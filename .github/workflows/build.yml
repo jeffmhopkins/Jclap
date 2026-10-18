@@ -26,13 +26,11 @@ jobs:
         run: cmake --build build --config Release
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
-      - name: Upload plugin
+      - name: Upload plugins
         uses: actions/upload-artifact@v4
         with:
-          name: orb-polar-${{ runner.os }}
-          path: |
-            build/*.clap
-            build/Release/*.clap
+          name: jclap-${{ runner.os }}
+          path: build/clap/
 
   release:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
@@ -47,10 +45,7 @@ jobs:
       - name: Zip plugins
         run: |
           cd dist
-          for d in orb-polar-*; do
-            if [ -d "$d/Release" ]; then mv "$d"/Release/* "$d"/ && rmdir "$d/Release"; fi
-            (cd "$d" && zip -r "../$d.zip" .)
-          done
+          for d in jclap-*; do (cd "$d" && zip -r "../$d.zip" .); done
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.version || github.ref_name }}
