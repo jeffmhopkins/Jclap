@@ -1,44 +1,31 @@
-# JClap: Orb Polar
+# JClap
 
-A tiny CLAP note-effect plugin with no GUI. It listens for two MIDI CCs carrying an X/Y position
-(Cartesian) and sends out two CCs carrying the same position as an angle and a radius (polar), ready to
-MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note effects works.
+A collection of small, single-purpose CLAP utility plugins. Each one does one job, usually with no GUI;
+any settings show up as plain host parameters.
 
-## Using it in Bitwig
+## Plugins
 
-1. Put **Orb Polar** on the Omnisphere track, before Omnisphere.
-2. Send your X/Y controller to CC 16 (X) and CC 17 (Y). The plugin swallows those two CCs and emits
-   CC 18 (angle) and CC 19 (radius) on the same MIDI channel. Everything else passes through untouched.
-3. In Omnisphere, right-click the Orb, choose **MIDI CC Learn**, and move the controller so it learns
-   the angle (CC 18). Right-click again, choose **Switch to Radius**, MIDI CC Learn again and it learns
-   the radius (CC 19). Tip: while learning, wiggle only along one axis near the edge so the CC you want
-   is the one that changes most.
-
-## Mapping
-
-- X and Y are 0..127 with 64 as center. Y grows upward.
-- **Radius**: 0 at center, 127 at the edge. A square XY pad can reach about 1.41 in the corners; by
-  default this is clamped to the unit circle (`Radius Mode = Clamp to circle`). `Fill square` instead
-  uses `max(|x|, |y|)` so the whole square edge reaches full radius.
-- **Angle**: 0..127 covers one full turn. 0 is +X (pointing right), increasing counter-clockwise. The
-  wrap from 127 back to 0 is a neighbor step on the circle, not a jump.
-- At dead center the angle is undefined, so the plugin holds the last angle and only sends radius 0.
-- Output CCs are only sent when their value changes.
-
-Spectrasonics doesn't document where the Orb's angle 0 sits or which way it turns, so these are
-exposed as settings. If the Orb dot lands rotated or mirrored from your controller, adjust
-`Angle Offset` (degrees) and `Direction`.
-
-## Settings (host parameters, no GUI)
-
-| Parameter | Default | |
+| Plugin | Type | What it does |
 |---|---|---|
-| X In CC / Y In CC | 16 / 17 | Input CC numbers |
-| Angle Out CC / Radius Out CC | 18 / 19 | Output CC numbers |
-| Angle Offset | 0 deg | Rotates the angle |
-| Direction | Counter-clockwise | Flip to clockwise to mirror |
-| Radius Mode | Clamp to circle | Or Fill square |
-| Pass Input CCs | Off | Also forward the raw X/Y CCs |
+| [Orb Polar](plugins/orb-polar) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
+
+## Download
+
+Grab the zip for your OS from the [latest release](https://github.com/jeffmhopkins/Jclap/releases/latest).
+It contains every plugin. Copy the `.clap` files (bundles on macOS) to your CLAP folder:
+
+- macOS: `~/Library/Audio/Plug-Ins/CLAP`
+- Windows: `C:\Program Files\Common Files\CLAP`
+- Linux: `~/.clap`
+
+On macOS the plugins are only ad-hoc signed (not notarized), so files downloaded through a browser are
+quarantined and Bitwig silently skips them. After copying, clear the quarantine flag once:
+
+```sh
+xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap
+```
+
+Then restart Bitwig (or rescan plug-ins under Settings → Locations).
 
 ## Building
 
@@ -48,6 +35,29 @@ cmake --build build --config Release
 ctest --test-dir build -C Release
 ```
 
-Copy `build/Orb Polar.clap` (a bundle on macOS) to your CLAP folder: `~/Library/Audio/Plug-Ins/CLAP`
-on macOS, `C:\Program Files\Common Files\CLAP` on Windows, `~/.clap` on Linux. CI builds all three; tagged
-versions (`v*`) are published as zips on the Releases page.
+All plugins land in `build/clap/`. CI builds Linux, macOS (universal) and Windows on every push.
+
+## Adding a plugin
+
+1. Create `plugins/<name>/` with its sources, tests and a short `README.md`.
+2. Add `plugins/<name>/CMakeLists.txt`:
+
+   ```cmake
+   jclap_add_plugin(<name>
+      OUTPUT_NAME "<Display Name>"
+      BUNDLE_ID com.jeffmhopkins.jclap.<name>
+      SOURCES src/plugin.cpp)
+
+   jclap_add_test(<name>-tests SOURCES tests/test_<name>.cpp)
+   ```
+
+3. Add `add_subdirectory(plugins/<name>)` to the top-level `CMakeLists.txt` and a row to the table
+   above.
+
+Use `com.jeffmhopkins.jclap.<name>` as the CLAP plugin id too, so ids never collide.
+
+## Releasing
+
+In GitHub, open Actions → build → Run workflow and enter a version such as `v0.2.0`. The run builds
+every platform, tags the commit and publishes a release with one zip per OS. Pushing a `v*` tag does
+the same.
