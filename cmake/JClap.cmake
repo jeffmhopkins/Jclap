@@ -18,6 +18,7 @@ function(jclap_add_plugin name)
       set_target_properties(${name} PROPERTIES
          BUNDLE TRUE
          BUNDLE_EXTENSION clap
+         MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/cmake/Info.plist.in
          MACOSX_BUNDLE_GUI_IDENTIFIER ${ARG_BUNDLE_ID}
          MACOSX_BUNDLE_BUNDLE_NAME "${ARG_OUTPUT_NAME}"
          MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}

@@ -18,8 +18,14 @@ It contains every plugin. Copy the `.clap` files (bundles on macOS) to your CLAP
 - Windows: `C:\Program Files\Common Files\CLAP`
 - Linux: `~/.clap`
 
-The plugins aren't signed. If macOS blocks one, run
-`xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/<name>.clap`.
+On macOS the plugins are only ad-hoc signed (not notarized), so files downloaded through a browser are
+quarantined and Bitwig silently skips them. After copying, clear the quarantine flag once:
+
+```sh
+xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap
+```
+
+Then restart Bitwig (or rescan plug-ins under Settings → Locations).
 
 ## Building
 

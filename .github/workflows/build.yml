@@ -26,11 +26,29 @@ jobs:
         run: cmake --build build --config Release
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+      # Package on each runner so file permissions survive (artifact uploads drop them).
+      - name: Sign (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          codesign --force --sign - build/clap/*.clap
+          codesign --verify --strict --verbose=2 build/clap/*.clap
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir dist
+          ditto -c -k --sequesterRsrc build/clap "dist/jclap-${{ runner.os }}.zip"
+      - name: Package
+        if: runner.os != 'macOS'
+        shell: bash
+        run: |
+          mkdir dist
+          cd build/clap
+          cmake -E tar cf "../../dist/jclap-${{ runner.os }}.zip" --format=zip -- *.clap
       - name: Upload plugins
         uses: actions/upload-artifact@v4
         with:
           name: jclap-${{ runner.os }}
-          path: build/clap/
+          path: dist/*.zip
 
   release:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
@@ -42,10 +60,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
-      - name: Zip plugins
-        run: |
-          cd dist
-          for d in jclap-*; do (cd "$d" && zip -r "../$d.zip" .); done
+          merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.version || github.ref_name }}
