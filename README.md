@@ -49,5 +49,5 @@ ctest --test-dir build -C Release
 ```
 
 Copy `build/Orb Polar.clap` (a bundle on macOS) to your CLAP folder: `~/Library/Audio/Plug-Ins/CLAP`
-on macOS, `C:\Program Files\Common Files\CLAP` on Windows, `~/.clap` on Linux. CI builds all three and
-attaches them as workflow artifacts.
+on macOS, `C:\Program Files\Common Files\CLAP` on Windows, `~/.clap` on Linux. CI builds all three; tagged
+versions (`v*`) are published as zips on the Releases page.
