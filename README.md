@@ -7,7 +7,7 @@ any settings show up as plain host parameters.
 
 | Plugin | Type | What it does |
 |---|---|---|
-| [Orb Polar](plugins/orb-polar) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
+| [Polar XY](plugins/orb-polar) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
 
 ## Download
 

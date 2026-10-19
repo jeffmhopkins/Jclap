@@ -1,4 +1,4 @@
-// JClap Orb Polar: a GUI-less CLAP note effect that turns two XY CCs into Omnisphere Orb
+// JClap Polar XY: a GUI-less CLAP note effect that turns two XY CCs into Omnisphere Orb
 // angle/radius CCs. Settings are exposed as plain parameters so the host shows them generically.
 
 #include <clap/clap.h>
@@ -376,13 +376,13 @@ const char *const kFeatures[] = {CLAP_PLUGIN_FEATURE_NOTE_EFFECT, CLAP_PLUGIN_FE
 
 const clap_plugin_descriptor_t kDescriptor = {
    CLAP_VERSION_INIT,
-   "com.jeffmhopkins.jclap.orb-polar",
-   "Orb Polar",
+   "com.jeffmhopkins.jclap.polar-xy",
+   "Polar XY",
    "jeffmhopkins",
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.1.4",
+   "0.1.5",
    "Converts XY CCs to Omnisphere Orb angle and radius CCs",
    kFeatures,
 };
