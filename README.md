@@ -19,7 +19,14 @@ It contains every plugin. Copy the `.clap` files (bundles on macOS) to your CLAP
 - Linux: `~/.clap`
 
 On macOS the plugins are only ad-hoc signed (not notarized), so files downloaded through a browser are
-quarantined and Bitwig silently skips them. After copying, clear the quarantine flag once:
+quarantined and Bitwig silently skips them. Files downloaded with `curl` aren't flagged, so the easiest
+install is from Terminal:
+
+```sh
+curl -sL https://github.com/jeffmhopkins/Jclap/releases/latest/download/jclap-macOS.zip -o /tmp/jclap.zip && mkdir -p ~/Library/Audio/Plug-Ins/CLAP && ditto -x -k /tmp/jclap.zip ~/Library/Audio/Plug-Ins/CLAP
+```
+
+If you downloaded with a browser instead, clear the quarantine flag once after copying:
 
 ```sh
 xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap

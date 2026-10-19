@@ -61,9 +61,15 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - uses: actions/checkout@v4
+        with:
+          path: src
+      - name: Render install notes
+        run: sed "s/{{VERSION}}/${{ inputs.version || github.ref_name }}/g" src/.github/release-notes.md > notes.md
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.version || github.ref_name }}
           target_commitish: ${{ github.sha }}
           files: dist/*.zip
+          body_path: notes.md
           generate_release_notes: true
