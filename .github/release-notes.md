@@ -33,3 +33,12 @@ xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap
 ```
 
 Either way, restart Bitwig afterwards.
+
+### Upgrading from 0.1.2 or earlier
+
+The plugin file was renamed from `Orb Polar.clap` to `OrbPolar.clap`. Delete the old copy so Bitwig
+doesn't see two:
+
+```sh
+rm -rf ~/Library/Audio/Plug-Ins/CLAP/Orb\ Polar*.clap
+```
