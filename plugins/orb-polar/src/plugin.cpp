@@ -283,7 +283,7 @@ const clap_plugin_descriptor_t kDescriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.1.1",
+   "0.1.2",
    "Converts XY CCs to Omnisphere Orb angle and radius CCs",
    kFeatures,
 };

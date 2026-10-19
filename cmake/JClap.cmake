@@ -23,6 +23,10 @@ function(jclap_add_plugin name)
          MACOSX_BUNDLE_BUNDLE_NAME "${ARG_OUTPUT_NAME}"
          MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
          MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION})
+      # Classic bundle type marker that some hosts and Finder still look for.
+      file(WRITE ${CMAKE_BINARY_DIR}/PkgInfo "BNDL????")
+      target_sources(${name} PRIVATE ${CMAKE_BINARY_DIR}/PkgInfo)
+      set_source_files_properties(${CMAKE_BINARY_DIR}/PkgInfo PROPERTIES MACOSX_PACKAGE_LOCATION .)
    else()
       set_target_properties(${name} PROPERTIES PREFIX "" SUFFIX ".clap")
    endif()

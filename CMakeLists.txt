@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.17)
-project(jclap VERSION 0.1.1 LANGUAGES CXX)
+
+# Without this, macOS binaries require the build machine's OS version (e.g. a macOS 26 CI runner
+# produces plugins that refuse to load on macOS 15). Must be set before project().
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS version")
+
+project(jclap VERSION 0.1.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
