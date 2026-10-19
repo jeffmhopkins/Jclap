@@ -3,7 +3,9 @@
 
 #include <clap/clap.h>
 
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -123,6 +125,24 @@ struct OrbPolar {
       return true;
    }
 
+   static bool isNoteEvent(const clap_event_header_t *h) {
+      if (h->space_id != CLAP_CORE_EVENT_SPACE_ID)
+         return false;
+      switch (h->type) {
+      case CLAP_EVENT_NOTE_ON:
+      case CLAP_EVENT_NOTE_OFF:
+      case CLAP_EVENT_NOTE_CHOKE:
+      case CLAP_EVENT_NOTE_END:
+      case CLAP_EVENT_NOTE_EXPRESSION:
+      case CLAP_EVENT_MIDI:
+      case CLAP_EVENT_MIDI_SYSEX:
+      case CLAP_EVENT_MIDI2:
+         return true;
+      default:
+         return false;
+      }
+   }
+
    clap_process_status process(const clap_process_t *proc) {
       const clap_input_events_t *in = proc->in_events;
       const clap_output_events_t *out = proc->out_events;
@@ -141,8 +161,9 @@ struct OrbPolar {
                 handleMidi(reinterpret_cast<const clap_event_midi_t *>(h), out))
                continue;
          }
-         // Everything else (notes, other CCs, sysex...) goes straight through.
-         out->try_push(out, h);
+         // Notes and other MIDI go straight through; anything else (transport...) must not be echoed.
+         if (isNoteEvent(h))
+            out->try_push(out, h);
       }
       return CLAP_PROCESS_CONTINUE;
    }
@@ -218,6 +239,19 @@ bool paramsValueToText(const clap_plugin_t *, clap_id id, double value, char *ou
 bool paramsTextToValue(const clap_plugin_t *, clap_id id, const char *text, double *value) {
    if (id >= kParamCount)
       return false;
+   // Labels produced by paramsValueToText for the on/off style parameters.
+   static const char *const kOnLabels[] = {"Clockwise", "Fill square", "On"};
+   static const char *const kOffLabels[] = {"Counter-clockwise", "Clamp to circle", "Off"};
+   for (const char *label : kOnLabels)
+      if (!std::strcmp(text, label)) {
+         *value = 1.0;
+         return true;
+      }
+   for (const char *label : kOffLabels)
+      if (!std::strcmp(text, label)) {
+         *value = 0.0;
+         return true;
+      }
    const char *s = text;
    if (std::strncmp(s, "CC", 2) == 0)
       s += 2;
@@ -237,12 +271,24 @@ const clap_plugin_params_t kParamsExt = {paramsCount, paramsGetInfo, paramsGetVa
 
 // ---- state ----
 
-bool stateSave(const clap_plugin_t *plugin, const clap_ostream_t *stream) {
+// State layout: 4-byte magic, uint32 version, then one double per parameter.
+constexpr char kStateMagic[4] = {'J', 'C', 'O', 'P'};
+constexpr uint32_t kStateVersion = 1;
+
+struct StateBlob {
+   char magic[4];
+   uint32_t version;
    double values[kParamCount];
+};
+
+bool stateSave(const clap_plugin_t *plugin, const clap_ostream_t *stream) {
+   StateBlob blob{};
+   std::memcpy(blob.magic, kStateMagic, sizeof(kStateMagic));
+   blob.version = kStateVersion;
    for (uint32_t i = 0; i < kParamCount; ++i)
-      values[i] = self(plugin)->params[i].load();
-   const char *buf = reinterpret_cast<const char *>(values);
-   int64_t remaining = sizeof(values);
+      blob.values[i] = self(plugin)->params[i].load();
+   const char *buf = reinterpret_cast<const char *>(&blob);
+   int64_t remaining = sizeof(blob);
    while (remaining > 0) {
       const int64_t written = stream->write(stream, buf, static_cast<uint64_t>(remaining));
       if (written <= 0)
@@ -254,9 +300,9 @@ bool stateSave(const clap_plugin_t *plugin, const clap_ostream_t *stream) {
 }
 
 bool stateLoad(const clap_plugin_t *plugin, const clap_istream_t *stream) {
-   double values[kParamCount];
-   char *buf = reinterpret_cast<char *>(values);
-   int64_t remaining = sizeof(values);
+   StateBlob blob{};
+   char *buf = reinterpret_cast<char *>(&blob);
+   int64_t remaining = sizeof(blob);
    while (remaining > 0) {
       const int64_t got = stream->read(stream, buf, static_cast<uint64_t>(remaining));
       if (got <= 0)
@@ -264,8 +310,21 @@ bool stateLoad(const clap_plugin_t *plugin, const clap_istream_t *stream) {
       buf += got;
       remaining -= got;
    }
+   if (std::memcmp(blob.magic, kStateMagic, sizeof(kStateMagic)) || blob.version != kStateVersion)
+      return false;
    for (uint32_t i = 0; i < kParamCount; ++i)
-      self(plugin)->params[i].store(values[i]);
+      if (!std::isfinite(blob.values[i]))
+         return false;
+
+   OrbPolar *p = self(plugin);
+   for (uint32_t i = 0; i < kParamCount; ++i)
+      p->params[i].store(std::clamp(blob.values[i], kParams[i].min, kParams[i].max));
+
+   // Tell the host the values changed so it refreshes what it shows.
+   auto *hostParams =
+      static_cast<const clap_host_params_t *>(p->host->get_extension(p->host, CLAP_EXT_PARAMS));
+   if (hostParams)
+      hostParams->rescan(p->host, CLAP_PARAM_RESCAN_VALUES);
    return true;
 }
 
@@ -283,7 +342,7 @@ const clap_plugin_descriptor_t kDescriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.1.3",
+   "0.1.4",
    "Converts XY CCs to Omnisphere Orb angle and radius CCs",
    kFeatures,
 };
