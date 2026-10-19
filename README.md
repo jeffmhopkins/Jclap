@@ -51,7 +51,7 @@ All plugins land in `build/clap/`. CI builds Linux, macOS (universal) and Window
 
    ```cmake
    jclap_add_plugin(<name>
-      OUTPUT_NAME "<Display Name>"
+      OUTPUT_NAME "<FileName>"   # no spaces; the host shows the descriptor name
       BUNDLE_ID com.jeffmhopkins.jclap.<name>
       SOURCES src/plugin.cpp)
 

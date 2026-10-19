@@ -1,4 +1,7 @@
-# jclap_add_plugin(<name> OUTPUT_NAME <display name> BUNDLE_ID <id> SOURCES <files...>)
+# jclap_add_plugin(<name> OUTPUT_NAME <FileName> BUNDLE_ID <id> SOURCES <files...>)
+#
+# OUTPUT_NAME is the .clap file name; keep it free of spaces. The name hosts display comes from
+# the plugin descriptor in code.
 #
 # Builds one CLAP plugin binary. Every plugin lands in ${CMAKE_BINARY_DIR}/clap
 # (no per-config subfolder) so packaging can just grab clap/*.clap.
