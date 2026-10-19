@@ -32,6 +32,17 @@ jobs:
         run: |
           codesign --force --sign - build/clap/*.clap
           codesign --verify --strict --verbose=2 build/clap/*.clap
+      - name: Check minimum macOS version
+        if: runner.os == 'macOS'
+        run: |
+          for bin in build/clap/*.clap/Contents/MacOS/*; do
+            vtool -show-build "$bin"
+            # arm64 can't go below 11.0, so accept 10.x or 11.x and fail on anything newer.
+            if vtool -show-build "$bin" | awk '/minos/ {split($2, v, "."); if (v[1] > 11) bad=1} END {exit !bad}'; then
+              echo "::error::$bin requires a newer macOS than 11"; exit 1
+            fi
+          done
+          find build/clap -maxdepth 3 | sort
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
