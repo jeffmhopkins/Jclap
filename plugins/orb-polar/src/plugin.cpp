@@ -143,6 +143,27 @@ struct OrbPolar {
       }
    }
 
+   // Audio is copied through untouched; the port only exists so hosts that expect audio IO accept us.
+   static void passAudioThrough(const clap_process_t *proc) {
+      if (proc->audio_inputs_count < 1 || proc->audio_outputs_count < 1)
+         return;
+      const clap_audio_buffer_t &in = proc->audio_inputs[0];
+      const clap_audio_buffer_t &out = proc->audio_outputs[0];
+      const uint32_t channels = std::min(in.channel_count, out.channel_count);
+      for (uint32_t c = 0; c < channels; ++c) {
+         if (in.data32 && out.data32 && in.data32[c] != out.data32[c])
+            std::memcpy(out.data32[c], in.data32[c], proc->frames_count * sizeof(float));
+         if (in.data64 && out.data64 && in.data64[c] != out.data64[c])
+            std::memcpy(out.data64[c], in.data64[c], proc->frames_count * sizeof(double));
+      }
+      for (uint32_t c = channels; c < out.channel_count; ++c) {
+         if (out.data32)
+            std::memset(out.data32[c], 0, proc->frames_count * sizeof(float));
+         if (out.data64)
+            std::memset(out.data64[c], 0, proc->frames_count * sizeof(double));
+      }
+   }
+
    clap_process_status process(const clap_process_t *proc) {
       const clap_input_events_t *in = proc->in_events;
       const clap_output_events_t *out = proc->out_events;
@@ -165,6 +186,7 @@ struct OrbPolar {
          if (isNoteEvent(h))
             out->try_push(out, h);
       }
+      passAudioThrough(proc);
       return CLAP_PROCESS_CONTINUE;
    }
 };
@@ -186,6 +208,24 @@ bool notePortsGet(const clap_plugin_t *, uint32_t index, bool isInput, clap_note
 }
 
 const clap_plugin_note_ports_t kNotePorts = {notePortsCount, notePortsGet};
+
+// ---- audio ports ----
+
+uint32_t audioPortsCount(const clap_plugin_t *, bool) { return 1; }
+
+bool audioPortsGet(const clap_plugin_t *, uint32_t index, bool isInput, clap_audio_port_info_t *info) {
+   if (index != 0)
+      return false;
+   info->id = 0;
+   std::snprintf(info->name, sizeof(info->name), "%s", isInput ? "Audio In" : "Audio Out");
+   info->channel_count = 2;
+   info->flags = CLAP_AUDIO_PORT_IS_MAIN;
+   info->port_type = CLAP_PORT_STEREO;
+   info->in_place_pair = 0;
+   return true;
+}
+
+const clap_plugin_audio_ports_t kAudioPorts = {audioPortsCount, audioPortsGet};
 
 // ---- params ----
 
@@ -372,6 +412,8 @@ clap_process_status pluginProcess(const clap_plugin_t *plugin, const clap_proces
 }
 
 const void *pluginGetExtension(const clap_plugin_t *, const char *id) {
+   if (!std::strcmp(id, CLAP_EXT_AUDIO_PORTS))
+      return &kAudioPorts;
    if (!std::strcmp(id, CLAP_EXT_NOTE_PORTS))
       return &kNotePorts;
    if (!std::strcmp(id, CLAP_EXT_PARAMS))
