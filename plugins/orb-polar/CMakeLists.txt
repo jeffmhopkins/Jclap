@@ -1,6 +1,6 @@
 jclap_add_plugin(orb-polar
-   OUTPUT_NAME "OrbPolar"
-   BUNDLE_ID com.jeffmhopkins.jclap.orb-polar
+   OUTPUT_NAME "PolarXY"
+   BUNDLE_ID com.jeffmhopkins.jclap.polar-xy
    SOURCES src/plugin.cpp)
 target_include_directories(orb-polar PRIVATE src)
 

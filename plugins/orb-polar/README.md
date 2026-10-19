@@ -1,4 +1,4 @@
-# Orb Polar
+# Polar XY
 
 A tiny CLAP note effect with no GUI. It listens for two MIDI CCs carrying an X/Y position
 (Cartesian) and sends out two CCs carrying the same position as an angle and a radius (polar), ready to
@@ -6,7 +6,7 @@ MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note 
 
 ## Using it in Bitwig
 
-1. Put **Orb Polar** on the Omnisphere track, before Omnisphere.
+1. Put **Polar XY** on the Omnisphere track, before Omnisphere.
 2. Send your X/Y controller to CC 16 (X) and CC 17 (Y). The plugin swallows those two CCs and emits
    CC 18 (angle) and CC 19 (radius) on the same MIDI channel. Everything else passes through untouched.
 3. In Omnisphere, right-click the Orb, choose **MIDI CC Learn**, and move the controller so it learns
