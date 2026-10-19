@@ -43,6 +43,15 @@ jobs:
             fi
           done
           find build/clap -maxdepth 3 | sort
+      # The official CLAP validator loads each plugin the way a host does and checks it against the spec.
+      - name: Install clap-validator
+        run: cargo install --locked --git https://github.com/free-audio/clap-validator --tag 0.4.1 clap-validator
+      - name: Validate plugins
+        shell: bash
+        run: |
+          for p in build/clap/*.clap; do
+            clap-validator validate --only-failed "$p"
+          done
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
