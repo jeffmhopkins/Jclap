@@ -1,7 +1,7 @@
 #pragma once
 
 // A tiny in-process host for plugin tests: creates a plugin from clap_entry, feeds it param, mod
-// and MIDI events, runs blocks (with optional stereo audio) and collects what it sends back.
+// note and MIDI events, runs blocks (with optional stereo audio) and collects what it sends back.
 //
 //    jclap::core::TestHost host(clap_entry, "com.jeffmhopkins.jclap.myplugin");
 //    host.setParam(kGain, -6.0);
@@ -87,6 +87,7 @@ struct TestOutput {
    std::vector<TestMidi> midi;
    std::vector<clap_event_param_value_t> paramValues;
    std::vector<clap_event_param_gesture_t> gestures; // header.type tells begin from end
+   std::vector<clap_event_note_t> noteEnds;
 };
 
 class TestHost {
@@ -131,6 +132,33 @@ public:
       ev.param_id = id;
       ev.note_id = ev.port_index = ev.channel = ev.key = -1;
       ev.amount = amount;
+      in_.add(ev.header);
+   }
+
+   // A CLAP note event: CLAP_EVENT_NOTE_ON, NOTE_OFF or NOTE_CHOKE.
+   void note(uint16_t type, int16_t key, double velocity = 1.0, int32_t noteId = -1, int16_t channel = 0,
+             uint32_t time = 0) {
+      clap_event_note_t ev{};
+      ev.header = {sizeof(ev), time, CLAP_CORE_EVENT_SPACE_ID, type, 0};
+      ev.note_id = noteId;
+      ev.port_index = 0;
+      ev.channel = channel;
+      ev.key = key;
+      ev.velocity = velocity;
+      in_.add(ev.header);
+   }
+
+   // A per-note expression (CLAP_NOTE_EXPRESSION_TUNING, PRESSURE, ...), by note id or key.
+   void noteExpression(clap_note_expression expression, int16_t key, double value, int32_t noteId = -1,
+                       int16_t channel = 0, uint32_t time = 0) {
+      clap_event_note_expression_t ev{};
+      ev.header = {sizeof(ev), time, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION, 0};
+      ev.expression_id = expression;
+      ev.note_id = noteId;
+      ev.port_index = 0;
+      ev.channel = channel;
+      ev.key = key;
+      ev.value = value;
       in_.add(ev.header);
    }
 
@@ -211,6 +239,8 @@ private:
          }
          else if (h->type == CLAP_EVENT_PARAM_VALUE)
             result.paramValues.push_back(*reinterpret_cast<const clap_event_param_value_t *>(h));
+         else if (h->type == CLAP_EVENT_NOTE_END)
+            result.noteEnds.push_back(*reinterpret_cast<const clap_event_note_t *>(h));
          else if (h->type == CLAP_EVENT_PARAM_GESTURE_BEGIN || h->type == CLAP_EVENT_PARAM_GESTURE_END)
             result.gestures.push_back(*reinterpret_cast<const clap_event_param_gesture_t *>(h));
       }

@@ -21,7 +21,7 @@ Link it with `target_link_libraries(<name> PRIVATE jclap::core)`.
 | `jclap/core/edit_queue.h` | `EditQueue`: carries GUI edits to the audio thread and out to the host as gesture and value events |
 | `jclap/core/spsc_queue.h` | `SpscQueue`: a lock-free queue for small messages between the GUI and the audio thread, such as notes from an on-screen keyboard |
 | `jclap/core/sample_fifo.h` | `SampleFifo`: the audio thread writes samples, the GUI reads the newest ones for a scope |
-| `jclap/core/test_host.h` | `TestHost`: an in-process host for tests. Send params, modulation and MIDI, run blocks with audio, read back events, values and value text |
+| `jclap/core/test_host.h` | `TestHost`: an in-process host for tests. Send params, modulation, CLAP notes and note expressions, and MIDI, run blocks with audio, read back events, values and value text |
 
 A minimal plugin:
 

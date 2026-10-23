@@ -27,10 +27,12 @@ option(JCLAP_BUILD_TOOLS "Build developer tools" OFF)
 # kit and CLAP window glue.
 add_subdirectory(libs/core)
 add_subdirectory(libs/ui)
+add_subdirectory(libs/dsp)
 
 # One folder per plugin under plugins/, each with its own CMakeLists.txt.
 add_subdirectory(plugins/polar-xy)
 add_subdirectory(plugins/micromonsta2)
+add_subdirectory(plugins/basic-synth)
 
 # The starting point for new plugins (cmake/NewPlugin.cmake copies it). Built into build/template,
 # not build/clap, so it is checked in CI but never shipped.
