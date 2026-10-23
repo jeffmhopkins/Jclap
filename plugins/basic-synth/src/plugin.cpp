@@ -7,6 +7,8 @@
 #include <jclap/core/helpers.h>
 #include <jclap/core/sample_fifo.h>
 #include <jclap/core/spsc_queue.h>
+#include <jclap/dsp/denormals.h>
+#include <jclap/dsp/envelope.h>
 #include <jclap/dsp/math.h>
 #include <jclap/dsp/vca.h>
 #include <jclap/ui/clap_gui.h>
@@ -175,6 +177,11 @@ public:
       out.clear();
       if (index < 0 || index >= kEnvCount)
          return;
+      // Looping, there is one shared cycle to show.
+      if (loopShown_[index].stage.load() >= 0) {
+         out.push_back({loopShown_[index].stage.load(), loopShown_[index].level.load(), 1.0f});
+         return;
+      }
       for (const Shown &s : shown_) {
          const int stage = s.envStage[index].load();
          if (stage >= 0)
@@ -254,6 +261,7 @@ public:
    // ---- audio thread ----
 
    clap_process_status process(const clap_process_t *proc) override {
+      jclap::dsp::ScopedNoDenormals noDenormals;
       edits_.drain(proc->out_events);
       PanelNote p;
       while (panelNotes_.pop(p))
@@ -275,10 +283,16 @@ public:
          const uint32_t end = next < eventCount ? std::min(frames, in->get(in, next)->time) : frames;
          configureVoices();
          for (uint32_t i = start; i < end; ++i) {
+            double shared[kEnvCount];
+            for (int e = 0; e < kEnvCount; ++e)
+               shared[e] = looping_[e] ? loopEnv_[e].process() : 0.0;
             float sum = 0.0f;
             for (Slot &s : slots_)
-               sum += s.voice.process();
+               sum += s.voice.process(shared);
             sum = jclap::dsp::softClip(output_.process(sum * kVoiceGain));
+            // Where flush-to-zero is not available, a fading tail could still go subnormal.
+            if (std::fabs(sum) < 1e-20f)
+               sum = 0.0f;
             if (left)
                left[i] = sum;
             if (right)
@@ -303,6 +317,22 @@ private:
    // Every sounding voice takes the current params, and its note's bend, pressure and timbre.
    void configureVoices() {
       output_.setGainDb(value(kLevel));
+      // A looping envelope is one cycle every voice shares, free running from the moment its loop
+      // switch went on.
+      for (int e = 0; e < kEnvCount; ++e) {
+         const bool on = value(envParam(e, kEnv1Loop)) >= 0.5;
+         jclap::dsp::Envelope &env = loopEnv_[e];
+         env.setAttack(value(envParam(e, kEnv1Attack)) / 1000.0);
+         env.setDecay(value(envParam(e, kEnv1Decay)) / 1000.0);
+         env.setSustain(value(envParam(e, kEnv1Sustain)));
+         env.setRelease(value(envParam(e, kEnv1Release)) / 1000.0);
+         env.setLoop(true);
+         if (on && !looping_[e]) {
+            env.reset();
+            env.gateOn();
+         }
+         looping_[e] = on;
+      }
       for (Slot &s : slots_) {
          if (s.voice.isActive())
             configure(s);
@@ -581,6 +611,10 @@ private:
             shown_[i].envFrom[e].store(s.voice.envReleaseFrom(e));
          }
       }
+      for (int e = 0; e < kEnvCount; ++e) {
+         loopShown_[e].stage.store(looping_[e] ? static_cast<int>(loopEnv_[e].stage()) - 1 : -1);
+         loopShown_[e].level.store(loopEnv_[e].level());
+      }
       lfoShown_.store(newest != nullptr);
       if (newest)
          lfoValue_.store(static_cast<float>(newest->voice.lfoValue()));
@@ -597,6 +631,8 @@ private:
    ChannelState channels_[16];
    jclap::dsp::Vca output_;
    uint64_t clock_ = 0;
+   jclap::dsp::Envelope loopEnv_[kEnvCount];
+   bool looping_[kEnvCount] = {};
 
    // Shared with the panel.
    struct Shown {
@@ -607,6 +643,11 @@ private:
    };
    Shown shown_[kVoiceCount];
    std::atomic<bool> lfoShown_{false};
+   struct LoopShown {
+      std::atomic<int> stage{-1};
+      std::atomic<float> level{0.0f};
+   };
+   LoopShown loopShown_[kEnvCount];
    std::atomic<float> lfoValue_{0.0f};
    jclap::core::SpscQueue<PanelNote> panelNotes_;
    jclap::core::SampleFifo<4096> scope_;

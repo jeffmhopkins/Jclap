@@ -2,6 +2,7 @@
 // frequencies, envelope timing and VCA smoothing.
 
 #include <jclap/core/test_host.h>
+#include <jclap/dsp/denormals.h>
 #include <jclap/dsp/envelope.h>
 #include <jclap/dsp/filter.h>
 #include <jclap/dsp/lfo.h>
@@ -276,6 +277,20 @@ int main() {
       for (int i = 0; i < 0.02 * kRate; ++i)
          env.process();
       JCLAP_CHECK(!env.isActive());
+   }
+
+   // ---- denormals: inside the scope a subnormal product flushes to zero (on x86 and ARM64) ----
+   {
+      volatile float tiny = 1e-30f, scale = 1e-10f;
+      {
+         ScopedNoDenormals noDenormals;
+         const float product = tiny * scale;
+#if defined(JCLAP_DSP_DENORMALS_SSE) || defined(JCLAP_DSP_DENORMALS_ARM64)
+         JCLAP_CHECK_EQ(product, 0.0f);
+#endif
+         (void)product;
+      }
+      JCLAP_CHECK(tiny * scale != 0.0f);
    }
 
    // ---- smoother and VCA ----

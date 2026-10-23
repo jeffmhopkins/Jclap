@@ -1,7 +1,8 @@
 #pragma once
 
-// One synth voice, built from jclap::dsp: oscillator -> filter -> VCA. Two envelopes, each able to
-// loop, send to the filter, the VCA and the pitch by their own amounts, and an LFO moves the cutoff
+// One synth voice, built from jclap::dsp: oscillator -> filter -> VCA. Two envelopes send to the
+// filter, the VCA and the pitch by their own amounts. A looping envelope is not the voice's own: the
+// plugin runs one shared cycle and passes its value in, so every voice moves together, and an LFO moves the cutoff
 // and the VCA. Per-note expression (MPE) moves it too: bend sets the pitch, and pressure and timbre
 // open the filter.
 
@@ -27,8 +28,9 @@ struct VoiceSettings {
    jclap::dsp::Filter::Mode filterMode = jclap::dsp::Filter::Mode::LowPass;
    jclap::dsp::Filter::Slope slope = jclap::dsp::Filter::Slope::Db24;
    double cutoffHz = 2000.0, resonance = 0.3;
-   // An envelope: ADSR in seconds and sustain level, whether it loops, and where it goes. Filter
-   // is in octaves, pitch in semitones, both either way; VCA is 0..1.
+   // An envelope: ADSR in seconds and sustain level, where it goes, and whether it loops (then the
+   // voice takes the shared cycle's value instead). Filter is in octaves, pitch in semitones, both
+   // either way; VCA is 0..1.
    struct Env {
       double attack = 0.005, decay = 0.4, sustain = 0.5, release = 0.3;
       bool loop = false;
@@ -70,7 +72,6 @@ public:
          env_[i].setDecay(s.env[i].decay);
          env_[i].setSustain(s.env[i].sustain);
          env_[i].setRelease(s.env[i].release);
-         env_[i].setLoop(s.env[i].loop);
          sends_[i] = s.env[i];
       }
       cutoff_.setTarget(std::log2(s.cutoffHz));
@@ -125,15 +126,19 @@ public:
       timbre_.setTarget(timbre);
    }
 
-   float process() {
+   // `shared` holds each looping envelope's current value (ignored for the others).
+   float process(const double *shared) {
       if (!isActive())
          return 0.0f;
+      const double gate = gate_.process();
       double toFilter = 0.0, toPitch = 0.0, toVca = 0.0, vcaShare = 0.0;
       for (int i = 0; i < kEnvCount; ++i) {
-         const double e = env_[i].process();
+         const double own = env_[i].process();
+         const double e = sends_[i].loop ? shared[i] : own;
          toFilter += sends_[i].toFilter * e;
          toPitch += sends_[i].toPitch * e;
-         toVca += sends_[i].toVca * e;
+         // The shared cycle never ends, so on the VCA it is let in by this voice's key.
+         toVca += sends_[i].toVca * e * (sends_[i].loop ? gate : 1.0);
          vcaShare += sends_[i].toVca;
       }
       const double lfo = lfoValue_ = lfo_.process();
@@ -143,22 +148,23 @@ public:
       filter_.setCutoff(std::exp2(std::clamp(octaves, 3.0, 15.0)));
       // What the envelopes leave of the VCA follows the gate: with no envelope sent to it, the VCA
       // is simply open while the key is held. Tremolo dips that by up to its depth.
-      const double gate = gate_.process() * std::max(0.0, 1.0 - vcaShare);
+      const double open = gate * std::max(0.0, 1.0 - vcaShare);
       const double tremolo = 1.0 - lfoToVca_ * (0.5 - 0.5 * lfo);
-      level_ = static_cast<float>(std::clamp(gate + toVca, 0.0, 1.0) * tremolo);
+      level_ = static_cast<float>(std::clamp(open + toVca, 0.0, 1.0) * tremolo);
       return vca_.process(filter_.process(osc_.process()), level_);
    }
 
-   // Sounding until released and silent: the gate has closed and every envelope sent to the VCA
-   // has finished.
+   // Sounding until released and silent: the gate has closed and every envelope of its own sent to
+   // the VCA has finished.
    bool isActive() const {
       if (!released_ || gate_.value() > 1e-4)
          return true;
       for (int i = 0; i < kEnvCount; ++i)
-         if (sends_[i].toVca > 0.0 && env_[i].isActive())
+         if (!sends_[i].loop && sends_[i].toVca > 0.0 && env_[i].isActive())
             return true;
       return false;
    }
+   bool envLooping(int i) const { return sends_[i].loop; }
    bool isReleasing() const { return released_; }
    // The VCA's level, for picking the quietest voice to steal.
    float level() const { return level_; }

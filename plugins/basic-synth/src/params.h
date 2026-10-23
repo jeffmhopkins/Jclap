@@ -53,13 +53,15 @@ enum ParamId : clap_id {
 };
 
 // Every param can be automated and modulated from the host. Modulation can also be per voice (by note
-// id, key or channel), which is what Bitwig's polyphonic modulators send. MPE Bend Range is the one
-// param with no per-voice meaning.
+// id, key or channel), which is what Bitwig's polyphonic modulators send. MPE Bend Range and the
+// envelope loop switches are the params with no per-voice meaning.
 constexpr auto kGlobalMod = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE;
 constexpr auto kMod = kGlobalMod | CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID | CLAP_PARAM_IS_MODULATABLE_PER_KEY |
                       CLAP_PARAM_IS_MODULATABLE_PER_CHANNEL | CLAP_PARAM_IS_MODULATABLE_PER_PORT;
 constexpr auto kStepped = kMod | CLAP_PARAM_IS_STEPPED;
 constexpr auto kChoice = kStepped | CLAP_PARAM_IS_ENUM;
+// A looping envelope is one shared cycle, so its switch has no per-voice meaning.
+constexpr auto kGlobalChoice = kGlobalMod | CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_ENUM;
 
 // Envelope `env` (0 or 1)'s param, given Env 1's: envParam(1, kEnv1Decay) is kEnv2Decay.
 constexpr int kEnvParamCount = kEnv2Attack - kEnv1Attack;
@@ -89,7 +91,7 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kEnv1Decay, "Env 1 Decay", "Env 1", 1.0, 2000.0, 400.0, kMod},
    {kEnv1Sustain, "Env 1 Sustain", "Env 1", 0.0, 1.0, 0.7, kMod},
    {kEnv1Release, "Env 1 Release", "Env 1", 1.0, 4000.0, 300.0, kMod},
-   {kEnv1Loop, "Env 1 Loop", "Env 1", 0.0, 1.0, 0.0, kChoice},
+   {kEnv1Loop, "Env 1 Loop", "Env 1", 0.0, 1.0, 0.0, kGlobalChoice},
    {kEnv1ToFilter, "Env 1 to Filter", "Env 1", -5.0, 5.0, 0.0, kMod},
    {kEnv1ToVca, "Env 1 to VCA", "Env 1", 0.0, 1.0, 1.0, kMod},
    {kEnv1ToPitch, "Env 1 to Pitch", "Env 1", -24.0, 24.0, 0.0, kMod},
@@ -97,7 +99,7 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kEnv2Decay, "Env 2 Decay", "Env 2", 1.0, 2000.0, 300.0, kMod},
    {kEnv2Sustain, "Env 2 Sustain", "Env 2", 0.0, 1.0, 0.3, kMod},
    {kEnv2Release, "Env 2 Release", "Env 2", 1.0, 4000.0, 300.0, kMod},
-   {kEnv2Loop, "Env 2 Loop", "Env 2", 0.0, 1.0, 0.0, kChoice},
+   {kEnv2Loop, "Env 2 Loop", "Env 2", 0.0, 1.0, 0.0, kGlobalChoice},
    {kEnv2ToFilter, "Env 2 to Filter", "Env 2", -5.0, 5.0, 2.0, kMod},
    {kEnv2ToVca, "Env 2 to VCA", "Env 2", 0.0, 1.0, 0.0, kMod},
    {kEnv2ToPitch, "Env 2 to Pitch", "Env 2", -24.0, 24.0, 0.0, kMod},

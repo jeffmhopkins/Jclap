@@ -19,6 +19,7 @@ no CLAP, no GUI, no allocation, so everything is safe on the audio thread.
 | `jclap/dsp/envelope.h` | `Envelope`: ADSR with analog-style curves and an optional loop (attack and decay repeat while held). Retriggers from the current level, so no clicks |
 | `jclap/dsp/vca.h` | `Vca`: a smoothed gain times a control signal, with linear or exponential (60 dB) response |
 | `jclap/dsp/smoother.h` | `Smoother`: a one-pole glide for param changes |
+| `jclap/dsp/denormals.h` | `ScopedNoDenormals`: flush-to-zero for the scope of `process()`, so decaying tails stay fast and never output subnormals |
 | `jclap/dsp/math.h` | `noteToHz`, `dbToGain`, `gainToDb`, and `softClip` to saturate overs at the end of a chain |
 
 A voice is a few lines:

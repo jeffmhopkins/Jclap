@@ -26,11 +26,14 @@ oscillator ──> filter ──> VCA ──> out
 
 - **Oscillator**: sine, triangle, saw, square or pulse, with pulse width, band-limited.
 - **Filter**: low, high or band pass at 12, 24, 36 or 48 dB/oct, with resonance.
-- **Env 1 and Env 2**: two ADSRs, each with a **loop** toggle (attack and decay repeat while the key is
-  held) and three amounts: to the filter (±5 octaves), to the VCA (0 to 100%) and to the pitch (±24
+- **Env 1 and Env 2**: two ADSRs, each with a **loop** toggle and three amounts: to the filter (±5 octaves), to the VCA (0 to 100%) and to the pitch (±24
   semitones). They start as Env 1 on the VCA and Env 2 on the filter. Whatever share of the VCA the
   envelopes don't take follows the key, so with both VCA amounts at 0 it is a plain organ-style gate.
   A glowing dot rides each envelope's curve for every sounding voice, so you can watch all eight.
+- **Looping**: a looping envelope is one shared cycle, not one per note. It starts the moment LOOP is
+  switched on and runs freely, attack and decay over and over, like an LFO with an envelope's shape;
+  every voice follows the same cycle, and it shows as a single dot. On the VCA it is let through
+  while a key is held.
 - **LFO**: sine, triangle, saw, square or random, 0.05 to 20 Hz, restarted with each note. It moves the
   cutoff (±4 octaves) and the VCA (tremolo). The light next to it shows the newest note's LFO.
 - **Voices**: eight. A ninth note takes the quietest releasing voice, or else the oldest.

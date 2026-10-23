@@ -223,13 +223,15 @@ int main() {
    h.setParam(kWave, 0.0);
    h.setParam(kFilterMode, 0.0);
    h.setParam(kSlope, 1.0);
-   // Every param can be automated and modulated, and all but bend range per voice.
+   // Every param can be automated and modulated, and all but bend range and the loop switches per
+   // voice.
    auto *params = static_cast<const clap_plugin_params_t *>(h.plugin()->get_extension(h.plugin(), CLAP_EXT_PARAMS));
    for (uint32_t i = 0; i < kParamCount; ++i) {
       clap_param_info_t info{};
       JCLAP_CHECK(params->get_info(h.plugin(), i, &info));
       JCLAP_CHECK((info.flags & CLAP_PARAM_IS_AUTOMATABLE) && (info.flags & CLAP_PARAM_IS_MODULATABLE));
-      JCLAP_CHECK(i == kBendRange || (info.flags & CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID));
+      JCLAP_CHECK(i == kBendRange || i == kEnv1Loop || i == kEnv2Loop ||
+                  (info.flags & CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID));
    }
    // A global modulation moves every voice, and the knobs show it.
    h.modulate(kTune, 12.0);
@@ -309,6 +311,33 @@ int main() {
    h.note(CLAP_EVENT_NOTE_OFF, 57, 0.0);
    run(19200);
    JCLAP_CHECK(run.rms() < 1e-3);
+   // It is one shared cycle: notes started at different times show a single playhead, and with no
+   // note held it keeps running.
+   {
+      std::vector<EditorHost::EnvState> states;
+      panel.envelopes(0, states);
+      JCLAP_CHECK_EQ(states.size(), 1u);
+      h.note(CLAP_EVENT_NOTE_ON, 60, 1.0);
+      run(700);
+      h.note(CLAP_EVENT_NOTE_ON, 64, 1.0);
+      run(300);
+      panel.envelopes(0, states);
+      JCLAP_CHECK_EQ(states.size(), 1u);
+      h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+      run(64);
+   }
+   // Switching the loop on restarts the cycle from its attack.
+   h.setParam(kEnv1Loop, 0.0);
+   run(64);
+   h.setParam(kEnv1Attack, 200.0);
+   h.setParam(kEnv1Loop, 1.0);
+   run(480);
+   {
+      std::vector<EditorHost::EnvState> states;
+      panel.envelopes(0, states);
+      JCLAP_CHECK(states.size() == 1 && states[0].stage == 0 && states[0].level < 0.2f);
+   }
+   h.setParam(kEnv1Attack, 1.0);
    h.setParam(kEnv1Loop, 0.0);
    JCLAP_CHECK(h.paramText(kEnv1Loop, 1.0) == "On");
    JCLAP_CHECK(h.paramText(kEnv2ToPitch, -7.0) == "-7.0 st");
