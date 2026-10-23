@@ -47,9 +47,12 @@ in -> low/high cut -> [drive PRE] -> [echo INTO] -> predelay + early reflections
 Drag a body to move it, drag the arrow on the selected body to set its velocity, scroll on a body to
 change its mass. Double-click empty space to add a body there, right-click a body to remove one.
 
-Incoming audio is split into lows, mids and highs. Each band makes the bodies that follow it glow
-and shed dust, which falls through the system's gravity, and its transients send out rings. React
-also kicks the bodies on transients, so the input changes the orbit itself and through it the sound.
+As they move, the bodies shed soft gas that billows out, drifts on a slow swirl and falls back
+toward them. Where two bodies' clouds meet they push each other apart, and the seam heats up and
+glows whiter. Incoming audio is split into lows, mids and highs. Each band makes the bodies that
+follow it glow, shed bigger clouds and spark dust, which falls through the system's gravity, and its
+transients send out rings that shove the gas aside. React also kicks the bodies on transients, so
+the input changes the orbit itself and through it the sound.
 
 The clock runs the orbits free, synced (one lap of the start orbit fits into Sync Bars, restarting
 when the host starts), or free but restarted with the transport (RETRIG).
@@ -71,7 +74,7 @@ preset's name is saved with the project.
 The audio thread owns the simulation and the reverb. Every 32 samples it steps the orbits and
 updates the network, so a render comes out the same at any block size. A few hundred times a second
 it publishes a frame (positions, band levels, transients) through a triple buffer; the panel reads
-the newest one when it draws, about 60 times a second, and keeps the trails, dust and ripples to
+the newest one when it draws, about 60 times a second, and keeps the gas, dust and ripples to
 itself. Drags go back through a lock-free queue. Neither side ever waits for the other, and nothing on
 the audio thread allocates after activate.
 
