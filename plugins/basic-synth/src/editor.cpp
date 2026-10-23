@@ -18,6 +18,7 @@
 #include <jclap/ui/tabs.h>
 #include <jclap/ui/tooltip.h>
 
+#include <bitset>
 #include <string>
 #include <vector>
 
@@ -63,18 +64,24 @@ public:
       buildPlay();
       startTimer(30);
    }
+   // A key or cell still held with the mouse is let go, so closing the panel doesn't leave it hanging.
+   ~Panel() override {
+      keyboard_->releaseNote();
+      grid_->releaseNote();
+   }
 
    void showPage(int page) { tabs_->select(page); }
 
    void timerCallback() override {
       host_.voices(voices_);
       std::vector<ui::NoteGrid::Touch> touches;
-      for (int n = keyboard_->lowNote(); n <= keyboard_->highNote(); ++n)
-         keyboard_->setNoteOn(n, false);
+      std::bitset<128> held;
       for (const EditorHost::Voice &v : voices_) {
-         keyboard_->setNoteOn(v.note, true);
+         held.set(v.note);
          touches.push_back({v.note, v.bend, v.pressure, v.timbre});
       }
+      for (int n = keyboard_->lowNote(); n <= keyboard_->highNote(); ++n)
+         keyboard_->setNoteOn(n, held[n]);
       grid_->setTouches(touches);
       // Bright at the top of the LFO's swing, dark at the bottom, off with no note held.
       float lfo = 0.0f;

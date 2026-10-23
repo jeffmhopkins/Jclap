@@ -111,7 +111,8 @@ private:
       }
       // One sample of an RC curve from `from` toward a point just past `target`.
       double toward(double from, double target) const {
-         const double aim = target + (target >= from ? overshoot : -overshoot);
+         // Already there counts as falling, so a release from silence ends instead of rising.
+         const double aim = target + (target > from ? overshoot : -overshoot);
          return aim + (from - aim) * coef;
       }
    };

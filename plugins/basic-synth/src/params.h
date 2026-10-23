@@ -13,6 +13,8 @@
 
 namespace basic_synth {
 
+// The ids are the host's names for the params, in automation and saved projects, so once released
+// they stay put: a new param goes at the end, before kParamCount.
 enum ParamId : clap_id {
    // Oscillator.
    kWave,

@@ -39,6 +39,9 @@ public:
 
    // The voices to show (held notes and their expression). Replaces the previous set.
    void setTouches(std::vector<Touch> touches);
+   // Lets go of a cell held with the mouse, sending onNoteOff. For a panel closing mid-press, so the
+   // note doesn't hang.
+   void releaseNote();
 
    int noteAt(int column, int row) const { return low_ + column + row * interval_; }
 

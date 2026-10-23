@@ -168,7 +168,9 @@ void NoteGrid::mouseDrag(const visage::MouseEvent &e) {
    redraw();
 }
 
-void NoteGrid::mouseUp(const visage::MouseEvent &) {
+void NoteGrid::mouseUp(const visage::MouseEvent &) { releaseNote(); }
+
+void NoteGrid::releaseNote() {
    if (!playing_)
       return;
    playing_ = false;

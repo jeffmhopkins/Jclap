@@ -30,7 +30,10 @@ void ActivityLed::setCount(uint32_t count) {
 }
 
 void ActivityLed::setLevel(float level) {
-   level_ = std::clamp(level, 0.0f, 1.0f);
+   level = std::clamp(level, 0.0f, 1.0f);
+   if (level == level_)
+      return;
+   level_ = level;
    if (level_ > 0.0f && fadeMs > 0 && !isRunning())
       startTimer(kTickMs);
    redraw();

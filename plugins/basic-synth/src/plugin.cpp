@@ -64,7 +64,8 @@ struct ChannelState {
    double bend = 0.0, pressure = 0.0, timbre = 0.5;
 };
 
-// State layout: 4-byte magic, uint32 version, then one double per param in kParams order.
+// State layout: 4-byte magic, uint32 version, uint32 param count, then one double per param in id
+// order. A state from a version with fewer params loads them and leaves the rest at their defaults.
 constexpr char kStateMagic[4] = {'J', 'B', 'S', 'Y'};
 constexpr uint32_t kStateVersion = 1;
 
@@ -236,8 +237,9 @@ public:
    // ---- state ----
 
    bool stateSave(const clap_ostream_t *stream) override {
-      const uint32_t version = kStateVersion;
-      if (!jclap::core::writeAll(stream, kStateMagic, 4) || !jclap::core::writeAll(stream, &version, 4))
+      const uint32_t version = kStateVersion, count = kParamCount;
+      if (!jclap::core::writeAll(stream, kStateMagic, 4) || !jclap::core::writeAll(stream, &version, 4) ||
+          !jclap::core::writeAll(stream, &count, 4))
          return false;
       for (size_t i = 0; i < kParamCount; ++i) {
          const double v = values_[i].load();
@@ -249,15 +251,21 @@ public:
 
    bool stateLoad(const clap_istream_t *stream) override {
       char magic[4];
-      uint32_t version = 0;
-      double v[kParamCount];
+      uint32_t version = 0, count = 0;
       if (!jclap::core::readAll(stream, magic, 4) || std::memcmp(magic, kStateMagic, 4) ||
           !jclap::core::readAll(stream, &version, 4) || version != kStateVersion ||
-          !jclap::core::readAll(stream, v, sizeof(v)))
+          !jclap::core::readAll(stream, &count, 4))
          return false;
-      for (size_t i = 0; i < kParamCount; ++i) {
-         if (!std::isfinite(v[i]))
+      // Params past ours are from a newer version, and ignored.
+      double v[kParamCount];
+      for (size_t i = 0; i < kParamCount; ++i)
+         v[i] = kParams[i].defaultValue;
+      for (uint32_t i = 0; i < count; ++i) {
+         double d;
+         if (!jclap::core::readAll(stream, &d, sizeof(d)) || !std::isfinite(d))
             return false;
+         if (i < kParamCount)
+            v[i] = d;
       }
       for (size_t i = 0; i < kParamCount; ++i)
          values_[i].store(std::clamp(v[i], kParams[i].min, kParams[i].max));
@@ -413,7 +421,8 @@ private:
       switch (h->type) {
       case CLAP_EVENT_PARAM_VALUE: {
          auto *ev = reinterpret_cast<const clap_event_param_value_t *>(h);
-         if (ev->param_id < kParamCount)
+         // A NaN would get past the clamp and silence the synth for good.
+         if (ev->param_id < kParamCount && std::isfinite(ev->value))
             values_[ev->param_id].store(std::clamp(ev->value, kParams[ev->param_id].min, kParams[ev->param_id].max));
          break;
       }
@@ -421,7 +430,7 @@ private:
          // An amount added to the param: for every voice when no note is named, else for the voices
          // it names (Bitwig's polyphonic modulators send one per note id).
          auto *ev = reinterpret_cast<const clap_event_param_mod_t *>(h);
-         if (ev->param_id >= kParamCount)
+         if (ev->param_id >= kParamCount || !std::isfinite(ev->amount))
             break;
          if (ev->note_id == -1 && ev->key == -1 && ev->channel == -1) {
             mods_[ev->param_id].store(ev->amount);
@@ -454,6 +463,8 @@ private:
       }
       case CLAP_EVENT_NOTE_EXPRESSION: {
          auto *ev = reinterpret_cast<const clap_event_note_expression_t *>(h);
+         if (!std::isfinite(ev->value))
+            break;
          for (Slot &s : slots_) {
             if (!matches(s, ev->note_id, ev->port_index, ev->channel, ev->key))
                continue;

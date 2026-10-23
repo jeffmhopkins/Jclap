@@ -324,5 +324,18 @@ int main() {
       JCLAP_CHECK(near(gainToDb(vca.process(1.0f, 0.5f)), -30.0, 1e-3));
       JCLAP_CHECK_EQ(vca.process(1.0f, 1.0f), 1.0f);
    }
+   // A gate let go before the attack has moved ends in silence, without a blip upward.
+   {
+      Envelope env;
+      env.setSampleRate(48000);
+      env.setRelease(0.1);
+      env.gateOn();
+      env.gateOff();
+      float peak = 0.0f;
+      for (int i = 0; i < 100 && env.isActive(); ++i)
+         peak = std::max(peak, env.process());
+      JCLAP_CHECK(peak == 0.0f && !env.isActive());
+   }
+
    return jclap::core::testResult();
 }

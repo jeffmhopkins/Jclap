@@ -4,7 +4,10 @@
 #include <jclap/core/test_host.h>
 
 #include <algorithm>
+#include <clap/ext/state.h>
+
 #include <cmath>
+#include <cstring>
 
 #include <vector>
 
@@ -71,6 +74,25 @@ struct Run {
       }
       return count > 1 ? (count - 1) * 48000.0 / (last - first) : 0.0;
    }
+};
+
+// A byte buffer the plugin's state extension writes to and reads from.
+struct Buffer {
+   std::vector<uint8_t> bytes;
+   size_t pos = 0;
+   clap_ostream_t out{this, [](const clap_ostream_t *s, const void *data, uint64_t size) -> int64_t {
+                         auto *b = static_cast<Buffer *>(s->ctx);
+                         b->bytes.insert(b->bytes.end(), static_cast<const uint8_t *>(data),
+                                         static_cast<const uint8_t *>(data) + size);
+                         return static_cast<int64_t>(size);
+                      }};
+   clap_istream_t in{this, [](const clap_istream_t *s, void *data, uint64_t size) -> int64_t {
+                        auto *b = static_cast<Buffer *>(s->ctx);
+                        const size_t n = std::min<size_t>(size, b->bytes.size() - b->pos);
+                        std::memcpy(data, b->bytes.data() + b->pos, n);
+                        b->pos += n;
+                        return static_cast<int64_t>(n);
+                     }};
 };
 
 bool near(double a, double b, double tolerance) { return std::fabs(a - b) <= tolerance; }
@@ -480,6 +502,48 @@ int main() {
          JCLAP_CHECK(h.textToValue(id, h.paramText(id, value).c_str(), back));
          JCLAP_CHECK(h.paramText(id, back) == h.paramText(id, value));
       }
+   }
+
+   // State: a round trip, and a state with fewer params (an older version) loads them and leaves
+   // the rest at their defaults.
+   {
+      auto *state = static_cast<const clap_plugin_state_t *>(h.plugin()->get_extension(h.plugin(), CLAP_EXT_STATE));
+      h.setParam(kResonance, 0.8);
+      h.setParam(kTimbreAmount, 1.0);
+      run(64);
+      Buffer saved;
+      JCLAP_CHECK(state->save(h.plugin(), &saved.out));
+      JCLAP_CHECK_EQ(saved.bytes.size(), 12u + 8u * kParamCount);
+      h.setParam(kResonance, 0.1);
+      run(64);
+      JCLAP_CHECK(state->load(h.plugin(), &saved.in));
+      JCLAP_CHECK(near(h.paramValue(kResonance), 0.8, 1e-12));
+
+      Buffer older;
+      older.bytes = saved.bytes;
+      const uint32_t count = kTimbreAmount;
+      std::memcpy(older.bytes.data() + 8, &count, 4);
+      older.bytes.resize(12 + 8 * count);
+      JCLAP_CHECK(state->load(h.plugin(), &older.in));
+      JCLAP_CHECK(near(h.paramValue(kResonance), 0.8, 1e-12));
+      JCLAP_CHECK(near(h.paramValue(kTimbreAmount), kParams[kTimbreAmount].defaultValue, 1e-12));
+
+      Buffer cut;
+      cut.bytes.assign(saved.bytes.begin(), saved.bytes.end() - 4);
+      JCLAP_CHECK(!state->load(h.plugin(), &cut.in));
+   }
+
+   // A NaN from the host is ignored rather than silencing the synth.
+   {
+      h.setParam(kCutoff, std::nan(""));
+      run(64);
+      JCLAP_CHECK(std::isfinite(h.paramValue(kCutoff)));
+      h.modulate(kCutoff, std::nan(""));
+      h.note(CLAP_EVENT_NOTE_ON, 60, 1.0);
+      run(4800);
+      JCLAP_CHECK(run.rms() > 0.01);
+      h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+      run(64);
    }
 
    return jclap::core::testResult();

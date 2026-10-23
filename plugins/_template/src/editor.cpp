@@ -77,6 +77,11 @@ public:
       buildGrid();
       startTimer(30);
    }
+   // A key or cell still held with the mouse is let go, so closing the panel doesn't leave it hanging.
+   ~Panel() override {
+      keyboard_->releaseNote();
+      grid_->releaseNote();
+   }
 
    void showPage(int page) { tabs_->select(page); }
 
