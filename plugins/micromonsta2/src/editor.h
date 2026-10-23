@@ -5,21 +5,15 @@
 
 #include <memory>
 
-#include "jclap/ui/window.h"
+#include <jclap/ui/params.h>
+#include <jclap/ui/window.h>
 
 namespace mm2 {
 
-// What the panel needs from the plugin. Called on the main (GUI) thread.
-class EditorHost {
+// What the panel needs from the plugin, on the main (GUI) thread. Params are addressed by CLAP id:
+// the CC number, or kChannelParamId. paramModulated() is what is actually sent, with host modulation.
+class EditorHost : public jclap::ui::ParamAccess {
 public:
-   virtual ~EditorHost() = default;
-   // The knob's own setting for kCcParams[index].
-   virtual double baseValue(int index) const = 0;
-   // What is actually sent: the setting plus any host modulation.
-   virtual double modulatedValue(int index) const = 0;
-   virtual void beginEdit(int index) = 0;
-   virtual void setValue(int index, double value) = 0;
-   virtual void endEdit(int index) = 0;
    virtual int channel() const = 0; // 1-16
    virtual void setChannel(int channel) = 0;
    virtual void sendAll() = 0;

@@ -52,7 +52,9 @@ Bank select (0/32), sustain (64) and All Sound/Notes Off (120/123) are left out.
 Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage. `src/editor.cpp`
 only holds the layout.
 Drag a knob up or down (shift for fine), use the mouse wheel for single steps, double-click to reset.
-The window can be resized and keeps its shape.
+Right-click a knob to reset it, type a value, or reach the host's menu for that parameter;
+right-click the background to pick a UI size. The window can be resized and keeps its shape.
 
 To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
-`build/plugins/micromonsta2/micromonsta2-screenshot docs/panel.png`.
+`build/plugins/micromonsta2/micromonsta2-screenshot plugins/micromonsta2/docs/panel.png`. With tools on,
+`ctest` checks the panel still renders like that image.
