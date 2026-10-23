@@ -8,6 +8,8 @@ project(jclap VERSION 0.1.5 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Plugins are shared libraries, so static dependencies (Visage, bgfx) must be position independent.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 include(FetchContent)
 FetchContent_Declare(clap
@@ -20,3 +22,4 @@ enable_testing()
 
 # One folder per plugin under plugins/, each with its own CMakeLists.txt.
 add_subdirectory(plugins/orb-polar)
+add_subdirectory(plugins/micromonsta2)

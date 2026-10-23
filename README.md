@@ -8,6 +8,7 @@ any settings show up as plain host parameters.
 | Plugin | Type | What it does |
 |---|---|---|
 | [Polar XY](plugins/orb-polar) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
+| [MicroMonsta 2 CC](plugins/micromonsta2) | Note effect | Knob panel that sends every MicroMonsta 2 parameter as a MIDI CC |
 
 ## Download
 
@@ -42,7 +43,8 @@ cmake --build build --config Release
 ctest --test-dir build -C Release
 ```
 
-All plugins land in `build/clap/`. CI builds Linux, macOS (universal) and Windows on every push.
+On Linux, install `libx11-dev libxrandr-dev libgl1-mesa-dev` first (the MicroMonsta 2 panel uses
+them). All plugins land in `build/clap/`. CI builds Linux, macOS (universal) and Windows on every push.
 
 ## Adding a plugin
 
