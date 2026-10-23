@@ -46,6 +46,8 @@ constexpr float kHeaderHeight = 52.0f;
 // The orbit view covers everything under the header; the bodies are framed in the open space between
 // the side cards, centred here (view coordinates, design units).
 constexpr float kStageX = 600.0f, kStageY = 272.0f, kStageRadius = 238.0f;
+// The camera's zoom (pixels per world unit) at which the sky is drawn at its own size.
+constexpr float kRestZoom = 150.0f;
 constexpr float kPi = 3.14159265f;
 
 constexpr unsigned kOrange = 0xfff28c28;
@@ -515,25 +517,37 @@ private:
                   dust_.end());
    }
 
+   // The sky follows the camera: zooming in spreads the stars and swells the nebulae, zooming out
+   // packs them closer. Near stars (the brighter ones) move more than far ones, so the sky has
+   // depth. The star field tiles, so zooming out never leaves an empty edge.
    void drawBackdrop(visage::Canvas &c, float s) {
       const float w = width(), h = height();
-      // Nebulae that brighten a little with the tank.
+      const float cx = kStageX * s, cy = kStageY * s;
+      const float zoom = zoom_ > 0.0f ? zoom_ / kRestZoom : 1.0f;
+      // Nebulae, far away, and brightening a little with the tank.
       const float lift = std::min(1.0f, frame_.late * 3.0f);
+      const float nk = std::clamp(std::pow(zoom, 0.25f), 0.8f, 1.4f);
       const auto nebula = [&](float x, float y, float r, unsigned color, float a) {
+         const float nx = cx + (x * s - cx) * nk, ny = cy + (y * s - cy) * nk, nr = r * s * nk;
          c.setColor(visage::Brush::radial(glow(color, a * (1.0f + 0.5f * lift), 1.0f), glow(color, 0.0f, 1.0f),
-                                          visage::Point(x * s, y * s), r * s));
-         c.circle((x - r) * s, (y - r) * s, 2 * r * s);
+                                          visage::Point(nx, ny), nr));
+         c.circle(nx - nr, ny - nr, 2 * nr);
       };
       nebula(300, 170, 420, 0xff4a2a8a, 0.2f);
       nebula(930, 470, 460, 0xff123f6e, 0.24f);
       nebula(760, 70, 300, 0xff7a2a5a, 0.11f);
       nebula(160, 590, 360, 0xff1b5560, 0.15f);
       for (const Star &st : stars_) {
+         const float k = std::pow(zoom, 0.35f + 0.65f * st.b);
          const float twinkle = 0.85f + 0.15f * std::sin(time_ * 1.3f + st.phase);
-         const float r = (0.6f + st.b * st.b * 1.8f) * s;
+         const float r = (0.6f + st.b * st.b * 1.8f) * s * std::clamp(std::sqrt(k), 0.7f, 1.4f);
          c.setColor(glow(st.b > 0.93f ? 0xffcfe0ff : 0xffffffff, (0.2f + 0.75f * st.b) * twinkle,
                          st.b > 0.96f ? 1.5f : 1.0f));
-         c.circle(st.x * w - r, st.y * h - r, 2 * r);
+         // Every copy of this star's tile that lands on screen.
+         const float ox = st.x * w - cx, oy = st.y * h - cy;
+         for (int ty = static_cast<int>(std::floor((-cy / k - oy) / h)); ty <= static_cast<int>(std::floor(((h - cy) / k - oy) / h)); ++ty)
+            for (int tx = static_cast<int>(std::floor((-cx / k - ox) / w)); tx <= static_cast<int>(std::floor(((w - cx) / k - ox) / w)); ++tx)
+               c.circle(cx + (ox + tx * w) * k - r, cy + (oy + ty * h) * k - r, 2 * r);
       }
    }
 
