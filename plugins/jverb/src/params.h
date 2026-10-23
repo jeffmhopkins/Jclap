@@ -294,7 +294,8 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    }
    switch (id) {
    case kDecay:
-      std::snprintf(out, size, value < 10.0 ? "%.2f s" : "%.1f s", value);
+      // The format is chosen from the value as it will print, so 9.996 shows as 10.0 s, not 10.00 s.
+      std::snprintf(out, size, value < 9.995 ? "%.2f s" : "%.1f s", value);
       break;
    case kSize:
       std::snprintf(out, size, "%.2f AU", value);
@@ -323,7 +324,7 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kBassXover:
    case kLowCut:
    case kHighCut:
-      if (value >= 1000.0)
+      if (value >= 999.5)
          std::snprintf(out, size, "%.1f kHz", value / 1000.0);
       else
          std::snprintf(out, size, "%.0f Hz", value);

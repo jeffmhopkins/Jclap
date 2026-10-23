@@ -446,21 +446,36 @@ private:
             ax += dx * g;
             ay += dy * g;
          }
-         // Another body's gas pushes back where it overlaps this one, and the seam heats up.
+         // Another body's gas pushes back where it overlaps this one, and the seam heats up. Where
+         // puffs bunch up (around a body under a loud passage) each one samples an even spread of at
+         // most kMaxChecks of its candidates and weights them up to match, so the cost per frame
+         // stays bounded instead of growing with the square of the crowd.
+         constexpr int kMaxChecks = 32;
          float contact = 0.0f, crowd = 0.0f;
          const int cx = cellOf(p.x), cy = cellOf(p.y);
-         for (int gy = std::max(0, cy - 1); gy <= std::min(kGrid - 1, cy + 1); ++gy)
-            for (int gx = std::max(0, cx - 1); gx <= std::min(kGrid - 1, cx + 1); ++gx)
+         const int gx0 = std::max(0, cx - 1), gx1 = std::min(kGrid - 1, cx + 1);
+         const int gy0 = std::max(0, cy - 1), gy1 = std::min(kGrid - 1, cy + 1);
+         int candidates = 0;
+         for (int gy = gy0; gy <= gy1; ++gy)
+            for (int gx = gx0; gx <= gx1; ++gx)
+               candidates += static_cast<int>(grid_[gy * kGrid + gx].size());
+         const int stride = (candidates + kMaxChecks - 1) / kMaxChecks;
+         const float weight = static_cast<float>(std::max(1, stride));
+         int seen = stride > 1 ? i % stride : 0;
+         for (int gy = gy0; gy <= gy1; ++gy)
+            for (int gx = gx0; gx <= gx1; ++gx)
                for (int j : grid_[gy * kGrid + gx]) {
+                  if (stride > 1 && seen++ % stride != 0)
+                     continue;
                   const Puff &q = puffs_[j];
                   const float dx = p.x - q.x, dy = p.y - q.y, reach = 0.6f * (p.size + q.size);
                   const float d2 = dx * dx + dy * dy;
                   if (d2 >= reach * reach)
                      continue;
-                  crowd += 1.0f;
+                  crowd += weight;
                   if (q.body == p.body)
                      continue;
-                  const float d = std::sqrt(d2) + 1e-4f, overlap = 1.0f - d / reach;
+                  const float d = std::sqrt(d2) + 1e-4f, overlap = weight * (1.0f - d / reach);
                   ax += 0.6f * overlap * dx / d;
                   ay += 0.6f * overlap * dy / d;
                   contact += overlap;
@@ -691,7 +706,18 @@ private:
       }
    }
 
-   void rescan() { user_ = userPresets(); }
+   // Reads the user's preset folder. Done when the panel opens, the menu opens and after a save, not
+   // on every arrow click, so stepping through presets never waits on the disk.
+   void rescan() {
+      const std::string current = currentIndex_ >= 0 && currentIndex_ < total() ? at(currentIndex_).name : "";
+      const bool wasUser = currentIndex_ >= static_cast<int>(factoryPresets().size());
+      user_ = userPresets();
+      currentIndex_ = -1;
+      if (!current.empty() && wasUser)
+         for (int i = 0; i < static_cast<int>(user_.size()); ++i)
+            if (user_[i].name == current)
+               currentIndex_ = static_cast<int>(factoryPresets().size()) + i;
+   }
 
    // Every preset in menu order: factory first, then the user's.
    int total() const { return static_cast<int>(factoryPresets().size() + user_.size()); }
@@ -699,29 +725,34 @@ private:
       const auto &f = factoryPresets();
       return i < static_cast<int>(f.size()) ? f[i] : user_[i - f.size()];
    }
-   const Preset *find(const std::string &name) const {
+   // The preset loaded by name: the one last loaded here if it still has that name, otherwise the
+   // first in menu order.
+   int indexOf(const std::string &name) const {
+      if (currentIndex_ >= 0 && currentIndex_ < total() && at(currentIndex_).name == name)
+         return currentIndex_;
       for (int i = 0; i < total(); ++i)
          if (at(i).name == name)
-            return &at(i);
-      return nullptr;
+            return i;
+      return -1;
+   }
+   const Preset *find(const std::string &name) const {
+      const int i = indexOf(name);
+      return i < 0 ? nullptr : &at(i);
    }
 
    void load(int i) {
       const Preset &p = at(i);
       applyPreset(p, host_);
       host_.setPresetName(p.name);
+      currentIndex_ = i;
       // Restart the orbits from the preset's masses and velocities.
       host_.send({OrbitCommand::Kind::Reset, 0, 0.0f, 0.0f});
       redraw();
    }
 
    void step(int dir) {
-      rescan();
       const int n = total();
-      int current = -1;
-      for (int i = 0; i < n; ++i)
-         if (at(i).name == host_.presetName())
-            current = i;
+      const int current = indexOf(host_.presetName());
       load(current < 0 ? 0 : (current + dir + n) % n);
    }
 
@@ -781,17 +812,35 @@ private:
    void finishSave(bool apply) {
       if (!editor_ || !editor_->isVisible())
          return;
-      const std::string name = presetFileName(editor_->text().toUtf8());
+      const std::string name = uniqueName(presetFileName(editor_->text().toUtf8()));
       editor_->setVisible(false);
       if (apply && writePreset(userPresetFolder() / (name + kPresetExtension), host_)) {
          host_.setPresetName(name);
          rescan();
+         for (int i = 0; i < static_cast<int>(user_.size()); ++i)
+            if (user_[i].name == name)
+               currentIndex_ = static_cast<int>(factoryPresets().size()) + i;
       }
       redraw();
    }
 
+   // A save name that won't hide a factory preset or silently replace another user preset: saving
+   // again over the user preset you're on keeps its name, anything else that's taken gets a number.
+   std::string uniqueName(const std::string &wanted) {
+      rescan();
+      const bool onUserPreset = currentIndex_ >= static_cast<int>(factoryPresets().size()) &&
+                                at(currentIndex_).name == wanted;
+      if (onUserPreset)
+         return wanted;
+      std::string name = wanted;
+      for (int k = 2; indexOf(name) >= 0; ++k)
+         name = wanted + " " + std::to_string(k);
+      return name;
+   }
+
    EditorHost &host_;
    std::vector<Preset> user_;
+   int currentIndex_ = -1;
    std::unique_ptr<visage::TextEditor> editor_;
    Zone hover_ = Zone::None;
 };

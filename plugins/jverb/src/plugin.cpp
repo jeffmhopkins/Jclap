@@ -133,6 +133,8 @@ public:
    void reset() override {
       engine_.reset();
       analyzer_.reset();
+      for (int band = 0; band < 3; ++band)
+         seenHits_[band] = analyzer_.hits(band);
    }
 
    const void *extension(const char *id) override {
@@ -154,13 +156,29 @@ public:
    double paramModulated(clap_id id) const override { return id < kParamCount ? value(id) : 0.0; }
    void beginEdit(clap_id id) override { edits_.begin(id); }
    void setParam(clap_id id, double v) override {
-      if (id >= kParamCount)
+      if (id >= kParamCount || !std::isfinite(v))
          return;
       v = std::clamp(v, kParams[id].min, kParams[id].max);
       values_[id].store(v);
       edits_.value(id, v);
    }
    void endEdit(clap_id id) override { edits_.end(id); }
+   void setParams(const double *values) override {
+      bool changed = false;
+      for (clap_id id = 0; id < kParamCount; ++id) {
+         if (!std::isfinite(values[id]))
+            continue;
+         const double v = std::clamp(values[id], kParams[id].min, kParams[id].max);
+         if (values_[id].load() == v)
+            continue;
+         values_[id].store(v);
+         pending_[id].store(true, std::memory_order_release);
+         changed = true;
+      }
+      if (changed)
+         if (auto *hostParams = hostExtension<clap_host_params_t>(CLAP_EXT_PARAMS))
+            hostParams->request_flush(host());
+   }
    const jclap::ui::HostMenu *hostMenu() const override { return &hostMenu_; }
    bool readFrame(OrbitFrame &out) override {
       if (!frames_.update())
@@ -207,7 +225,7 @@ public:
 
    void paramsFlush(const clap_input_events_t *in, const clap_output_events_t *out) override {
       handleEvents(in);
-      edits_.drain(out);
+      drainEdits(out);
    }
 
    // ---- state ----
@@ -259,7 +277,7 @@ public:
 
    clap_process_status process(const clap_process_t *proc) override {
       jclap::dsp::ScopedNoDenormals noDenormals;
-      edits_.drain(proc->out_events);
+      drainEdits(proc->out_events);
       handleEvents(proc->in_events);
       OrbitCommand cmd;
       while (commands_.pop(cmd))
@@ -277,6 +295,7 @@ public:
       const float *inL = in.data32[0], *inR = in.data32[in.channel_count > 1 ? 1 : 0];
       float *outL = out.data32[0], *outR = out.data32[out.channel_count > 1 ? 1 : 0];
       float peak[2] = {0.0f, 0.0f};
+      bool resetThisBlock = false;
       for (uint32_t i = 0; i < proc->frames_count; ++i) {
          if (tick_ == 0)
             controlTick();
@@ -286,8 +305,12 @@ public:
          float yl, yr, late;
          engine_.process(l, r, yl, yr, late);
          if (!std::isfinite(yl) || !std::isfinite(yr)) {
-            // Never pass on a NaN or infinity; start the tank again instead.
-            engine_.reset();
+            // Never pass on a NaN or infinity; start the tank again instead, at most once a block so
+            // a source that keeps producing them can't make every sample pay for a reset.
+            if (!resetThisBlock) {
+               engine_.reset();
+               resetThisBlock = true;
+            }
             yl = yr = 0.0f;
          }
          lateLevel_ = std::max(lateLevel_ * 0.9995f, late);
@@ -305,6 +328,18 @@ public:
    }
 
 private:
+   // Tells the host about the panel's edits: knob gestures in order, then each param a preset load
+   // changed, as one edit carrying its latest value.
+   void drainEdits(const clap_output_events_t *out) {
+      edits_.drain(out);
+      for (clap_id id = 0; id < kParamCount; ++id)
+         if (pending_[id].load(std::memory_order_relaxed) && pending_[id].exchange(false, std::memory_order_acquire)) {
+            jclap::core::pushParamGesture(out, id, true);
+            jclap::core::pushParamValue(out, id, values_[id].load());
+            jclap::core::pushParamGesture(out, id, false);
+         }
+   }
+
    void handleEvents(const clap_input_events_t *in) {
       const uint32_t n = in->size(in);
       for (uint32_t i = 0; i < n; ++i) {
@@ -313,12 +348,12 @@ private:
             continue;
          if (h->type == CLAP_EVENT_PARAM_VALUE) {
             auto *ev = reinterpret_cast<const clap_event_param_value_t *>(h);
-            if (ev->param_id < kParamCount)
+            if (ev->param_id < kParamCount && std::isfinite(ev->value))
                values_[ev->param_id].store(std::clamp(ev->value, kParams[ev->param_id].min, kParams[ev->param_id].max));
          }
          else if (h->type == CLAP_EVENT_PARAM_MOD) {
             auto *ev = reinterpret_cast<const clap_event_param_mod_t *>(h);
-            if (ev->param_id < kParamCount)
+            if (ev->param_id < kParamCount && std::isfinite(ev->amount))
                mods_[ev->param_id].store(ev->amount);
          }
       }
@@ -370,6 +405,10 @@ private:
          radius_[b] = b < sim_.count() ? sim_.radius(b) : 1.0;
       ++resets_;
       spawnPending_ = false;
+      // The same kicks in the same order after every restart, so two bounces match.
+      rng_ = kRngSeed;
+      for (int band = 0; band < 3; ++band)
+         seenHits_[band] = analyzer_.hits(band);
    }
 
    int choice(clap_id id) const { return static_cast<int>(value(id) + 0.5); }
@@ -429,6 +468,10 @@ private:
          rate = kLap / (choice(kSyncBars) * 4.0 * 60.0 / tempo_) / std::sqrt(gravity);
       if (run)
          sim_.step(rate * kControlTick / sampleRate_, mass, gravity);
+      // Should the orbits ever blow up (they shouldn't: every input is finite), start them again
+      // rather than send NaN positions on to the tank and the panel.
+      if (!sim_.finite())
+         restartSim();
 
       // What each body sends: distance (smoothed over about 60 ms), pan, and a modulation signal
       // from its speed relative to the others and how close its nearest neighbour is.
@@ -558,6 +601,8 @@ private:
    // Host modulation, written by the audio thread.
    std::atomic<double> mods_[kParamCount];
    jclap::core::EditQueue edits_;
+   // Params a preset load changed that the host hasn't been told about yet.
+   std::atomic<bool> pending_[kParamCount] = {};
    jclap::ui::HostMenu hostMenu_;
    // Main thread.
    std::string presetName_ = "Init";
@@ -573,7 +618,8 @@ private:
    double lastVelocity_[kMaxBodies] = {1, 1, 1, 1, 1, 1};
    uint32_t seenHits_[3] = {};
    uint32_t resets_ = 0;
-   uint32_t rng_ = 0x9e3779b9u;
+   static constexpr uint32_t kRngSeed = 0x9e3779b9u;
+   uint32_t rng_ = kRngSeed;
    float lateLevel_ = 0.0f;
    bool spawnPending_ = false;
    double spawnX_ = 0.0, spawnY_ = 0.0;

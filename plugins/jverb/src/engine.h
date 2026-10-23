@@ -63,6 +63,11 @@ struct Ramp {
       value = target;
       left = 0;
    }
+   // Lands on the target now: after a reset, so a restarted instance starts where a fresh one does.
+   void settle() {
+      value += step * static_cast<float>(left);
+      left = 0;
+   }
    float next() {
       if (left > 0) {
          value += step;
@@ -71,6 +76,13 @@ struct Ramp {
       return value;
    }
 };
+
+// Leaves the tank's signal untouched below 2 and bends it softly toward 3 above, a last guard so
+// that nothing (a host sending full-scale square waves into Freeze, say) can make the lines run away.
+inline float tankLimit(float x) {
+   const float m = std::fabs(x);
+   return m < 2.0f ? x : std::copysign(2.0f + std::tanh(m - 2.0f), x);
+}
 
 struct OnePole {
    float a = 1.0f, y = 0.0f;
@@ -81,11 +93,14 @@ struct OnePole {
    float highpass(float x) { return x - lowpass(x); }
 };
 
-// A Schroeder allpass around a DelayLine, so its length can glide.
+// A Schroeder allpass around a DelayLine. Its length glides toward `target` a little every sample
+// (`glide` per sample, set with the sample rate), so a length that changes each control tick
+// bends smoothly instead of stepping.
 struct Allpass {
    jclap::dsp::DelayLine line;
-   float length = 100.0f, gain = 0.5f;
+   float length = 100.0f, target = 100.0f, gain = 0.5f, glide = 0.001f;
    float process(float x) {
+      length += glide * (target - length);
       const float d = line.read(length);
       const float w = x + gain * d;
       line.write(w);
@@ -195,14 +210,21 @@ public:
       emph_.y = deemph_.y = dc_.y = 0.0f;
       held_ = 0.0f;
       holdCount_ = 0;
+      first_ = true;
    }
    void set(const Control &c) {
       type_ = c.driveType;
+      inLoop_ = c.driveWhere == DriveWhere::Loop;
       gain_.set(static_cast<float>(jclap::dsp::dbToGain(c.drive)));
       tone_.set(static_cast<float>(c.driveTone));
       bias_.set(static_cast<float>(c.driveBias));
       mix_.set(static_cast<float>(c.driveMix));
       trim_.set(static_cast<float>(jclap::dsp::dbToGain(c.driveTrim)));
+      if (first_) {
+         first_ = false;
+         for (Ramp *r : {&gain_, &tone_, &bias_, &mix_, &trim_})
+            r->settle();
+      }
    }
    float process(float x) {
       const float gain = gain_.next(), tone = tone_.next(), bias = bias_.next(), mix = mix_.next(), trim = trim_.next();
@@ -231,12 +253,33 @@ public:
       const float lo2 = deemph_.lowpass(y);
       y = lo2 / (2.0f - tilt) + (y - lo2) / tilt;
       // Most shapes come out near full scale whatever the drive, so bring them back to the level
-      // that went in before the trim.
-      y *= trim / std::sqrt(std::max(1.0f, gain));
+      // that went in before the trim. In the loop, quiet signals must not come out louder than they
+      // went in, or the loop would grow below 100% feedback: there the makeup undoes the whole
+      // small-signal gain (drive times the shape's slope at rest), and the trim can only cut.
+      if (inLoop_)
+         y *= std::min(1.0f, trim) / (std::max(1.0f, gain) * slope(bias));
+      else
+         y *= trim / std::sqrt(std::max(1.0f, gain));
       return x + mix * (y - x);
    }
 
 private:
+   // How steep shape() is around its resting point: the gain it gives a quiet signal.
+   float slope(float bias) const {
+      switch (type_) {
+      case DriveType::Tube: {
+         const float t = std::tanh(0.6f * bias);
+         return std::max(0.05f, 1.0f - t * t);
+      }
+      case DriveType::Fuzz:
+         return 2.5f * std::exp(-2.5f * 0.4f * bias);
+      case DriveType::Fold:
+         return 1.5707963f * (1.0f + bias);
+      default:
+         return 1.0f;
+      }
+   }
+
    float shape(float x, float bias) const {
       switch (type_) {
       case DriveType::Tape:
@@ -258,6 +301,7 @@ private:
 
    double sampleRate_ = 48000.0;
    DriveType type_ = DriveType::Tube;
+   bool inLoop_ = true, first_ = true;
    Oversampler os_;
    OnePole emph_, deemph_, dc_;
    Ramp gain_, tone_, bias_, mix_, trim_;
@@ -275,7 +319,7 @@ public:
       sr_ = sampleRate;
       for (auto &l : line_)
          l.setMaxDelay(static_cast<int>(kEchoMaxSeconds * sr_) + 8);
-      glide_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.12 * sr_)));
+      glide_ = 1.0 - std::exp(-1.0 / (0.12 * sr_));
       for (int ch = 0; ch < 2; ++ch) {
          hp_[ch].setCutoff(60.0, sr_);
          tone_[ch].setCutoff(1800.0, sr_);
@@ -291,23 +335,26 @@ public:
       first_ = true;
    }
    void set(const Control &c) {
-      target_ = static_cast<float>(std::clamp(c.echoSeconds, 0.005, kEchoMaxSeconds - 0.01) * sr_);
-      if (first_) {
+      target_ = std::clamp(c.echoSeconds, 0.005, kEchoMaxSeconds - 0.01) * sr_;
+      if (first_)
          time_ = target_;
-         first_ = false;
-      }
       feedback_.set(static_cast<float>(c.echoFeedback));
       const double t = std::clamp(c.echoTone, -1.0, 1.0);
       low_.set(static_cast<float>(jclap::dsp::dbToGain(t < 0 ? 0.0 : -9.0 * t)));
       high_.set(static_cast<float>(jclap::dsp::dbToGain(t < 0 ? 12.0 * t : 3.0 * t)));
       pingPong_ = c.echoPingPong;
+      if (first_) {
+         first_ = false;
+         for (Ramp *r : {&feedback_, &low_, &high_})
+            r->settle();
+      }
    }
    // Takes a stereo pair and returns only the repeats.
    void process(const float in[2], float out[2]) {
       time_ += glide_ * (target_ - time_);
       const float fb = feedback_.next(), lo = low_.next(), hi = high_.next();
       for (int ch = 0; ch < 2; ++ch)
-         out[ch] = line_[ch].read(time_);
+         out[ch] = line_[ch].read(static_cast<float>(time_));
       for (int ch = 0; ch < 2; ++ch) {
          float v = out[ch];
          const float l = tone_[ch].lowpass(v);
@@ -329,7 +376,8 @@ private:
    jclap::dsp::DelayLine line_[2];
    OnePole hp_[2], tone_[2];
    float fb_[2] = {};
-   float time_ = 0.0f, target_ = 0.0f, glide_ = 0.001f;
+   // In double: a float glide toward a target of ~200,000 samples stalls a few hundred samples short.
+   double time_ = 0.0, target_ = 0.0, glide_ = 0.001;
    bool first_ = true, pingPong_ = true;
    Ramp feedback_, low_, high_;
 };
@@ -368,6 +416,12 @@ public:
       echo_.setSampleRate(sr_);
       lengthGlide_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.025 * sr_)));
       weightGlide_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.08 * sr_)));
+      for (int ch = 0; ch < 2; ++ch) {
+         for (auto &ap : bloom_[ch])
+            ap.glide = lengthGlide_;
+         for (auto &ap : smear_[ch])
+            ap.glide = lengthGlide_;
+      }
       reset();
    }
 
@@ -406,6 +460,7 @@ public:
       const bool freeze = c.freeze;
       // Lines and their decay. Each body owns a pair: its distance from the centre of mass stretches
       // or squeezes them, and its radial speed is heard as Doppler.
+      double loss = 0.0;
       for (int b = 0; b < kMaxBodies; ++b) {
          const bool on = b < c.bodies;
          const double dn = std::clamp(c.radius[b] / 0.9, 0.25, 2.2);
@@ -417,6 +472,9 @@ public:
             const double rt = std::max(0.05, c.decay);
             const double gMid = freeze ? 0.99995 : std::pow(10.0, -3.0 * seconds / rt);
             const double gBass = freeze ? 0.99995 : std::min(0.9999, std::pow(10.0, -3.0 * seconds / (rt * c.bassMult)));
+            if (on)
+               loss += 1.0 - std::max(std::pow(10.0, -3.0 * seconds / rt),
+                                      std::min(0.9999, std::pow(10.0, -3.0 * seconds / (rt * c.bassMult))));
             gainMid_[k].set(static_cast<float>(gMid));
             gainBass_[k].set(static_cast<float>(gBass));
             bassLp_[k].setCutoff(c.bassXover, sr_);
@@ -440,24 +498,33 @@ public:
          }
          const double attack = std::max(0.0, c.attack);
          for (int i = 0; i < 3; ++i) {
-            bloom_[ch][i].length = static_cast<float>(kBloomMs[ch][i] * 0.001 * sr_ * std::min(2.0, std::sqrt(size)));
+            bloom_[ch][i].target = static_cast<float>(kBloomMs[ch][i] * 0.001 * sr_ * std::min(2.0, std::sqrt(size)));
             bloom_[ch][i].gain = static_cast<float>(0.55 + 0.3 * attack);
          }
          for (int i = 0; i < 2; ++i) {
-            smear_[ch][i].length = static_cast<float>(kSmearMs[ch][i] * 0.001 * sr_);
+            smear_[ch][i].target = static_cast<float>(kSmearMs[ch][i] * 0.001 * sr_);
             smear_[ch][i].gain = static_cast<float>(0.7 * c.smear);
          }
          drive_[ch].set(c);
          tiltLp_[ch].setCutoff(700.0, sr_);
       }
-      reverseWindow_ = static_cast<float>((0.08 + 0.5 * std::max(0.0, -c.attack)) * std::min(2.0, std::sqrt(size)) * sr_);
+      targetReverseWindow_ = static_cast<float>((0.08 + 0.5 * std::max(0.0, -c.attack)) * std::min(2.0, std::sqrt(size)) * sr_);
       predelaySamples_.set(static_cast<float>(c.predelayMs * 0.001 * sr_));
       earlySize_.set(static_cast<float>(size));
       attack_.set(static_cast<float>(c.attack));
       inputGain_.set(freeze ? 0.0f : 1.0f);
 
       // Loop.
-      loopGain_.set(freeze ? 0.0f : static_cast<float>(0.85 * c.feedback));
+      // The outer loop goes around the whole tank, whose resonances get louder the longer the decay:
+      // their peak gain grows about as 1 / (what a line loses each pass). Scaling the loop by that
+      // loss keeps Feedback meaning the same at every decay: below 100% the tail still dies away,
+      // past it the loop grows into the safety stage. The constant is measured, and more bodies
+      // spread the resonances thinner, so they take more.
+      const double meanLoss = loss / std::max(1, 2 * c.bodies);
+      const double spread = c.bodies > 3 ? std::pow(c.bodies / 3.0, 1.25) : 1.0;
+      const double loopScale = std::min(1.0, kLoopCalibration * spread * meanLoss);
+      loopScale_.set(static_cast<float>(loopScale));
+      loopGain_.set(freeze ? 0.0f : static_cast<float>(0.85 * c.feedback * loopScale));
       shimmer_.set(static_cast<float>(c.shimmer));
       pitchRatio_ = std::exp2(c.shimmerPitch / 12.0);
       smearMix_.set(static_cast<float>(c.smear));
@@ -484,6 +551,25 @@ public:
             length_[k] = targetLength_[k];
             weight_[k] = targetWeight_[k];
          }
+         for (int ch = 0; ch < 2; ++ch) {
+            for (auto &ap : bloom_[ch])
+               ap.length = ap.target;
+            for (auto &ap : smear_[ch])
+               ap.length = ap.target;
+         }
+         reverseWindow_ = targetReverseWindow_;
+         for (detail::Ramp &r : gainMid_)
+            r.settle();
+         for (detail::Ramp &r : gainBass_)
+            r.settle();
+         for (int b = 0; b < kMaxBodies; ++b) {
+            panL_[b].settle();
+            panR_[b].settle();
+         }
+         for (detail::Ramp *r : {&outScale_, &predelaySamples_, &earlySize_, &attack_, &inputGain_, &loopGain_, &loopScale_,
+                                 &shimmer_, &smearMix_, &tiltLow_, &tiltHigh_, &echoMix_, &earlyGain_, &lateGain_,
+                                 &width_, &duck_, &dry_, &wet_, &level_})
+            r->settle();
       }
    }
 
@@ -520,6 +606,7 @@ public:
 
       // Diffuse, then shape the attack: a slow bloom one way, reversed windows the other.
       const float attack = attack_.next(), inGain = inputGain_.next();
+      reverseWindow_ += lengthGlide_ * (targetReverseWindow_ - reverseWindow_);
       float inject[2];
       for (int ch = 0; ch < 2; ++ch) {
          float d = delayed[ch];
@@ -545,9 +632,13 @@ public:
          weight_[k] += weightGlide_ * (targetWeight_[k] - weight_[k]);
          sumW2 += weight_[k] * weight_[k];
          y[k] = lines_[k].read(length_[k]);
-         const float low = bassLp_[k].lowpass(y[k]);
-         const float high = highLp_[k].lowpass(y[k] - low);
-         o[k] = gainBass_[k].next() * low + gainMid_[k].next() * high;
+         // Bass and treble decay. Written as a lowpass shelf after the mid gain, then a lowpass for the
+         // treble, so the loop's gain at every frequency stays at or below the larger of the two
+         // decay gains: splitting into a low band and a damped high band and summing them can come
+         // out above both near the crossover, and at long decays the tank then grows.
+         const float gMid = gainMid_[k].next(), gBass = gainBass_[k].next();
+         const float shelved = gMid * y[k] + (gBass - gMid) * bassLp_[k].lowpass(y[k]);
+         o[k] = highLp_[k].lowpass(shelved);
       }
       // Householder reflection over the active lines: every line feeds every other, energy kept.
       // Lines fading out drop out of the mix and just ring down on their own.
@@ -568,12 +659,12 @@ public:
          const float u = weight_[k] * norm;
          const float fed = o[k] - 2.0f * u * dot;
          const float in = weight_[k] * kInjectSign[k] * inject[k & 1] * 0.5f;
-         lines_[k].write(fed + in);
+         lines_[k].write(detail::tankLimit(fed + in));
       }
 
       // The outer loop, heard next sample.
       const float shimmer = shimmer_.next(), smearMix = smearMix_.next();
-      const float tl = tiltLow_.next(), th = tiltHigh_.next(), fb = loopGain_.next();
+      const float tl = tiltLow_.next(), th = tiltHigh_.next(), fb = loopGain_.next(), loopScale = loopScale_.next();
       for (int ch = 0; ch < 2; ++ch) {
          float v = late[ch];
          if (loop)
@@ -595,7 +686,7 @@ public:
          // even with Feedback at zero. The safety stage below keeps the two loops bounded.
          echo_.process(loopPre_, echoed);
          for (int ch = 0; ch < 2; ++ch)
-            loopTail_[ch] += 0.6f * echoMix * inGain * echoed[ch];
+            loopTail_[ch] += 0.6f * echoMix * inGain * loopScale * echoed[ch];
       }
       for (int ch = 0; ch < 2; ++ch) {
          const float v = loopTail_[ch];
@@ -631,6 +722,7 @@ public:
 
 private:
    // Line lengths at size 1 and rest distance, in ms: two per body, none a simple ratio of another.
+   static constexpr double kLoopCalibration = 5.0;
    static constexpr double kLineMs[kLines] = {31.3, 35.9, 38.7, 44.3, 42.1, 49.7,
                                               47.3, 55.1, 53.9, 61.7, 58.1, 66.9};
    static constexpr float kInjectSign[kLines] = {1, 1, -1, 1, 1, -1, -1, -1, 1, -1, -1, 1};
@@ -654,7 +746,7 @@ private:
    detail::OnePole loopHp_[2], tiltLp_[2];
    float loopOut_[2] = {}, loopPre_[2] = {}, loopTail_[2] = {};
    detail::Echo echo_;
-   float reverseWindow_ = 4800.0f;
+   float reverseWindow_ = 4800.0f, targetReverseWindow_ = 4800.0f;
    double pitchRatio_ = 2.0;
 
    jclap::dsp::DelayLine lines_[kLines];
@@ -665,7 +757,7 @@ private:
    detail::Ramp panL_[kMaxBodies], panR_[kMaxBodies], outScale_;
 
    detail::Ramp predelaySamples_, earlySize_, attack_, inputGain_;
-   detail::Ramp loopGain_, shimmer_, smearMix_, tiltLow_, tiltHigh_;
+   detail::Ramp loopGain_, loopScale_, shimmer_, smearMix_, tiltLow_, tiltHigh_;
    detail::Ramp echoMix_;
    detail::Ramp earlyGain_, lateGain_, width_, duck_, dry_, wet_, level_;
    float duckEnv_ = 0.0f, duckAttack_ = 0.01f, duckRelease_ = 0.001f;
