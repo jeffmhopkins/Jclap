@@ -12,7 +12,9 @@ out to the synth as a CC. Notes and other MIDI pass straight through.
    (or HW Instrument) device that sends MIDI to the synth.
 2. Set the panel's **MIDI CH** to the synth's MIDI channel (SYSTEM page S02). In bi-timbral mode
    Program B listens on that channel + 1, so use a second instance for it.
-3. Turn knobs, automate them, or drop Bitwig modulators on them.
+3. Turn knobs, automate them, or drop Bitwig modulators on them. Modulation is added on top of the
+   knob's setting: the knob stays where you put it, a thin white arc shows how far the modulator moves
+   it, and the number under the knob is the value actually sent.
 
 ## How it sends
 

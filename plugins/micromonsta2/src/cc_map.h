@@ -100,6 +100,9 @@ inline int indexOfCc(int cc) {
    return -1;
 }
 
+// Host modulation (e.g. a Bitwig modulator) is an offset on top of the knob's setting.
+inline double modulated(double base, double mod) { return std::clamp(base + mod, 0.0, 127.0); }
+
 inline int toCcValue(double value) { return std::clamp(static_cast<int>(std::lround(value)), 0, 127); }
 
 // Remembers what was last sent for each CC so only real changes go out. A parameter is only sent

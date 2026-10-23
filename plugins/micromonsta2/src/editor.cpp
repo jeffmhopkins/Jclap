@@ -34,6 +34,7 @@ constexpr unsigned kGreen = 0xff9bd36a;
 constexpr unsigned kText = 0xffe6e8eb;
 constexpr unsigned kDimText = 0xff8d939c;
 constexpr unsigned kTrack = 0xff2e333b;
+constexpr unsigned kModulation = 0xfff4f1e6;
 
 visage::Font font(float size) { return visage::Font(size, visage::fonts::Lato_Regular_ttf); }
 
@@ -41,16 +42,19 @@ visage::Font font(float size) { return visage::Font(size, visage::fonts::Lato_Re
 class Knob : public visage::Frame {
 public:
    Knob(EditorHost &host, int index, unsigned accent) : host_(host), index_(index), accent_(accent) {
-      value_ = host_.ccValue(index_);
+      base_ = host_.baseValue(index_);
+      sent_ = host_.modulatedValue(index_);
    }
 
    const CcParam &param() const { return kCcParams[index_]; }
 
    // Picks up changes made by the host (automation, modulation, state load).
    void sync() {
-      const double v = host_.ccValue(index_);
-      if (v != value_) {
-         value_ = v;
+      const double base = host_.baseValue(index_), sent = host_.modulatedValue(index_);
+      if (base != base_ || sent != sent_) {
+         if (!dragging_)
+            base_ = base;
+         sent_ = sent;
          redraw();
       }
    }
@@ -65,8 +69,7 @@ public:
       canvas.text(param().label, font(10.5f * s), visage::Font::kCenter, 0, 0, w, 16.0f * s);
 
       // Track and value arc. Our angles run clockwise from 12 o'clock; Visage's start at 3 o'clock.
-      const float t = static_cast<float>(value_ / 127.0);
-      const float angle = -kSweep + 2.0f * kSweep * t;
+      const float angle = angleFor(base_);
       const float from = param().bipolar ? 0.0f : -kSweep;
       const float ring = 3.2f * s;
       canvas.setColor(kTrack);
@@ -76,6 +79,15 @@ public:
          canvas.arc(cx - d * 0.5f, cy - d * 0.5f, d, ring, 0.5f * (angle + from) - 0.5f * kPi,
                     0.5f * std::fabs(angle - from),
                     true);
+      }
+
+      // Host modulation: a thin outer arc from the knob's setting to the value being sent.
+      const float modAngle = angleFor(sent_);
+      if (std::fabs(modAngle - angle) > 0.01f) {
+         const float md = d + 7.0f * s;
+         canvas.setColor(kModulation);
+         canvas.arc(cx - md * 0.5f, cy - md * 0.5f, md, 2.0f * s, 0.5f * (angle + modAngle) - 0.5f * kPi,
+                    0.5f * std::fabs(modAngle - angle), true);
       }
 
       // Knob body: soft shadow, shaded cap and a pointer line.
@@ -96,7 +108,7 @@ public:
 
       const float textY = cy + d * 0.5f + 3.0f * s;
       canvas.setColor(kText);
-      canvas.text(std::to_string(toCcValue(value_)), font(12.0f * s), visage::Font::kCenter, 0, textY, w,
+      canvas.text(std::to_string(toCcValue(sent_)), font(12.0f * s), visage::Font::kCenter, 0, textY, w,
                   15.0f * s);
       canvas.setColor(kDimText);
       canvas.text("CC " + std::to_string(param().cc), font(9.5f * s), visage::Font::kCenter, 0,
@@ -113,7 +125,7 @@ public:
       }
       dragging_ = true;
       dragStartY_ = e.position.y;
-      dragStartValue_ = value_;
+      dragStartValue_ = base_;
       host_.beginEdit(index_);
    }
 
@@ -136,22 +148,25 @@ public:
       if (delta == 0.0f)
          return false;
       host_.beginEdit(index_);
-      set(std::round(value_) + (delta > 0 ? 1.0 : -1.0));
+      set(std::round(base_) + (delta > 0 ? 1.0 : -1.0));
       host_.endEdit(index_);
       return true;
    }
 
 private:
    void set(double v) {
-      value_ = std::clamp(v, 0.0, 127.0);
-      host_.setValue(index_, value_);
+      base_ = std::clamp(v, 0.0, 127.0);
+      host_.setValue(index_, base_);
+      sent_ = host_.modulatedValue(index_);
       redraw();
    }
+
+   static float angleFor(double value) { return -kSweep + 2.0f * kSweep * static_cast<float>(value / 127.0); }
 
    EditorHost &host_;
    int index_;
    unsigned accent_;
-   double value_ = 0.0;
+   double base_ = 0.0, sent_ = 0.0;
    bool dragging_ = false;
    float dragStartY_ = 0.0f;
    double dragStartValue_ = 0.0;

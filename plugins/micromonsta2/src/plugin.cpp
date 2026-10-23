@@ -83,11 +83,12 @@ struct MicroMonsta final : EditorHost {
    std::unique_ptr<Editor> editor;
    bool fdRegistered = false;
 
-   double effective(int i) const { return std::clamp(values[i].load() + mods[i].load(), 0.0, 127.0); }
+   double effective(int i) const { return modulated(values[i].load(), mods[i].load()); }
 
    // ---- EditorHost (main thread) ----
 
-   double ccValue(int index) const override { return effective(index); }
+   double baseValue(int index) const override { return values[index].load(); }
+   double modulatedValue(int index) const override { return effective(index); }
 
    void beginEdit(int index) override { queueGui({GuiEvent::Begin, clapId(index), 0}); }
 
@@ -282,7 +283,10 @@ struct MicroMonsta final : EditorHost {
    }
 };
 
-MicroMonsta *self(const clap_plugin_t *p) { return static_cast<MicroMonsta *>(p->plugin_data); }
+// plugin_data holds the EditorHost view of the plugin, so tests can drive what the panel sees.
+MicroMonsta *self(const clap_plugin_t *p) {
+   return static_cast<MicroMonsta *>(static_cast<EditorHost *>(p->plugin_data));
+}
 
 // ---- note ports ----
 
@@ -694,7 +698,7 @@ const clap_plugin_t *createPlugin(const clap_host_t *host) {
    auto *p = new MicroMonsta();
    p->host = host;
    p->plugin.desc = &kDescriptor;
-   p->plugin.plugin_data = p;
+   p->plugin.plugin_data = static_cast<EditorHost *>(p);
    p->plugin.init = pluginInit;
    p->plugin.destroy = pluginDestroy;
    p->plugin.activate = pluginActivate;

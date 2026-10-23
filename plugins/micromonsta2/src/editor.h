@@ -12,8 +12,10 @@ namespace mm2 {
 class EditorHost {
 public:
    virtual ~EditorHost() = default;
-   // Current value of kCcParams[index], including host modulation.
-   virtual double ccValue(int index) const = 0;
+   // The knob's own setting for kCcParams[index].
+   virtual double baseValue(int index) const = 0;
+   // What is actually sent: the setting plus any host modulation.
+   virtual double modulatedValue(int index) const = 0;
    virtual void beginEdit(int index) = 0;
    virtual void setValue(int index, double value) = 0;
    virtual void endEdit(int index) = 0;
