@@ -29,7 +29,7 @@ public:
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // Draws the panel offscreen at the given pixel size and saves it as a PNG. The view is run for
-// `seconds` of frames first (pulled from the host), so the gas and dust have built up.
+// `seconds` of frames first (pulled from the host), so the trails and gas have built up.
 bool renderScreenshot(EditorHost &host, double seconds, int width, int height, const char *pngPath);
 
 } // namespace jverb

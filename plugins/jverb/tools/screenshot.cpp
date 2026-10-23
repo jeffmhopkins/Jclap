@@ -1,7 +1,7 @@
 // Renders the panel to a PNG without a host: jverb-screenshot out.png [bodies [width height]]
 //
 // A stand-in host runs the orbit sim itself and makes up a drum-and-pad input, so the render shows
-// gas, dust and ripples as they look with audio playing. Everything is seeded, so the same
+// trails, gas and dust as they look with audio playing. Everything is seeded, so the same
 // arguments always draw the same picture.
 
 #include <cmath>

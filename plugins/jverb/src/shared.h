@@ -12,7 +12,7 @@
 namespace jverb {
 
 struct OrbitFrame {
-   // Bumped when the sim restarts (Reset, Retrig, a state load), so the panel can clear its gas.
+   // Bumped when the sim restarts (Reset, Retrig, a state load), so the panel can clear its trails and gas.
    uint32_t resets = 0;
    int count = 3;
    float x[kMaxBodies] = {}, y[kMaxBodies] = {}, vx[kMaxBodies] = {}, vy[kMaxBodies] = {};

@@ -3,7 +3,7 @@
 //
 // The view runs at about 60 frames a second on the main thread. Each frame it takes the newest
 // OrbitFrame the audio thread published (never waiting for one), sheds and moves the gas, dust
-// and ripples (which exist only here) and redraws. Drags become OrbitCommands for the audio thread
+// and trails (which exist only here) and redraws. Drags become OrbitCommands for the audio thread
 // and param edits for the host.
 
 #include "editor.h"
@@ -57,10 +57,11 @@ constexpr unsigned kText = 0xffe6e8eb;
 constexpr unsigned kDim = 0xff9aa3b5;
 constexpr unsigned kBodyColors[kMaxBodies] = {0xff6fe0ff, 0xffffb05a, 0xffff6fd2, 0xff8fe8a8, 0xffa98bff, 0xffff8a7a};
 
-// Gas the bodies shed as they move.
+// Trails keep this many frames (about seven seconds) of each body's path.
+constexpr int kTrailPoints = 420;
+// Puffs of gas from transients.
 constexpr int kMaxPuffs = 1600;
 constexpr int kMaxDust = 1800;
-constexpr int kMaxRipples = 48;
 
 visage::Color glow(unsigned argb, float alpha, float hdr) { return visage::Color(argb, hdr).withAlpha(alpha); }
 
@@ -121,12 +122,12 @@ private:
    unsigned accent_;
 };
 
-// The space scene: stars, nebulae, the bodies and the gas they shed, the dust incoming audio sheds,
-// and ripples from transients. Everything brighter than 1 blooms.
+// The space scene: stars, nebulae, the bodies and their trails, the dust incoming audio sheds, and
+// gas from transients. Everything brighter than 1 blooms.
 //
-// The gas is what's left of each body's path: soft puffs that billow out, drift on a slow swirl,
-// fall toward the bodies, and get shoved by the rings. Where two bodies' clouds meet they push each
-// other apart and heat up, glowing whiter along the seam.
+// Each transient blows a shell of soft gas out of the bodies that follow its band. The shell billows
+// out and slows, drifts on a slow swirl and falls back toward the bodies. Where two bodies' clouds
+// meet they push each other apart and heat up, glowing whiter along the seam.
 class OrbitView : public visage::Frame {
 public:
    OrbitView(EditorHost &host, float designWidth) : host_(host), designWidth_(designWidth) {
@@ -137,9 +138,10 @@ public:
       std::uniform_real_distribution<float> u(0.0f, 1.0f);
       for (Star &s : stars_)
          s = {u(rng), u(rng), u(rng), u(rng) * 6.28f};
+      for (auto &t : trails_)
+         t.reserve(kTrailPoints);
       puffs_.reserve(kMaxPuffs);
       dust_.reserve(kMaxDust);
-      ripples_.reserve(kMaxRipples);
    }
 
    // Readout and velocity arrow for this body (-1 for none). Clicking a body selects it.
@@ -147,18 +149,27 @@ public:
 
    // One frame of animation, `dt` seconds after the last.
    void advance(const OrbitFrame &f, float dt) {
-      const bool restarted = f.resets != frame_.resets;
-      if (restarted) {
+      if (f.resets != frame_.resets) {
+         for (auto &t : trails_)
+            t.clear();
          puffs_.clear();
          dust_.clear();
       }
-      const OrbitFrame last = frame_;
+      const int oldCount = frame_.count;
       frame_ = f;
       time_ += dt;
+      for (int b = f.count; b < std::max(oldCount, f.count); ++b)
+         trails_[b].clear();
       if (selected >= f.count)
          selected = -1;
-      if (!f.frozen)
-         moveGas(f, last, restarted, dt);
+
+      // Trails, in world units, so the camera can zoom without smearing them.
+      for (int b = 0; b < f.count; ++b) {
+         auto &t = trails_[b];
+         if (t.size() == kTrailPoints)
+            t.erase(t.begin());
+         t.push_back({f.x[b], f.y[b]});
+      }
 
       // The camera eases out to keep every body in frame and back in when they gather.
       float extent = 0.9f;
@@ -167,21 +178,19 @@ public:
       const float target = kStageRadius / (extent * 1.12f);
       zoom_ = zoom_ <= 0.0f ? target : zoom_ + (target - zoom_) * std::min(1.0f, dt * (target < zoom_ ? 2.5f : 0.6f));
 
-      if (!f.frozen)
-         moveDust(f, dt);
-      for (Ripple &r : ripples_)
-         r.age += dt;
-      ripples_.erase(std::remove_if(ripples_.begin(), ripples_.end(), [](const Ripple &r) { return r.age > 1.6f; }),
-                     ripples_.end());
       for (int band = 0; band < 3; ++band) {
          if (f.hits[band] != seenHits_[band]) {
             seenHits_[band] = f.hits[band];
-            for (int b = band; b < f.count; b += 3)
-               if (static_cast<int>(ripples_.size()) < kMaxRipples)
-                  ripples_.push_back({f.x[b], f.y[b], 0.0f, f.hitStrength[band], b});
+            if (!f.frozen)
+               for (int b = band; b < f.count; b += 3)
+                  burst(f, b, f.hitStrength[band]);
             flare_[band] = std::max(flare_[band], f.hitStrength[band]);
          }
          flare_[band] *= std::exp(-dt * 4.0f);
+      }
+      if (!f.frozen) {
+         moveGas(f, dt);
+         moveDust(f, dt);
       }
       redraw();
    }
@@ -212,13 +221,24 @@ public:
       for (const Puff &p : puffs_) {
          const float t = p.age / p.life;
          // Thinner where many puffs pile up, so a dense knot stays a cloud rather than a white blob.
-         const float alpha = std::min(1.0f, p.age * 5.0f) * (1.0f - t) * (1.0f - t) * (0.19f + 0.05f * p.heat) /
+         const float alpha = std::min(1.0f, p.age * 5.0f) * (1.0f - t) * (1.0f - t) * (0.17f + 0.03f * p.heat) /
                              std::sqrt(std::max(1.0f, p.crowd / 5.0f));
          const float r = p.size * ppu;
-         visage::Color tint = visage::Color(kBodyColors[p.body]).interpolateWith(0xffffffff, std::min(0.35f, 0.25f * p.heat));
-         tint.setHdr(1.0f + 0.45f * p.heat);
+         visage::Color tint = visage::Color(kBodyColors[p.body]).interpolateWith(0xffffffff, std::min(0.25f, 0.15f * p.heat));
+         tint.setHdr(1.0f + 0.3f * p.heat);
          c.setColor(visage::Brush::radial(tint.withAlpha(alpha), tint.withAlpha(0.0f), visage::Point(X(p.x), Y(p.y)), r));
          c.circle(X(p.x) - r, Y(p.y) - r, 2 * r);
+      }
+
+      // Trails: faint and thin at the tail, bright at the body.
+      for (int b = 0; b < f.count; ++b) {
+         const auto &t = trails_[b];
+         const size_t n = t.size();
+         for (size_t k = 1; k < n; ++k) {
+            const float a = static_cast<float>(k) / n;
+            c.setColor(glow(kBodyColors[b], 0.04f + 0.86f * a * a, 1.0f + 0.7f * a * a * a));
+            c.segment(X(t[k - 1].x), Y(t[k - 1].y), X(t[k].x), Y(t[k].y), (0.7f + 2.6f * a) * s, true);
+         }
       }
 
       // Dust: short streaks along its motion.
@@ -227,16 +247,6 @@ public:
          const float streak = 0.035f;
          c.setColor(glow(kBodyColors[d.body], 0.2f + 0.75f * life, 1.1f + 1.0f * life));
          c.segment(X(d.x - d.vx * streak), Y(d.y - d.vy * streak), X(d.x), Y(d.y), 1.7f * s, true);
-      }
-
-      // Ripples from transients.
-      for (const Ripple &r : ripples_) {
-         const float radius = (14.0f + 230.0f * r.age) * s;
-         const float fade = (0.08f + 0.22f * r.strength) * std::max(0.0f, 1.0f - r.age / 1.6f);
-         c.setColor(glow(kBodyColors[r.body], fade, 1.2f));
-         c.ring(X(r.x) - radius, Y(r.y) - radius, 2 * radius, 1.6f * s);
-         c.setColor(glow(kBodyColors[r.body], fade * 0.3f, 1.0f));
-         c.ring(X(r.x) - radius - 5 * s, Y(r.y) - radius - 5 * s, 2 * radius + 10 * s, 5.0f * s);
       }
 
       // Bodies: a soft halo, a bright core, a white-hot centre; louder bands glow harder.
@@ -346,9 +356,8 @@ private:
       float x, y, vx, vy, age, life;
       int body;
    };
-   struct Ripple {
-      float x, y, age, strength;
-      int body;
+   struct Point2 {
+      float x, y;
    };
 
    static constexpr float kArrowScale = 0.45f;
@@ -387,27 +396,21 @@ private:
       return std::hypot(tip.x - p.x, tip.y - p.y) < 10.0f * width() / designWidth_;
    }
 
-   void moveGas(const OrbitFrame &f, const OrbitFrame &last, bool restarted, float dt) {
-      // Shed puffs along the path since the last frame, about one every 0.045 units, so the cloud
-      // has no gaps however fast a body moves. Louder bands make bigger, longer-lived puffs.
-      const float life = std::clamp(0.8f * f.decay, 2.5f, 8.0f);
-      for (int b = 0; b < f.count; ++b) {
-         const bool fresh = restarted || b >= last.count;
-         const float x0 = fresh ? f.x[b] : last.x[b], y0 = fresh ? f.y[b] : last.y[b];
-         carry_[b] += std::hypot(f.x[b] - x0, f.y[b] - y0) / 0.045f + dt * 5.0f;
-         const float energy = std::min(1.0f, f.band[b % 3]);
-         while (carry_[b] >= 1.0f) {
-            carry_[b] -= 1.0f;
-            if (static_cast<int>(puffs_.size()) >= kMaxPuffs)
-               puffs_.erase(puffs_.begin());
-            const float k = uniform_(rng_), a = uniform_(rng_) * 2.0f * kPi, sp = 0.04f + 0.06f * uniform_(rng_);
-            puffs_.push_back({x0 + (f.x[b] - x0) * k, y0 + (f.y[b] - y0) * k,
-                              -0.12f * f.vx[b] + sp * std::cos(a), -0.12f * f.vy[b] + sp * std::sin(a), 0.0f,
-                              life * (0.7f + 0.5f * uniform_(rng_)), (0.11f + 0.07f * energy) * (0.8f + 0.4f * uniform_(rng_)),
-                              0.0f, 1.0f, b});
-         }
+   // A transient: a shell of gas blown out of body `b`, faster and thicker the harder it hit.
+   void burst(const OrbitFrame &f, int b, float strength) {
+      const int n = 14 + static_cast<int>(26.0f * strength);
+      const float life = std::clamp(0.5f * f.decay, 1.8f, 4.5f), speed = 0.7f + 1.5f * strength;
+      const float turn = uniform_(rng_) * 2.0f * kPi;
+      for (int i = 0; i < n && static_cast<int>(puffs_.size()) < kMaxPuffs; ++i) {
+         const float a = turn + 2.0f * kPi * (i + 0.6f * uniform_(rng_)) / n, v = speed * (0.75f + 0.5f * uniform_(rng_));
+         puffs_.push_back({f.x[b] + 0.03f * std::cos(a), f.y[b] + 0.03f * std::sin(a),
+                           0.6f * f.vx[b] + v * std::cos(a), 0.6f * f.vy[b] + v * std::sin(a), 0.0f,
+                           life * (0.7f + 0.5f * uniform_(rng_)), (0.06f + 0.05f * strength) * (0.8f + 0.4f * uniform_(rng_)),
+                           0.0f, 1.0f, b});
       }
+   }
 
+   void moveGas(const OrbitFrame &f, float dt) {
       // Sort the puffs into a coarse grid, so each one only looks at its neighbours.
       constexpr float kCell = 0.2f;
       constexpr int kGrid = 40;
@@ -420,9 +423,10 @@ private:
       const float h = dt * 0.8f;
       for (int i = 0; i < static_cast<int>(puffs_.size()); ++i) {
          Puff &p = puffs_[i];
-         // A slow swirl that turns over time, gentle drag, and a weak pull from every body.
-         float ax = 0.16f * std::sin(1.7f * p.y + 0.37f * time_ + p.body) - 0.9f * p.vx;
-         float ay = 0.16f * std::cos(1.9f * p.x - 0.29f * time_ - p.body) - 0.9f * p.vy;
+         // A slow swirl that turns over time, drag that stalls the shell as it billows out, and a
+         // weak pull from every body.
+         float ax = 0.3f * std::sin(1.7f * p.y + 0.37f * time_ + p.body) - 2.0f * p.vx;
+         float ay = 0.3f * std::cos(1.9f * p.x - 0.29f * time_ - p.body) - 2.0f * p.vy;
          for (int b = 0; b < f.count; ++b) {
             const float dx = f.x[b] - p.x, dy = f.y[b] - p.y;
             const float r2 = dx * dx + dy * dy + 0.12f;
@@ -449,16 +453,6 @@ private:
                   ay += 0.6f * overlap * dy / d;
                   contact += overlap;
                }
-         // Rings push the gas outward as they pass.
-         for (const Ripple &r : ripples_) {
-            const float front = (14.0f + 230.0f * r.age) / zoom_;
-            const float dx = p.x - r.x, dy = p.y - r.y, d = std::sqrt(dx * dx + dy * dy) + 1e-4f;
-            const float near = 1.0f - std::fabs(d - front) / 0.12f;
-            if (near > 0.0f) {
-               ax += 2.5f * r.strength * near * dx / d;
-               ay += 2.5f * r.strength * near * dy / d;
-            }
-         }
          p.vx += h * ax;
          p.vy += h * ay;
          p.heat += (std::min(2.0f, contact) - p.heat) * std::min(1.0f, dt * 3.0f);
@@ -468,7 +462,7 @@ private:
          p.x += h * p.vx;
          p.y += h * p.vy;
          p.age += dt;
-         p.size += dt * 0.1f;
+         p.size += dt * 0.12f;
       }
       puffs_.erase(std::remove_if(puffs_.begin(), puffs_.end(), [](const Puff &p) { return p.age > p.life; }),
                    puffs_.end());
@@ -580,11 +574,10 @@ private:
    visage::BloomPostEffect bloom_;
    OrbitFrame frame_;
    Star stars_[420];
+   std::vector<Point2> trails_[kMaxBodies];
    std::vector<Puff> puffs_;
    std::vector<int> grid_[40 * 40];
-   float carry_[kMaxBodies] = {};
    std::vector<Dust> dust_;
-   std::vector<Ripple> ripples_;
    uint32_t seenHits_[3] = {};
    float flare_[3] = {};
    float spawnCarry_[3] = {};
