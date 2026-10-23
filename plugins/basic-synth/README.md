@@ -25,7 +25,7 @@ oscillator ──> filter ──> VCA ──> out
 ```
 
 - **Oscillator**: sine, triangle, saw, square or pulse, with pulse width, band-limited. DUAL adds a second oscillator of the same wave, detuned from the first by DETUNE: a few cents either side of the centre for beating, up to an octave up or down at the ends.
-- **Filter**: low, high or band pass at 12, 24, 36 or 48 dB/oct, with resonance.
+- **Filter**: low, high or band pass at 12, 24, 36 or 48 dB/oct, with resonance. KEY TRACK moves the cutoff with the note, up to an octave per octave from C4.
 - **Env 1 and Env 2**: two ADSRs, each with a **loop** toggle and three amounts: to the filter (±5 octaves), to the VCA (0 to 100%) and to the pitch (±24
   semitones). They start as Env 1 on the VCA and Env 2 on the filter. Whatever share of the VCA the
   envelopes don't take follows the key, so with both VCA amounts at 0 it is a plain organ-style gate.

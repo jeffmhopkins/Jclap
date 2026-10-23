@@ -155,11 +155,13 @@ private:
       add<ui::Section>({256, 68, 452, 196}, "FILTER");
       segments(kFilterMode, "MODE", {"LP", "HP", "BP"}, kBlue, {268, 116, 150, 26});
       segments(kSlope, "SLOPE", {"12", "24", "36", "48 dB"}, kBlue, {430, 116, 266, 26});
-      const auto cells = ui::row({268, 152, 428, 104}, 4);
+      const auto cells = ui::row({268, 152, 428, 104}, 5);
       knob(kCutoff, "CUTOFF", kBlue, cells[0]);
       knob(kResonance, "RESO", kBlue, cells[1]);
-      tips_.add(knob(kPressureAmount, "PRESSURE", kBlue, cells[2]), "How far MPE pressure opens the cutoff.");
-      tips_.add(knob(kTimbreAmount, "TIMBRE", kBlue, cells[3]),
+      tips_.add(knob(kKeyTrack, "KEY TRACK", kBlue, cells[2]),
+                "How far the cutoff follows the note: at 100% an octave up for each octave above C4.");
+      tips_.add(knob(kPressureAmount, "PRESSURE", kBlue, cells[3]), "How far MPE pressure opens the cutoff.");
+      tips_.add(knob(kTimbreAmount, "TIMBRE", kBlue, cells[4]),
                 "How far MPE timbre (slide, CC 74) moves the cutoff either way.");
    }
 

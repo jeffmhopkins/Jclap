@@ -381,6 +381,28 @@ int main() {
       h.setParam(kEnv1Release, 50.0);
    }
 
+   // Key track: a high sine through a low cutoff comes through louder once the cutoff follows it.
+   {
+      const double cutoff = h.paramValue(kCutoff);
+      h.setParam(kCutoff, cutoffValue(200.0));
+      const auto level = [&] {
+         h.note(CLAP_EVENT_NOTE_ON, 81, 1.0);
+         run(4800);
+         run(4800);
+         const double rms = run.rms();
+         h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+         run(64);
+         return rms;
+      };
+      const double fixed = level();
+      h.setParam(kKeyTrack, 1.0);
+      const double tracked = level();
+      JCLAP_CHECK(tracked > 4.0 * fixed);
+      JCLAP_CHECK(h.paramText(kKeyTrack, 0.5) == "50%");
+      h.setParam(kCutoff, cutoff);
+      h.setParam(kKeyTrack, 0.0);
+   }
+
    // Dual: a second oscillator detuned from the first. A few cents changes the sound but not the
    // pitch; at the top of the knob the second is an octave up.
    {

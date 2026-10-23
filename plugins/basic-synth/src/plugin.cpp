@@ -373,6 +373,7 @@ private:
       vs.slope = static_cast<jclap::dsp::Filter::Slope>(choice(kSlope, slot) + 1);
       vs.cutoffHz = cutoffHz(value(kCutoff, s));
       vs.resonance = value(kResonance, s);
+      vs.keyTrack = value(kKeyTrack, s);
       vs.pressureAmount = value(kPressureAmount, s);
       vs.timbreAmount = value(kTimbreAmount, s);
       for (int i = 0; i < kEnvCount; ++i) {

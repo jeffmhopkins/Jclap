@@ -25,6 +25,7 @@ enum ParamId : clap_id {
    kSlope,
    kCutoff,
    kResonance,
+   kKeyTrack,
    // Two envelopes, each the same eight params in the same order (see envParam()).
    kEnv1Attack,
    kEnv1Decay,
@@ -95,6 +96,7 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kSlope, "Slope", "Filter", 0.0, 3.0, 1.0, kChoice},
    {kCutoff, "Cutoff", "Filter", 0.0, 1.0, 2.0 / 3.0, kMod},
    {kResonance, "Resonance", "Filter", 0.0, 1.0, 0.3, kMod},
+   {kKeyTrack, "Key Track", "Filter", 0.0, 1.0, 0.0, kMod},
    // Env 1 shapes the VCA and Env 2 the filter, to start with; either can go anywhere.
    {kEnv1Attack, "Env 1 Attack", "Env 1", 1.0, 2000.0, 5.0, kMod},
    {kEnv1Decay, "Env 1 Decay", "Env 1", 1.0, 2000.0, 400.0, kMod},
@@ -165,6 +167,7 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    switch (id) {
    case kPulseWidth:
    case kResonance:
+   case kKeyTrack:
    case kEnv1Sustain:
    case kEnv2Sustain:
    case kEnv1ToVca:
@@ -250,6 +253,7 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
    switch (id) {
    case kPulseWidth:
    case kResonance:
+   case kKeyTrack:
    case kEnv1Sustain:
    case kEnv2Sustain:
    case kEnv1ToVca:

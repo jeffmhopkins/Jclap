@@ -20,6 +20,8 @@ public:
          return 4.0;
       case kPulseWidth:
          return 0.3;
+      case kKeyTrack:
+         return 0.5;
       case kDual:
          return 1.0;
       case kCutoff:

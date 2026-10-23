@@ -4,7 +4,7 @@
 // filter, the VCA and the pitch by their own amounts. A looping envelope is not the voice's own: the
 // plugin runs one shared cycle and passes its value in, so every voice moves together, and an LFO moves the cutoff
 // and the VCA. Per-note expression (MPE) moves it too: bend sets the pitch, and pressure and timbre
-// open the filter.
+// open the filter, and the cutoff can follow the note.
 
 #include <jclap/dsp/envelope.h>
 #include <jclap/dsp/filter.h>
@@ -31,6 +31,8 @@ struct VoiceSettings {
    jclap::dsp::Filter::Mode filterMode = jclap::dsp::Filter::Mode::LowPass;
    jclap::dsp::Filter::Slope slope = jclap::dsp::Filter::Slope::Db24;
    double cutoffHz = 2000.0, resonance = 0.3;
+   // How far the cutoff follows the note's pitch, 0..1: at 1 it moves an octave per octave, from C4.
+   double keyTrack = 0.0;
    // An envelope: ADSR in seconds and sustain level, where it goes, and whether it loops (then the
    // voice takes the shared cycle's value instead). Filter is in octaves, pitch in semitones, both
    // either way; VCA is 0..1.
@@ -86,6 +88,7 @@ public:
          sends_[i] = s.env[i];
       }
       cutoff_.setTarget(std::log2(s.cutoffHz));
+      keyTrack_ = s.keyTrack;
       pressureAmount_ = s.pressureAmount;
       timbreAmount_ = s.timbreAmount;
       lfo_.setShape(s.lfoShape);
@@ -168,7 +171,7 @@ public:
          osc_.setFrequency(jclap::dsp::noteToHz(pitch));
          source = osc_.process();
       }
-      const double octaves = cutoff_.process() + toFilter + pressureAmount_ * pressure_.process() +
+      const double octaves = cutoff_.process() + toFilter + keyTrack_ * (pitch - 60.0) / 12.0 + pressureAmount_ * pressure_.process() +
                              timbreAmount_ * 2.0 * (timbre_.process() - 0.5) + lfoToCutoff_ * lfo;
       filter_.setCutoff(std::exp2(std::clamp(octaves, 3.0, 15.0)));
       // What the envelopes leave of the VCA follows the gate: with no envelope sent to it, the VCA
@@ -212,7 +215,7 @@ private:
    // Pitch in semitones; cutoff in octaves (log2 Hz). The gate glides over a few ms so a gate-only
    // VCA opens and closes without clicks.
    jclap::dsp::Smoother pitch_, pressure_, timbre_, cutoff_, gate_;
-   double pressureAmount_ = 0.0, timbreAmount_ = 0.0;
+   double keyTrack_ = 0.0, pressureAmount_ = 0.0, timbreAmount_ = 0.0;
    double lfoToCutoff_ = 0.0, lfoToVca_ = 0.0, lfoValue_ = 0.0;
    bool released_ = true;
    float level_ = 0.0f;
