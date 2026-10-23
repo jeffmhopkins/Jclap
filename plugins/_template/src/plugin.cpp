@@ -197,7 +197,7 @@ const clap_plugin_descriptor_t PluginTemplate::descriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.2.0",
+   "0.3.0",
    "Stereo gain and pan with a level meter",
    kFeatures,
 };
