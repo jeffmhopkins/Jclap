@@ -1,10 +1,11 @@
 #pragma once
 
-// The plugin's knob panel. Kept behind this small interface so plugin.cpp never includes Visage.
+// The plugin's knob panel, built from jclap::ui widgets. Kept behind this small interface so
+// plugin.cpp never includes Visage.
 
-#include <cstdint>
-#include <functional>
 #include <memory>
+
+#include "jclap/ui/window.h"
 
 namespace mm2 {
 
@@ -24,30 +25,8 @@ public:
    virtual void sendAll() = 0;
 };
 
-class Editor {
-public:
-   explicit Editor(EditorHost &host);
-   ~Editor();
-
-   void show(void *parentWindow);
-
-   // Sizes in the units the CLAP host expects (logical points on macOS, pixels elsewhere).
-   uint32_t width() const;
-   uint32_t height() const;
-   void setSize(uint32_t width, uint32_t height);
-   void adjustSize(uint32_t *width, uint32_t *height) const;
-
-   // Linux only: the X11 connection fd the host polls for us.
-   int posixFd() const;
-   void processFdEvents();
-
-   // Called when the panel wants the host window resized.
-   std::function<void()> onResizeRequest;
-
-private:
-   struct Impl;
-   std::unique_ptr<Impl> impl_;
-};
+// The plugin window with the panel in it.
+std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // Draws the panel offscreen at the given pixel size and saves it as a PNG (for docs and checks).
 bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath);

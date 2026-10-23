@@ -43,8 +43,8 @@ cmake --build build --config Release
 ctest --test-dir build -C Release
 ```
 
-On Linux, install `libx11-dev libxrandr-dev libgl1-mesa-dev` first (the MicroMonsta 2 panel uses
-them). All plugins land in `build/clap/`. CI builds Linux, macOS (universal) and Windows on every push.
+On Linux, install `libx11-dev libxrandr-dev libgl1-mesa-dev` first (the GUI library uses them).
+All plugins land in `build/clap/`. CI builds Linux, macOS (universal) and Windows on every push.
 
 ## Adding a plugin
 
@@ -64,6 +64,9 @@ them). All plugins land in `build/clap/`. CI builds Linux, macOS (universal) and
    above.
 
 Use `com.jeffmhopkins.jclap.<name>` as the CLAP plugin id too, so ids never collide.
+
+For a GUI, link the shared widget library with `target_link_libraries(<name> PRIVATE jclap::ui)`. It
+has knobs, sliders, buttons, panels and the CLAP window glue; see [libs/ui](libs/ui).
 
 ## Releasing
 

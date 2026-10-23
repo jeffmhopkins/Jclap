@@ -20,6 +20,12 @@ FetchContent_MakeAvailable(clap)
 include(cmake/JClap.cmake)
 enable_testing()
 
+# Offscreen renderers (panel screenshots, the widget gallery). They need a GPU or a software Vulkan driver.
+option(JCLAP_BUILD_TOOLS "Build developer tools" OFF)
+
+# Shared libraries plugins can link: jclap::ui is the Visage widget kit and CLAP window glue.
+add_subdirectory(libs/ui)
+
 # One folder per plugin under plugins/, each with its own CMakeLists.txt.
 add_subdirectory(plugins/orb-polar)
 add_subdirectory(plugins/micromonsta2)
