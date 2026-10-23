@@ -205,7 +205,7 @@ private:
 
    void buildLfo() {
       add<ui::Section>({12, 498, 346, 170}, "LFO");
-      lfoLight_ = &add<ui::ActivityLed>({262, 501, 84, 22}, "NOW");
+      lfoLight_ = &add<ui::ActivityLed>({262, 504, 84, 22}, "NOW");
       lfoLight_->setColor(kGreen);
       lfoLight_->fadeMs = 0;
       tips_.add(*lfoLight_, "The LFO of the newest held note.");
