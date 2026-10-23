@@ -103,6 +103,9 @@ constexpr auto kToggle = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED;
 // Each body starts on a different routing, so turning bodies on adds something new.
 constexpr double kDefaultTarget[kMaxBodies] = {1, 2, 3, 4, 5, 6};
 constexpr double kDefaultAmount[kMaxBodies] = {0.35, 0.25, 0.4, 0.4, 0.3, 0.4};
+// Unequal masses: three equal ones would stay on the figure-eight they start on, which is stable.
+// These break it up within a few laps into motion that never repeats.
+constexpr double kDefaultMass[kMaxBodies] = {1.0, 1.25, 0.8, 1.0, 1.0, 1.0};
 
 inline const char *const kBodyNames[kMaxBodies] = {"IO", "KEPLER", "VESTA", "TITAN", "RHEA", "LUNA"};
 
@@ -136,7 +139,7 @@ struct ParamTable {
       for (int b = 0; b < kMaxBodies; ++b) {
          for (int k = 0; k < 4; ++k)
             std::snprintf(names[b][k], sizeof(names[b][k]), "%s %s", kBodyNamesTitle(b), kSuffix[k]);
-         defs[bodyParam(b, kBody1Mass)] = {bodyParam(b, kBody1Mass), names[b][0], "Bodies", 0.1, 3.0, 1.0, kMod};
+         defs[bodyParam(b, kBody1Mass)] = {bodyParam(b, kBody1Mass), names[b][0], "Bodies", 0.1, 3.0, kDefaultMass[b], kMod};
          defs[bodyParam(b, kBody1Velocity)] = {bodyParam(b, kBody1Velocity), names[b][1], "Bodies", 0.5, 1.5, 1.0, kMod};
          defs[bodyParam(b, kBody1Target)] = {bodyParam(b, kBody1Target), names[b][2], "Bodies", 0.0,
                                              static_cast<double>(Target::Count) - 1.0, kDefaultTarget[b], kChoice};

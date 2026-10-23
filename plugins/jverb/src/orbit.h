@@ -22,8 +22,8 @@ public:
       double x = 0, y = 0, vx = 0, vy = 0;
    };
 
-   // Puts `count` bodies at their start positions: three start on a figure-eight (nudged so it
-   // slowly turns chaotic), any other count on a ring at its circular speed. `velocity` scales each
+   // Puts `count` bodies at their start positions: three start on a figure-eight (stable with
+   // equal masses, chaotic within a few laps with unequal ones), any other count on a ring at its circular speed. `velocity` scales each
    // body's start velocity.
    void reset(int count, const double *mass, const double *velocity, double gravity) {
       count_ = std::clamp(count, 2, kMax);
