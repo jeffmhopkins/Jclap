@@ -1,5 +1,5 @@
 // Basic Synth: an eight-voice MPE synth built from jclap::dsp. Each voice has an oscillator, a filter
-// and a VCA, an envelope for each of the last two, and an LFO (see voice.h). Notes arrive as CLAP notes with per-note expressions, as MPE MIDI, or
+// and a VCA, two envelopes that can each go to the filter, VCA and pitch, and an LFO (see voice.h). Notes arrive as CLAP notes with per-note expressions, as MPE MIDI, or
 // as plain MIDI; the panel's keyboard and note grid play it too.
 
 #include <jclap/core/edit_queue.h>
@@ -323,18 +323,23 @@ private:
       vs.slope = static_cast<jclap::dsp::Filter::Slope>(choice(kSlope, slot) + 1);
       vs.cutoffHz = cutoffHz(value(kCutoff, s));
       vs.resonance = value(kResonance, s);
-      vs.filterEnvAmount = value(kFilterEnvAmount, s);
-      vs.ampEnvAmount = value(kAmpEnvAmount, s);
       vs.pressureAmount = value(kPressureAmount, s);
       vs.timbreAmount = value(kTimbreAmount, s);
-      vs.filterEnv = {value(kFilterAttack, s) / 1000.0, value(kFilterDecay, s) / 1000.0, value(kFilterSustain, s),
-                      value(kFilterRelease, s) / 1000.0};
+      for (int i = 0; i < kEnvCount; ++i) {
+         VoiceSettings::Env &e = vs.env[i];
+         e.attack = value(envParam(i, kEnv1Attack), s) / 1000.0;
+         e.decay = value(envParam(i, kEnv1Decay), s) / 1000.0;
+         e.sustain = value(envParam(i, kEnv1Sustain), s);
+         e.release = value(envParam(i, kEnv1Release), s) / 1000.0;
+         e.loop = value(envParam(i, kEnv1Loop), s) >= 0.5;
+         e.toFilter = value(envParam(i, kEnv1ToFilter), s);
+         e.toVca = value(envParam(i, kEnv1ToVca), s);
+         e.toPitch = value(envParam(i, kEnv1ToPitch), s);
+      }
       vs.lfoShape = static_cast<jclap::dsp::Lfo::Shape>(choice(kLfoShape, slot));
       vs.lfoRate = lfoHz(value(kLfoRate, s));
       vs.lfoToCutoff = value(kLfoToCutoff, s);
       vs.lfoToVca = value(kLfoToVca, s);
-      vs.ampEnv = {value(kAmpAttack, s) / 1000.0, value(kAmpDecay, s) / 1000.0, value(kAmpSustain, s),
-                   value(kAmpRelease, s) / 1000.0};
       return vs;
    }
 
@@ -600,7 +605,7 @@ const clap_plugin_descriptor_t BasicSynth::descriptor = {
    "",
    "",
    "0.3.0",
-   "An eight-voice MPE synth: oscillator, filter and VCA, each with an envelope",
+   "An eight-voice MPE synth: oscillator, filter, VCA, two envelopes and an LFO",
    kFeatures,
 };
 

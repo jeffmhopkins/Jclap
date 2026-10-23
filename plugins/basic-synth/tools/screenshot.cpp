@@ -26,6 +26,10 @@ public:
          return 0.45;
       case kLfoToCutoff:
          return 1.5;
+      case kEnv2Loop:
+         return 1.0;
+      case kEnv2ToPitch:
+         return 7.0;
       case kLfoToVca:
          return 0.3;
       default:
@@ -37,11 +41,11 @@ public:
       switch (id) {
       case kCutoff:
          return 0.68;
-      case kAmpDecay:
+      case kEnv1Decay:
          return 700.0;
-      case kAmpSustain:
+      case kEnv1Sustain:
          return 0.45;
-      case kFilterAttack:
+      case kEnv2Attack:
          return 300.0;
       default:
          return paramValue(id);
@@ -82,7 +86,7 @@ int main(int argc, char **argv) {
    }
    const int page = argc > 2 ? std::atoi(argv[2]) : 0;
    const int width = argc > 4 ? std::atoi(argv[3]) : 720;
-   const int height = argc > 4 ? std::atoi(argv[4]) : 820;
+   const int height = argc > 4 ? std::atoi(argv[4]) : 884;
    DemoHost host;
    return renderScreenshot(host, page, width, height, argv[1]) ? 0 : 1;
 }

@@ -14,6 +14,9 @@
 //    env.gateOff();              // note off
 //    float level = env.process();
 //    if (!env.isActive()) ...    // released and silent: the voice is free
+//
+// Looping, it runs attack and decay over and over while the gate is held, rising from the sustain
+// level each time, like a gated LFO with an envelope's shape; release ends it as usual.
 
 #include <algorithm>
 #include <cmath>
@@ -36,6 +39,8 @@ public:
    void setRelease(double seconds) { release_.set(releaseTime_ = seconds, sampleRate_, kFallShape); }
    // 0..1.
    void setSustain(double level) { sustain_ = std::clamp(level, 0.0, 1.0); }
+   void setLoop(bool loop) { loop_ = loop; }
+   bool loop() const { return loop_; }
 
    void gateOn() { stage_ = Stage::Attack; }
    void gateOff() {
@@ -61,11 +66,13 @@ public:
          level_ = decay_.toward(level_, sustain_);
          if (level_ <= sustain_) {
             level_ = sustain_;
-            stage_ = Stage::Sustain;
+            stage_ = loop_ ? Stage::Attack : Stage::Sustain;
          }
          break;
       case Stage::Sustain:
          level_ = sustain_;
+         if (loop_)
+            stage_ = Stage::Attack;
          break;
       case Stage::Release:
          level_ = release_.toward(level_, 0.0);
@@ -107,6 +114,7 @@ private:
 
    double sampleRate_ = 48000.0;
    double attackTime_ = 0.01, decayTime_ = 0.1, releaseTime_ = 0.1, sustain_ = 1.0;
+   bool loop_ = false;
    Curve attack_, decay_, release_;
    Stage stage_ = Stage::Idle;
    double level_ = 0.0;

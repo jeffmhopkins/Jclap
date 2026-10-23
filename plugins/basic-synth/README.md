@@ -2,7 +2,7 @@
 
 # Basic Synth
 
-An eight-voice MPE synth built from jclap::dsp: oscillator, filter and VCA, two envelopes and an LFO per voice.
+An eight-voice MPE synth built from jclap::dsp: oscillator, filter and VCA, two looping envelopes and an LFO per voice.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: instrument](https://img.shields.io/badge/CLAP-instrument-blue)](https://github.com/free-audio/clap) [![MPE](https://img.shields.io/badge/MPE-yes-blue)](#mpe) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](#panel)
 
@@ -17,17 +17,19 @@ start a new instrument from.
 
 ```
 oscillator ──> filter ──> VCA ──> out
-                 ^         ^
-   filter env ───┤         ├─── amp env
-   LFO ──────────┤         ├─── LFO (tremolo)
-   pressure, timbre ───────┘ (cutoff)
+    ^            ^         ^
+    │            │         │
+   Env 1, Env 2: each sends to pitch, filter and VCA by its own amount
+   LFO: to filter and VCA (tremolo)
+   MPE pressure, timbre: to filter
 ```
 
 - **Oscillator**: sine, triangle, saw, square or pulse, with pulse width, band-limited.
 - **Filter**: low, high or band pass at 12, 24, 36 or 48 dB/oct, with resonance.
-- **Filter envelope**: an ADSR that moves the cutoff by its amount, up to ±5 octaves.
-- **Amp envelope**: an ADSR that shapes the VCA by its amount. At 0 the VCA just follows the key:
-  on while held, off on release.
+- **Env 1 and Env 2**: two ADSRs, each with a **loop** toggle (attack and decay repeat while the key is
+  held) and three amounts: to the filter (±5 octaves), to the VCA (0 to 100%) and to the pitch (±24
+  semitones). They start as Env 1 on the VCA and Env 2 on the filter. Whatever share of the VCA the
+  envelopes don't take follows the key, so with both VCA amounts at 0 it is a plain organ-style gate.
 - **LFO**: sine, triangle, saw, square or random, 0.05 to 20 Hz, restarted with each note. It moves the
   cutoff (±4 octaves) and the VCA (tremolo). The light next to it shows the newest note's LFO.
 - **Voices**: eight. A ninth note takes the quietest releasing voice, or else the oldest.

@@ -79,12 +79,12 @@ int main() {
    // A plain sine with the filter wide open, so pitch is easy to measure.
    h.setParam(kWave, 0.0);
    h.setParam(kCutoff, 1.0);
-   h.setParam(kFilterEnvAmount, 0.0);
+   h.setParam(kEnv2ToFilter, 0.0);
    h.setParam(kPressureAmount, 0.0);
    h.setParam(kTimbreAmount, 0.0);
-   h.setParam(kAmpSustain, 1.0);
-   h.setParam(kAmpAttack, 1.0);
-   h.setParam(kAmpRelease, 50.0);
+   h.setParam(kEnv1Sustain, 1.0);
+   h.setParam(kEnv1Attack, 1.0);
+   h.setParam(kEnv1Release, 50.0);
    h.note(CLAP_EVENT_NOTE_ON, 69, 1.0, 7);
    run(4800);
    run(48000);
@@ -200,7 +200,7 @@ int main() {
    // Every wave, filter mode and slope makes a sound and stays finite, with resonance up.
    h.setParam(kResonance, 1.0);
    h.setParam(kCutoff, 0.5);
-   h.setParam(kFilterEnvAmount, 3.0);
+   h.setParam(kEnv2ToFilter, 3.0);
    for (int wave = 0; wave < 5; ++wave)
       for (int mode = 0; mode < 3; ++mode)
          for (int slope = 0; slope < 4; ++slope) {
@@ -219,7 +219,7 @@ int main() {
    // ---- host automation and modulation ----
    h.setParam(kResonance, 0.0);
    h.setParam(kCutoff, 1.0);
-   h.setParam(kFilterEnvAmount, 0.0);
+   h.setParam(kEnv2ToFilter, 0.0);
    h.setParam(kWave, 0.0);
    h.setParam(kFilterMode, 0.0);
    h.setParam(kSlope, 1.0);
@@ -256,15 +256,15 @@ int main() {
    h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
    run(64);
 
-   // Amp env amount: at full the VCA follows the envelope down to sustain 0; at 0 it just follows
+   // Env 1 to VCA: at full the VCA follows the envelope down to sustain 0; at 0 it just follows
    // the gate, so the note holds at full level.
-   h.setParam(kAmpDecay, 20.0);
-   h.setParam(kAmpSustain, 0.0);
+   h.setParam(kEnv1Decay, 20.0);
+   h.setParam(kEnv1Sustain, 0.0);
    h.note(CLAP_EVENT_NOTE_ON, 57, 1.0);
    run(9600);
    run(4800);
    JCLAP_CHECK(run.rms() < 1e-3);
-   h.setParam(kAmpEnvAmount, 0.0);
+   h.setParam(kEnv1ToVca, 0.0);
    run(4800);
    run(4800);
    JCLAP_CHECK(run.rms() > 0.05);
@@ -273,11 +273,49 @@ int main() {
    run(4800);
    run(4800);
    JCLAP_CHECK(run.rms() < 1e-3);
-   JCLAP_CHECK(h.paramText(kAmpEnvAmount, 0.5) == "50%");
+   JCLAP_CHECK(h.paramText(kEnv1ToVca, 0.5) == "50%");
+
+   // Env 2 to pitch: held at sustain 1, +12 st doubles the frequency.
+   h.setParam(kEnv1ToVca, 1.0);
+   h.setParam(kEnv1Sustain, 1.0);
+   h.setParam(kEnv2Sustain, 1.0);
+   h.setParam(kEnv2Attack, 1.0);
+   h.setParam(kEnv2ToFilter, 0.0);
+   h.setParam(kEnv2ToPitch, 12.0);
+   h.note(CLAP_EVENT_NOTE_ON, 57, 1.0);
+   run(4800);
+   run(48000);
+   JCLAP_CHECK(near(run.frequency(), 440.0, 0.5));
+   h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+   h.setParam(kEnv2ToPitch, 0.0);
+   run(64);
+   // A looping Env 1 on the VCA pulses the note: loud at each peak, quiet between.
+   h.setParam(kEnv1Loop, 1.0);
+   h.setParam(kEnv1Attack, 1.0);
+   h.setParam(kEnv1Decay, 50.0);
+   h.setParam(kEnv1Sustain, 0.0);
+   h.note(CLAP_EVENT_NOTE_ON, 57, 1.0);
+   run(48000);
+   int pulses = 0;
+   bool loud = false;
+   for (size_t i = 0; i + 480 <= run.left.size(); i += 480) {
+      float peak = 0.0f;
+      for (size_t j = i; j < i + 480; ++j)
+         peak = std::max(peak, std::fabs(run.left[j]));
+      pulses += !loud && peak > 0.05f;
+      loud = peak > 0.05f;
+   }
+   JCLAP_CHECK(pulses >= 10);
+   h.note(CLAP_EVENT_NOTE_OFF, 57, 0.0);
+   run(19200);
+   JCLAP_CHECK(run.rms() < 1e-3);
+   h.setParam(kEnv1Loop, 0.0);
+   JCLAP_CHECK(h.paramText(kEnv1Loop, 1.0) == "On");
+   JCLAP_CHECK(h.paramText(kEnv2ToPitch, -7.0) == "-7.0 st");
 
    // The LFO: a slow square at full tremolo depth turns the note on and off, and the panel sees it.
-   h.setParam(kAmpEnvAmount, 1.0);
-   h.setParam(kAmpSustain, 1.0);
+   h.setParam(kEnv1ToVca, 1.0);
+   h.setParam(kEnv1Sustain, 1.0);
    h.setParam(kLfoShape, 3.0);
    h.setParam(kLfoRate, lfoValue(2.0));
    h.setParam(kLfoToVca, 1.0);
@@ -305,7 +343,7 @@ int main() {
    JCLAP_CHECK(h.textToValue(kCutoff, "2.5 kHz", v) && near(cutoffHz(v), 2500.0, 1e-6));
    JCLAP_CHECK(h.paramText(kWave, 4.0) == "Pulse");
    JCLAP_CHECK(h.paramText(kSlope, 3.0) == "48 dB");
-   JCLAP_CHECK(h.paramText(kFilterEnvAmount, -1.5) == "-1.5 oct");
+   JCLAP_CHECK(h.paramText(kEnv2ToFilter, -1.5) == "-1.5 oct");
    // Every param's text reads back as the same value, as hosts (and clap-validator) check.
    for (clap_id id = 0; id < kParamCount; ++id) {
       for (double value : {kParams[id].min, kParams[id].defaultValue, kParams[id].max}) {

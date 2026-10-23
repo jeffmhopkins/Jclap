@@ -252,6 +252,32 @@ int main() {
       JCLAP_CHECK(lfo.process() == 0.0 && lfo.process() == 0.5 && lfo.process() == 1.0 && lfo.process() == 0.5);
    }
 
+   // A looping envelope cycles attack and decay while held, then releases.
+   {
+      Envelope env;
+      env.setSampleRate(kRate);
+      env.setAttack(0.01);
+      env.setDecay(0.01);
+      env.setSustain(0.2);
+      env.setRelease(0.01);
+      env.setLoop(true);
+      env.gateOn();
+      int peaks = 0;
+      Envelope::Stage last = env.stage();
+      for (int i = 0; i < 0.1 * kRate; ++i) {
+         env.process();
+         peaks += last == Envelope::Stage::Attack && env.stage() == Envelope::Stage::Decay;
+         last = env.stage();
+         JCLAP_CHECK(env.stage() != Envelope::Stage::Sustain);
+      }
+      // About 100 ms / (10 ms + a fast climb from 0.2) per cycle.
+      JCLAP_CHECK(peaks >= 5 && peaks <= 12);
+      env.gateOff();
+      for (int i = 0; i < 0.02 * kRate; ++i)
+         env.process();
+      JCLAP_CHECK(!env.isActive());
+   }
+
    // ---- smoother and VCA ----
    {
       Smoother s;

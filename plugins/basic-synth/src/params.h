@@ -17,22 +17,28 @@ enum ParamId : clap_id {
    kWave,
    kPulseWidth,
    kTune,
-   // Filter, and its envelope.
+   // Filter.
    kFilterMode,
    kSlope,
    kCutoff,
    kResonance,
-   kFilterEnvAmount,
-   kFilterAttack,
-   kFilterDecay,
-   kFilterSustain,
-   kFilterRelease,
-   // The VCA's envelope.
-   kAmpEnvAmount,
-   kAmpAttack,
-   kAmpDecay,
-   kAmpSustain,
-   kAmpRelease,
+   // Two envelopes, each the same eight params in the same order (see envParam()).
+   kEnv1Attack,
+   kEnv1Decay,
+   kEnv1Sustain,
+   kEnv1Release,
+   kEnv1Loop,
+   kEnv1ToFilter,
+   kEnv1ToVca,
+   kEnv1ToPitch,
+   kEnv2Attack,
+   kEnv2Decay,
+   kEnv2Sustain,
+   kEnv2Release,
+   kEnv2Loop,
+   kEnv2ToFilter,
+   kEnv2ToVca,
+   kEnv2ToPitch,
    // The LFO, restarted with each note.
    kLfoShape,
    kLfoRate,
@@ -55,6 +61,10 @@ constexpr auto kMod = kGlobalMod | CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID | CLAP_
 constexpr auto kStepped = kMod | CLAP_PARAM_IS_STEPPED;
 constexpr auto kChoice = kStepped | CLAP_PARAM_IS_ENUM;
 
+// Envelope `env` (0 or 1)'s param, given Env 1's: envParam(1, kEnv1Decay) is kEnv2Decay.
+constexpr int kEnvParamCount = kEnv2Attack - kEnv1Attack;
+constexpr clap_id envParam(int env, ParamId env1Param) { return env1Param + env * kEnvParamCount; }
+
 // The cutoff param runs 0..1 so a knob sweeps it evenly by ear: 20 Hz times 1000 to that power.
 constexpr double kCutoffLow = 20.0;
 constexpr double kCutoffSpan = 1000.0;
@@ -74,16 +84,23 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kSlope, "Slope", "Filter", 0.0, 3.0, 1.0, kChoice},
    {kCutoff, "Cutoff", "Filter", 0.0, 1.0, 2.0 / 3.0, kMod},
    {kResonance, "Resonance", "Filter", 0.0, 1.0, 0.3, kMod},
-   {kFilterEnvAmount, "Filter Env Amount", "Filter Envelope", -5.0, 5.0, 2.0, kMod},
-   {kFilterAttack, "Filter Attack", "Filter Envelope", 1.0, 2000.0, 5.0, kMod},
-   {kFilterDecay, "Filter Decay", "Filter Envelope", 1.0, 2000.0, 300.0, kMod},
-   {kFilterSustain, "Filter Sustain", "Filter Envelope", 0.0, 1.0, 0.3, kMod},
-   {kFilterRelease, "Filter Release", "Filter Envelope", 1.0, 4000.0, 300.0, kMod},
-   {kAmpEnvAmount, "Amp Env Amount", "Amp Envelope", 0.0, 1.0, 1.0, kMod},
-   {kAmpAttack, "Amp Attack", "Amp Envelope", 1.0, 2000.0, 5.0, kMod},
-   {kAmpDecay, "Amp Decay", "Amp Envelope", 1.0, 2000.0, 400.0, kMod},
-   {kAmpSustain, "Amp Sustain", "Amp Envelope", 0.0, 1.0, 0.7, kMod},
-   {kAmpRelease, "Amp Release", "Amp Envelope", 1.0, 4000.0, 300.0, kMod},
+   // Env 1 shapes the VCA and Env 2 the filter, to start with; either can go anywhere.
+   {kEnv1Attack, "Env 1 Attack", "Env 1", 1.0, 2000.0, 5.0, kMod},
+   {kEnv1Decay, "Env 1 Decay", "Env 1", 1.0, 2000.0, 400.0, kMod},
+   {kEnv1Sustain, "Env 1 Sustain", "Env 1", 0.0, 1.0, 0.7, kMod},
+   {kEnv1Release, "Env 1 Release", "Env 1", 1.0, 4000.0, 300.0, kMod},
+   {kEnv1Loop, "Env 1 Loop", "Env 1", 0.0, 1.0, 0.0, kChoice},
+   {kEnv1ToFilter, "Env 1 to Filter", "Env 1", -5.0, 5.0, 0.0, kMod},
+   {kEnv1ToVca, "Env 1 to VCA", "Env 1", 0.0, 1.0, 1.0, kMod},
+   {kEnv1ToPitch, "Env 1 to Pitch", "Env 1", -24.0, 24.0, 0.0, kMod},
+   {kEnv2Attack, "Env 2 Attack", "Env 2", 1.0, 2000.0, 5.0, kMod},
+   {kEnv2Decay, "Env 2 Decay", "Env 2", 1.0, 2000.0, 300.0, kMod},
+   {kEnv2Sustain, "Env 2 Sustain", "Env 2", 0.0, 1.0, 0.3, kMod},
+   {kEnv2Release, "Env 2 Release", "Env 2", 1.0, 4000.0, 300.0, kMod},
+   {kEnv2Loop, "Env 2 Loop", "Env 2", 0.0, 1.0, 0.0, kChoice},
+   {kEnv2ToFilter, "Env 2 to Filter", "Env 2", -5.0, 5.0, 2.0, kMod},
+   {kEnv2ToVca, "Env 2 to VCA", "Env 2", 0.0, 1.0, 0.0, kMod},
+   {kEnv2ToPitch, "Env 2 to Pitch", "Env 2", -24.0, 24.0, 0.0, kMod},
    {kLfoShape, "LFO Shape", "LFO", 0.0, 4.0, 1.0, kChoice},
    {kLfoRate, "LFO Rate", "LFO", 0.0, 1.0, 0.6, kMod},
    {kLfoToCutoff, "LFO to Cutoff", "LFO", -4.0, 4.0, 0.0, kMod},
@@ -98,6 +115,7 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
 inline const char *const kWaveNames[] = {"Sine", "Triangle", "Saw", "Square", "Pulse"};
 inline const char *const kFilterModeNames[] = {"Low Pass", "High Pass", "Band Pass"};
 inline const char *const kSlopeNames[] = {"12 dB", "24 dB", "36 dB", "48 dB"};
+inline const char *const kLoopNames[] = {"Off", "On"};
 inline const char *const kLfoShapeNames[] = {"Sine", "Triangle", "Saw", "Square", "Random"};
 
 inline const char *const *choiceNames(clap_id id, int &count) {
@@ -114,6 +132,10 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kLfoShape:
       count = 5;
       return kLfoShapeNames;
+   case kEnv1Loop:
+   case kEnv2Loop:
+      count = 2;
+      return kLoopNames;
    default:
       count = 0;
       return nullptr;
@@ -131,9 +153,10 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    switch (id) {
    case kPulseWidth:
    case kResonance:
-   case kFilterSustain:
-   case kAmpSustain:
-   case kAmpEnvAmount:
+   case kEnv1Sustain:
+   case kEnv2Sustain:
+   case kEnv1ToVca:
+   case kEnv2ToVca:
    case kLfoToVca:
       std::snprintf(out, size, "%.0f%%", value * 100.0);
       break;
@@ -149,7 +172,8 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
          std::snprintf(out, size, "%.2f kHz", hz / 1000.0);
       break;
    }
-   case kFilterEnvAmount:
+   case kEnv1ToFilter:
+   case kEnv2ToFilter:
    case kLfoToCutoff:
       std::snprintf(out, size, "%+.1f oct", value);
       break;
@@ -162,12 +186,16 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kTimbreAmount:
       std::snprintf(out, size, "%.1f oct", value);
       break;
-   case kFilterAttack:
-   case kFilterDecay:
-   case kFilterRelease:
-   case kAmpAttack:
-   case kAmpDecay:
-   case kAmpRelease:
+   case kEnv1ToPitch:
+   case kEnv2ToPitch:
+      std::snprintf(out, size, "%+.1f st", value);
+      break;
+   case kEnv1Attack:
+   case kEnv1Decay:
+   case kEnv1Release:
+   case kEnv2Attack:
+   case kEnv2Decay:
+   case kEnv2Release:
       std::snprintf(out, size, "%.0f ms", value);
       break;
    case kLevel:
@@ -201,9 +229,10 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
    switch (id) {
    case kPulseWidth:
    case kResonance:
-   case kFilterSustain:
-   case kAmpSustain:
-   case kAmpEnvAmount:
+   case kEnv1Sustain:
+   case kEnv2Sustain:
+   case kEnv1ToVca:
+   case kEnv2ToVca:
    case kLfoToVca:
       value = v / 100.0;
       break;
