@@ -20,6 +20,7 @@ Link it with `target_link_libraries(<name> PRIVATE jclap::core)`.
 | `jclap/core/helpers.h` | `ParamDef` + `fillParamInfo`, `pushParamValue` / `pushParamGesture` / `pushMidi`, `isNoteEvent`, `passAudioThrough`, `writeAll` / `readAll` for state streams |
 | `jclap/core/edit_queue.h` | `EditQueue`: carries GUI edits to the audio thread and out to the host as gesture and value events |
 | `jclap/core/spsc_queue.h` | `SpscQueue`: a lock-free queue for small messages between the GUI and the audio thread, such as notes from an on-screen keyboard |
+| `jclap/core/triple_buffer.h` | `TripleBuffer`: the audio thread publishes a whole struct (a frame of visual state), the GUI reads the newest one. Neither side waits or tears |
 | `jclap/core/sample_fifo.h` | `SampleFifo`: the audio thread writes samples, the GUI reads the newest ones for a scope |
 | `jclap/core/test_host.h` | `TestHost`: an in-process host for tests. Send params, modulation, CLAP notes and note expressions, and MIDI, run blocks with audio, read back events, values and value text |
 

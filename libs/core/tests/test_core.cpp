@@ -7,6 +7,7 @@
 #include <jclap/core/sample_fifo.h>
 #include <jclap/core/spsc_queue.h>
 #include <jclap/core/test_host.h>
+#include <jclap/core/triple_buffer.h>
 
 #include <atomic>
 #include <cstring>
@@ -129,6 +130,25 @@ int main() {
    float last[3] = {};
    JCLAP_CHECK_EQ(fifo.read(last, 3), 10u);
    JCLAP_CHECK(last[0] == 7 && last[1] == 8 && last[2] == 9);
+
+   // TripleBuffer: the reader sees only published structs, always the newest, and knows when
+   // nothing new came.
+   struct Pair {
+      int a = 0, b = 0;
+   };
+   jclap::core::TripleBuffer<Pair> triple;
+   JCLAP_CHECK(!triple.update());
+   for (int i = 1; i <= 3; ++i) {
+      triple.back() = {i, -i};
+      triple.publish();
+   }
+   triple.back() = {99, 99}; // written, never published
+   JCLAP_CHECK(triple.update());
+   JCLAP_CHECK(triple.front().a == 3 && triple.front().b == -3);
+   JCLAP_CHECK(!triple.update());
+   triple.back() = {4, -4};
+   triple.publish();
+   JCLAP_CHECK(triple.update() && triple.front().a == 4);
 
    return jclap::core::testResult();
 }
