@@ -11,14 +11,14 @@ namespace {
 // Fills the knobs with a spread of values so every arc style shows up.
 class DemoHost : public mm2::EditorHost {
 public:
-   double baseValue(int index) const override { return (index * 37) % 128; }
+   double paramValue(clap_id id) const override { return (mm2::indexOfCc(static_cast<int>(id)) * 37) % 128; }
    // Every fifth knob shows some host modulation.
-   double modulatedValue(int index) const override {
-      return mm2::modulated(baseValue(index), index % 5 == 0 ? 25.0 : 0.0);
+   double paramModulated(clap_id id) const override {
+      return mm2::modulated(paramValue(id), mm2::indexOfCc(static_cast<int>(id)) % 5 == 0 ? 25.0 : 0.0);
    }
-   void beginEdit(int) override {}
-   void setValue(int, double) override {}
-   void endEdit(int) override {}
+   void beginEdit(clap_id) override {}
+   void setParam(clap_id, double) override {}
+   void endEdit(clap_id) override {}
    int channel() const override { return 1; }
    void setChannel(int) override {}
    void sendAll() override {}

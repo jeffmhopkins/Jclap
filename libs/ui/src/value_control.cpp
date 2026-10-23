@@ -3,17 +3,59 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+
+#include <visage/widgets.h>
 
 namespace jclap::ui {
 
-ValueControl::ValueControl(ValueRange range) : range_(range) {
-   value_ = modulated_ = std::clamp(range_.defaultValue, range_.min, range_.max);
+ValuePopup::ValuePopup() { setIgnoresMouseEvents(true, false); }
+
+void ValuePopup::show(visage::Frame &target, const std::string &text) {
+   visage::Frame *top = target.topParentFrame();
+   if (!top || top == &target)
+      return;
+   if (host_ != top) {
+      hide();
+      host_ = top;
+      top->addChild(this);
+      setOnTop(true);
+   }
+   text_ = text;
+   const visage::Bounds b = top->relativeBounds(&target);
+   const float h = std::clamp(b.height() * 0.22f, 18.0f, 28.0f);
+   const float w = std::max(h * 2.5f, font(h * 0.6f).stringWidth(visage::String(text_).toUtf32()) + h);
+   setBounds(b.xCenter() - w * 0.5f, std::max(0.0f, b.y() - h - 4.0f), w, h);
+   redraw();
 }
+
+void ValuePopup::hide() {
+   if (host_)
+      host_->removeChild(this);
+   host_ = nullptr;
+}
+
+void ValuePopup::draw(visage::Canvas &canvas) {
+   const Theme &t = *theme_;
+   const float r = height() * 0.3f;
+   canvas.setColor(t.headerBar);
+   canvas.roundedRectangle(0, 0, width(), height(), r);
+   canvas.setColor(t.panelBorder);
+   canvas.roundedRectangleBorder(0, 0, width(), height(), r, 1.0f);
+   canvas.setColor(t.text);
+   canvas.text(text_, font(height() * 0.6f), visage::Font::kCenter, 0, 0, width(), height());
+}
+
+ValueControl::ValueControl(ValueRange range) : range_(range) {
+   value_ = modulated_ = range_.clamp(range_.defaultValue);
+}
+
+ValueControl::~ValueControl() { popup_.hide(); }
 
 void ValueControl::setRange(const ValueRange &range) {
    range_ = range;
-   value_ = std::clamp(value_, range_.min, range_.max);
-   modulated_ = std::clamp(modulated_, range_.min, range_.max);
+   value_ = range_.clamp(value_);
+   modulated_ = range_.clamp(modulated_);
    redraw();
 }
 
@@ -44,40 +86,44 @@ void ValueControl::setAccent(unsigned color) {
 
 void ValueControl::setTheme(const Theme &theme) {
    theme_ = &theme;
+   popup_.setTheme(theme);
    redraw();
 }
 
-float ValueControl::fraction(double value) const {
-   const double span = range_.max - range_.min;
-   return span > 0.0 ? static_cast<float>((value - range_.min) / span) : 0.0f;
-}
-
-std::string ValueControl::text() const {
+std::string ValueControl::formatValue(double v) const {
    if (valueText)
-      return valueText(modulated_);
+      return valueText(v);
    if (range_.step >= 1.0)
-      return std::to_string(std::lround(modulated_));
+      return std::to_string(std::lround(v));
    char buffer[32];
-   std::snprintf(buffer, sizeof(buffer), "%.2f", modulated_);
+   std::snprintf(buffer, sizeof(buffer), "%.2f", v);
    return buffer;
 }
 
-void ValueControl::userSet(double value) {
-   value_ = std::clamp(value, range_.min, range_.max);
+void ValueControl::change(double value) {
+   value_ = range_.clamp(value);
    if (onChange)
       onChange(value_);
    modulated_ = modulatedSource ? modulatedSource() : value_;
    redraw();
 }
 
+void ValueControl::userSet(double value) {
+   if (onBeginEdit)
+      onBeginEdit();
+   change(value);
+   if (onEndEdit)
+      onEndEdit();
+}
+
 void ValueControl::mouseDown(const visage::MouseEvent &e) {
+   if (e.shouldTriggerPopup()) {
+      showContextMenu(e);
+      return;
+   }
    if (e.repeatClickCount() == 2) {
-      if (onBeginEdit)
-         onBeginEdit();
-      userSet(range_.defaultValue);
-      if (onEndEdit)
-         onEndEdit();
       dragging_ = false;
+      resetToDefault();
       return;
    }
    dragging_ = true;
@@ -85,6 +131,8 @@ void ValueControl::mouseDown(const visage::MouseEvent &e) {
    dragStartValue_ = value_;
    if (onBeginEdit)
       onBeginEdit();
+   if (showPopup_)
+      popup_.show(*this, text());
 }
 
 void ValueControl::mouseDrag(const visage::MouseEvent &e) {
@@ -92,13 +140,16 @@ void ValueControl::mouseDrag(const visage::MouseEvent &e) {
       return;
    // Hold shift for fine control.
    const float length = dragLength() * (e.isShiftDown() ? 10.0f : 1.0f);
-   userSet(dragStartValue_ + dragDistance(dragStart_, e.position) * (range_.max - range_.min) / length);
+   change(dragStartValue_ + dragDistance(dragStart_, e.position) * (range_.max - range_.min) / length);
+   if (showPopup_)
+      popup_.show(*this, text());
 }
 
 void ValueControl::mouseUp(const visage::MouseEvent &) {
    if (dragging_ && onEndEdit)
       onEndEdit();
    dragging_ = false;
+   popup_.hide();
 }
 
 bool ValueControl::mouseWheel(const visage::MouseEvent &e) {
@@ -106,12 +157,55 @@ bool ValueControl::mouseWheel(const visage::MouseEvent &e) {
    if (delta == 0.0f)
       return false;
    const double step = range_.step > 0.0 ? range_.step : (range_.max - range_.min) / 100.0;
-   if (onBeginEdit)
-      onBeginEdit();
    userSet(range_.min + std::round((value_ - range_.min) / step) * step + (delta > 0 ? step : -step));
-   if (onEndEdit)
-      onEndEdit();
    return true;
+}
+
+void ValueControl::showContextMenu(const visage::MouseEvent &e) {
+   visage::PopupMenu menu;
+   menu.addOption(0, "Reset to default").onSelection() += [this](int) { resetToDefault(); };
+   menu.addOption(1, "Enter value...").onSelection() += [this](int) { startTextEntry(); };
+   if (onContextMenu)
+      onContextMenu(menu);
+   menu.show(this, e.position);
+}
+
+void ValueControl::startTextEntry() {
+   if (!editor_) {
+      editor_ = std::make_unique<visage::TextEditor>();
+      editor_->setNumberEntry();
+      editor_->setJustification(visage::Font::kCenter);
+      editor_->onEnterKey() += [this] { finishTextEntry(true); };
+      editor_->onEscapeKey() += [this] { finishTextEntry(false); };
+      addChild(editor_.get(), false);
+   }
+   const float h = std::clamp(height() * 0.22f, 16.0f, 30.0f);
+   editor_->setBounds(0, (height() - h) * 0.5f, width(), h);
+   editor_->setFont(font(h * 0.65f));
+   editor_->setText(formatValue(value_));
+   editor_->setVisible(true);
+   editor_->requestKeyboardFocus();
+   editor_->selectAll();
+}
+
+void ValueControl::finishTextEntry(bool apply) {
+   if (!editor_ || !editor_->isVisible())
+      return;
+   const std::string typed = editor_->text().toUtf8();
+   editor_->setVisible(false);
+   if (!apply)
+      return;
+   double v = 0.0;
+   bool ok;
+   if (parseText)
+      ok = parseText(typed, v);
+   else {
+      char *end = nullptr;
+      v = std::strtod(typed.c_str(), &end);
+      ok = end != typed.c_str();
+   }
+   if (ok && std::isfinite(v))
+      userSet(v);
 }
 
 } // namespace jclap::ui

@@ -1,13 +1,14 @@
 #pragma once
 
 // The CLAP gui and posix-fd-support extensions for a plugin with one embedded jclap::ui::Window.
+// With a jclap::core::Plugin subclass:
 //
-//    struct MyPlugin { clap_plugin_t plugin; jclap::ui::ClapGui gui; ... };
-//    jclap::ui::ClapGui *guiOf(const clap_plugin_t *p) { return &self(p)->gui; }
+//    class MyPlugin : public jclap::core::Plugin { ... jclap::ui::ClapGui gui; };
 //
-//    init:          p->gui.init(host); p->gui.createWindow = [p] { return makeMyWindow(*p); };
-//    destroy:       p->gui.destroy();
-//    get_extension: if (const void *ext = jclap::ui::ClapGui::extension<guiOf>(id)) return ext;
+//    init():      gui.init(host()); gui.createWindow = [this] { return createEditor(*this); };
+//    extension(): if (auto *ext = jclap::ui::ClapGui::extensionFor<MyPlugin, &MyPlugin::gui>(id)) return ext;
+//
+// Without one, pass a function that finds the ClapGui: ClapGui::extension<guiOf>(id).
 //
 // All of it runs on the main thread, as CLAP requires for these extensions.
 
@@ -17,12 +18,18 @@
 #include <memory>
 #include <string_view>
 
+#include "jclap/core/plugin.h"
 #include "jclap/ui/window.h"
 
 namespace jclap::ui {
 
 class ClapGui {
 public:
+   ClapGui() = default;
+   ~ClapGui() { destroy(); }
+   ClapGui(const ClapGui &) = delete;
+   ClapGui &operator=(const ClapGui &) = delete;
+
    // Looks up the host's gui and posix-fd extensions. Call from the plugin's init().
    void init(const clap_host_t *host);
 
@@ -32,13 +39,19 @@ public:
    // The open window, or null.
    Window *window() const { return window_.get(); }
 
-   // Closes the window. Call from the plugin's destroy() in case the host didn't.
+   // Closes the window. Also done on destruction, in case the host didn't.
    void destroy();
 
    // The gui / posix-fd-support extension struct for `id`, or null. `Lookup` finds the plugin's
    // ClapGui from its clap_plugin_t.
    template <ClapGui *(*Lookup)(const clap_plugin_t *)>
    static const void *extension(const char *id);
+
+   // The same for a jclap::core::Plugin subclass P holding the ClapGui in member M.
+   template <typename P, ClapGui P::*M>
+   static const void *extensionFor(const char *id) {
+      return extension<&memberOf<P, M>>(id);
+   }
 
    // The extension calls, one per clap_plugin_gui_t entry.
    static bool isApiSupported(const char *api, bool isFloating);
@@ -52,6 +65,11 @@ public:
    void onFd();
 
 private:
+   template <typename P, ClapGui P::*M>
+   static ClapGui *memberOf(const clap_plugin_t *p) {
+      return &(static_cast<P *>(core::Plugin::from(p))->*M);
+   }
+
    const clap_host_t *host_ = nullptr;
    const clap_host_gui_t *hostGui_ = nullptr;
    const clap_host_posix_fd_support_t *hostFd_ = nullptr;
@@ -66,6 +84,8 @@ const void *ClapGui::extension(const char *id) {
       [](const clap_plugin_t *, const char **api, bool *floating) { return getPreferredApi(api, floating); },
       [](const clap_plugin_t *p, const char *api, bool floating) { return Lookup(p)->create(api, floating); },
       [](const clap_plugin_t *p) { Lookup(p)->destroy(); },
+      // Visage reads the OS's DPI for the monitor the window is on, so the host's scale is ignored,
+      // which CLAP allows; sizes we report are already physical pixels outside macOS.
       [](const clap_plugin_t *, double) { return false; },
       [](const clap_plugin_t *p, uint32_t *w, uint32_t *h) { return Lookup(p)->getSize(w, h); },
       [](const clap_plugin_t *) { return true; },

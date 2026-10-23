@@ -1,6 +1,14 @@
+<div align="center">
+
 # MicroMonsta 2 CC
 
-A CLAP note effect with a knob panel for the Audiothingies MicroMonsta 2. Every sound parameter the
+A knob panel that sends every Audiothingies MicroMonsta 2 sound parameter as a MIDI CC.
+
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: note effect](https://img.shields.io/badge/CLAP-note%20effect-blue)](https://github.com/free-audio/clap) [![parameters: 64 CCs](https://img.shields.io/badge/parameters-64%20CCs-blue)](docs/cc-map.csv) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage)
+
+</div>
+
+A CLAP note effect for the Audiothingies MicroMonsta 2. Every sound parameter the
 synth accepts over MIDI CC is a host parameter, so it can be automated or modulated, and each change goes
 out to the synth as a CC. Notes and other MIDI pass straight through.
 
@@ -10,23 +18,29 @@ out to the synth as a CC. Notes and other MIDI pass straight through.
 
 1. Put **MicroMonsta 2 CC** on the track that plays the MicroMonsta 2, before the hardware instrument
    (or HW Instrument) device that sends MIDI to the synth.
-2. Set the panel's **MIDI CH** to the synth's MIDI channel (SYSTEM page S02). In bi-timbral mode
-   Program B listens on that channel + 1, so use a second instance for it.
+2. Set the panel's **MIDI CH** to the synth's MIDI channel (SYSTEM page S02).
 3. Turn knobs, automate them, or drop Bitwig modulators on them. Modulation is added on top of the
    knob's setting: the knob stays where you put it, a thin white arc shows how far the modulator moves
    it, and the number under the knob is the value actually sent.
 
+> [!TIP]
+> In bi-timbral mode Program B listens on the MIDI channel + 1, so use a second instance for it.
+
 ## How it sends
 
-- A CC is only sent once its knob has been set (by you, automation or modulation). Inserting the
-  plugin never overwrites the synth's current sound with the plugin's defaults.
+> [!NOTE]
+> A CC is only sent once its knob has been set (by you, automation or modulation). Inserting the
+> plugin never overwrites the synth's current sound with the plugin's defaults.
+
 - Saved projects remember which knobs were set and send them again when the project opens.
   **SEND ALL** pushes every knob's value to the synth now.
 - Values are plain 0 to 127. The manual doesn't say how each CC maps to ms, Hz or semitones, so the
   panel shows the raw value. Tune, fine tune, filter env amount, EQ and the mod matrix knobs are drawn
   as centered (64 = middle).
-- The manual lists no MIDI out jack and doesn't say the synth sends CCs, so the panel doesn't follow
-  the synth's own knobs.
+
+> [!WARNING]
+> The manual lists no MIDI out jack and doesn't say the synth sends CCs, so the panel doesn't follow
+> the synth's own knobs.
 
 ## CC map
 
@@ -52,7 +66,10 @@ Bank select (0/32), sustain (64) and All Sound/Notes Off (120/123) are left out.
 Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage. `src/editor.cpp`
 only holds the layout.
 Drag a knob up or down (shift for fine), use the mouse wheel for single steps, double-click to reset.
-The window can be resized and keeps its shape.
+Right-click a knob to reset it, type a value, or reach the host's menu for that parameter;
+right-click the background to pick a UI size. The window can be resized and keeps its shape.
 
-To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
-`build/plugins/micromonsta2/micromonsta2-screenshot docs/panel.png`.
+> [!TIP]
+> To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
+> `build/plugins/micromonsta2/micromonsta2-screenshot plugins/micromonsta2/docs/panel.png`. With tools
+> on, `ctest` checks the panel still renders like that image.

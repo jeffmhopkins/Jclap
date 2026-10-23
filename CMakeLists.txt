@@ -23,9 +23,18 @@ enable_testing()
 # Offscreen renderers (panel screenshots, the widget gallery). They need a GPU or a software Vulkan driver.
 option(JCLAP_BUILD_TOOLS "Build developer tools" OFF)
 
-# Shared libraries plugins can link: jclap::ui is the Visage widget kit and CLAP window glue.
+# Shared libraries plugins can link: jclap::core is the CLAP boilerplate, jclap::ui the Visage widget
+# kit and CLAP window glue.
+add_subdirectory(libs/core)
 add_subdirectory(libs/ui)
 
 # One folder per plugin under plugins/, each with its own CMakeLists.txt.
 add_subdirectory(plugins/orb-polar)
 add_subdirectory(plugins/micromonsta2)
+
+# The starting point for new plugins (cmake/NewPlugin.cmake copies it). Built into build/template,
+# not build/clap, so it is checked in CI but never shipped.
+option(JCLAP_BUILD_TEMPLATE "Build and test the plugin template" OFF)
+if(JCLAP_BUILD_TEMPLATE)
+   add_subdirectory(plugins/_template)
+endif()

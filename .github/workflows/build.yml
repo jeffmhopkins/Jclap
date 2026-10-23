@@ -20,12 +20,18 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      # Visage (the jclap::ui GUI library) needs X11 and OpenGL headers on Linux.
+      # Visage (the jclap::ui GUI library) needs X11 and OpenGL headers on Linux. The software Vulkan
+      # driver lets the screenshot tests render panels without a GPU.
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxrandr-dev libgl1-mesa-dev
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxrandr-dev libgl1-mesa-dev mesa-vulkan-drivers libvulkan1
+      # The template is built and tested everywhere; screenshot tests (JCLAP_BUILD_TOOLS) run on Linux,
+      # where rendering matches the committed reference images.
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+        shell: bash
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          -DJCLAP_BUILD_TEMPLATE=ON ${{ runner.os == 'Linux' && '-DJCLAP_BUILD_TOOLS=ON' || '' }}
       - name: Build
         run: cmake --build build --config Release
       - name: Test
@@ -34,7 +40,7 @@ jobs:
       - name: Sign (macOS)
         if: runner.os == 'macOS'
         run: |
-          codesign --force --sign - build/clap/*.clap
+          codesign --force --sign - build/clap/*.clap build/template/*.clap
           codesign --verify --strict --verbose=2 build/clap/*.clap
       - name: Check minimum macOS version
         if: runner.os == 'macOS'
@@ -53,7 +59,7 @@ jobs:
       - name: Validate plugins
         shell: bash
         run: |
-          for p in build/clap/*.clap; do
+          for p in build/clap/*.clap build/template/*.clap; do
             clap-validator validate --only-failed "$p"
           done
       - name: Package (macOS)

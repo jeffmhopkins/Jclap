@@ -38,6 +38,9 @@ public:
    uint32_t height() const;
    void setSize(uint32_t width, uint32_t height);
    void adjustSize(uint32_t *width, uint32_t *height) const;
+   // Resizes to `zoom` times the initial size and asks the host to follow. A DesignFrame root offers
+   // this in its background right-click menu.
+   void setZoom(float zoom);
 
    // Linux only: the X11 connection fd the host polls for us.
    int posixFd() const;
