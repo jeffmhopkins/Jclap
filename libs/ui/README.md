@@ -27,6 +27,15 @@ target_link_libraries(<name> PRIVATE jclap::ui)
 | `jclap/ui/dropdown.h` | Pick one of a list of options (menu on click, wheel to step), for enum params |
 | `jclap/ui/xy_pad.h` | Two values at once, each with its own range, modulation and param. `setGrid(Grid::Polar)` makes it a circle of angle and radius |
 | `jclap/ui/meter.h` | Level meter with a falling peak marker, fed from a timer |
+| `jclap/ui/number_box.h` | A value in a box: drag, scroll or type it. `setStepButtons(true)` adds - and + to make a stepper |
+| `jclap/ui/segmented.h` | A row of buttons with one on, for enum params with a few options |
+| `jclap/ui/led.h` | Activity light that flashes on MIDI (or anything) and fades. Feed it a counter the audio thread bumps |
+| `jclap/ui/envelope.h` | ADSR editor: drag the corners. Binds to four params |
+| `jclap/ui/keyboard.h` | Piano keyboard that plays notes when clicked and lights held notes |
+| `jclap/ui/note_grid.h` | LinnStrument-style note grid (rows a fourth apart) that shows per-note MPE: bend, pressure and timbre. Slide on it to bend |
+| `jclap/ui/scope.h` | Oscilloscope or waveform view, fed from a `jclap::core::SampleFifo` |
+| `jclap/ui/tabs.h` | Tab bar that shows one page of widgets at a time |
+| `jclap/ui/tooltip.h` | Hover help for any widget |
 | `jclap/ui/section.h` | `Section` (titled panel box), `Label` and `Divider`. They ignore the mouse |
 | `jclap/ui/theme.h` | Colours shared by every widget, and the `font()` helper |
 
@@ -68,7 +77,7 @@ public:
 `jclap/ui/params.h` and `jclap/ui/param_bindings.h` connect widgets to CLAP params in one call.
 The plugin implements `ParamAccess` (read a value, begin/set/end an edit, by param id), usually
 storing values in atomics and forwarding gestures to a `jclap::core::EditQueue`. Then
-`ParamBindings::bind(widget, id)` wires a Knob, Slider, toggle Button, Dropdown or XY pad (two ids):
+`ParamBindings::bind(widget, id)` wires a Knob, Slider, NumberBox, toggle Button, Dropdown, SegmentedSwitch, XY pad (two ids) or EnvelopeEditor (four ids):
 edits go to the host as gestures, a 30 ms timer pulls automation, modulation and state loads back
 in, and the right-click menu gets the host's items through CLAP's context-menu extension (return a
 `HostMenu` from `ParamAccess::hostMenu()`).

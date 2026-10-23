@@ -16,4 +16,8 @@ if(JCLAP_BUILD_TOOLS)
    target_include_directories(plugin_template-screenshot PRIVATE src)
    target_link_libraries(plugin_template-screenshot PRIVATE jclap::ui)
    jclap_add_screenshot_test(plugin_template-screenshot-test TOOL plugin_template-screenshot REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel.png)
+   jclap_add_screenshot_test(plugin_template-screenshot-tone-test TOOL plugin_template-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-tone.png ARGS 1)
+   jclap_add_screenshot_test(plugin_template-screenshot-grid-test TOOL plugin_template-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-grid.png ARGS 2)
 endif()

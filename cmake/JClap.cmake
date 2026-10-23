@@ -51,11 +51,11 @@ function(jclap_add_test name)
    add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
-# jclap_add_screenshot_test(<name> TOOL <target> REFERENCE <png>) renders with a screenshot tool
-# (which takes the output path as its only argument) and checks the result against a committed
-# PNG, so visual regressions fail the build. Needs JCLAP_BUILD_TOOLS and Python 3.
+# jclap_add_screenshot_test(<name> TOOL <target> REFERENCE <png> [ARGS <arg>...]) renders with a
+# screenshot tool (which takes the output path, then any ARGS) and checks the result against a
+# committed PNG, so visual regressions fail the build. Needs JCLAP_BUILD_TOOLS and Python 3.
 function(jclap_add_screenshot_test name)
-   cmake_parse_arguments(ARG "" "TOOL;REFERENCE" "" ${ARGN})
+   cmake_parse_arguments(ARG "" "TOOL;REFERENCE" "ARGS" ${ARGN})
    if(NOT EXISTS ${ARG_REFERENCE})
       message(STATUS "No ${ARG_REFERENCE} yet; render it with ${ARG_TOOL} to enable ${name}")
       return()
@@ -67,6 +67,6 @@ function(jclap_add_screenshot_test name)
    endif()
    add_test(NAME ${name}
       COMMAND ${CMAKE_COMMAND} -DTOOL=$<TARGET_FILE:${ARG_TOOL}> -DREF=${ARG_REFERENCE}
-         -DOUT=${CMAKE_CURRENT_BINARY_DIR}/${name}.png -DPYTHON=${Python3_EXECUTABLE}
+         -DOUT=${CMAKE_CURRENT_BINARY_DIR}/${name}.png -DPYTHON=${Python3_EXECUTABLE} "-DARGS=${ARG_ARGS}"
          -P ${CMAKE_SOURCE_DIR}/cmake/ScreenshotTest.cmake)
 endfunction()

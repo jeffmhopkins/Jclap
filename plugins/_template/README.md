@@ -8,14 +8,17 @@ The starting point for a new JClap plugin, with params, state, a panel and tests
 
 </div>
 
-The starting point for a new JClap plugin: a stereo gain, pan, width and routing utility built on
-[jclap::core](../../libs/core) and [jclap::ui](../../libs/ui). Its panel uses one of every widget
-(knob, horizontal and vertical slider, toggle and push button, dropdown, XY pad, meter, section,
-label and divider), so there is always an example to copy and the rest is easy to delete.
+The starting point for a new JClap plugin, built on [jclap::core](../../libs/core) and
+[jclap::ui](../../libs/ui): a stereo gain, pan, width and routing utility, plus a one-voice test tone
+you can play from the panel or the host, with per-note expression (MPE). Across its three tabs the
+panel uses every widget in the library, so there is always an example to copy and the rest is
+easy to delete.
 It is built and tested in CI (`-DJCLAP_BUILD_TEMPLATE=ON`, output in `build/template/`) but never
 shipped.
 
-![Panel](docs/panel.png)
+| Mixer | Test tone | Grid |
+|---|---|---|
+| ![Mixer](docs/panel.png) | ![Test tone](docs/panel-tone.png) | ![Grid](docs/panel-grid.png) |
 
 ## Making a plugin from it
 
@@ -42,6 +45,6 @@ Then:
 |---|---|
 | `src/params.h` | Param ids, ranges and display text, shared by the plugin and the panel |
 | `src/plugin.cpp` | The `jclap::core::Plugin` subclass: params, state, audio, GUI hookup |
-| `src/editor.cpp` | The panel: a `DesignFrame` with one of each widget, bound to params by `ParamBindings` |
+| `src/editor.cpp` | The panel: a `DesignFrame` with tabs and one of each widget, bound to params by `ParamBindings` |
 | `tests/test_plugin.cpp` | Host-style tests through `jclap::core::TestHost` |
-| `tools/screenshot.cpp` | Renders the panel to `docs/panel.png` (needs `-DJCLAP_BUILD_TOOLS=ON`) |
+| `tools/screenshot.cpp` | Renders a tab of the panel to `docs/` (needs `-DJCLAP_BUILD_TOOLS=ON`): `plugin_template-screenshot out.png [tab]` |

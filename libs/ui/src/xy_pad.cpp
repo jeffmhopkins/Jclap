@@ -8,14 +8,6 @@ namespace {
 
 constexpr double kTwoPi = 6.283185307179586;
 
-std::string format(const XYPad::Axis &a, double v) {
-   if (a.valueText)
-      return a.valueText(v);
-   char buffer[32];
-   std::snprintf(buffer, sizeof(buffer), a.range.step >= 1.0 ? "%.0f" : "%.2f", v);
-   return buffer;
-}
-
 } // namespace
 
 XYPad::XYPad(ValueRange xRange, ValueRange yRange) {
@@ -178,14 +170,7 @@ void XYPad::drawPolar(visage::Canvas &canvas, visage::Bounds b, unsigned accent)
 }
 
 std::string XYPad::popupText() const {
-   return format(axes_[0], axes_[0].modulated) + "  " + format(axes_[1], axes_[1].modulated);
-}
-
-void XYPad::set(Axis &a, double v) {
-   a.value = a.range.clamp(v);
-   if (a.onChange)
-      a.onChange(a.value);
-   a.modulated = a.modulatedSource ? a.modulatedSource() : a.value;
+   return axes_[0].text(axes_[0].modulated) + "  " + axes_[1].text(axes_[1].modulated);
 }
 
 void XYPad::moveTo(visage::Point p) {
@@ -205,8 +190,8 @@ void XYPad::moveTo(visage::Point p) {
       fx = std::clamp((p.x - b.x()) / std::max(1.0f, b.width()), 0.0f, 1.0f);
       fy = std::clamp((b.bottom() - p.y) / std::max(1.0f, b.height()), 0.0f, 1.0f);
    }
-   set(axes_[0], axes_[0].range.min + fx * (axes_[0].range.max - axes_[0].range.min));
-   set(axes_[1], axes_[1].range.min + fy * (axes_[1].range.max - axes_[1].range.min));
+   axes_[0].set(axes_[0].range.min + fx * (axes_[0].range.max - axes_[0].range.min));
+   axes_[1].set(axes_[1].range.min + fy * (axes_[1].range.max - axes_[1].range.min));
    redraw();
 }
 
@@ -214,7 +199,7 @@ void XYPad::resetBoth() {
    for (Axis &a : axes_) {
       if (a.onBeginEdit)
          a.onBeginEdit();
-      set(a, a.range.defaultValue);
+      a.set(a.range.defaultValue);
       if (a.onEndEdit)
          a.onEndEdit();
    }

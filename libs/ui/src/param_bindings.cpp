@@ -13,7 +13,10 @@ void ParamBindings::bind(ValueControl &control, clap_id id) {
    control.modulatedSource = [this, id] { return access_.paramModulated(id); };
    control.onContextMenu = [this, id](visage::PopupMenu &menu) { addHostMenu(menu, id); };
    control.setValue(access_.paramValue(id), access_.paramModulated(id));
-   bound_.push_back({&control, nullptr, nullptr, nullptr, id, 0});
+   Bound b;
+   b.control = &control;
+   b.id = id;
+   bound_.push_back(b);
 }
 
 void ParamBindings::bind(Button &button, clap_id id) {
@@ -24,7 +27,10 @@ void ParamBindings::bind(Button &button, clap_id id) {
       access_.endEdit(id);
    };
    button.setOn(access_.paramValue(id) >= 0.5);
-   bound_.push_back({nullptr, &button, nullptr, nullptr, id, 0});
+   Bound b;
+   b.button = &button;
+   b.id = id;
+   bound_.push_back(b);
 }
 
 void ParamBindings::bind(Dropdown &dropdown, clap_id id) {
@@ -34,10 +40,44 @@ void ParamBindings::bind(Dropdown &dropdown, clap_id id) {
       access_.endEdit(id);
    };
    dropdown.setSelected(static_cast<int>(std::lround(access_.paramValue(id) - dropdown.firstValue)));
-   bound_.push_back({nullptr, nullptr, &dropdown, nullptr, id, 0});
+   Bound b;
+   b.dropdown = &dropdown;
+   b.id = id;
+   bound_.push_back(b);
 }
 
-void ParamBindings::wireAxis(XYPad::Axis &axis, clap_id id) {
+void ParamBindings::bind(SegmentedSwitch &segments, clap_id id) {
+   segments.onChange = [this, id, &segments](int index) {
+      access_.beginEdit(id);
+      access_.setParam(id, segments.firstValue + index);
+      access_.endEdit(id);
+   };
+   segments.setSelected(static_cast<int>(std::lround(access_.paramValue(id) - segments.firstValue)));
+   Bound b;
+   b.segments = &segments;
+   b.id = id;
+   bound_.push_back(b);
+}
+
+void ParamBindings::bind(EnvelopeEditor &envelope, clap_id attack, clap_id decay, clap_id sustain, clap_id release) {
+   const clap_id ids[] = {attack, decay, sustain, release};
+   for (int i = 0; i < EnvelopeEditor::kStageCount; ++i)
+      wireAxis(envelope.stage(static_cast<EnvelopeEditor::Stage>(i)), ids[i]);
+   envelope.onContextMenu = [this, ids](visage::PopupMenu &menu) {
+      for (clap_id id : ids)
+         addHostMenu(menu, id);
+   };
+   Bound b;
+   b.envelope = &envelope;
+   b.id = attack;
+   b.id2 = decay;
+   b.id3 = sustain;
+   b.id4 = release;
+   bound_.push_back(b);
+   sync(b);
+}
+
+void ParamBindings::wireAxis(ValueAxis &axis, clap_id id) {
    axis.onBeginEdit = [this, id] { access_.beginEdit(id); };
    axis.onChange = [this, id](double v) { access_.setParam(id, v); };
    axis.onEndEdit = [this, id] { access_.endEdit(id); };
@@ -53,20 +93,35 @@ void ParamBindings::bind(XYPad &pad, clap_id xId, clap_id yId) {
    };
    pad.setValues(access_.paramValue(xId), access_.paramModulated(xId), access_.paramValue(yId),
                  access_.paramModulated(yId));
-   bound_.push_back({nullptr, nullptr, nullptr, &pad, xId, yId});
+   Bound b;
+   b.pad = &pad;
+   b.id = xId;
+   b.id2 = yId;
+   bound_.push_back(b);
 }
 
 void ParamBindings::sync() {
-   for (const Bound &b : bound_) {
-      if (b.control)
-         b.control->setValue(access_.paramValue(b.id), access_.paramModulated(b.id));
-      else if (b.button)
-         b.button->setOn(access_.paramValue(b.id) >= 0.5);
-      else if (b.dropdown)
-         b.dropdown->setSelected(static_cast<int>(std::lround(access_.paramValue(b.id) - b.dropdown->firstValue)));
-      else if (b.pad)
-         b.pad->setValues(access_.paramValue(b.id), access_.paramModulated(b.id), access_.paramValue(b.id2),
-                          access_.paramModulated(b.id2));
+   for (const Bound &b : bound_)
+      sync(b);
+}
+
+void ParamBindings::sync(const Bound &b) {
+   if (b.control)
+      b.control->setValue(access_.paramValue(b.id), access_.paramModulated(b.id));
+   else if (b.button)
+      b.button->setOn(access_.paramValue(b.id) >= 0.5);
+   else if (b.dropdown)
+      b.dropdown->setSelected(static_cast<int>(std::lround(access_.paramValue(b.id) - b.dropdown->firstValue)));
+   else if (b.segments)
+      b.segments->setSelected(static_cast<int>(std::lround(access_.paramValue(b.id) - b.segments->firstValue)));
+   else if (b.pad)
+      b.pad->setValues(access_.paramValue(b.id), access_.paramModulated(b.id), access_.paramValue(b.id2),
+                       access_.paramModulated(b.id2));
+   else if (b.envelope) {
+      const clap_id ids[] = {b.id, b.id2, b.id3, b.id4};
+      for (int i = 0; i < EnvelopeEditor::kStageCount; ++i)
+         b.envelope->setValue(static_cast<EnvelopeEditor::Stage>(i), access_.paramValue(ids[i]),
+                              access_.paramModulated(ids[i]));
    }
 }
 
