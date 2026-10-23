@@ -2,6 +2,8 @@
 
 #include <visage/app.h>
 
+#include "jclap/ui/design_frame.h"
+
 namespace jclap::ui {
 
 struct Window::Impl {
@@ -22,6 +24,13 @@ Window::Window(std::unique_ptr<visage::Frame> root, const WindowOptions &options
       if (onResizeRequest)
          onResizeRequest();
    };
+   if (auto *design = dynamic_cast<DesignFrame *>(impl_->root.get()))
+      design->onZoom = [this](float zoom) { setZoom(zoom); };
+}
+
+void Window::setZoom(float zoom) {
+   const WindowOptions &o = impl_->options;
+   impl_->app.setWindowDimensions(o.width * zoom, o.height * zoom);
 }
 
 Window::~Window() {

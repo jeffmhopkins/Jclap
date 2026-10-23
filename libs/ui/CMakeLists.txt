@@ -14,12 +14,18 @@ add_library(jclap_ui STATIC
    src/slider.cpp
    src/button.cpp
    src/section.cpp
+   src/dropdown.cpp
+   src/xy_pad.cpp
+   src/meter.cpp
+   src/design_frame.cpp
+   src/params.cpp
+   src/param_bindings.cpp
    src/window.cpp
    src/clap_gui.cpp)
 add_library(jclap::ui ALIAS jclap_ui)
 target_include_directories(jclap_ui PUBLIC include)
 target_compile_features(jclap_ui PUBLIC cxx_std_17)
-target_link_libraries(jclap_ui PUBLIC clap visage PRIVATE VisageEmbeddedFonts)
+target_link_libraries(jclap_ui PUBLIC jclap::core visage PRIVATE VisageEmbeddedFonts)
 if(NOT MSVC)
    target_compile_options(jclap_ui PRIVATE -Wall -Wextra -fvisibility=hidden)
 endif()
@@ -28,4 +34,5 @@ endif()
 if(JCLAP_BUILD_TOOLS)
    add_executable(jclap-ui-gallery tools/gallery.cpp)
    target_link_libraries(jclap-ui-gallery PRIVATE jclap::ui)
+   jclap_add_screenshot_test(jclap-ui-gallery-screenshot TOOL jclap-ui-gallery REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/gallery.png)
 endif()
