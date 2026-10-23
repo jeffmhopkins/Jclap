@@ -61,6 +61,9 @@ public:
       reset();
    }
 
+   // Each voice's random LFO takes its own sequence.
+   void setSeed(uint32_t seed) { lfo_.setSeed(seed); }
+
    void configure(const VoiceSettings &s) {
       osc_.setWave(s.wave);
       osc_.setPulseWidth(s.pulseWidth);

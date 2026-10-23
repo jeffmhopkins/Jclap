@@ -39,7 +39,7 @@ public:
       if (slope == slope_)
          return;
       slope_ = slope;
-      updateCoefficients();
+      updateQ();
    }
    Slope slope() const { return slope_; }
    int stages() const { return static_cast<int>(slope_); }
@@ -51,8 +51,11 @@ public:
    double cutoff() const { return cutoff_; }
    // 0 is no resonance; 1 is a sharp peak just short of self-oscillation.
    void setResonance(double amount) {
-      resonance_ = std::clamp(amount, 0.0, 1.0);
-      updateCoefficients();
+      amount = std::clamp(amount, 0.0, 1.0);
+      if (amount == resonance_)
+         return;
+      resonance_ = amount;
+      updateQ();
    }
    double resonance() const { return resonance_; }
 
@@ -100,23 +103,32 @@ private:
       }
    };
 
+   // Each stage's Q only changes with the slope or resonance, so it is worked out then; a cutoff
+   // change, which may come every sample, costs one tan().
+   void updateQ() {
+      const int n = stages();
+      for (int i = 0; i < n; ++i) {
+         // Butterworth: the poles of an order-2n filter, two per stage.
+         q_[i] = 1.0 / (2.0 * std::cos((2.0 * i + 1.0) * kPi / (4.0 * n)));
+         if (i == n - 1)
+            q_[i] *= std::pow(30.0, resonance_);
+      }
+      updateCoefficients();
+   }
+
    void updateCoefficients() {
       const double hz = std::clamp(cutoff_, 10.0, 0.45 * sampleRate_);
       const double g = std::tan(kPi * hz / sampleRate_);
       const int n = stages();
-      for (int i = 0; i < n; ++i) {
-         // Butterworth: the poles of an order-2n filter, two per stage.
-         double q = 1.0 / (2.0 * std::cos((2.0 * i + 1.0) * kPi / (4.0 * n)));
-         if (i == n - 1)
-            q *= std::pow(30.0, resonance_);
-         stages_[i].set(g, q);
-      }
+      for (int i = 0; i < n; ++i)
+         stages_[i].set(g, q_[i]);
    }
 
    Mode mode_ = Mode::LowPass;
    Slope slope_ = Slope::Db12;
    double sampleRate_ = 48000.0, cutoff_ = 1000.0, resonance_ = 0.0;
    Stage stages_[kMaxStages];
+   double q_[kMaxStages] = {0.7071067811865476, 0.0, 0.0, 0.0};
 };
 
 } // namespace jclap::dsp

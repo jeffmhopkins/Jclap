@@ -1,6 +1,7 @@
 // Basic Synth: an eight-voice MPE synth built from jclap::dsp. Each voice has an oscillator, a filter
-// and a VCA, two envelopes that can each go to the filter, VCA and pitch, and an LFO (see voice.h). Notes arrive as CLAP notes with per-note expressions, as MPE MIDI, or
-// as plain MIDI; the panel's keyboard and note grid play it too.
+// and a VCA, two envelopes that can each go to the filter, VCA and pitch, and an LFO (see voice.h).
+// Notes arrive as CLAP notes with per-note expressions, as MPE MIDI, or as plain MIDI; the panel's
+// keyboard and note grid play it too.
 
 #include <jclap/core/edit_queue.h>
 #include <jclap/core/entry.h>
@@ -87,9 +88,10 @@ public:
    }
 
    bool activate(double sampleRate, uint32_t, uint32_t) override {
-      for (Slot &s : slots_) {
-         s = Slot{};
-         s.voice.setSampleRate(sampleRate);
+      for (int i = 0; i < kVoiceCount; ++i) {
+         slots_[i] = Slot{};
+         slots_[i].voice.setSampleRate(sampleRate);
+         slots_[i].voice.setSeed(0x9e3779b9u * (i + 1));
       }
       for (ChannelState &c : channels_)
          c = ChannelState{};
@@ -103,6 +105,8 @@ public:
    void reset() override {
       for (Slot &s : slots_)
          s.voice.reset();
+      for (ChannelState &c : channels_)
+         c = ChannelState{};
    }
 
    // An instrument: notes in, stereo out.
@@ -218,10 +222,14 @@ public:
       return id < kParamCount && parseParam(id, text, *value);
    }
 
+   // Called while not processing, so only params apply; notes wait for process().
    void paramsFlush(const clap_input_events_t *in, const clap_output_events_t *out) override {
       const uint32_t n = in->size(in);
-      for (uint32_t i = 0; i < n; ++i)
-         handleEvent(in->get(in, i), out);
+      for (uint32_t i = 0; i < n; ++i) {
+         const clap_event_header_t *h = in->get(in, i);
+         if (h->type == CLAP_EVENT_PARAM_VALUE || h->type == CLAP_EVENT_PARAM_MOD)
+            handleEvent(h, out);
+      }
       edits_.drain(out);
    }
 
@@ -532,8 +540,9 @@ private:
          return;
       }
       Slot &s = pickSlot(port, channel, key);
-      // A different note taking this voice has ended, as far as the host is concerned.
-      if (s.voice.isActive() && s.noteId != noteId)
+      // A different note taking this voice has ended, as far as the host is concerned. (MIDI and
+      // panel notes have no id, so compare where they are too.)
+      if (s.voice.isActive() && (s.noteId != noteId || s.key != key || s.channel != channel || s.port != port))
          endNote(s, out, time);
       s.noteId = noteId;
       s.port = port;

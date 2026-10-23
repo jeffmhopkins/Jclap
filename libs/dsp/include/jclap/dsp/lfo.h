@@ -34,6 +34,9 @@ public:
    }
    double rate() const { return rate_; }
 
+   // The random shape's sequence. Give each LFO its own seed (any but 0) so voices don't move in step.
+   void setSeed(uint32_t seed) { seed_ = seed ? seed : 0x2545f491; }
+
    // Restart the cycle, 0..1. Random picks a new value.
    void reset(double phase = 0.0) {
       phase_ = phase - std::floor(phase);
