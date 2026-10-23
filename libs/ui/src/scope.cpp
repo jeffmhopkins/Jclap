@@ -5,6 +5,9 @@
 namespace jclap::ui {
 
 void Scope::setSamples(const float *samples, size_t count) {
+   // A held or silent signal gives the same samples tick after tick; skip the redraw then.
+   if (samples_.size() == count && std::equal(samples, samples + count, samples_.begin()))
+      return;
    samples_.assign(samples, samples + count);
    redraw();
 }

@@ -30,8 +30,11 @@ void ActivityLed::setCount(uint32_t count) {
 }
 
 void ActivityLed::setLevel(float level) {
-   level_ = std::clamp(level, 0.0f, 1.0f);
-   if (level_ > 0.0f && !isRunning())
+   level = std::clamp(level, 0.0f, 1.0f);
+   if (level == level_)
+      return;
+   level_ = level;
+   if (level_ > 0.0f && fadeMs > 0 && !isRunning())
       startTimer(kTickMs);
    redraw();
 }
@@ -52,6 +55,10 @@ void ActivityLed::setTheme(const Theme &theme) {
 }
 
 void ActivityLed::timerCallback() {
+   if (fadeMs <= 0) {
+      stopTimer();
+      return;
+   }
    level_ = std::max(0.0f, level_ - static_cast<float>(kTickMs) / std::max(1, fadeMs));
    if (level_ <= 0.0f)
       stopTimer();

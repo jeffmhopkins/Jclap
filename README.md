@@ -2,7 +2,7 @@
 
 # JClap
 
-Small, single-purpose CLAP utility plugins, plus the shared toolkit they are built with.
+Small, single-purpose CLAP plugins, plus the shared toolkit they are built with.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![Release](https://img.shields.io/github/v/release/jeffmhopkins/Jclap)](https://github.com/jeffmhopkins/Jclap/releases/latest) [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](CMakeLists.txt) [![CLAP 1.2](https://img.shields.io/badge/CLAP-1.2.2-blue)](https://github.com/free-audio/clap) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](.github/workflows/build.yml) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage)
 
@@ -17,6 +17,7 @@ and plugins that need a panel get one from the shared GUI library.
 |---|---|---|
 | [Polar XY](plugins/polar-xy) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
 | [MicroMonsta 2 CC](plugins/micromonsta2) | Note effect | Knob panel that sends every MicroMonsta 2 parameter as a MIDI CC |
+| [Basic Synth](plugins/basic-synth) | Instrument | Eight-voice MPE synth: oscillator, filter, VCA, two looping envelopes and an LFO |
 
 ## Download
 
@@ -73,13 +74,15 @@ It creates `plugins/my-plugin/` (plugin id `com.jeffmhopkins.jclap.my-plugin`), 
 top-level `CMakeLists.txt`, and prints what to change next. See
 [plugins/_template](plugins/_template) for the details, then add a row to the table above.
 
-Plugins build on two shared libraries:
+Plugins build on three shared libraries:
 
 - [jclap::core](libs/core): the CLAP boilerplate. A `Plugin` base class, `JCLAP_ENTRY` for the
   factory, param/state/port/event helpers, the GUI edit queue and `TestHost` for host-style tests.
 - [jclap::ui](libs/ui): the GUI. Knobs, sliders, buttons, dropdowns, an XY pad, meters and panels
   on [Visage](https://github.com/VitalAudio/visage), a design-grid layout, one-line param binding
   and the CLAP window glue.
+- [jclap::dsp](libs/dsp): audio building blocks. A band-limited oscillator with pulse width, a
+  resonant low/high/band pass filter with 12 to 48 dB/oct slopes, an ADSR envelope, an LFO and a VCA.
 
 > [!NOTE]
 > **Screenshot tests.** Configure with `-DJCLAP_BUILD_TOOLS=ON` and `ctest` also renders the panels and

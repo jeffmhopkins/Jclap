@@ -42,6 +42,20 @@ int main() {
    JCLAP_CHECK(h.paramText(kRouting, 3.0) == "Right only");
    JCLAP_CHECK(h.paramText(kWidth, 1.5) == "150%");
 
+   // Host modulation adds to a param without changing it: +6 dB on top of -6 dB is unity.
+   h.setParam(kMute, 0.0);
+   h.setParam(kWidth, 1.0);
+   h.setParam(kRouting, 0.0);
+   h.setParam(kGain, -6.0206);
+   h.modulate(kGain, 6.0206);
+   inR[0] = 0.5f;
+   h.process(4, in, out);
+   JCLAP_CHECK(std::fabs(outL[0] - 0.5f) < 1e-3f);
+   JCLAP_CHECK_EQ(h.paramValue(kGain), -6.0206);
+   JCLAP_CHECK(std::fabs(h.object<EditorHost>()->paramModulated(kGain)) < 1e-9);
+   h.modulate(kGain, 0.0);
+   h.setParam(kWidth, 0.0);
+
    // Mute.
    h.setParam(kMute, 1.0);
    h.process(4, in, out);

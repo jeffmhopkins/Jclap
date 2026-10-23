@@ -25,6 +25,9 @@ public:
    // Keys held from outside (host notes); drawn in the accent colour.
    void setNoteOn(int note, bool on);
    void clearNotes();
+   // Lets go of a key held with the mouse, sending onNoteOff. For a panel closing mid-press, so the
+   // note doesn't hang.
+   void releaseNote() { release(); }
    bool isNoteOn(int note) const { return note >= 0 && note < 128 && held_[note]; }
 
    void setAccent(unsigned color);

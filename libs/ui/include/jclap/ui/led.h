@@ -3,6 +3,9 @@
 // A small light that flashes on activity, such as MIDI coming in or going out, then fades. Call
 // flash() from the GUI, or feed it a counter the audio thread bumps on each event with
 // setCount(): it flashes whenever the count changes, so no event is missed between redraws.
+//
+// Or set fadeMs to 0 for a steady light whose brightness follows setLevel(), such as an LFO's
+// current value.
 
 #include <cstdint>
 #include <string>
@@ -19,13 +22,13 @@ public:
 
    void flash();
    void setCount(uint32_t count);
-   // Brightness 0..1, normally left to flash() and the fade. For screenshots and tests.
+   // Brightness 0..1. With a fade it then fades out like a flash; with fadeMs = 0 it stays.
    void setLevel(float level);
 
    void setLabel(std::string label);
    void setColor(unsigned color);
    void setTheme(const Theme &theme);
-   // How long a flash takes to fade out.
+   // How long a flash takes to fade out. 0 means no fade: the light holds what setLevel() set.
    int fadeMs = 250;
 
    void draw(visage::Canvas &canvas) override;

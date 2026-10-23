@@ -6,6 +6,7 @@
 // dragging.
 
 #include <functional>
+#include <vector>
 
 #include <visage/ui.h>
 
@@ -30,6 +31,18 @@ public:
    // Times (attack, decay, release) are drawn on a curve so short ones stay visible: position is
    // fraction^timeCurve of the stage's width. 1 is linear; the default 0.5 suits millisecond ranges.
    void setTimeCurve(float curve);
+
+   // Where a playing envelope is now: its stage, its level (0..1), and in release the level it was
+   // let go at. Each shows as a glowing dot riding the curve.
+   struct Playhead {
+      Stage stage = kAttack;
+      float level = 0.0f, releaseFrom = 1.0f;
+      bool operator==(const Playhead &o) const {
+         return stage == o.stage && level == o.level && releaseFrom == o.releaseFrom;
+      }
+   };
+   // One per sounding voice; feed them from a timer, and an empty list when nothing plays.
+   void setPlayheads(std::vector<Playhead> playheads);
 
    void setAccent(unsigned color);
    void setTheme(const Theme &theme);
@@ -63,6 +76,7 @@ private:
    unsigned accent_ = 0;
    float timeCurve_ = 0.5f;
    Handle dragging_ = kNone;
+   std::vector<Playhead> playheads_;
    ValuePopup popup_;
 };
 

@@ -41,6 +41,13 @@ void EnvelopeEditor::setValue(Stage s, double value, double modulated) {
    }
 }
 
+void EnvelopeEditor::setPlayheads(std::vector<Playhead> playheads) {
+   if (playheads == playheads_)
+      return;
+   playheads_ = std::move(playheads);
+   redraw();
+}
+
 void EnvelopeEditor::setTimeCurve(float curve) {
    timeCurve_ = std::max(0.05f, curve);
    redraw();
@@ -114,9 +121,14 @@ void EnvelopeEditor::draw(visage::Canvas &canvas) {
    for (const ValueAxis &a : stages_)
       modulated = modulated || a.modulated != a.value;
    if (modulated) {
+      // Drawn like a knob's modulation ring: a light line, with a small dot on each moved corner.
       canvas.setColor(t.modulation);
+      const float line = std::max(1.5f, std::min(width(), height()) * 0.012f);
       for (int i = 0; i + 1 < 5; ++i)
-         canvas.segment(modLine[i].x, modLine[i].y, modLine[i + 1].x, modLine[i + 1].y, 1.0f, true);
+         canvas.segment(modLine[i].x, modLine[i].y, modLine[i + 1].x, modLine[i + 1].y, line, true);
+      const float pip = line * 3.0f;
+      for (int i = 1; i < 5; ++i)
+         canvas.circle(modLine[i].x - pip * 0.5f, modLine[i].y - pip * 0.5f, pip);
    }
 
    canvas.setColor(accent);
@@ -129,6 +141,34 @@ void EnvelopeEditor::draw(visage::Canvas &canvas) {
       canvas.circle(h.x - dot * 0.5f, h.y - dot * 0.5f, dot);
       canvas.setColor(accent);
       canvas.ring(h.x - dot * 0.5f, h.y - dot * 0.5f, dot, 2.0f);
+   }
+
+   // Each playhead rides the curve the host is playing (the modulated one): along each stage by how
+   // far the level has travelled through it, at the level's height.
+   const float sustain = std::clamp(stages_[kSustain].range.fraction(stages_[kSustain].modulated), 0.0f, 1.0f);
+   const auto along = [](visage::Point a, visage::Point c, float f) {
+      f = std::clamp(f, 0.0f, 1.0f);
+      return visage::Point{a.x + (c.x - a.x) * f, a.y + (c.y - a.y) * f};
+   };
+   const float glow = dot * 2.2f;
+   for (const Playhead &ph : playheads_) {
+      const float level = std::clamp(ph.level, 0.0f, 1.0f);
+      visage::Point at;
+      if (ph.stage == kAttack)
+         at = along(m.start, m.peak, level);
+      else if (ph.stage == kDecay)
+         at = along(m.peak, m.knee, sustain < 1.0f ? (1.0f - level) / (1.0f - sustain) : 1.0f);
+      else if (ph.stage == kSustain)
+         at = m.knee;
+      else
+         at = along(m.hold, m.end, ph.releaseFrom > 0.0f ? 1.0f - level / ph.releaseFrom : 1.0f);
+      at.y = b.bottom() - level * b.height();
+      canvas.setColor((accent & 0x00ffffff) | 0x30000000);
+      canvas.circle(at.x - glow * 0.5f, at.y - glow * 0.5f, glow);
+      canvas.setColor((accent & 0x00ffffff) | 0x60000000);
+      canvas.circle(at.x - glow * 0.32f, at.y - glow * 0.32f, glow * 0.64f);
+      canvas.setColor(t.modulation);
+      canvas.circle(at.x - dot * 0.3f, at.y - dot * 0.3f, dot * 0.6f);
    }
 }
 
