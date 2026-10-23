@@ -25,7 +25,7 @@ public:
       values_[kDecay] = 6.5;
       values_[kSize] = 1.6;
       values_[kMix] = 0.42;
-      values_[kFeedback] = 0.35;
+      values_[kFeedback] = 0.9;
       values_[kShimmer] = 0.3;
       values_[kDriveOn] = 1.0;
       double mass[kMaxBodies], velocity[kMaxBodies];

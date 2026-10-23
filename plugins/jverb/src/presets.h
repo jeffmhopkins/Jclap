@@ -68,10 +68,10 @@ inline const std::vector<Preset> &factoryPresets() {
                    {{kDecay, 28}, {kSize, 3.4}, {kGravity, 0.5}, {kBodies, 6}, {kMotion, 0.75}, {kAttack, 0.35},
                     {kDampHigh, 6000}, {kBassMult, 1.1}, {kPredelay, 60}, {kMix, 0.5}}});
       p.push_back({"Shimmer Halo", "Ambient",
-                   {{kDecay, 8}, {kSize, 2}, {kShimmer, 0.45}, {kFeedback, 0.35}, {kShimmerPitch, 12}, {kTilt, 0.2},
+                   {{kDecay, 8}, {kSize, 2}, {kShimmer, 0.45}, {kFeedback, 0.9}, {kShimmerPitch, 12}, {kTilt, 0.2},
                     {kAttack, 0.3}, {kMix, 0.42}}});
       p.push_back({"Octave Under", "Ambient",
-                   {{kDecay, 10}, {kSize, 2.4}, {kShimmer, 0.4}, {kShimmerPitch, -12}, {kFeedback, 0.3},
+                   {{kDecay, 10}, {kSize, 2.4}, {kShimmer, 0.4}, {kShimmerPitch, -12}, {kFeedback, 0.85},
                     {kDampHigh, 4000}, {kMix, 0.4}}});
       p.push_back({"Swell Machine", "Ambient",
                    {{kDecay, 6}, {kSize, 1.6}, {kAttack, 0.85}, {kDiffusion, 0.9}, {kMotion, 0.5}, {kMix, 0.45}}});
@@ -90,11 +90,11 @@ inline const std::vector<Preset> &factoryPresets() {
       p.push_back({"Tape Loop Orbit", "Echo",
                    with({{kEchoOn, 1}, {kEchoWhere, kLoopSlot}, {kEchoSync, 12}, {kEchoFeedback, 0.35},
                          {kEchoTone, -0.5}, {kEchoMix, 0.8}, {kDriveOn, 1}, {kDriveWhere, kInLoop},
-                         {kDriveType, kTape}, {kDrive, 8}, {kFeedback, 0.2}, {kDecay, 5}, {kMix, 0.45}},
+                         {kDriveType, kTape}, {kDrive, 8}, {kFeedback, 0.85}, {kDecay, 5}, {kMix, 0.45}},
                         target(2, Target::Echo, 0.25))});
       p.push_back({"Infinite Return", "Echo",
                    {{kEchoOn, 1}, {kEchoWhere, kLoopSlot}, {kEchoSync, 10}, {kEchoFeedback, 0.7}, {kEchoMix, 0.7},
-                    {kFeedback, 0.55}, {kShimmer, 0.2}, {kDecay, 8}, {kSize, 2}, {kMix, 0.45}}});
+                    {kFeedback, 0.92}, {kShimmer, 0.2}, {kDecay, 8}, {kSize, 2}, {kMix, 0.45}}});
       p.push_back({"Warped Slapback", "Echo",
                    with({{kEchoOn, 1}, {kEchoWhere, kInto}, {kEchoTime, 140}, {kEchoFeedback, 0.25},
                          {kEchoPingPong, 0}, {kEchoTone, 0.2}, {kEchoMix, 0.7}, {kDecay, 1.4}, {kSize, 0.7},
@@ -102,17 +102,17 @@ inline const std::vector<Preset> &factoryPresets() {
                         target(0, Target::Echo, 0.5))});
 
       p.push_back({"Burning Loop", "Drive",
-                   {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kTube}, {kDrive, 18}, {kFeedback, 0.7},
+                   {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kTube}, {kDrive, 18}, {kFeedback, 0.9},
                     {kTilt, -0.3}, {kDecay, 5}, {kMix, 0.4}}});
       p.push_back({"Fuzz Cloud", "Drive",
                    {{kDriveOn, 1}, {kDriveWhere, kPostSlot}, {kDriveType, kFuzz}, {kDrive, 24}, {kDriveMix, 0.6},
                     {kDriveTrim, -6}, {kDecay, 7}, {kSize, 2}, {kMix, 0.45}}});
       p.push_back({"Crushed Satellites", "Drive",
                    {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kCrush}, {kDriveBias, 0.5}, {kDrive, 14},
-                    {kFeedback, 0.5}, {kBodies, 5}, {kDecay, 4}, {kMix, 0.4}}});
+                    {kFeedback, 0.8}, {kBodies, 5}, {kDecay, 4}, {kMix, 0.4}}});
       p.push_back({"Folded Space", "Drive",
                    {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kFold}, {kDrive, 20}, {kShimmer, 0.25},
-                    {kFeedback, 0.45}, {kDecay, 6}, {kMix, 0.4}}});
+                    {kFeedback, 0.85}, {kDecay, 6}, {kMix, 0.4}}});
       p.push_back({"Hot Input", "Drive",
                    {{kDriveOn, 1}, {kDriveWhere, kPreSlot}, {kDriveType, kTape}, {kDrive, 15}, {kDriveTone, 0.3},
                     {kDecay, 2.2}, {kMix, 0.35}}});
@@ -135,21 +135,17 @@ inline const std::vector<Preset> &factoryPresets() {
    return presets;
 }
 
-// Applies a preset as edits through `access`: every param to its default, then the preset's values.
-inline void applyPreset(const Preset &preset, jclap::ui::ParamAccess &access) {
+// Applies a preset through `host` (anything with setParams(const double *)): every param to its
+// default, then the preset's values.
+template <class Host>
+void applyPreset(const Preset &preset, Host &host) {
    double values[kParamCount];
    for (clap_id id = 0; id < kParamCount; ++id)
       values[id] = kParams[id].defaultValue;
    for (const auto &[id, v] : preset.values)
       if (id < kParamCount)
          values[id] = std::clamp(v, kParams[id].min, kParams[id].max);
-   for (clap_id id = 0; id < kParamCount; ++id) {
-      if (access.paramValue(id) == values[id])
-         continue;
-      access.beginEdit(id);
-      access.setParam(id, values[id]);
-      access.endEdit(id);
-   }
+   host.setParams(values);
 }
 
 // Where user presets live: per platform, under the user's own settings folder.
@@ -189,23 +185,40 @@ inline bool readPreset(const std::filesystem::path &file, Preset &out) {
    return true;
 }
 
-// Saves every param that isn't at its default; returns false if the file can't be written.
+// Saves every param that isn't at its default; returns false if the file can't be written. The
+// file is written beside its final name and then renamed over it, so a failed save never leaves a
+// half-written preset behind.
 inline bool writePreset(const std::filesystem::path &file, const jclap::ui::ParamAccess &access) {
    std::error_code ec;
    std::filesystem::create_directories(file.parent_path(), ec);
-   std::ofstream out(file);
-   if (!out)
-      return false;
-   out << kPresetHeader << "\n";
-   char line[64];
-   for (clap_id id = 0; id < kParamCount; ++id) {
-      const double v = access.paramValue(id);
-      if (v != kParams[id].defaultValue) {
-         std::snprintf(line, sizeof(line), "%u %.9g\n", static_cast<unsigned>(id), v);
-         out << line;
+   std::filesystem::path temp = file;
+   temp += ".tmp";
+   {
+      std::ofstream out(temp);
+      if (!out)
+         return false;
+      out << kPresetHeader << "\n";
+      char line[64];
+      for (clap_id id = 0; id < kParamCount; ++id) {
+         const double v = access.paramValue(id);
+         if (v != kParams[id].defaultValue) {
+            std::snprintf(line, sizeof(line), "%u %.9g\n", static_cast<unsigned>(id), v);
+            out << line;
+         }
+      }
+      out.flush();
+      if (!out) {
+         out.close();
+         std::filesystem::remove(temp, ec);
+         return false;
       }
    }
-   return static_cast<bool>(out);
+   std::filesystem::rename(temp, file, ec);
+   if (ec) {
+      std::filesystem::remove(temp, ec);
+      return false;
+   }
+   return true;
 }
 
 // The user's presets, sorted by name.

@@ -135,6 +135,14 @@ public:
    }
 
    // Distance from the centre of mass, and from the nearest other body.
+   bool finite() const {
+      for (int i = 0; i < count_; ++i) {
+         const Body &b = bodies_[i];
+         if (!std::isfinite(b.x) || !std::isfinite(b.y) || !std::isfinite(b.vx) || !std::isfinite(b.vy))
+            return false;
+      }
+      return true;
+   }
    double radius(int i) const { return std::hypot(bodies_[i].x, bodies_[i].y); }
    double speed(int i) const { return std::hypot(bodies_[i].vx, bodies_[i].vy); }
    double nearest(int i) const {

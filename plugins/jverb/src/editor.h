@@ -24,6 +24,18 @@ public:
    // The name of the preset last loaded or saved, kept with the plugin's state.
    virtual std::string presetName() const = 0;
    virtual void setPresetName(const std::string &name) = 0;
+   // Sets every param at once (`values` holds kParamCount of them), as loading a preset does. Each
+   // param that changes is one edit for the host. The plugin coalesces these, so clicking quickly
+   // through presets sends the host the latest values instead of a backlog that could overflow.
+   virtual void setParams(const double *values) {
+      for (clap_id id = 0; id < kParamCount; ++id) {
+         if (paramValue(id) == values[id])
+            continue;
+         beginEdit(id);
+         setParam(id, values[id]);
+         endEdit(id);
+      }
+   }
 };
 
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
