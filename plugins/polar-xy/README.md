@@ -12,6 +12,8 @@ A small CLAP note effect. It listens for two MIDI CCs carrying an X/Y position
 (Cartesian) and sends out two CCs carrying the same position as an angle and a radius (polar), ready to
 MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note effects works.
 
+![Panel](docs/panel.png)
+
 ## Using it in Bitwig
 
 1. Put **Polar XY** on the Omnisphere track, before Omnisphere.
@@ -42,8 +44,6 @@ MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note 
 > `Angle Offset` (degrees) and `Direction`.
 
 ## Panel
-
-![Panel](docs/panel.png)
 
 **XY IN** shows the last X/Y position received and **POLAR OUT** the angle and radius sent for it,
 with angle 0 marked by the tick on the right. Comparing the two shows what `Angle Offset` and

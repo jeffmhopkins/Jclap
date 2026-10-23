@@ -1,5 +1,5 @@
-// Plugin Template: a stereo gain/pan utility with a small panel. It exists to be copied; see
-// README.md. Everything plugin-specific is in this file and editor.cpp.
+// Plugin Template: a stereo gain/pan/width utility with a panel that uses every jclap::ui widget.
+// It exists to be copied; see README.md. Everything plugin-specific is in this file and editor.cpp.
 
 #include <jclap/core/edit_queue.h>
 #include <jclap/core/entry.h>
@@ -23,7 +23,7 @@ const char *const kFeatures[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_F
 
 // State layout: 4-byte magic, uint32 version, then one double per param in kParams order.
 constexpr char kStateMagic[4] = {'J', 'T', 'M', 'P'};
-constexpr uint32_t kStateVersion = 1;
+constexpr uint32_t kStateVersion = 2;
 
 class PluginTemplate final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -142,7 +142,7 @@ public:
       if (proc->audio_inputs_count < 1 || proc->audio_outputs_count < 1)
          return CLAP_PROCESS_CONTINUE;
 
-      // Constant-power pan on top of the gain; mute wins.
+      // Routing, then mid/side width, then constant-power pan on top of the gain; mute wins.
       const double pan = values_[kPan].load();
       const double angle = (pan + 1.0) * 0.25 * 3.14159265358979;
       const float gain = values_[kMute].load() >= 0.5 ? 0.0f
@@ -152,14 +152,25 @@ public:
 
       const clap_audio_buffer_t &in = proc->audio_inputs[0];
       const clap_audio_buffer_t &out = proc->audio_outputs[0];
+      if (!in.data32 || !out.data32 || in.channel_count < 2 || out.channel_count < 2) {
+         jclap::core::passAudioThrough(proc);
+         return CLAP_PROCESS_CONTINUE;
+      }
+      const int routing = static_cast<int>(values_[kRouting].load() + 0.5);
+      const float width = static_cast<float>(values_[kWidth].load());
       float peak = 0.0f;
-      for (uint32_t c = 0; c < std::min(2u, std::min(in.channel_count, out.channel_count)); ++c) {
-         if (!in.data32 || !out.data32)
-            continue;
-         for (uint32_t i = 0; i < proc->frames_count; ++i) {
-            out.data32[c][i] = in.data32[c][i] * g[c];
-            peak = std::max(peak, std::fabs(out.data32[c][i]));
-         }
+      for (uint32_t i = 0; i < proc->frames_count; ++i) {
+         float l = in.data32[0][i], r = in.data32[1][i];
+         if (routing == 1)
+            std::swap(l, r);
+         else if (routing == 2)
+            r = l;
+         else if (routing == 3)
+            l = r;
+         const float mid = 0.5f * (l + r), side = 0.5f * (l - r) * width;
+         out.data32[0][i] = (mid + side) * g[0];
+         out.data32[1][i] = (mid - side) * g[1];
+         peak = std::max(peak, std::max(std::fabs(out.data32[0][i]), std::fabs(out.data32[1][i])));
       }
       // The panel takes the largest peak since it last looked.
       float seen = peak_.load(std::memory_order_relaxed);
@@ -198,7 +209,7 @@ const clap_plugin_descriptor_t PluginTemplate::descriptor = {
    "",
    "",
    "0.3.0",
-   "Stereo gain and pan with a level meter",
+   "Stereo gain, pan, width and routing with a level meter",
    kFeatures,
 };
 

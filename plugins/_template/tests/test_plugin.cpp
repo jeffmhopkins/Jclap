@@ -28,6 +28,19 @@ int main() {
    JCLAP_CHECK(std::fabs(outL[0] - 0.5f * std::sqrt(2.0f) * 0.5f) < 1e-3f);
    JCLAP_CHECK(std::fabs(outR[0]) < 1e-6f);
 
+   // Swap routing at full width moves the left input to the right output.
+   h.setParam(kPan, 0.0);
+   h.setParam(kRouting, 1.0);
+   inR[0] = 0.0f;
+   h.process(4, in, out);
+   JCLAP_CHECK(std::fabs(outL[0]) < 1e-4f && outR[0] > 0.1f);
+   // Width 0 folds to mono.
+   h.setParam(kWidth, 0.0);
+   h.process(4, in, out);
+   JCLAP_CHECK(std::fabs(outL[0] - outR[0]) < 1e-6f);
+   JCLAP_CHECK(h.paramText(kRouting, 3.0) == "Right only");
+   JCLAP_CHECK(h.paramText(kWidth, 1.5) == "150%");
+
    // Mute.
    h.setParam(kMute, 1.0);
    h.process(4, in, out);

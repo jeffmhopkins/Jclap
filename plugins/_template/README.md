@@ -8,8 +8,10 @@ The starting point for a new JClap plugin, with params, state, a panel and tests
 
 </div>
 
-The starting point for a new JClap plugin: a stereo gain/pan utility with a knob, a slider, a
-toggle and a level meter, built on [jclap::core](../../libs/core) and [jclap::ui](../../libs/ui).
+The starting point for a new JClap plugin: a stereo gain, pan, width and routing utility built on
+[jclap::core](../../libs/core) and [jclap::ui](../../libs/ui). Its panel uses one of every widget
+(knob, horizontal and vertical slider, toggle and push button, dropdown, XY pad, meter, section,
+label and divider), so there is always an example to copy and the rest is easy to delete.
 It is built and tested in CI (`-DJCLAP_BUILD_TEMPLATE=ON`, output in `build/template/`) but never
 shipped.
 
@@ -40,6 +42,6 @@ Then:
 |---|---|
 | `src/params.h` | Param ids, ranges and display text, shared by the plugin and the panel |
 | `src/plugin.cpp` | The `jclap::core::Plugin` subclass: params, state, audio, GUI hookup |
-| `src/editor.cpp` | The panel: a `DesignFrame` with widgets bound to params by `ParamBindings` |
+| `src/editor.cpp` | The panel: a `DesignFrame` with one of each widget, bound to params by `ParamBindings` |
 | `tests/test_plugin.cpp` | Host-style tests through `jclap::core::TestHost` |
 | `tools/screenshot.cpp` | Renders the panel to `docs/panel.png` (needs `-DJCLAP_BUILD_TOOLS=ON`) |

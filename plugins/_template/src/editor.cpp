@@ -1,14 +1,18 @@
-// The panel: a gain knob, a pan slider, a mute toggle and an output meter on a 360 x 240 grid.
+// The panel, on a 600 x 320 grid. It uses one of every jclap::ui widget so there is always an
+// example to copy: knob, horizontal and vertical slider, toggle and push button, dropdown, XY pad,
+// meter, section, label and divider.
 
 #include "editor.h"
 
 #include <jclap/ui/button.h>
 #include <jclap/ui/design_frame.h>
+#include <jclap/ui/dropdown.h>
 #include <jclap/ui/knob.h>
 #include <jclap/ui/meter.h>
 #include <jclap/ui/param_bindings.h>
 #include <jclap/ui/section.h>
 #include <jclap/ui/slider.h>
+#include <jclap/ui/xy_pad.h>
 
 #include "params.h"
 
@@ -17,8 +21,8 @@ namespace {
 
 namespace ui = jclap::ui;
 
-constexpr float kDesignWidth = 360.0f;
-constexpr float kDesignHeight = 240.0f;
+constexpr float kDesignWidth = 600.0f;
+constexpr float kDesignHeight = 320.0f;
 
 std::string text(clap_id id, double value) {
    char buffer[32];
@@ -30,26 +34,56 @@ ui::ValueRange rangeOf(clap_id id, double step = 0.0, bool bipolar = false) {
    return {kParams[id].min, kParams[id].max, kParams[id].defaultValue, step, bipolar};
 }
 
+// Value text and typed-in values for a knob or slider, both from params.h.
+void useParamText(ui::ValueControl &control, clap_id id) {
+   control.valueText = [id](double v) { return text(id, v); };
+   control.parseText = [id](const std::string &t, double &v) { return parseParam(id, t.c_str(), v); };
+}
+
 class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
-      add<ui::Section>({10, 10, 340, 220}, "PLUGIN TEMPLATE");
+      add<ui::Section>({10, 10, 580, 300}, "PLUGIN TEMPLATE");
 
-      auto &gain = add<ui::Knob>({20, 50, 110, 110}, rangeOf(kGain, 0.5));
+      // Left column: knob, dropdown, toggle and push button.
+      auto &gain = add<ui::Knob>({24, 40, 124, 124}, rangeOf(kGain, 0.5));
       gain.setLabel("GAIN");
-      gain.valueText = [](double v) { return text(kGain, v); };
-      gain.parseText = [](const std::string &t, double &v) { return parseParam(kGain, t.c_str(), v); };
+      useParamText(gain, kGain);
       bindings_.bind(gain, kGain);
 
-      auto &pan = add<ui::Slider>({150, 60, 140, 44}, ui::Slider::Orientation::Horizontal, rangeOf(kPan, 0.01, true));
+      add<ui::Label>({28, 174, 116, 16}, "ROUTING", ui::defaultTheme().dimText, visage::Font::kLeft);
+      std::vector<std::string> routings(kRoutingNames, kRoutingNames + kRoutingCount);
+      bindings_.bind(add<ui::Dropdown>({28, 192, 116, 30}, routings), kRouting);
+
+      bindings_.bind(add<ui::Button>({28, 238, 56, 30}, "MUTE"), kMute);
+      // A plain push button: not bound to a param, it runs onClick.
+      add<ui::Button>({88, 238, 56, 30}, "RESET").onClick = [this] { resetAll(); };
+
+      add<ui::Divider>({162, 44, 1, 252});
+
+      // Middle: a horizontal slider, and an XY pad driving pan and width together.
+      auto &pan = add<ui::Slider>({178, 40, 220, 44}, ui::Slider::Orientation::Horizontal, rangeOf(kPan, 0.01, true));
       pan.setLabel("PAN");
-      pan.valueText = [](double v) { return text(kPan, v); };
-      pan.parseText = [](const std::string &t, double &v) { return parseParam(kPan, t.c_str(), v); };
+      useParamText(pan, kPan);
       bindings_.bind(pan, kPan);
 
-      bindings_.bind(add<ui::Button>({150, 130, 140, 32}, "MUTE"), kMute);
+      auto &pad = add<ui::XYPad>({198, 96, 180, 200}, rangeOf(kPan, 0.01, true), rangeOf(kWidth, 0.01));
+      pad.x().label = "PAN";
+      pad.y().label = "WIDTH";
+      pad.x().valueText = [](double v) { return text(kPan, v); };
+      pad.y().valueText = [](double v) { return text(kWidth, v); };
+      bindings_.bind(pad, kPan, kWidth);
 
-      meter_ = &add<ui::Meter>({310, 50, 16, 160});
+      add<ui::Divider>({414, 44, 1, 252});
+
+      // Right: a vertical slider and the output meter.
+      auto &width = add<ui::Slider>({432, 40, 64, 256}, ui::Slider::Orientation::Vertical, rangeOf(kWidth, 0.01));
+      width.setLabel("WIDTH");
+      useParamText(width, kWidth);
+      bindings_.bind(width, kWidth);
+
+      add<ui::Label>({516, 40, 56, 16}, "OUT", ui::defaultTheme().dimText);
+      meter_ = &add<ui::Meter>({534, 62, 20, 234});
       meter_->setLevel(host_.outputPeak());
       startTimer(30);
    }
@@ -62,6 +96,16 @@ public:
    }
 
 private:
+   // Sets every param back to its default, as one gesture each so the host records it.
+   void resetAll() {
+      for (clap_id id = 0; id < kParamCount; ++id) {
+         host_.beginEdit(id);
+         host_.setParam(id, kParams[id].defaultValue);
+         host_.endEdit(id);
+      }
+      bindings_.sync();
+   }
+
    EditorHost &host_;
    ui::ParamBindings bindings_;
    ui::Meter *meter_ = nullptr;

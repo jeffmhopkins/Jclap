@@ -11,7 +11,7 @@ namespace {
 class DemoHost : public plugin_template::EditorHost {
 public:
    double paramValue(clap_id id) const override {
-      const double values[] = {-4.5, 0.3, 0.0};
+      const double values[] = {-4.5, 0.3, 0.0, 1.4, 0.0};
       return id < plugin_template::kParamCount ? values[id] : 0.0;
    }
    void beginEdit(clap_id) override {}
@@ -27,8 +27,8 @@ int main(int argc, char **argv) {
       std::fprintf(stderr, "usage: %s out.png [width height]\n", argv[0]);
       return 1;
    }
-   const int width = argc > 3 ? std::atoi(argv[2]) : 360;
-   const int height = argc > 3 ? std::atoi(argv[3]) : 240;
+   const int width = argc > 3 ? std::atoi(argv[2]) : 600;
+   const int height = argc > 3 ? std::atoi(argv[3]) : 320;
    DemoHost host;
    return plugin_template::renderScreenshot(host, width, height, argv[1]) ? 0 : 1;
 }
