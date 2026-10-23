@@ -48,25 +48,27 @@ All plugins land in `build/clap/`. CI builds Linux, macOS (universal) and Window
 
 ## Adding a plugin
 
-1. Create `plugins/<name>/` with its sources, tests and a short `README.md`.
-2. Add `plugins/<name>/CMakeLists.txt`:
+Start from the template, which is a working gain/pan plugin with a panel:
 
-   ```cmake
-   jclap_add_plugin(<name>
-      OUTPUT_NAME "<FileName>"   # no spaces; the host shows the descriptor name
-      BUNDLE_ID com.jeffmhopkins.jclap.<name>
-      SOURCES src/plugin.cpp)
+```sh
+cmake -DNAME=my-plugin -DFILE_NAME=MyPlugin "-DDISPLAY_NAME=My Plugin" -P cmake/NewPlugin.cmake
+```
 
-   jclap_add_test(<name>-tests SOURCES tests/test_<name>.cpp)
-   ```
+It creates `plugins/my-plugin/` (plugin id `com.jeffmhopkins.jclap.my-plugin`), adds it to the
+top-level `CMakeLists.txt`, and prints what to change next. See
+[plugins/_template](plugins/_template) for the details, then add a row to the table above.
 
-3. Add `add_subdirectory(plugins/<name>)` to the top-level `CMakeLists.txt` and a row to the table
-   above.
+Plugins build on two shared libraries:
 
-Use `com.jeffmhopkins.jclap.<name>` as the CLAP plugin id too, so ids never collide.
+- [jclap::core](libs/core): the CLAP boilerplate. A `Plugin` base class, `JCLAP_ENTRY` for the
+  factory, param/state/port/event helpers, the GUI edit queue and `TestHost` for host-style tests.
+- [jclap::ui](libs/ui): the GUI. Knobs, sliders, buttons, dropdowns, an XY pad, meters and panels
+  on [Visage](https://github.com/VitalAudio/visage), a design-grid layout, one-line param binding
+  and the CLAP window glue.
 
-For a GUI, link the shared widget library with `target_link_libraries(<name> PRIVATE jclap::ui)`. It
-has knobs, sliders, buttons, panels and the CLAP window glue; see [libs/ui](libs/ui).
+Visual checks: configure with `-DJCLAP_BUILD_TOOLS=ON` and `ctest` also renders the panels and the
+widget gallery and compares them with the PNGs in each `docs/` folder. CI does this on Linux. After
+an intended visual change, re-render the reference (the failing test prints how).
 
 ## Releasing
 
