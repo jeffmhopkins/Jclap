@@ -9,6 +9,14 @@
 
 namespace jclap::ui {
 
+std::string ValueAxis::text(double v) const {
+   if (valueText)
+      return valueText(v);
+   char buffer[32];
+   std::snprintf(buffer, sizeof(buffer), range.step >= 1.0 ? "%.0f" : "%.2f", v);
+   return buffer;
+}
+
 ValuePopup::ValuePopup() { setIgnoresMouseEvents(true, false); }
 
 void ValuePopup::show(visage::Frame &target, const std::string &text) {

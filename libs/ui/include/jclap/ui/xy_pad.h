@@ -19,16 +19,7 @@ namespace jclap::ui {
 
 class XYPad : public visage::Frame {
 public:
-   struct Axis {
-      ValueRange range;
-      std::string label;
-      double value = 0.0, modulated = 0.0;
-      std::function<std::string(double)> valueText;
-      std::function<void()> onBeginEdit;
-      std::function<void(double)> onChange;
-      std::function<void()> onEndEdit;
-      std::function<double()> modulatedSource;
-   };
+   using Axis = ValueAxis;
 
    enum class Grid { Cartesian, Polar };
 
@@ -64,7 +55,6 @@ private:
    // Polar: the screen angle (radians, counter-clockwise from right) for an x value, and back.
    double polarAngle(double xValue) const;
    void moveTo(visage::Point p);
-   void set(Axis &a, double v);
    void resetBoth();
    std::string popupText() const;
 

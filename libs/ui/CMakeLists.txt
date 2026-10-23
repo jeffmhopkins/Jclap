@@ -17,6 +17,15 @@ add_library(jclap_ui STATIC
    src/dropdown.cpp
    src/xy_pad.cpp
    src/meter.cpp
+   src/number_box.cpp
+   src/segmented.cpp
+   src/led.cpp
+   src/envelope.cpp
+   src/keyboard.cpp
+   src/tabs.cpp
+   src/scope.cpp
+   src/tooltip.cpp
+   src/note_grid.cpp
    src/design_frame.cpp
    src/params.cpp
    src/param_bindings.cpp

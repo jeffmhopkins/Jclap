@@ -32,6 +32,28 @@ struct ValueRange {
    float fraction(double v) const { return max > min ? static_cast<float>((v - min) / (max - min)) : 0.0f; }
 };
 
+// One value of a multi-value widget (XYPad's axes, EnvelopeEditor's stages): its range, the host's
+// value and modulated value, how it is shown, and the edit callbacks ParamBindings wires to a param.
+struct ValueAxis {
+   ValueRange range;
+   std::string label;
+   double value = 0.0, modulated = 0.0;
+   std::function<std::string(double)> valueText;
+   std::function<void()> onBeginEdit;
+   std::function<void(double)> onChange;
+   std::function<void()> onEndEdit;
+   std::function<double()> modulatedSource;
+
+   // Sets the value as the user, calling onChange and refreshing the modulated value.
+   void set(double v) {
+      value = range.clamp(v);
+      if (onChange)
+         onChange(value);
+      modulated = modulatedSource ? modulatedSource() : value;
+   }
+   std::string text(double v) const;
+};
+
 // A small rounded box that floats above a control and shows its value while it is dragged.
 class ValuePopup : public visage::Frame {
 public:

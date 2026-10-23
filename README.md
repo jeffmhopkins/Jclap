@@ -62,8 +62,8 @@ the tests, and checks every plugin with [clap-validator](https://github.com/free
 ## Adding a plugin
 
 > [!TIP]
-> **Start from the template.** It is a working gain/pan plugin with a panel, and one command copies
-> and renames it:
+> **Start from the template.** It is a working gain/pan/width plugin whose panel uses every widget,
+> and one command copies and renames it:
 
 ```sh
 cmake -DNAME=my-plugin -DFILE_NAME=MyPlugin "-DDISPLAY_NAME=My Plugin" -P cmake/NewPlugin.cmake

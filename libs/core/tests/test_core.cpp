@@ -4,6 +4,8 @@
 #include <jclap/core/edit_queue.h>
 #include <jclap/core/entry.h>
 #include <jclap/core/helpers.h>
+#include <jclap/core/sample_fifo.h>
+#include <jclap/core/spsc_queue.h>
 #include <jclap/core/test_host.h>
 
 #include <atomic>
@@ -107,6 +109,26 @@ int main() {
    float *in[2] = {inL, inR}, *outs[2] = {outL, outR};
    host.process(4, in, outs);
    JCLAP_CHECK_EQ(outR[3], 8.0f);
+
+   // SpscQueue: FIFO order, and full/empty are reported.
+   jclap::core::SpscQueue<int, 4> queue;
+   for (int i = 0; i < 4; ++i)
+      JCLAP_CHECK(queue.push(i));
+   JCLAP_CHECK(!queue.push(4));
+   int item = -1;
+   JCLAP_CHECK(queue.pop(item) && item == 0);
+   JCLAP_CHECK(queue.push(4));
+   for (int expect : {1, 2, 3, 4})
+      JCLAP_CHECK(queue.pop(item) && item == expect);
+   JCLAP_CHECK(!queue.pop(item));
+
+   // SampleFifo: reads the newest samples, oldest first, across the wrap.
+   jclap::core::SampleFifo<8> fifo;
+   const float ramp[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+   fifo.write(ramp, 10);
+   float last[3] = {};
+   JCLAP_CHECK_EQ(fifo.read(last, 3), 10u);
+   JCLAP_CHECK(last[0] == 7 && last[1] == 8 && last[2] == 9);
 
    return jclap::core::testResult();
 }
