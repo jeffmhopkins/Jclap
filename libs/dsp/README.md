@@ -2,7 +2,7 @@
 
 # jclap::dsp
 
-Header-only audio building blocks for synths and effects: oscillator, filter, envelope and VCA.
+Header-only audio building blocks for synths and effects: oscillator, filter, envelope, LFO and VCA.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![header only](https://img.shields.io/badge/header-only-blue)](include/jclap/dsp) [![tests: measured](https://img.shields.io/badge/tests-measured-blue)](tests)
 
@@ -15,6 +15,7 @@ no CLAP, no GUI, no allocation, so everything is safe on the audio thread.
 |---|---|
 | `jclap/dsp/oscillator.h` | `Oscillator`: sine, triangle, saw, square and pulse with variable width. Saw, square and pulse are band-limited with PolyBLEP and the triangle with PolyBLAMP. Output is -1..1 with no DC, narrow pulses included |
 | `jclap/dsp/filter.h` | `Filter`: resonant low, high or band pass, 12, 24, 36 or 48 dB/oct. Cascaded zero-delay-feedback state variable stages, tuned as a Butterworth cascade, stable with the cutoff moving every sample |
+| `jclap/dsp/lfo.h` | `Lfo`: sine, triangle, saw, square or sample-and-hold random, -1..1, for modulation |
 | `jclap/dsp/envelope.h` | `Envelope`: ADSR with analog-style curves. Retriggers from the current level, so no clicks |
 | `jclap/dsp/vca.h` | `Vca`: a smoothed gain times a control signal, with linear or exponential (60 dB) response |
 | `jclap/dsp/smoother.h` | `Smoother`: a one-pole glide for param changes |

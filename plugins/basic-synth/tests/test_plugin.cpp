@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+
 #include <vector>
 
 #include "editor.h"
@@ -78,12 +79,12 @@ int main() {
    // A plain sine with the filter wide open, so pitch is easy to measure.
    h.setParam(kWave, 0.0);
    h.setParam(kCutoff, 1.0);
-   h.setParam(kEnvAmount, 0.0);
+   h.setParam(kFilterEnvAmount, 0.0);
    h.setParam(kPressureAmount, 0.0);
    h.setParam(kTimbreAmount, 0.0);
-   h.setParam(kSustain, 1.0);
-   h.setParam(kAttack, 1.0);
-   h.setParam(kRelease, 50.0);
+   h.setParam(kAmpSustain, 1.0);
+   h.setParam(kAmpAttack, 1.0);
+   h.setParam(kAmpRelease, 50.0);
    h.note(CLAP_EVENT_NOTE_ON, 69, 1.0, 7);
    run(4800);
    run(48000);
@@ -199,7 +200,7 @@ int main() {
    // Every wave, filter mode and slope makes a sound and stays finite, with resonance up.
    h.setParam(kResonance, 1.0);
    h.setParam(kCutoff, 0.5);
-   h.setParam(kEnvAmount, 3.0);
+   h.setParam(kFilterEnvAmount, 3.0);
    for (int wave = 0; wave < 5; ++wave)
       for (int mode = 0; mode < 3; ++mode)
          for (int slope = 0; slope < 4; ++slope) {
@@ -215,6 +216,88 @@ int main() {
             run(64);
          }
 
+   // ---- host automation and modulation ----
+   h.setParam(kResonance, 0.0);
+   h.setParam(kCutoff, 1.0);
+   h.setParam(kFilterEnvAmount, 0.0);
+   h.setParam(kWave, 0.0);
+   h.setParam(kFilterMode, 0.0);
+   h.setParam(kSlope, 1.0);
+   // Every param can be automated and modulated, and all but bend range per voice.
+   auto *params = static_cast<const clap_plugin_params_t *>(h.plugin()->get_extension(h.plugin(), CLAP_EXT_PARAMS));
+   for (uint32_t i = 0; i < kParamCount; ++i) {
+      clap_param_info_t info{};
+      JCLAP_CHECK(params->get_info(h.plugin(), i, &info));
+      JCLAP_CHECK((info.flags & CLAP_PARAM_IS_AUTOMATABLE) && (info.flags & CLAP_PARAM_IS_MODULATABLE));
+      JCLAP_CHECK(i == kBendRange || (info.flags & CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID));
+   }
+   // A global modulation moves every voice, and the knobs show it.
+   h.modulate(kTune, 12.0);
+   h.note(CLAP_EVENT_NOTE_ON, 57, 1.0, 1);
+   run(4800);
+   run(48000);
+   JCLAP_CHECK(near(run.frequency(), 440.0, 0.5));
+   JCLAP_CHECK_EQ(panel.paramModulated(kTune), 12.0);
+   JCLAP_CHECK_EQ(panel.paramValue(kTune), 0.0);
+   h.modulate(kTune, 0.0);
+   h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+   run(64);
+   // A per-voice modulation moves only the note it names, and a new note starts without it.
+   h.note(CLAP_EVENT_NOTE_ON, 57, 1.0, 2);
+   h.modulateNote(kTune, 12.0, 2);
+   run(4800);
+   run(48000);
+   JCLAP_CHECK(near(run.frequency(), 440.0, 0.5));
+   h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+   h.note(CLAP_EVENT_NOTE_ON, 57, 1.0, 3);
+   run(4800);
+   run(48000);
+   JCLAP_CHECK(near(run.frequency(), 220.0, 0.5));
+   h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+   run(64);
+
+   // Amp env amount: at full the VCA follows the envelope down to sustain 0; at 0 it just follows
+   // the gate, so the note holds at full level.
+   h.setParam(kAmpDecay, 20.0);
+   h.setParam(kAmpSustain, 0.0);
+   h.note(CLAP_EVENT_NOTE_ON, 57, 1.0);
+   run(9600);
+   run(4800);
+   JCLAP_CHECK(run.rms() < 1e-3);
+   h.setParam(kAmpEnvAmount, 0.0);
+   run(4800);
+   run(4800);
+   JCLAP_CHECK(run.rms() > 0.05);
+   // and closes on release.
+   h.note(CLAP_EVENT_NOTE_OFF, 57, 0.0);
+   run(4800);
+   run(4800);
+   JCLAP_CHECK(run.rms() < 1e-3);
+   JCLAP_CHECK(h.paramText(kAmpEnvAmount, 0.5) == "50%");
+
+   // The LFO: a slow square at full tremolo depth turns the note on and off, and the panel sees it.
+   h.setParam(kAmpEnvAmount, 1.0);
+   h.setParam(kAmpSustain, 1.0);
+   h.setParam(kLfoShape, 3.0);
+   h.setParam(kLfoRate, lfoValue(2.0));
+   h.setParam(kLfoToVca, 1.0);
+   h.note(CLAP_EVENT_NOTE_ON, 57, 1.0);
+   run(6000); // the first quarter cycle, high
+   const double high = run.rms();
+   float lfo = 0.0f;
+   JCLAP_CHECK(panel.lfo(lfo) && lfo == 1.0f);
+   run(6000);
+   run(11000); // most of the second half, low
+   JCLAP_CHECK(high > 0.05 && run.rms() < 0.01);
+   JCLAP_CHECK(panel.lfo(lfo) && lfo == -1.0f);
+   h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+   run(64);
+   JCLAP_CHECK(!panel.lfo(lfo));
+   h.setParam(kLfoToVca, 0.0);
+   JCLAP_CHECK(h.paramText(kLfoRate, lfoValue(2.0)) == "2.00 Hz");
+   JCLAP_CHECK(h.paramText(kLfoRate, 0.0) == "0.050 Hz");
+   JCLAP_CHECK(h.paramText(kLfoShape, 4.0) == "Random");
+
    // Param text.
    JCLAP_CHECK(h.paramText(kCutoff, cutoffValue(1000.0)) == "1.00 kHz");
    JCLAP_CHECK(h.paramText(kCutoff, cutoffValue(250.0)) == "250 Hz");
@@ -222,7 +305,7 @@ int main() {
    JCLAP_CHECK(h.textToValue(kCutoff, "2.5 kHz", v) && near(cutoffHz(v), 2500.0, 1e-6));
    JCLAP_CHECK(h.paramText(kWave, 4.0) == "Pulse");
    JCLAP_CHECK(h.paramText(kSlope, 3.0) == "48 dB");
-   JCLAP_CHECK(h.paramText(kEnvAmount, -1.5) == "-1.5 oct");
+   JCLAP_CHECK(h.paramText(kFilterEnvAmount, -1.5) == "-1.5 oct");
    // Every param's text reads back as the same value, as hosts (and clap-validator) check.
    for (clap_id id = 0; id < kParamCount; ++id) {
       for (double value : {kParams[id].min, kParams[id].defaultValue, kParams[id].max}) {

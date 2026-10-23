@@ -30,6 +30,8 @@ public:
       float bend, pressure, timbre;
    };
    virtual void voices(std::vector<Voice> &out) const = 0;
+   // The newest held voice's LFO, -1..1, for the LFO light. False when no note is held.
+   virtual bool lfo(float &value) const = 0;
 };
 
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);

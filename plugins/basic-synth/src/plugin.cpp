@@ -1,5 +1,5 @@
-// Basic Synth: an eight-voice MPE synth built from jclap::dsp, one oscillator, filter, envelope and
-// VCA per voice (see voice.h). Notes arrive as CLAP notes with per-note expressions, as MPE MIDI, or
+// Basic Synth: an eight-voice MPE synth built from jclap::dsp. Each voice has an oscillator, a filter
+// and a VCA, an envelope for each of the last two, and an LFO (see voice.h). Notes arrive as CLAP notes with per-note expressions, as MPE MIDI, or
 // as plain MIDI; the panel's keyboard and note grid play it too.
 
 #include <jclap/core/edit_queue.h>
@@ -48,6 +48,8 @@ struct Slot {
    // CLAP notes and the panel's get them per note.
    bool midi = false;
    double bend = 0.0, pressure = 0.0, timbre = 0.5, volume = 1.0, velocity = 1.0;
+   // Per-voice param modulation from the host, added to the param and its global modulation.
+   double mod[kParamCount] = {};
    // When it started, for stealing the oldest.
    uint64_t started = 0;
    bool ended = true; // NOTE_END already sent
@@ -68,8 +70,10 @@ public:
    static const clap_plugin_descriptor_t descriptor;
 
    explicit BasicSynth(const clap_host_t *host) : Plugin(&descriptor, host) {
-      for (size_t i = 0; i < kParamCount; ++i)
+      for (size_t i = 0; i < kParamCount; ++i) {
          values_[i].store(kParams[i].defaultValue);
+         mods_[i].store(0.0);
+      }
    }
 
    bool init() override {
@@ -88,7 +92,7 @@ public:
       for (ChannelState &c : channels_)
          c = ChannelState{};
       output_.setSampleRate(sampleRate);
-      output_.setGainDb(values_[kLevel].load());
+      output_.setGainDb(value(kLevel));
       output_.reset();
       publishVoices();
       return true;
@@ -132,6 +136,8 @@ public:
    // ---- EditorHost (main thread) ----
 
    double paramValue(clap_id id) const override { return id < kParamCount ? values_[id].load() : 0.0; }
+   // The knobs show global modulation; per-voice modulation differs per note, so it only sounds.
+   double paramModulated(clap_id id) const override { return id < kParamCount ? value(id) : 0.0; }
    void beginEdit(clap_id id) override { edits_.begin(id); }
    void setParam(clap_id id, double value) override {
       if (id >= kParamCount)
@@ -157,6 +163,13 @@ public:
          if (note >= 0)
             out.push_back({note, s.bend.load(), s.pressure.load(), s.timbre.load()});
       }
+   }
+
+   bool lfo(float &value) const override {
+      if (!lfoShown_.load())
+         return false;
+      value = lfoValue_.load();
+      return true;
    }
 
    // ---- params ----
@@ -279,40 +292,51 @@ public:
 private:
    // Every sounding voice takes the current params, and its note's bend, pressure and timbre.
    void configureVoices() {
-      const VoiceSettings vs = settings();
-      output_.setGainDb(values_[kLevel].load());
+      output_.setGainDb(value(kLevel));
       for (Slot &s : slots_) {
          if (s.voice.isActive())
-            configure(s, vs);
+            configure(s);
       }
    }
 
-   void configure(Slot &s, const VoiceSettings &vs) {
-      s.voice.configure(vs);
+   void configure(Slot &s) {
+      s.voice.configure(settings(s));
       s.voice.setPitch(pitchOf(s));
       s.voice.setExpression(pressureOf(s), timbreOf(s));
-      s.voice.setGain(s.velocity * s.volume);
+      // The output VCA takes the level; a voice's own level modulation scales just that voice.
+      s.voice.setGain(s.velocity * s.volume * jclap::dsp::dbToGain(s.mod[kLevel]));
    }
 
-   VoiceSettings settings() const {
+   // A param as a voice hears it: the value, plus global and per-voice modulation, clamped.
+   double value(clap_id id, const Slot *s = nullptr) const {
+      const double v = values_[id].load() + mods_[id].load() + (s ? s->mod[id] : 0.0);
+      return std::clamp(v, kParams[id].min, kParams[id].max);
+   }
+   int choice(clap_id id, const Slot &s) const { return static_cast<int>(value(id, &s) + 0.5); }
+
+   VoiceSettings settings(const Slot &slot) const {
+      const Slot *s = &slot;
       VoiceSettings vs;
-      vs.wave = static_cast<jclap::dsp::Oscillator::Wave>(choice(kWave));
-      vs.pulseWidth = values_[kPulseWidth].load();
-      vs.filterMode = static_cast<jclap::dsp::Filter::Mode>(choice(kFilterMode));
-      vs.slope = static_cast<jclap::dsp::Filter::Slope>(choice(kSlope) + 1);
-      vs.cutoffHz = cutoffHz(values_[kCutoff].load());
-      vs.resonance = values_[kResonance].load();
-      vs.envAmount = values_[kEnvAmount].load();
-      vs.pressureAmount = values_[kPressureAmount].load();
-      vs.timbreAmount = values_[kTimbreAmount].load();
-      vs.attack = values_[kAttack].load() / 1000.0;
-      vs.decay = values_[kDecay].load() / 1000.0;
-      vs.sustain = values_[kSustain].load();
-      vs.release = values_[kRelease].load() / 1000.0;
+      vs.wave = static_cast<jclap::dsp::Oscillator::Wave>(choice(kWave, slot));
+      vs.pulseWidth = value(kPulseWidth, s);
+      vs.filterMode = static_cast<jclap::dsp::Filter::Mode>(choice(kFilterMode, slot));
+      vs.slope = static_cast<jclap::dsp::Filter::Slope>(choice(kSlope, slot) + 1);
+      vs.cutoffHz = cutoffHz(value(kCutoff, s));
+      vs.resonance = value(kResonance, s);
+      vs.filterEnvAmount = value(kFilterEnvAmount, s);
+      vs.ampEnvAmount = value(kAmpEnvAmount, s);
+      vs.pressureAmount = value(kPressureAmount, s);
+      vs.timbreAmount = value(kTimbreAmount, s);
+      vs.filterEnv = {value(kFilterAttack, s) / 1000.0, value(kFilterDecay, s) / 1000.0, value(kFilterSustain, s),
+                      value(kFilterRelease, s) / 1000.0};
+      vs.lfoShape = static_cast<jclap::dsp::Lfo::Shape>(choice(kLfoShape, slot));
+      vs.lfoRate = lfoHz(value(kLfoRate, s));
+      vs.lfoToCutoff = value(kLfoToCutoff, s);
+      vs.lfoToVca = value(kLfoToVca, s);
+      vs.ampEnv = {value(kAmpAttack, s) / 1000.0, value(kAmpDecay, s) / 1000.0, value(kAmpSustain, s),
+                   value(kAmpRelease, s) / 1000.0};
       return vs;
    }
-
-   int choice(clap_id id) const { return static_cast<int>(values_[id].load() + 0.5); }
 
    double pitchOf(const Slot &s) const {
       double bend = s.bend;
@@ -320,9 +344,9 @@ private:
          // The manager channel's bend moves every note; a note channel's moves its own note.
          bend = channels_[0].bend * 2.0;
          if (s.channel > 0)
-            bend += channels_[s.channel].bend * values_[kBendRange].load();
+            bend += channels_[s.channel].bend * value(kBendRange);
       }
-      return s.key + std::round(values_[kTune].load()) + bend;
+      return s.key + std::round(value(kTune, &s)) + bend;
    }
    double pressureOf(const Slot &s) const { return s.midi ? channels_[s.channel].pressure : s.pressure; }
    double timbreOf(const Slot &s) const { return s.midi ? channels_[s.channel].timbre : s.timbre; }
@@ -335,6 +359,21 @@ private:
          auto *ev = reinterpret_cast<const clap_event_param_value_t *>(h);
          if (ev->param_id < kParamCount)
             values_[ev->param_id].store(std::clamp(ev->value, kParams[ev->param_id].min, kParams[ev->param_id].max));
+         break;
+      }
+      case CLAP_EVENT_PARAM_MOD: {
+         // An amount added to the param: for every voice when no note is named, else for the voices
+         // it names (Bitwig's polyphonic modulators send one per note id).
+         auto *ev = reinterpret_cast<const clap_event_param_mod_t *>(h);
+         if (ev->param_id >= kParamCount)
+            break;
+         if (ev->note_id == -1 && ev->key == -1 && ev->channel == -1) {
+            mods_[ev->param_id].store(ev->amount);
+            break;
+         }
+         for (Slot &s : slots_)
+            if (matches(s, ev->note_id, ev->port_index, ev->channel, ev->key))
+               s.mod[ev->param_id] = ev->amount;
          break;
       }
       case CLAP_EVENT_NOTE_ON: {
@@ -463,7 +502,9 @@ private:
       s.velocity = velocity;
       s.started = ++clock_;
       s.ended = false;
-      configure(s, settings());
+      for (double &m : s.mod)
+         m = 0.0;
+      configure(s);
       s.voice.start(pitchOf(s), velocity);
    }
 
@@ -507,17 +548,25 @@ private:
 
    // Copies the held notes where the panel can read them.
    void publishVoices() {
+      const Slot *newest = nullptr;
       for (int i = 0; i < kVoiceCount; ++i) {
          const Slot &s = slots_[i];
          const bool held = s.voice.isActive() && !s.voice.isReleasing();
+         if (held && (!newest || s.started > newest->started))
+            newest = &s;
          shown_[i].note.store(held ? s.key : -1);
-         shown_[i].bend.store(static_cast<float>(pitchOf(s) - s.key - std::round(values_[kTune].load())));
+         shown_[i].bend.store(static_cast<float>(pitchOf(s) - s.key - std::round(value(kTune, &s))));
          shown_[i].pressure.store(static_cast<float>(pressureOf(s)));
          shown_[i].timbre.store(static_cast<float>(timbreOf(s)));
       }
+      lfoShown_.store(newest != nullptr);
+      if (newest)
+         lfoValue_.store(static_cast<float>(newest->voice.lfoValue()));
    }
 
    std::atomic<double> values_[kParamCount];
+   // Global modulation from the host, written by the audio thread.
+   std::atomic<double> mods_[kParamCount];
    jclap::core::EditQueue edits_;
    jclap::ui::HostMenu hostMenu_;
 
@@ -533,6 +582,8 @@ private:
       std::atomic<float> bend{0.0f}, pressure{0.0f}, timbre{0.5f};
    };
    Shown shown_[kVoiceCount];
+   std::atomic<bool> lfoShown_{false};
+   std::atomic<float> lfoValue_{0.0f};
    jclap::core::SpscQueue<PanelNote> panelNotes_;
    jclap::core::SampleFifo<4096> scope_;
 
@@ -549,7 +600,7 @@ const clap_plugin_descriptor_t BasicSynth::descriptor = {
    "",
    "",
    "0.3.0",
-   "An eight-voice MPE synth: oscillator, filter, envelope and VCA",
+   "An eight-voice MPE synth: oscillator, filter and VCA, each with an envelope",
    kFeatures,
 };
 

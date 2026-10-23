@@ -162,6 +162,21 @@ public:
       in_.add(ev.header);
    }
 
+   // A polyphonic modulation for the voices a note id (or key and channel) names, as Bitwig sends
+   // for a per-voice modulator.
+   void modulateNote(clap_id id, double amount, int32_t noteId, int16_t key = -1, int16_t channel = -1,
+                     uint32_t time = 0) {
+      clap_event_param_mod_t ev{};
+      ev.header = {sizeof(ev), time, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD, 0};
+      ev.param_id = id;
+      ev.note_id = noteId;
+      ev.port_index = -1;
+      ev.channel = channel;
+      ev.key = key;
+      ev.amount = amount;
+      in_.add(ev.header);
+   }
+
    void midi(uint8_t status, uint8_t data1, uint8_t data2, uint32_t time = 0) {
       clap_event_midi_t ev{};
       ev.header = {sizeof(ev), time, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI, 0};

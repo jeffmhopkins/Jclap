@@ -1,5 +1,5 @@
 // Basic Synth's panel, in the MicroMonsta 2 style: a title bar, the oscillator, filter, envelope and
-// output, and a keyboard or MPE note grid to play it, on a 720 x 640 design grid scaled to the window.
+// output, and a keyboard or MPE note grid to play it, on a 720 x 820 design grid scaled to the window.
 
 #include "editor.h"
 
@@ -7,6 +7,7 @@
 #include <jclap/ui/envelope.h>
 #include <jclap/ui/keyboard.h>
 #include <jclap/ui/knob.h>
+#include <jclap/ui/led.h>
 #include <jclap/ui/note_grid.h>
 #include <jclap/ui/number_box.h>
 #include <jclap/ui/param_bindings.h>
@@ -27,14 +28,16 @@ namespace {
 namespace ui = jclap::ui;
 
 constexpr float kDesignWidth = 720.0f;
-constexpr float kDesignHeight = 640.0f;
+constexpr float kDesignHeight = 820.0f;
 constexpr float kHeaderHeight = 56.0f;
 constexpr int kScopeSamples = 1024;
 
-// The MicroMonsta 2 palette: orange for the oscillator, blue for the filter, purple for the envelope.
+// The MicroMonsta 2 palette: orange for the oscillator, blue for the filter, purple for the VCA, and a
+// green for the LFO.
 constexpr unsigned kOrange = 0xfff28c28;
 constexpr unsigned kBlue = 0xff9fc3ee;
 constexpr unsigned kPurple = 0xffbb8fec;
+constexpr unsigned kGreen = 0xff8fd6a8;
 
 enum PlayPage { kKeysPage, kGridPage };
 
@@ -53,7 +56,8 @@ public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       buildOscillator();
       buildFilter();
-      buildEnvelope();
+      buildEnvelopes();
+      buildLfo();
       buildOutput();
       buildPlay();
       startTimer(30);
@@ -71,6 +75,9 @@ public:
          touches.push_back({v.note, v.bend, v.pressure, v.timbre});
       }
       grid_->setTouches(touches);
+      // Bright at the top of the LFO's swing, dark at the bottom, off with no note held.
+      float lfo = 0.0f;
+      lfoLight_->setLevel(host_.lfo(lfo) ? 0.5f + 0.5f * lfo : 0.0f);
       host_.readScope(scopeSamples_.data(), scopeSamples_.size());
       scope_->setSamples(scopeSamples_);
    }
@@ -133,49 +140,70 @@ private:
       add<ui::Section>({256, 68, 452, 196}, "FILTER");
       segments(kFilterMode, "MODE", {"LP", "HP", "BP"}, kBlue, {268, 116, 150, 26});
       segments(kSlope, "SLOPE", {"12", "24", "36", "48 dB"}, kBlue, {430, 116, 266, 26});
-      const auto cells = ui::row({268, 152, 428, 104}, 5);
+      const auto cells = ui::row({268, 152, 428, 104}, 4);
       knob(kCutoff, "CUTOFF", kBlue, cells[0]);
       knob(kResonance, "RESO", kBlue, cells[1]);
-      tips_.add(knob(kEnvAmount, "ENV", kBlue, cells[2], true), "How far the envelope moves the cutoff.");
-      tips_.add(knob(kPressureAmount, "PRESSURE", kBlue, cells[3]), "How far MPE pressure opens the cutoff.");
-      tips_.add(knob(kTimbreAmount, "TIMBRE", kBlue, cells[4]),
+      tips_.add(knob(kPressureAmount, "PRESSURE", kBlue, cells[2]), "How far MPE pressure opens the cutoff.");
+      tips_.add(knob(kTimbreAmount, "TIMBRE", kBlue, cells[3]),
                 "How far MPE timbre (slide, CC 74) moves the cutoff either way.");
    }
 
-   void buildEnvelope() {
-      add<ui::Section>({12, 276, 380, 148}, "ENVELOPE");
-      auto &env = add<ui::EnvelopeEditor>({24, 302, 356, 114}, rangeOf(kAttack, 1.0), rangeOf(kDecay, 1.0),
-                                         rangeOf(kSustain, 0.01), rangeOf(kRelease, 1.0));
-      env.setAccent(kPurple);
-      for (clap_id id : {kAttack, kDecay, kSustain, kRelease})
-         env.stage(static_cast<ui::EnvelopeEditor::Stage>(id - kAttack)).valueText = [id](double v) { return text(id, v); };
-      bindings_.bind(env, kAttack, kDecay, kSustain, kRelease);
-      tips_.add(env, "Shapes the VCA and the filter. Drag the corners.");
+   // An envelope editor and its amount knob, in a section of their own.
+   void envelope(const char *title, clap_id attack, clap_id amount, bool bipolar, unsigned accent, float x,
+                 const char *tip) {
+      add<ui::Section>({x, 276, 346, 148}, title);
+      auto &env = add<ui::EnvelopeEditor>({x + 12, 302, 246, 114}, rangeOf(attack, 1.0), rangeOf(attack + 1, 1.0),
+                                         rangeOf(attack + 2, 0.01), rangeOf(attack + 3, 1.0));
+      env.setAccent(accent);
+      for (clap_id id = attack; id < attack + 4; ++id)
+         env.stage(static_cast<ui::EnvelopeEditor::Stage>(id - attack)).valueText = [id](double v) { return text(id, v); };
+      bindings_.bind(env, attack, attack + 1, attack + 2, attack + 3);
+      tips_.add(knob(amount, "AMOUNT", accent, {x + 264, 302, 74, 114}, bipolar), tip);
+   }
+
+   void buildEnvelopes() {
+      envelope("FILTER ENV", kFilterAttack, kFilterEnvAmount, true, kBlue, 12,
+               "How far the filter envelope moves the cutoff, either way.");
+      envelope("AMP ENV", kAmpAttack, kAmpEnvAmount, false, kPurple, 362,
+               "How much the amp envelope shapes the VCA. At 0 the VCA just follows the key.");
+   }
+
+   void buildLfo() {
+      add<ui::Section>({12, 436, 346, 170}, "LFO");
+      lfoLight_ = &add<ui::ActivityLed>({262, 439, 84, 22}, "NOW");
+      lfoLight_->setColor(kGreen);
+      lfoLight_->fadeMs = 0;
+      tips_.add(*lfoLight_, "The LFO of the newest held note.");
+      segments(kLfoShape, "SHAPE", {"SIN", "TRI", "SAW", "SQR", "RND"}, kGreen, {24, 482, 322, 26});
+      const auto cells = ui::row({24, 514, 322, 88}, 3);
+      knob(kLfoRate, "RATE", kGreen, cells[0]);
+      knob(kLfoToCutoff, "TO CUTOFF", kGreen, cells[1], true);
+      knob(kLfoToVca, "TO VCA", kGreen, cells[2]);
    }
 
    void buildOutput() {
       const unsigned dim = ui::defaultTheme().dimText;
-      add<ui::Section>({404, 276, 304, 148}, "OUTPUT");
-      knob(kLevel, "LEVEL", kOrange, {414, 302, 84, 114});
-      add<ui::Label>({508, 300, 188, 16}, "MPE BEND RANGE", dim, visage::Font::kLeft);
-      auto &bend = add<ui::NumberBox>({508, 318, 188, 28}, rangeOf(kBendRange, 1.0));
+      add<ui::Section>({362, 436, 346, 170}, "OUTPUT");
+      knob(kLevel, "LEVEL", kOrange, {372, 464, 84, 136});
+      add<ui::Label>({466, 464, 230, 16}, "MPE BEND RANGE", dim, visage::Font::kLeft);
+      auto &bend = add<ui::NumberBox>({466, 482, 230, 28}, rangeOf(kBendRange, 1.0));
       bend.setStepButtons(true);
       bend.valueText = [](double v) { return text(kBendRange, v); };
       bend.parseText = [](const std::string &t, double &v) { return parseParam(kBendRange, t.c_str(), v); };
       bindings_.bind(bend, kBendRange);
-      scope_ = &add<ui::Scope>({508, 356, 188, 60});
+      scope_ = &add<ui::Scope>({466, 520, 230, 78});
       scope_->setAccent(kOrange);
    }
 
    void buildPlay() {
-      add<ui::Section>({12, 436, 696, 192}, "PLAY");
-      tabs_ = &add<ui::TabBar>({508, 440, 188, 24}, std::vector<std::string>{"KEYS", "GRID"});
-      keyboard_ = &tabs_->addToPage(kKeysPage, add<ui::PianoKeyboard>({24, 472, 672, 144}, 36, 84));
+      add<ui::Section>({12, 618, 696, 192}, "PLAY");
+      tabs_ = &add<ui::TabBar>({508, 622, 188, 24}, std::vector<std::string>{"KEYS", "GRID"});
+      keyboard_ = &tabs_->addToPage(kKeysPage, add<ui::PianoKeyboard>({24, 654, 672, 144}, 36, 84));
       keyboard_->onNoteOn = [this](int note, float velocity) { host_.noteOn(note, velocity); };
       keyboard_->onNoteOff = [this](int note) { host_.noteOff(note); };
       // Press a cell, slide sideways to bend, up and down for timbre. An MPE controller's notes show
       // their bend, pressure and timbre here as they play.
-      grid_ = &tabs_->addToPage(kGridPage, add<ui::NoteGrid>({24, 472, 672, 144}, 16, 5, 40));
+      grid_ = &tabs_->addToPage(kGridPage, add<ui::NoteGrid>({24, 654, 672, 144}, 16, 5, 40));
       grid_->onNoteOn = [this](int note, float velocity) { host_.noteOn(note, velocity); };
       grid_->onExpression = [this](int note, float bend, float pressure, float timbre) {
          host_.noteExpression(note, bend, pressure, timbre);
@@ -191,6 +219,7 @@ private:
    ui::PianoKeyboard *keyboard_ = nullptr;
    ui::NoteGrid *grid_ = nullptr;
    ui::Scope *scope_ = nullptr;
+   ui::ActivityLed *lfoLight_ = nullptr;
    std::vector<EditorHost::Voice> voices_;
    std::vector<float> scopeSamples_ = std::vector<float>(kScopeSamples);
 };

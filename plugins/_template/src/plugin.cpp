@@ -48,8 +48,10 @@ public:
    static const clap_plugin_descriptor_t descriptor;
 
    explicit PluginTemplate(const clap_host_t *host) : Plugin(&descriptor, host) {
-      for (size_t i = 0; i < kParamCount; ++i)
+      for (size_t i = 0; i < kParamCount; ++i) {
          values_[i].store(kParams[i].defaultValue);
+         mods_[i].store(0.0);
+      }
    }
 
    bool activate(double sampleRate, uint32_t, uint32_t) override {
@@ -91,6 +93,7 @@ public:
    // ---- EditorHost (main thread) ----
 
    double paramValue(clap_id id) const override { return id < kParamCount ? values_[id].load() : 0.0; }
+   double paramModulated(clap_id id) const override { return id < kParamCount ? value(id) : 0.0; }
    void beginEdit(clap_id id) override { edits_.begin(id); }
    void setParam(clap_id id, double value) override {
       if (id >= kParamCount)
@@ -213,10 +216,10 @@ public:
 
       // Routing, then mid/side width, then constant-power pan on top of the gain; mute wins. The
       // test tone is added to the input before all of that.
-      const double pan = values_[kPan].load();
+      const double pan = value(kPan);
       const double angle = (pan + 1.0) * 0.25 * 3.14159265358979;
-      const float gain = values_[kMute].load() >= 0.5 ? 0.0f
-                                                      : static_cast<float>(std::pow(10.0, values_[kGain].load() / 20.0));
+      const float gain = value(kMute) >= 0.5 ? 0.0f
+                                                      : static_cast<float>(std::pow(10.0, value(kGain) / 20.0));
       const float g[2] = {gain * static_cast<float>(std::cos(angle) * std::sqrt(2.0)),
                           gain * static_cast<float>(std::sin(angle) * std::sqrt(2.0))};
 
@@ -226,8 +229,8 @@ public:
          jclap::core::passAudioThrough(proc);
          return CLAP_PROCESS_CONTINUE;
       }
-      const int routing = static_cast<int>(values_[kRouting].load() + 0.5);
-      const float width = static_cast<float>(values_[kWidth].load());
+      const int routing = static_cast<int>(value(kRouting) + 0.5);
+      const float width = static_cast<float>(value(kWidth));
       float peak = 0.0f;
       for (uint32_t i = 0; i < proc->frames_count; ++i) {
          const float tone = nextToneSample();
@@ -264,6 +267,14 @@ private:
             auto *ev = reinterpret_cast<const clap_event_param_value_t *>(h);
             if (ev->param_id < kParamCount)
                values_[ev->param_id].store(std::clamp(ev->value, kParams[ev->param_id].min, kParams[ev->param_id].max));
+            break;
+         }
+         case CLAP_EVENT_PARAM_MOD: {
+            // A host modulator's offset (Bitwig's modulators send these). It adds to the param
+            // without changing it; the knobs show it as their light ring.
+            auto *ev = reinterpret_cast<const clap_event_param_mod_t *>(h);
+            if (ev->param_id < kParamCount)
+               mods_[ev->param_id].store(ev->amount);
             break;
          }
          case CLAP_EVENT_NOTE_ON:
@@ -354,8 +365,8 @@ private:
       if (v.stage == ToneVoice::Stage::Off)
          return 0.0f;
       // Linear segments; each stage's param is how long a full 0..1 sweep takes.
-      const auto perSample = [this](clap_id id) { return 1000.0 / (std::max(1.0, values_[id].load()) * sampleRate_); };
-      const double sustain = values_[kSustain].load();
+      const auto perSample = [this](clap_id id) { return 1000.0 / (std::max(1.0, value(id)) * sampleRate_); };
+      const double sustain = value(kSustain);
       switch (v.stage) {
       case ToneVoice::Stage::Attack:
          if ((v.level += perSample(kAttack)) >= 1.0) {
@@ -382,11 +393,11 @@ private:
          break;
       }
 
-      const double note = v.note + v.bend + std::round(values_[kTranspose].load());
+      const double note = v.note + v.bend + std::round(value(kTranspose));
       v.phase += 440.0 * std::pow(2.0, (note - 69.0) / 12.0) / sampleRate_;
       v.phase -= std::floor(v.phase);
       double wave;
-      switch (static_cast<int>(values_[kWave].load() + 0.5)) {
+      switch (static_cast<int>(value(kWave) + 0.5)) {
       case 1:
          wave = 4.0 * std::fabs(v.phase - 0.5) - 1.0;
          break;
@@ -400,11 +411,16 @@ private:
          wave = std::sin(2.0 * 3.14159265358979 * v.phase);
          break;
       }
-      const double level = std::pow(10.0, values_[kToneLevel].load() / 20.0);
+      const double level = std::pow(10.0, value(kToneLevel) / 20.0);
       return static_cast<float>(wave * v.level * v.velocity * level);
    }
 
+   // A param as the audio hears it: its value plus host modulation, clamped to its range.
+   double value(clap_id id) const { return std::clamp(values_[id].load() + mods_[id].load(), kParams[id].min, kParams[id].max); }
+
    std::atomic<double> values_[kParamCount];
+   // Host modulation, written by the audio thread.
+   std::atomic<double> mods_[kParamCount];
    std::atomic<float> peak_{0.0f};
    jclap::core::EditQueue edits_;
    jclap::ui::HostMenu hostMenu_;

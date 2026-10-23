@@ -114,9 +114,14 @@ void EnvelopeEditor::draw(visage::Canvas &canvas) {
    for (const ValueAxis &a : stages_)
       modulated = modulated || a.modulated != a.value;
    if (modulated) {
+      // Drawn like a knob's modulation ring: a light line, with a small dot on each moved corner.
       canvas.setColor(t.modulation);
+      const float line = std::max(1.5f, std::min(width(), height()) * 0.012f);
       for (int i = 0; i + 1 < 5; ++i)
-         canvas.segment(modLine[i].x, modLine[i].y, modLine[i + 1].x, modLine[i + 1].y, 1.0f, true);
+         canvas.segment(modLine[i].x, modLine[i].y, modLine[i + 1].x, modLine[i + 1].y, line, true);
+      const float pip = line * 3.0f;
+      for (int i = 1; i < 5; ++i)
+         canvas.circle(modLine[i].x - pip * 0.5f, modLine[i].y - pip * 0.5f, pip);
    }
 
    canvas.setColor(accent);

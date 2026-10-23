@@ -29,7 +29,7 @@ target_link_libraries(<name> PRIVATE jclap::ui)
 | `jclap/ui/meter.h` | Level meter with a falling peak marker, fed from a timer |
 | `jclap/ui/number_box.h` | A value in a box: drag, scroll or type it. `setStepButtons(true)` adds - and + to make a stepper |
 | `jclap/ui/segmented.h` | A row of buttons with one on, for enum params with a few options |
-| `jclap/ui/led.h` | Activity light that flashes on MIDI (or anything) and fades. Feed it a counter the audio thread bumps |
+| `jclap/ui/led.h` | Activity light that flashes on MIDI (or anything) and fades. Feed it a counter the audio thread bumps, or set `fadeMs = 0` for a steady light with variable brightness (an LFO, a gate) |
 | `jclap/ui/envelope.h` | ADSR editor: drag the corners. Binds to four params |
 | `jclap/ui/keyboard.h` | Piano keyboard that plays notes when clicked and lights held notes |
 | `jclap/ui/note_grid.h` | LinnStrument-style note grid (rows a fourth apart) that shows per-note MPE: bend, pressure and timbre. Slide on it to bend |

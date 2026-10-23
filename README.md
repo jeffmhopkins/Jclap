@@ -17,7 +17,7 @@ and plugins that need a panel get one from the shared GUI library.
 |---|---|---|
 | [Polar XY](plugins/polar-xy) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
 | [MicroMonsta 2 CC](plugins/micromonsta2) | Note effect | Knob panel that sends every MicroMonsta 2 parameter as a MIDI CC |
-| [Basic Synth](plugins/basic-synth) | Instrument | Eight-voice MPE synth: oscillator, filter, envelope and VCA |
+| [Basic Synth](plugins/basic-synth) | Instrument | Eight-voice MPE synth: oscillator, filter, VCA, two envelopes and an LFO |
 
 ## Download
 
@@ -82,7 +82,7 @@ Plugins build on three shared libraries:
   on [Visage](https://github.com/VitalAudio/visage), a design-grid layout, one-line param binding
   and the CLAP window glue.
 - [jclap::dsp](libs/dsp): audio building blocks. A band-limited oscillator with pulse width, a
-  resonant low/high/band pass filter with 12 to 48 dB/oct slopes, an ADSR envelope and a VCA.
+  resonant low/high/band pass filter with 12 to 48 dB/oct slopes, an ADSR envelope, an LFO and a VCA.
 
 > [!NOTE]
 > **Screenshot tests.** Configure with `-DJCLAP_BUILD_TOOLS=ON` and `ctest` also renders the panels and

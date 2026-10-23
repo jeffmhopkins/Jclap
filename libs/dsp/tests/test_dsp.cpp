@@ -4,6 +4,7 @@
 #include <jclap/core/test_host.h>
 #include <jclap/dsp/envelope.h>
 #include <jclap/dsp/filter.h>
+#include <jclap/dsp/lfo.h>
 #include <jclap/dsp/math.h>
 #include <jclap/dsp/oscillator.h>
 #include <jclap/dsp/smoother.h>
@@ -215,6 +216,40 @@ int main() {
       env.gateOn();
       JCLAP_CHECK(env.process() > before);
       JCLAP_CHECK(env.level() - before < 0.01f);
+   }
+
+   // ---- LFO: in range, at its rate, and every shape starts its cycle where it should ----
+   for (auto shape : {Lfo::Shape::Sine, Lfo::Shape::Triangle, Lfo::Shape::Saw, Lfo::Shape::Square, Lfo::Shape::Random}) {
+      Lfo lfo;
+      lfo.setSampleRate(kRate);
+      lfo.setShape(shape);
+      lfo.setRate(4.0);
+      lfo.reset();
+      double lo = 1.0, hi = -1.0, sum = 0.0;
+      int changes = 0;
+      double last = lfo.process();
+      for (int i = 1; i < kRate; ++i) {
+         const double v = lfo.process();
+         lo = std::min(lo, v);
+         hi = std::max(hi, v);
+         sum += v;
+         changes += v != last;
+         last = v;
+      }
+      JCLAP_CHECK(lo >= -1.0 && hi <= 1.0 && hi - lo > 0.5);
+      if (shape == Lfo::Shape::Random) {
+         // A new value once per cycle.
+         JCLAP_CHECK(changes >= 3 && changes <= 4);
+      } else {
+         JCLAP_CHECK(std::fabs(sum / kRate) < 0.01);
+      }
+   }
+   {
+      Lfo lfo;
+      lfo.setSampleRate(kRate);
+      lfo.setShape(Lfo::Shape::Triangle);
+      lfo.setRate(kRate / 8.0);
+      JCLAP_CHECK(lfo.process() == 0.0 && lfo.process() == 0.5 && lfo.process() == 1.0 && lfo.process() == 0.5);
    }
 
    // ---- smoother and VCA ----

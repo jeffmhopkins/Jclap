@@ -1,11 +1,12 @@
 #pragma once
 
-// One synth voice, built from jclap::dsp: oscillator -> filter -> VCA, with one envelope opening both
-// the VCA and the filter. Per-note expression (MPE) moves it too: bend sets the pitch, and pressure
+// One synth voice, built from jclap::dsp: oscillator -> filter -> VCA, with an envelope for each of
+// the filter and the VCA, and an LFO that can move both. Per-note expression (MPE) moves it too: bend sets the pitch, and pressure
 // and timbre open the filter.
 
 #include <jclap/dsp/envelope.h>
 #include <jclap/dsp/filter.h>
+#include <jclap/dsp/lfo.h>
 #include <jclap/dsp/math.h>
 #include <jclap/dsp/oscillator.h>
 #include <jclap/dsp/smoother.h>
@@ -23,10 +24,19 @@ struct VoiceSettings {
    jclap::dsp::Filter::Mode filterMode = jclap::dsp::Filter::Mode::LowPass;
    jclap::dsp::Filter::Slope slope = jclap::dsp::Filter::Slope::Db24;
    double cutoffHz = 2000.0, resonance = 0.3;
+   // An ADSR: seconds, and the sustain level.
+   struct Adsr {
+      double attack = 0.005, decay = 0.4, sustain = 0.5, release = 0.3;
+   };
+   Adsr filterEnv, ampEnv;
    // How far each source moves the cutoff, in octaves at full scale. Timbre is centred on 0.5.
-   double envAmount = 2.0, pressureAmount = 2.0, timbreAmount = 2.0;
-   // Seconds, and the sustain level.
-   double attack = 0.005, decay = 0.4, sustain = 0.5, release = 0.3;
+   double filterEnvAmount = 2.0, pressureAmount = 2.0, timbreAmount = 2.0;
+   // How much the amp envelope shapes the VCA, 0..1. At 0 the VCA just follows the gate: full while
+   // the note is held, closed on release.
+   double ampEnvAmount = 1.0;
+   // The LFO: octaves of cutoff at full swing, and tremolo depth 0..1.
+   jclap::dsp::Lfo::Shape lfoShape = jclap::dsp::Lfo::Shape::Triangle;
+   double lfoRate = 5.0, lfoToCutoff = 0.0, lfoToVca = 0.0;
 };
 
 class SynthVoice {
@@ -34,9 +44,11 @@ public:
    void setSampleRate(double sampleRate) {
       osc_.setSampleRate(sampleRate);
       filter_.setSampleRate(sampleRate);
-      env_.setSampleRate(sampleRate);
+      filterEnv_.setSampleRate(sampleRate);
+      ampEnv_.setSampleRate(sampleRate);
+      lfo_.setSampleRate(sampleRate);
       vca_.setSampleRate(sampleRate);
-      for (jclap::dsp::Smoother *s : {&pitch_, &pressure_, &timbre_, &cutoff_}) {
+      for (jclap::dsp::Smoother *s : {&pitch_, &pressure_, &timbre_, &cutoff_, &gate_}) {
          s->setSampleRate(sampleRate);
          s->setTime(0.005);
       }
@@ -50,14 +62,17 @@ public:
       filter_.setMode(s.filterMode);
       filter_.setSlope(s.slope);
       filter_.setResonance(s.resonance);
-      env_.setAttack(s.attack);
-      env_.setDecay(s.decay);
-      env_.setSustain(s.sustain);
-      env_.setRelease(s.release);
+      set(filterEnv_, s.filterEnv);
+      set(ampEnv_, s.ampEnv);
       cutoff_.setTarget(std::log2(s.cutoffHz));
-      envAmount_ = s.envAmount;
+      filterEnvAmount_ = s.filterEnvAmount;
       pressureAmount_ = s.pressureAmount;
       timbreAmount_ = s.timbreAmount;
+      ampEnvAmount_ = s.ampEnvAmount;
+      lfo_.setShape(s.lfoShape);
+      lfo_.setRate(s.lfoRate);
+      lfoToCutoff_ = s.lfoToCutoff;
+      lfoToVca_ = s.lfoToVca;
    }
 
    // Gate on at a pitch in semitones (MIDI note numbers, fractional for bends). A voice that is still
@@ -65,18 +80,27 @@ public:
    void start(double pitch, double gain) {
       pitch_.setTarget(pitch);
       vca_.setGain(gain);
-      if (!env_.isActive()) {
+      if (!isActive()) {
          osc_.reset();
          filter_.reset();
          vca_.reset();
+         lfo_.reset();
+         gate_.reset(0.0);
          for (jclap::dsp::Smoother *s : {&pitch_, &pressure_, &timbre_, &cutoff_})
             s->reset(s->target());
       }
-      env_.gateOn();
+      gate_.setTarget(1.0);
+      filterEnv_.gateOn();
+      ampEnv_.gateOn();
    }
-   void release() { env_.gateOff(); }
+   void release() {
+      filterEnv_.gateOff();
+      ampEnv_.gateOff();
+      gate_.setTarget(0.0);
+   }
    void reset() {
-      env_.reset();
+      filterEnv_.reset();
+      ampEnv_.reset();
       filter_.reset();
    }
 
@@ -90,28 +114,45 @@ public:
    }
 
    float process() {
-      if (!env_.isActive())
+      if (!isActive())
          return 0.0f;
-      const float env = env_.process();
+      const double filterEnv = filterEnv_.process(), ampEnv = ampEnv_.process();
+      const double lfo = lfoValue_ = lfo_.process();
       osc_.setFrequency(jclap::dsp::noteToHz(pitch_.process()));
-      const double octaves = cutoff_.process() + envAmount_ * env + pressureAmount_ * pressure_.process() +
-                             timbreAmount_ * 2.0 * (timbre_.process() - 0.5);
+      const double octaves = cutoff_.process() + filterEnvAmount_ * filterEnv + pressureAmount_ * pressure_.process() +
+                             timbreAmount_ * 2.0 * (timbre_.process() - 0.5) + lfoToCutoff_ * lfo;
       filter_.setCutoff(std::exp2(std::clamp(octaves, 3.0, 15.0)));
-      return vca_.process(filter_.process(osc_.process()), env);
+      // Tremolo dips the level by up to the depth, never above where the envelope has it.
+      const double tremolo = 1.0 - lfoToVca_ * (0.5 - 0.5 * lfo);
+      const double control = (ampEnvAmount_ * ampEnv + (1.0 - ampEnvAmount_) * gate_.process()) * tremolo;
+      return vca_.process(filter_.process(osc_.process()), static_cast<float>(control));
    }
 
-   bool isActive() const { return env_.isActive(); }
-   bool isReleasing() const { return env_.isReleasing(); }
-   float level() const { return env_.level(); }
+   // The amp envelope decides how long a voice lasts.
+   bool isActive() const { return ampEnv_.isActive(); }
+   bool isReleasing() const { return ampEnv_.isReleasing(); }
+   float level() const { return ampEnv_.level(); }
+   // The LFO's latest output, -1..1.
+   double lfoValue() const { return lfoValue_; }
 
 private:
+   static void set(jclap::dsp::Envelope &env, const VoiceSettings::Adsr &adsr) {
+      env.setAttack(adsr.attack);
+      env.setDecay(adsr.decay);
+      env.setSustain(adsr.sustain);
+      env.setRelease(adsr.release);
+   }
+
    jclap::dsp::Oscillator osc_;
    jclap::dsp::Filter filter_;
-   jclap::dsp::Envelope env_;
+   jclap::dsp::Envelope filterEnv_, ampEnv_;
+   jclap::dsp::Lfo lfo_;
    jclap::dsp::Vca vca_;
    // Pitch in semitones; cutoff in octaves (log2 Hz).
-   jclap::dsp::Smoother pitch_, pressure_, timbre_, cutoff_;
-   double envAmount_ = 0.0, pressureAmount_ = 0.0, timbreAmount_ = 0.0;
+   // The gate glides over a few ms so a gate-only VCA opens and closes without clicks.
+   jclap::dsp::Smoother pitch_, pressure_, timbre_, cutoff_, gate_;
+   double filterEnvAmount_ = 0.0, pressureAmount_ = 0.0, timbreAmount_ = 0.0, ampEnvAmount_ = 1.0;
+   double lfoToCutoff_ = 0.0, lfoToVca_ = 0.0, lfoValue_ = 0.0;
 };
 
 } // namespace basic_synth

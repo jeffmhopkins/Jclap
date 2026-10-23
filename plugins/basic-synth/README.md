@@ -2,7 +2,7 @@
 
 # Basic Synth
 
-An eight-voice MPE synth: one oscillator, filter, envelope and VCA per voice, built from jclap::dsp.
+An eight-voice MPE synth built from jclap::dsp: oscillator, filter and VCA, two envelopes and an LFO per voice.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: instrument](https://img.shields.io/badge/CLAP-instrument-blue)](https://github.com/free-audio/clap) [![MPE](https://img.shields.io/badge/MPE-yes-blue)](#mpe) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](#panel)
 
@@ -18,15 +18,26 @@ start a new instrument from.
 ```
 oscillator ──> filter ──> VCA ──> out
                  ^         ^
-   envelope ─────┴─────────┘
-   pressure, timbre ──> cutoff
+   filter env ───┤         ├─── amp env
+   LFO ──────────┤         ├─── LFO (tremolo)
+   pressure, timbre ───────┘ (cutoff)
 ```
 
 - **Oscillator**: sine, triangle, saw, square or pulse, with pulse width, band-limited.
-- **Filter**: low, high or band pass at 12, 24, 36 or 48 dB/oct, with resonance. The envelope moves
-  the cutoff by up to ±5 octaves.
-- **Envelope**: one ADSR, shaping both the VCA and the cutoff.
+- **Filter**: low, high or band pass at 12, 24, 36 or 48 dB/oct, with resonance.
+- **Filter envelope**: an ADSR that moves the cutoff by its amount, up to ±5 octaves.
+- **Amp envelope**: an ADSR that shapes the VCA by its amount. At 0 the VCA just follows the key:
+  on while held, off on release.
+- **LFO**: sine, triangle, saw, square or random, 0.05 to 20 Hz, restarted with each note. It moves the
+  cutoff (±4 octaves) and the VCA (tremolo). The light next to it shows the newest note's LFO.
 - **Voices**: eight. A ninth note takes the quietest releasing voice, or else the oldest.
+
+## Automation and modulation
+
+Every parameter is a host parameter: Bitwig can automate it, and its modulators can move it. Every
+one except MPE Bend Range can also be modulated **per voice**, so a polyphonic modulator in Bitwig
+(a per-note LFO, velocity or random, for instance) moves each note on its own. The knobs and
+envelope drawings show the host's modulation as a light ring or line over the value.
 
 ## MPE
 
