@@ -11,20 +11,14 @@
 #include <cstring>
 #include <memory>
 
+#include <jclap/ui/clap_gui.h>
+
 #include "cc_map.h"
 #include "editor.h"
 
 namespace {
 
 using namespace mm2;
-
-#if defined(_WIN32)
-const char *const kWindowApi = CLAP_WINDOW_API_WIN32;
-#elif defined(__APPLE__)
-const char *const kWindowApi = CLAP_WINDOW_API_COCOA;
-#else
-const char *const kWindowApi = CLAP_WINDOW_API_X11;
-#endif
 
 // Single-producer (GUI thread) single-consumer (audio thread) queue of panel edits, which the audio
 // thread turns into CLAP param events so the host records them.
@@ -65,8 +59,6 @@ struct MicroMonsta final : EditorHost {
    clap_plugin_t plugin;
    const clap_host_t *host;
    const clap_host_params_t *hostParams = nullptr;
-   const clap_host_gui_t *hostGui = nullptr;
-   const clap_host_posix_fd_support_t *hostFd = nullptr;
 
    std::atomic<double> values[kCcParamCount];
    std::atomic<double> mods[kCcParamCount];
@@ -80,8 +72,7 @@ struct MicroMonsta final : EditorHost {
    int sentChannel = 1;
 
    GuiQueue guiEvents;
-   std::unique_ptr<Editor> editor;
-   bool fdRegistered = false;
+   jclap::ui::ClapGui gui;
 
    double effective(int i) const { return modulated(values[i].load(), mods[i].load()); }
 
@@ -511,114 +502,7 @@ const clap_plugin_state_t kState = {stateSave, stateLoad};
 
 // ---- gui ----
 
-bool guiIsApiSupported(const clap_plugin_t *, const char *api, bool isFloating) {
-   return !isFloating && !std::strcmp(api, kWindowApi);
-}
-
-bool guiGetPreferredApi(const clap_plugin_t *, const char **api, bool *isFloating) {
-   *api = kWindowApi;
-   *isFloating = false;
-   return true;
-}
-
-bool guiCreate(const clap_plugin_t *plugin, const char *api, bool isFloating) {
-   if (isFloating || std::strcmp(api, kWindowApi))
-      return false;
-   MicroMonsta *p = self(plugin);
-   if (!p->editor) {
-      p->editor = std::make_unique<Editor>(*p);
-      p->editor->onResizeRequest = [p] {
-         if (p->hostGui)
-            p->hostGui->request_resize(p->host, p->editor->width(), p->editor->height());
-      };
-   }
-   return true;
-}
-
-void guiDestroy(const clap_plugin_t *plugin) {
-   MicroMonsta *p = self(plugin);
-   if (p->fdRegistered && p->editor) {
-      p->hostFd->unregister_fd(p->host, p->editor->posixFd());
-      p->fdRegistered = false;
-   }
-   p->editor.reset();
-}
-
-bool guiSetScale(const clap_plugin_t *, double) { return false; }
-
-bool guiGetSize(const clap_plugin_t *plugin, uint32_t *width, uint32_t *height) {
-   MicroMonsta *p = self(plugin);
-   if (!p->editor)
-      return false;
-   *width = p->editor->width();
-   *height = p->editor->height();
-   return true;
-}
-
-bool guiCanResize(const clap_plugin_t *) { return true; }
-
-bool guiGetResizeHints(const clap_plugin_t *plugin, clap_gui_resize_hints_t *hints) {
-   MicroMonsta *p = self(plugin);
-   if (!p->editor)
-      return false;
-   hints->can_resize_horizontally = true;
-   hints->can_resize_vertically = true;
-   hints->preserve_aspect_ratio = true;
-   hints->aspect_ratio_width = p->editor->width();
-   hints->aspect_ratio_height = p->editor->height();
-   return true;
-}
-
-bool guiAdjustSize(const clap_plugin_t *plugin, uint32_t *width, uint32_t *height) {
-   MicroMonsta *p = self(plugin);
-   if (!p->editor)
-      return false;
-   p->editor->adjustSize(width, height);
-   return true;
-}
-
-bool guiSetSize(const clap_plugin_t *plugin, uint32_t width, uint32_t height) {
-   MicroMonsta *p = self(plugin);
-   if (!p->editor)
-      return false;
-   p->editor->setSize(width, height);
-   return true;
-}
-
-bool guiSetParent(const clap_plugin_t *plugin, const clap_window_t *window) {
-   MicroMonsta *p = self(plugin);
-   if (!p->editor)
-      return false;
-#if defined(__APPLE__) || defined(_WIN32)
-   p->editor->show(window->ptr);
-#else
-   p->editor->show(reinterpret_cast<void *>(window->x11));
-   if (p->hostFd && !p->fdRegistered)
-      p->fdRegistered = p->hostFd->register_fd(p->host, p->editor->posixFd(),
-                                               CLAP_POSIX_FD_READ | CLAP_POSIX_FD_WRITE | CLAP_POSIX_FD_ERROR);
-#endif
-   return true;
-}
-
-bool guiSetTransient(const clap_plugin_t *, const clap_window_t *) { return false; }
-void guiSuggestTitle(const clap_plugin_t *, const char *) {}
-bool guiShow(const clap_plugin_t *) { return true; }
-bool guiHide(const clap_plugin_t *) { return true; }
-
-const clap_plugin_gui_t kGui = {guiIsApiSupported, guiGetPreferredApi, guiCreate,   guiDestroy,
-                                guiSetScale,       guiGetSize,         guiCanResize, guiGetResizeHints,
-                                guiAdjustSize,     guiSetSize,         guiSetParent, guiSetTransient,
-                                guiSuggestTitle,   guiShow,            guiHide};
-
-#if !defined(__APPLE__) && !defined(_WIN32)
-void onFd(const clap_plugin_t *plugin, int, clap_posix_fd_flags_t) {
-   MicroMonsta *p = self(plugin);
-   if (p->editor)
-      p->editor->processFdEvents();
-}
-
-const clap_plugin_posix_fd_support_t kFdSupport = {onFd};
-#endif
+jclap::ui::ClapGui *guiOf(const clap_plugin_t *plugin) { return &self(plugin)->gui; }
 
 // ---- plugin ----
 
@@ -640,17 +524,14 @@ const clap_plugin_descriptor_t kDescriptor = {
 bool pluginInit(const clap_plugin_t *plugin) {
    MicroMonsta *p = self(plugin);
    p->hostParams = static_cast<const clap_host_params_t *>(p->host->get_extension(p->host, CLAP_EXT_PARAMS));
-   p->hostGui = static_cast<const clap_host_gui_t *>(p->host->get_extension(p->host, CLAP_EXT_GUI));
-   auto *fd = static_cast<const clap_host_posix_fd_support_t *>(
-      p->host->get_extension(p->host, CLAP_EXT_POSIX_FD_SUPPORT));
-   if (fd && fd->register_fd && fd->unregister_fd)
-      p->hostFd = fd;
+   p->gui.init(p->host);
+   p->gui.createWindow = [p] { return createEditor(*p); };
    p->resetDefaults();
    return true;
 }
 
 void pluginDestroy(const clap_plugin_t *plugin) {
-   guiDestroy(plugin);
+   self(plugin)->gui.destroy();
    delete self(plugin);
 }
 
@@ -683,13 +564,7 @@ const void *pluginGetExtension(const clap_plugin_t *, const char *id) {
       return &kParamsExt;
    if (!std::strcmp(id, CLAP_EXT_STATE))
       return &kState;
-   if (!std::strcmp(id, CLAP_EXT_GUI))
-      return &kGui;
-#if !defined(__APPLE__) && !defined(_WIN32)
-   if (!std::strcmp(id, CLAP_EXT_POSIX_FD_SUPPORT))
-      return &kFdSupport;
-#endif
-   return nullptr;
+   return jclap::ui::ClapGui::extension<guiOf>(id);
 }
 
 void pluginOnMainThread(const clap_plugin_t *) {}

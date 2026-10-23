@@ -20,7 +20,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      # Visage (the MicroMonsta 2 panel) needs X11 and OpenGL headers on Linux.
+      # Visage (the jclap::ui GUI library) needs X11 and OpenGL headers on Linux.
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libx11-dev libxrandr-dev libgl1-mesa-dev

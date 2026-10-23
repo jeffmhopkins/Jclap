@@ -49,7 +49,8 @@ Bank select (0/32), sustain (64) and All Sound/Notes Off (120/123) are left out.
 
 ## Panel
 
-Drawn with [Visage](https://github.com/VitalAudio/visage), pinned to a commit in `CMakeLists.txt`.
+Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage. `src/editor.cpp`
+only holds the layout.
 Drag a knob up or down (shift for fine), use the mouse wheel for single steps, double-click to reset.
 The window can be resized and keeps its shape.
 
