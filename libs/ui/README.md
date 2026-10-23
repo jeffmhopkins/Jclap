@@ -25,7 +25,7 @@ target_link_libraries(<name> PRIVATE jclap::ui)
 | `jclap/ui/slider.h` | Horizontal or vertical fader with the same value model as the knob |
 | `jclap/ui/button.h` | Push button, or an on/off toggle with `setToggle(true)`. `onWheel` makes steppers easy |
 | `jclap/ui/dropdown.h` | Pick one of a list of options (menu on click, wheel to step), for enum params |
-| `jclap/ui/xy_pad.h` | Two values at once, each with its own range, modulation and param |
+| `jclap/ui/xy_pad.h` | Two values at once, each with its own range, modulation and param. `setGrid(Grid::Polar)` makes it a circle of angle and radius |
 | `jclap/ui/meter.h` | Level meter with a falling peak marker, fed from a timer |
 | `jclap/ui/section.h` | `Section` (titled panel box), `Label` and `Divider`. They ignore the mouse |
 | `jclap/ui/theme.h` | Colours shared by every widget, and the `font()` helper |

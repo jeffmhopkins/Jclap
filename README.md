@@ -15,7 +15,7 @@ and plugins that need a panel get one from the shared GUI library.
 
 | Plugin | Type | What it does |
 |---|---|---|
-| [Polar XY](plugins/orb-polar) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
+| [Polar XY](plugins/polar-xy) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
 | [MicroMonsta 2 CC](plugins/micromonsta2) | Note effect | Knob panel that sends every MicroMonsta 2 parameter as a MIDI CC |
 
 ## Download
