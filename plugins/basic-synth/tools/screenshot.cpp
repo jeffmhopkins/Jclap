@@ -20,6 +20,8 @@ public:
          return 4.0;
       case kPulseWidth:
          return 0.3;
+      case kDual:
+         return 1.0;
       case kCutoff:
          return 0.55;
       case kResonance:

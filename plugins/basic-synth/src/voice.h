@@ -1,6 +1,6 @@
 #pragma once
 
-// One synth voice, built from jclap::dsp: oscillator -> filter -> VCA. Two envelopes send to the
+// One synth voice, built from jclap::dsp: oscillator (or a detuned pair) -> filter -> VCA. Two envelopes send to the
 // filter, the VCA and the pitch by their own amounts. A looping envelope is not the voice's own: the
 // plugin runs one shared cycle and passes its value in, so every voice moves together, and an LFO moves the cutoff
 // and the VCA. Per-note expression (MPE) moves it too: bend sets the pitch, and pressure and timbre
@@ -25,6 +25,9 @@ constexpr int kEnvCount = 2;
 struct VoiceSettings {
    jclap::dsp::Oscillator::Wave wave = jclap::dsp::Oscillator::Wave::Saw;
    double pulseWidth = 0.5;
+   // A second oscillator, the same wave, the pair detuned apart by this many cents.
+   bool dual = false;
+   double detuneCents = 12.0;
    jclap::dsp::Filter::Mode filterMode = jclap::dsp::Filter::Mode::LowPass;
    jclap::dsp::Filter::Slope slope = jclap::dsp::Filter::Slope::Db24;
    double cutoffHz = 2000.0, resonance = 0.3;
@@ -48,6 +51,7 @@ class SynthVoice {
 public:
    void setSampleRate(double sampleRate) {
       osc_.setSampleRate(sampleRate);
+      osc2_.setSampleRate(sampleRate);
       filter_.setSampleRate(sampleRate);
       for (jclap::dsp::Envelope &e : env_)
          e.setSampleRate(sampleRate);
@@ -65,8 +69,12 @@ public:
    void setSeed(uint32_t seed) { lfo_.setSeed(seed); }
 
    void configure(const VoiceSettings &s) {
-      osc_.setWave(s.wave);
-      osc_.setPulseWidth(s.pulseWidth);
+      for (jclap::dsp::Oscillator *o : {&osc_, &osc2_}) {
+         o->setWave(s.wave);
+         o->setPulseWidth(s.pulseWidth);
+      }
+      dual_ = s.dual;
+      detune_ = s.detuneCents / 100.0;
       filter_.setMode(s.filterMode);
       filter_.setSlope(s.slope);
       filter_.setResonance(s.resonance);
@@ -93,6 +101,8 @@ public:
       vca_.setGain(gain);
       if (!isActive()) {
          osc_.reset();
+         // Off phase from the first, so the pair doesn't start out cancelling or doubling.
+         osc2_.reset(0.37);
          filter_.reset();
          vca_.reset();
          lfo_.reset();
@@ -145,7 +155,18 @@ public:
          vcaShare += sends_[i].toVca;
       }
       const double lfo = lfoValue_ = lfo_.process();
-      osc_.setFrequency(jclap::dsp::noteToHz(pitch_.process() + toPitch));
+      const double pitch = pitch_.process() + toPitch;
+      double source;
+      if (dual_) {
+         // Detuned either side of the note, so the pair stays centred on it. Their sum is scaled
+         // by 1/sqrt(2): about the same loudness as one, as the two drift in and out of phase.
+         osc_.setFrequency(jclap::dsp::noteToHz(pitch - 0.5 * detune_));
+         osc2_.setFrequency(jclap::dsp::noteToHz(pitch + 0.5 * detune_));
+         source = (osc_.process() + osc2_.process()) * 0.7071067811865476;
+      } else {
+         osc_.setFrequency(jclap::dsp::noteToHz(pitch));
+         source = osc_.process();
+      }
       const double octaves = cutoff_.process() + toFilter + pressureAmount_ * pressure_.process() +
                              timbreAmount_ * 2.0 * (timbre_.process() - 0.5) + lfoToCutoff_ * lfo;
       filter_.setCutoff(std::exp2(std::clamp(octaves, 3.0, 15.0)));
@@ -154,7 +175,7 @@ public:
       const double open = gate * std::max(0.0, 1.0 - vcaShare);
       const double tremolo = 1.0 - lfoToVca_ * (0.5 - 0.5 * lfo);
       level_ = static_cast<float>(std::clamp(open + toVca, 0.0, 1.0) * tremolo);
-      return vca_.process(filter_.process(osc_.process()), level_);
+      return vca_.process(filter_.process(static_cast<float>(source)), level_);
    }
 
    // Sounding until released and silent: the gate has closed and every envelope of its own sent to
@@ -179,7 +200,9 @@ public:
    double lfoValue() const { return lfoValue_; }
 
 private:
-   jclap::dsp::Oscillator osc_;
+   jclap::dsp::Oscillator osc_, osc2_;
+   bool dual_ = false;
+   double detune_ = 0.0; // semitones
    jclap::dsp::Filter filter_;
    jclap::dsp::Envelope env_[kEnvCount];
    VoiceSettings::Env sends_[kEnvCount];

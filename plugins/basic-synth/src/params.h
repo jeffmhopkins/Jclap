@@ -17,6 +17,8 @@ enum ParamId : clap_id {
    kWave,
    kPulseWidth,
    kTune,
+   kDual,
+   kDetune,
    // Filter.
    kFilterMode,
    kSlope,
@@ -82,6 +84,8 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kWave, "Wave", "Oscillator", 0.0, 4.0, 2.0, kChoice},
    {kPulseWidth, "Pulse Width", "Oscillator", 0.05, 0.95, 0.5, kMod},
    {kTune, "Tune", "Oscillator", -24.0, 24.0, 0.0, kStepped},
+   {kDual, "Dual", "Oscillator", 0.0, 1.0, 0.0, kChoice},
+   {kDetune, "Detune", "Oscillator", 0.0, 100.0, 12.0, kMod},
    {kFilterMode, "Filter Mode", "Filter", 0.0, 2.0, 0.0, kChoice},
    {kSlope, "Slope", "Filter", 0.0, 3.0, 1.0, kChoice},
    {kCutoff, "Cutoff", "Filter", 0.0, 1.0, 2.0 / 3.0, kMod},
@@ -136,6 +140,7 @@ inline const char *const *choiceNames(clap_id id, int &count) {
       return kLfoShapeNames;
    case kEnv1Loop:
    case kEnv2Loop:
+   case kDual:
       count = 2;
       return kLoopNames;
    default:
@@ -191,6 +196,9 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kEnv1ToPitch:
    case kEnv2ToPitch:
       std::snprintf(out, size, "%+.1f st", value);
+      break;
+   case kDetune:
+      std::snprintf(out, size, "%.0f ct", value);
       break;
    case kEnv1Attack:
    case kEnv1Decay:

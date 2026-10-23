@@ -24,7 +24,7 @@ oscillator ──> filter ──> VCA ──> out
    MPE pressure, timbre: to filter
 ```
 
-- **Oscillator**: sine, triangle, saw, square or pulse, with pulse width, band-limited.
+- **Oscillator**: sine, triangle, saw, square or pulse, with pulse width, band-limited. DUAL adds a second oscillator of the same wave, the pair detuned apart by DETUNE (0 to 100 cents) and centred on the note.
 - **Filter**: low, high or band pass at 12, 24, 36 or 48 dB/oct, with resonance.
 - **Env 1 and Env 2**: two ADSRs, each with a **loop** toggle and three amounts: to the filter (±5 octaves), to the VCA (0 to 100%) and to the pitch (±24
   semitones). They start as Env 1 on the VCA and Env 2 on the filter. Whatever share of the VCA the

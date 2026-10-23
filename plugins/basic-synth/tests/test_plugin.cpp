@@ -370,6 +370,28 @@ int main() {
       h.setParam(kEnv1Release, 50.0);
    }
 
+   // Dual: a second oscillator detuned either side, so the pitch stays centred and the sound changes.
+   {
+      h.note(CLAP_EVENT_NOTE_ON, 57, 1.0);
+      run(4800);
+      run(4800);
+      const std::vector<float> single = run.left;
+      h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+      run(64);
+      h.setParam(kDual, 1.0);
+      h.setParam(kDetune, 10.0);
+      h.note(CLAP_EVENT_NOTE_ON, 57, 1.0);
+      run(4800);
+      run(48000);
+      JCLAP_CHECK(near(run.frequency(), 220.0, 1.0));
+      JCLAP_CHECK(run.rms() > 0.03);
+      JCLAP_CHECK(std::vector<float>(run.left.begin(), run.left.begin() + 4800) != single);
+      h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+      run(64);
+      h.setParam(kDual, 0.0);
+      JCLAP_CHECK(h.paramText(kDetune, 12.0) == "12 ct");
+   }
+
    // The LFO: a slow square at full tremolo depth turns the note on and off, and the panel sees it.
    h.setParam(kEnv1ToVca, 1.0);
    h.setParam(kEnv1Sustain, 1.0);
