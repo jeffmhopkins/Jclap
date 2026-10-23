@@ -11,6 +11,7 @@
 #include <jclap/ui/led.h>
 #include <jclap/ui/note_grid.h>
 #include <jclap/ui/number_box.h>
+#include <jclap/ui/octave_shift.h>
 #include <jclap/ui/param_bindings.h>
 #include <jclap/ui/scope.h>
 #include <jclap/ui/section.h>
@@ -70,7 +71,10 @@ public:
       grid_->releaseNote();
    }
 
-   void showPage(int page) { tabs_->select(page); }
+   void showPage(int page) {
+      tabs_->select(page);
+      octave_->redraw();
+   }
 
    void timerCallback() override {
       host_.voices(voices_);
@@ -80,7 +84,8 @@ public:
          held.set(v.note);
          touches.push_back({v.note, v.bend, v.pressure, v.timbre});
       }
-      for (int n = keyboard_->lowNote(); n <= keyboard_->highNote(); ++n)
+      // Every note, not just the ones shown, so the keyboard can point to notes off either end.
+      for (int n = 0; n < 128; ++n)
          keyboard_->setNoteOn(n, held[n]);
       grid_->setTouches(touches);
       // Bright at the top of the LFO's swing, dark at the bottom, off with no note held.
@@ -245,6 +250,41 @@ private:
       };
       grid_->onNoteOff = [this](int note) { host_.noteOff(note); };
       tabs_->select(kKeysPage);
+      tabs_->onChange = [this](int) { octave_->redraw(); };
+
+      // Octaves up and down, for the keyboard and grid together. The readout shows the range of
+      // whichever is showing.
+      octave_ = &add<ui::OctaveShift>({300, 684, 196, 24}, -3, 3);
+      octave_->setAccent(kOrange);
+      octave_->valueText = [this](int) {
+         const bool keys = tabs_->selected() == kKeysPage;
+         const int low = keys ? keyboard_->lowNote() : grid_->lowNote();
+         const int high = std::min(127, keys ? keyboard_->highNote() : grid_->highNote());
+         return ui::noteName(low) + " - " + ui::noteName(high);
+      };
+      octave_->onChange = [this](int value, int step) {
+         keyboard_->shiftOctaves(step);
+         grid_->shiftOctaves(step);
+         host_.playOctave = value;
+      };
+      tips_.add(*octave_, "Moves the keyboard and grid an octave down or up.");
+      keyboard_->shiftOctaves(host_.playOctave);
+      grid_->shiftOctaves(host_.playOctave);
+      octave_->setValue(host_.playOctave);
+
+      // The grid's rows: fourths like a LinnStrument, fifths, or octaves for the widest range.
+      auto &rows = tabs_->addToPage(kGridPage, add<ui::SegmentedSwitch>({100, 684, 180, 24},
+                                                                       std::vector<std::string>{"4THS", "5THS", "OCT"}));
+      rows.setAccent(kOrange);
+      static constexpr int kIntervals[3] = {5, 7, 12};
+      rows.setSelected(host_.gridInterval == 7 ? 1 : host_.gridInterval == 12 ? 2 : 0);
+      grid_->setRowInterval(kIntervals[rows.selected()]);
+      rows.onChange = [this](int index) {
+         grid_->setRowInterval(kIntervals[index]);
+         host_.gridInterval = kIntervals[index];
+         octave_->redraw();
+      };
+      tips_.add(rows, "How far apart the grid's rows are.");
    }
 
    EditorHost &host_;
@@ -254,6 +294,7 @@ private:
    ui::PianoKeyboard *keyboard_ = nullptr;
    ui::NoteGrid *grid_ = nullptr;
    ui::Scope *scope_ = nullptr;
+   ui::OctaveShift *octave_ = nullptr;
    ui::ActivityLed *lfoLight_ = nullptr;
    ui::EnvelopeEditor *envelopes_[2] = {};
    std::vector<EditorHost::EnvState> envStates_;

@@ -66,8 +66,12 @@ Bitwig's per-note modulators know when a note is done.
 
 ## Panel
 
-The **GRID** tab is a LinnStrument-style note grid: rows a fourth apart, and every held note shows its
-bend (sideways), pressure (size) and timbre (height). Play it with the mouse too: press, slide sideways
-to bend, up and down for timbre. **KEYS** is a piano keyboard.
+The **GRID** tab is a LinnStrument-style note grid: rows a fourth apart (or a fifth, or an octave for
+the widest range), and every held note shows its bend (sideways), pressure (size) and timbre (height).
+Play it with the mouse too: press, slide sideways to bend, up and down for timbre. **KEYS** is a piano
+keyboard.
+
+The **− / +** buttons move both up or down by octaves, three either way, and show the range in view. A
+note held outside it lights an arrow at that edge.
 
 ![Note grid](docs/panel-grid.png)

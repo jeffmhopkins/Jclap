@@ -19,6 +19,7 @@ add_library(jclap_ui STATIC
    src/meter.cpp
    src/number_box.cpp
    src/segmented.cpp
+   src/octave_shift.cpp
    src/led.cpp
    src/envelope.cpp
    src/keyboard.cpp

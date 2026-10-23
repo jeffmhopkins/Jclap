@@ -31,13 +31,14 @@ target_link_libraries(<name> PRIVATE jclap::ui)
 | `jclap/ui/segmented.h` | A row of buttons with one on, for enum params with a few options |
 | `jclap/ui/led.h` | Activity light that flashes on MIDI (or anything) and fades. Feed it a counter the audio thread bumps, or set `fadeMs = 0` for a steady light with variable brightness (an LFO, a gate) |
 | `jclap/ui/envelope.h` | ADSR editor: drag the corners. Binds to four params. `setPlayheads` shows a glowing dot per playing voice |
-| `jclap/ui/keyboard.h` | Piano keyboard that plays notes when clicked and lights held notes |
-| `jclap/ui/note_grid.h` | LinnStrument-style note grid (rows a fourth apart) that shows per-note MPE: bend, pressure and timbre. Slide on it to bend |
+| `jclap/ui/keyboard.h` | Piano keyboard that plays notes when clicked and lights held notes. Held notes past either end show as an arrow; `shiftOctaves` moves the range |
+| `jclap/ui/note_grid.h` | LinnStrument-style note grid (rows a fourth, fifth or octave apart) that shows per-note MPE: bend, pressure and timbre. Slide on it to bend. Off-grid notes show as an arrow; `shiftOctaves` moves it |
+| `jclap/ui/octave_shift.h` | Octave - and + buttons around a readout, to move a keyboard or grid up and down |
 | `jclap/ui/scope.h` | Oscilloscope or waveform view, fed from a `jclap::core::SampleFifo` |
 | `jclap/ui/tabs.h` | Tab bar that shows one page of widgets at a time |
 | `jclap/ui/tooltip.h` | Hover help for any widget |
 | `jclap/ui/section.h` | `Section` (titled panel box), `Label` and `Divider`. They ignore the mouse |
-| `jclap/ui/theme.h` | Colours shared by every widget, and the `font()` helper |
+| `jclap/ui/theme.h` | Colours shared by every widget, and the `font()` and `noteName()` helpers |
 
 Knob and Slider share `ValueControl`: a `ValueRange` (min, max, default, wheel step, bipolar), the
 host's value and modulated value, and `onBeginEdit` / `onChange` / `onEndEdit` callbacks. Drag

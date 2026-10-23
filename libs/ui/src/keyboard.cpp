@@ -33,6 +33,19 @@ void PianoKeyboard::setRange(int lowNote, int highNote) {
    redraw();
 }
 
+bool PianoKeyboard::shiftOctaves(int octaves) {
+   // Whole octaves only, as far as the range still fits.
+   while (octaves > 0 && high_ + 12 * octaves > 127)
+      --octaves;
+   while (octaves < 0 && low_ + 12 * octaves < 0)
+      ++octaves;
+   if (octaves == 0)
+      return false;
+   release();
+   setRange(low_ + 12 * octaves, high_ + 12 * octaves);
+   return true;
+}
+
 void PianoKeyboard::setNoteOn(int note, bool on) {
    if (note < 0 || note > 127 || held_[note] == on)
       return;
@@ -117,6 +130,28 @@ void PianoKeyboard::draw(visage::Canvas &canvas) {
    }
    canvas.setColor(t.panelBorder);
    canvas.fill(0, 0, width(), 2.0f);
+
+   // An arrow at each edge past which a note is held.
+   bool below = false, above = false;
+   for (int n = 0; n < 128; ++n) {
+      if (held_[n]) {
+         below |= n < low_;
+         above |= n > high_;
+      }
+   }
+   const float a = std::min(h * 0.22f, width() * 0.05f), y = h * kBlackHeight + (h * (1.0f - kBlackHeight) - a) * 0.5f;
+   for (int side = 0; side < 2; ++side) {
+      if (!(side == 0 ? below : above))
+         continue;
+      const float x = side == 0 ? 3.0f : width() - 3.0f - a * 0.5f;
+      canvas.setColor(t.shadow);
+      canvas.roundedRectangle(x - 3.0f, y - 3.0f, a * 0.5f + 6.0f, a + 6.0f, 3.0f);
+      canvas.setColor(accent);
+      if (side == 0)
+         canvas.triangleLeft(x, y, a * 0.5f);
+      else
+         canvas.triangleRight(x, y, a * 0.5f);
+   }
 }
 
 void PianoKeyboard::press(int note, float velocity) {

@@ -11,6 +11,9 @@
 
 #include <vector>
 
+#include <jclap/ui/keyboard.h>
+#include <jclap/ui/note_grid.h>
+
 #include "editor.h"
 #include "params.h"
 
@@ -577,6 +580,20 @@ int main() {
       JCLAP_CHECK(run.rms() > 0.01);
       h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
       run(64);
+   }
+
+   // The panel's keyboard and grid move by octaves and stop at the ends of the MIDI range.
+   {
+      jclap::ui::PianoKeyboard keys(36, 84);
+      JCLAP_CHECK(keys.shiftOctaves(1) && keys.lowNote() == 48 && keys.highNote() == 96);
+      JCLAP_CHECK(keys.shiftOctaves(5) && keys.highNote() <= 127 && keys.highNote() - keys.lowNote() == 48);
+      JCLAP_CHECK(!keys.shiftOctaves(1));
+      jclap::ui::NoteGrid grid(16, 5, 40, 5);
+      JCLAP_CHECK(grid.highNote() == 40 + 15 + 4 * 5);
+      grid.setRowInterval(12);
+      JCLAP_CHECK(grid.highNote() == 40 + 15 + 4 * 12);
+      JCLAP_CHECK(grid.shiftOctaves(-5) && grid.lowNote() == 4);
+      JCLAP_CHECK(jclap::ui::noteName(60) == "C4" && jclap::ui::noteName(37) == "C#2" && jclap::ui::noteName(0) == "C-1");
    }
 
    return jclap::core::testResult();

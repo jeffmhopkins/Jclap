@@ -2,7 +2,9 @@
 
 // A piano keyboard. It lights the keys you tell it are held (setNoteOn, e.g. from notes the plugin
 // received) and plays notes when clicked: onNoteOn / onNoteOff fire as you press, glide across and
-// release keys. Velocity comes from how far down the key you click.
+// release keys. Velocity comes from how far down the key you click. Held notes outside the range shown
+// light an arrow at that edge, so a note the host plays off-screen is never invisible; shiftOctaves()
+// moves the range (an OctaveShift control can drive it).
 
 #include <bitset>
 #include <functional>
@@ -21,6 +23,9 @@ public:
    void setRange(int lowNote, int highNote);
    int lowNote() const { return low_; }
    int highNote() const { return high_; }
+   // Moves the range by whole octaves, keeping its size; it stops at either end of 0..127. Returns
+   // whether it moved.
+   bool shiftOctaves(int octaves);
 
    // Keys held from outside (host notes); drawn in the accent colour.
    void setNoteOn(int note, bool on);
