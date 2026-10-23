@@ -152,6 +152,7 @@ public:
    // One frame of animation, `dt` seconds after the last.
    void advance(const OrbitFrame &f, float dt) {
       if (f.resets != frame_.resets) {
+         span_ = 0.0f;
          for (auto &t : trails_)
             t.clear();
          puffs_.clear();
@@ -173,16 +174,21 @@ public:
          t.push_back({f.x[b], f.y[b]});
       }
 
-      // The camera eases out to keep every body in frame and back in when they gather.
+      // The camera frames the size of the whole system rather than where the bodies are this
+      // instant: the widest any body has been, which shrinks back only slowly (over about fifteen
+      // seconds), so close passes don't pull the view in. It zooms out quickly to catch a body flung
+      // wide, and in very gently, never faster than 5% a second.
       float extent = 0.9f;
       for (int b = 0; b < f.count; ++b)
          extent = std::max(extent, std::hypot(f.x[b], f.y[b]));
-      const float target = kStageRadius / (extent * 1.12f);
-      // Zooming out is quick, so a body flung wide is caught; zooming in is slow (about ten times
-      // slower), so the view settles back in gently.
-      constexpr float kZoomOutRate = 2.5f, kZoomInRate = 0.24f;
-      zoom_ = zoom_ <= 0.0f ? target
-                            : zoom_ + (target - zoom_) * std::min(1.0f, dt * (target < zoom_ ? kZoomOutRate : kZoomInRate));
+      span_ = extent > span_ ? extent : span_ + (extent - span_) * std::min(1.0f, dt / 15.0f);
+      const float target = kStageRadius / (span_ * 1.12f);
+      if (zoom_ <= 0.0f)
+         zoom_ = target;
+      else if (target < zoom_)
+         zoom_ += (target - zoom_) * std::min(1.0f, dt * 2.5f);
+      else
+         zoom_ = std::min(target, zoom_ * std::exp(std::min(0.05f, 0.25f * std::log(target / zoom_)) * dt));
 
       for (int band = 0; band < 3; ++band) {
          if (f.hits[band] != seenHits_[band]) {
@@ -599,7 +605,7 @@ private:
    uint32_t seenHits_[3] = {};
    float flare_[3] = {};
    float spawnCarry_[3] = {};
-   float zoom_ = 0.0f;
+   float zoom_ = 0.0f, span_ = 0.0f;
    float time_ = 0.0f;
    int hover_ = -1, dragBody_ = -1;
    bool dragArrow_ = false;
