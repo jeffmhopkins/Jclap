@@ -43,5 +43,14 @@ int main() {
    JCLAP_CHECK_EQ(h.paramValue(kGain), 3.0);
    JCLAP_CHECK(h.paramText(kPan, -0.5) == "50L");
 
+   // Every param's text reads back as the same value, as hosts (and clap-validator) check.
+   for (clap_id id = 0; id < kParamCount; ++id) {
+      for (double v : {kParams[id].min, kParams[id].defaultValue, kParams[id].max}) {
+         double back = -999;
+         JCLAP_CHECK(h.textToValue(id, h.paramText(id, v).c_str(), back));
+         JCLAP_CHECK(h.paramText(id, back) == h.paramText(id, v));
+      }
+   }
+
    return jclap::core::testResult();
 }

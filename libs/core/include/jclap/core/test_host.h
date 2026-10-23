@@ -156,6 +156,10 @@ public:
       return text;
    }
 
+   bool textToValue(clap_id id, const char *text, double &value) const {
+      return params_->text_to_value(plugin_, id, text, &value);
+   }
+
    // Runs one block. Audio buffers, if given, are stereo and `frames` long; output may alias input.
    TestOutput process(uint32_t frames = 256, float *const *audioIn = nullptr, float **audioOut = nullptr) {
       TestEventList out;

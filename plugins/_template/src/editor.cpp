@@ -38,11 +38,13 @@ public:
       auto &gain = add<ui::Knob>({20, 50, 110, 110}, rangeOf(kGain, 0.5));
       gain.setLabel("GAIN");
       gain.valueText = [](double v) { return text(kGain, v); };
+      gain.parseText = [](const std::string &t, double &v) { return parseParam(kGain, t.c_str(), v); };
       bindings_.bind(gain, kGain);
 
       auto &pan = add<ui::Slider>({150, 60, 140, 44}, ui::Slider::Orientation::Horizontal, rangeOf(kPan, 0.01, true));
       pan.setLabel("PAN");
       pan.valueText = [](double v) { return text(kPan, v); };
+      pan.parseText = [](const std::string &t, double &v) { return parseParam(kPan, t.c_str(), v); };
       bindings_.bind(pan, kPan);
 
       bindings_.bind(add<ui::Button>({150, 130, 140, 32}, "MUTE"), kMute);

@@ -92,6 +92,10 @@ public:
       return true;
    }
 
+   bool paramsTextToValue(clap_id id, const char *text, double *value) const override {
+      return id < kParamCount && parseParam(id, text, *value);
+   }
+
    void paramsFlush(const clap_input_events_t *in, const clap_output_events_t *out) override {
       applyParamEvents(in);
       edits_.drain(out);
