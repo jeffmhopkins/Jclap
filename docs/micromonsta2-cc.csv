@@ -1,0 +1,67 @@
+cc,parameter,section,manual_name,in_plugin
+5,Glide,Voice,VOICE GLIDE,yes
+33,Voice Detune,Voice,VOICE DETUNE,yes
+35,Pan Spread,Voice,PAN SPREAD,yes
+91,Drive,Voice,VOICE DRIVE,yes
+34,Osc Detune,Oscillators,OSC DETUNE,yes
+39,Osc1 Shape,Oscillators,OSC1 SHAPE,yes
+40,Osc1 Tune,Oscillators,OSC1 TUNE,yes
+41,Osc1 Fine Tune,Oscillators,OSC1 FINE TUNE,yes
+42,Osc2 Shape,Oscillators,OSC2 SHAPE,yes
+43,Osc2 Tune,Oscillators,OSC2 TUNE,yes
+44,Osc2 Fine Tune,Oscillators,OSC2 FINE TUNE,yes
+45,Osc3 Shape,Oscillators,OSC3 SHAPE,yes
+46,Osc3 Tune,Oscillators,OSC3 TUNE,yes
+47,Osc3 Fine Tune,Oscillators,OSC3 FINE TUNE,yes
+48,Osc1 Level,Mix,OSC1 LEVEL,yes
+49,Osc2 Level,Mix,OSC2 LEVEL,yes
+50,Osc3 Level,Mix,OSC3 LEVEL,yes
+51,Noise Level,Mix,NOISE LEVEL,yes
+74,Cutoff,Filter,FILTER CUTOFF,yes
+71,Resonance,Filter,FILTER RESONANCE,yes
+88,Env Amount,Filter,FILTER ENVELOPE,yes
+89,Tracking,Filter,FILTER TRACKING,yes
+90,FM,Filter,FILTER FM,yes
+73,Env1 Attack,Envelopes,ENV1 ATTACK,yes
+75,Env1 Decay,Envelopes,ENV1 DECAY,yes
+79,Env1 Sustain,Envelopes,ENV1 SUSTAIN,yes
+72,Env1 Release,Envelopes,ENV1 RELEASE,yes
+80,Env2 Attack,Envelopes,ENV2 ATTACK,yes
+81,Env2 Decay,Envelopes,ENV2 DECAY,yes
+82,Env2 Sustain,Envelopes,ENV2 SUSTAIN,yes
+83,Env2 Release,Envelopes,ENV2 RELEASE,yes
+84,Env3 Attack,Envelopes,ENV3 ATTACK,yes
+85,Env3 Decay,Envelopes,ENV3 DECAY,yes
+86,Env3 Sustain,Envelopes,ENV3 SUSTAIN,yes
+87,Env3 Release,Envelopes,ENV3 RELEASE,yes
+36,VCA Env Velocity Sens,Envelopes,VCA ENV VELO SENS,yes
+37,Filter Env Velocity Sens,Envelopes,FLT ENV VELO SENS,yes
+76,LFO1 Speed,LFO,LFO1 SPEED,yes
+77,LFO2 Speed,LFO,LFO2 SPEED,yes
+78,LFO3 Speed,LFO,LFO3 SPEED,yes
+52,Mod Matrix Level 1,Mod Matrix,MOD MTX LEVEL 1,yes
+53,Mod Matrix Level 2,Mod Matrix,MOD MTX LEVEL 2,yes
+54,Mod Matrix Level 3,Mod Matrix,MOD MTX LEVEL 3,yes
+55,Mod Matrix Level 4,Mod Matrix,MOD MTX LEVEL 4,yes
+56,Mod Matrix Level 5,Mod Matrix,MOD MTX LEVEL 5,yes
+57,Mod Matrix Level 6,Mod Matrix,MOD MTX LEVEL 6,yes
+58,Mod Matrix Level 7,Mod Matrix,MOD MTX LEVEL 7,yes
+59,Mod Matrix Level 8,Mod Matrix,MOD MTX LEVEL 8,yes
+60,Mod Matrix Level 9,Mod Matrix,MOD MTX LEVEL 9,yes
+61,Mod Matrix Level 10,Mod Matrix,MOD MTX LEVEL 10,yes
+62,Lag Level 1,Mod Matrix,LAG LEVEL 1,yes
+70,Mod Knob,Performance,MOD KNOB,yes
+1,Mod Wheel,Performance,MOD. WHEEL,yes
+7,Volume (not saved),Performance,Volume (Not saved),yes
+26,Delay Time,Effects,DELAY TIME,yes
+27,Delay Feedback,Effects,DELAY FEEDBACK,yes
+28,Delay Level,Effects,DELAY LEVEL,yes
+29,Reverb Decay,Effects,REVERB DECAY,yes
+30,Reverb Mod,Effects,REVERB MOD,yes
+31,Reverb Level,Effects,REVERB LEVEL,yes
+25,EQ,Effects,EQ,yes
+0,Bank Select MSB,System,BANK SELECT MSB,no
+32,Bank Select LSB,System,BANK SELECT LSB,no
+64,Sustain Pedal,System,SUSTAIN PEDAL,no
+120,All Sound Off,System,ALL SOUND OFF,no
+123,All Notes Off,System,ALL NOTES OFF,no
