@@ -67,6 +67,13 @@ public:
    void noteOn(int, float) override {}
    void noteExpression(int, float, float, float) override {}
    void noteOff(int) override {}
+   // The chord's four voices, at different points of each envelope.
+   void envelopes(int index, std::vector<EnvState> &out) const override {
+      if (index == 0)
+         out = {{0, 0.5f, 1.0f}, {1, 0.75f, 1.0f}, {2, 0.45f, 1.0f}, {3, 0.2f, 0.45f}};
+      else
+         out = {{0, 0.3f, 1.0f}, {1, 0.6f, 1.0f}, {1, 0.4f, 1.0f}, {3, 0.1f, 0.3f}};
+   }
    bool lfo(float &value) const override {
       value = 0.6f;
       return true;

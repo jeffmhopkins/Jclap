@@ -30,8 +30,15 @@ public:
       float bend, pressure, timbre;
    };
    virtual void voices(std::vector<Voice> &out) const = 0;
-   // The newest held voice's LFO, -1..1, for the LFO light. False when no note is held.
+   // The newest note's LFO, -1..1, for the LFO light. False when no note sounds.
    virtual bool lfo(float &value) const = 0;
+   // Where envelope `index` (0 or 1) is in every sounding voice: stage 0..3 for attack, decay,
+   // sustain, release, the level 0..1, and the level its release started from.
+   struct EnvState {
+      int stage;
+      float level, releaseFrom;
+   };
+   virtual void envelopes(int index, std::vector<EnvState> &out) const = 0;
 };
 
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);

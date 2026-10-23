@@ -79,6 +79,14 @@ public:
       // Bright at the top of the LFO's swing, dark at the bottom, off with no note held.
       float lfo = 0.0f;
       lfoLight_->setLevel(host_.lfo(lfo) ? 0.5f + 0.5f * lfo : 0.0f);
+      // A glowing dot on each envelope for every sounding voice.
+      for (int i = 0; i < 2; ++i) {
+         host_.envelopes(i, envStates_);
+         std::vector<ui::EnvelopeEditor::Playhead> heads;
+         for (const EditorHost::EnvState &e : envStates_)
+            heads.push_back({static_cast<ui::EnvelopeEditor::Stage>(e.stage), e.level, e.releaseFrom});
+         envelopes_[i]->setPlayheads(std::move(heads));
+      }
       host_.readScope(scopeSamples_.data(), scopeSamples_.size());
       scope_->setSamples(scopeSamples_);
    }
@@ -153,9 +161,9 @@ private:
    void envelope(int index, unsigned accent, float x) {
       const auto id = [index](ParamId env1Param) { return envParam(index, env1Param); };
       add<ui::Section>({x, 276, 346, 210}, index == 0 ? "ENV 1" : "ENV 2");
-      auto &env = add<ui::EnvelopeEditor>({x + 12, 302, 322, 96}, rangeOf(id(kEnv1Attack), 1.0),
+      auto &env = *(envelopes_[index] = &add<ui::EnvelopeEditor>({x + 12, 302, 322, 96}, rangeOf(id(kEnv1Attack), 1.0),
                                          rangeOf(id(kEnv1Decay), 1.0), rangeOf(id(kEnv1Sustain), 0.01),
-                                         rangeOf(id(kEnv1Release), 1.0));
+                                         rangeOf(id(kEnv1Release), 1.0)));
       env.setAccent(accent);
       for (int stage = 0; stage < ui::EnvelopeEditor::kStageCount; ++stage) {
          const clap_id p = id(kEnv1Attack) + stage;
@@ -232,6 +240,8 @@ private:
    ui::NoteGrid *grid_ = nullptr;
    ui::Scope *scope_ = nullptr;
    ui::ActivityLed *lfoLight_ = nullptr;
+   ui::EnvelopeEditor *envelopes_[2] = {};
+   std::vector<EditorHost::EnvState> envStates_;
    std::vector<EditorHost::Voice> voices_;
    std::vector<float> scopeSamples_ = std::vector<float>(kScopeSamples);
 };

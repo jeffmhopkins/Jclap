@@ -162,6 +162,10 @@ public:
    bool isReleasing() const { return released_; }
    // The VCA's level, for picking the quietest voice to steal.
    float level() const { return level_; }
+   // Where envelope `i` is, for the panel.
+   jclap::dsp::Envelope::Stage envStage(int i) const { return env_[i].stage(); }
+   float envLevel(int i) const { return env_[i].level(); }
+   float envReleaseFrom(int i) const { return env_[i].releaseFrom(); }
    // The LFO's latest output, -1..1.
    double lfoValue() const { return lfoValue_; }
 

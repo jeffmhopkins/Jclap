@@ -30,6 +30,7 @@ oscillator ──> filter ──> VCA ──> out
   held) and three amounts: to the filter (±5 octaves), to the VCA (0 to 100%) and to the pitch (±24
   semitones). They start as Env 1 on the VCA and Env 2 on the filter. Whatever share of the VCA the
   envelopes don't take follows the key, so with both VCA amounts at 0 it is a plain organ-style gate.
+  A glowing dot rides each envelope's curve for every sounding voice, so you can watch all eight.
 - **LFO**: sine, triangle, saw, square or random, 0.05 to 20 Hz, restarted with each note. It moves the
   cutoff (±4 octaves) and the VCA (tremolo). The light next to it shows the newest note's LFO.
 - **Voices**: eight. A ninth note takes the quietest releasing voice, or else the oldest.

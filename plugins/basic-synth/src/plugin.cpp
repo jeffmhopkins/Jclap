@@ -171,6 +171,16 @@ public:
       value = lfoValue_.load();
       return true;
    }
+   void envelopes(int index, std::vector<EnvState> &out) const override {
+      out.clear();
+      if (index < 0 || index >= kEnvCount)
+         return;
+      for (const Shown &s : shown_) {
+         const int stage = s.envStage[index].load();
+         if (stage >= 0)
+            out.push_back({stage, s.envLevel[index].load(), s.envFrom[index].load()});
+      }
+   }
 
    // ---- params ----
 
@@ -553,16 +563,23 @@ private:
 
    // Copies the held notes where the panel can read them.
    void publishVoices() {
+      // The LFO light follows the newest sounding note.
       const Slot *newest = nullptr;
       for (int i = 0; i < kVoiceCount; ++i) {
          const Slot &s = slots_[i];
          const bool held = s.voice.isActive() && !s.voice.isReleasing();
-         if (held && (!newest || s.started > newest->started))
+         if (s.voice.isActive() && (!newest || s.started > newest->started))
             newest = &s;
          shown_[i].note.store(held ? s.key : -1);
          shown_[i].bend.store(static_cast<float>(pitchOf(s) - s.key - std::round(value(kTune, &s))));
          shown_[i].pressure.store(static_cast<float>(pressureOf(s)));
          shown_[i].timbre.store(static_cast<float>(timbreOf(s)));
+         for (int e = 0; e < kEnvCount; ++e) {
+            // Idle (or a silent voice) maps to -1; attack, decay, sustain, release to 0..3.
+            shown_[i].envStage[e].store(s.voice.isActive() ? static_cast<int>(s.voice.envStage(e)) - 1 : -1);
+            shown_[i].envLevel[e].store(s.voice.envLevel(e));
+            shown_[i].envFrom[e].store(s.voice.envReleaseFrom(e));
+         }
       }
       lfoShown_.store(newest != nullptr);
       if (newest)
@@ -585,6 +602,8 @@ private:
    struct Shown {
       std::atomic<int> note{-1};
       std::atomic<float> bend{0.0f}, pressure{0.0f}, timbre{0.5f};
+      std::atomic<int> envStage[kEnvCount] = {-1, -1};
+      std::atomic<float> envLevel[kEnvCount] = {}, envFrom[kEnvCount] = {};
    };
    Shown shown_[kVoiceCount];
    std::atomic<bool> lfoShown_{false};

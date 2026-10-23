@@ -44,8 +44,10 @@ public:
 
    void gateOn() { stage_ = Stage::Attack; }
    void gateOff() {
-      if (stage_ != Stage::Idle)
+      if (stage_ != Stage::Idle) {
          stage_ = Stage::Release;
+         releaseFrom_ = level_;
+      }
    }
    // Straight to silence.
    void reset() {
@@ -91,6 +93,8 @@ public:
    Stage stage() const { return stage_; }
    bool isActive() const { return stage_ != Stage::Idle; }
    bool isReleasing() const { return stage_ == Stage::Release; }
+   // The level the release started from, for drawing how far along it is.
+   float releaseFrom() const { return static_cast<float>(releaseFrom_); }
 
 private:
    // How far past the target each curve aims, as a fraction of a full sweep. Aiming past it is
@@ -117,7 +121,7 @@ private:
    bool loop_ = false;
    Curve attack_, decay_, release_;
    Stage stage_ = Stage::Idle;
-   double level_ = 0.0;
+   double level_ = 0.0, releaseFrom_ = 0.0;
 };
 
 } // namespace jclap::dsp

@@ -313,6 +313,34 @@ int main() {
    JCLAP_CHECK(h.paramText(kEnv1Loop, 1.0) == "On");
    JCLAP_CHECK(h.paramText(kEnv2ToPitch, -7.0) == "-7.0 st");
 
+   // The panel sees every sounding voice's envelopes: two notes, two playheads each, and a
+   // released note's release start.
+   {
+      h.setParam(kEnv1Attack, 1.0);
+      h.setParam(kEnv1Release, 500.0);
+      h.setParam(kEnv1Sustain, 1.0);
+      h.note(CLAP_EVENT_NOTE_ON, 60, 1.0);
+      h.note(CLAP_EVENT_NOTE_ON, 64, 1.0);
+      run(4800);
+      std::vector<EditorHost::EnvState> states;
+      panel.envelopes(0, states);
+      JCLAP_CHECK_EQ(states.size(), 2u);
+      panel.envelopes(1, states);
+      JCLAP_CHECK_EQ(states.size(), 2u);
+      h.note(CLAP_EVENT_NOTE_OFF, 64, 0.0);
+      run(480);
+      panel.envelopes(0, states);
+      int releasing = 0;
+      for (const auto &e : states)
+         releasing += e.stage == 3 && e.releaseFrom > e.level && e.level > 0.0f;
+      JCLAP_CHECK_EQ(releasing, 1);
+      h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+      run(64);
+      panel.envelopes(0, states);
+      JCLAP_CHECK(states.empty());
+      h.setParam(kEnv1Release, 50.0);
+   }
+
    // The LFO: a slow square at full tremolo depth turns the note on and off, and the panel sees it.
    h.setParam(kEnv1ToVca, 1.0);
    h.setParam(kEnv1Sustain, 1.0);
