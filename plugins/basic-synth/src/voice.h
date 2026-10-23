@@ -25,9 +25,9 @@ constexpr int kEnvCount = 2;
 struct VoiceSettings {
    jclap::dsp::Oscillator::Wave wave = jclap::dsp::Oscillator::Wave::Saw;
    double pulseWidth = 0.5;
-   // A second oscillator, the same wave, the pair detuned apart by this many cents.
+   // A second oscillator, the same wave, this many semitones from the first.
    bool dual = false;
-   double detuneCents = 12.0;
+   double detune = 0.1;
    jclap::dsp::Filter::Mode filterMode = jclap::dsp::Filter::Mode::LowPass;
    jclap::dsp::Filter::Slope slope = jclap::dsp::Filter::Slope::Db24;
    double cutoffHz = 2000.0, resonance = 0.3;
@@ -74,7 +74,7 @@ public:
          o->setPulseWidth(s.pulseWidth);
       }
       dual_ = s.dual;
-      detune_ = s.detuneCents / 100.0;
+      detune_ = s.detune;
       filter_.setMode(s.filterMode);
       filter_.setSlope(s.slope);
       filter_.setResonance(s.resonance);
@@ -158,10 +158,11 @@ public:
       const double pitch = pitch_.process() + toPitch;
       double source;
       if (dual_) {
-         // Detuned either side of the note, so the pair stays centred on it. Their sum is scaled
-         // by 1/sqrt(2): about the same loudness as one, as the two drift in and out of phase.
-         osc_.setFrequency(jclap::dsp::noteToHz(pitch - 0.5 * detune_));
-         osc2_.setFrequency(jclap::dsp::noteToHz(pitch + 0.5 * detune_));
+         // The first stays on the note and the second is detuned from it, by a few cents for
+         // beating up to an octave. Their sum is scaled by 1/sqrt(2): about the same loudness as
+         // one, as the two drift in and out of phase.
+         osc_.setFrequency(jclap::dsp::noteToHz(pitch));
+         osc2_.setFrequency(jclap::dsp::noteToHz(pitch + detune_));
          source = (osc_.process() + osc2_.process()) * 0.7071067811865476;
       } else {
          osc_.setFrequency(jclap::dsp::noteToHz(pitch));

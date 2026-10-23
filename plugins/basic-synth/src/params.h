@@ -5,6 +5,7 @@
 
 #include <jclap/core/helpers.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -79,13 +80,17 @@ constexpr double kLfoLow = 0.05;
 constexpr double kLfoSpan = 400.0;
 inline double lfoHz(double value) { return kLfoLow * std::pow(kLfoSpan, value); }
 inline double lfoValue(double hz) { return std::log(hz / kLfoLow) / std::log(kLfoSpan); }
+// Detune runs -1..1, cubed and scaled to an octave: fine around the centre for beating (0.2 is
+// about 10 cents), and a whole octave either way at the ends.
+inline double detuneSemitones(double value) { return 12.0 * value * value * value; }
+inline double detuneValue(double semitones) { return std::clamp(std::cbrt(semitones / 12.0), -1.0, 1.0); }
 
 inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kWave, "Wave", "Oscillator", 0.0, 4.0, 2.0, kChoice},
    {kPulseWidth, "Pulse Width", "Oscillator", 0.05, 0.95, 0.5, kMod},
    {kTune, "Tune", "Oscillator", -24.0, 24.0, 0.0, kStepped},
    {kDual, "Dual", "Oscillator", 0.0, 1.0, 0.0, kChoice},
-   {kDetune, "Detune", "Oscillator", 0.0, 100.0, 12.0, kMod},
+   {kDetune, "Detune", "Oscillator", -1.0, 1.0, 0.2, kMod},
    {kFilterMode, "Filter Mode", "Filter", 0.0, 2.0, 0.0, kChoice},
    {kSlope, "Slope", "Filter", 0.0, 3.0, 1.0, kChoice},
    {kCutoff, "Cutoff", "Filter", 0.0, 1.0, 2.0 / 3.0, kMod},
@@ -197,9 +202,15 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kEnv2ToPitch:
       std::snprintf(out, size, "%+.1f st", value);
       break;
-   case kDetune:
-      std::snprintf(out, size, "%.0f ct", value);
+   case kDetune: {
+      // Cents under a semitone, semitones above.
+      const double st = detuneSemitones(value);
+      if (std::fabs(st) < 0.995)
+         std::snprintf(out, size, "%+.0f ct", st * 100.0);
+      else
+         std::snprintf(out, size, "%+.2f st", st);
       break;
+   }
    case kEnv1Attack:
    case kEnv1Decay:
    case kEnv1Release:
@@ -252,6 +263,10 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
       break;
    case kLfoRate:
       value = lfoValue(std::fmax(1e-6, v));
+      break;
+   case kDetune:
+      // Cents with a c, otherwise semitones.
+      value = detuneValue(*end == 'c' || *end == 'C' ? v / 100.0 : v);
       break;
    default:
       value = v;

@@ -47,6 +47,17 @@ struct Run {
       return left.empty() ? 0.0 : std::sqrt(sum / left.size());
    }
 
+   // The amplitude of one frequency, by correlating with a sine and cosine at it.
+   double magnitude(double hz) const {
+      double re = 0.0, im = 0.0;
+      for (size_t i = 0; i < left.size(); ++i) {
+         const double phase = 2.0 * 3.141592653589793 * hz * i / 48000.0;
+         re += left[i] * std::cos(phase);
+         im += left[i] * std::sin(phase);
+      }
+      return left.empty() ? 0.0 : 2.0 * std::sqrt(re * re + im * im) / left.size();
+   }
+
    // Frequency from rising zero crossings, for a sine.
    double frequency() const {
       int first = -1, last = -1, count = 0;
@@ -370,7 +381,8 @@ int main() {
       h.setParam(kEnv1Release, 50.0);
    }
 
-   // Dual: a second oscillator detuned either side, so the pitch stays centred and the sound changes.
+   // Dual: a second oscillator detuned from the first. A few cents changes the sound but not the
+   // pitch; at the top of the knob the second is an octave up.
    {
       h.note(CLAP_EVENT_NOTE_ON, 57, 1.0);
       run(4800);
@@ -379,17 +391,33 @@ int main() {
       h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
       run(64);
       h.setParam(kDual, 1.0);
-      h.setParam(kDetune, 10.0);
+      h.setParam(kDetune, detuneValue(0.1));
       h.note(CLAP_EVENT_NOTE_ON, 57, 1.0);
       run(4800);
       run(48000);
-      JCLAP_CHECK(near(run.frequency(), 220.0, 1.0));
+      JCLAP_CHECK(near(run.frequency(), 220.0, 1.5));
       JCLAP_CHECK(run.rms() > 0.03);
       JCLAP_CHECK(std::vector<float>(run.left.begin(), run.left.begin() + 4800) != single);
       h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
       run(64);
+      h.setParam(kDetune, 1.0);
+      h.setParam(kWave, 0.0); // sine
+      h.note(CLAP_EVENT_NOTE_ON, 57, 1.0);
+      run(4800);
+      run(48000);
+      // Two sines, at the note and an octave up, about equally loud.
+      const double at220 = run.magnitude(220.0), at440 = run.magnitude(440.0);
+      JCLAP_CHECK(at220 > 0.01 && near(at440 / at220, 1.0, 0.2));
+      h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+      run(64);
+      h.setParam(kWave, kParams[kWave].defaultValue);
       h.setParam(kDual, 0.0);
-      JCLAP_CHECK(h.paramText(kDetune, 12.0) == "12 ct");
+      JCLAP_CHECK(near(detuneSemitones(1.0), 12.0, 1e-9) && near(detuneSemitones(-1.0), -12.0, 1e-9));
+      JCLAP_CHECK(h.paramText(kDetune, detuneValue(0.1)) == "+10 ct");
+      JCLAP_CHECK(h.paramText(kDetune, -1.0) == "-12.00 st");
+      double d = 0.0;
+      JCLAP_CHECK(h.textToValue(kDetune, "-7 ct", d) && near(detuneSemitones(d), -0.07, 1e-9));
+      JCLAP_CHECK(h.textToValue(kDetune, "7", d) && near(detuneSemitones(d), 7.0, 1e-9));
    }
 
    // The LFO: a slow square at full tremolo depth turns the note on and off, and the panel sees it.

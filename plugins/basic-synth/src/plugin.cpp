@@ -368,7 +368,7 @@ private:
       vs.wave = static_cast<jclap::dsp::Oscillator::Wave>(choice(kWave, slot));
       vs.pulseWidth = value(kPulseWidth, s);
       vs.dual = value(kDual, s) >= 0.5;
-      vs.detuneCents = value(kDetune, s);
+      vs.detune = detuneSemitones(value(kDetune, s));
       vs.filterMode = static_cast<jclap::dsp::Filter::Mode>(choice(kFilterMode, slot));
       vs.slope = static_cast<jclap::dsp::Filter::Slope>(choice(kSlope, slot) + 1);
       vs.cutoffHz = cutoffHz(value(kCutoff, s));

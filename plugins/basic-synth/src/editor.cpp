@@ -142,12 +142,13 @@ private:
       auto &dual = add<ui::Button>({172, 74, 60, 22}, "DUAL");
       dual.setAccent(kOrange);
       bindings_.bind(dual, kDual);
-      tips_.add(dual, "Two oscillators, detuned apart by DETUNE.");
+      tips_.add(dual, "A second oscillator, detuned from the first by DETUNE.");
       segments(kWave, "WAVE", {"SIN", "TRI", "SAW", "SQR", "PULSE"}, kOrange, {24, 116, 208, 26});
       const auto cells = ui::row({24, 152, 208, 104}, 3);
       tips_.add(knob(kPulseWidth, "WIDTH", kOrange, cells[0]), "Pulse width, for the PULSE wave.");
       knob(kTune, "TUNE", kOrange, cells[1], true);
-      tips_.add(knob(kDetune, "DETUNE", kOrange, cells[2]), "How far apart the two oscillators are, with DUAL on.");
+      tips_.add(knob(kDetune, "DETUNE", kOrange, cells[2], true),
+                "The second oscillator's pitch, with DUAL on: cents near the middle, an octave at the ends.");
    }
 
    void buildFilter() {
