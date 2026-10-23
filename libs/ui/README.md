@@ -1,7 +1,15 @@
+<div align="center">
+
 # jclap::ui
 
-Shared GUI pieces for JClap plugins, drawn with [Visage](https://github.com/VitalAudio/visage) (pinned
-to a commit in `CMakeLists.txt`). Link it from a plugin's `CMakeLists.txt`:
+Shared GUI widgets, layout and CLAP glue for JClap plugins.
+
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![CLAP: gui | context-menu](https://img.shields.io/badge/CLAP-gui%20%7C%20context--menu-blue)](https://github.com/free-audio/clap) [![screenshots: tested](https://img.shields.io/badge/screenshots-tested-brightgreen)](docs/gallery.png)
+
+</div>
+
+Drawn with [Visage](https://github.com/VitalAudio/visage), pinned to a commit in `CMakeLists.txt`.
+Link it from a plugin's `CMakeLists.txt`:
 
 ```cmake
 target_link_libraries(<name> PRIVATE jclap::ui)
@@ -51,8 +59,9 @@ public:
 };
 ```
 
-Right-clicking the panel background offers UI sizes from 75% to 200% (as long as the panel is the
-window's root).
+> [!TIP]
+> Right-clicking the panel background offers UI sizes from 75% to 200%, as long as the panel is the
+> window's root.
 
 ## Params
 
@@ -67,8 +76,10 @@ in, and the right-click menu gets the host's items through CLAP's context-menu e
 ## Window and CLAP glue
 
 `jclap/ui/window.h` wraps a Visage window around one root frame and handles host sizing and zoom.
-It doesn't include Visage, so the plugin's main file doesn't have to either. Visage picks up the
-monitor's DPI itself, so HiDPI screens work without the host's `set_scale`.
+It doesn't include Visage, so the plugin's main file doesn't have to either. 
+
+> [!NOTE]
+> Visage picks up the monitor's DPI itself, so HiDPI screens work without the host's `set_scale`.
 
 `jclap/ui/clap_gui.h` implements the CLAP `gui` and `posix-fd-support` extensions for that window.
 With a `jclap::core::Plugin` subclass:
@@ -79,11 +90,17 @@ With a `jclap::core::Plugin` subclass:
 // extension(): return jclap::ui::ClapGui::extensionFor<MyPlugin, &MyPlugin::gui_>(id);
 ```
 
+> [!IMPORTANT]
+> Declare `gui_` as the plugin's last member, so the window closes before anything it reads is
+> destroyed.
+
 `createEditor` returns `std::make_unique<jclap::ui::Window>(std::move(panel), WindowOptions{w, h})`.
 `plugins/_template` is a small complete example; `plugins/micromonsta2/src/editor.cpp` a big one.
 
 ## Gallery
 
-`docs/gallery.png` is rendered by `jclap-ui-gallery` (configure with `-DJCLAP_BUILD_TOOLS=ON`), and
-`ctest` checks the render against it. `jclap::ui::renderToPng()` does the same offscreen render for
+`docs/gallery.png` is rendered by `jclap-ui-gallery` (configure with `-DJCLAP_BUILD_TOOLS=ON`).
+
+> [!NOTE]
+> With tools on, `ctest` checks the render against `docs/gallery.png`, and CI does it on Linux. `jclap::ui::renderToPng()` does the same offscreen render for
 any frame.

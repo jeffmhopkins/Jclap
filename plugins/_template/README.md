@@ -1,4 +1,12 @@
+<div align="center">
+
 # Plugin Template
+
+The starting point for a new JClap plugin, with params, state, a panel and tests.
+
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.2](https://img.shields.io/badge/CLAP-1.2.2-blue)](https://github.com/free-audio/clap) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![shipped: no](https://img.shields.io/badge/shipped-no-lightgrey)](#plugin-template)
+
+</div>
 
 The starting point for a new JClap plugin: a stereo gain/pan utility with a knob, a slider, a
 toggle and a level meter, built on [jclap::core](../../libs/core) and [jclap::ui](../../libs/ui).
@@ -15,9 +23,13 @@ cmake -DNAME=my-plugin -DFILE_NAME=MyPlugin "-DDISPLAY_NAME=My Plugin" -P cmake/
 
 That copies this folder to `plugins/my-plugin`, renames everything (target, plugin id
 `com.jeffmhopkins.jclap.my-plugin`, class, namespace, display name) and adds it to the top-level
-`CMakeLists.txt`. Then:
+`CMakeLists.txt`.
 
-- Change `kStateMagic` in `src/plugin.cpp` so saved states can't be confused with another plugin's.
+> [!IMPORTANT]
+> Change `kStateMagic` in `src/plugin.cpp` so saved states can't be confused with another plugin's.
+
+Then:
+
 - Replace the params in `src/params.h`, the DSP in `process()`, and the panel in `src/editor.cpp`.
 - No GUI? Drop `editor.*`, the `gui_` member and the `jclap::ui` link, and link `jclap::core` instead.
 - Add a row to the plugin table in the top-level README.

@@ -49,7 +49,12 @@ foreach(f IN LISTS files)
    file(WRITE "${dst}/${f}" "${text}")
 endforeach()
 
-file(WRITE "${dst}/README.md" "# ${DISPLAY_NAME}\n\nWhat it does, how to use it, and its parameters.\n")
+set(ci "https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml")
+file(WRITE "${dst}/README.md"
+   "<div align=\"center\">\n\n# ${DISPLAY_NAME}\n\nOne line on what it does.\n\n"
+   "[![CI](${ci}/badge.svg)](${ci}) "
+   "[![CLAP: 1.2.2](https://img.shields.io/badge/CLAP-1.2.2-blue)](https://github.com/free-audio/clap)\n\n"
+   "</div>\n\nHow to use it, and its parameters.\n")
 
 # Register it next to the other plugins.
 file(READ "${root}/CMakeLists.txt" top)

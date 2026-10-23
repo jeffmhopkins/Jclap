@@ -1,4 +1,12 @@
+<div align="center">
+
 # Polar XY
+
+Turns an XY controller's two CCs into angle and radius CCs for Omnisphere's Orb.
+
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: note effect](https://img.shields.io/badge/CLAP-note%20effect-blue)](https://github.com/free-audio/clap) [![GUI: none](https://img.shields.io/badge/GUI-none-lightgrey)](#settings-host-parameters-no-gui) [![host: Bitwig](https://img.shields.io/badge/host-Bitwig-blue)](#using-it-in-bitwig)
+
+</div>
 
 A tiny CLAP note effect with no GUI. It listens for two MIDI CCs carrying an X/Y position
 (Cartesian) and sends out two CCs carrying the same position as an angle and a radius (polar), ready to
@@ -11,8 +19,11 @@ MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note 
    CC 18 (angle) and CC 19 (radius) on the same MIDI channel. Everything else passes through untouched.
 3. In Omnisphere, right-click the Orb, choose **MIDI CC Learn**, and move the controller so it learns
    the angle (CC 18). Right-click again, choose **Switch to Radius**, MIDI CC Learn again and it learns
-   the radius (CC 19). Tip: while learning, wiggle only along one axis near the edge so the CC you want
-   is the one that changes most.
+   the radius (CC 19).
+
+> [!TIP]
+> While learning, wiggle only along one axis near the edge so the CC you want is the one that changes
+> most.
 
 ## Mapping
 
@@ -25,9 +36,10 @@ MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note 
 - At dead center the angle is undefined, so the plugin holds the last angle and only sends radius 0.
 - Output CCs are only sent when their value changes.
 
-Spectrasonics doesn't document where the Orb's angle 0 sits or which way it turns, so these are
-exposed as settings. If the Orb dot lands rotated or mirrored from your controller, adjust
-`Angle Offset` (degrees) and `Direction`.
+> [!IMPORTANT]
+> Spectrasonics doesn't document where the Orb's angle 0 sits or which way it turns, so these are
+> exposed as settings. If the Orb dot lands rotated or mirrored from your controller, adjust
+> `Angle Offset` (degrees) and `Direction`.
 
 ## Settings (host parameters, no GUI)
 
