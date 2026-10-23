@@ -178,7 +178,11 @@ public:
       for (int b = 0; b < f.count; ++b)
          extent = std::max(extent, std::hypot(f.x[b], f.y[b]));
       const float target = kStageRadius / (extent * 1.12f);
-      zoom_ = zoom_ <= 0.0f ? target : zoom_ + (target - zoom_) * std::min(1.0f, dt * (target < zoom_ ? 2.5f : 0.6f));
+      // Zooming in eases 2.5 times slower than zooming out, so a body flung wide is caught quickly
+      // and the view settles back in gently.
+      constexpr float kZoomOutRate = 2.5f, kZoomInRate = kZoomOutRate / 2.5f;
+      zoom_ = zoom_ <= 0.0f ? target
+                            : zoom_ + (target - zoom_) * std::min(1.0f, dt * (target < zoom_ ? kZoomOutRate : kZoomInRate));
 
       for (int band = 0; band < 3; ++band) {
          if (f.hits[band] != seenHits_[band]) {
