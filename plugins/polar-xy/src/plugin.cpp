@@ -1,8 +1,10 @@
-// JClap Polar XY: a GUI-less CLAP note effect that turns two XY CCs into Omnisphere Orb
-// angle/radius CCs. Settings are exposed as plain parameters so the host shows them generically.
+// JClap Polar XY: a CLAP note effect that turns two XY CCs into Omnisphere Orb angle/radius CCs.
+// Settings are plain parameters; the panel in editor.cpp shows them with a live view of the Orb.
 
+#include <jclap/core/edit_queue.h>
 #include <jclap/core/entry.h>
 #include <jclap/core/helpers.h>
+#include <jclap/ui/clap_gui.h>
 
 #include <algorithm>
 #include <atomic>
@@ -10,38 +12,13 @@
 #include <cstdio>
 #include <cstring>
 
+#include "editor.h"
+#include "params.h"
 #include "polar.h"
 
 namespace {
 
-enum ParamId : clap_id {
-   kParamInX = 0,
-   kParamInY,
-   kParamOutAngle,
-   kParamOutRadius,
-   kParamAngleOffset,
-   kParamDirection,
-   kParamRadiusMode,
-   kParamPassThrough,
-   kParamCount
-};
-
-struct ParamInfo {
-   const char *name;
-   double min, max, def;
-   bool stepped;
-};
-
-const ParamInfo kParams[kParamCount] = {
-   {"X In CC", 0, 127, 16, true},
-   {"Y In CC", 0, 127, 17, true},
-   {"Angle Out CC", 0, 127, 18, true},
-   {"Radius Out CC", 0, 127, 19, true},
-   {"Angle Offset", 0, 360, 0, false},
-   {"Direction", 0, 1, 0, true},
-   {"Radius Mode", 0, 1, 0, true},
-   {"Pass Input CCs", 0, 1, 0, true},
-};
+using namespace polar_xy;
 
 struct ChannelState {
    int x = 64, y = 64;
@@ -60,16 +37,20 @@ struct StateBlob {
 
 const char *const kFeatures[] = {CLAP_PLUGIN_FEATURE_NOTE_EFFECT, CLAP_PLUGIN_FEATURE_UTILITY, nullptr};
 
-class OrbPolar final : public jclap::core::Plugin {
+class PolarXY final : public jclap::core::Plugin, public EditorHost {
 public:
    static const clap_plugin_descriptor_t descriptor;
 
-   explicit OrbPolar(const clap_host_t *host) : Plugin(&descriptor, host) {}
+   explicit PolarXY(const clap_host_t *host) : Plugin(&descriptor, host) {}
 
    bool init() override {
       for (uint32_t i = 0; i < kParamCount; ++i)
          params_[i].store(kParams[i].def);
       resetChannels();
+      edits_.init(host());
+      hostMenu_.init(host());
+      gui_.init(host());
+      gui_.createWindow = [this] { return createEditor(*this); };
       return true;
    }
 
@@ -89,7 +70,25 @@ public:
          return &paramsExtension;
       if (!std::strcmp(id, CLAP_EXT_STATE))
          return &stateExtension;
-      return nullptr;
+      return jclap::ui::ClapGui::extensionFor<PolarXY, &PolarXY::gui_>(id);
+   }
+
+   // ---- EditorHost (main thread) ----
+
+   double paramValue(clap_id id) const override { return id < kParamCount ? params_[id].load() : 0.0; }
+   void beginEdit(clap_id id) override { edits_.begin(id); }
+   void setParam(clap_id id, double value) override {
+      if (id >= kParamCount)
+         return;
+      value = std::clamp(value, kParams[id].min, kParams[id].max);
+      params_[id].store(value);
+      edits_.value(id, value);
+   }
+   void endEdit(clap_id id) override { edits_.end(id); }
+   const jclap::ui::HostMenu *hostMenu() const override { return &hostMenu_; }
+   void lastInput(int &x, int &y) const override {
+      x = lastX_.load();
+      y = lastY_.load();
    }
 
    bool notePortsInfo(uint32_t index, bool isInput, clap_note_port_info_t *info) const override {
@@ -124,60 +123,22 @@ public:
    bool paramsValueToText(clap_id id, double value, char *out, uint32_t size) const override {
       if (id >= kParamCount)
          return false;
-      const bool on = value >= 0.5;
-      switch (id) {
-      case kParamAngleOffset:
-         std::snprintf(out, size, "%.1f deg", value);
-         break;
-      case kParamDirection:
-         std::snprintf(out, size, "%s", on ? "Clockwise" : "Counter-clockwise");
-         break;
-      case kParamRadiusMode:
-         std::snprintf(out, size, "%s", on ? "Fill square" : "Clamp to circle");
-         break;
-      case kParamPassThrough:
-         std::snprintf(out, size, "%s", on ? "On" : "Off");
-         break;
-      default:
-         std::snprintf(out, size, "CC %d", static_cast<int>(value + 0.5));
-         break;
-      }
+      formatParam(id, value, out, size);
       return true;
    }
 
    bool paramsTextToValue(clap_id id, const char *text, double *value) const override {
-      if (id >= kParamCount)
-         return false;
-      // Labels produced by paramsValueToText for the on/off style parameters.
-      static const char *const kOnLabels[] = {"Clockwise", "Fill square", "On"};
-      static const char *const kOffLabels[] = {"Counter-clockwise", "Clamp to circle", "Off"};
-      for (const char *label : kOnLabels)
-         if (!std::strcmp(text, label)) {
-            *value = 1.0;
-            return true;
-         }
-      for (const char *label : kOffLabels)
-         if (!std::strcmp(text, label)) {
-            *value = 0.0;
-            return true;
-         }
-      const char *s = text;
-      if (std::strncmp(s, "CC", 2) == 0)
-         s += 2;
-      double v;
-      if (std::sscanf(s, "%lf", &v) != 1)
-         return false;
-      *value = v;
-      return true;
+      return id < kParamCount && parseParam(id, text, *value);
    }
 
-   void paramsFlush(const clap_input_events_t *in, const clap_output_events_t *) override {
+   void paramsFlush(const clap_input_events_t *in, const clap_output_events_t *out) override {
       const uint32_t n = in->size(in);
       for (uint32_t i = 0; i < n; ++i) {
          const clap_event_header_t *h = in->get(in, i);
          if (h->space_id == CLAP_CORE_EVENT_SPACE_ID && h->type == CLAP_EVENT_PARAM_VALUE)
             applyParam(reinterpret_cast<const clap_event_param_value_t *>(h));
       }
+      edits_.drain(out);
    }
 
    // ---- state ----
@@ -215,6 +176,7 @@ public:
    clap_process_status process(const clap_process_t *proc) override {
       const clap_input_events_t *in = proc->in_events;
       const clap_output_events_t *out = proc->out_events;
+      edits_.drain(out);
       const uint32_t n = in->size(in);
       for (uint32_t i = 0; i < n; ++i) {
          const clap_event_header_t *h = in->get(in, i);
@@ -271,6 +233,8 @@ private:
          st.y = value;
       else
          return false;
+      lastX_.store(st.x);
+      lastY_.store(st.y);
 
       const bool passThrough = intParam(kParamPassThrough) != 0;
       if (passThrough)
@@ -296,9 +260,15 @@ private:
 
    std::atomic<double> params_[kParamCount];
    ChannelState channels_[16];
+   // The last X/Y seen on any channel, for the panel.
+   std::atomic<int> lastX_{64}, lastY_{64};
+   jclap::core::EditQueue edits_;
+   jclap::ui::HostMenu hostMenu_;
+   // Last, so the panel closes before the state it reads goes away.
+   jclap::ui::ClapGui gui_;
 };
 
-const clap_plugin_descriptor_t OrbPolar::descriptor = {
+const clap_plugin_descriptor_t PolarXY::descriptor = {
    CLAP_VERSION_INIT,
    "com.jeffmhopkins.jclap.polar-xy",
    "Polar XY",
@@ -313,4 +283,4 @@ const clap_plugin_descriptor_t OrbPolar::descriptor = {
 
 } // namespace
 
-JCLAP_ENTRY(OrbPolar)
+JCLAP_ENTRY(PolarXY)

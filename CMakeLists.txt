@@ -29,7 +29,7 @@ add_subdirectory(libs/core)
 add_subdirectory(libs/ui)
 
 # One folder per plugin under plugins/, each with its own CMakeLists.txt.
-add_subdirectory(plugins/orb-polar)
+add_subdirectory(plugins/polar-xy)
 add_subdirectory(plugins/micromonsta2)
 
 # The starting point for new plugins (cmake/NewPlugin.cmake copies it). Built into build/template,

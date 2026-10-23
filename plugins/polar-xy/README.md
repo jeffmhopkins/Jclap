@@ -4,11 +4,11 @@
 
 Turns an XY controller's two CCs into angle and radius CCs for Omnisphere's Orb.
 
-[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: note effect](https://img.shields.io/badge/CLAP-note%20effect-blue)](https://github.com/free-audio/clap) [![GUI: none](https://img.shields.io/badge/GUI-none-lightgrey)](#settings-host-parameters-no-gui) [![host: Bitwig](https://img.shields.io/badge/host-Bitwig-blue)](#using-it-in-bitwig)
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: note effect](https://img.shields.io/badge/CLAP-note%20effect-blue)](https://github.com/free-audio/clap) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](#panel) [![host: Bitwig](https://img.shields.io/badge/host-Bitwig-blue)](#using-it-in-bitwig)
 
 </div>
 
-A tiny CLAP note effect with no GUI. It listens for two MIDI CCs carrying an X/Y position
+A small CLAP note effect. It listens for two MIDI CCs carrying an X/Y position
 (Cartesian) and sends out two CCs carrying the same position as an angle and a radius (polar), ready to
 MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note effects works.
 
@@ -41,7 +41,20 @@ MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note 
 > exposed as settings. If the Orb dot lands rotated or mirrored from your controller, adjust
 > `Angle Offset` (degrees) and `Direction`.
 
-## Settings (host parameters, no GUI)
+## Panel
+
+![Panel](docs/panel.png)
+
+**XY IN** shows the last X/Y position received and **POLAR OUT** the angle and radius sent for it,
+with angle 0 marked by the tick on the right. Comparing the two shows what `Angle Offset` and
+`Direction` do. Below them are all the settings, which are also plain host parameters.
+
+> [!TIP]
+> To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
+> `build/plugins/polar-xy/polar-xy-screenshot plugins/polar-xy/docs/panel.png`. With tools on,
+> `ctest` checks the panel still renders like that image.
+
+## Settings
 
 | Parameter | Default | |
 |---|---|---|
