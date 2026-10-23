@@ -38,6 +38,9 @@ public:
    void setSlope(Slope slope) {
       if (slope == slope_)
          return;
+      // Stages coming back in start clean, not from wherever they were left.
+      for (int i = stages(); i < static_cast<int>(slope); ++i)
+         stages_[i].ic1 = stages_[i].ic2 = 0.0;
       slope_ = slope;
       updateQ();
    }

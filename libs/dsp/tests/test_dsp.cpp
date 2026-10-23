@@ -193,7 +193,18 @@ int main() {
       for (int i = 0; i < 0.1 * kRate; ++i)
          env.process();
       JCLAP_CHECK(env.stage() == Envelope::Stage::Sustain);
-      JCLAP_CHECK_EQ(env.level(), 0.5f);
+      JCLAP_CHECK(std::fabs(env.level() - 0.5f) < 1e-4f);
+      // A sustain change glides there rather than stepping.
+      env.setSustain(0.8);
+      const float held = env.level();
+      env.process();
+      JCLAP_CHECK(env.level() > held && env.level() - held < 0.02f);
+      for (int i = 0; i < 0.05 * kRate; ++i)
+         env.process();
+      JCLAP_CHECK(std::fabs(env.level() - 0.8f) < 1e-4f);
+      env.setSustain(0.5);
+      for (int i = 0; i < 0.05 * kRate; ++i)
+         env.process();
       // Release falls, and finishes within its time.
       env.gateOff();
       float last = env.level();

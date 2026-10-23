@@ -50,6 +50,9 @@ struct Slot {
    // MIDI notes take their bend, pressure and timbre from their channel (MPE gives each note its own);
    // CLAP notes and the panel's get them per note.
    bool midi = false;
+   // Played on the panel: the host never sent it, so it hears no NOTE_END for it, and the panel's
+   // note-offs and expressions touch only these.
+   bool panel = false;
    double bend = 0.0, pressure = 0.0, timbre = 0.5, volume = 1.0, velocity = 1.0;
    // Per-voice param modulation from the host, added to the param and its global modulation.
    double mod[kParamCount] = {};
@@ -96,6 +99,11 @@ public:
       }
       for (ChannelState &c : channels_)
          c = ChannelState{};
+      for (int e = 0; e < kEnvCount; ++e) {
+         loopEnv_[e].setSampleRate(sampleRate);
+         loopEnv_[e].reset();
+         looping_[e] = false;
+      }
       output_.setSampleRate(sampleRate);
       output_.setGainDb(value(kLevel));
       output_.reset();
@@ -281,7 +289,7 @@ public:
       edits_.drain(proc->out_events);
       PanelNote p;
       while (panelNotes_.pop(p))
-         handlePanelNote(p);
+         handlePanelNote(p, proc->out_events);
 
       float *left = nullptr, *right = nullptr;
       if (proc->audio_outputs_count > 0 && proc->audio_outputs[0].data32 && proc->audio_outputs[0].channel_count > 0) {
@@ -469,14 +477,15 @@ private:
             if (!matches(s, ev->note_id, ev->port_index, ev->channel, ev->key))
                continue;
             switch (ev->expression_id) {
+            // Clamped to the ranges CLAP gives them.
             case CLAP_NOTE_EXPRESSION_TUNING:
-               s.bend = ev->value;
+               s.bend = std::clamp(ev->value, -120.0, 120.0);
                break;
             case CLAP_NOTE_EXPRESSION_PRESSURE:
-               s.pressure = ev->value;
+               s.pressure = std::clamp(ev->value, 0.0, 1.0);
                break;
             case CLAP_NOTE_EXPRESSION_BRIGHTNESS:
-               s.timbre = ev->value;
+               s.timbre = std::clamp(ev->value, 0.0, 1.0);
                break;
             case CLAP_NOTE_EXPRESSION_VOLUME:
                s.volume = std::clamp(ev->value, 0.0, 4.0);
@@ -517,13 +526,14 @@ private:
       }
    }
 
-   void handlePanelNote(const PanelNote &p) {
+   void handlePanelNote(const PanelNote &p, const clap_output_events_t *out) {
       if (p.kind == PanelNote::Kind::On) {
-         startNote(-1, 0, 0, p.note, p.velocity, false, nullptr, 0);
+         // Stealing a host note's voice still tells the host that note ended.
+         startNote(-1, 0, 0, p.note, p.velocity, false, out, 0, true);
          return;
       }
       for (Slot &s : slots_) {
-         if (s.midi || !matches(s, -1, 0, 0, p.note))
+         if (!s.panel || !matches(s, -1, 0, 0, p.note))
             continue;
          if (p.kind == PanelNote::Kind::Off) {
             s.voice.release();
@@ -544,7 +554,7 @@ private:
    }
 
    void startNote(int32_t noteId, int16_t port, int16_t channel, int16_t key, double velocity, bool midi,
-                  const clap_output_events_t *out, uint32_t time) {
+                  const clap_output_events_t *out, uint32_t time, bool panel = false) {
       if (key < 0 || key > 127 || channel < 0 || channel > 15)
          return;
       if (velocity <= 0.0) {
@@ -553,16 +563,18 @@ private:
                s.voice.release();
          return;
       }
-      Slot &s = pickSlot(port, channel, key);
+      Slot &s = pickSlot(port, channel, key, panel);
       // A different note taking this voice has ended, as far as the host is concerned. (MIDI and
       // panel notes have no id, so compare where they are too.)
-      if (s.voice.isActive() && (s.noteId != noteId || s.key != key || s.channel != channel || s.port != port))
+      if (s.voice.isActive() &&
+          (s.noteId != noteId || s.key != key || s.channel != channel || s.port != port || s.panel != panel))
          endNote(s, out, time);
       s.noteId = noteId;
       s.port = port;
       s.channel = channel;
       s.key = key;
       s.midi = midi;
+      s.panel = panel;
       s.bend = 0.0;
       s.pressure = 0.0;
       s.timbre = 0.5;
@@ -578,9 +590,9 @@ private:
 
    // The same note if it is still sounding, else a free voice, else the quietest releasing one,
    // else the oldest.
-   Slot &pickSlot(int16_t port, int16_t channel, int16_t key) {
+   Slot &pickSlot(int16_t port, int16_t channel, int16_t key, bool panel) {
       for (Slot &s : slots_)
-         if (s.voice.isActive() && s.key == key && s.channel == channel && s.port == port)
+         if (s.voice.isActive() && s.key == key && s.channel == channel && s.port == port && s.panel == panel)
             return s;
       for (Slot &s : slots_)
          if (!s.voice.isActive())
@@ -603,7 +615,7 @@ private:
       if (s.ended)
          return;
       s.ended = true;
-      if (!out)
+      if (!out || s.panel)
          return;
       clap_event_note_t ev{};
       ev.header = {sizeof(ev), time, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_END, 0};

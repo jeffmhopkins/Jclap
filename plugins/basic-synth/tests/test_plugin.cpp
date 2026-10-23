@@ -504,6 +504,39 @@ int main() {
       }
    }
 
+   // The panel's notes are its own: playing and letting go of a key the host also holds leaves the
+   // host's note sounding, and the host hears no NOTE_END for a note it never sent.
+   {
+      run.noteEnds.clear();
+      h.note(CLAP_EVENT_NOTE_ON, 60, 1.0, 77);
+      run(480);
+      panel.noteOn(60, 1.0f);
+      run(480);
+      panel.noteOff(60);
+      run(48000);
+      std::vector<EditorHost::Voice> held;
+      panel.voices(held);
+      JCLAP_CHECK(held.size() == 1 && held[0].note == 60);
+      JCLAP_CHECK(run.noteEnds.empty());
+      h.note(CLAP_EVENT_NOTE_OFF, 60, 0.0, 77);
+      run(48000);
+      JCLAP_CHECK(run.noteEnds.size() == 1 && run.noteEnds[0].note_id == 77);
+   }
+
+   // A looping envelope keeps time at other sample rates: at 96 kHz a 200 ms attack is still
+   // rising 150 ms in.
+   {
+      jclap::core::TestHost h96(clap_entry, "com.jeffmhopkins.jclap.basic-synth", 96000);
+      Run run96{h96, {}, {}, {}};
+      h96.setParam(kEnv1Attack, 200.0);
+      h96.setParam(kEnv1Loop, 1.0);
+      run96(64);
+      run96(14400);
+      std::vector<EditorHost::EnvState> states;
+      h96.object<EditorHost>()->envelopes(0, states);
+      JCLAP_CHECK(states.size() == 1 && states[0].stage == 0);
+   }
+
    // State: a round trip, and a state with fewer params (an older version) loads them and leaves
    // the rest at their defaults.
    {

@@ -112,6 +112,10 @@ public:
          gate_.reset(0.0);
          for (jclap::dsp::Smoother *s : {&pitch_, &pressure_, &timbre_, &cutoff_})
             s->reset(s->target());
+         // An envelope that only goes to the filter or pitch can still be releasing from the last
+         // note; a fresh one starts from zero all the same.
+         for (jclap::dsp::Envelope &e : env_)
+            e.reset();
       }
       released_ = false;
       gate_.setTarget(1.0);

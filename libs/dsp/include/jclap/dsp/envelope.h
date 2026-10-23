@@ -32,6 +32,7 @@ public:
       attack_.set(attackTime_, sampleRate_, kAttackShape);
       decay_.set(decayTime_, sampleRate_, kFallShape);
       release_.set(releaseTime_, sampleRate_, kFallShape);
+      sustainGlide_ = 1.0 - std::exp(-1.0 / (kSustainGlideSeconds * sampleRate_));
    }
    // Seconds.
    void setAttack(double seconds) { attack_.set(attackTime_ = seconds, sampleRate_, kAttackShape); }
@@ -66,13 +67,14 @@ public:
          break;
       case Stage::Decay:
          level_ = decay_.toward(level_, sustain_);
-         if (level_ <= sustain_) {
-            level_ = sustain_;
+         // At or past the sustain level (also when sustain was raised above it): sustain glides
+         // the rest of the way, so a change never steps.
+         if (level_ <= sustain_)
             stage_ = loop_ ? Stage::Attack : Stage::Sustain;
-         }
          break;
       case Stage::Sustain:
-         level_ = sustain_;
+         // Follows the sustain level smoothly, so automating it doesn't zipper.
+         level_ += (sustain_ - level_) * sustainGlide_;
          if (loop_)
             stage_ = Stage::Attack;
          break;
@@ -101,6 +103,7 @@ private:
    // what makes the curve land in finite time; the smaller the overshoot, the more curved.
    static constexpr double kAttackShape = 0.3;
    static constexpr double kFallShape = 0.001;
+   static constexpr double kSustainGlideSeconds = 0.003;
 
    struct Curve {
       double coef = 0.0, overshoot = 0.0;
@@ -123,6 +126,7 @@ private:
    Curve attack_, decay_, release_;
    Stage stage_ = Stage::Idle;
    double level_ = 0.0, releaseFrom_ = 0.0;
+   double sustainGlide_ = 1.0 - std::exp(-1.0 / (kSustainGlideSeconds * 48000.0));
 };
 
 } // namespace jclap::dsp
