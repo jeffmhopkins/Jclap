@@ -5,7 +5,11 @@
 //
 // It also shows per-note expression (MPE): each held note gets a marker that slides sideways with
 // its pitch bend (one cell per semitone, with a trail back to the key), rises with timbre (CC 74 /
-// brightness) and grows with pressure. Give it the voices to show with setTouches().
+// brightness) and grows with pressure. Give it the voices to show with setTouches(). A held note
+// lower or higher than any cell lights an arrow at the left or right edge.
+//
+// rowInterval sets the layout: 5 (fourths, the default), 7 (fifths) or 12 (octaves, the widest
+// range). shiftOctaves() moves it up or down; an OctaveShift control can drive it.
 //
 // Playing it: press a cell for a note, slide sideways to bend, up and down for timbre. The
 // callbacks fire as you go, so a plugin can turn them into notes and note expressions.
@@ -32,6 +36,13 @@ public:
    explicit NoteGrid(int columns = 16, int rows = 8, int lowNote = 30, int rowInterval = 5);
 
    void setLayout(int columns, int rows, int lowNote, int rowInterval = 5);
+   void setRowInterval(int semitones) { setLayout(columns_, rows_, low_, semitones); }
+   int rowInterval() const { return interval_; }
+   // The lowest and highest notes on the grid, bottom left and top right.
+   int lowNote() const { return low_; }
+   int highNote() const { return noteAt(columns_ - 1, rows_ - 1); }
+   // Moves every cell by whole octaves while the lowest note stays in 0..127. Returns whether it moved.
+   bool shiftOctaves(int octaves);
    // Pitch classes in the scale as a 12-bit mask (bit 0 = C), and the root. Defaults to C major.
    void setScale(uint16_t mask, int root);
    // How far a full slide across one cell bends, in semitones. 1 by default, like a LinnStrument.

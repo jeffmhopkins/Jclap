@@ -13,11 +13,6 @@ constexpr unsigned kOffScale = 0xff2b3038;
 
 int pitchClass(int note) { return ((note % 12) + 12) % 12; }
 
-std::string noteName(int note) {
-   static const char *const kNames[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-   return kNames[pitchClass(note)] + std::to_string(note / 12 - 1);
-}
-
 } // namespace
 
 NoteGrid::NoteGrid(int columns, int rows, int lowNote, int rowInterval) {
@@ -30,6 +25,18 @@ void NoteGrid::setLayout(int columns, int rows, int lowNote, int rowInterval) {
    low_ = lowNote;
    interval_ = rowInterval;
    redraw();
+}
+
+bool NoteGrid::shiftOctaves(int octaves) {
+   while (octaves > 0 && low_ + 12 * octaves > 127)
+      --octaves;
+   while (octaves < 0 && low_ + 12 * octaves < 0)
+      ++octaves;
+   if (octaves == 0)
+      return false;
+   releaseNote();
+   setLayout(columns_, rows_, low_ + 12 * octaves, interval_);
+   return true;
 }
 
 void NoteGrid::setScale(uint16_t mask, int root) {
@@ -102,6 +109,27 @@ void NoteGrid::draw(visage::Canvas &canvas) {
       drawTouch(canvas, touch, accent);
    if (playing_)
       drawTouch(canvas, own_, t.text);
+
+   // An arrow at the left or right edge for held notes below or above every cell.
+   bool below = false, above = false;
+   const int high = highNote();
+   for (const Touch &touch : touches_) {
+      below |= touch.note < low_;
+      above |= touch.note > high;
+   }
+   const float a = std::min(ch * 0.5f, cw * 0.5f), y = height() * 0.5f - a * 0.5f;
+   for (int side = 0; side < 2; ++side) {
+      if (!(side == 0 ? below : above))
+         continue;
+      const float x = side == 0 ? 3.0f : width() - 3.0f - a * 0.5f;
+      canvas.setColor(t.shadow);
+      canvas.roundedRectangle(x - 3.0f, y - 3.0f, a * 0.5f + 6.0f, a + 6.0f, 3.0f);
+      canvas.setColor(accent);
+      if (side == 0)
+         canvas.triangleLeft(x, y, a * 0.5f);
+      else
+         canvas.triangleRight(x, y, a * 0.5f);
+   }
 }
 
 void NoteGrid::drawTouch(visage::Canvas &canvas, const Touch &touch, unsigned color) {

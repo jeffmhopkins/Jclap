@@ -17,7 +17,7 @@ and plugins that need a panel get one from the shared GUI library.
 |---|---|---|
 | [Polar XY](plugins/polar-xy) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
 | [MicroMonsta 2 CC](plugins/micromonsta2) | Note effect | Knob panel that sends every MicroMonsta 2 parameter as a MIDI CC |
-| [Basic Synth](plugins/basic-synth) | Instrument | Eight-voice MPE synth: oscillator, filter, VCA, two looping envelopes and an LFO |
+| [Basic Synth](plugins/basic-synth) | Instrument | Eight-voice MPE synth: dual detunable oscillators, key-tracking filter, VCA, two looping envelopes and an LFO |
 
 ## Download
 

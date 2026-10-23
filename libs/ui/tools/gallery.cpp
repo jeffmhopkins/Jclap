@@ -9,6 +9,7 @@
 #include <jclap/ui/led.h>
 #include <jclap/ui/meter.h>
 #include <jclap/ui/number_box.h>
+#include <jclap/ui/octave_shift.h>
 #include <jclap/ui/scope.h>
 #include <jclap/ui/section.h>
 #include <jclap/ui/segmented.h>
@@ -72,7 +73,7 @@ public:
       auto &number = add<ui::NumberBox>({145, 370, 105, 28}, ui::ValueRange{0, 127, 64, 1});
       number.setLabel("CC");
       number.setValue(74);
-      auto &led = add<ui::ActivityLed>({30, 410, 100, 16}, "MIDI IN");
+      auto &led = add<ui::ActivityLed>({30, 412, 96, 20}, "MIDI IN");
       led.setLevel(1.0f);
       tips_.add(led, "Flashes on MIDI input");
       led_ = &led;
@@ -95,8 +96,12 @@ public:
       polar.setValues(20, 100);
 
       auto &keys = add<ui::PianoKeyboard>({30, 450, 705, 66}, 36, 84);
-      for (int note : {48, 55, 64, 67})
+      // A chord, and a note above the range, which shows as an arrow at the right edge.
+      for (int note : {48, 55, 64, 67, 96})
          keys.setNoteOn(note, true);
+      auto &octave = add<ui::OctaveShift>({136, 410, 114, 24});
+      octave.valueText = [&keys](int) { return ui::noteName(keys.lowNote()) + " - " + ui::noteName(keys.highNote()); };
+      octave.onChange = [&keys](int, int step) { keys.shiftOctaves(step); };
    }
 
    void showTips() { tips_.show(*tipTarget()); }

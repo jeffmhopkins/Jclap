@@ -39,6 +39,11 @@ public:
       float level, releaseFrom;
    };
    virtual void envelopes(int index, std::vector<EnvState> &out) const = 0;
+
+   // Where the panel's keyboard and grid were left, so reopening it shows the same notes: octaves
+   // up or down, and the grid's row interval in semitones. Main thread only.
+   int playOctave = 0;
+   int gridInterval = 5;
 };
 
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);

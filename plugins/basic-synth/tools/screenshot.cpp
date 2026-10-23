@@ -83,8 +83,9 @@ public:
       return true;
    }
    void voices(std::vector<Voice> &out) const override {
-      // A chord, each note bent and pressed a little differently, as MPE playing looks.
-      out = {{48, -0.4f, 0.3f, 0.5f}, {55, 0.0f, 0.6f, 0.7f}, {60, 0.9f, 0.85f, 0.3f}, {64, 0.2f, 0.5f, 0.55f}};
+      // A chord, each note bent and pressed a little differently, as MPE playing looks, and a high
+      // note off the top of the keyboard and grid, which shows as an arrow.
+      out = {{48, -0.4f, 0.3f, 0.5f}, {55, 0.0f, 0.6f, 0.7f}, {60, 0.9f, 0.85f, 0.3f}, {64, 0.2f, 0.5f, 0.55f}, {96, 0.0f, 0.4f, 0.5f}};
    }
 };
 

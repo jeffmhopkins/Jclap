@@ -3,6 +3,8 @@
 // Colours and the font shared by every jclap::ui widget. Widgets point at defaultTheme() unless
 // given another one with setTheme().
 
+#include <string>
+
 #include <visage/graphics.h>
 
 namespace jclap::ui {
@@ -29,5 +31,8 @@ const Theme &defaultTheme();
 
 // The library's UI font (Lato Regular) at the given size.
 visage::Font font(float size);
+
+// A MIDI note's name with its octave, middle C (60) as C4: "C4", "F#2".
+std::string noteName(int note);
 
 } // namespace jclap::ui
