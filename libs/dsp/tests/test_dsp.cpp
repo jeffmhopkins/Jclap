@@ -2,6 +2,7 @@
 // frequencies, envelope timing and VCA smoothing.
 
 #include <jclap/core/test_host.h>
+#include <jclap/dsp/delay_line.h>
 #include <jclap/dsp/denormals.h>
 #include <jclap/dsp/envelope.h>
 #include <jclap/dsp/filter.h>
@@ -346,6 +347,31 @@ int main() {
       for (int i = 0; i < 100 && env.isActive(); ++i)
          peak = std::max(peak, env.process());
       JCLAP_CHECK(peak == 0.0f && !env.isActive());
+   }
+
+   // DelayLine: whole delays give back the exact sample, half-way delays land between neighbours,
+   // and a sine read at a fractional delay keeps its level.
+   {
+      DelayLine line;
+      line.setMaxDelay(100);
+      JCLAP_CHECK(line.maxDelay() >= 100);
+      for (int i = 1; i <= 50; ++i)
+         line.write(static_cast<float>(i));
+      JCLAP_CHECK_EQ(line.read(1.0f), 49.0f);
+      JCLAP_CHECK_EQ(line.tap(10), 40.0f);
+      JCLAP_CHECK(near(line.read(10.5f), 39.5, 1e-4));
+      line.reset();
+      double in = 0.0, out = 0.0;
+      for (int i = 0; i < 4800; ++i) {
+         const float x = static_cast<float>(std::sin(2.0 * kPi * 1000.0 * i / kRate));
+         line.write(x);
+         const float y = line.read(37.3f);
+         if (i > 100) {
+            in += x * x;
+            out += y * y;
+         }
+      }
+      JCLAP_CHECK(std::fabs(10.0 * std::log10(out / in)) < 0.1);
    }
 
    return jclap::core::testResult();
