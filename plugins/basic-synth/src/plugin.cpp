@@ -158,6 +158,9 @@ public:
       if (id >= kParamCount)
          return;
       value = std::clamp(value, kParams[id].min, kParams[id].max);
+      // A stepped param (Tune, Bend Range) only takes whole values, so the host records whole ones.
+      if (kParams[id].flags & CLAP_PARAM_IS_STEPPED)
+         value = std::round(value);
       values_[id].store(value);
       edits_.value(id, value);
    }
@@ -370,11 +373,12 @@ private:
       s.voice.setGain(gainOf(s));
    }
 
-   // The output VCA takes the level; a voice's own level modulation scales just that voice. Velocity
-   // takes away up to its amount: at 0 every note is as loud as the hardest.
+   // The output VCA takes the level; a voice's own level modulation scales just that voice, up to the
+   // param's 0 dB top like any other. Velocity takes away up to its amount: at 0 every note is as loud
+   // as the hardest.
    double gainOf(const Slot &s) const {
       const double velocity = 1.0 - value(kVelocityToVca, &s) * (1.0 - s.velocity);
-      return velocity * s.volume * jclap::dsp::dbToGain(s.mod[kLevel]);
+      return velocity * s.volume * jclap::dsp::dbToGain(value(kLevel, &s) - value(kLevel));
    }
 
    // A param as a voice hears it: the value, plus global and per-voice modulation, clamped.
@@ -453,7 +457,7 @@ private:
             break;
          }
          for (Slot &s : slots_)
-            if (matches(s, ev->note_id, ev->port_index, ev->channel, ev->key))
+            if (hostMatches(s, ev->note_id, ev->port_index, ev->channel, ev->key))
                s.mod[ev->param_id] = ev->amount;
          break;
       }
@@ -465,8 +469,11 @@ private:
       case CLAP_EVENT_NOTE_OFF:
       case CLAP_EVENT_NOTE_CHOKE: {
          auto *ev = reinterpret_cast<const clap_event_note_t *>(h);
+         // A choke naming nothing is a panic, and cuts the panel's notes too.
+         const bool all =
+            h->type == CLAP_EVENT_NOTE_CHOKE && ev->note_id == -1 && ev->key == -1 && ev->channel == -1;
          for (Slot &s : slots_) {
-            if (!matches(s, ev->note_id, ev->port_index, ev->channel, ev->key))
+            if (!(all ? s.voice.isActive() : hostMatches(s, ev->note_id, ev->port_index, ev->channel, ev->key)))
                continue;
             if (h->type == CLAP_EVENT_NOTE_CHOKE) {
                s.voice.reset();
@@ -482,7 +489,7 @@ private:
          if (!std::isfinite(ev->value))
             break;
          for (Slot &s : slots_) {
-            if (!matches(s, ev->note_id, ev->port_index, ev->channel, ev->key))
+            if (!hostMatches(s, ev->note_id, ev->port_index, ev->channel, ev->key))
                continue;
             switch (ev->expression_id) {
             // Clamped to the ranges CLAP gives them.
@@ -523,9 +530,19 @@ private:
          } else if (status == 0xB0 && ev->data[1] == 74) {
             c.timbre = ev->data[2] / 127.0;
          } else if (status == 0xB0 && (ev->data[1] == 120 || ev->data[1] == 123)) {
-            // All sound off cuts, all notes off releases.
-            for (Slot &s : slots_)
-               ev->data[1] == 120 ? s.voice.reset() : s.voice.release();
+            // All sound off cuts, all notes off releases: the host's notes on that channel, or on
+            // every channel when it comes on the manager channel (1), as for the MPE zone. The
+            // panel's notes are its own.
+            for (Slot &s : slots_) {
+               if (s.panel || !s.voice.isActive() || s.port != ev->port_index || (channel != 0 && s.channel != channel))
+                  continue;
+               if (ev->data[1] == 120) {
+                  s.voice.reset();
+                  endNote(s, out, h->time);
+               } else {
+                  s.voice.release();
+               }
+            }
          }
          break;
       }
@@ -561,21 +578,24 @@ private:
       return (key == -1 || s.key == key) && (channel == -1 || s.channel == channel) && (port == -1 || s.port == port);
    }
 
+   // matches() for the host's events, which never touch the panel's notes.
+   static bool hostMatches(const Slot &s, int32_t noteId, int16_t port, int16_t channel, int16_t key) {
+      return !s.panel && matches(s, noteId, port, channel, key);
+   }
+
    void startNote(int32_t noteId, int16_t port, int16_t channel, int16_t key, double velocity, bool midi,
                   const clap_output_events_t *out, uint32_t time, bool panel = false) {
-      if (key < 0 || key > 127 || channel < 0 || channel > 15)
+      // A CLAP note at velocity 0 is still a note (MIDI's "velocity 0 is note off" was handled before
+      // this), so it plays, as quietly as velocity makes it, and ends like any other.
+      if (key < 0 || key > 127 || channel < 0 || channel > 15 || !std::isfinite(velocity))
          return;
-      if (velocity <= 0.0) {
-         for (Slot &s : slots_)
-            if (matches(s, noteId, port, channel, key))
-               s.voice.release();
-         return;
-      }
+      velocity = std::clamp(velocity, 0.0, 1.0);
       Slot &s = pickSlot(port, channel, key, panel);
       // A different note taking this voice has ended, as far as the host is concerned. (MIDI and
-      // panel notes have no id, so compare where they are too.)
-      if (s.voice.isActive() &&
-          (s.noteId != noteId || s.key != key || s.channel != channel || s.port != port || s.panel != panel))
+      // panel notes have no id, so compare where they are too.) So has one that fell silent earlier
+      // in this block, before the end-of-block scan could report it.
+      if (!s.voice.isActive() ||
+          s.noteId != noteId || s.key != key || s.channel != channel || s.port != port || s.panel != panel)
          endNote(s, out, time);
       s.noteId = noteId;
       s.port = port;

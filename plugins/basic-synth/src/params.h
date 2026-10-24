@@ -290,7 +290,8 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
       value = detuneValue(*end == 'c' || *end == 'C' ? v / 100.0 : v);
       break;
    default:
-      value = v;
+      // A stepped param takes whole values only.
+      value = (kParams[id].flags & CLAP_PARAM_IS_STEPPED) ? std::round(v) : v;
       break;
    }
    return true;
