@@ -135,8 +135,10 @@ sample. Freeze closes this input.
 
 The tank is a feedback delay network of **sixteen lines**. At System Size 1 they run 29.3, 33.1,
 37.9, 42.7, 48.9, 55.3, 63.1, 71.9, 81.7, 92.9, 105.7, 120.3, 137.1, 155.9, 177.7 and 201.9 ms: even on
-a log scale, none a simple ratio of another. System Size (0.25 to 4) scales them all, up to a cap
-of 0.84 s. The number of lines never changes, whatever the bodies do.
+a log scale, none a simple ratio of another. System Size (0.25 to 10 AU) scales them all, so at
+10 AU the longest line runs 2.02 s (the cap is 2.09 s). The early taps stop growing at 4x. The panel
+draws the system at its System Size, a quarter of the stage at 0.25 AU and all of it at 10, with
+faint AU rings while the knob turns or the mouse is over the system. The number of lines never changes, whatever the bodies do.
 
 Each pass through a line goes:
 
@@ -231,9 +233,10 @@ voices see, before the voices), shapes it, and adds it to the tank's input on th
 
 **Why Feedback means the same at every decay.** The tank's resonances get louder the longer the
 decay: their peak gain grows about as one over what a line loses each pass. So the loop is scaled by
-that loss: loop scale = min(1.25, 3.3 x (mean loss per pass)^0.83). The curve was fitted by
-bisecting, over Decay 1 to 30 s and Size 0.5 to 3, the Feedback where a tail first sustains; it lands
-between 96% and 123%, mostly 100% to 115%. So below 100% the tail still dies away (just longer and
+that loss: loop scale = min(1.25, 3.3 x (mean loss per pass)^0.83), times (3 / Size)^0.2 past Size
+3, where the long lines ring up more than the curve expects. The curve was fitted by bisecting, over
+Decay 1 to 30 s and Size 0.5 to 3, the Feedback where a tail first sustains; it lands between 96% and
+123%, mostly 100% to 115%. At Size 6 and 10 it lands between 72% and 127%. So below 100% the tail still dies away (just longer and
 more coloured by the loop), and past it the loop grows until the safety stage holds it. Feedback runs
 to 110%.
 
@@ -395,7 +398,7 @@ is automatable; "Mod" means the host can also modulate it (CLAP param modulation
 | Param | Range | Default | What it does |
 | --- | --- | --- | --- |
 | Decay | 0.2 to 60 s | 4 s | RT60 of the tank's mids. Mod, and a body target. |
-| System Size | 0.25 to 4 | 1 | Scales every tank line, the tank allpasses (up to 2x), the early taps, the swell and reverse windows. Mod. |
+| System Size | 0.25 to 10 | 1 | Scales every tank line, the tank allpasses (up to 2x), the early taps (up to 4x), the swell and reverse windows, and how big the stage draws the system. Mod. |
 | Gravity | 0.25 to 4 | 1 | G in the sim: higher is faster and tighter. Mod. |
 | Bodies | 2 to 6 | 3 | How many bodies, voices and bands. |
 | Motion | 0 to 200% | 40% | Tank line drift. See above. Mod. |

@@ -612,7 +612,7 @@ public:
    // Once per control tick, before that tick's samples.
    void setControl(const Control &c) {
       c_ = c;
-      const double size = std::clamp(c.size, 0.25, 4.0);
+      const double size = std::clamp(c.size, 0.25, 10.0);
       const bool freeze = c.freeze;
       // Lines and their decay. Sixteen lines always, whatever the bodies do: each loop is the line
       // plus the allpass inside it, and decays to -60 dB in the Decay time.
@@ -700,7 +700,7 @@ public:
       }
       targetReverseWindow_ = static_cast<float>((0.08 + 0.5 * std::max(0.0, -c.attack)) * std::min(2.0, std::sqrt(size)) * sr_);
       predelaySamples_.set(static_cast<float>(c.predelayMs * 0.001 * sr_));
-      earlySize_.set(static_cast<float>(size));
+      earlySize_.set(static_cast<float>(std::min(4.0, size)));
       attack_.set(static_cast<float>(c.attack));
       inputGain_.set(freeze ? 0.0f : 1.0f);
 
@@ -712,7 +712,10 @@ public:
       // Feedback where a tail first sustains, over Decay 1 to 30 s and Size 0.5 to 3, lands it
       // between 96% and 123%, mostly 100% to 115%.
       const double meanLoss = loss / kLines;
-      const double loopScale = std::min(kLoopMax, kLoopCalibration * std::pow(meanLoss, kLoopExponent));
+      // Past Size 3 the long lines ring up more than the curve expects, so it eases off a little there
+      // (measured at Size 6 and 10).
+      const double loopScale = std::min(kLoopMax, kLoopCalibration * std::pow(meanLoss, kLoopExponent)) *
+                               std::pow(std::min(1.0, 3.0 / size), 0.2);
       loopScale_.set(static_cast<float>(loopScale / kLoopMax));
       loopGain_.set(freeze ? 0.0f : static_cast<float>(c.feedback * loopScale));
       shimmer_.set(static_cast<float>(c.shimmer));
@@ -942,7 +945,7 @@ public:
    double bodyTone(int b) const { return bodyTone_[b]; }
    double bodySwirl(int b) const { return bodySwirl_[b]; }
 
-   static constexpr double kMaxLineSeconds = 0.85;
+   static constexpr double kMaxLineSeconds = 2.1;
    static constexpr double kMaxTankApSeconds = 0.06;
 
 private:
