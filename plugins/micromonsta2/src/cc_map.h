@@ -90,7 +90,21 @@ inline constexpr int kCcParamCount = sizeof(kCcParams) / sizeof(kCcParams[0]);
 inline constexpr uint32_t kChannelParamId = 1000;
 inline constexpr int kParamCount = kCcParamCount + 1;
 
-inline double defaultValue(const CcParam &p) { return p.bipolar ? 64.0 : 0.0; }
+// An init-patch style default: what SEND ALL and "reset to default" send for a knob nobody set, so
+// they never mute the synth. Centre for bipolar knobs, open for the main level, cutoff and
+// sustains, the usual 100 for Volume, mid speed for the LFOs, and 0 for the rest.
+inline double defaultValue(const CcParam &p) {
+   if (p.bipolar)
+      return 64.0;
+   switch (p.cc) {
+   case 7: return 100.0;                     // Volume
+   case 48: return 127.0;                    // Osc1 Level
+   case 74: return 127.0;                    // Filter Cutoff
+   case 79: case 82: case 86: return 127.0;  // Env sustains
+   case 76: case 77: case 78: return 64.0;   // LFO speeds
+   default: return 0.0;
+   }
+}
 
 // Index into kCcParams for a CC number, or -1.
 inline int indexOfCc(int cc) {
@@ -118,8 +132,8 @@ public:
    CcSender() { reset(); }
 
    void reset() {
-      for (int &v : lastSent_)
-         v = -1;
+      for (int i = 0; i < kCcParamCount; ++i)
+         lastSent_[i] = lastKnob_[i] = -1;
    }
 
    // Forget what was sent so every touched CC goes out again (e.g. after a channel change).
@@ -127,16 +141,27 @@ public:
 
    // Returns the CC value to send for parameter index i, or -1 if nothing needs to go out. It only
    // counts as sent once sent() says so, so a CC the host's output queue refused goes out next time.
-   int pending(int i, double value, bool touched) const {
+   // A knob that hasn't moved since it was last sent stays quiet even when the synth has since
+   // heard another value for that CC (see heard()), so a passed-through controller isn't overridden.
+   int pending(int i, double value, bool touched) {
       if (!touched)
          return -1;
       const int v = toCcValue(value);
-      return v == lastSent_[i] ? -1 : v;
+      if (v == lastKnob_[i])
+         return -1;
+      if (v == lastSent_[i]) {
+         lastKnob_[i] = v;
+         return -1;
+      }
+      return v;
    }
-   void sent(int i, int value) { lastSent_[i] = value; }
+   void sent(int i, int value) { lastSent_[i] = lastKnob_[i] = value; }
+   // The synth got `value` for this CC from elsewhere (a controller's CC passed through).
+   void heard(int i, int value) { lastSent_[i] = value; }
 
 private:
-   int lastSent_[kCcParamCount];
+   int lastSent_[kCcParamCount]; // what the synth has, as far as we know
+   int lastKnob_[kCcParamCount]; // the knob's CC value when it was last sent or found already there
 };
 
 } // namespace mm2

@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 
@@ -73,15 +74,11 @@ public:
       return true;
    }
 
-   bool activate(double, uint32_t, uint32_t) override {
+   bool activate(double sampleRate, uint32_t, uint32_t) override {
       // Resend everything that has been set, so a reopened project restores the synth's sound.
       resendRequested_.store(true);
+      minGap_ = static_cast<int64_t>(sampleRate * kMinGapSeconds);
       return true;
-   }
-
-   void reset() override {
-      for (auto &m : mods_)
-         m.store(0.0);
    }
 
    const void *extension(const char *id) override {
@@ -251,19 +248,32 @@ public:
 
       // A knob the state leaves out (or saved as NaN) is back at its default, untouched, rather than
       // keeping the previous sound's setting or losing the whole state.
+      double value[kCcParamCount];
+      bool touched[kCcParamCount];
       for (int i = 0; i < kCcParamCount; ++i) {
-         values_[i].store(defaultValue(kCcParams[i]));
-         touched_[i].store(false);
+         value[i] = defaultValue(kCcParams[i]);
+         touched[i] = false;
       }
-      midiChannel_.store(std::clamp(static_cast<int>(header.channel), 1, 16));
       for (uint32_t e = 0; e < header.count; ++e) {
          const int i = indexOfCc(entries[e].cc);
          if (i < 0 || !std::isfinite(entries[e].value))
             continue;
-         values_[i].store(std::clamp(entries[e].value, 0.0, 127.0));
-         touched_[i].store(entries[e].touched != 0);
+         value[i] = std::clamp(entries[e].value, 0.0, 127.0);
+         touched[i] = entries[e].touched != 0;
       }
+      // The audio thread may be sending meanwhile: a knob going untouched stops sending before its
+      // value changes, and one being set gets its value before it starts, so a knob never goes out
+      // with a value it doesn't have.
+      for (int i = 0; i < kCcParamCount; ++i) {
+         if (!touched[i])
+            touched_[i].store(false);
+         values_[i].store(value[i]);
+         if (touched[i])
+            touched_[i].store(true);
+      }
+      midiChannel_.store(std::clamp(static_cast<int>(header.channel), 1, 16));
       // Send the restored sound to the synth on the next block.
+      loaded_.store(true);
       resendRequested_.store(true);
 
       // Tell the host the values changed so it refreshes what it shows.
@@ -280,14 +290,22 @@ public:
 
       edits_.drain(out);
 
+      // Notes the host's queue refused last block go first, in order.
+      retryDeferred(out);
+
       // Panel edits, state loads and channel changes land between blocks; send them at the start.
       const int ch = midiChannel_.load();
-      if (ch != sentChannel_ || resendRequested_.exchange(false)) {
+      // After a load, a knob only modulation was sending goes quiet again unless it's still modulated.
+      if (loaded_.exchange(false))
+         for (int i = 0; i < kCcParamCount; ++i)
+            modulatedOnce_[i] = modulatedOnce_[i] && mods_[i].load() != 0.0;
+      const bool resend = resendRequested_.exchange(false);
+      if (ch != sentChannel_ || resend) {
          sentChannel_ = ch;
          sender_.resendAll();
       }
       for (int i = 0; i < kCcParamCount; ++i)
-         sendIfChanged(out, 0, i);
+         sendIfChanged(out, 0, i, false);
 
       const uint32_t n = in->size(in);
       for (uint32_t e = 0; e < n; ++e) {
@@ -296,26 +314,65 @@ public:
              (h->type == CLAP_EVENT_PARAM_VALUE || h->type == CLAP_EVENT_PARAM_MOD)) {
             const int i = applyParamEvent(h);
             if (i >= 0) {
-               sendIfChanged(out, h->time, i);
+               sendIfChanged(out, h->time, i, h->type == CLAP_EVENT_PARAM_MOD);
             } else if (midiChannel_.load() != sentChannel_) {
                // The channel changed: from here on, every set CC goes out on the new one.
                sentChannel_ = midiChannel_.load();
                sender_.resendAll();
                for (int k = 0; k < kCcParamCount; ++k)
-                  sendIfChanged(out, h->time, k);
+                  sendIfChanged(out, h->time, k, false);
             }
             continue;
          }
          // Notes and other MIDI go straight through; anything else (transport...) must not be echoed.
-         if (jclap::core::isNoteEvent(h))
-            out->try_push(out, h);
+         if (jclap::core::isNoteEvent(h)) {
+            if (h->type == CLAP_EVENT_MIDI)
+               heardMidi(reinterpret_cast<const clap_event_midi_t *>(h));
+            // Once one is refused, the rest wait behind it so they stay in order.
+            if (deferredCount_ > 0 || !out->try_push(out, h))
+               defer(h);
+         }
       }
+      frame_ += proc->frames_count;
       jclap::core::passAudioThrough(proc);
       return CLAP_PROCESS_CONTINUE;
    }
 
 private:
    double effective(int i) const { return modulated(values_[i].load(), mods_[i].load()); }
+
+   // A controller's CC passed through on our channel: the synth now has that value, and the knob
+   // doesn't go out again until it moves.
+   void heardMidi(const clap_event_midi_t *ev) {
+      if ((ev->data[0] & 0xF0) != 0xB0 || (ev->data[0] & 0x0F) != sentChannel_ - 1)
+         return;
+      const int i = indexOfCc(ev->data[1]);
+      if (i >= 0)
+         sender_.heard(i, ev->data[2] & 0x7F);
+   }
+
+   // A refused note or MIDI event is kept for the next block rather than dropped, so a note-off
+   // isn't lost. SysEx isn't kept: its data only lives for this block.
+   void defer(const clap_event_header_t *h) {
+      if (deferredCount_ >= kMaxDeferred || h->size > sizeof(Deferred::bytes) || h->type == CLAP_EVENT_MIDI_SYSEX)
+         return;
+      std::memcpy(deferred_[deferredCount_++].bytes, h, h->size);
+   }
+
+   void retryDeferred(const clap_output_events_t *out) {
+      int done = 0;
+      while (done < deferredCount_) {
+         auto *h = reinterpret_cast<clap_event_header_t *>(deferred_[done].bytes);
+         h->time = 0;
+         if (!out->try_push(out, h))
+            break;
+         ++done;
+      }
+      if (done > 0) {
+         std::memmove(deferred_, deferred_ + done, sizeof(Deferred) * (deferredCount_ - done));
+         deferredCount_ -= done;
+      }
+   }
 
    void resetDefaults() {
       for (int i = 0; i < kCcParamCount; ++i) {
@@ -325,6 +382,8 @@ private:
       }
       midiChannel_.store(1);
       sender_.reset();
+      for (int64_t &f : lastSendFrame_)
+         f = INT64_MIN / 2;
    }
 
    // Applies a param value or modulation event. Returns the CC param index it touched, or -1.
@@ -352,18 +411,27 @@ private:
          const int i = std::isfinite(ev->amount) ? indexOfCc(static_cast<int>(ev->param_id)) : -1;
          if (i >= 0) {
             mods_[i].store(ev->amount);
-            touched_[i].store(true);
+            // Sent from now on, without changing the saved state (which only the host's own edits do).
+            modulatedOnce_[i] = true;
          }
          return i;
       }
       return -1;
    }
 
-   void sendIfChanged(const clap_output_events_t *out, uint32_t time, int i) {
-      const int v = sender_.pending(i, effective(i), touched_[i].load());
+   // `limited` (modulation) sends keep at least kMinGapSeconds between one CC's messages, so fast
+   // modulation can't swamp the synth's 5-pin MIDI. A value held back goes out with the next
+   // block's sweep, which isn't limited.
+   void sendIfChanged(const clap_output_events_t *out, uint32_t time, int i, bool limited) {
+      const int64_t at = frame_ + time;
+      if (limited && at - lastSendFrame_[i] < minGap_)
+         return;
+      const int v = sender_.pending(i, effective(i), touched_[i].load() || modulatedOnce_[i]);
       if (v >= 0 && jclap::core::pushMidi(out, time, static_cast<uint8_t>(0xB0 | (sentChannel_ - 1)),
-                                          static_cast<uint8_t>(kCcParams[i].cc), static_cast<uint8_t>(v)))
+                                          static_cast<uint8_t>(kCcParams[i].cc), static_cast<uint8_t>(v))) {
          sender_.sent(i, v);
+         lastSendFrame_[i] = at;
+      }
    }
 
    const clap_host_params_t *hostParams_ = nullptr;
@@ -374,11 +442,21 @@ private:
    // A CC is only sent once something has set it; see CcSender.
    std::atomic<bool> touched_[kCcParamCount];
    std::atomic<int> midiChannel_{1};
-   std::atomic<bool> resendRequested_{false};
+   std::atomic<bool> resendRequested_{false}, loaded_{false};
 
    // Audio thread only.
+   static constexpr double kMinGapSeconds = 0.005;
+   static constexpr int kMaxDeferred = 256;
+   struct Deferred {
+      alignas(8) uint8_t bytes[64];
+   };
    CcSender sender_;
    int sentChannel_ = 1;
+   bool modulatedOnce_[kCcParamCount] = {};
+   int64_t frame_ = 0, minGap_ = 240;
+   int64_t lastSendFrame_[kCcParamCount];
+   Deferred deferred_[kMaxDeferred];
+   int deferredCount_ = 0;
 
    jclap::core::EditQueue edits_;
    jclap::ui::HostMenu hostMenu_;
