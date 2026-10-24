@@ -64,6 +64,16 @@ int main() {
    CHECK_EQ(sender.pending(2, 30.0, true), 30);
    sender.sent(2, 30);
    CHECK_EQ(sender.pending(2, 30.0, true), -1);
+   // The synth heard 50 from a controller: the unmoved knob stays quiet, and moving it to 50 sends
+   // nothing either; moving it elsewhere sends.
+   sender.heard(2, 50);
+   CHECK_EQ(update(2, 30.0, true), -1);
+   CHECK_EQ(update(2, 50.0, true), -1);
+   CHECK_EQ(update(2, 51.0, true), 51);
+   // Defaults are an init patch: nothing mutes the synth.
+   CHECK_EQ(defaultValue(kCcParams[indexOfCc(7)]), 100.0);
+   CHECK_EQ(defaultValue(kCcParams[indexOfCc(74)]), 127.0);
+   CHECK_EQ(defaultValue(kCcParams[indexOfCc(40)]), 64.0);
 
    if (failures)
       std::printf("%d failure(s)\n", failures);

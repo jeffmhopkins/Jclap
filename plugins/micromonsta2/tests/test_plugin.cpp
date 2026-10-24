@@ -5,7 +5,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
+#include <iterator>
+#include <string>
 #include <vector>
 
 #include "cc_map.h"
@@ -97,11 +100,22 @@ int main() {
    // Unchanged blocks send nothing.
    CHECK_EQ(ccs(h.process()).size(), 0u);
 
-   // Several modulation steps in one block each go out.
+   // Modulation steps closer than 5 ms on one CC are thinned for 5-pin MIDI: the first goes out at
+   // once and the latest with the next block.
    h.modulate(74, 1);
-   h.modulate(74, 2);
+   h.modulate(74, 2, 10);
+   h.modulate(74, 3, 20);
+   h.modulate(74, 4, 255);
    out = ccs(h.process());
    CHECK_EQ(out.size(), 2u);
+   CHECK_EQ(out.empty() ? 0 : out[0].value, 101);
+   CHECK_EQ(out.size() < 2 ? 0 : out[1].value, 104);
+   h.modulate(74, 5, 0);
+   h.modulate(74, 2, 100);
+   CHECK_EQ(ccs(h.process()).size(), 0u);
+   out = ccs(h.process());
+   CHECK_EQ(out.size(), 1u);
+   CHECK_EQ(out.empty() ? 0 : out[0].value, 102);
 
    // Panel edits reach the host as a gesture and go out as a CC on the next block.
    panel.beginEdit(73);
@@ -162,18 +176,90 @@ int main() {
       for (size_t at = 16; at + 16 <= bad.bytes.size(); at += 16) {
          int32_t cc;
          std::memcpy(&cc, bad.bytes.data() + at, 4);
-         if (cc == 74) {
+         if (cc == 73) {
             const double nan = std::nan("");
             std::memcpy(bad.bytes.data() + at + 8, &nan, 8);
          }
       }
       JCLAP_CHECK(state->load(h.plugin(), &bad.in));
-      CHECK_EQ(h.paramValue(74), 0.0);
-      CHECK_EQ(h.paramValue(73), 90.0);
-      bool sent74 = false;
+      CHECK_EQ(h.paramValue(73), 0.0);
+      CHECK_EQ(h.paramValue(74), 101.0);
+      bool sent73 = false;
       for (const Cc &c : ccs(h.process()))
-         sent74 = sent74 || c.cc == 74;
-      JCLAP_CHECK(!sent74);
+         sent73 = sent73 || c.cc == 73;
+      JCLAP_CHECK(!sent73);
+   }
+
+   // #77: the defaults are an init patch, so SEND ALL on a fresh instance doesn't mute the synth.
+   {
+      jclap::core::TestHost f(clap_entry, "com.jeffmhopkins.jclap.micromonsta2");
+      mm2::EditorHost &p = *f.object<mm2::EditorHost>();
+      p.sendAll();
+      int got[128];
+      std::fill(std::begin(got), std::end(got), -1);
+      for (const Cc &c : ccs(f.process()))
+         got[c.cc] = c.value;
+      CHECK_EQ(got[7], 100);
+      CHECK_EQ(got[48], 127);
+      CHECK_EQ(got[74], 127);
+      CHECK_EQ(got[79], 127);
+      CHECK_EQ(got[40], 64);
+      CHECK_EQ(got[49], 0);
+      JCLAP_CHECK(f.paramValue(7) == 100.0);
+   }
+
+   // A state saved on channel 3 goes out once when it loads, not again on the next block.
+   {
+      jclap::core::TestHost a(clap_entry, "com.jeffmhopkins.jclap.micromonsta2");
+      a.setParam(mm2::kChannelParamId, 3);
+      a.setParam(74, 60);
+      a.process();
+      auto *state = static_cast<const clap_plugin_state_t *>(a.plugin()->get_extension(a.plugin(), CLAP_EXT_STATE));
+      Buffer saved;
+      JCLAP_CHECK(state->save(a.plugin(), &saved.out));
+      jclap::core::TestHost b(clap_entry, "com.jeffmhopkins.jclap.micromonsta2");
+      auto *stateB = static_cast<const clap_plugin_state_t *>(b.plugin()->get_extension(b.plugin(), CLAP_EXT_STATE));
+      JCLAP_CHECK(stateB->load(b.plugin(), &saved.in));
+      const auto first = ccs(b.process());
+      CHECK_EQ(first.size(), 1u);
+      CHECK_EQ(first.empty() ? 0 : first[0].channel, 3);
+      CHECK_EQ(ccs(b.process()).size(), 0u);
+
+      // Modulating a knob nobody set sends it but doesn't change the saved state.
+      Buffer before, after;
+      JCLAP_CHECK(stateB->save(b.plugin(), &before.out));
+      b.modulate(71, 10);
+      CHECK_EQ(ccs(b.process()).size(), 1u);
+      JCLAP_CHECK(stateB->save(b.plugin(), &after.out));
+      JCLAP_CHECK(before.bytes == after.bytes);
+
+      // reset() keeps the modulation: the next send of 71 still includes it.
+      b.plugin()->reset(b.plugin());
+      b.setParam(71, 20);
+      const auto afterReset = ccs(b.process());
+      CHECK_EQ(afterReset.empty() ? 0 : afterReset[0].value, 30);
+
+      // A controller's CC passed through on the synth's channel counts as sent: the knob isn't
+      // pushed back over it, and setting the knob to the value the synth already has sends nothing.
+      b.midi(0xB2, 74, 90);
+      const auto through = b.process();
+      CHECK_EQ(ccs(through).size(), 1u);
+      CHECK_EQ(ccs(b.process()).size(), 0u);
+      b.setParam(74, 90);
+      CHECK_EQ(ccs(b.process()).size(), 0u);
+      b.setParam(74, 91);
+      CHECK_EQ(ccs(b.process()).size(), 1u);
+
+      // A note the host's queue refuses goes out on the next block, in order.
+      b.setOutputLimit(1);
+      b.midi(0x92, 60, 100);
+      b.midi(0x82, 60, 0);
+      CHECK_EQ(b.process().midi.size(), 1u);
+      b.setOutputLimit(SIZE_MAX);
+      const auto late = b.process();
+      CHECK_EQ(late.midi.size(), 1u);
+      CHECK_EQ(late.midi.empty() ? 0 : late.midi[0].status, 0x82);
+      CHECK_EQ(b.process().midi.size(), 0u);
    }
 
    return jclap::core::testResult();

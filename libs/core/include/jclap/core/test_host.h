@@ -11,6 +11,7 @@
 
 #include <clap/clap.h>
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -54,6 +55,8 @@ inline int testResult() {
 // A list of CLAP events usable as both input and output.
 struct TestEventList {
    std::vector<std::vector<char>> events;
+   // As an output list: how many events it takes before refusing, like a host's full queue.
+   size_t limit = SIZE_MAX;
 
    void add(const clap_event_header_t &h) {
       const char *p = reinterpret_cast<const char *>(&h);
@@ -74,7 +77,10 @@ private:
       return static_cast<TestEventList *>(l->ctx)->at(i);
    }
    static bool push(const clap_output_events_t *l, const clap_event_header_t *h) {
-      static_cast<TestEventList *>(l->ctx)->add(*h);
+      auto *list = static_cast<TestEventList *>(l->ctx);
+      if (list->events.size() >= list->limit)
+         return false;
+      list->add(*h);
       return true;
    }
 };
@@ -222,6 +228,7 @@ public:
    // Runs one block. Audio buffers, if given, are stereo and `frames` long; output may alias input.
    TestOutput process(uint32_t frames = 256, float *const *audioIn = nullptr, float **audioOut = nullptr) {
       TestEventList out;
+      out.limit = outputLimit_;
       const clap_input_events_t in = in_.input();
       const clap_output_events_t outEvents = out.output();
       clap_audio_buffer_t inBuf{}, outBuf{};
@@ -257,6 +264,9 @@ public:
 
    static constexpr uint32_t kMaxFrames = 1024;
 
+   // Makes the output queue refuse events past `n` per block, as a host's full queue would.
+   void setOutputLimit(size_t n) { outputLimit_ = n; }
+
 private:
    static TestOutput collect(const TestEventList &out) {
       TestOutput result;
@@ -286,6 +296,7 @@ private:
    const clap_plugin_t *plugin_ = nullptr;
    const clap_plugin_params_t *params_ = nullptr;
    TestEventList in_;
+   size_t outputLimit_ = SIZE_MAX;
 };
 
 } // namespace jclap::core

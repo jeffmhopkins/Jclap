@@ -33,7 +33,14 @@ out to the synth as a CC. Notes and other MIDI pass straight through.
 > plugin never overwrites the synth's current sound with the plugin's defaults.
 
 - Saved projects remember which knobs were set and send them again when the project opens.
-  **SEND ALL** pushes every knob's value to the synth now.
+  **SEND ALL** pushes every knob's value to the synth now. A knob never set sends its default, which
+  is an init patch rather than all zeros: Volume 100, Osc1 Level, Cutoff and the env sustains at 127,
+  the LFO speeds and centered knobs at 64, and the rest at 0. Resetting a knob to its default sends
+  the same value.
+- Modulation sends each CC at most every 5 ms, so a fast modulator can't flood 5-pin MIDI. The
+  latest value always goes out.
+- A CC from your controller that passes through on the synth's channel counts as sent: the plugin
+  doesn't push its knob back over it until you move that knob.
 - Values are plain 0 to 127. The manual doesn't say how each CC maps to ms, Hz or semitones, so the
   panel shows the raw value. Tune, fine tune, filter env amount, EQ and the mod matrix knobs are drawn
   as centered (64 = middle).
