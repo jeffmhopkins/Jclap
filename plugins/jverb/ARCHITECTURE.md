@@ -492,7 +492,7 @@ from the new masses and velocities.
 | Short | Wood Room | 0.7 s, small, a little dark, lighter bass. |
 | Short | Small Orbit | 1 s, four bodies, bright. |
 | Short | Drum Reactor | React 100%, Duck, low cut; body 1 on Damping. |
-| Short | Swirling Slapback | Straight echo INTO; body 1 on Damping. It sets Echo Time to 140 ms but leaves Echo Sync at 1/8D, so the echo plays at a dotted eighth. |
+| Short | Swirling Slapback | 140 ms straight echo INTO, free-running; body 1 on Damping. |
 | Short | Hot Input | Tape drive PRE at +15 dB. |
 | Medium | Figure-Eight Plate | 2.4 s, Diffusion 95%, all late, bright. |
 | Medium | Ping-Pong Space | Synced 1/4 ping-pong echo AFTER. |

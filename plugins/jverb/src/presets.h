@@ -66,7 +66,7 @@ inline const std::vector<Preset> &factoryPresets() {
                          {kLowCut, 90}, {kMix, 0.3}},
                         target(0, Target::Damping, 0.4))});
       p.push_back({"Swirling Slapback", "Short",
-                   with({{kEchoOn, 1}, {kEchoWhere, kInto}, {kEchoTime, 140}, {kEchoFeedback, 0.25},
+                   with({{kEchoOn, 1}, {kEchoWhere, kInto}, {kEchoSync, 0}, {kEchoTime, 140}, {kEchoFeedback, 0.25},
                          {kEchoPingPong, 0}, {kEchoTone, 0.2}, {kEchoMix, 0.7}, {kDecay, 1.4}, {kSize, 0.7},
                          {kMix, 0.3}},
                         target(0, Target::Damping, 0.5))});
