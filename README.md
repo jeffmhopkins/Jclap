@@ -20,9 +20,7 @@ and plugins that need a panel get one from the shared GUI library.
 </tr>
 <tr>
 <td align="center" valign="top"><a href="plugins/basic-synth"><img src="plugins/basic-synth/docs/panel.png" width="240" alt="Basic Synth panel"></a><br><b>Basic Synth</b></td>
-<td align="center" valign="top"><a href="plugins/polar-xy"><img src="plugins/polar-xy/docs/panel.png" width="240" alt="Polar XY panel"></a><br><b>Polar XY</b>
-<br><br><a href="plugins/_template"><img src="plugins/_template/docs/panel.png" width="200" alt="Template plugin panel"></a><br><b>Template</b>
-<br><br><a href="libs/ui"><img src="libs/ui/docs/gallery.png" width="253" alt="jclap::ui widget gallery"></a><br><b>Widget gallery</b></td>
+<td align="center" valign="top"><a href="plugins/polar-xy"><img src="plugins/polar-xy/docs/panel.png" width="240" alt="Polar XY panel"></a><br><b>Polar XY</b></td>
 </tr>
 </table>
 
