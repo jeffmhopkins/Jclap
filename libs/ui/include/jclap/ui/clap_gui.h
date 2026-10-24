@@ -70,11 +70,14 @@ private:
       return &(static_cast<P *>(core::Plugin::from(p))->*M);
    }
 
+   void unregisterFd();
+
    const clap_host_t *host_ = nullptr;
    const clap_host_gui_t *hostGui_ = nullptr;
    const clap_host_posix_fd_support_t *hostFd_ = nullptr;
    std::unique_ptr<Window> window_;
-   bool fdRegistered_ = false;
+   // The fd registered with the host, or -1.
+   int fd_ = -1;
 };
 
 template <ClapGui *(*Lookup)(const clap_plugin_t *)>

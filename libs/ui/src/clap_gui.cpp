@@ -36,19 +36,22 @@ bool ClapGui::create(const char *api, bool isFloating) {
       return false;
    if (!window_) {
       window_ = createWindow();
-      window_->onResizeRequest = [this] {
-         if (hostGui_)
-            hostGui_->request_resize(host_, window_->width(), window_->height());
+      // Without the host's gui extension there is no one to ask, so the window just resizes.
+      window_->onResizeRequest = [this](uint32_t w, uint32_t h) {
+         return !hostGui_ || hostGui_->request_resize(host_, w, h);
       };
    }
    return true;
 }
 
+void ClapGui::unregisterFd() {
+   if (fd_ >= 0)
+      hostFd_->unregister_fd(host_, fd_);
+   fd_ = -1;
+}
+
 void ClapGui::destroy() {
-   if (fdRegistered_ && window_) {
-      hostFd_->unregister_fd(host_, window_->posixFd());
-      fdRegistered_ = false;
-   }
+   unregisterFd();
    window_.reset();
 }
 
@@ -65,9 +68,10 @@ bool ClapGui::getResizeHints(clap_gui_resize_hints_t *hints) const {
       return false;
    hints->can_resize_horizontally = true;
    hints->can_resize_vertically = true;
+   // The design ratio, which adjustSize keeps; the current size would drift with rounding.
    hints->preserve_aspect_ratio = window_->options().fixedAspectRatio;
-   hints->aspect_ratio_width = window_->width();
-   hints->aspect_ratio_height = window_->height();
+   hints->aspect_ratio_width = static_cast<uint32_t>(window_->options().width);
+   hints->aspect_ratio_height = static_cast<uint32_t>(window_->options().height);
    return true;
 }
 
@@ -79,10 +83,7 @@ bool ClapGui::adjustSize(uint32_t *width, uint32_t *height) const {
 }
 
 bool ClapGui::setSize(uint32_t width, uint32_t height) {
-   if (!window_)
-      return false;
-   window_->setSize(width, height);
-   return true;
+   return window_ && window_->setSize(width, height);
 }
 
 bool ClapGui::setParent(const clap_window_t *window) {
@@ -91,10 +92,14 @@ bool ClapGui::setParent(const clap_window_t *window) {
 #if defined(__APPLE__) || defined(_WIN32)
    window_->show(window->ptr);
 #else
+   // Every show() opens a new X connection and closes the old one, so a second set_parent needs
+   // the fd swapped. Only READ: the socket is nearly always writable, and asking for WRITE makes
+   // the host call on_fd nonstop.
+   unregisterFd();
    window_->show(reinterpret_cast<void *>(window->x11));
-   if (hostFd_ && !fdRegistered_)
-      fdRegistered_ = hostFd_->register_fd(host_, window_->posixFd(),
-                                           CLAP_POSIX_FD_READ | CLAP_POSIX_FD_WRITE | CLAP_POSIX_FD_ERROR);
+   const int fd = window_->posixFd();
+   if (hostFd_ && fd >= 0 && hostFd_->register_fd(host_, fd, CLAP_POSIX_FD_READ | CLAP_POSIX_FD_ERROR))
+      fd_ = fd;
 #endif
    return true;
 }
