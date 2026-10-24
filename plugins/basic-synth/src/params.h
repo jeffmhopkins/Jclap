@@ -55,6 +55,10 @@ enum ParamId : clap_id {
    kBendRange,
    kPressureAmount,
    kTimbreAmount,
+   // Added after 0.4.0: what velocity does, and the LFO on the pulse width.
+   kVelocityToVca,
+   kVelocityToFilter,
+   kLfoToPulseWidth,
    kParamCount
 };
 
@@ -124,6 +128,10 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kBendRange, "MPE Bend Range", "Expression", 1.0, 96.0, 48.0, kGlobalMod | CLAP_PARAM_IS_STEPPED},
    {kPressureAmount, "Pressure", "Expression", 0.0, 4.0, 2.0, kMod},
    {kTimbreAmount, "Timbre", "Expression", 0.0, 4.0, 2.0, kMod},
+   // Full velocity on the VCA by default, as before it had a knob.
+   {kVelocityToVca, "Velocity to VCA", "Velocity", 0.0, 1.0, 1.0, kMod},
+   {kVelocityToFilter, "Velocity to Filter", "Velocity", 0.0, 4.0, 0.0, kMod},
+   {kLfoToPulseWidth, "LFO to Pulse Width", "LFO", 0.0, 1.0, 0.0, kMod},
 };
 
 // Choice names, in value order.
@@ -175,6 +183,8 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kEnv1ToVca:
    case kEnv2ToVca:
    case kLfoToVca:
+   case kVelocityToVca:
+   case kLfoToPulseWidth:
       std::snprintf(out, size, "%.0f%%", value * 100.0);
       break;
    case kTune:
@@ -201,6 +211,7 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    }
    case kPressureAmount:
    case kTimbreAmount:
+   case kVelocityToFilter:
       std::snprintf(out, size, "%.1f oct", value);
       break;
    case kEnv1ToPitch:
@@ -261,6 +272,8 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
    case kEnv1ToVca:
    case kEnv2ToVca:
    case kLfoToVca:
+   case kVelocityToVca:
+   case kLfoToPulseWidth:
       value = v / 100.0;
       break;
    case kCutoff:

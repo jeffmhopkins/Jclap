@@ -167,7 +167,7 @@ private:
       add<ui::Section>({256, 68, 452, 196}, "FILTER");
       segments(kFilterMode, "MODE", {"LP", "HP", "BP"}, kBlue, {268, 116, 150, 26});
       segments(kSlope, "SLOPE", {"12", "24", "36", "48 dB"}, kBlue, {430, 116, 266, 26});
-      const auto cells = ui::row({268, 152, 428, 104}, 5);
+      const auto cells = ui::row({268, 152, 428, 104}, 6);
       knob(kCutoff, "CUTOFF", kBlue, cells[0]);
       knob(kResonance, "RESO", kBlue, cells[1]);
       tips_.add(knob(kKeyTrack, "KEY TRACK", kBlue, cells[2]),
@@ -175,6 +175,8 @@ private:
       tips_.add(knob(kPressureAmount, "PRESSURE", kBlue, cells[3]), "How far MPE pressure opens the cutoff.");
       tips_.add(knob(kTimbreAmount, "TIMBRE", kBlue, cells[4]),
                 "How far MPE timbre (slide, CC 74) moves the cutoff either way.");
+      tips_.add(knob(kVelocityToFilter, "VELOCITY", kBlue, cells[5]),
+                "How far velocity opens the cutoff: the full amount at the hardest note.");
    }
 
    // An envelope: its editor, a loop toggle, and how much it sends to the filter, VCA and pitch.
@@ -215,23 +217,27 @@ private:
       lfoLight_->fadeMs = 0;
       tips_.add(*lfoLight_, "The LFO of the newest held note.");
       segments(kLfoShape, "SHAPE", {"SIN", "TRI", "SAW", "SQR", "RND"}, kGreen, {24, 544, 322, 26});
-      const auto cells = ui::row({24, 576, 322, 88}, 3);
+      const auto cells = ui::row({24, 576, 322, 88}, 4);
       knob(kLfoRate, "RATE", kGreen, cells[0]);
       knob(kLfoToCutoff, "TO CUTOFF", kGreen, cells[1], true);
       knob(kLfoToVca, "TO VCA", kGreen, cells[2]);
+      tips_.add(knob(kLfoToPulseWidth, "TO WIDTH", kGreen, cells[3]),
+                "How far it sweeps the pulse width, around the WIDTH knob, for the PULSE wave.");
    }
 
    void buildOutput() {
       const unsigned dim = ui::defaultTheme().dimText;
       add<ui::Section>({362, 498, 346, 170}, "OUTPUT");
-      knob(kLevel, "LEVEL", kOrange, {372, 526, 84, 136});
-      add<ui::Label>({466, 526, 230, 16}, "MPE BEND RANGE", dim, visage::Font::kLeft);
-      auto &bend = add<ui::NumberBox>({466, 544, 230, 28}, rangeOf(kBendRange, 1.0));
+      knob(kLevel, "LEVEL", kOrange, {372, 526, 80, 136});
+      tips_.add(knob(kVelocityToVca, "VELOCITY", kOrange, {456, 526, 80, 136}),
+                "How much velocity sets the loudness: at 0 every note plays as loud as the hardest.");
+      add<ui::Label>({546, 526, 150, 16}, "MPE BEND RANGE", dim, visage::Font::kLeft);
+      auto &bend = add<ui::NumberBox>({546, 544, 150, 28}, rangeOf(kBendRange, 1.0));
       bend.setStepButtons(true);
       bend.valueText = [](double v) { return text(kBendRange, v); };
       bend.parseText = [](const std::string &t, double &v) { return parseParam(kBendRange, t.c_str(), v); };
       bindings_.bind(bend, kBendRange);
-      scope_ = &add<ui::Scope>({466, 582, 230, 78});
+      scope_ = &add<ui::Scope>({546, 582, 150, 78});
       scope_->setAccent(kOrange);
    }
 

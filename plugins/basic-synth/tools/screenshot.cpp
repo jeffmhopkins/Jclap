@@ -36,6 +36,10 @@ public:
          return 7.0;
       case kLfoToVca:
          return 0.3;
+      case kLfoToPulseWidth:
+         return 0.4;
+      case kVelocityToFilter:
+         return 1.5;
       default:
          return id < kParamCount ? kParams[id].defaultValue : 0.0;
       }
