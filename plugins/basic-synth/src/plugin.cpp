@@ -367,8 +367,14 @@ private:
       s.voice.configure(settings(s));
       s.voice.setPitch(pitchOf(s));
       s.voice.setExpression(pressureOf(s), timbreOf(s));
-      // The output VCA takes the level; a voice's own level modulation scales just that voice.
-      s.voice.setGain(s.velocity * s.volume * jclap::dsp::dbToGain(s.mod[kLevel]));
+      s.voice.setGain(gainOf(s));
+   }
+
+   // The output VCA takes the level; a voice's own level modulation scales just that voice. Velocity
+   // takes away up to its amount: at 0 every note is as loud as the hardest.
+   double gainOf(const Slot &s) const {
+      const double velocity = 1.0 - value(kVelocityToVca, &s) * (1.0 - s.velocity);
+      return velocity * s.volume * jclap::dsp::dbToGain(s.mod[kLevel]);
    }
 
    // A param as a voice hears it: the value, plus global and per-voice modulation, clamped.
@@ -390,6 +396,7 @@ private:
       vs.cutoffHz = cutoffHz(value(kCutoff, s));
       vs.resonance = value(kResonance, s);
       vs.keyTrack = value(kKeyTrack, s);
+      vs.velocityOctaves = value(kVelocityToFilter, s) * slot.velocity;
       vs.pressureAmount = value(kPressureAmount, s);
       vs.timbreAmount = value(kTimbreAmount, s);
       for (int i = 0; i < kEnvCount; ++i) {
@@ -407,6 +414,7 @@ private:
       vs.lfoRate = lfoHz(value(kLfoRate, s));
       vs.lfoToCutoff = value(kLfoToCutoff, s);
       vs.lfoToVca = value(kLfoToVca, s);
+      vs.lfoToPulseWidth = value(kLfoToPulseWidth, s);
       return vs;
    }
 
@@ -585,7 +593,7 @@ private:
       for (double &m : s.mod)
          m = 0.0;
       configure(s);
-      s.voice.start(pitchOf(s), velocity);
+      s.voice.start(pitchOf(s), gainOf(s));
    }
 
    // The same note if it is still sounding, else a free voice, else the quietest releasing one,

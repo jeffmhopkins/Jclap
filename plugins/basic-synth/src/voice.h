@@ -2,9 +2,10 @@
 
 // One synth voice, built from jclap::dsp: oscillator (or a detuned pair) -> filter -> VCA. Two envelopes send to the
 // filter, the VCA and the pitch by their own amounts. A looping envelope is not the voice's own: the
-// plugin runs one shared cycle and passes its value in, so every voice moves together, and an LFO moves the cutoff
-// and the VCA. Per-note expression (MPE) moves it too: bend sets the pitch, and pressure and timbre
-// open the filter, and the cutoff can follow the note.
+// plugin runs one shared cycle and passes its value in, so every voice moves together, and an LFO moves the cutoff,
+// the VCA and the pulse width. Velocity scales the VCA and opens the filter, each by its own amount. Per-note
+// expression (MPE) moves it too: bend sets the pitch, and pressure and timbre open the filter, and the cutoff can
+// follow the note.
 
 #include <jclap/dsp/envelope.h>
 #include <jclap/dsp/filter.h>
@@ -16,6 +17,8 @@
 
 #include <algorithm>
 #include <cmath>
+
+#include "params.h"
 
 namespace basic_synth {
 
@@ -33,6 +36,8 @@ struct VoiceSettings {
    double cutoffHz = 2000.0, resonance = 0.3;
    // How far the cutoff follows the note's pitch, 0..1: at 1 it moves an octave per octave, from C4.
    double keyTrack = 0.0;
+   // Octaves this note's velocity opens the cutoff (the Velocity to Filter amount times the velocity).
+   double velocityOctaves = 0.0;
    // An envelope: ADSR in seconds and sustain level, where it goes, and whether it loops (then the
    // voice takes the shared cycle's value instead). Filter is in octaves, pitch in semitones, both
    // either way; VCA is 0..1.
@@ -44,9 +49,10 @@ struct VoiceSettings {
    Env env[kEnvCount];
    // How far MPE moves the cutoff, in octaves at full scale. Timbre is centred on 0.5.
    double pressureAmount = 2.0, timbreAmount = 2.0;
-   // The LFO: octaves of cutoff at full swing, and tremolo depth 0..1.
+   // The LFO: octaves of cutoff at full swing, tremolo depth 0..1, and pulse width depth 0..1 (at 1
+   // it sweeps the width across its whole range).
    jclap::dsp::Lfo::Shape lfoShape = jclap::dsp::Lfo::Shape::Triangle;
-   double lfoRate = 5.0, lfoToCutoff = 0.0, lfoToVca = 0.0;
+   double lfoRate = 5.0, lfoToCutoff = 0.0, lfoToVca = 0.0, lfoToPulseWidth = 0.0;
 };
 
 class SynthVoice {
@@ -75,6 +81,7 @@ public:
          o->setWave(s.wave);
          o->setPulseWidth(s.pulseWidth);
       }
+      pulseWidth_ = s.pulseWidth;
       dual_ = s.dual;
       detune_ = s.detune;
       filter_.setMode(s.filterMode);
@@ -87,7 +94,7 @@ public:
          env_[i].setRelease(s.env[i].release);
          sends_[i] = s.env[i];
       }
-      cutoff_.setTarget(std::log2(s.cutoffHz));
+      cutoff_.setTarget(std::log2(s.cutoffHz) + s.velocityOctaves);
       keyTrack_ = s.keyTrack;
       pressureAmount_ = s.pressureAmount;
       timbreAmount_ = s.timbreAmount;
@@ -95,6 +102,7 @@ public:
       lfo_.setRate(s.lfoRate);
       lfoToCutoff_ = s.lfoToCutoff;
       lfoToVca_ = s.lfoToVca;
+      lfoToPulseWidth_ = s.lfoToPulseWidth;
    }
 
    // Gate on at a pitch in semitones (MIDI note numbers, fractional for bends). A voice that is still
@@ -163,6 +171,12 @@ public:
       }
       const double lfo = lfoValue_ = lfo_.process();
       const double pitch = pitch_.process() + toPitch;
+      if (lfoToPulseWidth_ > 0.0) {
+         // Pulse width modulation, about the knob's width and kept inside the oscillator's range.
+         const double width = std::clamp(pulseWidth_ + lfoToPulseWidth_ * kLfoWidthSwing * lfo, 0.05, 0.95);
+         osc_.setPulseWidth(width);
+         osc2_.setPulseWidth(width);
+      }
       double source;
       if (dual_) {
          // The first stays on the note and the second is detuned from it, by a few cents for
@@ -220,7 +234,8 @@ private:
    // VCA opens and closes without clicks.
    jclap::dsp::Smoother pitch_, pressure_, timbre_, cutoff_, gate_;
    double keyTrack_ = 0.0, pressureAmount_ = 0.0, timbreAmount_ = 0.0;
-   double lfoToCutoff_ = 0.0, lfoToVca_ = 0.0, lfoValue_ = 0.0;
+   double pulseWidth_ = 0.5;
+   double lfoToCutoff_ = 0.0, lfoToVca_ = 0.0, lfoToPulseWidth_ = 0.0, lfoValue_ = 0.0;
    bool released_ = true;
    float level_ = 0.0f;
 };

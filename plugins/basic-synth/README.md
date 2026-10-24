@@ -20,12 +20,13 @@ oscillator ──> filter ──> VCA ──> out
     ^            ^         ^
     │            │         │
    Env 1, Env 2: each sends to pitch, filter and VCA by its own amount
-   LFO: to filter and VCA (tremolo)
+   LFO: to filter, VCA (tremolo) and pulse width
+   Velocity: to filter and VCA, each by its own knob
    MPE pressure, timbre: to filter
 ```
 
 - **Oscillator**: sine, triangle, saw, square or pulse, with pulse width, band-limited. DUAL adds a second oscillator of the same wave, detuned from the first by DETUNE: a few cents either side of the centre for beating, up to an octave up or down at the ends.
-- **Filter**: low, high or band pass at 12, 24, 36 or 48 dB/oct, with resonance. KEY TRACK moves the cutoff with the note, up to an octave per octave from C4.
+- **Filter**: low, high or band pass at 12, 24, 36 or 48 dB/oct, with resonance. KEY TRACK moves the cutoff with the note, up to an octave per octave from C4. VELOCITY opens the cutoff for harder notes, by up to 4 octaves at full velocity (off to start with).
 - **Env 1 and Env 2**: two ADSRs, each with a **loop** toggle and three amounts: to the filter (±5 octaves), to the VCA (0 to 100%) and to the pitch (±24
   semitones). They start as Env 1 on the VCA and Env 2 on the filter. Whatever share of the VCA the
   envelopes don't take follows the key, so with both VCA amounts at 0 it is a plain organ-style gate.
@@ -35,7 +36,10 @@ oscillator ──> filter ──> VCA ──> out
   every voice follows the same cycle, and it shows as a single dot. On the VCA it is let through
   while a key is held.
 - **LFO**: sine, triangle, saw, square or random, 0.05 to 20 Hz, restarted with each note. It moves the
-  cutoff (±4 octaves) and the VCA (tremolo). The light next to it shows the newest note's LFO.
+  cutoff (±4 octaves), the VCA (tremolo) and, for the pulse wave, the pulse width (TO WIDTH sweeps it
+  either side of the WIDTH knob, up to the whole range). The light next to it shows the newest note's LFO.
+- **Output**: LEVEL, and VELOCITY, how much velocity sets each note's loudness. It starts at 100%, so
+  a soft note is quiet; at 0 every note plays as loud as the hardest.
 - **Voices**: eight. A ninth note takes the quietest releasing voice, or else the oldest.
 
 ## Automation and modulation
@@ -43,7 +47,8 @@ oscillator ──> filter ──> VCA ──> out
 Every parameter is a host parameter: Bitwig can automate it, and its modulators can move it. Every
 one except MPE Bend Range can also be modulated **per voice**, so a polyphonic modulator in Bitwig
 (a per-note LFO, velocity or random, for instance) moves each note on its own. The knobs and
-envelope drawings show the host's modulation as a light ring or line over the value.
+envelope drawings show the host's modulation as a light ring or line over the value. The LFO's own movement shows
+the same way in green, carrying on from the host's: on CUTOFF and WIDTH while a note sounds.
 
 ## MPE
 
