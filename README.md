@@ -13,6 +13,21 @@ and plugins that need a panel get one from the shared GUI library.
 
 ## Plugins
 
+<table>
+<tr>
+<td align="center" valign="top"><a href="plugins/jverb"><img src="plugins/jverb/docs/panel.png" width="400" alt="JVerb panel"></a><br><b>JVerb</b></td>
+<td align="center" valign="top"><a href="plugins/micromonsta2"><img src="plugins/micromonsta2/docs/panel.png" width="387" alt="MicroMonsta 2 CC panel"></a><br><b>MicroMonsta 2 CC</b></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="plugins/basic-synth"><img src="plugins/basic-synth/docs/panel.png" width="240" alt="Basic Synth panel"></a><br><b>Basic Synth</b></td>
+<td align="center" valign="top"><a href="plugins/polar-xy"><img src="plugins/polar-xy/docs/panel.png" width="240" alt="Polar XY panel"></a><br><b>Polar XY</b>
+<br><br><a href="plugins/_template"><img src="plugins/_template/docs/panel.png" width="200" alt="Template plugin panel"></a><br><b>Template</b>
+<br><br><a href="libs/ui"><img src="libs/ui/docs/gallery.png" width="253" alt="jclap::ui widget gallery"></a><br><b>Widget gallery</b></td>
+</tr>
+</table>
+
+Panels are shown at one-third size. They are the screenshot-test references, so they always match the current build.
+
 | Plugin | Type | What it does |
 |---|---|---|
 | [Polar XY](plugins/polar-xy) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
