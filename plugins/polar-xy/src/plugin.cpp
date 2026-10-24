@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 
@@ -101,9 +102,19 @@ public:
    }
    void endEdit(clap_id id) override { edits_.end(id); }
    const jclap::ui::HostMenu *hostMenu() const override { return &hostMenu_; }
-   void lastInput(int &x, int &y) const override {
-      x = lastX_.load();
-      y = lastY_.load();
+   void lastInput(int &x, int &y, int &channel) const override {
+      const uint32_t v = lastIn_.load();
+      channel = static_cast<int>(v >> 16) & 0x0F;
+      x = static_cast<int>(v >> 8) & 0x7F;
+      y = static_cast<int>(v) & 0x7F;
+   }
+   bool lastOutput(int &angle, int &radius) const override {
+      const int32_t v = lastOut_.load();
+      if (v < 0)
+         return false;
+      angle = (v >> 8) & 0x7F;
+      radius = v & 0x7F;
+      return true;
    }
 
    bool notePortsInfo(uint32_t index, bool isInput, clap_note_port_info_t *info) const override {
@@ -197,8 +208,13 @@ public:
       const uint32_t n = in->size(in);
       for (uint32_t i = 0; i < n; ++i) {
          const clap_event_header_t *h = in->get(in, i);
+         // X and Y moving at the same moment are one move: a channel converts once its events at that
+         // time are all in, so no point made of the new X and the old Y goes out between them.
+         if (h->time != pendingTime_)
+            convertPending(out);
          if (h->space_id == CLAP_CORE_EVENT_SPACE_ID) {
             if (h->type == CLAP_EVENT_PARAM_VALUE) {
+               convertPending(out);
                applyParam(reinterpret_cast<const clap_event_param_value_t *>(h));
                applySettings(out, h->time);
                continue;
@@ -213,6 +229,7 @@ public:
          if (jclap::core::isNoteEvent(h))
             out->try_push(out, h);
       }
+      convertPending(out);
       // Audio is copied through untouched; the port only exists so hosts that expect audio IO accept us.
       jclap::core::passAudioThrough(proc);
       return CLAP_PROCESS_CONTINUE;
@@ -222,6 +239,21 @@ private:
    void resetChannels() {
       for (auto &c : channels_)
          c = ChannelState{};
+      pendingMask_ = 0;
+   }
+
+   void convertPending(const clap_output_events_t *out) {
+      for (int channel = 0; pendingMask_ != 0; ++channel)
+         if (pendingMask_ & (1u << channel)) {
+            pendingMask_ &= ~(1u << channel);
+            convert(out, pendingTime_, channel);
+         }
+   }
+
+   // Two inputs or two outputs on one CC can't be told apart, so the plugin converts nothing (and
+   // passes the input CCs through) until they differ. The panel says so.
+   bool conflicting() const {
+      return intParam(kParamInX) == intParam(kParamInY) || intParam(kParamOutAngle) == intParam(kParamOutRadius);
    }
 
    void forgetSent() {
@@ -249,6 +281,17 @@ private:
    // A changed setting changes what the controller's position means, so every channel that has a
    // position sends it again at once; on new output CCs, whatever it was sent on the old ones.
    void applySettings(const clap_output_events_t *out, uint32_t time) {
+      // A new input CC means that axis isn't known until it arrives on it, rather than pairing the
+      // other axis with the old CC's last value.
+      const int inX = intParam(kParamInX), inY = intParam(kParamInY);
+      if (inX != inX_ || inY != inY_) {
+         for (ChannelState &st : channels_) {
+            st.hasX = st.hasX && inX == inX_;
+            st.hasY = st.hasY && inY == inY_;
+         }
+         inX_ = inX;
+         inY_ = inY;
+      }
       const Settings now = settings();
       if (now == applied_)
          return;
@@ -265,7 +308,7 @@ private:
    // Sends a channel's position as angle and radius, each only if it changed.
    void convert(const clap_output_events_t *out, uint32_t time, int channel) {
       ChannelState &st = channels_[channel];
-      if (!st.hasX || !st.hasY)
+      if (!st.hasX || !st.hasY || conflicting())
          return;
       jclap::PolarSettings s;
       s.angleOffsetDeg = applied_.angleOffset;
@@ -284,6 +327,8 @@ private:
          pushCC(out, time, channel, applied_.outRadius, p.radius);
          st.sentRadius = p.radius;
       }
+      if (channel == panelChannel_ && st.sentAngle >= 0)
+         lastOut_.store(st.sentAngle << 8 | st.sentRadius);
    }
 
    void pushCC(const clap_output_events_t *out, uint32_t time, int channel, int cc, int value) {
@@ -297,10 +342,11 @@ private:
          return false;
       const int channel = ev->data[0] & 0x0F;
       const int cc = ev->data[1];
-      const int value = ev->data[2];
+      const int value = ev->data[2] & 0x7F;
       ChannelState &st = channels_[channel];
 
-      // The same CC for both is read as X.
+      if (conflicting())
+         return false;
       if (cc == intParam(kParamInX)) {
          st.x = value;
          st.hasX = true;
@@ -310,23 +356,35 @@ private:
       } else {
          return false;
       }
-      lastX_.store(st.x);
-      lastY_.store(st.y);
+      // The panel follows the channel that moved last, as one tear-free value.
+      if (channel != panelChannel_) {
+         panelChannel_ = channel;
+         lastOut_.store(st.sentAngle >= 0 ? st.sentAngle << 8 | st.sentRadius : -1);
+      }
+      lastIn_.store(static_cast<uint32_t>(channel) << 16 | static_cast<uint32_t>(st.x) << 8 |
+                    static_cast<uint32_t>(st.y));
 
       const bool passThrough = intParam(kParamPassThrough) != 0;
       if (passThrough)
          out->try_push(out, &ev->header);
 
-      convert(out, ev->header.time, channel);
+      pendingMask_ |= 1u << channel;
+      pendingTime_ = ev->header.time;
       return true;
    }
 
    std::atomic<double> params_[kParamCount];
    ChannelState channels_[16];
-   // The settings the last conversion used (audio thread).
+   // The settings the last conversion used, and the input CCs (audio thread).
    Settings applied_;
-   // The last X/Y seen on any channel, for the panel.
-   std::atomic<int> lastX_{64}, lastY_{64};
+   int inX_ = -1, inY_ = -1;
+   // Channels with input waiting to convert, all at pendingTime_ (audio thread).
+   uint32_t pendingMask_ = 0, pendingTime_ = 0;
+   // For the panel: the channel that moved last, its X/Y (channel << 16 | x << 8 | y) and what it
+   // last sent (angle << 8 | radius, or -1 for nothing yet).
+   int panelChannel_ = 0;
+   std::atomic<uint32_t> lastIn_{64u << 8 | 64u};
+   std::atomic<int32_t> lastOut_{-1};
    jclap::core::EditQueue edits_;
    jclap::ui::HostMenu hostMenu_;
    // Last, so the panel closes before the state it reads goes away.

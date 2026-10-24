@@ -5,6 +5,7 @@
 
 #include "editor.h"
 #include "params.h"
+#include "polar.h"
 
 namespace {
 
@@ -19,9 +20,19 @@ public:
    void beginEdit(clap_id) override {}
    void setParam(clap_id, double) override {}
    void endEdit(clap_id) override {}
-   void lastInput(int &x, int &y) const override {
+   void lastInput(int &x, int &y, int &channel) const override {
       x = 104;
       y = 88;
+      channel = 0;
+   }
+   // What the plugin sends for that input with the 45 degree offset.
+   bool lastOutput(int &angle, int &radius) const override {
+      jclap::PolarSettings settings;
+      settings.angleOffsetDeg = 45.0;
+      const jclap::PolarCC out = jclap::toPolar(104, 88, settings);
+      angle = out.angle;
+      radius = out.radius;
+      return true;
    }
 };
 

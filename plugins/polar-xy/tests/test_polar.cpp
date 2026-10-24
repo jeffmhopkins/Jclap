@@ -36,15 +36,28 @@ int main() {
 
    // Corners clamp to the unit circle by default, and reach full radius in fill-square mode.
    CHECK_EQ(toPolar(127, 127, def).radius, 127);
-   CHECK_EQ(toPolar(96, 96, def).radius, 91);  // ~0.508 * sqrt(2) * 127
+   CHECK_EQ(toPolar(96, 96, def).radius, 90);  // (0.508 * sqrt(2) - dead zone) / (1 - dead zone) * 127
    PolarSettings fill;
    fill.radiusMode = RadiusMode::FillSquare;
-   CHECK_EQ(toPolar(96, 96, fill).radius, 65);
+   CHECK_EQ(toPolar(96, 96, fill).radius, 63);
    CHECK_EQ(toPolar(127, 127, fill).angle, 16); // 45 deg
 
-   // Just below +X wraps to the top of the CC range rather than going negative.
-   auto below = toPolar(127, 63, def);
-   CHECK_EQ(below.angle, 127);
+   // Just below +X wraps round to 0: 127 would be a full turn, the same angle, so it's never sent.
+   CHECK_EQ(toPolar(127, 63, def).angle, 0);
+   for (int x = 0; x < 128; ++x)
+      for (int y = 0; y < 128; ++y)
+         if (toPolar(x, y, def).angle > 126) {
+            CHECK_EQ(toPolar(x, y, def).angle, 126);
+            x = y = 128;
+         }
+   CHECK_EQ(toPolar(127, 66, def).angle, 1);
+
+   // The dead zone: a step of jitter around the centre, even diagonally, holds the angle at radius 0;
+   // just outside, the radius starts at 1.
+   CHECK_EQ(toPolar(65, 63, def).hasAngle, false);
+   CHECK_EQ(toPolar(63, 63, def).radius, 0);
+   CHECK_EQ(toPolar(66, 65, def).hasAngle, true);
+   CHECK_EQ(toPolar(66, 65, def).radius, 1);
 
    // Clockwise flips the sense; offset rotates and wraps.
    PolarSettings cw;

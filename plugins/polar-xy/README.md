@@ -33,10 +33,15 @@ MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note 
 - **Radius**: 0 at center, 127 at the edge. A square XY pad can reach about 1.41 in the corners; by
   default this is clamped to the unit circle (`Radius Mode = Clamp to circle`). `Fill square` instead
   uses `max(|x|, |y|)` so the whole square edge reaches full radius.
-- **Angle**: 0..127 covers one full turn. 0 is +X (pointing right), increasing counter-clockwise. The
-  wrap from 127 back to 0 is a neighbor step on the circle, not a jump.
-- At dead center the angle is undefined, so the plugin holds the last angle and only sends radius 0.
-- Output CCs are only sent when their value changes.
+- **Angle**: one full turn in steps of 1/127, so 0..126. 0 is +X (pointing right), increasing
+  counter-clockwise. 127 would be a full turn, the same angle as 0, so the wrap goes from 126 to 0.
+- Around dead center (within about two CC steps) the angle is undefined, so the plugin holds the last
+  angle and sends radius 0. Controller jitter at rest can't swing the Orb across quadrants. Outside
+  that the radius starts at 1.
+- X and Y arriving at the same moment are one move: only the final point goes out.
+- Each MIDI channel has its own position. Output CCs are only sent when their value changes.
+- If X and Y In (or Angle and Radius Out) are set to the same CC, nothing is converted and the input
+  CCs pass through. The panel shows a warning.
 
 > [!IMPORTANT]
 > Spectrasonics doesn't document where the Orb's angle 0 sits or which way it turns, so these are
@@ -45,7 +50,8 @@ MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note 
 
 ## Panel
 
-**XY IN** shows the last X/Y position received and **POLAR OUT** the angle and radius sent for it,
+**XY IN** shows the last X/Y position received, with its channel, and **POLAR OUT** the angle and
+radius the plugin sent for that channel (a dash until both axes have arrived),
 with angle 0 marked by the tick on the right. Comparing the two shows what `Angle Offset` and
 `Direction` do. Below them are all the settings, which are also plain host parameters.
 

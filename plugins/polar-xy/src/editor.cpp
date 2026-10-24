@@ -11,6 +11,7 @@
 #include <jclap/ui/section.h>
 #include <jclap/ui/xy_pad.h>
 
+#include <cmath>
 #include <string>
 
 #include "params.h"
@@ -76,6 +77,8 @@ public:
       auto &pass = add<ui::Button>({590, 410, 106, 30}, "PASS");
       pass.setAccent(kPurple);
       bindings_.bind(pass, kParamPassThrough);
+      // Shown when two inputs or two outputs share a CC, which the plugin won't convert.
+      warning_ = &add<ui::Label>({380, 44, 320, 16}, "", kOrange, visage::Font::kRight, 0.7f);
 
       sync();
       startTimer(30);
@@ -129,31 +132,33 @@ private:
    }
 
    void sync() {
-      int x = 64, y = 64;
-      host_.lastInput(x, y);
-      jclap::PolarSettings settings;
-      settings.angleOffsetDeg = host_.paramValue(kParamAngleOffset);
-      settings.clockwise = host_.paramValue(kParamDirection) >= 0.5;
-      settings.radiusMode = host_.paramValue(kParamRadiusMode) >= 0.5 ? jclap::RadiusMode::FillSquare
-                                                                       : jclap::RadiusMode::ClampToCircle;
-      const jclap::PolarCC out = jclap::toPolar(x, y, settings);
-      // At dead center the angle is undefined and the plugin holds the last one; so does the view.
-      if (out.hasAngle)
-         angle_ = out.angle;
+      int x = 64, y = 64, channel = 0;
+      host_.lastInput(x, y, channel);
+      // What the plugin really sent on that channel (it holds the angle at the centre, and sends
+      // nothing until both axes have arrived), rather than a guess from the input.
+      int angle = 0, radius = 0;
+      const bool sent = host_.lastOutput(angle, radius);
 
       xy_->x().label = "X " + std::to_string(x);
-      xy_->y().label = "Y " + std::to_string(y);
-      polar_->x().label = "ANGLE " + std::to_string(angle_);
-      polar_->y().label = "RADIUS " + std::to_string(out.radius);
+      xy_->y().label = "Y " + std::to_string(y) + "  CH " + std::to_string(channel + 1);
+      polar_->x().label = sent ? "ANGLE " + std::to_string(angle) : "ANGLE -";
+      polar_->y().label = sent ? "RADIUS " + std::to_string(radius) : "RADIUS -";
       xy_->setValues(x, y);
-      polar_->setValues(angle_, out.radius);
+      polar_->setValues(angle, radius);
+
+      const auto same = [this](clap_id a, clap_id b) {
+         return std::lround(host_.paramValue(a)) == std::lround(host_.paramValue(b));
+      };
+      warning_->setText(same(kParamInX, kParamInY)               ? "X and Y share a CC: not converting"
+                        : same(kParamOutAngle, kParamOutRadius) ? "Angle and radius share a CC: not converting"
+                                                                : "");
    }
 
    EditorHost &host_;
    ui::ParamBindings bindings_;
    ui::XYPad *xy_ = nullptr;
    ui::XYPad *polar_ = nullptr;
-   int angle_ = 0;
+   ui::Label *warning_ = nullptr;
 };
 } // namespace
 
