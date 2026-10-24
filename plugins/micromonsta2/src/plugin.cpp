@@ -472,7 +472,7 @@ const clap_plugin_descriptor_t MicroMonsta::descriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.6.0",
+   "0.7.0",
    "Knob panel that sends every MicroMonsta 2 parameter as MIDI CC",
    kFeatures,
 };
