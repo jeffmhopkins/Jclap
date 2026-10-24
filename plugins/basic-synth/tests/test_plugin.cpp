@@ -790,5 +790,99 @@ int main() {
       JCLAP_CHECK(jclap::ui::noteName(60) == "C4" && jclap::ui::noteName(37) == "C#2" && jclap::ui::noteName(0) == "C-1");
    }
 
+   // Sustain pedal (#54) and MIDI expressions on CLAP-dialect notes (#53), on a fresh instance.
+   {
+      jclap::core::TestHost h2(clap_entry, "com.jeffmhopkins.jclap.basic-synth");
+      EditorHost &panel2 = *h2.object<EditorHost>();
+      Run r{h2, {}, {}, {}};
+      h2.setParam(kWave, 0.0);
+      h2.setParam(kCutoff, 1.0);
+      h2.setParam(kEnv2ToFilter, 0.0);
+      h2.setParam(kEnv1Sustain, 1.0);
+      h2.setParam(kEnv1Attack, 1.0);
+      h2.setParam(kEnv1Release, 50.0);
+      std::vector<EditorHost::Voice> vs;
+
+      // Pedal down: a released MIDI note keeps sounding until the pedal comes up.
+      h2.midi(0xB0, 64, 127);
+      h2.midi(0x90, 57, 100);
+      r(4800);
+      h2.midi(0x80, 57, 0);
+      r(9600);
+      JCLAP_CHECK(r.rms() > 0.05);
+      h2.midi(0xB0, 64, 0);
+      r(9600);
+      JCLAP_CHECK(r.left.back() == 0.0f);
+
+      // The same for a CLAP note on that channel, and the manager channel's pedal holds a note on
+      // another channel.
+      h2.midi(0xB0, 64, 100);
+      h2.note(CLAP_EVENT_NOTE_ON, 69, 1.0, 1, 0);
+      h2.note(CLAP_EVENT_NOTE_ON, 72, 1.0, 2, 3);
+      r(4800);
+      h2.note(CLAP_EVENT_NOTE_OFF, 69, 0.0, 1, 0);
+      h2.note(CLAP_EVENT_NOTE_OFF, 72, 0.0, 2, 3);
+      r(9600);
+      panel2.voices(vs);
+      JCLAP_CHECK(vs.size() == 2);
+      // A pedal on channel 4 coming up doesn't let go of notes the manager pedal still holds.
+      h2.midi(0xB3, 64, 0);
+      r(9600);
+      panel2.voices(vs);
+      JCLAP_CHECK(vs.size() == 2);
+      h2.midi(0xB0, 64, 0);
+      r(9600);
+      panel2.voices(vs);
+      JCLAP_CHECK(vs.empty());
+      JCLAP_CHECK(r.noteEnds.size() >= 2);
+
+      // The pedal never holds the panel's notes.
+      h2.midi(0xB0, 64, 127);
+      panel2.noteOn(60, 1.0f);
+      r(4800);
+      panel2.noteOff(60);
+      r(9600);
+      panel2.voices(vs);
+      JCLAP_CHECK(vs.empty());
+      // CC 123 lets go of held notes even with the pedal down.
+      h2.midi(0x90, 60, 100);
+      r(4800);
+      h2.midi(0x80, 60, 0);
+      h2.midi(0xB0, 123, 0);
+      r(9600);
+      panel2.voices(vs);
+      JCLAP_CHECK(vs.empty());
+      h2.midi(0xB0, 64, 0);
+
+      // A CLAP note follows MIDI pitch bend on its channel: full bend up on channel 1 is +2 st.
+      h2.note(CLAP_EVENT_NOTE_ON, 69, 1.0, 5, 0);
+      h2.midi(0xE0, 0x7F, 0x7F);
+      r(4800);
+      r(48000);
+      JCLAP_CHECK(near(r.frequency(), 440.0 * std::pow(2.0, 2.0 * 8191.0 / 8192.0 / 12.0), 1.0));
+      // Channel pressure and CC 74 reach it too, until it gets its own expression.
+      h2.midi(0xD0, 64, 0);
+      h2.midi(0xB0, 74, 127);
+      r(256);
+      panel2.voices(vs);
+      JCLAP_CHECK(vs.size() == 1 && near(vs[0].pressure, 64 / 127.0, 1e-4) && vs[0].timbre == 1.0f);
+      h2.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, 69, 0.2, 5, 0);
+      r(256);
+      panel2.voices(vs);
+      JCLAP_CHECK(vs.size() == 1 && near(vs[0].pressure, 0.2, 1e-4) && vs[0].timbre == 1.0f);
+      h2.midi(0xE0, 0x00, 0x40);
+      h2.note(CLAP_EVENT_NOTE_OFF, 69, 0.0, 5, 0);
+      r(9600);
+
+      // The panel's notes ignore the host's MIDI bend.
+      h2.midi(0xE0, 0x7F, 0x7F);
+      panel2.noteOn(69, 1.0f);
+      r(4800);
+      r(48000);
+      JCLAP_CHECK(near(r.frequency(), 440.0, 0.5));
+      panel2.noteOff(69);
+      r(9600);
+   }
+
    return jclap::core::testResult();
 }

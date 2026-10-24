@@ -62,8 +62,10 @@ Every note bends, presses and slides on its own.
 | Volume | Volume | | Level |
 
 Plain MIDI works too: notes on channel 1 play, and its pitch bend moves every note by ±2 semitones (as
-the MPE manager channel does). The synth reports each finished voice to the host (`NOTE_END`), so
-Bitwig's per-note modulators know when a note is done.
+the MPE manager channel does). The sustain pedal (CC 64) holds notes on its channel, or on every
+channel from channel 1. A host that sends notes as CLAP events and its controllers as MIDI (REAPER
+can) still gets bend, pressure and CC 74 on those notes. The synth reports each finished voice to the
+host (`NOTE_END`), so Bitwig's per-note modulators know when a note is done.
 
 > [!TIP]
 > In Bitwig, MPE controllers and per-note expressions from the piano roll arrive as CLAP note
