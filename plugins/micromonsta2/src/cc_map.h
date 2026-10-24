@@ -103,7 +103,12 @@ inline int indexOfCc(int cc) {
 // Host modulation (e.g. a Bitwig modulator) is an offset on top of the knob's setting.
 inline double modulated(double base, double mod) { return std::clamp(base + mod, 0.0, 127.0); }
 
-inline int toCcValue(double value) { return std::clamp(static_cast<int>(std::lround(value)), 0, 127); }
+// NaN (which lround leaves unspecified) maps to 0.
+inline int toCcValue(double value) {
+   if (!(value > 0.0))
+      return 0;
+   return static_cast<int>(std::lround(std::min(value, 127.0)));
+}
 
 // Remembers what was last sent for each CC so only real changes go out. A parameter is only sent
 // once it has been "touched" (set by the host, automation or the panel), so inserting the plugin
@@ -120,16 +125,15 @@ public:
    // Forget what was sent so every touched CC goes out again (e.g. after a channel change).
    void resendAll() { reset(); }
 
-   // Returns the CC value to send for parameter index i, or -1 if nothing needs to go out.
-   int update(int i, double value, bool touched) {
+   // Returns the CC value to send for parameter index i, or -1 if nothing needs to go out. It only
+   // counts as sent once sent() says so, so a CC the host's output queue refused goes out next time.
+   int pending(int i, double value, bool touched) const {
       if (!touched)
          return -1;
       const int v = toCcValue(value);
-      if (v == lastSent_[i])
-         return -1;
-      lastSent_[i] = v;
-      return v;
+      return v == lastSent_[i] ? -1 : v;
    }
+   void sent(int i, int value) { lastSent_[i] = value; }
 
 private:
    int lastSent_[kCcParamCount];
