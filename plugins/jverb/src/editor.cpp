@@ -1056,6 +1056,7 @@ public:
    }
 
    OrbitView &view() { return *view_; }
+   void selectSpacePage(int page) { spaceTabs_->select(page); }
    // Pulls every control's value from the host now, as the bindings' timer does.
    void syncControls() { bindings_.sync(); }
 
@@ -1135,11 +1136,12 @@ private:
       tips_.add(bars, "Bars per lap when synced.");
    }
 
-   // Left: the space itself, on two pages.
+   // Left: the space itself, on three pages.
    void buildSpace() {
       const unsigned a = kSpaceAccent;
       glass({16, 64, 214, 536}, "", a);
       auto &tabs = glassy(add<ui::TabBar>({24, 70, 198, 26}, std::vector<std::string>{"SPACE", "SHAPE", "ORBIT"}), a);
+      spaceTabs_ = &tabs;
       tabs.addToPage(0, knob(kDecay, "DECAY", a, {26, 104, 194, 122}, "How long the tail lasts (RT60)."));
       const auto g = ui::grid({26, 232, 194, 360}, 2, 3);
       tabs.addToPage(0, knob(kSize, "SYSTEM SIZE", a, g[0], "Scales the whole system: every delay line, and the room."));
@@ -1154,7 +1156,7 @@ private:
       tabs.addToPage(0, add<ui::Label>(ui::Rect{g[2].x, g[2].y + 72, g[2].w, 16}, "sparse - dense", kDim,
                                        visage::Font::kCenter));
       tabs.addToPage(0, knob(kMotion, "MOTION", a, g[3], "How much the tail drifts and shimmers as it rings: "
-                                                         "a subtle chorus, never a pitch bend."));
+                                                         "a subtle chorus up to 100%, a seasick warble past it."));
       tabs.addToPage(0, knob(kPredelay, "PREDELAY", a, g[4]));
       tabs.addToPage(0, knob(kDampHigh, "DAMP HIGH", a, g[5], "Highs above this die faster on every pass."));
 
@@ -1184,7 +1186,7 @@ private:
       tabs.select(0);
    }
 
-   // Right: the outer loop and the drive, on two pages.
+   // Right: the outer loop, the drive and the echo, on three pages.
    void buildLoop() {
       const unsigned a = kLoopAccent;
       glass({970, 64, 214, 536}, "", a);
@@ -1361,6 +1363,7 @@ private:
    OrbitView *view_ = nullptr;
    Card cards_[kMaxBodies];
    AddSlot *addSlot_ = nullptr;
+   ui::TabBar *spaceTabs_ = nullptr;
    VoiceList *voices_ = nullptr;
    ui::Meter *meters_[2] = {};
    OrbitFrame frame_;
@@ -1375,9 +1378,11 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
                                        ui::WindowOptions{static_cast<int>(kDesignWidth), static_cast<int>(kDesignHeight)});
 }
 
-bool renderScreenshot(EditorHost &host, double seconds, int width, int height, const char *pngPath) {
+bool renderScreenshot(EditorHost &host, double seconds, int width, int height, const char *pngPath,
+                      int spacePage) {
    Panel panel(host);
    panel.stopTimer();
+   panel.selectSpacePage(spacePage);
    const int frames = static_cast<int>(seconds * 60.0);
    for (int i = 0; i < frames; ++i)
       panel.step(1.0f / 60.0f);

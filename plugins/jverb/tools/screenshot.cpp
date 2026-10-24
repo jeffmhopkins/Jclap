@@ -1,4 +1,6 @@
-// Renders the panel to a PNG without a host: jverb-screenshot out.png [bodies [width height]]
+// Renders the panel to a PNG without a host: jverb-screenshot out.png [bodies [page [width height]]]
+//
+// page picks the left card's page: 0 SPACE (the default), 1 SHAPE, 2 ORBIT.
 //
 // A stand-in host runs the orbit sim itself and makes up a drum-and-pad input, so the render shows
 // trails, gas and dust as they look with audio playing. Everything is seeded, so the same
@@ -28,7 +30,7 @@ public:
       values_[kFeedback] = 0.9;
       values_[kShimmer] = 0.3;
       values_[kDriveOn] = 1.0;
-      // Shimmer Halo's routings.
+      // Two bodies routed, so the cards and the readout show it.
       values_[bodyParam(1, kBody1Target)] = static_cast<double>(Target::Shimmer);
       values_[bodyParam(1, kBody1Amount)] = 0.5;
       values_[bodyParam(2, kBody1Target)] = static_cast<double>(Target::Tilt);
@@ -106,12 +108,13 @@ private:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [bodies [width height]]\n", argv[0]);
+      std::fprintf(stderr, "usage: %s out.png [bodies [page [width height]]]\n", argv[0]);
       return 1;
    }
    const int bodies = argc > 2 ? std::atoi(argv[2]) : 3;
-   const int width = argc > 4 ? std::atoi(argv[3]) : 1200;
-   const int height = argc > 4 ? std::atoi(argv[4]) : 780;
+   const int page = argc > 3 ? std::atoi(argv[3]) : 0;
+   const int width = argc > 5 ? std::atoi(argv[4]) : 1200;
+   const int height = argc > 5 ? std::atoi(argv[5]) : 780;
    DemoHost host(bodies < 2 ? 3 : bodies);
-   return renderScreenshot(host, 7.0, width, height, argv[1]) ? 0 : 1;
+   return renderScreenshot(host, 7.0, width, height, argv[1], page) ? 0 : 1;
 }

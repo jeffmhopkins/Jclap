@@ -42,6 +42,8 @@ std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // Draws the panel offscreen at the given pixel size and saves it as a PNG. The view is run for
 // `seconds` of frames first (pulled from the host), so the trails and gas have built up.
-bool renderScreenshot(EditorHost &host, double seconds, int width, int height, const char *pngPath);
+// `spacePage` picks the left card's page: 0 SPACE, 1 SHAPE, 2 ORBIT.
+bool renderScreenshot(EditorHost &host, double seconds, int width, int height, const char *pngPath,
+                      int spacePage = 0);
 
 } // namespace jverb
