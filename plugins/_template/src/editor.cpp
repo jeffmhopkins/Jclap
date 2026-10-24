@@ -52,7 +52,8 @@ std::string text(clap_id id, double value) {
 }
 
 ui::ValueRange rangeOf(clap_id id, double step = 0.0, bool bipolar = false) {
-   return {kParams[id].min, kParams[id].max, kParams[id].defaultValue, step, bipolar};
+   return {kParams[id].min, kParams[id].max, kParams[id].defaultValue, step, bipolar,
+           (kParams[id].flags & CLAP_PARAM_IS_STEPPED) != 0};
 }
 
 std::vector<std::string> namesOf(clap_id id) {

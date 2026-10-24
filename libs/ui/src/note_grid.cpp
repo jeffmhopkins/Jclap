@@ -166,6 +166,8 @@ NoteGrid::Touch NoteGrid::touchFrom(visage::Point p) const {
 }
 
 void NoteGrid::mouseDown(const visage::MouseEvent &e) {
+   // A second button pressed while one note is held: end that note before starting another.
+   releaseNote();
    const int col = static_cast<int>(e.position.x / cellWidth());
    const int row = static_cast<int>((height() - e.position.y) / cellHeight());
    if (col < 0 || col >= columns_ || row < 0 || row >= rows_)

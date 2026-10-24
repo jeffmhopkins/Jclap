@@ -4,6 +4,7 @@
 // scrolls or double-clicks back to its default, plus an optional modulated value the host is
 // actually using. Right-click opens a menu with "Reset to default" and "Enter value...".
 
+#include <cmath>
 #include <functional>
 #include <memory>
 #include <string>
@@ -26,8 +27,19 @@ struct ValueRange {
    double step = 0.0;
    // Draw the value from the middle of the range instead of from min.
    bool bipolar = false;
+   // Only whole steps are valid (a CLAP_PARAM_IS_STEPPED param): drags snap to them.
+   bool stepped = false;
 
-   double clamp(double v) const { return v < min ? min : v > max ? max : v; }
+   // NaN becomes min, so a bad value never reaches the host.
+   double clamp(double v) const { return !(v >= min) ? min : v > max ? max : v; }
+   // clamp(), then to the nearest whole step from min when stepped.
+   double snap(double v) const {
+      v = clamp(v);
+      if (!stepped)
+         return v;
+      const double s = step > 0.0 ? step : 1.0;
+      return clamp(min + std::round((v - min) / s) * s);
+   }
    // Position of a value in the range, 0 to 1.
    float fraction(double v) const { return max > min ? static_cast<float>((v - min) / (max - min)) : 0.0f; }
 };
@@ -46,7 +58,7 @@ struct ValueAxis {
 
    // Sets the value as the user, calling onChange and refreshing the modulated value.
    void set(double v) {
-      value = range.clamp(v);
+      value = range.snap(v);
       if (onChange)
          onChange(value);
       modulated = modulatedSource ? modulatedSource() : value;

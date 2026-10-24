@@ -75,7 +75,8 @@ std::string text(clap_id id, double value) {
 }
 
 ui::ValueRange rangeOf(clap_id id, double step = 0.0) {
-   return {kParams[id].min, kParams[id].max, kParams[id].defaultValue, step, kParams[id].min < 0.0};
+   return {kParams[id].min, kParams[id].max, kParams[id].defaultValue, step, kParams[id].min < 0.0,
+           (kParams[id].flags & CLAP_PARAM_IS_STEPPED) != 0};
 }
 
 // Knobs, buttons and switches over space: darker, see-through tracks.

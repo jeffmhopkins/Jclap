@@ -1,15 +1,41 @@
 #include "jclap/ui/param_bindings.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace jclap::ui {
 
-ParamBindings::ParamBindings(ParamAccess &access, int pollMs) : access_(access) { startTimer(pollMs); }
+ParamBindings::ParamBindings(ParamAccess &access, int pollMs)
+   : access_(access), gestures_(std::make_shared<Gestures>(Gestures{&access, {}})) {
+   startTimer(pollMs);
+}
+
+ParamBindings::~ParamBindings() {
+   for (clap_id id : gestures_->open)
+      access_.endEdit(id);
+   gestures_->open.clear();
+   gestures_->access = nullptr;
+}
+
+void ParamBindings::Gestures::begin(clap_id id) {
+   if (!access)
+      return;
+   open.push_back(id);
+   access->beginEdit(id);
+}
+
+void ParamBindings::Gestures::end(clap_id id) {
+   const auto it = std::find(open.begin(), open.end(), id);
+   if (!access || it == open.end())
+      return;
+   open.erase(it);
+   access->endEdit(id);
+}
 
 void ParamBindings::bind(ValueControl &control, clap_id id) {
-   control.onBeginEdit = [this, id] { access_.beginEdit(id); };
+   control.onBeginEdit = [g = gestures_, id] { g->begin(id); };
    control.onChange = [this, id](double v) { access_.setParam(id, v); };
-   control.onEndEdit = [this, id] { access_.endEdit(id); };
+   control.onEndEdit = [g = gestures_, id] { g->end(id); };
    control.modulatedSource = [this, id] { return access_.paramModulated(id); };
    control.onContextMenu = [this, id](visage::PopupMenu &menu) { addHostMenu(menu, id); };
    control.setValue(access_.paramValue(id), access_.paramModulated(id));
@@ -78,9 +104,9 @@ void ParamBindings::bind(EnvelopeEditor &envelope, clap_id attack, clap_id decay
 }
 
 void ParamBindings::wireAxis(ValueAxis &axis, clap_id id) {
-   axis.onBeginEdit = [this, id] { access_.beginEdit(id); };
+   axis.onBeginEdit = [g = gestures_, id] { g->begin(id); };
    axis.onChange = [this, id](double v) { access_.setParam(id, v); };
-   axis.onEndEdit = [this, id] { access_.endEdit(id); };
+   axis.onEndEdit = [g = gestures_, id] { g->end(id); };
    axis.modulatedSource = [this, id] { return access_.paramModulated(id); };
 }
 

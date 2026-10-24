@@ -17,7 +17,11 @@ XYPad::XYPad(ValueRange xRange, ValueRange yRange) {
       a.value = a.modulated = a.range.clamp(a.range.defaultValue);
 }
 
-XYPad::~XYPad() { popup_.hide(); }
+XYPad::~XYPad() {
+   // Destroyed mid-drag: close the gestures mouseUp would have.
+   XYPad::mouseUp({});
+   popup_.hide();
+}
 
 void XYPad::setValues(double x, double xModulated, double y, double yModulated) {
    const double v[2][2] = {{x, xModulated}, {y, yModulated}};

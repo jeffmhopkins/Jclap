@@ -11,6 +11,7 @@
 //    bindings.bind(pad, kXId, kYId);
 //    bindings.bind(envelope, kAttack, kDecay, kSustain, kRelease);
 
+#include <memory>
 #include <vector>
 
 #include <visage/ui.h>
@@ -28,6 +29,10 @@ namespace jclap::ui {
 class ParamBindings : public visage::EventTimer {
 public:
    explicit ParamBindings(ParamAccess &access, int pollMs = 30);
+   // Ends any drag gesture still open, so the host never keeps a param touched.
+   ~ParamBindings() override;
+   ParamBindings(const ParamBindings &) = delete;
+   ParamBindings &operator=(const ParamBindings &) = delete;
 
    // Knob, Slider or NumberBox. Its range stays as set; this wires the callbacks and the current value.
    void bind(ValueControl &control, clap_id id);
@@ -56,10 +61,20 @@ private:
       clap_id id = 0, id2 = 0, id3 = 0, id4 = 0;
    };
 
+   // Drag gestures still open. Shared with the widgets' begin/end callbacks, so a widget that
+   // ends its drag after the bindings are gone (it is destroyed later) does nothing.
+   struct Gestures {
+      ParamAccess *access;
+      std::vector<clap_id> open;
+      void begin(clap_id id);
+      void end(clap_id id);
+   };
+
    void wireAxis(ValueAxis &axis, clap_id id);
    void sync(const Bound &b);
 
    ParamAccess &access_;
+   std::shared_ptr<Gestures> gestures_;
    std::vector<Bound> bound_;
 };
 

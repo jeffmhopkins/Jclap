@@ -58,7 +58,12 @@ ValueControl::ValueControl(ValueRange range) : range_(range) {
    value_ = modulated_ = range_.clamp(range_.defaultValue);
 }
 
-ValueControl::~ValueControl() { popup_.hide(); }
+ValueControl::~ValueControl() {
+   // Destroyed mid-drag (the editor closed): close the gesture, or the host keeps the param touched.
+   if (dragging_ && onEndEdit)
+      onEndEdit();
+   popup_.hide();
+}
 
 void ValueControl::setRange(const ValueRange &range) {
    range_ = range;
@@ -109,7 +114,7 @@ std::string ValueControl::formatValue(double v) const {
 }
 
 void ValueControl::change(double value) {
-   value_ = range_.clamp(value);
+   value_ = range_.snap(value);
    if (onChange)
       onChange(value_);
    modulated_ = modulatedSource ? modulatedSource() : value_;
@@ -162,8 +167,12 @@ void ValueControl::mouseUp(const visage::MouseEvent &) {
 
 bool ValueControl::mouseWheel(const visage::MouseEvent &e) {
    const float delta = e.precise_wheel_delta_y != 0.0f ? e.precise_wheel_delta_y : e.wheel_delta_y;
-   if (delta == 0.0f)
+   if (delta == 0.0f || !(range_.max > range_.min))
       return false;
+   // A wheel step mid-drag would nest a second gesture inside the drag's, and the next drag event
+   // would undo it anyway.
+   if (dragging_)
+      return true;
    const double step = range_.step > 0.0 ? range_.step : (range_.max - range_.min) / 100.0;
    userSet(range_.min + std::round((value_ - range_.min) / step) * step + (delta > 0 ? step : -step));
    return true;

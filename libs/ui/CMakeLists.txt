@@ -40,6 +40,10 @@ if(NOT MSVC)
    target_compile_options(jclap_ui PRIVATE -Wall -Wextra -fvisibility=hidden)
 endif()
 
+# Widget input checks: mouse handlers called directly, no window or GPU needed.
+jclap_add_test(jclap-ui-tests SOURCES tests/test_widgets.cpp)
+target_link_libraries(jclap-ui-tests PRIVATE jclap::ui)
+
 # Offscreen render of every widget, for docs and visual checks. Needs a GPU (or a software Vulkan driver).
 if(JCLAP_BUILD_TOOLS)
    add_executable(jclap-ui-gallery tools/gallery.cpp)
