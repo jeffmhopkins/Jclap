@@ -428,6 +428,70 @@ int main() {
       h.setParam(kKeyTrack, 0.0);
    }
 
+   // Velocity: on the VCA by its own amount (all of it by default), and on the filter only when asked.
+   {
+      const auto level = [&](double velocity) {
+         h.note(CLAP_EVENT_NOTE_ON, 81, velocity);
+         run(4800);
+         run(4800);
+         const double rms = run.rms();
+         h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+         run(64);
+         return rms;
+      };
+      JCLAP_CHECK_EQ(kParams[kVelocityToVca].defaultValue, 1.0);
+      const double hard = level(1.0);
+      JCLAP_CHECK(near(level(0.25) / hard, 0.25, 0.02));
+      h.setParam(kVelocityToVca, 0.5);
+      JCLAP_CHECK(near(level(0.25) / hard, 0.625, 0.02));
+      h.setParam(kVelocityToVca, 0.0);
+      JCLAP_CHECK(near(level(0.25) / hard, 1.0, 0.02));
+      // A high sine through a low cutoff, as for key track: harder notes open it further.
+      const double cutoff = h.paramValue(kCutoff);
+      h.setParam(kCutoff, cutoffValue(200.0));
+      const double closed = level(1.0);
+      h.setParam(kVelocityToFilter, 4.0);
+      JCLAP_CHECK(level(1.0) > 4.0 * closed);
+      JCLAP_CHECK(level(0.01) < 1.5 * closed);
+      JCLAP_CHECK(h.paramText(kVelocityToFilter, 1.5) == "1.5 oct");
+      JCLAP_CHECK(h.paramText(kVelocityToVca, 0.5) == "50%");
+      h.setParam(kCutoff, cutoff);
+      h.setParam(kVelocityToFilter, 0.0);
+      h.setParam(kVelocityToVca, 1.0);
+   }
+
+   // LFO to pulse width: a slow square swings a 30% pulse to 75% and then to 5%, which changes how
+   // much second harmonic there is; with no depth both halves sound the same.
+   {
+      h.setParam(kWave, 4.0);
+      h.setParam(kPulseWidth, 0.3);
+      h.setParam(kLfoShape, 3.0);
+      h.setParam(kLfoRate, lfoValue(2.0));
+      const auto halves = [&](double &first, double &second) {
+         h.note(CLAP_EVENT_NOTE_ON, 57, 1.0);
+         run(1000);
+         run(8000); // most of the first half
+         first = run.magnitude(440.0);
+         run(4000);
+         run(8000); // most of the second
+         second = run.magnitude(440.0);
+         h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+         run(64);
+      };
+      double first = 0.0, second = 0.0;
+      halves(first, second);
+      JCLAP_CHECK(near(first, second, 0.1 * first));
+      h.setParam(kLfoToPulseWidth, 1.0);
+      halves(first, second);
+      JCLAP_CHECK(first > 2.0 * second);
+      JCLAP_CHECK(h.paramText(kLfoToPulseWidth, 0.4) == "40%");
+      h.setParam(kLfoToPulseWidth, 0.0);
+      h.setParam(kLfoShape, kParams[kLfoShape].defaultValue);
+      h.setParam(kLfoRate, kParams[kLfoRate].defaultValue);
+      h.setParam(kPulseWidth, kParams[kPulseWidth].defaultValue);
+      h.setParam(kWave, 0.0);
+   }
+
    // Dual: a second oscillator detuned from the first. A few cents changes the sound but not the
    // pitch; at the top of the knob the second is an octave up.
    {

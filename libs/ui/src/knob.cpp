@@ -11,6 +11,14 @@ constexpr float kSweep = 0.75f * kPi; // half of the 270 degree knob travel
 
 } // namespace
 
+void Knob::setLiveModulation(double offset, unsigned color) {
+   if (offset == liveOffset_ && color == liveColor_)
+      return;
+   liveOffset_ = offset;
+   liveColor_ = color;
+   redraw();
+}
+
 void Knob::draw(visage::Canvas &canvas) {
    const Theme &t = *theme_;
    const float w = width(), h = height();
@@ -48,6 +56,17 @@ void Knob::draw(visage::Canvas &canvas) {
       canvas.setColor(t.modulation);
       canvas.arc(cx - md * 0.5f, cy - md * 0.5f, md, 2.0f * s, 0.5f * (angle + modAngle) - 0.5f * kPi,
                  0.5f * std::fabs(modAngle - angle), true);
+   }
+   // The plugin's own modulation carries on from there, on the same ring.
+   if (liveOffset_ != 0.0) {
+      const double live = std::clamp(modulatedValue() + liveOffset_, range().min, range().max);
+      const float liveAngle = angleFor(live);
+      if (std::fabs(liveAngle - modAngle) > 0.01f) {
+         const float md = d + 7.0f * s;
+         canvas.setColor(liveColor_);
+         canvas.arc(cx - md * 0.5f, cy - md * 0.5f, md, 2.0f * s, 0.5f * (modAngle + liveAngle) - 0.5f * kPi,
+                    0.5f * std::fabs(liveAngle - modAngle), true);
+      }
    }
 
    // Knob body: soft shadow, shaded cap and a pointer line.

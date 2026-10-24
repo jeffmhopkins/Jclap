@@ -13,6 +13,10 @@ public:
 
    void draw(visage::Canvas &canvas) override;
 
+   // The plugin's own modulation (an LFO, say), drawn in `color` on from the host's: an offset in
+   // the knob's units from the modulated value. 0 hides it.
+   void setLiveModulation(double offset, unsigned color);
+
    // A small tick just outside the track at `value`, e.g. to mark where a range's normal zone ends.
    void setMarker(double value) {
       marker_ = value;
@@ -26,6 +30,8 @@ protected:
    float dragLength() const override { return 2.0f * height(); }
 
 private:
+   double liveOffset_ = 0.0;
+   unsigned liveColor_ = 0;
    double marker_ = 0.0;
    bool hasMarker_ = false;
 };
