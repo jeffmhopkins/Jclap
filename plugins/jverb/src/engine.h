@@ -1,10 +1,10 @@
 #pragma once
 
 // JVerb's audio: input filters, predelay and early reflections, diffusion and attack shaping, a
-// feedback delay network with two lines per body, an outer loop (drive, shimmer, smear, tilt and a
+// sixteen-line feedback delay network with an allpass in every line, an outer loop (drive, shimmer, smear, tilt and a
 // safety limiter), a long echo that can sit before the tank, in the loop or after it, and the
 // output stage. The orbit sim lives in the plugin; it hands this engine
-// each body's distance and pan once per control tick (setControl), and process() runs per sample.
+// each body's pan once per control tick (setControl), and process() runs per sample.
 //
 // Nothing here allocates after setSampleRate(), takes a lock, or calls the OS.
 
@@ -21,7 +21,7 @@
 
 namespace jverb {
 
-constexpr int kLines = 2 * kMaxBodies;
+constexpr int kLines = 16;
 // Samples per control tick: params, the orbit and every derived coefficient update this often, and
 // gains ramp across it.
 constexpr int kControlTick = 32;
@@ -41,12 +41,10 @@ struct Control {
    EchoWhere echoWhere = EchoWhere::Into;
    double echoSeconds = 0.375, echoFeedback = 0.45, echoTone = -0.2, echoMix = 0.5;
    double width = 1.0, duck = 0.0, mix = 0.35, levelDb = 0.0;
-   // Bodies: how many are in the system, and per body its distance from the centre of mass, its
-   // left/right position (-1..1) and any extra delay modulation routed to it (-1..1).
+   // Bodies: how many are in the system, and each one's left/right position (-1..1). The tank's
+   // lines are shared out among them, and each body pans its own.
    int bodies = 3;
-   double radius[kMaxBodies] = {1, 1, 1, 1, 1, 1};
    double pan[kMaxBodies] = {};
-   double delayMod[kMaxBodies] = {};
 };
 
 namespace detail {
@@ -105,6 +103,35 @@ struct Allpass {
       const float w = x + gain * d;
       line.write(w);
       return d - gain * w;
+   }
+};
+
+// A slow sine that drifts a tank line's length, so a long tail blurs instead of ringing. Its depth is
+// set in cents of pitch bend per pass, not in samples, so however fast it runs it never bends a pass
+// by more than that. A rotating phasor, renormalised each control tick, saves a sin() per sample.
+struct Drift {
+   float x = 1.0f, y = 0.0f, cw = 1.0f, sw = 0.0f;
+   Ramp depth;
+   void start(double phase) {
+      x = static_cast<float>(std::cos(2.0 * jclap::dsp::kPi * phase));
+      y = static_cast<float>(std::sin(2.0 * jclap::dsp::kPi * phase));
+   }
+   // `hz` of drift that bends a pass by at most `cents`.
+   void set(double hz, double cents, double sampleRate) {
+      const double w = 2.0 * jclap::dsp::kPi * hz / sampleRate;
+      cw = static_cast<float>(std::cos(w));
+      sw = static_cast<float>(std::sin(w));
+      // A delay swinging by A samples at w radians per sample bends pitch by up to a factor 1 + A w.
+      depth.set(static_cast<float>((std::exp2(cents / 1200.0) - 1.0) / w));
+      const float r = 1.0f / std::sqrt(x * x + y * y);
+      x *= r;
+      y *= r;
+   }
+   float next() {
+      const float nx = x * cw - y * sw;
+      y = x * sw + y * cw;
+      x = nx;
+      return depth.next() * y;
    }
 };
 
@@ -410,12 +437,16 @@ public:
       }
       for (auto &line : lines_)
          line.setMaxDelay(samples(kMaxLineSeconds));
+      for (auto &line : tankAp_)
+         line.setMaxDelay(samples(kMaxTankApSeconds));
+      for (auto &line : tankAp2_)
+         line.setMaxDelay(samples(kMaxTankApSeconds));
       duckEnv_ = 0.0f;
       duckAttack_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.005 * sr_)));
       duckRelease_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.3 * sr_)));
       echo_.setSampleRate(sr_);
       lengthGlide_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.025 * sr_)));
-      weightGlide_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.08 * sr_)));
+      panGlide_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.08 * sr_)));
       for (int ch = 0; ch < 2; ++ch) {
          for (auto &ap : bloom_[ch])
             ap.glide = lengthGlide_;
@@ -446,7 +477,12 @@ public:
       }
       for (int k = 0; k < kLines; ++k) {
          lines_[k].reset();
+         tankAp_[k].reset();
+         tankAp2_[k].reset();
          bassLp_[k].y = highLp_[k].y = 0.0f;
+         // Spread start phases, the same after every reset so renders repeat.
+         drift_[k].start(0.618034 * k);
+         apDrift_[k].start(0.381966 * k + 0.25);
       }
       echo_.reset();
       duckEnv_ = 0.0f;
@@ -458,42 +494,46 @@ public:
       c_ = c;
       const double size = std::clamp(c.size, 0.25, 4.0);
       const bool freeze = c.freeze;
-      // Lines and their decay. Each body owns a pair: its distance from the centre of mass stretches
-      // or squeezes them, and its radial speed is heard as Doppler.
+      // Lines and their decay. Sixteen lines always, whatever the bodies do: each loop is the line
+      // plus the allpass inside it, and decays to -60 dB in the Decay time.
+      const double rt = std::max(0.05, c.decay);
+      const double motion = std::clamp(c.motion, 0.0, 1.0);
+      const int bodies = std::clamp(c.bodies, 1, kMaxBodies);
       double loss = 0.0;
-      for (int b = 0; b < kMaxBodies; ++b) {
-         const bool on = b < c.bodies;
-         const double dn = std::clamp(c.radius[b] / 0.9, 0.25, 2.2);
-         const double stretch = (1.0 + c.motion * (dn - 1.0)) * (1.0 + 0.15 * c.delayMod[b]);
-         for (int j = 0; j < 2; ++j) {
-            const int k = 2 * b + j;
-            const double seconds = std::min(kMaxLineSeconds - 0.01, size * kLineMs[k] * 0.001 * stretch);
-            targetLength_[k] = static_cast<float>(seconds * sr_);
-            const double rt = std::max(0.05, c.decay);
-            const double gMid = freeze ? 0.99995 : std::pow(10.0, -3.0 * seconds / rt);
-            const double gBass = freeze ? 0.99995 : std::min(0.9999, std::pow(10.0, -3.0 * seconds / (rt * c.bassMult)));
-            if (on)
-               loss += 1.0 - std::max(std::pow(10.0, -3.0 * seconds / rt),
-                                      std::min(0.9999, std::pow(10.0, -3.0 * seconds / (rt * c.bassMult))));
-            gainMid_[k].set(static_cast<float>(gMid));
-            gainBass_[k].set(static_cast<float>(gBass));
-            bassLp_[k].setCutoff(c.bassXover, sr_);
-            highLp_[k].setCutoff(freeze ? 0.45 * sr_ : c.dampHigh, sr_);
-            targetWeight_[k] = on ? 1.0f : 0.0f;
-         }
-         // Equal-power pan for the pair: centred, the first line goes left and the second right.
-         const double angle = (std::clamp(c.pan[b], -1.0, 1.0) + 1.0) * 0.25 * jclap::dsp::kPi;
-         panL_[b].set(static_cast<float>(std::cos(angle) * std::sqrt(2.0)));
-         panR_[b].set(static_cast<float>(std::sin(angle) * std::sqrt(2.0)));
+      for (int k = 0; k < kLines; ++k) {
+         const double seconds = std::min(kMaxLineSeconds - 0.01, size * kLineMs[k] * 0.001);
+         const double apSeconds = std::min(2.0, size) * kTankApMs[k] * 0.001;
+         targetLength_[k] = static_cast<float>(seconds * sr_);
+         targetApLength_[k] = static_cast<float>(apSeconds * sr_);
+         const double ap2Seconds = std::min(2.0, size) * kTankAp2Ms[k] * 0.001;
+         apLength2_[k] = static_cast<float>(ap2Seconds * sr_);
+         const double loop = seconds + apSeconds + ap2Seconds;
+         const double mid = std::pow(10.0, -3.0 * loop / rt);
+         const double bass = std::min(0.9999, std::pow(10.0, -3.0 * loop / (rt * c.bassMult)));
+         loss += 1.0 - std::max(mid, bass);
+         gainMid_[k].set(static_cast<float>(freeze ? 0.99995 : mid));
+         gainBass_[k].set(static_cast<float>(freeze ? 0.99995 : bass));
+         bassLp_[k].setCutoff(c.bassXover, sr_);
+         highLp_[k].setCutoff(freeze ? 0.45 * sr_ : c.dampHigh, sr_);
+         // Motion is how far the lines drift, as pitch: never more than kDriftCents a pass.
+         drift_[k].set(kDriftHz[k], motion * kDriftCents, sr_);
+         apDrift_[k].set(kApDriftHz[k], motion * kApDriftCents, sr_);
+         // Lines go to the bodies in pairs, one left and one right, and each body pans its pairs
+         // equal-power: centred, both sides at full level.
+         const double pan = std::clamp(c.pan[(k / 2) % bodies], -1.0, 1.0);
+         const double angle = (pan + 1.0) * 0.25 * jclap::dsp::kPi;
+         targetPan_[k] = static_cast<float>(((k & 1) ? std::sin(angle) : std::cos(angle)) * std::sqrt(2.0));
       }
-      outScale_.set(static_cast<float>(0.9 / std::sqrt(static_cast<double>(std::max(2, c.bodies)))));
+      tankApGain_.set(static_cast<float>(kTankApGainMin + (kTankApGainMax - kTankApGainMin) * std::clamp(c.diffusion, 0.0, 1.0)));
+      delayBodies_ = bodies;
 
       // Input.
       for (int ch = 0; ch < 2; ++ch) {
          lowCut_[ch].setCutoff(c.lowCut);
          highCut_[ch].setCutoff(c.highCut);
-         for (int i = 0; i < 4; ++i) {
-            diffuser_[ch][i].length = static_cast<float>(kDiffuserMs[ch][i] * 0.001 * sr_);
+         for (int i = 0; i < kDiffusers; ++i) {
+            // Fixed lengths: set the glide's target too, or the length would creep toward it.
+            diffuser_[ch][i].length = diffuser_[ch][i].target = static_cast<float>(kDiffuserMs[ch][i] * 0.001 * sr_);
             diffuser_[ch][i].gain = static_cast<float>(c.diffusion * (i < 2 ? 0.72 : 0.62));
          }
          const double attack = std::max(0.0, c.attack);
@@ -518,13 +558,13 @@ public:
       // The outer loop goes around the whole tank, whose resonances get louder the longer the decay:
       // their peak gain grows about as 1 / (what a line loses each pass). Scaling the loop by that
       // loss keeps Feedback meaning the same at every decay: below 100% the tail still dies away,
-      // past it the loop grows into the safety stage. The constant is measured, and more bodies
-      // spread the resonances thinner, so they take more.
-      const double meanLoss = loss / std::max(1, 2 * c.bodies);
-      const double spread = c.bodies > 3 ? std::pow(c.bodies / 3.0, 1.25) : 1.0;
-      const double loopScale = std::min(1.0, kLoopCalibration * spread * meanLoss);
-      loopScale_.set(static_cast<float>(loopScale));
-      loopGain_.set(freeze ? 0.0f : static_cast<float>(0.85 * c.feedback * loopScale));
+      // past it the loop grows into the safety stage. The curve is measured: a bisection on the
+      // Feedback where a tail first sustains, over Decay 1 to 30 s and Size 0.5 to 3, lands it
+      // between 100% and about 115%.
+      const double meanLoss = loss / kLines;
+      const double loopScale = std::min(kLoopMax, kLoopCalibration * std::pow(meanLoss, kLoopExponent));
+      loopScale_.set(static_cast<float>(loopScale / kLoopMax));
+      loopGain_.set(freeze ? 0.0f : static_cast<float>(c.feedback * loopScale));
       shimmer_.set(static_cast<float>(c.shimmer));
       pitchRatio_ = std::exp2(c.shimmerPitch / 12.0);
       smearMix_.set(static_cast<float>(c.smear));
@@ -549,7 +589,10 @@ public:
          first_ = false;
          for (int k = 0; k < kLines; ++k) {
             length_[k] = targetLength_[k];
-            weight_[k] = targetWeight_[k];
+            apLength_[k] = targetApLength_[k];
+            pan_[k] = targetPan_[k];
+            drift_[k].depth.settle();
+            apDrift_[k].depth.settle();
          }
          for (int ch = 0; ch < 2; ++ch) {
             for (auto &ap : bloom_[ch])
@@ -562,11 +605,7 @@ public:
             r.settle();
          for (detail::Ramp &r : gainBass_)
             r.settle();
-         for (int b = 0; b < kMaxBodies; ++b) {
-            panL_[b].settle();
-            panR_[b].settle();
-         }
-         for (detail::Ramp *r : {&outScale_, &predelaySamples_, &earlySize_, &attack_, &inputGain_, &loopGain_, &loopScale_,
+         for (detail::Ramp *r : {&tankApGain_, &predelaySamples_, &earlySize_, &attack_, &inputGain_, &loopGain_, &loopScale_,
                                  &shimmer_, &smearMix_, &tiltLow_, &tiltHigh_, &echoMix_, &earlyGain_, &lateGain_,
                                  &width_, &duck_, &dry_, &wet_, &level_})
             r->settle();
@@ -625,42 +664,47 @@ public:
          inject[ch] = shaped * inGain + loopOut_[ch];
       }
 
-      // The tank.
-      float y[kLines], o[kLines], sumW2 = 0.0f;
+      // The tank. Each line is read with its drift, through the allpass inside it, then damped.
+      float y[kLines], o[kLines];
+      const float apGain = tankApGain_.next();
       for (int k = 0; k < kLines; ++k) {
          length_[k] += lengthGlide_ * (targetLength_[k] - length_[k]);
-         weight_[k] += weightGlide_ * (targetWeight_[k] - weight_[k]);
-         sumW2 += weight_[k] * weight_[k];
-         y[k] = lines_[k].read(length_[k]);
+         apLength_[k] += lengthGlide_ * (targetApLength_[k] - apLength_[k]);
+         pan_[k] += panGlide_ * (targetPan_[k] - pan_[k]);
+         float v = lines_[k].read(length_[k] + drift_[k].next());
+         const float d = tankAp_[k].read(apLength_[k] + apDrift_[k].next());
+         const float w = v + apGain * d;
+         tankAp_[k].write(w);
+         v = d - apGain * w;
+         const float d2 = tankAp2_[k].read(apLength2_[k]);
+         const float w2 = v + apGain * d2;
+         tankAp2_[k].write(w2);
+         v = d2 - apGain * w2;
+         y[k] = v;
          // Bass and treble decay. Written as a lowpass shelf after the mid gain, then a lowpass for the
          // treble, so the loop's gain at every frequency stays at or below the larger of the two
          // decay gains: splitting into a low band and a damped high band and summing them can come
          // out above both near the crossover, and at long decays the tank then grows.
          const float gMid = gainMid_[k].next(), gBass = gainBass_[k].next();
-         const float shelved = gMid * y[k] + (gBass - gMid) * bassLp_[k].lowpass(y[k]);
+         const float shelved = gMid * v + (gBass - gMid) * bassLp_[k].lowpass(v);
          o[k] = highLp_[k].lowpass(shelved);
       }
-      // Householder reflection over the active lines: every line feeds every other, energy kept.
-      // Lines fading out drop out of the mix and just ring down on their own.
-      const float norm = sumW2 > 1e-6f ? 1.0f / std::sqrt(sumW2) : 0.0f;
-      float dot = 0.0f;
-      for (int k = 0; k < kLines; ++k)
-         dot += weight_[k] * norm * o[k];
-      const float scale = outScale_.next();
+      // A 16 x 16 Hadamard mix: every line feeds every other equally and no energy is gained or lost.
+      for (int h = 1; h < kLines; h *= 2)
+         for (int i = 0; i < kLines; i += 2 * h)
+            for (int j = i; j < i + h; ++j) {
+               const float a = o[j], b = o[j + h];
+               o[j] = a + b;
+               o[j + h] = a - b;
+            }
+      // Even lines are heard on the left and odd on the right, each panned by its body.
       float late[2] = {0.0f, 0.0f};
-      for (int b = 0; b < kMaxBodies; ++b) {
-         const float l = panL_[b].next(), r = panR_[b].next();
-         late[0] += y[2 * b] * weight_[2 * b] * l;
-         late[1] += y[2 * b + 1] * weight_[2 * b + 1] * r;
-      }
-      late[0] *= scale;
-      late[1] *= scale;
-      for (int k = 0; k < kLines; ++k) {
-         const float u = weight_[k] * norm;
-         const float fed = o[k] - 2.0f * u * dot;
-         const float in = weight_[k] * kInjectSign[k] * inject[k & 1] * 0.5f;
-         lines_[k].write(detail::tankLimit(fed + in));
-      }
+      for (int k = 0; k < kLines; ++k)
+         late[k & 1] += kOutSign[k] * pan_[k] * y[k];
+      late[0] *= kOutScale;
+      late[1] *= kOutScale;
+      for (int k = 0; k < kLines; ++k)
+         lines_[k].write(detail::tankLimit(0.25f * o[k] + kInjectSign[k] * kInjectScale * inject[k & 1]));
 
       // The outer loop, heard next sample.
       const float shimmer = shimmer_.next(), smearMix = smearMix_.next();
@@ -715,18 +759,46 @@ public:
       lateLevel = std::max(std::fabs(late[0]), std::fabs(late[1]));
    }
 
-   // Body b's current delay, in milliseconds, for the panel's readout.
-   double delayMs(int b) const { return 1000.0 * 0.5 * (length_[2 * b] + length_[2 * b + 1]) / sr_; }
+   // The mean length of body b's lines, in milliseconds, for the panel's readout.
+   double delayMs(int b) const {
+      double sum = 0.0;
+      int count = 0;
+      for (int k = 0; k < kLines; ++k)
+         if ((k / 2) % delayBodies_ == b) {
+            sum += length_[k];
+            ++count;
+         }
+      return count ? 1000.0 * sum / count / sr_ : 0.0;
+   }
 
-   static constexpr double kMaxLineSeconds = 0.8;
+   static constexpr double kMaxLineSeconds = 0.85;
+   static constexpr double kMaxTankApSeconds = 0.06;
 
 private:
-   // Line lengths at size 1 and rest distance, in ms: two per body, none a simple ratio of another.
-   static constexpr double kLoopCalibration = 5.0;
-   static constexpr double kLineMs[kLines] = {31.3, 35.9, 38.7, 44.3, 42.1, 49.7,
-                                              47.3, 55.1, 53.9, 61.7, 58.1, 66.9};
-   static constexpr float kInjectSign[kLines] = {1, 1, -1, 1, 1, -1, -1, -1, 1, -1, -1, 1};
-   static constexpr double kDiffuserMs[2][4] = {{4.77, 3.59, 12.73, 9.31}, {5.13, 3.31, 13.71, 8.89}};
+   static constexpr double kLoopCalibration = 3.3, kLoopExponent = 0.83, kLoopMax = 1.25;
+   // Line lengths at size 1, in ms: spread evenly on a log scale and none a simple ratio of another.
+   // Adjacent lines go to opposite sides, so each side spans the whole range.
+   static constexpr double kLineMs[kLines] = {29.3, 33.1, 37.9, 42.7, 48.9, 55.3, 63.1, 71.9,
+                                              81.7, 92.9, 105.7, 120.3, 137.1, 155.9, 177.7, 201.9};
+   // The allpass inside each line, in ms at size 1, shuffled against the line lengths.
+   static constexpr double kTankApMs[kLines] = {11.3, 5.9, 17.7, 8.3, 21.1, 6.7, 14.9, 9.7,
+                                                23.3, 4.9, 12.7, 19.3, 7.1, 16.1, 10.3, 13.9};
+   static constexpr double kTankAp2Ms[kLines] = {3.1, 6.3, 2.3, 4.7, 7.9, 2.9, 5.3, 3.7,
+                                                 6.9, 2.1, 4.1, 7.3, 3.3, 5.9, 2.7, 4.9};
+   // Diffusion sets the tank's allpass gain between these.
+   static constexpr double kTankApGainMin = 0.2, kTankApGainMax = 0.65;
+   // Drift rates in Hz, one per line, spread over a decade and shuffled, and the most a pass bends.
+   static constexpr double kDriftHz[kLines] = {0.137, 0.713, 0.291, 1.093, 0.173, 0.557, 0.389, 0.941,
+                                               0.113, 0.811, 0.241, 0.479, 0.617, 1.171, 0.331, 0.887};
+   static constexpr double kApDriftHz[kLines] = {0.53, 0.19, 0.97, 0.31, 0.71, 0.23, 1.31, 0.43,
+                                                 0.61, 0.17, 1.13, 0.37, 0.83, 0.27, 0.47, 1.01};
+   static constexpr double kDriftCents = 4.0, kApDriftCents = 1.0;
+   static constexpr float kInjectSign[kLines] = {1, 1, -1, 1, 1, -1, -1, -1, 1, -1, -1, 1, 1, 1, -1, -1};
+   static constexpr float kOutSign[kLines] = {1, -1, 1, 1, -1, 1, -1, -1, 1, 1, -1, 1, 1, -1, -1, 1};
+   static constexpr float kInjectScale = 0.3f, kOutScale = 0.5f;
+   static constexpr int kDiffusers = 6;
+   static constexpr double kDiffuserMs[2][kDiffusers] = {{4.77, 3.59, 12.73, 9.31, 17.93, 23.11},
+                                                         {5.13, 3.31, 13.71, 8.89, 19.27, 21.73}};
    static constexpr double kBloomMs[2][3] = {{41.0, 67.0, 101.0}, {47.0, 71.0, 107.0}};
    static constexpr double kSmearMs[2][2] = {{17.3, 27.9}, {19.1, 25.7}};
    static constexpr int kEarlyTaps = 8;
@@ -739,7 +811,7 @@ private:
 
    jclap::dsp::Filter lowCut_[2], highCut_[2];
    jclap::dsp::DelayLine predelay_[2];
-   detail::Allpass diffuser_[2][4], bloom_[2][3], smear_[2][2];
+   detail::Allpass diffuser_[2][kDiffusers], bloom_[2][3], smear_[2][2];
    detail::Reverser reverse_[2];
    detail::PitchShifter shifter_[2];
    detail::Drive drive_[2];
@@ -749,12 +821,14 @@ private:
    float reverseWindow_ = 4800.0f, targetReverseWindow_ = 4800.0f;
    double pitchRatio_ = 2.0;
 
-   jclap::dsp::DelayLine lines_[kLines];
+   jclap::dsp::DelayLine lines_[kLines], tankAp_[kLines], tankAp2_[kLines];
    detail::OnePole bassLp_[kLines], highLp_[kLines];
-   detail::Ramp gainMid_[kLines], gainBass_[kLines];
-   float length_[kLines] = {}, targetLength_[kLines] = {}, weight_[kLines] = {}, targetWeight_[kLines] = {};
-   float lengthGlide_ = 0.001f, weightGlide_ = 0.001f;
-   detail::Ramp panL_[kMaxBodies], panR_[kMaxBodies], outScale_;
+   detail::Ramp gainMid_[kLines], gainBass_[kLines], tankApGain_;
+   detail::Drift drift_[kLines], apDrift_[kLines];
+   float length_[kLines] = {}, targetLength_[kLines] = {}, apLength_[kLines] = {}, targetApLength_[kLines] = {};
+   float apLength2_[kLines] = {}, pan_[kLines] = {}, targetPan_[kLines] = {};
+   float lengthGlide_ = 0.001f, panGlide_ = 0.001f;
+   int delayBodies_ = 3;
 
    detail::Ramp predelaySamples_, earlySize_, attack_, inputGain_;
    detail::Ramp loopGain_, loopScale_, shimmer_, smearMix_, tiltLow_, tiltHigh_;

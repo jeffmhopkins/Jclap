@@ -1,7 +1,6 @@
 // JVerb: an algorithmic reverb modulated by a live gravity simulation. Two to six bodies orbit each
-// other (orbit.h); each owns a pair of the reverb's delay lines (engine.h), so its distance from the
-// centre of mass is heard as the size of its part of the space and its motion as Doppler. Each body
-// can also be routed to one more destination, and transients in the input can kick the bodies.
+// other (orbit.h); each pans its share of the reverb's sixteen delay lines (engine.h), so the tail
+// swirls around the stereo field as the orbit turns. Each body can also be routed to one more destination, and transients in the input can kick the bodies.
 //
 // Threads: the audio thread owns the sim and the engine. Once every 32 samples (a control tick) it
 // reads the params, steps the sim and updates the engine; every few ticks it publishes an
