@@ -13,7 +13,7 @@ no CLAP, no GUI, no allocation, so everything is safe on the audio thread.
 
 | Header | What it is |
 |---|---|
-| `jclap/dsp/oscillator.h` | `Oscillator`: sine, triangle, saw, square and pulse with variable width. Saw, square and pulse are band-limited with PolyBLEP and the triangle with PolyBLAMP. Output is -1..1 with no DC, narrow pulses included |
+| `jclap/dsp/oscillator.h` | `Oscillator`: sine, triangle, saw, square and pulse with variable width. Saw, square and pulse are band-limited with PolyBLEP and the triangle with PolyBLAMP. No DC on any wave. Sine, triangle, saw and square are -1..1; the pulse is centred, not scaled, so width w spans -2w..2-2w |
 | `jclap/dsp/filter.h` | `Filter`: resonant low, high or band pass, 12, 24, 36 or 48 dB/oct. Cascaded zero-delay-feedback state variable stages, tuned as a Butterworth cascade, stable with the cutoff moving every sample |
 | `jclap/dsp/lfo.h` | `Lfo`: sine, triangle, saw, square or sample-and-hold random, -1..1, for modulation |
 | `jclap/dsp/envelope.h` | `Envelope`: ADSR with analog-style curves and an optional loop (attack and decay repeat while held). Retriggers from the current level, so no clicks |

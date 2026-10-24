@@ -104,6 +104,27 @@ int main() {
       JCLAP_CHECK(near(high / kRate, 0.2, 0.01));
    }
 
+   // The level and the falling edge's correction agree even when the phase lands within rounding of
+   // the edge: no one-sample spike past the pulse's range. 4 kHz at 48 kHz hits it every cycle.
+   for (const double rate : {48000.0, 96000.0}) {
+      for (const double width : {0.2, 0.5, 0.7}) {
+         for (double hz = 100.0; hz <= 8000.0; hz += 100.0) {
+            Oscillator osc;
+            osc.setSampleRate(rate);
+            osc.setWave(width == 0.5 ? Oscillator::Wave::Square : Oscillator::Wave::Pulse);
+            osc.setPulseWidth(width);
+            osc.setFrequency(hz);
+            double lo = 0.0, hi = 0.0;
+            for (int i = 0; i < 4800; ++i) {
+               const double s = osc.process();
+               lo = std::min(lo, s);
+               hi = std::max(hi, s);
+            }
+            JCLAP_CHECK(lo >= -2.0 * width - 1e-4 && hi <= 2.0 - 2.0 * width + 1e-4);
+         }
+      }
+   }
+
    // PolyBLEP spreads the saw's reset over two samples: no single jump is the whole 2.0 drop.
    {
       Oscillator osc;
@@ -155,6 +176,18 @@ int main() {
    }
    // Resonance peaks at the cutoff.
    JCLAP_CHECK(filterGainDb(makeFilter(Mode::LowPass, Slope::Db24, 1000.0, 0.8), 1000.0) > 6.0);
+   // A NaN cutoff or resonance is ignored, so the filter keeps working instead of sticking at NaN.
+   {
+      Filter f = makeFilter(Mode::LowPass, Slope::Db24, 1000.0, 0.5);
+      f.setCutoff(std::nan(""));
+      f.setResonance(std::nan(""));
+      JCLAP_CHECK_EQ(f.cutoff(), 1000.0);
+      JCLAP_CHECK_EQ(f.resonance(), 0.5);
+      float y = 0.0f;
+      for (int i = 0; i < 100; ++i)
+         y = f.process(1.0f);
+      JCLAP_CHECK(std::isfinite(y));
+   }
    // Sweeping the cutoff every sample at full resonance stays stable.
    {
       Filter f = makeFilter(Mode::LowPass, Slope::Db48, 1000.0, 1.0);
@@ -336,6 +369,20 @@ int main() {
       JCLAP_CHECK(near(gainToDb(vca.process(1.0f, 0.5f)), -30.0, 1e-3));
       JCLAP_CHECK_EQ(vca.process(1.0f, 1.0f), 1.0f);
    }
+   // A retrigger right at the peak holds it, rather than dipping for a sample (zero attack).
+   {
+      Envelope env;
+      env.setSampleRate(kRate);
+      env.setAttack(0.0);
+      env.setDecay(0.5);
+      env.setSustain(0.5);
+      env.gateOn();
+      JCLAP_CHECK_EQ(env.process(), 1.0f);
+      JCLAP_CHECK(env.stage() == Envelope::Stage::Decay);
+      env.gateOn();
+      JCLAP_CHECK_EQ(env.process(), 1.0f);
+      JCLAP_CHECK(env.stage() == Envelope::Stage::Decay);
+   }
    // A gate let go before the attack has moved ends in silence, without a blip upward.
    {
       Envelope env;
@@ -372,6 +419,27 @@ int main() {
          }
       }
       JCLAP_CHECK(std::fabs(10.0 * std::log10(out / in)) < 0.1);
+   }
+
+   // Out-of-range sizes and delays are safe: a non-positive max still makes a usable line, and an
+   // unset line or a NaN delay reads as a delay of 1.
+   {
+      DelayLine unset;
+      unset.write(3.0f);
+      unset.write(4.0f);
+      JCLAP_CHECK_EQ(unset.read(1.0f), 3.0f);
+      JCLAP_CHECK_EQ(unset.read(50.0f), 3.0f);
+      for (int samples : {0, -1, -5, -100}) {
+         DelayLine line;
+         line.setMaxDelay(samples);
+         JCLAP_CHECK(line.maxDelay() >= 1);
+      }
+      DelayLine line;
+      line.setMaxDelay(10);
+      for (int i = 1; i <= 10; ++i)
+         line.write(static_cast<float>(i));
+      JCLAP_CHECK_EQ(line.read(std::nanf("")), 9.0f);
+      JCLAP_CHECK_EQ(line.read(-3.0f), 9.0f);
    }
 
    return jclap::core::testResult();

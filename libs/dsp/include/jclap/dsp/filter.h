@@ -46,14 +46,19 @@ public:
    }
    Slope slope() const { return slope_; }
    int stages() const { return static_cast<int>(slope_); }
-   // Hz, clamped to 10 Hz..0.45 x the sample rate. Cheap enough to call every sample.
+   // Hz, clamped to 10 Hz..0.45 x the sample rate. Cheap enough to call every sample. A NaN is
+   // ignored, so one bad modulation value can't leave the filter stuck at NaN.
    void setCutoff(double hz) {
+      if (std::isnan(hz))
+         return;
       cutoff_ = hz;
       updateCoefficients();
    }
    double cutoff() const { return cutoff_; }
-   // 0 is no resonance; 1 is a sharp peak just short of self-oscillation.
+   // 0 is no resonance; 1 is a sharp peak just short of self-oscillation. A NaN is ignored.
    void setResonance(double amount) {
+      if (std::isnan(amount))
+         return;
       amount = std::clamp(amount, 0.0, 1.0);
       if (amount == resonance_)
          return;
