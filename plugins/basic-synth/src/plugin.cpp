@@ -71,6 +71,19 @@ struct Slot {
 struct ChannelState {
    double bend = 0.0, pressure = 0.0, timbre = 0.5;
    bool sustain = false; // CC 64 at 64 or more
+   // Pitch bend range in semitones from RPN 0, or -1 for the default (2 on a plain channel, the MPE
+   // Bend Range knob on an MPE note channel).
+   double bendRange = -1.0;
+   // The RPN that data entry (CC 6 / 38) goes to, from CC 101 / 100; 127/127 is none.
+   int rpnMsb = 127, rpnLsb = 127;
+};
+
+// A per-note modulation that arrived before its note did (in the same block, or just ahead of it).
+struct PendingMod {
+   int32_t noteId;
+   int16_t port, channel, key;
+   clap_id param;
+   double amount;
 };
 
 // State layout: 4-byte magic, uint32 version, uint32 param count, then one double per param in id
@@ -105,6 +118,8 @@ public:
       }
       for (ChannelState &c : channels_)
          c = ChannelState{};
+      mpeMembers_ = 15;
+      pendingCount_ = 0;
       for (int e = 0; e < kEnvCount; ++e) {
          loopEnv_[e].setSampleRate(sampleRate);
          loopEnv_[e].reset();
@@ -122,6 +137,8 @@ public:
          s.voice.reset();
       for (ChannelState &c : channels_)
          c = ChannelState{};
+      mpeMembers_ = 15;
+      pendingCount_ = 0;
    }
 
    // An instrument: notes in, stereo out.
@@ -173,11 +190,15 @@ public:
    void endEdit(clap_id id) override { edits_.end(id); }
    const jclap::ui::HostMenu *hostMenu() const override { return &hostMenu_; }
    void readScope(float *out, size_t count) override { scope_.read(out, count); }
+   // While the host isn't processing, the panel's notes wait in the queue. Note-ons and expressions
+   // stop going in well before it's full, so the note-offs that follow always fit and no note sticks.
    void noteOn(int note, float velocity) override {
-      panelNotes_.push({PanelNote::Kind::On, static_cast<int8_t>(note), std::max(0.01f, velocity), 0, 0, 0.5f});
+      if (panelNotes_.size() < kPanelReserve)
+         panelNotes_.push({PanelNote::Kind::On, static_cast<int8_t>(note), std::max(0.01f, velocity), 0, 0, 0.5f});
    }
    void noteExpression(int note, float bend, float pressure, float timbre) override {
-      panelNotes_.push({PanelNote::Kind::Expression, static_cast<int8_t>(note), 0, bend, pressure, timbre});
+      if (panelNotes_.size() < kPanelReserve)
+         panelNotes_.push({PanelNote::Kind::Expression, static_cast<int8_t>(note), 0, bend, pressure, timbre});
    }
    void noteOff(int note) override { panelNotes_.push({PanelNote::Kind::Off, static_cast<int8_t>(note), 0, 0, 0, 0}); }
    void voices(std::vector<Voice> &out) const override {
@@ -296,9 +317,12 @@ public:
    clap_process_status process(const clap_process_t *proc) override {
       jclap::dsp::ScopedNoDenormals noDenormals;
       edits_.drain(proc->out_events);
+      blockFrames_ = proc->frames_count;
       PanelNote p;
       while (panelNotes_.pop(p))
          handlePanelNote(p, proc->out_events);
+      // The panel may have moved a knob since the last block.
+      dirty_ = true;
 
       float *left = nullptr, *right = nullptr;
       if (proc->audio_outputs_count > 0 && proc->audio_outputs[0].data32 && proc->audio_outputs[0].channel_count > 0) {
@@ -314,7 +338,11 @@ public:
          while (next < eventCount && in->get(in, next)->time <= start)
             handleEvent(in->get(in, next++), proc->out_events);
          const uint32_t end = next < eventCount ? std::min(frames, in->get(in, next)->time) : frames;
-         configureVoices();
+         // Only when something every voice hears has changed; a note's own events configure it.
+         if (dirty_) {
+            configureVoices();
+            dirty_ = false;
+         }
          for (uint32_t i = start; i < end; ++i) {
             double shared[kEnvCount];
             for (int e = 0; e < kEnvCount; ++e)
@@ -343,7 +371,14 @@ public:
       if (left)
          scope_.write(left, frames);
       publishVoices();
-      return CLAP_PROCESS_CONTINUE;
+      blockFrames_ = 0;
+      // Per-note modulation that never found its note this block isn't kept for later notes.
+      pendingCount_ = 0;
+      // With every voice silent there's nothing to render until the next event.
+      for (const Slot &s : slots_)
+         if (s.voice.isActive())
+            return CLAP_PROCESS_CONTINUE;
+      return CLAP_PROCESS_SLEEP;
    }
 
 private:
@@ -428,13 +463,25 @@ private:
       return vs;
    }
 
+   // An MPE lower zone: channel 1 manages, channels 2..mpeMembers_+1 each carry their own notes.
+   // It's on (all 15 channels) until an MPE Configuration Message says otherwise; with a zone of 0
+   // every channel is a plain MIDI channel.
+   bool isMember(int channel) const { return channel >= 1 && channel <= mpeMembers_; }
+   bool zoneOn() const { return mpeMembers_ > 0; }
+   double bendRange(int channel) const {
+      const double r = channels_[channel].bendRange;
+      return r >= 0.0 ? r : isMember(channel) ? value(kBendRange) : 2.0;
+   }
+
    double pitchOf(const Slot &s) const {
       double bend = s.bend;
       if (!s.panel) {
-         // The manager channel's bend moves every note; a note channel's moves its own note.
-         bend += channels_[0].bend * 2.0;
-         if (s.channel > 0)
-            bend += channels_[s.channel].bend * value(kBendRange);
+         // In a zone the manager channel's bend moves every note, and a note channel's moves its own
+         // notes; a plain channel's bend moves its own notes.
+         if (isMember(s.channel))
+            bend += channels_[0].bend * bendRange(0) + channels_[s.channel].bend * bendRange(s.channel);
+         else
+            bend += channels_[s.channel].bend * bendRange(s.channel);
       }
       return s.key + std::round(value(kTune, &s)) + bend;
    }
@@ -444,7 +491,46 @@ private:
    double timbreOf(const Slot &s) const { return s.panel || s.ownTimbre ? s.timbre : channels_[s.channel].timbre; }
 
    // The sustain pedal holds a host note when it's down on the note's channel or the manager channel.
-   bool pedalDown(const Slot &s) const { return !s.panel && (channels_[s.channel].sustain || channels_[0].sustain); }
+   bool pedalDown(const Slot &s) const {
+      return !s.panel && (channels_[s.channel].sustain || (isMember(s.channel) && channels_[0].sustain));
+   }
+
+   // The channels a channel-wide message on `channel` reaches: its own, or every channel in the zone
+   // when it comes on the manager channel.
+   bool reaches(int channel, const Slot &s) const {
+      return s.channel == channel || (channel == 0 && zoneOn() && isMember(s.channel));
+   }
+
+   // Data entry for the RPN picked with CC 101 / 100. RPN 0 is the channel's pitch bend range
+   // (semitones on CC 6, cents on CC 38). RPN 6 on channel 1 is the MPE Configuration Message: how
+   // many channels after it carry notes, with their bend ranges back to the MPE defaults.
+   void dataEntry(int channel, bool msb, int v) {
+      ChannelState &c = channels_[channel];
+      if (c.rpnMsb != 0)
+         return;
+      if (c.rpnLsb == 0) {
+         const double semitones = msb ? v : std::floor(std::max(0.0, c.bendRange));
+         const double cents = msb ? 0.0 : v;
+         c.bendRange = std::min(96.0, semitones + cents / 100.0);
+         dirty_ = true;
+      }
+      else if (c.rpnLsb == 6 && channel == 0 && msb) {
+         mpeMembers_ = std::min(v, 15);
+         for (ChannelState &m : channels_)
+            m.bendRange = -1.0;
+         dirty_ = true;
+      }
+   }
+
+   // Lets go of the notes the pedal is holding on the channels `channel` reaches, unless another
+   // pedal still holds them.
+   void releasePedalled(int channel, int16_t port) {
+      for (Slot &s : slots_)
+         if (s.sustained && !s.panel && s.voice.isActive() && s.port == port && reaches(channel, s) && !pedalDown(s)) {
+            s.sustained = false;
+            s.voice.release();
+         }
+   }
    // A host note-off: let go now, or when the pedal comes up.
    void releaseHost(Slot &s) {
       if (pedalDown(s))
@@ -460,8 +546,10 @@ private:
       case CLAP_EVENT_PARAM_VALUE: {
          auto *ev = reinterpret_cast<const clap_event_param_value_t *>(h);
          // A NaN would get past the clamp and silence the synth for good.
-         if (ev->param_id < kParamCount && std::isfinite(ev->value))
+         if (ev->param_id < kParamCount && std::isfinite(ev->value)) {
             values_[ev->param_id].store(std::clamp(ev->value, kParams[ev->param_id].min, kParams[ev->param_id].max));
+            dirty_ = true;
+         }
          break;
       }
       case CLAP_EVENT_PARAM_MOD: {
@@ -470,13 +558,21 @@ private:
          auto *ev = reinterpret_cast<const clap_event_param_mod_t *>(h);
          if (ev->param_id >= kParamCount || !std::isfinite(ev->amount))
             break;
+         dirty_ = true;
          if (ev->note_id == -1 && ev->key == -1 && ev->channel == -1) {
             mods_[ev->param_id].store(ev->amount);
             break;
          }
+         bool found = false;
          for (Slot &s : slots_)
-            if (hostMatches(s, ev->note_id, ev->port_index, ev->channel, ev->key))
+            if (hostMatches(s, ev->note_id, ev->port_index, ev->channel, ev->key)) {
                s.mod[ev->param_id] = ev->amount;
+               found = true;
+            }
+         // Sent with or just before its note-on (as hosts may for a note's starting value): kept
+         // until the end of the block for the note to pick up.
+         if (!found && pendingCount_ < kMaxPending)
+            pending_[pendingCount_++] = {ev->note_id, ev->port_index, ev->channel, ev->key, ev->param_id, ev->amount};
          break;
       }
       case CLAP_EVENT_NOTE_ON: {
@@ -528,6 +624,7 @@ private:
             default:
                break;
             }
+            configure(s);
          }
          break;
       }
@@ -546,27 +643,54 @@ private:
                   releaseHost(s);
          } else if (status == 0xE0) {
             c.bend = ((ev->data[2] << 7 | ev->data[1]) - 8192) / 8192.0;
+            dirty_ = true;
          } else if (status == 0xD0) {
             c.pressure = ev->data[1] / 127.0;
+            dirty_ = true;
+         } else if (status == 0xA0) {
+            // Polyphonic aftertouch: that one MIDI note's pressure.
+            for (Slot &s : slots_)
+               if (s.midi && matches(s, -1, ev->port_index, channel, ev->data[1])) {
+                  s.pressure = ev->data[2] / 127.0;
+                  s.ownPressure = true;
+                  configure(s);
+               }
          } else if (status == 0xB0 && ev->data[1] == 74) {
             c.timbre = ev->data[2] / 127.0;
+            dirty_ = true;
          } else if (status == 0xB0 && ev->data[1] == 64) {
             // Sustain: up lets go of the notes it was holding, unless the other pedal that applies
             // (this channel's or the manager channel's) is still down.
             c.sustain = ev->data[2] >= 64;
             if (!c.sustain)
-               for (Slot &s : slots_)
-                  if (s.sustained && !s.panel && s.voice.isActive() && s.port == ev->port_index &&
-                      (channel == 0 || s.channel == channel) && !pedalDown(s)) {
-                     s.sustained = false;
-                     s.voice.release();
-                  }
+               releasePedalled(channel, ev->port_index);
+         } else if (status == 0xB0 && (ev->data[1] == 101 || ev->data[1] == 100)) {
+            (ev->data[1] == 101 ? c.rpnMsb : c.rpnLsb) = ev->data[2];
+         } else if (status == 0xB0 && (ev->data[1] == 6 || ev->data[1] == 38)) {
+            dataEntry(channel, ev->data[1] == 6, ev->data[2]);
+         } else if (status == 0xB0 && ev->data[1] == 121) {
+            // Reset All Controllers: bend, pressure, CC 74 and the pedal back to rest, on the
+            // channels it reaches, and the notes the pedal held let go.
+            for (int ch = 0; ch < 16; ++ch)
+               if (ch == channel || (channel == 0 && zoneOn() && isMember(ch))) {
+                  ChannelState &r = channels_[ch];
+                  r.bend = r.pressure = 0.0;
+                  r.timbre = 0.5;
+                  r.sustain = false;
+                  r.rpnMsb = r.rpnLsb = 127;
+               }
+            releasePedalled(channel, ev->port_index);
+            dirty_ = true;
          } else if (status == 0xB0 && (ev->data[1] == 120 || ev->data[1] == 123)) {
             // All sound off cuts, all notes off releases: the host's notes on that channel, or on
             // every channel when it comes on the manager channel (1), as for the MPE zone. The
-            // panel's notes are its own.
+            // panel's notes are its own. Both lift the pedal too, so a stop mid-pedal doesn't leave
+            // every later note held.
+            for (int ch = 0; ch < 16; ++ch)
+               if (ch == channel || (channel == 0 && zoneOn() && isMember(ch)))
+                  channels_[ch].sustain = false;
             for (Slot &s : slots_) {
-               if (s.panel || !s.voice.isActive() || s.port != ev->port_index || (channel != 0 && s.channel != channel))
+               if (s.panel || !s.voice.isActive() || s.port != ev->port_index || !reaches(channel, s))
                   continue;
                // Both also let go of notes the pedal is holding.
                s.sustained = false;
@@ -647,12 +771,19 @@ private:
       s.ended = false;
       for (double &m : s.mod)
          m = 0.0;
+      for (int i = 0; i < pendingCount_; ++i) {
+         const PendingMod &m = pending_[i];
+         if (!panel && (m.noteId != -1 ? m.noteId == noteId
+                                       : (m.key == -1 || m.key == key) && (m.channel == -1 || m.channel == channel) &&
+                                             (m.port == -1 || m.port == port)))
+            s.mod[m.param] = m.amount;
+      }
       configure(s);
       s.voice.start(pitchOf(s), gainOf(s));
    }
 
-   // The same note if it is still sounding, else a free voice, else the quietest releasing one,
-   // else the oldest.
+   // The same note if it is still sounding, else a free voice, else the quietest releasing (or
+   // pedal-held) one, else the oldest.
    Slot &pickSlot(int16_t port, int16_t channel, int16_t key, bool panel) {
       for (Slot &s : slots_)
          if (s.voice.isActive() && s.key == key && s.channel == channel && s.port == port && s.panel == panel)
@@ -661,8 +792,9 @@ private:
          if (!s.voice.isActive())
             return s;
       Slot *best = nullptr;
+      // Notes only the sustain pedal is holding count as let go: steal those before a key still down.
       for (Slot &s : slots_)
-         if (s.voice.isReleasing() && (!best || s.voice.level() < best->voice.level()))
+         if ((s.voice.isReleasing() || s.sustained) && (!best || s.voice.level() < best->voice.level()))
             best = &s;
       if (best)
          return *best;
@@ -680,6 +812,8 @@ private:
       s.ended = true;
       if (!out || s.panel)
          return;
+      // A host event timed past the block still ends its note inside it.
+      time = std::min(time, blockFrames_ > 0 ? blockFrames_ - 1 : 0);
       clap_event_note_t ev{};
       ev.header = {sizeof(ev), time, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_END, 0};
       ev.note_id = s.noteId;
@@ -747,7 +881,17 @@ private:
    };
    LoopShown loopShown_[kEnvCount];
    std::atomic<float> lfoValue_{0.0f};
+   // The MPE lower zone's size (see isMember), set by an MPE Configuration Message.
+   int mpeMembers_ = 15;
+   static constexpr int kMaxPending = 32;
+   PendingMod pending_[kMaxPending];
+   int pendingCount_ = 0;
+   // Something every voice hears changed since they were last configured.
+   bool dirty_ = true;
+   // This block's length, while it runs; 0 outside a block.
+   uint32_t blockFrames_ = 0;
    jclap::core::SpscQueue<PanelNote> panelNotes_;
+   static constexpr size_t kPanelReserve = decltype(panelNotes_)::capacity() - 128;
    jclap::core::SampleFifo<4096> scope_;
 
    // Last, so the panel closes before the state it reads goes away.

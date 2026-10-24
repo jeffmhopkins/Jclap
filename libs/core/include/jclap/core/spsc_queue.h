@@ -25,6 +25,11 @@ public:
       return true;
    }
 
+   // How many items are waiting. Exact for the producer's own pushes; the consumer may have taken
+   // some since, so it can only be higher than the truth, never lower.
+   size_t size() const { return write_.load(std::memory_order_acquire) - read_.load(std::memory_order_acquire); }
+   static constexpr size_t capacity() { return Size; }
+
    // Consumer. Returns false when the queue is empty.
    bool pop(T &item) {
       const uint32_t r = read_.load(std::memory_order_relaxed);
