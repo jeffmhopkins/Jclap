@@ -884,5 +884,132 @@ int main() {
       r(9600);
    }
 
+   // The second review's fixes (#78, #79, #65), on a fresh instance.
+   {
+      jclap::core::TestHost h3(clap_entry, "com.jeffmhopkins.jclap.basic-synth");
+      EditorHost &panel3 = *h3.object<EditorHost>();
+      Run r{h3, {}, {}, {}};
+      h3.setParam(kWave, 0.0);
+      h3.setParam(kCutoff, 1.0);
+      h3.setParam(kEnv2ToFilter, 0.0);
+      h3.setParam(kEnv1Sustain, 1.0);
+      h3.setParam(kEnv1Attack, 1.0);
+      h3.setParam(kEnv1Release, 50.0);
+      std::vector<EditorHost::Voice> vs;
+      const auto sounding = [&](int key) {
+         panel3.voices(vs);
+         return std::any_of(vs.begin(), vs.end(), [&](const EditorHost::Voice &v) { return v.note == key; });
+      };
+
+      // #78: with the pedal down, stealing takes a pedal-held note before a key still held.
+      h3.midi(0xB0, 64, 127);
+      h3.note(CLAP_EVENT_NOTE_ON, 36, 1.0, 1, 0);
+      r(256);
+      for (int i = 0; i < 8; ++i) {
+         h3.note(CLAP_EVENT_NOTE_ON, static_cast<int16_t>(60 + i), 1.0, 10 + i, 0);
+         r(256);
+         h3.note(CLAP_EVENT_NOTE_OFF, static_cast<int16_t>(60 + i), 0.0, 10 + i, 0);
+         r(256);
+      }
+      JCLAP_CHECK(sounding(36));
+      JCLAP_CHECK(std::none_of(r.noteEnds.begin(), r.noteEnds.end(), [](const clap_event_note_t &e) { return e.note_id == 1; }));
+
+      // #79: CC 121 lifts the pedal and resets the bend.
+      h3.midi(0xE0, 0x7F, 0x7F);
+      h3.note(CLAP_EVENT_NOTE_OFF, 36, 0.0, 1, 0);
+      h3.midi(0xB0, 121, 0);
+      r(9600);
+      panel3.voices(vs);
+      JCLAP_CHECK(vs.empty());
+      h3.note(CLAP_EVENT_NOTE_ON, 69, 1.0, 20, 0);
+      r(4800);
+      r(48000);
+      JCLAP_CHECK(near(r.frequency(), 440.0, 0.5));
+      // CC 123 lifts the pedal too, so a note played after it isn't held.
+      h3.midi(0xB0, 64, 127);
+      h3.midi(0xB0, 123, 0);
+      r(9600);
+      h3.note(CLAP_EVENT_NOTE_ON, 69, 1.0, 21, 0);
+      r(4800);
+      h3.note(CLAP_EVENT_NOTE_OFF, 69, 0.0, 21, 0);
+      r(9600);
+      JCLAP_CHECK(r.left.back() == 0.0f);
+
+      // Poly aftertouch sets that key's pressure.
+      h3.midi(0x91, 60, 100);
+      h3.midi(0x91, 64, 100);
+      h3.midi(0xA1, 60, 127);
+      r(256);
+      panel3.voices(vs);
+      JCLAP_CHECK(vs.size() == 2);
+      for (const auto &v : vs)
+         JCLAP_CHECK(v.pressure == (v.note == 60 ? 1.0f : 0.0f));
+      h3.midi(0xB1, 123, 0);
+      r(9600);
+
+      // RPN 0 sets a note channel's bend range: 12 semitones on channel 2.
+      h3.midi(0xB1, 101, 0);
+      h3.midi(0xB1, 100, 0);
+      h3.midi(0xB1, 6, 12);
+      h3.midi(0x91, 60, 100);
+      h3.midi(0xE1, 0, 96);
+      r(256);
+      panel3.voices(vs);
+      JCLAP_CHECK(vs.size() == 1 && near(vs[0].bend, 6.0, 1e-4));
+      h3.midi(0xB1, 123, 0);
+      h3.midi(0xE1, 0, 64);
+      r(9600);
+      // An MPE configuration message with no channels turns the zone off: channel 2 is then a
+      // plain channel, bending 2 semitones, and the channel 1 bend doesn't reach it.
+      h3.midi(0xB0, 101, 0);
+      h3.midi(0xB0, 100, 6);
+      h3.midi(0xB0, 6, 0);
+      h3.midi(0x92, 60, 100); // channel 3, never given a range
+      h3.midi(0xE2, 0, 96);
+      h3.midi(0xE0, 0, 96);
+      r(256);
+      panel3.voices(vs);
+      JCLAP_CHECK(vs.size() == 1 && near(vs[0].bend, 1.0, 1e-4));
+      h3.midi(0xB2, 123, 0);
+      h3.midi(0xE0, 0, 64);
+      h3.midi(0xE2, 0, 64);
+      r(9600);
+
+      // A per-note modulation sent just ahead of its note-on reaches the note.
+      h3.modulateNote(kTune, 12.0, 30);
+      h3.note(CLAP_EVENT_NOTE_ON, 57, 1.0, 30, 0);
+      r(4800);
+      r(48000);
+      JCLAP_CHECK(near(r.frequency(), 440.0, 0.5));
+      h3.note(CLAP_EVENT_NOTE_OFF, 57, 0.0, 30, 0);
+      r(9600);
+
+      // A flood of panel note-ons can't crowd out the note-off.
+      for (int i = 0; i < 2000; ++i)
+         panel3.noteOn(60, 1.0f);
+      panel3.noteOff(60);
+      r(9600);
+      panel3.voices(vs);
+      JCLAP_CHECK(vs.empty());
+
+      // Env amounts glide: dropping Env 1 to VCA from full doesn't step the output.
+      h3.setParam(kEnv1ToVca, 1.0);
+      h3.note(CLAP_EVENT_NOTE_ON, 69, 1.0, 40, 0);
+      r(4800);
+      r(4800);
+      float peak = 0.0f;
+      for (float x : r.left)
+         peak = std::max(peak, std::fabs(x));
+      h3.setParam(kEnv1ToVca, 0.1);
+      r(1024);
+      float jump = 0.0f;
+      for (size_t i = 1; i < r.left.size(); ++i)
+         jump = std::max(jump, std::fabs(r.left[i] - r.left[i - 1]));
+      // A 440 Hz sine moves at most 2 pi 440 / 48000 of its peak per sample.
+      JCLAP_CHECK(jump < 0.07f * peak);
+      h3.note(CLAP_EVENT_NOTE_OFF, 69, 0.0, 40, 0);
+      r(9600);
+   }
+
    return jclap::core::testResult();
 }

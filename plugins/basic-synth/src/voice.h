@@ -70,6 +70,7 @@ public:
          s->setTime(0.005);
       }
       cutoff_.setTime(0.02);
+      amountGlide_ = 1.0 - std::exp(-1.0 / (0.005 * sampleRate));
       reset();
    }
 
@@ -77,32 +78,34 @@ public:
    void setSeed(uint32_t seed) { lfo_.setSeed(seed); }
 
    void configure(const VoiceSettings &s) {
-      for (jclap::dsp::Oscillator *o : {&osc_, &osc2_}) {
+      for (jclap::dsp::Oscillator *o : {&osc_, &osc2_})
          o->setWave(s.wave);
-         o->setPulseWidth(s.pulseWidth);
-      }
-      pulseWidth_ = s.pulseWidth;
       dual_ = s.dual;
       detune_ = s.detune;
       filter_.setMode(s.filterMode);
       filter_.setSlope(s.slope);
-      filter_.setResonance(s.resonance);
       for (int i = 0; i < kEnvCount; ++i) {
          env_[i].setAttack(s.env[i].attack);
          env_[i].setDecay(s.env[i].decay);
          env_[i].setSustain(s.env[i].sustain);
          env_[i].setRelease(s.env[i].release);
          sends_[i] = s.env[i];
+         target_[kEnvToFilter + i] = s.env[i].toFilter;
+         target_[kEnvToPitch + i] = s.env[i].toPitch;
+         target_[kEnvToVca + i] = s.env[i].toVca;
       }
+      // The amounts, resonance and pulse width glide to their new values (see process()).
+      target_[kResonance] = s.resonance;
+      target_[kPulseWidth] = s.pulseWidth;
       cutoff_.setTarget(std::log2(s.cutoffHz) + s.velocityOctaves);
       keyTrack_ = s.keyTrack;
       pressureAmount_ = s.pressureAmount;
       timbreAmount_ = s.timbreAmount;
       lfo_.setShape(s.lfoShape);
       lfo_.setRate(s.lfoRate);
-      lfoToCutoff_ = s.lfoToCutoff;
-      lfoToVca_ = s.lfoToVca;
-      lfoToPulseWidth_ = s.lfoToPulseWidth;
+      target_[kLfoToCutoff] = s.lfoToCutoff;
+      target_[kLfoToVca] = s.lfoToVca;
+      target_[kLfoToPulseWidth] = s.lfoToPulseWidth;
    }
 
    // Gate on at a pitch in semitones (MIDI note numbers, fractional for bends). A voice that is still
@@ -116,15 +119,20 @@ public:
          osc2_.reset(0.37);
          filter_.reset();
          vca_.reset();
-         lfo_.reset();
          gate_.reset(0.0);
          for (jclap::dsp::Smoother *s : {&pitch_, &pressure_, &timbre_, &cutoff_})
             s->reset(s->target());
+         for (int i = 0; i < kAmounts; ++i)
+            now_[i] = target_[i];
+         applyResonance(true);
+         applyPulseWidth(now_[kPulseWidth], true);
          // An envelope that only goes to the filter or pitch can still be releasing from the last
          // note; a fresh one starts from zero all the same.
          for (jclap::dsp::Envelope &e : env_)
             e.reset();
       }
+      // The LFO starts its cycle again with every note, retriggered or stolen ones too.
+      lfo_.reset();
       released_ = false;
       gate_.setTarget(1.0);
       for (jclap::dsp::Envelope &e : env_)
@@ -159,24 +167,25 @@ public:
       if (!isActive())
          return 0.0f;
       const double gate = gate_.process();
+      // Envelope and LFO amounts, resonance and pulse width glide over about 5 ms, so turning or
+      // automating them doesn't step.
+      for (int i = 0; i < kAmounts; ++i)
+         now_[i] += amountGlide_ * (target_[i] - now_[i]);
+      applyResonance(false);
       double toFilter = 0.0, toPitch = 0.0, toVca = 0.0, vcaShare = 0.0;
       for (int i = 0; i < kEnvCount; ++i) {
          const double own = env_[i].process();
          const double e = sends_[i].loop ? shared[i] : own;
-         toFilter += sends_[i].toFilter * e;
-         toPitch += sends_[i].toPitch * e;
+         toFilter += now_[kEnvToFilter + i] * e;
+         toPitch += now_[kEnvToPitch + i] * e;
          // The shared cycle never ends, so on the VCA it is let in by this voice's key.
-         toVca += sends_[i].toVca * e * (sends_[i].loop ? gate : 1.0);
-         vcaShare += sends_[i].toVca;
+         toVca += now_[kEnvToVca + i] * e * (sends_[i].loop ? gate : 1.0);
+         vcaShare += now_[kEnvToVca + i];
       }
       const double lfo = lfoValue_ = lfo_.process();
       const double pitch = pitch_.process() + toPitch;
-      if (lfoToPulseWidth_ > 0.0) {
-         // Pulse width modulation, about the knob's width and kept inside the oscillator's range.
-         const double width = std::clamp(pulseWidth_ + lfoToPulseWidth_ * kLfoWidthSwing * lfo, 0.05, 0.95);
-         osc_.setPulseWidth(width);
-         osc2_.setPulseWidth(width);
-      }
+      // Pulse width modulation, about the knob's width and kept inside the oscillator's range.
+      applyPulseWidth(std::clamp(now_[kPulseWidth] + now_[kLfoToPulseWidth] * kLfoWidthSwing * lfo, 0.05, 0.95), false);
       double source;
       if (dual_) {
          // The first stays on the note and the second is detuned from it, by a few cents for
@@ -190,12 +199,12 @@ public:
          source = osc_.process();
       }
       const double octaves = cutoff_.process() + toFilter + keyTrack_ * (pitch - 60.0) / 12.0 + pressureAmount_ * pressure_.process() +
-                             timbreAmount_ * 2.0 * (timbre_.process() - 0.5) + lfoToCutoff_ * lfo;
+                             timbreAmount_ * 2.0 * (timbre_.process() - 0.5) + now_[kLfoToCutoff] * lfo;
       filter_.setCutoff(std::exp2(std::clamp(octaves, 3.0, 15.0)));
       // What the envelopes leave of the VCA follows the gate: with no envelope sent to it, the VCA
       // is simply open while the key is held. Tremolo dips that by up to its depth.
       const double open = gate * std::max(0.0, 1.0 - vcaShare);
-      const double tremolo = 1.0 - lfoToVca_ * (0.5 - 0.5 * lfo);
+      const double tremolo = 1.0 - now_[kLfoToVca] * (0.5 - 0.5 * lfo);
       level_ = static_cast<float>(std::clamp(open + toVca, 0.0, 1.0) * tremolo);
       return vca_.process(filter_.process(static_cast<float>(source)), level_);
    }
@@ -222,6 +231,35 @@ public:
    double lfoValue() const { return lfoValue_; }
 
 private:
+   // The filter and oscillators only hear a new resonance or width when it has moved.
+   void applyResonance(bool always) {
+      if (always || std::fabs(now_[kResonance] - resonanceSet_) > 1e-6) {
+         filter_.setResonance(now_[kResonance]);
+         resonanceSet_ = now_[kResonance];
+      }
+   }
+   void applyPulseWidth(double width, bool always) {
+      if (always || std::fabs(width - widthSet_) > 1e-7) {
+         osc_.setPulseWidth(width);
+         osc2_.setPulseWidth(width);
+         widthSet_ = width;
+      }
+   }
+
+   enum {
+      kEnvToFilter = 0,
+      kEnvToPitch = kEnvToFilter + kEnvCount,
+      kEnvToVca = kEnvToPitch + kEnvCount,
+      kLfoToCutoff = kEnvToVca + kEnvCount,
+      kLfoToVca,
+      kLfoToPulseWidth,
+      kResonance,
+      kPulseWidth,
+      kAmounts
+   };
+   double target_[kAmounts] = {}, now_[kAmounts] = {};
+   double amountGlide_ = 1.0, resonanceSet_ = -1.0, widthSet_ = -1.0;
+
    jclap::dsp::Oscillator osc_, osc2_;
    bool dual_ = false;
    double detune_ = 0.0; // semitones
@@ -234,8 +272,7 @@ private:
    // VCA opens and closes without clicks.
    jclap::dsp::Smoother pitch_, pressure_, timbre_, cutoff_, gate_;
    double keyTrack_ = 0.0, pressureAmount_ = 0.0, timbreAmount_ = 0.0;
-   double pulseWidth_ = 0.5;
-   double lfoToCutoff_ = 0.0, lfoToVca_ = 0.0, lfoToPulseWidth_ = 0.0, lfoValue_ = 0.0;
+   double lfoValue_ = 0.0;
    bool released_ = true;
    float level_ = 0.0f;
 };
