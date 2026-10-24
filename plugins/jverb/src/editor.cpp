@@ -175,6 +175,8 @@ public:
 
    // Readout and velocity arrow for this body (-1 for none). Clicking a body selects it.
    int selected = -1;
+   // The System Size knob, which sets how big the stage draws the system.
+   float systemSize = 1.0f;
 
    // One frame of animation, `dt` seconds after the last.
    void advance(const OrbitFrame &f, float dt) {
@@ -218,6 +220,19 @@ public:
          zoom_ += (target - zoom_) * std::min(1.0f, dt * 2.5f);
       else
          zoom_ = std::min(target, zoom_ * std::exp(std::min(0.05f, 0.25f * std::log(target / zoom_)) * dt));
+      // On top of that the stage draws the system at its System Size: a quarter of the stage at
+      // 0.25 AU, about half at 1, all of it at 10 (on a log scale, so both ends stay readable). It
+      // follows the knob in about a tenth of a second.
+      const float sized = 0.25f + 0.75f * std::log(std::clamp(systemSize, 0.25f, 10.0f) / 0.25f) / std::log(40.0f);
+      sizeView_ = sizeView_ <= 0.0f ? sized : sizeView_ + (sized - sizeView_) * std::min(1.0f, dt * 10.0f);
+      // The AU rings show only while System Size is turning (gone 5 s after it stops) or while the
+      // mouse is over the system.
+      if (shownSize_ > 0.0f && std::abs(systemSize - shownSize_) > 1e-4f)
+         sinceSize_ = 0.0f;
+      shownSize_ = systemSize;
+      sinceSize_ += dt;
+      const float want = overStage_ ? 1.0f : std::clamp((5.0f - sinceSize_) / 1.5f, 0.0f, 1.0f);
+      scaleAlpha_ += (want - scaleAlpha_) * std::min(1.0f, dt * 6.0f);
 
       for (int band = 0; band < 3; ++band) {
          if (f.hits[band] != seenHits_[band]) {
@@ -242,11 +257,13 @@ public:
       c.fill(0, 0, width(), height());
       drawBackdrop(c, s);
 
-      const float ppu = zoom_ * s;
+      const float ppu = scale() * s;
       const float cx = kStageX * s, cy = kStageY * s;
       const auto X = [&](float x) { return cx + x * ppu; };
       const auto Y = [&](float y) { return cy + y * ppu; };
       const OrbitFrame &f = frame_;
+
+      drawScale(c, s, cx, cy, ppu);
 
       // The centre of mass, and a faint tether between each body and the next.
       c.setColor(glow(kText, 0.3f, 1.0f));
@@ -379,6 +396,8 @@ public:
    }
 
    void mouseMove(const visage::MouseEvent &e) override {
+      const float s = width() / designWidth_;
+      overStage_ = std::hypot(e.position.x - kStageX * s, e.position.y - kStageY * s) < kStageRadius * 1.15f * s;
       const int h = bodyAt(e.position);
       if (h != hover_) {
          hover_ = h;
@@ -386,7 +405,10 @@ public:
       }
    }
 
-   void mouseExit(const visage::MouseEvent &) override { hover_ = -1; }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = -1;
+      overStage_ = false;
+   }
 
    // Scrolling on a body changes its mass, about 5% a notch.
    bool mouseWheel(const visage::MouseEvent &e) override {
@@ -428,7 +450,7 @@ private:
       host_.endEdit(kBodies);
    }
 
-   float ppu() const { return zoom_ * width() / designWidth_; }
+   float ppu() const { return scale() * width() / designWidth_; }
    visage::Point toWorld(visage::Point p) const {
       const float s = width() / designWidth_;
       return {(p.x - kStageX * s) / ppu(), (p.y - kStageY * s) / ppu()};
@@ -599,7 +621,7 @@ private:
    void drawBackdrop(visage::Canvas &c, float s) {
       const float w = width(), h = height();
       const float cx = kStageX * s, cy = kStageY * s;
-      const float zoom = zoom_ > 0.0f ? zoom_ / kRestZoom : 1.0f;
+      const float zoom = zoom_ > 0.0f ? scale() / (0.53f * kRestZoom) : 1.0f;
       // Nebulae, far away, and brightening a little with the tank.
       const float lift = std::min(1.0f, frame_.late * 3.0f);
       const float nk = std::clamp(std::pow(zoom, 0.25f), 0.8f, 1.4f);
@@ -640,6 +662,28 @@ private:
          const float r = (2.5f + 0.25f * bodyRadius(f.mass[b])) * s;
          c.setColor(glow(kBodyColors[b], 1.0f, 1.4f));
          c.circle(x - r, y - r + 0.5f * s, 2 * r);
+      }
+   }
+
+   // Pixels per world unit (before the window's own scale): the camera's fit times the System Size.
+   float scale() const { return zoom_ * (sizeView_ > 0.0f ? sizeView_ : 0.53f); }
+
+   // Faint rings at round distances in AU, so the size of the system reads off the stage. A world
+   // unit is System Size AU.
+   void drawScale(visage::Canvas &c, float s, float cx, float cy, float ppu) {
+      if (scaleAlpha_ < 0.01f)
+         return;
+      const float perAu = ppu / std::clamp(systemSize, 0.25f, 10.0f);
+      for (const float au : {0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f, 16.0f}) {
+         const float r = au * perAu;
+         if (r < 40.0f * s || r > kStageRadius * 1.08f * s)
+            continue;
+         c.setColor(glow(kText, 0.07f * scaleAlpha_, 1.0f));
+         c.ring(cx - r, cy - r, 2 * r, 1.0f * s);
+         char label[16];
+         std::snprintf(label, sizeof label, au < 1.0f ? "%.2g AU" : "%.0f AU", au);
+         c.setColor(glow(kDim, 0.45f * scaleAlpha_, 1.0f));
+         c.text(label, ui::font(9 * s), visage::Font::kLeft, cx + 4 * s, cy - r - 12 * s, 60 * s, 11 * s);
       }
    }
 
@@ -695,7 +739,9 @@ private:
    uint32_t seenHits_[3] = {};
    float flare_[3] = {};
    float spawnCarry_[3] = {};
-   float zoom_ = 0.0f, span_ = 0.0f;
+   float zoom_ = 0.0f, span_ = 0.0f, sizeView_ = 0.0f;
+   float shownSize_ = 0.0f, sinceSize_ = 1e9f, scaleAlpha_ = 0.0f;
+   bool overStage_ = false;
    float swirlAngle_[kMaxBodies] = {};
    float time_ = 0.0f;
    int hover_ = -1, dragBody_ = -1;
@@ -1034,6 +1080,7 @@ public:
       OrbitFrame f;
       if (host_.readFrame(f))
          frame_ = f;
+      view_->systemSize = static_cast<float>(host_.paramValue(kSize));
       view_->advance(frame_, dt);
       const int count = currentBodies();
       if (count != laidOut_)

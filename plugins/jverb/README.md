@@ -32,7 +32,7 @@ in -> low/high cut -> [drive PRE] -> [echo INTO] -> predelay + early reflections
    -> early/late -> [drive POST] -> [echo AFTER] -> duck, width, mix, level -> out
 ```
 
-- **Space**: Decay (RT60), System Size (scales every line and the early reflections), Gravity (how
+- **Space**: Decay (RT60), System Size (0.25 to 10 AU: scales every line, up to 2 s at the top, and the early reflections, and sets how big the stage draws the system), Gravity (how
   fast and tight the orbits run), Bodies, Motion (how far the lines drift), Predelay and Damp High.
   **Shape** has Attack, Diffusion, Early/Late, the bass multiplier and crossover, the input cuts and
   React.

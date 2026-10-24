@@ -122,7 +122,7 @@ struct ParamTable {
    ParamTable() {
       const jclap::core::ParamDef fixed[] = {
          {kDecay, "Decay", "Space", 0.2, 60.0, 4.0, kMod},
-         {kSize, "System Size", "Space", 0.25, 4.0, 1.0, kMod},
+         {kSize, "System Size", "Space", 0.25, 10.0, 1.0, kMod},
          {kGravity, "Gravity", "Space", 0.25, 4.0, 1.0, kMod},
          {kBodies, "Bodies", "Space", 2.0, 6.0, 3.0, kToggle},
          {kMotion, "Motion", "Space", 0.0, 2.0, 0.4, kMod},
