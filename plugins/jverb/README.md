@@ -11,6 +11,9 @@ with a long echo, a drive you can loop into the tail, and presets.
 
 ![Panel](docs/panel.png)
 
+**[Read the user manual (PDF)](docs/JVerb-User-Manual.pdf)**: installing, a quick start, every control with its
+range and default, the presets, sound-design recipes and troubleshooting.
+
 ## How it sounds the way it does
 
 The tail comes from sixteen delay lines, 29 to 202 ms at System Size 1, each with two allpasses
@@ -120,3 +123,5 @@ SPACE, 1 SHAPE, 2 ORBIT), which runs the orbits with a made-up drum and pad inpu
 `-DJCLAP_BUILD_TOOLS=ON`, `ctest` checks all three renders in `docs/`:
 
 ![Six bodies](docs/panel-six.png)
+
+The manual's source is in [`docs/manual`](docs/manual), and `docs/manual/build.sh` rebuilds the PDF.

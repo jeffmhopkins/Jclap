@@ -1,0 +1,1409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JVerb User Manual</title>
+<style>
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Regular.ttf"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Italic.ttf"); font-weight: 400; font-style: italic; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Medium.ttf"); font-weight: 500; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-SemiBold.ttf"); font-weight: 600; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Bold.ttf"); font-weight: 700; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Light.ttf"); font-weight: 300; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Regular.ttf"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Medium.ttf"); font-weight: 500; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-SemiBold.ttf"); font-weight: 600; font-style: normal; }
+:root {
+  --ink: #15171d;
+  --ink-2: #3b3f4a;
+  --ink-3: #6d7280;
+  --rule: #e3e4e8;
+  --wash: #f5f5f7;
+  --night: #070910;
+  --orange: #f28c28;
+  --orange-ink: #c4650f;
+  --space: #ffb05a;  --space-ink: #b86a14;
+  --loop: #ff6fd2;   --loop-ink: #b8338f;
+  --drive: #ee6f5c;  --drive-ink: #c0412d;
+  --echo: #8fe8a8;   --echo-ink: #23864a;
+  --io: #6fe0ff;     --io-ink: #1489ad;
+  --rhea: #a98bff;   --luna: #ff8a7a;
+}
+@page {
+  size: 8.5in 11in;
+  margin: 0.85in 0.85in 0.8in 0.85in;
+  @bottom-left { content: "JVerb  ·  User Manual  ·  v0.7.0"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
+  @bottom-right { content: counter(page); font: 600 8pt "InterM"; color: #15171d; }
+}
+@page cover { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+@page plain { @bottom-left { content: none; } @bottom-right { content: none; } }
+@page back { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  margin: 0; font-family: "InterM", sans-serif; font-size: 9.6pt; line-height: 1.55; color: var(--ink);
+  font-feature-settings: "cv11", "ss01", "tnum" 0; hyphens: manual;
+}
+p { margin: 0 0 0.75em; orphans: 3; widows: 3; }
+strong { font-weight: 600; }
+em { font-style: italic; }
+code, .mono { font-family: "JetBrains Mono", monospace; font-size: 0.86em; }
+code { background: var(--wash); border-radius: 3px; padding: 0.05em 0.3em; }
+a { color: inherit; text-decoration: none; }
+
+/* ---------- cover ---------- */
+.cover {
+  page: cover; width: 8.5in; height: 11in; background: var(--night); color: #fff; position: relative; overflow: hidden;
+  break-after: page;
+}
+.cover .stars { position: absolute; inset: 0; }
+.cover .top { position: absolute; left: 0.85in; right: 0.85in; top: 0.8in; display: flex; justify-content: space-between; align-items: center; }
+.cover .brand { font: 600 8pt "InterM"; letter-spacing: 0.28em; color: #9aa0ad; text-transform: uppercase; }
+.cover .title { position: absolute; left: 0.85in; top: 1.9in; }
+.cover .word { font: 300 92pt/0.9 "InterDisplayM"; letter-spacing: -0.035em; }
+.cover .word .j { color: var(--orange); font-weight: 400; }
+.cover .sub { margin-top: 0.22in; font: 400 15pt "InterDisplayM"; color: #c9ccd4; letter-spacing: 0.01em; }
+.cover .sub b { color: #fff; font-weight: 500; }
+.cover .shot { position: absolute; left: 0.85in; right: 0.85in; top: 4.45in; }
+.cover .shot img { width: 100%; display: block; border-radius: 10px; box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 30px 80px rgba(255,111,210,0.18), 0 10px 40px rgba(111,224,255,0.12); }
+.cover .foot { position: absolute; left: 0.85in; right: 0.85in; bottom: 0.75in; display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid rgba(255,255,255,0.14); padding-top: 0.16in; }
+.cover .foot .k { font: 600 7pt "InterM"; letter-spacing: 0.22em; text-transform: uppercase; color: #7d8391; }
+.cover .foot .v { font: 500 10pt "InterM"; color: #e8e9ee; margin-top: 3px; }
+
+/* ---------- front matter ---------- */
+.front { page: plain; break-after: page; }
+.toc-title { font: 300 30pt/1 "InterDisplayM"; letter-spacing: -0.02em; margin: 0 0 0.25in; }
+.toc { columns: 2; column-gap: 0.4in; }
+.toc .grp { break-inside: avoid; }
+.toc .ch { display: flex; align-items: baseline; padding: 4px 0 4px; border-bottom: 1px solid var(--rule); }
+.toc .ch .n { width: 0.36in; font: 600 9pt "JetBrains Mono"; color: var(--orange-ink); }
+.toc .ch .t { flex: 1; font: 600 10.5pt "InterM"; }
+.toc .ch .p { font: 500 9.5pt "InterM"; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.toc .sec { display: flex; align-items: baseline; padding: 1px 0 1px 0.36in; font-size: 8.4pt; color: var(--ink-2); }
+.toc .sec .t { flex: 1; }
+.toc .sec .p { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.toc .grp { padding-bottom: 3px; }
+
+/* ---------- chapters ---------- */
+.chapter { break-before: page; }
+.chap-head { position: relative; margin: 0 0 0.32in; padding-top: 0.05in; }
+.chap-head .num { font: 600 8pt "JetBrains Mono"; letter-spacing: 0.18em; color: var(--accent, var(--orange-ink)); text-transform: uppercase; }
+.chap-head h1 { font: 300 32pt/1.02 "InterDisplayM"; letter-spacing: -0.025em; margin: 0.08in 0 0.12in; color: var(--ink); }
+.chap-head .lede { font: 400 12pt/1.5 "InterDisplayM"; color: var(--ink-2); max-width: 5.6in; margin: 0; }
+.chap-head .bar { height: 3px; width: 0.9in; background: var(--accent-bg, var(--orange)); margin-top: 0.22in; border-radius: 2px; }
+
+h2 { break-inside: avoid; font: 600 13.5pt/1.25 "InterDisplayM"; letter-spacing: -0.005em; margin: 0.32in 0 0.1in; break-after: avoid; }
+h2 .tag { font: 600 7pt "JetBrains Mono"; letter-spacing: 0.14em; color: var(--accent, var(--orange-ink)); display: block; margin-bottom: 3px; text-transform: uppercase; }
+h3 { font: 600 10.2pt/1.3 "InterM"; margin: 0.2in 0 0.06in; break-after: avoid; }
+h4 { font: 600 7.5pt "InterM"; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0.16in 0 0.06in; break-after: avoid; }
+ul, ol { margin: 0 0 0.8em; padding-left: 1.15em; }
+li { margin: 0 0 0.3em; }
+li::marker { color: var(--ink-3); }
+
+/* ---------- tables ---------- */
+table { width: 100%; border-collapse: collapse; margin: 0.06in 0 0.18in; font-size: 8.5pt; line-height: 1.42; }
+thead th { text-align: left; font: 600 6.8pt "InterM"; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3); border-bottom: 1.2px solid var(--ink); padding: 0 8px 5px 0; }
+tbody td { border-bottom: 1px solid var(--rule); padding: 5px 8px 5px 0; vertical-align: top; }
+tbody tr { break-inside: avoid; }
+td.c { font-weight: 600; white-space: nowrap; }
+td.r, td.d { font-family: "JetBrains Mono", monospace; font-size: 7.6pt; color: var(--ink-2); white-space: nowrap; }
+td.d { color: var(--ink); }
+table.params td.c { width: 1.05in; }
+table.params td.r { width: 1.3in; white-space: normal; }
+table.params td.d { width: 0.7in; white-space: normal; }
+table.compact td.c { width: 0.95in; }
+table.compact td.r { width: 1.05in; white-space: normal; line-height: 1.5; }
+table.compact .dflt { color: var(--ink); font-weight: 600; }
+.mod { display: inline-block; font: 600 6pt "InterM"; letter-spacing: 0.08em; padding: 0 4px; border-radius: 3px; margin-left: 4px; vertical-align: 1px; border: 1px solid currentColor; }
+.mod.m { color: #7b7f8b; }
+.mod.t { color: var(--loop-ink); }
+
+/* ---------- figures ---------- */
+figure { margin: 0.12in 0 0.22in; break-inside: avoid; }
+figure img { display: block; width: 100%; border-radius: 6px; }
+figure.dark img { box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 6px 22px rgba(10,12,20,0.18); }
+figcaption { font-size: 7.8pt; color: var(--ink-3); margin-top: 7px; line-height: 1.45; }
+figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
+
+.split { break-inside: avoid; display: grid; grid-template-columns: 1.72in 1fr; gap: 0.3in; align-items: start; margin-top: 0.1in; }
+.split figure { margin: 0; }
+.split figure img { border-radius: 8px; }
+.split .body > :first-child { margin-top: 0; }
+
+/* ---------- callouts ---------- */
+.note { border-left: 3px solid var(--accent-bg, var(--orange)); background: var(--wash); padding: 9px 13px 9px 13px; margin: 0.12in 0 0.2in; border-radius: 0 6px 6px 0; break-inside: avoid; font-size: 8.9pt; }
+.note .k { font: 700 6.6pt "InterM"; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent, var(--orange-ink)); display: block; margin-bottom: 2px; }
+.note p:last-child { margin-bottom: 0; }
+.note.warn { border-left-color: #d64545; }
+.note.warn .k { color: #b53030; }
+
+.cols2 { break-inside: avoid; display: grid; grid-template-columns: 1fr 1fr; gap: 0.28in; }
+.cols2 > div > :first-child { margin-top: 0; }
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 8.8pt; margin: 0 0 0.15in; }
+.kv dt { font-weight: 600; white-space: nowrap; }
+.kv dd { margin: 0; color: var(--ink-2); }
+
+/* numbered callouts legend */
+.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 0.28in; margin-top: 0.12in; font-size: 8.6pt; }
+.legend div { display: flex; gap: 9px; align-items: baseline; break-inside: avoid; }
+.dot { flex: none; display: inline-flex; width: 17px; height: 17px; border-radius: 50%; background: var(--orange); color: #fff; font: 700 7.5pt/17px "InterM"; justify-content: center; position: relative; top: -1px; }
+.legend b { font-weight: 600; }
+.anno { position: relative; }
+.anno svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* steps */
+.steps { counter-reset: s; list-style: none; padding: 0; margin: 0.08in 0 0.2in; }
+.steps > li { counter-increment: s; position: relative; padding: 0 0 0.13in 0.48in; margin: 0; break-inside: avoid; }
+.steps > li::before { content: counter(s, decimal-leading-zero); position: absolute; left: 0; top: -1px; font: 600 11pt "JetBrains Mono"; color: var(--orange-ink); }
+.steps > li b.h { display: block; font-weight: 600; font-size: 10pt; margin-bottom: 1px; }
+
+/* recipe cards */
+.recipes { display: grid; grid-template-columns: 1fr 1fr; gap: 0.16in; margin-top: 0.12in; }
+.recipe { border: 1px solid var(--rule); border-radius: 8px; padding: 11px 13px 9px; break-inside: avoid; position: relative; overflow: hidden; }
+.recipe::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: var(--rc, var(--orange)); }
+.recipe h3 { margin: 0 0 3px; font-size: 9.8pt; }
+.recipe p { font-size: 8.5pt; color: var(--ink-2); margin-bottom: 6px; }
+.recipe .set { font: 400 7.3pt/1.6 "JetBrains Mono"; color: var(--ink); background: var(--wash); border-radius: 5px; padding: 6px 8px; }
+.recipe .from { font-size: 7.4pt; color: var(--ink-3); margin-top: 5px; }
+
+.pill { display: inline-block; font: 600 6.6pt "InterM"; letter-spacing: 0.1em; text-transform: uppercase; padding: 1px 6px; border-radius: 10px; color: #fff; vertical-align: 1px; }
+.key { display: inline-block; font: 600 7.4pt "InterM"; border: 1px solid #c9ccd3; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: #fff; line-height: 1.5; }
+
+.swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+
+.specs td.c { width: 1.7in; }
+
+.back { page: back; width: 8.5in; height: 11in; background: var(--night); color: #fff; position: relative; break-before: page; }
+.back .mid { position: absolute; left: 0; right: 0; top: 4.4in; text-align: center; }
+.back .word { font: 300 40pt "InterDisplayM"; letter-spacing: -0.03em; }
+.back .word .j { color: var(--orange); font-weight: 400; }
+.back .small { font: 500 8pt "InterM"; letter-spacing: 0.22em; text-transform: uppercase; color: #7d8391; margin-top: 10px; }
+.back .url { position: absolute; bottom: 0.8in; left: 0; right: 0; text-align: center; font: 400 8.5pt "JetBrains Mono"; color: #9aa0ad; }
+
+.avoid { break-inside: avoid; }
+.pb { break-before: page; }
+.muted { color: var(--ink-3); }
+.small { font-size: 8.4pt; }
+</style>
+</head>
+<body>
+
+<!-- ================= COVER ================= -->
+<section class="cover">
+  <svg class="stars" viewBox="0 0 816 1056" preserveAspectRatio="none" id="stars"></svg>
+  <div class="top">
+    <svg width="64" height="30" viewBox="0 0 50 34">
+      <circle cx="16" cy="17" r="13" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
+      <circle cx="34" cy="17" r="13" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
+      <circle cx="12" cy="21" r="5.5" fill="#6fe0ff"/>
+      <circle cx="25" cy="20.5" r="5.5" fill="#ffb05a"/>
+      <circle cx="38" cy="21" r="5.5" fill="#ff6fd2"/>
+    </svg>
+    <div class="brand">JClap &nbsp;·&nbsp; CLAP Audio Effect</div>
+  </div>
+  <div class="title">
+    <div class="word"><span class="j">J</span>Verb</div>
+    <div class="sub"><b>The three-body reverb.</b> &nbsp;User Manual</div>
+  </div>
+  <div class="shot"><img src="img/panel.jpg" alt=""></div>
+  <div class="foot">
+    <div><div class="k">Version</div><div class="v">0.7.0</div></div>
+    <div><div class="k">Format</div><div class="v">CLAP · Stereo</div></div>
+    <div><div class="k">Platforms</div><div class="v">macOS · Windows · Linux</div></div>
+    <div style="text-align:right"><div class="k">Edition</div><div class="v">October 2026</div></div>
+  </div>
+</section>
+
+<!-- ================= CONTENTS ================= -->
+<section class="front">
+  <div class="chap-head" style="margin-bottom:0.25in">
+    <div class="num">Contents</div>
+  </div>
+  <div class="toc-title">Contents</div>
+  <div class="toc" id="toc"></div>
+  <h2 style="margin-top:0.3in">About this manual</h2>
+  <p>Chapters 2 and 3 get you installed and making sound in a few minutes. Chapter 4 tours the panel, and Chapter 5 explains how the sound is made, which is the quickest way to understand what every control does. Chapters 6 to 9 cover every control in the order they sit on the panel. The appendix lists every parameter with its exact range and default, plus specifications and troubleshooting.</p>
+  <p>Throughout the manual, control names are set in <strong>bold</strong> and panel labels as they appear on screen, such as <strong>DAMP HIGH</strong>. Tags beside a parameter mean:</p>
+  <div class="kv">
+    <dt><span class="mod m">MOD</span></dt><dd>The host can modulate it with CLAP parameter modulation, on top of automation.</dd>
+    <dt><span class="mod t">TARGET</span></dt><dd>A body can be routed to it as a modulation target.</dd>
+  </div>
+</section>
+
+<!-- ================= 1. WELCOME ================= -->
+<section class="chapter" data-ch="01" data-title="Welcome to JVerb">
+  <div class="chap-head">
+    <div class="num">Chapter 01</div>
+    <h1>Welcome to JVerb</h1>
+    <p class="lede">A reverb whose tail is moved by a live gravity simulation. Two to six bodies orbit one another, and each one is a voice inside the sound.</p>
+    <div class="bar"></div>
+  </div>
+
+  <p>Most reverbs that move do it with an LFO: a sine wave, a fixed rate, the same swirl every bar. JVerb moves its tail with something that never quite repeats. At its heart is a lush sixteen-line reverb tank. Those lines are shared out among a small system of bodies that pull on each other under gravity, and each body's share of the tail leaves through its own <strong>voice</strong>: its own band of the spectrum, its own place in the stereo field, its own tone and its own phaser. As the bodies swing, slingshot and drift, the tail swirls around the speakers with them.</p>
+  <p>Three bodies start on the famous figure-eight orbit and slowly fall into chaos. Add more, up to six, and the motion gets busier. Drag them, throw them, make one heavy and the others light, or let the music kick them around: transients in your input nudge the bodies, so what you play changes the orbit, and the orbit changes the sound.</p>
+  <p>Around the tank sits an <strong>outer loop</strong> with feedback, shimmer, smear and tilt; a five-flavour <strong>drive</strong> you can place before, inside or after the reverb; and a four-second <strong>echo</strong> that can feed the reverb, be fed by it, or ride inside its loop.</p>
+
+  <h2>At a glance</h2>
+  <div class="cols2">
+    <div>
+      <ul>
+        <li><strong>Sixteen-line tank</strong> with two allpasses per line and a Hadamard mix. Decays from 0.2 to 60 seconds.</li>
+        <li><strong>Two to six orbiting bodies</strong>, each its own voice: band, pan, tone and swirl, driven by its position and angle.</li>
+        <li><strong>Bodies as modulators.</strong> Route any body's speed and close passes to Decay, Damping, Feedback, Width and more.</li>
+        <li><strong>Reactive orbits.</strong> Input transients kick the bodies by band: lows, mids, highs.</li>
+      </ul>
+    </div>
+    <div>
+      <ul>
+        <li><strong>Outer loop</strong> with Feedback to 110%, ±24-semitone shimmer, smear, tilt and Freeze.</li>
+        <li><strong>Drive</strong>: Tape, Tube, Fuzz, Fold or Crush, 2× oversampled, in the PRE, LOOP or POST slot.</li>
+        <li><strong>Echo</strong> up to 4 s, free or tempo-synced, with ping-pong, in the INTO, LOOP or AFTER slot.</li>
+        <li><strong>An extreme zone</strong> past 100% on four knobs, for warble, ringing and inside-out stereo.</li>
+        <li><strong>32 factory presets</strong>, from tight booths to minute-long washes.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note">
+    <span class="k">Lovely below 100%, weird above it</span>
+    <p>Motion, Orbit Pan, Orbit Tone and Orbit Swirl run to 200%, with a tick on the knob at 100%. Up to the tick they are tuned to stay musical: nothing bends pitch audibly and nothing rings. Past the tick is the extreme zone. See <em>Chapter 12</em>.</p>
+  </div>
+
+</section>
+
+<!-- ================= 2. INSTALLATION ================= -->
+<section class="chapter" data-ch="02" data-title="Installation">
+  <div class="chap-head">
+    <div class="num">Chapter 02</div>
+    <h1>Installation</h1>
+    <p class="lede">JVerb is a CLAP plug-in. It ships in the JClap bundle alongside the other JClap plug-ins.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2>Requirements</h2>
+  <div class="kv">
+    <dt>Plug-in format</dt><dd>CLAP 1.2 (audio effect, stereo). Your host must support CLAP, for example Bitwig Studio, REAPER, FL Studio or Studio One.</dd>
+    <dt>macOS</dt><dd>Universal binary: macOS 10.15 or later on Intel, 11 or later on Apple Silicon.</dd>
+    <dt>Windows</dt><dd>64-bit Windows.</dd>
+    <dt>Linux</dt><dd>64-bit, X11.</dd>
+  </div>
+
+  <h2>Installing</h2>
+  <ol class="steps">
+    <li><b class="h">Download</b>Grab the zip for your operating system from the latest release at <span class="mono">github.com/jeffmhopkins/Jclap/releases/latest</span>. It contains every JClap plug-in.</li>
+    <li><b class="h">Copy the plug-in</b>Copy <span class="mono">JVerb.clap</span> (a bundle on macOS) into your CLAP folder:
+      <table style="margin-top:6px">
+        <tbody>
+          <tr><td class="c">macOS</td><td class="r">~/Library/Audio/Plug-Ins/CLAP</td></tr>
+          <tr><td class="c">Windows</td><td class="r">C:\Program Files\Common Files\CLAP</td></tr>
+          <tr><td class="c">Linux</td><td class="r">~/.clap</td></tr>
+        </tbody>
+      </table>
+    </li>
+    <li><b class="h">Rescan</b>Restart your host or rescan plug-ins. In Bitwig Studio this is under <em>Settings → Locations</em>. JVerb appears as an audio effect in the reverb category.</li>
+  </ol>
+
+  <div class="note warn">
+    <span class="k">macOS: browser downloads are quarantined</span>
+    <p>The plug-ins are ad-hoc signed but not notarized, so macOS quarantines files downloaded through a web browser and some hosts (Bitwig among them) silently skip them. The simplest install is from Terminal, since files fetched with <span class="mono">curl</span> are not flagged:</p>
+    <p class="mono" style="font-size:7.2pt; background:#fff; padding:7px 9px; border-radius:4px; word-break:break-all; line-height:1.5">curl -sL https://github.com/jeffmhopkins/Jclap/releases/latest/download/jclap-macOS.zip -o /tmp/jclap.zip &amp;&amp; mkdir -p ~/Library/Audio/Plug-Ins/CLAP &amp;&amp; ditto -x -k /tmp/jclap.zip ~/Library/Audio/Plug-Ins/CLAP</p>
+    <p>If you already downloaded with a browser, clear the flag once after copying:</p>
+    <p class="mono" style="font-size:7.2pt; background:#fff; padding:7px 9px; border-radius:4px">xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap</p>
+  </div>
+
+  <h2>Insert or send?</h2>
+  <p>JVerb works either way. On an <strong>insert</strong>, use <strong>MIX</strong> in the Output section to set the balance of dry and wet (the default is 35%). On a <strong>send/return</strong> bus, set <strong>MIX</strong> to 100% so the return carries only the reverb, and set the amount with the send level instead. If you use <strong>DUCK</strong> on a send, remember that it listens to whatever arrives at JVerb's input, which is the send signal.</p>
+  <p>JVerb is a stereo effect. A mono input is used on both sides, and the reverb spreads it into stereo.</p>
+</section>
+
+<!-- ================= 3. QUICK START ================= -->
+<section class="chapter" data-ch="03" data-title="Quick Start">
+  <div class="chap-head">
+    <div class="num">Chapter 03</div>
+    <h1>Quick Start</h1>
+    <p class="lede">Five minutes from an empty insert slot to a moving, living tail.</p>
+    <div class="bar"></div>
+  </div>
+
+  <ol class="steps">
+    <li><b class="h">Load JVerb and play something</b>Put JVerb on a track with something sustained and something percussive in it: a pad and a drum loop are ideal. The orbits start running as soon as the panel opens. The bodies trail coloured paths across the stage, and each drum hit blows a puff of glowing gas out of them.</li>
+    <li><b class="h">Pick a preset</b>Click the preset name in the header to open the menu: presets are grouped from <em>Short</em> rooms through <em>Medium</em> and <em>Long</em> spaces to <em>Washes</em> that ring for most of a minute. Or click the arrows, or scroll over the bar, to step through them. Try <em>Vocal Hall</em>, then <em>Shimmer Halo</em>, then <em>Nebula</em>.</li>
+    <li><b class="h">Set the size and length</b>On the <strong>SPACE</strong> page, <strong>DECAY</strong> sets how long the tail lasts and <strong>SYSTEM SIZE</strong> how big the space is. Bigger systems have longer lines and a slower, grainier build. <strong>DAMP HIGH</strong> darkens the tail as it rings.</li>
+    <li><b class="h">Make it move</b>Open the <strong>ORBIT</strong> page. <strong>PAN</strong> moves each body's voice from a wide spread to where the body actually is; <strong>TONE</strong> darkens voices as their bodies swing out; <strong>SWIRL</strong> adds a phaser to each voice, swept by its orbit. Now drag a body somewhere new, or scroll on it to make it heavier, and listen to the tail rearrange itself.</li>
+    <li><b class="h">Let a body drive something</b>Each body has a card along the bottom. Set Kepler's target menu to <strong>Feedback</strong> and raise its <strong>AMOUNT</strong>: each time Kepler slingshots past another body, the tail surges. The Feedback knob's ring shows the movement live.</li>
+    <li><b class="h">Add colour on the right</b>The right card has three pages. <strong>LOOP</strong> adds feedback and shimmer around the whole tank, <strong>DRIVE</strong> saturates, and <strong>ECHO</strong> adds rhythmic repeats. Try <strong>ECHO ON</strong> with the slot at <strong>INTO</strong>: every repeat blooms into its own reverb swell.</li>
+    <li><b class="h">Save it</b>Click <strong>SAVE</strong> in the preset bar, type a name and press <span class="key">Enter</span>. Your preset appears under <em>User</em> in the preset menu. Settings are also saved with your project automatically.</li>
+  </ol>
+
+  <div class="note">
+    <span class="k">Tip</span>
+    <p>Every control has a tooltip. Hover over anything on the panel for a one-line reminder of what it does.</p>
+  </div>
+</section>
+
+<!-- ================= 4. PANEL TOUR ================= -->
+<section class="chapter" data-ch="04" data-title="The Panel">
+  <div class="chap-head">
+    <div class="num">Chapter 04</div>
+    <h1>The Panel</h1>
+    <p class="lede">The orbit view fills the middle. The reverb's controls sit around it in glass cards, one per part of the sound.</p>
+    <div class="bar"></div>
+  </div>
+
+  <figure class="dark anno" id="overview">
+    <img src="img/panel.jpg" alt="">
+    <svg viewBox="0 0 1200 780">
+      <g font-family="InterM" font-weight="700" font-size="15" text-anchor="middle">
+        <!-- markers inserted by script -->
+      </g>
+    </svg>
+  </figure>
+
+  <div class="legend">
+    <div><span class="dot">1</span><span><b>Preset bar.</b> Step with the arrows, click the name for the menu, <b>SAVE</b> your own.</span></div>
+    <div><span class="dot">2</span><span><b>RUN / RESET.</b> Pause the orbits, or put the bodies back where they started.</span></div>
+    <div><span class="dot">3</span><span><b>Clock.</b> FREE, SYNC or RETRIG, and the bars per lap when synced.</span></div>
+    <div><span class="dot">4</span><span><b>Space card.</b> SPACE, SHAPE and ORBIT pages: the room, its shape and the voices.</span></div>
+    <div><span class="dot">5</span><span><b>Orbit view.</b> The live simulation. Drag, throw, add and remove bodies here.</span></div>
+    <div><span class="dot">6</span><span><b>Body readout.</b> The selected body's mass, speed, routing and voice.</span></div>
+    <div><span class="dot">7</span><span><b>Voice strip.</b> Where each body's voice sits from left to right.</span></div>
+    <div><span class="dot">8</span><span><b>Loop card.</b> LOOP, DRIVE and ECHO pages.</span></div>
+    <div><span class="dot">9</span><span><b>Body cards.</b> Mass, velocity and a modulation target for each body.</span></div>
+    <div><span class="dot">10</span><span><b>Add body.</b> Adds the next body, up to six.</span></div>
+    <div><span class="dot">11</span><span><b>Output.</b> Width, Duck, Mix and Level, with stereo meters.</span></div>
+  </div>
+
+  <h2>Working with the controls</h2>
+  <p>Every knob, switch and menu is a host parameter, so everything can be automated, and most knobs also accept CLAP parameter modulation from the host. Knobs work the same everywhere on the panel:</p>
+  <table>
+    <thead><tr><th>Action</th><th>On a knob</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Drag up / down</td><td>Change the value. A popup shows the value while you drag.</td></tr>
+      <tr><td class="c"><span class="key">Shift</span> + drag</td><td>Fine adjustment.</td></tr>
+      <tr><td class="c">Scroll wheel</td><td>Step the value up or down.</td></tr>
+      <tr><td class="c">Double-click</td><td>Reset to the default value.</td></tr>
+      <tr><td class="c">Right-click</td><td>Menu with <em>Reset to default</em> and <em>Enter value…</em> to type an exact number.</td></tr>
+    </tbody>
+  </table>
+  <p>Each knob draws two arcs. The inner arc is where you set it. When a body or the host is modulating the parameter, a <strong>modulation ring</strong> shows the value actually in use, moving in real time. The four knobs with an extended range carry a small tick at 100%.</p>
+
+  <h2>Panel size</h2>
+  <p>The panel is 1200 × 780 at 100%. Right-click any empty part of the orbit view and choose <em>UI Size</em> to scale it to 75%, 100%, 125%, 150% or 200%. The size you pick is remembered the next time the editor opens.</p>
+</section>
+
+<!-- ================= 5. HOW IT WORKS ================= -->
+<section class="chapter" data-ch="05" data-title="How JVerb Works">
+  <div class="chap-head">
+    <div class="num">Chapter 05</div>
+    <h1>How JVerb Works</h1>
+    <p class="lede">A tank of sixteen delay lines, a loop around it, and a small solar system that decides where each part of the tail is heard.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2>Signal flow</h2>
+  <p>Sound enters at the top left, is shaped and diffused, rings in the tank, and leaves through the body voices to the output. The hexagons are <strong>slots</strong>: the drive sits in exactly one of its three slots, and the echo in one of its three. Only the slot that is selected is active.</p>
+
+  <figure>
+    <svg viewBox="0 0 704 290" width="100%" font-family="InterM" font-size="9.5">
+      <defs>
+        <marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#15171d"/></marker>
+        <marker id="ahg" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#9aa0ad"/></marker>
+      </defs>
+      <g id="flow"></g>
+    </svg>
+    <figcaption><b>Fig. 5.1</b> &nbsp;The main signal path. Hexagons are slots for the drive (red) and echo (green). The dashed lines are the early reflections, which skip the tank, and the dry signal, which meets the wet at Mix.</figcaption>
+  </figure>
+
+  <h2>The input stage</h2>
+  <p>The input first passes <strong>LOW CUT</strong> and <strong>HIGH CUT</strong>. Only the reverb hears these filters; the dry signal is untouched. If the drive is in its PRE slot it comes next, then the echo if its slot is INTO. <strong>PREDELAY</strong> holds the sound back by up to half a second before the space answers.</p>
+  <p>Eight <strong>early reflections</strong> are tapped off the predelay, between 7 and 67 ms after it (scaled by System Size), alternating left and right. They never enter the tank: they go straight to the <strong>EARLY/LATE</strong> balance at the output. Meanwhile the signal is smeared by six allpasses per side (<strong>DIFFUSION</strong>) and shaped by <strong>ATTACK</strong>, which can soften it into a slow swell or play it backwards in overlapping windows, before it enters the tank.</p>
+
+  <h2>The tank</h2>
+  <p>The tank is a feedback delay network of sixteen lines. At System Size 1 they run from 29 ms to 202 ms, evenly spread on a log scale so that none is a simple ratio of another. Each pass through a line goes through two allpasses, loses a little level (so the tail falls 60 dB in the <strong>DECAY</strong> time), has its bass adjusted by <strong>BASS MULT</strong> and its treble damped by <strong>DAMP HIGH</strong>, and is then mixed into every other line through a 16 × 16 Hadamard matrix. The result is a sound that thickens into a dense wash within about 150 ms.</p>
+  <p>Each line also drifts very slowly on its own, which blurs resonances the way a chorus would. <strong>MOTION</strong> sets how far: at 100% no line bends a pass by more than 4 cents, so the tail never sounds pitchy.</p>
+
+  <h2>Bodies are voices</h2>
+  <p>The sixteen lines are dealt out among the bodies in left/right pairs, so every body owns a spread of short and long lines on both sides. With three bodies, Io gets lines 1–2, 7–8 and 13–14; Kepler gets 3–4, 9–10 and 15–16; Vesta gets 5–6 and 11–12. Each body's lines are summed into its own stereo <strong>voice</strong>, and the voice is shaped by where the body is:</p>
+
+  <figure>
+    <svg viewBox="0 0 704 150" width="100%" font-family="InterM" id="bands"></svg>
+    <figcaption><b>Fig. 5.2</b> &nbsp;With three bodies the spectrum splits into three log-spaced bands between 150 Hz and 6 kHz, body 1 lowest. The outer bands stay open below and above. At Orbit Pan 100% each voice is narrowed to its band, falling 12 dB per octave outside it.</figcaption>
+  </figure>
+
+  <table>
+    <thead><tr><th>Voice</th><th>Comes from</th><th>Controlled by</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Band</td><td>The body's number: body 1 lowest. With <em>n</em> bodies the spectrum is cut into <em>n</em> bands.</td><td>ORBIT · PAN</td></tr>
+      <tr><td class="c">Place</td><td>The body's left/right position on the stage.</td><td>ORBIT · PAN</td></tr>
+      <tr><td class="c">Tone</td><td>The body's distance from the centre of mass: bright near the centre, dark out on the swing.</td><td>ORBIT · TONE</td></tr>
+      <tr><td class="c">Swirl</td><td>The body's angle around the centre. A four-stage phaser is swept twice per lap.</td><td>ORBIT · SWIRL</td></tr>
+    </tbody>
+  </table>
+  <p>None of this bends pitch: the bodies never change a line's length. Because a body's tone also moves the damping in its own lines, a dark body's part of the tail dies darker as well as sounding darker.</p>
+
+  <h2>The outer loop</h2>
+  <p>Around the whole tank runs a second, slower loop. It takes the plain sum of all the lines, <em>before</em> the voices, shapes it, and feeds it back into the tank's input:</p>
+  <figure>
+    <svg viewBox="0 0 704 140" width="100%" font-family="InterM" font-size="9.5"><g id="loopfig"></g></svg>
+    <figcaption><b>Fig. 5.3</b> &nbsp;The outer loop. Shimmer re-pitches every pass so the tail climbs (or falls); the safety stage keeps the loop bounded however hard it is pushed.</figcaption>
+  </figure>
+  <p>Because the loop is taken before the voices, nothing a voice does (a boost, a ringing phaser, a stereo flip) is ever fed back. That is what makes the voice controls safe to push to 200%.</p>
+  <p><strong>FEEDBACK</strong> is scaled so that it means the same thing at any decay and size: below roughly 100% the tail still dies away, just longer and more coloured by the loop; past it, the loop grows until the safety stage holds it.</p>
+
+  <h2>Bodies are modulators too</h2>
+  <p>Besides its voice, each body produces a <strong>modulation signal</strong>: how fast it is moving compared with the others, plus how close its nearest neighbour is. A body cruising at the average speed sits near zero; a body slingshotting past another spikes high. Route that signal to one of nine parameters with the body's <strong>Target</strong> and <strong>Amount</strong> (Chapter 9).</p>
+
+  <h2>The orbit simulation</h2>
+  <p>The bodies obey Newtonian gravity: every body pulls on every other in proportion to its mass. <strong>GRAVITY</strong> scales the pull, so higher values give faster, tighter orbits with the same shapes. The simulation takes smaller steps during close passes so slingshots stay accurate, keeps the system centred, and gently catches any body flung too far out and turns it around. Simulation and audio run on the same 32-sample clock, so the same settings and input always give the same orbits and the same render, at any buffer size.</p>
+</section>
+
+<!-- ================= 6. ORBIT VIEW ================= -->
+<section class="chapter" data-ch="06" data-title="The Orbit View" style="--accent: var(--io-ink); --accent-bg: var(--io);">
+  <div class="chap-head">
+    <div class="num">Chapter 06</div>
+    <h1>The Orbit View</h1>
+    <p class="lede">The stage in the middle of the panel is not just a display. It is an instrument: every body can be grabbed, thrown and weighed.</p>
+    <div class="bar"></div>
+  </div>
+
+  <figure class="dark" style="width:5.2in"><img src="img/stage.jpg" alt=""><figcaption><b>Fig. 6.1</b> &nbsp;Three bodies on the stage. Kepler is selected: its readout shows its mass, speed, routing and voice. The strip at the bottom places each voice from left to right.</figcaption></figure>
+
+  <h2>Gestures</h2>
+  <table>
+    <thead><tr><th>Gesture</th><th>Where</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Drag</td><td>On a body</td><td>Moves the body. Release it and it carries on from where you left it.</td></tr>
+      <tr><td class="c">Drag the arrow</td><td>On the selected body</td><td>Sets the body's velocity: direction and speed.</td></tr>
+      <tr><td class="c">Scroll</td><td>On a body</td><td>Changes its mass. Heavier bodies are drawn bigger.</td></tr>
+      <tr><td class="c">Double-click</td><td>Empty space</td><td>Adds a body at that point, moving at circular speed around the others (up to six).</td></tr>
+      <tr><td class="c">Right-click</td><td>On a body</td><td>Removes it. The bodies after it move down a place, settings and all.</td></tr>
+      <tr><td class="c">Right-click</td><td>Empty space</td><td>The panel menu, with <em>UI Size</em>.</td></tr>
+      <tr><td class="c">Click a card</td><td>Body cards</td><td>Selects that body; click again to deselect.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>The bodies</h2>
+  <p>Six bodies are available, each with a fixed name and colour. The first three are present by default.</p>
+  <table>
+    <thead><tr><th style="width:0.45in">No.</th><th>Body</th><th>Default mass</th><th>Follows transients in</th></tr></thead>
+    <tbody>
+      <tr><td class="r">1</td><td class="c"><span class="swatch" style="background:#6fe0ff"></span>Io</td><td class="r">1.00</td><td>Lows (below 250 Hz)</td></tr>
+      <tr><td class="r">2</td><td class="c"><span class="swatch" style="background:#ffb05a"></span>Kepler</td><td class="r">1.25</td><td>Mids</td></tr>
+      <tr><td class="r">3</td><td class="c"><span class="swatch" style="background:#ff6fd2"></span>Vesta</td><td class="r">0.80</td><td>Highs (above 2.5 kHz)</td></tr>
+      <tr><td class="r">4</td><td class="c"><span class="swatch" style="background:#8fe8a8"></span>Titan</td><td class="r">1.00</td><td>Lows</td></tr>
+      <tr><td class="r">5</td><td class="c"><span class="swatch" style="background:#a98bff"></span>Rhea</td><td class="r">1.00</td><td>Mids</td></tr>
+      <tr><td class="r">6</td><td class="c"><span class="swatch" style="background:#ff8a7a"></span>Luna</td><td class="r">1.00</td><td>Highs</td></tr>
+    </tbody>
+  </table>
+  <p>Three bodies start on the figure-eight orbit, which is stable when the masses are equal. JVerb's default masses (1, 1.25, 0.8) break it up within a few laps into motion that never repeats. Any other number of bodies starts on a ring with slightly different radii, so the ring soon breaks up too.</p>
+
+  <h2>Reading the view</h2>
+  <p>Everything on the stage reflects what you hear:</p>
+  <ul>
+    <li><strong>Glow.</strong> A body whose voice is bright burns whiter and wider; a dark one burns deeper in its own colour.</li>
+    <li><strong>Arcs.</strong> Arcs spin around a body faster the harder its phaser is sweeping.</li>
+    <li><strong>Voice strip.</strong> The line under the stage, marked L and R, places each voice in the stereo field.</li>
+    <li><strong>Gas.</strong> Each transient in the input blows a shell of soft gas out of the bodies that follow its band. It billows, drifts on a slow swirl and falls back. Where two bodies' clouds meet they push each other apart and the seam glows whiter.</li>
+    <li><strong>Dust.</strong> Each band also makes its bodies glow and throw off sparks of dust, which fall through the system's gravity.</li>
+    <li><strong>AU rings.</strong> The system is drawn at its System Size: a quarter of the stage at 0.25 AU, all of it at 10 AU. Faint rings mark the scale while you turn the knob or hover over the system.</li>
+    <li><strong>Readout.</strong> The selected body's box shows its mass (m) and speed (v), where it is routed and by how much right now, and its voice: position, tone and swirl.</li>
+  </ul>
+
+  <div class="note" style="--accent: var(--io-ink); --accent-bg: var(--io);">
+    <span class="k">React</span>
+    <p>Transients do more than draw gas. With <strong>REACT</strong> (on the SHAPE page) above zero, each hit also kicks the bodies that follow its band, so a busy drum part keeps reshaping the orbit, and through it the sound. Set React to 0% for orbits that only follow gravity.</p>
+  </div>
+</section>
+
+<!-- ================= 7. HEADER ================= -->
+<section class="chapter" data-ch="07" data-title="Presets and Clock">
+  <div class="chap-head">
+    <div class="num">Chapter 07</div>
+    <h1>Presets and Clock</h1>
+    <p class="lede">The header holds the preset browser and the controls that run the orbits.</p>
+    <div class="bar"></div>
+  </div>
+
+  <figure class="dark"><img src="img/header.jpg" alt=""><figcaption><b>Fig. 7.1</b> &nbsp;The header: preset bar, RUN and RESET, the clock switch and Sync Bars.</figcaption></figure>
+
+  <h2>The preset bar</h2>
+  <ul>
+    <li><strong>◀ ▶</strong> step to the previous or next preset, in menu order. Scrolling over the bar does the same.</li>
+    <li><strong>The name</strong> opens the preset menu: the factory bank in four categories (<em>Short</em>, <em>Medium</em>, <em>Long</em>, <em>Washes</em>), a <em>User</em> submenu with your own presets, and <em>Save as…</em>. The category of the current preset is shown at the left of the bar.</li>
+    <li><strong>SAVE</strong> asks for a name and writes the current settings as a user preset.</li>
+  </ul>
+  <p>Loading a preset sets every parameter, so nothing carries over from the previous sound (a body's routing, for example). The host sees the change as an ordinary edit, so it can be undone. The orbits then restart from the preset's masses and velocities.</p>
+
+  <h3>User presets</h3>
+  <p>User presets are small text files with the extension <span class="mono">.jvpreset</span>, one line per parameter, so they sound the same even if a later version changes a default. They live in:</p>
+  <table>
+    <tbody>
+      <tr><td class="c">macOS</td><td class="r">~/Library/Application Support/JVerb/Presets</td></tr>
+      <tr><td class="c">Windows</td><td class="r">%APPDATA%\JVerb\Presets</td></tr>
+      <tr><td class="c">Linux</td><td class="r">$XDG_CONFIG_HOME/JVerb/Presets &nbsp;(or ~/.config/JVerb/Presets)</td></tr>
+    </tbody>
+  </table>
+  <p>Copy files into this folder to share presets between machines; they appear the next time the menu opens. The name of the last preset loaded or saved is stored with your project.</p>
+
+  <h2>Running the orbits</h2>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">RUN</td><td class="r">On / Off</td><td class="d">On</td><td>Off stops the orbits where they are. The tail keeps sounding, with every voice held where its body stopped.</td></tr>
+      <tr><td class="c">RESET</td><td class="r">button</td><td class="d">–</td><td>Puts the bodies back where they start, with their set masses and velocities.</td></tr>
+      <tr><td class="c">Clock</td><td class="r">Free, Sync, Retrig</td><td class="d">Free</td><td>How the orbits are clocked (below).</td></tr>
+      <tr><td class="c">Sync Bars</td><td class="r">1 to 16 bars</td><td class="d">4</td><td>Bars per lap of the start orbit when the clock is SYNC.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Clock modes</h3>
+  <div class="kv">
+    <dt>FREE</dt><dd>The orbits run on their own. With three bodies the figure-eight comes round about every 8 seconds at Gravity 1.</dd>
+    <dt>SYNC</dt><dd>One lap of the start orbit fits into <strong>Sync Bars</strong> bars at the host's tempo and time signature. When the transport starts, loops or jumps, the orbits restart and run on to where they would be at that point in the cycle, so they line up with your bars.</dd>
+    <dt>RETRIG</dt><dd>The orbits run free, but restart whenever the transport starts, loops or jumps.</dd>
+  </div>
+  <p>Restarts are deterministic: the same settings and the same input give the same orbits, and the same render, every time. That makes SYNC and RETRIG the modes to use when you bounce or freeze tracks.</p>
+</section>
+
+<!-- ================= 8. SPACE CARD ================= -->
+<section class="chapter" data-ch="08" data-title="The Space Card" style="--accent: var(--space-ink); --accent-bg: var(--space);">
+  <div class="chap-head">
+    <div class="num">Chapter 08</div>
+    <h1>The Space Card</h1>
+    <p class="lede">Three pages on the left of the panel: SPACE sets the room, SHAPE its character, ORBIT how much the bodies move their voices.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2><span class="tag">Page 1</span>SPACE</h2>
+  <div class="split">
+    <figure class="dark"><img src="img/card-space.jpg" alt=""></figure>
+    <div class="body">
+      <table class="params">
+        <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="c">DECAY</td><td class="r">0.2 – 60 s</td><td class="d">4.00 s</td><td>How long the tail lasts: the time for the mids to fall 60 dB (RT60). <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
+          <tr><td class="c">SYSTEM SIZE</td><td class="r">0.25 – 10 AU</td><td class="d">1.00 AU</td><td>Scales every line in the tank, the early reflections, and the swell and reverse windows. At 10 AU the longest line is 2 s. Also sets how big the stage draws the system. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">GRAVITY</td><td class="r">G ×0.25 – ×4</td><td class="d">×1.00</td><td>How hard the bodies pull. Higher runs the orbits faster and tighter with the same shapes. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">BODIES</td><td class="r">2 – 6</td><td class="d">3</td><td>How many bodies, and so how many voices and bands. Fewer is sparse, more is dense.</td></tr>
+          <tr><td class="c">MOTION</td><td class="r">0 – 200%</td><td class="d">40%</td><td>How far the tank's lines drift: a chorus-like blur up to 100%, warble beyond. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">PREDELAY</td><td class="r">0 – 500 ms</td><td class="d">20 ms</td><td>Delay before the space answers. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">DAMP HIGH</td><td class="r">1 – 20 kHz</td><td class="d">7.0 kHz</td><td>Highs above this die faster on every pass, so the tail darkens as it rings. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="note" style="--accent: var(--space-ink); --accent-bg: var(--space);">
+    <span class="k">System Size and Decay are independent</span>
+    <p>Decay is always the RT60 you set, whatever the size. A small system with a long decay gives a dense, metallic ring; a big system with a short decay sounds like a large space heard briefly, with more audible early structure. Sizes above about 4 AU start to sound grainy and echo-like by design.</p>
+  </div>
+
+  <h2 class="pb"><span class="tag">Page 2</span>SHAPE</h2>
+  <div class="split">
+    <figure class="dark"><img src="img/card-shape.jpg" alt=""></figure>
+    <div class="body">
+      <table class="params">
+        <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="c">ATTACK</td><td class="r">Reverse 100% – Swell 100%</td><td class="d">Off</td><td>Right of centre the tail swells in through three long allpasses; left of centre it plays the input backwards in overlapping windows (80 to 580 ms). <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">DIFFUSION</td><td class="r">0 – 100%</td><td class="d">70%</td><td>How much the input is smeared before the tank, and how dense the tank's own allpasses are. At 0% a click goes in as a click; at 100% as a cloud. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
+          <tr><td class="c">EARLY/LATE</td><td class="r">0 – 100% late</td><td class="d">75% late</td><td>Equal-power balance of early reflections and tail. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
+          <tr><td class="c">BASS MULT</td><td class="r">×0.25 – ×2.5</td><td class="d">×1.20</td><td>Bass decay time relative to Decay. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">BASS XOVER</td><td class="r">80 – 800 Hz</td><td class="d">250 Hz</td><td>Where Bass Mult takes over. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">LOW CUT</td><td class="r">20 Hz – 1 kHz</td><td class="d">40 Hz</td><td>High-pass on the reverb's input. The dry signal is untouched. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">HIGH CUT</td><td class="r">1 – 20 kHz</td><td class="d">16.0 kHz</td><td>Low-pass on the reverb's input. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">REACT</td><td class="r">0 – 100%</td><td class="d">30%</td><td>How hard transients in the input kick the bodies. <span class="mod m">MOD</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3>Swell and reverse</h3>
+  <p><strong>ATTACK</strong> is a bipolar knob. Turned right, transients soften into a slow bloom; the swell's allpasses grow with System Size. Turned left, the diffused signal is played backwards in two overlapping windows that grow from 80 ms to 580 ms as you turn, giving the classic reverse-reverb suck-in on every note. Both crossfade in gradually, so small settings just take the edge off.</p>
+
+  <h3>React in detail</h3>
+  <p>A three-band analyser (split at 250 Hz and 2.5 kHz) watches the dry input for sudden jumps. Each transient kicks the bodies following its band, in proportion to React and how hard it hit. Kicks also scale with Gravity, so they feel the same at any orbit speed.</p>
+
+  <h2 class="pb"><span class="tag">Page 3</span>ORBIT</h2>
+  <div class="split">
+    <figure class="dark"><img src="img/card-orbit.jpg" alt=""></figure>
+    <div class="body">
+      <table class="params">
+        <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="c">PAN</td><td class="r">0 – 200%</td><td class="d">75%</td><td>Narrows each voice to its own band and moves it from a wide spread to where its body is, left to right. Past 100% voices are thrown to the edges and their stereo turns inside out. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">TONE</td><td class="r">0 – 200%</td><td class="d">60%</td><td>A voice darkens as its body swings out and brightens near the centre. Also moves the damping in that body's lines. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">SWIRL</td><td class="r">0 – 200%</td><td class="d">60%</td><td>How deep each voice's four-stage phaser goes, swept twice per lap by its orbit. Past 100% the phasers feed back until they ring. <span class="mod m">MOD</span></td></tr>
+        </tbody>
+      </table>
+      <h4>The voice list</h4>
+      <p class="small">Below the knobs, a row per body shows its voice live: where it sits from left to right, its tone (dark to bright), and how hard it is swirling. Each meter draws the same 0 to 200% scale as the knobs, with a tick at 100%.</p>
+    </div>
+  </div>
+
+  <h3>How tone follows distance</h3>
+  <p>Each body's tone depends on its distance from the centre of mass, scaled by <strong>TONE</strong>. Near the centre a voice is bright, out on the swing it is dark, and at about 0.9 units it is neutral.</p>
+  <table>
+    <thead><tr><th>Body's tone</th><th>Above 2.5 kHz</th><th>Level</th><th>Damping in its lines</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Dark (–1)</td><td class="r">–12 dB</td><td class="r">–3 dB</td><td>an octave lower</td></tr>
+      <tr><td class="c">Bright (+1)</td><td class="r">+4 dB</td><td class="r">+3 dB</td><td>an octave higher</td></tr>
+      <tr><td class="c">Dark, past 100% (–2)</td><td class="r">–24 dB</td><td class="r">–3 dB</td><td>three octaves lower</td></tr>
+      <tr><td class="c">Bright, past 100% (+2)</td><td class="r">+14 dB</td><td class="r">+3 dB</td><td>three octaves higher</td></tr>
+    </tbody>
+  </table>
+  <p>Mass and velocity shape this too: a heavy body sits near the centre and stays bright, while its light partners swing wide and go dark and wide.</p>
+  <p class="muted small">With Pan, Tone and Swirl all at 0%, every voice passes its lines straight through, and JVerb behaves like a conventional, very smooth stereo reverb.</p>
+</section>
+
+<!-- ================= 9. BODY CARDS ================= -->
+<section class="chapter" data-ch="09" data-title="Body Cards and Modulation" style="--accent: var(--io-ink); --accent-bg: var(--io);">
+  <div class="chap-head">
+    <div class="num">Chapter 09</div>
+    <h1>Body Cards and Modulation</h1>
+    <p class="lede">Each body has a card along the bottom of the panel: two knobs that change its orbit, and a routing that lets it drive the sound.</p>
+    <div class="bar"></div>
+  </div>
+
+  <figure class="dark"><img src="img/bodies.jpg" alt=""><figcaption><b>Fig. 9.1</b> &nbsp;Body cards for Io, Kepler (selected, routed to Shimmer) and Vesta (routed to Tilt), and the ADD BODY slot. With more bodies the cards narrow and VELOCITY and AMOUNT are labelled SPEED and AMT.</figcaption></figure>
+
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">MASS</td><td class="r">0.10 – 3.00</td><td class="d">1.00, 1.25, 0.80, then 1.00</td><td>The body's gravity on the others, and how big it is drawn. A heavy body sits near the centre; light ones swing wide around it. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">VELOCITY</td><td class="r">×0.50 – ×1.50</td><td class="d">×1.00</td><td>Scales the body's start speed. Turned while running, it scales the body's current speed by as much. Slow bodies fall inward; fast ones fly wide. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">Target</td><td class="r">menu</td><td class="d">Off</td><td>Which parameter this body's modulation signal moves.</td></tr>
+      <tr><td class="c">AMOUNT</td><td class="r">–100% – +100%</td><td class="d">+30%</td><td>How much, and in which direction. <span class="mod m">MOD</span></td></tr>
+    </tbody>
+  </table>
+
+  <p>Click <strong>ADD BODY</strong> to add the next body, up to six, or use the <strong>BODIES</strong> stepper on the SPACE page. A new body enters outside the others, moving at circular speed around them. Lowering the count removes the newest body.</p>
+
+  <h2>The modulation signal</h2>
+  <p>Each body's signal combines two things: how fast it is moving compared with the average of all the bodies, and how close its nearest neighbour is. The result runs from –1 to +1 and is smoothed over about 60 ms. A body slingshotting past another spikes high; a body crawling at the far end of a long orbit goes negative. The selected body's readout shows the live value of its routing.</p>
+
+  <h2>Targets</h2>
+  <p>Bodies start routed to <em>Off</em>, so nothing moves the sound that the panel doesn't show. When a body is routed, its target knob's modulation ring moves with it. Several bodies on the same target add up, and each result is kept within its parameter's range. Host modulation is added first, then the bodies' offset.</p>
+  <table>
+    <thead><tr><th>Target</th><th>At full signal × 100% Amount</th><th>Target</th><th>At full signal × 100% Amount</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Decay</td><td>Decay doubles (halves at –1)</td><td class="c">Shimmer</td><td>+50 points</td></tr>
+      <tr><td class="c">Damping</td><td>Damp High moves 1.5 octaves</td><td class="c">Feedback</td><td>+40 points</td></tr>
+      <tr><td class="c">Diffusion</td><td>+50 points</td><td class="c">Tilt</td><td>+80 points</td></tr>
+      <tr><td class="c">Early/Late</td><td>+50 points</td><td class="c">Width</td><td>+80 points</td></tr>
+      <tr><td class="c">Drive</td><td>+18 dB</td><td class="c">Off</td><td>No modulation</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note" style="--accent: var(--io-ink); --accent-bg: var(--io);">
+    <span class="k">Sound-design idea</span>
+    <p>Route a light, fast body to <strong>Damping</strong> with a negative Amount: each slingshot briefly darkens the tail, like a door swinging shut. Route a heavy, slow body to <strong>Width</strong> for a gentle breathing of the stereo image. Because the orbit never quite repeats, neither does the modulation.</p>
+  </div>
+</section>
+
+<!-- ================= 10. LOOP CARD ================= -->
+<section class="chapter" data-ch="10" data-title="The Loop Card" style="--accent: var(--loop-ink); --accent-bg: var(--loop);">
+  <div class="chap-head">
+    <div class="num">Chapter 10</div>
+    <h1>The Loop Card</h1>
+    <p class="lede">Three pages on the right: the outer loop around the tank, the drive, and the echo.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2><span class="tag">Page 1</span>LOOP</h2>
+  <div class="split">
+    <figure class="dark"><img src="img/card-loop.jpg" alt=""></figure>
+    <div class="body">
+      <table class="params">
+        <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="c">FREEZE</td><td class="r">On / Off</td><td class="d">Off</td><td>Holds the tail forever, at its level and brightness, and lets nothing new in.</td></tr>
+          <tr><td class="c">FEEDBACK</td><td class="r">0 – 110%</td><td class="d">0%</td><td>Sends the tank's output back to its input through the loop. Scaled to mean the same at any decay. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
+          <tr><td class="c">SHIMMER</td><td class="r">0 – 100%</td><td class="d">0%</td><td>How much of the loop is pitch shifted. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
+          <tr><td class="c">PITCH</td><td class="r">–24 – +24 st</td><td class="d">+12 st</td><td>The shimmer interval, in semitones.</td></tr>
+          <tr><td class="c">TILT</td><td class="r">–100% – +100%</td><td class="d">+0%</td><td>Darkens or brightens what goes round the loop: up to 6 dB each way around 700 Hz. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
+          <tr><td class="c">SMEAR</td><td class="r">0 – 100%</td><td class="d">30%</td><td>Allpass blur in the loop. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">SAFETY</td><td class="r">Soft, Hard</td><td class="d">Soft</td><td>How the loop is kept from running away: a soft saturator or a hard clip.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3>Feedback, and past 100%</h3>
+  <p>With Feedback below roughly 100% the tail still dies away, just longer and more coloured by the loop's shimmer, smear and tilt. Around 100% (somewhere between about 96% and 123%, depending on Decay and Size) the tail starts to sustain itself; past that, it grows until the <strong>SAFETY</strong> stage holds it. <em>Soft</em> rounds the peaks off with a gentle saturation; <em>Hard</em> clips them for a harsher, more aggressive sustain.</p>
+  <h3>Shimmer</h3>
+  <p>Each pass through the loop is pitch shifted by <strong>PITCH</strong>, and Shimmer sets how much of the loop takes the shifted path. Because every pass is shifted again, the tail climbs (or descends) in steps: +12 gives the classic octave-up halo, –12 a deepening undertow, and a fifth (+7) a harmonic stack. Combine with Feedback for long, building shimmers.</p>
+  <h3>Freeze</h3>
+  <p><strong>FREEZE</strong> sets every line to sustain exactly, fades the damping out, slows the drift to a stop and closes both the input and the loop. Whatever is ringing at that moment holds indefinitely. Play over it with the dry signal, then release Freeze to let it decay naturally.</p>
+
+  <h2><span class="tag" style="color:var(--drive-ink)">Page 2</span>DRIVE</h2>
+  <div class="split" style="--accent: var(--drive-ink);">
+    <figure class="dark"><img src="img/card-drive.jpg" alt=""></figure>
+    <div class="body">
+      <table class="params">
+        <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="c">DRIVE ON</td><td class="r">On / Off</td><td class="d">Off</td><td>Switches the drive in. Fades over a few milliseconds rather than clicking.</td></tr>
+          <tr><td class="c">Slot</td><td class="r">PRE, LOOP, POST</td><td class="d">LOOP</td><td>PRE drives the input; LOOP drives every pass of the feedback loop; POST drives the reverb's output.</td></tr>
+          <tr><td class="c">Type</td><td class="r">menu</td><td class="d">Tube</td><td>Tape, Tube, Fuzz, Fold or Crush (below).</td></tr>
+          <tr><td class="c">DRIVE</td><td class="r">0 – +36 dB</td><td class="d">+12 dB</td><td>Gain into the shaper. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
+          <tr><td class="c">TONE</td><td class="r">–100% – +100%</td><td class="d">+0%</td><td>Tilts what goes into the shaper around 900 Hz, and back after, so it changes <em>what</em> distorts, not the overall balance. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">BIAS</td><td class="r">0 – 100%</td><td class="d">20%</td><td>Asymmetry for even harmonics (Tube, Fuzz), fold depth (Fold), or hold length (Crush). <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">MIX</td><td class="r">0 – 100%</td><td class="d">100%</td><td>Clean / driven blend. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">TRIM</td><td class="r">–18 – +6 dB</td><td class="d">0 dB</td><td>Output trim. In the LOOP slot it can only cut. <span class="mod m">MOD</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3>Drive types</h3>
+  <table>
+    <thead><tr><th>Type</th><th>Character</th><th>What Bias does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Tape</td><td>Smooth, symmetrical saturation. Warm and forgiving.</td><td>–</td></tr>
+      <tr><td class="c">Tube</td><td>Asymmetric saturation with more even harmonics.</td><td>More asymmetry, more even harmonics.</td></tr>
+      <tr><td class="c">Fuzz</td><td>A hard exponential knee. Buzzy and aggressive.</td><td>Offsets the knee.</td></tr>
+      <tr><td class="c">Fold</td><td>A sine wavefolder that folds back on itself as it is driven. Metallic, synth-like.</td><td>Fold depth.</td></tr>
+      <tr><td class="c">Crush</td><td>Bit reduction from 12 down to 3 bits as Drive rises.</td><td>Sample-and-hold: holds each sample for up to 15 samples.</td></tr>
+    </tbody>
+  </table>
+  <p>Tape, Tube, Fuzz and Fold run at 2× oversampling to keep aliasing down. Crush is deliberately not oversampled.</p>
+
+  <div class="note" style="--accent: var(--drive-ink); --accent-bg: var(--drive);">
+    <span class="k">Drive in the loop</span>
+    <p>In the LOOP slot the drive works on every pass, so the tail gets dirtier the longer it rings. JVerb makes sure a quiet signal never comes out of the loop drive louder than it went in, so adding drive never makes the loop run away below 100% Feedback. That is also why TRIM can only cut in this slot.</p>
+  </div>
+
+  <h2><span class="tag" style="color:var(--echo-ink)">Page 3</span>ECHO</h2>
+  <div class="split">
+    <figure class="dark"><img src="img/card-echo.jpg" alt=""></figure>
+    <div class="body">
+      <table class="params">
+        <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="c">ECHO ON</td><td class="r">On / Off</td><td class="d">Off</td><td>Turns the echo's output up or down. The echo keeps running underneath, so switching on never replays old repeats.</td></tr>
+          <tr><td class="c">Slot</td><td class="r">INTO, LOOP, AFTER</td><td class="d">INTO</td><td>Where the echo sits (below).</td></tr>
+          <tr><td class="c">Sync</td><td class="r">Free, 1/16 … 2 Bars</td><td class="d">1/8D</td><td>A note value at the host tempo, or Free to use TIME.</td></tr>
+          <tr><td class="c">PING</td><td class="r">On / Off</td><td class="d">On</td><td>Ping-pong: the first repeat is on the left, then they alternate.</td></tr>
+          <tr><td class="c">TIME</td><td class="r">10 – 4000 ms</td><td class="d">375 ms</td><td>The echo time when Sync is Free. Otherwise the knob shows the note value. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">FEEDBACK</td><td class="r">0 – 105%</td><td class="d">45%</td><td>Level of each repeat relative to the last. Past 100% the repeats saturate rather than run away. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">TONE</td><td class="r">–100% – +100%</td><td class="d">–20%</td><td>Darker or brighter with every repeat. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">MIX</td><td class="r">0 – 100%</td><td class="d">50%</td><td>Level of the repeats added at the slot. <span class="mod m">MOD</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3>The three echo slots</h3>
+  <p>Wherever it sits, the echo works as a send and return: it takes a copy of the signal at that point and adds only its repeats back, so the signal itself always passes straight through.</p>
+  <table>
+    <thead><tr><th>Slot</th><th>Listens to</th><th>What you hear</th></tr></thead>
+    <tbody>
+      <tr><td class="c">INTO</td><td>The input, after the cuts and Drive PRE.</td><td>Every repeat is reverberated: the space hears each one as a new note, giving a rhythm of reverb swells.</td></tr>
+      <tr><td class="c">LOOP</td><td>The outer loop, after shimmer, smear and tilt.</td><td>The tail comes back into the tank in long, spaced passes, one per echo time, even with Feedback at 0. With Feedback up, the two loops stack.</td></tr>
+      <tr><td class="c">AFTER</td><td>The finished wet signal, after Drive POST.</td><td>Plain echoes of the reverb. They are part of the wet, so Width, Duck and Mix act on them, but they are never reverberated.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="cols2">
+    <div>
+      <h3>Time and sync</h3>
+      <p>Sync values run 1/16, 1/8T, 1/16D, 1/8, 1/4T, 1/8D, 1/4, 1/2T, 1/4D, 1/2, 1/2D, 1 Bar and 2 Bars; the bar values follow the host's time signature. At 120 BPM the default 1/8D is 375 ms. A synced time longer than 4 s, at slow tempos, is halved until it fits.</p>
+      <p>Changing the time bends the repeats already in the line, like a tape machine settling to a new speed, rather than clicking.</p>
+    </div>
+    <div>
+      <h3>Echo tone</h3>
+      <p>Tone works on the feedback only, so each later repeat is shaped more than the one before.</p>
+      <table>
+        <thead><tr><th>Tone</th><th>Per pass, low</th><th>Per pass, high</th></tr></thead>
+        <tbody>
+          <tr><td class="r">–100%</td><td class="r">0 dB</td><td class="r">–12 dB</td></tr>
+          <tr><td class="r">–20%</td><td class="r">0 dB</td><td class="r">–2.4 dB</td></tr>
+          <tr><td class="r">0%</td><td class="r">0 dB</td><td class="r">0 dB</td></tr>
+          <tr><td class="r">+100%</td><td class="r">–9 dB</td><td class="r">+3 dB</td></tr>
+        </tbody>
+      </table>
+      <p class="small muted">Split at 1.8 kHz. A 60 Hz high-pass in the feedback keeps lows from piling up.</p>
+    </div>
+  </div>
+
+  <div class="note" style="--accent: var(--echo-ink); --accent-bg: var(--echo);">
+    <span class="k">Switching without clicks</span>
+    <p>Turning the drive on or off, changing its slot or type, or moving the echo to another slot all fade over a few milliseconds instead of switching in one sample. The echo keeps what is already in its lines when it moves, so you can change slots mid-performance.</p>
+  </div>
+</section>
+
+<!-- ================= 11. OUTPUT ================= -->
+<section class="chapter" data-ch="11" data-title="Output" style="--accent: var(--orange-ink);">
+  <div class="chap-head">
+    <div class="num">Chapter 11</div>
+    <h1>Output</h1>
+    <p class="lede">The last stage: stereo width, ducking, the dry/wet blend and the final level.</p>
+    <div class="bar"></div>
+  </div>
+
+  <figure class="dark" style="width:3.8in"><img src="img/output.jpg" alt=""><figcaption><b>Fig. 11.1</b> &nbsp;The Output card with its stereo peak meters.</figcaption></figure>
+
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">WIDTH</td><td class="r">0 – 200%</td><td class="d">100%</td><td>Stereo width of the wet signal: 0% mono, 100% as is, 200% doubled side. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
+      <tr><td class="c">DUCK</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Turns the reverb down by up to this much while the input plays (5 ms attack, 300 ms release), so it blooms in the gaps. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">MIX</td><td class="r">0 – 100%</td><td class="d">35%</td><td>Dry/wet balance. Use 100% on a send. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">LEVEL</td><td class="r">–24 – +12 dB</td><td class="d">+0.0 dB</td><td>Output gain, on dry and wet together. <span class="mod m">MOD</span></td></tr>
+    </tbody>
+  </table>
+  <p>The meters show the peak level of each output channel. With high Feedback, Shimmer or Drive the wet level can rise well above the input: keep an eye on them, and use <strong>LEVEL</strong> or the loop's <strong>SAFETY</strong> mode to tame it.</p>
+  <p>JVerb also reports its tail length to the host, worked out from the current Decay, Predelay, Feedback and echo settings, so hosts that stop processing silent tracks let the reverb ring out fully. With Freeze on, Feedback at 95% or more, or the echo in its LOOP slot, the tail is reported as infinite.</p>
+
+</section>
+
+<section class="chapter" data-ch="12" data-title="The Extreme Zone" style="--accent: var(--loop-ink); --accent-bg: var(--loop);">
+  <div class="chap-head">
+    <div class="num">Chapter 12</div>
+    <h1>The Extreme Zone</h1>
+    <p class="lede">Four knobs go to 200%. Past the tick at 100% is where the weird stuff lives.</p>
+    <div class="bar"></div>
+  </div>
+  <figure style="display:flex; gap:0.35in; align-items:center; margin:0.05in 0 0.25in">
+    <svg viewBox="0 0 200 170" width="1.9in" id="zoneknob"></svg>
+    <div class="small" style="flex:1">
+      <p><strong>Up to the tick</strong> the four knobs are tuned to stay lovely: nothing bends pitch audibly and nothing rings.</p>
+      <p><strong>Past the tick</strong> they keep going, to twice their normal range. The ORBIT page's voice list draws the same 0 to 200% scale with the same tick, so you can see which voices are in the extreme zone.</p>
+    </div>
+  </figure>
+
+  <table>
+    <thead><tr><th>Knob</th><th>0 – 100%</th><th>100 – 200%</th></tr></thead>
+    <tbody>
+      <tr><td class="c">MOTION</td><td>The lines drift up to 4 cents a pass. A chorus-like blur, never pitchy.</td><td>The drift grows to as much as 150 cents a pass and runs up to four times faster. With Feedback high the tail warbles and groans.</td></tr>
+      <tr><td class="c">ORBIT PAN</td><td>Voices narrow to their bands and move from a wide spread to where their bodies are.</td><td>Voices are thrown further out (at 200%, six times as far), so most pin to the edges, and each voice's stereo turns inside out.</td></tr>
+      <tr><td class="c">ORBIT TONE</td><td>Up to –12 / +4 dB above 2.5 kHz, ±3 dB of level, damping ±1 octave.</td><td>Up to –24 / +14 dB above 2.5 kHz and damping ±3 octaves, so the swing between bodies gets hard.</td></tr>
+      <tr><td class="c">ORBIT SWIRL</td><td>Phaser depth up to its full mix; two sweeps per lap.</td><td>The phasers feed back on themselves until they ring, the sweep widens and goes round up to eight times per lap, and the tank's own allpasses swirl twice as hard.</td></tr>
+    </tbody>
+  </table>
+  <p>Only Motion acts inside the tank. Because the outer loop is taken before the voices, nothing Pan, Tone or Swirl does is ever fed back, so even at 200% they cannot make the reverb run away. The ringing of an extreme Swirl is level-compensated so its loudest resonance stays at unity.</p>
+  <p>Three other parameters also go past unity: <strong>FEEDBACK</strong> to 110% (the tail grows into the safety stage), echo <strong>FEEDBACK</strong> to 105% (repeats saturate), and <strong>WIDTH</strong> to 200%.</p>
+</section>
+
+<!-- ================= 13. PRESETS ================= -->
+<section class="chapter" data-ch="13" data-title="Factory Presets">
+  <div class="chap-head">
+    <div class="num">Chapter 13</div>
+    <h1>Factory Presets</h1>
+    <p class="lede">Thirty-two starting points, ordered from tight rooms to washes that ring for most of a minute.</p>
+    <div class="bar"></div>
+  </div>
+  <div id="presets"></div>
+</section>
+
+<!-- ================= 14. RECIPES ================= -->
+<section class="chapter" data-ch="14" data-title="Sound Design Recipes">
+  <div class="chap-head">
+    <div class="num">Chapter 14</div>
+    <h1>Sound Design Recipes</h1>
+    <p class="lede">Starting points for common jobs and uncommon sounds. Begin from <em>Init</em> unless a preset is named, then change only what is listed.</p>
+    <div class="bar"></div>
+  </div>
+
+  <div class="recipes">
+    <div class="recipe" style="--rc: var(--space)">
+      <h3>Vocal plate that stays out of the way</h3>
+      <p>A bright, dense tail that ducks under the singer and blooms between phrases.</p>
+      <div class="set">DECAY 2.8 s · PREDELAY 35 ms<br>DIFFUSION 95% · EARLY/LATE 100%<br>LOW CUT 150 Hz · DUCK 40%</div>
+      <div class="from">Close to: Vocal Hall, Figure-Eight Plate</div>
+    </div>
+    <div class="recipe" style="--rc: var(--io)">
+      <h3>Drum room that answers back</h3>
+      <p>The kit kicks the bodies around; one body darkens the room on every slingshot.</p>
+      <div class="set">DECAY 1.0 s · REACT 100% · DUCK 30%<br>LOW CUT 120 Hz<br>IO → Damping, AMOUNT –50%</div>
+      <div class="from">Close to: Drum Reactor</div>
+    </div>
+    <div class="recipe" style="--rc: var(--echo)">
+      <h3>Rhythmic bloom</h3>
+      <p>Each dotted-eighth repeat swells into its own reverb.</p>
+      <div class="set">ECHO ON · slot INTO · SYNC 1/8D<br>ECHO FEEDBACK 45% · ECHO MIX 60%<br>DECAY 3 s</div>
+      <div class="from">Close to: Dotted Echo Hall</div>
+    </div>
+    <div class="recipe" style="--rc: var(--loop)">
+      <h3>Octave halo</h3>
+      <p>A climbing, angelic shimmer for pads and guitars.</p>
+      <div class="set">SHIMMER 45% · PITCH +12 st<br>FEEDBACK 85% · DECAY 9 s<br>TILT –20% · MIX 50%</div>
+      <div class="from">Close to: Shimmer Halo</div>
+    </div>
+    <div class="recipe" style="--rc: var(--drive)">
+      <h3>Tape-loop ambience</h3>
+      <p>The tail returns once a bar, a little dirtier each time.</p>
+      <div class="set">ECHO ON · slot LOOP · SYNC 1 Bar<br>DRIVE ON · slot LOOP · type Tape<br>VESTA → Tilt</div>
+      <div class="from">Close to: Tape Loop Orbit</div>
+    </div>
+    <div class="recipe" style="--rc: var(--rhea)">
+      <h3>Endless drone bed</h3>
+      <p>Catch a chord in the tail and hold it while you play over the top.</p>
+      <div class="set">DECAY 30 s · SIZE 3 AU · ATTACK Swell 50%<br>Play a chord, then FREEZE On<br>MIX 100% on a send</div>
+      <div class="from">Close to: Nebula, Frozen Ring</div>
+    </div>
+    <div class="recipe" style="--rc: var(--echo)">
+      <h3>Locked to the groove</h3>
+      <p>The orbit repeats every two bars and lines up with the song on every playback.</p>
+      <div class="set">Clock SYNC · Sync Bars 2<br>ORBIT PAN 120% · SWIRL 80%<br>VESTA → Tilt, AMOUNT +60%</div>
+      <div class="from">Close to: Synced Orbit</div>
+    </div>
+    <div class="recipe" style="--rc: var(--luna)">
+      <h3>Seasick space</h3>
+      <p>Into the extreme zone: a warbling, groaning tail that turns inside out.</p>
+      <div class="set">MOTION 160% · FEEDBACK 95%<br>ORBIT PAN 200% · SWIRL 170%<br>DECAY 12 s · SAFETY Soft</div>
+      <div class="from">Pull Motion back below the tick to tame it.</div>
+    </div>
+  </div>
+
+  <h2>General tips</h2>
+  <ul>
+    <li><strong>Fewer bodies, clearer voices.</strong> Two bodies give two wide bands that swap places; six give a busy, finely sliced shimmer of motion.</li>
+    <li><strong>Mass sets the drama.</strong> One heavy body with light partners gives a stable centre and wild outer voices (<em>Heavy Moon</em>). Equal masses give the most even, flowing motion.</li>
+    <li><strong>Gravity sets the tempo of the swirl.</strong> Low Gravity is a slow ballet; high Gravity a frantic, tight cluster. For tempo-locked motion use SYNC instead.</li>
+    <li><strong>Pause to audition.</strong> Turn RUN off to freeze the voices where they are while you adjust the reverb itself.</li>
+    <li><strong>Long washes on a send.</strong> Decays over 20 seconds sit best on a send with Mix at 100%, Low Cut raised and a little Duck.</li>
+  </ul>
+</section>
+
+<!-- ================= APPENDIX ================= -->
+<section class="chapter" data-ch="A" data-title="Appendix: Parameter Reference">
+  <div class="chap-head">
+    <div class="num">Appendix A</div>
+    <h1>Parameter Reference</h1>
+    <p class="lede">Every parameter JVerb exposes to the host, in host order. Everything is automatable.</p>
+    <div class="bar"></div>
+  </div>
+  <div id="paramref"></div>
+</section>
+
+<section class="chapter" data-ch="B" data-title="Appendix: Specifications">
+  <div class="chap-head">
+    <div class="num">Appendix B</div>
+    <h1>Specifications</h1>
+    <div class="bar"></div>
+  </div>
+  <table class="specs">
+    <tbody>
+      <tr><td class="c">Format</td><td>CLAP 1.2 audio effect. Features: audio-effect, reverb, stereo.</td></tr>
+      <tr><td class="c">Channels</td><td>Stereo in, stereo out. A mono input is used on both sides.</td></tr>
+      <tr><td class="c">Platforms</td><td>macOS universal (10.15+ Intel, 11+ Apple Silicon), Windows (64-bit), Linux (64-bit).</td></tr>
+      <tr><td class="c">Latency</td><td>None reported to the host.</td></tr>
+      <tr><td class="c">Tail</td><td>Reported to the host from the current settings, so reverb tails are never cut off.</td></tr>
+      <tr><td class="c">Reverb tank</td><td>16-line feedback delay network, two allpasses per line, 16 × 16 Hadamard mix. Lines 29–202 ms at Size 1, up to 2.02 s at Size 10.</td></tr>
+      <tr><td class="c">Decay</td><td>0.2 to 60 s RT60, with separate bass multiplier and crossover.</td></tr>
+      <tr><td class="c">Early reflections</td><td>8 taps, 7 to 67 ms × System Size (up to 4×).</td></tr>
+      <tr><td class="c">Simulation</td><td>2 to 6 bodies under mutual gravity, velocity Verlet with adaptive substeps.</td></tr>
+      <tr><td class="c">Control rate</td><td>Every 32 samples; gains ramp across each block, so nothing zippers. Renders are identical at any buffer size.</td></tr>
+      <tr><td class="c">Drive</td><td>5 shapes, 2× oversampled (31-tap half-band filters), except Crush.</td></tr>
+      <tr><td class="c">Echo</td><td>Stereo, 10 ms to 4 s, 13 tempo-synced values plus Free, ping-pong.</td></tr>
+      <tr><td class="c">Parameters</td><td>All automatable; most accept CLAP parameter modulation.</td></tr>
+      <tr><td class="c">State</td><td>Saved with the host project, including the preset name. Older JVerb states load, with any missing parameters at their defaults.</td></tr>
+      <tr><td class="c">Panel</td><td>1200 × 780 at 100%; 75%, 100%, 125%, 150% and 200%.</td></tr>
+      <tr><td class="c">Threading</td><td>The audio thread never allocates, locks or waits on the panel after activation.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 style="margin-top:0.4in">Troubleshooting</h2>
+  <table>
+    <thead><tr><th style="width:2.1in">Symptom</th><th>What to check</th></tr></thead>
+    <tbody>
+      <tr><td class="c" style="white-space:normal">JVerb doesn't appear in my host (macOS)</td><td>The download is probably quarantined. See the warning in Chapter 2, then rescan plug-ins.</td></tr>
+      <tr><td class="c" style="white-space:normal">The tail never stops</td><td>Check <strong>FREEZE</strong>, and whether <strong>FEEDBACK</strong> is near or above 100%. A body routed to Feedback or Decay can also push it over. Echo Feedback above 100% sustains the repeats.</td></tr>
+      <tr><td class="c" style="white-space:normal">The tail sounds out of tune or seasick</td><td><strong>MOTION</strong> is past 100%, or <strong>SHIMMER</strong> is up with an interval you didn't intend.</td></tr>
+      <tr><td class="c" style="white-space:normal">A whistling or ringing tone</td><td><strong>ORBIT SWIRL</strong> past 100% makes the phasers ring. A small System Size with a long Decay can also sound metallic.</td></tr>
+      <tr><td class="c" style="white-space:normal">The reverb jumps around the stereo field too much</td><td>Lower <strong>ORBIT PAN</strong>, reduce <strong>REACT</strong>, or lower <strong>GRAVITY</strong> for slower motion.</td></tr>
+      <tr><td class="c" style="white-space:normal">SYNC doesn't line up with the song</td><td>The orbits realign when the transport starts, loops or jumps. Start playback from a bar line, and check the host sends tempo and time signature.</td></tr>
+      <tr><td class="c" style="white-space:normal">The output went silent for a moment</td><td>If a sample ever becomes invalid, JVerb outputs silence and restarts its tank (at most once per block) rather than passing a burst of noise. Usually an invalid sample came in from upstream.</td></tr>
+      <tr><td class="c" style="white-space:normal">My user presets are missing</td><td>Check the preset folder for your OS (Chapter 7). Files must end in <span class="mono">.jvpreset</span>.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Glossary</h2>
+  <div class="kv">
+    <dt>RT60</dt><dd>The time a reverb takes to fall by 60 dB. JVerb's Decay is the RT60 of the tank's mid frequencies.</dd>
+    <dt>AU</dt><dd>Astronomical unit. JVerb's playful unit for System Size: at 1 AU the tank's lines run 29 to 202 ms.</dd>
+    <dt>Tank</dt><dd>The network of delay lines that makes the reverb tail.</dd>
+    <dt>Allpass</dt><dd>A filter that passes every frequency at the same level but smears it in time. Chains of them build density.</dd>
+    <dt>Hadamard mix</dt><dd>A way of mixing every line into every other with equal energy, so the tail thickens evenly.</dd>
+    <dt>Voice</dt><dd>A body's share of the tail, shaped by where that body is.</dd>
+    <dt>Slot</dt><dd>One of the three places in the signal path the drive or the echo can sit.</dd>
+    <dt>Slingshot</dt><dd>A close, fast pass of one body by another. It spikes the body's modulation signal.</dd>
+  </div>
+</section>
+
+<section class="back">
+  <div class="mid">
+    <svg width="90" height="44" viewBox="0 0 50 34">
+      <circle cx="16" cy="17" r="13" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1"/>
+      <circle cx="34" cy="17" r="13" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1"/>
+      <circle cx="12" cy="21" r="5.5" fill="#6fe0ff"/>
+      <circle cx="25" cy="20.5" r="5.5" fill="#ffb05a"/>
+      <circle cx="38" cy="21" r="5.5" fill="#ff6fd2"/>
+    </svg>
+    <div class="word"><span class="j">J</span>Verb</div>
+    <div class="small">The three-body reverb · v0.7.0</div>
+  </div>
+  <div class="url">github.com/jeffmhopkins/Jclap</div>
+</section>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+function el(parent, tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  parent.appendChild(e);
+  return e;
+}
+
+// ----- cover stars -----
+(function () {
+  const s = document.getElementById('stars');
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const g = el(s, 'g', {});
+  for (let i = 0; i < 260; i++) {
+    const r = rnd() < 0.92 ? 0.4 + rnd() * 0.7 : 1.2 + rnd() * 0.8;
+    el(g, 'circle', { cx: rnd() * 816, cy: rnd() * 1056, r, fill: '#fff', opacity: (0.15 + rnd() * 0.6).toFixed(2) });
+  }
+  // a faint figure-eight path behind the title
+  const p = [];
+  for (let t = 0; t <= Math.PI * 2 + 0.01; t += 0.02) {
+    const x = 560 + 210 * Math.sin(t), y = 300 + 85 * Math.sin(2 * t);
+    p.push((p.length ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1));
+  }
+  const defs = el(s, 'defs', {});
+  const lg = el(defs, 'linearGradient', { id: 'f8', x1: '0', x2: '1' });
+  el(lg, 'stop', { offset: '0', 'stop-color': '#6fe0ff' });
+  el(lg, 'stop', { offset: '0.5', 'stop-color': '#ffb05a' });
+  el(lg, 'stop', { offset: '1', 'stop-color': '#ff6fd2' });
+  el(s, 'path', { d: p.join(''), fill: 'none', stroke: 'url(#f8)', 'stroke-width': 1.2, opacity: 0.55 });
+  const bodies = [[0.6, '#6fe0ff'], [2.75, '#ffb05a'], [4.9, '#ff6fd2']];
+  for (const [t, c] of bodies) {
+    const x = 560 + 210 * Math.sin(t), y = 300 + 85 * Math.sin(2 * t);
+    const rg = el(defs, 'radialGradient', { id: 'g' + c.slice(1) });
+    el(rg, 'stop', { offset: '0', 'stop-color': c, 'stop-opacity': 0.55 });
+    el(rg, 'stop', { offset: '1', 'stop-color': c, 'stop-opacity': 0 });
+    el(s, 'circle', { cx: x, cy: y, r: 34, fill: 'url(#g' + c.slice(1) + ')' });
+    el(s, 'circle', { cx: x, cy: y, r: 6, fill: c });
+    el(s, 'circle', { cx: x, cy: y, r: 2.6, fill: '#fff', opacity: 0.85 });
+  }
+})();
+
+// ----- overview callouts -----
+(function () {
+  const g = document.querySelector('#overview svg g');
+  const pts = [
+    [1, 550, 58], [2, 824, 58], [3, 1040, 58], [4, 123, 108],
+    [5, 470, 250], [6, 890, 492], [7, 760, 568], [8, 1077, 108],
+    [9, 380, 600], [10, 797, 640], [11, 1010, 600],
+  ];
+  for (const [n, x, y] of pts) {
+    el(g, 'circle', { cx: x, cy: y, r: 15, fill: '#f28c28', stroke: '#fff', 'stroke-width': 2.5 });
+    el(g, 'text', { x, y: y + 5.2, fill: '#fff' }, String(n));
+  }
+})();
+
+// ----- signal flow -----
+(function () {
+  const g = document.getElementById('flow');
+  const W = 82, H = 34;
+  const colors = { drive: ['#fdeae6', '#c0412d'], echo: ['#e3f7e9', '#23864a'], box: ['#f5f5f7', '#15171d'], tank: ['#15171d', '#ffffff'], io: ['#ffffff', '#15171d'] };
+  function box(x, y, label, kind = 'box', w = W, sub) {
+    const [fill, ink] = colors[kind];
+    if (kind === 'drive' || kind === 'echo') {
+      const p = [[x + 9, y], [x + w - 9, y], [x + w, y + H / 2], [x + w - 9, y + H], [x + 9, y + H], [x, y + H / 2]];
+      el(g, 'polygon', { points: p.map(q => q.join(',')).join(' '), fill, stroke: ink, 'stroke-width': 1.1 });
+    } else if (kind === 'io') {
+      el(g, 'rect', { x, y, width: w, height: H, rx: H / 2, fill, stroke: ink, 'stroke-width': 1.2 });
+    } else {
+      el(g, 'rect', { x, y, width: w, height: H, rx: 5, fill, stroke: kind === 'tank' ? 'none' : '#c9ccd3', 'stroke-width': 1 });
+    }
+    const t = el(g, 'text', { x: x + w / 2, y: y + (sub ? 14 : 20.5), 'text-anchor': 'middle', 'font-weight': 600, 'font-size': 8.6, fill: ink, 'letter-spacing': '0.04em' }, label);
+    if (sub) el(g, 'text', { x: x + w / 2, y: y + 25.5, 'text-anchor': 'middle', 'font-size': 7, fill: kind === 'tank' ? '#b8bcc6' : '#6d7280' }, sub);
+  }
+  function arrow(d, gray) {
+    el(g, 'path', { d, fill: 'none', stroke: gray ? '#9aa0ad' : '#15171d', 'stroke-width': 1.1, 'stroke-dasharray': gray ? '3 3' : 'none', 'marker-end': gray ? 'url(#ahg)' : 'url(#ah)' });
+  }
+  const xs = [4, 103, 202, 301, 400, 499, 598];
+  const y1 = 14, y2 = 120, y3 = 222;
+  box(xs[0], y1, 'IN', 'io');
+  box(xs[1], y1, 'CUTS', 'box', W, 'low · high');
+  box(xs[2], y1, 'DRIVE', 'drive', W, 'PRE slot');
+  box(xs[3], y1, 'ECHO', 'echo', W, 'INTO slot');
+  box(xs[4], y1, 'PREDELAY', 'box', W, '0–500 ms');
+  box(xs[5], y1, 'DIFFUSION', 'box', W, '6 allpasses');
+  box(xs[6], y1, 'ATTACK', 'box', W + 20, 'swell · reverse');
+  for (let i = 0; i < 6; i++) arrow(`M${xs[i] + W},${y1 + H / 2} L${xs[i + 1] - 2},${y1 + H / 2}`);
+  // attack down to sum
+  el(g, 'circle', { cx: 649, cy: y2 + H / 2, r: 11, fill: '#fff', stroke: '#15171d', 'stroke-width': 1.1 });
+  el(g, 'text', { x: 649, y: y2 + H / 2 + 4, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 600 }, '+');
+  arrow(`M649,${y1 + H} L649,${y2 + H / 2 - 13}`);
+  // tank
+  box(420, y2 - 6, 'TANK', 'tank', 180, '16 lines · damping · Hadamard mix');
+  g.lastChild.previousSibling.setAttribute('y', y2 + 8);
+  arrow(`M${649 - 11},${y2 + H / 2} L602,${y2 + H / 2}`);
+  // loop badge
+  el(g, 'path', { d: `M470,${y2 + 34} C470,${y2 + 64} 640,${y2 + 64} 649,${y2 + H / 2 + 13}`, fill: 'none', stroke: '#b8338f', 'stroke-width': 1.2, 'marker-end': 'url(#ah)' });
+  el(g, 'text', { x: 560, y: y2 + 66, 'text-anchor': 'middle', 'font-size': 7.6, fill: '#b8338f', 'font-weight': 600, 'letter-spacing': '0.05em' }, 'OUTER LOOP  (Fig. 5.3)');
+  // voices, early/late
+  box(260, y2, 'BODY VOICES', 'box', 110, 'band · place · tone · swirl');
+  arrow(`M420,${y2 + H / 2} L372,${y2 + H / 2}`);
+  box(110, y2, 'EARLY / LATE', 'box', 100, 'balance');
+  arrow(`M260,${y2 + H / 2} L212,${y2 + H / 2}`);
+  // early reflections dashed
+  arrow(`M441,${y1 + H} L441,${y1 + H + 26} L160,${y1 + H + 26} L160,${y2 - 2}`, true);
+  el(g, 'text', { x: 300, y: y1 + H + 21, 'text-anchor': 'middle', 'font-size': 7.4, fill: '#6d7280' }, 'early reflections · 8 taps');
+  // row3
+  arrow(`M110,${y2 + H / 2} L60,${y2 + H / 2} L60,${y3 - 2}`);
+  box(19, y3, 'DRIVE', 'drive', W, 'POST slot');
+  box(140, y3, 'ECHO', 'echo', W, 'AFTER slot');
+  arrow(`M${19 + W},${y3 + H / 2} L138,${y3 + H / 2}`);
+  box(262, y3, 'OUTPUT', 'box', 170, 'width · duck · mix · level');
+  arrow(`M${140 + W},${y3 + H / 2} L260,${y3 + H / 2}`);
+  box(490, y3, 'OUT', 'io');
+  arrow(`M432,${y3 + H / 2} L488,${y3 + H / 2}`);
+  // dry path
+  arrow(`M45,${y1 + H} L45,${y1 + H + 8} L4,${y1 + H + 8} L4,${y3 + H + 18} L347,${y3 + H + 18} L347,${y3 + H + 2}`, true);
+  el(g, 'text', { x: 200, y: y3 + H + 14, 'text-anchor': 'middle', 'font-size': 7.4, fill: '#6d7280' }, 'dry signal');
+})();
+
+// ----- outer loop -----
+(function () {
+  const g = document.getElementById('loopfig');
+  const H = 32, y = 44, W = 70;
+  function box(x, label, kind, sub, w = W) {
+    const fill = kind === 'drive' ? '#fdeae6' : kind === 'echo' ? '#e3f7e9' : kind === 'tank' ? '#15171d' : '#fdf0f8';
+    const ink = kind === 'drive' ? '#c0412d' : kind === 'echo' ? '#23864a' : kind === 'tank' ? '#fff' : '#15171d';
+    if (kind === 'drive' || kind === 'echo') {
+      const p = [[x + 8, y2(kind)], [x + w - 8, y2(kind)], [x + w, y2(kind) + H / 2], [x + w - 8, y2(kind) + H], [x + 8, y2(kind) + H], [x, y2(kind) + H / 2]];
+      el(g, 'polygon', { points: p.map(q => q.join(',')).join(' '), fill, stroke: ink, 'stroke-width': 1.1 });
+    } else {
+      el(g, 'rect', { x, y, width: w, height: H, rx: 5, fill, stroke: kind === 'tank' ? 'none' : '#f0b4dc', 'stroke-width': 1 });
+    }
+    const yy = y2(kind);
+    el(g, 'text', { x: x + w / 2, y: yy + (sub ? 13.5 : 19.5), 'text-anchor': 'middle', 'font-weight': 600, 'font-size': 8.2, fill: ink, 'letter-spacing': '0.03em' }, label);
+    if (sub) el(g, 'text', { x: x + w / 2, y: yy + 24.5, 'text-anchor': 'middle', 'font-size': 6.8, fill: kind === 'tank' ? '#b8bcc6' : '#6d7280' }, sub);
+  }
+  const y2 = (k) => k === 'echo' ? 98 : y;
+  function arrow(d, color = '#15171d') { el(g, 'path', { d, fill: 'none', stroke: color, 'stroke-width': 1.1, 'marker-end': 'url(#ah)' }); }
+  const xs = [4, 90, 176, 262, 348, 434, 520];
+  box(xs[0], 'TANK', 'tank', 'sum of lines');
+  box(xs[1], 'DRIVE', 'drive', 'LOOP slot');
+  box(xs[2], 'HIGH-PASS', 'box', '40 Hz');
+  box(xs[3], 'SHIMMER', 'box', '±24 st');
+  box(xs[4], 'SMEAR', 'box', '2 allpasses');
+  box(xs[5], 'TILT', 'box', '±6 dB @ 700 Hz');
+  box(xs[6], 'FEEDBACK', 'box', '× loop scale');
+  for (let i = 0; i < 6; i++) arrow(`M${xs[i] + W},${y + H / 2} L${xs[i + 1] - 2},${y + H / 2}`);
+  el(g, 'circle', { cx: 618, cy: y + H / 2, r: 10, fill: '#fff', stroke: '#15171d', 'stroke-width': 1.1 });
+  el(g, 'text', { x: 618, y: y + H / 2 + 4, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 600 }, '+');
+  arrow(`M${xs[6] + W},${y + H / 2} L606,${y + H / 2}`);
+  box(636, 'SAFETY', 'box', 'soft · hard', 64);
+  arrow(`M628,${y + H / 2} L634,${y + H / 2}`);
+  // echo loop branch
+  arrow(`M${xs[5] + W / 2},${y + H} L${xs[5] + W / 2},${98 + H / 2} L${xs[6] - 2},${98 + H / 2}`);
+  box(xs[6], 'ECHO', 'echo', 'LOOP slot');
+  arrow(`M${xs[6] + W},${98 + H / 2} L618,${98 + H / 2} L618,${y + H / 2 + 12}`);
+  // return
+  arrow(`M668,${y} L668,${y - 26} L39,${y - 26} L39,${y - 2}`, '#b8338f');
+  el(g, 'text', { x: 352, y: y - 31, 'text-anchor': 'middle', 'font-size': 7.6, fill: '#b8338f', 'font-weight': 600, 'letter-spacing': '0.05em' }, 'BACK INTO THE TANK, NEXT SAMPLE');
+})();
+
+// ----- bands figure -----
+(function () {
+  const s = document.getElementById('bands');
+  const x0 = 40, x1 = 690, fLo = 20, fHi = 20000;
+  const X = f => x0 + (Math.log(f / fLo) / Math.log(fHi / fLo)) * (x1 - x0);
+  const base = 110, top = 22;
+  const n = 3, cols = ['#6fe0ff', '#ffb05a', '#ff6fd2'], names = ['Io', 'Kepler', 'Vesta'];
+  const edge = i => 150 * Math.pow(40, i / n);
+  // grid
+  for (const f of [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]) {
+    el(s, 'line', { x1: X(f), x2: X(f), y1: top - 6, y2: base, stroke: '#eceef1', 'stroke-width': 1 });
+    el(s, 'text', { x: X(f), y: base + 14, 'text-anchor': 'middle', 'font-size': 8, fill: '#6d7280' }, f >= 1000 ? (f / 1000) + 'k' : String(f));
+  }
+  el(s, 'line', { x1: x0, x2: x1, y1: base, y2: base, stroke: '#15171d', 'stroke-width': 1 });
+  el(s, 'text', { x: x1, y: base + 28, 'text-anchor': 'end', 'font-size': 7.5, fill: '#6d7280' }, 'Hz');
+  for (let b = 0; b < n; b++) {
+    const lo = b === 0 ? null : edge(b), hi = b === n - 1 ? null : edge(b + 1);
+    const pts = [];
+    for (let i = 0; i <= 200; i++) {
+      const f = fLo * Math.pow(fHi / fLo, i / 200);
+      let g = 1;
+      if (lo) g /= (1 + Math.pow(lo / f, 2));
+      if (hi) g /= (1 + Math.pow(f / hi, 2));
+      const db = Math.max(-30, 20 * Math.log10(g));
+      pts.push([X(f), top + (-db / 30) * (base - top)]);
+    }
+    const d = 'M' + pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L');
+    el(s, 'path', { d: d + ` L${x1},${base} L${x0},${base} Z`, fill: cols[b], opacity: 0.16 });
+    el(s, 'path', { d, fill: 'none', stroke: cols[b], 'stroke-width': 2 });
+    const cx = b === 0 ? X(150) : b === n - 1 ? X(5000) : Math.sqrt(edge(b) * edge(b + 1));
+    el(s, 'text', { x: b === 1 ? X(cx) : cx, y: top + 14, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 600, fill: '#15171d' }, `${b + 1} · ${names[b]}`);
+  }
+  for (let i = 1; i < n; i++) {
+    const f = edge(i);
+    el(s, 'text', { x: X(f), y: base - 6, 'text-anchor': 'middle', 'font-size': 7.4, fill: '#3b3f4a', 'font-family': 'JetBrains Mono' }, Math.round(f) + ' Hz');
+  }
+})();
+
+// ----- presets -----
+(function () {
+  const P = [
+    ['Short', 'Rooms, booths and slapbacks under about a second.', [
+      ['Init', 'The defaults: a 4 s tail with three bodies.'],
+      ['Tight Booth', '0.35 s, the smallest size, mostly early reflections.'],
+      ['Wood Room', '0.7 s, small, a little dark, lighter bass.'],
+      ['Small Orbit', '1 s, four bodies, bright.'],
+      ['Drum Reactor', 'React 100%, Duck and Low Cut; Io routed to Damping.'],
+      ['Swirling Slapback', 'A 140 ms straight echo INTO the reverb, free-running; Io on Damping.'],
+      ['Hot Input', 'Tape drive in the PRE slot at +15 dB.'],
+    ]],
+    ['Medium', 'Plates, halls and character spaces.', [
+      ['Figure-Eight Plate', '2.4 s, Diffusion 95%, all late, bright.'],
+      ['Ping-Pong Space', 'Synced 1/4 ping-pong echo AFTER the reverb.'],
+      ['Vocal Hall', '2.8 s, 35 ms predelay, Low Cut, Duck.'],
+      ['Dotted Echo Hall', 'Synced 1/8D echo INTO a 3 s hall.'],
+      ['Binary Star', 'Two bodies, a heavy pair; Kepler on Width.'],
+      ['Synced Orbit', 'Clock SYNC, 2 bars a lap; Vesta on Tilt.'],
+      ['Burning Loop', 'Tube drive in the LOOP at +18 dB, Feedback 55%, dark tilt.'],
+      ['Crushed Satellites', 'Crush in the LOOP, five bodies, Feedback 40%.'],
+      ['Chaos Engine', 'Six bodies, Gravity 2.5, React 80%; bodies on Damping and Feedback.'],
+      ['Heavy Moon', 'One heavy body (2.8) and two light ones.'],
+    ]],
+    ['Long', 'Long tails, loops and shimmers.', [
+      ['Tape Loop Orbit', 'A 1-bar echo in the LOOP plus tape drive in the LOOP; Vesta on Tilt.'],
+      ['Swell Machine', 'Swell 85%, 6 s.'],
+      ['Fuzz Cloud', 'Fuzz POST at +24 dB, 60% mix, 7 s.'],
+      ['Folded Space', 'Fold in the LOOP, Shimmer 25%, Feedback 80%.'],
+      ['Slow Ballet', 'Gravity 0.35, Smear 60%, 8 s.'],
+      ['Shimmer Halo', 'Octave-up shimmer 45%, Feedback 85%, 9 s.'],
+      ['Infinite Return', 'A 1/2-note echo in the LOOP, Feedback 70%, a little shimmer.'],
+      ['Octave Under', 'Octave-down shimmer, Feedback 80%, dark.'],
+      ['Cathedral Drift', '13 s, Size 2.6, 45 ms predelay, long bass.'],
+    ]],
+    ['Washes', 'Ambient beds that ring for most of a minute.', [
+      ['Nebula', '22 s, Size 3, slow attack, wide.'],
+      ['Deep Field', '30 s, six bodies, low gravity, 60 ms predelay.'],
+      ['Galaxy Shimmer', '35 s, octave-up shimmer, Feedback 50%, wide.'],
+      ['Event Horizon', '45 s, Size 4, Diffusion 100%, dark, 80 ms predelay.'],
+      ['Dark Matter', '50 s, Size 4, very dark, octave-down shimmer, long bass.'],
+      ['Frozen Ring', '60 s, all late, a little Duck.'],
+    ]],
+  ];
+  const cols = ['#ffb05a', '#6fe0ff', '#ff6fd2', '#a98bff'];
+  const host = document.getElementById('presets');
+  let html = '';
+  P.forEach(([cat, desc, list], i) => {
+    html += `<h2 style="margin-top:${i ? '0.26in' : '0'}"><span class="tag" style="color:#6d7280">${list.length} presets</span><span class="swatch" style="background:${cols[i]};width:10px;height:10px"></span>${cat}</h2>`;
+    html += `<p class="muted small" style="margin-bottom:4px">${desc}</p>`;
+    html += '<table><tbody>' + list.map(([n, d]) => `<tr><td class="c" style="width:1.6in">${n}</td><td>${d}</td></tr>`).join('') + '</tbody></table>';
+  });
+  html += `<div class="note"><span class="k">Echo slots in the factory bank</span><p>To hear each echo slot: <em>Swirling Slapback</em> and <em>Dotted Echo Hall</em> use INTO, <em>Tape Loop Orbit</em> and <em>Infinite Return</em> use LOOP, and <em>Ping-Pong Space</em> uses AFTER.</p></div>`;
+  host.innerHTML = html;
+})();
+
+// ----- parameter reference -----
+(function () {
+  const M = '<span class="mod m">MOD</span>', T = '<span class="mod t">TARGET</span>';
+  const G = [
+    ['Space', [
+      ['Decay', '0.2 – 60 s', '4.00 s', M + T], ['System Size', '0.25 – 10 AU', '1.00 AU', M], ['Gravity', 'G ×0.25 – ×4', '×1.00', M],
+      ['Bodies', '2 – 6', '3', ''], ['Motion', '0 – 200%', '40%', M], ['Attack', 'Reverse 100% – Swell 100%', 'Off', M],
+      ['Diffusion', '0 – 100%', '70%', M + T], ['Early/Late', '0 – 100% late', '75% late', M + T], ['Predelay', '0 – 500 ms', '20 ms', M],
+      ['Damp High', '1 – 20 kHz', '7.0 kHz', M + T], ['Bass Mult', '×0.25 – ×2.5', '×1.20', M], ['Bass Xover', '80 – 800 Hz', '250 Hz', M],
+      ['Low Cut', '20 Hz – 1 kHz', '40 Hz', M], ['High Cut', '1 – 20 kHz', '16.0 kHz', M],
+    ]],
+    ['Orbit', [
+      ['Run', 'On / Off', 'On', ''], ['Clock', 'Free, Sync, Retrig', 'Free', ''], ['Sync Bars', '1 – 16', '4', ''],
+      ['React', '0 – 100%', '30%', M], ['Orbit Pan', '0 – 200%', '75%', M], ['Orbit Tone', '0 – 200%', '60%', M], ['Orbit Swirl', '0 – 200%', '60%', M],
+    ]],
+    ['Bodies (per body: Io, Kepler, Vesta, Titan, Rhea, Luna)', [
+      ['Mass', '0.10 – 3.00', '1.00 (Kepler 1.25, Vesta 0.80)', M], ['Velocity', '×0.50 – ×1.50', '×1.00', M],
+      ['Target', 'Off, Decay, Damping, Diffusion, Early/Late, Drive, Shimmer, Feedback, Tilt, Width', 'Off', ''], ['Amount', '–100% – +100%', '+30%', M],
+    ]],
+    ['Loop', [
+      ['Feedback', '0 – 110%', '0%', M + T], ['Shimmer', '0 – 100%', '0%', M + T], ['Shimmer Pitch', '–24 – +24 st', '+12 st', ''],
+      ['Tilt', '–100% – +100%', '+0%', M + T], ['Smear', '0 – 100%', '30%', M], ['Safety', 'Soft, Hard', 'Soft', ''], ['Freeze', 'On / Off', 'Off', ''],
+    ]],
+    ['Drive', [
+      ['Drive On', 'On / Off', 'Off', ''], ['Drive Slot', 'Pre, Loop, Post', 'Loop', ''], ['Drive Type', 'Tape, Tube, Fuzz, Fold, Crush', 'Tube', ''],
+      ['Drive', '0 – +36 dB', '+12 dB', M + T], ['Drive Tone', '–100% – +100%', '+0%', M], ['Drive Bias', '0 – 100%', '20%', M],
+      ['Drive Mix', '0 – 100%', '100%', M], ['Drive Trim', '–18 – +6 dB', '0 dB', M],
+    ]],
+    ['Echo', [
+      ['Echo On', 'On / Off', 'Off', ''], ['Echo Slot', 'Into, Loop, After', 'Into', ''], ['Echo Time', '10 – 4000 ms', '375 ms', M],
+      ['Echo Sync', 'Free, 1/16, 1/8T, 1/16D, 1/8, 1/4T, 1/8D, 1/4, 1/2T, 1/4D, 1/2, 1/2D, 1 Bar, 2 Bars', '1/8D', ''],
+      ['Echo Feedback', '0 – 105%', '45%', M], ['Echo Tone', '–100% – +100%', '–20%', M], ['Echo Ping-Pong', 'On / Off', 'On', ''], ['Echo Mix', '0 – 100%', '50%', M],
+    ]],
+    ['Output', [
+      ['Width', '0 – 200%', '100%', M + T], ['Duck', '0 – 100%', '0%', M], ['Mix', '0 – 100%', '35%', M], ['Level', '–24 – +12 dB', '0 dB', M],
+    ]],
+  ];
+  let html = '';
+  for (const [name, rows] of G) {
+    html += `<h4>${name}</h4><table class="params"><thead><tr><th>Parameter</th><th>Range</th><th>Default</th><th></th></tr></thead><tbody>`;
+    html += rows.map(([n, r, d, f]) => `<tr><td class="c" style="width:1.3in">${n}</td><td class="r" style="width:auto;white-space:normal">${r}</td><td class="d" style="width:1.3in">${d}</td><td style="width:1in;text-align:right">${f}</td></tr>`).join('');
+    html += '</tbody></table>';
+  }
+  document.getElementById('paramref').innerHTML = html;
+})();
+
+// ----- extreme zone knob -----
+(function () {
+  const s = document.getElementById('zoneknob');
+  const cx = 100, cy = 92, r = 62, a0 = 135, a1 = 405;
+  const pt = (deg, rr) => [cx + rr * Math.cos(deg * Math.PI / 180), cy + rr * Math.sin(deg * Math.PI / 180)];
+  const arc = (d0, d1, rr) => { const [x0, y0] = pt(d0, rr), [x1, y1] = pt(d1, rr); return `M${x0},${y0} A${rr},${rr} 0 ${d1 - d0 > 180 ? 1 : 0} 1 ${x1},${y1}`; };
+  const mid = (a0 + a1) / 2;
+  el(s, 'path', { d: arc(a0, a1, r), fill: 'none', stroke: '#e3e4e8', 'stroke-width': 9, 'stroke-linecap': 'round' });
+  el(s, 'path', { d: arc(a0, mid, r), fill: 'none', stroke: '#ffb05a', 'stroke-width': 9, 'stroke-linecap': 'round' });
+  el(s, 'path', { d: arc(mid, a1, r), fill: 'none', stroke: '#ff6fd2', 'stroke-width': 9, 'stroke-linecap': 'round' });
+  const [tx0, ty0] = pt(mid, r - 12), [tx1, ty1] = pt(mid, r + 12);
+  el(s, 'line', { x1: tx0, y1: ty0, x2: tx1, y2: ty1, stroke: '#15171d', 'stroke-width': 2.2 });
+  el(s, 'circle', { cx, cy, r: 40, fill: '#1b1e27' });
+  const [px, py] = pt(330, 30);
+  el(s, 'line', { x1: cx, y1: cy, x2: px, y2: py, stroke: '#fff', 'stroke-width': 3, 'stroke-linecap': 'round' });
+  el(s, 'text', { x: cx, y: 16, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700, fill: '#15171d' }, '100%');
+  el(s, 'text', { x: 20, y: 166, 'text-anchor': 'start', 'font-size': 10, 'font-weight': 600, fill: '#b86a14' }, 'LOVELY');
+  el(s, 'text', { x: 180, y: 166, 'text-anchor': 'end', 'font-size': 10, 'font-weight': 600, fill: '#b8338f' }, 'WEIRD');
+  el(s, 'text', { x: 46, y: 150, 'text-anchor': 'middle', 'font-size': 8, fill: '#6d7280' }, '0');
+  el(s, 'text', { x: 154, y: 150, 'text-anchor': 'middle', 'font-size': 8, fill: '#6d7280' }, '200');
+})();
+
+// ----- compact card tables -----
+document.querySelectorAll('.split table.params').forEach(t => {
+  t.querySelector('thead tr').innerHTML = '<th>Control</th><th>Range · Default</th><th>What it does</th>';
+  t.querySelectorAll('tbody tr').forEach(tr => {
+    const r = tr.querySelector('td.r'), d = tr.querySelector('td.d');
+    r.innerHTML = r.innerHTML + '<br><span class="dflt">' + d.innerHTML + '</span>';
+    d.remove();
+  });
+  t.classList.add('compact');
+});
+
+// ----- table of contents -----
+(function () {
+  const toc = document.getElementById('toc');
+  const pages = window.TOC_PAGES || {};
+  let html = '';
+  document.querySelectorAll('section.chapter').forEach(sec => {
+    const n = sec.dataset.ch, t = sec.dataset.title;
+    html += `<div class="grp"><div class="ch"><span class="n">${n}</span><span class="t">${t}</span><span class="p">${pages[t] || ''}</span></div>`;
+    sec.querySelectorAll('h2').forEach(h => {
+      const tt = h.childNodes[h.childNodes.length - 1].textContent.trim();
+      if (sec.dataset.ch === '13') return;
+      html += `<div class="sec"><span class="t">${tt}</span><span class="p">${pages[t + '/' + tt] || ''}</span></div>`;
+    });
+    html += '</div>';
+  });
+  toc.innerHTML = html;
+})();
+</script>
+</body>
+</html>
