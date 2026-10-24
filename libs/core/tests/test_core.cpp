@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <cstring>
+#include <type_traits>
 
 namespace {
 
@@ -69,6 +70,58 @@ const char *const kFeatures[] = {CLAP_PLUGIN_FEATURE_UTILITY, nullptr};
 const clap_plugin_descriptor_t Probe::descriptor = {CLAP_VERSION_INIT, "test.probe", "Probe", "", "", "", "",
                                                     "1", "", kFeatures};
 
+// A host for EditQueue on its own: its params extension counts flush requests.
+int flushRequests = 0;
+const clap_host_params_t kHostParams = {[](const clap_host_t *, clap_param_rescan_flags) {},
+                                        [](const clap_host_t *, clap_id, clap_param_clear_flags) {},
+                                        [](const clap_host_t *) { ++flushRequests; }};
+const clap_host_t kParamsHost = {CLAP_VERSION_INIT, nullptr, "edit test", "jclap", "", "1",
+                                 [](const clap_host_t *, const char *id) -> const void * {
+                                    return std::strcmp(id, CLAP_EXT_PARAMS) ? nullptr : &kHostParams;
+                                 },
+                                 [](const clap_host_t *) {}, [](const clap_host_t *) {}, [](const clap_host_t *) {}};
+
+// An output list that takes only `room` more events, like a host's bounded queue.
+struct BoundedOut {
+   jclap::core::TestEventList list;
+   size_t room = 0;
+   clap_output_events_t output() { return {this, push}; }
+   static bool push(const clap_output_events_t *l, const clap_event_header_t *h) {
+      auto *self = static_cast<BoundedOut *>(l->ctx);
+      if (!self->room)
+         return false;
+      --self->room;
+      self->list.add(*h);
+      return true;
+   }
+};
+
+struct Drained {
+   int begins = 0, ends = 0, values = 0;
+   double last = -1.0;
+};
+
+// Drains everything (up to `room` events) and counts what came out.
+Drained drainAll(jclap::core::EditQueue &edits, size_t room = 100000) {
+   BoundedOut out;
+   out.room = room;
+   const clap_output_events_t events = out.output();
+   edits.drain(&events);
+   Drained d;
+   for (size_t i = 0; i < out.list.events.size(); ++i) {
+      const clap_event_header_t *h = out.list.at(i);
+      if (h->type == CLAP_EVENT_PARAM_GESTURE_BEGIN)
+         ++d.begins;
+      else if (h->type == CLAP_EVENT_PARAM_GESTURE_END)
+         ++d.ends;
+      else if (h->type == CLAP_EVENT_PARAM_VALUE) {
+         ++d.values;
+         d.last = reinterpret_cast<const clap_event_param_value_t *>(h)->value;
+      }
+   }
+   return d;
+}
+
 } // namespace
 
 JCLAP_ENTRY(Probe)
@@ -110,6 +163,65 @@ int main() {
    float *in[2] = {inL, inR}, *outs[2] = {outL, outR};
    host.process(4, in, outs);
    JCLAP_CHECK_EQ(outR[3], 8.0f);
+
+   // EditQueue, nothing draining for a long drag: the gesture still ends, on its last value.
+   {
+      jclap::core::EditQueue edits;
+      edits.init(&kParamsHost);
+      flushRequests = 0;
+      edits.begin(kLevel);
+      for (int i = 0; i < 2000; ++i)
+         edits.value(kLevel, i);
+      edits.end(kLevel);
+      // One request until a drain, not one per edit.
+      JCLAP_CHECK_EQ(flushRequests, 1);
+      const Drained d = drainAll(edits);
+      JCLAP_CHECK(d.begins == 1 && d.ends == 1);
+      JCLAP_CHECK_EQ(d.last, 1999.0);
+      JCLAP_CHECK(d.values > 1000);
+      // After a drain, the next edit asks again.
+      edits.set(kLevel, 1.0);
+      JCLAP_CHECK_EQ(flushRequests, 2);
+      JCLAP_CHECK_EQ(drainAll(edits).ends, 1);
+   }
+   // Many whole gestures while full: every Begin that goes out has its End.
+   {
+      jclap::core::EditQueue edits;
+      edits.init(&kParamsHost);
+      for (int i = 0; i < 1000; ++i)
+         edits.set(kLevel, i);
+      const Drained d = drainAll(edits);
+      JCLAP_CHECK(d.begins > 0 && d.begins == d.ends);
+   }
+   // More open gestures than it tracks: the extra Begins are dropped along with their Ends.
+   {
+      jclap::core::EditQueue edits;
+      edits.init(&kParamsHost);
+      for (clap_id id = 0; id < 40; ++id)
+         edits.begin(id);
+      for (clap_id id = 0; id < 40; ++id)
+         edits.end(id);
+      const Drained d = drainAll(edits);
+      JCLAP_CHECK(d.begins > 0 && d.begins == d.ends);
+   }
+   // An event the host refuses stays queued: the End comes out on the next drain.
+   {
+      jclap::core::EditQueue edits;
+      edits.init(&kParamsHost);
+      edits.set(kLevel, 4.0);
+      const Drained first = drainAll(edits, 2);
+      JCLAP_CHECK(first.begins == 1 && first.values == 1 && first.ends == 0);
+      const Drained second = drainAll(edits);
+      JCLAP_CHECK(second.begins == 0 && second.values == 0 && second.ends == 1);
+   }
+
+   // fillParamInfo takes a null name or module as empty.
+   {
+      clap_param_info_t info;
+      jclap::core::fillParamInfo({kLevel, nullptr, nullptr, 0, 1, 0}, &info);
+      JCLAP_CHECK(info.name[0] == 0 && info.module[0] == 0 && info.id == kLevel);
+   }
+   static_assert(!std::is_copy_constructible_v<jclap::core::TestHost>, "a copy would destroy the plugin twice");
 
    // SpscQueue: FIFO order, and full/empty are reported.
    jclap::core::SpscQueue<int, 4> queue;
