@@ -38,7 +38,8 @@ const char *const kFeatures[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_F
 // State layout: 4-byte magic, uint32 version, uint32 param count, then one double per param in id
 // order. A state from a version with fewer params loads them and leaves the rest at their defaults.
 constexpr char kStateMagic[4] = {'J', 'V', 'R', 'B'};
-constexpr uint32_t kStateVersion = 1;
+// 2: the bodies' targets changed (version 1's Delay Mod, Size and Echo became Off).
+constexpr uint32_t kStateVersion = 2;
 
 // Sim time units per second with the clock free: the figure-eight comes round about every 8 s.
 constexpr double kFreeRate = 0.8;
@@ -110,6 +111,7 @@ public:
       for (size_t i = 0; i < kParamCount; ++i) {
          values_[i].store(kParams[i].defaultValue);
          mods_[i].store(0.0);
+         heard_[i].store(std::nan(""));
       }
    }
 
@@ -153,7 +155,13 @@ public:
    // ---- EditorHost (main thread) ----
 
    double paramValue(clap_id id) const override { return id < kParamCount ? values_[id].load() : 0.0; }
-   double paramModulated(clap_id id) const override { return id < kParamCount ? value(id) : 0.0; }
+   // What the audio is using: host modulation, plus the bodies' for the params they can move.
+   double paramModulated(clap_id id) const override {
+      if (id >= kParamCount)
+         return 0.0;
+      const double h = heard_[id].load(std::memory_order_relaxed);
+      return std::isnan(h) ? value(id) : h;
+   }
    void beginEdit(clap_id id) override { edits_.begin(id); }
    void setParam(clap_id id, double v) override {
       if (id >= kParamCount || !std::isfinite(v))
@@ -248,7 +256,7 @@ public:
       char magic[4];
       uint32_t header[2] = {};
       if (!jclap::core::readAll(stream, magic, 4) || std::memcmp(magic, kStateMagic, 4) ||
-          !jclap::core::readAll(stream, header, sizeof(header)) || header[0] != kStateVersion || header[1] > kParamCount)
+          !jclap::core::readAll(stream, header, sizeof(header)) || (header[0] != kStateVersion && header[0] != 1) || header[1] > kParamCount)
          return false;
       double v[kParamCount];
       if (!jclap::core::readAll(stream, v, sizeof(double) * header[1]))
@@ -256,6 +264,17 @@ public:
       for (uint32_t i = 0; i < header[1]; ++i)
          if (!std::isfinite(v[i]))
             return false;
+      if (header[0] == 1)
+         for (int b = 0; b < kMaxBodies; ++b) {
+            const clap_id id = bodyParam(b, kBody1Target);
+            if (id < header[1]) {
+               // Off, Delay Mod, Size, Drive, Shimmer, Feedback, Tilt, Width, Echo.
+               constexpr Target kOld[] = {Target::Off,      Target::Off,  Target::Off,   Target::Drive, Target::Shimmer,
+                                          Target::Feedback, Target::Tilt, Target::Width, Target::Off};
+               const int old = std::clamp(static_cast<int>(v[id] + 0.5), 0, 8);
+               v[id] = static_cast<double>(kOld[old]);
+            }
+         }
       // The preset's name follows the values; older saves may not have one.
       uint32_t nameLength = 0;
       char name[256];
@@ -401,8 +420,8 @@ private:
       for (int b = 0; b < kMaxBodies; ++b)
          v[b] = lastVelocity_[b] = value(bodyParam(b, kBody1Velocity));
       sim_.reset(static_cast<int>(value(kBodies) + 0.5), m, v, value(kGravity));
-      for (int b = 0; b < kMaxBodies; ++b)
-         radius_[b] = b < sim_.count() ? sim_.radius(b) : 1.0;
+      for (double &sig : signal_)
+         sig = 0.0;
       ++resets_;
       spawnPending_ = false;
       // The same kicks in the same order after every restart, so two bounces match.
@@ -431,7 +450,7 @@ private:
          const int b = sim_.count();
          sim_.add(x, y, mass, gravity);
          lastVelocity_[b] = value(bodyParam(b, kBody1Velocity));
-         radius_[b] = sim_.radius(b);
+         signal_[b] = 0.0;
       }
       else if (want < sim_.count())
          sim_.remove();
@@ -473,8 +492,10 @@ private:
       if (!sim_.finite())
          restartSim();
 
-      // What each body sends: distance (smoothed over about 60 ms), pan, and a modulation signal
-      // from its speed relative to the others and how close its nearest neighbour is.
+      // What each body sends: its left/right position, and a modulation signal from its speed
+      // relative to the others and how close its nearest neighbour is (smoothed over about 60 ms).
+      // The signal moves only the param the body's card routes it to, and that param's knob shows
+      // the movement, so nothing changes the sound that the panel doesn't show.
       const int n = sim_.count();
       double meanSpeed = 0.0;
       for (int b = 0; b < n; ++b)
@@ -484,63 +505,64 @@ private:
       double offsets[static_cast<int>(Target::Count)] = {};
       Control c;
       c.bodies = n;
-      for (int b = 0; b < kMaxBodies; ++b) {
-         if (b >= n) {
-            c.radius[b] = radius_[b];
-            continue;
-         }
-         radius_[b] += smooth * (sim_.radius(b) - radius_[b]);
-         c.radius[b] = radius_[b];
+      for (int b = 0; b < n; ++b) {
          c.pan[b] = std::clamp(sim_.body(b).x / 1.3, -1.0, 1.0);
          const double closeness = 1.0 / (1.0 + sim_.nearest(b) / 0.25);
-         const double signal = std::clamp(std::tanh(1.5 * (sim_.speed(b) / meanSpeed - 1.0)) + closeness, -1.0, 1.0);
+         const double raw = std::clamp(std::tanh(1.5 * (sim_.speed(b) / meanSpeed - 1.0)) + closeness, -1.0, 1.0);
+         signal_[b] += smooth * (raw - signal_[b]);
          const int target = choice(bodyParam(b, kBody1Target));
-         const double amount = value(bodyParam(b, kBody1Amount)) * signal;
-         if (target == static_cast<int>(Target::DelayMod))
-            c.delayMod[b] = amount;
-         else if (target > 0 && target < static_cast<int>(Target::Count))
-            offsets[target] += amount;
+         if (target > 0 && target < static_cast<int>(Target::Count))
+            offsets[target] += value(bodyParam(b, kBody1Amount)) * signal_[b];
       }
+      const auto offset = [&](Target t) { return offsets[static_cast<int>(t)]; };
 
-      c.decay = value(kDecay);
-      c.size = value(kSize) * std::exp2(0.5 * offsets[static_cast<int>(Target::Size)]);
+      c.decay = std::clamp(value(kDecay) * std::exp2(offset(Target::Decay)), kParams[kDecay].min, kParams[kDecay].max);
+      c.size = value(kSize);
       c.motion = value(kMotion);
       c.attack = value(kAttack);
-      c.diffusion = value(kDiffusion);
-      c.earlyLate = value(kEarlyLate);
+      c.diffusion = std::clamp(value(kDiffusion) + 0.5 * offset(Target::Diffusion), 0.0, 1.0);
+      c.earlyLate = std::clamp(value(kEarlyLate) + 0.5 * offset(Target::EarlyLate), 0.0, 1.0);
       c.predelayMs = value(kPredelay);
-      c.dampHigh = value(kDampHigh);
+      c.dampHigh = std::clamp(value(kDampHigh) * std::exp2(1.5 * offset(Target::Damping)), kParams[kDampHigh].min,
+                              kParams[kDampHigh].max);
       c.bassMult = value(kBassMult);
       c.bassXover = value(kBassXover);
       c.lowCut = value(kLowCut);
       c.highCut = value(kHighCut);
-      c.feedback = std::clamp(value(kFeedback) + 0.4 * offsets[static_cast<int>(Target::Feedback)], 0.0, 1.1);
-      c.shimmer = std::clamp(value(kShimmer) + 0.5 * offsets[static_cast<int>(Target::Shimmer)], 0.0, 1.0);
+      c.feedback = std::clamp(value(kFeedback) + 0.4 * offset(Target::Feedback), 0.0, 1.1);
+      c.shimmer = std::clamp(value(kShimmer) + 0.5 * offset(Target::Shimmer), 0.0, 1.0);
       c.shimmerPitch = std::round(value(kShimmerPitch));
-      c.tilt = std::clamp(value(kTilt) + 0.8 * offsets[static_cast<int>(Target::Tilt)], -1.0, 1.0);
+      c.tilt = std::clamp(value(kTilt) + 0.8 * offset(Target::Tilt), -1.0, 1.0);
       c.smear = value(kSmear);
       c.safetyHard = choice(kSafety) == 1;
       c.freeze = value(kFreeze) >= 0.5;
       c.driveOn = value(kDriveOn) >= 0.5;
       c.driveWhere = static_cast<DriveWhere>(std::clamp(choice(kDriveWhere), 0, 2));
       c.driveType = static_cast<DriveType>(std::clamp(choice(kDriveType), 0, 4));
-      c.drive = std::clamp(value(kDrive) + 18.0 * offsets[static_cast<int>(Target::Drive)], 0.0, 36.0);
+      c.drive = std::clamp(value(kDrive) + 18.0 * offset(Target::Drive), 0.0, 36.0);
       c.driveTone = value(kDriveTone);
       c.driveBias = value(kDriveBias);
       c.driveMix = value(kDriveMix);
       c.driveTrim = value(kDriveTrim);
       c.echoOn = value(kEchoOn) >= 0.5;
       c.echoWhere = static_cast<EchoWhere>(std::clamp(choice(kEchoWhere), 0, 2));
-      c.echoSeconds = echoSeconds() * std::exp2(0.5 * offsets[static_cast<int>(Target::Echo)]);
+      c.echoSeconds = echoSeconds();
       c.echoFeedback = value(kEchoFeedback);
       c.echoTone = value(kEchoTone);
       c.echoPingPong = value(kEchoPingPong) >= 0.5;
       c.echoMix = value(kEchoMix);
-      c.width = std::clamp(value(kWidth) + 0.8 * offsets[static_cast<int>(Target::Width)], 0.0, 2.0);
+      c.width = std::clamp(value(kWidth) + 0.8 * offset(Target::Width), 0.0, 2.0);
       c.duck = value(kDuck);
       c.mix = value(kMix);
       c.levelDb = value(kLevel);
       engine_.setControl(c);
+
+      // The values the bodies are moving, for those params' knobs.
+      const std::pair<clap_id, double> heard[] = {{kDecay, c.decay},       {kDampHigh, c.dampHigh}, {kDiffusion, c.diffusion},
+                                                  {kEarlyLate, c.earlyLate}, {kDrive, c.drive},       {kShimmer, c.shimmer},
+                                                  {kFeedback, c.feedback}, {kTilt, c.tilt},         {kWidth, c.width}};
+      for (const auto &[id, v] : heard)
+         heard_[id].store(v, std::memory_order_relaxed);
 
       if (++publish_ >= kPublishEvery) {
          publish_ = 0;
@@ -570,7 +592,9 @@ private:
          f.vx[b] = static_cast<float>(body.vx);
          f.vy[b] = static_cast<float>(body.vy);
          f.mass[b] = static_cast<float>(mass[b]);
-         f.delayMs[b] = static_cast<float>(engine_.delayMs(b));
+         f.signal[b] = static_cast<float>(signal_[b]);
+         f.target[b] = static_cast<uint8_t>(std::clamp(choice(bodyParam(b, kBody1Target)), 0, static_cast<int>(Target::Count) - 1));
+         f.amount[b] = static_cast<float>(value(bodyParam(b, kBody1Amount)));
       }
       for (int band = 0; band < 3; ++band) {
          f.band[band] = analyzer_.level(band);
@@ -614,7 +638,10 @@ private:
    Engine engine_;
    Analyzer analyzer_;
    OrbitSim sim_;
-   double radius_[kMaxBodies] = {1, 1, 1, 1, 1, 1};
+   double signal_[kMaxBodies] = {};
+   // The value each body-movable param is heard at, for its knob; NaN until the first control tick
+   // and for every param the bodies can't move.
+   std::atomic<double> heard_[kParamCount];
    double lastVelocity_[kMaxBodies] = {1, 1, 1, 1, 1, 1};
    uint32_t seenHits_[3] = {};
    uint32_t resets_ = 0;

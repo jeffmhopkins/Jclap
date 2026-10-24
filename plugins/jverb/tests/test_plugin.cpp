@@ -272,7 +272,7 @@ int main() {
             JCLAP_CHECK(ok && h.paramText(id, back) == text);
          }
       JCLAP_CHECK(h.paramText(kEchoSync, 6.0) == "1/8D");
-      JCLAP_CHECK(h.paramText(bodyParam(2, kBody1Target), static_cast<double>(Target::Echo)) == "Echo");
+      JCLAP_CHECK(h.paramText(bodyParam(2, kBody1Target), static_cast<double>(Target::Damping)) == "Damping");
    }
 
    // State: values and the preset name come back.
@@ -292,6 +292,44 @@ int main() {
       JCLAP_CHECK_EQ(b.paramValue(kEchoTime), 777.0);
       JCLAP_CHECK_EQ(b.paramValue(bodyParam(4, kBody1Mass)), 2.25);
       JCLAP_CHECK(b.object<EditorHost>()->presetName() == "Moon Room");
+
+      // A version 1 save: its body targets are translated, and the pitch-bending ones (Delay Mod,
+      // Size, Echo) come back Off.
+      uint32_t version = 1;
+      std::memcpy(buffer.data.data() + 4, &version, sizeof(version));
+      const double oldTargets[kMaxBodies] = {1, 2, 3, 5, 7, 8}; // Delay Mod, Size, Drive, Feedback, Width, Echo
+      for (int body = 0; body < kMaxBodies; ++body)
+         std::memcpy(buffer.data.data() + 12 + 8 * bodyParam(body, kBody1Target), &oldTargets[body], sizeof(double));
+      jclap::core::TestHost c(clap_entry, kId, kRate);
+      buffer.read = 0;
+      const clap_istream_t old = buffer.in();
+      JCLAP_CHECK(stateOf(c)->load(c.plugin(), &old));
+      const Target expect[kMaxBodies] = {Target::Off, Target::Off, Target::Drive, Target::Feedback, Target::Width, Target::Off};
+      for (int body = 0; body < kMaxBodies; ++body)
+         JCLAP_CHECK_EQ(c.paramValue(bodyParam(body, kBody1Target)), static_cast<double>(expect[body]));
+      JCLAP_CHECK_EQ(c.paramValue(kDecay), 12.5);
+   }
+
+   // Nothing moves the sound that the panel doesn't show: bodies start routed nowhere, and a body
+   // routed to a param moves that param's knob (its modulated value) while the orbits run.
+   {
+      jclap::core::TestHost h(clap_entry, kId, kRate);
+      for (int body = 0; body < kMaxBodies; ++body)
+         JCLAP_CHECK_EQ(h.paramValue(bodyParam(body, kBody1Target)), static_cast<double>(Target::Off));
+      EditorHost &panel = *h.object<EditorHost>();
+      std::vector<float> inL(static_cast<size_t>(kRate / 4), 0.0f), inR = inL, outL, outR;
+      run(h, inL, inR, outL, outR, 256);
+      JCLAP_CHECK_EQ(panel.paramModulated(kDampHigh), h.paramValue(kDampHigh));
+      h.setParam(bodyParam(0, kBody1Target), static_cast<double>(Target::Damping));
+      h.setParam(bodyParam(0, kBody1Amount), 1.0);
+      double lo = 1e9, hi = 0.0;
+      for (int i = 0; i < 40; ++i) {
+         run(h, inL, inR, outL, outR, 256);
+         lo = std::min(lo, panel.paramModulated(kDampHigh));
+         hi = std::max(hi, panel.paramModulated(kDampHigh));
+      }
+      JCLAP_CHECK(hi / lo > 1.2);
+      JCLAP_CHECK_EQ(h.paramValue(kDampHigh), kParams[kDampHigh].defaultValue);
    }
 
    // Panel edits reach the host as gestures, and the orbit view's commands are taken.
@@ -363,7 +401,16 @@ int main() {
          for (const auto &[id, v] : p.values)
             JCLAP_CHECK(id < kParamCount && v >= kParams[id].min && v <= kParams[id].max);
          jclap::core::TestHost h(clap_entry, kId, kRate);
+         // Loaded over another preset, it sets every param: its own values, the rest to defaults.
+         applyPreset(factoryPresets()[p.name == "Chaos Engine" ? 1 : factoryPresets().size() - 4], *h.object<EditorHost>());
          applyPreset(p, *h.object<EditorHost>());
+         for (clap_id id = 0; id < kParamCount; ++id) {
+            double expect = kParams[id].defaultValue;
+            for (const auto &[pid, v] : p.values)
+               if (pid == id)
+                  expect = v;
+            JCLAP_CHECK_EQ(h.paramValue(id), expect);
+         }
          Noise noise;
          std::vector<float> inL(static_cast<size_t>(kRate)), inR(inL.size()), outL, outR;
          for (size_t i = 0; i < inL.size() / 4; ++i)
@@ -379,9 +426,14 @@ int main() {
          jclap::core::TestHost slow(clap_entry, kId, kLongRate);
          applyPreset(p, *slow.object<EditorHost>());
          const auto e = windows(tail(slow, kLongRate, 40.0), kLongRate, 2.0, 4.0);
+         // Repeats and routed bodies make a tail rise and fall, but it never climbs above where it
+         // has already been.
          bool grows = false;
-         for (size_t i = 2; i < e.size(); ++i)
-            grows |= e[i] > 1e-6 && e[i] > e[i - 1] * 1.25;
+         double loudest = e.front();
+         for (size_t i = 1; i < e.size(); ++i) {
+            grows |= e[i] > 1e-6 && e[i] > loudest;
+            loudest = std::max(loudest, e[i]);
+         }
          if (grows || e.back() > e.front())
             std::printf("preset %s: tail grows (%.3g -> %.3g)\n", p.name.c_str(), e.front(), e.back());
          JCLAP_CHECK(!grows && e.back() <= e.front());
@@ -399,7 +451,7 @@ int main() {
       JCLAP_CHECK(writePreset(file, panel));
       Preset p;
       JCLAP_CHECK(readPreset(file, p));
-      JCLAP_CHECK(p.name == "jverb-test" && p.values.size() == 2);
+      JCLAP_CHECK(p.name == "jverb-test" && p.values.size() == kParamCount);
       std::filesystem::remove(file);
       JCLAP_CHECK(presetFileName("My/Preset: *1* ") == "MyPreset 1");
    }

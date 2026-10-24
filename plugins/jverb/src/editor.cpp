@@ -28,6 +28,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <random>
 #include <string>
 #include <vector>
@@ -100,6 +101,22 @@ public:
    explicit Glass(std::string title = {}, unsigned accent = kDim) : title_(std::move(title)), accent_(accent) {
       setIgnoresMouseEvents(true, false);
    }
+   // Makes the card clickable (clicks on its controls still go to them).
+   void setOnClick(std::function<void()> onClick) {
+      onClick_ = std::move(onClick);
+      setIgnoresMouseEvents(!onClick_, false);
+   }
+   // Draws the card lit, in its accent colour.
+   void setHighlighted(bool on) {
+      if (on != highlighted_) {
+         highlighted_ = on;
+         redraw();
+      }
+   }
+   void mouseDown(const visage::MouseEvent &) override {
+      if (onClick_)
+         onClick_();
+   }
    void setTitle(std::string title, unsigned accent) {
       title_ = std::move(title);
       accent_ = accent;
@@ -111,8 +128,16 @@ public:
       const float s = height() / designHeight;
       c.setColor(visage::Color(0xb80b0e17));
       c.roundedRectangle(0, 0, width(), height(), 10 * s);
-      c.setColor(visage::Color(0x2effffff));
-      c.roundedRectangleBorder(0, 0, width(), height(), 10 * s, 1.0f * s);
+      if (highlighted_) {
+         c.setColor(glow(accent_, 0.14f, 1.0f));
+         c.roundedRectangle(0, 0, width(), height(), 10 * s);
+         c.setColor(glow(accent_, 0.9f, 1.3f));
+         c.roundedRectangleBorder(0, 0, width(), height(), 10 * s, 1.5f * s);
+      }
+      else {
+         c.setColor(visage::Color(0x2effffff));
+         c.roundedRectangleBorder(0, 0, width(), height(), 10 * s, 1.0f * s);
+      }
       if (!title_.empty()) {
          c.setColor(accent_);
          c.text(title_, ui::font(13 * s), visage::Font::kLeft, 14 * s, 7 * s, width(), 18 * s);
@@ -122,6 +147,8 @@ public:
 private:
    std::string title_;
    unsigned accent_;
+   std::function<void()> onClick_;
+   bool highlighted_ = false;
 };
 
 // The space scene: stars, nebulae, the bodies and their trails, the dust incoming audio sheds, and
@@ -261,12 +288,13 @@ public:
          c.segment(X(d.x - d.vx * streak), Y(d.y - d.vy * streak), X(d.x), Y(d.y), 1.7f * s, true);
       }
 
-      // Bodies: a soft halo, a bright core, a white-hot centre; louder bands glow harder.
+      // Bodies: a soft halo, a bright core, a white-hot centre; louder bands glow harder, and heavier
+      // bodies are bigger.
       for (int b = 0; b < f.count; ++b) {
-         const float r = (4.5f + 3.0f * std::sqrt(f.mass[b])) * s;
+         const float r = bodyRadius(f.mass[b]) * s;
          const float energy = std::min(1.0f, f.band[b % 3]) * 0.6f + flare_[b % 3];
          const float bx = X(f.x[b]), by = Y(f.y[b]);
-         const float halo = r * (3.5f + 1.5f * energy);
+         const float halo = r * (3.0f + 1.5f * energy);
          c.setColor(visage::Brush::radial(glow(kBodyColors[b], 0.24f + 0.14f * energy, 1.0f),
                                           glow(kBodyColors[b], 0.0f, 1.0f), visage::Point(bx, by), halo));
          c.circle(bx - halo, by - halo, 2 * halo);
@@ -390,14 +418,17 @@ private:
       return {kStageX * s + x * ppu(), kStageY * s + y * ppu()};
    }
 
+   // A body's core radius in design units: from 4.5 for the lightest to about 15 for the heaviest.
+   static float bodyRadius(float mass) { return 3.0f + 6.0f * std::pow(std::max(0.05f, mass), 0.6f); }
+
    int bodyAt(visage::Point p) const {
       const float s = width() / designWidth_;
       int best = -1;
-      float bestD = 16.0f * s;
+      float bestD = 1e9f;
       for (int b = 0; b < frame_.count; ++b) {
          const visage::Point q = toScreen(frame_.x[b], frame_.y[b]);
          const float d = std::hypot(q.x - p.x, q.y - p.y);
-         if (d < bestD)
+         if (d < std::max(16.0f, bodyRadius(frame_.mass[b]) + 6.0f) * s && d < bestD)
             bestD = d, best = b;
       }
       return best;
@@ -578,8 +609,9 @@ private:
 
    void drawReadout(visage::Canvas &c, float s, int b, float bx, float by, float ppu) {
       const OrbitFrame &f = frame_;
+      const float ring = std::max(16.0f, bodyRadius(f.mass[b]) + 7.0f) * s;
       c.setColor(glow(kText, 0.85f, 1.0f));
-      c.ring(bx - 16 * s, by - 16 * s, 32 * s, 1.2f * s);
+      c.ring(bx - ring, by - ring, 2 * ring, 1.2f * s);
       if (b == selected) {
          // The velocity arrow, with a handle at the tip to drag.
          const float ex = bx + f.vx[b] * kArrowScale * ppu, ey = by + f.vy[b] * kArrowScale * ppu;
@@ -594,8 +626,13 @@ private:
       }
       char line1[64], line2[96];
       std::snprintf(line1, sizeof(line1), "%s   m %.2f   v %.2f", kBodyNames[b], f.mass[b], std::hypot(f.vx[b], f.vy[b]));
-      std::snprintf(line2, sizeof(line2), "r %.2f  ->  delay %.0f ms   pan %s%.0f", std::hypot(f.x[b], f.y[b]),
-                    f.delayMs[b], f.x[b] < 0 ? "L" : "R", std::min(100.0f, std::fabs(f.x[b]) / 1.3f * 100.0f));
+      const int target = std::min<int>(f.target[b], static_cast<int>(Target::Count) - 1);
+      const float pan = std::min(100.0f, std::fabs(f.x[b]) / 1.3f * 100.0f);
+      if (target > 0)
+         std::snprintf(line2, sizeof(line2), "-> %s %+.0f%%   pan %s%.0f", kTargetNames[target],
+                       f.signal[b] * f.amount[b] * 100.0f, f.x[b] < 0 ? "L" : "R", pan);
+      else
+         std::snprintf(line2, sizeof(line2), "not routed   pan %s%.0f", f.x[b] < 0 ? "L" : "R", pan);
       const float tw = 196 * s, th = 42 * s;
       const float tx = std::min(bx + 22 * s, width() - tw - 250 * s), ty = by + 14 * s;
       c.setColor(visage::Color(0xd00b0e16));
@@ -904,6 +941,8 @@ public:
       const int count = currentBodies();
       if (count != laidOut_)
          layoutBodies(count);
+      for (int b = 0; b < kMaxBodies; ++b)
+         cards_[b].glass->setHighlighted(b == view_->selected);
       float l, r;
       host_.outputPeaks(l, r);
       meters_[0]->setLevel(l);
@@ -918,6 +957,8 @@ public:
    }
 
    OrbitView &view() { return *view_; }
+   // Pulls every control's value from the host now, as the bindings' timer does.
+   void syncControls() { bindings_.sync(); }
 
    void draw(visage::Canvas &c) override {
       const float s = scale();
@@ -1010,8 +1051,8 @@ private:
       tips_.add(bodies, "Each body owns two delay lines: fewer is sparse and echoey, more is dense.");
       tabs.addToPage(0, add<ui::Label>(ui::Rect{g[2].x, g[2].y + 72, g[2].w, 16}, "sparse - dense", kDim,
                                        visage::Font::kCenter));
-      tabs.addToPage(0, knob(kMotion, "MOTION", a, g[3], "How far each body's distance stretches its delay lines, "
-                                                         "and so how much Doppler you hear."));
+      tabs.addToPage(0, knob(kMotion, "MOTION", a, g[3], "How much the tail drifts and shimmers as it rings: "
+                                                         "a subtle chorus, never a pitch bend."));
       tabs.addToPage(0, knob(kPredelay, "PREDELAY", a, g[4]));
       tabs.addToPage(0, knob(kDampHigh, "DAMP HIGH", a, g[5], "Highs above this die faster on every pass."));
 
@@ -1122,9 +1163,14 @@ private:
       for (int b = 0; b < kMaxBodies; ++b) {
          Card &card = cards_[b];
          card.glass = &glass({0, 0, 10, kCardHeight}, kBodyNames[b], kBodyColors[b]);
+         // Clicking a card picks its body in the orbit view; clicking it again lets go.
+         card.glass->setOnClick([this, b] {
+            view_->selected = view_->selected == b ? -1 : b;
+            view_->redraw();
+         });
          card.target = &glassy(add<ui::Dropdown>({0, 0, 10, 10}, targets), kBodyColors[b]);
          bindings_.bind(*card.target, bodyParam(b, kBody1Target));
-         tips_.add(*card.target, "What this body's speed and close passes move, besides its own delay lines.");
+         tips_.add(*card.target, "What this body's speed and close passes move. That knob's ring shows it moving.");
          card.mass = &knob(bodyParam(b, kBody1Mass), "MASS", kBodyColors[b], {0, 0, 10, 10});
          card.velocity = &knob(bodyParam(b, kBody1Velocity), "VELOCITY", kBodyColors[b], {0, 0, 10, 10});
          card.amount = &knob(bodyParam(b, kBody1Amount), "AMOUNT", kBodyColors[b], {0, 0, 10, 10});
@@ -1221,6 +1267,7 @@ bool renderScreenshot(EditorHost &host, double seconds, int width, int height, c
       panel.step(1.0f / 60.0f);
    panel.view().selected = 1;
    panel.step(1.0f / 60.0f);
+   panel.syncControls();
    return ui::renderToPng(panel, width, height, pngPath);
 }
 

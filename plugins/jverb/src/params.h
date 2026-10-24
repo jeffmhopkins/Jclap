@@ -78,7 +78,9 @@ enum ParamId : clap_id {
 // Body `body`'s param: bodyParam(2, kBody1Mass) is body 3's mass.
 constexpr clap_id bodyParam(int body, clap_id body1Param) { return body1Param + 4 * body; }
 
-enum class Target { Off, DelayMod, Size, Drive, Shimmer, Feedback, Tilt, Width, Echo, Count };
+// What a body's motion can move. None of them bend pitch: the orbits change the tail's colour and
+// shape, never its tuning.
+enum class Target { Off, Decay, Damping, Diffusion, EarlyLate, Drive, Shimmer, Feedback, Tilt, Width, Count };
 enum class Clock { Free, Sync, Retrig, Count };
 enum class DriveWhere { Pre, Loop, Post, Count };
 enum class DriveType { Tape, Tube, Fuzz, Fold, Crush, Count };
@@ -100,9 +102,10 @@ constexpr auto kMod = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE;
 constexpr auto kChoice = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_ENUM;
 constexpr auto kToggle = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED;
 
-// Each body starts on a different routing, so turning bodies on adds something new.
-constexpr double kDefaultTarget[kMaxBodies] = {1, 2, 3, 4, 5, 6};
-constexpr double kDefaultAmount[kMaxBodies] = {0.35, 0.25, 0.4, 0.4, 0.3, 0.4};
+// Bodies start routed nowhere, so nothing moves the sound that the panel doesn't show. The amount
+// waits at 30%, so picking a target does something straight away.
+constexpr double kDefaultTarget[kMaxBodies] = {0, 0, 0, 0, 0, 0};
+constexpr double kDefaultAmount[kMaxBodies] = {0.3, 0.3, 0.3, 0.3, 0.3, 0.3};
 // Unequal masses: three equal ones would stay on the figure-eight they start on, which is stable.
 // These break it up within a few laps into motion that never repeats.
 constexpr double kDefaultMass[kMaxBodies] = {1.0, 1.25, 0.8, 1.0, 1.0, 1.0};
@@ -204,7 +207,8 @@ inline int bodyOf(clap_id id) {
 inline clap_id bodyRole(clap_id id) { return kBody1Mass + (id - kBody1Mass) % 4; }
 
 // Choice names, in value order.
-inline const char *const kTargetNames[] = {"Off", "Delay Mod", "Size", "Drive", "Shimmer", "Feedback", "Tilt", "Width", "Echo"};
+inline const char *const kTargetNames[] = {"Off",   "Decay",   "Damping", "Diffusion", "Early/Late",
+                                           "Drive", "Shimmer", "Feedback", "Tilt",      "Width"};
 inline const char *const kClockNames[] = {"Free", "Sync", "Retrig"};
 inline const char *const kWhereNames[] = {"Pre", "Loop", "Post"};
 inline const char *const kTypeNames[] = {"Tape", "Tube", "Fuzz", "Fold", "Crush"};
