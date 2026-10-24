@@ -480,5 +480,31 @@ int main() {
       std::printf("10 s of audio, everything on: %.3f s (%.1f%% of one core)\n", seconds, seconds * 10.0);
    }
 
+   // A NaN or infinite input sample is heard as silence: the tail keeps working, the panel's band
+   // levels don't stick at full glow, and kicks still register afterwards (#60).
+   {
+      jclap::core::TestHost h(clap_entry, kId, kRate);
+      EditorHost &panel = *h.object<EditorHost>();
+      Noise noise;
+      std::vector<float> inL(static_cast<size_t>(kRate)), inR(inL.size()), outL, outR;
+      for (size_t i = 0; i < inL.size(); ++i)
+         inL[i] = inR[i] = i < 4800 ? 0.5f * noise.next() : 0.0f;
+      inL[100] = std::nanf("");
+      inR[200] = std::numeric_limits<float>::infinity();
+      run(h, inL, inR, outL, outR, 512);
+      JCLAP_CHECK(finiteAndBounded(outL, 4.0f) && finiteAndBounded(outR, 4.0f));
+      JCLAP_CHECK(energy(outL, 0.2, 0.5) > 1e-6); // the tail still rang, so the tank wasn't reset
+      OrbitFrame f;
+      JCLAP_CHECK(panel.readFrame(f));
+      JCLAP_CHECK(f.band[0] < 0.1f && f.band[1] < 0.1f && f.band[2] < 0.1f); // a second of silence
+      const uint32_t hitsBefore = f.hits[0] + f.hits[1] + f.hits[2];
+      std::fill(inL.begin(), inL.end(), 0.0f);
+      for (size_t i = 0; i < 2400; ++i)
+         inL[i] = inR[i] = 0.9f * noise.next();
+      run(h, inL, inR, outL, outR, 512);
+      JCLAP_CHECK(panel.readFrame(f));
+      JCLAP_CHECK(f.hits[0] + f.hits[1] + f.hits[2] > hitsBefore);
+   }
+
    return jclap::core::testResult();
 }

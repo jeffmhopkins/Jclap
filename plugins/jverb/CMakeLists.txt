@@ -10,6 +10,11 @@ jclap_add_test(jverb-tests SOURCES tests/test_plugin.cpp src/plugin.cpp src/edit
 target_include_directories(jverb-tests PRIVATE src)
 target_link_libraries(jverb-tests PRIVATE jclap::ui jclap::dsp)
 
+# The tank on its own.
+jclap_add_test(jverb-engine-tests SOURCES tests/test_engine.cpp)
+target_include_directories(jverb-engine-tests PRIVATE src)
+target_link_libraries(jverb-engine-tests PRIVATE jclap::dsp jclap::core)
+
 # Offscreen render of the panel, for docs and visual checks. Needs a GPU (or a software Vulkan driver).
 if(JCLAP_BUILD_TOOLS)
    add_executable(jverb-screenshot tools/screenshot.cpp src/editor.cpp)

@@ -105,12 +105,14 @@ struct OnePole {
 
 // A Schroeder allpass around a DelayLine. Its length glides toward `target` a little every sample
 // (`glide` per sample, set with the sample rate), so a length that changes each control tick
-// bends smoothly instead of stepping.
+// bends smoothly instead of stepping. With `ease` below 1 the glide also starts gently: the length
+// follows `aim`, which itself eases toward the target, so the read speed never jumps either.
 struct Allpass {
    jclap::dsp::DelayLine line;
-   float length = 100.0f, target = 100.0f, gain = 0.5f, glide = 0.001f;
+   float length = 100.0f, aim = 100.0f, target = 100.0f, gain = 0.5f, glide = 0.001f, ease = 1.0f;
    float process(float x) {
-      length += glide * (target - length);
+      aim += ease * (target - aim);
+      length += glide * (aim - length);
       const float d = line.read(length);
       const float w = x + gain * d;
       line.write(w);
@@ -219,8 +221,12 @@ public:
       return filter(down_, downPos_, b);
    }
 
-private:
    static constexpr int kTaps = 31;
+   // How late the round trip comes out, in input samples: each filter is (kTaps - 1) / 2 samples
+   // at the 2x rate.
+   static constexpr int kLatency = (kTaps - 1) / 2;
+
+private:
    float filter(std::array<float, 2 * kTaps> &hist, int &pos, float x) {
       pos = (pos + 1) % kTaps;
       hist[pos] = hist[pos + kTaps] = x;
@@ -246,6 +252,7 @@ public:
    }
    void reset() {
       os_.reset();
+      dryLine_.fill(0.0f);
       emph_.y = deemph_.y = dc_.y = 0.0f;
       held_ = 0.0f;
       holdCount_ = 0;
@@ -272,8 +279,14 @@ public:
       const float lo = emph_.lowpass(x);
       const float tilt = 1.0f + 0.75f * tone;
       float v = (lo * (2.0f - tilt) + (x - lo) * tilt) * gain;
-      float y;
+      // The dry side of the mix, delayed to line up with the oversampled path, or Mix below 100%
+      // comb-filters. Crush doesn't oversample, so it mixes with the undelayed input.
+      dryPos_ = (dryPos_ + 1) % Oversampler::kLatency;
+      const float dryLate = dryLine_[dryPos_];
+      dryLine_[dryPos_] = x;
+      float y, dry = dryLate;
       if (type_ == DriveType::Crush) {
+         dry = x;
          // Fewer bits as the drive rises, and a sample-and-hold whose rate falls with the bias.
          const float bits = 12.0f - 9.0f * std::min(1.0f, (gain - 1.0f) / 60.0f);
          const float steps = std::exp2(bits);
@@ -299,7 +312,7 @@ public:
          y *= std::min(1.0f, trim) / (std::max(1.0f, gain) * slope(bias));
       else
          y *= trim / std::sqrt(std::max(1.0f, gain));
-      return x + mix * (y - x);
+      return dry + mix * (y - dry);
    }
 
 private:
@@ -342,6 +355,8 @@ private:
    DriveType type_ = DriveType::Tube;
    bool inLoop_ = true, first_ = true;
    Oversampler os_;
+   std::array<float, Oversampler::kLatency> dryLine_ = {};
+   int dryPos_ = 0;
    OnePole emph_, deemph_, dc_;
    Ramp gain_, tone_, bias_, mix_, trim_;
    float held_ = 0.0f;
@@ -563,11 +578,22 @@ public:
       echo_.setSampleRate(sr_);
       lengthGlide_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.025 * sr_)));
       panGlide_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.08 * sr_)));
+      busFadeStep_ = static_cast<float>(1.0 / (0.05 * sr_));
+      // Predelay may move its read point by at most half a sample per sample, and the early size
+      // its farthest tap by a quarter, so a big jump becomes a short, bounded pitch swoop.
+      earlySlew_ = static_cast<float>(0.25 / (kEarlyMs[kEarlyTaps - 1] * 0.001 * sr_));
+      // Every length that moves eases into its glide over a few ms: a glide that starts at full speed
+      // bends the waveform at a corner, a softer click but still a click.
+      easeGlide_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.005 * sr_)));
       for (int ch = 0; ch < 2; ++ch) {
-         for (auto &ap : bloom_[ch])
+         for (auto &ap : bloom_[ch]) {
             ap.glide = lengthGlide_;
-         for (auto &ap : smear_[ch])
+            ap.ease = easeGlide_;
+         }
+         for (auto &ap : smear_[ch]) {
             ap.glide = lengthGlide_;
+            ap.ease = easeGlide_;
+         }
       }
       reset();
    }
@@ -606,6 +632,7 @@ public:
       for (int b = 0; b < kMaxBodies; ++b)
          bodySwirl_[b] = lastPhase_[b] = 0.0;
       duckEnv_ = 0.0f;
+      busFade_ = 1.0f;
       first_ = true;
    }
 
@@ -630,7 +657,7 @@ public:
          targetLength_[k] = static_cast<float>(seconds * sr_);
          targetApLength_[k] = static_cast<float>(apSeconds * sr_);
          const double ap2Seconds = std::min(2.0, size) * kTankAp2Ms[k] * 0.001;
-         apLength2_[k] = static_cast<float>(ap2Seconds * sr_);
+         targetApLength2_[k] = static_cast<float>(ap2Seconds * sr_);
          const double loop = seconds + apSeconds + ap2Seconds;
          const double mid = std::pow(10.0, -3.0 * loop / rt);
          const double bass = std::min(0.9999, std::pow(10.0, -3.0 * loop / (rt * c.bassMult)));
@@ -657,6 +684,14 @@ public:
       // Each body's voice: with n bodies the spectrum splits into n bands, log-spaced from about
       // 150 Hz to 6 kHz, body 1 lowest.
       const double spread = std::clamp(c.panDepth, 0.0, 2.0), swirl = std::clamp(c.swirlDepth, 0.0, 2.0);
+      // A new body count gives every voice a new band and hands line pairs to other voices. The old
+      // voices, as they were, keep playing their old share of the lines while the new ones fade in
+      // over 50 ms, rather than everything switching in one sample.
+      if (bodies != delayBodies_ && !first_) {
+         std::copy(std::begin(voice_), std::end(voice_), std::begin(oldVoice_));
+         oldBodies_ = delayBodies_;
+         busFade_ = 0.0f;
+      }
       for (int b = 0; b < bodies; ++b) {
          const auto edge = [&](int i) { return kBandLowHz * std::pow(kBandHighHz / kBandLowHz, static_cast<double>(i) / bodies); };
          voice_[b].set(b == 0 ? 0.0 : edge(b), b == bodies - 1 ? 0.0 : edge(b + 1), spread, std::clamp(c.pan[b], -1.0, 1.0),
@@ -699,8 +734,10 @@ public:
          tiltLp_[ch].setCutoff(700.0, sr_);
       }
       targetReverseWindow_ = static_cast<float>((0.08 + 0.5 * std::max(0.0, -c.attack)) * std::min(2.0, std::sqrt(size)) * sr_);
-      predelaySamples_.set(static_cast<float>(c.predelayMs * 0.001 * sr_));
-      earlySize_.set(static_cast<float>(std::min(4.0, size)));
+      // These two move the early taps, so they slide there at a limited speed: a 32-sample ramp
+      // clicked.
+      targetPredelay_ = static_cast<float>(c.predelayMs * 0.001 * sr_);
+      targetEarlySize_ = static_cast<float>(std::min(4.0, size));
       attack_.set(static_cast<float>(c.attack));
       inputGain_.set(freeze ? 0.0f : 1.0f);
 
@@ -741,24 +778,27 @@ public:
       if (first_) {
          first_ = false;
          for (int k = 0; k < kLines; ++k) {
-            length_[k] = targetLength_[k];
-            apLength_[k] = targetApLength_[k];
+            length_[k] = aimLength_[k] = targetLength_[k];
+            apLength_[k] = aimApLength_[k] = targetApLength_[k];
+            apLength2_[k] = aimApLength2_[k] = targetApLength2_[k];
             apOffset_[k] = targetApOffset_[k];
             drift_[k].depth.settle();
             apDrift_[k].depth.settle();
          }
          for (int ch = 0; ch < 2; ++ch) {
             for (auto &ap : bloom_[ch])
-               ap.length = ap.target;
+               ap.length = ap.aim = ap.target;
             for (auto &ap : smear_[ch])
-               ap.length = ap.target;
+               ap.length = ap.aim = ap.target;
          }
          reverseWindow_ = targetReverseWindow_;
+         predelaySamples_ = aimPredelay_ = targetPredelay_;
+         earlySize_ = aimEarlySize_ = targetEarlySize_;
          for (detail::Ramp &r : gainMid_)
             r.settle();
          for (detail::Ramp &r : gainBass_)
             r.settle();
-         for (detail::Ramp *r : {&tankApGain_, &predelaySamples_, &earlySize_, &attack_, &inputGain_, &loopGain_, &loopScale_,
+         for (detail::Ramp *r : {&tankApGain_, &attack_, &inputGain_, &loopGain_, &loopScale_,
                                  &shimmer_, &smearMix_, &tiltLow_, &tiltHigh_, &echoMix_, &earlyGain_, &lateGain_,
                                  &width_, &duck_, &dry_, &wet_, &level_})
             r->settle();
@@ -787,7 +827,11 @@ public:
       }
 
       // Predelay, and early reflections tapped off the same lines.
-      const float pd = predelaySamples_.next(), es = earlySize_.next();
+      aimPredelay_ += std::clamp(targetPredelay_ - aimPredelay_, -kPredelaySlew, kPredelaySlew);
+      aimEarlySize_ += std::clamp(targetEarlySize_ - aimEarlySize_, -earlySlew_, earlySlew_);
+      predelaySamples_ += easeGlide_ * (aimPredelay_ - predelaySamples_);
+      earlySize_ += easeGlide_ * (aimEarlySize_ - earlySize_);
+      const float pd = predelaySamples_, es = earlySize_;
       float early[2] = {0.0f, 0.0f}, delayed[2];
       for (int ch = 0; ch < 2; ++ch) {
          predelay_[ch].write(x[ch]);
@@ -821,8 +865,12 @@ public:
       float y[kLines], o[kLines];
       const float apGain = tankApGain_.next();
       for (int k = 0; k < kLines; ++k) {
-         length_[k] += lengthGlide_ * (targetLength_[k] - length_[k]);
-         apLength_[k] += lengthGlide_ * (targetApLength_[k] - apLength_[k]);
+         aimLength_[k] += easeGlide_ * (targetLength_[k] - aimLength_[k]);
+         aimApLength_[k] += easeGlide_ * (targetApLength_[k] - aimApLength_[k]);
+         aimApLength2_[k] += easeGlide_ * (targetApLength2_[k] - aimApLength2_[k]);
+         length_[k] += lengthGlide_ * (aimLength_[k] - length_[k]);
+         apLength_[k] += lengthGlide_ * (aimApLength_[k] - apLength_[k]);
+         apLength2_[k] += lengthGlide_ * (aimApLength2_[k] - apLength2_[k]);
          apOffset_[k] += panGlide_ * (targetApOffset_[k] - apOffset_[k]);
          const float g = std::clamp(apGain + apOffset_[k], 0.0f, kTankApGainCeiling);
          float v = lines_[k].read(length_[k] + drift_[k].next());
@@ -866,6 +914,22 @@ public:
          late[1] += r;
          plain[0] += bus[b][0];
          plain[1] += bus[b][1];
+      }
+      // Just after the body count changed: the old voices on their old lines, fading out.
+      if (busFade_ < 1.0f) {
+         const float fade = busFade_;
+         busFade_ = std::min(1.0f, busFade_ + busFadeStep_);
+         float oldBus[kMaxBodies][2] = {}, old[2] = {0.0f, 0.0f};
+         for (int k = 0; k < kLines; ++k)
+            oldBus[(k / 2) % oldBodies_][k & 1] += kOutSign[k] * y[k];
+         for (int b = 0; b < oldBodies_; ++b) {
+            float l, r;
+            oldVoice_[b].process(oldBus[b][0], oldBus[b][1], l, r);
+            old[0] += l;
+            old[1] += r;
+         }
+         for (int ch = 0; ch < 2; ++ch)
+            late[ch] = fade * late[ch] + (1.0f - fade) * old[ch];
       }
       for (int ch = 0; ch < 2; ++ch) {
          late[ch] *= kOutScale;
@@ -1006,14 +1070,22 @@ private:
    detail::Ramp gainMid_[kLines], gainBass_[kLines], tankApGain_;
    detail::Drift drift_[kLines], apDrift_[kLines];
    float length_[kLines] = {}, targetLength_[kLines] = {}, apLength_[kLines] = {}, targetApLength_[kLines] = {};
-   float apLength2_[kLines] = {};
+   float apLength2_[kLines] = {}, targetApLength2_[kLines] = {};
+   // Where each length's glide is heading this sample, easing toward its target (see easeGlide_).
+   float aimLength_[kLines] = {}, aimApLength_[kLines] = {}, aimApLength2_[kLines] = {};
    float apOffset_[kLines] = {}, targetApOffset_[kLines] = {};
-   detail::BodyVoice voice_[kMaxBodies];
-   float lengthGlide_ = 0.001f, panGlide_ = 0.001f;
-   int delayBodies_ = 3;
+   detail::BodyVoice voice_[kMaxBodies], oldVoice_[kMaxBodies];
+   float lengthGlide_ = 0.001f, panGlide_ = 0.001f, easeGlide_ = 0.004f;
+   int delayBodies_ = 3, oldBodies_ = 3;
+   // How far a body-count crossfade has got (1 when there's none), and how far it moves a sample.
+   // oldVoice_ holds the voices as they were before the change.
+   float busFade_ = 1.0f, busFadeStep_ = 0.0005f;
    double bodyPan_[kMaxBodies] = {}, bodyTone_[kMaxBodies] = {}, bodySwirl_[kMaxBodies] = {}, lastPhase_[kMaxBodies] = {};
 
-   detail::Ramp predelaySamples_, earlySize_, attack_, inputGain_;
+   static constexpr float kPredelaySlew = 0.5f;
+   float predelaySamples_ = 0.0f, aimPredelay_ = 0.0f, targetPredelay_ = 0.0f;
+   float earlySize_ = 1.0f, aimEarlySize_ = 1.0f, targetEarlySize_ = 1.0f, earlySlew_ = 1e-4f;
+   detail::Ramp attack_, inputGain_;
    detail::Ramp loopGain_, loopScale_, shimmer_, smearMix_, tiltLow_, tiltHigh_;
    detail::Ramp echoMix_;
    detail::Ramp earlyGain_, lateGain_, width_, duck_, dry_, wet_, level_;

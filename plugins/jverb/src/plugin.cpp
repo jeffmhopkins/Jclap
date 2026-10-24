@@ -319,13 +319,15 @@ public:
          if (tick_ == 0)
             controlTick();
          tick_ = (tick_ + 1) % kControlTick;
-         const float l = inL[i], r = inR[i];
+         // A NaN or infinite input sample is heard as silence, before the analyzer and the tank see
+         // it: either would hold on to it for good.
+         const float l = std::isfinite(inL[i]) ? inL[i] : 0.0f, r = std::isfinite(inR[i]) ? inR[i] : 0.0f;
          analyzer_.process(l, r);
          float yl, yr, late;
          engine_.process(l, r, yl, yr, late);
          if (!std::isfinite(yl) || !std::isfinite(yr)) {
-            // Never pass on a NaN or infinity; start the tank again instead, at most once a block so
-            // a source that keeps producing them can't make every sample pay for a reset.
+            // Never pass on a NaN or infinity; start the tank again instead, at most once a block.
+            // With the input cleaned above, only a blown-up tank gets here.
             if (!resetThisBlock) {
                engine_.reset();
                resetThisBlock = true;
