@@ -4,11 +4,11 @@ jclap_add_plugin(plugin_template
    OUTPUT_DIR template
    SOURCES src/plugin.cpp src/editor.cpp)
 target_include_directories(plugin_template PRIVATE src)
-target_link_libraries(plugin_template PRIVATE jclap::ui)
+target_link_libraries(plugin_template PRIVATE jclap::ui jclap::dsp)
 
 jclap_add_test(plugin_template-tests SOURCES tests/test_plugin.cpp src/plugin.cpp src/editor.cpp)
 target_include_directories(plugin_template-tests PRIVATE src)
-target_link_libraries(plugin_template-tests PRIVATE jclap::ui)
+target_link_libraries(plugin_template-tests PRIVATE jclap::ui jclap::dsp)
 
 # Offscreen render of the panel, for docs and visual checks. Needs a GPU (or a software Vulkan driver).
 if(JCLAP_BUILD_TOOLS)
