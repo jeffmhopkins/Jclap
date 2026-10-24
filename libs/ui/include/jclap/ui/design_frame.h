@@ -76,6 +76,9 @@ public:
 
    void resized() override;
    void mouseDown(const visage::MouseEvent &e) override;
+   // Shows the background menu (the UI sizes, if onZoom is set) at `position` in `source`. For a
+   // child that covers the background, so right-clicking it offers the same.
+   void showZoomMenu(visage::Frame &source, visage::Point position);
 
 private:
    struct Placed {

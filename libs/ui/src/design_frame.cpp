@@ -63,7 +63,12 @@ void DesignFrame::resized() {
 }
 
 void DesignFrame::mouseDown(const visage::MouseEvent &e) {
-   if (!e.shouldTriggerPopup() || !onZoom)
+   if (e.shouldTriggerPopup())
+      showZoomMenu(*this, e.position);
+}
+
+void DesignFrame::showZoomMenu(visage::Frame &source, visage::Point position) {
+   if (!onZoom)
       return;
    visage::PopupMenu menu;
    visage::PopupMenu sizes("UI Size");
@@ -78,7 +83,7 @@ void DesignFrame::mouseDown(const visage::MouseEvent &e) {
       if (id >= 0 && id < static_cast<int>(zoomLevels.size()))
          onZoom(zoomLevels[id]);
    };
-   menu.show(this, e.position);
+   menu.show(&source, position);
 }
 
 } // namespace jclap::ui

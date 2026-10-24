@@ -42,6 +42,7 @@ struct OrbitCommand {
       Velocity, // set its velocity to (x, y)
       Spawn,    // where the next body added should appear
       Reset,    // back to the start positions
+      Remove,   // which body goes when the count next drops
    } kind;
    int8_t body;
    float x, y;

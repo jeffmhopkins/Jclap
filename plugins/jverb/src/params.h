@@ -5,6 +5,7 @@
 
 #include <jclap/core/helpers.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -212,6 +213,17 @@ inline int bodyOf(clap_id id) {
    return id >= kBody1Mass && id < kBodyParamsEnd ? static_cast<int>(id - kBody1Mass) / 4 : -1;
 }
 inline clap_id bodyRole(clap_id id) { return kBody1Mass + (id - kBody1Mass) % 4; }
+
+// A body target as 0.4.x saved it (state version 1, preset files of 69 params), in today's terms:
+// its Off, Delay Mod, Size, Drive, Shimmer, Feedback, Tilt, Width, Echo, with Delay Mod, Size and
+// Echo gone.
+inline double targetFromV1(double old) {
+   constexpr Target kOld[] = {Target::Off,      Target::Off,  Target::Off,   Target::Drive, Target::Shimmer,
+                              Target::Feedback, Target::Tilt, Target::Width, Target::Off};
+   return static_cast<double>(kOld[std::clamp(static_cast<int>(old + 0.5), 0, 8)]);
+}
+// How many params 0.4.x had; its preset files list exactly these.
+constexpr clap_id kV1ParamCount = 69;
 
 // Choice names, in value order.
 inline const char *const kTargetNames[] = {"Off",   "Decay",   "Damping", "Diffusion", "Early/Late",

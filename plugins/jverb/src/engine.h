@@ -131,16 +131,19 @@ struct Drift {
       y = static_cast<float>(std::sin(2.0 * jclap::dsp::kPi * phase));
    }
    // `hz` of drift that bends a pass by at most `cents`, but never swings further than `most` samples.
-   void set(double hz, double cents, double sampleRate, double most) {
+   // `speed` (0..1) slows the swing without changing its depth: at 0 the read point holds still.
+   void set(double hz, double cents, double sampleRate, double most, double speed = 1.0) {
       const double w = 2.0 * jclap::dsp::kPi * hz / sampleRate;
-      cw = static_cast<float>(std::cos(w));
-      sw = static_cast<float>(std::sin(w));
+      cw = static_cast<float>(std::cos(w * speed));
+      sw = static_cast<float>(std::sin(w * speed));
       // A delay swinging by A samples at w radians per sample bends pitch by up to a factor 1 + A w.
       depth.set(static_cast<float>(std::min(most, (std::exp2(cents / 1200.0) - 1.0) / w)));
       const float r = 1.0f / std::sqrt(x * x + y * y);
       x *= r;
       y *= r;
    }
+   // Where the swing is now, in samples.
+   float value() const { return depth.value * y; }
    float next() {
       const float nx = x * cw - y * sw;
       y = x * sw + y * cw;
@@ -258,9 +261,13 @@ public:
       holdCount_ = 0;
       first_ = true;
    }
+   // The shaper and the slot it's in. The engine fades the drive out before it calls this with a
+   // change, and back in after, so the switch is never heard as a step.
+   void setMode(DriveType type, bool inLoop) {
+      type_ = type;
+      inLoop_ = inLoop;
+   }
    void set(const Control &c) {
-      type_ = c.driveType;
-      inLoop_ = c.driveWhere == DriveWhere::Loop;
       gain_.set(static_cast<float>(jclap::dsp::dbToGain(c.drive)));
       tone_.set(static_cast<float>(c.driveTone));
       bias_.set(static_cast<float>(c.driveBias));
@@ -579,6 +586,8 @@ public:
       lengthGlide_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.025 * sr_)));
       panGlide_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.08 * sr_)));
       busFadeStep_ = static_cast<float>(1.0 / (0.05 * sr_));
+      slotStep_ = static_cast<float>(1.0 / (0.005 * sr_));
+      freezeFadeStep_ = static_cast<float>(1.0 / (0.05 * sr_));
       // Predelay may move its read point by at most half a sample per sample, and the early size
       // its farthest tap by a quarter, so a big jump becomes a short, bounded pitch swoop.
       earlySlew_ = static_cast<float>(0.25 / (kEarlyMs[kEarlyTaps - 1] * 0.001 * sr_));
@@ -633,6 +642,9 @@ public:
          bodySwirl_[b] = lastPhase_[b] = 0.0;
       duckEnv_ = 0.0f;
       busFade_ = 1.0f;
+      undamped_ = 0.0f;
+      driveAmt_ = 0.0f;
+      echoAmt_ = 1.0f;
       first_ = true;
    }
 
@@ -650,6 +662,8 @@ public:
       const double apDriftCents = std::min(1.0, motion) * kApDriftCents + 29.0 * wild * wild;
       const double driftRate = 1.0 + 3.0 * wild;
       const int bodies = std::clamp(c.bodies, 1, kMaxBodies);
+      driftSpeed_ = first_ ? (freeze ? 0.0 : 1.0)
+                           : std::clamp(driftSpeed_ + (freeze ? -1.0 : 1.0) * kControlTick / (0.5 * sr_), 0.0, 1.0);
       double loss = 0.0;
       for (int k = 0; k < kLines; ++k) {
          const double seconds = std::min(kMaxLineSeconds - 0.01, size * kLineMs[k] * 0.001);
@@ -658,12 +672,22 @@ public:
          targetApLength_[k] = static_cast<float>(apSeconds * sr_);
          const double ap2Seconds = std::min(2.0, size) * kTankAp2Ms[k] * 0.001;
          targetApLength2_[k] = static_cast<float>(ap2Seconds * sr_);
+         if (freeze && driftSpeed_ == 0.0) {
+            // Once the drift has stopped, every read lands on a whole sample (a fraction of a sample
+            // less than the length asked for at most), where reading between samples can't dull it.
+            const auto whole = [](float length, float drift) { return std::round(length + drift) - drift; };
+            targetLength_[k] = whole(targetLength_[k], drift_[k].value());
+            targetApLength_[k] = whole(targetApLength_[k], apDrift_[k].value());
+            targetApLength2_[k] = std::round(targetApLength2_[k]);
+         }
          const double loop = seconds + apSeconds + ap2Seconds;
          const double mid = std::pow(10.0, -3.0 * loop / rt);
          const double bass = std::min(0.9999, std::pow(10.0, -3.0 * loop / (rt * c.bassMult)));
          loss += 1.0 - std::max(mid, bass);
-         gainMid_[k].set(static_cast<float>(freeze ? 0.99995 : mid));
-         gainBass_[k].set(static_cast<float>(freeze ? 0.99995 : bass));
+         // Frozen, the loop neither loses nor gains: the allpasses and the mix are lossless, so the
+         // tail holds its level and colour for as long as Freeze stays on.
+         gainMid_[k].set(static_cast<float>(freeze ? 1.0 : mid));
+         gainBass_[k].set(static_cast<float>(freeze ? 1.0 : bass));
          bassLp_[k].setCutoff(c.bassXover, sr_);
          const int b = (k / 2) % bodies;
          // A body's tone moves its lines' treble damping by up to an octave each way, so a dark body's
@@ -671,11 +695,13 @@ public:
          // Past +-1, up to three octaves.
          const double tone = std::clamp(c.tone[b], -2.0, 2.0);
          const double octaves = tone * (1.0 + 0.5 * std::max(0.0, std::fabs(tone) - 1.0));
-         highLp_[k].setCutoff(freeze ? 0.45 * sr_ : std::clamp(c.dampHigh * std::exp2(octaves), 300.0, 0.45 * sr_), sr_);
+         highLp_[k].setCutoff(std::clamp(c.dampHigh * std::exp2(octaves), 300.0, 0.45 * sr_), sr_);
          // Motion is how far the lines drift, as pitch. A swing never reaches past half a line's
          // length, so even the wildest drift reads only what was written.
-         drift_[k].set(kDriftHz[k] * driftRate, driftCents, sr_, 0.45 * targetLength_[k]);
-         apDrift_[k].set(kApDriftHz[k] * driftRate, apDriftCents, sr_, 0.45 * targetApLength_[k]);
+         // Frozen, the drift slows to a stop where it is: a moving read point between samples loses
+         // a little treble on every pass.
+         drift_[k].set(kDriftHz[k] * driftRate, driftCents, sr_, 0.45 * targetLength_[k], driftSpeed_);
+         apDrift_[k].set(kApDriftHz[k] * driftRate, apDriftCents, sr_, 0.45 * targetApLength_[k], driftSpeed_);
          // The body's phase sweep also nudges the gains of the allpasses in its lines. Neither that
          // nor its phaser changes a line's length, so nothing bends pitch.
          targetApOffset_[k] = static_cast<float>(kPhaseLoopDepth * std::clamp(c.swirlDepth, 0.0, 2.0) *
@@ -792,6 +818,13 @@ public:
                ap.length = ap.aim = ap.target;
          }
          reverseWindow_ = targetReverseWindow_;
+         driveSlot_ = c.driveWhere;
+         driveType_ = c.driveType;
+         for (auto &d : drive_)
+            d.setMode(driveType_, driveSlot_ == DriveWhere::Loop);
+         driveAmt_ = c.driveOn ? 1.0f : 0.0f;
+         echoSlot_ = c.echoWhere;
+         echoAmt_ = 1.0f;
          predelaySamples_ = aimPredelay_ = targetPredelay_;
          earlySize_ = aimEarlySize_ = targetEarlySize_;
          for (detail::Ramp &r : gainMid_)
@@ -809,19 +842,33 @@ public:
    void process(float inL, float inR, float &outL, float &outR, float &lateLevel) {
       const float dryL = inL, dryR = inR;
       float x[2] = {lowCut_[0].process(highCut_[0].process(inL)), lowCut_[1].process(highCut_[1].process(inR))};
-      const bool pre = c_.driveOn && c_.driveWhere == DriveWhere::Pre;
-      const bool loop = c_.driveOn && c_.driveWhere == DriveWhere::Loop;
-      const bool post = c_.driveOn && c_.driveWhere == DriveWhere::Post;
-      if (pre)
+      // Drive On, its slot and its type, and the echo's slot, never switch in one sample: the drive
+      // fades out (over 5 ms) before its slot or type changes and back in after, and fades in from
+      // a cleared start when it comes on; the echo fades its input and output the same way when it
+      // moves, so no step is written into its repeats either.
+      stepSlots();
+      // Eased, so the fade has no corners: a linear one bends the waveform where it starts and stops.
+      const auto ease = [](float t) { return t * t * (3.0f - 2.0f * t); };
+      const float driveAmt = ease(driveAmt_);
+      const auto drive = [&](float *v) {
          for (int ch = 0; ch < 2; ++ch)
-            x[ch] = drive_[ch].process(x[ch]);
+            v[ch] += driveAmt * (drive_[ch].process(v[ch]) - v[ch]);
+      };
+      const bool driving = driveAmt > 0.0f;
+      const bool pre = driving && driveSlot_ == DriveWhere::Pre;
+      const bool loop = driving && driveSlot_ == DriveWhere::Loop;
+      const bool post = driving && driveSlot_ == DriveWhere::Post;
+      if (pre)
+         drive(x);
       // The echo runs every sample in whichever slot it sits, even switched off (its mix is then
       // zero), so turning it back on never replays repeats from long ago.
-      const float echoMix = echoMix_.next();
-      const EchoWhere echoWhere = c_.echoWhere;
+      const float echoAmt = ease(echoAmt_);
+      const float echoMix = echoMix_.next() * echoAmt;
+      const EchoWhere echoWhere = echoSlot_;
       float echoed[2] = {0.0f, 0.0f};
       if (echoWhere == EchoWhere::Into) {
-         echo_.process(x, echoed);
+         const float in[2] = {x[0] * echoAmt, x[1] * echoAmt};
+         echo_.process(in, echoed);
          for (int ch = 0; ch < 2; ++ch)
             x[ch] += echoMix * echoed[ch];
       }
@@ -864,6 +911,8 @@ public:
       // The tank. Each line is read with its drift, through the allpass inside it, then damped.
       float y[kLines], o[kLines];
       const float apGain = tankApGain_.next();
+      undamped_ += std::clamp((c_.freeze ? 1.0f : 0.0f) - undamped_, -freezeFadeStep_, freezeFadeStep_);
+      const float undamped = undamped_;
       for (int k = 0; k < kLines; ++k) {
          aimLength_[k] += easeGlide_ * (targetLength_[k] - aimLength_[k]);
          aimApLength_[k] += easeGlide_ * (targetApLength_[k] - aimApLength_[k]);
@@ -889,7 +938,9 @@ public:
          // out above both near the crossover, and at long decays the tank then grows.
          const float gMid = gainMid_[k].next(), gBass = gainBass_[k].next();
          const float shelved = gMid * v + (gBass - gMid) * bassLp_[k].lowpass(v);
-         o[k] = highLp_[k].lowpass(shelved);
+         // Frozen, the damping fades out (over freezeFade_), or every pass would darken the tail.
+         const float damped = highLp_[k].lowpass(shelved);
+         o[k] = damped + undamped * (shelved - damped);
       }
       // A 16 x 16 Hadamard mix: every line feeds every other equally and no energy is gained or lost.
       for (int h = 1; h < kLines; h *= 2)
@@ -909,7 +960,8 @@ public:
       float late[2] = {0.0f, 0.0f}, plain[2] = {0.0f, 0.0f};
       for (int b = 0; b < delayBodies_; ++b) {
          float l, r;
-         voice_[b].process(bus[b][0], bus[b][1], l, r);
+         const float g = busGain(b, delayBodies_);
+         voice_[b].process(g * bus[b][0], g * bus[b][1], l, r);
          late[0] += l;
          late[1] += r;
          plain[0] += bus[b][0];
@@ -924,7 +976,8 @@ public:
             oldBus[(k / 2) % oldBodies_][k & 1] += kOutSign[k] * y[k];
          for (int b = 0; b < oldBodies_; ++b) {
             float l, r;
-            oldVoice_[b].process(oldBus[b][0], oldBus[b][1], l, r);
+            const float g = busGain(b, oldBodies_);
+            oldVoice_[b].process(g * oldBus[b][0], g * oldBus[b][1], l, r);
             old[0] += l;
             old[1] += r;
          }
@@ -944,7 +997,7 @@ public:
       for (int ch = 0; ch < 2; ++ch) {
          float v = plain[ch];
          if (loop)
-            v = drive_[ch].process(v);
+            v += driveAmt * (drive_[ch].process(v) - v);
          v = loopHp_[ch].highpass(v);
          const float shifted = shifter_[ch].process(v, pitchRatio_);
          v += shimmer * (shifted - v);
@@ -960,7 +1013,8 @@ public:
       if (echoWhere == EchoWhere::Loop) {
          // Echoes of the shaped tail go back into the tank, so it returns in long, spaced passes,
          // even with Feedback at zero. The safety stage below keeps the two loops bounded.
-         echo_.process(loopPre_, echoed);
+         const float in[2] = {loopPre_[0] * echoAmt, loopPre_[1] * echoAmt};
+         echo_.process(in, echoed);
          for (int ch = 0; ch < 2; ++ch)
             loopTail_[ch] += 0.6f * echoMix * inGain * loopScale * echoed[ch];
       }
@@ -973,10 +1027,10 @@ public:
       const float eg = earlyGain_.next(), lg = lateGain_.next();
       float wet[2] = {early[0] * eg + late[0] * lg, early[1] * eg + late[1] * lg};
       if (post)
-         for (int ch = 0; ch < 2; ++ch)
-            wet[ch] = drive_[ch].process(wet[ch]);
+         drive(wet);
       if (echoWhere == EchoWhere::After) {
-         echo_.process(wet, echoed);
+         const float in[2] = {wet[0] * echoAmt, wet[1] * echoAmt};
+         echo_.process(in, echoed);
          for (int ch = 0; ch < 2; ++ch)
             wet[ch] += echoMix * echoed[ch];
       }
@@ -989,6 +1043,36 @@ public:
       outL = (dryL * dg + (mid + side) * wg) * lv;
       outR = (dryR * dg + (mid - side) * wg) * lv;
       lateLevel = std::max(std::fabs(late[0]), std::fabs(late[1]));
+   }
+
+   // The eight line pairs don't share out evenly among three, five or six bodies (five gives three
+   // bodies two pairs and two bodies one), so each body's voice is levelled by how many it has:
+   // every body is heard equally loud, as with two or four.
+   static float busGain(int b, int bodies) {
+      constexpr int kPairs = kLines / 2;
+      const int pairs = kPairs / bodies + (b < kPairs % bodies ? 1 : 0);
+      return static_cast<float>(std::sqrt(static_cast<double>(kPairs) / bodies / pairs));
+   }
+
+   // Moves the drive's and the echo's fades one sample on. Each fades out when what it should be
+   // differs from what it is, switches once silent, and fades back in.
+   void stepSlots() {
+      const bool driveMatches = driveSlot_ == c_.driveWhere && driveType_ == c_.driveType;
+      if (driveAmt_ == 0.0f && !driveMatches) {
+         driveSlot_ = c_.driveWhere;
+         driveType_ = c_.driveType;
+         for (auto &d : drive_)
+            d.setMode(driveType_, driveSlot_ == DriveWhere::Loop);
+      }
+      const float driveTarget = c_.driveOn && driveMatches ? 1.0f : 0.0f;
+      if (driveAmt_ == 0.0f && driveTarget > 0.0f)
+         // Starting from silence: whatever its filters and oversampler held from last time is stale.
+         for (auto &d : drive_)
+            d.reset();
+      driveAmt_ += std::clamp(driveTarget - driveAmt_, -slotStep_, slotStep_);
+      if (echoAmt_ == 0.0f && echoSlot_ != c_.echoWhere)
+         echoSlot_ = c_.echoWhere;
+      echoAmt_ += std::clamp((echoSlot_ == c_.echoWhere ? 1.0f : 0.0f) - echoAmt_, -slotStep_, slotStep_);
    }
 
    // The mean length of body b's lines, in milliseconds, for the panel's readout.
@@ -1080,6 +1164,15 @@ private:
    // How far a body-count crossfade has got (1 when there's none), and how far it moves a sample.
    // oldVoice_ holds the voices as they were before the change.
    float busFade_ = 1.0f, busFadeStep_ = 0.0005f;
+   // How far Freeze has faded the tank's damping out (0..1), and its step per sample.
+   float undamped_ = 0.0f, freezeFadeStep_ = 0.0005f;
+   // How fast the tank's drift swings (1, slowing to 0 over half a second while frozen).
+   double driftSpeed_ = 1.0;
+   // The drive's and echo's slot fades (0..1) and the slot and type each is really in.
+   float driveAmt_ = 0.0f, echoAmt_ = 1.0f, slotStep_ = 0.004f;
+   DriveWhere driveSlot_ = DriveWhere::Loop;
+   DriveType driveType_ = DriveType::Tube;
+   EchoWhere echoSlot_ = EchoWhere::Into;
    double bodyPan_[kMaxBodies] = {}, bodyTone_[kMaxBodies] = {}, bodySwirl_[kMaxBodies] = {}, lastPhase_[kMaxBodies] = {};
 
    static constexpr float kPredelaySlew = 0.5f;

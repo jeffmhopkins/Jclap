@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -208,23 +209,38 @@ inline std::filesystem::path userPresetFolder() {
 #endif
 }
 
-constexpr const char *kPresetHeader = "JVerb preset 1";
+// Version 2 from 0.7.0. Version 1 files come from 0.4.x (69 params, the old body targets) or from
+// 0.5.0 and 0.6.0 (more params, today's targets); which one shows in how many params they list.
+constexpr const char *kPresetHeader = "JVerb preset 2";
+constexpr const char *kPresetHeaderPrefix = "JVerb preset ";
 constexpr const char *kPresetExtension = ".jvpreset";
 
 // Reads a user preset; false if the file isn't one.
 inline bool readPreset(const std::filesystem::path &file, Preset &out) {
    std::ifstream in(file);
    std::string line;
-   if (!in || !std::getline(in, line) || line.rfind(kPresetHeader, 0) != 0)
+   if (!in || !std::getline(in, line) || line.rfind(kPresetHeaderPrefix, 0) != 0)
+      return false;
+   const int version = std::atoi(line.c_str() + std::strlen(kPresetHeaderPrefix));
+   if (version < 1 || version > 2)
       return false;
    out = {file.stem().string(), "User", {}};
+   bool newer = false;
    while (std::getline(in, line)) {
       std::istringstream fields(line);
       unsigned id = 0;
       double v = 0.0;
-      if (fields >> id >> v && id < kParamCount && std::isfinite(v))
-         out.values.emplace_back(static_cast<clap_id>(id), v);
+      if (fields >> id >> v) {
+         newer = newer || id >= kV1ParamCount;
+         if (id < kParamCount && std::isfinite(v))
+            out.values.emplace_back(static_cast<clap_id>(id), v);
+      }
    }
+   // A 0.4.x file: its body targets meant something else then.
+   if (version == 1 && !newer)
+      for (auto &[id, v] : out.values)
+         if (bodyOf(id) >= 0 && bodyRole(id) == kBody1Target)
+            v = targetFromV1(v);
    return true;
 }
 
