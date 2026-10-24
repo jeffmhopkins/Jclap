@@ -125,7 +125,7 @@ struct ParamTable {
          {kSize, "System Size", "Space", 0.25, 4.0, 1.0, kMod},
          {kGravity, "Gravity", "Space", 0.25, 4.0, 1.0, kMod},
          {kBodies, "Bodies", "Space", 2.0, 6.0, 3.0, kToggle},
-         {kMotion, "Motion", "Space", 0.0, 1.0, 0.4, kMod},
+         {kMotion, "Motion", "Space", 0.0, 2.0, 0.4, kMod},
          {kAttack, "Attack", "Space", -1.0, 1.0, 0.0, kMod},
          {kDiffusion, "Diffusion", "Space", 0.0, 1.0, 0.7, kMod},
          {kEarlyLate, "Early/Late", "Space", 0.0, 1.0, 0.75, kMod},
@@ -181,9 +181,9 @@ struct ParamTable {
          {kDuck, "Duck", "Output", 0.0, 1.0, 0.0, kMod},
          {kMix, "Mix", "Output", 0.0, 1.0, 0.35, kMod},
          {kLevel, "Level", "Output", -24.0, 12.0, 0.0, kMod},
-         {kOrbitPan, "Orbit Pan", "Orbit", 0.0, 1.0, 0.75, kMod},
-         {kOrbitTone, "Orbit Tone", "Orbit", 0.0, 1.0, 0.6, kMod},
-         {kOrbitSwirl, "Orbit Swirl", "Orbit", 0.0, 1.0, 0.6, kMod},
+         {kOrbitPan, "Orbit Pan", "Orbit", 0.0, 2.0, 0.75, kMod},
+         {kOrbitTone, "Orbit Tone", "Orbit", 0.0, 2.0, 0.6, kMod},
+         {kOrbitSwirl, "Orbit Swirl", "Orbit", 0.0, 2.0, 0.6, kMod},
       };
       for (const auto &d : tail)
          defs[d.id] = d;

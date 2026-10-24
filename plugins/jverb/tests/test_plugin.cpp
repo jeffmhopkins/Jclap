@@ -151,7 +151,7 @@ int main() {
    }
 
    // Pushed as hard as it goes, at every body count: feedback past 100%, the loop drive, shimmer,
-   // the echo in the loop past 100%, then freeze. It stays finite and bounded.
+   // the echo in the loop past 100%, every modulation at its extreme, then freeze. It stays finite and bounded.
    for (int bodies = 2; bodies <= kMaxBodies; ++bodies) {
       jclap::core::TestHost h(clap_entry, kId, kRate);
       h.setParam(kBodies, bodies);
@@ -167,6 +167,10 @@ int main() {
       h.setParam(kEchoTime, 120.0);
       h.setParam(kGravity, 4.0);
       h.setParam(kReact, 1.0);
+      h.setParam(kMotion, 2.0);
+      h.setParam(kOrbitPan, 2.0);
+      h.setParam(kOrbitTone, 2.0);
+      h.setParam(kOrbitSwirl, 2.0);
       h.setParam(kMix, 1.0);
       Noise noise;
       std::vector<float> inL(static_cast<size_t>(3 * kRate)), inR(inL.size()), outL, outR;

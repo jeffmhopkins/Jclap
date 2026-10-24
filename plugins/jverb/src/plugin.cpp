@@ -509,13 +509,15 @@ private:
       c.panDepth = value(kOrbitPan);
       c.swirlDepth = value(kOrbitSwirl);
       const double orbitTone = value(kOrbitTone);
+      const double sweeps = 2.0 + std::round(6.0 * std::max(0.0, c.swirlDepth - 1.0));
       for (int b = 0; b < n; ++b) {
          const OrbitSim::Body &body = sim_.body(b);
          c.pan[b] = std::clamp(body.x / 1.3, -1.0, 1.0);
          // Bright near the centre of mass, dark out on the swing (rest distance is about 0.9).
          c.tone[b] = orbitTone * std::clamp(1.2 * (1.0 - sim_.radius(b) / 0.9), -1.0, 1.0);
-         // Twice round the phaser's sweep per lap, so it swirls as fast as the body goes round.
-         c.phase[b] = std::sin(2.0 * std::atan2(body.y, body.x));
+         // Twice round the phaser's sweep per lap, so it swirls as fast as the body goes round; past
+         // full Swirl, up to eight times (a whole number, so the sweep stays smooth as the angle wraps).
+         c.phase[b] = std::sin(sweeps * std::atan2(body.y, body.x));
          const double closeness = 1.0 / (1.0 + sim_.nearest(b) / 0.25);
          const double raw = std::clamp(std::tanh(1.5 * (sim_.speed(b) / meanSpeed - 1.0)) + closeness, -1.0, 1.0);
          signal_[b] += smooth * (raw - signal_[b]);
