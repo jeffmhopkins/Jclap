@@ -70,14 +70,13 @@ void DesignFrame::mouseDown(const visage::MouseEvent &e) {
    for (size_t i = 0; i < zoomLevels.size(); ++i) {
       const int percent = static_cast<int>(std::lround(zoomLevels[i] * 100.0f));
       sizes.addOption(static_cast<int>(i), std::to_string(percent) + "%")
-         .select(std::fabs(zoomLevels[i] - currentZoom) < 0.001f);
+         .select(std::fabs(zoomLevels[i] - currentZoom) < 0.005f);
    }
    menu.addSubMenu(sizes);
    menu.onSelection() += [this](int id) {
-      if (id >= 0 && id < static_cast<int>(zoomLevels.size())) {
-         currentZoom = zoomLevels[id];
-         onZoom(currentZoom);
-      }
+      // The window resizes only if the host agrees, and sets currentZoom when it does.
+      if (id >= 0 && id < static_cast<int>(zoomLevels.size()))
+         onZoom(zoomLevels[id]);
    };
    menu.show(this, e.position);
 }

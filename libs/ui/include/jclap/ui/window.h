@@ -19,9 +19,15 @@ struct WindowOptions {
    int height = 600;
    // Keep width:height while the host resizes the window.
    bool fixedAspectRatio = true;
-   // Smallest size, as a fraction of the initial one.
+   // Smallest and largest size, as a fraction of the initial one. Sizes are also capped at
+   // kMaxWindowPixels a side, so the GPU never gets a texture it can't make.
    float minimumScale = 0.5f;
+   float maximumScale = 4.0f;
 };
+
+// Largest window side in physical pixels. GPUs back to D3D 10 / GL 4 / Metal on Intel Macs
+// support textures at least this big.
+constexpr int kMaxWindowPixels = 8192;
 
 class Window {
 public:
@@ -36,20 +42,31 @@ public:
    // Sizes in the units the CLAP host expects (logical points on macOS, pixels elsewhere).
    uint32_t width() const;
    uint32_t height() const;
-   void setSize(uint32_t width, uint32_t height);
+   // Applies a size the host chose. Returns false, and keeps the current size, if it is outside the
+   // minimum and maximum (a host should pass it through adjustSize first).
+   bool setSize(uint32_t width, uint32_t height);
+   // Makes a size usable: the largest one that fits in it at the initial aspect ratio (when fixed),
+   // within the minimum and maximum.
    void adjustSize(uint32_t *width, uint32_t *height) const;
-   // Resizes to `zoom` times the initial size and asks the host to follow. A DesignFrame root offers
-   // this in its background right-click menu.
+   // Asks the host for `zoom` times the initial size (through onResizeRequest), and resizes only if
+   // it agrees. A DesignFrame root offers this in its background right-click menu.
    void setZoom(float zoom);
 
    // Linux only: the X11 connection fd the host polls for us.
    int posixFd() const;
    void processFdEvents();
 
-   // Called when the window wants the host to resize it.
-   std::function<void()> onResizeRequest;
+   // Called when the window wants the host to resize it (zoom only, never for a resize the host
+   // made). Returns whether to go ahead; with no handler the window resizes by itself.
+   std::function<bool(uint32_t width, uint32_t height)> onResizeRequest;
 
 private:
+   struct Limits {
+      int64_t minWidth, minHeight, maxWidth, maxHeight;
+   };
+   Limits limits() const;
+   void layoutRoot();
+
    struct Impl;
    std::unique_ptr<Impl> impl_;
 };

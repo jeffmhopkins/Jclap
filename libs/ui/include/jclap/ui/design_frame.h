@@ -12,6 +12,7 @@
 //       }
 //    };
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -47,8 +48,9 @@ public:
 
    float designWidth() const { return designWidth_; }
    float designHeight() const { return designHeight_; }
-   // Pixels per design unit.
-   float scale() const { return width() / designWidth_; }
+   // Pixels per design unit: the largest that fits both ways, so nothing is cut off when the frame
+   // has another aspect ratio (Window centres the frame and keeps its shape).
+   float scale() const { return std::min(width() / designWidth_, height() / designHeight_); }
 
    // Creates a child at `bounds` (design units). The panel owns it; children draw in the order added.
    template <typename T, typename... Args>
@@ -69,6 +71,7 @@ public:
    // When set, right-clicking the background offers these UI sizes (1.0 = design size).
    std::function<void(float)> onZoom;
    std::vector<float> zoomLevels = {0.75f, 1.0f, 1.25f, 1.5f, 2.0f};
+   // The size shown as ticked. Window keeps it in step with the size the window really has.
    float currentZoom = 1.0f;
 
    void resized() override;
