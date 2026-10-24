@@ -1,7 +1,7 @@
 // JVerb: an algorithmic reverb modulated by a live gravity simulation. Two to six bodies orbit each
-// other (orbit.h); each owns a pair of the reverb's delay lines (engine.h), so its distance from the
-// centre of mass is heard as the size of its part of the space and its motion as Doppler. Each body
-// can also be routed to one more destination, and transients in the input can kick the bodies.
+// other (orbit.h); each pans its share of the reverb's sixteen delay lines (engine.h), so the tail
+// swirls around the stereo field as the orbit turns. Each body can also be routed to one more
+// destination, and transients in the input can kick the bodies.
 //
 // Threads: the audio thread owns the sim and the engine. Once every 32 samples (a control tick) it
 // reads the params, steps the sim and updates the engine; every few ticks it publishes an
@@ -492,7 +492,8 @@ private:
       if (!sim_.finite())
          restartSim();
 
-      // What each body sends: its left/right position, and a modulation signal from its speed
+      // What each body sends: its left/right position, its tone and phase for its share of the tail
+      // (as deep as the Orbit Pan, Tone and Swirl knobs say), and a modulation signal from its speed
       // relative to the others and how close its nearest neighbour is (smoothed over about 60 ms).
       // The signal moves only the param the body's card routes it to, and that param's knob shows
       // the movement, so nothing changes the sound that the panel doesn't show.
@@ -505,8 +506,18 @@ private:
       double offsets[static_cast<int>(Target::Count)] = {};
       Control c;
       c.bodies = n;
+      c.panDepth = value(kOrbitPan);
+      c.swirlDepth = value(kOrbitSwirl);
+      const double orbitTone = value(kOrbitTone);
+      const double sweeps = 2.0 + std::round(6.0 * std::max(0.0, c.swirlDepth - 1.0));
       for (int b = 0; b < n; ++b) {
-         c.pan[b] = std::clamp(sim_.body(b).x / 1.3, -1.0, 1.0);
+         const OrbitSim::Body &body = sim_.body(b);
+         c.pan[b] = std::clamp(body.x / 1.3, -1.0, 1.0);
+         // Bright near the centre of mass, dark out on the swing (rest distance is about 0.9).
+         c.tone[b] = orbitTone * std::clamp(1.2 * (1.0 - sim_.radius(b) / 0.9), -1.0, 1.0);
+         // Twice round the phaser's sweep per lap, so it swirls as fast as the body goes round; past
+         // full Swirl, up to eight times (a whole number, so the sweep stays smooth as the angle wraps).
+         c.phase[b] = std::sin(sweeps * std::atan2(body.y, body.x));
          const double closeness = 1.0 / (1.0 + sim_.nearest(b) / 0.25);
          const double raw = std::clamp(std::tanh(1.5 * (sim_.speed(b) / meanSpeed - 1.0)) + closeness, -1.0, 1.0);
          signal_[b] += smooth * (raw - signal_[b]);
@@ -593,6 +604,9 @@ private:
          f.vy[b] = static_cast<float>(body.vy);
          f.mass[b] = static_cast<float>(mass[b]);
          f.signal[b] = static_cast<float>(signal_[b]);
+         f.voicePan[b] = static_cast<float>(engine_.bodyPan(b));
+         f.voiceTone[b] = static_cast<float>(engine_.bodyTone(b));
+         f.voiceSwirl[b] = static_cast<float>(engine_.bodySwirl(b));
          f.target[b] = static_cast<uint8_t>(std::clamp(choice(bodyParam(b, kBody1Target)), 0, static_cast<int>(Target::Count) - 1));
          f.amount[b] = static_cast<float>(value(bodyParam(b, kBody1Amount)));
       }

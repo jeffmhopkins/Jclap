@@ -42,6 +42,13 @@ void Knob::draw(visage::Canvas &canvas) {
                  0.5f * std::fabs(angle - from), true);
    }
 
+   if (hasMarker_) {
+      const float ma = angleFor(marker_), mx = std::sin(ma), my = -std::cos(ma);
+      const float r0 = d * 0.5f + 1.5f * s, r1 = d * 0.5f + 6.0f * s;
+      canvas.setColor(t.dimText);
+      canvas.segment(cx + mx * r0, cy + my * r0, cx + mx * r1, cy + my * r1, 1.5f * s, true);
+   }
+
    // Modulation: a thin outer arc from the knob's setting to the value in use.
    const float modAngle = angleFor(modulatedValue());
    if (std::fabs(modAngle - angle) > 0.01f) {

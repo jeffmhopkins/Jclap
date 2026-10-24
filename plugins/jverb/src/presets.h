@@ -2,12 +2,11 @@
 
 // JVerb's presets: a factory bank compiled in, and the user's own saved as small text files.
 //
-// A factory preset lists only what it changes from the defaults, so presets stay short and
-// readable; loading one still sets every param, the rest to their defaults, so nothing from the
-// previous sound (a body's routing, say) carries over. A user preset saves every param. Loading
-// one is a normal edit of every param (the
-// host sees each change, and can undo it) followed by a restart of the orbits from the new masses
-// and velocities.
+// A factory preset is written as what it changes from the defaults, so the bank stays readable,
+// then filled out with every other param at its default, so it holds the whole sound and nothing
+// from the previous one (a body's routing, say) carries over. A user preset saves every param.
+// Loading one is a normal edit of every param (the host sees each change, and can undo it)
+// followed by a restart of the orbits from the new masses and velocities.
 //
 // A user preset file is plain text: a "JVerb preset 1" line, then one "<param id> <value>" per line.
 
@@ -51,87 +50,128 @@ inline const std::vector<Preset> &factoryPresets() {
       constexpr double kTape = 0, kTube = 1, kFuzz = 2, kFold = 3, kCrush = 4;
       std::vector<Preset> p;
 
-      p.push_back({"Init", "Basics", {}});
-      p.push_back({"Small Orbit", "Basics",
-                   {{kDecay, 0.9}, {kSize, 0.4}, {kBodies, 4}, {kMotion, 0.2}, {kDiffusion, 0.8}, {kEarlyLate, 0.55},
+      // Ordered by length, from tight rooms to washes that ring for most of a minute.
+      p.push_back({"Init", "Short", {}});
+      p.push_back({"Tight Booth", "Short",
+                   {{kDecay, 0.35}, {kSize, 0.25}, {kMotion, 0.1}, {kDiffusion, 0.6}, {kEarlyLate, 0.35},
+                    {kPredelay, 0}, {kDampHigh, 9000}, {kSmear, 0.1}, {kMix, 0.2}}});
+      p.push_back({"Wood Room", "Short",
+                   {{kDecay, 0.7}, {kSize, 0.35}, {kMotion, 0.15}, {kDiffusion, 0.75}, {kEarlyLate, 0.5},
+                    {kPredelay, 3}, {kDampHigh, 6500}, {kBassMult, 0.9}, {kSmear, 0.15}, {kMix, 0.25}}});
+      p.push_back({"Small Orbit", "Short",
+                   {{kDecay, 1.0}, {kSize, 0.45}, {kBodies, 4}, {kMotion, 0.25}, {kDiffusion, 0.8}, {kEarlyLate, 0.55},
                     {kPredelay, 4}, {kDampHigh, 9500}, {kMix, 0.25}}});
-      p.push_back({"Figure-Eight Plate", "Basics",
-                   {{kDecay, 2.6}, {kSize, 0.6}, {kMotion, 0.25}, {kDiffusion, 0.95}, {kEarlyLate, 0.95},
-                    {kPredelay, 10}, {kDampHigh, 12500}, {kLowCut, 120}, {kMix, 0.3}}});
-      p.push_back({"Cathedral Drift", "Basics",
-                   {{kDecay, 11}, {kSize, 2.6}, {kGravity, 0.7}, {kMotion, 0.5}, {kPredelay, 45}, {kDampHigh, 5200},
-                    {kBassMult, 1.5}, {kEarlyLate, 0.85}, {kMix, 0.4}}});
-      p.push_back({"Binary Star", "Basics",
-                   with({{kDecay, 3.2}, {kBodies, 2}, {kMotion, 0.7}, {kSize, 1.2}, {kMix, 0.35},
-                         body(0, kBody1Mass, 1.4), body(1, kBody1Mass, 1.1)},
-                        target(1, Target::Width, 0.6))});
-
-      p.push_back({"Deep Field", "Ambient",
-                   {{kDecay, 28}, {kSize, 3.4}, {kGravity, 0.5}, {kBodies, 6}, {kMotion, 0.75}, {kAttack, 0.35},
-                    {kDampHigh, 6000}, {kBassMult, 1.1}, {kPredelay, 60}, {kMix, 0.5}}});
-      p.push_back({"Shimmer Halo", "Ambient",
-                   {{kDecay, 8}, {kSize, 2}, {kShimmer, 0.45}, {kFeedback, 0.9}, {kShimmerPitch, 12}, {kTilt, 0.2},
-                    {kAttack, 0.3}, {kMix, 0.42}}});
-      p.push_back({"Octave Under", "Ambient",
-                   {{kDecay, 10}, {kSize, 2.4}, {kShimmer, 0.4}, {kShimmerPitch, -12}, {kFeedback, 0.85},
-                    {kDampHigh, 4000}, {kMix, 0.4}}});
-      p.push_back({"Swell Machine", "Ambient",
-                   {{kDecay, 6}, {kSize, 1.6}, {kAttack, 0.85}, {kDiffusion, 0.9}, {kMotion, 0.5}, {kMix, 0.45}}});
-      p.push_back({"Slow Ballet", "Ambient",
-                   {{kDecay, 7}, {kSize, 1.8}, {kGravity, 0.35}, {kMotion, 0.65}, {kSmear, 0.6}, {kMix, 0.4}}});
-      p.push_back({"Frozen Ring", "Ambient",
-                   {{kDecay, 45}, {kSize, 3}, {kDiffusion, 0.9}, {kDampHigh, 8000}, {kMotion, 0.3}, {kMix, 0.6},
-                    {kDuck, 0.3}}});
-
-      p.push_back({"Dotted Echo Hall", "Echo",
-                   {{kEchoOn, 1}, {kEchoWhere, kInto}, {kEchoSync, 6}, {kEchoFeedback, 0.45}, {kEchoMix, 0.55},
-                    {kDecay, 3}, {kSize, 1.4}, {kMix, 0.35}}});
-      p.push_back({"Ping-Pong Space", "Echo",
-                   {{kEchoOn, 1}, {kEchoWhere, kAfter}, {kEchoSync, 7}, {kEchoFeedback, 0.5}, {kEchoPingPong, 1},
-                    {kEchoMix, 0.5}, {kDecay, 2.5}, {kMix, 0.4}}});
-      p.push_back({"Tape Loop Orbit", "Echo",
-                   with({{kEchoOn, 1}, {kEchoWhere, kLoopSlot}, {kEchoSync, 12}, {kEchoFeedback, 0.35},
-                         {kEchoTone, -0.5}, {kEchoMix, 0.8}, {kDriveOn, 1}, {kDriveWhere, kInLoop},
-                         {kDriveType, kTape}, {kDrive, 8}, {kFeedback, 0.65}, {kDecay, 5}, {kMix, 0.45}},
-                        target(2, Target::Tilt, 0.25))});
-      p.push_back({"Infinite Return", "Echo",
-                   {{kEchoOn, 1}, {kEchoWhere, kLoopSlot}, {kEchoSync, 10}, {kEchoFeedback, 0.7}, {kEchoMix, 0.7},
-                    {kFeedback, 0.7}, {kShimmer, 0.2}, {kDecay, 8}, {kSize, 2}, {kMix, 0.45}}});
-      p.push_back({"Swirling Slapback", "Echo",
+      p.push_back({"Drum Reactor", "Short",
+                   with({{kReact, 1}, {kDecay, 1.2}, {kSize, 0.6}, {kMotion, 0.3}, {kEarlyLate, 0.6}, {kDuck, 0.4},
+                         {kLowCut, 90}, {kMix, 0.3}},
+                        target(0, Target::Damping, 0.4))});
+      p.push_back({"Swirling Slapback", "Short",
                    with({{kEchoOn, 1}, {kEchoWhere, kInto}, {kEchoTime, 140}, {kEchoFeedback, 0.25},
                          {kEchoPingPong, 0}, {kEchoTone, 0.2}, {kEchoMix, 0.7}, {kDecay, 1.4}, {kSize, 0.7},
                          {kMix, 0.3}},
                         target(0, Target::Damping, 0.5))});
+      p.push_back({"Hot Input", "Short",
+                   {{kDriveOn, 1}, {kDriveWhere, kPreSlot}, {kDriveType, kTape}, {kDrive, 15}, {kDriveTone, 0.3},
+                    {kDecay, 1.5}, {kSize, 0.6}, {kMix, 0.35}}});
 
-      p.push_back({"Burning Loop", "Drive",
-                   {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kTube}, {kDrive, 18}, {kFeedback, 0.7},
-                    {kTilt, -0.3}, {kDecay, 5}, {kMix, 0.4}}});
-      p.push_back({"Fuzz Cloud", "Drive",
-                   {{kDriveOn, 1}, {kDriveWhere, kPostSlot}, {kDriveType, kFuzz}, {kDrive, 24}, {kDriveMix, 0.6},
-                    {kDriveTrim, -6}, {kDecay, 7}, {kSize, 2}, {kMix, 0.45}}});
-      p.push_back({"Crushed Satellites", "Drive",
+      p.push_back({"Figure-Eight Plate", "Medium",
+                   {{kDecay, 2.4}, {kSize, 0.6}, {kMotion, 0.35}, {kDiffusion, 0.95}, {kEarlyLate, 0.95},
+                    {kPredelay, 10}, {kDampHigh, 12500}, {kLowCut, 120}, {kMix, 0.3}}});
+      p.push_back({"Ping-Pong Space", "Medium",
+                   {{kEchoOn, 1}, {kEchoWhere, kAfter}, {kEchoSync, 7}, {kEchoFeedback, 0.5}, {kEchoPingPong, 1},
+                    {kEchoMix, 0.5}, {kDecay, 2.5}, {kMix, 0.4}}});
+      p.push_back({"Vocal Hall", "Medium",
+                   {{kDecay, 2.8}, {kSize, 1.3}, {kMotion, 0.4}, {kDiffusion, 0.8}, {kPredelay, 35}, {kDampHigh, 8000},
+                    {kLowCut, 150}, {kDuck, 0.35}, {kMix, 0.28}}});
+      p.push_back({"Dotted Echo Hall", "Medium",
+                   {{kEchoOn, 1}, {kEchoWhere, kInto}, {kEchoSync, 6}, {kEchoFeedback, 0.45}, {kEchoMix, 0.55},
+                    {kDecay, 3}, {kSize, 1.4}, {kMix, 0.35}}});
+      p.push_back({"Binary Star", "Medium",
+                   with({{kDecay, 3.2}, {kBodies, 2}, {kMotion, 0.6}, {kSize, 1.2}, {kMix, 0.35},
+                         body(0, kBody1Mass, 1.4), body(1, kBody1Mass, 1.1)},
+                        target(1, Target::Width, 0.6))});
+      p.push_back({"Synced Orbit", "Medium",
+                   with({{kClock, 1}, {kSyncBars, 2}, {kMotion, 0.6}, {kDecay, 3.5}, {kSize, 1.3}, {kMix, 0.4}},
+                        target(2, Target::Tilt, 0.4))});
+      p.push_back({"Burning Loop", "Medium",
+                   {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kTube}, {kDrive, 18}, {kFeedback, 0.55},
+                    {kTilt, -0.3}, {kDecay, 4}, {kMix, 0.4}}});
+      p.push_back({"Crushed Satellites", "Medium",
                    {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kCrush}, {kDriveBias, 0.5}, {kDrive, 14},
                     {kFeedback, 0.4}, {kBodies, 5}, {kDecay, 4}, {kMix, 0.4}}});
-      p.push_back({"Folded Space", "Drive",
-                   {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kFold}, {kDrive, 20}, {kShimmer, 0.25},
-                    {kFeedback, 0.85}, {kDecay, 6}, {kMix, 0.4}}});
-      p.push_back({"Hot Input", "Drive",
-                   {{kDriveOn, 1}, {kDriveWhere, kPreSlot}, {kDriveType, kTape}, {kDrive, 15}, {kDriveTone, 0.3},
-                    {kDecay, 2.2}, {kMix, 0.35}}});
-
-      p.push_back({"Chaos Engine", "Orbits",
-                   with(with({{kBodies, 6}, {kGravity, 2.5}, {kMotion, 0.9}, {kReact, 0.8}, {kDecay, 4},
+      p.push_back({"Chaos Engine", "Medium",
+                   with(with({{kBodies, 6}, {kGravity, 2.5}, {kMotion, 0.8}, {kReact, 0.8}, {kDecay, 4},
                               {kFeedback, 0.3}, {kMix, 0.45}},
                              target(0, Target::Damping, 0.6)),
                         target(3, Target::Feedback, 0.6))});
-      p.push_back({"Synced Orbit", "Orbits",
-                   {{kClock, 1}, {kSyncBars, 2}, {kMotion, 0.8}, {kDecay, 3.5}, {kMix, 0.4}}});
-      p.push_back({"Heavy Moon", "Orbits",
-                   {{kBodies, 3}, {kMotion, 0.7}, {kDecay, 5}, {kSize, 1.5},
+      p.push_back({"Heavy Moon", "Medium",
+                   {{kBodies, 3}, {kMotion, 0.6}, {kDecay, 5}, {kSize, 1.5},
                     {bodyParam(0, kBody1Mass), 2.8}, {bodyParam(1, kBody1Mass), 0.3}, {bodyParam(2, kBody1Mass), 0.4},
                     {kMix, 0.4}}});
-      p.push_back({"Drum Reactor", "Orbits",
-                   {{kReact, 1}, {kDecay, 1.8}, {kSize, 0.9}, {kMotion, 0.6}, {kDuck, 0.4}, {kMix, 0.3}}});
+
+      p.push_back({"Tape Loop Orbit", "Long",
+                   with({{kEchoOn, 1}, {kEchoWhere, kLoopSlot}, {kEchoSync, 12}, {kEchoFeedback, 0.35},
+                         {kEchoTone, -0.5}, {kEchoMix, 0.8}, {kDriveOn, 1}, {kDriveWhere, kInLoop},
+                         {kDriveType, kTape}, {kDrive, 8}, {kFeedback, 0.65}, {kDecay, 6}, {kSize, 1.6}, {kMix, 0.45}},
+                        target(2, Target::Tilt, 0.25))});
+      p.push_back({"Swell Machine", "Long",
+                   {{kDecay, 6}, {kSize, 1.8}, {kAttack, 0.85}, {kDiffusion, 0.9}, {kMotion, 0.5}, {kMix, 0.45}}});
+      p.push_back({"Fuzz Cloud", "Long",
+                   {{kDriveOn, 1}, {kDriveWhere, kPostSlot}, {kDriveType, kFuzz}, {kDrive, 24}, {kDriveMix, 0.6},
+                    {kDriveTrim, -6}, {kDecay, 7}, {kSize, 2}, {kMix, 0.45}}});
+      p.push_back({"Folded Space", "Long",
+                   {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kFold}, {kDrive, 20}, {kShimmer, 0.25},
+                    {kFeedback, 0.8}, {kDecay, 7}, {kSize, 1.8}, {kMix, 0.4}}});
+      p.push_back({"Slow Ballet", "Long",
+                   {{kDecay, 8}, {kSize, 2}, {kGravity, 0.35}, {kMotion, 0.6}, {kDiffusion, 0.85}, {kSmear, 0.6},
+                    {kMix, 0.4}}});
+      p.push_back({"Shimmer Halo", "Long",
+                   {{kDecay, 9}, {kSize, 2.2}, {kShimmer, 0.45}, {kFeedback, 0.85}, {kShimmerPitch, 12}, {kTilt, 0.2},
+                    {kAttack, 0.3}, {kDiffusion, 0.85}, {kMix, 0.42}}});
+      p.push_back({"Infinite Return", "Long",
+                   {{kEchoOn, 1}, {kEchoWhere, kLoopSlot}, {kEchoSync, 10}, {kEchoFeedback, 0.7}, {kEchoMix, 0.7},
+                    {kFeedback, 0.7}, {kShimmer, 0.2}, {kDecay, 10}, {kSize, 2}, {kMix, 0.45}}});
+      p.push_back({"Octave Under", "Long",
+                   {{kDecay, 10}, {kSize, 2.4}, {kShimmer, 0.4}, {kShimmerPitch, -12}, {kFeedback, 0.8},
+                    {kDampHigh, 4000}, {kMix, 0.4}}});
+      p.push_back({"Cathedral Drift", "Long",
+                   {{kDecay, 13}, {kSize, 2.6}, {kGravity, 0.7}, {kMotion, 0.5}, {kDiffusion, 0.85}, {kPredelay, 45},
+                    {kDampHigh, 5200}, {kBassMult, 1.5}, {kEarlyLate, 0.85}, {kMix, 0.4}}});
+
+      // The washes: big sizes, high diffusion, slow attacks and long decays, for Supermassive-style
+      // pads that keep blooming long after the note.
+      p.push_back({"Nebula", "Washes",
+                   {{kDecay, 22}, {kSize, 3}, {kMotion, 0.55}, {kDiffusion, 0.9}, {kAttack, 0.35}, {kEarlyLate, 0.95},
+                    {kPredelay, 30}, {kDampHigh, 6500}, {kBassMult, 1.1}, {kSmear, 0.5}, {kWidth, 1.3}, {kMix, 0.5}}});
+      p.push_back({"Deep Field", "Washes",
+                   {{kDecay, 30}, {kSize, 3.4}, {kGravity, 0.5}, {kBodies, 6}, {kMotion, 0.6}, {kAttack, 0.4},
+                    {kDiffusion, 0.9}, {kEarlyLate, 0.95}, {kDampHigh, 6000}, {kBassMult, 1.1}, {kPredelay, 60},
+                    {kSmear, 0.45}, {kMix, 0.5}}});
+      p.push_back({"Galaxy Shimmer", "Washes",
+                   {{kDecay, 35}, {kSize, 3.5}, {kMotion, 0.5}, {kDiffusion, 0.95}, {kAttack, 0.5}, {kEarlyLate, 1},
+                    {kPredelay, 40}, {kDampHigh, 7500}, {kShimmer, 0.25}, {kShimmerPitch, 12}, {kFeedback, 0.5},
+                    {kTilt, 0.1}, {kSmear, 0.5}, {kWidth, 1.4}, {kMix, 0.55}}});
+      p.push_back({"Event Horizon", "Washes",
+                   {{kDecay, 45}, {kSize, 4}, {kGravity, 0.4}, {kMotion, 0.7}, {kDiffusion, 1}, {kAttack, 0.6},
+                    {kEarlyLate, 1}, {kPredelay, 80}, {kDampHigh, 4500}, {kBassMult, 1.3}, {kLowCut, 80},
+                    {kSmear, 0.6}, {kWidth, 1.4}, {kDuck, 0.2}, {kMix, 0.6}}});
+      p.push_back({"Dark Matter", "Washes",
+                   {{kDecay, 50}, {kSize, 4}, {kGravity, 0.3}, {kMotion, 0.6}, {kDiffusion, 0.95}, {kAttack, 0.45},
+                    {kEarlyLate, 1}, {kDampHigh, 2500}, {kBassMult, 1.6}, {kShimmer, 0.2}, {kShimmerPitch, -12},
+                    {kFeedback, 0.4}, {kSmear, 0.5}, {kMix, 0.6}}});
+      p.push_back({"Frozen Ring", "Washes",
+                   {{kDecay, 60}, {kSize, 3}, {kMotion, 0.4}, {kDiffusion, 0.9}, {kEarlyLate, 1}, {kDampHigh, 8000},
+                    {kSmear, 0.4}, {kDuck, 0.3}, {kMix, 0.6}}});
+
+      // Every preset lists every setting, the rest at their defaults, so a preset is the whole sound.
+      for (Preset &preset : p) {
+         std::vector<bool> given(kParamCount, false);
+         for (const auto &[id, v] : preset.values)
+            given[id] = true;
+         for (clap_id id = 0; id < kParamCount; ++id)
+            if (!given[id])
+               preset.values.push_back({id, kParams[id].defaultValue});
+      }
 
       return p;
    }();

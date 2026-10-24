@@ -13,21 +13,24 @@ drive you can loop into the tail, and presets.
 
 ## How it sounds the way it does
 
-Every body in the system owns two delay lines in a feedback delay network. As a body swings out from
-the centre of mass its lines stretch, and as it falls back in they shrink, so you hear its orbit as
-slow, never-repeating Doppler drift. Three bodies (the default) start on a figure-eight that slowly
-turns chaotic; add more, up to six, and the network goes from sparse and echoey to dense.
+The tail comes from sixteen delay lines, 29 to 202 ms at System Size 1, each with two allpasses
+inside it and all mixed into each other every pass, so a sound smears into a dense wash within about
+150 ms, and decays run up to a minute. Each line drifts slowly on its
+own, which blurs the resonances the way a chorus would, but never by more than 4 cents a pass, so the
+tail never sounds pitchy. The bodies share out the lines and pan them, so the tail swirls around
+the stereo field as the orbit turns. Three bodies (the default) start on a figure-eight that slowly
+turns chaotic; add more, up to six, and the movement gets busier.
 
 ```
 in -> low/high cut -> [drive PRE] -> [echo INTO] -> predelay + early reflections
    -> diffusion -> attack (swell, or reverse windows)
-   -> tank: 2 lines per body, Householder mix, bass and high damping
+   -> tank: 16 lines, each with a slow drift and two allpasses, Hadamard mix, bass and high damping
    -> outer loop: [drive LOOP] -> shimmer -> smear -> tilt -> feedback -> [echo LOOP] -> safety -> back in
    -> early/late -> [drive POST] -> [echo AFTER] -> duck, width, mix, level -> out
 ```
 
 - **Space**: Decay (RT60), System Size (scales every line and the early reflections), Gravity (how
-  fast and tight the orbits run), Bodies, Motion (how much distance moves the lines), Predelay and
+  fast and tight the orbits run), Bodies, Motion (how far the lines drift, up to 4 cents), Predelay and
   Damp High. **Shape** has Attack, Diffusion, Early/Late, the bass multiplier and crossover, the input
   cuts and React.
 - **Bodies**: each has Mass and Velocity, which change the orbit itself, and a Target with an Amount.
@@ -59,8 +62,8 @@ when the host starts), or free but restarted with the transport (RETRIG).
 
 ## Presets
 
-The preset bar in the header steps through the factory bank (Basics, Ambient, Echo, Drive, Orbits)
-and your own. SAVE names the current settings and writes them to:
+The preset bar in the header steps through the factory bank, ordered from short rooms to washes
+that ring for most of a minute (Short, Medium, Long, Washes), and your own. SAVE names the current settings and writes them to:
 
 - macOS: `~/Library/Application Support/JVerb/Presets`
 - Windows: `%APPDATA%\JVerb\Presets`

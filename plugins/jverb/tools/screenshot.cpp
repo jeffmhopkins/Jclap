@@ -67,6 +67,10 @@ public:
          f.signal[b] = static_cast<float>(std::tanh(1.5 * (sim_.speed(b) - 1.0)));
          f.target[b] = static_cast<uint8_t>(values_[bodyParam(b, kBody1Target)] + 0.5);
          f.amount[b] = static_cast<float>(values_[bodyParam(b, kBody1Amount)]);
+         // Roughly what the engine applies at the default Orbit settings.
+         f.voicePan[b] = static_cast<float>(std::clamp(values_[kOrbitPan] * body.x / 1.3, -1.0, 1.0));
+         f.voiceTone[b] = static_cast<float>(values_[kOrbitTone] * std::clamp((0.9 - sim_.radius(b)) / 0.6, -1.0, 1.0));
+         f.voiceSwirl[b] = static_cast<float>(values_[kOrbitSwirl] * std::min(1.0, sim_.speed(b) / 1.5));
       }
       const double beat = std::fmod(t, 0.5) / 0.5, eighth = std::fmod(t, 0.25) / 0.25;
       f.band[0] = static_cast<float>(0.9 * std::exp(-6.0 * beat));

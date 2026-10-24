@@ -17,6 +17,13 @@ public:
    // the knob's units from the modulated value. 0 hides it.
    void setLiveModulation(double offset, unsigned color);
 
+   // A small tick just outside the track at `value`, e.g. to mark where a range's normal zone ends.
+   void setMarker(double value) {
+      marker_ = value;
+      hasMarker_ = true;
+      redraw();
+   }
+
 protected:
    float dragDistance(visage::Point from, visage::Point to) const override { return from.y - to.y; }
    // A drag of twice the knob's height covers the whole range.
@@ -25,6 +32,8 @@ protected:
 private:
    double liveOffset_ = 0.0;
    unsigned liveColor_ = 0;
+   double marker_ = 0.0;
+   bool hasMarker_ = false;
 };
 
 } // namespace jclap::ui
