@@ -3,8 +3,8 @@
 // JVerb's audio: input filters, predelay and early reflections, diffusion and attack shaping, a
 // sixteen-line feedback delay network with an allpass in every line, an outer loop (drive, shimmer, smear, tilt and a
 // safety limiter), a long echo that can sit before the tank, in the loop or after it, and the
-// output stage. The orbit sim lives in the plugin; it hands this engine
-// each body's pan once per control tick (setControl), and process() runs per sample.
+// output stage. The orbit sim lives in the plugin; it hands this engine each body's position, tone
+// and phase once per control tick (setControl), and process() runs per sample.
 //
 // Nothing here allocates after setSampleRate(), takes a lock, or calls the OS.
 
@@ -450,7 +450,7 @@ private:
 };
 
 // A stereo delay up to kEchoMaxSeconds. Its time glides like a tape transport, so a change in time
-// (or a body routed to it) bends the pitch of the repeats rather than clicking. Each repeat goes
+// bends the pitch of the repeats rather than clicking. Each repeat goes
 // through a tone tilt, a 60 Hz high-pass and a soft saturator, so feedback past 100% blooms into
 // distortion instead of blowing up. Ping-pong crosses the feedback between channels.
 class Echo {

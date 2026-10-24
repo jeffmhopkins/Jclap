@@ -18,4 +18,6 @@ if(JCLAP_BUILD_TOOLS)
    jclap_add_screenshot_test(jverb-screenshot-test TOOL jverb-screenshot REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel.png)
    jclap_add_screenshot_test(jverb-screenshot-six-test TOOL jverb-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-six.png ARGS 6)
+   jclap_add_screenshot_test(jverb-screenshot-orbit-test TOOL jverb-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-orbit.png ARGS 3 2)
 endif()
