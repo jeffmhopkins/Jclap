@@ -28,6 +28,10 @@ public:
       values_[kFeedback] = 0.9;
       values_[kShimmer] = 0.3;
       values_[kDriveOn] = 1.0;
+      // Shimmer Halo's routings.
+      values_[bodyParam(1, kBody1Target)] = static_cast<double>(Target::Shimmer);
+      values_[bodyParam(1, kBody1Amount)] = 0.5;
+      values_[bodyParam(2, kBody1Target)] = static_cast<double>(Target::Tilt);
       double mass[kMaxBodies], velocity[kMaxBodies];
       for (int b = 0; b < kMaxBodies; ++b) {
          mass[b] = values_[bodyParam(b, kBody1Mass)];
@@ -60,7 +64,9 @@ public:
          f.vx[b] = static_cast<float>(body.vx);
          f.vy[b] = static_cast<float>(body.vy);
          f.mass[b] = static_cast<float>(mass[b]);
-         f.delayMs[b] = static_cast<float>(1.6 * 40.0 * (1.0 + 0.4 * (sim_.radius(b) / 0.9 - 1.0)));
+         f.signal[b] = static_cast<float>(std::tanh(1.5 * (sim_.speed(b) - 1.0)));
+         f.target[b] = static_cast<uint8_t>(values_[bodyParam(b, kBody1Target)] + 0.5);
+         f.amount[b] = static_cast<float>(values_[bodyParam(b, kBody1Amount)]);
       }
       const double beat = std::fmod(t, 0.5) / 0.5, eighth = std::fmod(t, 0.25) / 0.25;
       f.band[0] = static_cast<float>(0.9 * std::exp(-6.0 * beat));

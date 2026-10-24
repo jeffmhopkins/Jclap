@@ -18,7 +18,10 @@ struct OrbitFrame {
    int count = 3;
    float x[kMaxBodies] = {}, y[kMaxBodies] = {}, vx[kMaxBodies] = {}, vy[kMaxBodies] = {};
    float mass[kMaxBodies] = {};
-   float delayMs[kMaxBodies] = {};
+   // Each body's modulation signal (-1..1), where it's routed and by how much.
+   float signal[kMaxBodies] = {};
+   uint8_t target[kMaxBodies] = {};
+   float amount[kMaxBodies] = {};
    // The dry input split into low, mid and high: an envelope per band (about 0..1), and a counter
    // that goes up on each transient with how hard it hit (0..1).
    float band[3] = {};

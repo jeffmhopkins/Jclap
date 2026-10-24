@@ -2,8 +2,10 @@
 
 // JVerb's presets: a factory bank compiled in, and the user's own saved as small text files.
 //
-// A preset lists only what it changes from the defaults, so presets stay short and readable and
-// params added later fall back to their defaults. Loading one is a normal edit of every param (the
+// A factory preset lists only what it changes from the defaults, so presets stay short and
+// readable; loading one still sets every param, the rest to their defaults, so nothing from the
+// previous sound (a body's routing, say) carries over. A user preset saves every param. Loading
+// one is a normal edit of every param (the
 // host sees each change, and can undo it) followed by a restart of the orbits from the new masses
 // and velocities.
 //
@@ -90,26 +92,26 @@ inline const std::vector<Preset> &factoryPresets() {
       p.push_back({"Tape Loop Orbit", "Echo",
                    with({{kEchoOn, 1}, {kEchoWhere, kLoopSlot}, {kEchoSync, 12}, {kEchoFeedback, 0.35},
                          {kEchoTone, -0.5}, {kEchoMix, 0.8}, {kDriveOn, 1}, {kDriveWhere, kInLoop},
-                         {kDriveType, kTape}, {kDrive, 8}, {kFeedback, 0.85}, {kDecay, 5}, {kMix, 0.45}},
-                        target(2, Target::Echo, 0.25))});
+                         {kDriveType, kTape}, {kDrive, 8}, {kFeedback, 0.65}, {kDecay, 5}, {kMix, 0.45}},
+                        target(2, Target::Tilt, 0.25))});
       p.push_back({"Infinite Return", "Echo",
                    {{kEchoOn, 1}, {kEchoWhere, kLoopSlot}, {kEchoSync, 10}, {kEchoFeedback, 0.7}, {kEchoMix, 0.7},
-                    {kFeedback, 0.92}, {kShimmer, 0.2}, {kDecay, 8}, {kSize, 2}, {kMix, 0.45}}});
-      p.push_back({"Warped Slapback", "Echo",
+                    {kFeedback, 0.7}, {kShimmer, 0.2}, {kDecay, 8}, {kSize, 2}, {kMix, 0.45}}});
+      p.push_back({"Swirling Slapback", "Echo",
                    with({{kEchoOn, 1}, {kEchoWhere, kInto}, {kEchoTime, 140}, {kEchoFeedback, 0.25},
                          {kEchoPingPong, 0}, {kEchoTone, 0.2}, {kEchoMix, 0.7}, {kDecay, 1.4}, {kSize, 0.7},
                          {kMix, 0.3}},
-                        target(0, Target::Echo, 0.5))});
+                        target(0, Target::Damping, 0.5))});
 
       p.push_back({"Burning Loop", "Drive",
-                   {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kTube}, {kDrive, 18}, {kFeedback, 0.9},
+                   {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kTube}, {kDrive, 18}, {kFeedback, 0.7},
                     {kTilt, -0.3}, {kDecay, 5}, {kMix, 0.4}}});
       p.push_back({"Fuzz Cloud", "Drive",
                    {{kDriveOn, 1}, {kDriveWhere, kPostSlot}, {kDriveType, kFuzz}, {kDrive, 24}, {kDriveMix, 0.6},
                     {kDriveTrim, -6}, {kDecay, 7}, {kSize, 2}, {kMix, 0.45}}});
       p.push_back({"Crushed Satellites", "Drive",
                    {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kCrush}, {kDriveBias, 0.5}, {kDrive, 14},
-                    {kFeedback, 0.8}, {kBodies, 5}, {kDecay, 4}, {kMix, 0.4}}});
+                    {kFeedback, 0.4}, {kBodies, 5}, {kDecay, 4}, {kMix, 0.4}}});
       p.push_back({"Folded Space", "Drive",
                    {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kFold}, {kDrive, 20}, {kShimmer, 0.25},
                     {kFeedback, 0.85}, {kDecay, 6}, {kMix, 0.4}}});
@@ -120,7 +122,7 @@ inline const std::vector<Preset> &factoryPresets() {
       p.push_back({"Chaos Engine", "Orbits",
                    with(with({{kBodies, 6}, {kGravity, 2.5}, {kMotion, 0.9}, {kReact, 0.8}, {kDecay, 4},
                               {kFeedback, 0.3}, {kMix, 0.45}},
-                             target(0, Target::Size, 0.6)),
+                             target(0, Target::Damping, 0.6)),
                         target(3, Target::Feedback, 0.6))});
       p.push_back({"Synced Orbit", "Orbits",
                    {{kClock, 1}, {kSyncBars, 2}, {kMotion, 0.8}, {kDecay, 3.5}, {kMix, 0.4}}});
@@ -130,6 +132,7 @@ inline const std::vector<Preset> &factoryPresets() {
                     {kMix, 0.4}}});
       p.push_back({"Drum Reactor", "Orbits",
                    {{kReact, 1}, {kDecay, 1.8}, {kSize, 0.9}, {kMotion, 0.6}, {kDuck, 0.4}, {kMix, 0.3}}});
+
       return p;
    }();
    return presets;
@@ -185,7 +188,8 @@ inline bool readPreset(const std::filesystem::path &file, Preset &out) {
    return true;
 }
 
-// Saves every param that isn't at its default; returns false if the file can't be written. The
+// Saves every param, so a preset sounds the same even if a later version changes a default; returns
+// false if the file can't be written. The
 // file is written beside its final name and then renamed over it, so a failed save never leaves a
 // half-written preset behind.
 inline bool writePreset(const std::filesystem::path &file, const jclap::ui::ParamAccess &access) {
@@ -200,11 +204,8 @@ inline bool writePreset(const std::filesystem::path &file, const jclap::ui::Para
       out << kPresetHeader << "\n";
       char line[64];
       for (clap_id id = 0; id < kParamCount; ++id) {
-         const double v = access.paramValue(id);
-         if (v != kParams[id].defaultValue) {
-            std::snprintf(line, sizeof(line), "%u %.9g\n", static_cast<unsigned>(id), v);
-            out << line;
-         }
+         std::snprintf(line, sizeof(line), "%u %.9g\n", static_cast<unsigned>(id), access.paramValue(id));
+         out << line;
       }
       out.flush();
       if (!out) {
