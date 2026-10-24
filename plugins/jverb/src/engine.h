@@ -560,7 +560,7 @@ public:
       // loss keeps Feedback meaning the same at every decay: below 100% the tail still dies away,
       // past it the loop grows into the safety stage. The curve is measured: a bisection on the
       // Feedback where a tail first sustains, over Decay 1 to 30 s and Size 0.5 to 3, lands it
-      // between 100% and about 115%.
+      // between 96% and 123%, mostly 100% to 115%.
       const double meanLoss = loss / kLines;
       const double loopScale = std::min(kLoopMax, kLoopCalibration * std::pow(meanLoss, kLoopExponent));
       loopScale_.set(static_cast<float>(loopScale / kLoopMax));
@@ -795,7 +795,7 @@ private:
    static constexpr double kDriftCents = 4.0, kApDriftCents = 1.0;
    static constexpr float kInjectSign[kLines] = {1, 1, -1, 1, 1, -1, -1, -1, 1, -1, -1, 1, 1, 1, -1, -1};
    static constexpr float kOutSign[kLines] = {1, -1, 1, 1, -1, 1, -1, -1, 1, 1, -1, 1, 1, -1, -1, 1};
-   static constexpr float kInjectScale = 0.3f, kOutScale = 0.5f;
+   static constexpr float kInjectScale = 0.3f, kOutScale = 0.6f;
    static constexpr int kDiffusers = 6;
    static constexpr double kDiffuserMs[2][kDiffusers] = {{4.77, 3.59, 12.73, 9.31, 17.93, 23.11},
                                                          {5.13, 3.31, 13.71, 8.89, 19.27, 21.73}};
