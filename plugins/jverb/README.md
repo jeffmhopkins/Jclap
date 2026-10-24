@@ -52,8 +52,11 @@ in -> low/high cut -> [drive PRE] -> [echo INTO] -> predelay + early reflections
   ring.
 - **Loop**: Feedback sends the tank's output back to its input; past 100% it grows into the safety
   stage (soft saturation or a hard clip). Shimmer pitch shifts the loop, Smear blurs it, Tilt colours
-  it, Freeze holds the tail forever.
-- **Drive**: Tape, Tube, Fuzz, Fold or Crush, oversampled 2x, in the PRE, LOOP or POST slot.
+  it, Freeze holds the tail forever, at its level and brightness (the drift slows to a stop and the
+  damping fades out while frozen).
+- **Drive**: Tape, Tube, Fuzz, Fold or Crush, oversampled 2x, in the PRE, LOOP or POST slot. Turning
+  it on or off, or changing its slot or type, fades over a few milliseconds instead of clicking; so
+  does moving the echo between slots.
 - **Echo**: up to four seconds, free in milliseconds or synced to a note value, with feedback, tone and
   ping-pong. INTO puts the repeats into the reverb, LOOP sends echoes of the tail back into the tank
   so it returns in long passes, AFTER echoes the reverb itself. Changing the time bends the repeats
@@ -67,8 +70,10 @@ move the sound, and the presets.
 
 Drag a body to move it, drag the arrow on the selected body to set its velocity, scroll on a body to
 change its mass (heavier bodies are drawn bigger). Double-click empty space to add a body there,
-right-click a body to remove one. Clicking a body's card at the bottom selects it too. The selected
-body's readout shows its voice and where it is routed.
+right-click a body to remove it (the bodies after it move down a place, settings and all). Clicking a
+body's card at the bottom selects it too. The selected body's readout shows its voice and where it is
+routed. Right-click empty space for the UI size menu; the size you pick stays when the editor is
+closed and opened again.
 
 Each body shows what its voice is doing: a bright voice burns whiter and wider and a dark one deeper,
 and arcs spin around the body faster the harder its phaser sweeps. A strip under the stage places each
@@ -83,8 +88,9 @@ up and glows whiter. Each band (lows, mids, highs) also makes its bodies glow an
 falls through the system's gravity. React also kicks the bodies on transients, so the input changes
 the orbit itself and through it the sound.
 
-The clock runs the orbits free, synced (one lap of the start orbit fits into Sync Bars, restarting
-when the host starts), or free but restarted with the transport (RETRIG).
+The clock runs the orbits free, synced (one lap of the start orbit fits into Sync Bars, in the host's
+time signature, and lines up with the song's bars whenever playback starts, loops or jumps), or free
+but restarted with the transport (RETRIG). The echo's 1 Bar and 2 Bars follow the time signature too.
 
 ## Presets
 

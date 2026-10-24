@@ -78,6 +78,9 @@ private:
    std::unique_ptr<Window> window_;
    // The fd registered with the host, or -1.
    int fd_ = -1;
+   // The size the window had when it was last closed, so reopening the editor keeps the user's UI
+   // size instead of going back to 100% (0 until then).
+   uint32_t lastWidth_ = 0, lastHeight_ = 0;
 };
 
 template <ClapGui *(*Lookup)(const clap_plugin_t *)>

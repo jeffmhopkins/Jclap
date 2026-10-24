@@ -30,21 +30,30 @@ public:
       buffer_.assign(size, 0.0f);
       mask_ = size - 1;
       pos_ = 0;
+      written_ = size;
    }
    int maxDelay() const { return static_cast<int>(buffer_.size()) - 4; }
 
+   // Silence, at once whatever the length: nothing is cleared, but samples from before the reset read
+   // as zero until they've been written over. Safe on the audio thread, where clearing a long line
+   // could take longer than a block.
    void reset() {
-      std::fill(buffer_.begin(), buffer_.end(), 0.0f);
       pos_ = 0;
+      written_ = 0;
    }
 
    void write(float x) {
       pos_ = (pos_ + 1) & mask_;
       buffer_[pos_] = x;
+      if (written_ <= mask_)
+         ++written_;
    }
 
-   // The sample written `delay` writes ago, for a whole number of samples.
-   float tap(int delay) const { return buffer_[(pos_ - static_cast<size_t>(delay)) & mask_]; }
+   // The sample written `delay` writes ago, for a whole number of samples (0 is the latest).
+   float tap(int delay) const {
+      const auto d = static_cast<size_t>(delay);
+      return d < written_ ? buffer_[(pos_ - d) & mask_] : 0.0f;
+   }
 
    // Between samples by Hermite interpolation; clamped to 1..maxDelay(), and NaN reads as 1.
    float read(float delay) const {
@@ -63,6 +72,8 @@ public:
 private:
    std::vector<float> buffer_ = std::vector<float>(4, 0.0f);
    size_t mask_ = 3, pos_ = 0;
+   // Samples written since the last reset, up to the buffer's size: older ones read as zero.
+   size_t written_ = 4;
 };
 
 } // namespace jclap::dsp

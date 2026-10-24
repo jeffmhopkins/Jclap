@@ -2,6 +2,9 @@
 
 #include <jclap/core/test_host.h>
 
+#include <clap/ext/tail.h>
+#include <fstream>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -221,9 +224,12 @@ int main() {
       run(h, inL, inR, outL, outR, 512);
       h.setParam(kFreeze, 1.0);
       const auto e = windows(tail(h, kRate, 40.0), kRate, 3.0, 5.0);
+      // Frozen, the tank keeps its level and treble (the engine tests check it holds), so what
+      // moves here is the bodies' voices swinging their tone and pan: a few dB either way, never
+      // a climb.
       for (double w : e)
-         JCLAP_CHECK(w < e.front() * 1.5);
-      JCLAP_CHECK(e.back() > e.front() * 0.1);
+         JCLAP_CHECK(w < e.front() * 2.5);
+      JCLAP_CHECK(e.back() > e.front() * 0.25);
    }
 
    // A non-finite value or modulation from the host is ignored, and the orbits keep going.
@@ -504,6 +510,120 @@ int main() {
       run(h, inL, inR, outL, outR, 512);
       JCLAP_CHECK(panel.readFrame(f));
       JCLAP_CHECK(f.hits[0] + f.hits[1] + f.hits[2] > hitsBefore);
+   }
+
+   // Automation lands on its own sample, not the start of its block: the same render at any block
+   // size with params moving too.
+   {
+      Noise noise;
+      std::vector<float> inL(static_cast<size_t>(kRate)), inR(inL.size());
+      for (size_t i = 0; i < inL.size(); ++i)
+         inL[i] = inR[i] = (i / 4000) % 3 == 0 ? 0.5f * noise.next() : 0.0f;
+      struct Move {
+         size_t at;
+         clap_id id;
+         double value;
+      };
+      const Move moves[] = {{3000, kDecay, 1.0}, {9001, kSize, 2.0}, {20000, kPredelay, 120.0}, {30500, kMix, 0.8}};
+      const auto render = [&](uint32_t block, std::vector<float> &outL) {
+         jclap::core::TestHost h(clap_entry, kId, kRate);
+         outL.assign(inL.size(), 0.0f);
+         std::vector<float> outR(inL.size());
+         for (size_t pos = 0; pos < inL.size(); pos += block) {
+            const uint32_t n = static_cast<uint32_t>(std::min<size_t>(block, inL.size() - pos));
+            for (const Move &m : moves)
+               if (m.at >= pos && m.at < pos + n)
+                  h.setParam(m.id, m.value, static_cast<uint32_t>(m.at - pos));
+            float *in[2] = {inL.data() + pos, inR.data() + pos};
+            float *out[2] = {outL.data() + pos, outR.data() + pos};
+            h.process(n, in, out);
+         }
+      };
+      std::vector<float> a, b;
+      render(1024, a);
+      render(37, b);
+      float worst = 0.0f;
+      for (size_t i = 0; i < a.size(); ++i)
+         worst = std::max(worst, std::fabs(a[i] - b[i]));
+      JCLAP_CHECK(worst < 1e-6f);
+   }
+
+   // Silent blocks with buffers, so control ticks run.
+   float silence[2][512] = {}, sink[2][512];
+   float *silentIn[2] = {silence[0], silence[1]}, *silentOut[2] = {sink[0], sink[1]};
+
+   // The tail extension: finite, longer with a longer decay, infinite when frozen.
+   {
+      jclap::core::TestHost h(clap_entry, kId, kRate);
+      auto *tail = static_cast<const clap_plugin_tail_t *>(h.plugin()->get_extension(h.plugin(), CLAP_EXT_TAIL));
+      JCLAP_CHECK(tail != nullptr);
+      if (tail) {
+         h.process(512, silentIn, silentOut);
+         const uint32_t base = tail->get(h.plugin());
+         JCLAP_CHECK(base > kRate && base < INT32_MAX);
+         h.setParam(kDecay, 20.0);
+         h.process(512, silentIn, silentOut);
+         JCLAP_CHECK(tail->get(h.plugin()) > 2 * base);
+         h.setParam(kFreeze, 1.0);
+         h.process(512, silentIn, silentOut);
+         JCLAP_CHECK(tail->get(h.plugin()) >= INT32_MAX);
+      }
+   }
+
+   // Removing a body removes that one: the bodies after it move down, and a drag can't put a body
+   // far outside the stage.
+   {
+      jclap::core::TestHost h(clap_entry, kId, kRate);
+      EditorHost &panel = *h.object<EditorHost>();
+      h.setParam(kBodies, 4.0);
+      h.setParam(kRun, 0.0);
+      for (int i = 0; i < 20; ++i)
+         h.process(512, silentIn, silentOut);
+      OrbitFrame before{}, after{};
+      while (panel.readFrame(before)) {
+      }
+      h.process(512, silentIn, silentOut);
+      JCLAP_CHECK(panel.readFrame(before) && before.count == 4);
+      panel.send({OrbitCommand::Kind::Remove, 1, 0.0f, 0.0f});
+      panel.setParam(kBodies, 3.0);
+      for (int i = 0; i < 4; ++i)
+         h.process(512, silentIn, silentOut);
+      JCLAP_CHECK(panel.readFrame(after) && after.count == 3);
+      // Paused, the bodies stay put; the centre of mass is kept at the origin, so they shift by as
+      // much as the removed body's share moved it.
+      const float shiftX = after.x[1] - before.x[2], shiftY = after.y[1] - before.y[2];
+      JCLAP_CHECK(std::fabs(after.x[2] - before.x[3] - shiftX) < 1e-4f && std::fabs(after.y[2] - before.y[3] - shiftY) < 1e-4f);
+      JCLAP_CHECK(std::fabs(after.x[0] - before.x[0] - shiftX) < 1e-4f);
+
+      panel.send({OrbitCommand::Kind::Place, 0, 1000.0f, 0.0f});
+      for (int i = 0; i < 4; ++i)
+         h.process(512, silentIn, silentOut);
+      JCLAP_CHECK(panel.readFrame(after) && std::hypot(after.x[0], after.y[0]) < 8.0f);
+   }
+
+   // A preset file from 0.4.x (69 params) gets its body targets translated; one from 0.5 or 0.6
+   // (more params, the same header) doesn't.
+   {
+      const auto write = [](const std::filesystem::path &file, clap_id count, double target) {
+         std::ofstream out(file);
+         out << "JVerb preset 1\n";
+         for (clap_id id = 0; id < count; ++id)
+            out << id << " " << (id == bodyParam(0, kBody1Target) ? target : kParams[id].defaultValue) << "\n";
+      };
+      const auto folder = std::filesystem::temp_directory_path();
+      Preset p;
+      write(folder / "jverb-old.jvpreset", kV1ParamCount, 3.0); // 0.4's Drive
+      JCLAP_CHECK(readPreset(folder / "jverb-old.jvpreset", p));
+      for (const auto &[id, v] : p.values)
+         if (id == bodyParam(0, kBody1Target))
+            JCLAP_CHECK(v == static_cast<double>(Target::Drive));
+      write(folder / "jverb-new.jvpreset", kParamCount, 3.0); // today's Diffusion
+      JCLAP_CHECK(readPreset(folder / "jverb-new.jvpreset", p));
+      for (const auto &[id, v] : p.values)
+         if (id == bodyParam(0, kBody1Target))
+            JCLAP_CHECK(v == 3.0);
+      std::filesystem::remove(folder / "jverb-old.jvpreset");
+      std::filesystem::remove(folder / "jverb-new.jvpreset");
    }
 
    return jclap::core::testResult();

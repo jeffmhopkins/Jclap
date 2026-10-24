@@ -96,6 +96,9 @@ signal. The **echo** is a single unit drawn at all three of its possible places 
 branches), and only the one its slot names is live. Wherever it sits it works as a send and return:
 it takes a copy of the signal at that point and adds only its repeats back in, scaled by Echo Mix, so
 the signal itself always passes straight through. See [Echo](#echo) for how it works inside.
+Neither switches in one sample: when Drive On, the drive's slot or type, or the echo's slot changes,
+that unit fades out over 5 ms (eased, so the fade has no corners), switches, and fades back in, and
+the echo's input fades with it so no step is written into its repeats.
 
 Two things about the shape matter more than anything else:
 
@@ -178,8 +181,10 @@ samples, so however fast it runs it bends a pass by no more than that: up to 4 c
 (and 1 cent for the drifting allpass). Past 100% see [below](#up-to-100-and-past-it). A swing never
 reaches past 45% of a line's length, so even the wildest drift only reads what was written.
 
-**Freeze** sets every line's gain to 0.99995, opens the damping to the top of the band, closes the
-input and the outer loop: the tail holds as it is, forever.
+**Freeze** sets every line's gain to exactly 1, fades the damping out over 50 ms, slows the drift to
+a stop over half a second and then lets every read land on a whole sample (where reading between
+samples can't dull it), and closes the input and the outer loop: the tail holds as it is, its level
+and its brightness, forever.
 
 **How the lines are shared out.** Line *k* belongs to body (*k*/2) mod Bodies, so the lines are dealt
 out in left/right pairs. With three bodies, body 1 has lines 1-2, 7-8 and 13-14, body 2 has 3-4, 9-10
@@ -382,7 +387,8 @@ shapes, only faster.
 
 **The clock.** With Clock on Free the sim runs 0.8 time units a second, so the figure-eight comes
 round about every 8 s. **Sync** fits one lap of the start orbit into Sync Bars bars at the host tempo
-and restarts when the transport starts; **Retrig** runs free but restarts with the transport. **Run**
+and time signature, and when the transport starts, loops or jumps it restarts and runs the orbits on
+to where they'd be at that point of the cycle, so they line up with the bars; **Retrig** runs free but restarts with the transport. **Run**
 off stops the orbits where they are; the tail keeps sounding, with every voice held where its body
 stopped. Restarts are
 deterministic: the same params and input give the same orbits and the same render every time.
@@ -590,8 +596,9 @@ from the new masses and velocities.
 | Washes | Dark Matter | 50 s, Size 4, very dark, octave-down shimmer, long bass. |
 | Washes | Frozen Ring | 60 s, all late, a little Duck. |
 
-**User presets** are saved with SAVE in the header, as `.jvpreset` text files: a `JVerb preset 1`
-line, then one `<param id> <value>` line for every param (so a user preset sounds the same even if a
+**User presets** are saved with SAVE in the header, as `.jvpreset` text files: a `JVerb preset 2`
+line (version 1 files from 0.4.x, which list 69 params, get their body targets translated as old
+states do), then one `<param id> <value>` line for every param (so a user preset sounds the same even if a
 later version changes a default). Files are written beside their final name and renamed over it, so a
 failed save never leaves half a preset. They live in:
 

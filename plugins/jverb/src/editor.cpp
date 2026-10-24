@@ -176,6 +176,8 @@ public:
 
    // Readout and velocity arrow for this body (-1 for none). Clicking a body selects it.
    int selected = -1;
+   // Right-click on the stage away from any body, with where (in the view).
+   std::function<void(visage::Point)> onBackgroundMenu;
    // The System Size knob, which sets how big the stage draws the system.
    float systemSize = 1.0f;
 
@@ -359,8 +361,12 @@ public:
    void mouseDown(const visage::MouseEvent &e) override {
       const visage::Point p = e.position;
       if (e.shouldTriggerPopup()) {
-         if (bodyAt(p) >= 0 && frame_.count > 2)
-            setBodies(frame_.count - 1);
+         // On a body, removes that body; anywhere else, the panel's menu (UI size).
+         const int b = bodyAt(p);
+         if (b >= 0)
+            removeBody(b);
+         else if (onBackgroundMenu)
+            onBackgroundMenu(p);
          return;
       }
       if (e.repeatClickCount() >= 2 && bodyAt(p) < 0) {
@@ -449,6 +455,30 @@ private:
       host_.beginEdit(kBodies);
       host_.setParam(kBodies, count);
       host_.endEdit(kBodies);
+   }
+
+   // Removes body `b`: the bodies after it move down a place, settings and trails with them. The
+   // plugin is told which one goes before Bodies drops, so its orbit goes too, not the last one.
+   void removeBody(int b) {
+      const int n = frame_.count;
+      if (n <= 2 || b < 0 || b >= n)
+         return;
+      double values[kParamCount];
+      for (clap_id id = 0; id < kParamCount; ++id)
+         values[id] = host_.paramValue(id);
+      for (int k = b; k + 1 < n; ++k)
+         for (clap_id role : {kBody1Mass, kBody1Velocity, kBody1Target, kBody1Amount})
+            values[bodyParam(k, role)] = values[bodyParam(k + 1, role)];
+      values[kBodies] = n - 1;
+      host_.send({OrbitCommand::Kind::Remove, static_cast<int8_t>(b), 0.0f, 0.0f});
+      host_.setParams(values);
+      for (int k = b; k + 1 < kMaxBodies; ++k)
+         trails_[k] = std::move(trails_[k + 1]);
+      trails_[kMaxBodies - 1].clear();
+      selected = -1;
+      hover_ = -1;
+      dragBody_ = -1;
+      redraw();
    }
 
    float ppu() const { return scale() * width() / designWidth_; }
@@ -636,8 +666,11 @@ private:
       nebula(930, 470, 460, 0xff123f6e, 0.24f);
       nebula(760, 70, 300, 0xff7a2a5a, 0.11f);
       nebula(160, 590, 360, 0xff1b5560, 0.15f);
+      // Zoomed far out, each star would be drawn once per tile on screen, which grows with the square
+      // of the zoom-out, so the sky stops following below a quarter.
+      const float skyZoom = std::max(zoom, 0.25f);
       for (const Star &st : stars_) {
-         const float k = std::pow(zoom, 0.35f + 0.65f * st.b);
+         const float k = std::pow(skyZoom, 0.35f + 0.65f * st.b);
          const float twinkle = 0.85f + 0.15f * std::sin(time_ * 1.3f + st.phase);
          const float r = (0.6f + st.b * st.b * 1.8f) * s * std::clamp(std::sqrt(k), 0.7f, 1.4f);
          c.setColor(glow(st.b > 0.93f ? 0xffcfe0ff : 0xffffffff, (0.2f + 0.75f * st.b) * twinkle,
@@ -1070,6 +1103,9 @@ class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       view_ = &add<OrbitView>({0, kHeaderHeight, kDesignWidth, kDesignHeight - kHeaderHeight}, host, kDesignWidth);
+      // The stage fills the panel below the header, so its background right-click opens the UI
+      // size menu the panel's own background would.
+      view_->onBackgroundMenu = [this](visage::Point p) { showZoomMenu(*view_, p); };
       buildHeader();
       buildSpace();
       buildLoop();

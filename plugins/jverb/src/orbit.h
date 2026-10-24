@@ -86,15 +86,31 @@ public:
       x = 1.2 * extent * std::cos(a);
       y = 1.2 * extent * std::sin(a);
    }
-   void remove() { count_ = std::max(2, count_ - 1); }
+   // Removes body `i` (the last if out of range), moving the ones after it down a place.
+   void remove(int i = -1) {
+      if (count_ <= 2)
+         return;
+      if (i < 0 || i >= count_)
+         i = count_ - 1;
+      for (int k = i; k + 1 < count_; ++k)
+         bodies_[k] = bodies_[k + 1];
+      bodies_[--count_] = Body{};
+   }
 
+   // A drag can carry a body far outside the window (the pointer keeps going), so where it's put
+   // and how fast it's thrown are kept to what the tether can bring back.
+   static constexpr double kMaxPlace = 4.0, kMaxSpeed = 6.0;
    void place(int i, double x, double y) {
-      if (i < count_)
-         bodies_[i].x = x, bodies_[i].y = y;
+      if (i < 0 || i >= count_ || !std::isfinite(x) || !std::isfinite(y))
+         return;
+      const double r = std::hypot(x, y), k = r > kMaxPlace ? kMaxPlace / r : 1.0;
+      bodies_[i].x = x * k, bodies_[i].y = y * k;
    }
    void setVelocity(int i, double vx, double vy) {
-      if (i < count_)
-         bodies_[i].vx = vx, bodies_[i].vy = vy;
+      if (i < 0 || i >= count_ || !std::isfinite(vx) || !std::isfinite(vy))
+         return;
+      const double v = std::hypot(vx, vy), k = v > kMaxSpeed ? kMaxSpeed / v : 1.0;
+      bodies_[i].vx = vx * k, bodies_[i].vy = vy * k;
    }
    void kick(int i, double dvx, double dvy) {
       if (i < count_)

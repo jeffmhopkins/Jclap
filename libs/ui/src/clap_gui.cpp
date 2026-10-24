@@ -40,6 +40,11 @@ bool ClapGui::create(const char *api, bool isFloating) {
       window_->onResizeRequest = [this](uint32_t w, uint32_t h) {
          return !hostGui_ || hostGui_->request_resize(host_, w, h);
       };
+      if (lastWidth_ > 0 && lastHeight_ > 0) {
+         uint32_t w = lastWidth_, h = lastHeight_;
+         window_->adjustSize(&w, &h);
+         window_->setSize(w, h);
+      }
    }
    return true;
 }
@@ -52,6 +57,10 @@ void ClapGui::unregisterFd() {
 
 void ClapGui::destroy() {
    unregisterFd();
+   if (window_) {
+      lastWidth_ = window_->width();
+      lastHeight_ = window_->height();
+   }
    window_.reset();
 }
 

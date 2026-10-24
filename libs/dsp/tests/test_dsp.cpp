@@ -407,6 +407,11 @@ int main() {
       JCLAP_CHECK_EQ(line.read(1.0f), 49.0f);
       JCLAP_CHECK_EQ(line.tap(10), 40.0f);
       JCLAP_CHECK(near(line.read(10.5f), 39.5, 1e-4));
+      // A reset is silence at once: the old samples read as zero until written over.
+      line.reset();
+      JCLAP_CHECK(line.read(20.0f) == 0.0f && line.tap(5) == 0.0f);
+      line.write(7.0f);
+      JCLAP_CHECK(line.tap(0) == 7.0f && line.tap(1) == 0.0f && line.read(30.5f) == 0.0f);
       line.reset();
       double in = 0.0, out = 0.0;
       for (int i = 0; i < 4800; ++i) {
