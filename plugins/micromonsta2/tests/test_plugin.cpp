@@ -3,6 +3,9 @@
 
 #include <jclap/core/test_host.h>
 
+#include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <vector>
 
 #include "cc_map.h"
@@ -27,6 +30,25 @@ std::vector<Cc> ccs(const jclap::core::TestOutput &out) {
    }
    return result;
 }
+
+// A byte buffer the plugin's state extension writes to and reads from.
+struct Buffer {
+   std::vector<uint8_t> bytes;
+   size_t pos = 0;
+   clap_ostream_t out{this, [](const clap_ostream_t *s, const void *data, uint64_t size) -> int64_t {
+                         auto *b = static_cast<Buffer *>(s->ctx);
+                         b->bytes.insert(b->bytes.end(), static_cast<const uint8_t *>(data),
+                                         static_cast<const uint8_t *>(data) + size);
+                         return static_cast<int64_t>(size);
+                      }};
+   clap_istream_t in{this, [](const clap_istream_t *s, void *data, uint64_t size) -> int64_t {
+                        auto *b = static_cast<Buffer *>(s->ctx);
+                        const size_t n = std::min<size_t>(size, b->bytes.size() - b->pos);
+                        std::memcpy(data, b->bytes.data() + b->pos, n);
+                        b->pos += n;
+                        return static_cast<int64_t>(n);
+                     }};
+};
 
 } // namespace
 
@@ -96,6 +118,63 @@ int main() {
    const auto moved = ccs(h.process());
    CHECK_EQ(h.paramValue(mm2::kChannelParamId), 3.0);
    CHECK_EQ(moved.empty() ? 0 : moved[0].channel, 3);
+
+   // A channel change mid-block moves the CCs after it at once: the set knobs go out again on the new
+   // channel at that time, and the later edit with them (101 plus the +2 modulation still on 74).
+   h.setParam(mm2::kChannelParamId, 5, 10);
+   h.setParam(74, 101, 20);
+   const auto midBlock = h.process();
+   CHECK_EQ(midBlock.midi.empty() ? 0 : midBlock.midi.front().time, 10u);
+   bool all5 = !midBlock.midi.empty(), got74 = false;
+   for (const Cc &c : ccs(midBlock)) {
+      all5 = all5 && c.channel == 5;
+      got74 = got74 || (c.cc == 74 && c.value == 103);
+   }
+   JCLAP_CHECK(all5 && got74);
+   CHECK_EQ(ccs(h.process()).size(), 0u);
+
+   // A NaN from the host is ignored: nothing goes out, and the knob keeps its value.
+   h.setParam(74, std::nan(""));
+   h.modulate(73, std::nan(""));
+   CHECK_EQ(ccs(h.process()).size(), 0u);
+   CHECK_EQ(h.paramValue(74), 101.0);
+   JCLAP_CHECK(std::isfinite(panel.paramModulated(73)));
+   double parsed = 0.0;
+   JCLAP_CHECK(!h.textToValue(74, "nan", parsed) && !h.textToValue(74, "inf", parsed));
+   JCLAP_CHECK(h.textToValue(74, "12", parsed) && parsed == 12.0);
+
+   // State: a round trip, and a NaN entry (from an older build) only loses that knob, which goes back
+   // to its default and is not sent.
+   {
+      auto *state = static_cast<const clap_plugin_state_t *>(h.plugin()->get_extension(h.plugin(), CLAP_EXT_STATE));
+      Buffer saved;
+      JCLAP_CHECK(state->save(h.plugin(), &saved.out));
+      h.setParam(73, 10);
+      h.process();
+      JCLAP_CHECK(state->load(h.plugin(), &saved.in));
+      CHECK_EQ(h.paramValue(73), 90.0);
+      CHECK_EQ(h.paramValue(74), 101.0);
+      CHECK_EQ(h.paramValue(mm2::kChannelParamId), 5.0);
+
+      // Header (16 bytes), then {cc, touched, value} entries of 16 bytes.
+      Buffer bad;
+      bad.bytes = saved.bytes;
+      for (size_t at = 16; at + 16 <= bad.bytes.size(); at += 16) {
+         int32_t cc;
+         std::memcpy(&cc, bad.bytes.data() + at, 4);
+         if (cc == 74) {
+            const double nan = std::nan("");
+            std::memcpy(bad.bytes.data() + at + 8, &nan, 8);
+         }
+      }
+      JCLAP_CHECK(state->load(h.plugin(), &bad.in));
+      CHECK_EQ(h.paramValue(74), 0.0);
+      CHECK_EQ(h.paramValue(73), 90.0);
+      bool sent74 = false;
+      for (const Cc &c : ccs(h.process()))
+         sent74 = sent74 || c.cc == 74;
+      JCLAP_CHECK(!sent74);
+   }
 
    return jclap::core::testResult();
 }

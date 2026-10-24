@@ -64,6 +64,7 @@ public:
 
    bool init() override {
       hostParams_ = hostExtension<clap_host_params_t>(CLAP_EXT_PARAMS);
+      hostState_ = hostExtension<clap_host_state_t>(CLAP_EXT_STATE);
       edits_.init(host());
       hostMenu_.init(host());
       gui_.init(host());
@@ -119,6 +120,8 @@ public:
    void beginEdit(clap_id id) override { edits_.begin(id); }
 
    void setParam(clap_id id, double value) override {
+      if (!std::isfinite(value))
+         return;
       if (id == kChannelParamId) {
          const int ch = std::clamp(static_cast<int>(std::lround(value)), 1, 16);
          midiChannel_.store(ch);
@@ -150,6 +153,9 @@ public:
       for (auto &t : touched_)
          t.store(true);
       resendRequested_.store(true);
+      // Every knob now goes out when the project opens, which is saved state the host can't see.
+      if (hostState_)
+         hostState_->mark_dirty(host());
       if (hostParams_)
          hostParams_->request_flush(host());
    }
@@ -198,7 +204,7 @@ public:
       if (std::strncmp(s, "Ch", 2) == 0)
          s += 2;
       double v;
-      if (std::sscanf(s, "%lf", &v) != 1)
+      if (std::sscanf(s, "%lf", &v) != 1 || !std::isfinite(v))
          return false;
       *value = v;
       return true;
@@ -239,14 +245,20 @@ public:
 
       StateEntry entries[128];
       for (uint32_t i = 0; i < header.count; ++i) {
-         if (!jclap::core::readAll(stream, &entries[i], sizeof(StateEntry)) || !std::isfinite(entries[i].value))
+         if (!jclap::core::readAll(stream, &entries[i], sizeof(StateEntry)))
             return false;
       }
 
+      // A knob the state leaves out (or saved as NaN) is back at its default, untouched, rather than
+      // keeping the previous sound's setting or losing the whole state.
+      for (int i = 0; i < kCcParamCount; ++i) {
+         values_[i].store(defaultValue(kCcParams[i]));
+         touched_[i].store(false);
+      }
       midiChannel_.store(std::clamp(static_cast<int>(header.channel), 1, 16));
       for (uint32_t e = 0; e < header.count; ++e) {
          const int i = indexOfCc(entries[e].cc);
-         if (i < 0)
+         if (i < 0 || !std::isfinite(entries[e].value))
             continue;
          values_[i].store(std::clamp(entries[e].value, 0.0, 127.0));
          touched_[i].store(entries[e].touched != 0);
@@ -283,8 +295,15 @@ public:
          if (h->space_id == CLAP_CORE_EVENT_SPACE_ID &&
              (h->type == CLAP_EVENT_PARAM_VALUE || h->type == CLAP_EVENT_PARAM_MOD)) {
             const int i = applyParamEvent(h);
-            if (i >= 0)
+            if (i >= 0) {
                sendIfChanged(out, h->time, i);
+            } else if (midiChannel_.load() != sentChannel_) {
+               // The channel changed: from here on, every set CC goes out on the new one.
+               sentChannel_ = midiChannel_.load();
+               sender_.resendAll();
+               for (int k = 0; k < kCcParamCount; ++k)
+                  sendIfChanged(out, h->time, k);
+            }
             continue;
          }
          // Notes and other MIDI go straight through; anything else (transport...) must not be echoed.
@@ -314,6 +333,9 @@ private:
          return -1;
       if (h->type == CLAP_EVENT_PARAM_VALUE) {
          auto *ev = reinterpret_cast<const clap_event_param_value_t *>(h);
+         // A NaN would be saved, and then fail the whole project's load.
+         if (!std::isfinite(ev->value))
+            return -1;
          if (ev->param_id == kChannelParamId) {
             midiChannel_.store(std::clamp(static_cast<int>(std::lround(ev->value)), 1, 16));
             return -1;
@@ -327,7 +349,7 @@ private:
       }
       if (h->type == CLAP_EVENT_PARAM_MOD) {
          auto *ev = reinterpret_cast<const clap_event_param_mod_t *>(h);
-         const int i = indexOfCc(static_cast<int>(ev->param_id));
+         const int i = std::isfinite(ev->amount) ? indexOfCc(static_cast<int>(ev->param_id)) : -1;
          if (i >= 0) {
             mods_[i].store(ev->amount);
             touched_[i].store(true);
@@ -338,13 +360,14 @@ private:
    }
 
    void sendIfChanged(const clap_output_events_t *out, uint32_t time, int i) {
-      const int v = sender_.update(i, effective(i), touched_[i].load());
-      if (v >= 0)
-         jclap::core::pushMidi(out, time, static_cast<uint8_t>(0xB0 | (sentChannel_ - 1)),
-                               static_cast<uint8_t>(kCcParams[i].cc), static_cast<uint8_t>(v));
+      const int v = sender_.pending(i, effective(i), touched_[i].load());
+      if (v >= 0 && jclap::core::pushMidi(out, time, static_cast<uint8_t>(0xB0 | (sentChannel_ - 1)),
+                                          static_cast<uint8_t>(kCcParams[i].cc), static_cast<uint8_t>(v)))
+         sender_.sent(i, v);
    }
 
    const clap_host_params_t *hostParams_ = nullptr;
+   const clap_host_state_t *hostState_ = nullptr;
 
    std::atomic<double> values_[kCcParamCount];
    std::atomic<double> mods_[kCcParamCount];

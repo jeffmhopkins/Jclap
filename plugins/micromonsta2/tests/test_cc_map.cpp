@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdio>
 #include <set>
 
@@ -37,18 +38,32 @@ int main() {
    CHECK_EQ(toCcValue(-3.0), 0);
    CHECK_EQ(toCcValue(126.6), 127);
    CHECK_EQ(toCcValue(200.0), 127);
+   CHECK_EQ(toCcValue(std::nan("")), 0);
+   CHECK_EQ(toCcValue(1e300), 127);
 
    CcSender sender;
+   // What the plugin does: send what is pending, and record it once the push worked.
+   const auto update = [&sender](int i, double value, bool touched) {
+      const int v = sender.pending(i, value, touched);
+      if (v >= 0)
+         sender.sent(i, v);
+      return v;
+   };
    // Untouched parameters are never sent.
-   CHECK_EQ(sender.update(0, 64.0, false), -1);
+   CHECK_EQ(update(0, 64.0, false), -1);
    // First touch sends, repeats of the same CC value don't.
-   CHECK_EQ(sender.update(0, 64.0, true), 64);
-   CHECK_EQ(sender.update(0, 64.2, true), -1);
-   CHECK_EQ(sender.update(0, 64.6, true), 65);
+   CHECK_EQ(update(0, 64.0, true), 64);
+   CHECK_EQ(update(0, 64.2, true), -1);
+   CHECK_EQ(update(0, 64.6, true), 65);
    // After a resend request the current value goes out again.
    sender.resendAll();
-   CHECK_EQ(sender.update(0, 64.6, true), 65);
-   CHECK_EQ(sender.update(1, 0.0, true), 0);
+   CHECK_EQ(update(0, 64.6, true), 65);
+   CHECK_EQ(update(1, 0.0, true), 0);
+   // A value that was never pushed (the host's queue was full) stays pending until it is.
+   CHECK_EQ(sender.pending(2, 30.0, true), 30);
+   CHECK_EQ(sender.pending(2, 30.0, true), 30);
+   sender.sent(2, 30);
+   CHECK_EQ(sender.pending(2, 30.0, true), -1);
 
    if (failures)
       std::printf("%d failure(s)\n", failures);
