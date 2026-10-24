@@ -10,7 +10,7 @@ void fillParamInfo(const ParamDef &def, clap_param_info_t *info) {
    std::memset(info, 0, sizeof(*info));
    info->id = def.id;
    info->flags = def.flags;
-   std::snprintf(info->name, sizeof(info->name), "%s", def.name);
+   std::snprintf(info->name, sizeof(info->name), "%s", def.name ? def.name : "");
    std::snprintf(info->module, sizeof(info->module), "%s", def.module ? def.module : "");
    info->min_value = def.min;
    info->max_value = def.max;

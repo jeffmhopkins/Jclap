@@ -12,6 +12,7 @@
 #include <clap/clap.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -96,8 +97,20 @@ public:
       entry.init("");
       auto *factory = static_cast<const clap_plugin_factory_t *>(entry.get_factory(CLAP_PLUGIN_FACTORY_ID));
       plugin_ = factory->create_plugin(factory, &host_, pluginId);
-      plugin_->init(plugin_);
-      plugin_->activate(plugin_, sampleRate, 1, kMaxFrames);
+      if (!plugin_) {
+         // Nothing below can run without a plugin, so stop here with a message rather than crash.
+         std::printf("TestHost: no plugin with id \"%s\"\n", pluginId);
+         std::fflush(stdout);
+         std::abort();
+      }
+      if (!plugin_->init(plugin_)) {
+         std::printf("TestHost: %s: init() failed\n", pluginId);
+         ++testFailures();
+      }
+      if (!plugin_->activate(plugin_, sampleRate, 1, kMaxFrames)) {
+         std::printf("TestHost: %s: activate() failed\n", pluginId);
+         ++testFailures();
+      }
       plugin_->start_processing(plugin_);
       params_ = static_cast<const clap_plugin_params_t *>(plugin_->get_extension(plugin_, CLAP_EXT_PARAMS));
    }
@@ -107,6 +120,9 @@ public:
       plugin_->deactivate(plugin_);
       plugin_->destroy(plugin_);
    }
+   // One plugin instance per host: a copy would destroy it twice.
+   TestHost(const TestHost &) = delete;
+   TestHost &operator=(const TestHost &) = delete;
 
    const clap_plugin_t *plugin() const { return plugin_; }
    // The plugin object, for a jclap::core::Plugin subclass (or any base of it, such as the
