@@ -113,7 +113,7 @@ private:
 
    void knob(clap_id id, const char *label, unsigned accent, ui::Rect cell) {
       const ParamInfo &p = kParams[id];
-      auto &k = add<ui::Knob>(cell, ui::ValueRange{p.min, p.max, p.def, 1.0});
+      auto &k = add<ui::Knob>(cell, ui::ValueRange{p.min, p.max, p.def, 1.0, false, p.stepped});
       k.setLabel(label);
       k.setAccent(accent);
       k.valueText = [id](double v) { return text(id, v); };

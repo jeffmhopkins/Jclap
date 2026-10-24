@@ -22,7 +22,11 @@ EnvelopeEditor::EnvelopeEditor(ValueRange attack, ValueRange decay, ValueRange s
    }
 }
 
-EnvelopeEditor::~EnvelopeEditor() { popup_.hide(); }
+EnvelopeEditor::~EnvelopeEditor() {
+   // Destroyed mid-drag: close the gestures mouseUp would have.
+   EnvelopeEditor::mouseUp({});
+   popup_.hide();
+}
 
 void EnvelopeEditor::setValues(double attack, double decay, double sustain, double release) {
    const double v[kStageCount] = {attack, decay, sustain, release};

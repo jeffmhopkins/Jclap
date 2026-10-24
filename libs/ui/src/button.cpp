@@ -48,8 +48,9 @@ void Button::mouseExit(const visage::MouseEvent &) {
    redraw();
 }
 
-void Button::mouseDown(const visage::MouseEvent &) {
-   if (toggle_) {
+void Button::mouseDown(const visage::MouseEvent &e) {
+   // A right-click (or ctrl-click on macOS) is for a menu, not a flip.
+   if (toggle_ && !e.shouldTriggerPopup()) {
       setOn(!on_);
       if (onToggle)
          onToggle(on_);
