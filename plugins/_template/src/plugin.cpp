@@ -447,7 +447,7 @@ const clap_plugin_descriptor_t PluginTemplate::descriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.3.0",
+   "0.4.0",
    "Stereo gain, pan, width and routing, with a test tone",
    kFeatures,
 };
