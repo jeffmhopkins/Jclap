@@ -21,6 +21,9 @@ void ClapGui::init(const clap_host_t *host) {
    auto *fd = static_cast<const clap_host_posix_fd_support_t *>(host->get_extension(host, CLAP_EXT_POSIX_FD_SUPPORT));
    if (fd && fd->register_fd && fd->unregister_fd)
       hostFd_ = fd;
+   auto *timer = static_cast<const clap_host_timer_support_t *>(host->get_extension(host, CLAP_EXT_TIMER_SUPPORT));
+   if (timer && timer->register_timer && timer->unregister_timer)
+      hostTimer_ = timer;
 }
 
 bool ClapGui::isApiSupported(const char *api, bool isFloating) { return !isFloating && !std::strcmp(api, kWindowApi); }
@@ -36,6 +39,8 @@ bool ClapGui::create(const char *api, bool isFloating) {
       return false;
    if (!window_) {
       window_ = createWindow();
+      if (!window_)
+         return false;
       // Without the host's gui extension there is no one to ask, so the window just resizes.
       window_->onResizeRequest = [this](uint32_t w, uint32_t h) {
          return !hostGui_ || hostGui_->request_resize(host_, w, h);
@@ -55,8 +60,15 @@ void ClapGui::unregisterFd() {
    fd_ = -1;
 }
 
+void ClapGui::unregisterTimer() {
+   if (timer_ != CLAP_INVALID_ID)
+      hostTimer_->unregister_timer(host_, timer_);
+   timer_ = CLAP_INVALID_ID;
+}
+
 void ClapGui::destroy() {
    unregisterFd();
+   unregisterTimer();
    if (window_) {
       lastWidth_ = window_->width();
       lastHeight_ = window_->height();
@@ -105,16 +117,42 @@ bool ClapGui::setParent(const clap_window_t *window) {
    // the fd swapped. Only READ: the socket is nearly always writable, and asking for WRITE makes
    // the host call on_fd nonstop.
    unregisterFd();
+   unregisterTimer();
    window_->show(reinterpret_cast<void *>(window->x11));
    const int fd = window_->posixFd();
    if (hostFd_ && fd >= 0 && hostFd_->register_fd(host_, fd, CLAP_POSIX_FD_READ | CLAP_POSIX_FD_ERROR))
       fd_ = fd;
+   // No fd support: poll the connection from a host timer instead, about once a frame.
+   else if (!hostTimer_ || !hostTimer_->register_timer(host_, 16, &timer_))
+      timer_ = CLAP_INVALID_ID;
+   // Nothing would ever service the window, so it would sit there unpainted.
+   if (fd_ < 0 && timer_ == CLAP_INVALID_ID)
+      return false;
 #endif
    return true;
 }
 
+bool ClapGui::setScale(double scale) { return window_ && window_->setHostScale(scale); }
+
+bool ClapGui::show() {
+   if (window_)
+      window_->setVisible(true);
+   return window_ != nullptr;
+}
+
+bool ClapGui::hide() {
+   if (window_)
+      window_->setVisible(false);
+   return window_ != nullptr;
+}
+
 void ClapGui::onFd() {
    if (window_)
+      window_->processFdEvents();
+}
+
+void ClapGui::onTimer(clap_id id) {
+   if (window_ && id == timer_)
       window_->processFdEvents();
 }
 

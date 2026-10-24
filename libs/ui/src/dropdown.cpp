@@ -4,6 +4,21 @@
 
 namespace jclap::ui {
 
+namespace {
+
+// Builds and opens the right-click menu from `fill`, if it adds anything.
+void showContextMenu(visage::Frame *frame, const visage::MouseEvent &e,
+                     const std::function<void(visage::PopupMenu &)> &fill) {
+   if (!fill)
+      return;
+   visage::PopupMenu menu;
+   fill(menu);
+   if (menu.hasOptions())
+      menu.show(frame, e.position);
+}
+
+} // namespace
+
 void Dropdown::setOptions(std::vector<std::string> options) {
    options_ = std::move(options);
    selected_ = std::clamp(selected_, 0, std::max(0, static_cast<int>(options_.size()) - 1));
@@ -67,7 +82,14 @@ void Dropdown::mouseExit(const visage::MouseEvent &) {
    redraw();
 }
 
-void Dropdown::mouseDown(const visage::MouseEvent &) {
+void Dropdown::mouseDown(const visage::MouseEvent &e) {
+   // Right-click is the param's menu; only a plain click opens the options.
+   if (e.shouldTriggerPopup()) {
+      showContextMenu(this, e, onContextMenu);
+      return;
+   }
+   if (!e.isLeftButton())
+      return;
    visage::PopupMenu menu;
    for (size_t i = 0; i < options_.size(); ++i)
       menu.addOption(static_cast<int>(i), options_[i]).select(static_cast<int>(i) == selected_);

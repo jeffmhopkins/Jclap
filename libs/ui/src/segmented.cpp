@@ -4,6 +4,21 @@
 
 namespace jclap::ui {
 
+namespace {
+
+// Builds and opens the right-click menu from `fill`, if it adds anything.
+void showContextMenu(visage::Frame *frame, const visage::MouseEvent &e,
+                     const std::function<void(visage::PopupMenu &)> &fill) {
+   if (!fill)
+      return;
+   visage::PopupMenu menu;
+   fill(menu);
+   if (menu.hasOptions())
+      menu.show(frame, e.position);
+}
+
+} // namespace
+
 void SegmentedSwitch::setOptions(std::vector<std::string> options) {
    options_ = std::move(options);
    selected_ = std::clamp(selected_, 0, std::max(0, static_cast<int>(options_.size()) - 1));
@@ -87,7 +102,14 @@ void SegmentedSwitch::mouseExit(const visage::MouseEvent &) {
    redraw();
 }
 
-void SegmentedSwitch::mouseDown(const visage::MouseEvent &e) { pick(indexAt(e.position.x)); }
+void SegmentedSwitch::mouseDown(const visage::MouseEvent &e) {
+   if (e.shouldTriggerPopup()) {
+      showContextMenu(this, e, onContextMenu);
+      return;
+   }
+   if (e.isLeftButton())
+      pick(indexAt(e.position.x));
+}
 
 bool SegmentedSwitch::mouseWheel(const visage::MouseEvent &e) {
    if (e.wheel_delta_y == 0.0f || options_.empty())

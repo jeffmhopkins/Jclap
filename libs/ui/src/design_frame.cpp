@@ -32,6 +32,14 @@ std::vector<Rect> grid(Rect area, int columns, int rows, float gap) {
    return cells;
 }
 
+float designScale(const visage::Frame &frame) {
+   for (const visage::Frame *f = &frame; f; f = f->parent()) {
+      if (auto *design = dynamic_cast<const DesignFrame *>(f))
+         return design->scale() > 0.0f ? design->scale() : 1.0f;
+   }
+   return 1.0f;
+}
+
 DesignFrame::DesignFrame(float designWidth, float designHeight)
    : designWidth_(designWidth), designHeight_(designHeight) {}
 

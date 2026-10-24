@@ -5,6 +5,7 @@
 // either side that step by the range's step (1 if it has none). Fits CC numbers, channels and
 // other whole-number params. Binds like a Knob.
 
+#include "jclap/ui/design_frame.h"
 #include "jclap/ui/value_control.h"
 
 namespace jclap::ui {
@@ -22,7 +23,8 @@ public:
 
 protected:
    float dragDistance(visage::Point from, visage::Point to) const override { return from.y - to.y; }
-   float dragLength() const override { return 200.0f; }
+   // 200 points at the design size, so it feels the same at any UI zoom.
+   float dragLength() const override { return 200.0f * designScale(*this); }
 
 private:
    // Which part of the box a point is over: -1 the - button, +1 the + button, 0 the value.

@@ -32,6 +32,9 @@ public:
 
    // Called when the user picks an option.
    std::function<void(int)> onChange;
+   // Right-click menu items (e.g. the host's param menu, from ParamBindings). The menu only opens
+   // if this adds something.
+   std::function<void(visage::PopupMenu &)> onContextMenu;
 
    void draw(visage::Canvas &canvas) override;
    void mouseEnter(const visage::MouseEvent &e) override;

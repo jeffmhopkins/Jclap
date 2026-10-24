@@ -36,7 +36,10 @@ void EnvelopeEditor::setValues(double attack, double decay, double sustain, doub
 
 void EnvelopeEditor::setValue(Stage s, double value, double modulated) {
    ValueAxis &a = stages_[s];
-   if (dragging_ != kNone)
+   // Only the stages under the mouse hold still; the others follow the host as usual.
+   Stage held1, held2;
+   stagesOf(dragging_, held1, held2);
+   if (dragging_ != kNone && (s == held1 || s == held2))
       value = a.value;
    if (value != a.value || modulated != a.modulated) {
       a.value = value;
@@ -180,7 +183,8 @@ EnvelopeEditor::Handle EnvelopeEditor::handleAt(visage::Point p) const {
    const Points pts = points(false);
    const visage::Point handles[] = {pts.peak, pts.knee, pts.end};
    Handle best = kNone;
-   float bestDistance = std::max(14.0f, std::min(width(), height()) * 0.12f);
+   const float reach = std::max(14.0f, std::min(width(), height()) * 0.12f);
+   float bestDistance = reach;
    for (int i = 0; i < 3; ++i) {
       const float d = std::hypot(p.x - handles[i].x, p.y - handles[i].y);
       if (d < bestDistance) {
@@ -188,6 +192,10 @@ EnvelopeEditor::Handle EnvelopeEditor::handleAt(visage::Point p) const {
          best = static_cast<Handle>(i);
       }
    }
+   // With a short decay to a high sustain the knee sits on (or beside) the peak. It always lies to
+   // the right, so a press right of the peak takes the knee and one on or left of it the peak.
+   if (best == kPeak && p.x > pts.peak.x && std::hypot(p.x - pts.knee.x, p.y - pts.knee.y) < reach)
+      best = kKnee;
    return best;
 }
 
@@ -250,6 +258,9 @@ std::string EnvelopeEditor::popupText() const {
 }
 
 void EnvelopeEditor::mouseDown(const visage::MouseEvent &e) {
+   // Another button pressed mid-drag belongs to the drag, which the first release ends.
+   if (dragging_ != kNone)
+      return;
    const Handle h = handleAt(e.position);
    if (e.shouldTriggerPopup()) {
       visage::PopupMenu menu;

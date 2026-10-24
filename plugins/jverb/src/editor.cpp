@@ -256,6 +256,9 @@ public:
 
    void draw(visage::Canvas &c) override {
       const float s = width() / designWidth_;
+      // 18 pixels at the design size and 1x, so the glow keeps its size relative to the scene at
+      // any window size or DPI.
+      bloom_.setBloomSize(18.0f * s * (dpiScale() > 0.0f ? dpiScale() : 1.0f));
       c.setColor(0xff04050a);
       c.fill(0, 0, width(), height());
       drawBackdrop(c, s);

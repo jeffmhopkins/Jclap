@@ -31,6 +31,8 @@ const Theme &defaultTheme();
 
 // The library's UI font (Lato Regular) at the given size.
 visage::Font font(float size);
+// The same at a window's DPI scale, for measuring text (stringWidth needs the scale set).
+visage::Font font(float size, float dpiScale);
 
 // A MIDI note's name with its octave, middle C (60) as C4: "C4", "F#2".
 std::string noteName(int note);

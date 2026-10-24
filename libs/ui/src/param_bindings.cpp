@@ -52,6 +52,7 @@ void ParamBindings::bind(Button &button, clap_id id) {
       access_.setParam(id, on ? 1.0 : 0.0);
       access_.endEdit(id);
    };
+   button.onContextMenu = [this, id](visage::PopupMenu &menu) { addHostMenu(menu, id); };
    button.setOn(access_.paramValue(id) >= 0.5);
    Bound b;
    b.button = &button;
@@ -65,6 +66,7 @@ void ParamBindings::bind(Dropdown &dropdown, clap_id id) {
       access_.setParam(id, dropdown.firstValue + index);
       access_.endEdit(id);
    };
+   dropdown.onContextMenu = [this, id](visage::PopupMenu &menu) { addHostMenu(menu, id); };
    dropdown.setSelected(static_cast<int>(std::lround(access_.paramValue(id) - dropdown.firstValue)));
    Bound b;
    b.dropdown = &dropdown;
@@ -78,6 +80,7 @@ void ParamBindings::bind(SegmentedSwitch &segments, clap_id id) {
       access_.setParam(id, segments.firstValue + index);
       access_.endEdit(id);
    };
+   segments.onContextMenu = [this, id](visage::PopupMenu &menu) { addHostMenu(menu, id); };
    segments.setSelected(static_cast<int>(std::lround(access_.paramValue(id) - segments.firstValue)));
    Bound b;
    b.segments = &segments;
@@ -159,8 +162,10 @@ void ParamBindings::addHostMenu(visage::PopupMenu &menu, clap_id id) {
    if (items.empty())
       return;
 
-   // Host action ids only need to be unique within this menu; offset them past the built-in items.
+   // Option ids only need to be unique within this menu, so they count up past the built-in items
+   // rather than reuse the host's action ids, which can be any 32-bit value.
    constexpr int kFirstId = 1000;
+   int nextId = kFirstId;
    std::vector<visage::PopupMenu> stack(1);
    for (const HostMenu::Item &item : items) {
       visage::PopupMenu &current = stack.back();
@@ -168,7 +173,7 @@ void ParamBindings::addHostMenu(visage::PopupMenu &menu, clap_id id) {
       case HostMenu::Item::Kind::Entry:
       case HostMenu::Item::Kind::Check: {
          const clap_id action = item.action;
-         current.addOption(kFirstId + static_cast<int>(action), item.label)
+         current.addOption(nextId++, item.label)
             .select(item.checked)
             .enable(item.enabled)
             .onSelection() += [host, id, action](int) { host->perform(id, action); };

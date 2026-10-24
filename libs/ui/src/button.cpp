@@ -2,6 +2,21 @@
 
 namespace jclap::ui {
 
+namespace {
+
+// Builds and opens the right-click menu from `fill`, if it adds anything.
+void showContextMenu(visage::Frame *frame, const visage::MouseEvent &e,
+                     const std::function<void(visage::PopupMenu &)> &fill) {
+   if (!fill)
+      return;
+   visage::PopupMenu menu;
+   fill(menu);
+   if (menu.hasOptions())
+      menu.show(frame, e.position);
+}
+
+} // namespace
+
 void Button::setText(std::string text) {
    if (text != text_) {
       text_ = std::move(text);
@@ -50,6 +65,10 @@ void Button::mouseExit(const visage::MouseEvent &) {
 
 void Button::mouseDown(const visage::MouseEvent &e) {
    // A right-click (or ctrl-click on macOS) is for a menu, not a flip.
+   if (e.shouldTriggerPopup() && onContextMenu) {
+      showContextMenu(this, e, onContextMenu);
+      return;
+   }
    if (toggle_ && !e.shouldTriggerPopup()) {
       setOn(!on_);
       if (onToggle)

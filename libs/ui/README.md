@@ -89,9 +89,18 @@ in, and the right-click menu gets the host's items through CLAP's context-menu e
 It doesn't include Visage, so the plugin's main file doesn't have to either. 
 
 > [!NOTE]
-> Visage picks up the monitor's DPI itself, so HiDPI screens work without the host's `set_scale`.
+> On macOS and Windows the window follows the OS's per-monitor scale and refuses the host's
+> `set_scale`. On Linux it takes the host's `set_scale`, and without one the desktop's scale
+> (`Xft.dpi`, which desktop scaling sets), not the monitor's physical DPI.
 
-`jclap/ui/clap_gui.h` implements the CLAP `gui` and `posix-fd-support` extensions for that window.
+`jclap/ui/clap_gui.h` implements the CLAP `gui`, `posix-fd-support` and `timer-support` extensions
+for that window. On Linux the window's events come through the host's fd polling, or a 16 ms host
+timer when the host has no fd support.
+
+Visage is patched (`libs/ui/patches/visage.patch`, applied when CMake fetches it). Each change is
+marked `jclap:`. A press while another button is held goes to the widget being dragged. On Linux
+the window no longer follows the host's parent window size, writes no size hints on the host's
+window, and stops drawing while hidden. On Windows the host's window isn't subclassed.
 With a `jclap::core::Plugin` subclass:
 
 ```cpp

@@ -11,6 +11,8 @@ const Theme &defaultTheme() {
 
 visage::Font font(float size) { return visage::Font(size, visage::fonts::Lato_Regular_ttf); }
 
+visage::Font font(float size, float dpiScale) { return font(size).withDpiScale(dpiScale > 0.0f ? dpiScale : 1.0f); }
+
 std::string noteName(int note) {
    static const char *const kNames[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
    const int octave = (note < 0 ? (note - 11) / 12 : note / 12) - 1;
