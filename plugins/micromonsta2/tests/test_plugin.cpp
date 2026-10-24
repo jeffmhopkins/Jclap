@@ -120,7 +120,7 @@ int main() {
    CHECK_EQ(moved.empty() ? 0 : moved[0].channel, 3);
 
    // A channel change mid-block moves the CCs after it at once: the set knobs go out again on the new
-   // channel at that time, and the later edit with them.
+   // channel at that time, and the later edit with them (101 plus the +2 modulation still on 74).
    h.setParam(mm2::kChannelParamId, 5, 10);
    h.setParam(74, 101, 20);
    const auto midBlock = h.process();
@@ -128,7 +128,7 @@ int main() {
    bool all5 = !midBlock.midi.empty(), got74 = false;
    for (const Cc &c : ccs(midBlock)) {
       all5 = all5 && c.channel == 5;
-      got74 = got74 || (c.cc == 74 && c.value == 101);
+      got74 = got74 || (c.cc == 74 && c.value == 103);
    }
    JCLAP_CHECK(all5 && got74);
    CHECK_EQ(ccs(h.process()).size(), 0u);
