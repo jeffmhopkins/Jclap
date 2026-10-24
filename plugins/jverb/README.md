@@ -95,7 +95,7 @@ that ring for most of a minute (Short, Medium, Long, Washes), and your own. SAVE
 - Windows: `%APPDATA%\JVerb\Presets`
 - Linux: `$XDG_CONFIG_HOME/JVerb/Presets` (or `~/.config/JVerb/Presets`)
 
-Each is a small text file, `.jvpreset`, listing the params that differ from their defaults. The
+Each is a small text file, `.jvpreset`, listing every param. The
 preset's name is saved with the project.
 
 ## Threads

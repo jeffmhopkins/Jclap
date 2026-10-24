@@ -803,6 +803,10 @@ public:
    }
 
    bool mouseWheel(const visage::MouseEvent &e) override {
+      // Only a vertical scroll steps: a sideways trackpad swipe, or the zero-delta events some
+      // trackpads send, would otherwise step every time.
+      if (e.wheel_delta_y == 0.0f || std::fabs(e.wheel_delta_x) > std::fabs(e.wheel_delta_y))
+         return false;
       step(e.wheel_delta_y > 0 ? -1 : 1);
       return true;
    }
@@ -1306,8 +1310,7 @@ private:
       tabs.addToPage(2, pingPong);
       tips_.add(pingPong, "Ping-pong: repeats bounce between left and right.");
       const auto q = ui::grid({980, 212, 194, 300}, 2, 2);
-      auto &time = knob(kEchoTime, "TIME", e, q[0], "The echo's time when SYNC is Free. A body routed to Echo "
-                                                     "bends it like a tape machine.");
+      auto &time = knob(kEchoTime, "TIME", e, q[0], "The echo's time when SYNC is Free.");
       time.valueText = [this](double v) {
          const int sync = static_cast<int>(host_.paramValue(kEchoSync) + 0.5);
          return sync > 0 && sync < kEchoSyncCount ? std::string(kEchoSyncNames[sync]) : text(kEchoTime, v);
