@@ -87,6 +87,8 @@ constexpr double kLfoLow = 0.05;
 constexpr double kLfoSpan = 400.0;
 inline double lfoHz(double value) { return kLfoLow * std::pow(kLfoSpan, value); }
 inline double lfoValue(double hz) { return std::log(hz / kLfoLow) / std::log(kLfoSpan); }
+// How far LFO to Pulse Width moves the width at full depth and full swing, either way.
+constexpr double kLfoWidthSwing = 0.45;
 // Detune runs -1..1, cubed and scaled to an octave: fine around the centre for beating (0.2 is
 // about 10 cents), and a whole octave either way at the ends.
 inline double detuneSemitones(double value) { return 12.0 * value * value * value; }

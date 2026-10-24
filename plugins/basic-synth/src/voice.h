@@ -18,6 +18,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "params.h"
+
 namespace basic_synth {
 
 constexpr int kEnvCount = 2;
@@ -171,7 +173,7 @@ public:
       const double pitch = pitch_.process() + toPitch;
       if (lfoToPulseWidth_ > 0.0) {
          // Pulse width modulation, about the knob's width and kept inside the oscillator's range.
-         const double width = std::clamp(pulseWidth_ + lfoToPulseWidth_ * 0.45 * lfo, 0.05, 0.95);
+         const double width = std::clamp(pulseWidth_ + lfoToPulseWidth_ * kLfoWidthSwing * lfo, 0.05, 0.95);
          osc_.setPulseWidth(width);
          osc2_.setPulseWidth(width);
       }

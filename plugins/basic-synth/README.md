@@ -47,7 +47,8 @@ oscillator ──> filter ──> VCA ──> out
 Every parameter is a host parameter: Bitwig can automate it, and its modulators can move it. Every
 one except MPE Bend Range can also be modulated **per voice**, so a polyphonic modulator in Bitwig
 (a per-note LFO, velocity or random, for instance) moves each note on its own. The knobs and
-envelope drawings show the host's modulation as a light ring or line over the value.
+envelope drawings show the host's modulation as a light ring or line over the value. The LFO's own movement shows
+the same way in green, carrying on from the host's: on CUTOFF and WIDTH while a note sounds.
 
 ## MPE
 
