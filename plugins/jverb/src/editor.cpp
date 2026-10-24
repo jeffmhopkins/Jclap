@@ -189,7 +189,7 @@ public:
       frame_ = f;
       time_ += dt;
       for (int b = 0; b < kMaxBodies; ++b)
-         swirlAngle_[b] = std::fmod(swirlAngle_[b] + dt * (0.6f + 7.0f * std::clamp(f.voiceSwirl[b], 0.0f, 1.0f)), 6.2831853f);
+         swirlAngle_[b] = std::fmod(swirlAngle_[b] + dt * (0.6f + 7.0f * std::clamp(f.voiceSwirl[b], 0.0f, 2.0f)), 6.2831853f);
       for (int b = f.count; b < std::max(oldCount, f.count); ++b)
          trails_[b].clear();
       if (selected >= f.count)
@@ -297,7 +297,11 @@ public:
       for (int b = 0; b < f.count; ++b) {
          const float r = bodyRadius(f.mass[b]) * s;
          const float energy = std::min(1.0f, f.band[b % 3]) * 0.6f + flare_[b % 3];
-         const float tone = std::clamp(f.voiceTone[b], -1.0f, 1.0f), swirl = std::clamp(f.voiceSwirl[b], 0.0f, 1.0f);
+         // Past 100% the voices go further than the drawing should, so the glow grows more slowly there
+         // (bloom would blow out) and the swirl arcs only lengthen up to a full ring of three.
+         const float rawTone = std::clamp(f.voiceTone[b], -2.0f, 2.0f);
+         const float tone = std::clamp(rawTone, -1.0f, 1.0f) + 0.35f * (rawTone - std::clamp(rawTone, -1.0f, 1.0f));
+         const float swirl = std::clamp(f.voiceSwirl[b], 0.0f, 2.0f);
          const float bx = X(f.x[b]), by = Y(f.y[b]);
          const float halo = r * (3.0f + 1.5f * energy) * (1.0f + 0.2f * tone);
          const visage::Color core = visage::Color(kBodyColors[b]).interpolateWith(0xffffffff, std::max(0.0f, 0.3f * tone));
@@ -312,9 +316,9 @@ public:
          c.circle(bx - 0.4f * r, by - 0.4f * r, 0.8f * r);
          if (swirl > 0.02f) {
             const float ring = r + (6.0f + 4.0f * swirl) * s;
-            c.setColor(glow(kBodyColors[b], 0.25f + 0.65f * swirl, 1.0f + 0.6f * swirl));
+            c.setColor(glow(kBodyColors[b], std::min(0.25f + 0.65f * swirl, 1.0f), 1.0f + 0.6f * std::min(swirl, 1.0f)));
             for (int k = 0; k < 3; ++k)
-               c.roundedArc(bx - ring, by - ring, 2 * ring, 1.4f * s, swirlAngle_[b] + k * 2.0944f, 0.15f + 0.35f * swirl);
+               c.roundedArc(bx - ring, by - ring, 2 * ring, 1.4f * s, swirlAngle_[b] + k * 2.0944f, std::min(0.15f + 0.35f * swirl, 0.95f));
          }
       }
 
@@ -918,7 +922,8 @@ private:
 };
 
 // The ORBIT page's live view of every body's voice: a row each, with where it sits left to right,
-// its tone (a bar from the centre, right for brighter) and how hard its phaser sweeps.
+// its tone (a bar from the centre, right for brighter) and how hard its phaser sweeps. The bars run to
+// 200%, with a tick at 100% where the normal zone ends.
 class VoiceList : public visage::Frame {
 public:
    VoiceList() { setIgnoresMouseEvents(true, false); }
@@ -950,18 +955,23 @@ public:
          const float dot = px + bw * 0.5f * (1.0f + std::clamp(frame_.voicePan[b], -1.0f, 1.0f));
          c.circle(dot - 3.5f * s, mid - 3.5f * s, 7 * s);
          // Tone: a bar from the centre.
-         const float tx = col + colW + pad, tone = std::clamp(frame_.voiceTone[b], -1.0f, 1.0f);
+         const float tx = col + colW + pad, tone = std::clamp(frame_.voiceTone[b], -2.0f, 2.0f);
          c.setColor(visage::Color(0x22ffffff));
          c.roundedRectangle(tx, mid - 3 * s, bw, 6 * s, 3 * s);
+         const float half = bw / 2, len = std::fabs(tone) * 0.5f * half;
+         c.setColor(visage::Color(0x44ffffff));
+         c.fill(tx + 0.25f * bw, mid - 5 * s, 1.0f * s, 10 * s);
+         c.fill(tx + 0.75f * bw, mid - 5 * s, 1.0f * s, 10 * s);
          c.setColor(glow(tone >= 0 ? 0xfffff1d6 : 0xff6f86c0, 0.9f, 1.2f));
-         const float half = bw / 2, len = std::fabs(tone) * half;
          c.roundedRectangle(tone >= 0 ? tx + half : tx + half - len, mid - 3 * s, std::max(1.0f * s, len), 6 * s, 3 * s);
          // Swirl: a bar from the left.
-         const float sx = col + 2 * colW + pad, swirl = std::clamp(frame_.voiceSwirl[b], 0.0f, 1.0f);
+         const float sx = col + 2 * colW + pad, swirl = std::clamp(frame_.voiceSwirl[b], 0.0f, 2.0f);
          c.setColor(visage::Color(0x22ffffff));
          c.roundedRectangle(sx, mid - 3 * s, bw, 6 * s, 3 * s);
+         c.setColor(visage::Color(0x44ffffff));
+         c.fill(sx + 0.5f * bw, mid - 5 * s, 1.0f * s, 10 * s);
          c.setColor(glow(kBodyColors[b], 0.9f, 1.2f));
-         c.roundedRectangle(sx, mid - 3 * s, std::max(1.0f * s, swirl * bw), 6 * s, 3 * s);
+         c.roundedRectangle(sx, mid - 3 * s, std::max(1.0f * s, 0.5f * swirl * bw), 6 * s, 3 * s);
       }
    }
 
@@ -1083,6 +1093,9 @@ private:
       k.setAccent(accent);
       k.valueText = [id](double v) { return text(id, v); };
       k.parseText = [id](const std::string &t, double &v) { return parseParam(id, t.c_str(), v); };
+      // These go to 200%; past the tick at 100% is the extreme zone.
+      if (id == kMotion || id == kOrbitPan || id == kOrbitTone || id == kOrbitSwirl)
+         k.setMarker(1.0);
       bindings_.bind(k, id);
       if (tip)
          tips_.add(k, tip);
