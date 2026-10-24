@@ -44,8 +44,10 @@ one-pole smoothers (25 ms for lengths, 80 ms for pans and voice gains), so a cha
 flowchart TD
     IN([stereo in]) --> CUT[High Cut, then Low Cut]
     CUT --> DPRE{{Drive PRE}}
-    DPRE --> EINTO{{Echo INTO}}
-    EINTO --> PD[Predelay]
+    DPRE --> INSUM((+))
+    DPRE -.-> EINTO{{Echo, if slot INTO}}
+    EINTO -.->|repeats x Echo Mix| INSUM
+    INSUM --> PD[Predelay]
     PD --> DIF[Diffusion<br/>6 allpasses per side]
     PD --> ER[Early reflections<br/>8 taps, 7 to 67 ms x Size]
     DIF --> ATT[Attack<br/>swell: 3 long allpasses<br/>reverse: windowed playback]
@@ -72,9 +74,9 @@ flowchart TD
         SHIM --> SMEAR[Smear, 2 allpasses]
         SMEAR --> TILT[Tilt around 700 Hz]
         TILT --> FB[x Feedback x loop scale]
-        TILT --> ELOOP{{Echo LOOP}}
+        TILT -.-> ELOOP{{Echo, if slot LOOP}}
         FB --> FBSUM((+))
-        ELOOP --> FBSUM
+        ELOOP -.->|repeats x 0.6 Echo Mix| FBSUM
         FBSUM --> SAFE[Safety, soft or hard]
     end
     SAFE -.->|next sample| SUM
@@ -82,14 +84,18 @@ flowchart TD
     VOICES --> EL[Early/Late balance]
     ER --> EL
     EL --> DPOST{{Drive POST}}
-    DPOST --> EAFTER{{Echo AFTER}}
-    EAFTER --> OUT[Width, Duck, Mix with dry, Level]
+    DPOST --> OUTSUM((+))
+    DPOST -.-> EAFTER{{Echo, if slot AFTER}}
+    EAFTER -.->|repeats x Echo Mix| OUTSUM
+    OUTSUM --> OUT[Width, Duck, Mix with dry, Level]
     OUT --> OUTP([stereo out])
 ```
 
-The hexagons are the slots. Drive sits in exactly one of PRE, LOOP or POST; Echo sits in exactly
-one of INTO, LOOP or AFTER. The echo runs every sample even when it is switched off (its mix is just
-zero), so turning it back on never replays repeats from long ago.
+The hexagons are the slots. **Drive** sits in exactly one of PRE, LOOP or POST, in line with the
+signal. The **echo** is a single unit drawn at all three of its possible places (the dotted
+branches), and only the one its slot names is live. Wherever it sits it works as a send and return:
+it takes a copy of the signal at that point and adds only its repeats back in, scaled by Echo Mix, so
+the signal itself always passes straight through. See [Echo](#echo) for how it works inside.
 
 Two things about the shape matter more than anything else:
 
@@ -104,9 +110,9 @@ Two things about the shape matter more than anything else:
 **Filters.** The input goes through a lowpass (High Cut, 1 to 20 kHz) and a high-pass (Low Cut,
 20 Hz to 1 kHz). Only the reverb hears them; the dry signal is untouched.
 
-**Drive PRE** and **Echo INTO** come next if they are in those slots (see [Drive](#drive) and
-[Echo](#echo)). Echo INTO adds its repeats here, so both the early reflections and the tank hear
-every repeat.
+**Drive PRE** comes next if the drive is in that slot (see [Drive](#drive)). Then, if the echo's
+slot is INTO, the echo takes a copy of the signal here and adds its repeats back, so both the early
+reflections and the tank hear every repeat (see [Echo](#echo)).
 
 **Predelay** is a delay of 0 to 500 ms.
 
@@ -226,7 +232,8 @@ voices see, before the voices), shapes it, and adds it to the tank's input on th
 4. **Smear**: two short allpasses (17 to 28 ms) with gain 0.7 times Smear, mixed in by Smear.
 5. **Tilt**: a seesaw around 700 Hz, up to 6 dB each way.
 6. **Feedback**, times the **loop scale**.
-7. **Echo LOOP**, if the echo is in that slot: echoes of the shaped tail are added here.
+7. **Echo LOOP**, if the echo is in that slot: echoes of the shaped tail (taken before the Feedback
+   gain) are added here. See [Echo](#echo).
 8. **Safety**: Soft is a tanh; Hard is a clip at ±1.
 
 **Why Feedback means the same at every decay.** The tank's resonances get louder the longer the
@@ -262,29 +269,89 @@ tank), **LOOP** (in the outer loop) or **POST** (on the wet signal, before Echo 
 
 ## Echo
 
-A stereo delay of up to 4 seconds. **Echo Time** is free (10 to 4000 ms) when Echo Sync is "Free";
-otherwise Sync picks a note value from 1/16 to 2 bars at the host's tempo, halved until it fits under
-4 s. The delay time glides with a 120 ms time constant, like a tape transport, so changing the time
-bends the pitch of the repeats instead of clicking.
+One stereo delay, up to 4 seconds long, which can sit at one of three points in the reverb. It is a
+send and return: it never replaces the signal where it sits, it adds repeats of it.
 
-Each repeat goes through a tone tilt around 1.8 kHz (Echo Tone below zero cuts the highs by up to
-12 dB; above zero cuts the lows by up to 9 dB and lifts the highs by 3), a 60 Hz high-pass and a tanh
-saturator on the feedback. Echo Feedback runs to 105%, so past 100% the repeats bloom into distortion
-instead of blowing up. **Ping-Pong** sends the input in mono on the left and swaps each repeat to
-the other side.
+### Inside the echo
 
-The three slots:
+```mermaid
+flowchart LR
+    IN([a copy of the signal<br/>at the echo's slot]) --> W((+))
+    W --> DL[delay line<br/>Echo Time or Echo Sync<br/>glides like tape]
+    DL --> R[/repeat/]
+    R --> OUT([repeats only, x Echo Mix,<br/>added back at the slot])
+    R --> T[Echo Tone<br/>tilt around 1.8 kHz]
+    T --> H[60 Hz high-pass]
+    H --> S[x Echo Feedback,<br/>then tanh]
+    S -.->|"next repeat: same side,<br/>or the other side with Ping-Pong"| W
+```
 
-- **INTO**: the repeats are added to the input before the predelay, so each repeat is reverberated.
-- **LOOP**: echoes of the outer loop's shaped tail go back into the tank (at 0.6 x Echo Mix, scaled
-  by the loop scale), so the tail returns in long, spaced passes, even with Feedback at zero. The
-  safety stage keeps both loops bounded. Freeze turns it off.
-- **AFTER**: echoes of the finished reverb, after Drive POST.
+Each side (left and right) has its own line. Every sample:
+
+1. **Read** the line at the echo time. That is the repeat, and it is all the echo returns: the echo's
+   output has no dry signal in it.
+2. **Feed back** the repeat into the line, through Echo Tone, a 60 Hz high-pass and a tanh
+   saturator with Echo Feedback as its gain. So the first repeat is the signal as it went in, and
+   each one after it is a little more filtered and a little more saturated than the last.
+3. **Write** the line: the incoming signal plus the fed-back repeat.
+
+**Time.** With Echo Sync on Free, the time is Echo Time, 10 to 4000 ms. Any other Sync value is a
+note value (1/16 to 2 bars, including triplets and dotted values) at the host's tempo; at 120 BPM the
+default 1/8D is 375 ms. A synced time longer than 4 s, at slow tempos, is halved until it fits. The
+line's read point glides toward a new time with a 120 ms time constant, the way a tape machine's
+speed settles, so turning the time knob (or a tempo change) bends the pitch of the repeats already in
+the line instead of clicking.
+
+**Feedback** is the level of each repeat relative to the one before, 0 to 105%. Because the feedback
+goes through a tanh, past about 100% the repeats grow until they saturate rather than blowing up, so
+the echo holds at a dense, driven level.
+
+**Tone** works on the feedback only, so it shapes each later repeat more than the one before:
+
+| Echo Tone | Each pass, below 1.8 kHz | Each pass, above 1.8 kHz |
+| --- | --- | --- |
+| -100% | 0 dB | -12 dB (repeats get darker fast) |
+| -20% (default) | 0 dB | -2.4 dB |
+| 0% | 0 dB | 0 dB |
+| +100% | -9 dB | +3 dB (repeats thin out and brighten) |
+
+The 60 Hz high-pass keeps low end from piling up however many times a repeat goes round.
+
+**Ping-Pong.** Off, each side echoes itself: left feeds the left line and its repeats feed back on the
+left, the same on the right. On, the input is summed to mono and written only into the left line;
+each repeat then feeds back into the other side's line. So the first repeat is on the left, the
+second on the right, and they alternate from there.
+
+**Echo On** ramps Echo Mix to zero rather than stopping the echo. The echo runs every sample in
+whichever slot it is set to, so turning it back on never replays repeats from long ago, and moving it
+to another slot keeps what is already in its lines.
+
+### The three slots
+
+| Slot | It takes a copy of | Its repeats are added to | What you hear |
+| --- | --- | --- | --- |
+| **INTO** | the input, after the cuts and Drive PRE | the input, before the predelay | Every repeat is reverberated: the early reflections and the tank hear each one as a new note, so you get a rhythm of reverb swells. |
+| **LOOP** | the outer loop: the tank's plain sum after Drive LOOP, shimmer, smear and tilt, before the Feedback gain | the outer loop's return, before the safety stage, at 0.6 x Echo Mix x the loop scale | The tail comes back into the tank in long, spaced passes, one per echo time, even with Feedback at 0. With Feedback up the two loops stack. |
+| **AFTER** | the finished wet signal: early and late after Drive POST | the wet signal, before Width, Duck and Mix | Plain echoes of the reverb. They are part of the wet, so Width, Duck and Mix act on them too, but they are never reverberated. |
+
+A few things about the LOOP slot follow from where it sits:
+
+- Its repeats go into the tank, so they are reverberated again and again, each pass one echo time
+  later and through the tank's decay, the loop's tilt and shimmer, and the echo's own tone.
+- Its level is scaled by the same loop scale that keeps Feedback meaning the same at any decay, so
+  the echo returns about as strongly at a 2 s decay as at a 30 s one.
+- It shares the loop's safety stage (soft tanh or hard clip), which keeps the echo and the outer loop
+  bounded together.
+- Freeze closes it along with the input and the outer loop, so a frozen tail stays as it is.
+
+The factory presets show each slot: Swirling Slapback and Dotted Echo Hall use INTO, Tape Loop Orbit
+and Infinite Return use LOOP, and Ping-Pong Space uses AFTER.
 
 ## The output stage
 
 **Early/Late** is an equal-power balance: early reflections times 1.4 cos, late tail times sin, from
-all early at 0% to all late at 100%. Then Drive POST and Echo AFTER, if they are there.
+all early at 0% to all late at 100%. Then Drive POST and the echo's repeats, if they are in those
+slots.
 
 **Width** scales the wet signal's side (0% mono, 100% as is, 200% doubled). **Duck** follows the dry
 input with a 5 ms attack and 300 ms release and turns the wet down by up to Duck while the input
