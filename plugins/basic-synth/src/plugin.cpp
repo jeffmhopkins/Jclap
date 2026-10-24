@@ -47,9 +47,14 @@ struct Slot {
    // Which note this is, to match note-offs and expressions. A note id of -1 means the host gave none.
    int32_t noteId = -1;
    int16_t port = 0, channel = 0, key = -1;
-   // MIDI notes take their bend, pressure and timbre from their channel (MPE gives each note its own);
-   // CLAP notes and the panel's get them per note.
+   // MIDI notes take their bend, pressure and timbre from their channel (MPE gives each note its own).
+   // CLAP notes get them per note, and also follow their channel's MIDI bend, pressure and CC 74, for
+   // hosts that send notes as CLAP events but controllers as MIDI. The panel's notes only per note.
    bool midi = false;
+   // A CLAP note that has had its own pressure or brightness expression uses that, not its channel's.
+   bool ownPressure = false, ownTimbre = false;
+   // Released while the sustain pedal was down: it keeps sounding until the pedal comes up.
+   bool sustained = false;
    // Played on the panel: the host never sent it, so it hears no NOTE_END for it, and the panel's
    // note-offs and expressions touch only these.
    bool panel = false;
@@ -65,6 +70,7 @@ struct Slot {
 // bend moves every note by up to 2 semitones.
 struct ChannelState {
    double bend = 0.0, pressure = 0.0, timbre = 0.5;
+   bool sustain = false; // CC 64 at 64 or more
 };
 
 // State layout: 4-byte magic, uint32 version, uint32 param count, then one double per param in id
@@ -424,16 +430,28 @@ private:
 
    double pitchOf(const Slot &s) const {
       double bend = s.bend;
-      if (s.midi) {
+      if (!s.panel) {
          // The manager channel's bend moves every note; a note channel's moves its own note.
-         bend = channels_[0].bend * 2.0;
+         bend += channels_[0].bend * 2.0;
          if (s.channel > 0)
             bend += channels_[s.channel].bend * value(kBendRange);
       }
       return s.key + std::round(value(kTune, &s)) + bend;
    }
-   double pressureOf(const Slot &s) const { return s.midi ? channels_[s.channel].pressure : s.pressure; }
-   double timbreOf(const Slot &s) const { return s.midi ? channels_[s.channel].timbre : s.timbre; }
+   double pressureOf(const Slot &s) const {
+      return s.panel || s.ownPressure ? s.pressure : channels_[s.channel].pressure;
+   }
+   double timbreOf(const Slot &s) const { return s.panel || s.ownTimbre ? s.timbre : channels_[s.channel].timbre; }
+
+   // The sustain pedal holds a host note when it's down on the note's channel or the manager channel.
+   bool pedalDown(const Slot &s) const { return !s.panel && (channels_[s.channel].sustain || channels_[0].sustain); }
+   // A host note-off: let go now, or when the pedal comes up.
+   void releaseHost(Slot &s) {
+      if (pedalDown(s))
+         s.sustained = true;
+      else
+         s.voice.release();
+   }
 
    void handleEvent(const clap_event_header_t *h, const clap_output_events_t *out) {
       if (h->space_id != CLAP_CORE_EVENT_SPACE_ID)
@@ -479,7 +497,7 @@ private:
                s.voice.reset();
                endNote(s, out, h->time);
             } else {
-               s.voice.release();
+               releaseHost(s);
             }
          }
          break;
@@ -498,9 +516,11 @@ private:
                break;
             case CLAP_NOTE_EXPRESSION_PRESSURE:
                s.pressure = std::clamp(ev->value, 0.0, 1.0);
+               s.ownPressure = true;
                break;
             case CLAP_NOTE_EXPRESSION_BRIGHTNESS:
                s.timbre = std::clamp(ev->value, 0.0, 1.0);
+               s.ownTimbre = true;
                break;
             case CLAP_NOTE_EXPRESSION_VOLUME:
                s.volume = std::clamp(ev->value, 0.0, 4.0);
@@ -513,7 +533,8 @@ private:
       }
       case CLAP_EVENT_MIDI: {
          // MPE gives each note its own channel (2..16), so its bend, channel pressure and CC 74
-         // (timbre) are that note's alone. Plain MIDI on channel 1 bends every note by +/-2.
+         // (timbre) are that note's alone. Plain MIDI on channel 1 bends every note by +/-2. CLAP
+         // notes on the channel follow these too (see Slot::midi).
          auto *ev = reinterpret_cast<const clap_event_midi_t *>(h);
          const int status = ev->data[0] & 0xF0, channel = ev->data[0] & 0x0F;
          ChannelState &c = channels_[channel];
@@ -522,13 +543,24 @@ private:
          } else if (status == 0x80 || status == 0x90) {
             for (Slot &s : slots_)
                if (s.midi && matches(s, -1, ev->port_index, channel, ev->data[1]))
-                  s.voice.release();
+                  releaseHost(s);
          } else if (status == 0xE0) {
             c.bend = ((ev->data[2] << 7 | ev->data[1]) - 8192) / 8192.0;
          } else if (status == 0xD0) {
             c.pressure = ev->data[1] / 127.0;
          } else if (status == 0xB0 && ev->data[1] == 74) {
             c.timbre = ev->data[2] / 127.0;
+         } else if (status == 0xB0 && ev->data[1] == 64) {
+            // Sustain: up lets go of the notes it was holding, unless the other pedal that applies
+            // (this channel's or the manager channel's) is still down.
+            c.sustain = ev->data[2] >= 64;
+            if (!c.sustain)
+               for (Slot &s : slots_)
+                  if (s.sustained && !s.panel && s.voice.isActive() && s.port == ev->port_index &&
+                      (channel == 0 || s.channel == channel) && !pedalDown(s)) {
+                     s.sustained = false;
+                     s.voice.release();
+                  }
          } else if (status == 0xB0 && (ev->data[1] == 120 || ev->data[1] == 123)) {
             // All sound off cuts, all notes off releases: the host's notes on that channel, or on
             // every channel when it comes on the manager channel (1), as for the MPE zone. The
@@ -536,6 +568,8 @@ private:
             for (Slot &s : slots_) {
                if (s.panel || !s.voice.isActive() || s.port != ev->port_index || (channel != 0 && s.channel != channel))
                   continue;
+               // Both also let go of notes the pedal is holding.
+               s.sustained = false;
                if (ev->data[1] == 120) {
                   s.voice.reset();
                   endNote(s, out, h->time);
@@ -603,6 +637,7 @@ private:
       s.key = key;
       s.midi = midi;
       s.panel = panel;
+      s.ownPressure = s.ownTimbre = s.sustained = false;
       s.bend = 0.0;
       s.pressure = 0.0;
       s.timbre = 0.5;
