@@ -492,7 +492,8 @@ private:
       if (!sim_.finite())
          restartSim();
 
-      // What each body sends: its left/right position, and a modulation signal from its speed
+      // What each body sends: its left/right position, its tone and phase for its share of the tail
+      // (as deep as the Orbit Pan, Tone and Swirl knobs say), and a modulation signal from its speed
       // relative to the others and how close its nearest neighbour is (smoothed over about 60 ms).
       // The signal moves only the param the body's card routes it to, and that param's knob shows
       // the movement, so nothing changes the sound that the panel doesn't show.
@@ -505,8 +506,16 @@ private:
       double offsets[static_cast<int>(Target::Count)] = {};
       Control c;
       c.bodies = n;
+      c.panDepth = value(kOrbitPan);
+      c.swirlDepth = value(kOrbitSwirl);
+      const double orbitTone = value(kOrbitTone);
       for (int b = 0; b < n; ++b) {
-         c.pan[b] = std::clamp(sim_.body(b).x / 1.3, -1.0, 1.0);
+         const OrbitSim::Body &body = sim_.body(b);
+         c.pan[b] = std::clamp(body.x / 1.3, -1.0, 1.0);
+         // Bright near the centre of mass, dark out on the swing (rest distance is about 0.9).
+         c.tone[b] = orbitTone * std::clamp(1.2 * (1.0 - sim_.radius(b) / 0.9), -1.0, 1.0);
+         // Twice round the phaser's sweep per lap, so it swirls as fast as the body goes round.
+         c.phase[b] = std::sin(2.0 * std::atan2(body.y, body.x));
          const double closeness = 1.0 / (1.0 + sim_.nearest(b) / 0.25);
          const double raw = std::clamp(std::tanh(1.5 * (sim_.speed(b) / meanSpeed - 1.0)) + closeness, -1.0, 1.0);
          signal_[b] += smooth * (raw - signal_[b]);

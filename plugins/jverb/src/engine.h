@@ -42,9 +42,17 @@ struct Control {
    double echoSeconds = 0.375, echoFeedback = 0.45, echoTone = -0.2, echoMix = 0.5;
    double width = 1.0, duck = 0.0, mix = 0.35, levelDb = 0.0;
    // Bodies: how many are in the system, and each one's left/right position (-1..1). The tank's
-   // lines are shared out among them, and each body pans its own.
+   // lines are shared out among them in pairs, and each body is heard as its own voice in the tail:
+   //  - panDepth (0..1): how far each body's voice narrows to its own band of the spectrum and
+   //    moves from a wide spread to where the body is.
+   //  - tone (-1 darkest..1 brightest): its voice's colour and level, and its lines' damping.
+   //  - phase (-1..1): where its phaser sweep sits; as it moves, the voice swirls.
+   //  - swirlDepth (0..1): how deep every voice's phaser goes.
    int bodies = 3;
    double pan[kMaxBodies] = {};
+   double panDepth = 0.0, swirlDepth = 0.0;
+   double tone[kMaxBodies] = {};
+   double phase[kMaxBodies] = {};
 };
 
 namespace detail {
@@ -336,6 +344,95 @@ private:
    int holdCount_ = 0;
 };
 
+// One body's voice: the sum of its share of the tank's lines, on the way out. It narrows to the
+// body's band of the spectrum, takes the body's tone, swirls through a four-stage phaser and is placed
+// where the body is. With every depth at zero it passes its lines through unchanged, left and right.
+class BodyVoice {
+public:
+   void setSampleRate(double sampleRate) {
+      sr_ = sampleRate;
+      glide_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.08 * sr_)));
+      for (int ch = 0; ch < 2; ++ch)
+         shelf_[ch].setCutoff(kShelfHz, sr_);
+      reset();
+   }
+   void reset() {
+      for (int ch = 0; ch < 2; ++ch) {
+         for (OnePole &f : lo_[ch])
+            f.y = 0.0f;
+         for (OnePole &f : hi_[ch])
+            f.y = 0.0f;
+         shelf_[ch].y = 0.0f;
+         for (int i = 0; i < kStages; ++i)
+            apX_[ch][i] = apY_[ch][i] = 0.0f;
+      }
+      first_ = true;
+   }
+   // The band runs from lowHz to highHz (0 leaves that side open). spread, swirl: 0..1; pan, tone,
+   // sweep: -1..1.
+   void set(double lowHz, double highHz, double spread, double pan, double tone, double sweep, double swirl) {
+      lowOpen_ = lowHz <= 0.0;
+      highOpen_ = highHz <= 0.0;
+      for (int ch = 0; ch < 2; ++ch)
+         for (int i = 0; i < 2; ++i) {
+            lo_[ch][i].setCutoff(lowOpen_ ? 20.0 : lowHz, sr_);
+            hi_[ch][i].setCutoff(highOpen_ ? 20000.0 : highHz, sr_);
+         }
+      const double angle = (std::clamp(spread * pan, -1.0, 1.0) + 1.0) * 0.25 * jclap::dsp::kPi;
+      target_[kSpread] = static_cast<float>(spread);
+      target_[kSide] = static_cast<float>(1.0 - spread);
+      target_[kMidL] = static_cast<float>(std::sqrt(2.0) * std::cos(angle));
+      target_[kMidR] = static_cast<float>(std::sqrt(2.0) * std::sin(angle));
+      target_[kHigh] = static_cast<float>(jclap::dsp::dbToGain(tone < 0.0 ? 12.0 * tone : 4.0 * tone));
+      target_[kLevel] = static_cast<float>(jclap::dsp::dbToGain(3.0 * tone));
+      target_[kSweep] = static_cast<float>(kSweepDepth * std::clamp(sweep, -1.0, 1.0));
+      target_[kSwirl] = static_cast<float>(std::clamp(swirl, 0.0, 1.0));
+      if (first_) {
+         first_ = false;
+         for (int i = 0; i < kGains; ++i)
+            gain_[i] = target_[i];
+      }
+   }
+   void process(float inL, float inR, float &outL, float &outR) {
+      for (int i = 0; i < kGains; ++i)
+         gain_[i] += glide_ * (target_[i] - gain_[i]);
+      float x[2] = {inL, inR};
+      for (int ch = 0; ch < 2; ++ch) {
+         float v = x[ch];
+         // The band: two one-poles at each edge, so it falls 12 dB an octave outside it.
+         const float upper = highOpen_ ? v : hi_[ch][1].lowpass(hi_[ch][0].lowpass(v));
+         const float lower = lowOpen_ ? 0.0f : lo_[ch][1].lowpass(lo_[ch][0].lowpass(v));
+         v += gain_[kSpread] * (upper - lower - v);
+         const float l = shelf_[ch].lowpass(v);
+         v = (l + gain_[kHigh] * (v - l)) * gain_[kLevel];
+         // The phaser, its two sides swept opposite ways.
+         const float a = ch ? -gain_[kSweep] : gain_[kSweep];
+         float ap = v;
+         for (int i = 0; i < kStages; ++i) {
+            const float y = a * (ap - apY_[ch][i]) + apX_[ch][i];
+            apX_[ch][i] = ap;
+            apY_[ch][i] = y;
+            ap = y;
+         }
+         x[ch] = v + gain_[kSwirl] * 0.5f * (ap - v);
+      }
+      const float mid = 0.5f * (x[0] + x[1]), side = 0.5f * (x[0] - x[1]) * gain_[kSide];
+      outL = side + mid * gain_[kMidL];
+      outR = -side + mid * gain_[kMidR];
+   }
+
+private:
+   static constexpr int kStages = 4;
+   static constexpr double kShelfHz = 2500.0, kSweepDepth = 0.85;
+   enum { kSpread, kSide, kMidL, kMidR, kHigh, kLevel, kSweep, kSwirl, kGains };
+   double sr_ = 48000.0;
+   float glide_ = 0.001f;
+   bool first_ = true, lowOpen_ = true, highOpen_ = true;
+   OnePole lo_[2][2], hi_[2][2], shelf_[2];
+   float apX_[2][kStages] = {}, apY_[2][kStages] = {};
+   float gain_[kGains] = {}, target_[kGains] = {};
+};
+
 // A stereo delay up to kEchoMaxSeconds. Its time glides like a tape transport, so a change in time
 // (or a body routed to it) bends the pitch of the repeats rather than clicking. Each repeat goes
 // through a tone tilt, a 60 Hz high-pass and a soft saturator, so feedback past 100% blooms into
@@ -441,6 +538,8 @@ public:
          line.setMaxDelay(samples(kMaxTankApSeconds));
       for (auto &line : tankAp2_)
          line.setMaxDelay(samples(kMaxTankApSeconds));
+      for (auto &v : voice_)
+         v.setSampleRate(sr_);
       duckEnv_ = 0.0f;
       duckAttack_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.005 * sr_)));
       duckRelease_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.3 * sr_)));
@@ -485,6 +584,10 @@ public:
          apDrift_[k].start(0.381966 * k + 0.25);
       }
       echo_.reset();
+      for (auto &v : voice_)
+         v.reset();
+      for (int b = 0; b < kMaxBodies; ++b)
+         bodySwirl_[b] = lastPhase_[b] = 0.0;
       duckEnv_ = 0.0f;
       first_ = true;
    }
@@ -514,15 +617,38 @@ public:
          gainMid_[k].set(static_cast<float>(freeze ? 0.99995 : mid));
          gainBass_[k].set(static_cast<float>(freeze ? 0.99995 : bass));
          bassLp_[k].setCutoff(c.bassXover, sr_);
-         highLp_[k].setCutoff(freeze ? 0.45 * sr_ : c.dampHigh, sr_);
+         const int b = (k / 2) % bodies;
+         // A body's tone moves its lines' treble damping by up to an octave each way, so a dark body's
+         // part of the tail also dies darker.
+         const double tone = std::clamp(c.tone[b], -1.0, 1.0);
+         highLp_[k].setCutoff(freeze ? 0.45 * sr_ : std::clamp(c.dampHigh * std::exp2(tone), 500.0, 0.45 * sr_), sr_);
          // Motion is how far the lines drift, as pitch: never more than kDriftCents a pass.
          drift_[k].set(kDriftHz[k], motion * kDriftCents, sr_);
          apDrift_[k].set(kApDriftHz[k], motion * kApDriftCents, sr_);
-         // Lines go to the bodies in pairs, one left and one right, and each body pans its pairs
-         // equal-power: centred, both sides at full level.
-         const double pan = std::clamp(c.pan[(k / 2) % bodies], -1.0, 1.0);
-         const double angle = (pan + 1.0) * 0.25 * jclap::dsp::kPi;
-         targetPan_[k] = static_cast<float>(((k & 1) ? std::sin(angle) : std::cos(angle)) * std::sqrt(2.0));
+         // The body's phase sweep also nudges the gains of the allpasses in its lines. Neither that
+         // nor its phaser changes a line's length, so nothing bends pitch.
+         targetApOffset_[k] = static_cast<float>(kPhaseLoopDepth * std::clamp(c.swirlDepth, 0.0, 1.0) *
+                                                 std::clamp(c.phase[b], -1.0, 1.0));
+      }
+      // Each body's voice: with n bodies the spectrum splits into n bands, log-spaced from about
+      // 150 Hz to 6 kHz, body 1 lowest.
+      const double spread = std::clamp(c.panDepth, 0.0, 1.0), swirl = std::clamp(c.swirlDepth, 0.0, 1.0);
+      for (int b = 0; b < bodies; ++b) {
+         const auto edge = [&](int i) { return kBandLowHz * std::pow(kBandHighHz / kBandLowHz, static_cast<double>(i) / bodies); };
+         voice_[b].set(b == 0 ? 0.0 : edge(b), b == bodies - 1 ? 0.0 : edge(b + 1), spread, std::clamp(c.pan[b], -1.0, 1.0),
+                       std::clamp(c.tone[b], -1.0, 1.0), c.phase[b], swirl);
+      }
+      // What each body does to its voice, for the panel: where it sits, its tone, and its swirl as how
+      // fast its phaser is sweeping times how deep (smoothed over about 100 ms).
+      const double swirlSmooth = 1.0 - std::exp(-kControlTick / (0.1 * sr_));
+      for (int b = 0; b < kMaxBodies; ++b) {
+         const bool on = b < bodies;
+         bodyPan_[b] = on ? std::clamp(c.panDepth, 0.0, 1.0) * std::clamp(c.pan[b], -1.0, 1.0) : 0.0;
+         bodyTone_[b] = on ? std::clamp(c.tone[b], -1.0, 1.0) : 0.0;
+         const double phase = on ? std::clamp(c.phase[b], -1.0, 1.0) : 0.0;
+         const double rate = first_ ? 0.0 : std::fabs(phase - lastPhase_[b]) * sr_ / kControlTick;
+         bodySwirl_[b] += swirlSmooth * (std::clamp(c.swirlDepth, 0.0, 1.0) * std::min(1.0, rate / kSwirlFull) - bodySwirl_[b]);
+         lastPhase_[b] = phase;
       }
       tankApGain_.set(static_cast<float>(kTankApGainMin + (kTankApGainMax - kTankApGainMin) * std::clamp(c.diffusion, 0.0, 1.0)));
       delayBodies_ = bodies;
@@ -590,7 +716,7 @@ public:
          for (int k = 0; k < kLines; ++k) {
             length_[k] = targetLength_[k];
             apLength_[k] = targetApLength_[k];
-            pan_[k] = targetPan_[k];
+            apOffset_[k] = targetApOffset_[k];
             drift_[k].depth.settle();
             apDrift_[k].depth.settle();
          }
@@ -670,16 +796,17 @@ public:
       for (int k = 0; k < kLines; ++k) {
          length_[k] += lengthGlide_ * (targetLength_[k] - length_[k]);
          apLength_[k] += lengthGlide_ * (targetApLength_[k] - apLength_[k]);
-         pan_[k] += panGlide_ * (targetPan_[k] - pan_[k]);
+         apOffset_[k] += panGlide_ * (targetApOffset_[k] - apOffset_[k]);
+         const float g = std::clamp(apGain + apOffset_[k], 0.0f, kTankApGainCeiling);
          float v = lines_[k].read(length_[k] + drift_[k].next());
          const float d = tankAp_[k].read(apLength_[k] + apDrift_[k].next());
-         const float w = v + apGain * d;
+         const float w = v + g * d;
          tankAp_[k].write(w);
-         v = d - apGain * w;
+         v = d - g * w;
          const float d2 = tankAp2_[k].read(apLength2_[k]);
-         const float w2 = v + apGain * d2;
+         const float w2 = v + g * d2;
          tankAp2_[k].write(w2);
-         v = d2 - apGain * w2;
+         v = d2 - g * w2;
          y[k] = v;
          // Bass and treble decay. Written as a lowpass shelf after the mid gain, then a lowpass for the
          // treble, so the loop's gain at every frequency stays at or below the larger of the two
@@ -697,10 +824,18 @@ public:
                o[j] = a + b;
                o[j + h] = a - b;
             }
-      // Even lines are heard on the left and odd on the right, each panned by its body.
-      float late[2] = {0.0f, 0.0f};
+      // What's heard: each body's lines, even ones on the left and odd on the right, through that
+      // body's voice.
+      float bus[kMaxBodies][2] = {};
       for (int k = 0; k < kLines; ++k)
-         late[k & 1] += kOutSign[k] * pan_[k] * y[k];
+         bus[(k / 2) % delayBodies_][k & 1] += kOutSign[k] * y[k];
+      float late[2] = {0.0f, 0.0f};
+      for (int b = 0; b < delayBodies_; ++b) {
+         float l, r;
+         voice_[b].process(bus[b][0], bus[b][1], l, r);
+         late[0] += l;
+         late[1] += r;
+      }
       late[0] *= kOutScale;
       late[1] *= kOutScale;
       for (int k = 0; k < kLines; ++k)
@@ -771,6 +906,12 @@ public:
       return count ? 1000.0 * sum / count / sr_ : 0.0;
    }
 
+   // What body b does to its share of the tail, as the panel shows it: where it sits (-1..1), its
+   // tone (-1 darkest..1 brightest) and how hard its phase is swirling (0..1).
+   double bodyPan(int b) const { return bodyPan_[b]; }
+   double bodyTone(int b) const { return bodyTone_[b]; }
+   double bodySwirl(int b) const { return bodySwirl_[b]; }
+
    static constexpr double kMaxLineSeconds = 0.85;
    static constexpr double kMaxTankApSeconds = 0.06;
 
@@ -787,6 +928,12 @@ private:
                                                  6.9, 2.1, 4.1, 7.3, 3.3, 5.9, 2.7, 4.9};
    // Diffusion sets the tank's allpass gain between these.
    static constexpr double kTankApGainMin = 0.2, kTankApGainMax = 0.65;
+   static constexpr float kTankApGainCeiling = 0.8f;
+   // How far a body's phase sweep moves its loop allpass gains, and the span of the bodies' bands.
+   static constexpr double kPhaseLoopDepth = 0.12;
+   static constexpr double kBandLowHz = 150.0, kBandHighHz = 6000.0;
+   // A phase sweep moving this fast (full range per second) shows as full swirl.
+   static constexpr double kSwirlFull = 2.0;
    // Drift rates in Hz, one per line, spread over a decade and shuffled, and the most a pass bends.
    static constexpr double kDriftHz[kLines] = {0.137, 0.713, 0.291, 1.093, 0.173, 0.557, 0.389, 0.941,
                                                0.113, 0.811, 0.241, 0.479, 0.617, 1.171, 0.331, 0.887};
@@ -826,9 +973,12 @@ private:
    detail::Ramp gainMid_[kLines], gainBass_[kLines], tankApGain_;
    detail::Drift drift_[kLines], apDrift_[kLines];
    float length_[kLines] = {}, targetLength_[kLines] = {}, apLength_[kLines] = {}, targetApLength_[kLines] = {};
-   float apLength2_[kLines] = {}, pan_[kLines] = {}, targetPan_[kLines] = {};
+   float apLength2_[kLines] = {};
+   float apOffset_[kLines] = {}, targetApOffset_[kLines] = {};
+   detail::BodyVoice voice_[kMaxBodies];
    float lengthGlide_ = 0.001f, panGlide_ = 0.001f;
    int delayBodies_ = 3;
+   double bodyPan_[kMaxBodies] = {}, bodyTone_[kMaxBodies] = {}, bodySwirl_[kMaxBodies] = {}, lastPhase_[kMaxBodies] = {};
 
    detail::Ramp predelaySamples_, earlySize_, attack_, inputGain_;
    detail::Ramp loopGain_, loopScale_, shimmer_, smearMix_, tiltLow_, tiltHigh_;
