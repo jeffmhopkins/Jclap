@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include <visage/app.h>
+#include <visage/windowing.h>
 
 #include "jclap/ui/design_frame.h"
 #include "jclap/ui/theme.h"
@@ -42,7 +43,16 @@ Window::Window(std::unique_ptr<visage::Frame> root, const WindowOptions &options
    : impl_(new Impl{{}, std::move(root), options}) {
    auto &app = impl_->app;
    app.addChild(impl_->root.get());
-   app.onResize() += [this] { layoutRoot(); };
+   app.onResize() += [this] {
+      // An open popup menu was placed for the old size; close it rather than leave it adrift.
+      for (visage::Frame *child : impl_->app.children()) {
+         if (auto *menu = dynamic_cast<visage::PopupMenuFrame *>(child)) {
+            menu->setVisible(false);
+            menu->exit();
+         }
+      }
+      layoutRoot();
+   };
    // Fills the bars left around a letterboxed DesignFrame.
    app.onDraw() += [this](visage::Canvas &canvas) {
       canvas.setColor(defaultTheme().background);
@@ -117,6 +127,36 @@ const WindowOptions &Window::options() const { return impl_->options; }
 
 void Window::show(void *parentWindow) { impl_->app.show(parentWindow); }
 
+void Window::setVisible(bool visible) {
+#if !defined(__APPLE__) && !defined(_WIN32)
+   if (visage::Window *w = impl_->app.window())
+      visible ? w->show() : w->hide();
+#else
+   (void)visible;
+#endif
+}
+
+bool Window::setHostScale(double scale) {
+#if !defined(__APPLE__) && !defined(_WIN32)
+   if (!(scale > 0.0) || !std::isfinite(scale))
+      return false;
+   const float zoom = std::max(width() / (impl_->app.dpiScale() * std::max(impl_->options.width, 1)), 0.0f);
+   visage::setDpiScaleOverride(static_cast<float>(scale));
+   // Re-size at the new scale, keeping the zoom (Visage reads the scale when it sizes the window).
+   impl_->app.setWindowDimensions(impl_->options.width, impl_->options.height);
+   if (zoom > 0.0f) {
+      auto w = static_cast<uint32_t>(std::lround(impl_->options.width * zoom * scale));
+      auto h = static_cast<uint32_t>(std::lround(impl_->options.height * zoom * scale));
+      adjustSize(&w, &h);
+      setSize(w, h);
+   }
+   return true;
+#else
+   (void)scale;
+   return false;
+#endif
+}
+
 #if defined(__APPLE__)
 uint32_t Window::width() const { return static_cast<uint32_t>(impl_->app.width()); }
 uint32_t Window::height() const { return static_cast<uint32_t>(impl_->app.height()); }
@@ -132,7 +172,14 @@ bool Window::setSize(uint32_t width, uint32_t height) {
        height > l.maxHeight)
       return false;
 #if defined(__APPLE__)
-   impl_->app.setWindowDimensions(static_cast<int>(width), static_cast<int>(height));
+   // Points to pixels at the backing scale of the screen the window is on: Visage's own
+   // conversion uses the main screen's, which doubles the size on a 1x display beside a 2x one.
+   const visage::Window *w = impl_->app.window();
+   if (w && w->dpiScale() > 0.0f)
+      impl_->app.setNativeWindowDimensions(static_cast<int>(std::lround(width * w->dpiScale())),
+                                           static_cast<int>(std::lround(height * w->dpiScale())));
+   else
+      impl_->app.setWindowDimensions(static_cast<int>(width), static_cast<int>(height));
 #else
    impl_->app.setNativeWindowDimensions(static_cast<int>(width), static_cast<int>(height));
 #endif

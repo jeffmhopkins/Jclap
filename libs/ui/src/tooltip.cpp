@@ -2,21 +2,34 @@
 
 #include <algorithm>
 
+#include "jclap/ui/design_frame.h"
+
 namespace jclap::ui {
 
-Tooltips::Tooltips() = default;
+Tooltips::Tooltips() : self_(std::make_shared<Tooltips *>(this)) {}
 
-Tooltips::~Tooltips() { hide(); }
+Tooltips::~Tooltips() {
+   // The frames' callbacks outlive this when the frames do; they check self_ and do nothing.
+   *self_ = nullptr;
+   hide();
+}
 
 void Tooltips::add(visage::Frame &frame, std::string text) {
    tips_.emplace_back(&frame, std::move(text));
-   frame.onMouseEnter() += [this, &frame](const visage::MouseEvent &) {
-      hide();
-      pending_ = &frame;
-      startTimer(delayMs);
+   std::weak_ptr<Tooltips *> self = self_;
+   frame.onMouseEnter() += [self, &frame](const visage::MouseEvent &) {
+      if (auto s = self.lock(); s && *s) {
+         (*s)->hide();
+         (*s)->pending_ = &frame;
+         (*s)->startTimer((*s)->delayMs);
+      }
    };
-   frame.onMouseExit() += [this](const visage::MouseEvent &) { hide(); };
-   frame.onMouseDown() += [this](const visage::MouseEvent &) { hide(); };
+   const auto hideTip = [self](const visage::MouseEvent &) {
+      if (auto s = self.lock(); s && *s)
+         (*s)->hide();
+   };
+   frame.onMouseExit() += hideTip;
+   frame.onMouseDown() += hideTip;
 }
 
 void Tooltips::setTheme(const Theme &theme) { popup_.theme = &theme; }
@@ -48,8 +61,8 @@ void Tooltips::show(visage::Frame &frame) {
    }
    popup_.text = *text;
    const visage::Bounds b = top->relativeBounds(&frame);
-   const float h = 22.0f;
-   const float w = font(h * 0.55f).stringWidth(visage::String(*text).toUtf32()) + h;
+   const float h = 22.0f * designScale(frame);
+   const float w = font(h * 0.55f, top->dpiScale()).stringWidth(visage::String(*text).toUtf32()) + h;
    // Under the widget, kept inside the window.
    float x = std::clamp(b.xCenter() - w * 0.5f, 2.0f, std::max(2.0f, top->width() - w - 2.0f));
    float y = b.bottom() + 4.0f;

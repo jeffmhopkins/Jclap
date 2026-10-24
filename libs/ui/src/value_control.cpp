@@ -8,6 +8,7 @@
 #include <visage/widgets.h>
 
 #include "jclap/core/helpers.h"
+#include "jclap/ui/design_frame.h"
 
 namespace jclap::ui {
 
@@ -33,8 +34,9 @@ void ValuePopup::show(visage::Frame &target, const std::string &text) {
    }
    text_ = text;
    const visage::Bounds b = top->relativeBounds(&target);
-   const float h = std::clamp(b.height() * 0.22f, 18.0f, 28.0f);
-   const float w = std::max(h * 2.5f, font(h * 0.6f).stringWidth(visage::String(text_).toUtf32()) + h);
+   const float s = designScale(target);
+   const float h = std::clamp(b.height() * 0.22f, 18.0f * s, 28.0f * s);
+   const float w = std::max(h * 2.5f, font(h * 0.6f, top->dpiScale()).stringWidth(visage::String(text_).toUtf32()) + h);
    setBounds(b.xCenter() - w * 0.5f, std::max(0.0f, b.y() - h - 4.0f), w, h);
    redraw();
 }
@@ -132,6 +134,9 @@ void ValueControl::userSet(double value) {
 }
 
 void ValueControl::mouseDown(const visage::MouseEvent &e) {
+   // Another button pressed mid-drag belongs to the drag, which the first release ends.
+   if (dragging_)
+      return;
    if (e.shouldTriggerPopup()) {
       showContextMenu(e);
       return;
@@ -144,6 +149,7 @@ void ValueControl::mouseDown(const visage::MouseEvent &e) {
    dragging_ = true;
    dragStart_ = e.position;
    dragStartValue_ = value_;
+   dragFine_ = e.isShiftDown();
    if (onBeginEdit)
       onBeginEdit();
    if (showPopup_)
@@ -153,8 +159,14 @@ void ValueControl::mouseDown(const visage::MouseEvent &e) {
 void ValueControl::mouseDrag(const visage::MouseEvent &e) {
    if (!dragging_)
       return;
-   // Hold shift for fine control.
-   const float length = dragLength() * (e.isShiftDown() ? 10.0f : 1.0f);
+   // Hold shift for fine control. Pressing or letting go of it mid-drag carries on from here,
+   // instead of rescaling the whole move so far.
+   if (e.isShiftDown() != dragFine_) {
+      dragFine_ = e.isShiftDown();
+      dragStart_ = e.position;
+      dragStartValue_ = value_;
+   }
+   const float length = dragLength() * (dragFine_ ? 10.0f : 1.0f);
    change(dragStartValue_ + dragDistance(dragStart_, e.position) * (range_.max - range_.min) / length);
    if (showPopup_)
       popup_.show(*this, text());
@@ -196,9 +208,15 @@ void ValueControl::startTextEntry() {
       editor_->setJustification(visage::Font::kCenter);
       editor_->onEnterKey() += [this] { finishTextEntry(true); };
       editor_->onEscapeKey() += [this] { finishTextEntry(false); };
+      // Clicking elsewhere takes the value, as Enter would.
+      editor_->onFocusChange() += [this](bool focused, bool) {
+         if (!focused)
+            finishTextEntry(true);
+      };
       addChild(editor_.get(), false);
    }
-   const float h = std::clamp(height() * 0.22f, 16.0f, 30.0f);
+   const float s = designScale(*this);
+   const float h = std::clamp(height() * 0.22f, 16.0f * s, 30.0f * s);
    editor_->setBounds(0, (height() - h) * 0.5f, width(), h);
    editor_->setFont(font(h * 0.65f));
    editor_->setText(formatValue(value_));

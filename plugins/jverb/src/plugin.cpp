@@ -805,7 +805,7 @@ const clap_plugin_descriptor_t JVerb::descriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.6.0",
+   "0.7.0",
    "Reverb modulated by a live three-body gravity simulation, with a loopable drive",
    kFeatures,
 };

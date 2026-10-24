@@ -1,10 +1,15 @@
 # jclap::ui: shared Visage widgets and CLAP window glue for plugins that have a GUI.
 # Link it with target_link_libraries(<plugin> PRIVATE jclap::ui).
 
-# Visage has no releases yet, so it is pinned to a commit.
+# Visage has no releases yet, so it is pinned to a commit. patches/visage.patch carries our fixes to
+# it (each marked "jclap:"): a press mid-drag keeps the drag, Linux follows only CLAP's set_size and
+# set_scale and takes the desktop's scale rather than the monitor's physical DPI, and Windows
+# leaves the host's window alone.
 FetchContent_Declare(visage
    GIT_REPOSITORY https://github.com/VitalAudio/visage.git
-   GIT_TAG 7654e32a84f95aacf9d15390272a47d2952d9565)
+   GIT_TAG 7654e32a84f95aacf9d15390272a47d2952d9565
+   PATCH_COMMAND ${CMAKE_COMMAND} -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/visage.patch
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/ApplyPatch.cmake)
 FetchContent_MakeAvailable(visage)
 
 add_library(jclap_ui STATIC

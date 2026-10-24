@@ -181,7 +181,9 @@ void XYPad::moveTo(visage::Point p) {
    const visage::Bounds b = pad();
    double fx, fy;
    if (grid_ == Grid::Polar) {
-      const float radius = std::max(1.0f, std::min(b.width(), b.height()) * 0.5f);
+      // The radius the dot is drawn on (see drawPolar), so clicking the dot leaves it where it is.
+      const float size = std::min(b.width(), b.height());
+      const float radius = std::max(1.0f, size * 0.5f - 1.0f - size * 0.07f * 0.5f);
       const double dx = p.x - (b.x() + b.width() * 0.5f), dy = (b.y() + b.height() * 0.5f) - p.y;
       double turn = std::atan2(dy, dx) - originDegrees_ * kTwoPi / 360.0;
       if (clockwise_)
@@ -211,6 +213,9 @@ void XYPad::resetBoth() {
 }
 
 void XYPad::mouseDown(const visage::MouseEvent &e) {
+   // Another button pressed mid-drag belongs to the drag, which the first release ends.
+   if (dragging_)
+      return;
    if (e.shouldTriggerPopup()) {
       visage::PopupMenu menu;
       menu.addOption(0, "Reset to default").onSelection() += [this](int) { resetBoth(); };

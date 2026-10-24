@@ -31,6 +31,9 @@ public:
    std::function<void(bool)> onToggle;
    // Mouse wheel over the button: +1 up, -1 down. Handy for steppers such as a channel picker.
    std::function<void(int)> onWheel;
+   // Right-click menu items (e.g. the host's param menu, from ParamBindings). The menu only opens
+   // if this adds something.
+   std::function<void(visage::PopupMenu &)> onContextMenu;
 
    void draw(visage::Canvas &canvas) override;
    void mouseEnter(const visage::MouseEvent &e) override;

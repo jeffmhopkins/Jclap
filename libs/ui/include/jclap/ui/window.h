@@ -38,6 +38,11 @@ public:
    const WindowOptions &options() const;
 
    void show(void *parentWindow);
+   // Linux: stop and restart drawing while the host has the editor hidden.
+   void setVisible(bool visible);
+   // Linux: the host's UI scale (CLAP set_scale), used instead of the desktop's from the next
+   // show(). Keeps the window's zoom. False elsewhere, where the OS's scale is used.
+   bool setHostScale(double scale);
 
    // Sizes in the units the CLAP host expects (logical points on macOS, pixels elsewhere).
    uint32_t width() const;

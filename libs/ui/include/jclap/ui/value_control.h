@@ -155,6 +155,8 @@ private:
    unsigned accent_ = 0;
    bool dragging_ = false;
    bool showPopup_ = false;
+   // Shift was held at the last drag event.
+   bool dragFine_ = false;
    visage::Point dragStart_;
    double dragStartValue_ = 0.0;
    ValuePopup popup_;

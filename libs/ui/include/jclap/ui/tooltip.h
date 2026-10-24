@@ -6,6 +6,7 @@
 //    Tooltips tips;                       // a panel member
 //    tips.add(cutoffKnob, "Filter cutoff. Shift-drag for fine control.");
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,8 @@ private:
    const std::string *textFor(const visage::Frame *frame) const;
 
    std::vector<std::pair<visage::Frame *, std::string>> tips_;
+   // What the frames' callbacks reach this through; null once this is destroyed.
+   std::shared_ptr<Tooltips *> self_;
    visage::Frame *pending_ = nullptr;
    visage::Frame *host_ = nullptr;
    Popup popup_;

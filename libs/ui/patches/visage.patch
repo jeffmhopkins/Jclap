@@ -1,0 +1,205 @@
+diff --git a/visage_app/window_event_handler.cpp b/visage_app/window_event_handler.cpp
+index 6095bc2..93bc52a 100644
+--- a/visage_app/window_event_handler.cpp
++++ b/visage_app/window_event_handler.cpp
+@@ -288,6 +288,15 @@ namespace visage {
+     MouseEvent mouse_event = buttonMouseEvent(button_id, x, y, button_state, modifiers);
+     mouse_event.repeat_click_count = repeat;
+ 
++    // jclap: a press while another button is held goes to the frame that has the drag, so the
++    // drag still gets its release instead of losing it to whatever is under the cursor now.
++    if (mouse_down_frame_) {
++      mouse_event.position = mouse_event.window_position - mouse_down_frame_->positionInWindow();
++      mouse_event.event_frame = mouse_down_frame_;
++      mouse_down_frame_->processMouseDown(mouse_event);
++      return;
++    }
++
+     mouse_down_frame_ = content_frame_->frameAtPoint(mouse_event.window_position);
+     temporary_frame_ = mouse_down_frame_;
+     while (temporary_frame_ && !temporary_frame_->acceptsKeystrokes())
+diff --git a/visage_windowing/linux/windowing_x11.cpp b/visage_windowing/linux/windowing_x11.cpp
+index a0fbf2d..52ce823 100644
+--- a/visage_windowing/linux/windowing_x11.cpp
++++ b/visage_windowing/linux/windowing_x11.cpp
+@@ -288,6 +288,29 @@ namespace visage {
+     return MonitorInfo::kDefaultRefreshRate;
+   }
+ 
++  // jclap: the scale the host asked for through CLAP's set_scale, 0 for none.
++  static float& dpiScaleOverride() {
++    static float scale = 0.0f;
++    return scale;
++  }
++
++  void setDpiScaleOverride(float scale) {
++    dpiScaleOverride() = scale;
++  }
++
++  // jclap: the desktop's scale as toolkits see it (Xft.dpi, which desktop scaling settings set), or
++  // 0 if it isn't set. Physical DPI would scale every 1440p 27" screen by 1.25 at 100%.
++  static float xftDpi(Display* display) {
++    const char* resources = XResourceManagerString(display);
++    if (resources == nullptr)
++      return 0.0f;
++    const char* found = strstr(resources, "Xft.dpi:");
++    if (found == nullptr)
++      return 0.0f;
++    long dpi = strtol(found + 8, nullptr, 10);  // whole dpi; strtol has no locale decimal point
++    return dpi > 0 ? static_cast<float>(dpi) : 0.0f;
++  }
++
+   static MonitorInfo monitorInfoForPosition(IPoint point) {
+     static constexpr float kInchToMm = 25.4f;
+     static constexpr float kDpiAdjustment = 4.0f / Window::kDefaultDpi;
+@@ -318,11 +341,12 @@ namespace visage {
+         IBounds bounds(info->x, info->y, info->width, info->height);
+         if (result.bounds.width() == 0 || bounds.contains(point)) {
+           result.bounds = bounds;
+-          if (output_info->mm_width > 0 && output_info->mm_height > 0)
+-            result.dpi = info->width * kInchToMm / output_info->mm_width;
++          if (dpiScaleOverride() > 0.0f)
++            result.dpi = dpiScaleOverride() * Window::kDefaultDpi;
++          else if (float xft = xftDpi(display))
++            result.dpi = xft;
+           else
+-            result.dpi = DisplayWidth(display, default_screen) * kInchToMm /
+-                         DisplayWidthMM(display, default_screen);
++            result.dpi = Window::kDefaultDpi;
+ 
+           result.dpi = std::round(result.dpi * kDpiAdjustment) / kDpiAdjustment;
+           result.refresh_rate = refreshRate(screen_resources, info);
+@@ -581,6 +605,9 @@ namespace visage {
+   static void threadTimerCallback(WindowX11* window) {
+     while (window->timerThreadRunning()) {
+       Thread::sleep(window->timerMs());
++      // jclap: no frames while hidden, so a hidden editor doesn't keep waking the host.
++      if (window->timerPaused())
++        continue;
+ 
+       X11Connection* x11 = window->x11Connection();
+       X11Connection::DisplayLock lock(x11);
+@@ -693,7 +720,8 @@ namespace visage {
+     XSizeHints* size_hints = XAllocSizeHints();
+     size_hints->flags = fixed ? PAspect : 0;
+ 
+-    ::Window handle = parent_handle_ ? parent_handle_ : window_handle_;
++    // jclap: hints go on our own window; the host's window is the host's to describe.
++    ::Window handle = window_handle_;
+ 
+     long supplied_return;
+     XGetWMNormalHints(x11_->display(), handle, size_hints, &supplied_return);
+@@ -1094,10 +1122,8 @@ namespace visage {
+       XNextEvent(x11_->display(), &event);
+ 
+       if (event.xany.window == parent_handle_ && event.type == ConfigureNotify) {
+-        X11Connection::DisplayLock lock(x11_);
+-        XWindowAttributes attributes;
+-        XGetWindowAttributes(x11_->display(), parent_handle_, &attributes);
+-        setNativeWindowSize(attributes.width, attributes.height);
++        // jclap: the host sizes the editor through CLAP's set_size, which applies its limits;
++        // following the parent's size would go around them.
+       }
+       else if (event.xany.window == window_handle_ && event.type == ClientMessage &&
+                event.xclient.message_type == x11_->timerEvent()) {
+@@ -1517,7 +1543,7 @@ namespace visage {
+     X11Connection::DisplayLock lock(x11_);
+ 
+     XSizeHints* size_hints = XAllocSizeHints();
+-    ::Window handle = parent_handle_ ? parent_handle_ : window_handle_;
++    ::Window handle = window_handle_;  // jclap: not the host's window
+     long supplied_return;
+     XGetWMNormalHints(x11_->display(), handle, size_hints, &supplied_return);
+     int min_width = kMinWidth;
+@@ -1532,6 +1558,7 @@ namespace visage {
+     XFree(size_hints);
+ 
+     XMapWindow(x11_->display(), window_handle_);
++    timer_paused_ = false;
+     XSetWMProtocols(x11_->display(), window_handle_, x11_->deleteMessageRef(), 1);
+     XFlush(x11_->display());
+     handleWindowShown();
+@@ -1577,6 +1604,7 @@ namespace visage {
+     ::Display* display = x11_->display();
+     XUnmapWindow(display, window_handle_);
+     XFlush(display);
++    timer_paused_ = true;
+     handleWindowHidden();
+   }
+ 
+diff --git a/visage_windowing/linux/windowing_x11.h b/visage_windowing/linux/windowing_x11.h
+index 7ce59ec..3cd5a69 100644
+--- a/visage_windowing/linux/windowing_x11.h
++++ b/visage_windowing/linux/windowing_x11.h
+@@ -238,6 +238,7 @@ namespace visage {
+     MonitorInfo monitorInfo() { return monitor_info_; }
+     X11Connection* x11Connection() { return x11_; }
+     bool timerThreadRunning() { return timer_thread_running_.load(); }
++    bool timerPaused() { return timer_paused_.load(); }
+     int timerMs() const { return timer_microseconds_.load() / 1000; }
+ 
+   private:
+@@ -288,6 +289,7 @@ namespace visage {
+     long long start_microseconds_ = 0;
+     std::atomic<long long> timer_microseconds_ = 16667;
+     std::atomic<bool> timer_thread_running_ = false;
++    std::atomic<bool> timer_paused_ = false;
+     std::unique_ptr<std::thread> timer_thread_;
+   };
+ }
+diff --git a/visage_windowing/win32/windowing_win32.cpp b/visage_windowing/win32/windowing_win32.cpp
+index c01ed8b..0cfe691 100644
+--- a/visage_windowing/win32/windowing_win32.cpp
++++ b/visage_windowing/win32/windowing_win32.cpp
+@@ -1213,6 +1213,14 @@ namespace visage {
+       handleDpiChange(hwnd, l_param, w_param);
+       return 0;
+     }
++#ifndef WM_DPICHANGED_AFTERPARENT
++#define WM_DPICHANGED_AFTERPARENT 0x02E3
++#endif
++    case WM_DPICHANGED_AFTERPARENT: {
++      // jclap: the host's window moved to a monitor with another scale; re-read it.
++      handleResizeEnd(hwnd);
++      return 0;
++    }
+     case WM_MOVE:
+     case WM_DISPLAYCHANGE: {
+       updateMonitor();
+@@ -1495,9 +1503,10 @@ namespace visage {
+ 
+     SetWindowLongPtr(window_handle_, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+ 
+-    auto parent_proc = SetWindowLongPtr(parent_handle_, GWLP_WNDPROC,
+-                                        reinterpret_cast<LONG_PTR>(pluginParentWindowProc));
+-    parent_window_proc_ = reinterpret_cast<WNDPROC>(parent_proc);
++    // jclap: the host's window is left alone (no subclassing): the host sizes the editor through
++    // CLAP's adjust_size/set_size and handles its own DPI changes, which reach this child as
++    // WM_DPICHANGED_AFTERPARENT. Start at the DPI of the monitor the host's window is on.
++    setDpiScale(dpi_awareness.dpiScale(parent_handle_));
+ 
+     event_hooks_ = std::make_unique<EventHooks>();
+     finishWindowSetup();
+@@ -1519,7 +1528,7 @@ namespace visage {
+       drag_drop_target_->Release();
+     }
+ 
+-    if (parent_handle_)
++    if (parent_handle_ && parent_window_proc_)
+       SetWindowLongPtr(parent_handle_, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(parent_window_proc_));
+ 
+     NativeWindowLookup::instance().removeWindow(this);
+diff --git a/visage_windowing/windowing.h b/visage_windowing/windowing.h
+index 0405781..b2edd4f 100644
+--- a/visage_windowing/windowing.h
++++ b/visage_windowing/windowing.h
+@@ -222,6 +222,9 @@ namespace visage {
+   void setDoubleClickSpeed(int ms);
+ 
+   float defaultDpiScale();
++  // jclap: Linux only. Use this scale for new windows instead of the desktop's (0 goes back to
++  // the desktop's).
++  void setDpiScaleOverride(float scale);
+   IBounds computeWindowBounds(const Dimension& x, const Dimension& y, const Dimension& width,
+                               const Dimension& height);
+ 

@@ -42,6 +42,11 @@ public:
    virtual void setScale(float scale) = 0;
 };
 
+class DesignFrame;
+// The scale of the DesignFrame `frame` is in (1 outside one), for sizes that should follow the UI
+// zoom but aren't laid out by it, such as popups and drag distances.
+float designScale(const visage::Frame &frame);
+
 class DesignFrame : public visage::Frame {
 public:
    DesignFrame(float designWidth, float designHeight);
