@@ -7,6 +7,8 @@
 
 #include <visage/widgets.h>
 
+#include "jclap/core/helpers.h"
+
 namespace jclap::ui {
 
 std::string ValueAxis::text(double v) const {
@@ -216,11 +218,8 @@ void ValueControl::finishTextEntry(bool apply) {
    bool ok;
    if (parseText)
       ok = parseText(typed, v);
-   else {
-      char *end = nullptr;
-      v = std::strtod(typed.c_str(), &end);
-      ok = end != typed.c_str();
-   }
+   else
+      ok = core::parseNumber(typed.c_str(), v); // a '.' decimal point in every locale
    if (ok && std::isfinite(v))
       userSet(v);
 }

@@ -10,6 +10,7 @@
 #include <jclap/core/triple_buffer.h>
 
 #include <atomic>
+#include <clocale>
 #include <cstring>
 #include <type_traits>
 
@@ -140,6 +141,19 @@ int main() {
    host.process();
    JCLAP_CHECK_EQ(host.paramValue(kLevel), 3.0);
    JCLAP_CHECK_EQ(host.paramText(kLevel, 2.5) == "2.5", true);
+   // The default text parser knows only this plugin's params.
+   {
+      double v = 0.0;
+      JCLAP_CHECK(host.textToValue(kLevel, "1.5", v) && v == 1.5);
+      JCLAP_CHECK(!host.textToValue(kLevel + 1, "1.5", v));
+      JCLAP_CHECK(!host.textToValue(kLevel, "nan", v));
+   }
+   // Ports default to an in-place pair only when both directions exist.
+   {
+      clap_audio_port_info_t info{};
+      const auto &ports = jclap::core::Plugin::audioPortsExtension;
+      JCLAP_CHECK(ports.get(host.plugin(), 0, false, &info) && info.in_place_pair == 0);
+   }
 
    // GUI edits come out as begin, value, end, from process and from flush.
    probe->edits.set(kLevel, 8.0);
@@ -261,6 +275,46 @@ int main() {
    triple.back() = {4, -4};
    triple.publish();
    JCLAP_CHECK(triple.update() && triple.front().a == 4);
+
+   // Numbers read the same in a locale with a decimal comma; NaN, infinity and units are handled.
+   {
+      std::setlocale(LC_NUMERIC, "de_DE.UTF-8"); // if installed; the checks hold either way
+      double v = 0.0;
+      const char *end = nullptr;
+      JCLAP_CHECK(jclap::core::parseNumber(" -2.5dB", v, &end) && v == -2.5 && !std::strcmp(end, "dB"));
+      JCLAP_CHECK(jclap::core::parseNumber("1e3 Hz", v, &end) && v == 1000.0 && !std::strcmp(end, " Hz"));
+      JCLAP_CHECK(jclap::core::parseNumber(".5", v) && v == 0.5);
+      JCLAP_CHECK(jclap::core::parseNumber("3e", v, &end) && v == 3.0 && !std::strcmp(end, "e"));
+      JCLAP_CHECK(!jclap::core::parseNumber("nan", v));
+      JCLAP_CHECK(!jclap::core::parseNumber("inf", v));
+      JCLAP_CHECK(!jclap::core::parseNumber("1e999", v));
+      JCLAP_CHECK(!jclap::core::parseNumber("dB", v));
+      JCLAP_CHECK(!jclap::core::parseNumber("", v));
+      std::setlocale(LC_NUMERIC, "C");
+   }
+
+   // Pass-through with no input silences the output and marks it constant; mixed precisions convert.
+   {
+      float o0[4] = {1, 1, 1, 1}, o1[4] = {1, 1, 1, 1};
+      float *outs[2] = {o0, o1};
+      double i0[4] = {0.25, 0.5, 0.75, 1.0};
+      double *ins[1] = {i0};
+      clap_audio_buffer_t in{}, out{};
+      out.data32 = outs;
+      out.channel_count = 2;
+      clap_process_t proc{};
+      proc.frames_count = 4;
+      proc.audio_outputs = &out;
+      proc.audio_outputs_count = 1;
+      jclap::core::passAudioThrough(&proc);
+      JCLAP_CHECK(o0[3] == 0.0f && o1[0] == 0.0f && out.constant_mask == 3);
+      in.data64 = ins;
+      in.channel_count = 1;
+      proc.audio_inputs = &in;
+      proc.audio_inputs_count = 1;
+      jclap::core::passAudioThrough(&proc);
+      JCLAP_CHECK(o0[0] == 0.25f && o0[3] == 1.0f && o1[2] == 0.0f && out.constant_mask == 2);
+   }
 
    return jclap::core::testResult();
 }

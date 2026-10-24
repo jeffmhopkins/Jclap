@@ -2,7 +2,11 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cmath>
 #include <cstring>
+#include <locale>
+#include <sstream>
+#include <string>
 
 namespace jclap::core {
 
@@ -15,6 +19,46 @@ void fillParamInfo(const ParamDef &def, clap_param_info_t *info) {
    info->min_value = def.min;
    info->max_value = def.max;
    info->default_value = def.defaultValue;
+}
+
+bool parseNumber(const char *text, double &value, const char **end) {
+   if (!text)
+      return false;
+   // Find the number's extent first, [+-]digits[.digits][e[+-]digits], so a unit after it ("3dB")
+   // is never taken for part of it, then read just that in the C locale.
+   const char *p = text;
+   while (*p == ' ' || *p == '\t')
+      ++p;
+   const char *start = p;
+   if (*p == '+' || *p == '-')
+      ++p;
+   int digits = 0;
+   for (; *p >= '0' && *p <= '9'; ++p)
+      ++digits;
+   if (*p == '.')
+      for (++p; *p >= '0' && *p <= '9'; ++p)
+         ++digits;
+   if (!digits)
+      return false;
+   if (*p == 'e' || *p == 'E') {
+      const char *q = p + 1;
+      if (*q == '+' || *q == '-')
+         ++q;
+      if (*q >= '0' && *q <= '9') {
+         while (*q >= '0' && *q <= '9')
+            ++q;
+         p = q;
+      }
+   }
+   std::istringstream in(std::string(start, p));
+   in.imbue(std::locale::classic());
+   double v = 0.0;
+   if (!(in >> v) || !std::isfinite(v))
+      return false;
+   value = v;
+   if (end)
+      *end = p;
+   return true;
 }
 
 bool isNoteEvent(const clap_event_header_t *h) {
@@ -66,23 +110,45 @@ bool pushMidi(const clap_output_events_t *out, uint32_t time, uint8_t status, ui
 }
 
 void passAudioThrough(const clap_process_t *proc) {
-   if (proc->audio_inputs_count < 1 || proc->audio_outputs_count < 1)
+   if (proc->audio_outputs_count < 1)
       return;
-   const clap_audio_buffer_t &in = proc->audio_inputs[0];
-   const clap_audio_buffer_t &out = proc->audio_outputs[0];
-   const uint32_t channels = std::min(in.channel_count, out.channel_count);
-   for (uint32_t c = 0; c < channels; ++c) {
-      if (in.data32 && out.data32 && in.data32[c] != out.data32[c])
-         std::memcpy(out.data32[c], in.data32[c], proc->frames_count * sizeof(float));
-      if (in.data64 && out.data64 && in.data64[c] != out.data64[c])
-         std::memcpy(out.data64[c], in.data64[c], proc->frames_count * sizeof(double));
+   const uint32_t frames = proc->frames_count;
+   const clap_audio_buffer_t *in = proc->audio_inputs_count > 0 ? &proc->audio_inputs[0] : nullptr;
+   clap_audio_buffer_t &out = proc->audio_outputs[0];
+   const uint32_t channels = in ? std::min(in->channel_count, out.channel_count) : 0;
+   uint64_t constant = 0;
+   for (uint32_t c = 0; c < out.channel_count; ++c) {
+      float *o32 = out.data32 ? out.data32[c] : nullptr;
+      double *o64 = out.data64 ? out.data64[c] : nullptr;
+      const float *i32 = c < channels && in->data32 ? in->data32[c] : nullptr;
+      const double *i64 = c < channels && in->data64 ? in->data64[c] : nullptr;
+      if (!i32 && !i64) {
+         // Nothing to copy: silence.
+         if (o32)
+            std::memset(o32, 0, frames * sizeof(float));
+         if (o64)
+            std::memset(o64, 0, frames * sizeof(double));
+         constant |= c < 64 ? uint64_t(1) << c : 0;
+         continue;
+      }
+      if (o32 && o32 != i32) {
+         if (i32)
+            std::memcpy(o32, i32, frames * sizeof(float));
+         else
+            for (uint32_t i = 0; i < frames; ++i)
+               o32[i] = static_cast<float>(i64[i]);
+      }
+      if (o64 && o64 != i64) {
+         if (i64)
+            std::memcpy(o64, i64, frames * sizeof(double));
+         else
+            for (uint32_t i = 0; i < frames; ++i)
+               o64[i] = i32[i];
+      }
+      if (c < 64 && (in->constant_mask >> c) & 1)
+         constant |= uint64_t(1) << c;
    }
-   for (uint32_t c = channels; c < out.channel_count; ++c) {
-      if (out.data32)
-         std::memset(out.data32[c], 0, proc->frames_count * sizeof(float));
-      if (out.data64)
-         std::memset(out.data64[c], 0, proc->frames_count * sizeof(double));
-   }
+   out.constant_mask = constant;
 }
 
 bool writeAll(const clap_ostream_t *stream, const void *data, int64_t size) {

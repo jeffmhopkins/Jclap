@@ -395,7 +395,10 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
       }
       const bool reverse = !std::strncmp(text, "Reverse", 7), swell = !std::strncmp(text, "Swell", 5);
       if (reverse || swell) {
-         value = std::strtod(text + (reverse ? 7 : 5), nullptr) / 100.0 * (reverse ? -1.0 : 1.0);
+         double amount = 0.0;
+         if (!jclap::core::parseNumber(text + (reverse ? 7 : 5), amount))
+            return false;
+         value = amount / 100.0 * (reverse ? -1.0 : 1.0);
          return true;
       }
    }
@@ -404,9 +407,9 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
       text += 3;
    else if (*text == 'x')
       ++text;
-   char *end = nullptr;
-   const double v = std::strtod(text, &end);
-   if (end == text)
+   double v = 0.0;
+   const char *end = nullptr;
+   if (!jclap::core::parseNumber(text, v, &end))
       return false;
    while (*end == ' ')
       ++end;

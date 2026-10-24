@@ -447,5 +447,25 @@ int main() {
       JCLAP_CHECK_EQ(line.read(-3.0f), 9.0f);
    }
 
+   // A filter used before any setter is already a working low pass, not silence.
+   {
+      Filter f;
+      float y = 0.0f;
+      for (int i = 0; i < 4800; ++i)
+         y = f.process(1.0f);
+      JCLAP_CHECK(std::fabs(y - 1.0f) < 1e-3f);
+   }
+
+   // A long fractional delay keeps its fraction: on a ramp, read(400000.3) is exactly 0.3 behind
+   // read(400000).
+   {
+      DelayLine line;
+      line.setMaxDelay(410000);
+      for (int i = 0; i < 410000; ++i)
+         line.write(static_cast<float>(i % 1000));
+      const float a = line.read(400005.0), b = line.read(400005.3);
+      JCLAP_CHECK(std::fabs((a - b) - 0.3f) < 1e-3f);
+   }
+
    return jclap::core::testResult();
 }
