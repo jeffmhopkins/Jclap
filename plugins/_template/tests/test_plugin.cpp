@@ -318,5 +318,65 @@ int main() {
       JCLAP_CHECK(!state->load(h.plugin(), &cut.in));
    }
 
+   // MIDI and MPE expression, and the panel across deactivate, on a fresh instance.
+   {
+      jclap::core::TestHost m(clap_entry, "com.jeffmhopkins.jclap.plugin-template");
+      EditorHost &p = *m.object<EditorHost>();
+      EditorHost::Voice v{};
+      float zl[4] = {}, zr[4] = {}, ol[4], orr[4];
+      float *mi[2] = {zl, zr}, *mo[2] = {ol, orr};
+      const auto shown = [&] { return p.voice(v); };
+
+      // Plain MIDI on channel 2 bends +/-2 semitones, not 48.
+      m.midi(0x91, 60, 100);
+      m.midi(0xE1, 0, 96); // +0.5
+      m.process(4, mi, mo);
+      JCLAP_CHECK(shown() && std::fabs(v.bend - 1.0f) < 1e-4f);
+      // RPN 0 sets that channel's range to 12.
+      m.midi(0xB1, 101, 0);
+      m.midi(0xB1, 100, 0);
+      m.midi(0xB1, 6, 12);
+      m.process(4, mi, mo);
+      JCLAP_CHECK(shown() && std::fabs(v.bend - 6.0f) < 1e-4f);
+      m.midi(0x81, 60, 0);
+      m.midi(0xE1, 0, 64);
+
+      // An MPE configuration message turns on a zone: note channels bend +/-48, channel 1 bends all.
+      m.midi(0xB0, 101, 0);
+      m.midi(0xB0, 100, 6);
+      m.midi(0xB0, 6, 15);
+      // An MPE controller sends the note's bend, pressure and timbre before its note-on; they stick.
+      m.midi(0xE2, 0, 96);
+      m.midi(0xD2, 64, 0);
+      m.midi(0xB2, 74, 127);
+      m.midi(0x92, 64, 100);
+      m.process(4, mi, mo);
+      JCLAP_CHECK(shown() && v.note == 64 && std::fabs(v.bend - 24.0f) < 1e-4f &&
+                  std::fabs(v.pressure - 64 / 127.0f) < 1e-4f && v.timbre == 1.0f);
+      m.midi(0xE0, 0, 96);
+      m.process(4, mi, mo);
+      JCLAP_CHECK(shown() && std::fabs(v.bend - 25.0f) < 1e-4f);
+      // Pressure on another channel isn't this note's.
+      m.midi(0xD3, 10, 0);
+      m.process(4, mi, mo);
+      JCLAP_CHECK(shown() && std::fabs(v.pressure - 64 / 127.0f) < 1e-4f);
+      // A CLAP note starts neutral.
+      m.note(CLAP_EVENT_NOTE_ON, 67, 1.0);
+      m.process(4, mi, mo);
+      JCLAP_CHECK(shown() && v.note == 67 && v.bend == 0.0f && v.pressure == 0.0f);
+
+      // Deactivating clears the lit keys and the voice view, and panel notes played while inactive
+      // don't play when it comes back.
+      JCLAP_CHECK(p.noteHeld(67));
+      m.plugin()->stop_processing(m.plugin());
+      m.plugin()->deactivate(m.plugin());
+      JCLAP_CHECK(!p.noteHeld(67) && !p.noteHeld(64) && !shown());
+      p.noteOn(72, 1.0f);
+      JCLAP_CHECK(m.plugin()->activate(m.plugin(), 48000, 1, 1024));
+      m.plugin()->start_processing(m.plugin());
+      m.process(4, mi, mo);
+      JCLAP_CHECK(!p.noteHeld(72) && !shown());
+   }
+
    return jclap::core::testResult();
 }
