@@ -59,7 +59,8 @@ public:
    float process() {
       switch (stage_) {
       case Stage::Attack:
-         level_ = attack_.toward(level_, 1.0);
+         // A retrigger already at the top goes straight on to the decay instead of dipping first.
+         level_ = level_ >= 1.0 ? 1.0 : attack_.toward(level_, 1.0);
          if (level_ >= 1.0) {
             level_ = 1.0;
             stage_ = Stage::Decay;

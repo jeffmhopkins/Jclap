@@ -1,8 +1,9 @@
 #pragma once
 
 // An oscillator with the basic analog waves. Saw, square and pulse are band-limited with PolyBLEP
-// and the triangle with PolyBLAMP, so high notes alias far less than the naive shapes would. Output
-// is -1..1 with no DC offset, also for narrow pulses.
+// and the triangle with PolyBLAMP, so high notes alias far less than the naive shapes would. Every
+// wave has no DC offset. Sine, triangle, saw and square are -1..1; the pulse is centred rather than
+// scaled, so a width w spans -2w..2-2w (a 20% pulse peaks at 1.6, the narrowest at 1.98).
 //
 //    Oscillator osc;
 //    osc.setSampleRate(sampleRate);
@@ -61,7 +62,13 @@ public:
       case Wave::Square:
       case Wave::Pulse: {
          const double width = wave_ == Wave::Square ? 0.5 : pulseWidth_;
-         out = (t < width ? 1.0 : -1.0) + polyBlep(t, dt) - polyBlep(wrap(t + 1.0 - width), dt);
+         // The level and the falling edge's correction both come from the phase since that edge, so
+         // rounding can't put them on opposite sides of it (a one-sample spike of 2).
+         double fall = t + 1.0 - width;
+         const bool high = fall < 1.0;
+         if (!high)
+            fall -= 1.0;
+         out = (high ? 1.0 : -1.0) + polyBlep(t, dt) - polyBlep(fall, dt);
          // A pulse's average is 2 * width - 1; take it out so narrow pulses stay centred.
          out -= 2.0 * width - 1.0;
          break;

@@ -20,8 +20,10 @@ namespace jclap::dsp {
 
 class DelayLine {
 public:
-   // Room for delays up to `samples` long. Allocates and clears, so call it outside the audio thread.
+   // Room for delays up to `samples` long (at least 1). Allocates and clears, so call it outside the
+   // audio thread.
    void setMaxDelay(int samples) {
+      samples = std::max(samples, 1);
       size_t size = 4;
       while (size < static_cast<size_t>(samples) + 4)
          size <<= 1;
@@ -44,9 +46,11 @@ public:
    // The sample written `delay` writes ago, for a whole number of samples.
    float tap(int delay) const { return buffer_[(pos_ - static_cast<size_t>(delay)) & mask_]; }
 
-   // Between samples by Hermite interpolation; clamped to 1..maxDelay().
+   // Between samples by Hermite interpolation; clamped to 1..maxDelay(), and NaN reads as 1.
    float read(float delay) const {
-      delay = std::clamp(delay, 1.0f, static_cast<float>(maxDelay()));
+      if (!(delay >= 1.0f))
+         delay = 1.0f;
+      delay = std::min(delay, static_cast<float>(std::max(1, maxDelay())));
       const int whole = static_cast<int>(delay);
       const float t = delay - static_cast<float>(whole);
       const float y0 = tap(whole - 1), y1 = tap(whole), y2 = tap(whole + 1), y3 = tap(whole + 2);
