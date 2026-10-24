@@ -61,8 +61,13 @@ inline const char *const *choiceLabels(clap_id id) {
 inline void formatParam(clap_id id, double value, char *out, uint32_t size) {
    if (const char *const *labels = choiceLabels(id))
       std::snprintf(out, size, "%s", labels[value >= 0.5 ? 1 : 0]);
-   else if (id == kParamAngleOffset)
-      std::snprintf(out, size, "%.1f deg", value);
+   else if (id == kParamAngleOffset) {
+      // Rounded first, so 359.96 shows as 0.0, the angle it is, not 360.0.
+      double shown = std::round(value * 10.0) / 10.0;
+      if (shown >= 360.0)
+         shown -= 360.0;
+      std::snprintf(out, size, "%.1f deg", shown);
+   }
    else
       std::snprintf(out, size, "CC %d", static_cast<int>(value + 0.5));
 }
@@ -74,8 +79,11 @@ inline bool sameText(const char *a, const char *b) {
    return *a == *b;
 }
 
-// Labels in any case, or a number, kept to the param's range.
+// Labels in any case, or a number ("CC 20", "cc20" and " 20" too), kept to the param's range. An
+// angle offset wraps around the circle instead, so -90 is 270.
 inline bool parseParam(clap_id id, const char *text, double &value) {
+   while (std::isspace(static_cast<unsigned char>(*text)))
+      ++text;
    if (const char *const *labels = choiceLabels(id)) {
       for (int i = 0; i < 2; ++i)
          if (sameText(text, labels[i])) {
@@ -83,11 +91,16 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
             return true;
          }
    }
-   if (std::strncmp(text, "CC", 2) == 0)
+   if (std::tolower(static_cast<unsigned char>(text[0])) == 'c' && std::tolower(static_cast<unsigned char>(text[1])) == 'c')
       text += 2;
    double v;
    if (std::sscanf(text, "%lf", &v) != 1 || !std::isfinite(v))
       return false;
+   if (id == kParamAngleOffset) {
+      v = std::fmod(v, 360.0);
+      value = v < 0.0 ? v + 360.0 : v + 0.0; // + 0.0 turns -0 into 0
+      return true;
+   }
    value = std::clamp(v, kParams[id].min, kParams[id].max);
    return true;
 }

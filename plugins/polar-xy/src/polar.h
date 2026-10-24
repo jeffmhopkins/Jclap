@@ -14,6 +14,11 @@ inline double ccToBipolar(int v) {
    return v >= 64 ? (v - 64) / 63.0 : (v - 64) / 64.0;
 }
 
+// Around the centre a controller's ±1 jitter would swing the angle across quadrants, so inside this
+// radius (on the -1..+1 scale; one CC step is about 0.016) the angle holds and the radius is 0. The
+// radius is measured from its edge, so it still starts at 1.
+constexpr double kDeadZone = 0.03;
+
 enum class RadiusMode { ClampToCircle = 0, FillSquare = 1 };
 
 struct PolarSettings {
@@ -23,7 +28,7 @@ struct PolarSettings {
 };
 
 struct PolarCC {
-   int angle = 0;       // 0..127 covering 0..360 degrees
+   int angle = 0;       // 0..126 in steps of 360/127 degrees (127 would be 360, the same as 0)
    int radius = 0;      // 0..127, 0 = center, 127 = edge
    bool hasAngle = false; // false at dead center, where the angle is undefined
 };
@@ -44,17 +49,17 @@ inline PolarCC toPolar(int xcc, int ycc, const PolarSettings &s) {
    double r = s.radiusMode == RadiusMode::FillSquare ? std::max(std::abs(x), std::abs(y))
                                                      : std::hypot(x, y);
    r = std::clamp(r, 0.0, 1.0);
-   out.radius = static_cast<int>(std::lround(r * 127.0));
-
-   if (x == 0.0 && y == 0.0)
+   if (r < kDeadZone)
       return out;
+   out.radius = static_cast<int>(std::lround((r - kDeadZone) / (1.0 - kDeadZone) * 127.0));
 
    double deg = std::atan2(y, x) * 180.0 / kPi;
    if (s.clockwise)
       deg = -deg;
    deg = wrapDegrees(deg + s.angleOffsetDeg);
-   // deg is in [0, 360) so this lands in 0..127; 127 and 0 sit next to each other on the circle.
-   out.angle = static_cast<int>(std::lround(deg / 360.0 * 127.0));
+   // A 0..127 CC read as v / 127 of a turn makes 127 the same angle as 0, so a turn is 0..126 and
+   // what would round to 127 is sent as 0.
+   out.angle = static_cast<int>(std::lround(deg / 360.0 * 127.0)) % 127;
    out.hasAngle = true;
    return out;
 }
