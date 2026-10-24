@@ -7,8 +7,11 @@ extern "C" const clap_plugin_entry_t clap_entry;
 int main() {
    jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
 
-   // X hard right (CC 16 = 127) at the default Y of 64: full radius at angle 0.
+   // Nothing goes out until both axes are known.
    h.midi(0xB0, 16, 127);
+   JCLAP_CHECK_EQ(h.process().midi.size(), 0u);
+   // X hard right (CC 16 = 127) with Y centred: full radius at angle 0.
+   h.midi(0xB0, 17, 64);
    auto out = h.process();
    JCLAP_CHECK_EQ(out.midi.size(), 2u);
    if (out.midi.size() == 2) {

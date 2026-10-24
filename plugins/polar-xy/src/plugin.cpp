@@ -21,8 +21,22 @@ namespace {
 using namespace polar_xy;
 
 struct ChannelState {
+   // The last X/Y seen. Nothing is sent until both have arrived: the other axis isn't known.
    int x = 64, y = 64;
-   int lastAngle = -1, lastRadius = -1;
+   bool hasX = false, hasY = false;
+   // The angle held at dead center, and what was last sent on the output CCs (-1: send again).
+   int angle = -1;
+   int sentAngle = -1, sentRadius = -1;
+};
+
+// What the conversion depends on, to notice when a setting changes.
+struct Settings {
+   int outAngle = -1, outRadius = -1, direction = 0, radiusMode = 0;
+   double angleOffset = 0.0;
+   bool operator==(const Settings &o) const {
+      return outAngle == o.outAngle && outRadius == o.outRadius && direction == o.direction &&
+             radiusMode == o.radiusMode && angleOffset == o.angleOffset;
+   }
 };
 
 // State layout: 4-byte magic, uint32 version, then one double per parameter.
@@ -54,12 +68,13 @@ public:
       return true;
    }
 
+   // A reset is not a controller move: keep the X/Y last seen, and only send them again with the next.
    bool activate(double, uint32_t, uint32_t) override {
-      resetChannels();
+      forgetSent();
       return true;
    }
 
-   void reset() override { resetChannels(); }
+   void reset() override { forgetSent(); }
 
    const void *extension(const char *id) override {
       if (!std::strcmp(id, CLAP_EXT_AUDIO_PORTS))
@@ -78,7 +93,7 @@ public:
    double paramValue(clap_id id) const override { return id < kParamCount ? params_[id].load() : 0.0; }
    void beginEdit(clap_id id) override { edits_.begin(id); }
    void setParam(clap_id id, double value) override {
-      if (id >= kParamCount)
+      if (id >= kParamCount || !std::isfinite(value))
          return;
       value = std::clamp(value, kParams[id].min, kParams[id].max);
       params_[id].store(value);
@@ -177,12 +192,15 @@ public:
       const clap_input_events_t *in = proc->in_events;
       const clap_output_events_t *out = proc->out_events;
       edits_.drain(out);
+      // Panel edits, flushes and state loads land between blocks.
+      applySettings(out, 0);
       const uint32_t n = in->size(in);
       for (uint32_t i = 0; i < n; ++i) {
          const clap_event_header_t *h = in->get(in, i);
          if (h->space_id == CLAP_CORE_EVENT_SPACE_ID) {
             if (h->type == CLAP_EVENT_PARAM_VALUE) {
                applyParam(reinterpret_cast<const clap_event_param_value_t *>(h));
+               applySettings(out, h->time);
                continue;
             }
             if (h->type == CLAP_EVENT_PARAM_MOD || h->type == CLAP_EVENT_PARAM_GESTURE_BEGIN ||
@@ -206,11 +224,66 @@ private:
          c = ChannelState{};
    }
 
+   void forgetSent() {
+      for (auto &c : channels_)
+         c.sentAngle = c.sentRadius = -1;
+   }
+
    int intParam(ParamId id) const { return static_cast<int>(params_[id].load() + 0.5); }
 
    void applyParam(const clap_event_param_value_t *ev) {
-      if (ev->param_id < kParamCount)
-         params_[ev->param_id].store(ev->value);
+      if (ev->param_id < kParamCount && std::isfinite(ev->value))
+         params_[ev->param_id].store(std::clamp(ev->value, kParams[ev->param_id].min, kParams[ev->param_id].max));
+   }
+
+   Settings settings() const {
+      Settings s;
+      s.outAngle = intParam(kParamOutAngle);
+      s.outRadius = intParam(kParamOutRadius);
+      s.direction = intParam(kParamDirection);
+      s.radiusMode = intParam(kParamRadiusMode);
+      s.angleOffset = params_[kParamAngleOffset].load();
+      return s;
+   }
+
+   // A changed setting changes what the controller's position means, so every channel that has a
+   // position sends it again at once; on new output CCs, whatever it was sent on the old ones.
+   void applySettings(const clap_output_events_t *out, uint32_t time) {
+      const Settings now = settings();
+      if (now == applied_)
+         return;
+      const bool moved = now.outAngle != applied_.outAngle || now.outRadius != applied_.outRadius;
+      applied_ = now;
+      for (int channel = 0; channel < 16; ++channel) {
+         ChannelState &st = channels_[channel];
+         if (moved)
+            st.sentAngle = st.sentRadius = -1;
+         convert(out, time, channel);
+      }
+   }
+
+   // Sends a channel's position as angle and radius, each only if it changed.
+   void convert(const clap_output_events_t *out, uint32_t time, int channel) {
+      ChannelState &st = channels_[channel];
+      if (!st.hasX || !st.hasY)
+         return;
+      jclap::PolarSettings s;
+      s.angleOffsetDeg = applied_.angleOffset;
+      s.clockwise = applied_.direction != 0;
+      s.radiusMode = static_cast<jclap::RadiusMode>(applied_.radiusMode);
+      const jclap::PolarCC p = jclap::toPolar(st.x, st.y, s);
+
+      // At dead center the angle is undefined, so it holds its last value.
+      if (p.hasAngle)
+         st.angle = p.angle;
+      if (st.angle >= 0 && st.angle != st.sentAngle) {
+         pushCC(out, time, channel, applied_.outAngle, st.angle);
+         st.sentAngle = st.angle;
+      }
+      if (p.radius != st.sentRadius) {
+         pushCC(out, time, channel, applied_.outRadius, p.radius);
+         st.sentRadius = p.radius;
+      }
    }
 
    void pushCC(const clap_output_events_t *out, uint32_t time, int channel, int cc, int value) {
@@ -227,12 +300,16 @@ private:
       const int value = ev->data[2];
       ChannelState &st = channels_[channel];
 
-      if (cc == intParam(kParamInX))
+      // The same CC for both is read as X.
+      if (cc == intParam(kParamInX)) {
          st.x = value;
-      else if (cc == intParam(kParamInY))
+         st.hasX = true;
+      } else if (cc == intParam(kParamInY)) {
          st.y = value;
-      else
+         st.hasY = true;
+      } else {
          return false;
+      }
       lastX_.store(st.x);
       lastY_.store(st.y);
 
@@ -240,26 +317,14 @@ private:
       if (passThrough)
          out->try_push(out, &ev->header);
 
-      jclap::PolarSettings s;
-      s.angleOffsetDeg = params_[kParamAngleOffset].load();
-      s.clockwise = intParam(kParamDirection) != 0;
-      s.radiusMode = static_cast<jclap::RadiusMode>(intParam(kParamRadiusMode));
-      const jclap::PolarCC p = jclap::toPolar(st.x, st.y, s);
-
-      // At dead center the angle is undefined, so it holds its last value.
-      if (p.hasAngle && p.angle != st.lastAngle) {
-         pushCC(out, ev->header.time, channel, intParam(kParamOutAngle), p.angle);
-         st.lastAngle = p.angle;
-      }
-      if (p.radius != st.lastRadius) {
-         pushCC(out, ev->header.time, channel, intParam(kParamOutRadius), p.radius);
-         st.lastRadius = p.radius;
-      }
+      convert(out, ev->header.time, channel);
       return true;
    }
 
    std::atomic<double> params_[kParamCount];
    ChannelState channels_[16];
+   // The settings the last conversion used (audio thread).
+   Settings applied_;
    // The last X/Y seen on any channel, for the panel.
    std::atomic<int> lastX_{64}, lastY_{64};
    jclap::core::EditQueue edits_;
