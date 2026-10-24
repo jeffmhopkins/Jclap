@@ -103,3 +103,39 @@ jobs:
           files: dist/*.zip
           body_path: notes.md
           generate_release_notes: true
+
+  # Every push to main replaces the "dev" pre-release with that commit's build, for testing before a
+  # real release. It's marked pre-release, so "latest" and the README's links still point at the last
+  # tagged version.
+  dev-release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: dev-release
+      cancel-in-progress: true
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: actions/checkout@v4
+        with:
+          path: src
+      - name: Render install notes
+        run: |
+          {
+            echo "Development build of \`${GITHUB_SHA::7}\` on main. Not a release: it's replaced by each push to main."
+            echo
+            sed "s/{{VERSION}}/dev/g" src/.github/release-notes.md
+          } > notes.md
+      - name: Replace the dev release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete dev --cleanup-tag --yes || true
+          gh release create dev dist/*.zip --prerelease --latest=false --target "$GITHUB_SHA" \
+            --title "dev (${GITHUB_SHA::7})" --notes-file notes.md

@@ -109,3 +109,7 @@ Plugins build on three shared libraries:
 > In GitHub, open Actions → build → Run workflow and enter a version such as `v0.2.0`. The run builds
 > every platform, tags the commit and publishes a release with one zip per OS. Pushing a `v*` tag does
 > the same. Bump the version in `CMakeLists.txt` and each plugin descriptor first.
+
+Every push to `main` also rebuilds the [dev pre-release](https://github.com/jeffmhopkins/Jclap/releases/tag/dev)
+from that commit, for testing merged changes before a real release. It replaces itself each time and is
+never marked latest.
