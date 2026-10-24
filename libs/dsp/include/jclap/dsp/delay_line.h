@@ -9,7 +9,9 @@
 //    line.write(in);                        // once per sample
 //    float out = line.read(delaySamples);   // any delay from 1 to the max, as often as you like
 //
-// write() moves time forward, so read(1) right after it is the sample written the call before.
+// write() moves time forward, so read(1) right after it is the sample written the call before:
+// write first and read(d) is d samples behind the input. Reading before the write, as a feedback
+// loop does, makes it d + 1.
 
 #include <algorithm>
 #include <cmath>
@@ -55,13 +57,14 @@ public:
       return d < written_ ? buffer_[(pos_ - d) & mask_] : 0.0f;
    }
 
-   // Between samples by Hermite interpolation; clamped to 1..maxDelay(), and NaN reads as 1.
-   float read(float delay) const {
-      if (!(delay >= 1.0f))
-         delay = 1.0f;
-      delay = std::min(delay, static_cast<float>(std::max(1, maxDelay())));
+   // Between samples by Hermite interpolation; clamped to 1..maxDelay(), and NaN reads as 1. The
+   // delay is split in double, so the fraction stays fine on a line seconds long at a high rate.
+   float read(double delay) const {
+      if (!(delay >= 1.0))
+         delay = 1.0;
+      delay = std::min(delay, static_cast<double>(std::max(1, maxDelay())));
       const int whole = static_cast<int>(delay);
-      const float t = delay - static_cast<float>(whole);
+      const float t = static_cast<float>(delay - whole);
       const float y0 = tap(whole - 1), y1 = tap(whole), y2 = tap(whole + 1), y3 = tap(whole + 2);
       const float c1 = 0.5f * (y2 - y0);
       const float c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3;

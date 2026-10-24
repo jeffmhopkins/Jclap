@@ -101,6 +101,7 @@ class TestHost {
 public:
    TestHost(const clap_plugin_entry_t &entry, const char *pluginId, double sampleRate = 48000) {
       entry.init("");
+      entry_ = &entry;
       auto *factory = static_cast<const clap_plugin_factory_t *>(entry.get_factory(CLAP_PLUGIN_FACTORY_ID));
       plugin_ = factory->create_plugin(factory, &host_, pluginId);
       if (!plugin_) {
@@ -119,12 +120,17 @@ public:
       }
       plugin_->start_processing(plugin_);
       params_ = static_cast<const clap_plugin_params_t *>(plugin_->get_extension(plugin_, CLAP_EXT_PARAMS));
+      if (auto *ports = static_cast<const clap_plugin_audio_ports_t *>(plugin_->get_extension(plugin_, CLAP_EXT_AUDIO_PORTS))) {
+         hasAudioIn_ = ports->count(plugin_, true) > 0;
+         hasAudioOut_ = ports->count(plugin_, false) > 0;
+      }
    }
 
    ~TestHost() {
       plugin_->stop_processing(plugin_);
       plugin_->deactivate(plugin_);
       plugin_->destroy(plugin_);
+      entry_->deinit();
    }
    // One plugin instance per host: a copy would destroy it twice.
    TestHost(const TestHost &) = delete;
@@ -237,13 +243,27 @@ public:
       proc.steady_time = -1;
       proc.in_events = &in;
       proc.out_events = &outEvents;
-      if (audioIn && audioOut) {
-         inBuf.data32 = const_cast<float **>(audioIn);
-         inBuf.channel_count = 2;
-         outBuf.data32 = audioOut;
-         outBuf.channel_count = 2;
+      // Buffers passed in are always given to the plugin.
+      const bool given = audioIn && audioOut;
+      if (!given) {
+         // Like a real host, give the plugin buffers for the ports it has: silence in, scratch out.
+         for (std::vector<float> &b : scratch_)
+            b.assign(frames, 0.0f);
+         float **ins = scratchPointers_, **outs = scratchPointers_ + 2;
+         for (int c = 0; c < 4; ++c)
+            scratchPointers_[c] = scratch_[c].data();
+         audioIn = audioIn ? audioIn : ins;
+         audioOut = audioOut ? audioOut : outs;
+      }
+      inBuf.data32 = const_cast<float **>(audioIn);
+      inBuf.channel_count = 2;
+      outBuf.data32 = audioOut;
+      outBuf.channel_count = 2;
+      if (given || hasAudioIn_) {
          proc.audio_inputs = &inBuf;
          proc.audio_inputs_count = 1;
+      }
+      if (given || hasAudioOut_) {
          proc.audio_outputs = &outBuf;
          proc.audio_outputs_count = 1;
       }
@@ -294,6 +314,10 @@ private:
    const clap_host_t host_ = {CLAP_VERSION_INIT, nullptr, "jclap test", "jclap", "", "1", getExtension,
                               noop, noop, noop};
    const clap_plugin_t *plugin_ = nullptr;
+   const clap_plugin_entry_t *entry_ = nullptr;
+   bool hasAudioIn_ = false, hasAudioOut_ = false;
+   std::vector<float> scratch_[4];
+   float *scratchPointers_[4] = {};
    const clap_plugin_params_t *params_ = nullptr;
    TestEventList in_;
    size_t outputLimit_ = SIZE_MAX;

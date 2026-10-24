@@ -3,15 +3,29 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "jclap/core/helpers.h"
+
 namespace jclap::core {
 
 Plugin::Plugin(const clap_plugin_descriptor_t *descriptor, const clap_host_t *host) : host_(host) {
    plugin_.desc = descriptor;
    plugin_.plugin_data = this;
-   plugin_.init = [](const clap_plugin_t *p) { return from(p)->init(); };
+   // Exceptions mustn't unwind into the host, which is C: the calls that can fail report a
+   // failure instead.
+   plugin_.init = [](const clap_plugin_t *p) {
+      try {
+         return from(p)->init();
+      } catch (...) {
+         return false;
+      }
+   };
    plugin_.destroy = [](const clap_plugin_t *p) { delete from(p); };
    plugin_.activate = [](const clap_plugin_t *p, double sr, uint32_t minFrames, uint32_t maxFrames) {
-      return from(p)->activate(sr, minFrames, maxFrames);
+      try {
+         return from(p)->activate(sr, minFrames, maxFrames);
+      } catch (...) {
+         return false;
+      }
    };
    plugin_.deactivate = [](const clap_plugin_t *p) { from(p)->deactivate(); };
    plugin_.start_processing = [](const clap_plugin_t *p) { return from(p)->startProcessing(); };
@@ -27,13 +41,13 @@ bool Plugin::paramsValueToText(clap_id, double value, char *out, uint32_t size) 
    return true;
 }
 
-bool Plugin::paramsTextToValue(clap_id, const char *text, double *value) const {
-   char *end = nullptr;
-   const double v = std::strtod(text, &end);
-   if (end == text)
-      return false;
-   *value = v;
-   return true;
+bool Plugin::paramsTextToValue(clap_id id, const char *text, double *value) const {
+   // Only for a param this plugin has, and the same in every locale.
+   clap_param_info_t info;
+   bool known = false;
+   for (uint32_t i = 0, n = paramsCount(); i < n && !known; ++i)
+      known = paramsInfo(i, &info) && info.id == id;
+   return known && parseNumber(text, *value);
 }
 
 bool Plugin::notePortsInfo(uint32_t index, bool isInput, clap_note_port_info_t *info) const {
@@ -54,7 +68,8 @@ bool Plugin::audioPortsInfo(uint32_t index, bool isInput, clap_audio_port_info_t
    info->channel_count = 2;
    info->flags = CLAP_AUDIO_PORT_IS_MAIN;
    info->port_type = CLAP_PORT_STEREO;
-   info->in_place_pair = 0;
+   // In place only when there is a port going the other way to share buffers with.
+   info->in_place_pair = audioPortsCount(!isInput) > 0 ? 0 : CLAP_INVALID_ID;
    return true;
 }
 
@@ -74,8 +89,20 @@ const clap_plugin_params_t Plugin::paramsExtension = {
 };
 
 const clap_plugin_state_t Plugin::stateExtension = {
-   [](const clap_plugin_t *p, const clap_ostream_t *s) { return from(p)->stateSave(s); },
-   [](const clap_plugin_t *p, const clap_istream_t *s) { return from(p)->stateLoad(s); },
+   [](const clap_plugin_t *p, const clap_ostream_t *s) {
+      try {
+         return from(p)->stateSave(s);
+      } catch (...) {
+         return false;
+      }
+   },
+   [](const clap_plugin_t *p, const clap_istream_t *s) {
+      try {
+         return from(p)->stateLoad(s);
+      } catch (...) {
+         return false;
+      }
+   },
 };
 
 const clap_plugin_note_ports_t Plugin::notePortsExtension = {

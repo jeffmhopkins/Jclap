@@ -29,6 +29,9 @@ public:
    enum class Slope { Db12 = 1, Db24, Db36, Db48 };
    static constexpr int kMaxStages = 4;
 
+   // Ready to use as a 1 kHz, 12 dB low pass at 48 kHz, before any setter runs.
+   Filter() { updateQ(); }
+
    void setSampleRate(double sampleRate) {
       sampleRate_ = sampleRate;
       updateCoefficients();

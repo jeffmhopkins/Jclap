@@ -43,7 +43,13 @@ private:
    static const clap_plugin_t *tryCreate(const clap_host_t *host, const char *id) {
       if (std::strcmp(id, P::descriptor.id))
          return nullptr;
-      return (new P(host))->clapPlugin();
+      // A constructor that throws (out of memory, say) is a failed create, not an exception
+      // unwinding into the host.
+      try {
+         return (new P(host))->clapPlugin();
+      } catch (...) {
+         return nullptr;
+      }
    }
 };
 

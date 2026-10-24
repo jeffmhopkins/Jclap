@@ -21,6 +21,11 @@ struct ParamDef {
 
 void fillParamInfo(const ParamDef &def, clap_param_info_t *info);
 
+// Reads a number from the start of `text` ("0.5", " -12 dB") the same way in every locale, so a
+// '.' is always the decimal point. False for no number or for NaN and infinity. `end`, if given,
+// is set to the first character after the number, for reading a unit.
+bool parseNumber(const char *text, double &value, const char **end = nullptr);
+
 // ---- events ----
 
 // True for note and MIDI events, which a note effect usually passes straight through.
@@ -33,8 +38,9 @@ bool pushMidi(const clap_output_events_t *out, uint32_t time, uint8_t status, ui
 
 // ---- audio ----
 
-// Copies the first input port to the first output port (32 or 64 bit), silencing extra output
-// channels. For utilities that only have audio ports because hosts expect them.
+// Copies the first input port to the first output port (32 or 64 bit, converting if they differ),
+// silencing extra output channels, or every output channel with no input. Passes the input's
+// constant_mask on. For utilities that only have audio ports because hosts expect them.
 void passAudioThrough(const clap_process_t *process);
 
 // ---- state ----

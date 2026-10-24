@@ -259,9 +259,9 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
             return true;
          }
    }
-   char *end = nullptr;
-   const double v = std::strtod(text, &end);
-   if (end == text)
+   double v = 0.0;
+   const char *end = nullptr;
+   if (!jclap::core::parseNumber(text, v, &end))
       return false;
    while (*end == ' ')
       ++end;
