@@ -35,9 +35,21 @@ struct PanelNote {
 struct ToneVoice {
    enum class Stage { Off, Attack, Decay, Sustain, Release } stage = Stage::Off;
    int note = -1;
+   // The MIDI channel a MIDI note came in on, whose bend, pressure and CC 74 it follows; -1 for CLAP
+   // and panel notes, which get per-note expressions instead.
+   int channel = -1;
    double phase = 0.0, level = 0.0, velocity = 0.0;
    // Per-note expression: bend (semitones) moves the pitch; pressure and timbre are only shown.
    double bend = 0.0, pressure = 0.0, timbre = 0.5;
+};
+
+// What a MIDI channel last sent. MPE controllers send a note's bend, pressure and timbre on its
+// channel just before the note-on, so the note picks them up from here.
+struct MidiChannel {
+   double bend = 0.0; // -1..+1
+   double pressure = 0.0, timbre = 0.5;
+   double bendRange = -1.0; // semitones from RPN 0, or -1 for the default
+   int rpnMsb = 127, rpnLsb = 127;
 };
 
 // State layout: 4-byte magic, uint32 version, uint32 param count, then one double per param in
@@ -62,6 +74,13 @@ public:
    bool activate(double sampleRate, uint32_t, uint32_t) override {
       sampleRate_ = sampleRate;
       voice_ = ToneVoice{};
+      resetMidi();
+      // Panel notes played while inactive are dropped, not replayed now. The audio thread isn't
+      // running, so popping here is safe.
+      PanelNote stale;
+      while (panelNotes_.pop(stale)) {
+      }
+      active_.store(true);
       // Param changes glide over about 20 ms instead of jumping once per block. They start where the
       // params are now, so activating doesn't fade in.
       for (jclap::dsp::Smoother *s : {&gainL_, &gainR_, &width_}) {
@@ -76,9 +95,19 @@ public:
       return true;
    }
 
-   void reset() override {
+   // The panel's lit keys and voice view go dark with the sound.
+   void deactivate() override {
+      active_.store(false);
       voice_ = ToneVoice{};
       clearHeld();
+      publishVoice();
+   }
+
+   void reset() override {
+      voice_ = ToneVoice{};
+      resetMidi();
+      clearHeld();
+      publishVoice();
    }
 
    uint32_t notePortsCount(bool isInput) const override { return isInput ? 1 : 0; }
@@ -127,13 +156,19 @@ public:
    const jclap::ui::HostMenu *hostMenu() const override { return &hostMenu_; }
    float outputPeak() override { return peak_.exchange(0.0f); }
    void readScope(float *out, size_t count) override { scope_.read(out, count); }
+   // While inactive nothing plays the queue, so the panel's notes are ignored rather than queued.
    void noteOn(int note, float velocity) override {
-      panelNotes_.push({PanelNote::Kind::On, static_cast<int8_t>(note), std::max(0.01f, velocity), 0, 0, 0.5f});
+      if (active_.load())
+         panelNotes_.push({PanelNote::Kind::On, static_cast<int8_t>(note), std::max(0.01f, velocity), 0, 0, 0.5f});
    }
    void noteExpression(int note, float bend, float pressure, float timbre) override {
-      panelNotes_.push({PanelNote::Kind::Expression, static_cast<int8_t>(note), 0, bend, pressure, timbre});
+      if (active_.load())
+         panelNotes_.push({PanelNote::Kind::Expression, static_cast<int8_t>(note), 0, bend, pressure, timbre});
    }
-   void noteOff(int note) override { panelNotes_.push({PanelNote::Kind::Off, static_cast<int8_t>(note), 0, 0, 0, 0}); }
+   void noteOff(int note) override {
+      if (active_.load())
+         panelNotes_.push({PanelNote::Kind::Off, static_cast<int8_t>(note), 0, 0, 0, 0});
+   }
    bool voice(Voice &out) const override {
       const int note = shownNote_.load();
       if (note < 0)
@@ -346,21 +381,41 @@ private:
             break;
          }
          case CLAP_EVENT_MIDI: {
-            // Plain MIDI, or MPE where each note has its own channel: bend is +/-48 semitones on
-            // MPE note channels (2..16) and +/-2 on channel 1, channel pressure is pressure, CC 74
-            // is timbre.
+            // Plain MIDI, or MPE where each note has its own channel. Bend is +/-2 semitones, or
+            // what RPN 0 sets; once an MPE configuration message (RPN 6 on channel 1) turns on a
+            // zone, its note channels (2..) bend +/-48 and channel 1 bends every note. Channel
+            // pressure is pressure and CC 74 is timbre, on the note's own channel.
             auto *ev = reinterpret_cast<const clap_event_midi_t *>(h);
             const int status = ev->data[0] & 0xF0, channel = ev->data[0] & 0x0F;
-            if (status == 0x90 && ev->data[2] > 0)
+            MidiChannel &c = midi_[channel];
+            if (status == 0x90 && ev->data[2] > 0) {
                startNote(ev->data[1], ev->data[2] / 127.0f);
-            else if (status == 0x80 || status == 0x90)
+               if (voice_.note == ev->data[1]) {
+                  voice_.channel = channel;
+                  voice_.pressure = c.pressure;
+                  voice_.timbre = c.timbre;
+                  voice_.bend = midiBend();
+               }
+            } else if (status == 0x80 || status == 0x90)
                stopNote(ev->data[1]);
-            else if (status == 0xE0)
-               voice_.bend = ((ev->data[2] << 7 | ev->data[1]) - 8192) / 8192.0 * (channel == 0 ? 2.0 : 48.0);
-            else if (status == 0xD0)
-               voice_.pressure = ev->data[1] / 127.0;
-            else if (status == 0xB0 && ev->data[1] == 74)
-               voice_.timbre = ev->data[2] / 127.0;
+            else if (status == 0xE0) {
+               c.bend = ((ev->data[2] << 7 | ev->data[1]) - 8192) / 8192.0;
+               if (voice_.channel >= 0)
+                  voice_.bend = midiBend();
+            } else if (status == 0xD0) {
+               c.pressure = ev->data[1] / 127.0;
+               if (voice_.channel == channel)
+                  voice_.pressure = c.pressure;
+            } else if (status == 0xB0 && ev->data[1] == 74) {
+               c.timbre = ev->data[2] / 127.0;
+               if (voice_.channel == channel)
+                  voice_.timbre = c.timbre;
+            } else if (status == 0xB0 && ev->data[1] == 101)
+               c.rpnMsb = ev->data[2];
+            else if (status == 0xB0 && ev->data[1] == 100)
+               c.rpnLsb = ev->data[2];
+            else if (status == 0xB0 && ev->data[1] == 6)
+               dataEntry(channel, ev->data[2]);
             else if (status == 0xB0 && ev->data[1] == 123)
                releaseAll(); // All Notes Off
             else if (status == 0xB0 && ev->data[1] == 120) {
@@ -373,6 +428,43 @@ private:
             break;
          }
       }
+   }
+
+   void resetMidi() {
+      for (MidiChannel &c : midi_)
+         c = MidiChannel{};
+      mpeMembers_ = 0;
+   }
+
+   bool isMember(int channel) const { return channel >= 1 && channel <= mpeMembers_; }
+   double bendRange(int channel) const {
+      const double r = midi_[channel].bendRange;
+      return r >= 0.0 ? r : isMember(channel) ? 48.0 : 2.0;
+   }
+   // A MIDI note's bend in semitones: its own channel's, plus channel 1's when it's in an MPE zone.
+   double midiBend() const {
+      const int ch = voice_.channel;
+      double bend = midi_[ch].bend * bendRange(ch);
+      if (isMember(ch))
+         bend += midi_[0].bend * bendRange(0);
+      return bend;
+   }
+
+   // CC 6 for the RPN selected with CC 101/100: 0 is the bend range in semitones, and 6 on channel 1
+   // is the MPE configuration message, whose value is how many note channels the zone has.
+   void dataEntry(int channel, int value) {
+      const MidiChannel &c = midi_[channel];
+      if (c.rpnMsb != 0)
+         return;
+      if (c.rpnLsb == 0)
+         midi_[channel].bendRange = value;
+      else if (c.rpnLsb == 6 && channel == 0) {
+         mpeMembers_ = std::min(value, 15);
+         for (MidiChannel &m : midi_)
+            m.bendRange = -1.0;
+      }
+      if (voice_.channel >= 0)
+         voice_.bend = midiBend();
    }
 
    // Copies the voice's note and expression where the panel can read them.
@@ -419,6 +511,7 @@ private:
       setHeld(note, true);
       noteCount_.fetch_add(1);
       voice_.note = note;
+      voice_.channel = -1;
       voice_.velocity = velocity;
       voice_.bend = 0.0;
       voice_.pressure = 0.0;
@@ -502,6 +595,9 @@ private:
    // Test tone. The voice belongs to the audio thread; the rest is shared with the panel.
    double sampleRate_ = 48000.0;
    ToneVoice voice_;
+   MidiChannel midi_[16];
+   int mpeMembers_ = 0; // note channels in the MPE zone; 0 is plain MIDI
+   std::atomic<bool> active_{false};
    jclap::core::SpscQueue<PanelNote> panelNotes_;
    std::atomic<int> shownNote_{-1};
    std::atomic<float> shownBend_{0.0f}, shownPressure_{0.0f}, shownTimbre_{0.5f};

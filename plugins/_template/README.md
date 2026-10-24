@@ -28,10 +28,12 @@ cmake -DNAME=my-plugin -DFILE_NAME=MyPlugin "-DDISPLAY_NAME=My Plugin" -P cmake/
 
 That copies this folder to `plugins/my-plugin`, renames everything (target, plugin id
 `com.jeffmhopkins.jclap.my-plugin`, class, namespace, display name) and adds it to the top-level
-`CMakeLists.txt`.
+`CMakeLists.txt`. It also sets `kStateMagic` in `src/plugin.cpp` to J plus the first three letters
+of `FILE_NAME`, so saved states can't be confused with another plugin's. It refuses a `FILE_NAME`
+another plugin already builds, and a `DISPLAY_NAME` with quotes or backslashes.
 
 > [!IMPORTANT]
-> Change `kStateMagic` in `src/plugin.cpp` so saved states can't be confused with another plugin's.
+> If it warns that the state magic is already in use, pick another one in `src/plugin.cpp`.
 
 Then:
 
