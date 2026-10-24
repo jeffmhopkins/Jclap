@@ -3,6 +3,9 @@
 
 #include <clap/clap.h>
 
+#include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -64,17 +67,29 @@ inline void formatParam(clap_id id, double value, char *out, uint32_t size) {
       std::snprintf(out, size, "CC %d", static_cast<int>(value + 0.5));
 }
 
+inline bool sameText(const char *a, const char *b) {
+   for (; *a && *b; ++a, ++b)
+      if (std::tolower(static_cast<unsigned char>(*a)) != std::tolower(static_cast<unsigned char>(*b)))
+         return false;
+   return *a == *b;
+}
+
+// Labels in any case, or a number, kept to the param's range.
 inline bool parseParam(clap_id id, const char *text, double &value) {
    if (const char *const *labels = choiceLabels(id)) {
       for (int i = 0; i < 2; ++i)
-         if (!std::strcmp(text, labels[i])) {
+         if (sameText(text, labels[i])) {
             value = i;
             return true;
          }
    }
    if (std::strncmp(text, "CC", 2) == 0)
       text += 2;
-   return std::sscanf(text, "%lf", &value) == 1;
+   double v;
+   if (std::sscanf(text, "%lf", &v) != 1 || !std::isfinite(v))
+      return false;
+   value = std::clamp(v, kParams[id].min, kParams[id].max);
+   return true;
 }
 
 } // namespace polar_xy
