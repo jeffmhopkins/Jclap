@@ -391,7 +391,7 @@ public:
       target_[kMidL] = static_cast<float>(std::sqrt(2.0) * std::cos(angle));
       target_[kMidR] = static_cast<float>(std::sqrt(2.0) * std::sin(angle));
       // Up to +-1, a 12 dB cut or 4 dB lift above the shelf and 3 dB of level; past it, up to 24 dB
-      // of cut or 10 of lift.
+      // of cut or 14 of lift.
       const double lift = 4.0 * tone + 6.0 * std::max(0.0, tone - 1.0);
       target_[kHigh] = static_cast<float>(jclap::dsp::dbToGain(tone < 0.0 ? 12.0 * tone : lift));
       target_[kLevel] = static_cast<float>(jclap::dsp::dbToGain(3.0 * std::clamp(tone, -1.0, 1.0)));

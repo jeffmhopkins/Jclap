@@ -59,6 +59,10 @@ in -> low/high cut -> [drive PRE] -> [echo INTO] -> predelay + early reflections
   so it returns in long passes, AFTER echoes the reverb itself. Changing the time bends the repeats
   like a tape machine.
 
+[ARCHITECTURE.md](ARCHITECTURE.md) walks through all of it from the code: the signal flow, the tank,
+the voices, the loop, every parameter with its range, the 0-100% and 100-200% zones, how the bodies
+move the sound, and the presets.
+
 ## The orbit view
 
 Drag a body to move it, drag the arrow on the selected body to set its velocity, scroll on a body to
