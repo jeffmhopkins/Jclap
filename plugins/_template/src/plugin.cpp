@@ -6,6 +6,7 @@
 #include <jclap/core/helpers.h>
 #include <jclap/core/sample_fifo.h>
 #include <jclap/core/spsc_queue.h>
+#include <jclap/dsp/smoother.h>
 #include <jclap/ui/clap_gui.h>
 
 #include <algorithm>
@@ -39,9 +40,13 @@ struct ToneVoice {
    double bend = 0.0, pressure = 0.0, timbre = 0.5;
 };
 
-// State layout: 4-byte magic, uint32 version, then one double per param in kParams order.
+// State layout: 4-byte magic, uint32 version, uint32 param count, then one double per param in
+// kParams order. Params are only ever appended, so a state with fewer values loads those and leaves
+// the rest at their defaults, and one with more (from a newer build) ignores the extras. Version 2
+// (0.6.0 and earlier) had no count and always 12 values.
 constexpr char kStateMagic[4] = {'J', 'T', 'M', 'P'};
-constexpr uint32_t kStateVersion = 2;
+constexpr uint32_t kStateVersion = 3;
+constexpr uint32_t kVersion2ParamCount = 12;
 
 class PluginTemplate final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -57,7 +62,23 @@ public:
    bool activate(double sampleRate, uint32_t, uint32_t) override {
       sampleRate_ = sampleRate;
       voice_ = ToneVoice{};
+      // Param changes glide over about 20 ms instead of jumping once per block. They start where the
+      // params are now, so activating doesn't fade in.
+      for (jclap::dsp::Smoother *s : {&gainL_, &gainR_, &width_}) {
+         s->setSampleRate(sampleRate);
+         s->setTime(0.02);
+      }
+      float g[2];
+      mixerGains(g);
+      gainL_.reset(g[0]);
+      gainR_.reset(g[1]);
+      width_.reset(value(kWidth));
       return true;
+   }
+
+   void reset() override {
+      voice_ = ToneVoice{};
+      clearHeld();
    }
 
    uint32_t notePortsCount(bool isInput) const override { return isInput ? 1 : 0; }
@@ -96,7 +117,7 @@ public:
    double paramModulated(clap_id id) const override { return id < kParamCount ? value(id) : 0.0; }
    void beginEdit(clap_id id) override { edits_.begin(id); }
    void setParam(clap_id id, double value) override {
-      if (id >= kParamCount)
+      if (id >= kParamCount || !std::isfinite(value))
          return;
       value = std::clamp(value, kParams[id].min, kParams[id].max);
       values_[id].store(value);
@@ -151,7 +172,10 @@ public:
    }
 
    bool paramsTextToValue(clap_id id, const char *text, double *value) const override {
-      return id < kParamCount && parseParam(id, text, *value);
+      if (id >= kParamCount || !parseParam(id, text, *value))
+         return false;
+      *value = std::clamp(*value, kParams[id].min, kParams[id].max);
+      return true;
    }
 
    void paramsFlush(const clap_input_events_t *in, const clap_output_events_t *out) override {
@@ -162,8 +186,8 @@ public:
    // ---- state ----
 
    bool stateSave(const clap_ostream_t *stream) override {
-      const uint32_t version = kStateVersion;
-      if (!jclap::core::writeAll(stream, kStateMagic, 4) || !jclap::core::writeAll(stream, &version, 4))
+      const uint32_t header[2] = {kStateVersion, kParamCount};
+      if (!jclap::core::writeAll(stream, kStateMagic, 4) || !jclap::core::writeAll(stream, header, sizeof(header)))
          return false;
       for (size_t i = 0; i < kParamCount; ++i) {
          const double v = values_[i].load();
@@ -175,15 +199,24 @@ public:
 
    bool stateLoad(const clap_istream_t *stream) override {
       char magic[4];
-      uint32_t version = 0;
-      double v[kParamCount];
+      uint32_t version = 0, count = 0;
       if (!jclap::core::readAll(stream, magic, 4) || std::memcmp(magic, kStateMagic, 4) ||
-          !jclap::core::readAll(stream, &version, 4) || version != kStateVersion ||
-          !jclap::core::readAll(stream, v, sizeof(v)))
+          !jclap::core::readAll(stream, &version, 4))
          return false;
-      for (size_t i = 0; i < kParamCount; ++i) {
-         if (!std::isfinite(v[i]))
+      if (version == 2)
+         count = kVersion2ParamCount;
+      else if (version != kStateVersion || !jclap::core::readAll(stream, &count, 4))
+         return false;
+      // Params the state doesn't have, or has as NaN or infinity, go back to their defaults.
+      double v[kParamCount];
+      for (size_t i = 0; i < kParamCount; ++i)
+         v[i] = kParams[i].defaultValue;
+      for (uint32_t i = 0; i < count; ++i) {
+         double x;
+         if (!jclap::core::readAll(stream, &x, sizeof(x)))
             return false;
+         if (i < kParamCount && std::isfinite(x))
+            v[i] = x;
       }
       for (size_t i = 0; i < kParamCount; ++i)
          values_[i].store(std::clamp(v[i], kParams[i].min, kParams[i].max));
@@ -215,13 +248,13 @@ public:
          return CLAP_PROCESS_CONTINUE;
 
       // Routing, then mid/side width, then constant-power pan on top of the gain; mute wins. The
-      // test tone is added to the input before all of that.
-      const double pan = value(kPan);
-      const double angle = (pan + 1.0) * 0.25 * 3.14159265358979;
-      const float gain = value(kMute) >= 0.5 ? 0.0f
-                                                      : static_cast<float>(std::pow(10.0, value(kGain) / 20.0));
-      const float g[2] = {gain * static_cast<float>(std::cos(angle) * std::sqrt(2.0)),
-                          gain * static_cast<float>(std::sin(angle) * std::sqrt(2.0))};
+      // test tone is added to the input before all of that. Gain and width glide to their new
+      // values, so automation doesn't zipper and mute doesn't click.
+      float g[2];
+      mixerGains(g);
+      gainL_.setTarget(g[0]);
+      gainR_.setTarget(g[1]);
+      width_.setTarget(value(kWidth));
 
       const clap_audio_buffer_t &in = proc->audio_inputs[0];
       const clap_audio_buffer_t &out = proc->audio_outputs[0];
@@ -230,7 +263,6 @@ public:
          return CLAP_PROCESS_CONTINUE;
       }
       const int routing = static_cast<int>(value(kRouting) + 0.5);
-      const float width = static_cast<float>(value(kWidth));
       float peak = 0.0f;
       for (uint32_t i = 0; i < proc->frames_count; ++i) {
          const float tone = nextToneSample();
@@ -241,9 +273,11 @@ public:
             r = l;
          else if (routing == 3)
             l = r;
+         const float width = static_cast<float>(width_.process());
+         const float gl = static_cast<float>(gainL_.process()), gr = static_cast<float>(gainR_.process());
          const float mid = 0.5f * (l + r), side = 0.5f * (l - r) * width;
-         out.data32[0][i] = (mid + side) * g[0];
-         out.data32[1][i] = (mid - side) * g[1];
+         out.data32[0][i] = (mid + side) * gl;
+         out.data32[1][i] = (mid - side) * gr;
          peak = std::max(peak, std::max(std::fabs(out.data32[0][i]), std::fabs(out.data32[1][i])));
       }
       scope_.write(out.data32[0], proc->frames_count);
@@ -265,7 +299,7 @@ private:
          switch (h->type) {
          case CLAP_EVENT_PARAM_VALUE: {
             auto *ev = reinterpret_cast<const clap_event_param_value_t *>(h);
-            if (ev->param_id < kParamCount)
+            if (ev->param_id < kParamCount && std::isfinite(ev->value))
                values_[ev->param_id].store(std::clamp(ev->value, kParams[ev->param_id].min, kParams[ev->param_id].max));
             break;
          }
@@ -273,7 +307,7 @@ private:
             // A host modulator's offset (Bitwig's modulators send these). It adds to the param
             // without changing it; the knobs show it as their light ring.
             auto *ev = reinterpret_cast<const clap_event_param_mod_t *>(h);
-            if (ev->param_id < kParamCount)
+            if (ev->param_id < kParamCount && std::isfinite(ev->amount))
                mods_[ev->param_id].store(ev->amount);
             break;
          }
@@ -282,8 +316,21 @@ private:
             auto *ev = reinterpret_cast<const clap_event_note_t *>(h);
             if (h->type == CLAP_EVENT_NOTE_ON && ev->velocity > 0.0)
                startNote(ev->key, static_cast<float>(ev->velocity));
+            else if (ev->key == -1)
+               releaseAll();
             else
                stopNote(ev->key);
+            break;
+         }
+         case CLAP_EVENT_NOTE_CHOKE: {
+            // Stop at once, no release.
+            auto *ev = reinterpret_cast<const clap_event_note_t *>(h);
+            if (ev->key == -1 || ev->key == voice_.note)
+               voice_.stage = ToneVoice::Stage::Off;
+            if (ev->key == -1)
+               clearHeld();
+            else
+               setHeld(ev->key, false);
             break;
          }
          case CLAP_EVENT_NOTE_EXPRESSION: {
@@ -314,6 +361,12 @@ private:
                voice_.pressure = ev->data[1] / 127.0;
             else if (status == 0xB0 && ev->data[1] == 74)
                voice_.timbre = ev->data[2] / 127.0;
+            else if (status == 0xB0 && ev->data[1] == 123)
+               releaseAll(); // All Notes Off
+            else if (status == 0xB0 && ev->data[1] == 120) {
+               voice_.stage = ToneVoice::Stage::Off; // All Sound Off: silent now, no release
+               clearHeld();
+            }
             break;
          }
          default:
@@ -339,6 +392,25 @@ private:
          held_[note / 64].fetch_or(bit);
       else
          held_[note / 64].fetch_and(~bit);
+   }
+
+   void clearHeld() {
+      held_[0].store(0);
+      held_[1].store(0);
+   }
+
+   void releaseAll() {
+      clearHeld();
+      if (voice_.stage != ToneVoice::Stage::Off)
+         voice_.stage = ToneVoice::Stage::Release;
+   }
+
+   // The mixer's left and right gains: level, pan and mute together.
+   void mixerGains(float g[2]) const {
+      const double angle = (value(kPan) + 1.0) * 0.25 * 3.14159265358979;
+      const double gain = value(kMute) >= 0.5 ? 0.0 : std::pow(10.0, value(kGain) / 20.0);
+      g[0] = static_cast<float>(gain * std::cos(angle) * std::sqrt(2.0));
+      g[1] = static_cast<float>(gain * std::sin(angle) * std::sqrt(2.0));
    }
 
    void startNote(int note, float velocity) {
@@ -422,6 +494,8 @@ private:
    // Host modulation, written by the audio thread.
    std::atomic<double> mods_[kParamCount];
    std::atomic<float> peak_{0.0f};
+   // The mixer's gains and width as the audio applies them, gliding toward the params.
+   jclap::dsp::Smoother gainL_, gainR_, width_;
    jclap::core::EditQueue edits_;
    jclap::ui::HostMenu hostMenu_;
 

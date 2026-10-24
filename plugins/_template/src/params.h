@@ -5,6 +5,7 @@
 
 #include <jclap/core/helpers.h>
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -72,12 +73,15 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kToneLevel:
       std::snprintf(out, size, "%.1f dB", value);
       break;
-   case kPan:
-      if (value > -0.005 && value < 0.005)
+   case kPan: {
+      // Rounded first, so anything that would print as 0 prints as C (and reads back as centre).
+      const double percent = std::round(std::fabs(value) * 100.0);
+      if (percent == 0.0)
          std::snprintf(out, size, "C");
       else
-         std::snprintf(out, size, "%.0f%c", (value < 0 ? -value : value) * 100.0, value < 0 ? 'L' : 'R');
+         std::snprintf(out, size, "%.0f%c", percent, value < 0 ? 'L' : 'R');
       break;
+   }
    case kWidth:
    case kSustain:
       std::snprintf(out, size, "%.0f%%", value * 100.0);
@@ -96,7 +100,9 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    }
 }
 
-// The reverse of formatParam, also accepting plain numbers. Hosts check that the two round-trip.
+// The reverse of formatParam, also accepting plain numbers in the units it prints: percent for Pan,
+// Width and Sustain ("30" is 30% right, "-30" or "30L" is 30% left). Hosts check that the two
+// round-trip. NaN and infinity are refused.
 inline bool parseParam(clap_id id, const char *text, double &value) {
    while (*text == ' ')
       ++text;
@@ -108,11 +114,9 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
             return true;
          }
    }
-   if (id == kMute) {
-      if (!std::strncmp(text, "On", 2) || !std::strncmp(text, "Off", 3)) {
-         value = text[1] == 'n' ? 1.0 : 0.0;
-         return true;
-      }
+   if (id == kMute && (!std::strcmp(text, "On") || !std::strcmp(text, "Off"))) {
+      value = text[1] == 'n' ? 1.0 : 0.0;
+      return true;
    }
    if (id == kPan && (text[0] == 'C' || text[0] == 'c') && text[1] == '\0') {
       value = 0.0;
@@ -120,13 +124,13 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
    }
    char *end = nullptr;
    const double v = std::strtod(text, &end);
-   if (end == text)
+   if (end == text || !std::isfinite(v))
       return false;
    while (*end == ' ')
       ++end;
    if (id == kPan && (*end == 'L' || *end == 'l' || *end == 'R' || *end == 'r'))
-      value = (*end == 'L' || *end == 'l' ? -v : v) / 100.0;
-   else if (id == kWidth || id == kSustain)
+      value = (*end == 'L' || *end == 'l' ? -std::fabs(v) : std::fabs(v)) / 100.0;
+   else if (id == kPan || id == kWidth || id == kSustain)
       value = v / 100.0;
    else
       value = v;
