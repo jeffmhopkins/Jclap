@@ -188,6 +188,8 @@ public:
       const int oldCount = frame_.count;
       frame_ = f;
       time_ += dt;
+      for (int b = 0; b < kMaxBodies; ++b)
+         swirlAngle_[b] = std::fmod(swirlAngle_[b] + dt * (0.6f + 7.0f * std::clamp(f.voiceSwirl[b], 0.0f, 1.0f)), 6.2831853f);
       for (int b = f.count; b < std::max(oldCount, f.count); ++b)
          trails_[b].clear();
       if (selected >= f.count)
@@ -289,20 +291,34 @@ public:
       }
 
       // Bodies: a soft halo, a bright core, a white-hot centre; louder bands glow harder, and heavier
-      // bodies are bigger.
+      // bodies are bigger. Each body also shows its own voice in the tail: its tone (a bright voice
+      // burns whiter and wider, a dark one deep and dim) and its phaser (arcs that spin faster and
+      // brighter the harder it sweeps).
       for (int b = 0; b < f.count; ++b) {
          const float r = bodyRadius(f.mass[b]) * s;
          const float energy = std::min(1.0f, f.band[b % 3]) * 0.6f + flare_[b % 3];
+         const float tone = std::clamp(f.voiceTone[b], -1.0f, 1.0f), swirl = std::clamp(f.voiceSwirl[b], 0.0f, 1.0f);
          const float bx = X(f.x[b]), by = Y(f.y[b]);
-         const float halo = r * (3.0f + 1.5f * energy);
-         c.setColor(visage::Brush::radial(glow(kBodyColors[b], 0.24f + 0.14f * energy, 1.0f),
-                                          glow(kBodyColors[b], 0.0f, 1.0f), visage::Point(bx, by), halo));
+         const float halo = r * (3.0f + 1.5f * energy) * (1.0f + 0.2f * tone);
+         const visage::Color core = visage::Color(kBodyColors[b]).interpolateWith(0xffffffff, std::max(0.0f, 0.3f * tone));
+         c.setColor(visage::Brush::radial(core.withAlpha(0.22f + 0.12f * energy + 0.06f * tone),
+                                          core.withAlpha(0.0f), visage::Point(bx, by), halo));
          c.circle(bx - halo, by - halo, 2 * halo);
-         c.setColor(glow(kBodyColors[b], 1.0f, 1.6f + 0.5f * energy));
+         visage::Color body = core;
+         body.setHdr(1.5f + 0.5f * energy + 0.25f * tone);
+         c.setColor(body);
          c.circle(bx - r, by - r, 2 * r);
-         c.setColor(glow(0xffffffff, 1.0f, 1.8f + 0.5f * energy));
+         c.setColor(glow(0xffffffff, 1.0f, 1.8f + 0.5f * energy + 0.15f * tone));
          c.circle(bx - 0.4f * r, by - 0.4f * r, 0.8f * r);
+         if (swirl > 0.02f) {
+            const float ring = r + (6.0f + 4.0f * swirl) * s;
+            c.setColor(glow(kBodyColors[b], 0.25f + 0.65f * swirl, 1.0f + 0.6f * swirl));
+            for (int k = 0; k < 3; ++k)
+               c.roundedArc(bx - ring, by - ring, 2 * ring, 1.4f * s, swirlAngle_[b] + k * 2.0944f, 0.15f + 0.35f * swirl);
+         }
       }
+
+      drawStereo(c, s, f);
 
       const int shown = selected >= 0 ? selected : hover_;
       if (shown >= 0 && shown < f.count)
@@ -607,6 +623,22 @@ private:
       }
    }
 
+   // Where each body's voice sits in the stereo field: a strip under the stage, a dot per body.
+   void drawStereo(visage::Canvas &c, float s, const OrbitFrame &f) {
+      const float x0 = 470 * s, x1 = 730 * s, y = 516 * s;
+      c.setColor(glow(kDim, 0.45f, 1.0f));
+      c.fill(x0, y, x1 - x0, 1.0f * s);
+      c.fill((x0 + x1) / 2, y - 3 * s, 1.0f * s, 7 * s);
+      c.text("L", ui::font(10 * s), visage::Font::kCenter, x0 - 18 * s, y - 7 * s, 12 * s, 14 * s);
+      c.text("R", ui::font(10 * s), visage::Font::kCenter, x1 + 6 * s, y - 7 * s, 12 * s, 14 * s);
+      for (int b = 0; b < f.count; ++b) {
+         const float x = x0 + (x1 - x0) * 0.5f * (1.0f + std::clamp(f.voicePan[b], -1.0f, 1.0f));
+         const float r = (2.5f + 0.25f * bodyRadius(f.mass[b])) * s;
+         c.setColor(glow(kBodyColors[b], 1.0f, 1.4f));
+         c.circle(x - r, y - r + 0.5f * s, 2 * r);
+      }
+   }
+
    void drawReadout(visage::Canvas &c, float s, int b, float bx, float by, float ppu) {
       const OrbitFrame &f = frame_;
       const float ring = std::max(16.0f, bodyRadius(f.mass[b]) + 7.0f) * s;
@@ -627,13 +659,14 @@ private:
       char line1[64], line2[96];
       std::snprintf(line1, sizeof(line1), "%s   m %.2f   v %.2f", kBodyNames[b], f.mass[b], std::hypot(f.vx[b], f.vy[b]));
       const int target = std::min<int>(f.target[b], static_cast<int>(Target::Count) - 1);
-      const float pan = std::min(100.0f, std::fabs(f.x[b]) / 1.3f * 100.0f);
       if (target > 0)
-         std::snprintf(line2, sizeof(line2), "-> %s %+.0f%%   pan %s%.0f", kTargetNames[target],
-                       f.signal[b] * f.amount[b] * 100.0f, f.x[b] < 0 ? "L" : "R", pan);
+         std::snprintf(line2, sizeof(line2), "routed to %s %+.0f%%", kTargetNames[target], f.signal[b] * f.amount[b] * 100.0f);
       else
-         std::snprintf(line2, sizeof(line2), "not routed   pan %s%.0f", f.x[b] < 0 ? "L" : "R", pan);
-      const float tw = 196 * s, th = 42 * s;
+         std::snprintf(line2, sizeof(line2), "routing off");
+      char line3[96];
+      std::snprintf(line3, sizeof(line3), "voice  %s%.0f   tone %+.0f%%   swirl %.0f%%", f.voicePan[b] < 0 ? "L" : "R",
+                    std::fabs(f.voicePan[b]) * 100.0f, f.voiceTone[b] * 100.0f, f.voiceSwirl[b] * 100.0f);
+      const float tw = 216 * s, th = 58 * s;
       const float tx = std::min(bx + 22 * s, width() - tw - 250 * s), ty = by + 14 * s;
       c.setColor(visage::Color(0xd00b0e16));
       c.roundedRectangle(tx, ty, tw, th, 6 * s);
@@ -643,6 +676,7 @@ private:
       c.text(line1, ui::font(12 * s), visage::Font::kLeft, tx + 10 * s, ty + 4 * s, tw - 14 * s, 16 * s);
       c.setColor(kDim);
       c.text(line2, ui::font(11 * s), visage::Font::kLeft, tx + 10 * s, ty + 21 * s, tw - 14 * s, 16 * s);
+      c.text(line3, ui::font(11 * s), visage::Font::kLeft, tx + 10 * s, ty + 37 * s, tw - 14 * s, 16 * s);
    }
 
    EditorHost &host_;
@@ -658,6 +692,7 @@ private:
    float flare_[3] = {};
    float spawnCarry_[3] = {};
    float zoom_ = 0.0f, span_ = 0.0f;
+   float swirlAngle_[kMaxBodies] = {};
    float time_ = 0.0f;
    int hover_ = -1, dragBody_ = -1;
    bool dragArrow_ = false;
@@ -882,6 +917,58 @@ private:
    Zone hover_ = Zone::None;
 };
 
+// The ORBIT page's live view of every body's voice: a row each, with where it sits left to right,
+// its tone (a bar from the centre, right for brighter) and how hard its phaser sweeps.
+class VoiceList : public visage::Frame {
+public:
+   VoiceList() { setIgnoresMouseEvents(true, false); }
+   float designHeight = 1.0f;
+   void setFrame(const OrbitFrame &f) {
+      frame_ = f;
+      redraw();
+   }
+
+   void draw(visage::Canvas &c) override {
+      const float s = height() / designHeight, w = width();
+      const float col = 52 * s, colW = (w - col - 6 * s) / 3;
+      c.setColor(kDim);
+      const char *heads[] = {"PAN", "TONE", "SWIRL"};
+      for (int i = 0; i < 3; ++i)
+         c.text(heads[i], ui::font(10 * s), visage::Font::kCenter, col + i * colW, 0, colW, 14 * s);
+      const float rowH = std::min(28.0f * s, (height() - 18 * s) / kMaxBodies);
+      for (int b = 0; b < frame_.count; ++b) {
+         const float y = 18 * s + b * rowH, mid = y + rowH / 2;
+         c.setColor(kBodyColors[b]);
+         c.text(kBodyNames[b], ui::font(10 * s), visage::Font::kLeft, 2 * s, y, col, rowH);
+         const float pad = 6 * s, bw = colW - 2 * pad;
+         // Pan: a line with a dot.
+         const float px = col + pad;
+         c.setColor(visage::Color(0x33ffffff));
+         c.fill(px, mid, bw, 1.0f * s);
+         c.fill(px + bw / 2, mid - 3 * s, 1.0f * s, 7 * s);
+         c.setColor(glow(kBodyColors[b], 1.0f, 1.3f));
+         const float dot = px + bw * 0.5f * (1.0f + std::clamp(frame_.voicePan[b], -1.0f, 1.0f));
+         c.circle(dot - 3.5f * s, mid - 3.5f * s, 7 * s);
+         // Tone: a bar from the centre.
+         const float tx = col + colW + pad, tone = std::clamp(frame_.voiceTone[b], -1.0f, 1.0f);
+         c.setColor(visage::Color(0x22ffffff));
+         c.roundedRectangle(tx, mid - 3 * s, bw, 6 * s, 3 * s);
+         c.setColor(glow(tone >= 0 ? 0xfffff1d6 : 0xff6f86c0, 0.9f, 1.2f));
+         const float half = bw / 2, len = std::fabs(tone) * half;
+         c.roundedRectangle(tone >= 0 ? tx + half : tx + half - len, mid - 3 * s, std::max(1.0f * s, len), 6 * s, 3 * s);
+         // Swirl: a bar from the left.
+         const float sx = col + 2 * colW + pad, swirl = std::clamp(frame_.voiceSwirl[b], 0.0f, 1.0f);
+         c.setColor(visage::Color(0x22ffffff));
+         c.roundedRectangle(sx, mid - 3 * s, bw, 6 * s, 3 * s);
+         c.setColor(glow(kBodyColors[b], 0.9f, 1.2f));
+         c.roundedRectangle(sx, mid - 3 * s, std::max(1.0f * s, swirl * bw), 6 * s, 3 * s);
+      }
+   }
+
+private:
+   OrbitFrame frame_;
+};
+
 // A card's "+" slot that adds a body.
 class AddSlot : public visage::Frame {
 public:
@@ -943,6 +1030,8 @@ public:
          layoutBodies(count);
       for (int b = 0; b < kMaxBodies; ++b)
          cards_[b].glass->setHighlighted(b == view_->selected);
+      if (voices_->isVisible())
+         voices_->setFrame(frame_);
       float l, r;
       host_.outputPeaks(l, r);
       meters_[0]->setLevel(l);
@@ -1037,7 +1126,7 @@ private:
    void buildSpace() {
       const unsigned a = kSpaceAccent;
       glass({16, 64, 214, 536}, "", a);
-      auto &tabs = glassy(add<ui::TabBar>({24, 70, 198, 26}, std::vector<std::string>{"SPACE", "SHAPE"}), a);
+      auto &tabs = glassy(add<ui::TabBar>({24, 70, 198, 26}, std::vector<std::string>{"SPACE", "SHAPE", "ORBIT"}), a);
       tabs.addToPage(0, knob(kDecay, "DECAY", a, {26, 104, 194, 122}, "How long the tail lasts (RT60)."));
       const auto g = ui::grid({26, 232, 194, 360}, 2, 3);
       tabs.addToPage(0, knob(kSize, "SYSTEM SIZE", a, g[0], "Scales the whole system: every delay line, and the room."));
@@ -1048,7 +1137,7 @@ private:
       bodies.valueText = [](double v) { return std::to_string(static_cast<int>(v + 0.5)); };
       bindings_.bind(bodies, kBodies);
       tabs.addToPage(0, bodies);
-      tips_.add(bodies, "Each body owns two delay lines: fewer is sparse and echoey, more is dense.");
+      tips_.add(bodies, "Each body is a voice in the tail; the ORBIT page sets how much the orbits move them.");
       tabs.addToPage(0, add<ui::Label>(ui::Rect{g[2].x, g[2].y + 72, g[2].w, 16}, "sparse - dense", kDim,
                                        visage::Font::kCenter));
       tabs.addToPage(0, knob(kMotion, "MOTION", a, g[3], "How much the tail drifts and shimmers as it rings: "
@@ -1066,6 +1155,19 @@ private:
       tabs.addToPage(1, knob(kLowCut, "LOW CUT", a, h[5], "Filters the input before the reverb."));
       tabs.addToPage(1, knob(kHighCut, "HIGH CUT", a, h[6], "Filters the input before the reverb."));
       tabs.addToPage(1, knob(kReact, "REACT", a, h[7], "How hard transients in the input kick the bodies."));
+
+      // Each body is its own voice in the tail; these set how much the orbits move those voices.
+      const auto o = ui::grid({26, 104, 194, 240}, 2, 2);
+      tabs.addToPage(2, knob(kOrbitPan, "PAN", a, o[0], "Each body's voice moves from a wide spread to where the "
+                                                        "body is, left to right. Each voice is its own band, "
+                                                        "lowest for the first body."));
+      tabs.addToPage(2, knob(kOrbitTone, "TONE", a, o[1], "A body's voice darkens as it swings out and brightens "
+                                                          "near the centre."));
+      tabs.addToPage(2, knob(kOrbitSwirl, "SWIRL", a, o[2], "How deep each body's phaser goes, swept twice per lap by "
+                                                            "its orbit. No pitch bends."));
+      voices_ = &add<VoiceList>(ui::Rect{24, 352, 198, 236});
+      voices_->designHeight = 236;
+      tabs.addToPage(2, *voices_);
       tabs.select(0);
    }
 
@@ -1246,6 +1348,7 @@ private:
    OrbitView *view_ = nullptr;
    Card cards_[kMaxBodies];
    AddSlot *addSlot_ = nullptr;
+   VoiceList *voices_ = nullptr;
    ui::Meter *meters_[2] = {};
    OrbitFrame frame_;
    int laidOut_ = 0;

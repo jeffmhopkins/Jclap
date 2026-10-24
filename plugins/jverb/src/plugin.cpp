@@ -604,6 +604,9 @@ private:
          f.vy[b] = static_cast<float>(body.vy);
          f.mass[b] = static_cast<float>(mass[b]);
          f.signal[b] = static_cast<float>(signal_[b]);
+         f.voicePan[b] = static_cast<float>(engine_.bodyPan(b));
+         f.voiceTone[b] = static_cast<float>(engine_.bodyTone(b));
+         f.voiceSwirl[b] = static_cast<float>(engine_.bodySwirl(b));
          f.target[b] = static_cast<uint8_t>(std::clamp(choice(bodyParam(b, kBody1Target)), 0, static_cast<int>(Target::Count) - 1));
          f.amount[b] = static_cast<float>(value(bodyParam(b, kBody1Amount)));
       }

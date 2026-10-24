@@ -20,6 +20,9 @@ struct OrbitFrame {
    float mass[kMaxBodies] = {};
    // Each body's modulation signal (-1..1), where it's routed and by how much.
    float signal[kMaxBodies] = {};
+   // What each body's own voice in the tail is doing, as the engine applies it: where it sits
+   // (-1 left..1 right), its tone (-1 dark..1 bright) and how hard its phaser sweeps (0..1).
+   float voicePan[kMaxBodies] = {}, voiceTone[kMaxBodies] = {}, voiceSwirl[kMaxBodies] = {};
    uint8_t target[kMaxBodies] = {};
    float amount[kMaxBodies] = {};
    // The dry input split into low, mid and high: an envelope per band (about 0..1), and a counter
