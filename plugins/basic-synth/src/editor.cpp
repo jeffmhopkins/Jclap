@@ -137,7 +137,9 @@ private:
    }
 
    ui::Knob &knob(clap_id id, const char *label, unsigned accent, ui::Rect cell, bool bipolar = false) {
-      auto &k = add<ui::Knob>(cell, rangeOf(id, 0.0, bipolar));
+      // A stepped param (Tune) moves a whole step at a time.
+      const double step = (kParams[id].flags & CLAP_PARAM_IS_STEPPED) ? 1.0 : 0.0;
+      auto &k = add<ui::Knob>(cell, rangeOf(id, step, bipolar));
       k.setLabel(label);
       k.setAccent(accent);
       k.valueText = [id](double v) { return text(id, v); };

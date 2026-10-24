@@ -646,6 +646,136 @@ int main() {
       run(64);
    }
 
+   // A plain sine again, with a 1 ms release, for the note bookkeeping below.
+   h.setParam(kWave, 0.0);
+   h.setParam(kCutoff, 1.0);
+   h.setParam(kResonance, 0.0);
+   h.setParam(kEnv1Attack, 1.0);
+   h.setParam(kEnv1Sustain, 1.0);
+   h.setParam(kEnv1Release, 1.0);
+   h.setParam(kEnv1ToVca, 1.0);
+   h.setParam(kLfoToVca, 0.0);
+   run(64);
+   const auto ended = [&](int32_t id) {
+      return std::count_if(run.noteEnds.begin(), run.noteEnds.end(), [id](const clap_event_note_t &e) {
+         return e.note_id == id;
+      });
+   };
+
+   // A voice that falls silent in a block and is taken by a later note in the same block still
+   // reports its note ended, as does one cut by all sound off (CC 120).
+   {
+      run.noteEnds.clear();
+      h.note(CLAP_EVENT_NOTE_ON, 60, 1.0, 201);
+      run(512);
+      h.note(CLAP_EVENT_NOTE_OFF, 60, 0.0, 201);
+      h.note(CLAP_EVENT_NOTE_ON, 64, 1.0, 202, 0, 900); // 201 is silent long before frame 900
+      run(1024);
+      run(1024);
+      JCLAP_CHECK_EQ(ended(201), 1);
+      h.midi(0xB0, 120, 0, 10);
+      h.note(CLAP_EVENT_NOTE_ON, 67, 1.0, 203, 0, 20);
+      run(1024);
+      JCLAP_CHECK_EQ(ended(202), 1);
+      h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+      run(64);
+      JCLAP_CHECK_EQ(ended(203), 1);
+   }
+
+   // A CLAP note at velocity 0 is a note: it starts, and ends when let go.
+   {
+      run.noteEnds.clear();
+      h.note(CLAP_EVENT_NOTE_ON, 62, 0.0, 210);
+      run(256);
+      panel.voices(voices);
+      JCLAP_CHECK(voices.size() == 1 && voices[0].note == 62);
+      h.note(CLAP_EVENT_NOTE_OFF, 62, 0.0, 210);
+      run(1024);
+      JCLAP_CHECK_EQ(ended(210), 1);
+   }
+
+   // A host note-off, expression or modulation that names no note id leaves the panel's note on
+   // the same key alone.
+   {
+      panel.noteOn(62, 1.0f);
+      run(256);
+      h.note(CLAP_EVENT_NOTE_ON, 62, 1.0);
+      run(256);
+      h.noteExpression(CLAP_NOTE_EXPRESSION_TUNING, 62, 5.0);
+      h.note(CLAP_EVENT_NOTE_OFF, 62, 0.0);
+      h.modulateNote(kTune, 12.0, -1, 62);
+      run(1024);
+      run(4800);
+      panel.voices(voices);
+      JCLAP_CHECK(voices.size() == 1 && voices[0].note == 62 && voices[0].bend == 0.0f);
+      JCLAP_CHECK(near(run.frequency(), 293.66, 0.5));
+      // All notes off from the host leaves it too; a choke naming nothing cuts it.
+      h.midi(0xB0, 123, 0);
+      run(1024);
+      panel.voices(voices);
+      JCLAP_CHECK_EQ(voices.size(), 1u);
+      h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+      run(64);
+      panel.voices(voices);
+      JCLAP_CHECK(voices.empty());
+      panel.noteOff(62);
+      run(64);
+   }
+
+   // All notes off on a note channel releases only that channel's notes; on the manager channel,
+   // every channel's.
+   {
+      h.midi(0x91, 60, 100); // channel 2
+      h.midi(0x92, 67, 100); // channel 3
+      h.note(CLAP_EVENT_NOTE_ON, 72, 1.0, 220, 2); // a CLAP note on channel 3
+      run(256);
+      h.midi(0xB4, 123, 0); // channel 5: none of them
+      run(1024);
+      panel.voices(voices);
+      JCLAP_CHECK_EQ(voices.size(), 3u);
+      h.midi(0xB2, 123, 0); // channel 3
+      run(1024);
+      panel.voices(voices);
+      JCLAP_CHECK(voices.size() == 1 && voices[0].note == 60);
+      h.midi(0xB0, 123, 0); // channel 1
+      run(1024);
+      panel.voices(voices);
+      JCLAP_CHECK(voices.empty());
+   }
+
+   // Per-voice Level modulation stops at the param's 0 dB top, and can still turn a voice down.
+   {
+      h.setParam(kLevel, 0.0);
+      h.setParam(kVelocityToVca, 0.0);
+      const auto level = [&](double mod) {
+         h.note(CLAP_EVENT_NOTE_ON, 57, 1.0, 230);
+         h.modulateNote(kLevel, mod, 230);
+         run(4800);
+         run(4800);
+         const double rms = run.rms();
+         h.note(CLAP_EVENT_NOTE_CHOKE, -1, 0.0, -1, -1);
+         run(64);
+         return rms;
+      };
+      const double full = level(0.0);
+      JCLAP_CHECK(full > 0.05 && near(level(24.0) / full, 1.0, 0.01));
+      JCLAP_CHECK(near(level(-20.0) / full, 0.1, 0.01));
+      h.setParam(kLevel, kParams[kLevel].defaultValue);
+      h.setParam(kVelocityToVca, 1.0);
+   }
+
+   // Tune is stepped: the panel and typed text set whole semitones.
+   {
+      panel.setParam(kTune, 3.37);
+      JCLAP_CHECK_EQ(panel.paramValue(kTune), 3.0);
+      run(64);
+      JCLAP_CHECK_EQ(h.paramValue(kTune), 3.0);
+      double t = 0.0;
+      JCLAP_CHECK(h.textToValue(kTune, "-4.6", t) && t == -5.0);
+      panel.setParam(kTune, 0.0);
+      run(64);
+   }
+
    // The panel's keyboard and grid move by octaves and stop at the ends of the MIDI range.
    {
       jclap::ui::PianoKeyboard keys(36, 84);
