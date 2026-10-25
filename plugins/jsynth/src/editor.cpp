@@ -25,6 +25,7 @@
 #include <jclap/ui/tabs.h>
 #include <jclap/ui/tooltip.h>
 
+#include <visage/app.h>
 #include <visage_graphics/post_effects.h>
 #include <visage_ui/popup_menu.h>
 #include <visage_widgets/text_editor.h>
@@ -38,6 +39,7 @@
 #include <string>
 #include <vector>
 
+#include "flock.h"
 #include "params.h"
 #include "presets.h"
 
@@ -66,7 +68,7 @@ constexpr float kPi = 3.14159265f;
 // The sky the flocks fly in, between the side cards (design units). The flock is simulated in sky
 // units: y runs 0..1 down the sky's height and x 0..kSkyAspect across it.
 constexpr float kSkyX = 240.0f, kSkyY = 60.0f, kSkyW = 720.0f, kSkyH = 540.0f;
-constexpr float kSkyAspect = kSkyW / kSkyH;
+static_assert(kSkyW / kSkyH == kSkyAspect, "the panel's sky has the flock's shape");
 
 constexpr unsigned kText = 0xffe6e8eb;
 constexpr unsigned kDim = 0xff9aa3b5;
@@ -562,13 +564,6 @@ private:
 
 // ---- the sky ----
 
-// Where a held note's lure sits in the sky: low notes left and high right (bend moves it), more Slide
-// higher up.
-visage::Point lureFor(const EditorHost::Note &n) {
-   const float x = std::clamp((n.note + n.bend - 36.0f) / 48.0f, 0.0f, 1.0f);
-   return {(0.07f + 0.86f * x) * kSkyAspect, 0.1f + 0.8f * (1.0f - std::clamp(n.timbre, 0.0f, 1.0f))};
-}
-
 // One species' flock params, read from the host each frame.
 struct Species {
    int behaviour = 0;
@@ -595,14 +590,6 @@ struct Species {
       windHz = static_cast<float>(lfoHz(v(lfoParam(1, kLfoRate))));
       windPush = v(lfoParam(1, kLfoPush));
    }
-   // How near counts as a neighbour, in sky units.
-   float radius() const { return 0.08f + 0.32f * range; }
-   float maxSpeed(float press) const { return (0.08f + 0.42f * speed) * (1.0f + 0.8f * press); }
-};
-
-// A creature's own modulation sources, 0..1, as the stage chips show them.
-struct CreatureSources {
-   float speed = 0, crowd = 0, nearest = 0, heading = 0, caught = 0, wake = 0, x = 0, y = 0;
 };
 
 // The stage: a night sky, both flocks, their ink, the links between neighbours that modulate each
@@ -616,10 +603,7 @@ public:
       std::uniform_real_distribution<float> u(0.0f, 1.0f);
       for (Star &st : stars_)
          st = {u(rng_), u(rng_), u(rng_), u(rng_) * 6.28f};
-      // Each species keeps a few resting creatures, dim, that fly while it plays nothing.
-      for (int part = 0; part < kPartCount; ++part)
-         for (int i = 0; i < kIdle; ++i)
-            spawn(part, -1, {(0.15f + 0.3f * u(rng_) + 0.4f * part) * kSkyAspect, 0.25f + 0.5f * u(rng_)});
+      local_.reset(23);
       puffs_.reserve(kMaxPuffs);
    }
 
@@ -632,24 +616,32 @@ public:
    std::string hint;
    unsigned hintColor = kText;
 
-   // One frame, `dt` seconds after the last.
+   // One frame, `dt` seconds after the last: the engine's flock as it last published it, or while
+   // the plugin isn't processing, the panel's own.
    void advance(const std::vector<EditorHost::Note> &notes, float dt) {
       time_ += dt;
       for (int part = 0; part < kPartCount; ++part)
          species_[part].read(host_, part);
-      follow(notes, dt);
-      fly(dt);
+      live_ = host_.flockFrame(frame_);
+      if (!live_)
+         flyLocal(notes, dt);
+      sync();
       shed(dt);
       moveInk(dt);
-      measure(dt);
       redraw();
    }
+
+   // Whether the creatures are the engine's (the plugin is processing).
+   bool live() const { return live_; }
+   // The engine's newest envelope and LFO levels for `part`, while live.
+   float envLevel(int part, int e) const { return frame_.env[part][e]; }
+   float lfoLevel(int part, int l) const { return frame_.lfo[part][l]; }
 
    // The sources of `part`'s newest held creature, or a resting one's when it plays nothing.
    CreatureSources sources(int part) const {
       const Creature *pick = nullptr;
       for (const Creature &b : creatures_)
-         if (b.part == part && (b.note >= 0 || (!pick && b.note == -1)))
+         if (b.part == part && (b.held ? !pick || !pick->held || b.id > pick->id : !pick))
             pick = &b;
       return pick ? pick->sources : CreatureSources{};
    }
@@ -679,30 +671,32 @@ public:
          c.circle(X(p.x) - r, Y(p.y) - r, 2 * r);
       }
 
-      // Links: neighbours of a kind feed each other FM, brighter the nearer they fly. A hunter that
-      // has caught its prey bites it, in pink.
-      for (size_t i = 0; i < creatures_.size(); ++i)
-         for (size_t j = i + 1; j < creatures_.size(); ++j) {
-            const Creature &a = creatures_[i], &b = creatures_[j];
-            const float d = std::hypot(a.x - b.x, a.y - b.y), e = std::min(a.energy, b.energy);
-            if (a.part == b.part) {
-               const Species &sp = species_[a.part];
-               const float R = sp.radius() * 0.6f;
-               if (d < R && e > 0.05f) {
-                  const float k = (1.0f - d / R) * e * (0.15f + 0.6f * sp.neighbourFm);
-                  c.setColor(glow(kText, k * (a.part == shownPart ? 0.7f : 0.35f), 1.2f));
-                  c.segment(X(a.x), Y(a.y), X(b.x), Y(b.y), 1.0f * s, true);
-               }
-            }
-            else if (d < kCatch * 2.0f && e > 0.2f && (a.sources.caught > 0.3f || b.sources.caught > 0.3f)) {
-               c.setColor(glow(kCaughtColor, 0.9f * e, 1.8f));
-               c.segment(X(a.x), Y(a.y), X(b.x), Y(b.y), 2.2f * s, true);
+      // Links: a creature's nearest of its kind, brighter the more Neighbour FM it hears. A hunter
+      // that has caught its prey bites it, in pink.
+      const auto bySlot = [&](int slot) -> const Creature * {
+         for (const Creature &o : creatures_)
+            if (o.slot == slot)
+               return &o;
+         return nullptr;
+      };
+      for (const Creature &a : creatures_) {
+         if (const Creature *b = a.neighbour >= 0 ? bySlot(a.neighbour) : nullptr) {
+            const float e = std::min(a.energy, b->energy);
+            const float k = e * (0.1f + 0.7f * species_[a.part].neighbourFm);
+            if (k > 0.02f) {
+               c.setColor(glow(kText, k * (a.part == shownPart ? 0.7f : 0.35f), 1.2f));
+               c.segment(X(a.x), Y(a.y), X(b->x), Y(b->y), 1.0f * s, true);
             }
          }
+         if (const Creature *h = a.hunter >= 0 && a.sources.caught > 0.3f ? bySlot(a.hunter) : nullptr) {
+            c.setColor(glow(kCaughtColor, 0.9f * std::min(a.energy, h->energy), 1.8f));
+            c.segment(X(a.x), Y(a.y), X(h->x), Y(h->y), 2.2f * s, true);
+         }
+      }
 
       // Lures: where each held note pulls its creature.
       for (const Creature &b : creatures_) {
-         if (b.note < 0 || b.energy < 0.05f)
+         if (!b.held || b.energy < 0.05f)
             continue;
          const unsigned col = kPartColors[b.part];
          c.setColor(glow(col, 0.14f * b.energy, 1.0f));
@@ -754,21 +748,19 @@ public:
    std::function<void(visage::Point)> onBackgroundMenu;
 
 private:
-   static constexpr int kIdle = 6;
    static constexpr int kMaxPuffs = 2600;
    static constexpr int kPathPoints = 22;
-   static constexpr float kCatch = 0.025f;
 
+   // A creature as drawn: the flock's, plus its colour, fresh ink stroke and shedding clock.
    struct Creature {
-      int id = 0;
-      int part = 0;
-      // The note it follows; -1 resting, and -2 - note once that note is let go and it fades.
-      int note = -1;
+      uint32_t id = 0;
+      int part = 0, slot = 0, neighbour = -1, hunter = -1;
+      bool held = false, resting = false;
       unsigned color = 0;
       float x = 0, y = 0, vx = 0, vy = 0;
       float energy = 0;
       float lureX = 0, lureY = 0, press = 0;
-      float wanderAngle = 0, wing = 0, emit = 0;
+      float wing = 0, emit = 0;
       CreatureSources sources;
       std::vector<visage::Point> path;
    };
@@ -776,9 +768,9 @@ private:
       float x, y, vx, vy, age, life, size, grow, alpha;
       unsigned color;
       int part;
-      // The id of the creature that shed it: a creature feels only others' wake, and only other
+      // The id of the creature that shed it: a creature stirs only others' ink, and only other
       // creatures' ink pushes back.
-      int owner;
+      uint32_t owner;
       // How hard it is pressed against other ink (it glows whiter), and how many puffs overlap it
       // (each draws thinner, so a dense knot stays a cloud).
       float heat = 0.0f, crowd = 0.0f;
@@ -809,165 +801,96 @@ private:
       }
    }
 
-   Creature &spawn(int part, int note, visage::Point at) {
-      std::uniform_real_distribution<float> u(-1.0f, 1.0f);
-      Creature b;
-      b.id = nextId_++;
-      b.part = part;
-      b.note = note;
-      b.color = kInks[part][(note < 0 ? static_cast<int>(creatures_.size()) : note * 5) & 3];
-      b.x = at.x + 0.03f * u(rng_);
-      b.y = at.y + 0.03f * u(rng_);
-      b.vx = 0.1f * u(rng_);
-      b.vy = 0.1f * u(rng_);
-      b.wanderAngle = 3.14f * u(rng_);
-      b.wing = 3.14f * u(rng_);
-      b.path.reserve(kPathPoints);
-      creatures_.push_back(b);
-      return creatures_.back();
+   // The frame's creatures, keeping each one's colour and ink stroke while its id lasts.
+   void sync() {
+      std::vector<Creature> next;
+      next.reserve(static_cast<size_t>(frame_.count));
+      for (int i = 0; i < frame_.count; ++i) {
+         const FlockFrame::Shown &s = frame_.creatures[i];
+         Creature b;
+         for (Creature &old : creatures_)
+            if (old.id == s.id) {
+               b = std::move(old);
+               break;
+            }
+         if (b.id != s.id) {
+            b = Creature{};
+            b.id = s.id;
+            b.color = kInks[s.part][(s.slot * 5 + static_cast<int>(s.id)) & 3];
+            b.path.reserve(kPathPoints);
+         }
+         const bool jumped = std::fabs(s.x - b.x) > 0.3f || std::fabs(s.y - b.y) > 0.3f;
+         b.part = s.part, b.slot = s.slot, b.neighbour = s.neighbour, b.hunter = s.hunter;
+         b.held = s.held, b.resting = s.resting;
+         b.x = s.x, b.y = s.y, b.vx = s.vx, b.vy = s.vy;
+         b.energy = s.energy, b.press = s.press, b.wing = s.wing;
+         b.lureX = s.lureX, b.lureY = s.lureY;
+         b.sources = s.sources;
+         if (jumped) // wrapped round the sky
+            b.path.clear();
+         if (static_cast<int>(b.path.size()) == kPathPoints)
+            b.path.erase(b.path.begin());
+         b.path.push_back({b.x, b.y});
+         next.push_back(std::move(b));
+      }
+      creatures_ = std::move(next);
    }
 
-   // Matches creatures to the held notes: a new note hatches one at its lure, a released note's
-   // creature flies off and fades, and resting creatures show only while a species plays nothing.
-   void follow(const std::vector<EditorHost::Note> &notes, float dt) {
-      for (Creature &b : creatures_)
-         if (b.note >= 0)
-            b.note = -2 - b.note; // let go, unless a held note claims it below
-      int held[kPartCount] = {};
+   // The panel's own flock, while the plugin isn't processing: the same sim, fed the held notes and
+   // the params without their routes.
+   void flyLocal(const std::vector<EditorHost::Note> &notes, float dt) {
+      local_.size = static_cast<float>(host_.paramValue(kSkySize));
+      local_.walls = static_cast<int>(host_.paramValue(kSkyWalls) + 0.5);
+      for (int part = 0; part < kPartCount; ++part)
+         local_.gust[part] = std::sin(2.0f * kPi * species_[part].windHz * time_ + 1.0f);
+      bool claimed[kVoiceSlots] = {};
       for (const EditorHost::Note &n : notes)
          for (int part = 0; part < kPartCount; ++part) {
             if (!plays(part, n))
                continue;
-            ++held[part];
-            const visage::Point lure = lureFor(n);
-            Creature *b = nullptr;
-            for (Creature &c : creatures_)
-               if (c.part == part && c.note == -2 - n.note)
-                  b = &c;
-            if (!b)
-               b = &spawn(part, n.note, lure);
-            b->note = n.note;
-            b->lureX = lure.x;
-            b->lureY = lure.y;
-            b->press = std::clamp(n.pressure, 0.0f, 1.0f);
-         }
-      for (Creature &b : creatures_) {
-         const float target = b.note >= 0 ? 0.55f + 0.45f * b.press : b.note == -1 && held[b.part] == 0 ? 0.3f : 0.0f;
-         const float rate = b.note >= 0 ? 5.0f : 1.2f;
-         b.energy += (target - b.energy) * std::min(1.0f, dt * rate);
-      }
-      creatures_.erase(std::remove_if(creatures_.begin(), creatures_.end(),
-                                      [](const Creature &b) { return b.note <= -2 && b.energy < 0.01f; }),
-                       creatures_.end());
-   }
-
-   // One boids step for every creature.
-   void fly(float dt) {
-      std::uniform_real_distribution<float> u(-1.0f, 1.0f);
-      const int walls = static_cast<int>(host_.paramValue(kSkyWalls) + 0.5);
-      // The wind: one slow gust for the whole sky, from part B's Wind rate (the two parts share it).
-      const float windAngle = 0.4f + 0.9f * std::sin(time_ * 0.07f);
-      const float gust = std::sin(2.0f * kPi * species_[1].windHz * time_ + 1.0f);
-      for (Creature &b : creatures_) {
-         const Species &sp = species_[b.part];
-         const float R = sp.radius();
-         float cx = 0, cy = 0, ax = 0, ay = 0, sx = 0, sy = 0, hx = 0, hy = 0;
-         float nearest = 1e9f, prey = 1e9f;
-         int n = 0;
-         for (const Creature &o : creatures_) {
-            if (&o == &b || o.energy < 0.05f)
-               continue;
-            const float dx = o.x - b.x, dy = o.y - b.y, d = std::hypot(dx, dy) + 1e-5f;
-            nearest = std::min(nearest, d);
-            if (o.part == b.part) {
-               if (d < R) {
-                  cx += o.x, cy += o.y, ax += o.vx, ay += o.vy, ++n;
-               }
-               if (d < 0.4f * R) {
-                  const float k = 1.0f - d / (0.4f * R);
-                  sx -= dx / d * k, sy -= dy / d * k;
-               }
+            int slot = -1;
+            for (int i = 0; i < kVoiceSlots && slot < 0; ++i)
+               if (!claimed[i] && localNote_[i] == n.note && local_.creatures[i].alive && local_.creatures[i].held &&
+                   local_.creatures[i].part == part)
+                  slot = i;
+            float lx, ly;
+            lureFor(static_cast<float>(n.note), n.bend, n.timbre, lx, ly);
+            if (slot < 0) {
+               for (int i = 0; i < kVoiceSlots && slot < 0; ++i)
+                  if (!claimed[i] && !local_.creatures[i].alive)
+                     slot = i;
+               for (int i = 0; i < kVoiceSlots && slot < 0; ++i)
+                  if (!claimed[i] && !local_.creatures[i].held)
+                     slot = i;
+               if (slot < 0)
+                  continue;
+               local_.hatch(slot, part, lx, ly);
+               localNote_[slot] = n.note;
             }
-            else {
-               // Hunters chase the nearest of the other species; everyone shies from a hunter, and
-               // Flee runs from the other species whatever it does.
-               if (sp.behaviour == 2 && d < prey && d < 2.5f * R) {
-                  prey = d;
-                  hx = dx / d, hy = dy / d;
-               }
-               const float scare = sp.behaviour == 3 ? 1.5f : species_[o.part].behaviour == 2 ? 0.6f : 0.0f;
-               if (scare > 0.0f && d < R) {
-                  sx -= dx / d * scare * (1.0f - d / R);
-                  sy -= dy / d * scare * (1.0f - d / R);
-               }
-            }
+            claimed[slot] = true;
+            jsynth::Creature &c = local_.creatures[slot];
+            c.lureX = lx;
+            c.lureY = ly;
+            c.press = std::clamp(n.pressure, 0.0f, 1.0f);
          }
-         float accX = 0, accY = 0;
-         if (n > 0) {
-            const float pull = sp.behaviour == 1 ? -1.0f : 1.0f; // Scatter pushes away from the middle
-            accX += (cx / n - b.x) * sp.cohesion * 2.5f * pull + (ax / n - b.vx) * sp.alignment * 2.0f;
-            accY += (cy / n - b.y) * sp.cohesion * 2.5f * pull + (ay / n - b.vy) * sp.alignment * 2.0f;
+      for (int i = 0; i < kCreatureSlots; ++i) {
+         jsynth::Creature &c = local_.creatures[i];
+         if (!c.alive)
+            continue;
+         if (i < kVoiceSlots && !claimed[i])
+            local_.release(i);
+         c.params.read([&](clap_id o) { return host_.paramValue(partId(c.part, o)); });
+         if (i < kVoiceSlots) {
+            localWing_[i] += dt * species_[c.part].wingHz;
+            c.wing = std::sin(2.0f * kPi * localWing_[i]);
          }
-         accX += sx * sp.separation * 1.6f + hx * 0.9f;
-         accY += sy * sp.separation * 1.6f + hy * 0.9f;
-         if (b.note >= 0) {
-            accX += (b.lureX - b.x) * sp.lure * 6.0f - b.vx * sp.lure * 0.6f;
-            accY += (b.lureY - b.y) * sp.lure * 6.0f - b.vy * sp.lure * 0.6f;
-         }
-         b.wanderAngle += u(rng_) * dt * 5.0f;
-         accX += std::cos(b.wanderAngle) * sp.wander * 0.5f;
-         accY += std::sin(b.wanderAngle) * sp.wander * 0.5f;
-         accX += std::cos(windAngle) * gust * sp.windPush * 0.35f;
-         accY += std::sin(windAngle) * gust * sp.windPush * 0.35f;
-         // The wingbeat: each creature bobs across its path, faster when pressed.
-         b.wing += 2.0f * kPi * std::min(sp.wingHz, 12.0f) * dt * (1.0f + b.press);
-         const float v = std::hypot(b.vx, b.vy) + 1e-5f;
-         accX += -b.vy / v * std::sin(b.wing) * sp.wingPush * 0.8f;
-         accY += b.vx / v * std::sin(b.wing) * sp.wingPush * 0.8f;
-         // Walls: soft ones turn creatures back near the edge; open ones only well past it.
-         const float m = walls == 2 ? -0.08f : 0.06f, k = walls == 2 ? 4.0f : 14.0f;
-         if (walls != 1) {
-            if (b.x < m)
-               accX += (m - b.x) * k;
-            if (b.x > kSkyAspect - m)
-               accX -= (b.x - kSkyAspect + m) * k;
-            if (b.y < m)
-               accY += (m - b.y) * k;
-            if (b.y > 1.0f - m)
-               accY -= (b.y - 1.0f + m) * k;
-         }
-         b.vx += accX * dt;
-         b.vy += accY * dt;
-         const float top = sp.maxSpeed(b.press), speed = std::hypot(b.vx, b.vy) + 1e-6f;
-         const float clamped = std::clamp(speed, 0.35f * top, top);
-         b.vx *= clamped / speed;
-         b.vy *= clamped / speed;
-         b.x += b.vx * dt;
-         b.y += b.vy * dt;
-         if (walls == 1) {
-            const float wrapX = std::fmod(b.x + kSkyAspect, kSkyAspect), wrapY = std::fmod(b.y + 1.0f, 1.0f);
-            if (wrapX != b.x || wrapY != b.y)
-               b.path.clear();
-            b.x = wrapX, b.y = wrapY;
-         }
-         if (static_cast<int>(b.path.size()) == kPathPoints)
-            b.path.erase(b.path.begin());
-         b.path.push_back({b.x, b.y});
-         b.sources.speed = clamped / sp.maxSpeed(1.0f);
-         b.sources.crowd = std::min(1.0f, n / 6.0f);
-         b.sources.nearest = std::clamp(1.0f - nearest / R, 0.0f, 1.0f);
-         b.sources.heading = (std::atan2(b.vy, b.vx) + kPi) / (2.0f * kPi);
-         b.sources.x = std::clamp(b.x / kSkyAspect, 0.0f, 1.0f);
-         b.sources.y = std::clamp(1.0f - b.y, 0.0f, 1.0f);
       }
-      // A hunter that reaches its prey has caught it, and holds on for a moment.
-      for (Creature &b : creatures_) {
-         b.sources.caught *= std::exp(-dt * 2.0f);
-         for (const Creature &o : creatures_)
-            if (o.part != b.part && species_[o.part].behaviour == 2 && o.energy > 0.1f && b.energy > 0.1f &&
-                std::hypot(o.x - b.x, o.y - b.y) < kCatch)
-               b.sources.caught = 1.0f;
+      localTime_ += std::min(dt, 0.1f);
+      while (localTime_ >= Flock::kStep) {
+         localTime_ -= Flock::kStep;
+         local_.step();
       }
+      local_.show(frame_);
    }
 
    // Every creature sheds ink behind it, more the brighter it is.
@@ -1072,17 +995,6 @@ private:
                    puffs_.end());
    }
 
-   // How much of the other creatures' fresh ink each one is flying through.
-   void measure(float dt) {
-      for (Creature &b : creatures_) {
-         float ink = 0.0f;
-         for (const Puff &p : puffs_)
-            if (p.owner != b.id && std::fabs(p.x - b.x) < 0.04f && std::fabs(p.y - b.y) < 0.04f)
-               ink += p.alpha * (1.0f - p.age / p.life);
-         b.sources.wake += (std::min(1.0f, ink / 12.0f) - b.sources.wake) * std::min(1.0f, dt * 6.0f);
-      }
-   }
-
    template <typename FX, typename FY>
    void drawCreature(visage::Canvas &c, const Creature &b, float s, FX X, FY Y) {
       if (b.energy < 0.01f)
@@ -1103,7 +1015,7 @@ private:
       c.circle(x - r, y - r, 2 * r);
       // Wings: a chevron along its heading that beats with the wingbeat.
       const float v = std::hypot(b.vx, b.vy) + 1e-5f, hx = b.vx / v, hy = b.vy / v;
-      const float flap = 0.45f + 0.35f * std::sin(b.wing);
+      const float flap = 0.45f + 0.35f * b.wing;
       const float len = (7.0f + 3.0f * b.press) * s;
       c.setColor(glow(0xffffffff, 0.85f * b.energy * shown, 1.3f));
       for (int side = -1; side <= 1; side += 2) {
@@ -1154,10 +1066,16 @@ private:
    visage::BloomPostEffect bloom_;
    Species species_[kPartCount];
    std::vector<Creature> creatures_;
+   // The frame being drawn: the engine's, or the panel's own flock's.
+   FlockFrame frame_;
+   bool live_ = false;
+   Flock local_;
+   int localNote_[kVoiceSlots] = {};
+   float localWing_[kVoiceSlots] = {};
+   float localTime_ = 0.0f;
    std::vector<Puff> puffs_;
    std::vector<std::vector<int>> grid_;
    Star stars_[150];
-   int nextId_ = 0;
    float time_ = 0.0f;
    int playing_ = -1;
 };
@@ -1223,9 +1141,15 @@ public:
          else if (s >= kSourceSpeed && s <= kSourceSkyY)
             chip->setLevel(flock[s - kSourceSpeed]);
          else if (s >= kSourceEnv1 && s < kSourceEnv1 + kEnvCount)
-            chip->setLevel(envLevel_[s - kSourceEnv1]);
-         else if (s >= kSourceWingbeat && s < kSourceWingbeat + kLfoCount)
-            chip->setLevel(0.5f + 0.5f * lfoValue(s - kSourceWingbeat), true);
+            chip->setLevel(view_->live() ? view_->envLevel(host_.part, s - kSourceEnv1) : envLevel_[s - kSourceEnv1]);
+         else if (s >= kSourceWingbeat && s < kSourceWingbeat + kLfoCount) {
+            // The engine's LFO is already unipolar or bipolar by its Polarity; the panel's guess is
+            // too. The chip shows either across its width.
+            const int l = s - kSourceWingbeat;
+            const float v = view_->live() ? view_->lfoLevel(host_.part, l) : lfoValue(l);
+            const bool unipolar = static_cast<int>(value(host_.part, lfoParam(l, kLfoPolarity)) + 0.5) == 1;
+            chip->setLevel(unipolar ? v : 0.5f + 0.5f * v, !unipolar);
+         }
          chip->setState(mapping_, mapping_ && s == armed_, pulse);
       }
       if (!host_.panelsHidden)
@@ -1599,7 +1523,7 @@ private:
                                                       {kSourceCaught, "CAUGHT"},   {kSourceWake, "WAKE"},
                                                       {kSourceSkyX, "X"},          {kSourceSkyY, "Y"}};
       const char *tips[] = {"How fast this creature flies.", "How many neighbours it has.",
-                            "How near its nearest neighbour is.", "Which way it flies, all the way round.",
+                            "How near its nearest neighbour is.", "How much it flies upward: 1 straight up, 0 straight down.",
                             "On while a hunter has caught it.", "How much of the others' ink it flies through.",
                             "Where it is in the sky, left to right.", "Where it is in the sky, bottom to top."};
       const auto cells = ui::row({248, 618, 558, 22}, 8, 4);
@@ -1982,6 +1906,35 @@ bool renderScreenshot(EditorHost &host, const ScreenshotView &view, double secon
       panel.step(1.0f / 60.0f);
    panel.syncControls();
    return ui::renderToPng(panel, width, height, pngPath);
+}
+
+bool renderFrames(EditorHost &host, const ScreenshotView &view, int width, int height, int frames, double fps,
+                  const std::function<void(int)> &advance, const std::function<void(const uint8_t *)> &frame) {
+   Panel panel(host);
+   panel.stopTimer();
+   panel.showPart(view.part);
+   panel.showTabs(view.leftTab, view.rightTab);
+   panel.showRoutes(view.routes);
+   panel.setMapping(view.mapSource != 0, view.mapSource);
+   panel.showPanels(!view.hidden);
+   visage::ApplicationEditor editor;
+   editor.addChild(&panel);
+   editor.onResize() += [&] { panel.setBounds(editor.localBounds()); };
+   editor.setWindowless(width, height);
+   panel.setBounds(editor.localBounds());
+   for (int i = 0; i < frames; ++i) {
+      advance(i);
+      panel.step(static_cast<float>(1.0 / fps));
+      panel.syncControls();
+      const visage::Screenshot shot = editor.takeScreenshot();
+      if (shot.width() != width || shot.height() != height) {
+         editor.removeChild(&panel);
+         return false;
+      }
+      frame(shot.data());
+   }
+   editor.removeChild(&panel);
+   return true;
 }
 
 } // namespace jsynth

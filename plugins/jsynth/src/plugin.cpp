@@ -557,24 +557,7 @@ private:
 
    void publishFlock() {
       FlockFrame &f = flockFrames_.back();
-      const Flock &flock = engine_->flock();
-      f.frame++;
-      f.count = 0;
-      for (int i = 0; i < kCreatureSlots; ++i) {
-         const Creature &c = flock.creatures[i];
-         if (!c.alive)
-            continue;
-         FlockFrame::Shown &s = f.creatures[f.count++];
-         s.id = c.id;
-         s.part = static_cast<int8_t>(c.part);
-         s.held = c.held;
-         s.x = c.x, s.y = c.y, s.vx = c.vx, s.vy = c.vy;
-         s.energy = c.energy, s.press = c.press, s.wing = c.wing;
-         s.sources = c.sources;
-         s.slot = static_cast<int16_t>(i);
-         s.neighbour = static_cast<int16_t>(c.neighbour[0]);
-         s.hunter = static_cast<int16_t>(c.hunter);
-      }
+      engine_->flock().show(f);
       for (int part = 0; part < kPartCount; ++part) {
          for (int e = 0; e < kEnvCount; ++e)
             f.env[part][e] = engine_->envLevel(part, e);

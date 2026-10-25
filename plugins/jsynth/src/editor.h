@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -71,5 +72,11 @@ struct ScreenshotView {
 // as a PNG.
 bool renderScreenshot(EditorHost &host, const ScreenshotView &view, double seconds, int width, int height,
                       const char *pngPath);
+
+// Renders the panel as a run of frames, `fps` a second, offscreen at the given pixel size: before
+// each frame `advance(frame)` runs (the caller moves its engine on by a frame's worth of audio), then
+// the panel steps and draws, and `frame(rgba)` gets its pixels (width x height, 4 bytes each).
+bool renderFrames(EditorHost &host, const ScreenshotView &view, int width, int height, int frames, double fps,
+                  const std::function<void(int)> &advance, const std::function<void(const uint8_t *)> &frame);
 
 } // namespace jsynth

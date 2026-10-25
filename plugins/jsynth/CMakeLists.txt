@@ -19,6 +19,10 @@ if(JCLAP_BUILD_TOOLS)
    add_executable(jsynth-screenshot tools/screenshot.cpp src/editor.cpp)
    target_include_directories(jsynth-screenshot PRIVATE src)
    target_link_libraries(jsynth-screenshot PRIVATE jclap::ui jclap::dsp)
+   # Records a phrase through the engine: audio, or video of the panel with the audio.
+   add_executable(jsynth-record tools/record.cpp src/editor.cpp)
+   target_include_directories(jsynth-record PRIVATE src)
+   target_link_libraries(jsynth-record PRIVATE jclap::ui jclap::dsp)
    jclap_add_screenshot_test(jsynth-screenshot-main-test TOOL jsynth-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel.png ARGS 0 0 1)
    jclap_add_screenshot_test(jsynth-screenshot-part-b-test TOOL jsynth-screenshot

@@ -90,6 +90,8 @@ struct Creature {
    int hunter = -1;
 };
 
+struct FlockFrame;
+
 class Flock {
 public:
    // The flock's step: fixed, so it flies the same at any sample rate and block size.
@@ -132,6 +134,9 @@ public:
    }
    // Its note is up: it flies off as it fades.
    void release(int slot) { creatures[slot].held = false; }
+
+   // Copies the live creatures into `f`, for the panel.
+   void show(FlockFrame &f) const;
 
    // Whether `part` has any held creature, so its resting ones fade out.
    bool playing(int part) const {
@@ -409,8 +414,8 @@ struct FlockFrame {
    struct Shown {
       uint32_t id;
       int8_t part;
-      bool held;
-      float x, y, vx, vy, energy, press, wing;
+      bool held, resting;
+      float x, y, vx, vy, energy, press, wing, lureX, lureY;
       CreatureSources sources;
       // Its slot, its strongest neighbour's and its hunter's (-1 for none).
       int16_t slot, neighbour, hunter;
@@ -421,5 +426,31 @@ struct FlockFrame {
    float env[kPartCount][kEnvCount] = {};
    float lfo[kPartCount][kLfoCount] = {};
 };
+
+inline void Flock::show(FlockFrame &f) const {
+   f.frame++;
+   f.count = 0;
+   for (int i = 0; i < kCreatureSlots; ++i) {
+      const Creature &c = creatures[i];
+      if (!c.alive)
+         continue;
+      FlockFrame::Shown &s = f.creatures[f.count++];
+      s.id = c.id;
+      s.part = static_cast<int8_t>(c.part);
+      s.held = c.held;
+      s.resting = c.resting;
+      s.x = c.x, s.y = c.y, s.vx = c.vx, s.vy = c.vy;
+      s.energy = c.energy, s.press = c.press, s.wing = c.wing;
+      s.lureX = c.lureX, s.lureY = c.lureY;
+      s.sources = c.sources;
+      s.slot = static_cast<int16_t>(i);
+      int best = -1;
+      for (int n = 0; n < kNeighbours; ++n)
+         if (c.neighbour[n] >= 0 && (best < 0 || c.neighbourWeight[n] > c.neighbourWeight[best]))
+            best = n;
+      s.neighbour = static_cast<int16_t>(best >= 0 ? c.neighbour[best] : -1);
+      s.hunter = static_cast<int16_t>(c.hunter);
+   }
+}
 
 } // namespace jsynth

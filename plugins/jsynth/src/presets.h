@@ -97,8 +97,10 @@ inline const std::vector<Preset> &factoryPresets() {
                           a(flockParam(kSpeed), 0.6), b(flockParam(kSpeed), 0.7)},
                          route(0, 6, kSourceCaught, filterParam(0, kFilterCutoff), 0.6)})});
       p.push_back({"Wind Choir", "Weather",
-                   join({{a(oscParam(0, kOscWave), kSaw), a(mixParam(kNoiseLevel), 0.3), a(filterParam(0, kFilterType), 2),
-                          a(filterParam(0, kFilterResonance), 0.6), a(lfoParam(1, kLfoPush), 0.9),
+                   join({{a(oscParam(0, kOscWave), kSaw), a(oscParam(1, kOscWave), kSaw), a(oscParam(1, kOscPitchMode), 0),
+                          a(oscParam(1, kOscFine), 11), a(mixParam(kMixLevel, 1), 0.9), a(mixParam(kNoiseLevel), 0.35),
+                          a(filterParam(0, kFilterType), 2), a(filterParam(0, kFilterCutoff), 0.5),
+                          a(filterParam(0, kFilterResonance), 0.4), a(kPartLevel, 6.0), a(lfoParam(1, kLfoPush), 0.9),
                           a(lfoParam(1, kLfoRate), lfoValue(0.1)), a(envParam(0, kEnvAttack), timeValue(600))},
                          route(0, 6, kSourceWind, filterParam(0, kFilterCutoff), 0.4),
                          route(0, 7, slide, filterParam(0, kFilterResonance), 0.3)})});
