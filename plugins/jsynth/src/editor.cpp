@@ -90,6 +90,7 @@ unsigned sourceColor(int source) {
        0xfff6f0a0, 0xffff6fd2, 0xffb98bff, 0xff8fe8a8, 0xff9ad0c0, // Strike, Press, Glide, Slide, Lift
        0xffc0c8d8,                                                 // Key
        0xfff2c94c, 0xffff8a7a, 0xff6fe0ff, 0xffa98bff, kCaughtColor, 0xff5fd3b0, // the flock's own
+       0xffffe08a, 0xff9fd8ff,                                     // Sky X, Sky Y
        0xffd0d0d0, 0xffe0e0ff,                                     // Random, Mod Wheel
        0xfff28c28, 0xff8fe8a8, 0xff6fb8ff, 0xffff6fd2};            // Macros
    return colors[std::clamp(source, 0, kSourceCount - 1)];
@@ -601,7 +602,7 @@ struct Species {
 
 // A creature's own modulation sources, 0..1, as the stage chips show them.
 struct CreatureSources {
-   float speed = 0, crowd = 0, nearest = 0, heading = 0, caught = 0, wake = 0;
+   float speed = 0, crowd = 0, nearest = 0, heading = 0, caught = 0, wake = 0, x = 0, y = 0;
 };
 
 // The stage: a night sky, both flocks, their ink, the links between neighbours that modulate each
@@ -953,6 +954,8 @@ private:
          b.sources.crowd = std::min(1.0f, n / 6.0f);
          b.sources.nearest = std::clamp(1.0f - nearest / R, 0.0f, 1.0f);
          b.sources.heading = (std::atan2(b.vy, b.vx) + kPi) / (2.0f * kPi);
+         b.sources.x = std::clamp(b.x / kSkyAspect, 0.0f, 1.0f);
+         b.sources.y = std::clamp(1.0f - b.y, 0.0f, 1.0f);
       }
       // A hunter that reaches its prey has caught it, and holds on for a moment.
       for (Creature &b : creatures_) {
@@ -1206,13 +1209,13 @@ public:
       }
       runEnvelopes(dt);
       const CreatureSources src = view_->sources(host_.part);
-      const float flock[] = {src.speed, src.crowd, src.nearest, src.heading, src.caught, src.wake};
+      const float flock[] = {src.speed, src.crowd, src.nearest, src.heading, src.caught, src.wake, src.x, src.y};
       const float pulse = 0.5f + 0.5f * std::sin(time_ * 5.0f);
       for (SourceChip *chip : chips_) {
          const int s = chip->source();
          if (s >= kSourceStrike && s < kSourceStrike + kTouchCount)
             chip->setLevel(touch[s - kSourceStrike]);
-         else if (s >= kSourceSpeed && s <= kSourceWake)
+         else if (s >= kSourceSpeed && s <= kSourceSkyY)
             chip->setLevel(flock[s - kSourceSpeed]);
          else if (s >= kSourceEnv1 && s < kSourceEnv1 + kEnvCount)
             chip->setLevel(envLevel_[s - kSourceEnv1]);
@@ -1548,12 +1551,14 @@ private:
    void buildStageChips() {
       const std::pair<int, const char *> sources[] = {{kSourceSpeed, "SPEED"},     {kSourceCrowd, "CROWD"},
                                                       {kSourceNearest, "NEAREST"}, {kSourceHeading, "HEADING"},
-                                                      {kSourceCaught, "CAUGHT"},   {kSourceWake, "WAKE"}};
+                                                      {kSourceCaught, "CAUGHT"},   {kSourceWake, "WAKE"},
+                                                      {kSourceSkyX, "SKY X"},      {kSourceSkyY, "SKY Y"}};
       const char *tips[] = {"How fast this creature flies.", "How many neighbours it has.",
                             "How near its nearest neighbour is.", "Which way it flies, all the way round.",
-                            "On while a hunter has caught it.", "How much of the others' ink it flies through."};
-      const auto cells = ui::row({248, 572, 578, 22}, 6, 6);
-      for (int i = 0; i < 6; ++i)
+                            "On while a hunter has caught it.", "How much of the others' ink it flies through.",
+                            "Where it is in the sky, left to right.", "Where it is in the sky, bottom to top."};
+      const auto cells = ui::row({248, 572, 578, 22}, 8, 4);
+      for (int i = 0; i < 8; ++i)
          chip(sources[i].first, sources[i].second, cells[i], tips[i]);
    }
 
@@ -1719,16 +1724,16 @@ private:
 
    // Bottom: a card per oscillator.
    void buildOscs(int part) {
-      const float w = 270, gap = 10, y = 612, h = 152;
+      const float w = 250, gap = 10, y = 612, h = 152;
       for (int o = 0; o < kOscCount; ++o) {
          const float x = 16 + o * (w + gap);
          const unsigned c = kOscColors[o];
          glass({x, y, w, h}, "", c);
          label({x + 14, y + 9, 50, 18}, "OSC " + std::to_string(o + 1), c, visage::Font::kLeft);
-         auto &pitch = segments(oscParam(o, kOscPitchMode), c, {x + 62, y + 7, 106, 22},
+         auto &pitch = segments(oscParam(o, kOscPitchMode), c, {x + 60, y + 7, 100, 22},
                                 std::vector<std::string>{"NOTE", "RATIO", "HZ"});
          tips_.add(pitch, "NOTE follows the key in semitones; RATIO is a multiple of the note; HZ is fixed.");
-         dropdown(oscParam(o, kOscWave), c, {x + 174, y + 7, 88, 22});
+         dropdown(oscParam(o, kOscWave), c, {x + 164, y + 7, 78, 22});
          const auto k = ui::row({x + 4, y + 34, w - 8, 112}, 5);
          // The pitch knob shows whichever the pitch mode uses; refreshPitch() swaps them.
          auto &coarse = knob(oscParam(o, kOscCoarse), "COARSE", c, k[0]);
@@ -1745,20 +1750,32 @@ private:
    // Bottom right: the part's voice.
    void buildVoice(int part) {
       const unsigned c = kPartColors[part];
-      const float x = 858, y = 612;
-      glass({x, y, 326, 152}, part == 0 ? "PART A" : "PART B", c);
-      segments(kVoiceMode, c, {x + 104, y + 7, 144, 22}, std::vector<std::string>{"POLY", "MONO", "LEGATO"});
-      auto &voices = glassy(put<ui::NumberBox>({x + 254, y + 7, 64, 22}, rangeOf(partId(part, kPolyphony), 1.0)), c);
+      const float x = 796, y = 612;
+      glass({x, y, 388, 152}, part == 0 ? "PART A" : "PART B", c);
+      segments(kVoiceMode, c, {x + 80, y + 7, 140, 22}, std::vector<std::string>{"POLY", "MONO", "LEGATO"});
+      auto &voices = glassy(put<ui::NumberBox>({x + 226, y + 7, 64, 22}, rangeOf(partId(part, kPolyphony), 1.0)), c);
       voices.setStepButtons(true);
       voices.valueText = [](double v) { return std::to_string(static_cast<int>(v + 0.5)); };
       bindings_.bind(voices, partId(part, kPolyphony));
       tips_.add(voices, "How many creatures this species can have at once: one per held note, up to 16.");
-      const auto k = ui::row({x + 4, y + 34, 318, 112}, 5);
-      knob(kPartTranspose, "TRANSPOSE", c, k[0]);
+      const auto k = ui::row({x + 2, y + 34, 384, 112}, 8);
+      knob(kPartTranspose, "TRANSP", c, k[0]);
       knob(kGlideTime, "GLIDE", c, k[1]);
       knob(kBendRange, "BEND", c, k[2], "The MPE bend range: how far a finger slides, in semitones.");
       knob(kPartPan, "PAN", c, k[3]);
-      knob(kPartLevel, "LEVEL", c, k[4]);
+      knob(kSkyPan, "SKY PAN", c, k[4], "How far a creature's place in the sky, left to right, pans its voice: "
+                                        "at 100% the flock spreads across the whole stereo field.");
+      knob(kPartLevel, "LEVEL", c, k[5]);
+      // The output, shared by both parts.
+      const int was = part_;
+      part_ = -1;
+      label({k[6].x, y + 10, k[6].w * 2, 16}, "OUTPUT", kDim);
+      knob(kOutputWidth, "WIDTH", kDim, k[6], "The whole output's stereo width: 0% is mono, past 100% wider.");
+      knob(kMasterLevel, "MASTER", kDim, k[7]);
+      part_ = was;
+      // Each part's card has its own copy, so they show with it.
+      for (size_t i = placed_.size() - 3; i < placed_.size(); ++i)
+         placed_[i].part = part;
    }
 
    // The route list: every route of a part, over the sky.

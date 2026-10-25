@@ -58,6 +58,8 @@ enum GlobalParam : clap_id {
    // The sky both species fly in.
    kSkySize = kTouchSmooth1 + kTouchCount,
    kSkyWalls,
+   // The output's stereo width: 0 is mono, 100% as is, 200% wider.
+   kOutputWidth,
    kGlobalEnd
 };
 
@@ -81,6 +83,8 @@ enum PartParam : clap_id {
    kDrift,
    kVelocityToAmp,
    kPartOutput,
+   // How far a creature's place left to right in the sky pans its voice.
+   kSkyPan,
 
    kOscBase = 16,
    kOscStride = 16,
@@ -245,13 +249,13 @@ inline const std::vector<std::string> kPolarityNames = {"Bipolar", "Unipolar"};
 // from it.
 inline const std::vector<std::string> kBehaviourNames = {"Shoal", "Scatter", "Hunt", "Flee"};
 inline const std::vector<std::string> kWallNames = {"Soft", "Wrap", "Open"};
-// Route sources. Off is no route. Speed to Wake are the flock's own: how fast this creature flies, how
-// many neighbours it has, how near the nearest is, which way it heads, whether a hunter has it, and
-// how much ink it is flying through.
+// Route sources. Off is no route. Speed to Sky Y are the flock's own: how fast this creature flies, how
+// many neighbours it has, how near the nearest is, which way it heads, whether a hunter has it, how
+// much ink it is flying through, and where it is in the sky (left to right, and bottom to top).
 inline const std::vector<std::string> kSourceNames = {
     "Off",   "Env 1",   "Env 2",    "Env 3",   "Wingbeat", "Wind",   "LFO 1",  "LFO 2",  "Strike",    "Press",
     "Glide", "Slide",   "Lift",     "Key",     "Speed",    "Crowd",  "Nearest",   "Heading",
-    "Caught", "Wake",   "Random",   "Mod Wheel", "Macro 1", "Macro 2", "Macro 3", "Macro 4"};
+    "Caught", "Wake",   "Sky X",    "Sky Y",   "Random",   "Mod Wheel", "Macro 1", "Macro 2", "Macro 3", "Macro 4"};
 enum Source {
    kSourceOff,
    kSourceEnv1,
@@ -266,6 +270,8 @@ enum Source {
    kSourceHeading,
    kSourceCaught,
    kSourceWake,
+   kSourceSkyX,
+   kSourceSkyY,
    kSourceRandom,
    kSourceModWheel,
    kSourceMacro1,
@@ -353,7 +359,7 @@ struct Builder {
 // What a route can move: every continuous part param a voice can use, as part offsets. MAP mode
 // can map any knob showing one of these.
 inline std::vector<clap_id> buildDestinations() {
-   std::vector<clap_id> d = {kPartLevel, kPartPan, kPartFine, kGlideTime, kDrift};
+   std::vector<clap_id> d = {kPartLevel, kPartPan, kSkyPan, kPartFine, kGlideTime, kDrift};
    for (int o = 0; o < kOscCount; ++o)
       for (OscParam p : {kOscShape, kOscCoarse, kOscFine, kOscRatio, kOscFixed, kOscPhase})
          d.push_back(oscParam(o, p));
@@ -429,6 +435,7 @@ inline void addPart(Builder &b, int part) {
    b.add(id(kDrift), "Drift", voice, 0.0, 1.0, 0.1, kMod, Unit::Percent);
    b.add(id(kVelocityToAmp), "Velocity", voice, 0.0, 1.0, 1.0, kMod, Unit::Percent);
    b.choice(id(kPartOutput), "Output", voice, kOutputNames, 0, kGlobalChoice);
+   b.add(id(kSkyPan), "Sky Pan", voice, 0.0, 1.0, 0.5, kMod, Unit::Percent);
 
    for (int o = 0; o < kOscCount; ++o) {
       const std::string m = num("Osc ", o), n = m + " ";
@@ -575,6 +582,7 @@ inline std::vector<Param> buildParams() {
    }
    b.add(kSkySize, "Sky Size", "Sky", 0.0, 1.0, 0.5, kGlobalMod, Unit::Percent);
    b.choice(kSkyWalls, "Sky Walls", "Sky", kWallNames, 0, kGlobalChoice);
+   b.add(kOutputWidth, "Output Width", "Output", 0.0, 2.0, 1.0, kGlobalMod, Unit::Percent);
    for (int part = 0; part < kPartCount; ++part)
       addPart(b, part);
    // The destination menu reads each destination's name from part A.
