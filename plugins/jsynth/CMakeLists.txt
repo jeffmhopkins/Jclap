@@ -1,0 +1,28 @@
+# JSynth is a panel mock for now: it makes no sound, so it builds into build/preview, which CI checks
+# but never ships. Move it to build/clap (drop OUTPUT_DIR) once it plays.
+jclap_add_plugin(jsynth
+   OUTPUT_NAME "JSynth"
+   BUNDLE_ID com.jeffmhopkins.jclap.jsynth
+   OUTPUT_DIR preview
+   SOURCES src/plugin.cpp src/editor.cpp)
+target_include_directories(jsynth PRIVATE src)
+target_link_libraries(jsynth PRIVATE jclap::ui)
+
+jclap_add_test(jsynth-tests SOURCES tests/test_plugin.cpp src/plugin.cpp src/editor.cpp)
+target_include_directories(jsynth-tests PRIVATE src)
+target_link_libraries(jsynth-tests PRIVATE jclap::ui)
+
+# Offscreen renders of the panel, for docs and visual checks. Needs a GPU (or a software Vulkan driver).
+if(JCLAP_BUILD_TOOLS)
+   add_executable(jsynth-screenshot tools/screenshot.cpp src/editor.cpp)
+   target_include_directories(jsynth-screenshot PRIVATE src)
+   target_link_libraries(jsynth-screenshot PRIVATE jclap::ui)
+   jclap_add_screenshot_test(jsynth-screenshot-main-test TOOL jsynth-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel.png ARGS 0 0)
+   jclap_add_screenshot_test(jsynth-screenshot-main-b-test TOOL jsynth-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-b.png ARGS 0 1)
+   jclap_add_screenshot_test(jsynth-screenshot-mod-test TOOL jsynth-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-mod.png ARGS 1 0)
+   jclap_add_screenshot_test(jsynth-screenshot-play-test TOOL jsynth-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-play.png ARGS 2 0 0)
+endif()

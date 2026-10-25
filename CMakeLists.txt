@@ -34,6 +34,7 @@ add_subdirectory(plugins/polar-xy)
 add_subdirectory(plugins/micromonsta2)
 add_subdirectory(plugins/basic-synth)
 add_subdirectory(plugins/jverb)
+add_subdirectory(plugins/jsynth)
 
 # The starting point for new plugins (cmake/NewPlugin.cmake copies it). Built into build/template,
 # not build/clap, so it is checked in CI but never shipped.

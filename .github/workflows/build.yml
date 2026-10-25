@@ -40,7 +40,7 @@ jobs:
       - name: Sign (macOS)
         if: runner.os == 'macOS'
         run: |
-          codesign --force --sign - build/clap/*.clap build/template/*.clap
+          codesign --force --sign - build/clap/*.clap build/template/*.clap build/preview/*.clap
           codesign --verify --strict --verbose=2 build/clap/*.clap
       - name: Check minimum macOS version
         if: runner.os == 'macOS'
@@ -59,7 +59,7 @@ jobs:
       - name: Validate plugins
         shell: bash
         run: |
-          for p in build/clap/*.clap build/template/*.clap; do
+          for p in build/clap/*.clap build/template/*.clap build/preview/*.clap; do
             clap-validator validate --only-failed "$p"
           done
       - name: Package (macOS)
