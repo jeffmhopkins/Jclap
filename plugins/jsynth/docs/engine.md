@@ -104,6 +104,10 @@ plan for the sound. Nothing here is built yet.
 per voice. Flock: 32 creatures, O(n²) neighbour search at 500 Hz is about 0.5 M pair checks/s.
 Routes: 64 × 32 × 1.5 kHz ≈ 3 M multiply-adds/s.
 
+Voices that don't hear each other (no Neighbour FM, no Bite sounding) render a whole control tick
+at a time, one voice after another, which keeps each voice's state in cache; otherwise they run in
+step, a sample at a time. Idle FM cells, pans, noise and unused filter ramps are skipped per sample.
+
 ## Tests
 
 Silence when idle, no NaN/inf across random params and notes, voice count, a note's pitch from an
@@ -158,7 +162,8 @@ where it conflicts with the sections above, this wins.
   the Wind.
 - Flock sources are made continuous: Crowd is a kernel-weighted count, Heading becomes "how much
   it flies upward" (0..1, smooth), Caught is slewed.
-- The per-note modulation flags are removed from the params until it's built.
+- The per-note modulation flags were removed until it was built. It is now: every route destination
+  takes CLAP per-note modulation (by note id, key, channel or port), eased over 10 ms per voice.
 - Route Source and Destination are no longer automatable.
 
 **Notes**

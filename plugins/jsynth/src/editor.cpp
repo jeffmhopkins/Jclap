@@ -612,6 +612,8 @@ public:
    // Where the sky is, in design units from the view's top left: its left, top and height (its width
    // follows from kSkyAspect). The panel moves it when its cards are hidden.
    float skyLeft = kSkyX, skyTop = kSkyY - kHeaderHeight, skyHeight = kSkyH;
+   // Whether each held note's lure ring is drawn.
+   bool showRings = true;
    // A line of help at the top of the sky (MAP mode's), in its colour.
    std::string hint;
    unsigned hintColor = kText;
@@ -696,16 +698,17 @@ public:
          }
       }
 
-      // Lures: where each held note pulls its creature.
+      // Lures: where each held note pulls its creature. Faint, so they read as guides, not as
+      // things in the sky; RINGS turns them off.
       for (const Creature &b : creatures_) {
-         if (!b.held || b.energy < 0.05f)
+         if (!showRings || !b.held || b.energy < 0.05f)
             continue;
          const unsigned col = kPartColors[b.part];
-         c.setColor(glow(col, 0.14f * b.energy, 1.0f));
-         c.segment(X(b.lureX), Y(b.lureY), X(b.x), Y(b.y), 1.0f * s, true);
-         c.setColor(glow(col, 0.55f * b.energy, 1.0f));
+         c.setColor(glow(col, 0.06f * b.energy, 1.0f));
+         c.segment(X(b.lureX), Y(b.lureY), X(b.x), Y(b.y), 0.8f * s, true);
+         c.setColor(glow(col, 0.28f * b.energy, 1.0f));
          const float r = (9.0f + 5.0f * b.press) * s;
-         c.ring(X(b.lureX) - r, Y(b.lureY) - r, 2 * r, 1.2f * s);
+         c.ring(X(b.lureX) - r, Y(b.lureY) - r, 2 * r, 0.9f * s);
       }
 
       // The other species first, so the shown one flies in front.
@@ -1529,7 +1532,14 @@ private:
       tips_.add(mode, "Which species a note hatches: A only, both, split by key or by velocity, by MPE zone, "
                       "or crossfaded by Slide or Press.");
       // ROUTES sits under the sky, at the end of the flock's own sources.
-      auto &routes = glassy(put<ui::Button>({814, 617, 94, 24}, "ROUTES"), kMapColor);
+      auto &rings = glassy(put<ui::Button>({772, 617, 56, 24}, "RINGS"), kDim);
+      rings.setToggle(true);
+      rings.setOn(host_.ringsShown);
+      view_->showRings = host_.ringsShown;
+      rings.onToggle = [this](bool on) { view_->showRings = host_.ringsShown = on; };
+      tips_.add(rings, "Show each held note's lure: the ring its creature is pulled toward, placed by LURE X "
+                       "and LURE Y on the FLOCK card.");
+      auto &routes = glassy(put<ui::Button>({834, 617, 74, 24}, "ROUTES"), kMapColor);
       routes.setToggle(true);
       routes.onToggle = [this](bool on) { showRoutes(on); };
       routesButton_ = &routes;
@@ -1552,9 +1562,13 @@ private:
                             "How near its nearest neighbour is.", "How much it flies upward: 1 straight up, 0 straight down.",
                             "On while a hunter has caught it.", "How much of the others' ink it flies through.",
                             "Where it is in the sky, left to right.", "Where it is in the sky, bottom to top."};
-      const auto cells = ui::row({248, 618, 558, 22}, 8, 4);
-      for (int i = 0; i < 8; ++i)
-         chip(sources[i].first, sources[i].second, cells[i], tips[i]);
+      // X and Y need less room than the names, which keeps space for RINGS.
+      float x = 248;
+      for (int i = 0; i < 8; ++i) {
+         const float w = i < 6 ? 67.0f : 44.0f;
+         chip(sources[i].first, sources[i].second, {x, 618, w, 22}, tips[i]);
+         x += w + 4;
+      }
    }
 
    // Left: how a species flies, its FM, and the touch response.

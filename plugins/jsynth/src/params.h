@@ -328,9 +328,9 @@ struct Param {
    const char *shortName;
 };
 
-// Every param can be automated and modulated by the host. Per-voice host modulation (by note id, key
-// or channel) isn't built yet, so no param claims it. Settings that make no sense to automate (a
-// route's source and destination, the oversampling) are neither.
+// Every param can be automated and modulated by the host, and the route destinations can be
+// modulated per note too (by note id, key, channel or port; see buildParams()). Settings that make
+// no sense to automate (a route's source and destination, the oversampling) are neither.
 constexpr auto kGlobalMod = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE;
 constexpr auto kMod = kGlobalMod;
 constexpr auto kStepped = kMod | CLAP_PARAM_IS_STEPPED;
@@ -595,6 +595,13 @@ inline std::vector<Param> buildParams() {
       for (const Param &p : b.params)
          if (p.def.id == partId(0, offset))
             destinationNames().push_back(p.shortName);
+   // The route destinations are what a voice reads per note, so those take per-note modulation.
+   for (int part = 0; part < kPartCount; ++part)
+      for (clap_id offset : destinations())
+         for (Param &p : b.params)
+            if (p.def.id == partId(part, offset))
+               p.def.flags |= CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID | CLAP_PARAM_IS_MODULATABLE_PER_KEY |
+                              CLAP_PARAM_IS_MODULATABLE_PER_CHANNEL | CLAP_PARAM_IS_MODULATABLE_PER_PORT;
    std::sort(b.params.begin(), b.params.end(), [](const Param &x, const Param &y) { return x.def.id < y.def.id; });
    return b.params;
 }

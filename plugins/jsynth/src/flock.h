@@ -109,6 +109,8 @@ struct Creature {
    float roamRate[2] = {}, roamPhase[2] = {};
    FlockParams params;
    CreatureSources sources;
+   // Where they were a step ago, so a voice can glide between steps.
+   CreatureSources lastSources;
    // The same-species creatures it hears, and how much (0..1), and the hunter holding it.
    int neighbour[kNeighbours] = {-1, -1, -1};
    float neighbourWeight[kNeighbours] = {};
@@ -177,6 +179,8 @@ public:
    void step() {
       const float dt = kStep;
       time_ += dt;
+      for (Creature &c : creatures)
+         c.lastSources = c.sources;
       bool plays[kPartCount];
       for (int p = 0; p < kPartCount; ++p)
          plays[p] = playing(p);

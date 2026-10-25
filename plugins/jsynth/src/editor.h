@@ -53,6 +53,8 @@ public:
    bool routesOpen = false;
    // Whether the cards are hidden, leaving only the sky.
    bool panelsHidden = false;
+   // Whether the sky draws the held notes' lure rings.
+   bool ringsShown = true;
 };
 
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);

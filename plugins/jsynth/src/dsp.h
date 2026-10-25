@@ -326,8 +326,9 @@ public:
          }
          break;
       case kAttack: {
-         t_ += dt;
-         const float x = s.attack <= 0.0f ? 1.0f : std::min(1.0f, t_ / s.attack);
+         // Progress is kept as a fraction, so a modulated time changes the rate, never the position.
+         t_ = s.attack <= 0.0f ? 1.0f : std::min(1.0f, t_ + dt / s.attack);
+         const float x = t_;
          level_ = start_ + (1.0f - start_) * shape(x, -0.5f + s.attackCurve);
          if (x >= 1.0f) {
             level_ = 1.0f;
@@ -344,8 +345,8 @@ public:
          }
          break;
       case kDecay: {
-         t_ += dt;
-         const float x = s.decay <= 0.0f ? 1.0f : std::min(1.0f, t_ / s.decay);
+         t_ = s.decay <= 0.0f ? 1.0f : std::min(1.0f, t_ + dt / s.decay);
+         const float x = t_;
          level_ = 1.0f - (1.0f - s.sustain) * shape(x, 0.6f + 0.4f * s.decayCurve);
          if (x >= 1.0f) {
             t_ = 0;
@@ -367,8 +368,8 @@ public:
          }
          break;
       case kRelease: {
-         t_ += dt;
-         const float x = s.release <= 0.0f ? 1.0f : std::min(1.0f, t_ / s.release);
+         t_ = s.release <= 0.0f ? 1.0f : std::min(1.0f, t_ + dt / s.release);
+         const float x = t_;
          level_ = from_ * (1.0f - shape(x, 0.6f + 0.4f * s.releaseCurve));
          if (x >= 1.0f) {
             level_ = 0;
@@ -382,13 +383,19 @@ public:
 
 private:
    // 0..1 to 0..1, bowed: c > 0 rises fast then slows (the RC shape decays have), c < 0 the reverse.
-   static float shape(float x, float c) {
+   // The divisor only changes with the curve, so it is kept between calls.
+   float shape(float x, float c) {
       c = std::clamp(c, -0.95f, 0.95f);
       if (std::fabs(c) < 1e-3f)
          return x;
       const float k = c * 8.0f;
-      return (1.0f - std::exp(-k * x)) / (1.0f - std::exp(-k));
+      if (k != shapeK_) {
+         shapeK_ = k;
+         shapeScale_ = 1.0f / (1.0f - std::exp(-k));
+      }
+      return (1.0f - std::exp(-k * x)) * shapeScale_;
    }
+   float shapeK_ = 0, shapeScale_ = 1;
 
    Settings settings_;
    Stage stage_ = kIdle;

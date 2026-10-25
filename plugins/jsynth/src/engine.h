@@ -71,6 +71,12 @@ public:
          destOffset_[d] = dests[d];
       }
       firstAmountDest_ = destinationIndex(routeParam(0, kRouteAmount));
+      // Each param back to its part and destination, for the host's per-note modulation.
+      modTarget_.assign(paramCount(), {-1, -1});
+      for (int part = 0; part < kPartCount; ++part)
+         for (int d = 0; d < destCount_; ++d)
+            if (const int i = partIndex_[part][destOffset_[d]]; i >= 0)
+               modTarget_[i] = {part, d};
       // The comb's longest delay: its lowest tuning (30 Hz) at 4x.
       const int combMax = static_cast<int>(sampleRate * kMaxOversample / 30.0) + 8;
       for (Voice &v : voices_)
@@ -118,6 +124,7 @@ public:
       for (float &c : chanTimbre_)
          c = 0.5f;
       managerBend_ = 0;
+      managerPressure_ = managerTimbre_ = false;
       lastPitch_[0] = lastPitch_[1] = -1.0f;
       width_.snap(static_cast<float>(global(kOutputWidth)));
       master_.snap(static_cast<float>(std::pow(10.0, global(kMasterLevel) / 20.0)));
@@ -181,6 +188,19 @@ public:
 
    // A CLAP note expression; -1 fields match any.
    void expression(const NoteRef &ref, int id, double value) {
+      // A held note a mono voice has left keeps its expression for when the voice comes back.
+      for (int part = 0; part < kPartCount; ++part)
+         for (int i = 0; i < stackSize_[part]; ++i) {
+            Held &h = stack_[part][i];
+            if (!matches(h.ref, ref))
+               continue;
+            if (id == CLAP_NOTE_EXPRESSION_TUNING)
+               h.bendSemis = static_cast<float>(std::clamp(value, -128.0, 128.0));
+            else if (id == CLAP_NOTE_EXPRESSION_PRESSURE)
+               h.pressure = static_cast<float>(std::clamp(value, 0.0, 1.0));
+            else if (id == CLAP_NOTE_EXPRESSION_BRIGHTNESS)
+               h.timbre = static_cast<float>(std::clamp(value, 0.0, 1.0));
+         }
       for (Voice &v : voices_) {
          if (!v.active || !matches(v.ref, ref))
             continue;
@@ -190,6 +210,29 @@ public:
             v.pressure = static_cast<float>(std::clamp(value, 0.0, 1.0));
          else if (id == CLAP_NOTE_EXPRESSION_BRIGHTNESS)
             v.timbre = static_cast<float>(std::clamp(value, 0.0, 1.0));
+      }
+   }
+
+   // The host's modulation of param `index` (in kParams()) on the voices playing `ref`, in the
+   // param's own units. Only route destinations take it (they claim it in their flags).
+   void voiceMod(const NoteRef &ref, int index, float amount) {
+      if (index < 0 || index >= static_cast<int>(modTarget_.size()) || modTarget_[index].part < 0)
+         return;
+      const ModTarget t = modTarget_[index];
+      for (Voice &v : voices_) {
+         if (!v.active || v.part != t.part || !matches(v.ref, ref))
+            continue;
+         int m = 0;
+         while (m < v.hostModCount && v.hostMods[m].dest != t.dest)
+            ++m;
+         if (m == v.hostModCount) {
+            if (m == Voice::kHostMods || amount == 0.0f)
+               continue;
+            v.hostMods[m] = {t.dest, 0.0f, v.fresh ? amount : 0.0f};
+            v.hostMod[t.dest] = v.hostMods[m].now;
+            ++v.hostModCount;
+         }
+         v.hostMods[m].target = amount;
       }
    }
 
@@ -236,6 +279,7 @@ public:
       }
       case 0xD0:
          chanPressure_[ch] = data[1] / 127.0f;
+         managerPressure_ = managerPressure_ || ch == 0;
          for (Voice &v : voices_)
             if (v.active && v.ref.channel == ch && v.ref.noteId == -1)
                v.pressure = chanPressure_[ch];
@@ -243,6 +287,7 @@ public:
       case 0xB0:
          if (data[1] == 74) {
             chanTimbre_[ch] = data[2] / 127.0f;
+            managerTimbre_ = managerTimbre_ || ch == 0;
             for (Voice &v : voices_)
                if (v.active && v.ref.channel == ch && v.ref.noteId == -1)
                   v.timbre = chanTimbre_[ch];
@@ -293,13 +338,21 @@ public:
    // Renders `frames` samples at sample offset 0..frames. The plugin splits a host block at note
    // events and calls this between them; the control grid carries over regardless.
    // `out` is [port][channel], three stereo ports: main, part A's own, part B's own.
-   void render(float *const *const *out, int offset, int frames) {
-      for (int n = 0; n < frames; ++n) {
-         blockSample_ = offset + n;
+   // `at` is where in the host block this span starts (for NOTE_END timing) when it differs from
+   // `offset`, as it does when the plugin renders into scratch.
+   void render(float *const *const *out, int offset, int frames, int at = -1) {
+      if (at < 0)
+         at = offset;
+      // A tick's worth (or what is left of one) at a time.
+      while (frames > 0) {
+         blockSample_ = at;
          if (tickPos_ == 0)
             tick();
-         renderSample(out, offset + n);
-         if (++tickPos_ == kTick)
+         const int n = std::min(frames, kTick - tickPos_);
+         renderSpan(out, offset, n, at);
+         offset += n, at += n, frames -= n;
+         tickPos_ += n;
+         if (tickPos_ == kTick)
             tickPos_ = 0;
       }
    }
@@ -364,6 +417,8 @@ public:
 private:
    // ---- the voice ----
 
+   enum : uint8_t { kUseG = 1, kUseDrive = 2, kUseComb = 4, kUseRes = 8 };
+
    struct Ramp {
       float v = 0, inc = 0;
       void to(float target, float steps) { inc = (target - v) / steps; }
@@ -396,13 +451,21 @@ private:
       dsp::Noise noise, oscNoise;
       float tune = 0; // Tune Pull, in semitones
       // Oscillators.
-      float phase[kOscCount] = {}, out[kOscCount] = {}, last[kOscCount] = {};
+      // Phase in double, so a low note's pitch stays true over a long hold.
+      double phase[kOscCount] = {};
+      float out[kOscCount] = {}, last[kOscCount] = {};
+      // Glide Rounding: the bend a tick ago, and the correction toward the nearest semitone now.
+      float lastBend = 0, roundFix = 0;
       // Where each oscillator's wave was read last sample, for its effective rate under FM.
       float lastRead[kOscCount] = {};
       int wave[kOscCount] = {};
       bool sync[kOscCount] = {};
       // Whether each oscillator is heard or modulates something, so a silent one can be skipped.
       bool heard[kOscCount] = {true, true, true};
+      // The FM cells that are on or fading, as a bit per source for each oscillator modulated, and
+      // whether the neighbours' FM is; the sample loop skips the rest.
+      uint8_t fmFrom[kOscCount] = {};
+      bool anyFm = false, neighbourOn = false;
       bool wrapped = false;
       // Each oscillator's level times its pan, per side.
       Ramp freq[kOscCount], shape[kOscCount], oscL[kOscCount], oscR[kOscCount];
@@ -412,6 +475,8 @@ private:
       int driveType = 0;
       // Filters: per filter, type and slope, and per channel the stages.
       int ftype[kFilterCount] = {}, fstages[kFilterCount] = {1, 1};
+      // Which of each filter's ramps its type reads (kUse*); the rest wait for the next tick.
+      uint8_t fuse[kFilterCount] = {};
       bool open[kFilterCount] = {};
       Ramp g[kFilterCount], fdrive[kFilterCount], comb[kFilterCount], res[kFilterCount];
       float ks[kFilterCount][4] = {{1.414f, 1.414f, 1.414f, 1.414f}, {1.414f, 1.414f, 1.414f, 1.414f}};
@@ -431,9 +496,26 @@ private:
       int hunter = -1;
       Ramp bite;
       float flockSources[8] = {};
+      // The host's per-note modulation: a few destinations each, eased like the params, and the
+      // current offsets by destination for mod() to add (plain units).
+      struct HostMod {
+         int dest;
+         float target, now;
+      };
+      static constexpr int kHostMods = 8;
+      HostMod hostMods[kHostMods];
+      int hostModCount = 0;
+      float hostMod[256] = {};
 
+      // A new note's modulation starts from none.
+      void dropHostMods() {
+         for (int m = 0; m < hostModCount; ++m)
+            hostMod[hostMods[m].dest] = 0.0f;
+         hostModCount = 0;
+      }
       void clear() {
          gate = sustained = fading = false;
+         dropHostMods();
          fresh = true;
          for (int e = 0; e < kEnvCount; ++e) {
             env[e].reset();
@@ -441,6 +523,7 @@ private:
          }
          for (int o = 0; o < kOscCount; ++o)
             phase[o] = out[o] = last[o] = lastRead[o] = 0;
+         lastBend = roundFix = 0;
          for (auto &f : svf)
             for (auto &c : f)
                for (dsp::Svf &s : c)
@@ -590,10 +673,20 @@ private:
    }
 
    // A part param on voice `v`, with its routes.
-   float mod(const Voice &v, const float *offset, clap_id o) const {
+   // Inline for the common case, nothing moving it; the rest out of line.
+#if defined(__GNUC__) || defined(__clang__)
+   __attribute__((always_inline))
+#endif
+   inline float mod(const Voice &v, const float *offset, clap_id o) const {
       const int d = destOf_[o];
-      const float base = plain(v.part, o);
-      if (d < 0 || offset[d] == 0.0f)
+      if (d < 0 || (offset[d] == 0.0f && v.hostMod[d] == 0.0f))
+         return plain(v.part, o);
+      return moved(v, offset, o, d);
+   }
+   float moved(const Voice &v, const float *offset, clap_id o, int d) const {
+      const float host = v.hostMod[d];
+      const float base = host == 0.0f ? plain(v.part, o) : std::clamp(plain(v.part, o) + host, min_[o], min_[o] + span_[o]);
+      if (offset[d] == 0.0f)
          return base;
       return denorm(o, norm(o, base) + offset[d]);
    }
@@ -632,7 +725,11 @@ private:
          c.params.read([&](clap_id o) { return plain(c.part, o); });
       }
 
+      for (int part = 0; part < kPartCount; ++part)
+         trim(part, std::clamp(static_cast<int>(plain(part, kPolyphony) + 0.5f), 1, kMaxPolyphony));
       float offset[256];
+      flockDue_ = flockAcc_ + static_cast<int64_t>(kTick) * static_cast<int64_t>(kFlockRate) >=
+                  static_cast<int64_t>(std::llround(sampleRate_));
       for (int i = 0; i < kVoiceSlots; ++i) {
          Voice &v = voices_[i];
          if (!v.active)
@@ -676,12 +773,31 @@ private:
       const float fs = static_cast<float>(sampleRate_) * static_cast<float>(factor_);
       const float st = static_cast<float>(steps);
 
+      // The host's per-note modulation, eased over about 10 ms like the params.
+      if (v.hostModCount > 0) {
+         const float a = v.fresh ? 1.0f : 1.0f - std::exp(-tickSeconds / 0.010f);
+         for (int m = 0; m < v.hostModCount; ++m) {
+            Voice::HostMod &h = v.hostMods[m];
+            h.now += (h.target - h.now) * a;
+            v.hostMod[h.dest] = h.now;
+         }
+      }
+
       // Touch, through each dimension's curve and smoothing.
       const float bendRange = plain(part, kBendRange);
       const float bend = v.bendSemis + v.bendNorm * bendRange +
                          managerBend_ * static_cast<float>(global(kManagerBendRange));
-      const float raws[kTouchCount] = {v.velocity, v.pressure, std::clamp(bend / std::max(1.0f, bendRange), -1.0f, 1.0f),
-                                       v.timbre, v.lift};
+      // The MPE manager channel's pressure and CC 74 reach every note in the zone: pressure as the
+      // greater of the two, CC 74 as an offset from its middle.
+      float pressure = v.pressure, timbre = v.timbre;
+      if (v.ref.channel != 0) {
+         if (managerPressure_)
+            pressure = std::max(pressure, chanPressure_[0]);
+         if (managerTimbre_)
+            timbre = std::clamp(timbre + chanTimbre_[0] - 0.5f, 0.0f, 1.0f);
+      }
+      const float raws[kTouchCount] = {v.velocity, pressure, std::clamp(bend / std::max(1.0f, bendRange), -1.0f, 1.0f),
+                                       timbre, v.lift};
       for (int t = 0; t < kTouchCount; ++t) {
          const float target = touchCurve_[t] == 0.0f ? raws[t] : curve(raws[t], touchCurve_[t]);
          v.touch[t] += (target - v.touch[t]) * (v.fresh ? 1.0f : touchCoef_[t]);
@@ -690,11 +806,15 @@ private:
       // The creature: its sources in, its lure and press out.
       Creature &c = flock_.creatures[slot];
       if (c.alive && c.part == part) {
-         const CreatureSources &s = c.sources;
-         const float src[8] = {s.speed, s.crowd, s.nearest, s.heading, s.caught, s.wake, s.x, s.y};
-         const float a = v.fresh ? 1.0f : 1.0f - std::exp(-tickSeconds / 0.006f);
+         // Between flock steps, glide from the last step to this one (a step late, never stepped),
+         // then a light smoothing on top.
+         const CreatureSources &s = c.sources, &p = c.lastSources;
+         const float now[8] = {s.speed, s.crowd, s.nearest, s.heading, s.caught, s.wake, s.x, s.y};
+         const float was[8] = {p.speed, p.crowd, p.nearest, p.heading, p.caught, p.wake, p.x, p.y};
+         const float between = std::clamp(static_cast<float>(flockAcc_) / static_cast<float>(sampleRate_), 0.0f, 1.0f);
+         const float a = v.fresh ? 1.0f : 1.0f - std::exp(-tickSeconds / 0.002f);
          for (int k = 0; k < 8; ++k)
-            v.flockSources[k] += (src[k] - v.flockSources[k]) * a;
+            v.flockSources[k] += (was[k] + (now[k] - was[k]) * between - v.flockSources[k]) * a;
          const float note = static_cast<float>(v.ref.key);
          lureAt(lureAxis(choice(part, flockParam(kLureX)), note, bend, v.touch, v.randomValue),
                 lureAxis(choice(part, flockParam(kLureY)), note, bend, v.touch, v.randomValue), c.lureX, c.lureY);
@@ -724,7 +844,9 @@ private:
       }
       // The creature's own flight follows its routes too: Press can make it faster, say.
       if (c.alive && c.part == part) {
-         c.params.read([&](clap_id o) { return mod(v, offset, o); });
+         // Only the flock's step reads them, so they are read only when one is due.
+         if (flockDue_ || v.fresh)
+            c.params.read([&](clap_id o) { return mod(v, offset, o); });
          c.wing = v.lfoOut[0];
       }
 
@@ -737,12 +859,14 @@ private:
          v.pitch = target;
       else
          v.pitch += (target - v.pitch) * (1.0f - std::exp(-tickSeconds / (0.25f * glide)));
-      float bendNow = bend;
-      if (rounding > 0.0f) {
-         // Glide Rounding: a resting finger settles on the nearest semitone.
-         const float nearest = std::round(bendNow);
-         bendNow += (nearest - bendNow) * rounding;
-      }
+      // Glide Rounding: once a finger stops sliding, it settles on the nearest semitone over the
+      // Rounding Time; while it slides, the pitch follows it exactly.
+      const bool resting = std::fabs(bend - v.lastBend) < 0.01f;
+      v.lastBend = bend;
+      const float fix = resting && rounding > 0.0f ? (std::round(bend) - bend) * rounding : 0.0f;
+      const float roundTime = static_cast<float>(timeMs(global(kRoundingTime))) / 1000.0f;
+      v.roundFix += (fix - v.roundFix) * (v.fresh || roundTime <= 0.0f ? 1.0f : 1.0f - std::exp(-tickSeconds / roundTime));
+      const float bendNow = bend + v.roundFix;
       const float driftAmt = mod(v, offset, kDrift);
       const float drift = v.drift.process(tickSeconds, 0.3f, dsp::Lfo::kSmooth, 0.0f) * driftAmt * 0.15f;
       tunePull(slot, v, offset, tickSeconds);
@@ -792,6 +916,16 @@ private:
             const float c2 = mod(v, offset, fmCell(from, to));
             ramp(v.fm[from * kOscCount + to], c2 * c2, st, v.fresh);
          }
+      v.anyFm = false;
+      for (int to = 0; to < kOscCount; ++to) {
+         v.fmFrom[to] = 0;
+         for (int from = 0; from < kOscCount; ++from) {
+            const Ramp &r = v.fm[from * kOscCount + to];
+            if (r.v != 0.0f || r.inc != 0.0f)
+               v.fmFrom[to] |= static_cast<uint8_t>(1 << from);
+         }
+         v.anyFm = v.anyFm || v.fmFrom[to] != 0;
+      }
       v.expFm = choice(part, kFmBase + kFmType) == 1;
       // Heard: it has level, or feeds another that is heard (or the neighbours, for Osc 1). Worked
       // out from the targets and where the ramps are now, so nothing is cut while it fades.
@@ -858,6 +992,10 @@ private:
          // A ladder opened all the way with no resonance or drive (Filter 2 as it starts) only passes
          // the sound through, so it skips the work, keeping its state ready to filter again.
          v.open[f] = type == 5 && hz >= 18000.0f && resonance < 1e-3f && fdrive < 1e-3f;
+         const bool comb = type == 6 || type == 7;
+         v.fuse[f] = static_cast<uint8_t>((comb || v.open[f] ? 0 : kUseG) | (comb ? kUseComb : 0) |
+                                          (comb || type == 4 || (type == 5 && !v.open[f]) ? kUseRes : 0) |
+                                          (v.open[f] ? 0 : kUseDrive));
       }
 
       // Amp: level, velocity, the Expression crossfade, and the creature's place in the stereo field.
@@ -911,6 +1049,12 @@ private:
       }
       for (int n = 0; n < kNeighbours; ++n)
          if (v.neighbourWeight[n].v < 1e-3f && v.neighbourWeight[n].inc <= 0.0f)
+            v.neighbour[n] = -1, v.neighbourWeight[n].snap(0);
+
+      // With Neighbour FM off, nothing of theirs is heard, so they let go at once.
+      v.neighbourOn = v.neighbourFm.v != 0.0f || v.neighbourFm.inc != 0.0f;
+      if (!v.neighbourOn)
+         for (int n = 0; n < kNeighbours; ++n)
             v.neighbour[n] = -1, v.neighbourWeight[n].snap(0);
 
       // Bite: the hunter on it, while Caught.
@@ -985,8 +1129,20 @@ private:
       v.tune += (target - v.tune) * (1.0f - std::exp(-tickSeconds / 0.15f));
    }
 
+   static int lowestBit(unsigned m) {
+#if defined(__GNUC__) || defined(__clang__)
+      return __builtin_ctz(m);
+#else
+      int i = 0;
+      while (!(m & 1u))
+         m >>= 1, ++i;
+      return i;
+#endif
+   }
+
    static void ramp(Ramp &r, float target, float steps, bool snap) {
-      if (snap)
+      // Landing exactly on zero lets the sample loop skip what is off.
+      if (snap || (target == 0.0f && std::fabs(r.v) < 1e-7f))
          r.snap(target);
       else
          r.to(target, steps);
@@ -994,48 +1150,89 @@ private:
 
    // ---- one sample ----
 
-   void renderSample(float *const *const *out, int n) {
-      float bus[kPartCount][2][kMaxOversample] = {};
+   // Env 1 (the amp) and the steal fade for one sample; false once the voice has ended.
+   bool ampStep(int i, float dtBase) {
+      Voice &v = voices_[i];
+      v.envOut[0] = v.env[0].process(dtBase) * v.envScale[0];
+      if (v.fading) {
+         v.fade -= v.fadeStep;
+         if (v.fade <= 0.0f) {
+            end(i);
+            return false;
+         }
+      }
+      if (!v.env[0].active()) {
+         end(i);
+         return false;
+      }
+      return true;
+   }
+
+   // `frames` samples inside one tick. Voices that hear each other (Neighbour FM, a hunter's
+   // Bite) must run in step, a sample at a time across all of them; otherwise each runs its whole
+   // span on its own, which keeps its state hot. Both give the same sound.
+   void renderSpan(float *const *const *out, int offset, int frames, int at) {
+      float bus[kPartCount][2][kTick * kMaxOversample];
+      for (auto &part : bus)
+         for (auto &ch : part)
+            std::fill(ch, ch + frames * factor_, 0.0f);
       const float dtBase = 1.0f / static_cast<float>(sampleRate_);
-      for (int i = 0; i < kVoiceSlots; ++i) {
-         Voice &v = voices_[i];
-         if (!v.active)
-            continue;
-         // Env 1, the amp, every sample.
-         v.envOut[0] = v.env[0].process(dtBase) * v.envScale[0];
-         if (v.fading) {
-            v.fade -= v.fadeStep;
-            if (v.fade <= 0.0f) {
-               end(i);
-               continue;
+      bool together = false;
+      for (const Voice &v : voices_)
+         together = together || (v.active && (v.neighbourOn || (v.hunter >= 0 && (v.bite.v != 0.0f || v.bite.inc != 0.0f))));
+      if (together)
+         for (int n = 0; n < frames; ++n) {
+            blockSample_ = at + n;
+            for (int i = 0; i < kVoiceSlots; ++i)
+               if (voices_[i].active)
+                  ampStep(i, dtBase);
+            for (int s = 0; s < factor_; ++s) {
+               const int k = n * factor_ + s;
+               for (int i = 0; i < kVoiceSlots; ++i) {
+                  Voice &v = voices_[i];
+                  if (!v.active)
+                     continue;
+                  float l, r;
+                  voiceSample(i, v, l, r);
+                  bus[v.part][0][k] += l;
+                  bus[v.part][1][k] += r;
+               }
+               // Everyone has run this sample: what they played is what the others hear next.
+               for (int i = 0; i < kVoiceSlots; ++i)
+                  if (voices_[i].active)
+                     oscOut_[0][i] = oscOut_[1][i];
             }
          }
-         if (!v.env[0].active()) {
-            end(i);
-            continue;
-         }
-      }
-      for (int s = 0; s < factor_; ++s) {
+      else
          for (int i = 0; i < kVoiceSlots; ++i) {
             Voice &v = voices_[i];
-            if (!v.active)
-               continue;
-            float l, r;
-            voiceSample(i, v, l, r);
-            bus[v.part][0][s] += l;
-            bus[v.part][1][s] += r;
-         }
-         // Everyone has run this sample: what they played is what the others hear next.
-         for (int i = 0; i < kVoiceSlots; ++i)
-            if (voices_[i].active)
+            for (int n = 0; n < frames && v.active; ++n) {
+               blockSample_ = at + n;
+               if (!ampStep(i, dtBase))
+                  break;
+               float *l = bus[v.part][0] + n * factor_, *r = bus[v.part][1] + n * factor_;
+               for (int s = 0; s < factor_; ++s) {
+                  float vl, vr;
+                  voiceSample(i, v, vl, vr);
+                  l[s] += vl;
+                  r[s] += vr;
+               }
+            }
+            if (v.active)
                oscOut_[0][i] = oscOut_[1][i];
-      }
+         }
+      blockSample_ = at;
+      for (int n = 0; n < frames; ++n)
+         mixSample(out, offset + n, bus, n * factor_);
+   }
 
+   // The parts' buses, at `k` in the oversampled span, down to one output sample `n`.
+   void mixSample(float *const *const *out, int n, const float (&bus)[kPartCount][2][kTick * kMaxOversample], int k) {
       float mainL = 0, mainR = 0;
       for (int part = 0; part < kPartCount; ++part) {
          float lr[2];
          for (int c = 0; c < 2; ++c) {
-            float *x = bus[part][c];
+            const float *x = bus[part][c] + k;
             if (factor_ == 4) {
                const float a = halfBands_[part][c][0].process(x[0], x[1]);
                const float b = halfBands_[part][c][0].process(x[2], x[3]);
@@ -1082,41 +1279,44 @@ private:
       float f[kOscCount], sh[kOscCount], c[kOscCount * kOscCount];
       for (int o = 0; o < kOscCount; ++o) {
          f[o] = v.freq[o].next();
-         sh[o] = v.shape[o].next();
+         // A silent one's shape can wait for the next tick to catch up.
+         sh[o] = v.heard[o] ? v.shape[o].next() : v.shape[o].v;
       }
-      bool anyFm = false;
-      for (int i = 0; i < kOscCount * kOscCount; ++i) {
-         c[i] = v.fm[i].next();
-         anyFm = anyFm || c[i] != 0.0f;
-      }
-      // Neighbour FM: their Osc 1 a sample ago, weighted.
+      // Only the cells that are on move (the rest sit at exactly zero).
+      for (int to = 0; to < kOscCount; ++to)
+         for (unsigned m = v.fmFrom[to]; m != 0; m &= m - 1) {
+            const int from = lowestBit(m);
+            c[from * kOscCount + to] = v.fm[from * kOscCount + to].next();
+         }
+      // Neighbour FM: their Osc 1 a sample ago, weighted. While it is off, nothing of theirs is read
+      // and the weights wait.
       float neighbour = 0;
-      const float nfm = v.neighbourFm.next();
-      for (int nb = 0; nb < kNeighbours; ++nb) {
-         const float w = v.neighbourWeight[nb].next();
-         // At zero nothing of theirs is read at all.
-         if (nfm > 0.0f && v.neighbour[nb] >= 0)
-            neighbour += w * oscOut_[0][v.neighbour[nb]];
+      if (v.neighbourOn) {
+         const float nfm = v.neighbourFm.next();
+         for (int nb = 0; nb < kNeighbours; ++nb) {
+            const float w = v.neighbourWeight[nb].next();
+            if (nfm > 0.0f && v.neighbour[nb] >= 0)
+               neighbour += w * oscOut_[0][v.neighbour[nb]];
+         }
+         neighbour *= nfm;
       }
-      neighbour *= nfm;
       float now[kOscCount] = {v.out[0], v.out[1], v.out[2]};
       bool wrapped = false;
       for (int o = kOscCount - 1; o >= 0; --o) {
          if (!v.heard[o]) {
             // Silent and modulating nothing: only its phase moves (Osc 1's wrap still syncs).
             v.phase[o] += f[o];
-            if (v.phase[o] >= 1.0f) {
-               v.phase[o] -= 1.0f;
+            if (v.phase[o] >= 1.0) {
+               v.phase[o] -= 1.0;
                wrapped = wrapped || o == 0;
             }
             now[o] = 0;
             continue;
          }
          float m = 0;
-         for (int from = 0; anyFm && from < kOscCount; ++from) {
+         for (unsigned bits = v.fmFrom[o]; bits != 0; bits &= bits - 1) {
+            const int from = lowestBit(bits);
             const float amt = c[from * kOscCount + o];
-            if (amt == 0.0f)
-               continue;
             // Feedback: the average of its last two samples, which keeps it from going to noise.
             const float src = from == o ? 0.5f * (v.out[o] + v.last[o]) : now[from];
             m += amt * src * (from == o ? 0.5f : 2.0f);
@@ -1129,10 +1329,10 @@ private:
             // Exponential FM: the modulator moves the pitch, up to 4 octaves either way per unit.
             inc *= std::exp2(std::clamp(2.0f * m, -4.0f, 4.0f));
             inc = std::min(inc, 0.45f);
-            ph = v.phase[o];
+            ph = static_cast<float>(v.phase[o]);
          }
          else
-            ph = frac(v.phase[o] + m);
+            ph = frac(static_cast<float>(v.phase[o]) + m);
          // The saw's and pulse's band-limiting needs how far the wave really moved this sample,
          // which phase FM changes.
          float blepDt = inc;
@@ -1149,8 +1349,8 @@ private:
          v.last[o] = v.out[o];
          now[o] = y;
          v.phase[o] += inc;
-         if (v.phase[o] >= 1.0f) {
-            v.phase[o] = dsp::frac(v.phase[o]);
+         if (v.phase[o] >= 1.0) {
+            v.phase[o] -= std::floor(v.phase[o]);
             if (o == 0)
                wrapped = true;
          }
@@ -1164,12 +1364,15 @@ private:
       oscOut_[1][slot] = now[0];
 
       // The mix: each oscillator panned, then noise.
-      float pl[kOscCount], pr[kOscCount];
-      for (int o = 0; o < kOscCount; ++o) {
-         pl[o] = v.oscL[o].next();
-         pr[o] = v.oscR[o].next();
-      }
-      const float nl = v.noiseLevel.next(), nc = v.noiseColor.next();
+      // A silent one's pan gains sit still at zero (that is what silent means).
+      float pl[kOscCount] = {}, pr[kOscCount] = {};
+      for (int o = 0; o < kOscCount; ++o)
+         if (v.heard[o]) {
+            pl[o] = v.oscL[o].next();
+            pr[o] = v.oscR[o].next();
+         }
+      const bool noiseOn = v.noiseLevel.v != 0.0f || v.noiseLevel.inc != 0.0f;
+      const float nl = noiseOn ? v.noiseLevel.next() : 0.0f, nc = noiseOn ? v.noiseColor.next() : 0.0f;
       float noise = 0;
       if (nl > 1e-4f) {
          // Made at the oversampled rate, so it is made louder to come out of the decimator as loud
@@ -1205,12 +1408,13 @@ private:
 
       float g[kFilterCount], fd[kFilterCount], cd[kFilterCount], rs[kFilterCount];
       for (int fi = 0; fi < kFilterCount; ++fi) {
-         g[fi] = v.g[fi].next();
-         fd[fi] = v.fdrive[fi].next();
-         cd[fi] = v.comb[fi].next();
-         rs[fi] = v.res[fi].next();
+         const uint8_t use = v.fuse[fi];
+         g[fi] = use & kUseG ? v.g[fi].next() : v.g[fi].v;
+         fd[fi] = use & kUseDrive ? v.fdrive[fi].next() : v.fdrive[fi].v;
+         cd[fi] = use & kUseComb ? v.comb[fi].next() : v.comb[fi].v;
+         rs[fi] = use & kUseRes ? v.res[fi].next() : v.res[fi].v;
       }
-      const float bal = v.balance.next();
+      const float bal = v.routing != 0 ? v.balance.next() : 0.0f;
       const int channels = v.stereo ? 2 : 1;
       float y[2] = {0, 0};
       for (int ch = 0; ch < channels; ++ch) {
@@ -1231,7 +1435,7 @@ private:
          y[1] = y[0];
 
       // Bite: a hunter's Osc 1 rings it.
-      const float bite = v.bite.next();
+      const float bite = v.bite.v != 0.0f || v.bite.inc != 0.0f ? v.bite.next() : 0.0f;
       if (bite > 1e-4f && v.hunter >= 0) {
          const float ring = oscOut_[0][v.hunter];
          for (float &s : y)
@@ -1322,37 +1526,47 @@ private:
       return best;
    }
 
+   // Fades out `part`'s voices beyond `keep` (not counting those already fading): the oldest released
+   // first, then the oldest held. A note-on makes room for itself this way, and a tick catches up
+   // when Polyphony is turned down.
+   void trim(int part, int keep) {
+      int sounding = 0;
+      for (const Voice &v : voices_)
+         sounding += v.active && !v.fading && v.part == part;
+      for (; sounding > keep; --sounding) {
+         int victim = -1;
+         for (int i = 0; i < kVoiceSlots; ++i) {
+            const Voice &v = voices_[i];
+            if (!v.active || v.fading || v.part != part)
+               continue;
+            if (victim < 0 || (v.gate < voices_[victim].gate) ||
+                (v.gate == voices_[victim].gate && v.age < voices_[victim].age))
+               victim = i;
+         }
+         if (victim < 0)
+            break;
+         voices_[victim].fading = true;
+         voices_[victim].fadeStep = 1.0f / (0.003f * static_cast<float>(sampleRate_));
+      }
+   }
+
    // Starts a voice for `ref` in `part`, stealing if the part is at its polyphony. `reuse` is a voice
    // to restart in place (mono), or -1.
    int start(int part, const NoteRef &ref, float velocity, float bendNorm, float pressure, float timbre, int reuse) {
       int slot = reuse;
       if (slot < 0) {
          const int poly = std::clamp(static_cast<int>(plain(part, kPolyphony) + 0.5f), 1, kMaxPolyphony);
-         int sounding = 0;
-         for (const Voice &v : voices_)
-            sounding += v.active && !v.fading && v.part == part;
-         if (sounding >= poly) {
-            // Steal: the oldest released voice in this part, else the oldest held.
-            int victim = -1;
-            for (int i = 0; i < kVoiceSlots; ++i) {
-               const Voice &v = voices_[i];
-               if (!v.active || v.fading || v.part != part)
-                  continue;
-               if (victim < 0 || (v.gate < voices_[victim].gate) ||
-                   (v.gate == voices_[victim].gate && v.age < voices_[victim].age))
-                  victim = i;
-            }
-            if (victim >= 0) {
-               voices_[victim].fading = true;
-               voices_[victim].fadeStep = 1.0f / (0.003f * static_cast<float>(sampleRate_));
-            }
-         }
+         trim(part, poly - 1);
          for (int i = 0; i < kVoiceSlots && slot < 0; ++i)
             if (!voices_[i].active)
                slot = i;
          if (slot < 0) {
-            // Every slot busy (fades included): cut the oldest at once.
+            // Every slot busy, fades included (32 voices held and 8 still fading): take the fading
+            // voice furthest down its fade, so what is cut is nearly silent already.
             for (int i = 0; i < kVoiceSlots; ++i)
+               if (voices_[i].fading && (slot < 0 || voices_[i].fade < voices_[slot].fade))
+                  slot = i;
+            for (int i = 0; slot < 0 && i < kVoiceSlots; ++i)
                if (slot < 0 || voices_[i].age < voices_[slot].age)
                   slot = i;
             end(slot);
@@ -1387,8 +1601,10 @@ private:
       lastPitch_[part] = v.targetPitch;
       if (!restart) {
          for (int o = 0; o < kOscCount; ++o)
-            if (choice(part, oscParam(o, kOscRetrigger)) == 1)
-               v.phase[o] = plain(part, oscParam(o, kOscPhase)) / 360.0f;
+            // Retrigger On starts at its Phase; Off runs free, which a new voice takes up as a
+            // phase of its own.
+            v.phase[o] = choice(part, oscParam(o, kOscRetrigger)) == 1 ? plain(part, oscParam(o, kOscPhase)) / 360.0
+                                                                       : v.random.unipolar();
       }
       for (int e = 0; e < kEnvCount; ++e) {
          setEnvelope(v, e, nullptr);
@@ -1445,6 +1661,9 @@ private:
       if (!v.active)
          return;
       v.active = false;
+      // Neighbour FM and Hunt Ring read this; a stale value would keep ringing on into the
+      // next note that listens to this slot.
+      oscOut_[0][slot] = oscOut_[1][slot] = 0.0f;
       flock_.release(slot);
       flock_.silence(slot);
       if (!v.ref.host)
@@ -1460,7 +1679,7 @@ private:
    // Mono and Legato: one voice per part, and a stack of held notes to fall back to.
    void monoOn(int part, const NoteRef &ref, float velocity, float bendNorm, float pressure, float timbre, bool legato) {
       if (stackSize_[part] < kStack)
-         stack_[part][stackSize_[part]++] = {ref, velocity};
+         stack_[part][stackSize_[part]++] = {ref, velocity, bendNorm, pressure, timbre, 0.0f};
       int slot = -1;
       for (int i = 0; i < kVoiceSlots; ++i)
          if (voices_[i].active && !voices_[i].fading && voices_[i].part == part)
@@ -1470,6 +1689,7 @@ private:
          Voice &v = voices_[slot];
          NoteRef old = v.ref;
          v.ref = ref;
+         v.dropHostMods();
          v.targetPitch = static_cast<float>(ref.key);
          lastPitch_[part] = v.targetPitch;
          v.velocity = velocity;
@@ -1511,10 +1731,19 @@ private:
             const Held &h = stack_[part][n - 1];
             const NoteRef old = v.ref;
             v.ref = h.ref;
+            v.dropHostMods();
             v.targetPitch = static_cast<float>(h.ref.key);
             lastPitch_[part] = v.targetPitch;
             noteHandedOver(old);
             v.lift = velocity;
+            // Back to that note's own touch: its member channel's now, or its note expressions'.
+            v.velocity = h.velocity;
+            const int ch = h.ref.channel;
+            const bool member = h.ref.noteId == -1 && ch >= 1 && ch < 16;
+            v.bendNorm = member ? chanBend_[ch] : h.bendNorm;
+            v.pressure = member ? chanPressure_[ch] : h.pressure;
+            v.timbre = member ? chanTimbre_[ch] : h.timbre;
+            v.bendSemis = h.bendSemis;
          }
       }
       // A note let go while another had the voice: it ends now.
@@ -1550,6 +1779,10 @@ private:
    float min_[kPartEnd], span_[kPartEnd];
    bool isRatio_[kPartEnd];
    clap_id destOffset_[256];
+   struct ModTarget {
+      int part, dest;
+   };
+   std::vector<ModTarget> modTarget_;
    int destCount_ = 0, firstAmountDest_ = 0;
    float cur_[kPartCount][kPartEnd] = {};
    bool first_ = true;
@@ -1571,18 +1804,23 @@ private:
    float touchCurve_[kTouchCount] = {}, touchCoef_[kTouchCount] = {};
    float chanBend_[16] = {}, chanPressure_[16] = {}, chanTimbre_[16] = {};
    float managerBend_ = 0, modWheel_ = 0;
+   // Whether the manager channel has sent pressure or CC 74, which then reach every note.
+   bool managerPressure_ = false, managerTimbre_ = false;
    bool sustain_ = false;
    float lastPitch_[kPartCount] = {-1.0f, -1.0f};
 
+   // A held note on a mono part's stack, with its touch as it is now, for the voice to come back to.
    struct Held {
       NoteRef ref;
-      float velocity;
+      float velocity, bendNorm, pressure, timbre, bendSemis;
    };
    static constexpr int kStack = 16;
    Held stack_[kPartCount][kStack];
    int stackSize_[kPartCount] = {};
 
-   static constexpr int kMaxEnded = 128;
+   // Every voice start can end at most once per block, and a block rarely starts more than a
+   // handful, so this never fills in practice.
+   static constexpr int kMaxEnded = 1024;
    Ended ended_[kMaxEnded];
    int endedCount_ = 0;
    int blockSample_ = 0;
@@ -1591,6 +1829,7 @@ private:
    float noiseGain_ = 1.41421356f;
    int tickPos_ = 0;
    int64_t flockAcc_ = 0;
+   bool flockDue_ = true; // whether this tick ends with a flock step
    uint64_t age_ = 0;
    uint32_t frames_ = 0;
 };

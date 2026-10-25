@@ -410,8 +410,12 @@ private:
       if (h->type == CLAP_EVENT_PARAM_MOD) {
          auto *ev = reinterpret_cast<const clap_event_param_mod_t *>(h);
          const int i = paramIndex(ev->param_id);
-         if (i >= 0 && std::isfinite(ev->amount) && ev->note_id == -1 && ev->key == -1 && ev->channel == -1)
+         if (i < 0 || !std::isfinite(ev->amount))
+            return true;
+         if (ev->note_id == -1 && ev->key == -1 && ev->channel == -1)
             mods_[i].store(ev->amount);
+         else
+            engine_->voiceMod(hostRef(ev->note_id, ev->port_index, ev->channel, ev->key), i, static_cast<float>(ev->amount));
          return true;
       }
       return false;
@@ -501,7 +505,8 @@ private:
       // No main port to write to: render into scratch so time (and the flock) keeps moving.
       while (frames > 0) {
          const int n = std::min(frames, kScratch);
-         engine_->render(scratchPorts_, 0, n);
+         engine_->render(scratchPorts_, 0, n, at);
+         at += n;
          frames -= n;
       }
    }

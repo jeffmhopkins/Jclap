@@ -26,7 +26,8 @@ A bi-timbral MPE synth where every note is a creature and the creatures flock. T
 
 - **Every note is a creature.** Your finger is its lure: the note sets where the lure sits left to
   right, Glide moves it sideways, Slide lifts it, and Press makes the creature fly faster and
-  brighter. Let go and it flies off as it fades.
+  brighter. Let go and it flies off as it fades. LURE X and LURE Y on the FLOCK card choose what
+  places the lure, and RINGS under the sky shows or hides each held note's lure ring.
 - **Two species, A and B**, each a whole patch with its own way of flying: Shoal, Scatter, Hunt or
   Flee. The play mode decides which species a note hatches (Single, Layer, Split, MPE Zones,
   Velocity or Expression). Each plays up to 16 creatures.
