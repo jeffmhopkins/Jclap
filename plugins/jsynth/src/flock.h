@@ -81,7 +81,10 @@ struct Creature {
    float lureX = 0, lureY = 0, press = 0;
    // -1..1, this creature's wingbeat now (its own LFO's value).
    float wing = 0, wingPhase = 0;
-   float wanderAngle = 0;
+   float wanderAngle = 0, wanderTurn = 0;
+   // Its own roaming around the lure: two slow orbits at rates and phases of its own, so no two
+   // creatures trace the same path and none repeats.
+   float roamRate[2] = {}, roamPhase[2] = {};
    FlockParams params;
    CreatureSources sources;
    // The same-species creatures it hears, and how much (0..1), and the hunter holding it.
@@ -195,6 +198,10 @@ private:
       c.vx = 0.1f * rng_.bipolar();
       c.vy = 0.1f * rng_.bipolar();
       c.wanderAngle = kPi * rng_.bipolar();
+      for (int i = 0; i < 2; ++i) {
+         c.roamRate[i] = (0.6f + 0.5f * rng_.unipolar()) * (i == 0 ? 1.0f : 1.618f) * (rng_.bipolar() < 0 ? -1.0f : 1.0f);
+         c.roamPhase[i] = 2.0f * kPi * rng_.unipolar();
+      }
       c.wing = wing;
    }
 
@@ -255,12 +262,24 @@ private:
          accX += sx * sp.separation * 1.6f + hx * 0.9f;
          accY += sy * sp.separation * 1.6f + hy * 0.9f;
          if (b.held) {
-            accX += (b.lureX - b.x) * sp.lure * 6.0f - b.vx * sp.lure * 0.6f;
-            accY += (b.lureY - b.y) * sp.lure * 6.0f - b.vy * sp.lure * 0.6f;
+            // The finger pulls toward a point that roams around the lure, on a leash: loose near it,
+            // so the flock and the wander shape the path there, and firm when the creature strays.
+            const float reach = (0.05f + 0.14f * sp.wander) * scale();
+            const float tx = b.lureX + reach * (std::sin(time_ * b.roamRate[0] + b.roamPhase[0]) +
+                                                0.5f * std::sin(time_ * b.roamRate[1] * 1.3f + b.roamPhase[1]));
+            const float ty = b.lureY + reach * 0.8f * (std::cos(time_ * b.roamRate[1] + b.roamPhase[1]) +
+                                                       0.5f * std::sin(time_ * b.roamRate[0] * 0.7f + b.roamPhase[0]));
+            const float dx = tx - b.x, dy = ty - b.y;
+            const float leash = 0.35f + 0.65f * std::min(1.0f, std::sqrt(dx * dx + dy * dy) / (0.2f * scale()));
+            accX += dx * sp.lure * 6.0f * leash - b.vx * sp.lure * 0.6f;
+            accY += dy * sp.lure * 6.0f * leash - b.vy * sp.lure * 0.6f;
          }
-         b.wanderAngle += rng_.bipolar() * dt * 5.0f;
-         accX += std::cos(b.wanderAngle) * sp.wander * 0.5f;
-         accY += std::sin(b.wanderAngle) * sp.wander * 0.5f;
+         // Wander: the heading drifts, and how fast it turns drifts too, so a creature sometimes
+         // sweeps a long curve and sometimes jinks.
+         b.wanderTurn += (rng_.bipolar() * 6.0f - b.wanderTurn * 0.8f) * dt;
+         b.wanderAngle += (b.wanderTurn + rng_.bipolar() * 4.0f) * dt;
+         accX += std::cos(b.wanderAngle) * sp.wander * 1.1f;
+         accY += std::sin(b.wanderAngle) * sp.wander * 1.1f;
          accX += std::cos(windAngle) * gust[b.part] * sp.windPush * 0.35f;
          accY += std::sin(windAngle) * gust[b.part] * sp.windPush * 0.35f;
          // The wingbeat bobs each creature across its path.
@@ -282,7 +301,7 @@ private:
          b.vx += accX * dt;
          b.vy += accY * dt;
          const float top = maxSpeed(sp, b.press), speed = std::sqrt(b.vx * b.vx + b.vy * b.vy) + 1e-6f;
-         const float clamped = std::clamp(speed, 0.35f * top, top);
+         const float clamped = std::clamp(speed, 0.2f * top, top);
          b.vx *= clamped / speed;
          b.vy *= clamped / speed;
          b.x += b.vx * dt;

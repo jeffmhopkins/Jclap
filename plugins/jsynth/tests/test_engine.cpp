@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "engine.h"
+#include "presets.h"
 
 using namespace jsynth;
 
@@ -224,6 +225,21 @@ int main() {
          JCLAP_CHECK(finite(out));
          JCLAP_CHECK(peak(out) <= 1.0f);
       }
+   }
+
+   // Every factory preset sounds, finite and under full scale.
+   for (const Preset &preset : factoryPresets()) {
+      Params p;
+      const std::vector<double> v = presetValues(preset);
+      for (size_t i = 0; i < paramCount(); ++i)
+         p.values[i].store(v[i]);
+      Engine e;
+      e.prepare(kRate, {p.values.get(), p.mods.get()});
+      const auto out = render(e, 96000, 256, phrase());
+      const bool ok = finite(out) && peak(out) <= 1.0f && peak(out) > 1e-4f; // a swell has barely begun by the end
+      if (!ok)
+         std::printf("preset %s: peak %g\n", preset.name.c_str(), peak(out));
+      JCLAP_CHECK(ok);
    }
 
    // What it costs: 32 voices (16 notes in each part) at 2x for two seconds.

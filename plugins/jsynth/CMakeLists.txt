@@ -12,7 +12,7 @@ target_link_libraries(jsynth-tests PRIVATE jclap::ui jclap::dsp)
 # The engine alone: sound, determinism, notes and CPU, with no panel.
 jclap_add_test(jsynth-engine-tests SOURCES tests/test_engine.cpp)
 target_include_directories(jsynth-engine-tests PRIVATE src)
-target_link_libraries(jsynth-engine-tests PRIVATE jclap::core)
+target_link_libraries(jsynth-engine-tests PRIVATE jclap::core jclap::ui)
 
 # Offscreen renders of the panel, for docs and visual checks. Needs a GPU (or a software Vulkan driver).
 if(JCLAP_BUILD_TOOLS)
