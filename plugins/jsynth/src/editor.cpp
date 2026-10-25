@@ -90,7 +90,7 @@ unsigned sourceColor(int source) {
        0xfff6f0a0, 0xffff6fd2, 0xffb98bff, 0xff8fe8a8, 0xff9ad0c0, // Strike, Press, Glide, Slide, Lift
        0xffc0c8d8,                                                 // Key
        0xfff2c94c, 0xffff8a7a, 0xff6fe0ff, 0xffa98bff, kCaughtColor, 0xff5fd3b0, // the flock's own
-       0xffffe08a, 0xff9fd8ff,                                     // Sky X, Sky Y
+       0xffffe08a, 0xff9fd8ff,                                     // X, Y
        0xffd0d0d0, 0xffe0e0ff,                                     // Random, Mod Wheel
        0xfff28c28, 0xff8fe8a8, 0xff6fb8ff, 0xffff6fd2};            // Macros
    return colors[std::clamp(source, 0, kSourceCount - 1)];
@@ -1552,7 +1552,7 @@ private:
       const std::pair<int, const char *> sources[] = {{kSourceSpeed, "SPEED"},     {kSourceCrowd, "CROWD"},
                                                       {kSourceNearest, "NEAREST"}, {kSourceHeading, "HEADING"},
                                                       {kSourceCaught, "CAUGHT"},   {kSourceWake, "WAKE"},
-                                                      {kSourceSkyX, "SKY X"},      {kSourceSkyY, "SKY Y"}};
+                                                      {kSourceSkyX, "X"},          {kSourceSkyY, "Y"}};
       const char *tips[] = {"How fast this creature flies.", "How many neighbours it has.",
                             "How near its nearest neighbour is.", "Which way it flies, all the way round.",
                             "On while a hunter has caught it.", "How much of the others' ink it flies through.",
@@ -1592,7 +1592,7 @@ private:
                                                    "how much WAKE the others feel.");
          if (part == 0) {
             part_ = -1;
-            knob(kSkySize, "SKY", kDim, g[10], "How big the sky is, so how far apart the flocks can spread.");
+            knob(kSkySize, "SIZE", kDim, g[10], "How big the sky is, so how far apart the flocks can spread.");
             label({g[11].x, g[11].y + 2, g[11].w, 16}, "WALLS");
             auto &walls = dropdown(kSkyWalls, kDim, {g[11].x + 4, g[11].y + 34, g[11].w - 8, 24});
             tips_.add(walls, "What the sky's edges do: turn creatures back, wrap them round, or let them roam.");
@@ -1763,7 +1763,7 @@ private:
       knob(kGlideTime, "GLIDE", c, k[1]);
       knob(kBendRange, "BEND", c, k[2], "The MPE bend range: how far a finger slides, in semitones.");
       knob(kPartPan, "PAN", c, k[3]);
-      knob(kSkyPan, "SKY PAN", c, k[4], "How far a creature's place in the sky, left to right, pans its voice: "
+      knob(kSkyPan, "X PAN", c, k[4], "How far a creature's place in the sky, left to right, pans its voice: "
                                         "at 100% the flock spreads across the whole stereo field.");
       knob(kPartLevel, "LEVEL", c, k[5]);
       // The output, shared by both parts.

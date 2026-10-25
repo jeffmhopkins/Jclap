@@ -249,13 +249,13 @@ inline const std::vector<std::string> kPolarityNames = {"Bipolar", "Unipolar"};
 // from it.
 inline const std::vector<std::string> kBehaviourNames = {"Shoal", "Scatter", "Hunt", "Flee"};
 inline const std::vector<std::string> kWallNames = {"Soft", "Wrap", "Open"};
-// Route sources. Off is no route. Speed to Sky Y are the flock's own: how fast this creature flies, how
+// Route sources. Off is no route. Speed to Y are the flock's own: how fast this creature flies, how
 // many neighbours it has, how near the nearest is, which way it heads, whether a hunter has it, how
 // much ink it is flying through, and where it is in the sky (left to right, and bottom to top).
 inline const std::vector<std::string> kSourceNames = {
     "Off",   "Env 1",   "Env 2",    "Env 3",   "Wingbeat", "Wind",   "LFO 1",  "LFO 2",  "Strike",    "Press",
     "Glide", "Slide",   "Lift",     "Key",     "Speed",    "Crowd",  "Nearest",   "Heading",
-    "Caught", "Wake",   "Sky X",    "Sky Y",   "Random",   "Mod Wheel", "Macro 1", "Macro 2", "Macro 3", "Macro 4"};
+    "Caught", "Wake",   "X",        "Y",       "Random",   "Mod Wheel", "Macro 1", "Macro 2", "Macro 3", "Macro 4"};
 enum Source {
    kSourceOff,
    kSourceEnv1,
@@ -435,7 +435,7 @@ inline void addPart(Builder &b, int part) {
    b.add(id(kDrift), "Drift", voice, 0.0, 1.0, 0.1, kMod, Unit::Percent);
    b.add(id(kVelocityToAmp), "Velocity", voice, 0.0, 1.0, 1.0, kMod, Unit::Percent);
    b.choice(id(kPartOutput), "Output", voice, kOutputNames, 0, kGlobalChoice);
-   b.add(id(kSkyPan), "Sky Pan", voice, 0.0, 1.0, 0.5, kMod, Unit::Percent);
+   b.add(id(kSkyPan), "X Pan", voice, 0.0, 1.0, 0.5, kMod, Unit::Percent);
 
    for (int o = 0; o < kOscCount; ++o) {
       const std::string m = num("Osc ", o), n = m + " ";
@@ -580,8 +580,8 @@ inline std::vector<Param> buildParams() {
       b.add(kTouchSmooth1 + i, std::string(kTouchNames[i]) + " Smoothing", "Expression", 0.0, 1.0,
             timeValue(i == 2 ? 2.0 : 8.0), kGlobalMod, Unit::Time);
    }
-   b.add(kSkySize, "Sky Size", "Sky", 0.0, 1.0, 0.5, kGlobalMod, Unit::Percent);
-   b.choice(kSkyWalls, "Sky Walls", "Sky", kWallNames, 0, kGlobalChoice);
+   b.add(kSkySize, "Size", "Sky", 0.0, 1.0, 0.5, kGlobalMod, Unit::Percent);
+   b.choice(kSkyWalls, "Walls", "Sky", kWallNames, 0, kGlobalChoice);
    b.add(kOutputWidth, "Output Width", "Output", 0.0, 2.0, 1.0, kGlobalMod, Unit::Percent);
    for (int part = 0; part < kPartCount; ++part)
       addPart(b, part);

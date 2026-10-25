@@ -37,7 +37,7 @@ A bi-timbral MPE synth where every note is a creature and the creatures flock. T
   intervals (Tune Pull). A hunter that catches its prey ring-modulates it (Bite).
 - **Ink:** each creature sheds ink that blooms (Spread) and fades (Tail). Flying through another
   creature's ink stirs it, and that is the Wake source.
-- **Stereo:** Sky Pan sets how far each creature's place in the sky, left to right, pans its voice,
+- **Stereo:** X Pan sets how far each creature's place in the sky, left to right, pans its voice,
   so a flock can spread across the stereo field. Output Width sets the whole output's width.
 - **Four LFOs.** Two move the flock: the wingbeat, one per creature, and the wind, one gust for the
   whole sky (Push sets how hard). LFO 1 and LFO 2 are plain LFOs that only modulate. All four are
@@ -49,7 +49,7 @@ There is no matrix page. Press **MAP**, touch a source, then drag any knob: the 
 source moves it, shown as a ring in the source's colour (up to four per knob). Double-click a knob to
 flip its route, right-click to remove it. The sources are the touch chips in the header, the envelope
 and LFO chips on the right card, and the flock's own under the sky: Speed, Crowd, Nearest, Heading,
-Caught, Wake, and Sky X and Sky Y (where the creature is). Each chip's LED glows with its source as it moves. The FM grid and the flock params
+Caught, Wake, and X and Y (where the creature is). Each chip's LED glows with its source as it moves. The FM grid and the flock params
 are knobs, so they map like any other.
 
 Underneath, each part has a pool of 64 routes (source, destination, amount) as host params, so route
