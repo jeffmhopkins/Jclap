@@ -33,6 +33,8 @@ target_link_libraries(<name> PRIVATE jclap::ui)
 | `jclap/ui/envelope.h` | ADSR editor: drag the corners. Binds to four params. `setPlayheads` shows a glowing dot per playing voice |
 | `jclap/ui/keyboard.h` | Piano keyboard that plays notes when clicked and lights held notes. Held notes past either end show as an arrow; `shiftOctaves` moves the range |
 | `jclap/ui/note_grid.h` | LinnStrument-style note grid (rows a fourth, fifth or octave apart) that shows per-note MPE: bend, pressure and timbre. Slide on it to bend. Off-grid notes show as an arrow; `shiftOctaves` moves it |
+| `jclap/ui/note_roll.h` | Small piano roll that shows what a sequencer or note generator is about to play: notes as bars with their names, a beat grid and a playhead. `setLanes` fixes the rows (a sequencer's pitches), `setCompact` shows only the pitches in use |
+| `jclap/ui/preset_bar.h` | Preset browser for a header: arrows and the wheel step through presets, the name opens a menu by category, SAVE writes the current settings to the user's folder. `jclap/ui/presets.h` holds the factory-bank helpers and the preset file format, without Visage |
 | `jclap/ui/octave_shift.h` | Octave - and + buttons around a readout, to move a keyboard or grid up and down |
 | `jclap/ui/scope.h` | Oscilloscope or waveform view, fed from a `jclap::core::SampleFifo` |
 | `jclap/ui/tabs.h` | Tab bar that shows one page of widgets at a time |
@@ -40,7 +42,9 @@ target_link_libraries(<name> PRIVATE jclap::ui)
 | `jclap/ui/section.h` | `Section` (titled panel box), `Label` and `Divider`. They ignore the mouse |
 | `jclap/ui/theme.h` | Colours shared by every widget, and the `font()` and `noteName()` helpers |
 
-Knob and Slider share `ValueControl`: a `ValueRange` (min, max, default, wheel step, bipolar), the
+Knob and Slider share `ValueControl`: a `ValueRange` (min, max, default, wheel step, bipolar, and
+optional `stops`, the only values a drag, the wheel or a stepper lands on, such as loop lengths of
+1, 2, 4, 8, 16 or 32 bars), the
 host's value and modulated value, and `onBeginEdit` / `onChange` / `onEndEdit` callbacks. Drag
 (shift for fine), scroll for one step, double-click to reset. Right-click opens a menu with "Reset
 to default", "Enter value..." (type a number) and the host's own items for the param.

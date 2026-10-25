@@ -1,6 +1,10 @@
 // Widget input checks: calls the mouse handlers directly and records what reaches the params.
 
+#include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -12,8 +16,10 @@
 #include <jclap/ui/tooltip.h>
 #include <jclap/ui/knob.h>
 #include <jclap/ui/note_grid.h>
+#include <jclap/ui/note_roll.h>
 #include <jclap/ui/number_box.h>
 #include <jclap/ui/param_bindings.h>
+#include <jclap/ui/presets.h>
 #include <jclap/ui/xy_pad.h>
 
 namespace ui = jclap::ui;
@@ -284,6 +290,107 @@ void measuresAtAScale() {
    JCLAP_CHECK(w1 > 10.0f && std::fabs(w1 - w2) < 2.0f);
    JCLAP_CHECK(ui::font(12.0f, 0.0f).stringWidth(U"x", 1) > 0.0f);
 }
+
+void stopsSnap() {
+   // A loop length of 1, 2, 4, 8, 16, 32 or 55: drags, the wheel and the steppers land only on those.
+   ui::ValueRange range{1, 55, 8, 1.0, false, true};
+   range.stops = {1, 2, 4, 8, 16, 32, 55};
+   JCLAP_CHECK_EQ(range.stepFrom(8, 1), 16.0);
+   JCLAP_CHECK_EQ(range.stepFrom(8, -1), 4.0);
+   JCLAP_CHECK_EQ(range.stepFrom(10, -1), 8.0);
+   JCLAP_CHECK_EQ(range.stepFrom(55, 1), 55.0);
+   JCLAP_CHECK_EQ(range.nearestStop(11), 8.0);
+   JCLAP_CHECK_EQ(range.stopPosition(12), 3.5);
+
+   Params p;
+   ui::ParamBindings bindings(p);
+   ui::Knob knob(range);
+   knob.setBounds(0, 0, 100, 100);
+   bindings.bind(knob, 1);
+   knob.setValue(8);
+   knob.mouseDown(press(50, 50));
+   for (int dy = 1; dy <= 60; ++dy)
+      knob.mouseDrag(press(50, 50.0f - dy * 2.0f));
+   knob.mouseUp(press(50, 0));
+   JCLAP_CHECK(!p.values.empty());
+   for (double v : p.values)
+      JCLAP_CHECK(std::find(range.stops.begin(), range.stops.end(), v) != range.stops.end());
+   JCLAP_CHECK_EQ(p.values.back(), 55.0);
+
+   Params q;
+   ui::ParamBindings wheelBindings(q);
+   ui::Knob wheeled(range);
+   wheeled.setBounds(0, 0, 100, 100);
+   wheelBindings.bind(wheeled, 1);
+   wheeled.setValue(8);
+   wheeled.mouseWheel(wheel(50, 50, 1.0f));
+   JCLAP_CHECK(!q.values.empty() && q.values.back() == 16.0);
+
+   Params r;
+   ui::ParamBindings boxBindings(r);
+   ui::NumberBox box(range);
+   box.setStepButtons(true);
+   box.setBounds(0, 0, 132, 28);
+   boxBindings.bind(box, 1);
+   box.setValue(8);
+   box.mouseDown(press(128, 14));
+   box.mouseUp(press(128, 14));
+   JCLAP_CHECK(!r.values.empty() && r.values.back() == 16.0);
+}
+
+void noteRollLanes() {
+   ui::NoteRoll roll;
+   roll.setNotes({{0, 2, 60, 1.0f}, {2, 2, 67, 0.5f}});
+   // Every semitone between the notes, two either side, highest first.
+   const std::vector<int> range = roll.lanes();
+   JCLAP_CHECK_EQ(range.size(), 12u);
+   JCLAP_CHECK_EQ(range.front(), 69);
+   JCLAP_CHECK_EQ(range.back(), 58);
+   roll.setCompact(true);
+   JCLAP_CHECK(roll.lanes() == (std::vector<int>{67, 60}));
+   roll.setLanes({61, 72, 65, 68, 65});
+   JCLAP_CHECK(roll.lanes() == (std::vector<int>{72, 68, 65, 61}));
+   roll.setLanes({});
+   JCLAP_CHECK(roll.lanes() == (std::vector<int>{67, 60}));
+}
+
+void presetFilesRoundTrip() {
+   struct Values : ui::ParamAccess {
+      double v[3] = {0.25, -3.0, 7.0};
+      double paramValue(clap_id id) const override { return id < 3 ? v[id] : 0.0; }
+      void beginEdit(clap_id) override {}
+      void setParam(clap_id id, double x) override { v[id] = x; }
+      void endEdit(clap_id) override {}
+   } values;
+   const ui::PresetFormat format{"JclapTest", 2, ".jtpreset", 3};
+   const std::filesystem::path dir = std::filesystem::temp_directory_path() / "jclap-preset-test";
+   std::filesystem::create_directories(dir);
+   const std::filesystem::path file = dir / (ui::presetFileName("Warm / Wide?") + format.extension);
+   JCLAP_CHECK(file.filename().string() == "Warm  Wide.jtpreset");
+   JCLAP_CHECK(ui::writePresetFile(file, format, values));
+   ui::Preset back;
+   int version = 0;
+   JCLAP_CHECK(ui::readPresetFile(file, format, back, &version));
+   JCLAP_CHECK_EQ(version, 2);
+   JCLAP_CHECK_EQ(back.values.size(), 3u);
+   for (const auto &[id, v] : back.values)
+      JCLAP_CHECK_EQ(v, values.v[id]);
+
+   // Another plugin's file, or a newer version than this one reads, is refused.
+   const ui::PresetFormat other{"Other", 2, ".jtpreset", 3};
+   JCLAP_CHECK(!ui::readPresetFile(file, other, back));
+   const ui::PresetFormat older{"JclapTest", 1, ".jtpreset", 3};
+   JCLAP_CHECK(!ui::readPresetFile(file, older, back));
+   std::filesystem::remove_all(dir);
+
+   // A factory preset filled out: what it lists, and the defaults for the rest.
+   std::vector<ui::Preset> bank = {{"Init", "A", {}}, {"Loud", "A", {{1, 6.0}}}};
+   ui::completePresets(bank, {0.5, 0.0, 1.0});
+   JCLAP_CHECK_EQ(bank[0].values.size(), 3u);
+   JCLAP_CHECK_EQ(bank[1].values.size(), 3u);
+   for (const auto &[id, v] : bank[1].values)
+      JCLAP_CHECK_EQ(v, id == 1 ? 6.0 : id == 0 ? 0.5 : 1.0);
+}
 } // namespace
 
 int main() {
@@ -298,5 +405,8 @@ int main() {
    tooltipsOutlivedByFrames();
    dropdownRightClickDoesntPick();
    measuresAtAScale();
+   stopsSnap();
+   noteRollLanes();
+   presetFilesRoundTrip();
    return jclap::core::testResult();
 }
