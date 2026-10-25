@@ -1,12 +1,15 @@
 #pragma once
 
-// JSynth's parameters: a global block, then two parts (A and B) with the same layout. A part's params
-// are written once, as offsets into a part (PartParam and the per-module enums below), and partId()
-// turns an offset into the host's id for part A or B. Each module (oscillator, filter, envelope, LFO,
-// matrix slot) is a block of ids with room left to grow, so ids can stay put once released: a new
-// param goes in its block's spare room, never between two that exist.
+// JSynth's parameters: a global block, then two species (parts A and B) with the same layout. A part's
+// params are written once, as offsets into a part (PartParam and the per-module enums below), and
+// partId() turns an offset into the host's id for part A or B. Each module (oscillator, filter,
+// envelope, LFO, route) is a block of ids with room left to grow, so ids can stay put once released:
+// a new param goes in its block's spare room, never between two that exist.
 //
 // The ids have gaps, so kParams() is the list of params that exist and paramIndex() finds one by id.
+//
+// Every note is a creature, and each part's creatures flock. Modulation is a list of routes per part
+// (source, destination, amount), which the panel's MAP mode writes: there is no matrix page.
 
 #include <jclap/core/helpers.h>
 
@@ -26,7 +29,7 @@ constexpr int kOscCount = 3;
 constexpr int kFilterCount = 2;
 constexpr int kEnvCount = 3;
 constexpr int kLfoCount = 2;
-constexpr int kSlotCount = 16;
+constexpr int kRouteCount = 16;
 constexpr int kMacroCount = 4;
 // The touch dimensions, in MPE order: velocity, pressure, bend, CC 74 and release velocity.
 constexpr int kTouchCount = 5;
@@ -49,7 +52,10 @@ enum GlobalParam : clap_id {
    // Each touch dimension's response curve and smoothing.
    kTouchCurve1 = kMacro1 + kMacroCount,
    kTouchSmooth1 = kTouchCurve1 + kTouchCount,
-   kGlobalEnd = kTouchSmooth1 + kTouchCount
+   // The sky both species fly in.
+   kSkySize = kTouchSmooth1 + kTouchCount,
+   kSkyWalls,
+   kGlobalEnd
 };
 
 constexpr clap_id kPartBase = 64;
@@ -77,16 +83,17 @@ enum PartParam : clap_id {
    kOscStride = 16,
    kFmBase = kOscBase + kOscCount * kOscStride, // 64
    kMixBase = kFmBase + 16,                      // 80
-   kVoiceTailBase = kMixBase + 16,               // 96: drive, routing, shaper
+   kVoiceTailBase = kMixBase + 16,               // 96: drive and filter routing
    kFilterBase = kVoiceTailBase + 16,            // 112
    kFilterStride = 16,
    kEnvBase = kFilterBase + kFilterCount * kFilterStride, // 144
    kEnvStride = 16,
    kLfoBase = kEnvBase + kEnvCount * kEnvStride, // 192
    kLfoStride = 16,
-   kSlotBase = kLfoBase + kLfoCount * kLfoStride, // 224
-   kSlotStride = 8,
-   kPartEnd = kSlotBase + kSlotCount * kSlotStride // 352, inside the 512 stride
+   kFlockBase = kLfoBase + kLfoCount * kLfoStride, // 224
+   kRouteBase = kFlockBase + 32,                   // 256
+   kRouteStride = 4,
+   kPartEnd = kRouteBase + kRouteCount * kRouteStride // 320, inside the 512 stride
 };
 
 enum OscParam : clap_id {
@@ -104,7 +111,7 @@ enum OscParam : clap_id {
    kOscKeyTrack,
 };
 
-// The FM matrix: kFmCell + from * 3 + to, where a cell on the diagonal is that oscillator's feedback.
+// The FM grid: kFmCell + from * 3 + to, where a cell on the diagonal is that oscillator's feedback.
 enum FmParam : clap_id {
    kFmCell = 0,
    kFmType = kOscCount * kOscCount,
@@ -113,13 +120,8 @@ enum FmParam : clap_id {
 enum MixParam : clap_id {
    kMixLevel = 0, // one per oscillator
    kMixPan = kMixLevel + kOscCount,
-   kMixRoute = kMixPan + kOscCount,
-   kRingPair = kMixRoute + kOscCount,
-   kRingLevel,
-   kRingRoute,
-   kNoiseLevel,
+   kNoiseLevel = kMixPan + kOscCount,
    kNoiseColor,
-   kNoiseRoute,
 };
 
 enum VoiceTailParam : clap_id {
@@ -127,9 +129,6 @@ enum VoiceTailParam : clap_id {
    kDriveAmount,
    kFilterRouting,
    kFilterBalance,
-   kShaperType,
-   kShaperAmount,
-   kShaperMix,
 };
 
 enum FilterParam : clap_id {
@@ -139,7 +138,6 @@ enum FilterParam : clap_id {
    kFilterResonance,
    kFilterDrive,
    kFilterKeyTrack,
-   kFilterFm,
 };
 
 enum EnvParam : clap_id {
@@ -156,6 +154,7 @@ enum EnvParam : clap_id {
    kEnvVelocity,
 };
 
+// LFO 1 is the wingbeat, one per creature; LFO 2 is the wind, one gust for the whole sky.
 enum LfoParam : clap_id {
    kLfoShape,
    kLfoRate,
@@ -165,14 +164,34 @@ enum LfoParam : clap_id {
    kLfoPhase,
    kLfoDelay,
    kLfoPolarity,
+   // How hard it moves the creatures: a wingbeat bobs each one, the wind pushes them all one way.
+   kLfoPush,
 };
 
-enum SlotParam : clap_id {
-   kSlotSource,
-   kSlotVia,
-   kSlotCurve,
-   kSlotAmount,
-   kSlotDestination,
+// How a species flies, and what flying near another creature does to its sound.
+enum FlockParam : clap_id {
+   kBehaviour,
+   kCohesion,   // pull toward the middle of the neighbours
+   kAlignment,  // turn to fly the way the neighbours fly
+   kSeparation, // keep clear of the nearest
+   kSpeed,
+   kWander,
+   kLure,       // how hard a finger pulls its own creature
+   kRange,      // how near counts as a neighbour
+   kNeighbourFm,  // the nearest neighbour's Osc 1 into this creature's Osc 2
+   kTunePull,     // creatures flying the same way drift toward pure intervals
+   kBite,         // ring mod while a hunter has caught this creature
+   kTailLength,   // how long the ink tail lasts
+   kTailSpread,   // how far the ink blooms as it ages
+   kWake,         // how much flying through another creature's ink stirs this one
+};
+
+// A route: kRouteSource (Off for none), kRouteDestination (an index into destinations()) and its
+// signed depth.
+enum RouteParam : clap_id {
+   kRouteSource,
+   kRouteDestination,
+   kRouteAmount,
 };
 
 // A part param's offset, for module `index`.
@@ -183,7 +202,8 @@ constexpr clap_id tailParam(VoiceTailParam p) { return kVoiceTailBase + p; }
 constexpr clap_id filterParam(int filter, FilterParam p) { return kFilterBase + filter * kFilterStride + p; }
 constexpr clap_id envParam(int env, EnvParam p) { return kEnvBase + env * kEnvStride + p; }
 constexpr clap_id lfoParam(int lfo, LfoParam p) { return kLfoBase + lfo * kLfoStride + p; }
-constexpr clap_id slotParam(int slot, SlotParam p) { return kSlotBase + slot * kSlotStride + p; }
+constexpr clap_id flockParam(FlockParam p) { return kFlockBase + p; }
+constexpr clap_id routeParam(int route, RouteParam p) { return kRouteBase + route * kRouteStride + p; }
 
 // The host's id for a part param.
 constexpr clap_id partId(int part, clap_id offset) { return kPartBase + part * kPartStride + offset; }
@@ -205,10 +225,8 @@ inline const std::vector<std::string> kWaveNames = {"Sine",      "Triangle",   "
 inline const std::vector<std::string> kPitchModeNames = {"Note", "Ratio", "Fixed"};
 inline const std::vector<std::string> kOnOffNames = {"Off", "On"};
 inline const std::vector<std::string> kFmTypeNames = {"Phase", "Exponential"};
-inline const std::vector<std::string> kRingPairNames = {"1 x 2", "1 x 3", "2 x 3"};
 inline const std::vector<std::string> kDriveTypeNames = {"Soft", "Hard", "Tube"};
 inline const std::vector<std::string> kRoutingNames = {"Serial", "Parallel", "Split"};
-inline const std::vector<std::string> kShaperTypeNames = {"Off", "Soft Clip", "Fold", "Asymmetric"};
 inline const std::vector<std::string> kFilterTypeNames = {"Low Pass", "High Pass", "Band Pass", "Notch",
                                                           "Peak",     "Ladder",    "Comb +",    "Comb -"};
 inline const std::vector<std::string> kSlopeNames = {"12 dB", "24 dB", "36 dB", "48 dB"};
@@ -218,12 +236,35 @@ inline const std::vector<std::string> kDivisionNames = {"1/32", "1/16T", "1/16",
                                                         "1/8D", "1/4",   "1/2T", "1/4D", "1/2",   "1/1", "2/1", "4/1"};
 inline const std::vector<std::string> kTriggerNames = {"Retrigger", "Free", "Global"};
 inline const std::vector<std::string> kPolarityNames = {"Bipolar", "Unipolar"};
-// Matrix sources. Off is no route as a source, and no scaling as a via.
+// Shoal flies with its own kind, Scatter keeps apart, Hunt chases the other species and Flee runs
+// from it.
+inline const std::vector<std::string> kBehaviourNames = {"Shoal", "Scatter", "Hunt", "Flee"};
+inline const std::vector<std::string> kWallNames = {"Soft", "Wrap", "Open"};
+// Route sources. Off is no route. Speed to Wake are the flock's own: how fast this creature flies, how
+// many neighbours it has, how near the nearest is, which way it heads, whether a hunter has it, and
+// how much ink it is flying through.
 inline const std::vector<std::string> kSourceNames = {
-    "Off",    "Env 1",  "Env 2",       "Env 3",       "LFO 1",      "LFO 2",     "Strike",    "Press",
-    "Glide",  "Slide",  "Lift",        "Key",         "Gate",       "Random",    "Alternate", "Voice",
-    "Notes",  "Mod Wheel", "Macro 1",  "Macro 2",     "Macro 3",    "Macro 4"};
-inline const std::vector<std::string> kCurveNames = {"Linear", "Exponential", "Logarithmic", "S-Curve", "Steps"};
+    "Off",   "Env 1",   "Env 2",    "Env 3",   "Wingbeat", "Wind",   "Strike",    "Press",
+    "Glide", "Slide",   "Lift",     "Key",     "Speed",    "Crowd",  "Nearest",   "Heading",
+    "Caught", "Wake",   "Random",   "Mod Wheel", "Macro 1", "Macro 2", "Macro 3", "Macro 4"};
+enum Source {
+   kSourceOff,
+   kSourceEnv1,
+   kSourceWingbeat = kSourceEnv1 + kEnvCount,
+   kSourceWind,
+   kSourceStrike,
+   kSourceKey = kSourceStrike + kTouchCount,
+   kSourceSpeed,
+   kSourceCrowd,
+   kSourceNearest,
+   kSourceHeading,
+   kSourceCaught,
+   kSourceWake,
+   kSourceRandom,
+   kSourceModWheel,
+   kSourceMacro1,
+   kSourceCount = kSourceMacro1 + kMacroCount
+};
 inline const char *const kTouchNames[kTouchCount] = {"Strike", "Press", "Glide", "Slide", "Lift"};
 
 // ---- value mappings ----
@@ -265,13 +306,13 @@ struct Param {
    jclap::core::ParamDef def;
    Unit unit;
    const std::vector<std::string> *choices = nullptr;
-   // Without the part's letter: "Osc 1 Coarse". The panel's labels and the matrix's destinations
+   // Without the part's letter: "Osc 1 Coarse". The panel's labels and the route destinations
    // use it.
    const char *shortName;
 };
 
 // Every param can be automated and modulated by the host, and most per voice (by note id, key or
-// channel), as Bitwig's polyphonic modulators do. Play mode, matrix routing and other settings
+// channel), as Bitwig's polyphonic modulators do. Play mode, route sources and other settings
 // with no per-voice meaning are global only.
 constexpr auto kGlobalMod = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE;
 constexpr auto kMod = kGlobalMod | CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID | CLAP_PARAM_IS_MODULATABLE_PER_KEY |
@@ -303,9 +344,10 @@ struct Builder {
    }
 };
 
-// The matrix's destinations: every continuous part param a voice can move, as part offsets.
+// What a route can move: every continuous part param a voice can use, as part offsets. MAP mode
+// can map any knob showing one of these.
 inline std::vector<clap_id> buildDestinations() {
-   std::vector<clap_id> d = {kPartLevel, kPartPan, kPartFine, kDrift};
+   std::vector<clap_id> d = {kPartLevel, kPartPan, kPartFine, kGlideTime, kDrift};
    for (int o = 0; o < kOscCount; ++o)
       for (OscParam p : {kOscShape, kOscCoarse, kOscFine, kOscRatio, kOscFixed, kOscPhase})
          d.push_back(oscParam(o, p));
@@ -313,24 +355,28 @@ inline std::vector<clap_id> buildDestinations() {
       for (int to = 0; to < kOscCount; ++to)
          d.push_back(fmCell(from, to));
    for (int o = 0; o < kOscCount; ++o)
-      for (MixParam p : {kMixLevel, kMixPan, kMixRoute})
+      for (MixParam p : {kMixLevel, kMixPan})
          d.push_back(mixParam(p, o));
-   for (MixParam p : {kRingLevel, kNoiseLevel, kNoiseColor})
+   for (MixParam p : {kNoiseLevel, kNoiseColor})
       d.push_back(mixParam(p));
-   for (VoiceTailParam p : {kDriveAmount, kFilterBalance, kShaperAmount, kShaperMix})
+   for (VoiceTailParam p : {kDriveAmount, kFilterBalance})
       d.push_back(tailParam(p));
    for (int f = 0; f < kFilterCount; ++f)
-      for (FilterParam p : {kFilterCutoff, kFilterResonance, kFilterDrive, kFilterKeyTrack, kFilterFm})
+      for (FilterParam p : {kFilterCutoff, kFilterResonance, kFilterDrive, kFilterKeyTrack})
          d.push_back(filterParam(f, p));
    for (int e = 0; e < kEnvCount; ++e)
       for (EnvParam p : {kEnvDelay, kEnvAttack, kEnvHold, kEnvDecay, kEnvSustain, kEnvRelease})
          d.push_back(envParam(e, p));
    for (int l = 0; l < kLfoCount; ++l)
-      for (LfoParam p : {kLfoRate, kLfoPhase, kLfoDelay})
+      for (LfoParam p : {kLfoRate, kLfoPhase, kLfoDelay, kLfoPush})
          d.push_back(lfoParam(l, p));
+   // The flock itself can be modulated: Press can make a creature break formation, say.
+   for (FlockParam p : {kCohesion, kAlignment, kSeparation, kSpeed, kWander, kLure, kRange, kNeighbourFm, kTunePull,
+                        kBite, kTailLength, kTailSpread, kWake})
+      d.push_back(flockParam(p));
    // A route's depth can be moved by another route.
-   for (int s = 0; s < kSlotCount; ++s)
-      d.push_back(slotParam(s, kSlotAmount));
+   for (int r = 0; r < kRouteCount; ++r)
+      d.push_back(routeParam(r, kRouteAmount));
    return d;
 }
 
@@ -339,6 +385,12 @@ inline std::vector<clap_id> buildDestinations() {
 inline const std::vector<clap_id> &destinations() {
    static const std::vector<clap_id> d = detail::buildDestinations();
    return d;
+}
+// Where a part offset is in destinations(), or -1 when routes can't move it.
+inline int destinationIndex(clap_id offset) {
+   const auto &d = destinations();
+   const auto it = std::find(d.begin(), d.end(), offset);
+   return it == d.end() ? -1 : static_cast<int>(it - d.begin());
 }
 
 // The destination menu's names, filled in from the params once they exist (see kParams()).
@@ -358,7 +410,7 @@ inline void addPart(Builder &b, int part) {
    const std::string voice = "Voice";
    b.add(id(kPartLevel), "Level", voice, -60.0, 6.0, 0.0, kMod, Unit::Decibels);
    b.add(id(kPartPan), "Pan", voice, -1.0, 1.0, 0.0, kMod, Unit::Bipolar);
-   b.add(id(kPartTranspose), "Transpose", voice, -48.0, 48.0, 0.0, kStepped, Unit::Semitones);
+   b.add(id(kPartTranspose), "Transpose", voice, -48.0, 48.0, part == 1 ? -12.0 : 0.0, kStepped, Unit::Semitones);
    b.add(id(kPartFine), "Fine", voice, -100.0, 100.0, 0.0, kMod, Unit::Cents);
    b.add(id(kKeyLow), "Key Low", voice, 0.0, 127.0, 0.0, kGlobalStepped, Unit::Note);
    b.add(id(kKeyHigh), "Key High", voice, 0.0, 127.0, 127.0, kGlobalStepped, Unit::Note);
@@ -374,13 +426,12 @@ inline void addPart(Builder &b, int part) {
    for (int o = 0; o < kOscCount; ++o) {
       const std::string m = num("Osc ", o), n = m + " ";
       const auto p = [&](OscParam q) { return id(oscParam(o, q)); };
-      b.choice(p(kOscWave), n + "Wave", m, kWaveNames, 2, kChoice);
+      b.choice(p(kOscWave), n + "Wave", m, kWaveNames, o == 0 ? 2 : 0, kChoice);
       b.add(p(kOscShape), n + "Shape", m, 0.0, 1.0, 0.5, kMod, Unit::Percent);
-      b.choice(p(kOscPitchMode), n + "Pitch Mode", m, kPitchModeNames, 0, kChoice);
+      b.choice(p(kOscPitchMode), n + "Pitch Mode", m, kPitchModeNames, o == 0 ? 0 : 1, kChoice);
       b.add(p(kOscCoarse), n + "Coarse", m, -48.0, 48.0, 0.0, kStepped, Unit::Semitones);
-      // Osc 2 starts a few cents sharp, so turning it up beats against Osc 1.
-      b.add(p(kOscFine), n + "Fine", m, -100.0, 100.0, o == 1 ? 7.0 : 0.0, kMod, Unit::Cents);
-      b.add(p(kOscRatio), n + "Ratio", m, 0.25, 16.0, 1.0, kMod, Unit::Ratio);
+      b.add(p(kOscFine), n + "Fine", m, -100.0, 100.0, 0.0, kMod, Unit::Cents);
+      b.add(p(kOscRatio), n + "Ratio", m, 0.25, 16.0, o == 2 ? 3.0 : 1.0, kMod, Unit::Ratio);
       b.add(p(kOscFixed), n + "Fixed", m, 0.0, 1.0, fixedValue(440.0), kMod, Unit::FixedHz);
       b.choice(p(kOscSync), n + "Sync", m, kOnOffNames, 0, kChoice);
       b.choice(p(kOscRetrigger), n + "Retrigger", m, kOnOffNames, 1, kChoice);
@@ -400,23 +451,14 @@ inline void addPart(Builder &b, int part) {
       const std::string n = num("Osc ", o, " ");
       b.add(id(mixParam(kMixLevel, o)), n + "Level", "Mixer", 0.0, 1.0, o == 0 ? 1.0 : 0.0, kMod, Unit::Percent);
       b.add(id(mixParam(kMixPan, o)), n + "Pan", "Mixer", -1.0, 1.0, 0.0, kMod, Unit::Bipolar);
-      // -100% goes to Filter 1 and +100% to Filter 2, with the filters split.
-      b.add(id(mixParam(kMixRoute, o)), n + "Route", "Mixer", -1.0, 1.0, -1.0, kMod, Unit::Bipolar);
    }
-   b.choice(id(mixParam(kRingPair)), "Ring Pair", "Mixer", kRingPairNames, 1, kChoice);
-   b.add(id(mixParam(kRingLevel)), "Ring Level", "Mixer", 0.0, 1.0, 0.0, kMod, Unit::Percent);
-   b.add(id(mixParam(kRingRoute)), "Ring Route", "Mixer", -1.0, 1.0, -1.0, kMod, Unit::Bipolar);
    b.add(id(mixParam(kNoiseLevel)), "Noise Level", "Mixer", 0.0, 1.0, 0.0, kMod, Unit::Percent);
    b.add(id(mixParam(kNoiseColor)), "Noise Color", "Mixer", -1.0, 1.0, 0.0, kMod, Unit::Bipolar);
-   b.add(id(mixParam(kNoiseRoute)), "Noise Route", "Mixer", -1.0, 1.0, -1.0, kMod, Unit::Bipolar);
 
    b.choice(id(tailParam(kDriveType)), "Drive Type", "Drive", kDriveTypeNames, 0, kChoice);
    b.add(id(tailParam(kDriveAmount)), "Drive", "Drive", 0.0, 1.0, 0.0, kMod, Unit::Percent);
    b.choice(id(tailParam(kFilterRouting)), "Filter Routing", "Filters", kRoutingNames, 0, kChoice);
    b.add(id(tailParam(kFilterBalance)), "Filter Balance", "Filters", -1.0, 1.0, 0.0, kMod, Unit::Bipolar);
-   b.choice(id(tailParam(kShaperType)), "Shaper Type", "Shaper", kShaperTypeNames, 0, kChoice);
-   b.add(id(tailParam(kShaperAmount)), "Shaper", "Shaper", 0.0, 1.0, 0.0, kMod, Unit::Percent);
-   b.add(id(tailParam(kShaperMix)), "Shaper Mix", "Shaper", 0.0, 1.0, 1.0, kMod, Unit::Percent);
 
    for (int f = 0; f < kFilterCount; ++f) {
       const std::string m = num("Filter ", f), n = m + " ";
@@ -428,7 +470,6 @@ inline void addPart(Builder &b, int part) {
       b.add(p(kFilterResonance), n + "Resonance", m, 0.0, 1.0, 0.2, kMod, Unit::Percent);
       b.add(p(kFilterDrive), n + "Drive", m, 0.0, 1.0, 0.0, kMod, Unit::Percent);
       b.add(p(kFilterKeyTrack), n + "Key Track", m, 0.0, 1.0, 0.0, kMod, Unit::Percent);
-      b.add(p(kFilterFm), n + "FM", m, 0.0, 1.0, 0.0, kMod, Unit::Percent);
    }
 
    for (int e = 0; e < kEnvCount; ++e) {
@@ -448,45 +489,59 @@ inline void addPart(Builder &b, int part) {
    }
 
    for (int l = 0; l < kLfoCount; ++l) {
-      const std::string m = num("LFO ", l), n = m + " ";
+      const std::string m = l == 0 ? "Wingbeat" : "Wind", n = m + " ";
       const auto p = [&](LfoParam q) { return id(lfoParam(l, q)); };
-      b.choice(p(kLfoShape), n + "Shape", m, kLfoShapeNames, l == 0 ? 0 : 1, kChoice);
-      b.add(p(kLfoRate), n + "Rate", m, 0.0, 1.0, lfoValue(l == 0 ? 5.0 : 0.5), kMod, Unit::LfoHz);
+      b.choice(p(kLfoShape), n + "Shape", m, kLfoShapeNames, l == 0 ? 0 : 5, kChoice);
+      b.add(p(kLfoRate), n + "Rate", m, 0.0, 1.0, lfoValue(l == 0 ? 5.0 : 0.2), kMod, Unit::LfoHz);
       b.choice(p(kLfoSync), n + "Sync", m, kOnOffNames, 0, kGlobalChoice);
       b.choice(p(kLfoDivision), n + "Division", m, kDivisionNames, 8, kChoice);
-      b.choice(p(kLfoTrigger), n + "Trigger", m, kTriggerNames, 0, kGlobalChoice);
+      // The wind is one gust for every creature, so it starts Global.
+      b.choice(p(kLfoTrigger), n + "Trigger", m, kTriggerNames, l == 0 ? 0 : 2, kGlobalChoice);
       b.add(p(kLfoPhase), n + "Phase", m, 0.0, 360.0, 0.0, kMod, Unit::Degrees);
       b.add(p(kLfoDelay), n + "Delay", m, 0.0, 1.0, 0.0, kMod, Unit::Time);
       b.choice(p(kLfoPolarity), n + "Polarity", m, kPolarityNames, 0, kChoice);
+      b.add(p(kLfoPush), n + "Push", m, 0.0, 1.0, l == 0 ? 0.2 : 0.3, kMod, Unit::Percent);
    }
 
-   // The starting routes: Env 2 opens Filter 1, Env 3 drives the 2 > 1 FM, pressure and slide open
-   // the cutoff as in Basic Synth, and the mod wheel brings in vibrato.
+   // Part A shoals and part B hunts it, so a layered patch has a predator from the start.
+   const std::string fl = "Flock";
+   b.choice(id(flockParam(kBehaviour)), "Behaviour", fl, kBehaviourNames, part == 0 ? 0 : 2, kGlobalChoice);
+   b.add(id(flockParam(kCohesion)), "Cohesion", fl, 0.0, 1.0, 0.5, kMod, Unit::Percent);
+   b.add(id(flockParam(kAlignment)), "Alignment", fl, 0.0, 1.0, 0.5, kMod, Unit::Percent);
+   b.add(id(flockParam(kSeparation)), "Separation", fl, 0.0, 1.0, 0.4, kMod, Unit::Percent);
+   b.add(id(flockParam(kSpeed)), "Speed", fl, 0.0, 1.0, part == 0 ? 0.4 : 0.55, kMod, Unit::Percent);
+   b.add(id(flockParam(kWander)), "Wander", fl, 0.0, 1.0, 0.2, kMod, Unit::Percent);
+   b.add(id(flockParam(kLure)), "Lure", fl, 0.0, 1.0, 0.6, kMod, Unit::Percent);
+   b.add(id(flockParam(kRange)), "Range", fl, 0.0, 1.0, 0.35, kMod, Unit::Percent);
+   b.add(id(flockParam(kNeighbourFm)), "Neighbour FM", fl, 0.0, 1.0, 0.25, kMod, Unit::Percent);
+   b.add(id(flockParam(kTunePull)), "Tune Pull", fl, 0.0, 1.0, 0.0, kMod, Unit::Percent);
+   b.add(id(flockParam(kBite)), "Bite", fl, 0.0, 1.0, part == 1 ? 0.5 : 0.0, kMod, Unit::Percent);
+   b.add(id(flockParam(kTailLength)), "Tail Length", fl, 0.0, 1.0, 0.5, kMod, Unit::Percent);
+   b.add(id(flockParam(kTailSpread)), "Tail Spread", fl, 0.0, 1.0, 0.5, kMod, Unit::Percent);
+   b.add(id(flockParam(kWake)), "Wake", fl, 0.0, 1.0, 0.2, kMod, Unit::Percent);
+
+   // The starting routes: Env 2 opens Filter 1, Press makes a creature flap faster and brighter,
+   // Speed opens the cutoff and Crowd thickens the 2 > 1 FM, so a tight flock rings.
    struct Route {
-      int source, via;
+      int source;
       double amount;
       clap_id destination;
    };
-   const Route routes[] = {{2, 0, 0.3, filterParam(0, kFilterCutoff)},
-                           {3, 0, 0.25, fmCell(1, 0)},
-                           {7, 0, 0.2, filterParam(0, kFilterCutoff)},
-                           {9, 0, 0.15, filterParam(0, kFilterCutoff)},
-                           {4, 17, 0.2, kPartFine}};
-   const auto destinationIndex = [](clap_id offset) {
-      const auto &d = destinations();
-      return static_cast<int>(std::find(d.begin(), d.end(), offset) - d.begin());
-   };
-   for (int s = 0; s < kSlotCount; ++s) {
-      const std::string m = num("Slot ", s), n = m + " ";
-      const auto p = [&](SlotParam q) { return id(slotParam(s, q)); };
-      const Route r = s < static_cast<int>(std::size(routes)) ? routes[s] : Route{0, 0, 0.0, filterParam(0, kFilterCutoff)};
-      b.choice(p(kSlotSource), n + "Source", m, kSourceNames, r.source, kGlobalChoice);
-      b.choice(p(kSlotVia), n + "Via", m, kSourceNames, r.via, kGlobalChoice);
-      b.choice(p(kSlotCurve), n + "Curve", m, kCurveNames, 0, kGlobalChoice);
-      b.add(p(kSlotAmount), n + "Amount", m, -1.0, 1.0, r.amount, kMod, Unit::Bipolar);
+   const Route routes[] = {{kSourceEnv1 + 1, 0.3, filterParam(0, kFilterCutoff)},
+                           {kSourceStrike + 1, 0.4, flockParam(kSpeed)},
+                           {kSourceStrike + 1, 0.2, filterParam(0, kFilterCutoff)},
+                           {kSourceSpeed, 0.25, filterParam(0, kFilterCutoff)},
+                           {kSourceCrowd, 0.35, fmCell(1, 0)},
+                           {kSourceWingbeat, 0.15, oscParam(0, kOscShape)}};
+   for (int r = 0; r < kRouteCount; ++r) {
+      const std::string m = num("Route ", r), n = m + " ";
+      const auto p = [&](RouteParam q) { return id(routeParam(r, q)); };
+      const Route route = r < static_cast<int>(std::size(routes)) ? routes[r] : Route{kSourceOff, 0.0, filterParam(0, kFilterCutoff)};
+      b.choice(p(kRouteSource), n + "Source", m, kSourceNames, route.source, kGlobalChoice);
       // The destination names come from the params, so the choice list is filled in afterwards.
-      b.add(p(kSlotDestination), n + "Destination", m, 0.0, static_cast<double>(destinations().size() - 1),
-            destinationIndex(r.destination), kGlobalChoice, Unit::Choice, &destinationNames());
+      b.add(p(kRouteDestination), n + "Destination", m, 0.0, static_cast<double>(destinations().size() - 1),
+            destinationIndex(route.destination), kGlobalChoice, Unit::Choice, &destinationNames());
+      b.add(p(kRouteAmount), n + "Amount", m, -1.0, 1.0, route.amount, kMod, Unit::Bipolar);
    }
 }
 
@@ -509,6 +564,8 @@ inline std::vector<Param> buildParams() {
       b.add(kTouchSmooth1 + i, std::string(kTouchNames[i]) + " Smoothing", "Expression", 0.0, 1.0,
             timeValue(i == 2 ? 2.0 : 8.0), kGlobalMod, Unit::Time);
    }
+   b.add(kSkySize, "Sky Size", "Sky", 0.0, 1.0, 0.5, kGlobalMod, Unit::Percent);
+   b.choice(kSkyWalls, "Sky Walls", "Sky", kWallNames, 0, kGlobalChoice);
    for (int part = 0; part < kPartCount; ++part)
       addPart(b, part);
    // The destination menu reads each destination's name from part A.

@@ -85,8 +85,12 @@ int main() {
    JCLAP_CHECK_EQ(destinationNames().size(), destinations().size());
    for (clap_id offset : destinations())
       JCLAP_CHECK(findParam(partId(0, offset)) != nullptr);
-   JCLAP_CHECK(h.paramText(partId(0, slotParam(0, kSlotDestination)), h.paramValue(partId(0, slotParam(0, kSlotDestination)))) ==
+   JCLAP_CHECK(h.paramText(partId(0, routeParam(0, kRouteDestination)), h.paramValue(partId(0, routeParam(0, kRouteDestination)))) ==
                "Filter 1 Cutoff");
+   JCLAP_CHECK(h.paramText(partId(0, routeParam(4, kRouteDestination)), h.paramValue(partId(0, routeParam(4, kRouteDestination)))) ==
+               "FM 2 > 1");
+   JCLAP_CHECK(h.paramText(partId(1, flockParam(kBehaviour)), h.paramValue(partId(1, flockParam(kBehaviour)))) == "Hunt");
+   JCLAP_CHECK(destinationIndex(kPartTranspose) == -1);
 
    // Text: a few by hand, then every param round-trips at its ends, middle and default.
    JCLAP_CHECK(h.paramText(partId(0, oscParam(1, kOscWave)), 5.0) == "Half Sine");

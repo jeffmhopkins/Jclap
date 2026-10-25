@@ -2,7 +2,7 @@
 
 # JSynth
 
-A bi-timbral MPE synth in the spirit of Basic Synth: two parts, each with three cross-modulating oscillators, two filters, three envelopes, two LFOs and a 16-slot mod matrix.
+A bi-timbral MPE synth where every note is a creature and the creatures flock. Two species, each a three-oscillator FM patch with two filters, three envelopes and two LFOs, and creatures that fly near each other modulate each other. Each one trails ink.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.2 instrument](https://img.shields.io/badge/CLAP%201.2.2-instrument-blue)](https://github.com/free-audio/clap) [![MPE: yes](https://img.shields.io/badge/MPE-yes-blue)](#the-design) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![status: panel mock](https://img.shields.io/badge/status-panel%20mock-orange)](#status) [![shipped: no](https://img.shields.io/badge/shipped-no-lightgrey)](#status)
 
@@ -12,40 +12,47 @@ A bi-timbral MPE synth in the spirit of Basic Synth: two parts, each with three 
 
 > [!IMPORTANT]
 > **This is the panel mock.** Every param exists, can be automated, and saves and loads, and the panel
-> edits them all, but the plugin makes **no sound** yet. It builds into `build/preview/`, which CI
-> checks but never ships.
+> flies the flocks from the held notes, but the plugin makes **no sound** yet. It builds into
+> `build/preview/`, which CI checks but never ships.
 
-| Main (part A) | Main (part B) |
+| Part A | Part B |
 |---|---|
-| ![Main page, part A](docs/panel.png) | ![Main page, part B](docs/panel-b.png) |
-| **Mod** | **Play** |
-| ![Mod page](docs/panel-mod.png) | ![Play page](docs/panel-play.png) |
+| ![Part A, the FLOCK and ENV tabs](docs/panel.png) | ![Part B, the FM and MOTION tabs](docs/panel-b.png) |
+| **MAP mode, with SPEED armed** | **The route list** |
+| ![MAP mode](docs/panel-map.png) | ![Routes](docs/panel-routes.png) |
 
 ## The design
 
-- **Two parts, A and B**, each a whole patch. The play mode decides which part a note goes to:
-  Single, Layer, Split (by key), MPE Zones (lower zone to A, upper to B), Velocity, or Expression (a
-  per-note crossfade by Slide or Press). Each part plays up to 16 notes.
+- **Every note is a creature.** Your finger is its lure: the note sets where the lure sits left to
+  right, Glide moves it sideways, Slide lifts it, and Press makes the creature fly faster and
+  brighter. Let go and it flies off as it fades.
+- **Two species, A and B**, each a whole patch with its own way of flying: Shoal, Scatter, Hunt or
+  Flee. The play mode decides which species a note hatches (Single, Layer, Split, MPE Zones,
+  Velocity or Expression). Each plays up to 16 creatures.
 - **A voice:** three oscillators (analog waves, the TX81Z's eight FM waves, or noise; pitched by
-  note, ratio or fixed Hz), a 3×3 FM matrix whose diagonal is each oscillator's feedback, ring mod
-  and sync, a mixer, drive, two filters (serial, parallel or split, each oscillator choosing in
-  split), a shaper, and the amp.
-- **Modulation:** Env 1 is the amp; Env 2, Env 3 and the LFOs go wherever the matrix sends them.
-  Each of the 16 slots is a source, a via source that scales it, a curve, an amount, and a
-  destination, which is any continuous param of the part (including another slot's amount).
-- **Touch:** Strike, Press, Glide, Slide and Lift each have a response curve and smoothing. Glide
-  rounding pulls a resting finger to the nearest semitone.
+  note, ratio or fixed Hz), a 3×3 FM grid whose diagonal is each oscillator's feedback, noise, drive,
+  and two filters (serial, parallel or split).
+- **Between creatures:** the nearest neighbour's Osc 1 feeds this creature's Osc 2 (Neighbour FM), so
+  a tight flock rings and a loose one is clean. Creatures flying the same way drift toward pure
+  intervals (Tune Pull). A hunter that catches its prey ring-modulates it (Bite).
+- **Ink:** each creature sheds ink that blooms (Spread) and fades (Tail). Flying through another
+  creature's ink stirs it, and that is the Wake source.
+- **Motion:** LFO 1 is the wingbeat, one per creature, and LFO 2 the wind, one gust for the whole sky.
+  Push sets how hard each moves the creatures; both are also mod sources.
 
-## The panel
+## Modulation: MAP
 
-- **MAIN** edits the selected part's voice. **A / B** in the header picks the part.
-- **MOD** is the selected part's matrix, beside the touch response and the four macros (both shared).
-- **PLAY** has the play mode, both parts' voice settings side by side, and a keyboard or MPE note
-  grid.
+There is no matrix page. Press **MAP**, touch a source, then drag any knob: the drag sets how much that
+source moves it, shown as a ring in the source's colour (up to four per knob). Double-click a knob to
+flip its route, right-click to remove it. The sources are the touch chips in the header, the envelope
+and LFO chips on the right card, and the flock's own under the sky: Speed, Crowd, Nearest, Heading,
+Caught and Wake. Underneath, each part has 16 routes (source, destination, amount) as host params, and
+**ROUTES** lists them to edit by name. The FM grid and the flock params are knobs, so they map like
+any other.
 
 ## Params
 
 `src/params.h` writes a part's params once, as offsets, and `partId(part, offset)` gives the host's
-id. Each module is a block of ids with room to grow (oscillators 16 apart, matrix slots 8 apart), so
-ids can stay put once released. The state saves each value with its id, so a state from a build with
-fewer params loads, and unknown ids are skipped.
+id. Each module is a block of ids with room to grow (oscillators 16 apart, routes 4 apart), so ids can
+stay put once released. The state saves each value with its id, so a state from a build with fewer
+params loads, and unknown ids are skipped.

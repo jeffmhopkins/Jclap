@@ -405,7 +405,7 @@ const clap_plugin_descriptor_t JSynth::descriptor = {
     "",
     "",
     "0.7.0",
-    "Bi-timbral MPE synth (panel mock, no sound yet)",
+    "Bi-timbral MPE flocking synth (panel mock, no sound yet)",
     kFeatures,
 };
 
