@@ -323,16 +323,16 @@ struct Param {
    const char *shortName;
 };
 
-// Every param can be automated and modulated by the host, and most per voice (by note id, key or
-// channel), as Bitwig's polyphonic modulators do. Play mode, route sources and other settings
-// with no per-voice meaning are global only.
+// Every param can be automated and modulated by the host. Per-voice host modulation (by note id, key
+// or channel) isn't built yet, so no param claims it. Settings that make no sense to automate (a
+// route's source and destination, the oversampling) are neither.
 constexpr auto kGlobalMod = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE;
-constexpr auto kMod = kGlobalMod | CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID | CLAP_PARAM_IS_MODULATABLE_PER_KEY |
-                      CLAP_PARAM_IS_MODULATABLE_PER_CHANNEL | CLAP_PARAM_IS_MODULATABLE_PER_PORT;
+constexpr auto kMod = kGlobalMod;
 constexpr auto kStepped = kMod | CLAP_PARAM_IS_STEPPED;
 constexpr auto kChoice = kStepped | CLAP_PARAM_IS_ENUM;
 constexpr auto kGlobalStepped = kGlobalMod | CLAP_PARAM_IS_STEPPED;
 constexpr auto kGlobalChoice = kGlobalStepped | CLAP_PARAM_IS_ENUM;
+constexpr auto kSetting = CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_ENUM;
 
 namespace detail {
 
@@ -432,10 +432,10 @@ inline void addPart(Builder &b, int part) {
    b.add(id(kGlideTime), "Glide", voice, 0.0, 1.0, 0.0, kMod, Unit::Time);
    b.choice(id(kGlideMode), "Glide Mode", voice, kGlideModeNames, 0, kGlobalChoice);
    b.add(id(kBendRange), "MPE Bend Range", voice, 1.0, 96.0, 48.0, kGlobalStepped, Unit::Range);
-   b.add(id(kDrift), "Drift", voice, 0.0, 1.0, 0.1, kMod, Unit::Percent);
+   b.add(id(kDrift), "Drift", voice, 0.0, 1.0, 0.0, kMod, Unit::Percent);
    b.add(id(kVelocityToAmp), "Velocity", voice, 0.0, 1.0, 1.0, kMod, Unit::Percent);
    b.choice(id(kPartOutput), "Output", voice, kOutputNames, 0, kGlobalChoice);
-   b.add(id(kSkyPan), "X Pan", voice, 0.0, 1.0, 0.5, kMod, Unit::Percent);
+   b.add(id(kSkyPan), "X Pan", voice, 0.0, 1.0, 0.0, kMod, Unit::Percent);
 
    for (int o = 0; o < kOscCount; ++o) {
       const std::string m = num("Osc ", o), n = m + " ";
@@ -529,15 +529,16 @@ inline void addPart(Builder &b, int part) {
    b.add(id(flockParam(kWander)), "Wander", fl, 0.0, 1.0, 0.2, kMod, Unit::Percent);
    b.add(id(flockParam(kLure)), "Lure", fl, 0.0, 1.0, 0.6, kMod, Unit::Percent);
    b.add(id(flockParam(kRange)), "Range", fl, 0.0, 1.0, 0.35, kMod, Unit::Percent);
-   b.add(id(flockParam(kNeighbourFm)), "Neighbour FM", fl, 0.0, 1.0, 0.25, kMod, Unit::Percent);
+   b.add(id(flockParam(kNeighbourFm)), "Neighbour FM", fl, 0.0, 1.0, 0.0, kMod, Unit::Percent);
    b.add(id(flockParam(kTunePull)), "Tune Pull", fl, 0.0, 1.0, 0.0, kMod, Unit::Percent);
-   b.add(id(flockParam(kBite)), "Bite", fl, 0.0, 1.0, part == 1 ? 0.5 : 0.0, kMod, Unit::Percent);
+   b.add(id(flockParam(kBite)), "Bite", fl, 0.0, 1.0, 0.0, kMod, Unit::Percent);
    b.add(id(flockParam(kTailLength)), "Tail Length", fl, 0.0, 1.0, 0.5, kMod, Unit::Percent);
    b.add(id(flockParam(kTailSpread)), "Tail Spread", fl, 0.0, 1.0, 0.5, kMod, Unit::Percent);
    b.add(id(flockParam(kWake)), "Wake", fl, 0.0, 1.0, 0.2, kMod, Unit::Percent);
 
-   // The starting routes: Env 2 opens Filter 1, Press makes a creature flap faster and brighter,
-   // Speed opens the cutoff and Crowd thickens the 2 > 1 FM, so a tight flock rings.
+   // The starting routes: Env 2 opens Filter 1, and Press opens it too and makes the creature fly
+   // faster. Nothing the flock does reaches the sound unless a route or a BETWEEN CREATURES knob says
+   // so: every creature-to-sound link starts at zero, so a plain patch is plain.
    struct Route {
       int source;
       double amount;
@@ -545,18 +546,15 @@ inline void addPart(Builder &b, int part) {
    };
    const Route routes[] = {{kSourceEnv1 + 1, 0.3, filterParam(0, kFilterCutoff)},
                            {kSourceStrike + 1, 0.4, flockParam(kSpeed)},
-                           {kSourceStrike + 1, 0.2, filterParam(0, kFilterCutoff)},
-                           {kSourceSpeed, 0.25, filterParam(0, kFilterCutoff)},
-                           {kSourceCrowd, 0.35, fmCell(1, 0)},
-                           {kSourceWingbeat, 0.15, oscParam(0, kOscShape)}};
+                           {kSourceStrike + 1, 0.2, filterParam(0, kFilterCutoff)}};
    for (int r = 0; r < kRouteCount; ++r) {
       const std::string m = num("Route ", r), n = m + " ";
       const auto p = [&](RouteParam q) { return id(routeParam(r, q)); };
       const Route route = r < static_cast<int>(std::size(routes)) ? routes[r] : Route{kSourceOff, 0.0, filterParam(0, kFilterCutoff)};
-      b.choice(p(kRouteSource), n + "Source", m, kSourceNames, route.source, kGlobalChoice);
+      b.choice(p(kRouteSource), n + "Source", m, kSourceNames, route.source, kSetting);
       // The destination names come from the params, so the choice list is filled in afterwards.
       b.add(p(kRouteDestination), n + "Destination", m, 0.0, static_cast<double>(destinations().size() - 1),
-            destinationIndex(route.destination), kGlobalChoice, Unit::Choice, &destinationNames());
+            destinationIndex(route.destination), kSetting, Unit::Choice, &destinationNames());
       b.add(p(kRouteAmount), n + "Amount", m, -1.0, 1.0, route.amount, kMod, Unit::Bipolar);
    }
 }
@@ -567,7 +565,7 @@ inline std::vector<Param> buildParams() {
    b.add(kSplitKey, "Split Key", "Play", 0.0, 127.0, 60.0, kGlobalStepped, Unit::Note);
    b.add(kVelocitySplit, "Velocity Split", "Play", 1.0, 127.0, 80.0, kGlobalStepped, Unit::Velocity);
    b.choice(kCrossfadeSource, "Crossfade Source", "Play", kCrossfadeNames, 0, kGlobalChoice);
-   b.choice(kQuality, "Quality", "Output", kQualityNames, 1, kGlobalChoice);
+   b.choice(kQuality, "Quality", "Output", kQualityNames, 1, kSetting);
    b.add(kMasterLevel, "Master Level", "Output", -60.0, 6.0, -6.0, kGlobalMod, Unit::Decibels);
    b.add(kManagerBendRange, "Manager Bend Range", "Expression", 1.0, 96.0, 2.0, kGlobalStepped, Unit::Range);
    b.add(kGlideRounding, "Glide Rounding", "Expression", 0.0, 1.0, 0.0, kGlobalMod, Unit::Percent);

@@ -88,8 +88,10 @@ int main() {
       JCLAP_CHECK(findParam(partId(0, offset)) != nullptr);
    JCLAP_CHECK(h.paramText(partId(0, routeParam(0, kRouteDestination)), h.paramValue(partId(0, routeParam(0, kRouteDestination)))) ==
                "Filter 1 Cutoff");
-   JCLAP_CHECK(h.paramText(partId(0, routeParam(4, kRouteDestination)), h.paramValue(partId(0, routeParam(4, kRouteDestination)))) ==
-               "FM 2 > 1");
+   // Nothing from the flock reaches the sound by default: the starting routes stop at three.
+   JCLAP_CHECK(h.paramText(partId(0, routeParam(3, kRouteSource)), h.paramValue(partId(0, routeParam(3, kRouteSource)))) == "Off");
+   JCLAP_CHECK(h.paramValue(partId(0, flockParam(kNeighbourFm))) == 0.0);
+   JCLAP_CHECK(h.paramValue(partId(1, flockParam(kBite))) == 0.0);
    JCLAP_CHECK(h.paramText(partId(1, flockParam(kBehaviour)), h.paramValue(partId(1, flockParam(kBehaviour)))) == "Hunt");
    JCLAP_CHECK(destinationIndex(kPartTranspose) == -1);
 
@@ -133,14 +135,15 @@ int main() {
       JCLAP_CHECK(std::fabs(h.object<EditorHost>()->paramModulated(cutoff) - 0.5) < 1e-9);
    }
 
-   // Silent, whatever is played.
+   // A note sounds, finite and under full scale.
    {
       h.note(CLAP_EVENT_NOTE_ON, 60, 0.8);
       float outL[256], outR[256];
       float *out[2] = {outL, outR};
       std::fill(outL, outL + 256, 1.0f);
       h.process(256, nullptr, out);
-      JCLAP_CHECK(std::all_of(outL, outL + 256, [](float s) { return s == 0.0f; }));
+      JCLAP_CHECK(std::any_of(outL, outL + 256, [](float s) { return s != 0.0f; }));
+      JCLAP_CHECK(std::all_of(outL, outL + 256, [](float s) { return std::isfinite(s) && std::fabs(s) <= 1.0f; }));
       std::vector<EditorHost::Note> notes;
       h.object<EditorHost>()->notes(notes);
       JCLAP_CHECK(notes.size() == 1 && notes[0].note == 60 && std::fabs(notes[0].strike - 0.8f) < 1e-6f);

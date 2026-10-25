@@ -1,16 +1,20 @@
-// JSynth: a bi-timbral MPE synth, so far only its panel and params. This is the mock: every param
-// exists, saves and loads, and the panel edits it, but the plugin makes no sound yet. Notes from the
-// host and the panel are tracked so the keyboard, note grid and touch lights show them.
+// JSynth: a bi-timbral MPE synth where every note is a creature in a flock. The engine (engine.h)
+// makes the sound and flies the flock; this file is the CLAP side: params, state, notes and ports,
+// and what the panel reads back.
 
 #include <jclap/core/edit_queue.h>
 #include <jclap/core/entry.h>
 #include <jclap/core/helpers.h>
 #include <jclap/core/spsc_queue.h>
 #include <jclap/core/triple_buffer.h>
+#include <jclap/dsp/denormals.h>
 #include <jclap/ui/clap_gui.h>
+
+#include <clap/ext/voice-info.h>
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -18,6 +22,7 @@
 #include <vector>
 
 #include "editor.h"
+#include "engine.h"
 #include "params.h"
 
 namespace {
@@ -54,7 +59,8 @@ public:
 
    explicit JSynth(const clap_host_t *host)
        : Plugin(&descriptor, host), values_(new std::atomic<double>[paramCount()]),
-         mods_(new std::atomic<double>[paramCount()]), pending_(new std::atomic<bool>[paramCount()]) {
+         mods_(new std::atomic<double>[paramCount()]), pending_(new std::atomic<bool>[paramCount()]),
+         engine_(new Engine) {
       for (size_t i = 0; i < paramCount(); ++i) {
          values_[i].store(kParams()[i].def.defaultValue);
          mods_[i].store(0.0);
@@ -70,7 +76,9 @@ public:
       return true;
    }
 
-   bool activate(double, uint32_t, uint32_t) override {
+   bool activate(double sampleRate, uint32_t, uint32_t) override {
+      sampleRate_ = sampleRate;
+      engine_->prepare(sampleRate, {values_.get(), mods_.get()});
       held_.clear();
       // Panel notes played while inactive are dropped. The audio thread isn't running, so popping
       // here is safe.
@@ -81,11 +89,19 @@ public:
       return true;
    }
 
-   // An instrument: notes in, stereo out.
-   uint32_t audioPortsCount(bool isInput) const override { return isInput ? 0 : 1; }
+   void reset() override { engine_->reset(1); }
+
+   // An instrument: notes in, and three stereo outs: the main mix, then part A's and part B's own
+   // (a part set to Output Own plays there instead of in the main mix).
+   uint32_t audioPortsCount(bool isInput) const override { return isInput ? 0 : 3; }
    bool audioPortsInfo(uint32_t index, bool isInput, clap_audio_port_info_t *info) const override {
-      if (!Plugin::audioPortsInfo(index, isInput, info))
+      if (isInput || index >= 3)
          return false;
+      info->id = index;
+      std::snprintf(info->name, sizeof(info->name), "%s", index == 0 ? "Main" : index == 1 ? "Part A" : "Part B");
+      info->channel_count = 2;
+      info->flags = index == 0 ? CLAP_AUDIO_PORT_IS_MAIN : 0;
+      info->port_type = CLAP_PORT_STEREO;
       info->in_place_pair = CLAP_INVALID_ID;
       return true;
    }
@@ -107,6 +123,8 @@ public:
          return &paramsExtension;
       if (!std::strcmp(id, CLAP_EXT_STATE))
          return &stateExtension;
+      if (!std::strcmp(id, CLAP_EXT_VOICE_INFO))
+         return &voiceInfo_;
       return jclap::ui::ClapGui::extensionFor<JSynth, &JSynth::gui_>(id);
    }
 
@@ -267,38 +285,106 @@ public:
    // ---- audio thread ----
 
    clap_process_status process(const clap_process_t *proc) override {
+      jclap::dsp::ScopedNoDenormals noDenormals;
       drainEdits(proc->out_events);
+      if (proc->transport)
+         engine_->transport((proc->transport->flags & CLAP_TRANSPORT_HAS_TEMPO) ? proc->transport->tempo : 0.0,
+                            (proc->transport->flags & CLAP_TRANSPORT_IS_PLAYING) != 0);
+
+      // Where the engine writes: the main port, then each part's own. A part whose port is missing
+      // plays in the main mix.
+      const int frames = static_cast<int>(proc->frames_count);
+      float *channels[3][2] = {};
+      float *const *ports[3] = {nullptr, nullptr, nullptr};
+      for (uint32_t p = 0; p < proc->audio_outputs_count && p < 3; ++p) {
+         const clap_audio_buffer_t &out = proc->audio_outputs[p];
+         if (!out.data32 || out.channel_count < 2)
+            continue;
+         for (int c = 0; c < 2; ++c) {
+            channels[p][c] = out.data32[c];
+            std::fill(out.data32[c], out.data32[c] + frames, 0.0f);
+         }
+         ports[p] = channels[p];
+         proc->audio_outputs[p].constant_mask = 0;
+      }
+
+      // The panel's notes start at the top of the block.
+      engine_->setBlockSample(0);
+      PanelNote p;
+      while (panelNotes_.pop(p)) {
+         NoteRef ref;
+         ref.key = p.note;
+         ref.port = -1;
+         if (p.kind == PanelNote::Kind::On) {
+            press(p.note, -1, p.velocity);
+            engine_->noteOn(ref, p.velocity);
+         }
+         else if (p.kind == PanelNote::Kind::Off) {
+            lift(p.note, -1, 0.0f);
+            engine_->noteOff(ref, 0.0f);
+         }
+         else {
+            if (HeldNote *h = find(p.note, -1)) {
+               h->shown.bend = p.bend;
+               h->shown.pressure = p.pressure;
+               h->shown.timbre = p.timbre;
+            }
+            engine_->expression(ref, CLAP_NOTE_EXPRESSION_TUNING, p.bend);
+            engine_->expression(ref, CLAP_NOTE_EXPRESSION_PRESSURE, p.pressure);
+            engine_->expression(ref, CLAP_NOTE_EXPRESSION_BRIGHTNESS, p.timbre);
+         }
+      }
+
+      // Render up to each event, then apply it: notes land on their sample, and params are read at
+      // the next control tick.
       const uint32_t n = proc->in_events->size(proc->in_events);
+      int at = 0;
       for (uint32_t i = 0; i < n; ++i) {
          const clap_event_header_t *h = proc->in_events->get(proc->in_events, i);
+         const int time = std::clamp(static_cast<int>(h->time), at, frames);
+         if (time > at) {
+            renderSpan(ports, at, time - at);
+            at = time;
+         }
+         engine_->setBlockSample(at);
          if (!handleParam(h))
             handleNote(h);
       }
-      PanelNote p;
-      while (panelNotes_.pop(p)) {
-         if (p.kind == PanelNote::Kind::On)
-            press(p.note, -1, p.velocity);
-         else if (p.kind == PanelNote::Kind::Off)
-            lift(p.note, -1, 0.0f);
-         else if (HeldNote *h = find(p.note, -1)) {
-            h->shown.bend = p.bend;
-            h->shown.pressure = p.pressure;
-            h->shown.timbre = p.timbre;
-         }
+      if (at < frames)
+         renderSpan(ports, at, frames - at);
+
+      // Notes that have finished sounding.
+      for (int e = 0; e < engine_->endedCount(); ++e) {
+         const Engine::Ended &end = engine_->ended(e);
+         clap_event_note_t ev{};
+         ev.header = {sizeof(ev), static_cast<uint32_t>(std::clamp(end.sample, 0, std::max(0, frames - 1))),
+                      CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_END, 0};
+         ev.note_id = end.ref.noteId;
+         ev.port_index = end.ref.port;
+         ev.channel = end.ref.channel;
+         ev.key = end.ref.key;
+         proc->out_events->try_push(proc->out_events, &ev.header);
       }
-      // No sound yet.
-      for (uint32_t port = 0; port < proc->audio_outputs_count; ++port) {
-         const clap_audio_buffer_t &out = proc->audio_outputs[port];
-         for (uint32_t c = 0; c < out.channel_count; ++c) {
-            if (out.data32)
-               std::fill(out.data32[c], out.data32[c] + proc->frames_count, 0.0f);
-            if (out.data64)
-               std::fill(out.data64[c], out.data64[c] + proc->frames_count, 0.0);
-         }
-         proc->audio_outputs[port].constant_mask = ~uint64_t{0};
-      }
+      engine_->clearEnded();
+
       publish();
-      return CLAP_PROCESS_SLEEP;
+      sinceFrame_ += frames;
+      if (sinceFrame_ >= static_cast<int>(sampleRate_ / 120.0)) {
+         sinceFrame_ = 0;
+         publishFlock();
+      }
+      return CLAP_PROCESS_CONTINUE;
+   }
+
+   // ---- what the panel reads (main thread) ----
+
+   bool flockFrame(FlockFrame &out) const override {
+      // The engine's flock, if it published one in the last quarter second.
+      if (nowMs() - lastFrame_.load(std::memory_order_relaxed) > 250)
+         return false;
+      flockFrames_.update();
+      out = flockFrames_.front();
+      return true;
    }
 
 private:
@@ -336,21 +422,29 @@ private:
          return;
       switch (h->type) {
       case CLAP_EVENT_NOTE_ON:
-      case CLAP_EVENT_NOTE_OFF: {
+      case CLAP_EVENT_NOTE_OFF:
+      case CLAP_EVENT_NOTE_CHOKE: {
          auto *ev = reinterpret_cast<const clap_event_note_t *>(h);
-         if (h->type == CLAP_EVENT_NOTE_ON)
-            press(ev->key, -1, static_cast<float>(ev->velocity));
-         else
-            lift(ev->key, -1, static_cast<float>(ev->velocity));
+         const NoteRef ref = hostRef(ev->note_id, ev->port_index, ev->channel, ev->key);
+         if (h->type == CLAP_EVENT_NOTE_ON) {
+            press(ev->key, ev->channel, static_cast<float>(ev->velocity));
+            engine_->noteOn(ref, static_cast<float>(ev->velocity));
+         }
+         else if (h->type == CLAP_EVENT_NOTE_OFF) {
+            lift(ev->key, ev->channel, static_cast<float>(ev->velocity));
+            engine_->noteOff(ref, static_cast<float>(ev->velocity));
+         }
+         else {
+            held_.clear();
+            engine_->choke(ref);
+         }
          break;
       }
-      case CLAP_EVENT_NOTE_CHOKE:
-         held_.clear();
-         break;
       case CLAP_EVENT_NOTE_EXPRESSION: {
          auto *ev = reinterpret_cast<const clap_event_note_expression_t *>(h);
+         engine_->expression(hostRef(ev->note_id, ev->port_index, ev->channel, ev->key), ev->expression_id, ev->value);
          for (HeldNote &n : held_) {
-            if (ev->key != -1 && ev->key != n.shown.note)
+            if ((ev->key != -1 && ev->key != n.shown.note) || (ev->channel != -1 && ev->channel != n.channel))
                continue;
             const float v = static_cast<float>(ev->value);
             if (ev->expression_id == CLAP_NOTE_EXPRESSION_TUNING)
@@ -363,18 +457,20 @@ private:
          break;
       }
       case CLAP_EVENT_MIDI: {
-         // MPE: each note has its own channel, so its bend, channel pressure and CC 74 are its own.
          auto *ev = reinterpret_cast<const clap_event_midi_t *>(h);
+         engine_->midi(ev->data, ev->port_index);
+         // The panel's copy: notes, and each member channel's own bend, pressure and CC 74.
          const int status = ev->data[0] & 0xF0, channel = ev->data[0] & 0x0F;
          if (status == 0x90 && ev->data[2] > 0)
             press(ev->data[1], channel, ev->data[2] / 127.0f);
          else if (status == 0x80 || status == 0x90)
             lift(ev->data[1], channel, ev->data[2] / 127.0f);
          for (HeldNote &n : held_) {
-            if (n.channel != channel)
+            if (n.channel != channel || channel == 0)
                continue;
-            if (status == 0xE0) // MPE's default 48 semitones on a note channel
-               n.shown.bend = ((ev->data[2] << 7 | ev->data[1]) - 8192) / 8192.0f * 48.0f;
+            if (status == 0xE0)
+               n.shown.bend = ((ev->data[2] << 7 | ev->data[1]) - 8192) / 8192.0f *
+                              static_cast<float>(paramValue(partId(0, kBendRange)));
             else if (status == 0xD0)
                n.shown.pressure = ev->data[1] / 127.0f;
             else if (status == 0xB0 && ev->data[1] == 74)
@@ -385,6 +481,34 @@ private:
       default:
          break;
       }
+   }
+
+   static NoteRef hostRef(int32_t noteId, int16_t port, int16_t channel, int16_t key) {
+      NoteRef ref;
+      ref.noteId = noteId;
+      ref.port = port;
+      ref.channel = channel;
+      ref.key = key;
+      ref.host = true;
+      return ref;
+   }
+
+   void renderSpan(float *const *const *ports, int at, int frames) {
+      if (ports[0]) {
+         engine_->render(ports, at, frames);
+         return;
+      }
+      // No main port to write to: render into scratch so time (and the flock) keeps moving.
+      while (frames > 0) {
+         const int n = std::min(frames, kScratch);
+         engine_->render(scratchPorts_, 0, n);
+         frames -= n;
+      }
+   }
+
+   static int64_t nowMs() {
+      return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+          .count();
    }
 
    HeldNote *find(int note, int channel) {
@@ -431,6 +555,44 @@ private:
       shown_.publish();
    }
 
+   void publishFlock() {
+      FlockFrame &f = flockFrames_.back();
+      const Flock &flock = engine_->flock();
+      f.frame++;
+      f.count = 0;
+      for (int i = 0; i < kCreatureSlots; ++i) {
+         const Creature &c = flock.creatures[i];
+         if (!c.alive)
+            continue;
+         FlockFrame::Shown &s = f.creatures[f.count++];
+         s.id = c.id;
+         s.part = static_cast<int8_t>(c.part);
+         s.held = c.held;
+         s.x = c.x, s.y = c.y, s.vx = c.vx, s.vy = c.vy;
+         s.energy = c.energy, s.press = c.press, s.wing = c.wing;
+         s.sources = c.sources;
+         s.slot = static_cast<int16_t>(i);
+         s.neighbour = static_cast<int16_t>(c.neighbour[0]);
+         s.hunter = static_cast<int16_t>(c.hunter);
+      }
+      for (int part = 0; part < kPartCount; ++part) {
+         for (int e = 0; e < kEnvCount; ++e)
+            f.env[part][e] = engine_->envLevel(part, e);
+         for (int l = 0; l < kLfoCount; ++l)
+            f.lfo[part][l] = engine_->lfoLevel(part, l);
+      }
+      flockFrames_.publish();
+      lastFrame_.store(nowMs(), std::memory_order_relaxed);
+   }
+
+   static bool getVoiceInfo(const clap_plugin_t *, clap_voice_info_t *info) {
+      info->voice_count = 2 * kMaxPolyphony;
+      info->voice_capacity = kVoiceSlots;
+      info->flags = CLAP_VOICE_INFO_SUPPORTS_OVERLAPPING_NOTES;
+      return true;
+   }
+   static constexpr clap_plugin_voice_info_t voiceInfo_ = {getVoiceInfo};
+
    std::unique_ptr<std::atomic<double>[]> values_, mods_;
    // Params a preset load changed that the host hasn't been told about yet.
    std::unique_ptr<std::atomic<bool>[]> pending_;
@@ -446,6 +608,16 @@ private:
       return v;
    }();
    mutable jclap::core::TripleBuffer<HeldNotes> shown_;
+   std::unique_ptr<Engine> engine_;
+   double sampleRate_ = 48000.0;
+   int sinceFrame_ = 0;
+   mutable jclap::core::TripleBuffer<FlockFrame> flockFrames_;
+   std::atomic<int64_t> lastFrame_{0};
+   // Somewhere to render when the host gives no main port.
+   static constexpr int kScratch = 256;
+   std::vector<float> scratch_ = std::vector<float>(2 * kScratch);
+   float *scratchChannels_[2] = {scratch_.data(), scratch_.data() + kScratch};
+   float *const *scratchPorts_[3] = {scratchChannels_, nullptr, nullptr};
    // Last, so the window closes before anything it reads is destroyed.
    jclap::ui::ClapGui gui_;
 };
@@ -459,7 +631,7 @@ const clap_plugin_descriptor_t JSynth::descriptor = {
     "",
     "",
     "0.7.0",
-    "Bi-timbral MPE flocking synth (panel mock, no sound yet)",
+    "Bi-timbral MPE flocking FM synth",
     kFeatures,
 };
 

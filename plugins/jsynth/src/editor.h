@@ -11,6 +11,8 @@
 #include <jclap/ui/params.h>
 #include <jclap/ui/window.h>
 
+#include "flock.h"
+
 namespace jsynth {
 
 // What the panel needs from the plugin, on the main thread.
@@ -38,6 +40,9 @@ public:
    // changes is one edit for the host. The plugin coalesces these, so clicking quickly through
    // presets sends the host the latest values instead of a backlog that could overflow.
    virtual void setParams(const double *values);
+   // The engine's flock as it last published it, or false while the plugin isn't processing (the
+   // panel then flies its own).
+   virtual bool flockFrame(FlockFrame &) const { return false; }
 
    // Where the panel was left, so reopening it shows the same view: the part (A or B), the left and
    // right cards' tabs, and whether the route list is open. Main thread only.
