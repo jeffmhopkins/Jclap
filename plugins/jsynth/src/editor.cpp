@@ -856,7 +856,14 @@ private:
                    local_.creatures[i].part == part)
                   slot = i;
             float lx, ly;
-            lureFor(static_cast<float>(n.note), n.bend, n.timbre, lx, ly);
+            const float touch[kTouchCount] = {n.strike, n.pressure, 0.0f, n.timbre, n.lift};
+            // A random place of its own, the same each time the note is played.
+            const float random = std::sin(n.note * 12.9898f) * 2.0f - 1.0f;
+            const auto axis = [&](FlockParam p) {
+               return lureAxis(static_cast<int>(host_.paramValue(partId(part, flockParam(p))) + 0.5), static_cast<float>(n.note),
+                               n.bend, touch, random);
+            };
+            lureAt(axis(kLureX), axis(kLureY), lx, ly);
             if (slot < 0) {
                for (int i = 0; i < kVoiceSlots && slot < 0; ++i)
                   if (!claimed[i] && !local_.creatures[i].alive)
@@ -1566,7 +1573,7 @@ private:
          auto &behaviour = dropdown(flockParam(kBehaviour), c, {30, 106, 186, 24});
          tips_.add(behaviour, "SHOAL flies with its own kind, SCATTER keeps apart, HUNT chases the other species "
                               "and FLEE runs from it.");
-         const auto g = ui::grid({22, 138, 202, 496}, 3, 4);
+         const auto g = ui::grid({22, 138, 202, 440}, 3, 4);
          knob(flockParam(kCohesion), "COHESION", c, g[0], "Pull toward the middle of the neighbours.");
          knob(flockParam(kAlignment), "ALIGN", c, g[1], "Turn to fly the way the neighbours fly.");
          knob(flockParam(kSeparation), "SEPARATE", c, g[2], "Keep clear of the nearest.");
@@ -1578,6 +1585,16 @@ private:
          knob(flockParam(kTailSpread), "SPREAD", c, g[8], "How far the ink blooms as it ages.");
          knob(flockParam(kWake), "WAKE", c, g[9], "How much a creature stirs the ink it flies through, and so "
                                                    "how much WAKE the others feel.");
+         // What places each note's lure, the ring its creature is pulled to.
+         for (int axis = 0; axis < 2; ++axis) {
+            const float x = 30 + axis * 96.0f;
+            label({x, 586, 90, 14}, axis == 0 ? "LURE X" : "LURE Y");
+            auto &lure = dropdown(flockParam(axis == 0 ? kLureX : kLureY), c, {x, 604, 90, 22});
+            tips_.add(lure, axis == 0 ? "What places a note's ring left to right: PITCH (with bend), a touch, "
+                                        "RANDOM per note, or CENTRE."
+                                      : "What places a note's ring bottom to top: SLIDE (CC 74), another touch, "
+                                        "PITCH, RANDOM per note, or CENTRE.");
+         }
          if (part == 0) {
             part_ = -1;
             knob(kSkySize, "SIZE", kDim, g[10], "How big the sky is, so how far apart the flocks can spread.");

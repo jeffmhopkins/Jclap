@@ -254,6 +254,27 @@ int main() {
       JCLAP_CHECK_EQ(e.activeVoices(), 0);
    }
 
+   // A creature lives as long as its voice: through a long release after its note is let go, and
+   // gone soon after the voice ends.
+   {
+      Params p;
+      p.setPart(0, envParam(0, kEnvRelease), timeValue(3000));
+      Engine e;
+      e.prepare(kRate, {p.values.get(), p.mods.get()});
+      const auto played = [&] {
+         int n = 0;
+         for (int i = 0; i < kVoiceSlots; ++i)
+            n += e.flock().creatures[i].alive;
+         return n;
+      };
+      render(e, 96000, 256, {{100, Event::On, 60, 0.8f}, {4800, Event::Off, 60, 0.0f}});
+      JCLAP_CHECK_EQ(e.activeVoices(), 1);
+      JCLAP_CHECK_EQ(played(), 1);
+      render(e, 48000 * 12, 256, {});
+      JCLAP_CHECK_EQ(e.activeVoices(), 0);
+      JCLAP_CHECK_EQ(played(), 0);
+   }
+
    // Every factory preset sounds, finite and under full scale.
    for (const Preset &preset : factoryPresets()) {
       Params p;

@@ -29,10 +29,28 @@ constexpr float kSkyAspect = 4.0f / 3.0f;
 constexpr int kNeighbours = 3;
 
 // Where a held note's lure sits: low notes left and high right (bend moves it), more Slide higher up.
-inline void lureFor(float note, float bend, float slide, float &x, float &y) {
-   const float k = std::clamp((note + bend - 36.0f) / 48.0f, 0.0f, 1.0f);
-   x = (0.07f + 0.86f * k) * kSkyAspect;
-   y = 0.1f + 0.8f * (1.0f - std::clamp(slide, 0.0f, 1.0f));
+// What places a lure along one axis (kLureSourceNames).
+enum LureSource { kLurePitch, kLureStrike, kLurePress, kLureSlide, kLureLift, kLureRandom, kLureCentre };
+
+// A note's place along one axis, 0..1, by `source`: its pitch with bend over four octaves from C2, a
+// touch dimension (strike, press, glide, slide, lift, each 0..1), its own random place (-1..1), or
+// the middle.
+inline float lureAxis(int source, float note, float bend, const float touch[5], float random) {
+   switch (source) {
+   case kLurePitch: return std::clamp((note + bend - 36.0f) / 48.0f, 0.0f, 1.0f);
+   case kLureStrike: return std::clamp(touch[0], 0.0f, 1.0f);
+   case kLurePress: return std::clamp(touch[1], 0.0f, 1.0f);
+   case kLureSlide: return std::clamp(touch[3], 0.0f, 1.0f);
+   case kLureLift: return std::clamp(touch[4], 0.0f, 1.0f);
+   case kLureRandom: return std::clamp(0.5f + 0.5f * random, 0.0f, 1.0f);
+   default: return 0.5f;
+   }
+}
+
+// Where a lure sits in the sky for its places along X and Y (0..1, Y upward), clear of the edges.
+inline void lureAt(float ax, float ay, float &x, float &y) {
+   x = (0.07f + 0.86f * ax) * kSkyAspect;
+   y = 0.1f + 0.8f * (1.0f - ay);
 }
 
 // How a creature flies: its species' flock params, moved by its own routes.
@@ -82,6 +100,10 @@ struct Creature {
    // -1..1, this creature's wingbeat now (its own LFO's value).
    float wing = 0, wingPhase = 0;
    float wanderAngle = 0, wanderTurn = 0;
+   // Whether the engine runs it (the panel's own flock doesn't), and if so whether its voice still
+   // sounds and how loud (its amp envelope): let go, it glows as its sound does and goes when it ends.
+   bool tracked = false, sounding = false;
+   float level = 0;
    // Its own roaming around the lure: two slow orbits at rates and phases of its own, so no two
    // creatures trace the same path and none repeats.
    float roamRate[2] = {}, roamPhase[2] = {};
@@ -137,6 +159,8 @@ public:
    }
    // Its note is up: it flies off as it fades.
    void release(int slot) { creatures[slot].held = false; }
+   // Its voice has ended: it fades out and goes.
+   void silence(int slot) { creatures[slot].sounding = false; }
 
    // Copies the live creatures into `f`, for the panel.
    void show(FlockFrame &f) const;
@@ -159,8 +183,15 @@ public:
       for (Creature &c : creatures) {
          if (!c.alive)
             continue;
-         const float target = c.held ? 0.55f + 0.45f * c.press : c.resting && !plays[c.part] ? 0.3f : 0.0f;
-         const float rate = c.held ? 5.0f : 1.2f;
+         float target = 0.0f, rate = 1.2f;
+         if (c.held)
+            target = 0.55f + 0.45f * c.press, rate = 5.0f;
+         else if (c.sounding)
+            target = std::max(0.04f, 0.55f * c.level), rate = 5.0f; // its release
+         else if (c.resting)
+            target = plays[c.part] ? 0.0f : 0.3f;
+         else if (c.tracked)
+            rate = 6.0f; // its voice has ended
          c.energy += (target - c.energy) * std::min(1.0f, dt * rate);
          // A released creature flies off as it fades, then goes; a resting one stays, dimmed. A
          // resting creature beats its own wings.

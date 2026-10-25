@@ -80,27 +80,63 @@ private:
    std::vector<Note> held_;
 };
 
-NoteRef ref(int key) {
+NoteRef ref(int key, int id) {
    NoteRef r;
    r.key = static_cast<int16_t>(key);
    r.channel = 0;
    r.port = 0;
-   r.noteId = key;
+   r.noteId = id;
    r.host = true;
    return r;
 }
 
-// The phrase: a Cm7 (C3 G3 Bb3 Eb4) struck at 0.3 s and held for 15 s while every note's pressure
-// swells from nothing to full and back, then released into its tail.
+// A phrase: notes, each struck and let go on its own sample, with its pressure over time.
 struct Phrase {
-   static constexpr double kStart = 0.3, kHold = 15.0, kTail = 2.5;
-   const int keys[4] = {48, 55, 58, 63};
-   double length() const { return kStart + kHold + kTail; }
-   float pressure(double t) const {
-      if (t < kStart || t > kStart + kHold)
-         return 0.0f;
-      const double s = std::sin(3.14159265358979 * (t - kStart) / kHold);
-      return static_cast<float>(s * s);
+   struct Note {
+      int key;
+      double on, off; // seconds
+      float velocity;
+   };
+   std::vector<Note> notes;
+   double length = 0;
+   // Each held note's pressure at `t` seconds.
+   float (*pressure)(const Phrase &, const Note &, double t) = nullptr;
+
+   // A Cm7 (C3 G3 Bb3 Eb4) struck at 0.3 s and held for 15 s while every note's pressure swells from
+   // nothing to full and back, then released into its tail.
+   static Phrase cm7Swell() {
+      Phrase p;
+      for (int key : {48, 55, 58, 63})
+         p.notes.push_back({key, 0.3, 15.3, 0.7f});
+      p.length = 17.8;
+      p.pressure = [](const Phrase &, const Note &n, double t) {
+         const double s = std::sin(3.14159265358979 * (t - n.on) / (n.off - n.on));
+         return static_cast<float>(s * s);
+      };
+      return p;
+   }
+
+   // Four bars at 84 BPM, a chord a bar: Cm9, Abmaj7, Fm9, G7(b9). Each is strummed upward, its
+   // notes 45 ms apart and a little harder toward the top, and held into the next; pressure swells
+   // through each bar.
+   static Phrase fourBar() {
+      Phrase p;
+      const double bar = 4.0 * 60.0 / 84.0, start = 0.3, strum = 0.045;
+      const std::vector<std::vector<int>> chords = {
+          {48, 55, 58, 62, 63}, {44, 51, 55, 60, 63}, {41, 48, 51, 55, 56}, {43, 53, 59, 62, 68}};
+      for (size_t c = 0; c < chords.size(); ++c) {
+         const double at = start + bar * static_cast<double>(c);
+         const double off = c + 1 < chords.size() ? at + bar + 0.03 : at + bar * 1.5;
+         for (size_t i = 0; i < chords[c].size(); ++i)
+            p.notes.push_back({chords[c][i], at + strum * static_cast<double>(i), off,
+                               0.55f + 0.06f * static_cast<float>(i)});
+      }
+      p.length = start + bar * 4.5 + 2.5;
+      p.pressure = [](const Phrase &, const Note &n, double t) {
+         const double s = std::sin(3.14159265358979 * std::min(1.0, (t - n.on) / (n.off - n.on)));
+         return static_cast<float>(0.15 + 0.7 * s * s);
+      };
+      return p;
    }
 };
 
@@ -110,36 +146,43 @@ void play(RecordHost &host, const Phrase &phrase, int64_t at, int samples, std::
    float l[kBlock], r[kBlock];
    float *main[2] = {l, r};
    float *const *ports[3] = {main, nullptr, nullptr};
-   const int64_t on = static_cast<int64_t>(Phrase::kStart * kRate);
-   const int64_t off = static_cast<int64_t>((Phrase::kStart + Phrase::kHold) * kRate);
+   const auto sampleOf = [](double s) { return static_cast<int64_t>(s * kRate); };
    for (int done = 0; done < samples;) {
       const int64_t now = at + done;
       int n = std::min(kBlock, samples - done);
-      // Land the note on and off on their samples.
-      if (now < on && now + n > on)
-         n = static_cast<int>(on - now);
-      if (now < off && now + n > off)
-         n = static_cast<int>(off - now);
-      if (now == on) {
-         for (int k : phrase.keys)
-            e.noteOn(ref(k), 0.7f);
-         host.held().clear();
-         for (int k : phrase.keys)
-            host.held().push_back({k, 0.0f, 0.0f, 0.5f, 0.7f, 0.0f});
+      // Land every note on and off on its sample.
+      for (const Phrase::Note &note : phrase.notes)
+         for (int64_t edge : {sampleOf(note.on), sampleOf(note.off)})
+            if (now < edge && now + n > edge)
+               n = static_cast<int>(edge - now);
+      // Each note is its own (a chord can hold a key the next one strikes again).
+      const auto id = [&](const Phrase::Note &note) { return static_cast<int>(&note - phrase.notes.data()); };
+      for (const Phrase::Note &note : phrase.notes) {
+         if (now == sampleOf(note.off)) {
+            e.noteOff(ref(note.key, id(note)), 0.3f);
+            auto &held = host.held();
+            for (size_t i = 0; i < held.size(); ++i)
+               if (held[i].note == note.key) {
+                  held.erase(held.begin() + static_cast<long>(i));
+                  break;
+               }
+         }
       }
-      if (now == off) {
-         for (int k : phrase.keys)
-            e.noteOff(ref(k), 0.3f);
-         host.held().clear();
-      }
+      for (const Phrase::Note &note : phrase.notes)
+         if (now == sampleOf(note.on)) {
+            e.noteOn(ref(note.key, id(note)), note.velocity);
+            host.held().push_back({note.key, 0.0f, 0.0f, 0.5f, note.velocity, 0.0f});
+         }
       // Pressure, as an MPE controller sends it: a fresh value each block.
-      const float p = phrase.pressure(static_cast<double>(now) / kRate);
-      if (now >= on && now < off) {
-         for (int k : phrase.keys)
-            e.expression(ref(k), CLAP_NOTE_EXPRESSION_PRESSURE, p);
-         for (EditorHost::Note &h : host.held())
-            h.pressure = p;
-      }
+      const double t = static_cast<double>(now) / kRate;
+      for (const Phrase::Note &note : phrase.notes)
+         if (t >= note.on && t < note.off) {
+            const float p = phrase.pressure(phrase, note, t);
+            e.expression(ref(note.key, id(note)), CLAP_NOTE_EXPRESSION_PRESSURE, p);
+            for (EditorHost::Note &h : host.held())
+               if (h.note == note.key)
+                  h.pressure = p;
+         }
       std::fill(l, l + n, 0.0f);
       std::fill(r, r + n, 0.0f);
       e.render(ports, 0, n);
@@ -197,9 +240,14 @@ int main(int argc, char **argv) {
       return 1;
    }
    RecordHost host(*preset);
-   const Phrase phrase;
+   const std::string phraseName = argc > 3 ? argv[3] : "cm7-swell";
+   if (phraseName != "cm7-swell" && phraseName != "four-bar") {
+      std::fprintf(stderr, "no phrase called %s (cm7-swell or four-bar)\n", phraseName.c_str());
+      return 1;
+   }
+   const Phrase phrase = phraseName == "four-bar" ? Phrase::fourBar() : Phrase::cm7Swell();
    std::vector<float> audio;
-   const int64_t total = static_cast<int64_t>(phrase.length() * kRate);
+   const int64_t total = static_cast<int64_t>(phrase.length * kRate);
    audio.reserve(static_cast<size_t>(total) * 2);
 
    const bool video = out.size() > 4 && out.compare(out.size() - 4, 4, ".mp4") == 0;
@@ -215,7 +263,7 @@ int main(int argc, char **argv) {
       FILE *pipe = popen(encode.c_str(), "w");
       if (!pipe)
          return 1;
-      const int frames = static_cast<int>(phrase.length() * kFps);
+      const int frames = static_cast<int>(phrase.length * kFps);
       int64_t at = 0;
       ScreenshotView view;
       view.leftTab = 1;  // FM: the grid the pressure is moving

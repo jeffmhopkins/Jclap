@@ -193,6 +193,8 @@ enum FlockParam : clap_id {
    kTailLength,   // how long the ink tail lasts
    kTailSpread,   // how far the ink blooms as it ages
    kWake,         // how much flying through another creature's ink stirs this one
+   kLureX,        // what places a note's lure left to right (a LureSource)
+   kLureY,        // and bottom to top
 };
 
 // A route: kRouteSource (Off for none), kRouteDestination (an index into destinations()) and its
@@ -249,6 +251,9 @@ inline const std::vector<std::string> kPolarityNames = {"Bipolar", "Unipolar"};
 // from it.
 inline const std::vector<std::string> kBehaviourNames = {"Shoal", "Scatter", "Hunt", "Flee"};
 inline const std::vector<std::string> kWallNames = {"Soft", "Wrap", "Open"};
+// What places a held note's lure along one axis of the sky: its pitch (with bend), one of its touch
+// dimensions, a random place per note, or the middle.
+inline const std::vector<std::string> kLureSourceNames = {"Pitch", "Strike", "Press", "Slide", "Lift", "Random", "Centre"};
 // Route sources. Off is no route. Speed to Y are the flock's own: how fast this creature flies, how
 // many neighbours it has, how near the nearest is, which way it heads, whether a hunter has it, how
 // much ink it is flying through, and where it is in the sky (left to right, and bottom to top).
@@ -535,6 +540,8 @@ inline void addPart(Builder &b, int part) {
    b.add(id(flockParam(kTailLength)), "Tail Length", fl, 0.0, 1.0, 0.5, kMod, Unit::Percent);
    b.add(id(flockParam(kTailSpread)), "Tail Spread", fl, 0.0, 1.0, 0.5, kMod, Unit::Percent);
    b.add(id(flockParam(kWake)), "Wake", fl, 0.0, 1.0, 0.2, kMod, Unit::Percent);
+   b.choice(id(flockParam(kLureX)), "Lure X", fl, kLureSourceNames, 0, kGlobalChoice);
+   b.choice(id(flockParam(kLureY)), "Lure Y", fl, kLureSourceNames, 3, kGlobalChoice);
 
    // The starting routes: Env 2 opens Filter 1, and Press opens it too and makes the creature fly
    // faster. Nothing the flock does reaches the sound unless a route or a BETWEEN CREATURES knob says

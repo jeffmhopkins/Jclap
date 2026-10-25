@@ -69,8 +69,10 @@ The 48 factory presets run in six categories from the fastest envelopes to the s
 patch with no routes at all and works up to ones the flock plays: Neighbour FM, Bite, and routes
 from the flock's sources. Nothing from the flock reaches the sound unless a preset (or you) routes it.
 
-`jsynth-record out.wav|out.mp4 [preset]` (built with the tools) plays a held Cm7 whose pressure swells
-up and back over 15 seconds through a preset, and writes the audio, or a video of the panel with it.
+`jsynth-record out.wav|out.mp4 [preset] [cm7-swell|four-bar]` (built with the tools) plays a phrase
+through a preset and writes the audio, or a video of the panel with it: a held Cm7 whose pressure
+swells up and back over 15 seconds, or four strummed chords (Cm9, Abmaj7, Fm9, G7b9) with the
+pressure swelling through each bar.
 
 ## Params
 

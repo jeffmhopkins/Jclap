@@ -695,8 +695,12 @@ private:
          const float a = v.fresh ? 1.0f : 1.0f - std::exp(-tickSeconds / 0.006f);
          for (int k = 0; k < 8; ++k)
             v.flockSources[k] += (src[k] - v.flockSources[k]) * a;
-         lureFor(static_cast<float>(v.ref.key), bend, v.touch[3], c.lureX, c.lureY);
+         const float note = static_cast<float>(v.ref.key);
+         lureAt(lureAxis(choice(part, flockParam(kLureX)), note, bend, v.touch, v.randomValue),
+                lureAxis(choice(part, flockParam(kLureY)), note, bend, v.touch, v.randomValue), c.lureX, c.lureY);
          c.press = v.touch[1];
+         c.tracked = c.sounding = true;
+         c.level = v.env[0].level();
       }
 
       // Routes, from the sources as they were at the last tick; then envelopes 2 and 3 at control
@@ -1400,7 +1404,10 @@ private:
       }
       if (!restart) {
          float lx, ly;
-         lureFor(static_cast<float>(ref.key), 0.0f, timbre, lx, ly);
+         const float touch[kTouchCount] = {velocity, pressure, 0.0f, timbre, 0.0f};
+         const float note = static_cast<float>(ref.key);
+         lureAt(lureAxis(choice(part, flockParam(kLureX)), note, 0.0f, touch, v.randomValue),
+                lureAxis(choice(part, flockParam(kLureY)), note, 0.0f, touch, v.randomValue), lx, ly);
          flock_.hatch(slot, part, lx, ly);
          flock_.creatures[slot].params.read([&](clap_id o) { return plain(part, o); });
       }
@@ -1439,6 +1446,7 @@ private:
          return;
       v.active = false;
       flock_.release(slot);
+      flock_.silence(slot);
       if (!v.ref.host)
          return;
       for (int i = 0; i < kVoiceSlots; ++i)
