@@ -152,25 +152,24 @@ int main() {
 
    // Per-note host modulation moves only the note it names: Level down 60 dB on one of two notes.
    {
+      // On the heap: an engine is big, and Windows gives a test 1 MB of stack.
       Params p;
-      Engine e;
-      e.prepare(kRate, {p.values.get(), p.mods.get()});
       JCLAP_CHECK(kParams()[paramIndex(partId(0, kPartLevel))].def.flags & CLAP_PARAM_IS_MODULATABLE_PER_NOTE_ID);
       const auto level = [&](int key) {
-         Engine f;
-         f.prepare(kRate, {p.values.get(), p.mods.get()});
-         f.setBlockSample(0);
-         f.noteOn(ref(60), 0.8f);
-         f.noteOn(ref(64), 0.8f);
-         f.voiceMod(ref(key), paramIndex(partId(0, kPartLevel)), -66.0f);
-         return peak(render(f, 24000, 256, {}));
+         auto f = std::make_unique<Engine>();
+         f->prepare(kRate, {p.values.get(), p.mods.get()});
+         f->setBlockSample(0);
+         f->noteOn(ref(60), 0.8f);
+         f->noteOn(ref(64), 0.8f);
+         f->voiceMod(ref(key), paramIndex(partId(0, kPartLevel)), -66.0f);
+         return peak(render(*f, 24000, 256, {}));
       };
       const float none = [&] {
-         Engine f;
-         f.prepare(kRate, {p.values.get(), p.mods.get()});
-         f.setBlockSample(0);
-         f.noteOn(ref(60), 0.8f);
-         return peak(render(f, 24000, 256, {}));
+         auto f = std::make_unique<Engine>();
+         f->prepare(kRate, {p.values.get(), p.mods.get()});
+         f->setBlockSample(0);
+         f->noteOn(ref(60), 0.8f);
+         return peak(render(*f, 24000, 256, {}));
       }();
       // Silencing 64 leaves about 60 alone; and a mod on a note not playing does nothing.
       JCLAP_CHECK(std::fabs(level(64) - none) < 0.02f * none + 1e-3f);
