@@ -25,4 +25,6 @@ if(JCLAP_BUILD_TOOLS)
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-map.png ARGS 0 1 3 0 14)
    jclap_add_screenshot_test(jsynth-screenshot-routes-test TOOL jsynth-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-routes.png ARGS 0 2 0 1)
+   jclap_add_screenshot_test(jsynth-screenshot-hidden-test TOOL jsynth-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-hidden.png ARGS 0 0 1 0 0 1200 780 1)
 endif()

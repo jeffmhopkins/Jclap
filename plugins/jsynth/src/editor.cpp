@@ -625,6 +625,9 @@ public:
 
    // The part whose creatures are drawn in front, brighter, and whose sources the chips show.
    int shownPart = 0;
+   // Where the sky is, in design units from the view's top left: its left, top and height (its width
+   // follows from kSkyAspect). The panel moves it when its cards are hidden.
+   float skyLeft = kSkyX, skyTop = kSkyY - kHeaderHeight, skyHeight = kSkyH;
    // A line of help at the top of the sky (MAP mode's), in its colour.
    std::string hint;
    unsigned hintColor = kText;
@@ -655,8 +658,8 @@ public:
       const float s = width() / designWidth_;
       bloom_.setBloomSize(18.0f * s * (dpiScale() > 0.0f ? dpiScale() : 1.0f));
       drawBackdrop(c, s);
-      const float ppu = kSkyH * s;
-      const float ox = kSkyX * s, oy = (kSkyY - kHeaderHeight) * s;
+      const float ppu = skyHeight * s;
+      const float ox = skyLeft * s, oy = skyTop * s;
       const auto X = [&](float x) { return ox + x * ppu; };
       const auto Y = [&](float y) { return oy + y * ppu; };
 
@@ -717,7 +720,7 @@ public:
 
       if (!hint.empty()) {
          c.setColor(glow(hintColor, 0.95f, 1.0f));
-         c.text(hint, ui::font(12 * s), visage::Font::kCenter, kSkyX * s, 6 * s, kSkyW * s, 18 * s);
+         c.text(hint, ui::font(12 * s), visage::Font::kCenter, skyLeft * s, (skyTop - 2) * s, skyHeight * kSkyAspect * s, 18 * s);
       }
    }
 
@@ -786,7 +789,7 @@ private:
 
    bool skyAt(visage::Point p, float &nx, float &timbre) const {
       const float s = width() / designWidth_;
-      const float x = (p.x / s - kSkyX) / kSkyH, y = (p.y / s + kHeaderHeight - kSkyY) / kSkyH;
+      const float x = (p.x / s - skyLeft) / skyHeight, y = (p.y / s - skyTop) / skyHeight;
       nx = std::clamp((x / kSkyAspect - 0.07f) / 0.86f, 0.0f, 1.0f);
       timbre = std::clamp(1.0f - (y - 0.1f) / 0.8f, 0.0f, 1.0f);
       return x >= 0.0f && x <= kSkyAspect && y >= 0.0f && y <= 1.0f;
@@ -1134,7 +1137,8 @@ private:
          c.circle(st.x * w - r, st.y * h - r, 2 * r);
       }
       // The sky's corners, faintly, so the walls have somewhere to be.
-      const float x0 = kSkyX * s, y0 = (kSkyY - kHeaderHeight) * s, x1 = x0 + kSkyW * s, y1 = y0 + kSkyH * s, t = 12 * s;
+      const float x0 = skyLeft * s, y0 = skyTop * s, x1 = x0 + skyHeight * kSkyAspect * s, y1 = y0 + skyHeight * s,
+                  t = 12 * s;
       c.setColor(visage::Color(0x30ffffff));
       for (float cx : {x0, x1})
          for (float cy : {y0, y1}) {
@@ -1182,6 +1186,7 @@ public:
       showTabs(host_.leftTab, host_.rightTab);
       showRoutes(host_.routesOpen);
       showPart(host_.part);
+      showPanels(!host_.panelsHidden);
       last_ = std::chrono::steady_clock::now();
       startTimer(16);
    }
@@ -1223,12 +1228,14 @@ public:
             chip->setLevel(0.5f + 0.5f * lfoValue(s - kSourceWingbeat), true);
          chip->setState(mapping_, mapping_ && s == armed_, pulse);
       }
-      refreshPitch();
+      if (!host_.panelsHidden)
+         refreshPitch();
       // Rings follow the routes, which the host or the route list can change too.
       const double sum = routeChecksum();
       if (sum != routeSum_) {
          routeSum_ = sum;
-         layoutRoutes();
+         if (!host_.panelsHidden)
+            layoutRoutes();
          for (MapKnob *k : mapKnobs_)
             k->redraw();
       }
@@ -1260,6 +1267,32 @@ public:
       routesButton_->setOn(open);
       refresh();
    }
+   // Hides every card and the header, so the sky fills the window with only the flocks in it; the
+   // HIDE button stays, in the corner, to bring them back.
+   void showPanels(bool shown) {
+      host_.panelsHidden = !shown;
+      hideButton_->setOn(!shown);
+      hideButton_->setText(shown ? "HIDE" : "SHOW");
+      if (shown) {
+         move(*view_, {0, kHeaderHeight, kDesignWidth, kDesignHeight - kHeaderHeight});
+         view_->skyLeft = kSkyX;
+         view_->skyTop = kSkyY - kHeaderHeight;
+         view_->skyHeight = kSkyH;
+         move(*hideButton_, kHideBounds);
+      }
+      else {
+         // The sky as big as the window allows, centred.
+         const float h = kDesignHeight - 2 * kCleanMargin;
+         move(*view_, {0, 0, kDesignWidth, kDesignHeight});
+         view_->skyLeft = (kDesignWidth - h * kSkyAspect) / 2;
+         view_->skyTop = kCleanMargin;
+         view_->skyHeight = h;
+         move(*hideButton_, {kDesignWidth - 62, kDesignHeight - 34, 50, 22});
+      }
+      if (!shown && mapping_)
+         setMapping(false, kSourceOff);
+      refresh();
+   }
    // MAP on or off, with `source` armed.
    void setMapping(bool on, int source) {
       mapping_ = on;
@@ -1270,6 +1303,8 @@ public:
    }
 
    void draw(visage::Canvas &c) override {
+      if (host_.panelsHidden)
+         return;
       const float s = scale();
       c.setColor(0xff070910);
       c.fill(0, 0, width(), kHeaderHeight * s);
@@ -1423,7 +1458,7 @@ private:
 
    void refresh() {
       for (const Placed &p : placed_) {
-         bool on = p.part < 0 || p.part == host_.part;
+         bool on = (p.part < 0 || p.part == host_.part) && !host_.panelsHidden;
          if (p.group == kLeft)
             on = on && leftTabs_->selected() == p.tab;
          else if (p.group == kRight)
@@ -1432,8 +1467,12 @@ private:
             on = on && host_.routesOpen;
          p.frame->setVisible(on);
       }
-      refreshPitch();
-      if (routeInfo_)
+      if (host_.panelsHidden)
+         for (const PitchKnobs &p : pitchKnobs_)
+            p.coarse->setVisible(false), p.ratio->setVisible(false), p.fixed->setVisible(false);
+      else
+         refreshPitch();
+      if (routeInfo_ && !host_.panelsHidden)
          layoutRoutes();
       redraw();
    }
@@ -1540,11 +1579,17 @@ private:
       tips_.add(mode, "Which species a note hatches: A only, both, split by key or by velocity, by MPE zone, "
                       "or crossfaded by Slide or Press.");
       // ROUTES sits under the sky, at the end of the flock's own sources.
-      auto &routes = glassy(put<ui::Button>({836, 617, 116, 24}, "ROUTES"), kMapColor);
+      auto &routes = glassy(put<ui::Button>({814, 617, 94, 24}, "ROUTES"), kMapColor);
       routes.setToggle(true);
       routes.onToggle = [this](bool on) { showRoutes(on); };
       routesButton_ = &routes;
       tips_.add(routes, "Every route of this part as a list, to edit by name.");
+      // Not put(): it stays when the cards hide.
+      auto &hide = glassy(add<ui::Button>(kHideBounds, "HIDE"), kDim);
+      hide.setToggle(true);
+      hide.onToggle = [this](bool on) { showPanels(!on); };
+      hideButton_ = &hide;
+      tips_.add(hide, "Hide every card, so the sky fills the window with only the flocks in it.");
    }
 
    // The flock's own sources, under the sky.
@@ -1557,14 +1602,14 @@ private:
                             "How near its nearest neighbour is.", "Which way it flies, all the way round.",
                             "On while a hunter has caught it.", "How much of the others' ink it flies through.",
                             "Where it is in the sky, left to right.", "Where it is in the sky, bottom to top."};
-      const auto cells = ui::row({248, 618, 578, 22}, 8, 4);
+      const auto cells = ui::row({248, 618, 558, 22}, 8, 4);
       for (int i = 0; i < 8; ++i)
          chip(sources[i].first, sources[i].second, cells[i], tips[i]);
    }
 
    // Left: how a species flies, its FM, and the touch response.
    void buildLeft() {
-      glass({16, 64, 214, 536}, "", kDim);
+      glass({16, 64, 214, 582}, "", kDim);
       leftTabs_ = &glassy(put<ui::TabBar>({24, 70, 198, 26}, std::vector<std::string>{"FLOCK", "FM", "TOUCH"}), kDim);
       leftTabs_->onChange = [this](int t) {
          host_.leftTab = t;
@@ -1578,7 +1623,7 @@ private:
          auto &behaviour = dropdown(flockParam(kBehaviour), c, {30, 106, 186, 24});
          tips_.add(behaviour, "SHOAL flies with its own kind, SCATTER keeps apart, HUNT chases the other species "
                               "and FLEE runs from it.");
-         const auto g = ui::grid({22, 138, 202, 448}, 3, 4);
+         const auto g = ui::grid({22, 138, 202, 496}, 3, 4);
          knob(flockParam(kCohesion), "COHESION", c, g[0], "Pull toward the middle of the neighbours.");
          knob(flockParam(kAlignment), "ALIGN", c, g[1], "Turn to fly the way the neighbours fly.");
          knob(flockParam(kSeparation), "SEPARATE", c, g[2], "Keep clear of the nearest.");
@@ -1603,20 +1648,20 @@ private:
          // The FM grid: the row is the oscillator modulating, the column the one modulated, and the
          // diagonal each one's feedback.
          label({30, 102, 186, 16}, "OSC FM, ROW INTO COLUMN", kDim);
-         const auto f = ui::grid({22, 118, 202, 252}, 3, 3);
+         const auto f = ui::grid({22, 118, 202, 276}, 3, 3);
          static const char *names[3][3] = {{"FB 1", "1 > 2", "1 > 3"}, {"2 > 1", "FB 2", "2 > 3"}, {"3 > 1", "3 > 2", "FB 3"}};
          for (int from = 0; from < kOscCount; ++from)
             for (int to = 0; to < kOscCount; ++to)
                knob(fmCell(from, to), names[from][to], kOscColors[from], f[from * 3 + to]);
-         segments(kFmBase + kFmType, c, {30, 374, 186, 22}, std::vector<std::string>{"PHASE", "EXP"});
-         label({30, 406, 186, 16}, "BETWEEN CREATURES", kDim);
-         const auto x = ui::row({22, 424, 202, 94}, 3);
+         segments(kFmBase + kFmType, c, {30, 400, 186, 22}, std::vector<std::string>{"PHASE", "EXP"});
+         label({30, 436, 186, 16}, "BETWEEN CREATURES", kDim);
+         const auto x = ui::row({22, 454, 202, 96}, 3);
          knob(flockParam(kNeighbourFm), "NEIGHBOUR", c, x[0], "The nearest neighbour's Osc 1 into this creature's "
                                                                "Osc 2: a tight flock rings, a loose one is clean.");
          knob(flockParam(kTunePull), "TUNE PULL", c, x[1], "Creatures flying the same way drift toward pure "
                                                             "intervals.");
          knob(flockParam(kBite), "BITE", c, x[2], "Ring mod while a hunter holds this creature.");
-         const auto y = ui::row({22, 518, 202, 78}, 3);
+         const auto y = ui::row({22, 548, 202, 96}, 3);
          knob(mixParam(kNoiseLevel), "NOISE", c, y[0]);
          knob(mixParam(kNoiseColor), "COLOR", c, y[1]);
          knob(kDrift, "DRIFT", c, y[2], "Each creature's own slow wander in pitch.");
@@ -1628,12 +1673,12 @@ private:
       label({88, 102, 66, 16}, "CURVE", kDim);
       label({154, 102, 66, 16}, "SMOOTH", kDim);
       for (int i = 0; i < kTouchCount; ++i) {
-         const float y = 116 + i * 74.0f;
-         label({28, y + 26, 62, 16}, upper(kTouchNames[i]), sourceColor(kSourceStrike + i), visage::Font::kLeft);
-         knob(kTouchCurve1 + i, "", sourceColor(kSourceStrike + i), {88, y, 66, 74});
-         knob(kTouchSmooth1 + i, "", sourceColor(kSourceStrike + i), {154, y, 66, 74});
+         const float y = 116 + i * 82.0f;
+         label({28, y + 30, 62, 16}, upper(kTouchNames[i]), sourceColor(kSourceStrike + i), visage::Font::kLeft);
+         knob(kTouchCurve1 + i, "", sourceColor(kSourceStrike + i), {88, y, 66, 82});
+         knob(kTouchSmooth1 + i, "", sourceColor(kSourceStrike + i), {154, y, 66, 82});
       }
-      const auto r = ui::row({22, 492, 202, 100}, 3);
+      const auto r = ui::row({22, 536, 202, 104}, 3);
       knob(kGlideRounding, "ROUND", kDim, r[0], "Pulls a resting finger to the nearest semitone.");
       knob(kRoundingTime, "ROUND TIME", kDim, r[1]);
       knob(kManagerBendRange, "MGR BEND", kDim, r[2], "The MPE manager channel's bend range.");
@@ -1643,7 +1688,7 @@ private:
 
    // Right: the envelopes, the wingbeat and the wind, and the filters.
    void buildRight() {
-      glass({970, 64, 214, 536}, "", kDim);
+      glass({970, 64, 214, 582}, "", kDim);
       rightTabs_ = &glassy(put<ui::TabBar>({978, 70, 198, 26}, std::vector<std::string>{"ENV", "MOTION", "LFO", "FILTER"}), kDim);
       rightTabs_->onChange = [this](int t) {
          host_.rightTab = t;
@@ -1653,21 +1698,21 @@ private:
       tab_ = 0;
       const char *envNames[kEnvCount] = {"ENV 1  AMP", "ENV 2", "ENV 3"};
       for (int e = 0; e < kEnvCount; ++e)
-         chip(kSourceEnv1 + e, envNames[e], {982, 104 + e * 164.0f, 104, 22});
+         chip(kSourceEnv1 + e, envNames[e], {982, 104 + e * 180.0f, 104, 22});
       tab_ = 1;
       chip(kSourceWingbeat, "WINGBEAT", {982, 104, 104, 22}, "One per creature: each bobs across its path.");
-      chip(kSourceWind, "WIND", {982, 352, 104, 22}, "One gust for the whole sky, pushing every creature.");
+      chip(kSourceWind, "WIND", {982, 376, 104, 22}, "One gust for the whole sky, pushing every creature.");
       tab_ = 2;
       chip(kSourceLfo1, "LFO 1", {982, 104, 104, 22}, "A plain LFO, one per creature unless its trigger is Global.");
-      chip(kSourceLfo1 + 1, "LFO 2", {982, 352, 104, 22}, "A plain LFO, one per creature unless its trigger is Global.");
+      chip(kSourceLfo1 + 1, "LFO 2", {982, 376, 104, 22}, "A plain LFO, one per creature unless its trigger is Global.");
       for (int part = 0; part < kPartCount; ++part) {
          part_ = part;
          const unsigned c = kPartColors[part];
          tab_ = 0;
          for (int e = 0; e < kEnvCount; ++e) {
-            const float y = 104 + e * 164.0f;
+            const float y = 104 + e * 180.0f;
             const auto id = [&](EnvParam p) { return partId(part, envParam(e, p)); };
-            auto &env = glassy(put<ui::EnvelopeEditor>({980, y + 30, 194, 120}, rangeOf(id(kEnvAttack)),
+            auto &env = glassy(put<ui::EnvelopeEditor>({980, y + 30, 194, 136}, rangeOf(id(kEnvAttack)),
                                                        rangeOf(id(kEnvDecay)), rangeOf(id(kEnvSustain)),
                                                        rangeOf(id(kEnvRelease))),
                                sourceColor(kSourceEnv1 + e));
@@ -1678,12 +1723,12 @@ private:
          // MOTION has the wingbeat and the wind, which also move the flock; LFO the two that don't.
          for (int l = 0; l < kLfoCount; ++l) {
             tab_ = l < kMotionCount ? 1 : 2;
-            const float y = 104 + (l % 2) * 248.0f;
+            const float y = 104 + (l % 2) * 272.0f;
             const unsigned lc = sourceColor(kSourceWingbeat + l);
             dropdown(lfoParam(l, kLfoShape), lc, {1094, y, 80, 22});
             dropdown(lfoParam(l, kLfoTrigger), c, {982, y + 28, 104, 22});
             segments(lfoParam(l, kLfoSync), lc, {1094, y + 28, 80, 22}, std::vector<std::string>{"FREE", "SYNC"});
-            const auto k = ui::grid({976, y + 56, 202, 184}, 3, 2);
+            const auto k = ui::grid({976, y + 56, 202, 208}, 3, 2);
             // The plain LFOs have no Push, so their cells move up one.
             const int at = l < kMotionCount ? 0 : -1;
             knob(lfoParam(l, kLfoRate), "RATE", lc, k[0]);
@@ -1700,19 +1745,19 @@ private:
          tab_ = 3;
          segments(tailParam(kFilterRouting), c, {982, 104, 190, 22}, std::vector<std::string>{"SERIAL", "PARALLEL", "SPLIT"});
          for (int f = 0; f < kFilterCount; ++f) {
-            const float y = 136 + f * 150.0f;
+            const float y = 140 + f * 168.0f;
             label({984, y + 3, 56, 16}, f == 0 ? "FILTER 1" : "FILTER 2", c, visage::Font::kLeft);
             dropdown(filterParam(f, kFilterType), c, {1040, y, 84, 22});
             dropdown(filterParam(f, kFilterSlope), c, {1128, y, 46, 22});
-            const auto k = ui::row({976, y + 28, 202, 96}, 4);
+            const auto k = ui::row({976, y + 30, 202, 100}, 4);
             knob(filterParam(f, kFilterCutoff), "CUTOFF", c, k[0]);
             knob(filterParam(f, kFilterResonance), "RES", c, k[1]);
             knob(filterParam(f, kFilterDrive), "DRIVE", c, k[2]);
             knob(filterParam(f, kFilterKeyTrack), "KEY", c, k[3]);
          }
-         label({984, 439, 56, 16}, "DRIVE", c, visage::Font::kLeft);
-         dropdown(tailParam(kDriveType), c, {1040, 436, 134, 22});
-         const auto k = ui::row({976, 464, 202, 100}, 3);
+         label({984, 467, 56, 16}, "DRIVE", c, visage::Font::kLeft);
+         dropdown(tailParam(kDriveType), c, {1040, 464, 134, 22});
+         const auto k = ui::row({976, 496, 202, 116}, 3);
          knob(tailParam(kDriveAmount), "DRIVE", c, k[0]);
          knob(tailParam(kFilterBalance), "BALANCE", c, k[1], "Filter 1 against Filter 2, in parallel and split.");
          knob(kVelocityToAmp, "VELOCITY", c, k[2], "How much Strike sets the level.");
@@ -1884,6 +1929,9 @@ private:
    ui::SegmentedSwitch *partSwitch_ = nullptr;
    ui::Button *mapButton_ = nullptr;
    ui::Button *routesButton_ = nullptr;
+   ui::Button *hideButton_ = nullptr;
+   static constexpr ui::Rect kHideBounds{914, 617, 44, 24};
+   static constexpr float kCleanMargin = 16.0f;
    ui::TabBar *leftTabs_ = nullptr;
    ui::TabBar *rightTabs_ = nullptr;
    std::vector<Placed> placed_;
@@ -1928,6 +1976,7 @@ bool renderScreenshot(EditorHost &host, const ScreenshotView &view, double secon
    panel.showTabs(view.leftTab, view.rightTab);
    panel.showRoutes(view.routes);
    panel.setMapping(view.mapSource != 0, view.mapSource);
+   panel.showPanels(!view.hidden);
    const int frames = static_cast<int>(seconds * 60.0);
    for (int i = 0; i < frames; ++i)
       panel.step(1.0f / 60.0f);

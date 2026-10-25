@@ -116,7 +116,7 @@ private:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [part [left-tab [right-tab [routes [map-source [width height]]]]]]\n",
+      std::fprintf(stderr, "usage: %s out.png [part [left-tab [right-tab [routes [map-source [width height [hidden]]]]]]]\n",
                    argv[0]);
       return 1;
    }
@@ -127,6 +127,7 @@ int main(int argc, char **argv) {
    view.rightTab = arg(4);
    view.routes = arg(5) != 0;
    view.mapSource = arg(6);
+   view.hidden = arg(9) != 0;
    const int width = argc > 8 ? arg(7) : 1200;
    const int height = argc > 8 ? arg(8) : 780;
    DemoHost host;
