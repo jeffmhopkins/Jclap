@@ -65,7 +65,7 @@ constexpr float kPi = 3.14159265f;
 
 // The sky the flocks fly in, between the side cards (design units). The flock is simulated in sky
 // units: y runs 0..1 down the sky's height and x 0..kSkyAspect across it.
-constexpr float kSkyX = 240.0f, kSkyY = 60.0f, kSkyW = 720.0f, kSkyH = 500.0f;
+constexpr float kSkyX = 240.0f, kSkyY = 60.0f, kSkyW = 720.0f, kSkyH = 540.0f;
 constexpr float kSkyAspect = kSkyW / kSkyH;
 
 constexpr unsigned kText = 0xffe6e8eb;
@@ -1540,7 +1540,7 @@ private:
       tips_.add(mode, "Which species a note hatches: A only, both, split by key or by velocity, by MPE zone, "
                       "or crossfaded by Slide or Press.");
       // ROUTES sits under the sky, at the end of the flock's own sources.
-      auto &routes = glassy(put<ui::Button>({836, 571, 116, 24}, "ROUTES"), kMapColor);
+      auto &routes = glassy(put<ui::Button>({836, 617, 116, 24}, "ROUTES"), kMapColor);
       routes.setToggle(true);
       routes.onToggle = [this](bool on) { showRoutes(on); };
       routesButton_ = &routes;
@@ -1557,7 +1557,7 @@ private:
                             "How near its nearest neighbour is.", "Which way it flies, all the way round.",
                             "On while a hunter has caught it.", "How much of the others' ink it flies through.",
                             "Where it is in the sky, left to right.", "Where it is in the sky, bottom to top."};
-      const auto cells = ui::row({248, 572, 578, 22}, 8, 4);
+      const auto cells = ui::row({248, 618, 578, 22}, 8, 4);
       for (int i = 0; i < 8; ++i)
          chip(sources[i].first, sources[i].second, cells[i], tips[i]);
    }
@@ -1724,7 +1724,8 @@ private:
 
    // Bottom: a card per oscillator.
    void buildOscs(int part) {
-      const float w = 250, gap = 10, y = 612, h = 152;
+      // The knobs run past the card's bottom edge: a knob draws nothing in the bottom quarter of its cell.
+      const float w = 250, gap = 10, y = 656, h = 108;
       for (int o = 0; o < kOscCount; ++o) {
          const float x = 16 + o * (w + gap);
          const unsigned c = kOscColors[o];
@@ -1734,7 +1735,7 @@ private:
                                 std::vector<std::string>{"NOTE", "RATIO", "HZ"});
          tips_.add(pitch, "NOTE follows the key in semitones; RATIO is a multiple of the note; HZ is fixed.");
          dropdown(oscParam(o, kOscWave), c, {x + 164, y + 7, 78, 22});
-         const auto k = ui::row({x + 4, y + 34, w - 8, 112}, 5);
+         const auto k = ui::row({x + 4, y + 28, w - 8, 96}, 5);
          // The pitch knob shows whichever the pitch mode uses; refreshPitch() swaps them.
          auto &coarse = knob(oscParam(o, kOscCoarse), "COARSE", c, k[0]);
          auto &ratio = knob(oscParam(o, kOscRatio), "RATIO", c, k[0]);
@@ -1750,15 +1751,15 @@ private:
    // Bottom right: the part's voice.
    void buildVoice(int part) {
       const unsigned c = kPartColors[part];
-      const float x = 796, y = 612;
-      glass({x, y, 388, 152}, part == 0 ? "PART A" : "PART B", c);
+      const float x = 796, y = 656;
+      glass({x, y, 388, 108}, part == 0 ? "PART A" : "PART B", c);
       segments(kVoiceMode, c, {x + 80, y + 7, 140, 22}, std::vector<std::string>{"POLY", "MONO", "LEGATO"});
       auto &voices = glassy(put<ui::NumberBox>({x + 226, y + 7, 64, 22}, rangeOf(partId(part, kPolyphony), 1.0)), c);
       voices.setStepButtons(true);
       voices.valueText = [](double v) { return std::to_string(static_cast<int>(v + 0.5)); };
       bindings_.bind(voices, partId(part, kPolyphony));
       tips_.add(voices, "How many creatures this species can have at once: one per held note, up to 16.");
-      const auto k = ui::row({x + 2, y + 34, 384, 112}, 8);
+      const auto k = ui::row({x + 2, y + 28, 384, 96}, 8);
       knob(kPartTranspose, "TRANSP", c, k[0]);
       knob(kGlideTime, "GLIDE", c, k[1]);
       knob(kBendRange, "BEND", c, k[2], "The MPE bend range: how far a finger slides, in semitones.");
