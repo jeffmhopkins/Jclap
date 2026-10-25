@@ -318,6 +318,32 @@ inline const std::vector<Preset> &factoryPresets() {
                          route(0, 6, kSourceWake, filterParam(0, kFilterCutoff), 0.5),
                          route(0, 7, kSourceWake, fmCell(1, 0), 0.4)})});
 
+      // Both species at full tilt: the shoal's FM opens with pressure and with how fast and crowded it
+      // flies, and the hunters' bite rings whatever they catch.
+      p.push_back({"Murmuration Riot", "Pads",
+                   join({{g(kPlayMode, 1.0), a(kPartLevel, -3)},
+                         op(0, 0, kSaw, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), op(0, 2, kSine, 3.01, 0.0),
+                         {a(fm21, 0.25), a(fb2, 0.2), a(fm32, 0.2), a(cutoff, 0.5), a(resonance, 0.35),
+                          a(flockParam(kNeighbourFm), 0.45), a(flockParam(kTunePull), 0.3), a(flockParam(kSpeed), 0.6),
+                          a(flockParam(kWander), 0.5), a(flockParam(kWake), 0.6), a(kSkyPan, 0.8), a(kDrift, 0.1),
+                          a(lfoParam(2, kLfoRate), lfoValue(5.5))},
+                         env(0, 0, 120, 800, 0.85, 1200), env(0, 2, 200, 1200, 0.3, 800),
+                         routes(0, {{env3, fm21, 0.35},
+                                    {press, fm21, 0.5},
+                                    {press, cutoff, 0.3},
+                                    {kSourceWake, cutoff, 0.25},
+                                    {kSourceSpeed, fm32, 0.3},
+                                    {kSourceCrowd, resonance, 0.25},
+                                    {lfo1, kPartFine, 0.0},
+                                    {press, routeParam(6, kRouteAmount), 0.08}}),
+                         op(1, 0, kPulse, 1.0, 1.0), op(1, 1, kSine, 1.0, 0.0),
+                         {b(oscParam(0, kOscShape), 0.3), b(fm21, 0.3), b(filterParam(0, kFilterType), 5), b(cutoff, 0.35),
+                          b(resonance, 0.5), b(tailParam(kDriveType), 2), b(tailParam(kDriveAmount), 0.3),
+                          b(flockParam(kBite), 0.6), b(flockParam(kNeighbourFm), 0.3), b(flockParam(kSpeed), 0.75),
+                          b(kSkyPan, 0.6), b(kPartLevel, -10)},
+                         env(1, 0, 80, 800, 0.9, 800),
+                         routes(1, {{kSourceCaught, cutoff, 0.4}, {kSourceSpeed, fm21, 0.3}, {press, fm21, 0.3}})})});
+
       // ---- Swells: seconds to arrive ----
       p.push_back({"Slow Sine", "Swells",
                    join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.3), env(0, 0, 3000, 1000, 1.0, 4000), open(0),
