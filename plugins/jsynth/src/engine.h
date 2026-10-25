@@ -9,9 +9,9 @@
 // routes, and sets per-sample linear ramps for everything the audio path reads. Env 1 (the amp) runs
 // every sample.
 //
-// Voices run sample by sample, all together, so one voice can hear another's last sample: Neighbour
-// FM (a neighbour's Osc 1 into this voice's Osc 2) and Bite (a hunter's Osc 1 ring-modulating its
-// prey) are one-sample couplings. At 2x or 4x Quality the voices run oversampled; each part's stereo
+// Voices that hear each other, through Neighbour FM (a neighbour's Osc 1 into this voice's Osc 2) or
+// Bite (a hunter's Osc 1 ring-modulating its prey), run sample by sample, all together, so each hears
+// the others' last sample. Otherwise each voice renders the tick's span on its own; both sound the same. At 2x or 4x Quality the voices run oversampled; each part's stereo
 // bus is decimated by IIR half-bands.
 //
 // Everything is allocated in prepare(); process() allocates nothing and takes no locks.
