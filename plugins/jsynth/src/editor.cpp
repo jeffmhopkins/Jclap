@@ -26,6 +26,8 @@
 #include <jclap/ui/tooltip.h>
 
 #include <visage_graphics/post_effects.h>
+#include <visage_ui/popup_menu.h>
+#include <visage_widgets/text_editor.h>
 
 #include <algorithm>
 #include <cctype>
@@ -37,8 +39,21 @@
 #include <vector>
 
 #include "params.h"
+#include "presets.h"
 
 namespace jsynth {
+
+void EditorHost::setParams(const double *values) {
+   for (size_t i = 0; i < paramCount(); ++i) {
+      const clap_id id = kParams()[i].def.id;
+      if (paramValue(id) == values[i])
+         continue;
+      beginEdit(id);
+      setParam(id, values[i]);
+      endEdit(id);
+   }
+}
+
 namespace {
 
 namespace ui = jclap::ui;
@@ -71,6 +86,7 @@ unsigned sourceColor(int source) {
        0xff808080,                                                 // Off
        0xffffd36b, 0xffffa94d, 0xffff7a59,                         // Env 1-3
        0xff7ee0ff, 0xff8fb8ff,                                     // Wingbeat, Wind
+       0xff5fd3b0, 0xffc9a0ff,                                     // LFO 1, LFO 2
        0xfff6f0a0, 0xffff6fd2, 0xffb98bff, 0xff8fe8a8, 0xff9ad0c0, // Strike, Press, Glide, Slide, Lift
        0xffc0c8d8,                                                 // Key
        0xfff2c94c, 0xffff8a7a, 0xff6fe0ff, 0xffa98bff, kCaughtColor, 0xff5fd3b0, // the flock's own
@@ -275,10 +291,14 @@ public:
          redraw();
       }
    }
-   void setLevel(float level) {
+   // How far the source is now, 0..1: it fills the chip and lights the LED. A bipolar source (an
+   // LFO) passes its -1..1 swing as 0..1, and lights the LED by how far it is from the middle.
+   void setLevel(float level, bool bipolar = false) {
       level = std::clamp(level, 0.0f, 1.0f);
-      if (std::fabs(level - level_) > 0.004f) {
+      const float led = bipolar ? std::fabs(2.0f * level - 1.0f) : level;
+      if (std::fabs(level - level_) > 0.004f || std::fabs(led - led_) > 0.004f) {
          level_ = level;
+         led_ = led;
          redraw();
       }
    }
@@ -311,17 +331,232 @@ public:
          c.setColor(visage::Color(0x26ffffff));
          c.roundedRectangleBorder(0, 0, w, h, r, 1.0f * s);
       }
-      c.setColor(glow(color, 1.0f, armed_ ? 1.5f : 1.0f));
-      c.circle(7 * s, h * 0.5f - 3 * s, 6 * s);
+      // The LED: dim when the source is at rest, glowing as it rises.
+      const float lx = 9 * s, ly = h * 0.5f, halo = 9 * s;
+      c.setColor(visage::Brush::radial(glow(color, 0.7f * led_, 1.0f), glow(color, 0.0f, 1.0f), visage::Point(lx, ly), halo));
+      c.circle(lx - halo, ly - halo, 2 * halo);
+      c.setColor(visage::Color(color).interpolateWith(0xff20232c, 0.75f * (1.0f - led_)));
+      c.circle(lx - 3.5f * s, ly - 3.5f * s, 7 * s);
+      c.setColor(glow(0xffffffff, 0.8f * led_ * led_, 1.0f));
+      c.circle(lx - 1.5f * s, ly - 1.5f * s, 3 * s);
       c.setColor(armed_ ? 0xffffffff : kText);
-      c.text(label_, ui::font(10.5f * s), visage::Font::kLeft, 17 * s, 0, w - 19 * s, h);
+      c.text(label_, ui::font(10 * s), visage::Font::kLeft, 16 * s, 0, w - 17 * s, h);
    }
 
 private:
    int source_;
    std::string label_;
    bool mapping_ = false, armed_ = false;
-   float pulse_ = 0.0f, level_ = 0.0f;
+   float pulse_ = 0.0f, level_ = 0.0f, led_ = 0.0f;
+};
+
+// The header's preset bar: arrows step through the presets, the name opens a menu of them by
+// category (and the user's own), and SAVE names the current sound and saves it as a user preset.
+class PresetBar : public visage::Frame {
+public:
+   explicit PresetBar(EditorHost &host) : host_(host) { rescan(); }
+
+   void draw(visage::Canvas &c) override {
+      const float s = height() / 26.0f, w = width(), h = height();
+      c.setColor(visage::Color(0x80141a26));
+      c.roundedRectangle(0, 0, w, h, 6 * s);
+      c.setColor(visage::Color(0x30ffffff));
+      c.roundedRectangleBorder(0, 0, w, h, 6 * s, 1.0f * s);
+      const float a = kArrow * s, save = kSave * s;
+      c.setColor(visage::Color(0x22ffffff));
+      c.fill(a, 4 * s, 1 * s, h - 8 * s);
+      c.fill(w - save - a, 4 * s, 1 * s, h - 8 * s);
+      c.fill(w - save, 4 * s, 1 * s, h - 8 * s);
+      const auto arrow = [&](float cx, float dir, bool hot) {
+         c.setColor(hot ? kText : kDim);
+         c.triangle(cx + dir * 4 * s, h / 2, cx - dir * 3 * s, h / 2 - 5 * s, cx - dir * 3 * s, h / 2 + 5 * s);
+      };
+      arrow(a / 2, -1.0f, hover_ == Zone::Prev);
+      arrow(w - save - a / 2, 1.0f, hover_ == Zone::Next);
+      c.setColor(hover_ == Zone::Save ? kText : kPartColors[0]);
+      c.text("SAVE", ui::font(11 * s), visage::Font::kCenter, w - save, 0, save, h);
+      if (editor_ && editor_->isVisible())
+         return;
+      const std::string name = host_.presetName();
+      c.setColor(hover_ == Zone::Name ? 0xffffffff : kText);
+      c.text(name.empty() ? std::string("Untitled") : name, ui::font(13 * s), visage::Font::kCenter, a, 0,
+             w - 2 * a - save, h);
+   }
+
+   void mouseMove(const visage::MouseEvent &e) override { setHover(zoneAt(e.position.x)); }
+   void mouseExit(const visage::MouseEvent &) override { setHover(Zone::None); }
+
+   void mouseDown(const visage::MouseEvent &e) override {
+      switch (zoneAt(e.position.x)) {
+      case Zone::Prev: step(-1); break;
+      case Zone::Next: step(1); break;
+      case Zone::Save: startSave(); break;
+      case Zone::Name: showMenu(); break;
+      case Zone::None: break;
+      }
+   }
+
+   bool mouseWheel(const visage::MouseEvent &e) override {
+      // Only a vertical scroll steps, so a sideways trackpad swipe doesn't.
+      if (e.wheel_delta_y == 0.0f || std::fabs(e.wheel_delta_x) > std::fabs(e.wheel_delta_y))
+         return false;
+      step(e.wheel_delta_y > 0 ? -1 : 1);
+      return true;
+   }
+
+private:
+   enum class Zone { None, Prev, Name, Next, Save };
+   static constexpr float kArrow = 24.0f, kSave = 48.0f;
+   static constexpr int kSaveId = 1 << 20, kUserBase = 1 << 16;
+
+   Zone zoneAt(float x) const {
+      const float s = height() / 26.0f, w = width();
+      if (x < kArrow * s)
+         return Zone::Prev;
+      if (x >= w - kSave * s)
+         return Zone::Save;
+      if (x >= w - (kSave + kArrow) * s)
+         return Zone::Next;
+      return Zone::Name;
+   }
+   void setHover(Zone z) {
+      if (z != hover_) {
+         hover_ = z;
+         redraw();
+      }
+   }
+
+   // Reads the user's preset folder: when the panel opens, the menu opens and after a save, not on
+   // every arrow click, so stepping through presets never waits on the disk.
+   void rescan() {
+      const std::string current = currentIndex_ >= 0 && currentIndex_ < total() ? at(currentIndex_).name : "";
+      const bool wasUser = currentIndex_ >= static_cast<int>(factoryPresets().size());
+      user_ = userPresets();
+      currentIndex_ = -1;
+      if (!current.empty() && wasUser)
+         for (int i = 0; i < static_cast<int>(user_.size()); ++i)
+            if (user_[i].name == current)
+               currentIndex_ = static_cast<int>(factoryPresets().size()) + i;
+   }
+
+   // Every preset in menu order: factory first, then the user's.
+   int total() const { return static_cast<int>(factoryPresets().size() + user_.size()); }
+   const Preset &at(int i) const {
+      const auto &f = factoryPresets();
+      return i < static_cast<int>(f.size()) ? f[i] : user_[i - f.size()];
+   }
+   // The preset loaded by name: the one last loaded here if it still has that name, otherwise the
+   // first in menu order.
+   int indexOf(const std::string &name) const {
+      if (currentIndex_ >= 0 && currentIndex_ < total() && at(currentIndex_).name == name)
+         return currentIndex_;
+      for (int i = 0; i < total(); ++i)
+         if (at(i).name == name)
+            return i;
+      return -1;
+   }
+
+   void load(int i) {
+      const Preset &p = at(i);
+      host_.setParams(presetValues(p).data());
+      host_.setPresetName(p.name);
+      currentIndex_ = i;
+      redraw();
+   }
+
+   void step(int dir) {
+      const int n = total();
+      const int current = indexOf(host_.presetName());
+      load(current < 0 ? 0 : (current + dir + n) % n);
+   }
+
+   void showMenu() {
+      rescan();
+      visage::PopupMenu menu;
+      const std::string current = host_.presetName();
+      std::vector<std::string> categories;
+      for (const Preset &p : factoryPresets())
+         if (std::find(categories.begin(), categories.end(), p.category) == categories.end())
+            categories.push_back(p.category);
+      const auto &f = factoryPresets();
+      for (const std::string &cat : categories) {
+         visage::PopupMenu sub(cat);
+         for (int i = 0; i < static_cast<int>(f.size()); ++i)
+            if (f[i].category == cat)
+               sub.addOption(i, f[i].name).select(f[i].name == current);
+         menu.addSubMenu(std::move(sub));
+      }
+      visage::PopupMenu user("User");
+      for (int i = 0; i < static_cast<int>(user_.size()); ++i)
+         user.addOption(kUserBase + i, user_[i].name).select(user_[i].name == current);
+      if (user_.empty())
+         user.addOption(-2, "(none saved yet)").enable(false);
+      menu.addSubMenu(std::move(user));
+      menu.addBreak();
+      menu.addOption(kSaveId, "Save as...");
+      menu.onSelection() += [this](int id) {
+         if (id == kSaveId)
+            startSave();
+         else if (id >= kUserBase && id - kUserBase < static_cast<int>(user_.size()))
+            load(static_cast<int>(factoryPresets().size()) + id - kUserBase);
+         else if (id >= 0 && id < static_cast<int>(factoryPresets().size()))
+            load(id);
+      };
+      menu.show(this, {kArrow * height() / 26.0f, height()});
+   }
+
+   void startSave() {
+      if (!editor_) {
+         editor_ = std::make_unique<visage::TextEditor>();
+         editor_->setJustification(visage::Font::kCenter);
+         editor_->onEnterKey() += [this] { finishSave(true); };
+         editor_->onEscapeKey() += [this] { finishSave(false); };
+         addChild(editor_.get(), false);
+      }
+      const float s = height() / 26.0f;
+      editor_->setBounds(kArrow * s, 3 * s, width() - (2 * kArrow + kSave) * s, height() - 6 * s);
+      editor_->setFont(ui::font(13 * s));
+      editor_->setText(host_.presetName().empty() ? std::string("My Flock") : host_.presetName());
+      editor_->setVisible(true);
+      editor_->requestKeyboardFocus();
+      editor_->selectAll();
+      redraw();
+   }
+
+   void finishSave(bool apply) {
+      if (!editor_ || !editor_->isVisible())
+         return;
+      const std::string name = uniqueName(presetFileName(editor_->text().toUtf8()));
+      editor_->setVisible(false);
+      if (apply && writePreset(userPresetFolder() / (name + kPresetExtension), host_)) {
+         host_.setPresetName(name);
+         rescan();
+         for (int i = 0; i < static_cast<int>(user_.size()); ++i)
+            if (user_[i].name == name)
+               currentIndex_ = static_cast<int>(factoryPresets().size()) + i;
+      }
+      redraw();
+   }
+
+   // A save name that won't hide a factory preset or silently replace another user preset: saving
+   // again over the user preset you're on keeps its name, anything else that's taken gets a number.
+   std::string uniqueName(const std::string &wanted) {
+      rescan();
+      const bool onUserPreset = currentIndex_ >= static_cast<int>(factoryPresets().size()) &&
+                                at(currentIndex_).name == wanted;
+      if (onUserPreset)
+         return wanted;
+      std::string name = wanted;
+      for (int k = 2; indexOf(name) >= 0; ++k)
+         name = wanted + " " + std::to_string(k);
+      return name;
+   }
+
+   EditorHost &host_;
+   std::vector<Preset> user_;
+   int currentIndex_ = -1;
+   std::unique_ptr<visage::TextEditor> editor_;
+   Zone hover_ = Zone::None;
 };
 
 // ---- the sky ----
@@ -428,11 +663,14 @@ public:
       for (const Puff &p : puffs_) {
          const float t = p.age / p.life;
          const float a = p.alpha * std::min(1.0f, p.age * 10.0f) * std::pow(1.0f - t, 1.6f) *
-                         (p.part == shownPart ? 0.2f : 0.11f);
+                         (p.part == shownPart ? 0.22f : 0.12f) * (1.0f + 0.4f * p.heat) /
+                         std::sqrt(std::max(1.0f, p.crowd / 6.0f));
          if (a < 0.003f)
             continue;
          const float r = p.size * ppu;
-         const visage::Color tint(p.color, 1.0f + 0.25f * (1.0f - t));
+         // Hot ink, pressed against another creature's, goes whiter and blooms.
+         visage::Color tint = visage::Color(p.color).interpolateWith(0xffffffff, std::min(0.35f, 0.2f * p.heat));
+         tint.setHdr(1.0f + 0.25f * (1.0f - t) + 0.5f * p.heat);
          c.setColor(visage::Brush::radial(tint.withAlpha(a), tint.withAlpha(0.0f), visage::Point(X(p.x), Y(p.y)), r));
          c.circle(X(p.x) - r, Y(p.y) - r, 2 * r);
       }
@@ -518,6 +756,7 @@ private:
    static constexpr float kCatch = 0.025f;
 
    struct Creature {
+      int id = 0;
       int part = 0;
       // The note it follows; -1 resting, and -2 - note once that note is let go and it fades.
       int note = -1;
@@ -533,9 +772,12 @@ private:
       float x, y, vx, vy, age, life, size, grow, alpha;
       unsigned color;
       int part;
-      // Who shed it, so a creature feels only others' wake. Cleared whenever creatures may move in
-      // memory.
-      const Creature *owner;
+      // The id of the creature that shed it: a creature feels only others' wake, and only other
+      // creatures' ink pushes back.
+      int owner;
+      // How hard it is pressed against other ink (it glows whiter), and how many puffs overlap it
+      // (each draws thinner, so a dense knot stays a cloud).
+      float heat = 0.0f, crowd = 0.0f;
    };
    struct Star {
       float x, y, b, phase;
@@ -566,6 +808,7 @@ private:
    Creature &spawn(int part, int note, visage::Point at) {
       std::uniform_real_distribution<float> u(-1.0f, 1.0f);
       Creature b;
+      b.id = nextId_++;
       b.part = part;
       b.note = note;
       b.color = kInks[part][(note < 0 ? static_cast<int>(creatures_.size()) : note * 5) & 3];
@@ -583,8 +826,6 @@ private:
    // Matches creatures to the held notes: a new note hatches one at its lure, a released note's
    // creature flies off and fades, and resting creatures show only while a species plays nothing.
    void follow(const std::vector<EditorHost::Note> &notes, float dt) {
-      for (Puff &p : puffs_)
-         p.owner = nullptr;
       for (Creature &b : creatures_)
          if (b.note >= 0)
             b.note = -2 - b.note; // let go, unless a held note claims it below
@@ -745,24 +986,71 @@ private:
             p.alpha = b.energy;
             p.color = b.color;
             p.part = b.part;
-            p.owner = &b;
+            p.owner = b.id;
             puffs_.push_back(p);
          }
          b.emit = std::max(b.emit, 0.0f);
       }
    }
 
-   // Ink drifts on a slow curl, slows, and is stirred by any creature flying through it: that
-   // stirring is the wake a creature feels.
+   // Ink drifts on a slow curl and slows. Like JVerb's gas, one creature's ink pushes back where it
+   // overlaps another's, harder against the other species, and the seam heats up and glows. Any
+   // creature flying through ink stirs it along: that stirring is the wake a creature feels.
    void moveInk(float dt) {
+      // Sort the puffs into a coarse grid over the sky (and a margin), so each only checks its
+      // neighbours; a crowded spot checks an even sample of at most kMaxChecks, weighted up to match.
+      constexpr float kCell = 0.06f;
+      constexpr int kGridX = 30, kGridY = 22, kMaxChecks = 32;
+      for (auto &cell : grid_)
+         cell.clear();
+      const auto cellX = [&](float x) { return std::clamp(static_cast<int>(std::floor(x / kCell)) + 3, 0, kGridX - 1); };
+      const auto cellY = [&](float y) { return std::clamp(static_cast<int>(std::floor(y / kCell)) + 3, 0, kGridY - 1); };
+      grid_.resize(kGridX * kGridY);
+      for (int i = 0; i < static_cast<int>(puffs_.size()); ++i)
+         grid_[cellY(puffs_[i].y) * kGridX + cellX(puffs_[i].x)].push_back(i);
+
       const float drag = std::exp(-dt * 1.4f);
-      for (Puff &p : puffs_) {
+      for (int i = 0; i < static_cast<int>(puffs_.size()); ++i) {
+         Puff &p = puffs_[i];
          p.age += dt;
          p.size += p.grow * dt;
-         p.vx = p.vx * drag + std::sin(p.y * 7.0f + time_ * 0.21f) * 0.012f * dt;
-         p.vy = p.vy * drag + std::cos(p.x * 6.0f - time_ * 0.17f) * 0.012f * dt;
+         float ax = std::sin(p.y * 7.0f + time_ * 0.21f) * 0.012f, ay = std::cos(p.x * 6.0f - time_ * 0.17f) * 0.012f;
+         float contact = 0.0f, crowd = 0.0f;
+         const int cx = cellX(p.x), cy = cellY(p.y);
+         const int gx0 = std::max(0, cx - 1), gx1 = std::min(kGridX - 1, cx + 1);
+         const int gy0 = std::max(0, cy - 1), gy1 = std::min(kGridY - 1, cy + 1);
+         int candidates = 0;
+         for (int gy = gy0; gy <= gy1; ++gy)
+            for (int gx = gx0; gx <= gx1; ++gx)
+               candidates += static_cast<int>(grid_[gy * kGridX + gx].size());
+         const int stride = (candidates + kMaxChecks - 1) / kMaxChecks;
+         const float weight = static_cast<float>(std::max(1, stride));
+         int seen = stride > 1 ? i % stride : 0;
+         for (int gy = gy0; gy <= gy1; ++gy)
+            for (int gx = gx0; gx <= gx1; ++gx)
+               for (int j : grid_[gy * kGridX + gx]) {
+                  if (stride > 1 && seen++ % stride != 0)
+                     continue;
+                  const Puff &q = puffs_[j];
+                  const float dx = p.x - q.x, dy = p.y - q.y, reach = 0.6f * (p.size + q.size);
+                  const float d2 = dx * dx + dy * dy;
+                  if (d2 >= reach * reach)
+                     continue;
+                  crowd += weight;
+                  if (q.owner == p.owner)
+                     continue;
+                  const float d = std::sqrt(d2) + 1e-4f;
+                  const float overlap = weight * (1.0f - d / reach) * (q.part == p.part ? 1.0f : 1.8f);
+                  ax += 0.025f * overlap * dx / d;
+                  ay += 0.025f * overlap * dy / d;
+                  contact += overlap;
+               }
+         p.heat += (std::min(2.0f, 0.5f * contact) - p.heat) * std::min(1.0f, dt * 3.0f);
+         p.crowd = crowd;
+         p.vx = p.vx * drag + ax * dt;
+         p.vy = p.vy * drag + ay * dt;
          for (const Creature &b : creatures_) {
-            if (&b == p.owner || b.energy < 0.05f)
+            if (b.id == p.owner || b.energy < 0.05f)
                continue;
             const float dx = p.x - b.x, dy = p.y - b.y, d2 = dx * dx + dy * dy;
             if (d2 < 0.0025f) {
@@ -783,7 +1071,7 @@ private:
       for (Creature &b : creatures_) {
          float ink = 0.0f;
          for (const Puff &p : puffs_)
-            if (p.owner != &b && std::fabs(p.x - b.x) < 0.04f && std::fabs(p.y - b.y) < 0.04f)
+            if (p.owner != b.id && std::fabs(p.x - b.x) < 0.04f && std::fabs(p.y - b.y) < 0.04f)
                ink += p.alpha * (1.0f - p.age / p.life);
          b.sources.wake += (std::min(1.0f, ink / 12.0f) - b.sources.wake) * std::min(1.0f, dt * 6.0f);
       }
@@ -860,7 +1148,9 @@ private:
    Species species_[kPartCount];
    std::vector<Creature> creatures_;
    std::vector<Puff> puffs_;
+   std::vector<std::vector<int>> grid_;
    Star stars_[150];
+   int nextId_ = 0;
    float time_ = 0.0f;
    int playing_ = -1;
 };
@@ -885,6 +1175,7 @@ public:
          buildRoutes(part);
       }
       part_ = -1;
+      buildRouteControls();
       showTabs(host_.leftTab, host_.rightTab);
       showRoutes(host_.routesOpen);
       showPart(host_.part);
@@ -913,6 +1204,7 @@ public:
          touch[3] = n.timbre;
          touch[4] = n.lift;
       }
+      runEnvelopes(dt);
       const CreatureSources src = view_->sources(host_.part);
       const float flock[] = {src.speed, src.crowd, src.nearest, src.heading, src.caught, src.wake};
       const float pulse = 0.5f + 0.5f * std::sin(time_ * 5.0f);
@@ -922,6 +1214,10 @@ public:
             chip->setLevel(touch[s - kSourceStrike]);
          else if (s >= kSourceSpeed && s <= kSourceWake)
             chip->setLevel(flock[s - kSourceSpeed]);
+         else if (s >= kSourceEnv1 && s < kSourceEnv1 + kEnvCount)
+            chip->setLevel(envLevel_[s - kSourceEnv1]);
+         else if (s >= kSourceWingbeat && s < kSourceWingbeat + kLfoCount)
+            chip->setLevel(0.5f + 0.5f * lfoValue(s - kSourceWingbeat), true);
          chip->setState(mapping_, mapping_ && s == armed_, pulse);
       }
       refreshPitch();
@@ -929,6 +1225,7 @@ public:
       const double sum = routeChecksum();
       if (sum != routeSum_) {
          routeSum_ = sum;
+         layoutRoutes();
          for (MapKnob *k : mapKnobs_)
             k->redraw();
       }
@@ -952,7 +1249,7 @@ public:
    }
    void showTabs(int left, int right) {
       leftTabs_->select(host_.leftTab = std::clamp(left, 0, 2));
-      rightTabs_->select(host_.rightTab = std::clamp(right, 0, 2));
+      rightTabs_->select(host_.rightTab = std::clamp(right, 0, 3));
       refresh();
    }
    void showRoutes(bool open) {
@@ -1057,6 +1354,53 @@ private:
    };
 
    double value(int part, clap_id offset) const { return host_.paramValue(partId(part, offset)); }
+
+   // The shown part's LFO `l` now, -1..1, free running from its rate, shape and phase, for its LED.
+   float lfoValue(int l) const {
+      const int part = host_.part;
+      const double cycles = time_ * lfoHz(value(part, lfoParam(l, kLfoRate))) + value(part, lfoParam(l, kLfoPhase)) / 360.0;
+      const float ph = static_cast<float>(cycles - std::floor(cycles));
+      float v;
+      switch (static_cast<int>(value(part, lfoParam(l, kLfoShape)) + 0.5)) {
+      case 1: v = 1.0f - 4.0f * std::fabs(ph - 0.5f); break;          // triangle
+      case 2: v = 2.0f * ph - 1.0f; break;                             // saw
+      case 3: v = ph < 0.5f ? 1.0f : -1.0f; break;                     // square
+      case 4: v = std::sin(static_cast<float>(std::floor(cycles)) * 12.9898f) > 0.0f ? 0.7f : -0.7f; break; // S&H
+      case 5: v = 0.6f * std::sin(2.0f * kPi * ph) + 0.4f * std::sin(2.0f * kPi * ph * 0.37f + 1.0f); break; // smooth
+      default: v = std::sin(2.0f * kPi * ph); break;                   // sine
+      }
+      if (static_cast<int>(value(part, lfoParam(l, kLfoPolarity)) + 0.5) == 1)
+         v = 0.5f * v + 0.5f; // unipolar
+      return v;
+   }
+
+   // The shown part's envelopes, as the newest note would run them, for their LEDs: from the top
+   // when a new note arrives, and released when the last one lets go.
+   void runEnvelopes(float dt) {
+      const int newest = notes_.empty() ? -1 : notes_.back().note;
+      if (newest >= 0 && newest != envNote_)
+         envTime_ = 0.0f;
+      envNote_ = newest;
+      envTime_ += dt;
+      for (int e = 0; e < kEnvCount; ++e) {
+         const auto sec = [&](EnvParam p) { return static_cast<float>(timeMs(value(host_.part, envParam(e, p)))) / 1000.0f; };
+         const float sustain = static_cast<float>(value(host_.part, envParam(e, kEnvSustain)));
+         float &level = envLevel_[e];
+         if (newest < 0) {
+            level = std::max(0.0f, level - dt * std::max(level, 0.05f) / std::max(sec(kEnvRelease), 0.005f));
+            continue;
+         }
+         const float t = envTime_ - sec(kEnvDelay), a = sec(kEnvAttack), hold = sec(kEnvHold), d = sec(kEnvDecay);
+         if (t < 0.0f)
+            level = 0.0f;
+         else if (t < a)
+            level = t / std::max(a, 1e-4f);
+         else if (t < a + hold)
+            level = 1.0f;
+         else
+            level = sustain + (1.0f - sustain) * std::max(0.0f, 1.0f - (t - a - hold) / std::max(d, 1e-4f));
+      }
+   }
    // One whole edit, as if the user made it.
    void set(int part, clap_id offset, double v) {
       const clap_id id = partId(part, offset);
@@ -1086,6 +1430,8 @@ private:
          p.frame->setVisible(on);
       }
       refreshPitch();
+      if (routeInfo_)
+         layoutRoutes();
       redraw();
    }
    // Shows each oscillator's pitch knob for its pitch mode.
@@ -1170,26 +1516,28 @@ private:
    }
 
    void buildHeader() {
-      auto &parts = glassy(put<ui::SegmentedSwitch>({270, 13, 170, 26}, std::vector<std::string>{"PART A", "PART B"}),
+      put<PresetBar>({262, 13, 250, 26}, host_);
+      auto &parts = glassy(put<ui::SegmentedSwitch>({522, 13, 146, 26}, std::vector<std::string>{"PART A", "PART B"}),
                            kPartColors[0]);
       parts.onChange = [this](int p) { showPart(p); };
       partSwitch_ = &parts;
       tips_.add(parts, "Each part is a species with its own patch and its own way of flying. The cards edit "
                        "this one; the sky shows both.");
-      auto &map = glassy(put<ui::Button>({452, 13, 74, 26}, "MAP"), kMapColor);
+      auto &map = glassy(put<ui::Button>({800, 13, 62, 26}, "MAP"), kMapColor);
       map.setToggle(true);
       map.onToggle = [this](bool on) { setMapping(on, kSourceOff); };
       mapButton_ = &map;
       tips_.add(map, "Press MAP, touch a source, then drag any knob to set how much the source moves it. "
                      "Double-click a knob to flip its route, right-click to remove it.");
-      const auto cells = ui::row({540, 13, 356, 26}, kTouchCount, 6);
+      const auto cells = ui::row({872, 13, 312, 26}, kTouchCount, 4);
       for (int i = 0; i < kTouchCount; ++i)
          chip(kSourceStrike + i, upper(kTouchNames[i]), cells[i]);
-      auto &mode = glassy(put<ui::Dropdown>({910, 13, 132, 26}, upper(kPlayModeNames)), kPartColors[0]);
+      auto &mode = glassy(put<ui::Dropdown>({678, 13, 112, 26}, upper(kPlayModeNames)), kPartColors[0]);
       bindings_.bind(mode, kPlayMode);
       tips_.add(mode, "Which species a note hatches: A only, both, split by key or by velocity, by MPE zone, "
                       "or crossfaded by Slide or Press.");
-      auto &routes = glassy(put<ui::Button>({1052, 13, 132, 26}, "ROUTES"), kMapColor);
+      // ROUTES sits under the sky, at the end of the flock's own sources.
+      auto &routes = glassy(put<ui::Button>({836, 571, 116, 24}, "ROUTES"), kMapColor);
       routes.setToggle(true);
       routes.onToggle = [this](bool on) { showRoutes(on); };
       routesButton_ = &routes;
@@ -1204,7 +1552,7 @@ private:
       const char *tips[] = {"How fast this creature flies.", "How many neighbours it has.",
                             "How near its nearest neighbour is.", "Which way it flies, all the way round.",
                             "On while a hunter has caught it.", "How much of the others' ink it flies through."};
-      const auto cells = ui::row({300, 572, 600, 22}, 6, 8);
+      const auto cells = ui::row({248, 572, 578, 22}, 6, 6);
       for (int i = 0; i < 6; ++i)
          chip(sources[i].first, sources[i].second, cells[i], tips[i]);
    }
@@ -1291,7 +1639,7 @@ private:
    // Right: the envelopes, the wingbeat and the wind, and the filters.
    void buildRight() {
       glass({970, 64, 214, 536}, "", kDim);
-      rightTabs_ = &glassy(put<ui::TabBar>({978, 70, 198, 26}, std::vector<std::string>{"ENV", "MOTION", "FILTER"}), kDim);
+      rightTabs_ = &glassy(put<ui::TabBar>({978, 70, 198, 26}, std::vector<std::string>{"ENV", "MOTION", "LFO", "FILTER"}), kDim);
       rightTabs_->onChange = [this](int t) {
          host_.rightTab = t;
          refresh();
@@ -1304,6 +1652,9 @@ private:
       tab_ = 1;
       chip(kSourceWingbeat, "WINGBEAT", {982, 104, 104, 22}, "One per creature: each bobs across its path.");
       chip(kSourceWind, "WIND", {982, 352, 104, 22}, "One gust for the whole sky, pushing every creature.");
+      tab_ = 2;
+      chip(kSourceLfo1, "LFO 1", {982, 104, 104, 22}, "A plain LFO, one per creature unless its trigger is Global.");
+      chip(kSourceLfo1 + 1, "LFO 2", {982, 352, 104, 22}, "A plain LFO, one per creature unless its trigger is Global.");
       for (int part = 0; part < kPartCount; ++part) {
          part_ = part;
          const unsigned c = kPartColors[part];
@@ -1319,24 +1670,29 @@ private:
             bindings_.bind(env, id(kEnvAttack), id(kEnvDecay), id(kEnvSustain), id(kEnvRelease));
             dropdown(envParam(e, kEnvLoop), c, {1094, y, 80, 22});
          }
-         tab_ = 1;
+         // MOTION has the wingbeat and the wind, which also move the flock; LFO the two that don't.
          for (int l = 0; l < kLfoCount; ++l) {
-            const float y = 104 + l * 248.0f;
+            tab_ = l < kMotionCount ? 1 : 2;
+            const float y = 104 + (l % 2) * 248.0f;
             const unsigned lc = sourceColor(kSourceWingbeat + l);
             dropdown(lfoParam(l, kLfoShape), lc, {1094, y, 80, 22});
             dropdown(lfoParam(l, kLfoTrigger), c, {982, y + 28, 104, 22});
             segments(lfoParam(l, kLfoSync), lc, {1094, y + 28, 80, 22}, std::vector<std::string>{"FREE", "SYNC"});
             const auto k = ui::grid({976, y + 56, 202, 184}, 3, 2);
+            // The plain LFOs have no Push, so their cells move up one.
+            const int at = l < kMotionCount ? 0 : -1;
             knob(lfoParam(l, kLfoRate), "RATE", lc, k[0]);
-            knob(lfoParam(l, kLfoPush), "PUSH", lc, k[1], l == 0 ? "How far each creature bobs." : "How hard the gust pushes.");
-            knob(lfoParam(l, kLfoPhase), "PHASE", lc, k[2]);
-            knob(lfoParam(l, kLfoDelay), "DELAY", lc, k[3]);
-            label({k[4].x, k[4].y + 6, k[4].w, 16}, "DIVISION");
-            dropdown(lfoParam(l, kLfoDivision), lc, {k[4].x + 4, k[4].y + 34, k[4].w - 8, 22});
-            label({k[5].x, k[5].y + 6, k[5].w, 16}, "POLARITY");
-            dropdown(lfoParam(l, kLfoPolarity), lc, {k[5].x + 4, k[5].y + 34, k[5].w - 8, 22});
+            if (l < kMotionCount)
+               knob(lfoParam(l, kLfoPush), "PUSH", lc, k[1], l == 0 ? "How far each creature bobs." : "How hard the gust pushes.");
+            knob(lfoParam(l, kLfoPhase), "PHASE", lc, k[2 + at]);
+            knob(lfoParam(l, kLfoDelay), "DELAY", lc, k[3 + at]);
+            const ui::Rect dv = k[4 + at], pl = k[5 + at];
+            label({dv.x, dv.y + 6, dv.w, 16}, "DIVISION");
+            dropdown(lfoParam(l, kLfoDivision), lc, {dv.x + 4, dv.y + 34, dv.w - 8, 22});
+            label({pl.x, pl.y + 6, pl.w, 16}, "POLARITY");
+            dropdown(lfoParam(l, kLfoPolarity), lc, {pl.x + 4, pl.y + 34, pl.w - 8, 22});
          }
-         tab_ = 2;
+         tab_ = 3;
          segments(tailParam(kFilterRouting), c, {982, 104, 190, 22}, std::vector<std::string>{"SERIAL", "PARALLEL", "SPLIT"});
          for (int f = 0; f < kFilterCount; ++f) {
             const float y = 136 + f * 150.0f;
@@ -1406,27 +1762,101 @@ private:
    }
 
    // The route list: every route of a part, over the sky.
+   // The route list over the sky: a row for each route the part uses, in route order, sixteen to a
+   // page. Every route of the pool has its row built up front; layoutRoutes() places the used ones.
    void buildRoutes(int part) {
       group_ = kRoutes;
       const unsigned c = kPartColors[part];
       glass({252, 66, 696, 494}, part == 0 ? "ROUTES  PART A" : "ROUTES  PART B", kMapColor);
-      label({430, 73, 500, 16}, "or press MAP, touch a source and drag any knob", kDim, visage::Font::kRight);
       const std::vector<std::string> sources = upper(kSourceNames);
       const std::vector<std::string> &dests = destinationNames();
       for (int r = 0; r < kRouteCount; ++r) {
-         const float x = 266 + (r / 8) * 340.0f, y = 102 + (r % 8) * 56.0f;
-         label({x, y + 3, 22, 16}, std::to_string(r + 1), kDim, visage::Font::kLeft);
-         auto &src = glassy(put<ui::Dropdown>({x + 22, y, 104, 22}, sources), kMapColor);
+         RouteRow row{part, r, {}};
+         auto &number = put<ui::Label>({0, 0, 22, 16}, std::to_string(r + 1), kDim, visage::Font::kLeft);
+         auto &src = glassy(put<ui::Dropdown>({0, 0, 104, 22}, sources), kMapColor);
          bindings_.bind(src, partId(part, routeParam(r, kRouteSource)));
-         auto &dst = glassy(put<ui::Dropdown>({x + 130, y, 190, 22}, dests), c);
+         auto &dst = glassy(put<ui::Dropdown>({0, 0, 166, 22}, dests), c);
          bindings_.bind(dst, partId(part, routeParam(r, kRouteDestination)));
+         auto &remove = glassy(put<ui::Button>({0, 0, 22, 22}, "X"), kMapColor);
+         remove.onClick = [this, part, r] {
+            set(part, routeParam(r, kRouteSource), kSourceOff);
+            set(part, routeParam(r, kRouteAmount), 0.0);
+            layoutRoutes();
+         };
+         tips_.add(remove, "Remove this route.");
          const clap_id amount = partId(part, routeParam(r, kRouteAmount));
-         auto &amt = glassy(put<ui::Slider>({x + 22, y + 26, 298, 20}, ui::Slider::Orientation::Horizontal, rangeOf(amount)),
+         auto &amt = glassy(put<ui::Slider>({0, 0, 298, 20}, ui::Slider::Orientation::Horizontal, rangeOf(amount)),
                             kMapColor);
          amt.valueText = [amount](double v) { return text(amount, v); };
          bindings_.bind(amt, amount);
+         row.frames = {&number, &src, &dst, &remove, &amt};
+         routeRows_.push_back(row);
       }
       group_ = kAlways;
+   }
+
+   // The list's own controls, shared by both parts: adding a route, the pages, and the count.
+   void buildRouteControls() {
+      group_ = kRoutes;
+      routeInfo_ = &put<ui::Label>({430, 73, 360, 16}, "", kDim, visage::Font::kRight);
+      auto &add = glassy(put<ui::Button>({800, 70, 70, 22}, "+ ADD"), kMapColor);
+      add.onClick = [this] {
+         // A new route from Env 2 to Filter 1's cutoff, at zero: pick its source and destination here.
+         for (int r = 0; r < kRouteCount; ++r)
+            if (static_cast<int>(value(host_.part, routeParam(r, kRouteSource)) + 0.5) == kSourceOff) {
+               set(host_.part, routeParam(r, kRouteSource), kSourceEnv1 + 1);
+               set(host_.part, routeParam(r, kRouteDestination), destinationIndex(filterParam(0, kFilterCutoff)));
+               set(host_.part, routeParam(r, kRouteAmount), 0.0);
+               break;
+            }
+         routePage_ = 99; // the last page, where the new route is
+         layoutRoutes();
+      };
+      tips_.add(add, "Add a route, then pick its source and destination. Or press MAP, touch a source and drag "
+                     "any knob.");
+      auto &prev = glassy(put<ui::Button>({876, 70, 30, 22}, "<"), kMapColor);
+      prev.onClick = [this] {
+         routePage_ = std::max(0, routePage_ - 1);
+         layoutRoutes();
+      };
+      auto &next = glassy(put<ui::Button>({910, 70, 30, 22}, ">"), kMapColor);
+      next.onClick = [this] {
+         ++routePage_;
+         layoutRoutes();
+      };
+      routeEmpty_ = &put<ui::Label>({272, 280, 656, 20}, "No routes yet. Press + ADD, or press MAP, touch a source "
+                                                          "and drag any knob.", kDim);
+      group_ = kAlways;
+   }
+
+   // Places the shown part's routes in use on the list's current page, and hides every other row.
+   void layoutRoutes() {
+      std::vector<const RouteRow *> used;
+      for (const RouteRow &row : routeRows_)
+         if (row.part == host_.part && static_cast<int>(value(row.part, routeParam(row.route, kRouteSource)) + 0.5) != kSourceOff)
+            used.push_back(&row);
+      const int pages = std::max(1, (static_cast<int>(used.size()) + 15) / 16);
+      routePage_ = std::clamp(routePage_, 0, pages - 1);
+      for (const RouteRow &row : routeRows_)
+         for (visage::Frame *f : row.frames)
+            f->setVisible(false);
+      const bool open = host_.routesOpen;
+      for (int i = routePage_ * 16; open && i < std::min<int>(static_cast<int>(used.size()), (routePage_ + 1) * 16); ++i) {
+         const int slot = i - routePage_ * 16;
+         const float x = 266 + (slot / 8) * 340.0f, y = 102 + (slot % 8) * 56.0f;
+         const RouteRow &row = *used[i];
+         const ui::Rect rects[] = {{x, y + 3, 22, 16}, {x + 22, y, 104, 22}, {x + 130, y, 164, 22}, {x + 298, y, 22, 22},
+                                   {x + 22, y + 26, 298, 20}};
+         for (int k = 0; k < 5; ++k) {
+            move(*row.frames[k], rects[k]);
+            row.frames[k]->setVisible(true);
+         }
+      }
+      char info[64];
+      std::snprintf(info, sizeof(info), "%d of %d routes   page %d of %d", static_cast<int>(used.size()), kRouteCount,
+                    routePage_ + 1, pages);
+      routeInfo_->setText(info);
+      routeEmpty_->setVisible(open && used.empty());
    }
 
    EditorHost &host_;
@@ -1442,6 +1872,14 @@ private:
    std::vector<MapKnob *> mapKnobs_;
    std::vector<SourceChip *> chips_;
    std::vector<PitchKnobs> pitchKnobs_;
+   struct RouteRow {
+      int part, route;
+      std::vector<visage::Frame *> frames; // number, source, destination, remove, amount
+   };
+   std::vector<RouteRow> routeRows_;
+   ui::Label *routeInfo_ = nullptr;
+   ui::Label *routeEmpty_ = nullptr;
+   int routePage_ = 0;
    std::vector<EditorHost::Note> notes_;
    // What put() is building for: a part (-1 for both), and where it shows.
    int part_ = -1;
@@ -1451,6 +1889,9 @@ private:
    int armed_ = kSourceOff;
    double routeSum_ = 0.0;
    float time_ = 0.0f;
+   float envLevel_[kEnvCount] = {};
+   float envTime_ = 0.0f;
+   int envNote_ = -1;
    std::chrono::steady_clock::time_point last_;
 };
 

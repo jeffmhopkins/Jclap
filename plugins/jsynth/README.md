@@ -17,7 +17,7 @@ A bi-timbral MPE synth where every note is a creature and the creatures flock. T
 
 | Part A | Part B |
 |---|---|
-| ![Part A, the FLOCK and ENV tabs](docs/panel.png) | ![Part B, the FM and MOTION tabs](docs/panel-b.png) |
+| ![Part A, the FLOCK and MOTION tabs](docs/panel.png) | ![Part B, the FM and LFO tabs](docs/panel-b.png) |
 | **MAP mode, with SPEED armed** | **The route list** |
 | ![MAP mode](docs/panel-map.png) | ![Routes](docs/panel-routes.png) |
 
@@ -37,8 +37,9 @@ A bi-timbral MPE synth where every note is a creature and the creatures flock. T
   intervals (Tune Pull). A hunter that catches its prey ring-modulates it (Bite).
 - **Ink:** each creature sheds ink that blooms (Spread) and fades (Tail). Flying through another
   creature's ink stirs it, and that is the Wake source.
-- **Motion:** LFO 1 is the wingbeat, one per creature, and LFO 2 the wind, one gust for the whole sky.
-  Push sets how hard each moves the creatures; both are also mod sources.
+- **Four LFOs.** Two move the flock: the wingbeat, one per creature, and the wind, one gust for the
+  whole sky (Push sets how hard). LFO 1 and LFO 2 are plain LFOs that only modulate. All four are
+  sources to map.
 
 ## Modulation: MAP
 
@@ -46,9 +47,19 @@ There is no matrix page. Press **MAP**, touch a source, then drag any knob: the 
 source moves it, shown as a ring in the source's colour (up to four per knob). Double-click a knob to
 flip its route, right-click to remove it. The sources are the touch chips in the header, the envelope
 and LFO chips on the right card, and the flock's own under the sky: Speed, Crowd, Nearest, Heading,
-Caught and Wake. Underneath, each part has 16 routes (source, destination, amount) as host params, and
-**ROUTES** lists them to edit by name. The FM grid and the flock params are knobs, so they map like
-any other.
+Caught and Wake. Each chip's LED glows with its source as it moves. The FM grid and the flock params
+are knobs, so they map like any other.
+
+Underneath, each part has a pool of 64 routes (source, destination, amount) as host params, so route
+depths can be automated. **ROUTES** lists the ones in use, sixteen to a page, to edit by name: **+ ADD**
+starts one and **X** removes it.
+
+## Presets
+
+As in JVerb: the arrows step through the presets, the name opens them by category, and **SAVE** saves
+the current sound as a user preset (`.jspreset`, plain text, in the user's application data folder
+under `JSynth/Presets`). A factory preset loads every param it doesn't set at its default, so nothing
+from the last patch carries over.
 
 ## Params
 

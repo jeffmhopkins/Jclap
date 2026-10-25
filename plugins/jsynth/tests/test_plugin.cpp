@@ -14,6 +14,7 @@
 
 #include "editor.h"
 #include "params.h"
+#include "presets.h"
 
 extern "C" const clap_plugin_entry_t clap_entry;
 
@@ -202,6 +203,41 @@ int main() {
       cut.bytes.assign(saved.bytes.begin(), saved.bytes.begin() + saved.bytes.size() / 2);
       JCLAP_CHECK(!state->load(h.plugin(), &cut.in));
       JCLAP_CHECK_EQ(h.paramValue(level), -3.0);
+   }
+
+   // Presets: every factory value is a param in range, names are unique, and a user preset saved to
+   // a file reads back with every param.
+   {
+      std::set<std::string> names;
+      for (const Preset &p : factoryPresets()) {
+         JCLAP_CHECK(names.insert(p.name).second);
+         for (const auto &[id, v] : p.values) {
+            const Param *param = findParam(id);
+            JCLAP_CHECK(param != nullptr);
+            if (param)
+               JCLAP_CHECK(v >= param->def.min && v <= param->def.max);
+         }
+         JCLAP_CHECK_EQ(presetValues(p).size(), paramCount());
+      }
+      struct Values : jclap::ui::ParamAccess {
+         std::vector<double> v = presetValues(factoryPresets()[1]);
+         double paramValue(clap_id id) const override { return v[paramIndex(id)]; }
+         double paramModulated(clap_id id) const override { return paramValue(id); }
+         void beginEdit(clap_id) override {}
+         void setParam(clap_id, double) override {}
+         void endEdit(clap_id) override {}
+      } access;
+      const auto folder = std::filesystem::temp_directory_path() / "jsynth-preset-test";
+      std::filesystem::remove_all(folder);
+      JCLAP_CHECK(writePreset(folder / (std::string("Mine") + kPresetExtension), access));
+      const std::vector<Preset> user = userPresets(folder);
+      JCLAP_CHECK_EQ(user.size(), 1u);
+      if (!user.empty()) {
+         JCLAP_CHECK(user[0].name == "Mine");
+         JCLAP_CHECK(presetValues(user[0]) == access.v);
+      }
+      std::filesystem::remove_all(folder);
+      JCLAP_CHECK(presetFileName("a/b: c ") == "ab c");
    }
 
    return jclap::core::testResult();

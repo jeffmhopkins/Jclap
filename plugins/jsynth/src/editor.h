@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <jclap/ui/params.h>
@@ -29,6 +30,14 @@ public:
       float strike, lift;
    };
    virtual void notes(std::vector<Note> &out) const = 0;
+
+   // The name of the preset last loaded or saved, kept with the plugin's state.
+   virtual std::string presetName() const = 0;
+   virtual void setPresetName(const std::string &name) = 0;
+   // Sets every param at once, as loading a preset does: values[i] is kParams()[i]'s. Each param that
+   // changes is one edit for the host. The plugin coalesces these, so clicking quickly through
+   // presets sends the host the latest values instead of a backlog that could overflow.
+   virtual void setParams(const double *values);
 
    // Where the panel was left, so reopening it shows the same view: the part (A or B), the left and
    // right cards' tabs, and whether the route list is open. Main thread only.

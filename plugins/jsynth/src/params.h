@@ -28,8 +28,11 @@ constexpr int kPartCount = 2;
 constexpr int kOscCount = 3;
 constexpr int kFilterCount = 2;
 constexpr int kEnvCount = 3;
-constexpr int kLfoCount = 2;
-constexpr int kRouteCount = 16;
+// Wingbeat and Wind move the flock as well as modulating; LFO 1 and LFO 2 only modulate.
+constexpr int kMotionCount = 2;
+constexpr int kLfoCount = 4;
+// Routes per part: a pool the panel shows only the used ones of, so it reads as an open-ended list.
+constexpr int kRouteCount = 64;
 constexpr int kMacroCount = 4;
 // The touch dimensions, in MPE order: velocity, pressure, bend, CC 74 and release velocity.
 constexpr int kTouchCount = 5;
@@ -59,7 +62,7 @@ enum GlobalParam : clap_id {
 };
 
 constexpr clap_id kPartBase = 64;
-constexpr clap_id kPartStride = 512;
+constexpr clap_id kPartStride = 1024;
 constexpr clap_id kParamIdEnd = kPartBase + kPartCount * kPartStride;
 
 // Offsets within a part. The voice settings come first, then one block per module.
@@ -90,10 +93,10 @@ enum PartParam : clap_id {
    kEnvStride = 16,
    kLfoBase = kEnvBase + kEnvCount * kEnvStride, // 192
    kLfoStride = 16,
-   kFlockBase = kLfoBase + kLfoCount * kLfoStride, // 224
-   kRouteBase = kFlockBase + 32,                   // 256
+   kFlockBase = kLfoBase + kLfoCount * kLfoStride, // 256
+   kRouteBase = kFlockBase + 32,                   // 288
    kRouteStride = 4,
-   kPartEnd = kRouteBase + kRouteCount * kRouteStride // 320, inside the 512 stride
+   kPartEnd = kRouteBase + kRouteCount * kRouteStride // 544, inside the 1024 stride
 };
 
 enum OscParam : clap_id {
@@ -154,7 +157,8 @@ enum EnvParam : clap_id {
    kEnvVelocity,
 };
 
-// LFO 1 is the wingbeat, one per creature; LFO 2 is the wind, one gust for the whole sky.
+// The first two LFOs move the flock: the wingbeat, one per creature, and the wind, one gust for the
+// whole sky. The other two, LFO 1 and LFO 2, are plain LFOs, sources for routes only.
 enum LfoParam : clap_id {
    kLfoShape,
    kLfoRate,
@@ -164,7 +168,8 @@ enum LfoParam : clap_id {
    kLfoPhase,
    kLfoDelay,
    kLfoPolarity,
-   // How hard it moves the creatures: a wingbeat bobs each one, the wind pushes them all one way.
+   // Wingbeat and Wind only: how hard it moves the creatures. A wingbeat bobs each one, the wind
+   // pushes them all one way.
    kLfoPush,
 };
 
@@ -244,7 +249,7 @@ inline const std::vector<std::string> kWallNames = {"Soft", "Wrap", "Open"};
 // many neighbours it has, how near the nearest is, which way it heads, whether a hunter has it, and
 // how much ink it is flying through.
 inline const std::vector<std::string> kSourceNames = {
-    "Off",   "Env 1",   "Env 2",    "Env 3",   "Wingbeat", "Wind",   "Strike",    "Press",
+    "Off",   "Env 1",   "Env 2",    "Env 3",   "Wingbeat", "Wind",   "LFO 1",  "LFO 2",  "Strike",    "Press",
     "Glide", "Slide",   "Lift",     "Key",     "Speed",    "Crowd",  "Nearest",   "Heading",
     "Caught", "Wake",   "Random",   "Mod Wheel", "Macro 1", "Macro 2", "Macro 3", "Macro 4"};
 enum Source {
@@ -252,7 +257,8 @@ enum Source {
    kSourceEnv1,
    kSourceWingbeat = kSourceEnv1 + kEnvCount,
    kSourceWind,
-   kSourceStrike,
+   kSourceLfo1,
+   kSourceStrike = kSourceLfo1 + kLfoCount - kMotionCount,
    kSourceKey = kSourceStrike + kTouchCount,
    kSourceSpeed,
    kSourceCrowd,
@@ -369,7 +375,8 @@ inline std::vector<clap_id> buildDestinations() {
          d.push_back(envParam(e, p));
    for (int l = 0; l < kLfoCount; ++l)
       for (LfoParam p : {kLfoRate, kLfoPhase, kLfoDelay, kLfoPush})
-         d.push_back(lfoParam(l, p));
+         if (p != kLfoPush || l < kMotionCount)
+            d.push_back(lfoParam(l, p));
    // The flock itself can be modulated: Press can make a creature break formation, say.
    for (FlockParam p : {kCohesion, kAlignment, kSeparation, kSpeed, kWander, kLure, kRange, kNeighbourFm, kTunePull,
                         kBite, kTailLength, kTailSpread, kWake})
@@ -489,18 +496,20 @@ inline void addPart(Builder &b, int part) {
    }
 
    for (int l = 0; l < kLfoCount; ++l) {
-      const std::string m = l == 0 ? "Wingbeat" : "Wind", n = m + " ";
+      const std::string m = l == 0 ? "Wingbeat" : l == 1 ? "Wind" : num("LFO ", l - kMotionCount), n = m + " ";
       const auto p = [&](LfoParam q) { return id(lfoParam(l, q)); };
-      b.choice(p(kLfoShape), n + "Shape", m, kLfoShapeNames, l == 0 ? 0 : 5, kChoice);
-      b.add(p(kLfoRate), n + "Rate", m, 0.0, 1.0, lfoValue(l == 0 ? 5.0 : 0.2), kMod, Unit::LfoHz);
+      b.choice(p(kLfoShape), n + "Shape", m, kLfoShapeNames, l == 1 ? 5 : l == 3 ? 1 : 0, kChoice);
+      static const double rates[kLfoCount] = {5.0, 0.2, 4.0, 0.5};
+      b.add(p(kLfoRate), n + "Rate", m, 0.0, 1.0, lfoValue(rates[l]), kMod, Unit::LfoHz);
       b.choice(p(kLfoSync), n + "Sync", m, kOnOffNames, 0, kGlobalChoice);
       b.choice(p(kLfoDivision), n + "Division", m, kDivisionNames, 8, kChoice);
-      // The wind is one gust for every creature, so it starts Global.
-      b.choice(p(kLfoTrigger), n + "Trigger", m, kTriggerNames, l == 0 ? 0 : 2, kGlobalChoice);
+      // The wind is one gust for the whole sky, so it starts Global.
+      b.choice(p(kLfoTrigger), n + "Trigger", m, kTriggerNames, l == 1 ? 2 : 0, kGlobalChoice);
       b.add(p(kLfoPhase), n + "Phase", m, 0.0, 360.0, 0.0, kMod, Unit::Degrees);
       b.add(p(kLfoDelay), n + "Delay", m, 0.0, 1.0, 0.0, kMod, Unit::Time);
       b.choice(p(kLfoPolarity), n + "Polarity", m, kPolarityNames, 0, kChoice);
-      b.add(p(kLfoPush), n + "Push", m, 0.0, 1.0, l == 0 ? 0.2 : 0.3, kMod, Unit::Percent);
+      if (l < kMotionCount)
+         b.add(p(kLfoPush), n + "Push", m, 0.0, 1.0, l == 0 ? 0.2 : 0.3, kMod, Unit::Percent);
    }
 
    // Part A shoals and part B hunts it, so a layered patch has a predator from the start.

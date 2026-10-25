@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstring>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "editor.h"
@@ -42,9 +43,10 @@ struct HeldNotes {
 
 // State layout: 4-byte magic, uint32 version, uint32 count, then that many (uint32 id, double value)
 // pairs. Ids have gaps and blocks grow, so each value carries its id; an id this build doesn't know
-// is skipped, and a param the state doesn't mention keeps its default.
+// is skipped, and a param the state doesn't mention keeps its default. Version 2 adds the preset's
+// name after the values: a uint32 length, then that many bytes.
 constexpr char kStateMagic[4] = {'J', 'J', 'S', 'Y'};
-constexpr uint32_t kStateVersion = 1;
+constexpr uint32_t kStateVersion = 2;
 
 class JSynth final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -52,10 +54,11 @@ public:
 
    explicit JSynth(const clap_host_t *host)
        : Plugin(&descriptor, host), values_(new std::atomic<double>[paramCount()]),
-         mods_(new std::atomic<double>[paramCount()]) {
+         mods_(new std::atomic<double>[paramCount()]), pending_(new std::atomic<bool>[paramCount()]) {
       for (size_t i = 0; i < paramCount(); ++i) {
          values_[i].store(kParams()[i].def.defaultValue);
          mods_[i].store(0.0);
+         pending_[i].store(false);
       }
    }
 
@@ -134,6 +137,27 @@ public:
       edits_.value(id, value);
    }
    void endEdit(clap_id id) override { edits_.end(id); }
+   void setParams(const double *values) override {
+      bool changed = false;
+      for (size_t i = 0; i < paramCount(); ++i) {
+         if (!std::isfinite(values[i]))
+            continue;
+         const jclap::core::ParamDef &d = kParams()[i].def;
+         double v = std::clamp(values[i], d.min, d.max);
+         if (d.flags & CLAP_PARAM_IS_STEPPED)
+            v = std::round(v);
+         if (values_[i].load() == v)
+            continue;
+         values_[i].store(v);
+         pending_[i].store(true, std::memory_order_release);
+         changed = true;
+      }
+      if (changed)
+         if (auto *hostParams = hostExtension<clap_host_params_t>(CLAP_EXT_PARAMS))
+            hostParams->request_flush(host());
+   }
+   std::string presetName() const override { return presetName_; }
+   void setPresetName(const std::string &name) override { presetName_ = name; }
    const jclap::ui::HostMenu *hostMenu() const override { return &hostMenu_; }
    // While the host isn't processing, the panel's notes wait in the queue. Note-ons and expressions
    // stop going in well before it's full, so the note-offs that follow always fit and no note sticks.
@@ -181,7 +205,7 @@ public:
       const uint32_t n = in->size(in);
       for (uint32_t i = 0; i < n; ++i)
          handleParam(in->get(in, i));
-      edits_.drain(out);
+      drainEdits(out);
    }
 
    // ---- state ----
@@ -197,14 +221,16 @@ public:
          if (!jclap::core::writeAll(stream, &id, 4) || !jclap::core::writeAll(stream, &v, sizeof(v)))
             return false;
       }
-      return true;
+      const uint32_t nameLength = static_cast<uint32_t>(std::min<size_t>(presetName_.size(), 255));
+      return jclap::core::writeAll(stream, &nameLength, 4) &&
+             (nameLength == 0 || jclap::core::writeAll(stream, presetName_.data(), nameLength));
    }
 
    bool stateLoad(const clap_istream_t *stream) override {
       char magic[4];
       uint32_t version = 0, count = 0;
       if (!jclap::core::readAll(stream, magic, 4) || std::memcmp(magic, kStateMagic, 4) ||
-          !jclap::core::readAll(stream, &version, 4) || version != kStateVersion ||
+          !jclap::core::readAll(stream, &version, 4) || version < 1 || version > kStateVersion ||
           !jclap::core::readAll(stream, &count, 4))
          return false;
       // Read everything before changing anything, so a bad state leaves the current one alone.
@@ -220,8 +246,19 @@ public:
          if (i >= 0)
             loaded[i] = std::clamp(v, kParams()[i].def.min, kParams()[i].def.max);
       }
+      // The preset's name follows the values from version 2.
+      std::string name;
+      uint32_t nameLength = 0;
+      if (version >= 2) {
+         if (!jclap::core::readAll(stream, &nameLength, 4) || nameLength > 255)
+            return false;
+         name.resize(nameLength);
+         if (nameLength && !jclap::core::readAll(stream, name.data(), nameLength))
+            return false;
+      }
       for (size_t i = 0; i < paramCount(); ++i)
          values_[i].store(loaded[i]);
+      presetName_ = name;
       if (auto *hostParams = hostExtension<clap_host_params_t>(CLAP_EXT_PARAMS))
          hostParams->rescan(host(), CLAP_PARAM_RESCAN_VALUES);
       return true;
@@ -230,7 +267,7 @@ public:
    // ---- audio thread ----
 
    clap_process_status process(const clap_process_t *proc) override {
-      edits_.drain(proc->out_events);
+      drainEdits(proc->out_events);
       const uint32_t n = proc->in_events->size(proc->in_events);
       for (uint32_t i = 0; i < n; ++i) {
          const clap_event_header_t *h = proc->in_events->get(proc->in_events, i);
@@ -373,6 +410,19 @@ private:
                   held_.end());
    }
 
+   // Tells the host about the panel's edits: knob gestures in order, then each param a preset load
+   // changed, as one edit carrying its latest value.
+   void drainEdits(const clap_output_events_t *out) {
+      edits_.drain(out);
+      for (size_t i = 0; i < paramCount(); ++i)
+         if (pending_[i].load(std::memory_order_relaxed) && pending_[i].exchange(false, std::memory_order_acquire)) {
+            const clap_id id = kParams()[i].def.id;
+            jclap::core::pushParamGesture(out, id, true);
+            jclap::core::pushParamValue(out, id, values_[i].load());
+            jclap::core::pushParamGesture(out, id, false);
+         }
+   }
+
    void publish() {
       HeldNotes &h = shown_.back();
       h.count = 0;
@@ -382,7 +432,11 @@ private:
    }
 
    std::unique_ptr<std::atomic<double>[]> values_, mods_;
+   // Params a preset load changed that the host hasn't been told about yet.
+   std::unique_ptr<std::atomic<bool>[]> pending_;
    jclap::core::EditQueue edits_;
+   // Main thread.
+   std::string presetName_ = "Init";
    jclap::ui::HostMenu hostMenu_;
    jclap::core::SpscQueue<PanelNote> panelNotes_;
    // Audio thread only. Reserved in the constructor's place by the cap, so it never allocates past it.

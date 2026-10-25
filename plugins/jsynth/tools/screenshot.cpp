@@ -1,12 +1,13 @@
 // Renders the panel to a PNG without a host:
 //    jsynth-screenshot out.png [part [left-tab [right-tab [routes [map-source [width height]]]]]]
 // Part 0 is A, 1 is B. The left card's tabs are FLOCK, FM, TOUCH and the right card's ENV, MOTION,
-// FILTER (0, 1, 2). Routes 1 opens the route list. Map-source, a route source's number, turns MAP on
+// LFO, FILTER (0 up). Routes 1 opens the route list. Map-source, a route source's number, turns MAP on
 // with that source armed.
 
 #include <cstdio>
 #include <cstdlib>
 #include <map>
+#include <string>
 
 #include "editor.h"
 #include "params.h"
@@ -96,6 +97,8 @@ public:
    void noteOn(int, float) override {}
    void noteExpression(int, float, float, float) override {}
    void noteOff(int) override {}
+   std::string presetName() const override { return "Starling Bells"; }
+   void setPresetName(const std::string &) override {}
    void notes(std::vector<Note> &out) const override {
       // A chord, each note bent and pressed a little differently, as MPE playing looks.
       out = {{43, -0.4f, 0.3f, 0.35f, 0.6f, 0.0f},
