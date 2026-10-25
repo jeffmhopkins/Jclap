@@ -1,0 +1,1361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JSynth User Manual</title>
+<style>
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Regular.ttf"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Italic.ttf"); font-weight: 400; font-style: italic; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Medium.ttf"); font-weight: 500; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-SemiBold.ttf"); font-weight: 600; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Bold.ttf"); font-weight: 700; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Light.ttf"); font-weight: 300; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Regular.ttf"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Medium.ttf"); font-weight: 500; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-SemiBold.ttf"); font-weight: 600; font-style: normal; }
+:root {
+  --ink: #15171d;
+  --ink-2: #3b3f4a;
+  --ink-3: #6d7280;
+  --rule: #e3e4e8;
+  --wash: #f5f5f7;
+  --night: #05060b;
+  --orange: #f28c28;
+  --orange-ink: #c4650f;
+  --a: #f28c28;      --a-ink: #c4650f;
+  --b: #6fb8ff;      --b-ink: #2a74b8;
+  --map: #ff6fd2;    --map-ink: #b8338f;
+  --env: #ffa94d;    --env-ink: #b86a14;
+  --lfo: #5fd3b0;    --lfo-ink: #1f8a6b;
+  --wing: #7ee0ff;   --wing-ink: #1489ad;
+  --osc: #a98bff;    --osc-ink: #6a4fc4;
+}
+@page {
+  size: 8.5in 11in;
+  margin: 0.85in 0.85in 0.8in 0.85in;
+  @bottom-left { content: "JSynth  ·  User Manual  ·  v0.8.0"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
+  @bottom-right { content: counter(page); font: 600 8pt "InterM"; color: #15171d; }
+}
+@page cover { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+@page plain { @bottom-left { content: none; } @bottom-right { content: none; } }
+@page back { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  margin: 0; font-family: "InterM", sans-serif; font-size: 9.6pt; line-height: 1.55; color: var(--ink);
+  font-feature-settings: "cv11", "ss01", "tnum" 0; hyphens: manual;
+}
+p { margin: 0 0 0.75em; orphans: 3; widows: 3; }
+strong { font-weight: 600; }
+em { font-style: italic; }
+code, .mono { font-family: "JetBrains Mono", monospace; font-size: 0.86em; }
+code { background: var(--wash); border-radius: 3px; padding: 0.05em 0.3em; }
+a { color: inherit; text-decoration: none; }
+
+/* ---------- cover ---------- */
+.cover {
+  page: cover; width: 8.5in; height: 11in; background: var(--night); color: #fff; position: relative; overflow: hidden;
+  break-after: page;
+}
+.cover .stars { position: absolute; inset: 0; }
+.cover .top { position: absolute; left: 0.85in; right: 0.85in; top: 0.8in; display: flex; justify-content: space-between; align-items: center; }
+.cover .brand { font: 600 8pt "InterM"; letter-spacing: 0.28em; color: #9aa0ad; text-transform: uppercase; }
+.cover .title { position: absolute; left: 0.85in; top: 1.9in; }
+.cover .word { font: 300 92pt/0.9 "InterDisplayM"; letter-spacing: -0.035em; }
+.cover .word .j { color: var(--orange); font-weight: 400; }
+.cover .sub { margin-top: 0.22in; font: 400 15pt "InterDisplayM"; color: #c9ccd4; letter-spacing: 0.01em; }
+.cover .sub b { color: #fff; font-weight: 500; }
+.cover .shot { position: absolute; left: 0.85in; right: 0.85in; top: 4.45in; }
+.cover .shot img { width: 100%; display: block; border-radius: 10px; box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 30px 80px rgba(242,140,40,0.18), 0 10px 40px rgba(111,184,255,0.14); }
+.cover .foot { position: absolute; left: 0.85in; right: 0.85in; bottom: 0.75in; display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid rgba(255,255,255,0.14); padding-top: 0.16in; }
+.cover .foot .k { font: 600 7pt "InterM"; letter-spacing: 0.22em; text-transform: uppercase; color: #7d8391; }
+.cover .foot .v { font: 500 10pt "InterM"; color: #e8e9ee; margin-top: 3px; }
+
+/* ---------- front matter ---------- */
+.front { page: plain; break-after: page; }
+.toc-title { font: 300 30pt/1 "InterDisplayM"; letter-spacing: -0.02em; margin: 0 0 0.25in; }
+.toc { columns: 2; column-gap: 0.4in; }
+.toc .grp { break-inside: avoid; }
+.toc .ch { display: flex; align-items: baseline; padding: 3px 0 3px; border-bottom: 1px solid var(--rule); }
+.toc .ch .n { width: 0.36in; font: 600 9pt "JetBrains Mono"; color: var(--orange-ink); }
+.toc .ch .t { flex: 1; font: 600 10.5pt "InterM"; }
+.toc .ch .p { font: 500 9.5pt "InterM"; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.toc .sec { display: flex; align-items: baseline; padding: 0 0 0 0.36in; font-size: 7.9pt; line-height: 1.45; color: var(--ink-2); }
+.toc .sec .t { flex: 1; }
+.toc .sec .p { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.toc .grp { padding-bottom: 3px; }
+
+/* ---------- chapters ---------- */
+.chapter { break-before: page; }
+.chap-head { position: relative; margin: 0 0 0.32in; padding-top: 0.05in; }
+.chap-head .num { font: 600 8pt "JetBrains Mono"; letter-spacing: 0.18em; color: var(--accent, var(--orange-ink)); text-transform: uppercase; }
+.chap-head h1 { font: 300 32pt/1.02 "InterDisplayM"; letter-spacing: -0.025em; margin: 0.08in 0 0.12in; color: var(--ink); }
+.chap-head .lede { font: 400 12pt/1.5 "InterDisplayM"; color: var(--ink-2); max-width: 5.6in; margin: 0; }
+.chap-head .bar { height: 3px; width: 0.9in; background: var(--accent-bg, var(--orange)); margin-top: 0.22in; border-radius: 2px; }
+
+h2 { break-inside: avoid; font: 600 13.5pt/1.25 "InterDisplayM"; letter-spacing: -0.005em; margin: 0.32in 0 0.1in; break-after: avoid; }
+h2 .tag { font: 600 7pt "JetBrains Mono"; letter-spacing: 0.14em; color: var(--accent, var(--orange-ink)); display: block; margin-bottom: 3px; text-transform: uppercase; }
+h3 { font: 600 10.2pt/1.3 "InterM"; margin: 0.2in 0 0.06in; break-after: avoid; }
+h4 { font: 600 7.5pt "InterM"; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0.16in 0 0.06in; break-after: avoid; }
+ul, ol { margin: 0 0 0.8em; padding-left: 1.15em; }
+li { margin: 0 0 0.3em; }
+li::marker { color: var(--ink-3); }
+
+/* ---------- tables ---------- */
+table { width: 100%; border-collapse: collapse; margin: 0.06in 0 0.18in; font-size: 8.5pt; line-height: 1.42; }
+thead th { text-align: left; font: 600 6.8pt "InterM"; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3); border-bottom: 1.2px solid var(--ink); padding: 0 8px 5px 0; }
+tbody td { border-bottom: 1px solid var(--rule); padding: 5px 8px 5px 0; vertical-align: top; }
+tbody tr { break-inside: avoid; }
+td.c { font-weight: 600; white-space: nowrap; }
+td.r, td.d { font-family: "JetBrains Mono", monospace; font-size: 7.6pt; color: var(--ink-2); white-space: nowrap; }
+td.d { color: var(--ink); }
+table.params td.c { width: 1.05in; }
+table.params td.r { width: 1.3in; white-space: normal; }
+table.params td.d { width: 0.7in; white-space: normal; }
+table.compact td.c { width: 0.95in; }
+table.compact td.r { width: 1.05in; white-space: normal; line-height: 1.5; }
+table.compact .dflt { color: var(--ink); font-weight: 600; }
+.mod { display: inline-block; font: 600 6pt "InterM"; letter-spacing: 0.08em; padding: 0 4px; border-radius: 3px; margin-left: 4px; vertical-align: 1px; border: 1px solid currentColor; }
+.mod.m { color: #7b7f8b; }
+.mod.t { color: var(--map-ink); }
+
+/* ---------- figures ---------- */
+figure { margin: 0.12in 0 0.22in; break-inside: avoid; }
+figure img { display: block; width: 100%; border-radius: 6px; }
+figure.dark img { box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 6px 22px rgba(10,12,20,0.18); }
+figcaption { font-size: 7.8pt; color: var(--ink-3); margin-top: 7px; line-height: 1.45; }
+figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
+
+.split { break-inside: avoid; display: grid; grid-template-columns: 1.72in 1fr; gap: 0.3in; align-items: start; margin-top: 0.1in; }
+.split figure { margin: 0; }
+.split figure img { border-radius: 8px; }
+.split .body > :first-child { margin-top: 0; }
+
+/* ---------- callouts ---------- */
+.note { border-left: 3px solid var(--accent-bg, var(--orange)); background: var(--wash); padding: 9px 13px 9px 13px; margin: 0.12in 0 0.2in; border-radius: 0 6px 6px 0; break-inside: avoid; font-size: 8.9pt; }
+.note .k { font: 700 6.6pt "InterM"; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent, var(--orange-ink)); display: block; margin-bottom: 2px; }
+.note p:last-child { margin-bottom: 0; }
+.note.warn { border-left-color: #d64545; }
+.note.warn .k { color: #b53030; }
+
+.cols2 { break-inside: avoid; display: grid; grid-template-columns: 1fr 1fr; gap: 0.28in; }
+.cols2 > div > :first-child { margin-top: 0; }
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 8.8pt; margin: 0 0 0.15in; }
+.kv dt { font-weight: 600; white-space: nowrap; }
+.kv dd { margin: 0; color: var(--ink-2); }
+
+/* numbered callouts legend */
+.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 0.28in; margin-top: 0.12in; font-size: 8.6pt; }
+.legend div { display: flex; gap: 9px; align-items: baseline; break-inside: avoid; }
+.dot { flex: none; display: inline-flex; width: 17px; height: 17px; border-radius: 50%; background: var(--orange); color: #fff; font: 700 7.5pt/17px "InterM"; justify-content: center; position: relative; top: -1px; }
+.legend b { font-weight: 600; }
+.anno { position: relative; }
+.anno svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* steps */
+.steps { counter-reset: s; list-style: none; padding: 0; margin: 0.08in 0 0.2in; }
+.steps > li { counter-increment: s; position: relative; padding: 0 0 0.13in 0.48in; margin: 0; break-inside: avoid; }
+.steps > li::before { content: counter(s, decimal-leading-zero); position: absolute; left: 0; top: -1px; font: 600 11pt "JetBrains Mono"; color: var(--orange-ink); }
+.steps > li b.h { display: block; font-weight: 600; font-size: 10pt; margin-bottom: 1px; }
+
+/* recipe cards */
+.recipes { display: grid; grid-template-columns: 1fr 1fr; gap: 0.16in; margin-top: 0.12in; }
+.recipe { border: 1px solid var(--rule); border-radius: 8px; padding: 11px 13px 9px; break-inside: avoid; position: relative; overflow: hidden; }
+.recipe::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: var(--rc, var(--orange)); }
+.recipe h3 { margin: 0 0 3px; font-size: 9.8pt; }
+.recipe p { font-size: 8.5pt; color: var(--ink-2); margin-bottom: 6px; }
+.recipe .set { font: 400 7.3pt/1.6 "JetBrains Mono"; color: var(--ink); background: var(--wash); border-radius: 5px; padding: 6px 8px; }
+.recipe .from { font-size: 7.4pt; color: var(--ink-3); margin-top: 5px; }
+
+.pill { display: inline-block; font: 600 6.6pt "InterM"; letter-spacing: 0.1em; text-transform: uppercase; padding: 1px 6px; border-radius: 10px; color: #fff; vertical-align: 1px; }
+.key { display: inline-block; font: 600 7.4pt "InterM"; border: 1px solid #c9ccd3; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: #fff; line-height: 1.5; }
+
+.swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+
+.specs td.c { width: 1.7in; }
+
+.back { page: back; width: 8.5in; height: 11in; background: var(--night); color: #fff; position: relative; break-before: page; }
+.back .mid { position: absolute; left: 0; right: 0; top: 4.4in; text-align: center; }
+.back .word { font: 300 40pt "InterDisplayM"; letter-spacing: -0.03em; }
+.back .word .j { color: var(--orange); font-weight: 400; }
+.back .small { font: 500 8pt "InterM"; letter-spacing: 0.22em; text-transform: uppercase; color: #7d8391; margin-top: 10px; }
+.back .url { position: absolute; bottom: 0.8in; left: 0; right: 0; text-align: center; font: 400 8.5pt "JetBrains Mono"; color: #9aa0ad; }
+
+.avoid { break-inside: avoid; }
+.pb { break-before: page; }
+.muted { color: var(--ink-3); }
+.small { font-size: 8.4pt; }
+</style>
+</head>
+<body>
+
+<!-- ================= COVER ================= -->
+<section class="cover">
+  <svg class="stars" viewBox="0 0 816 1056" preserveAspectRatio="none" id="stars"></svg>
+  <div class="top">
+    <svg width="64" height="30" viewBox="0 0 50 34">
+      <path d="M4,26 C14,14 24,10 34,12" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1"/>
+      <circle cx="10" cy="21" r="4.5" fill="#f28c28"/>
+      <circle cx="24" cy="13" r="4.5" fill="#ff6fd2"/>
+      <circle cx="38" cy="11" r="4.5" fill="#6fb8ff"/>
+    </svg>
+    <div class="brand">JClap &nbsp;·&nbsp; CLAP Instrument</div>
+  </div>
+  <div class="title">
+    <div class="word"><span class="j">J</span>Synth</div>
+    <div class="sub"><b>The flocking synth.</b> &nbsp;User Manual</div>
+  </div>
+  <div class="shot"><img src="img/panel.jpg" alt=""></div>
+  <div class="foot">
+    <div><div class="k">Version</div><div class="v">0.8.0</div></div>
+    <div><div class="k">Format</div><div class="v">CLAP · Instrument · MPE</div></div>
+    <div><div class="k">Platforms</div><div class="v">macOS · Windows · Linux</div></div>
+    <div style="text-align:right"><div class="k">Edition</div><div class="v">October 2026</div></div>
+  </div>
+</section>
+
+<!-- ================= CONTENTS ================= -->
+<section class="front">
+  <div class="chap-head" style="margin-bottom:0.25in">
+    <div class="num">Contents</div>
+  </div>
+  <div class="toc-title">Contents</div>
+  <div class="toc" id="toc"></div>
+  <h2 style="margin-top:0.3in">About this manual</h2>
+  <p>Chapters 2 and 3 get you installed and playing in a few minutes. Chapter 4 tours the panel, and Chapter 5 explains how a note becomes a sound, which is the quickest way to understand what every control does. Chapters 6 to 13 cover the sky, the parts and every card on the panel. Chapter 14 lists the factory presets and Chapter 15 has recipes to start from. The appendix lists every parameter with its exact range and default, plus specifications and troubleshooting.</p>
+  <p>Throughout the manual, control names are set in <strong>bold</strong> and panel labels as they appear on screen, such as <strong>TUNE PULL</strong>. Every control is a host parameter, and every one that moves continuously can be modulated by the host. A tag beside a parameter means:</p>
+  <div class="kv">
+    <dt><span class="mod t">ROUTE</span></dt><dd>A route can move it, per note, and the host can modulate it per note too.</dd>
+  </div>
+</section>
+
+<!-- ================= 1. WELCOME ================= -->
+<section class="chapter" data-ch="01" data-title="Welcome to JSynth">
+  <div class="chap-head">
+    <div class="num">Chapter 01</div>
+    <h1>Welcome to JSynth</h1>
+    <p class="lede">A two-part MPE synth where every note is a creature, and the creatures flock.</p>
+    <div class="bar"></div>
+  </div>
+
+  <p>Play a note on JSynth and a creature hatches in the sky in the middle of the panel. Your note is its <strong>lure</strong>: low notes pull their creatures to the left, high notes to the right, and sliding your finger up an MPE controller lifts it higher. Press harder and the creature flies faster and burns brighter. Let go and it flies off as its sound fades, trailing ink.</p>
+  <p>While they are held, the creatures do what flocks do. They gather, turn together, keep a little apart, and wander. And because each creature is a voice, how it flies can become how it sounds: how fast it goes, how crowded it is, how near its nearest neighbour is, which way it heads and how much ink it flies through are all modulation sources, as exact as an envelope. Creatures can also hear each other directly. A neighbour's oscillator can frequency-modulate this one, creatures flying the same way drift toward pure intervals, and a hunter that catches its prey rings it.</p>
+  <p>Underneath is a serious synth. Each of the two parts, <strong>A</strong> and <strong>B</strong>, is its own species with its own patch: three oscillators with analog and FM waves, a 3×3 FM grid, noise, drive, two filters, three envelopes, four LFOs and sixty-four routes. Nothing the flock does reaches the sound unless you route it, so a plain patch is plain.</p>
+
+  <h2>At a glance</h2>
+  <div class="cols2">
+    <div>
+      <ul>
+        <li><strong>Two parts</strong>, layered, split, by velocity, by MPE zone, or crossfaded by expression. Up to 16 voices each.</li>
+        <li><strong>Three oscillators</strong> per voice: sine, triangle, saw, square, pulse, the TX81Z's FM waves and noise, pitched by note, ratio or fixed Hz.</li>
+        <li><strong>A 3×3 FM grid</strong>, phase or exponential, whose diagonal is each oscillator's feedback.</li>
+        <li><strong>Two filters</strong> per voice: SVF up to 48 dB, notch, peak, ladder and comb, in serial, parallel or split.</li>
+        <li><strong>MPE</strong> and CLAP note expressions: strike, press, glide, slide and lift, each with its own curve and smoothing.</li>
+      </ul>
+    </div>
+    <div>
+      <ul>
+        <li><strong>The flock</strong>: cohesion, alignment, separation, speed, wander, lure and range, with four behaviours: Shoal, Scatter, Hunt and Flee.</li>
+        <li><strong>Eight flock sources</strong> per creature: Speed, Crowd, Nearest, Heading, Caught, Wake, X and Y.</li>
+        <li><strong>Between creatures</strong>: Neighbour FM, Tune Pull and Bite.</li>
+        <li><strong>MAP</strong>: touch a source, drag a knob. No matrix page, and up to 64 routes per part.</li>
+        <li><strong>49 factory presets</strong> from hits to slow swells.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note">
+    <span class="k">The flock is the engine's</span>
+    <p>The flock flies on the audio thread, at a fixed rate, inside the synth. What you see in the sky is exactly what the voices hear, and a render plays back the same every time from the same start.</p>
+  </div>
+</section>
+
+<!-- ================= 2. INSTALLATION ================= -->
+<section class="chapter" data-ch="02" data-title="Installation">
+  <div class="chap-head">
+    <div class="num">Chapter 02</div>
+    <h1>Installation</h1>
+    <p class="lede">JSynth is a CLAP plug-in. It ships in the JClap bundle alongside the other JClap plug-ins.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2>Requirements</h2>
+  <div class="kv">
+    <dt>Plug-in format</dt><dd>CLAP 1.2 (instrument, stereo). Your host must support CLAP, for example Bitwig Studio, REAPER, FL Studio or Studio One.</dd>
+    <dt>macOS</dt><dd>Universal binary: macOS 10.15 or later on Intel, 11 or later on Apple Silicon.</dd>
+    <dt>Windows</dt><dd>64-bit Windows.</dd>
+    <dt>Linux</dt><dd>64-bit, X11.</dd>
+    <dt>Controller</dt><dd>Any MIDI keyboard. An MPE controller (a Seaboard, Linnstrument, Osmose or similar) or a host that sends CLAP note expressions brings out the most.</dd>
+  </div>
+
+  <h2>Installing</h2>
+  <ol class="steps">
+    <li><b class="h">Download</b>Grab the zip for your operating system from the latest release at <span class="mono">github.com/jeffmhopkins/Jclap/releases/latest</span>. It contains every JClap plug-in.</li>
+    <li><b class="h">Copy the plug-in</b>Copy <span class="mono">JSynth.clap</span> (a bundle on macOS) into your CLAP folder:
+      <table style="margin-top:6px">
+        <tbody>
+          <tr><td class="c">macOS</td><td class="r">~/Library/Audio/Plug-Ins/CLAP</td></tr>
+          <tr><td class="c">Windows</td><td class="r">C:\Program Files\Common Files\CLAP</td></tr>
+          <tr><td class="c">Linux</td><td class="r">~/.clap</td></tr>
+        </tbody>
+      </table>
+    </li>
+    <li><b class="h">Rescan</b>Restart your host or rescan plug-ins. In Bitwig Studio this is under <em>Settings → Locations</em>. JSynth appears as an instrument.</li>
+  </ol>
+
+  <div class="note warn">
+    <span class="k">macOS: browser downloads are quarantined</span>
+    <p>The plug-ins are ad-hoc signed but not notarized, so macOS quarantines files downloaded through a web browser and some hosts (Bitwig among them) silently skip them. The simplest install is from Terminal, since files fetched with <span class="mono">curl</span> are not flagged:</p>
+    <p class="mono" style="font-size:7.2pt; background:#fff; padding:7px 9px; border-radius:4px; word-break:break-all; line-height:1.5">curl -sL https://github.com/jeffmhopkins/Jclap/releases/latest/download/jclap-macOS.zip -o /tmp/jclap.zip &amp;&amp; mkdir -p ~/Library/Audio/Plug-Ins/CLAP &amp;&amp; ditto -x -k /tmp/jclap.zip ~/Library/Audio/Plug-Ins/CLAP</p>
+    <p>If you already downloaded with a browser, clear the flag once after copying:</p>
+    <p class="mono" style="font-size:7.2pt; background:#fff; padding:7px 9px; border-radius:4px">xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap</p>
+  </div>
+
+  <h2>Outputs</h2>
+  <p>JSynth has one note input and three stereo outputs: <strong>Main</strong>, <strong>Part A</strong> and <strong>Part B</strong>. Normally both parts play on Main. Set a part's <strong>Output</strong> to <em>Own</em> (a host parameter) and it plays on its own port instead, so you can process the two species separately in your host.</p>
+</section>
+
+<!-- ================= 3. QUICK START ================= -->
+<section class="chapter" data-ch="03" data-title="Quick Start">
+  <div class="chap-head">
+    <div class="num">Chapter 03</div>
+    <h1>Quick Start</h1>
+    <p class="lede">Five minutes from an empty instrument slot to a flock you can hear.</p>
+    <div class="bar"></div>
+  </div>
+
+  <ol class="steps">
+    <li><b class="h">Load JSynth and play</b>Put JSynth on an instrument track and play a few notes. Each note hatches a creature at its lure: low notes on the left, high on the right. Hold a chord and watch them gather; let go and they fly off as they fade. No keyboard to hand? Click in the sky: left to right picks the note (C2 to C6), and dragging bends it.</li>
+    <li><b class="h">Pick a preset</b>Click the preset name in the header to open the menu, grouped from <em>Hits</em> through <em>Plucks</em>, <em>Keys</em>, <em>Bass and Leads</em> and <em>Pads</em> to slow <em>Swells</em>. Or click the arrows, or scroll over the bar, to step through them. Try <em>Starling Bells</em>, then <em>Murmuration Pad</em>, then <em>Predator and Prey</em>.</li>
+    <li><b class="h">Let the creatures hear each other</b>Load <em>Init</em> and turn <strong>OSC 2</strong>'s <strong>LEVEL</strong> up to about half, since Neighbour FM plays through Osc 2. Then open the <strong>FM</strong> tab on the left card and turn up <strong>NEIGHBOUR</strong>. Now hold a chord: when creatures fly close together they frequency-modulate each other, and the sound rings and shifts as the flock moves. Raise <strong>TUNE PULL</strong> too and creatures flying the same way drift into just intonation.</li>
+    <li><b class="h">Map a flock source</b>Press <strong>MAP</strong> in the header. Click <strong>SPEED</strong> under the sky, then open the <strong>FILTER</strong> tab on the right and drag Filter 1's <strong>CUTOFF</strong> up. A ring in Speed's colour shows the route. Press <strong>MAP</strong> again to finish. Now the faster a creature flies, the brighter it sounds; play harder (Press makes creatures faster) to hear it.</li>
+    <li><b class="h">Add a second species</b>Set the play mode in the header to <strong>LAYER</strong> and click <strong>PART B</strong>. Part B is a whole second patch, and by default it hunts: its creatures chase part A's. On part B's <strong>FM</strong> tab, raise <strong>BITE</strong>, and every creature B catches rings with its hunter's tone.</li>
+    <li><b class="h">Save it</b>Click <strong>SAVE</strong> in the preset bar, type a name and press <span class="key">Enter</span>. Your preset appears under <em>User</em> in the preset menu. Settings are also saved with your project automatically.</li>
+  </ol>
+
+  <div class="note">
+    <span class="k">Tip</span>
+    <p>Every control has a tooltip. Hover over anything on the panel for a one-line reminder of what it does.</p>
+  </div>
+</section>
+
+<!-- ================= 4. PANEL TOUR ================= -->
+<section class="chapter" data-ch="04" data-title="The Panel">
+  <div class="chap-head">
+    <div class="num">Chapter 04</div>
+    <h1>The Panel</h1>
+    <p class="lede">The sky fills the middle. The patch sits around it in glass cards, and the cards always edit the part you have chosen.</p>
+    <div class="bar"></div>
+  </div>
+
+  <figure class="dark anno" id="overview">
+    <img src="img/panel.jpg" alt="">
+    <svg viewBox="0 0 1200 780">
+      <g font-family="InterM" font-weight="700" font-size="15" text-anchor="middle">
+        <!-- markers inserted by script -->
+      </g>
+    </svg>
+  </figure>
+
+  <div class="legend">
+    <div><span class="dot">1</span><span><b>Preset bar.</b> Step with the arrows, click the name for the menu, <b>SAVE</b> your own.</span></div>
+    <div><span class="dot">2</span><span><b>PART A / PART B.</b> Which species the cards edit.</span></div>
+    <div><span class="dot">3</span><span><b>Play mode.</b> Which part each note plays.</span></div>
+    <div><span class="dot">4</span><span><b>MAP.</b> Turns on mapping: touch a source, drag a knob.</span></div>
+    <div><span class="dot">5</span><span><b>Touch chips.</b> STRIKE, PRESS, GLIDE, SLIDE, LIFT: sources that light as you play.</span></div>
+    <div><span class="dot">6</span><span><b>Left card.</b> FLOCK, FM and TOUCH tabs.</span></div>
+    <div><span class="dot">7</span><span><b>The sky.</b> Both species, their ink, and the links between them. Click to play.</span></div>
+    <div><span class="dot">8</span><span><b>Flock sources.</b> The creatures' own modulation sources.</span></div>
+    <div><span class="dot">9</span><span><b>RINGS, ROUTES, HIDE.</b> Lure rings, the route list, and the sky on its own.</span></div>
+    <div><span class="dot">10</span><span><b>Right card.</b> ENV, MOTION, LFO and FILTER tabs.</span></div>
+    <div><span class="dot">11</span><span><b>Oscillator cards.</b> OSC 1, 2 and 3: pitch, wave and mix.</span></div>
+    <div><span class="dot">12</span><span><b>Part card.</b> Voice mode, polyphony, pitch, pan and level, and the output.</span></div>
+  </div>
+
+  <h2>Working with the controls</h2>
+  <p>Every knob, switch and menu is a host parameter, so everything can be automated. Knobs work the same everywhere on the panel:</p>
+  <table>
+    <thead><tr><th>Action</th><th>On a knob</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Drag up / down</td><td>Change the value. A popup shows the value while you drag.</td></tr>
+      <tr><td class="c"><span class="key">Shift</span> + drag</td><td>Fine adjustment.</td></tr>
+      <tr><td class="c">Scroll wheel</td><td>Step the value up or down.</td></tr>
+      <tr><td class="c">Double-click</td><td>Reset to the default value.</td></tr>
+      <tr><td class="c">Right-click</td><td>Menu with <em>Reset to default</em> and <em>Enter value…</em> to type an exact number.</td></tr>
+    </tbody>
+  </table>
+  <p>A knob that a route moves draws up to four coloured <strong>route rings</strong> outside its own arc, one per source, each spanning how far that source moves it. In MAP mode, knobs behave differently: see <em>Chapter 13</em>.</p>
+
+  <h2>Colours</h2>
+  <p>Part A is drawn in <span class="swatch" style="background:#f28c28"></span>orange and part B in <span class="swatch" style="background:#6fb8ff"></span>blue, in the sky and on the cards. Every modulation source has its own colour, the same on its chip, its route rings and in the route list, and MAP and the route list are <span class="swatch" style="background:#ff6fd2"></span>pink.</p>
+
+  <h2>Panel size</h2>
+  <p>The panel is 1200 × 780 at 100%. Right-click any empty part of the sky and choose <em>UI Size</em> to scale it to 75%, 100%, 125%, 150% or 200%. The size you pick is remembered the next time the editor opens.</p>
+</section>
+
+<!-- ================= 5. HOW IT WORKS ================= -->
+<section class="chapter" data-ch="05" data-title="How JSynth Works">
+  <div class="chap-head">
+    <div class="num">Chapter 05</div>
+    <h1>How JSynth Works</h1>
+    <p class="lede">A note becomes a voice and a creature at once. The voice makes the sound; the creature flies, and how it flies can shape the sound.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2>One voice</h2>
+  <figure>
+    <svg viewBox="0 0 690 300" width="100%" style="display:block">
+      <defs>
+        <marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#15171d"/></marker>
+        <marker id="ahg" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#b8338f"/></marker>
+      </defs>
+      <g id="flow" font-family="InterM"></g>
+    </svg>
+    <figcaption><b>Fig. 5.1</b> &nbsp;One voice, at the oversampled rate. The pink paths are the couplings to other creatures: a neighbour's Osc 1 into Osc 2, and a hunter's Osc 1 ringing the voice.</figcaption>
+  </figure>
+
+  <p>Each voice runs three <strong>oscillators</strong>, in the order 3, 2, 1, so Osc 3 can modulate Osc 2, and both can modulate Osc 1, within the same sample. The <strong>FM grid</strong> sets how much each one modulates each other one. The <strong>mixer</strong> sets each oscillator's level and pan and adds noise. Then comes <strong>drive</strong>, then two <strong>filters</strong>, then the <strong>amp</strong>, whose shape is Env 1, and finally the voice's place in the stereo field. Every voice of a part sums to that part's bus, and the two parts sum to the output.</p>
+
+  <h2>The control rate</h2>
+  <p>Envelopes 2 and 3, the LFOs, the touch, the routes and the flock all work at a control rate of one tick every 32 samples (1,500 a second at 48 kHz). Every value the audio reads ramps smoothly across each tick, so nothing zippers, and knobs are smoothed over 10 ms. The amp envelope runs every sample. Because the ticks are counted across the host's blocks, JSynth sounds the same at any buffer size.</p>
+
+  <h2>The creature</h2>
+  <p>As a voice starts, its creature hatches at the note's lure. The flock steps 500 times a second. Each step, every creature feels its neighbours (cohesion, alignment, separation), its lure, its own wander, the wind and its wingbeat, and moves. Then the flock works out each creature's eight sources and who can hear whom. Each voice reads its creature's sources smoothly between steps.</p>
+
+  <h2>Routes</h2>
+  <p>A <strong>route</strong> connects a source to a destination with an amount. Each part has 64 of them. Each tick, every voice works out its routes from its own sources, so the same route can push one note's filter open and leave another's closed: an envelope, a finger's pressure or a creature's speed is always that note's own. A route moves a parameter within its own range, so +100% from a source at full takes any knob from its lowest to its highest.</p>
+
+  <h2>Quality</h2>
+  <p>The voices run at 2× the host's rate by default, which keeps FM and hard waves clean, and are brought back down by a steep, latency-free filter. The <strong>Quality</strong> parameter (a host setting) chooses 1×, 2× or 4×. 1× saves CPU; 4× is for bright FM at low sample rates.</p>
+
+  <div class="note">
+    <span class="k">Where to read more</span>
+    <p><span class="mono">plugins/jsynth/ARCHITECTURE.md</span> in the source repository walks through every stage with the numbers the code uses.</p>
+  </div>
+</section>
+
+<!-- ================= 6. THE SKY ================= -->
+<section class="chapter" data-ch="06" data-title="The Sky" style="--accent: var(--b-ink); --accent-bg: var(--b);">
+  <div class="chap-head">
+    <div class="num">Chapter 06</div>
+    <h1>The Sky</h1>
+    <p class="lede">Both species fly here, all the time. The sky is the synth's own flock, drawn as it is.</p>
+    <div class="bar"></div>
+  </div>
+
+  <figure class="dark" style="max-width:5.4in;margin-left:auto;margin-right:auto"><img src="img/stage.jpg" alt=""><figcaption><b>Fig. 6.1</b> &nbsp;Part A's creatures (orange) and part B's (teal) in a layered patch, with their ink. Faint grey rings are lures; a pink ring marks a creature a hunter has caught; thin lines join neighbours that hear each other.</figcaption></figure>
+
+  <h2>What you see</h2>
+  <div class="kv">
+    <dt>Creatures</dt><dd>A glowing body and a pair of wings that beat with its Wingbeat LFO. It is brighter the harder you press, and fades with its sound after you let go. The part you are editing flies in front; the other is dimmed.</dd>
+    <dt>Resting creatures</dt><dd>Six per species fly quietly while a part plays nothing, so you can see how it flies before you play. They fade away once you do.</dd>
+    <dt>Ink</dt><dd>Every creature sheds ink behind it, which blooms and fades by the part's <strong>TAIL</strong> and <strong>SPREAD</strong>. Creatures flying through ink stir it.</dd>
+    <dt>Lure rings</dt><dd>Where each held note pulls its creature, with a faint line to it. <strong>RINGS</strong> under the sky shows or hides them.</dd>
+    <dt>Links</dt><dd>A thin line from a creature to the neighbour it hears most, brighter the more <strong>NEIGHBOUR</strong> FM it gets, and a line from a hunter to what it has caught.</dd>
+    <dt>Caught</dt><dd>A pink ring around a creature a hunter holds.</dd>
+  </div>
+
+  <h2>Playing the sky</h2>
+  <p>Click anywhere in the sky to play a note: left to right runs from C2 to C6, and how high you click sets Slide. Drag while holding to bend the note and change Slide; let go to release it. The notes play on whichever parts the play mode sends them to, just like notes from your keyboard.</p>
+
+  <h2>The flock sources</h2>
+  <p>The row of chips under the sky holds each creature's eight sources. Each chip's light shows the newest creature of the part you are editing. They are always each note's own when used in a route.</p>
+  <table>
+    <thead><tr><th>Source</th><th>What it measures (0 to 100%)</th></tr></thead>
+    <tbody>
+      <tr><td class="c">SPEED</td><td>How fast the creature flies, against the fastest it could at full Press.</td></tr>
+      <tr><td class="c">CROWD</td><td>How many neighbours it has, counted smoothly: two close neighbours is full.</td></tr>
+      <tr><td class="c">NEAREST</td><td>How near its nearest neighbour is: 100% is touching, 0 is at the edge of <strong>RANGE</strong> or beyond.</td></tr>
+      <tr><td class="c">HEADING</td><td>How much it flies upward: 100% straight up, 50% level, 0 straight down. Smooth all the way round, so it never jumps.</td></tr>
+      <tr><td class="c">CAUGHT</td><td>Whether a hunter of the other species has it. Rises in about 20 ms, lets go over about half a second.</td></tr>
+      <tr><td class="c">WAKE</td><td>How much ink it is flying into, scaled by the part's <strong>WAKE</strong> knob.</td></tr>
+      <tr><td class="c">X</td><td>Where it is, left (0) to right (100%).</td></tr>
+      <tr><td class="c">Y</td><td>Where it is, bottom (0) to top (100%).</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Showing the sky on its own</h2>
+  <p><strong>HIDE</strong> folds the cards away so the sky fills the whole panel, which is lovely on a second screen while you play. <strong>SHOW</strong>, in the corner, brings them back.</p>
+</section>
+
+<!-- ================= 7. PARTS AND PLAYING ================= -->
+<section class="chapter" data-ch="07" data-title="Parts and Playing">
+  <div class="chap-head">
+    <div class="num">Chapter 07</div>
+    <h1>Parts and Playing</h1>
+    <p class="lede">Two species, one keyboard. The header decides which notes go where; the part card sets how each part plays them.</p>
+    <div class="bar"></div>
+  </div>
+
+  <figure class="dark"><img src="img/header.jpg" alt=""><figcaption><b>Fig. 7.1</b> &nbsp;The header: logo, preset bar, PART A / PART B, play mode, MAP and the touch chips.</figcaption></figure>
+
+  <h2>Two parts</h2>
+  <p>Parts A and B are complete, separate patches with the same controls. <strong>PART A</strong> and <strong>PART B</strong> in the header choose which one the cards show and edit; the sky always shows both. A new instance starts with A shoaling and B hunting it an octave down, so layering them gives you a predator from the start.</p>
+
+  <h2>Play modes</h2>
+  <table>
+    <thead><tr><th style="width:1.1in">Mode</th><th>Which part plays a note</th></tr></thead>
+    <tbody>
+      <tr><td class="c">SINGLE</td><td>Part A only. The default.</td></tr>
+      <tr><td class="c">LAYER</td><td>Both, every note.</td></tr>
+      <tr><td class="c">SPLIT</td><td>B below the <strong>Split Key</strong> (C4 by default), A from it up.</td></tr>
+      <tr><td class="c">MPE ZONES</td><td>MPE member channels 2 to 8 play A and 9 to 16 play B. Channel 1 plays both.</td></tr>
+      <tr><td class="c">VELOCITY</td><td>B for notes struck at or above the <strong>Velocity Split</strong> (80), A for softer ones.</td></tr>
+      <tr><td class="c">EXPRESSION</td><td>Both, crossfaded per note by Slide or Press (the <strong>Crossfade Source</strong>): at 0 you hear A, at full you hear B.</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">Split Key, Velocity Split and Crossfade Source, and each part's Key Low and Key High range, are host parameters. A note outside a part's key range never plays that part.</p>
+
+  <h2>The part card</h2>
+  <div class="avoid">
+    <figure class="dark"><img src="img/part.jpg" alt="" style="max-width:4.2in"></figure>
+    <table class="params">
+      <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="c">POLY / MONO / LEGATO</td><td class="r">Voice mode</td><td class="d">Poly</td><td>Mono plays one note at a time and restarts it; Legato glides to a new note without restarting while one is held. Both go back to the last note still held when you let go.</td></tr>
+        <tr><td class="c">Voices (− 8 +)</td><td class="r">1 – 16</td><td class="d">8</td><td>Polyphony: how many notes the part sounds at most. The oldest released note is taken first, then the oldest held, with a 3 ms fade.</td></tr>
+        <tr><td class="c">TRANSP</td><td class="r">±48 st</td><td class="d">0 (B: −12)</td><td>Transpose, in semitones.</td></tr>
+        <tr><td class="c">GLIDE</td><td class="r">0 ms – 20 s</td><td class="d">0</td><td>Portamento time. <span class="mod t">ROUTE</span></td></tr>
+        <tr><td class="c">BEND</td><td class="r">1 – 96 st</td><td class="d">48 st</td><td>The MPE bend range: how far a finger slides on a member channel.</td></tr>
+        <tr><td class="c">PAN</td><td class="r">±100%</td><td class="d">0</td><td>The part's pan. <span class="mod t">ROUTE</span></td></tr>
+        <tr><td class="c">X PAN</td><td class="r">0 – 100%</td><td class="d">0%</td><td>How far each creature's place in the sky, left to right, pans its voice. At 100% a creature at the left edge plays hard left. <span class="mod t">ROUTE</span></td></tr>
+        <tr><td class="c">LEVEL</td><td class="r">−60 – +6 dB</td><td class="d">0 dB</td><td>The part's level. <span class="mod t">ROUTE</span></td></tr>
+        <tr><td class="c">WIDTH</td><td class="r">0 – 200%</td><td class="d">100%</td><td>The whole output's stereo width: 0% is mono, past 100% wider. Shared by both parts.</td></tr>
+        <tr><td class="c">MASTER</td><td class="r">−60 – +6 dB</td><td class="d">−6 dB</td><td>The whole output's level. Shared by both parts.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Host parameters that complete the part: <strong>Fine</strong> (±100 cents), <strong>Glide Mode</strong> (Always, or Legato: glide only from a note still held), <strong>Drift</strong> (on the FM tab, a slow random pitch wander per creature), <strong>Velocity</strong> (on the FILTER tab: how much Strike sets the level), <strong>Key Low</strong> and <strong>Key High</strong>, and <strong>Output</strong> (Main or Own).</p>
+
+  <h2>MPE and MIDI</h2>
+  <p>JSynth takes CLAP notes, plain MIDI and MIDI MPE.</p>
+  <ul>
+    <li><strong>Channel 1</strong> is the MPE manager channel and a plain keyboard's channel. Its pitch bend moves every note by the <strong>MGR BEND</strong> range (2 semitones by default, on the TOUCH tab). CC 1 is the Mod Wheel source and CC 64 is sustain. If it sends channel pressure or CC 74, those reach every note too.</li>
+    <li><strong>Channels 2 to 16</strong> are member channels, each carrying one note's own bend (by the part's <strong>BEND</strong> range), pressure and CC 74.</li>
+    <li><strong>CLAP notes</strong> use note expressions instead: tuning, pressure and brightness.</li>
+  </ul>
+  <p>Hosts that support CLAP per-note modulation can also modulate any parameter tagged <span class="mod t">ROUTE</span> on a single note.</p>
+</section>
+
+<!-- ================= 8. OSCILLATORS AND FM ================= -->
+<section class="chapter" data-ch="08" data-title="Oscillators and FM" style="--accent: var(--osc-ink); --accent-bg: var(--osc);">
+  <div class="chap-head">
+    <div class="num">Chapter 08</div>
+    <h1>Oscillators and FM</h1>
+    <p class="lede">Three oscillators per voice, from soft sines to band-limited saws, and a grid that lets each one modulate the others.</p>
+    <div class="bar"></div>
+  </div>
+
+  <figure class="dark"><img src="img/oscs.jpg" alt=""><figcaption><b>Fig. 8.1</b> &nbsp;The three oscillator cards along the bottom.</figcaption></figure>
+
+  <h2>An oscillator card</h2>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">NOTE / RATIO / HZ</td><td class="r">Pitch mode</td><td class="d">Note (Osc 2, 3: Ratio)</td><td><strong>Note</strong> follows the keyboard with an offset; <strong>Ratio</strong> runs at a multiple of the note, the classic FM way; <strong>Hz</strong> holds a fixed frequency whatever you play.</td></tr>
+      <tr><td class="c">Wave</td><td class="r">14 waves</td><td class="d">Saw (Osc 2, 3: Sine)</td><td>See the table below.</td></tr>
+      <tr><td class="c">COARSE</td><td class="r">±48 st</td><td class="d">0</td><td>Note mode: the offset in semitones. <span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">RATIO</td><td class="r">×0.25 – ×16</td><td class="d">×1 (Osc 3: ×3)</td><td>Ratio mode: the multiple of the note. Routes move it by musical intervals. <span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">FREQ</td><td class="r">1 Hz – 10 kHz</td><td class="d">440 Hz</td><td>Hz mode: the fixed frequency. <span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">FINE</td><td class="r">±100 ct</td><td class="d">0</td><td>Fine tune, in every mode. <span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">SHAPE</td><td class="r">0 – 100%</td><td class="d">50%</td><td>Pulse width for Square and Pulse; for the other waves (except Saw), a phase distortion that squeezes or stretches the first half of the cycle. 50% is the plain wave. <span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">LEVEL</td><td class="r">0 – 100%</td><td class="d">100% (Osc 2, 3: 0%)</td><td>How loud it is in the mix. An oscillator at 0 can still modulate others. <span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">PAN</td><td class="r">±100%</td><td class="d">0</td><td>Its place in the voice's stereo image. <span class="mod t">ROUTE</span></td></tr>
+    </tbody>
+  </table>
+  <p class="small">Host parameters per oscillator: <strong>Sync</strong> (Osc 2 and 3 restart with Osc 1), <strong>Retrigger</strong> (On starts each note at <strong>Phase</strong>; Off at a random phase), <strong>Phase</strong> <span class="mod t">ROUTE</span>, <strong>Bend</strong> (how much the pitch bend moves it, 100% by default) and <strong>Key Track</strong> (Off pitches it from middle C whatever you play).</p>
+
+  <h3>The waves</h3>
+  <table>
+    <thead><tr><th style="width:1.4in">Wave</th><th>Character</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Sine</td><td>Pure. The classic FM operator.</td></tr>
+      <tr><td class="c">Triangle</td><td>Soft, odd harmonics.</td></tr>
+      <tr><td class="c">Saw</td><td>Bright and full. Band-limited, so it stays clean high up and under FM.</td></tr>
+      <tr><td class="c">Square, Pulse</td><td>Hollow to nasal. Shape sets the width: 10 to 90% for Square, 5 to 50% for Pulse.</td></tr>
+      <tr><td class="c">Half Sine … Alt Camel</td><td>The Yamaha TX81Z's seven other waves: Half Sine, Abs Sine, Quarter, Alt Sine, Alt Half, Camel and Alt Camel. Sines with parts of the cycle cut, folded or doubled, which give FM a whole family of brighter, buzzier tones.</td></tr>
+      <tr><td class="c">White, Pink</td><td>Noise, as an oscillator: it can be filtered, panned and even used as an FM source.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="pb"><span class="tag">Left card</span>FM</h2>
+  <div class="split">
+    <figure class="dark"><img src="img/card-fm.jpg" alt=""></figure>
+    <div class="body">
+      <p>The grid reads <strong>row into column</strong>: the knob in row 2, column 1 (<strong>2 &gt; 1</strong>) is how much Osc 2 modulates Osc 1. The diagonal, <strong>FB 1</strong> to <strong>FB 3</strong>, is each oscillator's feedback on itself. Each knob is squared inside, so the first half of its travel is gentle.</p>
+      <table class="params">
+        <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="c">FB, 1 &gt; 2 … 3 &gt; 2</td><td class="r">0 – 100%</td><td class="d">0%</td><td>The nine cells. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">PHASE / EXP</td><td class="r">FM type</td><td class="d">Phase</td><td><strong>Phase</strong> is DX-style phase modulation, bright and stable in pitch. <strong>Exp</strong> moves the pitch itself, up to four octaves either way: growly, and it bends.</td></tr>
+          <tr><td class="c">NEIGHBOUR</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Neighbours' Osc 1 into this creature's Osc 2. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">TUNE PULL</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Creatures flying the same way drift toward pure intervals. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">BITE</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Ring mod while this part's hunters hold their prey. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">NOISE</td><td class="r">0 – 100%</td><td class="d">0%</td><td>The mixer's noise level. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">COLOR</td><td class="r">±100%</td><td class="d">0</td><td>Pink (−100%) to white (+100%). <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">DRIFT</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Each creature's own slow wander in pitch, up to ±15 cents. <span class="mod t">ROUTE</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3>Order and feedback</h3>
+  <p>Within each sample the oscillators run 3, then 2, then 1. So the downward cells (3 &gt; 2, 3 &gt; 1 and 2 &gt; 1) hear this sample's modulator, and the upward ones (1 &gt; 2, 1 &gt; 3, 2 &gt; 3) hear the last sample's. In practice this means you can build any of the classic stacks: 3 &gt; 2 &gt; 1 as a three-operator stack heard on Osc 1, or 2 &gt; 1 and 3 &gt; 1 as two modulators on one carrier. Feedback averages its last two samples, as the DX7 did, so it brightens toward a saw and then a rasp rather than straight into noise.</p>
+  <p class="small muted">BETWEEN CREATURES (Neighbour, Tune Pull and Bite) is explained in <em>Chapter 11</em>.</p>
+</section>
+
+<!-- ================= 9. FILTERS AND DRIVE ================= -->
+<section class="chapter" data-ch="09" data-title="Filters and Drive" style="--accent: var(--a-ink); --accent-bg: var(--a);">
+  <div class="chap-head">
+    <div class="num">Chapter 09</div>
+    <h1>Filters and Drive</h1>
+    <p class="lede">Two filters per voice, from a clean 48 dB low pass to a ringing comb, after a drive stage.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2><span class="tag">Right card</span>FILTER</h2>
+  <div class="split">
+    <figure class="dark"><img src="img/card-filter.jpg" alt=""></figure>
+    <div class="body">
+      <table class="params">
+        <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="c">SERIAL / PARALLEL / SPLIT</td><td class="r">Routing</td><td class="d">Serial</td><td>See below.</td></tr>
+          <tr><td class="c">Type</td><td class="r">8 types</td><td class="d">Low Pass (F2: Ladder)</td><td>See the table below.</td></tr>
+          <tr><td class="c">Slope</td><td class="r">12 – 48 dB</td><td class="d">24 dB</td><td>Low, high and band pass only.</td></tr>
+          <tr><td class="c">CUTOFF</td><td class="r">20 Hz – 20 kHz</td><td class="d">1.26 kHz (F2: 20 kHz)</td><td>For a comb, its tuning. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">RES</td><td class="r">0 – 100%</td><td class="d">20% (F2: 0%)</td><td>Resonance; for a peak, its boost; for a comb, its feedback. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">DRIVE</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Saturates the filter's own input. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">KEY</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Key tracking: at 100% the cutoff moves an octave per octave, around middle C. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">DRIVE type</td><td class="r">Soft, Hard, Tube</td><td class="d">Soft</td><td>The drive before both filters.</td></tr>
+          <tr><td class="c">DRIVE</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Up to 24 dB into the shape, with the level brought back down. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">BALANCE</td><td class="r">±100%</td><td class="d">0</td><td>Filter 1 against Filter 2, in Parallel and Split. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">VELOCITY</td><td class="r">0 – 100%</td><td class="d">100%</td><td>How much Strike sets the level. At 0 every note plays at full level.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h2>Filter types</h2>
+  <table>
+    <thead><tr><th style="width:1.2in">Type</th><th>Sound</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Low Pass</td><td>The workhorse: a state variable filter, cascaded for 12, 24, 36 or 48 dB per octave, with a resonance peak up to a whistle.</td></tr>
+      <tr><td class="c">High Pass</td><td>The same, from the other side: thins and brightens.</td></tr>
+      <tr><td class="c">Band Pass</td><td>Only a band around the cutoff. Narrower and more vocal with resonance.</td></tr>
+      <tr><td class="c">Notch</td><td>Cuts a band out. Resonance narrows it. Slope is ignored.</td></tr>
+      <tr><td class="c">Peak</td><td>Boosts a band. Resonance is the boost, up to five times.</td></tr>
+      <tr><td class="c">Ladder</td><td>A four-pole transistor ladder: warm, thick, and it squelches and self-oscillates near full resonance.</td></tr>
+      <tr><td class="c">Comb +</td><td>A short tuned delay with positive feedback: rings at every harmonic of the cutoff, like a plucked string or a tube.</td></tr>
+      <tr><td class="c">Comb −</td><td>Negative feedback: rings at the odd harmonics, hollower, an octave lower.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Routing</h2>
+  <div class="kv">
+    <dt>Serial</dt><dd>Filter 1 into Filter 2. Filter 2 starts as an open ladder, so it changes nothing until you turn it down, and costs nothing while it stays open.</dd>
+    <dt>Parallel</dt><dd>Both filters hear the whole voice; <strong>BALANCE</strong> crossfades between them.</dd>
+    <dt>Split</dt><dd>Osc 1 goes to Filter 1, and Osc 2, Osc 3 and the noise to Filter 2. At centre <strong>BALANCE</strong> both are at full; turning it either way turns the other side down.</dd>
+  </div>
+
+  <h2>Drive</h2>
+  <p>The drive sits before the filters. <strong>Soft</strong> is a tanh curve, round and warm. <strong>Hard</strong> clips flat, buzzier. <strong>Tube</strong> is asymmetric, so it adds even harmonics. Its gain is compensated, so turning it up thickens and compresses the sound more than it makes it louder.</p>
+</section>
+
+<!-- ================= 10. ENVELOPES AND LFOS ================= -->
+<section class="chapter" data-ch="10" data-title="Envelopes and LFOs" style="--accent: var(--env-ink); --accent-bg: var(--env);">
+  <div class="chap-head">
+    <div class="num">Chapter 10</div>
+    <h1>Envelopes and LFOs</h1>
+    <p class="lede">Three envelopes and four LFOs per voice. Two of the LFOs move the creatures as well as the sound.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2><span class="tag">Right card</span>ENV</h2>
+  <div class="split">
+    <figure class="dark"><img src="img/card-env.jpg" alt=""></figure>
+    <div class="body">
+      <p>Each envelope draws its shape: drag the points to set <strong>attack</strong>, <strong>decay</strong>, <strong>sustain</strong> and <strong>release</strong>. A dot rides the curve for every sounding note. The chip above each one is its source for MAP and lights as it moves.</p>
+      <p><strong>ENV 1 AMP</strong> is the amp: it shapes every note's level, and it always releases when you let go. <strong>ENV 2</strong> and <strong>ENV 3</strong> are free to route; a new part starts with Env 2 opening Filter 1.</p>
+      <table class="params">
+        <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="c">Attack</td><td class="r">0 ms – 20 s</td><td class="d">5 ms</td><td><span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">Decay</td><td class="r">0 ms – 20 s</td><td class="d">400 ms (2, 3: 300 ms)</td><td><span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">Sustain</td><td class="r">0 – 100%</td><td class="d">70% (2, 3: 30%)</td><td><span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">Release</td><td class="r">0 ms – 20 s</td><td class="d">300 ms</td><td><span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">Loop</td><td class="r">Off, Held, Free</td><td class="d">Off</td><td><strong>Held</strong> repeats attack and decay while the note is held. <strong>Free</strong> keeps repeating after you let go too, until the note ends.</td></tr>
+        </tbody>
+      </table>
+      <p class="small">Host parameters per envelope: <strong>Delay</strong> and <strong>Hold</strong> (0 ms to 20 s) <span class="mod t">ROUTE</span>, an <strong>Attack</strong>, <strong>Decay</strong> and <strong>Release Curve</strong> each (−1 to +1), and <strong>Velocity</strong>, how much Strike scales the whole envelope.</p>
+    </div>
+  </div>
+
+  <h2 class="pb"><span class="tag">Right card</span>MOTION</h2>
+  <div class="split">
+    <figure class="dark"><img src="img/card-motion.jpg" alt=""></figure>
+    <div class="body">
+      <p>The MOTION tab holds the two LFOs that move the flock. Both are also sources for routes, like any LFO.</p>
+      <div class="kv">
+        <dt>WINGBEAT</dt><dd>One per creature (5 Hz sine by default). It bobs each creature across its path, by <strong>PUSH</strong>, and beats its wings on screen.</dd>
+        <dt>WIND</dt><dd>One gust for the whole sky (a slow 0.2 Hz Smooth, Global by default). It pushes every creature of the part the same way, by <strong>PUSH</strong>, from a direction that turns slowly on its own.</dd>
+      </div>
+      <table class="params">
+        <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="c">Shape</td><td class="r">Sine, Triangle, Saw, Square, S&amp;H, Smooth</td><td class="d">Sine (Wind: Smooth)</td><td>S&amp;H holds a random value per cycle; Smooth glides between random values.</td></tr>
+          <tr><td class="c">Trigger</td><td class="r">Retrigger, Free, Global</td><td class="d">Retrigger (Wind: Global)</td><td>See below.</td></tr>
+          <tr><td class="c">FREE / SYNC</td><td class="r">Rate or tempo</td><td class="d">Free</td><td>Sync follows the host's tempo at <strong>DIVISION</strong>.</td></tr>
+          <tr><td class="c">RATE</td><td class="r">0.02 – 50 Hz</td><td class="d">5 Hz (Wind: 0.2 Hz)</td><td><span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">PUSH</td><td class="r">0 – 100%</td><td class="d">20% (Wind: 30%)</td><td>How hard it moves the creatures. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">PHASE</td><td class="r">0 – 360°</td><td class="d">0°</td><td>Where a retriggered cycle starts. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">DELAY</td><td class="r">0 ms – 20 s</td><td class="d">0</td><td>Fades the LFO in after each note starts. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">DIVISION</td><td class="r">1/32 – 4/1</td><td class="d">1/4</td><td>With triplets and dotted values.</td></tr>
+          <tr><td class="c">POLARITY</td><td class="r">Bipolar, Unipolar</td><td class="d">Bipolar</td><td>Bipolar swings both ways around the knob; unipolar only up from it.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h2 class="pb"><span class="tag">Right card</span>LFO</h2>
+  <div class="split">
+    <figure class="dark"><img src="img/card-lfo.jpg" alt=""></figure>
+    <div class="body">
+      <p><strong>LFO 1</strong> (4 Hz sine) and <strong>LFO 2</strong> (0.5 Hz triangle) are plain LFOs that only modulate. They have the same controls as the MOTION LFOs, without Push.</p>
+      <h4>Trigger</h4>
+      <div class="kv">
+        <dt>Retrigger</dt><dd>Each note's LFO starts at Phase. Notes are in step with how you play them.</dd>
+        <dt>Free</dt><dd>Each note's LFO picks up where the part's running LFO is, so notes are in step with each other.</dd>
+        <dt>Global</dt><dd>One LFO for the whole part. Every note hears the same value; a route can't change its rate per note.</dd>
+      </div>
+      <div class="note"><span class="k">Vibrato</span><p>Route LFO 1 to the part's <strong>Fine</strong> at a few percent for vibrato, and set its <strong>DELAY</strong> so it arrives once the note has settled. Map Press onto that route's amount and the vibrato follows your finger.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 11. THE FLOCK ================= -->
+<section class="chapter" data-ch="11" data-title="The Flock" style="--accent: var(--b-ink); --accent-bg: var(--b);">
+  <div class="chap-head">
+    <div class="num">Chapter 11</div>
+    <h1>The Flock</h1>
+    <p class="lede">How each species flies, and what flying near another creature does to its sound.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2><span class="tag">Left card</span>FLOCK</h2>
+  <div class="split">
+    <figure class="dark"><img src="img/card-flock.jpg" alt=""></figure>
+    <div class="body">
+      <table class="params">
+        <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="c">Behaviour</td><td class="r">Shoal, Scatter, Hunt, Flee</td><td class="d">Shoal (B: Hunt)</td><td>See below.</td></tr>
+          <tr><td class="c">COHESION</td><td class="r">0 – 100%</td><td class="d">50%</td><td>Pull toward the middle of the neighbours. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">ALIGN</td><td class="r">0 – 100%</td><td class="d">50%</td><td>Turn to fly the way the neighbours fly. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">SEPARATE</td><td class="r">0 – 100%</td><td class="d">40%</td><td>Keep clear of the nearest. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">SPEED</td><td class="r">0 – 100%</td><td class="d">40% (B: 55%)</td><td>Top speed. Press raises it further, up to 80% more. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">WANDER</td><td class="r">0 – 100%</td><td class="d">20%</td><td>Each creature's restlessness, and how far it roams around its lure. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">LURE</td><td class="r">0 – 100%</td><td class="d">60%</td><td>How hard your note pulls its creature. Low lets the flock take over. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">RANGE</td><td class="r">0 – 100%</td><td class="d">35%</td><td>How near counts as a neighbour. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">TAIL</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How long the ink lasts, about 0.3 to 3 seconds. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">SPREAD</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How far the ink blooms as it ages. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">WAKE</td><td class="r">0 – 100%</td><td class="d">20%</td><td>How strongly ink registers on the Wake source. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">SIZE</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How big the sky is. A bigger sky makes creatures relatively smaller and slower, so flocks spread out. Shared.</td></tr>
+          <tr><td class="c">WALLS</td><td class="r">Soft, Wrap, Open</td><td class="d">Soft</td><td>Soft turns creatures back near the edge; Wrap carries them round to the other side; Open lets them fly well past it first. Shared.</td></tr>
+          <tr><td class="c">LURE X, LURE Y</td><td class="r">Pitch, Strike, Press, Slide, Lift, Random, Centre</td><td class="d">Pitch, Slide</td><td>What places a note's lure along each axis.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h2>Behaviours</h2>
+  <div class="kv">
+    <dt>Shoal</dt><dd>Flies with its own kind: cohesion, alignment and separation as set.</dd>
+    <dt>Scatter</dt><dd>Keeps apart: cohesion pushes creatures away from their neighbours' middle instead of toward it.</dd>
+    <dt>Hunt</dt><dd>Chases the nearest creature of the other species. A hunter that gets close enough catches it, which turns on the prey's Caught source and its Bite. Everything shies away from hunters a little.</dd>
+    <dt>Flee</dt><dd>Runs hard from the other species, whatever it is doing.</dd>
+  </div>
+
+  <h2>The lure</h2>
+  <p>A held note pulls its creature toward a point that roams slowly around the lure, on a leash: loose near the lure, so the flock and the wander shape the path there, and firm when the creature strays. Each creature roams on its own two slow orbits, so no two trace the same path. <strong>LURE X</strong> and <strong>LURE Y</strong> choose what places the lure: by default low notes sit left and high notes right (Pitch, over four octaves from C2, and bend moves it), and more Slide sits higher. Try Lure Y on <em>Press</em> to make pressing harder send creatures upward, or Lure X on <em>Random</em> to scatter a chord across the sky.</p>
+
+  <h2>Between creatures</h2>
+  <p>Three knobs on the <strong>FM</strong> tab connect the flock to the sound directly. All start at 0, so the flock changes nothing until you ask it to.</p>
+  <div class="kv">
+    <dt>NEIGHBOUR</dt><dd>Each creature listens to up to three neighbours of its own species, weighted by how near they are, and their Osc 1 frequency-modulates its Osc 2. A tight flock rings; a loose one is clean. When a creature gains or loses a neighbour, the change fades in over about 10 ms, so it never clicks. For it to be heard, Osc 2 must be in the sound: give it level, or route it into Osc 1 on the FM grid.</dd>
+    <dt>TUNE PULL</dt><dd>For each neighbour heading within 30° of the same way, the creature is pulled toward the nearest just interval from that neighbour's pitch (unison, minor third, major third, fourth, fifth, major sixth, octave), up to ±30 cents at 100%, over about 150 ms. Chords played on a flock that flies together settle into just intonation; break formation and they drift back.</dd>
+    <dt>BITE</dt><dd>While one of this part's hunters holds a creature of the other species, the hunter's Osc 1 ring-modulates it, by Bite times how caught it is. Set Bite on the hunting part. Because Caught lets go over half a second, each bite rings out as the prey escapes.</dd>
+  </div>
+
+  <h2>Ink and Wake</h2>
+  <p>Every creature leaves ink behind it, more the brighter it is. The ink fades with <strong>TAIL</strong> and blooms with <strong>SPREAD</strong>. The <strong>Wake</strong> source is how much ink a creature is flying into, read just ahead of it: the other species' ink fully and its own kind's a little less. So Wake rises when a creature crosses another's path or follows a flock, and a route from Wake makes a sound that reacts to where the flock has been.</p>
+</section>
+
+<!-- ================= 12. TOUCH ================= -->
+<section class="chapter" data-ch="12" data-title="Touch" style="--accent: var(--map-ink); --accent-bg: var(--map);">
+  <div class="chap-head">
+    <div class="num">Chapter 12</div>
+    <h1>Touch</h1>
+    <p class="lede">Five dimensions of every note, each shaped and smoothed, each a source.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2><span class="tag">Left card</span>TOUCH</h2>
+  <div class="split">
+    <figure class="dark"><img src="img/card-touch.jpg" alt=""></figure>
+    <div class="body">
+      <table>
+        <thead><tr><th style="width:0.75in">Touch</th><th>Where it comes from</th></tr></thead>
+        <tbody>
+          <tr><td class="c">STRIKE</td><td>How hard the note was struck: its velocity.</td></tr>
+          <tr><td class="c">PRESS</td><td>Pressure: MPE channel pressure or the CLAP pressure expression. It also makes the creature faster and brighter.</td></tr>
+          <tr><td class="c">GLIDE</td><td>The finger's bend, as −100% to +100% of the bend range.</td></tr>
+          <tr><td class="c">SLIDE</td><td>Up and down the key: MPE CC 74 or the CLAP brightness expression.</td></tr>
+          <tr><td class="c">LIFT</td><td>How fast the note was released: its release velocity.</td></tr>
+        </tbody>
+      </table>
+      <p>Each has a <strong>CURVE</strong> (−1 to +1): positive bows it up, so it responds more early in the travel, and negative bows it down. And a <strong>SMOOTH</strong> time (8 ms by default, 2 ms for Glide so slides track the finger), which irons out a controller's steps.</p>
+      <table class="params">
+        <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="c">ROUND</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Glide Rounding: once a finger stops sliding, pull its pitch toward the nearest semitone, by this much. While the finger moves, the pitch follows it exactly.</td></tr>
+          <tr><td class="c">ROUND TIME</td><td class="r">0 ms – 20 s</td><td class="d">150 ms</td><td>How long that pull takes.</td></tr>
+          <tr><td class="c">MGR BEND</td><td class="r">1 – 96 st</td><td class="d">2 st</td><td>The bend range of the MPE manager channel (channel 1), which bends every note.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h2>The touch chips</h2>
+  <p>The five chips in the header light as you play, showing the newest note of the part you are editing. In MAP mode they are sources like any other: touch <strong>PRESS</strong> and drag a knob to make pressure move it.</p>
+  <div class="note">
+    <span class="k">No MPE controller?</span>
+    <p>Strike and Lift come from any keyboard. A plain keyboard's channel pressure is Press for every note, and its pitch wheel bends every note by MGR BEND. In the sky, a click sets Slide by how high you click and dragging bends.</p>
+  </div>
+</section>
+
+<!-- ================= 13. MAP AND ROUTES ================= -->
+<section class="chapter" data-ch="13" data-title="Modulation: MAP and Routes" style="--accent: var(--map-ink); --accent-bg: var(--map);">
+  <div class="chap-head">
+    <div class="num">Chapter 13</div>
+    <h1>Modulation: MAP and Routes</h1>
+    <p class="lede">There is no matrix page. Touch a source, drag a knob.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2>Mapping</h2>
+  <ol class="steps">
+    <li><b class="h">Press MAP</b>The button lights pink, the source chips pulse, and the sky says <em>MAP: touch a source, then drag a knob</em>.</li>
+    <li><b class="h">Touch a source</b>Click any source chip: the touch chips in the header, the envelope and LFO chips on the right card, or the flock's under the sky. It lights, and the sky tells you to drag a knob.</li>
+    <li><b class="h">Drag a knob</b>Drag any knob up or down to set how much the source moves it, from −100% to +100%. A ring in the source's colour shows how far it reaches. Drag more knobs to send the same source to them too, or touch another source.</li>
+    <li><b class="h">Press MAP again</b>To finish. Knobs go back to setting their own values.</li>
+  </ol>
+  <figure class="dark"><img src="img/map.jpg" alt=""><figcaption><b>Fig. 13.1</b> &nbsp;MAP with SPEED armed. The pink ring on the flock's SPEED knob is the route a new part starts with, from Press.</figcaption></figure>
+  <table>
+    <thead><tr><th>In MAP mode, with a source armed</th><th>On a knob</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Drag</td><td>Set that source's amount on this knob. A route dragged back to 0 is removed.</td></tr>
+      <tr><td class="c">Double-click</td><td>Flip the route's sign.</td></tr>
+      <tr><td class="c">Right-click</td><td>Remove the route. With no source armed, removes every route to that knob.</td></tr>
+    </tbody>
+  </table>
+  <p>Each knob shows up to four route rings. Nearly every knob on a part's cards can take routes: the flock's knobs, the FM grid, the envelopes and LFOs, the filters and the oscillators. The exceptions are Transpose, the part's Bend range, Velocity, and the shared ones: Size, Width, Master and the TOUCH card.</p>
+
+  <h2>Sources</h2>
+  <table>
+    <thead><tr><th style="width:1.3in">Source</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Env 1, 2, 3</td><td>0 to 100%, each note's own.</td></tr>
+      <tr><td class="c">Wingbeat, Wind, LFO 1, 2</td><td>−100% to +100% (or 0 to 100% when Unipolar). Per note unless Global.</td></tr>
+      <tr><td class="c">Strike, Press, Slide, Lift</td><td>0 to 100%, each note's own.</td></tr>
+      <tr><td class="c">Glide</td><td>−100% to +100%: the note's bend.</td></tr>
+      <tr><td class="c">Key</td><td>The note: −100% four octaves below middle C, 0 at middle C, +100% four octaves above.</td></tr>
+      <tr><td class="c">Speed … Y</td><td>The flock's eight, 0 to 100% (Chapter 6).</td></tr>
+      <tr><td class="c">Random</td><td>A new value per note, −100% to +100%.</td></tr>
+      <tr><td class="c">Mod Wheel</td><td>CC 1 on channel 1.</td></tr>
+      <tr><td class="c">Macro 1 to 4</td><td>Four host parameters, for automation or a controller.</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">Key, Random, Mod Wheel and the macros have no chip on the panel; choose them in the route list.</p>
+
+  <h2>The route list</h2>
+  <figure class="dark"><img src="img/routes.jpg" alt=""><figcaption><b>Fig. 13.2</b> &nbsp;ROUTES: every route of the part in use, with its source, destination and amount.</figcaption></figure>
+  <p><strong>ROUTES</strong> under the sky opens the list of the part's routes in use, sixteen to a page. Each row has the source, the destination and the amount; change any of them here. <strong>+ ADD</strong> starts a new route (Env 2 onto Filter 1 Cutoff, at 0) to edit, and <strong>X</strong> removes one. The arrows turn the pages. Each part has 64 routes; the list shows how many are used.</p>
+  <p>The list reaches what MAP can't: sources without a chip, and destinations with no knob on the panel, such as an oscillator's Phase, an envelope's Delay and Hold, and every route's own amount.</p>
+
+  <h2>Routes onto routes</h2>
+  <p>A route's amount is itself a destination. Route Press onto the amount of a route from LFO 1 to Fine, and the vibrato deepens as you press. Routes onto amounts are worked out first, so they always take effect on the same tick.</p>
+  <h2>How far a route moves a knob</h2>
+  <p>A route moves a parameter within its own range: +100% from a source at full moves a knob from its lowest setting to its highest, and +10% moves it a tenth of the way. Routes add together, and the result stops at the knob's ends. Ratio moves by musical intervals, so a small route onto Ratio detunes evenly at every setting.</p>
+</section>
+
+<!-- ================= 14. PRESETS ================= -->
+<section class="chapter" data-ch="14" data-title="Factory Presets">
+  <div class="chap-head">
+    <div class="num">Chapter 14</div>
+    <h1>Factory Presets</h1>
+    <p class="lede">Forty-nine sounds in six families, from hits gone in a fraction of a second to swells that take seconds to arrive.</p>
+    <div class="bar"></div>
+  </div>
+  <p>The preset bar works like JVerb's: the arrows step through the presets, scrolling over the bar does too, and clicking the name opens the menu by category. <strong>SAVE</strong> saves the current sound under a name of your own. A factory preset sets every parameter it doesn't mention to its default, so nothing from the last sound (a route, say) carries over. Within each category, the presets run from a plain patch with no routes up to ones the flock plays.</p>
+  <div id="presets"></div>
+  <h2>Your presets</h2>
+  <p>User presets are small text files ending <span class="mono">.jspreset</span>, saved in:</p>
+  <table>
+    <tbody>
+      <tr><td class="c">macOS</td><td class="r">~/Library/Application Support/JSynth/Presets</td></tr>
+      <tr><td class="c">Windows</td><td class="r">%APPDATA%\JSynth\Presets</td></tr>
+      <tr><td class="c">Linux</td><td class="r">~/.config/JSynth/Presets (or $XDG_CONFIG_HOME/JSynth/Presets)</td></tr>
+    </tbody>
+  </table>
+  <p>Copy them between machines freely. A preset from a newer JSynth loads in an older one with any parameters it doesn't know skipped.</p>
+</section>
+
+<!-- ================= 15. RECIPES ================= -->
+<section class="chapter" data-ch="15" data-title="Sound Design Recipes">
+  <div class="chap-head">
+    <div class="num">Chapter 15</div>
+    <h1>Sound Design Recipes</h1>
+    <p class="lede">Starting points that show off what the flock can do. Each starts from Init unless it says otherwise.</p>
+    <div class="bar"></div>
+  </div>
+
+  <div class="recipes">
+    <div class="recipe" style="--rc:#6fe0ff">
+      <h3>DX electric piano</h3>
+      <p>Two sines, a 1:1 pair for the body and a ×14 for the bark.</p>
+      <div class="set">Osc 1 Sine · Osc 2 Sine Ratio ×1 Level 0<br>Osc 3 Sine Ratio ×14 Level 0<br>Env 1 A 1 ms D 5 s S 0 R 400 ms<br>Env 2 → FM 2 &gt; 1 +30% · Env 3 (D 60 ms) → FM 3 &gt; 1 +35%<br>Strike → FM 2 &gt; 1 +20% · Filter 1 open</div>
+      <div class="from">Or load <em>Tine Piano</em>.</div>
+    </div>
+    <div class="recipe" style="--rc:#ffb05a">
+      <h3>A flock that rings</h3>
+      <p>Neighbours modulate each other, so a held chord shimmers as it gathers and breaks.</p>
+      <div class="set">Osc 2 Sine Ratio ×3.5 · FM 2 &gt; 1 40%<br>NEIGHBOUR 70% · TUNE PULL 40% · COHESION 70%<br>Crowd → FM 2 &gt; 1 +30%<br>X PAN 60%</div>
+      <div class="from">Or load <em>Starling Bells</em>.</div>
+    </div>
+    <div class="recipe" style="--rc:#ff4f8b">
+      <h3>Predator and prey</h3>
+      <p>Two species; every catch rings and opens the prey's filter.</p>
+      <div class="set">Play mode LAYER<br>A: Flee · Caught → F1 Cutoff +60%<br>B: Hunt · Speed 70% · Pulse · BITE 90% · Transp −12</div>
+      <div class="from">Or load <em>Predator and Prey</em>.</div>
+    </div>
+    <div class="recipe" style="--rc:#5fd3b0">
+      <h3>Ink-stirred pad</h3>
+      <p>The sound follows where the flock has been.</p>
+      <div class="set">Osc 1 Alt Sine · FB 1 25%<br>TAIL 100% · SPREAD 90% · WAKE 80% · LURE 35%<br>Wake → F1 Cutoff +50% · Wake → FM 2 &gt; 1 +40%</div>
+      <div class="from">Or load <em>Ink Ribbons</em>.</div>
+    </div>
+    <div class="recipe" style="--rc:#8fb8ff">
+      <h3>Wind through a choir</h3>
+      <p>One gust for the whole sky, heard in the filter.</p>
+      <div class="set">Saws, Noise 35% · F1 Band Pass, Res 40%<br>Wind Push 90% · Wind Rate 0.1 Hz<br>Wind → F1 Cutoff +40% · Slide → F1 Res +30%</div>
+      <div class="from">Or load <em>Wind Choir</em>.</div>
+    </div>
+    <div class="recipe" style="--rc:#ff6fd2">
+      <h3>Pressure vibrato</h3>
+      <p>Vibrato only where you press, arriving after the note settles.</p>
+      <div class="set">LFO 1 5.5 Hz, DELAY 350 ms<br>Route LFO 1 → Fine at 0<br>Press → that route's amount +6%</div>
+      <div class="from">As in <em>Pressure Lead</em>.</div>
+    </div>
+    <div class="recipe" style="--rc:#ffe08a">
+      <h3>A stereo murmuration</h3>
+      <p>The flock spreads a pad across the speakers as it turns.</p>
+      <div class="set">Two saws, detuned · ALIGN 80% · SPEED 25%<br>X PAN 80% · DRIFT 15%<br>Heading → Pan +60%</div>
+      <div class="from">Or load <em>Murmuration Pad</em>.</div>
+    </div>
+    <div class="recipe" style="--rc:#f6f0a0">
+      <h3>Struck drum</h3>
+      <p>A pitch drop that goes further the harder you hit.</p>
+      <div class="set">Osc 1 Sine · FB 1 15% · Env 1 D 300 ms S 0<br>Env 3 (D 45 ms) → Osc 1 Ratio +10%<br>Strike → that route's amount +10%</div>
+      <div class="from">Or load <em>Log Drum</em>.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= A. PARAMETERS ================= -->
+<section class="chapter" data-ch="A" data-title="Appendix: Parameter Reference">
+  <div class="chap-head">
+    <div class="num">Appendix A</div>
+    <h1>Parameter Reference</h1>
+    <p class="lede">Every parameter JSynth exposes to the host. Part parameters exist once for each part, named "A …" and "B …" in the host.</p>
+    <div class="bar"></div>
+  </div>
+  <div id="paramref"></div>
+</section>
+
+<section class="chapter" data-ch="B" data-title="Appendix: Specifications">
+  <div class="chap-head">
+    <div class="num">Appendix B</div>
+    <h1>Specifications</h1>
+    <div class="bar"></div>
+  </div>
+  <table class="specs">
+    <tbody>
+      <tr><td class="c">Format</td><td>CLAP 1.2 instrument. Features: instrument, synthesizer, stereo.</td></tr>
+      <tr><td class="c">Ports</td><td>One note input (CLAP, MIDI and MIDI MPE; CLAP preferred). Three stereo outputs: Main, Part A, Part B.</td></tr>
+      <tr><td class="c">Platforms</td><td>macOS universal (10.15+ Intel, 11+ Apple Silicon), Windows (64-bit), Linux (64-bit).</td></tr>
+      <tr><td class="c">Latency</td><td>None.</td></tr>
+      <tr><td class="c">Parts</td><td>Two, each a complete patch and a species in the flock.</td></tr>
+      <tr><td class="c">Voices</td><td>Up to 16 per part (40 slots in all, so stolen notes fade out in 3 ms). Mono and Legato with a note stack.</td></tr>
+      <tr><td class="c">Oscillators</td><td>3 per voice, 14 waves, double-precision phase. Saw, square and pulse band-limited by polyBLEP.</td></tr>
+      <tr><td class="c">FM</td><td>3 × 3 grid including feedback; phase or exponential. Plus Neighbour FM from up to three neighbours.</td></tr>
+      <tr><td class="c">Filters</td><td>2 per voice: TPT state variable (12–48 dB), notch, peak, 4-pole ZDF ladder, comb ±. Serial, parallel or split.</td></tr>
+      <tr><td class="c">Modulation</td><td>3 DAHDSR envelopes with curves and loop, 4 LFOs, 5 touch dimensions, 8 flock sources, key, random, mod wheel, 4 macros. 64 routes per part.</td></tr>
+      <tr><td class="c">Oversampling</td><td>1×, 2× (default) or 4×, decimated by polyphase IIR half-bands.</td></tr>
+      <tr><td class="c">Control rate</td><td>Every 32 samples, ramped per sample. The flock steps at 500 Hz. Renders are identical at any buffer size.</td></tr>
+      <tr><td class="c">Parameters</td><td>All automatable except the route sources, destinations and Quality. Continuous ones accept CLAP modulation; route destinations accept it per note (note id, key, channel or port).</td></tr>
+      <tr><td class="c">State</td><td>Saved with the host project, including the preset name. States from older and newer builds load, with unknown parameters skipped and missing ones at their defaults.</td></tr>
+      <tr><td class="c">Panel</td><td>1200 × 780 at 100%; 75%, 100%, 125%, 150% and 200%.</td></tr>
+      <tr><td class="c">Threading</td><td>The audio thread never allocates, locks or waits on the panel after activation.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 style="margin-top:0.4in">Troubleshooting</h2>
+  <table>
+    <thead><tr><th style="width:2.1in">Symptom</th><th>What to check</th></tr></thead>
+    <tbody>
+      <tr><td class="c" style="white-space:normal">JSynth doesn't appear in my host (macOS)</td><td>The download is probably quarantined. See the warning in Chapter 2, then rescan plug-ins.</td></tr>
+      <tr><td class="c" style="white-space:normal">Only part A plays</td><td>The play mode is <strong>SINGLE</strong>. Choose <strong>LAYER</strong> or another mode in the header. Check each part's Key Low and Key High too.</td></tr>
+      <tr><td class="c" style="white-space:normal">Turning up the flock knobs changes nothing in the sound</td><td>By design: the flock only reaches the sound through routes and the three BETWEEN CREATURES knobs. Map a flock source, or raise <strong>NEIGHBOUR</strong>.</td></tr>
+      <tr><td class="c" style="white-space:normal">NEIGHBOUR makes no difference</td><td>It modulates Osc 2. Give Osc 2 some <strong>LEVEL</strong>, or route it into Osc 1 with <strong>2 &gt; 1</strong>. Creatures also have to be near each other: raise <strong>RANGE</strong> or <strong>COHESION</strong>, and play more than one note.</td></tr>
+      <tr><td class="c" style="white-space:normal">BITE does nothing</td><td>Bite is set on the hunting part, and needs the hunter's Osc 1 and a prey of the other species: play mode LAYER (or any mode that plays both), one part on <strong>Hunt</strong>.</td></tr>
+      <tr><td class="c" style="white-space:normal">Notes are out of tune</td><td>Check <strong>TUNE PULL</strong> (just intervals are up to 30 cents from equal temperament), <strong>DRIFT</strong>, and a route onto Fine or Ratio. An MPE controller sends bend per note at the part's <strong>BEND</strong> range, which must match the controller's (48 semitones is the MPE standard).</td></tr>
+      <tr><td class="c" style="white-space:normal">Pitch bend is far too wide on a plain keyboard</td><td>A plain keyboard is on channel 1, which bends by <strong>MGR BEND</strong> (2 semitones). If its notes come on other channels, they are taken as MPE member channels and bend by <strong>BEND</strong>.</td></tr>
+      <tr><td class="c" style="white-space:normal">Notes cut off when I play a lot</td><td>The part is at its polyphony and the oldest notes are being taken. Raise the voices count on the part card (up to 16).</td></tr>
+      <tr><td class="c" style="white-space:normal">My user presets are missing</td><td>Check the preset folder for your OS (Chapter 14). Files must end in <span class="mono">.jspreset</span>.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Glossary</h2>
+  <div class="kv">
+    <dt>Creature</dt><dd>A note, as it flies in the sky. Each sounding voice has one.</dd>
+    <dt>Species</dt><dd>A part. Each part's creatures flock with their own kind.</dd>
+    <dt>Lure</dt><dd>Where a held note pulls its creature.</dd>
+    <dt>Boids</dt><dd>The classic flocking model (Craig Reynolds, 1986): cohesion, alignment and separation.</dd>
+    <dt>MPE</dt><dd>MIDI Polyphonic Expression: each note on its own MIDI channel, so each can bend and be pressed on its own.</dd>
+    <dt>FM</dt><dd>Frequency modulation: one oscillator wobbling another's phase or pitch at audio rate, for bright, bell-like and metallic tones.</dd>
+    <dt>Ratio</dt><dd>An oscillator's frequency as a multiple of the note's.</dd>
+    <dt>Just interval</dt><dd>An interval from a simple whole-number ratio, such as 3:2 for a fifth. They beat less than equal-tempered ones.</dd>
+    <dt>Route</dt><dd>A source, a destination and an amount.</dd>
+    <dt>Ring modulation</dt><dd>Multiplying two signals, for clangorous sum-and-difference tones.</dd>
+  </div>
+</section>
+
+<section class="back">
+  <div class="mid">
+    <svg width="90" height="44" viewBox="0 0 50 34">
+      <path d="M4,26 C14,14 24,10 34,12" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+      <circle cx="10" cy="21" r="4.5" fill="#f28c28"/>
+      <circle cx="24" cy="13" r="4.5" fill="#ff6fd2"/>
+      <circle cx="38" cy="11" r="4.5" fill="#6fb8ff"/>
+    </svg>
+    <div class="word"><span class="j">J</span>Synth</div>
+    <div class="small">The flocking synth · v0.8.0</div>
+  </div>
+  <div class="url">github.com/jeffmhopkins/Jclap</div>
+</section>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+function el(parent, tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  parent.appendChild(e);
+  return e;
+}
+
+// ----- cover: stars, ink and two flocks -----
+(function () {
+  const s = document.getElementById('stars');
+  let seed = 11;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const defs = el(s, 'defs', {});
+  for (const [id, c] of [['inkA', '#ff6a4a'], ['inkB', '#4fe0c0']]) {
+    const rg = el(defs, 'radialGradient', { id });
+    el(rg, 'stop', { offset: '0', 'stop-color': c, 'stop-opacity': 0.32 });
+    el(rg, 'stop', { offset: '1', 'stop-color': c, 'stop-opacity': 0 });
+  }
+  const g = el(s, 'g', {});
+  for (let i = 0; i < 240; i++) {
+    const r = rnd() < 0.92 ? 0.4 + rnd() * 0.7 : 1.2 + rnd() * 0.8;
+    el(g, 'circle', { cx: rnd() * 816, cy: rnd() * 1056, r, fill: '#fff', opacity: (0.12 + rnd() * 0.55).toFixed(2) });
+  }
+  // two flocks curving across behind the title, each creature leaving ink
+  const flock = (cx, cy, rx, ry, t0, n, col, ink) => {
+    for (let i = 0; i < n; i++) {
+      const t = t0 + i * 0.11 + rnd() * 0.05;
+      const x = cx + rx * Math.cos(t) + (rnd() - 0.5) * 30, y = cy + ry * Math.sin(t) + (rnd() - 0.5) * 22;
+      const hx = -Math.sin(t) * rx, hy = Math.cos(t) * ry, hl = Math.hypot(hx, hy);
+      const ux = hx / hl, uy = hy / hl;
+      for (let k = 1; k <= 3; k++)
+        el(s, 'circle', { cx: x - ux * 16 * k, cy: y - uy * 16 * k, r: 10 + 6 * k, fill: `url(#${ink})` });
+      el(s, 'circle', { cx: x, cy: y, r: 3.2, fill: col });
+      el(s, 'circle', { cx: x, cy: y, r: 1.4, fill: '#fff', opacity: 0.9 });
+      const w = 7, a = 0.6;
+      for (const side of [-1, 1]) {
+        const wx = -ux * Math.cos(a) - side * uy * Math.sin(a) * 1.4, wy = -uy * Math.cos(a) + side * ux * Math.sin(a) * 1.4;
+        el(s, 'line', { x1: x + ux * 1.5, y1: y + uy * 1.5, x2: x + wx * w, y2: y + wy * w, stroke: '#fff', 'stroke-width': 0.9, opacity: 0.8, 'stroke-linecap': 'round' });
+      }
+    }
+  };
+  flock(560, 330, 200, 90, -1.2, 11, '#f28c28', 'inkA');
+  flock(600, 300, 150, 120, 1.9, 7, '#6fb8ff', 'inkB');
+})();
+
+// ----- overview callouts -----
+(function () {
+  const g = document.querySelector('#overview svg g');
+  const pts = [
+    [1, 387, 52], [2, 595, 52], [3, 734, 52], [4, 831, 52], [5, 1028, 52], [6, 16, 66],
+    [7, 600, 330], [8, 256, 604], [9, 778, 604], [10, 1184, 66], [11, 18, 656], [12, 798, 656],
+  ];
+  for (const [n, x, y] of pts) {
+    el(g, 'circle', { cx: x, cy: y, r: 13, fill: '#f28c28', stroke: '#fff', 'stroke-width': 2.2 });
+    el(g, 'text', { x, y: y + 4.8, fill: '#fff', 'font-size': 13 }, String(n));
+  }
+})();
+
+// ----- one voice -----
+(function () {
+  const g = document.getElementById('flow');
+  const H = 34;
+  function box(x, y, w, label, sub, kind) {
+    const fill = kind === 'osc' ? '#efeaff' : kind === 'flock' ? '#fde9f6' : kind === 'io' ? '#ffffff' : kind === 'dark' ? '#15171d' : '#f5f5f7';
+    const ink = kind === 'osc' ? '#4b3596' : kind === 'flock' ? '#b8338f' : kind === 'dark' ? '#ffffff' : '#15171d';
+    if (kind === 'flock') {
+      const p = [[x + 9, y], [x + w - 9, y], [x + w, y + H / 2], [x + w - 9, y + H], [x + 9, y + H], [x, y + H / 2]];
+      el(g, 'polygon', { points: p.map(q => q.join(',')).join(' '), fill, stroke: ink, 'stroke-width': 1.1 });
+    } else if (kind === 'io') {
+      el(g, 'rect', { x, y, width: w, height: H, rx: H / 2, fill, stroke: ink, 'stroke-width': 1.2 });
+    } else {
+      el(g, 'rect', { x, y, width: w, height: H, rx: 5, fill, stroke: kind === 'dark' ? 'none' : '#c9ccd3', 'stroke-width': 1 });
+    }
+    el(g, 'text', { x: x + w / 2, y: y + (sub ? 14 : 20.5), 'text-anchor': 'middle', 'font-weight': 600, 'font-size': 8.6, fill: ink, 'letter-spacing': '0.04em' }, label);
+    if (sub) el(g, 'text', { x: x + w / 2, y: y + 25.5, 'text-anchor': 'middle', 'font-size': 7, fill: kind === 'dark' ? '#b8bcc6' : '#6d7280' }, sub);
+  }
+  function arrow(d, pink) {
+    el(g, 'path', { d, fill: 'none', stroke: pink ? '#b8338f' : '#15171d', 'stroke-width': 1.1, 'stroke-dasharray': pink ? '3 3' : 'none', 'marker-end': pink ? 'url(#ahg)' : 'url(#ah)' });
+  }
+  // row 1: note, touch, pitch
+  box(4, 10, 82, 'NOTE', null, 'io');
+  box(108, 10, 120, 'TOUCH', 'strike · press · glide · slide · lift');
+  box(250, 10, 150, 'PITCH', 'glide · bend · drift · tune pull');
+  box(430, 10, 150, 'ROUTES', 'envelopes · LFOs · flock');
+  arrow('M86,27 L106,27'); arrow('M228,27 L248,27');
+  el(g, 'text', { x: 505, y: 58, 'text-anchor': 'middle', 'font-size': 7.2, fill: '#6d7280' }, 'move everything below, per note');
+  // row 2: the oscillators
+  const y2 = 92;
+  box(40, y2, 96, 'OSC 3', null, 'osc');
+  box(190, y2, 96, 'OSC 2', null, 'osc');
+  box(340, y2, 96, 'OSC 1', null, 'osc');
+  arrow(`M136,${y2 + 17} L188,${y2 + 17}`); arrow(`M286,${y2 + 17} L338,${y2 + 17}`);
+  el(g, 'text', { x: 162, y: y2 + 12, 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 600, fill: '#4b3596' }, 'FM');
+  el(g, 'text', { x: 312, y: y2 + 12, 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 600, fill: '#4b3596' }, 'FM');
+  el(g, 'path', { d: 'M325,44 L325,64 M88,64 L388,64', fill: 'none', stroke: '#15171d', 'stroke-width': 1.1 });
+  for (const x of [88, 238, 388]) arrow(`M${x},64 L${x},${y2 - 2}`);
+  el(g, 'text', { x: 232, y: 60, 'text-anchor': 'middle', 'font-size': 7.2, fill: '#6d7280' }, 'each oscillator: note, ratio or fixed Hz');
+  box(480, y2, 150, 'NEIGHBOURS\u2019 OSC 1', 'up to three, weighted', 'flock');
+  arrow(`M480,${y2 + 17} L452,${y2 + 17} L452,${y2 + 48} L238,${y2 + 48} L238,${y2 + 36}`, true);
+  el(g, 'text', { x: 356, y: y2 + 60, 'text-anchor': 'middle', 'font-size': 7.2, fill: '#b8338f' }, 'Neighbour FM into Osc 2');
+  // row 3: mixer to out
+  const y3 = 186;
+  box(4, y3, 96, 'MIXER', 'level · pan · noise');
+  box(118, y3, 82, 'DRIVE', 'soft · hard · tube');
+  box(218, y3, 120, 'FILTERS 1 + 2', 'serial · parallel · split');
+  box(356, y3, 82, 'BITE', 'ring mod', 'flock');
+  box(456, y3, 96, 'AMP', 'Env 1 · level');
+  box(570, y3, 96, 'PAN', 'part pan + X pan');
+  arrow(`M388,${y2 + 34} L388,${y2 + 70} L52,${y2 + 70} L52,${y3 - 2}`);
+  arrow(`M100,${y3 + 17} L116,${y3 + 17}`); arrow(`M200,${y3 + 17} L216,${y3 + 17}`); arrow(`M338,${y3 + 17} L354,${y3 + 17}`);
+  arrow(`M438,${y3 + 17} L454,${y3 + 17}`); arrow(`M552,${y3 + 17} L568,${y3 + 17}`);
+  box(570, y3 + 66, 96, 'PART BUS', 'to the output', 'dark');
+  arrow(`M618,${y3 + 34} L618,${y3 + 64}`);
+  box(330, y3 + 66, 150, 'HUNTER\u2019S OSC 1', 'while Caught', 'flock');
+  arrow(`M397,${y3 + 66} L397,${y3 + 36}`, true);
+})();
+
+// ----- presets -----
+(function () {
+  const P = [
+    ['Hits', 'Gone in a fraction of a second.', [
+      ['Wood Block', 'A sine with a ×2.76 modulator, 70 ms.'],
+      ['Glass Tick', 'A sine with a ×7 modulator.'],
+      ['Marimba', '×4 and ×10 partials; Env 3 and Strike bring in the ×10.'],
+      ['Steel Drum', '×3 and ×2 modulators, slightly detuned, opened by Env 3 and Strike.'],
+      ['Log Drum', 'Self-feedback and a pitch drop that goes further the harder you strike.'],
+      ['Fireflies', 'Half Sine blips; a fast, scattered flock with short ink, spread wide.'],
+      ['Metal Rain', 'Inharmonic ×3.73 and ×7.11, scattered; each note detuned at random.'],
+      ['Hunter Clicks', 'Layer: A flees, B hunts an octave up with Bite and Neighbour FM.'],
+    ]],
+    ['Plucks', 'Struck, ringing out over a second or two.', [
+      ['Sine Pluck', 'One sine, no routes.'],
+      ['Nylon', 'Saw through a key-tracked low pass, Env 2 on the cutoff.'],
+      ['Harp', '1:1 FM with a long ring.'],
+      ['Koto', '×3 modulator with feedback.'],
+      ['Synth Pluck', 'Saw and detuned pulse through a resonant filter; Slide on resonance.'],
+      ['Bell Pluck', '×3.5 and ×7; Press deepens the upper FM.'],
+      ['Starling Bells', 'Neighbour FM, Tune Pull and a cohesive flock; Crowd deepens the FM.'],
+      ['Dripping Ink', 'Long, wide ink; Wake, Speed and Heading play the filter and FM.'],
+    ]],
+    ['Keys', 'Played like a keyboard: organs held, pianos and mallets dying away.', [
+      ['Sine Organ', 'Three sine drawbars, no routes.'],
+      ['Tonewheel', 'The organ with feedback grit and vibrato.'],
+      ['Celesta', 'A sine with a ×7 modulator and a long decay.'],
+      ['Clav', 'Narrow pulse through a resonant filter.'],
+      ['Vibes', '×4 FM with tremolo.'],
+      ['Tine Piano', 'A DX-style electric piano: a 1:1 pair and a ×14 tine.'],
+      ['Suitcase Pressure', 'The piano with Press on the bark and Slide on the tremolo\u2019s pan.'],
+      ['Mallet Flock', 'Layer: vibes and an upper shoal with Neighbour FM and Tune Pull.'],
+    ]],
+    ['Bass and Leads', 'Held, speaking at once.', [
+      ['Sine Bass', 'A sine an octave down with a little feedback.'],
+      ['FM Bass', '1:1 FM with feedback on the modulator.'],
+      ['Saw Lead', 'Two detuned saws, delayed vibrato.'],
+      ['Reed', 'Pulse with a slow attack; Press opens the filter.'],
+      ['East Coast Brass', 'Feedback-driven 1:1 FM with a slow swell of brightness.'],
+      ['Pressure Lead', 'Press opens the FM and the vibrato; Slide adds grit.'],
+      ['Shark Bass', 'Split at C3: below, a hunting saw-and-pulse bass with Bite; Speed opens its filter.'],
+      ['Predator and Prey', 'Layer: A flees, B hunts an octave down; every catch opens A\u2019s filter.'],
+    ]],
+    ['Pads', 'Rising in under a second, held.', [
+      ['Sine Pad', 'Two detuned sines panned apart, no routes.'],
+      ['Warm Analog', 'Saw pair through a low pass, a slow Env 2.'],
+      ['Glass Pad', '×3 and ×0.5, LFO 1 on the FM.'],
+      ['Wind Choir', 'Saws and noise through a band pass; a strong wind on the cutoff.'],
+      ['String Machine', 'Three saws with slow detune LFOs; Press opens the filter.'],
+      ['Murmuration Pad', 'Saws, an aligned flock spread wide; Heading pans each voice.'],
+      ['Pressure Front', 'Press opens 2:1 FM, with Neighbour FM.'],
+      ['Ink Ribbons', 'Long ink and a loose lure; Wake plays cutoff and FM.'],
+      ['Murmuration Riot', 'Layer: a fast FM shoal opened by Press, Speed, Crowd and Wake, and driven ladder hunters that bite.'],
+    ]],
+    ['Swells', 'Seconds to arrive.', [
+      ['Slow Sine', 'Two sines over three seconds, no routes.'],
+      ['Bowed Glass', '2:1 FM that blooms with a slow Env 3.'],
+      ['Tidal Strings', 'Saws, a slow Env 2 on the cutoff, LFO 2 on the pan.'],
+      ['Dawn Chorus', 'Vibrato that arrives once the note has bloomed.'],
+      ['Deep Current', 'A sub through a resonant, tube-driven ladder; Slide drives it harder.'],
+      ['Aurora', 'A slow FM shoal with Tune Pull; Heading on the FM, Y on the cutoff.'],
+      ['Storm Front', 'Saw and noise through a comb in a strong wind; Wind, Wake and Speed on the filters.'],
+      ['Murmuration Storm', 'Layer: a saw shoal with Neighbour FM and Tune Pull, and FM hunters.'],
+    ]],
+  ];
+  const cols = ['#f6f0a0', '#ffb05a', '#6fe0ff', '#f28c28', '#a98bff', '#6fb8ff'];
+  const host = document.getElementById('presets');
+  let html = '';
+  P.forEach(([cat, desc, list], i) => {
+    html += `<h2 style="margin-top:${i ? '0.26in' : '0.1in'}"><span class="tag" style="color:#6d7280">${list.length} presets</span><span class="swatch" style="background:${cols[i]};width:10px;height:10px"></span>${cat}</h2>`;
+    html += `<p class="muted small" style="margin-bottom:4px">${desc}</p>`;
+    html += '<table><tbody>' + list.map(([n, d]) => `<tr><td class="c" style="width:1.6in">${n}</td><td>${d}</td></tr>`).join('') + '</tbody></table>';
+  });
+  html += `<div class="note"><span class="k">Init</span><p><em>Init</em> is every parameter at its default: a saw through a low pass on part A, with the three starting routes (Env 2 and Press on the cutoff, Press on the flock's speed).</p></div>`;
+  host.innerHTML = html;
+})();
+
+// ----- parameter reference -----
+(function () {
+  const T = '<span class="mod t">ROUTE</span>';
+  const G = [
+    ['Global', [
+      ['Play Mode', 'Single, Layer, Split, MPE Zones, Velocity, Expression', 'Single', ''], ['Split Key', 'C-1 – G9', 'C4', ''],
+      ['Velocity Split', '1 – 127', '80', ''], ['Crossfade Source', 'Slide, Press', 'Slide', ''], ['Quality', '1x, 2x, 4x', '2x', ''],
+      ['Master Level', '–60 – +6 dB', '–6.0 dB', ''], ['Output Width', '0 – 200%', '100%', ''], ['Manager Bend Range', '1 – 96 st', '2 st', ''],
+      ['Glide Rounding', '0 – 100%', '0%', ''], ['Rounding Time', '0 ms – 20 s', '150 ms', ''], ['Macro 1 – 4', '0 – 100%', '0%', ''],
+      ['Strike … Lift Curve', '–1 – +1', '+0.00', ''], ['Strike … Lift Smoothing', '0 ms – 20 s', '8.0 ms (Glide 2.0 ms)', ''],
+      ['Size', '0 – 100%', '50%', ''], ['Walls', 'Soft, Wrap, Open', 'Soft', ''],
+    ]],
+    ['Voice (per part)', [
+      ['Level', '–60 – +6 dB', '0.0 dB', T], ['Pan', '–100% – +100%', '+0%', T], ['X Pan', '0 – 100%', '0%', T],
+      ['Transpose', '–48 – +48 st', '+0 st (B: –12 st)', ''], ['Fine', '–100 – +100 ct', '+0 ct', T],
+      ['Key Low, Key High', 'C-1 – G9', 'C-1, G9', ''], ['Polyphony', '1 – 16', '8', ''], ['Voice Mode', 'Poly, Mono, Legato', 'Poly', ''],
+      ['Glide', '0 ms – 20 s', '0.0 ms', T], ['Glide Mode', 'Always, Legato', 'Always', ''], ['MPE Bend Range', '1 – 96 st', '48 st', ''],
+      ['Drift', '0 – 100%', '0%', T], ['Velocity', '0 – 100%', '100%', ''], ['Output', 'Main, Own', 'Main', ''],
+    ]],
+    ['Oscillators (per part: Osc 1, 2, 3)', [
+      ['Wave', 'Sine, Triangle, Saw, Square, Pulse, Half Sine, Abs Sine, Quarter, Alt Sine, Alt Half, Camel, Alt Camel, White, Pink', 'Saw (Osc 2, 3: Sine)', ''],
+      ['Shape', '0 – 100%', '50%', T], ['Pitch Mode', 'Note, Ratio, Fixed', 'Note (Osc 2, 3: Ratio)', ''],
+      ['Coarse', '–48 – +48 st', '+0 st', T], ['Fine', '–100 – +100 ct', '+0 ct', T], ['Ratio', '×0.25 – ×16', '×1 (Osc 3: ×3)', T],
+      ['Fixed', '1 Hz – 10 kHz', '440 Hz', T], ['Sync', 'Off, On', 'Off', ''], ['Retrigger', 'Off, On', 'On', ''],
+      ['Phase', '0 – 360°', '0°', T], ['Bend', '0 – 100%', '100%', ''], ['Key Track', 'Off, On', 'On', ''],
+      ['Level (mixer)', '0 – 100%', '100% (Osc 2, 3: 0%)', T], ['Pan (mixer)', '–100% – +100%', '+0%', T],
+    ]],
+    ['FM, noise and drive (per part)', [
+      ['FM Feedback 1 – 3, FM 1 > 2 … 3 > 2', '0 – 100%', '0%', T], ['FM Type', 'Phase, Exponential', 'Phase', ''],
+      ['Noise Level', '0 – 100%', '0%', T], ['Noise Color', '–100% – +100%', '+0%', T],
+      ['Drive Type', 'Soft, Hard, Tube', 'Soft', ''], ['Drive', '0 – 100%', '0%', T],
+    ]],
+    ['Filters (per part: Filter 1, 2)', [
+      ['Filter Routing', 'Serial, Parallel, Split', 'Serial', ''], ['Filter Balance', '–100% – +100%', '+0%', T],
+      ['Type', 'Low Pass, High Pass, Band Pass, Notch, Peak, Ladder, Comb +, Comb –', 'Low Pass (F2: Ladder)', ''],
+      ['Slope', '12, 24, 36, 48 dB', '24 dB', ''], ['Cutoff', '20 Hz – 20 kHz', '1.26 kHz (F2: 20.00 kHz)', T],
+      ['Resonance', '0 – 100%', '20% (F2: 0%)', T], ['Drive', '0 – 100%', '0%', T], ['Key Track', '0 – 100%', '0%', T],
+    ]],
+    ['Envelopes (per part: Env 1, 2, 3)', [
+      ['Delay', '0 ms – 20 s', '0.0 ms', T], ['Attack', '0 ms – 20 s', '5.0 ms', T], ['Hold', '0 ms – 20 s', '0.0 ms', T],
+      ['Decay', '0 ms – 20 s', '400 ms (Env 2, 3: 300 ms)', T], ['Sustain', '0 – 100%', '70% (Env 2, 3: 30%)', T],
+      ['Release', '0 ms – 20 s', '300 ms', T], ['Attack, Decay, Release Curve', '–1 – +1', '+0.00', ''],
+      ['Loop', 'Off, Held, Free', 'Off', ''], ['Velocity', '0 – 100%', '0%', ''],
+    ]],
+    ['LFOs (per part: Wingbeat, Wind, LFO 1, LFO 2)', [
+      ['Shape', 'Sine, Triangle, Saw, Square, S&H, Smooth', 'Sine (Wind: Smooth, LFO 2: Triangle)', ''],
+      ['Rate', '0.02 – 50 Hz', '5.00, 0.20, 4.00, 0.50 Hz', T], ['Sync', 'Off, On', 'Off', ''], ['Division', '1/32 – 4/1', '1/4', ''],
+      ['Trigger', 'Retrigger, Free, Global', 'Retrigger (Wind: Global)', ''], ['Phase', '0 – 360°', '0°', T],
+      ['Delay', '0 ms – 20 s', '0.0 ms', T], ['Polarity', 'Bipolar, Unipolar', 'Bipolar', ''],
+      ['Push (Wingbeat, Wind)', '0 – 100%', '20%, 30%', T],
+    ]],
+    ['Flock (per part)', [
+      ['Behaviour', 'Shoal, Scatter, Hunt, Flee', 'Shoal (B: Hunt)', ''], ['Cohesion', '0 – 100%', '50%', T], ['Alignment', '0 – 100%', '50%', T],
+      ['Separation', '0 – 100%', '40%', T], ['Speed', '0 – 100%', '40% (B: 55%)', T], ['Wander', '0 – 100%', '20%', T],
+      ['Lure', '0 – 100%', '60%', T], ['Range', '0 – 100%', '35%', T], ['Neighbour FM', '0 – 100%', '0%', T],
+      ['Tune Pull', '0 – 100%', '0%', T], ['Bite', '0 – 100%', '0%', T], ['Tail Length', '0 – 100%', '50%', T],
+      ['Tail Spread', '0 – 100%', '50%', T], ['Wake', '0 – 100%', '20%', T],
+      ['Lure X, Lure Y', 'Pitch, Strike, Press, Slide, Lift, Random, Centre', 'Pitch, Slide', ''],
+    ]],
+    ['Routes (per part: Route 1 – 64)', [
+      ['Source', 'Off and 27 sources', 'Off (1–3: Env 2, Press, Press)', ''],
+      ['Destination', '160 destinations', 'Filter 1 Cutoff (2: Speed)', ''],
+      ['Amount', '–100% – +100%', '+0% (1–3: +30, +40, +20%)', T],
+    ]],
+  ];
+  let html = '';
+  for (const [name, rows] of G) {
+    html += `<h4>${name}</h4><table class="params"><thead><tr><th>Parameter</th><th>Range</th><th>Default</th><th></th></tr></thead><tbody>`;
+    html += rows.map(([n, r, d, f]) => `<tr><td class="c" style="width:1.5in;white-space:normal">${n}</td><td class="r" style="width:auto;white-space:normal">${r}</td><td class="d" style="width:1.45in">${d}</td><td style="width:0.6in;text-align:right">${f}</td></tr>`).join('');
+    html += '</tbody></table>';
+  }
+  document.getElementById('paramref').innerHTML = html;
+})();
+
+// ----- compact card tables -----
+document.querySelectorAll('.split table.params').forEach(t => {
+  t.querySelector('thead tr').innerHTML = '<th>Control</th><th>Range · Default</th><th>What it does</th>';
+  t.querySelectorAll('tbody tr').forEach(tr => {
+    const r = tr.querySelector('td.r'), d = tr.querySelector('td.d');
+    r.innerHTML = r.innerHTML + '<br><span class="dflt">' + d.innerHTML + '</span>';
+    d.remove();
+  });
+  t.classList.add('compact');
+});
+
+// ----- table of contents -----
+(function () {
+  const toc = document.getElementById('toc');
+  const pages = window.TOC_PAGES || {};
+  let html = '';
+  document.querySelectorAll('section.chapter').forEach(sec => {
+    const n = sec.dataset.ch, t = sec.dataset.title;
+    html += `<div class="grp"><div class="ch"><span class="n">${n}</span><span class="t">${t}</span><span class="p">${pages[t] || ''}</span></div>`;
+    sec.querySelectorAll('h2').forEach(h => {
+      const tt = h.childNodes[h.childNodes.length - 1].textContent.trim();
+      if (sec.dataset.ch === '14') return;
+      html += `<div class="sec"><span class="t">${tt}</span><span class="p">${pages[t + '/' + tt] || ''}</span></div>`;
+    });
+    html += '</div>';
+  });
+  toc.innerHTML = html;
+})();
+</script>
+</body>
+</html>
