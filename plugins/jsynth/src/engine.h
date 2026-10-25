@@ -322,6 +322,33 @@ public:
       const Voice *v = newest(part);
       return v ? v->lfoOut[l] : partLfoOut_[part][l];
    }
+   // Where every sounding voice's envelopes are, in the curve's four stages: a delay sits at the
+   // start of the attack and a hold at the peak.
+   void showEnvelopes(FlockFrame &f) const {
+      f.playheadCount = 0;
+      for (const Voice &v : voices_) {
+         if (!v.active || v.fading)
+            continue;
+         FlockFrame::Playhead &p = f.playheads[f.playheadCount++];
+         p.part = static_cast<int8_t>(v.part);
+         for (int e = 0; e < kEnvCount; ++e) {
+            const dsp::Envelope &env = v.env[e];
+            int stage = -1;
+            switch (env.stage()) {
+            case dsp::Envelope::kDelay:
+            case dsp::Envelope::kAttack: stage = 0; break;
+            case dsp::Envelope::kHold:
+            case dsp::Envelope::kDecay: stage = 1; break;
+            case dsp::Envelope::kSustain: stage = 2; break;
+            case dsp::Envelope::kRelease: stage = 3; break;
+            default: break;
+            }
+            p.stage[e] = static_cast<int8_t>(stage);
+            p.level[e] = env.level();
+            p.from[e] = env.releaseFrom();
+         }
+      }
+   }
 
    // The sample being rendered within the current host block, for NOTE_END times.
    void setBlockSample(int s) { blockSample_ = s; }

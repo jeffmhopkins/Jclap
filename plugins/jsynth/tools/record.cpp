@@ -60,6 +60,7 @@ public:
    void notes(std::vector<Note> &out) const override { out = held_; }
    bool flockFrame(FlockFrame &out) const override {
       engine_.flock().show(out);
+      engine_.showEnvelopes(out);
       for (int part = 0; part < kPartCount; ++part) {
          for (int e = 0; e < kEnvCount; ++e)
             out.env[part][e] = engine_.envLevel(part, e);

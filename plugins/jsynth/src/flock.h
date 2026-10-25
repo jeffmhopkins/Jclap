@@ -425,6 +425,15 @@ struct FlockFrame {
    // Each part's newest note's envelopes and LFOs, for the chips' lights.
    float env[kPartCount][kEnvCount] = {};
    float lfo[kPartCount][kLfoCount] = {};
+   // Where every sounding voice's envelopes are, for the dots riding the envelope curves. A stage is
+   // the curve's: 0 attack, 1 decay, 2 sustain, 3 release, -1 not running.
+   struct Playhead {
+      int8_t part;
+      int8_t stage[kEnvCount];
+      float level[kEnvCount], from[kEnvCount];
+   };
+   int playheadCount = 0;
+   Playhead playheads[kVoiceSlots];
 };
 
 inline void Flock::show(FlockFrame &f) const {

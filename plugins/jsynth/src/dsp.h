@@ -289,6 +289,9 @@ public:
    bool active() const { return stage_ != kIdle; }
    bool releasing() const { return stage_ == kRelease; }
    float level() const { return level_; }
+   Stage stage() const { return stage_; }
+   // The level the release started from.
+   float releaseFrom() const { return from_; }
 
    // Advances by `dt` seconds.
    float process(float dt) {

@@ -636,6 +636,8 @@ public:
    // The engine's newest envelope and LFO levels for `part`, while live.
    float envLevel(int part, int e) const { return frame_.env[part][e]; }
    float lfoLevel(int part, int l) const { return frame_.lfo[part][l]; }
+   // The engine's newest frame, while live.
+   const FlockFrame &frame() const { return frame_; }
 
    // The sources of `part`'s newest held creature, or a resting one's when it plays nothing.
    CreatureSources sources(int part) const {
@@ -1131,6 +1133,7 @@ public:
          touch[4] = n.lift;
       }
       runEnvelopes(dt);
+      showPlayheads();
       const CreatureSources src = view_->sources(host_.part);
       const float flock[] = {src.speed, src.crowd, src.nearest, src.heading, src.caught, src.wake, src.x, src.y};
       const float pulse = 0.5f + 0.5f * std::sin(time_ * 5.0f);
@@ -1362,6 +1365,22 @@ private:
          else
             level = sustain + (1.0f - sustain) * std::max(0.0f, 1.0f - (t - a - hold) / std::max(d, 1e-4f));
       }
+   }
+   // A glowing dot on each envelope for every sounding voice of its part, where the engine has it.
+   void showPlayheads() {
+      const FlockFrame &f = view_->frame();
+      for (int part = 0; part < kPartCount; ++part)
+         for (int e = 0; e < kEnvCount; ++e) {
+            if (!envelopes_[part][e])
+               continue;
+            heads_.clear();
+            for (int i = 0; view_->live() && i < f.playheadCount; ++i) {
+               const FlockFrame::Playhead &p = f.playheads[i];
+               if (p.part == part && p.stage[e] >= 0)
+                  heads_.push_back({static_cast<ui::EnvelopeEditor::Stage>(p.stage[e]), p.level[e], p.from[e]});
+            }
+            envelopes_[part][e]->setPlayheads(heads_);
+         }
    }
    // One whole edit, as if the user made it.
    void set(int part, clap_id offset, double v) {
@@ -1641,6 +1660,7 @@ private:
                                                        rangeOf(id(kEnvRelease))),
                                sourceColor(kSourceEnv1 + e));
             env.setTimeCurve(0.35f);
+            envelopes_[part][e] = &env;
             bindings_.bind(env, id(kEnvAttack), id(kEnvDecay), id(kEnvSustain), id(kEnvRelease));
             dropdown(envParam(e, kEnvLoop), c, {1094, y, 80, 22});
          }
@@ -1882,6 +1902,8 @@ private:
    float envLevel_[kEnvCount] = {};
    float envTime_ = 0.0f;
    int envNote_ = -1;
+   ui::EnvelopeEditor *envelopes_[kPartCount][kEnvCount] = {};
+   std::vector<ui::EnvelopeEditor::Playhead> heads_;
    std::chrono::steady_clock::time_point last_;
 };
 
@@ -1926,6 +1948,8 @@ bool renderFrames(EditorHost &host, const ScreenshotView &view, int width, int h
       advance(i);
       panel.step(static_cast<float>(1.0 / fps));
       panel.syncControls();
+      // Offscreen, nothing draws until asked: draw what this frame changed before taking it.
+      editor.drawWindow();
       const visage::Screenshot shot = editor.takeScreenshot();
       if (shot.width() != width || shot.height() != height) {
          editor.removeChild(&panel);

@@ -558,6 +558,7 @@ private:
    void publishFlock() {
       FlockFrame &f = flockFrames_.back();
       engine_->flock().show(f);
+      engine_->showEnvelopes(f);
       for (int part = 0; part < kPartCount; ++part) {
          for (int e = 0; e < kEnvCount; ++e)
             f.env[part][e] = engine_->envLevel(part, e);
