@@ -1,8 +1,6 @@
 jclap_add_plugin(jsynth
    OUTPUT_NAME "JSynth"
    BUNDLE_ID com.jeffmhopkins.jclap.jsynth
-   # Not released yet: it builds beside the shipped plugins, and CI validates it, but isn't packaged.
-   OUTPUT_DIR preview
    SOURCES src/plugin.cpp src/editor.cpp)
 target_include_directories(jsynth PRIVATE src)
 target_link_libraries(jsynth PRIVATE jclap::ui jclap::dsp)
