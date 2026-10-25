@@ -355,6 +355,9 @@ public:
          if (tickPos_ == kTick)
             tickPos_ = 0;
       }
+      // Voices that run their spans one after another log their ends out of time order; a host
+      // wants them in order.
+      std::stable_sort(ended_, ended_ + endedCount_, [](const Ended &a, const Ended &b) { return a.sample < b.sample; });
    }
 
    // Note ends since the last call, in order, with the sample they happened at.

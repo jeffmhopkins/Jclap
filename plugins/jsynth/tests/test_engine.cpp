@@ -87,6 +87,9 @@ std::vector<float> render(Engine &e, int frames, int block, const std::vector<Ev
          e.render(ports, at, n - at);
       if (ends)
          *ends += e.endedCount();
+      // A host takes a block's events in time order, NOTE_ENDs included.
+      for (int i = 1; i < e.endedCount(); ++i)
+         JCLAP_CHECK(e.ended(i - 1).sample <= e.ended(i).sample);
       e.clearEnded();
       for (int i = 0; i < n; ++i) {
          out.push_back(l[i]);
@@ -133,6 +136,23 @@ int main() {
       e.prepare(kRate, {p.values.get(), p.mods.get()});
       const auto out = render(e, 24000, 256, {});
       JCLAP_CHECK(peak(out) == 0.0f);
+   }
+
+   // Six notes let go a few samples apart, the first-played last, end inside one tick in the
+   // order they were let go, whichever voice slot each is in.
+   {
+      Params p;
+      auto e = std::make_unique<Engine>();
+      e->prepare(kRate, {p.values.get(), p.mods.get()});
+      std::vector<Event> ev;
+      for (int i = 0; i < 6; ++i)
+         ev.push_back({100, Event::On, 48 + 5 * i, 1.0f - 0.15f * i});
+      for (int i = 0; i < 6; ++i)
+         ev.push_back({24000 + 3 * (5 - i), Event::Off, 48 + 5 * i, 0.0f});
+      std::sort(ev.begin(), ev.end(), [](const Event &a, const Event &b) { return a.at < b.at; });
+      int ends = 0;
+      render(*e, 240000, 4096, ev, &ends);
+      JCLAP_CHECK(ends == 6);
    }
 
    // A note sounds, stays finite and under full scale, and ends with exactly one NOTE_END.
