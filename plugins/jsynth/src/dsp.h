@@ -147,7 +147,7 @@ inline float wave(int w, float p, float dt, float shape) {
    case kHalfSine:
       return p < 0.5f ? Sine::at(p) : 0.0f;
    case kAbsSine:
-      return std::fabs(Sine::at(0.5f * p)) * 2.0f - 1.0f + 0.36338f;
+      return std::fabs(Sine::at(0.5f * p)) * 2.0f - 1.27324f; // its mean, 4/pi, taken off
    case kQuarter:
       return (p < 0.25f || (p >= 0.5f && p < 0.75f)) ? std::fabs(Sine::at(p)) : 0.0f;
    case kAltSine:
@@ -202,6 +202,12 @@ struct Svf {
 struct Ladder {
    float s[4] = {};
    void reset() { s[0] = s[1] = s[2] = s[3] = 0; }
+   // Passes `x` through as a wide-open ladder would, keeping its state where that ladder's would be,
+   // so it can start filtering again at any sample without a step.
+   float pass(float x) {
+      s[0] = s[1] = s[2] = s[3] = x;
+      return x;
+   }
    float process(float x, float g, float resonance) {
       const float G = g / (1.0f + g);
       const float k = 4.0f * resonance; // self-oscillates near 4
@@ -217,7 +223,8 @@ struct Ladder {
          s[i] = out + v;
          u = out;
       }
-      return u;
+      // Made up for the loop's loss, so the passband stays at unity as the resonance rises.
+      return u * (1.0f + k);
    }
 };
 
@@ -226,13 +233,23 @@ struct Ladder {
 struct Comb {
    std::vector<float> buffer;
    int write = 0;
+   // How much of the buffer has been written since the last reset, the only part a reset clears,
+   // so resetting a comb that never ran (most voices') costs nothing.
+   int used = 0;
    void prepare(int maxSamples) {
       buffer.assign(static_cast<size_t>(std::max(4, maxSamples)), 0.0f);
-      write = 0;
+      write = used = 0;
    }
    void reset() {
-      std::fill(buffer.begin(), buffer.end(), 0.0f);
-      write = 0;
+      std::fill(buffer.begin(), buffer.begin() + used, 0.0f);
+      write = used = 0;
+   }
+   // Takes up `o`'s state (same size), copying only what it has written.
+   void copyFrom(const Comb &o) {
+      const int n = std::max(used, o.used);
+      std::copy(o.buffer.begin(), o.buffer.begin() + n, buffer.begin());
+      write = o.write;
+      used = o.used;
    }
    float process(float x, float delaySamples, float feedback) {
       const int n = static_cast<int>(buffer.size());
@@ -248,6 +265,7 @@ struct Comb {
       buffer[write] = std::clamp(y, -4.0f, 4.0f);
       if (++write >= n)
          write = 0;
+      used = std::max(used, write == 0 ? n : write);
       return 0.5f * (x + delayed);
    }
 };

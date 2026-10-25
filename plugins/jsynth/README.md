@@ -4,16 +4,17 @@
 
 A bi-timbral MPE synth where every note is a creature and the creatures flock. Two species, each a three-oscillator FM patch with two filters, three envelopes and two LFOs, and creatures that fly near each other modulate each other. Each one trails ink.
 
-[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.2 instrument](https://img.shields.io/badge/CLAP%201.2.2-instrument-blue)](https://github.com/free-audio/clap) [![MPE: yes](https://img.shields.io/badge/MPE-yes-blue)](#the-design) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![status: panel mock](https://img.shields.io/badge/status-panel%20mock-orange)](#status) [![shipped: no](https://img.shields.io/badge/shipped-no-lightgrey)](#status)
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.2 instrument](https://img.shields.io/badge/CLAP%201.2.2-instrument-blue)](https://github.com/free-audio/clap) [![MPE: yes](https://img.shields.io/badge/MPE-yes-blue)](#the-design) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![status: in development](https://img.shields.io/badge/status-in%20development-orange)](#status) [![shipped: no](https://img.shields.io/badge/shipped-no-lightgrey)](#status)
 
 </div>
 
 ## Status
 
 > [!IMPORTANT]
-> **This is the panel mock.** Every param exists, can be automated, and saves and loads, and the panel
-> flies the flocks from the held notes, but the plugin makes **no sound** yet. It builds into
-> `build/preview/`, which CI checks but never ships.
+> **In development.** The engine plays: three-operator FM per voice, two filters, three envelopes,
+> four LFOs, the route list and the flock, in two parts, from MPE, MIDI or CLAP notes. The panel
+> draws the engine's own flock and where each voice's envelopes are. See [docs/engine.md](docs/engine.md)
+> for how it's built. It isn't released yet.
 
 | Part A | Part B |
 |---|---|
@@ -62,6 +63,14 @@ As in JVerb: the arrows step through the presets, the name opens them by categor
 the current sound as a user preset (`.jspreset`, plain text, in the user's application data folder
 under `JSynth/Presets`). A factory preset loads every param it doesn't set at its default, so nothing
 from the last patch carries over.
+
+The 48 factory presets run in six categories from the fastest envelopes to the slowest: **Hits**,
+**Plucks**, **Keys**, **Bass and Leads**, **Pads** and **Swells**. Each category starts with a plain
+patch with no routes at all and works up to ones the flock plays: Neighbour FM, Bite, and routes
+from the flock's sources. Nothing from the flock reaches the sound unless a preset (or you) routes it.
+
+`jsynth-record out.wav|out.mp4 [preset]` (built with the tools) plays a held Cm7 whose pressure swells
+up and back over 15 seconds through a preset, and writes the audio, or a video of the panel with it.
 
 ## Params
 

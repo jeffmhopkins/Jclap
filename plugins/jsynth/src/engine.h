@@ -91,6 +91,7 @@ public:
          v.active = false;
          v.clear();
          v.noise.rng.seed(seed * 2654435761u + static_cast<uint32_t>(i) * 40503u + 17u);
+         v.oscNoise.rng.seed(seed * 2246822519u + static_cast<uint32_t>(i) * 69069u + 91u);
          v.random.seed(seed * 2246822519u + static_cast<uint32_t>(i) * 3266489917u + 5u);
          for (int l = 0; l < kLfoCount; ++l)
             v.lfo[l].seed(seed * 668265263u + static_cast<uint32_t>(i * kLfoCount + l) * 374761393u + 3u);
@@ -194,6 +195,9 @@ public:
 
    // Ends every voice playing `ref` at once.
    void choke(const NoteRef &ref) {
+      // Nor does a mono part fall back to it later.
+      for (int part = 0; part < kPartCount; ++part)
+         unstack(part, ref);
       for (int i = 0; i < kVoiceSlots; ++i)
          if (voices_[i].active && matches(voices_[i].ref, ref))
             end(i);
@@ -255,10 +259,14 @@ public:
                   }
             sustain_ = down;
          }
-         else if (data[1] == 120 || data[1] == 123)
-            for (Voice &v : voices_)
+         else if (data[1] == 120 || data[1] == 123) {
+            stackSize_[0] = stackSize_[1] = 0;
+            for (Voice &v : voices_) {
+               v.sustained = false;
                if (v.active && v.gate)
                   gateOff(v);
+            }
+         }
          break;
       default:
          break;
@@ -384,10 +392,13 @@ private:
       float lfoOut[kLfoCount] = {};
       dsp::Lfo drift;
       dsp::Random random;
-      dsp::Noise noise;
+      // The mixer's noise, and the oscillators' noise waves: each its own, so pink stays pink.
+      dsp::Noise noise, oscNoise;
       float tune = 0; // Tune Pull, in semitones
       // Oscillators.
       float phase[kOscCount] = {}, out[kOscCount] = {}, last[kOscCount] = {};
+      // Where each oscillator's wave was read last sample, for its effective rate under FM.
+      float lastRead[kOscCount] = {};
       int wave[kOscCount] = {};
       bool sync[kOscCount] = {};
       // Whether each oscillator is heard or modulates something, so a silent one can be skipped.
@@ -429,7 +440,7 @@ private:
             envOut[e] = 0;
          }
          for (int o = 0; o < kOscCount; ++o)
-            phase[o] = out[o] = last[o] = 0;
+            phase[o] = out[o] = last[o] = lastRead[o] = 0;
          for (auto &f : svf)
             for (auto &c : f)
                for (dsp::Svf &s : c)
@@ -441,6 +452,7 @@ private:
             for (dsp::Comb &c : f)
                c.reset();
          noise.reset();
+         oscNoise.reset();
          fade = 1;
          fadeStep = 0;
          tune = 0;
@@ -498,6 +510,7 @@ private:
          }
       first_ = false;
       factor_ = 1 << std::clamp(static_cast<int>(global(kQuality) + 0.5), 0, 2);
+      noiseGain_ = std::sqrt(static_cast<float>(factor_));
    }
 
    // The used routes, rebuilt when any route param changes.
@@ -563,14 +576,15 @@ private:
       for (int i = 0; i < n; ++i) {
          const Route &r = routes_[part][i];
          if (r.dest >= firstAmountDest_)
-            offset[r.dest] += source(v, r.source) * r.amount * 0.5f; // amount's range is 2 wide
+            offset[r.dest] += source(v, r.source) * plain(part, routeParam(r.index, kRouteAmount)) * 0.5f; // its range is 2 wide
       }
       // Pass 2: everything else, each at its amount moved by pass 1.
       for (int i = 0; i < n; ++i) {
          const Route &r = routes_[part][i];
          if (r.dest >= firstAmountDest_)
             continue;
-         const float amount = std::clamp(r.amount + 2.0f * offset[firstAmountDest_ + r.index], -1.0f, 1.0f);
+         // Each amount as smoothed with the other params, so automating one doesn't zipper.
+         const float amount = std::clamp(plain(part, routeParam(r.index, kRouteAmount)) + 2.0f * offset[firstAmountDest_ + r.index], -1.0f, 1.0f);
          offset[r.dest] += source(v, r.source) * amount;
       }
    }
@@ -714,7 +728,8 @@ private:
       const float glide = static_cast<float>(timeMs(mod(v, offset, kGlideTime))) / 1000.0f;
       const float rounding = static_cast<float>(global(kGlideRounding));
       float target = v.targetPitch;
-      if (glide <= 0.0f || v.fresh)
+      // A new voice starts where start() put it (the last note's pitch, when it glides).
+      if (glide <= 0.0f)
          v.pitch = target;
       else
          v.pitch += (target - v.pitch) * (1.0f - std::exp(-tickSeconds / (0.25f * glide)));
@@ -755,10 +770,19 @@ private:
          ramp(v.oscL[o], lvl * std::cos((pan + 1.0f) * 0.25f * dsp::kPi) * 1.41421356f, st, v.fresh);
          ramp(v.oscR[o], lvl * std::sin((pan + 1.0f) * 0.25f * dsp::kPi) * 1.41421356f, st, v.fresh);
       }
+      const bool wasStereo = v.stereo;
       v.stereo = false;
       for (int o = 0; o < kOscCount; ++o)
          v.stereo = v.stereo || std::fabs(plain(part, mixParam(kMixPan, o))) > 1e-3f ||
                     (destOf_[mixParam(kMixPan, o)] >= 0 && offset[destOf_[mixParam(kMixPan, o)]] != 0.0f);
+      // Going stereo, the right channel's filters take up where the shared ones are.
+      if (v.stereo && !wasStereo && !v.fresh)
+         for (int f = 0; f < kFilterCount; ++f) {
+            for (int st2 = 0; st2 < 4; ++st2)
+               v.svf[f][1][st2] = v.svf[f][0][st2];
+            v.ladder[f][1] = v.ladder[f][0];
+            v.comb_[f][1].copyFrom(v.comb_[f][0]);
+         }
       for (int from = 0; from < kOscCount; ++from)
          for (int to = 0; to < kOscCount; ++to) {
             const float c2 = mod(v, offset, fmCell(from, to));
@@ -827,17 +851,9 @@ private:
          }
          const float fdrive = mod(v, offset, filterParam(f, kFilterDrive));
          ramp(v.fdrive[f], 1.0f + 4.0f * fdrive, st, v.fresh);
-         // A low pass or ladder opened all the way, undriven and barely resonant, passes the sound
-         // through untouched, so it costs nothing. Its state starts clean when it closes again.
-         const bool open = (type == 0 || type == 5) && hz >= 18000.0f && fdrive < 1e-3f && resonance < 0.25f;
-         if (v.open[f] && !open) {
-            for (auto &ch : v.svf[f])
-               for (dsp::Svf &sv : ch)
-                  sv.reset();
-            for (auto &l : v.ladder[f])
-               l.reset();
-         }
-         v.open[f] = open;
+         // A ladder opened all the way with no resonance or drive (Filter 2 as it starts) only passes
+         // the sound through, so it skips the work, keeping its state ready to filter again.
+         v.open[f] = type == 5 && hz >= 18000.0f && resonance < 1e-3f && fdrive < 1e-3f;
       }
 
       // Amp: level, velocity, the Expression crossfade, and the creature's place in the stereo field.
@@ -1074,7 +1090,8 @@ private:
       const float nfm = v.neighbourFm.next();
       for (int nb = 0; nb < kNeighbours; ++nb) {
          const float w = v.neighbourWeight[nb].next();
-         if (v.neighbour[nb] >= 0)
+         // At zero nothing of theirs is read at all.
+         if (nfm > 0.0f && v.neighbour[nb] >= 0)
             neighbour += w * oscOut_[0][v.neighbour[nb]];
       }
       neighbour *= nfm;
@@ -1112,8 +1129,19 @@ private:
          }
          else
             ph = frac(v.phase[o] + m);
-         const float noiseWave = v.wave[o] == dsp::kWhite ? v.noise.white() : v.wave[o] == dsp::kPink ? v.noise.pink() : 0.0f;
-         const float y = v.wave[o] >= dsp::kWhite ? noiseWave : dsp::wave(v.wave[o], ph, inc, sh[o]);
+         // The saw's and pulse's band-limiting needs how far the wave really moved this sample,
+         // which phase FM changes.
+         float blepDt = inc;
+         if (!v.expFm && m != 0.0f && v.wave[o] >= dsp::kSaw && v.wave[o] <= dsp::kPulse) {
+            float moved = ph - v.lastRead[o];
+            moved = moved > 0.5f ? moved - 1.0f : moved < -0.5f ? moved + 1.0f : moved;
+            blepDt = std::clamp(std::fabs(moved), inc, 0.45f);
+         }
+         v.lastRead[o] = ph;
+         const float noiseWave = v.wave[o] == dsp::kWhite   ? v.oscNoise.white() * noiseGain_
+                                     : v.wave[o] == dsp::kPink ? v.oscNoise.pink() * noiseGain_
+                                                               : 0.0f;
+         const float y = v.wave[o] >= dsp::kWhite ? noiseWave : dsp::wave(v.wave[o], ph, blepDt, sh[o]);
          v.last[o] = v.out[o];
          now[o] = y;
          v.phase[o] += inc;
@@ -1140,7 +1168,9 @@ private:
       const float nl = v.noiseLevel.next(), nc = v.noiseColor.next();
       float noise = 0;
       if (nl > 1e-4f) {
-         const float wn = v.noise.white(), pn = v.noise.pink() * 2.5f;
+         // Made at the oversampled rate, so it is made louder to come out of the decimator as loud
+         // at every quality.
+         const float wn = v.noise.white() * noiseGain_, pn = v.noise.pink() * 2.5f * noiseGain_;
          noise = (pn + (wn - pn) * (0.5f + 0.5f * nc)) * nl;
       }
       // Split sends Osc 1 to Filter 1 and the rest to Filter 2.
@@ -1217,8 +1247,6 @@ private:
    }
 
    float filter(Voice &v, int f, int ch, float x, float g, float drive, float combDelay, float res) {
-      if (v.open[f])
-         return x;
       if (drive > 1.001f)
          x = dsp::fastTanh(x * drive) / std::sqrt(drive);
       switch (v.ftype[f]) {
@@ -1245,7 +1273,7 @@ private:
          return x + bp * 4.0f * res;
       }
       case 5: // ladder
-         return v.ladder[f][ch].process(x, g, res * 1.02f);
+         return v.open[f] ? v.ladder[f][ch].pass(x) : v.ladder[f][ch].process(x, g, res * 1.02f);
       default: // comb + / -
          return v.comb_[f][ch].process(x, combDelay, res);
       }
@@ -1382,7 +1410,9 @@ private:
       if (!routesBuilt_)
          compileRoutes();
       float offset[256];
-      v.fresh = true;
+      // A new voice takes its settings at once; a mono voice taken over by the next note ramps to
+      // them from where it is, so a change of velocity or pitch doesn't click.
+      v.fresh = !restart;
       controlVoice(slot, v, offset, kTick / static_cast<float>(sampleRate_), kTick * factor_);
       return slot;
    }
@@ -1450,16 +1480,24 @@ private:
       start(part, ref, velocity, bendNorm, pressure, timbre, -1);
    }
 
-   void monoOff(int part, const NoteRef &ref, float velocity) {
+   // Takes `ref` off a mono part's stack of held notes.
+   void unstack(int part, const NoteRef &ref) {
       int n = 0;
       for (int i = 0; i < stackSize_[part]; ++i)
          if (!matches(stack_[part][i].ref, ref))
             stack_[part][n++] = stack_[part][i];
       stackSize_[part] = n;
+   }
+
+   void monoOff(int part, const NoteRef &ref, float velocity) {
+      unstack(part, ref);
+      const int n = stackSize_[part];
+      bool playing = false;
       for (int i = 0; i < kVoiceSlots; ++i) {
          Voice &v = voices_[i];
          if (!v.active || v.part != part || !matches(v.ref, ref))
             continue;
+         playing = true;
          if (n > 0 && !sustain_) {
             // Back to the last note still held.
             const Held &h = stack_[part][n - 1];
@@ -1471,12 +1509,20 @@ private:
             v.lift = velocity;
          }
       }
+      // A note let go while another had the voice: it ends now.
+      if (!playing && ref.key >= 0)
+         noteHandedOver(ref);
    }
 
-   // A mono voice moved on from `old`: if no voice plays it now, its note has ended.
+   // A mono voice moved on from `old`: if no voice plays it now and it isn't still held (for the
+   // voice to come back to), its note has ended.
    void noteHandedOver(const NoteRef &old) {
       if (!old.host)
          return;
+      for (int part = 0; part < kPartCount; ++part)
+         for (int i = 0; i < stackSize_[part]; ++i)
+            if (matches(stack_[part][i].ref, old))
+               return;
       for (const Voice &v : voices_)
          if (v.active && v.ref.host && v.ref.noteId == old.noteId && v.ref.key == old.key && v.ref.channel == old.channel)
             return;
@@ -1534,6 +1580,7 @@ private:
    int blockSample_ = 0;
 
    int factor_ = 2;
+   float noiseGain_ = 1.41421356f;
    int tickPos_ = 0;
    int64_t flockAcc_ = 0;
    uint64_t age_ = 0;

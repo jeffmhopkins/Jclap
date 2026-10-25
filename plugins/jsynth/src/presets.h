@@ -338,7 +338,7 @@ inline const std::vector<Preset> &factoryPresets() {
                          env(0, 0, 2000, 1000, 1.0, 3000), env(0, 2, 3000, 1000, 0.8, 3000), open(0),
                          routes(0, {{env3, fm21, 0.3}, {lfo1, kPartFine, 0.04}, {press, fm21, 0.25}})})});
       p.push_back({"Deep Current", "Swells",
-                   join({{a(kPartLevel, 6)}, op(0, 1, kSine, 0.5, 0.6),
+                   join({{a(kPartLevel, -2)}, op(0, 1, kSine, 0.5, 0.6),
                          {a(kPartTranspose, -12), a(filterParam(0, kFilterType), 5), a(cutoff, 0.25), a(resonance, 0.5),
                           a(tailParam(kDriveType), 2), a(kDrift, 0.2), a(lfoParam(3, kLfoRate), lfoValue(0.07))},
                          env(0, 0, 2500, 1000, 1.0, 4000), env(0, 1, 6000, 1000, 1.0, 4000),

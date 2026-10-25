@@ -481,7 +481,7 @@ inline void addPart(Builder &b, int part) {
       b.choice(p(kFilterType), n + "Type", m, kFilterTypeNames, f == 0 ? 0 : 5, kChoice);
       b.choice(p(kFilterSlope), n + "Slope", m, kSlopeNames, 1, kChoice);
       b.add(p(kFilterCutoff), n + "Cutoff", m, 0.0, 1.0, f == 0 ? 0.6 : 1.0, kMod, Unit::CutoffHz);
-      b.add(p(kFilterResonance), n + "Resonance", m, 0.0, 1.0, 0.2, kMod, Unit::Percent);
+      b.add(p(kFilterResonance), n + "Resonance", m, 0.0, 1.0, f == 0 ? 0.2 : 0.0, kMod, Unit::Percent);
       b.add(p(kFilterDrive), n + "Drive", m, 0.0, 1.0, 0.0, kMod, Unit::Percent);
       b.add(p(kFilterKeyTrack), n + "Key Track", m, 0.0, 1.0, 0.0, kMod, Unit::Percent);
    }

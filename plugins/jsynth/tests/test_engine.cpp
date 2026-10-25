@@ -227,6 +227,33 @@ int main() {
       }
    }
 
+   // Legato: A, then B over it, B up, A up. A is ended once, when it is let go, and B once.
+   {
+      Params p;
+      p.setPart(0, kVoiceMode, 2);
+      Engine e;
+      e.prepare(kRate, {p.values.get(), p.mods.get()});
+      int ends = 0;
+      render(e, 96000, 256, {{100, Event::On, 60, 0.8f}, {5000, Event::On, 64, 0.8f}, {10000, Event::Off, 64, 0.0f},
+                             {15000, Event::Off, 60, 0.0f}}, &ends);
+      JCLAP_CHECK_EQ(ends, 2);
+      JCLAP_CHECK_EQ(e.activeVoices(), 0);
+   }
+
+   // Mono: a note choked away isn't fallen back to later.
+   {
+      Params p;
+      p.setPart(0, kVoiceMode, 1);
+      Engine e;
+      e.prepare(kRate, {p.values.get(), p.mods.get()});
+      render(e, 4800, 256, {{100, Event::On, 60, 0.8f}});
+      NoteRef all = ref(-1);
+      all.noteId = -1, all.channel = -1, all.port = -1;
+      e.choke(all);
+      render(e, 96000, 256, {{100, Event::On, 64, 0.8f}, {5000, Event::Off, 64, 0.0f}});
+      JCLAP_CHECK_EQ(e.activeVoices(), 0);
+   }
+
    // Every factory preset sounds, finite and under full scale.
    for (const Preset &preset : factoryPresets()) {
       Params p;
