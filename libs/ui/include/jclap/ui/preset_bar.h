@@ -1,0 +1,96 @@
+#pragma once
+
+// A preset browser for a panel's header: arrows (or the wheel) step through every preset, the name
+// opens a menu of them by category, and SAVE names the current settings and writes them to the
+// user's preset folder. The factory bank comes first, then the user's presets under "User".
+//
+//    auto &bar = add<PresetBar>({380, 12, 340, 28}, factoryPresets(), format, params);
+//    bar.currentName = [&] { return host.presetName(); };
+//    bar.setCurrentName = [&](const std::string &n) { host.setPresetName(n); };
+//
+// It is drawn for a height of about 28 and scales with it.
+
+#include <functional>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include <visage/ui.h>
+
+#include "jclap/ui/params.h"
+#include "jclap/ui/presets.h"
+#include "jclap/ui/theme.h"
+
+namespace visage {
+class TextEditor;
+}
+
+namespace jclap::ui {
+
+class PresetBar : public visage::Frame {
+public:
+   // `factory` must outlive the bar (it is usually a static bank).
+   PresetBar(const std::vector<Preset> &factory, PresetFormat format, ParamAccess &params);
+   ~PresetBar() override;
+
+   // The name of the preset last loaded or saved, which the plugin keeps with its state. Without
+   // these the bar keeps the name itself.
+   std::function<std::string()> currentName;
+   std::function<void(const std::string &)> setCurrentName;
+   // Applies a preset. By default each param the preset lists that differs is set as one edit,
+   // with any param it leaves out at `defaults` (when given). A plugin that coalesces a whole
+   // preset's edits, or restarts something after a load, sets its own.
+   std::function<void(const Preset &)> onLoad;
+   std::vector<double> defaults;
+
+   void setTheme(const Theme &theme);
+   void setAccent(unsigned color);
+
+   // Loads the preset `dir` places after (or before) the current one, wrapping around.
+   void step(int dir);
+   // Loads a preset by name; false if there is none.
+   bool load(const std::string &name);
+   // Re-reads the user's preset folder. Done when the bar is made, when the menu opens and after a
+   // save, never on an arrow click, so stepping through presets doesn't wait on the disk.
+   void rescan();
+   // Every preset in menu order: the factory bank, then the user's.
+   int total() const;
+   const Preset &at(int index) const;
+
+   void draw(visage::Canvas &canvas) override;
+   void mouseMove(const visage::MouseEvent &e) override;
+   void mouseExit(const visage::MouseEvent &e) override;
+   void mouseDown(const visage::MouseEvent &e) override;
+   bool mouseWheel(const visage::MouseEvent &e) override;
+
+private:
+   enum class Zone { None, Prev, Name, Next, Save };
+
+   Zone zoneAt(float x) const;
+   void setHover(Zone z);
+   std::string name() const;
+   void rename(const std::string &name);
+   int indexOf(const std::string &name) const;
+   void loadIndex(int index);
+   void showMenu();
+   void startSave();
+   void finishSave(bool apply);
+   std::string uniqueName(const std::string &wanted);
+
+   const std::vector<Preset> &factory_;
+   PresetFormat format_;
+   ParamAccess &params_;
+   const Theme *theme_ = &defaultTheme();
+   unsigned accent_ = 0;
+   std::vector<Preset> user_;
+   int currentIndex_ = -1;
+   std::string ownName_ = "Init";
+   std::unique_ptr<visage::TextEditor> editor_;
+   Zone hover_ = Zone::None;
+};
+
+// Applies `preset` through `params`, one gesture per param that changes. Params the preset leaves
+// out go to `defaults` (one per id) when it is given.
+void applyPreset(const Preset &preset, ParamAccess &params, const std::vector<double> &defaults = {});
+
+} // namespace jclap::ui

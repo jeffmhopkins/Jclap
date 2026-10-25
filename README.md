@@ -23,7 +23,8 @@ and plugins that need a panel get one from the shared GUI library.
 <td align="center" valign="top"><a href="plugins/polar-xy"><img src="plugins/polar-xy/docs/panel.png" width="240" alt="Polar XY panel"></a><br><b>Polar XY</b></td>
 </tr>
 <tr>
-<td align="center" valign="top" colspan="2"><a href="plugins/jsynth"><img src="plugins/jsynth/docs/panel.png" width="400" alt="JSynth panel"></a><br><b>JSynth</b></td>
+<td align="center" valign="top"><a href="plugins/jsynth"><img src="plugins/jsynth/docs/panel.png" width="400" alt="JSynth panel"></a><br><b>JSynth</b></td>
+<td align="center" valign="top"><a href="plugins/monolith"><img src="plugins/monolith/docs/panel.png" width="400" alt="Monolith panel"></a><br><b>Monolith</b></td>
 </tr>
 </table>
 
@@ -35,6 +36,7 @@ Panels are shown at one-third size. They are the screenshot-test references, so 
 | [MicroMonsta 2 CC](plugins/micromonsta2) | Note effect | Knob panel that sends every MicroMonsta 2 parameter as a MIDI CC |
 | [Basic Synth](plugins/basic-synth) | Instrument | Eight-voice MPE synth: dual detunable oscillators, key-tracking filter, VCA, two looping envelopes and an LFO |
 | [JVerb](plugins/jverb) | Audio effect | Reverb moved by a live three-body gravity sim, each body its own voice in the tail, with a long echo, a loopable drive and presets ([manual](plugins/jverb/docs/JVerb-User-Manual.pdf)) |
+| [Monolith](plugins/monolith) | Note effect | Note generator that reads a slab of alien glyphs as MIDI phrases in time with the host, from a one-bar loop to a 55-glyph script that drifts and erodes, in five scripts, with presets |
 | [JSynth](plugins/jsynth) | Instrument | Two-part MPE FM synth where every note is a creature in a flock, and how the creatures fly shapes how they sound ([manual](plugins/jsynth/docs/JSynth-User-Manual.pdf)) |
 
 ## Download

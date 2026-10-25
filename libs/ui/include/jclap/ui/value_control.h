@@ -8,6 +8,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <visage/ui.h>
 
@@ -29,6 +30,10 @@ struct ValueRange {
    bool bipolar = false;
    // Only whole steps are valid (a CLAP_PARAM_IS_STEPPED param): drags snap to them.
    bool stepped = false;
+   // When not empty, the only values a drag, the wheel or a stepper lands on, in rising order (a
+   // loop length of 1, 2, 4, 8, 16 or 32 bars, say). A drag moves evenly from one to the next
+   // however far apart they are. Typed values and the host's own values are not snapped to them.
+   std::vector<double> stops{};
 
    // NaN becomes min, so a bad value never reaches the host.
    double clamp(double v) const { return !(v >= min) ? min : v > max ? max : v; }
@@ -39,6 +44,44 @@ struct ValueRange {
          return v;
       const double s = step > 0.0 ? step : 1.0;
       return clamp(min + std::round((v - min) / s) * s);
+   }
+   // The stop nearest `v` (by index when `v` sits between two), or snap(v) with no stops.
+   double nearestStop(double v) const {
+      if (stops.empty())
+         return snap(v);
+      double best = stops.front();
+      for (double s : stops)
+         if (std::fabs(s - v) < std::fabs(best - v))
+            best = s;
+      return clamp(best);
+   }
+   // Where `v` sits among the stops, as a fractional index: 0 at the first, 1 at the second...
+   double stopPosition(double v) const {
+      if (stops.size() < 2)
+         return 0.0;
+      if (v <= stops.front())
+         return 0.0;
+      for (size_t i = 1; i < stops.size(); ++i)
+         if (v <= stops[i])
+            return (i - 1) + (v - stops[i - 1]) / (stops[i] - stops[i - 1]);
+      return static_cast<double>(stops.size() - 1);
+   }
+   // The value one step up (dir > 0) or down from `v`: the next stop, or the next whole step.
+   double stepFrom(double v, int dir) const {
+      if (!stops.empty()) {
+         if (dir > 0) {
+            for (double s : stops)
+               if (s > v + 1e-9)
+                  return clamp(s);
+            return clamp(stops.back());
+         }
+         for (size_t i = stops.size(); i-- > 0;)
+            if (stops[i] < v - 1e-9)
+               return clamp(stops[i]);
+         return clamp(stops.front());
+      }
+      const double s = step > 0.0 ? step : (max - min) / 100.0;
+      return snap(min + std::round((v - min) / s) * s + (dir > 0 ? s : -s));
    }
    // Position of a value in the range, 0 to 1.
    float fraction(double v) const { return max > min ? static_cast<float>((v - min) / (max - min)) : 0.0f; }

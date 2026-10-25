@@ -32,6 +32,9 @@ add_library(jclap_ui STATIC
    src/scope.cpp
    src/tooltip.cpp
    src/note_grid.cpp
+   src/note_roll.cpp
+   src/presets.cpp
+   src/preset_bar.cpp
    src/design_frame.cpp
    src/params.cpp
    src/param_bindings.cpp

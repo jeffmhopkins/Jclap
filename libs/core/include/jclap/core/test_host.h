@@ -11,6 +11,7 @@
 
 #include <clap/clap.h>
 
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -99,7 +100,7 @@ struct TestOutput {
 
 class TestHost {
 public:
-   TestHost(const clap_plugin_entry_t &entry, const char *pluginId, double sampleRate = 48000) {
+   TestHost(const clap_plugin_entry_t &entry, const char *pluginId, double sampleRate = 48000) : sampleRate_(sampleRate) {
       entry.init("");
       entry_ = &entry;
       auto *factory = static_cast<const clap_plugin_factory_t *>(entry.get_factory(CLAP_PLUGIN_FACTORY_ID));
@@ -214,6 +215,26 @@ public:
       in_.add(ev.header);
    }
 
+   // Gives every following block this transport, as a host does while it plays or is stopped. Each
+   // block moves it on by its length (song position in beats and seconds), as a playing host would.
+   // Off by default: the plugin gets no transport.
+   void setTransport(double tempo, double beats, bool playing) {
+      transport_ = clap_event_transport_t{};
+      transport_.header = {sizeof(transport_), 0, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_TRANSPORT, 0};
+      transport_.flags = CLAP_TRANSPORT_HAS_TEMPO | CLAP_TRANSPORT_HAS_BEATS_TIMELINE |
+                         CLAP_TRANSPORT_HAS_SECONDS_TIMELINE | CLAP_TRANSPORT_HAS_TIME_SIGNATURE |
+                         (playing ? CLAP_TRANSPORT_IS_PLAYING : 0);
+      transport_.tempo = tempo;
+      transport_.song_pos_beats = static_cast<clap_beattime>(std::llround(beats * CLAP_BEATTIME_FACTOR));
+      transport_.song_pos_seconds = static_cast<clap_sectime>(std::llround(beats * 60.0 / tempo * CLAP_SECTIME_FACTOR));
+      transport_.tsig_num = 4;
+      transport_.tsig_denom = 4;
+      hasTransport_ = true;
+   }
+   void clearTransport() { hasTransport_ = false; }
+   // The song position in beats the next block starts at.
+   double transportBeats() const { return static_cast<double>(transport_.song_pos_beats) / CLAP_BEATTIME_FACTOR; }
+
    // The value the host would read back.
    double paramValue(clap_id id) const {
       double v = -1;
@@ -267,8 +288,12 @@ public:
          proc.audio_outputs = &outBuf;
          proc.audio_outputs_count = 1;
       }
+      if (hasTransport_)
+         proc.transport = &transport_;
       plugin_->process(plugin_, &proc);
       in_.events.clear();
+      if (hasTransport_ && (transport_.flags & CLAP_TRANSPORT_IS_PLAYING))
+         setTransport(transport_.tempo, transportBeats() + frames * transport_.tempo / 60.0 / sampleRate_, true);
       return collect(out);
    }
 
@@ -315,6 +340,9 @@ private:
                               noop, noop, noop};
    const clap_plugin_t *plugin_ = nullptr;
    const clap_plugin_entry_t *entry_ = nullptr;
+   double sampleRate_;
+   clap_event_transport_t transport_{};
+   bool hasTransport_ = false;
    bool hasAudioIn_ = false, hasAudioOut_ = false;
    std::vector<float> scratch_[4];
    float *scratchPointers_[4] = {};

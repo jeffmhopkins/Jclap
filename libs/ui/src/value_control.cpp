@@ -167,7 +167,16 @@ void ValueControl::mouseDrag(const visage::MouseEvent &e) {
       dragStartValue_ = value_;
    }
    const float length = dragLength() * (dragFine_ ? 10.0f : 1.0f);
-   change(dragStartValue_ + dragDistance(dragStart_, e.position) * (range_.max - range_.min) / length);
+   if (range_.stops.size() >= 2) {
+      // Evenly through the stops, however far apart their values are.
+      const double last = static_cast<double>(range_.stops.size() - 1);
+      const double at = range_.stopPosition(dragStartValue_) + dragDistance(dragStart_, e.position) * last / length;
+      const size_t i = static_cast<size_t>(std::clamp(std::round(at), 0.0, last));
+      if (range_.stops[i] != value_)
+         change(range_.stops[i]);
+   }
+   else
+      change(dragStartValue_ + dragDistance(dragStart_, e.position) * (range_.max - range_.min) / length);
    if (showPopup_)
       popup_.show(*this, text());
 }
@@ -187,8 +196,7 @@ bool ValueControl::mouseWheel(const visage::MouseEvent &e) {
    // would undo it anyway.
    if (dragging_)
       return true;
-   const double step = range_.step > 0.0 ? range_.step : (range_.max - range_.min) / 100.0;
-   userSet(range_.min + std::round((value_ - range_.min) / step) * step + (delta > 0 ? step : -step));
+   userSet(range_.stepFrom(value_, delta > 0 ? 1 : -1));
    return true;
 }
 

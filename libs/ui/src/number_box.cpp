@@ -62,6 +62,10 @@ void NumberBox::mouseDown(const visage::MouseEvent &e) {
       ValueControl::mouseDown(e);
       return;
    }
+   if (!range().stops.empty()) {
+      userSet(range().stepFrom(value(), part));
+      return;
+   }
    const double step = range().step > 0.0 ? range().step : 1.0;
    userSet(range().min + std::round((value() - range().min) / step) * step + part * step);
 }
