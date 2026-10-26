@@ -70,20 +70,20 @@ EngineParams still() {
 int main() {
    // ---- decoding ----
    {
-      // Across the top-right of row 1 (2 grid units: 3 steps), down from the same start as a chord
-      // (2 units: 3 steps), then a short diagonal; a dot on the bottom row.
-      const Glyph g = glyphOf({{3, 5}, {3, 9}, {9, 7}}, 10);
+      // Across row 2 (2 grid units: 3 steps), down five rows from the same start as a chord (2.1
+      // units: 3 steps), then a short diagonal up two rows; a dot on the bottom row.
+      const Glyph g = glyphOf({{6, 8}, {6, 21}, {21, 16}}, 22);
       const GlyphNotes n = decode(g);
       JCLAP_CHECK_EQ(n.count, 4);
       JCLAP_CHECK_EQ(n.notes[0].start, 0);
       JCLAP_CHECK_EQ(n.notes[0].length, 3);
-      JCLAP_CHECK_EQ(n.notes[0].row, 1);
+      JCLAP_CHECK_EQ(n.notes[0].row, 2);
       JCLAP_CHECK_EQ(n.notes[0].velocity, 80);
       JCLAP_CHECK_EQ(n.notes[1].start, 0); // a chord with the first
       JCLAP_CHECK_EQ(n.notes[1].length, 3);
       JCLAP_CHECK_EQ(n.notes[2].start, 3);
-      JCLAP_CHECK_EQ(n.notes[2].row, 3);
-      JCLAP_CHECK_EQ(n.notes[2].length, 2); // sqrt(2) * 1.5 rounds to 2
+      JCLAP_CHECK_EQ(n.notes[2].row, 7);
+      JCLAP_CHECK_EQ(n.notes[2].length, 2); // 1.32 units * 1.5 rounds to 2
       JCLAP_CHECK(n.notes[3].ghost);
       JCLAP_CHECK_EQ(n.notes[3].start, 5);
       JCLAP_CHECK_EQ(n.notes[3].velocity, 40);
@@ -100,18 +100,29 @@ int main() {
       JCLAP_CHECK_EQ(held.notes[1].length, 14);
 
       // Long glyphs are cut at the window.
-      const GlyphNotes cut = decode(glyphOf({{0, 11}, {11, 0}, {0, 11}, {11, 0}}));
+      const GlyphNotes cut = decode(glyphOf({{0, 23}, {23, 0}, {0, 23}, {23, 0}}));
       JCLAP_CHECK_EQ(cut.count, 4); // 5 + 5 + 5 steps, then the fourth starts at 15 and is cut to one
       JCLAP_CHECK(cut.notes[cut.count - 1].start + cut.notes[cut.count - 1].length <= kWindowSteps);
    }
 
    // ---- rows ----
    {
-      // F Phrygian, Wide: Db4, F4, Ab4, C5 from the bottom.
-      JCLAP_CHECK_EQ(rowPitch(3, 5, 3, 0, 0), 61);
-      JCLAP_CHECK_EQ(rowPitch(2, 5, 3, 0, 0), 65);
-      JCLAP_CHECK_EQ(rowPitch(1, 5, 3, 0, 0), 68);
-      JCLAP_CHECK_EQ(rowPitch(0, 5, 3, 0, 0), 72);
+      // F Phrygian in thirds: Bb3 on the bottom row, the root F4 on the third row up, then Ab4, C5
+      // and on up to Bb5 on the top row, two octaves.
+      JCLAP_CHECK_EQ(rowPitch(7, 5, 3, 1, 0), 58);
+      JCLAP_CHECK_EQ(rowPitch(5, 5, 3, 1, 0), 65);
+      JCLAP_CHECK_EQ(rowPitch(4, 5, 3, 1, 0), 68);
+      JCLAP_CHECK_EQ(rowPitch(3, 5, 3, 1, 0), 72);
+      JCLAP_CHECK_EQ(rowPitch(0, 5, 3, 1, 0), 82);
+      // In steps, Db4 to Db5; in fifths, Eb3 to Eb6.
+      JCLAP_CHECK_EQ(rowPitch(7, 5, 3, 0, 0), 61);
+      JCLAP_CHECK_EQ(rowPitch(0, 5, 3, 0, 0), 73);
+      JCLAP_CHECK_EQ(rowPitch(7, 5, 3, 3, 0), 51);
+      JCLAP_CHECK_EQ(rowPitch(0, 5, 3, 3, 0), 99);
+      // Every spread climbs from the bottom row to the top.
+      for (int spread = 0; spread < 4; ++spread)
+         for (int r = 1; r < kGridRows; ++r)
+            JCLAP_CHECK(rowPitch(r - 1, 5, 3, spread, 0) > rowPitch(r, 5, 3, spread, 0));
    }
 
    // ---- the scribe ----
@@ -385,6 +396,22 @@ int main() {
       std::vector<uint8_t> bad = bytes;
       bad[8] = 9; // seven strokes is more than a glyph can have
       JCLAP_CHECK(!Engine::load(bad.data(), bad.size(), [](const Command &) {}));
+
+      // A slab saved on the old 3 x 4 grid keeps its shapes on the 3 x 8 one: rows 0, 1, 2, 3 become
+      // 0, 2, 5, 7.
+      Cell old;
+      old.glyph = glyphOf({{3, 11}, {0, 2}}, 7);
+      std::array<Cell, kCells> oldCells{};
+      oldCells[4] = old;
+      std::vector<uint8_t> oldBytes = Engine::save(oldCells, 0);
+      JCLAP_CHECK(Engine::upgradeFromFourRows(oldBytes));
+      std::vector<Command> upgraded;
+      JCLAP_CHECK(Engine::load(oldBytes.data(), oldBytes.size(), [&](const Command &c) { upgraded.push_back(c); }));
+      JCLAP_CHECK(upgraded[4].glyph == glyphOf({{nodeAt(0, 2), nodeAt(2, 7)}, {0, 2}}, nodeAt(1, 5)));
+      // Nodes past the old grid can't be in an old slab.
+      oldCells[4].glyph = glyphOf({{3, 20}});
+      oldBytes = Engine::save(oldCells, 0);
+      JCLAP_CHECK(!Engine::upgradeFromFourRows(oldBytes));
    }
 
    // ---- listening ----
@@ -396,7 +423,7 @@ int main() {
       Engine e;
       e.setParams(p);
       const auto before = e.cells();
-      // Within the first bar: F4 (row 2) soft on step 1 for 2 steps, Ab4 (row 1) hard on step 3.
+      // Within the first bar: F4 (row 5) soft on step 1 for 2 steps, Ab4 (row 4) hard on step 3.
       // 1 step = 0.25 beat = 6000 frames.
       const std::vector<NoteIn> in = {
          {0, 65, 70, true}, {12000, 65, 0, false}, {12000, 68, 120, true}, {30000, 68, 0, false}};
@@ -404,8 +431,8 @@ int main() {
       JCLAP_CHECK_EQ(ons(heard), 0); // nothing is read out while listening
       const Glyph g = e.cells()[0].glyph;
       JCLAP_CHECK_EQ(g.count, 2);
-      JCLAP_CHECK_EQ(g.strokes[0].from, nodeAt(0, 2));
-      JCLAP_CHECK_EQ(g.strokes[1].from, nodeAt(2, 1));
+      JCLAP_CHECK_EQ(g.strokes[0].from, nodeAt(0, 5));
+      JCLAP_CHECK_EQ(g.strokes[1].from, nodeAt(2, 4));
       const GlyphNotes n = decode(g);
       JCLAP_CHECK_EQ(n.notes[0].length, 2);
       JCLAP_CHECK_EQ(n.notes[1].start, 2);
@@ -423,10 +450,10 @@ int main() {
       run(e, 0.0, 0.1, in);
       SlabFrame f;
       e.fillFrame(f);
-      JCLAP_CHECK_EQ(f.rowPitch[2], rowPitch(2, 2, p.scale, p.rows, p.octave));
+      JCLAP_CHECK_EQ(f.rowPitch[2], rowPitch(2, 2, p.scale, p.spread, p.octave));
       run(e, 0.1, 0.1, {{0, 62, 0, false}});
       e.fillFrame(f);
-      JCLAP_CHECK_EQ(f.rowPitch[2], rowPitch(2, p.root, p.scale, p.rows, p.octave));
+      JCLAP_CHECK_EQ(f.rowPitch[2], rowPitch(2, p.root, p.scale, p.spread, p.octave));
    }
 
    return jclap::core::testResult();

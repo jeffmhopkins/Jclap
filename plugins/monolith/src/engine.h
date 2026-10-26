@@ -39,7 +39,7 @@ struct EngineParams {
    Direction direction = Direction::Forward;
    Mode mode = Mode::Speak;
    double swing = 0.0;
-   int root = 5, scale = 3, rows = 0, octave = 0;
+   int root = 5, scale = 3, spread = 1, octave = 0;
    double velocity = 0.8, gate = 0.9, humanize = 0.0;
    bool follow = false;
 };
@@ -153,12 +153,26 @@ public:
    }
 
 private:
+   // An allowed end for a stroke from `from`. Each column (the start's own, and each one across) is
+   // as likely as another however many rows it offers, so the tall grid doesn't make every stroke
+   // run up or down.
    int randomTarget(int from, Rng &rng) const {
-      int options[kNodes], n = 0;
+      int perColumn[kGridColumns] = {};
       for (int to = 0; to < kNodes; ++to)
          if (strokeAllowed(orthography_, from, to))
-            options[n++] = to;
-      return n ? options[rng.below(n)] : -1;
+            ++perColumn[columnOf(to)];
+      int columns[kGridColumns], n = 0;
+      for (int c = 0; c < kGridColumns; ++c)
+         if (perColumn[c] > 0)
+            columns[n++] = c;
+      if (n == 0)
+         return -1;
+      const int column = columns[rng.below(n)];
+      int pick = rng.below(perColumn[column]);
+      for (int to = 0; to < kNodes; ++to)
+         if (columnOf(to) == column && strokeAllowed(orthography_, from, to) && pick-- == 0)
+            return to;
+      return -1;
    }
 
    Orthography orthography_ = Orthography::Monolith;
@@ -447,6 +461,33 @@ public:
       return true;
    }
 
+   // Brings a slab saved before glyphs had eight rows (on a 3 x 4 grid) onto the 3 x 8 grid, in
+   // place, keeping each glyph's shape: the old rows become rows 0, 2, 5 and 7. False if `data`
+   // isn't a slab.
+   static bool upgradeFromFourRows(std::vector<uint8_t> &data) {
+      if (data.size() != 8 + kCells * kCellBytes)
+         return false;
+      const auto node = [](uint8_t &n) {
+         static constexpr uint8_t kRow[4] = {0, 2, 5, 7};
+         if (n < 12)
+            n = static_cast<uint8_t>(nodeAt(n % 3, kRow[n / 3]));
+      };
+      for (int i = 0; i < kCells; ++i) {
+         uint8_t *b = data.data() + 8 + i * kCellBytes;
+         if (b[0] > kMaxStrokes)
+            return false;
+         for (int k = 0; k < kMaxStrokes; ++k) {
+            if (k < b[0] && (b[1 + 2 * k] >= 12 || b[2 + 2 * k] >= 12))
+               return false;
+            node(b[1 + 2 * k]);
+            node(b[2 + 2 * k]);
+         }
+         if (static_cast<int8_t>(b[13]) >= 0)
+            node(b[13]);
+      }
+      return true;
+   }
+
    static void writeCell(const Cell &c, uint8_t *b) {
       std::memset(b, 0, kCellBytes);
       b[0] = c.glyph.count;
@@ -570,8 +611,8 @@ private:
 
    void publishPitches() {
       const int root = params_.follow && params_.mode == Mode::Speak && followRoot_ >= 0 ? followRoot_ : params_.root;
-      for (int r = 0; r < 4; ++r)
-         pitches_[r] = rowPitch(r, root, params_.scale, params_.rows, params_.octave);
+      for (int r = 0; r < kGridRows; ++r)
+         pitches_[r] = rowPitch(r, root, params_.scale, params_.spread, params_.octave);
    }
 
    // ---- listen ----
@@ -633,7 +674,7 @@ private:
    // The row whose pitch is nearest, octaves aside; on a tie, the nearest in absolute terms.
    int nearestRow(int pitch) const {
       int best = 0, bestFolded = 99, bestAbs = 999;
-      for (int r = 0; r < 4; ++r) {
+      for (int r = 0; r < kGridRows; ++r) {
          int d = ((pitch - pitches_[r]) % 12 + 12) % 12;
          d = std::min(d, 12 - d);
          const int a = std::abs(pitch - pitches_[r]);
@@ -663,7 +704,7 @@ private:
    std::array<Active, kMaxActive> active_{};
    int activeCount_ = 0;
    std::array<int, kHistory> history_{-1, -1, -1, -1, -1, -1};
-   std::array<int, 4> pitches_{72, 68, 65, 61};
+   std::array<int, kGridRows> pitches_{};
    int followRoot_ = -1, held_ = 0;
 
    // Listen.

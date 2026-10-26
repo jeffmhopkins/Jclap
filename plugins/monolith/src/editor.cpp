@@ -141,7 +141,7 @@ void drawStroke(visage::Canvas &c, const GlyphBox &box, Orthography o, Stroke s,
    case StrokeStyle::Arc: {
       if (rowOf(s.from) == rowOf(s.to)) {
          const Point centre = box.at({kHaloCenterX, kHaloCenterY});
-         const float r = kHaloRadius[rowOf(s.from)] * box.unit;
+         const float r = haloRadius(rowOf(s.from)) * box.unit;
          const float a1 = haloAngle(s.from), a2 = haloAngle(s.to);
          const float d = 2.0f * r + t;
          c.arc(centre.x - d * 0.5f, centre.y - d * 0.5f, d, t, (a1 + a2) * 0.5f - kPi * 0.5f, std::fabs(a1 - a2) * 0.5f,
@@ -181,7 +181,7 @@ Point strokePoint(const GlyphBox &box, Orthography o, Stroke s, float t) {
    case StrokeStyle::Arc:
       if (rowOf(s.from) == rowOf(s.to)) {
          const Point centre = box.at({kHaloCenterX, kHaloCenterY});
-         const float r = kHaloRadius[rowOf(s.from)] * box.unit;
+         const float r = haloRadius(rowOf(s.from)) * box.unit;
          const float angle = haloAngle(s.from) + (haloAngle(s.to) - haloAngle(s.from)) * t;
          return {centre.x + r * std::sin(angle), centre.y - r * std::cos(angle)};
       }
@@ -225,8 +225,8 @@ void drawGlyph(visage::Canvas &c, const Glyph &g, int visible, Orthography o, co
          c.setColor(withAlpha(kEdge, 0.9f));
          const Point centre = box.at({kHaloCenterX, kHaloCenterY});
          for (int r = 0; r < kGridRows; ++r) {
-            const float d = 2.0f * kHaloRadius[r] * box.unit + 1.0f;
-            c.arc(centre.x - d * 0.5f, centre.y - d * 0.5f, d, 1.0f, -kPi * 0.5f, kHaloSpread[r] * 1.5f, false);
+            const float d = 2.0f * haloRadius(r) * box.unit + 1.0f;
+            c.arc(centre.x - d * 0.5f, centre.y - d * 0.5f, d, 1.0f, -kPi * 0.5f, haloSpread(r) * 1.5f, false);
          }
       }
       for (int n = 0; n < kNodes; ++n) {
@@ -833,10 +833,10 @@ private:
                "The orthography the scribe writes in. Each draws its strokes its own way and allows its own "
                "shapes, so each has its own feel; a stroke plays the same in any of them.");
       dropdown(kRoot, "ROOT", "The key's root.");
-      dropdown(kScale, "SCALE", "The scale the four glyph rows are taken from.");
-      dropdown(kRows, "ROWS",
-               "Which scale degrees the four rows play. WIDE: a third below the root to a fifth above. "
-               "STACKED: a seventh chord. STEPS: four neighbours. OPEN: root, fifth, octave and a ninth.");
+      dropdown(kScale, "SCALE", "The scale the eight glyph rows are taken from.");
+      dropdown(kSpread, "SPREAD",
+               "How far apart the eight rows are in the scale, with the root on the third row up. STEPS "
+               "spans about an octave, THIRDS two, FOURTHS three and FIFTHS four.");
       caption({28, y, 156, 14}, "OCTAVE");
       auto &octave = themed(add<ui::NumberBox>({28, y + 16, 156, 26}, rangeOf(kOctave, 1.0)));
       octave.setStepButtons(true);
@@ -940,7 +940,7 @@ private:
                              frame_.rowPitch[n.row], n.velocity / 127.0f});
          }
       }
-      roll_->setLanes({frame_.rowPitch[0], frame_.rowPitch[1], frame_.rowPitch[2], frame_.rowPitch[3]});
+      roll_->setLanes(std::vector<int>(frame_.rowPitch.begin(), frame_.rowPitch.end()));
       roll_->setNotes(notes);
       roll_->setPlayhead(frame_.playing ? frame_.step : -1.0f);
    }

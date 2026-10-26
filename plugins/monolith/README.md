@@ -17,13 +17,13 @@ time. Put it before any instrument.
 
 ## How a glyph reads
 
-A glyph is one to six strokes drawn between the twelve nodes of a 3 x 4 grid. Each stroke is a note:
+A glyph is one to six strokes drawn between the 24 nodes of a 3 x 8 grid. Each stroke is a note:
 
 | | |
 |---|---|
-| Start node's row | Pitch: the four rows play four notes of the scale, top row highest |
+| Start node's row | Pitch: the eight rows play eight notes of the scale, top row highest |
 | Start node's column | Velocity: soft, medium, hard from left to right |
-| Stroke length | Duration: a step and a half per grid unit, rounded |
+| Stroke length | Duration: a step and a half per grid unit (a column apart), rounded |
 | Stroke order | Rhythm: notes play back to back in the order drawn |
 | Same start node | Chord: a stroke that starts where the last one started plays with it |
 | Dot | A soft one-step ghost note after the strokes |
@@ -39,7 +39,7 @@ in playing order and the notes they read as.
 **SCRIPT** picks the orthography the scribe writes in. Each draws strokes its own way and allows only
 certain shapes, which gives it a feel: Monolith allows anything; Runic writes upright staves and
 short branches; Circuit runs along the grid only; Halo writes around rings and along spokes; Cuneiform
-presses short wedges between neighbouring nodes. A stroke plays the same in any script (lengths are
+presses short wedges between nearby nodes. A stroke plays the same in any script (lengths are
 always measured on the grid), so switching scripts changes the language, not the decoder.
 
 ## From a one-bar loop to 32 bars
@@ -67,9 +67,10 @@ always measured on the grid), so switching scripts changes the language, not the
 - Click a glyph to decode it (click it again to follow the voice). Double-click to read it next.
   Shift-click to have the scribe write that one again.
 - In the decode view, drag from node to node to carve a stroke, and right-click a stroke to wipe it.
-- **ROOT**, **SCALE**, **ROWS** and **OCTAVE** set what the four rows play. Rows WIDE puts the root
-  second from the bottom; STACKED is a seventh chord; STEPS four neighbouring notes; OPEN root,
-  fifth, octave and ninth.
+- **ROOT**, **SCALE**, **SPREAD** and **OCTAVE** set what the eight rows play. The root is on the
+  third row up, and SPREAD is how far apart the rows are in the scale: STEPS spans about an octave,
+  THIRDS (the default) two, FOURTHS three and FIFTHS four. Projects saved before glyphs had eight
+  rows load with their glyphs' shapes kept.
 - **MODE** LISTEN plays nothing: notes you play are carved, a glyph per sixteen steps, into the cell
   being read, written in the current script. Switch back to SPEAK to hear them read back.
 - **KEY FOLLOW** makes a held note the root while you hold it. Otherwise played notes pass through.

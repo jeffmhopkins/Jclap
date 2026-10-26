@@ -3,11 +3,12 @@
 // Glyphs and how they read as notes. Plain C++ with no plugin or GUI code, so it can be tested on
 // its own.
 //
-// A glyph is 1 to 6 strokes drawn between the twelve nodes of a 3 x 4 grid, plus an optional dot
-// and an optional overbar. Node n sits at column n % 3 and row n / 3, row 0 at the top. Each stroke
-// is one note:
+// A glyph is 1 to 6 strokes drawn between the 24 nodes of a 3 x 8 grid, plus an optional dot and an
+// optional overbar. Node n sits at column n % 3 and row n / 3, row 0 at the top. The rows are packed
+// closer than the columns (3/7 of a column apart), so the grid is as tall as it is wide plus half.
+// Each stroke is one note:
 //
-//    start node's row     pitch: the Dialect's four row pitches, row 0 the highest
+//    start node's row     pitch: the Dialect's eight row pitches, row 0 the highest
 //    start node's column  velocity: 80, 100, 120 from left to right
 //    stroke length        duration: grid length x 1.5, rounded, at least one step
 //    stroke order         rhythm: notes play back to back in the order drawn
@@ -18,7 +19,7 @@
 // A glyph owns a window of 16 steps; whatever doesn't fit is cut at the end of it.
 //
 // The orthography is the script the glyphs are written in. It decides how a glyph looks and which
-// strokes the scribe may write, but not how a stroke reads: lengths are always measured on the 3 x 4
+// strokes the scribe may write, but not how a stroke reads: lengths are always measured on the 3 x 8
 // grid, so a glyph plays the same whichever script draws it.
 
 #include <algorithm>
@@ -29,7 +30,9 @@
 
 namespace monolith {
 
-constexpr int kGridColumns = 3, kGridRows = 4, kNodes = kGridColumns * kGridRows;
+constexpr int kGridColumns = 3, kGridRows = 8, kNodes = kGridColumns * kGridRows;
+// The distance between rows, in grid units (a column apart is one).
+constexpr float kRowSpacing = 3.0f / 7.0f;
 constexpr int kMaxStrokes = 6;
 constexpr int kWindowSteps = 16;
 // Strokes plus a ghost note.
@@ -91,22 +94,24 @@ struct Point {
    float x = 0.0f, y = 0.0f;
 };
 
-// Halo's nodes sit on four rings around a point below the glyph, three to a ring: one on the
+// Halo's nodes sit on eight rings around a point below the glyph, three to a ring: one on the
 // upright spoke and one either side, fanned wider on the inner rings so they don't crowd.
 constexpr float kHaloCenterX = 1.0f, kHaloCenterY = 3.6f;
-constexpr float kHaloRadius[kGridRows] = {3.4f, 2.5f, 1.6f, 0.7f};
-constexpr float kHaloSpread[kGridRows] = {0.30f, 0.38f, 0.55f, 0.95f};
+
+inline float haloRadius(int row) { return 3.4f - 2.7f / 7.0f * static_cast<float>(row); }
+// How far a ring's side nodes sit from the spoke, in radians: about a grid unit along the ring.
+inline float haloSpread(int row) { return std::min(0.95f, 0.98f / haloRadius(row)); }
 
 // A Halo node's angle from upright, clockwise, in radians.
-inline float haloAngle(int node) { return static_cast<float>(columnOf(node) - 1) * kHaloSpread[rowOf(node)]; }
+inline float haloAngle(int node) { return static_cast<float>(columnOf(node) - 1) * haloSpread(rowOf(node)); }
 
 // Where a node is drawn, in grid units: x from 0 to 2, y from 0 (top) to 3.
 inline Point nodePosition(Orthography o, int node) {
    if (o == Orthography::Halo) {
-      const float a = haloAngle(node), radius = kHaloRadius[rowOf(node)];
+      const float a = haloAngle(node), radius = haloRadius(rowOf(node));
       return {kHaloCenterX + radius * std::sin(a), kHaloCenterY - radius * std::cos(a)};
    }
-   return {static_cast<float>(columnOf(node)), static_cast<float>(rowOf(node))};
+   return {static_cast<float>(columnOf(node)), static_cast<float>(rowOf(node)) * kRowSpacing};
 }
 
 // Whether the scribe may write a stroke from `a` to `b` in this script.
@@ -116,21 +121,22 @@ inline bool strokeAllowed(Orthography o, int a, int b) {
    const int dc = std::abs(columnOf(a) - columnOf(b)), dr = std::abs(rowOf(a) - rowOf(b));
    switch (o) {
    case Orthography::Monolith: return true;
-   // Upright staves and their branches: verticals of any length, and single diagonal steps.
-   case Orthography::Runic: return dc == 0 || (dc == 1 && dr == 1);
+   // Upright staves and their branches: verticals of any length, and short diagonals to the next column.
+   case Orthography::Runic: return dc == 0 || (dc == 1 && dr >= 1 && dr <= 3);
    // Traces run along the grid only.
    case Orthography::Circuit: return dc == 0 || dr == 0;
    // Around a ring, or in or out along a spoke.
    case Orthography::Halo: return dr == 0 || dc == 0;
-   // Short wedges to a neighbouring node.
-   case Orthography::Cuneiform: return dc <= 1 && dr <= 1;
+   // Short wedges to a nearby node.
+   case Orthography::Cuneiform: return dc <= 1 && dr <= 2;
    }
    return false;
 }
 
-// A stroke's length on the 3 x 4 grid, whatever the script.
+// A stroke's length on the 3 x 8 grid, whatever the script.
 inline float strokeLength(int a, int b) {
-   const float dc = static_cast<float>(columnOf(a) - columnOf(b)), dr = static_cast<float>(rowOf(a) - rowOf(b));
+   const float dc = static_cast<float>(columnOf(a) - columnOf(b));
+   const float dr = static_cast<float>(rowOf(a) - rowOf(b)) * kRowSpacing;
    return std::sqrt(dc * dc + dr * dr);
 }
 
@@ -146,7 +152,7 @@ inline int velocityOfColumn(int column) { return column <= 0 ? 80 : column == 1 
 struct GlyphNote {
    // In steps from the start of the glyph's window.
    int start = 0, length = 1;
-   // 0 (top, highest) to 3.
+   // 0 (top, highest) to 7.
    int row = 0;
    int velocity = 100;
    bool ghost = false;

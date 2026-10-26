@@ -31,7 +31,8 @@ const char *const kFeatures[] = {CLAP_PLUGIN_FEATURE_NOTE_EFFECT, CLAP_PLUGIN_FE
 // order, uint32 slab size and the slab (Engine::save), then uint32 name length and the preset name.
 // Params are only ever appended, so a state with fewer values leaves the rest at their defaults.
 constexpr char kStateMagic[4] = {'J', 'M', 'O', 'N'};
-constexpr uint32_t kStateVersion = 1;
+// Version 1 drew glyphs on a 3 x 4 grid and had ROWS where SPREAD is; it still loads.
+constexpr uint32_t kStateVersion = 2;
 
 // Notes the engine sends in one block, without allocating on the audio thread.
 struct NoteBuffer {
@@ -209,7 +210,7 @@ public:
       char magic[4];
       uint32_t header[2] = {};
       if (!jclap::core::readAll(stream, magic, 4) || std::memcmp(magic, kStateMagic, 4) ||
-          !jclap::core::readAll(stream, header, sizeof(header)) || header[0] != kStateVersion || header[1] > 4096)
+          !jclap::core::readAll(stream, header, sizeof(header)) || header[0] < 1 || header[0] > kStateVersion || header[1] > 4096)
          return false;
       double v[kParamCount];
       for (size_t i = 0; i < kParamCount; ++i)
@@ -227,6 +228,13 @@ public:
       std::vector<uint8_t> slab(slabSize);
       if (!jclap::core::readAll(stream, slab.data(), slabSize))
          return false;
+      if (header[0] == 1) {
+         if (!Engine::upgradeFromFourRows(slab))
+            return false;
+         // Wide, Stacked, Steps, Open become the nearest spread.
+         static constexpr double kSpreadOf[4] = {1, 1, 0, 3};
+         v[kSpread] = kSpreadOf[std::clamp(static_cast<int>(std::lround(v[kSpread])), 0, 3)];
+      }
       std::vector<Command> loads;
       if (!Engine::load(slab.data(), slab.size(), [&](const Command &c) { loads.push_back(c); }))
          return false;
@@ -392,7 +400,7 @@ private:
       p.swing = value(kSwing);
       p.root = whole(kRoot);
       p.scale = whole(kScale);
-      p.rows = whole(kRows);
+      p.spread = whole(kSpread);
       p.octave = whole(kOctave);
       p.velocity = value(kVelocity);
       p.gate = value(kGate);

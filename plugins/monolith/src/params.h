@@ -33,7 +33,7 @@ enum ParamId : clap_id {
    // Dialect: what the rows sound as.
    kRoot,
    kScale,
-   kRows,
+   kSpread,
    kOctave,
    // Output.
    kVelocity,
@@ -65,7 +65,7 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kSwing, "Swing", "Voice", 0, 0.75, 0, kMod},
    {kRoot, "Root", "Dialect", 0, 11, 5, kChoice},
    {kScale, "Scale", "Dialect", 0, 11, 3, kChoice},
-   {kRows, "Rows", "Dialect", 0, 3, 0, kChoice},
+   {kSpread, "Spread", "Dialect", 0, 3, 1, kChoice},
    {kOctave, "Octave", "Dialect", -3, 3, 0, kStep},
    {kVelocity, "Velocity", "Output", 0, 1, 0.8, kMod},
    {kGate, "Gate", "Output", 0.1, 2, 0.9, kMod},
@@ -86,7 +86,7 @@ inline const char *const kRootNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "
 inline const char *const kScaleNames[] = {"Major",          "Minor",           "Dorian",           "Phrygian",
                                           "Lydian",         "Mixolydian",      "Locrian",          "Harmonic Minor",
                                           "Major Pentatonic", "Minor Pentatonic", "Whole Tone",     "Chromatic"};
-inline const char *const kRowsNames[] = {"Wide", "Stacked", "Steps", "Open"};
+inline const char *const kSpreadNames[] = {"Steps", "Thirds", "Fourths", "Fifths"};
 
 enum class Direction { Forward, Reverse, PingPong, Random };
 enum class Mode { Speak, Listen };
@@ -103,9 +103,11 @@ inline const Scale kScales[] = {
    {5, {0, 3, 5, 7, 10}},       {6, {0, 2, 4, 6, 8, 10}},    {12, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}},
 };
 
-// The scale degrees of the four glyph rows, from the bottom row up. Wide (the default) puts the
-// root second from the bottom, with a third below it and two above.
-inline const int kRowDegrees[][4] = {{-2, 0, 2, 4}, {0, 2, 4, 6}, {0, 1, 2, 3}, {0, 4, 7, 11}};
+// How many scale degrees apart neighbouring glyph rows are, for each Spread. The root is on the
+// third row from the bottom, so two rows reach below it and five above: Steps spans about an
+// octave, Thirds two, Fourths three and Fifths four.
+inline const int kRowSpreads[] = {1, 2, 3, 4};
+constexpr int kRootRow = 5;
 
 inline const char *const *choiceNames(clap_id id, int &count) {
    switch (id) {
@@ -115,7 +117,7 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kMode: count = 2; return kModeNames;
    case kRoot: count = 12; return kRootNames;
    case kScale: count = 12; return kScaleNames;
-   case kRows: count = 4; return kRowsNames;
+   case kSpread: count = 4; return kSpreadNames;
    default: count = 0; return nullptr;
    }
 }
@@ -124,10 +126,11 @@ inline int choiceIndex(double value, int count) {
    return std::clamp(static_cast<int>(std::lround(value)), 0, count - 1);
 }
 
-// The MIDI note a glyph row plays (row 0 the top, highest), with the root in octave 4 (F4 = 65).
-inline int rowPitch(int row, int root, int scale, int rows, int octave) {
+// The MIDI note a glyph row plays (row 0 the top, highest, of eight), with the root in octave 4
+// (F4 = 65).
+inline int rowPitch(int row, int root, int scale, int spread, int octave) {
    const Scale &s = kScales[std::clamp(scale, 0, 11)];
-   const int degree = kRowDegrees[std::clamp(rows, 0, 3)][3 - std::clamp(row, 0, 3)];
+   const int degree = kRowSpreads[std::clamp(spread, 0, 3)] * (kRootRow - std::clamp(row, 0, 7));
    const int octaves = degree >= 0 ? degree / s.size : -((-degree + s.size - 1) / s.size);
    const int index = degree - octaves * s.size;
    return std::clamp(60 + root + 12 * (octave + octaves) + s.intervals[index], 0, 127);
