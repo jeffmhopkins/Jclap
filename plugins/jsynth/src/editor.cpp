@@ -1535,9 +1535,8 @@ private:
    EditorHost &host_;
 };
 
-// The FM grid as a picture: the three oscillators as nodes, an arrow from each modulator to what it
-// modulates, as bright and thick as its amount, a loop for each one's feedback, and an arrow out of
-// each oscillator that is heard, as bright as its level.
+// The FM as what comes out: a C4 run through the three oscillators the way the engine does it,
+// two cycles drawn, with a chip under it for each route that is on.
 class FmView : public visage::Frame {
 public:
    explicit FmView(EditorHost &host) : host_(host) { setIgnoresMouseEvents(true, false); }
@@ -1546,79 +1545,121 @@ public:
       const float w = width(), h = height();
       const float s = h / 290.0f;
       const auto param = [&](clap_id offset) { return static_cast<float>(host_.paramValue(partId(host_.part, offset))); };
-      // Osc 2 and 3 above, Osc 1 below: the classic stack, with the carrier at the bottom.
-      const float px[3] = {w * 0.5f, w * 0.27f, w * 0.73f}, py[3] = {h * 0.66f, h * 0.28f, h * 0.28f};
-      const float r = 26 * s;
       c.setColor(visage::Color(0x40000000));
       c.roundedRectangle(0, 0, w, h, 6 * s);
-      for (int from = 0; from < kOscCount; ++from)
-         for (int to = 0; to < kOscCount; ++to) {
-            const float amount = param(fmCell(from, to));
-            if (from == to || amount < 0.005f)
-               continue;
-            // Two arrows can join a pair, one each way, so each sits a little to its own side.
-            const float dx = px[to] - px[from], dy = py[to] - py[from], len = std::hypot(dx, dy);
-            const float ux = dx / len, uy = dy / len, nx = -uy * 7 * s, ny = ux * 7 * s;
-            const float x0 = px[from] + ux * r + nx, y0 = py[from] + uy * r + ny;
-            const float x1 = px[to] - ux * (r + 4 * s) + nx, y1 = py[to] - uy * (r + 4 * s) + ny;
-            const unsigned col = kOscColors[from];
-            c.setColor(glow(col, 0.15f + 0.25f * amount, 1.0f));
-            c.segment(x0, y0, x1, y1, (6 + 10 * amount) * s, true);
-            c.setColor(glow(col, 0.4f + 0.6f * amount, 1.0f + 0.6f * amount));
-            c.segment(x0, y0, x1, y1, (1.5f + 3 * amount) * s, true);
-            const float ax = x1 - ux * 10 * s, ay = y1 - uy * 10 * s;
-            c.segment(x1, y1, ax + uy * 6 * s, ay - ux * 6 * s, 2 * s, true);
-            c.segment(x1, y1, ax - uy * 6 * s, ay + ux * 6 * s, 2 * s, true);
-         }
-      for (int o = 0; o < kOscCount; ++o) {
-         const unsigned col = kOscColors[o];
-         const float fb = param(fmCell(o, o)), level = param(mixParam(kMixLevel, o));
-         // Feedback: an arrow that leaves the node and loops back into it, outward of the picture.
-         if (fb > 0.005f) {
-            const float out = o == 0 ? dsp::kPi : o == 1 ? -2.36f : -0.78f; // the loop's direction, radians
-            const float lr = 20 * s, cx = px[o] + std::cos(out) * (r + lr * 0.6f), cy = py[o] + std::sin(out) * (r + lr * 0.6f);
-            c.setColor(glow(col, 0.3f + 0.7f * fb, 1.0f + 0.5f * fb));
-            const float thick = (1.5f + 3 * fb) * s;
-            const auto outside = [&](float x, float y) { return std::hypot(x - px[o], y - py[o]) > r + 3 * s; };
-            float lastX = 0, lastY = 0, prevX = 0, prevY = 0;
-            bool have = false;
-            constexpr int kSteps = 48;
-            // Round the loop clockwise from where it leaves the node; the arrowhead goes where it re-enters.
-            const float start = out + dsp::kPi;
-            for (int i = 0; i <= kSteps; ++i) {
-               const float a = start + 2 * dsp::kPi * i / kSteps;
-               const float x = cx + std::cos(a) * lr, y = cy + std::sin(a) * lr;
-               if (!outside(x, y))
-                  continue;
-               if (have)
-                  c.segment(lastX, lastY, x, y, thick, true);
-               prevX = lastX, prevY = lastY;
-               lastX = x, lastY = y, have = true;
-            }
-            const float dx = lastX - prevX, dy = lastY - prevY, len = std::max(1e-3f, std::hypot(dx, dy));
-            const float ux = dx / len, uy = dy / len, ax = lastX - ux * 9 * s, ay = lastY - uy * 9 * s;
-            c.segment(lastX, lastY, ax + uy * 6 * s, ay - ux * 6 * s, 2 * s, true);
-            c.segment(lastX, lastY, ax - uy * 6 * s, ay + ux * 6 * s, 2 * s, true);
-            const float tx = cx, ty = cy - lr - 10 * s;
-            c.setColor(glow(col, 1.0f, 1.2f));
-            c.text("FB " + std::to_string(static_cast<int>(fb * 100 + 0.5f)) + "%", ui::font(10 * s), visage::Font::kCenter,
-                   tx - 24 * s, ty - 7 * s, 48 * s, 14 * s);
-         }
-         // Heard: an arrow down and out, as bright as the level.
-         if (level > 0.005f) {
-            c.setColor(glow(col, 0.2f + 0.8f * level, 1.0f));
-            c.segment(px[o], py[o] + r + 2 * s, px[o], h - 10 * s, (1.5f + 3 * level) * s, true);
-         }
-         c.setColor(glow(col, 0.25f, 1.0f));
-         c.circle(px[o] - r * 1.3f, py[o] - r * 1.3f, 2.6f * r);
-         c.setColor(visage::Color(0xff10131c));
-         c.circle(px[o] - r, py[o] - r, 2 * r);
-         c.setColor(glow(col, 1.0f, 1.3f));
-         c.ring(px[o] - r, py[o] - r, 2 * r, 2.5f * s);
-         c.text(std::to_string(o + 1), ui::font(18 * s), visage::Font::kCenter, px[o] - r, py[o] - r, 2 * r, 2 * r);
-      }
       c.setColor(visage::Color(0x88ffffff));
-      c.text("OUT", ui::font(9 * s), visage::Font::kLeft, 8 * s, h - 16 * s, 60 * s, 12 * s);
+      c.text("WHAT COMES OUT, AT C4", ui::font(9 * s), visage::Font::kLeft, 10 * s, 6 * s, w, 16 * s);
+
+      // The run: each oscillator at its pitch, as the engine's sample loop modulates them.
+      constexpr float kRate = 48000, kNote = 60;
+      float inc[kOscCount], shape[kOscCount], level[kOscCount], amount[kOscCount][kOscCount];
+      int wave[kOscCount];
+      for (int o = 0; o < kOscCount; ++o) {
+         const int mode = static_cast<int>(param(oscParam(o, kOscPitchMode)) + 0.5f);
+         const float fine = param(oscParam(o, kOscFine));
+         float hz;
+         if (mode == 0)
+            hz = 440.0f * std::exp2((kNote + param(oscParam(o, kOscCoarse)) + fine / 100.0f - 69.0f) / 12.0f);
+         else if (mode == 1)
+            hz = 440.0f * std::exp2((kNote + fine / 100.0f - 69.0f) / 12.0f) * param(oscParam(o, kOscRatio));
+         else
+            hz = static_cast<float>(fixedHz(param(oscParam(o, kOscFixed)))) * std::exp2(fine / 1200.0f);
+         inc[o] = std::clamp(hz, 0.0f, 0.45f * kRate) / kRate;
+         wave[o] = static_cast<int>(param(oscParam(o, kOscWave)) + 0.5f);
+         // Noise and Random have no one shape; a sine stands in.
+         if (wave[o] >= dsp::kWhite)
+            wave[o] = dsp::kSine;
+         shape[o] = param(oscParam(o, kOscShape));
+         level[o] = param(mixParam(kMixLevel, o));
+         for (int to = 0; to < kOscCount; ++to)
+            amount[o][to] = param(fmCell(o, to));
+      }
+      const bool expFm = static_cast<int>(param(kFmBase + kFmType) + 0.5f) == 1;
+      const int cycle = static_cast<int>(1.0f / std::max(inc[0], 1e-4f));
+      constexpr int kWarm = 4; // cycles run before the drawn two, so feedback settles
+      double phase[kOscCount] = {};
+      float out[kOscCount] = {}, last[kOscCount] = {};
+      std::vector<float> y;
+      y.reserve(2 * cycle + 1);
+      float top = 1e-6f;
+      for (int i = 0; i < (kWarm + 2) * cycle + 1; ++i) {
+         float now[kOscCount] = {out[0], out[1], out[2]};
+         for (int o = kOscCount - 1; o >= 0; --o) {
+            float m = 0;
+            for (int from = 0; from < kOscCount; ++from)
+               m += amount[from][o] * (from == o ? 0.25f * (out[o] + last[o]) : 2.0f * now[from]);
+            float step = inc[o], ph;
+            if (expFm) {
+               step = std::min(step * std::exp2(std::clamp(2.0f * m, -4.0f, 4.0f)), 0.45f);
+               ph = static_cast<float>(phase[o]);
+            }
+            else
+               ph = static_cast<float>(phase[o]) + m - std::floor(static_cast<float>(phase[o]) + m);
+            now[o] = dsp::wave(wave[o], ph, inc[o], shape[o]);
+            last[o] = out[o];
+            phase[o] += step;
+            phase[o] -= std::floor(phase[o]);
+         }
+         float sum = 0;
+         for (int o = 0; o < kOscCount; ++o) {
+            out[o] = now[o];
+            sum += level[o] * now[o];
+         }
+         if (i >= kWarm * cycle) {
+            y.push_back(sum);
+            top = std::max(top, std::fabs(sum));
+         }
+      }
+
+      const unsigned col = kPartColors[host_.part];
+      const float x0 = 10 * s, x1 = w - 10 * s, mid = h * 0.42f, amp = h * 0.3f;
+      c.setColor(visage::Color(0x18ffffff));
+      c.fill(x0, mid, x1 - x0, 1);
+      const auto at = [&](size_t i, float &px, float &py) {
+         px = x0 + (x1 - x0) * i / (y.size() - 1);
+         py = mid - y[i] / top * amp;
+      };
+      for (int pass = 0; pass < 2; ++pass) {
+         c.setColor(pass == 0 ? glow(col, 0.3f, 1.0f) : glow(col, 1.0f, 1.3f));
+         const float thick = (pass == 0 ? 7.0f : 2.0f) * s;
+         float px0, py0, px1, py1;
+         at(0, px0, py0);
+         for (size_t i = 1; i < y.size(); ++i) {
+            at(i, px1, py1);
+            c.segment(px0, py0, px1, py1, thick, true);
+            px0 = px1, py0 = py1;
+         }
+      }
+
+      // The routes that are on, biggest first.
+      struct Route {
+         int from, to;
+         float amount;
+      };
+      std::vector<Route> routes;
+      for (int from = 0; from < kOscCount; ++from)
+         for (int to = 0; to < kOscCount; ++to)
+            if (amount[from][to] >= 0.005f)
+               routes.push_back({from, to, amount[from][to]});
+      std::stable_sort(routes.begin(), routes.end(), [](const Route &a, const Route &b) { return a.amount > b.amount; });
+      const float cw = (w - 20 * s - 2 * 6 * s) / 3, ch = 20 * s;
+      if (routes.empty()) {
+         c.setColor(visage::Color(0x88ffffff));
+         c.text("NO FM: TURN UP A KNOB IN THE GRID", ui::font(9 * s), visage::Font::kCenter, 0, h - 44 * s, w, ch);
+      }
+      for (size_t i = 0; i < routes.size() && i < 6; ++i) {
+         const Route &r = routes[i];
+         const float cx = 10 * s + (i % 3) * (cw + 6 * s), cy = h - (i < 3 ? 52 : 28) * s;
+         const unsigned rc = kOscColors[r.from];
+         c.setColor(glow(rc, 0.2f, 1.0f));
+         c.roundedRectangle(cx, cy, cw, ch, ch / 2);
+         c.setColor(glow(rc, 1.0f, 1.2f));
+         c.roundedRectangleBorder(cx, cy, cw, ch, ch / 2, 1.5f * s);
+         const std::string name = r.from == r.to ? "FB " + std::to_string(r.from + 1)
+                                                 : std::to_string(r.from + 1) + " > " + std::to_string(r.to + 1);
+         c.text(name + "  " + std::to_string(static_cast<int>(r.amount * 100 + 0.5f)) + "%", ui::font(9 * s),
+                visage::Font::kCenter, cx, cy, cw, ch);
+      }
    }
 
 private:
