@@ -94,6 +94,12 @@ inline float tankLimit(float x) {
    return m < 2.0f ? x : std::copysign(2.0f + std::tanh(m - 2.0f), x);
 }
 
+// The wet signal's last guard: untouched up to 1, then bending softly toward 1.2.
+inline float wetGuard(float x) {
+   const float m = std::fabs(x);
+   return m < 1.0f ? x : std::copysign(1.0f + 0.2f * std::tanh((m - 1.0f) / 0.2f), x);
+}
+
 struct OnePole {
    float a = 1.0f, y = 0.0f;
    void setCutoff(double hz, double sampleRate) {
@@ -269,18 +275,23 @@ public:
    }
    void set(const Control &c) {
       gain_.set(static_cast<float>(jclap::dsp::dbToGain(c.drive)));
+      // In the loop, up to 100% Feedback the makeup undoes all the drive's gain (see process). Past it,
+      // it undoes less and less (as a power of the gain, 1 to 0), until at 150% it undoes none, so the
+      // drive pushes the loop into the shaper and it screams instead of choking.
+      makeup_.set(static_cast<float>(1.0 - std::clamp((c.feedback - 1.0) / 0.5, 0.0, 1.0)));
       tone_.set(static_cast<float>(c.driveTone));
       bias_.set(static_cast<float>(c.driveBias));
       mix_.set(static_cast<float>(c.driveMix));
       trim_.set(static_cast<float>(jclap::dsp::dbToGain(c.driveTrim)));
       if (first_) {
          first_ = false;
-         for (Ramp *r : {&gain_, &tone_, &bias_, &mix_, &trim_})
+         for (Ramp *r : {&gain_, &tone_, &bias_, &mix_, &trim_, &makeup_})
             r->settle();
       }
    }
    float process(float x) {
       const float gain = gain_.next(), tone = tone_.next(), bias = bias_.next(), mix = mix_.next(), trim = trim_.next();
+      const float makeup = makeup_.next();
       // Tone tilts the spectrum into the shaper and back out, so it changes what distorts, not the
       // overall balance.
       const float lo = emph_.lowpass(x);
@@ -314,9 +325,10 @@ public:
       // Most shapes come out near full scale whatever the drive, so bring them back to the level
       // that went in before the trim. In the loop, quiet signals must not come out louder than they
       // went in, or the loop would grow below 100% feedback: there the makeup undoes the whole
-      // small-signal gain (drive times the shape's slope at rest), and the trim can only cut.
+      // small-signal gain (drive times the shape's slope at rest), and the trim can only cut. Past
+      // 100% Feedback the makeup leaves some of the drive's gain in (see set).
       if (inLoop_)
-         y *= std::min(1.0f, trim) / (std::max(1.0f, gain) * slope(bias));
+         y *= std::min(1.0f, trim) / (std::pow(std::max(1.0f, gain), makeup) * slope(bias));
       else
          y *= trim / std::sqrt(std::max(1.0f, gain));
       return dry + mix * (y - dry);
@@ -365,7 +377,7 @@ private:
    std::array<float, Oversampler::kLatency> dryLine_ = {};
    int dryPos_ = 0;
    OnePole emph_, deemph_, dc_;
-   Ramp gain_, tone_, bias_, mix_, trim_;
+   Ramp gain_, tone_, bias_, mix_, trim_, makeup_;
    float held_ = 0.0f;
    int holdCount_ = 0;
 };
@@ -624,6 +636,7 @@ public:
          highCut_[ch].reset();
          loopHp_[ch].y = 0.0f;
          tiltLp_[ch].y = 0.0f;
+         tailTiltLp_[ch].y = 0.0f;
          loopOut_[ch] = 0.0f;
       }
       for (int k = 0; k < kLines; ++k) {
@@ -758,6 +771,7 @@ public:
          }
          drive_[ch].set(c);
          tiltLp_[ch].setCutoff(700.0, sr_);
+         tailTiltLp_[ch].setCutoff(700.0, sr_);
       }
       targetReverseWindow_ = static_cast<float>((0.08 + 0.5 * std::max(0.0, -c.attack)) * std::min(2.0, std::sqrt(size)) * sr_);
       // These two move the early taps, so they slide there at a limited speed: a 32-sample ramp
@@ -782,10 +796,18 @@ public:
       loopScale_.set(static_cast<float>(loopScale / kLoopMax));
       loopGain_.set(freeze ? 0.0f : static_cast<float>(c.feedback * loopScale));
       shimmer_.set(static_cast<float>(c.shimmer));
+      // Below kLoopFloor Feedback, the shimmer still goes round the loop at that much, on its own, so
+      // it stacks up from Feedback 0. At or past it, it rides the loop's own gain.
+      shimmerLift_.set(freeze ? 0.0f : static_cast<float>(std::max(0.0, kLoopFloor - c.feedback) * loopScale));
       pitchRatio_ = std::exp2(c.shimmerPitch / 12.0);
       smearMix_.set(static_cast<float>(c.smear));
       tiltLow_.set(static_cast<float>(jclap::dsp::dbToGain(-6.0 * c.tilt)));
       tiltHigh_.set(static_cast<float>(jclap::dsp::dbToGain(6.0 * c.tilt)));
+      // Tilt also colours the tail as it's heard, fading out as Feedback rises to kLoopFloor: there the
+      // loop, which tilts the tail again on every pass, has taken over.
+      const double tailTilt = c.tilt * std::max(0.0, 1.0 - c.feedback / kLoopFloor);
+      tailTiltLow_.set(static_cast<float>(jclap::dsp::dbToGain(-kTailTiltDb * tailTilt)));
+      tailTiltHigh_.set(static_cast<float>(jclap::dsp::dbToGain(kTailTiltDb * tailTilt)));
 
       // Echo.
       echo_.set(c);
@@ -832,7 +854,8 @@ public:
          for (detail::Ramp &r : gainBass_)
             r.settle();
          for (detail::Ramp *r : {&tankApGain_, &attack_, &inputGain_, &loopGain_, &loopScale_,
-                                 &shimmer_, &smearMix_, &tiltLow_, &tiltHigh_, &echoMix_, &earlyGain_, &lateGain_,
+                                 &shimmer_, &shimmerLift_, &smearMix_, &tiltLow_, &tiltHigh_,
+                                 &tailTiltLow_, &tailTiltHigh_, &echoMix_, &earlyGain_, &lateGain_,
                                  &width_, &duck_, &dry_, &wet_, &level_})
             r->settle();
       }
@@ -992,7 +1015,7 @@ public:
          lines_[k].write(detail::tankLimit(0.25f * o[k] + kInjectSign[k] * kInjectScale * inject[k & 1]));
 
       // The outer loop, heard next sample.
-      const float shimmer = shimmer_.next(), smearMix = smearMix_.next();
+      const float shimmer = shimmer_.next(), shimmerLift = shimmerLift_.next(), smearMix = smearMix_.next();
       const float tl = tiltLow_.next(), th = tiltHigh_.next(), fb = loopGain_.next(), loopScale = loopScale_.next();
       for (int ch = 0; ch < 2; ++ch) {
          float v = plain[ch];
@@ -1001,6 +1024,7 @@ public:
          v = loopHp_[ch].highpass(v);
          const float shifted = shifter_[ch].process(v, pitchRatio_);
          v += shimmer * (shifted - v);
+         const float lifted = shimmerLift * shimmer * shifted;
          float s = v;
          for (auto &ap : smear_[ch])
             s = ap.process(s);
@@ -1008,7 +1032,7 @@ public:
          const float lo = tiltLp_[ch].lowpass(v);
          v = lo * tl + (v - lo) * th;
          loopPre_[ch] = v;
-         loopTail_[ch] = v * fb;
+         loopTail_[ch] = v * fb + lifted;
       }
       if (echoWhere == EchoWhere::Loop) {
          // Echoes of the shaped tail go back into the tank, so it returns in long, spaced passes,
@@ -1024,6 +1048,11 @@ public:
       }
 
       // Output.
+      const float ttl = tailTiltLow_.next(), tth = tailTiltHigh_.next();
+      for (int ch = 0; ch < 2; ++ch) {
+         const float lo = tailTiltLp_[ch].lowpass(late[ch]);
+         late[ch] = lo * ttl + (late[ch] - lo) * tth;
+      }
       const float eg = earlyGain_.next(), lg = lateGain_.next();
       float wet[2] = {early[0] * eg + late[0] * lg, early[1] * eg + late[1] * lg};
       if (post)
@@ -1034,6 +1063,10 @@ public:
          for (int ch = 0; ch < 2; ++ch)
             wet[ch] += echoMix * echoed[ch];
       }
+      // Past 100% Feedback the loop runs up into its safety stage and the tail can come out hotter
+      // than full scale; above it, the wet signal bends softly toward 1.2. Below, nothing changes.
+      for (float &v : wet)
+         v = detail::wetGuard(v);
       const float w = width_.next();
       const float mid = 0.5f * (wet[0] + wet[1]), side = 0.5f * (wet[0] - wet[1]) * w;
       const float level = std::max(std::fabs(dryL), std::fabs(dryR));
@@ -1098,6 +1131,11 @@ public:
 
 private:
    static constexpr double kLoopCalibration = 3.3, kLoopExponent = 0.83, kLoopMax = 1.25;
+   // Below this Feedback, Shimmer and Tilt still act on their own (see setControl), so they're heard
+   // from Feedback 0. Factory presets that use them sit at or above it, and sound as they always did.
+   static constexpr double kLoopFloor = 0.4;
+   // How far Tilt lifts or cuts the tail as heard, in dB at full Tilt, with Feedback at 0.
+   static constexpr double kTailTiltDb = 9.0;
    // Line lengths at size 1, in ms: spread evenly on a log scale and none a simple ratio of another.
    // Adjacent lines go to opposite sides, so each side spans the whole range.
    static constexpr double kLineMs[kLines] = {29.3, 33.1, 37.9, 42.7, 48.9, 55.3, 63.1, 71.9,
@@ -1143,7 +1181,7 @@ private:
    detail::Reverser reverse_[2];
    detail::PitchShifter shifter_[2];
    detail::Drive drive_[2];
-   detail::OnePole loopHp_[2], tiltLp_[2];
+   detail::OnePole loopHp_[2], tiltLp_[2], tailTiltLp_[2];
    float loopOut_[2] = {}, loopPre_[2] = {}, loopTail_[2] = {};
    detail::Echo echo_;
    float reverseWindow_ = 4800.0f, targetReverseWindow_ = 4800.0f;
@@ -1179,7 +1217,7 @@ private:
    float predelaySamples_ = 0.0f, aimPredelay_ = 0.0f, targetPredelay_ = 0.0f;
    float earlySize_ = 1.0f, aimEarlySize_ = 1.0f, targetEarlySize_ = 1.0f, earlySlew_ = 1e-4f;
    detail::Ramp attack_, inputGain_;
-   detail::Ramp loopGain_, loopScale_, shimmer_, smearMix_, tiltLow_, tiltHigh_;
+   detail::Ramp loopGain_, loopScale_, shimmer_, shimmerLift_, smearMix_, tiltLow_, tiltHigh_, tailTiltLow_, tailTiltHigh_;
    detail::Ramp echoMix_;
    detail::Ramp earlyGain_, lateGain_, width_, duck_, dry_, wet_, level_;
    float duckEnv_ = 0.0f, duckAttack_ = 0.01f, duckRelease_ = 0.001f;

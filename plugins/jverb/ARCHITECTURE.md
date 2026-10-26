@@ -235,9 +235,12 @@ voices see, before the voices), shapes it, and adds it to the tank's input on th
 3. **Shimmer**: a delay-line pitch shifter (two read heads sweeping a 60 ms window, crossfaded with
    Hann windows that sum to one). Shimmer crossfades from the plain loop to the shifted one; Shimmer
    Pitch sets the interval, -24 to +24 semitones. Each pass goes up (or down) again, so the tail
-   climbs.
+   climbs. Below 40% Feedback the shifted part also goes round on its own at 40% (times the loop
+   scale), so Shimmer is heard from Feedback 0; at 40% and up it rides the loop's own gain alone.
 4. **Smear**: two short allpasses (17 to 28 ms) with gain 0.7 times Smear, mixed in by Smear.
-5. **Tilt**: a seesaw around 700 Hz, up to 6 dB each way.
+5. **Tilt**: a seesaw around 700 Hz, up to 6 dB each way. Below 40% Feedback Tilt also tilts the
+   late tail as it is heard, up to 9 dB each way at Feedback 0 and fading out by 40%, where the loop,
+   tilting the tail again each pass, has taken over (see [The output stage](#the-output-stage)).
 6. **Feedback**, times the **loop scale**.
 7. **Echo LOOP**, if the echo is in that slot: echoes of the shaped tail (taken before the Feedback
    gain) are added here. See [Echo](#echo).
@@ -250,7 +253,7 @@ that loss: loop scale = min(1.25, 3.3 x (mean loss per pass)^0.83), times (3 / S
 Decay 1 to 30 s and Size 0.5 to 3, the Feedback where a tail first sustains; it lands between 96% and
 123%, mostly 100% to 115%. At Size 6 and 10 it lands between 72% and 127%. So below 100% the tail still dies away (just longer and
 more coloured by the loop), and past it the loop grows until the safety stage holds it. Feedback runs
-to 110%.
+to 150%, so every decay and size has room past the point where its tail sustains.
 
 ## Drive
 
@@ -271,8 +274,10 @@ tank), **LOOP** (in the outer loop) or **POST** (on the wet signal, before Echo 
    rather than the overall balance.
 5. **Makeup and Trim.** In PRE and POST the output is scaled by Trim / sqrt(gain). In the LOOP slot a
    quiet signal must never come out louder than it went in, or the loop would grow below 100%
-   Feedback, so the makeup there undoes the whole small-signal gain (drive times the shape's slope at
-   rest) and Trim can only cut.
+   Feedback, so up to 100% Feedback the makeup there undoes the whole small-signal gain (drive times
+   the shape's slope at rest) and Trim can only cut. Past 100% it undoes less: the drive's gain is
+   undone as gain^m, with m falling from 1 at 100% to 0 at 150%. The drive then pushes the loop up
+   into its shaper and the tail screams and holds, where a full makeup would choke it.
 6. **Mix** between the clean and driven signal.
 
 ## Echo
@@ -361,6 +366,10 @@ and Infinite Return use LOOP, and Ping-Pong Space uses AFTER.
 all early at 0% to all late at 100%. Then Drive POST and the echo's repeats, if they are in those
 slots.
 
+Below 40% Feedback, **Tilt** tilts the late tail here before the balance (see [The outer
+loop](#the-outer-loop)). After the echo, a **guard** leaves the wet signal untouched up to 1 and bends
+anything above softly toward 1.2, for a loop run past 100%.
+
 **Width** scales the wet signal's side (0% mono, 100% as is, 200% doubled). **Duck** follows the dry
 input with a 5 ms attack and 300 ms release and turns the wet down by up to Duck while the input
 plays. **Mix** is a linear crossfade of dry and wet. **Level** is the output gain, -24 to +12 dB, on
@@ -441,15 +450,15 @@ the panel doesn't show; a routed param's knob shows the movement on its modulati
 
 | Target | At signal x Amount = 1 |
 | --- | --- |
-| Decay | Decay doubles (halves at -1) |
-| Damping | Damp High moves 1.5 octaves |
-| Diffusion | +50 points |
-| Early/Late | +50 points |
-| Drive | +18 dB |
-| Shimmer | +50 points |
-| Feedback | +40 points |
-| Tilt | +80 points |
-| Width | +80 points |
+| Decay | Decay moves 2.5 octaves (x5.7, or /5.7 at -1) |
+| Damping | Damp High moves 3.75 octaves |
+| Diffusion | +125 points |
+| Early/Late | +125 points |
+| Drive | +45 dB |
+| Shimmer | +125 points |
+| Feedback | +100 points |
+| Tilt | +200 points |
+| Width | +200 points |
 
 Each result is clamped to its param's range. Host modulation (CLAP param mod) is added to the knob's
 value first, then the bodies' offset.
@@ -470,7 +479,7 @@ before the voices, none of the voice extremes are fed back; only Motion acts ins
 
 The ORBIT page's voice list draws the same 0 to 200% scale, with the tick at 100%.
 
-Other params that go past unity: **Feedback** to 110% (the tail grows into the safety stage),
+Other params that go past unity: **Feedback** to 150% (the tail grows into the safety stage),
 **Echo Feedback** to 105% (repeats saturate), and **Width** to 200%.
 
 ## Every parameter
@@ -516,16 +525,16 @@ is automatable; "Mod" means the host can also modulate it (CLAP param modulation
 | Mass | 0.1 to 3 | 1, 1.25, 0.8, 1, 1, 1 | Its gravity. Mod. |
 | Velocity | x0.5 to x1.5 | x1 | Scales its speed. Mod. |
 | Target | Off, Decay, Damping, Diffusion, Early/Late, Drive, Shimmer, Feedback, Tilt, Width | Off | Where its signal goes. |
-| Amount | -100% to +100% | +30% | How much. Mod. |
+| Amount | -100% to +100% | +50% | How much. Mod. |
 
 ### Loop
 
 | Param | Range | Default | What it does |
 | --- | --- | --- | --- |
-| Feedback | 0 to 110% | 0% | Outer loop gain, scaled to mean the same at any decay. Mod, and a body target. |
-| Shimmer | 0 to 100% | 0% | How much of the loop is pitch shifted. Mod, and a body target. |
+| Feedback | 0 to 150% | 0% | Outer loop gain, scaled to mean the same at any decay. Mod, and a body target. |
+| Shimmer | 0 to 100% | 0% | How much of the loop is pitch shifted; heard from Feedback 0. Mod, and a body target. |
 | Shimmer Pitch | -24 to +24 st | +12 st | The shift's interval, in whole semitones. |
-| Tilt | -100% to +100% | 0% | ±6 dB seesaw around 700 Hz in the loop. Mod, and a body target. |
+| Tilt | -100% to +100% | 0% | ±6 dB seesaw around 700 Hz in the loop, and up to ±9 dB on the tail below 40% Feedback. Mod, and a body target. |
 | Smear | 0 to 100% | 30% | Allpass blur in the loop. Mod. |
 | Safety | Soft, Hard | Soft | tanh or a clip at ±1 on the loop's return. |
 | Freeze | On/Off | Off | Holds the tail forever. |
@@ -535,7 +544,7 @@ is automatable; "Mod" means the host can also modulate it (CLAP param modulation
 | Param | Range | Default | What it does |
 | --- | --- | --- | --- |
 | Drive On | On/Off | Off | |
-| Drive Slot | Pre, Loop, Post | Loop | Where it sits. |
+| Drive Slot | Pre, Loop, Post | Pre | Where it sits. |
 | Drive Type | Tape, Tube, Fuzz, Fold, Crush | Tube | The shape. |
 | Drive | 0 to +36 dB | +12 dB | Gain into the shape. Mod, and a body target. |
 | Drive Tone | -100% to +100% | 0% | Emphasis tilt around 900 Hz. Mod. |

@@ -108,9 +108,9 @@ constexpr auto kChoice = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED | CLA
 constexpr auto kToggle = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED;
 
 // Bodies start routed nowhere, so nothing moves the sound that the panel doesn't show. The amount
-// waits at 30%, so picking a target does something straight away.
+// waits at 50%, so picking a target does something you can hear straight away.
 constexpr double kDefaultTarget[kMaxBodies] = {0, 0, 0, 0, 0, 0};
-constexpr double kDefaultAmount[kMaxBodies] = {0.3, 0.3, 0.3, 0.3, 0.3, 0.3};
+constexpr double kDefaultAmount[kMaxBodies] = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
 // Unequal masses: three equal ones would stay on the figure-eight they start on, which is stable.
 // These break it up within a few laps into motion that never repeats.
 constexpr double kDefaultMass[kMaxBodies] = {1.0, 1.25, 0.8, 1.0, 1.0, 1.0};
@@ -155,7 +155,7 @@ struct ParamTable {
                                              kDefaultAmount[b], kMod};
       }
       const jclap::core::ParamDef tail[] = {
-         {kFeedback, "Feedback", "Loop", 0.0, 1.1, 0.0, kMod},
+         {kFeedback, "Feedback", "Loop", 0.0, 1.5, 0.0, kMod},
          {kShimmer, "Shimmer", "Loop", 0.0, 1.0, 0.0, kMod},
          {kShimmerPitch, "Shimmer Pitch", "Loop", -24.0, 24.0, 12.0, kToggle},
          {kTilt, "Tilt", "Loop", -1.0, 1.0, 0.0, kMod},
@@ -163,7 +163,7 @@ struct ParamTable {
          {kSafety, "Safety", "Loop", 0.0, 1.0, 0.0, kChoice},
          {kFreeze, "Freeze", "Loop", 0.0, 1.0, 0.0, kToggle},
          {kDriveOn, "Drive On", "Drive", 0.0, 1.0, 0.0, kToggle},
-         {kDriveWhere, "Drive Slot", "Drive", 0.0, 2.0, 1.0, kChoice},
+         {kDriveWhere, "Drive Slot", "Drive", 0.0, 2.0, 0.0, kChoice},
          {kDriveType, "Drive Type", "Drive", 0.0, 4.0, 1.0, kChoice},
          {kDrive, "Drive", "Drive", 0.0, 36.0, 12.0, kMod},
          {kDriveTone, "Drive Tone", "Drive", -1.0, 1.0, 0.0, kMod},

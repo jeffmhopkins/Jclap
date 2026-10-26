@@ -65,12 +65,12 @@ inline const std::vector<Preset> &factoryPresets() {
       p.push_back({"Drum Reactor", "Short",
                    with({{kReact, 1}, {kDecay, 1.2}, {kSize, 0.6}, {kMotion, 0.3}, {kEarlyLate, 0.6}, {kDuck, 0.4},
                          {kLowCut, 90}, {kMix, 0.3}},
-                        target(0, Target::Damping, 0.4))});
+                        target(0, Target::Damping, 0.16))});
       p.push_back({"Swirling Slapback", "Short",
                    with({{kEchoOn, 1}, {kEchoWhere, kInto}, {kEchoSync, 0}, {kEchoTime, 140}, {kEchoFeedback, 0.25},
                          {kEchoPingPong, 0}, {kEchoTone, 0.2}, {kEchoMix, 0.7}, {kDecay, 1.4}, {kSize, 0.7},
                          {kMix, 0.3}},
-                        target(0, Target::Damping, 0.5))});
+                        target(0, Target::Damping, 0.2))});
       p.push_back({"Hot Input", "Short",
                    {{kDriveOn, 1}, {kDriveWhere, kPreSlot}, {kDriveType, kTape}, {kDrive, 15}, {kDriveTone, 0.3},
                     {kDecay, 1.5}, {kSize, 0.6}, {kMix, 0.35}}});
@@ -90,10 +90,10 @@ inline const std::vector<Preset> &factoryPresets() {
       p.push_back({"Binary Star", "Medium",
                    with({{kDecay, 3.2}, {kBodies, 2}, {kMotion, 0.6}, {kSize, 1.2}, {kMix, 0.35},
                          body(0, kBody1Mass, 1.4), body(1, kBody1Mass, 1.1)},
-                        target(1, Target::Width, 0.6))});
+                        target(1, Target::Width, 0.24))});
       p.push_back({"Synced Orbit", "Medium",
                    with({{kClock, 1}, {kSyncBars, 2}, {kMotion, 0.6}, {kDecay, 3.5}, {kSize, 1.3}, {kMix, 0.4}},
-                        target(2, Target::Tilt, 0.4))});
+                        target(2, Target::Tilt, 0.16))});
       p.push_back({"Burning Loop", "Medium",
                    {{kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kTube}, {kDrive, 18}, {kFeedback, 0.55},
                     {kTilt, -0.3}, {kDecay, 4}, {kMix, 0.4}}});
@@ -103,8 +103,8 @@ inline const std::vector<Preset> &factoryPresets() {
       p.push_back({"Chaos Engine", "Medium",
                    with(with({{kBodies, 6}, {kGravity, 2.5}, {kMotion, 0.8}, {kReact, 0.8}, {kDecay, 4},
                               {kFeedback, 0.3}, {kMix, 0.45}},
-                             target(0, Target::Damping, 0.6)),
-                        target(3, Target::Feedback, 0.6))});
+                             target(0, Target::Damping, 0.24)),
+                        target(3, Target::Feedback, 0.24))});
       p.push_back({"Heavy Moon", "Medium",
                    {{kBodies, 3}, {kMotion, 0.6}, {kDecay, 5}, {kSize, 1.5},
                     {bodyParam(0, kBody1Mass), 2.8}, {bodyParam(1, kBody1Mass), 0.3}, {bodyParam(2, kBody1Mass), 0.4},
@@ -114,7 +114,7 @@ inline const std::vector<Preset> &factoryPresets() {
                    with({{kEchoOn, 1}, {kEchoWhere, kLoopSlot}, {kEchoSync, 12}, {kEchoFeedback, 0.35},
                          {kEchoTone, -0.5}, {kEchoMix, 0.8}, {kDriveOn, 1}, {kDriveWhere, kInLoop},
                          {kDriveType, kTape}, {kDrive, 8}, {kFeedback, 0.65}, {kDecay, 6}, {kSize, 1.6}, {kMix, 0.45}},
-                        target(2, Target::Tilt, 0.25))});
+                        target(2, Target::Tilt, 0.1))});
       p.push_back({"Swell Machine", "Long",
                    {{kDecay, 6}, {kSize, 1.8}, {kAttack, 0.85}, {kDiffusion, 0.9}, {kMotion, 0.5}, {kMix, 0.45}}});
       p.push_back({"Fuzz Cloud", "Long",
