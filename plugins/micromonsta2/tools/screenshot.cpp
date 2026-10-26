@@ -8,10 +8,18 @@
 
 namespace {
 
-// Fills the knobs with a spread of values so every arc style shows up.
+// Shows a program from the bank, with some host modulation so every arc style shows up.
 class DemoHost : public mm2::EditorHost {
 public:
-   double paramValue(clap_id id) const override { return (mm2::indexOfCc(static_cast<int>(id)) * 37) % 128; }
+   static const mm2::HardwarePatch &patch() { return *mm2::findFactoryPatch("P013 OctaBass"); }
+
+   // The program's values, and a spread for the header knobs it doesn't set.
+   double paramValue(clap_id id) const override {
+      for (auto [cc, v] : patch().values)
+         if (cc == static_cast<int>(id))
+            return v;
+      return (mm2::indexOfCc(static_cast<int>(id)) * 37) % 128;
+   }
    // Every fifth knob shows some host modulation.
    double paramModulated(clap_id id) const override {
       return mm2::modulated(paramValue(id), mm2::indexOfCc(static_cast<int>(id)) % 5 == 0 ? 25.0 : 0.0);
@@ -22,6 +30,12 @@ public:
    int channel() const override { return 1; }
    void setChannel(int) override {}
    void sendAll() override {}
+   void loadProgram(const mm2::HardwarePatch &) override {}
+   // A program from the bank, so the mod matrix labels show.
+   int program() const override { return patch().program; }
+   mm2::ModRoute route(int slot) const override { return patch().routes[slot]; }
+   std::string presetName() const override { return mm2::displayName(patch()); }
+   void setPresetName(const std::string &) override {}
 };
 
 } // namespace

@@ -7,13 +7,16 @@
 #include <jclap/ui/design_frame.h>
 #include <jclap/ui/knob.h>
 #include <jclap/ui/param_bindings.h>
+#include <jclap/ui/preset_bar.h>
 #include <jclap/ui/section.h>
 
+#include <cctype>
 #include <string>
 #include <tuple>
 #include <vector>
 
 #include "cc_map.h"
+#include "patches.h"
 
 namespace mm2 {
 namespace {
@@ -37,19 +40,24 @@ class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       buildLayout();
-      for (auto [button, x, w] : {std::tuple{&chDown_, 408.0f, 34.0f}, {&channel_, 448.0f, 150.0f},
-                                  {&chUp_, 604.0f, 34.0f}, {&sendAll_, 656.0f, 110.0f}})
-         place(*button, {x, 29, w, 34});
+      buildPresetBar();
+      for (auto [button, x, w] : {std::tuple{&chDown_, 336.0f, 34.0f}, {&channel_, 376.0f, 150.0f},
+                                  {&chUp_, 532.0f, 34.0f}, {&sendAll_, 584.0f, 110.0f}})
+         place(*button, {x, 50, w, 30});
 
       chDown_.onClick = [this] { host_.setChannel(host_.channel() - 1); };
       chUp_.onClick = [this] { host_.setChannel(host_.channel() + 1); };
       channel_.onWheel = [this](int d) { host_.setChannel(host_.channel() + d); };
       sendAll_.onClick = [this] { host_.sendAll(); };
       syncChannel();
+      syncRoutes();
       startTimer(30);
    }
 
-   void timerCallback() override { syncChannel(); }
+   void timerCallback() override {
+      syncChannel();
+      syncRoutes();
+   }
 
    void draw(visage::Canvas &canvas) override {
       const ui::Theme &t = ui::defaultTheme();
@@ -78,10 +86,59 @@ private:
 
    void syncChannel() { channel_.setText("MIDI CH " + std::to_string(host_.channel())); }
 
-   void knob(int cc, unsigned accent, Rect cell) {
+   // The synth's programs, then the user's own knob presets.
+   void buildPresetBar() {
+      auto &bar = add<ui::PresetBar>({336, 12, 530, 28}, factoryPresets(), kPresetFormat, host_);
+      bar.setAccent(kOrange);
+      bar.defaults = presetDefaults();
+      bar.currentName = [this] { return host_.presetName(); };
+      bar.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
+      bar.onLoad = [this](const ui::Preset &p) {
+         if (const HardwarePatch *patch = findFactoryPatch(p.name))
+            host_.loadProgram(*patch);
+         else
+            ui::applyPreset(p, host_, presetDefaults());
+      };
+   }
+
+   // Labels each mod matrix knob with the loaded program's routing: "1 CUTO" with "lfo1*whl" under
+   // its value.
+   void syncRoutes() {
+      const int program = host_.program();
+      bool changed = program != shownProgram_;
+      ModRoute routes[kModSlots];
+      for (int s = 0; s < kModSlots; ++s) {
+         routes[s] = host_.route(s);
+         changed = changed || !(routes[s] == shownRoutes_[s]);
+      }
+      if (!changed)
+         return;
+      shownProgram_ = program;
+      for (int s = 0; s < kModSlots; ++s) {
+         shownRoutes_[s] = routes[s];
+         if (!modKnobs_[s])
+            continue;
+         std::string label = std::to_string(s + 1);
+         std::string caption = "CC " + std::to_string(52 + s);
+         if (program > 0) {
+            // A slot with no source or no destination does nothing, whatever the other one says.
+            const bool used = routes[s].source != 0 && routes[s].destination != 0;
+            std::string dest = used ? destinationName(routes[s]) : "off";
+            for (char &c : dest)
+               c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            label += " " + dest;
+            if (used)
+               caption = sourceName(routes[s]);
+         }
+         modKnobs_[s]->setLabel(label);
+         modKnobs_[s]->setCaption(caption);
+      }
+   }
+
+   ui::Knob *knob(int cc, unsigned accent, Rect cell) {
       const int i = indexOfCc(cc);
       if (i < 0)
-         return;
+         return nullptr;
       const CcParam &p = kCcParams[i];
       auto &k = add<ui::Knob>(cell, ui::ValueRange{0.0, 127.0, defaultValue(p), 1.0, p.bipolar});
       k.setLabel(p.label);
@@ -89,6 +146,9 @@ private:
       k.setAccent(accent);
       k.valueText = [](double v) { return std::to_string(toCcValue(v)); };
       bindings_.bind(k, static_cast<clap_id>(p.cc));
+      if (cc >= 52 && cc < 52 + kModSlots)
+         modKnobs_[cc - 52] = &k;
+      return &k;
    }
 
    // Knobs for the given CCs, spread evenly across a row.
@@ -161,6 +221,9 @@ private:
 
    EditorHost &host_;
    ui::ParamBindings bindings_;
+   ui::Knob *modKnobs_[kModSlots] = {};
+   int shownProgram_ = -1;
+   ModRoute shownRoutes_[kModSlots];
    ui::Button chDown_{"<"}, chUp_{">"}, channel_{"MIDI CH 1"}, sendAll_{"SEND ALL"};
 };
 

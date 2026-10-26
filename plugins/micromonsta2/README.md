@@ -26,6 +26,35 @@ out to the synth as a CC. Notes and other MIDI pass straight through.
 > [!TIP]
 > In bi-timbral mode Program B listens on the MIDI channel + 1, so use a second instance for it.
 
+## Programs
+
+The bar at the top lists the programs stored on the synth, by slot and category ("P013 OctaBass").
+Picking one:
+
+- sends Bank Select (CC 0 = 0, CC 32 = 0-2) and Program Change (0-99) on the panel's MIDI channel, so
+  the synth loads that program (P001-P100 are bank 0, P101-P200 bank 1, P201-P300 bank 2);
+- moves every knob to that program's value without sending it, since the synth already has it. Turning
+  a knob afterwards sends it as usual. Mod wheel, mod knob and volume aren't part of a program and stay
+  where they are;
+- labels the mod matrix knobs with the program's routing: destination on top ("1 CUTO"), source under
+  the value ("lfo1*whl"). Slots with no source or destination say OFF. CCs can only change a slot's
+  amount, so the routing stays until another program is picked.
+
+The project remembers the program and sends its Program Change again when it opens. **SAVE** stores the
+knobs as your own preset (under "User"), which sends its CCs when loaded and doesn't change the program.
+
+> [!NOTE]
+> Audiothingies hasn't published the factory bank or the SysEx program format. The bank here is the 209
+> named programs from a full dump of a real unit (`data/bank.syx`, UTILITY U02), which is the factory
+> bank plus a few programs its owner saved. `tools/mm2_bank.py` decodes it into `src/factory_bank.inc`
+> and checks the decoding against `data/cal-*.syx`: single-program dumps taken after
+> `tools/mm2_capture.py` set every CC to a known pattern. Tune, fine tune, cutoff and the ±99 amounts are
+> stored in their own ranges, so the panel shows the CC value that gives the stored value.
+>
+> To use your own synth's bank: run `python tools/mm2_capture.py data` with the synth on USB (it walks
+> you through the U02 and U01 dumps), then `python tools/mm2_bank.py data/bank.syx src/factory_bank.inc`
+> and rebuild.
+
 ## How it sends
 
 > [!NOTE]
