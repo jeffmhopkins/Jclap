@@ -1285,6 +1285,124 @@ private:
    EditorHost &host_;
 };
 
+// The part's voices and where they sit in the stereo field: a slot per voice the part can play, lit
+// while a creature holds it, then the field from left to right with each creature where its pan puts
+// it, the spread X Pan gives the flock, and the output's width around it all.
+class StereoView : public visage::Frame {
+public:
+   StereoView(EditorHost &host, const FlockView &sky) : host_(host), sky_(sky) { setIgnoresMouseEvents(true, false); }
+
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height();
+      const float s = h / 120.0f;
+      const int part = host_.part;
+      const unsigned color = kPartColors[part];
+      const auto param = [&](clap_id id) { return static_cast<float>(host_.paramValue(id)); };
+      const int voices = static_cast<int>(param(partId(part, kPolyphony)) + 0.5f);
+      const float pan = param(partId(part, kPartPan)), spread = param(partId(part, kSkyPan));
+      const float widthOut = param(kOutputWidth);
+      const FlockFrame &f = sky_.frame();
+      int held = 0;
+      for (int i = 0; i < f.count; ++i)
+         held += f.creatures[i].part == part && f.creatures[i].held;
+
+      // The voice slots.
+      c.setColor(visage::Color(0x88ffffff));
+      c.text("VOICES", ui::font(9 * s), visage::Font::kLeft, 0, 0, 60 * s, 14 * s);
+      for (int i = 0; i < 16; ++i) {
+         const float cx = 62 * s + i * 14 * s, cy = 7 * s, r = 4.5f * s;
+         if (i >= voices) {
+            c.setColor(visage::Color(0x14ffffff));
+            c.circle(cx - r, cy - r, 2 * r);
+            continue;
+         }
+         const bool on = i < held;
+         if (on) {
+            c.setColor(glow(color, 0.25f, 1.0f));
+            c.circle(cx - 2 * r, cy - 2 * r, 4 * r);
+         }
+         c.setColor(on ? glow(color, 1.0f, 1.5f) : glow(color, 0.35f, 1.0f));
+         c.circle(cx - r, cy - r, 2 * r);
+      }
+
+      // The field: L to R across, with the output's width as brackets.
+      const float top = 26 * s, fh = h - top - 14 * s, mid = top + fh / 2;
+      c.setColor(visage::Color(0x40000000));
+      c.roundedRectangle(0, top, w, fh, 6 * s);
+      c.setColor(visage::Color(0x22ffffff));
+      c.fill(8 * s, mid, w - 16 * s, 1);
+      c.fill(w / 2, top + 6 * s, 1, fh - 12 * s);
+      const auto xOf = [&](float p) { return w / 2 + std::clamp(p, -1.0f, 1.0f) * (w / 2 - 14 * s); };
+      const float half = 0.5f * std::min(widthOut, 2.0f);
+      c.setColor(visage::Color(0x55ffffff));
+      for (float side : {-1.0f, 1.0f}) {
+         const float bx = xOf(side * std::min(1.0f, half));
+         c.fill(bx - 1 * s, top + 8 * s, 2 * s, fh - 16 * s);
+      }
+      // The flock's spread, centred on the part's pan.
+      const float l = xOf(pan - spread), r = xOf(pan + spread);
+      c.setColor(glow(color, 0.16f, 1.0f));
+      c.roundedRectangle(std::min(l, r) - 6 * s, mid - 12 * s, std::fabs(r - l) + 12 * s, 24 * s, 12 * s);
+      c.setColor(glow(color, 0.9f, 1.2f));
+      c.fill(xOf(pan) - 1 * s, mid - 16 * s, 2 * s, 32 * s);
+      // Each creature of the part where it is heard.
+      for (int i = 0; i < f.count; ++i) {
+         const FlockFrame::Shown &cr = f.creatures[i];
+         if (cr.part != part)
+            continue;
+         const float across = std::clamp(cr.x / kSkyAspect, 0.0f, 1.0f) * 2.0f - 1.0f;
+         const float x = xOf(pan + spread * across), e = std::clamp(cr.energy, 0.2f, 1.0f);
+         c.setColor(glow(color, 0.25f * e, 1.0f));
+         c.circle(x - 9 * s, mid - 9 * s, 18 * s);
+         c.setColor(glow(color, cr.held ? 1.0f : 0.5f, 1.6f));
+         c.circle(x - 3.5f * s, mid - 3.5f * s, 7 * s);
+      }
+      c.setColor(visage::Color(0x88ffffff));
+      c.text("L", ui::font(10 * s), visage::Font::kLeft, 6 * s, h - 14 * s, 20 * s, 14 * s);
+      c.text("R", ui::font(10 * s), visage::Font::kRight, w - 26 * s, h - 14 * s, 20 * s, 14 * s);
+      c.text("WIDTH", ui::font(9 * s), visage::Font::kCenter, 0, h - 14 * s, w, 14 * s);
+   }
+
+private:
+   EditorHost &host_;
+   const FlockView &sky_;
+};
+
+// The part's level and the master's, as two bars on one dB scale.
+class LevelView : public visage::Frame {
+public:
+   explicit LevelView(EditorHost &host) : host_(host) { setIgnoresMouseEvents(true, false); }
+
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height();
+      const float s = h / 120.0f;
+      const float top = 6 * s, bottom = h - 18 * s;
+      const auto yOf = [&](double db) { return bottom - static_cast<float>((std::clamp(db, -60.0, 6.0) + 60.0) / 66.0) * (bottom - top); };
+      const double levels[2] = {host_.paramValue(partId(host_.part, kPartLevel)), host_.paramValue(kMasterLevel)};
+      const unsigned colors[2] = {kPartColors[host_.part], kDim};
+      const char *names[2] = {"PART", "MASTER"};
+      for (int db : {0, -12, -24, -36, -48}) {
+         c.setColor(visage::Color(db == 0 ? 0x44ffffff : 0x18ffffff));
+         c.fill(0, yOf(db), w, 1);
+      }
+      for (int i = 0; i < 2; ++i) {
+         const float bw = 22 * s, x = w * (0.3f + 0.4f * i) - bw / 2;
+         c.setColor(visage::Color(0x40000000));
+         c.roundedRectangle(x, top, bw, bottom - top, 4 * s);
+         const float y = yOf(levels[i]);
+         c.setColor(glow(colors[i], 0.25f, 1.0f));
+         c.roundedRectangle(x - 3 * s, y - 3 * s, bw + 6 * s, bottom - y + 3 * s, 6 * s);
+         c.setColor(glow(colors[i], 0.9f, 1.3f));
+         c.roundedRectangle(x, y, bw, bottom - y, 4 * s);
+         c.setColor(visage::Color(0x88ffffff));
+         c.text(names[i], ui::font(9 * s), visage::Font::kCenter, x - 20 * s, h - 14 * s, bw + 40 * s, 14 * s);
+      }
+   }
+
+private:
+   EditorHost &host_;
+};
+
 class Panel : public ui::DesignFrame, public visage::EventTimer, public Mapper {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
@@ -1951,29 +2069,32 @@ private:
          bindings_.bind(env, id(kEnvAttack), id(kEnvDecay), id(kEnvSustain), id(kEnvRelease));
       }
 
-      // Under the sky: the part's voice and the output, big.
-      const ui::Rect vb{kReducedSky.x, 650, kReducedSky.w, 274};
+      // Under the sky: the part's voice and the output, big. The drawings are shared (see
+      // buildReducedShared()); the knobs sit under them.
+      const ui::Rect vb = kVoiceBox;
       glass(vb, part == 0 ? "PART A  VOICE" : "PART B  VOICE", c);
-      segments(kVoiceMode, c, {vb.x + 150, vb.y + 10, 180, 26}, std::vector<std::string>{"POLY", "MONO", "LEGATO"});
-      auto &voices = glassy(put<ui::NumberBox>({vb.x + 340, vb.y + 10, 76, 26}, rangeOf(partId(part, kPolyphony), 1.0)), c);
+      segments(kVoiceMode, c, {vb.x + 150, vb.y + 8, 180, 26}, std::vector<std::string>{"POLY", "MONO", "LEGATO"});
+      auto &voices = glassy(put<ui::NumberBox>({vb.x + 340, vb.y + 8, 76, 26}, rangeOf(partId(part, kPolyphony), 1.0)), c);
       voices.setStepButtons(true);
       voices.valueText = [](double v) { return std::to_string(static_cast<int>(v + 0.5)); };
       bindings_.bind(voices, partId(part, kPolyphony));
-      const auto v = ui::row({vb.x + 8, vb.y + 52, vb.w - 16, 116}, 6);
-      knob(kPartLevel, "LEVEL", c, v[0]);
-      knob(kPartPan, "PAN", c, v[1]);
-      knob(kSkyPan, "X PAN", c, v[2], "How far a creature's place in the sky, left to right, pans its voice.");
-      knob(kGlideTime, "GLIDE", c, v[3]);
-      knob(kPartTranspose, "TRANSP", c, v[4]);
-      knob(kVelocityToAmp, "VELOCITY", c, v[5], "How much Strike sets the level.");
+      tips_.add(voices, "How many creatures this species can have at once: one per held note, up to 16.");
+      const auto stereo = ui::row({vb.x + 8, vb.y + 172, 412, 100}, 3);
+      knob(kPartPan, "PAN", c, stereo[0]);
+      knob(kSkyPan, "X PAN", c, stereo[1], "How far a creature's place in the sky, left to right, pans its voice.");
+      const auto levels = ui::row({vb.x + 430, vb.y + 172, 140, 100}, 2);
+      knob(kPartLevel, "LEVEL", c, levels[0]);
+      const auto more = ui::grid({vb.x + 576, vb.y + 40, 140, 232}, 2, 2);
+      knob(kGlideTime, "GLIDE", c, more[0]);
+      knob(kPartTranspose, "TRANSP", c, more[1]);
+      knob(kVelocityToAmp, "VELOCITY", c, more[2], "How much Strike sets the level.");
+      knob(kBendRange, "BEND", c, more[3], "The MPE bend range: how far a finger slides, in semitones.");
       const int was = part_;
       part_ = -1;
-      label({vb.x + 14, vb.y + 214, 120, 18}, "OUTPUT", kDim, visage::Font::kLeft);
-      const auto out = ui::row({vb.x + 8, vb.y + 170, vb.w - 16, 116}, 6);
-      knob(kMasterLevel, "MASTER", kDim, out[1]);
-      knob(kOutputWidth, "WIDTH", kDim, out[2], "The whole output's stereo width: 0% is mono, past 100% wider.");
+      knob(kOutputWidth, "WIDTH", kDim, stereo[2], "The whole output's stereo width: 0% is mono, past 100% wider.");
+      knob(kMasterLevel, "MASTER", kDim, levels[1]);
       part_ = was;
-      for (size_t i = placed_.size() - 3; i < placed_.size(); ++i)
+      for (size_t i = placed_.size() - 2; i < placed_.size(); ++i)
          placed_[i].part = part;
    }
 
@@ -1982,6 +2103,9 @@ private:
       for (int o = 0; o < kOscCount; ++o)
          drawings_.push_back(&put<WaveView>({164, 98 + o * 98.0f, 330, 92}, host_, o, kOscColors[o]));
       drawings_.push_back(&put<FilterView>({28, 440, 856, 94}, host_));
+      const ui::Rect vb = kVoiceBox;
+      drawings_.push_back(&put<StereoView>({vb.x + 14, vb.y + 44, 400, 124}, host_, *view_));
+      drawings_.push_back(&put<LevelView>({vb.x + 430, vb.y + 44, 140, 124}, host_));
       const std::pair<int, const char *> sources[] = {
           {kSourceSpeed, "SPEED"}, {kSourceNearest, "NEAREST"}, {kSourceHeading, "HEADING"}, {kSourceTurn, "TURN"}};
       for (int i = 0; i < 4; ++i)
@@ -2229,6 +2353,7 @@ private:
    static constexpr int kAllCards = 0, kReducedView = 1, kSkyOnly = 2;
    // The reduced view's sky, right of its big panels (design units, like kSky*).
    static constexpr ui::Rect kReducedSky{912, 60, kSkyW, kSkyH};
+   static constexpr ui::Rect kVoiceBox{912, 650, kSkyW, 274};
    static constexpr float kCleanMargin = 16.0f;
    std::vector<Placed> placed_;
    std::vector<MapKnob *> mapKnobs_;
