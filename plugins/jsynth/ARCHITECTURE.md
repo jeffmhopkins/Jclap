@@ -34,7 +34,7 @@ it gives a number, the number is the one in the code.
 | [`src/flock.h`](src/flock.h) | The boids: every creature's flight, who hears whom, the ink field and the eight flock sources. |
 | [`src/plugin.cpp`](src/plugin.cpp) | The CLAP plugin: params, state, note and MIDI events, ports, NOTE_END, and what the panel reads back. |
 | [`src/presets.h`](src/presets.h) | The factory bank and user preset files. |
-| [`src/editor.cpp`](src/editor.cpp) | The panel: the sky, its three views (FULL with every card, REDUCED with big drawn panels, SKY alone), MAP and the route list. |
+| [`src/editor.cpp`](src/editor.cpp) | The panel: the sky, its two views (SYNTH with big drawn panels beside the sky, SKY alone), MAP and the route list. |
 
 A part's params are written once, as offsets, and `partId(part, offset)` gives the host's id: part
 A's start at 64 and part B's at 1088. Each module (oscillator, filter, envelope, LFO, route) is a

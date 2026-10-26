@@ -392,6 +392,11 @@ struct FlockFrame {
    // Each part's newest note's envelopes and LFOs, for the chips' lights.
    float env[kPartCount][kEnvCount] = {};
    float lfo[kPartCount][kLfoCount] = {};
+   // Each part's newest voice's filters as modulated, for the filter graph: cutoff in Hz (0 while the
+   // part is silent) and resonance.
+   float cutoff[kPartCount][kFilterCount] = {}, resonance[kPartCount][kFilterCount] = {};
+   // The peaks since the last frame of A, B and the main output, for the level bars.
+   float meter[3] = {};
    // Where every sounding voice's envelopes are, for the dots riding the envelope curves. A stage is
    // the curve's: 0 attack, 1 decay, 2 sustain, 3 release, -1 not running.
    struct Playhead {

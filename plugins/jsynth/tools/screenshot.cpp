@@ -1,7 +1,8 @@
 // Renders the panel to a PNG without a host:
-//    jsynth-screenshot out.png [part [routes [map-source [width height [view]]]]]
+//    jsynth-screenshot out.png [part [routes [map-source [width height [view [tab]]]]]]
 // Part 0 is A, 1 is B. Routes 1 opens the route list. Map-source, a route source's number, turns MAP
-// on with that source armed. View 0 is every card, 1 the reduced view, 2 only the sky.
+// on with that source armed. View 0 is the synth, 1 only the sky. Tab
+// is the one under the sky: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH.
 
 #include <cstdio>
 #include <cstdlib>
@@ -125,6 +126,7 @@ int main(int argc, char **argv) {
    view.routes = arg(3) != 0;
    view.mapSource = arg(4);
    view.view = arg(7);
+   view.voiceTab = arg(8);
    const int width = argc > 6 ? arg(5) : 1648;
    const int height = argc > 6 ? arg(6) : 940;
    DemoHost host;

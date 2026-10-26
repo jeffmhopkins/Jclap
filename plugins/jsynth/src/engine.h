@@ -117,6 +117,7 @@ public:
          dc_[p][0] = dc_[p][1] = dcIn_[p][0] = dcIn_[p][1] = 0;
          stackSize_[p] = 0;
       }
+      meters_[0] = meters_[1] = meters_[2] = 0;
       for (float &c : chanBend_)
          c = 0;
       for (float &c : chanPressure_)
@@ -384,6 +385,24 @@ public:
    }
 
    const Flock &flock() const { return flock_; }
+   // `part`'s newest voice's filter `f` now, as modulated: its cutoff in Hz and its resonance; false
+   // while the part has no voice.
+   bool filterNow(int part, int f, float &hz, float &resonance) const {
+      const Voice *v = newest(part);
+      if (!v)
+         return false;
+      hz = v->cutNow[f];
+      resonance = v->resNow[f];
+      return hz > 0.0f;
+   }
+
+   // The peak of A (0), B (1) or the main output (2) since the last call, for the panel's meters.
+   float takeMeter(int i) {
+      const float m = meters_[i];
+      meters_[i] = 0;
+      return m;
+   }
+
    // The newest held voice's sources for the panel's chips: envelopes and LFOs of `part`.
    float envLevel(int part, int e) const {
       const Voice *v = newest(part);
@@ -486,6 +505,8 @@ private:
       int driveType = 0;
       // Filters: per filter, type and slope, and per channel the stages.
       int ftype[kFilterCount] = {}, fstages[kFilterCount] = {1, 1};
+      // Each filter's cutoff (Hz, after routes and key tracking) and resonance this tick, for the panel.
+      float cutNow[kFilterCount] = {}, resNow[kFilterCount] = {};
       // Which of each filter's ramps its type reads (kUse*); the rest wait for the next tick.
       uint8_t fuse[kFilterCount] = {};
       bool open[kFilterCount] = {};
@@ -998,6 +1019,8 @@ private:
          float hz = static_cast<float>(cutoffHz(mod(v, offset, filterParam(f, kFilterCutoff)))) *
                     std::pow(2.0f, (notePitch - 60.0f) / 12.0f * keyTrack);
          const float resonance = mod(v, offset, filterParam(f, kFilterResonance));
+         v.cutNow[f] = std::clamp(hz, 10.0f, 0.45f * fs);
+         v.resNow[f] = resonance;
          if (type == 6 || type == 7) {
             // The comb: tuned to the cutoff, 30 Hz up.
             hz = std::clamp(hz, 30.0f, 0.45f * fs);
@@ -1280,6 +1303,7 @@ private:
             dc_[part][c] = y;
             lr[c] = y;
          }
+         meters_[part] = std::max(meters_[part], std::max(std::fabs(lr[0]), std::fabs(lr[1])));
          if (choice(part, kPartOutput) == 1 && out[part + 1]) {
             out[part + 1][0][n] = lr[0];
             out[part + 1][1][n] = lr[1];
@@ -1294,6 +1318,7 @@ private:
       const float mid = 0.5f * (mainL + mainR), side = 0.5f * (mainL - mainR) * w;
       out[0][0][n] = limit((mid + side) * m);
       out[0][1][n] = limit((mid - side) * m);
+      meters_[2] = std::max(meters_[2], std::max(std::fabs(out[0][0][n]), std::fabs(out[0][1][n])));
    }
 
    static float limit(float x) {
@@ -1839,6 +1864,8 @@ private:
    float oscOut_[2][kVoiceSlots] = {};
    dsp::HalfBand halfBands_[kPartCount][2][2];
    float dc_[kPartCount][2] = {}, dcIn_[kPartCount][2] = {};
+   // The peaks since the panel last took them: A, B and the main output.
+   float meters_[3] = {};
    Ramp width_, master_;
 
    float touchCurve_[kTouchCount] = {}, touchCoef_[kTouchCount] = {};
