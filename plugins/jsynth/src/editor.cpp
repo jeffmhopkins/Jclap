@@ -1228,7 +1228,7 @@ public:
       for (int i = 0; i < kPoints; ++i) {
          const float x0 = w * i / kPoints, x1 = w * (i + 1) / kPoints, y0 = y(sum[i]), y1 = y(sum[i + 1]);
          c.setColor(glow(color, 0.18f, 1.0f));
-         c.fill(x0, std::min(y0, y1), x1 - x0 + 0.5f, h - std::min(y0, y1));
+         c.fill(std::floor(x0), std::max(y0, y1), std::floor(x1) - std::floor(x0), h - std::max(y0, y1));
          c.setColor(glow(color, 1.0f, 1.4f));
          c.segment(x0, y0, x1, y1, 2.5f * s, true);
       }
@@ -1896,7 +1896,7 @@ private:
    // left, each drawn as well as set.
    void buildReduced(int part) {
       const unsigned c = kPartColors[part];
-      const float x = 16, w = 760;
+      const float x = 16, w = 880;
       // Oscillators: a row each, its wave drawn beside its knobs.
       glass({x, 64, w, 330}, "OSCILLATORS", c);
       for (int o = 0; o < kOscCount; ++o) {
@@ -1905,7 +1905,7 @@ private:
          label({x + 14, y + 6, 120, 20}, "OSC " + std::to_string(o + 1), oc, visage::Font::kLeft);
          dropdown(oscParam(o, kOscWave), oc, {x + 14, y + 32, 120, 26});
          segments(oscParam(o, kOscPitchMode), oc, {x + 14, y + 62, 120, 24}, std::vector<std::string>{"NOTE", "RATIO", "HZ"});
-         const auto k = ui::row({x + 380, y - 4, 300, 104}, 4);
+         const auto k = ui::row({x + 486, y - 4, 320, 104}, 4);
          auto &coarse = knob(oscParam(o, kOscCoarse), "PITCH", oc, k[0]);
          auto &ratio = knob(oscParam(o, kOscRatio), "RATIO", oc, k[0]);
          auto &fixed = knob(oscParam(o, kOscFixed), "FREQ", oc, k[0]);
@@ -1913,8 +1913,8 @@ private:
          knob(oscParam(o, kOscShape), "SHAPE", oc, k[1]);
          knob(mixParam(kMixLevel, o), "LEVEL", oc, k[2]);
          knob(mixParam(kMixPan, o), "PAN", oc, k[3]);
-         label({x + 684, y + 10, 64, 16}, "FILTER");
-         dropdown(oscParam(o, kOscFilter), oc, {x + 688, y + 36, 58, 26});
+         label({x + 808, y + 10, 64, 16}, "FILTER");
+         dropdown(oscParam(o, kOscFilter), oc, {x + 810, y + 36, 60, 26});
       }
 
       // Filters: their response drawn across the panel, then each one's knobs under its half.
@@ -1938,25 +1938,50 @@ private:
       glass({x, 664, w, 260}, "ENVELOPES", c);
       const char *envNames[kEnvCount] = {"ENV 1  AMP", "ENV 2", "ENV 3"};
       for (int e = 0; e < kEnvCount; ++e) {
-         const float ex = x + 12 + e * 248.0f;
+         const float ex = x + 12 + e * 288.0f;
          const unsigned ec = sourceColor(kSourceEnv1 + e);
          chip(kSourceEnv1 + e, envNames[e], {ex, 694, 110, 24});
-         dropdown(envParam(e, kEnvLoop), c, {ex + 150, 694, 86, 24});
+         dropdown(envParam(e, kEnvLoop), c, {ex + 190, 694, 86, 24});
          const auto id = [&](EnvParam p) { return partId(part, envParam(e, p)); };
-         auto &env = glassy(put<ui::EnvelopeEditor>({ex, 726, 236, 190}, rangeOf(id(kEnvAttack)), rangeOf(id(kEnvDecay)),
+         auto &env = glassy(put<ui::EnvelopeEditor>({ex, 726, 276, 190}, rangeOf(id(kEnvAttack)), rangeOf(id(kEnvDecay)),
                                                     rangeOf(id(kEnvSustain)), rangeOf(id(kEnvRelease))),
                             ec);
          env.setTimeCurve(0.35f);
          envelopes_[1][part][e] = &env;
          bindings_.bind(env, id(kEnvAttack), id(kEnvDecay), id(kEnvSustain), id(kEnvRelease));
       }
+
+      // Under the sky: the part's voice and the output, big.
+      const ui::Rect vb{kReducedSky.x, 650, kReducedSky.w, 274};
+      glass(vb, part == 0 ? "PART A  VOICE" : "PART B  VOICE", c);
+      segments(kVoiceMode, c, {vb.x + 150, vb.y + 10, 180, 26}, std::vector<std::string>{"POLY", "MONO", "LEGATO"});
+      auto &voices = glassy(put<ui::NumberBox>({vb.x + 340, vb.y + 10, 76, 26}, rangeOf(partId(part, kPolyphony), 1.0)), c);
+      voices.setStepButtons(true);
+      voices.valueText = [](double v) { return std::to_string(static_cast<int>(v + 0.5)); };
+      bindings_.bind(voices, partId(part, kPolyphony));
+      const auto v = ui::row({vb.x + 8, vb.y + 52, vb.w - 16, 116}, 6);
+      knob(kPartLevel, "LEVEL", c, v[0]);
+      knob(kPartPan, "PAN", c, v[1]);
+      knob(kSkyPan, "X PAN", c, v[2], "How far a creature's place in the sky, left to right, pans its voice.");
+      knob(kGlideTime, "GLIDE", c, v[3]);
+      knob(kPartTranspose, "TRANSP", c, v[4]);
+      knob(kVelocityToAmp, "VELOCITY", c, v[5], "How much Strike sets the level.");
+      const int was = part_;
+      part_ = -1;
+      label({vb.x + 14, vb.y + 214, 120, 18}, "OUTPUT", kDim, visage::Font::kLeft);
+      const auto out = ui::row({vb.x + 8, vb.y + 170, vb.w - 16, 116}, 6);
+      knob(kMasterLevel, "MASTER", kDim, out[1]);
+      knob(kOutputWidth, "WIDTH", kDim, out[2], "The whole output's stereo width: 0% is mono, past 100% wider.");
+      part_ = was;
+      for (size_t i = placed_.size() - 3; i < placed_.size(); ++i)
+         placed_[i].part = part;
    }
 
    // The reduced view's drawings, which follow the shown part, and its flock sources under the sky.
    void buildReducedShared() {
       for (int o = 0; o < kOscCount; ++o)
-         drawings_.push_back(&put<WaveView>({164, 98 + o * 98.0f, 220, 92}, host_, o, kOscColors[o]));
-      drawings_.push_back(&put<FilterView>({28, 440, 736, 94}, host_));
+         drawings_.push_back(&put<WaveView>({164, 98 + o * 98.0f, 330, 92}, host_, o, kOscColors[o]));
+      drawings_.push_back(&put<FilterView>({28, 440, 856, 94}, host_));
       const std::pair<int, const char *> sources[] = {
           {kSourceSpeed, "SPEED"}, {kSourceNearest, "NEAREST"}, {kSourceHeading, "HEADING"}, {kSourceTurn, "TURN"}};
       for (int i = 0; i < 4; ++i)
@@ -2203,7 +2228,7 @@ private:
    ui::Button *routesButton_ = nullptr;
    static constexpr int kAllCards = 0, kReducedView = 1, kSkyOnly = 2;
    // The reduced view's sky, right of its big panels (design units, like kSky*).
-   static constexpr ui::Rect kReducedSky{792, 150, 840, 630};
+   static constexpr ui::Rect kReducedSky{912, 60, kSkyW, kSkyH};
    static constexpr float kCleanMargin = 16.0f;
    std::vector<Placed> placed_;
    std::vector<MapKnob *> mapKnobs_;
