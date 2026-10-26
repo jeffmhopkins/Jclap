@@ -1,7 +1,6 @@
 jclap_add_plugin(monolith
    OUTPUT_NAME "Monolith"
    BUNDLE_ID com.jeffmhopkins.jclap.monolith
-   OUTPUT_DIR monolith
    SOURCES src/plugin.cpp src/editor.cpp)
 target_include_directories(monolith PRIVATE src)
 target_link_libraries(monolith PRIVATE jclap::ui)
