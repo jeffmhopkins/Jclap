@@ -289,9 +289,11 @@ public:
    clap_process_status process(const clap_process_t *proc) override {
       jclap::dsp::ScopedNoDenormals noDenormals;
       drainEdits(proc->out_events);
-      if (proc->transport)
-         engine_->transport((proc->transport->flags & CLAP_TRANSPORT_HAS_TEMPO) ? proc->transport->tempo : 0.0,
-                            (proc->transport->flags & CLAP_TRANSPORT_IS_PLAYING) != 0);
+      if (const clap_event_transport_t *t = proc->transport) {
+         const double beats = static_cast<double>(t->song_pos_beats) / CLAP_BEATTIME_FACTOR;
+         engine_->transport((t->flags & CLAP_TRANSPORT_HAS_TEMPO) ? t->tempo : 0.0, (t->flags & CLAP_TRANSPORT_IS_PLAYING) != 0,
+                            (t->flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE) ? &beats : nullptr);
+      }
 
       // Where the engine writes: the main port, then each part's own. A part whose port is missing
       // plays in the main mix.

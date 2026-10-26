@@ -711,10 +711,10 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
         <tbody>
           <tr><td class="c">Shape</td><td class="r">Sine, Triangle, Saw, Square, S&amp;H, Smooth</td><td class="d">Sine (Wind: Smooth)</td><td>S&amp;H holds a random value per cycle; Smooth glides between random values.</td></tr>
           <tr><td class="c">Trigger</td><td class="r">Retrigger, Free, Global</td><td class="d">Retrigger (Wind: Global)</td><td>See below.</td></tr>
-          <tr><td class="c">FREE / SYNC</td><td class="r">Rate or tempo</td><td class="d">Free</td><td>Sync follows the host's tempo at <strong>DIVISION</strong>.</td></tr>
+          <tr><td class="c">FREE / SYNC</td><td class="r">Rate or tempo</td><td class="d">Free</td><td>Sync follows the host's tempo at <strong>DIVISION</strong>; Free and Global also lock to its bar.</td></tr>
           <tr><td class="c">RATE</td><td class="r">0.02 – 50 Hz</td><td class="d">5 Hz (Wind: 0.2 Hz)</td><td><span class="mod t">ROUTE</span></td></tr>
           <tr><td class="c">PUSH</td><td class="r">0 – 100%</td><td class="d">20% (Wind: 30%)</td><td>How hard it moves the creatures. <span class="mod t">ROUTE</span></td></tr>
-          <tr><td class="c">PHASE</td><td class="r">0 – 360°</td><td class="d">0°</td><td>Where a retriggered cycle starts. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">PHASE</td><td class="r">0 – 360°</td><td class="d">0°</td><td>Where a retriggered cycle starts, or how far a synced one sits off the beat. <span class="mod t">ROUTE</span></td></tr>
           <tr><td class="c">DELAY</td><td class="r">0 ms – 20 s</td><td class="d">0</td><td>Fades the LFO in after each note starts. <span class="mod t">ROUTE</span></td></tr>
           <tr><td class="c">DIVISION</td><td class="r">1/32 – 4/1</td><td class="d">1/4</td><td>With triplets and dotted values.</td></tr>
           <tr><td class="c">POLARITY</td><td class="r">Bipolar, Unipolar</td><td class="d">Bipolar</td><td>Bipolar swings both ways around the knob; unipolar only up from it.</td></tr>
@@ -734,6 +734,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
         <dt>Free</dt><dd>Each note's LFO picks up where the part's running LFO is, so notes are in step with each other.</dd>
         <dt>Global</dt><dd>One LFO for the whole part. Every note hears the same value; a route can't change its rate per note.</dd>
       </div>
+      <div class="note"><span class="k">On the grid</span><p>With <strong>SYNC</strong> on, a <strong>Free</strong> or <strong>Global</strong> LFO is locked to your DAW's bar, not just its tempo: a 1/16 gate lands on the sixteenths wherever you start playback, and a looped bar plays the same S&amp;H values every time round. <strong>PHASE</strong> shifts it against the beat. <strong>Retrigger</strong> starts it with each note instead, which suits notes played off the grid.</p></div>
       <div class="note"><span class="k">Vibrato</span><p>Route LFO 1 to the part's <strong>Fine</strong> at a few percent for vibrato, and set its <strong>DELAY</strong> so it arrives once the note has settled. Map Press onto that route's amount and the vibrato follows your finger.</p></div>
     </div>
   </div>

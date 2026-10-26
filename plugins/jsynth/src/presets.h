@@ -111,11 +111,13 @@ inline const std::vector<Preset> &factoryPresets() {
       const auto lfo = [](int part, int l, int shape, double hz) {
          return Values{{partId(part, lfoParam(l, kLfoShape)), shape}, {partId(part, lfoParam(l, kLfoRate)), lfoValue(hz)}};
       };
-      // The same, synced to the host's tempo at a division (kDivisionNames).
+      // The same, synced to the host's tempo at a division (kDivisionNames) and running Free, so it
+      // sits on the host's bar rather than starting with each note.
       const auto lfoSync = [](int part, int l, int shape, int division) {
          return Values{{partId(part, lfoParam(l, kLfoShape)), shape},
                        {partId(part, lfoParam(l, kLfoSync)), 1},
-                       {partId(part, lfoParam(l, kLfoDivision)), division}};
+                       {partId(part, lfoParam(l, kLfoDivision)), division},
+                       {partId(part, lfoParam(l, kLfoTrigger)), 1}};
       };
       // One voice that slides between held notes over `glide` ms, and restarts from a released one.
       const auto mono = [](int part, double glide) {

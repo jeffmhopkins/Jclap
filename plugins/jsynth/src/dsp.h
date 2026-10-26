@@ -411,9 +411,11 @@ public:
    enum Shape { kSine, kTriangle, kSaw, kSquare, kSampleHold, kSmooth };
 
    void seed(uint32_t s) {
+      seed_ = s;
       rng_.seed(s);
       held_ = rng_.bipolar();
       next_ = rng_.bipolar();
+      cycle_ = INT64_MIN;
    }
    void restart(float phase) {
       phase_ = phase - std::floor(phase);
@@ -430,6 +432,30 @@ public:
          held_ = next_;
          next_ = rng_.bipolar();
       }
+      cycle_ = INT64_MIN;
+      return at(shape, delay);
+   }
+
+   // Held to a timeline instead: `cycles` is how many cycles in it is (the host's beats over the
+   // division's, plus Phase), so it lands on the same place in the bar however playback got there.
+   // Its random values are drawn from the cycle's number, so a looped bar repeats them.
+   float lock(float dt, double cycles, int shape, float delay) {
+      age_ += dt;
+      const double whole = std::floor(cycles);
+      phase_ = static_cast<float>(cycles - whole);
+      if (phase_ >= 1.0f)
+         phase_ = 0.0f;
+      const int64_t c = static_cast<int64_t>(whole);
+      if (c != cycle_) {
+         held_ = draw(c);
+         next_ = draw(c + 1);
+         cycle_ = c;
+      }
+      return at(shape, delay);
+   }
+
+private:
+   float at(int shape, float delay) const {
       float v = 0;
       const float p = phase_;
       switch (shape) {
@@ -459,9 +485,19 @@ public:
       const float fade = delay <= 0.0f ? 1.0f : std::min(1.0f, age_ / delay);
       return v * fade;
    }
+   // -1..1 for cycle `c`, the same every time for this seed.
+   float draw(int64_t c) const {
+      uint64_t z = (static_cast<uint64_t>(seed_) << 32) ^ static_cast<uint64_t>(c);
+      z += 0x9e3779b97f4a7c15ull;
+      z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
+      z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
+      z ^= z >> 31;
+      return static_cast<float>(static_cast<uint32_t>(z >> 32)) / 2147483648.0f - 1.0f;
+   }
 
-private:
    Random rng_;
+   uint32_t seed_ = 0;
+   int64_t cycle_ = INT64_MIN;
    float phase_ = 0, age_ = 0, held_ = 0, next_ = 0;
 };
 

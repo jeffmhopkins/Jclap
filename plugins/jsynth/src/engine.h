@@ -134,6 +134,7 @@ public:
       tickPos_ = 0;
       flockAcc_ = 0;
       age_ = 0;
+      beats_ = 0;
       first_ = true;
       frames_ = 0;
       for (auto &a : oscOut_)
@@ -319,8 +320,11 @@ public:
    }
 
    // Tempo for synced LFOs, and whether the transport just started (which reseeds the flock and
-   // randomness when nothing is sounding, so a bounce from the top matches playback).
-   void transport(double bpm, bool playing) {
+   // randomness when nothing is sounding, so a bounce from the top matches playback). `beats` is
+   // where the block starts in the song, in quarter notes, when the host says: synced LFOs that
+   // aren't retriggered follow it, so they sit on the bar. Without it they count on from where
+   // they were.
+   void transport(double bpm, bool playing, const double *beats = nullptr) {
       if (bpm > 1.0)
          bpm_ = bpm;
       if (playing && !playing_) {
@@ -331,6 +335,9 @@ public:
             reset(seed_);
       }
       playing_ = playing;
+      following_ = playing && beats;
+      if (following_)
+         hostBeats_ = *beats;
    }
 
    // ---- render ----
@@ -712,12 +719,17 @@ private:
          touchCoef_[t] = smooth <= 0.0f ? 1.0f : 1.0f - std::exp(-tickSeconds / smooth);
       }
       const int steps = kTick * factor_;
+      // Where this tick is in the song, in quarter notes.
+      if (following_)
+         beats_ = hostBeats_ + blockSample_ * bpm_ / (60.0 * sampleRate_);
 
       // The part-wide LFOs (Global trigger), and the wind that pushes each species.
       for (int part = 0; part < kPartCount; ++part)
          for (int l = 0; l < kLfoCount; ++l) {
-            const float hz = lfoRate(part, l, nullptr, nullptr);
-            float v = partLfo_[part][l].process(tickSeconds, hz, choice(part, lfoParam(l, kLfoShape)), 0.0f);
+            const int shape = choice(part, lfoParam(l, kLfoShape));
+            float v = choice(part, lfoParam(l, kLfoSync)) == 1
+                         ? partLfo_[part][l].lock(tickSeconds, lfoCycles(part, l, plain(part, lfoParam(l, kLfoPhase))), shape, 0.0f)
+                         : partLfo_[part][l].process(tickSeconds, lfoRate(part, l, nullptr, nullptr), shape, 0.0f);
             if (choice(part, lfoParam(l, kLfoPolarity)) == 1)
                v = 0.5f + 0.5f * v;
             partLfoOut_[part][l] = v;
@@ -750,16 +762,24 @@ private:
       // Main bus settings.
       width_.to(static_cast<float>(global(kOutputWidth)), static_cast<float>(kTick));
       master_.to(static_cast<float>(std::pow(10.0, global(kMasterLevel) / 20.0)), static_cast<float>(kTick));
+      beats_ += tickSeconds * bpm_ / 60.0;
       ++frames_;
    }
 
+   // A synced LFO's beat length, in quarter notes, for each of kDivisionNames.
+   static double lfoBeats(int division) {
+      static const double beats[] = {0.125, 1.0 / 6, 0.25, 1.0 / 3, 0.375, 0.5, 2.0 / 3, 0.75,
+                                     1.0,   4.0 / 3, 1.5,  2.0,     4.0,   8.0, 16.0};
+      return beats[std::clamp(division, 0, 14)];
+   }
+   // How many cycles into the song a synced LFO is this tick, `degrees` of Phase on.
+   double lfoCycles(int part, int l, float degrees) const {
+      return beats_ / lfoBeats(choice(part, lfoParam(l, kLfoDivision))) + degrees / 360.0;
+   }
+
    float lfoRate(int part, int l, const Voice *v, const float *offset) const {
-      if (choice(part, lfoParam(l, kLfoSync)) == 1) {
-         static const float beats[] = {0.125f, 1.0f / 6, 0.25f, 1.0f / 3, 0.375f, 0.5f, 2.0f / 3, 0.75f,
-                                       1.0f,   4.0f / 3, 1.5f, 2.0f, 4.0f, 8.0f, 16.0f};
-         const int d = std::clamp(choice(part, lfoParam(l, kLfoDivision)), 0, 14);
-         return static_cast<float>(bpm_ / 60.0) / beats[d];
-      }
+      if (choice(part, lfoParam(l, kLfoSync)) == 1)
+         return static_cast<float>(bpm_ / 60.0 / lfoBeats(choice(part, lfoParam(l, kLfoDivision))));
       const float r = v ? mod(*v, offset, lfoParam(l, kLfoRate)) : plain(part, lfoParam(l, kLfoRate));
       return static_cast<float>(lfoHz(r));
    }
@@ -834,11 +854,16 @@ private:
          v.envOut[e] = v.env[e].process(tickSeconds) * v.envScale[e];
       for (int l = 0; l < kLfoCount; ++l) {
          float out;
-         if (choice(part, lfoParam(l, kLfoTrigger)) == 2)
+         const int trigger = choice(part, lfoParam(l, kLfoTrigger));
+         if (trigger == 2)
             out = partLfoOut_[part][l];
          else {
             const float delay = static_cast<float>(timeMs(mod(v, offset, lfoParam(l, kLfoDelay)))) / 1000.0f;
-            out = v.lfo[l].process(tickSeconds, lfoRate(part, l, &v, offset), choice(part, lfoParam(l, kLfoShape)), delay);
+            const int shape = choice(part, lfoParam(l, kLfoShape));
+            // Free and synced, each note's LFO sits on the song's bar like the part's does.
+            out = trigger == 1 && choice(part, lfoParam(l, kLfoSync)) == 1
+                     ? v.lfo[l].lock(tickSeconds, lfoCycles(part, l, mod(v, offset, lfoParam(l, kLfoPhase))), shape, delay)
+                     : v.lfo[l].process(tickSeconds, lfoRate(part, l, &v, offset), shape, delay);
             if (choice(part, lfoParam(l, kLfoPolarity)) == 1)
                out = 0.5f + 0.5f * out;
          }
@@ -1783,6 +1808,9 @@ private:
 
    double sampleRate_ = 48000.0;
    double bpm_ = 120.0;
+   // The song position this tick, in quarter notes, and the host's at the top of the block.
+   double beats_ = 0, hostBeats_ = 0;
+   bool following_ = false;
    bool playing_ = false;
    uint32_t seed_ = 1;
    ParamSource params_;
