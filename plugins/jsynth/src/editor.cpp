@@ -93,7 +93,7 @@ unsigned sourceColor(int source) {
        0xff808080,                                                 // Off
        0xffffd36b, 0xffffa94d, 0xffff7a59,                         // Env 1-3
        0xff5fd3b0, 0xffc9a0ff,                                     // LFO 1, LFO 2
-       0xfff6f0a0, 0xffff6fd2, 0xffb98bff, 0xff8fe8a8,             // Strike, Press, Glide, Slide
+       0xfff6f0a0, 0xffff6fd2, 0xffb98bff, 0xff8fe8a8, 0xff9ad0c0, // Velocity, Press, Glide, Slide, Release
        0xffc0c8d8,                                                 // Key
        0xfff2c94c, 0xff6fe0ff, 0xffa98bff, 0xffff8a7a,             // Speed, Nearest, Heading, Turn
        0xffd0d0d0, 0xffe0e0ff,                                     // Random, Mod Wheel
@@ -102,8 +102,8 @@ unsigned sourceColor(int source) {
 }
 // The wingbeat's and the wind's colour, on the MOTION card.
 constexpr unsigned kMotionColors[kMotionCount] = {0xff7ee0ff, 0xff8fb8ff};
-// Each touch's colour on the TOUCH card: its source's, and Lift's own.
-unsigned touchColor(int touch) { return touch < kTouchSourceCount ? sourceColor(kSourceStrike + touch) : 0xff9ad0c0; }
+// Each touch's colour on the TOUCH card: its source's.
+unsigned touchColor(int touch) { return sourceColor(kSourceVelocity + touch); }
 
 std::string text(clap_id id, double value) {
    char buffer[64];
@@ -842,7 +842,7 @@ private:
       case 2: // Split: B below the split key, A from it up
          return (n.note < static_cast<int>(host_.paramValue(kSplitKey) + 0.5)) == (part == 1);
       case 4: // Velocity: B for hard hits
-         return (n.strike * 127.0f >= static_cast<float>(host_.paramValue(kVelocitySplit))) == (part == 1);
+         return (n.velocity * 127.0f >= static_cast<float>(host_.paramValue(kVelocitySplit))) == (part == 1);
       default: // Layer, zones and the crossfade play both
          return true;
       }
@@ -901,7 +901,7 @@ private:
                    local_.creatures[i].part == part)
                   slot = i;
             float lx, ly;
-            const float touch[kTouchCount] = {n.strike, n.pressure, 0.0f, n.timbre, n.lift};
+            const float touch[kTouchCount] = {n.velocity, n.pressure, 0.0f, n.timbre, n.release};
             // A random place of its own, the same each time the note is played.
             const float random = std::sin(n.note * 12.9898f) * 2.0f - 1.0f;
             const auto axis = [&](FlockParam p) {
@@ -1717,11 +1717,11 @@ public:
       float touch[kTouchCount] = {};
       if (!notes_.empty()) {
          const EditorHost::Note &n = notes_.back();
-         touch[0] = n.strike;
+         touch[0] = n.velocity;
          touch[1] = n.pressure;
          touch[2] = std::min(1.0f, std::fabs(n.bend) / 2.0f);
          touch[3] = n.timbre;
-         touch[4] = n.lift;
+         touch[4] = n.release;
       }
       runEnvelopes(dt);
       showPlayheads();
@@ -1730,8 +1730,8 @@ public:
       const float pulse = 0.5f + 0.5f * std::sin(time_ * 5.0f);
       for (SourceChip *chip : chips_) {
          const int s = chip->source();
-         if (s >= kSourceStrike && s < kSourceStrike + kTouchSourceCount)
-            chip->setLevel(touch[s - kSourceStrike]);
+         if (s >= kSourceVelocity && s < kSourceVelocity + kTouchSourceCount)
+            chip->setLevel(touch[s - kSourceVelocity]);
          else if (s >= kSourceSpeed && s <= kSourceTurn)
             chip->setLevel(flock[s - kSourceSpeed], s == kSourceTurn);
          else if (s >= kSourceEnv1 && s < kSourceEnv1 + kEnvCount)
@@ -2097,23 +2097,23 @@ private:
    void buildHeader() {
       // The header's controls sit over the sky.
       dx_ = kColumn;
-      put<PresetBar>({262, 13, 250, 26}, host_);
-      auto &parts = glassy(put<ui::SegmentedSwitch>({522, 13, 146, 26}, std::vector<std::string>{"PART A", "PART B"}),
+      put<PresetBar>({192, 13, 250, 26}, host_);
+      auto &parts = glassy(put<ui::SegmentedSwitch>({452, 13, 146, 26}, std::vector<std::string>{"PART A", "PART B"}),
                            kPartColors[0]);
       parts.onChange = [this](int p) { showPart(p); };
       partSwitch_ = &parts;
       tips_.add(parts, "Each part is a species with its own patch and its own way of flying. The cards edit "
                        "this one; the sky shows both.");
-      auto &map = glassy(put<ui::Button>({800, 13, 62, 26}, "MAP"), kMapColor);
+      auto &map = glassy(put<ui::Button>({730, 13, 62, 26}, "MAP"), kMapColor);
       map.setToggle(true);
       map.onToggle = [this](bool on) { setMapping(on, kSourceOff); };
       mapButton_ = &map;
       tips_.add(map, "Touch a source (which turns MAP on), then drag any knob to set how much the source moves it. "
                      "Double-click a knob to flip its route, right-click to remove it.");
-      const auto cells = ui::row({872, 13, 312, 26}, kTouchSourceCount, 4);
+      const auto cells = ui::row({802, 13, 398, 26}, kTouchSourceCount, 4);
       for (int i = 0; i < kTouchSourceCount; ++i)
-         chip(kSourceStrike + i, upper(kTouchNames[i]), cells[i]);
-      auto &mode = glassy(put<ui::Dropdown>({678, 13, 112, 26}, upper(kPlayModeNames)), kPartColors[0]);
+         chip(kSourceVelocity + i, upper(kTouchNames[i]), cells[i]);
+      auto &mode = glassy(put<ui::Dropdown>({608, 13, 112, 26}, upper(kPlayModeNames)), kPartColors[0]);
       bindings_.bind(mode, kPlayMode);
       tips_.add(mode, "Which species a note hatches: A only, both, split by key or by velocity, by MPE zone, "
                       "or crossfaded by Slide or Press.");
@@ -2134,7 +2134,7 @@ private:
       group_ = kAlways;
       dx_ = 0;
       // Not put(): it stays when the cards hide.
-      auto &views = glassy(add<ui::SegmentedSwitch>({1420, 13, 212, 26}, std::vector<std::string>{"FULL", "REDUCED", "SKY"}),
+      auto &views = glassy(add<ui::SegmentedSwitch>({1436, 13, 196, 26}, std::vector<std::string>{"FULL", "REDUCED", "SKY"}),
                            kDim);
       views.onChange = [this](int v) { setView(v); };
       viewSwitch_ = &views;
@@ -2374,7 +2374,7 @@ private:
       knob(kPartLevel, "LEVEL", c, vk[3]);
       knob(kGlideTime, "GLIDE", c, vk[5]);
       knob(kPartTranspose, "TRANSP", c, vk[6]);
-      knob(kVelocityToAmp, "VELOCITY", c, vk[7], "How much Strike sets the level.");
+      knob(kVelocityToAmp, "VELOCITY", c, vk[7], "How much velocity sets the level.");
       const int was = part_;
       part_ = -1;
       knob(kOutputWidth, "WIDTH", kDim, vk[2], "The whole output's stereo width: 0% is mono, past 100% wider.");
@@ -2428,10 +2428,10 @@ private:
          chip(kSourceEnv1 + e, envNames[e], {x + 10, y + 7, 104, 22});
          dropdown(envParam(e, kEnvLoop), c, {x + w - 90, y + 7, 80, 22});
          const auto id = [&](EnvParam p) { return partId(part, envParam(e, p)); };
-         // The amp envelope's card also has how much Strike sets the level.
+         // The amp envelope's card also has how much velocity sets the level.
          const float knobW = e == 0 ? 56 : 0;
          if (e == 0)
-            knob(kVelocityToAmp, "VELOCITY", ec, {x + w - 4 - knobW, y + 40, knobW, 96}, "How much Strike sets the level.");
+            knob(kVelocityToAmp, "VELOCITY", ec, {x + w - 4 - knobW, y + 40, knobW, 96}, "How much velocity sets the level.");
          auto &env = glassy(put<ui::EnvelopeEditor>({x + 8, y + 36, w - 16 - knobW, h - 44}, rangeOf(id(kEnvAttack)),
                                                     rangeOf(id(kEnvDecay)), rangeOf(id(kEnvSustain)),
                                                     rangeOf(id(kEnvRelease))),

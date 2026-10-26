@@ -58,7 +58,7 @@ public:
       a(routeParam(7, kRouteSource), kSourceHeading);
       a(routeParam(7, kRouteDestination), destinationIndex(kPartPan));
       a(routeParam(7, kRouteAmount), 0.4);
-      a(routeParam(8, kRouteSource), kSourceStrike + 3);
+      a(routeParam(8, kRouteSource), kSourceVelocity + 3);
       a(routeParam(8, kRouteDestination), destinationIndex(oscParam(1, kOscShape)));
       a(routeParam(8, kRouteAmount), 0.3);
 

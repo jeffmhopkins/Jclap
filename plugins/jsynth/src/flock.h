@@ -28,7 +28,7 @@ constexpr int kNeighbours = 3;
 
 // Where a held note's lure sits: low notes left and high right (bend moves it), more Slide higher up.
 // What places a lure along one axis (kLureSourceNames).
-enum LureSource { kLurePitch, kLureStrike, kLurePress, kLureSlide, kLureLift, kLureRandom, kLureCentre };
+enum LureSource { kLurePitch, kLureVelocity, kLurePress, kLureSlide, kLureRelease, kLureRandom, kLureCentre };
 
 // A note's place along one axis, 0..1, by `source`: its pitch with bend over four octaves from C2, a
 // touch dimension (strike, press, glide, slide, lift, each 0..1), its own random place (-1..1), or
@@ -36,10 +36,10 @@ enum LureSource { kLurePitch, kLureStrike, kLurePress, kLureSlide, kLureLift, kL
 inline float lureAxis(int source, float note, float bend, const float touch[5], float random) {
    switch (source) {
    case kLurePitch: return std::clamp((note + bend - 36.0f) / 48.0f, 0.0f, 1.0f);
-   case kLureStrike: return std::clamp(touch[0], 0.0f, 1.0f);
+   case kLureVelocity: return std::clamp(touch[0], 0.0f, 1.0f);
    case kLurePress: return std::clamp(touch[1], 0.0f, 1.0f);
    case kLureSlide: return std::clamp(touch[3], 0.0f, 1.0f);
-   case kLureLift: return std::clamp(touch[4], 0.0f, 1.0f);
+   case kLureRelease: return std::clamp(touch[4], 0.0f, 1.0f);
    case kLureRandom: return std::clamp(0.5f + 0.5f * random, 0.0f, 1.0f);
    default: return 0.5f;
    }

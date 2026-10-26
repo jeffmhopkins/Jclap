@@ -642,8 +642,8 @@ private:
          return v.envOut[s - kSourceEnv1];
       if (s >= kSourceLfo1 && s < kSourceLfo1 + kLfoCount - kMotionCount)
          return v.lfoOut[kMotionCount + s - kSourceLfo1];
-      if (s >= kSourceStrike && s < kSourceStrike + kTouchSourceCount)
-         return v.touch[s - kSourceStrike];
+      if (s >= kSourceVelocity && s < kSourceVelocity + kTouchSourceCount)
+         return v.touch[s - kSourceVelocity];
       if (s == kSourceKey)
          return std::clamp((v.ref.key - 60) / 48.0f, -1.0f, 1.0f);
       if (s >= kSourceSpeed && s <= kSourceTurn)

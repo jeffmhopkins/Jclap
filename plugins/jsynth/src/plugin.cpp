@@ -49,9 +49,10 @@ struct HeldNotes {
 // State layout: 4-byte magic, uint32 version, uint32 count, then that many (uint32 id, double value)
 // pairs. Ids have gaps and blocks grow, so each value carries its id; an id this build doesn't know
 // is skipped, and a param the state doesn't mention keeps its default. Version 2 adds the preset's
-// name after the values: a uint32 length, then that many bytes.
+// name after the values: a uint32 length, then that many bytes. Version 3 adds Release as a route
+// source; an older state's route sources are moved to match.
 constexpr char kStateMagic[4] = {'J', 'J', 'S', 'Y'};
-constexpr uint32_t kStateVersion = 2;
+constexpr uint32_t kStateVersion = 3;
 
 class JSynth final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -262,7 +263,8 @@ public:
             return false;
          const int i = paramIndex(id);
          if (i >= 0)
-            loaded[i] = std::clamp(v, kParams()[i].def.min, kParams()[i].def.max);
+            loaded[i] = std::clamp(version < 3 ? migrateBeforeRelease(id, v) : v, kParams()[i].def.min,
+                                   kParams()[i].def.max);
       }
       // The preset's name follows the values from version 2.
       std::string name;
@@ -526,7 +528,7 @@ private:
       if (note < 0 || note > 127)
          return;
       if (HeldNote *n = find(note, channel)) {
-         n->shown.strike = velocity;
+         n->shown.velocity = velocity;
          return;
       }
       if (held_.size() >= kMaxShown)

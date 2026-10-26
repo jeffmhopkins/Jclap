@@ -95,7 +95,7 @@ inline const std::vector<Preset> &factoryPresets() {
       constexpr int kSine = 0, kSaw = 2, kPulse = 4, kHalfSine = 5, kAltSine = 8;
       constexpr int kRatio = 1;
       const int env2 = kSourceEnv1 + 1, env3 = kSourceEnv1 + 2, lfo1 = kSourceLfo1, lfo2 = kSourceLfo1 + 1;
-      const int strike = kSourceStrike, press = kSourceStrike + 1, slide = kSourceStrike + 3;
+      const int velocity = kSourceVelocity, press = kSourceVelocity + 1, slide = kSourceVelocity + 3;
       const clap_id cutoff = filterParam(0, kFilterCutoff), resonance = filterParam(0, kFilterResonance);
       const clap_id fm21 = fmCell(1, 0), fm31 = fmCell(2, 0), fm32 = fmCell(2, 1), fb1 = fmCell(0, 0), fb2 = fmCell(1, 1);
       std::vector<Preset> p;
@@ -115,16 +115,16 @@ inline const std::vector<Preset> &factoryPresets() {
       p.push_back({"Marimba", "Hits",
                    join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 4.0, 0.3), op(0, 2, kSine, 10.0, 0.0), {a(fm31, 0.05)},
                          env(0, 0, 0.5, 420, 0.0, 300), env(0, 2, 0.5, 35, 0.0, 30), open(0),
-                         routes(0, {{env3, fm31, 0.4}, {strike, fm31, 0.15}})})});
+                         routes(0, {{env3, fm31, 0.4}, {velocity, fm31, 0.15}})})});
       p.push_back({"Steel Drum", "Hits",
                    join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.0, 0.0), op(0, 2, kSine, 2.0, 0.0),
                          {a(oscParam(1, kOscFine), 4), a(fm21, 0.2), a(fm31, 0.1)}, env(0, 0, 1, 520, 0.0, 350),
-                         env(0, 2, 0.5, 140, 0.0, 100), open(0), routes(0, {{env3, fm21, 0.3}, {strike, fm31, 0.3}})})});
+                         env(0, 2, 0.5, 140, 0.0, 100), open(0), routes(0, {{env3, fm21, 0.3}, {velocity, fm31, 0.3}})})});
       p.push_back({"Log Drum", "Hits",
                    join({op(0, 0, kSine, 1.0, 1.0), {a(fb1, 0.15)}, env(0, 0, 0.5, 300, 0.0, 220), env(0, 2, 0.5, 45, 0.0, 40),
                          open(0),
                          // The hit drops in pitch, further the harder it is struck.
-                         routes(0, {{env3, oscParam(0, kOscRatio), 0.1}, {strike, routeParam(0, kRouteAmount), 0.1}})})});
+                         routes(0, {{env3, oscParam(0, kOscRatio), 0.1}, {velocity, routeParam(0, kRouteAmount), 0.1}})})});
       p.push_back({"Fireflies", "Hits",
                    {a(flockParam(kBehaviour), kScatter), a(oscParam(0, kOscWave), kHalfSine), a(envParam(0, kEnvAttack), timeValue(1)),
                     a(envParam(0, kEnvDecay), timeValue(220)), a(envParam(0, kEnvSustain), 0.0),
@@ -138,7 +138,7 @@ inline const std::vector<Preset> &factoryPresets() {
                          routes(0, {{env3, fm21, 0.3},
                                     {kSourceRandom, oscParam(1, kOscRatio), 0.04},
                                     {kSourceRandom, oscParam(2, kOscRatio), -0.05},
-                                    {strike, fm32, 0.3}})})});
+                                    {velocity, fm32, 0.3}})})});
       p.push_back({"Hunter Clicks", "Hits",
                    join({{g(kPlayMode, 1.0)},
                          op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.5, 0.0),
@@ -162,12 +162,12 @@ inline const std::vector<Preset> &factoryPresets() {
       p.push_back({"Koto", "Plucks",
                    join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.0, 0.0), {a(fm21, 0.15), a(fb1, 0.1)},
                          env(0, 0, 0.5, 1300, 0.0, 600), env(0, 2, 0.5, 180, 0.0, 150), open(0),
-                         routes(0, {{env3, fm21, 0.4}, {strike, fm21, 0.2}})})});
+                         routes(0, {{env3, fm21, 0.4}, {velocity, fm21, 0.2}})})});
       p.push_back({"Synth Pluck", "Plucks",
                    join({{a(oscParam(1, kOscWave), kPulse), a(oscParam(1, kOscPitchMode), 0), a(oscParam(1, kOscFine), 7),
                           a(mixParam(kMixLevel, 1), 0.6), a(cutoff, 0.3), a(resonance, 0.45)},
                          env(0, 0, 1, 800, 0.1, 300), env(0, 1, 0.5, 260, 0.0, 200),
-                         routes(0, {{env2, cutoff, 0.5}, {strike, cutoff, 0.2}, {slide, resonance, 0.3}})})});
+                         routes(0, {{env2, cutoff, 0.5}, {velocity, cutoff, 0.2}, {slide, resonance, 0.3}})})});
       p.push_back({"Bell Pluck", "Plucks",
                    join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.5, 0.0), op(0, 2, kSine, 7.0, 0.0),
                          {a(fm21, 0.25), a(fm32, 0.25), a(lfoParam(2, kLfoRate), lfoValue(0.7))},
@@ -205,7 +205,7 @@ inline const std::vector<Preset> &factoryPresets() {
       p.push_back({"Clav", "Keys",
                    join({{a(kPartLevel, -5)}, {a(oscParam(0, kOscWave), kPulse), a(oscParam(0, kOscShape), 0.25), a(cutoff, 0.55), a(resonance, 0.35)},
                          env(0, 0, 0.5, 1200, 0.3, 60), env(0, 1, 0.5, 180, 0.0, 100),
-                         routes(0, {{env2, cutoff, 0.35}, {strike, cutoff, 0.25}})})});
+                         routes(0, {{env2, cutoff, 0.35}, {velocity, cutoff, 0.25}})})});
       const Values vibes = join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 4.0, 0.0), {a(fm21, 0.15)},
                                  env(0, 0, 0.5, 3000, 0.0, 1200), env(0, 2, 0.5, 300, 0.0, 200), open(0)});
       p.push_back({"Vibes", "Keys",
@@ -215,13 +215,13 @@ inline const std::vector<Preset> &factoryPresets() {
                                  {a(fm21, 0.15)}, env(0, 0, 1, 5000, 0.0, 400), env(0, 1, 0.5, 1500, 0.2, 400),
                                  env(0, 2, 0.5, 60, 0.0, 40), open(0)});
       p.push_back({"Tine Piano", "Keys",
-                   join({tines, routes(0, {{env2, fm21, 0.3}, {env3, fm31, 0.35}, {strike, fm21, 0.2}})})});
+                   join({tines, routes(0, {{env2, fm21, 0.3}, {env3, fm31, 0.35}, {velocity, fm21, 0.2}})})});
       // Pressure pushes the bark, and CC 74 sets how far the tremolo pans.
       p.push_back({"Suitcase Pressure", "Keys",
                    join({tines, {a(lfoParam(2, kLfoRate), lfoValue(4.5))},
                          routes(0, {{env2, fm21, 0.3},
                                     {env3, fm31, 0.35},
-                                    {strike, fm21, 0.2},
+                                    {velocity, fm21, 0.2},
                                     {press, fm21, 0.35},
                                     {lfo1, kPartPan, 0.0},
                                     {slide, routeParam(4, kRouteAmount), 0.6}})})});
@@ -253,7 +253,7 @@ inline const std::vector<Preset> &factoryPresets() {
       p.push_back({"East Coast Brass", "Bass and Leads",
                    join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 1.0, 0.0), {a(fb2, 0.3), a(fm21, 0.1)},
                          env(0, 0, 40, 400, 0.9, 200), env(0, 2, 60, 300, 0.6, 200), open(0),
-                         routes(0, {{env3, fm21, 0.4}, {strike, fm21, 0.2}})})});
+                         routes(0, {{env3, fm21, 0.4}, {velocity, fm21, 0.2}})})});
       // Pressure opens the FM and brings in vibrato; CC 74 adds grit through the modulator's feedback.
       p.push_back({"Pressure Lead", "Bass and Leads",
                    join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), {a(fm21, 0.1), a(fb2, 0.1), a(lfoParam(2, kLfoRate), lfoValue(5.5))},
@@ -440,22 +440,25 @@ inline std::filesystem::path userPresetFolder() {
 #endif
 }
 
-constexpr const char *kPresetHeader = "JSynth preset 1";
+// Format 2 adds Release as a route source; a format 1 preset's route sources are moved to match.
+constexpr const char *kPresetHeader = "JSynth preset 2";
+constexpr const char *kPresetHeaderBeforeRelease = "JSynth preset 1";
 constexpr const char *kPresetExtension = ".jspreset";
 
 // Reads a user preset; false if the file isn't one.
 inline bool readPreset(const std::filesystem::path &file, Preset &out) {
    std::ifstream in(file);
    std::string line;
-   if (!in || !std::getline(in, line) || line != kPresetHeader)
+   if (!in || !std::getline(in, line) || (line != kPresetHeader && line != kPresetHeaderBeforeRelease))
       return false;
+   const bool old = line == kPresetHeaderBeforeRelease;
    out = {file.stem().string(), "User", {}};
    while (std::getline(in, line)) {
       std::istringstream fields(line);
       unsigned id = 0;
       double v = 0.0;
       if (fields >> id >> v && findParam(id) && std::isfinite(v))
-         out.values.emplace_back(static_cast<clap_id>(id), v);
+         out.values.emplace_back(static_cast<clap_id>(id), old ? migrateBeforeRelease(id, v) : v);
    }
    return true;
 }

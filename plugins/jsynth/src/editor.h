@@ -25,12 +25,12 @@ public:
    virtual void noteExpression(int note, float bend, float pressure, float timbre) = 0;
    virtual void noteOff(int note) = 0;
 
-   // The held notes, from the host or the panel: each is a creature's lure. Strike is the note-on
-   // velocity and lift the release velocity (0 while held).
+   // The held notes, from the host or the panel: each is a creature's lure. Velocity is the note-on
+   // velocity and release the release velocity (0 while held).
    struct Note {
       int note;
       float bend, pressure, timbre;
-      float strike, lift;
+      float velocity, release;
    };
    virtual void notes(std::vector<Note> &out) const = 0;
 
