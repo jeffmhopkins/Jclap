@@ -9,7 +9,19 @@ namespace jclap::ui {
 
 namespace {
 constexpr float kArrow = 26.0f, kSave = 52.0f;
-constexpr int kSaveId = 1 << 20, kUserBase = 1 << 16;
+constexpr int kSaveId = 1 << 20, kDeleteId = kSaveId + 1, kUserBase = 1 << 16;
+
+// The save name box. A click anywhere but SAVE drops the name, so the box never sits open without
+// the keyboard; SAVE itself saves, and so does Enter.
+class NameEditor : public visage::TextEditor {
+public:
+   std::function<void()> onClickAway;
+   void focusChanged(bool is_focused, bool was_clicked) override {
+      visage::TextEditor::focusChanged(is_focused, was_clicked);
+      if (!is_focused && was_clicked && onClickAway)
+         onClickAway();
+   }
+};
 } // namespace
 
 void applyPreset(const Preset &preset, ParamAccess &params, const std::vector<double> &defaults) {
@@ -175,7 +187,7 @@ void PresetBar::mouseDown(const visage::MouseEvent &e) {
    switch (zoneAt(e.position.x)) {
    case Zone::Prev: step(-1); break;
    case Zone::Next: step(1); break;
-   case Zone::Save: startSave(); break;
+   case Zone::Save: editor_ && editor_->isVisible() ? finishSave(true) : startSave(); break;
    case Zone::Name: showMenu(); break;
    case Zone::None: break;
    }
@@ -213,9 +225,13 @@ void PresetBar::showMenu() {
    menu.addSubMenu(std::move(user));
    menu.addBreak();
    menu.addOption(kSaveId, "Save as...");
+   if (indexOf(current) >= static_cast<int>(factory_.size()))
+      menu.addOption(kDeleteId, "Delete \"" + current + "\"...");
    menu.onSelection() += [this](int id) {
       if (id == kSaveId)
          startSave();
+      else if (id == kDeleteId)
+         confirmDelete();
       else if (id >= kUserBase && id - kUserBase < static_cast<int>(user_.size()))
          loadIndex(static_cast<int>(factory_.size()) + id - kUserBase);
       else if (id >= 0 && id < static_cast<int>(factory_.size()))
@@ -224,12 +240,34 @@ void PresetBar::showMenu() {
    menu.show(this, {kArrow * height() / 28.0f, height()});
 }
 
+// Deleting a preset can't be undone, so the menu asks once more before the file goes.
+void PresetBar::confirmDelete() {
+   const std::string current = name();
+   visage::PopupMenu menu;
+   menu.addOption(kDeleteId, "Delete \"" + current + "\" for good");
+   menu.addOption(-2, "Cancel");
+   menu.onSelection() += [this, current](int id) {
+      if (id != kDeleteId)
+         return;
+      std::error_code ec;
+      std::filesystem::remove(userPresetFolder(format_) / (current + format_.extension), ec);
+      rescan();
+      redraw();
+   };
+   menu.show(this, {kArrow * height() / 28.0f, height()});
+}
+
 void PresetBar::startSave() {
    if (!editor_) {
-      editor_ = std::make_unique<visage::TextEditor>();
-      editor_->setJustification(visage::Font::kCenter);
-      editor_->onEnterKey() += [this] { finishSave(true); };
-      editor_->onEscapeKey() += [this] { finishSave(false); };
+      auto editor = std::make_unique<NameEditor>();
+      editor->setJustification(visage::Font::kCenter);
+      editor->onEnterKey() += [this] { finishSave(true); };
+      editor->onEscapeKey() += [this] { finishSave(false); };
+      editor->onClickAway = [this] {
+         if (hover_ != Zone::Save)
+            finishSave(false);
+      };
+      editor_ = std::move(editor);
       addChild(editor_.get(), false);
    }
    const float s = height() / 28.0f;

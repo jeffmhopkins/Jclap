@@ -4,9 +4,8 @@
 // owns one and steps it on the audio thread, so what you hear and what the panel draws come from the
 // same sim; the panel only flies its own copy while the plugin isn't processing.
 //
-// Fixed capacity and no allocation: slots 0..kVoiceSlots-1 belong to the engine's voices (a voice's
-// creature lives in the voice's slot), and the rest are resting creatures that keep a species alive
-// while it plays nothing. Randomness is our own xorshift, reseeded with the flock, so a render is
+// Fixed capacity and no allocation: each of the engine's voices has a slot, and a voice's creature
+// lives in the voice's slot, so the sky is empty until a note plays. Randomness is our own xorshift, reseeded with the flock, so a render is
 // the same every time from the same start.
 
 #include <algorithm>
@@ -21,8 +20,7 @@ namespace jsynth {
 // Voices for both parts together: each part sounds at most its Polyphony (16), and the spare slots
 // let a stolen voice fade out in its own slot while the new note starts in another.
 constexpr int kVoiceSlots = 40;
-constexpr int kIdlePerPart = 6;
-constexpr int kCreatureSlots = kVoiceSlots + kIdlePerPart * kPartCount;
+constexpr int kCreatureSlots = kVoiceSlots;
 // The sky is kSkyAspect wide and 1 high.
 constexpr float kSkyAspect = 4.0f / 3.0f;
 // The neighbours whose sound a creature hears (Neighbour FM).
@@ -89,15 +87,14 @@ struct Creature {
    // Bumped each time the slot gets a new creature, so the panel can tell a new one from an old.
    uint32_t id = 0;
    int part = 0;
-   // Held (its note is down), or flying off as it fades; resting creatures are never held.
+   // Held (its note is down), or flying off as it fades.
    bool held = false;
-   bool resting = false;
    float x = 0, y = 0, vx = 0, vy = 0;
    // How bright and present it is, 0..1: up while held, down after.
    float energy = 0;
    float lureX = 0, lureY = 0, press = 0;
    // -1..1, this creature's wingbeat now (its own LFO's value).
-   float wing = 0, wingPhase = 0;
+   float wing = 0;
    float wanderAngle = 0, wanderTurn = 0;
    // Whether the engine runs it (the panel's own flock doesn't), and if so whether its voice still
    // sounds and how loud (its amp envelope): let go, it glows as its sound does and goes when it ends.
@@ -136,12 +133,6 @@ public:
       for (Creature &c : creatures)
          c = Creature{};
       nextId_ = 1;
-      for (int part = 0; part < kPartCount; ++part)
-         for (int i = 0; i < kIdlePerPart; ++i) {
-            Creature &c = creatures[kVoiceSlots + part * kIdlePerPart + i];
-            hatch(c, part, (0.15f + 0.3f * rng_.unipolar() + 0.4f * part) * kSkyAspect, 0.25f + 0.5f * rng_.unipolar());
-            c.resting = true;
-         }
    }
 
    // A new creature in voice slot `slot`, at its lure.
@@ -161,23 +152,12 @@ public:
    // Copies the live creatures into `f`, for the panel.
    void show(FlockFrame &f) const;
 
-   // Whether `part` has any held creature, so its resting ones fade out.
-   bool playing(int part) const {
-      for (int i = 0; i < kVoiceSlots; ++i)
-         if (creatures[i].alive && creatures[i].part == part && creatures[i].held)
-            return true;
-      return false;
-   }
-
    // One step of kStep seconds.
    void step() {
       const float dt = kStep;
       time_ += dt;
       for (Creature &c : creatures)
          c.lastSources = c.sources;
-      bool plays[kPartCount];
-      for (int p = 0; p < kPartCount; ++p)
-         plays[p] = playing(p);
       for (Creature &c : creatures) {
          if (!c.alive)
             continue;
@@ -186,19 +166,12 @@ public:
             target = 0.55f + 0.45f * c.press, rate = 5.0f;
          else if (c.sounding)
             target = std::max(0.04f, 0.55f * c.level), rate = 5.0f; // its release
-         else if (c.resting)
-            target = plays[c.part] ? 0.0f : 0.3f;
          else if (c.tracked)
             rate = 6.0f; // its voice has ended
          c.energy += (target - c.energy) * std::min(1.0f, dt * rate);
-         // A released creature flies off as it fades, then goes; a resting one stays, dimmed. A
-         // resting creature beats its own wings.
-         if (!c.held && !c.resting && c.energy < 0.01f)
+         // A released creature flies off as it fades, then goes.
+         if (!c.held && c.energy < 0.01f)
             c.alive = false;
-         if (c.resting) {
-            c.wingPhase += dt * 4.0f;
-            c.wing = dsp::Sine::at(c.wingPhase);
-         }
       }
       fly(dt);
       couple(dt);
@@ -408,7 +381,7 @@ struct FlockFrame {
    struct Shown {
       uint32_t id;
       int8_t part;
-      bool held, resting;
+      bool held;
       float x, y, vx, vy, energy, press, wing, lureX, lureY;
       CreatureSources sources;
       // Its slot, its strongest neighbour's and its hunter's (-1 for none).
@@ -441,7 +414,6 @@ inline void Flock::show(FlockFrame &f) const {
       s.id = c.id;
       s.part = static_cast<int8_t>(c.part);
       s.held = c.held;
-      s.resting = c.resting;
       s.x = c.x, s.y = c.y, s.vx = c.vx, s.vy = c.vy;
       s.energy = c.energy, s.press = c.press, s.wing = c.wing;
       s.lureX = c.lureX, s.lureY = c.lureY;

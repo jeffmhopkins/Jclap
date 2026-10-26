@@ -724,12 +724,6 @@ private:
       flock_.size = static_cast<float>(global(kSkySize));
       flock_.walls = static_cast<int>(global(kSkyWalls) + 0.5);
 
-      // The resting creatures fly by their species' own params.
-      for (int i = kVoiceSlots; i < kCreatureSlots; ++i) {
-         Creature &c = flock_.creatures[i];
-         c.params.read([&](clap_id o) { return plain(c.part, o); });
-      }
-
       for (int part = 0; part < kPartCount; ++part)
          trim(part, std::clamp(static_cast<int>(plain(part, kPolyphony) + 0.5f), 1, kMaxPolyphony));
       float offset[256];

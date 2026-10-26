@@ -7,8 +7,8 @@
 // here reaches the sound.
 //
 // MAP mode is how modulation is made: press MAP, touch a source (a chip in the header, on the cards
-// or under the sky), then drag any knob to set how much that source moves it. Each route shows as a
-// ring in the source's colour around the knob it moves.
+// or under the sky), then drag any knob to set how much that source moves it. While it is armed, its
+// routes show as rings in its colour around the knobs they move; outside MAP the knobs show none.
 
 #include "editor.h"
 
@@ -192,8 +192,9 @@ public:
 };
 
 // A knob MAP mode can map. With a source armed, dragging it sets that route's amount instead of the
-// knob's value, a double-click flips the route's sign and a right-click removes it. Up to four routes
-// show as rings outside the knob's own, in their sources' colours, each spanning what it adds.
+// knob's value, a double-click flips the route's sign and a right-click removes it. Only in MAP mode
+// with a source armed does it show a route: a ring outside the knob's own, in the source's colour,
+// spanning what it adds.
 class MapKnob : public ui::Knob {
 public:
    MapKnob(ui::ValueRange range, Mapper &mapper, int part, clap_id offset)
@@ -201,38 +202,29 @@ public:
 
    void draw(visage::Canvas &c) override {
       Knob::draw(c);
-      if (dest_ < 0)
+      const int armed = mapper_.armedSource();
+      if (dest_ < 0 || !mapper_.mapping() || armed == kSourceOff)
          return;
       rings_.clear();
       mapper_.rings(part_, dest_, rings_);
       const float w = width(), h = height(), s = h / 100.0f;
       const float d = std::min(w * 0.7f, 48.0f * s);
       const float cx = w * 0.5f, cy = 18.0f * s + d * 0.5f + 2.0f * s;
+      const float rd = d + 13.0f * s;
       const float sweep = 0.75f * kPi;
       const float from = fraction(value());
-      const int armed = mapper_.armedSource();
-      bool armedShown = false;
-      const int count = std::min<int>(4, static_cast<int>(rings_.size()));
-      for (int i = 0; i < count; ++i) {
-         const Mapper::Ring &r = rings_[i];
+      c.setColor(glow(sourceColor(armed), 0.55f, 1.0f));
+      c.arc(cx - rd * 0.5f, cy - rd * 0.5f, rd, 1.4f * s, -0.5f * kPi, sweep, true);
+      for (const Mapper::Ring &r : rings_) {
+         if (r.source != armed)
+            continue;
          const float to = std::clamp(from + static_cast<float>(r.amount), 0.0f, 1.0f);
-         const float rd = d + (13.0f + 5.0f * i) * s;
-         const bool lit = mapper_.mapping() && r.source == armed;
-         armedShown |= lit;
-         c.setColor(glow(sourceColor(r.source), 0.22f, 1.0f));
-         c.arc(cx - rd * 0.5f, cy - rd * 0.5f, rd, 1.4f * s, -0.5f * kPi, sweep, true);
          if (std::fabs(to - from) > 0.002f) {
             const float a0 = -sweep + 2.0f * sweep * from, a1 = -sweep + 2.0f * sweep * to;
-            c.setColor(glow(sourceColor(r.source), 1.0f, lit ? 1.6f : 1.0f));
-            c.arc(cx - rd * 0.5f, cy - rd * 0.5f, rd, (lit ? 3.4f : 2.6f) * s, 0.5f * (a0 + a1) - 0.5f * kPi,
+            c.setColor(glow(sourceColor(armed), 1.0f, 1.6f));
+            c.arc(cx - rd * 0.5f, cy - rd * 0.5f, rd, 3.4f * s, 0.5f * (a0 + a1) - 0.5f * kPi,
                   0.5f * std::fabs(a1 - a0), true);
          }
-      }
-      // With a source armed, a faint ring where its route would go says "drag me".
-      if (mapper_.mapping() && armed != kSourceOff && !armedShown && count < 4) {
-         const float rd = d + (13.0f + 5.0f * count) * s;
-         c.setColor(glow(sourceColor(armed), 0.55f, 1.0f));
-         c.arc(cx - rd * 0.5f, cy - rd * 0.5f, rd, 1.4f * s, -0.5f * kPi, sweep, true);
       }
    }
 
@@ -380,7 +372,7 @@ public:
       arrow(w - save - a / 2, 1.0f, hover_ == Zone::Next);
       c.setColor(hover_ == Zone::Save ? kText : kPartColors[0]);
       c.text("SAVE", ui::font(11 * s), visage::Font::kCenter, w - save, 0, save, h);
-      if (editor_ && editor_->isVisible())
+      if (editing())
          return;
       const std::string name = host_.presetName();
       c.setColor(hover_ == Zone::Name ? 0xffffffff : kText);
@@ -395,7 +387,7 @@ public:
       switch (zoneAt(e.position.x)) {
       case Zone::Prev: step(-1); break;
       case Zone::Next: step(1); break;
-      case Zone::Save: startSave(); break;
+      case Zone::Save: editing() ? finishSave(true) : startSave(); break;
       case Zone::Name: showMenu(); break;
       case Zone::None: break;
       }
@@ -412,7 +404,7 @@ public:
 private:
    enum class Zone { None, Prev, Name, Next, Save };
    static constexpr float kArrow = 24.0f, kSave = 48.0f;
-   static constexpr int kSaveId = 1 << 20, kUserBase = 1 << 16;
+   static constexpr int kSaveId = 1 << 20, kDeleteId = kSaveId + 1, kUserBase = 1 << 16;
 
    Zone zoneAt(float x) const {
       const float s = height() / 26.0f, w = width();
@@ -499,9 +491,13 @@ private:
       menu.addSubMenu(std::move(user));
       menu.addBreak();
       menu.addOption(kSaveId, "Save as...");
+      if (onUserPreset())
+         menu.addOption(kDeleteId, "Delete \"" + current + "\"...");
       menu.onSelection() += [this](int id) {
          if (id == kSaveId)
             startSave();
+         else if (id == kDeleteId)
+            confirmDelete();
          else if (id >= kUserBase && id - kUserBase < static_cast<int>(user_.size()))
             load(static_cast<int>(factoryPresets().size()) + id - kUserBase);
          else if (id >= 0 && id < static_cast<int>(factoryPresets().size()))
@@ -510,12 +506,52 @@ private:
       menu.show(this, {kArrow * height() / 26.0f, height()});
    }
 
+   bool onUserPreset() const {
+      const int i = indexOf(host_.presetName());
+      return i >= static_cast<int>(factoryPresets().size());
+   }
+
+   // Deleting a preset can't be undone, so the menu asks once more before the file goes.
+   void confirmDelete() {
+      const std::string name = host_.presetName();
+      visage::PopupMenu menu;
+      menu.addOption(kDeleteId, "Delete \"" + name + "\" for good");
+      menu.addOption(-2, "Cancel");
+      menu.onSelection() += [this, name](int id) {
+         if (id != kDeleteId)
+            return;
+         std::error_code ec;
+         std::filesystem::remove(userPresetFolder() / (name + kPresetExtension), ec);
+         rescan();
+         redraw();
+      };
+      menu.show(this, {kArrow * height() / 26.0f, height()});
+   }
+
+   // The save name box. A click anywhere but SAVE drops the name, so the box never sits open
+   // without the keyboard; SAVE itself saves, and so does Enter.
+   class NameEditor : public visage::TextEditor {
+   public:
+      std::function<void()> onClickAway;
+      void focusChanged(bool is_focused, bool was_clicked) override {
+         visage::TextEditor::focusChanged(is_focused, was_clicked);
+         if (!is_focused && was_clicked && onClickAway)
+            onClickAway();
+      }
+   };
+
+   bool editing() const { return editor_ && editor_->isVisible(); }
+
    void startSave() {
       if (!editor_) {
-         editor_ = std::make_unique<visage::TextEditor>();
+         editor_ = std::make_unique<NameEditor>();
          editor_->setJustification(visage::Font::kCenter);
          editor_->onEnterKey() += [this] { finishSave(true); };
          editor_->onEscapeKey() += [this] { finishSave(false); };
+         editor_->onClickAway = [this] {
+            if (hover_ != Zone::Save)
+               finishSave(false);
+         };
          addChild(editor_.get(), false);
       }
       const float s = height() / 26.0f;
@@ -529,7 +565,7 @@ private:
    }
 
    void finishSave(bool apply) {
-      if (!editor_ || !editor_->isVisible())
+      if (!editing())
          return;
       const std::string name = uniqueName(presetFileName(editor_->text().toUtf8()));
       editor_->setVisible(false);
@@ -560,7 +596,7 @@ private:
    EditorHost &host_;
    std::vector<Preset> user_;
    int currentIndex_ = -1;
-   std::unique_ptr<visage::TextEditor> editor_;
+   std::unique_ptr<NameEditor> editor_;
    Zone hover_ = Zone::None;
 };
 
@@ -642,7 +678,7 @@ public:
    // The engine's newest frame, while live.
    const FlockFrame &frame() const { return frame_; }
 
-   // The sources of `part`'s newest held creature, or a resting one's when it plays nothing.
+   // The sources of `part`'s newest held creature, or a fading one's when it holds none.
    CreatureSources sources(int part) const {
       const Creature *pick = nullptr;
       for (const Creature &b : creatures_)
@@ -761,7 +797,7 @@ private:
    struct Creature {
       uint32_t id = 0;
       int part = 0, slot = 0, neighbour = -1, hunter = -1;
-      bool held = false, resting = false;
+      bool held = false;
       unsigned color = 0;
       float x = 0, y = 0, vx = 0, vy = 0;
       float energy = 0;
@@ -827,7 +863,7 @@ private:
          }
          const bool jumped = std::fabs(s.x - b.x) > 0.3f || std::fabs(s.y - b.y) > 0.3f;
          b.part = s.part, b.slot = s.slot, b.neighbour = s.neighbour, b.hunter = s.hunter;
-         b.held = s.held, b.resting = s.resting;
+         b.held = s.held;
          b.x = s.x, b.y = s.y, b.vx = s.vx, b.vy = s.vy;
          b.energy = s.energy, b.press = s.press, b.wing = s.wing;
          b.lureX = s.lureX, b.lureY = s.lureY;
@@ -890,13 +926,11 @@ private:
          jsynth::Creature &c = local_.creatures[i];
          if (!c.alive)
             continue;
-         if (i < kVoiceSlots && !claimed[i])
+         if (!claimed[i])
             local_.release(i);
          c.params.read([&](clap_id o) { return host_.paramValue(partId(c.part, o)); });
-         if (i < kVoiceSlots) {
-            localWing_[i] += dt * species_[c.part].wingHz;
-            c.wing = std::sin(2.0f * kPi * localWing_[i]);
-         }
+         localWing_[i] += dt * species_[c.part].wingHz;
+         c.wing = std::sin(2.0f * kPi * localWing_[i]);
       }
       localTime_ += std::min(dt, 0.1f);
       while (localTime_ >= Flock::kStep) {
