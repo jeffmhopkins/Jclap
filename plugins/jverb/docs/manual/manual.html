@@ -261,7 +261,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
         <li><strong>Drive</strong>: Tape, Tube, Fuzz, Fold or Crush, 2× oversampled, in the PRE, LOOP or POST slot.</li>
         <li><strong>Echo</strong> up to 4 s, free or tempo-synced, with ping-pong, in the INTO, LOOP or AFTER slot.</li>
         <li><strong>An extreme zone</strong> past 100% on four knobs, for warble, ringing and inside-out stereo.</li>
-        <li><strong>32 factory presets</strong>, from tight booths to minute-long washes.</li>
+        <li><strong>70 factory presets</strong>, from vocal booths, plates and halls to minute-long washes and loops that scream.</li>
       </ul>
     </div>
   </div>
@@ -329,7 +329,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
 
   <ol class="steps">
     <li><b class="h">Load JVerb and play something</b>Put JVerb on a track with something sustained and something percussive in it: a pad and a drum loop are ideal. The orbits start running as soon as the panel opens. The bodies trail coloured paths across the stage, and each drum hit blows a puff of glowing gas out of them.</li>
-    <li><b class="h">Pick a preset</b>Click the preset name in the header to open the menu: presets are grouped from <em>Short</em> rooms through <em>Medium</em> and <em>Long</em> spaces to <em>Washes</em> that ring for most of a minute, and <em>Extremes</em> for when it should stop sounding like a room. Or click the arrows, or scroll over the bar, to step through them. Try <em>Vocal Hall</em>, then <em>Shimmer Halo</em>, then <em>Nebula</em>.</li>
+    <li><b class="h">Pick a preset</b>Click the preset name in the header to open the menu: presets are grouped from the classic spaces (<em>Rooms</em>, <em>Plates</em>, <em>Halls</em>) through what JVerb adds to them (<em>Echoes</em>, <em>Shimmer</em>, <em>Orbits</em>, <em>Texture</em>) to <em>Washes</em> that ring for most of a minute, and <em>Extremes</em> for when it should stop sounding like a room. Or click the arrows, or scroll over the bar, to step through them. Try <em>Vocal Plate</em>, then <em>Concert Hall</em>, then <em>Comet Pass</em>, then <em>Aurora</em>.</li>
     <li><b class="h">Set the size and length</b>On the <strong>SPACE</strong> page, <strong>DECAY</strong> sets how long the tail lasts and <strong>SYSTEM SIZE</strong> how big the space is. Bigger systems have longer lines and a slower, grainier build. <strong>DAMP HIGH</strong> darkens the tail as it rings.</li>
     <li><b class="h">Make it move</b>Open the <strong>ORBIT</strong> page. <strong>PAN</strong> moves each body's voice from a wide spread to where the body actually is; <strong>TONE</strong> darkens voices as their bodies swing out; <strong>SWIRL</strong> adds a phaser to each voice, swept by its orbit. Now drag a body somewhere new, or scroll on it to make it heavier, and listen to the tail rearrange itself.</li>
     <li><b class="h">Let a body drive something</b>Each body has a card along the bottom. Set Kepler's target menu to <strong>Feedback</strong> and raise its <strong>AMOUNT</strong>: each time Kepler slingshots past another body, the tail surges. The Feedback knob's ring shows the movement live.</li>
@@ -531,7 +531,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <h2>The preset bar</h2>
   <ul>
     <li><strong>◀ ▶</strong> step to the previous or next preset, in menu order. Scrolling over the bar does the same.</li>
-    <li><strong>The name</strong> opens the preset menu: the factory bank in five categories (<em>Short</em>, <em>Medium</em>, <em>Long</em>, <em>Washes</em>, <em>Extremes</em>), a <em>User</em> submenu with your own presets, and <em>Save as…</em>. The category of the current preset is shown at the left of the bar.</li>
+    <li><strong>The name</strong> opens the preset menu: the factory bank in nine categories (<em>Rooms</em>, <em>Plates</em>, <em>Halls</em>, <em>Echoes</em>, <em>Shimmer</em>, <em>Orbits</em>, <em>Texture</em>, <em>Washes</em>, <em>Extremes</em>), a <em>User</em> submenu with your own presets, and <em>Save as…</em>. The category of the current preset is shown at the left of the bar.</li>
     <li><strong>SAVE</strong> asks for a name and writes the current settings as a user preset.</li>
   </ul>
   <p>Loading a preset sets every parameter, so nothing carries over from the previous sound (a body's routing, for example). The host sees the change as an ordinary edit, so it can be undone. The orbits then restart from the preset's masses and velocities.</p>
@@ -893,7 +893,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <div class="chap-head">
     <div class="num">Chapter 13</div>
     <h1>Factory Presets</h1>
-    <p class="lede">Thirty-two starting points, ordered from tight rooms to washes that ring for most of a minute.</p>
+    <p class="lede">Seventy starting points: the classic rooms, plates and halls first, then the echo, shimmer, orbits and drive, then washes that ring for most of a minute and the extremes.</p>
     <div class="bar"></div>
   </div>
   <div id="presets"></div>
@@ -1255,57 +1255,96 @@ function el(parent, tag, attrs, text) {
 // ----- presets -----
 (function () {
   const P = [
-    ['Short', 'Rooms, booths and slapbacks under about a second.', [
+    ['Rooms', 'Natural rooms and booths, under about a second and a half.', [
       ['Init', 'The defaults: a 4 s tail with three bodies.'],
-      ['Tight Booth', '0.35 s, the smallest size, mostly early reflections.'],
-      ['Wood Room', '0.7 s, small, a little dark, lighter bass.'],
-      ['Small Orbit', '1 s, four bodies, bright.'],
+      ['Vocal Booth', '0.3 s, the smallest size, mostly early reflections.'],
+      ['Studio Room', '0.55 s, small and even, lighter bass.'],
+      ['Wood Room', '0.75 s, small and a little dark.'],
+      ['Live Room', '1.1 s, a bigger room with some air.'],
       ['Drum Reactor', 'React 100%, Duck and Low Cut; Io routed to Damping.'],
-      ['Swirling Slapback', 'A 140 ms straight echo INTO the reverb, free-running; Io on Damping.'],
-      ['Hot Input', 'Tape drive in the PRE slot at +15 dB.'],
+      ['Gated Snare', '0.4 s in a big, fully diffused space, thin bass: a dense burst that stops short.'],
     ]],
-    ['Medium', 'Plates, halls and character spaces.', [
+    ['Plates', 'Dense from the first moment and bright, with no early reflections to speak of.', [
+      ['Vocal Plate', '1.8 s, 25 ms predelay, Low Cut 180 Hz, a little Duck.'],
+      ['Snare Plate', '1.3 s, Diffusion 100%, very bright, thin bass.'],
       ['Figure-Eight Plate', '2.4 s, Diffusion 95%, all late, bright.'],
-      ['Ping-Pong Space', 'Synced 1/4 ping-pong echo AFTER the reverb.'],
+      ['Gold Plate', '3.2 s, Diffusion 100%, Motion 50%, Smear, a little wider.'],
+      ['Dark Plate', '2.6 s, damped at 3.8 kHz.'],
+      ['Orbit Plate', 'A 2.2 s plate with four bodies; Io on Width and Vesta on Damping.'],
+    ]],
+    ['Halls', 'Chambers and halls: early reflections first, then a longer, darker tail with lifted bass.', [
+      ['Echo Chamber', '1.6 s, mid-sized, a strong early part.'],
+      ['Stone Chamber', '2.2 s, darker, long bass, half early.'],
       ['Vocal Hall', '2.8 s, 35 ms predelay, Low Cut, Duck.'],
+      ['Concert Hall', '2.6 s, Size 1.6, 28 ms predelay, long bass.'],
+      ['Strings Hall', '3.4 s, Size 1.9, 40 ms predelay, a slight swell.'],
+      ['Grand Hall', '4.5 s, Size 2.4, 45 ms predelay, long bass.'],
+      ['Cathedral Drift', '13 s, Size 2.6, 45 ms predelay, long bass.'],
+    ]],
+    ['Echoes', 'The echo in each of its slots, from slapback to a tail that returns once a bar.', [
+      ['Swirling Slapback', 'A 140 ms straight echo INTO the reverb, free-running; Io on Damping.'],
+      ['Ping-Pong Space', 'Synced 1/4 ping-pong echo AFTER the reverb.'],
+      ['Triplet Rain', 'Bright 1/8T ping-pong echo AFTER a short plate.'],
       ['Dotted Echo Hall', 'Synced 1/8D echo INTO a 3 s hall.'],
+      ['Dub Chamber', 'Dark 1/4 echo INTO a chamber at 70%, light tape drive PRE.'],
+      ['Tape Loop Orbit', 'A 1-bar echo in the LOOP plus tape drive in the LOOP; Vesta on Tilt.'],
+      ['Infinite Return', 'A 1/2-note echo in the LOOP, Feedback 70%, a little shimmer.'],
+    ]],
+    ['Shimmer', 'Pitch in the loop, slow swells and backwards starts.', [
+      ['Swell Machine', 'Swell 85%, 6 s.'],
+      ['Reverse Bloom', 'Reverse 80%: each note breathes in before it sounds.'],
+      ['Shimmer Halo', 'Octave-up shimmer 45%, Feedback 85%, 9 s.'],
+      ['Fifth Cathedral', 'A fifth up, Shimmer 35%, Feedback 80%, 10 s, 40 ms predelay.'],
+      ['Ice Crystals', 'Two octaves up, Low Cut 300 Hz, bright and wide.'],
+      ['Octave Under', 'Octave-down shimmer, Feedback 80%, dark.'],
+      ['Choir Cloud', 'Octave up, Swell 60%, Motion 80%, Swirl 100%, 12 s.'],
+    ]],
+    ['Orbits', 'The bodies front and centre, moving the tail around the stereo field, its tone and its length.', [
+      ['Small Orbit', '1 s, four bodies, bright.'],
       ['Binary Star', 'Two bodies, a heavy pair; Kepler on Width.'],
+      ['Heavy Moon', 'One heavy body (2.8) and two light ones.'],
       ['Synced Orbit', 'Clock SYNC, 2 bars a lap; Vesta on Tilt.'],
+      ['Comet Pass', 'A light, fast Vesta on Damping: the tail brightens each time it swings past.'],
+      ['Tidal Breath', 'Two bodies at low gravity; Io on Decay and Kepler on Early/Late, so the tail breathes.'],
+      ['Six Moons', 'Six bodies, Orbit Pan and Tone 100%: six bands drifting around the stereo field.'],
+      ['Pulsar', 'Clock SYNC at 1 bar, Gravity 2; Kepler on Width and Titan on Tilt.'],
+      ['Slow Ballet', 'Gravity 0.35, Smear 60%, 8 s.'],
+      ['Chaos Engine', 'Six bodies, Gravity 2.5, React 80%; bodies on Damping and Feedback.'],
+    ]],
+    ['Texture', 'The drive at the input, in the loop and on the tail.', [
+      ['Hot Input', 'Tape drive in the PRE slot at +15 dB.'],
+      ['Lo-Fi Radio', 'Band-limited to 450 Hz to 4 kHz, light crush POST.'],
       ['Burning Loop', 'Tube drive in the LOOP at +18 dB, Feedback 55%, dark tilt.'],
       ['Crushed Satellites', 'Crush in the LOOP, five bodies, Feedback 40%.'],
-      ['Chaos Engine', 'Six bodies, Gravity 2.5, React 80%; bodies on Damping and Feedback.'],
-      ['Heavy Moon', 'One heavy body (2.8) and two light ones.'],
-    ]],
-    ['Long', 'Long tails, loops and shimmers.', [
-      ['Tape Loop Orbit', 'A 1-bar echo in the LOOP plus tape drive in the LOOP; Vesta on Tilt.'],
-      ['Swell Machine', 'Swell 85%, 6 s.'],
+      ['Tape Ghosts', 'Tape drive and a dark 1/2-note echo in the LOOP, Motion 95%: a worn tape memory.'],
       ['Fuzz Cloud', 'Fuzz POST at +24 dB, 60% mix, 7 s.'],
       ['Folded Space', 'Fold in the LOOP, Shimmer 25%, Feedback 80%.'],
-      ['Slow Ballet', 'Gravity 0.35, Smear 60%, 8 s.'],
-      ['Shimmer Halo', 'Octave-up shimmer 45%, Feedback 85%, 9 s.'],
-      ['Infinite Return', 'A 1/2-note echo in the LOOP, Feedback 70%, a little shimmer.'],
-      ['Octave Under', 'Octave-down shimmer, Feedback 80%, dark.'],
-      ['Cathedral Drift', '13 s, Size 2.6, 45 ms predelay, long bass.'],
     ]],
     ['Washes', 'Ambient beds that ring for most of a minute.', [
       ['Nebula', '22 s, Size 3, slow attack, wide.'],
+      ['Aurora', '25 s, a little octave shimmer; Kepler on Shimmer, so it comes and goes with the orbit.'],
       ['Deep Field', '30 s, six bodies, low gravity, 60 ms predelay.'],
       ['Galaxy Shimmer', '35 s, octave-up shimmer, Feedback 50%, wide.'],
+      ['Glacier', '40 s at Size 7, Swell 70%, Smear 70%, dark.'],
       ['Event Horizon', '45 s, Size 4, Diffusion 100%, dark, 80 ms predelay.'],
       ['Dark Matter', '50 s, Size 4, very dark, octave-down shimmer, long bass.'],
       ['Frozen Ring', '60 s, all late, a little Duck.'],
     ]],
     ['Extremes', 'The far ends of the ranges: loops that hold, scream and bloom.', [
       ['Singing Tank', 'Diffusion 0, Size 0.3, Feedback 90%, no damping: metallic ringing that slowly builds.'],
+      ['Steel Cathedral', 'Diffusion 0, a fifth up, Feedback 100%: ringing metal that climbs and holds.'],
       ['Whale Song', '30 s, Size 4, Motion 160%, Shimmer –5 st, dark, Swirl 160%.'],
+      ['Sub Collapse', 'Two octaves down, Feedback 115%, dark tilt: a growl that sinks and holds.'],
       ['Feedback Bloom', 'Feedback 145%, a little +7 st shimmer, bright tilt: the tail dips, then blooms.'],
       ['Screaming Loop', 'Tube in the LOOP at +24 dB, Feedback 130%: it holds and screams.'],
+      ['Glitch Hold', 'Crush in the LOOP, Feedback 110%, a 1/16 echo in the LOOP: a stuttering digital hold.'],
       ['Orbit Riot', 'Six bodies, Gravity 2.5, React 100%, every body routed hard.'],
       ['Inside Out', 'Orbit Pan, Tone, Swirl and Width all at 200%, Motion 120%.'],
+      ['Backwards Universe', 'Reverse 100% at Size 6, octave-down shimmer, Motion 130%.'],
       ['Echo Runaway', 'Dotted-quarter echo in the LOOP at 105%, tape drive in the LOOP, Feedback 80%.'],
     ]],
   ];
-  const cols = ['#ffb05a', '#6fe0ff', '#ff6fd2', '#a98bff', '#ff7a7a'];
+  const cols = ['#ffb05a', '#ffd84a', '#6fe0ff', '#7dffb0', '#c6a8ff', '#ff6fd2', '#ff9a5a', '#a98bff', '#ff7a7a'];
   const host = document.getElementById('presets');
   let html = '';
   P.forEach(([cat, desc, list], i) => {
@@ -1313,7 +1352,7 @@ function el(parent, tag, attrs, text) {
     html += `<p class="muted small" style="margin-bottom:4px">${desc}</p>`;
     html += '<table><tbody>' + list.map(([n, d]) => `<tr><td class="c" style="width:1.6in">${n}</td><td>${d}</td></tr>`).join('') + '</tbody></table>';
   });
-  html += `<div class="note"><span class="k">Echo slots in the factory bank</span><p>To hear each echo slot: <em>Swirling Slapback</em> and <em>Dotted Echo Hall</em> use INTO, <em>Tape Loop Orbit</em> and <em>Infinite Return</em> use LOOP, and <em>Ping-Pong Space</em> uses AFTER.</p></div>`;
+  html += `<div class="note"><span class="k">Echo slots in the factory bank</span><p>To hear each echo slot: <em>Swirling Slapback</em>, <em>Dotted Echo Hall</em> and <em>Dub Chamber</em> use INTO, <em>Tape Loop Orbit</em> and <em>Infinite Return</em> use LOOP, and <em>Ping-Pong Space</em> and <em>Triplet Rain</em> use AFTER.</p></div>`;
   host.innerHTML = html;
 })();
 

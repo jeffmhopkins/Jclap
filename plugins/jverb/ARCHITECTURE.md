@@ -362,8 +362,8 @@ A few things about the LOOP slot follow from where it sits:
   bounded together.
 - Freeze closes it along with the input and the outer loop, so a frozen tail stays as it is.
 
-The factory presets show each slot: Swirling Slapback and Dotted Echo Hall use INTO, Tape Loop Orbit
-and Infinite Return use LOOP, and Ping-Pong Space uses AFTER.
+The factory presets show each slot: Swirling Slapback, Dotted Echo Hall and Dub Chamber use INTO,
+Tape Loop Orbit and Infinite Return use LOOP, and Ping-Pong Space and Triplet Rain use AFTER.
 
 ## The output stage
 
@@ -477,7 +477,7 @@ before the voices, none of the voice extremes are fed back; only Motion acts ins
 
 | Knob | 0 to 100% | 100 to 200% |
 | --- | --- | --- |
-| **Motion** | Drift grows to 4 cents a pass (1 cent in the allpasses). A chorus-like blur, never pitchy, up to 80% (where every factory preset sits). From 80% a warble is added on top, about 30 cents a pass by 100%. | The warble grows steadily to 150 cents a pass (30 in the allpasses), and runs up to 4 times faster. With Feedback high the tail warbles and groans. |
+| **Motion** | Drift grows to 4 cents a pass (1 cent in the allpasses). A chorus-like blur, never pitchy, up to 80% (where every factory preset outside Texture and Extremes sits). From 80% a warble is added on top, about 30 cents a pass by 100%. | The warble grows steadily to 150 cents a pass (30 in the allpasses), and runs up to 4 times faster. With Feedback high the tail warbles and groans. |
 | **Orbit Pan** | Voices narrow to their bands and move from a wide spread to where their bodies are. | Voices are thrown further out (at 200% six times as far), so most pin to the edges, and each voice's own side turns negative: its stereo turns inside out. |
 | **Orbit Tone** | Up to -12 / +4 dB above 2.5 kHz, ±3 dB level, damping ±1 octave. | Up to -24 / +14 dB above 2.5 kHz, damping up to ±3 octaves, and the bodies get up to 3 times as sensitive to their distance, so the swing between them gets hard. |
 | **Orbit Swirl** | Phaser depth up to its full mix; two sweeps per lap. | The phaser feeds back on itself, up to 0.8, until it rings (the output is scaled by 1 - 0.75 x feedback, so the loudest resonance rings out at up to +6 dB); its share of the voice grows from half to all of it; the sweep widens and goes round up to 8 times per lap; the tank allpass nudge doubles. |
@@ -589,44 +589,75 @@ from the new masses and velocities.
 
 | Category | Preset | What makes it |
 | --- | --- | --- |
-| Short | Init | The defaults. |
-| Short | Tight Booth | 0.35 s, smallest size, mostly early. |
-| Short | Wood Room | 0.7 s, small, a little dark, lighter bass. |
-| Short | Small Orbit | 1 s, four bodies, bright. |
-| Short | Drum Reactor | React 100%, Duck, low cut; body 1 on Damping. |
-| Short | Swirling Slapback | 140 ms straight echo INTO, free-running; body 1 on Damping. |
-| Short | Hot Input | Tape drive PRE at +15 dB. |
-| Medium | Figure-Eight Plate | 2.4 s, Diffusion 95%, all late, bright. |
-| Medium | Ping-Pong Space | Synced 1/4 ping-pong echo AFTER. |
-| Medium | Vocal Hall | 2.8 s, 35 ms predelay, low cut, Duck. |
-| Medium | Dotted Echo Hall | Synced 1/8D echo INTO a 3 s hall. |
-| Medium | Binary Star | Two bodies, heavy pair; body 2 on Width. |
-| Medium | Synced Orbit | Clock Sync, 2 bars a lap; body 3 on Tilt. |
-| Medium | Burning Loop | Tube drive in the LOOP at +18 dB, Feedback 55%, dark tilt. |
-| Medium | Crushed Satellites | Crush in the LOOP, five bodies, Feedback 40%. |
-| Medium | Chaos Engine | Six bodies, Gravity 2.5, React 80%; bodies on Damping and Feedback. |
-| Medium | Heavy Moon | One heavy body (2.8) and two light ones. |
-| Long | Tape Loop Orbit | 1-bar echo in the LOOP plus tape drive in the LOOP; body 3 on Tilt. |
-| Long | Swell Machine | Swell 85%, 6 s. |
-| Long | Fuzz Cloud | Fuzz POST at +24 dB, 60% mix, 7 s. |
-| Long | Folded Space | Fold in the LOOP, Shimmer 25%, Feedback 80%. |
-| Long | Slow Ballet | Gravity 0.35, Smear 60%, 8 s. |
-| Long | Shimmer Halo | Octave-up shimmer 45%, Feedback 85%, 9 s. |
-| Long | Infinite Return | 1/2-note echo in the LOOP, Feedback 70%, a little shimmer. |
-| Long | Octave Under | Octave-down shimmer, Feedback 80%, dark. |
-| Long | Cathedral Drift | 13 s, Size 2.6, 45 ms predelay, long bass. |
+| Rooms | Init | The defaults: a 4 s tail with three bodies. |
+| Rooms | Vocal Booth | 0.3 s, the smallest size, mostly early reflections. |
+| Rooms | Studio Room | 0.55 s, small and even, lighter bass. |
+| Rooms | Wood Room | 0.75 s, small and a little dark. |
+| Rooms | Live Room | 1.1 s, a bigger room with some air. |
+| Rooms | Drum Reactor | React 100%, Duck and Low Cut; Io routed to Damping. |
+| Rooms | Gated Snare | 0.4 s in a big, fully diffused space, thin bass: a dense burst that stops short. |
+| Plates | Vocal Plate | 1.8 s, 25 ms predelay, Low Cut 180 Hz, a little Duck. |
+| Plates | Snare Plate | 1.3 s, Diffusion 100%, very bright, thin bass. |
+| Plates | Figure-Eight Plate | 2.4 s, Diffusion 95%, all late, bright. |
+| Plates | Gold Plate | 3.2 s, Diffusion 100%, Motion 50%, Smear, a little wider. |
+| Plates | Dark Plate | 2.6 s, damped at 3.8 kHz. |
+| Plates | Orbit Plate | A 2.2 s plate with four bodies; Io on Width and Vesta on Damping. |
+| Halls | Echo Chamber | 1.6 s, mid-sized, a strong early part. |
+| Halls | Stone Chamber | 2.2 s, darker, long bass, half early. |
+| Halls | Vocal Hall | 2.8 s, 35 ms predelay, Low Cut, Duck. |
+| Halls | Concert Hall | 2.6 s, Size 1.6, 28 ms predelay, long bass. |
+| Halls | Strings Hall | 3.4 s, Size 1.9, 40 ms predelay, a slight swell. |
+| Halls | Grand Hall | 4.5 s, Size 2.4, 45 ms predelay, long bass. |
+| Halls | Cathedral Drift | 13 s, Size 2.6, 45 ms predelay, long bass. |
+| Echoes | Swirling Slapback | A 140 ms straight echo INTO the reverb, free-running; Io on Damping. |
+| Echoes | Ping-Pong Space | Synced 1/4 ping-pong echo AFTER the reverb. |
+| Echoes | Triplet Rain | Bright 1/8T ping-pong echo AFTER a short plate. |
+| Echoes | Dotted Echo Hall | Synced 1/8D echo INTO a 3 s hall. |
+| Echoes | Dub Chamber | Dark 1/4 echo INTO a chamber at 70%, light tape drive PRE. |
+| Echoes | Tape Loop Orbit | A 1-bar echo in the LOOP plus tape drive in the LOOP; Vesta on Tilt. |
+| Echoes | Infinite Return | A 1/2-note echo in the LOOP, Feedback 70%, a little shimmer. |
+| Shimmer | Swell Machine | Swell 85%, 6 s. |
+| Shimmer | Reverse Bloom | Reverse 80%: each note breathes in before it sounds. |
+| Shimmer | Shimmer Halo | Octave-up shimmer 45%, Feedback 85%, 9 s. |
+| Shimmer | Fifth Cathedral | A fifth up, Shimmer 35%, Feedback 80%, 10 s, 40 ms predelay. |
+| Shimmer | Ice Crystals | Two octaves up, Low Cut 300 Hz, bright and wide. |
+| Shimmer | Octave Under | Octave-down shimmer, Feedback 80%, dark. |
+| Shimmer | Choir Cloud | Octave up, Swell 60%, Motion 80%, Swirl 100%, 12 s. |
+| Orbits | Small Orbit | 1 s, four bodies, bright. |
+| Orbits | Binary Star | Two bodies, a heavy pair; Kepler on Width. |
+| Orbits | Heavy Moon | One heavy body (2.8) and two light ones. |
+| Orbits | Synced Orbit | Clock SYNC, 2 bars a lap; Vesta on Tilt. |
+| Orbits | Comet Pass | A light, fast Vesta on Damping: the tail brightens each time it swings past. |
+| Orbits | Tidal Breath | Two bodies at low gravity; Io on Decay and Kepler on Early/Late, so the tail breathes. |
+| Orbits | Six Moons | Six bodies, Orbit Pan and Tone 100%: six bands drifting around the stereo field. |
+| Orbits | Pulsar | Clock SYNC at 1 bar, Gravity 2; Kepler on Width and Titan on Tilt. |
+| Orbits | Slow Ballet | Gravity 0.35, Smear 60%, 8 s. |
+| Orbits | Chaos Engine | Six bodies, Gravity 2.5, React 80%; bodies on Damping and Feedback. |
+| Texture | Hot Input | Tape drive in the PRE slot at +15 dB. |
+| Texture | Lo-Fi Radio | Band-limited to 450 Hz to 4 kHz, light crush POST. |
+| Texture | Burning Loop | Tube drive in the LOOP at +18 dB, Feedback 55%, dark tilt. |
+| Texture | Crushed Satellites | Crush in the LOOP, five bodies, Feedback 40%. |
+| Texture | Tape Ghosts | Tape drive and a dark 1/2-note echo in the LOOP, Motion 95%: a worn tape memory. |
+| Texture | Fuzz Cloud | Fuzz POST at +24 dB, 60% mix, 7 s. |
+| Texture | Folded Space | Fold in the LOOP, Shimmer 25%, Feedback 80%. |
 | Washes | Nebula | 22 s, Size 3, slow attack, wide. |
+| Washes | Aurora | 25 s, a little octave shimmer; Kepler on Shimmer, so it comes and goes with the orbit. |
 | Washes | Deep Field | 30 s, six bodies, low gravity, 60 ms predelay. |
 | Washes | Galaxy Shimmer | 35 s, octave-up shimmer, Feedback 50%, wide. |
+| Washes | Glacier | 40 s at Size 7, Swell 70%, Smear 70%, dark. |
 | Washes | Event Horizon | 45 s, Size 4, Diffusion 100%, dark, 80 ms predelay. |
 | Washes | Dark Matter | 50 s, Size 4, very dark, octave-down shimmer, long bass. |
 | Washes | Frozen Ring | 60 s, all late, a little Duck. |
 | Extremes | Singing Tank | Diffusion 0, Size 0.3, Feedback 90%, no damping: metallic ringing that slowly builds. |
+| Extremes | Steel Cathedral | Diffusion 0, a fifth up, Feedback 100%: ringing metal that climbs and holds. |
 | Extremes | Whale Song | 30 s, Size 4, Motion 160%, Shimmer -5 st, dark, Swirl 160%. |
+| Extremes | Sub Collapse | Two octaves down, Feedback 115%, dark tilt: a growl that sinks and holds. |
 | Extremes | Feedback Bloom | Feedback 145%, a little +7 st shimmer, bright tilt: the tail dips, then blooms. |
 | Extremes | Screaming Loop | Tube in the LOOP at +24 dB, Feedback 130%: it holds and screams. |
+| Extremes | Glitch Hold | Crush in the LOOP, Feedback 110%, a 1/16 echo in the LOOP: a stuttering digital hold. |
 | Extremes | Orbit Riot | Six bodies, Gravity 2.5, React 100%, every body routed hard. |
 | Extremes | Inside Out | Orbit Pan, Tone, Swirl and Width all at 200%, Motion 120%. |
+| Extremes | Backwards Universe | Reverse 100% at Size 6, octave-down shimmer, Motion 130%. |
 | Extremes | Echo Runaway | Dotted-quarter echo in the LOOP at 105%, tape drive in the LOOP, Feedback 80%. |
 
 **User presets** are saved with SAVE in the header, as `.jvpreset` text files: a `JVerb preset 2`

@@ -97,8 +97,9 @@ but restarted with the transport (RETRIG). The echo's 1 Bar and 2 Bars follow th
 
 ## Presets
 
-The preset bar in the header steps through the factory bank, ordered from short rooms to washes
-that ring for most of a minute (Short, Medium, Long, Washes), and your own. SAVE names the current settings and writes them to:
+The preset bar in the header steps through the factory bank of 70 presets, and your own. The bank
+runs from the classic spaces (Rooms, Plates, Halls) through what JVerb adds to them (Echoes, Shimmer,
+Orbits, Texture) to Washes that ring for most of a minute and Extremes that stop sounding like rooms. SAVE names the current settings and writes them to:
 
 - macOS: `~/Library/Application Support/JVerb/Presets`
 - Windows: `%APPDATA%\JVerb\Presets`
