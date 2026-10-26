@@ -61,7 +61,9 @@ starts one and **X** removes it.
 
 As in JVerb: the arrows step through the presets, the name opens them by category, and **SAVE** saves
 the current sound as a user preset (`.jspreset`, plain text, in the user's application data folder
-under `JSynth/Presets`). A factory preset loads every param it doesn't set at its default, so nothing
+under `JSynth/Presets`). SAVE opens a name box: type a name and press Enter or click SAVE again to
+save it, or press Escape or click anywhere else to back out. To remove a user preset, load it, open the name
+menu and pick **Delete**; it asks once more before the file goes. A factory preset loads every param it doesn't set at its default, so nothing
 from the last patch carries over.
 
 The 49 factory presets run in six categories from the fastest envelopes to the slowest: **Hits**,

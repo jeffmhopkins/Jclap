@@ -370,7 +370,7 @@ public:
       arrow(w - save - a / 2, 1.0f, hover_ == Zone::Next);
       c.setColor(hover_ == Zone::Save ? kText : kPartColors[0]);
       c.text("SAVE", ui::font(11 * s), visage::Font::kCenter, w - save, 0, save, h);
-      if (editor_ && editor_->isVisible())
+      if (editing())
          return;
       const std::string name = host_.presetName();
       c.setColor(hover_ == Zone::Name ? 0xffffffff : kText);
@@ -385,7 +385,7 @@ public:
       switch (zoneAt(e.position.x)) {
       case Zone::Prev: step(-1); break;
       case Zone::Next: step(1); break;
-      case Zone::Save: startSave(); break;
+      case Zone::Save: editing() ? finishSave(true) : startSave(); break;
       case Zone::Name: showMenu(); break;
       case Zone::None: break;
       }
@@ -402,7 +402,7 @@ public:
 private:
    enum class Zone { None, Prev, Name, Next, Save };
    static constexpr float kArrow = 24.0f, kSave = 48.0f;
-   static constexpr int kSaveId = 1 << 20, kUserBase = 1 << 16;
+   static constexpr int kSaveId = 1 << 20, kDeleteId = kSaveId + 1, kUserBase = 1 << 16;
 
    Zone zoneAt(float x) const {
       const float s = height() / 26.0f, w = width();
@@ -489,9 +489,13 @@ private:
       menu.addSubMenu(std::move(user));
       menu.addBreak();
       menu.addOption(kSaveId, "Save as...");
+      if (onUserPreset())
+         menu.addOption(kDeleteId, "Delete \"" + current + "\"...");
       menu.onSelection() += [this](int id) {
          if (id == kSaveId)
             startSave();
+         else if (id == kDeleteId)
+            confirmDelete();
          else if (id >= kUserBase && id - kUserBase < static_cast<int>(user_.size()))
             load(static_cast<int>(factoryPresets().size()) + id - kUserBase);
          else if (id >= 0 && id < static_cast<int>(factoryPresets().size()))
@@ -500,12 +504,52 @@ private:
       menu.show(this, {kArrow * height() / 26.0f, height()});
    }
 
+   bool onUserPreset() const {
+      const int i = indexOf(host_.presetName());
+      return i >= static_cast<int>(factoryPresets().size());
+   }
+
+   // Deleting a preset can't be undone, so the menu asks once more before the file goes.
+   void confirmDelete() {
+      const std::string name = host_.presetName();
+      visage::PopupMenu menu;
+      menu.addOption(kDeleteId, "Delete \"" + name + "\" for good");
+      menu.addOption(-2, "Cancel");
+      menu.onSelection() += [this, name](int id) {
+         if (id != kDeleteId)
+            return;
+         std::error_code ec;
+         std::filesystem::remove(userPresetFolder() / (name + kPresetExtension), ec);
+         rescan();
+         redraw();
+      };
+      menu.show(this, {kArrow * height() / 26.0f, height()});
+   }
+
+   // The save name box. A click anywhere but SAVE drops the name, so the box never sits open
+   // without the keyboard; SAVE itself saves, and so does Enter.
+   class NameEditor : public visage::TextEditor {
+   public:
+      std::function<void()> onClickAway;
+      void focusChanged(bool is_focused, bool was_clicked) override {
+         visage::TextEditor::focusChanged(is_focused, was_clicked);
+         if (!is_focused && was_clicked && onClickAway)
+            onClickAway();
+      }
+   };
+
+   bool editing() const { return editor_ && editor_->isVisible(); }
+
    void startSave() {
       if (!editor_) {
-         editor_ = std::make_unique<visage::TextEditor>();
+         editor_ = std::make_unique<NameEditor>();
          editor_->setJustification(visage::Font::kCenter);
          editor_->onEnterKey() += [this] { finishSave(true); };
          editor_->onEscapeKey() += [this] { finishSave(false); };
+         editor_->onClickAway = [this] {
+            if (hover_ != Zone::Save)
+               finishSave(false);
+         };
          addChild(editor_.get(), false);
       }
       const float s = height() / 26.0f;
@@ -519,7 +563,7 @@ private:
    }
 
    void finishSave(bool apply) {
-      if (!editor_ || !editor_->isVisible())
+      if (!editing())
          return;
       const std::string name = uniqueName(presetFileName(editor_->text().toUtf8()));
       editor_->setVisible(false);
@@ -550,7 +594,7 @@ private:
    EditorHost &host_;
    std::vector<Preset> user_;
    int currentIndex_ = -1;
-   std::unique_ptr<visage::TextEditor> editor_;
+   std::unique_ptr<NameEditor> editor_;
    Zone hover_ = Zone::None;
 };
 
