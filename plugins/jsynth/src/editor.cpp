@@ -1547,7 +1547,7 @@ public:
       const float s = h / 290.0f;
       const auto param = [&](clap_id offset) { return static_cast<float>(host_.paramValue(partId(host_.part, offset))); };
       // Osc 2 and 3 above, Osc 1 below: the classic stack, with the carrier at the bottom.
-      const float px[3] = {w * 0.5f, w * 0.2f, w * 0.8f}, py[3] = {h * 0.66f, h * 0.24f, h * 0.24f};
+      const float px[3] = {w * 0.5f, w * 0.27f, w * 0.73f}, py[3] = {h * 0.66f, h * 0.28f, h * 0.28f};
       const float r = 26 * s;
       c.setColor(visage::Color(0x40000000));
       c.roundedRectangle(0, 0, w, h, 6 * s);
@@ -1573,11 +1573,36 @@ public:
       for (int o = 0; o < kOscCount; ++o) {
          const unsigned col = kOscColors[o];
          const float fb = param(fmCell(o, o)), level = param(mixParam(kMixLevel, o));
-         // Feedback: a ring beside the node.
+         // Feedback: an arrow that leaves the node and loops back into it, outward of the picture.
          if (fb > 0.005f) {
-            const float lx = px[o] + (o == 2 ? 1 : -1) * r * 1.25f, ly = py[o] - r * 0.9f, lr = 14 * s;
+            const float out = o == 0 ? dsp::kPi : o == 1 ? -2.36f : -0.78f; // the loop's direction, radians
+            const float lr = 20 * s, cx = px[o] + std::cos(out) * (r + lr * 0.6f), cy = py[o] + std::sin(out) * (r + lr * 0.6f);
             c.setColor(glow(col, 0.3f + 0.7f * fb, 1.0f + 0.5f * fb));
-            c.ring(lx - lr, ly - lr, 2 * lr, (1.5f + 3 * fb) * s);
+            const float thick = (1.5f + 3 * fb) * s;
+            const auto outside = [&](float x, float y) { return std::hypot(x - px[o], y - py[o]) > r + 3 * s; };
+            float lastX = 0, lastY = 0, prevX = 0, prevY = 0;
+            bool have = false;
+            constexpr int kSteps = 48;
+            // Round the loop clockwise from where it leaves the node; the arrowhead goes where it re-enters.
+            const float start = out + dsp::kPi;
+            for (int i = 0; i <= kSteps; ++i) {
+               const float a = start + 2 * dsp::kPi * i / kSteps;
+               const float x = cx + std::cos(a) * lr, y = cy + std::sin(a) * lr;
+               if (!outside(x, y))
+                  continue;
+               if (have)
+                  c.segment(lastX, lastY, x, y, thick, true);
+               prevX = lastX, prevY = lastY;
+               lastX = x, lastY = y, have = true;
+            }
+            const float dx = lastX - prevX, dy = lastY - prevY, len = std::max(1e-3f, std::hypot(dx, dy));
+            const float ux = dx / len, uy = dy / len, ax = lastX - ux * 9 * s, ay = lastY - uy * 9 * s;
+            c.segment(lastX, lastY, ax + uy * 6 * s, ay - ux * 6 * s, 2 * s, true);
+            c.segment(lastX, lastY, ax - uy * 6 * s, ay + ux * 6 * s, 2 * s, true);
+            const float tx = cx, ty = cy - lr - 10 * s;
+            c.setColor(glow(col, 1.0f, 1.2f));
+            c.text("FB " + std::to_string(static_cast<int>(fb * 100 + 0.5f)) + "%", ui::font(10 * s), visage::Font::kCenter,
+                   tx - 24 * s, ty - 7 * s, 48 * s, 14 * s);
          }
          // Heard: an arrow down and out, as bright as the level.
          if (level > 0.005f) {
