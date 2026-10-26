@@ -1535,6 +1535,70 @@ private:
    EditorHost &host_;
 };
 
+// An LFO's shape `cycles` into its run, -1..1: the panel's guess at the engine's, for its LEDs and
+// pictures.
+float lfoWave(int shape, double cycles) {
+   const float ph = static_cast<float>(cycles - std::floor(cycles));
+   switch (shape) {
+   case 1: return 1.0f - 4.0f * std::fabs(ph - 0.5f); // triangle
+   case 2: return 2.0f * ph - 1.0f;                   // saw
+   case 3: return ph < 0.5f ? 1.0f : -1.0f;           // square
+   case 4: return std::sin(static_cast<float>(std::floor(cycles)) * 12.9898f) > 0.0f ? 0.7f : -0.7f; // S&H
+   case 5: return 0.6f * std::sin(2.0f * kPi * ph) + 0.4f * std::sin(2.0f * kPi * ph * 0.37f + 1.0f); // smooth
+   default: return std::sin(2.0f * kPi * ph); // sine
+   }
+}
+
+// A plain LFO drawn: two cycles of its shape, from its phase, unipolar ones from the floor, with a
+// dot running along it at its rate.
+class LfoView : public visage::Frame {
+public:
+   LfoView(EditorHost &host, int lfo, unsigned color, const float &time) : host_(host), lfo_(lfo), color_(color), time_(time) {
+      setIgnoresMouseEvents(true, false);
+   }
+
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height();
+      const float s = h / 127.0f;
+      const auto param = [&](LfoParam p) { return host_.paramValue(partId(host_.part, lfoParam(lfo_, p))); };
+      const int shape = static_cast<int>(param(kLfoShape) + 0.5);
+      const double phase = param(kLfoPhase) / 360.0;
+      const bool unipolar = static_cast<int>(param(kLfoPolarity) + 0.5) == 1;
+      c.setColor(visage::Color(0x40000000));
+      c.roundedRectangle(0, 0, w, h, 6 * s);
+      const float x0 = 8 * s, x1 = w - 8 * s, top = 10 * s, bottom = h - 10 * s;
+      const auto yOf = [&](float v) {
+         const float u = unipolar ? 0.5f * v + 0.5f : 0.5f + 0.5f * v;
+         return bottom - u * (bottom - top);
+      };
+      c.setColor(visage::Color(0x18ffffff));
+      c.fill(x0, unipolar ? bottom : (top + bottom) / 2, x1 - x0, 1);
+      constexpr int kPoints = 160;
+      for (int pass = 0; pass < 2; ++pass) {
+         c.setColor(pass == 0 ? glow(color_, 0.3f, 1.0f) : glow(color_, 1.0f, 1.2f));
+         float px = x0, py = yOf(lfoWave(shape, phase));
+         for (int i = 1; i <= kPoints; ++i) {
+            const double t = 2.0 * i / kPoints;
+            const float nx = x0 + (x1 - x0) * static_cast<float>(t / 2.0), ny = yOf(lfoWave(shape, t + phase));
+            c.segment(px, py, nx, ny, (pass == 0 ? 6.0f : 2.0f) * s, true);
+            px = nx, py = ny;
+         }
+      }
+      // The dot: where the LFO is now, free running at its rate.
+      const double run = time_ * lfoHz(param(kLfoRate));
+      const double at = run - 2.0 * std::floor(run / 2.0);
+      const float dx = x0 + (x1 - x0) * static_cast<float>(at / 2.0), dy = yOf(lfoWave(shape, at + phase)), r = 5 * s;
+      c.setColor(glow(color_, 1.0f, 1.5f));
+      c.circle(dx - r, dy - r, 2 * r);
+   }
+
+private:
+   EditorHost &host_;
+   int lfo_;
+   unsigned color_;
+   const float &time_;
+};
+
 // The FM as what comes out: a C4 run through the three oscillators the way the engine does it,
 // two cycles drawn, with a chip under it for each route that is on.
 class FmView : public visage::Frame {
@@ -1899,7 +1963,7 @@ public:
 
 private:
    // Where a widget shows: always, or in the route list.
-   enum Group { kAlways, kFull, kReduced, kReducedOsc, kReducedFm, kRoutes };
+   enum Group { kAlways, kFull, kReduced, kReducedOsc, kReducedFm, kReducedEnv, kReducedLfo, kRoutes };
    struct Placed {
       visage::Frame *frame;
       int part; // -1 for both
@@ -1917,16 +1981,7 @@ private:
    float lfoValue(int l) const {
       const int part = host_.part;
       const double cycles = time_ * lfoHz(value(part, lfoParam(l, kLfoRate))) + value(part, lfoParam(l, kLfoPhase)) / 360.0;
-      const float ph = static_cast<float>(cycles - std::floor(cycles));
-      float v;
-      switch (static_cast<int>(value(part, lfoParam(l, kLfoShape)) + 0.5)) {
-      case 1: v = 1.0f - 4.0f * std::fabs(ph - 0.5f); break;          // triangle
-      case 2: v = 2.0f * ph - 1.0f; break;                             // saw
-      case 3: v = ph < 0.5f ? 1.0f : -1.0f; break;                     // square
-      case 4: v = std::sin(static_cast<float>(std::floor(cycles)) * 12.9898f) > 0.0f ? 0.7f : -0.7f; break; // S&H
-      case 5: v = 0.6f * std::sin(2.0f * kPi * ph) + 0.4f * std::sin(2.0f * kPi * ph * 0.37f + 1.0f); break; // smooth
-      default: v = std::sin(2.0f * kPi * ph); break;                   // sine
-      }
+      float v = lfoWave(static_cast<int>(value(part, lfoParam(l, kLfoShape)) + 0.5), cycles);
       if (static_cast<int>(value(part, lfoParam(l, kLfoPolarity)) + 0.5) == 1)
          v = 0.5f * v + 0.5f; // unipolar
       return v;
@@ -2010,6 +2065,8 @@ private:
       case kReduced: return host_.view == kReducedView;
       case kReducedOsc: return host_.view == kReducedView && oscTab_ == 0;
       case kReducedFm: return host_.view == kReducedView && oscTab_ == 1;
+      case kReducedEnv: return host_.view == kReducedView && envTab_ == 0;
+      case kReducedLfo: return host_.view == kReducedView && envTab_ == 1;
       case kRoutes: return host_.view == kAllCards && host_.routesOpen;
       default: return true;
       }
@@ -2341,21 +2398,40 @@ private:
       knob(tailParam(kFilterBalance), "BALANCE", c, {k[8].x, 629, k[8].w, 96}, "In parallel, turns Filter 1 or Filter 2 down.");
 
       // Envelopes: three big editors side by side.
-      glass({x, 727, w, 197}, "ENVELOPES", c);
+      // Envelopes and LFOs, on two tabs: three big envelope editors, or the two LFOs drawn.
+      glass({x, 727, w, 197}, "", c);
+      group_ = kReducedEnv;
       const char *envNames[kEnvCount] = {"ENV 1  AMP", "ENV 2", "ENV 3"};
       for (int e = 0; e < kEnvCount; ++e) {
          const float ex = x + 12 + e * 288.0f;
          const unsigned ec = sourceColor(kSourceEnv1 + e);
-         chip(kSourceEnv1 + e, envNames[e], {ex, 757, 110, 24});
-         dropdown(envParam(e, kEnvLoop), c, {ex + 190, 757, 86, 24});
+         chip(kSourceEnv1 + e, envNames[e], {ex, 763, 110, 24});
+         dropdown(envParam(e, kEnvLoop), c, {ex + 190, 763, 86, 24});
          const auto id = [&](EnvParam p) { return partId(part, envParam(e, p)); };
-         auto &env = glassy(put<ui::EnvelopeEditor>({ex, 789, 276, 127}, rangeOf(id(kEnvAttack)), rangeOf(id(kEnvDecay)),
+         auto &env = glassy(put<ui::EnvelopeEditor>({ex, 793, 276, 127}, rangeOf(id(kEnvAttack)), rangeOf(id(kEnvDecay)),
                                                     rangeOf(id(kEnvSustain)), rangeOf(id(kEnvRelease))),
                             ec);
          env.setTimeCurve(0.35f);
          envelopes_[1][part][e] = &env;
          bindings_.bind(env, id(kEnvAttack), id(kEnvDecay), id(kEnvSustain), id(kEnvRelease));
       }
+      group_ = kReducedLfo;
+      for (int i = 0; i < kLfoCount - kMotionCount; ++i) {
+         const int l = kMotionCount + i;
+         const float lx = x + 12 + i * 436.0f;
+         const unsigned lc = sourceColor(kSourceLfo1 + i);
+         chip(kSourceLfo1 + i, "LFO " + std::to_string(i + 1), {lx, 763, 104, 24});
+         dropdown(lfoParam(l, kLfoShape), lc, {lx + 112, 763, 96, 24});
+         dropdown(lfoParam(l, kLfoTrigger), c, {lx + 216, 763, 100, 24});
+         segments(lfoParam(l, kLfoSync), lc, {lx + 324, 763, 96, 24}, std::vector<std::string>{"FREE", "SYNC"});
+         const auto k = ui::row({lx + 208, 793, 212, 94}, 3);
+         knob(lfoParam(l, kLfoRate), "RATE", lc, k[0]);
+         knob(lfoParam(l, kLfoPhase), "PHASE", lc, k[1]);
+         knob(lfoParam(l, kLfoDelay), "DELAY", lc, k[2]);
+         dropdown(lfoParam(l, kLfoDivision), lc, {lx + 212, 892, 100, 24});
+         dropdown(lfoParam(l, kLfoPolarity), lc, {lx + 320, 892, 100, 24});
+      }
+      group_ = kReduced;
 
       // Under the sky: the part's voice and the output, big. The drawings are shared (see
       // buildReducedShared()); the knobs sit under them.
@@ -2397,6 +2473,17 @@ private:
          drawings_.push_back(&put<WaveView>({164, 98 + o * 98.0f, 330, 92}, host_, o, kOscColors[o]));
       group_ = kReducedFm;
       drawings_.push_back(&put<FmView>({28, 100, 320, 290}, host_));
+      group_ = kReduced;
+      auto &envTabs = glassy(put<ui::TabBar>({26, 731, 260, 26}, std::vector<std::string>{"ENVELOPES", "LFOS"}), kDim);
+      envTabs.select(envTab_);
+      envTabs.onChange = [this](int t) {
+         envTab_ = t;
+         refresh();
+      };
+      group_ = kReducedLfo;
+      for (int i = 0; i < kLfoCount - kMotionCount; ++i)
+         drawings_.push_back(&put<LfoView>({28 + i * 436.0f, 793, 196, 123}, host_, kMotionCount + i,
+                                           sourceColor(kSourceLfo1 + i), time_));
       group_ = kReduced;
       drawings_.push_back(&put<FilterView>({28, 440, 856, 157}, host_, *this));
       const ui::Rect vb = kVoiceBox;
@@ -2691,6 +2778,7 @@ private:
    std::vector<visage::Frame *> drawings_; // the reduced view's, redrawn each frame
    ui::SegmentedSwitch *viewSwitch_ = nullptr;
    int oscTab_ = 0; // the reduced view's oscillator panel: 0 OSCILLATORS, 1 FM
+   int envTab_ = 0; // and its envelope panel: 0 ENVELOPES, 1 LFOS
    std::vector<ui::EnvelopeEditor::Playhead> heads_;
    std::chrono::steady_clock::time_point last_;
 };
