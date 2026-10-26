@@ -1491,7 +1491,8 @@ private:
    const FlockView &sky_;
 };
 
-// The part's level and the master's, as two bars on one dB scale.
+// Both parts' levels and the master's, as bars on one dB scale. The part being edited is lit; the
+// other shows dimmer, so the balance between them is always in view.
 class LevelView : public visage::Frame {
 public:
    explicit LevelView(EditorHost &host) : host_(host) { setIgnoresMouseEvents(true, false); }
@@ -1501,23 +1502,25 @@ public:
       const float s = h / 120.0f;
       const float top = 6 * s, bottom = h - 18 * s;
       const auto yOf = [&](double db) { return bottom - static_cast<float>((std::clamp(db, -60.0, 6.0) + 60.0) / 66.0) * (bottom - top); };
-      const double levels[2] = {host_.paramValue(partId(host_.part, kPartLevel)), host_.paramValue(kMasterLevel)};
-      const unsigned colors[2] = {kPartColors[host_.part], kDim};
-      const char *names[2] = {"PART", "MASTER"};
+      const double levels[3] = {host_.paramValue(partId(0, kPartLevel)), host_.paramValue(partId(1, kPartLevel)),
+                                host_.paramValue(kMasterLevel)};
+      const unsigned colors[3] = {kPartColors[0], kPartColors[1], kDim};
+      const char *names[3] = {"A", "B", w > 100 * s ? "MASTER" : "M"};
       for (int db : {0, -12, -24, -36, -48}) {
          c.setColor(visage::Color(db == 0 ? 0x44ffffff : 0x18ffffff));
          c.fill(0, yOf(db), w, 1);
       }
-      for (int i = 0; i < 2; ++i) {
-         const float bw = 22 * s, x = w * (0.3f + 0.4f * i) - bw / 2;
+      for (int i = 0; i < 3; ++i) {
+         const float bw = std::min(20 * s, w * 0.14f), x = w * (0.2f + 0.3f * i) - bw / 2;
+         const float lit = i == 2 || i == host_.part ? 1.0f : 0.4f;
          c.setColor(visage::Color(0x40000000));
          c.roundedRectangle(x, top, bw, bottom - top, 4 * s);
          const float y = yOf(levels[i]);
-         c.setColor(glow(colors[i], 0.25f, 1.0f));
+         c.setColor(glow(colors[i], 0.25f * lit, 1.0f));
          c.roundedRectangle(x - 3 * s, y - 3 * s, bw + 6 * s, bottom - y + 3 * s, 6 * s);
-         c.setColor(glow(colors[i], 0.9f, 1.3f));
+         c.setColor(glow(colors[i], 0.9f * lit, 1.0f + 0.3f * lit));
          c.roundedRectangle(x, y, bw, bottom - y, 4 * s);
-         c.setColor(visage::Color(0x88ffffff));
+         c.setColor(visage::Color(lit == 1.0f ? 0xccffffff : 0x66ffffff));
          c.text(names[i], ui::font(9 * s), visage::Font::kCenter, x - 20 * s, h - 14 * s, bw + 40 * s, 14 * s);
       }
    }
@@ -1608,9 +1611,10 @@ public:
       }
       if (!(host_.view == kSkyOnly))
          refreshPitch();
-      if (host_.view == kReducedView)
+      if (host_.view != kSkyOnly)
          for (visage::Frame *d : drawings_)
-            d->redraw();
+            if (d->isVisible())
+               d->redraw();
       // Rings follow the routes, which the host or the route list can change too.
       const double sum = routeChecksum();
       if (sum != routeSum_) {
@@ -2290,6 +2294,8 @@ private:
       label({k[4].x, y + 10, k[4].w * 2, 16}, "OUTPUT", kDim);
       knob(kOutputWidth, "WIDTH", kDim, k[4], "The whole output's stereo width: 0% is mono, past 100% wider.");
       knob(kMasterLevel, "MASTER", kDim, k[5]);
+      // Both parts' levels and the master's, whichever part the cards edit.
+      drawings_.push_back(&put<LevelView>({k[3].x, y + 34, k[3].w, 108}, host_));
    }
 
    // Beside the envelopes: both filters and the drive after them.
