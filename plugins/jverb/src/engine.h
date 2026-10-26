@@ -50,8 +50,8 @@ struct Control {
    //    +-1 the cuts and boosts get extreme.
    //  - phase (-1..1): where its phaser sweep sits; as it moves, the voice swirls.
    //  - swirlDepth (0..2): how deep every voice's phaser goes. Past 1 it feeds back and rings.
-   // And motion (0..2): up to 1 the tank's drift bends a pass by at most 4 cents; past 1 it grows
-   // to a seasick 150 cents and runs up to four times faster.
+   // And motion (0..2): up to 0.8 the tank's drift bends a pass by at most 4 cents; past it, it grows
+   // to about 30 cents at 1 and a seasick 150 cents at 2, and runs up to four times faster.
    int bodies = 3;
    double pan[kMaxBodies] = {};
    double panDepth = 0.0, swirlDepth = 0.0;
@@ -279,24 +279,31 @@ public:
       // it undoes less and less (as a power of the gain, 1 to 0), until at 150% it undoes none, so the
       // drive pushes the loop into the shaper and it screams instead of choking.
       makeup_.set(static_cast<float>(1.0 - std::clamp((c.feedback - 1.0) / 0.5, 0.0, 1.0)));
-      tone_.set(static_cast<float>(c.driveTone));
+      // Tone's emphasis: up to +-50%, a straight 1 -+ 0.75 Tone on the lows and 1 +- 0.75 Tone on the
+      // highs; past it, on in even dB steps to 6 dB each way at the ends, rather than the lows
+      // dropping toward nothing (and the de-emphasis lifting them back up to 12 dB).
+      const double t = std::clamp(c.driveTone, -1.0, 1.0), past = std::max(0.0, std::fabs(t) - 0.5);
+      const double lift = past > 0.0 ? 1.375 * jclap::dsp::dbToGain(6.47 * past) : 1.0 + 0.75 * std::fabs(t);
+      const double cut = past > 0.0 ? 0.625 * jclap::dsp::dbToGain(-3.84 * past) : 1.0 - 0.75 * std::fabs(t);
+      emphLow_.set(static_cast<float>(t < 0.0 ? lift : cut));
+      emphHigh_.set(static_cast<float>(t < 0.0 ? cut : lift));
       bias_.set(static_cast<float>(c.driveBias));
       mix_.set(static_cast<float>(c.driveMix));
       trim_.set(static_cast<float>(jclap::dsp::dbToGain(c.driveTrim)));
       if (first_) {
          first_ = false;
-         for (Ramp *r : {&gain_, &tone_, &bias_, &mix_, &trim_, &makeup_})
+         for (Ramp *r : {&gain_, &emphLow_, &emphHigh_, &bias_, &mix_, &trim_, &makeup_})
             r->settle();
       }
    }
    float process(float x) {
-      const float gain = gain_.next(), tone = tone_.next(), bias = bias_.next(), mix = mix_.next(), trim = trim_.next();
+      const float gain = gain_.next(), low = emphLow_.next(), high = emphHigh_.next(), bias = bias_.next(), mix = mix_.next(),
+                  trim = trim_.next();
       const float makeup = makeup_.next();
       // Tone tilts the spectrum into the shaper and back out, so it changes what distorts, not the
       // overall balance.
       const float lo = emph_.lowpass(x);
-      const float tilt = 1.0f + 0.75f * tone;
-      float v = (lo * (2.0f - tilt) + (x - lo) * tilt) * gain;
+      float v = (lo * low + (x - lo) * high) * gain;
       // The dry side of the mix, delayed to line up with the oversampled path, or Mix below 100%
       // comb-filters. Crush doesn't oversample, so it mixes with the undelayed input.
       dryPos_ = (dryPos_ + 1) % Oversampler::kLatency;
@@ -321,7 +328,7 @@ public:
       }
       y = dc_.highpass(y);
       const float lo2 = deemph_.lowpass(y);
-      y = lo2 / (2.0f - tilt) + (y - lo2) / tilt;
+      y = lo2 / low + (y - lo2) / high;
       // Most shapes come out near full scale whatever the drive, so bring them back to the level
       // that went in before the trim. In the loop, quiet signals must not come out louder than they
       // went in, or the loop would grow below 100% feedback: there the makeup undoes the whole
@@ -377,7 +384,7 @@ private:
    std::array<float, Oversampler::kLatency> dryLine_ = {};
    int dryPos_ = 0;
    OnePole emph_, deemph_, dc_;
-   Ramp gain_, tone_, bias_, mix_, trim_, makeup_;
+   Ramp gain_, emphLow_, emphHigh_, bias_, mix_, trim_, makeup_;
    float held_ = 0.0f;
    int holdCount_ = 0;
 };
@@ -432,7 +439,8 @@ public:
       // Past full swirl the phaser sweeps wider and feeds back on itself, up to a ringing 0.8.
       const double ring = std::max(0.0, swirl - 1.0);
       target_[kSweep] = static_cast<float>((kSweepDepth + 0.1 * ring) * std::clamp(sweep, -1.0, 1.0));
-      target_[kSwirl] = static_cast<float>(std::clamp(swirl, 0.0, 1.0));
+      // Past full swirl the phaser's share also grows from half to all of the voice.
+      target_[kSwirl] = static_cast<float>(std::clamp(swirl, 0.0, 1.0) + ring);
       target_[kRing] = static_cast<float>(0.8 * ring);
       if (first_) {
          first_ = false;
@@ -462,9 +470,9 @@ public:
             ap = y;
          }
          last_[ch] = ap;
-         // The feedback can lift a resonance by up to 1 / (1 - ring); scaling by (1 - ring) keeps
-         // the loudest one at unity.
-         x[ch] = v + gain_[kSwirl] * 0.5f * ((1.0f - gain_[kRing]) * ap - v);
+         // The feedback can lift a resonance by up to 1 / (1 - ring); scaling by 1 - 0.75 ring lets the
+         // loudest one ring out at up to +6 dB (the wet signal's guard catches anything hotter).
+         x[ch] = v + gain_[kSwirl] * 0.5f * ((1.0f - 0.75f * gain_[kRing]) * ap - v);
       }
       const float mid = 0.5f * (x[0] + x[1]), side = 0.5f * (x[0] - x[1]) * gain_[kSide];
       outL = side + mid * gain_[kMidL];
@@ -513,9 +521,11 @@ public:
       if (first_)
          time_ = target_;
       feedback_.set(static_cast<float>(c.echoFeedback));
-      const double t = std::clamp(c.echoTone, -1.0, 1.0);
-      low_.set(static_cast<float>(jclap::dsp::dbToGain(t < 0 ? 0.0 : -9.0 * t)));
-      high_.set(static_cast<float>(jclap::dsp::dbToGain(t < 0 ? 12.0 * t : 3.0 * t)));
+      // Past +-50% each step goes twice as far: at the ends, -13.5 dB of lows and +4.5 dB of highs, or
+      // -18 dB of highs.
+      const double t = std::clamp(c.echoTone, -1.0, 1.0), past = std::max(0.0, std::fabs(t) - 0.5);
+      low_.set(static_cast<float>(jclap::dsp::dbToGain(t < 0 ? 0.0 : -9.0 * (t + past))));
+      high_.set(static_cast<float>(jclap::dsp::dbToGain(t < 0 ? 12.0 * (t - past) : 3.0 * (t + past))));
       pingPong_ = c.echoPingPong;
       if (first_) {
          first_ = false;
@@ -669,10 +679,11 @@ public:
       // Lines and their decay. Sixteen lines always, whatever the bodies do: each loop is the line
       // plus the allpass inside it, and decays to -60 dB in the Decay time.
       const double rt = std::max(0.05, c.decay);
-      const double motion = std::clamp(c.motion, 0.0, 2.0), wild = std::max(0.0, motion - 1.0);
-      // Up to Motion 1, at most kDriftCents a pass; past it, up to 150 cents and four times faster.
-      const double driftCents = std::min(1.0, motion) * kDriftCents + 146.0 * wild * wild;
-      const double apDriftCents = std::min(1.0, motion) * kApDriftCents + 29.0 * wild * wild;
+      // Up to Motion 80%, at most kDriftCents a pass (the factory presets all sit here). Past it the
+      // drift grows steadily, to about 30 cents at 100% and 150 at 200%, and runs up to four times faster.
+      const double motion = std::clamp(c.motion, 0.0, 2.0), wild = std::max(0.0, (motion - kMotionWild) / (2.0 - kMotionWild));
+      const double driftCents = std::min(1.0, motion) * kDriftCents + 146.0 * wild;
+      const double apDriftCents = std::min(1.0, motion) * kApDriftCents + 29.0 * wild;
       const double driftRate = 1.0 + 3.0 * wild;
       const int bodies = std::clamp(c.bodies, 1, kMaxBodies);
       driftSpeed_ = first_ ? (freeze ? 0.0 : 1.0)
@@ -748,7 +759,12 @@ public:
          bodySwirl_[b] += swirlSmooth * (std::clamp(c.swirlDepth, 0.0, 2.0) * std::min(1.0, rate / kSwirlFull) - bodySwirl_[b]);
          lastPhase_[b] = phase;
       }
-      tankApGain_.set(static_cast<float>(kTankApGainMin + (kTankApGainMax - kTankApGainMin) * std::clamp(c.diffusion, 0.0, 1.0)));
+      // From 50% up, Diffusion sets the tank's allpass gain between kTankApGainMin and Max; below,
+      // it falls on to nothing at 0%, where the bare lines ring metallic and grainy.
+      const double diffusion = std::clamp(c.diffusion, 0.0, 1.0);
+      const double apGainMid = kTankApGainMin + (kTankApGainMax - kTankApGainMin) * 0.5;
+      tankApGain_.set(static_cast<float>(diffusion >= 0.5 ? kTankApGainMin + (kTankApGainMax - kTankApGainMin) * diffusion
+                                                           : apGainMid * diffusion / 0.5));
       delayBodies_ = bodies;
 
       // Input.
@@ -791,8 +807,12 @@ public:
       const double meanLoss = loss / kLines;
       // Past Size 3 the long lines ring up more than the curve expects, so it eases off a little there
       // (measured at Size 6 and 10).
+      // Below 50% Diffusion the tank's allpasses thin out and its resonances ring up harder, so the
+      // loop eases off there too, to kLoopBareTank of the curve at 0% (measured at Size 0.3 to 3,
+      // Decay 4 and 20 s).
       const double loopScale = std::min(kLoopMax, kLoopCalibration * std::pow(meanLoss, kLoopExponent)) *
-                               std::pow(std::min(1.0, 3.0 / size), 0.2);
+                               std::pow(std::min(1.0, 3.0 / size), 0.2) *
+                               (kLoopBareTank + (1.0 - kLoopBareTank) * std::min(1.0, diffusion / 0.5));
       loopScale_.set(static_cast<float>(loopScale / kLoopMax));
       loopGain_.set(freeze ? 0.0f : static_cast<float>(c.feedback * loopScale));
       shimmer_.set(static_cast<float>(c.shimmer));
@@ -801,8 +821,12 @@ public:
       shimmerLift_.set(freeze ? 0.0f : static_cast<float>(std::max(0.0, kLoopFloor - c.feedback) * loopScale));
       pitchRatio_ = std::exp2(c.shimmerPitch / 12.0);
       smearMix_.set(static_cast<float>(c.smear));
-      tiltLow_.set(static_cast<float>(jclap::dsp::dbToGain(-6.0 * c.tilt)));
-      tiltHigh_.set(static_cast<float>(jclap::dsp::dbToGain(6.0 * c.tilt)));
+      // Up to +-40%, a 6 dB seesaw. Past it the loop would pile up bass far faster than treble (the
+      // tank damps the treble on every pass), so the bass lift slows and the treble lift steepens:
+      // at full Tilt, +4.2 dB of bass or +8.4 dB of treble.
+      const double over = std::max(0.0, std::fabs(c.tilt) - 0.4);
+      tiltLow_.set(static_cast<float>(jclap::dsp::dbToGain(c.tilt < -0.4 ? 2.4 + 3.0 * over : -6.0 * c.tilt)));
+      tiltHigh_.set(static_cast<float>(jclap::dsp::dbToGain(c.tilt > 0.4 ? 2.4 + 10.0 * over : 6.0 * c.tilt)));
       // Tilt also colours the tail as it's heard, fading out as Feedback rises to kLoopFloor: there the
       // loop, which tilts the tail again on every pass, has taken over.
       const double tailTilt = c.tilt * std::max(0.0, 1.0 - c.feedback / kLoopFloor);
@@ -1130,7 +1154,7 @@ public:
    static constexpr double kMaxTankApSeconds = 0.06;
 
 private:
-   static constexpr double kLoopCalibration = 3.3, kLoopExponent = 0.83, kLoopMax = 1.25;
+   static constexpr double kLoopCalibration = 3.3, kLoopExponent = 0.83, kLoopMax = 1.25, kLoopBareTank = 0.8;
    // Below this Feedback, Shimmer and Tilt still act on their own (see setControl), so they're heard
    // from Feedback 0. Factory presets that use them sit at or above it, and sound as they always did.
    static constexpr double kLoopFloor = 0.4;
@@ -1145,7 +1169,7 @@ private:
                                                 23.3, 4.9, 12.7, 19.3, 7.1, 16.1, 10.3, 13.9};
    static constexpr double kTankAp2Ms[kLines] = {3.1, 6.3, 2.3, 4.7, 7.9, 2.9, 5.3, 3.7,
                                                  6.9, 2.1, 4.1, 7.3, 3.3, 5.9, 2.7, 4.9};
-   // Diffusion sets the tank's allpass gain between these.
+   // Diffusion sets the tank's allpass gain between these from 50% up (below, down to 0).
    static constexpr double kTankApGainMin = 0.2, kTankApGainMax = 0.65;
    static constexpr float kTankApGainCeiling = 0.8f;
    // How far a body's phase sweep moves its loop allpass gains, and the span of the bodies' bands.
@@ -1159,6 +1183,8 @@ private:
    static constexpr double kApDriftHz[kLines] = {0.53, 0.19, 0.97, 0.31, 0.71, 0.23, 1.31, 0.43,
                                                  0.61, 0.17, 1.13, 0.37, 0.83, 0.27, 0.47, 1.01};
    static constexpr double kDriftCents = 4.0, kApDriftCents = 1.0;
+   // Where Motion starts to warble.
+   static constexpr double kMotionWild = 0.8;
    static constexpr float kInjectSign[kLines] = {1, 1, -1, 1, 1, -1, -1, -1, 1, -1, -1, 1, 1, 1, -1, -1};
    static constexpr float kOutSign[kLines] = {1, -1, 1, 1, -1, 1, -1, -1, 1, 1, -1, 1, 1, -1, -1, 1};
    static constexpr float kInjectScale = 0.3f, kOutScale = 0.6f;

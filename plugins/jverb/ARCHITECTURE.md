@@ -178,7 +178,8 @@ bodies do changes a line's length, so nothing bends pitch.
 **Motion** is how far the lines drift. Each line has a slow sine at its own rate, 0.11 to 1.17 Hz,
 spread over a decade and shuffled. Its depth is set in cents of pitch bend per pass rather than in
 samples, so however fast it runs it bends a pass by no more than that: up to 4 cents at Motion 100%
-(and 1 cent for the drifting allpass). Past 100% see [below](#up-to-100-and-past-it). A swing never
+(and 1 cent for the drifting allpass). Past 80% the warble is added on top; see
+[below](#up-to-100-and-past-it). A swing never
 reaches past 45% of a line's length, so even the wildest drift only reads what was written.
 
 **Freeze** sets every line's gain to exactly 1, fades the damping out over 50 ms, slows the drift to
@@ -249,7 +250,8 @@ voices see, before the voices), shapes it, and adds it to the tank's input on th
 **Why Feedback means the same at every decay.** The tank's resonances get louder the longer the
 decay: their peak gain grows about as one over what a line loses each pass. So the loop is scaled by
 that loss: loop scale = min(1.25, 3.3 x (mean loss per pass)^0.83), times (3 / Size)^0.2 past Size
-3, where the long lines ring up more than the curve expects. The curve was fitted by bisecting, over
+3, where the long lines ring up more than the curve expects, and times 0.8 to 1 below 50% Diffusion
+(0.8 at 0%), where the thinner allpasses let resonances ring up harder. The curve was fitted by bisecting, over
 Decay 1 to 30 s and Size 0.5 to 3, the Feedback where a tail first sustains; it lands between 96% and
 123%, mostly 100% to 115%. At Size 6 and 10 it lands between 72% and 127%. So below 100% the tail still dies away (just longer and
 more coloured by the loop), and past it the loop grows until the safety stage holds it. Feedback runs
@@ -261,7 +263,8 @@ One stereo drive, which sits in one of three slots: **PRE** (on the input, befor
 tank), **LOOP** (in the outer loop) or **POST** (on the wet signal, before Echo AFTER). Each sample:
 
 1. **Tone emphasis**: a one-pole split at 900 Hz tilts the spectrum by 1 + 0.75 x Drive Tone (bright
-   side up and dark side down, or the other way).
+   side up and dark side down, or the other way) up to ±50%; past it, on in even dB steps to 6 dB
+   each way at ±100%.
 2. **Gain**: Drive, 0 to +36 dB.
 3. **Shape**, at 2x oversampling (31-tap half-band Blackman-windowed sinc, up and down):
    - **Tape**: tanh.
@@ -323,10 +326,12 @@ the echo holds at a dense, driven level.
 
 | Echo Tone | Each pass, below 1.8 kHz | Each pass, above 1.8 kHz |
 | --- | --- | --- |
-| -100% | 0 dB | -12 dB (repeats get darker fast) |
+| -100% | 0 dB | -18 dB (repeats get darker fast) |
 | -20% (default) | 0 dB | -2.4 dB |
 | 0% | 0 dB | 0 dB |
-| +100% | -9 dB | +3 dB (repeats thin out and brighten) |
+| +100% | -13.5 dB | +4.5 dB (repeats thin out and brighten) |
+
+Up to ±50% each step is even; past it each step goes twice as far.
 
 The 60 Hz high-pass keeps low end from piling up however many times a repeat goes round.
 
@@ -472,10 +477,10 @@ before the voices, none of the voice extremes are fed back; only Motion acts ins
 
 | Knob | 0 to 100% | 100 to 200% |
 | --- | --- | --- |
-| **Motion** | Drift grows to 4 cents a pass (1 cent in the allpasses). A chorus-like blur, never pitchy. | Drift grows with the square of the excess to 150 cents a pass (30 in the allpasses), and runs up to 4 times faster. With Feedback high the tail warbles and groans. |
+| **Motion** | Drift grows to 4 cents a pass (1 cent in the allpasses). A chorus-like blur, never pitchy, up to 80% (where every factory preset sits). From 80% a warble is added on top, about 30 cents a pass by 100%. | The warble grows steadily to 150 cents a pass (30 in the allpasses), and runs up to 4 times faster. With Feedback high the tail warbles and groans. |
 | **Orbit Pan** | Voices narrow to their bands and move from a wide spread to where their bodies are. | Voices are thrown further out (at 200% six times as far), so most pin to the edges, and each voice's own side turns negative: its stereo turns inside out. |
-| **Orbit Tone** | Up to -12 / +4 dB above 2.5 kHz, ±3 dB level, damping ±1 octave. | Up to -24 / +14 dB above 2.5 kHz, damping up to ±3 octaves, so the swing between bodies gets hard. |
-| **Orbit Swirl** | Phaser depth up to its full mix; two sweeps per lap. | The phaser feeds back on itself, up to 0.8, until it rings (the output is scaled by 1 - feedback so the loudest resonance stays at unity); the sweep widens and goes round up to 8 times per lap; the tank allpass nudge doubles. |
+| **Orbit Tone** | Up to -12 / +4 dB above 2.5 kHz, ±3 dB level, damping ±1 octave. | Up to -24 / +14 dB above 2.5 kHz, damping up to ±3 octaves, and the bodies get up to 3 times as sensitive to their distance, so the swing between them gets hard. |
+| **Orbit Swirl** | Phaser depth up to its full mix; two sweeps per lap. | The phaser feeds back on itself, up to 0.8, until it rings (the output is scaled by 1 - 0.75 x feedback, so the loudest resonance rings out at up to +6 dB); its share of the voice grows from half to all of it; the sweep widens and goes round up to 8 times per lap; the tank allpass nudge doubles. |
 
 The ORBIT page's voice list draws the same 0 to 200% scale, with the tick at 100%.
 
@@ -497,12 +502,12 @@ is automatable; "Mod" means the host can also modulate it (CLAP param modulation
 | Bodies | 2 to 6 | 3 | How many bodies, voices and bands. |
 | Motion | 0 to 200% | 40% | Tank line drift. See above. Mod. |
 | Attack | Reverse 100% to Swell 100% | Off | Reverse windows or a slow bloom. Mod. |
-| Diffusion | 0 to 100% | 70% | Input diffuser gain, and tank allpass gain (0.2 to 0.65). Mod, and a body target. |
+| Diffusion | 0 to 100% | 70% | Input diffuser gain, and tank allpass gain (0 at 0%, 0.425 at 50%, 0.65 at 100%). At 0% the bare lines ring metallic. Mod, and a body target. |
 | Early/Late | 0 to 100% late | 75% | Equal-power balance of early reflections and tail. Mod, and a body target. |
 | Predelay | 0 to 500 ms | 20 ms | Mod. |
 | Damp High | 1 to 20 kHz | 7 kHz | Treble damping in the tank, per pass. Mod, and a body target. |
 | Bass Mult | x0.25 to x2.5 | x1.2 | Bass decay time relative to Decay. Mod. |
-| Bass Xover | 80 to 800 Hz | 250 Hz | Where Bass Mult takes over. Mod. |
+| Bass Xover | 80 to 800 Hz | 250 Hz | Where Bass Mult takes over. Not on the panel (it barely changes the sound); automation and presets only. Mod. |
 | Low Cut | 20 Hz to 1 kHz | 40 Hz | High-pass on the reverb's input. Mod. |
 | High Cut | 1 to 20 kHz | 16 kHz | Lowpass on the reverb's input. Mod. |
 
@@ -534,8 +539,8 @@ is automatable; "Mod" means the host can also modulate it (CLAP param modulation
 | Feedback | 0 to 150% | 0% | Outer loop gain, scaled to mean the same at any decay. Mod, and a body target. |
 | Shimmer | 0 to 100% | 0% | How much of the loop is pitch shifted; heard from Feedback 0. Mod, and a body target. |
 | Shimmer Pitch | -24 to +24 st | +12 st | The shift's interval, in whole semitones. |
-| Tilt | -100% to +100% | 0% | ±6 dB seesaw around 700 Hz in the loop, and up to ±9 dB on the tail below 40% Feedback. Mod, and a body target. |
-| Smear | 0 to 100% | 30% | Allpass blur in the loop. Mod. |
+| Tilt | -100% to +100% | 0% | 6 dB seesaw around 700 Hz in the loop up to ±40%; past it the bass lift slows (+4.2 dB at -100%) and the treble lift steepens (+8.4 dB at +100%). Also up to ±9 dB on the tail below 40% Feedback. Mod, and a body target. |
+| Smear | 0 to 100% | 30% | Allpass blur in the loop. Not on the panel (it barely changes the sound); automation and presets only. Mod. |
 | Safety | Soft, Hard | Soft | tanh or a clip at ±1 on the loop's return. |
 | Freeze | On/Off | Off | Holds the tail forever. |
 
@@ -616,6 +621,13 @@ from the new masses and velocities.
 | Washes | Event Horizon | 45 s, Size 4, Diffusion 100%, dark, 80 ms predelay. |
 | Washes | Dark Matter | 50 s, Size 4, very dark, octave-down shimmer, long bass. |
 | Washes | Frozen Ring | 60 s, all late, a little Duck. |
+| Extremes | Singing Tank | Diffusion 0, Size 0.3, Feedback 90%, no damping: metallic ringing that slowly builds. |
+| Extremes | Whale Song | 30 s, Size 4, Motion 160%, Shimmer -5 st, dark, Swirl 160%. |
+| Extremes | Feedback Bloom | Feedback 145%, a little +7 st shimmer, bright tilt: the tail dips, then blooms. |
+| Extremes | Screaming Loop | Tube in the LOOP at +24 dB, Feedback 130%: it holds and screams. |
+| Extremes | Orbit Riot | Six bodies, Gravity 2.5, React 100%, every body routed hard. |
+| Extremes | Inside Out | Orbit Pan, Tone, Swirl and Width all at 200%, Motion 120%. |
+| Extremes | Echo Runaway | Dotted-quarter echo in the LOOP at 105%, tape drive in the LOOP, Feedback 80%. |
 
 **User presets** are saved with SAVE in the header, as `.jvpreset` text files: a `JVerb preset 2`
 line (version 1 files from 0.4.x, which list 69 params, get their body targets translated as old

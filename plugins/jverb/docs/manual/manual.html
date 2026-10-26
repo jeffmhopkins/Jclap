@@ -329,7 +329,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
 
   <ol class="steps">
     <li><b class="h">Load JVerb and play something</b>Put JVerb on a track with something sustained and something percussive in it: a pad and a drum loop are ideal. The orbits start running as soon as the panel opens. The bodies trail coloured paths across the stage, and each drum hit blows a puff of glowing gas out of them.</li>
-    <li><b class="h">Pick a preset</b>Click the preset name in the header to open the menu: presets are grouped from <em>Short</em> rooms through <em>Medium</em> and <em>Long</em> spaces to <em>Washes</em> that ring for most of a minute. Or click the arrows, or scroll over the bar, to step through them. Try <em>Vocal Hall</em>, then <em>Shimmer Halo</em>, then <em>Nebula</em>.</li>
+    <li><b class="h">Pick a preset</b>Click the preset name in the header to open the menu: presets are grouped from <em>Short</em> rooms through <em>Medium</em> and <em>Long</em> spaces to <em>Washes</em> that ring for most of a minute, and <em>Extremes</em> for when it should stop sounding like a room. Or click the arrows, or scroll over the bar, to step through them. Try <em>Vocal Hall</em>, then <em>Shimmer Halo</em>, then <em>Nebula</em>.</li>
     <li><b class="h">Set the size and length</b>On the <strong>SPACE</strong> page, <strong>DECAY</strong> sets how long the tail lasts and <strong>SYSTEM SIZE</strong> how big the space is. Bigger systems have longer lines and a slower, grainier build. <strong>DAMP HIGH</strong> darkens the tail as it rings.</li>
     <li><b class="h">Make it move</b>Open the <strong>ORBIT</strong> page. <strong>PAN</strong> moves each body's voice from a wide spread to where the body actually is; <strong>TONE</strong> darkens voices as their bodies swing out; <strong>SWIRL</strong> adds a phaser to each voice, swept by its orbit. Now drag a body somewhere new, or scroll on it to make it heavier, and listen to the tail rearrange itself.</li>
     <li><b class="h">Let a body drive something</b>Each body has a card along the bottom. Set Kepler's target menu to <strong>Feedback</strong> and raise its <strong>AMOUNT</strong>: each time Kepler slingshots past another body, the tail surges. The Feedback knob's ring shows the movement live.</li>
@@ -531,7 +531,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <h2>The preset bar</h2>
   <ul>
     <li><strong>◀ ▶</strong> step to the previous or next preset, in menu order. Scrolling over the bar does the same.</li>
-    <li><strong>The name</strong> opens the preset menu: the factory bank in four categories (<em>Short</em>, <em>Medium</em>, <em>Long</em>, <em>Washes</em>), a <em>User</em> submenu with your own presets, and <em>Save as…</em>. The category of the current preset is shown at the left of the bar.</li>
+    <li><strong>The name</strong> opens the preset menu: the factory bank in five categories (<em>Short</em>, <em>Medium</em>, <em>Long</em>, <em>Washes</em>, <em>Extremes</em>), a <em>User</em> submenu with your own presets, and <em>Save as…</em>. The category of the current preset is shown at the left of the bar.</li>
     <li><strong>SAVE</strong> asks for a name and writes the current settings as a user preset.</li>
   </ul>
   <p>Loading a preset sets every parameter, so nothing carries over from the previous sound (a body's routing, for example). The host sees the change as an ordinary edit, so it can be undone. The orbits then restart from the preset's masses and velocities.</p>
@@ -587,7 +587,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
           <tr><td class="c">SYSTEM SIZE</td><td class="r">0.25 – 10 AU</td><td class="d">1.00 AU</td><td>Scales every line in the tank, the early reflections, and the swell and reverse windows. At 10 AU the longest line is 2 s. Also sets how big the stage draws the system. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">GRAVITY</td><td class="r">G ×0.25 – ×4</td><td class="d">×1.00</td><td>How hard the bodies pull. Higher runs the orbits faster and tighter with the same shapes. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">BODIES</td><td class="r">2 – 6</td><td class="d">3</td><td>How many bodies, and so how many voices and bands. Fewer is sparse, more is dense.</td></tr>
-          <tr><td class="c">MOTION</td><td class="r">0 – 200%</td><td class="d">40%</td><td>How far the tank's lines drift: a chorus-like blur up to 100%, warble beyond. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">MOTION</td><td class="r">0 – 200%</td><td class="d">40%</td><td>How far the tank's lines drift: a chorus-like blur up to 80%, warble beyond. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">PREDELAY</td><td class="r">0 – 500 ms</td><td class="d">20 ms</td><td>Delay before the space answers. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">DAMP HIGH</td><td class="r">1 – 20 kHz</td><td class="d">7.0 kHz</td><td>Highs above this die faster on every pass, so the tail darkens as it rings. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
         </tbody>
@@ -608,10 +608,10 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
         <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
         <tbody>
           <tr><td class="c">ATTACK</td><td class="r">Reverse 100% – Swell 100%</td><td class="d">Off</td><td>Right of centre the tail swells in through three long allpasses; left of centre it plays the input backwards in overlapping windows (80 to 580 ms). <span class="mod m">MOD</span></td></tr>
-          <tr><td class="c">DIFFUSION</td><td class="r">0 – 100%</td><td class="d">70%</td><td>How much the input is smeared before the tank, and how dense the tank's own allpasses are. At 0% a click goes in as a click; at 100% as a cloud. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
+          <tr><td class="c">DIFFUSION</td><td class="r">0 – 100%</td><td class="d">70%</td><td>How much the input is smeared before the tank, and how dense the tank's own allpasses are. At 0% a click goes in as a click and the bare tank rings metallic; at 100% as a cloud. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
           <tr><td class="c">EARLY/LATE</td><td class="r">0 – 100% late</td><td class="d">75% late</td><td>Equal-power balance of early reflections and tail. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
           <tr><td class="c">BASS MULT</td><td class="r">×0.25 – ×2.5</td><td class="d">×1.20</td><td>Bass decay time relative to Decay. <span class="mod m">MOD</span></td></tr>
-          <tr><td class="c">BASS XOVER</td><td class="r">80 – 800 Hz</td><td class="d">250 Hz</td><td>Where Bass Mult takes over. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">BASS XOVER</td><td class="r">80 – 800 Hz</td><td class="d">250 Hz</td><td>Where Bass Mult takes over. Not on the panel, since it barely changes the sound; automation and presets only. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">LOW CUT</td><td class="r">20 Hz – 1 kHz</td><td class="d">40 Hz</td><td>High-pass on the reverb's input. The dry signal is untouched. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">HIGH CUT</td><td class="r">1 – 20 kHz</td><td class="d">16.0 kHz</td><td>Low-pass on the reverb's input. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">REACT</td><td class="r">0 – 100%</td><td class="d">30%</td><td>How hard transients in the input kick the bodies. <span class="mod m">MOD</span></td></tr>
@@ -635,7 +635,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
         <tbody>
           <tr><td class="c">PAN</td><td class="r">0 – 200%</td><td class="d">75%</td><td>Narrows each voice to its own band and moves it from a wide spread to where its body is, left to right. Past 100% voices are thrown to the edges and their stereo turns inside out. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">TONE</td><td class="r">0 – 200%</td><td class="d">60%</td><td>A voice darkens as its body swings out and brightens near the centre. Also moves the damping in that body's lines. <span class="mod m">MOD</span></td></tr>
-          <tr><td class="c">SWIRL</td><td class="r">0 – 200%</td><td class="d">60%</td><td>How deep each voice's four-stage phaser goes, swept twice per lap by its orbit. Past 100% the phasers feed back until they ring. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">SWIRL</td><td class="r">0 – 200%</td><td class="d">60%</td><td>How deep each voice's four-stage phaser goes, swept twice per lap by its orbit. Past 100% the phasers feed back until they ring, and take over more of each voice. <span class="mod m">MOD</span></td></tr>
         </tbody>
       </table>
       <h4>The voice list</h4>
@@ -724,7 +724,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
           <tr><td class="c">SHIMMER</td><td class="r">0 – 100%</td><td class="d">0%</td><td>How much of the loop is pitch shifted. Heard even with Feedback at 0. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
           <tr><td class="c">PITCH</td><td class="r">–24 – +24 st</td><td class="d">+12 st</td><td>The shimmer interval, in semitones.</td></tr>
           <tr><td class="c">TILT</td><td class="r">–100% – +100%</td><td class="d">+0%</td><td>Darkens or brightens what goes round the loop: up to 6 dB each way around 700 Hz. Below 40% Feedback it also tilts the tail you hear, up to 9 dB each way. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
-          <tr><td class="c">SMEAR</td><td class="r">0 – 100%</td><td class="d">30%</td><td>Allpass blur in the loop. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">SMEAR</td><td class="r">0 – 100%</td><td class="d">30%</td><td>Allpass blur in the loop. Not on the panel, since it barely changes the sound; automation and presets only. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">SAFETY</td><td class="r">Soft, Hard</td><td class="d">Soft</td><td>How the loop is kept from running away: a soft saturator or a hard clip.</td></tr>
         </tbody>
       </table>
@@ -749,7 +749,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
           <tr><td class="c">Slot</td><td class="r">PRE, LOOP, POST</td><td class="d">PRE</td><td>PRE drives the input; LOOP drives every pass of the feedback loop; POST drives the reverb's output.</td></tr>
           <tr><td class="c">Type</td><td class="r">menu</td><td class="d">Tube</td><td>Tape, Tube, Fuzz, Fold or Crush (below).</td></tr>
           <tr><td class="c">DRIVE</td><td class="r">0 – +36 dB</td><td class="d">+12 dB</td><td>Gain into the shaper. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
-          <tr><td class="c">TONE</td><td class="r">–100% – +100%</td><td class="d">+0%</td><td>Tilts what goes into the shaper around 900 Hz, and back after, so it changes <em>what</em> distorts, not the overall balance. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">TONE</td><td class="r">–100% – +100%</td><td class="d">+0%</td><td>Tilts what goes into the shaper around 900 Hz, and back after, so it changes <em>what</em> distorts, not the overall balance. Each step is even, up to 6 dB each way at the ends. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">BIAS</td><td class="r">0 – 100%</td><td class="d">20%</td><td>Asymmetry for even harmonics (Tube, Fuzz), fold depth (Fold), or hold length (Crush). <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">MIX</td><td class="r">0 – 100%</td><td class="d">100%</td><td>Clean / driven blend. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">TRIM</td><td class="r">–18 – +6 dB</td><td class="d">0 dB</td><td>Output trim. In the LOOP slot it can only cut. <span class="mod m">MOD</span></td></tr>
@@ -789,7 +789,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
           <tr><td class="c">PING</td><td class="r">On / Off</td><td class="d">On</td><td>Ping-pong: the first repeat is on the left, then they alternate.</td></tr>
           <tr><td class="c">TIME</td><td class="r">10 – 4000 ms</td><td class="d">375 ms</td><td>The echo time when Sync is Free. Otherwise the knob shows the note value. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">FEEDBACK</td><td class="r">0 – 105%</td><td class="d">45%</td><td>Level of each repeat relative to the last. Past 100% the repeats saturate rather than run away. <span class="mod m">MOD</span></td></tr>
-          <tr><td class="c">TONE</td><td class="r">–100% – +100%</td><td class="d">–20%</td><td>Darker or brighter with every repeat. <span class="mod m">MOD</span></td></tr>
+          <tr><td class="c">TONE</td><td class="r">–100% – +100%</td><td class="d">–20%</td><td>Darker or brighter with every repeat; past ±50% each step goes twice as far. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">MIX</td><td class="r">0 – 100%</td><td class="d">50%</td><td>Level of the repeats added at the slot. <span class="mod m">MOD</span></td></tr>
         </tbody>
       </table>
@@ -878,10 +878,10 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <table>
     <thead><tr><th>Knob</th><th>0 – 100%</th><th>100 – 200%</th></tr></thead>
     <tbody>
-      <tr><td class="c">MOTION</td><td>The lines drift up to 4 cents a pass. A chorus-like blur, never pitchy.</td><td>The drift grows to as much as 150 cents a pass and runs up to four times faster. With Feedback high the tail warbles and groans.</td></tr>
+      <tr><td class="c">MOTION</td><td>The lines drift up to 4 cents a pass. A chorus-like blur, never pitchy, up to 80%; from there a warble comes in, about 30 cents a pass by 100%.</td><td>The warble grows to as much as 150 cents a pass and runs up to four times faster. With Feedback high the tail warbles and groans.</td></tr>
       <tr><td class="c">ORBIT PAN</td><td>Voices narrow to their bands and move from a wide spread to where their bodies are.</td><td>Voices are thrown further out (at 200%, six times as far), so most pin to the edges, and each voice's stereo turns inside out.</td></tr>
-      <tr><td class="c">ORBIT TONE</td><td>Up to –12 / +4 dB above 2.5 kHz, ±3 dB of level, damping ±1 octave.</td><td>Up to –24 / +14 dB above 2.5 kHz and damping ±3 octaves, so the swing between bodies gets hard.</td></tr>
-      <tr><td class="c">ORBIT SWIRL</td><td>Phaser depth up to its full mix; two sweeps per lap.</td><td>The phasers feed back on themselves until they ring, the sweep widens and goes round up to eight times per lap, and the tank's own allpasses swirl twice as hard.</td></tr>
+      <tr><td class="c">ORBIT TONE</td><td>Up to –12 / +4 dB above 2.5 kHz, ±3 dB of level, damping ±1 octave.</td><td>Up to –24 / +14 dB above 2.5 kHz and damping ±3 octaves, and the bodies turn up to three times as sensitive to their distance, so the swing between bodies gets hard.</td></tr>
+      <tr><td class="c">ORBIT SWIRL</td><td>Phaser depth up to its full mix; two sweeps per lap.</td><td>The phasers feed back on themselves until they ring and take over the whole voice, the sweep widens and goes round up to eight times per lap, and the tank's own allpasses swirl twice as hard.</td></tr>
     </tbody>
   </table>
   <p>Only Motion acts inside the tank. Because the outer loop is taken before the voices, nothing Pan, Tone or Swirl does is ever fed back, so even at 200% they cannot make the reverb run away. The ringing of an extreme Swirl is level-compensated so its loudest resonance stays at unity.</p>
@@ -1013,7 +1013,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <tbody>
       <tr><td class="c" style="white-space:normal">JVerb doesn't appear in my host (macOS)</td><td>The download is probably quarantined. See the warning in Chapter 2, then rescan plug-ins.</td></tr>
       <tr><td class="c" style="white-space:normal">The tail never stops</td><td>Check <strong>FREEZE</strong>, and whether <strong>FEEDBACK</strong> is near or above 100%. A body routed to Feedback or Decay can also push it over. Echo Feedback above 100% sustains the repeats.</td></tr>
-      <tr><td class="c" style="white-space:normal">The tail sounds out of tune or seasick</td><td><strong>MOTION</strong> is past 100%, or <strong>SHIMMER</strong> is up with an interval you didn't intend.</td></tr>
+      <tr><td class="c" style="white-space:normal">The tail sounds out of tune or seasick</td><td><strong>MOTION</strong> is past 80%, or <strong>SHIMMER</strong> is up with an interval you didn't intend.</td></tr>
       <tr><td class="c" style="white-space:normal">A whistling or ringing tone</td><td><strong>ORBIT SWIRL</strong> past 100% makes the phasers ring. A small System Size with a long Decay can also sound metallic.</td></tr>
       <tr><td class="c" style="white-space:normal">The reverb jumps around the stereo field too much</td><td>Lower <strong>ORBIT PAN</strong>, reduce <strong>REACT</strong>, or lower <strong>GRAVITY</strong> for slower motion.</td></tr>
       <tr><td class="c" style="white-space:normal">SYNC doesn't line up with the song</td><td>The orbits realign when the transport starts, loops or jumps. Start playback from a bar line, and check the host sends tempo and time signature.</td></tr>
@@ -1295,8 +1295,17 @@ function el(parent, tag, attrs, text) {
       ['Dark Matter', '50 s, Size 4, very dark, octave-down shimmer, long bass.'],
       ['Frozen Ring', '60 s, all late, a little Duck.'],
     ]],
+    ['Extremes', 'The far ends of the ranges: loops that hold, scream and bloom.', [
+      ['Singing Tank', 'Diffusion 0, Size 0.3, Feedback 90%, no damping: metallic ringing that slowly builds.'],
+      ['Whale Song', '30 s, Size 4, Motion 160%, Shimmer –5 st, dark, Swirl 160%.'],
+      ['Feedback Bloom', 'Feedback 145%, a little +7 st shimmer, bright tilt: the tail dips, then blooms.'],
+      ['Screaming Loop', 'Tube in the LOOP at +24 dB, Feedback 130%: it holds and screams.'],
+      ['Orbit Riot', 'Six bodies, Gravity 2.5, React 100%, every body routed hard.'],
+      ['Inside Out', 'Orbit Pan, Tone, Swirl and Width all at 200%, Motion 120%.'],
+      ['Echo Runaway', 'Dotted-quarter echo in the LOOP at 105%, tape drive in the LOOP, Feedback 80%.'],
+    ]],
   ];
-  const cols = ['#ffb05a', '#6fe0ff', '#ff6fd2', '#a98bff'];
+  const cols = ['#ffb05a', '#6fe0ff', '#ff6fd2', '#a98bff', '#ff7a7a'];
   const host = document.getElementById('presets');
   let html = '';
   P.forEach(([cat, desc, list], i) => {
@@ -1316,7 +1325,7 @@ function el(parent, tag, attrs, text) {
       ['Decay', '0.2 – 60 s', '4.00 s', M + T], ['System Size', '0.25 – 10 AU', '1.00 AU', M], ['Gravity', 'G ×0.25 – ×4', '×1.00', M],
       ['Bodies', '2 – 6', '3', ''], ['Motion', '0 – 200%', '40%', M], ['Attack', 'Reverse 100% – Swell 100%', 'Off', M],
       ['Diffusion', '0 – 100%', '70%', M + T], ['Early/Late', '0 – 100% late', '75% late', M + T], ['Predelay', '0 – 500 ms', '20 ms', M],
-      ['Damp High', '1 – 20 kHz', '7.0 kHz', M + T], ['Bass Mult', '×0.25 – ×2.5', '×1.20', M], ['Bass Xover', '80 – 800 Hz', '250 Hz', M],
+      ['Damp High', '1 – 20 kHz', '7.0 kHz', M + T], ['Bass Mult', '×0.25 – ×2.5', '×1.20', M], ['Bass Xover (not on the panel)', '80 – 800 Hz', '250 Hz', M],
       ['Low Cut', '20 Hz – 1 kHz', '40 Hz', M], ['High Cut', '1 – 20 kHz', '16.0 kHz', M],
     ]],
     ['Orbit', [
@@ -1329,7 +1338,7 @@ function el(parent, tag, attrs, text) {
     ]],
     ['Loop', [
       ['Feedback', '0 – 150%', '0%', M + T], ['Shimmer', '0 – 100%', '0%', M + T], ['Shimmer Pitch', '–24 – +24 st', '+12 st', ''],
-      ['Tilt', '–100% – +100%', '+0%', M + T], ['Smear', '0 – 100%', '30%', M], ['Safety', 'Soft, Hard', 'Soft', ''], ['Freeze', 'On / Off', 'Off', ''],
+      ['Tilt', '–100% – +100%', '+0%', M + T], ['Smear (not on the panel)', '0 – 100%', '30%', M], ['Safety', 'Soft, Hard', 'Soft', ''], ['Freeze', 'On / Off', 'Off', ''],
     ]],
     ['Drive', [
       ['Drive On', 'On / Off', 'Off', ''], ['Drive Slot', 'Pre, Loop, Post', 'Pre', ''], ['Drive Type', 'Tape, Tube, Fuzz, Fold, Crush', 'Tube', ''],
