@@ -261,7 +261,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
         <li><strong>Drive</strong>: Tape, Tube, Fuzz, Fold or Crush, 2× oversampled, in the PRE, LOOP or POST slot.</li>
         <li><strong>Echo</strong> up to 4 s, free or tempo-synced, with ping-pong, in the INTO, LOOP or AFTER slot.</li>
         <li><strong>An extreme zone</strong> past 100% on four knobs, for warble, ringing and inside-out stereo.</li>
-        <li><strong>70 factory presets</strong>, from vocal booths, plates and halls to minute-long washes and loops that scream.</li>
+        <li><strong>81 factory presets</strong>, from vocal booths, plates and halls to minute-long washes and loops that scream.</li>
       </ul>
     </div>
   </div>
@@ -329,7 +329,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
 
   <ol class="steps">
     <li><b class="h">Load JVerb and play something</b>Put JVerb on a track with something sustained and something percussive in it: a pad and a drum loop are ideal. The orbits start running as soon as the panel opens. The bodies trail coloured paths across the stage, and each drum hit blows a puff of glowing gas out of them.</li>
-    <li><b class="h">Pick a preset</b>Click the preset name in the header to open the menu: presets are grouped from the classic spaces (<em>Rooms</em>, <em>Plates</em>, <em>Halls</em>) through what JVerb adds to them (<em>Echoes</em>, <em>Shimmer</em>, <em>Orbits</em>, <em>Texture</em>) to <em>Washes</em> that ring for most of a minute, and <em>Extremes</em> for when it should stop sounding like a room. Or click the arrows, or scroll over the bar, to step through them. Try <em>Vocal Plate</em>, then <em>Concert Hall</em>, then <em>Comet Pass</em>, then <em>Aurora</em>.</li>
+    <li><b class="h">Pick a preset</b>Click the preset name in the header to open the menu: presets are grouped from the classic spaces (<em>Rooms</em>, <em>Plates</em>, <em>Halls</em>) through what JVerb adds to them (<em>Echoes</em>, <em>Shimmer</em>, <em>Orbits</em>, <em>Modulation</em>, <em>Texture</em>) to <em>Washes</em> that ring for most of a minute, and <em>Extremes</em> for when it should stop sounding like a room. Or click the arrows, or scroll over the bar, to step through them. Try <em>Vocal Plate</em>, then <em>Concert Hall</em>, then <em>Comet Pass</em>, then <em>Aurora</em>.</li>
     <li><b class="h">Set the size and length</b>On the <strong>SPACE</strong> page, <strong>DECAY</strong> sets how long the tail lasts and <strong>SYSTEM SIZE</strong> how big the space is. Bigger systems have longer lines and a slower, grainier build. <strong>DAMP HIGH</strong> darkens the tail as it rings.</li>
     <li><b class="h">Make it move</b>Open the <strong>ORBIT</strong> page. <strong>PAN</strong> moves each body's voice from a wide spread to where the body actually is; <strong>TONE</strong> darkens voices as their bodies swing out; <strong>SWIRL</strong> adds a phaser to each voice, swept by its orbit. Now drag a body somewhere new, or scroll on it to make it heavier, and listen to the tail rearrange itself.</li>
     <li><b class="h">Let a body drive something</b>Each body has a card along the bottom. Set Kepler's target menu to <strong>Feedback</strong> and raise its <strong>AMOUNT</strong>: each time Kepler slingshots past another body, the tail surges. The Feedback knob's ring shows the movement live.</li>
@@ -531,7 +531,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <h2>The preset bar</h2>
   <ul>
     <li><strong>◀ ▶</strong> step to the previous or next preset, in menu order. Scrolling over the bar does the same.</li>
-    <li><strong>The name</strong> opens the preset menu: the factory bank in nine categories (<em>Rooms</em>, <em>Plates</em>, <em>Halls</em>, <em>Echoes</em>, <em>Shimmer</em>, <em>Orbits</em>, <em>Texture</em>, <em>Washes</em>, <em>Extremes</em>), a <em>User</em> submenu with your own presets, and <em>Save as…</em>. The category of the current preset is shown at the left of the bar.</li>
+    <li><strong>The name</strong> opens the preset menu: the factory bank in ten categories (<em>Rooms</em>, <em>Plates</em>, <em>Halls</em>, <em>Echoes</em>, <em>Shimmer</em>, <em>Orbits</em>, <em>Modulation</em>, <em>Texture</em>, <em>Washes</em>, <em>Extremes</em>), a <em>User</em> submenu with your own presets, and <em>Save as…</em>. The category of the current preset is shown at the left of the bar.</li>
     <li><strong>SAVE</strong> asks for a name and writes the current settings as a user preset.</li>
   </ul>
   <p>Loading a preset sets every parameter, so nothing carries over from the previous sound (a body's routing, for example). The host sees the change as an ordinary edit, so it can be undone. The orbits then restart from the preset's masses and velocities.</p>
@@ -893,7 +893,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <div class="chap-head">
     <div class="num">Chapter 13</div>
     <h1>Factory Presets</h1>
-    <p class="lede">Seventy starting points: the classic rooms, plates and halls first, then the echo, shimmer, orbits and drive, then washes that ring for most of a minute and the extremes.</p>
+    <p class="lede">Eighty-one starting points: the classic rooms, plates and halls first, then the echo, shimmer, orbits, heavy modulation and drive, then washes that ring for most of a minute and the extremes.</p>
     <div class="bar"></div>
   </div>
   <div id="presets"></div>
@@ -1311,6 +1311,19 @@ function el(parent, tag, attrs, text) {
       ['Slow Ballet', 'Gravity 0.35, Smear 60%, 8 s.'],
       ['Chaos Engine', 'Six bodies, Gravity 2.5, React 80%; bodies on Damping and Feedback.'],
     ]],
+    ['Modulation', 'Everything that moves turned up: warbling tanks, ringing phasers and orbits that throw the tail around.', [
+      ['Vibrato Plate', 'A 2.5 s plate with Motion at 130%: a steady, pitchy vibrato.'],
+      ['Seasick Hall', 'Motion 150%, Feedback 60%, Swirl 120%: a hall that lurches.'],
+      ['Underwater', 'Motion 180%, damped at 1.5 kHz, Orbit Tone 200%: murky and wobbling.'],
+      ['Phaser Galaxy', 'Orbit Swirl 200% with four fast bodies: ringing phaser sweeps across the stereo field.'],
+      ['Wobble Choir', 'Octave shimmer with Motion 160% and Swirl 150%: a warbling choir.'],
+      ['Drunk Tape', 'Motion 200%, tape drive and a 1/4D echo in the LOOP: wow and flutter gone wrong.'],
+      ['Tremor Field', 'Six fast bodies at Gravity 4, routed hard to Width, Tilt and Damping: a fluttering tail.'],
+      ['Strobe Orbit', 'Clock SYNC at 1 bar; bodies at full on Early/Late, Width and Diffusion: a rhythmic stutter.'],
+      ['Pressure Wave', 'React 100%, Gravity 2.5, two bodies pulling Decay up and down: the tail pumps.'],
+      ['Drive Throb', 'Tube POST, with Kepler pushing the drive at Gravity 3: distortion that throbs.'],
+      ['Kaleidoscope', 'Six bodies, Orbit Pan and Tone 200%, Motion 140%; bodies on Shimmer, Width and Tilt.'],
+    ]],
     ['Texture', 'The drive at the input, in the loop and on the tail.', [
       ['Hot Input', 'Tape drive in the PRE slot at +15 dB.'],
       ['Lo-Fi Radio', 'Band-limited to 450 Hz to 4 kHz, light crush POST.'],
@@ -1333,7 +1346,7 @@ function el(parent, tag, attrs, text) {
     ['Extremes', 'The far ends of the ranges: loops that hold, scream and bloom.', [
       ['Singing Tank', 'Diffusion 0, Size 0.3, Feedback 90%, no damping: metallic ringing that slowly builds.'],
       ['Steel Cathedral', 'Diffusion 0, a fifth up, Feedback 100%: ringing metal that climbs and holds.'],
-      ['Whale Song', '30 s, Size 4, Motion 160%, Shimmer –5 st, dark, Swirl 160%.'],
+      ['Whale Song', '30 s, Size 4, Motion 160%, Shimmer -5 st, dark, Swirl 160%.'],
       ['Sub Collapse', 'Two octaves down, Feedback 115%, dark tilt: a growl that sinks and holds.'],
       ['Feedback Bloom', 'Feedback 145%, a little +7 st shimmer, bright tilt: the tail dips, then blooms.'],
       ['Screaming Loop', 'Tube in the LOOP at +24 dB, Feedback 130%: it holds and screams.'],
@@ -1344,7 +1357,7 @@ function el(parent, tag, attrs, text) {
       ['Echo Runaway', 'Dotted-quarter echo in the LOOP at 105%, tape drive in the LOOP, Feedback 80%.'],
     ]],
   ];
-  const cols = ['#ffb05a', '#ffd84a', '#6fe0ff', '#7dffb0', '#c6a8ff', '#ff6fd2', '#ff9a5a', '#a98bff', '#ff7a7a'];
+  const cols = ['#ffb05a', '#ffd84a', '#6fe0ff', '#7dffb0', '#c6a8ff', '#ff6fd2', '#5affd8', '#ff9a5a', '#a98bff', '#ff7a7a'];
   const host = document.getElementById('presets');
   let html = '';
   P.forEach(([cat, desc, list], i) => {

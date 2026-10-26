@@ -477,7 +477,7 @@ before the voices, none of the voice extremes are fed back; only Motion acts ins
 
 | Knob | 0 to 100% | 100 to 200% |
 | --- | --- | --- |
-| **Motion** | Drift grows to 4 cents a pass (1 cent in the allpasses). A chorus-like blur, never pitchy, up to 80% (where every factory preset outside Texture and Extremes sits). From 80% a warble is added on top, about 30 cents a pass by 100%. | The warble grows steadily to 150 cents a pass (30 in the allpasses), and runs up to 4 times faster. With Feedback high the tail warbles and groans. |
+| **Motion** | Drift grows to 4 cents a pass (1 cent in the allpasses). A chorus-like blur, never pitchy, up to 80% (where every factory preset outside Modulation, Texture and Extremes sits). From 80% a warble is added on top, about 30 cents a pass by 100%. | The warble grows steadily to 150 cents a pass (30 in the allpasses), and runs up to 4 times faster. With Feedback high the tail warbles and groans. |
 | **Orbit Pan** | Voices narrow to their bands and move from a wide spread to where their bodies are. | Voices are thrown further out (at 200% six times as far), so most pin to the edges, and each voice's own side turns negative: its stereo turns inside out. |
 | **Orbit Tone** | Up to -12 / +4 dB above 2.5 kHz, ±3 dB level, damping ±1 octave. | Up to -24 / +14 dB above 2.5 kHz, damping up to ±3 octaves, and the bodies get up to 3 times as sensitive to their distance, so the swing between them gets hard. |
 | **Orbit Swirl** | Phaser depth up to its full mix; two sweeps per lap. | The phaser feeds back on itself, up to 0.8, until it rings (the output is scaled by 1 - 0.75 x feedback, so the loudest resonance rings out at up to +6 dB); its share of the voice grows from half to all of it; the sweep widens and goes round up to 8 times per lap; the tank allpass nudge doubles. |
@@ -633,6 +633,17 @@ from the new masses and velocities.
 | Orbits | Pulsar | Clock SYNC at 1 bar, Gravity 2; Kepler on Width and Titan on Tilt. |
 | Orbits | Slow Ballet | Gravity 0.35, Smear 60%, 8 s. |
 | Orbits | Chaos Engine | Six bodies, Gravity 2.5, React 80%; bodies on Damping and Feedback. |
+| Modulation | Vibrato Plate | A 2.5 s plate with Motion at 130%: a steady, pitchy vibrato. |
+| Modulation | Seasick Hall | Motion 150%, Feedback 60%, Swirl 120%: a hall that lurches. |
+| Modulation | Underwater | Motion 180%, damped at 1.5 kHz, Orbit Tone 200%: murky and wobbling. |
+| Modulation | Phaser Galaxy | Orbit Swirl 200% with four fast bodies: ringing phaser sweeps across the stereo field. |
+| Modulation | Wobble Choir | Octave shimmer with Motion 160% and Swirl 150%: a warbling choir. |
+| Modulation | Drunk Tape | Motion 200%, tape drive and a 1/4D echo in the LOOP: wow and flutter gone wrong. |
+| Modulation | Tremor Field | Six fast bodies at Gravity 4, routed hard to Width, Tilt and Damping: a fluttering tail. |
+| Modulation | Strobe Orbit | Clock SYNC at 1 bar; bodies at full on Early/Late, Width and Diffusion: a rhythmic stutter. |
+| Modulation | Pressure Wave | React 100%, Gravity 2.5, two bodies pulling Decay up and down: the tail pumps. |
+| Modulation | Drive Throb | Tube POST, with Kepler pushing the drive at Gravity 3: distortion that throbs. |
+| Modulation | Kaleidoscope | Six bodies, Orbit Pan and Tone 200%, Motion 140%; bodies on Shimmer, Width and Tilt. |
 | Texture | Hot Input | Tape drive in the PRE slot at +15 dB. |
 | Texture | Lo-Fi Radio | Band-limited to 450 Hz to 4 kHz, light crush POST. |
 | Texture | Burning Loop | Tube drive in the LOOP at +18 dB, Feedback 55%, dark tilt. |

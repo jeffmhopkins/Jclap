@@ -52,7 +52,7 @@ inline const std::vector<Preset> &factoryPresets() {
       std::vector<Preset> p;
 
       // The bank runs from the classic spaces (rooms, plates, halls) through what JVerb adds to them
-      // (echoes, shimmer, orbits, drive) to washes that ring for most of a minute and the extremes.
+      // (echoes, shimmer, orbits, modulation, drive) to washes that ring for most of a minute and the extremes.
       // The classics keep Motion low and the bodies routed nowhere, so they sound like real spaces;
       // the later categories each show off one part of the engine.
 
@@ -222,6 +222,58 @@ inline const std::vector<Preset> &factoryPresets() {
                               {kFeedback, 0.3}, {kMix, 0.45}},
                              target(0, Target::Damping, 0.24)),
                         target(3, Target::Feedback, 0.24))});
+
+      // Modulation: everything that moves turned up. Motion past its tick warbles the tank, the
+      // orbit knobs past 100% throw the voices around, and fast, heavy orbits drive routed targets
+      // hard, so the tail wobbles, sweeps, flutters and throbs.
+      p.push_back({"Vibrato Plate", "Modulation",
+                   {{kDecay, 2.5}, {kSize, 0.6}, {kMotion, 1.3}, {kDiffusion, 1}, {kEarlyLate, 1}, {kPredelay, 8},
+                    {kDampHigh, 10000}, {kLowCut, 120}, {kMix, 0.35}}});
+      p.push_back({"Seasick Hall", "Modulation",
+                   {{kDecay, 6}, {kSize, 2}, {kMotion, 1.5}, {kFeedback, 0.6}, {kDiffusion, 0.85}, {kEarlyLate, 0.9},
+                    {kPredelay, 30}, {kDampHigh, 6000}, {kOrbitSwirl, 1.2}, {kMix, 0.42}}});
+      p.push_back({"Underwater", "Modulation",
+                   {{kDecay, 10}, {kSize, 2.5}, {kMotion, 1.8}, {kDampHigh, 1500}, {kBassMult, 1.4},
+                    {kOrbitTone, 2}, {kOrbitSwirl, 1.4}, {kDiffusion, 0.9}, {kEarlyLate, 1}, {kMix, 0.5}}});
+      p.push_back({"Phaser Galaxy", "Modulation",
+                   {{kBodies, 4}, {kGravity, 2}, {kDecay, 8}, {kSize, 2}, {kMotion, 0.8}, {kOrbitPan, 1.4},
+                    {kOrbitSwirl, 2}, {kDiffusion, 0.9}, {kEarlyLate, 1}, {kMix, 0.45}}});
+      p.push_back({"Wobble Choir", "Modulation",
+                   {{kDecay, 12}, {kSize, 2.6}, {kMotion, 1.6}, {kShimmer, 0.4}, {kShimmerPitch, 12},
+                    {kFeedback, 0.8}, {kAttack, 0.4}, {kOrbitSwirl, 1.5}, {kDiffusion, 0.95}, {kEarlyLate, 1},
+                    {kDampHigh, 6500}, {kMix, 0.45}}});
+      p.push_back({"Drunk Tape", "Modulation",
+                   {{kMotion, 2}, {kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kTape}, {kDrive, 12},
+                    {kEchoOn, 1}, {kEchoWhere, kLoopSlot}, {kEchoSync, 9}, {kEchoFeedback, 0.55}, {kEchoTone, -0.5},
+                    {kEchoMix, 0.7}, {kFeedback, 0.7}, {kTilt, -0.4}, {kDecay, 6}, {kSize, 1.5}, {kMix, 0.45}}});
+      p.push_back({"Tremor Field", "Modulation",
+                   with(with(with({{kBodies, 6}, {kGravity, 4}, {kDecay, 4}, {kSize, 1.4}, {kMotion, 0.8},
+                                   {kOrbitPan, 1.8}, {kOrbitTone, 1.5}, {kMix, 0.42}, body(0, kBody1Velocity, 1.5),
+                                   body(2, kBody1Velocity, 1.5), body(4, kBody1Velocity, 1.5)},
+                                  target(0, Target::Width, 1)),
+                             target(2, Target::Tilt, 0.8)),
+                        target(4, Target::Damping, -0.8))});
+      p.push_back({"Strobe Orbit", "Modulation",
+                   with(with(with({{kClock, 1}, {kSyncBars, 1}, {kBodies, 3}, {kDecay, 3}, {kSize, 1.2},
+                                   {kOrbitPan, 1.5}, {kMix, 0.42}},
+                                  target(0, Target::EarlyLate, 1)),
+                             target(1, Target::Width, 1)),
+                        target(2, Target::Diffusion, -1))});
+      p.push_back({"Pressure Wave", "Modulation",
+                   with(with({{kBodies, 4}, {kGravity, 2.5}, {kReact, 1}, {kDecay, 5}, {kSize, 1.8}, {kMotion, 0.9},
+                              {kOrbitPan, 1.2}, {kMix, 0.42}},
+                             target(0, Target::Decay, 1)),
+                        target(2, Target::Decay, -1))});
+      p.push_back({"Drive Throb", "Modulation",
+                   with({{kDriveOn, 1}, {kDriveWhere, kPostSlot}, {kDriveType, kTube}, {kDrive, 6}, {kDriveTrim, -4},
+                         {kGravity, 3}, {kDecay, 4}, {kSize, 1.4}, {kMotion, 0.9}, {kOrbitPan, 1.3}, {kMix, 0.4}},
+                        target(1, Target::Drive, 0.6))});
+      p.push_back({"Kaleidoscope", "Modulation",
+                   with(with({{kBodies, 6}, {kGravity, 3}, {kDecay, 9}, {kSize, 2.4}, {kMotion, 1.4}, {kOrbitPan, 2},
+                              {kOrbitTone, 2}, {kOrbitSwirl, 1.6}, {kShimmer, 0.15}, {kShimmerPitch, 7},
+                              {kFeedback, 0.5}, {kWidth, 1.5}, {kMix, 0.5}},
+                             target(1, Target::Shimmer, 0.8)),
+                        with(target(3, Target::Width, 0.8), target(5, Target::Tilt, -0.8)))});
 
       // Texture: the drive at the input, in the loop and on the tail, and a lo-fi radio.
       p.push_back({"Hot Input", "Texture",
