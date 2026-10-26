@@ -52,6 +52,8 @@ constexpr unsigned kText = 0xffe8e4dc;
 constexpr unsigned kDim = 0xff6b645c;
 constexpr unsigned kEmber = 0xffff5a36;
 constexpr unsigned kAsh = 0xff3a3330;
+// The hot core of a lit stroke, inside its ember glow.
+constexpr unsigned kPeach = 0xffffd6c4;
 
 unsigned withAlpha(unsigned color, float alpha) {
    return (color & 0x00ffffffu) | (static_cast<unsigned>(std::clamp(alpha, 0.0f, 1.0f) * 255.0f) << 24);
@@ -161,14 +163,60 @@ void drawStroke(visage::Canvas &c, const GlyphBox &box, Orthography o, Stroke s,
    }
 }
 
+// The point a fraction `t` of the way along a stroke as its script draws it: along the corner of a
+// trace, around a ring for a Halo arc, straight otherwise.
+Point strokePoint(const GlyphBox &box, Orthography o, Stroke s, float t) {
+   const Point a = box.node(o, s.from), b = box.node(o, s.to);
+   t = std::clamp(t, 0.0f, 1.0f);
+   const auto lerp = [](Point p, Point q, float k) { return Point{p.x + (q.x - p.x) * k, p.y + (q.y - p.y) * k}; };
+   switch (styleOf(o)) {
+   case StrokeStyle::Trace: {
+      const Point corner{b.x, a.y};
+      const float across = std::fabs(b.x - a.x), down = std::fabs(b.y - a.y), total = across + down;
+      if (total <= 0.0f)
+         return a;
+      const float d = t * total;
+      return d <= across ? lerp(a, corner, across > 0.0f ? d / across : 0.0f) : lerp(corner, b, (d - across) / down);
+   }
+   case StrokeStyle::Arc:
+      if (rowOf(s.from) == rowOf(s.to)) {
+         const Point centre = box.at({kHaloCenterX, kHaloCenterY});
+         const float r = kHaloRadius[rowOf(s.from)] * box.unit;
+         const float angle = haloAngle(s.from) + (haloAngle(s.to) - haloAngle(s.from)) * t;
+         return {centre.x + r * std::sin(angle), centre.y - r * std::cos(angle)};
+      }
+      return lerp(a, b, t);
+   default: return lerp(a, b, t);
+   }
+}
+
 struct GlyphStyle {
+   // Unlit strokes. While the glyph plays, the ones still to come.
    unsigned color = kText;
+   // While the glyph plays: how far into its 16 steps the voice is (negative when it isn't playing).
+   // Each stroke lights as its note sounds, with a pen point running along it, and stays lit after.
+   float step = -1.0f;
+   unsigned lit = kEmber;
+   // How brightly the whole glyph burns when it isn't playing stroke by stroke: 0 drawn plain in
+   // `color`, 1 fully lit like a sounding stroke.
+   float glow = 0.0f;
    // Eroded strokes are drawn as faint scars in this colour; 0 leaves them out.
    unsigned scar = 0;
    float thickness = 2.0f;
    bool nodes = false;
    bool numbers = false;
 };
+
+// A stroke burning at `heat` (0..1): soft ember halos widening around a peach core.
+void drawLitStroke(visage::Canvas &c, const GlyphBox &box, Orthography o, Stroke s, float t, unsigned lit, float heat) {
+   const float halos[][2] = {{7.0f, 0.05f}, {4.5f, 0.09f}, {2.8f, 0.18f}, {1.8f, 0.35f}};
+   for (const auto &h : halos) {
+      c.setColor(withAlpha(lit, h[1] * heat));
+      drawStroke(c, box, o, s, t * h[0]);
+   }
+   c.setColor(withAlpha(kPeach, 0.35f + 0.65f * heat));
+   drawStroke(c, box, o, s, t);
+}
 
 void drawGlyph(visage::Canvas &c, const Glyph &g, int visible, Orthography o, const GlyphBox &box, const GlyphStyle &style) {
    const float t = style.thickness;
@@ -193,16 +241,72 @@ void drawGlyph(visage::Canvas &c, const Glyph &g, int visible, Orthography o, co
          c.setColor(style.scar);
          drawStroke(c, box, o, g.strokes[i], t * 0.6f);
       }
-   c.setColor(style.color);
+   // Each stroke's note, for lighting them in time. A stroke past the window never plays.
+   float progress[kMaxStrokes];
+   float dotProgress = -1.0f;
+   for (float &p : progress)
+      p = -1.0f;
+   if (style.step >= 0.0f) {
+      const GlyphNotes notes = decode(g, visible);
+      for (int i = 0; i < notes.count; ++i) {
+         const GlyphNote &n = notes.notes[i];
+         const float p = (style.step - n.start) / static_cast<float>(std::max(1, n.length));
+         if (n.ghost)
+            dotProgress = p;
+         else
+            progress[n.stroke] = p;
+      }
+   }
+   for (int i = 0; i < visible && i < g.count; ++i) {
+      const float p = progress[i];
+      if (p >= 0.0f && p < 1.0f)
+         drawLitStroke(c, box, o, g.strokes[i], t, style.lit, 1.0f);
+      else if (p >= 1.0f)
+         drawLitStroke(c, box, o, g.strokes[i], t, style.lit, 0.55f);
+      else if (style.step < 0.0f && style.glow > 0.0f)
+         drawLitStroke(c, box, o, g.strokes[i], t, style.lit, style.glow);
+      else {
+         c.setColor(style.color);
+         drawStroke(c, box, o, g.strokes[i], t);
+      }
+   }
+   // The pen points of the sounding strokes, on top.
    for (int i = 0; i < visible && i < g.count; ++i)
-      drawStroke(c, box, o, g.strokes[i], t);
+      if (progress[i] >= 0.0f && progress[i] < 1.0f) {
+         const Point p = strokePoint(box, o, g.strokes[i], progress[i]);
+         const float d = t * 4.0f;
+         c.setColor(withAlpha(style.lit, 0.35f));
+         c.circle(p.x - d, p.y - d, d * 2.0f);
+         c.setColor(0xffffffffu);
+         c.circle(p.x - d * 0.4f, p.y - d * 0.4f, d * 0.8f);
+      }
    if (g.dot >= 0 && g.dot < kNodes) {
       const Point p = box.node(o, g.dot);
       const float d = t * 2.6f;
-      c.ring(p.x - d * 0.5f, p.y - d * 0.5f, d, std::max(1.0f, t * 0.7f));
+      const bool sounding = dotProgress >= 0.0f && dotProgress < 1.0f;
+      const bool burning = sounding || (style.step < 0.0f && style.glow > 0.0f);
+      if (burning || dotProgress >= 1.0f) {
+         c.setColor(withAlpha(style.lit, 0.2f * (sounding ? 1.0f : 0.6f)));
+         c.circle(p.x - d * 1.4f, p.y - d * 1.4f, d * 2.8f);
+         c.setColor(kPeach);
+      }
+      else
+         c.setColor(style.color);
+      if (burning)
+         c.circle(p.x - d * 0.5f, p.y - d * 0.5f, d);
+      else
+         c.ring(p.x - d * 0.5f, p.y - d * 0.5f, d, std::max(1.0f, t * 0.7f));
    }
    if (g.bar) {
       const Point l = box.at({-0.1f, -0.55f}), r = box.at({2.1f, -0.55f});
+      const float heat = style.step >= 0.0f ? 0.55f : style.glow;
+      if (heat > 0.0f) {
+         c.setColor(withAlpha(style.lit, 0.18f * heat));
+         c.segment(l.x, l.y, r.x, r.y, t * 3.5f, true);
+         c.setColor(withAlpha(kPeach, 0.35f + 0.65f * heat));
+      }
+      else
+         c.setColor(style.color);
       c.segment(l.x, l.y, r.x, r.y, t, false);
    }
    if (style.numbers)
@@ -210,11 +314,13 @@ void drawGlyph(visage::Canvas &c, const Glyph &g, int visible, Orthography o, co
          const Point a = box.node(o, g.strokes[i].from), b = box.node(o, g.strokes[i].to);
          const float dx = b.x - a.x, dy = b.y - a.y, len = std::max(0.001f, std::sqrt(dx * dx + dy * dy));
          const float mx = a.x + dx * 0.5f - dy / len * box.unit * 0.18f, my = a.y + dy * 0.5f + dx / len * box.unit * 0.18f;
-         const float d = box.unit * 0.24f;
+         const float d = box.unit * 0.26f;
          c.setColor(kBackground);
          c.circle(mx - d * 0.5f, my - d * 0.5f, d);
          c.setColor(kEmber);
-         c.text(std::to_string(i + 1), ui::font(d * 0.8f), visage::Font::kCenter, mx - d * 0.5f, my - d * 0.5f, d, d);
+         c.ring(mx - d * 0.5f, my - d * 0.5f, d, std::max(1.0f, d * 0.08f));
+         c.setColor(kText);
+         c.text(std::to_string(i + 1), ui::font(d * 0.62f), visage::Font::kCenter, mx - d * 0.5f, my - d * 0.5f, d, d);
       }
 }
 
@@ -227,55 +333,96 @@ inline void cellPlace(int i, int &column, int &row) {
 }
 
 class SlabView : public visage::Frame {
+   // Room either side of the slab's face, and under it for the ground.
+   static constexpr float kSide = 10.0f, kBase = 22.0f;
+
 public:
    explicit SlabView(const SlabFrame &frame) : frame_(frame) {}
 
    std::function<void(int)> onSelect, onJump, onReroll;
    int selected = -1;
 
+   // The slab stands as a block of dark stone on a faint ember ground; the glyphs are cut into its
+   // face, the most recently read burning and the rest pale, fading toward the columns read last.
    void draw(visage::Canvas &c) override {
       const float w = width(), h = height();
-      const float cw = w / kSlabColumns, ch = h / kSlabRows;
-      c.setColor(kBackground);
-      c.roundedRectangle(0, 0, w, h, 6);
+      const float faceX = kSide, faceW = w - 2 * kSide, faceH = h - kBase;
+      const float cw = faceW / kSlabColumns, ch = faceH / kSlabRows;
+
+      // Ground glow and the slab's shadow on it.
+      c.setColor(visage::Brush::horizontal(visage::Color(0x00ff5a36), visage::Color(0x33ff5a36)));
+      c.fill(0, h - kBase * 0.75f, w * 0.5f, kBase * 0.5f);
+      c.setColor(visage::Brush::horizontal(visage::Color(0x33ff5a36), visage::Color(0x00ff5a36)));
+      c.fill(w * 0.5f, h - kBase * 0.75f, w * 0.5f, kBase * 0.5f);
+      c.setColor(0xcc000000);
+      c.fill(faceX - 4, faceH, faceW + 8, kBase * 0.35f);
+
+      // The face: lighter at the top, as if lit from above, with a bright left edge.
+      c.setColor(visage::Brush::vertical(visage::Color(0xff191615), visage::Color(0xff0c0b0b)));
+      c.fill(faceX, 0, faceW, faceH);
+      c.setColor(0x14ffffff);
+      c.fill(faceX, 0, 1.5f, faceH);
+      c.setColor(0x66000000);
+      c.fill(faceX + faceW - 2, 0, 2, faceH);
+      for (int k = 1; k < kSlabColumns; ++k) {
+         c.setColor(0x0affffff);
+         c.fill(faceX + k * cw, ch * 0.4f, 1, faceH - ch * 0.8f);
+      }
+
       for (int i = 0; i < kCells; ++i) {
          int column, row;
          cellPlace(i, column, row);
-         const float x = column * cw, y = row * ch;
+         const float x = faceX + column * cw, y = row * ch;
          const bool inUse = i < frame_.length;
          const bool current = frame_.playing && i == frame_.current;
          float trail = 0.0f;
          for (int k = 0; k < kHistory; ++k)
             if (frame_.history[k] == i && frame_.playing)
                trail = std::max(trail, (k + 1) / static_cast<float>(kHistory));
-         if (current) {
-            c.setColor(withAlpha(kEmber, 0.16f));
-            c.roundedRectangle(x + 2, y + 2, cw - 4, ch - 4, 4);
-            c.setColor(kEmber);
-            c.roundedRectangleBorder(x + 2, y + 2, cw - 4, ch - 4, 4, 1.2f);
-         }
-         else if (trail > 0.0f && inUse) {
-            c.setColor(withAlpha(kEmber, 0.08f * trail));
-            c.roundedRectangle(x + 2, y + 2, cw - 4, ch - 4, 4);
-         }
-         if (i == selected) {
-            c.setColor(kText);
-            c.roundedRectangleBorder(x + 2, y + 2, cw - 4, ch - 4, 4, 1.0f);
-         }
+         // Columns read later are more worn: the first (right) is clearest.
+         const float wear = 1.0f - 0.12f * static_cast<float>(i / kSlabRows);
          const Cell &cell = frame_.cells[i];
          GlyphStyle style;
-         style.thickness = std::max(1.2f, ch * 0.045f);
-         style.color = current ? kEmber : inUse ? withAlpha(kText, 0.55f + 0.35f * trail) : withAlpha(kDim, 0.45f);
-         style.scar = inUse ? withAlpha(kDim, 0.35f) : 0;
-         const GlyphBox box = GlyphBox::fit(x + 4, y + 4, cw - 8, ch - 8);
+         style.thickness = std::max(1.2f, ch * 0.042f);
+         style.color = current ? withAlpha(kText, 0.35f)
+                       : inUse ? withAlpha(kText, (0.5f + 0.3f * trail) * wear)
+                               : withAlpha(kDim, 0.3f * wear);
+         style.step = current ? frame_.step : -1.0f;
+         style.glow = current ? 0.0f : trail > 0.0f && inUse ? 0.25f * trail : 0.0f;
+         style.scar = inUse ? withAlpha(kDim, 0.25f * wear) : 0;
+         const GlyphBox box = GlyphBox::fit(x + 6, y + 5, cw - 12, ch - 12);
+         if (current) {
+            const float d = std::min(cw, ch) * 1.3f;
+            c.setColor(visage::Brush::radial(visage::Color(0x30ff5a36), visage::Color(0x00ff5a36),
+                                             {x + cw * 0.5f, y + ch * 0.5f}, d * 0.5f));
+            c.fill(x + cw * 0.5f - d * 0.5f, y + ch * 0.5f - d * 0.5f, d, d);
+         }
          drawGlyph(c, cell.glyph, cell.visible(), frame_.orthography, box, style);
+         if (current) {
+            c.setColor(withAlpha(kEmber, 0.3f));
+            c.fill(x + cw * 0.28f - 1, y + ch - 6, cw * 0.44f + 2, 4);
+            c.setColor(kEmber);
+            c.fill(x + cw * 0.28f, y + ch - 5, cw * 0.44f, 2);
+         }
+         if (i == selected) {
+            c.setColor(withAlpha(kPeach, 0.8f));
+            const float l = 6, x0 = x + 3, y0 = y + 2, x1 = x + cw - 3, y1 = y + ch - 2;
+            c.fill(x0, y0, l, 1);
+            c.fill(x0, y0, 1, l);
+            c.fill(x1 - l, y0, l, 1);
+            c.fill(x1 - 1, y0, 1, l);
+            c.fill(x0, y1 - 1, l, 1);
+            c.fill(x0, y1 - l, 1, l);
+            c.fill(x1 - l, y1 - 1, l, 1);
+            c.fill(x1 - 1, y1 - l, 1, l);
+         }
       }
       // The line where the read part ends.
       if (frame_.length < kCells) {
          int column, row;
          cellPlace(frame_.length, column, row);
-         c.setColor(withAlpha(kEmber, 0.5f));
-         c.fill(column * cw + 4, row * ch, cw - 8, 1.0f);
+         c.setColor(withAlpha(kEmber, 0.35f));
+         c.fill(faceX + column * cw + 8, row * ch, cw - 16, 1.0f);
       }
    }
 
@@ -296,8 +443,11 @@ public:
    }
 
    int cellAt(float px, float py) const {
-      const int column = static_cast<int>(px / (width() / kSlabColumns));
-      const int row = static_cast<int>(py / (height() / kSlabRows));
+      const float faceW = width() - 2 * kSide, faceH = height() - kBase;
+      if (px < kSide || py >= faceH)
+         return -1;
+      const int column = static_cast<int>((px - kSide) / (faceW / kSlabColumns));
+      const int row = static_cast<int>(py / (faceH / kSlabRows));
       if (column < 0 || column >= kSlabColumns || row < 0 || row >= kSlabRows)
          return -1;
       return (kSlabColumns - 1 - column) * kSlabRows + row;
@@ -324,11 +474,21 @@ public:
       const Cell &x = frame_.cells[cell];
       GlyphStyle style;
       style.thickness = std::max(2.5f, h * 0.018f);
-      style.color = frame_.playing && cell == frame_.current ? kEmber : kText;
+      style.color = kText;
+      style.step = frame_.playing && cell == frame_.current ? frame_.step : -1.0f;
+      style.glow = 0.8f;
+      style.color = withAlpha(kText, 0.45f);
       style.scar = withAlpha(kDim, 0.5f);
       style.nodes = true;
       style.numbers = true;
-      drawGlyph(c, x.glyph, x.visible(), frame_.orthography, box(), style);
+      // Each row's note beside it.
+      const GlyphBox b = box();
+      for (int r = 0; r < kGridRows; ++r) {
+         const Point p = b.node(frame_.orthography, nodeAt(0, r));
+         c.setColor(kDim);
+         c.text(ui::noteName(frame_.rowPitch[r]), ui::font(11), visage::Font::kRight, p.x - b.unit * 0.3f - 40, p.y - 8, 40, 16);
+      }
+      drawGlyph(c, x.glyph, x.visible(), frame_.orthography, b, style);
       if (dragFrom_ >= 0) {
          const Point a = box().node(frame_.orthography, dragFrom_);
          c.setColor(withAlpha(kEmber, 0.7f));
@@ -382,7 +542,7 @@ public:
    }
 
 private:
-   GlyphBox box() const { return GlyphBox::fit(10, 10, width() - 20, height() - 20); }
+   GlyphBox box() const { return GlyphBox::fit(34, 10, width() - 44, height() - 20); }
 
    // The glyph as it stands: eroded strokes are gone for good once it is carved.
    Glyph standing() const {
@@ -498,13 +658,24 @@ private:
    const SlabFrame &frame_;
 };
 
+// Caps set wide, as the slab's labels are cut: "DECODE" becomes "D E C O D E".
+std::string spaced(const std::string &text) {
+   std::string out;
+   for (char ch : text) {
+      if (!out.empty())
+         out += ' ';
+      out += ch;
+   }
+   return out;
+}
+
 // A label over a control in the left strip.
 class Caption : public visage::Frame {
 public:
    explicit Caption(std::string text) : text_(std::move(text)) { setIgnoresMouseEvents(true, false); }
    void draw(visage::Canvas &c) override {
       c.setColor(kDim);
-      c.text(text_, ui::font(height() * 0.78f), visage::Font::kLeft, 0, 0, width(), height());
+      c.text(spaced(text_), ui::font(height() * 0.7f), visage::Font::kLeft, 0, 0, width(), height());
    }
 
 private:
@@ -526,7 +697,7 @@ public:
       c.setColor(kEmber);
       c.fill(10 * s, 9 * s, 3 * s, 10 * s);
       c.setColor(kDim);
-      c.text(title_, ui::font(11 * s), visage::Font::kLeft, 18 * s, 6 * s, width(), 16 * s);
+      c.text(spaced(title_), ui::font(10 * s), visage::Font::kLeft, 18 * s, 6 * s, width(), 16 * s);
    }
 
 private:
@@ -561,9 +732,9 @@ public:
       c.setColor(withAlpha(kEmber, 0.3f));
       c.fill(40 * s, 28 * s, 6 * s, 14 * s);
       c.setColor(kText);
-      c.text("MONOLITH", ui::font(24 * s), visage::Font::kLeft, 58 * s, 10 * s, 200 * s, 36 * s);
+      c.text(spaced("MONOLITH"), ui::font(22 * s), visage::Font::kLeft, 58 * s, 8 * s, 260 * s, 30 * s);
       c.setColor(kDim);
-      c.text("glyph terminal", ui::font(12 * s), visage::Font::kLeft, 200 * s, 14 * s, 160 * s, 30 * s);
+      c.text(spaced("GLYPH NOTE GENERATOR"), ui::font(9 * s), visage::Font::kLeft, 59 * s, 34 * s, 300 * s, 14 * s);
       c.setColor(kEdge);
       c.fill(16 * s, 56 * s, (kDesignWidth - 32) * s, 1 * s);
    }
@@ -622,7 +793,7 @@ private:
       presets.currentName = [this] { return host_.presetName(); };
       presets.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
 
-      caption({800, 18, 40, 20}, "SEED");
+      caption({792, 21, 44, 15}, "SEED");
       auto &seed = themed(add<ui::NumberBox>({838, 14, 110, 28}, rangeOf(kSeed, 1.0)));
       seed.setStepButtons(true);
       seed.valueText = [](double v) { return text(kSeed, v); };
@@ -692,8 +863,7 @@ private:
    }
 
    void buildSlab() {
-      add<Plate>({208, 70, 330, 594}, "SLAB");
-      slab_ = &add<SlabView>({216, 94, 314, 562}, frame_);
+      slab_ = &add<SlabView>({208, 66, 330, 604}, frame_);
       slab_->onSelect = [this](int i) { selected_ = selected_ == i ? -1 : i; refresh(); };
       slab_->onJump = [this](int i) {
          Command c;
