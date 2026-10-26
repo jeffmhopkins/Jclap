@@ -20,6 +20,15 @@ the presets, and threads and state.
 | ![Part A](docs/panel.png) | ![Part B](docs/panel-b.png) |
 | **MAP mode, with SPEED armed** | **The route list** |
 | ![MAP mode](docs/panel-map.png) | ![Routes](docs/panel-routes.png) |
+| **The REDUCED view** | **The SKY view** |
+| ![REDUCED](docs/panel-reduced.png) | ![SKY](docs/panel-hidden.png) |
+
+**Three views**, switched at the top right. **FULL** has every card around the sky. **REDUCED** puts
+big, drawn panels down the left beside a sky the same size: the oscillators with their waves drawn
+(and an FM tab that draws what comes out), the filters' response, which you drag to set cutoff and
+resonance, and the envelopes (and an LFOS tab). Under the sky a panel has VOICE (the stereo field,
+the levels of both parts and the voices in use), FLOCK and MOTION tabs. Only the touch curves, glide
+rounding and the route list stay on FULL. **SKY** hides everything but the flocks.
 
 ## The design
 
@@ -30,7 +39,8 @@ the presets, and threads and state.
 - **Two species, A and B**, each a whole patch with its own way of flying: Shoal, Scatter, Hunt or
   Flee. The play mode decides which species a note hatches (Single, Layer, Split, MPE Zones,
   Velocity or Expression). Each plays up to 16 creatures.
-- **A voice:** three oscillators (analog waves, the TX81Z's eight FM waves, or noise; pitched by
+- **A voice:** three oscillators (analog waves, the TX81Z's eight FM waves, noise, or Random: a
+  wave drawn fresh for each note; pitched by
   note, ratio or fixed Hz), a 3×3 FM grid whose diagonal is each oscillator's feedback, noise, drive,
   and two filters, serial or parallel, with each oscillator and the noise picking Filter 1, Filter 2
   or both.
@@ -48,11 +58,12 @@ the presets, and threads and state.
 
 There is no matrix page. Touch a source chip, which turns **MAP** on with it armed, then drag any knob: the drag sets how much that
 source moves it, shown as a ring in the source's colour (up to four per knob). Double-click a knob to
-flip its route, right-click to remove it. The sources are the touch chips in the header (Strike,
-Press, Glide, Slide), the envelope and LFO chips on their cards, and the flock's own under the sky:
-Speed, Nearest, Heading, and Turn (which way and how hard the creature is turning, + right, - left).
-Each chip's LED glows with its source as it moves. Key, Random, Mod Wheel and the four macros are in
-the route list. The FM grid and the flock params are knobs, so they map like any other.
+flip its route, right-click to remove it. The sources are the touch chips in the header (Velocity,
+Press, Glide, Slide, and Release, the release velocity), the envelope and LFO chips on their cards,
+and the flock's own under the sky: Speed, Nearest, Heading, and Turn (which way and how hard the
+creature is turning, + right, - left). Each chip's LED glows with its source as it moves. Random (a
+value per note) has a chip under the sky in REDUCED; Key, Mod Wheel and the four macros are in the
+route list. The FM grid and the flock params are knobs, so they map like any other.
 
 Underneath, each part has a pool of 64 routes (source, destination, amount) as host params, so route
 depths can be automated. **ROUTES** lists the ones in use, sixteen to a page, to edit by name: **+ ADD**

@@ -462,6 +462,7 @@ private:
       // Where each oscillator's wave was read last sample, for its effective rate under FM.
       float lastRead[kOscCount] = {};
       int wave[kOscCount] = {};
+      int randomWave[kOscCount] = {}; // what Wave Random drew for this note
       bool sync[kOscCount] = {};
       // Whether each oscillator is heard or modulates something, so a silent one can be skipped.
       bool heard[kOscCount] = {true, true, true};
@@ -641,8 +642,8 @@ private:
          return v.envOut[s - kSourceEnv1];
       if (s >= kSourceLfo1 && s < kSourceLfo1 + kLfoCount - kMotionCount)
          return v.lfoOut[kMotionCount + s - kSourceLfo1];
-      if (s >= kSourceStrike && s < kSourceStrike + kTouchSourceCount)
-         return v.touch[s - kSourceStrike];
+      if (s >= kSourceVelocity && s < kSourceVelocity + kTouchSourceCount)
+         return v.touch[s - kSourceVelocity];
       if (s == kSourceKey)
          return std::clamp((v.ref.key - 60) / 48.0f, -1.0f, 1.0f);
       if (s >= kSourceSpeed && s <= kSourceTurn)
@@ -891,6 +892,8 @@ private:
                  std::pow(2.0f, mod(v, offset, oscParam(o, kOscFine)) / 1200.0f);
          hz = std::clamp(hz, 0.0f, 0.45f * fs);
          v.wave[o] = choice(part, oscParam(o, kOscWave));
+         if (v.wave[o] == dsp::kRandom)
+            v.wave[o] = v.randomWave[o];
          v.sync[o] = o > 0 && choice(part, oscParam(o, kOscSync)) == 1;
          ramp(v.freq[o], hz / fs, st, v.fresh);
          ramp(v.shape[o], mod(v, offset, oscParam(o, kOscShape)), st, v.fresh);
@@ -1594,6 +1597,10 @@ private:
       v.pressure = pressure;
       v.timbre = timbre;
       v.randomValue = v.random.bipolar();
+      // Drawn only for an oscillator set to it, so other patches' random sequences stay as they were.
+      for (int o = 0; o < kOscCount; ++o)
+         if (choice(part, oscParam(o, kOscWave)) == dsp::kRandom)
+            v.randomWave[o] = static_cast<int>(v.random.unipolar() * (dsp::kAltCamel + 1));
       v.targetPitch = static_cast<float>(ref.key);
       // Glide Mode Legato only glides from a note still held.
       const bool legatoGlide = choice(part, kGlideMode) == 1;

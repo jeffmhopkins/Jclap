@@ -146,7 +146,7 @@ int main() {
       JCLAP_CHECK(std::all_of(outL, outL + 256, [](float s) { return std::isfinite(s) && std::fabs(s) <= 1.0f; }));
       std::vector<EditorHost::Note> notes;
       h.object<EditorHost>()->notes(notes);
-      JCLAP_CHECK(notes.size() == 1 && notes[0].note == 60 && std::fabs(notes[0].strike - 0.8f) < 1e-6f);
+      JCLAP_CHECK(notes.size() == 1 && notes[0].note == 60 && std::fabs(notes[0].velocity - 0.8f) < 1e-6f);
       h.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, 60, 0.4);
       h.process();
       h.object<EditorHost>()->notes(notes);
@@ -206,6 +206,21 @@ int main() {
       cut.bytes.assign(saved.bytes.begin(), saved.bytes.begin() + saved.bytes.size() / 2);
       JCLAP_CHECK(!state->load(h.plugin(), &cut.in));
       JCLAP_CHECK_EQ(h.paramValue(level), -3.0);
+
+      // A version 2 state was saved before Release was a source: its Key is Key still, and Slide Slide.
+      const clap_id source0 = partId(0, routeParam(0, kRouteSource)), source1 = partId(1, routeParam(3, kRouteSource));
+      Buffer old;
+      old.bytes.insert(old.bytes.end(), {'J', 'J', 'S', 'Y'});
+      old.put(uint32_t{2});
+      old.put(uint32_t{2});
+      old.put(uint32_t{source0});
+      old.put(10.0); // Key then
+      old.put(uint32_t{source1});
+      old.put(9.0); // Slide
+      old.put(uint32_t{0});
+      JCLAP_CHECK(state->load(h.plugin(), &old.in));
+      JCLAP_CHECK_EQ(h.paramValue(source0), static_cast<double>(kSourceKey));
+      JCLAP_CHECK_EQ(h.paramValue(source1), static_cast<double>(kSourceVelocity + 3));
    }
 
    // Presets: every factory value is a param in range, names are unique, and a user preset saved to

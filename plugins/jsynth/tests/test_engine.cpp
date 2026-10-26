@@ -216,6 +216,39 @@ int main() {
       JCLAP_CHECK(std::fabs(hz - 440.0) < 2.0);
    }
 
+   // Wave Random draws a wave for each note: the same key, played eight times from the same phase,
+   // takes more than one shape (by its crest factor, peak over RMS).
+   {
+      Params p;
+      p.setPart(0, oscParam(0, kOscWave), dsp::kRandom);
+      p.setPart(0, oscParam(0, kOscRetrigger), 1);
+      p.setPart(0, filterParam(0, kFilterCutoff), 1.0);
+      p.setPart(0, kDrift, 0.0);
+      for (int r = 0; r < kRouteCount; ++r)
+         p.setPart(0, routeParam(r, kRouteSource), kSourceOff);
+      std::vector<Event> ev;
+      for (int n = 0; n < 8; ++n) {
+         ev.push_back({n * 12000, Event::On, 57, 1.0f});
+         ev.push_back({n * 12000 + 6000, Event::Off, 57, 0.0f});
+      }
+      auto e = std::make_unique<Engine>();
+      e->prepare(kRate, {p.values.get(), p.mods.get()});
+      const auto out = render(*e, 8 * 12000, 512, ev);
+      std::vector<int> crests;
+      for (int n = 0; n < 8; ++n) {
+         double sum = 0, top = 0;
+         for (size_t i = (n * 12000 + 3000) * 2; i < static_cast<size_t>(n * 12000 + 5000) * 2; i += 2) {
+            sum += out[i] * out[i];
+            top = std::max(top, static_cast<double>(std::fabs(out[i])));
+         }
+         crests.push_back(static_cast<int>(10.0 * top / std::sqrt(sum / 2000.0) + 0.5));
+      }
+      std::sort(crests.begin(), crests.end());
+      const auto kinds = std::unique(crests.begin(), crests.end()) - crests.begin();
+      std::printf("random wave: %d shapes in 8 notes\n", static_cast<int>(kinds));
+      JCLAP_CHECK(finite(out) && kinds >= 3);
+   }
+
    // Each oscillator picks its filter: in serial, F2 skips a closed Filter 1; in parallel, Balance
    // all the way to Filter 1 silences what goes only into Filter 2.
    {

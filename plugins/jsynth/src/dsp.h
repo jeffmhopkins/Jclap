@@ -98,6 +98,7 @@ enum Wave {
    kAltCamel,
    kWhite,
    kPink,
+   kRandom, // a tonal wave, Sine to Alt Camel, drawn fresh for each note
 };
 
 inline float polyBlep(float t, float dt) {

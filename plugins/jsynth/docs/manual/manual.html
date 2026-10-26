@@ -33,7 +33,7 @@
 @page {
   size: 8.5in 11in;
   margin: 0.85in 0.85in 0.8in 0.85in;
-  @bottom-left { content: "JSynth  ·  User Manual  ·  v0.8.0"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
+  @bottom-left { content: "JSynth  ·  User Manual  ·  v0.9.0"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
   @bottom-right { content: counter(page); font: 600 8pt "InterM"; color: #15171d; }
 }
 @page cover { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
@@ -209,7 +209,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
   <div class="shot"><img src="img/panel.jpg" alt=""></div>
   <div class="foot">
-    <div><div class="k">Version</div><div class="v">0.8.0</div></div>
+    <div><div class="k">Version</div><div class="v">0.9.0</div></div>
     <div><div class="k">Format</div><div class="v">CLAP · Instrument · MPE</div></div>
     <div><div class="k">Platforms</div><div class="v">macOS · Windows · Linux</div></div>
     <div style="text-align:right"><div class="k">Edition</div><div class="v">October 2026</div></div>
@@ -252,7 +252,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
         <li><strong>Three oscillators</strong> per voice: sine, triangle, saw, square, pulse, the TX81Z's FM waves and noise, pitched by note, ratio or fixed Hz.</li>
         <li><strong>A 3×3 FM grid</strong>, phase or exponential, whose diagonal is each oscillator's feedback.</li>
         <li><strong>Two filters</strong> per voice: SVF up to 48 dB, notch, peak, ladder and comb, in serial or parallel, with each oscillator picking its filter.</li>
-        <li><strong>MPE</strong> and CLAP note expressions: strike, press, glide, slide and lift, each with its own curve and smoothing.</li>
+        <li><strong>MPE</strong> and CLAP note expressions: velocity, press, glide, slide and release velocity, each with its own curve and smoothing.</li>
       </ul>
     </div>
     <div>
@@ -364,18 +364,19 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div><span class="dot">2</span><span><b>PART A / PART B.</b> Which species the cards edit.</span></div>
     <div><span class="dot">3</span><span><b>Play mode.</b> Which part each note plays.</span></div>
     <div><span class="dot">4</span><span><b>MAP.</b> Mapping: touch a source, drag a knob. Touching a source turns it on too.</span></div>
-    <div><span class="dot">5</span><span><b>Touch chips.</b> STRIKE, PRESS, GLIDE, SLIDE: sources that light as you play.</span></div>
+    <div><span class="dot">5</span><span><b>Touch chips.</b> VELOCITY, PRESS, GLIDE, SLIDE, RELEASE: sources that light as you play.</span></div>
     <div><span class="dot">6</span><span><b>FM and FLOCK cards.</b> The FM grid, the links between creatures and the noise; how the species flies.</span></div>
     <div><span class="dot">7</span><span><b>The sky.</b> Both species, their ink, and the links between them. Click to play.</span></div>
     <div><span class="dot">8</span><span><b>Flock sources.</b> The creatures' own modulation sources.</span></div>
-    <div><span class="dot">9</span><span><b>RINGS, ROUTES, HIDE.</b> Lure rings, the route list, and the sky on its own.</span></div>
+    <div><span class="dot">9</span><span><b>RINGS, ROUTES.</b> Lure rings and the route list.</span></div>
     <div><span class="dot">10</span><span><b>MOTION and LFO cards.</b> The wingbeat and the wind that move the flock, and LFO 1 and 2.</span></div>
     <div><span class="dot">11</span><span><b>Oscillator cards.</b> OSC 1, 2 and 3: pitch, wave, mix and which filter.</span></div>
     <div><span class="dot">12</span><span><b>Part card.</b> Voice mode, polyphony, pitch, pan and level.</span></div>
     <div><span class="dot">13</span><span><b>TOUCH card.</b> Each touch's curve and smoothing.</span></div>
     <div><span class="dot">14</span><span><b>Envelope cards.</b> ENV 1 AMP, ENV 2 and ENV 3.</span></div>
     <div><span class="dot">15</span><span><b>FILTER card.</b> Both filters, the drive and the noise's filter.</span></div>
-    <div><span class="dot">16</span><span><b>PLAY card.</b> Pitch rounding, the manager channel's bend, and the output.</span></div>
+    <div><span class="dot">16</span><span><b>PLAY card.</b> Pitch rounding, the manager channel's bend, the levels of both parts, and the output.</span></div>
+    <div><span class="dot">17</span><span><b>FULL / REDUCED / SKY.</b> The three views: every card, big drawn panels, or the sky alone.</span></div>
   </div>
 
   <h2>Working with the controls</h2>
@@ -475,8 +476,16 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     </tbody>
   </table>
 
-  <h2>Showing the sky on its own</h2>
-  <p><strong>HIDE</strong> folds the cards away so the sky fills the whole panel, which is lovely on a second screen while you play. <strong>SHOW</strong>, in the corner, brings them back.</p>
+  <h2>Three views</h2>
+  <p>The switch at the top right picks how much of the panel you see. <strong>FULL</strong> has every card around the sky, as this manual shows them. <strong>SKY</strong> folds everything away but the header so the sky fills the panel, which is lovely on a second screen while you play. <strong>REDUCED</strong> keeps the sky at the same size and puts the sound down the left in big panels that draw what they do:</p>
+  <figure class="dark"><img src="img/reduced.jpg" alt=""><figcaption><b>Fig. 6.2</b> &nbsp;REDUCED: the oscillators, filter and envelopes drawn down the left, and the voice under the sky.</figcaption></figure>
+  <ul>
+    <li><strong>OSCILLATORS</strong>: a row each, with its wave drawn as its Wave and Shape make it, its pitch, fine, shape, level and pan, which filter it goes into, and <strong>RAND / SYNC</strong>: whether each note starts the wave at a random place or at its Phase. The <strong>FM</strong> tab has the FM grid, what comes out of it drawn for a C4 with a chip for each route that is on, and the links between creatures.</li>
+    <li><strong>FILTER</strong>: both filters' response drawn together. Drag a numbered handle across to set its cutoff and up or down for its resonance; the wheel sets its drive and a double-click resets it. In MAP mode, with a source armed, the drag sets that source's route to the cutoff instead. Under it, each filter's controls, the balance and the drive after the filters, and above it which filter the noise goes into.</li>
+    <li><strong>ENVELOPES</strong>: the three envelope editors. The <strong>LFOS</strong> tab draws LFO 1 and 2, a dot running along each at its rate, beside their controls.</li>
+    <li>Under the sky, <strong>VOICE</strong> draws the stereo field (the part's pan, its X Pan spread and its creatures), the levels of both parts and the master, and the voices in use, over the knobs that set them. <strong>FLOCK</strong> and <strong>MOTION</strong> hold the FLOCK and MOTION cards' controls.</li>
+  </ul>
+  <p>The touch curves, glide rounding and the route list are only on FULL. The view stays as you left it when the editor is closed and opened again.</p>
 </section>
 
 <!-- ================= 7. PARTS AND PLAYING ================= -->
@@ -524,7 +533,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       </tbody>
     </table>
   </div>
-  <p>Host parameters that complete the part: <strong>Fine</strong> (±100 cents), <strong>Glide Mode</strong> (Always, or Legato: glide only from a note still held), <strong>Drift</strong> (on the FM card, a slow random pitch wander per creature), <strong>Velocity</strong> (on the ENV 1 AMP card: how much Strike sets the level), <strong>Key Low</strong> and <strong>Key High</strong>, and <strong>Output</strong> (Main or Own).</p>
+  <p>Host parameters that complete the part: <strong>Fine</strong> (±100 cents), <strong>Glide Mode</strong> (Always, or Legato: glide only from a note still held), <strong>Drift</strong> (on the FM card, a slow random pitch wander per creature), <strong>Velocity</strong> (on the ENV 1 AMP card: how much velocity sets the level), <strong>Key Low</strong> and <strong>Key High</strong>, and <strong>Output</strong> (Main or Own).</p>
 
   <h2>MPE and MIDI</h2>
   <p>JSynth takes CLAP notes, plain MIDI and MIDI MPE.</p>
@@ -552,7 +561,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
     <tbody>
       <tr><td class="c">NOTE / RATIO / HZ</td><td class="r">Pitch mode</td><td class="d">Note (Osc 2, 3: Ratio)</td><td><strong>Note</strong> follows the keyboard with an offset; <strong>Ratio</strong> runs at a multiple of the note, the classic FM way; <strong>Hz</strong> holds a fixed frequency whatever you play.</td></tr>
-      <tr><td class="c">Wave</td><td class="r">14 waves</td><td class="d">Saw (Osc 2, 3: Sine)</td><td>See the table below.</td></tr>
+      <tr><td class="c">Wave</td><td class="r">15 waves</td><td class="d">Saw (Osc 2, 3: Sine)</td><td>See the table below.</td></tr>
       <tr><td class="c">COARSE</td><td class="r">±48 st</td><td class="d">0</td><td>Note mode: the offset in semitones. <span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">RATIO</td><td class="r">×0.25 – ×16</td><td class="d">×1 (Osc 3: ×3)</td><td>Ratio mode: the multiple of the note. Routes move it by musical intervals. <span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">FREQ</td><td class="r">1 Hz – 10 kHz</td><td class="d">440 Hz</td><td>Hz mode: the fixed frequency. <span class="mod t">ROUTE</span></td></tr>
@@ -575,6 +584,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">Square, Pulse</td><td>Hollow to nasal. Shape sets the width: 10 to 90% for Square, 5 to 50% for Pulse.</td></tr>
       <tr><td class="c">Half Sine … Alt Camel</td><td>The Yamaha TX81Z's seven other waves: Half Sine, Abs Sine, Quarter, Alt Sine, Alt Half, Camel and Alt Camel. Sines with parts of the cycle cut, folded or doubled, which give FM a whole family of brighter, buzzier tones.</td></tr>
       <tr><td class="c">White, Pink</td><td>Noise, as an oscillator: it can be filtered, panned and even used as an FM source.</td></tr>
+      <tr><td class="c">Random</td><td>A different one of Sine to Alt Camel for each note, so a run of notes changes colour as it goes.</td></tr>
     </tbody>
   </table>
 
@@ -683,8 +693,8 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
           <tr><td class="c">Loop</td><td class="r">Off, Held, Free</td><td class="d">Off</td><td><strong>Held</strong> repeats attack and decay while the note is held. <strong>Free</strong> keeps repeating after you let go too, until the note ends.</td></tr>
         </tbody>
       </table>
-      <p><strong>VELOCITY</strong> on the ENV 1 AMP card (0 to 100%, 100% by default) is how much Strike sets the level. At 0 every note plays at full level.</p>
-      <p class="small">Host parameters per envelope: <strong>Delay</strong> and <strong>Hold</strong> (0 ms to 20 s) <span class="mod t">ROUTE</span>, an <strong>Attack</strong>, <strong>Decay</strong> and <strong>Release Curve</strong> each (−1 to +1), and <strong>Velocity</strong>, how much Strike scales the whole envelope.</p>
+      <p><strong>VELOCITY</strong> on the ENV 1 AMP card (0 to 100%, 100% by default) is how much velocity sets the level. At 0 every note plays at full level.</p>
+      <p class="small">Host parameters per envelope: <strong>Delay</strong> and <strong>Hold</strong> (0 ms to 20 s) <span class="mod t">ROUTE</span>, an <strong>Attack</strong>, <strong>Decay</strong> and <strong>Release Curve</strong> each (−1 to +1), and <strong>Velocity</strong>, how much velocity scales the whole envelope.</p>
   </div>
 
   <h2 class="pb"><span class="tag">Right of the sky</span>MOTION</h2>
@@ -757,7 +767,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
           <tr><td class="c">SPREAD</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How far the ink blooms as it ages. <span class="mod t">ROUTE</span></td></tr>
           <tr><td class="c">SIZE</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How big the sky is. A bigger sky makes creatures relatively smaller and slower, so flocks spread out. Shared.</td></tr>
           <tr><td class="c">WALLS</td><td class="r">Soft, Wrap, Open</td><td class="d">Soft</td><td>Soft turns creatures back near the edge; Wrap carries them round to the other side; Open lets them fly well past it first. Shared.</td></tr>
-          <tr><td class="c">LURE X, LURE Y</td><td class="r">Pitch, Strike, Press, Slide, Lift, Random, Centre</td><td class="d">Pitch, Slide</td><td>What places a note's lure along each axis.</td></tr>
+          <tr><td class="c">LURE X, LURE Y</td><td class="r">Pitch, Velocity, Press, Slide, Release, Random, Centre</td><td class="d">Pitch, Slide</td><td>What places a note's lure along each axis.</td></tr>
         </tbody>
       </table>
     </div>
@@ -802,11 +812,11 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <table>
         <thead><tr><th style="width:0.75in">Touch</th><th>Where it comes from</th></tr></thead>
         <tbody>
-          <tr><td class="c">STRIKE</td><td>How hard the note was struck: its velocity.</td></tr>
+          <tr><td class="c">VELOCITY</td><td>How hard the note was struck: its velocity.</td></tr>
           <tr><td class="c">PRESS</td><td>Pressure: MPE channel pressure or the CLAP pressure expression. It also makes the creature faster and brighter.</td></tr>
           <tr><td class="c">GLIDE</td><td>The finger's bend, as −100% to +100% of the bend range.</td></tr>
           <tr><td class="c">SLIDE</td><td>Up and down the key: MPE CC 74 or the CLAP brightness expression.</td></tr>
-          <tr><td class="c">LIFT</td><td>How fast the note was released: its release velocity. It isn't a route source, but it can place a note's lure.</td></tr>
+          <tr><td class="c">RELEASE</td><td>How fast the note was released: its release velocity, 0 while the note is held. Route it to the amp envelope's release, say, so a quick lift cuts the note short.</td></tr>
         </tbody>
       </table>
       <p>Each has a <strong>CURVE</strong> (−1 to +1): positive bows it up, so it responds more early in the travel, and negative bows it down. And a <strong>SMOOTH</strong> time (8 ms by default, 2 ms for Glide so slides track the finger), which irons out a controller's steps.</p>
@@ -825,10 +835,10 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
 
   <h2>The touch chips</h2>
-  <p>The four chips in the header light as you play, showing the newest note of the part you are editing. In MAP mode they are sources like any other: touch <strong>PRESS</strong> and drag a knob to make pressure move it.</p>
+  <p>The five chips in the header light as you play, showing the newest note of the part you are editing. In MAP mode they are sources like any other: touch <strong>PRESS</strong> and drag a knob to make pressure move it.</p>
   <div class="note">
     <span class="k">No MPE controller?</span>
-    <p>Strike comes from any keyboard. A plain keyboard's channel pressure is Press for every note, and its pitch wheel bends every note by MGR BEND. In the sky, a click sets Slide by how high you click and dragging bends.</p>
+    <p>Velocity comes from any keyboard. A plain keyboard's channel pressure is Press for every note, and its pitch wheel bends every note by MGR BEND. In the sky, a click sets Slide by how high you click and dragging bends.</p>
   </div>
 </section>
 
@@ -864,7 +874,8 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <tbody>
       <tr><td class="c">Env 1, 2, 3</td><td>0 to 100%, each note's own.</td></tr>
       <tr><td class="c">LFO 1, 2</td><td>−100% to +100% (or 0 to 100% when Unipolar). Per note unless Global.</td></tr>
-      <tr><td class="c">Strike, Press, Slide</td><td>0 to 100%, each note's own.</td></tr>
+      <tr><td class="c">Velocity, Press, Slide</td><td>0 to 100%, each note's own.</td></tr>
+      <tr><td class="c">Release</td><td>The note's release velocity, 0 to 100%: 0 while it is held.</td></tr>
       <tr><td class="c">Glide</td><td>−100% to +100%: the note's bend.</td></tr>
       <tr><td class="c">Key</td><td>The note: −100% four octaves below middle C, 0 at middle C, +100% four octaves above.</td></tr>
       <tr><td class="c">Speed, Nearest, Heading</td><td>The flock's own, 0 to 100% (Chapter 6).</td></tr>
@@ -874,7 +885,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">Macro 1 to 4</td><td>Four host parameters, for automation or a controller.</td></tr>
     </tbody>
   </table>
-  <p class="small muted">Key, Random, Mod Wheel and the macros have no chip on the panel; choose them in the route list.</p>
+  <p class="small muted">Key, Mod Wheel and the macros have no chip on the panel, and Random has one only in REDUCED, under the sky; choose them in the route list.</p>
 
   <h2>The route list</h2>
   <figure class="dark"><img src="img/routes.jpg" alt=""><figcaption><b>Fig. 13.2</b> &nbsp;ROUTES: every route of the part in use, with its source, destination and amount.</figcaption></figure>
@@ -922,7 +933,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div class="recipe" style="--rc:#6fe0ff">
       <h3>DX electric piano</h3>
       <p>Two sines, a 1:1 pair for the body and a ×14 for the bark.</p>
-      <div class="set">Osc 1 Sine · Osc 2 Sine Ratio ×1 Level 0<br>Osc 3 Sine Ratio ×14 Level 0<br>Env 1 A 1 ms D 5 s S 0 R 400 ms<br>Env 2 → FM 2 &gt; 1 +30% · Env 3 (D 60 ms) → FM 3 &gt; 1 +35%<br>Strike → FM 2 &gt; 1 +20% · Filter 1 open</div>
+      <div class="set">Osc 1 Sine · Osc 2 Sine Ratio ×1 Level 0<br>Osc 3 Sine Ratio ×14 Level 0<br>Env 1 A 1 ms D 5 s S 0 R 400 ms<br>Env 2 → FM 2 &gt; 1 +30% · Env 3 (D 60 ms) → FM 3 &gt; 1 +35%<br>Velocity → FM 2 &gt; 1 +20% · Filter 1 open</div>
       <div class="from">Or load <em>Tine Piano</em>.</div>
     </div>
     <div class="recipe" style="--rc:#ffb05a">
@@ -964,7 +975,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div class="recipe" style="--rc:#f6f0a0">
       <h3>Struck drum</h3>
       <p>A pitch drop that goes further the harder you hit.</p>
-      <div class="set">Osc 1 Sine · FB 1 15% · Env 1 D 300 ms S 0<br>Env 3 (D 45 ms) → Osc 1 Ratio +10%<br>Strike → that route's amount +10%</div>
+      <div class="set">Osc 1 Sine · FB 1 15% · Env 1 D 300 ms S 0<br>Env 3 (D 45 ms) → Osc 1 Ratio +10%<br>Velocity → that route's amount +10%</div>
       <div class="from">Or load <em>Log Drum</em>.</div>
     </div>
   </div>
@@ -998,7 +1009,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">Oscillators</td><td>3 per voice, 14 waves, double-precision phase. Saw, square and pulse band-limited by polyBLEP.</td></tr>
       <tr><td class="c">FM</td><td>3 × 3 grid including feedback; phase or exponential. Plus Neighbour FM from up to three neighbours.</td></tr>
       <tr><td class="c">Filters</td><td>2 per voice: TPT state variable (12–48 dB), notch, peak, 4-pole ZDF ladder, comb ±. Serial or parallel, each oscillator and the noise picking its filter.</td></tr>
-      <tr><td class="c">Modulation</td><td>3 DAHDSR envelopes with curves and loop, 4 LFOs, 5 touch dimensions (4 as sources), 4 flock sources, key, random, mod wheel, 4 macros. 64 routes per part.</td></tr>
+      <tr><td class="c">Modulation</td><td>3 DAHDSR envelopes with curves and loop, 4 LFOs, 5 touch dimensions, 4 flock sources, key, random, mod wheel, 4 macros. 64 routes per part.</td></tr>
       <tr><td class="c">Oversampling</td><td>1×, 2× (default) or 4×, decimated by polyphase IIR half-bands.</td></tr>
       <tr><td class="c">Control rate</td><td>Every 32 samples, ramped per sample. The flock steps at 500 Hz. Renders are identical at any buffer size.</td></tr>
       <tr><td class="c">Parameters</td><td>All automatable except the route sources, destinations and Quality. Continuous ones accept CLAP modulation; route destinations accept it per note (note id, key, channel or port).</td></tr>
@@ -1048,7 +1059,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <circle cx="38" cy="11" r="4.5" fill="#6fb8ff"/>
     </svg>
     <div class="word"><span class="j">J</span>Synth</div>
-    <div class="small">The flocking synth · v0.8.0</div>
+    <div class="small">The flocking synth · v0.9.0</div>
   </div>
   <div class="url">github.com/jeffmhopkins/Jclap</div>
 </section>
@@ -1105,9 +1116,9 @@ function el(parent, tag, attrs, text) {
 (function () {
   const g = document.querySelector('#overview svg g');
   const pts = [
-    [1, 611, 52], [2, 819, 52], [3, 958, 52], [4, 1055, 52], [5, 1252, 52], [6, 16, 66],
+    [1, 541, 52], [2, 749, 52], [3, 888, 52], [4, 985, 52], [5, 1225, 52], [6, 16, 66],
     [7, 824, 330], [8, 480, 604], [9, 1002, 604], [10, 1632, 66], [11, 18, 656], [12, 798, 656],
-    [13, 1632, 656], [14, 18, 774], [15, 676, 774], [16, 1632, 774],
+    [13, 1632, 656], [14, 18, 774], [15, 676, 774], [16, 1632, 774], [17, 1534, 52],
   ];
   for (const [n, x, y] of pts) {
     el(g, 'circle', { cx: x, cy: y, r: 13, fill: '#f28c28', stroke: '#fff', 'stroke-width': 2.2 });
@@ -1138,7 +1149,7 @@ function el(parent, tag, attrs, text) {
   }
   // row 1: note, touch, pitch
   box(4, 10, 82, 'NOTE', null, 'io');
-  box(108, 10, 120, 'TOUCH', 'strike · press · glide · slide · lift');
+  box(108, 10, 120, 'TOUCH', 'velocity · press · glide · slide · release');
   box(250, 10, 150, 'PITCH', 'glide · bend · drift · tune pull');
   box(430, 10, 150, 'ROUTES', 'envelopes · LFOs · flock');
   arrow('M86,27 L106,27'); arrow('M228,27 L248,27');
@@ -1180,8 +1191,8 @@ function el(parent, tag, attrs, text) {
     ['Hits', 'Gone in a fraction of a second.', [
       ['Wood Block', 'A sine with a ×2.76 modulator, 70 ms.'],
       ['Glass Tick', 'A sine with a ×7 modulator.'],
-      ['Marimba', '×4 and ×10 partials; Env 3 and Strike bring in the ×10.'],
-      ['Steel Drum', '×3 and ×2 modulators, slightly detuned, opened by Env 3 and Strike.'],
+      ['Marimba', '×4 and ×10 partials; Env 3 and Velocity bring in the ×10.'],
+      ['Steel Drum', '×3 and ×2 modulators, slightly detuned, opened by Env 3 and Velocity.'],
       ['Log Drum', 'Self-feedback and a pitch drop that goes further the harder you strike.'],
       ['Fireflies', 'Half Sine blips; a fast, scattered flock with short ink, spread wide.'],
       ['Metal Rain', 'Inharmonic ×3.73 and ×7.11, scattered; each note detuned at random.'],
@@ -1260,7 +1271,7 @@ function el(parent, tag, attrs, text) {
       ['Velocity Split', '1 – 127', '80', ''], ['Crossfade Source', 'Slide, Press', 'Slide', ''], ['Quality', '1x, 2x, 4x', '2x', ''],
       ['Master Level', '–60 – +6 dB', '–6.0 dB', ''], ['Output Width', '0 – 200%', '100%', ''], ['Manager Bend Range', '1 – 96 st', '2 st', ''],
       ['Glide Rounding', '0 – 100%', '0%', ''], ['Rounding Time', '0 ms – 20 s', '150 ms', ''], ['Macro 1 – 4', '0 – 100%', '0%', ''],
-      ['Strike … Lift Curve', '–1 – +1', '+0.00', ''], ['Strike … Lift Smoothing', '0 ms – 20 s', '8.0 ms (Glide 2.0 ms)', ''],
+      ['Velocity … Release Curve', '–1 – +1', '+0.00', ''], ['Velocity … Release Smoothing', '0 ms – 20 s', '8.0 ms (Glide 2.0 ms)', ''],
       ['Size', '0 – 100%', '50%', ''], ['Walls', 'Soft, Wrap, Open', 'Soft', ''],
     ]],
     ['Voice (per part)', [
@@ -1308,7 +1319,7 @@ function el(parent, tag, attrs, text) {
       ['Lure', '0 – 100%', '60%', T], ['Range', '0 – 100%', '35%', T], ['Neighbour FM', '0 – 100%', '0%', T],
       ['Tune Pull', '0 – 100%', '0%', T], ['Bite', '0 – 100%', '0%', T], ['Tail Length', '0 – 100%', '50%', T],
       ['Tail Spread', '0 – 100%', '50%', T],
-      ['Lure X, Lure Y', 'Pitch, Strike, Press, Slide, Lift, Random, Centre', 'Pitch, Slide', ''],
+      ['Lure X, Lure Y', 'Pitch, Velocity, Press, Slide, Release, Random, Centre', 'Pitch, Slide', ''],
     ]],
     ['Routes (per part: Route 1 – 64)', [
       ['Source', 'Off and 20 sources', 'Off (1–3: Env 2, Press, Press)', ''],

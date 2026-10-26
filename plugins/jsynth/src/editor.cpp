@@ -22,6 +22,7 @@
 #include <jclap/ui/section.h>
 #include <jclap/ui/segmented.h>
 #include <jclap/ui/slider.h>
+#include <jclap/ui/tabs.h>
 #include <jclap/ui/tooltip.h>
 
 #include <visage/app.h>
@@ -38,6 +39,7 @@
 #include <string>
 #include <vector>
 
+#include "dsp.h"
 #include "flock.h"
 #include "params.h"
 #include "presets.h"
@@ -91,7 +93,7 @@ unsigned sourceColor(int source) {
        0xff808080,                                                 // Off
        0xffffd36b, 0xffffa94d, 0xffff7a59,                         // Env 1-3
        0xff5fd3b0, 0xffc9a0ff,                                     // LFO 1, LFO 2
-       0xfff6f0a0, 0xffff6fd2, 0xffb98bff, 0xff8fe8a8,             // Strike, Press, Glide, Slide
+       0xfff6f0a0, 0xffff6fd2, 0xffb98bff, 0xff8fe8a8, 0xff9ad0c0, // Velocity, Press, Glide, Slide, Release
        0xffc0c8d8,                                                 // Key
        0xfff2c94c, 0xff6fe0ff, 0xffa98bff, 0xffff8a7a,             // Speed, Nearest, Heading, Turn
        0xffd0d0d0, 0xffe0e0ff,                                     // Random, Mod Wheel
@@ -100,8 +102,8 @@ unsigned sourceColor(int source) {
 }
 // The wingbeat's and the wind's colour, on the MOTION card.
 constexpr unsigned kMotionColors[kMotionCount] = {0xff7ee0ff, 0xff8fb8ff};
-// Each touch's colour on the TOUCH card: its source's, and Lift's own.
-unsigned touchColor(int touch) { return touch < kTouchSourceCount ? sourceColor(kSourceStrike + touch) : 0xff9ad0c0; }
+// Each touch's colour on the TOUCH card: its source's.
+unsigned touchColor(int touch) { return sourceColor(kSourceVelocity + touch); }
 
 std::string text(clap_id id, double value) {
    char buffer[64];
@@ -840,7 +842,7 @@ private:
       case 2: // Split: B below the split key, A from it up
          return (n.note < static_cast<int>(host_.paramValue(kSplitKey) + 0.5)) == (part == 1);
       case 4: // Velocity: B for hard hits
-         return (n.strike * 127.0f >= static_cast<float>(host_.paramValue(kVelocitySplit))) == (part == 1);
+         return (n.velocity * 127.0f >= static_cast<float>(host_.paramValue(kVelocitySplit))) == (part == 1);
       default: // Layer, zones and the crossfade play both
          return true;
       }
@@ -899,7 +901,7 @@ private:
                    local_.creatures[i].part == part)
                   slot = i;
             float lx, ly;
-            const float touch[kTouchCount] = {n.strike, n.pressure, 0.0f, n.timbre, n.lift};
+            const float touch[kTouchCount] = {n.velocity, n.pressure, 0.0f, n.timbre, n.release};
             // A random place of its own, the same each time the note is played.
             const float random = std::sin(n.note * 12.9898f) * 2.0f - 1.0f;
             const auto axis = [&](FlockParam p) {
@@ -1132,6 +1134,602 @@ private:
 
 // ---- the panel ----
 
+// The reduced view's drawings. Each reads the shown part's params as it draws, so it follows every
+// knob, route and preset without bindings of its own.
+
+// One oscillator's wave, two cycles of it, as its Wave and Shape make it.
+class WaveView : public visage::Frame {
+public:
+   WaveView(EditorHost &host, int osc, unsigned color) : host_(host), osc_(osc), color_(color) {
+      setIgnoresMouseEvents(true, false);
+   }
+
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height();
+      const float s = h / 84.0f;
+      c.setColor(visage::Color(0x40000000));
+      c.roundedRectangle(0, 0, w, h, 6 * s);
+      c.setColor(visage::Color(0x18ffffff));
+      c.fill(0, h / 2, w, 1);
+      const auto param = [&](clap_id offset) { return host_.paramValue(partId(host_.part, offset)); };
+      const int wave = static_cast<int>(param(oscParam(osc_, kOscWave)) + 0.5);
+      const float shape = static_cast<float>(param(oscParam(osc_, kOscShape)));
+      const float level = static_cast<float>(param(mixParam(kMixLevel, osc_)));
+      constexpr int kPoints = 160;
+      std::minstd_rand rng(7 + osc_);
+      std::uniform_real_distribution<float> noise(-1.0f, 1.0f);
+      float pink = 0.0f;
+      float last = 0.0f;
+      for (int i = 0; i <= kPoints; ++i) {
+         const float t = static_cast<float>(i) / kPoints;
+         float y;
+         if (wave == dsp::kRandom) {
+            // A different tonal wave each half cycle, as a hint that each note takes its own.
+            y = dsp::wave((i * 6 / kPoints * 5 + osc_ * 3) % (dsp::kAltCamel + 1), std::fmod(6.0f * t, 1.0f),
+                          6.0f / kPoints * 0.01f, shape);
+         }
+         else if (wave >= dsp::kWhite) {
+            const float n = noise(rng);
+            pink = 0.8f * pink + 0.2f * n;
+            y = wave == dsp::kWhite ? n * 0.8f : pink * 2.0f;
+         }
+         else
+            y = dsp::wave(wave, std::fmod(2.0f * t, 1.0f), 2.0f / kPoints * 0.01f, shape);
+         y = std::clamp(y, -1.0f, 1.0f);
+         const float px = 8 * s + t * (w - 16 * s), py = h / 2 - y * (h / 2 - 10 * s);
+         if (i > 0) {
+            const float lx = 8 * s + (t - 1.0f / kPoints) * (w - 16 * s);
+            c.setColor(glow(color_, 0.12f, 1.0f));
+            c.segment(lx, last, px, py, 7 * s, true);
+            c.setColor(glow(color_, 0.35f + 0.65f * std::min(1.0f, level * 2.0f + 0.2f), 1.2f));
+            c.segment(lx, last, px, py, 2 * s, true);
+         }
+         last = py;
+      }
+   }
+
+private:
+   EditorHost &host_;
+   int osc_;
+   unsigned color_;
+};
+
+// Both filters' responses over 20 Hz to 20 kHz, and what the voice hears through them. Each filter
+// has a handle on its curve at its cutoff: drag it across for cutoff and up or down for resonance,
+// scroll for its drive, double-click to reset. In MAP with a source armed, dragging across sets how
+// much the source moves that cutoff instead.
+class FilterView : public visage::Frame {
+public:
+   FilterView(EditorHost &host, Mapper &mapper) : host_(host), mapper_(mapper) {}
+
+   void mouseDown(const visage::MouseEvent &e) override {
+      drag_ = handleAt(e.position.x, e.position.y);
+      if (drag_ < 0)
+         return;
+      const int part = host_.part;
+      startX_ = e.position.x, startY_ = e.position.y;
+      if (mapper_.mapping() && mapper_.armedSource() != kSourceOff) {
+         route_ = mapper_.routeFor(part, destinationIndex(filterParam(drag_, kFilterCutoff)));
+         if (route_ >= 0) {
+            mapper_.beginRoute(part, route_);
+            startCut_ = mapper_.routeAmount(part, route_);
+         }
+         return;
+      }
+      route_ = -1;
+      if (e.repeatClickCount() == 2) {
+         for (FilterParam q : {kFilterCutoff, kFilterResonance})
+            set(q, findParam(id(q))->def.defaultValue);
+         drag_ = -1;
+         return;
+      }
+      startCut_ = param(filterParam(drag_, kFilterCutoff));
+      startRes_ = param(filterParam(drag_, kFilterResonance));
+      for (FilterParam q : {kFilterCutoff, kFilterResonance})
+         host_.beginEdit(id(q));
+   }
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (drag_ < 0)
+         return;
+      const float fine = e.isShiftDown() ? 0.2f : 1.0f;
+      const double across = (e.position.x - startX_) / width() * fine, up = (startY_ - e.position.y) / height() * fine;
+      if (route_ >= 0) {
+         mapper_.setRouteAmount(host_.part, route_, std::clamp(startCut_ + 2.0 * across, -1.0, 1.0));
+         return;
+      }
+      if (mapper_.mapping())
+         return;
+      host_.setParam(id(kFilterCutoff), std::clamp(startCut_ + across, 0.0, 1.0));
+      host_.setParam(id(kFilterResonance), std::clamp(startRes_ + up, 0.0, 1.0));
+      redraw();
+   }
+   void mouseUp(const visage::MouseEvent &) override {
+      if (drag_ >= 0 && route_ >= 0)
+         mapper_.endRoute(host_.part, route_);
+      else if (drag_ >= 0 && !mapper_.mapping())
+         for (FilterParam q : {kFilterCutoff, kFilterResonance})
+            host_.endEdit(id(q));
+      drag_ = -1, route_ = -1;
+   }
+   bool mouseWheel(const visage::MouseEvent &e) override {
+      const int f = handleAt(e.position.x, e.position.y);
+      if (f < 0)
+         return false;
+      drag_ = f;
+      set(kFilterDrive, std::clamp(param(filterParam(f, kFilterDrive)) + 0.05 * e.precise_wheel_delta_y, 0.0, 1.0));
+      drag_ = -1;
+      return true;
+   }
+
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height();
+      const float s = h / 120.0f;
+      const unsigned color = kPartColors[host_.part];
+      c.setColor(visage::Color(0x40000000));
+      c.roundedRectangle(0, 0, w, h, 6 * s);
+      // Grid: decades across, 12 dB steps down.
+      for (double f : {100.0, 1000.0, 10000.0}) {
+         const float x = xOf(f, w);
+         c.setColor(visage::Color(0x18ffffff));
+         c.fill(x, 0, 1, h);
+         c.setColor(visage::Color(0x55ffffff));
+         c.text(f >= 1000.0 ? std::to_string(static_cast<int>(f / 1000)) + "k" : std::to_string(static_cast<int>(f)),
+                ui::font(9 * s), visage::Font::kLeft, x + 3 * s, h - 14 * s, 30 * s, 12 * s);
+      }
+      for (int db = 12; db >= -36; db -= 12) {
+         c.setColor(visage::Color(db == 0 ? 0x30ffffff : 0x14ffffff));
+         c.fill(0, yOf(db, h), w, 1);
+      }
+      const bool parallel = param(tailParam(kFilterRouting)) > 0.5;
+      const double w2 = 0.5 + 0.5 * param(tailParam(kFilterBalance));
+      constexpr int kPoints = 200;
+      float sum[kPoints + 1], one[kFilterCount][kPoints + 1];
+      for (int i = 0; i <= kPoints; ++i) {
+         const double f = 20.0 * std::pow(1000.0, static_cast<double>(i) / kPoints);
+         const double a = magnitude(0, f), b = magnitude(1, f);
+         one[0][i] = static_cast<float>(a);
+         one[1][i] = static_cast<float>(b);
+         sum[i] = static_cast<float>(parallel ? std::min(1.0, 2.0 - 2.0 * w2) * a + std::min(1.0, 2.0 * w2) * b : a * b);
+      }
+      // What the voice hears, filled; each filter on its own as a line.
+      const auto y = [&](float m) { return yOf(20.0 * std::log10(std::max(m, 1e-4f)), h); };
+      for (int i = 0; i < kPoints; ++i) {
+         const float x0 = w * i / kPoints, x1 = w * (i + 1) / kPoints, y0 = y(sum[i]), y1 = y(sum[i + 1]);
+         c.setColor(glow(color, 0.18f, 1.0f));
+         c.fill(std::floor(x0), std::max(y0, y1), std::floor(x1) - std::floor(x0), h - std::max(y0, y1));
+         c.setColor(glow(color, 1.0f, 1.4f));
+         c.segment(x0, y0, x1, y1, 2.5f * s, true);
+      }
+      for (int f = 0; f < kFilterCount; ++f)
+         for (int i = 0; i < kPoints; ++i) {
+            c.setColor(glow(f == 0 ? 0xffffffff : 0xff9fd8ff, 0.35f, 1.0f));
+            c.segment(w * i / kPoints, y(one[f][i]), w * (i + 1) / kPoints, y(one[f][i + 1]), 1.2f * s, true);
+         }
+      // The handles: a glowing dot on each filter's own curve at its cutoff.
+      for (int f = 0; f < kFilterCount; ++f) {
+         const auto [hx, hy] = handle(f);
+         const unsigned hc = f == 0 ? 0xffffffff : 0xff9fd8ff;
+         const float r = (drag_ == f ? 9.0f : 7.0f) * s;
+         c.setColor(glow(hc, 0.25f, 1.0f));
+         c.circle(hx - 2 * r, hy - 2 * r, 4 * r);
+         c.setColor(glow(f == 0 ? color : hc, 1.0f, 1.5f));
+         c.circle(hx - r, hy - r, 2 * r);
+         c.setColor(visage::Color(0xff0b0e17));
+         c.text(f == 0 ? "1" : "2", ui::font(9 * s), visage::Font::kCenter, hx - r, hy - r, 2 * r, 2 * r);
+      }
+      c.setColor(visage::Color(0x88ffffff));
+      c.text(parallel ? "PARALLEL" : "SERIAL: FILTER 1 INTO FILTER 2", ui::font(9 * s), visage::Font::kRight, 0, 4 * s,
+             w - 8 * s, 12 * s);
+   }
+
+private:
+   double param(clap_id offset) const { return host_.paramValue(partId(host_.part, offset)); }
+   clap_id id(FilterParam q) const { return partId(host_.part, filterParam(drag_, q)); }
+   // One whole edit of the dragged filter's param.
+   void set(FilterParam q, double v) {
+      host_.beginEdit(id(q));
+      host_.setParam(id(q), v);
+      host_.endEdit(id(q));
+      redraw();
+   }
+   // Where filter `f`'s handle is: at its cutoff, on its own curve (clamped into the graph).
+   std::pair<float, float> handle(int f) const {
+      const double hz = cutoffHz(param(filterParam(f, kFilterCutoff)));
+      const float m = static_cast<float>(magnitude(f, hz));
+      const float y = yOf(20.0 * std::log10(std::max(m, 1e-4f)), height());
+      return {std::clamp(xOf(hz, width()), 10.0f, width() - 10.0f), std::clamp(y, 10.0f, height() - 10.0f)};
+   }
+   int handleAt(float x, float y) const {
+      int best = -1;
+      float near = height() * 0.2f;
+      for (int f = 0; f < kFilterCount; ++f) {
+         const auto [hx, hy] = handle(f);
+         const float d = std::hypot(hx - x, hy - y);
+         if (d < near)
+            best = f, near = d;
+      }
+      return best;
+   }
+   static float xOf(double f, float w) { return static_cast<float>(std::log(f / 20.0) / std::log(1000.0)) * w; }
+   static float yOf(double db, float h) { return static_cast<float>((24.0 - std::clamp(db, -48.0, 24.0)) / 72.0) * h; }
+
+   // A sketch of filter `f`'s magnitude at `hz`: the analog prototypes, close enough to see.
+   double magnitude(int f, double hz) const {
+      const int type = static_cast<int>(param(filterParam(f, kFilterType)) + 0.5);
+      const int stages = static_cast<int>(param(filterParam(f, kFilterSlope)) + 0.5) + 1;
+      const double fc = cutoffHz(param(filterParam(f, kFilterCutoff)));
+      const double res = param(filterParam(f, kFilterResonance));
+      const double x = hz / fc, q = 0.707 + 9.0 * res * res;
+      const auto two = [&](double qq) { return 1.0 / std::sqrt((1 - x * x) * (1 - x * x) + x * x / (qq * qq)); };
+      switch (type) {
+      case 0: return std::pow(two(0.707), stages - 1) * two(q);
+      case 1: return std::pow(x * x * two(0.707), stages - 1) * x * x * two(q);
+      case 2: return std::pow(x / 0.707 * two(0.707), stages - 1) * (x / q) * two(q);
+      case 3: return std::fabs(1 - x * x) * two(q);
+      case 4: return 1.0 + 4.0 * res * (x / q) * two(q);
+      case 5: {
+         // A 4-pole ladder: (1 + jx)^4 with feedback k.
+         const double k = 4.0 * res;
+         double re = 1, im = 0;
+         for (int i = 0; i < 4; ++i) {
+            const double r = re - im * x, m = im + re * x;
+            re = r, im = m;
+         }
+         re += k;
+         return (1.0 + k) / std::sqrt(re * re + im * im);
+      }
+      default: {
+         // Combs: a delay of one period at the cutoff, fed back.
+         const double g = (0.3 + 0.68 * res) * (type == 6 ? 1.0 : -1.0);
+         const double ph = 2.0 * kPi * x;
+         const double re = 1.0 - g * std::cos(ph), im = g * std::sin(ph);
+         return (1.0 - std::fabs(g)) / std::sqrt(re * re + im * im);
+      }
+      }
+   }
+
+   EditorHost &host_;
+   Mapper &mapper_;
+   int drag_ = -1, route_ = -1;
+   float startX_ = 0, startY_ = 0;
+   double startCut_ = 0, startRes_ = 0;
+};
+
+// The part's voices and where they sit in the stereo field: a slot per voice the part can play, lit
+// while a creature holds it, then the field from left to right with each creature where its pan puts
+// it, the spread X Pan gives the flock, and the output's width around it all.
+class StereoView : public visage::Frame {
+public:
+   StereoView(EditorHost &host, const FlockView &sky) : host_(host), sky_(sky) { setIgnoresMouseEvents(true, false); }
+
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height();
+      const float s = h / 120.0f;
+      const int part = host_.part;
+      const unsigned color = kPartColors[part];
+      const auto param = [&](clap_id id) { return static_cast<float>(host_.paramValue(id)); };
+      const float pan = param(partId(part, kPartPan)), spread = param(partId(part, kSkyPan));
+      const float widthOut = param(kOutputWidth);
+      const FlockFrame &f = sky_.frame();
+      // The field: L to R across, with the output's width as brackets.
+      const float top = 0, fh = h - 16 * s, mid = top + fh / 2;
+      c.setColor(visage::Color(0x40000000));
+      c.roundedRectangle(0, top, w, fh, 6 * s);
+      c.setColor(visage::Color(0x22ffffff));
+      c.fill(8 * s, mid, w - 16 * s, 1);
+      c.fill(w / 2, top + 6 * s, 1, fh - 12 * s);
+      const auto xOf = [&](float p) { return w / 2 + std::clamp(p, -1.0f, 1.0f) * (w / 2 - 14 * s); };
+      const float half = 0.5f * std::min(widthOut, 2.0f);
+      c.setColor(visage::Color(0x55ffffff));
+      for (float side : {-1.0f, 1.0f}) {
+         const float bx = xOf(side * std::min(1.0f, half));
+         c.fill(bx - 1 * s, top + 8 * s, 2 * s, fh - 16 * s);
+      }
+      // The flock's spread, centred on the part's pan.
+      const float l = xOf(pan - spread), r = xOf(pan + spread);
+      c.setColor(glow(color, 0.16f, 1.0f));
+      c.roundedRectangle(std::min(l, r) - 6 * s, mid - 12 * s, std::fabs(r - l) + 12 * s, 24 * s, 12 * s);
+      c.setColor(glow(color, 0.9f, 1.2f));
+      c.fill(xOf(pan) - 1 * s, mid - 16 * s, 2 * s, 32 * s);
+      // Each creature of the part where it is heard.
+      for (int i = 0; i < f.count; ++i) {
+         const FlockFrame::Shown &cr = f.creatures[i];
+         if (cr.part != part)
+            continue;
+         const float across = std::clamp(cr.x / kSkyAspect, 0.0f, 1.0f) * 2.0f - 1.0f;
+         const float x = xOf(pan + spread * across), e = std::clamp(cr.energy, 0.2f, 1.0f);
+         c.setColor(glow(color, 0.25f * e, 1.0f));
+         c.circle(x - 9 * s, mid - 9 * s, 18 * s);
+         c.setColor(glow(color, cr.held ? 1.0f : 0.5f, 1.6f));
+         c.circle(x - 3.5f * s, mid - 3.5f * s, 7 * s);
+      }
+      c.setColor(visage::Color(0x88ffffff));
+      c.text("L", ui::font(10 * s), visage::Font::kLeft, 6 * s, h - 14 * s, 20 * s, 14 * s);
+      c.text("R", ui::font(10 * s), visage::Font::kRight, w - 26 * s, h - 14 * s, 20 * s, 14 * s);
+      c.text("WIDTH", ui::font(9 * s), visage::Font::kCenter, 0, h - 14 * s, w, 14 * s);
+   }
+
+private:
+   EditorHost &host_;
+   const FlockView &sky_;
+};
+
+// A slot for each voice the part can play, four by four, lit while a creature holds it.
+class VoiceSlotsView : public visage::Frame {
+public:
+   VoiceSlotsView(EditorHost &host, const FlockView &sky) : host_(host), sky_(sky) { setIgnoresMouseEvents(true, false); }
+
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height();
+      const float s = h / 120.0f;
+      const int part = host_.part;
+      const unsigned color = kPartColors[part];
+      const int voices = static_cast<int>(host_.paramValue(partId(part, kPolyphony)) + 0.5);
+      const FlockFrame &f = sky_.frame();
+      int held = 0;
+      for (int i = 0; i < f.count; ++i)
+         held += f.creatures[i].part == part && f.creatures[i].held;
+      const float cell = std::min(w, h - 16 * s) / 4, r = cell * 0.22f;
+      const float x0 = (w - 4 * cell) / 2;
+      for (int i = 0; i < 16; ++i) {
+         const float cx = x0 + (i % 4 + 0.5f) * cell, cy = (i / 4 + 0.5f) * cell;
+         if (i >= voices) {
+            c.setColor(visage::Color(0x14ffffff));
+            c.circle(cx - r, cy - r, 2 * r);
+            continue;
+         }
+         const bool on = i < held;
+         if (on) {
+            c.setColor(glow(color, 0.25f, 1.0f));
+            c.circle(cx - 2 * r, cy - 2 * r, 4 * r);
+         }
+         c.setColor(on ? glow(color, 1.0f, 1.5f) : glow(color, 0.35f, 1.0f));
+         c.circle(cx - r, cy - r, 2 * r);
+      }
+      char text[32];
+      std::snprintf(text, sizeof(text), "%d OF %d VOICES", std::min(held, voices), voices);
+      c.setColor(visage::Color(0x88ffffff));
+      c.text(text, ui::font(9 * s), visage::Font::kCenter, 0, h - 14 * s, w, 14 * s);
+   }
+
+private:
+   EditorHost &host_;
+   const FlockView &sky_;
+};
+
+// Both parts' levels and the master's, as bars on one dB scale. The part being edited is lit; the
+// other shows dimmer, so the balance between them is always in view.
+class LevelView : public visage::Frame {
+public:
+   explicit LevelView(EditorHost &host) : host_(host) { setIgnoresMouseEvents(true, false); }
+
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height();
+      const float s = h / 120.0f;
+      const float top = 6 * s, bottom = h - 18 * s;
+      const auto yOf = [&](double db) { return bottom - static_cast<float>((std::clamp(db, -60.0, 6.0) + 60.0) / 66.0) * (bottom - top); };
+      const double levels[3] = {host_.paramValue(partId(0, kPartLevel)), host_.paramValue(partId(1, kPartLevel)),
+                                host_.paramValue(kMasterLevel)};
+      const unsigned colors[3] = {kPartColors[0], kPartColors[1], kDim};
+      const char *names[3] = {"A", "B", w > 100 * s ? "MASTER" : "M"};
+      for (int db : {0, -12, -24, -36, -48}) {
+         c.setColor(visage::Color(db == 0 ? 0x44ffffff : 0x18ffffff));
+         c.fill(0, yOf(db), w, 1);
+      }
+      for (int i = 0; i < 3; ++i) {
+         const float bw = std::min(20 * s, w * 0.14f), x = w * (0.2f + 0.3f * i) - bw / 2;
+         const float lit = i == 2 || i == host_.part ? 1.0f : 0.4f;
+         c.setColor(visage::Color(0x40000000));
+         c.roundedRectangle(x, top, bw, bottom - top, 4 * s);
+         const float y = yOf(levels[i]);
+         c.setColor(glow(colors[i], 0.25f * lit, 1.0f));
+         c.roundedRectangle(x - 3 * s, y - 3 * s, bw + 6 * s, bottom - y + 3 * s, 6 * s);
+         c.setColor(glow(colors[i], 0.9f * lit, 1.0f + 0.3f * lit));
+         c.roundedRectangle(x, y, bw, bottom - y, 4 * s);
+         c.setColor(visage::Color(lit == 1.0f ? 0xccffffff : 0x66ffffff));
+         c.text(names[i], ui::font(9 * s), visage::Font::kCenter, x - 20 * s, h - 14 * s, bw + 40 * s, 14 * s);
+      }
+   }
+
+private:
+   EditorHost &host_;
+};
+
+// An LFO's shape `cycles` into its run, -1..1: the panel's guess at the engine's, for its LEDs and
+// pictures.
+float lfoWave(int shape, double cycles) {
+   const float ph = static_cast<float>(cycles - std::floor(cycles));
+   switch (shape) {
+   case 1: return 1.0f - 4.0f * std::fabs(ph - 0.5f); // triangle
+   case 2: return 2.0f * ph - 1.0f;                   // saw
+   case 3: return ph < 0.5f ? 1.0f : -1.0f;           // square
+   case 4: return std::sin(static_cast<float>(std::floor(cycles)) * 12.9898f) > 0.0f ? 0.7f : -0.7f; // S&H
+   case 5: return 0.6f * std::sin(2.0f * kPi * ph) + 0.4f * std::sin(2.0f * kPi * ph * 0.37f + 1.0f); // smooth
+   default: return std::sin(2.0f * kPi * ph); // sine
+   }
+}
+
+// A plain LFO drawn: two cycles of its shape, from its phase, unipolar ones from the floor, with a
+// dot running along it at its rate.
+class LfoView : public visage::Frame {
+public:
+   LfoView(EditorHost &host, int lfo, unsigned color, const float &time) : host_(host), lfo_(lfo), color_(color), time_(time) {
+      setIgnoresMouseEvents(true, false);
+   }
+
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height();
+      const float s = h / 127.0f;
+      const auto param = [&](LfoParam p) { return host_.paramValue(partId(host_.part, lfoParam(lfo_, p))); };
+      const int shape = static_cast<int>(param(kLfoShape) + 0.5);
+      const double phase = param(kLfoPhase) / 360.0;
+      const bool unipolar = static_cast<int>(param(kLfoPolarity) + 0.5) == 1;
+      c.setColor(visage::Color(0x40000000));
+      c.roundedRectangle(0, 0, w, h, 6 * s);
+      const float x0 = 8 * s, x1 = w - 8 * s, top = 10 * s, bottom = h - 10 * s;
+      const auto yOf = [&](float v) {
+         const float u = unipolar ? 0.5f * v + 0.5f : 0.5f + 0.5f * v;
+         return bottom - u * (bottom - top);
+      };
+      c.setColor(visage::Color(0x18ffffff));
+      c.fill(x0, unipolar ? bottom : (top + bottom) / 2, x1 - x0, 1);
+      constexpr int kPoints = 160;
+      for (int pass = 0; pass < 2; ++pass) {
+         c.setColor(pass == 0 ? glow(color_, 0.3f, 1.0f) : glow(color_, 1.0f, 1.2f));
+         float px = x0, py = yOf(lfoWave(shape, phase));
+         for (int i = 1; i <= kPoints; ++i) {
+            const double t = 2.0 * i / kPoints;
+            const float nx = x0 + (x1 - x0) * static_cast<float>(t / 2.0), ny = yOf(lfoWave(shape, t + phase));
+            c.segment(px, py, nx, ny, (pass == 0 ? 6.0f : 2.0f) * s, true);
+            px = nx, py = ny;
+         }
+      }
+      // The dot: where the LFO is now, free running at its rate.
+      const double run = time_ * lfoHz(param(kLfoRate));
+      const double at = run - 2.0 * std::floor(run / 2.0);
+      const float dx = x0 + (x1 - x0) * static_cast<float>(at / 2.0), dy = yOf(lfoWave(shape, at + phase)), r = 5 * s;
+      c.setColor(glow(color_, 1.0f, 1.5f));
+      c.circle(dx - r, dy - r, 2 * r);
+   }
+
+private:
+   EditorHost &host_;
+   int lfo_;
+   unsigned color_;
+   const float &time_;
+};
+
+// The FM as what comes out: a C4 run through the three oscillators the way the engine does it,
+// two cycles drawn, with a chip under it for each route that is on.
+class FmView : public visage::Frame {
+public:
+   explicit FmView(EditorHost &host) : host_(host) { setIgnoresMouseEvents(true, false); }
+
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height();
+      const float s = h / 290.0f;
+      const auto param = [&](clap_id offset) { return static_cast<float>(host_.paramValue(partId(host_.part, offset))); };
+      c.setColor(visage::Color(0x40000000));
+      c.roundedRectangle(0, 0, w, h, 6 * s);
+      c.setColor(visage::Color(0x88ffffff));
+      c.text("WHAT COMES OUT, AT C4", ui::font(9 * s), visage::Font::kLeft, 10 * s, 6 * s, w, 16 * s);
+
+      // The run: each oscillator at its pitch, as the engine's sample loop modulates them.
+      constexpr float kRate = 48000, kNote = 60;
+      float inc[kOscCount], shape[kOscCount], level[kOscCount], amount[kOscCount][kOscCount];
+      int wave[kOscCount];
+      for (int o = 0; o < kOscCount; ++o) {
+         const int mode = static_cast<int>(param(oscParam(o, kOscPitchMode)) + 0.5f);
+         const float fine = param(oscParam(o, kOscFine));
+         float hz;
+         if (mode == 0)
+            hz = 440.0f * std::exp2((kNote + param(oscParam(o, kOscCoarse)) + fine / 100.0f - 69.0f) / 12.0f);
+         else if (mode == 1)
+            hz = 440.0f * std::exp2((kNote + fine / 100.0f - 69.0f) / 12.0f) * param(oscParam(o, kOscRatio));
+         else
+            hz = static_cast<float>(fixedHz(param(oscParam(o, kOscFixed)))) * std::exp2(fine / 1200.0f);
+         inc[o] = std::clamp(hz, 0.0f, 0.45f * kRate) / kRate;
+         wave[o] = static_cast<int>(param(oscParam(o, kOscWave)) + 0.5f);
+         // Noise and Random have no one shape; a sine stands in.
+         if (wave[o] >= dsp::kWhite)
+            wave[o] = dsp::kSine;
+         shape[o] = param(oscParam(o, kOscShape));
+         level[o] = param(mixParam(kMixLevel, o));
+         for (int to = 0; to < kOscCount; ++to)
+            amount[o][to] = param(fmCell(o, to));
+      }
+      const bool expFm = static_cast<int>(param(kFmBase + kFmType) + 0.5f) == 1;
+      const int cycle = static_cast<int>(1.0f / std::max(inc[0], 1e-4f));
+      constexpr int kWarm = 4; // cycles run before the drawn two, so feedback settles
+      double phase[kOscCount] = {};
+      float out[kOscCount] = {}, last[kOscCount] = {};
+      std::vector<float> y;
+      y.reserve(2 * cycle + 1);
+      float top = 1e-6f;
+      for (int i = 0; i < (kWarm + 2) * cycle + 1; ++i) {
+         float now[kOscCount] = {out[0], out[1], out[2]};
+         for (int o = kOscCount - 1; o >= 0; --o) {
+            float m = 0;
+            for (int from = 0; from < kOscCount; ++from)
+               m += amount[from][o] * (from == o ? 0.25f * (out[o] + last[o]) : 2.0f * now[from]);
+            float step = inc[o], ph;
+            if (expFm) {
+               step = std::min(step * std::exp2(std::clamp(2.0f * m, -4.0f, 4.0f)), 0.45f);
+               ph = static_cast<float>(phase[o]);
+            }
+            else
+               ph = static_cast<float>(phase[o]) + m - std::floor(static_cast<float>(phase[o]) + m);
+            now[o] = dsp::wave(wave[o], ph, inc[o], shape[o]);
+            last[o] = out[o];
+            phase[o] += step;
+            phase[o] -= std::floor(phase[o]);
+         }
+         float sum = 0;
+         for (int o = 0; o < kOscCount; ++o) {
+            out[o] = now[o];
+            sum += level[o] * now[o];
+         }
+         if (i >= kWarm * cycle) {
+            y.push_back(sum);
+            top = std::max(top, std::fabs(sum));
+         }
+      }
+
+      const unsigned col = kPartColors[host_.part];
+      const float x0 = 10 * s, x1 = w - 10 * s, mid = h * 0.42f, amp = h * 0.3f;
+      c.setColor(visage::Color(0x18ffffff));
+      c.fill(x0, mid, x1 - x0, 1);
+      const auto at = [&](size_t i, float &px, float &py) {
+         px = x0 + (x1 - x0) * i / (y.size() - 1);
+         py = mid - y[i] / top * amp;
+      };
+      for (int pass = 0; pass < 2; ++pass) {
+         c.setColor(pass == 0 ? glow(col, 0.3f, 1.0f) : glow(col, 1.0f, 1.3f));
+         const float thick = (pass == 0 ? 7.0f : 2.0f) * s;
+         float px0, py0, px1, py1;
+         at(0, px0, py0);
+         for (size_t i = 1; i < y.size(); ++i) {
+            at(i, px1, py1);
+            c.segment(px0, py0, px1, py1, thick, true);
+            px0 = px1, py0 = py1;
+         }
+      }
+
+      // The routes that are on, biggest first.
+      struct Route {
+         int from, to;
+         float amount;
+      };
+      std::vector<Route> routes;
+      for (int from = 0; from < kOscCount; ++from)
+         for (int to = 0; to < kOscCount; ++to)
+            if (amount[from][to] >= 0.005f)
+               routes.push_back({from, to, amount[from][to]});
+      std::stable_sort(routes.begin(), routes.end(), [](const Route &a, const Route &b) { return a.amount > b.amount; });
+      const float cw = (w - 20 * s - 2 * 6 * s) / 3, ch = 20 * s;
+      if (routes.empty()) {
+         c.setColor(visage::Color(0x88ffffff));
+         c.text("NO FM: TURN UP A KNOB IN THE GRID", ui::font(9 * s), visage::Font::kCenter, 0, h - 44 * s, w, ch);
+      }
+      for (size_t i = 0; i < routes.size() && i < 6; ++i) {
+         const Route &r = routes[i];
+         const float cx = 10 * s + (i % 3) * (cw + 6 * s), cy = h - (i < 3 ? 52 : 28) * s;
+         const unsigned rc = kOscColors[r.from];
+         c.setColor(glow(rc, 0.2f, 1.0f));
+         c.roundedRectangle(cx, cy, cw, ch, ch / 2);
+         c.setColor(glow(rc, 1.0f, 1.2f));
+         c.roundedRectangleBorder(cx, cy, cw, ch, ch / 2, 1.5f * s);
+         const std::string name = r.from == r.to ? "FB " + std::to_string(r.from + 1)
+                                                 : std::to_string(r.from + 1) + " > " + std::to_string(r.to + 1);
+         c.text(name + "  " + std::to_string(static_cast<int>(r.amount * 100 + 0.5f)) + "%", ui::font(9 * s),
+                visage::Font::kCenter, cx, cy, cw, ch);
+      }
+   }
+
+private:
+   EditorHost &host_;
+};
+
 class Panel : public ui::DesignFrame, public visage::EventTimer, public Mapper {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
@@ -1140,6 +1738,7 @@ public:
       // panel's own background would.
       view_->onBackgroundMenu = [this](visage::Point p) { showZoomMenu(*view_, p); };
       buildHeader();
+      group_ = kFull;
       buildStageChips();
       buildLeft();
       buildRight();
@@ -1147,17 +1746,22 @@ public:
       buildPlay();
       for (int part = 0; part < kPartCount; ++part) {
          part_ = part;
+         group_ = kFull;
          buildOscs(part);
          buildVoice(part);
          buildEnvelopes(part);
          buildFilters(part);
+         group_ = kReduced;
+         buildReduced(part);
          buildRoutes(part);
       }
       part_ = -1;
+      group_ = kReduced;
+      buildReducedShared();
       buildRouteControls();
       showRoutes(host_.routesOpen);
       showPart(host_.part);
-      showPanels(!host_.panelsHidden);
+      setView(host_.view);
       last_ = std::chrono::steady_clock::now();
       startTimer(16);
    }
@@ -1177,11 +1781,11 @@ public:
       float touch[kTouchCount] = {};
       if (!notes_.empty()) {
          const EditorHost::Note &n = notes_.back();
-         touch[0] = n.strike;
+         touch[0] = n.velocity;
          touch[1] = n.pressure;
          touch[2] = std::min(1.0f, std::fabs(n.bend) / 2.0f);
          touch[3] = n.timbre;
-         touch[4] = n.lift;
+         touch[4] = n.release;
       }
       runEnvelopes(dt);
       showPlayheads();
@@ -1190,8 +1794,8 @@ public:
       const float pulse = 0.5f + 0.5f * std::sin(time_ * 5.0f);
       for (SourceChip *chip : chips_) {
          const int s = chip->source();
-         if (s >= kSourceStrike && s < kSourceStrike + kTouchSourceCount)
-            chip->setLevel(touch[s - kSourceStrike]);
+         if (s >= kSourceVelocity && s < kSourceVelocity + kTouchSourceCount)
+            chip->setLevel(touch[s - kSourceVelocity]);
          else if (s >= kSourceSpeed && s <= kSourceTurn)
             chip->setLevel(flock[s - kSourceSpeed], s == kSourceTurn);
          else if (s >= kSourceEnv1 && s < kSourceEnv1 + kEnvCount)
@@ -1206,13 +1810,17 @@ public:
          }
          chip->setState(mapping_, mapping_ && s == armed_, pulse);
       }
-      if (!host_.panelsHidden)
+      if (!(host_.view == kSkyOnly))
          refreshPitch();
+      if (host_.view != kSkyOnly)
+         for (visage::Frame *d : drawings_)
+            if (d->isVisible())
+               d->redraw();
       // Rings follow the routes, which the host or the route list can change too.
       const double sum = routeChecksum();
       if (sum != routeSum_) {
          routeSum_ = sum;
-         if (!host_.panelsHidden)
+         if (!(host_.view == kSkyOnly))
             layoutRoutes();
          for (MapKnob *k : mapKnobs_)
             k->redraw();
@@ -1240,18 +1848,22 @@ public:
       routesButton_->setOn(open);
       refresh();
    }
-   // Hides every card and the header, so the sky fills the window with only the flocks in it; the
-   // HIDE button stays, in the corner, to bring them back.
-   void showPanels(bool shown) {
-      host_.panelsHidden = !shown;
-      hideButton_->setOn(!shown);
-      hideButton_->setText(shown ? "HIDE" : "SHOW");
-      if (shown) {
+   // Switches the view: every card around the sky, the voice's big panels beside it, or the sky alone
+   // filling the window. The view switch stays, top right, in all three.
+   void setView(int view) {
+      host_.view = std::clamp(view, 0, 2);
+      viewSwitch_->setSelected(host_.view);
+      if (host_.view == kAllCards) {
          move(*view_, {0, kHeaderHeight, kDesignWidth, kDesignHeight - kHeaderHeight});
          view_->skyLeft = kSkyX;
          view_->skyTop = kSkyY - kHeaderHeight;
          view_->skyHeight = kSkyH;
-         move(*hideButton_, kHideBounds);
+      }
+      else if (host_.view == kReducedView) {
+         move(*view_, {0, kHeaderHeight, kDesignWidth, kDesignHeight - kHeaderHeight});
+         view_->skyLeft = kReducedSky.x;
+         view_->skyTop = kReducedSky.y - kHeaderHeight;
+         view_->skyHeight = kReducedSky.h;
       }
       else {
          // The sky as big as the window allows, centred.
@@ -1260,9 +1872,8 @@ public:
          view_->skyLeft = (kDesignWidth - h * kSkyAspect) / 2;
          view_->skyTop = (kDesignHeight - h) / 2;
          view_->skyHeight = h;
-         move(*hideButton_, {kDesignWidth - 62, kDesignHeight - 34, 50, 22});
       }
-      if (!shown && mapping_)
+      if (host_.view == kSkyOnly && mapping_)
          setMapping(false, kSourceOff);
       refresh();
    }
@@ -1276,7 +1887,7 @@ public:
    }
 
    void draw(visage::Canvas &c) override {
-      if (host_.panelsHidden)
+      if ((host_.view == kSkyOnly))
          return;
       const float s = scale();
       c.setColor(0xff070910);
@@ -1352,7 +1963,19 @@ public:
 
 private:
    // Where a widget shows: always, or in the route list.
-   enum Group { kAlways, kRoutes };
+   enum Group {
+      kAlways,
+      kFull,
+      kReduced,
+      kReducedOsc,
+      kReducedFm,
+      kReducedEnv,
+      kReducedLfo,
+      kReducedVoice,
+      kReducedFlock,
+      kReducedMotion,
+      kRoutes
+   };
    struct Placed {
       visage::Frame *frame;
       int part; // -1 for both
@@ -1361,6 +1984,7 @@ private:
    struct PitchKnobs {
       int part, osc;
       ui::Knob *coarse, *ratio, *fixed;
+      Group group;
    };
 
    double value(int part, clap_id offset) const { return host_.paramValue(partId(part, offset)); }
@@ -1369,16 +1993,7 @@ private:
    float lfoValue(int l) const {
       const int part = host_.part;
       const double cycles = time_ * lfoHz(value(part, lfoParam(l, kLfoRate))) + value(part, lfoParam(l, kLfoPhase)) / 360.0;
-      const float ph = static_cast<float>(cycles - std::floor(cycles));
-      float v;
-      switch (static_cast<int>(value(part, lfoParam(l, kLfoShape)) + 0.5)) {
-      case 1: v = 1.0f - 4.0f * std::fabs(ph - 0.5f); break;          // triangle
-      case 2: v = 2.0f * ph - 1.0f; break;                             // saw
-      case 3: v = ph < 0.5f ? 1.0f : -1.0f; break;                     // square
-      case 4: v = std::sin(static_cast<float>(std::floor(cycles)) * 12.9898f) > 0.0f ? 0.7f : -0.7f; break; // S&H
-      case 5: v = 0.6f * std::sin(2.0f * kPi * ph) + 0.4f * std::sin(2.0f * kPi * ph * 0.37f + 1.0f); break; // smooth
-      default: v = std::sin(2.0f * kPi * ph); break;                   // sine
-      }
+      float v = lfoWave(static_cast<int>(value(part, lfoParam(l, kLfoShape)) + 0.5), cycles);
       if (static_cast<int>(value(part, lfoParam(l, kLfoPolarity)) + 0.5) == 1)
          v = 0.5f * v + 0.5f; // unipolar
       return v;
@@ -1414,9 +2029,10 @@ private:
    // A glowing dot on each envelope for every sounding voice of its part, where the engine has it.
    void showPlayheads() {
       const FlockFrame &f = view_->frame();
+      for (int v = 0; v < 2; ++v)
       for (int part = 0; part < kPartCount; ++part)
          for (int e = 0; e < kEnvCount; ++e) {
-            if (!envelopes_[part][e])
+            if (!envelopes_[v][part][e])
                continue;
             heads_.clear();
             for (int i = 0; view_->live() && i < f.playheadCount; ++i) {
@@ -1424,7 +2040,7 @@ private:
                if (p.part == part && p.stage[e] >= 0)
                   heads_.push_back({static_cast<ui::EnvelopeEditor::Stage>(p.stage[e]), p.level[e], p.from[e]});
             }
-            envelopes_[part][e]->setPlayheads(heads_);
+            envelopes_[v][part][e]->setPlayheads(heads_);
          }
    }
    // One whole edit, as if the user made it.
@@ -1445,26 +2061,36 @@ private:
    }
 
    void refresh() {
-      for (const Placed &p : placed_) {
-         bool on = (p.part < 0 || p.part == host_.part) && !host_.panelsHidden;
-         if (p.group == kRoutes)
-            on = on && host_.routesOpen;
-         p.frame->setVisible(on);
-      }
-      if (host_.panelsHidden)
-         for (const PitchKnobs &p : pitchKnobs_)
-            p.coarse->setVisible(false), p.ratio->setVisible(false), p.fixed->setVisible(false);
-      else
-         refreshPitch();
-      if (routeInfo_ && !host_.panelsHidden)
+      for (const Placed &p : placed_)
+         p.frame->setVisible(shows(p.part, p.group));
+      refreshPitch();
+      if (routeInfo_ && host_.view != kSkyOnly)
          layoutRoutes();
       redraw();
+   }
+   // Whether a widget of `part` in `group` shows in the view now.
+   bool shows(int part, Group group) const {
+      if ((part >= 0 && part != host_.part) || host_.view == kSkyOnly)
+         return false;
+      switch (group) {
+      case kFull: return host_.view == kAllCards;
+      case kReduced: return host_.view == kReducedView;
+      case kReducedOsc: return host_.view == kReducedView && oscTab_ == 0;
+      case kReducedFm: return host_.view == kReducedView && oscTab_ == 1;
+      case kReducedEnv: return host_.view == kReducedView && envTab_ == 0;
+      case kReducedLfo: return host_.view == kReducedView && envTab_ == 1;
+      case kReducedVoice: return host_.view == kReducedView && voiceTab_ == 0;
+      case kReducedFlock: return host_.view == kReducedView && voiceTab_ == 1;
+      case kReducedMotion: return host_.view == kReducedView && voiceTab_ == 2;
+      case kRoutes: return host_.view == kAllCards && host_.routesOpen;
+      default: return true;
+      }
    }
    // Shows each oscillator's pitch knob for its pitch mode.
    void refreshPitch() {
       for (const PitchKnobs &p : pitchKnobs_) {
          const int mode = static_cast<int>(value(p.part, oscParam(p.osc, kOscPitchMode)) + 0.5);
-         const bool shown = p.part == host_.part;
+         const bool shown = shows(p.part, p.group);
          p.coarse->setVisible(shown && mode == 0);
          p.ratio->setVisible(shown && mode == 1);
          p.fixed->setVisible(shown && mode == 2);
@@ -1543,27 +2169,28 @@ private:
    void buildHeader() {
       // The header's controls sit over the sky.
       dx_ = kColumn;
-      put<PresetBar>({262, 13, 250, 26}, host_);
-      auto &parts = glassy(put<ui::SegmentedSwitch>({522, 13, 146, 26}, std::vector<std::string>{"PART A", "PART B"}),
+      put<PresetBar>({192, 13, 250, 26}, host_);
+      auto &parts = glassy(put<ui::SegmentedSwitch>({452, 13, 146, 26}, std::vector<std::string>{"PART A", "PART B"}),
                            kPartColors[0]);
       parts.onChange = [this](int p) { showPart(p); };
       partSwitch_ = &parts;
       tips_.add(parts, "Each part is a species with its own patch and its own way of flying. The cards edit "
                        "this one; the sky shows both.");
-      auto &map = glassy(put<ui::Button>({800, 13, 62, 26}, "MAP"), kMapColor);
+      auto &map = glassy(put<ui::Button>({730, 13, 62, 26}, "MAP"), kMapColor);
       map.setToggle(true);
       map.onToggle = [this](bool on) { setMapping(on, kSourceOff); };
       mapButton_ = &map;
       tips_.add(map, "Touch a source (which turns MAP on), then drag any knob to set how much the source moves it. "
                      "Double-click a knob to flip its route, right-click to remove it.");
-      const auto cells = ui::row({872, 13, 312, 26}, kTouchSourceCount, 4);
+      const auto cells = ui::row({802, 13, 398, 26}, kTouchSourceCount, 4);
       for (int i = 0; i < kTouchSourceCount; ++i)
-         chip(kSourceStrike + i, upper(kTouchNames[i]), cells[i]);
-      auto &mode = glassy(put<ui::Dropdown>({678, 13, 112, 26}, upper(kPlayModeNames)), kPartColors[0]);
+         chip(kSourceVelocity + i, upper(kTouchNames[i]), cells[i]);
+      auto &mode = glassy(put<ui::Dropdown>({608, 13, 112, 26}, upper(kPlayModeNames)), kPartColors[0]);
       bindings_.bind(mode, kPlayMode);
       tips_.add(mode, "Which species a note hatches: A only, both, split by key or by velocity, by MPE zone, "
                       "or crossfaded by Slide or Press.");
       // ROUTES sits under the sky, at the end of the flock's own sources.
+      group_ = kFull;
       auto &rings = glassy(put<ui::Button>({772, 617, 56, 24}, "RINGS"), kDim);
       rings.setToggle(true);
       rings.setOn(host_.ringsShown);
@@ -1576,13 +2203,15 @@ private:
       routes.onToggle = [this](bool on) { showRoutes(on); };
       routesButton_ = &routes;
       tips_.add(routes, "Every route of this part as a list, to edit by name.");
-      // Not put(): it stays when the cards hide.
-      auto &hide = glassy(add<ui::Button>(kHideBounds, "HIDE"), kDim);
-      hide.setToggle(true);
-      hide.onToggle = [this](bool on) { showPanels(!on); };
-      hideButton_ = &hide;
-      tips_.add(hide, "Hide every card, so the sky fills the window with only the flocks in it.");
+      group_ = kAlways;
       dx_ = 0;
+      // Not put(): it stays when the cards hide.
+      auto &views = glassy(add<ui::SegmentedSwitch>({1436, 13, 196, 26}, std::vector<std::string>{"FULL", "REDUCED", "SKY"}),
+                           kDim);
+      views.onChange = [this](int v) { setView(v); };
+      viewSwitch_ = &views;
+      tips_.add(views, "FULL shows every card. REDUCED shows the oscillators, filters and envelopes big beside "
+                       "the sky. SKY hides everything but the flocks.");
    }
 
    // The flock's own sources, under the sky.
@@ -1719,6 +2348,253 @@ private:
       dx_ = 0;
    }
 
+   // The reduced view, for one part: the oscillators, the filters and the envelopes, big, down the
+   // left, each drawn as well as set.
+   void buildReduced(int part) {
+      const unsigned c = kPartColors[part];
+      const float x = 16, w = 880;
+      // Oscillators, on two tabs: OSCILLATORS has a row each, its wave drawn beside its knobs; FM the
+      // grid, drawn as who modulates whom, and the links between creatures.
+      glass({x, 64, w, 330}, "", c);
+      group_ = kReducedOsc;
+      for (int o = 0; o < kOscCount; ++o) {
+         const unsigned oc = kOscColors[o];
+         const float y = 98 + o * 98.0f;
+         label({x + 14, y + 6, 120, 20}, "OSC " + std::to_string(o + 1), oc, visage::Font::kLeft);
+         // Where each note starts the wave: a fresh random place, or always at its Phase.
+         segments(oscParam(o, kOscRetrigger), oc, {x + 62, y + 4, 72, 20}, std::vector<std::string>{"RAND", "SYNC"});
+         dropdown(oscParam(o, kOscWave), oc, {x + 14, y + 32, 120, 26});
+         segments(oscParam(o, kOscPitchMode), oc, {x + 14, y + 62, 120, 24}, std::vector<std::string>{"NOTE", "RATIO", "HZ"});
+         const auto k = ui::row({x + 436, y - 4, 370, 104}, 5);
+         auto &coarse = knob(oscParam(o, kOscCoarse), "PITCH", oc, k[0]);
+         auto &ratio = knob(oscParam(o, kOscRatio), "RATIO", oc, k[0]);
+         auto &fixed = knob(oscParam(o, kOscFixed), "FREQ", oc, k[0]);
+         pitchKnobs_.push_back({part, o, &coarse, &ratio, &fixed, kReducedOsc});
+         knob(oscParam(o, kOscFine), "FINE", oc, k[1]);
+         knob(oscParam(o, kOscShape), "SHAPE", oc, k[2]);
+         knob(mixParam(kMixLevel, o), "LEVEL", oc, k[3]);
+         knob(mixParam(kMixPan, o), "PAN", oc, k[4]);
+         label({x + 808, y + 10, 64, 16}, "FILTER");
+         dropdown(oscParam(o, kOscFilter), oc, {x + 810, y + 36, 60, 26});
+      }
+      group_ = kReducedFm;
+      label({x + 340, 98, 300, 16}, "ROW INTO COLUMN", kDim);
+      const auto g = ui::grid({x + 330, 112, 320, 280}, 3, 3);
+      static const char *names[3][3] = {{"FB 1", "1 > 2", "1 > 3"}, {"2 > 1", "FB 2", "2 > 3"}, {"3 > 1", "3 > 2", "FB 3"}};
+      for (int from = 0; from < kOscCount; ++from)
+         for (int to = 0; to < kOscCount; ++to)
+            knob(fmCell(from, to), names[from][to], kOscColors[from], g[from * 3 + to]);
+      segments(kFmBase + kFmType, c, {x + 670, 98, 196, 24}, std::vector<std::string>{"PHASE", "EXP"});
+      label({x + 670, 132, 196, 16}, "BETWEEN CREATURES", kDim);
+      const auto b = ui::grid({x + 664, 150, 208, 240}, 3, 2);
+      knob(flockParam(kNeighbourFm), "FLOCK FM", c, b[0], "The nearest neighbours' Osc 1 into this creature's Osc 2.");
+      knob(flockParam(kTunePull), "TUNE PULL", c, b[1], "Creatures flying the same way drift toward pure intervals.");
+      knob(flockParam(kBite), "BITE", c, b[2], "Ring mod while a hunter holds this creature.");
+      knob(mixParam(kNoiseLevel), "NOISE", c, b[3]);
+      knob(mixParam(kNoiseColor), "COLOR", c, b[4]);
+      knob(kDrift, "DRIFT", c, b[5], "Each creature's own slow wander in pitch.");
+      group_ = kReduced;
+
+      // Filters: their response drawn across the panel, then each one's knobs under its half.
+      glass({x, 404, w, 313}, "FILTER", c);
+      segments(tailParam(kFilterRouting), c, {x + 90, 410, 160, 24}, std::vector<std::string>{"SERIAL", "PARALLEL"});
+      label({x + 270, 414, 90, 16}, "NOISE INTO", kDim, visage::Font::kRight);
+      tips_.add(dropdown(mixParam(kNoiseFilter), c, {x + 366, 410, 66, 24}), "Which filter the noise goes into.");
+      const auto k = ui::row({x + 8, 605, w - 16, 104}, 10);
+      for (int f = 0; f < kFilterCount; ++f) {
+         const unsigned fc = f == 0 ? c : sourceColor(kSourceLfo1 + 1);
+         const ui::Rect &first = k[f * 4];
+         // Its name first, then its type and slope.
+         label({first.x, 604, first.w, 18}, f == 0 ? "FILTER 1" : "FILTER 2", f == 0 ? 0xffffffff : 0xff9fd8ff);
+         dropdown(filterParam(f, kFilterType), c, {k[f * 4 + 1].x + 4, 601, 2 * first.w - 8, 24});
+         dropdown(filterParam(f, kFilterSlope), c, {k[f * 4 + 3].x + 4, 601, first.w - 8, 24});
+         knob(filterParam(f, kFilterCutoff), "CUTOFF", fc, {k[f * 4].x, 629, k[f * 4].w, 96});
+         knob(filterParam(f, kFilterResonance), "RES", fc, {k[f * 4 + 1].x, 629, k[f * 4 + 1].w, 96});
+         knob(filterParam(f, kFilterDrive), "DRIVE", fc, {k[f * 4 + 2].x, 629, k[f * 4 + 2].w, 96});
+         knob(filterParam(f, kFilterKeyTrack), "KEY", fc, {k[f * 4 + 3].x, 629, k[f * 4 + 3].w, 96});
+      }
+      knob(tailParam(kFilterBalance), "BALANCE", c, {k[8].x, 629, k[8].w, 96}, "In parallel, turns Filter 1 or Filter 2 down.");
+      // After both filters: the drive, by its kind.
+      dropdown(tailParam(kDriveType), c, {k[9].x + 4, 601, k[9].w - 8, 24});
+      knob(tailParam(kDriveAmount), "OUT DRIVE", c, {k[9].x, 629, k[9].w, 96}, "Drive after the filters, of the kind above.");
+
+      // Envelopes: three big editors side by side.
+      // Envelopes and LFOs, on two tabs: three big envelope editors, or the two LFOs drawn.
+      glass({x, 727, w, 197}, "", c);
+      group_ = kReducedEnv;
+      const char *envNames[kEnvCount] = {"ENV 1  AMP", "ENV 2", "ENV 3"};
+      for (int e = 0; e < kEnvCount; ++e) {
+         const float ex = x + 12 + e * 288.0f;
+         const unsigned ec = sourceColor(kSourceEnv1 + e);
+         chip(kSourceEnv1 + e, envNames[e], {ex, 763, 110, 24});
+         dropdown(envParam(e, kEnvLoop), c, {ex + 190, 763, 86, 24});
+         const auto id = [&](EnvParam p) { return partId(part, envParam(e, p)); };
+         auto &env = glassy(put<ui::EnvelopeEditor>({ex, 793, 276, 127}, rangeOf(id(kEnvAttack)), rangeOf(id(kEnvDecay)),
+                                                    rangeOf(id(kEnvSustain)), rangeOf(id(kEnvRelease))),
+                            ec);
+         env.setTimeCurve(0.35f);
+         envelopes_[1][part][e] = &env;
+         bindings_.bind(env, id(kEnvAttack), id(kEnvDecay), id(kEnvSustain), id(kEnvRelease));
+      }
+      group_ = kReducedLfo;
+      for (int i = 0; i < kLfoCount - kMotionCount; ++i) {
+         const int l = kMotionCount + i;
+         const float lx = x + 12 + i * 436.0f;
+         const unsigned lc = sourceColor(kSourceLfo1 + i);
+         chip(kSourceLfo1 + i, "LFO " + std::to_string(i + 1), {lx, 763, 104, 24});
+         dropdown(lfoParam(l, kLfoShape), lc, {lx + 112, 763, 96, 24});
+         dropdown(lfoParam(l, kLfoTrigger), c, {lx + 216, 763, 100, 24});
+         segments(lfoParam(l, kLfoSync), lc, {lx + 324, 763, 96, 24}, std::vector<std::string>{"FREE", "SYNC"});
+         const auto k = ui::row({lx + 208, 793, 212, 94}, 3);
+         knob(lfoParam(l, kLfoRate), "RATE", lc, k[0]);
+         knob(lfoParam(l, kLfoPhase), "PHASE", lc, k[1]);
+         knob(lfoParam(l, kLfoDelay), "DELAY", lc, k[2]);
+         dropdown(lfoParam(l, kLfoDivision), lc, {lx + 212, 892, 100, 24});
+         dropdown(lfoParam(l, kLfoPolarity), lc, {lx + 320, 892, 100, 24});
+      }
+      group_ = kReduced;
+
+      // Under the sky: the part's voice and the output, big. The drawings are shared (see
+      // buildReducedShared()); the knobs sit under them.
+      // On three tabs: VOICE, FLOCK (how it flies) and MOTION (the wingbeat and the wind).
+      const ui::Rect vb = kVoiceBox;
+      glass(vb, "", c);
+      label({vb.x + vb.w - 96, vb.y + 12, 84, 18}, part == 0 ? "PART A" : "PART B", c, visage::Font::kRight);
+      group_ = kReducedVoice;
+      segments(kVoiceMode, c, {vb.x + 318, vb.y + 8, 200, 26}, std::vector<std::string>{"POLY", "MONO", "LEGATO"});
+      auto &voices = glassy(put<ui::NumberBox>({vb.x + 526, vb.y + 8, 76, 26}, rangeOf(partId(part, kPolyphony), 1.0)), c);
+      voices.setStepButtons(true);
+      voices.valueText = [](double v) { return std::to_string(static_cast<int>(v + 0.5)); };
+      bindings_.bind(voices, partId(part, kPolyphony));
+      tips_.add(voices, "How many creatures this species can have at once: one per held note, up to 16.");
+      // One row of knobs, each under its drawing: the stereo field, the levels, the voices.
+      const auto vk = kVoiceKnobs();
+      knob(kPartPan, "PAN", c, vk[0]);
+      knob(kSkyPan, "X PAN", c, vk[1], "How far a creature's place in the sky, left to right, pans its voice.");
+      knob(kPartLevel, "LEVEL", c, vk[3]);
+      knob(kGlideTime, "GLIDE", c, vk[5]);
+      knob(kBendRange, "BEND", c, vk[6], "The MPE bend range: how far a finger slides, in semitones.");
+      knob(kPartTranspose, "TRANSP", c, vk[7]);
+      knob(kVelocityToAmp, "VELOCITY", c, vk[8], "How much velocity sets the level.");
+      shared(part, [&] {
+         knob(kOutputWidth, "WIDTH", kDim, vk[2], "The whole output's stereo width: 0% is mono, past 100% wider.");
+         knob(kMasterLevel, "MASTER", kDim, vk[4]);
+      });
+
+      group_ = kReducedFlock;
+      // Left, what it is and where the lures sit; right, how it flies.
+      const float fx = vb.x + 14, fw = 150;
+      const auto pick = [&](float y, const char *name, clap_id id, unsigned col) -> ui::Dropdown & {
+         label({fx, y, fw, 16}, name, kDim, visage::Font::kLeft);
+         return dropdown(id, col, {fx, y + 18, fw, 26});
+      };
+      tips_.add(pick(vb.y + 44, "BEHAVIOUR", flockParam(kBehaviour), c),
+                "SHOAL flies with its own kind, SCATTER keeps apart, HUNT chases the other species and FLEE runs from it.");
+      tips_.add(pick(vb.y + 100, "LURE X", flockParam(kLureX), c), "What places a note's ring left to right.");
+      tips_.add(pick(vb.y + 156, "LURE Y", flockParam(kLureY), c), "What places a note's ring bottom to top.");
+      shared(part, [&] {
+         tips_.add(pick(vb.y + 212, "WALLS", kSkyWalls, kDim),
+                   "What the sky's edges do: turn creatures back, wrap them round, or let them roam.");
+      });
+      const auto fk = ui::grid({vb.x + 176, vb.y + 40, vb.w - 186, 232}, 5, 2);
+      knob(flockParam(kCohesion), "COHESION", c, fk[0], "Pull toward the middle of the neighbours.");
+      knob(flockParam(kAlignment), "ALIGN", c, fk[1], "Turn to fly the way the neighbours fly.");
+      knob(flockParam(kSeparation), "SEPARATE", c, fk[2], "Keep clear of the nearest.");
+      knob(flockParam(kSpeed), "SPEED", c, fk[3]);
+      knob(flockParam(kWander), "WANDER", c, fk[4], "Each creature's own restlessness.");
+      knob(flockParam(kLure), "LURE", c, fk[5], "How hard your finger pulls its creature.");
+      knob(flockParam(kRange), "RANGE", c, fk[6], "How near counts as a neighbour.");
+      knob(flockParam(kTailLength), "TAIL", c, fk[7], "How long the ink lasts behind a creature.");
+      knob(flockParam(kTailSpread), "SPREAD", c, fk[8], "How far the ink blooms as it ages.");
+      shared(part, [&] {
+         knob(kSkySize, "SIZE", kDim, fk[9], "How big the sky is, so how far apart the flocks can spread.");
+      });
+
+      group_ = kReducedMotion;
+      for (int l = 0; l < kMotionCount; ++l) {
+         const float mx = vb.x + 10 + l * 356.0f, my = vb.y + 44;
+         const unsigned lc = kMotionColors[l];
+         tips_.add(label({mx, my + 4, 88, 16}, l == 0 ? "WINGBEAT" : "WIND", lc, visage::Font::kLeft),
+                   l == 0 ? "One per creature: each bobs across its path." : "One gust for the whole sky, pushing every creature.");
+         dropdown(lfoParam(l, kLfoShape), lc, {mx + 88, my, 80, 24});
+         dropdown(lfoParam(l, kLfoTrigger), c, {mx + 174, my, 92, 24});
+         segments(lfoParam(l, kLfoSync), lc, {mx + 272, my, 72, 24}, std::vector<std::string>{"FREE", "SYNC"});
+         const auto mk = ui::row({mx - 4, my + 34, 352, 110}, 4);
+         knob(lfoParam(l, kLfoRate), "RATE", lc, mk[0]);
+         knob(lfoParam(l, kLfoPush), "PUSH", lc, mk[1], l == 0 ? "How far each creature bobs." : "How hard the gust pushes.");
+         knob(lfoParam(l, kLfoPhase), "PHASE", lc, mk[2]);
+         knob(lfoParam(l, kLfoDelay), "DELAY", lc, mk[3]);
+         label({mx, my + 152, 168, 16}, "DIVISION", kDim, visage::Font::kLeft);
+         dropdown(lfoParam(l, kLfoDivision), lc, {mx, my + 170, 168, 26});
+         label({mx + 176, my + 152, 168, 16}, "POLARITY", kDim, visage::Font::kLeft);
+         dropdown(lfoParam(l, kLfoPolarity), lc, {mx + 176, my + 170, 168, 26});
+      }
+      group_ = kReduced;
+   }
+
+   // Builds controls of params that aren't the part's own in `build`, then hands them to `part`, so
+   // they show and hide with its page.
+   template <typename Build> void shared(int part, Build build) {
+      const int was = part_;
+      const size_t from = placed_.size();
+      part_ = -1;
+      build();
+      part_ = was;
+      for (size_t i = from; i < placed_.size(); ++i)
+         placed_[i].part = part;
+   }
+
+   // The reduced view's drawings, which follow the shown part, and its flock sources under the sky.
+   void buildReducedShared() {
+      auto &tabs = glassy(put<ui::TabBar>({26, 68, 260, 26}, std::vector<std::string>{"OSCILLATORS", "FM"}), kDim);
+      tabs.select(oscTab_);
+      tabs.onChange = [this](int t) {
+         oscTab_ = t;
+         refresh();
+      };
+      group_ = kReducedOsc;
+      for (int o = 0; o < kOscCount; ++o)
+         drawings_.push_back(&put<WaveView>({164, 98 + o * 98.0f, 276, 92}, host_, o, kOscColors[o]));
+      group_ = kReducedFm;
+      drawings_.push_back(&put<FmView>({28, 100, 320, 290}, host_));
+      group_ = kReduced;
+      auto &envTabs = glassy(put<ui::TabBar>({26, 731, 260, 26}, std::vector<std::string>{"ENVELOPES", "LFOS"}), kDim);
+      envTabs.select(envTab_);
+      envTabs.onChange = [this](int t) {
+         envTab_ = t;
+         refresh();
+      };
+      group_ = kReducedLfo;
+      for (int i = 0; i < kLfoCount - kMotionCount; ++i)
+         drawings_.push_back(&put<LfoView>({28 + i * 436.0f, 793, 196, 123}, host_, kMotionCount + i,
+                                           sourceColor(kSourceLfo1 + i), time_));
+      group_ = kReduced;
+      drawings_.push_back(&put<FilterView>({28, 440, 856, 157}, host_, *this));
+      const ui::Rect vb = kVoiceBox;
+      // Each drawing spans the knobs under it.
+      const auto k = kVoiceKnobs();
+      const auto over = [&](int from, int to) {
+         return ui::Rect{k[from].x + 6, vb.y + 44, k[to].x + k[to].w - k[from].x - 12, 124};
+      };
+      auto &voiceTabs = glassy(put<ui::TabBar>({vb.x + 8, vb.y + 6, 300, 26}, std::vector<std::string>{"VOICE", "FLOCK", "MOTION"}), kDim);
+      voiceTabs.select(voiceTab_);
+      voiceTabs.onChange = [this](int t) {
+         voiceTab_ = t;
+         refresh();
+      };
+      group_ = kReducedVoice;
+      drawings_.push_back(&put<StereoView>(over(0, 2), host_, *view_));
+      drawings_.push_back(&put<LevelView>(over(3, 4), host_));
+      drawings_.push_back(&put<VoiceSlotsView>(over(5, 8), host_, *view_));
+      group_ = kReduced;
+      const std::pair<int, const char *> sources[] = {
+          {kSourceSpeed, "SPEED"}, {kSourceNearest, "NEAREST"}, {kSourceHeading, "HEADING"}, {kSourceTurn, "TURN"},
+          {kSourceRandom, "RANDOM"}};
+      for (int i = 0; i < 5; ++i)
+         chip(sources[i].first, sources[i].second, {kReducedSky.x + 8 + i * 84.0f, kReducedSky.y + kReducedSky.h + 12, 80, 24});
+      group_ = kAlways;
+   }
+
    // Under the oscillators: a card per envelope.
    void buildEnvelopes(int part) {
       const unsigned c = kPartColors[part];
@@ -1731,16 +2607,16 @@ private:
          chip(kSourceEnv1 + e, envNames[e], {x + 10, y + 7, 104, 22});
          dropdown(envParam(e, kEnvLoop), c, {x + w - 90, y + 7, 80, 22});
          const auto id = [&](EnvParam p) { return partId(part, envParam(e, p)); };
-         // The amp envelope's card also has how much Strike sets the level.
+         // The amp envelope's card also has how much velocity sets the level.
          const float knobW = e == 0 ? 56 : 0;
          if (e == 0)
-            knob(kVelocityToAmp, "VELOCITY", ec, {x + w - 4 - knobW, y + 40, knobW, 96}, "How much Strike sets the level.");
+            knob(kVelocityToAmp, "VELOCITY", ec, {x + w - 4 - knobW, y + 40, knobW, 96}, "How much velocity sets the level.");
          auto &env = glassy(put<ui::EnvelopeEditor>({x + 8, y + 36, w - 16 - knobW, h - 44}, rangeOf(id(kEnvAttack)),
                                                     rangeOf(id(kEnvDecay)), rangeOf(id(kEnvSustain)),
                                                     rangeOf(id(kEnvRelease))),
                             ec);
          env.setTimeCurve(0.35f);
-         envelopes_[part][e] = &env;
+         envelopes_[0][part][e] = &env;
          bindings_.bind(env, id(kEnvAttack), id(kEnvDecay), id(kEnvSustain), id(kEnvRelease));
       }
    }
@@ -1769,6 +2645,8 @@ private:
       label({k[4].x, y + 10, k[4].w * 2, 16}, "OUTPUT", kDim);
       knob(kOutputWidth, "WIDTH", kDim, k[4], "The whole output's stereo width: 0% is mono, past 100% wider.");
       knob(kMasterLevel, "MASTER", kDim, k[5]);
+      // Both parts' levels and the master's, whichever part the cards edit.
+      drawings_.push_back(&put<LevelView>({k[3].x, y + 34, k[3].w, 108}, host_));
    }
 
    // Beside the envelopes: both filters and the drive after them.
@@ -1814,7 +2692,7 @@ private:
          auto &coarse = knob(oscParam(o, kOscCoarse), "COARSE", c, k[0]);
          auto &ratio = knob(oscParam(o, kOscRatio), "RATIO", c, k[0]);
          auto &fixed = knob(oscParam(o, kOscFixed), "FREQ", c, k[0]);
-         pitchKnobs_.push_back({part, o, &coarse, &ratio, &fixed});
+         pitchKnobs_.push_back({part, o, &coarse, &ratio, &fixed, kFull});
          knob(oscParam(o, kOscFine), "FINE", c, k[1]);
          knob(oscParam(o, kOscShape), "SHAPE", c, k[2]);
          knob(mixParam(kMixLevel, o), "LEVEL", c, k[3]);
@@ -1956,8 +2834,12 @@ private:
    ui::SegmentedSwitch *partSwitch_ = nullptr;
    ui::Button *mapButton_ = nullptr;
    ui::Button *routesButton_ = nullptr;
-   ui::Button *hideButton_ = nullptr;
-   static constexpr ui::Rect kHideBounds{914 + kColumn, 617, 44, 24};
+   static constexpr int kAllCards = 0, kReducedView = 1, kSkyOnly = 2;
+   // The reduced view's sky, right of its big panels (design units, like kSky*).
+   static constexpr ui::Rect kReducedSky{912, 60, kSkyW, kSkyH};
+   static constexpr ui::Rect kVoiceBox{912, 650, kSkyW, 274};
+   // The voice panel's knobs, one row along its bottom.
+   static std::vector<ui::Rect> kVoiceKnobs() { return ui::row({kVoiceBox.x + 8, kVoiceBox.y + 172, kVoiceBox.w - 16, 100}, 9); }
    static constexpr float kCleanMargin = 16.0f;
    std::vector<Placed> placed_;
    std::vector<MapKnob *> mapKnobs_;
@@ -1983,7 +2865,13 @@ private:
    float envLevel_[kEnvCount] = {};
    float envTime_ = 0.0f;
    int envNote_ = -1;
-   ui::EnvelopeEditor *envelopes_[kPartCount][kEnvCount] = {};
+   // Each part's envelopes, in the full view (0) and the reduced one (1).
+   ui::EnvelopeEditor *envelopes_[2][kPartCount][kEnvCount] = {};
+   std::vector<visage::Frame *> drawings_; // the reduced view's, redrawn each frame
+   ui::SegmentedSwitch *viewSwitch_ = nullptr;
+   int oscTab_ = 0; // the reduced view's oscillator panel: 0 OSCILLATORS, 1 FM
+   int envTab_ = 0; // and its envelope panel: 0 ENVELOPES, 1 LFOS
+   int voiceTab_ = 0; // and the panel under the sky: 0 VOICE, 1 FLOCK, 2 MOTION
    std::vector<ui::EnvelopeEditor::Playhead> heads_;
    std::chrono::steady_clock::time_point last_;
 };
@@ -2002,7 +2890,7 @@ bool renderScreenshot(EditorHost &host, const ScreenshotView &view, double secon
    panel.showPart(view.part);
    panel.showRoutes(view.routes);
    panel.setMapping(view.mapSource != 0, view.mapSource);
-   panel.showPanels(!view.hidden);
+   panel.setView(view.view);
    const int frames = static_cast<int>(seconds * 60.0);
    for (int i = 0; i < frames; ++i)
       panel.step(1.0f / 60.0f);
@@ -2017,7 +2905,7 @@ bool renderFrames(EditorHost &host, const ScreenshotView &view, int width, int h
    panel.showPart(view.part);
    panel.showRoutes(view.routes);
    panel.setMapping(view.mapSource != 0, view.mapSource);
-   panel.showPanels(!view.hidden);
+   panel.setView(view.view);
    visage::ApplicationEditor editor;
    editor.addChild(&panel);
    editor.onResize() += [&] { panel.setBounds(editor.localBounds()); };

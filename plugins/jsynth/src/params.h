@@ -36,8 +36,8 @@ constexpr int kRouteCount = 64;
 constexpr int kMacroCount = 4;
 // The touch dimensions, in MPE order: velocity, pressure, bend, CC 74 and release velocity.
 constexpr int kTouchCount = 5;
-// The ones that are route sources: all but Lift, which only places a lure.
-constexpr int kTouchSourceCount = 4;
+// All of them are route sources.
+constexpr int kTouchSourceCount = kTouchCount;
 constexpr int kMaxPolyphony = 16;
 
 // ---- ids ----
@@ -237,7 +237,7 @@ inline const std::vector<std::string> kGlideModeNames = {"Always", "Legato"};
 inline const std::vector<std::string> kOutputNames = {"Main", "Own"};
 inline const std::vector<std::string> kWaveNames = {"Sine",      "Triangle",   "Saw",      "Square",       "Pulse",
                                                     "Half Sine", "Abs Sine",   "Quarter",  "Alt Sine",     "Alt Half",
-                                                    "Camel",     "Alt Camel",  "White",    "Pink"};
+                                                    "Camel",     "Alt Camel",  "White",    "Pink",         "Random"};
 inline const std::vector<std::string> kPitchModeNames = {"Note", "Ratio", "Fixed"};
 inline const std::vector<std::string> kOnOffNames = {"Off", "On"};
 inline const std::vector<std::string> kFmTypeNames = {"Phase", "Exponential"};
@@ -260,18 +260,18 @@ inline const std::vector<std::string> kBehaviourNames = {"Shoal", "Scatter", "Hu
 inline const std::vector<std::string> kWallNames = {"Soft", "Wrap", "Open"};
 // What places a held note's lure along one axis of the sky: its pitch (with bend), one of its touch
 // dimensions, a random place per note, or the middle.
-inline const std::vector<std::string> kLureSourceNames = {"Pitch", "Strike", "Press", "Slide", "Lift", "Random", "Centre"};
+inline const std::vector<std::string> kLureSourceNames = {"Pitch", "Velocity", "Press", "Slide", "Release", "Random", "Centre"};
 // Route sources. Off is no route. Speed to Turn are the flock's own: how fast this creature flies,
 // how near its nearest neighbour is, how much it flies upward, and which way and how hard it turns.
 inline const std::vector<std::string> kSourceNames = {
-    "Off",   "Env 1", "Env 2", "Env 3",   "LFO 1",   "LFO 2", "Strike", "Press",     "Glide",   "Slide",   "Key",
+    "Off",   "Env 1", "Env 2", "Env 3",   "LFO 1",   "LFO 2", "Velocity", "Press",   "Glide",   "Slide",   "Release", "Key",
     "Speed", "Nearest", "Heading", "Turn", "Random", "Mod Wheel", "Macro 1", "Macro 2", "Macro 3", "Macro 4"};
 enum Source {
    kSourceOff,
    kSourceEnv1,
    kSourceLfo1 = kSourceEnv1 + kEnvCount,
-   kSourceStrike = kSourceLfo1 + kLfoCount - kMotionCount,
-   kSourceKey = kSourceStrike + kTouchSourceCount,
+   kSourceVelocity = kSourceLfo1 + kLfoCount - kMotionCount,
+   kSourceKey = kSourceVelocity + kTouchSourceCount,
    kSourceSpeed,
    kSourceNearest,
    kSourceHeading,
@@ -281,7 +281,17 @@ enum Source {
    kSourceMacro1,
    kSourceCount = kSourceMacro1 + kMacroCount
 };
-inline const char *const kTouchNames[kTouchCount] = {"Strike", "Press", "Glide", "Slide", "Lift"};
+inline const char *const kTouchNames[kTouchCount] = {"Velocity", "Press", "Glide", "Slide", "Release"};
+
+// Release became a route source after Slide, so a route source saved before then (state version 2,
+// preset format 1) from Key on is one further along now.
+constexpr int kSourceKeyBeforeRelease = kSourceVelocity + 4;
+inline double migrateBeforeRelease(clap_id id, double value) {
+   const clap_id offset = offsetOf(id);
+   const bool routeSource = partOf(id) >= 0 && offset >= kRouteBase && offset < kPartEnd &&
+                            (offset - kRouteBase) % kRouteStride == kRouteSource;
+   return routeSource && value >= kSourceKeyBeforeRelease - 0.5 ? value + 1.0 : value;
+}
 
 // ---- value mappings ----
 
@@ -552,8 +562,8 @@ inline void addPart(Builder &b, int part) {
       clap_id destination;
    };
    const Route routes[] = {{kSourceEnv1 + 1, 0.3, filterParam(0, kFilterCutoff)},
-                           {kSourceStrike + 1, 0.4, flockParam(kSpeed)},
-                           {kSourceStrike + 1, 0.2, filterParam(0, kFilterCutoff)}};
+                           {kSourceVelocity + 1, 0.4, flockParam(kSpeed)},
+                           {kSourceVelocity + 1, 0.2, filterParam(0, kFilterCutoff)}};
    for (int r = 0; r < kRouteCount; ++r) {
       const std::string m = num("Route ", r), n = m + " ";
       const auto p = [&](RouteParam q) { return id(routeParam(r, q)); };

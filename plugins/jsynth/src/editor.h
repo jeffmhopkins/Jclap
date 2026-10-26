@@ -25,12 +25,12 @@ public:
    virtual void noteExpression(int note, float bend, float pressure, float timbre) = 0;
    virtual void noteOff(int note) = 0;
 
-   // The held notes, from the host or the panel: each is a creature's lure. Strike is the note-on
-   // velocity and lift the release velocity (0 while held).
+   // The held notes, from the host or the panel: each is a creature's lure. Velocity is the note-on
+   // velocity and release the release velocity (0 while held).
    struct Note {
       int note;
       float bend, pressure, timbre;
-      float strike, lift;
+      float velocity, release;
    };
    virtual void notes(std::vector<Note> &out) const = 0;
 
@@ -49,8 +49,8 @@ public:
    // the route list is open. Main thread only.
    int part = 0;
    bool routesOpen = false;
-   // Whether the cards are hidden, leaving only the sky.
-   bool panelsHidden = false;
+   // The view: 0 every card, 1 reduced (the voice's big panels beside the sky), 2 only the sky.
+   int view = 0;
    // Whether the sky draws the held notes' lure rings.
    bool ringsShown = true;
 };
@@ -58,12 +58,12 @@ public:
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // What a screenshot shows: the part, the route list, and MAP mode with a source
-// armed (a Source from params.h, or 0 for MAP off), and whether the cards are hidden.
+// armed (a Source from params.h, or 0 for MAP off), and the view (0 full, 1 reduced, 2 sky only).
 struct ScreenshotView {
    int part = 0;
    bool routes = false;
    int mapSource = 0;
-   bool hidden = false;
+   int view = 0;
 };
 
 // Flies the flock for `seconds`, then draws the panel offscreen at the given pixel size and saves it

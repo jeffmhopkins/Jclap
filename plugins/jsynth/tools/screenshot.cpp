@@ -1,7 +1,7 @@
 // Renders the panel to a PNG without a host:
-//    jsynth-screenshot out.png [part [routes [map-source [width height [hidden]]]]]
+//    jsynth-screenshot out.png [part [routes [map-source [width height [view]]]]]
 // Part 0 is A, 1 is B. Routes 1 opens the route list. Map-source, a route source's number, turns MAP
-// on with that source armed. Hidden 1 hides the cards.
+// on with that source armed. View 0 is every card, 1 the reduced view, 2 only the sky.
 
 #include <cstdio>
 #include <cstdlib>
@@ -58,7 +58,7 @@ public:
       a(routeParam(7, kRouteSource), kSourceHeading);
       a(routeParam(7, kRouteDestination), destinationIndex(kPartPan));
       a(routeParam(7, kRouteAmount), 0.4);
-      a(routeParam(8, kRouteSource), kSourceStrike + 3);
+      a(routeParam(8, kRouteSource), kSourceVelocity + 3);
       a(routeParam(8, kRouteDestination), destinationIndex(oscParam(1, kOscShape)));
       a(routeParam(8, kRouteAmount), 0.3);
 
@@ -115,7 +115,7 @@ private:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [part [routes [map-source [width height [hidden]]]]]\n",
+      std::fprintf(stderr, "usage: %s out.png [part [routes [map-source [width height [view]]]]]\n",
                    argv[0]);
       return 1;
    }
@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
    view.part = arg(2);
    view.routes = arg(3) != 0;
    view.mapSource = arg(4);
-   view.hidden = arg(7) != 0;
+   view.view = arg(7);
    const int width = argc > 6 ? arg(5) : 1648;
    const int height = argc > 6 ? arg(6) : 940;
    DemoHost host;
