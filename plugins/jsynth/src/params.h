@@ -28,7 +28,7 @@ constexpr int kPartCount = 2;
 constexpr int kOscCount = 3;
 constexpr int kFilterCount = 2;
 constexpr int kEnvCount = 3;
-// Wingbeat and Wind move the flock as well as modulating; LFO 1 and LFO 2 only modulate.
+// Wingbeat and Wind move the flock and aren't route sources; LFO 1 and LFO 2 only modulate.
 constexpr int kMotionCount = 2;
 constexpr int kLfoCount = 4;
 // Routes per part: a pool the panel shows only the used ones of, so it reads as an open-ended list.
@@ -36,6 +36,8 @@ constexpr int kRouteCount = 64;
 constexpr int kMacroCount = 4;
 // The touch dimensions, in MPE order: velocity, pressure, bend, CC 74 and release velocity.
 constexpr int kTouchCount = 5;
+// The ones that are route sources: all but Lift, which only places a lure.
+constexpr int kTouchSourceCount = 4;
 constexpr int kMaxPolyphony = 16;
 
 // ---- ids ----
@@ -162,7 +164,8 @@ enum EnvParam : clap_id {
 };
 
 // The first two LFOs move the flock: the wingbeat, one per creature, and the wind, one gust for the
-// whole sky. The other two, LFO 1 and LFO 2, are plain LFOs, sources for routes only.
+// whole sky. They aren't route sources. The other two, LFO 1 and LFO 2, are plain LFOs, sources for
+// routes only.
 enum LfoParam : clap_id {
    kLfoShape,
    kLfoRate,
@@ -192,7 +195,7 @@ enum FlockParam : clap_id {
    kBite,         // ring mod while a hunter has caught this creature
    kTailLength,   // how long the ink tail lasts
    kTailSpread,   // how far the ink blooms as it ages
-   kWake,         // how much flying through another creature's ink stirs this one
+   kWakeRetired,  // was Wake; its id stays taken so Lure X and Y keep theirs
    kLureX,        // what places a note's lure left to right (a LureSource)
    kLureY,        // and bottom to top
 };
@@ -254,29 +257,21 @@ inline const std::vector<std::string> kWallNames = {"Soft", "Wrap", "Open"};
 // What places a held note's lure along one axis of the sky: its pitch (with bend), one of its touch
 // dimensions, a random place per note, or the middle.
 inline const std::vector<std::string> kLureSourceNames = {"Pitch", "Strike", "Press", "Slide", "Lift", "Random", "Centre"};
-// Route sources. Off is no route. Speed to Y are the flock's own: how fast this creature flies, how
-// many neighbours it has, how near the nearest is, which way it heads, whether a hunter has it, how
-// much ink it is flying through, and where it is in the sky (left to right, and bottom to top).
+// Route sources. Off is no route. Speed to Turn are the flock's own: how fast this creature flies,
+// how near its nearest neighbour is, how much it flies upward, and which way and how hard it turns.
 inline const std::vector<std::string> kSourceNames = {
-    "Off",   "Env 1",   "Env 2",    "Env 3",   "Wingbeat", "Wind",   "LFO 1",  "LFO 2",  "Strike",    "Press",
-    "Glide", "Slide",   "Lift",     "Key",     "Speed",    "Crowd",  "Nearest",   "Heading",
-    "Caught", "Wake",   "X",        "Y",       "Random",   "Mod Wheel", "Macro 1", "Macro 2", "Macro 3", "Macro 4"};
+    "Off",   "Env 1", "Env 2", "Env 3",   "LFO 1",   "LFO 2", "Strike", "Press",     "Glide",   "Slide",   "Key",
+    "Speed", "Nearest", "Heading", "Turn", "Random", "Mod Wheel", "Macro 1", "Macro 2", "Macro 3", "Macro 4"};
 enum Source {
    kSourceOff,
    kSourceEnv1,
-   kSourceWingbeat = kSourceEnv1 + kEnvCount,
-   kSourceWind,
-   kSourceLfo1,
+   kSourceLfo1 = kSourceEnv1 + kEnvCount,
    kSourceStrike = kSourceLfo1 + kLfoCount - kMotionCount,
-   kSourceKey = kSourceStrike + kTouchCount,
+   kSourceKey = kSourceStrike + kTouchSourceCount,
    kSourceSpeed,
-   kSourceCrowd,
    kSourceNearest,
    kSourceHeading,
-   kSourceCaught,
-   kSourceWake,
-   kSourceSkyX,
-   kSourceSkyY,
+   kSourceTurn,
    kSourceRandom,
    kSourceModWheel,
    kSourceMacro1,
@@ -390,7 +385,7 @@ inline std::vector<clap_id> buildDestinations() {
             d.push_back(lfoParam(l, p));
    // The flock itself can be modulated: Press can make a creature break formation, say.
    for (FlockParam p : {kCohesion, kAlignment, kSeparation, kSpeed, kWander, kLure, kRange, kNeighbourFm, kTunePull,
-                        kBite, kTailLength, kTailSpread, kWake})
+                        kBite, kTailLength, kTailSpread})
       d.push_back(flockParam(p));
    // A route's depth can be moved by another route.
    for (int r = 0; r < kRouteCount; ++r)
@@ -539,7 +534,6 @@ inline void addPart(Builder &b, int part) {
    b.add(id(flockParam(kBite)), "Bite", fl, 0.0, 1.0, 0.0, kMod, Unit::Percent);
    b.add(id(flockParam(kTailLength)), "Tail Length", fl, 0.0, 1.0, 0.5, kMod, Unit::Percent);
    b.add(id(flockParam(kTailSpread)), "Tail Spread", fl, 0.0, 1.0, 0.5, kMod, Unit::Percent);
-   b.add(id(flockParam(kWake)), "Wake", fl, 0.0, 1.0, 0.2, kMod, Unit::Percent);
    b.choice(id(flockParam(kLureX)), "Lure X", fl, kLureSourceNames, 0, kGlobalChoice);
    b.choice(id(flockParam(kLureY)), "Lure Y", fl, kLureSourceNames, 3, kGlobalChoice);
 

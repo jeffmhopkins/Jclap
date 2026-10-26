@@ -498,7 +498,9 @@ private:
       Ramp neighbourFm;
       int hunter = -1;
       Ramp bite;
-      float flockSources[8] = {};
+      // Its creature's sources, in CreatureSources order: Speed, Nearest, Heading and Turn (the
+      // route sources), then Caught and x.
+      float flockSources[6] = {};
       // The host's per-note modulation: a few destinations each, eased like the params, and the
       // current offsets by destination for mod() to add (plain units).
       struct HostMod {
@@ -635,13 +637,13 @@ private:
    float source(const Voice &v, int s) const {
       if (s >= kSourceEnv1 && s < kSourceEnv1 + kEnvCount)
          return v.envOut[s - kSourceEnv1];
-      if (s >= kSourceWingbeat && s < kSourceWingbeat + kLfoCount)
-         return v.lfoOut[s - kSourceWingbeat];
-      if (s >= kSourceStrike && s < kSourceStrike + kTouchCount)
+      if (s >= kSourceLfo1 && s < kSourceLfo1 + kLfoCount - kMotionCount)
+         return v.lfoOut[kMotionCount + s - kSourceLfo1];
+      if (s >= kSourceStrike && s < kSourceStrike + kTouchSourceCount)
          return v.touch[s - kSourceStrike];
       if (s == kSourceKey)
          return std::clamp((v.ref.key - 60) / 48.0f, -1.0f, 1.0f);
-      if (s >= kSourceSpeed && s <= kSourceSkyY)
+      if (s >= kSourceSpeed && s <= kSourceTurn)
          return v.flockSources[s - kSourceSpeed];
       if (s == kSourceRandom)
          return v.randomValue;
@@ -806,11 +808,11 @@ private:
          // Between flock steps, glide from the last step to this one (a step late, never stepped),
          // then a light smoothing on top.
          const CreatureSources &s = c.sources, &p = c.lastSources;
-         const float now[8] = {s.speed, s.crowd, s.nearest, s.heading, s.caught, s.wake, s.x, s.y};
-         const float was[8] = {p.speed, p.crowd, p.nearest, p.heading, p.caught, p.wake, p.x, p.y};
+         const float now[6] = {s.speed, s.nearest, s.heading, s.turn, s.caught, s.x};
+         const float was[6] = {p.speed, p.nearest, p.heading, p.turn, p.caught, p.x};
          const float between = std::clamp(static_cast<float>(flockAcc_) / static_cast<float>(sampleRate_), 0.0f, 1.0f);
          const float a = v.fresh ? 1.0f : 1.0f - std::exp(-tickSeconds / 0.002f);
-         for (int k = 0; k < 8; ++k)
+         for (int k = 0; k < 6; ++k)
             v.flockSources[k] += (was[k] + (now[k] - was[k]) * between - v.flockSources[k]) * a;
          const float note = static_cast<float>(v.ref.key);
          lureAt(lureAxis(choice(part, flockParam(kLureX)), note, bend, v.touch, v.randomValue),
@@ -1005,7 +1007,7 @@ private:
       }
       // The gain goes into the pan gains, so the sample loop ramps two values, not three.
       const float xPan = mod(v, offset, kSkyPan);
-      const float pan = std::clamp(mod(v, offset, kPartPan) + xPan * (2.0f * v.flockSources[6] - 1.0f), -1.0f, 1.0f);
+      const float pan = std::clamp(mod(v, offset, kPartPan) + xPan * (2.0f * v.flockSources[5] - 1.0f), -1.0f, 1.0f);
       ramp(v.ampL, gain * std::cos((pan + 1.0f) * 0.25f * dsp::kPi), st, v.fresh);
       ramp(v.ampR, gain * std::sin((pan + 1.0f) * 0.25f * dsp::kPi), st, v.fresh);
 

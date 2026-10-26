@@ -92,7 +92,7 @@ Two things about the shape matter more than anything else:
 1. **Each part is a whole synth.** Both parts have the same voice, the same 64 routes and the same
    flock params; only the play mode and the sky are shared.
 2. **The flock is in the audio path.** The engine flies the flock on the audio thread, so a
-   creature's speed or crowding is a modulation source as exact as an envelope, and what the panel
+   creature's speed or turning is a modulation source as exact as an envelope, and what the panel
    draws is what you hear.
 
 ## Timing
@@ -157,7 +157,8 @@ sample is reset rather than passed on.
 
 ## Touch and MPE
 
-Each voice has five touch dimensions, in MPE order:
+Each voice has five touch dimensions, in MPE order. All but Lift are route sources; Lift only
+places a lure (see [The flock](#the-flock)).
 
 | Touch | From |
 | --- | --- |
@@ -311,7 +312,7 @@ triplets and dots), a Phase, a fade-in Delay and a Polarity (bipolar or unipolar
 - **Free** starts each note's LFO in step with the part's running one, plus Phase.
 - **Global** uses one LFO for the whole part; routes can't move its rate per voice.
 
-The first two LFOs also move the flock:
+The first two LFOs move the flock, and aren't route sources:
 
 - **Wingbeat** (5 Hz, Sine) bobs each creature across its path, by **Push**.
 - **Wind** (0.2 Hz, Smooth, Global) is one gust for the whole sky, pushing every creature of the
@@ -325,16 +326,16 @@ Each part has a pool of **64 routes**, each a source, a destination and an amoun
 all host params. The panel shows only the ones in use, so it reads as an open-ended list. Source and
 Destination are settings (not automatable); amounts are automatable and can be modulated.
 
-**Sources** (27): Env 1 to 3; Wingbeat, Wind, LFO 1, LFO 2; Strike, Press, Glide, Slide, Lift; Key;
-the flock's eight (Speed, Crowd, Nearest, Heading, Caught, Wake, X, Y);
-Random; Mod Wheel; Macro 1 to 4. They are unipolar 0..1 except the LFOs (by their polarity), Glide,
-Random (one value per note, -1..1) and Key, which is (key - 60) / 48, clamped to -1..1.
+**Sources** (20): Env 1 to 3; LFO 1, LFO 2; Strike, Press, Glide, Slide; Key; the flock's four
+(Speed, Nearest, Heading, Turn); Random; Mod Wheel; Macro 1 to 4. They are unipolar 0..1 except the
+LFOs (by their polarity), Glide, Turn, Random (one value per note, -1..1) and Key, which is
+(key - 60) / 48, clamped to -1..1.
 
-**Destinations** (160): every continuous part param a voice reads: level, pan, X Pan, fine, glide
+**Destinations** (159): every continuous part param a voice reads: level, pan, X Pan, fine, glide
 and drift; each oscillator's shape, coarse, fine, ratio, fixed pitch and phase; all nine FM cells;
 the mixer; drive and balance; each filter's cutoff, resonance, drive and key track; each envelope's
 times and sustain; each LFO's rate, phase and delay (and Push for the two that have it); the flock's
-thirteen continuous params; and every route's own amount.
+twelve continuous params; and every route's own amount.
 
 **How a route moves a param.** Per voice per tick:
 
@@ -406,23 +407,21 @@ Pitch (four octaves from C2, with bend), Strike, Press, Slide, Lift, Random (a p
 Centre. By default X is Pitch and Y is Slide, so low notes fly left, high notes right, and more
 Slide flies higher.
 
-**The flock's sources**, each 0..1 and continuous:
+**The flock's sources**, each continuous:
 
 | Source | What it is |
 | --- | --- |
-| Speed | How fast it flies, against the fastest it could at full Press. |
-| Crowd | How many neighbours it has, by the kernel (2 is full), smoothed over 50 ms. |
-| Nearest | How near the nearest neighbour is. |
+| Speed | How fast it flies, against the fastest it could at full Press (0..1). |
+| Nearest | How near the nearest neighbour is (0..1). |
 | Heading | How much it flies upward: 1 straight up, 0 straight down, smooth all the way round. |
-| Caught | Whether a hunter has it: rises in about 20 ms, lets go over about 500 ms. |
-| Wake | How much ink it is flying into. |
-| X, Y | Where it is in the sky, left to right and bottom to top. |
+| Turn | How fast its heading turns: + a right turn on screen, - a left one, tanh of the rate over 4 radians a second, smoothed over about 170 ms so the wingbeat barely shows in it (-1..1). |
 
-**Ink.** Each species has a 24 × 18 ink grid. Every creature leaves ink a little behind it, by its
-energy. The grid fades with **Tail** (a time constant of 0.3 to 3.3 s) and blurs with **Spread** (a
-few cells per step, round robin, so it costs little). **Wake** reads the ink just ahead of a
-creature, where its own fresh ink isn't: the other species' fully and its own kind's at 70%, times
-0.5 + 1.5 × the Wake knob. The panel draws its own, finer ink from the creatures' positions.
+The flock also keeps, for the voice but not as route sources, **Caught** (whether a hunter has it:
+rises in about 20 ms, lets go over about 500 ms; it scales Bite) and the creature's place left to
+right (for X Pan).
+
+**Ink** is the panel's alone: it draws ink from the creatures' positions, fading with **Tail** and
+blooming with **Spread**. The engine keeps no ink.
 
 ## Between creatures
 
@@ -591,7 +590,6 @@ it per note.
 | Bite | 0 to 100% | 0% | This part's ring mod on what it catches. |
 | Tail Length | 0 to 100% | 50% | How long the ink lasts. |
 | Tail Spread | 0 to 100% | 50% | How far it blooms. |
-| Wake | 0 to 100% | 20% | How much ink stirs the Wake source. |
 | Lure X, Lure Y | Pitch, Strike, Press, Slide, Lift, Random, Centre | Pitch, Slide | What places the lure. |
 
 ### Routes (per part, Route 1 to 64)
@@ -599,7 +597,7 @@ it per note.
 | Param | Range | Default | What it does |
 | --- | --- | --- | --- |
 | Source | Off and the 27 sources | Off (the first three: Env 2, Press, Press) | |
-| Destination | the 160 destinations | Filter 1 Cutoff (Route 2: Speed) | |
+| Destination | the 159 destinations | Filter 1 Cutoff (Route 2: Speed) | |
 | Amount | -100 to +100% | 0 (+30, +40, +20%) | |
 
 ## Presets
@@ -618,15 +616,15 @@ over. Each category starts with a plain patch with no routes and works up to one
 | | Log Drum | Self-feedback, Env 3 dropping the ratio; Strike deepens the drop. |
 | | Fireflies | Half Sine, Scatter at high speed and wander, short ink, wide X Pan. |
 | | Metal Rain | Inharmonic ×3.73 and ×7.11, Scatter; Random detunes each note's ratios. |
-| | Hunter Clicks | Layer: A flees, B hunts an octave up with Bite and Neighbour FM; Caught and Nearest open the FM. |
+| | Hunter Clicks | Layer: A flees, B hunts an octave up with Bite and Neighbour FM; Nearest opens A's FM and B's. |
 | Plucks | Sine Pluck | One sine, 900 ms decay, no routes. |
 | | Nylon | Saw through a key-tracked low pass, Env 2 on the cutoff. |
 | | Harp | 1:1 FM with a long ring. |
 | | Koto | ×3 modulator with feedback, Env 3 and Strike on the FM. |
 | | Synth Pluck | Saw and detuned pulse, resonant filter; Slide on the resonance. |
 | | Bell Pluck | ×3.5 and ×7; Press on the upper FM, LFO 1 on the detune. |
-| | Starling Bells | ×3.5 FM with Neighbour FM, Tune Pull and cohesion; Crowd deepens the FM. |
-| | Dripping Ink | Alt Sine with long, wide ink; Wake on the cutoff, Speed on the FM, Heading on the resonance. |
+| | Starling Bells | ×3.5 FM with Neighbour FM, Tune Pull and cohesion; Nearest deepens the FM. |
+| | Dripping Ink | Alt Sine with long, wide ink; Turn on the cutoff, Speed on the FM, Heading on the resonance. |
 | Keys | Sine Organ | Three sine drawbars, no routes. |
 | | Tonewheel | The organ with feedback and a 6.5 Hz LFO on the pitch. |
 | | Celesta | Sine with a ×7 modulator and long decay. |
@@ -634,7 +632,7 @@ over. Each category starts with a plain patch with no routes and works up to one
 | | Vibes | ×4 FM with a 5.5 Hz tremolo. |
 | | Tine Piano | A DX-style electric piano: a 1:1 pair and a ×14 tine. |
 | | Suitcase Pressure | The piano with Press on the bark; Slide sets how far the tremolo pans. |
-| | Mallet Flock | Layer: vibes and an upper shoal with Neighbour FM and Tune Pull; Crowd and Heading on the FM. |
+| | Mallet Flock | Layer: vibes and an upper shoal with Neighbour FM and Tune Pull; Nearest and Heading on the FM. |
 | Bass and Leads | Sine Bass | Sine an octave down with a little feedback. |
 | | FM Bass | 1:1 FM with feedback on the modulator, Env 3 on the FM. |
 | | Saw Lead | Two detuned saws, delayed vibrato. |
@@ -642,24 +640,24 @@ over. Each category starts with a plain patch with no routes and works up to one
 | | East Coast Brass | Feedback-driven 1:1 FM with a slow Env 3. |
 | | Pressure Lead | Press opens the FM and the vibrato; Slide adds feedback grit. |
 | | Shark Bass | Split at C3: B below hunts with saw and pulse and Bite; Speed opens its filter. |
-| | Predator and Prey | Layer: A flees, B hunts an octave down with Bite; Caught opens A's filter. |
+| | Predator and Prey | Layer: A flees, B hunts an octave down with Bite; Nearest opens A's filter. |
 | Pads | Sine Pad | Two detuned sines panned apart, no routes. |
 | | Warm Analog | Saw pair through a low pass, slow Env 2. |
 | | Glass Pad | ×3 and ×0.5, LFO 1 on the FM. |
-| | Wind Choir | Saws and noise through a band pass; Wind on the cutoff with a strong gust. |
+| | Wind Choir | Saws and noise through a band pass; LFO 2 on the cutoff with a strong gust. |
 | | String Machine | Three saws with two slow LFOs on the detune, Press on the cutoff. |
 | | Murmuration Pad | Saws, high alignment, slow flight, long ink, wide X Pan; Heading pans. |
 | | Pressure Front | Press opens 2:1 FM, with Neighbour FM. |
-| | Ink Ribbons | Alt Sine with feedback, long ink and a loose lure; Wake on cutoff and FM. |
-| | Murmuration Riot | Layer: a fast FM shoal opened by Press, Speed, Crowd and Wake, and a driven ladder of hunters with Bite. |
+| | Ink Ribbons | Alt Sine with feedback, long ink and a loose lure; Turn on cutoff and FM. |
+| | Murmuration Riot | Layer: a fast FM shoal opened by Press, Speed, Nearest and Turn, and a driven ladder of hunters with Bite. |
 | Swells | Slow Sine | Two sines over three seconds, no routes. |
 | | Bowed Glass | 2:1 FM that blooms with a slow Env 3. |
 | | Tidal Strings | Saws, slow Env 2 on the cutoff, LFO 2 on the pan. |
 | | Dawn Chorus | Vibrato that arrives once the note has bloomed; Press on the FM. |
 | | Deep Current | A sub through a resonant tube-driven ladder; Slide on the drive. |
-| | Aurora | Slow FM shoal with Tune Pull; Heading on the FM, Y on the cutoff. |
-| | Storm Front | Saw and noise through a comb, strong wind, Scatter; Wind, Wake and Speed on the filters. |
-| | Murmuration Storm | Layer: a saw shoal with Neighbour FM and Tune Pull, and FM hunters; Crowd, Nearest, Speed and Caught. |
+| | Aurora | Slow FM shoal with Tune Pull; Heading on the FM, Slide on the cutoff. |
+| | Storm Front | Saw and noise through a comb, strong wind, Scatter; LFO 2, Turn and Speed on the filters. |
+| | Murmuration Storm | Layer: a saw shoal with Neighbour FM and Tune Pull, and FM hunters; Nearest, Speed and Heading. |
 
 **User presets** are plain text files ending `.jspreset`: a `JSynth preset 1` line, then one
 `<param id> <value>` per line, every param. Ids a build doesn't know are skipped, and params a file

@@ -144,7 +144,7 @@ inline const std::vector<Preset> &factoryPresets() {
                          op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.5, 0.0),
                          {a(fm21, 0.25), a(flockParam(kBehaviour), kFlee), a(flockParam(kSpeed), 0.7), a(kSkyPan, 0.6)},
                          env(0, 0, 0.5, 130, 0.0, 120), env(0, 2, 0.5, 50, 0.0, 40), open(0),
-                         routes(0, {{env3, fm21, 0.4}, {kSourceCaught, fm21, 0.4}, {kSourceSpeed, oscParam(1, kOscRatio), 0.05}}),
+                         routes(0, {{env3, fm21, 0.4}, {kSourceNearest, fm21, 0.4}, {kSourceSpeed, oscParam(1, kOscRatio), 0.05}}),
                          op(1, 0, kSine, 1.0, 1.0), op(1, 1, kSine, 1.41, 0.0),
                          {b(kPartTranspose, 12), b(fm21, 0.4), b(flockParam(kSpeed), 0.85), b(flockParam(kBite), 0.7),
                           b(flockParam(kNeighbourFm), 0.4), b(kSkyPan, 0.6), b(kPartLevel, -4)},
@@ -180,15 +180,15 @@ inline const std::vector<Preset> &factoryPresets() {
                           a(envParam(0, kEnvRelease), timeValue(1500)), a(flockParam(kNeighbourFm), 0.7),
                           a(flockParam(kTunePull), 0.4), a(flockParam(kCohesion), 0.7), a(flockParam(kTailLength), 0.7),
                           a(kSkyPan, 0.6)},
-                         route(0, 6, kSourceCrowd, fmCell(1, 0), 0.3)})});
+                         route(0, 6, kSourceNearest, fmCell(1, 0), 0.3)})});
       p.push_back({"Dripping Ink", "Plucks",
                    join({op(0, 0, kAltSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0),
                          {a(fm21, 0.15), a(cutoff, 0.55), a(resonance, 0.3), a(flockParam(kTailLength), 1.0),
-                          a(flockParam(kTailSpread), 0.9), a(flockParam(kWake), 0.8), a(kSkyPan, 0.5),
+                          a(flockParam(kTailSpread), 0.9), a(kSkyPan, 0.5),
                           a(lfoParam(2, kLfoRate), lfoValue(0.8))},
                          env(0, 0, 0.5, 1400, 0.0, 1500), env(0, 2, 0.5, 400, 0.0, 400),
                          routes(0, {{env3, fm21, 0.3},
-                                    {kSourceWake, cutoff, 0.35},
+                                    {kSourceTurn, cutoff, 0.35},
                                     {kSourceSpeed, fm21, 0.2},
                                     {kSourceHeading, resonance, 0.2},
                                     {lfo1, oscParam(1, kOscRatio), 0.02}})})});
@@ -227,7 +227,7 @@ inline const std::vector<Preset> &factoryPresets() {
                                     {slide, routeParam(4, kRouteAmount), 0.6}})})});
       p.push_back({"Mallet Flock", "Keys",
                    join({{g(kPlayMode, 1.0)}, vibes, {a(flockParam(kNeighbourFm), 0.3), a(kSkyPan, 0.7)},
-                         routes(0, {{env3, fm21, 0.2}, {kSourceCrowd, fm21, 0.2}}),
+                         routes(0, {{env3, fm21, 0.2}, {kSourceNearest, fm21, 0.2}}),
                          op(1, 0, kSine, 1.0, 1.0), op(1, 1, kSine, 4.0, 0.0),
                          {b(kPartTranspose, 12), b(flockParam(kBehaviour), 0), b(fm21, 0.2), b(flockParam(kNeighbourFm), 0.35),
                           b(flockParam(kTunePull), 0.5), b(kSkyPan, 0.7), b(kPartLevel, -6)},
@@ -268,7 +268,7 @@ inline const std::vector<Preset> &factoryPresets() {
                    join({{g(kPlayMode, 1.0), a(flockParam(kBehaviour), kFlee), b(flockParam(kBehaviour), kHunt),
                           b(oscParam(0, kOscWave), kPulse), b(kPartTranspose, -12), b(flockParam(kBite), 0.9),
                           a(flockParam(kSpeed), 0.6), b(flockParam(kSpeed), 0.7)},
-                         route(0, 6, kSourceCaught, filterParam(0, kFilterCutoff), 0.6)})});
+                         route(0, 6, kSourceNearest, filterParam(0, kFilterCutoff), 0.6)})});
 
       // ---- Pads: rising in under a second, held ----
       p.push_back({"Sine Pad", "Pads",
@@ -290,7 +290,7 @@ inline const std::vector<Preset> &factoryPresets() {
                           a(filterParam(0, kFilterType), 2), a(filterParam(0, kFilterCutoff), 0.5),
                           a(filterParam(0, kFilterResonance), 0.4), a(kPartLevel, 6.0), a(lfoParam(1, kLfoPush), 0.9),
                           a(lfoParam(1, kLfoRate), lfoValue(0.1)), a(envParam(0, kEnvAttack), timeValue(600))},
-                         route(0, 6, kSourceWind, filterParam(0, kFilterCutoff), 0.4),
+                         route(0, 6, lfo2, filterParam(0, kFilterCutoff), 0.4),
                          route(0, 7, slide, filterParam(0, kFilterResonance), 0.3)})});
       p.push_back({"String Machine", "Pads",
                    join({{a(kPartLevel, -4)}, {a(oscParam(1, kOscWave), kSaw), a(oscParam(1, kOscPitchMode), 0), a(oscParam(1, kOscFine), -8),
@@ -314,26 +314,26 @@ inline const std::vector<Preset> &factoryPresets() {
                          route(0, 6, press, fmCell(1, 0), 0.6), route(0, 7, kSourceLfo1, kPartFine, 0.15)})});
       p.push_back({"Ink Ribbons", "Pads",
                    join({{a(oscParam(0, kOscWave), kAltSine), a(fmCell(0, 0), 0.25), a(flockParam(kTailLength), 1.0),
-                          a(flockParam(kTailSpread), 0.9), a(flockParam(kWake), 0.8), a(flockParam(kLure), 0.35)},
-                         route(0, 6, kSourceWake, filterParam(0, kFilterCutoff), 0.5),
-                         route(0, 7, kSourceWake, fmCell(1, 0), 0.4)})});
+                          a(flockParam(kTailSpread), 0.9), a(flockParam(kLure), 0.35)},
+                         route(0, 6, kSourceTurn, filterParam(0, kFilterCutoff), 0.5),
+                         route(0, 7, kSourceTurn, fmCell(1, 0), 0.4)})});
 
-      // Both species at full tilt: the shoal's FM opens with pressure and with how fast and crowded it
+      // Both species at full tilt: the shoal's FM opens with pressure and with how fast and near it
       // flies, and the hunters' bite rings whatever they catch.
       p.push_back({"Murmuration Riot", "Pads",
                    join({{g(kPlayMode, 1.0), a(kPartLevel, -3)},
                          op(0, 0, kSaw, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), op(0, 2, kSine, 3.01, 0.0),
                          {a(fm21, 0.25), a(fb2, 0.2), a(fm32, 0.2), a(cutoff, 0.5), a(resonance, 0.35),
                           a(flockParam(kNeighbourFm), 0.45), a(flockParam(kTunePull), 0.3), a(flockParam(kSpeed), 0.6),
-                          a(flockParam(kWander), 0.5), a(flockParam(kWake), 0.6), a(kSkyPan, 0.8), a(kDrift, 0.1),
+                          a(flockParam(kWander), 0.5), a(kSkyPan, 0.8), a(kDrift, 0.1),
                           a(lfoParam(2, kLfoRate), lfoValue(5.5))},
                          env(0, 0, 120, 800, 0.85, 1200), env(0, 2, 200, 1200, 0.3, 800),
                          routes(0, {{env3, fm21, 0.35},
                                     {press, fm21, 0.5},
                                     {press, cutoff, 0.3},
-                                    {kSourceWake, cutoff, 0.25},
+                                    {kSourceTurn, cutoff, 0.25},
                                     {kSourceSpeed, fm32, 0.3},
-                                    {kSourceCrowd, resonance, 0.25},
+                                    {kSourceNearest, resonance, 0.25},
                                     {lfo1, kPartFine, 0.0},
                                     {press, routeParam(6, kRouteAmount), 0.08}}),
                          op(1, 0, kPulse, 1.0, 1.0), op(1, 1, kSine, 1.0, 0.0),
@@ -342,7 +342,7 @@ inline const std::vector<Preset> &factoryPresets() {
                           b(flockParam(kBite), 0.6), b(flockParam(kNeighbourFm), 0.3), b(flockParam(kSpeed), 0.75),
                           b(kSkyPan, 0.6), b(kPartLevel, -10)},
                          env(1, 0, 80, 800, 0.9, 800),
-                         routes(1, {{kSourceCaught, cutoff, 0.4}, {kSourceSpeed, fm21, 0.3}, {press, fm21, 0.3}})})});
+                         routes(1, {{kSourceNearest, cutoff, 0.4}, {kSourceSpeed, fm21, 0.3}, {press, fm21, 0.3}})})});
 
       // ---- Swells: seconds to arrive ----
       p.push_back({"Slow Sine", "Swells",
@@ -377,7 +377,7 @@ inline const std::vector<Preset> &factoryPresets() {
                          routes(0, {{env3, fm32, 0.35},
                                     {kSourceHeading, fm21, 0.3},
                                     {lfo1, oscParam(2, kOscRatio), 0.01},
-                                    {kSourceSkyY, cutoff, 0.25},
+                                    {slide, cutoff, 0.25},
                                     {press, fm21, 0.2}})})});
       p.push_back({"Storm Front", "Swells",
                    join({{a(kPartLevel, 5)}, {a(oscParam(1, kOscWave), kSaw), a(oscParam(1, kOscPitchMode), 0), a(oscParam(1, kOscFine), -12),
@@ -386,8 +386,8 @@ inline const std::vector<Preset> &factoryPresets() {
                           a(tailParam(kDriveType), 2), a(lfoParam(1, kLfoPush), 0.8), a(lfoParam(1, kLfoRate), lfoValue(0.15)),
                           a(flockParam(kBehaviour), kScatter), a(kSkyPan, 0.6), a(kDrift, 0.2)},
                          env(0, 0, 2500, 1000, 1.0, 4000), env(0, 1, 3000, 1000, 1.0, 3000),
-                         routes(0, {{kSourceWind, cutoff, 0.25},
-                                    {kSourceWake, resonance, 0.3},
+                         routes(0, {{lfo2, cutoff, 0.25},
+                                    {kSourceTurn, resonance, 0.3},
                                     {kSourceSpeed, filterParam(1, kFilterCutoff), 0.3},
                                     {env2, mixParam(kNoiseLevel), 0.3},
                                     {press, tailParam(kDriveAmount), 0.4}})})});
@@ -397,14 +397,14 @@ inline const std::vector<Preset> &factoryPresets() {
                           a(flockParam(kNeighbourFm), 0.5), a(flockParam(kTunePull), 0.5), a(kSkyPan, 0.8)},
                          env(0, 0, 3000, 1000, 1.0, 4000), env(0, 1, 3000, 1000, 1.0, 4000),
                          routes(0, {{env2, cutoff, 0.3},
-                                    {kSourceCrowd, cutoff, 0.3},
+                                    {kSourceNearest, cutoff, 0.3},
                                     {kSourceNearest, kPartPan, 0.3},
                                     {kSourceSpeed, fm21, 0.2},
                                     {press, routeParam(1, kRouteAmount), 0.3}}),
                          op(1, 0, kSine, 1.0, 1.0), op(1, 1, kSine, 2.0, 0.0),
                          {b(fm21, 0.2), b(flockParam(kBite), 0.4), b(flockParam(kNeighbourFm), 0.3), b(kSkyPan, 0.6), b(kPartLevel, -8)},
                          env(1, 0, 3000, 1000, 1.0, 4000), env(1, 2, 4000, 1000, 1.0, 3000), open(1),
-                         routes(1, {{kSourceCaught, fm21, 0.4}, {env3, fm21, 0.3}, {kSourceHeading, oscParam(1, kOscFine), 0.1}})})});
+                         routes(1, {{kSourceNearest, fm21, 0.4}, {env3, fm21, 0.3}, {kSourceHeading, oscParam(1, kOscFine), 0.1}})})});
       return p;
    }();
    return presets;
