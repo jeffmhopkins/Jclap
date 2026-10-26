@@ -329,6 +329,28 @@ int main() {
       JCLAP_CHECK(sent74);
    }
 
+   // The bank from the synth: every program has a unique slot, every sound CC, values in range and
+   // routing within the synth's lists. Program 106 is the one the capture checked Program Change on.
+   {
+      const auto &bank = mm2::factoryBank();
+      JCLAP_CHECK(bank.size() > 100);
+      bool seen[mm2::kProgramCount + 1] = {};
+      for (const mm2::HardwarePatch &p : bank) {
+         JCLAP_CHECK(p.program >= 1 && p.program <= mm2::kProgramCount && !seen[p.program]);
+         seen[std::clamp(p.program, 0, mm2::kProgramCount)] = true;
+         CHECK_EQ(p.values.size(), 58u);
+         for (auto [cc, v] : p.values)
+            JCLAP_CHECK(mm2::indexOfCc(cc) >= 0 && v >= 0 && v <= 127);
+         for (const mm2::ModRoute &r : p.routes)
+            JCLAP_CHECK(r.source < mm2::kModSourceCount && r.destination < mm2::kModDestinationCount);
+      }
+      const mm2::HardwarePatch *octa = mm2::findFactoryPatch("P013 OctaBass");
+      JCLAP_CHECK(octa && octa->category == "Bass");
+      const mm2::HardwarePatch *p106 = mm2::findFactoryPatch("P106 Stretchr");
+      JCLAP_CHECK(p106 && mm2::bankOf(p106->program) == 1 && mm2::programChangeOf(p106->program) == 5);
+      CHECK_EQ(mm2::factoryPresets().size(), bank.size());
+   }
+
    // Program numbers map onto banks of 100.
    CHECK_EQ(mm2::bankOf(1), 0);
    CHECK_EQ(mm2::programChangeOf(1), 0);

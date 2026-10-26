@@ -11,6 +11,7 @@
 #include <jclap/ui/presets.h>
 
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <utility>
 #include <vector>
@@ -24,7 +25,7 @@ inline constexpr const char *kModSources[] = {
    "random1",  "rnd1*mod", "random2",  "rnd2*knb", "env1",     "env1*vel", "env2",     "env2*vel",
    "env3",     "env3*vel", "lfo1",     "lfo1*vel", "lfo1*aft", "lfo1*whl", "lfo1*knb", "lfo1*en1",
    "lfo2",     "lfo2*vel", "lfo2*aft", "lfo2*whl", "lfo2*knb", "lfo2*en2", "lfo3",     "lfo3*vel",
-   "lfo3*aft", "lfo3*whl", "lfo3*knb", "lfo3*en3", "lag",      "mult1",    "mult2",    "offset",
+   "lfo3*aft", "lfo3*whl", "lfo3*knb", "lfo3*env3", "lag",      "mult1",    "mult2",    "offset",
 };
 inline constexpr int kModSourceCount = sizeof(kModSources) / sizeof(kModSources[0]);
 
@@ -63,8 +64,8 @@ struct HardwarePatch {
 
 inline constexpr int kProgramCount = 300;
 
-// The synth has 300 program slots. The manual says it follows Bank Select and Program Change but not
-// how the slots are split into banks, so this assumes banks of 100: bank (CC 32) 0-2, program 0-99.
+// The synth has 300 program slots in banks of 100: Bank Select LSB (CC 32) 0-2, then Program Change
+// 0-99. The manual doesn't say so; it was checked on a real unit (CC 32 = 1, program 5 loads P106).
 inline int bankOf(int program) { return (program - 1) / 100; }
 inline int programChangeOf(int program) { return (program - 1) % 100; }
 
@@ -75,10 +76,14 @@ inline std::string displayName(const HardwarePatch &p) {
    return std::string(num) + " " + p.name;
 }
 
-// The programs in the synth's factory bank. Audiothingies hasn't published them, and the manual
-// doesn't document the SysEx program format, so the bank is filled from a dump of a real unit.
+// The programs stored on the synth: every named program (P001-P300, skipping "INIT") from a full dump
+// (UTILITY U02) of a real MicroMonsta 2, decoded by tools/mm2_bank.py. That's the factory bank plus
+// whatever its owner saved over it. Audiothingies hasn't published the bank or the SysEx program
+// format, so the values come from that dump, not from a document.
 inline const std::vector<HardwarePatch> &factoryBank() {
-   static const std::vector<HardwarePatch> bank;
+   static const std::vector<HardwarePatch> bank = {
+#include "factory_bank.inc"
+   };
    return bank;
 }
 

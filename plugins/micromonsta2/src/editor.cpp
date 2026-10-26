@@ -101,7 +101,8 @@ private:
       };
    }
 
-   // Labels each mod matrix knob with the loaded program's routing: "1 CUTO" over "lfo1*whl".
+   // Labels each mod matrix knob with the loaded program's routing: "1 CUTO" with "lfo1*whl" under
+   // its value.
    void syncRoutes() {
       const int program = host_.program();
       bool changed = program != shownProgram_;
@@ -120,11 +121,13 @@ private:
          std::string label = std::to_string(s + 1);
          std::string caption = "CC " + std::to_string(52 + s);
          if (program > 0) {
-            std::string dest = destinationName(routes[s]);
+            // A slot with no source or no destination does nothing, whatever the other one says.
+            const bool used = routes[s].source != 0 && routes[s].destination != 0;
+            std::string dest = used ? destinationName(routes[s]) : "off";
             for (char &c : dest)
                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
             label += " " + dest;
-            if (routes[s].source != 0)
+            if (used)
                caption = sourceName(routes[s]);
          }
          modKnobs_[s]->setLabel(label);
