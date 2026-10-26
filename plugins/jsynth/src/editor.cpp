@@ -1963,7 +1963,19 @@ public:
 
 private:
    // Where a widget shows: always, or in the route list.
-   enum Group { kAlways, kFull, kReduced, kReducedOsc, kReducedFm, kReducedEnv, kReducedLfo, kRoutes };
+   enum Group {
+      kAlways,
+      kFull,
+      kReduced,
+      kReducedOsc,
+      kReducedFm,
+      kReducedEnv,
+      kReducedLfo,
+      kReducedVoice,
+      kReducedFlock,
+      kReducedMotion,
+      kRoutes
+   };
    struct Placed {
       visage::Frame *frame;
       int part; // -1 for both
@@ -2067,6 +2079,9 @@ private:
       case kReducedFm: return host_.view == kReducedView && oscTab_ == 1;
       case kReducedEnv: return host_.view == kReducedView && envTab_ == 0;
       case kReducedLfo: return host_.view == kReducedView && envTab_ == 1;
+      case kReducedVoice: return host_.view == kReducedView && voiceTab_ == 0;
+      case kReducedFlock: return host_.view == kReducedView && voiceTab_ == 1;
+      case kReducedMotion: return host_.view == kReducedView && voiceTab_ == 2;
       case kRoutes: return host_.view == kAllCards && host_.routesOpen;
       default: return true;
       }
@@ -2350,14 +2365,15 @@ private:
          segments(oscParam(o, kOscRetrigger), oc, {x + 62, y + 4, 72, 20}, std::vector<std::string>{"RAND", "SYNC"});
          dropdown(oscParam(o, kOscWave), oc, {x + 14, y + 32, 120, 26});
          segments(oscParam(o, kOscPitchMode), oc, {x + 14, y + 62, 120, 24}, std::vector<std::string>{"NOTE", "RATIO", "HZ"});
-         const auto k = ui::row({x + 486, y - 4, 320, 104}, 4);
+         const auto k = ui::row({x + 436, y - 4, 370, 104}, 5);
          auto &coarse = knob(oscParam(o, kOscCoarse), "PITCH", oc, k[0]);
          auto &ratio = knob(oscParam(o, kOscRatio), "RATIO", oc, k[0]);
          auto &fixed = knob(oscParam(o, kOscFixed), "FREQ", oc, k[0]);
          pitchKnobs_.push_back({part, o, &coarse, &ratio, &fixed, kReducedOsc});
-         knob(oscParam(o, kOscShape), "SHAPE", oc, k[1]);
-         knob(mixParam(kMixLevel, o), "LEVEL", oc, k[2]);
-         knob(mixParam(kMixPan, o), "PAN", oc, k[3]);
+         knob(oscParam(o, kOscFine), "FINE", oc, k[1]);
+         knob(oscParam(o, kOscShape), "SHAPE", oc, k[2]);
+         knob(mixParam(kMixLevel, o), "LEVEL", oc, k[3]);
+         knob(mixParam(kMixPan, o), "PAN", oc, k[4]);
          label({x + 808, y + 10, 64, 16}, "FILTER");
          dropdown(oscParam(o, kOscFilter), oc, {x + 810, y + 36, 60, 26});
       }
@@ -2382,7 +2398,9 @@ private:
       // Filters: their response drawn across the panel, then each one's knobs under its half.
       glass({x, 404, w, 313}, "FILTER", c);
       segments(tailParam(kFilterRouting), c, {x + 90, 410, 160, 24}, std::vector<std::string>{"SERIAL", "PARALLEL"});
-      const auto k = ui::row({x + 8, 605, w - 16, 104}, 9);
+      label({x + 270, 414, 90, 16}, "NOISE INTO", kDim, visage::Font::kRight);
+      tips_.add(dropdown(mixParam(kNoiseFilter), c, {x + 366, 410, 66, 24}), "Which filter the noise goes into.");
+      const auto k = ui::row({x + 8, 605, w - 16, 104}, 10);
       for (int f = 0; f < kFilterCount; ++f) {
          const unsigned fc = f == 0 ? c : sourceColor(kSourceLfo1 + 1);
          const ui::Rect &first = k[f * 4];
@@ -2396,6 +2414,9 @@ private:
          knob(filterParam(f, kFilterKeyTrack), "KEY", fc, {k[f * 4 + 3].x, 629, k[f * 4 + 3].w, 96});
       }
       knob(tailParam(kFilterBalance), "BALANCE", c, {k[8].x, 629, k[8].w, 96}, "In parallel, turns Filter 1 or Filter 2 down.");
+      // After both filters: the drive, by its kind.
+      dropdown(tailParam(kDriveType), c, {k[9].x + 4, 601, k[9].w - 8, 24});
+      knob(tailParam(kDriveAmount), "OUT DRIVE", c, {k[9].x, 629, k[9].w, 96}, "Drive after the filters, of the kind above.");
 
       // Envelopes: three big editors side by side.
       // Envelopes and LFOs, on two tabs: three big envelope editors, or the two LFOs drawn.
@@ -2435,10 +2456,13 @@ private:
 
       // Under the sky: the part's voice and the output, big. The drawings are shared (see
       // buildReducedShared()); the knobs sit under them.
+      // On three tabs: VOICE, FLOCK (how it flies) and MOTION (the wingbeat and the wind).
       const ui::Rect vb = kVoiceBox;
-      glass(vb, part == 0 ? "PART A  VOICE" : "PART B  VOICE", c);
-      segments(kVoiceMode, c, {vb.x + 150, vb.y + 8, 180, 26}, std::vector<std::string>{"POLY", "MONO", "LEGATO"});
-      auto &voices = glassy(put<ui::NumberBox>({vb.x + 340, vb.y + 8, 76, 26}, rangeOf(partId(part, kPolyphony), 1.0)), c);
+      glass(vb, "", c);
+      label({vb.x + vb.w - 96, vb.y + 12, 84, 18}, part == 0 ? "PART A" : "PART B", c, visage::Font::kRight);
+      group_ = kReducedVoice;
+      segments(kVoiceMode, c, {vb.x + 318, vb.y + 8, 200, 26}, std::vector<std::string>{"POLY", "MONO", "LEGATO"});
+      auto &voices = glassy(put<ui::NumberBox>({vb.x + 526, vb.y + 8, 76, 26}, rangeOf(partId(part, kPolyphony), 1.0)), c);
       voices.setStepButtons(true);
       voices.valueText = [](double v) { return std::to_string(static_cast<int>(v + 0.5)); };
       bindings_.bind(voices, partId(part, kPolyphony));
@@ -2449,14 +2473,74 @@ private:
       knob(kSkyPan, "X PAN", c, vk[1], "How far a creature's place in the sky, left to right, pans its voice.");
       knob(kPartLevel, "LEVEL", c, vk[3]);
       knob(kGlideTime, "GLIDE", c, vk[5]);
-      knob(kPartTranspose, "TRANSP", c, vk[6]);
-      knob(kVelocityToAmp, "VELOCITY", c, vk[7], "How much velocity sets the level.");
+      knob(kBendRange, "BEND", c, vk[6], "The MPE bend range: how far a finger slides, in semitones.");
+      knob(kPartTranspose, "TRANSP", c, vk[7]);
+      knob(kVelocityToAmp, "VELOCITY", c, vk[8], "How much velocity sets the level.");
+      shared(part, [&] {
+         knob(kOutputWidth, "WIDTH", kDim, vk[2], "The whole output's stereo width: 0% is mono, past 100% wider.");
+         knob(kMasterLevel, "MASTER", kDim, vk[4]);
+      });
+
+      group_ = kReducedFlock;
+      // Left, what it is and where the lures sit; right, how it flies.
+      const float fx = vb.x + 14, fw = 150;
+      const auto pick = [&](float y, const char *name, clap_id id, unsigned col) -> ui::Dropdown & {
+         label({fx, y, fw, 16}, name, kDim, visage::Font::kLeft);
+         return dropdown(id, col, {fx, y + 18, fw, 26});
+      };
+      tips_.add(pick(vb.y + 44, "BEHAVIOUR", flockParam(kBehaviour), c),
+                "SHOAL flies with its own kind, SCATTER keeps apart, HUNT chases the other species and FLEE runs from it.");
+      tips_.add(pick(vb.y + 100, "LURE X", flockParam(kLureX), c), "What places a note's ring left to right.");
+      tips_.add(pick(vb.y + 156, "LURE Y", flockParam(kLureY), c), "What places a note's ring bottom to top.");
+      shared(part, [&] {
+         tips_.add(pick(vb.y + 212, "WALLS", kSkyWalls, kDim),
+                   "What the sky's edges do: turn creatures back, wrap them round, or let them roam.");
+      });
+      const auto fk = ui::grid({vb.x + 176, vb.y + 40, vb.w - 186, 232}, 5, 2);
+      knob(flockParam(kCohesion), "COHESION", c, fk[0], "Pull toward the middle of the neighbours.");
+      knob(flockParam(kAlignment), "ALIGN", c, fk[1], "Turn to fly the way the neighbours fly.");
+      knob(flockParam(kSeparation), "SEPARATE", c, fk[2], "Keep clear of the nearest.");
+      knob(flockParam(kSpeed), "SPEED", c, fk[3]);
+      knob(flockParam(kWander), "WANDER", c, fk[4], "Each creature's own restlessness.");
+      knob(flockParam(kLure), "LURE", c, fk[5], "How hard your finger pulls its creature.");
+      knob(flockParam(kRange), "RANGE", c, fk[6], "How near counts as a neighbour.");
+      knob(flockParam(kTailLength), "TAIL", c, fk[7], "How long the ink lasts behind a creature.");
+      knob(flockParam(kTailSpread), "SPREAD", c, fk[8], "How far the ink blooms as it ages.");
+      shared(part, [&] {
+         knob(kSkySize, "SIZE", kDim, fk[9], "How big the sky is, so how far apart the flocks can spread.");
+      });
+
+      group_ = kReducedMotion;
+      for (int l = 0; l < kMotionCount; ++l) {
+         const float mx = vb.x + 10 + l * 356.0f, my = vb.y + 44;
+         const unsigned lc = kMotionColors[l];
+         tips_.add(label({mx, my + 4, 88, 16}, l == 0 ? "WINGBEAT" : "WIND", lc, visage::Font::kLeft),
+                   l == 0 ? "One per creature: each bobs across its path." : "One gust for the whole sky, pushing every creature.");
+         dropdown(lfoParam(l, kLfoShape), lc, {mx + 88, my, 80, 24});
+         dropdown(lfoParam(l, kLfoTrigger), c, {mx + 174, my, 92, 24});
+         segments(lfoParam(l, kLfoSync), lc, {mx + 272, my, 72, 24}, std::vector<std::string>{"FREE", "SYNC"});
+         const auto mk = ui::row({mx - 4, my + 34, 352, 110}, 4);
+         knob(lfoParam(l, kLfoRate), "RATE", lc, mk[0]);
+         knob(lfoParam(l, kLfoPush), "PUSH", lc, mk[1], l == 0 ? "How far each creature bobs." : "How hard the gust pushes.");
+         knob(lfoParam(l, kLfoPhase), "PHASE", lc, mk[2]);
+         knob(lfoParam(l, kLfoDelay), "DELAY", lc, mk[3]);
+         label({mx, my + 152, 168, 16}, "DIVISION", kDim, visage::Font::kLeft);
+         dropdown(lfoParam(l, kLfoDivision), lc, {mx, my + 170, 168, 26});
+         label({mx + 176, my + 152, 168, 16}, "POLARITY", kDim, visage::Font::kLeft);
+         dropdown(lfoParam(l, kLfoPolarity), lc, {mx + 176, my + 170, 168, 26});
+      }
+      group_ = kReduced;
+   }
+
+   // Builds controls of params that aren't the part's own in `build`, then hands them to `part`, so
+   // they show and hide with its page.
+   template <typename Build> void shared(int part, Build build) {
       const int was = part_;
+      const size_t from = placed_.size();
       part_ = -1;
-      knob(kOutputWidth, "WIDTH", kDim, vk[2], "The whole output's stereo width: 0% is mono, past 100% wider.");
-      knob(kMasterLevel, "MASTER", kDim, vk[4]);
+      build();
       part_ = was;
-      for (size_t i = placed_.size() - 2; i < placed_.size(); ++i)
+      for (size_t i = from; i < placed_.size(); ++i)
          placed_[i].part = part;
    }
 
@@ -2470,7 +2554,7 @@ private:
       };
       group_ = kReducedOsc;
       for (int o = 0; o < kOscCount; ++o)
-         drawings_.push_back(&put<WaveView>({164, 98 + o * 98.0f, 330, 92}, host_, o, kOscColors[o]));
+         drawings_.push_back(&put<WaveView>({164, 98 + o * 98.0f, 276, 92}, host_, o, kOscColors[o]));
       group_ = kReducedFm;
       drawings_.push_back(&put<FmView>({28, 100, 320, 290}, host_));
       group_ = kReduced;
@@ -2492,9 +2576,17 @@ private:
       const auto over = [&](int from, int to) {
          return ui::Rect{k[from].x + 6, vb.y + 44, k[to].x + k[to].w - k[from].x - 12, 124};
       };
+      auto &voiceTabs = glassy(put<ui::TabBar>({vb.x + 8, vb.y + 6, 300, 26}, std::vector<std::string>{"VOICE", "FLOCK", "MOTION"}), kDim);
+      voiceTabs.select(voiceTab_);
+      voiceTabs.onChange = [this](int t) {
+         voiceTab_ = t;
+         refresh();
+      };
+      group_ = kReducedVoice;
       drawings_.push_back(&put<StereoView>(over(0, 2), host_, *view_));
       drawings_.push_back(&put<LevelView>(over(3, 4), host_));
-      drawings_.push_back(&put<VoiceSlotsView>(over(5, 7), host_, *view_));
+      drawings_.push_back(&put<VoiceSlotsView>(over(5, 8), host_, *view_));
+      group_ = kReduced;
       const std::pair<int, const char *> sources[] = {
           {kSourceSpeed, "SPEED"}, {kSourceNearest, "NEAREST"}, {kSourceHeading, "HEADING"}, {kSourceTurn, "TURN"},
           {kSourceRandom, "RANDOM"}};
@@ -2747,7 +2839,7 @@ private:
    static constexpr ui::Rect kReducedSky{912, 60, kSkyW, kSkyH};
    static constexpr ui::Rect kVoiceBox{912, 650, kSkyW, 274};
    // The voice panel's knobs, one row along its bottom.
-   static std::vector<ui::Rect> kVoiceKnobs() { return ui::row({kVoiceBox.x + 8, kVoiceBox.y + 172, kVoiceBox.w - 16, 100}, 8); }
+   static std::vector<ui::Rect> kVoiceKnobs() { return ui::row({kVoiceBox.x + 8, kVoiceBox.y + 172, kVoiceBox.w - 16, 100}, 9); }
    static constexpr float kCleanMargin = 16.0f;
    std::vector<Placed> placed_;
    std::vector<MapKnob *> mapKnobs_;
@@ -2779,6 +2871,7 @@ private:
    ui::SegmentedSwitch *viewSwitch_ = nullptr;
    int oscTab_ = 0; // the reduced view's oscillator panel: 0 OSCILLATORS, 1 FM
    int envTab_ = 0; // and its envelope panel: 0 ENVELOPES, 1 LFOS
+   int voiceTab_ = 0; // and the panel under the sky: 0 VOICE, 1 FLOCK, 2 MOTION
    std::vector<ui::EnvelopeEditor::Playhead> heads_;
    std::chrono::steady_clock::time_point last_;
 };
