@@ -227,9 +227,10 @@ int main() {
          p.setPart(0, oscParam(0, kOscFilter), dest);
          for (int r = 0; r < kRouteCount; ++r)
             p.setPart(0, routeParam(r, kRouteSource), kSourceOff);
-         Engine e;
-         e.prepare(kRate, {p.values.get(), p.mods.get()});
-         const auto out = render(e, 24000, 512, {{0, Event::On, 57, 1.0f}});
+         // On the heap: MSVC gives each test's Engine its own room in main's frame.
+         auto e = std::make_unique<Engine>();
+         e->prepare(kRate, {p.values.get(), p.mods.get()});
+         const auto out = render(*e, 24000, 512, {{0, Event::On, 57, 1.0f}});
          double sum = 0;
          for (size_t i = 19200; i < out.size(); ++i)
             sum += out[i] * out[i];
