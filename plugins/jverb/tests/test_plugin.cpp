@@ -452,8 +452,12 @@ int main() {
          for (const auto &[id, v] : p.values)
             JCLAP_CHECK(id < kParamCount && v >= kParams[id].min && v <= kParams[id].max);
          jclap::core::TestHost h(clap_entry, kId, kRate);
-         // Loaded over another preset, it sets every param: its own values, the rest to defaults.
-         applyPreset(factoryPresets()[p.name == "Chaos Engine" ? 1 : factoryPresets().size() - 4], *h.object<EditorHost>());
+         // Loaded over another preset (one with every body routed), it sets every param: its own
+         // values, the rest to defaults.
+         const auto riot = std::find_if(factoryPresets().begin(), factoryPresets().end(),
+                                        [](const Preset &q) { return q.name == "Orbit Riot"; });
+         JCLAP_CHECK(riot != factoryPresets().end());
+         applyPreset(p.name == riot->name ? factoryPresets()[1] : *riot, *h.object<EditorHost>());
          applyPreset(p, *h.object<EditorHost>());
          for (clap_id id = 0; id < kParamCount; ++id) {
             double expect = kParams[id].defaultValue;
