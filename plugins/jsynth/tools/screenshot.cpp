@@ -1,5 +1,5 @@
 // Renders the panel to a PNG without a host:
-//    jsynth-screenshot out.png [part [routes [map-source [width height [hidden]]]]]
+//    jsynth-screenshot out.png [part [routes [map-source [width height [view]]]]]
 // Part 0 is A, 1 is B. Routes 1 opens the route list. Map-source, a route source's number, turns MAP
 // on with that source armed. View 0 is every card, 1 the reduced view, 2 only the sky.
 

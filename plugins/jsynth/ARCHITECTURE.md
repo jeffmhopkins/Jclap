@@ -34,7 +34,7 @@ it gives a number, the number is the one in the code.
 | [`src/flock.h`](src/flock.h) | The boids: every creature's flight, who hears whom, the ink field and the eight flock sources. |
 | [`src/plugin.cpp`](src/plugin.cpp) | The CLAP plugin: params, state, note and MIDI events, ports, NOTE_END, and what the panel reads back. |
 | [`src/presets.h`](src/presets.h) | The factory bank and user preset files. |
-| [`src/editor.cpp`](src/editor.cpp) | The panel: the sky, the cards (all on screen at once, no tabs), MAP and the route list. |
+| [`src/editor.cpp`](src/editor.cpp) | The panel: the sky, its three views (FULL with every card, REDUCED with big drawn panels, SKY alone), MAP and the route list. |
 
 A part's params are written once, as offsets, and `partId(part, offset)` gives the host's id: part
 A's start at 64 and part B's at 1088. Each module (oscillator, filter, envelope, LFO, route) is a
@@ -46,7 +46,7 @@ One voice, as it runs at the oversampled rate:
 
 ```mermaid
 flowchart TD
-    NOTE([note on: key, velocity, channel]) --> TOUCH[Touch<br/>Strike, Press, Glide, Slide, Lift<br/>curve and smoothing]
+    NOTE([note on: key, velocity, channel]) --> TOUCH[Touch<br/>Velocity, Press, Glide, Slide, Release<br/>curve and smoothing]
     TOUCH --> PITCH[Pitch<br/>transpose, fine, glide, bend,<br/>drift, Tune Pull]
     PITCH --> O3[Osc 3]
     PITCH --> O2[Osc 2]
@@ -157,16 +157,16 @@ sample is reset rather than passed on.
 
 ## Touch and MPE
 
-Each voice has five touch dimensions, in MPE order. All but Lift are route sources; Lift only
-places a lure (see [The flock](#the-flock)).
+Each voice has five touch dimensions, in MPE order, all route sources. Release is 0 while the note
+is held and its release velocity after.
 
 | Touch | From |
 | --- | --- |
-| **Strike** | note-on velocity |
+| **Velocity** | note-on velocity |
 | **Press** | CLAP pressure, or the MIDI channel's pressure |
 | **Glide** | the bend, as -1..1 of the part's bend range |
 | **Slide** | CLAP brightness, or the channel's CC 74 |
-| **Lift** | release velocity |
+| **Release** | release velocity |
 
 Each goes through its own **Curve** (-1..1: the value is raised to the power 4<sup>-curve</sup>, so
 positive curves respond more early) and **Smoothing** (a one-pole at control rate; 2 ms for Glide,
@@ -214,7 +214,7 @@ long hold.
 Key Track Off pitches Note and Ratio from middle C instead of the note. Every oscillator is clamped
 below 0.45 of the oversampled rate.
 
-**Waves** (14):
+**Waves** (15):
 
 | Wave | How |
 | --- | --- |
@@ -224,6 +224,7 @@ below 0.45 of the oversampled rate.
 | Square, Pulse | polyBLEP edges at both ends, with their DC removed. Shape sets the width: 10 to 90% for Square, 5 to 50% for Pulse. |
 | Half Sine, Abs Sine, Quarter, Alt Sine, Alt Half, Camel, Alt Camel | The TX81Z's other seven waves, each built from the table sine. |
 | White, Pink | Noise; pink is Paul Kellet's economy filter on white. |
+| Random | One of Sine to Alt Camel, drawn from the voice's own random sequence at each note. |
 
 For every wave but Saw, Square and Pulse, **Shape** is a phase distortion: 50% is straight, and
 toward 0 or 100% the first half of the cycle is squeezed or stretched.
@@ -290,7 +291,7 @@ splits the voice between the filters.
 ## Amp and pan
 
 The voice's gain is the part's **Level** (-60 to +6 dB) times its velocity response
-(1 - Velocity + Velocity × Strike) times 0.35 for headroom, and in Expression mode times the
+(1 - Velocity + Velocity × Velocity) times 0.35 for headroom, and in Expression mode times the
 crossfade. Env 1 multiplies it every sample.
 
 Its pan is the part's **Pan** plus **X Pan** times where its creature is, left to right
@@ -301,7 +302,7 @@ flock never moves the stereo image.
 
 **Three envelopes** per voice, each Delay, Attack, Hold, Decay, Sustain, Release (times 0 ms to
 20 s on an even knob, about 100 ms in the middle), with a curve per segment (-1..1) and a
-**Velocity** amount that scales the whole envelope by Strike. A retrigger starts from where the
+**Velocity** amount that scales the whole envelope by the note's velocity. A retrigger starts from where the
 level is, so it never clicks. **Loop** Held repeats attack and decay while the note is held; Free
 keeps repeating after the note is let go too, until the voice ends. Env 1 is the amp and always
 releases on note off. Env 1 runs every sample; Env 2 and 3 at control rate.
@@ -330,7 +331,7 @@ Each part has a pool of **64 routes**, each a source, a destination and an amoun
 all host params. The panel shows only the ones in use, so it reads as an open-ended list. Source and
 Destination are settings (not automatable); amounts are automatable and can be modulated.
 
-**Sources** (20): Env 1 to 3; LFO 1, LFO 2; Strike, Press, Glide, Slide; Key; the flock's four
+**Sources** (21): Env 1 to 3; LFO 1, LFO 2; Velocity, Press, Glide, Slide, Release; Key; the flock's four
 (Speed, Nearest, Heading, Turn); Random; Mod Wheel; Macro 1 to 4. They are unipolar 0..1 except the
 LFOs (by their polarity), Glide, Turn, Random (one value per note, -1..1) and Key, which is
 (key - 60) / 48, clamped to -1..1.
@@ -408,7 +409,7 @@ Speed is clamped between 20% and 100% of a top speed of (0.08 + 0.42 × Speed) �
 - **Flee** runs hard from the other species, whatever it does.
 
 **Where a lure sits.** Lure X and Lure Y each choose what places a note's lure along that axis:
-Pitch (four octaves from C2, with bend), Strike, Press, Slide, Lift, Random (a place per note) or
+Pitch (four octaves from C2, with bend), Velocity, Press, Slide, Release, Random (a place per note) or
 Centre. By default X is Pitch and Y is Slide, so low notes fly left, high notes right, and more
 Slide flies higher.
 
@@ -483,8 +484,8 @@ it per note.
 | Glide Rounding | 0 to 100% | 0% | Pulls a resting finger to the nearest semitone. |
 | Rounding Time | 0 ms to 20 s | 150 ms | How long the pull takes. |
 | Macro 1 to 4 | 0 to 100% | 0% | Sources for routes. |
-| Strike/Press/Glide/Slide/Lift Curve | -1 to +1 | 0 | Each touch's response curve. |
-| Strike/Press/Glide/Slide/Lift Smoothing | 0 ms to 20 s | 8 ms (Glide 2 ms) | Each touch's smoothing. |
+| Velocity/Press/Glide/Slide/Release Curve | -1 to +1 | 0 | Each touch's response curve. |
+| Velocity/Press/Glide/Slide/Release Smoothing | 0 ms to 20 s | 8 ms (Glide 2 ms) | Each touch's smoothing. |
 | Size | 0 to 100% | 50% | How big the sky is. |
 | Walls | Soft, Wrap, Open | Soft | What the sky's edges do. |
 
@@ -504,14 +505,14 @@ it per note.
 | Glide Mode | Always, Legato | Always | Glide from any last note, or only a held one. |
 | MPE Bend Range | 1 to 96 st | 48 st | A member channel's bend range. |
 | Drift | 0 to 100% | 0% | A slow random pitch wander per voice, up to ±0.15 st. |
-| Velocity | 0 to 100% | 100% | How much Strike sets the level. |
+| Velocity | 0 to 100% | 100% | How much velocity sets the level. |
 | Output | Main, Own | Main | The main mix, or the part's own port. |
 
 ### Oscillators (per part, Osc 1 to 3)
 
 | Param | Range | Default | What it does |
 | --- | --- | --- | --- |
-| Wave | 14 waves | Saw (Osc 2, 3: Sine) | See [The oscillators](#the-oscillators). |
+| Wave | 15 waves | Saw (Osc 2, 3: Sine) | See [The oscillators](#the-oscillators). |
 | Shape | 0 to 100% | 50% | Pulse width, or phase distortion. |
 | Pitch Mode | Note, Ratio, Fixed | Note (Osc 2, 3: Ratio) | |
 | Coarse | ±48 st | 0 | Note mode. |
@@ -564,7 +565,7 @@ it per note.
 | Release | 0 ms to 20 s | 300 ms | |
 | Attack, Decay, Release Curve | -1 to +1 | 0 | |
 | Loop | Off, Held, Free | Off | |
-| Velocity | 0 to 100% | 0% | How much Strike scales the envelope. |
+| Velocity | 0 to 100% | 0% | How much velocity scales the envelope. |
 
 ### LFOs (per part: Wingbeat, Wind, LFO 1, LFO 2)
 
@@ -597,7 +598,7 @@ it per note.
 | Bite | 0 to 100% | 0% | This part's ring mod on what it catches. |
 | Tail Length | 0 to 100% | 50% | How long the ink lasts. |
 | Tail Spread | 0 to 100% | 50% | How far it blooms. |
-| Lure X, Lure Y | Pitch, Strike, Press, Slide, Lift, Random, Centre | Pitch, Slide | What places the lure. |
+| Lure X, Lure Y | Pitch, Velocity, Press, Slide, Release, Random, Centre | Pitch, Slide | What places the lure. |
 
 ### Routes (per part, Route 1 to 64)
 
@@ -618,16 +619,16 @@ over. Each category starts with a plain patch with no routes and works up to one
 | --- | --- | --- |
 | Hits | Wood Block | Sine with a ×2.76 modulator, 70 ms decay. |
 | | Glass Tick | Sine with a ×7 modulator. |
-| | Marimba | ×4 and ×10 partials; Env 3 and Strike open the ×10's FM. |
-| | Steel Drum | ×3 and ×2 modulators, Env 3 and Strike on the FM. |
-| | Log Drum | Self-feedback, Env 3 dropping the ratio; Strike deepens the drop. |
+| | Marimba | ×4 and ×10 partials; Env 3 and Velocity open the ×10's FM. |
+| | Steel Drum | ×3 and ×2 modulators, Env 3 and Velocity on the FM. |
+| | Log Drum | Self-feedback, Env 3 dropping the ratio; Velocity deepens the drop. |
 | | Fireflies | Half Sine, Scatter at high speed and wander, short ink, wide X Pan. |
 | | Metal Rain | Inharmonic ×3.73 and ×7.11, Scatter; Random detunes each note's ratios. |
 | | Hunter Clicks | Layer: A flees, B hunts an octave up with Bite and Neighbour FM; Nearest opens A's FM and B's. |
 | Plucks | Sine Pluck | One sine, 900 ms decay, no routes. |
 | | Nylon | Saw through a key-tracked low pass, Env 2 on the cutoff. |
 | | Harp | 1:1 FM with a long ring. |
-| | Koto | ×3 modulator with feedback, Env 3 and Strike on the FM. |
+| | Koto | ×3 modulator with feedback, Env 3 and Velocity on the FM. |
 | | Synth Pluck | Saw and detuned pulse, resonant filter; Slide on the resonance. |
 | | Bell Pluck | ×3.5 and ×7; Press on the upper FM, LFO 1 on the detune. |
 | | Starling Bells | ×3.5 FM with Neighbour FM, Tune Pull and cohesion; Nearest deepens the FM. |
@@ -635,7 +636,7 @@ over. Each category starts with a plain patch with no routes and works up to one
 | Keys | Sine Organ | Three sine drawbars, no routes. |
 | | Tonewheel | The organ with feedback and a 6.5 Hz LFO on the pitch. |
 | | Celesta | Sine with a ×7 modulator and long decay. |
-| | Clav | Narrow pulse through a resonant filter, Strike on the cutoff. |
+| | Clav | Narrow pulse through a resonant filter, Velocity on the cutoff. |
 | | Vibes | ×4 FM with a 5.5 Hz tremolo. |
 | | Tine Piano | A DX-style electric piano: a 1:1 pair and a ×14 tine. |
 | | Suitcase Pressure | The piano with Press on the bark; Slide sets how far the tremolo pans. |

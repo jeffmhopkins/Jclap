@@ -28,9 +28,11 @@ if(JCLAP_BUILD_TOOLS)
    jclap_add_screenshot_test(jsynth-screenshot-part-b-test TOOL jsynth-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-b.png ARGS 1)
    jclap_add_screenshot_test(jsynth-screenshot-map-test TOOL jsynth-screenshot
-      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-map.png ARGS 0 0 11)
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-map.png ARGS 0 0 12)
    jclap_add_screenshot_test(jsynth-screenshot-routes-test TOOL jsynth-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-routes.png ARGS 0 1)
    jclap_add_screenshot_test(jsynth-screenshot-hidden-test TOOL jsynth-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-hidden.png ARGS 0 0 0 1648 940 2)
+   jclap_add_screenshot_test(jsynth-screenshot-reduced-test TOOL jsynth-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-reduced.png ARGS 0 0 0 1648 940 1)
 endif()
