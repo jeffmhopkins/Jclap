@@ -237,7 +237,7 @@ inline const std::vector<std::string> kGlideModeNames = {"Always", "Legato"};
 inline const std::vector<std::string> kOutputNames = {"Main", "Own"};
 inline const std::vector<std::string> kWaveNames = {"Sine",      "Triangle",   "Saw",      "Square",       "Pulse",
                                                     "Half Sine", "Abs Sine",   "Quarter",  "Alt Sine",     "Alt Half",
-                                                    "Camel",     "Alt Camel",  "White",    "Pink"};
+                                                    "Camel",     "Alt Camel",  "White",    "Pink",         "Random"};
 inline const std::vector<std::string> kPitchModeNames = {"Note", "Ratio", "Fixed"};
 inline const std::vector<std::string> kOnOffNames = {"Off", "On"};
 inline const std::vector<std::string> kFmTypeNames = {"Phase", "Exponential"};

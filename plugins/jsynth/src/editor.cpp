@@ -22,6 +22,7 @@
 #include <jclap/ui/section.h>
 #include <jclap/ui/segmented.h>
 #include <jclap/ui/slider.h>
+#include <jclap/ui/tabs.h>
 #include <jclap/ui/tooltip.h>
 
 #include <visage/app.h>
@@ -1162,7 +1163,12 @@ public:
       for (int i = 0; i <= kPoints; ++i) {
          const float t = static_cast<float>(i) / kPoints;
          float y;
-         if (wave >= dsp::kWhite) {
+         if (wave == dsp::kRandom) {
+            // A different tonal wave each half cycle, as a hint that each note takes its own.
+            y = dsp::wave((i * 6 / kPoints * 5 + osc_ * 3) % (dsp::kAltCamel + 1), std::fmod(6.0f * t, 1.0f),
+                          6.0f / kPoints * 0.01f, shape);
+         }
+         else if (wave >= dsp::kWhite) {
             const float n = noise(rng);
             pink = 0.8f * pink + 0.2f * n;
             y = wave == dsp::kWhite ? n * 0.8f : pink * 2.0f;
@@ -1529,6 +1535,71 @@ private:
    EditorHost &host_;
 };
 
+// The FM grid as a picture: the three oscillators as nodes, an arrow from each modulator to what it
+// modulates, as bright and thick as its amount, a loop for each one's feedback, and an arrow out of
+// each oscillator that is heard, as bright as its level.
+class FmView : public visage::Frame {
+public:
+   explicit FmView(EditorHost &host) : host_(host) { setIgnoresMouseEvents(true, false); }
+
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height();
+      const float s = h / 290.0f;
+      const auto param = [&](clap_id offset) { return static_cast<float>(host_.paramValue(partId(host_.part, offset))); };
+      // Osc 2 and 3 above, Osc 1 below: the classic stack, with the carrier at the bottom.
+      const float px[3] = {w * 0.5f, w * 0.2f, w * 0.8f}, py[3] = {h * 0.66f, h * 0.24f, h * 0.24f};
+      const float r = 26 * s;
+      c.setColor(visage::Color(0x40000000));
+      c.roundedRectangle(0, 0, w, h, 6 * s);
+      for (int from = 0; from < kOscCount; ++from)
+         for (int to = 0; to < kOscCount; ++to) {
+            const float amount = param(fmCell(from, to));
+            if (from == to || amount < 0.005f)
+               continue;
+            // Two arrows can join a pair, one each way, so each sits a little to its own side.
+            const float dx = px[to] - px[from], dy = py[to] - py[from], len = std::hypot(dx, dy);
+            const float ux = dx / len, uy = dy / len, nx = -uy * 7 * s, ny = ux * 7 * s;
+            const float x0 = px[from] + ux * r + nx, y0 = py[from] + uy * r + ny;
+            const float x1 = px[to] - ux * (r + 4 * s) + nx, y1 = py[to] - uy * (r + 4 * s) + ny;
+            const unsigned col = kOscColors[from];
+            c.setColor(glow(col, 0.15f + 0.25f * amount, 1.0f));
+            c.segment(x0, y0, x1, y1, (6 + 10 * amount) * s, true);
+            c.setColor(glow(col, 0.4f + 0.6f * amount, 1.0f + 0.6f * amount));
+            c.segment(x0, y0, x1, y1, (1.5f + 3 * amount) * s, true);
+            const float ax = x1 - ux * 10 * s, ay = y1 - uy * 10 * s;
+            c.segment(x1, y1, ax + uy * 6 * s, ay - ux * 6 * s, 2 * s, true);
+            c.segment(x1, y1, ax - uy * 6 * s, ay + ux * 6 * s, 2 * s, true);
+         }
+      for (int o = 0; o < kOscCount; ++o) {
+         const unsigned col = kOscColors[o];
+         const float fb = param(fmCell(o, o)), level = param(mixParam(kMixLevel, o));
+         // Feedback: a ring beside the node.
+         if (fb > 0.005f) {
+            const float lx = px[o] + (o == 2 ? 1 : -1) * r * 1.25f, ly = py[o] - r * 0.9f, lr = 14 * s;
+            c.setColor(glow(col, 0.3f + 0.7f * fb, 1.0f + 0.5f * fb));
+            c.ring(lx - lr, ly - lr, 2 * lr, (1.5f + 3 * fb) * s);
+         }
+         // Heard: an arrow down and out, as bright as the level.
+         if (level > 0.005f) {
+            c.setColor(glow(col, 0.2f + 0.8f * level, 1.0f));
+            c.segment(px[o], py[o] + r + 2 * s, px[o], h - 10 * s, (1.5f + 3 * level) * s, true);
+         }
+         c.setColor(glow(col, 0.25f, 1.0f));
+         c.circle(px[o] - r * 1.3f, py[o] - r * 1.3f, 2.6f * r);
+         c.setColor(visage::Color(0xff10131c));
+         c.circle(px[o] - r, py[o] - r, 2 * r);
+         c.setColor(glow(col, 1.0f, 1.3f));
+         c.ring(px[o] - r, py[o] - r, 2 * r, 2.5f * s);
+         c.text(std::to_string(o + 1), ui::font(18 * s), visage::Font::kCenter, px[o] - r, py[o] - r, 2 * r, 2 * r);
+      }
+      c.setColor(visage::Color(0x88ffffff));
+      c.text("OUT", ui::font(9 * s), visage::Font::kLeft, 8 * s, h - 16 * s, 60 * s, 12 * s);
+   }
+
+private:
+   EditorHost &host_;
+};
+
 class Panel : public ui::DesignFrame, public visage::EventTimer, public Mapper {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
@@ -1762,7 +1833,7 @@ public:
 
 private:
    // Where a widget shows: always, or in the route list.
-   enum Group { kAlways, kFull, kReduced, kRoutes };
+   enum Group { kAlways, kFull, kReduced, kReducedOsc, kReducedFm, kRoutes };
    struct Placed {
       visage::Frame *frame;
       int part; // -1 for both
@@ -1871,6 +1942,8 @@ private:
       switch (group) {
       case kFull: return host_.view == kAllCards;
       case kReduced: return host_.view == kReducedView;
+      case kReducedOsc: return host_.view == kReducedView && oscTab_ == 0;
+      case kReducedFm: return host_.view == kReducedView && oscTab_ == 1;
       case kRoutes: return host_.view == kAllCards && host_.routesOpen;
       default: return true;
       }
@@ -2142,25 +2215,46 @@ private:
    void buildReduced(int part) {
       const unsigned c = kPartColors[part];
       const float x = 16, w = 880;
-      // Oscillators: a row each, its wave drawn beside its knobs.
-      glass({x, 64, w, 330}, "OSCILLATORS", c);
+      // Oscillators, on two tabs: OSCILLATORS has a row each, its wave drawn beside its knobs; FM the
+      // grid, drawn as who modulates whom, and the links between creatures.
+      glass({x, 64, w, 330}, "", c);
+      group_ = kReducedOsc;
       for (int o = 0; o < kOscCount; ++o) {
          const unsigned oc = kOscColors[o];
          const float y = 98 + o * 98.0f;
          label({x + 14, y + 6, 120, 20}, "OSC " + std::to_string(o + 1), oc, visage::Font::kLeft);
+         // Where each note starts the wave: a fresh random place, or always at its Phase.
+         segments(oscParam(o, kOscRetrigger), oc, {x + 62, y + 4, 72, 20}, std::vector<std::string>{"RAND", "SYNC"});
          dropdown(oscParam(o, kOscWave), oc, {x + 14, y + 32, 120, 26});
          segments(oscParam(o, kOscPitchMode), oc, {x + 14, y + 62, 120, 24}, std::vector<std::string>{"NOTE", "RATIO", "HZ"});
          const auto k = ui::row({x + 486, y - 4, 320, 104}, 4);
          auto &coarse = knob(oscParam(o, kOscCoarse), "PITCH", oc, k[0]);
          auto &ratio = knob(oscParam(o, kOscRatio), "RATIO", oc, k[0]);
          auto &fixed = knob(oscParam(o, kOscFixed), "FREQ", oc, k[0]);
-         pitchKnobs_.push_back({part, o, &coarse, &ratio, &fixed, kReduced});
+         pitchKnobs_.push_back({part, o, &coarse, &ratio, &fixed, kReducedOsc});
          knob(oscParam(o, kOscShape), "SHAPE", oc, k[1]);
          knob(mixParam(kMixLevel, o), "LEVEL", oc, k[2]);
          knob(mixParam(kMixPan, o), "PAN", oc, k[3]);
          label({x + 808, y + 10, 64, 16}, "FILTER");
          dropdown(oscParam(o, kOscFilter), oc, {x + 810, y + 36, 60, 26});
       }
+      group_ = kReducedFm;
+      label({x + 340, 98, 300, 16}, "ROW INTO COLUMN", kDim);
+      const auto g = ui::grid({x + 330, 112, 320, 280}, 3, 3);
+      static const char *names[3][3] = {{"FB 1", "1 > 2", "1 > 3"}, {"2 > 1", "FB 2", "2 > 3"}, {"3 > 1", "3 > 2", "FB 3"}};
+      for (int from = 0; from < kOscCount; ++from)
+         for (int to = 0; to < kOscCount; ++to)
+            knob(fmCell(from, to), names[from][to], kOscColors[from], g[from * 3 + to]);
+      segments(kFmBase + kFmType, c, {x + 670, 98, 196, 24}, std::vector<std::string>{"PHASE", "EXP"});
+      label({x + 670, 132, 196, 16}, "BETWEEN CREATURES", kDim);
+      const auto b = ui::grid({x + 664, 150, 208, 240}, 3, 2);
+      knob(flockParam(kNeighbourFm), "FLOCK FM", c, b[0], "The nearest neighbours' Osc 1 into this creature's Osc 2.");
+      knob(flockParam(kTunePull), "TUNE PULL", c, b[1], "Creatures flying the same way drift toward pure intervals.");
+      knob(flockParam(kBite), "BITE", c, b[2], "Ring mod while a hunter holds this creature.");
+      knob(mixParam(kNoiseLevel), "NOISE", c, b[3]);
+      knob(mixParam(kNoiseColor), "COLOR", c, b[4]);
+      knob(kDrift, "DRIFT", c, b[5], "Each creature's own slow wander in pitch.");
+      group_ = kReduced;
 
       // Filters: their response drawn across the panel, then each one's knobs under its half.
       glass({x, 404, w, 250}, "FILTER", c);
@@ -2169,9 +2263,10 @@ private:
       for (int f = 0; f < kFilterCount; ++f) {
          const unsigned fc = f == 0 ? c : sourceColor(kSourceLfo1 + 1);
          const ui::Rect &first = k[f * 4];
-         dropdown(filterParam(f, kFilterType), c, {first.x + 4, 538, 2 * first.w - 8, 24});
-         dropdown(filterParam(f, kFilterSlope), c, {first.x + 2 * first.w + 4, 538, first.w - 8, 24});
-         label({k[f * 4 + 3].x, 541, k[f * 4 + 3].w, 18}, f == 0 ? "FILTER 1" : "FILTER 2", f == 0 ? 0xffffffff : 0xff9fd8ff);
+         // Its name first, then its type and slope.
+         label({first.x, 541, first.w, 18}, f == 0 ? "FILTER 1" : "FILTER 2", f == 0 ? 0xffffffff : 0xff9fd8ff);
+         dropdown(filterParam(f, kFilterType), c, {k[f * 4 + 1].x + 4, 538, 2 * first.w - 8, 24});
+         dropdown(filterParam(f, kFilterSlope), c, {k[f * 4 + 3].x + 4, 538, first.w - 8, 24});
          knob(filterParam(f, kFilterCutoff), "CUTOFF", fc, {k[f * 4].x, 566, k[f * 4].w, 96});
          knob(filterParam(f, kFilterResonance), "RES", fc, {k[f * 4 + 1].x, 566, k[f * 4 + 1].w, 96});
          knob(filterParam(f, kFilterDrive), "DRIVE", fc, {k[f * 4 + 2].x, 566, k[f * 4 + 2].w, 96});
@@ -2225,8 +2320,18 @@ private:
 
    // The reduced view's drawings, which follow the shown part, and its flock sources under the sky.
    void buildReducedShared() {
+      auto &tabs = glassy(put<ui::TabBar>({26, 68, 260, 26}, std::vector<std::string>{"OSCILLATORS", "FM"}), kDim);
+      tabs.select(oscTab_);
+      tabs.onChange = [this](int t) {
+         oscTab_ = t;
+         refresh();
+      };
+      group_ = kReducedOsc;
       for (int o = 0; o < kOscCount; ++o)
          drawings_.push_back(&put<WaveView>({164, 98 + o * 98.0f, 330, 92}, host_, o, kOscColors[o]));
+      group_ = kReducedFm;
+      drawings_.push_back(&put<FmView>({28, 100, 320, 290}, host_));
+      group_ = kReduced;
       drawings_.push_back(&put<FilterView>({28, 440, 856, 94}, host_, *this));
       const ui::Rect vb = kVoiceBox;
       // Each drawing spans the knobs under it.
@@ -2238,8 +2343,9 @@ private:
       drawings_.push_back(&put<LevelView>(over(3, 4), host_));
       drawings_.push_back(&put<VoiceSlotsView>(over(5, 7), host_, *view_));
       const std::pair<int, const char *> sources[] = {
-          {kSourceSpeed, "SPEED"}, {kSourceNearest, "NEAREST"}, {kSourceHeading, "HEADING"}, {kSourceTurn, "TURN"}};
-      for (int i = 0; i < 4; ++i)
+          {kSourceSpeed, "SPEED"}, {kSourceNearest, "NEAREST"}, {kSourceHeading, "HEADING"}, {kSourceTurn, "TURN"},
+          {kSourceRandom, "RANDOM"}};
+      for (int i = 0; i < 5; ++i)
          chip(sources[i].first, sources[i].second, {kReducedSky.x + 8 + i * 84.0f, kReducedSky.y + kReducedSky.h + 12, 80, 24});
       group_ = kAlways;
    }
@@ -2518,6 +2624,7 @@ private:
    ui::EnvelopeEditor *envelopes_[2][kPartCount][kEnvCount] = {};
    std::vector<visage::Frame *> drawings_; // the reduced view's, redrawn each frame
    ui::SegmentedSwitch *viewSwitch_ = nullptr;
+   int oscTab_ = 0; // the reduced view's oscillator panel: 0 OSCILLATORS, 1 FM
    std::vector<ui::EnvelopeEditor::Playhead> heads_;
    std::chrono::steady_clock::time_point last_;
 };
