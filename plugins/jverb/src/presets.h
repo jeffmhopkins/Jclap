@@ -164,6 +164,36 @@ inline const std::vector<Preset> &factoryPresets() {
                    {{kDecay, 60}, {kSize, 3}, {kMotion, 0.4}, {kDiffusion, 0.9}, {kEarlyLate, 1}, {kDampHigh, 8000},
                     {kSmear, 0.4}, {kDuck, 0.3}, {kMix, 0.6}}});
 
+      // The extremes: the far ends of the ranges, for sounds that stop being rooms. Feedback past 100%
+      // sustains and grows into the safety stage, so these hold or bloom rather than die away.
+      p.push_back({"Singing Tank", "Extremes",
+                   {{kDecay, 20}, {kSize, 0.3}, {kDiffusion, 0}, {kFeedback, 0.9}, {kDampHigh, 20000}, {kMotion, 0},
+                    {kEarlyLate, 1}, {kMix, 0.5}}});
+      p.push_back({"Whale Song", "Extremes",
+                   {{kDecay, 30}, {kSize, 4}, {kGravity, 0.4}, {kMotion, 1.6}, {kFeedback, 0.95}, {kShimmer, 0.3},
+                    {kShimmerPitch, -5}, {kDampHigh, 3000}, {kBassMult, 1.6}, {kOrbitSwirl, 1.6}, {kDiffusion, 0.9},
+                    {kEarlyLate, 1}, {kAttack, 0.4}, {kMix, 0.6}}});
+      p.push_back({"Feedback Bloom", "Extremes",
+                   {{kFeedback, 1.45}, {kTilt, 0.3}, {kShimmer, 0.12}, {kShimmerPitch, 7}, {kDampHigh, 12000},
+                    {kDecay, 6}, {kSize, 1.5}, {kMix, 0.5}}});
+      p.push_back({"Screaming Loop", "Extremes",
+                   {{kFeedback, 1.3}, {kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kTube}, {kDrive, 24},
+                    {kTilt, 0.2}, {kDecay, 5}, {kSize, 0.8}, {kMix, 0.45}}});
+      p.push_back({"Orbit Riot", "Extremes",
+                   with(with(with({{kBodies, 6}, {kGravity, 2.5}, {kReact, 1}, {kMotion, 0.9}, {kDecay, 5},
+                                   {kFeedback, 0.6}, {kMix, 0.5}},
+                                  target(0, Target::Feedback, 0.6)),
+                             with(target(1, Target::Damping, -0.6), target(2, Target::Tilt, 0.5))),
+                        with(with(target(3, Target::Width, 0.6), target(4, Target::Shimmer, 0.5)),
+                             target(5, Target::Decay, 0.5)))});
+      p.push_back({"Inside Out", "Extremes",
+                   {{kOrbitPan, 2}, {kOrbitSwirl, 2}, {kOrbitTone, 2}, {kWidth, 2}, {kDecay, 6}, {kSize, 2},
+                    {kMotion, 1.2}, {kMix, 0.55}}});
+      p.push_back({"Echo Runaway", "Extremes",
+                   {{kEchoOn, 1}, {kEchoWhere, kLoopSlot}, {kEchoSync, 9}, {kEchoFeedback, 1.05}, {kEchoTone, -0.4},
+                    {kEchoMix, 1}, {kDriveOn, 1}, {kDriveWhere, kInLoop}, {kDriveType, kTape}, {kDrive, 10},
+                    {kFeedback, 0.8}, {kDecay, 5}, {kMix, 0.5}}});
+
       // Every preset lists every setting, the rest at their defaults, so a preset is the whole sound.
       for (Preset &preset : p) {
          std::vector<bool> given(kParamCount, false);

@@ -1291,7 +1291,7 @@ private:
       tabs.addToPage(0, add<ui::Label>(ui::Rect{g[2].x, g[2].y + 72, g[2].w, 16}, "sparse - dense", kDim,
                                        visage::Font::kCenter));
       tabs.addToPage(0, knob(kMotion, "MOTION", a, g[3], "How much the tail drifts and shimmers as it rings: "
-                                                         "a subtle chorus up to 100%, a seasick warble past it."));
+                                                         "a subtle chorus up to 80%, a seasick warble past it."));
       tabs.addToPage(0, knob(kPredelay, "PREDELAY", a, g[4]));
       tabs.addToPage(0, knob(kDampHigh, "DAMP HIGH", a, g[5], "Highs above this die faster on every pass."));
 
@@ -1301,10 +1301,11 @@ private:
       tabs.addToPage(1, knob(kDiffusion, "DIFFUSION", a, h[1], "How much the input is smeared before the tank."));
       tabs.addToPage(1, knob(kEarlyLate, "EARLY/LATE", a, h[2]));
       tabs.addToPage(1, knob(kBassMult, "BASS MULT", a, h[3], "Bass decay relative to the mids."));
-      tabs.addToPage(1, knob(kBassXover, "BASS XOVER", a, h[4]));
-      tabs.addToPage(1, knob(kLowCut, "LOW CUT", a, h[5], "Filters the input before the reverb."));
-      tabs.addToPage(1, knob(kHighCut, "HIGH CUT", a, h[6], "Filters the input before the reverb."));
-      tabs.addToPage(1, knob(kReact, "REACT", a, h[7], "How hard transients in the input kick the bodies."));
+      // Bass Xover isn't on the panel: across its whole range it barely changes the sound. It stays a
+      // param, so projects and presets that set it still load.
+      tabs.addToPage(1, knob(kLowCut, "LOW CUT", a, h[4], "Filters the input before the reverb."));
+      tabs.addToPage(1, knob(kHighCut, "HIGH CUT", a, h[5], "Filters the input before the reverb."));
+      tabs.addToPage(1, knob(kReact, "REACT", a, h[6], "How hard transients in the input kick the bodies."));
 
       // Each body is its own voice in the tail; these set how much the orbits move those voices.
       const auto o = ui::grid({26, 104, 194, 240}, 2, 2);
@@ -1333,7 +1334,8 @@ private:
       const auto g = ui::grid({980, 140, 194, 330}, 2, 3);
       tabs.addToPage(0, knob(kFeedback, "FEEDBACK", a, g[0], "Feeds the tank's output back into its input through "
                                                              "the loop. Past 100% it grows into the limiter."));
-      tabs.addToPage(0, knob(kShimmer, "SHIMMER", a, g[1], "How much of the loop is pitch shifted."));
+      tabs.addToPage(0, knob(kShimmer, "SHIMMER", a, g[1], "How much of the loop is pitch shifted. Heard even with "
+                                                           "Feedback at 0."));
       tabs.addToPage(0, add<ui::Label>(ui::Rect{g[2].x, g[2].y + 2, g[2].w, 16}, "PITCH", kText, visage::Font::kCenter));
       auto &pitch = glassy(add<ui::NumberBox>({g[2].x + 4, g[2].y + 34, g[2].w - 8, 28}, rangeOf(kShimmerPitch, 1.0)), a);
       pitch.setStepButtons(true);
@@ -1341,10 +1343,10 @@ private:
       pitch.parseText = [](const std::string &t, double &v) { return parseParam(kShimmerPitch, t.c_str(), v); };
       bindings_.bind(pitch, kShimmerPitch);
       tabs.addToPage(0, pitch);
-      tabs.addToPage(0, knob(kTilt, "TILT", a, g[3], "Darkens or brightens what goes round the loop."));
-      tabs.addToPage(0, knob(kSmear, "SMEAR", a, g[4], "Allpass smearing in the loop."));
-      tabs.addToPage(0, add<ui::Label>(ui::Rect{g[5].x, g[5].y + 2, g[5].w, 16}, "SAFETY", kText, visage::Font::kCenter));
-      auto &safety = glassy(add<ui::SegmentedSwitch>({g[5].x + 4, g[5].y + 34, g[5].w - 8, 28},
+      tabs.addToPage(0, knob(kTilt, "TILT", a, g[3], "Darkens or brightens the tail, and what goes round the loop."));
+      // Smear isn't on the panel, for the same reason as Bass Xover; it stays a param.
+      tabs.addToPage(0, add<ui::Label>(ui::Rect{g[4].x, g[4].y + 2, g[4].w, 16}, "SAFETY", kText, visage::Font::kCenter));
+      auto &safety = glassy(add<ui::SegmentedSwitch>({g[4].x + 4, g[4].y + 34, g[4].w - 8, 28},
                                                      std::vector<std::string>{"SOFT", "HARD"}),
                             a);
       bindings_.bind(safety, kSafety);

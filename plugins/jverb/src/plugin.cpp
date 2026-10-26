@@ -609,7 +609,10 @@ private:
          const OrbitSim::Body &body = sim_.body(b);
          c.pan[b] = std::clamp(body.x / 1.3, -1.0, 1.0);
          // Bright near the centre of mass, dark out on the swing (rest distance is about 0.9).
-         c.tone[b] = orbitTone * std::clamp(1.2 * (1.0 - sim_.radius(b) / 0.9), -1.0, 1.0);
+         // Past 100% Orbit Tone the bodies also turn more sensitive, up to three times at 200%, so a
+         // small swing already reaches the extremes.
+         const double toneReach = 1.2 * (1.0 + 2.0 * std::max(0.0, orbitTone - 1.0));
+         c.tone[b] = orbitTone * std::clamp(toneReach * (1.0 - sim_.radius(b) / 0.9), -1.0, 1.0);
          // Twice round the phaser's sweep per lap, so it swirls as fast as the body goes round; past
          // full Swirl, up to eight times (a whole number, so the sweep stays smooth as the angle wraps).
          c.phase[b] = std::sin(sweeps * std::atan2(body.y, body.x));

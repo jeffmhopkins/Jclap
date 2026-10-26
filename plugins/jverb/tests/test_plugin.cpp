@@ -472,11 +472,17 @@ int main() {
          JCLAP_CHECK(finiteAndBounded(outL, 4.0f) && finiteAndBounded(outR, 4.0f));
 
          // Then 40 s of silence, at a lower rate to keep the test quick: the tail must never grow,
-         // even with the drive or the echo in the loop.
+         // even with the drive or the echo in the loop. The Extremes run their loops past 100% on
+         // purpose, so theirs may sustain and grow, but only up to the safety stage and the guard.
          constexpr double kLongRate = 24000.0;
          jclap::core::TestHost slow(clap_entry, kId, kLongRate);
          applyPreset(p, *slow.object<EditorHost>());
-         const auto e = windows(tail(slow, kLongRate, 40.0), kLongRate, 2.0, 4.0);
+         const auto longTail = tail(slow, kLongRate, 40.0);
+         if (p.category == "Extremes") {
+            JCLAP_CHECK(finiteAndBounded(longTail, 1.25f));
+            continue;
+         }
+         const auto e = windows(longTail, kLongRate, 2.0, 4.0);
          // Repeats and routed bodies make a tail rise and fall, but it never climbs above where it
          // has already been.
          bool grows = false;
