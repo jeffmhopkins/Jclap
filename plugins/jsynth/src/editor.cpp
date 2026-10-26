@@ -2323,33 +2323,33 @@ private:
       group_ = kReduced;
 
       // Filters: their response drawn across the panel, then each one's knobs under its half.
-      glass({x, 404, w, 250}, "FILTER", c);
+      glass({x, 404, w, 313}, "FILTER", c);
       segments(tailParam(kFilterRouting), c, {x + 90, 410, 160, 24}, std::vector<std::string>{"SERIAL", "PARALLEL"});
-      const auto k = ui::row({x + 8, 542, w - 16, 104}, 9);
+      const auto k = ui::row({x + 8, 605, w - 16, 104}, 9);
       for (int f = 0; f < kFilterCount; ++f) {
          const unsigned fc = f == 0 ? c : sourceColor(kSourceLfo1 + 1);
          const ui::Rect &first = k[f * 4];
          // Its name first, then its type and slope.
-         label({first.x, 541, first.w, 18}, f == 0 ? "FILTER 1" : "FILTER 2", f == 0 ? 0xffffffff : 0xff9fd8ff);
-         dropdown(filterParam(f, kFilterType), c, {k[f * 4 + 1].x + 4, 538, 2 * first.w - 8, 24});
-         dropdown(filterParam(f, kFilterSlope), c, {k[f * 4 + 3].x + 4, 538, first.w - 8, 24});
-         knob(filterParam(f, kFilterCutoff), "CUTOFF", fc, {k[f * 4].x, 566, k[f * 4].w, 96});
-         knob(filterParam(f, kFilterResonance), "RES", fc, {k[f * 4 + 1].x, 566, k[f * 4 + 1].w, 96});
-         knob(filterParam(f, kFilterDrive), "DRIVE", fc, {k[f * 4 + 2].x, 566, k[f * 4 + 2].w, 96});
-         knob(filterParam(f, kFilterKeyTrack), "KEY", fc, {k[f * 4 + 3].x, 566, k[f * 4 + 3].w, 96});
+         label({first.x, 604, first.w, 18}, f == 0 ? "FILTER 1" : "FILTER 2", f == 0 ? 0xffffffff : 0xff9fd8ff);
+         dropdown(filterParam(f, kFilterType), c, {k[f * 4 + 1].x + 4, 601, 2 * first.w - 8, 24});
+         dropdown(filterParam(f, kFilterSlope), c, {k[f * 4 + 3].x + 4, 601, first.w - 8, 24});
+         knob(filterParam(f, kFilterCutoff), "CUTOFF", fc, {k[f * 4].x, 629, k[f * 4].w, 96});
+         knob(filterParam(f, kFilterResonance), "RES", fc, {k[f * 4 + 1].x, 629, k[f * 4 + 1].w, 96});
+         knob(filterParam(f, kFilterDrive), "DRIVE", fc, {k[f * 4 + 2].x, 629, k[f * 4 + 2].w, 96});
+         knob(filterParam(f, kFilterKeyTrack), "KEY", fc, {k[f * 4 + 3].x, 629, k[f * 4 + 3].w, 96});
       }
-      knob(tailParam(kFilterBalance), "BALANCE", c, {k[8].x, 566, k[8].w, 96}, "In parallel, turns Filter 1 or Filter 2 down.");
+      knob(tailParam(kFilterBalance), "BALANCE", c, {k[8].x, 629, k[8].w, 96}, "In parallel, turns Filter 1 or Filter 2 down.");
 
       // Envelopes: three big editors side by side.
-      glass({x, 664, w, 260}, "ENVELOPES", c);
+      glass({x, 727, w, 197}, "ENVELOPES", c);
       const char *envNames[kEnvCount] = {"ENV 1  AMP", "ENV 2", "ENV 3"};
       for (int e = 0; e < kEnvCount; ++e) {
          const float ex = x + 12 + e * 288.0f;
          const unsigned ec = sourceColor(kSourceEnv1 + e);
-         chip(kSourceEnv1 + e, envNames[e], {ex, 694, 110, 24});
-         dropdown(envParam(e, kEnvLoop), c, {ex + 190, 694, 86, 24});
+         chip(kSourceEnv1 + e, envNames[e], {ex, 757, 110, 24});
+         dropdown(envParam(e, kEnvLoop), c, {ex + 190, 757, 86, 24});
          const auto id = [&](EnvParam p) { return partId(part, envParam(e, p)); };
-         auto &env = glassy(put<ui::EnvelopeEditor>({ex, 726, 276, 190}, rangeOf(id(kEnvAttack)), rangeOf(id(kEnvDecay)),
+         auto &env = glassy(put<ui::EnvelopeEditor>({ex, 789, 276, 127}, rangeOf(id(kEnvAttack)), rangeOf(id(kEnvDecay)),
                                                     rangeOf(id(kEnvSustain)), rangeOf(id(kEnvRelease))),
                             ec);
          env.setTimeCurve(0.35f);
@@ -2398,7 +2398,7 @@ private:
       group_ = kReducedFm;
       drawings_.push_back(&put<FmView>({28, 100, 320, 290}, host_));
       group_ = kReduced;
-      drawings_.push_back(&put<FilterView>({28, 440, 856, 94}, host_, *this));
+      drawings_.push_back(&put<FilterView>({28, 440, 856, 157}, host_, *this));
       const ui::Rect vb = kVoiceBox;
       // Each drawing spans the knobs under it.
       const auto k = kVoiceKnobs();
