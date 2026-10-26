@@ -49,8 +49,8 @@ public:
    // the route list is open. Main thread only.
    int part = 0;
    bool routesOpen = false;
-   // Whether the cards are hidden, leaving only the sky.
-   bool panelsHidden = false;
+   // The view: 0 every card, 1 reduced (the voice's big panels beside the sky), 2 only the sky.
+   int view = 0;
    // Whether the sky draws the held notes' lure rings.
    bool ringsShown = true;
 };
@@ -58,12 +58,12 @@ public:
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // What a screenshot shows: the part, the route list, and MAP mode with a source
-// armed (a Source from params.h, or 0 for MAP off), and whether the cards are hidden.
+// armed (a Source from params.h, or 0 for MAP off), and the view (0 full, 1 reduced, 2 sky only).
 struct ScreenshotView {
    int part = 0;
    bool routes = false;
    int mapSource = 0;
-   bool hidden = false;
+   int view = 0;
 };
 
 // Flies the flock for `seconds`, then draws the panel offscreen at the given pixel size and saves it
