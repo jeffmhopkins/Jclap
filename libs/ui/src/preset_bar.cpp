@@ -9,7 +9,7 @@ namespace jclap::ui {
 
 namespace {
 constexpr float kArrow = 26.0f, kSave = 52.0f;
-constexpr int kSaveId = 1 << 20, kUserBase = 1 << 16;
+constexpr int kSaveId = 1 << 20, kDeleteId = kSaveId + 1, kUserBase = 1 << 16;
 
 // The save name box. A click anywhere but SAVE drops the name, so the box never sits open without
 // the keyboard; SAVE itself saves, and so does Enter.
@@ -225,13 +225,34 @@ void PresetBar::showMenu() {
    menu.addSubMenu(std::move(user));
    menu.addBreak();
    menu.addOption(kSaveId, "Save as...");
+   if (indexOf(current) >= static_cast<int>(factory_.size()))
+      menu.addOption(kDeleteId, "Delete \"" + current + "\"...");
    menu.onSelection() += [this](int id) {
       if (id == kSaveId)
          startSave();
+      else if (id == kDeleteId)
+         confirmDelete();
       else if (id >= kUserBase && id - kUserBase < static_cast<int>(user_.size()))
          loadIndex(static_cast<int>(factory_.size()) + id - kUserBase);
       else if (id >= 0 && id < static_cast<int>(factory_.size()))
          loadIndex(id);
+   };
+   menu.show(this, {kArrow * height() / 28.0f, height()});
+}
+
+// Deleting a preset can't be undone, so the menu asks once more before the file goes.
+void PresetBar::confirmDelete() {
+   const std::string current = name();
+   visage::PopupMenu menu;
+   menu.addOption(kDeleteId, "Delete \"" + current + "\" for good");
+   menu.addOption(-2, "Cancel");
+   menu.onSelection() += [this, current](int id) {
+      if (id != kDeleteId)
+         return;
+      std::error_code ec;
+      std::filesystem::remove(userPresetFolder(format_) / (current + format_.extension), ec);
+      rescan();
+      redraw();
    };
    menu.show(this, {kArrow * height() / 28.0f, height()});
 }

@@ -73,6 +73,7 @@ private:
    int indexOf(const std::string &name) const;
    void loadIndex(int index);
    void showMenu();
+   void confirmDelete();
    void startSave();
    void finishSave(bool apply);
    std::string uniqueName(const std::string &wanted);

@@ -410,7 +410,7 @@ public:
 private:
    enum class Zone { None, Prev, Name, Next, Save };
    static constexpr float kArrow = 24.0f, kSave = 48.0f;
-   static constexpr int kSaveId = 1 << 20, kUserBase = 1 << 16;
+   static constexpr int kSaveId = 1 << 20, kDeleteId = kSaveId + 1, kUserBase = 1 << 16;
 
    Zone zoneAt(float x) const {
       const float s = height() / 26.0f, w = width();
@@ -497,13 +497,39 @@ private:
       menu.addSubMenu(std::move(user));
       menu.addBreak();
       menu.addOption(kSaveId, "Save as...");
+      if (onUserPreset())
+         menu.addOption(kDeleteId, "Delete \"" + current + "\"...");
       menu.onSelection() += [this](int id) {
          if (id == kSaveId)
             startSave();
+         else if (id == kDeleteId)
+            confirmDelete();
          else if (id >= kUserBase && id - kUserBase < static_cast<int>(user_.size()))
             load(static_cast<int>(factoryPresets().size()) + id - kUserBase);
          else if (id >= 0 && id < static_cast<int>(factoryPresets().size()))
             load(id);
+      };
+      menu.show(this, {kArrow * height() / 26.0f, height()});
+   }
+
+   bool onUserPreset() const {
+      const int i = indexOf(host_.presetName());
+      return i >= static_cast<int>(factoryPresets().size());
+   }
+
+   // Deleting a preset can't be undone, so the menu asks once more before the file goes.
+   void confirmDelete() {
+      const std::string name = host_.presetName();
+      visage::PopupMenu menu;
+      menu.addOption(kDeleteId, "Delete \"" + name + "\" for good");
+      menu.addOption(-2, "Cancel");
+      menu.onSelection() += [this, name](int id) {
+         if (id != kDeleteId)
+            return;
+         std::error_code ec;
+         std::filesystem::remove(userPresetFolder() / (name + kPresetExtension), ec);
+         rescan();
+         redraw();
       };
       menu.show(this, {kArrow * height() / 26.0f, height()});
    }
