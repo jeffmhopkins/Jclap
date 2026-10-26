@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "editor.h"
+#include "orbit.h"
 #include "params.h"
 #include "presets.h"
 
@@ -599,6 +600,28 @@ int main() {
       for (int i = 0; i < 4; ++i)
          h.process(512, silentIn, silentOut);
       JCLAP_CHECK(panel.readFrame(after) && std::hypot(after.x[0], after.y[0]) < 8.0f);
+   }
+
+   // Left running, the bodies keep their energy and stay apart: they used to bleed it away until they
+   // sat in pairs on top of each other. Five minutes at the control rate, at the default masses.
+   {
+      const double mass[kMaxBodies] = {1.0, 1.25, 0.8, 1.0, 1.0, 1.0}, speed[kMaxBodies] = {1, 1, 1, 1, 1, 1};
+      for (int count : {3, 6}) {
+         OrbitSim sim;
+         sim.reset(count, mass, speed, 1.0);
+         const double start = sim.energy(mass, 1.0), dt = 0.8 * 32 / kRate;
+         const long ticks = static_cast<long>(300 * kRate / 32), lastMinute = static_cast<long>(60 * kRate / 32);
+         double nearest = 0.0;
+         for (long t = 0; t < ticks; ++t) {
+            sim.step(dt, mass, 1.0);
+            if (t >= ticks - lastMinute)
+               for (int b = 0; b < count; ++b)
+                  nearest += sim.nearest(b) / (count * lastMinute);
+         }
+         JCLAP_CHECK(sim.finite());
+         JCLAP_CHECK(std::fabs(sim.energy(mass, 1.0) - start) < 0.02 * std::fabs(start));
+         JCLAP_CHECK(nearest > 0.6);
+      }
    }
 
    // A preset file from 0.4.x (69 params) gets its body targets translated; one from 0.5 or 0.6
