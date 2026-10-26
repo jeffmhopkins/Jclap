@@ -34,7 +34,7 @@ it gives a number, the number is the one in the code.
 | [`src/flock.h`](src/flock.h) | The boids: every creature's flight, who hears whom, the ink field and the eight flock sources. |
 | [`src/plugin.cpp`](src/plugin.cpp) | The CLAP plugin: params, state, note and MIDI events, ports, NOTE_END, and what the panel reads back. |
 | [`src/presets.h`](src/presets.h) | The factory bank and user preset files. |
-| [`src/editor.cpp`](src/editor.cpp) | The panel: the sky, the cards, MAP and the route list. |
+| [`src/editor.cpp`](src/editor.cpp) | The panel: the sky, the cards (all on screen at once, no tabs), MAP and the route list. |
 
 A part's params are written once, as offsets, and `partId(part, offset)` gives the host's id: part
 A's start at 64 and part B's at 1088. Each module (oscillator, filter, envelope, LFO, route) is a
@@ -279,9 +279,13 @@ also has its own **Drive** (a tanh on its input, gain 1 to 5, gain compensated).
 
 - **Serial:** Filter 1 into Filter 2. Filter 2 starts as an open ladder, so serial changes nothing
   until it is turned down.
-- **Parallel:** both hear the drive; **Balance** crossfades between them.
-- **Split:** Osc 1 goes to Filter 1, Osc 2, Osc 3 and the noise to Filter 2. At centre Balance both
-  are at full; either side turns the other down.
+- **Parallel:** each filter hears what goes into it; **Balance** turns each down from the centre out.
+
+Each oscillator and the noise picks its filter (**Filter**: 1+2, F1 or F2). In serial, F1 and 1+2
+go through both filters and F2 through Filter 2 only. In parallel, a source in only one filter is at
+full level with Balance at centre, and the other side turns it down. A source in both goes half
+into each at centre and all into one at either end, so it crossfades. Osc 1 on F1 and the rest on F2
+splits the voice between the filters.
 
 ## Amp and pan
 
@@ -354,7 +358,8 @@ route is corrected a tick later.
 A route whose destination is a flock param moves that creature's own flight: Press onto Speed makes
 the creature you press harder fly faster. Those are read only on ticks that end with a flock step.
 
-**MAP** writes the same routes from the panel: press MAP, touch a source chip, then drag a knob. The
+**MAP** writes the same routes from the panel: touch a source chip (which turns MAP on with it
+armed), then drag a knob. The
 first drag on a knob takes a free route for that source and destination; double-click flips its
 sign, right-click removes it. Route rings show only in MAP with a source armed: each knob that
 source moves shows a ring in its colour. Outside MAP the knobs show no rings.
@@ -518,6 +523,7 @@ it per note.
 | Phase | 0 to 360° | 0 | |
 | Bend | 0 to 100% | 100% | How much the bend moves it. |
 | Key Track | Off, On | On | Off pitches it from middle C. |
+| Filter | 1+2, F1, F2 | 1+2 | Which filter it goes into. |
 | Level (mixer) | 0 to 100% | 100% (Osc 2, 3: 0%) | |
 | Pan (mixer) | -100 to +100% | 0 | |
 
@@ -529,6 +535,7 @@ it per note.
 | FM Type | Phase, Exponential | Phase | |
 | Noise Level | 0 to 100% | 0% | |
 | Noise Color | -100 to +100% | 0 | Pink to white. |
+| Noise Filter | 1+2, F1, F2 | 1+2 | Which filter the noise goes into. |
 | Drive Type | Soft, Hard, Tube | Soft | |
 | Drive | 0 to 100% | 0% | Before the filters. |
 
@@ -536,7 +543,7 @@ it per note.
 
 | Param | Range | Default | What it does |
 | --- | --- | --- | --- |
-| Filter Routing | Serial, Parallel, Split | Serial | |
+| Filter Routing | Serial, Parallel | Serial | |
 | Filter Balance | -100 to +100% | 0 | Filter 1 against Filter 2. |
 | Type | Low Pass, High Pass, Band Pass, Notch, Peak, Ladder, Comb +, Comb - | Low Pass (Filter 2: Ladder) | |
 | Slope | 12, 24, 36, 48 dB | 24 dB | Low, high and band pass. |

@@ -45,11 +45,9 @@ public:
    // panel then flies its own).
    virtual bool flockFrame(FlockFrame &) const { return false; }
 
-   // Where the panel was left, so reopening it shows the same view: the part (A or B), the left and
-   // right cards' tabs, and whether the route list is open. Main thread only.
+   // Where the panel was left, so reopening it shows the same view: the part (A or B), and whether
+   // the route list is open. Main thread only.
    int part = 0;
-   int leftTab = 0;
-   int rightTab = 0;
    bool routesOpen = false;
    // Whether the cards are hidden, leaving only the sky.
    bool panelsHidden = false;
@@ -59,12 +57,10 @@ public:
 
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
-// What a screenshot shows: the part, the cards' tabs, the route list, and MAP mode with a source
+// What a screenshot shows: the part, the route list, and MAP mode with a source
 // armed (a Source from params.h, or 0 for MAP off), and whether the cards are hidden.
 struct ScreenshotView {
    int part = 0;
-   int leftTab = 0;
-   int rightTab = 0;
    bool routes = false;
    int mapSource = 0;
    bool hidden = false;

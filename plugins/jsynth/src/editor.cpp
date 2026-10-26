@@ -1,13 +1,13 @@
 // JSynth's panel: the sky fills the window, drawn with bloom, and the controls float over it on
-// translucent cards, as JVerb's do. 1200 x 780 design units, scaled to the window.
+// translucent cards, as JVerb's do. 1648 x 940 design units, scaled to the window.
 //
 // Every held note is a creature. The panel flies both species' flocks itself, about 60 frames a
 // second on the main thread, from the held notes and the flock params, and each creature sheds ink
 // that blooms and fades behind it. It is a mock: the audio thread doesn't fly them yet, so nothing
 // here reaches the sound.
 //
-// MAP mode is how modulation is made: press MAP, touch a source (a chip in the header, on the cards
-// or under the sky), then drag any knob to set how much that source moves it. While it is armed, its
+// MAP mode is how modulation is made: touch a source (a chip in the header, on the cards or under
+// the sky), which turns MAP on with it armed, then drag any knob to set how much that source moves it. While it is armed, its
 // routes show as rings in its colour around the knobs they move; outside MAP the knobs show none.
 
 #include "editor.h"
@@ -22,7 +22,6 @@
 #include <jclap/ui/section.h>
 #include <jclap/ui/segmented.h>
 #include <jclap/ui/slider.h>
-#include <jclap/ui/tabs.h>
 #include <jclap/ui/tooltip.h>
 
 #include <visage/app.h>
@@ -1156,7 +1155,6 @@ public:
       }
       part_ = -1;
       buildRouteControls();
-      showTabs(host_.leftTab, host_.rightTab);
       showRoutes(host_.routesOpen);
       showPart(host_.part);
       showPanels(!host_.panelsHidden);
@@ -1235,11 +1233,6 @@ public:
       host_.part = std::clamp(part, 0, kPartCount - 1);
       partSwitch_->setSelected(host_.part);
       partSwitch_->setAccent(kPartColors[host_.part]);
-      refresh();
-   }
-   void showTabs(int left, int right) {
-      host_.leftTab = left;
-      host_.rightTab = right;
       refresh();
    }
    void showRoutes(bool open) {
@@ -1358,7 +1351,7 @@ public:
    }
 
 private:
-   // Where a widget shows: always, or on a tab of the left or right card, or in the route list.
+   // Where a widget shows: always, or in the route list.
    enum Group { kAlways, kRoutes };
    struct Placed {
       visage::Frame *frame;
@@ -1478,7 +1471,7 @@ private:
       }
    }
 
-   // Adds a widget for the part, card and tab being built.
+   // Adds a widget for the part and card being built.
    template <typename T, typename... Args>
    T &put(ui::Rect bounds, Args &&...args) {
       bounds.x += dx_;
@@ -1561,7 +1554,7 @@ private:
       map.setToggle(true);
       map.onToggle = [this](bool on) { setMapping(on, kSourceOff); };
       mapButton_ = &map;
-      tips_.add(map, "Press MAP, touch a source, then drag any knob to set how much the source moves it. "
+      tips_.add(map, "Touch a source (which turns MAP on), then drag any knob to set how much the source moves it. "
                      "Double-click a knob to flip its route, right-click to remove it.");
       const auto cells = ui::row({872, 13, 312, 26}, kTouchSourceCount, 4);
       for (int i = 0; i < kTouchSourceCount; ++i)
@@ -1679,7 +1672,7 @@ private:
       for (int l = 0; l < kMotionCount; ++l) {
          const float y = 104 + l * 272.0f;
          const unsigned lc = kMotionColors[l];
-         tips_.add(label({28, y, 104, 22}, l == 0 ? "WINGBEAT" : "WIND", lc, visage::Font::kLeft),
+         tips_.add(label({30, y + 3, 104, 16}, l == 0 ? "WINGBEAT" : "WIND", lc, visage::Font::kLeft),
                    l == 0 ? "One per creature: each bobs across its path." : "One gust for the whole sky, pushing every creature.");
          lfoControls(l, lc, c, 28, y);
       }
@@ -1800,7 +1793,7 @@ private:
       }
       dropdown(tailParam(kDriveType), c, {k[8].x + 4, y + 36, k[9].x + k[9].w - k[8].x - 8, 22});
       knob(tailParam(kDriveAmount), "DRIVE", c, k[8]);
-      knob(tailParam(kFilterBalance), "BALANCE", c, k[9], "Filter 1 against Filter 2, in parallel and split.");
+      knob(tailParam(kFilterBalance), "BALANCE", c, k[9], "In parallel, turns Filter 1 or Filter 2 down.");
    }
 
    // Bottom: a card per oscillator.
@@ -1908,8 +1901,8 @@ private:
          routePage_ = 99; // the last page, where the new route is
          layoutRoutes();
       };
-      tips_.add(add, "Add a route, then pick its source and destination. Or press MAP, touch a source and drag "
-                     "any knob.");
+      tips_.add(add, "Add a route, then pick its source and destination. Or touch a source and drag any "
+                     "knob.");
       auto &prev = glassy(put<ui::Button>({876, 70, 30, 22}, "<"), kMapColor);
       prev.onClick = [this] {
          routePage_ = std::max(0, routePage_ - 1);
@@ -2007,7 +2000,6 @@ bool renderScreenshot(EditorHost &host, const ScreenshotView &view, double secon
    Panel panel(host);
    panel.stopTimer();
    panel.showPart(view.part);
-   panel.showTabs(view.leftTab, view.rightTab);
    panel.showRoutes(view.routes);
    panel.setMapping(view.mapSource != 0, view.mapSource);
    panel.showPanels(!view.hidden);
@@ -2023,7 +2015,6 @@ bool renderFrames(EditorHost &host, const ScreenshotView &view, int width, int h
    Panel panel(host);
    panel.stopTimer();
    panel.showPart(view.part);
-   panel.showTabs(view.leftTab, view.rightTab);
    panel.showRoutes(view.routes);
    panel.setMapping(view.mapSource != 0, view.mapSource);
    panel.showPanels(!view.hidden);
