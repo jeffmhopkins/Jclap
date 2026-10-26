@@ -1,12 +1,19 @@
 #pragma once
 
-// The orbit simulation: two to six bodies under their mutual gravity and nothing else, so the motion
-// braids, swaps partners and slingshots without ever settling. The audio thread steps it every
+// The orbit simulation: two to six bodies under their mutual gravity, so the motion braids, swaps
+// partners and slingshots without ever settling. The audio thread steps it every
 // control tick; it never allocates, and the same steps from the same start give the same orbits.
 //
 // Units: G = 1 times the Gravity param, masses are the Mass params (about 1), and the default orbits
 // span about two units. The centre of mass is kept at the origin and at rest, so the system never
 // drifts off.
+//
+// Left to plain gravity, bodies pair off: a close pass hands energy from one body to the others, the
+// pair it leaves behind sinks deeper, and with four or more bodies those pairs keep hardening until
+// they sit on top of each other for good. Two things stop that. Gravity turns repulsive inside kCore,
+// so no pair can sink much below it, and the system's energy is held at what it started with (what
+// the start, a drag, a throw or the Velocity params gave it), so neither the tether nor transient
+// kicks can drain or pump it over time.
 
 #include <algorithm>
 #include <cmath>
@@ -58,6 +65,7 @@ public:
          bodies_[i].vy *= velocity[i] * g;
       }
       recentre(mass);
+      rebase(mass, gravity);
    }
 
    int count() const { return count_; }
@@ -75,6 +83,7 @@ public:
       bodies_[count_] = {x, y, -v * y / r, v * x / r};
       ++count_;
       recentre(mass);
+      rebase(mass, gravity);
    }
    // Where a new body goes when nobody said: outside the others, on the far side of the newest one.
    void spawnPoint(double &x, double &y) const {
@@ -95,6 +104,7 @@ public:
       for (int k = i; k + 1 < count_; ++k)
          bodies_[k] = bodies_[k + 1];
       bodies_[--count_] = Body{};
+      rebased_ = false;
    }
 
    // A drag can carry a body far outside the window (the pointer keeps going), so where it's put
@@ -105,12 +115,14 @@ public:
          return;
       const double r = std::hypot(x, y), k = r > kMaxPlace ? kMaxPlace / r : 1.0;
       bodies_[i].x = x * k, bodies_[i].y = y * k;
+      rebased_ = false;
    }
    void setVelocity(int i, double vx, double vy) {
       if (i < 0 || i >= count_ || !std::isfinite(vx) || !std::isfinite(vy))
          return;
       const double v = std::hypot(vx, vy), k = v > kMaxSpeed ? kMaxSpeed / v : 1.0;
       bodies_[i].vx = vx * k, bodies_[i].vy = vy * k;
+      rebased_ = false;
    }
    void kick(int i, double dvx, double dvy) {
       if (i < count_)
@@ -119,10 +131,17 @@ public:
    void scaleVelocity(int i, double ratio) {
       if (i < count_)
          bodies_[i].vx *= ratio, bodies_[i].vy *= ratio;
+      rebased_ = false;
    }
 
    // Advances `dt` time units. Close passes take smaller steps so slingshots stay accurate.
    void step(double dt, const double *mass, double gravity) {
+      // A drag, throw, new speed or new mass sets the energy to keep; a kick doesn't, so it dies away.
+      bool massChanged = false;
+      for (int i = 0; i < count_; ++i)
+         massChanged = massChanged || mass[i] != mass_[i];
+      if (!rebased_ || massChanged)
+         rebase(mass, gravity);
       double minD2 = 1e9;
       for (int i = 0; i < count_; ++i)
          for (int j = i + 1; j < count_; ++j) {
@@ -148,6 +167,24 @@ public:
          }
       }
       recentre(mass);
+      thermostat(dt, mass, gravity);
+   }
+
+   // The total energy: motion, the softened gravity and its core, and the tether's spring.
+   double energy(const double *mass, double gravity) const {
+      double e = 0.0;
+      for (int i = 0; i < count_; ++i) {
+         const Body &b = bodies_[i];
+         e += 0.5 * mass[i] * (b.vx * b.vx + b.vy * b.vy);
+         const double out = std::max(0.0, std::hypot(b.x, b.y) - kTether);
+         e += mass[i] * 0.5 * kSpring * out * out;
+         for (int j = i + 1; j < count_; ++j) {
+            const double dx = bodies_[j].x - b.x, dy = bodies_[j].y - b.y;
+            const double r2 = dx * dx + dy * dy + kSoft * kSoft, r = std::sqrt(r2);
+            e -= gravity * mass[i] * mass[j] * (1.0 - kCore * kCore / (3.0 * r2)) / r;
+         }
+      }
+      return e;
    }
 
    // Distance from the centre of mass, and from the nearest other body.
@@ -170,8 +207,10 @@ public:
    }
 
 private:
-   // Softening keeps close passes finite; the tether pulls back bodies flung past kTether.
-   static constexpr double kSoft = 0.05, kTether = 2.4;
+   // Softening keeps close passes finite; inside kCore gravity pushes apart instead of pulling (it
+   // balances at kCore, like the size of a body), and the tether pulls back bodies flung past kTether.
+   // The energy settles back to its target over about kSettle time units (a few seconds).
+   static constexpr double kSoft = 0.05, kCore = 0.16, kTether = 2.4, kSpring = 3.0, kSettle = 4.0;
 
    void accelerations(const double *mass, double gravity) {
       for (int i = 0; i < count_; ++i) {
@@ -181,22 +220,52 @@ private:
                continue;
             const double dx = bodies_[j].x - bodies_[i].x, dy = bodies_[j].y - bodies_[i].y;
             const double r2 = dx * dx + dy * dy + kSoft * kSoft;
-            const double f = gravity * mass[j] / (r2 * std::sqrt(r2));
+            const double f = gravity * mass[j] * (1.0 - kCore * kCore / r2) / (r2 * std::sqrt(r2));
             ax += dx * f;
             ay += dy * f;
          }
          const double r = std::hypot(bodies_[i].x, bodies_[i].y);
          if (r > kTether) {
-            const double pull = 3.0 * (r - kTether) / r;
+            const double pull = kSpring * (r - kTether) / r;
             ax -= bodies_[i].x * pull;
             ay -= bodies_[i].y * pull;
-            // And a little drag out there, so an escape is caught and turned around, not bounced.
-            ax -= 0.4 * bodies_[i].vx * (r - kTether);
-            ay -= 0.4 * bodies_[i].vy * (r - kTether);
+            // And a little drag out there, so an escape is caught and turned around, not bounced, but
+            // only while there's energy to spare: drag that always ran would drain the system, and the
+            // bodies would fall into ever tighter pairs.
+            if (excess_ > 0.0) {
+               ax -= 0.4 * bodies_[i].vx * (r - kTether);
+               ay -= 0.4 * bodies_[i].vy * (r - kTether);
+            }
          }
          ax_[i] = ax;
          ay_[i] = ay;
       }
+   }
+
+   // Takes the energy now as the one to keep, per unit of gravity (a stronger gravity gives the
+   // same shapes, only faster, and so proportionally more energy).
+   void rebase(const double *mass, double gravity) {
+      for (int i = 0; i < kMax; ++i)
+         mass_[i] = i < count_ ? mass[i] : 0.0;
+      target_ = energy(mass, gravity) / std::max(0.01, gravity);
+      excess_ = 0.0;
+      rebased_ = true;
+   }
+
+   // Eases the energy back to its target by scaling every speed alike, so no path bends; the drag
+   // past the tether also catches what a kick put in.
+   void thermostat(double dt, const double *mass, double gravity) {
+      const double target = target_ * std::max(0.01, gravity);
+      const double e = energy(mass, gravity);
+      excess_ = e - target;
+      double kinetic = 0.0;
+      for (int i = 0; i < count_; ++i)
+         kinetic += 0.5 * mass[i] * (bodies_[i].vx * bodies_[i].vx + bodies_[i].vy * bodies_[i].vy);
+      if (kinetic < 1e-6)
+         return;
+      const double k = std::sqrt(std::clamp(1.0 - excess_ * std::min(1.0, dt / kSettle) / kinetic, 0.9, 1.1));
+      for (int i = 0; i < count_; ++i)
+         bodies_[i].vx *= k, bodies_[i].vy *= k;
    }
 
    void recentre(const double *mass) {
@@ -220,6 +289,8 @@ private:
 
    Body bodies_[kMax];
    double ax_[kMax] = {}, ay_[kMax] = {};
+   double mass_[kMax] = {}, target_ = 0.0, excess_ = 0.0;
+   bool rebased_ = false;
    int count_ = 3;
 };
 

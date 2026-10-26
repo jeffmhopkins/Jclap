@@ -371,12 +371,24 @@ once a block.
 
 ## The orbit simulation
 
-[`orbit.h`](src/orbit.h) is two to six bodies under their mutual gravity and nothing else. The
-acceleration on each body is G x mass / r² toward every other body, with G the **Gravity** param and a
-softening of 0.05 so close passes stay finite. It steps with velocity Verlet, taking smaller substeps
-during close passes (up to 64 per tick) so slingshots stay accurate, and recentres the centre of mass
-at the origin and at rest after every step so the system never drifts off. A body flung past 2.4
-units is pulled back by a spring and a little drag, so an escape is caught and turned around.
+[`orbit.h`](src/orbit.h) is two to six bodies under their mutual gravity. The acceleration on each
+body is G x mass / r² toward every other body, with G the **Gravity** param and a softening of 0.05 so
+close passes stay finite. Inside 0.16 units (about the size a body is drawn) gravity turns repulsive,
+balancing at 0.16, so two bodies can circle each other closely but never sink on top of each other. It
+steps with velocity Verlet, taking smaller substeps during close passes (up to 64 per tick) so
+slingshots stay accurate, and recentres the centre of mass at the origin and at rest after every step
+so the system never drifts off. A body flung past 2.4 units is pulled back by a spring.
+
+**Keeping the energy.** Gravity on its own pairs bodies off: a close pass hands energy from one body to
+the rest, and the pair it leaves behind is bound tighter. Anything that keeps taking energy out makes
+that worse, and a drag on escaping bodies used to do just that, so after a few minutes the pairs had
+hardened into bodies stuck on top of each other (the system lost ten times its starting energy in ten
+minutes). Now the sim keeps the energy it was given: the start, a drag or throw on the panel, a
+**Velocity** or **Mass** change, or a body added or removed sets the energy to keep (per unit of
+Gravity), and after every step all speeds are scaled alike to ease back towards it over about four
+time units. A transient's kick doesn't set it, so what **React** puts in dies away over a few seconds,
+and the drag past the tether runs only while there's such energy to spare, so a kicked body is still
+caught and turned around rather than bounced.
 
 **Where they start.** Three bodies start on the figure-eight orbit, which is stable with equal masses;
 the default masses (1, 1.25, 0.8) break it up within a few laps into motion that never repeats. Any
