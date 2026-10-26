@@ -610,62 +610,112 @@ it per note.
 
 ## Presets
 
-The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 49 presets in six
-categories, from the fastest envelopes to the slowest. Each is written as what it changes from the
-defaults, and loading one puts every other param at its default, so nothing (a route, say) carries
-over. Each category starts with a plain patch with no routes and works up to ones the flock plays.
+The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 92 presets in
+14 categories. The first eleven are instrument families, as a keyboard player looks for a sound;
+the last three are the showcases: **Motion** (patches that move on their own), **Layers and Splits**
+(both parts at once) and **Flock** (the creatures playing the sound). Each preset is written as what
+it changes from the defaults, and loading one puts every other param at its default, so nothing (a
+route, say) carries over. Most answer the mod wheel and Press, so they play from any keyboard.
+
+Every preset's level is matched by measurement: a trim table at the end of the bank sets each
+preset's part levels so the loudest 400 ms of a held chord at velocity 0.8 sits near -20 dBFS (a
+little lower for plucks and bells, lower again for drums, which are heard by their peaks). A trim
+moves both parts together, so a layer keeps its balance.
 
 | Category | Preset | What makes it |
 | --- | --- | --- |
-| Hits | Wood Block | Sine with a ×2.76 modulator, 70 ms decay. |
-| | Glass Tick | Sine with a ×7 modulator. |
-| | Marimba | ×4 and ×10 partials; Env 3 and Velocity open the ×10's FM. |
-| | Steel Drum | ×3 and ×2 modulators, Env 3 and Velocity on the FM. |
-| | Log Drum | Self-feedback, Env 3 dropping the ratio; Velocity deepens the drop. |
-| | Fireflies | Half Sine, Scatter at high speed and wander, short ink, wide X Pan. |
-| | Metal Rain | Inharmonic ×3.73 and ×7.11, Scatter; Random detunes each note's ratios. |
-| | Hunter Clicks | Layer: A flees, B hunts an octave up with Bite and Neighbour FM; Nearest opens A's FM and B's. |
-| Plucks | Sine Pluck | One sine, 900 ms decay, no routes. |
-| | Nylon | Saw through a key-tracked low pass, Env 2 on the cutoff. |
-| | Harp | 1:1 FM with a long ring. |
-| | Koto | ×3 modulator with feedback, Env 3 and Velocity on the FM. |
-| | Synth Pluck | Saw and detuned pulse, resonant filter; Slide on the resonance. |
-| | Bell Pluck | ×3.5 and ×7; Press on the upper FM, LFO 1 on the detune. |
-| | Starling Bells | ×3.5 FM with Neighbour FM, Tune Pull and cohesion; Nearest deepens the FM. |
-| | Dripping Ink | Alt Sine with long, wide ink; Turn on the cutoff, Speed on the FM, Heading on the resonance. |
-| Keys | Sine Organ | Three sine drawbars, no routes. |
-| | Tonewheel | The organ with feedback and a 6.5 Hz LFO on the pitch. |
-| | Celesta | Sine with a ×7 modulator and long decay. |
-| | Clav | Narrow pulse through a resonant filter, Velocity on the cutoff. |
-| | Vibes | ×4 FM with a 5.5 Hz tremolo. |
-| | Tine Piano | A DX-style electric piano: a 1:1 pair and a ×14 tine. |
-| | Suitcase Pressure | The piano with Press on the bark; Slide sets how far the tremolo pans. |
-| | Mallet Flock | Layer: vibes and an upper shoal with Neighbour FM and Tune Pull; Nearest and Heading on the FM. |
-| Bass and Leads | Sine Bass | Sine an octave down with a little feedback. |
-| | FM Bass | 1:1 FM with feedback on the modulator, Env 3 on the FM. |
-| | Saw Lead | Two detuned saws, delayed vibrato. |
-| | Reed | Pulse, slow attack, Press on the cutoff. |
-| | East Coast Brass | Feedback-driven 1:1 FM with a slow Env 3. |
-| | Pressure Lead | Press opens the FM and the vibrato; Slide adds feedback grit. |
-| | Shark Bass | Split at C3: B below hunts with saw and pulse and Bite; Speed opens its filter. |
-| | Predator and Prey | Layer: A flees, B hunts an octave down with Bite; Nearest opens A's filter. |
+| Bass | Sub Bass | A sine with a touch of feedback and a quiet octave; the wheel adds feedback. |
+|  | Analog Bass | Saw and a square an octave down through a ladder; Env 2 plucks it, harder when struck harder. |
+|  | FM Bass | A DX bass: 1:1 FM with feedback on the modulator, its depth dying away; Velocity bites. |
+|  | Funk Bass | Saw and pulse, a short velocity-scaled filter pluck. |
+|  | Acid Bass | Saw into a resonant, driven ladder with glide between held notes; Velocity accents, Slide opens it. |
+|  | Reese Bass | Two saws 22 cents apart over a sub, LFO 2 drifting the detune; drive. |
+|  | Wobble Bass | Saw and square through a tube-driven ladder, an eighth-note wobble at the host's tempo; the wheel deepens it. |
+| Leads | Saw Lead | Two detuned saws, vibrato after 350 ms. |
+|  | Square Lead | Square over a square an octave down, LFO 2 on the width. |
+|  | Sync Lead | Osc 2 synced to a silent Osc 1; Env 2, the wheel and Press sweep its pitch. |
+|  | Soft Flute | Sine and a soft triangle with a breath of noise at the start and under Press. |
+|  | FM Lead | 1:1 FM with feedback; Press and Velocity open it. |
+|  | Pressure Lead | Press opens 2:1 FM and brings in vibrato; Slide adds feedback grit. |
+|  | Overdrive Lead | Saws and a sub driven hard into a resonant ladder; Press drives harder. |
+| Keys | Tine Piano | A DX electric piano: a 1:1 pair and a ×14 tine, both harder when struck harder; high notes die sooner. |
+|  | Suitcase EP | The tine piano through a stereo tremolo the wheel widens; Press pushes the bark. |
+|  | Reed Piano | A half-sine modulator that barks when struck hard, through a little drive; the wheel adds tremolo. |
+|  | Clav | Narrow pulse through a resonant filter, Velocity on the cutoff. |
+|  | Harpsichord | Saw and a narrow pulse an octave up, high passed, with a short release. |
+|  | Tonewheel Organ | Drawbars 16', 8' and 5 1/3', key click, and a rotary speaker the wheel speeds up. |
+|  | Church Organ | Sines at 16', 8' and 4' with a slow speak and a long release. |
+| Mallets and Bells | Marimba | ×4 and ×10 partials; Env 3 and Velocity bring in the ×10. |
+|  | Vibraphone | ×4 FM with a tremolo the wheel deepens. |
+|  | Celesta | A sine with a ×7 modulator and a long decay. |
+|  | Tubular Bells | A ×3.5 modulator over a long ring, a second carrier an octave up. |
+|  | Crystal Bells | Inharmonic ×1.41 and ×7 with a slow shimmer on the ×1.41; the wheel deepens it. |
+|  | Steel Drum | ×3 and ×2 modulators, slightly detuned, opened by Env 3 and Velocity. |
+| Plucks | Synth Pluck | Saw and detuned pulse through a resonant filter; Slide on the resonance, the wheel lengthens it. |
+|  | Bright Pluck | Two saws panned apart and a square an octave up; the wheel lets it ring longer. |
+|  | Nylon Guitar | Saw through a key-tracked low pass, Env 2 on the cutoff. |
+|  | Harp | 1:1 FM with a long ring. |
+|  | Koto | ×3 modulator with feedback, Env 3 and Velocity on the FM. |
+|  | Kalimba | ×3 FM blip with an inharmonic ×5.95 partial. |
+|  | Pizzicato | Two saws, a short, key-tracked filter pluck. |
+|  | Bell Pluck | ×3.5 and ×7; Press on the upper FM, LFO 1 on the detune. |
+| Brass | Synth Brass | Two detuned saws, Env 2 on the filter (deeper when struck harder), a pitch scoop, vibrato on the wheel. |
+|  | Soft Horns | Saw and triangle with a slow speak. |
+|  | East Coast Brass | Feedback-driven 1:1 FM with a slow Env 3; Press opens it. |
+|  | Brass Stabs | Three saws, short and bright, driven; Velocity sets the bite. |
+| Strings | String Machine | Three saws with slow detune LFOs; Press and the wheel open the filter. |
+|  | Ensemble Strings | Saws drifting against each other on LFO 2; a harder note bows in faster. |
+|  | Slow Strings | The ensemble over a second and more, opening as it swells. |
+|  | Solo Cello | Mono saw and pulse with glide; Press brings in vibrato and opens the filter. |
 | Pads | Sine Pad | Two detuned sines panned apart, no routes. |
-| | Warm Analog | Saw pair through a low pass, slow Env 2. |
-| | Glass Pad | ×3 and ×0.5, LFO 1 on the FM. |
-| | Wind Choir | Saws and noise through a band pass; LFO 2 on the cutoff with a strong gust. |
-| | String Machine | Three saws with two slow LFOs on the detune, Press on the cutoff. |
-| | Murmuration Pad | Saws, high alignment, slow flight, long ink, wide X Pan; Heading pans. |
-| | Pressure Front | Press opens 2:1 FM, with Neighbour FM. |
-| | Ink Ribbons | Alt Sine with feedback, long ink and a loose lure; Turn on cutoff and FM. |
-| | Murmuration Riot | Layer: a fast FM shoal opened by Press, Speed, Nearest and Turn, and a driven ladder of hunters with Bite. |
-| Swells | Slow Sine | Two sines over three seconds, no routes. |
-| | Bowed Glass | 2:1 FM that blooms with a slow Env 3. |
-| | Tidal Strings | Saws, slow Env 2 on the cutoff, LFO 2 on the pan. |
-| | Dawn Chorus | Vibrato that arrives once the note has bloomed; Press on the FM. |
-| | Deep Current | A sub through a resonant tube-driven ladder; Slide on the drive. |
-| | Aurora | Slow FM shoal with Tune Pull; Heading on the FM, Slide on the cutoff. |
-| | Storm Front | Saw and noise through a comb, strong wind, Scatter; LFO 2, Turn and Speed on the filters. |
-| | Murmuration Storm | Layer: a saw shoal with Neighbour FM and Tune Pull, and FM hunters; Nearest, Speed and Heading. |
+|  | Warm Analog | Saw pair through a low pass, slow Env 2. |
+|  | PWM Pad | Two squares whose widths drift on unrelated LFOs. |
+|  | Glass Pad | ×3 and ×0.5, LFO 1 on the FM. |
+|  | Choir Pad | Saws through two band passes in parallel for an "ah"; a slow LFO moves the vowel, the wheel darkens it. |
+|  | Bowed Glass | 2:1 FM that blooms with a slow Env 3. |
+|  | Dawn Chorus | Vibrato that arrives once the note has bloomed; Press on the FM. |
+|  | Deep Current | A sub through a resonant, tube-driven ladder; Slide drives it harder. |
+| Rhythmic | Trance Gate | Saws gated in sixteenths; the wheel softens the gate. |
+|  | Sixteenth Pulse | A falling saw LFO snaps a ladder open each sixteenth, so a held note plays a line. |
+|  | Sample and Hold | A new random cutoff each sixteenth through a resonant ladder. |
+|  | Dotted Chords | Chords chopped on dotted eighths, the filter breathing on the half note. |
+| Atmospheres | Wind Choir | Saws and noise through a band pass in a strong wind; LFO 2 on the cutoff. |
+|  | Deep Space | Pink noise through a comb tuned to the note, slow random LFOs on its filters. |
+|  | Aurora | A slow FM shoal with Tune Pull; Heading on the FM, Slide on the cutoff. |
+|  | Storm Front | Saw and noise through a comb in a strong wind; LFO 2, Turn and Speed on the filters. |
+| Drums and FX | Kick | A sine whose pitch drops two octaves in 50 ms. |
+|  | Snare | Noise and a body tone with a snap. |
+|  | Hi-Hat | White noise high passed; the wheel opens it. |
+|  | Wood Block | A sine with a ×2.76 modulator, 70 ms. |
+|  | Log Drum | Self-feedback and a pitch drop that goes further the harder you strike. |
+|  | Laser Zap | FM with feedback, its pitch diving. |
+|  | Riser | Hold a note: saws and noise rise an octave and open over four seconds. |
+| Motion | Shifting Glass | Three-operator FM with a looping Env 3 and two unsynced LFOs; the wheel deepens all of it. |
+|  | Random Garden | The Random wave: each note draws its own waves, LFO speed and pan. |
+|  | Pulsar | A looping Env 1: every held note pulses on its own clock, faster higher up and with Press. |
+|  | Clockwork | A sixteenth-note sample-and-hold on the FM and a dotted-eighth square on the filter. |
+|  | MPE Voices | Two band passes for a vowel: Press brightens and adds vibrato, Slide moves the vowel, Release sets the tail. |
+|  | Tide Machine | Layer: a saw drone breathing on slow LFOs, and FM bells an octave up looping on their own envelope. |
+| Layers and Splits | Piano and Strings | Layer: the tine piano, and strings under it the wheel brings up. |
+|  | Bell Pad | Layer: an FM bell for the strike over a warm pad that swells in behind it. |
+|  | Bass and Keys Split | Split at C3: an analog bass below, the reed piano above. |
+|  | Bass and Lead Split | Split at C3: an acid bass below, a saw lead above. |
+|  | Velocity Stab | Velocity: play softly for a pad, dig in for a brass stab. |
+|  | Breath to Brass | Expression: Press crossfades each note from a breathy flute to bright brass. |
+|  | Octave Shimmer | Layer: a warm pad and an octave-up ring of sine bells with Neighbour FM and Tune Pull. |
+| Flock | Fireflies | Half Sine blips; a fast, scattered flock with short ink, spread wide. |
+|  | Metal Rain | Inharmonic ×3.73 and ×7.11, scattered; each note detuned at random. |
+|  | Starling Bells | Neighbour FM, Tune Pull and a cohesive flock; Nearest deepens the FM. |
+|  | Dripping Ink | Long, wide ink; Turn, Speed and Heading play the filter and FM. |
+|  | Ink Ribbons | Long ink and a loose lure; Turn plays cutoff and FM. |
+|  | Murmuration Pad | Saws, an aligned flock spread wide; Heading pans each voice. |
+|  | Pressure Front | Press opens 2:1 FM, with Neighbour FM. |
+|  | Hunter Clicks | Layer: A flees, B hunts an octave up with Bite and Neighbour FM. |
+|  | Mallet Flock | Layer: vibes and an upper shoal with Neighbour FM and Tune Pull. |
+|  | Shark Bass | Split at C3: below, a hunting saw-and-pulse bass with Bite; Speed opens its filter. |
+|  | Predator and Prey | Layer: A flees, B hunts an octave down; A's filter opens as its own kind closes in. |
+|  | Murmuration Riot | Layer: a fast FM shoal opened by Press, Speed, Nearest and Turn, and driven ladder hunters that bite. |
+|  | Murmuration Storm | Layer: a saw shoal with Neighbour FM and Tune Pull, and FM hunters. |
 
 **User presets** are plain text files ending `.jspreset`: a `JSynth preset 1` line, then one
 `<param id> <value>` per line, every param. Ids a build doesn't know are skipped, and params a file
