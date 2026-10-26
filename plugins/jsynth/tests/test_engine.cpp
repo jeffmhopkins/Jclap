@@ -216,6 +216,34 @@ int main() {
       JCLAP_CHECK(std::fabs(hz - 440.0) < 2.0);
    }
 
+   // Each oscillator picks its filter: in serial, F2 skips a closed Filter 1; in parallel, Balance
+   // all the way to Filter 1 silences what goes only into Filter 2.
+   {
+      const auto level = [](int routing, int dest, double balance) {
+         Params p;
+         p.setPart(0, filterParam(0, kFilterCutoff), 0.0);
+         p.setPart(0, tailParam(kFilterRouting), routing);
+         p.setPart(0, tailParam(kFilterBalance), balance);
+         p.setPart(0, oscParam(0, kOscFilter), dest);
+         for (int r = 0; r < kRouteCount; ++r)
+            p.setPart(0, routeParam(r, kRouteSource), kSourceOff);
+         Engine e;
+         e.prepare(kRate, {p.values.get(), p.mods.get()});
+         const auto out = render(e, 24000, 512, {{0, Event::On, 57, 1.0f}});
+         double sum = 0;
+         for (size_t i = 19200; i < out.size(); ++i)
+            sum += out[i] * out[i];
+         return std::sqrt(sum / (out.size() - 19200));
+      };
+      const double serialF1 = level(0, 1, 0.0), serialF2 = level(0, 2, 0.0), serialBoth = level(0, 0, 0.0);
+      const double parallelF1 = level(1, 1, -1.0), parallelF2 = level(1, 2, -1.0);
+      std::printf("filter picks: serial F1 %.4f F2 %.4f both %.4f, parallel at F1 %.4f %.4f\n", serialF1, serialF2,
+                  serialBoth, parallelF1, parallelF2);
+      JCLAP_CHECK(serialF2 > 10.0 * serialF1);
+      JCLAP_CHECK(std::fabs(serialBoth - serialF1) < 1e-6);
+      JCLAP_CHECK(parallelF2 < 1e-6 && parallelF1 < serialF2);
+   }
+
    // The host's block size changes nothing: the control grid is the engine's own.
    {
       Params p;

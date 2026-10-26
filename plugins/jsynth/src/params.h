@@ -118,6 +118,7 @@ enum OscParam : clap_id {
    kOscPhase,
    kOscBend,
    kOscKeyTrack,
+   kOscFilter,
 };
 
 // The FM grid: kFmCell + from * 3 + to, where a cell on the diagonal is that oscillator's feedback.
@@ -131,6 +132,7 @@ enum MixParam : clap_id {
    kMixPan = kMixLevel + kOscCount,
    kNoiseLevel = kMixPan + kOscCount,
    kNoiseColor,
+   kNoiseFilter,
 };
 
 enum VoiceTailParam : clap_id {
@@ -240,7 +242,9 @@ inline const std::vector<std::string> kPitchModeNames = {"Note", "Ratio", "Fixed
 inline const std::vector<std::string> kOnOffNames = {"Off", "On"};
 inline const std::vector<std::string> kFmTypeNames = {"Phase", "Exponential"};
 inline const std::vector<std::string> kDriveTypeNames = {"Soft", "Hard", "Tube"};
-inline const std::vector<std::string> kRoutingNames = {"Serial", "Parallel", "Split"};
+inline const std::vector<std::string> kRoutingNames = {"Serial", "Parallel"};
+// Which filter an oscillator or the noise goes into.
+inline const std::vector<std::string> kFilterDestNames = {"1+2", "F1", "F2"};
 inline const std::vector<std::string> kFilterTypeNames = {"Low Pass", "High Pass", "Band Pass", "Notch",
                                                           "Peak",     "Ladder",    "Comb +",    "Comb -"};
 inline const std::vector<std::string> kSlopeNames = {"12 dB", "24 dB", "36 dB", "48 dB"};
@@ -452,6 +456,7 @@ inline void addPart(Builder &b, int part) {
       b.add(p(kOscPhase), n + "Phase", m, 0.0, 360.0, 0.0, kMod, Unit::Degrees);
       b.add(p(kOscBend), n + "Bend", m, 0.0, 1.0, 1.0, kMod, Unit::Percent);
       b.choice(p(kOscKeyTrack), n + "Key Track", m, kOnOffNames, 1, kChoice);
+      b.choice(p(kOscFilter), n + "Filter", m, kFilterDestNames, 0, kChoice);
    }
 
    for (int from = 0; from < kOscCount; ++from)
@@ -468,6 +473,7 @@ inline void addPart(Builder &b, int part) {
    }
    b.add(id(mixParam(kNoiseLevel)), "Noise Level", "Mixer", 0.0, 1.0, 0.0, kMod, Unit::Percent);
    b.add(id(mixParam(kNoiseColor)), "Noise Color", "Mixer", -1.0, 1.0, 0.0, kMod, Unit::Bipolar);
+   b.choice(id(mixParam(kNoiseFilter)), "Noise Filter", "Mixer", kFilterDestNames, 0, kChoice);
 
    b.choice(id(tailParam(kDriveType)), "Drive Type", "Drive", kDriveTypeNames, 0, kChoice);
    b.add(id(tailParam(kDriveAmount)), "Drive", "Drive", 0.0, 1.0, 0.0, kMod, Unit::Percent);
