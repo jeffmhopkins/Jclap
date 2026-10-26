@@ -378,7 +378,7 @@ public:
       arrow(w - save - a / 2, 1.0f, hover_ == Zone::Next);
       c.setColor(hover_ == Zone::Save ? kText : kPartColors[0]);
       c.text("SAVE", ui::font(11 * s), visage::Font::kCenter, w - save, 0, save, h);
-      if (editor_ && editor_->isVisible())
+      if (editing())
          return;
       const std::string name = host_.presetName();
       c.setColor(hover_ == Zone::Name ? 0xffffffff : kText);
@@ -393,7 +393,7 @@ public:
       switch (zoneAt(e.position.x)) {
       case Zone::Prev: step(-1); break;
       case Zone::Next: step(1); break;
-      case Zone::Save: startSave(); break;
+      case Zone::Save: editing() ? finishSave(true) : startSave(); break;
       case Zone::Name: showMenu(); break;
       case Zone::None: break;
       }
@@ -508,12 +508,30 @@ private:
       menu.show(this, {kArrow * height() / 26.0f, height()});
    }
 
+   // The save name box. A click anywhere but SAVE drops the name, so the box never sits open
+   // without the keyboard; SAVE itself saves, and so does Enter.
+   class NameEditor : public visage::TextEditor {
+   public:
+      std::function<void()> onClickAway;
+      void focusChanged(bool is_focused, bool was_clicked) override {
+         visage::TextEditor::focusChanged(is_focused, was_clicked);
+         if (!is_focused && was_clicked && onClickAway)
+            onClickAway();
+      }
+   };
+
+   bool editing() const { return editor_ && editor_->isVisible(); }
+
    void startSave() {
       if (!editor_) {
-         editor_ = std::make_unique<visage::TextEditor>();
+         editor_ = std::make_unique<NameEditor>();
          editor_->setJustification(visage::Font::kCenter);
          editor_->onEnterKey() += [this] { finishSave(true); };
          editor_->onEscapeKey() += [this] { finishSave(false); };
+         editor_->onClickAway = [this] {
+            if (hover_ != Zone::Save)
+               finishSave(false);
+         };
          addChild(editor_.get(), false);
       }
       const float s = height() / 26.0f;
@@ -527,7 +545,7 @@ private:
    }
 
    void finishSave(bool apply) {
-      if (!editor_ || !editor_->isVisible())
+      if (!editing())
          return;
       const std::string name = uniqueName(presetFileName(editor_->text().toUtf8()));
       editor_->setVisible(false);
@@ -558,7 +576,7 @@ private:
    EditorHost &host_;
    std::vector<Preset> user_;
    int currentIndex_ = -1;
-   std::unique_ptr<visage::TextEditor> editor_;
+   std::unique_ptr<NameEditor> editor_;
    Zone hover_ = Zone::None;
 };
 
