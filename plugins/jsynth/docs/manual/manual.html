@@ -330,7 +330,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <li><b class="h">Load JSynth and play</b>Put JSynth on an instrument track and play a few notes. Each note hatches a creature at its lure: low notes on the left, high on the right. Hold a chord and watch them gather; let go and they fly off as they fade. No keyboard to hand? Click in the sky: left to right picks the note (C2 to C6), and dragging bends it.</li>
     <li><b class="h">Pick a preset</b>Click the preset name in the header to open the menu, grouped from <em>Hits</em> through <em>Plucks</em>, <em>Keys</em>, <em>Bass and Leads</em> and <em>Pads</em> to slow <em>Swells</em>. Or click the arrows, or scroll over the bar, to step through them. Try <em>Starling Bells</em>, then <em>Murmuration Pad</em>, then <em>Predator and Prey</em>.</li>
     <li><b class="h">Let the creatures hear each other</b>Load <em>Init</em> and turn <strong>OSC 2</strong>'s <strong>LEVEL</strong> up to about half, since Neighbour FM plays through Osc 2. Then open the <strong>FM</strong> tab on the left card and turn up <strong>NEIGHBOUR</strong>. Now hold a chord: when creatures fly close together they frequency-modulate each other, and the sound rings and shifts as the flock moves. Raise <strong>TUNE PULL</strong> too and creatures flying the same way drift into just intonation.</li>
-    <li><b class="h">Map a flock source</b>Press <strong>MAP</strong> in the header. Click <strong>SPEED</strong> under the sky, then open the <strong>FILTER</strong> tab on the right and drag Filter 1's <strong>CUTOFF</strong> up. A ring in Speed's colour shows the route. Press <strong>MAP</strong> again to finish. Now the faster a creature flies, the brighter it sounds; play harder (Press makes creatures faster) to hear it.</li>
+    <li><b class="h">Map a flock source</b>Press <strong>MAP</strong> in the header. Click <strong>SPEED</strong> under the sky, then open the <strong>FILTER</strong> tab on the right and drag Filter 1's <strong>CUTOFF</strong> up. A ring in Speed's colour shows the route while Speed is armed. Press <strong>MAP</strong> again to finish. Now the faster a creature flies, the brighter it sounds; play harder (Press makes creatures faster) to hear it.</li>
     <li><b class="h">Add a second species</b>Set the play mode in the header to <strong>LAYER</strong> and click <strong>PART B</strong>. Part B is a whole second patch, and by default it hunts: its creatures chase part A's. On part B's <strong>FM</strong> tab, raise <strong>BITE</strong>, and every creature B catches rings with its hunter's tone.</li>
     <li><b class="h">Save it</b>Click <strong>SAVE</strong> in the preset bar, type a name and press <span class="key">Enter</span>. Your preset appears under <em>User</em> in the preset menu. Settings are also saved with your project automatically.</li>
   </ol>
@@ -386,7 +386,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">Right-click</td><td>Menu with <em>Reset to default</em> and <em>Enter value…</em> to type an exact number.</td></tr>
     </tbody>
   </table>
-  <p>A knob that a route moves draws up to four coloured <strong>route rings</strong> outside its own arc, one per source, each spanning how far that source moves it. In MAP mode, knobs behave differently: see <em>Chapter 13</em>.</p>
+  <p>In MAP mode, with a source armed, each knob that source moves draws a <strong>route ring</strong> in its colour outside its own arc, spanning how far the source moves it. Outside MAP the knobs show no rings; the route list shows every route. In MAP mode, knobs behave differently: see <em>Chapter 13</em>.</p>
 
   <h2>Colours</h2>
   <p>Part A is drawn in <span class="swatch" style="background:#f28c28"></span>orange and part B in <span class="swatch" style="background:#6fb8ff"></span>blue, in the sky and on the cards. Every modulation source has its own colour, the same on its chip, its route rings and in the route list, and MAP and the route list are <span class="swatch" style="background:#ff6fd2"></span>pink.</p>
@@ -450,7 +450,6 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <h2>What you see</h2>
   <div class="kv">
     <dt>Creatures</dt><dd>A glowing body and a pair of wings that beat with its Wingbeat LFO. It is brighter the harder you press, and fades with its sound after you let go. The part you are editing flies in front; the other is dimmed.</dd>
-    <dt>Resting creatures</dt><dd>Six per species fly quietly while a part plays nothing, so you can see how it flies before you play. They fade away once you do.</dd>
     <dt>Ink</dt><dd>Every creature sheds ink behind it, which blooms and fades by the part's <strong>TAIL</strong> and <strong>SPREAD</strong>. Creatures flying through ink stir it.</dd>
     <dt>Lure rings</dt><dd>Where each held note pulls its creature, with a faint line to it. <strong>RINGS</strong> under the sky shows or hides them.</dd>
     <dt>Links</dt><dd>A thin line from a creature to the neighbour it hears most, brighter the more <strong>NEIGHBOUR</strong> FM it gets, and a line from a hunter to what it has caught.</dd>
@@ -850,9 +849,9 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <li><b class="h">Press MAP</b>The button lights pink, the source chips pulse, and the sky says <em>MAP: touch a source, then drag a knob</em>.</li>
     <li><b class="h">Touch a source</b>Click any source chip: the touch chips in the header, the envelope and LFO chips on the right card, or the flock's under the sky. It lights, and the sky tells you to drag a knob.</li>
     <li><b class="h">Drag a knob</b>Drag any knob up or down to set how much the source moves it, from −100% to +100%. A ring in the source's colour shows how far it reaches. Drag more knobs to send the same source to them too, or touch another source.</li>
-    <li><b class="h">Press MAP again</b>To finish. Knobs go back to setting their own values.</li>
+    <li><b class="h">Press MAP again</b>To finish. Knobs go back to setting their own values, and the rings go away.</li>
   </ol>
-  <figure class="dark"><img src="img/map.jpg" alt=""><figcaption><b>Fig. 13.1</b> &nbsp;MAP with SPEED armed. The pink ring on the flock's SPEED knob is the route a new part starts with, from Press.</figcaption></figure>
+  <figure class="dark"><img src="img/map.jpg" alt=""><figcaption><b>Fig. 13.1</b> &nbsp;MAP with a source armed: the knobs it moves show rings in its colour.</figcaption></figure>
   <table>
     <thead><tr><th>In MAP mode, with a source armed</th><th>On a knob</th></tr></thead>
     <tbody>
@@ -861,7 +860,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">Right-click</td><td>Remove the route. With no source armed, removes every route to that knob.</td></tr>
     </tbody>
   </table>
-  <p>Each knob shows up to four route rings. Nearly every knob on a part's cards can take routes: the flock's knobs, the FM grid, the envelopes and LFOs, the filters and the oscillators. The exceptions are Transpose, the part's Bend range, Velocity, and the shared ones: Size, Width, Master and the TOUCH card.</p>
+  <p>Only the armed source's rings show; touch another source to see its routes. Nearly every knob on a part's cards can take routes: the flock's knobs, the FM grid, the envelopes and LFOs, the filters and the oscillators. The exceptions are Transpose, the part's Bend range, Velocity, and the shared ones: Size, Width, Master and the TOUCH card.</p>
 
   <h2>Sources</h2>
   <table>
