@@ -36,22 +36,22 @@ the presets, and threads and state.
 - **Between creatures:** the nearest neighbour's Osc 1 feeds this creature's Osc 2 (Neighbour FM), so
   a tight flock rings and a loose one is clean. Creatures flying the same way drift toward pure
   intervals (Tune Pull). A hunter that catches its prey ring-modulates it (Bite).
-- **Ink:** each creature sheds ink that blooms (Spread) and fades (Tail). Flying through another
-  creature's ink stirs it, and that is the Wake source.
+- **Ink:** each creature sheds ink in the sky that blooms (Spread) and fades (Tail).
 - **Stereo:** X Pan sets how far each creature's place in the sky, left to right, pans its voice,
   so a flock can spread across the stereo field. Output Width sets the whole output's width.
 - **Four LFOs.** Two move the flock: the wingbeat, one per creature, and the wind, one gust for the
-  whole sky (Push sets how hard). LFO 1 and LFO 2 are plain LFOs that only modulate. All four are
-  sources to map.
+  whole sky (Push sets how hard). They only move the flock. LFO 1 and LFO 2 are plain LFOs, the two
+  to map.
 
 ## Modulation: MAP
 
 There is no matrix page. Press **MAP**, touch a source, then drag any knob: the drag sets how much that
 source moves it, shown as a ring in the source's colour (up to four per knob). Double-click a knob to
-flip its route, right-click to remove it. The sources are the touch chips in the header, the envelope
-and LFO chips on the right card, and the flock's own under the sky: Speed, Crowd, Nearest, Heading,
-Caught, Wake, and X and Y (where the creature is). Each chip's LED glows with its source as it moves. The FM grid and the flock params
-are knobs, so they map like any other.
+flip its route, right-click to remove it. The sources are the touch chips in the header (Strike,
+Press, Glide, Slide), the envelope and LFO chips on the right card, and the flock's own under the sky:
+Speed, Nearest, Heading, and Turn (which way and how hard the creature is turning, + right, - left).
+Each chip's LED glows with its source as it moves. Key, Random, Mod Wheel and the four macros are in
+the route list. The FM grid and the flock params are knobs, so they map like any other.
 
 Underneath, each part has a pool of 64 routes (source, destination, amount) as host params, so route
 depths can be automated. **ROUTES** lists the ones in use, sixteen to a page, to edit by name: **+ ADD**

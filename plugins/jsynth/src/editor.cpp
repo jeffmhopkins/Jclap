@@ -87,16 +87,18 @@ unsigned sourceColor(int source) {
    static const unsigned colors[kSourceCount] = {
        0xff808080,                                                 // Off
        0xffffd36b, 0xffffa94d, 0xffff7a59,                         // Env 1-3
-       0xff7ee0ff, 0xff8fb8ff,                                     // Wingbeat, Wind
        0xff5fd3b0, 0xffc9a0ff,                                     // LFO 1, LFO 2
-       0xfff6f0a0, 0xffff6fd2, 0xffb98bff, 0xff8fe8a8, 0xff9ad0c0, // Strike, Press, Glide, Slide, Lift
+       0xfff6f0a0, 0xffff6fd2, 0xffb98bff, 0xff8fe8a8,             // Strike, Press, Glide, Slide
        0xffc0c8d8,                                                 // Key
-       0xfff2c94c, 0xffff8a7a, 0xff6fe0ff, 0xffa98bff, kCaughtColor, 0xff5fd3b0, // the flock's own
-       0xffffe08a, 0xff9fd8ff,                                     // X, Y
+       0xfff2c94c, 0xff6fe0ff, 0xffa98bff, 0xffff8a7a,             // Speed, Nearest, Heading, Turn
        0xffd0d0d0, 0xffe0e0ff,                                     // Random, Mod Wheel
        0xfff28c28, 0xff8fe8a8, 0xff6fb8ff, 0xffff6fd2};            // Macros
    return colors[std::clamp(source, 0, kSourceCount - 1)];
 }
+// The wingbeat's and the wind's colour, on the MOTION card.
+constexpr unsigned kMotionColors[kMotionCount] = {0xff7ee0ff, 0xff8fb8ff};
+// Each touch's colour on the TOUCH card: its source's, and Lift's own.
+unsigned touchColor(int touch) { return touch < kTouchSourceCount ? sourceColor(kSourceStrike + touch) : 0xff9ad0c0; }
 
 std::string text(clap_id id, double value) {
    char buffer[64];
@@ -568,7 +570,7 @@ private:
 struct Species {
    int behaviour = 0;
    float cohesion = 0, alignment = 0, separation = 0, speed = 0, wander = 0, lure = 0, range = 0;
-   float neighbourFm = 0, tailLength = 0, tailSpread = 0, wake = 0;
+   float neighbourFm = 0, tailLength = 0, tailSpread = 0;
    float wingHz = 0, wingPush = 0, windHz = 0, windPush = 0;
 
    void read(const EditorHost &host, int part) {
@@ -584,7 +586,6 @@ struct Species {
       neighbourFm = v(flockParam(kNeighbourFm));
       tailLength = v(flockParam(kTailLength));
       tailSpread = v(flockParam(kTailSpread));
-      wake = v(flockParam(kWake));
       wingHz = static_cast<float>(lfoHz(v(lfoParam(0, kLfoRate))));
       wingPush = v(lfoParam(0, kLfoPush));
       windHz = static_cast<float>(lfoHz(v(lfoParam(1, kLfoRate))));
@@ -936,7 +937,7 @@ private:
 
    // Ink drifts on a slow curl and slows. Like JVerb's gas, one creature's ink pushes back where it
    // overlaps another's, harder against the other species, and the seam heats up and glows. Any
-   // creature flying through ink stirs it along: that stirring is the wake a creature feels.
+   // creature flying through ink stirs it along.
    void moveInk(float dt) {
       // Sort the puffs into a coarse grid over the sky (and a margin), so each only checks its
       // neighbours; a crowded spot checks an even sample of at most kMaxChecks, weighted up to match.
@@ -995,7 +996,7 @@ private:
                continue;
             const float dx = p.x - b.x, dy = p.y - b.y, d2 = dx * dx + dy * dy;
             if (d2 < 0.0025f) {
-               const float k = (1.0f - std::sqrt(d2) / 0.05f) * species_[b.part].wake * 3.0f * dt;
+               const float k = (1.0f - std::sqrt(d2) / 0.05f) * 0.6f * dt;
                p.vx += b.vx * k;
                p.vy += b.vy * k;
             }
@@ -1145,20 +1146,20 @@ public:
       runEnvelopes(dt);
       showPlayheads();
       const CreatureSources src = view_->sources(host_.part);
-      const float flock[] = {src.speed, src.crowd, src.nearest, src.heading, src.caught, src.wake, src.x, src.y};
+      const float flock[] = {src.speed, src.nearest, src.heading, 0.5f + 0.5f * src.turn};
       const float pulse = 0.5f + 0.5f * std::sin(time_ * 5.0f);
       for (SourceChip *chip : chips_) {
          const int s = chip->source();
-         if (s >= kSourceStrike && s < kSourceStrike + kTouchCount)
+         if (s >= kSourceStrike && s < kSourceStrike + kTouchSourceCount)
             chip->setLevel(touch[s - kSourceStrike]);
-         else if (s >= kSourceSpeed && s <= kSourceSkyY)
-            chip->setLevel(flock[s - kSourceSpeed]);
+         else if (s >= kSourceSpeed && s <= kSourceTurn)
+            chip->setLevel(flock[s - kSourceSpeed], s == kSourceTurn);
          else if (s >= kSourceEnv1 && s < kSourceEnv1 + kEnvCount)
             chip->setLevel(view_->live() ? view_->envLevel(host_.part, s - kSourceEnv1) : envLevel_[s - kSourceEnv1]);
-         else if (s >= kSourceWingbeat && s < kSourceWingbeat + kLfoCount) {
+         else if (s >= kSourceLfo1 && s < kSourceLfo1 + kLfoCount - kMotionCount) {
             // The engine's LFO is already unipolar or bipolar by its Polarity; the panel's guess is
             // too. The chip shows either across its width.
-            const int l = s - kSourceWingbeat;
+            const int l = kMotionCount + s - kSourceLfo1;
             const float v = view_->live() ? view_->lfoLevel(host_.part, l) : lfoValue(l);
             const bool unipolar = static_cast<int>(value(host_.part, lfoParam(l, kLfoPolarity)) + 0.5) == 1;
             chip->setLevel(unipolar ? v : 0.5f + 0.5f * v, !unipolar);
@@ -1458,9 +1459,9 @@ private:
       g.designHeight = r.h;
       return g;
    }
-   void label(ui::Rect r, const std::string &t, unsigned color = kText,
-              visage::Font::Justification j = visage::Font::kCenter) {
-      put<ui::Label>(r, t, color, j);
+   ui::Label &label(ui::Rect r, const std::string &t, unsigned color = kText,
+                    visage::Font::Justification j = visage::Font::kCenter) {
+      return put<ui::Label>(r, t, color, j);
    }
    clap_id idOf(clap_id offset) const { return part_ < 0 ? offset : partId(part_, offset); }
 
@@ -1524,8 +1525,8 @@ private:
       mapButton_ = &map;
       tips_.add(map, "Press MAP, touch a source, then drag any knob to set how much the source moves it. "
                      "Double-click a knob to flip its route, right-click to remove it.");
-      const auto cells = ui::row({872, 13, 312, 26}, kTouchCount, 4);
-      for (int i = 0; i < kTouchCount; ++i)
+      const auto cells = ui::row({872, 13, 312, 26}, kTouchSourceCount, 4);
+      for (int i = 0; i < kTouchSourceCount; ++i)
          chip(kSourceStrike + i, upper(kTouchNames[i]), cells[i]);
       auto &mode = glassy(put<ui::Dropdown>({678, 13, 112, 26}, upper(kPlayModeNames)), kPartColors[0]);
       bindings_.bind(mode, kPlayMode);
@@ -1554,21 +1555,15 @@ private:
 
    // The flock's own sources, under the sky.
    void buildStageChips() {
-      const std::pair<int, const char *> sources[] = {{kSourceSpeed, "SPEED"},     {kSourceCrowd, "CROWD"},
-                                                      {kSourceNearest, "NEAREST"}, {kSourceHeading, "HEADING"},
-                                                      {kSourceCaught, "CAUGHT"},   {kSourceWake, "WAKE"},
-                                                      {kSourceSkyX, "X"},          {kSourceSkyY, "Y"}};
-      const char *tips[] = {"How fast this creature flies.", "How many neighbours it has.",
-                            "How near its nearest neighbour is.", "How much it flies upward: 1 straight up, 0 straight down.",
-                            "On while a hunter has caught it.", "How much of the others' ink it flies through.",
-                            "Where it is in the sky, left to right.", "Where it is in the sky, bottom to top."};
-      // X and Y need less room than the names, which keeps space for RINGS.
-      float x = 248;
-      for (int i = 0; i < 8; ++i) {
-         const float w = i < 6 ? 67.0f : 44.0f;
-         chip(sources[i].first, sources[i].second, {x, 618, w, 22}, tips[i]);
-         x += w + 4;
-      }
+      const std::pair<int, const char *> sources[] = {{kSourceSpeed, "SPEED"},
+                                                      {kSourceNearest, "NEAREST"},
+                                                      {kSourceHeading, "HEADING"},
+                                                      {kSourceTurn, "TURN"}};
+      const char *tips[] = {"How fast this creature flies.", "How near its nearest neighbour is.",
+                            "How much it flies upward: 1 straight up, 0 straight down.",
+                            "Which way and how hard it turns: + right, - left."};
+      for (int i = 0; i < 4; ++i)
+         chip(sources[i].first, sources[i].second, {248 + i * 75.0f, 618, 71, 22}, tips[i]);
    }
 
    // Left: how a species flies, its FM, and the touch response.
@@ -1597,8 +1592,6 @@ private:
          knob(flockParam(kRange), "RANGE", c, g[6], "How near counts as a neighbour.");
          knob(flockParam(kTailLength), "TAIL", c, g[7], "How long the ink lasts behind a creature.");
          knob(flockParam(kTailSpread), "SPREAD", c, g[8], "How far the ink blooms as it ages.");
-         knob(flockParam(kWake), "WAKE", c, g[9], "How much a creature stirs the ink it flies through, and so "
-                                                   "how much WAKE the others feel.");
          // What places each note's lure, the ring its creature is pulled to.
          for (int axis = 0; axis < 2; ++axis) {
             const float x = 30 + axis * 96.0f;
@@ -1611,9 +1604,9 @@ private:
          }
          if (part == 0) {
             part_ = -1;
-            knob(kSkySize, "SIZE", kDim, g[10], "How big the sky is, so how far apart the flocks can spread.");
-            label({g[11].x, g[11].y + 2, g[11].w, 16}, "WALLS");
-            auto &walls = dropdown(kSkyWalls, kDim, {g[11].x + 4, g[11].y + 34, g[11].w - 8, 24});
+            knob(kSkySize, "SIZE", kDim, g[9], "How big the sky is, so how far apart the flocks can spread.");
+            label({g[10].x, g[10].y + 2, g[10].w, 16}, "WALLS");
+            auto &walls = dropdown(kSkyWalls, kDim, {g[10].x + 4, g[10].y + 34, g[10].w - 8, 24});
             tips_.add(walls, "What the sky's edges do: turn creatures back, wrap them round, or let them roam.");
             part_ = part;
          }
@@ -1648,9 +1641,9 @@ private:
       label({154, 102, 66, 16}, "SMOOTH", kDim);
       for (int i = 0; i < kTouchCount; ++i) {
          const float y = 116 + i * 82.0f;
-         label({28, y + 30, 62, 16}, upper(kTouchNames[i]), sourceColor(kSourceStrike + i), visage::Font::kLeft);
-         knob(kTouchCurve1 + i, "", sourceColor(kSourceStrike + i), {88, y, 66, 82});
-         knob(kTouchSmooth1 + i, "", sourceColor(kSourceStrike + i), {154, y, 66, 82});
+         label({28, y + 30, 62, 16}, upper(kTouchNames[i]), touchColor(i), visage::Font::kLeft);
+         knob(kTouchCurve1 + i, "", touchColor(i), {88, y, 66, 82});
+         knob(kTouchSmooth1 + i, "", touchColor(i), {154, y, 66, 82});
       }
       const auto r = ui::row({22, 536, 202, 104}, 3);
       knob(kGlideRounding, "ROUND", kDim, r[0], "Pulls a resting finger to the nearest semitone.");
@@ -1674,8 +1667,10 @@ private:
       for (int e = 0; e < kEnvCount; ++e)
          chip(kSourceEnv1 + e, envNames[e], {982, 104 + e * 180.0f, 104, 22});
       tab_ = 1;
-      chip(kSourceWingbeat, "WINGBEAT", {982, 104, 104, 22}, "One per creature: each bobs across its path.");
-      chip(kSourceWind, "WIND", {982, 376, 104, 22}, "One gust for the whole sky, pushing every creature.");
+      tips_.add(label({982, 104, 104, 22}, "WINGBEAT", kMotionColors[0], visage::Font::kLeft),
+                "One per creature: each bobs across its path.");
+      tips_.add(label({982, 376, 104, 22}, "WIND", kMotionColors[1], visage::Font::kLeft),
+                "One gust for the whole sky, pushing every creature.");
       tab_ = 2;
       chip(kSourceLfo1, "LFO 1", {982, 104, 104, 22}, "A plain LFO, one per creature unless its trigger is Global.");
       chip(kSourceLfo1 + 1, "LFO 2", {982, 376, 104, 22}, "A plain LFO, one per creature unless its trigger is Global.");
@@ -1699,7 +1694,7 @@ private:
          for (int l = 0; l < kLfoCount; ++l) {
             tab_ = l < kMotionCount ? 1 : 2;
             const float y = 104 + (l % 2) * 272.0f;
-            const unsigned lc = sourceColor(kSourceWingbeat + l);
+            const unsigned lc = l < kMotionCount ? kMotionColors[l] : sourceColor(kSourceLfo1 + l - kMotionCount);
             dropdown(lfoParam(l, kLfoShape), lc, {1094, y, 80, 22});
             dropdown(lfoParam(l, kLfoTrigger), c, {982, y + 28, 104, 22});
             segments(lfoParam(l, kLfoSync), lc, {1094, y + 28, 80, 22}, std::vector<std::string>{"FREE", "SYNC"});

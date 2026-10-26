@@ -57,7 +57,7 @@ inline void lureAt(float ax, float ay, float &x, float &y) {
 struct FlockParams {
    int behaviour = 0;
    float cohesion = 0.5f, alignment = 0.5f, separation = 0.4f, speed = 0.4f, wander = 0.2f, lure = 0.6f,
-         range = 0.35f, tailLength = 0.5f, tailSpread = 0.5f, wake = 0.2f;
+         range = 0.35f;
    // Wingbeat and wind push (0..1).
    float wingPush = 0.2f, windPush = 0.3f;
 
@@ -72,17 +72,16 @@ struct FlockParams {
       wander = static_cast<float>(v(flockParam(kWander)));
       lure = static_cast<float>(v(flockParam(kLure)));
       range = static_cast<float>(v(flockParam(kRange)));
-      tailLength = static_cast<float>(v(flockParam(kTailLength)));
-      tailSpread = static_cast<float>(v(flockParam(kTailSpread)));
-      wake = static_cast<float>(v(flockParam(kWake)));
       wingPush = static_cast<float>(v(lfoParam(0, kLfoPush)));
       windPush = static_cast<float>(v(lfoParam(1, kLfoPush)));
    }
 };
 
-// A creature's own modulation sources, each 0..1 and continuous, so a route from one never steps.
+// A creature's own modulation sources, each continuous, so a route from one never steps: Speed,
+// Nearest and Heading 0..1, Turn -1..1. Caught (0..1, for Bite) and x (0..1, for X Pan) aren't
+// route sources but glide the same way.
 struct CreatureSources {
-   float speed = 0, crowd = 0, nearest = 0, heading = 0, caught = 0, wake = 0, x = 0, y = 0;
+   float speed = 0, nearest = 0, heading = 0, turn = 0, caught = 0, x = 0;
 };
 
 struct Creature {
@@ -123,7 +122,6 @@ class Flock {
 public:
    // The flock's step: fixed, so it flies the same at any sample rate and block size.
    static constexpr float kStep = 1.0f / 500.0f;
-   static constexpr int kGridX = 24, kGridY = 18;
 
    Creature creatures[kCreatureSlots];
    // The sky's settings: Size (0..1) and Walls (Soft, Wrap, Open).
@@ -137,11 +135,7 @@ public:
       time_ = 0;
       for (Creature &c : creatures)
          c = Creature{};
-      for (int p = 0; p < kPartCount; ++p)
-         for (float &d : ink_[p])
-            d = 0;
       nextId_ = 1;
-      blurAt_[0] = blurAt_[1] = 0;
       for (int part = 0; part < kPartCount; ++part)
          for (int i = 0; i < kIdlePerPart; ++i) {
             Creature &c = creatures[kVoiceSlots + part * kIdlePerPart + i];
@@ -208,19 +202,13 @@ public:
       }
       fly(dt);
       couple(dt);
-      ink(dt);
-   }
-
-   // The ink density (0..1) of `part` at (x, y), for drawing.
-   float inkAt(int part, float x, float y) const {
-      const int gx = std::clamp(static_cast<int>(x / kSkyAspect * kGridX), 0, kGridX - 1);
-      const int gy = std::clamp(static_cast<int>(y * kGridY), 0, kGridY - 1);
-      return ink_[part][gy * kGridX + gx];
    }
 
 private:
    static constexpr float kPi = dsp::kPi;
    static constexpr float kCatch = 0.03f;
+   // A turn rate (radians a second) that reads as a hard turn on the Turn source.
+   static constexpr float kTurnFull = 4.0f;
 
    void hatch(Creature &c, int part, float x, float y) {
       const float wing = c.wing;
@@ -254,7 +242,7 @@ private:
             continue;
          const FlockParams &sp = b.params;
          const float R = radius(sp);
-         float cx = 0, cy = 0, ax = 0, ay = 0, sx = 0, sy = 0, hx = 0, hy = 0, wsum = 0, crowd = 0, near = 0;
+         float cx = 0, cy = 0, ax = 0, ay = 0, sx = 0, sy = 0, hx = 0, hy = 0, wsum = 0, near = 0;
          float prey = 1e9f;
          for (const Creature &o : creatures) {
             if (&o == &b || !o.alive || o.energy < 0.02f)
@@ -265,7 +253,6 @@ private:
                   // A smooth kernel, so a neighbour drifting in or out of range fades in or out.
                   const float k = 1.0f - d / R, w = k * k * o.energy;
                   cx += o.x * w, cy += o.y * w, ax += o.vx * w, ay += o.vy * w, wsum += w;
-                  crowd += w;
                   near = std::max(near, k * std::min(1.0f, 2.0f * o.energy));
                }
                if (d < 0.4f * R) {
@@ -333,6 +320,7 @@ private:
             if (b.y > 1.0f - m)
                accY -= (b.y - 1.0f + m) * k;
          }
+         const float wasX = b.vx, wasY = b.vy;
          b.vx += accX * dt;
          b.vy += accY * dt;
          const float top = maxSpeed(sp, b.press), speed = std::sqrt(b.vx * b.vx + b.vy * b.vy) + 1e-6f;
@@ -352,12 +340,17 @@ private:
          }
          CreatureSources &s = b.sources;
          s.speed = clamped / maxSpeed(sp, 1.0f);
-         s.crowd += (std::min(1.0f, crowd / 2.0f) - s.crowd) * std::min(1.0f, dt * 20.0f);
          s.nearest += (near - s.nearest) * std::min(1.0f, dt * 20.0f);
          // How much it flies upward: smooth all the way round, unlike an angle.
          s.heading = 0.5f - 0.5f * b.vy / (clamped + 1e-6f);
+         // How fast its heading turns, in radians a second: + clockwise on screen (a right turn, as y
+         // runs down), - a left one. kTurnFull is a hard turn; tanh keeps a sharper one in range, and
+         // the smoothing (about 170 ms) keeps the wander's and the wingbeat's jitter out of it.
+         const float was = std::sqrt(wasX * wasX + wasY * wasY) + 1e-6f;
+         const float sine = (wasX * b.vy - wasY * b.vx) / (was * clamped);
+         const float turn = std::tanh(std::asin(std::clamp(sine, -1.0f, 1.0f)) / dt / kTurnFull);
+         s.turn += (turn - s.turn) * std::min(1.0f, dt * 6.0f);
          s.x = std::clamp(b.x / kSkyAspect, 0.0f, 1.0f);
-         s.y = std::clamp(1.0f - b.y, 0.0f, 1.0f);
       }
    }
 
@@ -404,62 +397,9 @@ private:
       }
    }
 
-   // A coarse ink field per species: each creature leaves ink behind it, which fades with its Tail and
-   // blurs with its Spread. Wake is how much ink a creature is flying into: read just ahead of it,
-   // where its own ink isn't.
-   void ink(float dt) {
-      for (int p = 0; p < kPartCount; ++p) {
-         // Fade and blur at the species' own rates (from its first live creature).
-         float tail = 0.5f, spread = 0.5f;
-         for (const Creature &c : creatures)
-            if (c.alive && c.part == p) {
-               tail = c.params.tailLength;
-               spread = c.params.tailSpread;
-               break;
-            }
-         const float fade = std::exp(-dt / (0.3f + 3.0f * tail));
-         const float blur = std::min(0.24f, dt * (0.5f + 6.0f * spread));
-         float *g = ink_[p];
-         // The blur runs on a few cells per step, round robin, so the field costs little.
-         for (int n = 0; n < kGridX; ++n) {
-            const int i = blurAt_[p] = (blurAt_[p] + 7) % (kGridX * kGridY);
-            const int x = i % kGridX, y = i / kGridX;
-            const float l = g[y * kGridX + std::max(0, x - 1)], r = g[y * kGridX + std::min(kGridX - 1, x + 1)];
-            const float u = g[std::max(0, y - 1) * kGridX + x], d = g[std::min(kGridY - 1, y + 1) * kGridX + x];
-            g[i] += (0.25f * (l + r + u + d) - g[i]) * blur * 8.0f;
-         }
-         for (int i = 0; i < kGridX * kGridY; ++i)
-            g[i] *= fade;
-      }
-      for (Creature &b : creatures) {
-         if (!b.alive || b.energy < 0.02f)
-            continue;
-         const float v = std::sqrt(b.vx * b.vx + b.vy * b.vy) + 1e-5f;
-         // Leave ink a little behind...
-         deposit(b.part, b.x - b.vx / v * 0.03f, b.y - b.vy / v * 0.03f, b.energy * dt * 1.5f);
-         // ...and feel the ink ahead: the other species' fully, its own kind's a little less.
-         const float ax = b.x + b.vx / v * 0.06f, ay = b.y + b.vy / v * 0.06f;
-         float ink = 0;
-         for (int p = 0; p < kPartCount; ++p)
-            ink += inkAt(p, ax, ay) * (p == b.part ? 0.7f : 1.0f);
-         const float target = std::min(1.0f, ink * (0.5f + 1.5f * b.params.wake));
-         b.sources.wake += (target - b.sources.wake) * std::min(1.0f, dt * 6.0f);
-      }
-   }
-
-   void deposit(int part, float x, float y, float amount) {
-      if (x < 0 || y < 0 || x >= kSkyAspect || y >= 1.0f)
-         return;
-      float &cell = ink_[part][std::min(kGridY - 1, static_cast<int>(y * kGridY)) * kGridX +
-                               std::min(kGridX - 1, static_cast<int>(x / kSkyAspect * kGridX))];
-      cell = std::min(1.0f, cell + amount);
-   }
-
    dsp::Random rng_;
    float time_ = 0;
    uint32_t nextId_ = 1;
-   float ink_[kPartCount][kGridX * kGridY] = {};
-   int blurAt_[kPartCount] = {};
 };
 
 // What the engine shows the panel, a few hundred times a second, through a TripleBuffer.

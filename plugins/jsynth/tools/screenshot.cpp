@@ -52,8 +52,8 @@ public:
       a(flockParam(kTunePull), 0.3);
       a(flockParam(kTailLength), 0.6);
       a(flockParam(kTailSpread), 0.6);
-      // A few more routes, so the knobs show rings: Speed and Wake into the 1 > 2 FM, Heading pans.
-      a(routeParam(6, kRouteSource), kSourceWake);
+      // A few more routes, so the knobs show rings: Turn into the 2 > 1 FM, Heading pans.
+      a(routeParam(6, kRouteSource), kSourceTurn);
       a(routeParam(6, kRouteDestination), destinationIndex(fmCell(1, 0)));
       a(routeParam(6, kRouteAmount), -0.2);
       a(routeParam(7, kRouteSource), kSourceHeading);

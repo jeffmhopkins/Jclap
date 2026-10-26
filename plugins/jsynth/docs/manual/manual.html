@@ -241,7 +241,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
 
   <p>Play a note on JSynth and a creature hatches in the sky in the middle of the panel. Your note is its <strong>lure</strong>: low notes pull their creatures to the left, high notes to the right, and sliding your finger up an MPE controller lifts it higher. Press harder and the creature flies faster and burns brighter. Let go and it flies off as its sound fades, trailing ink.</p>
-  <p>While they are held, the creatures do what flocks do. They gather, turn together, keep a little apart, and wander. And because each creature is a voice, how it flies can become how it sounds: how fast it goes, how crowded it is, how near its nearest neighbour is, which way it heads and how much ink it flies through are all modulation sources, as exact as an envelope. Creatures can also hear each other directly. A neighbour's oscillator can frequency-modulate this one, creatures flying the same way drift toward pure intervals, and a hunter that catches its prey rings it.</p>
+  <p>While they are held, the creatures do what flocks do. They gather, turn together, keep a little apart, and wander. And because each creature is a voice, how it flies can become how it sounds: how fast it goes, how near its nearest neighbour is, which way it heads and how hard it turns are all modulation sources, as exact as an envelope. Creatures can also hear each other directly. A neighbour's oscillator can frequency-modulate this one, creatures flying the same way drift toward pure intervals, and a hunter that catches its prey rings it.</p>
   <p>Underneath is a serious synth. Each of the two parts, <strong>A</strong> and <strong>B</strong>, is its own species with its own patch: three oscillators with analog and FM waves, a 3×3 FM grid, noise, drive, two filters, three envelopes, four LFOs and sixty-four routes. Nothing the flock does reaches the sound unless you route it, so a plain patch is plain.</p>
 
   <h2>At a glance</h2>
@@ -258,7 +258,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div>
       <ul>
         <li><strong>The flock</strong>: cohesion, alignment, separation, speed, wander, lure and range, with four behaviours: Shoal, Scatter, Hunt and Flee.</li>
-        <li><strong>Eight flock sources</strong> per creature: Speed, Crowd, Nearest, Heading, Caught, Wake, X and Y.</li>
+        <li><strong>Four flock sources</strong> per creature: Speed, Nearest, Heading and Turn.</li>
         <li><strong>Between creatures</strong>: Neighbour FM, Tune Pull and Bite.</li>
         <li><strong>MAP</strong>: touch a source, drag a knob. No matrix page, and up to 64 routes per part.</li>
         <li><strong>49 factory presets</strong> from hits to slow swells.</li>
@@ -364,7 +364,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div><span class="dot">2</span><span><b>PART A / PART B.</b> Which species the cards edit.</span></div>
     <div><span class="dot">3</span><span><b>Play mode.</b> Which part each note plays.</span></div>
     <div><span class="dot">4</span><span><b>MAP.</b> Turns on mapping: touch a source, drag a knob.</span></div>
-    <div><span class="dot">5</span><span><b>Touch chips.</b> STRIKE, PRESS, GLIDE, SLIDE, LIFT: sources that light as you play.</span></div>
+    <div><span class="dot">5</span><span><b>Touch chips.</b> STRIKE, PRESS, GLIDE, SLIDE: sources that light as you play.</span></div>
     <div><span class="dot">6</span><span><b>Left card.</b> FLOCK, FM and TOUCH tabs.</span></div>
     <div><span class="dot">7</span><span><b>The sky.</b> Both species, their ink, and the links between them. Click to play.</span></div>
     <div><span class="dot">8</span><span><b>Flock sources.</b> The creatures' own modulation sources.</span></div>
@@ -422,7 +422,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <p>Envelopes 2 and 3, the LFOs, the touch, the routes and the flock all work at a control rate of one tick every 32 samples (1,500 a second at 48 kHz). Every value the audio reads ramps smoothly across each tick, so nothing zippers, and knobs are smoothed over 10 ms. The amp envelope runs every sample. Because the ticks are counted across the host's blocks, JSynth sounds the same at any buffer size.</p>
 
   <h2>The creature</h2>
-  <p>As a voice starts, its creature hatches at the note's lure. The flock steps 500 times a second. Each step, every creature feels its neighbours (cohesion, alignment, separation), its lure, its own wander, the wind and its wingbeat, and moves. Then the flock works out each creature's eight sources and who can hear whom. Each voice reads its creature's sources smoothly between steps.</p>
+  <p>As a voice starts, its creature hatches at the note's lure. The flock steps 500 times a second. Each step, every creature feels its neighbours (cohesion, alignment, separation), its lure, its own wander, the wind and its wingbeat, and moves. Then the flock works out each creature's four sources and who can hear whom. Each voice reads its creature's sources smoothly between steps.</p>
 
   <h2>Routes</h2>
   <p>A <strong>route</strong> connects a source to a destination with an amount. Each part has 64 of them. Each tick, every voice works out its routes from its own sources, so the same route can push one note's filter open and leave another's closed: an envelope, a finger's pressure or a creature's speed is always that note's own. A route moves a parameter within its own range, so +100% from a source at full takes any knob from its lowest to its highest.</p>
@@ -461,18 +461,14 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <p>Click anywhere in the sky to play a note: left to right runs from C2 to C6, and how high you click sets Slide. Drag while holding to bend the note and change Slide; let go to release it. The notes play on whichever parts the play mode sends them to, just like notes from your keyboard.</p>
 
   <h2>The flock sources</h2>
-  <p>The row of chips under the sky holds each creature's eight sources. Each chip's light shows the newest creature of the part you are editing. They are always each note's own when used in a route.</p>
+  <p>The row of chips under the sky holds each creature's four sources. Each chip's light shows the newest creature of the part you are editing. They are always each note's own when used in a route.</p>
   <table>
-    <thead><tr><th>Source</th><th>What it measures (0 to 100%)</th></tr></thead>
+    <thead><tr><th>Source</th><th>What it measures</th></tr></thead>
     <tbody>
-      <tr><td class="c">SPEED</td><td>How fast the creature flies, against the fastest it could at full Press.</td></tr>
-      <tr><td class="c">CROWD</td><td>How many neighbours it has, counted smoothly: two close neighbours is full.</td></tr>
+      <tr><td class="c">SPEED</td><td>How fast the creature flies, against the fastest it could at full Press (0 to 100%).</td></tr>
       <tr><td class="c">NEAREST</td><td>How near its nearest neighbour is: 100% is touching, 0 is at the edge of <strong>RANGE</strong> or beyond.</td></tr>
       <tr><td class="c">HEADING</td><td>How much it flies upward: 100% straight up, 50% level, 0 straight down. Smooth all the way round, so it never jumps.</td></tr>
-      <tr><td class="c">CAUGHT</td><td>Whether a hunter of the other species has it. Rises in about 20 ms, lets go over about half a second.</td></tr>
-      <tr><td class="c">WAKE</td><td>How much ink it is flying into, scaled by the part's <strong>WAKE</strong> knob.</td></tr>
-      <tr><td class="c">X</td><td>Where it is, left (0) to right (100%).</td></tr>
-      <tr><td class="c">Y</td><td>Where it is, bottom (0) to top (100%).</td></tr>
+      <tr><td class="c">TURN</td><td>Which way and how hard it is turning: up to +100% for a hard right turn on screen, down to −100% for a hard left, 0 flying straight. Smoothed over about 170 ms, so the wander's jitter and the wingbeat's bob barely reach it.</td></tr>
     </tbody>
   </table>
 
@@ -697,7 +693,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <div class="split">
     <figure class="dark"><img src="img/card-motion.jpg" alt=""></figure>
     <div class="body">
-      <p>The MOTION tab holds the two LFOs that move the flock. Both are also sources for routes, like any LFO.</p>
+      <p>The MOTION tab holds the two LFOs that move the flock. They only move it: they aren't sources for routes. For a sound that moves with them, use LFO 1 or 2 at the same rate.</p>
       <div class="kv">
         <dt>WINGBEAT</dt><dd>One per creature (5 Hz sine by default). It bobs each creature across its path, by <strong>PUSH</strong>, and beats its wings on screen.</dd>
         <dt>WIND</dt><dd>One gust for the whole sky (a slow 0.2 Hz Smooth, Global by default). It pushes every creature of the part the same way, by <strong>PUSH</strong>, from a direction that turns slowly on its own.</dd>
@@ -761,7 +757,6 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
           <tr><td class="c">RANGE</td><td class="r">0 – 100%</td><td class="d">35%</td><td>How near counts as a neighbour. <span class="mod t">ROUTE</span></td></tr>
           <tr><td class="c">TAIL</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How long the ink lasts, about 0.3 to 3 seconds. <span class="mod t">ROUTE</span></td></tr>
           <tr><td class="c">SPREAD</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How far the ink blooms as it ages. <span class="mod t">ROUTE</span></td></tr>
-          <tr><td class="c">WAKE</td><td class="r">0 – 100%</td><td class="d">20%</td><td>How strongly ink registers on the Wake source. <span class="mod t">ROUTE</span></td></tr>
           <tr><td class="c">SIZE</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How big the sky is. A bigger sky makes creatures relatively smaller and slower, so flocks spread out. Shared.</td></tr>
           <tr><td class="c">WALLS</td><td class="r">Soft, Wrap, Open</td><td class="d">Soft</td><td>Soft turns creatures back near the edge; Wrap carries them round to the other side; Open lets them fly well past it first. Shared.</td></tr>
           <tr><td class="c">LURE X, LURE Y</td><td class="r">Pitch, Strike, Press, Slide, Lift, Random, Centre</td><td class="d">Pitch, Slide</td><td>What places a note's lure along each axis.</td></tr>
@@ -774,7 +769,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <div class="kv">
     <dt>Shoal</dt><dd>Flies with its own kind: cohesion, alignment and separation as set.</dd>
     <dt>Scatter</dt><dd>Keeps apart: cohesion pushes creatures away from their neighbours' middle instead of toward it.</dd>
-    <dt>Hunt</dt><dd>Chases the nearest creature of the other species. A hunter that gets close enough catches it, which turns on the prey's Caught source and its Bite. Everything shies away from hunters a little.</dd>
+    <dt>Hunt</dt><dd>Chases the nearest creature of the other species. A hunter that gets close enough catches it, which turns on its Bite. Everything shies away from hunters a little.</dd>
     <dt>Flee</dt><dd>Runs hard from the other species, whatever it is doing.</dd>
   </div>
 
@@ -786,11 +781,11 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <div class="kv">
     <dt>NEIGHBOUR</dt><dd>Each creature listens to up to three neighbours of its own species, weighted by how near they are, and their Osc 1 frequency-modulates its Osc 2. A tight flock rings; a loose one is clean. When a creature gains or loses a neighbour, the change fades in over about 10 ms, so it never clicks. For it to be heard, Osc 2 must be in the sound: give it level, or route it into Osc 1 on the FM grid.</dd>
     <dt>TUNE PULL</dt><dd>For each neighbour heading within 30° of the same way, the creature is pulled toward the nearest just interval from that neighbour's pitch (unison, minor third, major third, fourth, fifth, major sixth, octave), up to ±30 cents at 100%, over about 150 ms. Chords played on a flock that flies together settle into just intonation; break formation and they drift back.</dd>
-    <dt>BITE</dt><dd>While one of this part's hunters holds a creature of the other species, the hunter's Osc 1 ring-modulates it, by Bite times how caught it is. Set Bite on the hunting part. Because Caught lets go over half a second, each bite rings out as the prey escapes.</dd>
+    <dt>BITE</dt><dd>While one of this part's hunters holds a creature of the other species, the hunter's Osc 1 ring-modulates it, by Bite times how caught it is. Set Bite on the hunting part. Because a catch lets go over half a second, each bite rings out as the prey escapes.</dd>
   </div>
 
-  <h2>Ink and Wake</h2>
-  <p>Every creature leaves ink behind it, more the brighter it is. The ink fades with <strong>TAIL</strong> and blooms with <strong>SPREAD</strong>. The <strong>Wake</strong> source is how much ink a creature is flying into, read just ahead of it: the other species' ink fully and its own kind's a little less. So Wake rises when a creature crosses another's path or follows a flock, and a route from Wake makes a sound that reacts to where the flock has been.</p>
+  <h2>Ink</h2>
+  <p>Every creature leaves ink behind it in the sky, more the brighter it is. The ink fades with <strong>TAIL</strong> and blooms with <strong>SPREAD</strong>. It is only drawn: it doesn't change the sound.</p>
 </section>
 
 <!-- ================= 12. TOUCH ================= -->
@@ -813,7 +808,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
           <tr><td class="c">PRESS</td><td>Pressure: MPE channel pressure or the CLAP pressure expression. It also makes the creature faster and brighter.</td></tr>
           <tr><td class="c">GLIDE</td><td>The finger's bend, as −100% to +100% of the bend range.</td></tr>
           <tr><td class="c">SLIDE</td><td>Up and down the key: MPE CC 74 or the CLAP brightness expression.</td></tr>
-          <tr><td class="c">LIFT</td><td>How fast the note was released: its release velocity.</td></tr>
+          <tr><td class="c">LIFT</td><td>How fast the note was released: its release velocity. It isn't a route source, but it can place a note's lure.</td></tr>
         </tbody>
       </table>
       <p>Each has a <strong>CURVE</strong> (−1 to +1): positive bows it up, so it responds more early in the travel, and negative bows it down. And a <strong>SMOOTH</strong> time (8 ms by default, 2 ms for Glide so slides track the finger), which irons out a controller's steps.</p>
@@ -829,10 +824,10 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
 
   <h2>The touch chips</h2>
-  <p>The five chips in the header light as you play, showing the newest note of the part you are editing. In MAP mode they are sources like any other: touch <strong>PRESS</strong> and drag a knob to make pressure move it.</p>
+  <p>The four chips in the header light as you play, showing the newest note of the part you are editing. In MAP mode they are sources like any other: touch <strong>PRESS</strong> and drag a knob to make pressure move it.</p>
   <div class="note">
     <span class="k">No MPE controller?</span>
-    <p>Strike and Lift come from any keyboard. A plain keyboard's channel pressure is Press for every note, and its pitch wheel bends every note by MGR BEND. In the sky, a click sets Slide by how high you click and dragging bends.</p>
+    <p>Strike comes from any keyboard. A plain keyboard's channel pressure is Press for every note, and its pitch wheel bends every note by MGR BEND. In the sky, a click sets Slide by how high you click and dragging bends.</p>
   </div>
 </section>
 
@@ -868,11 +863,12 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <thead><tr><th style="width:1.3in">Source</th><th>Value</th></tr></thead>
     <tbody>
       <tr><td class="c">Env 1, 2, 3</td><td>0 to 100%, each note's own.</td></tr>
-      <tr><td class="c">Wingbeat, Wind, LFO 1, 2</td><td>−100% to +100% (or 0 to 100% when Unipolar). Per note unless Global.</td></tr>
-      <tr><td class="c">Strike, Press, Slide, Lift</td><td>0 to 100%, each note's own.</td></tr>
+      <tr><td class="c">LFO 1, 2</td><td>−100% to +100% (or 0 to 100% when Unipolar). Per note unless Global.</td></tr>
+      <tr><td class="c">Strike, Press, Slide</td><td>0 to 100%, each note's own.</td></tr>
       <tr><td class="c">Glide</td><td>−100% to +100%: the note's bend.</td></tr>
       <tr><td class="c">Key</td><td>The note: −100% four octaves below middle C, 0 at middle C, +100% four octaves above.</td></tr>
-      <tr><td class="c">Speed … Y</td><td>The flock's eight, 0 to 100% (Chapter 6).</td></tr>
+      <tr><td class="c">Speed, Nearest, Heading</td><td>The flock's own, 0 to 100% (Chapter 6).</td></tr>
+      <tr><td class="c">Turn</td><td>The flock's turning, −100% (left) to +100% (right) (Chapter 6).</td></tr>
       <tr><td class="c">Random</td><td>A new value per note, −100% to +100%.</td></tr>
       <tr><td class="c">Mod Wheel</td><td>CC 1 on channel 1.</td></tr>
       <tr><td class="c">Macro 1 to 4</td><td>Four host parameters, for automation or a controller.</td></tr>
@@ -932,25 +928,25 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div class="recipe" style="--rc:#ffb05a">
       <h3>A flock that rings</h3>
       <p>Neighbours modulate each other, so a held chord shimmers as it gathers and breaks.</p>
-      <div class="set">Osc 2 Sine Ratio ×3.5 · FM 2 &gt; 1 40%<br>NEIGHBOUR 70% · TUNE PULL 40% · COHESION 70%<br>Crowd → FM 2 &gt; 1 +30%<br>X PAN 60%</div>
+      <div class="set">Osc 2 Sine Ratio ×3.5 · FM 2 &gt; 1 40%<br>NEIGHBOUR 70% · TUNE PULL 40% · COHESION 70%<br>Nearest → FM 2 &gt; 1 +30%<br>X PAN 60%</div>
       <div class="from">Or load <em>Starling Bells</em>.</div>
     </div>
     <div class="recipe" style="--rc:#ff4f8b">
       <h3>Predator and prey</h3>
-      <p>Two species; every catch rings and opens the prey's filter.</p>
-      <div class="set">Play mode LAYER<br>A: Flee · Caught → F1 Cutoff +60%<br>B: Hunt · Speed 70% · Pulse · BITE 90% · Transp −12</div>
+      <p>Two species; every catch rings, and the prey's filter opens as its own kind closes in.</p>
+      <div class="set">Play mode LAYER<br>A: Flee · Nearest → F1 Cutoff +60%<br>B: Hunt · Speed 70% · Pulse · BITE 90% · Transp −12</div>
       <div class="from">Or load <em>Predator and Prey</em>.</div>
     </div>
     <div class="recipe" style="--rc:#5fd3b0">
-      <h3>Ink-stirred pad</h3>
-      <p>The sound follows where the flock has been.</p>
-      <div class="set">Osc 1 Alt Sine · FB 1 25%<br>TAIL 100% · SPREAD 90% · WAKE 80% · LURE 35%<br>Wake → F1 Cutoff +50% · Wake → FM 2 &gt; 1 +40%</div>
+      <h3>Turning pad</h3>
+      <p>The sound leans as each creature banks.</p>
+      <div class="set">Osc 1 Alt Sine · FB 1 25%<br>TAIL 100% · SPREAD 90% · LURE 35%<br>Turn → F1 Cutoff +50% · Turn → FM 2 &gt; 1 +40%</div>
       <div class="from">Or load <em>Ink Ribbons</em>.</div>
     </div>
     <div class="recipe" style="--rc:#8fb8ff">
       <h3>Wind through a choir</h3>
-      <p>One gust for the whole sky, heard in the filter.</p>
-      <div class="set">Saws, Noise 35% · F1 Band Pass, Res 40%<br>Wind Push 90% · Wind Rate 0.1 Hz<br>Wind → F1 Cutoff +40% · Slide → F1 Res +30%</div>
+      <p>A strong gust pushes the flock while LFO 2 sweeps the filter.</p>
+      <div class="set">Saws, Noise 35% · F1 Band Pass, Res 40%<br>Wind Push 90% · Wind Rate 0.1 Hz<br>LFO 2 → F1 Cutoff +40% · Slide → F1 Res +30%</div>
       <div class="from">Or load <em>Wind Choir</em>.</div>
     </div>
     <div class="recipe" style="--rc:#ff6fd2">
@@ -1002,7 +998,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">Oscillators</td><td>3 per voice, 14 waves, double-precision phase. Saw, square and pulse band-limited by polyBLEP.</td></tr>
       <tr><td class="c">FM</td><td>3 × 3 grid including feedback; phase or exponential. Plus Neighbour FM from up to three neighbours.</td></tr>
       <tr><td class="c">Filters</td><td>2 per voice: TPT state variable (12–48 dB), notch, peak, 4-pole ZDF ladder, comb ±. Serial, parallel or split.</td></tr>
-      <tr><td class="c">Modulation</td><td>3 DAHDSR envelopes with curves and loop, 4 LFOs, 5 touch dimensions, 8 flock sources, key, random, mod wheel, 4 macros. 64 routes per part.</td></tr>
+      <tr><td class="c">Modulation</td><td>3 DAHDSR envelopes with curves and loop, 4 LFOs, 5 touch dimensions (4 as sources), 4 flock sources, key, random, mod wheel, 4 macros. 64 routes per part.</td></tr>
       <tr><td class="c">Oversampling</td><td>1×, 2× (default) or 4×, decimated by polyphase IIR half-bands.</td></tr>
       <tr><td class="c">Control rate</td><td>Every 32 samples, ramped per sample. The flock steps at 500 Hz. Renders are identical at any buffer size.</td></tr>
       <tr><td class="c">Parameters</td><td>All automatable except the route sources, destinations and Quality. Continuous ones accept CLAP modulation; route destinations accept it per note (note id, key, channel or port).</td></tr>
@@ -1197,8 +1193,8 @@ function el(parent, tag, attrs, text) {
       ['Koto', '×3 modulator with feedback.'],
       ['Synth Pluck', 'Saw and detuned pulse through a resonant filter; Slide on resonance.'],
       ['Bell Pluck', '×3.5 and ×7; Press deepens the upper FM.'],
-      ['Starling Bells', 'Neighbour FM, Tune Pull and a cohesive flock; Crowd deepens the FM.'],
-      ['Dripping Ink', 'Long, wide ink; Wake, Speed and Heading play the filter and FM.'],
+      ['Starling Bells', 'Neighbour FM, Tune Pull and a cohesive flock; Nearest deepens the FM.'],
+      ['Dripping Ink', 'Long, wide ink; Turn, Speed and Heading play the filter and FM.'],
     ]],
     ['Keys', 'Played like a keyboard: organs held, pianos and mallets dying away.', [
       ['Sine Organ', 'Three sine drawbars, no routes.'],
@@ -1218,18 +1214,18 @@ function el(parent, tag, attrs, text) {
       ['East Coast Brass', 'Feedback-driven 1:1 FM with a slow swell of brightness.'],
       ['Pressure Lead', 'Press opens the FM and the vibrato; Slide adds grit.'],
       ['Shark Bass', 'Split at C3: below, a hunting saw-and-pulse bass with Bite; Speed opens its filter.'],
-      ['Predator and Prey', 'Layer: A flees, B hunts an octave down; every catch opens A\u2019s filter.'],
+      ['Predator and Prey', 'Layer: A flees, B hunts an octave down; A\u2019s filter opens as its own kind closes in.'],
     ]],
     ['Pads', 'Rising in under a second, held.', [
       ['Sine Pad', 'Two detuned sines panned apart, no routes.'],
       ['Warm Analog', 'Saw pair through a low pass, a slow Env 2.'],
       ['Glass Pad', '×3 and ×0.5, LFO 1 on the FM.'],
-      ['Wind Choir', 'Saws and noise through a band pass; a strong wind on the cutoff.'],
+      ['Wind Choir', 'Saws and noise through a band pass; a strong wind, and LFO 2 on the cutoff.'],
       ['String Machine', 'Three saws with slow detune LFOs; Press opens the filter.'],
       ['Murmuration Pad', 'Saws, an aligned flock spread wide; Heading pans each voice.'],
       ['Pressure Front', 'Press opens 2:1 FM, with Neighbour FM.'],
-      ['Ink Ribbons', 'Long ink and a loose lure; Wake plays cutoff and FM.'],
-      ['Murmuration Riot', 'Layer: a fast FM shoal opened by Press, Speed, Crowd and Wake, and driven ladder hunters that bite.'],
+      ['Ink Ribbons', 'Long ink and a loose lure; Turn plays cutoff and FM.'],
+      ['Murmuration Riot', 'Layer: a fast FM shoal opened by Press, Speed, Nearest and Turn, and driven ladder hunters that bite.'],
     ]],
     ['Swells', 'Seconds to arrive.', [
       ['Slow Sine', 'Two sines over three seconds, no routes.'],
@@ -1237,8 +1233,8 @@ function el(parent, tag, attrs, text) {
       ['Tidal Strings', 'Saws, a slow Env 2 on the cutoff, LFO 2 on the pan.'],
       ['Dawn Chorus', 'Vibrato that arrives once the note has bloomed.'],
       ['Deep Current', 'A sub through a resonant, tube-driven ladder; Slide drives it harder.'],
-      ['Aurora', 'A slow FM shoal with Tune Pull; Heading on the FM, Y on the cutoff.'],
-      ['Storm Front', 'Saw and noise through a comb in a strong wind; Wind, Wake and Speed on the filters.'],
+      ['Aurora', 'A slow FM shoal with Tune Pull; Heading on the FM, Slide on the cutoff.'],
+      ['Storm Front', 'Saw and noise through a comb in a strong wind; LFO 2, Turn and Speed on the filters.'],
       ['Murmuration Storm', 'Layer: a saw shoal with Neighbour FM and Tune Pull, and FM hunters.'],
     ]],
   ];
@@ -1310,12 +1306,12 @@ function el(parent, tag, attrs, text) {
       ['Separation', '0 – 100%', '40%', T], ['Speed', '0 – 100%', '40% (B: 55%)', T], ['Wander', '0 – 100%', '20%', T],
       ['Lure', '0 – 100%', '60%', T], ['Range', '0 – 100%', '35%', T], ['Neighbour FM', '0 – 100%', '0%', T],
       ['Tune Pull', '0 – 100%', '0%', T], ['Bite', '0 – 100%', '0%', T], ['Tail Length', '0 – 100%', '50%', T],
-      ['Tail Spread', '0 – 100%', '50%', T], ['Wake', '0 – 100%', '20%', T],
+      ['Tail Spread', '0 – 100%', '50%', T],
       ['Lure X, Lure Y', 'Pitch, Strike, Press, Slide, Lift, Random, Centre', 'Pitch, Slide', ''],
     ]],
     ['Routes (per part: Route 1 – 64)', [
-      ['Source', 'Off and 27 sources', 'Off (1–3: Env 2, Press, Press)', ''],
-      ['Destination', '160 destinations', 'Filter 1 Cutoff (2: Speed)', ''],
+      ['Source', 'Off and 20 sources', 'Off (1–3: Env 2, Press, Press)', ''],
+      ['Destination', '159 destinations', 'Filter 1 Cutoff (2: Speed)', ''],
       ['Amount', '–100% – +100%', '+0% (1–3: +30, +40, +20%)', T],
     ]],
   ];
