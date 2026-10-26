@@ -398,6 +398,55 @@ int main() {
       JCLAP_CHECK(ok);
    }
 
+   // Synced LFOs that aren't retriggered sit on the host's bar: playback started a bar in hears
+   // what playback from the top hears there, S&H values included, for the part's (Global) LFO and
+   // a held note's (Free) one alike.
+   {
+      const auto levels = [](int trigger, int shape, double fromBeat, int blocks) {
+         Params p;
+         p.setPart(0, lfoParam(2, kLfoSync), 1);
+         p.setPart(0, lfoParam(2, kLfoDivision), 2); // 1/16
+         p.setPart(0, lfoParam(2, kLfoShape), shape);
+         p.setPart(0, lfoParam(2, kLfoTrigger), trigger);
+         p.setPart(0, lfoParam(2, kLfoPhase), 90.0);
+         auto e = std::make_unique<Engine>();
+         e->prepare(kRate, {p.values.get(), p.mods.get()});
+         std::vector<float> l(256), r(256);
+         float *ch[2] = {l.data(), r.data()};
+         float *const *ports[3] = {ch, ch, ch};
+         std::vector<float> out;
+         for (int b = 0; b < blocks; ++b) {
+            const double beats = fromBeat + b * 256 * 128.0 / 60.0 / kRate;
+            e->transport(128.0, true, &beats);
+            if (b == 0 && trigger != 2) {
+               e->setBlockSample(0);
+               e->noteOn(ref(60), 0.8f);
+            }
+            e->render(ports, 0, 256);
+            e->clearEnded();
+            out.push_back(e->lfoLevel(0, 2));
+         }
+         return out;
+      };
+      // 64 beats at 128 BPM is 5625 blocks of 256 exactly, so the later start falls on a block.
+      constexpr int kSkip = 5625;
+      for (int trigger : {1, 2})
+         for (int shape : {dsp::Lfo::kSine, dsp::Lfo::kSampleHold, dsp::Lfo::kSmooth}) {
+            const auto top = levels(trigger, shape, 0.0, kSkip + 400);
+            const auto in = levels(trigger, shape, 64.0, 400);
+            float worst = 0;
+            for (int b = 1; b < 400; ++b)
+               worst = std::max(worst, std::fabs(top[kSkip + b] - in[b]));
+            JCLAP_CHECK(worst < 1e-3f);
+         }
+      // And it is on the beat: a synced Global sine at 1/16 with 90 degrees of Phase is at its top
+      // on each sixteenth, so at its bottom halfway between, where this playback starts.
+      {
+         const auto at = levels(2, dsp::Lfo::kSine, 1.125, 1);
+         JCLAP_CHECK(std::fabs(at[0] + 1.0f) < 0.05f);
+      }
+   }
+
    // What it costs: 32 voices (16 notes in each part) at 2x for two seconds.
    {
       Params p;

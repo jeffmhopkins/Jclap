@@ -317,6 +317,14 @@ triplets and dots), a Phase, a fade-in Delay and a Polarity (bipolar or unipolar
 - **Free** starts each note's LFO in step with the part's running one, plus Phase.
 - **Global** uses one LFO for the whole part; routes can't move its rate per voice.
 
+Synced to a Division, Free and Global LFOs are locked to the host's song position rather than
+counted from when they started: each tick works out how many cycles into the song it is (the
+host's beats over the Division's, plus Phase), so a 1/16 lands on the sixteenths of the bar
+however playback got there, starting mid-song or jumping round a loop. Their S&H and Smooth
+values come from the cycle's number, so a looped bar repeats them. With the transport stopped,
+or no beat position from the host, they count on at the tempo from where they were. A
+Retriggered LFO still starts with each note, at the tempo.
+
 The first two LFOs move the flock, and aren't route sources:
 
 - **Wingbeat** (5 Hz, Sine) bobs each creature across its path, by **Push**.
