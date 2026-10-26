@@ -209,7 +209,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
   <div class="shot"><img src="img/panel.jpg" alt=""></div>
   <div class="foot">
-    <div><div class="k">Version</div><div class="v">0.9.0</div></div>
+    <div><div class="k">Version</div><div class="v">0.10.0</div></div>
     <div><div class="k">Format</div><div class="v">CLAP · Instrument · MPE</div></div>
     <div><div class="k">Platforms</div><div class="v">macOS · Windows · Linux</div></div>
     <div style="text-align:right"><div class="k">Edition</div><div class="v">October 2026</div></div>
@@ -224,7 +224,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <div class="toc-title">Contents</div>
   <div class="toc" id="toc"></div>
   <h2 style="margin-top:0.3in">About this manual</h2>
-  <p>Chapters 2 and 3 get you installed and playing in a few minutes. Chapter 4 tours the panel, and Chapter 5 explains how a note becomes a sound, which is the quickest way to understand what every control does. Chapters 6 to 13 cover the sky, the parts and every card on the panel. Chapter 14 lists the factory presets and Chapter 15 has recipes to start from. The appendix lists every parameter with its exact range and default, plus specifications and troubleshooting.</p>
+  <p>Chapters 2 and 3 get you installed and playing in a few minutes. Chapter 4 tours the panel, and Chapter 5 explains how a note becomes a sound, which is the quickest way to understand what every control does. Chapters 6 to 13 cover the sky, the parts and every panel. Chapter 14 lists the factory presets and Chapter 15 has recipes to start from. The appendix lists every parameter with its exact range and default, plus specifications and troubleshooting.</p>
   <p>Throughout the manual, control names are set in <strong>bold</strong> and panel labels as they appear on screen, such as <strong>TUNE PULL</strong>. Every control is a host parameter, and every one that moves continuously can be modulated by the host. A tag beside a parameter means:</p>
   <div class="kv">
     <dt><span class="mod t">ROUTE</span></dt><dd>A route can move it, per note, and the host can modulate it per note too.</dd>
@@ -329,8 +329,8 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <ol class="steps">
     <li><b class="h">Load JSynth and play</b>Put JSynth on an instrument track and play a few notes. Each note hatches a creature at its lure: low notes on the left, high on the right. Hold a chord and watch them gather; let go and they fly off as they fade. No keyboard to hand? Click in the sky: left to right picks the note (C2 to C6), and dragging bends it.</li>
     <li><b class="h">Pick a preset</b>Click the preset name in the header to open the menu, grouped by instrument family from <em>Bass</em>, <em>Leads</em> and <em>Keys</em> through <em>Pads</em> and <em>Drums and FX</em>, then the showcases: <em>Motion</em>, <em>Layers and Splits</em> and <em>Flock</em>. Or click the arrows, or scroll over the bar, to step through them. Try <em>Tine Piano</em>, then <em>Shifting Glass</em>, then <em>Breath to Brass</em> with some pressure, then <em>Predator and Prey</em>.</li>
-    <li><b class="h">Let the creatures hear each other</b>Load <em>Init</em> and turn <strong>OSC 2</strong>'s <strong>LEVEL</strong> up to about half, since Neighbour FM plays through Osc 2. Then turn up <strong>NEIGHBOUR</strong> on the <strong>FM</strong> card at the far left. Now hold a chord: when creatures fly close together they frequency-modulate each other, and the sound rings and shifts as the flock moves. Raise <strong>TUNE PULL</strong> too and creatures flying the same way drift into just intonation.</li>
-    <li><b class="h">Map a flock source</b>Click <strong>SPEED</strong> under the sky, which turns <strong>MAP</strong> on with Speed armed. Then drag Filter 1's <strong>CUTOFF</strong> up on the <strong>FILTER</strong> card at the bottom. A ring in Speed's colour shows the route while Speed is armed. Press <strong>MAP</strong> again to finish. Now the faster a creature flies, the brighter it sounds; play harder (Press makes creatures faster) to hear it.</li>
+    <li><b class="h">Let the creatures hear each other</b>Load <em>Init</em> and turn <strong>OSC 2</strong>'s <strong>LEVEL</strong> up to about half, since Neighbour FM plays through Osc 2. Then open the <strong>FM</strong> tab at the top left and turn up <strong>FLOCK FM</strong>. Now hold a chord: when creatures fly close together they frequency-modulate each other, and the sound rings and shifts as the flock moves. Raise <strong>TUNE PULL</strong> too and creatures flying the same way drift into just intonation.</li>
+    <li><b class="h">Map a flock source</b>Click <strong>SPEED</strong> under the sky, which turns <strong>MAP</strong> on with Speed armed. Then drag Filter 1's <strong>CUTOFF</strong> up on the <strong>FILTER</strong> panel at the left. A ring in Speed's colour shows the route while Speed is armed. Press <strong>MAP</strong> again to finish. Now the faster a creature flies, the brighter it sounds; play harder (Press makes creatures faster) to hear it.</li>
     <li><b class="h">Add a second species</b>Set the play mode in the header to <strong>LAYER</strong> and click <strong>PART B</strong>. Part B is a whole second patch, and by default it hunts: its creatures chase part A's. On part B's <strong>FM</strong> tab, raise <strong>BITE</strong>, and every creature B catches rings with its hunter's tone.</li>
     <li><b class="h">Save it</b>Click <strong>SAVE</strong> in the preset bar, type a name and press <span class="key">Enter</span>. Your preset appears under <em>User</em> in the preset menu. Settings are also saved with your project automatically.</li>
   </ol>
@@ -346,7 +346,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <div class="chap-head">
     <div class="num">Chapter 04</div>
     <h1>The Panel</h1>
-    <p class="lede">The sky fills the middle. The patch sits around it in glass cards, all on screen at once, and the cards always edit the part you have chosen.</p>
+    <p class="lede">The sound sits down the left in three big panels that draw what they do, the sky fills the right, and the voice and the output sit under it. Everything edits the part you have chosen.</p>
     <div class="bar"></div>
   </div>
 
@@ -361,22 +361,19 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
 
   <div class="legend">
     <div><span class="dot">1</span><span><b>Preset bar.</b> Step with the arrows, click the name for the menu, <b>SAVE</b> your own.</span></div>
-    <div><span class="dot">2</span><span><b>PART A / PART B.</b> Which species the cards edit.</span></div>
+    <div><span class="dot">2</span><span><b>PART A / PART B.</b> Which species the panels edit.</span></div>
     <div><span class="dot">3</span><span><b>Play mode.</b> Which part each note plays.</span></div>
     <div><span class="dot">4</span><span><b>MAP.</b> Mapping: touch a source, drag a knob. Touching a source turns it on too.</span></div>
     <div><span class="dot">5</span><span><b>Touch chips.</b> VELOCITY, PRESS, GLIDE, SLIDE, RELEASE: sources that light as you play.</span></div>
-    <div><span class="dot">6</span><span><b>FM and FLOCK cards.</b> The FM grid, the links between creatures and the noise; how the species flies.</span></div>
-    <div><span class="dot">7</span><span><b>The sky.</b> Both species, their ink, and the links between them. Click to play.</span></div>
-    <div><span class="dot">8</span><span><b>Flock sources.</b> The creatures' own modulation sources.</span></div>
-    <div><span class="dot">9</span><span><b>RINGS, ROUTES.</b> Lure rings and the route list.</span></div>
-    <div><span class="dot">10</span><span><b>MOTION and LFO cards.</b> The wingbeat and the wind that move the flock, and LFO 1 and 2.</span></div>
-    <div><span class="dot">11</span><span><b>Oscillator cards.</b> OSC 1, 2 and 3: pitch, wave, mix and which filter.</span></div>
-    <div><span class="dot">12</span><span><b>Part card.</b> Voice mode, polyphony, pitch, pan and level.</span></div>
-    <div><span class="dot">13</span><span><b>TOUCH card.</b> Each touch's curve and smoothing.</span></div>
-    <div><span class="dot">14</span><span><b>Envelope cards.</b> ENV 1 AMP, ENV 2 and ENV 3.</span></div>
-    <div><span class="dot">15</span><span><b>FILTER card.</b> Both filters, the drive and the noise's filter.</span></div>
-    <div><span class="dot">16</span><span><b>PLAY card.</b> Pitch rounding, the manager channel's bend, the levels of both parts, and the output.</span></div>
-    <div><span class="dot">17</span><span><b>FULL / REDUCED / SKY.</b> The three views: every card, big drawn panels, or the sky alone.</span></div>
+    <div><span class="dot">6</span><span><b>OSCILLATORS / FM.</b> The three oscillators with their waves drawn; the FM grid, the links between creatures and the noise.</span></div>
+    <div><span class="dot">7</span><span><b>FILTER.</b> Both filters' response, drawn live, and their controls.</span></div>
+    <div><span class="dot">8</span><span><b>ENVELOPES / LFOS.</b> ENV 1 AMP, ENV 2 and ENV 3; LFO 1 and 2.</span></div>
+    <div><span class="dot">9</span><span><b>The sky.</b> Both species, their ink, and the links between them. Click to play.</span></div>
+    <div><span class="dot">10</span><span><b>Flock sources.</b> The creatures' own modulation sources, and Random.</span></div>
+    <div><span class="dot">11</span><span><b>RINGS, ROUTES.</b> Lure rings and the route list.</span></div>
+    <div><span class="dot">12</span><span><b>VOICE / FLOCK / MOTION / TOUCH.</b> The voice, how the species flies, the wingbeat and the wind, and how each touch responds.</span></div>
+    <div><span class="dot">13</span><span><b>Meters.</b> The levels of A, B and the output as they play, with each one's setting marked.</span></div>
+    <div><span class="dot">14</span><span><b>SYNTH / SKY.</b> The two views: the panels beside the sky, or the sky alone.</span></div>
   </div>
 
   <h2>Working with the controls</h2>
@@ -394,7 +391,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <p>In MAP mode, with a source armed, each knob that source moves draws a <strong>route ring</strong> in its colour outside its own arc, spanning how far the source moves it. Outside MAP the knobs show no rings; the route list shows every route. In MAP mode, knobs behave differently: see <em>Chapter 13</em>.</p>
 
   <h2>Colours</h2>
-  <p>Part A is drawn in <span class="swatch" style="background:#f28c28"></span>orange and part B in <span class="swatch" style="background:#6fb8ff"></span>blue, in the sky and on the cards. Every modulation source has its own colour, the same on its chip, its route rings and in the route list, and MAP and the route list are <span class="swatch" style="background:#ff6fd2"></span>pink.</p>
+  <p>Part A is drawn in <span class="swatch" style="background:#f28c28"></span>orange and part B in <span class="swatch" style="background:#6fb8ff"></span>blue, in the sky and on the panels. Every modulation source has its own colour, the same on its chip, its route rings and in the route list, and MAP and the route list are <span class="swatch" style="background:#ff6fd2"></span>pink.</p>
 
   <h2>Panel size</h2>
   <p>The panel is 1648 × 940 at 100%. Right-click any empty part of the sky and choose <em>UI Size</em> to scale it to 75%, 100%, 125%, 150% or 200%; at 75% it fits a 1440 × 900 laptop screen. The size you pick is remembered the next time the editor opens.</p>
@@ -457,7 +454,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <dt>Creatures</dt><dd>A glowing body and a pair of wings that beat with its Wingbeat LFO. It is brighter the harder you press, and fades with its sound after you let go. The part you are editing flies in front; the other is dimmed.</dd>
     <dt>Ink</dt><dd>Every creature sheds ink behind it, which blooms and fades by the part's <strong>TAIL</strong> and <strong>SPREAD</strong>. Creatures flying through ink stir it.</dd>
     <dt>Lure rings</dt><dd>Where each held note pulls its creature, with a faint line to it. <strong>RINGS</strong> under the sky shows or hides them.</dd>
-    <dt>Links</dt><dd>A thin line from a creature to the neighbour it hears most, brighter the more <strong>NEIGHBOUR</strong> FM it gets, and a line from a hunter to what it has caught.</dd>
+    <dt>Links</dt><dd>A thin line from a creature to the neighbour it hears most, brighter the more <strong>FLOCK FM</strong> it gets, and a line from a hunter to what it has caught.</dd>
     <dt>Caught</dt><dd>A pink ring around a creature a hunter holds.</dd>
   </div>
 
@@ -465,7 +462,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <p>Click anywhere in the sky to play a note: left to right runs from C2 to C6, and how high you click sets Slide. Drag while holding to bend the note and change Slide; let go to release it. The notes play on whichever parts the play mode sends them to, just like notes from your keyboard.</p>
 
   <h2>The flock sources</h2>
-  <p>The row of chips under the sky holds each creature's four sources. Each chip's light shows the newest creature of the part you are editing. They are always each note's own when used in a route.</p>
+  <p>The row of chips under the sky holds each creature's four sources, and <strong>RANDOM</strong>, a new value for each note. Each chip's light shows the newest creature of the part you are editing. They are always each note's own when used in a route.</p>
   <table>
     <thead><tr><th>Source</th><th>What it measures</th></tr></thead>
     <tbody>
@@ -476,16 +473,9 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     </tbody>
   </table>
 
-  <h2>Three views</h2>
-  <p>The switch at the top right picks how much of the panel you see. <strong>FULL</strong> has every card around the sky, as this manual shows them. <strong>SKY</strong> folds everything away but the header so the sky fills the panel, which is lovely on a second screen while you play. <strong>REDUCED</strong> keeps the sky at the same size and puts the sound down the left in big panels that draw what they do:</p>
-  <figure class="dark"><img src="img/reduced.jpg" alt=""><figcaption><b>Fig. 6.2</b> &nbsp;REDUCED: the oscillators, filter and envelopes drawn down the left, and the voice under the sky.</figcaption></figure>
-  <ul>
-    <li><strong>OSCILLATORS</strong>: a row each, with its wave drawn as its Wave and Shape make it, its pitch, fine, shape, level and pan, which filter it goes into, and <strong>RAND / SYNC</strong>: whether each note starts the wave at a random place or at its Phase. The <strong>FM</strong> tab has the FM grid, what comes out of it drawn for a C4 with a chip for each route that is on, and the links between creatures.</li>
-    <li><strong>FILTER</strong>: both filters' response drawn together. Drag a numbered handle across to set its cutoff and up or down for its resonance; the wheel sets its drive and a double-click resets it. In MAP mode, with a source armed, the drag sets that source's route to the cutoff instead. Under it, each filter's controls, the balance and the drive after the filters, and above it which filter the noise goes into.</li>
-    <li><strong>ENVELOPES</strong>: the three envelope editors. The <strong>LFOS</strong> tab draws LFO 1 and 2, a dot running along each at its rate, beside their controls.</li>
-    <li>Under the sky, <strong>VOICE</strong> draws the stereo field (the part's pan, its X Pan spread and its creatures), the levels of both parts and the master, and the voices in use, over the knobs that set them. <strong>FLOCK</strong> and <strong>MOTION</strong> hold the FLOCK and MOTION cards' controls.</li>
-  </ul>
-  <p>The touch curves, glide rounding and the route list are only on FULL. The view stays as you left it when the editor is closed and opened again.</p>
+  <h2>Two views</h2>
+  <p>The switch at the top right picks how much of the panel you see. <strong>SYNTH</strong>, as this manual shows it, puts the sound down the left beside the sky. <strong>SKY</strong> folds everything away but the switch so the sky fills the panel, which is lovely on a second screen while you play. The view stays as you left it when the editor is closed and opened again.</p>
+  <figure class="dark"><img src="img/sky.jpg" alt=""><figcaption><b>Fig. 6.2</b> &nbsp;SKY: the flocks alone.</figcaption></figure>
 </section>
 
 <!-- ================= 7. PARTS AND PLAYING ================= -->
@@ -493,14 +483,14 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <div class="chap-head">
     <div class="num">Chapter 07</div>
     <h1>Parts and Playing</h1>
-    <p class="lede">Two species, one keyboard. The header decides which notes go where; the part card sets how each part plays them.</p>
+    <p class="lede">Two species, one keyboard. The header decides which notes go where; the VOICE tab under the sky sets how each part plays them.</p>
     <div class="bar"></div>
   </div>
 
-  <figure class="dark"><img src="img/header.jpg" alt=""><figcaption><b>Fig. 7.1</b> &nbsp;The header: logo, preset bar, PART A / PART B, play mode, MAP and the touch chips.</figcaption></figure>
+  <figure class="dark"><img src="img/header.jpg" alt=""><figcaption><b>Fig. 7.1</b> &nbsp;The header: logo, preset bar, PART A / PART B, play mode, MAP, the touch chips and the view switch.</figcaption></figure>
 
   <h2>Two parts</h2>
-  <p>Parts A and B are complete, separate patches with the same controls. <strong>PART A</strong> and <strong>PART B</strong> in the header choose which one the cards show and edit; the sky always shows both. A new instance starts with A shoaling and B hunting it an octave down, so layering them gives you a predator from the start.</p>
+  <p>Parts A and B are complete, separate patches with the same controls. <strong>PART A</strong> and <strong>PART B</strong> in the header choose which one the panels show and edit; the sky always shows both. A new instance starts with A shoaling and B hunting it an octave down, so layering them gives you a predator from the start.</p>
 
   <h2>Play modes</h2>
   <table>
@@ -516,29 +506,33 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </table>
   <p class="small muted">Split Key, Velocity Split and Crossfade Source, and each part's Key Low and Key High range, are host parameters. A note outside a part's key range never plays that part.</p>
 
-  <h2>The part card</h2>
+  <h2><span class="tag">Under the sky</span>VOICE</h2>
   <div class="avoid">
-    <figure class="dark"><img src="img/part.jpg" alt="" style="max-width:4.2in"></figure>
+    <figure class="dark"><img src="img/part.jpg" alt=""></figure>
+    <p>The VOICE tab draws what its knobs set: the stereo field (the part's pan, its X Pan spread, the output's width and where its creatures sit), the voices in use, and at the right the <strong>meters</strong>. These show the levels of A, B and the whole output as they play, from −60 to +6 dB, glowing brighter the louder they are and red above 0 dB. A white tick on each marks where its LEVEL or MASTER is set. The part you are editing is lit; the other is dimmed.</p>
     <table class="params">
       <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
       <tbody>
         <tr><td class="c">POLY / MONO / LEGATO</td><td class="r">Voice mode</td><td class="d">Poly</td><td>Mono plays one note at a time and restarts it; Legato glides to a new note without restarting while one is held. Both go back to the last note still held when you let go.</td></tr>
         <tr><td class="c">Voices (− 8 +)</td><td class="r">1 – 16</td><td class="d">8</td><td>Polyphony: how many notes the part sounds at most. The oldest released note is taken first, then the oldest held, with a 3 ms fade.</td></tr>
-        <tr><td class="c">TRANSP</td><td class="r">±48 st</td><td class="d">0 (B: −12)</td><td>Transpose, in semitones.</td></tr>
-        <tr><td class="c">GLIDE</td><td class="r">0 ms – 20 s</td><td class="d">0</td><td>Portamento time. <span class="mod t">ROUTE</span></td></tr>
-        <tr><td class="c">BEND</td><td class="r">1 – 96 st</td><td class="d">48 st</td><td>The MPE bend range: how far a finger slides on a member channel.</td></tr>
         <tr><td class="c">PAN</td><td class="r">±100%</td><td class="d">0</td><td>The part's pan. <span class="mod t">ROUTE</span></td></tr>
         <tr><td class="c">X PAN</td><td class="r">0 – 100%</td><td class="d">0%</td><td>How far each creature's place in the sky, left to right, pans its voice. At 100% a creature at the left edge plays hard left. <span class="mod t">ROUTE</span></td></tr>
+        <tr><td class="c">WIDTH</td><td class="r">0 – 200%</td><td class="d">100%</td><td>The whole output's stereo width: 0% is mono, past 100% wider. Shared by both parts.</td></tr>
+        <tr><td class="c">GLIDE</td><td class="r">0 ms – 20 s</td><td class="d">0</td><td>Portamento time. <span class="mod t">ROUTE</span></td></tr>
+        <tr><td class="c">BEND</td><td class="r">1 – 96 st</td><td class="d">48 st</td><td>The MPE bend range: how far a finger slides on a member channel.</td></tr>
+        <tr><td class="c">TRANSP</td><td class="r">±48 st</td><td class="d">0 (B: −12)</td><td>Transpose, in semitones.</td></tr>
+        <tr><td class="c">VELOCITY</td><td class="r">0 – 100%</td><td class="d">100%</td><td>How much velocity sets the level. At 0 every note plays at full level.</td></tr>
         <tr><td class="c">LEVEL</td><td class="r">−60 – +6 dB</td><td class="d">0 dB</td><td>The part's level. <span class="mod t">ROUTE</span></td></tr>
+        <tr><td class="c">MASTER</td><td class="r">−60 – +6 dB</td><td class="d">−6 dB</td><td>The whole output's level. Shared by both parts.</td></tr>
       </tbody>
     </table>
   </div>
-  <p>Host parameters that complete the part: <strong>Fine</strong> (±100 cents), <strong>Glide Mode</strong> (Always, or Legato: glide only from a note still held), <strong>Drift</strong> (on the FM card, a slow random pitch wander per creature), <strong>Velocity</strong> (on the ENV 1 AMP card: how much velocity sets the level), <strong>Key Low</strong> and <strong>Key High</strong>, and <strong>Output</strong> (Main or Own).</p>
+  <p>Host parameters that complete the part: <strong>Fine</strong> (±100 cents), <strong>Glide Mode</strong> (Always, or Legato: glide only from a note still held), <strong>Key Low</strong> and <strong>Key High</strong>, and <strong>Output</strong> (Main or Own).</p>
 
   <h2>MPE and MIDI</h2>
   <p>JSynth takes CLAP notes, plain MIDI and MIDI MPE.</p>
   <ul>
-    <li><strong>Channel 1</strong> is the MPE manager channel and a plain keyboard's channel. Its pitch bend moves every note by the <strong>MGR BEND</strong> range (2 semitones by default, on the PLAY card). CC 1 is the Mod Wheel source and CC 64 is sustain. If it sends channel pressure or CC 74, those reach every note too.</li>
+    <li><strong>Channel 1</strong> is the MPE manager channel and a plain keyboard's channel. Its pitch bend moves every note by the <strong>MGR BEND</strong> range (2 semitones by default, on the TOUCH tab). CC 1 is the Mod Wheel source and CC 64 is sustain. If it sends channel pressure or CC 74, those reach every note too.</li>
     <li><strong>Channels 2 to 16</strong> are member channels, each carrying one note's own bend (by the part's <strong>BEND</strong> range), pressure and CC 74.</li>
     <li><strong>CLAP notes</strong> use note expressions instead: tuning, pressure and brightness.</li>
   </ul>
@@ -554,17 +548,18 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div class="bar"></div>
   </div>
 
-  <figure class="dark"><img src="img/oscs.jpg" alt=""><figcaption><b>Fig. 8.1</b> &nbsp;The three oscillator cards under the sky.</figcaption></figure>
+  <figure class="dark"><img src="img/oscs.jpg" alt=""><figcaption><b>Fig. 8.1</b> &nbsp;The OSCILLATORS panel: a row for each oscillator, with its wave drawn as its Wave and Shape make it.</figcaption></figure>
 
-  <h2>An oscillator card</h2>
+  <h2>An oscillator</h2>
   <table class="params">
     <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
     <tbody>
       <tr><td class="c">NOTE / RATIO / HZ</td><td class="r">Pitch mode</td><td class="d">Note (Osc 2, 3: Ratio)</td><td><strong>Note</strong> follows the keyboard with an offset; <strong>Ratio</strong> runs at a multiple of the note, the classic FM way; <strong>Hz</strong> holds a fixed frequency whatever you play.</td></tr>
       <tr><td class="c">Wave</td><td class="r">15 waves</td><td class="d">Saw (Osc 2, 3: Sine)</td><td>See the table below.</td></tr>
-      <tr><td class="c">COARSE</td><td class="r">±48 st</td><td class="d">0</td><td>Note mode: the offset in semitones. <span class="mod t">ROUTE</span></td></tr>
-      <tr><td class="c">RATIO</td><td class="r">×0.25 – ×16</td><td class="d">×1 (Osc 3: ×3)</td><td>Ratio mode: the multiple of the note. Routes move it by musical intervals. <span class="mod t">ROUTE</span></td></tr>
-      <tr><td class="c">FREQ</td><td class="r">1 Hz – 10 kHz</td><td class="d">440 Hz</td><td>Hz mode: the fixed frequency. <span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">RAND / SYNC</td><td class="r">Retrigger</td><td class="d">Sync</td><td><strong>SYNC</strong> starts each note's wave at its <strong>Phase</strong>; <strong>RAND</strong> at a random place, so no two notes start alike.</td></tr>
+      <tr><td class="c">PITCH</td><td class="r">±48 st</td><td class="d">0</td><td>Note mode: the offset in semitones. <span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">RATIO</td><td class="r">×0.25 – ×16</td><td class="d">×1 (Osc 3: ×3)</td><td>Ratio mode (the knob reads RATIO): the multiple of the note. Routes move it by musical intervals. <span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">FREQ</td><td class="r">1 Hz – 10 kHz</td><td class="d">440 Hz</td><td>Hz mode (the knob reads FREQ): the fixed frequency. <span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">FINE</td><td class="r">±100 ct</td><td class="d">0</td><td>Fine tune, in every mode. <span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">SHAPE</td><td class="r">0 – 100%</td><td class="d">50%</td><td>Pulse width for Square and Pulse; for the other waves (except Saw), a phase distortion that squeezes or stretches the first half of the cycle. 50% is the plain wave. <span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">LEVEL</td><td class="r">0 – 100%</td><td class="d">100% (Osc 2, 3: 0%)</td><td>How loud it is in the mix. An oscillator at 0 can still modulate others. <span class="mod t">ROUTE</span></td></tr>
@@ -572,7 +567,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">FILTER</td><td class="r">1+2, F1, F2</td><td class="d">1+2</td><td>Which filter it goes into. See <em>Routing</em> in Chapter 09.</td></tr>
     </tbody>
   </table>
-  <p class="small">Host parameters per oscillator: <strong>Sync</strong> (Osc 2 and 3 restart with Osc 1), <strong>Retrigger</strong> (On starts each note at <strong>Phase</strong>; Off at a random phase), <strong>Phase</strong> <span class="mod t">ROUTE</span>, <strong>Bend</strong> (how much the pitch bend moves it, 100% by default) and <strong>Key Track</strong> (Off pitches it from middle C whatever you play).</p>
+  <p class="small">Host parameters per oscillator: <strong>Sync</strong> (Osc 2 and 3 restart with Osc 1), <strong>Phase</strong> <span class="mod t">ROUTE</span>, <strong>Bend</strong> (how much the pitch bend moves it, 100% by default) and <strong>Key Track</strong> (Off pitches it from middle C whatever you play).</p>
 
   <h3>The waves</h3>
   <table>
@@ -588,17 +583,17 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     </tbody>
   </table>
 
-  <h2 class="pb"><span class="tag">Far left</span>FM</h2>
-  <div class="split">
+  <h2 class="pb"><span class="tag">Oscillators</span>FM</h2>
+  <div>
     <figure class="dark"><img src="img/card-fm.jpg" alt=""></figure>
     <div class="body">
-      <p>The grid reads <strong>row into column</strong>: the knob in row 2, column 1 (<strong>2 &gt; 1</strong>) is how much Osc 2 modulates Osc 1. The diagonal, <strong>FB 1</strong> to <strong>FB 3</strong>, is each oscillator's feedback on itself. Each knob is squared inside, so the first half of its travel is gentle.</p>
+      <p>The <strong>FM</strong> tab draws what comes out of Osc 1, the oscillator you hear on its own, for a C4, with a chip for each FM cell that is turned up. The grid reads <strong>row into column</strong>: the knob in row 2, column 1 (<strong>2 &gt; 1</strong>) is how much Osc 2 modulates Osc 1. The diagonal, <strong>FB 1</strong> to <strong>FB 3</strong>, is each oscillator's feedback on itself. Each knob is squared inside, so the first half of its travel is gentle.</p>
       <table class="params">
         <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
         <tbody>
           <tr><td class="c">FB, 1 &gt; 2 … 3 &gt; 2</td><td class="r">0 – 100%</td><td class="d">0%</td><td>The nine cells. <span class="mod t">ROUTE</span></td></tr>
           <tr><td class="c">PHASE / EXP</td><td class="r">FM type</td><td class="d">Phase</td><td><strong>Phase</strong> is DX-style phase modulation, bright and stable in pitch. <strong>Exp</strong> moves the pitch itself, up to four octaves either way: growly, and it bends.</td></tr>
-          <tr><td class="c">NEIGHBOUR</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Neighbours' Osc 1 into this creature's Osc 2. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">FLOCK FM</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Neighbours' Osc 1 into this creature's Osc 2. <span class="mod t">ROUTE</span></td></tr>
           <tr><td class="c">TUNE PULL</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Creatures flying the same way drift toward pure intervals. <span class="mod t">ROUTE</span></td></tr>
           <tr><td class="c">BITE</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Ring mod while this part's hunters hold their prey. <span class="mod t">ROUTE</span></td></tr>
           <tr><td class="c">NOISE</td><td class="r">0 – 100%</td><td class="d">0%</td><td>The mixer's noise level. <span class="mod t">ROUTE</span></td></tr>
@@ -611,7 +606,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
 
   <h3>Order and feedback</h3>
   <p>Within each sample the oscillators run 3, then 2, then 1. So the downward cells (3 &gt; 2, 3 &gt; 1 and 2 &gt; 1) hear this sample's modulator, and the upward ones (1 &gt; 2, 1 &gt; 3, 2 &gt; 3) hear the last sample's. In practice this means you can build any of the classic stacks: 3 &gt; 2 &gt; 1 as a three-operator stack heard on Osc 1, or 2 &gt; 1 and 3 &gt; 1 as two modulators on one carrier. Feedback averages its last two samples, as the DX7 did, so it brightens toward a saw and then a rasp rather than straight into noise.</p>
-  <p class="small muted">BETWEEN CREATURES (Neighbour, Tune Pull and Bite) is explained in <em>Chapter 11</em>.</p>
+  <p class="small muted">BETWEEN CREATURES (Flock FM, Tune Pull and Bite) is explained in <em>Chapter 11</em>.</p>
 </section>
 
 <!-- ================= 9. FILTERS AND DRIVE ================= -->
@@ -623,21 +618,23 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div class="bar"></div>
   </div>
 
-  <h2><span class="tag">Bottom</span>FILTER</h2>
-  <figure class="dark"><img src="img/card-filter.jpg" alt="" style="max-width:5in"></figure>
+  <h2><span class="tag">Left</span>FILTER</h2>
+  <figure class="dark"><img src="img/card-filter.jpg" alt=""></figure>
+  <p>The graph draws both filters' response together, Filter 1 in orange and Filter 2 in purple. Drag a numbered handle across to set its cutoff and up or down for its resonance; the wheel sets its drive and a double-click resets it. In MAP mode, with a source armed, the drag sets that source's route to the cutoff instead.</p>
+  <p>While a note plays, the curves follow what the newest note's filters are really doing: its envelopes, LFOs, routes and key tracking all move them, and a faint line stays where the knobs alone would put them. The handles stay on the knobs' settings.</p>
   <table class="params">
     <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
     <tbody>
       <tr><td class="c">SERIAL / PARALLEL</td><td class="r">Routing</td><td class="d">Serial</td><td>See below.</td></tr>
-      <tr><td class="c">NOISE</td><td class="r">1+2, F1, F2</td><td class="d">1+2</td><td>Which filter the noise goes into.</td></tr>
+      <tr><td class="c">NOISE INTO</td><td class="r">1+2, F1, F2</td><td class="d">1+2</td><td>Which filter the noise goes into.</td></tr>
       <tr><td class="c">Type</td><td class="r">8 types</td><td class="d">Low Pass (F2: Ladder)</td><td>See the table below.</td></tr>
       <tr><td class="c">Slope</td><td class="r">12 – 48 dB</td><td class="d">24 dB</td><td>Low, high and band pass only.</td></tr>
       <tr><td class="c">CUTOFF</td><td class="r">20 Hz – 20 kHz</td><td class="d">1.26 kHz (F2: 20 kHz)</td><td>For a comb, its tuning. <span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">RES</td><td class="r">0 – 100%</td><td class="d">20% (F2: 0%)</td><td>Resonance; for a peak, its boost; for a comb, its feedback. <span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">DRIVE</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Saturates the filter's own input. <span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">KEY</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Key tracking: at 100% the cutoff moves an octave per octave, around middle C. <span class="mod t">ROUTE</span></td></tr>
-      <tr><td class="c">DRIVE type</td><td class="r">Soft, Hard, Tube</td><td class="d">Soft</td><td>The drive before both filters.</td></tr>
-      <tr><td class="c">DRIVE</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Up to 24 dB into the shape, with the level brought back down. <span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">Drive type</td><td class="r">Soft, Hard, Tube</td><td class="d">Soft</td><td>The drive before both filters.</td></tr>
+      <tr><td class="c">PRE DRIVE</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Up to 24 dB into the shape, with the level brought back down. <span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">BALANCE</td><td class="r">±100%</td><td class="d">0</td><td>In Parallel, turns Filter 1 or Filter 2 down. <span class="mod t">ROUTE</span></td></tr>
     </tbody>
   </table>
@@ -678,7 +675,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div class="bar"></div>
   </div>
 
-  <h2><span class="tag">Bottom</span>ENV</h2>
+  <h2><span class="tag">Bottom left</span>ENVELOPES</h2>
   <figure class="dark"><img src="img/card-env.jpg" alt=""></figure>
   <div>
       <p>Each envelope draws its shape: drag the points to set <strong>attack</strong>, <strong>decay</strong>, <strong>sustain</strong> and <strong>release</strong>. A dot rides the curve for every sounding note. The chip above each one is its source for MAP and lights as it moves.</p>
@@ -693,15 +690,15 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
           <tr><td class="c">Loop</td><td class="r">Off, Held, Free</td><td class="d">Off</td><td><strong>Held</strong> repeats attack and decay while the note is held. <strong>Free</strong> keeps repeating after you let go too, until the note ends.</td></tr>
         </tbody>
       </table>
-      <p><strong>VELOCITY</strong> on the ENV 1 AMP card (0 to 100%, 100% by default) is how much velocity sets the level. At 0 every note plays at full level.</p>
+      <p><strong>VELOCITY</strong> on the VOICE tab under the sky (0 to 100%, 100% by default) is how much velocity sets ENV 1's level. At 0 every note plays at full level.</p>
       <p class="small">Host parameters per envelope: <strong>Delay</strong> and <strong>Hold</strong> (0 ms to 20 s) <span class="mod t">ROUTE</span>, an <strong>Attack</strong>, <strong>Decay</strong> and <strong>Release Curve</strong> each (−1 to +1), and <strong>Velocity</strong>, how much velocity scales the whole envelope.</p>
   </div>
 
-  <h2 class="pb"><span class="tag">Right of the sky</span>MOTION</h2>
-  <div class="split">
+  <h2 class="pb"><span class="tag">Under the sky</span>MOTION</h2>
+  <div>
     <figure class="dark"><img src="img/card-motion.jpg" alt=""></figure>
     <div class="body">
-      <p>The MOTION card holds the two LFOs that move the flock. They only move it: they aren't sources for routes. For a sound that moves with them, use LFO 1 or 2 at the same rate.</p>
+      <p>The MOTION tab holds the two LFOs that move the flock. They only move it: they aren't sources for routes. For a sound that moves with them, use LFO 1 or 2 at the same rate.</p>
       <div class="kv">
         <dt>WINGBEAT</dt><dd>One per creature (5 Hz sine by default). It bobs each creature across its path, by <strong>PUSH</strong>, and beats its wings on screen.</dd>
         <dt>WIND</dt><dd>One gust for the whole sky (a slow 0.2 Hz Smooth, Global by default). It pushes every creature of the part the same way, by <strong>PUSH</strong>, from a direction that turns slowly on its own.</dd>
@@ -723,11 +720,11 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     </div>
   </div>
 
-  <h2 class="pb"><span class="tag">Far right</span>LFO</h2>
-  <div class="split">
+  <h2 class="pb"><span class="tag">Envelopes</span>LFOS</h2>
+  <div>
     <figure class="dark"><img src="img/card-lfo.jpg" alt=""></figure>
     <div class="body">
-      <p><strong>LFO 1</strong> (4 Hz sine) and <strong>LFO 2</strong> (0.5 Hz triangle) are plain LFOs that only modulate. They have the same controls as the MOTION LFOs, without Push.</p>
+      <p><strong>LFO 1</strong> (4 Hz sine) and <strong>LFO 2</strong> (0.5 Hz triangle) are plain LFOs that only modulate. The <strong>LFOS</strong> tab draws each one, with a dot running along it at its rate. They have the same controls as the MOTION LFOs, without Push.</p>
       <h4>Trigger</h4>
       <div class="kv">
         <dt>Retrigger</dt><dd>Each note's LFO starts at Phase. Notes are in step with how you play them.</dd>
@@ -748,8 +745,8 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div class="bar"></div>
   </div>
 
-  <h2><span class="tag">Left of the sky</span>FLOCK</h2>
-  <div class="split">
+  <h2><span class="tag">Under the sky</span>FLOCK</h2>
+  <div>
     <figure class="dark"><img src="img/card-flock.jpg" alt=""></figure>
     <div class="body">
       <table class="params">
@@ -785,9 +782,9 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <p>A held note pulls its creature toward a point that roams slowly around the lure, on a leash: loose near the lure, so the flock and the wander shape the path there, and firm when the creature strays. Each creature roams on its own two slow orbits, so no two trace the same path. <strong>LURE X</strong> and <strong>LURE Y</strong> choose what places the lure: by default low notes sit left and high notes right (Pitch, over four octaves from C2, and bend moves it), and more Slide sits higher. Try Lure Y on <em>Press</em> to make pressing harder send creatures upward, or Lure X on <em>Random</em> to scatter a chord across the sky.</p>
 
   <h2>Between creatures</h2>
-  <p>Three knobs on the <strong>FM</strong> card connect the flock to the sound directly. All start at 0, so the flock changes nothing until you ask it to.</p>
+  <p>Three knobs on the <strong>FM</strong> tab connect the flock to the sound directly. All start at 0, so the flock changes nothing until you ask it to.</p>
   <div class="kv">
-    <dt>NEIGHBOUR</dt><dd>Each creature listens to up to three neighbours of its own species, weighted by how near they are, and their Osc 1 frequency-modulates its Osc 2. A tight flock rings; a loose one is clean. When a creature gains or loses a neighbour, the change fades in over about 10 ms, so it never clicks. For it to be heard, Osc 2 must be in the sound: give it level, or route it into Osc 1 on the FM grid.</dd>
+    <dt>FLOCK FM</dt><dd>Each creature listens to up to three neighbours of its own species, weighted by how near they are, and their Osc 1 frequency-modulates its Osc 2. A tight flock rings; a loose one is clean. When a creature gains or loses a neighbour, the change fades in over about 10 ms, so it never clicks. For it to be heard, Osc 2 must be in the sound: give it level, or route it into Osc 1 on the FM grid.</dd>
     <dt>TUNE PULL</dt><dd>For each neighbour heading within 30° of the same way, the creature is pulled toward the nearest just interval from that neighbour's pitch (unison, minor third, major third, fourth, fifth, major sixth, octave), up to ±30 cents at 100%, over about 150 ms. Chords played on a flock that flies together settle into just intonation; break formation and they drift back.</dd>
     <dt>BITE</dt><dd>While one of this part's hunters holds a creature of the other species, the hunter's Osc 1 ring-modulates it, by Bite times how caught it is. Set Bite on the hunting part. Because a catch lets go over half a second, each bite rings out as the prey escapes.</dd>
   </div>
@@ -805,8 +802,8 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div class="bar"></div>
   </div>
 
-  <h2><span class="tag">Bottom right</span>TOUCH and PLAY</h2>
-  <div class="split">
+  <h2><span class="tag">Under the sky</span>TOUCH</h2>
+  <div>
     <figure class="dark"><img src="img/card-touch.jpg" alt=""></figure>
     <div class="body">
       <table>
@@ -820,15 +817,13 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
         </tbody>
       </table>
       <p>Each has a <strong>CURVE</strong> (−1 to +1): positive bows it up, so it responds more early in the travel, and negative bows it down. And a <strong>SMOOTH</strong> time (8 ms by default, 2 ms for Glide so slides track the finger), which irons out a controller's steps.</p>
-      <p>The <strong>PLAY</strong> card under it has the rest of how you play, and the output:</p>
+      <p>Under them, the rest of how you play. The whole tab is shared by both parts.</p>
       <table class="params">
         <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
         <tbody>
           <tr><td class="c">ROUND</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Glide Rounding: once a finger stops sliding, pull its pitch toward the nearest semitone, by this much. While the finger moves, the pitch follows it exactly.</td></tr>
           <tr><td class="c">ROUND TIME</td><td class="r">0 ms – 20 s</td><td class="d">150 ms</td><td>How long that pull takes.</td></tr>
           <tr><td class="c">MGR BEND</td><td class="r">1 – 96 st</td><td class="d">2 st</td><td>The bend range of the MPE manager channel (channel 1), which bends every note.</td></tr>
-          <tr><td class="c">WIDTH</td><td class="r">0 – 200%</td><td class="d">100%</td><td>The whole output's stereo width: 0% is mono, past 100% wider. Shared by both parts.</td></tr>
-          <tr><td class="c">MASTER</td><td class="r">−60 – +6 dB</td><td class="d">−6 dB</td><td>The whole output's level. Shared by both parts.</td></tr>
         </tbody>
       </table>
     </div>
@@ -853,7 +848,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
 
   <h2>Mapping</h2>
   <ol class="steps">
-    <li><b class="h">Touch a source</b>Click any source chip: the touch chips in the header, the envelope and LFO chips on their cards, or the flock's under the sky. That turns MAP on: the button lights pink, the source chips pulse, the one you touched lights, and the sky tells you to drag a knob. (Pressing <strong>MAP</strong> first works too.)</li>
+    <li><b class="h">Touch a source</b>Click any source chip: the touch chips in the header, the envelope and LFO chips on their panels, or the flock's under the sky. That turns MAP on: the button lights pink, the source chips pulse, the one you touched lights, and the sky tells you to drag a knob. (Pressing <strong>MAP</strong> first works too.)</li>
     <li><b class="h">Drag a knob</b>Drag any knob up or down to set how much the source moves it, from −100% to +100%. A ring in the source's colour shows how far it reaches. Drag more knobs to send the same source to them too, or touch another source.</li>
     <li><b class="h">Press MAP again</b>To finish. Knobs go back to setting their own values, and the rings go away.</li>
   </ol>
@@ -866,7 +861,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">Right-click</td><td>Remove the route. With no source armed, removes every route to that knob.</td></tr>
     </tbody>
   </table>
-  <p>Only the armed source's rings show; touch another source to see its routes. Nearly every knob on a part's cards can take routes: the flock's knobs, the FM grid, the envelopes and LFOs, the filters and the oscillators. The exceptions are Transpose, the part's Bend range, Velocity, and the shared ones: Size, Width, Master and the TOUCH card.</p>
+  <p>Only the armed source's rings show; touch another source to see its routes. Nearly every knob on a part's panels can take routes: the flock's knobs, the FM grid, the envelopes and LFOs, the filters and the oscillators. The exceptions are Transpose, the part's Bend range, Velocity, and the shared ones: Size, Width, Master and the TOUCH tab.</p>
 
   <h2>Sources</h2>
   <table>
@@ -885,11 +880,11 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">Macro 1 to 4</td><td>Four host parameters, for automation or a controller.</td></tr>
     </tbody>
   </table>
-  <p class="small muted">Key, Mod Wheel and the macros have no chip on the panel, and Random has one only in REDUCED, under the sky; choose them in the route list.</p>
+  <p class="small muted">Key, Mod Wheel and the macros have no chip on the panel; choose them in the route list. Random's chip is under the sky with the flock's.</p>
 
   <h2>The route list</h2>
   <figure class="dark"><img src="img/routes.jpg" alt=""><figcaption><b>Fig. 13.2</b> &nbsp;ROUTES: every route of the part in use, with its source, destination and amount.</figcaption></figure>
-  <p><strong>ROUTES</strong> under the sky opens the list of the part's routes in use, sixteen to a page. Each row has the source, the destination and the amount; change any of them here. <strong>+ ADD</strong> starts a new route (Env 2 onto Filter 1 Cutoff, at 0) to edit, and <strong>X</strong> removes one. The arrows turn the pages. Each part has 64 routes; the list shows how many are used.</p>
+  <p><strong>ROUTES</strong> under the sky opens, over the sky, the list of the part's routes in use, sixteen to a page. Each row has the source, the destination and the amount; change any of them here. <strong>+ ADD</strong> starts a new route (Env 2 onto Filter 1 Cutoff, at 0) to edit, and <strong>X</strong> removes one. The arrows turn the pages. Each part has 64 routes; the list shows how many are used.</p>
   <p>The list reaches what MAP can't: sources without a chip, and destinations with no knob on the panel, such as an oscillator's Phase, an envelope's Delay and Hold, and every route's own amount.</p>
 
   <h2>Routes onto routes</h2>
@@ -939,7 +934,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div class="recipe" style="--rc:#ffb05a">
       <h3>A flock that rings</h3>
       <p>Neighbours modulate each other, so a held chord shimmers as it gathers and breaks.</p>
-      <div class="set">Osc 2 Sine Ratio ×3.5 · FM 2 &gt; 1 40%<br>NEIGHBOUR 70% · TUNE PULL 40% · COHESION 70%<br>Nearest → FM 2 &gt; 1 +30%<br>X PAN 60%</div>
+      <div class="set">Osc 2 Sine Ratio ×3.5 · FM 2 &gt; 1 40%<br>FLOCK FM 70% · TUNE PULL 40% · COHESION 70%<br>Nearest → FM 2 &gt; 1 +30%<br>X PAN 60%</div>
       <div class="from">Or load <em>Starling Bells</em>.</div>
     </div>
     <div class="recipe" style="--rc:#ff4f8b">
@@ -1025,12 +1020,12 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <tbody>
       <tr><td class="c" style="white-space:normal">JSynth doesn't appear in my host (macOS)</td><td>The download is probably quarantined. See the warning in Chapter 2, then rescan plug-ins.</td></tr>
       <tr><td class="c" style="white-space:normal">Only part A plays</td><td>The play mode is <strong>SINGLE</strong>. Choose <strong>LAYER</strong> or another mode in the header. Check each part's Key Low and Key High too.</td></tr>
-      <tr><td class="c" style="white-space:normal">Turning up the flock knobs changes nothing in the sound</td><td>By design: the flock only reaches the sound through routes and the three BETWEEN CREATURES knobs. Map a flock source, or raise <strong>NEIGHBOUR</strong>.</td></tr>
-      <tr><td class="c" style="white-space:normal">NEIGHBOUR makes no difference</td><td>It modulates Osc 2. Give Osc 2 some <strong>LEVEL</strong>, or route it into Osc 1 with <strong>2 &gt; 1</strong>. Creatures also have to be near each other: raise <strong>RANGE</strong> or <strong>COHESION</strong>, and play more than one note.</td></tr>
+      <tr><td class="c" style="white-space:normal">Turning up the flock knobs changes nothing in the sound</td><td>By design: the flock only reaches the sound through routes and the three BETWEEN CREATURES knobs. Map a flock source, or raise <strong>FLOCK FM</strong>.</td></tr>
+      <tr><td class="c" style="white-space:normal">FLOCK FM makes no difference</td><td>It modulates Osc 2. Give Osc 2 some <strong>LEVEL</strong>, or route it into Osc 1 with <strong>2 &gt; 1</strong>. Creatures also have to be near each other: raise <strong>RANGE</strong> or <strong>COHESION</strong>, and play more than one note.</td></tr>
       <tr><td class="c" style="white-space:normal">BITE does nothing</td><td>Bite is set on the hunting part, and needs the hunter's Osc 1 and a prey of the other species: play mode LAYER (or any mode that plays both), one part on <strong>Hunt</strong>.</td></tr>
       <tr><td class="c" style="white-space:normal">Notes are out of tune</td><td>Check <strong>TUNE PULL</strong> (just intervals are up to 30 cents from equal temperament), <strong>DRIFT</strong>, and a route onto Fine or Ratio. An MPE controller sends bend per note at the part's <strong>BEND</strong> range, which must match the controller's (48 semitones is the MPE standard).</td></tr>
       <tr><td class="c" style="white-space:normal">Pitch bend is far too wide on a plain keyboard</td><td>A plain keyboard is on channel 1, which bends by <strong>MGR BEND</strong> (2 semitones). If its notes come on other channels, they are taken as MPE member channels and bend by <strong>BEND</strong>.</td></tr>
-      <tr><td class="c" style="white-space:normal">Notes cut off when I play a lot</td><td>The part is at its polyphony and the oldest notes are being taken. Raise the voices count on the part card (up to 16).</td></tr>
+      <tr><td class="c" style="white-space:normal">Notes cut off when I play a lot</td><td>The part is at its polyphony and the oldest notes are being taken. Raise the voices count on the VOICE tab (up to 16).</td></tr>
       <tr><td class="c" style="white-space:normal">My user presets are missing</td><td>Check the preset folder for your OS (Chapter 14). Files must end in <span class="mono">.jspreset</span>.</td></tr>
     </tbody>
   </table>
@@ -1117,8 +1112,8 @@ function el(parent, tag, attrs, text) {
   const g = document.querySelector('#overview svg g');
   const pts = [
     [1, 541, 52], [2, 749, 52], [3, 888, 52], [4, 985, 52], [5, 1225, 52], [6, 16, 66],
-    [7, 824, 330], [8, 480, 604], [9, 1002, 604], [10, 1632, 66], [11, 18, 656], [12, 798, 656],
-    [13, 1632, 656], [14, 18, 774], [15, 676, 774], [16, 1632, 774], [17, 1534, 52],
+    [7, 16, 406], [8, 16, 730], [9, 924, 72], [10, 912, 624], [11, 1458, 624], [12, 912, 656],
+    [13, 1632, 700], [14, 1564, 52],
   ];
   for (const [n, x, y] of pts) {
     el(g, 'circle', { cx: x, cy: y, r: 13, fill: '#f28c28', stroke: '#fff', 'stroke-width': 2.2 });

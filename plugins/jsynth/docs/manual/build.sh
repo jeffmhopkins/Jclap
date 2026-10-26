@@ -5,7 +5,7 @@
 # Inter is fetched into fonts/ on the first run. The first pass prints hidden markers to find the
 # page each heading lands on; the second fills those pages into the contents.
 #
-# The panel images in img/ are crops of 2400 x 1560 renders from jsynth-screenshot.
+# The panel images in img/ are crops of 3296 x 1880 renders from jsynth-screenshot (2x the design size).
 set -euo pipefail
 cd "$(dirname "$0")"
 

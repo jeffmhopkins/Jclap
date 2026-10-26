@@ -572,6 +572,12 @@ private:
          for (int l = 0; l < kLfoCount; ++l)
             f.lfo[part][l] = engine_->lfoLevel(part, l);
       }
+      for (int i = 0; i < 3; ++i)
+         f.meter[i] = engine_->takeMeter(i);
+      for (int part = 0; part < kPartCount; ++part)
+         for (int k = 0; k < kFilterCount; ++k)
+            if (!engine_->filterNow(part, k, f.cutoff[part][k], f.resonance[part][k]))
+               f.cutoff[part][k] = 0.0f;
       flockFrames_.publish();
       lastFrame_.store(nowMs(), std::memory_order_relaxed);
    }
