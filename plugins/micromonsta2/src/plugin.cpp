@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #include "cc_map.h"
 #include "editor.h"
@@ -37,8 +38,10 @@ const char *sectionName(Section s) {
 
 // State layout: 4-byte magic, uint32 version, int32 channel, uint32 count, then per CC parameter
 // {int32 cc, int32 touched, double value}. Keyed by CC so the list can change between versions.
+// Version 2 adds int32 program (0 = none), the program's routing as {source, destination} bytes for
+// each mod matrix slot, and the preset name as uint32 length + bytes.
 constexpr char kStateMagic[4] = {'J', 'M', 'M', '2'};
-constexpr uint32_t kStateVersion = 1;
+constexpr uint32_t kStateVersion = 2;
 
 struct StateHeader {
    char magic[4];
@@ -129,6 +132,7 @@ public:
       if (i < 0)
          return;
       value = std::clamp(value, 0.0, 127.0);
+      fromProgram_[i].store(false);
       values_[i].store(value);
       touched_[i].store(true);
       edits_.value(id, value);
@@ -156,6 +160,42 @@ public:
       if (hostParams_)
          hostParams_->request_flush(host());
    }
+
+   void loadProgram(const HardwarePatch &patch) override {
+      if (patch.program < 1 || patch.program > kProgramCount)
+         return;
+      for (int s = 0; s < kModSlots; ++s)
+         routes_[s] = patch.routes[s];
+      program_ = patch.program;
+      presetName_ = displayName(patch);
+
+      // The knobs the program sets stop sending before their values change, and the audio thread
+      // counts them as sent once the Program Change is out, so none of them goes out on its own.
+      for (int i = 0; i < kCcParamCount; ++i)
+         fromProgram_[i].store(false);
+      for (auto [cc, v] : patch.values) {
+         const int i = indexOfCc(cc);
+         if (i < 0 || kCcParams[i].section == Section::Performance)
+            continue;
+         touched_[i].store(false);
+         fromProgram_[i].store(true);
+         const double value = std::clamp(static_cast<double>(v), 0.0, 127.0);
+         values_[i].store(value);
+         edits_.begin(static_cast<clap_id>(cc));
+         edits_.value(static_cast<clap_id>(cc), value);
+         edits_.end(static_cast<clap_id>(cc));
+      }
+      programRequested_.store(patch.program);
+      if (hostState_)
+         hostState_->mark_dirty(host());
+      if (hostParams_)
+         hostParams_->request_flush(host());
+   }
+
+   int program() const override { return program_; }
+   ModRoute route(int slot) const override { return slot >= 0 && slot < kModSlots ? routes_[slot] : ModRoute{}; }
+   std::string presetName() const override { return presetName_; }
+   void setPresetName(const std::string &name) override { presetName_ = name; }
 
    // ---- params ----
 
@@ -229,14 +269,24 @@ public:
          if (!jclap::core::writeAll(stream, &e, sizeof(e)))
             return false;
       }
-      return true;
+      const int32_t program = program_;
+      uint8_t routes[2 * kModSlots];
+      for (int s = 0; s < kModSlots; ++s) {
+         routes[2 * s] = routes_[s].source;
+         routes[2 * s + 1] = routes_[s].destination;
+      }
+      const uint32_t nameLength = static_cast<uint32_t>(std::min<size_t>(presetName_.size(), 255));
+      return jclap::core::writeAll(stream, &program, sizeof(program)) &&
+             jclap::core::writeAll(stream, routes, sizeof(routes)) &&
+             jclap::core::writeAll(stream, &nameLength, sizeof(nameLength)) &&
+             jclap::core::writeAll(stream, presetName_.data(), nameLength);
    }
 
    bool stateLoad(const clap_istream_t *stream) override {
       StateHeader header{};
       if (!jclap::core::readAll(stream, &header, sizeof(header)))
          return false;
-      if (std::memcmp(header.magic, kStateMagic, sizeof(kStateMagic)) || header.version != kStateVersion ||
+      if (std::memcmp(header.magic, kStateMagic, sizeof(kStateMagic)) || header.version < 1 || header.version > kStateVersion ||
           header.count > 128)
          return false;
 
@@ -244,6 +294,19 @@ public:
       for (uint32_t i = 0; i < header.count; ++i) {
          if (!jclap::core::readAll(stream, &entries[i], sizeof(StateEntry)))
             return false;
+      }
+      int32_t program = 0;
+      uint8_t routes[2 * kModSlots] = {};
+      std::string name;
+      if (header.version >= 2) {
+         uint32_t nameLength = 0;
+         char buffer[256];
+         if (!jclap::core::readAll(stream, &program, sizeof(program)) ||
+             !jclap::core::readAll(stream, routes, sizeof(routes)) ||
+             !jclap::core::readAll(stream, &nameLength, sizeof(nameLength)) || nameLength >= sizeof(buffer) ||
+             !jclap::core::readAll(stream, buffer, nameLength))
+            return false;
+         name.assign(buffer, nameLength);
       }
 
       // A knob the state leaves out (or saved as NaN) is back at its default, untouched, rather than
@@ -272,7 +335,16 @@ public:
             touched_[i].store(true);
       }
       midiChannel_.store(std::clamp(static_cast<int>(header.channel), 1, 16));
-      // Send the restored sound to the synth on the next block.
+      program_ = program >= 1 && program <= kProgramCount ? program : 0;
+      for (int s = 0; s < kModSlots; ++s)
+         routes_[s] = ModRoute{routes[2 * s], routes[2 * s + 1]};
+      presetName_ = name;
+      // Send the restored sound to the synth on the next block: its program first, then every knob
+      // that was set, in case one moved after the program was loaded.
+      for (auto &f : fromProgram_)
+         f.store(false);
+      if (program_)
+         programRequested_.store(program_);
       loaded_.store(true);
       resendRequested_.store(true);
 
@@ -299,6 +371,8 @@ public:
       if (loaded_.exchange(false))
          for (int i = 0; i < kCcParamCount; ++i)
             modulatedOnce_[i] = modulatedOnce_[i] && mods_[i].load() != 0.0;
+      if (const int program = programRequested_.exchange(0); program > 0 && !sendProgram(out, ch, program))
+         programRequested_.store(program);
       const bool resend = resendRequested_.exchange(false);
       if (ch != sentChannel_ || resend) {
          sentChannel_ = ch;
@@ -340,6 +414,24 @@ public:
 
 private:
    double effective(int i) const { return modulated(values_[i].load(), mods_[i].load()); }
+
+   // Bank Select and Program Change for `program`, on the channel the CCs go out on. The knobs the
+   // program set now match the synth, so they count as sent. False if the host's queue was full.
+   bool sendProgram(const clap_output_events_t *out, int ch, int program) {
+      const auto status = static_cast<uint8_t>(0xB0 | (ch - 1));
+      if (!jclap::core::pushMidi(out, 0, status, 0, 0) ||
+          !jclap::core::pushMidi(out, 0, status, 32, static_cast<uint8_t>(bankOf(program))) ||
+          !jclap::core::pushMidi(out, 0, static_cast<uint8_t>(0xC0 | (ch - 1)),
+                                 static_cast<uint8_t>(programChangeOf(program)), 0))
+         return false;
+      for (int i = 0; i < kCcParamCount; ++i) {
+         if (!fromProgram_[i].exchange(false))
+            continue;
+         sender_.sent(i, toCcValue(effective(i)));
+         touched_[i].store(true);
+      }
+      return true;
+   }
 
    // A controller's CC passed through on our channel: the synth now has that value, and the knob
    // doesn't go out again until it moves.
@@ -401,6 +493,7 @@ private:
          }
          const int i = indexOfCc(static_cast<int>(ev->param_id));
          if (i >= 0) {
+            fromProgram_[i].store(false);
             values_[i].store(std::clamp(ev->value, 0.0, 127.0));
             touched_[i].store(true);
          }
@@ -443,6 +536,14 @@ private:
    std::atomic<bool> touched_[kCcParamCount];
    std::atomic<int> midiChannel_{1};
    std::atomic<bool> resendRequested_{false}, loaded_{false};
+   // A Program Change for the audio thread to send (0 = none), and the knobs that program set.
+   std::atomic<int> programRequested_{0};
+   std::atomic<bool> fromProgram_[kCcParamCount] = {};
+
+   // Main thread only.
+   int program_ = 0;
+   ModRoute routes_[kModSlots];
+   std::string presetName_;
 
    // Audio thread only.
    static constexpr double kMinGapSeconds = 0.005;

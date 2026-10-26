@@ -4,9 +4,12 @@
 // plugin.cpp never includes Visage.
 
 #include <memory>
+#include <string>
 
 #include <jclap/ui/params.h>
 #include <jclap/ui/window.h>
+
+#include "patches.h"
 
 namespace mm2 {
 
@@ -17,6 +20,17 @@ public:
    virtual int channel() const = 0; // 1-16
    virtual void setChannel(int channel) = 0;
    virtual void sendAll() = 0;
+
+   // Has the synth load `patch` (Bank Select + Program Change) and moves the knobs to its values
+   // without sending them, since the synth already has them.
+   virtual void loadProgram(const HardwarePatch &patch) = 0;
+   // The program last loaded (1-300), or 0 if none has been.
+   virtual int program() const = 0;
+   // That program's routing for mod matrix slot 0-9 (all "off" if none has been loaded).
+   virtual ModRoute route(int slot) const = 0;
+   // The name the preset bar shows, kept with the project.
+   virtual std::string presetName() const = 0;
+   virtual void setPresetName(const std::string &name) = 0;
 };
 
 // The plugin window with the panel in it.

@@ -22,6 +22,15 @@ public:
    int channel() const override { return 1; }
    void setChannel(int) override {}
    void sendAll() override {}
+   void loadProgram(const mm2::HardwarePatch &) override {}
+   // A program with a few mod matrix slots routed, so their labels show.
+   int program() const override { return 12; }
+   mm2::ModRoute route(int slot) const override {
+      static const mm2::ModRoute routes[mm2::kModSlots] = {{18, 12}, {21, 1}, {13, 13}, {5, 8}};
+      return routes[slot];
+   }
+   std::string presetName() const override { return "P012 OctaBass"; }
+   void setPresetName(const std::string &) override {}
 };
 
 } // namespace

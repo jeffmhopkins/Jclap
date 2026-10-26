@@ -262,5 +262,79 @@ int main() {
       CHECK_EQ(b.process().midi.size(), 0u);
    }
 
+   // Loading a program from the synth's bank: Bank Select and Program Change go out, the knobs move
+   // to the program's values without being sent (the synth already has them), and the panel gets
+   // the program's mod routing.
+   {
+      jclap::core::TestHost a(clap_entry, "com.jeffmhopkins.jclap.micromonsta2");
+      mm2::EditorHost &p = *a.object<mm2::EditorHost>();
+      a.setParam(mm2::kChannelParamId, 2);
+      a.setParam(7, 90);
+      a.process();
+
+      mm2::HardwarePatch patch;
+      patch.program = 112;
+      patch.name = "OctaBass";
+      patch.category = "Bass";
+      patch.values = {{74, 40}, {71, 99}, {52, 80}, {7, 10}};
+      patch.routes[0] = {18, 12}; // lfo1 -> cuto
+      p.loadProgram(patch);
+      const auto out = a.process();
+      CHECK_EQ(out.midi.size(), 3u);
+      if (out.midi.size() == 3) {
+         CHECK_EQ(out.midi[0].status, 0xB1);
+         CHECK_EQ(out.midi[0].data1, 0);
+         CHECK_EQ(out.midi[1].data1, 32);
+         CHECK_EQ(out.midi[1].data2, 1);
+         CHECK_EQ(out.midi[2].status, 0xC1);
+         CHECK_EQ(out.midi[2].data1, 11);
+      }
+      // The host hears about each knob that moved, as a gesture.
+      CHECK_EQ(out.paramValues.size(), 3u);
+      CHECK_EQ(a.paramValue(74), 40.0);
+      CHECK_EQ(a.paramValue(71), 99.0);
+      CHECK_EQ(a.paramValue(52), 80.0);
+      // Volume isn't part of a program.
+      CHECK_EQ(a.paramValue(7), 90.0);
+      CHECK_EQ(p.program(), 112);
+      JCLAP_CHECK(p.route(0) == (mm2::ModRoute{18, 12}));
+      JCLAP_CHECK(p.presetName() == "P112 OctaBass");
+      CHECK_EQ(ccs(a.process()).size(), 0u);
+
+      // Moving a knob afterwards sends it as usual.
+      p.beginEdit(74);
+      p.setParam(74, 41);
+      p.endEdit(74);
+      const auto moved = ccs(a.process());
+      CHECK_EQ(moved.size(), 1u);
+      CHECK_EQ(moved.empty() ? 0 : moved[0].value, 41);
+
+      // The program and its routing are saved; loading the project sends the Program Change first,
+      // then the knobs that were set.
+      auto *state = static_cast<const clap_plugin_state_t *>(a.plugin()->get_extension(a.plugin(), CLAP_EXT_STATE));
+      Buffer saved;
+      JCLAP_CHECK(state->save(a.plugin(), &saved.out));
+      jclap::core::TestHost b(clap_entry, "com.jeffmhopkins.jclap.micromonsta2");
+      mm2::EditorHost &pb = *b.object<mm2::EditorHost>();
+      auto *stateB = static_cast<const clap_plugin_state_t *>(b.plugin()->get_extension(b.plugin(), CLAP_EXT_STATE));
+      JCLAP_CHECK(stateB->load(b.plugin(), &saved.in));
+      CHECK_EQ(pb.program(), 112);
+      JCLAP_CHECK(pb.route(0) == (mm2::ModRoute{18, 12}));
+      JCLAP_CHECK(pb.presetName() == "P112 OctaBass");
+      const auto restored = b.process();
+      JCLAP_CHECK(restored.midi.size() >= 3 && restored.midi[2].status == 0xC1);
+      bool sent74 = false;
+      for (const Cc &c : ccs(restored))
+         sent74 = sent74 || (c.cc == 74 && c.value == 41);
+      JCLAP_CHECK(sent74);
+   }
+
+   // Program numbers map onto banks of 100.
+   CHECK_EQ(mm2::bankOf(1), 0);
+   CHECK_EQ(mm2::programChangeOf(1), 0);
+   CHECK_EQ(mm2::bankOf(100), 0);
+   CHECK_EQ(mm2::bankOf(101), 1);
+   CHECK_EQ(mm2::programChangeOf(300), 99);
+
    return jclap::core::testResult();
 }
