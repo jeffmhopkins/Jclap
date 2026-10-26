@@ -1188,10 +1188,72 @@ private:
    unsigned color_;
 };
 
-// Both filters' responses over 20 Hz to 20 kHz, and what the voice hears through them.
+// Both filters' responses over 20 Hz to 20 kHz, and what the voice hears through them. Each filter
+// has a handle on its curve at its cutoff: drag it across for cutoff and up or down for resonance,
+// scroll for its drive, double-click to reset. In MAP with a source armed, dragging across sets how
+// much the source moves that cutoff instead.
 class FilterView : public visage::Frame {
 public:
-   FilterView(EditorHost &host) : host_(host) { setIgnoresMouseEvents(true, false); }
+   FilterView(EditorHost &host, Mapper &mapper) : host_(host), mapper_(mapper) {}
+
+   void mouseDown(const visage::MouseEvent &e) override {
+      drag_ = handleAt(e.position.x, e.position.y);
+      if (drag_ < 0)
+         return;
+      const int part = host_.part;
+      startX_ = e.position.x, startY_ = e.position.y;
+      if (mapper_.mapping() && mapper_.armedSource() != kSourceOff) {
+         route_ = mapper_.routeFor(part, destinationIndex(filterParam(drag_, kFilterCutoff)));
+         if (route_ >= 0) {
+            mapper_.beginRoute(part, route_);
+            startCut_ = mapper_.routeAmount(part, route_);
+         }
+         return;
+      }
+      route_ = -1;
+      if (e.repeatClickCount() == 2) {
+         for (FilterParam q : {kFilterCutoff, kFilterResonance})
+            set(q, findParam(id(q))->def.defaultValue);
+         drag_ = -1;
+         return;
+      }
+      startCut_ = param(filterParam(drag_, kFilterCutoff));
+      startRes_ = param(filterParam(drag_, kFilterResonance));
+      for (FilterParam q : {kFilterCutoff, kFilterResonance})
+         host_.beginEdit(id(q));
+   }
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (drag_ < 0)
+         return;
+      const float fine = e.isShiftDown() ? 0.2f : 1.0f;
+      const double across = (e.position.x - startX_) / width() * fine, up = (startY_ - e.position.y) / height() * fine;
+      if (route_ >= 0) {
+         mapper_.setRouteAmount(host_.part, route_, std::clamp(startCut_ + 2.0 * across, -1.0, 1.0));
+         return;
+      }
+      if (mapper_.mapping())
+         return;
+      host_.setParam(id(kFilterCutoff), std::clamp(startCut_ + across, 0.0, 1.0));
+      host_.setParam(id(kFilterResonance), std::clamp(startRes_ + up, 0.0, 1.0));
+      redraw();
+   }
+   void mouseUp(const visage::MouseEvent &) override {
+      if (drag_ >= 0 && route_ >= 0)
+         mapper_.endRoute(host_.part, route_);
+      else if (drag_ >= 0 && !mapper_.mapping())
+         for (FilterParam q : {kFilterCutoff, kFilterResonance})
+            host_.endEdit(id(q));
+      drag_ = -1, route_ = -1;
+   }
+   bool mouseWheel(const visage::MouseEvent &e) override {
+      const int f = handleAt(e.position.x, e.position.y);
+      if (f < 0)
+         return false;
+      drag_ = f;
+      set(kFilterDrive, std::clamp(param(filterParam(f, kFilterDrive)) + 0.05 * e.precise_wheel_delta_y, 0.0, 1.0));
+      drag_ = -1;
+      return true;
+   }
 
    void draw(visage::Canvas &c) override {
       const float w = width(), h = height();
@@ -1237,6 +1299,18 @@ public:
             c.setColor(glow(f == 0 ? 0xffffffff : 0xff9fd8ff, 0.35f, 1.0f));
             c.segment(w * i / kPoints, y(one[f][i]), w * (i + 1) / kPoints, y(one[f][i + 1]), 1.2f * s, true);
          }
+      // The handles: a glowing dot on each filter's own curve at its cutoff.
+      for (int f = 0; f < kFilterCount; ++f) {
+         const auto [hx, hy] = handle(f);
+         const unsigned hc = f == 0 ? 0xffffffff : 0xff9fd8ff;
+         const float r = (drag_ == f ? 9.0f : 7.0f) * s;
+         c.setColor(glow(hc, 0.25f, 1.0f));
+         c.circle(hx - 2 * r, hy - 2 * r, 4 * r);
+         c.setColor(glow(f == 0 ? color : hc, 1.0f, 1.5f));
+         c.circle(hx - r, hy - r, 2 * r);
+         c.setColor(visage::Color(0xff0b0e17));
+         c.text(f == 0 ? "1" : "2", ui::font(9 * s), visage::Font::kCenter, hx - r, hy - r, 2 * r, 2 * r);
+      }
       c.setColor(visage::Color(0x88ffffff));
       c.text(parallel ? "PARALLEL" : "SERIAL: FILTER 1 INTO FILTER 2", ui::font(9 * s), visage::Font::kRight, 0, 4 * s,
              w - 8 * s, 12 * s);
@@ -1244,6 +1318,32 @@ public:
 
 private:
    double param(clap_id offset) const { return host_.paramValue(partId(host_.part, offset)); }
+   clap_id id(FilterParam q) const { return partId(host_.part, filterParam(drag_, q)); }
+   // One whole edit of the dragged filter's param.
+   void set(FilterParam q, double v) {
+      host_.beginEdit(id(q));
+      host_.setParam(id(q), v);
+      host_.endEdit(id(q));
+      redraw();
+   }
+   // Where filter `f`'s handle is: at its cutoff, on its own curve (clamped into the graph).
+   std::pair<float, float> handle(int f) const {
+      const double hz = cutoffHz(param(filterParam(f, kFilterCutoff)));
+      const float m = static_cast<float>(magnitude(f, hz));
+      const float y = yOf(20.0 * std::log10(std::max(m, 1e-4f)), height());
+      return {std::clamp(xOf(hz, width()), 10.0f, width() - 10.0f), std::clamp(y, 10.0f, height() - 10.0f)};
+   }
+   int handleAt(float x, float y) const {
+      int best = -1;
+      float near = height() * 0.2f;
+      for (int f = 0; f < kFilterCount; ++f) {
+         const auto [hx, hy] = handle(f);
+         const float d = std::hypot(hx - x, hy - y);
+         if (d < near)
+            best = f, near = d;
+      }
+      return best;
+   }
    static float xOf(double f, float w) { return static_cast<float>(std::log(f / 20.0) / std::log(1000.0)) * w; }
    static float yOf(double db, float h) { return static_cast<float>((24.0 - std::clamp(db, -48.0, 24.0)) / 72.0) * h; }
 
@@ -1283,6 +1383,10 @@ private:
    }
 
    EditorHost &host_;
+   Mapper &mapper_;
+   int drag_ = -1, route_ = -1;
+   float startX_ = 0, startY_ = 0;
+   double startCut_ = 0, startRes_ = 0;
 };
 
 // The part's voices and where they sit in the stereo field: a slot per voice the part can play, lit
@@ -2119,7 +2223,7 @@ private:
    void buildReducedShared() {
       for (int o = 0; o < kOscCount; ++o)
          drawings_.push_back(&put<WaveView>({164, 98 + o * 98.0f, 330, 92}, host_, o, kOscColors[o]));
-      drawings_.push_back(&put<FilterView>({28, 440, 856, 94}, host_));
+      drawings_.push_back(&put<FilterView>({28, 440, 856, 94}, host_, *this));
       const ui::Rect vb = kVoiceBox;
       // Each drawing spans the knobs under it.
       const auto k = kVoiceKnobs();
