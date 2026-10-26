@@ -1,8 +1,7 @@
 // Renders the panel to a PNG without a host:
-//    jsynth-screenshot out.png [part [left-tab [right-tab [routes [map-source [width height]]]]]]
-// Part 0 is A, 1 is B. The left card's tabs are FLOCK, FM, TOUCH and the right card's ENV, MOTION,
-// LFO, FILTER (0 up). Routes 1 opens the route list. Map-source, a route source's number, turns MAP on
-// with that source armed.
+//    jsynth-screenshot out.png [part [routes [map-source [width height [hidden]]]]]
+// Part 0 is A, 1 is B. Routes 1 opens the route list. Map-source, a route source's number, turns MAP
+// on with that source armed. Hidden 1 hides the cards.
 
 #include <cstdio>
 #include <cstdlib>
@@ -116,20 +115,18 @@ private:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [part [left-tab [right-tab [routes [map-source [width height [hidden]]]]]]]\n",
+      std::fprintf(stderr, "usage: %s out.png [part [routes [map-source [width height [hidden]]]]]\n",
                    argv[0]);
       return 1;
    }
    const auto arg = [&](int i) { return argc > i ? std::atoi(argv[i]) : 0; };
    ScreenshotView view;
    view.part = arg(2);
-   view.leftTab = arg(3);
-   view.rightTab = arg(4);
-   view.routes = arg(5) != 0;
-   view.mapSource = arg(6);
-   view.hidden = arg(9) != 0;
-   const int width = argc > 8 ? arg(7) : 1200;
-   const int height = argc > 8 ? arg(8) : 780;
+   view.routes = arg(3) != 0;
+   view.mapSource = arg(4);
+   view.hidden = arg(7) != 0;
+   const int width = argc > 6 ? arg(5) : 1648;
+   const int height = argc > 6 ? arg(6) : 940;
    DemoHost host;
    return renderScreenshot(host, view, 6.0, width, height, argv[1]) ? 0 : 1;
 }

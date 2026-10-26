@@ -24,13 +24,13 @@ if(JCLAP_BUILD_TOOLS)
    target_include_directories(jsynth-record PRIVATE src)
    target_link_libraries(jsynth-record PRIVATE jclap::ui jclap::dsp)
    jclap_add_screenshot_test(jsynth-screenshot-main-test TOOL jsynth-screenshot
-      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel.png ARGS 0 0 1)
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel.png ARGS 0)
    jclap_add_screenshot_test(jsynth-screenshot-part-b-test TOOL jsynth-screenshot
-      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-b.png ARGS 1 1 2)
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-b.png ARGS 1)
    jclap_add_screenshot_test(jsynth-screenshot-map-test TOOL jsynth-screenshot
-      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-map.png ARGS 0 1 3 0 11)
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-map.png ARGS 0 0 11)
    jclap_add_screenshot_test(jsynth-screenshot-routes-test TOOL jsynth-screenshot
-      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-routes.png ARGS 0 2 0 1)
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-routes.png ARGS 0 1)
    jclap_add_screenshot_test(jsynth-screenshot-hidden-test TOOL jsynth-screenshot
-      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-hidden.png ARGS 0 0 1 0 0 1200 780 1)
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-hidden.png ARGS 0 0 0 1648 940 1)
 endif()

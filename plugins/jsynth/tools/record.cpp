@@ -255,7 +255,7 @@ int main(int argc, char **argv) {
       play(host, phrase, 0, static_cast<int>(total), audio);
    }
    else {
-      const int width = 1200, height = 780;
+      const int width = 1648, height = 940;
       const std::string silent = out + ".video.mp4";
       const std::string encode = "ffmpeg -y -loglevel error -f rawvideo -pix_fmt rgba -s " + std::to_string(width) + "x" +
                                  std::to_string(height) + " -r " + std::to_string(kFps) +
@@ -266,8 +266,6 @@ int main(int argc, char **argv) {
       const int frames = static_cast<int>(phrase.length * kFps);
       int64_t at = 0;
       ScreenshotView view;
-      view.leftTab = 1;  // FM: the grid the pressure is moving
-      view.rightTab = 0; // ENV
       const bool ok = renderFrames(
           host, view, width, height, frames, kFps,
           [&](int frame) {

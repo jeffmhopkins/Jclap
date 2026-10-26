@@ -487,6 +487,8 @@ private:
       dsp::Ladder ladder[kFilterCount][2];
       dsp::Comb comb_[kFilterCount][2];
       int routing = 0;
+      // Each oscillator's filter, then the noise's: 0 both, 1 Filter 1, 2 Filter 2.
+      int dest[kOscCount + 1] = {};
       Ramp balance;
       bool stereo = false;
       // Amp: level, velocity and pan as one gain per side, times Env 1 and the steal fade.
@@ -944,6 +946,9 @@ private:
 
       // Filters.
       v.routing = choice(part, tailParam(kFilterRouting));
+      for (int o = 0; o < kOscCount; ++o)
+         v.dest[o] = choice(part, oscParam(o, kOscFilter));
+      v.dest[kOscCount] = choice(part, mixParam(kNoiseFilter));
       ramp(v.balance, mod(v, offset, tailParam(kFilterBalance)), st, v.fresh);
       for (int f = 0; f < kFilterCount; ++f) {
          const int type = choice(part, filterParam(f, kFilterType));
@@ -1379,20 +1384,15 @@ private:
          const float wn = v.noise.white() * noiseGain_, pn = v.noise.pink() * 2.5f * noiseGain_;
          noise = (pn + (wn - pn) * (0.5f + 0.5f * nc)) * nl;
       }
-      // Split sends Osc 1 to Filter 1 and the rest to Filter 2.
-      const bool split = v.routing == 2;
-      float aL = 0, aR = 0, bL = 0, bR = 0;
+      // Each source goes into Filter 1 only (a), Filter 2 only (b) or both (c).
+      float sum[3][2] = {};
       for (int o = 0; o < kOscCount; ++o) {
          const float s = now[o];
-         if (split && o > 0)
-            bL += s * pl[o], bR += s * pr[o];
-         else
-            aL += s * pl[o], aR += s * pr[o];
+         float *to = sum[v.dest[o] == 1 ? 0 : v.dest[o] == 2 ? 1 : 2];
+         to[0] += s * pl[o], to[1] += s * pr[o];
       }
-      if (split)
-         bL += noise, bR += noise;
-      else
-         aL += noise, aR += noise;
+      for (float &s : sum[v.dest[kOscCount] == 1 ? 0 : v.dest[kOscCount] == 2 ? 1 : 2])
+         s += noise;
 
       // Drive.
       const float d = v.drive.next();
@@ -1414,20 +1414,26 @@ private:
          rs[fi] = use & kUseRes ? v.res[fi].next() : v.res[fi].v;
       }
       const float bal = v.routing != 0 ? v.balance.next() : 0.0f;
+      // In parallel, Balance turns each filter down from the middle out, so a source in only one
+      // of them is at full level in the middle. A source in both is halved into each there, and
+      // goes all into one at either end.
+      const float w2 = 0.5f + 0.5f * bal;
+      const float g1 = std::min(1.0f, 2.0f - 2.0f * w2), g2 = std::min(1.0f, 2.0f * w2);
+      const float k1 = g1 > 1e-6f ? (1.0f - w2) / g1 : 0.0f, k2 = g2 > 1e-6f ? w2 / g2 : 0.0f;
       const int channels = v.stereo ? 2 : 1;
       float y[2] = {0, 0};
       for (int ch = 0; ch < channels; ++ch) {
-         float a = drive(ch == 0 ? (channels == 1 ? 0.5f * (aL + aR) : aL) : aR);
-         float b = drive(ch == 0 ? (channels == 1 ? 0.5f * (bL + bR) : bL) : bR);
+         const auto in = [&](int bus) {
+            return drive(channels == 1 ? 0.5f * (sum[bus][0] + sum[bus][1]) : sum[bus][ch]);
+         };
+         const float a = in(0), b = in(1), c = in(2);
          float o;
+         // Serial: a and c go through both filters, b through Filter 2 only.
          if (v.routing == 0)
-            o = filter(v, 1, ch, filter(v, 0, ch, a, g[0], fd[0], cd[0], rs[0]), g[1], fd[1], cd[1], rs[1]);
-         else {
-            const float f1 = filter(v, 0, ch, a, g[0], fd[0], cd[0], rs[0]);
-            const float f2 = filter(v, 1, ch, split ? b : a, g[1], fd[1], cd[1], rs[1]);
-            const float w2 = 0.5f + 0.5f * bal;
-            o = split ? f1 * std::min(1.0f, 2.0f - 2.0f * w2) + f2 * std::min(1.0f, 2.0f * w2) : f1 * (1.0f - w2) + f2 * w2;
-         }
+            o = filter(v, 1, ch, filter(v, 0, ch, a + c, g[0], fd[0], cd[0], rs[0]) + b, g[1], fd[1], cd[1], rs[1]);
+         else
+            o = g1 * filter(v, 0, ch, a + k1 * c, g[0], fd[0], cd[0], rs[0]) +
+                g2 * filter(v, 1, ch, b + k2 * c, g[1], fd[1], cd[1], rs[1]);
          y[ch] = o;
       }
       if (channels == 1)
