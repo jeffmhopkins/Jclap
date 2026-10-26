@@ -355,7 +355,8 @@ the creature you press harder fly faster. Those are read only on ticks that end 
 
 **MAP** writes the same routes from the panel: press MAP, touch a source chip, then drag a knob. The
 first drag on a knob takes a free route for that source and destination; double-click flips its
-sign, right-click removes it. Each knob shows up to four route rings in their sources' colours.
+sign, right-click removes it. Route rings show only in MAP with a source armed: each knob that
+source moves shows a ring in its colour. Outside MAP the knobs show no rings.
 **ROUTES** lists the routes in use, sixteen to a page: **+ ADD** starts one (Env 2 onto Filter 1
 Cutoff, at 0) and **X** removes one.
 
@@ -364,9 +365,8 @@ Press to Filter 1 Cutoff (+20%).
 
 ## The flock
 
-Every sounding voice is a creature in its slot. Each part also has six **resting creatures**,
-silent, that keep the species visible and flying while it plays nothing; they fade out while the
-part plays. Randomness is our own xorshift, reseeded on activate, on reset and when the transport
+Every sounding voice is a creature in its slot, and only those: the sky is empty until a note
+plays. Randomness is our own xorshift, reseeded on activate, on reset and when the transport
 starts with nothing sounding, so a bounce matches playback from the same start.
 
 **The sky** is 4:3 wide and 1 high. **Size** (0..1) scales everything in it: at a bigger sky the

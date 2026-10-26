@@ -7,8 +7,8 @@
 // here reaches the sound.
 //
 // MAP mode is how modulation is made: press MAP, touch a source (a chip in the header, on the cards
-// or under the sky), then drag any knob to set how much that source moves it. Each route shows as a
-// ring in the source's colour around the knob it moves.
+// or under the sky), then drag any knob to set how much that source moves it. While it is armed, its
+// routes show as rings in its colour around the knobs they move; outside MAP the knobs show none.
 
 #include "editor.h"
 
@@ -190,8 +190,9 @@ public:
 };
 
 // A knob MAP mode can map. With a source armed, dragging it sets that route's amount instead of the
-// knob's value, a double-click flips the route's sign and a right-click removes it. Up to four routes
-// show as rings outside the knob's own, in their sources' colours, each spanning what it adds.
+// knob's value, a double-click flips the route's sign and a right-click removes it. Only in MAP mode
+// with a source armed does it show a route: a ring outside the knob's own, in the source's colour,
+// spanning what it adds.
 class MapKnob : public ui::Knob {
 public:
    MapKnob(ui::ValueRange range, Mapper &mapper, int part, clap_id offset)
@@ -199,38 +200,29 @@ public:
 
    void draw(visage::Canvas &c) override {
       Knob::draw(c);
-      if (dest_ < 0)
+      const int armed = mapper_.armedSource();
+      if (dest_ < 0 || !mapper_.mapping() || armed == kSourceOff)
          return;
       rings_.clear();
       mapper_.rings(part_, dest_, rings_);
       const float w = width(), h = height(), s = h / 100.0f;
       const float d = std::min(w * 0.7f, 48.0f * s);
       const float cx = w * 0.5f, cy = 18.0f * s + d * 0.5f + 2.0f * s;
+      const float rd = d + 13.0f * s;
       const float sweep = 0.75f * kPi;
       const float from = fraction(value());
-      const int armed = mapper_.armedSource();
-      bool armedShown = false;
-      const int count = std::min<int>(4, static_cast<int>(rings_.size()));
-      for (int i = 0; i < count; ++i) {
-         const Mapper::Ring &r = rings_[i];
+      c.setColor(glow(sourceColor(armed), 0.55f, 1.0f));
+      c.arc(cx - rd * 0.5f, cy - rd * 0.5f, rd, 1.4f * s, -0.5f * kPi, sweep, true);
+      for (const Mapper::Ring &r : rings_) {
+         if (r.source != armed)
+            continue;
          const float to = std::clamp(from + static_cast<float>(r.amount), 0.0f, 1.0f);
-         const float rd = d + (13.0f + 5.0f * i) * s;
-         const bool lit = mapper_.mapping() && r.source == armed;
-         armedShown |= lit;
-         c.setColor(glow(sourceColor(r.source), 0.22f, 1.0f));
-         c.arc(cx - rd * 0.5f, cy - rd * 0.5f, rd, 1.4f * s, -0.5f * kPi, sweep, true);
          if (std::fabs(to - from) > 0.002f) {
             const float a0 = -sweep + 2.0f * sweep * from, a1 = -sweep + 2.0f * sweep * to;
-            c.setColor(glow(sourceColor(r.source), 1.0f, lit ? 1.6f : 1.0f));
-            c.arc(cx - rd * 0.5f, cy - rd * 0.5f, rd, (lit ? 3.4f : 2.6f) * s, 0.5f * (a0 + a1) - 0.5f * kPi,
+            c.setColor(glow(sourceColor(armed), 1.0f, 1.6f));
+            c.arc(cx - rd * 0.5f, cy - rd * 0.5f, rd, 3.4f * s, 0.5f * (a0 + a1) - 0.5f * kPi,
                   0.5f * std::fabs(a1 - a0), true);
          }
-      }
-      // With a source armed, a faint ring where its route would go says "drag me".
-      if (mapper_.mapping() && armed != kSourceOff && !armedShown && count < 4) {
-         const float rd = d + (13.0f + 5.0f * count) * s;
-         c.setColor(glow(sourceColor(armed), 0.55f, 1.0f));
-         c.arc(cx - rd * 0.5f, cy - rd * 0.5f, rd, 1.4f * s, -0.5f * kPi, sweep, true);
       }
    }
 
@@ -641,7 +633,7 @@ public:
    // The engine's newest frame, while live.
    const FlockFrame &frame() const { return frame_; }
 
-   // The sources of `part`'s newest held creature, or a resting one's when it plays nothing.
+   // The sources of `part`'s newest held creature, or a fading one's when it holds none.
    CreatureSources sources(int part) const {
       const Creature *pick = nullptr;
       for (const Creature &b : creatures_)
@@ -760,7 +752,7 @@ private:
    struct Creature {
       uint32_t id = 0;
       int part = 0, slot = 0, neighbour = -1, hunter = -1;
-      bool held = false, resting = false;
+      bool held = false;
       unsigned color = 0;
       float x = 0, y = 0, vx = 0, vy = 0;
       float energy = 0;
@@ -826,7 +818,7 @@ private:
          }
          const bool jumped = std::fabs(s.x - b.x) > 0.3f || std::fabs(s.y - b.y) > 0.3f;
          b.part = s.part, b.slot = s.slot, b.neighbour = s.neighbour, b.hunter = s.hunter;
-         b.held = s.held, b.resting = s.resting;
+         b.held = s.held;
          b.x = s.x, b.y = s.y, b.vx = s.vx, b.vy = s.vy;
          b.energy = s.energy, b.press = s.press, b.wing = s.wing;
          b.lureX = s.lureX, b.lureY = s.lureY;
@@ -889,13 +881,11 @@ private:
          jsynth::Creature &c = local_.creatures[i];
          if (!c.alive)
             continue;
-         if (i < kVoiceSlots && !claimed[i])
+         if (!claimed[i])
             local_.release(i);
          c.params.read([&](clap_id o) { return host_.paramValue(partId(c.part, o)); });
-         if (i < kVoiceSlots) {
-            localWing_[i] += dt * species_[c.part].wingHz;
-            c.wing = std::sin(2.0f * kPi * localWing_[i]);
-         }
+         localWing_[i] += dt * species_[c.part].wingHz;
+         c.wing = std::sin(2.0f * kPi * localWing_[i]);
       }
       localTime_ += std::min(dt, 0.1f);
       while (localTime_ >= Flock::kStep) {
