@@ -622,30 +622,32 @@ private:
       }
       const auto offset = [&](Target t) { return offsets[static_cast<int>(t)]; };
 
-      c.decay = std::clamp(value(kDecay) * std::exp2(offset(Target::Decay)), kParams[kDecay].min, kParams[kDecay].max);
+      // How far a body moves its target at 100% Amount with its signal at full: Decay and Damping by
+      // 2.5 and 3.75 octaves, Feedback by 100%, Tilt and Width across their whole range.
+      c.decay = std::clamp(value(kDecay) * std::exp2(2.5 * offset(Target::Decay)), kParams[kDecay].min, kParams[kDecay].max);
       c.size = value(kSize);
       c.motion = value(kMotion);
       c.attack = value(kAttack);
-      c.diffusion = std::clamp(value(kDiffusion) + 0.5 * offset(Target::Diffusion), 0.0, 1.0);
-      c.earlyLate = std::clamp(value(kEarlyLate) + 0.5 * offset(Target::EarlyLate), 0.0, 1.0);
+      c.diffusion = std::clamp(value(kDiffusion) + 1.25 * offset(Target::Diffusion), 0.0, 1.0);
+      c.earlyLate = std::clamp(value(kEarlyLate) + 1.25 * offset(Target::EarlyLate), 0.0, 1.0);
       c.predelayMs = value(kPredelay);
-      c.dampHigh = std::clamp(value(kDampHigh) * std::exp2(1.5 * offset(Target::Damping)), kParams[kDampHigh].min,
+      c.dampHigh = std::clamp(value(kDampHigh) * std::exp2(3.75 * offset(Target::Damping)), kParams[kDampHigh].min,
                               kParams[kDampHigh].max);
       c.bassMult = value(kBassMult);
       c.bassXover = value(kBassXover);
       c.lowCut = value(kLowCut);
       c.highCut = value(kHighCut);
-      c.feedback = std::clamp(value(kFeedback) + 0.4 * offset(Target::Feedback), 0.0, 1.1);
-      c.shimmer = std::clamp(value(kShimmer) + 0.5 * offset(Target::Shimmer), 0.0, 1.0);
+      c.feedback = std::clamp(value(kFeedback) + offset(Target::Feedback), 0.0, kParams[kFeedback].max);
+      c.shimmer = std::clamp(value(kShimmer) + 1.25 * offset(Target::Shimmer), 0.0, 1.0);
       c.shimmerPitch = std::round(value(kShimmerPitch));
-      c.tilt = std::clamp(value(kTilt) + 0.8 * offset(Target::Tilt), -1.0, 1.0);
+      c.tilt = std::clamp(value(kTilt) + 2.0 * offset(Target::Tilt), -1.0, 1.0);
       c.smear = value(kSmear);
       c.safetyHard = choice(kSafety) == 1;
       c.freeze = value(kFreeze) >= 0.5;
       c.driveOn = value(kDriveOn) >= 0.5;
       c.driveWhere = static_cast<DriveWhere>(std::clamp(choice(kDriveWhere), 0, 2));
       c.driveType = static_cast<DriveType>(std::clamp(choice(kDriveType), 0, 4));
-      c.drive = std::clamp(value(kDrive) + 18.0 * offset(Target::Drive), 0.0, 36.0);
+      c.drive = std::clamp(value(kDrive) + 45.0 * offset(Target::Drive), 0.0, 36.0);
       c.driveTone = value(kDriveTone);
       c.driveBias = value(kDriveBias);
       c.driveMix = value(kDriveMix);
@@ -657,7 +659,7 @@ private:
       c.echoTone = value(kEchoTone);
       c.echoPingPong = value(kEchoPingPong) >= 0.5;
       c.echoMix = value(kEchoMix);
-      c.width = std::clamp(value(kWidth) + 0.8 * offset(Target::Width), 0.0, 2.0);
+      c.width = std::clamp(value(kWidth) + 2.0 * offset(Target::Width), 0.0, 2.0);
       c.duck = value(kDuck);
       c.mix = value(kMix);
       c.levelDb = value(kLevel);

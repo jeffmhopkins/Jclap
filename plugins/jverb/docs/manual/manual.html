@@ -257,7 +257,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     </div>
     <div>
       <ul>
-        <li><strong>Outer loop</strong> with Feedback to 110%, ±24-semitone shimmer, smear, tilt and Freeze.</li>
+        <li><strong>Outer loop</strong> with Feedback to 150%, ±24-semitone shimmer, smear, tilt and Freeze.</li>
         <li><strong>Drive</strong>: Tape, Tube, Fuzz, Fold or Crush, 2× oversampled, in the PRE, LOOP or POST slot.</li>
         <li><strong>Echo</strong> up to 4 s, free or tempo-synced, with ping-pong, in the INTO, LOOP or AFTER slot.</li>
         <li><strong>An extreme zone</strong> past 100% on four knobs, for warble, ringing and inside-out stereo.</li>
@@ -675,7 +675,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">MASS</td><td class="r">0.10 – 3.00</td><td class="d">1.00, 1.25, 0.80, then 1.00</td><td>The body's gravity on the others, and how big it is drawn. A heavy body sits near the centre; light ones swing wide around it. <span class="mod m">MOD</span></td></tr>
       <tr><td class="c">VELOCITY</td><td class="r">×0.50 – ×1.50</td><td class="d">×1.00</td><td>Scales the body's start speed. Turned while running, it scales the body's current speed by as much. Slow bodies fall inward; fast ones fly wide. <span class="mod m">MOD</span></td></tr>
       <tr><td class="c">Target</td><td class="r">menu</td><td class="d">Off</td><td>Which parameter this body's modulation signal moves.</td></tr>
-      <tr><td class="c">AMOUNT</td><td class="r">–100% – +100%</td><td class="d">+30%</td><td>How much, and in which direction. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">AMOUNT</td><td class="r">–100% – +100%</td><td class="d">+50%</td><td>How much, and in which direction. <span class="mod m">MOD</span></td></tr>
     </tbody>
   </table>
 
@@ -689,11 +689,11 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <table>
     <thead><tr><th>Target</th><th>At full signal × 100% Amount</th><th>Target</th><th>At full signal × 100% Amount</th></tr></thead>
     <tbody>
-      <tr><td class="c">Decay</td><td>Decay doubles (halves at –1)</td><td class="c">Shimmer</td><td>+50 points</td></tr>
-      <tr><td class="c">Damping</td><td>Damp High moves 1.5 octaves</td><td class="c">Feedback</td><td>+40 points</td></tr>
-      <tr><td class="c">Diffusion</td><td>+50 points</td><td class="c">Tilt</td><td>+80 points</td></tr>
-      <tr><td class="c">Early/Late</td><td>+50 points</td><td class="c">Width</td><td>+80 points</td></tr>
-      <tr><td class="c">Drive</td><td>+18 dB</td><td class="c">Off</td><td>No modulation</td></tr>
+      <tr><td class="c">Decay</td><td>Decay ×5.7 (÷5.7 at –1)</td><td class="c">Shimmer</td><td>+125 points</td></tr>
+      <tr><td class="c">Damping</td><td>Damp High moves 3.75 octaves</td><td class="c">Feedback</td><td>+100 points</td></tr>
+      <tr><td class="c">Diffusion</td><td>+125 points</td><td class="c">Tilt</td><td>+200 points</td></tr>
+      <tr><td class="c">Early/Late</td><td>+125 points</td><td class="c">Width</td><td>+200 points</td></tr>
+      <tr><td class="c">Drive</td><td>+45 dB</td><td class="c">Off</td><td>No modulation</td></tr>
     </tbody>
   </table>
 
@@ -720,10 +720,10 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
         <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
         <tbody>
           <tr><td class="c">FREEZE</td><td class="r">On / Off</td><td class="d">Off</td><td>Holds the tail forever, at its level and brightness, and lets nothing new in.</td></tr>
-          <tr><td class="c">FEEDBACK</td><td class="r">0 – 110%</td><td class="d">0%</td><td>Sends the tank's output back to its input through the loop. Scaled to mean the same at any decay. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
-          <tr><td class="c">SHIMMER</td><td class="r">0 – 100%</td><td class="d">0%</td><td>How much of the loop is pitch shifted. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
+          <tr><td class="c">FEEDBACK</td><td class="r">0 – 150%</td><td class="d">0%</td><td>Sends the tank's output back to its input through the loop. Scaled to mean the same at any decay. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
+          <tr><td class="c">SHIMMER</td><td class="r">0 – 100%</td><td class="d">0%</td><td>How much of the loop is pitch shifted. Heard even with Feedback at 0. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
           <tr><td class="c">PITCH</td><td class="r">–24 – +24 st</td><td class="d">+12 st</td><td>The shimmer interval, in semitones.</td></tr>
-          <tr><td class="c">TILT</td><td class="r">–100% – +100%</td><td class="d">+0%</td><td>Darkens or brightens what goes round the loop: up to 6 dB each way around 700 Hz. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
+          <tr><td class="c">TILT</td><td class="r">–100% – +100%</td><td class="d">+0%</td><td>Darkens or brightens what goes round the loop: up to 6 dB each way around 700 Hz. Below 40% Feedback it also tilts the tail you hear, up to 9 dB each way. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
           <tr><td class="c">SMEAR</td><td class="r">0 – 100%</td><td class="d">30%</td><td>Allpass blur in the loop. <span class="mod m">MOD</span></td></tr>
           <tr><td class="c">SAFETY</td><td class="r">Soft, Hard</td><td class="d">Soft</td><td>How the loop is kept from running away: a soft saturator or a hard clip.</td></tr>
         </tbody>
@@ -732,7 +732,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
 
   <h3>Feedback, and past 100%</h3>
-  <p>With Feedback below roughly 100% the tail still dies away, just longer and more coloured by the loop's shimmer, smear and tilt. Around 100% (somewhere between about 96% and 123%, depending on Decay and Size) the tail starts to sustain itself; past that, it grows until the <strong>SAFETY</strong> stage holds it. <em>Soft</em> rounds the peaks off with a gentle saturation; <em>Hard</em> clips them for a harsher, more aggressive sustain.</p>
+  <p>With Feedback below roughly 100% the tail still dies away, just longer and more coloured by the loop's shimmer, smear and tilt. Around 100% (somewhere between about 96% and 123%, depending on Decay and Size) the tail starts to sustain itself; past that, it grows until the <strong>SAFETY</strong> stage holds it, and FEEDBACK runs on to 150% so every Decay and Size has room to scream. <em>Soft</em> rounds the peaks off with a gentle saturation; <em>Hard</em> clips them for a harsher, more aggressive sustain.</p>
   <h3>Shimmer</h3>
   <p>Each pass through the loop is pitch shifted by <strong>PITCH</strong>, and Shimmer sets how much of the loop takes the shifted path. Because every pass is shifted again, the tail climbs (or descends) in steps: +12 gives the classic octave-up halo, –12 a deepening undertow, and a fifth (+7) a harmonic stack. Combine with Feedback for long, building shimmers.</p>
   <h3>Freeze</h3>
@@ -746,7 +746,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
         <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
         <tbody>
           <tr><td class="c">DRIVE ON</td><td class="r">On / Off</td><td class="d">Off</td><td>Switches the drive in. Fades over a few milliseconds rather than clicking.</td></tr>
-          <tr><td class="c">Slot</td><td class="r">PRE, LOOP, POST</td><td class="d">LOOP</td><td>PRE drives the input; LOOP drives every pass of the feedback loop; POST drives the reverb's output.</td></tr>
+          <tr><td class="c">Slot</td><td class="r">PRE, LOOP, POST</td><td class="d">PRE</td><td>PRE drives the input; LOOP drives every pass of the feedback loop; POST drives the reverb's output.</td></tr>
           <tr><td class="c">Type</td><td class="r">menu</td><td class="d">Tube</td><td>Tape, Tube, Fuzz, Fold or Crush (below).</td></tr>
           <tr><td class="c">DRIVE</td><td class="r">0 – +36 dB</td><td class="d">+12 dB</td><td>Gain into the shaper. <span class="mod m">MOD</span><span class="mod t">TARGET</span></td></tr>
           <tr><td class="c">TONE</td><td class="r">–100% – +100%</td><td class="d">+0%</td><td>Tilts what goes into the shaper around 900 Hz, and back after, so it changes <em>what</em> distorts, not the overall balance. <span class="mod m">MOD</span></td></tr>
@@ -773,7 +773,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
 
   <div class="note" style="--accent: var(--drive-ink); --accent-bg: var(--drive);">
     <span class="k">Drive in the loop</span>
-    <p>In the LOOP slot the drive works on every pass, so the tail gets dirtier the longer it rings. JVerb makes sure a quiet signal never comes out of the loop drive louder than it went in, so adding drive never makes the loop run away below 100% Feedback. That is also why TRIM can only cut in this slot.</p>
+    <p>In the LOOP slot the drive works on every pass, so the tail gets dirtier the longer it rings. JVerb makes sure a quiet signal never comes out of the loop drive louder than it went in, so adding drive never makes the loop run away below 100% Feedback. That is also why TRIM can only cut in this slot. Past 100% Feedback the drive is let through more and more, until at 150% none of its gain is taken back: the loop then holds and screams instead of choking.</p>
   </div>
 
   <h2><span class="tag" style="color:var(--echo-ink)">Page 3</span>ECHO</h2>
@@ -885,7 +885,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     </tbody>
   </table>
   <p>Only Motion acts inside the tank. Because the outer loop is taken before the voices, nothing Pan, Tone or Swirl does is ever fed back, so even at 200% they cannot make the reverb run away. The ringing of an extreme Swirl is level-compensated so its loudest resonance stays at unity.</p>
-  <p>Three other parameters also go past unity: <strong>FEEDBACK</strong> to 110% (the tail grows into the safety stage), echo <strong>FEEDBACK</strong> to 105% (repeats saturate), and <strong>WIDTH</strong> to 200%.</p>
+  <p>Three other parameters also go past unity: <strong>FEEDBACK</strong> to 150% (the tail grows into the safety stage), echo <strong>FEEDBACK</strong> to 105% (repeats saturate), and <strong>WIDTH</strong> to 200%.</p>
 </section>
 
 <!-- ================= 13. PRESETS ================= -->
@@ -918,7 +918,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div class="recipe" style="--rc: var(--io)">
       <h3>Drum room that answers back</h3>
       <p>The kit kicks the bodies around; one body darkens the room on every slingshot.</p>
-      <div class="set">DECAY 1.0 s · REACT 100% · DUCK 30%<br>LOW CUT 120 Hz<br>IO → Damping, AMOUNT –50%</div>
+      <div class="set">DECAY 1.0 s · REACT 100% · DUCK 30%<br>LOW CUT 120 Hz<br>IO → Damping, AMOUNT –20%</div>
       <div class="from">Close to: Drum Reactor</div>
     </div>
     <div class="recipe" style="--rc: var(--echo)">
@@ -948,7 +948,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div class="recipe" style="--rc: var(--echo)">
       <h3>Locked to the groove</h3>
       <p>The orbit repeats every two bars and lines up with the song on every playback.</p>
-      <div class="set">Clock SYNC · Sync Bars 2<br>ORBIT PAN 120% · SWIRL 80%<br>VESTA → Tilt, AMOUNT +60%</div>
+      <div class="set">Clock SYNC · Sync Bars 2<br>ORBIT PAN 120% · SWIRL 80%<br>VESTA → Tilt, AMOUNT +24%</div>
       <div class="from">Close to: Synced Orbit</div>
     </div>
     <div class="recipe" style="--rc: var(--luna)">
@@ -1325,14 +1325,14 @@ function el(parent, tag, attrs, text) {
     ]],
     ['Bodies (per body: Io, Kepler, Vesta, Titan, Rhea, Luna)', [
       ['Mass', '0.10 – 3.00', '1.00 (Kepler 1.25, Vesta 0.80)', M], ['Velocity', '×0.50 – ×1.50', '×1.00', M],
-      ['Target', 'Off, Decay, Damping, Diffusion, Early/Late, Drive, Shimmer, Feedback, Tilt, Width', 'Off', ''], ['Amount', '–100% – +100%', '+30%', M],
+      ['Target', 'Off, Decay, Damping, Diffusion, Early/Late, Drive, Shimmer, Feedback, Tilt, Width', 'Off', ''], ['Amount', '–100% – +100%', '+50%', M],
     ]],
     ['Loop', [
-      ['Feedback', '0 – 110%', '0%', M + T], ['Shimmer', '0 – 100%', '0%', M + T], ['Shimmer Pitch', '–24 – +24 st', '+12 st', ''],
+      ['Feedback', '0 – 150%', '0%', M + T], ['Shimmer', '0 – 100%', '0%', M + T], ['Shimmer Pitch', '–24 – +24 st', '+12 st', ''],
       ['Tilt', '–100% – +100%', '+0%', M + T], ['Smear', '0 – 100%', '30%', M], ['Safety', 'Soft, Hard', 'Soft', ''], ['Freeze', 'On / Off', 'Off', ''],
     ]],
     ['Drive', [
-      ['Drive On', 'On / Off', 'Off', ''], ['Drive Slot', 'Pre, Loop, Post', 'Loop', ''], ['Drive Type', 'Tape, Tube, Fuzz, Fold, Crush', 'Tube', ''],
+      ['Drive On', 'On / Off', 'Off', ''], ['Drive Slot', 'Pre, Loop, Post', 'Pre', ''], ['Drive Type', 'Tape, Tube, Fuzz, Fold, Crush', 'Tube', ''],
       ['Drive', '0 – +36 dB', '+12 dB', M + T], ['Drive Tone', '–100% – +100%', '+0%', M], ['Drive Bias', '0 – 100%', '20%', M],
       ['Drive Mix', '0 – 100%', '100%', M], ['Drive Trim', '–18 – +6 dB', '0 dB', M],
     ]],

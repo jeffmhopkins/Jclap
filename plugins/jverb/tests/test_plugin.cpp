@@ -160,9 +160,10 @@ int main() {
       jclap::core::TestHost h(clap_entry, kId, kRate);
       h.setParam(kBodies, bodies);
       h.setParam(kDecay, 60.0);
-      h.setParam(kFeedback, 1.1);
+      h.setParam(kFeedback, 1.5);
       h.setParam(kShimmer, 1.0);
       h.setParam(kDriveOn, 1.0);
+      h.setParam(kDriveWhere, static_cast<double>(DriveWhere::Loop));
       h.setParam(kDriveType, static_cast<double>(DriveType::Fuzz));
       h.setParam(kDrive, 36.0);
       h.setParam(kEchoOn, 1.0);
@@ -185,6 +186,45 @@ int main() {
       h.setParam(kFreeze, 1.0);
       run(h, inL, inR, outL, outR, 256);
       JCLAP_CHECK(finiteAndBounded(outL, 4.0f) && finiteAndBounded(outR, 4.0f));
+   }
+
+   // Shimmer and Tilt are heard with Feedback at 0, and the drive straight from its default slot:
+   // each changes the tail on its own.
+   {
+      const auto render = [](clap_id id, double value) {
+         jclap::core::TestHost h(clap_entry, kId, kRate);
+         h.setParam(kMix, 1.0);
+         if (id == kDrive)
+            h.setParam(kDriveOn, 1.0);
+         h.setParam(id, value);
+         return tail(h, kRate, 3.0);
+      };
+      const auto plain = render(kMix, 1.0);
+      for (const auto &[id, value] : {std::pair<clap_id, double>{kShimmer, 1.0}, {kTilt, 1.0}, {kTilt, -1.0}, {kDrive, 30.0}}) {
+         const auto changed = render(id, value);
+         double diff = 0.0;
+         for (size_t i = 0; i < plain.size(); ++i)
+            diff += (changed[i] - plain[i]) * (changed[i] - plain[i]);
+         // The difference is at least 30 dB under the tail (Shimmer, on noise, is the faintest at about -22 dB).
+         JCLAP_CHECK(diff > 0.001 * energy(plain, 0.0, 4.0));
+      }
+   }
+
+   // Past about 105% the loop holds the tail up instead of letting it die, alone or through the loop
+   // drive (whose makeup lets some of its gain through there). The output stays bounded.
+   for (const bool drive : {false, true}) {
+      jclap::core::TestHost h(clap_entry, kId, kRate);
+      h.setParam(kFeedback, 1.5);
+      h.setParam(kMix, 1.0);
+      if (drive) {
+         h.setParam(kDriveOn, 1.0);
+         h.setParam(kDriveWhere, static_cast<double>(DriveWhere::Loop));
+         h.setParam(kDriveType, static_cast<double>(DriveType::Fuzz));
+         h.setParam(kDrive, 30.0);
+      }
+      const auto out = tail(h, kRate, 10.0);
+      JCLAP_CHECK(energy(out, 9.0, 11.0) > 0.5 * energy(out, 1.0, 3.0));
+      JCLAP_CHECK(finiteAndBounded(out, 1.25f));
    }
 
    // Long tails die away and never grow, however long the decay: the tank's gain stays below 1 at
