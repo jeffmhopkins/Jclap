@@ -44,7 +44,8 @@ struct SlabFrame {
    // The cells read most recently, oldest first; -1 where there are none yet.
    std::array<int, kHistory> history{-1, -1, -1, -1, -1, -1};
    // The pitch each glyph row plays right now (row 0 the top), key follow included.
-   std::array<int, 4> rowPitch{72, 68, 65, 61};
+   // F phrygian in thirds, the defaults, until the engine says otherwise.
+   std::array<int, kGridRows> rowPitch{82, 78, 75, 72, 68, 65, 61, 58};
    Orthography orthography = Orthography::Monolith;
 };
 
