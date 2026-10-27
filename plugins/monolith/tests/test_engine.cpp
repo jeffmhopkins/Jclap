@@ -221,6 +221,75 @@ int main() {
          JCLAP_CHECK(e.cellAt(g) >= 0 && e.cellAt(g) < 4);
    }
 
+   // ---- the start ----
+   {
+      // START moves the cells read round the slab, wrapping at its end, in every direction.
+      Engine e;
+      EngineParams p;
+      p.length = 4;
+      p.start = 53;
+      e.setParams(p);
+      const int forward[] = {53, 54, 0, 1, 53};
+      for (int g = 0; g < 5; ++g)
+         JCLAP_CHECK_EQ(e.cellAt(g), forward[g]);
+      p.direction = Direction::Reverse;
+      e.setParams(p);
+      JCLAP_CHECK_EQ(e.cellAt(0), 1);
+      p.direction = Direction::Random;
+      e.setParams(p);
+      for (int g = 0; g < 50; ++g)
+         JCLAP_CHECK(inWindow(e.cellAt(g), 53, 4));
+      JCLAP_CHECK(inWindow(0, 53, 4) && !inWindow(2, 53, 4) && !inWindow(52, 53, 4));
+      JCLAP_CHECK_EQ(windowStep(1, 1, 53, 4), 53);
+      JCLAP_CHECK_EQ(windowStep(53, -1, 53, 4), 1);
+
+      // Playing, the voice reads from the start: a jump to a cell outside the cells read is ignored.
+      p = still();
+      p.lock = true;
+      p.length = 2;
+      p.start = 10;
+      e.setParams(p);
+      e.resetVoice();
+      run(e, 0.0, 0.5);
+      SlabFrame f;
+      e.fillFrame(f);
+      JCLAP_CHECK_EQ(f.current, 10);
+      JCLAP_CHECK_EQ(f.start, 10);
+      Command jump;
+      jump.kind = Command::Kind::Jump;
+      jump.cell = 11;
+      e.apply(jump);
+      run(e, 0.5, 4.0);
+      e.fillFrame(f);
+      JCLAP_CHECK_EQ(f.current, 11);
+   }
+
+   // ---- changing rate ----
+   {
+      // The voice carries on from the glyph it is reading when the rate changes, faster or slower,
+      // rather than falling silent until the song reaches where the old rate had got to.
+      for (int rate : {0, 1, 3, 4, 5}) {
+         Engine e;
+         EngineParams p;
+         p.lock = true;
+         p.drift = 0.0;
+         p.length = 8;
+         p.density = 4;
+         e.setParams(p);
+         run(e, 0.0, 9.0); // into the third glyph at 1/16
+         SlabFrame f;
+         e.fillFrame(f);
+         const int reading = f.current;
+         p.rate = rate;
+         e.setParams(p);
+         const std::vector<Timed> after = run(e, 9.0, 4.0 * kRateBeats[rate] * kWindowSteps);
+         e.fillFrame(f);
+         JCLAP_CHECK(ons(after) > 0);
+         // Four glyphs later at the new rate, the voice is four cells on.
+         JCLAP_CHECK_EQ(f.current, (reading + 4) % 8);
+      }
+   }
+
    // ---- the voice ----
    {
       // One locked glyph at 1/16: one bar plays its notes once, at their steps.
@@ -420,6 +489,8 @@ int main() {
       p.mode = Mode::Listen;
       p.length = 2;
       p.lock = true;
+      p.root = 5; // F Phrygian
+      p.scale = 3;
       Engine e;
       e.setParams(p);
       const auto before = e.cells();

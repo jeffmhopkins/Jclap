@@ -41,12 +41,15 @@ enum ParamId : clap_id {
    kHumanize,
    kChannel,
    kFollow,
+   // Slab, appended after release: the first glyph read.
+   kStart,
    kParamCount
 };
 
 constexpr auto kAuto = CLAP_PARAM_IS_AUTOMATABLE;
 constexpr auto kMod = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE;
 constexpr auto kStep = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED;
+constexpr auto kModStep = kMod | CLAP_PARAM_IS_STEPPED;
 constexpr auto kChoice = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_ENUM;
 
 inline const jclap::core::ParamDef kParams[kParamCount] = {
@@ -58,13 +61,13 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kDrift, "Drift", "Slab", 0, 1, 0.25, kMod},
    {kErode, "Erode", "Slab", 0, 1, 0, kMod},
    {kLock, "Lock", "Slab", 0, 1, 0, kStep},
-   {kLength, "Length", "Slab", 1, 55, 8, kStep},
+   {kLength, "Length", "Slab", 1, 55, 2, kStep},
    {kRate, "Rate", "Voice", 0, 5, 2, kChoice},
    {kDirection, "Direction", "Voice", 0, 3, 0, kChoice},
    {kMode, "Mode", "Voice", 0, 1, 0, kChoice},
    {kSwing, "Swing", "Voice", 0, 0.75, 0, kMod},
-   {kRoot, "Root", "Dialect", 0, 11, 5, kChoice},
-   {kScale, "Scale", "Dialect", 0, 11, 3, kChoice},
+   {kRoot, "Root", "Dialect", 0, 11, 9, kChoice},
+   {kScale, "Scale", "Dialect", 0, 11, 1, kChoice},
    {kSpread, "Spread", "Dialect", 0, 3, 1, kChoice},
    {kOctave, "Octave", "Dialect", -3, 3, 0, kStep},
    {kVelocity, "Velocity", "Output", 0, 1, 0.8, kMod},
@@ -72,6 +75,7 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kHumanize, "Humanize", "Output", 0, 1, 0, kMod},
    {kChannel, "MIDI Channel", "Output", 1, 16, 1, kStep},
    {kFollow, "Key Follow", "Output", 0, 1, 0, kStep},
+   {kStart, "Start", "Slab", 1, 55, 1, kModStep},
 };
 
 // ---- choices ----
@@ -158,6 +162,8 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
       std::snprintf(out, size, "%.0f%%", value * 100.0);
    else if (id == kLength)
       std::snprintf(out, size, whole == 1 ? "%ld glyph" : "%ld glyphs", whole);
+   else if (id == kStart)
+      std::snprintf(out, size, "Glyph %ld", whole);
    else if (id == kLexicon)
       std::snprintf(out, size, "%ld glyphs", whole);
    else if (id == kDensity)
@@ -189,6 +195,8 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
    }
    if (id == kChannel && std::strncmp(text, "Ch", 2) == 0)
       text += 2;
+   if (id == kStart && std::strncmp(text, "Glyph", 5) == 0)
+      text += 5;
    double v = 0.0;
    if (!jclap::core::parseNumber(text, v))
       return false;

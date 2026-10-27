@@ -394,6 +394,7 @@ private:
       p.erode = value(kErode);
       p.lock = value(kLock) >= 0.5;
       p.length = whole(kLength);
+      p.start = whole(kStart) - 1;
       p.rate = whole(kRate);
       p.direction = static_cast<Direction>(whole(kDirection));
       p.mode = static_cast<Mode>(whole(kMode));

@@ -33,7 +33,9 @@ struct SlabFrame {
    uint32_t generation = 0;
    // The script the slab was written in (ScriptKey::pack), saved with it.
    uint64_t key = 0;
-   int length = 8;
+   int length = 2;
+   // The first cell read (from 0). The cells read are the LENGTH from here on, round the slab's end.
+   int start = 0;
    // The cell being read, and how far into its 16 steps the voice is.
    int current = 0;
    float step = 0.0f;
@@ -44,10 +46,19 @@ struct SlabFrame {
    // The cells read most recently, oldest first; -1 where there are none yet.
    std::array<int, kHistory> history{-1, -1, -1, -1, -1, -1};
    // The pitch each glyph row plays right now (row 0 the top), key follow included.
-   // F phrygian in thirds, the defaults, until the engine says otherwise.
-   std::array<int, kGridRows> rowPitch{82, 78, 75, 72, 68, 65, 61, 58};
+   // A Aeolian in thirds, the defaults, until the engine says otherwise.
+   std::array<int, kGridRows> rowPitch{86, 83, 79, 76, 72, 69, 65, 62};
    Orthography orthography = Orthography::Monolith;
 };
+
+// Whether `cell` is among the `length` cells read from `start`.
+inline bool inWindow(int cell, int start, int length) { return (cell - start + kCells) % kCells < length; }
+
+// The cell `k` places after `cell` in reading order, staying among those read.
+inline int windowStep(int cell, int k, int start, int length) {
+   const int index = (cell - start + kCells) % kCells;
+   return (start + (index + k % length + length) % length) % kCells;
+}
 
 struct Command {
    enum class Kind : uint8_t {

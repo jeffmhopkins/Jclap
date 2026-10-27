@@ -189,6 +189,17 @@ int main() {
       JCLAP_CHECK(h.textToValue(kChannel, "Ch 7", v));
       JCLAP_CHECK_EQ(v, 7.0);
       JCLAP_CHECK(!h.textToValue(kGrammar, "nan", v));
+      JCLAP_CHECK(h.paramText(kStart, 12) == "Glyph 12");
+      JCLAP_CHECK(h.textToValue(kStart, "Glyph 30", v));
+      JCLAP_CHECK_EQ(v, 30.0);
+   }
+
+   // START can be modulated as well as automated.
+   {
+      clap_param_info_t info{};
+      jclap::core::fillParamInfo(kParams[kStart], &info);
+      JCLAP_CHECK(info.flags & CLAP_PARAM_IS_MODULATABLE);
+      JCLAP_CHECK(info.flags & CLAP_PARAM_IS_AUTOMATABLE);
    }
 
    // The factory bank: whole presets, in range, uniquely named, using every script.
