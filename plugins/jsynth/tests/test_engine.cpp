@@ -132,7 +132,8 @@ int main() {
    // Silence with nothing playing.
    {
       Params p;
-      Engine e;
+      auto held = std::make_unique<Engine>(); // on the heap: Windows gives a test 1 MB of stack
+      Engine &e = *held;
       e.prepare(kRate, {p.values.get(), p.mods.get()});
       const auto out = render(e, 24000, 256, {});
       JCLAP_CHECK(peak(out) == 0.0f);
@@ -159,7 +160,8 @@ int main() {
    {
       Params p;
       p.set(kPlayMode, 1); // Layer: one note, a voice in each part
-      Engine e;
+      auto held = std::make_unique<Engine>(); // on the heap: Windows gives a test 1 MB of stack
+      Engine &e = *held;
       e.prepare(kRate, {p.values.get(), p.mods.get()});
       int ends = 0;
       const auto out = render(e, 96000, 256, {{100, Event::On, 60, 0.8f}, {24000, Event::Off, 60, 0.0f}}, &ends);
@@ -205,7 +207,8 @@ int main() {
       for (int r = 0; r < kRouteCount; ++r)
          p.setPart(0, routeParam(r, kRouteSource), kSourceOff);
       p.set(kQuality, 0);
-      Engine e;
+      auto held = std::make_unique<Engine>(); // on the heap: Windows gives a test 1 MB of stack
+      Engine &e = *held;
       e.prepare(kRate, {p.values.get(), p.mods.get()});
       const auto out = render(e, 72000, 512, {{0, Event::On, 69, 1.0f}});
       int crossings = 0;
@@ -312,7 +315,8 @@ int main() {
       std::vector<float> outs[3];
       const int blocks[3] = {512, 37, 64};
       for (int b = 0; b < 3; ++b) {
-         Engine e;
+         auto held = std::make_unique<Engine>(); // on the heap: Windows gives a test 1 MB of stack
+         Engine &e = *held;
          e.prepare(kRate, {p.values.get(), p.mods.get()});
          outs[b] = render(e, 48000, blocks[b], phrase());
       }
@@ -326,7 +330,8 @@ int main() {
    {
       Params p;
       p.set(kPlayMode, 1);
-      Engine e;
+      auto held = std::make_unique<Engine>(); // on the heap: Windows gives a test 1 MB of stack
+      Engine &e = *held;
       e.prepare(kRate, {p.values.get(), p.mods.get()});
       const auto first = render(e, 48000, 256, phrase());
       e.reset(1);
@@ -354,7 +359,8 @@ int main() {
             p.setPart(part, flockParam(kBite), 1.0);
          }
          p.set(kPlayMode, 1);
-         Engine e;
+         auto held = std::make_unique<Engine>(); // on the heap: Windows gives a test 1 MB of stack
+         Engine &e = *held;
          e.prepare(kRate, {p.values.get(), p.mods.get()});
          const auto out = render(e, 48000, 128, phrase());
          JCLAP_CHECK(finite(out));
@@ -366,7 +372,8 @@ int main() {
    {
       Params p;
       p.setPart(0, kVoiceMode, 2);
-      Engine e;
+      auto held = std::make_unique<Engine>(); // on the heap: Windows gives a test 1 MB of stack
+      Engine &e = *held;
       e.prepare(kRate, {p.values.get(), p.mods.get()});
       int ends = 0;
       render(e, 96000, 256, {{100, Event::On, 60, 0.8f}, {5000, Event::On, 64, 0.8f}, {10000, Event::Off, 64, 0.0f},
@@ -379,7 +386,8 @@ int main() {
    {
       Params p;
       p.setPart(0, kVoiceMode, 1);
-      Engine e;
+      auto held = std::make_unique<Engine>(); // on the heap: Windows gives a test 1 MB of stack
+      Engine &e = *held;
       e.prepare(kRate, {p.values.get(), p.mods.get()});
       render(e, 4800, 256, {{100, Event::On, 60, 0.8f}});
       NoteRef all = ref(-1);
@@ -394,7 +402,8 @@ int main() {
    {
       Params p;
       p.setPart(0, envParam(0, kEnvRelease), timeValue(3000));
-      Engine e;
+      auto held = std::make_unique<Engine>(); // on the heap: Windows gives a test 1 MB of stack
+      Engine &e = *held;
       e.prepare(kRate, {p.values.get(), p.mods.get()});
       const auto played = [&] {
          int n = 0;
@@ -416,7 +425,8 @@ int main() {
       const std::vector<double> v = presetValues(preset);
       for (size_t i = 0; i < paramCount(); ++i)
          p.values[i].store(v[i]);
-      Engine e;
+      auto held = std::make_unique<Engine>(); // on the heap: Windows gives a test 1 MB of stack
+      Engine &e = *held;
       e.prepare(kRate, {p.values.get(), p.mods.get()});
       const auto out = render(e, 96000, 256, phrase());
       const bool ok = finite(out) && peak(out) <= 1.0f && peak(out) > 1e-4f; // a swell has barely begun by the end
@@ -635,7 +645,8 @@ int main() {
          p.setPart(part, fmCell(1, 0), 0.4);
          p.setPart(part, filterParam(0, kFilterSlope), 3);
       }
-      Engine e;
+      auto held = std::make_unique<Engine>(); // on the heap: Windows gives a test 1 MB of stack
+      Engine &e = *held;
       e.prepare(kRate, {p.values.get(), p.mods.get()});
       std::vector<Event> notes;
       for (int k = 0; k < 16; ++k)
