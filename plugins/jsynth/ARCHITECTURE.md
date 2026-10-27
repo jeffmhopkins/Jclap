@@ -661,13 +661,14 @@ it per note.
 
 ## Presets
 
-The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 191 presets in
-20 categories. The first twelve are instrument families, as a keyboard player looks for a sound
+The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 203 presets in
+21 categories. The first twelve are instrument families, as a keyboard player looks for a sound
 (**Voices** is formants, throats and whispers); then **Expressive** (patches played with Press,
 where it bows, blows, bends, gates or blooms), **Monsta** (variations on MicroMonsta 2 programs), and
 the showcases: **Motion** (patches that move on their own), **Drones** and **Textures** (built on
 Shape-mode envelopes: long drifting shapes and chains under a held chord, and shapes as the amp so a
-held note plays a pattern), **Interplay** (envelopes routed onto each other's Time, Warp and Bend),
+held note plays a pattern), **Interplay** (envelopes routed onto each other's Time, Warp and Bend), **Landscapes** (both
+parts at once, each on Shape envelopes that move each other, some with macros or the flock),
 **Layers and Splits** (both parts at once) and **Flock** (the creatures
 playing the sound). Each preset is written as what
 it changes from the defaults, and loading one puts every other param at its default, so nothing (a
@@ -828,11 +829,23 @@ moves both parts together, so a layer keeps its balance.
 |  | Night Pulse | A heartbeat, two beats a bar, under a 20 s wander through the dark. |
 |  | Falling Bells | FM bells struck over and over by the Collapse shape, each tap lower, the FM fading with it. |
 | Interplay | Tug of War | A filter arch that won't keep time: a slow wander onto its Time and Warp stretches and leans each pass. |
-|   | Quickening | Gate 8 on the filter, its Time pulled down by a 40 s ramp, so slow pulses become a shiver. |
-|   | Lingering Breath | A breath routed onto its own Time: it lingers when open and falls back quickly. |
-|   | Mutual Orbit | Two shapes in orbit, each warping or bending the other, on FM colour and stereo place. |
-|   | Tilting Steps | Random steps in time with the host, bent up and down by a slow arch. |
-|   | Gathering Storm | Env 1 onto Env 2's Time: as the note blooms the flicker on the comb and noise gets faster. |
+|  | Quickening | Gate 8 on the filter, its Time pulled down by a 40 s ramp, so slow pulses become a shiver. |
+|  | Lingering Breath | A breath routed onto its own Time: it lingers when open and falls back quickly. |
+|  | Mutual Orbit | Two shapes in orbit, each warping or bending the other, on FM colour and stereo place. |
+|  | Tilting Steps | Random steps in time with the host, bent up and down by a slow arch. |
+|  | Gathering Storm | Env 1 onto Env 2's Time: as the note blooms the flicker on the comb and noise gets faster. |
+| Landscapes | Two Tides | Layer: saws open on a 13 s arch, FM glass swells on a 21 s one, each leaned by a wander. Macro 1 slows both, Macro 2 adds edge. |
+|  | Ember Field | Layer: pink noise crackles in a tuned comb on Sparkle, paced by a wander, over a tube-driven sub that surges. |
+|  | Glass Conversation | Layer: two bells on their own clocks, every 3 s and 4.7 s, a wander on each part speeding or slowing it. Macro 1 rings both faster. |
+|  | Low and High Weather | Split at C3: surging saws bent by a random walk below, a looped chain of air and glass above. |
+|  | Calm to Unrest | Press crossfade: a breathing sine choir, and a pulse swarm whose stutter quickens the harder you press. |
+|  | Between Worlds | Slide crossfade: a looped chain of arches across saw and FM glass, and tempo-synced random steps. |
+|  | Glass and Comets | Velocity: soft notes rain glass that settles as it ages, hard ones strike an 8 s comet. |
+|  | Hunter's Drone | Layer: a pad, and B's hunters ring-modding it whenever one catches; the gusts make them fly faster. |
+|  | Turning Choir | Layer: a dark pad under a choir whose root, fifth and octave hand over on a looped chain. Macro 1 slows it. |
+|  | Clockwork Garden | Layer, in tempo: a heartbeat on B's amp, bent soft to hard by a 16-bar arch, under A's random filter steps. |
+|  | Distant Engine | Layer: a driven comb hum, and B's Random wave spitting a saw train, slower on low notes. |
+|  | Afterglow | Layer: a soft pad, and a fifth above that swells in late and lingers, its shimmer bent by the amp. |
 | Layers and Splits | Piano and Strings | Layer: the tine piano, and strings under it the wheel brings up. |
 |  | Bell Pad | Layer: an FM bell for the strike over a warm pad that swells in behind it. |
 |  | Bass and Keys Split | Split at C3: an analog bass below, the reed piano above. |
