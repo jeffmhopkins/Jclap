@@ -886,9 +886,9 @@ private:
       caption({28, y, 72, 14}, "RANGE");
       auto &range = themed(add<ui::NumberBox>({28, y + 16, 72, 26}, rangeOf(kRange, 1.0)));
       range.setStepButtons(true);
-      range.valueText = [](double v) { return std::to_string(std::lround(v)) + " OCT"; };
+      range.valueText = [](double v) { return std::to_string(std::lround(v)); };
       bindings_.bind(range, kRange);
-      tips_.add(range, "How many octaves the phrase moves through, upward from OCTAVE. Each note takes the octave "
+      tips_.add(range, "How many octaves (1 to 4) the phrase moves through, upward from OCTAVE. Each note takes the octave "
                        "nearest the last one, so the line changes octave where the leap is shortest.");
       caption({108, y, 76, 14}, "PATH");
       auto &path = themed(add<ui::Dropdown>({108, y + 16, 76, 26}, namesOf(kPath)));
