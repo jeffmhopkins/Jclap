@@ -9,6 +9,7 @@
 #include <jclap/ui/param_bindings.h>
 #include <jclap/ui/preset_bar.h>
 #include <jclap/ui/section.h>
+#include <jclap/ui/tooltip.h>
 
 #include <cctype>
 #include <string>
@@ -101,8 +102,9 @@ private:
       };
    }
 
-   // Labels each mod matrix knob with the loaded program's routing: "1 CUTO" with "lfo1*whl" under
-   // its value.
+   // Labels each mod matrix knob with the loaded program's routing in plain English: what it
+   // modulates on top ("CUTOFF"), the source under the value ("LFO1×Wheel"), and a sentence on hover.
+   // The hover sentence and the host's name for the knob say which slot it is.
    void syncRoutes() {
       const int program = host_.program();
       bool changed = program != shownProgram_;
@@ -120,18 +122,18 @@ private:
             continue;
          std::string label = std::to_string(s + 1);
          std::string caption = "CC " + std::to_string(52 + s);
-         if (program > 0) {
-            // A slot with no source or no destination does nothing, whatever the other one says.
-            const bool used = routes[s].source != 0 && routes[s].destination != 0;
-            std::string dest = used ? destinationName(routes[s]) : "off";
-            for (char &c : dest)
+         if (program > 0 && !routes[s].used()) {
+            label += " OFF";
+         } else if (program > 0) {
+            const ModName &dest = destination(routes[s]);
+            label = dest.knob ? dest.knob : dest.label;
+            for (char &c : label)
                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-            label += " " + dest;
-            if (used)
-               caption = sourceName(routes[s]);
+            caption = source(routes[s]).label;
          }
          modKnobs_[s]->setLabel(label);
          modKnobs_[s]->setCaption(caption);
+         tips_.setText(*modKnobs_[s], modSentence(s, program > 0, routes[s]));
       }
    }
 
@@ -146,8 +148,10 @@ private:
       k.setAccent(accent);
       k.valueText = [](double v) { return std::to_string(toCcValue(v)); };
       bindings_.bind(k, static_cast<clap_id>(p.cc));
-      if (cc >= 52 && cc < 52 + kModSlots)
+      if (cc >= 52 && cc < 52 + kModSlots) {
          modKnobs_[cc - 52] = &k;
+         tips_.add(k, modSentence(cc - 52, false, {}));
+      }
       return &k;
    }
 
@@ -221,6 +225,7 @@ private:
 
    EditorHost &host_;
    ui::ParamBindings bindings_;
+   ui::Tooltips tips_;
    ui::Knob *modKnobs_[kModSlots] = {};
    int shownProgram_ = -1;
    ModRoute shownRoutes_[kModSlots];

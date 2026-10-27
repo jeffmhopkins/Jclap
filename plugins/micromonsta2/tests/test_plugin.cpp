@@ -278,7 +278,21 @@ int main() {
       patch.category = "Bass";
       patch.values = {{74, 40}, {71, 99}, {52, 80}, {7, 10}};
       patch.routes[0] = {18, 12}; // lfo1 -> cuto
+      auto *params = static_cast<const clap_plugin_params_t *>(a.plugin()->get_extension(a.plugin(), CLAP_EXT_PARAMS));
+      const auto paramName = [&](int cc) {
+         clap_param_info_t info{};
+         params->get_info(a.plugin(), static_cast<uint32_t>(mm2::indexOfCc(cc)), &info);
+         return std::string(info.name);
+      };
+      JCLAP_CHECK(paramName(52) == "Mod Matrix 1");
       p.loadProgram(patch);
+      // The host's names for the mod matrix follow the program's routing, in plain English.
+      JCLAP_CHECK(paramName(52) == "Mod 1: LFO 1 \xE2\x86\x92 Cutoff");
+      JCLAP_CHECK(paramName(53) == "Mod 2: Off");
+      JCLAP_CHECK(paramName(74) == "Filter Cutoff");
+      JCLAP_CHECK(mm2::modSentence(0, true, patch.routes[0]) ==
+                  "Mod slot 1: LFO 1 modulates the filter cutoff. The knob sets how much: none at the centre, "
+                  "reversed below it (CC 52).");
       const auto out = a.process();
       CHECK_EQ(out.midi.size(), 3u);
       if (out.midi.size() == 3) {

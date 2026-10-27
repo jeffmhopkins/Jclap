@@ -10,6 +10,7 @@
 
 #include <jclap/ui/presets.h>
 
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -20,19 +21,95 @@
 
 namespace mm2 {
 
-inline constexpr const char *kModSources[] = {
-   "off",      "note",     "note+bnd", "velocity", "aftertch", "modwheel", "mod knob", "pitchbnd",
-   "random1",  "rnd1*mod", "random2",  "rnd2*knb", "env1",     "env1*vel", "env2",     "env2*vel",
-   "env3",     "env3*vel", "lfo1",     "lfo1*vel", "lfo1*aft", "lfo1*whl", "lfo1*knb", "lfo1*en1",
-   "lfo2",     "lfo2*vel", "lfo2*aft", "lfo2*whl", "lfo2*knb", "lfo2*en2", "lfo3",     "lfo3*vel",
-   "lfo3*aft", "lfo3*whl", "lfo3*knb", "lfo3*env3", "lag",      "mult1",    "mult2",    "offset",
+// A mod source or destination: the synth's own display name, and plain English for the panel and the
+// host. The meanings are the manual's own (sections 6.8.4 and 6.8.5).
+struct ModName {
+   const char *code;  // as the synth's screen shows it
+   const char *label; // short, for the panel's captions and the host's names
+   const char *text;  // for a sentence: "<source> modulates <destination>"
+   const char *knob = nullptr; // shorter still, over a mod matrix knob (destinations only)
+};
+
+inline constexpr ModName kModSources[] = {
+   {"off", "Off", "nothing"},
+   {"note", "Note", "the note played"},
+   {"note+bnd", "Note+Bend", "the note played plus pitch bend"},
+   {"velocity", "Velocity", "velocity"},
+   {"aftertch", "Aftertouch", "aftertouch"},
+   {"modwheel", "Mod Wheel", "the mod wheel"},
+   {"mod knob", "Mod Knob", "the mod knob (M)"},
+   {"pitchbnd", "Pitch Bend", "the pitch bend lever"},
+   {"random1", "Random 1", "random value 1"},
+   {"rnd1*mod", "Rnd1×Wheel", "random value 1 scaled by the mod wheel"},
+   {"random2", "Random 2", "random value 2"},
+   {"rnd2*knb", "Rnd2×Knob", "random value 2 scaled by the mod knob"},
+   {"env1", "Env 1", "envelope 1"},
+   {"env1*vel", "Env1×Velo", "envelope 1 scaled by velocity"},
+   {"env2", "Env 2", "envelope 2"},
+   {"env2*vel", "Env2×Velo", "envelope 2 scaled by velocity"},
+   {"env3", "Env 3", "envelope 3"},
+   {"env3*vel", "Env3×Velo", "envelope 3 scaled by velocity"},
+   {"lfo1", "LFO 1", "LFO 1"},
+   {"lfo1*vel", "LFO1×Velo", "LFO 1 scaled by velocity"},
+   {"lfo1*aft", "LFO1×Touch", "LFO 1 scaled by aftertouch"},
+   {"lfo1*whl", "LFO1×Wheel", "LFO 1 scaled by the mod wheel"},
+   {"lfo1*knb", "LFO1×Knob", "LFO 1 scaled by the mod knob"},
+   {"lfo1*en1", "LFO1×Env1", "LFO 1 scaled by envelope 1"},
+   {"lfo2", "LFO 2", "LFO 2"},
+   {"lfo2*vel", "LFO2×Velo", "LFO 2 scaled by velocity"},
+   {"lfo2*aft", "LFO2×Touch", "LFO 2 scaled by aftertouch"},
+   {"lfo2*whl", "LFO2×Wheel", "LFO 2 scaled by the mod wheel"},
+   {"lfo2*knb", "LFO2×Knob", "LFO 2 scaled by the mod knob"},
+   {"lfo2*en2", "LFO2×Env2", "LFO 2 scaled by envelope 2"},
+   {"lfo3", "LFO 3", "LFO 3"},
+   {"lfo3*vel", "LFO3×Velo", "LFO 3 scaled by velocity"},
+   {"lfo3*aft", "LFO3×Touch", "LFO 3 scaled by aftertouch"},
+   {"lfo3*whl", "LFO3×Wheel", "LFO 3 scaled by the mod wheel"},
+   {"lfo3*knb", "LFO3×Knob", "LFO 3 scaled by the mod knob"},
+   {"lfo3*env3", "LFO3×Env3", "LFO 3 scaled by envelope 3"},
+   {"lag", "Lag", "the lag operator (a smoothed source)"},
+   {"mult1", "Mult 1", "multiply operator 1 (one source times another)"},
+   {"mult2", "Mult 2", "multiply operator 2 (one source times another)"},
+   {"offset", "Offset", "a fixed offset"},
 };
 inline constexpr int kModSourceCount = sizeof(kModSources) / sizeof(kModSources[0]);
 
-inline constexpr const char *kModDestinations[] = {
-   "off",  "ptch", "tun1", "tun2", "tun3", "shp1", "shp2", "shp3", "mix1", "mix2", "mix3", "xnze",
-   "cuto", "reso", "f.fm", "driv", "glid", "vca",  "pan",  "atk1", "atk2", "atk3", "atks", "dcy1",
-   "dcy2", "dcy3", "dcys", "rel1", "rel2", "rel3", "rels", "lfo1", "lfo2", "lfo3", "lfos",
+inline constexpr ModName kModDestinations[] = {
+   {"off", "Off", "nothing"},
+   {"ptch", "Pitch", "the pitch of all oscillators"},
+   {"tun1", "Osc1 Pitch", "the pitch of oscillator 1"},
+   {"tun2", "Osc2 Pitch", "the pitch of oscillator 2"},
+   {"tun3", "Osc3 Pitch", "the pitch of oscillator 3"},
+   {"shp1", "Osc1 Shape", "the shape of oscillator 1"},
+   {"shp2", "Osc2 Shape", "the shape of oscillator 2"},
+   {"shp3", "Osc3 Shape", "the shape of oscillator 3"},
+   {"mix1", "Osc1 Level", "the level of oscillator 1"},
+   {"mix2", "Osc2 Level", "the level of oscillator 2"},
+   {"mix3", "Osc3 Level", "the level of oscillator 3"},
+   {"xnze", "Noise", "the white noise level"},
+   {"cuto", "Cutoff", "the filter cutoff"},
+   {"reso", "Resonance", "the filter resonance"},
+   {"f.fm", "Filter FM", "the filter FM amount"},
+   {"driv", "Drive", "the voice drive"},
+   {"glid", "Glide", "the glide rate"},
+   {"vca", "Volume", "the voice volume (it can only turn it down)"},
+   {"pan", "Pan", "the voice pan"},
+   {"atk1", "Env1 Attack", "envelope 1's attack time", "E1 ATTACK"},
+   {"atk2", "Env2 Attack", "envelope 2's attack time", "E2 ATTACK"},
+   {"atk3", "Env3 Attack", "envelope 3's attack time", "E3 ATTACK"},
+   {"atks", "All Attacks", "the attack time of all three envelopes", "ATTACKS"},
+   {"dcy1", "Env1 Decay", "envelope 1's decay time", "E1 DECAY"},
+   {"dcy2", "Env2 Decay", "envelope 2's decay time", "E2 DECAY"},
+   {"dcy3", "Env3 Decay", "envelope 3's decay time", "E3 DECAY"},
+   {"dcys", "All Decays", "the decay time of all three envelopes", "DECAYS"},
+   {"rel1", "Env1 Release", "envelope 1's release time", "E1 RELEASE"},
+   {"rel2", "Env2 Release", "envelope 2's release time", "E2 RELEASE"},
+   {"rel3", "Env3 Release", "envelope 3's release time", "E3 RELEASE"},
+   {"rels", "All Releases", "the release time of all three envelopes", "RELEASES"},
+   {"lfo1", "LFO1 Speed", "LFO 1's speed"},
+   {"lfo2", "LFO2 Speed", "LFO 2's speed"},
+   {"lfo3", "LFO3 Speed", "LFO 3's speed"},
+   {"lfos", "LFO Speeds", "the speed of all three LFOs"},
 };
 inline constexpr int kModDestinationCount = sizeof(kModDestinations) / sizeof(kModDestinations[0]);
 
@@ -45,11 +122,39 @@ struct ModRoute {
    uint8_t destination = 0;
 
    bool operator==(const ModRoute &o) const { return source == o.source && destination == o.destination; }
+   // A slot with no source or no destination does nothing, whatever the other one says.
+   bool used() const {
+      return source != 0 && destination != 0 && source < kModSourceCount && destination < kModDestinationCount;
+   }
 };
 
-inline const char *sourceName(const ModRoute &r) { return r.source < kModSourceCount ? kModSources[r.source] : "?"; }
-inline const char *destinationName(const ModRoute &r) {
-   return r.destination < kModDestinationCount ? kModDestinations[r.destination] : "?";
+inline const ModName &source(const ModRoute &r) { return kModSources[r.source < kModSourceCount ? r.source : 0]; }
+inline const ModName &destination(const ModRoute &r) {
+   return kModDestinations[r.destination < kModDestinationCount ? r.destination : 0];
+}
+
+// The host's name for mod matrix slot 0-9: "Mod 1: LFO 2 → Pitch" once a program is loaded.
+inline std::string modParamName(int slot, bool programLoaded, const ModRoute &r) {
+   const std::string base = "Mod " + std::to_string(slot + 1);
+   if (!programLoaded)
+      return "Mod Matrix " + std::to_string(slot + 1);
+   if (!r.used())
+      return base + ": Off";
+   return base + ": " + source(r).label + " \xE2\x86\x92 " + destination(r).label;
+}
+
+// The hover help for a mod matrix knob.
+inline std::string modSentence(int slot, bool programLoaded, const ModRoute &r) {
+   const std::string cc = " (CC " + std::to_string(52 + slot) + ")";
+   const std::string name = "Mod slot " + std::to_string(slot + 1);
+   if (!programLoaded)
+      return name + " amount" + cc + ". Pick a program to see what it modulates.";
+   if (!r.used())
+      return name + " is off in this program, so this knob does nothing" + cc + ".";
+   std::string text = source(r).text;
+   text[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(text[0])));
+   return name + ": " + text + " modulates " + destination(r).text +
+          ". The knob sets how much: none at the centre, reversed below it" + cc + ".";
 }
 
 struct HardwarePatch {

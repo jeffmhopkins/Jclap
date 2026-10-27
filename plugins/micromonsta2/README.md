@@ -36,9 +36,16 @@ Picking one:
 - moves every knob to that program's value without sending it, since the synth already has it. Turning
   a knob afterwards sends it as usual. Mod wheel, mod knob and volume aren't part of a program and stay
   where they are;
-- labels the mod matrix knobs with the program's routing: destination on top ("1 CUTO"), source under
-  the value ("lfo1*whl"). Slots with no source or destination say OFF. CCs can only change a slot's
-  amount, so the routing stays until another program is picked.
+- labels the mod matrix knobs with the program's routing in plain English: what the slot modulates on
+  top ("CUTOFF", "OSC2 SHAPE", "RELEASES" for all three envelopes), the source under the value
+  ("LFO 2", "LFO1×Wheel" for LFO 1 scaled by the mod wheel). Slots with no source or destination say
+  OFF. Hovering a mod knob says it in a sentence: "Mod slot 1: LFO 2 modulates the pitch of all
+  oscillators. The knob sets how much: none at the centre, reversed below it (CC 52)."
+- renames the mod matrix parameters in the host to match, so automation lanes read "Mod 1: LFO 2 →
+  Pitch" instead of "Mod Matrix 1".
+
+CCs can only change a slot's amount, so the routing stays until another program is picked. The names
+follow the manual's description of each source and destination (sections 6.8.4 and 6.8.5).
 
 The project remembers the program and sends its Program Change again when it opens. **SAVE** stores the
 knobs as your own preset (under "User"), which sends its CCs when loaded and doesn't change the program.

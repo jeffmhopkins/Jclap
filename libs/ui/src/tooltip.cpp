@@ -32,6 +32,13 @@ void Tooltips::add(visage::Frame &frame, std::string text) {
    frame.onMouseDown() += hideTip;
 }
 
+void Tooltips::setText(visage::Frame &frame, std::string text) {
+   for (auto &[f, t] : tips_) {
+      if (f == &frame)
+         t = std::move(text);
+   }
+}
+
 void Tooltips::setTheme(const Theme &theme) { popup_.theme = &theme; }
 
 const std::string *Tooltips::textFor(const visage::Frame *frame) const {
