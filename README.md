@@ -42,7 +42,8 @@ Panels are shown at one-third size. They are the screenshot-test references, so 
 ## Download
 
 Grab the zip for your OS from the [latest release](https://github.com/jeffmhopkins/Jclap/releases/latest).
-It contains every plugin. Copy the `.clap` files (bundles on macOS) to your CLAP folder:
+`jclap-<OS>.zip` contains every plugin; to get just one, take `jclap-<Plugin>-<OS>.zip` instead (for
+example `jclap-JSynth-macOS.zip`). Copy the `.clap` files (bundles on macOS) to your CLAP folder:
 
 - macOS: `~/Library/Audio/Plug-Ins/CLAP`
 - Windows: `C:\Program Files\Common Files\CLAP`

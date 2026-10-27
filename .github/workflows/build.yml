@@ -67,6 +67,11 @@ jobs:
         run: |
           mkdir dist
           ditto -c -k --sequesterRsrc build/clap "dist/jclap-${{ runner.os }}.zip"
+          # One zip per plugin as well, for anyone who only wants one of them.
+          for p in build/clap/*.clap; do
+            name=$(basename "$p" .clap)
+            ditto -c -k --sequesterRsrc --keepParent "$p" "dist/jclap-$name-${{ runner.os }}.zip"
+          done
       - name: Package
         if: runner.os != 'macOS'
         shell: bash
@@ -74,6 +79,9 @@ jobs:
           mkdir dist
           cd build/clap
           cmake -E tar cf "../../dist/jclap-${{ runner.os }}.zip" --format=zip -- *.clap
+          for p in *.clap; do
+            cmake -E tar cf "../../dist/jclap-${p%.clap}-${{ runner.os }}.zip" --format=zip -- "$p"
+          done
       - name: Upload plugins
         uses: actions/upload-artifact@v4
         with:
