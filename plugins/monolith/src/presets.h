@@ -167,6 +167,37 @@ inline const std::vector<Preset> &factoryPresets() {
                     {kGate, 1.6}, {kSpread, kFourths}, {kScale, kDorian}, {kRoot, kE}, {kVelocity, 0.55},
                     {kSeed, 1400}}});
 
+      // Journeys: RANGE and PATH carry the phrase up and down through octaves.
+      constexpr double kLoopPath = 0, kClimb = 1, kContour = 2;
+      p.push_back({"Stairwell", "Journeys",
+                   {{kRange, 3}, {kPath, kLoopPath}, {kLength, 2}, {kLock, 1}, {kSeed, 2718}, {kDensity, 4},
+                    {kSpread, kSteps}, {kScale, kMinor}, {kRoot, kA}, {kOctave, -1}, {kGate, 0.6}}});
+      p.push_back({"Rising Tablet", "Journeys",
+                   {{kRange, 4}, {kPath, kLoopPath}, {kLength, 1}, {kLock, 1}, {kSeed, 95}, {kDensity, 5},
+                    {kSpread, kSteps}, {kScale, kDorian}, {kRoot, kD}, {kOctave, -2}, {kGate, 0.5}}});
+      p.push_back({"Mountain Path", "Journeys",
+                   {{kRange, 3}, {kPath, kContour}, {kLength, 8}, {kLock, 1}, {kSeed, 8848}, {kDensity, 4},
+                    {kSpread, kThirds}, {kScale, kMajor}, {kRoot, kE}, {kOctave, -1}, {kGate, 0.8}}});
+      p.push_back({"Arch of Glyphs", "Journeys",
+                   {{kOrthography, kHalo}, {kRange, 2}, {kPath, kContour}, {kLength, 16}, {kDrift, 0.1}, {kSeed, 180},
+                    {kDensity, 3}, {kRate, k8}, {kSpread, kThirds}, {kScale, kLydian}, {kRoot, kF}, {kGate, 1.3},
+                    {kVelocity, 0.6}}});
+      p.push_back({"Goat Climb", "Journeys",
+                   {{kOrthography, kRunic}, {kRange, 3}, {kPath, kClimb}, {kLength, 8}, {kDrift, 0.15}, {kSeed, 404},
+                    {kDensity, 4}, {kSpread, kSteps}, {kScale, kMinorPent}, {kRoot, kG}, {kOctave, -1}, {kGate, 0.5},
+                    {kSwing, 0.15}}});
+      p.push_back({"Wandering Octaves", "Journeys",
+                   {{kRange, 2}, {kPath, kClimb}, {kLength, 32}, {kDrift, 0.2}, {kLexicon, 24}, {kGrammar, 0.4},
+                    {kSeed, 6502}, {kSpread, kThirds}, {kScale, kHarmonicMinor}, {kRoot, kC}, {kHumanize, 0.2}}});
+      p.push_back({"Circuit Elevator", "Journeys",
+                   {{kOrthography, kCircuit}, {kRange, 4}, {kPath, kLoopPath}, {kLength, 2}, {kLock, 1}, {kSeed, 1985},
+                    {kDensity, 6}, {kRate, k16}, {kSpread, kSteps}, {kScale, kMinor}, {kRoot, kE}, {kOctave, -2},
+                    {kGate, 0.3}}});
+      p.push_back({"Tide Script", "Journeys",
+                   {{kOrthography, kCuneiform}, {kRange, 3}, {kPath, kContour}, {kLength, 12}, {kDirection, kPingPong},
+                    {kDrift, 0.25}, {kSeed, 1212}, {kDensity, 5}, {kSpread, kSteps}, {kScale, kMixolydian},
+                    {kRoot, kBb}, {kOctave, -1}, {kGate, 0.7}, {kHumanize, 0.3}}});
+
       // Listen: plays nothing until you teach it, then reads your playing back.
       p.push_back({"Listening Stone", "Listen",
                    {{kScale, kPhrygian}, {kRoot, kF}, {kMode, 1}, {kLength, 4}, {kLock, 1}, {kRate, k16}}});
