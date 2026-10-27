@@ -623,10 +623,12 @@ it per note.
 
 ## Presets
 
-The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 92 presets in
-14 categories. The first eleven are instrument families, as a keyboard player looks for a sound;
-the last three are the showcases: **Motion** (patches that move on their own), **Layers and Splits**
-(both parts at once) and **Flock** (the creatures playing the sound). Each preset is written as what
+The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 152 presets in
+17 categories. The first twelve are instrument families, as a keyboard player looks for a sound
+(**Voices** is formants, throats and whispers); then **Expressive** (patches played with Press,
+where it bows, blows, bends, gates or blooms), **Monsta** (variations on MicroMonsta 2 programs), and
+the showcases: **Motion** (patches that move on their own), **Layers and Splits** (both parts at
+once) and **Flock** (the creatures playing the sound). Each preset is written as what
 it changes from the defaults, and loading one puts every other param at its default, so nothing (a
 route, say) carries over. Most answer the mod wheel and Press, so they play from any keyboard.
 
@@ -654,6 +656,15 @@ moves both parts together, so a layer keeps its balance.
 | Keys | Tine Piano | A DX electric piano: a 1:1 pair and a ×14 tine, both harder when struck harder; high notes die sooner. |
 |  | Suitcase EP | The tine piano through a stereo tremolo the wheel widens; Press pushes the bark. |
 |  | Reed Piano | A half-sine modulator that barks when struck hard, through a little drive; the wheel adds tremolo. |
+|  | Concert Grand | Layer: struck strings (two beating saws whose filter the hammer throws open, then closes as the note rings) over a pure FM body; low notes left, high right. |
+|  | Felt Piano | Soft hammers: triangle and sine through a dark filter, more thump than ring, a long release; Press warms it. |
+|  | Honky Tonk | Layer: the piano twice, 18 cents apart and panned apart. |
+|  | Dyno Tines | The tine piano struck harder: a longer bark and a little drive; the wheel drives it more. |
+|  | Phaser EP | The tine piano through a swept notch; the wheel speeds it up, Press deepens it. |
+|  | Tremolo Tines | Press is the tremolo depth, from none to a deep throb; the wheel sets its speed. |
+|  | Lo-Fi EP | The tine piano dull, drifting and wobbling like an old tape; the wheel warps it further. |
+|  | Glass EP | The tine modulator at ×7 and slow to fade, so the bark rings on as glass; Press brightens it. |
+|  | Wurli Drive | The reed piano with Press on the drive: lean in and it snarls; the wheel adds tremolo. |
 |  | Clav | Narrow pulse through a resonant filter, Velocity on the cutoff. |
 |  | Harpsichord | Saw and a narrow pulse an octave up, high passed, with a short release. |
 |  | Tonewheel Organ | Drawbars 16', 8' and 5 1/3', key click, and a rotary speaker the wheel speeds up. |
@@ -696,6 +707,15 @@ moves both parts together, so a layer keeps its balance.
 |  | Deep Space | Pink noise through a comb tuned to the note, slow random LFOs on its filters. |
 |  | Aurora | A slow FM shoal with Tune Pull; Heading on the FM, Slide on the cutoff. |
 |  | Storm Front | Saw and noise through a comb in a strong wind; LFO 2, Turn and Speed on the filters. |
+| Voices | Talk Box | Mono saw and pulse through two formants; Press slides the mouth from "ah" to "ee". |
+|  | Robot Chant | A new vowel every eighth note at the host’s tempo, from sample-and-hold LFOs on both formants. |
+|  | Babble Choir | Every note its own random vowel and its own speed of babbling; Press animates them. |
+|  | Throat Singer | Overtone singing: a drone under one very narrow band pass that Press or the wheel sweeps up its harmonics. |
+|  | Whisper Ghosts | Noise through a vowel; Press brings the voice in under the breath. |
+|  | Alien Choir | FM through formants that follow the creatures: Heading sets each vowel, Speed its growl. |
+|  | Yawning Giant | Two octaves down with a slow slide; Press opens the mouth. |
+|  | Talking Pluck | A pluck that says "yow": Env 2 opens the vowel from "ee" to "ah". |
+|  | Monks | An octave down on "oh"; the wheel and Press open it to "ah". |
 | Drums and FX | Kick | A sine whose pitch drops two octaves in 50 ms. |
 |  | Snare | Noise and a body tone with a snap. |
 |  | Hi-Hat | White noise high passed; the wheel opens it. |
@@ -703,6 +723,30 @@ moves both parts together, so a layer keeps its balance.
 |  | Log Drum | Self-feedback and a pitch drop that goes further the harder you strike. |
 |  | Laser Zap | FM with feedback, its pitch diving. |
 |  | Riser | Hold a note: saws and noise rise an octave and open over four seconds. |
+| Expressive | Solo Violin | Press is the bow: it swells the note, brightens it and lets the vibrato in. |
+|  | Breath Sax | Press is the breath: louder, brighter and, at the top, growling through the drive. |
+|  | Accordion | Press is the bellows; two reeds a little apart, which the wheel pulls further. |
+|  | Bending Lead | Press bends the note up a semitone, as a guitarist bends a string. |
+|  | Pressure Growl | A bass that growls as you lean on it: Press drives the FM feedback, the drive and the resonance. |
+|  | Bloom Bells | Strike a bell and it rings away; press and a pad grows out of it. |
+|  | Tension Wire | Noise through a comb tuned to the note; Press tightens it toward a bowed metal ring. |
+|  | Squeeze Organ | The tonewheel organ with Press on the rotor: lean in and it spins up, and the drive bites. |
+|  | Wilting Pad | A pad that sags flat and darkens under pressure. |
+|  | Flutter Pad | Press is the tremolo, deeper and faster the harder you press. |
+|  | Pressure Metal | Press slides the FM modulator off its ratio, from a pure tone to a clanging bell. |
+|  | Morph Pad | A low pass and a resonant high pass side by side: Press crossfades them, Slide moves the pulse width. |
+|  | Press Gate Pad | A pad that only stutters when you lean on it: Press deepens a sixteenth-note gate. |
+|  | Swell Brass | Brass that swells with Press: louder, brighter and a little sharper. |
+| Monsta | Foggy EP | [Foggy EP] Soft keys behind a velocity-hungry filter; Press warbles one oscillator sharp, the wheel gives each note its own shape. |
+|  | Genetic Lead | [Genetic] A plucky lead whose filter snaps shut; Press brings in a pulse two octaves up. |
+|  | Monsta Voices | [MstaVoic] Formant voices that waver apart under Press; the wheel lets the vowel drift. |
+|  | Fifty Pad | [Die-50] A resonant filter sweeping open and sinking over seconds, pulse widths shimmering; Press wobbles it. |
+|  | Kingdome | [Kingdome] A driven three-oscillator pad; Press raises one oscillator up to a fifth and sets the filter wobbling. |
+|  | Therapy Strings | [Therapy] Strings in reverse: Press hushes them while their shape shimmers. |
+|  | Nightmare | [Nitemare] A low drone with a diving third oscillator; Press brings in its pulsing shriek. |
+|  | Quack Bass | [MG Quak] A squelchy, driven mono bass with a long glide; Press sets the filter quacking. |
+|  | Gristle Lead | [Gristle] Wide pulse waves whose widths swing; Press makes the resonance flutter. |
+|  | Cumulus | [Cumulous] A wide pad under a resonant, tracking filter; Press speeds its drift, the wheel sweeps it across the stereo field. |
 | Motion | Shifting Glass | Three-operator FM with a looping Env 3 and two unsynced LFOs; the wheel deepens all of it. |
 |  | Random Garden | The Random wave: each note draws its own waves, LFO speed and pan. |
 |  | Pulsar | A looping Env 1: every held note pulses on its own clock, faster higher up and with Press. |
@@ -716,6 +760,24 @@ moves both parts together, so a layer keeps its balance.
 |  | Velocity Stab | Velocity: play softly for a pad, dig in for a brass stab. |
 |  | Breath to Brass | Expression: Press crossfades each note from a breathy flute to bright brass. |
 |  | Octave Shimmer | Layer: a warm pad and an octave-up ring of sine bells with Neighbour FM and Tune Pull. |
+|  | Lean-In Piano | Layer: the piano, and a pad that Press brings in behind it. |
+|  | EP and Strings | Layer: the tine piano, and strings that Press or the wheel swell in. |
+|  | EP and Bells | Layer: the tine piano, and an FM bell an octave up that rings on. |
+|  | Chorus EP | Layer: the tine piano twice, a few cents apart, a hair late and panned apart; the wheel spreads them. |
+|  | Tine and Reed | Layer: the tine and reed pianos, one each side; Press leans on the reed’s bark. |
+|  | Velocity Bark EP | Velocity: a mellow tine piano, until a hard note switches to the driven reed. |
+|  | Bass and EP Split | Split at C3: a round FM bass below, the suitcase piano above. |
+|  | Choir and Bells | Layer: a formant choir, and FM bells an octave up for the attack. |
+|  | Organ and Choir | Layer: the tonewheel organ, and a choir that Press or the wheel brings in. |
+|  | Harp and Strings | Layer: a plucked harp over slow strings. |
+|  | Sub and Pluck | Layer: a bright pluck, and a sine sub an octave under it that holds. |
+|  | Pad to Growl | Expression: Press crossfades each note from a clean pad to a snarling, resonant one. |
+|  | Whisper to Voice | Expression: Slide crossfades from a whisper to the sung vowel; Press opens the mouth. |
+|  | Brass over Strings | Layer: strings, and brass on top that Press or the wheel pushes in. |
+|  | Kalimba Pad | Layer: a kalimba over a soft pad that slowly fills in. |
+|  | Felt and Glass | Velocity: the felt piano played gently, a glassy bell piano played hard. |
+|  | Cello and Flute Split | Split at C3: a solo cello below, a breathy flute above. |
+|  | Glass and Sub | Layer: a glassy FM pad over a sine sub an octave down. |
 | Flock | Fireflies | Half Sine blips; a fast, scattered flock with short ink, spread wide. |
 |  | Metal Rain | Inharmonic ×3.73 and ×7.11, scattered; each note detuned at random. |
 |  | Starling Bells | Neighbour FM, Tune Pull and a cohesive flock; Nearest deepens the FM. |

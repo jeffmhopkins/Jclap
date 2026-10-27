@@ -81,11 +81,13 @@ save it, or press Escape or click anywhere else to back out. To remove a user pr
 menu and pick **Delete**; it asks once more before the file goes. A factory preset loads every param it doesn't set at its default, so nothing
 from the last patch carries over.
 
-The 92 factory presets run in 14 categories: **Bass**, **Leads**, **Keys**, **Mallets and Bells**, **Plucks**, **Brass**, **Strings**, **Pads**, **Rhythmic**, **Atmospheres**, **Drums and FX**, **Motion**, **Layers and Splits** and **Flock**. The instrument families come first,
+The 152 factory presets run in 17 categories: **Bass**, **Leads**, **Keys**, **Mallets and Bells**, **Plucks**, **Brass**, **Strings**, **Pads**, **Rhythmic**, **Atmospheres**, **Voices**, **Drums and FX**, **Expressive**, **Monsta**, **Motion**, **Layers and Splits** and **Flock**. The instrument families come first,
 from plain patches to ones with more going on, and most answer the mod wheel and Press so they play
-from any keyboard. **Motion** holds patches that keep moving on their own (looping envelopes, tempo-synced
+from any keyboard. **Keys** has an acoustic piano among its electric ones, and **Voices** is formants,
+throats and whispers. **Expressive** is played with Press, which bows, blows, bends, gates or blooms
+the sound rather than just opening a filter, and **Monsta** is variations on MicroMonsta 2 programs. **Motion** holds patches that keep moving on their own (looping envelopes, tempo-synced
 and random LFOs, the Random wave, every MPE dimension at once), **Layers and Splits** uses both parts
-(layers, splits at C3, a velocity switch and a Press crossfade), and **Flock** is the creatures playing
+(layers, some brought in by Press, splits at C3, velocity switches and Press and Slide crossfades), and **Flock** is the creatures playing
 the sound: Neighbour FM, Bite, and routes from the flock's sources. Every preset's level is matched, so
 stepping through the bank doesn't jump.
 
