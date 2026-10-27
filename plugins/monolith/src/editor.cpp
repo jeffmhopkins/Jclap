@@ -881,6 +881,20 @@ private:
       octave.setStepButtons(true);
       octave.valueText = [](double v) { return text(kOctave, v); };
       bindings_.bind(octave, kOctave);
+      tips_.add(octave, "The octave the eight rows start in.");
+      y += 52;
+      caption({28, y, 72, 14}, "RANGE");
+      auto &range = themed(add<ui::NumberBox>({28, y + 16, 72, 26}, rangeOf(kRange, 1.0)));
+      range.setStepButtons(true);
+      range.valueText = [](double v) { return std::to_string(std::lround(v)); };
+      bindings_.bind(range, kRange);
+      tips_.add(range, "How many octaves (1 to 4) the phrase moves through, upward from OCTAVE. Each note takes the octave "
+                       "nearest the last one, so the line changes octave where the leap is shortest.");
+      caption({108, y, 76, 14}, "PATH");
+      auto &path = themed(add<ui::Dropdown>({108, y + 16, 76, 26}, namesOf(kPath)));
+      bindings_.bind(path, kPath);
+      tips_.add(path, "How the phrase moves through RANGE. LOOP goes up an octave each time round and back down, "
+                      "CLIMB wanders up and down a glyph at a time, CONTOUR arches over the glyphs read.");
       y += 52;
       dropdown(kRate, "RATE", "How long one step is. A glyph is sixteen steps.");
       dropdown(kDirection, "DIRECTION", "The order the slab's cells are read in.");

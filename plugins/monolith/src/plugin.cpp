@@ -403,6 +403,8 @@ private:
       p.scale = whole(kScale);
       p.spread = whole(kSpread);
       p.octave = whole(kOctave);
+      p.range = whole(kRange);
+      p.path = static_cast<Path>(whole(kPath));
       p.velocity = value(kVelocity);
       p.gate = value(kGate);
       p.humanize = value(kHumanize);

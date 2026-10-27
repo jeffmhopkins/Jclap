@@ -76,6 +76,13 @@ always measured on the grid), so switching scripts changes the language, not the
   minor, by default). The root is on the third row up, and SPREAD is how far apart the rows are in
   the scale: STEPS spans about an octave, THIRDS (the default) two, FOURTHS three and FIFTHS four. Projects saved before glyphs had eight
   rows load with their glyphs' shapes kept.
+- **RANGE** and **PATH** take the phrase through more octaves without spreading the rows apart.
+  RANGE is how many octaves it moves through, upward from OCTAVE (1, the default, stays put). PATH is
+  how it moves: LOOP goes up an octave each time round the glyphs read and back down, like an
+  arpeggiator's octave range; CLIMB wanders up or down an octave a glyph at a time; CONTOUR arches
+  over the glyphs read, low at the ends and highest in the middle. Each note takes whichever octave
+  is nearest the note before it, pulled toward where the path is heading, so the line changes octave
+  where its own leap is shortest and gets there by the glyph's last note.
 - **MODE** LISTEN plays nothing: notes you play are carved, a glyph per sixteen steps, into the cell
   being read, written in the current script. Switch back to SPEAK to hear them read back.
 - **KEY FOLLOW** makes a held note the root while you hold it. Otherwise played notes pass through.

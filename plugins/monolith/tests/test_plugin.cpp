@@ -192,6 +192,10 @@ int main() {
       JCLAP_CHECK(h.paramText(kStart, 12) == "Glyph 12");
       JCLAP_CHECK(h.textToValue(kStart, "Glyph 30", v));
       JCLAP_CHECK_EQ(v, 30.0);
+      JCLAP_CHECK(h.paramText(kRange, 1) == "1 octave");
+      JCLAP_CHECK(h.paramText(kRange, 3) == "3 octaves");
+      JCLAP_CHECK(h.textToValue(kPath, "Contour", v));
+      JCLAP_CHECK_EQ(v, 2.0);
    }
 
    // START can be modulated as well as automated.
