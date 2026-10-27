@@ -395,6 +395,11 @@ struct FlockFrame {
    // Each part's newest voice's filters as modulated, for the filter graph: cutoff in Hz (0 while the
    // part is silent) and resonance.
    float cutoff[kPartCount][kFilterCount] = {}, resonance[kPartCount][kFilterCount] = {};
+   // Each part's newest voice's route destinations (indexes into destinations()) as its routes and
+   // the host's per-note modulation move them, in each param's units, for the knobs' live lines and
+   // the drawings. Only those `moved` hold a value; none do while the part is silent.
+   float dest[kPartCount][kDestSlots] = {};
+   bool moved[kPartCount][kDestSlots] = {};
    // The peaks since the last frame of A, B and the main output, for the level bars.
    float meter[3] = {};
    // Where every sounding voice's envelopes are, for the dots riding the envelope curves. A stage is

@@ -64,7 +64,9 @@ Press, Glide, Slide, and Release, the release velocity), the envelope and LFO ch
 and the flock's own under the sky: Speed, Nearest, Heading, and Turn (which way and how hard the
 creature is turning, + right, - left). Each chip's LED glows with its source as it moves. Random (a
 value per note) has a chip under the sky; Key, Mod Wheel and the four macros are in the
-route list. The FM grid and the flock params are knobs, so they map like any other.
+route list. The FM grid and the flock params are knobs, so they map like any other. While a part plays,
+each knob its routes move shows a white line on its outer ring out to where the newest note has it
+now, MAP or not, and the oscillator, FM and LFO pictures draw that note's values.
 
 Underneath, each part has a pool of 64 routes (source, destination, amount) as host params, so route
 depths can be automated. **ROUTES** lists the ones in use, sixteen to a page, to edit by name: **+ ADD**

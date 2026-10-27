@@ -396,6 +396,22 @@ public:
       return hz > 0.0f;
    }
 
+   // `part`'s newest voice's route destinations now, for the panel: each one its routes or the host's
+   // per-note modulation move gets its value in its param's units and `on` set. False while the part
+   // has no voice.
+   bool destinationsNow(int part, float *value, bool *on) const {
+      const Voice *v = newest(part);
+      if (!v)
+         return false;
+      float offset[kDestSlots];
+      evaluateRoutes(*v, offset);
+      for (int d = 0; d < destCount_; ++d) {
+         on[d] = offset[d] != 0.0f || v->hostMod[d] != 0.0f;
+         value[d] = on[d] ? moved(*v, offset, destOffset_[d], d) : 0.0f;
+      }
+      return true;
+   }
+
    // The peak of A (0), B (1) or the main output (2) since the last call, for the panel's meters.
    float takeMeter(int i) {
       const float m = meters_[i];
@@ -541,7 +557,7 @@ private:
       static constexpr int kHostMods = 8;
       HostMod hostMods[kHostMods];
       int hostModCount = 0;
-      float hostMod[256] = {};
+      float hostMod[kDestSlots] = {};
 
       // A new note's modulation starts from none.
       void dropHostMods() {
@@ -762,7 +778,7 @@ private:
 
       for (int part = 0; part < kPartCount; ++part)
          trim(part, std::clamp(static_cast<int>(plain(part, kPolyphony) + 0.5f), 1, kMaxPolyphony));
-      float offset[256];
+      float offset[kDestSlots];
       flockDue_ = flockAcc_ + static_cast<int64_t>(kTick) * static_cast<int64_t>(kFlockRate) >=
                   static_cast<int64_t>(std::llround(sampleRate_));
       for (int i = 0; i < kVoiceSlots; ++i) {
@@ -1694,7 +1710,7 @@ private:
       // Its settings now, rather than at the next tick: it plays from this sample.
       if (!routesBuilt_)
          compileRoutes();
-      float offset[256];
+      float offset[kDestSlots];
       // A new voice takes its settings at once; a mono voice taken over by the next note ramps to
       // them from where it is, so a change of velocity or pitch doesn't click.
       v.fresh = !restart;
@@ -1843,7 +1859,7 @@ private:
    int destOf_[kPartEnd];
    float min_[kPartEnd], span_[kPartEnd];
    bool isRatio_[kPartEnd];
-   clap_id destOffset_[256];
+   clap_id destOffset_[kDestSlots];
    struct ModTarget {
       int part, dest;
    };

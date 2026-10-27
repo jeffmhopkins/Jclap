@@ -17,6 +17,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -580,6 +581,9 @@ private:
          for (int k = 0; k < kFilterCount; ++k)
             if (!engine_->filterNow(part, k, f.cutoff[part][k], f.resonance[part][k]))
                f.cutoff[part][k] = 0.0f;
+      for (int part = 0; part < kPartCount; ++part)
+         if (!engine_->destinationsNow(part, f.dest[part], f.moved[part]))
+            std::fill(std::begin(f.moved[part]), std::end(f.moved[part]), false);
       flockFrames_.publish();
       lastFrame_.store(nowMs(), std::memory_order_relaxed);
    }

@@ -278,6 +278,33 @@ int main() {
       JCLAP_CHECK(parallelF2 < 1e-6 && parallelF1 < serialF2);
    }
 
+   // The panel sees what a route does to the newest voice: Press on FB 2 moves that cell's value
+   // while the key is pressed, and nothing else; no voice, nothing to show.
+   {
+      Params p;
+      for (int r = 0; r < kRouteCount; ++r)
+         p.setPart(0, routeParam(r, kRouteSource), kSourceOff);
+      p.setPart(0, routeParam(0, kRouteSource), kSourceVelocity + 1);
+      p.setPart(0, routeParam(0, kRouteDestination), destinationIndex(fmCell(1, 1)));
+      p.setPart(0, routeParam(0, kRouteAmount), 0.5);
+      auto e = std::make_unique<Engine>();
+      e->prepare(kRate, {p.values.get(), p.mods.get()});
+      std::vector<float> value(kDestSlots);
+      std::unique_ptr<bool[]> moved(new bool[kDestSlots]);
+      JCLAP_CHECK(!e->destinationsNow(0, value.data(), moved.get()));
+      render(*e, 12000, 512, {{0, Event::On, 60, 1.0f}, {100, Event::Pressure, 60, 1.0f}});
+      JCLAP_CHECK(e->destinationsNow(0, value.data(), moved.get()));
+      const int fb = destinationIndex(fmCell(1, 1));
+      int others = 0;
+      for (int d = 0; d < static_cast<int>(destinations().size()); ++d)
+         others += d != fb && moved[d];
+      const double base = kParams()[paramIndex(partId(0, fmCell(1, 1)))].def.defaultValue;
+      std::printf("FB 2 with Press: %.3f from %.3f\n", value[fb], base);
+      JCLAP_CHECK(moved[fb] && value[fb] > base + 0.1);
+      JCLAP_CHECK(others == 0);
+      JCLAP_CHECK(destinations().size() <= static_cast<size_t>(kDestSlots));
+   }
+
    // The host's block size changes nothing: the control grid is the engine's own.
    {
       Params p;
