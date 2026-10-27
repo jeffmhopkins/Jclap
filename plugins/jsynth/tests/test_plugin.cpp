@@ -99,6 +99,15 @@ int main() {
    JCLAP_CHECK(h.paramText(partId(0, oscParam(1, kOscWave)), 5.0) == "Half Sine");
    JCLAP_CHECK(h.paramText(partId(1, kKeyLow), 60.0) == "C4");
    JCLAP_CHECK(h.paramText(partId(0, envParam(0, kEnvAttack)), timeValue(5.0)) == "5.0 ms");
+   // The envelope editor's Time Range is a view, not automatable, and starts on Normal. Its cube puts
+   // an eighth of the range half way, and a position maps back to the same time.
+   JCLAP_CHECK(h.paramText(partId(0, envParam(2, kEnvRange)), h.paramValue(partId(0, envParam(2, kEnvRange)))) == "Normal");
+   JCLAP_CHECK((findParam(partId(0, envParam(0, kEnvRange)))->def.flags & CLAP_PARAM_IS_AUTOMATABLE) == 0);
+   JCLAP_CHECK(std::fabs(timeMs(envPositionValue(0.5f, kEnvShort)) - 125.0) < 0.01);
+   JCLAP_CHECK(std::fabs(timeMs(envPositionValue(0.5f, kEnvLong)) - 2500.0) < 0.1);
+   for (int range : {kEnvShort, kEnvNormal, kEnvLong})
+      for (float pos : {0.0f, 0.1f, 0.37f, 0.8f, 1.0f})
+         JCLAP_CHECK(std::fabs(envPosition(envPositionValue(pos, range), range) - pos) < 1e-4f);
    JCLAP_CHECK(h.paramText(partId(0, filterParam(0, kFilterCutoff)), cutoffValue(2000.0)) == "2.00 kHz");
    JCLAP_CHECK(h.paramText(partId(0, oscParam(1, kOscRatio)), 1.5) == "x1.5");
    {
@@ -236,6 +245,14 @@ int main() {
                JCLAP_CHECK(v >= param->def.min && v <= param->def.max);
          }
          JCLAP_CHECK_EQ(presetValues(p).size(), paramCount());
+         // Every envelope's times fit the editor's Time Range, so no corner opens pinned at the end.
+         const std::vector<double> all = presetValues(p);
+         for (int part = 0; part < kPartCount; ++part)
+            for (int e = 0; e < kEnvCount; ++e) {
+               const int range = static_cast<int>(all[paramIndex(partId(part, envParam(e, kEnvRange)))]);
+               for (EnvParam stage : {kEnvAttack, kEnvDecay, kEnvRelease})
+                  JCLAP_CHECK(envPosition(all[paramIndex(partId(part, envParam(e, stage)))], range) <= 1.0f + 1e-4f);
+            }
       }
       struct Values : jclap::ui::ParamAccess {
          std::vector<double> v = presetValues(factoryPresets()[1]);

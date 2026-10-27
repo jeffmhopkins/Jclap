@@ -2,7 +2,8 @@
 
 // An ADSR envelope you edit by dragging its corners: the peak sets attack, the knee sets decay (x)
 // and sustain (y), the end sets release. Each stage is a ValueAxis with its own range, so it binds
-// to four params. Double-click a corner to reset its stage(s); stage values float above while
+// to four params. A corner moves with the mouse from where it was grabbed, and shift slows it down
+// for fine moves. Double-click a corner to reset its stage(s); stage values float above while
 // dragging.
 
 #include <functional>
@@ -31,6 +32,11 @@ public:
    // Times (attack, decay, release) are drawn on a curve so short ones stay visible: position is
    // fraction^timeCurve of the stage's width. 1 is linear; the default 0.5 suits millisecond ranges.
    void setTimeCurve(float curve);
+
+   // Or a mapping of your own between a time stage's value and its position (0..1 of the stage's
+   // width), for params that already have a taper of their own, or to zoom in on part of a range.
+   // Values past the end sit at the end. Empty functions go back to the time curve.
+   void setTimeMapping(std::function<float(double value)> position, std::function<double(float position)> value);
 
    // Where a playing envelope is now: its stage, its level (0..1), and in release the level it was
    // let go at. Each shows as a glowing dot riding the curve.
@@ -67,7 +73,9 @@ private:
    Handle handleAt(visage::Point p) const;
    // The stages a handle moves.
    void stagesOf(Handle h, Stage &a, Stage &b) const;
+   float timePosition(const ValueAxis &a, double value) const;
    void moveTo(visage::Point p);
+   visage::Point handlePoint(Handle h) const;
    void resetHandle(Handle h);
    std::string popupText() const;
 
@@ -75,7 +83,13 @@ private:
    ValueAxis stages_[kStageCount];
    unsigned accent_ = 0;
    float timeCurve_ = 0.5f;
+   std::function<float(double)> timePosition_;
+   std::function<double(float)> timeValue_;
    Handle dragging_ = kNone;
+   // Where the drag carries on from: the corner and the mouse when it was grabbed, or when shift
+   // was last pressed or let go.
+   visage::Point dragHandle_, dragMouse_;
+   bool dragFine_ = false;
    std::vector<Playhead> playheads_;
    ValuePopup popup_;
 };

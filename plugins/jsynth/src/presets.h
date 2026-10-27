@@ -897,6 +897,19 @@ inline const std::vector<Preset> &factoryPresets() {
                preset.values.push_back({partId(part, kPartLevel), level[part] + trim - spill});
             preset.values.push_back({kMasterLevel, master + spill});
          }
+      // An envelope with a time past what Normal shows opens on Long, so its corners aren't pinned at
+      // the end of the editor. The range is only the editor's view: the sound is the same either way.
+      for (Preset &preset : p)
+         for (int part = 0; part < kPartCount; ++part)
+            for (int e = 0; e < kEnvCount; ++e) {
+               double longest = 0.0;
+               for (EnvParam stage : {kEnvAttack, kEnvDecay, kEnvRelease})
+                  for (const auto &[id, v] : preset.values)
+                     if (id == partId(part, envParam(e, stage)))
+                        longest = std::max(longest, timeMs(v));
+               if (longest > envRangeMs(kEnvNormal) + 0.5)
+                  preset.values.push_back({partId(part, envParam(e, kEnvRange)), kEnvLong});
+            }
       return p;
    }();
    return presets;

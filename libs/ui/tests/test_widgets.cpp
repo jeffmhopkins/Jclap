@@ -12,6 +12,7 @@
 #include <jclap/core/test_host.h>
 #include <jclap/ui/button.h>
 #include <jclap/ui/dropdown.h>
+#include <jclap/ui/envelope.h>
 #include <jclap/ui/theme.h>
 #include <jclap/ui/tooltip.h>
 #include <jclap/ui/knob.h>
@@ -220,6 +221,41 @@ void shiftMidDragCarriesOn() {
    knob.mouseUp(press(50, 30));
 }
 
+void envelopeDragsFromWhereItWasGrabbed() {
+   // A 200 x 100 editor: a 6 point pad, so each time stage is 0.3 of 188 points wide.
+   ui::EnvelopeEditor env(ui::ValueRange{0, 1, 0.25}, ui::ValueRange{0, 1, 0.25}, ui::ValueRange{0, 1, 0.5},
+                          ui::ValueRange{0, 1, 0.25});
+   env.setBounds(0, 0, 200, 100);
+   const float stage = 188.0f * 0.3f, peak = 6.0f + 0.5f * stage; // the default time curve is a square root
+   // Grabbing the corner a little off doesn't move it.
+   env.mouseDown(press(peak + 5, 10));
+   env.mouseDrag(press(peak + 5, 10));
+   JCLAP_CHECK(std::fabs(env.stage(ui::EnvelopeEditor::kAttack).value - 0.25) < 1e-6);
+   env.mouseDrag(press(peak + 15, 10));
+   const double coarse = env.stage(ui::EnvelopeEditor::kAttack).value;
+   JCLAP_CHECK(coarse > 0.3);
+   // Shift: only what follows moves, and a fifth as far.
+   env.mouseDrag(withShift(press(peak + 15, 10)));
+   JCLAP_CHECK_EQ(env.stage(ui::EnvelopeEditor::kAttack).value, coarse);
+   env.mouseDrag(withShift(press(peak + 25, 10)));
+   const double fine = env.stage(ui::EnvelopeEditor::kAttack).value;
+   JCLAP_CHECK(fine > coarse && fine - coarse < (coarse - 0.25) * 0.3);
+   env.mouseUp(press(peak + 25, 10));
+
+   // A mapping of its own that shows only half the range: a time past it sits at the end, and stays
+   // put while the corner is held there.
+   env.setTimeMapping([](double v) { return static_cast<float>(v * 2.0); }, [](float p) { return p * 0.5; });
+   env.setValues(0.25, 0.25, 0.5, 0.9);
+   // Attack and decay half way, the sustain plateau, then release at the end.
+   const float end = 6.0f + 2.0f * stage + 188.0f * (1.0f - 3.0f * 0.3f);
+   env.mouseDown(press(end, 94));
+   env.mouseDrag(press(end + 3, 90));
+   JCLAP_CHECK_EQ(env.stage(ui::EnvelopeEditor::kRelease).value, 0.9);
+   env.mouseDrag(press(end - 0.5f * stage, 90));
+   JCLAP_CHECK(std::fabs(env.stage(ui::EnvelopeEditor::kRelease).value - 0.25) < 0.01);
+   env.mouseUp(press(end - 0.5f * stage, 90));
+}
+
 void secondButtonMidDrag() {
    // A right-press during a drag belongs to the drag; the first release ends its gesture.
    Params p;
@@ -400,6 +436,7 @@ int main() {
    rightClickDoesntToggle();
    noteGridSecondPress();
    shiftMidDragCarriesOn();
+   envelopeDragsFromWhereItWasGrabbed();
    secondButtonMidDrag();
    polarDotClickKeepsValue();
    tooltipsOutlivedByFrames();

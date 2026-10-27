@@ -1839,8 +1839,10 @@ public:
          }
          chip->setState(mapping_, mapping_ && s == armed_, pulse);
       }
-      if (!(host_.view == kSkyOnly))
+      if (!(host_.view == kSkyOnly)) {
          refreshPitch();
+         refreshEnvRanges();
+      }
       if (host_.view != kSkyOnly)
          for (visage::Frame *d : drawings_)
             if (d->isVisible())
@@ -2094,6 +2096,7 @@ private:
       for (const Placed &p : placed_)
          p.frame->setVisible(shows(p.part, p.group));
       refreshPitch();
+      refreshEnvRanges();
       if (routeInfo_ && host_.view != kSkyOnly)
          layoutRoutes();
       redraw();
@@ -2125,6 +2128,21 @@ private:
          p.ratio->setVisible(shown && mode == 1);
          p.fixed->setVisible(shown && mode == 2);
       }
+   }
+
+   // Spreads each envelope editor's times by its Time Range. The times are already on a log taper, so
+   // the editor places them by milliseconds (on a cube) rather than drawing the taper bent again.
+   void refreshEnvRanges() {
+      for (int part = 0; part < kPartCount; ++part)
+         for (int e = 0; e < kEnvCount; ++e) {
+            ui::EnvelopeEditor *env = envelopes_[part][e];
+            const int range = static_cast<int>(value(part, envParam(e, kEnvRange)) + 0.5);
+            if (!env || range == envRanges_[part][e])
+               continue;
+            envRanges_[part][e] = range;
+            env->setTimeMapping([range](double v) { return envPosition(v, range); },
+                                [range](float position) { return envPositionValue(position, range); });
+         }
    }
 
    // Adds a widget for the part and group being built.
@@ -2317,13 +2335,16 @@ private:
          const float ex = x + 12 + e * 288.0f;
          const unsigned ec = sourceColor(kSourceEnv1 + e);
          chip(kSourceEnv1 + e, envNames[e], {ex, 763, 110, 24});
+         auto &range = dropdown(envParam(e, kEnvRange), c, {ex + 118, 763, 66, 24});
+         tips_.add(range, "How much time the editor spreads across its width: up to 1 s, 5 s or 20 s a stage. "
+                          "Switching it changes no time. Hold shift while dragging a corner for fine moves.");
          dropdown(envParam(e, kEnvLoop), c, {ex + 190, 763, 86, 24});
          const auto id = [&](EnvParam p) { return partId(part, envParam(e, p)); };
          auto &env = glassy(put<ui::EnvelopeEditor>({ex, 793, 276, 127}, rangeOf(id(kEnvAttack)), rangeOf(id(kEnvDecay)),
                                                     rangeOf(id(kEnvSustain)), rangeOf(id(kEnvRelease))),
                             ec);
-         env.setTimeCurve(0.35f);
          envelopes_[part][e] = &env;
+         envRanges_[part][e] = -1;
          bindings_.bind(env, id(kEnvAttack), id(kEnvDecay), id(kEnvSustain), id(kEnvRelease));
       }
       group_ = kLfoPage;
@@ -2639,6 +2660,7 @@ private:
    int envNote_ = -1;
    // Each part's envelope editors.
    ui::EnvelopeEditor *envelopes_[kPartCount][kEnvCount] = {};
+   int envRanges_[kPartCount][kEnvCount] = {};
    std::vector<visage::Frame *> drawings_; // redrawn each frame
    ui::SegmentedSwitch *viewSwitch_ = nullptr;
    int oscTab_ = 0;   // the oscillator panel's tab: 0 OSCILLATORS, 1 FM

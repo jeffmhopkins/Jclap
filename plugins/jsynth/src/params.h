@@ -163,6 +163,9 @@ enum EnvParam : clap_id {
    kEnvReleaseCurve,
    kEnvLoop,
    kEnvVelocity,
+   // How much time the envelope editor spreads across its width: a view, not a sound, so switching
+   // it never changes a time.
+   kEnvRange,
 };
 
 // The first two LFOs move the flock: the wingbeat, one per creature, and the wind, one gust for the
@@ -249,6 +252,8 @@ inline const std::vector<std::string> kFilterTypeNames = {"Low Pass", "High Pass
                                                           "Peak",     "Ladder",    "Comb +",    "Comb -"};
 inline const std::vector<std::string> kSlopeNames = {"12 dB", "24 dB", "36 dB", "48 dB"};
 inline const std::vector<std::string> kLoopNames = {"Off", "Held", "Free"};
+inline const std::vector<std::string> kEnvRangeNames = {"Short", "Normal", "Long"};
+enum EnvRange { kEnvShort, kEnvNormal, kEnvLong };
 inline const std::vector<std::string> kLfoShapeNames = {"Sine", "Triangle", "Saw", "Square", "S&H", "Smooth"};
 inline const std::vector<std::string> kDivisionNames = {"1/32", "1/16T", "1/16", "1/8T", "1/16D", "1/8",  "1/4T",
                                                         "1/8D", "1/4",   "1/2T", "1/4D", "1/2",   "1/1", "2/1", "4/1"};
@@ -306,6 +311,20 @@ inline double fixedHz(double v) { return std::pow(10000.0, v); }
 inline double fixedValue(double hz) { return std::log(hz) / std::log(10000.0); }
 inline double timeMs(double v) { return 0.5 * std::pow(40000.0, v) - 0.5; }
 inline double timeValue(double ms) { return std::log((ms + 0.5) / 0.5) / std::log(40000.0); }
+
+// The envelope editor's time ranges: the longest time each spreads across a stage's width, on a
+// cube so the short end gets room (half way is an eighth of the range: 125 ms, 625 ms, 2.5 s).
+inline double envRangeMs(int range) {
+   static const double ms[] = {1000.0, 5000.0, 20000.0};
+   return ms[std::clamp(range, 0, 2)];
+}
+inline float envPosition(double value, int range) {
+   return static_cast<float>(std::cbrt(std::fmax(0.0, timeMs(value)) / envRangeMs(range)));
+}
+inline double envPositionValue(float position, int range) {
+   const double f = std::clamp(static_cast<double>(position), 0.0, 1.0);
+   return timeValue(envRangeMs(range) * f * f * f);
+}
 
 // How a param prints and parses.
 enum class Unit {
@@ -516,6 +535,7 @@ inline void addPart(Builder &b, int part) {
       b.add(p(kEnvReleaseCurve), n + "Release Curve", m, -1.0, 1.0, 0.0, kMod, Unit::Curve);
       b.choice(p(kEnvLoop), n + "Loop", m, kLoopNames, 0, kGlobalChoice);
       b.add(p(kEnvVelocity), n + "Velocity", m, 0.0, 1.0, 0.0, kMod, Unit::Percent);
+      b.choice(p(kEnvRange), n + "Time Range", m, kEnvRangeNames, kEnvNormal, kSetting);
    }
 
    for (int l = 0; l < kLfoCount; ++l) {
