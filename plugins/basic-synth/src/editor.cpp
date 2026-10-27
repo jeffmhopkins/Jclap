@@ -18,6 +18,7 @@
 #include <jclap/ui/segmented.h>
 #include <jclap/ui/tabs.h>
 #include <jclap/ui/tooltip.h>
+#include <jclap/ui/update_notice.h>
 
 #include <bitset>
 #include <string>
@@ -58,6 +59,8 @@ ui::ValueRange rangeOf(clap_id id, double step = 0.0, bool bipolar = false) {
 class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
+      update_ = &add<ui::UpdateNotice>({480, 15, 220, 26});
+      update_->alignRight = true;
       buildOscillator();
       buildFilter();
       buildEnvelopes();
@@ -125,8 +128,10 @@ public:
       canvas.setColor(t.text);
       canvas.text("Synth", ui::font(26 * s), visage::Font::kLeft, 128 * s, 8 * s, 90 * s, 40 * s);
       canvas.setColor(t.dimText);
-      canvas.text("8 voices  ·  MPE  ·  built on jclap::dsp", ui::font(13 * s), visage::Font::kRight, 360 * s,
-                  8 * s, 340 * s, 40 * s);
+      // A newer release's notice takes the tagline's place.
+      if (!update_->isVisible())
+         canvas.text("8 voices  ·  MPE  ·  built on jclap::dsp", ui::font(13 * s), visage::Font::kRight, 360 * s,
+                     8 * s, 340 * s, 40 * s);
    }
 
 private:
@@ -306,6 +311,7 @@ private:
    EditorHost &host_;
    ui::ParamBindings bindings_;
    ui::Tooltips tips_;
+   ui::UpdateNotice *update_ = nullptr;
    ui::TabBar *tabs_ = nullptr;
    ui::PianoKeyboard *keyboard_ = nullptr;
    ui::NoteGrid *grid_ = nullptr;

@@ -66,6 +66,10 @@ xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap
 > [!TIP]
 > Then restart Bitwig, or rescan plug-ins under Settings → Locations.
 
+When a newer release is out, each plugin's header says so; click the notice to open the release page,
+or its cross to hide it until the next one. The plugins look at GitHub at most once a day. To stop
+them, right-click the panel background and untick **Check for Updates**.
+
 ## Building
 
 ```sh

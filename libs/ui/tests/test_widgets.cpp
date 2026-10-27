@@ -1,6 +1,7 @@
 // Widget input checks: calls the mouse handlers directly and records what reaches the params.
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -15,6 +16,8 @@
 #include <jclap/ui/envelope.h>
 #include <jclap/ui/theme.h>
 #include <jclap/ui/tooltip.h>
+#include <jclap/ui/update_notice.h>
+#include <jclap/ui/updates.h>
 #include <jclap/ui/knob.h>
 #include <jclap/ui/note_grid.h>
 #include <jclap/ui/note_roll.h>
@@ -427,6 +430,86 @@ void presetFilesRoundTrip() {
    for (const auto &[id, v] : bank[1].values)
       JCLAP_CHECK_EQ(v, id == 1 ? 6.0 : id == 0 ? 0.5 : 1.0);
 }
+
+void updateChecks() {
+   namespace up = ui::updates;
+   JCLAP_CHECK(up::isNewer("0.10.3", "0.10.2"));
+   JCLAP_CHECK(up::isNewer("v1.0.0", "0.99.9"));
+   JCLAP_CHECK(up::isNewer("0.11.0", "v0.10.12"));
+   JCLAP_CHECK(!up::isNewer("0.10.2", "0.10.2"));
+   JCLAP_CHECK(!up::isNewer("0.9.9", "0.10.0"));
+   JCLAP_CHECK(!up::isNewer("dev", "0.10.2"));
+   JCLAP_CHECK(!up::isNewer("0.10.3-beta", "0.10.2"));
+   JCLAP_CHECK(!up::isNewer("", "0.10.2"));
+
+   // Trimmed from a real reply: the release's tag, not the author's or an asset's fields.
+   const std::string reply = R"({"url":"https://api.github.com/x","html_url":"https://github.com/jeffmhopkins/Jclap/releases/tag/v0.10.3",
+      "author":{"login":"github-actions[bot]","site_admin":false},"tag_name" : "v0.10.3","draft":false,
+      "prerelease": false,"assets":[{"name":"jclap-macOS.zip"}]})";
+   JCLAP_CHECK(up::parseLatestRelease(reply) == "0.10.3");
+   std::string pre = reply;
+   pre.replace(pre.find("\"prerelease\": false"), 19, "\"prerelease\": true");
+   JCLAP_CHECK(up::parseLatestRelease(pre).empty());
+   JCLAP_CHECK(up::parseLatestRelease(R"({"tag_name":"dev","prerelease":false})").empty());
+   JCLAP_CHECK(up::parseLatestRelease(R"({"message":"API rate limit exceeded"})").empty());
+   JCLAP_CHECK(up::parseLatestRelease("").empty());
+
+   // Due once a day, or when the clock went back; never when turned off.
+   up::State state;
+   state.checkedAt = 1000000;
+   JCLAP_CHECK(!up::checkDue(state, 1000000 + 3600));
+   JCLAP_CHECK(up::checkDue(state, 1000000 + 86400));
+   JCLAP_CHECK(up::checkDue(state, 999000));
+   state.enabled = false;
+   JCLAP_CHECK(!up::checkDue(state, 1000000 + 86400));
+
+   const std::filesystem::path dir = std::filesystem::temp_directory_path() / "jclap-update-test";
+   std::filesystem::remove_all(dir);
+   const std::filesystem::path file = dir / "updates.txt";
+   JCLAP_CHECK(up::readState(file).enabled); // no file: defaults
+
+   // A fresh check that found a newer release: nothing is fetched, and the notice shows only while a
+   // window holds the checker.
+   const auto now = std::chrono::duration_cast<std::chrono::seconds>(
+                       std::chrono::system_clock::now().time_since_epoch()).count();
+   const std::string newer = "99.0.0";
+   JCLAP_CHECK(up::writeState(file, {true, static_cast<long long>(now), newer, ""}));
+   const up::State back = up::readState(file);
+   JCLAP_CHECK(back.enabled && back.checkedAt == now && back.latest == newer && back.dismissed.empty());
+   up::setStateFileForTesting(file);
+   JCLAP_CHECK(!up::available());
+   {
+      const auto handle = up::startChecking();
+      const auto release = up::available();
+      JCLAP_CHECK(release && release->version == newer);
+      JCLAP_CHECK(release && release->url == "https://github.com/jeffmhopkins/Jclap/releases/tag/v99.0.0");
+
+      ui::UpdateNotice notice;
+      notice.setBounds(0, 0, 200, 26);
+      notice.alignRight = true;
+      JCLAP_CHECK(!notice.isVisible());
+      notice.timerCallback();
+      JCLAP_CHECK(notice.isVisible() && notice.release().version == newer);
+      // A click beside the pill does nothing; the cross dismisses it, for good.
+      notice.mouseDown(press(2, 13));
+      JCLAP_CHECK(notice.isVisible());
+      notice.mouseDown(press(190, 13));
+      JCLAP_CHECK(!notice.isVisible());
+      JCLAP_CHECK(!up::available());
+      JCLAP_CHECK(up::readState(file).dismissed == newer);
+
+      // Turned off: no notice, even for a release not dismissed.
+      JCLAP_CHECK(up::writeState(file, {true, static_cast<long long>(now), "99.0.1", newer}));
+      up::setStateFileForTesting(file);
+      JCLAP_CHECK(up::available());
+      up::setEnabled(false);
+      JCLAP_CHECK(!up::available());
+      JCLAP_CHECK(!up::readState(file).enabled);
+   }
+   JCLAP_CHECK(!up::available());
+   up::setStateFileForTesting({});
+   std::filesystem::remove_all(dir);
+}
 } // namespace
 
 int main() {
@@ -445,5 +528,6 @@ int main() {
    stopsSnap();
    noteRollLanes();
    presetFilesRoundTrip();
+   updateChecks();
    return jclap::core::testResult();
 }

@@ -19,6 +19,7 @@
 #include <jclap/ui/segmented.h>
 #include <jclap/ui/tabs.h>
 #include <jclap/ui/tooltip.h>
+#include <jclap/ui/update_notice.h>
 
 #include <visage_graphics/post_effects.h>
 #include <visage_ui/popup_menu.h>
@@ -1216,7 +1217,9 @@ public:
       c.setColor(kText);
       c.text("Verb", ui::font(24 * s), visage::Font::kLeft, 67 * s, 6 * s, 90 * s, 40 * s);
       c.setColor(kDim);
-      c.text("three-body reverb", ui::font(12 * s), visage::Font::kLeft, 140 * s, 6 * s, 200 * s, 40 * s);
+      // A newer release's notice takes the tagline's place.
+      if (!update_->isVisible())
+         c.text("three-body reverb", ui::font(12 * s), visage::Font::kLeft, 140 * s, 6 * s, 200 * s, 40 * s);
    }
 
 private:
@@ -1252,6 +1255,7 @@ private:
    }
 
    void buildHeader() {
+      update_ = &glassy(add<ui::UpdateNotice>({140, 13, 226, 26}), kOrange);
       add<PresetBar>({380, 12, 340, 28}, host_);
       auto &run = glassy(add<ui::Button>({760, 14, 60, 24}, "RUN"), kOrange);
       bindings_.bind(run, kRun);
@@ -1496,6 +1500,7 @@ private:
    EditorHost &host_;
    ui::ParamBindings bindings_;
    ui::Tooltips tips_;
+   ui::UpdateNotice *update_ = nullptr;
    OrbitView *view_ = nullptr;
    Card cards_[kMaxBodies];
    AddSlot *addSlot_ = nullptr;

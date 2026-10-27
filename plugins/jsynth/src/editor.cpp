@@ -25,6 +25,7 @@
 #include <jclap/ui/slider.h>
 #include <jclap/ui/tabs.h>
 #include <jclap/ui/tooltip.h>
+#include <jclap/ui/update_notice.h>
 #include <jclap/ui/xy_pad.h>
 
 #include <visage/app.h>
@@ -2290,7 +2291,9 @@ public:
       c.setColor(kText);
       c.text("Synth", ui::font(24 * s), visage::Font::kLeft, 75 * s, 6 * s, 90 * s, 40 * s);
       c.setColor(kDim);
-      c.text("flocking synth", ui::font(12 * s), visage::Font::kLeft, 146 * s, 6 * s, 120 * s, 40 * s);
+      // A newer release's notice takes the tagline's place.
+      if (!update_->isVisible())
+         c.text("flocking synth", ui::font(12 * s), visage::Font::kLeft, 146 * s, 6 * s, 120 * s, 40 * s);
    }
 
    // ---- Mapper ----
@@ -2666,6 +2669,7 @@ private:
    }
 
    void buildHeader() {
+      update_ = &glassy(add<ui::UpdateNotice>({146, 13, 220, 26}), kPartColors[0]);
       put<PresetBar>({416, 13, 250, 26}, host_);
       auto &parts = glassy(put<ui::SegmentedSwitch>({676, 13, 146, 26}, std::vector<std::string>{"PART A", "PART B"}),
                            kPartColors[0]);
@@ -3135,6 +3139,7 @@ private:
    EditorHost &host_;
    ui::ParamBindings bindings_;
    ui::Tooltips tips_;
+   ui::UpdateNotice *update_ = nullptr;
    FlockView *view_ = nullptr;
    ui::SegmentedSwitch *partSwitch_ = nullptr;
    ui::Button *mapButton_ = nullptr;

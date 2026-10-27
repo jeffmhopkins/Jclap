@@ -23,6 +23,7 @@
 #include <jclap/ui/section.h>
 #include <jclap/ui/segmented.h>
 #include <jclap/ui/tooltip.h>
+#include <jclap/ui/update_notice.h>
 
 #include <algorithm>
 #include <chrono>
@@ -826,6 +827,9 @@ private:
    void caption(ui::Rect r, const char *t) { add<Caption>(r, t); }
 
    void buildHeader() {
+      auto &update = add<ui::UpdateNotice>({228, 15, 162, 26});
+      update.setTheme(emberTheme());
+      update.setAccent(kEmber);
       auto &presets = add<ui::PresetBar>({400, 14, 380, 28}, factoryPresets(), kPresetFormat, host_);
       presets.setTheme(emberTheme());
       presets.defaults = defaultValues();

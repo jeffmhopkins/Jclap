@@ -27,6 +27,7 @@
 #include <jclap/ui/slider.h>
 #include <jclap/ui/tabs.h>
 #include <jclap/ui/tooltip.h>
+#include <jclap/ui/update_notice.h>
 #include <jclap/ui/xy_pad.h>
 
 #include <utility>
@@ -73,6 +74,8 @@ public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       add<ui::Section>({10, 10, 580, 340}, "PLUGIN TEMPLATE");
       tabs_ = &add<ui::TabBar>({270, 14, 310, 26}, std::vector<std::string>{"MIXER", "TEST TONE", "GRID"});
+      // Hidden until a newer JClap release is out; then it links to it.
+      add<ui::UpdateNotice>({168, 15, 96, 22});
       buildMixer();
       buildTestTone();
       buildGrid();
