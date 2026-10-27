@@ -629,7 +629,7 @@ const clap_plugin_descriptor_t JSynth::descriptor = {
     "https://github.com/jeffmhopkins/Jclap",
     "",
     "",
-    "0.10.1",
+    "0.10.2",
     "Bi-timbral MPE flocking FM synth",
     kFeatures,
 };

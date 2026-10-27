@@ -188,8 +188,11 @@ public:
       programRequested_.store(patch.program);
       if (hostState_)
          hostState_->mark_dirty(host());
-      if (hostParams_)
+      if (hostParams_) {
+         // The mod matrix params are named after the routing.
+         hostParams_->rescan(host(), CLAP_PARAM_RESCAN_INFO);
          hostParams_->request_flush(host());
+      }
    }
 
    int program() const override { return program_; }
@@ -210,7 +213,11 @@ public:
          return true;
       }
       const CcParam &p = kCcParams[index];
-      jclap::core::fillParamInfo({static_cast<clap_id>(p.cc), p.name, sectionName(p.section), 0, 127,
+      // A mod matrix slot is named after the loaded program's routing, e.g. "Mod 1: LFO 2 → Pitch".
+      std::string name = p.name;
+      if (p.cc >= 52 && p.cc < 52 + kModSlots)
+         name = modParamName(p.cc - 52, program_ > 0, routes_[p.cc - 52]);
+      jclap::core::fillParamInfo({static_cast<clap_id>(p.cc), name.c_str(), sectionName(p.section), 0, 127,
                                   defaultValue(p), CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE},
                                  info);
       return true;
@@ -350,7 +357,7 @@ public:
 
       // Tell the host the values changed so it refreshes what it shows.
       if (hostParams_)
-         hostParams_->rescan(host(), CLAP_PARAM_RESCAN_VALUES);
+         hostParams_->rescan(host(), CLAP_PARAM_RESCAN_VALUES | CLAP_PARAM_RESCAN_INFO);
       return true;
    }
 
@@ -573,7 +580,7 @@ const clap_plugin_descriptor_t MicroMonsta::descriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.10.1",
+   "0.10.2",
    "Knob panel that sends every MicroMonsta 2 parameter as MIDI CC",
    kFeatures,
 };

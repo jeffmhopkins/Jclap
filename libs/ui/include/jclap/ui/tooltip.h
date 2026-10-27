@@ -22,6 +22,8 @@ public:
    ~Tooltips() override;
 
    void add(visage::Frame &frame, std::string text);
+   // Changes the text of a frame already added; it shows from the next hover.
+   void setText(visage::Frame &frame, std::string text);
    // How long the mouse has to rest on a widget before its tip shows.
    int delayMs = 600;
 
