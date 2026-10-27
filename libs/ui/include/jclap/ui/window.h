@@ -37,6 +37,7 @@ public:
    visage::Frame &root();
    const WindowOptions &options() const;
 
+   // Opens in the host's window, and starts the daily update check (see updates.h).
    void show(void *parentWindow);
    // Linux: stop and restart drawing while the host has the editor hidden.
    void setVisible(bool visible);

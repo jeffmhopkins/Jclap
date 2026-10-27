@@ -8,6 +8,7 @@
 
 #include "jclap/ui/design_frame.h"
 #include "jclap/ui/theme.h"
+#include "jclap/ui/updates.h"
 
 namespace jclap::ui {
 namespace {
@@ -37,10 +38,12 @@ struct Window::Impl {
    visage::ApplicationWindow app;
    std::unique_ptr<visage::Frame> root;
    WindowOptions options;
+   // Held while shown on screen: checks for a newer release, at most once a day.
+   std::shared_ptr<void> updateCheck;
 };
 
 Window::Window(std::unique_ptr<visage::Frame> root, const WindowOptions &options)
-   : impl_(new Impl{{}, std::move(root), options}) {
+   : impl_(new Impl{{}, std::move(root), options, {}}) {
    auto &app = impl_->app;
    app.addChild(impl_->root.get());
    app.onResize() += [this] {
@@ -120,12 +123,17 @@ void Window::setZoom(float zoom) {
 Window::~Window() {
    impl_->app.removeChild(impl_->root.get());
    impl_->app.close();
+   impl_->updateCheck.reset();
 }
 
 visage::Frame &Window::root() { return *impl_->root; }
 const WindowOptions &Window::options() const { return impl_->options; }
 
-void Window::show(void *parentWindow) { impl_->app.show(parentWindow); }
+void Window::show(void *parentWindow) {
+   impl_->app.show(parentWindow);
+   if (!impl_->updateCheck)
+      impl_->updateCheck = updates::startChecking();
+}
 
 void Window::setVisible(bool visible) {
 #if !defined(__APPLE__) && !defined(_WIN32)
