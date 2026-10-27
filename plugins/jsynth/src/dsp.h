@@ -276,45 +276,132 @@ struct Comb {
 // Delay, attack, hold, decay, sustain, release, with a curve per segment (-1..1 bends it). Loop Held
 // repeats attack and decay while the gate is held. Loop Free keeps repeating after the gate drops
 // too, until the voice ends; the amp envelope always releases on gate off.
+//
+// Or Shape mode, after XAOC's Zadar: a drawn contour (a table, from shapes.h) stretched over one
+// time, warped in time and bent in level, played forward or reversed, and repeated a number of
+// times, while the gate is held, or forever. It ends holding its last level. A forced gate off (the
+// amp) fades it out over the release while the contour keeps moving under the fade. A chain holds
+// an envelope waiting (arm()) until the one before it gets far enough through (trigger()).
 class Envelope {
 public:
-   enum Stage { kIdle, kDelay, kAttack, kHold, kDecay, kSustain, kRelease };
+   enum Stage { kIdle, kDelay, kAttack, kHold, kDecay, kSustain, kRelease, kShape, kWait, kDone };
+   enum Retrigger { kSmooth, kRestart, kIgnore };
    struct Settings {
       float delay = 0, attack = 0.005f, hold = 0, decay = 0.3f, sustain = 0.7f, release = 0.3f; // seconds
       float attackCurve = 0, decayCurve = 0, releaseCurve = 0;
       int loop = 0; // 0 Off, 1 Held, 2 Free
+      // Shape mode.
+      bool shapeMode = false;
+      const float *table = nullptr; // `points` + 1 levels, 0..1
+      int points = 0;
+      float time = 2.0f;            // seconds a cycle
+      float warp = 0, bend = 0;     // -1..1
+      int repeats = 1;              // cycles before it ends, 0 for forever
+      bool held = false;            // repeats while the gate is held instead
+      bool reverse = false;
+      int retrigger = kSmooth;
    };
 
    // Starts from wherever the level is, so a retrigger never clicks.
    void gateOn() {
+      gate_ = true;
+      if (settings_.shapeMode) {
+         trigger();
+         return;
+      }
       start_ = level_;
       t_ = 0;
       stage_ = kDelay;
    }
    // `force` releases even a Free loop (the amp envelope).
    void gateOff(bool force) {
+      gate_ = false;
+      if (settings_.shapeMode) {
+         if (force && stage_ != kIdle && !releasing_) {
+            releasing_ = true;
+            releaseT_ = 0;
+            from_ = level_;
+         }
+         return;
+      }
       if (stage_ != kIdle && stage_ != kRelease && (force || settings_.loop != 2)) {
          from_ = level_;
          t_ = 0;
          stage_ = kRelease;
       }
    }
+   // Shape mode, in a chain: the gate is on but the contour waits for trigger(), holding its level.
+   void arm() {
+      gate_ = true;
+      releasing_ = false;
+      gain_ = 1;
+      cycles_ = 0;
+      stage_ = kWait;
+   }
+   // Shape mode: plays the contour from the top, or (Smooth) from where it is at the level now.
+   void trigger() {
+      const Settings &s = settings_;
+      const bool playing = stage_ == kShape && !releasing_;
+      if (s.retrigger == kIgnore && playing)
+         return;
+      float x = 0;
+      if (s.retrigger == kSmooth && stage_ != kIdle && level_ > 1e-3f)
+         x = phaseAtLevel(level_);
+      t_ = x;
+      cycles_ = 0;
+      releasing_ = false;
+      gain_ = 1;
+      stage_ = kShape;
+      ++runs_;
+   }
    void reset() {
       stage_ = kIdle;
       level_ = 0;
       t_ = 0;
+      gain_ = 1;
+      releasing_ = false;
    }
    void set(const Settings &s) { settings_ = s; }
    bool active() const { return stage_ != kIdle; }
-   bool releasing() const { return stage_ == kRelease; }
+   bool releasing() const { return stage_ == kRelease || releasing_; }
    float level() const { return level_; }
    Stage stage() const { return stage_; }
    // The level the release started from.
    float releaseFrom() const { return from_; }
+   // Shape mode: where it is in the cycle, 0..1.
+   float phase() const { return t_; }
+   // Shape mode: how far through all its cycles, 0..1 (0 while waiting), and how many times it has
+   // started, so a chain can tell one run from the next.
+   float progress() const {
+      if (stage_ == kDone)
+         return 1.0f;
+      if (stage_ != kShape)
+         return 0.0f;
+      const int n = settings_.held || settings_.repeats <= 0 ? 1 : settings_.repeats;
+      return std::min(1.0f, (static_cast<float>(cycles_ % n) + t_) / static_cast<float>(n));
+   }
+   uint32_t runs() const { return runs_; }
+
+   // The contour at `x` (0..1 of a cycle) with the settings' warp, bend and direction.
+   float shapeLevel(float x) {
+      const Settings &s = settings_;
+      if (!s.table || s.points <= 0)
+         return 0.0f;
+      if (s.reverse)
+         x = 1.0f - x;
+      // Warp + bows time so the contour comes later, - so it comes sooner.
+      x = warp_(std::clamp(x, 0.0f, 1.0f), -0.75f * s.warp);
+      const float pos = x * static_cast<float>(s.points);
+      const int i = std::min(static_cast<int>(pos), s.points - 1);
+      const float y = s.table[i] + (s.table[i + 1] - s.table[i]) * (pos - static_cast<float>(i));
+      return bend_(y, 0.75f * s.bend);
+   }
 
    // Advances by `dt` seconds.
    float process(float dt) {
       const Settings &s = settings_;
+      if (s.shapeMode)
+         return processShape(dt);
       switch (stage_) {
       case kIdle:
          break;
@@ -330,7 +417,7 @@ public:
          // Progress is kept as a fraction, so a modulated time changes the rate, never the position.
          t_ = s.attack <= 0.0f ? 1.0f : std::min(1.0f, t_ + dt / s.attack);
          const float x = t_;
-         level_ = start_ + (1.0f - start_) * shape(x, -0.5f + s.attackCurve);
+         level_ = start_ + (1.0f - start_) * shape_(x, -0.5f + s.attackCurve);
          if (x >= 1.0f) {
             level_ = 1.0f;
             t_ = 0;
@@ -348,7 +435,7 @@ public:
       case kDecay: {
          t_ = s.decay <= 0.0f ? 1.0f : std::min(1.0f, t_ + dt / s.decay);
          const float x = t_;
-         level_ = 1.0f - (1.0f - s.sustain) * shape(x, 0.6f + 0.4f * s.decayCurve);
+         level_ = 1.0f - (1.0f - s.sustain) * shape_(x, 0.6f + 0.4f * s.decayCurve);
          if (x >= 1.0f) {
             t_ = 0;
             if (s.loop != 0) {
@@ -371,13 +458,19 @@ public:
       case kRelease: {
          t_ = s.release <= 0.0f ? 1.0f : std::min(1.0f, t_ + dt / s.release);
          const float x = t_;
-         level_ = from_ * (1.0f - shape(x, 0.6f + 0.4f * s.releaseCurve));
+         level_ = from_ * (1.0f - shape_(x, 0.6f + 0.4f * s.releaseCurve));
          if (x >= 1.0f) {
             level_ = 0;
             stage_ = kIdle;
          }
          break;
       }
+      default:
+         // Shape stages left over from a switch to ADSR: let it go from where it is.
+         from_ = level_;
+         t_ = 0;
+         stage_ = gate_ ? kSustain : kRelease;
+         break;
       }
       return level_;
    }
@@ -385,22 +478,87 @@ public:
 private:
    // 0..1 to 0..1, bowed: c > 0 rises fast then slows (the RC shape decays have), c < 0 the reverse.
    // The divisor only changes with the curve, so it is kept between calls.
-   float shape(float x, float c) {
-      c = std::clamp(c, -0.95f, 0.95f);
-      if (std::fabs(c) < 1e-3f)
-         return x;
-      const float k = c * 8.0f;
-      if (k != shapeK_) {
-         shapeK_ = k;
-         shapeScale_ = 1.0f / (1.0f - std::exp(-k));
+   struct Bow {
+      float k = 0, scale = 1;
+      float operator()(float x, float c) {
+         c = std::clamp(c, -0.95f, 0.95f);
+         if (std::fabs(c) < 1e-3f)
+            return x;
+         const float kk = c * 8.0f;
+         if (kk != k) {
+            k = kk;
+            scale = 1.0f / (1.0f - std::exp(-kk));
+         }
+         return (1.0f - std::exp(-kk * x)) * scale;
       }
-      return (1.0f - std::exp(-k * x)) * shapeScale_;
+   };
+
+   float processShape(float dt) {
+      const Settings &s = settings_;
+      switch (stage_) {
+      case kShape: {
+         t_ += dt / std::max(s.time, 1e-3f);
+         if (t_ >= 1.0f) {
+            ++cycles_;
+            const bool last = s.held ? !gate_ : s.repeats > 0 && cycles_ >= s.repeats;
+            if (last) {
+               t_ = 1.0f;
+               stage_ = kDone;
+            }
+            else
+               t_ -= std::floor(t_);
+         }
+         contour_ = shapeLevel(t_);
+         break;
+      }
+      case kWait:
+      case kDone:
+         break;
+      case kIdle:
+         return level_;
+      default:
+         // ADSR stages left over from a switch to Shape: pick the contour up from here.
+         trigger();
+         contour_ = shapeLevel(t_);
+         break;
+      }
+      if (releasing_) {
+         releaseT_ = s.release <= 0.0f ? 1.0f : std::min(1.0f, releaseT_ + dt / s.release);
+         gain_ = 1.0f - shape_(releaseT_, 0.6f + 0.4f * s.releaseCurve);
+         if (releaseT_ >= 1.0f) {
+            reset();
+            return level_;
+         }
+      }
+      level_ = (stage_ == kWait ? level_ : contour_ * gain_);
+      if (stage_ == kWait)
+         contour_ = level_;
+      return level_;
    }
-   float shapeK_ = 0, shapeScale_ = 1;
+
+   // The first place in the cycle where the contour passes `level`, or the top if it never does.
+   float phaseAtLevel(float level) {
+      constexpr int n = 256;
+      float prev = shapeLevel(0.0f);
+      for (int i = 1; i <= n; ++i) {
+         const float x = static_cast<float>(i) / n, y = shapeLevel(x);
+         if ((prev - level) * (y - level) <= 0.0f && prev != y)
+            return x - (1.0f / n) * (y - level) / (y - prev);
+         prev = y;
+      }
+      return 0.0f;
+   }
+
+   Bow shape_, warp_, bend_;
 
    Settings settings_;
    Stage stage_ = kIdle;
    float level_ = 0, start_ = 0, from_ = 0, t_ = 0;
+   // Shape mode: the contour before the release fade, the fade, and how many cycles have played.
+   float contour_ = 0, gain_ = 1, releaseT_ = 0;
+   int cycles_ = 0;
+   uint32_t runs_ = 0;
+   bool gate_ = false, releasing_ = false;
 };
 
 // ---- LFO ----

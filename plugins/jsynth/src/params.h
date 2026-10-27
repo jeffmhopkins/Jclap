@@ -13,6 +13,8 @@
 
 #include <jclap/core/helpers.h>
 
+#include "shapes.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -102,7 +104,12 @@ enum PartParam : clap_id {
    kFlockBase = kLfoBase + kLfoCount * kLfoStride, // 256
    kRouteBase = kFlockBase + 32,                   // 288
    kRouteStride = 4,
-   kPartEnd = kRouteBase + kRouteCount * kRouteStride // 544, inside the 1024 stride
+   kRouteEnd = kRouteBase + kRouteCount * kRouteStride, // 544
+   // Each envelope's Shape mode, then how the three chain.
+   kShapeBase = kRouteEnd,
+   kShapeStride = 16,
+   kChainBase = kShapeBase + kEnvCount * kShapeStride, // 592
+   kPartEnd = kChainBase + 16                          // 608, inside the 1024 stride
 };
 
 enum OscParam : clap_id {
@@ -166,6 +173,32 @@ enum EnvParam : clap_id {
    // How much time the envelope editor spreads across its width: a view, not a sound, so switching
    // it never changes a time.
    kEnvRange,
+   // ADSR, or Shape: the envelope plays a contour from the shape library instead (ShapeParam).
+   kEnvMode,
+};
+
+// An envelope in Shape mode, after XAOC's Zadar: one drawn contour from the library, stretched over
+// its Time (or a tempo length), warped in time, bent in level, reversed and repeated. Its Release
+// and Velocity are the envelope's own.
+enum ShapeParam : clap_id {
+   kShapeIndex,
+   kShapeTime,
+   kShapeSync,
+   kShapeDivision,
+   // Skews the contour in time: + pushes it later, toward the end, - pulls it sooner.
+   kShapeWarp,
+   // Bends it in level: +1 lifts it toward the top, -1 sinks it toward the bottom.
+   kShapeBend,
+   kShapeRepeat,
+   kShapeReverse,
+   kShapeRetrigger,
+   // In a chain: how far through the envelope before it this one starts, 0 with it, 100% after it.
+   kShapePhase,
+};
+
+// How a part's envelopes chain: one starts the next as it plays, and a loop goes back round.
+enum ChainParam : clap_id {
+   kChain,
 };
 
 // The first two LFOs move the flock: the wingbeat, one per creature, and the wind, one gust for the
@@ -221,6 +254,8 @@ constexpr clap_id tailParam(VoiceTailParam p) { return kVoiceTailBase + p; }
 constexpr clap_id filterParam(int filter, FilterParam p) { return kFilterBase + filter * kFilterStride + p; }
 constexpr clap_id envParam(int env, EnvParam p) { return kEnvBase + env * kEnvStride + p; }
 constexpr clap_id lfoParam(int lfo, LfoParam p) { return kLfoBase + lfo * kLfoStride + p; }
+constexpr clap_id shapeParam(int env, ShapeParam p) { return kShapeBase + env * kShapeStride + p; }
+constexpr clap_id chainParam(ChainParam p) { return kChainBase + p; }
 constexpr clap_id flockParam(FlockParam p) { return kFlockBase + p; }
 constexpr clap_id routeParam(int route, RouteParam p) { return kRouteBase + route * kRouteStride + p; }
 
@@ -254,6 +289,40 @@ inline const std::vector<std::string> kSlopeNames = {"12 dB", "24 dB", "36 dB", 
 inline const std::vector<std::string> kLoopNames = {"Off", "Held", "Free"};
 inline const std::vector<std::string> kEnvRangeNames = {"Short", "Normal", "Long"};
 enum EnvRange { kEnvShort, kEnvNormal, kEnvLong };
+inline const std::vector<std::string> kEnvModeNames = {"ADSR", "Shape"};
+enum EnvMode { kModeAdsr, kModeShape };
+// A shape's length when synced, in beats of 4/4.
+inline const std::vector<std::string> kShapeDivisionNames = {"1/16",   "1/8",    "1/4",    "1/2",    "1 Bar",
+                                                             "2 Bars", "3 Bars", "4 Bars", "6 Bars", "8 Bars",
+                                                             "12 Bars", "16 Bars", "24 Bars", "32 Bars", "64 Bars"};
+inline double shapeBeats(int division) {
+   static const double beats[] = {0.25, 0.5, 1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 256};
+   return beats[std::clamp(division, 0, static_cast<int>(std::size(beats)) - 1)];
+}
+// How many times a shape plays: a count, while the note is held, or until the voice ends.
+inline const std::vector<std::string> kRepeatNames = {"Once", "2x", "3x", "4x", "6x", "8x", "16x", "Held", "Forever"};
+enum { kRepeatHeld = 7, kRepeatForever = 8 };
+inline int repeatCount(int choice) {
+   static const int counts[] = {1, 2, 3, 4, 6, 8, 16};
+   return choice < kRepeatHeld ? counts[std::max(choice, 0)] : 1;
+}
+// What a new note does to a shape that is playing: Smooth picks it up where the contour is at the
+// level it is now (Zadar's analog mode), Restart starts it from the top, Ignore lets it play on.
+inline const std::vector<std::string> kRetriggerNames = {"Smooth", "Restart", "Ignore"};
+inline const std::vector<std::string> kChainNames = {"Off",        "1 > 2",      "2 > 3",         "1 > 2 > 3",
+                                                     "1 > 2 Loop", "2 > 3 Loop", "1 > 2 > 3 Loop"};
+// The envelope each one waits for in a chain, or -1 when it starts with the note. A loop's first
+// envelope starts with the note and again after its last.
+inline int chainedAfter(int chain, int env) {
+   static const int after[7][3] = {{-1, -1, -1}, {-1, 0, -1}, {-1, -1, 1}, {-1, 0, 1},
+                                   {1, 0, -1},   {-1, 2, 1},  {2, 0, 1}};
+   return after[std::clamp(chain, 0, 6)][env];
+}
+// Whether `env` is the one a chain starts from on the note.
+inline bool chainHead(int chain, int env) {
+   static const int head[7] = {-1, 0, 1, 0, 0, 1, 0};
+   return head[std::clamp(chain, 0, 6)] == env;
+}
 inline const std::vector<std::string> kLfoShapeNames = {"Sine", "Triangle", "Saw", "Square", "S&H", "Smooth"};
 inline const std::vector<std::string> kDivisionNames = {"1/32", "1/16T", "1/16", "1/8T", "1/16D", "1/8",  "1/4T",
                                                         "1/8D", "1/4",   "1/2T", "1/4D", "1/2",   "1/1", "2/1", "4/1"};
@@ -293,7 +362,7 @@ inline const char *const kTouchNames[kTouchCount] = {"Velocity", "Press", "Glide
 constexpr int kSourceKeyBeforeRelease = kSourceVelocity + 4;
 inline double migrateBeforeRelease(clap_id id, double value) {
    const clap_id offset = offsetOf(id);
-   const bool routeSource = partOf(id) >= 0 && offset >= kRouteBase && offset < kPartEnd &&
+   const bool routeSource = partOf(id) >= 0 && offset >= kRouteBase && offset < kRouteEnd &&
                             (offset - kRouteBase) % kRouteStride == kRouteSource;
    return routeSource && value >= kSourceKeyBeforeRelease - 0.5 ? value + 1.0 : value;
 }
@@ -311,6 +380,9 @@ inline double fixedHz(double v) { return std::pow(10000.0, v); }
 inline double fixedValue(double hz) { return std::log(hz) / std::log(10000.0); }
 inline double timeMs(double v) { return 0.5 * std::pow(40000.0, v) - 0.5; }
 inline double timeValue(double ms) { return std::log((ms + 0.5) / 0.5) / std::log(40000.0); }
+// A shape's Time: 1 ms to 30 minutes, about 1.3 s in the middle.
+inline double shapeMs(double v) { return std::pow(1.8e6, v); }
+inline double shapeValue(double ms) { return std::log(std::fmax(ms, 1.0)) / std::log(1.8e6); }
 
 // The envelope editor's time ranges: the longest time each spreads across a stage's width, on a
 // cube so the short end gets room (half way is an eighth of the range: 125 ms, 625 ms, 2.5 s).
@@ -345,6 +417,7 @@ enum class Unit {
    Velocity,
    Degrees,
    Curve,          // -1..1, shown as a signed number
+   ShapeTime,      // 0..1 on shapeMs()
 };
 
 struct Param {
@@ -423,6 +496,10 @@ inline std::vector<clap_id> buildDestinations() {
    // A route's depth can be moved by another route.
    for (int r = 0; r < kRouteCount; ++r)
       d.push_back(routeParam(r, kRouteAmount));
+   // Shape mode came later, so its destinations follow (a saved route keeps its index).
+   for (int e = 0; e < kEnvCount; ++e)
+      for (ShapeParam p : {kShapeTime, kShapeWarp, kShapeBend, kShapePhase})
+         d.push_back(shapeParam(e, p));
    return d;
 }
 
@@ -539,7 +616,20 @@ inline void addPart(Builder &b, int part) {
       b.choice(p(kEnvLoop), n + "Loop", m, kLoopNames, 0, kGlobalChoice);
       b.add(p(kEnvVelocity), n + "Velocity", m, 0.0, 1.0, 0.0, kMod, Unit::Percent);
       b.choice(p(kEnvRange), n + "Time Range", m, kEnvRangeNames, kEnvNormal, kSetting);
+      b.choice(p(kEnvMode), n + "Mode", m, kEnvModeNames, kModeAdsr, kGlobalChoice);
+      const auto q = [&](ShapeParam r) { return id(shapeParam(e, r)); };
+      b.choice(q(kShapeIndex), n + "Shape", m, shapeNames(), 12, kGlobalChoice);
+      b.add(q(kShapeTime), n + "Shape Time", m, 0.0, 1.0, shapeValue(2000.0), kMod, Unit::ShapeTime);
+      b.choice(q(kShapeSync), n + "Shape Sync", m, kOnOffNames, 0, kGlobalChoice);
+      b.choice(q(kShapeDivision), n + "Shape Length", m, kShapeDivisionNames, 4, kGlobalChoice);
+      b.add(q(kShapeWarp), n + "Warp", m, -1.0, 1.0, 0.0, kMod, Unit::Bipolar);
+      b.add(q(kShapeBend), n + "Bend", m, -1.0, 1.0, 0.0, kMod, Unit::Bipolar);
+      b.choice(q(kShapeRepeat), n + "Repeat", m, kRepeatNames, 0, kGlobalChoice);
+      b.choice(q(kShapeReverse), n + "Reverse", m, kOnOffNames, 0, kGlobalChoice);
+      b.choice(q(kShapeRetrigger), n + "Retrigger", m, kRetriggerNames, 0, kGlobalChoice);
+      b.add(q(kShapePhase), n + "Chain Phase", m, 0.0, 1.0, 1.0, kMod, Unit::Percent);
    }
+   b.choice(id(chainParam(kChain)), "Env Chain", "Env", kChainNames, 0, kGlobalChoice);
 
    for (int l = 0; l < kLfoCount; ++l) {
       const std::string m = l == 0 ? "Wingbeat" : l == 1 ? "Wind" : num("LFO ", l - kMotionCount), n = m + " ";
@@ -742,6 +832,18 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case Unit::Curve:
       std::snprintf(out, size, "%+.2f", value);
       break;
+   case Unit::ShapeTime: {
+      const double ms = shapeMs(value);
+      if (ms >= 59950.0)
+         std::snprintf(out, size, "%.1f min", ms / 60000.0);
+      else if (ms >= 999.5)
+         std::snprintf(out, size, "%.2f s", ms / 1000.0);
+      else if (ms >= 10.0)
+         std::snprintf(out, size, "%.0f ms", ms);
+      else
+         std::snprintf(out, size, "%.1f ms", ms);
+      break;
+   }
    }
 }
 
@@ -806,6 +908,10 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
    case Unit::Time:
       // Milliseconds, or seconds with an s.
       value = timeValue(std::fmax(0.0, *end == 's' || *end == 'S' ? v * 1000.0 : v));
+      break;
+   case Unit::ShapeTime:
+      // Milliseconds, seconds with an s, or minutes with min.
+      value = shapeValue(*end == 'm' && end[1] == 'i' ? v * 60000.0 : *end == 's' || *end == 'S' ? v * 1000.0 : v);
       break;
    default:
       value = (p->def.flags & CLAP_PARAM_IS_STEPPED) ? std::round(v) : v;

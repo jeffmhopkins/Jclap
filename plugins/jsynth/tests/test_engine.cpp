@@ -474,6 +474,155 @@ int main() {
       }
    }
 
+   // Shape mode on its own: a contour along its time, repeats, reverse, holding its end, the amp's
+   // fade, and the three retriggers.
+   {
+      using Env = dsp::Envelope;
+      const auto settings = [](int shape) {
+         Env::Settings s;
+         s.shapeMode = true;
+         s.table = shapeTable(shape);
+         s.points = kShapePoints;
+         s.time = 1.0f;
+         s.release = 0.5f;
+         return s;
+      };
+      const auto run = [](Env &e, float seconds) {
+         const int n = static_cast<int>(seconds * 1000.0f + 0.5f);
+         for (int i = 0; i < n; ++i)
+            e.process(0.001f);
+         return e.level();
+      };
+      // Ramp Up, once: halfway at half its time, then it holds the top.
+      Env e;
+      e.set(settings(0));
+      e.gateOn();
+      JCLAP_CHECK(std::fabs(run(e, 0.5f) - 0.5f) < 0.01f);
+      JCLAP_CHECK(run(e, 1.0f) > 0.999f && e.stage() == Env::kDone && e.progress() == 1.0f);
+      // A forced gate off fades it out over the release, and then it's done.
+      e.gateOff(true);
+      JCLAP_CHECK(run(e, 0.25f) < 0.5f && e.level() > 0.0f && e.active());
+      run(e, 0.3f);
+      JCLAP_CHECK(!e.active());
+      // Twice, reversed: a ramp down that goes round once more, half through its run at 1 s.
+      Env::Settings twice = settings(0);
+      twice.repeats = 2;
+      twice.reverse = true;
+      e.set(twice);
+      e.reset();
+      e.gateOn();
+      JCLAP_CHECK(std::fabs(run(e, 0.25f) - 0.75f) < 0.01f);
+      JCLAP_CHECK(std::fabs(run(e, 1.0f) - 0.75f) < 0.01f && std::fabs(e.progress() - 0.625f) < 0.01f);
+      JCLAP_CHECK(run(e, 1.0f) < 0.001f && e.stage() == Env::kDone);
+      // Held: round and round while the gate is on; let go, it finishes its pass and holds there.
+      Env::Settings held = settings(0);
+      held.held = true;
+      e.set(held);
+      e.reset();
+      e.gateOn();
+      run(e, 3.4f);
+      JCLAP_CHECK(e.stage() == Env::kShape && std::fabs(e.level() - 0.4f) < 0.01f);
+      e.gateOff(false);
+      JCLAP_CHECK(run(e, 0.5f) > 0.89f && e.stage() == Env::kShape);
+      JCLAP_CHECK(run(e, 0.2f) > 0.999f && e.stage() == Env::kDone);
+      // Smooth picks Arch up where it passes the level now; Restart drops to its start; Ignore
+      // plays on.
+      Env::Settings arch = settings(12);
+      arch.repeats = 0;
+      e.set(arch);
+      e.reset();
+      e.gateOn();
+      const float at = run(e, 0.7f);
+      e.gateOn();
+      JCLAP_CHECK(std::fabs(e.process(0.0f) - at) < 0.02f && e.phase() < 0.5f);
+      arch.retrigger = Env::kRestart;
+      e.set(arch);
+      e.gateOn();
+      JCLAP_CHECK(e.process(0.0f) < 0.01f);
+      run(e, 0.3f);
+      arch.retrigger = Env::kIgnore;
+      e.set(arch);
+      e.gateOn();
+      JCLAP_CHECK(std::fabs(e.phase() - 0.3f) < 0.01f);
+      // Warp + comes later and Bend + lifts: Ramp Up at its middle.
+      Env::Settings bent = settings(0);
+      bent.warp = 1.0f;
+      e.set(bent);
+      JCLAP_CHECK(e.shapeLevel(0.5f) < 0.4f);
+      bent.warp = 0.0f;
+      bent.bend = 1.0f;
+      e.set(bent);
+      JCLAP_CHECK(e.shapeLevel(0.5f) > 0.6f);
+      // Every shape stays in 0..1 and a looped Drift shape closes on itself.
+      for (int i = 0; i < kShapeCount; ++i)
+         for (int k = 0; k <= kShapePoints; ++k)
+            JCLAP_CHECK(shapeTable(i)[k] >= 0.0f && shapeTable(i)[k] <= 1.0f);
+      for (int i = 36; i < 40; ++i)
+         JCLAP_CHECK(std::fabs(shapeTable(i)[0] - shapeTable(i)[kShapePoints]) < 0.02f);
+      JCLAP_CHECK(static_cast<int>(shapeNames().size()) == kShapeCount);
+   }
+
+   // Shape mode in a voice: Env 1 as an Arch the voice follows, Env 2 chained after it (Chain
+   // 1 > 2, at 100%), and a synced time from the host's tempo.
+   {
+      Params p;
+      p.setPart(0, envParam(0, kEnvMode), kModeShape);
+      p.setPart(0, shapeParam(0, kShapeIndex), 12); // Arch
+      p.setPart(0, shapeParam(0, kShapeTime), shapeValue(500.0));
+      p.setPart(0, envParam(1, kEnvMode), kModeShape);
+      p.setPart(0, shapeParam(1, kShapeIndex), 0); // Ramp Up
+      p.setPart(0, shapeParam(1, kShapeSync), 1);
+      p.setPart(0, shapeParam(1, kShapeDivision), 2); // a beat: 0.5 s at 120
+      p.setPart(0, chainParam(kChain), 1);
+      p.setPart(0, envParam(0, kEnvRelease), timeValue(50.0));
+      auto e = std::make_unique<Engine>();
+      e->prepare(kRate, {p.values.get(), p.mods.get()});
+      e->transport(120.0, true);
+      int ends = 0;
+      const auto level = [&](int at, int env) {
+         static int done = 0;
+         render(*e, at - done, 256, {}, &ends);
+         done = at;
+         return e->envLevel(0, env);
+      };
+      e->setBlockSample(0);
+      e->noteOn(ref(60), 1.0f);
+      // A quarter in, the arch is up and Env 2 waits at zero; at its end Env 2 starts its ramp.
+      JCLAP_CHECK(level(6000, 0) > 0.6f && e->envLevel(0, 1) == 0.0f);
+      JCLAP_CHECK(level(12000, 0) > 0.95f && e->envLevel(0, 1) == 0.0f);
+      JCLAP_CHECK(level(36000, 1) > 0.45f && e->envLevel(0, 1) < 0.55f);
+      // The arch has ended at zero, but the note is held, so the voice stays.
+      JCLAP_CHECK(e->envLevel(0, 0) < 0.01f && e->activeVoices() == 1);
+      const auto out = render(*e, 4800, 256, {{0, Event::Off, 60, 0.0f}}, &ends);
+      JCLAP_CHECK(finite(out) && ends == 1 && e->activeVoices() == 0);
+   }
+
+   // A looped chain keeps going round: 1 > 2 Loop with two short ramps, while the note is held.
+   {
+      Params p;
+      for (int env = 0; env < 2; ++env) {
+         p.setPart(0, envParam(env, kEnvMode), kModeShape);
+         p.setPart(0, shapeParam(env, kShapeIndex), 12);
+         p.setPart(0, shapeParam(env, kShapeTime), shapeValue(100.0));
+      }
+      p.setPart(0, chainParam(kChain), 4);
+      auto e = std::make_unique<Engine>();
+      e->prepare(kRate, {p.values.get(), p.mods.get()});
+      e->setBlockSample(0);
+      e->noteOn(ref(60), 1.0f);
+      int rises = 0;
+      float last = 0.0f;
+      for (int block = 0; block < 200; ++block) {
+         render(*e, 240, 240, {});
+         const float now = e->envLevel(0, 0);
+         rises += last < 0.5f && now >= 0.5f;
+         last = now;
+      }
+      // A second: Env 1 rises every 200 ms (its arch, then Env 2's).
+      std::printf("looped chain: Env 1 rose %d times in a second\n", rises);
+      JCLAP_CHECK(rises >= 4 && rises <= 6);
+   }
+
    // What it costs: 32 voices (16 notes in each part) at 2x for two seconds.
    {
       Params p;
