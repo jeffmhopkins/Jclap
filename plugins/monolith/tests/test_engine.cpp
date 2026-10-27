@@ -527,5 +527,23 @@ int main() {
       JCLAP_CHECK_EQ(f.rowPitch[2], rowPitch(2, p.root, p.scale, p.spread, p.octave));
    }
 
+   // The very first notes, read in the block that starts the song, play the rows' pitches: never
+   // MIDI note 0 from rows not worked out yet.
+   {
+      EngineParams p;
+      p.root = 2;
+      Engine e;
+      e.setParams(p);
+      const auto notes = run(e, 0.0, 4.0);
+      JCLAP_CHECK(ons(notes) > 0);
+      for (const Timed &t : notes)
+         if (t.note.on) {
+            bool onARow = false;
+            for (int r = 0; r < kGridRows; ++r)
+               onARow |= t.note.pitch == rowPitch(r, p.root, p.scale, p.spread, p.octave);
+            JCLAP_CHECK(onARow);
+         }
+   }
+
    return jclap::core::testResult();
 }

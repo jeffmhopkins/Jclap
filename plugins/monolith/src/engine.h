@@ -214,7 +214,10 @@ public:
    static constexpr int kMaxListen = 32;
    static constexpr double kFreeTempo = 120.0;
 
-   Engine() { regenerate(ScriptKey::of(params_)); }
+   Engine() {
+      regenerate(ScriptKey::of(params_));
+      publishPitches();
+   }
 
    void setParams(const EngineParams &p) {
       params_ = p;
@@ -223,6 +226,7 @@ public:
       params_.rate = std::clamp(p.rate, 0, 5);
       if (ScriptKey::of(params_) != slabKey_)
          regenerate(ScriptKey::of(params_));
+      publishPitches();
    }
    const EngineParams &params() const { return params_; }
 
@@ -287,11 +291,13 @@ public:
          freeBeats_ = b1;
 
       handleFollow(in, inCount);
+      // The rows' pitches as of this block, so the first notes after a start, a param change or a
+      // held key are already in the new key.
+      publishPitches();
 
       if (!playing) {
          if (running_)
             stop(out);
-         publishPitches();
          return;
       }
       // A jump in the song position (a loop, a seek) silences what's sounding and starts reading
@@ -375,7 +381,6 @@ public:
 
       step_ = static_cast<float>(b1 / stepBeats - static_cast<double>(std::max<long long>(glyph_, 0)) * kWindowSteps);
       step_ = std::clamp(step_, 0.0f, static_cast<float>(kWindowSteps));
-      publishPitches();
    }
 
    // The cell the voice reads at glyph position `g` (the count of glyph windows since the song's start).
