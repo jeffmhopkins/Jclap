@@ -261,7 +261,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
         <li><strong>Four flock sources</strong> per creature: Speed, Nearest, Heading and Turn.</li>
         <li><strong>Between creatures</strong>: Neighbour FM, Tune Pull and Bite.</li>
         <li><strong>MAP</strong>: touch a source, drag a knob. No matrix page, and up to 64 routes per part.</li>
-        <li><strong>168 factory presets</strong>, from basses, pianos and pads to voices, patches played with pressure, and patches that move on their own and use both parts.</li>
+        <li><strong>185 factory presets</strong>, from basses, pianos and pads to voices, patches played with pressure, drones and textures, and patches that move on their own and use both parts.</li>
       </ul>
     </div>
   </div>
@@ -328,7 +328,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
 
   <ol class="steps">
     <li><b class="h">Load JSynth and play</b>Put JSynth on an instrument track and play a few notes. Each note hatches a creature at its lure: low notes on the left, high on the right. Hold a chord and watch them gather; let go and they fly off as they fade. No keyboard to hand? Click in the sky: left to right picks the note (C2 to C6), and dragging bends it.</li>
-    <li><b class="h">Pick a preset</b>Click the preset name in the header to open the menu, grouped by instrument family from <em>Bass</em>, <em>Leads</em> and <em>Keys</em> through <em>Pads</em> and <em>Drums and FX</em>, then the showcases: <em>Motion</em>, <em>Layers and Splits</em> and <em>Flock</em>. Or click the arrows, or scroll over the bar, to step through them. Try <em>Tine Piano</em>, then <em>Shifting Glass</em>, then <em>Breath to Brass</em> with some pressure, then <em>Predator and Prey</em>.</li>
+    <li><b class="h">Pick a preset</b>Click the preset name in the header to open the menu, grouped by instrument family from <em>Bass</em>, <em>Leads</em> and <em>Keys</em> through <em>Pads</em> and <em>Drums and FX</em>, then the showcases: <em>Motion</em>, <em>Drones</em>, <em>Textures</em>, <em>Layers and Splits</em> and <em>Flock</em>. Or click the arrows, or scroll over the bar, to step through them. Try <em>Tine Piano</em>, then <em>Shifting Glass</em>, then <em>Breath to Brass</em> with some pressure, then <em>Predator and Prey</em>.</li>
     <li><b class="h">Let the creatures hear each other</b>Load <em>Init</em> and turn <strong>OSC 2</strong>'s <strong>LEVEL</strong> up to about half, since Neighbour FM plays through Osc 2. Then open the <strong>FM</strong> tab at the top left and turn up <strong>FLOCK FM</strong>. Now hold a chord: when creatures fly close together they frequency-modulate each other, and the sound rings and shifts as the flock moves. Raise <strong>TUNE PULL</strong> too and creatures flying the same way drift into just intonation.</li>
     <li><b class="h">Map a flock source</b>Click <strong>SPEED</strong> under the sky, which turns <strong>MAP</strong> on with Speed armed. Then drag Filter 1's <strong>CUTOFF</strong> up on the <strong>FILTER</strong> panel at the left. A ring in Speed's colour shows the route while Speed is armed. Press <strong>MAP</strong> again to finish. Now the faster a creature flies, the brighter it sounds; play harder (Press makes creatures faster) to hear it.</li>
     <li><b class="h">Add a second species</b>Set the play mode in the header to <strong>LAYER</strong> and click <strong>PART B</strong>. Part B is a whole second patch, and by default it hunts: its creatures chase part A's. On part B's <strong>FM</strong> tab, raise <strong>BITE</strong>, and every creature B catches rings with its hunter's tone.</li>
@@ -678,7 +678,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <h2><span class="tag">Bottom left</span>ENVELOPES</h2>
   <figure class="dark"><img src="img/card-env.jpg" alt=""></figure>
   <div>
-      <p>Each envelope draws its shape: drag the points to set <strong>attack</strong>, <strong>decay</strong>, <strong>sustain</strong> and <strong>release</strong>. A point moves with the mouse from where you grab it; hold <strong>Shift</strong> for fine moves. A dot rides the curve for every sounding note. The chip above each one is its source for MAP and lights as it moves.</p>
+      <p>Each envelope is an <strong>ADSR</strong> or a <strong>SHAPE</strong>, picked in the box beside its chip. As an ADSR it draws its stages: drag the points to set <strong>attack</strong>, <strong>decay</strong>, <strong>sustain</strong> and <strong>release</strong>. A point moves with the mouse from where you grab it; hold <strong>Shift</strong> for fine moves. A dot rides the curve for every sounding note. The chip above each one is its source for MAP and lights as it moves.</p>
       <p><strong>ENV 1 AMP</strong> is the amp: it shapes every note's level, and it always releases when you let go. <strong>ENV 2</strong> and <strong>ENV 3</strong> are free to route; a new part starts with Env 2 opening Filter 1.</p>
       <table class="params">
         <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
@@ -693,6 +693,26 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       </table>
       <p><strong>VELOCITY</strong> on the VOICE tab under the sky (0 to 100%, 100% by default) is how much velocity sets ENV 1's level. At 0 every note plays at full level.</p>
       <p class="small">Host parameters per envelope: <strong>Delay</strong> and <strong>Hold</strong> (0 ms to 20 s) <span class="mod t">ROUTE</span>, an <strong>Attack</strong>, <strong>Decay</strong> and <strong>Release Curve</strong> each (−1 to +1), and <strong>Velocity</strong>, how much velocity scales the whole envelope.</p>
+  </div>
+
+  <h2>Shape mode</h2>
+  <div>
+      <p>After XAOC's Zadar module, a <strong>SHAPE</strong> envelope plays one drawn contour instead of its stages: pick it from <strong>48 shapes</strong> in eight banks, <em>Rise</em>, <em>Fall</em>, <em>Swell</em>, <em>Pulse</em>, <em>Waves</em>, <em>Steps</em>, <em>Drift</em> and <em>Strike</em>, and it is stretched over its time. Long, slow shapes on a filter or a drawbar keep a held chord moving for minutes; a pulse or a step shape as ENV 1 turns each held note into a pattern of its own.</p>
+      <p>The drawing shows the shape as it plays, with its bank and how often it repeats in its corners and a dot for every sounding note. <strong>Drag it sideways to warp it</strong> in time and <strong>up or down to bend it</strong> in level (Shift for fine moves; double-click puts both back).</p>
+      <table class="params">
+        <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="c">Time</td><td class="r">1 ms – 30 min</td><td class="d">2 s</td><td>How long one pass takes, with <strong>FREE</strong> lit. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">Length</td><td class="r">1/16 – 64 bars</td><td class="d">1 bar</td><td>With <strong>SYNC</strong> lit, one pass in the host's tempo instead.</td></tr>
+          <tr><td class="c">Warp</td><td class="r">−100 – +100%</td><td class="d">0%</td><td>Drag sideways: + pushes the shape later, − pulls it sooner. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">Bend</td><td class="r">−100 – +100%</td><td class="d">0%</td><td>Drag up or down: + lifts the shape, − sinks it. <span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">Repeat</td><td class="r">Once, 2x – 16x, Held, Forever</td><td class="d">Once</td><td>How many passes it plays; after the last it holds where it ended. <strong>Held</strong> repeats while the note is held and finishes its pass after; <strong>Forever</strong> until the note ends.</td></tr>
+          <tr><td class="c">REV</td><td class="r">Off, On</td><td class="d">Off</td><td>Plays the shape backwards.</td></tr>
+          <tr><td class="c">Retrigger</td><td class="r">Smooth, Restart, Ignore</td><td class="d">Smooth</td><td>What a new note does while it plays: <strong>Smooth</strong> picks the shape up where it passes the level it is at now, so it never jumps; <strong>Restart</strong> starts it from the top; <strong>Ignore</strong> lets it play on.</td></tr>
+          <tr><td class="c">REL / VEL</td><td class="r"></td><td class="d"></td><td>ENV 1's <strong>Release</strong>: when you let go it fades over this while the shape keeps moving under the fade. ENV 2 and ENV 3 show their <strong>Velocity</strong>, and play on after you let go.</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Chains.</strong> The box at the top right of the panel chains the envelopes in Shape mode, so one starts the next: <strong>1 &gt; 2</strong>, <strong>2 &gt; 3</strong>, <strong>1 &gt; 2 &gt; 3</strong>, or the same as a <strong>Loop</strong> back to the first. The first starts with the note; each next one waits until the one before has played its <strong>phase</strong> (the box beside its Retrigger) of its whole run: 0% starts it with the one before, 100% when that one ends. In a loop the first starts again from the last the same way, so two arches that start each other halfway cross-fade forever. In a chain, Held and Forever play once, so the chain moves on. An ADSR envelope in a chain just starts with the note.</p>
   </div>
 
   <h2 class="pb"><span class="tag">Under the sky</span>MOTION</h2>
@@ -1269,9 +1289,9 @@ function el(parent, tag, attrs, text) {
     ]],
     ['Atmospheres', 'Seconds to arrive.', [
       ['Wind Choir', 'Saws and noise through a band pass in a strong wind; LFO 2 on the cutoff.'],
-      ['Deep Space', 'Pink noise through a comb tuned to the note, slow random LFOs on its filters.'],
+      ['Deep Space', 'Pink noise through a comb tuned to the note, slow random LFOs and Wander and Gusts shapes on its filters and colour.'],
       ['Aurora', 'A slow FM shoal with Tune Pull; Heading on the FM, Slide on the cutoff.'],
-      ['Storm Front', 'Saw and noise through a comb in a strong wind; LFO 2, Turn and Speed on the filters.'],
+      ['Storm Front', 'Saw and noise through a comb in a strong wind, the noise coming in Gusts; LFO 2, Turn and Speed on the filters.'],
     ]],
     ['Voices', 'Formants, throats and whispers.', [
       ['Talk Box', 'Mono saw and pulse through two formants; Press slides the mouth from "ah" to "ee".'],
@@ -1338,12 +1358,33 @@ function el(parent, tag, attrs, text) {
       ['Pink Haze', '[PinkHaze] A hazy pad that glides between chords; Press pumps the filter, the wheel fades it.'],
     ]],
     ['Motion', 'Patches that keep moving on their own.', [
-      ['Shifting Glass', 'Three-operator FM with a looping Env 3 and two unsynced LFOs; the wheel deepens all of it.'],
+      ['Shifting Glass', 'Three-operator FM with Env 3 wandering on the FM (a 9 s Wander shape) and two unsynced LFOs; the wheel deepens all of it.'],
       ['Random Garden', 'The Random wave: each note draws its own waves, LFO speed and pan.'],
-      ['Pulsar', 'A looping Env 1: every held note pulses on its own clock, faster higher up and with Press.'],
+      ['Pulsar', 'A Pluck shape looping as the amp: every held note pulses on its own clock, faster higher up and with Press.'],
       ['Clockwork', 'A sixteenth-note sample-and-hold on the FM and a dotted-eighth square on the filter.'],
       ['MPE Voices', 'Two band passes for a vowel: Press brightens and adds vibrato, Slide moves the vowel, Release sets the tail.'],
-      ['Tide Machine', 'Layer: a saw drone breathing on slow LFOs, and FM bells an octave up looping on their own envelope.'],
+      ['Tide Machine', 'Layer: a saw drone breathing on slow LFOs, and FM bells an octave up echoing on an Echoes shape.'],
+    ]],
+    ['Drones', 'Shape envelopes that keep a held chord moving for minutes.', [
+      ['Basalt', 'Saws and a sub through a ladder; a Slow S fade-in, and Wander and Gusts shapes (23 s, 37 s) on the filter and pan.'],
+      ['Breathing Organ', 'Sine drawbars whose 2nd and 3rd partials breathe on their own Breath shapes, one reversed.'],
+      ['Cathedral Air', 'Noise in a comb tuned to the note; Shimmer on its ring, Twin Hills on the tone and the noise colour.'],
+      ['Undertow', 'A sub and a 1:2 FM growl that surges every 14 s; a Brownian walk turns its feedback.'],
+      ['Long Bloom', 'Chain 1 > 2: the amp blooms in over 12 s, and from 70% of the way the filter opens and closes on a 30 s arch.'],
+      ['Glacier', 'Chain 2 > 3 Loop: two 10 s arches start each other halfway, cross-fading a saw and FM glass forever.'],
+      ['Iron Hum', 'Saws in a comb with tube drive; Flicker on the comb, a 41 s Wander on the drive.'],
+      ['Tidal Pulse', 'Synced: four filter waves every eight bars, resonance wobbling down over sixteen.'],
+    ]],
+    ['Textures', 'Shapes as the amp, so each held note plays a pattern of its own.', [
+      ['Rain Glass', 'FM glass whose amp is the Sparkle shape, each note stretched by Random so a chord rains.'],
+      ['Bouncing Light', 'A dropped ball, over and over, faster up the keyboard; the filter bounces with it.'],
+      ['Echo Chamber', 'Each note echoes itself on the beat (Echoes, synced) and darkens over four bars.'],
+      ['Stutter Fields', 'Gates that speed up through each bar over a cutoff stepping at random.'],
+      ['Number Station', 'A band-passed tone keyed in sparse steps, with static, drifting in pitch.'],
+      ['Stairwell', 'The filter climbs a stair each beat and a fifth steps in at random.'],
+      ['Breathing Machine', 'Chain 1 > 2 > 3 Loop: the amp breathes, the filter strikes, the FM bounces, round again.'],
+      ['Night Pulse', 'A heartbeat, two beats a bar, under a 20 s wander through the dark.'],
+      ['Falling Bells', 'FM bells struck over and over by the Collapse shape, each tap lower, the FM fading with it.'],
     ]],
     ['Layers and Splits', 'Both parts at once.', [
       ['Piano and Strings', 'Layer: the tine piano, and strings under it the wheel brings up.'],
@@ -1443,6 +1484,11 @@ function el(parent, tag, attrs, text) {
       ['Decay', '0 ms – 20 s', '400 ms (Env 2, 3: 300 ms)', T], ['Sustain', '0 – 100%', '70% (Env 2, 3: 30%)', T],
       ['Release', '0 ms – 20 s', '300 ms', T], ['Attack, Decay, Release Curve', '–1 – +1', '+0.00', ''],
       ['Loop', 'Off, Held, Free', 'Off', ''], ['Velocity', '0 – 100%', '0%', ''], ['Time Range', 'Short, Normal, Long', 'Normal', ''],
+      ['Mode', 'ADSR, Shape', 'ADSR', ''], ['Shape', '48 shapes in 8 banks', 'Swell: Arch', ''],
+      ['Shape Time', '1 ms – 30 min', '2.00 s', T], ['Shape Sync', 'Off, On', 'Off', ''], ['Shape Length', '1/16 – 64 bars', '1 Bar', ''],
+      ['Warp', '–100% – +100%', '+0%', T], ['Bend', '–100% – +100%', '+0%', T], ['Repeat', 'Once, 2x – 16x, Held, Forever', 'Once', ''],
+      ['Reverse', 'Off, On', 'Off', ''], ['Retrigger', 'Smooth, Restart, Ignore', 'Smooth', ''], ['Chain Phase', '0 – 100%', '100%', T],
+      ['Env Chain (per part)', 'Off, 1 > 2, 2 > 3, 1 > 2 > 3, and each as a loop', 'Off', ''],
     ]],
     ['LFOs (per part: Wingbeat, Wind, LFO 1, LFO 2)', [
       ['Shape', 'Sine, Triangle, Saw, Square, S&H, Smooth', 'Sine (Wind: Smooth, LFO 2: Triangle)', ''],

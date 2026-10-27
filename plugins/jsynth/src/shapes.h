@@ -54,6 +54,18 @@ inline const std::vector<std::string> &shapeNames() {
    return names;
 }
 
+// A shape's index by its name in the bank ("Breath"), or 0 when there's none.
+inline int shapeIndex(const std::string &name) {
+   int i = 0;
+   for (const ShapeBank &b : shapeBanks())
+      for (const char *s : b.shapes) {
+         if (name == s)
+            return i;
+         ++i;
+      }
+   return 0;
+}
+
 namespace detail {
 
 constexpr double kPi = 3.14159265358979323846;
@@ -85,7 +97,7 @@ inline double steps(double x, int count, const double *levels) {
    const double p = std::min(x * count, count - 1e-9);
    const int i = static_cast<int>(p);
    const double f = p - i, edge = 0.04;
-   const double prev = levels[i > 0 ? i - 1 : count - 1];
+   const double prev = levels[i > 0 ? i - 1 : 0];
    return f < edge ? prev + (levels[i] - prev) * smooth(f / edge) : levels[i];
 }
 // A pulse of `width` (of each of `count` beats), with soft edges.
@@ -221,25 +233,9 @@ inline double shapeAt(int index, double x) {
       return 0.15 + 0.85 * y;
    }
    case 37: {
-      double lo = 1e9, hi = -1e9;
-      static std::array<double, 257> walk = [] {
-         std::array<double, 257> w{};
-         double v = 0.0;
-         for (int i = 0; i <= 256; ++i) {
-            w[i] = v;
-            v += (hash(37, i) - 0.5) * 0.18;
-         }
-         // Leaned back to the start, so the loop closes.
-         for (int i = 0; i <= 256; ++i)
-            w[i] -= w[256] * i / 256.0;
-         return w;
-      }();
-      for (double w : walk)
-         lo = std::min(lo, w), hi = std::max(hi, w);
-      const double p = x * 256.0;
-      const int i = std::min(static_cast<int>(p), 255);
-      const double y = walk[i] + (walk[i + 1] - walk[i]) * (p - i);
-      return (y - lo) / (hi - lo);
+      // A random walk on 1/f noise: big slow moves with smaller ones on top.
+      const double y = 0.5 * valueNoise(37, x, 4) + 0.3 * valueNoise(137, x, 9) + 0.2 * valueNoise(237, x, 23);
+      return std::clamp((y - 0.2) / 0.6, 0.0, 1.0);
    }
    case 38: return std::clamp(0.55 + 0.45 * (valueNoise(38, x, 48) - 0.5) * 2.0 * valueNoise(138, x, 5), 0.0, 1.0);
    case 39: {

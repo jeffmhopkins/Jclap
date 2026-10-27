@@ -2,7 +2,8 @@
 // panel as it plays, as an MP4 with the audio (it needs ffmpeg on the PATH).
 //    jsynth-record out.mp4|out.wav [preset] [phrase]
 // The preset is a factory preset's name (Init when left out). The phrase is "cm7-swell" (the default):
-// a Cm7 held for 15 seconds while the pressure on every note swells up and back down.
+// a Cm7 held for 15 seconds while the pressure on every note swells up and back down; "four-bar", a
+// chord a bar; or "drone", a low chord built up over half a minute.
 
 #include <atomic>
 #include <cmath>
@@ -11,6 +12,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "editor.h"
@@ -112,6 +114,22 @@ struct Phrase {
       p.pressure = [](const Phrase &, const Note &n, double t) {
          const double s = std::sin(3.14159265358979 * (t - n.on) / (n.off - n.on));
          return static_cast<float>(s * s);
+      };
+      return p;
+   }
+
+   // A drone: an open fifth low down (C2 G2) held for half a minute, Eb3 and Bb3 joining at 6 s, D4
+   // at 13 s and G4 at 19 s, all let go together at 28 s into their tails. Pressure rises and falls
+   // slowly on every note, a little apart.
+   static Phrase drone() {
+      Phrase p;
+      const std::pair<int, double> keys[] = {{36, 0.3}, {43, 0.3}, {51, 6.0}, {58, 6.0}, {62, 13.0}, {67, 19.0}};
+      for (const auto &[key, on] : keys)
+         p.notes.push_back({key, on, 28.0, 0.7f});
+      p.length = 36.0;
+      p.pressure = [](const Phrase &, const Note &n, double t) {
+         const double s = std::sin(3.14159265358979 * (t - n.on) / (n.off - n.on) + 0.3 * (n.key % 5));
+         return static_cast<float>(0.35 * s * s);
       };
       return p;
    }
@@ -241,11 +259,11 @@ int main(int argc, char **argv) {
    }
    RecordHost host(*preset);
    const std::string phraseName = argc > 3 ? argv[3] : "cm7-swell";
-   if (phraseName != "cm7-swell" && phraseName != "four-bar") {
-      std::fprintf(stderr, "no phrase called %s (cm7-swell or four-bar)\n", phraseName.c_str());
+   if (phraseName != "cm7-swell" && phraseName != "four-bar" && phraseName != "drone") {
+      std::fprintf(stderr, "no phrase called %s (cm7-swell, four-bar or drone)\n", phraseName.c_str());
       return 1;
    }
-   const Phrase phrase = phraseName == "four-bar" ? Phrase::fourBar() : Phrase::cm7Swell();
+   const Phrase phrase = phraseName == "four-bar" ? Phrase::fourBar() : phraseName == "drone" ? Phrase::drone() : Phrase::cm7Swell();
    std::vector<float> audio;
    const int64_t total = static_cast<int64_t>(phrase.length * kRate);
    audio.reserve(static_cast<size_t>(total) * 2);

@@ -717,15 +717,16 @@ private:
       const int part = v.part;
       const int n = routeCount_[part];
       // Pass 1: routes onto other routes' amounts, at their own unmodulated amounts.
+      const auto ontoAmount = [this](const Route &r) { return r.dest >= firstAmountDest_ && r.dest < firstAmountDest_ + kRouteCount; };
       for (int i = 0; i < n; ++i) {
          const Route &r = routes_[part][i];
-         if (r.dest >= firstAmountDest_)
+         if (ontoAmount(r))
             offset[r.dest] += source(v, r.source) * plain(part, routeParam(r.index, kRouteAmount)) * 0.5f; // its range is 2 wide
       }
       // Pass 2: everything else, each at its amount moved by pass 1.
       for (int i = 0; i < n; ++i) {
          const Route &r = routes_[part][i];
-         if (r.dest >= firstAmountDest_)
+         if (ontoAmount(r))
             continue;
          // Each amount as smoothed with the other params, so automating one doesn't zipper.
          const float amount = std::clamp(plain(part, routeParam(r.index, kRouteAmount)) + 2.0f * offset[firstAmountDest_ + r.index], -1.0f, 1.0f);

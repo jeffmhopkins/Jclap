@@ -51,6 +51,11 @@ the sky. **SKY** hides everything but the flocks.
 - **Ink:** each creature sheds ink in the sky that blooms (Spread) and fades (Tail).
 - **Stereo:** X Pan sets how far each creature's place in the sky, left to right, pans its voice,
   so a flock can spread across the stereo field. Output Width sets the whole output's width.
+- **Three envelopes, ADSR or Shape.** Each is a DAHDSR with curves and loops, or, in Shape mode
+  (after XAOC's Zadar), one contour from a library of 48 in eight banks, stretched over 1 ms to 30
+  minutes or a tempo length, warped, bent, reversed and repeated. An Env Chain starts one Shape
+  envelope from another at a phase of its run, in a line or a loop, for drones and textures that keep
+  moving.
 - **Four LFOs.** Two move the flock: the wingbeat, one per creature, and the wind, one gust for the
   whole sky (Push sets how hard). They only move the flock. LFO 1 and LFO 2 are plain LFOs, the two
   to map.
@@ -81,20 +86,22 @@ save it, or press Escape or click anywhere else to back out. To remove a user pr
 menu and pick **Delete**; it asks once more before the file goes. A factory preset loads every param it doesn't set at its default, so nothing
 from the last patch carries over.
 
-The 168 factory presets run in 17 categories: **Bass**, **Leads**, **Keys**, **Mallets and Bells**, **Plucks**, **Brass**, **Strings**, **Pads**, **Rhythmic**, **Atmospheres**, **Voices**, **Drums and FX**, **Expressive**, **Monsta**, **Motion**, **Layers and Splits** and **Flock**. The instrument families come first,
+The 185 factory presets run in 19 categories: **Bass**, **Leads**, **Keys**, **Mallets and Bells**, **Plucks**, **Brass**, **Strings**, **Pads**, **Rhythmic**, **Atmospheres**, **Voices**, **Drums and FX**, **Expressive**, **Monsta**, **Motion**, **Drones**, **Textures**, **Layers and Splits** and **Flock**. The instrument families come first,
 from plain patches to ones with more going on, and most answer the mod wheel and Press so they play
 from any keyboard. **Keys** has an acoustic piano among its electric ones, and **Voices** is formants,
 throats and whispers. **Expressive** is played with Press, which bows, blows, bends, gates or blooms
-the sound rather than just opening a filter, and **Monsta** is variations on MicroMonsta 2 programs. **Motion** holds patches that keep moving on their own (looping envelopes, tempo-synced
-and random LFOs, the Random wave, every MPE dimension at once), **Layers and Splits** uses both parts
+the sound rather than just opening a filter, and **Monsta** is variations on MicroMonsta 2 programs. **Motion** holds patches that keep moving on their own (looping shapes, tempo-synced
+and random LFOs, the Random wave, every MPE dimension at once), **Drones** and **Textures** are built
+on Shape-mode envelopes (long drifting shapes and chains under a held chord, and shapes as the amp so
+each held note plays a pattern), **Layers and Splits** uses both parts
 (layers, some brought in by Press, splits at C3, velocity switches and Press and Slide crossfades), and **Flock** is the creatures playing
 the sound: Neighbour FM, Bite, and routes from the flock's sources. Every preset's level is matched, so
 stepping through the bank doesn't jump.
 
-`jsynth-record out.wav|out.mp4 [preset] [cm7-swell|four-bar]` (built with the tools) plays a phrase
-through a preset and writes the audio, or a video of the panel with it: a held Cm7 whose pressure
-swells up and back over 15 seconds, or four strummed chords (Cm9, Abmaj7, Fm9, G7b9) with the
-pressure swelling through each bar.
+`jsynth-record out.wav|out.mp4 [preset] [cm7-swell|four-bar|drone]` (built with the tools) plays a
+phrase through a preset and writes the audio, or a video of the panel with it: a held Cm7 whose
+pressure swells up and back over 15 seconds, four strummed chords (Cm9, Abmaj7, Fm9, G7b9) with the
+pressure swelling through each bar, or a low chord built up over half a minute.
 
 ## Params
 

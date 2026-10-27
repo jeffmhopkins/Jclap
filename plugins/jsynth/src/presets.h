@@ -124,6 +124,28 @@ inline const std::vector<Preset> &factoryPresets() {
          return Values{{partId(part, kVoiceMode), 2}, {partId(part, kGlideTime), glide > 0 ? timeValue(glide) : 0.0},
                        {partId(part, kGlideMode), 1}};
       };
+      // Envelope `e` of `part` in Shape mode: a shape by its name, one pass of it in `ms`, and how
+      // often it plays (kRepeatNames).
+      const auto shape = [](int part, int e, const char *name, double ms, int repeat) {
+         return Values{{partId(part, envParam(e, kEnvMode)), kModeShape},
+                       {partId(part, shapeParam(e, kShapeIndex)), shapeIndex(name)},
+                       {partId(part, shapeParam(e, kShapeTime)), shapeValue(ms)},
+                       {partId(part, shapeParam(e, kShapeRepeat)), repeat}};
+      };
+      // The same, a pass a tempo length (kShapeDivisionNames).
+      const auto shapeSync = [](int part, int e, const char *name, int division, int repeat) {
+         return Values{{partId(part, envParam(e, kEnvMode)), kModeShape},
+                       {partId(part, shapeParam(e, kShapeIndex)), shapeIndex(name)},
+                       {partId(part, shapeParam(e, kShapeSync)), 1},
+                       {partId(part, shapeParam(e, kShapeDivision)), division},
+                       {partId(part, shapeParam(e, kShapeRepeat)), repeat}};
+      };
+      // A shape's warp and bend.
+      const auto bow = [](int part, int e, double warp, double bend) {
+         return Values{{partId(part, shapeParam(e, kShapeWarp)), warp}, {partId(part, shapeParam(e, kShapeBend)), bend}};
+      };
+      constexpr int kOnce = 0, kForever = kRepeatForever;
+      constexpr int kBar = 4, kBars2 = 5, kBars4 = 7, kBars8 = 9, kBars16 = 11;
       constexpr int kScatter = 1, kHunt = 2, kFlee = 3;
       constexpr int kSine = 0, kTriangle = 1, kSaw = 2, kSquare = 3, kPulse = 4, kHalfSine = 5, kAltSine = 8;
       constexpr int kRatio = 1;
@@ -555,8 +577,10 @@ inline const std::vector<Preset> &factoryPresets() {
                    join({op(0, 0, kSine, 1.0, 0.2), {a(mixParam(kNoiseLevel), 0.5), a(mixParam(kNoiseColor), -0.5), a(kSkyPan, 0.5),
                           a(kDrift, 0.2)},
                          filter(0, 0, kComb, 261.6, 0.85, 1.0), filter(0, 1, kLadder, 1500, 0.2, 0.3), lfo(0, 2, kLfoSmooth, 0.13),
-                         lfo(0, 3, kLfoSmooth, 0.08), env(0, 0, 2000, 1000, 1.0, 4000),
-                         routes(0, {{lfo1, cutoff2, 0.2}, {lfo2, resonance, 0.1}, {wheel, cutoff2, 0.3}, {press, resonance, 0.12}})})});
+                         lfo(0, 3, kLfoSmooth, 0.08), env(0, 0, 2000, 1000, 1.0, 4000), shape(0, 1, "Wander", 21000, kForever),
+                         shape(0, 2, "Gusts", 33000, kForever),
+                         routes(0, {{lfo1, cutoff2, 0.2}, {lfo2, resonance, 0.1}, {wheel, cutoff2, 0.3}, {press, resonance, 0.12},
+                                    {env2, cutoff2, 0.15}, {env3, mixParam(kNoiseColor), 0.3}})})});
       p.push_back({"Aurora", "Atmospheres",
                    join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 1.5, 0.0), op(0, 2, kSine, 3.01, 0.0),
                          {a(fm21, 0.15), a(cutoff, 0.7), a(resonance, 0.2), a(lfoParam(2, kLfoRate), lfoValue(0.1)),
@@ -573,11 +597,11 @@ inline const std::vector<Preset> &factoryPresets() {
                           a(filterParam(0, kFilterType), 6), a(cutoff, 0.45), a(resonance, 0.5), a(filterParam(1, kFilterCutoff), 0.7),
                           a(tailParam(kDriveType), 2), a(lfoParam(1, kLfoPush), 0.8), a(lfoParam(1, kLfoRate), lfoValue(0.15)),
                           a(flockParam(kBehaviour), kScatter), a(kSkyPan, 0.6), a(kDrift, 0.2)},
-                         env(0, 0, 2500, 1000, 1.0, 4000), env(0, 1, 3000, 1000, 1.0, 3000),
+                         env(0, 0, 2500, 1000, 1.0, 4000), shape(0, 1, "Gusts", 15000, kForever),
                          routes(0, {{lfo2, cutoff, 0.25},
                                     {kSourceTurn, resonance, 0.3},
                                     {kSourceSpeed, filterParam(1, kFilterCutoff), 0.3},
-                                    {env2, mixParam(kNoiseLevel), 0.3},
+                                    {env2, mixParam(kNoiseLevel), 0.35},
                                     {press, tailParam(kDriveAmount), 0.4}})})});
 
       // ---- Voices: formants, throats and whispers ----
@@ -1009,12 +1033,13 @@ inline const std::vector<Preset> &factoryPresets() {
                          routes(0, {{lfo1, cutoff, 0.0}, {press, depth(0), -0.2}, {wheel, kPartLevel, -0.2}})})});
 
       // ---- Motion: patches that keep moving on their own ----
-      // Two unsynced LFOs and Env 3 looping on the FM, so no two bars sound the same; the wheel deepens all of it.
+      // Two unsynced LFOs and Env 3 wandering on the FM (a 9 s random walk), so no two bars sound the
+      // same; the wheel deepens all of it.
       p.push_back({"Shifting Glass", "Motion",
                    join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), op(0, 2, kSine, 3.5, 0.0), {a(fm21, 0.15), a(fm32, 0.1)},
-                         {a(envParam(2, kEnvLoop), 1), a(kSkyPan, 0.5)}, lfo(0, 2, kLfoSmooth, 0.27), lfo(0, 3, kLfoTriangle, 0.11),
-                         env(0, 0, 800, 1000, 1.0, 2500), env(0, 2, 1200, 1700, 0.2, 1000), open(0),
-                         routes(0, {{env3, fm21, 0.2}, {lfo1, fm32, 0.25}, {lfo2, oscParam(2, kOscRatio), 0.02},
+                         {a(kSkyPan, 0.5)}, lfo(0, 2, kLfoSmooth, 0.27), lfo(0, 3, kLfoTriangle, 0.11),
+                         env(0, 0, 800, 1000, 1.0, 2500), shape(0, 2, "Wander", 9000, kForever), open(0),
+                         routes(0, {{env3, fm21, 0.25}, {lfo1, fm32, 0.25}, {lfo2, oscParam(2, kOscRatio), 0.02},
                                     {lfo2, kPartPan, 0.3}, {wheel, depth(0), 0.15}, {wheel, depth(1), 0.15}, {press, fm21, 0.25}})})});
       // Each note gets its own wave (Random) and its own LFO speed, so a chord shimmers apart.
       p.push_back({"Random Garden", "Motion",
@@ -1024,12 +1049,16 @@ inline const std::vector<Preset> &factoryPresets() {
                          env(0, 0, 400, 1000, 0.8, 2000), env(0, 1, 600, 3000, 0.3, 2000),
                          routes(0, {{kSourceRandom, lfoParam(2, kLfoRate), 0.2}, {lfo1, cutoff, 0.15}, {lfo2, fm21, 0.15},
                                     {env2, cutoff, 0.2}, {kSourceRandom, kPartPan, 0.5}, {wheel, depth(2), 0.2}, {press, fm21, 0.3}})})});
-      // A looping Env 1 makes every held note pulse on its own clock, faster higher up.
+      // A Pluck shape looping as the amp makes every held note pulse on its own clock, faster higher up;
+      // Env 3 plays the same shape bent down, so each pulse starts bright.
       p.push_back({"Pulsar", "Motion",
-                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.0, 0.0), {a(fm21, 0.2), a(envParam(0, kEnvLoop), 1), a(kSkyPan, 0.7)},
-                         env(0, 0, 2, 280, 0.0, 600), env(0, 2, 0.5, 120, 0.0, 100), open(0),
-                         routes(0, {{key, envParam(0, kEnvDecay), -0.15}, {env3, fm21, 0.3}, {kSourceRandom, envParam(0, kEnvDecay), 0.08},
-                                    {wheel, fm21, 0.3}, {press, envParam(0, kEnvDecay), -0.15}})})});
+                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.0, 0.0), {a(fm21, 0.2), a(kSkyPan, 0.7)},
+                         shape(0, 0, "Pluck", 300, kForever), {a(envParam(0, kEnvRelease), timeValue(600))},
+                         shape(0, 2, "Pluck", 300, kForever), bow(0, 2, 0.0, -0.7), open(0),
+                         routes(0, {{key, shapeParam(0, kShapeTime), -0.05}, {key, shapeParam(2, kShapeTime), -0.05}, {env3, fm21, 0.3},
+                                    {kSourceRandom, shapeParam(0, kShapeTime), 0.03}, {kSourceRandom, shapeParam(2, kShapeTime), 0.03},
+                                    {wheel, fm21, 0.3}, {press, shapeParam(0, kShapeTime), -0.05},
+                                    {press, shapeParam(2, kShapeTime), -0.05}})})});
       // A sixteenth-note sequence from LFOs alone: S&H on the FM, a dotted-eighth square on the filter.
       p.push_back({"Clockwork", "Motion",
                    join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), op(0, 2, kSquare, 0.5, 0.35), {a(fm21, 0.15)},
@@ -1047,7 +1076,8 @@ inline const std::vector<Preset> &factoryPresets() {
                          routes(0, {{press, cutoff, 0.2}, {press, cutoff2, 0.25}, {slide, cutoff2, -0.3}, {lfo1, kPartFine, 0.0},
                                     {press, depth(3), 0.05}, {release, envParam(0, kEnvRelease), 0.25},
                                     {wheel, depth(3), 0.04}})})});
-      // Both parts: A's saw drone breathes on a slow LFO, B's FM bells an octave up loop on their own envelope.
+      // Both parts: A's saw drone breathes on a slow LFO, B's FM bells an octave up echo on their own,
+      // an Echoes shape looping as their amp, each note's stretched by its Random.
       p.push_back({"Tide Machine", "Motion",
                    join({{g(kPlayMode, 1.0)},
                          osc(0, 0, kSaw, 0, -8, 1.0), osc(0, 1, kSaw, 0, 8, 1.0), {a(mixParam(kMixPan, 0), -0.6), a(mixParam(kMixPan, 1), 0.6)},
@@ -1055,10 +1085,173 @@ inline const std::vector<Preset> &factoryPresets() {
                          env(0, 0, 1500, 1000, 1.0, 3000), {a(kPartLevel, -3)},
                          routes(0, {{lfo1, cutoff, 0.3}, {lfo2, resonance, 0.15}, {wheel, cutoff, 0.25}, {press, cutoff, 0.2}}),
                          op(1, 0, kSine, 1.0, 1.0), op(1, 1, kSine, 3.5, 0.0),
-                         {b(kPartTranspose, 12), b(fm21, 0.2), b(envParam(0, kEnvLoop), 1), b(kSkyPan, 0.8), b(kPartLevel, -9)},
-                         env(1, 0, 3, 1300, 0.0, 1500), env(1, 2, 0.5, 300, 0.0, 300), open(1), lfo(1, 2, kLfoTriangle, 0.05),
-                         routes(1, {{env3, fm21, 0.3}, {kSourceRandom, envParam(0, kEnvDecay), 0.1}, {lfo1, kPartLevel, 0.1},
+                         {b(kPartTranspose, 12), b(fm21, 0.2), b(kSkyPan, 0.8), b(kPartLevel, -9)},
+                         shape(1, 0, "Echoes", 2600, kForever), {b(envParam(0, kEnvRelease), timeValue(1500))},
+                         env(1, 2, 0.5, 300, 0.0, 300), open(1), lfo(1, 2, kLfoTriangle, 0.05),
+                         routes(1, {{env3, fm21, 0.3}, {kSourceRandom, shapeParam(0, kShapeTime), 0.06}, {lfo1, kPartLevel, 0.1},
                                     {wheel, fm21, 0.25}})})});
+
+      // ---- Drones: Shape-mode envelopes, after Zadar, that keep a held chord moving for minutes ----
+      // Saws and a square sub through a ladder: the amp swells in on a slow S, then two long drifting
+      // shapes (23 s and 37 s, so they never line up) move the cutoff, resonance and pan.
+      p.push_back({"Basalt", "Drones",
+                   join({osc(0, 0, kSaw, 0, -7, 0.8), osc(0, 1, kSaw, -12, 6, 0.8), osc(0, 2, kSquare, -24, 0, 0.35),
+                         {a(mixParam(kMixPan, 0), -0.5), a(mixParam(kMixPan, 1), 0.5), a(tailParam(kDriveType), 2),
+                          a(tailParam(kDriveAmount), 0.25), a(kDrift, 0.2), a(kSkyPan, 0.4), a(kPartLevel, -4)},
+                         filter(0, 0, kLadder, 380, 0.35, 0.3), shape(0, 0, "Slow S", 6000, kOnce),
+                         {a(envParam(0, kEnvRelease), timeValue(6000))}, shape(0, 1, "Wander", 23000, kForever),
+                         shape(0, 2, "Gusts", 37000, kForever),
+                         routes(0, {{env2, cutoff, 0.28}, {env3, resonance, 0.25}, {env3, kPartPan, 0.3}, {press, cutoff, 0.2},
+                                    {wheel, tailParam(kDriveAmount), 0.5}})})});
+      // Three sine drawbars that breathe: the 2nd and 3rd partials swell in and out on their own Breath
+      // shapes, one reversed, so the organ's colour turns over every few seconds.
+      p.push_back({"Breathing Organ", "Drones",
+                   join({op(0, 0, kSine, 1.0, 0.9), op(0, 1, kSine, 2.0, 0.15), op(0, 2, kSine, 3.0, 0.1),
+                         {a(fmCell(0, 0), 0.08), a(kDrift, 0.15), a(kSkyPan, 0.5), a(kPartLevel, -3)}, open(0),
+                         shape(0, 0, "Lift", 2500, kOnce), {a(envParam(0, kEnvRelease), timeValue(3000))},
+                         shape(0, 1, "Breath", 9000, kForever), shape(0, 2, "Breath", 13000, kForever),
+                         {a(shapeParam(2, kShapeReverse), 1)}, lfo(0, 2, kLfoSine, 5.5),
+                         routes(0, {{env2, mixParam(kMixLevel, 1), 0.6}, {env3, mixParam(kMixLevel, 2), 0.5}, {lfo1, kPartFine, 0.01},
+                                    {wheel, depth(2), 0.05}, {press, fmCell(0, 0), 0.25}})})});
+      // Pink noise through a comb tuned to the note, under a vault: one shape shimmers the comb's ring,
+      // another rolls the air's colour over 17 seconds.
+      p.push_back({"Cathedral Air", "Drones",
+                   join({op(0, 0, kSine, 1.0, 0.15), {a(mixParam(kNoiseLevel), 0.6), a(mixParam(kNoiseColor), -0.4), a(kSkyPan, 0.6),
+                          a(kDrift, 0.1)},
+                         filter(0, 0, kComb, 261.6, 0.8, 1.0), filter(0, 1, kLowPass, 2500, 0.1, 0.3),
+                         shape(0, 0, "Bloom", 5000, kOnce), {a(envParam(0, kEnvRelease), timeValue(7000))},
+                         shape(0, 1, "Shimmer", 11000, kForever), shape(0, 2, "Twin Hills", 17000, kForever),
+                         routes(0, {{env2, resonance, 0.15}, {env3, cutoff2, 0.3}, {env3, mixParam(kNoiseColor), 0.4},
+                                    {wheel, cutoff2, 0.3}, {press, resonance, 0.1}})})});
+      // A sub and a 1:2 FM growl that surges up every 14 s, while a 29 s random walk turns its feedback.
+      p.push_back({"Undertow", "Drones",
+                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), {a(fm21, 0.08), a(fb2, 0.1), a(kSkyPan, 0.3)},
+                         filter(0, 0, kLowPass, 1400, 0.2, 0.4), shape(0, 0, "Slow S", 4000, kOnce),
+                         {a(envParam(0, kEnvRelease), timeValue(5000))}, shape(0, 1, "Surge", 14000, kForever),
+                         shape(0, 2, "Brownian", 29000, kForever),
+                         routes(0, {{env2, fm21, 0.35}, {env2, cutoff, 0.15}, {env3, fb2, 0.3}, {env3, oscParam(1, kOscFine), 0.04},
+                                    {press, fm21, 0.25}, {wheel, cutoff, 0.3}})})});
+      // A chain: the amp blooms in over 12 s, and 70% of the way there the filter starts its own 30 s
+      // arch, opening and closing once. Hold a chord and wait.
+      p.push_back({"Long Bloom", "Drones",
+                   join({osc(0, 0, kSaw, 0, -9, 0.9), osc(0, 1, kSaw, 0, 9, 0.9), osc(0, 2, kPulse, 12, 0, 0.3),
+                         {a(mixParam(kMixPan, 0), -0.6), a(mixParam(kMixPan, 1), 0.6), a(oscParam(2, kOscShape), 0.3),
+                          a(kSkyPan, 0.5), a(kPartLevel, -3)},
+                         filter(0, 0, kLowPass, 280, 0.3, 0.3), shape(0, 0, "Bloom", 12000, kOnce),
+                         {a(envParam(0, kEnvRelease), timeValue(8000))}, shape(0, 1, "Arch", 30000, kOnce),
+                         {a(shapeParam(1, kShapePhase), 0.7), a(chainParam(kChain), 1)}, shape(0, 2, "Wander", 19000, kForever),
+                         routes(0, {{env2, cutoff, 0.5}, {env2, resonance, 0.2}, {env3, kPartPan, 0.25}, {env3, oscParam(2, kOscShape), 0.2},
+                                    {press, cutoff, 0.15}, {wheel, cutoff, 0.25}})})});
+      // A looped chain: Env 2 and Env 3, each a 10 s arch, start each other halfway through, so a
+      // filtered saw and a glassy FM tone cross-fade forever.
+      p.push_back({"Glacier", "Drones",
+                   join({osc(0, 0, kSaw, 0, -5, 0.0), op(0, 1, kSine, 1.0, 0.0), op(0, 2, kSine, 3.5, 0.0),
+                         {a(fmCell(2, 1), 0.25), a(kSkyPan, 0.6), a(kDrift, 0.15), a(kPartLevel, 1)},
+                         filter(0, 0, kLowPass, 1200, 0.2, 0.4), shape(0, 0, "Lift", 3000, kOnce),
+                         {a(envParam(0, kEnvRelease), timeValue(5000))}, shape(0, 1, "Arch", 10000, kOnce),
+                         shape(0, 2, "Arch", 10000, kOnce),
+                         {a(shapeParam(1, kShapePhase), 0.5), a(shapeParam(2, kShapePhase), 0.5), a(chainParam(kChain), 5)},
+                         routes(0, {{env2, mixParam(kMixLevel, 0), 0.9}, {env3, mixParam(kMixLevel, 1), 0.8}, {env3, kPartPan, 0.2},
+                                    {press, cutoff, 0.2}, {wheel, fmCell(2, 1), 0.3}})})});
+      // Detuned saws in a comb with tube drive, a hum that flickers: a fast random flicker on the
+      // comb's ring and a 41 s wander on the drive.
+      p.push_back({"Iron Hum", "Drones",
+                   join({osc(0, 0, kSaw, 0, -4, 0.8), osc(0, 1, kSaw, -12, 4, 0.7),
+                         {a(tailParam(kDriveType), 2), a(tailParam(kDriveAmount), 0.3), a(kSkyPan, 0.4), a(kPartLevel, -6)},
+                         filter(0, 0, kComb, 261.6, 0.6, 1.0), filter(0, 1, kLowPass, 1800, 0.15, 0.3),
+                         shape(0, 0, "Slow S", 3000, kOnce), {a(envParam(0, kEnvRelease), timeValue(4000))},
+                         shape(0, 1, "Flicker", 6000, kForever), shape(0, 2, "Wander", 41000, kForever),
+                         routes(0, {{env2, resonance, 0.12}, {env3, tailParam(kDriveAmount), 0.4}, {env3, cutoff2, 0.25},
+                                    {press, cutoff2, 0.25}, {wheel, resonance, 0.2}})})});
+      // In time with the host: four filter waves to every eight bars, and resonance that wobbles
+      // down over sixteen.
+      p.push_back({"Tidal Pulse", "Drones",
+                   join({osc(0, 0, kSaw, 0, -8, 0.9), osc(0, 1, kSaw, 0, 8, 0.9), osc(0, 2, kSaw, -12, 0, 0.5),
+                         {a(mixParam(kMixPan, 0), -0.5), a(mixParam(kMixPan, 1), 0.5), a(kSkyPan, 0.4), a(kPartLevel, -4)},
+                         filter(0, 0, kLadder, 450, 0.3, 0.3), shape(0, 0, "Slow S", 4000, kOnce),
+                         {a(envParam(0, kEnvRelease), timeValue(4000))}, shapeSync(0, 1, "Wobble 4", kBars8, kForever),
+                         shapeSync(0, 2, "Fading Wobble", kBars16, kForever),
+                         routes(0, {{env2, cutoff, 0.3}, {env3, resonance, 0.35}, {press, cutoff, 0.2}, {wheel, cutoff, 0.2}})})});
+
+      // ---- Textures: shapes as the amp, so each held note plays a pattern of its own ----
+      // FM glass that sparkles: the amp is the Sparkle shape, looping, and each note's Random
+      // stretches its own, so a chord rains rather than strums.
+      p.push_back({"Rain Glass", "Textures",
+                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.5, 0.0), op(0, 2, kSine, 7.02, 0.0),
+                         {a(fm21, 0.25), a(fm32, 0.15), a(kSkyPan, 0.9), a(kPartLevel, 2)}, open(0),
+                         shape(0, 0, "Sparkle", 5000, kForever), {a(envParam(0, kEnvRelease), timeValue(2500))},
+                         shape(0, 2, "Wander", 13000, kForever),
+                         routes(0, {{kSourceRandom, shapeParam(0, kShapeTime), 0.06}, {key, shapeParam(0, kShapeTime), -0.04},
+                                    {env3, fm21, 0.25}, {kSourceRandom, kPartPan, 0.6}, {press, fm32, 0.3}, {wheel, fm21, 0.3}})})});
+      // A dropped ball, over and over: higher notes bounce faster, and the filter bounces with it.
+      p.push_back({"Bouncing Light", "Textures",
+                   join({op(0, 0, kTriangle, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), {a(fm21, 0.15), a(kSkyPan, 0.8)},
+                         filter(0, 0, kLowPass, 900, 0.3, 0.5), shape(0, 0, "Bounce", 2400, kForever),
+                         {a(envParam(0, kEnvRelease), timeValue(1500))}, shape(0, 1, "Bounce", 2400, kForever),
+                         routes(0, {{key, shapeParam(0, kShapeTime), -0.08}, {key, shapeParam(1, kShapeTime), -0.08},
+                                    {kSourceRandom, shapeParam(0, kShapeTime), 0.03}, {kSourceRandom, shapeParam(1, kShapeTime), 0.03},
+                                    {env2, cutoff, 0.35}, {press, fm21, 0.3}, {wheel, resonance, 0.3}})})});
+      // Each note echoes itself on the beat, six taps dying away, and darkens over four bars.
+      p.push_back({"Echo Chamber", "Textures",
+                   join({osc(0, 0, kSaw, 0, -6, 0.8), osc(0, 1, kPulse, 0, 6, 0.6), {a(kSkyPan, 0.6), a(kPartLevel, 1)},
+                         filter(0, 0, kLowPass, 3200, 0.25, 0.5), shapeSync(0, 0, "Echoes", kBar, kForever),
+                         {a(envParam(0, kEnvRelease), timeValue(1200))}, shapeSync(0, 1, "Ramp Down", kBars4, kForever),
+                         routes(0, {{env2, cutoff, 0.3}, {kSourceRandom, kPartPan, 0.5}, {press, cutoff, 0.2},
+                                    {wheel, resonance, 0.3}})})});
+      // Gates that come faster through every bar, over a filter stepping at random every eighth.
+      p.push_back({"Stutter Fields", "Textures",
+                   join({osc(0, 0, kSaw, 0, -10, 0.9), osc(0, 1, kSaw, 0, 10, 0.9), osc(0, 2, kSquare, -12, 0, 0.4),
+                         {a(mixParam(kMixPan, 0), -0.6), a(mixParam(kMixPan, 1), 0.6), a(kPartLevel, -3)},
+                         filter(0, 0, kLadder, 1100, 0.35, 0.4), shapeSync(0, 0, "Stutter", kBar, kForever),
+                         {a(envParam(0, kEnvRelease), timeValue(400)), a(shapeParam(0, kShapeRetrigger), 1)},
+                         shapeSync(0, 1, "Random 16", kBars2, kForever), shapeSync(0, 2, "Ramp Up", kBars4, kForever),
+                         routes(0, {{env2, cutoff, 0.3}, {env3, resonance, 0.3}, {press, cutoff, 0.2}, {wheel, depth(0), 0.2}})})});
+      // A faraway signal: a band-passed tone keyed in sparse steps, with static, drifting in pitch.
+      p.push_back({"Number Station", "Textures",
+                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSquare, 2.0, 0.5),
+                         {a(mixParam(kNoiseLevel), 0.15), a(kDrift, 0.3), a(kSkyPan, 0.5), a(kPartLevel, 6)},
+                         filter(0, 0, kBandPass, 900, 0.2, 0.6), {a(filterParam(0, kFilterSlope), 0)}, shapeSync(0, 0, "Sparse Steps", kBars2, kForever),
+                         {a(envParam(0, kEnvRelease), timeValue(800))}, shape(0, 1, "Flicker", 3000, kForever),
+                         shape(0, 2, "Brownian", 17000, kForever),
+                         routes(0, {{env2, kPartFine, 0.03}, {env3, cutoff, 0.15}, {env3, mixParam(kNoiseLevel), 0.2},
+                                    {press, cutoff, 0.2}, {wheel, mixParam(kNoiseLevel), 0.4}})})});
+      // A filter climbing a stair each beat and a second voice stepping in at random: one held note
+      // walks a line.
+      p.push_back({"Stairwell", "Textures",
+                   join({osc(0, 0, kSaw, 0, 0, 0.9), osc(0, 1, kSquare, 7, 0, 0.0), osc(0, 2, kSaw, -12, 0, 0.5),
+                         {a(kSkyPan, 0.5), a(kPartLevel, -2)}, filter(0, 0, kLadder, 500, 0.45, 0.4),
+                         shape(0, 0, "Lift", 800, kOnce), {a(envParam(0, kEnvRelease), timeValue(900))},
+                         shapeSync(0, 1, "Arp Up", kBar, kForever), shapeSync(0, 2, "Random 16", kBars2, kForever),
+                         routes(0, {{env2, cutoff, 0.35}, {env3, mixParam(kMixLevel, 1), 0.6}, {press, resonance, 0.25},
+                                    {wheel, cutoff, 0.2}})})});
+      // A looped chain of three: the amp breathes in and out, the filter strikes and dies, the FM
+      // bounces, and round again, each starting part way through the one before.
+      p.push_back({"Breathing Machine", "Textures",
+                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 1.5, 0.0), osc(0, 2, kSaw, -12, 0, 0.5),
+                         {a(fm21, 0.1), a(kSkyPan, 0.6), a(kPartLevel, -1)}, filter(0, 0, kLowPass, 700, 0.35, 0.4),
+                         shape(0, 0, "Breath", 3000, kOnce), {a(envParam(0, kEnvRelease), timeValue(1500))},
+                         shape(0, 1, "Comet", 2000, kOnce), shape(0, 2, "Bounce", 3000, kOnce),
+                         {a(shapeParam(0, kShapePhase), 0.5), a(shapeParam(1, kShapePhase), 0.6), a(shapeParam(2, kShapePhase), 0.6),
+                          a(chainParam(kChain), 6)},
+                         routes(0, {{env2, cutoff, 0.45}, {env3, fm21, 0.35}, {key, shapeParam(0, kShapeTime), -0.03},
+                                    {press, cutoff, 0.2}, {wheel, fm21, 0.25}})})});
+      // A slow heartbeat under the note, two beats a bar, and a 20 s wander through the dark.
+      p.push_back({"Night Pulse", "Textures",
+                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), {a(fm21, 0.12), a(mixParam(kNoiseLevel), 0.05),
+                          a(kSkyPan, 0.3), a(kPartLevel, 3)},
+                         filter(0, 0, kLowPass, 600, 0.2, 0.4), shapeSync(0, 0, "Heartbeat", kBar, kForever),
+                         {a(envParam(0, kEnvRelease), timeValue(1000))}, shape(0, 1, "Wander", 20000, kForever),
+                         routes(0, {{env2, cutoff, 0.3}, {env2, fm21, 0.2}, {press, fm21, 0.3}, {wheel, cutoff, 0.3}})})});
+      // Bells struck again and again in a loop of their own, each tap of the Collapse shape a step
+      // lower, and the FM fading with it.
+      p.push_back({"Falling Bells", "Textures",
+                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.5, 0.0), op(0, 2, kSine, 5.02, 0.0),
+                         {a(fm21, 0.3), a(fm31, 0.1), a(kSkyPan, 0.8)}, open(0),
+                         shape(0, 0, "Collapse", 4000, kForever), {a(envParam(0, kEnvRelease), timeValue(2500))},
+                         shape(0, 1, "Bell", 4000, kForever), bow(0, 1, 0.0, -0.4),
+                         routes(0, {{env2, fm21, 0.35}, {kSourceRandom, shapeParam(0, kShapeTime), 0.05},
+                                    {kSourceRandom, shapeParam(1, kShapeTime), 0.05}, {kSourceRandom, kPartPan, 0.5},
+                                    {press, fm31, 0.3}, {wheel, fm21, 0.2}})})});
 
       // ---- Layers and Splits: both parts at once ----
       // Layer: the tine piano, and slow strings under it.
@@ -1483,7 +1676,7 @@ inline const std::vector<Preset> &factoryPresets() {
          {"Wind Choir", 9.0},
          {"Deep Space", -2.5},
          {"Aurora", -2.0},
-         {"Storm Front", -5.0},
+         {"Storm Front", -4.0},
          {"Kick", -5.5},
          {"Snare", 3.0},
          {"Hi-Hat", 7.5},
@@ -1493,10 +1686,27 @@ inline const std::vector<Preset> &factoryPresets() {
          {"Riser", -4.0},
          {"Shifting Glass", -3.5},
          {"Random Garden", 2.5},
-         {"Pulsar", 4.5},
+         {"Pulsar", 6.0},
          {"Clockwork", -2.0},
          {"MPE Voices", 2.5},
          {"Tide Machine", -0.5},
+         {"Basalt", 3.0},
+         {"Breathing Organ", -1.5},
+         {"Cathedral Air", -5.0},
+         {"Undertow", -2.0},
+         {"Long Bloom", -1.0},
+         {"Glacier", -2.0},
+         {"Iron Hum", 1.5},
+         {"Tidal Pulse", 0.5},
+         {"Rain Glass", 0.5},
+         {"Bouncing Light", -2.5},
+         {"Echo Chamber", 4.5},
+         {"Stutter Fields", 0.5},
+         {"Number Station", 2.0},
+         {"Stairwell", -1.5},
+         {"Breathing Machine", -0.5},
+         {"Night Pulse", 0.5},
+         {"Falling Bells", -3.5},
          {"Piano and Strings", -1.0},
          {"Bell Pad", 1.0},
          {"Bass and Keys Split", 4.5},
