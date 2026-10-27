@@ -535,8 +535,8 @@ int main() {
       e.gateOff(false);
       JCLAP_CHECK(run(e, 0.5f) > 0.89f && e.stage() == Env::kShape);
       JCLAP_CHECK(run(e, 0.2f) > 0.999f && e.stage() == Env::kDone);
-      // Smooth picks Arch up where it passes the level now; Restart drops to its start; Ignore
-      // plays on.
+      // Smooth picks Arch up where it passes the level now; Restart goes back to its start, gliding
+      // there over a few milliseconds so it doesn't click; Ignore plays on.
       Env::Settings arch = settings(12);
       arch.repeats = 0;
       e.set(arch);
@@ -547,13 +547,39 @@ int main() {
       JCLAP_CHECK(std::fabs(e.process(0.0f) - at) < 0.02f && e.phase() < 0.5f);
       arch.retrigger = Env::kRestart;
       e.set(arch);
+      const float was = e.process(0.0f);
       e.gateOn();
-      JCLAP_CHECK(e.process(0.0f) < 0.01f);
-      run(e, 0.3f);
+      JCLAP_CHECK(e.phase() < 1e-6f && std::fabs(e.process(0.0f) - was) < 0.01f);
+      JCLAP_CHECK(std::fabs(e.process(0.001f) - was) < 0.15f); // no jump on the way down
+      run(e, Env::kDeclick);
+      JCLAP_CHECK(e.level() < 0.02f);
+      run(e, 0.3f - Env::kDeclick - 0.001f);
       arch.retrigger = Env::kIgnore;
       e.set(arch);
       e.gateOn();
       JCLAP_CHECK(std::fabs(e.phase() - 0.3f) < 0.01f);
+      // A sustain point holds Ramp Up at 40% while the gate is, and it plays on from there after.
+      Env::Settings sus = settings(0);
+      sus.sustainAt = 0.4f;
+      e.set(sus);
+      e.reset();
+      e.gateOn();
+      JCLAP_CHECK(std::fabs(run(e, 2.0f) - 0.4f) < 0.01f && e.stage() == Env::kShape);
+      e.gateOff(false);
+      JCLAP_CHECK(std::fabs(run(e, 0.3f) - 0.7f) < 0.01f);
+      // On the amp, the rest of the shape is the release: ADSR held in its sustain at 50%, then
+      // its own release plays out before the fade, and the envelope ends.
+      Env::Settings adsr = settings(shapeIndex("ADSR"));
+      adsr.sustainAt = 0.5f;
+      e.set(adsr);
+      e.reset();
+      e.gateOn();
+      JCLAP_CHECK(std::fabs(run(e, 3.0f) - 0.6f) < 0.01f);
+      e.gateOff(true);
+      JCLAP_CHECK(e.releasing() && std::fabs(run(e, 0.2f) - 0.6f) < 0.01f);
+      JCLAP_CHECK(run(e, 0.31f) < 0.01f && e.stage() == Env::kDone);
+      run(e, 0.6f);
+      JCLAP_CHECK(!e.active());
       // Warp + comes later and Bend + lifts: Ramp Up at its middle.
       Env::Settings bent = settings(0);
       bent.warp = 1.0f;

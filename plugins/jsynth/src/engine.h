@@ -1174,6 +1174,7 @@ private:
       s.releaseCurve = plain(v.part, envParam(e, kEnvReleaseCurve));
       s.loop = choice(v.part, envParam(e, kEnvLoop));
       s.shapeMode = shapeMode(v.part, e);
+      float height = 1.0f;
       if (s.shapeMode) {
          const auto value = [&](ShapeParam p) { return offset ? mod(v, offset, shapeParam(e, p)) : plain(v.part, shapeParam(e, p)); };
          s.table = shapeTable(choice(v.part, shapeParam(e, kShapeIndex)));
@@ -1198,11 +1199,13 @@ private:
          s.repeats = repeat == kRepeatForever && !chained ? 0 : repeatCount(repeat);
          s.reverse = choice(v.part, shapeParam(e, kShapeReverse)) == 1;
          s.retrigger = choice(v.part, shapeParam(e, kShapeRetrigger));
+         s.sustainAt = value(kShapeSustain);
+         height = std::clamp(value(kShapeLevel), 0.0f, 1.0f);
       }
       v.env[e].set(s);
-      // Env Velocity scales the whole envelope by the strike.
+      // Env Velocity scales the whole envelope by the strike, and a shape's Level all of it.
       const float vel = offset ? mod(v, offset, envParam(e, kEnvVelocity)) : plain(v.part, envParam(e, kEnvVelocity));
-      v.envScale[e] = 1.0f - vel + vel * v.touch[0];
+      v.envScale[e] = (1.0f - vel + vel * v.touch[0]) * height;
    }
 
    bool shapeMode(int part, int e) const { return choice(part, envParam(e, kEnvMode)) == kModeShape; }

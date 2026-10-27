@@ -279,9 +279,14 @@ struct Comb {
 //
 // Or Shape mode, after XAOC's Zadar: a drawn contour (a table, from shapes.h) stretched over one
 // time, warped in time and bent in level, played forward or reversed, and repeated a number of
-// times, while the gate is held, or forever. It ends holding its last level. A forced gate off (the
-// amp) fades it out over the release while the contour keeps moving under the fade. A chain holds
-// an envelope waiting (arm()) until the one before it gets far enough through (trigger()).
+// times, while the gate is held, or forever. It ends holding its last level. A sustain point stops
+// it there while the gate is held, as Zadar's does, and lets it play on from there when the gate
+// drops. A forced gate off (the amp) fades it out over the release while the contour keeps moving
+// under the fade; with a sustain point, the rest of the contour is the release, and the fade only
+// starts once it has played. A retrigger never clicks: Smooth picks the contour up where it passes
+// the level now (Zadar's analog mode), and Restart, or Smooth on a level the contour never
+// reaches, glides into the top over a few milliseconds. A chain holds an envelope waiting (arm())
+// until the one before it gets far enough through (trigger()).
 class Envelope {
 public:
    enum Stage { kIdle, kDelay, kAttack, kHold, kDecay, kSustain, kRelease, kShape, kWait, kDone };
@@ -300,7 +305,10 @@ public:
       bool held = false;            // repeats while the gate is held instead
       bool reverse = false;
       int retrigger = kSmooth;
+      float sustainAt = 1.0f;       // where in the cycle it holds while the gate is, 1 for none
    };
+   // How long a retrigger takes to glide into the contour.
+   static constexpr float kDeclick = 0.005f;
 
    // Starts from wherever the level is, so a retrigger never clicks.
    void gateOn() {
@@ -318,9 +326,11 @@ public:
       gate_ = false;
       if (settings_.shapeMode) {
          if (force && stage_ != kIdle && !releasing_) {
-            releasing_ = true;
-            releaseT_ = 0;
-            from_ = level_;
+            // With a sustain point, the rest of the contour plays first.
+            if (sustains() && stage_ == kShape)
+               fadeAtEnd_ = true;
+            else
+               startFade();
          }
          return;
       }
@@ -334,6 +344,7 @@ public:
    void arm() {
       gate_ = true;
       releasing_ = false;
+      fadeAtEnd_ = false;
       gain_ = 1;
       cycles_ = 0;
       stage_ = kWait;
@@ -347,9 +358,14 @@ public:
       float x = 0;
       if (s.retrigger == kSmooth && stage_ != kIdle && level_ > 1e-3f)
          x = phaseAtLevel(level_);
+      // Anything but a perfect pick-up glides from the level now into the contour.
+      if (stage_ != kIdle && std::fabs(shapeLevel(x) - level_) > 1e-3f) {
+         slewFrom_ = level_;
+         slew_ = 1.0f;
+      }
       t_ = x;
       cycles_ = 0;
-      releasing_ = false;
+      releasing_ = fadeAtEnd_ = false;
       gain_ = 1;
       stage_ = kShape;
       ++runs_;
@@ -359,11 +375,12 @@ public:
       level_ = 0;
       t_ = 0;
       gain_ = 1;
-      releasing_ = false;
+      slew_ = 0;
+      releasing_ = fadeAtEnd_ = false;
    }
    void set(const Settings &s) { settings_ = s; }
    bool active() const { return stage_ != kIdle; }
-   bool releasing() const { return stage_ == kRelease || releasing_; }
+   bool releasing() const { return stage_ == kRelease || releasing_ || fadeAtEnd_; }
    float level() const { return level_; }
    Stage stage() const { return stage_; }
    // The level the release started from.
@@ -497,13 +514,23 @@ private:
       const Settings &s = settings_;
       switch (stage_) {
       case kShape: {
-         t_ += dt / std::max(s.time, 1e-3f);
+         float next = t_ + dt / std::max(s.time, 1e-3f);
+         // Held at the sustain point until the gate drops.
+         if (gate_ && sustains() && t_ <= s.sustainAt && next >= s.sustainAt)
+            next = s.sustainAt;
+         t_ = next;
          if (t_ >= 1.0f) {
             ++cycles_;
-            const bool last = s.held ? !gate_ : s.repeats > 0 && cycles_ >= s.repeats;
+            const bool last = fadeAtEnd_ || (s.held ? !gate_ : s.repeats > 0 && cycles_ >= s.repeats);
             if (last) {
                t_ = 1.0f;
                stage_ = kDone;
+               if (fadeAtEnd_) {
+                  fadeAtEnd_ = false;
+                  contour_ = shapeLevel(t_);
+                  level_ = contour_ * gain_;
+                  startFade();
+               }
             }
             else
                t_ -= std::floor(t_);
@@ -533,7 +560,18 @@ private:
       level_ = (stage_ == kWait ? level_ : contour_ * gain_);
       if (stage_ == kWait)
          contour_ = level_;
+      if (slew_ > 0.0f) {
+         slew_ = std::max(0.0f, slew_ - dt / kDeclick);
+         const float k = slew_ * slew_ * (3.0f - 2.0f * slew_);
+         level_ += (slewFrom_ - level_) * k;
+      }
       return level_;
+   }
+   bool sustains() const { return settings_.sustainAt < 0.995f; }
+   void startFade() {
+      releasing_ = true;
+      releaseT_ = 0;
+      from_ = level_;
    }
 
    // The first place in the cycle where the contour passes `level`, or the top if it never does.
@@ -556,9 +594,11 @@ private:
    float level_ = 0, start_ = 0, from_ = 0, t_ = 0;
    // Shape mode: the contour before the release fade, the fade, and how many cycles have played.
    float contour_ = 0, gain_ = 1, releaseT_ = 0;
+   // A retrigger's glide: from where, and how much of it is left (1..0).
+   float slewFrom_ = 0, slew_ = 0;
    int cycles_ = 0;
    uint32_t runs_ = 0;
-   bool gate_ = false, releasing_ = false;
+   bool gate_ = false, releasing_ = false, fadeAtEnd_ = false;
 };
 
 // ---- LFO ----

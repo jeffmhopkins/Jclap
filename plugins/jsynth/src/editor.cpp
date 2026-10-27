@@ -1775,11 +1775,18 @@ private:
 // moves); double-click puts both back. In MAP with a source armed, the drag sets how much the source
 // warps it (sideways) or bends it (up or down) instead, and the shape as the source at its fullest
 // would take it shows over it in the source's colour; a right-click removes both routes.
+// The dashed line is the sustain point: drag it along (to the right edge for off), double-click it
+// to turn it off. The arrows at the top step through the shapes and the bank's name opens their menu.
 class ShapeView : public ui::XYPad {
 public:
-   ShapeView(const FlockView &sky, Mapper &mapper, int part, int env, ui::ValueRange warp, ui::ValueRange bend)
-       : XYPad(warp, bend), sky_(sky), mapper_(mapper), part_(part), env_(env),
+   ShapeView(EditorHost &host, const FlockView &sky, Mapper &mapper, int part, int env, ui::ValueRange warp,
+             ui::ValueRange bend)
+       : XYPad(warp, bend), host_(host), sky_(sky), mapper_(mapper), part_(part), env_(env),
          dests_{destinationIndex(shapeParam(env, kShapeWarp)), destinationIndex(shapeParam(env, kShapeBend))} {}
+
+   // The arrows (by -1 or +1) and the bank's name.
+   std::function<void(int)> onStep;
+   std::function<void()> onMenu;
 
    void setTheme(const ui::Theme &theme) {
       theme_ = &theme;
@@ -1821,7 +1828,8 @@ public:
       set.reverse = static_cast<int>(param(kShapeReverse) + 0.5) == 1;
       contour_.set(set);
       const int columns = std::max(2, static_cast<int>(x1 - x0));
-      const auto yOf = [&](float level) { return bottom - std::clamp(level, 0.0f, 1.0f) * (bottom - top); };
+      const float height = std::clamp(static_cast<float>(param(kShapeLevel)), 0.0f, 1.0f);
+      const auto yOf = [&](float level) { return bottom - std::clamp(level * height, 0.0f, 1.0f) * (bottom - top); };
 
       // Where the armed source takes it, under the shape itself.
       const int armed = mapper_.mapping() ? mapper_.armedSource() : kSourceOff;
@@ -1870,11 +1878,31 @@ public:
       }
       c.segment(px, py, x1, yOf(contour_.shapeLevel(1.0f)), 2.0f * s, true);
 
-      // Its bank, and how often it plays.
+      // The sustain point, dashed; off, a faint handle at the end to drag it in from.
+      const float sustain = static_cast<float>(param(kShapeSustain));
+      const bool sustains = sustain < 0.995f;
+      const float sx = x0 + (x1 - x0) * (sustains ? sustain : 1.0f);
+      c.setColor(sustains ? visage::Color(0xe0ffffff) : visage::Color(0x40ffffff));
+      for (float y = top + 13 * s; y < bottom; y += 5 * s)
+         c.fill(sx - 0.5f * s, y, 1.2f * s, std::min(3 * s, bottom - y));
+      if (sustains || dragSustain_)
+         c.text(dragSustain_ ? (sustains ? std::to_string(static_cast<int>(sustain * 100 + 0.5f)) + "%" : "OFF") : "SUS",
+                ui::font(8 * s), sx > w * 0.75f ? visage::Font::kRight : visage::Font::kLeft,
+                sx > w * 0.75f ? sx - 43 * s : sx + 3 * s, bottom - 11 * s, 40 * s, 10 * s);
+
+      // Arrows either side of its bank, and how often it plays.
       const int repeat = static_cast<int>(param(kShapeRepeat) + 0.5);
       c.setColor(kDim);
-      c.text(upper(shapeBanks()[index / kShapeBankSize].name), ui::font(9 * s), visage::Font::kLeft, x0 + 3 * s, top,
-             w / 2, 12 * s);
+      const float ay = top + 6 * s, ah = 3 * s;
+      c.segment(x0 + 7 * s, ay - ah, x0 + 4 * s, ay, 1.2f * s, true);
+      c.segment(x0 + 4 * s, ay, x0 + 7 * s, ay + ah, 1.2f * s, true);
+      const std::string bank = upper(shapeBanks()[index / kShapeBankSize].name);
+      const float bankW = ui::font(9 * s).stringWidth(visage::String(bank).toUtf32());
+      c.text(bank, ui::font(9 * s), visage::Font::kLeft, x0 + 12 * s, top, w / 2, 12 * s);
+      const float rx = x0 + 15 * s + bankW;
+      c.segment(rx, ay - ah, rx + 3 * s, ay, 1.2f * s, true);
+      c.segment(rx + 3 * s, ay, rx, ay + ah, 1.2f * s, true);
+      bankEnd_ = rx + 6 * s;
       c.text(upper(kRepeatNames[std::clamp(repeat, 0, static_cast<int>(kRepeatNames.size()) - 1)]), ui::font(9 * s),
              visage::Font::kRight, w / 2, top, x1 - w / 2 - 3 * s, 12 * s);
 
@@ -1893,6 +1921,37 @@ public:
    void mouseDown(const visage::MouseEvent &e) override {
       if (dragging_)
          return;
+      const float s = height() / 66.0f, x0 = 6 * s, x1 = width() - 6 * s;
+      // The arrows and the bank's name, along the top.
+      if (e.isLeftButton() && e.position.y < 18 * s && e.position.x < bankEnd_ + 2 * s) {
+         if (e.position.x < x0 + 10 * s) {
+            if (onStep)
+               onStep(-1);
+         }
+         else if (e.position.x > bankEnd_ - 9 * s) {
+            if (onStep)
+               onStep(1);
+         }
+         else if (onMenu)
+            onMenu();
+         return;
+      }
+      // The sustain point's line.
+      const float sustain = static_cast<float>(sky_.value(part_, shapeParam(env_, kShapeSustain)));
+      const float sx = x0 + (x1 - x0) * std::min(sustain, 1.0f);
+      if (e.isLeftButton() && std::fabs(e.position.x - sx) < 5 * s && !mapper_.mapping()) {
+         const clap_id id = partId(part_, shapeParam(env_, kShapeSustain));
+         host_.beginEdit(id);
+         if (e.repeatClickCount() == 2) {
+            host_.setParam(id, 1.0);
+            host_.endEdit(id);
+            redraw();
+            return;
+         }
+         dragSustain_ = true;
+         redraw();
+         return;
+      }
       if (mapper_.mapping()) {
          if (e.isRightButton()) {
             for (int d : dests_)
@@ -1930,6 +1989,15 @@ public:
             a->onBeginEdit();
    }
    void mouseDrag(const visage::MouseEvent &e) override {
+      if (dragSustain_) {
+         const float s = height() / 66.0f, x0 = 6 * s, x1 = width() - 6 * s;
+         double at = std::clamp((e.position.x - x0) / std::max(1.0f, x1 - x0), 0.0f, 1.0f);
+         if (at > 0.97)
+            at = 1.0; // off
+         host_.setParam(partId(part_, shapeParam(env_, kShapeSustain)), at);
+         redraw();
+         return;
+      }
       if (mapping_) {
          const float dx = e.position.x - from_.x, dy = from_.y - e.position.y;
          // The way it first moves picks the route: sideways for Warp, up or down for Bend.
@@ -1965,6 +2033,12 @@ public:
       redraw();
    }
    void mouseUp(const visage::MouseEvent &) override {
+      if (dragSustain_) {
+         host_.endEdit(partId(part_, shapeParam(env_, kShapeSustain)));
+         dragSustain_ = false;
+         redraw();
+         return;
+      }
       if (mapping_) {
          if (route_ >= 0)
             mapper_.endRoute(part_, route_);
@@ -1988,9 +2062,12 @@ private:
       fine_ = e.isShiftDown();
    }
 
+   EditorHost &host_;
    const FlockView &sky_;
    Mapper &mapper_;
    int part_, env_;
+   bool dragSustain_ = false;
+   float bankEnd_ = 0; // where the right arrow ends, as last drawn
    int dests_[2]; // Warp's and Bend's places in destinations()
    const ui::Theme *theme_ = &ui::defaultTheme();
    unsigned accent_ = 0xffffffff;
@@ -2856,16 +2933,20 @@ private:
          auto &shape = glassy(put<ui::Dropdown>({ex + 154, 763, 122, 24}, shapeOptions()), ec);
          shape.setGroups(shapeGroups());
          bindings_.bind(shape, sid(kShapeIndex));
-         tips_.add(shape, "The contour this envelope plays, from eight banks of six.");
-         auto &view = glassy(put<ShapeView>({ex, 793, 276, 66}, *view_, *this, part, e, rangeOf(sid(kShapeWarp)),
-                                            rangeOf(sid(kShapeBend))),
+         tips_.add(shape, "The contour this envelope plays, from ten banks of six. Scroll over it, or use the "
+                          "arrows on the drawing, to step through them.");
+         auto &view = glassy(put<ShapeView>({ex, 793, 276, 66}, host_, *view_, *this, part, e,
+                                            rangeOf(sid(kShapeWarp)), rangeOf(sid(kShapeBend))),
                              ec);
+         view.onStep = [&shape](int by) { shape.step(by); };
+         view.onMenu = [&shape] { shape.openMenu(); };
          bindings_.bind(view, sid(kShapeWarp), sid(kShapeBend));
          view.x().valueText = [i = sid(kShapeWarp)](double v) { return text(i, v); };
          view.y().valueText = [i = sid(kShapeBend)](double v) { return text(i, v); };
          tips_.add(view, "Drag sideways to warp the shape in time and up or down to bend it in level. Hold shift for "
                          "fine moves; double-click to put both back. In MAP, drag to set how much the source warps "
-                         "or bends it.");
+                         "or bends it. The dashed line is the sustain point, where it holds while the note is: drag "
+                         "it in from the right edge, and double-click it to turn it off.");
          shapes_[part][e] = &view;
          mapped_.push_back(&view);
          drawings_.push_back(&view);
@@ -2881,20 +2962,24 @@ private:
          tips_.add(repeat, "How many passes it plays, then holds where it ends. HELD repeats while the note is held "
                            "and finishes its pass after; FOREVER until the voice ends. In a chain both play once.");
          if (e == 0)
-            numberBox(envParam(e, kEnvRelease), "REL ", ec, {ex, 892, 104, 24},
-                      "The amp's fade after the note ends, while the shape plays on under it.");
+            numberBox(envParam(e, kEnvRelease), "REL ", ec, {ex, 892, 66, 24},
+                      "The amp's fade after the note ends, while the shape plays on under it. With a sustain point, "
+                      "the rest of the shape plays first and the fade follows.");
          else
-            numberBox(envParam(e, kEnvVelocity), "VEL ", ec, {ex, 892, 104, 24},
+            numberBox(envParam(e, kEnvVelocity), "VEL ", ec, {ex, 892, 66, 24},
                       "How much the note's velocity scales the envelope.");
-         auto &reverse = glassy(put<ui::Button>({ex + 108, 892, 40, 24}, "REV"), ec);
+         numberBox(shapeParam(e, kShapeLevel), "LVL ", ec, {ex + 70, 892, 58, 24},
+                   "The shape's height, as Zadar's level: it scales the whole contour down.");
+         auto &reverse = glassy(put<ui::Button>({ex + 132, 892, 34, 24}, "REV"), ec);
          reverse.setToggle(true);
          bindings_.bind(reverse, sid(kShapeReverse));
-         tips_.add(reverse, "Plays the shape backwards.");
-         auto &retrigger = dropdown(shapeParam(e, kShapeRetrigger), ec, {ex + 152, 892, 70, 24});
+         tips_.add(reverse, "Plays the shape backwards. The sustain point stays where it is from the start.");
+         auto &retrigger = dropdown(shapeParam(e, kShapeRetrigger), ec, {ex + 170, 892, 66, 24});
          tips_.add(retrigger, "What a new note does while it plays: SMOOTH picks the shape up where it is at the level "
-                              "it is now, RESTART starts it from the top, IGNORE lets it play on.");
+                              "it is now (Zadar's analog mode), RESTART glides back to the top in 5 ms and starts "
+                              "again, IGNORE lets it play on.");
          envShows_ = {e, EnvShows::kChained};
-         numberBox(shapeParam(e, kShapePhase), "", ec, {ex + 226, 892, 50, 24},
+         numberBox(shapeParam(e, kShapePhase), "", ec, {ex + 240, 892, 36, 24},
                    "When it starts in the chain: how far through the envelope before it, from with it (0%) to "
                    "after it ends (100%).");
          envShows_ = {};

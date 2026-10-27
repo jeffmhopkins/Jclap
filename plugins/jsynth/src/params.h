@@ -194,6 +194,10 @@ enum ShapeParam : clap_id {
    kShapeRetrigger,
    // In a chain: how far through the envelope before it this one starts, 0 with it, 100% after it.
    kShapePhase,
+   // Where in its cycle it stops while the gate is held, as Zadar's sustain; 100% is off.
+   kShapeSustain,
+   // Its height, as Zadar's level: an attenuator on the whole contour.
+   kShapeLevel,
 };
 
 // How a part's envelopes chain: one starts the next as it plays, and a loop goes back round.
@@ -418,6 +422,7 @@ enum class Unit {
    Degrees,
    Curve,          // -1..1, shown as a signed number
    ShapeTime,      // 0..1 on shapeMs()
+   SustainPoint,   // 0..1 as a percentage, with the top as Off
 };
 
 struct Param {
@@ -499,6 +504,9 @@ inline std::vector<clap_id> buildDestinations() {
    // Shape mode came later, so its destinations follow (a saved route keeps its index).
    for (int e = 0; e < kEnvCount; ++e)
       for (ShapeParam p : {kShapeTime, kShapeWarp, kShapeBend, kShapePhase})
+         d.push_back(shapeParam(e, p));
+   for (int e = 0; e < kEnvCount; ++e)
+      for (ShapeParam p : {kShapeSustain, kShapeLevel})
          d.push_back(shapeParam(e, p));
    return d;
 }
@@ -628,6 +636,8 @@ inline void addPart(Builder &b, int part) {
       b.choice(q(kShapeReverse), n + "Reverse", m, kOnOffNames, 0, kGlobalChoice);
       b.choice(q(kShapeRetrigger), n + "Retrigger", m, kRetriggerNames, 0, kGlobalChoice);
       b.add(q(kShapePhase), n + "Chain Phase", m, 0.0, 1.0, 1.0, kMod, Unit::Percent);
+      b.add(q(kShapeSustain), n + "Sustain Point", m, 0.0, 1.0, 1.0, kMod, Unit::SustainPoint);
+      b.add(q(kShapeLevel), n + "Shape Level", m, 0.0, 1.0, 1.0, kMod, Unit::Percent);
    }
    b.choice(id(chainParam(kChain)), "Env Chain", "Env", kChainNames, 0, kGlobalChoice);
 
@@ -779,6 +789,12 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case Unit::Percent:
       std::snprintf(out, size, "%.0f%%", value * 100.0);
       break;
+   case Unit::SustainPoint:
+      if (value >= 0.995)
+         std::snprintf(out, size, "Off");
+      else
+         std::snprintf(out, size, "%.0f%%", value * 100.0);
+      break;
    case Unit::Bipolar:
       std::snprintf(out, size, "%+.0f%%", value * 100.0);
       break;
@@ -882,6 +898,10 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
          return true;
       }
    }
+   if (p->unit == Unit::SustainPoint && (*text == 'o' || *text == 'O')) {
+      value = 1.0;
+      return true;
+   }
    if (p->unit == Unit::Ratio && (*text == 'x' || *text == 'X'))
       ++text;
    double v = 0.0;
@@ -894,6 +914,7 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
    switch (p->unit) {
    case Unit::Percent:
    case Unit::Bipolar:
+   case Unit::SustainPoint:
       value = v / 100.0;
       break;
    case Unit::CutoffHz:

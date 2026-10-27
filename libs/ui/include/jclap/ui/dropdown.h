@@ -26,6 +26,10 @@ public:
    void setGroups(std::vector<std::pair<std::string, int>> groups) { groups_ = std::move(groups); }
 
    int selected() const { return selected_; }
+   // Picks the option `by` away from this one, as the user would (calls onChange).
+   void step(int by);
+   // Opens the options' menu, as a click on the box does.
+   void openMenu();
    // Changes the choice without calling onChange (for host updates).
    void setSelected(int index);
 
