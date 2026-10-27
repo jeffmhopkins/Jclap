@@ -26,6 +26,7 @@
 #include <jclap/ui/tabs.h>
 #include <jclap/ui/tooltip.h>
 #include <jclap/ui/update_notice.h>
+#include <jclap/ui/xy_pad.h>
 
 #include <visage/app.h>
 #include <visage_graphics/post_effects.h>
@@ -265,6 +266,77 @@ public:
    void mouseUp(const visage::MouseEvent &e) override {
       if (route_ < 0)
          return Knob::mouseUp(e);
+      mapper_.endRoute(part_, route_);
+      route_ = -1;
+      redraw();
+   }
+
+private:
+   Mapper &mapper_;
+   int part_;
+   int dest_;
+   int route_ = -1;
+   double start_ = 0.0;
+   float startY_ = 0.0f;
+   std::vector<Mapper::Ring> rings_;
+};
+
+// A value box MAP mode can map, for a param with no room for a knob: as a MapKnob, but its route
+// shows as a bar along the bottom, from the value to where the source takes it.
+class MapBox : public ui::NumberBox {
+public:
+   MapBox(ui::ValueRange range, Mapper &mapper, int part, clap_id offset)
+       : NumberBox(range), mapper_(mapper), part_(part), dest_(destinationIndex(offset)) {}
+
+   void draw(visage::Canvas &c) override {
+      NumberBox::draw(c);
+      const int armed = mapper_.armedSource();
+      if (dest_ < 0 || !mapper_.mapping() || armed == kSourceOff)
+         return;
+      const float w = width(), h = height(), inset = h * 0.18f, line = std::max(1.5f, h * 0.08f);
+      c.setColor(glow(sourceColor(armed), 0.55f, 1.0f));
+      c.roundedRectangleBorder(0, 0, w, h, h * 0.18f, 1.4f);
+      rings_.clear();
+      mapper_.rings(part_, dest_, rings_);
+      const float from = fraction(value()), span = w - 2 * inset;
+      for (const Mapper::Ring &r : rings_) {
+         if (r.source != armed)
+            continue;
+         const float to = std::clamp(from + static_cast<float>(r.amount), 0.0f, 1.0f);
+         c.setColor(glow(sourceColor(armed), 1.0f, 1.6f));
+         c.fill(inset + span * std::min(from, to), h - line - 1.0f, std::max(line, span * std::fabs(to - from)), line);
+      }
+   }
+
+   void mouseDown(const visage::MouseEvent &e) override {
+      if (!mapper_.mapping() || dest_ < 0)
+         return NumberBox::mouseDown(e);
+      if (e.isRightButton()) {
+         mapper_.unmap(part_, dest_);
+         redraw();
+         return;
+      }
+      if (mapper_.armedSource() == kSourceOff)
+         return;
+      route_ = mapper_.routeFor(part_, dest_);
+      if (route_ < 0)
+         return;
+      mapper_.beginRoute(part_, route_);
+      start_ = mapper_.routeAmount(part_, route_);
+      if (e.repeatClickCount() == 2)
+         mapper_.setRouteAmount(part_, route_, start_ = -start_);
+      startY_ = e.position.y;
+      redraw();
+   }
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (route_ < 0)
+         return NumberBox::mouseDrag(e);
+      mapper_.setRouteAmount(part_, route_, std::clamp(start_ + (startY_ - e.position.y) / dragLength(), -1.0, 1.0));
+      redraw();
+   }
+   void mouseUp(const visage::MouseEvent &e) override {
+      if (route_ < 0)
+         return NumberBox::mouseUp(e);
       mapper_.endRoute(part_, route_);
       route_ = -1;
       redraw();
@@ -1656,6 +1728,242 @@ private:
    const float &time_;
 };
 
+// An envelope in Shape mode drawn: its contour as the engine plays it, warped, bent and maybe
+// reversed, one cycle across the width, with how often it repeats in the corner and a dot riding
+// it for every sounding voice. Drag sideways to warp it and up or down to bend it (shift for fine
+// moves); double-click puts both back. In MAP with a source armed, the drag sets how much the source
+// warps it (sideways) or bends it (up or down) instead, and the shape as the source at its fullest
+// would take it shows over it in the source's colour; a right-click removes both routes.
+class ShapeView : public ui::XYPad {
+public:
+   ShapeView(const FlockView &sky, Mapper &mapper, int part, int env, ui::ValueRange warp, ui::ValueRange bend)
+       : XYPad(warp, bend), sky_(sky), mapper_(mapper), part_(part), env_(env),
+         dests_{destinationIndex(shapeParam(env, kShapeWarp)), destinationIndex(shapeParam(env, kShapeBend))} {}
+
+   void setTheme(const ui::Theme &theme) {
+      theme_ = &theme;
+      popup_.setTheme(theme);
+      XYPad::setTheme(theme);
+   }
+   void setAccent(unsigned color) {
+      accent_ = color;
+      XYPad::setAccent(color);
+   }
+   // Each voice's place in the cycle and its level.
+   void setPlayheads(std::vector<std::pair<float, float>> heads) {
+      if (heads != heads_) {
+         heads_ = std::move(heads);
+         redraw();
+      }
+   }
+
+   void draw(visage::Canvas &c) override {
+      const ui::Theme &t = *theme_;
+      const float w = width(), h = height(), s = h / 66.0f;
+      c.setColor(t.knobDark);
+      c.roundedRectangle(0, 0, w, h, 5 * s);
+      c.setColor(t.panelBorder);
+      c.roundedRectangleBorder(0, 0, w, h, 5 * s, 1.0f);
+      const float x0 = 6 * s, x1 = w - 6 * s, top = 6 * s, bottom = h - 6 * s;
+      c.setColor(t.track);
+      for (int i = 1; i < 4; ++i)
+         c.fill(x0, top + (bottom - top) * i / 4.0f, x1 - x0, 1.0f);
+
+      const auto param = [&](ShapeParam p) { return sky_.value(part_, shapeParam(env_, p)); };
+      const int index = static_cast<int>(param(kShapeIndex) + 0.5);
+      dsp::Envelope::Settings set;
+      set.shapeMode = true;
+      set.table = shapeTable(index);
+      set.points = kShapePoints;
+      set.warp = static_cast<float>(x().modulated);
+      set.bend = static_cast<float>(y().modulated);
+      set.reverse = static_cast<int>(param(kShapeReverse) + 0.5) == 1;
+      contour_.set(set);
+      const int columns = std::max(2, static_cast<int>(x1 - x0));
+      const auto yOf = [&](float level) { return bottom - std::clamp(level, 0.0f, 1.0f) * (bottom - top); };
+
+      // Where the armed source takes it, under the shape itself.
+      const int armed = mapper_.mapping() ? mapper_.armedSource() : kSourceOff;
+      if (armed != kSourceOff) {
+         c.setColor(glow(sourceColor(armed), 0.55f, 1.0f));
+         c.roundedRectangleBorder(0, 0, w, h, 5 * s, 1.4f);
+         float moved[2] = {0.0f, 0.0f};
+         for (int a = 0; a < 2; ++a) {
+            rings_.clear();
+            if (dests_[a] >= 0)
+               mapper_.rings(part_, dests_[a], rings_);
+            for (const Mapper::Ring &r : rings_)
+               if (r.source == armed)
+                  moved[a] += static_cast<float>(r.amount);
+         }
+         if (moved[0] != 0.0f || moved[1] != 0.0f) {
+            dsp::Envelope::Settings far = set;
+            far.warp = std::clamp(set.warp + moved[0] * static_cast<float>(x().range.max - x().range.min), -1.0f, 1.0f);
+            far.bend = std::clamp(set.bend + moved[1] * static_cast<float>(y().range.max - y().range.min), -1.0f, 1.0f);
+            reach_.set(far);
+            c.setColor(glow(sourceColor(armed), 1.0f, 1.6f));
+            float px = x0, py = yOf(reach_.shapeLevel(0.0f));
+            for (int i = 1; i <= columns; i += 2) {
+               const float f = static_cast<float>(i) / columns;
+               const float nx = x0 + (x1 - x0) * f, ny = yOf(reach_.shapeLevel(f));
+               c.segment(px, py, nx, ny, 1.2f * s, true);
+               px = nx, py = ny;
+            }
+         }
+      }
+      c.setColor((accent_ & 0x00ffffff) | 0x30000000);
+      float px = x0, py = yOf(contour_.shapeLevel(0.0f));
+      for (int i = 1; i <= columns; ++i) {
+         const float f = static_cast<float>(i) / columns;
+         const float nx = x0 + (x1 - x0) * f, ny = yOf(contour_.shapeLevel(f));
+         c.fill(px, std::min(py, ny), nx - px, bottom - std::min(py, ny));
+         px = nx, py = ny;
+      }
+      c.setColor(accent_);
+      px = x0, py = yOf(contour_.shapeLevel(0.0f));
+      for (int i = 1; i <= columns; i += 2) {
+         const float f = static_cast<float>(i) / columns;
+         const float nx = x0 + (x1 - x0) * f, ny = yOf(contour_.shapeLevel(f));
+         c.segment(px, py, nx, ny, 2.0f * s, true);
+         px = nx, py = ny;
+      }
+      c.segment(px, py, x1, yOf(contour_.shapeLevel(1.0f)), 2.0f * s, true);
+
+      // Its bank, and how often it plays.
+      const int repeat = static_cast<int>(param(kShapeRepeat) + 0.5);
+      c.setColor(kDim);
+      c.text(upper(shapeBanks()[index / kShapeBankSize].name), ui::font(9 * s), visage::Font::kLeft, x0 + 3 * s, top,
+             w / 2, 12 * s);
+      c.text(upper(kRepeatNames[std::clamp(repeat, 0, static_cast<int>(kRepeatNames.size()) - 1)]), ui::font(9 * s),
+             visage::Font::kRight, w / 2, top, x1 - w / 2 - 3 * s, 12 * s);
+
+      const float dot = 6 * s, glowSize = dot * 2.2f;
+      for (const auto &[phase, level] : heads_) {
+         const float ax = x0 + (x1 - x0) * std::clamp(phase, 0.0f, 1.0f), ay = yOf(level);
+         c.setColor((accent_ & 0x00ffffff) | 0x30000000);
+         c.circle(ax - glowSize * 0.5f, ay - glowSize * 0.5f, glowSize);
+         c.setColor((accent_ & 0x00ffffff) | 0x60000000);
+         c.circle(ax - glowSize * 0.32f, ay - glowSize * 0.32f, glowSize * 0.64f);
+         c.setColor(t.modulation);
+         c.circle(ax - dot * 0.3f, ay - dot * 0.3f, dot * 0.6f);
+      }
+   }
+
+   void mouseDown(const visage::MouseEvent &e) override {
+      if (dragging_)
+         return;
+      if (mapper_.mapping()) {
+         if (e.isRightButton()) {
+            for (int d : dests_)
+               if (d >= 0)
+                  mapper_.unmap(part_, d);
+            redraw();
+         }
+         else if (e.isLeftButton() && mapper_.armedSource() != kSourceOff) {
+            mapping_ = true, axis_ = -1, route_ = -1;
+            from_ = e.position;
+         }
+         return;
+      }
+      if (e.shouldTriggerPopup()) {
+         XYPad::mouseDown(e);
+         return;
+      }
+      if (!e.isLeftButton())
+         return;
+      if (e.repeatClickCount() == 2) {
+         for (Axis *a : {&x(), &y()}) {
+            if (a->onBeginEdit)
+               a->onBeginEdit();
+            a->set(a->range.defaultValue);
+            if (a->onEndEdit)
+               a->onEndEdit();
+         }
+         redraw();
+         return;
+      }
+      dragging_ = true;
+      grab(e);
+      for (Axis *a : {&x(), &y()})
+         if (a->onBeginEdit)
+            a->onBeginEdit();
+   }
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (mapping_) {
+         const float dx = e.position.x - from_.x, dy = from_.y - e.position.y;
+         // The way it first moves picks the route: sideways for Warp, up or down for Bend.
+         if (axis_ < 0) {
+            if (std::max(std::fabs(dx), std::fabs(dy)) < 4.0f)
+               return;
+            axis_ = std::fabs(dx) >= std::fabs(dy) ? 0 : 1;
+            route_ = dests_[axis_] >= 0 ? mapper_.routeFor(part_, dests_[axis_]) : -1;
+            if (route_ < 0)
+               return;
+            mapper_.beginRoute(part_, route_);
+            startX_ = mapper_.routeAmount(part_, route_);
+         }
+         if (route_ < 0)
+            return;
+         const float scale = e.isShiftDown() ? 0.15f : 1.0f;
+         const float moved = axis_ == 0 ? dx / std::max(1.0f, width()) : dy / std::max(1.0f, height());
+         mapper_.setRouteAmount(part_, route_, std::clamp(startX_ + moved * scale, -1.0, 1.0));
+         redraw();
+         return;
+      }
+      if (!dragging_)
+         return;
+      // Shift slows it down, from where it is now.
+      if (e.isShiftDown() != fine_)
+         grab(e);
+      const float scale = fine_ ? 0.15f : 1.0f;
+      const float dx = (e.position.x - from_.x) / std::max(1.0f, width());
+      const float dy = (from_.y - e.position.y) / std::max(1.0f, height());
+      x().set(startX_ + dx * scale * (x().range.max - x().range.min));
+      y().set(startY_ + dy * scale * (y().range.max - y().range.min));
+      popup_.show(*this, "WARP " + x().text(x().value) + "   BEND " + y().text(y().value));
+      redraw();
+   }
+   void mouseUp(const visage::MouseEvent &) override {
+      if (mapping_) {
+         if (route_ >= 0)
+            mapper_.endRoute(part_, route_);
+         mapping_ = false, route_ = -1;
+         redraw();
+         return;
+      }
+      if (dragging_)
+         for (Axis *a : {&x(), &y()})
+            if (a->onEndEdit)
+               a->onEndEdit();
+      dragging_ = false;
+      popup_.hide();
+   }
+
+private:
+   void grab(const visage::MouseEvent &e) {
+      from_ = e.position;
+      startX_ = x().value;
+      startY_ = y().value;
+      fine_ = e.isShiftDown();
+   }
+
+   const FlockView &sky_;
+   Mapper &mapper_;
+   int part_, env_;
+   int dests_[2]; // Warp's and Bend's places in destinations()
+   const ui::Theme *theme_ = &ui::defaultTheme();
+   unsigned accent_ = 0xffffffff;
+   dsp::Envelope contour_, reach_;
+   std::vector<Mapper::Ring> rings_;
+   bool mapping_ = false;
+   int axis_ = -1, route_ = -1;
+   std::vector<std::pair<float, float>> heads_;
+   bool dragging_ = false, fine_ = false;
+   visage::Point from_;
+   double startX_ = 0, startY_ = 0;
+   ui::ValuePopup popup_;
+};
+
 // The FM as what comes out: a C4 run through the three oscillators the way the engine does it,
 // two cycles drawn, with a chip under it for each route that is on.
 class FmView : public visage::Frame {
@@ -1865,6 +2173,8 @@ public:
       if (!(host_.view == kSkyOnly)) {
          refreshPitch();
          refreshEnvRanges();
+         if (envModeSum() != envModes_)
+            refresh();
       }
       if (host_.view != kSkyOnly)
          for (visage::Frame *d : drawings_)
@@ -1878,6 +2188,8 @@ public:
             layoutRoutes();
          for (MapKnob *k : mapKnobs_)
             k->redraw();
+         for (visage::Frame *f : mapped_)
+            f->redraw();
       }
    }
 
@@ -1950,6 +2262,8 @@ public:
       mapButton_->setOn(on);
       for (MapKnob *k : mapKnobs_)
          k->redraw();
+      for (visage::Frame *f : mapped_)
+         f->redraw();
    }
 
    void draw(visage::Canvas &c) override {
@@ -2032,6 +2346,12 @@ public:
 private:
    // Where a widget shows: always, in the synth view, on one tab of a panel there, or in the route
    // list.
+   // Which of an envelope's modes a widget shows in: the ADSR editor, or Shape mode's controls
+   // (some only while its time is free or synced, or while it waits in a chain).
+   struct EnvShows {
+      int env = -1;
+      enum When { kAdsr, kShape, kFree, kSynced, kChained } when = kAdsr;
+   };
    enum Group {
       kAlways,
       kSynth,
@@ -2049,6 +2369,7 @@ private:
       visage::Frame *frame;
       int part; // -1 for both
       Group group;
+      EnvShows env;
    };
    struct PitchKnobs {
       int part, osc;
@@ -2084,6 +2405,26 @@ private:
             level = std::max(0.0f, level - dt * std::max(level, 0.05f) / std::max(sec(kEnvRelease), 0.005f));
             continue;
          }
+         if (shapeMode(host_.part, e)) {
+            // A shape: its contour along its time, repeated as it would be, holding its end after.
+            const auto param = [&](ShapeParam p) { return value(host_.part, shapeParam(e, p)); };
+            dsp::Envelope::Settings set;
+            set.shapeMode = true;
+            set.table = shapeTable(static_cast<int>(param(kShapeIndex) + 0.5));
+            set.points = kShapePoints;
+            set.warp = static_cast<float>(param(kShapeWarp));
+            set.bend = static_cast<float>(param(kShapeBend));
+            set.reverse = static_cast<int>(param(kShapeReverse) + 0.5) == 1;
+            ledShape_.set(set);
+            const float time = static_cast<int>(param(kShapeSync) + 0.5) == 1
+                                   ? static_cast<float>(shapeBeats(static_cast<int>(param(kShapeDivision) + 0.5)) * 0.5)
+                                   : static_cast<float>(shapeMs(param(kShapeTime)) / 1000.0);
+            const int repeat = static_cast<int>(param(kShapeRepeat) + 0.5);
+            const float cycles = envTime_ / std::max(time, 1e-3f);
+            const bool ends = repeat < kRepeatHeld && cycles >= repeatCount(repeat);
+            level = ledShape_.shapeLevel(ends ? 1.0f : cycles - std::floor(cycles));
+            continue;
+         }
          const float t = envTime_ - sec(kEnvDelay), a = sec(kEnvAttack), hold = sec(kEnvHold), d = sec(kEnvDecay);
          if (t < 0.0f)
             level = 0.0f;
@@ -2103,12 +2444,20 @@ private:
             if (!envelopes_[part][e])
                continue;
             heads_.clear();
+            shapeHeads_.clear();
             for (int i = 0; view_->live() && i < f.playheadCount; ++i) {
                const FlockFrame::Playhead &p = f.playheads[i];
-               if (p.part == part && p.stage[e] >= 0)
+               if (p.part != part || p.stage[e] < 0)
+                  continue;
+               // Stage 4 is a shape's: its place in the cycle, and its level.
+               if (p.stage[e] == 4)
+                  shapeHeads_.push_back({p.from[e], p.level[e]});
+               else
                   heads_.push_back({static_cast<ui::EnvelopeEditor::Stage>(p.stage[e]), p.level[e], p.from[e]});
             }
             envelopes_[part][e]->setPlayheads(heads_);
+            if (shapes_[part][e])
+               shapes_[part][e]->setPlayheads(shapeHeads_);
          }
    }
    // One whole edit, as if the user made it.
@@ -2129,8 +2478,9 @@ private:
    }
 
    void refresh() {
+      envModes_ = envModeSum();
       for (const Placed &p : placed_)
-         p.frame->setVisible(shows(p.part, p.group));
+         p.frame->setVisible(shows(p.part, p.group) && envShows(p.part, p.env));
       refreshPitch();
       refreshEnvRanges();
       if (routeInfo_ && host_.view != kSkyOnly)
@@ -2155,6 +2505,38 @@ private:
       default: return true;
       }
    }
+   // Whether an envelope widget of `part` shows for its envelope's mode now.
+   bool envShows(int part, EnvShows e) const {
+      if (e.env < 0 || part < 0)
+         return true;
+      const bool shape = static_cast<int>(value(part, envParam(e.env, kEnvMode)) + 0.5) == kModeShape;
+      const bool synced = static_cast<int>(value(part, shapeParam(e.env, kShapeSync)) + 0.5) == 1;
+      switch (e.when) {
+      case EnvShows::kAdsr: return !shape;
+      case EnvShows::kShape: return shape;
+      case EnvShows::kFree: return shape && !synced;
+      case EnvShows::kSynced: return shape && synced;
+      case EnvShows::kChained: return shape && chainedTo(part, e.env) >= 0;
+      }
+      return true;
+   }
+   bool shapeMode(int part, int e) const { return static_cast<int>(value(part, envParam(e, kEnvMode)) + 0.5) == kModeShape; }
+   // As the engine's: the envelope `e` waits for in its chain, when both are in Shape mode.
+   int chainedTo(int part, int e) const {
+      const int before = chainedAfter(static_cast<int>(value(part, chainParam(kChain)) + 0.5), e);
+      return before >= 0 && shapeMode(part, e) && shapeMode(part, before) ? before : -1;
+   }
+   // Everything envShows() reads, so a change from the host shows.
+   double envModeSum() const {
+      double sum = 0.0;
+      for (int part = 0; part < kPartCount; ++part) {
+         sum += value(part, chainParam(kChain)) * (part + 1) * 1000.0;
+         for (int e = 0; e < kEnvCount; ++e)
+            sum += (value(part, envParam(e, kEnvMode)) * 3.0 + value(part, shapeParam(e, kShapeSync))) * (part * 3 + e + 1) * 10.0;
+      }
+      return sum;
+   }
+
    // Shows each oscillator's pitch knob for its pitch mode.
    void refreshPitch() {
       for (const PitchKnobs &p : pitchKnobs_) {
@@ -2185,7 +2567,7 @@ private:
    template <typename T, typename... Args>
    T &put(ui::Rect bounds, Args &&...args) {
       T &frame = add<T>(bounds, std::forward<Args>(args)...);
-      placed_.push_back({&frame, part_, group_});
+      placed_.push_back({&frame, part_, group_, envShows_});
       return frame;
    }
    template <typename T>
@@ -2231,6 +2613,43 @@ private:
       auto &d = glassy(put<ui::Dropdown>(r, upper(*findParam(id)->choices)), accent);
       bindings_.bind(d, id);
       return d;
+   }
+   // A value in a box, `prefix` before it, for a param with no room for a knob.
+   ui::NumberBox &numberBox(clap_id offset, const std::string &prefix, unsigned accent, ui::Rect r, const char *tip) {
+      const clap_id id = idOf(offset);
+      ui::NumberBox *made;
+      if (part_ >= 0) {
+         auto &m = put<MapBox>(r, rangeOf(id), *this, part_, offset);
+         mapped_.push_back(&m);
+         made = &m;
+      }
+      else
+         made = &put<ui::NumberBox>(r, rangeOf(id));
+      auto &box = glassy(*made, accent);
+      box.valueText = [id, prefix](double v) { return prefix + text(id, v); };
+      box.parseText = [id](const std::string &t, double &v) { return parseParam(id, t.c_str(), v); };
+      bindings_.bind(box, id);
+      tips_.add(box, tip);
+      return box;
+   }
+   static std::vector<std::string> shapeOptions() {
+      std::vector<std::string> names;
+      for (const ShapeBank &b : shapeBanks())
+         for (const char *n : b.shapes)
+            names.push_back(upper(n));
+      return names;
+   }
+   static std::vector<std::pair<std::string, int>> shapeGroups() {
+      std::vector<std::pair<std::string, int>> groups;
+      for (const ShapeBank &b : shapeBanks())
+         groups.push_back({upper(b.name), kShapeBankSize});
+      return groups;
+   }
+   static std::vector<std::string> chainOptions() {
+      std::vector<std::string> names;
+      for (const std::string &n : kChainNames)
+         names.push_back(n == "Off" ? "NO CHAIN" : "CHAIN " + upper(n));
+      return names;
    }
    ui::SegmentedSwitch &segments(clap_id offset, unsigned accent, ui::Rect r, std::vector<std::string> names) {
       const clap_id id = idOf(offset);
@@ -2371,19 +2790,78 @@ private:
       for (int e = 0; e < kEnvCount; ++e) {
          const float ex = x + 12 + e * 288.0f;
          const unsigned ec = sourceColor(kSourceEnv1 + e);
-         chip(kSourceEnv1 + e, envNames[e], {ex, 763, 110, 24});
-         auto &range = dropdown(envParam(e, kEnvRange), c, {ex + 118, 763, 66, 24});
+         chip(kSourceEnv1 + e, envNames[e], {ex, 763, 88, 24});
+         auto &mode = dropdown(envParam(e, kEnvMode), c, {ex + 92, 763, 58, 24});
+         tips_.add(mode, "ADSR draws the envelope from its stages. SHAPE plays a contour from the shape library "
+                         "instead, stretched over its time, warped, bent and repeated, and can chain into the next.");
+         const auto id = [&](EnvParam p) { return partId(part, envParam(e, p)); };
+         const auto sid = [&](ShapeParam p) { return partId(part, shapeParam(e, p)); };
+
+         // ADSR: the editor and its view and loop.
+         envShows_ = {e, EnvShows::kAdsr};
+         auto &range = dropdown(envParam(e, kEnvRange), c, {ex + 154, 763, 66, 24});
          tips_.add(range, "How much time the editor spreads across its width: up to 1 s, 5 s or 20 s a stage. "
                           "Switching it changes no time. Hold shift while dragging a corner for fine moves.");
-         dropdown(envParam(e, kEnvLoop), c, {ex + 190, 763, 86, 24});
-         const auto id = [&](EnvParam p) { return partId(part, envParam(e, p)); };
+         dropdown(envParam(e, kEnvLoop), c, {ex + 224, 763, 52, 24});
          auto &env = glassy(put<ui::EnvelopeEditor>({ex, 793, 276, 127}, rangeOf(id(kEnvAttack)), rangeOf(id(kEnvDecay)),
                                                     rangeOf(id(kEnvSustain)), rangeOf(id(kEnvRelease))),
                             ec);
          envelopes_[part][e] = &env;
          envRanges_[part][e] = -1;
          bindings_.bind(env, id(kEnvAttack), id(kEnvDecay), id(kEnvSustain), id(kEnvRelease));
+
+         // Shape: which contour, drawn, and how it plays.
+         envShows_ = {e, EnvShows::kShape};
+         auto &shape = glassy(put<ui::Dropdown>({ex + 154, 763, 122, 24}, shapeOptions()), ec);
+         shape.setGroups(shapeGroups());
+         bindings_.bind(shape, sid(kShapeIndex));
+         tips_.add(shape, "The contour this envelope plays, from eight banks of six.");
+         auto &view = glassy(put<ShapeView>({ex, 793, 276, 66}, *view_, *this, part, e, rangeOf(sid(kShapeWarp)),
+                                            rangeOf(sid(kShapeBend))),
+                             ec);
+         bindings_.bind(view, sid(kShapeWarp), sid(kShapeBend));
+         view.x().valueText = [i = sid(kShapeWarp)](double v) { return text(i, v); };
+         view.y().valueText = [i = sid(kShapeBend)](double v) { return text(i, v); };
+         tips_.add(view, "Drag sideways to warp the shape in time and up or down to bend it in level. Hold shift for "
+                         "fine moves; double-click to put both back. In MAP, drag to set how much the source warps "
+                         "or bends it.");
+         shapes_[part][e] = &view;
+         mapped_.push_back(&view);
+         drawings_.push_back(&view);
+         envShows_ = {e, EnvShows::kFree};
+         numberBox(shapeParam(e, kShapeTime), "TIME ", ec, {ex, 864, 104, 24},
+                   "How long one pass of the shape takes: 1 ms to 30 minutes.");
+         envShows_ = {e, EnvShows::kSynced};
+         auto &length = dropdown(shapeParam(e, kShapeDivision), ec, {ex, 864, 104, 24});
+         tips_.add(length, "How long one pass of the shape takes, in the host's tempo.");
+         envShows_ = {e, EnvShows::kShape};
+         segments(shapeParam(e, kShapeSync), ec, {ex + 108, 864, 70, 24}, std::vector<std::string>{"FREE", "SYNC"});
+         auto &repeat = dropdown(shapeParam(e, kShapeRepeat), ec, {ex + 182, 864, 94, 24});
+         tips_.add(repeat, "How many passes it plays, then holds where it ends. HELD repeats while the note is held "
+                           "and finishes its pass after; FOREVER until the voice ends. In a chain both play once.");
+         if (e == 0)
+            numberBox(envParam(e, kEnvRelease), "REL ", ec, {ex, 892, 104, 24},
+                      "The amp's fade after the note ends, while the shape plays on under it.");
+         else
+            numberBox(envParam(e, kEnvVelocity), "VEL ", ec, {ex, 892, 104, 24},
+                      "How much the note's velocity scales the envelope.");
+         auto &reverse = glassy(put<ui::Button>({ex + 108, 892, 40, 24}, "REV"), ec);
+         reverse.setToggle(true);
+         bindings_.bind(reverse, sid(kShapeReverse));
+         tips_.add(reverse, "Plays the shape backwards.");
+         auto &retrigger = dropdown(shapeParam(e, kShapeRetrigger), ec, {ex + 152, 892, 70, 24});
+         tips_.add(retrigger, "What a new note does while it plays: SMOOTH picks the shape up where it is at the level "
+                              "it is now, RESTART starts it from the top, IGNORE lets it play on.");
+         envShows_ = {e, EnvShows::kChained};
+         numberBox(shapeParam(e, kShapePhase), "", ec, {ex + 226, 892, 50, 24},
+                   "When it starts in the chain: how far through the envelope before it, from with it (0%) to "
+                   "after it ends (100%).");
+         envShows_ = {};
       }
+      auto &chain = glassy(put<ui::Dropdown>({x + w - 12 - 150, 731, 150, 24}, chainOptions()), c);
+      bindings_.bind(chain, partId(part, chainParam(kChain)));
+      tips_.add(chain, "Chains envelopes in Shape mode: each starts the next as it plays, at the next one's phase "
+                       "(the box beside its REV), and a loop goes back round to the first.");
       group_ = kLfoPage;
       for (int i = 0; i < kLfoCount - kMotionCount; ++i) {
          const int l = kMotionCount + i;
@@ -2675,6 +3153,8 @@ private:
    static constexpr float kCleanMargin = 16.0f;
    std::vector<Placed> placed_;
    std::vector<MapKnob *> mapKnobs_;
+   // The other things MAP can map: value boxes and the shape drawings.
+   std::vector<visage::Frame *> mapped_;
    std::vector<SourceChip *> chips_;
    std::vector<PitchKnobs> pitchKnobs_;
    struct RouteRow {
@@ -2689,6 +3169,7 @@ private:
    // What put() is building for: a part (-1 for both), and where it shows.
    int part_ = -1;
    Group group_ = kAlways;
+   EnvShows envShows_;
    bool mapping_ = false;
    int armed_ = kSourceOff;
    double routeSum_ = 0.0;
@@ -2696,9 +3177,13 @@ private:
    float envLevel_[kEnvCount] = {};
    float envTime_ = 0.0f;
    int envNote_ = -1;
+   dsp::Envelope ledShape_;
    // Each part's envelope editors.
    ui::EnvelopeEditor *envelopes_[kPartCount][kEnvCount] = {};
    int envRanges_[kPartCount][kEnvCount] = {};
+   ShapeView *shapes_[kPartCount][kEnvCount] = {};
+   double envModes_ = -1.0;
+   std::vector<std::pair<float, float>> shapeHeads_;
    std::vector<visage::Frame *> drawings_; // redrawn each frame
    ui::SegmentedSwitch *viewSwitch_ = nullptr;
    int oscTab_ = 0;   // the oscillator panel's tab: 0 OSCILLATORS, 1 FM

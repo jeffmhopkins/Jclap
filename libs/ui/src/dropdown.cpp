@@ -91,8 +91,21 @@ void Dropdown::mouseDown(const visage::MouseEvent &e) {
    if (!e.isLeftButton())
       return;
    visage::PopupMenu menu;
-   for (size_t i = 0; i < options_.size(); ++i)
-      menu.addOption(static_cast<int>(i), options_[i]).select(static_cast<int>(i) == selected_);
+   if (groups_.empty())
+      for (size_t i = 0; i < options_.size(); ++i)
+         menu.addOption(static_cast<int>(i), options_[i]).select(static_cast<int>(i) == selected_);
+   else {
+      int i = 0;
+      for (const auto &[name, count] : groups_) {
+         visage::PopupMenu group(name);
+         bool holds = false;
+         for (int n = 0; n < count && i < static_cast<int>(options_.size()); ++n, ++i) {
+            group.addOption(i, options_[i]).select(i == selected_);
+            holds = holds || i == selected_;
+         }
+         menu.addSubMenu(std::move(group.select(holds)));
+      }
+   }
    menu.onSelection() += [this](int id) { pick(id); };
    menu.show(this);
 }

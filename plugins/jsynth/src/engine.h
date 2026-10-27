@@ -440,6 +440,13 @@ public:
          for (int e = 0; e < kEnvCount; ++e) {
             const dsp::Envelope &env = v.env[e];
             int stage = -1;
+            // A shape's dot rides its contour: stage 4, at its place in the cycle.
+            if (shapeMode(v.part, e)) {
+               p.stage[e] = static_cast<int8_t>(env.active() ? 4 : -1);
+               p.level[e] = env.level();
+               p.from[e] = env.phase();
+               continue;
+            }
             switch (env.stage()) {
             case dsp::Envelope::kDelay:
             case dsp::Envelope::kAttack: stage = 0; break;
@@ -486,7 +493,9 @@ private:
       float pitch = 60, targetPitch = 60;
       dsp::Envelope env[kEnvCount];
       dsp::Envelope::Settings envSettings[kEnvCount];
-      float envKey[kEnvCount][5] = {};
+      float envKey[kEnvCount][6] = {};
+      // For a chained envelope: the run of the one before it that last started it.
+      uint32_t chainFired[kEnvCount] = {};
       float envOut[kEnvCount] = {}, envScale[kEnvCount] = {1, 1, 1};
       dsp::Lfo lfo[kLfoCount];
       float lfoOut[kLfoCount] = {};
@@ -708,15 +717,16 @@ private:
       const int part = v.part;
       const int n = routeCount_[part];
       // Pass 1: routes onto other routes' amounts, at their own unmodulated amounts.
+      const auto ontoAmount = [this](const Route &r) { return r.dest >= firstAmountDest_ && r.dest < firstAmountDest_ + kRouteCount; };
       for (int i = 0; i < n; ++i) {
          const Route &r = routes_[part][i];
-         if (r.dest >= firstAmountDest_)
+         if (ontoAmount(r))
             offset[r.dest] += source(v, r.source) * plain(part, routeParam(r.index, kRouteAmount)) * 0.5f; // its range is 2 wide
       }
       // Pass 2: everything else, each at its amount moved by pass 1.
       for (int i = 0; i < n; ++i) {
          const Route &r = routes_[part][i];
-         if (r.dest >= firstAmountDest_)
+         if (ontoAmount(r))
             continue;
          // Each amount as smoothed with the other params, so automating one doesn't zipper.
          const float amount = std::clamp(plain(part, routeParam(r.index, kRouteAmount)) + 2.0f * offset[firstAmountDest_ + r.index], -1.0f, 1.0f);
@@ -889,6 +899,7 @@ private:
          setEnvelope(v, e, offset);
       for (int e = 1; e < kEnvCount; ++e)
          v.envOut[e] = v.env[e].process(tickSeconds) * v.envScale[e];
+      runChain(v, offset);
       for (int l = 0; l < kLfoCount; ++l) {
          float out;
          const int trigger = choice(part, lfoParam(l, kLfoTrigger));
@@ -1162,10 +1173,83 @@ private:
       s.decayCurve = plain(v.part, envParam(e, kEnvDecayCurve));
       s.releaseCurve = plain(v.part, envParam(e, kEnvReleaseCurve));
       s.loop = choice(v.part, envParam(e, kEnvLoop));
+      s.shapeMode = shapeMode(v.part, e);
+      if (s.shapeMode) {
+         const auto value = [&](ShapeParam p) { return offset ? mod(v, offset, shapeParam(e, p)) : plain(v.part, shapeParam(e, p)); };
+         s.table = shapeTable(choice(v.part, shapeParam(e, kShapeIndex)));
+         s.points = kShapePoints;
+         if (choice(v.part, shapeParam(e, kShapeSync)) == 1) {
+            s.time = static_cast<float>(shapeBeats(choice(v.part, shapeParam(e, kShapeDivision))) * 60.0 / bpm_);
+            v.envKey[e][5] = -1.0f; // so Free works its time out again
+         }
+         else {
+            const float t = value(kShapeTime);
+            if (t != v.envKey[e][5] || v.fresh) {
+               v.envKey[e][5] = t;
+               s.time = static_cast<float>(shapeMs(t)) / 1000.0f;
+            }
+         }
+         s.warp = value(kShapeWarp);
+         s.bend = value(kShapeBend);
+         // In a chain, Held and Forever play once, so the chain moves on (as Zadar's do).
+         const int repeat = choice(v.part, shapeParam(e, kShapeRepeat));
+         const bool chained = linked(v.part, e);
+         s.held = repeat == kRepeatHeld && !chained;
+         s.repeats = repeat == kRepeatForever && !chained ? 0 : repeatCount(repeat);
+         s.reverse = choice(v.part, shapeParam(e, kShapeReverse)) == 1;
+         s.retrigger = choice(v.part, shapeParam(e, kShapeRetrigger));
+      }
       v.env[e].set(s);
       // Env Velocity scales the whole envelope by the strike.
       const float vel = offset ? mod(v, offset, envParam(e, kEnvVelocity)) : plain(v.part, envParam(e, kEnvVelocity));
       v.envScale[e] = 1.0f - vel + vel * v.touch[0];
+   }
+
+   bool shapeMode(int part, int e) const { return choice(part, envParam(e, kEnvMode)) == kModeShape; }
+   // The envelope `e` of `part` waits for in its chain, if both are in Shape mode; or -1.
+   int chainedTo(int part, int e) const {
+      const int before = chainedAfter(choice(part, chainParam(kChain)), e);
+      return before >= 0 && shapeMode(part, e) && shapeMode(part, before) ? before : -1;
+   }
+   // Whether `e` starts another envelope or waits for one.
+   bool linked(int part, int e) const {
+      for (int n = 0; n < kEnvCount; ++n)
+         if (chainedTo(part, n) == e && n != e)
+            return true;
+      return chainedTo(part, e) >= 0;
+   }
+   // Starts the envelopes on a note: the first of a chain, and the ones on their own, now; the rest
+   // when the one before them gets far enough.
+   void startEnvelopes(Voice &v) {
+      const int chain = choice(v.part, chainParam(kChain));
+      for (int e = 0; e < kEnvCount; ++e) {
+         const int before = chainedTo(v.part, e);
+         if (before >= 0)
+            v.chainFired[e] = v.env[before].runs();
+      }
+      for (int e = 0; e < kEnvCount; ++e) {
+         if (chainedTo(v.part, e) >= 0 && !chainHead(chain, e))
+            v.env[e].arm();
+         else
+            v.env[e].gateOn();
+      }
+   }
+   // Each tick: starts an envelope whose one before it has played as far as its Chain Phase.
+   void runChain(Voice &v, const float *offset) {
+      for (int e = 0; e < kEnvCount; ++e) {
+         const int before = chainedTo(v.part, e);
+         if (before < 0)
+            continue;
+         const dsp::Envelope &b = v.env[before];
+         const bool started = b.stage() == dsp::Envelope::kShape || b.stage() == dsp::Envelope::kDone;
+         if (!started || b.runs() == v.chainFired[e])
+            continue;
+         const float phase = offset ? mod(v, offset, shapeParam(e, kShapePhase)) : plain(v.part, shapeParam(e, kShapePhase));
+         if (b.progress() >= std::min(phase, 1.0f)) {
+            v.chainFired[e] = b.runs();
+            v.env[e].trigger();
+         }
+      }
    }
 
    // Tune Pull: creatures flying the same way as this one drift toward a just interval from them.
@@ -1684,10 +1768,9 @@ private:
             v.phase[o] = choice(part, oscParam(o, kOscRetrigger)) == 1 ? plain(part, oscParam(o, kOscPhase)) / 360.0
                                                                        : v.random.unipolar();
       }
-      for (int e = 0; e < kEnvCount; ++e) {
+      for (int e = 0; e < kEnvCount; ++e)
          setEnvelope(v, e, nullptr);
-         v.env[e].gateOn();
-      }
+      startEnvelopes(v);
       for (int l = 0; l < kLfoCount; ++l) {
          const int trig = choice(part, lfoParam(l, kLfoTrigger));
          const float ph = plain(part, lfoParam(l, kLfoPhase)) / 360.0f;

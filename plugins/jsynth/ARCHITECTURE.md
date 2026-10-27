@@ -312,6 +312,29 @@ cube of the envelope's **Time Range** (Short, Normal or Long: up to 1, 5 or 20 s
 way is an eighth of the range. Time Range is a view setting saved with the patch, not automatable,
 and never changes a time; factory presets with a time past 5 s open on Long.
 
+**Shape mode**, after XAOC's Zadar: an envelope's **Mode** switches it from ADSR to playing one drawn
+contour from a library of 48 ([`src/shapes.h`](src/shapes.h)), eight banks of six: Rise, Fall, Swell,
+Pulse, Waves, Steps, Drift and Strike. Each shape is a 513-point table worked out once, which the
+engine reads with linear interpolation and the panel draws. One pass takes the shape's **Time** (1 ms
+to 30 minutes, about 1.3 s in the middle) or, with **Sync**, a **Length** in the host's tempo (1/16
+to 64 bars). **Warp** bows time (+ pushes the contour later, - pulls it sooner) and **Bend** bows
+level (+ lifts it, - sinks it), both with the curve the ADSR stages use; **Reverse** plays it
+backwards. **Repeat** plays it once, a number of times (2 to 16), while the note is held (it then
+finishes its pass), or forever; after its last pass it holds the level it ended on. **Retrigger** is
+what a new note does while it plays: Smooth starts it from the first place the contour passes the
+level it is at now (Zadar's analog mode, so it never jumps), Restart from the top, Ignore lets it play
+on. Env 1 still fades over its Release on note off, while the shape keeps moving under the fade;
+Env 2 and 3 play on. Like the ADSR times, the progress is kept as a fraction of a pass, so a routed
+Time changes the speed, never the place.
+
+**Env Chain** (per part) lets one Shape envelope start another, as Zadar's chains do: 1 > 2, 2 > 3,
+1 > 2 > 3, or the same as loops back to the first. The first of a chain starts with the note; each
+next one waits, holding its level, until the one before it has played its **Chain Phase** of its
+whole run (all its passes): 0% starts it with the one before, 100% when that one ends. In a loop the
+first starts again from the last the same way. Inside a chain Held and Forever play once, so the
+chain moves on. A link only holds between two envelopes in Shape mode; an ADSR envelope in a chain
+starts with the note. The chain is checked once a tick.
+
 **Four LFOs** per voice. Each has six shapes (Sine, Triangle, Saw, Square, S&H, Smooth, which
 glides between random values), a Rate of 0.02 to 50 Hz or a tempo Division (1/32 to 4/1, with
 triplets and dots), a Phase, a fade-in Delay and a Polarity (bipolar or unipolar).
@@ -349,11 +372,12 @@ Destination are settings (not automatable); amounts are automatable and can be m
 LFOs (by their polarity), Glide, Turn, Random (one value per note, -1..1) and Key, which is
 (key - 60) / 48, clamped to -1..1.
 
-**Destinations** (159): every continuous part param a voice reads: level, pan, X Pan, fine, glide
+**Destinations** (171): every continuous part param a voice reads: level, pan, X Pan, fine, glide
 and drift; each oscillator's shape, coarse, fine, ratio, fixed pitch and phase; all nine FM cells;
 the mixer; drive and balance; each filter's cutoff, resonance, drive and key track; each envelope's
 times and sustain; each LFO's rate, phase and delay (and Push for the two that have it); the flock's
-twelve continuous params; and every route's own amount.
+twelve continuous params; every route's own amount; and each envelope's Shape Time, Warp, Bend and
+Chain Phase (last, as they came later, so a saved route keeps its destination).
 
 **How a route moves a param.** Per voice per tick:
 
@@ -375,7 +399,8 @@ the creature you press harder fly faster. Those are read only on ticks that end 
 **MAP** writes the same routes from the panel: touch a source chip (which turns MAP on with it
 armed), then drag a knob. The
 first drag on a knob takes a free route for that source and destination; double-click flips its
-sign, right-click removes it. Route rings show only in MAP with a source armed: each knob that
+sign, right-click removes it. The value boxes MAP the same way, and a Shape envelope's drawing
+takes a sideways drag as a route onto its Warp and an up-or-down one onto its Bend. Route rings show only in MAP with a source armed: each knob that
 source moves shows a ring in its colour. Outside MAP the knobs show no rings.
 **ROUTES** lists the routes in use, sixteen to a page: **+ ADD** starts one (Env 2 onto Filter 1
 Cutoff, at 0) and **X** removes one.
@@ -579,6 +604,19 @@ it per note.
 | Attack, Decay, Release Curve | -1 to +1 | 0 | |
 | Loop | Off, Held, Free | Off | |
 | Velocity | 0 to 100% | 0% | How much velocity scales the envelope. |
+| Mode | ADSR, Shape | ADSR | Shape plays a contour from the shape library instead. |
+| Shape | 48 shapes in 8 banks | Swell: Arch | Shape mode's contour. |
+| Shape Time | 1 ms to 30 min | 2 s | One pass, when Shape Sync is off. |
+| Shape Sync | Off, On | Off | |
+| Shape Length | 1/16 to 64 bars | 1 bar | One pass, in the host's tempo, when Shape Sync is on. |
+| Warp | -100 to +100% | 0% | + pushes the contour later, - pulls it sooner. |
+| Bend | -100 to +100% | 0% | + lifts the contour, - sinks it. |
+| Repeat | Once, 2x to 16x, Held, Forever | Once | |
+| Reverse | Off, On | Off | |
+| Retrigger | Smooth, Restart, Ignore | Smooth | What a new note does while the shape plays. |
+| Chain Phase | 0 to 100% | 100% | In a chain, how far through the one before it this one starts. |
+
+**Env Chain** (per part): Off, 1 > 2, 2 > 3, 1 > 2 > 3, 1 > 2 Loop, 2 > 3 Loop, 1 > 2 > 3 Loop.
 
 ### LFOs (per part: Wingbeat, Wind, LFO 1, LFO 2)
 
@@ -623,12 +661,16 @@ it per note.
 
 ## Presets
 
-The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 168 presets in
-17 categories. The first twelve are instrument families, as a keyboard player looks for a sound
+The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 203 presets in
+21 categories. The first twelve are instrument families, as a keyboard player looks for a sound
 (**Voices** is formants, throats and whispers); then **Expressive** (patches played with Press,
 where it bows, blows, bends, gates or blooms), **Monsta** (variations on MicroMonsta 2 programs), and
-the showcases: **Motion** (patches that move on their own), **Layers and Splits** (both parts at
-once) and **Flock** (the creatures playing the sound). Each preset is written as what
+the showcases: **Motion** (patches that move on their own), **Drones** and **Textures** (built on
+Shape-mode envelopes: long drifting shapes and chains under a held chord, and shapes as the amp so a
+held note plays a pattern), **Interplay** (envelopes routed onto each other's Time, Warp and Bend), **Landscapes** (both
+parts at once, each on Shape envelopes that move each other, some with macros or the flock),
+**Layers and Splits** (both parts at once) and **Flock** (the creatures
+playing the sound). Each preset is written as what
 it changes from the defaults, and loading one puts every other param at its default, so nothing (a
 route, say) carries over. Most answer the mod wheel and Press, so they play from any keyboard.
 
@@ -704,9 +746,9 @@ moves both parts together, so a layer keeps its balance.
 |  | Sample and Hold | A new random cutoff each sixteenth through a resonant ladder. |
 |  | Dotted Chords | Chords chopped on dotted eighths, the filter breathing on the half note. |
 | Atmospheres | Wind Choir | Saws and noise through a band pass in a strong wind; LFO 2 on the cutoff. |
-|  | Deep Space | Pink noise through a comb tuned to the note, slow random LFOs on its filters. |
+|  | Deep Space | Pink noise through a comb tuned to the note, slow random LFOs and Wander and Gusts shapes on its filters and colour. |
 |  | Aurora | A slow FM shoal with Tune Pull; Heading on the FM, Slide on the cutoff. |
-|  | Storm Front | Saw and noise through a comb in a strong wind; LFO 2, Turn and Speed on the filters. |
+|  | Storm Front | Saw and noise through a comb in a strong wind, the noise coming in Gusts; LFO 2, Turn and Speed on the filters. |
 | Voices | Talk Box | Mono saw and pulse through two formants; Press slides the mouth from "ah" to "ee". |
 |  | Robot Chant | A new vowel every eighth note at the host’s tempo, from sample-and-hold LFOs on both formants. |
 |  | Babble Choir | Every note its own random vowel and its own speed of babbling; Press animates them. |
@@ -763,12 +805,47 @@ moves both parts together, so a layer keeps its balance.
 |  | Ice Bells | [IceBells] A filter resonant enough to ring, pinged by each note, brighter the harder you strike. |
 |  | Oldfield Lead | [Oldfield] A second voice swells in under the lead as the vibrato speeds up. |
 |  | Pink Haze | [PinkHaze] A hazy pad that glides between chords; Press pumps the filter, the wheel fades it. |
-| Motion | Shifting Glass | Three-operator FM with a looping Env 3 and two unsynced LFOs; the wheel deepens all of it. |
+| Motion | Shifting Glass | Three-operator FM with Env 3 wandering on the FM (a 9 s Wander shape) and two unsynced LFOs; the wheel deepens all of it. |
 |  | Random Garden | The Random wave: each note draws its own waves, LFO speed and pan. |
-|  | Pulsar | A looping Env 1: every held note pulses on its own clock, faster higher up and with Press. |
+|  | Pulsar | A Pluck shape looping as the amp: every held note pulses on its own clock, faster higher up and with Press. |
 |  | Clockwork | A sixteenth-note sample-and-hold on the FM and a dotted-eighth square on the filter. |
 |  | MPE Voices | Two band passes for a vowel: Press brightens and adds vibrato, Slide moves the vowel, Release sets the tail. |
-|  | Tide Machine | Layer: a saw drone breathing on slow LFOs, and FM bells an octave up looping on their own envelope. |
+|  | Tide Machine | Layer: a saw drone breathing on slow LFOs, and FM bells an octave up echoing on an Echoes shape. |
+| Drones | Basalt | Saws and a sub through a ladder; a Slow S fade-in, and Wander and Gusts shapes (23 s, 37 s) on the filter and pan. |
+|  | Breathing Organ | Sine drawbars whose 2nd and 3rd partials breathe on their own Breath shapes, one reversed. |
+|  | Cathedral Air | Noise in a comb tuned to the note; Shimmer on its ring, Twin Hills on the tone and the noise colour. |
+|  | Undertow | A sub and a 1:2 FM growl that surges every 14 s; a Brownian walk turns its feedback. |
+|  | Long Bloom | Chain 1 > 2: the amp blooms in over 12 s, and from 70% of the way the filter opens and closes on a 30 s arch. |
+|  | Glacier | Chain 2 > 3 Loop: two 10 s arches start each other halfway, cross-fading a saw and FM glass forever. |
+|  | Iron Hum | Saws in a comb with tube drive; Flicker on the comb, a 41 s Wander on the drive. |
+|  | Tidal Pulse | Synced: four filter waves every eight bars, resonance wobbling down over sixteen. |
+| Textures | Rain Glass | FM glass whose amp is the Sparkle shape, each note stretched by Random so a chord rains. |
+|  | Bouncing Light | A dropped ball, over and over, faster up the keyboard; the filter bounces with it. |
+|  | Echo Chamber | Each note echoes itself on the beat (Echoes, synced) and darkens over four bars. |
+|  | Stutter Fields | Gates that speed up through each bar over a cutoff stepping at random. |
+|  | Number Station | A band-passed tone keyed in sparse steps, with static, drifting in pitch. |
+|  | Stairwell | The filter climbs a stair each beat and a fifth steps in at random. |
+|  | Breathing Machine | Chain 1 > 2 > 3 Loop: the amp breathes, the filter strikes, the FM bounces, round again. |
+|  | Night Pulse | A heartbeat, two beats a bar, under a 20 s wander through the dark. |
+|  | Falling Bells | FM bells struck over and over by the Collapse shape, each tap lower, the FM fading with it. |
+| Interplay | Tug of War | A filter arch that won't keep time: a slow wander onto its Time and Warp stretches and leans each pass. |
+|  | Quickening | Gate 8 on the filter, its Time pulled down by a 40 s ramp, so slow pulses become a shiver. |
+|  | Lingering Breath | A breath routed onto its own Time: it lingers when open and falls back quickly. |
+|  | Mutual Orbit | Two shapes in orbit, each warping or bending the other, on FM colour and stereo place. |
+|  | Tilting Steps | Random steps in time with the host, bent up and down by a slow arch. |
+|  | Gathering Storm | Env 1 onto Env 2's Time: as the note blooms the flicker on the comb and noise gets faster. |
+| Landscapes | Two Tides | Layer: saws open on a 13 s arch, FM glass swells on a 21 s one, each leaned by a wander. Macro 1 slows both, Macro 2 adds edge. |
+|  | Ember Field | Layer: pink noise crackles in a tuned comb on Sparkle, paced by a wander, over a tube-driven sub that surges. |
+|  | Glass Conversation | Layer: two bells on their own clocks, every 3 s and 4.7 s, a wander on each part speeding or slowing it. Macro 1 rings both faster. |
+|  | Low and High Weather | Split at C3: surging saws bent by a random walk below, a looped chain of air and glass above. |
+|  | Calm to Unrest | Press crossfade: a breathing sine choir, and a pulse swarm whose stutter quickens the harder you press. |
+|  | Between Worlds | Slide crossfade: a looped chain of arches across saw and FM glass, and tempo-synced random steps. |
+|  | Glass and Comets | Velocity: soft notes rain glass that settles as it ages, hard ones strike an 8 s comet. |
+|  | Hunter's Drone | Layer: a pad, and B's hunters ring-modding it whenever one catches; the gusts make them fly faster. |
+|  | Turning Choir | Layer: a dark pad under a choir whose root, fifth and octave hand over on a looped chain. Macro 1 slows it. |
+|  | Clockwork Garden | Layer, in tempo: a heartbeat on B's amp, bent soft to hard by a 16-bar arch, under A's random filter steps. |
+|  | Distant Engine | Layer: a driven comb hum, and B's Random wave spitting a saw train, slower on low notes. |
+|  | Afterglow | Layer: a soft pad, and a fifth above that swells in late and lingers, its shimmer bent by the amp. |
 | Layers and Splits | Piano and Strings | Layer: the tine piano, and strings under it the wheel brings up. |
 |  | Bell Pad | Layer: an FM bell for the strike over a warm pad that swells in behind it. |
 |  | Bass and Keys Split | Split at C3: an analog bass below, the reed piano above. |

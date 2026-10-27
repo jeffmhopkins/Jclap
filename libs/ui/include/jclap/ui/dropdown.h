@@ -5,6 +5,7 @@
 
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <visage/ui.h>
@@ -19,6 +20,10 @@ public:
 
    void setOptions(std::vector<std::string> options);
    const std::vector<std::string> &options() const { return options_; }
+
+   // Opens the options in submenus instead of one list: each group's name and how many options
+   // it holds, in order. Empty goes back to one list.
+   void setGroups(std::vector<std::pair<std::string, int>> groups) { groups_ = std::move(groups); }
 
    int selected() const { return selected_; }
    // Changes the choice without calling onChange (for host updates).
@@ -47,6 +52,7 @@ private:
 
    const Theme *theme_ = &defaultTheme();
    std::vector<std::string> options_;
+   std::vector<std::pair<std::string, int>> groups_;
    int selected_ = 0;
    unsigned accent_ = 0;
    bool hover_ = false;

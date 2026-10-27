@@ -81,6 +81,18 @@ public:
       b(flockParam(kSpeed), 0.7);
       b(flockParam(kTailLength), 0.35);
       b(flockParam(kTailSpread), 0.3);
+      // Part B's Env 2 and 3 in Shape mode, chained: a slow swell that hands on to stepping gates.
+      b(envParam(1, kEnvMode), kModeShape);
+      b(shapeParam(1, kShapeIndex), 13.0);
+      b(shapeParam(1, kShapeTime), shapeValue(8000.0));
+      b(shapeParam(1, kShapeWarp), 0.3);
+      b(envParam(2, kEnvMode), kModeShape);
+      b(shapeParam(2, kShapeIndex), 33.0);
+      b(shapeParam(2, kShapeSync), 1.0);
+      b(shapeParam(2, kShapeDivision), 5.0);
+      b(shapeParam(2, kShapeRepeat), 3.0);
+      b(shapeParam(2, kShapePhase), 0.6);
+      b(chainParam(kChain), 5.0);
    }
 
    double paramValue(clap_id id) const override {
