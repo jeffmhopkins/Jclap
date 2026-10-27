@@ -447,7 +447,7 @@ const clap_plugin_descriptor_t Monolith::descriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.10.2",
+   "0.10.3",
    "Reads a slab of generated alien glyphs as MIDI note phrases",
    kFeatures,
 };
