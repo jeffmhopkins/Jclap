@@ -93,7 +93,7 @@ With no transport (a host that doesn't send one), Monolith keeps its own time at
 
 ## Presets
 
-The preset bar steps through a factory bank of 42 presets and then your own. Click the name for a
+The preset bar steps through a factory bank of 50 presets and then your own. Click the name for a
 menu of them by category:
 
 | Category | What's in it |
@@ -104,6 +104,7 @@ menu of them by category:
 | Evolving | Phrases that drift or erode a glyph at a time, up to the whole 55-glyph slab |
 | Rhythmic | Swing, short gates and random order, with the pitch kept close |
 | Textures | Slow, sparse or scattered lines for pads and atmospheres |
+| Journeys | RANGE and PATH carry the phrase up and down through two to four octaves |
 | Listen | Silent until you play: they carve what you play and read it back |
 
 **SAVE** names the current settings and writes them as a small text file:
