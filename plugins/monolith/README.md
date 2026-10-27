@@ -86,8 +86,20 @@ With no transport (a host that doesn't send one), Monolith keeps its own time at
 
 ## Presets
 
-The preset bar steps through a factory bank (Loops, Evolving, Textures) and your own. **SAVE** names
-the current settings and writes them as a small text file:
+The preset bar steps through a factory bank of 42 presets and then your own. Click the name for a
+menu of them by category:
+
+| Category | What's in it |
+|---|---|
+| Loops | Locked slabs from one to eight bars that repeat exactly |
+| Bass | Low, short, locked lines in steps, for a groove that holds |
+| Arps and Leads | Fast lines over a wide spread, including one that follows the key you hold |
+| Evolving | Phrases that drift or erode a glyph at a time, up to the whole 55-glyph slab |
+| Rhythmic | Swing, short gates and random order, with the pitch kept close |
+| Textures | Slow, sparse or scattered lines for pads and atmospheres |
+| Listen | Silent until you play: they carve what you play and read it back |
+
+**SAVE** names the current settings and writes them as a small text file:
 
 - macOS: `~/Library/Application Support/Monolith/Presets`
 - Windows: `%APPDATA%\Monolith\Presets`
