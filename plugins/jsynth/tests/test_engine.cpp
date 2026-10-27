@@ -212,7 +212,7 @@ int main() {
       e.prepare(kRate, {p.values.get(), p.mods.get()});
       const auto out = render(e, 72000, 512, {{0, Event::On, 69, 1.0f}});
       int crossings = 0;
-      for (size_t i = 48000; i < 48000 + 96000; i += 2)
+      for (size_t i = 48000; i + 2 < out.size(); i += 2)
          crossings += (out[i] <= 0.0f) != (out[i + 2] <= 0.0f);
       const double hz = crossings / 2.0;
       std::printf("A4 measures %.2f Hz\n", hz);

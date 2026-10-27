@@ -399,7 +399,8 @@ the creature you press harder fly faster. Those are read only on ticks that end 
 **MAP** writes the same routes from the panel: touch a source chip (which turns MAP on with it
 armed), then drag a knob. The
 first drag on a knob takes a free route for that source and destination; double-click flips its
-sign, right-click removes it. Route rings show only in MAP with a source armed: each knob that
+sign, right-click removes it. The value boxes MAP the same way, and a Shape envelope's drawing
+takes a sideways drag as a route onto its Warp and an up-or-down one onto its Bend. Route rings show only in MAP with a source armed: each knob that
 source moves shows a ring in its colour. Outside MAP the knobs show no rings.
 **ROUTES** lists the routes in use, sixteen to a page: **+ ADD** starts one (Env 2 onto Filter 1
 Cutoff, at 0) and **X** removes one.
@@ -660,13 +661,14 @@ it per note.
 
 ## Presets
 
-The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 185 presets in
-19 categories. The first twelve are instrument families, as a keyboard player looks for a sound
+The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 191 presets in
+20 categories. The first twelve are instrument families, as a keyboard player looks for a sound
 (**Voices** is formants, throats and whispers); then **Expressive** (patches played with Press,
 where it bows, blows, bends, gates or blooms), **Monsta** (variations on MicroMonsta 2 programs), and
 the showcases: **Motion** (patches that move on their own), **Drones** and **Textures** (built on
 Shape-mode envelopes: long drifting shapes and chains under a held chord, and shapes as the amp so a
-held note plays a pattern), **Layers and Splits** (both parts at once) and **Flock** (the creatures
+held note plays a pattern), **Interplay** (envelopes routed onto each other's Time, Warp and Bend),
+**Layers and Splits** (both parts at once) and **Flock** (the creatures
 playing the sound). Each preset is written as what
 it changes from the defaults, and loading one puts every other param at its default, so nothing (a
 route, say) carries over. Most answer the mod wheel and Press, so they play from any keyboard.
@@ -825,6 +827,12 @@ moves both parts together, so a layer keeps its balance.
 |  | Breathing Machine | Chain 1 > 2 > 3 Loop: the amp breathes, the filter strikes, the FM bounces, round again. |
 |  | Night Pulse | A heartbeat, two beats a bar, under a 20 s wander through the dark. |
 |  | Falling Bells | FM bells struck over and over by the Collapse shape, each tap lower, the FM fading with it. |
+| Interplay | Tug of War | A filter arch that won't keep time: a slow wander onto its Time and Warp stretches and leans each pass. |
+|   | Quickening | Gate 8 on the filter, its Time pulled down by a 40 s ramp, so slow pulses become a shiver. |
+|   | Lingering Breath | A breath routed onto its own Time: it lingers when open and falls back quickly. |
+|   | Mutual Orbit | Two shapes in orbit, each warping or bending the other, on FM colour and stereo place. |
+|   | Tilting Steps | Random steps in time with the host, bent up and down by a slow arch. |
+|   | Gathering Storm | Env 1 onto Env 2's Time: as the note blooms the flicker on the comb and noise gets faster. |
 | Layers and Splits | Piano and Strings | Layer: the tine piano, and strings under it the wheel brings up. |
 |  | Bell Pad | Layer: an FM bell for the strike over a warm pad that swells in behind it. |
 |  | Bass and Keys Split | Split at C3: an analog bass below, the reed piano above. |

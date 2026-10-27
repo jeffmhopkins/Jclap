@@ -280,6 +280,77 @@ private:
    std::vector<Mapper::Ring> rings_;
 };
 
+// A value box MAP mode can map, for a param with no room for a knob: as a MapKnob, but its route
+// shows as a bar along the bottom, from the value to where the source takes it.
+class MapBox : public ui::NumberBox {
+public:
+   MapBox(ui::ValueRange range, Mapper &mapper, int part, clap_id offset)
+       : NumberBox(range), mapper_(mapper), part_(part), dest_(destinationIndex(offset)) {}
+
+   void draw(visage::Canvas &c) override {
+      NumberBox::draw(c);
+      const int armed = mapper_.armedSource();
+      if (dest_ < 0 || !mapper_.mapping() || armed == kSourceOff)
+         return;
+      const float w = width(), h = height(), inset = h * 0.18f, line = std::max(1.5f, h * 0.08f);
+      c.setColor(glow(sourceColor(armed), 0.55f, 1.0f));
+      c.roundedRectangleBorder(0, 0, w, h, h * 0.18f, 1.4f);
+      rings_.clear();
+      mapper_.rings(part_, dest_, rings_);
+      const float from = fraction(value()), span = w - 2 * inset;
+      for (const Mapper::Ring &r : rings_) {
+         if (r.source != armed)
+            continue;
+         const float to = std::clamp(from + static_cast<float>(r.amount), 0.0f, 1.0f);
+         c.setColor(glow(sourceColor(armed), 1.0f, 1.6f));
+         c.fill(inset + span * std::min(from, to), h - line - 1.0f, std::max(line, span * std::fabs(to - from)), line);
+      }
+   }
+
+   void mouseDown(const visage::MouseEvent &e) override {
+      if (!mapper_.mapping() || dest_ < 0)
+         return NumberBox::mouseDown(e);
+      if (e.isRightButton()) {
+         mapper_.unmap(part_, dest_);
+         redraw();
+         return;
+      }
+      if (mapper_.armedSource() == kSourceOff)
+         return;
+      route_ = mapper_.routeFor(part_, dest_);
+      if (route_ < 0)
+         return;
+      mapper_.beginRoute(part_, route_);
+      start_ = mapper_.routeAmount(part_, route_);
+      if (e.repeatClickCount() == 2)
+         mapper_.setRouteAmount(part_, route_, start_ = -start_);
+      startY_ = e.position.y;
+      redraw();
+   }
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (route_ < 0)
+         return NumberBox::mouseDrag(e);
+      mapper_.setRouteAmount(part_, route_, std::clamp(start_ + (startY_ - e.position.y) / dragLength(), -1.0, 1.0));
+      redraw();
+   }
+   void mouseUp(const visage::MouseEvent &e) override {
+      if (route_ < 0)
+         return NumberBox::mouseUp(e);
+      mapper_.endRoute(part_, route_);
+      route_ = -1;
+      redraw();
+   }
+
+private:
+   Mapper &mapper_;
+   int part_;
+   int dest_;
+   int route_ = -1;
+   double start_ = 0.0;
+   float startY_ = 0.0f;
+   std::vector<Mapper::Ring> rings_;
+};
+
 // A modulation source you can touch in MAP mode: a pill with its name, filled as far as the source
 // is now. In MAP mode it pulses in its colour; armed, it is lit.
 class SourceChip : public visage::Frame {
@@ -1659,11 +1730,14 @@ private:
 // An envelope in Shape mode drawn: its contour as the engine plays it, warped, bent and maybe
 // reversed, one cycle across the width, with how often it repeats in the corner and a dot riding
 // it for every sounding voice. Drag sideways to warp it and up or down to bend it (shift for fine
-// moves); double-click puts both back.
+// moves); double-click puts both back. In MAP with a source armed, the drag sets how much the source
+// warps it (sideways) or bends it (up or down) instead, and the shape as the source at its fullest
+// would take it shows over it in the source's colour; a right-click removes both routes.
 class ShapeView : public ui::XYPad {
 public:
-   ShapeView(const FlockView &sky, int part, int env, ui::ValueRange warp, ui::ValueRange bend)
-       : XYPad(warp, bend), sky_(sky), part_(part), env_(env) {}
+   ShapeView(const FlockView &sky, Mapper &mapper, int part, int env, ui::ValueRange warp, ui::ValueRange bend)
+       : XYPad(warp, bend), sky_(sky), mapper_(mapper), part_(part), env_(env),
+         dests_{destinationIndex(shapeParam(env, kShapeWarp)), destinationIndex(shapeParam(env, kShapeBend))} {}
 
    void setTheme(const ui::Theme &theme) {
       theme_ = &theme;
@@ -1706,6 +1780,36 @@ public:
       contour_.set(set);
       const int columns = std::max(2, static_cast<int>(x1 - x0));
       const auto yOf = [&](float level) { return bottom - std::clamp(level, 0.0f, 1.0f) * (bottom - top); };
+
+      // Where the armed source takes it, under the shape itself.
+      const int armed = mapper_.mapping() ? mapper_.armedSource() : kSourceOff;
+      if (armed != kSourceOff) {
+         c.setColor(glow(sourceColor(armed), 0.55f, 1.0f));
+         c.roundedRectangleBorder(0, 0, w, h, 5 * s, 1.4f);
+         float moved[2] = {0.0f, 0.0f};
+         for (int a = 0; a < 2; ++a) {
+            rings_.clear();
+            if (dests_[a] >= 0)
+               mapper_.rings(part_, dests_[a], rings_);
+            for (const Mapper::Ring &r : rings_)
+               if (r.source == armed)
+                  moved[a] += static_cast<float>(r.amount);
+         }
+         if (moved[0] != 0.0f || moved[1] != 0.0f) {
+            dsp::Envelope::Settings far = set;
+            far.warp = std::clamp(set.warp + moved[0] * static_cast<float>(x().range.max - x().range.min), -1.0f, 1.0f);
+            far.bend = std::clamp(set.bend + moved[1] * static_cast<float>(y().range.max - y().range.min), -1.0f, 1.0f);
+            reach_.set(far);
+            c.setColor(glow(sourceColor(armed), 1.0f, 1.6f));
+            float px = x0, py = yOf(reach_.shapeLevel(0.0f));
+            for (int i = 1; i <= columns; i += 2) {
+               const float f = static_cast<float>(i) / columns;
+               const float nx = x0 + (x1 - x0) * f, ny = yOf(reach_.shapeLevel(f));
+               c.segment(px, py, nx, ny, 1.2f * s, true);
+               px = nx, py = ny;
+            }
+         }
+      }
       c.setColor((accent_ & 0x00ffffff) | 0x30000000);
       float px = x0, py = yOf(contour_.shapeLevel(0.0f));
       for (int i = 1; i <= columns; ++i) {
@@ -1747,6 +1851,19 @@ public:
    void mouseDown(const visage::MouseEvent &e) override {
       if (dragging_)
          return;
+      if (mapper_.mapping()) {
+         if (e.isRightButton()) {
+            for (int d : dests_)
+               if (d >= 0)
+                  mapper_.unmap(part_, d);
+            redraw();
+         }
+         else if (e.isLeftButton() && mapper_.armedSource() != kSourceOff) {
+            mapping_ = true, axis_ = -1, route_ = -1;
+            from_ = e.position;
+         }
+         return;
+      }
       if (e.shouldTriggerPopup()) {
          XYPad::mouseDown(e);
          return;
@@ -1771,6 +1888,27 @@ public:
             a->onBeginEdit();
    }
    void mouseDrag(const visage::MouseEvent &e) override {
+      if (mapping_) {
+         const float dx = e.position.x - from_.x, dy = from_.y - e.position.y;
+         // The way it first moves picks the route: sideways for Warp, up or down for Bend.
+         if (axis_ < 0) {
+            if (std::max(std::fabs(dx), std::fabs(dy)) < 4.0f)
+               return;
+            axis_ = std::fabs(dx) >= std::fabs(dy) ? 0 : 1;
+            route_ = dests_[axis_] >= 0 ? mapper_.routeFor(part_, dests_[axis_]) : -1;
+            if (route_ < 0)
+               return;
+            mapper_.beginRoute(part_, route_);
+            startX_ = mapper_.routeAmount(part_, route_);
+         }
+         if (route_ < 0)
+            return;
+         const float scale = e.isShiftDown() ? 0.15f : 1.0f;
+         const float moved = axis_ == 0 ? dx / std::max(1.0f, width()) : dy / std::max(1.0f, height());
+         mapper_.setRouteAmount(part_, route_, std::clamp(startX_ + moved * scale, -1.0, 1.0));
+         redraw();
+         return;
+      }
       if (!dragging_)
          return;
       // Shift slows it down, from where it is now.
@@ -1785,6 +1923,13 @@ public:
       redraw();
    }
    void mouseUp(const visage::MouseEvent &) override {
+      if (mapping_) {
+         if (route_ >= 0)
+            mapper_.endRoute(part_, route_);
+         mapping_ = false, route_ = -1;
+         redraw();
+         return;
+      }
       if (dragging_)
          for (Axis *a : {&x(), &y()})
             if (a->onEndEdit)
@@ -1802,10 +1947,15 @@ private:
    }
 
    const FlockView &sky_;
+   Mapper &mapper_;
    int part_, env_;
+   int dests_[2]; // Warp's and Bend's places in destinations()
    const ui::Theme *theme_ = &ui::defaultTheme();
    unsigned accent_ = 0xffffffff;
-   dsp::Envelope contour_;
+   dsp::Envelope contour_, reach_;
+   std::vector<Mapper::Ring> rings_;
+   bool mapping_ = false;
+   int axis_ = -1, route_ = -1;
    std::vector<std::pair<float, float>> heads_;
    bool dragging_ = false, fine_ = false;
    visage::Point from_;
@@ -2037,6 +2187,8 @@ public:
             layoutRoutes();
          for (MapKnob *k : mapKnobs_)
             k->redraw();
+         for (visage::Frame *f : mapped_)
+            f->redraw();
       }
    }
 
@@ -2109,6 +2261,8 @@ public:
       mapButton_->setOn(on);
       for (MapKnob *k : mapKnobs_)
          k->redraw();
+      for (visage::Frame *f : mapped_)
+         f->redraw();
    }
 
    void draw(visage::Canvas &c) override {
@@ -2460,7 +2614,15 @@ private:
    // A value in a box, `prefix` before it, for a param with no room for a knob.
    ui::NumberBox &numberBox(clap_id offset, const std::string &prefix, unsigned accent, ui::Rect r, const char *tip) {
       const clap_id id = idOf(offset);
-      auto &box = glassy(put<ui::NumberBox>(r, rangeOf(id)), accent);
+      ui::NumberBox *made;
+      if (part_ >= 0) {
+         auto &m = put<MapBox>(r, rangeOf(id), *this, part_, offset);
+         mapped_.push_back(&m);
+         made = &m;
+      }
+      else
+         made = &put<ui::NumberBox>(r, rangeOf(id));
+      auto &box = glassy(*made, accent);
       box.valueText = [id, prefix](double v) { return prefix + text(id, v); };
       box.parseText = [id](const std::string &t, double &v) { return parseParam(id, t.c_str(), v); };
       bindings_.bind(box, id);
@@ -2650,15 +2812,17 @@ private:
          shape.setGroups(shapeGroups());
          bindings_.bind(shape, sid(kShapeIndex));
          tips_.add(shape, "The contour this envelope plays, from eight banks of six.");
-         auto &view = glassy(put<ShapeView>({ex, 793, 276, 66}, *view_, part, e, rangeOf(sid(kShapeWarp)),
+         auto &view = glassy(put<ShapeView>({ex, 793, 276, 66}, *view_, *this, part, e, rangeOf(sid(kShapeWarp)),
                                             rangeOf(sid(kShapeBend))),
                              ec);
          bindings_.bind(view, sid(kShapeWarp), sid(kShapeBend));
          view.x().valueText = [i = sid(kShapeWarp)](double v) { return text(i, v); };
          view.y().valueText = [i = sid(kShapeBend)](double v) { return text(i, v); };
          tips_.add(view, "Drag sideways to warp the shape in time and up or down to bend it in level. Hold shift for "
-                         "fine moves; double-click to put both back.");
+                         "fine moves; double-click to put both back. In MAP, drag to set how much the source warps "
+                         "or bends it.");
          shapes_[part][e] = &view;
+         mapped_.push_back(&view);
          drawings_.push_back(&view);
          envShows_ = {e, EnvShows::kFree};
          numberBox(shapeParam(e, kShapeTime), "TIME ", ec, {ex, 864, 104, 24},
@@ -2984,6 +3148,8 @@ private:
    static constexpr float kCleanMargin = 16.0f;
    std::vector<Placed> placed_;
    std::vector<MapKnob *> mapKnobs_;
+   // The other things MAP can map: value boxes and the shape drawings.
+   std::vector<visage::Frame *> mapped_;
    std::vector<SourceChip *> chips_;
    std::vector<PitchKnobs> pitchKnobs_;
    struct RouteRow {

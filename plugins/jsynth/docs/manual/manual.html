@@ -261,7 +261,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
         <li><strong>Four flock sources</strong> per creature: Speed, Nearest, Heading and Turn.</li>
         <li><strong>Between creatures</strong>: Neighbour FM, Tune Pull and Bite.</li>
         <li><strong>MAP</strong>: touch a source, drag a knob. No matrix page, and up to 64 routes per part.</li>
-        <li><strong>185 factory presets</strong>, from basses, pianos and pads to voices, patches played with pressure, drones and textures, and patches that move on their own and use both parts.</li>
+        <li><strong>191 factory presets</strong>, from basses, pianos and pads to voices, patches played with pressure, drones and textures, and patches that move on their own and use both parts.</li>
       </ul>
     </div>
   </div>
@@ -698,7 +698,8 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <h2>Shape mode</h2>
   <div>
       <p>After XAOC's Zadar module, a <strong>SHAPE</strong> envelope plays one drawn contour instead of its stages: pick it from <strong>48 shapes</strong> in eight banks, <em>Rise</em>, <em>Fall</em>, <em>Swell</em>, <em>Pulse</em>, <em>Waves</em>, <em>Steps</em>, <em>Drift</em> and <em>Strike</em>, and it is stretched over its time. Long, slow shapes on a filter or a drawbar keep a held chord moving for minutes; a pulse or a step shape as ENV 1 turns each held note into a pattern of its own.</p>
-      <p>The drawing shows the shape as it plays, with its bank and how often it repeats in its corners and a dot for every sounding note. <strong>Drag it sideways to warp it</strong> in time and <strong>up or down to bend it</strong> in level (Shift for fine moves; double-click puts both back).</p>
+      <p>The drawing shows the shape as it plays, with its bank and how often it repeats in its corners and a dot for every sounding note. <strong>Drag it sideways to warp it</strong> in time and <strong>up or down to bend it</strong> in level (Shift for fine moves; double-click puts both back). In MAP mode, with a source armed, the same drag sets how far that source warps it (sideways) or bends it (up or down), and the shape as the source at its fullest would take it shows over it in the source's colour; right-click removes both routes.</p>
+      <p><strong>Envelopes moving envelopes.</strong> Env 1, 2 and 3 are sources, and each envelope's Time, Warp, Bend and Chain Phase (and its ADSR stage times) are destinations, so one envelope can stretch, lean or bend another while it plays, or itself. Time is read as a rate, so a change speeds the shape up or slows it from where it is, never jumps it. Chain Phase is read when the chain hands over. The <strong>Interplay</strong> presets are built this way.</p>
       <table class="params">
         <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
         <tbody>
@@ -883,6 +884,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">Right-click</td><td>Remove the route. With no source armed, removes every route to that knob.</td></tr>
     </tbody>
   </table>
+  <p>The value boxes (an envelope's TIME, REL, VEL and phase) take routes the same way: drag up or down, and a bar along the box's foot shows how far the source moves it. A Shape envelope's drawing takes a sideways drag as a route onto its Warp and an up-or-down one onto its Bend.</p>
   <p>Only the armed source's rings show; touch another source to see its routes. Nearly every knob on a part's panels can take routes: the flock's knobs, the FM grid, the envelopes and LFOs, the filters and the oscillators. The exceptions are Transpose, the part's Bend range, Velocity, and the shared ones: Size, Width, Master and the TOUCH tab.</p>
 
   <h2>Sources</h2>
@@ -920,7 +922,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <div class="chap-head">
     <div class="num">Chapter 14</div>
     <h1>Factory Presets</h1>
-    <p class="lede">A hundred and sixty-eight sounds in seventeen categories: the instrument families first, then patches played with pressure, variations on MicroMonsta 2 programs, and patches that move on their own, use both parts, or let the flock play.</p>
+    <p class="lede">A hundred and ninety-one sounds in twenty categories: the instrument families first, then patches played with pressure, variations on MicroMonsta 2 programs, patches that move on their own, drones and textures on Shape envelopes, envelopes that move each other, and patches that use both parts or let the flock play.</p>
     <div class="bar"></div>
   </div>
   <p>The preset bar works like JVerb's: the arrows step through the presets, scrolling over the bar does too, and clicking the name opens the menu by category. <strong>SAVE</strong> saves the current sound under a name of your own. A factory preset sets every parameter it doesn't mention to its default, so nothing from the last sound (a route, say) carries over. Within each category, the presets run from a plain patch up to ones with more going on, and most answer the mod wheel and Press. Every preset is level-matched, so stepping through the bank doesn't jump.</p>
@@ -1385,6 +1387,14 @@ function el(parent, tag, attrs, text) {
       ['Breathing Machine', 'Chain 1 > 2 > 3 Loop: the amp breathes, the filter strikes, the FM bounces, round again.'],
       ['Night Pulse', 'A heartbeat, two beats a bar, under a 20 s wander through the dark.'],
       ['Falling Bells', 'FM bells struck over and over by the Collapse shape, each tap lower, the FM fading with it.'],
+    ]],
+    ['Interplay', 'Envelopes that move each other: one routed onto another\'s Time, Warp or Bend, or its own.', [
+      ['Tug of War', 'A filter arch that won't keep time: a slow wander onto its Time and Warp stretches and leans each pass.'],
+      ['Quickening', 'Gate 8 on the filter, its Time pulled down by a 40 s ramp, so slow pulses become a shiver.'],
+      ['Lingering Breath', 'A breath routed onto its own Time: it lingers when open and falls back quickly.'],
+      ['Mutual Orbit', 'Two shapes in orbit, each warping or bending the other, on FM colour and stereo place.'],
+      ['Tilting Steps', 'Random steps in time with the host, bent up and down by a slow arch.'],
+      ['Gathering Storm', 'Env 1 onto Env 2's Time: as the note blooms the flicker on the comb and noise gets faster.'],
     ]],
     ['Layers and Splits', 'Both parts at once.', [
       ['Piano and Strings', 'Layer: the tine piano, and strings under it the wheel brings up.'],

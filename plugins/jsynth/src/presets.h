@@ -1253,6 +1253,72 @@ inline const std::vector<Preset> &factoryPresets() {
                                     {kSourceRandom, shapeParam(1, kShapeTime), 0.05}, {kSourceRandom, kPartPan, 0.5},
                                     {press, fm31, 0.3}, {wheel, fm21, 0.2}})})});
 
+      // ---- Interplay: envelopes that move each other ----
+      const clap_id time2 = shapeParam(1, kShapeTime), warp2 = shapeParam(1, kShapeWarp), bend2 = shapeParam(1, kShapeBend);
+      const clap_id warp3 = shapeParam(2, kShapeWarp);
+      // An arch on the filter that will not keep time: a 25 s wander stretches and squeezes each
+      // pass, from under 3 s to over 12, and leans it early or late.
+      p.push_back({"Tug of War", "Interplay",
+                   join({osc(0, 0, kSaw, 0, -7, 0.9), osc(0, 1, kSaw, 0, 7, 0.9), osc(0, 2, kSaw, -12, 0, 0.4),
+                         {a(mixParam(kMixPan, 0), -0.5), a(mixParam(kMixPan, 1), 0.5), a(kSkyPan, 0.4), a(kDrift, 0.15),
+                          a(kPartLevel, -4)},
+                         filter(0, 0, kLadder, 300, 0.4, 0.3), shape(0, 0, "Bloom", 4000, kOnce),
+                         {a(envParam(0, kEnvRelease), timeValue(5000))}, shape(0, 1, "Arch", 6000, kForever),
+                         shape(0, 2, "Wander", 25000, kForever),
+                         routes(0, {{env2, cutoff, 0.4}, {env3, time2, 0.12}, {env3, warp2, 0.3}, {env3, kPartPan, 0.2},
+                                    {press, cutoff, 0.15}, {wheel, resonance, 0.3}})})});
+      // A gated pad that speeds up: a 40 s ramp shortens the gate's pass five times over, so the
+      // chord starts as slow pulses and ends as a shiver.
+      p.push_back({"Quickening", "Interplay",
+                   join({osc(0, 0, kSaw, 0, -5, 0.8), osc(0, 1, kPulse, 0, 5, 0.7), osc(0, 2, kSaw, 12, 0, 0.3),
+                         {a(oscParam(1, kOscShape), 0.35), a(kSkyPan, 0.5), a(kPartLevel, -3)},
+                         filter(0, 0, kLowPass, 350, 0.3, 0.4), shape(0, 0, "Lift", 3000, kOnce),
+                         {a(envParam(0, kEnvRelease), timeValue(4000))}, shape(0, 1, "Gate 8", 4000, kForever),
+                         shape(0, 2, "Ramp Up", 40000, kOnce),
+                         routes(0, {{env2, cutoff, 0.45}, {env3, time2, -0.12}, {env3, resonance, 0.25},
+                                    {press, cutoff, 0.2}, {wheel, time2, -0.1}})})});
+      // A breath that slows itself at the top: its own level lengthens its pass, so it lingers when
+      // open and falls back quickly. Noise and the filter breathe with it.
+      p.push_back({"Lingering Breath", "Interplay",
+                   join({osc(0, 0, kSaw, 0, -4, 0.7), osc(0, 1, kTriangle, 12, 3, 0.5),
+                         {a(mixParam(kNoiseLevel), 0.0), a(mixParam(kNoiseColor), 0.2), a(kSkyPan, 0.5), a(kDrift, 0.2),
+                          a(kPartLevel, -3)},
+                         filter(0, 0, kLowPass, 450, 0.25, 0.3), shape(0, 0, "Slow S", 3500, kOnce),
+                         {a(envParam(0, kEnvRelease), timeValue(5000))}, shape(0, 1, "Breath", 5000, kForever),
+                         shape(0, 2, "Gusts", 31000, kForever),
+                         routes(0, {{env2, time2, 0.1}, {env2, cutoff, 0.4}, {env2, mixParam(kNoiseLevel), 0.35},
+                                    {env3, warp2, 0.4}, {press, cutoff, 0.15}, {wheel, resonance, 0.3}})})});
+      // Two shapes in orbit: each one warps or bends the other, so the FM's colour and the stereo
+      // place never line up the same way twice.
+      p.push_back({"Mutual Orbit", "Interplay",
+                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), op(0, 2, kSine, 3.01, 0.0),
+                         {a(fm21, 0.05), a(fm31, 0.04), a(kSkyPan, 0.7), a(kDrift, 0.1)}, open(0),
+                         shape(0, 0, "Lift", 3000, kOnce), {a(envParam(0, kEnvRelease), timeValue(5000))},
+                         shape(0, 1, "Twin Hills", 11000, kForever), shape(0, 2, "Wobble 4", 17000, kForever),
+                         routes(0, {{env2, warp3, 0.4}, {env3, bend2, 0.4}, {env2, fm21, 0.25}, {env3, fm31, 0.2},
+                                    {env3, kPartPan, 0.5}, {press, fm21, 0.2}, {wheel, fm31, 0.2}})})});
+      // Random steps in time with the host, tilted by a slow arch: as it rises the steps climb and
+      // crowd the top of the filter, as it falls they sink.
+      p.push_back({"Tilting Steps", "Interplay",
+                   join({osc(0, 0, kSquare, 0, -6, 0.6), osc(0, 1, kSaw, 0, 6, 0.8), osc(0, 2, kSine, -12, 0, 0.5),
+                         {a(kSkyPan, 0.5), a(kPartLevel, -5)},
+                         filter(0, 0, kLowPass, 400, 0.45, 0.4), shape(0, 0, "Bloom", 2000, kOnce),
+                         {a(envParam(0, kEnvRelease), timeValue(3000))}, shapeSync(0, 1, "Random 16", kBars2, kForever),
+                         shape(0, 2, "Arch", 20000, kForever),
+                         routes(0, {{env2, cutoff, 0.35}, {env3, bend2, 0.6}, {env3, resonance, 0.2}, {env2, kPartPan, 0.25},
+                                    {press, cutoff, 0.2}, {wheel, bend2, 0.5}})})});
+      // A flicker the amp drives: as the note blooms over 8 s, the flicker on the noise and the comb
+      // gets faster and faster, and slows again in the release.
+      p.push_back({"Gathering Storm", "Interplay",
+                   join({osc(0, 0, kSaw, 0, -10, 0.6), osc(0, 1, kSaw, -12, 10, 0.6),
+                         {a(mixParam(kNoiseLevel), 0.4), a(mixParam(kNoiseColor), -0.2), a(kSkyPan, 0.6),
+                          a(kPartLevel, -5)},
+                         filter(0, 0, kComb, 261.6, 0.5, 1.0), filter(0, 1, kLowPass, 900, 0.2, 0.3),
+                         shape(0, 0, "Slow S", 8000, kOnce), {a(envParam(0, kEnvRelease), timeValue(6000))},
+                         shape(0, 1, "Flicker", 8000, kForever), shape(0, 2, "Wander", 23000, kForever),
+                         routes(0, {{kSourceEnv1, time2, -0.14}, {env2, cutoff2, 0.35}, {env2, resonance, 0.15},
+                                    {env3, mixParam(kNoiseColor), 0.4}, {press, cutoff2, 0.2}, {wheel, resonance, 0.25}})})});
+
       // ---- Layers and Splits: both parts at once ----
       // Layer: the tine piano, and slow strings under it.
       p.push_back({"Piano and Strings", "Layers and Splits",
@@ -1707,6 +1773,12 @@ inline const std::vector<Preset> &factoryPresets() {
          {"Breathing Machine", -0.5},
          {"Night Pulse", 0.5},
          {"Falling Bells", -3.5},
+         {"Tug of War", 1.0},
+         {"Quickening", -3.5},
+         {"Lingering Breath", 2.5},
+         {"Mutual Orbit", -3.5},
+         {"Tilting Steps", -0.5},
+         {"Gathering Storm", 1.0},
          {"Piano and Strings", -1.0},
          {"Bell Pad", 1.0},
          {"Bass and Keys Split", 4.5},
