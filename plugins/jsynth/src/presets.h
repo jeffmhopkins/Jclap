@@ -879,6 +879,134 @@ inline const std::vector<Preset> &factoryPresets() {
                          env(0, 0, 1200, 1000, 0.95, 3000),
                          routes(0, {{lfo1, oscParam(1, kOscShape), 0.15}, {press, lfoParam(2, kLfoRate), 0.25}, {press, oscParam(0, kOscShape), -0.25},
                                     {lfo2, cutoff, 0.08}, {lfo1, kPartPan, 0.0}, {wheel, depth(4), 0.6}})})});
+      // [OldHills] Plucky keys over a held body: each note draws its own pulse width, a slow LFO turns
+      // it, and the pitch leans up as the note settles. The wheel adds resonance and width.
+      p.push_back({"Old Hills", "Monsta",
+                   join({osc(0, 0, kSaw, 0, -4, 0.25), osc(0, 1, kPulse, 0, 4, 1.0), {a(oscParam(1, kOscShape), 0.35)},
+                         filter(0, 0, kLowPass, 650, 0.2, 1.0), lfo(0, 3, kLfoTriangle, 0.3), env(0, 0, 2, 1000, 1.0, 400),
+                         env(0, 1, 2, 700, 0.3, 400), env(0, 2, 500, 900, 0.3, 400),
+                         routes(0, {{env2, cutoff, 0.35}, {kSourceRandom, oscParam(1, kOscShape), 0.25}, {lfo2, oscParam(1, kOscShape), 0.15},
+                                    {env3, kPartFine, 0.02}, {press, cutoff, 0.15}, {wheel, resonance, 0.3}, {wheel, oscParam(1, kOscShape), 0.2}})})});
+      // [Sunshine] A bright string pad under a resonant, fully tracking filter, its pulse width turning
+      // slowly and drawn anew for each note. The wheel adds a fifth above.
+      p.push_back({"Sunshine Strings", "Monsta",
+                   join({osc(0, 0, kSaw, 0, -6, 0.6), osc(0, 1, kPulse, 0, 6, 1.0), osc(0, 2, kSaw, 7, -10, 0.0),
+                         {a(mixParam(kMixPan, 0), -0.4), a(mixParam(kMixPan, 1), 0.4)}, filter(0, 0, kLowPass, 3500, 0.45, 1.0),
+                         lfo(0, 3, kLfoSine, 0.15), env(0, 0, 300, 1000, 1.0, 1800), env(0, 2, 1500, 3000, 0.5, 1800),
+                         routes(0, {{lfo2, oscParam(1, kOscShape), 0.35}, {kSourceRandom, oscParam(1, kOscShape), 0.25}, {env3, kPartFine, 0.02},
+                                    {press, cutoff, 0.1}, {wheel, mixParam(kMixLevel, 2), 0.6}})})});
+      // [WornArp] Short plucks from a worn machine: each note chirps up as it starts, lands a little
+      // off pitch and somewhere else in the stereo field.
+      p.push_back({"Worn Arp", "Monsta",
+                   join({osc(0, 0, kSaw, 0, 5, 1.0), osc(0, 1, kPulse, 0, -12, 0.3), {a(kDrift, 0.3), a(tailParam(kDriveAmount), 0.15)},
+                         filter(0, 0, kLowPass, 1300, 0.5, 1.0), lfo(0, 3, kLfoSine, 0.1), env(0, 0, 1, 500, 0.6, 250),
+                         env(0, 1, 0.5, 150, 0.0, 120), env(0, 2, 0.5, 60, 0.0, 50),
+                         routes(0, {{env2, cutoff, 0.4}, {env3, oscParam(1, kOscCoarse), 0.12}, {kSourceRandom, kPartPan, 0.5},
+                                    {kSourceRandom, kPartFine, 0.02}, {lfo2, oscParam(1, kOscShape), 0.4}, {press, cutoff, 0.15},
+                                    {wheel, envParam(0, kEnvSustain), -0.4}})})});
+      // [Waxxy] A driven, resonant pad-pluck whose filter lands somewhere new on each note; higher notes
+      // are narrower and less breathy.
+      p.push_back({"Waxxy", "Monsta",
+                   join({osc(0, 0, kSaw, 0, -4, 0.9), osc(0, 1, kPulse, 0, 4, 0.9), {a(mixParam(kNoiseLevel), 0.3), a(tailParam(kDriveAmount), 0.3)},
+                         filter(0, 0, kLadder, 500, 0.55, 0.0), env(0, 0, 1, 1000, 1.0, 300),
+                         env(0, 1, 1, 220, 0.3, 250),
+                         routes(0, {{env2, cutoff, 0.45}, {kSourceRandom, cutoff, 0.2}, {key, oscParam(1, kOscShape), 0.4},
+                                    {key, mixParam(kNoiseLevel), -0.3}, {press, resonance, 0.2}, {wheel, cutoff, 0.2}})})});
+      // [Reptile] A slow, crawling drone: three oscillators whose widths and tuning wander on slow LFOs,
+      // one drawn anew each note, and a pan that swings out as it arrives. Press drives it.
+      p.push_back({"Reptile", "Monsta",
+                   join({osc(0, 0, kSaw, 0, 10, 1.0), osc(0, 1, kPulse, 0, -30, 0.7), osc(0, 2, kPulse, 0, 30, 0.6),
+                         {a(tailParam(kDriveType), 2), a(tailParam(kDriveAmount), 0.25), a(kPartLevel, -4)}, filter(0, 0, kLowPass, 3500, 0.1, 0.3),
+                         lfo(0, 2, kLfoSmooth, 0.08), lfo(0, 3, kLfoSine, 0.12), env(0, 0, 800, 1500, 0.9, 2500), env(0, 2, 200, 1000, 1.0, 800),
+                         routes(0, {{lfo1, oscParam(1, kOscFine), 0.03}, {lfo2, oscParam(1, kOscShape), 0.4}, {lfo1, oscParam(0, kOscShape), 0.2},
+                                    {kSourceRandom, oscParam(2, kOscShape), 0.5}, {env3, kPartPan, 0.3}, {press, tailParam(kDriveAmount), 0.3},
+                                    {wheel, oscParam(1, kOscShape), 0.2}})})});
+      // [Crystal] Octaves of saw and pulse under a dark, resonant filter that each note sweeps open and
+      // lets close over seconds; slow LFOs turn the widths.
+      p.push_back({"Crystal Strings", "Monsta",
+                   join({osc(0, 0, kPulse, -12, 0, 1.0), osc(0, 1, kSaw, 12, -12, 0.8), osc(0, 2, kPulse, 0, 0, 0.5),
+                         filter(0, 0, kLadder, 150, 0.5, 1.0), {a(tailParam(kDriveAmount), 0.2)}, lfo(0, 2, kLfoSine, 0.35),
+                         lfo(0, 3, kLfoTriangle, 0.15), env(0, 0, 1, 1000, 1.0, 3000), env(0, 1, 0.5, 3000, 0.0, 3000),
+                         routes(0, {{env2, cutoff, 0.55}, {lfo2, oscParam(0, kOscShape), 0.3}, {lfo2, oscParam(2, kOscShape), -0.3},
+                                    {lfo1, kPartFine, 0.0}, {wheel, depth(3), 0.04}, {press, cutoff, 0.15}})})});
+      // [Softy] A drone that takes seconds to arrive, its filter breathing on a slow LFO; the wheel
+      // brings in a resonance that flutters.
+      p.push_back({"Softy Drone", "Monsta",
+                   join({osc(0, 0, kSaw, -12, 0, 1.0), osc(0, 1, kSaw, 0, -12, 0.8), osc(0, 2, kPulse, 0, 30, 0.5),
+                         filter(0, 0, kLowPass, 1200, 0.15, 0.0), lfo(0, 2, kLfoSine, 0.25), lfo(0, 3, kLfoSmooth, 0.3),
+                         env(0, 0, 3000, 1000, 1.0, 3000), {a(kPartLevel, -3)},
+                         routes(0, {{lfo1, cutoff, 0.25}, {lfo2, resonance, 0.0}, {wheel, depth(1), 0.4}, {press, cutoff, 0.1}})})});
+      // [Ceasefre] A wide pad whose widths turn as Env 2 swells over seconds; Press brings in a third
+      // oscillator a fifth up, pulsing. The wheel takes out the octave.
+      p.push_back({"Ceasefire", "Monsta",
+                   join({osc(0, 0, kPulse, 12, 0, 0.5), osc(0, 1, kPulse, 0, 0, 1.0), osc(0, 2, kSaw, 7, 0, 0.0),
+                         {a(mixParam(kMixPan, 0), -0.7), a(mixParam(kMixPan, 1), 0.7), a(kSkyPan, 0.5)},
+                         filter(0, 0, kLowPass, 1500, 0.45, 0.3), lfo(0, 2, kLfoSine, 3.0), env(0, 0, 1000, 1000, 1.0, 3000),
+                         env(0, 1, 2500, 3000, 0.0, 3000),
+                         routes(0, {{env2, oscParam(0, kOscShape), 0.35}, {env2, oscParam(1, kOscShape), -0.3}, {lfo1, mixParam(kMixLevel, 2), 0.0},
+                                    {press, depth(2), 0.5}, {press, mixParam(kMixLevel, 2), 0.2}, {wheel, mixParam(kMixLevel, 0), -0.4}})})});
+      // [ChamberS] Slow chamber strings whose widths and levels move on an LFO; Press is the vibrato.
+      p.push_back({"Chamber Strings", "Monsta",
+                   join({osc(0, 0, kSaw, 0, -9, 1.0), osc(0, 1, kPulse, 0, 9, 1.0), osc(0, 2, kSaw, -12, 0, 0.4),
+                         {a(mixParam(kMixPan, 0), -0.7), a(mixParam(kMixPan, 1), 0.7), a(tailParam(kDriveAmount), 0.2)},
+                         filter(0, 0, kLowPass, 1400, 0.35, 0.3), lfo(0, 2, kLfoSine, 5.5), lfo(0, 3, kLfoSine, 0.3),
+                         env(0, 0, 500, 1000, 1.0, 1500),
+                         routes(0, {{lfo2, oscParam(1, kOscShape), 0.4}, {lfo2, mixParam(kMixLevel, 1), -0.2}, {lfo1, kPartFine, 0.0},
+                                    {press, depth(2), 0.03}, {wheel, oscParam(0, kOscShape), 0.3}, {wheel, cutoff, 0.15}})})});
+      // [FreshAir] Wide saws under a filter resonant enough to whistle at the note; Press sets the
+      // whistle wobbling, the wheel adds breath.
+      p.push_back({"Fresh Air", "Monsta",
+                   join({osc(0, 0, kSaw, 0, -25, 1.0), osc(0, 1, kSaw, 0, 25, 1.0), {a(mixParam(kMixPan, 0), -0.6), a(mixParam(kMixPan, 1), 0.6)},
+                         filter(0, 0, kLadder, 1050, 0.85, 1.0), lfo(0, 2, kLfoSine, 6.0), env(0, 0, 300, 1000, 1.0, 1000),
+                         routes(0, {{lfo1, cutoff, 0.0}, {press, depth(0), -0.08}, {wheel, mixParam(kNoiseLevel), 0.2}})})});
+      // [ClangHrt] A struck, clanging string: an inharmonic FM strike over a driven saw body, the
+      // filter closing as it rings. Press brings the clang back.
+      p.push_back({"Clang Heart", "Monsta",
+                   join({op(0, 0, kSine, 1.0, 0.6), osc(0, 1, kSaw, 0, 0, 1.0), op(0, 2, kSine, 3.5, 0.0), {a(fm31, 0.15)},
+                         {a(tailParam(kDriveAmount), 0.3), a(kVelocityToAmp, 0.6), a(envParam(1, kEnvVelocity), 0.4)},
+                         filter(0, 0, kLowPass, 900, 0.2, 1.0), env(0, 0, 1, 1500, 0.45, 800), env(0, 1, 0.5, 800, 0.0, 600),
+                         env(0, 2, 0.5, 600, 0.0, 700),
+                         routes(0, {{env2, cutoff, 0.4}, {env3, fm31, 0.35}, {press, fm31, 0.2}, {wheel, cutoff, 0.3}})})});
+      // [SpaceGod] A howling, resonant swell that rises in pitch and opens over seconds; Press throws
+      // its top oscillator into a wild warble.
+      p.push_back({"Space God", "Monsta",
+                   join({osc(0, 0, kSaw, -2, 0, 1.0), osc(0, 1, kSaw, 0, 20, 0.6), osc(0, 2, kSaw, 24, 0, 0.3),
+                         {a(mixParam(kNoiseLevel), 0.1), a(kSkyPan, 0.8), a(kPartLevel, -3)}, filter(0, 0, kLadder, 900, 0.8, 1.0),
+                         lfo(0, 2, kLfoSine, 5.0), env(0, 0, 1500, 1000, 1.0, 4000), env(0, 1, 3000, 1000, 1.0, 4000),
+                         routes(0, {{env2, cutoff, 0.3}, {env2, kPartFine, 0.03}, {lfo1, oscParam(2, kOscFine), 0.0}, {press, depth(2), 0.15},
+                                    {wheel, resonance, -0.3}})})});
+      // [Opera2.0] A pad that sours as you press, one oscillator sinking flat; the wheel pulses in an
+      // octave above.
+      p.push_back({"Opera Pad", "Monsta",
+                   join({osc(0, 0, kPulse, 0, 0, 0.5), osc(0, 1, kSaw, 12, 0, 1.0), osc(0, 2, kPulse, 12, 4, 0.0),
+                         {a(oscParam(0, kOscShape), 0.3), a(mixParam(kNoiseLevel), 0.03), a(tailParam(kDriveAmount), 0.2),
+                          a(mixParam(kMixPan, 0), -0.5), a(mixParam(kMixPan, 1), 0.5)},
+                         filter(0, 0, kLowPass, 2000, 0.45, 1.0), lfo(0, 2, kLfoSine, 0.6), env(0, 0, 300, 1000, 1.0, 1200),
+                         routes(0, {{press, oscParam(1, kOscFine), -0.1}, {lfo1, mixParam(kMixLevel, 2), 0.0}, {wheel, depth(1), 0.5},
+                                    {wheel, cutoff, 0.1}})})});
+      // [IceBells] A filter resonant enough to ring, pinged by each note: the harder you strike, the
+      // brighter the ping. A slow LFO shimmers it.
+      p.push_back({"Ice Bells", "Monsta",
+                   join({osc(0, 0, kSaw, 0, -10, 0.5), osc(0, 1, kSaw, 0, 10, 0.5), {a(mixParam(kNoiseLevel), 0.05), a(kSkyPan, 0.6)},
+                         filter(0, 0, kLadder, 520, 0.92, 1.0), {a(envParam(1, kEnvVelocity), 1.0)}, lfo(0, 2, kLfoSine, 0.5),
+                         env(0, 0, 1, 2500, 0.4, 1500), env(0, 1, 0.5, 40, 0.0, 40),
+                         routes(0, {{env2, cutoff, 0.3}, {lfo1, cutoff, 0.03}, {press, resonance, 0.06}, {wheel, cutoff, 0.15}})})});
+      // [Oldfield] A lead whose second voice swells in under the first while the vibrato speeds up,
+      // as on a seventies record. The wheel speeds it further, Press deepens it.
+      p.push_back({"Oldfield Lead", "Monsta",
+                   join({osc(0, 0, kPulse, 0, 0, 0.0), osc(0, 1, kPulse, 12, 0, 0.6), osc(0, 2, kSaw, 12, 5, 0.3),
+                         {a(oscParam(0, kOscShape), 0.35), a(oscParam(1, kOscShape), 0.35), a(tailParam(kDriveAmount), 0.25)},
+                         filter(0, 0, kLowPass, 3500, 0.3, 0.0), lfo(0, 2, kLfoSine, 4.0), mono(0, 30),
+                         env(0, 0, 30, 1000, 1.0, 400), env(0, 1, 800, 4000, 0.4, 600),
+                         routes(0, {{env2, mixParam(kMixLevel, 0), 0.9}, {lfo1, kPartFine, 0.02}, {env2, lfoParam(2, kLfoRate), 0.15},
+                                    {press, depth(1), 0.02}, {wheel, lfoParam(2, kLfoRate), 0.1}})})});
+      // [PinkHaze] A hazy, wide pad that glides between chords; Press pumps the filter down on a slow
+      // LFO, and the wheel fades it back.
+      p.push_back({"Pink Haze", "Monsta",
+                   join({osc(0, 0, kSaw, 0, -20, 0.8), osc(0, 1, kPulse, 12, 20, 0.8), osc(0, 2, kPulse, 12, -15, 0.7),
+                         {a(mixParam(kMixPan, 0), -0.6), a(mixParam(kMixPan, 1), 0.6), a(kGlideTime, timeValue(150)), a(kPartLevel, -3)},
+                         filter(0, 0, kLowPass, 5000, 0.4, 0.5), lfo(0, 2, kLfoSine, 0.3), env(0, 0, 600, 1000, 1.0, 1500),
+                         routes(0, {{lfo1, cutoff, 0.0}, {press, depth(0), -0.2}, {wheel, kPartLevel, -0.2}})})});
 
       // ---- Motion: patches that keep moving on their own ----
       // Two unsynced LFOs and Env 3 looping on the FM, so no two bars sound the same; the wheel deepens all of it.
@@ -1431,6 +1559,22 @@ inline const std::vector<Preset> &factoryPresets() {
          {"Quack Bass", 9.0},
          {"Gristle Lead", 10.0},
          {"Cumulus", -7.0},
+         {"Old Hills", -4.0},
+         {"Sunshine Strings", -5.5},
+         {"Worn Arp", 2.5},
+         {"Waxxy", -1.0},
+         {"Reptile", 3.5},
+         {"Crystal Strings", -3.5},
+         {"Softy Drone", 0.0},
+         {"Ceasefire", -6.5},
+         {"Chamber Strings", -2.0},
+         {"Fresh Air", -4.5},
+         {"Clang Heart", 4.0},
+         {"Space God", -1.0},
+         {"Opera Pad", 0.5},
+         {"Ice Bells", -1.0},
+         {"Oldfield Lead", 4.5},
+         {"Pink Haze", -2.5},
          {"Lean-In Piano", -1.0},
          {"EP and Strings", -0.5},
          {"EP and Bells", -2.5},

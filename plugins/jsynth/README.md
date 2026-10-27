@@ -81,7 +81,7 @@ save it, or press Escape or click anywhere else to back out. To remove a user pr
 menu and pick **Delete**; it asks once more before the file goes. A factory preset loads every param it doesn't set at its default, so nothing
 from the last patch carries over.
 
-The 152 factory presets run in 17 categories: **Bass**, **Leads**, **Keys**, **Mallets and Bells**, **Plucks**, **Brass**, **Strings**, **Pads**, **Rhythmic**, **Atmospheres**, **Voices**, **Drums and FX**, **Expressive**, **Monsta**, **Motion**, **Layers and Splits** and **Flock**. The instrument families come first,
+The 168 factory presets run in 17 categories: **Bass**, **Leads**, **Keys**, **Mallets and Bells**, **Plucks**, **Brass**, **Strings**, **Pads**, **Rhythmic**, **Atmospheres**, **Voices**, **Drums and FX**, **Expressive**, **Monsta**, **Motion**, **Layers and Splits** and **Flock**. The instrument families come first,
 from plain patches to ones with more going on, and most answer the mod wheel and Press so they play
 from any keyboard. **Keys** has an acoustic piano among its electric ones, and **Voices** is formants,
 throats and whispers. **Expressive** is played with Press, which bows, blows, bends, gates or blooms

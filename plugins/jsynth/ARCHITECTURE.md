@@ -623,7 +623,7 @@ it per note.
 
 ## Presets
 
-The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 152 presets in
+The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 168 presets in
 17 categories. The first twelve are instrument families, as a keyboard player looks for a sound
 (**Voices** is formants, throats and whispers); then **Expressive** (patches played with Press,
 where it bows, blows, bends, gates or blooms), **Monsta** (variations on MicroMonsta 2 programs), and
@@ -747,6 +747,22 @@ moves both parts together, so a layer keeps its balance.
 |  | Quack Bass | [MG Quak] A squelchy, driven mono bass with a long glide; Press sets the filter quacking. |
 |  | Gristle Lead | [Gristle] Wide pulse waves whose widths swing; Press makes the resonance flutter. |
 |  | Cumulus | [Cumulous] A wide pad under a resonant, tracking filter; Press speeds its drift, the wheel sweeps it across the stereo field. |
+|  | Old Hills | [OldHills] Plucky keys over a held body; each note draws its own pulse width, and the pitch leans up as it settles. |
+|  | Sunshine Strings | [Sunshine] Bright strings under a resonant, tracking filter, the width turning slowly; the wheel adds a fifth. |
+|  | Worn Arp | [WornArp] Short plucks from a worn machine: each chirps, lands a little off pitch and somewhere new in the stereo field. |
+|  | Waxxy | [Waxxy] A driven, resonant pluck whose filter lands somewhere new on each note. |
+|  | Reptile | [Reptile] A crawling drone of three oscillators wandering on slow LFOs; Press drives it. |
+|  | Crystal Strings | [Crystal] Octaves under a dark, resonant filter each note sweeps open and lets close over seconds. |
+|  | Softy Drone | [Softy] A drone that takes seconds to arrive, its filter breathing; the wheel adds a fluttering resonance. |
+|  | Ceasefire | [Ceasefre] A wide pad whose widths turn as it swells; Press brings in a pulsing fifth. |
+|  | Chamber Strings | [ChamberS] Slow strings whose widths and levels move on an LFO; Press is the vibrato. |
+|  | Fresh Air | [FreshAir] Wide saws under a filter that whistles at the note; Press sets the whistle wobbling. |
+|  | Clang Heart | [ClangHrt] An inharmonic FM strike over a driven saw body; Press brings the clang back. |
+|  | Space God | [SpaceGod] A howling, resonant swell rising over seconds; Press throws its top oscillator into a warble. |
+|  | Opera Pad | [Opera2.0] A pad that sours as you press, one oscillator sinking flat; the wheel pulses in an octave. |
+|  | Ice Bells | [IceBells] A filter resonant enough to ring, pinged by each note, brighter the harder you strike. |
+|  | Oldfield Lead | [Oldfield] A second voice swells in under the lead as the vibrato speeds up. |
+|  | Pink Haze | [PinkHaze] A hazy pad that glides between chords; Press pumps the filter, the wheel fades it. |
 | Motion | Shifting Glass | Three-operator FM with a looping Env 3 and two unsynced LFOs; the wheel deepens all of it. |
 |  | Random Garden | The Random wave: each note draws its own waves, LFO speed and pan. |
 |  | Pulsar | A looping Env 1: every held note pulses on its own clock, faster higher up and with Press. |
