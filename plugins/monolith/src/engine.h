@@ -217,7 +217,10 @@ public:
    static constexpr double kFreeTempo = 120.0;
    static constexpr int kMaxRange = 4;
 
-   Engine() { regenerate(ScriptKey::of(params_)); }
+   Engine() {
+      regenerate(ScriptKey::of(params_));
+      publishPitches();
+   }
 
    void setParams(const EngineParams &p) {
       params_ = p;
@@ -227,6 +230,7 @@ public:
       params_.range = std::clamp(p.range, 1, kMaxRange);
       if (ScriptKey::of(params_) != slabKey_)
          regenerate(ScriptKey::of(params_));
+      publishPitches();
    }
    const EngineParams &params() const { return params_; }
 
@@ -291,8 +295,8 @@ public:
          freeBeats_ = b1;
 
       handleFollow(in, inCount);
-      // The rows sound in the key as it is now, so the first block plays the right notes and a held
-      // key-follow note is heard at once.
+      // The rows' pitches as of this block, so the first notes after a start, a param change or a
+      // held key are already in the new key.
       publishPitches();
 
       if (!playing) {

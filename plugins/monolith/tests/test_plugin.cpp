@@ -209,7 +209,7 @@ int main() {
    // The factory bank: whole presets, in range, uniquely named, using every script.
    {
       const auto &bank = factoryPresets();
-      JCLAP_CHECK(bank.size() >= 12u);
+      JCLAP_CHECK(bank.size() >= 40u);
       std::set<std::string> names, categories;
       std::set<int> scripts;
       for (const Preset &p : bank) {
@@ -223,7 +223,7 @@ int main() {
                scripts.insert(static_cast<int>(v));
          }
       }
-      JCLAP_CHECK_EQ(categories.size(), 3u);
+      JCLAP_CHECK_EQ(categories.size(), 7u);
       JCLAP_CHECK_EQ(scripts.size(), 5u);
       JCLAP_CHECK(bank.front().name == "Init");
    }
