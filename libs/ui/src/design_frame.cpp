@@ -77,8 +77,10 @@ void DesignFrame::mouseDown(const visage::MouseEvent &e) {
       showZoomMenu(*this, e.position);
 }
 
+// The background menu's "Check for Updates" item, after the UI sizes' ids.
+constexpr int kCheckForUpdates = 1000;
+
 void DesignFrame::showZoomMenu(visage::Frame &source, visage::Point position) {
-   constexpr int kCheckForUpdates = 1000;
    visage::PopupMenu menu;
    if (onZoom) {
       visage::PopupMenu sizes("UI Size");
