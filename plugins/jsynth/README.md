@@ -52,8 +52,8 @@ the sky. **SKY** hides everything but the flocks.
 - **Stereo:** X Pan sets how far each creature's place in the sky, left to right, pans its voice,
   so a flock can spread across the stereo field. Output Width sets the whole output's width.
 - **Three envelopes, ADSR or Shape.** Each is a DAHDSR with curves and loops, or, in Shape mode
-  (after XAOC's Zadar), one contour from a library of 48 in eight banks, stretched over 1 ms to 30
-  minutes or a tempo length, warped, bent, reversed and repeated. An Env Chain starts one Shape
+  (after XAOC's Zadar), one contour from a library of 60 in ten banks (ADSR-style ones among them), stretched over 1 ms to 30
+  minutes or a tempo length, warped, bent, scaled, reversed, repeated and held at a sustain point. An Env Chain starts one Shape
   envelope from another at a phase of its run, in a line or a loop, for drones and textures that keep
   moving.
 - **Four LFOs.** Two move the flock: the wingbeat, one per creature, and the wind, one gust for the

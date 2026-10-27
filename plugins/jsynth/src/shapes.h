@@ -12,6 +12,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -35,12 +36,14 @@ inline const std::vector<ShapeBank> &shapeBanks() {
       {"Steps", {"Arp Up", "Arp Down", "Up Down", "Random 8", "Random 16", "Sparse Steps"}},
       {"Drift", {"Wander", "Brownian", "Flicker", "Gusts", "Sparkle", "Shimmer"}},
       {"Strike", {"Comet", "Bell", "Saw Train", "Sawtooth Rise", "Collapse", "Tremble"}},
+      {"ADSR", {"ADSR", "Punch", "Slow Pad", "ASR", "AHD", "Organ"}},
+      {"Acoustic", {"Piano", "Brass", "Strings", "Guitar", "Double Attack", "Swell and Hit"}},
    };
    return banks;
 }
 
 constexpr int kShapeBankSize = 6;
-constexpr int kShapeCount = 8 * kShapeBankSize;
+constexpr int kShapeCount = 10 * kShapeBankSize;
 
 // "Bank: Name", the param's choice names.
 inline const std::vector<std::string> &shapeNames() {
@@ -118,6 +121,27 @@ inline double hit(double x, double at, double length, double sharp) {
    const double t = (x - at) / length;
    const double rise = 0.02 / length;
    return t < rise ? smooth(t / rise) : std::exp(-sharp * (t - rise));
+}
+
+// Segments through points, as an ADSR draws them: from (0, 0) to each {x, y} in turn, each bowed
+// by its curve (+ fast then slow, as an analog stage; 0 straight; - slow then fast).
+struct StagePoint {
+   double x, y, curve;
+};
+inline double stages(double x, std::initializer_list<StagePoint> points) {
+   double x0 = 0.0, y0 = 0.0;
+   for (const StagePoint &p : points) {
+      if (x <= p.x) {
+         const double t = p.x > x0 ? (x - x0) / (p.x - x0) : 1.0;
+         const double k = std::fabs(p.curve);
+         double f = t;
+         if (k > 1e-6)
+            f = p.curve > 0 ? (1.0 - std::exp(-k * t)) / (1.0 - std::exp(-k)) : (std::exp(k * t) - 1.0) / (std::exp(k) - 1.0);
+         return y0 + (p.y - y0) * f;
+      }
+      x0 = p.x, y0 = p.y;
+   }
+   return y0;
 }
 
 inline double shapeAt(int index, double x) {
@@ -267,6 +291,21 @@ inline double shapeAt(int index, double x) {
       return x < 0.08 ? smooth(x / 0.08) : steps((x - 0.08) / 0.92, 6, l);
    }
    case 47: return sin(kPi * x) * (0.7 + 0.3 * sin(tau * 23.0 * x));
+   // ADSR: the classic stages drawn, each with a sustain to set the sustain point in.
+   case 48: return stages(x, {{0.08, 1.0, 2.0}, {0.25, 0.6, 4.0}, {0.75, 0.6, 0.0}, {1.0, 0.0, 4.0}});
+   case 49: return stages(x, {{0.015, 1.0, 1.0}, {0.15, 0.45, 5.0}, {0.8, 0.45, 0.0}, {1.0, 0.0, 4.0}});
+   case 50: return stages(x, {{0.35, 1.0, -1.5}, {0.45, 0.85, 2.0}, {0.7, 0.85, 0.0}, {1.0, 0.0, 2.5}});
+   case 51: return stages(x, {{0.15, 1.0, 2.0}, {0.8, 1.0, 0.0}, {1.0, 0.0, 4.0}});
+   case 52: return stages(x, {{0.03, 1.0, 1.0}, {0.35, 1.0, 0.0}, {1.0, 0.0, 5.0}});
+   case 53: return stages(x, {{0.01, 1.0, 0.0}, {0.95, 1.0, 0.0}, {1.0, 0.0, 1.0}});
+   // Acoustic: envelopes after instruments.
+   case 54: return stages(x, {{0.005, 1.0, 0.0}, {0.1, 0.5, 4.0}, {0.85, 0.15, 3.0}, {1.0, 0.0, 3.0}});
+   case 55: return stages(x, {{0.07, 1.0, 1.5}, {0.2, 0.72, 3.0}, {0.8, 0.8, -0.5}, {1.0, 0.0, 4.0}});
+   case 56: return stages(x, {{0.25, 0.9, -1.0}, {0.78, 0.92, 0.0}, {1.0, 0.0, 2.0}});
+   case 57: return stages(x, {{0.004, 1.0, 0.0}, {0.45, 0.3, 4.0}, {0.85, 0.18, 1.0}, {1.0, 0.0, 3.0}});
+   case 58: return stages(x, {{0.015, 1.0, 1.0}, {0.1, 0.4, 3.0}, {0.18, 0.9, 1.5}, {0.35, 0.6, 3.0}, {0.8, 0.6, 0.0},
+                              {1.0, 0.0, 4.0}});
+   case 59: return stages(x, {{0.6, 0.55, -2.5}, {0.62, 1.0, 0.0}, {1.0, 0.0, 5.0}});
    default: return 0.0;
    }
 }

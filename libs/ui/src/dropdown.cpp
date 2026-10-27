@@ -88,8 +88,19 @@ void Dropdown::mouseDown(const visage::MouseEvent &e) {
       showContextMenu(this, e, onContextMenu);
       return;
    }
-   if (!e.isLeftButton())
+   if (e.isLeftButton())
+      openMenu();
+}
+
+void Dropdown::step(int by) {
+   if (options_.empty())
       return;
+   const int next = std::clamp(selected_ + by, 0, static_cast<int>(options_.size()) - 1);
+   if (next != selected_)
+      pick(next);
+}
+
+void Dropdown::openMenu() {
    visage::PopupMenu menu;
    if (groups_.empty())
       for (size_t i = 0; i < options_.size(); ++i)
@@ -113,9 +124,7 @@ void Dropdown::mouseDown(const visage::MouseEvent &e) {
 bool Dropdown::mouseWheel(const visage::MouseEvent &e) {
    if (e.wheel_delta_y == 0.0f || options_.empty())
       return false;
-   const int next = std::clamp(selected_ + (e.wheel_delta_y > 0 ? -1 : 1), 0, static_cast<int>(options_.size()) - 1);
-   if (next != selected_)
-      pick(next);
+   step(e.wheel_delta_y > 0 ? -1 : 1);
    return true;
 }
 

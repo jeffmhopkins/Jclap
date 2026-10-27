@@ -313,18 +313,23 @@ way is an eighth of the range. Time Range is a view setting saved with the patch
 and never changes a time; factory presets with a time past 5 s open on Long.
 
 **Shape mode**, after XAOC's Zadar: an envelope's **Mode** switches it from ADSR to playing one drawn
-contour from a library of 48 ([`src/shapes.h`](src/shapes.h)), eight banks of six: Rise, Fall, Swell,
-Pulse, Waves, Steps, Drift and Strike. Each shape is a 513-point table worked out once, which the
+contour from a library of 60 ([`src/shapes.h`](src/shapes.h)), ten banks of six: Rise, Fall, Swell,
+Pulse, Waves, Steps, Drift, Strike, ADSR (the classic stages drawn) and Acoustic (after instruments).
+The ADSR and Acoustic shapes are drawn as points joined by bowed stages. Each shape is a 513-point table worked out once, which the
 engine reads with linear interpolation and the panel draws. One pass takes the shape's **Time** (1 ms
 to 30 minutes, about 1.3 s in the middle) or, with **Sync**, a **Length** in the host's tempo (1/16
 to 64 bars). **Warp** bows time (+ pushes the contour later, - pulls it sooner) and **Bend** bows
-level (+ lifts it, - sinks it), both with the curve the ADSR stages use; **Reverse** plays it
-backwards. **Repeat** plays it once, a number of times (2 to 16), while the note is held (it then
+level (+ lifts it, - sinks it), both with the curve the ADSR stages use; **Level** scales it all down
+(Zadar's level); **Reverse** plays it backwards. A **Sustain Point** (100% is off) stops it there
+while the gate is held, as Zadar's sustain does, and it plays on from there when the gate drops; it
+stays where it is from the start when the shape is reversed. **Repeat** plays it once, a number of times (2 to 16), while the note is held (it then
 finishes its pass), or forever; after its last pass it holds the level it ended on. **Retrigger** is
 what a new note does while it plays: Smooth starts it from the first place the contour passes the
 level it is at now (Zadar's analog mode, so it never jumps), Restart from the top, Ignore lets it play
-on. Env 1 still fades over its Release on note off, while the shape keeps moving under the fade;
-Env 2 and 3 play on. Like the ADSR times, the progress is kept as a fraction of a pass, so a routed
+on. Neither ever clicks: a Restart, or a Smooth onto a level the contour never reaches, glides from
+the level it was at into the contour over 5 ms. Env 1 still fades over its Release on note off, while
+the shape keeps moving under the fade; with a sustain point the rest of the shape plays first, as the
+release, and the fade follows. Env 2 and 3 play on. Like the ADSR times, the progress is kept as a fraction of a pass, so a routed
 Time changes the speed, never the place.
 
 **Env Chain** (per part) lets one Shape envelope start another, as Zadar's chains do: 1 > 2, 2 > 3,
@@ -372,12 +377,13 @@ Destination are settings (not automatable); amounts are automatable and can be m
 LFOs (by their polarity), Glide, Turn, Random (one value per note, -1..1) and Key, which is
 (key - 60) / 48, clamped to -1..1.
 
-**Destinations** (171): every continuous part param a voice reads: level, pan, X Pan, fine, glide
+**Destinations** (177): every continuous part param a voice reads: level, pan, X Pan, fine, glide
 and drift; each oscillator's shape, coarse, fine, ratio, fixed pitch and phase; all nine FM cells;
 the mixer; drive and balance; each filter's cutoff, resonance, drive and key track; each envelope's
 times and sustain; each LFO's rate, phase and delay (and Push for the two that have it); the flock's
-twelve continuous params; every route's own amount; and each envelope's Shape Time, Warp, Bend and
-Chain Phase (last, as they came later, so a saved route keeps its destination).
+twelve continuous params; every route's own amount; then each envelope's Shape Time, Warp, Bend and
+Chain Phase, and after those its Sustain Point and Shape Level (last, as they came later, so a saved
+route keeps its destination).
 
 **How a route moves a param.** Per voice per tick:
 
@@ -605,7 +611,7 @@ it per note.
 | Loop | Off, Held, Free | Off | |
 | Velocity | 0 to 100% | 0% | How much velocity scales the envelope. |
 | Mode | ADSR, Shape | ADSR | Shape plays a contour from the shape library instead. |
-| Shape | 48 shapes in 8 banks | Swell: Arch | Shape mode's contour. |
+| Shape | 60 shapes in 10 banks | Swell: Arch | Shape mode's contour. |
 | Shape Time | 1 ms to 30 min | 2 s | One pass, when Shape Sync is off. |
 | Shape Sync | Off, On | Off | |
 | Shape Length | 1/16 to 64 bars | 1 bar | One pass, in the host's tempo, when Shape Sync is on. |
@@ -615,6 +621,8 @@ it per note.
 | Reverse | Off, On | Off | |
 | Retrigger | Smooth, Restart, Ignore | Smooth | What a new note does while the shape plays. |
 | Chain Phase | 0 to 100% | 100% | In a chain, how far through the one before it this one starts. |
+| Sustain Point | 0 to 100%, Off | Off | Where it holds while the note is. |
+| Shape Level | 0 to 100% | 100% | The shape's height. |
 
 **Env Chain** (per part): Off, 1 > 2, 2 > 3, 1 > 2 > 3, 1 > 2 Loop, 2 > 3 Loop, 1 > 2 > 3 Loop.
 
@@ -656,7 +664,7 @@ it per note.
 | Param | Range | Default | What it does |
 | --- | --- | --- | --- |
 | Source | Off and the 27 sources | Off (the first three: Env 2, Press, Press) | |
-| Destination | the 159 destinations | Filter 1 Cutoff (Route 2: Speed) | |
+| Destination | the 177 destinations | Filter 1 Cutoff (Route 2: Speed) | |
 | Amount | -100 to +100% | 0 (+30, +40, +20%) | |
 
 ## Presets
