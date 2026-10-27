@@ -10,6 +10,7 @@
 #include <jclap/ui/preset_bar.h>
 #include <jclap/ui/section.h>
 #include <jclap/ui/tooltip.h>
+#include <jclap/ui/update_notice.h>
 
 #include <cctype>
 #include <string>
@@ -42,6 +43,8 @@ public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       buildLayout();
       buildPresetBar();
+      // Under the name, the only free spot in the header.
+      add<ui::UpdateNotice>({70, 62, 220, 24});
       for (auto [button, x, w] : {std::tuple{&chDown_, 336.0f, 34.0f}, {&channel_, 376.0f, 150.0f},
                                   {&chUp_, 532.0f, 34.0f}, {&sendAll_, 584.0f, 110.0f}})
          place(*button, {x, 50, w, 30});

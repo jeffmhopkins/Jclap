@@ -47,8 +47,12 @@ struct PresetFormat {
 // loading one sets the whole sound and nothing from the previous preset carries over.
 void completePresets(std::vector<Preset> &presets, const std::vector<double> &defaults);
 
-// Where user presets live: per platform, under the user's own settings folder, then
-// <format.name>/Presets.
+// A folder of the user's own settings for `name`: %APPDATA%\<name> on Windows,
+// ~/Library/Application Support/<name> on macOS, and ~/.config/<name> (or under $XDG_CONFIG_HOME)
+// on Linux. It may not exist yet.
+std::filesystem::path userFolder(const std::string &name);
+
+// Where user presets live: userFolder(format.name) / "Presets".
 std::filesystem::path userPresetFolder(const PresetFormat &format);
 
 // Reads a user preset; false if the file isn't one of this format's. `version`, if given, is set to

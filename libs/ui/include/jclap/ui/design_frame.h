@@ -73,7 +73,8 @@ public:
    // Moves a child already added or placed.
    void move(visage::Frame &frame, Rect bounds);
 
-   // When set, right-clicking the background offers these UI sizes (1.0 = design size).
+   // When set, right-clicking the background offers these UI sizes (1.0 = design size), above
+   // "Check for Updates", which it always offers.
    std::function<void(float)> onZoom;
    std::vector<float> zoomLevels = {0.75f, 1.0f, 1.25f, 1.5f, 2.0f};
    // The size shown as ticked. Window keeps it in step with the size the window really has.
@@ -81,7 +82,8 @@ public:
 
    void resized() override;
    void mouseDown(const visage::MouseEvent &e) override;
-   // Shows the background menu (the UI sizes, if onZoom is set) at `position` in `source`. For a
+   // Shows the background menu at `position` in `source`: the UI sizes (if onZoom is set) and
+   // "Check for Updates", which turns the release check on or off for every JClap plugin. For a
    // child that covers the background, so right-clicking it offers the same.
    void showZoomMenu(visage::Frame &source, visage::Point position);
 

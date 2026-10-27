@@ -35,6 +35,8 @@ add_library(jclap_ui STATIC
    src/note_roll.cpp
    src/presets.cpp
    src/preset_bar.cpp
+   src/updates.cpp
+   src/update_notice.cpp
    src/design_frame.cpp
    src/params.cpp
    src/param_bindings.cpp
@@ -46,6 +48,14 @@ target_compile_features(jclap_ui PUBLIC cxx_std_17)
 target_link_libraries(jclap_ui PUBLIC jclap::core visage PRIVATE VisageEmbeddedFonts)
 if(NOT MSVC)
    target_compile_options(jclap_ui PRIVATE -Wall -Wextra -fvisibility=hidden)
+endif()
+# The update check compares the newest GitHub release with this build's version. It fetches with
+# WinHTTP on Windows and the system's libcurl (loaded at run time, not linked) elsewhere.
+set_source_files_properties(src/updates.cpp PROPERTIES COMPILE_DEFINITIONS JCLAP_VERSION="${jclap_VERSION}")
+if(WIN32)
+   target_link_libraries(jclap_ui PRIVATE winhttp shell32)
+else()
+   target_link_libraries(jclap_ui PRIVATE ${CMAKE_DL_LIBS})
 endif()
 
 # Widget input checks: mouse handlers called directly, no window or GPU needed.

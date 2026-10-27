@@ -22,21 +22,23 @@ void completePresets(std::vector<Preset> &presets, const std::vector<double> &de
    }
 }
 
-std::filesystem::path userPresetFolder(const PresetFormat &format) {
+std::filesystem::path userFolder(const std::string &name) {
 #if defined(_WIN32)
    const char *base = std::getenv("APPDATA");
-   return std::filesystem::path(base ? base : ".") / format.name / "Presets";
+   return std::filesystem::path(base ? base : ".") / name;
 #elif defined(__APPLE__)
    const char *home = std::getenv("HOME");
-   return std::filesystem::path(home ? home : ".") / "Library" / "Application Support" / format.name / "Presets";
+   return std::filesystem::path(home ? home : ".") / "Library" / "Application Support" / name;
 #else
    const char *config = std::getenv("XDG_CONFIG_HOME");
    const char *home = std::getenv("HOME");
    const std::filesystem::path base = config && *config ? std::filesystem::path(config)
                                                         : std::filesystem::path(home ? home : ".") / ".config";
-   return base / format.name / "Presets";
+   return base / name;
 #endif
 }
+
+std::filesystem::path userPresetFolder(const PresetFormat &format) { return userFolder(format.name) / "Presets"; }
 
 bool readPresetFile(const std::filesystem::path &file, const PresetFormat &format, Preset &out, int *version) {
    std::ifstream in(file);

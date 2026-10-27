@@ -5,6 +5,8 @@
 
 #include <visage/ui.h>
 
+#include "jclap/ui/updates.h"
+
 namespace jclap::ui {
 
 std::vector<Rect> row(Rect area, int count, float gap) {
@@ -76,20 +78,24 @@ void DesignFrame::mouseDown(const visage::MouseEvent &e) {
 }
 
 void DesignFrame::showZoomMenu(visage::Frame &source, visage::Point position) {
-   if (!onZoom)
-      return;
+   constexpr int kCheckForUpdates = 1000;
    visage::PopupMenu menu;
-   visage::PopupMenu sizes("UI Size");
-   for (size_t i = 0; i < zoomLevels.size(); ++i) {
-      const int percent = static_cast<int>(std::lround(zoomLevels[i] * 100.0f));
-      sizes.addOption(static_cast<int>(i), std::to_string(percent) + "%")
-         .select(std::fabs(zoomLevels[i] - currentZoom) < 0.005f);
+   if (onZoom) {
+      visage::PopupMenu sizes("UI Size");
+      for (size_t i = 0; i < zoomLevels.size(); ++i) {
+         const int percent = static_cast<int>(std::lround(zoomLevels[i] * 100.0f));
+         sizes.addOption(static_cast<int>(i), std::to_string(percent) + "%")
+            .select(std::fabs(zoomLevels[i] - currentZoom) < 0.005f);
+      }
+      menu.addSubMenu(sizes);
    }
-   menu.addSubMenu(sizes);
+   menu.addOption(kCheckForUpdates, "Check for Updates").select(updates::enabled());
    menu.onSelection() += [this](int id) {
       // The window resizes only if the host agrees, and sets currentZoom when it does.
-      if (id >= 0 && id < static_cast<int>(zoomLevels.size()))
+      if (onZoom && id >= 0 && id < static_cast<int>(zoomLevels.size()))
          onZoom(zoomLevels[id]);
+      else if (id == kCheckForUpdates)
+         updates::setEnabled(!updates::enabled());
    };
    menu.show(&source, position);
 }

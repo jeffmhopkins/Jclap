@@ -35,6 +35,7 @@ target_link_libraries(<name> PRIVATE jclap::ui)
 | `jclap/ui/note_grid.h` | LinnStrument-style note grid (rows a fourth, fifth or octave apart) that shows per-note MPE: bend, pressure and timbre. Slide on it to bend. Off-grid notes show as an arrow; `shiftOctaves` moves it |
 | `jclap/ui/note_roll.h` | Small piano roll that shows what a sequencer or note generator is about to play: notes as bars with their names, a beat grid and a playhead. `setLanes` fixes the rows (a sequencer's pitches), `setCompact` shows only the pitches in use |
 | `jclap/ui/preset_bar.h` | Preset browser for a header: arrows and the wheel step through presets, the name opens a menu by category, SAVE writes the current settings to the user's folder. `jclap/ui/presets.h` holds the factory-bank helpers and the preset file format, without Visage |
+| `jclap/ui/update_notice.h` | A small notice for a header when a newer JClap release is out. Click it to open the release page, or its cross to hide it until the next one. Hidden otherwise, and never in screenshots or tests. `jclap/ui/updates.h` is the check behind it, without Visage |
 | `jclap/ui/octave_shift.h` | Octave - and + buttons around a readout, to move a keyboard or grid up and down |
 | `jclap/ui/scope.h` | Oscilloscope or waveform view, fed from a `jclap::core::SampleFifo` |
 | `jclap/ui/tabs.h` | Tab bar that shows one page of widgets at a time |
@@ -75,7 +76,7 @@ public:
 
 > [!TIP]
 > Right-clicking the panel background offers UI sizes from 75% to 200%, as long as the panel is the
-> window's root.
+> window's root, and "Check for Updates", which turns the update check on or off.
 
 ## Params
 
@@ -119,6 +120,19 @@ With a `jclap::core::Plugin` subclass:
 
 `createEditor` returns `std::make_unique<jclap::ui::Window>(std::move(panel), WindowOptions{w, h})`.
 `plugins/_template` is a small complete example; `plugins/micromonsta2/src/editor.cpp` a big one.
+
+## Update notices
+
+When a plugin's window opens, `Window` asks GitHub for the newest release
+(`api.github.com/repos/jeffmhopkins/Jclap/releases/latest`) on a background thread, at most once a
+day across every JClap plugin, and compares it with the project version this build was made from.
+Any `UpdateNotice` in the panel then shows the newer release. The check uses WinHTTP on Windows and
+the system's libcurl elsewhere, loaded at run time, so there is nothing more to link or install.
+Offline, rate-limited, or without libcurl, nothing shows and nothing fails.
+
+What it learns is kept in `updates.txt` in the user's JClap folder (`%APPDATA%\JClap`,
+`~/Library/Application Support/JClap` or `~/.config/JClap`), with the release the user dismissed
+and whether checking is on. Unticking "Check for Updates" in the background menu stops all requests.
 
 ## Gallery
 
