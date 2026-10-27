@@ -93,18 +93,17 @@ Click the **star** beside the name to make the current preset a favorite (click 
 are kept in `Favorites.txt` beside the `Presets` folder, so they last between sessions and every
 instance of the plugin shares them.
 
-The 203 factory presets run in 21 categories: **Bass**, **Leads**, **Keys**, **Mallets and Bells**, **Plucks**, **Brass**, **Strings**, **Pads**, **Rhythmic**, **Atmospheres**, **Voices**, **Drums and FX**, **Expressive**, **Monsta**, **Motion**, **Drones**, **Textures**, **Interplay**, **Landscapes**, **Layers and Splits** and **Flock**. The instrument families come first,
-from plain patches to ones with more going on, and most answer the mod wheel and Press so they play
-from any keyboard. **Keys** has an acoustic piano among its electric ones, and **Voices** is formants,
-throats and whispers. **Expressive** is played with Press, which bows, blows, bends, gates or blooms
-the sound rather than just opening a filter, and **Monsta** is variations on MicroMonsta 2 programs. **Motion** holds patches that keep moving on their own (looping shapes, tempo-synced
-and random LFOs, the Random wave, every MPE dimension at once), **Drones** and **Textures** are built
-on Shape-mode envelopes (long drifting shapes and chains under a held chord, and shapes as the amp so
-each held note plays a pattern), **Interplay** routes envelopes onto each other's Time, Warp and
-Bend, **Landscapes** plays both parts at once on Shape envelopes that move each other, **Layers and Splits** uses both parts
-(layers, some brought in by Press, splits at C3, velocity switches and Press and Slide crossfades), and **Flock** is the creatures playing
-the sound: Neighbour FM, Bite, and routes from the flock's sources. Every preset's level is matched, so
-stepping through the bank doesn't jump.
+The 166 factory presets are mostly showcases, in 10 categories. **Essentials** comes first: a few plain
+patches to start from. Then **Flock**, the creatures playing the sound (Neighbour FM, Bite, Tune Pull
+and the flock's sources, many through the mod buses); **Pressure**, Press shaped by the buses (curved,
+multiplied by LFOs and shapes, delayed and lagged); **Expressive**, played with Press, which bows,
+blows, bends, gates or blooms the sound; **Drones** and **Textures**, built on Shape-mode envelopes and
+the buses (long drifting shapes under a held chord, and shapes as the amp so each held note plays a
+pattern); **Motion**, patches that keep moving on their own; **Interplay**, envelopes routed onto each
+other's Time, Warp and Bend; **Landscapes**, both parts at once on Shape envelopes that move each
+other; and **Monsta**, variations on MicroMonsta 2 programs. Most answer the mod wheel and Press, so
+they play from any keyboard, and every preset's level is matched, so stepping through the bank
+doesn't jump.
 
 `jsynth-record out.wav|out.mp4 [preset] [cm7-swell|four-bar|drone]` (built with the tools) plays a
 phrase through a preset and writes the audio, or a video of the panel with it: a held Cm7 whose
