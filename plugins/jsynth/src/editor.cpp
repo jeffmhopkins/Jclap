@@ -449,7 +449,7 @@ public:
       c.roundedRectangleBorder(0, 0, w, h, 5 * s, 1.0f * s);
       if (editing())
          return;
-      const std::string &name = host_.busNames()[part_][bus_];
+      const std::string name = host_.busNames()[part_][bus_];
       c.setColor(name.empty() ? kDim : kText);
       c.text(name.empty() ? std::string("NAME THIS BUS") : name, ui::font((name.empty() ? 10 : 12) * s),
              visage::Font::kCenter, 0, 0, w, h);

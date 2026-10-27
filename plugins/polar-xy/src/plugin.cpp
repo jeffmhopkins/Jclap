@@ -399,7 +399,7 @@ const clap_plugin_descriptor_t PolarXY::descriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.10.2",
+   "0.10.3",
    "Converts XY CCs to Omnisphere Orb angle and radius CCs",
    kFeatures,
 };

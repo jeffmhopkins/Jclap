@@ -34,7 +34,7 @@ class RecordHost : public EditorHost {
 public:
    explicit RecordHost(const Preset &preset)
        : values_(new std::atomic<double>[paramCount()]), mods_(new std::atomic<double>[paramCount()]),
-         name_(preset.name) {
+         name_(preset.name), buses_(preset.buses) {
       const std::vector<double> v = presetValues(preset);
       for (size_t i = 0; i < paramCount(); ++i) {
          values_[i].store(v[i]);
@@ -60,6 +60,7 @@ public:
    void noteOff(int) override {}
    std::string presetName() const override { return name_; }
    void setPresetName(const std::string &) override {}
+   BusNames busNames() const override { return buses_; }
    void notes(std::vector<Note> &out) const override { out = held_; }
    bool flockFrame(FlockFrame &out) const override {
       engine_.flock().show(out);
@@ -79,6 +80,7 @@ public:
 private:
    std::unique_ptr<std::atomic<double>[]> values_, mods_;
    std::string name_;
+   BusNames buses_;
    Engine engine_;
    std::vector<Note> held_;
 };
