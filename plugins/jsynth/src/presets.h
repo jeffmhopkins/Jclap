@@ -33,6 +33,7 @@ struct Preset {
    std::string name;
    std::string category;
    std::vector<std::pair<clap_id, double>> values;
+   BusNames buses{};
 };
 
 inline const std::vector<Preset> &factoryPresets() {
@@ -2176,6 +2177,17 @@ inline bool readPreset(const std::filesystem::path &file, Preset &out) {
    out = {file.stem().string(), "User", {}};
    while (std::getline(in, line)) {
       std::istringstream fields(line);
+      // A bus's name: "bus <part> <bus> <name>". An older JSynth skips these lines.
+      if (line.rfind("bus ", 0) == 0) {
+         std::string word;
+         int part = -1, bus = -1;
+         if (fields >> word >> part >> bus && part >= 0 && part < kPartCount && bus >= 0 && bus < kBusCount) {
+            std::string name;
+            std::getline(fields >> std::ws, name);
+            out.buses[part][bus] = name.substr(0, kBusNameMax);
+         }
+         continue;
+      }
       unsigned id = 0;
       double v = 0.0;
       if (fields >> id >> v && findParam(id) && std::isfinite(v))
@@ -2187,7 +2199,8 @@ inline bool readPreset(const std::filesystem::path &file, Preset &out) {
 // Saves every param, so a preset sounds the same even if a later version changes a default; false if
 // the file can't be written. It is written beside its final name and then renamed over it, so a
 // failed save never leaves a half-written preset behind.
-inline bool writePreset(const std::filesystem::path &file, const jclap::ui::ParamAccess &access) {
+inline bool writePreset(const std::filesystem::path &file, const jclap::ui::ParamAccess &access,
+                        const BusNames &buses = {}) {
    std::error_code ec;
    std::filesystem::create_directories(file.parent_path(), ec);
    std::filesystem::path temp = file;
@@ -2202,6 +2215,10 @@ inline bool writePreset(const std::filesystem::path &file, const jclap::ui::Para
          std::snprintf(line, sizeof(line), "%u %.17g\n", static_cast<unsigned>(p.def.id), access.paramValue(p.def.id));
          out << line;
       }
+      for (int part = 0; part < kPartCount; ++part)
+         for (int bus = 0; bus < kBusCount; ++bus)
+            if (!buses[part][bus].empty())
+               out << "bus " << part << " " << bus << " " << buses[part][bus] << "\n";
       out.flush();
       if (!out) {
          out.close();

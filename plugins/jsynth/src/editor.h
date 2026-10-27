@@ -37,6 +37,9 @@ public:
    // The name of the preset last loaded or saved, kept with the plugin's state.
    virtual std::string presetName() const = 0;
    virtual void setPresetName(const std::string &name) = 0;
+   // The buses' names, kept with the plugin's state and saved in user presets.
+   virtual BusNames busNames() const { return {}; }
+   virtual void setBusNames(const BusNames &) {}
    // Sets every param at once, as loading a preset does: values[i] is kParams()[i]'s. Each param that
    // changes is one edit for the host. The plugin coalesces these, so clicking quickly through
    // presets sends the host the latest values instead of a backlog that could overflow.
@@ -65,6 +68,7 @@ struct ScreenshotView {
    int mapSource = 0;
    int view = 0;
    int voiceTab = 0; // the tab under the sky: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH
+   int envTab = 0;   // the envelope card's: 0 ENVELOPES, 1 LFOS, 2 BUSES
 };
 
 // Flies the flock for `seconds`, then draws the panel offscreen at the given pixel size and saves it

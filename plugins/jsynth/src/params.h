@@ -16,6 +16,7 @@
 #include "shapes.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -36,6 +37,8 @@ constexpr int kLfoCount = 4;
 // Routes per part: a pool the panel shows only the used ones of, so it reads as an open-ended list.
 constexpr int kRouteCount = 64;
 constexpr int kMacroCount = 4;
+// Mod buses per part.
+constexpr int kBusCount = 4;
 // The touch dimensions, in MPE order: velocity, pressure, bend, CC 74 and release velocity.
 constexpr int kTouchCount = 5;
 // All of them are route sources.
@@ -109,7 +112,10 @@ enum PartParam : clap_id {
    kShapeBase = kRouteEnd,
    kShapeStride = 16,
    kChainBase = kShapeBase + kEnvCount * kShapeStride, // 592
-   kPartEnd = kChainBase + 16                          // 608, inside the 1024 stride
+   // The mod buses: a place to mix sources into one, then route that on.
+   kBusBase = kChainBase + 16, // 608
+   kBusStride = 8,
+   kPartEnd = kBusBase + kBusCount * kBusStride // 640, inside the 1024 stride
 };
 
 enum OscParam : clap_id {
@@ -205,6 +211,20 @@ enum ChainParam : clap_id {
    kChain,
 };
 
+// A mod bus: routes onto its Base mix there by its Mode, and it sends the mix on as a source of its
+// own, through its Curve and Polarity, faded in after the note by Delay and Fade, and smoothed by Lag.
+// Global makes it one value for the whole part, from its newest note.
+enum BusParam : clap_id {
+   kBusOffset, // its Base, added to the mix; the destination its inputs are routed to
+   kBusMode,
+   kBusCurve,
+   kBusPolarity,
+   kBusDelay,
+   kBusFade,
+   kBusLag,
+   kBusGlobal,
+};
+
 // The first two LFOs move the flock: the wingbeat, one per creature, and the wind, one gust for the
 // whole sky. They aren't route sources. The other two, LFO 1 and LFO 2, are plain LFOs, sources for
 // routes only.
@@ -260,6 +280,7 @@ constexpr clap_id envParam(int env, EnvParam p) { return kEnvBase + env * kEnvSt
 constexpr clap_id lfoParam(int lfo, LfoParam p) { return kLfoBase + lfo * kLfoStride + p; }
 constexpr clap_id shapeParam(int env, ShapeParam p) { return kShapeBase + env * kShapeStride + p; }
 constexpr clap_id chainParam(ChainParam p) { return kChainBase + p; }
+constexpr clap_id busParam(int bus, BusParam p) { return kBusBase + bus * kBusStride + p; }
 constexpr clap_id flockParam(FlockParam p) { return kFlockBase + p; }
 constexpr clap_id routeParam(int route, RouteParam p) { return kRouteBase + route * kRouteStride + p; }
 
@@ -327,6 +348,19 @@ inline bool chainHead(int chain, int env) {
    static const int head[7] = {-1, 0, 1, 0, 0, 1, 0};
    return head[std::clamp(chain, 0, 6)] == env;
 }
+// Each part's bus names, as the user labelled them; empty is the plain "Bus 1".
+// A bus name's longest, in bytes.
+constexpr size_t kBusNameMax = 24;
+using BusNames = std::array<std::array<std::string, kBusCount>, kPartCount>;
+inline std::string busLabel(const BusNames &names, int part, int bus) {
+   const std::string &n = names[part][bus];
+   return n.empty() ? "Bus " + std::to_string(bus + 1) : n;
+}
+// How a bus mixes its inputs, how it bends the mix, and which way round it sends it on.
+inline const std::vector<std::string> kBusModeNames = {"Sum", "Multiply", "Min", "Max"};
+enum BusMode { kBusSum, kBusMultiply, kBusMin, kBusMax };
+inline const std::vector<std::string> kBusCurveNames = {"Linear", "Exponential", "Log", "S-Curve", "Absolute"};
+inline const std::vector<std::string> kBusPolarityNames = {"As Is", "Unipolar", "Bipolar", "Invert"};
 inline const std::vector<std::string> kLfoShapeNames = {"Sine", "Triangle", "Saw", "Square", "S&H", "Smooth"};
 inline const std::vector<std::string> kDivisionNames = {"1/32", "1/16T", "1/16", "1/8T", "1/16D", "1/8",  "1/4T",
                                                         "1/8D", "1/4",   "1/2T", "1/4D", "1/2",   "1/1", "2/1", "4/1"};
@@ -343,7 +377,8 @@ inline const std::vector<std::string> kLureSourceNames = {"Pitch", "Velocity", "
 // how near its nearest neighbour is, how much it flies upward, and which way and how hard it turns.
 inline const std::vector<std::string> kSourceNames = {
     "Off",   "Env 1", "Env 2", "Env 3",   "LFO 1",   "LFO 2", "Velocity", "Press",   "Glide",   "Slide",   "Release", "Key",
-    "Speed", "Nearest", "Heading", "Turn", "Random", "Mod Wheel", "Macro 1", "Macro 2", "Macro 3", "Macro 4"};
+    "Speed", "Nearest", "Heading", "Turn", "Random", "Mod Wheel", "Macro 1", "Macro 2", "Macro 3", "Macro 4",
+    "Bus 1", "Bus 2", "Bus 3", "Bus 4"};
 enum Source {
    kSourceOff,
    kSourceEnv1,
@@ -357,7 +392,8 @@ enum Source {
    kSourceRandom,
    kSourceModWheel,
    kSourceMacro1,
-   kSourceCount = kSourceMacro1 + kMacroCount
+   kSourceBus1 = kSourceMacro1 + kMacroCount,
+   kSourceCount = kSourceBus1 + kBusCount
 };
 inline const char *const kTouchNames[kTouchCount] = {"Velocity", "Press", "Glide", "Slide", "Release"};
 
@@ -508,6 +544,9 @@ inline std::vector<clap_id> buildDestinations() {
    for (int e = 0; e < kEnvCount; ++e)
       for (ShapeParam p : {kShapeSustain, kShapeLevel})
          d.push_back(shapeParam(e, p));
+   // A bus's inputs: routes onto its Base.
+   for (int b = 0; b < kBusCount; ++b)
+      d.push_back(busParam(b, kBusOffset));
    return d;
 }
 
@@ -640,6 +679,20 @@ inline void addPart(Builder &b, int part) {
       b.add(q(kShapeLevel), n + "Shape Level", m, 0.0, 1.0, 1.0, kMod, Unit::Percent);
    }
    b.choice(id(chainParam(kChain)), "Env Chain", "Env", kChainNames, 0, kGlobalChoice);
+
+   for (int bus = 0; bus < kBusCount; ++bus) {
+      const std::string m = num("Bus ", bus), n = m + " ";
+      const auto p = [&](BusParam q) { return id(busParam(bus, q)); };
+      // Named as the bus alone, so the destination menu reads "Bus 1".
+      b.add(p(kBusOffset), m, m, -1.0, 1.0, 0.0, kMod, Unit::Bipolar);
+      b.choice(p(kBusMode), n + "Mode", m, kBusModeNames, kBusSum, kGlobalChoice);
+      b.choice(p(kBusCurve), n + "Curve", m, kBusCurveNames, 0, kGlobalChoice);
+      b.choice(p(kBusPolarity), n + "Polarity", m, kBusPolarityNames, 0, kGlobalChoice);
+      b.add(p(kBusDelay), n + "Delay", m, 0.0, 1.0, 0.0, kMod, Unit::Time);
+      b.add(p(kBusFade), n + "Fade", m, 0.0, 1.0, 0.0, kMod, Unit::Time);
+      b.add(p(kBusLag), n + "Lag", m, 0.0, 1.0, 0.0, kMod, Unit::Time);
+      b.choice(p(kBusGlobal), n + "Global", m, kOnOffNames, 0, kGlobalChoice);
+   }
 
    for (int l = 0; l < kLfoCount; ++l) {
       const std::string m = l == 0 ? "Wingbeat" : l == 1 ? "Wind" : num("LFO ", l - kMotionCount), n = m + " ";

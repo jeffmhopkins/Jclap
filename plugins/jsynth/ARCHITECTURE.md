@@ -372,28 +372,54 @@ Each part has a pool of **64 routes**, each a source, a destination and an amoun
 all host params. The panel shows only the ones in use, so it reads as an open-ended list. Source and
 Destination are settings (not automatable); amounts are automatable and can be modulated.
 
-**Sources** (21): Env 1 to 3; LFO 1, LFO 2; Velocity, Press, Glide, Slide, Release; Key; the flock's four
-(Speed, Nearest, Heading, Turn); Random; Mod Wheel; Macro 1 to 4. They are unipolar 0..1 except the
-LFOs (by their polarity), Glide, Turn, Random (one value per note, -1..1) and Key, which is
-(key - 60) / 48, clamped to -1..1.
+**Sources** (25): Env 1 to 3; LFO 1, LFO 2; Velocity, Press, Glide, Slide, Release; Key; the flock's four
+(Speed, Nearest, Heading, Turn); Random; Mod Wheel; Macro 1 to 4; Bus 1 to 4. They are unipolar 0..1 except the
+LFOs (by their polarity), Glide, Turn, Random (one value per note, -1..1), Key, which is
+(key - 60) / 48, clamped to -1..1, and the buses, -1..1.
 
-**Destinations** (177): every continuous part param a voice reads: level, pan, X Pan, fine, glide
+**Destinations** (181): every continuous part param a voice reads: level, pan, X Pan, fine, glide
 and drift; each oscillator's shape, coarse, fine, ratio, fixed pitch and phase; all nine FM cells;
 the mixer; drive and balance; each filter's cutoff, resonance, drive and key track; each envelope's
 times and sustain; each LFO's rate, phase and delay (and Push for the two that have it); the flock's
 twelve continuous params; every route's own amount; then each envelope's Shape Time, Warp, Bend and
-Chain Phase, and after those its Sustain Point and Shape Level (last, as they came later, so a saved
-route keeps its destination).
+Chain Phase, then its Sustain Point and Shape Level, and last the four buses' inputs (each later
+addition goes at the end, so a saved route keeps its destination).
 
 **How a route moves a param.** Per voice per tick:
 
 1. **Pass 1:** routes onto another route's amount add `source × amount` (scaled to the amount's
    range) at their own unmodulated amounts.
-2. **Pass 2:** every other route adds `source × its amount (as moved in pass 1)` to its
+2. **The buses**, in order (see below), from the routes onto them, at their amounts as moved in
+   pass 1. A bus routed onto a later bus is this tick's value; onto itself or an earlier one, last
+   tick's.
+3. **Pass 2:** every other route adds `source × its amount (as moved in pass 1)` to its
    destination's offset.
-3. A param's value is `denormalise(clamp(normalise(base) + offset, 0, 1))`, in its own 0..1 range.
+4. A param's value is `denormalise(clamp(normalise(base) + offset, 0, 1))`, in its own 0..1 range.
    Ratio is normalised in log space, so a route moves it by musical intervals; Coarse moves
    continuously.
+
+### Mod buses
+
+Each part has **four buses**: a place to mix sources into one value, shape it, and route it on as a
+source of its own (Bus 1 to 4), so a mix used in several places is made once. Routes onto a bus's
+**Base** are its inputs, not an offset on it: each input is `source × amount`, and they combine by
+the bus's **Mode**: Sum adds them, Multiply multiplies them (one gates or scales another), Min keeps
+the lowest and Max the highest. Then, per voice per tick:
+
+1. `x = clamp(mix + Base, -1, 1)` (Base is -100 to +100%, and takes the host's per-note modulation).
+2. **Curve**: Linear; Exponential `sign·x²` (slow near 0); Log `sign·√|x|` (quick near 0); S-Curve
+   `sign·(3x² − 2|x|³)`; Absolute `|x|`.
+3. **Polarity**: As Is; Unipolar `(x + 1) / 2`; Bipolar `2x − 1`; Invert `−x`. Clamped to -1..1.
+4. **Onset**: times 0 until **Delay** after the note starts, then rising linearly over **Fade**, so
+   a bus can bring in vibrato two seconds into a held note.
+5. **Lag**: a one-pole toward that, with Lag as its time constant (none at 0; a new voice starts
+   there at once).
+
+**Global** makes a bus one value for the whole part: the part's newest voice works it out, every
+voice reads it, and its onset runs from the part's first key down (a note played while another is
+held doesn't start it again). Each bus has a name, up to 24 bytes, saved in the plugin's state
+(version 4) and in user presets as `bus <part> <bus> <name>` lines, which older versions skip; the
+chips, route lists and MAP hint show it.
 
 A route's amount is smoothed with the other params, so automating one doesn't zipper. The routes
 are compared against a cached copy each tick and recompiled when any changed, so a half-written
@@ -640,6 +666,19 @@ it per note.
 | Polarity | Bipolar, Unipolar | Bipolar | |
 | Push | 0 to 100% | 20% (Wind: 30%) | Wingbeat and Wind only: how hard it moves the creatures. |
 
+### Buses (per part, Bus 1 to 4)
+
+| Param | Range | Default | What it does |
+| --- | --- | --- | --- |
+| Base (named "Bus 1" etc.) | -100 to +100% | 0% | Added to the mix; routes onto it are the bus's inputs. |
+| Mode | Sum, Multiply, Min, Max | Sum | How the inputs combine. |
+| Curve | Linear, Exponential, Log, S-Curve, Absolute | Linear | |
+| Polarity | As Is, Unipolar, Bipolar, Invert | As Is | |
+| Delay | 0 ms to 20 s | 0 | How long after the note before it comes in. |
+| Fade | 0 ms to 20 s | 0 | Then how long it takes to come in. |
+| Lag | 0 ms to 20 s | 0 | Smoothing. |
+| Global | Off, On | Off | One value for the part, from its newest note. |
+
 ### Flock (per part)
 
 | Param | Range | Default | What it does |
@@ -663,8 +702,8 @@ it per note.
 
 | Param | Range | Default | What it does |
 | --- | --- | --- | --- |
-| Source | Off and the 27 sources | Off (the first three: Env 2, Press, Press) | |
-| Destination | the 177 destinations | Filter 1 Cutoff (Route 2: Speed) | |
+| Source | Off and the 25 sources | Off (the first three: Env 2, Press, Press) | |
+| Destination | the 181 destinations | Filter 1 Cutoff (Route 2: Speed) | |
 | Amount | -100 to +100% | 0 (+30, +40, +20%) | |
 
 ## Presets
