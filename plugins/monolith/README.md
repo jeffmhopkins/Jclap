@@ -45,7 +45,10 @@ always measured on the grid), so switching scripts changes the language, not the
 ## From a one-bar loop to 32 bars
 
 - **LENGTH** is how many glyphs are read before the voice goes round again. At 1/16 a glyph is one bar,
-  so 1, 2, 4, 8, 16 and 32 are the knob's stops (55 reads the whole slab).
+  so 1, 2, 4, 8, 16 and 32 are the knob's stops (55 reads the whole slab). It starts at 2.
+- **START** is the first glyph read: the voice reads LENGTH glyphs from there, going round the slab's
+  end if it has to. Click a glyph to start there, or drag across glyphs to read just those. START has
+  no knob, but the host can automate and modulate it, so a phrase can walk across the slab.
 - **LOCK** holds the slab still. With it on, the phrase repeats exactly.
 - **DRIFT** is the chance the scribe rewrites a glyph after it's read, and **ERODE** the chance it
   loses a stroke instead. **RESTORE** brings eroded strokes back.
@@ -64,12 +67,14 @@ always measured on the grid), so switching scripts changes the language, not the
 
 ## Playing with it
 
-- Click a glyph to decode it (click it again to follow the voice). Double-click to read it next.
-  Shift-click to have the scribe write that one again.
+- Click a glyph to start reading there: the voice reads it next, and the decode view shows it (click
+  it again to follow the voice). Drag across glyphs to read just those: the drag sets START and
+  LENGTH to the span. Alt-click to read a glyph next without moving the start. Shift-click to have
+  the scribe write that one again.
 - In the decode view, drag from node to node to carve a stroke, and right-click a stroke to wipe it.
-- **ROOT**, **SCALE**, **SPREAD** and **OCTAVE** set what the eight rows play. The root is on the
-  third row up, and SPREAD is how far apart the rows are in the scale: STEPS spans about an octave,
-  THIRDS (the default) two, FOURTHS three and FIFTHS four. Projects saved before glyphs had eight
+- **ROOT**, **SCALE**, **SPREAD** and **OCTAVE** set what the eight rows play (A Aeolian, the natural
+  minor, by default). The root is on the third row up, and SPREAD is how far apart the rows are in
+  the scale: STEPS spans about an octave, THIRDS (the default) two, FOURTHS three and FIFTHS four. Projects saved before glyphs had eight
   rows load with their glyphs' shapes kept.
 - **MODE** LISTEN plays nothing: notes you play are carved, a glyph per sixteen steps, into the cell
   being read, written in the current script. Switch back to SPEAK to hear them read back.

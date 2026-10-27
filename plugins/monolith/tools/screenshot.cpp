@@ -58,7 +58,7 @@ public:
    void endEdit(clap_id) override {}
    const SlabFrame &frame() override { return frame_; }
    void command(const Command &) override {}
-   std::string presetName() const override { return "Phrygian Engine"; }
+   std::string presetName() const override { return "Init"; }
    void setPresetName(const std::string &) override {}
 
 private:

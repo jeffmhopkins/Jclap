@@ -2,9 +2,10 @@
 //
 //    header   the name, the preset bar, SEED with REROLL, LOCK and RESTORE
 //    left     how the glyphs sound and are read: script, key, rows, rate, direction, mode, output
-//    centre   the slab: 55 glyphs read top to bottom, columns right to left. Click one to decode it
-//             (click again to follow the voice), double-click to read it next, shift-click to have
-//             the scribe write it again.
+//    centre   the slab: 55 glyphs read top to bottom, columns right to left. Click one to start
+//             reading there (and decode it; click again to follow the voice), drag across some to
+//             read just those, alt-click to read one next, shift-click to have the scribe write it
+//             again.
 //    right    the decode view: the glyph large on its node grid, strokes numbered in the order they
 //             play, and the notes they read as. Drag from node to node to carve a stroke;
 //             right-click a stroke to wipe it. Under it the phrase being read, and the knobs.
@@ -340,6 +341,8 @@ public:
    explicit SlabView(const SlabFrame &frame) : frame_(frame) {}
 
    std::function<void(int)> onSelect, onJump, onReroll;
+   // A click or drag across cells: the first cell and how many, as the press begins, moves and ends.
+   std::function<void(int, int)> onBeginSpan, onSpan, onEndSpan;
    int selected = -1;
 
    // The slab stands as a block of dark stone on a faint ember ground; the glyphs are cut into its
@@ -373,7 +376,7 @@ public:
          int column, row;
          cellPlace(i, column, row);
          const float x = faceX + column * cw, y = row * ch;
-         const bool inUse = i < frame_.length;
+         const bool inUse = inWindow(i, frame_.start, frame_.length);
          const bool current = frame_.playing && i == frame_.current;
          float trail = 0.0f;
          for (int k = 0; k < kHistory; ++k)
@@ -417,13 +420,17 @@ public:
             c.fill(x1 - 1, y1 - l, 1, l);
          }
       }
-      // The line where the read part ends.
-      if (frame_.length < kCells) {
+      // The lines where the read part starts and ends.
+      const auto edge = [&](int i) {
          int column, row;
-         cellPlace(frame_.length, column, row);
+         cellPlace(i, column, row);
          c.setColor(withAlpha(kEmber, 0.35f));
          c.fill(faceX + column * cw + 8, row * ch, cw - 16, 1.0f);
-      }
+      };
+      if (frame_.start > 0)
+         edge(frame_.start);
+      if (frame_.length < kCells && (frame_.start + frame_.length) % kCells != 0)
+         edge((frame_.start + frame_.length) % kCells);
    }
 
    void mouseDown(const visage::MouseEvent &e) override {
@@ -434,16 +441,47 @@ public:
          if (onReroll)
             onReroll(i);
       }
-      else if (e.repeatClickCount() == 2) {
+      else if (e.isAltDown()) {
          if (onJump)
             onJump(i);
       }
-      else if (onSelect)
-         onSelect(i);
+      else {
+         anchor_ = last_ = i;
+         if (onBeginSpan)
+            onBeginSpan(i, 1);
+      }
    }
 
-   int cellAt(float px, float py) const {
+   // Dragging spans the cells from the one pressed to the one under the mouse, in reading order.
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (anchor_ < 0)
+         return;
+      const int i = cellAt(e.position.x, e.position.y, true);
+      if (i == last_)
+         return;
+      last_ = i;
+      if (onSpan)
+         onSpan(std::min(anchor_, i), std::abs(i - anchor_) + 1);
+   }
+
+   void mouseUp(const visage::MouseEvent &) override {
+      if (anchor_ < 0)
+         return;
+      const int first = std::min(anchor_, last_), count = std::abs(last_ - anchor_) + 1;
+      anchor_ = last_ = -1;
+      if (onEndSpan)
+         onEndSpan(first, count);
+      if (count == 1 && onSelect)
+         onSelect(first);
+   }
+
+   // The cell at a point, or -1 off the face; with `nearest`, the nearest cell to a point off it.
+   int cellAt(float px, float py, bool nearest = false) const {
       const float faceW = width() - 2 * kSide, faceH = height() - kBase;
+      if (nearest) {
+         px = std::clamp(px, kSide, kSide + faceW - 1);
+         py = std::clamp(py, 0.0f, faceH - 1);
+      }
       if (px < kSide || py >= faceH)
          return -1;
       const int column = static_cast<int>((px - kSide) / (faceW / kSlabColumns));
@@ -455,6 +493,7 @@ public:
 
 private:
    const SlabFrame &frame_;
+   int anchor_ = -1, last_ = -1;
 };
 
 // ---- the decode view ----
@@ -865,11 +904,27 @@ private:
    void buildSlab() {
       slab_ = &add<SlabView>({208, 66, 330, 604}, frame_);
       slab_->onSelect = [this](int i) { selected_ = selected_ == i ? -1 : i; refresh(); };
-      slab_->onJump = [this](int i) {
-         Command c;
-         c.kind = Command::Kind::Jump;
-         c.cell = static_cast<int8_t>(i);
-         host_.command(c);
+      slab_->onJump = [this](int i) { jump(i); };
+      // A click starts reading at the glyph; a drag also sets the length to the glyphs it spans. The
+      // voice reads the first of them next either way.
+      slab_->onBeginSpan = [this](int first, int) {
+         host_.beginEdit(kStart);
+         host_.setParam(kStart, first + 1);
+      };
+      slab_->onSpan = [this](int first, int count) {
+         if (!spanning_) {
+            spanning_ = true;
+            host_.beginEdit(kLength);
+         }
+         host_.setParam(kStart, first + 1);
+         host_.setParam(kLength, count);
+      };
+      slab_->onEndSpan = [this](int first, int) {
+         host_.endEdit(kStart);
+         if (spanning_)
+            host_.endEdit(kLength);
+         spanning_ = false;
+         jump(first);
       };
       slab_->onReroll = [this](int i) {
          Command c;
@@ -877,8 +932,16 @@ private:
          c.cell = static_cast<int8_t>(i);
          host_.command(c);
       };
-      tips_.add(*slab_, "The slab, read from the top right down each column. Click a glyph to decode it, "
-                        "double-click to read it next, shift-click to have the scribe write it again.");
+      tips_.add(*slab_, "The slab, read from the top right down each column. Click a glyph to start reading "
+                        "there and decode it; drag across glyphs to read just those. Alt-click to read one next "
+                        "without moving the start, shift-click to have the scribe write it again.");
+   }
+
+   void jump(int cell) {
+      Command c;
+      c.kind = Command::Kind::Jump;
+      c.cell = static_cast<int8_t>(cell);
+      host_.command(c);
    }
 
    void buildDecode() {
@@ -929,9 +992,8 @@ private:
    void updateRoll() {
       std::vector<ui::NoteRoll::Note> notes;
       const int length = std::max(1, frame_.length);
-      const int first = frame_.current;
       for (int k = 0; k < 4; ++k) {
-         const int cell = (first + k) % length;
+         const int cell = windowStep(frame_.current, k, frame_.start, length);
          const Cell &x = frame_.cells[cell];
          const GlyphNotes decoded = decode(x.glyph, x.visible());
          for (int i = 0; i < decoded.count; ++i) {
@@ -950,6 +1012,7 @@ private:
    ui::Tooltips tips_;
    SlabFrame frame_;
    int selected_ = -1;
+   bool spanning_ = false;
    SlabView *slab_ = nullptr;
    DecodeView *decode_ = nullptr;
    Transcript *transcript_ = nullptr;

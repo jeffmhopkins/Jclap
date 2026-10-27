@@ -7,7 +7,7 @@
 //    Scribe  builds a lexicon of glyphs from the seed and writes the slab from it, word by word,
 //            following a grammar: each word has two favourite successors, and GRAMMAR is how often
 //            it picks another word instead (and, half as often, changes a stroke of it).
-//    Slab    55 cells, read in order over the first LENGTH of them. When the voice leaves a cell, the
+//    Slab    55 cells, read in order over LENGTH of them from START (going round the slab's end). When the voice leaves a cell, the
 //            scribe may rewrite it (DRIFT) or it may lose a stroke (ERODE); LOCK stops both.
 //    Voice   steps through the slab at RATE in time with the host transport, one glyph per 16 steps,
 //            and plays each glyph's notes in the Dialect. With no transport it runs at 120 BPM.
@@ -34,12 +34,14 @@ struct EngineParams {
    int seed = 1, lexicon = 16, density = 3;
    double grammar = 0.3, drift = 0.25, erode = 0.0;
    bool lock = false;
-   int length = 8;
+   int length = 2;
+   // The first cell read, from 0.
+   int start = 0;
    int rate = 2;
    Direction direction = Direction::Forward;
    Mode mode = Mode::Speak;
    double swing = 0.0;
-   int root = 5, scale = 3, spread = 1, octave = 0;
+   int root = 9, scale = 1, spread = 1, octave = 0;
    double velocity = 0.8, gate = 0.9, humanize = 0.0;
    bool follow = false;
 };
@@ -217,6 +219,7 @@ public:
    void setParams(const EngineParams &p) {
       params_ = p;
       params_.length = std::clamp(p.length, 1, kCells);
+      params_.start = std::clamp(p.start, 0, kCells - 1);
       params_.rate = std::clamp(p.rate, 0, 5);
       if (ScriptKey::of(params_) != slabKey_)
          regenerate(ScriptKey::of(params_));
@@ -305,6 +308,17 @@ public:
       expected_ = b1;
 
       const double stepBeats = kRateBeats[params_.rate];
+      // A new rate puts the song at another glyph position: carry on from the cell being read, as if
+      // the voice had always been at this rate.
+      if (params_.rate != rate_ && glyph_ != INT_MIN) {
+         const long long g = static_cast<long long>(std::floor(b0 / stepBeats)) / kWindowSteps;
+         finishListening();
+         listenGlyph_ = INT_MIN;
+         offset_ += glyph_ - g;
+         glyph_ = g;
+         previousNotes_ = GlyphNotes{};
+      }
+      rate_ = params_.rate;
       const double swingDelay = std::clamp(params_.swing, 0.0, 0.75) * stepBeats * (2.0 / 3.0);
       const bool speaking = params_.mode == Mode::Speak;
 
@@ -365,7 +379,10 @@ public:
    }
 
    // The cell the voice reads at glyph position `g` (the count of glyph windows since the song's start).
-   int cellAt(long long g) const {
+   int cellAt(long long g) const { return (params_.start + indexAt(g)) % kCells; }
+
+   // How far into the cells read the voice is at glyph position `g`.
+   int indexAt(long long g) const {
       const long long p = g + offset_;
       const int length = params_.length;
       const auto mod = [](long long a, long long m) { return static_cast<int>(((a % m) + m) % m); };
@@ -407,6 +424,7 @@ public:
       f.key = slabKey_.pack();
       f.generation = generation_;
       f.length = params_.length;
+      f.start = params_.start;
       f.current = current_;
       f.step = running_ ? step_ : 0.0f;
       f.playing = running_;
@@ -587,8 +605,9 @@ private:
 
    // The word in the cell read before `cell`, for the grammar.
    int wordBefore(int cell) const {
-      const int length = params_.length;
-      return cells_[(cell + length - 1) % length].word;
+      if (!inWindow(cell, params_.start, params_.length))
+         return cells_[(cell + kCells - 1) % kCells].word;
+      return cells_[windowStep(cell, -1, params_.start, params_.length)].word;
    }
 
    // A repeatable -1..1 per step and note, so humanizing never depends on block sizes.
@@ -698,7 +717,7 @@ private:
    bool running_ = false;
    double expected_ = 0.0, freeBeats_ = 0.0;
    long long glyph_ = INT_MIN, offset_ = 0;
-   int current_ = 0, pendingJump_ = -1;
+   int current_ = 0, pendingJump_ = -1, rate_ = -1;
    float step_ = 0.0f;
    GlyphNotes notes_, previousNotes_;
    std::array<Active, kMaxActive> active_{};
