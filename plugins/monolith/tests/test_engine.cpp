@@ -527,5 +527,112 @@ int main() {
       JCLAP_CHECK_EQ(f.rowPitch[2], rowPitch(2, p.root, p.scale, p.spread, p.octave));
    }
 
+   // ---- range ----
+   {
+      // A range of one octave plays just as before, whatever the path.
+      EngineParams p;
+      p.length = 4;
+      Engine plain, loop, climb;
+      plain.setParams(p);
+      p.path = Path::Loop;
+      loop.setParams(p);
+      p.path = Path::Climb;
+      climb.setParams(p);
+      const std::vector<Timed> a = run(plain, 0.0, 32.0), b = run(loop, 0.0, 32.0), c = run(climb, 0.0, 32.0);
+      JCLAP_CHECK_EQ(a.size(), b.size());
+      JCLAP_CHECK_EQ(a.size(), c.size());
+      for (size_t i = 0; i < a.size() && i < b.size() && i < c.size(); ++i) {
+         JCLAP_CHECK_EQ(a[i].note.pitch, b[i].note.pitch);
+         JCLAP_CHECK_EQ(a[i].note.pitch, c[i].note.pitch);
+      }
+   }
+   {
+      // Loop over two octaves: a one-note glyph read on its own goes up an octave each time round
+      // and back down.
+      EngineParams p = still();
+      p.range = 2;
+      Engine e;
+      e.setParams(p);
+      Command carve;
+      carve.kind = Command::Kind::Set;
+      carve.cell = 0;
+      carve.glyph = glyphOf({{nodeAt(0, 4), nodeAt(1, 4)}});
+      e.apply(carve);
+      const int base = rowPitch(4, p.root, p.scale, p.spread, p.octave);
+      const std::vector<Timed> bars = run(e, 0.0, 16.0);
+      std::vector<int> pitches;
+      for (const Timed &t : bars)
+         if (t.note.on)
+            pitches.push_back(t.note.pitch);
+      JCLAP_CHECK_EQ(pitches.size(), 4u);
+      if (pitches.size() == 4) {
+         JCLAP_CHECK_EQ(pitches[0], base);
+         JCLAP_CHECK_EQ(pitches[1], base + 12);
+         JCLAP_CHECK_EQ(pitches[2], base);
+         JCLAP_CHECK_EQ(pitches[3], base + 12);
+      }
+   }
+   {
+      // Strokes from one node (a chord) change octave together, and every note stays in range.
+      EngineParams p = still();
+      p.range = 3;
+      Engine e;
+      e.setParams(p);
+      Command carve;
+      carve.kind = Command::Kind::Set;
+      carve.cell = 0;
+      carve.glyph = glyphOf({{6, 8}, {6, 21}});
+      e.apply(carve);
+      const int row = rowPitch(2, p.root, p.scale, p.spread, p.octave);
+      const std::vector<Timed> bars = run(e, 0.0, 4.0 * 8);
+      std::vector<int> on;
+      for (const Timed &t : bars)
+         if (t.note.on)
+            on.push_back(t.note.pitch);
+      JCLAP_CHECK_EQ(on.size(), 16u);
+      std::set<int> lifts;
+      for (size_t i = 0; i + 1 < on.size(); i += 2) {
+         const int a = on[i] - row;
+         JCLAP_CHECK_EQ(on[i + 1], on[i]);
+         JCLAP_CHECK(a == 0 || a == 12 || a == 24);
+         lifts.insert(a);
+      }
+      JCLAP_CHECK_EQ(lifts.size(), 3u);
+   }
+   {
+      // Climb and Contour stay inside the range and use more than one octave of it; Contour over
+      // eight glyphs and three octaves arches 0, 1, 1, 2, 2, 1, 1, 0.
+      for (Path path : {Path::Climb, Path::Contour}) {
+         EngineParams p = still();
+         p.length = 8;
+         p.range = 3;
+         p.path = path;
+         Engine e;
+         e.setParams(p);
+         for (int c = 0; c < 8; ++c) {
+            Command carve;
+            carve.kind = Command::Kind::Set;
+            carve.cell = static_cast<int8_t>(c);
+            carve.glyph = glyphOf({{nodeAt(0, 4), nodeAt(1, 4)}});
+            e.apply(carve);
+         }
+         const int base = rowPitch(4, p.root, p.scale, p.spread, p.octave);
+         const std::vector<Timed> bars = run(e, 0.0, 4.0 * 16);
+         std::vector<int> lifts;
+         for (const Timed &t : bars)
+            if (t.note.on)
+               lifts.push_back((t.note.pitch - base) / 12);
+         JCLAP_CHECK_EQ(lifts.size(), 16u);
+         for (int l : lifts)
+            JCLAP_CHECK(l >= 0 && l <= 2);
+         JCLAP_CHECK(std::set<int>(lifts.begin(), lifts.end()).size() > 1);
+         if (path == Path::Contour && lifts.size() == 16) {
+            const int arch[8] = {0, 1, 1, 2, 2, 1, 1, 0};
+            for (int i = 0; i < 16; ++i)
+               JCLAP_CHECK_EQ(lifts[i], arch[i % 8]);
+         }
+      }
+   }
+
    return jclap::core::testResult();
 }

@@ -43,6 +43,9 @@ enum ParamId : clap_id {
    kFollow,
    // Slab, appended after release: the first glyph read.
    kStart,
+   // Dialect, appended after release: how far the phrase climbs above OCTAVE, and how it gets there.
+   kRange,
+   kPath,
    kParamCount
 };
 
@@ -76,6 +79,8 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kChannel, "MIDI Channel", "Output", 1, 16, 1, kStep},
    {kFollow, "Key Follow", "Output", 0, 1, 0, kStep},
    {kStart, "Start", "Slab", 1, 55, 1, kModStep},
+   {kRange, "Range", "Dialect", 1, 4, 1, kStep},
+   {kPath, "Path", "Dialect", 0, 2, 0, kChoice},
 };
 
 // ---- choices ----
@@ -91,9 +96,13 @@ inline const char *const kScaleNames[] = {"Major",          "Minor",           "
                                           "Lydian",         "Mixolydian",      "Locrian",          "Harmonic Minor",
                                           "Major Pentatonic", "Minor Pentatonic", "Whole Tone",     "Chromatic"};
 inline const char *const kSpreadNames[] = {"Steps", "Thirds", "Fourths", "Fifths"};
+inline const char *const kPathNames[] = {"Loop", "Climb", "Contour"};
 
 enum class Direction { Forward, Reverse, PingPong, Random };
 enum class Mode { Speak, Listen };
+// How the voice moves through RANGE's octaves: up and back down an octave each time round the
+// cells read, on a walk a glyph at a time, or in an arch over the cells read.
+enum class Path { Loop, Climb, Contour };
 
 struct Scale {
    int size;
@@ -122,6 +131,7 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kRoot: count = 12; return kRootNames;
    case kScale: count = 12; return kScaleNames;
    case kSpread: count = 4; return kSpreadNames;
+   case kPath: count = 3; return kPathNames;
    default: count = 0; return nullptr;
    }
 }
@@ -170,6 +180,8 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
       std::snprintf(out, size, whole == 1 ? "%ld stroke" : "%ld strokes", whole);
    else if (id == kOctave)
       std::snprintf(out, size, "%+ld", whole);
+   else if (id == kRange)
+      std::snprintf(out, size, whole == 1 ? "%ld octave" : "%ld octaves", whole);
    else if (id == kChannel)
       std::snprintf(out, size, "Ch %ld", whole);
    else

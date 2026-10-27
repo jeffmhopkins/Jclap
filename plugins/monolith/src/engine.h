@@ -42,6 +42,8 @@ struct EngineParams {
    Mode mode = Mode::Speak;
    double swing = 0.0;
    int root = 9, scale = 1, spread = 1, octave = 0;
+   int range = 1;
+   Path path = Path::Loop;
    double velocity = 0.8, gate = 0.9, humanize = 0.0;
    bool follow = false;
 };
@@ -213,6 +215,7 @@ public:
    static constexpr int kMaxActive = 32;
    static constexpr int kMaxListen = 32;
    static constexpr double kFreeTempo = 120.0;
+   static constexpr int kMaxRange = 4;
 
    Engine() { regenerate(ScriptKey::of(params_)); }
 
@@ -221,6 +224,7 @@ public:
       params_.length = std::clamp(p.length, 1, kCells);
       params_.start = std::clamp(p.start, 0, kCells - 1);
       params_.rate = std::clamp(p.rate, 0, 5);
+      params_.range = std::clamp(p.range, 1, kMaxRange);
       if (ScriptKey::of(params_) != slabKey_)
          regenerate(ScriptKey::of(params_));
    }
@@ -287,11 +291,13 @@ public:
          freeBeats_ = b1;
 
       handleFollow(in, inCount);
+      // The rows sound in the key as it is now, so the first block plays the right notes and a held
+      // key-follow note is heard at once.
+      publishPitches();
 
       if (!playing) {
          if (running_)
             stop(out);
-         publishPitches();
          return;
       }
       // A jump in the song position (a loop, a seek) silences what's sounding and starts reading
@@ -303,6 +309,7 @@ public:
          glyph_ = INT_MIN;
          listenGlyph_ = INT_MIN;
          listenCount_ = 0;
+         forgetLine();
       }
       running_ = true;
       expected_ = b1;
@@ -333,14 +340,22 @@ public:
          const long long g = s / kWindowSteps;
          const int w = static_cast<int>(s % kWindowSteps);
          const GlyphNotes *notes = nullptr;
+         int target = 0;
          if (g > glyph_)
             enter(g, speaking);
-         if (g == glyph_)
+         if (g == glyph_) {
             notes = &notes_;
-         else if (g == glyph_ - 1)
+            target = target_;
+         }
+         else if (g == glyph_ - 1) {
             notes = &previousNotes_;
+            target = previousTarget_;
+         }
          if (!notes || !speaking)
             continue;
+         int lastStart = 0;
+         for (int i = 0; i < notes->count; ++i)
+            lastStart = std::max(lastStart, notes->notes[i].start);
          for (int i = 0; i < notes->count; ++i) {
             const GlyphNote &n = notes->notes[i];
             if (n.start != w)
@@ -355,7 +370,8 @@ public:
                                                         jitter * params_.humanize * 24.0));
             velocity = std::clamp(velocity, 1, 127);
             const double length = std::max(n.length * stepBeats * params_.gate, 16.0 * bps);
-            start(out, time, static_cast<uint8_t>(pitches_[n.row]), static_cast<uint8_t>(velocity), beat + length);
+            const int pitch = place(pitches_[n.row], target, s, n.start == lastStart);
+            start(out, time, static_cast<uint8_t>(pitch), static_cast<uint8_t>(velocity), beat + length);
          }
       }
 
@@ -375,7 +391,6 @@ public:
 
       step_ = static_cast<float>(b1 / stepBeats - static_cast<double>(std::max<long long>(glyph_, 0)) * kWindowSteps);
       step_ = std::clamp(step_, 0.0f, static_cast<float>(kWindowSteps));
-      publishPitches();
    }
 
    // The cell the voice reads at glyph position `g` (the count of glyph windows since the song's start).
@@ -417,6 +432,7 @@ public:
       step_ = 0.0f;
       current_ = cellAt(0);
       history_.fill(-1);
+      forgetLine();
    }
 
    void fillFrame(SlabFrame &f) const {
@@ -568,6 +584,7 @@ private:
       listenGlyph_ = INT_MIN;
       current_ = cellAt(0);
       step_ = 0.0f;
+      forgetLine();
    }
 
    // The voice moves on to glyph window `g`: the cell it leaves may drift or erode (not in Listen,
@@ -585,11 +602,99 @@ private:
          pendingJump_ = -1;
       }
       previousNotes_ = glyph_ == g - 1 ? notes_ : GlyphNotes{};
+      previousTarget_ = target_;
+      target_ = targetAt(g);
       glyph_ = g;
       current_ = cellAt(g);
       notes_ = decode(cells_[current_].glyph, cells_[current_].visible());
       std::rotate(history_.begin(), history_.begin() + 1, history_.end());
       history_.back() = current_;
+   }
+
+   // ---- range ----
+
+   // The octave above OCTAVE that PATH heads for at glyph position `g`, from 0 to RANGE - 1. Called
+   // once per glyph, in order, since Climb walks from where it was.
+   int targetAt(long long g) {
+      const int top = params_.range - 1;
+      if (top <= 0)
+         return climb_ = 0;
+      const long long p = g + offset_;
+      const auto mod = [](long long a, long long m) { return static_cast<int>(((a % m) + m) % m); };
+      switch (params_.path) {
+      case Path::Loop: {
+         // Up an octave each time round the cells read and back down, like an arpeggiator's up-down
+         // octave mode. Ping-pong goes round once there and back.
+         const long long cycle =
+            params_.direction == Direction::PingPong ? std::max(1, 2 * params_.length - 2) : params_.length;
+         const long long pass = p >= 0 ? p / cycle : -((-p + cycle - 1) / cycle);
+         const int q = mod(pass, 2LL * top);
+         return q <= top ? q : 2 * top - q;
+      }
+      case Path::Climb: {
+         // A step up, a step down or none each glyph, turning back at the ends.
+         const uint64_t h = hashMix(static_cast<uint64_t>(params_.seed) * 389 + 5, static_cast<uint64_t>(p)) % 10;
+         const int step = h < 4 ? 0 : h < 7 ? 1 : -1;
+         climb_ = std::clamp(climb_, 0, top);
+         if (climb_ + step < 0 || climb_ + step > top)
+            climb_ -= step;
+         else
+            climb_ += step;
+         return climb_;
+      }
+      case Path::Contour: {
+         // An arch over the cells read: lowest at the first and last, highest halfway.
+         const double t = (indexAt(g) + 0.5) / params_.length;
+         const double arch = 1.0 - std::fabs(2.0 * t - 1.0);
+         return std::min(top, static_cast<int>(arch * (top + 1)));
+      }
+      }
+      return 0;
+   }
+
+   // The pitch to play for `pitch` (a row's pitch, at OCTAVE) heading for `target` octaves above,
+   // at step `s`. Of the octaves in range it takes the one nearest the last note played, pulled
+   // toward the target harder with each note it stays away, so the line changes octave where its
+   // own leap is shortest; on the glyph's `last` step the pull wins, so every glyph arrives. Notes
+   // on the same step (a chord) move together.
+   int place(int pitch, int target, long long s, bool last) {
+      if (params_.range <= 1)
+         return pitch;
+      int octave = target;
+      if (s == lastStep_)
+         octave = lastOctave_;
+      else if (lastPitch_ >= 0) {
+         // At 12 a semitone per octave, moving to the target never costs more than staying.
+         const double pull = last ? 12.0 : std::min(12.0, 6.0 + 3.0 * awayFromTarget_);
+         double best = 1e9;
+         for (int k = 0; k < params_.range; ++k) {
+            if (pitch + 12 * k > 127)
+               break;
+            const double cost = std::abs(pitch + 12 * k - lastPitch_) + pull * std::abs(k - target);
+            if (cost < best || (cost == best && std::abs(k - target) < std::abs(octave - target))) {
+               best = cost;
+               octave = k;
+            }
+         }
+      }
+      while (octave > 0 && pitch + 12 * octave > 127)
+         --octave;
+      if (s != lastStep_)
+         awayFromTarget_ = octave == target ? 0 : awayFromTarget_ + 1;
+      lastStep_ = s;
+      lastOctave_ = octave;
+      lastPitch_ = pitch + 12 * octave;
+      return lastPitch_;
+   }
+
+   // A fresh start: the next note goes straight to its target, and Climb begins at the bottom.
+   void forgetLine() {
+      lastPitch_ = -1;
+      lastStep_ = LLONG_MIN;
+      lastOctave_ = 0;
+      awayFromTarget_ = 0;
+      climb_ = 0;
+      target_ = previousTarget_ = 0;
    }
 
    void leave(int cell) {
@@ -725,6 +830,10 @@ private:
    std::array<int, kHistory> history_{-1, -1, -1, -1, -1, -1};
    std::array<int, kGridRows> pitches_{};
    int followRoot_ = -1, held_ = 0;
+
+   // Range: the octave each glyph heads for, and the line so far.
+   int target_ = 0, previousTarget_ = 0, climb_ = 0, lastOctave_ = 0, lastPitch_ = -1, awayFromTarget_ = 0;
+   long long lastStep_ = LLONG_MIN;
 
    // Listen.
    std::array<Heard, kMaxListen> heard_{};
