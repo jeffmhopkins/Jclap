@@ -2,7 +2,8 @@
 
 // A preset browser for a panel's header: arrows (or the wheel) step through every preset, the name
 // opens a menu of them by category, and SAVE names the current settings and writes them to the
-// user's preset folder. The factory bank comes first, then the user's presets under "User".
+// user's preset folder. The factory bank comes first, then the user's presets under "User". The star
+// beside the name marks the current preset a favorite, and the menu lists favorites first.
 //
 //    auto &bar = add<PresetBar>({380, 12, 340, 28}, factoryPresets(), format, params);
 //    bar.currentName = [&] { return host.presetName(); };
@@ -56,6 +57,9 @@ public:
    // Every preset in menu order: the factory bank, then the user's.
    int total() const;
    const Preset &at(int index) const;
+   // Stars the current preset, or unstars it. False if the current name isn't a preset.
+   bool toggleFavorite();
+   const PresetFavorites &favorites() const { return favorites_; }
 
    void draw(visage::Canvas &canvas) override;
    void mouseMove(const visage::MouseEvent &e) override;
@@ -64,7 +68,7 @@ public:
    bool mouseWheel(const visage::MouseEvent &e) override;
 
 private:
-   enum class Zone { None, Prev, Name, Next, Save };
+   enum class Zone { None, Prev, Name, Star, Next, Save };
 
    Zone zoneAt(float x) const;
    void setHover(Zone z);
@@ -81,6 +85,7 @@ private:
    const std::vector<Preset> &factory_;
    PresetFormat format_;
    ParamAccess &params_;
+   PresetFavorites favorites_;
    const Theme *theme_ = &defaultTheme();
    unsigned accent_ = 0;
    std::vector<Preset> user_;
@@ -89,6 +94,10 @@ private:
    std::unique_ptr<visage::TextEditor> editor_;
    Zone hover_ = Zone::None;
 };
+
+// A five-pointed star centred on (cx, cy), filled or as an outline, in the canvas's current color.
+// Preset bars draw it beside the name to mark a favorite.
+void drawStar(visage::Canvas &canvas, float cx, float cy, float radius, bool filled);
 
 // Applies `preset` through `params`, one gesture per param that changes. Params the preset leaves
 // out go to `defaults` (one per id) when it is given.

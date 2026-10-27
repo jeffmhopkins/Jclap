@@ -86,6 +86,11 @@ save it, or press Escape or click anywhere else to back out. To remove a user pr
 menu and pick **Delete**; it asks once more before the file goes. A factory preset loads every param it doesn't set at its default, so nothing
 from the last patch carries over.
 
+Click the **star** beside the name to make the current preset a favorite (click again to unstar it).
+**Favorites** at the top of the name menu lists every starred preset, factory or your own. Favorites
+are kept in `Favorites.txt` beside the `Presets` folder, so they last between sessions and every
+instance of the plugin shares them.
+
 The 203 factory presets run in 21 categories: **Bass**, **Leads**, **Keys**, **Mallets and Bells**, **Plucks**, **Brass**, **Strings**, **Pads**, **Rhythmic**, **Atmospheres**, **Voices**, **Drums and FX**, **Expressive**, **Monsta**, **Motion**, **Drones**, **Textures**, **Interplay**, **Landscapes**, **Layers and Splits** and **Flock**. The instrument families come first,
 from plain patches to ones with more going on, and most answer the mod wheel and Press so they play
 from any keyboard. **Keys** has an acoustic piano among its electric ones, and **Voices** is formants,

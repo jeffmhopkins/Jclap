@@ -925,7 +925,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <p class="lede">Two hundred and three sounds in twenty-one categories: the instrument families first, then patches played with pressure, variations on MicroMonsta 2 programs, patches that move on their own, drones and textures on Shape envelopes, envelopes that move each other, landscapes on both parts, and patches that use both parts or let the flock play.</p>
     <div class="bar"></div>
   </div>
-  <p>The preset bar works like JVerb's: the arrows step through the presets, scrolling over the bar does too, and clicking the name opens the menu by category. <strong>SAVE</strong> saves the current sound under a name of your own. A factory preset sets every parameter it doesn't mention to its default, so nothing from the last sound (a route, say) carries over. Within each category, the presets run from a plain patch up to ones with more going on, and most answer the mod wheel and Press. Every preset is level-matched, so stepping through the bank doesn't jump.</p>
+  <p>The preset bar works like JVerb's: the arrows step through the presets, scrolling over the bar does too, and clicking the name opens the menu by category. <strong>SAVE</strong> saves the current sound under a name of your own. The <strong>star</strong> beside the name makes the current preset a favorite, and <em>Favorites</em> at the top of the menu lists every starred one, so the sounds you reach for are one click away. A factory preset sets every parameter it doesn't mention to its default, so nothing from the last sound (a route, say) carries over. Within each category, the presets run from a plain patch up to ones with more going on, and most answer the mod wheel and Press. Every preset is level-matched, so stepping through the bank doesn't jump.</p>
   <div id="presets"></div>
   <h2>Your presets</h2>
   <p>User presets are small text files ending <span class="mono">.jspreset</span>, saved in:</p>
@@ -937,6 +937,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     </tbody>
   </table>
   <p>Copy them between machines freely. A preset from a newer JSynth loads in an older one with any parameters it doesn't know skipped.</p>
+  <p>Favorites are kept in <span class="mono">Favorites.txt</span>, one preset name per line, in the folder above <span class="mono">Presets</span>. Every JSynth you open shares them, and they last between sessions.</p>
 </section>
 
 <!-- ================= 15. RECIPES ================= -->

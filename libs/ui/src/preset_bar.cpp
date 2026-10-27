@@ -8,8 +8,9 @@
 namespace jclap::ui {
 
 namespace {
-constexpr float kArrow = 26.0f, kSave = 52.0f;
-constexpr int kSaveId = 1 << 20, kDeleteId = kSaveId + 1, kUserBase = 1 << 16;
+constexpr float kArrow = 26.0f, kSave = 52.0f, kStar = 24.0f;
+constexpr int kSaveId = 1 << 20, kDeleteId = kSaveId + 1, kFavoriteId = kSaveId + 2, kUserBase = 1 << 16,
+              kFavoritesBase = 1 << 18;
 
 // The save name box. A click anywhere but SAVE drops the name, so the box never sits open without
 // the keyboard; SAVE itself saves, and so does Enter.
@@ -23,6 +24,24 @@ public:
    }
 };
 } // namespace
+
+void drawStar(visage::Canvas &canvas, float cx, float cy, float radius, bool filled) {
+   constexpr float kPi = 3.14159265f;
+   visage::Path star;
+   for (int i = 0; i < 10; ++i) {
+      const float angle = i * kPi / 5.0f, r = i % 2 ? radius * 0.45f : radius;
+      const visage::Point p{cx + r * std::sin(angle), cy - r * std::cos(angle)};
+      if (i == 0)
+         star.moveTo(p);
+      else
+         star.lineTo(p);
+   }
+   star.close();
+   if (filled)
+      canvas.fill(star);
+   else
+      canvas.fill(star.stroke(std::max(1.0f, radius * 0.16f)));
+}
 
 void applyPreset(const Preset &preset, ParamAccess &params, const std::vector<double> &defaults) {
    std::vector<std::pair<clap_id, double>> values;
@@ -45,7 +64,8 @@ void applyPreset(const Preset &preset, ParamAccess &params, const std::vector<do
 }
 
 PresetBar::PresetBar(const std::vector<Preset> &factory, PresetFormat format, ParamAccess &params)
-   : factory_(factory), format_(std::move(format)), params_(params) {
+   : factory_(factory), format_(std::move(format)), params_(params),
+     favorites_(PresetFavorites::fileFor(format_.name)) {
    rescan();
 }
 
@@ -88,6 +108,7 @@ int PresetBar::indexOf(const std::string &name) const {
 }
 
 void PresetBar::rescan() {
+   favorites_.reload();
    const std::string current = currentIndex_ >= 0 && currentIndex_ < total() ? at(currentIndex_).name : "";
    const bool wasUser = currentIndex_ >= static_cast<int>(factory_.size());
    user_ = userPresets(format_);
@@ -120,6 +141,15 @@ void PresetBar::step(int dir) {
    loadIndex(current < 0 ? 0 : (current + dir % n + n) % n);
 }
 
+bool PresetBar::toggleFavorite() {
+   const int i = indexOf(name());
+   if (i < 0)
+      return false;
+   favorites_.toggle(at(i).name);
+   redraw();
+   return true;
+}
+
 bool PresetBar::load(const std::string &name) {
    const int i = indexOf(name);
    if (i < 0)
@@ -136,6 +166,8 @@ PresetBar::Zone PresetBar::zoneAt(float x) const {
       return Zone::Save;
    if (x >= w - (kSave + kArrow) * s)
       return Zone::Next;
+   if (x >= w - (kSave + kArrow + kStar) * s)
+      return Zone::Star;
    return Zone::Name;
 }
 
@@ -171,9 +203,15 @@ void PresetBar::draw(visage::Canvas &c) {
       return;
    const std::string current = name();
    const int i = indexOf(current);
+   const float star = kStar * s;
    c.setColor(hover_ == Zone::Name ? 0xffffffffu : t.text);
    c.text(current.empty() ? std::string("Untitled") : current, font(13 * s), visage::Font::kCenter, a, 0,
-          w - 2 * a - save, h);
+          w - 2 * a - save - star, h);
+   if (i >= 0) {
+      const bool starred = favorites_.contains(at(i).name);
+      c.setColor(starred ? accent : hover_ == Zone::Star ? t.text : t.dimText);
+      drawStar(c, w - save - a - star / 2, h / 2, 6.5f * s, starred);
+   }
    if (i >= 0) {
       c.setColor(t.dimText);
       c.text(at(i).category, font(9 * s), visage::Font::kLeft, a + 8 * s, 0, 80 * s, h);
@@ -189,6 +227,7 @@ void PresetBar::mouseDown(const visage::MouseEvent &e) {
    case Zone::Next: step(1); break;
    case Zone::Save: editor_ && editor_->isVisible() ? finishSave(true) : startSave(); break;
    case Zone::Name: showMenu(); break;
+   case Zone::Star: toggleFavorite(); break;
    case Zone::None: break;
    }
 }
@@ -206,6 +245,15 @@ void PresetBar::showMenu() {
    rescan();
    visage::PopupMenu menu;
    const std::string current = name();
+   // Favorites first, in menu order, for the presets that still exist.
+   visage::PopupMenu favorites("Favorites");
+   for (int i = 0; i < total(); ++i)
+      if (favorites_.contains(at(i).name))
+         favorites.addOption(kFavoritesBase + i, at(i).name).select(at(i).name == current);
+   if (favorites.options().empty())
+      favorites.addOption(-2, "(click the star to add one)").enable(false);
+   menu.addSubMenu(std::move(favorites));
+   menu.addBreak();
    std::vector<std::string> categories;
    for (const Preset &p : factory_)
       if (std::find(categories.begin(), categories.end(), p.category) == categories.end())
@@ -225,6 +273,8 @@ void PresetBar::showMenu() {
    menu.addSubMenu(std::move(user));
    menu.addBreak();
    menu.addOption(kSaveId, "Save as...");
+   if (indexOf(current) >= 0)
+      menu.addOption(kFavoriteId, favorites_.contains(current) ? "Remove from Favorites" : "Add to Favorites");
    if (indexOf(current) >= static_cast<int>(factory_.size()))
       menu.addOption(kDeleteId, "Delete \"" + current + "\"...");
    menu.onSelection() += [this](int id) {
@@ -232,6 +282,10 @@ void PresetBar::showMenu() {
          startSave();
       else if (id == kDeleteId)
          confirmDelete();
+      else if (id == kFavoriteId)
+         toggleFavorite();
+      else if (id >= kFavoritesBase && id - kFavoritesBase < total())
+         loadIndex(id - kFavoritesBase);
       else if (id >= kUserBase && id - kUserBase < static_cast<int>(user_.size()))
          loadIndex(static_cast<int>(factory_.size()) + id - kUserBase);
       else if (id >= 0 && id < static_cast<int>(factory_.size()))
@@ -251,6 +305,7 @@ void PresetBar::confirmDelete() {
          return;
       std::error_code ec;
       std::filesystem::remove(userPresetFolder(format_) / (current + format_.extension), ec);
+      favorites_.remove(current);
       rescan();
       redraw();
    };

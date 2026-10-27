@@ -67,6 +67,38 @@ bool writePresetFile(const std::filesystem::path &file, const PresetFormat &form
 // The user's presets in the format's folder, sorted by name, with category "User".
 std::vector<Preset> userPresets(const PresetFormat &format);
 
+// The presets the user starred, by name, kept in userFolder(<plugin name>) / "Favorites.txt" with one
+// name per line. Every instance of the plugin reads the same file, so a star lasts into the next
+// session and shows in other instances once they reload. A toggle re-reads the file before writing
+// it, so it never drops a star another instance added in the meantime.
+//
+//    PresetFavorites favorites(PresetFavorites::fileFor(format.name));
+//    favorites.toggle("Warm");
+//    if (favorites.contains(preset.name)) ...
+class PresetFavorites {
+public:
+   explicit PresetFavorites(std::filesystem::path file);
+
+   // Where `name`'s favorites live: userFolder(name) / "Favorites.txt".
+   static std::filesystem::path fileFor(const std::string &name);
+
+   // Re-reads the file; with no file there are no favorites.
+   void reload();
+   bool contains(const std::string &name) const;
+   // Stars `name`, or unstars it if it was starred, and saves. Returns whether it's now a favorite.
+   bool toggle(const std::string &name);
+   // Unstars `name` (as when its preset is deleted) and saves if it was starred.
+   void remove(const std::string &name);
+   // In the order they were starred.
+   const std::vector<std::string> &names() const { return names_; }
+
+private:
+   bool save() const;
+
+   std::filesystem::path file_;
+   std::vector<std::string> names_;
+};
+
 // A name made safe for a file name: letters, digits, spaces, dashes and underscores only, never empty.
 std::string presetFileName(const std::string &name);
 

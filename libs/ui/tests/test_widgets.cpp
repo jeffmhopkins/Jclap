@@ -510,6 +510,28 @@ void updateChecks() {
    up::setStateFileForTesting({});
    std::filesystem::remove_all(dir);
 }
+
+// Favorites persist in their file, and two instances sharing it keep each other's stars.
+void presetFavoritesShared() {
+   const std::filesystem::path dir = std::filesystem::temp_directory_path() / "jclap-favorites-test";
+   std::filesystem::remove_all(dir);
+   const std::filesystem::path file = dir / "Favorites.txt";
+   ui::PresetFavorites a(file), b(file);
+   JCLAP_CHECK(a.names().empty());
+   JCLAP_CHECK(a.toggle("Warm Pad"));
+   JCLAP_CHECK(b.toggle("Acid Bass"));
+   JCLAP_CHECK(b.contains("Warm Pad") && b.contains("Acid Bass"));
+   a.reload();
+   JCLAP_CHECK_EQ(a.names().size(), 2u);
+   JCLAP_CHECK(!a.toggle("Warm Pad"));
+   ui::PresetFavorites later(file);
+   JCLAP_CHECK(!later.contains("Warm Pad") && later.contains("Acid Bass"));
+   later.remove("Acid Bass");
+   b.reload();
+   JCLAP_CHECK(b.names().empty());
+   JCLAP_CHECK(ui::PresetFavorites::fileFor("JclapTest") == ui::userFolder("JclapTest") / "Favorites.txt");
+   std::filesystem::remove_all(dir);
+}
 } // namespace
 
 int main() {
@@ -529,5 +551,6 @@ int main() {
    noteRollLanes();
    presetFilesRoundTrip();
    updateChecks();
+   presetFavoritesShared();
    return jclap::core::testResult();
 }
