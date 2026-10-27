@@ -633,6 +633,65 @@ int main() {
       JCLAP_CHECK(finite(out) && ends == 1 && e->activeVoices() == 0);
    }
 
+   // The mod buses: two macros routed onto Bus 1, mixed by its Mode, bent by its Curve and
+   // Polarity; Bus 2 takes Bus 1 on and fades it in after its Delay; Lag glides; Global holds one
+   // onset for the part.
+   {
+      Params p;
+      p.set(kMacro1, 0.5);
+      p.set(kMacro1 + 1, 0.6);
+      const auto route = [&](int r, int source, clap_id dest, double amount) {
+         p.setPart(0, routeParam(r, kRouteSource), source);
+         p.setPart(0, routeParam(r, kRouteDestination), destinationIndex(dest));
+         p.setPart(0, routeParam(r, kRouteAmount), amount);
+      };
+      route(10, kSourceMacro1, busParam(0, kBusOffset), 1.0);
+      route(11, kSourceMacro1 + 1, busParam(0, kBusOffset), 1.0);
+      route(12, kSourceBus1, busParam(1, kBusOffset), 1.0);
+      p.setPart(0, busParam(1, kBusDelay), timeValue(500.0));
+      p.setPart(0, busParam(1, kBusFade), timeValue(500.0));
+      auto e = std::make_unique<Engine>();
+      e->prepare(kRate, {p.values.get(), p.mods.get()});
+      e->setBlockSample(0);
+      e->noteOn(ref(60), 1.0f);
+      const auto bus = [&](int mode, int curve, int polarity, int b = 0) {
+         p.setPart(0, busParam(0, kBusMode), mode);
+         p.setPart(0, busParam(0, kBusCurve), curve);
+         p.setPart(0, busParam(0, kBusPolarity), polarity);
+         render(*e, 4800, 256, {});
+         return e->busLevel(0, b);
+      };
+      JCLAP_CHECK(std::fabs(bus(kBusSum, 0, 0) - 1.0f) < 1e-3f); // 1.1, held to 1
+      JCLAP_CHECK(std::fabs(bus(kBusMultiply, 0, 0) - 0.3f) < 1e-3f);
+      JCLAP_CHECK(std::fabs(bus(kBusMin, 0, 0) - 0.5f) < 1e-3f);
+      JCLAP_CHECK(std::fabs(bus(kBusMax, 0, 0) - 0.6f) < 1e-3f);
+      JCLAP_CHECK(std::fabs(bus(kBusMin, 1, 0) - 0.25f) < 1e-3f);  // Exponential
+      JCLAP_CHECK(std::fabs(bus(kBusMin, 1, 3) + 0.25f) < 1e-3f);  // inverted
+      JCLAP_CHECK(std::fabs(bus(kBusMin, 0, 2) - 0.0f) < 1e-3f);   // 0.5 as bipolar
+      JCLAP_CHECK(std::fabs(bus(kBusMin, 2, 1) - 0.8536f) < 1e-3f); // Log, then unipolar
+      // Bus 2 at 0.8 s (each check above ran 0.1 s): 60% into its fade of Bus 1's last 0.854, then
+      // 80% at 0.9 s of 0.5.
+      JCLAP_CHECK(std::fabs(e->busLevel(0, 1) - 0.512f) < 0.02f);
+      JCLAP_CHECK(std::fabs(bus(kBusMin, 0, 0, 1) - 0.4f) < 0.02f);
+      for (int i = 0; i < 4; ++i)
+         bus(kBusMin, 0, 0, 1);
+      JCLAP_CHECK(std::fabs(e->busLevel(0, 1) - 0.5f) < 1e-3f);
+      // Lag: a step on Base glides up, most of the way in its time (the Lag itself eases in, so a
+      // little more than a one-pole's 63%).
+      p.setPart(0, busParam(0, kBusLag), timeValue(100.0));
+      p.setPart(0, busParam(0, kBusOffset), 0.4);
+      render(*e, 4800, 256, {});
+      JCLAP_CHECK(e->busLevel(0, 0) > 0.65f && e->busLevel(0, 0) < 0.88f);
+      render(*e, 48000, 256, {});
+      JCLAP_CHECK(std::fabs(e->busLevel(0, 0) - 0.9f) < 1e-3f);
+      // Per note, a second note's Bus 2 starts its onset again; Global keeps the first's.
+      render(*e, 256, 256, {{0, Event::On, 64, 1.0f}});
+      JCLAP_CHECK(e->busLevel(0, 1) < 0.01f);
+      p.setPart(0, busParam(1, kBusGlobal), 1);
+      render(*e, 256, 256, {{0, Event::On, 67, 1.0f}});
+      JCLAP_CHECK(e->busLevel(0, 1) > 0.85f);
+   }
+
    // A looped chain keeps going round: 1 > 2 Loop with two short ramps, while the note is held.
    {
       Params p;

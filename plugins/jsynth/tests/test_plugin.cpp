@@ -191,13 +191,21 @@ int main() {
       h.setParam(level, -12.0);
       h.setParam(wave, 4.0);
       h.process();
+      // The bus names go with the state too.
+      EditorHost &panel = *h.object<EditorHost>();
+      BusNames names{};
+      names[0][1] = "Late Vibrato";
+      names[1][3] = "Breath";
+      panel.setBusNames(names);
       Buffer saved;
       JCLAP_CHECK(state->save(h.plugin(), &saved.out));
       h.setParam(level, 0.0);
+      panel.setBusNames({});
       h.process();
       JCLAP_CHECK(state->load(h.plugin(), &saved.in));
       JCLAP_CHECK_EQ(h.paramValue(level), -12.0);
       JCLAP_CHECK_EQ(h.paramValue(wave), 4.0);
+      JCLAP_CHECK(panel.busNames() == names);
 
       Buffer partial;
       partial.bytes.insert(partial.bytes.end(), {'J', 'J', 'S', 'Y'});
@@ -264,12 +272,16 @@ int main() {
       } access;
       const auto folder = std::filesystem::temp_directory_path() / "jsynth-preset-test";
       std::filesystem::remove_all(folder);
-      JCLAP_CHECK(writePreset(folder / (std::string("Mine") + kPresetExtension), access));
+      BusNames buses{};
+      buses[0][0] = "Swell and Shimmer";
+      buses[1][2] = "Late";
+      JCLAP_CHECK(writePreset(folder / (std::string("Mine") + kPresetExtension), access, buses));
       const std::vector<Preset> user = userPresets(folder);
       JCLAP_CHECK_EQ(user.size(), 1u);
       if (!user.empty()) {
          JCLAP_CHECK(user[0].name == "Mine");
          JCLAP_CHECK(presetValues(user[0]) == access.v);
+         JCLAP_CHECK(user[0].buses == buses);
       }
       std::filesystem::remove_all(folder);
       JCLAP_CHECK(presetFileName("a/b: c ") == "ab c");

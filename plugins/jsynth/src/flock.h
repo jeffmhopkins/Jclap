@@ -392,6 +392,7 @@ struct FlockFrame {
    // Each part's newest note's envelopes and LFOs, for the chips' lights.
    float env[kPartCount][kEnvCount] = {};
    float lfo[kPartCount][kLfoCount] = {};
+   float bus[kPartCount][kBusCount] = {};
    // Each part's newest voice's filters as modulated, for the filter graph: cutoff in Hz (0 while the
    // part is silent) and resonance.
    float cutoff[kPartCount][kFilterCount] = {}, resonance[kPartCount][kFilterCount] = {};

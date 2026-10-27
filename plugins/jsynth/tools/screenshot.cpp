@@ -111,6 +111,8 @@ public:
    void noteOff(int) override {}
    std::string presetName() const override { return "Starling Bells"; }
    void setPresetName(const std::string &) override {}
+   BusNames busNames() const override { return names_; }
+   void setBusNames(const BusNames &names) override { names_ = names; }
    void notes(std::vector<Note> &out) const override {
       // A chord, each note bent and pressed a little differently, as MPE playing looks.
       out = {{43, -0.4f, 0.3f, 0.35f, 0.6f, 0.0f},
@@ -122,13 +124,14 @@ public:
 
 private:
    std::map<clap_id, double> values_;
+   BusNames names_{{{"Breath Swell", "", "Late Shimmer", ""}, {}}};
 };
 
 } // namespace
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [part [routes [map-source [width height [view]]]]]\n",
+      std::fprintf(stderr, "usage: %s out.png [part [routes [map-source [width height [view [voice-tab [env-tab]]]]]]]\n",
                    argv[0]);
       return 1;
    }
@@ -139,6 +142,7 @@ int main(int argc, char **argv) {
    view.mapSource = arg(4);
    view.view = arg(7);
    view.voiceTab = arg(8);
+   view.envTab = arg(9);
    const int width = argc > 6 ? arg(5) : 1648;
    const int height = argc > 6 ? arg(6) : 940;
    DemoHost host;

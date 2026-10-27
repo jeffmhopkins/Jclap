@@ -26,7 +26,9 @@ the presets, and threads and state.
 **Two views**, switched at the top right. **SYNTH** puts big, drawn panels down the left beside the
 sky: the oscillators with their waves drawn (and an FM tab that draws what comes out), the filters'
 response, which you drag to set cutoff and resonance and which follows the modulated cutoff of the
-newest note as it plays, and the envelopes (and an LFOS tab). Under the sky a panel has VOICE (the
+newest note as it plays, and the envelopes (with LFOS and BUSES tabs: four mod buses per part that mix sources by Sum,
+Multiply, Min or Max, curve them, fade them in after a delay, and route the mix on under a name of
+your own). Under the sky a panel has VOICE (the
 stereo field, the voices in use, and live meters for A, B and the master that glow with the level),
 FLOCK, MOTION and TOUCH (the touch curves and glide rounding) tabs; RINGS and ROUTES sit just under
 the sky. **SKY** hides everything but the flocks.

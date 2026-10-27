@@ -53,7 +53,7 @@ struct HeldNotes {
 // name after the values: a uint32 length, then that many bytes. Version 3 adds Release as a route
 // source; an older state's route sources are moved to match.
 constexpr char kStateMagic[4] = {'J', 'J', 'S', 'Y'};
-constexpr uint32_t kStateVersion = 3;
+constexpr uint32_t kStateVersion = 4;
 
 class JSynth final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -178,6 +178,8 @@ public:
    }
    std::string presetName() const override { return presetName_; }
    void setPresetName(const std::string &name) override { presetName_ = name; }
+   BusNames busNames() const override { return busNames_; }
+   void setBusNames(const BusNames &names) override { busNames_ = names; }
    const jclap::ui::HostMenu *hostMenu() const override { return &hostMenu_; }
    // While the host isn't processing, the panel's notes wait in the queue. Note-ons and expressions
    // stop going in well before it's full, so the note-offs that follow always fit and no note sticks.
@@ -241,9 +243,18 @@ public:
          if (!jclap::core::writeAll(stream, &id, 4) || !jclap::core::writeAll(stream, &v, sizeof(v)))
             return false;
       }
-      const uint32_t nameLength = static_cast<uint32_t>(std::min<size_t>(presetName_.size(), 255));
-      return jclap::core::writeAll(stream, &nameLength, 4) &&
-             (nameLength == 0 || jclap::core::writeAll(stream, presetName_.data(), nameLength));
+      const auto writeText = [stream](const std::string &text, size_t most) {
+         const uint32_t length = static_cast<uint32_t>(std::min(text.size(), most));
+         return jclap::core::writeAll(stream, &length, 4) && (length == 0 || jclap::core::writeAll(stream, text.data(), length));
+      };
+      if (!writeText(presetName_, 255))
+         return false;
+      // Version 4: the bus names, part A's then B's.
+      for (const auto &part : busNames_)
+         for (const std::string &name : part)
+            if (!writeText(name, kBusNameMax))
+               return false;
+      return true;
    }
 
    bool stateLoad(const clap_istream_t *stream) override {
@@ -267,19 +278,27 @@ public:
             loaded[i] = std::clamp(version < 3 ? migrateBeforeRelease(id, v) : v, kParams()[i].def.min,
                                    kParams()[i].def.max);
       }
-      // The preset's name follows the values from version 2.
+      const auto readText = [stream](std::string &text, uint32_t most) {
+         uint32_t length = 0;
+         if (!jclap::core::readAll(stream, &length, 4) || length > most)
+            return false;
+         text.resize(length);
+         return length == 0 || jclap::core::readAll(stream, text.data(), length);
+      };
+      // The preset's name follows the values from version 2, and the bus names from version 4.
       std::string name;
-      uint32_t nameLength = 0;
-      if (version >= 2) {
-         if (!jclap::core::readAll(stream, &nameLength, 4) || nameLength > 255)
-            return false;
-         name.resize(nameLength);
-         if (nameLength && !jclap::core::readAll(stream, name.data(), nameLength))
-            return false;
-      }
+      if (version >= 2 && !readText(name, 255))
+         return false;
+      BusNames buses{};
+      if (version >= 4)
+         for (auto &part : buses)
+            for (std::string &bus : part)
+               if (!readText(bus, kBusNameMax))
+                  return false;
       for (size_t i = 0; i < paramCount(); ++i)
          values_[i].store(loaded[i]);
       presetName_ = name;
+      busNames_ = buses;
       if (auto *hostParams = hostExtension<clap_host_params_t>(CLAP_EXT_PARAMS))
          hostParams->rescan(host(), CLAP_PARAM_RESCAN_VALUES);
       return true;
@@ -574,6 +593,8 @@ private:
             f.env[part][e] = engine_->envLevel(part, e);
          for (int l = 0; l < kLfoCount; ++l)
             f.lfo[part][l] = engine_->lfoLevel(part, l);
+         for (int b = 0; b < kBusCount; ++b)
+            f.bus[part][b] = engine_->busLevel(part, b);
       }
       for (int i = 0; i < 3; ++i)
          f.meter[i] = engine_->takeMeter(i);
@@ -602,6 +623,7 @@ private:
    jclap::core::EditQueue edits_;
    // Main thread.
    std::string presetName_ = "Init";
+   BusNames busNames_{};
    jclap::ui::HostMenu hostMenu_;
    jclap::core::SpscQueue<PanelNote> panelNotes_;
    // Audio thread only. Reserved in the constructor's place by the cap, so it never allocates past it.

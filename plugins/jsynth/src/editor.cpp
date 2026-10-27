@@ -97,7 +97,8 @@ unsigned sourceColor(int source) {
        0xffc0c8d8,                                                 // Key
        0xfff2c94c, 0xff6fe0ff, 0xffa98bff, 0xffff8a7a,             // Speed, Nearest, Heading, Turn
        0xffd0d0d0, 0xffe0e0ff,                                     // Random, Mod Wheel
-       0xfff28c28, 0xff8fe8a8, 0xff6fb8ff, 0xffff6fd2};            // Macros
+       0xfff28c28, 0xff8fe8a8, 0xff6fb8ff, 0xffff6fd2,             // Macros
+       0xffb4f06e, 0xff6ef0c8, 0xfff07ab4, 0xffe6c27a};            // Buses
    return colors[std::clamp(source, 0, kSourceCount - 1)];
 }
 // The wingbeat's and the wind's colour, on the MOTION tab.
@@ -360,6 +361,12 @@ public:
    SourceChip(int source, std::string label) : source_(source), label_(std::move(label)) {}
 
    int source() const { return source_; }
+   void setLabel(const std::string &label) {
+      if (label != label_) {
+         label_ = label;
+         redraw();
+      }
+   }
    void setState(bool mapping, bool armed, float pulse) {
       if (mapping != mapping_ || armed != armed_ || (mapping && std::fabs(pulse - pulse_) > 0.02f)) {
          mapping_ = mapping;
@@ -425,6 +432,93 @@ private:
    std::string label_;
    bool mapping_ = false, armed_ = false;
    float pulse_ = 0.0f, level_ = 0.0f, led_ = 0.0f;
+};
+
+// A bus's name: click it to type a new one. Enter keeps it, Escape or a click away drops it, and an
+// empty name goes back to "Bus 1".
+class BusNameBox : public visage::Frame {
+public:
+   BusNameBox(EditorHost &host, int part, int bus, unsigned accent) : host_(host), part_(part), bus_(bus), accent_(accent) {}
+   std::function<void()> onChange;
+
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height(), s = h / 24.0f;
+      c.setColor(visage::Color(hover_ ? 0xc0181c28 : 0xa0101420));
+      c.roundedRectangle(0, 0, w, h, 5 * s);
+      c.setColor(glow(accent_, hover_ ? 0.6f : 0.3f, 1.0f));
+      c.roundedRectangleBorder(0, 0, w, h, 5 * s, 1.0f * s);
+      if (editing())
+         return;
+      const std::string &name = host_.busNames()[part_][bus_];
+      c.setColor(name.empty() ? kDim : kText);
+      c.text(name.empty() ? std::string("NAME THIS BUS") : name, ui::font((name.empty() ? 10 : 12) * s),
+             visage::Font::kCenter, 0, 0, w, h);
+   }
+   void mouseEnter(const visage::MouseEvent &) override {
+      hover_ = true;
+      redraw();
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = false;
+      redraw();
+   }
+   void mouseDown(const visage::MouseEvent &) override {
+      if (!editor_) {
+         editor_ = std::make_unique<Editor>();
+         editor_->setJustification(visage::Font::kCenter);
+         editor_->setMaxCharacters(static_cast<int>(kBusNameMax));
+         editor_->onEnterKey() += [this] { finish(true); };
+         editor_->onEscapeKey() += [this] { finish(false); };
+         editor_->onClickAway = [this] { finish(true); };
+         addChild(editor_.get(), false);
+      }
+      const float s = height() / 24.0f;
+      editor_->setBounds(3 * s, 2 * s, width() - 6 * s, height() - 4 * s);
+      editor_->setFont(ui::font(12 * s));
+      editor_->setText(host_.busNames()[part_][bus_]);
+      editor_->setVisible(true);
+      editor_->requestKeyboardFocus();
+      editor_->selectAll();
+      redraw();
+   }
+
+private:
+   class Editor : public visage::TextEditor {
+   public:
+      std::function<void()> onClickAway;
+      void focusChanged(bool is_focused, bool was_clicked) override {
+         visage::TextEditor::focusChanged(is_focused, was_clicked);
+         if (!is_focused && onClickAway)
+            onClickAway();
+      }
+   };
+   bool editing() const { return editor_ && editor_->isVisible(); }
+   void finish(bool apply) {
+      if (!editing())
+         return;
+      editor_->setVisible(false);
+      if (apply) {
+         std::string name = editor_->text().toUtf8();
+         // One line, trimmed.
+         for (char &ch : name)
+            if (ch == '\n' || ch == '\r' || ch == '\t')
+               ch = ' ';
+         const size_t from = name.find_first_not_of(' '), to = name.find_last_not_of(' ');
+         name = from == std::string::npos ? std::string() : name.substr(from, to - from + 1).substr(0, kBusNameMax);
+         BusNames names = host_.busNames();
+         names[part_][bus_] = name;
+         host_.setBusNames(names);
+         if (onChange)
+            onChange();
+      }
+      redraw();
+   }
+
+   EditorHost &host_;
+   int part_, bus_;
+   unsigned accent_;
+   bool hover_ = false;
+   std::unique_ptr<Editor> editor_;
 };
 
 // The header's preset bar: arrows step through the presets, the name opens a menu of them by
@@ -551,6 +645,7 @@ private:
       const Preset &p = at(i);
       host_.setParams(presetValues(p).data());
       host_.setPresetName(p.name);
+      host_.setBusNames(p.buses);
       currentIndex_ = i;
       redraw();
    }
@@ -688,7 +783,7 @@ private:
          return;
       const std::string name = uniqueName(presetFileName(editor_->text().toUtf8()));
       editor_->setVisible(false);
-      if (apply && writePreset(userPresetFolder() / (name + kPresetExtension), host_)) {
+      if (apply && writePreset(userPresetFolder() / (name + kPresetExtension), host_, host_.busNames())) {
          host_.setPresetName(name);
          rescan();
          for (int i = 0; i < static_cast<int>(user_.size()); ++i)
@@ -795,6 +890,7 @@ public:
    // The engine's newest envelope and LFO levels for `part`, while live.
    float envLevel(int part, int e) const { return frame_.env[part][e]; }
    float lfoLevel(int part, int l) const { return frame_.lfo[part][l]; }
+   float busLevel(int part, int b) const { return frame_.bus[part][b]; }
    // The engine's newest frame, while live.
    const FlockFrame &frame() const { return frame_; }
    // `part`'s param at `offset` as its newest voice has it now, while it sounds and a route or the
@@ -2235,18 +2331,50 @@ public:
       showRoutes(host_.routesOpen);
       showPart(host_.part);
       setView(host_.view);
+      refreshBusNames();
       last_ = std::chrono::steady_clock::now();
       startTimer(16);
+   }
+
+   // A source's name as the panel shows it: a bus by its label.
+   std::string sourceLabel(int s) const {
+      if (s >= kSourceBus1 && s < kSourceBus1 + kBusCount)
+         return busLabel(busNames_, host_.part, s - kSourceBus1);
+      return kSourceNames[std::clamp(s, 0, kSourceCount - 1)];
+   }
+   // The buses' names into their chips, boxes and the route menus.
+   void refreshBusNames() {
+      busNames_ = host_.busNames();
+      for (int part = 0; part < kPartCount; ++part) {
+         std::vector<std::string> sources = upper(kSourceNames);
+         std::vector<std::string> dests = destinationNames();
+         for (int b = 0; b < kBusCount; ++b) {
+            const std::string label = busLabel(busNames_, part, b);
+            sources[kSourceBus1 + b] = upper(label);
+            if (const int d = destinationIndex(busParam(b, kBusOffset)); d >= 0)
+               dests[d] = label;
+            if (busChips_[part][b])
+               busChips_[part][b]->setLabel(upper(label));
+         }
+         for (ui::Dropdown *d : routeSources_[part])
+            d->setOptions(sources);
+         for (ui::Dropdown *d : routeDests_[part])
+            d->setOptions(dests);
+      }
+      for (BusNameBox *box : busBoxes_)
+         box->redraw();
    }
 
    // One animation frame; the timer calls it with the real time since the last one.
    void step(float dt) {
       time_ += dt;
+      if (host_.busNames() != busNames_)
+         refreshBusNames();
       host_.notes(notes_);
       view_->shownPart = host_.part;
       view_->hint = !mapping_ ? std::string()
                     : armed_ != kSourceOff
-                        ? "Now drag any knob to set how much " + upper(kSourceNames[armed_]) + " moves it"
+                        ? "Now drag any knob to set how much " + upper(sourceLabel(armed_)) + " moves it"
                         : "MAP: touch a source, then drag a knob";
       view_->hintColor = armed_ != kSourceOff ? sourceColor(armed_) : kMapColor;
       view_->advance(notes_, dt);
@@ -2286,6 +2414,8 @@ public:
             const bool unipolar = static_cast<int>(value(host_.part, lfoParam(l, kLfoPolarity)) + 0.5) == 1;
             chip->setLevel(unipolar ? v : 0.5f + 0.5f * v, !unipolar);
          }
+         else if (s >= kSourceBus1 && s < kSourceBus1 + kBusCount)
+            chip->setLevel(view_->live() ? std::fabs(view_->busLevel(host_.part, s - kSourceBus1)) : 0.0f);
          chip->setState(mapping_, mapping_ && s == armed_, pulse);
       }
       if (!(host_.view == kSkyOnly)) {
@@ -2349,6 +2479,11 @@ public:
    void showVoiceTab(int tab) {
       voiceTab_ = tab;
       voiceTabs_->select(tab);
+      refresh();
+   }
+   void showEnvTab(int tab) {
+      envTab_ = tab;
+      envTabs_->select(tab);
       refresh();
    }
 
@@ -2477,6 +2612,7 @@ private:
       kFmPage,
       kEnvPage,
       kLfoPage,
+      kBusPage,
       kVoicePage,
       kFlockPage,
       kMotionPage,
@@ -2615,6 +2751,7 @@ private:
       case kFmPage: return oscTab_ == 1;
       case kEnvPage: return envTab_ == 0;
       case kLfoPage: return envTab_ == 1;
+      case kBusPage: return envTab_ == 2;
       case kVoicePage: return voiceTab_ == 0;
       case kFlockPage: return voiceTab_ == 1;
       case kMotionPage: return voiceTab_ == 2;
@@ -3004,6 +3141,38 @@ private:
          dropdown(lfoParam(l, kLfoDivision), lc, {lx + 212, 892, 100, 24});
          dropdown(lfoParam(l, kLfoPolarity), lc, {lx + 320, 892, 100, 24});
       }
+      // The buses: route sources onto a bus (MAP onto its BASE, or pick it as a route's destination),
+      // and it sends their mix on as a source of its own.
+      group_ = kBusPage;
+      for (int b = 0; b < kBusCount; ++b) {
+         const float bx = x + 12 + b * 218.0f;
+         const unsigned bc = sourceColor(kSourceBus1 + b);
+         busChips_[part][b] = &chip(kSourceBus1 + b, "BUS " + std::to_string(b + 1), {bx, 763, 104, 24},
+                                    "This bus as a source: touch it, then drag a knob to route the mix on.");
+         tips_.add(dropdown(busParam(b, kBusMode), bc, {bx + 108, 763, 102, 24}),
+                   "How the routes onto this bus mix: SUM adds them, MULTIPLY multiplies them (one gates "
+                   "another), MIN keeps the lowest and MAX the highest.");
+         auto &name = put<BusNameBox>({bx, 793, 210, 24}, host_, part, b, bc);
+         name.onChange = [this] { refreshBusNames(); };
+         busBoxes_.push_back(&name);
+         tips_.add(name, "Name this bus, so it reads as what it does in the route lists.");
+         tips_.add(dropdown(busParam(b, kBusCurve), bc, {bx, 823, 102, 24}),
+                   "Bends the mix: EXPONENTIAL is slow near zero, LOG quick, S-CURVE eased at both ends, and "
+                   "ABSOLUTE folds the negative half up.");
+         tips_.add(dropdown(busParam(b, kBusPolarity), bc, {bx + 108, 823, 102, 24}),
+                   "UNIPOLAR turns a -1..1 mix into 0..1, BIPOLAR turns 0..1 into -1..1, and INVERT flips it.");
+         knob(busParam(b, kBusOffset), "BASE", bc, {bx - 4, 851, 70, 70},
+              "Added to the mix. Routes onto this knob are the bus's inputs: touch a source in MAP and drag it.");
+         numberBox(busParam(b, kBusDelay), "DLY ", bc, {bx + 70, 856, 68, 24},
+                   "How long after the note the bus waits before it comes in.");
+         numberBox(busParam(b, kBusFade), "FADE ", bc, {bx + 142, 856, 68, 24},
+                   "After the delay, how long the bus takes to fade in.");
+         numberBox(busParam(b, kBusLag), "LAG ", bc, {bx + 70, 886, 68, 24},
+                   "Smooths the bus, so a step glides and a fast source slows.");
+         tips_.add(segments(busParam(b, kBusGlobal), bc, {bx + 142, 886, 68, 24}, std::vector<std::string>{"NOTE", "ALL"}),
+                   "NOTE runs the bus per note. ALL makes it one value for the part, from the newest note, timed "
+                   "from the first key down.");
+      }
       group_ = kSynth;
 
       // Under the sky: the part's voice and the output, big. The drawings are shared (see
@@ -3111,7 +3280,7 @@ private:
       group_ = kFmPage;
       drawings_.push_back(&put<FmView>({28, 100, 320, 290}, host_, *view_));
       group_ = kSynth;
-      auto &envTabs = glassy(put<ui::TabBar>({26, 731, 260, 26}, std::vector<std::string>{"ENVELOPES", "LFOS"}), kDim);
+      auto &envTabs = *(envTabs_ = &glassy(put<ui::TabBar>({26, 731, 330, 26}, std::vector<std::string>{"ENVELOPES", "LFOS", "BUSES"}), kDim));
       envTabs.select(envTab_);
       envTabs.onChange = [this](int t) {
          envTab_ = t;
@@ -3179,6 +3348,8 @@ private:
          bindings_.bind(src, partId(part, routeParam(r, kRouteSource)));
          auto &dst = glassy(put<ui::Dropdown>({0, 0, 166, 22}, dests), c);
          bindings_.bind(dst, partId(part, routeParam(r, kRouteDestination)));
+         routeSources_[part].push_back(&src);
+         routeDests_[part].push_back(&dst);
          auto &remove = glassy(put<ui::Button>({0, 0, 22, 22}, "X"), kMapColor);
          remove.onClick = [this, part, r] {
             set(part, routeParam(r, kRouteSource), kSourceOff);
@@ -3313,9 +3484,14 @@ private:
    std::vector<visage::Frame *> drawings_; // redrawn each frame
    ui::SegmentedSwitch *viewSwitch_ = nullptr;
    int oscTab_ = 0;   // the oscillator panel's tab: 0 OSCILLATORS, 1 FM
-   int envTab_ = 0;   // the envelope panel's: 0 ENVELOPES, 1 LFOS
+   int envTab_ = 0;   // the envelope panel's: 0 ENVELOPES, 1 LFOS, 2 BUSES
+   // The bus names the chips and route menus show, to notice when a preset or the host changes them.
+   BusNames busNames_{};
+   std::vector<BusNameBox *> busBoxes_;
+   SourceChip *busChips_[kPartCount][kBusCount] = {};
+   std::vector<ui::Dropdown *> routeSources_[kPartCount], routeDests_[kPartCount];
    int voiceTab_ = 0; // and the panel under the sky's: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH
-   ui::TabBar *voiceTabs_ = nullptr;
+   ui::TabBar *voiceTabs_ = nullptr, *envTabs_ = nullptr;
    // A, B and the main output's peaks, falling slowly, for the level bars.
    float meters_[3] = {};
    std::vector<ui::EnvelopeEditor::Playhead> heads_;
@@ -3338,6 +3514,7 @@ bool renderScreenshot(EditorHost &host, const ScreenshotView &view, double secon
    panel.setMapping(view.mapSource != 0, view.mapSource);
    panel.setView(view.view);
    panel.showVoiceTab(view.voiceTab);
+   panel.showEnvTab(view.envTab);
    const int frames = static_cast<int>(seconds * 60.0);
    for (int i = 0; i < frames; ++i)
       panel.step(1.0f / 60.0f);

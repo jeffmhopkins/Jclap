@@ -367,7 +367,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div><span class="dot">5</span><span><b>Touch chips.</b> VELOCITY, PRESS, GLIDE, SLIDE, RELEASE: sources that light as you play.</span></div>
     <div><span class="dot">6</span><span><b>OSCILLATORS / FM.</b> The three oscillators with their waves drawn; the FM grid, the links between creatures and the noise.</span></div>
     <div><span class="dot">7</span><span><b>FILTER.</b> Both filters' response, drawn live, and their controls.</span></div>
-    <div><span class="dot">8</span><span><b>ENVELOPES / LFOS.</b> ENV 1 AMP, ENV 2 and ENV 3; LFO 1 and 2.</span></div>
+    <div><span class="dot">8</span><span><b>ENVELOPES / LFOS / BUSES.</b> ENV 1 AMP, ENV 2 and ENV 3; LFO 1 and 2; the four mod buses.</span></div>
     <div><span class="dot">9</span><span><b>The sky.</b> Both species, their ink, and the links between them. Click to play.</span></div>
     <div><span class="dot">10</span><span><b>Flock sources.</b> The creatures' own modulation sources, and Random.</span></div>
     <div><span class="dot">11</span><span><b>RINGS, ROUTES.</b> Lure rings and the route list.</span></div>
@@ -666,12 +666,12 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <p>The drive sits before the filters. <strong>Soft</strong> is a tanh curve, round and warm. <strong>Hard</strong> clips flat, buzzier. <strong>Tube</strong> is asymmetric, so it adds even harmonics. Its gain is compensated, so turning it up thickens and compresses the sound more than it makes it louder.</p>
 </section>
 
-<!-- ================= 10. ENVELOPES AND LFOS ================= -->
-<section class="chapter" data-ch="10" data-title="Envelopes and LFOs" style="--accent: var(--env-ink); --accent-bg: var(--env);">
+<!-- ================= 10. ENVELOPES, LFOS AND BUSES ================= -->
+<section class="chapter" data-ch="10" data-title="Envelopes, LFOs and Buses" style="--accent: var(--env-ink); --accent-bg: var(--env);">
   <div class="chap-head">
     <div class="num">Chapter 10</div>
-    <h1>Envelopes and LFOs</h1>
-    <p class="lede">Three envelopes and four LFOs per voice. Two of the LFOs move the creatures as well as the sound.</p>
+    <h1>Envelopes, LFOs and Buses</h1>
+    <p class="lede">Three envelopes and four LFOs per voice, and four mod buses per part. Two of the LFOs move the creatures as well as the sound.</p>
     <div class="bar"></div>
   </div>
 
@@ -758,6 +758,27 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       </div>
       <div class="note"><span class="k">On the grid</span><p>With <strong>SYNC</strong> on, a <strong>Free</strong> or <strong>Global</strong> LFO is locked to your DAW's bar, not just its tempo: a 1/16 gate lands on the sixteenths wherever you start playback, and a looped bar plays the same S&amp;H values every time round. <strong>PHASE</strong> shifts it against the beat. <strong>Retrigger</strong> starts it with each note instead, which suits notes played off the grid.</p></div>
       <div class="note"><span class="k">Vibrato</span><p>Route LFO 1 to the part's <strong>Fine</strong> at a few percent for vibrato, and set its <strong>DELAY</strong> so it arrives once the note has settled. Map Press onto that route's amount and the vibrato follows your finger.</p></div>
+    </div>
+  </div>
+
+  <h2 class="pb"><span class="tag">Envelopes</span>BUSES</h2>
+  <div>
+    <figure class="dark"><img src="img/card-bus.jpg" alt=""></figure>
+    <div class="body">
+      <p>Each part has four <strong>mod buses</strong>. A bus takes any number of sources, mixes them into one value, shapes it, and hands it on as a source of its own: <strong>BUS 1</strong> to <strong>BUS 4</strong>, with a chip on this tab. Build a mix once (say, Press times the mod wheel, faded in after two seconds) and route it to as many places as you like.</p>
+      <p>To feed a bus, touch a source in MAP and drag the bus's <strong>BASE</strong> knob, or pick the bus as a route's destination in the route list. To use it, touch its chip and drag any knob. A bus can feed another bus.</p>
+      <h4>How it mixes and shapes</h4>
+      <div class="kv">
+        <dt>MODE</dt><dd><strong>SUM</strong> adds the inputs, each at its route's amount. <strong>MULTIPLY</strong> multiplies them, so one gates or scales another. <strong>MIN</strong> keeps the lowest and <strong>MAX</strong> the highest.</dd>
+        <dt>BASE</dt><dd>Added to the mix, −100% to +100%. With no inputs, a bus is just this value.</dd>
+        <dt>CURVE</dt><dd><strong>LINEAR</strong> as it is; <strong>EXPONENTIAL</strong> slow near zero; <strong>LOG</strong> quick near zero; <strong>S-CURVE</strong> eased at both ends; <strong>ABSOLUTE</strong> folds the negative half up.</dd>
+        <dt>POLARITY</dt><dd><strong>AS IS</strong>; <strong>UNIPOLAR</strong> turns −100..+100% into 0..100%; <strong>BIPOLAR</strong> turns 0..100% into −100..+100%; <strong>INVERT</strong> flips it.</dd>
+        <dt>DLY, FADE</dt><dd>The bus stays at zero for DLY after each note starts, then rises to full over FADE. This is how you bring in any modulation late in a held note.</dd>
+        <dt>LAG</dt><dd>Smooths the bus, so a step glides and a fast source slows down.</dd>
+        <dt>NOTE / ALL</dt><dd><strong>NOTE</strong> works the bus out for each note. <strong>ALL</strong> makes it one value for the part, from its newest note, and times DLY and FADE from the first key down, so a note played into a held chord doesn't start the fade again.</dd>
+      </div>
+      <p>Click the box under a bus's chip to name it. The name shows on its chip, in the route list and in MAP's hint, and is saved with the song and in your presets. An empty name goes back to "Bus 1".</p>
+      <div class="note"><span class="k">Late vibrato</span><p>Route LFO 1 onto Bus 1 at 100%, set the bus's DLY to 2 s and FADE to 1 s, and route Bus 1 to Fine at a few percent. Any held note now grows vibrato after two seconds. Route Press onto Bus 1 as well with MODE on MULTIPLY, and your finger sets how deep it gets.</p></div>
     </div>
   </div>
 </section>
@@ -905,6 +926,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">Random</td><td>A new value per note, −100% to +100%.</td></tr>
       <tr><td class="c">Mod Wheel</td><td>CC 1 on channel 1.</td></tr>
       <tr><td class="c">Macro 1 to 4</td><td>Four host parameters, for automation or a controller.</td></tr>
+      <tr><td class="c">Bus 1 to 4</td><td>The part's mod buses, −100% to +100%, by their own names (Chapter 10).</td></tr>
     </tbody>
   </table>
   <p class="small muted">Key, Mod Wheel and the macros have no chip on the panel; choose them in the route list. Random's chip is under the sky with the flock's.</p>
@@ -1526,6 +1548,12 @@ function el(parent, tag, attrs, text) {
       ['Delay', '0 ms – 20 s', '0.0 ms', T], ['Polarity', 'Bipolar, Unipolar', 'Bipolar', ''],
       ['Push (Wingbeat, Wind)', '0 – 100%', '20%, 30%', T],
     ]],
+    ['Buses (per part: Bus 1 – 4)', [
+      ['Base', '–100% – +100%', '+0%', T], ['Mode', 'Sum, Multiply, Min, Max', 'Sum', ''],
+      ['Curve', 'Linear, Exponential, Log, S-Curve, Absolute', 'Linear', ''], ['Polarity', 'As Is, Unipolar, Bipolar, Invert', 'As Is', ''],
+      ['Delay', '0 ms – 20 s', '0.0 ms', ''], ['Fade', '0 ms – 20 s', '0.0 ms', ''], ['Lag', '0 ms – 20 s', '0.0 ms', ''],
+      ['Global', 'Off, On', 'Off', ''],
+    ]],
     ['Flock (per part)', [
       ['Behaviour', 'Shoal, Scatter, Hunt, Flee', 'Shoal (B: Hunt)', ''], ['Cohesion', '0 – 100%', '50%', T], ['Alignment', '0 – 100%', '50%', T],
       ['Separation', '0 – 100%', '40%', T], ['Speed', '0 – 100%', '40% (B: 55%)', T], ['Wander', '0 – 100%', '20%', T],
@@ -1535,8 +1563,8 @@ function el(parent, tag, attrs, text) {
       ['Lure X, Lure Y', 'Pitch, Velocity, Press, Slide, Release, Random, Centre', 'Pitch, Slide', ''],
     ]],
     ['Routes (per part: Route 1 – 64)', [
-      ['Source', 'Off and 20 sources', 'Off (1–3: Env 2, Press, Press)', ''],
-      ['Destination', '159 destinations', 'Filter 1 Cutoff (2: Speed)', ''],
+      ['Source', 'Off and 25 sources', 'Off (1–3: Env 2, Press, Press)', ''],
+      ['Destination', '181 destinations', 'Filter 1 Cutoff (2: Speed)', ''],
       ['Amount', '–100% – +100%', '+0% (1–3: +30, +40, +20%)', T],
     ]],
   ];

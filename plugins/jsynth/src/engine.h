@@ -71,6 +71,7 @@ public:
          destOffset_[d] = dests[d];
       }
       firstAmountDest_ = destinationIndex(routeParam(0, kRouteAmount));
+      firstBusDest_ = destinationIndex(busParam(0, kBusOffset));
       // Each param back to its part and destination, for the host's per-note modulation.
       modTarget_.assign(paramCount(), {-1, -1});
       for (int part = 0; part < kPartCount; ++part)
@@ -428,6 +429,10 @@ public:
       const Voice *v = newest(part);
       return v ? v->lfoOut[l] : partLfoOut_[part][l];
    }
+   float busLevel(int part, int b) const {
+      const Voice *v = newest(part);
+      return v ? busNow(*v, b) : partBus_[part][b];
+   }
    // Where every sounding voice's envelopes are, in the curve's four stages: a delay sits at the
    // start of the attack and a hold at the peak.
    void showEnvelopes(FlockFrame &f) const {
@@ -499,6 +504,9 @@ private:
       float envOut[kEnvCount] = {}, envScale[kEnvCount] = {1, 1, 1};
       dsp::Lfo lfo[kLfoCount];
       float lfoOut[kLfoCount] = {};
+      // The buses (after their onset and lag), and how long since the note started, for the onset.
+      float busOut[kBusCount] = {};
+      float held = 0;
       dsp::Lfo drift;
       dsp::Random random;
       // The mixer's noise, and the oscillators' noise waves: each its own, so pink stays pink.
@@ -582,6 +590,8 @@ private:
             env[e].reset();
             envOut[e] = 0;
          }
+         for (float &b : busOut)
+            b = 0;
          for (int o = 0; o < kOscCount; ++o)
             phase[o] = out[o] = last[o] = lastRead[o] = 0;
          lastBend = roundFix = 0;
@@ -707,30 +717,112 @@ private:
          return modWheel_;
       if (s >= kSourceMacro1 && s < kSourceMacro1 + kMacroCount)
          return static_cast<float>(global(kMacro1 + (s - kSourceMacro1)));
+      if (s >= kSourceBus1 && s < kSourceBus1 + kBusCount)
+         return busNow(v, s - kSourceBus1);
       return 0.0f;
    }
+   // A bus's value on voice `v`: its own, or its part's for a Global one.
+   float busNow(const Voice &v, int b) const {
+      return choice(v.part, busParam(b, kBusGlobal)) == 1 ? partBus_[v.part][b] : v.busOut[b];
+   }
 
-   // Every route's offset on voice `v`, by destination, in normalised units.
+   bool ontoAmount(const Route &r) const { return r.dest >= firstAmountDest_ && r.dest < firstAmountDest_ + kRouteCount; }
+   bool ontoBus(const Route &r) const { return r.dest >= firstBusDest_ && r.dest < firstBusDest_ + kBusCount; }
+   // A route's depth on voice `v`, moved by the routes onto it (pass 1).
+   float routeAmount(int part, const Route &r, const float *offset) const {
+      // Each amount as smoothed with the other params, so automating one doesn't zipper.
+      return std::clamp(plain(part, routeParam(r.index, kRouteAmount)) + 2.0f * offset[firstAmountDest_ + r.index], -1.0f, 1.0f);
+   }
+
+   // Every route's offset on voice `v`, by destination, in normalised units. The buses are as they
+   // were last worked out (controlVoice does that between the two passes).
    void evaluateRoutes(const Voice &v, float *offset) const {
+      routeAmounts(v, offset);
+      routeRest(v, offset);
+   }
+   // Pass 1: routes onto other routes' amounts, at their own unmodulated amounts.
+   void routeAmounts(const Voice &v, float *offset) const {
       for (int d = 0; d < destCount_; ++d)
          offset[d] = 0;
       const int part = v.part;
-      const int n = routeCount_[part];
-      // Pass 1: routes onto other routes' amounts, at their own unmodulated amounts.
-      const auto ontoAmount = [this](const Route &r) { return r.dest >= firstAmountDest_ && r.dest < firstAmountDest_ + kRouteCount; };
-      for (int i = 0; i < n; ++i) {
+      for (int i = 0; i < routeCount_[part]; ++i) {
          const Route &r = routes_[part][i];
          if (ontoAmount(r))
             offset[r.dest] += source(v, r.source) * plain(part, routeParam(r.index, kRouteAmount)) * 0.5f; // its range is 2 wide
       }
-      // Pass 2: everything else, each at its amount moved by pass 1.
-      for (int i = 0; i < n; ++i) {
+   }
+   // Pass 2: everything else but the buses' inputs, each at its amount moved by pass 1.
+   void routeRest(const Voice &v, float *offset) const {
+      const int part = v.part;
+      for (int i = 0; i < routeCount_[part]; ++i) {
          const Route &r = routes_[part][i];
-         if (ontoAmount(r))
+         if (!ontoAmount(r) && !ontoBus(r))
+            offset[r.dest] += source(v, r.source) * routeAmount(part, r, offset);
+      }
+   }
+
+   // Bus `b`'s mix on voice `v` before its onset and lag: its inputs by its Mode, plus its Base,
+   // then its Curve and Polarity, as -1..1.
+   float busMix(const Voice &v, const float *offset, int b) const {
+      const int part = v.part;
+      const int mode = choice(part, busParam(b, kBusMode));
+      float mix = 0.0f;
+      int inputs = 0;
+      for (int i = 0; i < routeCount_[part]; ++i) {
+         const Route &r = routes_[part][i];
+         if (r.dest != firstBusDest_ + b)
             continue;
-         // Each amount as smoothed with the other params, so automating one doesn't zipper.
-         const float amount = std::clamp(plain(part, routeParam(r.index, kRouteAmount)) + 2.0f * offset[firstAmountDest_ + r.index], -1.0f, 1.0f);
-         offset[r.dest] += source(v, r.source) * amount;
+         const float x = source(v, r.source) * routeAmount(part, r, offset);
+         if (inputs++ == 0)
+            mix = x;
+         else if (mode == kBusSum)
+            mix += x;
+         else if (mode == kBusMultiply)
+            mix *= x;
+         else if (mode == kBusMin)
+            mix = std::min(mix, x);
+         else
+            mix = std::max(mix, x);
+      }
+      const int d = firstBusDest_ + b;
+      float x = std::clamp(mix + plain(part, busParam(b, kBusOffset)) + v.hostMod[d], -1.0f, 1.0f);
+      const float a = std::abs(x), sign = x < 0.0f ? -1.0f : 1.0f;
+      switch (choice(part, busParam(b, kBusCurve))) {
+      case 1: x = sign * a * a; break;                        // Exponential: slow near 0
+      case 2: x = sign * std::sqrt(a); break;                 // Log: quick near 0
+      case 3: x = sign * a * a * (3.0f - 2.0f * a); break;     // S-Curve: eased at both ends
+      case 4: x = a; break;                                   // Absolute: folded up
+      default: break;
+      }
+      switch (choice(part, busParam(b, kBusPolarity))) {
+      case 1: x = 0.5f + 0.5f * x; break;                     // -1..1 to 0..1
+      case 2: x = 2.0f * x - 1.0f; break;                     // 0..1 to -1..1
+      case 3: x = -x; break;
+      default: break;
+      }
+      return std::clamp(x, -1.0f, 1.0f);
+   }
+   // How far in a bus's onset is, `held` seconds after its note: nothing for its Delay, then up over
+   // its Fade.
+   float busOnset(int part, int b, float held) const {
+      const float delay = static_cast<float>(timeMs(plain(part, busParam(b, kBusDelay)))) / 1000.0f;
+      const float fade = static_cast<float>(timeMs(plain(part, busParam(b, kBusFade)))) / 1000.0f;
+      if (held < delay)
+         return 0.0f;
+      return fade <= 0.0f ? 1.0f : std::min(1.0f, (held - delay) / fade);
+   }
+   // Every bus on voice `v` this tick, in order, so a bus can take a lower one's value from now.
+   void runBuses(int slot, Voice &v, const float *offset, float tickSeconds) {
+      const int part = v.part;
+      const bool leads = leader_[part] == slot;
+      for (int b = 0; b < kBusCount; ++b) {
+         const bool global = choice(part, busParam(b, kBusGlobal)) == 1;
+         if (global && !leads)
+            continue;
+         const float target = busMix(v, offset, b) * busOnset(part, b, global ? partHeld_[part] : v.held);
+         const float lag = static_cast<float>(timeMs(plain(part, busParam(b, kBusLag)))) / 1000.0f;
+         float &out = global ? partBus_[part][b] : v.busOut[b];
+         out += (target - out) * (lag <= 0.0f || (v.fresh && !global) ? 1.0f : 1.0f - std::exp(-tickSeconds / lag));
       }
    }
 
@@ -788,6 +880,12 @@ private:
 
       for (int part = 0; part < kPartCount; ++part)
          trim(part, std::clamp(static_cast<int>(plain(part, kPolyphony) + 0.5f), 1, kMaxPolyphony));
+      // A Global bus follows each part's newest note, and its onset the part's first held note.
+      for (int part = 0; part < kPartCount; ++part) {
+         const Voice *lead = newest(part);
+         leader_[part] = lead ? static_cast<int>(lead - voices_) : -1;
+         partHeld_[part] += tickSeconds;
+      }
       float offset[kDestSlots];
       flockDue_ = flockAcc_ + static_cast<int64_t>(kTick) * static_cast<int64_t>(kFlockRate) >=
                   static_cast<int64_t>(std::llround(sampleRate_));
@@ -894,7 +992,10 @@ private:
 
       // Routes, from the sources as they were at the last tick; then envelopes 2 and 3 at control
       // rate (Env 1 runs every sample) and the LFOs.
-      evaluateRoutes(v, offset);
+      routeAmounts(v, offset);
+      runBuses(slot, v, offset, tickSeconds);
+      routeRest(v, offset);
+      v.held += tickSeconds;
       for (int e = 0; e < kEnvCount; ++e)
          setEnvelope(v, e, offset);
       for (int e = 1; e < kEnvCount; ++e)
@@ -1737,6 +1838,10 @@ private:
       const bool restart = reuse >= 0;
       if (!restart)
          v.clear();
+      if (!anyHeld(part, slot))
+         partHeld_[part] = 0;
+      leader_[part] = slot;
+      v.held = 0;
       v.active = true;
       v.gate = true;
       v.sustained = false;
@@ -1950,7 +2055,11 @@ private:
       int part, dest;
    };
    std::vector<ModTarget> modTarget_;
-   int destCount_ = 0, firstAmountDest_ = 0;
+   int destCount_ = 0, firstAmountDest_ = 0, firstBusDest_ = 0;
+   // The Global buses, each part's newest voice (or -1), and how long the part has held a note.
+   float partBus_[kPartCount][kBusCount] = {};
+   int leader_[kPartCount] = {};
+   float partHeld_[kPartCount] = {};
    float cur_[kPartCount][kPartEnd] = {};
    bool first_ = true;
    float routeCache_[kPartCount][kRouteCount][3] = {};
