@@ -532,6 +532,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <ul>
     <li><strong>◀ ▶</strong> step to the previous or next preset, in menu order. Scrolling over the bar does the same.</li>
     <li><strong>The name</strong> opens the preset menu: the factory bank in ten categories (<em>Rooms</em>, <em>Plates</em>, <em>Halls</em>, <em>Echoes</em>, <em>Shimmer</em>, <em>Orbits</em>, <em>Modulation</em>, <em>Texture</em>, <em>Washes</em>, <em>Extremes</em>), a <em>User</em> submenu with your own presets, and <em>Save as…</em>. The category of the current preset is shown at the left of the bar.</li>
+    <li><strong>☆</strong> beside the name makes the current preset a favorite; click it again to unstar it. Starred presets are listed under <em>Favorites</em> at the top of the menu.</li>
     <li><strong>SAVE</strong> asks for a name and writes the current settings as a user preset.</li>
   </ul>
   <p>Loading a preset sets every parameter, so nothing carries over from the previous sound (a body's routing, for example). The host sees the change as an ordinary edit, so it can be undone. The orbits then restart from the preset's masses and velocities.</p>
@@ -546,6 +547,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     </tbody>
   </table>
   <p>Copy files into this folder to share presets between machines; they appear the next time the menu opens. The name of the last preset loaded or saved is stored with your project.</p>
+  <p>Favorites are kept in <span class="mono">Favorites.txt</span>, one preset name per line, in the folder above <span class="mono">Presets</span>. Every JVerb you open shares them, and they last between sessions.</p>
 
   <h2>Running the orbits</h2>
   <table class="params">

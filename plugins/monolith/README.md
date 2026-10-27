@@ -116,6 +116,11 @@ menu of them by category:
 A preset holds the settings, not the slab: the same settings always write the same slab, so a preset
 always sounds the same. A slab you have carved, or that has drifted, is saved with the project.
 
+Click the **star** beside the name to make the current preset a favorite (click again to unstar it).
+**Favorites** at the top of the name menu lists every starred preset, factory or your own. Favorites
+are kept in `Favorites.txt` beside the `Presets` folder, so they last between sessions and every
+instance of the plugin shares them.
+
 ## Building
 
 Built with the rest of the repo; see the [top-level README](../../README.md). The engine is plain C++

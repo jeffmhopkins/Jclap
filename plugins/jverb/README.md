@@ -108,6 +108,11 @@ Orbits, Modulation, Texture) to Washes that ring for most of a minute and Extrem
 Each is a small text file, `.jvpreset`, listing every param. The
 preset's name is saved with the project.
 
+Click the **star** beside the name to make the current preset a favorite (click again to unstar it).
+**Favorites** at the top of the name menu lists every starred preset, factory or your own. Favorites
+are kept in `Favorites.txt` beside the `Presets` folder, so they last between sessions and every
+instance of the plugin shares them.
+
 ## Threads
 
 The audio thread owns the simulation and the reverb. Every 32 samples it steps the orbits and

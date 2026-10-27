@@ -49,6 +49,8 @@ follow the manual's description of each source and destination (sections 6.8.4 a
 
 The project remembers the program and sends its Program Change again when it opens. **SAVE** stores the
 knobs as your own preset (under "User"), which sends its CCs when loaded and doesn't change the program.
+The star beside the preset name marks it a favorite, and **Favorites** at the top of the name menu
+lists them; they're shared by every instance and kept between sessions.
 
 > [!NOTE]
 > Audiothingies hasn't published the factory bank or the SysEx program format. The bank here is the 209

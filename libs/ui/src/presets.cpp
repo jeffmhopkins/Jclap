@@ -105,6 +105,74 @@ std::vector<Preset> userPresets(const PresetFormat &format) {
    return found;
 }
 
+PresetFavorites::PresetFavorites(std::filesystem::path file) : file_(std::move(file)) { reload(); }
+
+std::filesystem::path PresetFavorites::fileFor(const std::string &name) { return userFolder(name) / "Favorites.txt"; }
+
+void PresetFavorites::reload() {
+   names_.clear();
+   std::ifstream in(file_);
+   std::string line;
+   while (std::getline(in, line)) {
+      if (!line.empty() && line.back() == '\r')
+         line.pop_back();
+      if (!line.empty() && !contains(line))
+         names_.push_back(line);
+   }
+}
+
+bool PresetFavorites::contains(const std::string &name) const {
+   return std::find(names_.begin(), names_.end(), name) != names_.end();
+}
+
+bool PresetFavorites::toggle(const std::string &name) {
+   reload();
+   const auto it = std::find(names_.begin(), names_.end(), name);
+   const bool starred = it == names_.end();
+   if (starred)
+      names_.push_back(name);
+   else
+      names_.erase(it);
+   save();
+   return starred;
+}
+
+void PresetFavorites::remove(const std::string &name) {
+   reload();
+   const auto it = std::find(names_.begin(), names_.end(), name);
+   if (it == names_.end())
+      return;
+   names_.erase(it);
+   save();
+}
+
+// Written beside the file and renamed over it, like a preset, so a failed save keeps the old stars.
+bool PresetFavorites::save() const {
+   std::error_code ec;
+   std::filesystem::create_directories(file_.parent_path(), ec);
+   std::filesystem::path temp = file_;
+   temp += ".tmp";
+   {
+      std::ofstream out(temp);
+      if (!out)
+         return false;
+      for (const std::string &name : names_)
+         out << name << "\n";
+      out.flush();
+      if (!out) {
+         out.close();
+         std::filesystem::remove(temp, ec);
+         return false;
+      }
+   }
+   std::filesystem::rename(temp, file_, ec);
+   if (ec) {
+      std::filesystem::remove(temp, ec);
+      return false;
+   }
+   return true;
+}
+
 std::string presetFileName(const std::string &name) {
    std::string safe;
    for (char ch : name)

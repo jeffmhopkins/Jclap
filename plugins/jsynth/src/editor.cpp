@@ -20,6 +20,7 @@
 #include <jclap/ui/knob.h>
 #include <jclap/ui/number_box.h>
 #include <jclap/ui/param_bindings.h>
+#include <jclap/ui/preset_bar.h>
 #include <jclap/ui/section.h>
 #include <jclap/ui/segmented.h>
 #include <jclap/ui/slider.h>
@@ -430,7 +431,10 @@ private:
 // category (and the user's own), and SAVE names the current sound and saves it as a user preset.
 class PresetBar : public visage::Frame {
 public:
-   explicit PresetBar(EditorHost &host) : host_(host) { rescan(); }
+   explicit PresetBar(EditorHost &host)
+      : host_(host), favorites_(userPresetFolder().parent_path() / "Favorites.txt") {
+      rescan();
+   }
 
    void draw(visage::Canvas &c) override {
       const float s = height() / 26.0f, w = width(), h = height();
@@ -454,9 +458,15 @@ public:
       if (editing())
          return;
       const std::string name = host_.presetName();
+      const float star = kStar * s;
       c.setColor(hover_ == Zone::Name ? 0xffffffff : kText);
       c.text(name.empty() ? std::string("Untitled") : name, ui::font(13 * s), visage::Font::kCenter, a, 0,
-             w - 2 * a - save, h);
+             w - 2 * a - save - star, h);
+      if (indexOf(name) >= 0) {
+         const bool starred = favorites_.contains(name);
+         c.setColor(starred ? kPartColors[0] : hover_ == Zone::Star ? kText : kDim);
+         ui::drawStar(c, w - save - a - star / 2, h / 2, 6.0f * s, starred);
+      }
    }
 
    void mouseMove(const visage::MouseEvent &e) override { setHover(zoneAt(e.position.x)); }
@@ -468,6 +478,7 @@ public:
       case Zone::Next: step(1); break;
       case Zone::Save: editing() ? finishSave(true) : startSave(); break;
       case Zone::Name: showMenu(); break;
+      case Zone::Star: toggleFavorite(); break;
       case Zone::None: break;
       }
    }
@@ -481,9 +492,10 @@ public:
    }
 
 private:
-   enum class Zone { None, Prev, Name, Next, Save };
-   static constexpr float kArrow = 24.0f, kSave = 48.0f;
-   static constexpr int kSaveId = 1 << 20, kDeleteId = kSaveId + 1, kUserBase = 1 << 16;
+   enum class Zone { None, Prev, Name, Star, Next, Save };
+   static constexpr float kArrow = 24.0f, kSave = 48.0f, kStar = 22.0f;
+   static constexpr int kSaveId = 1 << 20, kDeleteId = kSaveId + 1, kFavoriteId = kSaveId + 2, kUserBase = 1 << 16,
+                        kFavoritesBase = 1 << 18;
 
    Zone zoneAt(float x) const {
       const float s = height() / 26.0f, w = width();
@@ -493,6 +505,8 @@ private:
          return Zone::Save;
       if (x >= w - (kSave + kArrow) * s)
          return Zone::Next;
+      if (x >= w - (kSave + kArrow + kStar) * s)
+         return Zone::Star;
       return Zone::Name;
    }
    void setHover(Zone z) {
@@ -505,6 +519,7 @@ private:
    // Reads the user's preset folder: when the panel opens, the menu opens and after a save, not on
    // every arrow click, so stepping through presets never waits on the disk.
    void rescan() {
+      favorites_.reload();
       const std::string current = currentIndex_ >= 0 && currentIndex_ < total() ? at(currentIndex_).name : "";
       const bool wasUser = currentIndex_ >= static_cast<int>(factoryPresets().size());
       user_ = userPresets();
@@ -540,6 +555,15 @@ private:
       redraw();
    }
 
+   // Stars the current preset, or unstars it; a name that isn't a preset can't be starred.
+   void toggleFavorite() {
+      const std::string name = host_.presetName();
+      if (indexOf(name) < 0)
+         return;
+      favorites_.toggle(name);
+      redraw();
+   }
+
    void step(int dir) {
       const int n = total();
       const int current = indexOf(host_.presetName());
@@ -550,6 +574,15 @@ private:
       rescan();
       visage::PopupMenu menu;
       const std::string current = host_.presetName();
+      // Favorites first, in menu order, for the presets that still exist.
+      visage::PopupMenu favorites("Favorites");
+      for (int i = 0; i < total(); ++i)
+         if (favorites_.contains(at(i).name))
+            favorites.addOption(kFavoritesBase + i, at(i).name).select(at(i).name == current);
+      if (favorites.options().empty())
+         favorites.addOption(-2, "(click the star to add one)").enable(false);
+      menu.addSubMenu(std::move(favorites));
+      menu.addBreak();
       std::vector<std::string> categories;
       for (const Preset &p : factoryPresets())
          if (std::find(categories.begin(), categories.end(), p.category) == categories.end())
@@ -570,6 +603,8 @@ private:
       menu.addSubMenu(std::move(user));
       menu.addBreak();
       menu.addOption(kSaveId, "Save as...");
+      if (indexOf(current) >= 0)
+         menu.addOption(kFavoriteId, favorites_.contains(current) ? "Remove from Favorites" : "Add to Favorites");
       if (onUserPreset())
          menu.addOption(kDeleteId, "Delete \"" + current + "\"...");
       menu.onSelection() += [this](int id) {
@@ -577,6 +612,10 @@ private:
             startSave();
          else if (id == kDeleteId)
             confirmDelete();
+         else if (id == kFavoriteId)
+            toggleFavorite();
+         else if (id >= kFavoritesBase && id - kFavoritesBase < total())
+            load(id - kFavoritesBase);
          else if (id >= kUserBase && id - kUserBase < static_cast<int>(user_.size()))
             load(static_cast<int>(factoryPresets().size()) + id - kUserBase);
          else if (id >= 0 && id < static_cast<int>(factoryPresets().size()))
@@ -601,6 +640,7 @@ private:
             return;
          std::error_code ec;
          std::filesystem::remove(userPresetFolder() / (name + kPresetExtension), ec);
+         favorites_.remove(name);
          rescan();
          redraw();
       };
@@ -673,6 +713,7 @@ private:
    }
 
    EditorHost &host_;
+   ui::PresetFavorites favorites_;
    std::vector<Preset> user_;
    int currentIndex_ = -1;
    std::unique_ptr<NameEditor> editor_;
