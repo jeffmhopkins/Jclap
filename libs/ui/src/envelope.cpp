@@ -9,6 +9,8 @@ namespace {
 // Each of attack, decay and release gets this share of the width at its maximum; the sustain
 // plateau always gets the rest.
 constexpr float kStageWidth = 0.3f;
+// With shift held, a corner moves this much of the way the mouse does.
+constexpr float kFineScale = 0.2f;
 
 } // namespace
 
@@ -60,6 +62,18 @@ void EnvelopeEditor::setTimeCurve(float curve) {
    redraw();
 }
 
+void EnvelopeEditor::setTimeMapping(std::function<float(double)> position, std::function<double(float)> value) {
+   timePosition_ = std::move(position);
+   timeValue_ = std::move(value);
+   redraw();
+}
+
+float EnvelopeEditor::timePosition(const ValueAxis &a, double value) const {
+   if (timePosition_ && timeValue_)
+      return std::clamp(timePosition_(value), 0.0f, 1.0f);
+   return std::pow(std::clamp(a.range.fraction(value), 0.0f, 1.0f), timeCurve_);
+}
+
 void EnvelopeEditor::setAccent(unsigned color) {
    accent_ = color;
    redraw();
@@ -80,8 +94,8 @@ EnvelopeEditor::Points EnvelopeEditor::points(bool modulated) const {
    const visage::Bounds b = area();
    const auto f = [&](Stage s) {
       const ValueAxis &a = stages_[s];
-      const float fraction = std::clamp(a.range.fraction(modulated ? a.modulated : a.value), 0.0f, 1.0f);
-      return s == kSustain ? fraction : std::pow(fraction, timeCurve_);
+      const double v = modulated ? a.modulated : a.value;
+      return s == kSustain ? std::clamp(a.range.fraction(v), 0.0f, 1.0f) : timePosition(a, v);
    };
    const float stage = b.width() * kStageWidth;
    Points p;
@@ -212,7 +226,14 @@ void EnvelopeEditor::moveTo(visage::Point p) {
    };
    // Times: undo the drawing curve.
    const auto fromPosition = [&](ValueAxis &a, float f) {
-      fromFraction(a, std::pow(std::clamp(f, 0.0f, 1.0f), 1.0f / timeCurve_));
+      f = std::clamp(f, 0.0f, 1.0f);
+      // A time past the end of what's shown stays put until the corner is moved back inside.
+      if (f >= 1.0f && timePosition(a, a.value) >= 1.0f)
+         return;
+      if (timePosition_ && timeValue_)
+         a.set(a.range.clamp(timeValue_(f)));
+      else
+         fromFraction(a, std::pow(f, 1.0f / timeCurve_));
    };
    const Points pts = points(false);
    switch (dragging_) {
@@ -230,6 +251,11 @@ void EnvelopeEditor::moveTo(visage::Point p) {
       break;
    }
    redraw();
+}
+
+visage::Point EnvelopeEditor::handlePoint(Handle h) const {
+   const Points pts = points(false);
+   return h == kPeak ? pts.peak : h == kKnee ? pts.knee : pts.end;
 }
 
 void EnvelopeEditor::resetHandle(Handle h) {
@@ -281,6 +307,9 @@ void EnvelopeEditor::mouseDown(const visage::MouseEvent &e) {
       return;
    }
    dragging_ = h;
+   dragHandle_ = handlePoint(h);
+   dragMouse_ = e.position;
+   dragFine_ = e.isShiftDown();
    Stage a, b;
    stagesOf(h, a, b);
    if (stages_[a].onBeginEdit)
@@ -293,7 +322,15 @@ void EnvelopeEditor::mouseDown(const visage::MouseEvent &e) {
 void EnvelopeEditor::mouseDrag(const visage::MouseEvent &e) {
    if (dragging_ == kNone)
       return;
-   moveTo(e.position);
+   // The corner keeps its distance from the mouse instead of jumping under it. Pressing or letting
+   // go of shift mid-drag carries on from here, instead of rescaling the whole move so far.
+   if (e.isShiftDown() != dragFine_) {
+      dragFine_ = e.isShiftDown();
+      dragHandle_ = handlePoint(dragging_);
+      dragMouse_ = e.position;
+   }
+   const float scale = dragFine_ ? kFineScale : 1.0f;
+   moveTo({dragHandle_.x + (e.position.x - dragMouse_.x) * scale, dragHandle_.y + (e.position.y - dragMouse_.y) * scale});
    popup_.show(*this, popupText());
 }
 

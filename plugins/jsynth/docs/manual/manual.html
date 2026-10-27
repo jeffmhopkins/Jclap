@@ -678,7 +678,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <h2><span class="tag">Bottom left</span>ENVELOPES</h2>
   <figure class="dark"><img src="img/card-env.jpg" alt=""></figure>
   <div>
-      <p>Each envelope draws its shape: drag the points to set <strong>attack</strong>, <strong>decay</strong>, <strong>sustain</strong> and <strong>release</strong>. A dot rides the curve for every sounding note. The chip above each one is its source for MAP and lights as it moves.</p>
+      <p>Each envelope draws its shape: drag the points to set <strong>attack</strong>, <strong>decay</strong>, <strong>sustain</strong> and <strong>release</strong>. A point moves with the mouse from where you grab it; hold <strong>Shift</strong> for fine moves. A dot rides the curve for every sounding note. The chip above each one is its source for MAP and lights as it moves.</p>
       <p><strong>ENV 1 AMP</strong> is the amp: it shapes every note's level, and it always releases when you let go. <strong>ENV 2</strong> and <strong>ENV 3</strong> are free to route; a new part starts with Env 2 opening Filter 1.</p>
       <table class="params">
         <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
@@ -687,6 +687,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
           <tr><td class="c">Decay</td><td class="r">0 ms – 20 s</td><td class="d">400 ms (2, 3: 300 ms)</td><td><span class="mod t">ROUTE</span></td></tr>
           <tr><td class="c">Sustain</td><td class="r">0 – 100%</td><td class="d">70% (2, 3: 30%)</td><td><span class="mod t">ROUTE</span></td></tr>
           <tr><td class="c">Release</td><td class="r">0 ms – 20 s</td><td class="d">300 ms</td><td><span class="mod t">ROUTE</span></td></tr>
+          <tr><td class="c">Time Range</td><td class="r">Short, Normal, Long</td><td class="d">Normal</td><td>How much time the drawing spreads across its width: up to 1 s, 5 s or 20 s for each of attack, decay and release. Pick <strong>Short</strong> for plucks and drums, <strong>Long</strong> for pads and swells. It only changes the view: switching it never changes a time, and a time past the end waits there until you drag it back in.</td></tr>
           <tr><td class="c">Loop</td><td class="r">Off, Held, Free</td><td class="d">Off</td><td><strong>Held</strong> repeats attack and decay while the note is held. <strong>Free</strong> keeps repeating after you let go too, until the note ends.</td></tr>
         </tbody>
       </table>
@@ -1359,7 +1360,7 @@ function el(parent, tag, attrs, text) {
       ['Delay', '0 ms – 20 s', '0.0 ms', T], ['Attack', '0 ms – 20 s', '5.0 ms', T], ['Hold', '0 ms – 20 s', '0.0 ms', T],
       ['Decay', '0 ms – 20 s', '400 ms (Env 2, 3: 300 ms)', T], ['Sustain', '0 – 100%', '70% (Env 2, 3: 30%)', T],
       ['Release', '0 ms – 20 s', '300 ms', T], ['Attack, Decay, Release Curve', '–1 – +1', '+0.00', ''],
-      ['Loop', 'Off, Held, Free', 'Off', ''], ['Velocity', '0 – 100%', '0%', ''],
+      ['Loop', 'Off, Held, Free', 'Off', ''], ['Velocity', '0 – 100%', '0%', ''], ['Time Range', 'Short, Normal, Long', 'Normal', ''],
     ]],
     ['LFOs (per part: Wingbeat, Wind, LFO 1, LFO 2)', [
       ['Shape', 'Sine, Triangle, Saw, Square, S&H, Smooth', 'Sine (Wind: Smooth, LFO 2: Triangle)', ''],

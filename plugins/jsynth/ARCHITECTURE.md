@@ -307,6 +307,11 @@ level is, so it never clicks. **Loop** Held repeats attack and decay while the n
 keeps repeating after the note is let go too, until the voice ends. Env 1 is the amp and always
 releases on note off. Env 1 runs every sample; Env 2 and 3 at control rate.
 
+The panel's envelope editor doesn't draw that knob taper. It places each time by milliseconds, on a
+cube of the envelope's **Time Range** (Short, Normal or Long: up to 1, 5 or 20 s a stage), so half
+way is an eighth of the range. Time Range is a view setting saved with the patch, not automatable,
+and never changes a time; factory presets with a time past 5 s open on Long.
+
 **Four LFOs** per voice. Each has six shapes (Sine, Triangle, Saw, Square, S&H, Smooth, which
 glides between random values), a Rate of 0.02 to 50 Hz or a tempo Division (1/32 to 4/1, with
 triplets and dots), a Phase, a fade-in Delay and a Polarity (bipolar or unipolar).
