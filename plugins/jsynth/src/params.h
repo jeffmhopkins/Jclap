@@ -409,6 +409,9 @@ inline std::vector<clap_id> buildDestinations() {
 
 } // namespace detail
 
+// Room for every destination, in the engine's per-destination arrays and the panel's frame.
+constexpr int kDestSlots = 256;
+
 inline const std::vector<clap_id> &destinations() {
    static const std::vector<clap_id> d = detail::buildDestinations();
    return d;

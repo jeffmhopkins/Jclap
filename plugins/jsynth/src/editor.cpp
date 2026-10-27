@@ -8,6 +8,8 @@
 //
 // MAP mode is how modulation is made: touch a source (a chip in the header or under the sky), which turns MAP on with it armed, then drag any knob to set how much that source moves it. While it is armed, its
 // routes show as rings in its colour around the knobs they move; outside MAP the knobs show none.
+// While a part plays, a knob its routes move shows, MAP or not, a white line on its outer ring out to
+// where the part's newest voice has it now, and the drawings draw that voice's values.
 
 #include "editor.h"
 
@@ -199,6 +201,10 @@ class MapKnob : public ui::Knob {
 public:
    MapKnob(ui::ValueRange range, Mapper &mapper, int part, clap_id offset)
        : Knob(range), mapper_(mapper), part_(part), dest_(destinationIndex(offset)) {}
+
+   int part() const { return part_; }
+   // Its index in destinations(), or -1.
+   int destination() const { return dest_; }
 
    void draw(visage::Canvas &c) override {
       Knob::draw(c);
@@ -677,6 +683,16 @@ public:
    float lfoLevel(int part, int l) const { return frame_.lfo[part][l]; }
    // The engine's newest frame, while live.
    const FlockFrame &frame() const { return frame_; }
+   // `part`'s param at `offset` as its newest voice has it now, while it sounds and a route or the
+   // host's per-note modulation moves it; otherwise its knob's value.
+   double value(int part, clap_id offset) const {
+      if (live_) {
+         const int d = destinationIndex(offset);
+         if (d >= 0 && frame_.moved[part][d])
+            return frame_.dest[part][d];
+      }
+      return host_.paramValue(partId(part, offset));
+   }
 
    // The sources of `part`'s newest held creature, or a fading one's when it holds none.
    CreatureSources sources(int part) const {
@@ -1129,13 +1145,14 @@ private:
 
 // ---- the panel ----
 
-// The panel's drawings. Each reads the shown part's params as it draws, so it follows every
-// knob, route and preset without bindings of its own.
+// The panel's drawings. Each reads the shown part's params as it draws, as the newest voice has them
+// while it sounds, so it follows every knob, route and preset without bindings of its own.
 
 // One oscillator's wave, two cycles of it, as its Wave and Shape make it.
 class WaveView : public visage::Frame {
 public:
-   WaveView(EditorHost &host, int osc, unsigned color) : host_(host), osc_(osc), color_(color) {
+   WaveView(EditorHost &host, const FlockView &sky, int osc, unsigned color)
+       : host_(host), sky_(sky), osc_(osc), color_(color) {
       setIgnoresMouseEvents(true, false);
    }
 
@@ -1146,7 +1163,7 @@ public:
       c.roundedRectangle(0, 0, w, h, 6 * s);
       c.setColor(visage::Color(0x18ffffff));
       c.fill(0, h / 2, w, 1);
-      const auto param = [&](clap_id offset) { return host_.paramValue(partId(host_.part, offset)); };
+      const auto param = [&](clap_id offset) { return sky_.value(host_.part, offset); };
       const int wave = static_cast<int>(param(oscParam(osc_, kOscWave)) + 0.5);
       const float shape = static_cast<float>(param(oscParam(osc_, kOscShape)));
       const float level = static_cast<float>(param(mixParam(kMixLevel, osc_)));
@@ -1185,6 +1202,7 @@ public:
 
 private:
    EditorHost &host_;
+   const FlockView &sky_;
    int osc_;
    unsigned color_;
 };
@@ -1589,14 +1607,15 @@ float lfoWave(int shape, double cycles) {
 // dot running along it at its rate.
 class LfoView : public visage::Frame {
 public:
-   LfoView(EditorHost &host, int lfo, unsigned color, const float &time) : host_(host), lfo_(lfo), color_(color), time_(time) {
+   LfoView(EditorHost &host, const FlockView &sky, int lfo, unsigned color, const float &time)
+       : host_(host), sky_(sky), lfo_(lfo), color_(color), time_(time) {
       setIgnoresMouseEvents(true, false);
    }
 
    void draw(visage::Canvas &c) override {
       const float w = width(), h = height();
       const float s = h / 127.0f;
-      const auto param = [&](LfoParam p) { return host_.paramValue(partId(host_.part, lfoParam(lfo_, p))); };
+      const auto param = [&](LfoParam p) { return sky_.value(host_.part, lfoParam(lfo_, p)); };
       const int shape = static_cast<int>(param(kLfoShape) + 0.5);
       const double phase = param(kLfoPhase) / 360.0;
       const bool unipolar = static_cast<int>(param(kLfoPolarity) + 0.5) == 1;
@@ -1630,6 +1649,7 @@ public:
 
 private:
    EditorHost &host_;
+   const FlockView &sky_;
    int lfo_;
    unsigned color_;
    const float &time_;
@@ -1639,12 +1659,12 @@ private:
 // two cycles drawn, with a chip under it for each route that is on.
 class FmView : public visage::Frame {
 public:
-   explicit FmView(EditorHost &host) : host_(host) { setIgnoresMouseEvents(true, false); }
+   FmView(EditorHost &host, const FlockView &sky) : host_(host), sky_(sky) { setIgnoresMouseEvents(true, false); }
 
    void draw(visage::Canvas &c) override {
       const float w = width(), h = height();
       const float s = h / 290.0f;
-      const auto param = [&](clap_id offset) { return static_cast<float>(host_.paramValue(partId(host_.part, offset))); };
+      const auto param = [&](clap_id offset) { return static_cast<float>(sky_.value(host_.part, offset)); };
       c.setColor(visage::Color(0x40000000));
       c.roundedRectangle(0, 0, w, h, 6 * s);
       c.setColor(visage::Color(0x88ffffff));
@@ -1764,6 +1784,7 @@ public:
 
 private:
    EditorHost &host_;
+   const FlockView &sky_;
 };
 
 class Panel : public ui::DesignFrame, public visage::EventTimer, public Mapper {
@@ -1802,6 +1823,7 @@ public:
                         : "MAP: touch a source, then drag a knob";
       view_->hintColor = armed_ != kSourceOff ? sourceColor(armed_) : kMapColor;
       view_->advance(notes_, dt);
+      showLiveModulation();
       // The chips' levels: the newest note's touch, and the shown species' newest creature.
       float touch[kTouchCount] = {};
       if (!notes_.empty()) {
@@ -1853,6 +1875,17 @@ public:
             layoutRoutes();
          for (MapKnob *k : mapKnobs_)
             k->redraw();
+      }
+   }
+
+   // Each mappable knob's live line: past the host's modulation, to where its part's newest voice
+   // has it now, while a route or the host's per-note modulation moves it.
+   void showLiveModulation() {
+      const FlockFrame &f = view_->frame();
+      for (MapKnob *k : mapKnobs_) {
+         const int d = k->destination();
+         const bool on = view_->live() && d >= 0 && f.moved[k->part()][d];
+         k->setLiveModulation(on ? f.dest[k->part()][d] - k->modulatedValue() : 0.0, 0xffffffff);
       }
    }
 
@@ -2445,9 +2478,9 @@ private:
       };
       group_ = kOscPage;
       for (int o = 0; o < kOscCount; ++o)
-         drawings_.push_back(&put<WaveView>({164, 98 + o * 98.0f, 276, 92}, host_, o, kOscColors[o]));
+         drawings_.push_back(&put<WaveView>({164, 98 + o * 98.0f, 276, 92}, host_, *view_, o, kOscColors[o]));
       group_ = kFmPage;
-      drawings_.push_back(&put<FmView>({28, 100, 320, 290}, host_));
+      drawings_.push_back(&put<FmView>({28, 100, 320, 290}, host_, *view_));
       group_ = kSynth;
       auto &envTabs = glassy(put<ui::TabBar>({26, 731, 260, 26}, std::vector<std::string>{"ENVELOPES", "LFOS"}), kDim);
       envTabs.select(envTab_);
@@ -2457,7 +2490,7 @@ private:
       };
       group_ = kLfoPage;
       for (int i = 0; i < kLfoCount - kMotionCount; ++i)
-         drawings_.push_back(&put<LfoView>({28 + i * 436.0f, 793, 196, 123}, host_, kMotionCount + i,
+         drawings_.push_back(&put<LfoView>({28 + i * 436.0f, 793, 196, 123}, host_, *view_, kMotionCount + i,
                                            sourceColor(kSourceLfo1 + i), time_));
       group_ = kSynth;
       drawings_.push_back(&put<FilterView>({28, 440, 856, 157}, host_, *this, *view_));
