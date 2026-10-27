@@ -1,6 +1,7 @@
 ## Install
 
 Download the zip for your system below, unzip it, and copy the `.clap` files into your CLAP folder.
+`jclap-<system>.zip` holds every plugin; `jclap-<Plugin>-<system>.zip` holds just that one.
 Then restart your DAW, or rescan plug-ins (in Bitwig: Settings → Locations).
 
 | System | CLAP folder |
