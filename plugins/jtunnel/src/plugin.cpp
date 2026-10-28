@@ -120,7 +120,8 @@ public:
       link_.receiving = mode() == kModeReceive;
       // No socket isn't fatal: the plugin still passes audio through, and the panel says why.
       link_.ring.clear();
-      linkUp_ = network_.start(link_, owner_);
+      impair_ = ImpairSettings::fromEnvironment();
+      linkUp_ = network_.start(link_, owner_, impair_);
       active_ = true;
       return true;
    }
@@ -206,6 +207,8 @@ public:
       if (port)
          s.localAddress = net::Address{localIp_ ? localIp_ : 0x7F000001u, port}.toString();
       s.hostRate = sampleRate_;
+      if (active_ && impair_.enabled())
+         s.impairment = impair_.describe();
       s.listeners = link_.listeners.load();
       s.connection = link_.connection.load();
       const net::Address source{link_.source.load(), link_.sourcePort.load()};
@@ -532,6 +535,7 @@ private:
    OutMidi midiOut_[kMaxMidi];
    std::atomic<float> inPeak_{0.0f}, outPeak_{0.0f};
 
+   ImpairSettings impair_;
    uint32_t localIp_ = 0;
    std::chrono::steady_clock::time_point localIpCheckedAt_{};
 

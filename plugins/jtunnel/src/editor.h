@@ -19,6 +19,7 @@ struct TunnelStatus {
    bool discoveryOnNetwork = true; // mDNS works (else only this process is searched)
    std::string localAddress;     // where others can reach this instance, "192.168.1.5:47000"
    double hostRate = 0;          // the host's sample rate (what PCM sends at)
+   std::string impairment;       // what JTUNNEL_IMPAIR is doing to sent packets, if anything
    // Sending.
    int listeners = 0;
    // Receiving.

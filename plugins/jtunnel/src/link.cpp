@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <deque>
 
 #include "discovery.h"
 
@@ -27,10 +28,11 @@ bool sameName(const std::string &a, const char *b) {
 
 } // namespace
 
-bool Link::start(LinkState &state, uint64_t owner) {
+bool Link::start(LinkState &state, uint64_t owner, const ImpairSettings &impair) {
    stop();
    state_ = &state;
    owner_ = owner;
+   impair_ = impair;
    net::startup();
    bool opened = false;
    for (uint16_t port = kDefaultPort; port < kDefaultPort + 16 && !opened; ++port)
@@ -84,17 +86,44 @@ void Link::stop() {
 void Link::sendLoop() {
    std::vector<net::Address> to;
    OutPacket packet;
+   // With an impairment, packets wait here until their release time.
+   Impairment impairment(impair_);
+   struct Held {
+      Clock::time_point release;
+      OutPacket packet;
+   };
+   std::deque<Held> held;
+   constexpr size_t kMaxHeld = 2048;
    while (running_) {
-      state_->outgoingReady.wait(100);
+      int waitMs = 100;
+      if (!held.empty()) {
+         const auto until = std::chrono::ceil<std::chrono::milliseconds>(held.front().release - Clock::now());
+         waitMs = static_cast<int>(std::clamp<std::chrono::milliseconds::rep>(until.count(), 0, 100));
+      }
+      if (waitMs > 0)
+         state_->outgoingReady.wait(waitMs);
       to.clear();
       {
          std::lock_guard<std::mutex> lock(subscribersMutex_);
          for (const Subscriber &s : subscribers_)
             to.push_back(s.address);
       }
+      if (!impair_.enabled()) {
+         while (state_->outgoing.pop(packet))
+            for (const net::Address &address : to)
+               socket_.sendTo(address, packet.data, packet.size);
+         continue;
+      }
+      const Clock::time_point now = Clock::now();
+      Clock::time_point release;
       while (state_->outgoing.pop(packet))
+         if (impairment.schedule(now, release) && held.size() < kMaxHeld)
+            held.push_back({release, packet});
+      while (!held.empty() && held.front().release <= Clock::now()) {
          for (const net::Address &address : to)
-            socket_.sendTo(address, packet.data, packet.size);
+            socket_.sendTo(address, held.front().packet.data, held.front().packet.size);
+         held.pop_front();
+      }
    }
 }
 
