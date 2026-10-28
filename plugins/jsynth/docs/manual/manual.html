@@ -369,7 +369,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div><span class="dot">6</span><span><b>OSCILLATORS / FM.</b> The three oscillators with their waves drawn; the FM grid, the links between creatures and the noise.</span></div>
     <div><span class="dot">7</span><span><b>FILTER.</b> Both filters' response, drawn live, and their controls.</span></div>
     <div><span class="dot">8</span><span><b>ENVELOPES / LFOS / BUSES.</b> ENV 1 AMP, ENV 2 and ENV 3; LFO 1 and 2; the four mod buses.</span></div>
-    <div><span class="dot">9</span><span><b>The sky.</b> Both species, their ink, and the links between them. Click to play.</span></div>
+    <div><span class="dot">9</span><span><b>The sky.</b> Both species, their ink, and the links between them. Click to play. Over its top left, the look (SUMI or AURORA) and the palette.</span></div>
     <div><span class="dot">10</span><span><b>Flock sources.</b> The creatures' own modulation sources, and Random.</span></div>
     <div><span class="dot">11</span><span><b>RINGS, ROUTES.</b> Lure rings and the route list.</span></div>
     <div><span class="dot">12</span><span><b>VOICE / FLOCK / MOTION / TOUCH.</b> The voice, how the species flies, the wingbeat and the wind, and how each touch responds.</span></div>
@@ -448,16 +448,20 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <div class="bar"></div>
   </div>
 
-  <figure class="dark" style="max-width:5.4in;margin-left:auto;margin-right:auto"><img src="img/stage.jpg" alt=""><figcaption><b>Fig. 6.1</b> &nbsp;Part A's creatures (orange) and part B's (blue) in a layered patch, with their ink. Faint grey rings are lures; a pink ring marks a creature a hunter has caught; thin lines join neighbours that hear each other.</figcaption></figure>
+  <figure class="dark" style="max-width:5.4in;margin-left:auto;margin-right:auto"><img src="img/stage.jpg" alt=""><figcaption><b>Fig. 6.1</b> &nbsp;Part A's creatures and part B's in a layered patch, with their ink, in the Sumi look. Ripples are lures; a pink ring marks a creature a hunter has caught; dotted lines join neighbours that hear each other.</figcaption></figure>
 
   <h2>What you see</h2>
   <div class="kv">
-    <dt>Creatures</dt><dd>A glowing body and a pair of wings that beat with its Wingbeat LFO. It is brighter the harder you press, and fades with its sound after you let go. The part you are editing flies in front; the other is dimmed.</dd>
-    <dt>Ink</dt><dd>Every creature sheds ink behind it, which blooms and fades by the part's <strong>TAIL</strong> and <strong>SPREAD</strong>. Creatures flying through ink stir it.</dd>
-    <dt>Lure rings</dt><dd>Where each held note pulls its creature, with a faint line to it. <strong>RINGS</strong> under the sky shows or hides them.</dd>
-    <dt>Links</dt><dd>A thin line from a creature to the neighbour it hears most, brighter the more <strong>FLOCK FM</strong> it gets, and a line from a hunter to what it has caught.</dd>
+    <dt>Creatures</dt><dd>In Sumi a brush stroke, thick at the head and tapering behind, its width breathing with its Wingbeat LFO; in Aurora a four-pointed star trailing a thin line, its points twinkling with the wingbeat. It is brighter the harder you press, and fades with its sound after you let go. The part you are editing flies in front; the other is dimmed.</dd>
+    <dt>Ink</dt><dd>Every creature sheds ink behind it, which fades by the part's <strong>TAIL</strong> and spreads by its <strong>SPREAD</strong>, taking on a deeper colour as it ages. In Sumi it marbles into fine filaments; in Aurora each wisp hangs a curtain of light above it. Creatures flying through ink stir it, and so does the mouse.</dd>
+    <dt>Lures</dt><dd>Where each held note pulls its creature: ripples in Sumi, wider the harder you press, and a small diamond over a faint plumb line in Aurora. <strong>RINGS</strong> under the sky shows or hides them.</dd>
+    <dt>Links</dt><dd>From a creature to the neighbour it hears most, brighter the more <strong>FLOCK FM</strong> it gets: dotted in Sumi, an arc with a pulse running along it in Aurora. A hunter has a line to what it has caught.</dd>
+    <dt>Readout</dt><dd>Hover a creature to read which voice it is and its Speed, Turn and Nearest.</dd>
     <dt>Caught</dt><dd>A pink ring around a creature a hunter holds.</dd>
   </div>
+
+  <h2>Looks and palettes</h2>
+  <p>The switch over the sky's top left picks how it is drawn. <strong>SUMI</strong> is ink in dark water, lit from above; <strong>AURORA</strong> is a night sky over a glowing horizon. The menu beside it picks a palette: <strong>EMBER</strong>, <strong>BOREALIS</strong>, <strong>GLACIER</strong>, <strong>SUNSET</strong>, <strong>MOONLIGHT</strong>, <strong>NEON</strong> or <strong>CLASSIC</strong>, each with a set of inks for each part. Each look keeps its own palette (Sumi starts in Ember, Aurora in Borealis), and the look and both palettes are saved with your project. They are only drawn and never change the sound.</p>
 
   <h2>Playing the sky</h2>
   <p>Click anywhere in the sky to play a note: left to right runs from C2 to C6, and how high you click sets Slide. Drag while holding to bend the note and change Slide; let go to release it. The notes play on whichever parts the play mode sends them to, just like notes from your keyboard.</p>
@@ -475,7 +479,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </table>
 
   <h2>Two views</h2>
-  <p>The switch at the top right picks how much of the panel you see. <strong>SYNTH</strong>, as this manual shows it, puts the sound down the left beside the sky. <strong>SKY</strong> folds everything away but the switch so the sky fills the panel, which is lovely on a second screen while you play. The view stays as you left it when the editor is closed and opened again.</p>
+  <p>The switch at the top right picks how much of the panel you see. <strong>SYNTH</strong>, as this manual shows it, puts the sound down the left beside the sky. <strong>SKY</strong> folds everything away but the switch and the look so the sky fills the panel, which is lovely on a second screen while you play. The view stays as you left it when the editor is closed and opened again.</p>
   <figure class="dark"><img src="img/sky.jpg" alt=""><figcaption><b>Fig. 6.2</b> &nbsp;SKY: the flocks alone.</figcaption></figure>
 </section>
 
@@ -949,7 +953,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
 
   <h2>Ink</h2>
-  <p>Every creature leaves ink behind it in the sky, more the brighter it is. The ink fades with <strong>TAIL</strong> and blooms with <strong>SPREAD</strong>, and creatures flying through it stir it. It is only drawn: it doesn't change the sound.</p>
+  <p>Every creature leaves ink behind it in the sky, more the brighter it is. The ink fades with <strong>TAIL</strong> and spreads with <strong>SPREAD</strong>, and creatures flying through it stir it. How it looks depends on the sky's look and palette (<em>Chapter 6</em>). It is only drawn: it doesn't change the sound.</p>
 </section>
 
 <!-- ================= 12. TOUCH ================= -->

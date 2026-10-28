@@ -51,9 +51,10 @@ struct HeldNotes {
 // pairs. Ids have gaps and blocks grow, so each value carries its id; an id this build doesn't know
 // is skipped, and a param the state doesn't mention keeps its default. Version 2 adds the preset's
 // name after the values: a uint32 length, then that many bytes. Version 3 adds Release as a route
-// source; an older state's route sources are moved to match.
+// source; an older state's route sources are moved to match. Version 4 adds the bus names after the
+// preset's name, and version 5 the sky's look and each look's palette after them (three uint32s).
 constexpr char kStateMagic[4] = {'J', 'J', 'S', 'Y'};
-constexpr uint32_t kStateVersion = 4;
+constexpr uint32_t kStateVersion = 5;
 
 class JSynth final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -254,7 +255,10 @@ public:
          for (const std::string &name : part)
             if (!writeText(name, kBusNameMax))
                return false;
-      return true;
+      // Version 5: how the sky is drawn.
+      const uint32_t sky[3] = {static_cast<uint32_t>(skyLook), static_cast<uint32_t>(skyPalettes[0]),
+                               static_cast<uint32_t>(skyPalettes[1])};
+      return jclap::core::writeAll(stream, sky, sizeof(sky));
    }
 
    bool stateLoad(const clap_istream_t *stream) override {
@@ -295,10 +299,18 @@ public:
             for (std::string &bus : part)
                if (!readText(bus, kBusNameMax))
                   return false;
+      uint32_t sky[3] = {static_cast<uint32_t>(skyLook), static_cast<uint32_t>(skyPalettes[0]),
+                         static_cast<uint32_t>(skyPalettes[1])};
+      if (version >= 5 && !jclap::core::readAll(stream, sky, sizeof(sky)))
+         return false;
       for (size_t i = 0; i < paramCount(); ++i)
          values_[i].store(loaded[i]);
       presetName_ = name;
       busNames_ = buses;
+      // Out-of-range values are clamped by the panel when it draws.
+      skyLook = static_cast<int>(std::min<uint32_t>(sky[0], 1));
+      skyPalettes[0] = static_cast<int>(std::min<uint32_t>(sky[1], 255));
+      skyPalettes[1] = static_cast<int>(std::min<uint32_t>(sky[2], 255));
       if (auto *hostParams = hostExtension<clap_host_params_t>(CLAP_EXT_PARAMS))
          hostParams->rescan(host(), CLAP_PARAM_RESCAN_VALUES);
       return true;

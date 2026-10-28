@@ -164,10 +164,14 @@ These three knobs sit on the FM tab and start at zero.
 
 ![The SKY view](docs/readme/sky.jpg)
 
-**SKY**, top right, hides everything but the flocks. Part A's creatures are orange and B's blue and
-teal; grey rings are lures (**RINGS** shows or hides them), a pink ring is a creature that's been
-caught, and thin lines join each creature to the neighbour it hears most. A creature glows brighter
-the harder you press, and fades with its sound after you let go. The flock flies on the audio
+**SKY**, top right, hides everything but the flocks. The sky has two looks, picked over its top left:
+**SUMI** draws each creature as a brush stroke, its ink marbling in dark water, and **AURORA** each
+one as a star, its ink hanging curtains of light over a horizon. The menu beside them picks a palette
+(Ember, Borealis, Glacier, Sunset, Moonlight, Neon or Classic); each look keeps its own, and both are
+saved with the project. Lures show as ripples or small diamonds (**RINGS** shows or hides them), a
+pink ring is a creature that's been caught, and links join each creature to the neighbour it hears
+most. Hover a creature to read its Speed, Turn and Nearest; in Sumi the mouse stirs the ink. A
+creature glows brighter the harder you press, and fades with its sound after you let go. The flock flies on the audio
 thread, so what you see is exactly what the voices hear, and a render plays back the same every time
 from the same start.
 
