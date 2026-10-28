@@ -22,6 +22,7 @@ struct TunnelStatus {
    std::string impairment;       // what JTUNNEL_IMPAIR is doing to sent packets, if anything
    // Sending.
    int listeners = 0;
+   std::string nameTakenBy;      // a sender whose name another sender already has: where that one is
    // Receiving.
    int connection = 0;           // Connection: 0 none, 1 looking, 2 waiting, 3 receiving
    std::string source;           // the sender's address

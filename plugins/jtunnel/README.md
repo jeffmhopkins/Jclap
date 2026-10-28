@@ -35,6 +35,12 @@ it under **REACHABLE AT**, such as `192.168.1.20:47000`.
 
 - **Discovery:** senders announce `<name>._jtunnel._udp.local.` over mDNS, the multicast group
   Bonjour uses. Instances in the same process (two tracks in one DAW) also find each other directly.
+  Receivers look their tunnel up by name every 2 s, so a project reopened days later finds its
+  sender again wherever its address or port has moved.
+- **One sender per name:** a name belongs to whoever had it first. A sender whose name is already
+  on the network (a duplicated track, say) doesn't announce it, and its panel says **NAME IN USE**
+  and where the other one is; when the other goes, it takes the name over. Two that start at once
+  settle it by which claimed the name first.
 - **Transport:** plain UDP, unicast to each receiver, which renews its subscription twice a second.
   Senders listen on port 47000 (or the next free one up to 47015).
 - **Format:** Opus at 48 kHz in 5 ms frames by default (64 to 512 kbps), or uncompressed 24-bit PCM
@@ -121,7 +127,8 @@ lost or late frame; a sender's level going out.
 > [!TIP]
 > To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
 > `build/plugins/jtunnel/jtunnel-screenshot plugins/jtunnel/docs/panel.png`. Add `1440 960 send` for
-> the sender's view, and `idle` after that to see either before anything connects.
+> the sender's view, and `idle` after that to see either before anything connects (or `taken` for a
+> sender whose name is in use).
 
 ## Tests
 

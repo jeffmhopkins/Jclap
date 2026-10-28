@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <random>
 #include <string>
 #include <thread>
@@ -139,6 +140,38 @@ int main() {
    for (const std::string &n : rx->tunnelNames())
       listed = listed || n == name;
    JCLAP_CHECK(listed);
+
+   // A second sender with a name already in use doesn't take it: it waits, and gets it when the
+   // first goes. (In one process the two find each other directly, network or not.)
+   {
+      auto first = std::make_unique<jclap::core::TestHost>(clap_entry, kId);
+      jclap::core::TestHost second(clap_entry, kId);
+      EditorHost *a = first->object<EditorHost>();
+      EditorHost *b = second.object<EditorHost>();
+      const std::string shared = name + " dup";
+      a->setSendName(shared);
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      b->setSendName(shared);
+      std::string takenA, takenB;
+      for (int i = 0; i < 60 && (takenB.empty() || !takenA.empty()); ++i) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+         takenA = a->status().nameTakenBy;
+         takenB = b->status().nameTakenBy;
+      }
+      std::printf("same name: first \"%s\", second \"%s\"\n", takenA.c_str(), takenB.c_str());
+      JCLAP_CHECK(takenA.empty());
+      JCLAP_CHECK(takenB == "another track here");
+      int listed = 0;
+      for (const std::string &n : rx->tunnelNames())
+         listed += n == shared;
+      JCLAP_CHECK(listed <= 1);
+      first.reset();
+      for (int i = 0; i < 30 && !takenB.empty(); ++i) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+         takenB = b->status().nameTakenBy;
+      }
+      JCLAP_CHECK(takenB.empty());
+   }
 
    // State carries the params and both names.
    {

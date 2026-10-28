@@ -210,6 +210,8 @@ public:
       if (active_ && impair_.enabled())
          s.impairment = impair_.describe();
       s.listeners = link_.listeners.load();
+      if (mode() == kModeSend)
+         Discovery::instance().nameTaken(owner_, s.nameTakenBy);
       s.connection = link_.connection.load();
       const net::Address source{link_.source.load(), link_.sourcePort.load()};
       if (source.valid())
