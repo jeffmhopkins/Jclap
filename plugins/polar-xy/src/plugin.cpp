@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #include "editor.h"
 #include "motion.h"
@@ -44,10 +45,11 @@ struct Settings {
    }
 };
 
-// State layout: 4-byte magic, uint32 version, then one double per parameter. Version 1 had the
-// params before Smoothing; the ones it lacks load as their defaults.
+// State layout: 4-byte magic, uint32 version, one double per parameter, then (from version 3) uint32
+// name length and the preset name. Version 1 had the params before Smoothing; the ones it lacks load
+// as their defaults.
 constexpr char kStateMagic[4] = {'J', 'C', 'O', 'P'};
-constexpr uint32_t kStateVersion = 2;
+constexpr uint32_t kStateVersion = 3;
 
 struct StateHeader {
    char magic[4];
@@ -59,6 +61,7 @@ uint32_t savedParamCount(uint32_t version) {
    case 1:
       return kParamSmoothing;
    case 2:
+   case 3:
       return kParamCount;
    default:
       return 0;
@@ -128,6 +131,8 @@ public:
       x = static_cast<int>(v >> 8) & 0x7F;
       y = static_cast<int>(v) & 0x7F;
    }
+   std::string presetName() const override { return presetName_; }
+   void setPresetName(const std::string &name) override { presetName_ = name; }
    bool lastOutput(int &angle, int &radius) const override {
       const int32_t v = lastOut_.load();
       if (v < 0)
@@ -196,8 +201,11 @@ public:
       double values[kParamCount];
       for (uint32_t i = 0; i < kParamCount; ++i)
          values[i] = params_[i].load();
+      const uint32_t nameLength = static_cast<uint32_t>(std::min<size_t>(presetName_.size(), 255));
       return jclap::core::writeAll(stream, &header, sizeof(header)) &&
-             jclap::core::writeAll(stream, values, sizeof(values));
+             jclap::core::writeAll(stream, values, sizeof(values)) &&
+             jclap::core::writeAll(stream, &nameLength, sizeof(nameLength)) &&
+             jclap::core::writeAll(stream, presetName_.data(), nameLength);
    }
 
    bool stateLoad(const clap_istream_t *stream) override {
@@ -216,6 +224,14 @@ public:
       for (uint32_t i = 0; i < count; ++i)
          if (!std::isfinite(values[i]))
             return false;
+      // Older state has no name: it was whatever the settings were, not a preset.
+      uint32_t nameLength = 0;
+      char name[256];
+      if (header.version >= 3 && jclap::core::readAll(stream, &nameLength, sizeof(nameLength)) &&
+          nameLength < sizeof(name) && jclap::core::readAll(stream, name, nameLength))
+         presetName_.assign(name, nameLength);
+      else
+         presetName_.clear();
 
       for (uint32_t i = 0; i < kParamCount; ++i)
          params_[i].store(std::clamp(values[i], kParams[i].min, kParams[i].max));
@@ -482,6 +498,8 @@ private:
    int panelChannel_ = 0;
    std::atomic<uint32_t> lastIn_{64u << 8 | 64u};
    std::atomic<int32_t> lastOut_{-1};
+   // The preset last loaded or saved (main thread).
+   std::string presetName_ = "Init";
    jclap::core::EditQueue edits_;
    jclap::ui::HostMenu hostMenu_;
    // Last, so the panel closes before the state it reads goes away.

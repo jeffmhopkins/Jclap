@@ -8,6 +8,7 @@
 #include <jclap/ui/dropdown.h>
 #include <jclap/ui/knob.h>
 #include <jclap/ui/param_bindings.h>
+#include <jclap/ui/preset_bar.h>
 #include <jclap/ui/section.h>
 #include <jclap/ui/update_notice.h>
 #include <jclap/ui/xy_pad.h>
@@ -17,6 +18,7 @@
 
 #include "params.h"
 #include "polar.h"
+#include "presets.h"
 
 namespace polar_xy {
 namespace {
@@ -41,8 +43,12 @@ std::string text(clap_id id, double value) {
 class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
-      update_ = &add<ui::UpdateNotice>({480, 19, 220, 26});
-      update_->alignRight = true;
+      add<ui::UpdateNotice>({196, 19, 196, 26});
+      auto &presets = add<ui::PresetBar>({400, 18, 308, 28}, factoryPresets(), kPresetFormat, host_);
+      presets.setAccent(kOrange);
+      presets.defaults = defaultValues();
+      presets.currentName = [this] { return host_.presetName(); };
+      presets.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
       add<ui::Section>({12, 76, 232, 260}, "XY IN");
       add<ui::Section>({256, 76, 232, 260}, "POLAR OUT");
       add<ui::Section>({500, 76, 208, 124}, "INPUT CC");
@@ -85,7 +91,7 @@ public:
                      visage::Font::kLeft);
 
       // Shown when two inputs or two outputs share a CC, which the plugin won't convert.
-      warning_ = &add<ui::Label>({380, 44, 320, 16}, "", kOrange, visage::Font::kRight, 0.7f);
+      warning_ = &add<ui::Label>({380, 48, 328, 14}, "", kOrange, visage::Font::kRight, 0.7f);
 
       sync();
       startTimer(30);
@@ -107,11 +113,6 @@ public:
       canvas.text("Polar", ui::font(28 * s), visage::Font::kLeft, 58 * s, 12 * s, 90 * s, 40 * s);
       canvas.setColor(t.text);
       canvas.text("XY", ui::font(28 * s), visage::Font::kLeft, 128 * s, 12 * s, 60 * s, 40 * s);
-      canvas.setColor(t.dimText);
-      // A newer release's notice takes the tagline's place.
-      if (!update_->isVisible())
-         canvas.text("XY CCs to Orb angle and radius", ui::font(13 * s), visage::Font::kRight, 380 * s, 12 * s,
-                     320 * s, 40 * s);
    }
 
 private:
@@ -166,7 +167,6 @@ private:
 
    EditorHost &host_;
    ui::ParamBindings bindings_;
-   ui::UpdateNotice *update_ = nullptr;
    ui::XYPad *xy_ = nullptr;
    ui::XYPad *polar_ = nullptr;
    ui::Label *warning_ = nullptr;
