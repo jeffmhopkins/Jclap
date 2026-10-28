@@ -1009,7 +1009,10 @@ private:
       readouts_->set(0, "LATENCY", live ? value : "-", live && st.fillMs < st.targetMs * 0.5f ? kAmber : 0);
       std::snprintf(value, sizeof(value), "%.0f ms", st.targetMs);
       readouts_->set(1, "TARGET", live ? value : "-");
-      std::snprintf(value, sizeof(value), "%+.0f ppm", st.driftPpm);
+      if (std::isnan(st.driftPpm))
+         std::snprintf(value, sizeof(value), "...");
+      else
+         std::snprintf(value, sizeof(value), "%+.0f ppm", st.driftPpm);
       readouts_->set(2, "CLOCK", live ? value : "-");
       std::snprintf(value, sizeof(value), "%u / %u", st.lost, st.concealed);
       readouts_->set(3, "LOST / LATE", st.connection == 3 ? value : "-", st.lost + st.concealed ? kAmber : 0);

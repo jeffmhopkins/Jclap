@@ -275,7 +275,7 @@ struct Network : PacketSink {
          int count = 0;
          if (parseAudio(a.bytes.data(), a.bytes.size(), h, frames, count))
             for (int i = 0; i < count; ++i)
-               ring.store(h, frames[i]);
+               ring.store(h, frames[i], static_cast<int64_t>(a.time * 1e6));
          inFlight.pop();
       }
    }
@@ -283,6 +283,9 @@ struct Network : PacketSink {
 
 struct SimResult {
    double integral = 0.0;
+   double driftAt20 = 0.0;     // the measurement 20 s in
+   bool shownAt10 = true;      // whether the panel's figure was out 10 s in
+   double targetAtEnd = 0.0;   // after the sender went quiet
    uint32_t lost = 0, concealed = 0, concealedLate = 0;
    double fillMs = 0.0, targetMs = 0.0;
    double outputRms = 0.0;
@@ -345,7 +348,8 @@ SimResult simulate(Codec codec, double ppm, double seconds, double senderRate = 
       }
       net.deliver(ring, t);
       while (static_cast<double>(playedFrames + block) <= t * 48000.0) {
-         const int n = receiver.process(ring, outL, outR, block, midi, 64);
+         const int n = receiver.process(ring, outL, outR, block, midi, 64,
+                                        static_cast<int64_t>(t * 1e6));
          for (int i = 0; i < n; ++i)
             result.midi.push_back({(playedFrames + midi[i].time) / 48000.0, midi[i]});
          if (t > 20.0 && t < captureAt) {
@@ -358,6 +362,10 @@ SimResult simulate(Codec codec, double ppm, double seconds, double senderRate = 
          }
          if (t > 40.0 && t < 40.01)
             result.concealedLate = receiver.stats().concealed.load();
+         if (t > 10.0 && t < 10.01)
+            result.shownAt10 = !std::isnan(receiver.stats().driftPpm.load());
+         if (t > 20.0 && t < 20.01)
+            result.driftAt20 = receiver.drift();
          playedFrames += block;
       }
       if (t < captureAt && t + dt >= captureAt) {
@@ -369,6 +377,7 @@ SimResult simulate(Codec codec, double ppm, double seconds, double senderRate = 
       }
    }
    result.outputRms = measured ? std::sqrt(sumSquares / measured) : 0.0;
+   result.targetAtEnd = receiver.stats().targetMs.load();
    result.stateAtEnd = receiver.state();
    int held = 0;
    for (const auto &event : result.midi) {
@@ -390,8 +399,11 @@ void testSimulatedLink() {
    const double tone = 0.5 / std::sqrt(2.0);
    for (Codec codec : {Codec::Opus, Codec::Pcm24}) {
       const SimResult r = simulate(codec, 150.0, 90.0);
-      // The receiver found the sender's clock offset...
-      JCLAP_CHECK(std::abs(r.integral * 1e6 - 150.0) < 60.0);
+      // The receiver found the sender's clock offset, close already 20 s in (the panel holds the
+      // figure back until then)...
+      JCLAP_CHECK(std::abs(r.integral * 1e6 - 150.0) < 25.0);
+      JCLAP_CHECK(std::abs(r.driftAt20 * 1e6 - 150.0) < 50.0);
+      JCLAP_CHECK(!r.shownAt10);
       // ...kept the buffer near its target rather than drifting off...
       JCLAP_CHECK(r.fillMs < r.targetMs + 40.0);
       // 60 ms stalls need about 75 ms of lead to ride out.
@@ -416,23 +428,23 @@ void testSimulatedLink() {
       // The note left hanging when the sender went quiet was released, and the receiver waits.
       JCLAP_CHECK_EQ(r.notesHeldAtEnd, 0);
       JCLAP_CHECK(r.stateAtEnd == ReceiveState::Buffering);
+      // A sender going away isn't a network stall: Auto Buffer didn't grow for it.
+      JCLAP_CHECK(r.targetAtEnd <= r.targetMs + 1.0);
    }
    // Jitter but no stalls: the buffer stays small.
    {
       const SimResult r = simulate(Codec::Opus, 50.0, 60.0, 48000.0, false);
       JCLAP_CHECK(r.targetMs <= 30.0);
-      JCLAP_CHECK(std::abs(r.integral * 1e6 - 50.0) < 30.0);
+      JCLAP_CHECK(std::abs(r.integral * 1e6 - 50.0) < 20.0);
    }
    // A sender at 44.1 kHz into a 48 kHz receiver, with Opus (resampled at the sender) and PCM
    // (resampled at the receiver), and a slow clock.
    for (Codec codec : {Codec::Opus, Codec::Pcm24}) {
       const SimResult r = simulate(codec, -80.0, 60.0, 44100.0);
-      JCLAP_CHECK(std::abs(r.integral * 1e6 + 80.0) < 60.0);
+      JCLAP_CHECK(std::abs(r.integral * 1e6 + 80.0) < 25.0);
       JCLAP_CHECK(std::abs(r.outputRms - tone) < 0.05);
    }
 }
-
-} // namespace
 
 // The test impairment: parsing, and what it does to a 5 ms packet stream over a minute.
 void testImpairment() {
@@ -471,6 +483,8 @@ void testImpairment() {
    JCLAP_CHECK(stalled > 20);               // about 6 stalls in a minute, a dozen packets each
    JCLAP_CHECK(delaySum / sent > 5.0 && delaySum / sent < 15.0);
 }
+
+} // namespace
 
 int main() {
    testProtocol();

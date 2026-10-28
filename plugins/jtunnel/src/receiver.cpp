@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 namespace jtunnel {
 namespace {
@@ -25,6 +26,8 @@ constexpr double kMaxCorrection = 0.005;
 // The clock offset is measured over about this long, so it can follow a clock that wanders as
 // the machine warms up.
 constexpr double kDriftMemorySeconds = 600.0;
+// Before this much measuring the figure is mostly start-up noise (tens of ppm on a busy network).
+constexpr double kDriftShowSeconds = 15.0;
 // Late frames concealed in a row before the stream counts as stopped.
 constexpr double kStallSeconds = 0.3;
 constexpr double kAutoStepMs = 5.0;
@@ -59,9 +62,9 @@ void Receiver::begin(const StreamInfo &info) {
    resampler_.reset();
    decoder_.reset();
    correction_ = integral_ = drift_ = 0.0;
-   windowMax_ = -1e18;
+   windowMax_ = windowMaxArrival_ = -1e18;
    segmentOpen_ = false;
-   driftSum_ = driftTime_ = 0.0;
+   driftTT_ = driftTX_ = driftTime_ = measuredSeconds_ = 0.0;
    historyCount_ = historyNext_ = 0;
    windowElapsed_ = 0;
    dropoutInWindow_ = false;
@@ -71,7 +74,8 @@ void Receiver::begin(const StreamInfo &info) {
    state_ = ReceiveState::Buffering;
 }
 
-int Receiver::process(ReceiveRing &ring, float *left, float *right, uint32_t frames, OutMidi *midi, int capacity) {
+int Receiver::process(ReceiveRing &ring, float *left, float *right, uint32_t frames, OutMidi *midi, int capacity,
+                      int64_t nowUs) {
    out_ = midi;
    outCount_ = 0;
    outCapacity_ = capacity;
@@ -140,6 +144,33 @@ int Receiver::process(ReceiveRing &ring, float *left, float *right, uint32_t fra
    // The margin: everything received but not yet played.
    const double fill = (seqDiff(info.newest, nextSeq_) + 1.0) * frameSamples_ + resampler_.buffered();
    windowMax_ = std::max(windowMax_, fill);
+   // What has been played since the newest frame came in, added back.
+   double sinceArrival = -1.0;
+   if (nowUs >= 0) {
+      const double now = nowUs * 1e-6;
+      if (clockLocked_) {
+         const double predicted = blockTime_ + lastFrames_ * samplePeriod_;
+         const double error = now - predicted;
+         if (std::abs(error) > 0.05) {
+            clockLocked_ = false; // the host stopped for a while: start again
+         }
+         else {
+            const double omega = 2.0 * 3.14159265358979 * 0.5 * lastFrames_ / hostRate_;
+            blockTime_ = predicted + std::sqrt(2.0) * omega * error;
+            samplePeriod_ += omega * omega * error / lastFrames_;
+         }
+      }
+      if (!clockLocked_) {
+         blockTime_ = now;
+         samplePeriod_ = 1.0 / hostRate_;
+         clockLocked_ = true;
+      }
+      lastFrames_ = frames;
+      const double arrival = info.newestArrivalUs * 1e-6;
+      if (info.newestArrivalUs >= 0 && blockTime_ >= arrival)
+         sinceArrival = (blockTime_ - arrival) * streamRate_;
+   }
+   windowMaxArrival_ = std::max(windowMaxArrival_, sinceArrival >= 0.0 ? fill + sinceArrival : fill);
    windowElapsed_ += frames;
    if (windowElapsed_ >= kWindowSeconds * hostRate_)
       endWindow(info.newest);
@@ -148,6 +179,8 @@ int Receiver::process(ReceiveRing &ring, float *left, float *right, uint32_t fra
       // The sender stopped (or the network did): let go of its notes and wait for it to come back,
       // then buffer up again from there.
       releaseNotes(frames - 1);
+      dropoutInWindow_ = false;
+      longestStall_ = 0;
       state_ = ReceiveState::Buffering;
       startSeq_ = info.newest + 1;
       lateRun_ = 0;
@@ -194,8 +227,13 @@ void Receiver::endWindow(uint32_t newest) {
    const double window = windowElapsed_ / hostRate_;
    windowElapsed_ = 0;
    const double windowMax = windowMax_;
-   windowMax_ = -1e18;
+   const double windowMaxArrival = windowMaxArrival_;
+   windowMax_ = windowMaxArrival_ = -1e18;
 
+   // A stall still going on is judged when it ends: if it turns out to be the sender stopping, it
+   // says nothing about the network.
+   if (dropoutInWindow_ && lateRun_ > 0)
+      return;
    if (dropoutInWindow_) {
       // A dropout says the margin is too small, not that the clock moved: grow the margin, and
       // start the history again so the dropout's empty buffer doesn't also slow playback.
@@ -217,6 +255,7 @@ void Receiver::endWindow(uint32_t newest) {
    }
 
    history_[historyNext_] = windowMax;
+   historyArrival_[historyNext_] = windowMaxArrival;
    historyNext_ = (historyNext_ + 1) % kHistory;
    historyCount_ = std::min(historyCount_ + 1, kHistory);
    if (historyCount_ < 2)
@@ -225,6 +264,10 @@ void Receiver::endWindow(uint32_t newest) {
    for (int i = 0; i < historyCount_; ++i)
       lead += history_[i];
    lead /= historyCount_;
+   double arrivalLead = 0.0;
+   for (int i = 0; i < historyCount_; ++i)
+      arrivalLead += historyArrival_[i];
+   arrivalLead /= historyCount_;
 
    const double target = targetSamples();
    const double error = (lead - target) / streamRate_;
@@ -238,33 +281,46 @@ void Receiver::endWindow(uint32_t newest) {
       closeSegment();
       return;
    }
-   // The lead changes by (drift - correction) per second, so over any stretch without a dropout,
-   // drift = average correction + lead change / time. Kept over minutes, that sees through jitter
-   // and Auto Buffer moving the target.
+   // The lead changes by (drift - correction) per second, so over any stretch without a dropout
+   // the sum of correction x time plus the lead change, x(t), grows at the drift. Its slope by
+   // least squares, pooled over the stretches of the last minutes, sees through jitter, Auto Buffer
+   // moving the target, and the lead finding its level at the start of a stretch (which taking
+   // just the two ends would carry for minutes).
    if (!segmentOpen_) {
       segmentOpen_ = true;
-      segmentLead_ = lead;
+      segmentLead_ = arrivalLead;
       segmentCorrection_ = segmentTime_ = 0.0;
+      segN_ = segT_ = segX_ = segTT_ = segTX_ = 0.0;
    }
    else {
       segmentCorrection_ += correction_ * window;
       segmentTime_ += window;
    }
-   lastLead_ = lead;
+   const double x = segmentCorrection_ + (arrivalLead - segmentLead_) / streamRate_;
+   segN_ += 1.0;
+   segT_ += segmentTime_;
+   segX_ += x;
+   segTT_ += segmentTime_ * segmentTime_;
+   segTX_ += segmentTime_ * x;
    const double forget = 1.0 - window / kDriftMemorySeconds;
-   driftSum_ *= forget;
+   driftTT_ *= forget;
+   driftTX_ *= forget;
    driftTime_ *= forget;
-   const double time = driftTime_ + segmentTime_;
-   if (time > 5.0)
-      drift_ = (driftSum_ + segmentCorrection_ + (lead - segmentLead_) / streamRate_) / time;
+   const double tt = driftTT_ + (segTT_ - segT_ * segT_ / segN_);
+   const double tx = driftTX_ + (segTX_ - segT_ * segX_ / segN_);
+   measuredSeconds_ = driftTime_ + segmentTime_;
+   if (measuredSeconds_ > 5.0 && tt > 0.0)
+      drift_ = tx / tt;
    if (std::abs(error) < kIntegrateWithin)
       integral_ = std::clamp(integral_ + kI * error * window, -kMaxIntegral, kMaxIntegral);
    correction_ = std::clamp(kP * error + integral_, -kMaxCorrection, kMaxCorrection);
 }
 
 void Receiver::closeSegment() {
-   if (segmentOpen_) {
-      driftSum_ += segmentCorrection_ + (lastLead_ - segmentLead_) / streamRate_;
+   // Its centred sums: what it says about the slope, weighted by how much it can say.
+   if (segmentOpen_ && segN_ > 1.0) {
+      driftTT_ += segTT_ - segT_ * segT_ / segN_;
+      driftTX_ += segTX_ - segT_ * segX_ / segN_;
       driftTime_ += segmentTime_;
    }
    segmentOpen_ = false;
@@ -307,7 +363,10 @@ void Receiver::publish(double fill) {
    stats_.state.store(static_cast<int>(state_), std::memory_order_relaxed);
    stats_.fillMs.store(static_cast<float>(fillSmoothed_ * 1000.0 / rate), std::memory_order_relaxed);
    stats_.targetMs.store(static_cast<float>(bufferMs_ + autoExtraMs_), std::memory_order_relaxed);
-   stats_.driftPpm.store(static_cast<float>(drift_ * 1e6), std::memory_order_relaxed);
+   // Shown once it has had long enough to mean something; NaN until then.
+   stats_.driftPpm.store(measuredSeconds_ >= kDriftShowSeconds ? static_cast<float>(drift_ * 1e6)
+                                                               : std::numeric_limits<float>::quiet_NaN(),
+                         std::memory_order_relaxed);
    stats_.lost.store(lost_, std::memory_order_relaxed);
    stats_.concealed.store(concealed_, std::memory_order_relaxed);
    stats_.sampleRate.store(state_ == ReceiveState::Idle ? 0 : streamRate_, std::memory_order_relaxed);

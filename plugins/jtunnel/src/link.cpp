@@ -153,8 +153,10 @@ void Link::handle(const uint8_t *data, int size, const net::Address &from, Clock
       int count = 0;
       if (!parseAudio(data, static_cast<size_t>(size), header, frames, count))
          return;
+      const int64_t arrivalUs =
+         std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
       for (int i = 0; i < count; ++i)
-         state_->ring.store(header, frames[i]);
+         state_->ring.store(header, frames[i], arrivalUs);
       lastAudio_ = now;
       return;
    }

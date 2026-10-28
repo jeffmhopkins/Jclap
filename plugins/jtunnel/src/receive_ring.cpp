@@ -10,7 +10,7 @@ void ReceiveRing::clear() {
    generation_.fetch_add(1, std::memory_order_release);
 }
 
-void ReceiveRing::store(const AudioHeader &header, const Frame &frame) {
+void ReceiveRing::store(const AudioHeader &header, const Frame &frame, int64_t arrivalUs) {
    const bool active = active_.load(std::memory_order_relaxed);
    const uint32_t stream = streamId_.load(std::memory_order_relaxed);
    if (!active || stream != header.streamId) {
@@ -22,6 +22,7 @@ void ReceiveRing::store(const AudioHeader &header, const Frame &frame) {
       codec_.store(static_cast<uint32_t>(header.codec), std::memory_order_relaxed);
       frameSamples_.store(header.frameSamples, std::memory_order_relaxed);
       newest_.store(frame.seq, std::memory_order_relaxed);
+      newestArrival_.store(-1, std::memory_order_relaxed);
       active_.store(true, std::memory_order_relaxed);
       generation_.fetch_add(1, std::memory_order_release);
    }
@@ -52,8 +53,11 @@ void ReceiveRing::store(const AudioHeader &header, const Frame &frame) {
    slot.frame = frame;
    slot.state.store(Ready, std::memory_order_release);
 
-   if (seqDiff(frame.seq, newest) > 0)
+   if (seqDiff(frame.seq, newest) > 0) {
+      newestArrival_.store(arrivalUs >= 0 ? (arrivalUs << 16) | (frame.seq & 0xFFFF) : -1,
+                           std::memory_order_relaxed);
       newest_.store(frame.seq, std::memory_order_release);
+   }
 }
 
 StreamInfo ReceiveRing::info() const {
@@ -68,6 +72,9 @@ StreamInfo ReceiveRing::info() const {
       info.codec = static_cast<Codec>(codec_.load(std::memory_order_relaxed));
       info.frameSamples = static_cast<uint16_t>(frameSamples_.load(std::memory_order_relaxed));
       info.newest = newest_.load(std::memory_order_acquire);
+      // Written just before `newest`, so it is that frame's or a later one's; the tag tells which.
+      const int64_t arrival = newestArrival_.load(std::memory_order_relaxed);
+      info.newestArrivalUs = arrival >= 0 && (arrival & 0xFFFF) == (info.newest & 0xFFFF) ? arrival >> 16 : -1;
       std::atomic_thread_fence(std::memory_order_acquire);
       if (generation_.load(std::memory_order_relaxed) == before)
          return info;

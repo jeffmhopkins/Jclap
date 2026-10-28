@@ -423,7 +423,10 @@ public:
             std::copy(inR, inR + frames, thruR_.begin());
          }
          receiver_.setBuffer(params_[kParamBuffer].load(), params_[kParamAutoBuffer].load() >= 0.5);
-         const int received = receiver_.process(link_.ring, outL, outR, frames, midiOut_, kMaxMidi);
+         const int received = receiver_.process(
+            link_.ring, outL, outR, frames, midiOut_, kMaxMidi,
+            std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch())
+               .count());
          const double levelDb = params_[kParamLevel].load();
          const float gain = levelDb <= kParams[kParamLevel].min ? 0.0f : static_cast<float>(std::pow(10.0, levelDb / 20.0));
          for (uint32_t i = 0; i < frames; ++i) {

@@ -26,7 +26,7 @@ struct TunnelStatus {
    int connection = 0;           // Connection: 0 none, 1 looking, 2 waiting, 3 receiving
    std::string source;           // the sender's address
    int state = 0;                // ReceiveState: 0 idle, 1 buffering, 2 playing
-   float fillMs = 0, targetMs = 0, driftPpm = 0;
+   float fillMs = 0, targetMs = 0, driftPpm = 0; // driftPpm is NaN while still being measured
    uint32_t lost = 0, concealed = 0, sampleRate = 0;
    int codec = 0;
    // Peak levels since the last call, linear.
