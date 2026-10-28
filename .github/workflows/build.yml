@@ -54,9 +54,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       # MSVC compiles a project's files in parallel with /MP; the build step's --parallel only runs
-      # projects side by side.
-      CFLAGS: ${{ matrix.os == 'windows-latest' && '/MP' || '' }}
-      CXXFLAGS: ${{ matrix.os == 'windows-latest' && '/MP' || '' }}
+      # projects side by side. Spelled -MP, since Git Bash (which runs Configure) turns /MP into a path.
+      CFLAGS: ${{ matrix.os == 'windows-latest' && '-MP' || '' }}
+      CXXFLAGS: ${{ matrix.os == 'windows-latest' && '-MP' || '' }}
     steps:
       - uses: actions/checkout@v4
       # Visage (the jclap::ui GUI library) needs X11 and OpenGL headers on Linux. The software Vulkan
