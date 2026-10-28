@@ -510,6 +510,31 @@ int main() {
       // The second cell heard nothing and keeps its glyph.
       JCLAP_CHECK(e.cells()[1] == before[1]);
    }
+   {
+      // Partway through a window, the frame shows the notes heard so far and the glyph they carve,
+      // before the cell itself changes.
+      EngineParams p;
+      p.mode = Mode::Listen;
+      p.lock = true;
+      p.root = 5;
+      p.scale = 3;
+      Engine e;
+      e.setParams(p);
+      const auto before = e.cells();
+      run(e, 0.0, 1.0, {{0, 65, 90, true}, {6000, 65, 0, false}, {12000, 68, 110, true}});
+      SlabFrame f;
+      e.fillFrame(f);
+      JCLAP_CHECK(f.listening);
+      JCLAP_CHECK_EQ(f.heard, 2);
+      JCLAP_CHECK_EQ(f.heardNotes[0].pitch, 65);
+      JCLAP_CHECK(f.heardNotes[0].end > 0.0f);
+      JCLAP_CHECK_EQ(f.heardNotes[1].velocity, 110);
+      JCLAP_CHECK(f.heardNotes[1].end < 0.0f); // still held
+      JCLAP_CHECK_EQ(f.carving.count, 2);
+      JCLAP_CHECK_EQ(f.carving.strokes[0].from, nodeAt(1, 5));
+      JCLAP_CHECK_EQ(f.carving.strokes[1].from, nodeAt(2, 4));
+      JCLAP_CHECK(e.cells()[0] == before[0]);
+   }
 
    // ---- key follow ----
    {

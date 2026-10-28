@@ -84,12 +84,26 @@ always measured on the grid), so switching scripts changes the language, not the
   is nearest the note before it, pulled toward where the path is heading, so the line changes octave
   where its own leap is shortest and gets there by the glyph's last note.
 - **MODE** LISTEN plays nothing: notes you play are carved, a glyph per sixteen steps, into the cell
-  being read, written in the current script. Switch back to SPEAK to hear them read back.
+  being read, written in the current script. Switch back to SPEAK to hear them read back. While it
+  listens the panel becomes the stage (below).
 - **KEY FOLLOW** makes a held note the root while you hold it. Otherwise played notes pass through.
 - **SWING**, **VELOCITY**, **GATE** and **HUMANIZE** shape the output. Humanizing is the same each
   time round, so a locked loop stays a loop.
 
 With no transport (a host that doesn't send one), Monolith keeps its own time at 120 BPM.
+
+## The stage
+
+![The stage](docs/stage.png)
+
+In LISTEN the controls give way to a display made for capturing on a stream (an OBS window capture,
+say). The glyph being carved stands large in the middle, a stroke cut as each note is played, over
+the faint glyph it replaces. Beside it stands the slab as it is on the panel, read from the top right
+down each column, and under it a small roll of this glyph's notes so far, with the last note heard.
+The light in the corner beats with the song.
+
+Right-click the stage to pick a UI size that suits the capture. **SPEAK**, faint in the bottom right
+corner until the mouse finds it, switches back to the panel; so does switching MODE from the host.
 
 ## Presets
 
