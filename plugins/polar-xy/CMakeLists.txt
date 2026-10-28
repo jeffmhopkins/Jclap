@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.10.7)
+jclap_plugin_version(0.10.8)
 
 jclap_add_plugin(polar-xy
    OUTPUT_NAME "PolarXY"
