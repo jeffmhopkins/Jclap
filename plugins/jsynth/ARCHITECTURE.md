@@ -497,7 +497,8 @@ rises in about 20 ms, lets go over about 500 ms; it scales Bite) and the creatur
 right (for X Pan).
 
 **Ink** is the panel's alone: it draws ink from the creatures' positions, fading with **Tail** and
-blooming with **Spread**. The engine keeps no ink.
+blooming with **Spread**. The engine keeps no ink. How the sky is drawn (its look, Sumi or Aurora, and
+each look's palette) is panel state too, kept with the plugin's state (version 5) but never a param.
 
 ## Between creatures
 

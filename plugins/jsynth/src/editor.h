@@ -56,6 +56,10 @@ public:
    int view = 0;
    // Whether the sky draws the held notes' lure rings.
    bool ringsShown = true;
+   // How the sky is drawn: its look (0 Sumi, 1 Aurora), and the palette each look was left in.
+   // Unlike the above, these are kept with the plugin's state.
+   int skyLook = 0;
+   int skyPalettes[2] = {0, 1};
 };
 
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);

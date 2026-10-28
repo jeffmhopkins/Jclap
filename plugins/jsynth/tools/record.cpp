@@ -1,15 +1,18 @@
 // Plays a phrase through the engine offline and records it: the audio, and with a video path, the
 // panel as it plays, as an MP4 with the audio (it needs ffmpeg on the PATH).
-//    jsynth-record out.mp4|out.wav [preset] [phrase]
+//    jsynth-record out.mp4|out.wav [preset] [phrase [view [look [palette]]]]
 // The preset is a factory preset's name (Init when left out). The phrase is "cm7-swell" (the default):
 // a Cm7 held for 15 seconds while the pressure on every note swells up and back down; "four-bar", a
 // chord a bar; "drone", a low chord built up over half a minute; or "landscape", the drone with its
-// low notes struck hard and pressure leaning all the way in, for patches on both parts.
+// low notes struck hard and pressure leaning all the way in, for patches on both parts. A video shows
+// the view (0 the synth, 1 only the sky) with the sky in a look (0 Sumi, 1 Aurora) and a palette (by
+// number; the look's own when left out).
 
 #include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -259,7 +262,7 @@ bool writeWav(const char *path, const std::vector<float> &stereo) {
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.mp4|out.wav [preset]\n", argv[0]);
+      std::fprintf(stderr, "usage: %s out.mp4|out.wav [preset] [phrase [view [look [palette]]]]\n", argv[0]);
       return 1;
    }
    const std::string out = argv[1];
@@ -273,6 +276,10 @@ int main(int argc, char **argv) {
       return 1;
    }
    RecordHost host(*preset);
+   if (argc > 5)
+      host.skyLook = std::atoi(argv[5]);
+   if (argc > 6)
+      host.skyPalettes[host.skyLook & 1] = std::atoi(argv[6]);
    const std::string phraseName = argc > 3 ? argv[3] : "cm7-swell";
    if (phraseName != "cm7-swell" && phraseName != "four-bar" && phraseName != "drone" && phraseName != "landscape") {
       std::fprintf(stderr, "no phrase called %s (cm7-swell, four-bar, drone or landscape)\n", phraseName.c_str());
@@ -302,6 +309,7 @@ int main(int argc, char **argv) {
       const int frames = static_cast<int>(phrase.length * kFps);
       int64_t at = 0;
       ScreenshotView view;
+      view.view = argc > 4 ? std::atoi(argv[4]) : 0;
       const bool ok = renderFrames(
           host, view, width, height, frames, kFps,
           [&](int frame) {

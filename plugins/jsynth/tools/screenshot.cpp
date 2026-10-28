@@ -1,9 +1,10 @@
 // Renders the panel to a PNG without a host:
-//    jsynth-screenshot out.png [part [routes [map-source [width height [view [voice-tab [env-tab [osc-tab [preset]]]]]]]]]
+//    jsynth-screenshot out.png [part [routes [map-source [width height [view [voice-tab [env-tab [osc-tab [preset [look [palette]]]]]]]]]]]
 // Part 0 is A, 1 is B. Routes 1 opens the route list. Map-source, a route source's number, turns MAP
 // on with that source armed. View 0 is the synth, 1 only the sky. Voice-tab is the one under the
 // sky: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH. Env-tab is 0 ENVELOPES, 1 LFOS, 2 BUSES; osc-tab is 0
-// OSCILLATORS, 1 FM. Preset, a factory preset's name, loads it in place of the demo patch.
+// OSCILLATORS, 1 FM. Preset, a factory preset's name, loads it in place of the demo patch ("" for the
+// demo). Look is the sky's: 0 Sumi, 1 Aurora; palette, by number, the look's own when left out.
 
 #include <cstdio>
 #include <cstdlib>
@@ -157,16 +158,23 @@ int main(int argc, char **argv) {
    view.oscTab = arg(10);
    const int width = argc > 6 ? arg(5) : 1648;
    const int height = argc > 6 ? arg(6) : 940;
-   if (argc > 11) {
+   const auto render = [&](DemoHost &host) {
+      if (argc > 12)
+         host.skyLook = arg(12);
+      if (argc > 13)
+         host.skyPalettes[host.skyLook & 1] = arg(13);
+      return renderScreenshot(host, view, 6.0, width, height, argv[1]) ? 0 : 1;
+   };
+   if (argc > 11 && argv[11][0] != '\0') {
       for (const Preset &p : factoryPresets()) {
          if (p.name == argv[11]) {
             DemoHost host(p);
-            return renderScreenshot(host, view, 6.0, width, height, argv[1]) ? 0 : 1;
+            return render(host);
          }
       }
       std::fprintf(stderr, "no factory preset called %s\n", argv[11]);
       return 1;
    }
    DemoHost host;
-   return renderScreenshot(host, view, 6.0, width, height, argv[1]) ? 0 : 1;
+   return render(host);
 }

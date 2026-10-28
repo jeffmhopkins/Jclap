@@ -38,6 +38,7 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <functional>
 #include <random>
 #include <string>
@@ -79,10 +80,39 @@ constexpr unsigned kText = 0xffe6e8eb;
 constexpr unsigned kDim = 0xff9aa3b5;
 constexpr unsigned kMapColor = 0xffff6fd2;
 constexpr unsigned kCaughtColor = 0xffff4f8b;
-// Part A is warm, part B cool; each creature takes one of its species' four inks.
+// Part A is warm, part B cool. The logo's creatures take the Classic palette's inks.
 constexpr unsigned kPartColors[kPartCount] = {0xfff28c28, 0xff6fb8ff};
 constexpr unsigned kInks[kPartCount][4] = {{0xffffa040, 0xffff6a4a, 0xffffd060, 0xffff5fb0},
                                            {0xff5fd8ff, 0xff6f8cff, 0xffa98bff, 0xff4fe0c0}};
+// The sky's two looks: Sumi, ink in dark water, and Aurora, curtains of light over a horizon.
+enum SkyLook { kSumi, kAurora };
+// A palette either look can be drawn in: each species' four inks, fresh, and the colour its ink
+// ages into. Each look remembers its own; Sumi starts in Ember, Aurora in Borealis.
+constexpr int kPaletteCount = 7;
+struct SkyPalette {
+   const char *name;
+   unsigned ink[kPartCount][4];
+   unsigned old[kPartCount];
+};
+const SkyPalette &skyPalette(int index) {
+   static const SkyPalette palettes[kPaletteCount] = {
+       {"EMBER", {{0xffff5a3c, 0xffffb44a, 0xffff7a5a, 0xffffd27a}, {0xff38e0b0, 0xff4fd8c8, 0xff6fe8d0, 0xff2ab8c8}},
+        {0xff9a3a5a, 0xff2f5f9a}},
+       {"BOREALIS", {{0xffff4fa8, 0xffff6fc8, 0xffff5f8a, 0xffe060ff}, {0xff5cff9a, 0xff7affc0, 0xff4fffd0, 0xff9cff6a}},
+        {0xffffa040, 0xff3fb8ff}},
+       {"GLACIER", {{0xffcfefff, 0xff9fd8ff, 0xffe8f6ff, 0xff7fc8ff}, {0xffb59bff, 0xffd0a8ff, 0xff8f7bff, 0xffe0b8ff}},
+        {0xff3f6fa8, 0xff5a3a9a}},
+       {"SUNSET", {{0xffffb347, 0xffff8a3c, 0xffffd36b, 0xffff6a4a}, {0xffff5f9e, 0xffd65fff, 0xffff7ab8, 0xffa86bff}},
+        {0xffc03a3a, 0xff4a2a8a}},
+       {"MOONLIGHT", {{0xfff4ead8, 0xffe8dcc4, 0xfffff4e0, 0xffd8ccb8}, {0xffc8d8ec, 0xffb8cce4, 0xffdce8f8, 0xffa8bcd8}},
+        {0xff6a5a4a, 0xff3a4a64}},
+       {"NEON", {{0xffc8ff3c, 0xffa0ff5a, 0xffe8ff6a, 0xff7fff3a}, {0xffff3cc8, 0xffff5ae0, 0xffff3c9a, 0xffd23cff}},
+        {0xff2a8a5a, 0xff6a1a8a}},
+       {"CLASSIC", {{0xffffa040, 0xffff6a4a, 0xffffd060, 0xffff5fb0}, {0xff5fd8ff, 0xff6f8cff, 0xffa98bff, 0xff4fe0c0}},
+        {0xffc0306a, 0xff3c3cc0}},
+   };
+   return palettes[std::clamp(index, 0, kPaletteCount - 1)];
+}
 constexpr unsigned kOscColors[kOscCount] = {0xff6fe0ff, 0xffffb05a, 0xffa98bff};
 
 visage::Color glow(unsigned argb, float alpha, float hdr) { return visage::Color(argb, hdr).withAlpha(alpha); }
@@ -866,6 +896,9 @@ public:
    float skyLeft = kSkyX, skyTop = kSkyY - kHeaderHeight, skyHeight = kSkyH;
    // Whether each held note's lure ring is drawn.
    bool showRings = true;
+   // How the sky is drawn: a SkyLook, and the palette it is drawn in.
+   int look = kSumi;
+   int palette = 0;
    // A line of help at the top of the sky (MAP mode's), in its colour.
    std::string hint;
    unsigned hintColor = kText;
@@ -882,6 +915,7 @@ public:
       sync();
       shed(dt);
       moveInk(dt);
+      cursorAge_ += dt;
       redraw();
    }
 
@@ -921,69 +955,7 @@ public:
       const float ox = skyLeft * s, oy = skyTop * s;
       const auto X = [&](float x) { return ox + x * ppu; };
       const auto Y = [&](float y) { return oy + y * ppu; };
-
-      // Ink, oldest first: soft discs that bloom wider and thinner as they age.
-      for (const Puff &p : puffs_) {
-         const float t = p.age / p.life;
-         const float a = p.alpha * std::min(1.0f, p.age * 10.0f) * std::pow(1.0f - t, 1.6f) *
-                         (p.part == shownPart ? 0.22f : 0.12f) * (1.0f + 0.4f * p.heat) /
-                         std::sqrt(std::max(1.0f, p.crowd / 6.0f));
-         if (a < 0.003f)
-            continue;
-         const float r = p.size * ppu;
-         // Hot ink, pressed against another creature's, goes whiter and blooms.
-         visage::Color tint = visage::Color(p.color).interpolateWith(0xffffffff, std::min(0.35f, 0.2f * p.heat));
-         tint.setHdr(1.0f + 0.25f * (1.0f - t) + 0.5f * p.heat);
-         c.setColor(visage::Brush::radial(tint.withAlpha(a), tint.withAlpha(0.0f), visage::Point(X(p.x), Y(p.y)), r));
-         c.circle(X(p.x) - r, Y(p.y) - r, 2 * r);
-      }
-
-      // Links: a creature's nearest of its kind, brighter the more Neighbour FM it hears. A hunter
-      // that has caught its prey bites it, in pink.
-      const auto bySlot = [&](int slot) -> const Creature * {
-         for (const Creature &o : creatures_)
-            if (o.slot == slot)
-               return &o;
-         return nullptr;
-      };
-      for (const Creature &a : creatures_) {
-         if (const Creature *b = a.neighbour >= 0 ? bySlot(a.neighbour) : nullptr) {
-            const float e = std::min(a.energy, b->energy);
-            const float k = e * (0.1f + 0.7f * species_[a.part].neighbourFm);
-            if (k > 0.02f) {
-               c.setColor(glow(kText, k * (a.part == shownPart ? 0.7f : 0.35f), 1.2f));
-               c.segment(X(a.x), Y(a.y), X(b->x), Y(b->y), 1.0f * s, true);
-            }
-         }
-         if (const Creature *h = a.hunter >= 0 && a.sources.caught > 0.3f ? bySlot(a.hunter) : nullptr) {
-            c.setColor(glow(kCaughtColor, 0.9f * std::min(a.energy, h->energy), 1.8f));
-            c.segment(X(a.x), Y(a.y), X(h->x), Y(h->y), 2.2f * s, true);
-         }
-      }
-
-      // Lures: where each held note pulls its creature. Faint, so they read as guides, not as
-      // things in the sky; RINGS turns them off.
-      for (const Creature &b : creatures_) {
-         if (!showRings || !b.held || b.energy < 0.05f)
-            continue;
-         const unsigned col = kPartColors[b.part];
-         c.setColor(glow(col, 0.06f * b.energy, 1.0f));
-         c.segment(X(b.lureX), Y(b.lureY), X(b.x), Y(b.y), 0.8f * s, true);
-         c.setColor(glow(col, 0.28f * b.energy, 1.0f));
-         const float r = (9.0f + 5.0f * b.press) * s;
-         c.ring(X(b.lureX) - r, Y(b.lureY) - r, 2 * r, 0.9f * s);
-      }
-
-      // The other species first, so the shown one flies in front.
-      for (int pass = 0; pass < 2; ++pass)
-         for (const Creature &b : creatures_)
-            if ((b.part == shownPart) == (pass == 1))
-               drawCreature(c, b, s, X, Y);
-
-      if (!hint.empty()) {
-         c.setColor(glow(hintColor, 0.95f, 1.0f));
-         c.text(hint, ui::font(12 * s), visage::Font::kCenter, skyLeft * s, (skyTop - 2) * s, skyHeight * kSkyAspect * s, 18 * s);
-      }
+      drawScene(c, s, ppu, X, Y);
    }
 
    void mouseDown(const visage::MouseEvent &e) override {
@@ -1011,18 +983,29 @@ public:
          host_.noteOff(playing_);
       playing_ = -1;
    }
+   void mouseMove(const visage::MouseEvent &e) override {
+      const float s = width() / designWidth_;
+      const float x = (e.position.x / s - skyLeft) / skyHeight, y = (e.position.y / s - skyTop) / skyHeight;
+      if (std::hypot(x - cursorX_, y - cursorY_) > 0.01f)
+         cursorAge_ = 0.0f;
+      cursorX_ = x, cursorY_ = y;
+      cursorIn_ = x >= 0.0f && x <= kSkyAspect && y >= 0.0f && y <= 1.0f;
+   }
+   void mouseExit(const visage::MouseEvent &) override { cursorIn_ = false; }
 
    // Right-click on the stage, with where (in the view).
    std::function<void(visage::Point)> onBackgroundMenu;
 
 private:
    static constexpr int kMaxPuffs = 2600;
-   static constexpr int kPathPoints = 22;
+   static constexpr int kMaxPathPoints = 80;
 
    // A creature as drawn: the flock's, plus its colour, fresh ink stroke and shedding clock.
    struct Creature {
       uint32_t id = 0;
       int part = 0, slot = 0, neighbour = -1, hunter = -1;
+      // Which of its palette's four inks it is drawn in.
+      int ink = 0;
       bool held = false;
       unsigned color = 0;
       float x = 0, y = 0, vx = 0, vy = 0;
@@ -1034,8 +1017,8 @@ private:
    };
    struct Puff {
       float x, y, vx, vy, age, life, size, grow, alpha;
-      unsigned color;
-      int part;
+      // Its species, and which of the palette's four inks (its creature's).
+      int part, ink;
       // The id of the creature that shed it: a creature stirs only others' ink, and only other
       // creatures' ink pushes back.
       uint32_t owner;
@@ -1046,6 +1029,11 @@ private:
    struct Star {
       float x, y, b, phase;
    };
+   // Sumi's strokes are short, Aurora's lines long.
+   int pathPoints() const { return look == kSumi ? 40 : kMaxPathPoints; }
+
+   unsigned inkColor(int part, int ink) const { return skyPalette(palette).ink[part][ink & 3]; }
+   unsigned oldColor(int part) const { return skyPalette(palette).old[part]; }
 
    bool skyAt(visage::Point p, float &nx, float &timbre) const {
       const float s = width() / designWidth_;
@@ -1084,9 +1072,10 @@ private:
          if (b.id != s.id) {
             b = Creature{};
             b.id = s.id;
-            b.color = kInks[s.part][(s.slot * 5 + static_cast<int>(s.id)) & 3];
-            b.path.reserve(kPathPoints);
+            b.ink = (s.slot * 5 + static_cast<int>(s.id)) & 3;
+            b.path.reserve(kMaxPathPoints);
          }
+         b.color = inkColor(s.part, b.ink);
          const bool jumped = std::fabs(s.x - b.x) > 0.3f || std::fabs(s.y - b.y) > 0.3f;
          b.part = s.part, b.slot = s.slot, b.neighbour = s.neighbour, b.hunter = s.hunter;
          b.held = s.held;
@@ -1096,7 +1085,7 @@ private:
          b.sources = s.sources;
          if (jumped) // wrapped round the sky
             b.path.clear();
-         if (static_cast<int>(b.path.size()) == kPathPoints)
+         while (static_cast<int>(b.path.size()) >= pathPoints())
             b.path.erase(b.path.begin());
          b.path.push_back({b.x, b.y});
          next.push_back(std::move(b));
@@ -1174,8 +1163,10 @@ private:
             continue;
          const Species &sp = species_[b.part];
          b.emit -= dt;
+         // Fewer, bigger puffs for Aurora: each hangs a curtain.
+         const float rate = look == kSumi ? 40.0f : 30.0f;
          while (b.emit <= 0.0f && static_cast<int>(puffs_.size()) < kMaxPuffs) {
-            b.emit += 1.0f / 50.0f;
+            b.emit += 1.0f / rate;
             Puff p;
             p.x = b.x - b.vx * 0.03f + 0.004f * u(rng_);
             p.y = b.y - b.vy * 0.03f + 0.004f * u(rng_);
@@ -1183,10 +1174,10 @@ private:
             p.vy = -0.12f * b.vy + 0.015f * u(rng_);
             p.age = 0.0f;
             p.life = (0.6f + 4.4f * sp.tailLength) * (0.75f + 0.25f * u(rng_));
-            p.size = 0.007f + 0.006f * b.press;
-            p.grow = 0.008f + 0.07f * sp.tailSpread;
+            p.size = (0.007f + 0.006f * b.press) * (look == kSumi ? 1.2f : 1.6f);
+            p.grow = (0.008f + 0.07f * sp.tailSpread) * (look == kSumi ? 0.8f : 1.3f);
             p.alpha = b.energy;
-            p.color = b.color;
+            p.ink = b.ink;
             p.part = b.part;
             p.owner = b.id;
             puffs_.push_back(p);
@@ -1216,7 +1207,18 @@ private:
          Puff &p = puffs_[i];
          p.age += dt;
          p.size += p.grow * dt;
-         float ax = std::sin(p.y * 7.0f + time_ * 0.21f) * 0.012f, ay = std::cos(p.x * 6.0f - time_ * 0.17f) * 0.012f;
+         // Sumi marbles: a stronger, finer curl.
+         const float curl = look == kSumi ? 0.035f : 0.012f, fq = look == kSumi ? 1.8f : 1.0f;
+         float ax = std::sin(p.y * 7.0f * fq + time_ * 0.21f) * curl, ay = std::cos(p.x * 6.0f * fq - time_ * 0.17f) * curl;
+         // The mouse stirs the ink like a finger in water: a swirl around it, pushing out.
+         if (cursorIn_) {
+            const float dx = p.x - cursorX_, dy = p.y - cursorY_, d2 = dx * dx + dy * dy;
+            if (d2 < 0.02f) {
+               const float k = (1.0f - d2 / 0.02f) * 0.25f;
+               ax += k * (-dy * 3.0f + dx);
+               ay += k * (dx * 3.0f + dy);
+            }
+         }
          float contact = 0.0f, crowd = 0.0f;
          const int cx = cellX(p.x), cy = cellY(p.y);
          const int gx0 = std::max(0, cx - 1), gx1 = std::min(kGridX - 1, cx + 1);
@@ -1268,69 +1270,287 @@ private:
                    puffs_.end());
    }
 
+   // The creature under the mouse, if any.
+   const Creature *hovered() const {
+      if (!cursorIn_)
+         return nullptr;
+      const Creature *best = nullptr;
+      float bestD = 0.07f;
+      for (const Creature &b : creatures_) {
+         const float d = std::hypot(b.x - cursorX_, b.y - cursorY_);
+         if (b.energy > 0.1f && d < bestD)
+            bestD = d, best = &b;
+      }
+      return best;
+   }
+
    template <typename FX, typename FY>
-   void drawCreature(visage::Canvas &c, const Creature &b, float s, FX X, FY Y) {
+   void drawScene(visage::Canvas &c, float s, float ppu, FX X, FY Y) {
+      const Creature *hover = hovered();
+      const bool sumi = look == kSumi;
+
+      // Ink, oldest first. Sumi lays pigment in water; Aurora adds light, so overlaps brighten
+      // rather than muddy, each puff thinner the more there are around it so a dense knot stays a
+      // curtain instead of burning white.
+      if (!sumi)
+         c.setBlendMode(visage::BlendMode::Add);
+      for (const Puff &p : puffs_) {
+         const float t = p.age / p.life;
+         const float shown = p.part == shownPart ? 1.0f : 0.55f;
+         float a = p.alpha * std::min(1.0f, p.age * 6.0f) * std::pow(1.0f - t, 1.4f) * shown /
+                   std::sqrt(std::max(1.0f, p.crowd / (sumi ? 5.0f : 3.0f)));
+         if (a < 0.003f)
+            continue;
+         visage::Color tint = visage::Color(inkColor(p.part, p.ink)).interpolateWith(visage::Color(oldColor(p.part)), std::pow(t, 0.6f));
+         const float r = p.size * ppu, x = X(p.x), y = Y(p.y);
+         if (sumi) {
+            // A thin wash, and a filament along the way the ink drifts, bent along the curl so it
+            // reads as marbling. Ink pressed against another creature's goes paler.
+            tint = tint.interpolateWith(visage::Color(0xffffffff), std::min(0.45f, 0.25f * p.heat));
+            a *= 0.6f;
+            tint.setHdr(1.0f + 0.3f * p.heat);
+            c.setColor(visage::Brush::radial(tint.withAlpha(a * 0.5f), tint.withAlpha(0.0f), visage::Point(x, y), r));
+            c.circle(x - r, y - r, 2 * r);
+            const float v = std::hypot(p.vx, p.vy) + 1e-5f;
+            const float dx = p.vx / v, dy = p.vy / v, len = r * 0.35f + std::min(v * ppu * 0.3f, r * 0.6f);
+            const float bend = 0.5f * len * std::sin(p.x * 23.0f + p.y * 17.0f + time_ * 0.3f);
+            c.setColor(tint.withAlpha(std::min(1.0f, a * 1.1f)));
+            c.quadratic(x - dx * len, y - dy * len, x - dy * bend, y + dx * bend, x + dx * len, y + dy * len,
+                        std::max(0.6f * s, r * 0.08f));
+         }
+         else {
+            // A curtain: a tall soft ellipse brightest at its foot, a fine ray up through it and a
+            // brighter hem. Hot ink only warms a little toward white.
+            tint = tint.interpolateWith(visage::Color(0xffffffff), std::min(0.2f, 0.1f * p.heat));
+            a = std::min(0.12f, a * 0.12f * (1.0f + 0.3f * p.heat));
+            tint.setHdr(1.0f + 0.35f * (1.0f - t) + 0.25f * p.heat);
+            const float h = r * (2.5f + 2.0f * (1.0f - t)), w = r * 0.55f;
+            c.setColor(visage::Brush::radial(tint.withAlpha(a), tint.withAlpha(0.0f), visage::Point(x, y - h * 0.45f), w,
+                                             h * 0.6f, visage::Point(x, y - 0.1f * h)));
+            c.fill(x - w, y - h * 1.05f, 2 * w, h * 1.2f);
+            c.setColor(visage::Brush::linear(tint.withAlpha(std::min(1.0f, a * 2.5f)), tint.withAlpha(0.0f), visage::Point(x, y),
+                                             visage::Point(x, y - h)));
+            c.segment(x, y, x, y - h, 1.0f * s, true);
+            c.setColor(visage::Brush::radial(tint.withAlpha(a * 0.8f), tint.withAlpha(0.0f), visage::Point(x, y), r * 0.5f));
+            c.circle(x - 0.5f * r, y - 0.5f * r, 1.0f * r);
+         }
+      }
+      c.setBlendMode(visage::BlendMode::Alpha);
+
+      // Links: a creature's nearest of its kind, brighter the more Neighbour FM it hears. Sumi dots
+      // them; Aurora bows them up into arcs with a pulse running along. A hunter that has caught its
+      // prey bites it, in pink.
+      const auto bySlot = [&](int slot) -> const Creature * {
+         for (const Creature &o : creatures_)
+            if (o.slot == slot)
+               return &o;
+         return nullptr;
+      };
+      for (const Creature &a : creatures_) {
+         if (const Creature *b = a.neighbour >= 0 ? bySlot(a.neighbour) : nullptr) {
+            const float e = std::min(a.energy, b->energy);
+            const float k = e * (0.1f + 0.7f * species_[a.part].neighbourFm) * (a.part == shownPart ? 1.0f : 0.5f);
+            if (k > 0.02f) {
+               const float ax = X(a.x), ay = Y(a.y), bx = X(b->x), by = Y(b->y);
+               if (sumi) {
+                  const int n = static_cast<int>(std::hypot(bx - ax, by - ay) / (7.0f * s));
+                  for (int i = 1; i < n; ++i) {
+                     const float f = static_cast<float>(i) / n;
+                     c.setColor(glow(0xffe8e0d0, k * 0.5f * (0.4f + 0.6f * std::sin(kPi * f)), 1.0f));
+                     c.circle(ax + (bx - ax) * f - 0.8f * s, ay + (by - ay) * f - 0.8f * s, 1.6f * s);
+                  }
+               }
+               else {
+                  const float mx = (ax + bx) / 2, my = (ay + by) / 2 - 0.3f * std::hypot(bx - ax, by - ay);
+                  c.setColor(visage::Color(a.color).interpolateWith(visage::Color(0xffffffff), 0.5f).withAlpha(k * 0.3f));
+                  c.quadratic(ax, ay, mx, my, bx, by, 0.9f * s);
+                  const float ph = std::fmod(time_ * 0.7f + a.slot * 0.37f, 1.0f), u = 1.0f - ph;
+                  const float px = u * u * ax + 2 * u * ph * mx + ph * ph * bx, py = u * u * ay + 2 * u * ph * my + ph * ph * by;
+                  c.setColor(glow(a.color, k, 2.0f));
+                  c.circle(px - 2.0f * s, py - 2.0f * s, 4.0f * s);
+               }
+            }
+         }
+         if (const Creature *h = a.hunter >= 0 && a.sources.caught > 0.3f ? bySlot(a.hunter) : nullptr) {
+            c.setColor(glow(kCaughtColor, 0.9f * std::min(a.energy, h->energy), 1.8f));
+            c.segment(X(a.x), Y(a.y), X(h->x), Y(h->y), 2.0f * s, true);
+         }
+      }
+
+      // Lures: where each held note pulls its creature. Faint, so they read as guides; RINGS turns
+      // them off. Sumi's ripple like a drop, wider the harder it is pressed; Aurora's are a small
+      // diamond with a plumb line to the horizon.
+      for (const Creature &b : creatures_) {
+         if (!showRings || !b.held || b.energy < 0.05f)
+            continue;
+         const float lx = X(b.lureX), ly = Y(b.lureY);
+         if (sumi) {
+            for (int k = 0; k < 2; ++k) {
+               const float f = std::fmod(time_ * 0.45f + 0.5f * k + b.slot * 0.13f, 1.0f);
+               const float r = (4.0f + (14.0f + 10.0f * b.press) * f) * s;
+               c.setColor(glow(0xffe8e0d0, 0.3f * b.energy * (1.0f - f), 1.0f));
+               c.ring(lx - r, ly - r, 2 * r, 0.8f * s);
+            }
+         }
+         else {
+            const visage::Color col(b.color);
+            c.setColor(col.withAlpha(0.05f * b.energy));
+            c.segment(lx, ly, lx, Y(1.0f), 1.0f * s, false);
+            const float d = (6.0f + 3.0f * b.press) * s;
+            c.setColor(col.withAlpha(0.4f * b.energy));
+            c.diamond(lx - d / 2, ly - d / 2, d, 1.0f * s);
+         }
+      }
+
+      // The other species first, so the shown one flies in front.
+      for (int pass = 0; pass < 2; ++pass)
+         for (const Creature &b : creatures_)
+            if ((b.part == shownPart) == (pass == 1))
+               drawCreature(c, b, s, X, Y, &b == hover);
+
+      // The mouse: ripples in Sumi's water (it stirs the ink there, and in Aurora), a soft light in
+      // Aurora's sky. Over a creature, a readout of what it is doing.
+      if (cursorIn_) {
+         const float cx = X(cursorX_), cy = Y(cursorY_);
+         if (sumi) {
+            for (int k = 0; k < 3; ++k) {
+               const float f = std::fmod(cursorAge_ * 0.7f + k / 3.0f, 1.0f);
+               const float r = (6.0f + 40.0f * f) * s;
+               c.setColor(glow(0xffe8e0d0, 0.6f * (1.0f - f) * (1.0f - f), 1.0f));
+               c.ring(cx - r, cy - r, 2 * r, 1.0f * s);
+            }
+         }
+         else {
+            const float r = 34.0f * s;
+            c.setColor(visage::Brush::radial(glow(0xffffffff, 0.07f, 1.0f), glow(0xffffffff, 0.0f, 1.0f), visage::Point(cx, cy), r));
+            c.circle(cx - r, cy - r, 2 * r);
+         }
+      }
+      if (hover)
+         drawReadout(c, *hover, s, X(hover->x), Y(hover->y));
+
+      if (!hint.empty()) {
+         c.setColor(glow(hintColor, 0.95f, 1.0f));
+         c.text(hint, ui::font(12 * s), visage::Font::kCenter, skyLeft * s, (skyTop - 2) * s, skyHeight * kSkyAspect * s, 18 * s);
+      }
+   }
+
+   void drawReadout(visage::Canvas &c, const Creature &b, float s, float x, float y) {
+      char text[96];
+      std::snprintf(text, sizeof(text), "%c%d   SPEED %d%%   TURN %+d%%   NEAR %d%%", b.part == 0 ? 'A' : 'B',
+                    b.slot % kVoiceSlots + 1, static_cast<int>(100 * b.sources.speed),
+                    static_cast<int>(100 * b.sources.turn), static_cast<int>(100 * b.sources.nearest));
+      const float w = 230 * s, h = 24 * s, bx = x + 22 * s, by = y - 40 * s;
+      if (look == kSumi) {
+         c.setColor(glow(0xffe8e0d0, 0.85f, 1.0f));
+         c.text(text, ui::font(11 * s), visage::Font::kLeft, bx, by, w, h);
+         c.setColor(glow(0xffe8e0d0, 0.4f, 1.0f));
+         c.segment(x + 6 * s, y - 6 * s, bx - 2 * s, by + h / 2, 0.8f * s, true);
+         return;
+      }
+      c.setColor(visage::Color(0xd00a0d16));
+      c.roundedRectangle(bx, by, w, h, h / 2);
+      c.setColor(glow(b.color, 0.8f, 1.0f));
+      c.roundedRectangleBorder(bx, by, w, h, h / 2, 1.0f * s);
+      c.setColor(glow(kText, 0.95f, 1.0f));
+      c.text(text, ui::font(11 * s), visage::Font::kCenter, bx, by, w, h);
+      const float r = 16 * s;
+      c.setColor(glow(b.color, 0.7f, 1.2f));
+      c.ring(x - r, y - r, 2 * r, 1.0f * s);
+   }
+
+   template <typename FX, typename FY>
+   void drawCreature(visage::Canvas &c, const Creature &b, float s, FX X, FY Y, bool hover) {
       if (b.energy < 0.01f)
          return;
-      const float shown = b.part == shownPart ? 1.0f : 0.6f;
-      // Fresh ink: a bright stroke that thins out behind it, before it blooms into the cloud.
+      const float shown = (b.part == shownPart ? 1.0f : 0.6f) * (hover ? 1.3f : 1.0f);
       const size_t n = b.path.size();
-      for (size_t i = 1; i < n; ++i) {
-         const float k = static_cast<float>(i) / static_cast<float>(n);
-         c.setColor(glow(b.color, k * k * 0.8f * b.energy * shown, 1.0f + 0.4f * k));
-         c.segment(X(b.path[i - 1].x), Y(b.path[i - 1].y), X(b.path[i].x), Y(b.path[i].y), (0.6f + 2.6f * k) * s, true);
-      }
       const float x = X(b.x), y = Y(b.y);
-      const float r = (9.0f + 5.0f * b.press) * s * (0.6f + 0.4f * b.energy);
-      visage::Color core = visage::Color(b.color).interpolateWith(0xffffffff, 0.55f);
-      core.setHdr(1.2f + 0.8f * b.energy * shown);
-      c.setColor(visage::Brush::radial(core.withAlpha(b.energy * shown), glow(b.color, 0.0f, 1.0f), visage::Point(x, y), r));
-      c.circle(x - r, y - r, 2 * r);
-      // Wings: a chevron along its heading that beats with the wingbeat.
-      const float v = std::hypot(b.vx, b.vy) + 1e-5f, hx = b.vx / v, hy = b.vy / v;
-      const float flap = 0.45f + 0.35f * b.wing;
-      const float len = (7.0f + 3.0f * b.press) * s;
-      c.setColor(glow(0xffffffff, 0.85f * b.energy * shown, 1.3f));
-      for (int side = -1; side <= 1; side += 2) {
-         const float wx = -hx * std::cos(flap) - side * hy * std::sin(flap) * 1.4f;
-         const float wy = -hy * std::cos(flap) + side * hx * std::sin(flap) * 1.4f;
-         c.segment(x + hx * 2 * s, y + hy * 2 * s, x + wx * len, y + wy * len, 1.4f * s, true);
+      const visage::Color col(b.color);
+      if (look == kSumi) {
+         // A brush stroke: thick at the head, tapering to a hair, its width breathing with the wings.
+         for (size_t i = 1; i < n; ++i) {
+            const float k = static_cast<float>(i) / static_cast<float>(n);
+            const float w = (0.4f + (4.0f + 2.0f * b.press) * std::pow(k, 1.5f) * (0.85f + 0.15f * b.wing)) * s;
+            c.setColor(glow(b.color, std::min(1.0f, (0.15f + 0.85f * k) * b.energy * shown), 1.0f + 0.25f * std::pow(k, 4.0f)));
+            c.segment(X(b.path[i - 1].x), Y(b.path[i - 1].y), X(b.path[i].x), Y(b.path[i].y), w, true);
+         }
+         const float halo = 10.0f * s;
+         c.setColor(visage::Brush::radial(col.withAlpha(0.25f * b.energy * shown), col.withAlpha(0.0f), visage::Point(x, y), halo));
+         c.circle(x - halo, y - halo, 2 * halo);
+         const float r = (2.6f + 1.0f * b.press) * s;
+         c.setColor(glow(col.interpolateWith(visage::Color(0xfffff4e0), 0.6f).toARGB(), std::min(1.0f, b.energy * shown), 1.6f));
+         c.circle(x - r, y - r, 2 * r);
+      }
+      else {
+         // A star: a thin bright line behind it (unrounded, so the joins don't bead), a halo, and
+         // four points along its heading that twinkle with the wings.
+         for (size_t i = 1; i < n; ++i) {
+            const float k = static_cast<float>(i) / static_cast<float>(n);
+            c.setColor(glow(b.color, (0.05f + 0.75f * k * k) * b.energy * shown, 1.0f + 0.7f * k * k * k));
+            c.segment(X(b.path[i - 1].x), Y(b.path[i - 1].y), X(b.path[i].x), Y(b.path[i].y), (0.6f + 1.0f * k) * s, false);
+         }
+         const float halo = (14.0f + 6.0f * b.press) * s;
+         c.setColor(visage::Brush::radial(col.withAlpha(0.22f * b.energy * shown), col.withAlpha(0.0f), visage::Point(x, y), halo));
+         c.circle(x - halo, y - halo, 2 * halo);
+         const float v = std::hypot(b.vx, b.vy) + 1e-5f, hx = b.vx / v, hy = b.vy / v;
+         const float len = (10.0f + 6.0f * b.press) * s * (0.75f + 0.25f * b.wing);
+         c.setColor(glow(col.interpolateWith(visage::Color(0xffffffff), 0.6f).toARGB(), std::min(1.0f, b.energy * shown), 1.7f));
+         const float ca = 0.7071f * (hx - hy), sa = 0.7071f * (hx + hy);
+         c.segment(x - ca * len, y - sa * len, x + ca * len, y + sa * len, 1.0f * s, true);
+         c.segment(x + sa * len * 0.7f, y - ca * len * 0.7f, x - sa * len * 0.7f, y + ca * len * 0.7f, 1.0f * s, true);
+         const float r = 2.6f * s;
+         c.setColor(glow(0xffffffff, std::min(1.0f, b.energy * shown), 2.2f));
+         c.circle(x - r, y - r, 2 * r);
       }
       if (b.sources.caught > 0.05f) {
-         const float rr = r * (1.6f + 0.6f * (1.0f - b.sources.caught));
+         const float rr = (14.0f + 8.0f * (1.0f - b.sources.caught)) * s;
          c.setColor(glow(kCaughtColor, b.sources.caught * 0.6f, 1.4f));
-         c.ring(x - rr, y - rr, 2 * rr, 1.5f * s);
+         c.ring(x - rr, y - rr, 2 * rr, 1.2f * s);
       }
    }
 
    void drawBackdrop(visage::Canvas &c, float s) {
       const float w = width(), h = height();
-      c.setColor(0xff04050a);
-      c.fill(0, 0, w, h);
       const auto nebula = [&](float x, float y, float r, unsigned color, float a) {
          c.setColor(visage::Brush::radial(glow(color, a, 1.0f), glow(color, 0.0f, 1.0f), visage::Point(x * s, y * s), r * s));
          c.circle((x - r) * s, (y - r) * s, 2 * r * s);
       };
-      nebula(380, 240, 420, 0xff5a2a3a, 0.22f);
-      nebula(860, 330, 440, 0xff12355e, 0.26f);
-      nebula(620, 60, 300, 0xff3a2a6e, 0.14f);
-      nebula(200, 620, 360, 0xff1b4550, 0.14f);
-      for (const Star &st : stars_) {
-         const float twinkle = 0.8f + 0.2f * std::sin(time_ * 1.1f + st.phase);
-         const float r = (0.5f + st.b * st.b * 1.5f) * s;
-         c.setColor(glow(0xffffffff, (0.12f + 0.55f * st.b) * twinkle, st.b > 0.95f ? 1.4f : 1.0f));
-         c.circle(st.x * w - r, st.y * h - r, 2 * r);
-      }
-      // The sky's corners, faintly, so the walls have somewhere to be.
-      const float x0 = skyLeft * s, y0 = skyTop * s, x1 = x0 + skyHeight * kSkyAspect * s, y1 = y0 + skyHeight * s,
-                  t = 12 * s;
-      c.setColor(visage::Color(0x30ffffff));
-      for (float cx : {x0, x1})
-         for (float cy : {y0, y1}) {
-            const float dx = cx == x0 ? t : -t, dy = cy == y0 ? t : -t;
-            c.segment(cx, cy, cx + dx, cy, 1.0f * s, true);
-            c.segment(cx, cy, cx, cy + dy, 1.0f * s, true);
+      const float sx = skyLeft, sy = skyTop, sw = skyHeight * kSkyAspect, sh = skyHeight;
+      if (look == kSumi) {
+         // Deep water, lit from above, with motes drifting slowly up, darker toward the edges.
+         c.setColor(visage::Brush::vertical(visage::Color(0xff0e1a28), visage::Color(0xff04070c)));
+         c.fill(0, 0, w, h);
+         nebula(sx + 0.35f * sw, sy - 0.2f * sh, 0.9f * sh, 0xff2a4a66, 0.45f);
+         nebula(sx + 0.85f * sw, sy + 0.1f * sh, 0.5f * sh, 0xff24404a, 0.2f);
+         for (const Star &st : stars_) {
+            const float y = std::fmod(st.y - time_ * 0.004f * (0.3f + st.b) + 10.0f, 1.0f);
+            const float r = (0.5f + 0.7f * st.b) * s;
+            c.setColor(glow(0xffd8e4f0, 0.04f + 0.14f * st.b, 1.0f));
+            c.circle(st.x * w - r, y * h - r, 2 * r);
          }
+         c.setColor(visage::Brush::radial(visage::Color(0x00000000), visage::Color(0xb0000000),
+                                          visage::Point((sx + sw / 2) * s, (sy + sh / 2) * s), 0.75f * sw * s, 0.75f * sh * s));
+         c.fill(0, 0, w, h);
+      }
+      else {
+         // Night over a glowing horizon (the sky's floor), stars fading out toward it.
+         c.setColor(visage::Brush::vertical(visage::Color(0xff020309), visage::Color(0xff071820)));
+         c.fill(0, 0, w, h);
+         c.setColor(visage::Brush::radial(glow(0xff1f7a62, 0.4f, 1.0f), glow(0xff1f7a62, 0.0f, 1.0f),
+                                          visage::Point((sx + sw / 2) * s, (sy + sh * 1.08f) * s), 0.8f * sw * s, 0.35f * sh * s));
+         c.fill(0, 0, w, h);
+         nebula(sx + 0.2f * sw, sy + 0.2f * sh, 0.5f * sh, 0xff3a2060, 0.12f);
+         for (const Star &st : stars_) {
+            const float twinkle = 0.8f + 0.2f * std::sin(time_ * 1.7f + st.phase);
+            const float fade = std::clamp((0.95f - st.y) * 1.6f, 0.0f, 1.0f);
+            const float r = (0.5f + st.b * st.b * 1.5f) * s;
+            c.setColor(glow(0xffffffff, (0.12f + 0.6f * st.b) * twinkle * fade, st.b > 0.95f ? 1.4f : 1.0f));
+            c.circle(st.x * w - r, st.y * h - r, 2 * r);
+         }
+         c.setColor(glow(0xff7fe0c0, 0.18f, 1.0f));
+         c.fill(sx * s, (sy + sh) * s, sw * s, 1.0f * s);
+      }
    }
 
    EditorHost &host_;
@@ -1351,6 +1571,9 @@ private:
    Star stars_[150];
    float time_ = 0.0f;
    int playing_ = -1;
+   // Where the mouse is over the sky (sky units), and how long since it last moved.
+   bool cursorIn_ = false;
+   float cursorX_ = 0.0f, cursorY_ = 0.0f, cursorAge_ = 0.0f;
 };
 
 // ---- the panel ----
@@ -2331,6 +2554,7 @@ public:
       showRoutes(host_.routesOpen);
       showPart(host_.part);
       setView(host_.view);
+      setLook(host_.skyLook);
       refreshBusNames();
       last_ = std::chrono::steady_clock::now();
       startTimer(16);
@@ -2371,6 +2595,9 @@ public:
       if (host_.busNames() != busNames_)
          refreshBusNames();
       host_.notes(notes_);
+      // Loading the plugin's state can change the look under an open panel.
+      if (host_.skyLook != view_->look || host_.skyPalettes[host_.skyLook] != view_->palette)
+         setLook(host_.skyLook);
       view_->shownPart = host_.part;
       view_->hint = !mapping_ ? std::string()
                     : armed_ != kSourceOff
@@ -2492,6 +2719,17 @@ public:
       refresh();
    }
 
+   // Draws the sky in `look`, in the palette that look was left in.
+   void setLook(int look) {
+      host_.skyLook = std::clamp(look, 0, 1);
+      int &palette = host_.skyPalettes[host_.skyLook];
+      palette = std::clamp(palette, 0, kPaletteCount - 1);
+      lookSwitch_->setSelected(host_.skyLook);
+      paletteMenu_->setSelected(palette);
+      view_->look = host_.skyLook;
+      view_->palette = palette;
+   }
+
    void setView(int view) {
       host_.view = std::clamp(view, 0, 1);
       viewSwitch_->setSelected(host_.view);
@@ -2509,6 +2747,10 @@ public:
          view_->skyTop = (kDesignHeight - h) / 2;
          view_->skyHeight = h;
       }
+      // The look and palette sit over the sky's top left, or with only the sky, in the window's.
+      const float lx = host_.view == kSynthView ? kSkyX + 10 : kCleanMargin, ly = host_.view == kSynthView ? kSkyY + 10 : 13;
+      move(*lookSwitch_, {lx, ly, 136, 26});
+      move(*paletteMenu_, {lx + 144, ly, 120, 26});
       if (host_.view == kSkyOnly && mapping_)
          setMapping(false, kSourceOff);
       refresh();
@@ -2970,6 +3212,22 @@ private:
       views.onChange = [this](int v) { setView(v); };
       viewSwitch_ = &views;
       tips_.add(views, "SYNTH shows the sound's panels beside the sky. SKY hides everything but the flocks.");
+      // The sky's look and palette (setView places them).
+      auto &looks = glassy(add<ui::SegmentedSwitch>({0, 0, 136, 26}, std::vector<std::string>{"SUMI", "AURORA"}), kDim);
+      looks.onChange = [this](int l) { setLook(l); };
+      lookSwitch_ = &looks;
+      tips_.add(looks, "How the sky is drawn. SUMI: each creature a brush stroke, its ink marbling in dark water. "
+                       "AURORA: each creature a star, its ink hanging curtains of light. Only drawn: it never changes the sound.");
+      std::vector<std::string> palettes;
+      for (int i = 0; i < kPaletteCount; ++i)
+         palettes.push_back(skyPalette(i).name);
+      auto &palette = glassy(add<ui::Dropdown>({0, 0, 120, 26}, palettes), kDim);
+      palette.onChange = [this](int p) {
+         host_.skyPalettes[host_.skyLook] = p;
+         setLook(host_.skyLook);
+      };
+      paletteMenu_ = &palette;
+      tips_.add(palette, "The colours the creatures and their ink are drawn in. Each look keeps its own.");
    }
 
    // One part's panels: the oscillators, the filters and the envelopes down the left, each drawn as
@@ -3495,6 +3753,8 @@ private:
    std::vector<std::pair<float, float>> shapeHeads_;
    std::vector<visage::Frame *> drawings_; // redrawn each frame
    ui::SegmentedSwitch *viewSwitch_ = nullptr;
+   ui::SegmentedSwitch *lookSwitch_ = nullptr;
+   ui::Dropdown *paletteMenu_ = nullptr;
    int oscTab_ = 0;   // the oscillator panel's tab: 0 OSCILLATORS, 1 FM
    int envTab_ = 0;   // the envelope panel's: 0 ENVELOPES, 1 LFOS, 2 BUSES
    // The bus names the chips and route menus show, to notice when a preset or the host changes them.

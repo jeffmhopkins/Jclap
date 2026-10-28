@@ -197,15 +197,24 @@ int main() {
       names[0][1] = "Late Vibrato";
       names[1][3] = "Breath";
       panel.setBusNames(names);
+      // So does how the sky is drawn.
+      panel.skyLook = 1;
+      panel.skyPalettes[0] = 3;
+      panel.skyPalettes[1] = 5;
       Buffer saved;
       JCLAP_CHECK(state->save(h.plugin(), &saved.out));
       h.setParam(level, 0.0);
       panel.setBusNames({});
+      panel.skyLook = 0;
+      panel.skyPalettes[0] = panel.skyPalettes[1] = 0;
       h.process();
       JCLAP_CHECK(state->load(h.plugin(), &saved.in));
       JCLAP_CHECK_EQ(h.paramValue(level), -12.0);
       JCLAP_CHECK_EQ(h.paramValue(wave), 4.0);
       JCLAP_CHECK(panel.busNames() == names);
+      JCLAP_CHECK_EQ(panel.skyLook, 1);
+      JCLAP_CHECK_EQ(panel.skyPalettes[0], 3);
+      JCLAP_CHECK_EQ(panel.skyPalettes[1], 5);
 
       Buffer partial;
       partial.bytes.insert(partial.bytes.end(), {'J', 'J', 'S', 'Y'});
