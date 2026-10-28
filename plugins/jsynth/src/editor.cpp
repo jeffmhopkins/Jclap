@@ -3011,9 +3011,9 @@ private:
       segments(kFmBase + kFmType, c, {x + 670, 98, 196, 24}, std::vector<std::string>{"PHASE", "EXP"});
       label({x + 670, 132, 196, 16}, "BETWEEN CREATURES", kDim);
       const auto b = ui::grid({x + 664, 150, 208, 240}, 3, 2);
-      knob(flockParam(kNeighbourFm), "FLOCK FM", c, b[0], "The nearest neighbours' Osc 1 into this creature's Osc 2.");
-      knob(flockParam(kTunePull), "TUNE PULL", c, b[1], "Creatures flying the same way drift toward pure intervals.");
-      knob(flockParam(kBite), "BITE", c, b[2], "Ring mod while a hunter holds this creature.");
+      knob(flockParam(kNeighbourFm), "FLOCK FM", c, b[0], "Up to three neighbours of its own species, nearer louder, FM this creature's Osc 2 with their Osc 1. A tight flock rings.");
+      knob(flockParam(kTunePull), "TUNE PULL", c, b[1], "Neighbours heading within 30 degrees of each other pull toward just intervals, up to 30 cents. Break formation and they drift back.");
+      knob(flockParam(kBite), "BITE", c, b[2], "Set on the HUNT part: while one of its creatures catches prey, its Osc 1 ring-modulates the prey's sound.");
       knob(mixParam(kNoiseLevel), "NOISE", c, b[3]);
       knob(mixParam(kNoiseColor), "COLOR", c, b[4]);
       knob(kDrift, "DRIFT", c, b[5], "Each creature's own slow wander in pitch.");
@@ -3196,7 +3196,7 @@ private:
       // One row of knobs, each under its drawing: the stereo field, the voices, the levels.
       const auto vk = kVoiceKnobs();
       knob(kPartPan, "PAN", c, vk[0]);
-      knob(kSkyPan, "X PAN", c, vk[1], "How far a creature's place in the sky, left to right, pans its voice.");
+      knob(kSkyPan, "X PAN", c, vk[1], "How far a creature's place in the sky, left to right, pans its voice: at 100% the left edge plays hard left.");
       knob(kGlideTime, "GLIDE", c, vk[3]);
       knob(kBendRange, "BEND", c, vk[4], "The MPE bend range: how far a finger slides, in semitones.");
       knob(kPartTranspose, "TRANSP", c, vk[5]);
@@ -3215,25 +3215,25 @@ private:
          return dropdown(id, col, {fx, y + 18, fw, 26});
       };
       tips_.add(pick(vb.y + 44, "BEHAVIOUR", flockParam(kBehaviour), c),
-                "SHOAL flies with its own kind, SCATTER keeps apart, HUNT chases the other species and FLEE runs from it.");
-      tips_.add(pick(vb.y + 100, "LURE X", flockParam(kLureX), c), "What places a note's ring left to right.");
-      tips_.add(pick(vb.y + 156, "LURE Y", flockParam(kLureY), c), "What places a note's ring bottom to top.");
+                "SHOAL gathers with its own kind, SCATTER pushes apart, HUNT chases the other species (and can catch it for BITE), FLEE runs from it.");
+      tips_.add(pick(vb.y + 100, "LURE X", flockParam(kLureX), c), "What places a note's lure (its ring) left to right: PITCH puts low notes left, high right. With X PAN, this is where it sounds.");
+      tips_.add(pick(vb.y + 156, "LURE Y", flockParam(kLureY), c), "What places a note's lure (its ring) bottom to top: SLIDE lifts it, PRESS or VELOCITY send harder notes higher.");
       shared(part, [&] {
          tips_.add(pick(vb.y + 212, "WALLS", kSkyWalls, kDim),
-                   "What the sky's edges do: turn creatures back, wrap them round, or let them roam.");
+                   "What the sky's edges do: SOFT turns creatures back, WRAP carries them round to the other side, OPEN lets them roam past first.");
       });
       const auto fk = ui::grid({vb.x + 176, vb.y + 40, vb.w - 186, 232}, 5, 2);
-      knob(flockParam(kCohesion), "COHESION", c, fk[0], "Pull toward the middle of the neighbours.");
-      knob(flockParam(kAlignment), "ALIGN", c, fk[1], "Turn to fly the way the neighbours fly.");
-      knob(flockParam(kSeparation), "SEPARATE", c, fk[2], "Keep clear of the nearest.");
-      knob(flockParam(kSpeed), "SPEED", c, fk[3]);
-      knob(flockParam(kWander), "WANDER", c, fk[4], "Each creature's own restlessness.");
-      knob(flockParam(kLure), "LURE", c, fk[5], "How hard your finger pulls its creature.");
-      knob(flockParam(kRange), "RANGE", c, fk[6], "How near counts as a neighbour.");
-      knob(flockParam(kTailLength), "TAIL", c, fk[7], "How long the ink lasts behind a creature.");
-      knob(flockParam(kTailSpread), "SPREAD", c, fk[8], "How far the ink blooms as it ages.");
+      knob(flockParam(kCohesion), "COHESION", c, fk[0], "Boids rule 1: steer toward the middle of the neighbours. Up, creatures bunch, so NEAREST rises and FLOCK FM rings more.");
+      knob(flockParam(kAlignment), "ALIGN", c, fk[1], "Boids rule 2: match the neighbours' heading and speed. Up, they fly as one, so HEADING moves together and TUNE PULL engages.");
+      knob(flockParam(kSeparation), "SEPARATE", c, fk[2], "Boids rule 3: steer away from a neighbour that gets too close (within 40% of RANGE). Up, creatures keep their distance.");
+      knob(flockParam(kSpeed), "SPEED", c, fk[3], "Top speed. Press raises it up to 80% more. Faster creatures change neighbours, place and heading sooner.");
+      knob(flockParam(kWander), "WANDER", c, fk[4], "Each creature's own restlessness: a heading that drifts and jinks, and a wider roam around its lure. Up, TURN gets busy.");
+      knob(flockParam(kLure), "LURE", c, fk[5], "How hard a held note pulls its creature toward its lure. High keeps it where you play; low lets the flock carry it off.");
+      knob(flockParam(kRange), "RANGE", c, fk[6], "How near counts as a neighbour: how far the three boids rules, FLOCK FM, TUNE PULL and NEAREST reach. Hunters see 2.5x as far.");
+      knob(flockParam(kTailLength), "TAIL", c, fk[7], "How long the ink lasts behind a creature, about half a second to five. Only drawn: it never changes the sound.");
+      knob(flockParam(kTailSpread), "SPREAD", c, fk[8], "How far the ink blooms as it ages. Only drawn: it never changes the sound.");
       shared(part, [&] {
-         knob(kSkySize, "SIZE", kDim, fk[9], "How big the sky is, so how far apart the flocks can spread.");
+         knob(kSkySize, "SIZE", kDim, fk[9], "How big the sky is for both species. Bigger makes creatures, their RANGE and their speed relatively smaller, so flocks spread out.");
       });
 
       group_ = kMotionPage;
@@ -3241,13 +3241,13 @@ private:
          const float mx = vb.x + 10 + l * 356.0f, my = vb.y + 44;
          const unsigned lc = kMotionColors[l];
          tips_.add(label({mx, my + 4, 88, 16}, l == 0 ? "WINGBEAT" : "WIND", lc, visage::Font::kLeft),
-                   l == 0 ? "One per creature: each bobs across its path." : "One gust for the whole sky, pushing every creature.");
+                   l == 0 ? "One LFO per creature: it bobs each one side to side across its path, and beats its wings. Moves the flock only, not the sound." : "One gust for the whole species: it pushes every creature the same way, from a slowly turning direction. Moves the flock only.");
          dropdown(lfoParam(l, kLfoShape), lc, {mx + 88, my, 80, 24});
          dropdown(lfoParam(l, kLfoTrigger), c, {mx + 174, my, 92, 24});
          segments(lfoParam(l, kLfoSync), lc, {mx + 272, my, 72, 24}, std::vector<std::string>{"FREE", "SYNC"});
          const auto mk = ui::row({mx - 4, my + 34, 352, 110}, 4);
          knob(lfoParam(l, kLfoRate), "RATE", lc, mk[0]);
-         knob(lfoParam(l, kLfoPush), "PUSH", lc, mk[1], l == 0 ? "How far each creature bobs." : "How hard the gust pushes.");
+         knob(lfoParam(l, kLfoPush), "PUSH", lc, mk[1], l == 0 ? "How far each creature bobs across its path." : "How hard the gust pushes the whole species.");
          knob(lfoParam(l, kLfoPhase), "PHASE", lc, mk[2]);
          knob(lfoParam(l, kLfoDelay), "DELAY", lc, mk[3]);
          label({mx, my + 152, 168, 16}, "DIVISION", kDim, visage::Font::kLeft);
@@ -3329,11 +3329,18 @@ private:
       knob(kRoundingTime, "ROUND TIME", kDim, pk[1]);
       knob(kManagerBendRange, "MGR BEND", kDim, pk[2], "The MPE manager channel's bend range.");
       group_ = kSynth;
-      const std::pair<int, const char *> sources[] = {
-          {kSourceSpeed, "SPEED"}, {kSourceNearest, "NEAREST"}, {kSourceHeading, "HEADING"}, {kSourceTurn, "TURN"},
-          {kSourceRandom, "RANDOM"}};
+      // Each note's own creature, as a source: what it measures, for the chip's tip.
+      const struct {
+         int source;
+         const char *name, *tip;
+      } sources[] = {
+          {kSourceSpeed, "SPEED", "How fast this note's creature flies, against its top speed at full Press."},
+          {kSourceNearest, "NEAREST", "How near this note's creature's nearest neighbour is: full when touching, 0 at the edge of RANGE."},
+          {kSourceHeading, "HEADING", "Which way this note's creature flies: full straight up, half level, 0 straight down."},
+          {kSourceTurn, "TURN", "How hard this note's creature turns: + a right turn on screen, - a left one, 0 flying straight."},
+          {kSourceRandom, "RANDOM", "A new random value for each note, -100% to +100%."}};
       for (int i = 0; i < 5; ++i)
-         chip(sources[i].first, sources[i].second, {kSkyX + 8 + i * 84.0f, kSkyY + kSkyH + 12, 80, 24});
+         chip(sources[i].source, sources[i].name, {kSkyX + 8 + i * 84.0f, kSkyY + kSkyH + 12, 80, 24}, sources[i].tip);
       group_ = kAlways;
    }
 
