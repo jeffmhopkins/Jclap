@@ -3,8 +3,9 @@
 // It shows a receiver mid-stream on Wi-Fi, with one stall that auto buffer answered, or with
 // "send", a sender with two receivers. "idle" shows them before anything connects instead: a
 // receiver searching without mDNS, a sender set to PCM with nobody listening. "taken" shows a
-// sender whose name another sender already has, and "midi" a tunnel set to carry MIDI only. The panel polls status() a few seconds' worth of times
-// before the render, so each call here is one 30 ms tick.
+// sender whose name another sender already has, and "midi" a tunnel set to carry MIDI only. The
+// panel polls status() a few seconds' worth of times before the render, so each call here is one
+// 30 ms tick.
 
 #include <algorithm>
 #include <cmath>
