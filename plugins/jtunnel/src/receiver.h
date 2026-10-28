@@ -33,7 +33,7 @@ enum class ReceiveState : int { Idle = 0, Buffering = 1, Playing = 2 };
 // What the panel shows. Written by the audio thread, read anywhere.
 struct ReceiverStats {
    std::atomic<int> state{0};
-   std::atomic<float> fillMs{0.0f}, targetMs{0.0f}, driftPpm{0.0f};
+   std::atomic<float> fillMs{0.0f}, targetMs{0.0f}, driftPpm{0.0f}; // driftPpm NaN while measuring
    std::atomic<uint32_t> lost{0}, concealed{0}, sampleRate{0};
    std::atomic<int> codec{0};
 };
@@ -55,7 +55,9 @@ public:
 
    // Replaces left/right with what was received, and appends received MIDI to `midi` (at most
    // `capacity` events, in time order). Returns the number of events.
-   int process(ReceiveRing &ring, float *left, float *right, uint32_t frames, OutMidi *midi, int capacity);
+   // `nowUs` is the time on the clock the ring's arrival times use (or -1 if there is none).
+   int process(ReceiveRing &ring, float *left, float *right, uint32_t frames, OutMidi *midi, int capacity,
+               int64_t nowUs = -1);
 
    const ReceiverStats &stats() const { return stats_; }
    ReceiveState state() const { return state_; }
@@ -101,13 +103,25 @@ private:
    // Clock following.
    double correction_ = 0.0, integral_ = 0.0, drift_ = 0.0;
    int longestStall_ = 0;
-   // Drift measurement: finished stretches (sum of correction x time plus lead change, and time),
-   // and the one in progress.
-   double driftSum_ = 0.0, driftTime_ = 0.0;
+   // Drift measurement: the finished stretches' centred least-squares sums (time x time, time x
+   // offset) and length, and the stretch in progress.
+   double driftTT_ = 0.0, driftTX_ = 0.0, driftTime_ = 0.0, measuredSeconds_ = 0.0;
    bool segmentOpen_ = false;
-   double segmentLead_ = 0.0, segmentCorrection_ = 0.0, segmentTime_ = 0.0, lastLead_ = 0.0;
+   double segmentLead_ = 0.0, segmentCorrection_ = 0.0, segmentTime_ = 0.0;
+   double segN_ = 0.0, segT_ = 0.0, segX_ = 0.0, segTT_ = 0.0, segTX_ = 0.0;
    double windowMax_ = -1e18;
    double history_[kHistory] = {};
+   // The same lead as it was when the newest frame arrived, for measuring the clock. Seen only at
+   // block boundaries, the lead moves in whole frames: with both ends using one block size the
+   // arrivals keep their place against our blocks and the lead stays put, then jumps a frame, for
+   // as long as a minute at 80 ppm. Timed from arrival it moves smoothly.
+   double windowMaxArrival_ = -1e18;
+   // When this block started, smoothed: audio callbacks run up to a block late or early, and the
+   // window max would pick out every late one. A second-order loop (half a hertz) on block time.
+   double blockTime_ = 0.0, samplePeriod_ = 0.0;
+   uint32_t lastFrames_ = 0;
+   bool clockLocked_ = false;
+   double historyArrival_[kHistory] = {};
    int historyCount_ = 0, historyNext_ = 0;
    uint32_t windowElapsed_ = 0;
    bool dropoutInWindow_ = false;

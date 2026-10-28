@@ -43,11 +43,13 @@ it under **REACHABLE AT**, such as `192.168.1.20:47000`.
 - **Clock drift:** two machines' audio clocks never run at exactly the same speed. The receiver
   measures how far ahead of playback the freshest audio arrives and nudges its playback rate (by
   a few hundred ppm at most, inaudible) to hold that lead at the **BUFFER** setting. **CLOCK** shows
-  the measured difference. Different sample rates on the two ends are resampled too.
+  the measured difference, once it has had 15 seconds to measure (packet arrival times keep it
+  accurate between audio blocks). Different sample rates on the two ends are resampled too.
 - **Jitter and loss:** a lost frame is concealed (Opus fills it in convincingly; PCM fades) and
   skipped. A late one, as when Wi-Fi stalls, is concealed while playback waits for it. With **AUTO**
   on, each such dropout grows the buffer by the length of the stall, and after 20 quiet seconds it
-  shrinks back by 1 ms every 5 s.
+  shrinks back by 1 ms every 5 s. A sender that stops or restarts isn't a dropout: the receiver
+  waits, picks it up again (on whatever port it comes back on) and keeps its buffer.
 - **Threads:** the audio thread never touches the network. The sender codes frames and queues
   packets for a send thread; a receive thread puts frames in a lock-free ring the audio thread reads.
 

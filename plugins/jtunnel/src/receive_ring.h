@@ -20,6 +20,7 @@ struct StreamInfo {
    Codec codec = Codec::Opus;
    uint16_t frameSamples = 0;
    uint32_t newest = 0; // the highest sequence number stored
+   int64_t newestArrivalUs = -1; // when `newest` arrived (on the caller's clock), or -1 if unknown
 };
 
 class ReceiveRing {
@@ -33,7 +34,9 @@ public:
 
    // Stores one frame. A new stream id replaces the stream (frames of the old one are dropped as
    // they are found). Late frames, ones the audio thread has already played past, are dropped.
-   void store(const AudioHeader &header, const Frame &frame);
+   // `arrivalUs` is when it came in, in microseconds on any steady clock the audio thread also
+   // reads (or -1).
+   void store(const AudioHeader &header, const Frame &frame, int64_t arrivalUs = -1);
    // Forgets the stream, as when the receiver stops listening to it.
    void clear();
 
@@ -62,6 +65,9 @@ private:
    std::atomic<uint32_t> generation_{0};
    std::atomic<uint32_t> streamId_{0}, sampleRate_{0}, codec_{0}, frameSamples_{0};
    std::atomic<uint32_t> newest_{0};
+   // When the newest frame arrived, with its sequence number's low 16 bits in the low 16 bits, so
+   // the pair can't tear: (arrivalUs << 16) | (seq & 0xFFFF). -1 if unknown.
+   std::atomic<int64_t> newestArrival_{-1};
    std::atomic<bool> active_{false};
    std::atomic<uint32_t> readStream_{0}, readSeq_{0};
 };
