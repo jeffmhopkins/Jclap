@@ -184,13 +184,13 @@ public:
       link_.listenTarget = cleanTarget(target);
       markDirty();
    }
-   std::vector<std::string> tunnelNames() const override {
-      std::vector<std::string> names;
+   std::vector<TunnelEntry> tunnels() const override {
+      std::vector<TunnelEntry> found;
       const std::string own = mode() == kModeSend ? sendName() : std::string();
       for (const FoundTunnel &t : Discovery::instance().tunnels())
-         if (t.name != own && std::find(names.begin(), names.end(), t.name) == names.end())
-            names.push_back(t.name);
-      return names;
+         if (t.name != own && std::none_of(found.begin(), found.end(), [&](const TunnelEntry &e) { return e.name == t.name; }))
+            found.push_back({t.name, t.address.toString(), t.local});
+      return found;
    }
    TunnelStatus status() override {
       TunnelStatus s;
@@ -205,6 +205,7 @@ public:
       const uint16_t port = link_.port.load();
       if (port)
          s.localAddress = net::Address{localIp_ ? localIp_ : 0x7F000001u, port}.toString();
+      s.hostRate = sampleRate_;
       s.listeners = link_.listeners.load();
       s.connection = link_.connection.load();
       const net::Address source{link_.source.load(), link_.sourcePort.load()};

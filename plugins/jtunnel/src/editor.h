@@ -18,6 +18,7 @@ struct TunnelStatus {
    bool linkUp = false;          // it has a socket
    bool discoveryOnNetwork = true; // mDNS works (else only this process is searched)
    std::string localAddress;     // where others can reach this instance, "192.168.1.5:47000"
+   double hostRate = 0;          // the host's sample rate (what PCM sends at)
    // Sending.
    int listeners = 0;
    // Receiving.
@@ -31,6 +32,13 @@ struct TunnelStatus {
    float inputPeak = 0, outputPeak = 0;
 };
 
+// A tunnel found on the network.
+struct TunnelEntry {
+   std::string name;
+   std::string address; // "192.168.1.31:47000"
+   bool local = false;  // in this process (another track in this DAW)
+};
+
 // What the panel needs from the plugin, on the main thread.
 class EditorHost : public jclap::ui::ParamAccess {
 public:
@@ -39,8 +47,14 @@ public:
    // A tunnel name or a typed address.
    virtual std::string listenTarget() const = 0;
    virtual void setListenTarget(const std::string &target) = 0;
-   // Tunnels on the network now, by name.
-   virtual std::vector<std::string> tunnelNames() const = 0;
+   // Tunnels on the network now, one per name.
+   virtual std::vector<TunnelEntry> tunnels() const = 0;
+   std::vector<std::string> tunnelNames() const {
+      std::vector<std::string> names;
+      for (const TunnelEntry &t : tunnels())
+         names.push_back(t.name);
+      return names;
+   }
    virtual TunnelStatus status() = 0;
 };
 

@@ -21,7 +21,7 @@ LAN, Wi-Fi included.
    (it starts as this computer's name and a number).
 2. On the receiving track, add **JTunnel**, switch it to **RECEIVE**, and pick the tunnel from the
    **ON THE NETWORK** list, or type its name.
-3. Audio starts within a second. The light turns green and **LATENCY** shows how much the receiver
+3. Audio starts within a second. The link turns green and **LATENCY** shows how much the receiver
    is buffering.
 
 One sender can feed any number of receivers. MIDI (notes and channel messages) travels with the
@@ -29,7 +29,7 @@ audio, sample-locked to it, so a receiver can drive an instrument on the far mac
 
 If the list stays empty (see [macOS](#macos-local-network) below, or a router that blocks
 multicast), type the sender's address into the **LISTEN TO** box instead: the sender's panel shows
-it under the name, such as `192.168.1.20:47000`.
+it under **REACHABLE AT**, such as `192.168.1.20:47000`.
 
 ## How it works
 
@@ -87,15 +87,26 @@ Network**. Without it nothing reaches the network, though instances in the same 
 
 ## Panel
 
-**TUNNEL** holds the mode, the name (or the listen target and the list of tunnels found), and what
-the link is doing. **SEND FORMAT** is the sender's codec. **RECEIVE** holds the buffer and level,
-with live **LATENCY** (the receiver's buffer), **TARGET** (what it is aiming for), **CLOCK** (the
-sender's clock against this one) and **LOST / LATE** frame counts. **LEVELS** shows input and output.
+**SEND / RECEIVE** in the header sets the mode, and the panel below follows it. **LINK** draws the
+link, the sending end on the left and the receiving end on the right, in green while audio flows,
+amber while waiting and red without a socket, with warnings under it. Its graph shows the last 8
+seconds: a receiver's lead (what **LATENCY** shows) against its **TARGET**, with a red tick for each
+lost or late frame; a sender's level going out.
+
+- **Receiving:** **LISTEN TO** takes a tunnel's name or a typed address, and lists the tunnels
+  **ON THE NETWORK**; click one to listen to it. The readouts are **LATENCY** (the buffer),
+  **TARGET** (what it is aiming for), **CLOCK** (the sender's clock against this one) and
+  **LOST / LATE** frame counts. **RECEIVE** holds the buffer and **AUTO**.
+- **Sending:** **SEND AS** holds the name and the address receivers can type. The readouts are the
+  receivers, the format, the rate and the upload they cost together. **SEND FORMAT** holds the
+  codec, the bitrate (Opus only) and **REDUNDANT**.
+
+**OUTPUT** has **THRU**, the receiver's **LEVEL**, and input and output meters.
 
 > [!TIP]
 > To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
-> `build/plugins/jtunnel/jtunnel-screenshot plugins/jtunnel/docs/panel.png`. Add `1440 880 send` for
-> the sender's view.
+> `build/plugins/jtunnel/jtunnel-screenshot plugins/jtunnel/docs/panel.png`. Add `1440 960 send` for
+> the sender's view, and `idle` after that to see either before anything connects.
 
 ## Tests
 
