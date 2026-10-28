@@ -486,44 +486,6 @@ void testImpairment() {
 
 } // namespace
 
-// The test impairment: parsing, and what it does to a 5 ms packet stream over a minute.
-void testImpairment() {
-   const ImpairSettings s = ImpairSettings::parse("jitter=6,stall=80,every=10,loss=2,bogus=1,jitter2=x");
-   JCLAP_CHECK(s.enabled());
-   JCLAP_CHECK_EQ(s.jitterMs, 6.0);
-   JCLAP_CHECK_EQ(s.stallMs, 80.0);
-   JCLAP_CHECK_EQ(s.lossPercent, 2.0);
-   JCLAP_CHECK(s.describe() == "jitter 6 ms, 80 ms stalls every 10 s, 2% loss");
-   JCLAP_CHECK(!ImpairSettings::parse("").enabled());
-   JCLAP_CHECK(!ImpairSettings::parse("loss=-5,jitter=abc").enabled());
-
-   Impairment impairment(s, 7);
-   using Clock = Impairment::Clock;
-   const Clock::time_point start{};
-   Clock::time_point last = start;
-   int sent = 0, lost = 0, stalled = 0;
-   double delaySum = 0;
-   for (int i = 0; i < 12000; ++i) {
-      const Clock::time_point now = start + std::chrono::milliseconds(5 * i);
-      Clock::time_point release;
-      if (!impairment.schedule(now, release)) {
-         ++lost;
-         continue;
-      }
-      ++sent;
-      JCLAP_CHECK(release >= now && release >= last); // never early, never out of order
-      last = release;
-      const double delay = std::chrono::duration<double, std::milli>(release - now).count();
-      delaySum += delay;
-      stalled += delay > 60.0;
-   }
-   std::printf("impairment: %d sent, %d lost, mean delay %.1f ms, %d held over 60 ms\n", sent, lost,
-               delaySum / sent, stalled);
-   JCLAP_CHECK(lost > 150 && lost < 350);   // about 2% of 12000
-   JCLAP_CHECK(stalled > 20);               // about 6 stalls in a minute, a dozen packets each
-   JCLAP_CHECK(delaySum / sent > 5.0 && delaySum / sent < 15.0);
-}
-
 int main() {
    testProtocol();
    testCodecs();
