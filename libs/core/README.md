@@ -4,7 +4,7 @@
 
 The CLAP boilerplate every JClap plugin needs, with no GUI dependencies.
 
-[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.2](https://img.shields.io/badge/CLAP-1.2.2-blue)](https://github.com/free-audio/clap) [![tests: TestHost](https://img.shields.io/badge/tests-TestHost-blue)](tests)
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10](https://img.shields.io/badge/CLAP-1.2.10-blue)](https://github.com/free-audio/clap) [![tests: TestHost](https://img.shields.io/badge/tests-TestHost-blue)](tests)
 
 </div>
 
