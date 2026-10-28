@@ -108,16 +108,25 @@ uint32_t localIp() {
    if (s < 0)
       return 0;
 #endif
-   sockaddr_in to{};
-   to.sin_family = AF_INET;
-   to.sin_port = htons(9);
-   to.sin_addr.s_addr = htonl(0xC0A80001u); // 192.168.0.1: any private address picks the LAN route
+   // Any private address picks the LAN route. A machine with no default route (two computers on one
+   // cable) has a route only to its own subnet, so fall back to the other private ranges and last to
+   // the mDNS group, whose route is the interface discovery uses.
+   const uint32_t targets[] = {0xC0A80001u, 0x0A000001u, 0xAC100001u, 0xE00000FBu};
    uint32_t ip = 0;
-   if (connect(s, reinterpret_cast<sockaddr *>(&to), sizeof(to)) == 0) {
+   for (uint32_t target : targets) {
+      sockaddr_in to{};
+      to.sin_family = AF_INET;
+      to.sin_port = htons(9);
+      to.sin_addr.s_addr = htonl(target);
+      if (connect(s, reinterpret_cast<sockaddr *>(&to), sizeof(to)) != 0)
+         continue;
       sockaddr_in local{};
       socklen_t len = sizeof(local);
       if (getsockname(s, reinterpret_cast<sockaddr *>(&local), &len) == 0)
          ip = ntohl(local.sin_addr.s_addr);
+      if (ip && (ip >> 24) != 127)
+         break;
+      ip = 0;
    }
 #ifdef _WIN32
    closesocket(s);
