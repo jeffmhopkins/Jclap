@@ -30,7 +30,7 @@ there is a VST3 build for hosts without CLAP.
 
 ## VST3
 
-`PolarXY.vst3` is the same plugin, wrapped by clap-wrapper. It's in `jclap-PolarXY-VST3-<OS>.zip`
+`PolarXY.vst3` is the same plugin, wrapped by clap-wrapper. It's in `jclap-PolarXY-<version>-VST3-<OS>.zip`
 on the release page; see the [main README](../../README.md#download) for where it goes.
 
 - It shows up as an instrument (VST3 has no MIDI-effect category), with a MIDI input and output.

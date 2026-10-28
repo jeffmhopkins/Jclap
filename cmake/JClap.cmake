@@ -1,3 +1,16 @@
+# jclap_plugin_version(<x.y.z>), at the top of a plugin's CMakeLists.txt, sets that plugin's own
+# version. Its descriptor (the JCLAP_PLUGIN_VERSION macro, defined for every target in the folder),
+# its bundles and its update notice all use it. The release as a whole keeps the version in
+# project(); bump a plugin's here only when the plugin changed (.github/check-plugin-versions.sh
+# checks this against the last release).
+macro(jclap_plugin_version version)
+   if(NOT "${version}" MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+      message(FATAL_ERROR "jclap_plugin_version wants three numbers, like 1.2.3 (got '${version}')")
+   endif()
+   set(JCLAP_PLUGIN_VERSION ${version})
+   add_compile_definitions(JCLAP_PLUGIN_VERSION="${version}")
+endmacro()
+
 # jclap_add_plugin(<name> OUTPUT_NAME <FileName> BUNDLE_ID <id> [OUTPUT_DIR <dir>] SOURCES <files...>)
 #
 # OUTPUT_NAME is the .clap file name; keep it free of spaces. The name hosts display comes from
@@ -10,6 +23,9 @@ function(jclap_add_plugin name)
    cmake_parse_arguments(ARG "" "OUTPUT_NAME;BUNDLE_ID;OUTPUT_DIR" "SOURCES" ${ARGN})
    if(NOT ARG_OUTPUT_DIR)
       set(ARG_OUTPUT_DIR clap)
+   endif()
+   if(NOT JCLAP_PLUGIN_VERSION)
+      message(FATAL_ERROR "${name}: call jclap_plugin_version(<x.y.z>) before jclap_add_plugin")
    endif()
 
    add_library(${name} MODULE ${ARG_SOURCES})
@@ -28,8 +44,8 @@ function(jclap_add_plugin name)
          MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/cmake/Info.plist.in
          MACOSX_BUNDLE_GUI_IDENTIFIER ${ARG_BUNDLE_ID}
          MACOSX_BUNDLE_BUNDLE_NAME "${ARG_OUTPUT_NAME}"
-         MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
-         MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION})
+         MACOSX_BUNDLE_BUNDLE_VERSION ${JCLAP_PLUGIN_VERSION}
+         MACOSX_BUNDLE_SHORT_VERSION_STRING ${JCLAP_PLUGIN_VERSION})
       # Classic bundle type marker that some hosts and Finder still look for.
       file(WRITE ${CMAKE_BINARY_DIR}/PkgInfo "BNDL????")
       target_sources(${name} PRIVATE ${CMAKE_BINARY_DIR}/PkgInfo)
@@ -88,7 +104,7 @@ function(jclap_add_vst3 name)
    target_add_vst3_wrapper(TARGET ${name}
       OUTPUT_NAME "${ARG_OUTPUT_NAME}"
       BUNDLE_IDENTIFIER "${ARG_BUNDLE_ID}.vst3"
-      BUNDLE_VERSION "${PROJECT_VERSION}"
+      BUNDLE_VERSION "${JCLAP_PLUGIN_VERSION}"
       ASSET_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/vst3"
       # A bundle folder on Windows too, as the VST3 spec asks (the validator rejects a bare file).
       WINDOWS_FOLDER_VST3 TRUE)

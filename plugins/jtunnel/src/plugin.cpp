@@ -102,7 +102,7 @@ public:
       owner_ = Discovery::newOwnerId();
       edits_.init(host());
       hostMenu_.init(host());
-      gui_.init(host());
+      gui_.init(*this);
       gui_.createWindow = [this] { return createEditor(*this); };
       return true;
    }
@@ -590,7 +590,7 @@ const clap_plugin_descriptor_t JTunnel::descriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.10.7",
+   JCLAP_PLUGIN_VERSION,
    "Sends audio and MIDI to other JTunnel instances on the network, or plays what they send",
    kFeatures,
 };

@@ -1,3 +1,6 @@
+# This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
+jclap_plugin_version(0.1.0)
+
 jclap_add_plugin(plugin_template
    OUTPUT_NAME "PluginTemplate"
    BUNDLE_ID com.jeffmhopkins.jclap.plugin-template

@@ -66,7 +66,7 @@ public:
    bool init() override {
       edits_.init(host());
       hostMenu_.init(host());
-      gui_.init(host());
+      gui_.init(*this);
       gui_.createWindow = [this] { return createEditor(*this); };
       return true;
    }
@@ -447,7 +447,7 @@ const clap_plugin_descriptor_t Monolith::descriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.10.7",
+   JCLAP_PLUGIN_VERSION,
    "Reads a slab of generated alien glyphs as MIDI note phrases",
    kFeatures,
 };

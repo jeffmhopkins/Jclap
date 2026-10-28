@@ -1,3 +1,6 @@
+# This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
+jclap_plugin_version(0.10.7)
+
 jclap_add_plugin(jsynth
    OUTPUT_NAME "JSynth"
    BUNDLE_ID com.jeffmhopkins.jclap.jsynth

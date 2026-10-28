@@ -47,14 +47,14 @@ Panels are shown at one-third size. They are the screenshot-test references, so 
 ## Download
 
 Grab the zip for your OS from the [latest release](https://github.com/jeffmhopkins/Jclap/releases/latest).
-`jclap-<OS>.zip` contains every plugin; to get just one, take `jclap-<Plugin>-<OS>.zip` instead (for
-example `jclap-JSynth-macOS.zip`). Copy the `.clap` files (bundles on macOS) to your CLAP folder:
+`jclap-<OS>.zip` contains every plugin; to get just one, take `jclap-<Plugin>-<version>-<OS>.zip` instead
+(for example `jclap-JSynth-0.10.7-macOS.zip`). Copy the `.clap` files (bundles on macOS) to your CLAP folder:
 
 - macOS: `~/Library/Audio/Plug-Ins/CLAP`
 - Windows: `C:\Program Files\Common Files\CLAP`
 - Linux: `~/.clap`
 
-Polar XY also comes as a VST3, for hosts without CLAP: take `jclap-PolarXY-VST3-<OS>.zip` and copy
+Polar XY also comes as a VST3, for hosts without CLAP: take `jclap-PolarXY-<version>-VST3-<OS>.zip` and copy
 `PolarXY.vst3` to your VST3 folder (`~/Library/Audio/Plug-Ins/VST3` on macOS,
 `C:\Program Files\Common Files\VST3` on Windows, `~/.vst3` on Linux).
 
@@ -83,8 +83,9 @@ The VST3 needs the same after a browser download: `xattr -dr com.apple.quarantin
 > [!TIP]
 > Then restart Bitwig, or rescan plug-ins under Settings → Locations.
 
-When a newer release is out, each plugin's header says so; click the notice to open the release page,
-or its cross to hide it until the next one. The plugins look at GitHub at most once a day. To stop
+When a release has a newer version of a plugin, that plugin's header says so (plugins a release
+didn't change stay quiet); click the notice to open the release page, or its cross to hide it until
+the next one. The plugins look at GitHub at most once a day. To stop
 them, right-click the panel background and untick **Check for Updates**.
 
 ## Building
@@ -142,7 +143,13 @@ Plugins build on three shared libraries:
 > [!IMPORTANT]
 > In GitHub, open Actions → build → Run workflow and enter a version such as `v0.2.0`. The run builds
 > every platform, tags the commit and publishes a release with one zip per OS. Pushing a `v*` tag does
-> the same. Bump the version in `CMakeLists.txt` and each plugin descriptor first.
+> the same. Bump the release's version in `CMakeLists.txt` (`project()`) first.
+>
+> Each plugin also has its own version, `jclap_plugin_version(...)` at the top of its
+> `CMakeLists.txt`, which its descriptor, bundles and update notice use. Bump it only when that plugin
+> changed since the last release: CI warns on a pull request that changes a plugin still on the last
+> release's version, and a release with one fails. The release notes list every plugin's version,
+> and the update notice in each plugin only shows when its own version moved.
 
 Every push to `main` also rebuilds the [dev pre-release](https://github.com/jeffmhopkins/Jclap/releases/tag/dev)
 from that commit, for testing merged changes before a real release. It replaces itself each time and is

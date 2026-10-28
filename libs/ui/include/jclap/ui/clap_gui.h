@@ -7,7 +7,7 @@
 //
 //    class MyPlugin : public jclap::core::Plugin { ... jclap::ui::ClapGui gui; };
 //
-//    init():      gui.init(host()); gui.createWindow = [this] { return createEditor(*this); };
+//    init():      gui.init(*this); gui.createWindow = [this] { return createEditor(*this); };
 //    extension(): if (auto *ext = jclap::ui::ClapGui::extensionFor<MyPlugin, &MyPlugin::gui>(id)) return ext;
 //
 // Without one, pass a function that finds the ClapGui: ClapGui::extension<guiOf>(id).
@@ -32,8 +32,9 @@ public:
    ClapGui(const ClapGui &) = delete;
    ClapGui &operator=(const ClapGui &) = delete;
 
-   // Looks up the host's gui, posix-fd and timer extensions. Call from the plugin's init().
-   void init(const clap_host_t *host);
+   // Looks up the host's gui, posix-fd and timer extensions, and tells the update check which plugin
+   // and version this is (from its descriptor). Call from the plugin's init().
+   void init(const core::Plugin &plugin);
 
    // Builds the window when the host opens the GUI.
    std::function<std::unique_ptr<Window>()> createWindow;
