@@ -40,7 +40,10 @@ void Sender::begin() {
    }
    else {
       streamRate_ = static_cast<uint32_t>(std::lround(hostRate_));
-      frameSamples_ = kPcmFrameSamples;
+      frameSamples_ = codec_ == Codec::None
+                         ? std::clamp(static_cast<int>(std::lround(hostRate_ * kMidiFrameMs / 1000.0)), 16,
+                                      kMaxFrameSamples)
+                         : kPcmFrameSamples;
    }
    const bool resample = std::abs(hostRate_ - streamRate_) > 0.5;
    const double ratio = hostRate_ / streamRate_;
@@ -138,14 +141,15 @@ void Sender::emitFrame(PacketSink &sink) {
    header.frameSamples = static_cast<uint16_t>(frameSamples_);
    const Frame *frames[kMaxFramesPerPacket] = {&current_, &previous_};
    const int count = redundancy_ && hasPrevious_ ? 2 : 1;
-   if (f.audioBytes > 0) {
+   const bool coded = f.audioBytes > 0 || codec_ == Codec::None;
+   if (coded) {
       const size_t size = writeAudio(packet_, sizeof(packet_), header, frames, count);
       if (size)
          sink.send(packet_, size);
    }
 
    previous_ = current_;
-   hasPrevious_ = f.audioBytes > 0;
+   hasPrevious_ = coded;
    ++seq_;
    frameStart_ = end;
    frameFill_ = 0;

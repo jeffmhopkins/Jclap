@@ -1,4 +1,5 @@
-// Turns frames of interleaved stereo floats into packet bytes and back: Opus, or plain 24-bit PCM.
+// Turns frames of interleaved stereo floats into packet bytes and back: Opus, or plain 24-bit PCM
+// (or nothing, for MIDI only: no bytes, and silence back).
 // setup() allocates (main thread); everything else is safe on the audio thread.
 #pragma once
 

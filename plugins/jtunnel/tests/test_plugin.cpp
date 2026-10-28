@@ -133,6 +133,9 @@ int main() {
    JCLAP_CHECK(noteHeard);
    JCLAP_CHECK_EQ(txStatus.listeners, 1);
    JCLAP_CHECK_EQ(rxStatus.connection, 3);
+   // The panels' MIDI lights saw the note go out and come in.
+   JCLAP_CHECK(txStatus.midiEvents >= 1 && (txStatus.lastMidi & 0xff) == 0x90);
+   JCLAP_CHECK(rxStatus.midiEvents >= 1 && ((rxStatus.lastMidi >> 8) & 0x7f) == 62);
    // The sender's own output is its input (Thru on).
    JCLAP_CHECK(std::abs(outL[10] - inL[10]) < 1e-6f);
    // The receiver lists the tunnel it found.
@@ -184,6 +187,29 @@ int main() {
       std::vector<uint8_t> broken = bytes;
       broken[0] = 'X';
       JCLAP_CHECK(!loadState(copy, broken));
+   }
+
+   // A project saved before Carry existed still loads, carrying both.
+   {
+      receiver.setParam(jtunnel::kParamCarry, jtunnel::kCarryMidi);
+      receiver.process(block, rxIn, rxOut);
+      std::vector<uint8_t> bytes = saveState(receiver);
+      jclap::core::TestHost copy(clap_entry, kId);
+      JCLAP_CHECK(loadState(copy, bytes));
+      JCLAP_CHECK_EQ(copy.paramValue(jtunnel::kParamCarry), 2.0);
+      bytes.erase(bytes.begin() + 12 + 8 * jtunnel::kParamCarry, bytes.begin() + 12 + 8 * (jtunnel::kParamCarry + 1));
+      bytes[8] = static_cast<uint8_t>(jtunnel::kParamCarry);
+      jclap::core::TestHost old(clap_entry, kId);
+      JCLAP_CHECK(loadState(old, bytes));
+      JCLAP_CHECK_EQ(old.paramValue(jtunnel::kParamCarry), 0.0);
+      JCLAP_CHECK_EQ(old.paramValue(jtunnel::kParamMode), 1.0);
+      EditorHost *o = old.object<EditorHost>();
+      JCLAP_CHECK(o && o->listenTarget() == name);
+      char text[32];
+      jtunnel::formatParam(jtunnel::kParamCarry, 2, text, sizeof(text));
+      JCLAP_CHECK(std::string(text) == "MIDI");
+      double value = 0;
+      JCLAP_CHECK(jtunnel::parseParam(jtunnel::kParamCarry, "audio", value) && value == 1.0);
    }
    return jclap::core::testResult();
 }

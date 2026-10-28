@@ -27,6 +27,11 @@ LAN, Wi-Fi included.
 One sender can feed any number of receivers. MIDI (notes and channel messages) travels with the
 audio, sample-locked to it, so a receiver can drive an instrument on the far machine.
 
+**CARRY** picks what goes through: **AUDIO + MIDI**, **AUDIO** or **MIDI**. On a sender it is what
+gets sent; on a receiver, what of the stream gets played. **MIDI** alone sends no audio at all, in
+1 ms frames instead of 5, so with a small buffer on a wired network notes arrive in a few
+milliseconds.
+
 If the list stays empty (see [macOS](#macos-local-network) below, or a router that blocks
 multicast), type the sender's address into the **LISTEN TO** box instead: the sender's panel shows
 it under **REACHABLE AT**, such as `192.168.1.20:47000`.
@@ -44,7 +49,8 @@ it under **REACHABLE AT**, such as `192.168.1.20:47000`.
 - **Transport:** plain UDP, unicast to each receiver, which renews its subscription twice a second.
   Senders listen on port 47000 (or the next free one up to 47015).
 - **Format:** Opus at 48 kHz in 5 ms frames by default (64 to 512 kbps), or uncompressed 24-bit PCM
-  at the host's rate in 2 ms frames. With **REDUNDANT** on, every packet also carries the previous
+  at the host's rate in 2 ms frames. MIDI only sends 1 ms frames with no audio in them (about
+  230 kbps with redundancy, nearly all packet headers), keeping the clock that times the notes. With **REDUNDANT** on, every packet also carries the previous
   frame, so a single lost packet costs nothing.
 - **Clock drift:** two machines' audio clocks never run at exactly the same speed. The receiver
   measures how far ahead of playback the freshest audio arrives and nudges its playback rate (by
@@ -67,10 +73,11 @@ it under **REACHABLE AT**, such as `192.168.1.20:47000`.
 | Format | Opus, PCM 24-bit | How a sender codes audio. Opus is the one to use on Wi-Fi |
 | Bitrate | 64 to 512 kbps | Opus bitrate. 192 is transparent for most material |
 | Redundancy | Off, On | Repeat each frame in the next packet (doubles the bandwidth) |
-| Buffer | 2 to 250 ms | The receiver's lead over late packets. About 5 ms on Ethernet, 20 or more on Wi-Fi |
+| Buffer | 1 to 250 ms | The receiver's lead over late packets. About 5 ms on Ethernet, 20 or more on Wi-Fi |
 | Auto Buffer | Off, On | Grow the buffer after dropouts, and shrink it slowly when the network is quiet |
 | Thru | Off, On | Sender: keep playing its input locally. Receiver: mix its input in with what it receives |
 | Level | -inf to +12 dB | Receiver output level |
+| Carry | Audio + MIDI, Audio, MIDI | What a sender sends, or what a receiver plays of what arrives |
 
 The tunnel name and the listen target are saved with the project, not as parameters.
 
@@ -78,7 +85,9 @@ The tunnel name and the listen target are saved with the project, not as paramet
 
 One way, on top of the host's own buffers: the sender's frame (5 ms for Opus, 2 ms for PCM),
 Opus's 2.5 ms of lookahead, the network, and the receiver's buffer. On wired Ethernet with PCM and
-a 3 ms buffer that is under 10 ms. On Wi-Fi with Opus expect 25 to 60 ms, more on a busy network.
+a 3 ms buffer that is under 10 ms. On Wi-Fi with Opus expect 25 to 60 ms, more on a busy network. MIDI only drops the frame to 1 ms
+and has no lookahead, so on Ethernet with a 2 ms buffer it is a few milliseconds plus the host
+blocks; on Wi-Fi the buffer still has to cover the jitter.
 Neither host can compensate for it, so JTunnel suits monitoring, jamming and feeding another
 machine's effects, not sample-tight overdubs across machines.
 
@@ -122,13 +131,17 @@ lost or late frame; a sender's level going out.
   receivers, the format, the rate and the upload they cost together. **SEND FORMAT** holds the
   codec, the bitrate (Opus only) and **REDUNDANT**.
 
+Under them, **CARRY** sets what the tunnel carries, and the **MIDI** light flashes for each event
+going out (a sender) or coming in (a receiver), with the last one in words and the count. It says
+so in amber when **CARRY** is keeping MIDI back.
+
 **OUTPUT** has **THRU**, the receiver's **LEVEL**, and input and output meters.
 
 > [!TIP]
 > To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
-> `build/plugins/jtunnel/jtunnel-screenshot plugins/jtunnel/docs/panel.png`. Add `1440 960 send` for
+> `build/plugins/jtunnel/jtunnel-screenshot plugins/jtunnel/docs/panel.png`. Add `1440 1112 send` for
 > the sender's view, and `idle` after that to see either before anything connects (or `taken` for a
-> sender whose name is in use).
+> sender whose name is in use, or `midi` for a tunnel carrying MIDI only).
 
 ## Tests
 
@@ -136,5 +149,5 @@ lost or late frame; a sender's level going out.
 every rate pair), and a sender and receiver whose clocks run 150 ppm apart, joined by a simulated
 Wi-Fi link with jitter, 60 ms stalls and 2% loss, for 90 simulated seconds: the receiver must find
 the clock offset, stop dropping out, keep the tone at its level and deliver a note with its length
-intact. `jtunnel-plugin-tests` runs two whole plugins in one process over real UDP on the loopback
+intact, and a MIDI-only link that must deliver a note within 30 ms. `jtunnel-plugin-tests` runs two whole plugins in one process over real UDP on the loopback
 interface, one sending a tone and a note, the other finding the tunnel by name and playing them.

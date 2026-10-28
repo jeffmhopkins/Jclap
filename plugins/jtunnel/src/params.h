@@ -20,11 +20,16 @@ enum ParamId : clap_id {
    kParamAutoBuffer,
    kParamThru,
    kParamLevel,
+   kParamCarry,
    kParamCount
 };
 
 enum Mode { kModeSend = 0, kModeReceive = 1 };
 enum CodecChoice { kCodecOpus = 0, kCodecPcm = 1 };
+// What a tunnel carries. A sender sends only this; a receiver plays only this of what arrives.
+enum Carry { kCarryBoth = 0, kCarryAudio = 1, kCarryMidi = 2 };
+inline bool carriesAudio(int carry) { return carry != kCarryMidi; }
+inline bool carriesMidi(int carry) { return carry != kCarryAudio; }
 
 struct ParamInfo {
    const char *name;
@@ -37,15 +42,17 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Format", 0, 1, kCodecOpus, true},
    {"Bitrate", 64, 512, 192, true},
    {"Redundancy", 0, 1, 1, true},
-   {"Buffer", 2, 250, 20, false},
+   {"Buffer", 1, 250, 20, false},
    {"Auto Buffer", 0, 1, 1, true},
    {"Thru", 0, 1, 1, true},
    {"Level", -60, 12, 0, false},
+   {"Carry", 0, 2, kCarryBoth, true},
 };
 
 inline const char *const kModeLabels[] = {"Send", "Receive"};
 inline const char *const kCodecLabels[] = {"Opus", "PCM 24-bit"};
 inline const char *const kOnOffLabels[] = {"Off", "On"};
+inline const char *const kCarryLabels[] = {"Audio + MIDI", "Audio", "MIDI"};
 
 inline const char *const *choiceLabels(clap_id id) {
    switch (id) {
@@ -53,6 +60,8 @@ inline const char *const *choiceLabels(clap_id id) {
       return kModeLabels;
    case kParamCodec:
       return kCodecLabels;
+   case kParamCarry:
+      return kCarryLabels;
    case kParamRedundancy:
    case kParamAutoBuffer:
    case kParamThru:
@@ -64,7 +73,9 @@ inline const char *const *choiceLabels(clap_id id) {
 
 inline void formatParam(clap_id id, double value, char *out, uint32_t size) {
    if (const char *const *labels = choiceLabels(id))
-      std::snprintf(out, size, "%s", labels[value >= 0.5 ? 1 : 0]);
+      std::snprintf(out, size, "%s",
+                    labels[std::clamp(static_cast<int>(std::lround(value - kParams[id].min)), 0,
+                                      static_cast<int>(kParams[id].max - kParams[id].min))]);
    else if (id == kParamBitrate)
       std::snprintf(out, size, "%d kbps", static_cast<int>(value + 0.5));
    else if (id == kParamBuffer)
@@ -92,8 +103,9 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
    while (std::isspace(static_cast<unsigned char>(*text)))
       ++text;
    if (const char *const *labels = choiceLabels(id)) {
-      for (int i = 0; i < 2; ++i)
-         if (sameText(text, labels[i]) || (id == kParamCodec && i == 1 && sameText(text, "pcm"))) {
+      for (int i = 0; i <= static_cast<int>(kParams[id].max - kParams[id].min); ++i)
+         if (sameText(text, labels[i]) || (id == kParamCodec && i == 1 && sameText(text, "pcm")) ||
+             (id == kParamCarry && i == 0 && (sameText(text, "both") || sameText(text, "audio+midi")))) {
             value = i;
             return true;
          }

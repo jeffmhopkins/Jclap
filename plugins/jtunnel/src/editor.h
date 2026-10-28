@@ -29,7 +29,10 @@ struct TunnelStatus {
    int state = 0;                // ReceiveState: 0 idle, 1 buffering, 2 playing
    float fillMs = 0, targetMs = 0, driftPpm = 0; // driftPpm is NaN while still being measured
    uint32_t lost = 0, concealed = 0, sampleRate = 0;
-   int codec = 0;
+   int codec = 0;                // the stream's: 0 Opus, 1 PCM 24-bit, 2 none (MIDI only)
+   // MIDI sent (a sender: what came in to be sent) or received, counted since the plugin started,
+   // and the last event: status | data1 << 8 | data2 << 16, 0 before any.
+   uint32_t midiEvents = 0, lastMidi = 0;
    // Peak levels since the last call, linear.
    float inputPeak = 0, outputPeak = 0;
 };

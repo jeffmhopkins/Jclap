@@ -1,12 +1,12 @@
 // JTunnel's wire format: small UDP packets, little-endian.
 //
 // Audio packets carry one stream's frames, each a few ms of stereo audio plus the MIDI that falls
-// in it. With redundancy on, each packet also repeats the previous frame, so one lost packet costs
+// in it (or, for MIDI only, a millisecond of no audio). With redundancy on, each packet also repeats the previous frame, so one lost packet costs
 // nothing on Wi-Fi. A receiver asks for a tunnel with Subscribe packets (sent every half second as
 // a keepalive) and the sender unicasts to everyone subscribed; Bye leaves at once.
 //
 //    header   magic "JTUN" (4), version (1), type (1)
-//    audio    stream id (4), seq (4), sample rate (4), codec (1), channels (1), frame samples (2),
+//    audio    stream id (4), seq (4), sample rate (4), codec (1: Opus, PCM or none), channels (1), frame samples (2),
 //             frame count (1), then per frame (frame i is seq - i):
 //             midi count (1), midi count x [offset (2), status, data1, data2], audio bytes (2), audio
 //    subscribe  name length (1), name (no terminator)
@@ -19,7 +19,8 @@
 namespace jtunnel {
 
 enum class PacketType : uint8_t { Audio = 1, Subscribe = 2, Bye = 3 };
-enum class Codec : uint8_t { Opus = 0, Pcm24 = 1 };
+// None carries no audio: MIDI only, in short frames at the sender's rate, so it arrives sooner.
+enum class Codec : uint8_t { Opus = 0, Pcm24 = 1, None = 2 };
 
 constexpr uint8_t kProtocolVersion = 1;
 constexpr int kChannels = 2;
@@ -29,6 +30,8 @@ constexpr int kOpusSampleRate = 48000;
 // 2 ms at 48 kHz. Two 24-bit stereo frames still fit one Ethernet MTU with room for MIDI.
 constexpr int kPcmFrameSamples = 96;
 constexpr int kMaxFrameSamples = 240;
+// About 1 ms at the host's rate (48 at 48 kHz), for MIDI only.
+constexpr int kMidiFrameMs = 1;
 constexpr int kMaxFrameBytes = kPcmFrameSamples * kChannels * 3;
 constexpr int kMaxMidiPerFrame = 24;
 constexpr int kMaxFramesPerPacket = 2;
