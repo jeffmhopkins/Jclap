@@ -20,10 +20,15 @@ blocks them and Bitwig never lists them.
 There are two ways around it. Pick one.
 
 **Option A: install from Terminal (no quarantine).** Files downloaded with `curl` are never flagged.
-This command downloads this release and installs it into your CLAP folder:
+This command downloads this release and installs it into your CLAP folder. It replaces older copies
+outright, since unzipping over an old bundle can leave stale files that stop it loading, and clears
+Bitwig's plugin cache so the next scan starts fresh:
 
 ```sh
-curl -sL https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-macOS.zip -o /tmp/jclap.zip && mkdir -p ~/Library/Audio/Plug-Ins/CLAP && ditto -x -k /tmp/jclap.zip ~/Library/Audio/Plug-Ins/CLAP
+curl -sL https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-macOS.zip -o /tmp/jclap.zip && rm -rf /tmp/jclap && ditto -x -k /tmp/jclap.zip /tmp/jclap \
+  && mkdir -p ~/Library/Audio/Plug-Ins/CLAP && (cd /tmp/jclap && for p in *.clap; do
+    rm -rf ~/Library/Audio/Plug-Ins/CLAP/"$p" && mv "$p" ~/Library/Audio/Plug-Ins/CLAP/; done) \
+  && find ~/Library/Caches/Bitwig -maxdepth 1 -name 'clap-metadata-*' -exec rm -rf {} + 2>/dev/null; true
 ```
 
 **Option B: downloaded with a browser.** Copy the plugins into your CLAP folder as usual, then clear the
@@ -42,7 +47,8 @@ treats it as a brand-new plugin and can't reuse an old cached scan. Delete the o
 don't see two, and clear Bitwig's plugin cache:
 
 ```sh
-rm -rf ~/Library/Audio/Plug-Ins/CLAP/Orb*Polar*.clap ~/Library/Caches/Bitwig/clap-metadata-*
+find ~/Library/Audio/Plug-Ins/CLAP -maxdepth 1 -name 'Orb*Polar*.clap' -exec rm -rf {} +
+find ~/Library/Caches/Bitwig -maxdepth 1 -name 'clap-metadata-*' -exec rm -rf {} +
 ```
 
 Projects that used Orb Polar need the device swapped for Polar XY.
