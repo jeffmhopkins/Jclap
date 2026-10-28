@@ -92,10 +92,10 @@ function(jclap_add_vst3 name)
       ASSET_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/vst3"
       # A bundle folder on Windows too, as the VST3 spec asks (the validator rejects a bare file).
       WINDOWS_FOLDER_VST3 TRUE)
-   # The wrapper lays out the Linux and Windows bundles itself but not where a macOS one goes; $<1:...>
-   # keeps Xcode from adding /Release.
+   # The wrapper lays out the Linux and Windows bundles itself but not where a macOS one goes. A plain
+   # path: the wrapper reads this property back for a post-build step, where a $<...> wouldn't resolve.
    if(APPLE)
-      set_target_properties(${name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "$<1:${CMAKE_BINARY_DIR}/vst3>")
+      set_target_properties(${name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/vst3")
    endif()
 
    if(NOT MSVC)
