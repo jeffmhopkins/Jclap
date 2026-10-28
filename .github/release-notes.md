@@ -29,16 +29,15 @@ blocks them and Bitwig never lists them.
 There are two ways around it. Pick one.
 
 **Option A: install from Terminal (no quarantine).** Files downloaded with `curl` are never flagged.
-This command downloads this release and installs it into your CLAP folder. It replaces older copies
-outright, since unzipping over an old bundle can leave stale files that stop it loading, and clears
-Bitwig's plugin cache so the next scan starts fresh:
+This command downloads this release's CLAPs and VST3s and installs them into your plug-in folders.
+It replaces older copies outright, since unzipping over an old bundle can leave stale files that stop
+it loading, and clears Bitwig's plugin cache so the next scan starts fresh:
 
 ```sh
-curl -sL https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-macOS.zip -o /tmp/jclap.zip && rm -rf /tmp/jclap && ditto -x -k /tmp/jclap.zip /tmp/jclap \
-  && mkdir -p ~/Library/Audio/Plug-Ins/CLAP && (cd /tmp/jclap && for p in *.clap; do
-    rm -rf ~/Library/Audio/Plug-Ins/CLAP/"$p" && mv "$p" ~/Library/Audio/Plug-Ins/CLAP/; done) \
-  && find ~/Library/Caches/Bitwig -maxdepth 1 -name 'clap-metadata-*' -exec rm -rf {} + 2>/dev/null; true
+curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-macos.sh | bash -s {{VERSION}}
 ```
+
+It's [install-macos.sh](https://github.com/jeffmhopkins/Jclap/blob/main/install-macos.sh) if you'd like to read it first.
 
 **Option B: downloaded with a browser.** Copy the plugins into your CLAP folder as usual, then clear the
 flag once:
@@ -47,15 +46,7 @@ flag once:
 xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap
 ```
 
-The VST3 is the same: install it from Terminal with
-
-```sh
-curl -sL https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-VST3-macOS.zip -o /tmp/jclap-vst3.zip && rm -rf /tmp/jclap-vst3 && ditto -x -k /tmp/jclap-vst3.zip /tmp/jclap-vst3 \
-  && mkdir -p ~/Library/Audio/Plug-Ins/VST3 && (cd /tmp/jclap-vst3 && for p in *.vst3; do
-    rm -rf ~/Library/Audio/Plug-Ins/VST3/"$p" && mv "$p" ~/Library/Audio/Plug-Ins/VST3/; done)
-```
-
-or, after a browser download, run `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/PolarXY.vst3`.
+The VST3 needs the same after a browser download: `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/PolarXY.vst3`.
 
 Either way, restart Bitwig afterwards.
 
