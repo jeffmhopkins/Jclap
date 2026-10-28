@@ -3,6 +3,7 @@
 // The plugin's panel. Kept behind this small interface so plugin.cpp never includes Visage.
 
 #include <memory>
+#include <string>
 
 #include <jclap/ui/params.h>
 #include <jclap/ui/window.h>
@@ -18,6 +19,9 @@ public:
    // What that channel last sent: its angle and radius CCs. False while it hasn't sent any (only one
    // axis has arrived), and then angle and radius are left as they were.
    virtual bool lastOutput(int &angle, int &radius) const = 0;
+   // The name of the preset last loaded or saved, kept with the project.
+   virtual std::string presetName() const = 0;
+   virtual void setPresetName(const std::string &name) = 0;
 };
 
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);

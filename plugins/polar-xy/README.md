@@ -83,6 +83,10 @@ radius the plugin sent for that channel (a dash until both axes have arrived),
 with angle 0 marked by the tick on the right. Comparing the two shows what `Angle Offset` and
 `Direction` do. Below them are all the settings, which are also plain host parameters.
 
+The preset bar in the header steps through presets with its arrows, lists them from the name, stars
+favourites, and SAVE stores the current settings as your own preset. The factory bank is a single
+**Init** with everything at its default.
+
 > [!TIP]
 > To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
 > `build/plugins/polar-xy/polar-xy-screenshot plugins/polar-xy/docs/panel.png`. With tools on,

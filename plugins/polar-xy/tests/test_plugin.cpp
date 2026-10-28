@@ -2,6 +2,9 @@
 
 #include <jclap/core/test_host.h>
 
+#include "editor.h"
+#include "presets.h"
+
 #include <algorithm>
 #include <cstring>
 #include <utility>
@@ -195,8 +198,10 @@ int main() {
    h.setParam(1, 17.0);
    h.process();
 
-   // State round trip.
+   // State round trip, with the preset name.
    {
+      JCLAP_CHECK(h.object<polar_xy::EditorHost>()->presetName() == "Init");
+      h.object<polar_xy::EditorHost>()->setPresetName("Whirlpool");
       auto *state = static_cast<const clap_plugin_state_t *>(h.plugin()->get_extension(h.plugin(), CLAP_EXT_STATE));
       std::vector<uint8_t> bytes;
       clap_ostream_t os{&bytes, [](const clap_ostream_t *s, const void *d, uint64_t n) -> int64_t {
@@ -218,6 +223,7 @@ int main() {
                         }};
       JCLAP_CHECK(state2->load(h2.plugin(), &is));
       JCLAP_CHECK(h2.paramValue(0) == 20.0 && h2.paramValue(1) == 17.0);
+      JCLAP_CHECK(h2.object<polar_xy::EditorHost>()->presetName() == "Whirlpool");
 
       // Version 1 state, from before Smoothing, Inertia and Motion Path: those load as defaults.
       h2.setParam(8, 500.0);
@@ -232,6 +238,7 @@ int main() {
       JCLAP_CHECK(state2->load(h2.plugin(), &is));
       JCLAP_CHECK(h2.paramValue(0) == 21.0 && h2.paramValue(4) == 45.0 && h2.paramValue(6) == 1.0);
       JCLAP_CHECK(h2.paramValue(8) == 0.0 && h2.paramValue(9) == 0.0 && h2.paramValue(10) == 0.0);
+      JCLAP_CHECK(h2.object<polar_xy::EditorHost>()->presetName().empty()); // no name before version 3
    }
 
    JCLAP_CHECK(h.paramText(8, 250.0) == "250 ms");
@@ -241,6 +248,13 @@ int main() {
    JCLAP_CHECK(h.textToValue(8, "1.5 s", v) && v == 1500.0);
    JCLAP_CHECK(h.textToValue(8, "80ms", v) && v == 80.0);
    JCLAP_CHECK(h.textToValue(10, "around", v) && v == 1.0);
+
+   // The factory bank is one Init with every param at its default.
+   const auto &factory = polar_xy::factoryPresets();
+   JCLAP_CHECK(factory.size() == 1 && factory[0].name == "Init" && factory[0].values.size() == polar_xy::kParamCount);
+   if (!factory.empty())
+      for (const auto &[id, value] : factory[0].values)
+         JCLAP_CHECK(value == polar_xy::kParams[id].def);
 
    motionTests();
    return jclap::core::testResult();
