@@ -98,9 +98,9 @@ With no transport (a host that doesn't send one), Monolith keeps its own time at
 
 In LISTEN the controls give way to a display made for capturing on a stream (an OBS window capture,
 say). The glyph being carved stands large in the middle, a stroke cut as each note is played, over
-the faint glyph it replaces. Beside it are the last note heard, the notes of this glyph so far as
-trails of embers, and the whole slab, glowing where it has been carved by what it heard. The light
-in the corner beats with the song.
+the faint glyph it replaces. Beside it stands the slab as it is on the panel, read from the top right
+down each column, and under it a small roll of this glyph's notes so far, with the last note heard.
+The light in the corner beats with the song.
 
 Right-click the stage to pick a UI size that suits the capture. **SPEAK**, faint in the bottom right
 corner until the mouse finds it, switches back to the panel; so does switching MODE from the host.
