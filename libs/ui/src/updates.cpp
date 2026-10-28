@@ -87,6 +87,17 @@ size_t valueOf(const std::string &json, const char *key) {
    return std::string::npos;
 }
 
+// A plugin's name in a version list: the end of its id, like "polar-xy".
+bool validName(const std::string &s) {
+   if (s.empty() || s.size() > 64)
+      return false;
+   for (char ch : s) {
+      if (!(ch >= 'a' && ch <= 'z') && !(ch >= '0' && ch <= '9') && ch != '-' && ch != '_')
+         return false;
+   }
+   return true;
+}
+
 bool isTrue(const std::string &json, const char *key) {
    const size_t p = valueOf(json, key);
    return p != std::string::npos && json.compare(p, 4, "true") == 0;
@@ -295,6 +306,9 @@ struct Checker {
    bool running = false;
    std::thread worker;
    std::atomic<bool> cancel{false};
+   // Which plugin this binary is (setPlugin()).
+   std::string name;
+   std::string version = JCLAP_VERSION;
 };
 
 // Never destroyed: a thread is joined when the last window closes, not while the plugin unloads
@@ -324,6 +338,8 @@ void check() {
       loadLocked(c);
       c.state.checkedAt = unixNow();
       c.state.latest = latest;
+      c.state.release = latest;
+      c.state.versions = parsePluginVersions(body);
       saveLocked(c);
    }
    c.running = false;
@@ -365,7 +381,24 @@ void release() {
 
 } // namespace
 
-const char *currentVersion() { return JCLAP_VERSION; }
+void setPlugin(const std::string &id, const std::string &version) {
+   Checker &c = checker();
+   std::lock_guard<std::mutex> lock(c.mutex);
+   const size_t dot = id.rfind('.');
+   const std::string name = dot == std::string::npos ? id : id.substr(dot + 1);
+   int v[3];
+   // Only on a change, so a pointer from currentVersion() stays good across instances.
+   if (validName(name) && parseVersion(version, v) && (name != c.name || version != c.version)) {
+      c.name = name;
+      c.version = version;
+   }
+}
+
+const char *currentVersion() {
+   Checker &c = checker();
+   std::lock_guard<std::mutex> lock(c.mutex);
+   return c.version.c_str();
+}
 
 bool isNewer(const std::string &a, const std::string &b) {
    int va[3], vb[3];
@@ -394,6 +427,35 @@ std::string parseLatestRelease(const std::string &json) {
    return std::to_string(v[0]) + "." + std::to_string(v[1]) + "." + std::to_string(v[2]);
 }
 
+std::map<std::string, std::string> parsePluginVersions(const std::string &json) {
+   std::map<std::string, std::string> versions;
+   const std::string marker = "jclap-versions:";
+   const size_t at = json.find(marker);
+   if (at == std::string::npos)
+      return versions;
+   // name=x.y.z pairs split by spaces, up to the first thing that isn't one (the comment's end, or
+   // the \n escape ending the line in the JSON string).
+   size_t p = at + marker.size();
+   while (true) {
+      while (p < json.size() && json[p] == ' ')
+         ++p;
+      const size_t eq = json.find('=', p);
+      if (eq == std::string::npos)
+         break;
+      const std::string name = json.substr(p, eq - p);
+      size_t end = eq + 1;
+      while (end < json.size() && ((json[end] >= '0' && json[end] <= '9') || json[end] == '.'))
+         ++end;
+      const std::string version = json.substr(eq + 1, end - eq - 1);
+      int v[3];
+      if (!validName(name) || !parseVersion(version, v))
+         break;
+      versions[name] = version;
+      p = end;
+   }
+   return versions;
+}
+
 std::filesystem::path stateFile() { return userFolder("JClap") / "updates.txt"; }
 
 State readState(const std::filesystem::path &file) {
@@ -404,10 +466,21 @@ State readState(const std::filesystem::path &file) {
       return s;
    while (std::getline(in, line)) {
       std::istringstream fields(line);
-      std::string key, value;
+      std::string key, value, version;
       if (!(fields >> key >> value))
          continue;
       int v[3];
+      // Per-plugin lines, "version <plugin> <x.y.z>": builds from before plugins had versions read
+      // them as a key with a bad value, and skip them.
+      if (fields >> version) {
+         if (!validName(value) || !parseVersion(version, v))
+            continue;
+         if (key == "version")
+            s.versions[value] = version;
+         else if (key == "dismissed")
+            s.dismissedVersions[value] = version;
+         continue;
+      }
       if (key == "enabled")
          s.enabled = value != "0";
       else if (key == "checked")
@@ -416,6 +489,8 @@ State readState(const std::filesystem::path &file) {
          s.latest = value;
       else if (key == "dismissed" && parseVersion(value, v))
          s.dismissed = value;
+      else if (key == "release" && parseVersion(value, v))
+         s.release = value;
    }
    return s;
 }
@@ -437,6 +512,16 @@ bool writeState(const std::filesystem::path &file, const State &state) {
          out << "latest " << state.latest << "\n";
       if (!state.dismissed.empty())
          out << "dismissed " << state.dismissed << "\n";
+      if (!state.release.empty())
+         out << "release " << state.release << "\n";
+      for (const auto &[name, version] : state.versions) {
+         if (validName(name))
+            out << "version " << name << " " << version << "\n";
+      }
+      for (const auto &[name, version] : state.dismissedVersions) {
+         if (validName(name))
+            out << "dismissed " << name << " " << version << "\n";
+      }
       if (!out)
          return false;
    }
@@ -460,9 +545,20 @@ std::optional<Release> available() {
       loadLocked(c);
    const State &s = c.state;
    // Only while a window is open on screen, so screenshots and tests never show a notice.
-   if (c.users <= 0 || !s.enabled || !isNewer(s.latest, currentVersion()) || s.latest == s.dismissed)
+   if (c.users <= 0 || !s.enabled || s.release.empty())
       return std::nullopt;
-   return Release{s.latest, kReleasePage + s.latest};
+   // A release that lists versions but not this plugin no longer ships it.
+   std::string version = s.release;
+   if (!s.versions.empty()) {
+      const auto it = s.versions.find(c.name);
+      if (it == s.versions.end())
+         return std::nullopt;
+      version = it->second;
+   }
+   const auto dismissed = s.dismissedVersions.find(c.name);
+   if (!isNewer(version, c.version) || (dismissed != s.dismissedVersions.end() && dismissed->second == version))
+      return std::nullopt;
+   return Release{version, kReleasePage + s.release};
 }
 
 void dismiss(const std::string &version) {
@@ -470,7 +566,7 @@ void dismiss(const std::string &version) {
    std::lock_guard<std::mutex> lock(c.mutex);
    if (!c.loaded)
       loadLocked(c);
-   c.state.dismissed = version;
+   c.state.dismissedVersions[c.name] = version;
    saveLocked(c);
 }
 

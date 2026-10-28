@@ -1,7 +1,9 @@
 #pragma once
 
 // Update notices: looks up the newest JClap release on GitHub, at most once a day, in the
-// background, and says whether it is newer than this build. Doesn't include Visage;
+// background, and says whether it has a newer version of this plugin. Each plugin has its own
+// version, and a release lists them all (see .github/release-notes.md), so a release that only
+// changed JSynth shows a notice in JSynth and nowhere else. Doesn't include Visage;
 // jclap/ui/update_notice.h is the header widget that shows it.
 //
 // What the check learns is kept in a small text file in the user's settings folder (see
@@ -12,25 +14,33 @@
 // than an UpdateNotice in its header.
 
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
 
 namespace jclap::ui::updates {
 
-// This build's version, e.g. "0.10.2" (the project version in the top-level CMakeLists.txt).
+// Which plugin this is: its CLAP id and its version (jclap_plugin_version in its CMakeLists.txt).
+// The end of the id, after the last '.', is its name in a release's version list. ClapGui::init()
+// calls this from the plugin's descriptor.
+void setPlugin(const std::string &id, const std::string &version);
+
+// This plugin's version, e.g. "0.10.2". Before setPlugin(), the release's (the project version in
+// the top-level CMakeLists.txt).
 const char *currentVersion();
 
 struct Release {
-   std::string version; // e.g. "0.10.3", without the tag's "v"
+   std::string version; // this plugin's version in the release, e.g. "0.10.3"
    std::string url;     // the release's page on GitHub
 };
 
-// The newest release, if it is newer than this build, checking is on, the user hasn't dismissed
-// it, and a window is open (startChecking() is held). Cheap enough to call from a UI timer.
+// This plugin's version in the newest release, if it is newer than this build, checking is on,
+// the user hasn't dismissed it, and a window is open (startChecking() is held). Cheap enough to
+// call from a UI timer.
 std::optional<Release> available();
 
-// Hides `version`'s notice for good. A later release shows again.
+// Hides this plugin's notice for `version` for good. A later version shows again.
 void dismiss(const std::string &version);
 
 // Whether to check at all (on unless the user turned it off). Turning it on checks straight away
@@ -55,11 +65,22 @@ bool isNewer(const std::string &a, const std::string &b);
 // has none, or it is a draft or prerelease.
 std::string parseLatestRelease(const std::string &json);
 
+// Each plugin's version in a release, from the "jclap-versions: jsynth=0.10.8 jverb=0.10.7" line its
+// notes carry, keyed by the end of the plugin id. Empty for a release from before plugins had their
+// own versions.
+std::map<std::string, std::string> parsePluginVersions(const std::string &json);
+
 struct State {
    bool enabled = true;
    long long checkedAt = 0; // Unix time of the last successful check
    std::string latest;      // the newest release then, e.g. "0.10.3"
-   std::string dismissed;   // the release the user dismissed
+   std::string dismissed;   // the release dismissed by a build from before plugins had versions
+   // What a build with plugin versions learned. `release` is the newest release, empty if an older
+   // build made the last check (which drops these lines), and `versions` holds each plugin's version
+   // in it, empty if that release lists none (every plugin then has the release's version).
+   std::string release;
+   std::map<std::string, std::string> versions;
+   std::map<std::string, std::string> dismissedVersions; // per plugin
 };
 
 // The settings file, and reading and writing it. A missing or unreadable file reads as defaults.

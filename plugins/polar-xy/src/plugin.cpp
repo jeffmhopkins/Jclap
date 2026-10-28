@@ -85,7 +85,7 @@ public:
       resetChannels();
       edits_.init(host());
       hostMenu_.init(host());
-      gui_.init(host());
+      gui_.init(*this);
       gui_.createWindow = [this] { return createEditor(*this); };
       return true;
    }
@@ -514,7 +514,7 @@ const clap_plugin_descriptor_t PolarXY::descriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.10.7",
+   JCLAP_PLUGIN_VERSION,
    "Converts XY CCs to Omnisphere Orb angle and radius CCs",
    kFeatures,
 };

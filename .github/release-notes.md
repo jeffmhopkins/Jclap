@@ -1,3 +1,9 @@
+## Plugins
+
+Each plugin has its own version, and only changes it when the plugin itself changes:
+
+{{PLUGINS}}
+
 ## Download
 
 The whole collection, one zip per system:
@@ -14,12 +20,12 @@ On a Mac, the quickest install is from Terminal (see below for what it does):
 curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-macos.sh | bash -s {{VERSION}}
 ```
 
-The single-plugin zips are listed under Assets at the bottom.
+The single-plugin zips, named with the plugin's version, are listed under Assets at the bottom.
 
 ## Install
 
 Download the zip for your system below, unzip it, and copy the `.clap` files into your CLAP folder.
-`jclap-<system>.zip` holds every plugin; `jclap-<Plugin>-<system>.zip` holds just that one.
+`jclap-<system>.zip` holds every plugin; `jclap-<Plugin>-<version>-<system>.zip` holds just that one.
 Then restart your DAW, or rescan plug-ins (in Bitwig: Settings → Locations).
 
 | System | CLAP folder |
@@ -28,7 +34,7 @@ Then restart your DAW, or rescan plug-ins (in Bitwig: Settings → Locations).
 | Windows | `C:\Program Files\Common Files\CLAP` |
 | Linux | `~/.clap` |
 
-Polar XY also comes as a VST3: `jclap-PolarXY-VST3-<system>.zip` holds `PolarXY.vst3` (as does
+Polar XY also comes as a VST3: `jclap-PolarXY-<version>-VST3-<system>.zip` holds `PolarXY.vst3` (as does
 `jclap-VST3-<system>.zip`, which has every VST3). Copy it into your VST3 folder:
 
 | System | VST3 folder |

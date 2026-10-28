@@ -71,7 +71,7 @@ public:
       hostState_ = hostExtension<clap_host_state_t>(CLAP_EXT_STATE);
       edits_.init(host());
       hostMenu_.init(host());
-      gui_.init(host());
+      gui_.init(*this);
       gui_.createWindow = [this] { return createEditor(*this); };
       resetDefaults();
       return true;
@@ -580,7 +580,7 @@ const clap_plugin_descriptor_t MicroMonsta::descriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.10.7",
+   JCLAP_PLUGIN_VERSION,
    "Knob panel that sends every MicroMonsta 2 parameter as MIDI CC",
    kFeatures,
 };

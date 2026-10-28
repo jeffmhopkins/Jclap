@@ -454,6 +454,14 @@ void updateChecks() {
    JCLAP_CHECK(up::parseLatestRelease(R"({"message":"API rate limit exceeded"})").empty());
    JCLAP_CHECK(up::parseLatestRelease("").empty());
 
+   // Each plugin's version, from the hidden line in the release notes (as JSON escapes them).
+   const std::string listed = R"({"tag_name":"v0.11.0","body":"## Download\r\n\r\n<!-- jclap-versions: jsynth=0.10.8 polar-xy=0.10.7 -->\r\n| Plugin | Version |"})";
+   const auto versions = up::parsePluginVersions(listed);
+   JCLAP_CHECK_EQ(versions.size(), 2u);
+   JCLAP_CHECK(versions.at("jsynth") == "0.10.8" && versions.at("polar-xy") == "0.10.7");
+   JCLAP_CHECK(up::parsePluginVersions(reply).empty());
+   JCLAP_CHECK(up::parsePluginVersions(R"({"body":"jclap-versions: jsynth=dev"})").empty());
+
    // Due once a day, or when the clock went back; never when turned off.
    up::State state;
    state.checkedAt = 1000000;
@@ -473,9 +481,15 @@ void updateChecks() {
    const auto now = std::chrono::duration_cast<std::chrono::seconds>(
                        std::chrono::system_clock::now().time_since_epoch()).count();
    const std::string newer = "99.0.0";
-   JCLAP_CHECK(up::writeState(file, {true, static_cast<long long>(now), newer, ""}));
+   up::setPlugin("com.jeffmhopkins.jclap.jsynth", "0.10.7");
+   JCLAP_CHECK(std::string(up::currentVersion()) == "0.10.7");
+   up::State fresh;
+   fresh.checkedAt = now;
+   fresh.latest = fresh.release = newer;
+   JCLAP_CHECK(up::writeState(file, fresh));
    const up::State back = up::readState(file);
-   JCLAP_CHECK(back.enabled && back.checkedAt == now && back.latest == newer && back.dismissed.empty());
+   JCLAP_CHECK(back.enabled && back.checkedAt == now && back.latest == newer && back.release == newer &&
+               back.versions.empty() && back.dismissedVersions.empty());
    up::setStateFileForTesting(file);
    JCLAP_CHECK(!up::available());
    {
@@ -496,10 +510,41 @@ void updateChecks() {
       notice.mouseDown(press(190, 13));
       JCLAP_CHECK(!notice.isVisible());
       JCLAP_CHECK(!up::available());
-      JCLAP_CHECK(up::readState(file).dismissed == newer);
+      JCLAP_CHECK(up::readState(file).dismissedVersions.at("jsynth") == newer);
+
+      // A release that lists plugin versions: only a plugin whose own version is newer gets a
+      // notice, showing that version and linking the release.
+      up::State listedState = fresh;
+      listedState.release = "0.11.0";
+      listedState.versions = {{"jsynth", "0.10.8"}, {"jverb", "0.10.7"}};
+      JCLAP_CHECK(up::writeState(file, listedState));
+      JCLAP_CHECK(up::readState(file).versions == listedState.versions);
+      up::setStateFileForTesting(file);
+      const auto jsynth = up::available();
+      JCLAP_CHECK(jsynth && jsynth->version == "0.10.8");
+      JCLAP_CHECK(jsynth && jsynth->url == "https://github.com/jeffmhopkins/Jclap/releases/tag/v0.11.0");
+      up::setPlugin("com.jeffmhopkins.jclap.jverb", "0.10.7");
+      JCLAP_CHECK(!up::available());
+      up::setPlugin("com.jeffmhopkins.jclap.monolith", "0.10.7"); // not in the release
+      JCLAP_CHECK(!up::available());
+      // Dismissing JSynth's notice leaves another plugin's for the same version.
+      listedState.versions["jverb"] = "0.10.8";
+      JCLAP_CHECK(up::writeState(file, listedState));
+      up::setStateFileForTesting(file);
+      up::setPlugin("com.jeffmhopkins.jclap.jsynth", "0.10.7");
+      up::dismiss("0.10.8");
+      JCLAP_CHECK(!up::available());
+      up::setPlugin("com.jeffmhopkins.jclap.jverb", "0.10.7");
+      JCLAP_CHECK(up::available() && up::available()->version == "0.10.8");
+
+      // A file last written by a build from before plugin versions (no release line): no notice,
+      // rather than comparing this plugin with the release's version.
+      JCLAP_CHECK(up::writeState(file, {true, static_cast<long long>(now), newer, ""}));
+      up::setStateFileForTesting(file);
+      JCLAP_CHECK(!up::available());
 
       // Turned off: no notice, even for a release not dismissed.
-      JCLAP_CHECK(up::writeState(file, {true, static_cast<long long>(now), "99.0.1", newer}));
+      JCLAP_CHECK(up::writeState(file, fresh));
       up::setStateFileForTesting(file);
       JCLAP_CHECK(up::available());
       up::setEnabled(false);

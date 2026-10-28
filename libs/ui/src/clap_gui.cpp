@@ -2,6 +2,8 @@
 
 #include <cstring>
 
+#include "jclap/ui/updates.h"
+
 namespace jclap::ui {
 namespace {
 
@@ -15,7 +17,10 @@ const char *const kWindowApi = CLAP_WINDOW_API_X11;
 
 } // namespace
 
-void ClapGui::init(const clap_host_t *host) {
+void ClapGui::init(const core::Plugin &plugin) {
+   const clap_plugin_descriptor_t *desc = plugin.clapPlugin()->desc;
+   updates::setPlugin(desc->id, desc->version);
+   const clap_host_t *host = plugin.host();
    host_ = host;
    hostGui_ = static_cast<const clap_host_gui_t *>(host->get_extension(host, CLAP_EXT_GUI));
    auto *fd = static_cast<const clap_host_posix_fd_support_t *>(host->get_extension(host, CLAP_EXT_POSIX_FD_SUPPORT));

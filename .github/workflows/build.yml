@@ -154,36 +154,42 @@ jobs:
           for p in build/vst3/*.vst3; do
             "$validator" "$p" 2>&1 | grep -v 'Programlist'
           done
+      # The collection zips keep fixed names, so the installer and "latest" links always find them.
+      # The one-plugin zips carry that plugin's version.
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
+          versions=$(.github/plugin-versions.sh list)
+          version() { awk -v n="$1" '$2 == n { print $3 }' <<< "$versions"; }
           mkdir dist
           ditto -c -k --sequesterRsrc build/clap "dist/jclap-${{ runner.os }}.zip"
           # One zip per plugin as well, for anyone who only wants one of them.
           for p in build/clap/*.clap; do
             name=$(basename "$p" .clap)
-            ditto -c -k --sequesterRsrc --keepParent "$p" "dist/jclap-$name-${{ runner.os }}.zip"
+            ditto -c -k --sequesterRsrc --keepParent "$p" "dist/jclap-$name-$(version "$name")-${{ runner.os }}.zip"
           done
           # VST3s get their own zips, so the CLAP zips still unpack straight into the CLAP folder.
           ditto -c -k --sequesterRsrc build/vst3 "dist/jclap-VST3-${{ runner.os }}.zip"
           for p in build/vst3/*.vst3; do
             name=$(basename "$p" .vst3)
-            ditto -c -k --sequesterRsrc --keepParent "$p" "dist/jclap-$name-VST3-${{ runner.os }}.zip"
+            ditto -c -k --sequesterRsrc --keepParent "$p" "dist/jclap-$name-$(version "$name")-VST3-${{ runner.os }}.zip"
           done
       - name: Package
         if: runner.os != 'macOS'
         shell: bash
         run: |
+          versions=$(.github/plugin-versions.sh list)
+          version() { awk -v n="$1" '$2 == n { print $3 }' <<< "$versions"; }
           mkdir dist
           cd build/clap
           cmake -E tar cf "../../dist/jclap-${{ runner.os }}.zip" --format=zip -- *.clap
           for p in *.clap; do
-            cmake -E tar cf "../../dist/jclap-${p%.clap}-${{ runner.os }}.zip" --format=zip -- "$p"
+            cmake -E tar cf "../../dist/jclap-${p%.clap}-$(version "${p%.clap}")-${{ runner.os }}.zip" --format=zip -- "$p"
           done
           cd ../vst3
           cmake -E tar cf "../../dist/jclap-VST3-${{ runner.os }}.zip" --format=zip -- *.vst3
           for p in *.vst3; do
-            cmake -E tar cf "../../dist/jclap-${p%.vst3}-VST3-${{ runner.os }}.zip" --format=zip -- "$p"
+            cmake -E tar cf "../../dist/jclap-${p%.vst3}-$(version "${p%.vst3}")-VST3-${{ runner.os }}.zip" --format=zip -- "$p"
           done
       - name: Upload plugins
         uses: actions/upload-artifact@v4
@@ -191,9 +197,25 @@ jobs:
           name: jclap-${{ runner.os }}
           path: dist/*.zip
 
+  # Each plugin has its own version (jclap_plugin_version in its CMakeLists.txt). A plugin changed
+  # since the last release but still on that release's version gets a warning on pull requests and
+  # main, and stops a release.
+  plugin-versions:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check plugin versions
+        run: >
+          .github/plugin-versions.sh check
+          ${{ (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') && 'error' || 'warning' }}
+
   release:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    needs: build
+    needs: [build, plugin-versions]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -202,11 +224,13 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      # The whole history, so the notes can say which plugins are new since the last release.
       - uses: actions/checkout@v4
         with:
           path: src
+          fetch-depth: 0
       - name: Render install notes
-        run: sed "s/{{VERSION}}/${{ inputs.version || github.ref_name }}/g" src/.github/release-notes.md > notes.md
+        run: src/.github/plugin-versions.sh notes "${{ inputs.version || github.ref_name }}" > notes.md
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.version || github.ref_name }}
@@ -235,12 +259,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: src
+          fetch-depth: 0
       - name: Render install notes
         run: |
           {
             echo "Development build of \`${GITHUB_SHA::7}\` on main. Not a release: it's replaced by each push to main."
             echo
-            sed "s/{{VERSION}}/dev/g" src/.github/release-notes.md
+            src/.github/plugin-versions.sh notes dev
           } > notes.md
       - name: Replace the dev release
         env:
