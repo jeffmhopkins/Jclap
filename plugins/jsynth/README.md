@@ -2,117 +2,163 @@
 
 # JSynth
 
-A bi-timbral MPE synth where every note is a creature and the creatures flock. Two species, each a three-oscillator FM patch with two filters, three envelopes and two LFOs, and creatures that fly near each other modulate each other. Each one trails ink.
+A two-part MPE synth where every note is a creature, and the creatures flock. How they fly shapes how
+they sound: a tight flock rings, a loose one is clean, a hunter that catches its prey bites it, and
+each one trails ink across the sky.
 
-[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.2 instrument](https://img.shields.io/badge/CLAP%201.2.2-instrument-blue)](https://github.com/free-audio/clap) [![MPE: yes](https://img.shields.io/badge/MPE-yes-blue)](#the-design) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage)
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.2 instrument](https://img.shields.io/badge/CLAP%201.2.2-instrument-blue)](https://github.com/free-audio/clap) [![MPE: yes](https://img.shields.io/badge/MPE-yes-blue)](#play-it-with-your-hands) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage)
+
+![JSynth](docs/readme/panel.jpg)
+
+**[User manual (PDF)](docs/JSynth-User-Manual.pdf)** · **[Architecture](ARCHITECTURE.md)** · **[Install](../../README.md)**
 
 </div>
 
-**[Read the user manual (PDF)](docs/JSynth-User-Manual.pdf)**: installing, a quick start, every control with its
-range and default, the flock, MAP and routes, the presets, sound-design recipes and troubleshooting.
+## At a glance
 
-[ARCHITECTURE.md](ARCHITECTURE.md) walks through all of it from the code: the signal flow, timing,
-the voice, the flock and its sources, the couplings between creatures, every parameter with its range,
-the presets, and threads and state.
+- **Two parts, A and B**, each a whole patch: three oscillators, a 3×3 FM grid, noise, drive, two
+  filters, three envelopes, two LFOs and four mod buses. Play one, layer both, split the keyboard, or
+  pick the part by MPE zone, velocity or pressure.
+- **Every note is a creature.** It hatches where your note puts its lure, flies with the others of
+  its species, and fades off when you let go. Up to 16 per part.
+- **The flock is a modulation source.** Speed, Nearest, Heading and Turn route anywhere, and three
+  couplings run between creatures: Neighbour FM, Tune Pull and Bite.
+- **Shape envelopes** after XAOC's Zadar: 60 contours in ten banks, from 1 ms to 30 minutes, chained
+  into each other.
+- **MAP** instead of a matrix page: arm a source, drag a knob.
+- **166 factory presets** in ten categories, with favorites.
 
-| Part A | Part B |
-|---|---|
-| ![Part A](docs/panel.png) | ![Part B](docs/panel-b.png) |
-| **MAP mode, with SPEED armed** | **The route list** |
-| ![MAP mode](docs/panel-map.png) | ![Routes](docs/panel-routes.png) |
-| **The TOUCH tab** | **The SKY view** |
-| ![TOUCH](docs/panel-touch.png) | ![SKY](docs/panel-sky.png) |
+## Sound
 
-**Two views**, switched at the top right. **SYNTH** puts big, drawn panels down the left beside the
-sky: the oscillators with their waves drawn (and an FM tab that draws what comes out), the filters'
-response, which you drag to set cutoff and resonance and which follows the modulated cutoff of the
-newest note as it plays, and the envelopes (with LFOS and BUSES tabs: four mod buses per part that mix sources by Sum,
-Multiply, Min or Max, curve them, fade them in after a delay, and route the mix on under a name of
-your own). Under the sky a panel has VOICE (the
-stereo field, the voices in use, and live meters for A, B and the master that glow with the level),
-FLOCK, MOTION and TOUCH (the touch curves and glide rounding) tabs; RINGS and ROUTES sit just under
-the sky. **SKY** hides everything but the flocks.
+![The FM tab](docs/readme/fm.jpg)
 
-## The design
+Each oscillator plays an analog wave (sine, triangle, saw, square, pulse), one of the TX81Z's eight FM
+waves, white or pink noise, or **Random**, a wave drawn fresh for every note. It's pitched by note,
+by ratio or at a fixed Hz. The **FM** tab above is the 3×3 grid, row into column, with each
+oscillator's feedback on the diagonal, and draws what actually comes out at C4. Beside it sit the
+couplings **between creatures** and the part's noise and drift.
 
-- **Every note is a creature.** Your finger is its lure: the note sets where the lure sits left to
-  right, Glide moves it sideways, Slide lifts it, and Press makes the creature fly faster and
-  brighter. Let go and it flies off as it fades. LURE X and LURE Y on the FLOCK tab choose what
-  places the lure, and RINGS under the sky shows or hides each held note's lure ring.
-- **Two species, A and B**, each a whole patch with its own way of flying: Shoal, Scatter, Hunt or
-  Flee. The play mode decides which species a note hatches (Single, Layer, Split, MPE Zones,
-  Velocity or Expression). Each plays up to 16 creatures.
-- **A voice:** three oscillators (analog waves, the TX81Z's eight FM waves, noise, or Random: a
-  wave drawn fresh for each note; pitched by
-  note, ratio or fixed Hz), a 3×3 FM grid whose diagonal is each oscillator's feedback, noise, drive,
-  and two filters, serial or parallel, with each oscillator and the noise picking Filter 1, Filter 2
-  or both.
-- **Between creatures:** the nearest neighbour's Osc 1 feeds this creature's Osc 2 (Neighbour FM), so
-  a tight flock rings and a loose one is clean. Creatures flying the same way drift toward pure
-  intervals (Tune Pull). A hunter that catches its prey ring-modulates it (Bite).
-- **Ink:** each creature sheds ink in the sky that blooms (Spread) and fades (Tail).
-- **Stereo:** X Pan sets how far each creature's place in the sky, left to right, pans its voice,
-  so a flock can spread across the stereo field. Output Width sets the whole output's width.
-- **Three envelopes, ADSR or Shape.** Each is a DAHDSR with curves and loops, or, in Shape mode
-  (after XAOC's Zadar), one contour from a library of 60 in ten banks (ADSR-style ones among them), stretched over 1 ms to 30
-  minutes or a tempo length, warped, bent, scaled, reversed, repeated and held at a sustain point. An Env Chain starts one Shape
-  envelope from another at a phase of its run, in a line or a loop, for drones and textures that keep
-  moving.
-- **Four LFOs.** Two move the flock: the wingbeat, one per creature, and the wind, one gust for the
-  whole sky (Push sets how hard). They only move the flock. LFO 1 and LFO 2 are plain LFOs, the two
-  to map.
+![The filter, in MAP mode](docs/readme/map-filter.jpg)
 
-## Modulation: MAP
+Two filters, serial or parallel with a balance between them: low pass, high pass, band pass, notch,
+peak, ladder and two combs, 12 to 48 dB. Each oscillator and the noise picks Filter 1, Filter 2 or
+both. The response is drawn and draggable (handle 1 and 2 set cutoff and resonance), and it follows
+the newest note's modulated cutoff as it plays. A drive stage (soft, hard or tube) sits after them.
+This shot is in MAP mode with the Wah bus of *Finger Wah* armed: the rings on Cutoff and Res are how
+far it moves them.
 
-There is no matrix page. Touch a source chip, which turns **MAP** on with it armed, then drag any knob: the drag sets how much that
-source moves it, shown as a ring in the source's colour (up to four per knob). Double-click a knob to
-flip its route, right-click to remove it. The sources are the touch chips in the header (Velocity,
-Press, Glide, Slide, and Release, the release velocity), the envelope and LFO chips on their panels,
-and the flock's own under the sky: Speed, Nearest, Heading, and Turn (which way and how hard the
-creature is turning, + right, - left). Each chip's LED glows with its source as it moves. Random (a
-value per note) has a chip under the sky; Key, Mod Wheel and the four macros are in the
-route list. The FM grid and the flock params are knobs, so they map like any other. While a part plays,
-each knob its routes move shows a white line on its outer ring out to where the newest note has it
-now, MAP or not, and the oscillator, FM and LFO pictures draw that note's values.
+## Envelopes, LFOs and buses
 
-Underneath, each part has a pool of 64 routes (source, destination, amount) as host params, so route
-depths can be automated. **ROUTES** lists the ones in use, sixteen to a page, to edit by name: **+ ADD**
-starts one and **X** removes it.
+The card at the bottom left has three tabs.
+
+![Shape envelopes](docs/readme/shape.jpg)
+
+**ENVELOPES.** Each of the three is an ADSR (a DAHDSR with curves and loops) or a **Shape**: one
+contour from a library of 60 in ten banks (Rise, Fall, Swell, Pulse, Waves, Steps, Drift, Strike,
+ADSR and Acoustic), stretched over 1 ms to 30 minutes or a tempo length, then warped, bent, scaled,
+reversed, repeated and held at a sustain point. **Env Chain** starts one Shape envelope from another
+at a phase of its run, in a line or a loop, so drones keep moving. Above, *Two Tides*: Bloom, Arch
+and Wander, five, thirteen and twenty-nine seconds long.
+
+![LFOs](docs/readme/lfos.jpg)
+
+**LFOS.** Two plain LFOs per part (sine, triangle, saw, square, S&H, smooth), free or tempo-synced,
+retriggered per note, free-running or one for the whole part. *Twin Pulse* multiplies these two so
+its drone only swells where both are up.
+
+![Mod buses](docs/readme/buses.jpg)
+
+**BUSES.** Four per part. A bus mixes the routes into it by **Sum, Multiply, Min or Max**, bends the
+result (linear, exponential, log, S-curve, absolute), sets its polarity (as is, unipolar,
+bipolar, inverted), can wait and fade in
+after the note, lags it, and runs per note or once for the whole part. Name it and it routes on under
+that name, as *Flight Steps* does with **Wing Speed** and **Flock Heading**.
+
+## The flock
+
+![The FLOCK tab](docs/readme/flock.jpg)
+
+The tabs under the sky set how each species flies. **Behaviour** is Shoal, Scatter, Hunt or Flee;
+the knobs are the boids' cohesion, alignment and separation, plus speed, wander, how hard the lure
+pulls, how near counts as a neighbour, and the size of the sky. **Lure X** and **Lure Y** choose what places a note's
+lure (pitch, velocity, press, slide, release, random or the centre), and **Walls** are soft, wrap or
+open. **Tail** and **Spread** set how long the ink lasts and how far it blooms.
+
+![The MOTION tab](docs/readme/motion.jpg)
+
+**MOTION** holds the two LFOs that move only the flock: the **wingbeat**, one per creature, and the
+**wind**, one gust for the whole sky, with **Push** for how hard each shoves. **VOICE** has the
+stereo field (X Pan spreads creatures across it by where they fly), polyphony and mono/legato, glide,
+bend range, levels and live meters. **TOUCH** has a curve and smoothing for each touch dimension and
+glide rounding for MPE slides.
+
+Between creatures, the nearest neighbour's Osc 1 feeds this creature's Osc 2 (**Neighbour FM**);
+creatures flying the same way drift toward pure intervals (**Tune Pull**); and a hunter that catches
+its prey ring-modulates it (**Bite**).
+
+![The SKY view](docs/readme/sky.jpg)
+
+**SKY**, top right, hides everything but the flocks. Part A's creatures are orange and B's teal;
+grey rings are lures, a pink ring is a creature that's been caught, and thin lines join neighbours
+that hear each other.
+
+## Modulation: MAP and routes
+
+There is no matrix page. Click a source chip and **MAP** turns on with it armed; drag any knob and
+the drag sets how far that source moves it, drawn as a ring in the source's colour (up to four per
+knob). Double-click a knob to flip its route, right-click to remove it. Sources are the touch chips
+in the header (Velocity, Press, Glide, Slide, Release), the envelope, LFO and bus chips on their
+cards, and the flock's own under the sky (Speed, Nearest, Heading, Turn, Random). Key, Mod Wheel and
+four macros are in the route list. While a part plays, each moved knob shows a white line out to
+where the newest note has it now, MAP or not.
+
+![The route list](docs/readme/routes.jpg)
+
+Each part has 64 routes (source, destination, amount), all host params, so depths can be
+automated. **ROUTES** lists the ones in use, sixteen to a page, to edit by name: **+ ADD** starts
+one and **X** removes it.
+
+## Play it with your hands
+
+JSynth is MPE first. Your finger is the creature's lure: the note sets where it sits left to right,
+**Glide** (pitch bend) moves it sideways, **Slide** lifts it, and **Press** makes the creature fly
+faster and brighter. Release velocity is a source too. The play mode decides which part a note
+hatches in: **Single, Layer, Split, MPE Zones, Velocity** or **Expression**. Most presets also answer
+the mod wheel, so they play from any keyboard.
 
 ## Presets
 
-As in JVerb: the arrows step through the presets, the name opens them by category, and **SAVE** saves
-the current sound as a user preset (`.jspreset`, plain text, in the user's application data folder
-under `JSynth/Presets`). SAVE opens a name box: type a name and press Enter or click SAVE again to
-save it, or press Escape or click anywhere else to back out. To remove a user preset, load it, open the name
-menu and pick **Delete**; it asks once more before the file goes. A factory preset loads every param it doesn't set at its default, so nothing
-from the last patch carries over.
+The arrows step through presets, the name opens them by category, and **SAVE** stores the current
+sound as a user preset (`.jspreset`, plain text, under `JSynth/Presets` in your application data
+folder). To delete a user preset, load it and pick **Delete** from the name menu. Click the **star**
+to make any preset a favorite; **Favorites** sits at the top of the menu and is shared by every
+instance.
 
-Click the **star** beside the name to make the current preset a favorite (click again to unstar it).
-**Favorites** at the top of the name menu lists every starred preset, factory or your own. Favorites
-are kept in `Favorites.txt` beside the `Presets` folder, so they last between sessions and every
-instance of the plugin shares them.
+The 166 factory presets are level-matched and come in ten categories:
 
-The 166 factory presets are mostly showcases, in 10 categories. **Essentials** comes first: a few plain
-patches to start from. Then **Flock**, the creatures playing the sound (Neighbour FM, Bite, Tune Pull
-and the flock's sources, many through the mod buses); **Pressure**, Press shaped by the buses (curved,
-multiplied by LFOs and shapes, delayed and lagged); **Expressive**, played with Press, which bows,
-blows, bends, gates or blooms the sound; **Drones** and **Textures**, built on Shape-mode envelopes and
-the buses (long drifting shapes under a held chord, and shapes as the amp so each held note plays a
-pattern); **Motion**, patches that keep moving on their own; **Interplay**, envelopes routed onto each
-other's Time, Warp and Bend; **Landscapes**, both parts at once on Shape envelopes that move each
-other; and **Monsta**, variations on MicroMonsta 2 programs. Most answer the mod wheel and Press, so
-they play from any keyboard, and every preset's level is matched, so stepping through the bank
-doesn't jump.
+| Category | What's in it |
+|---|---|
+| **Essentials** | Plain patches to start from: basses, leads, keys, bells, plucks, brass, strings, pads, splits |
+| **Flock** | The creatures playing the sound: Neighbour FM, Bite, Tune Pull and the flock's sources |
+| **Pressure** | Press shaped by the buses: curved, multiplied, delayed and lagged |
+| **Expressive** | Played with Press, which bows, blows, bends, gates or blooms the sound |
+| **Drones** | Long drifting Shape envelopes under a held chord |
+| **Textures** | Shapes as the amp, so each held note plays a pattern |
+| **Motion** | Patches that keep moving on their own |
+| **Interplay** | Envelopes routed onto each other's Time, Warp and Bend |
+| **Landscapes** | Both parts at once on Shape envelopes that move each other |
+| **Monsta** | Variations on MicroMonsta 2 programs |
 
-`jsynth-record out.wav|out.mp4 [preset] [cm7-swell|four-bar|drone]` (built with the tools) plays a
-phrase through a preset and writes the audio, or a video of the panel with it: a held Cm7 whose
-pressure swells up and back over 15 seconds, four strummed chords (Cm9, Abmaj7, Fm9, G7b9) with the
-pressure swelling through each bar, or a low chord built up over half a minute.
+## For developers
 
-## Params
-
-`src/params.h` writes a part's params once, as offsets, and `partId(part, offset)` gives the host's
-id. Each module is a block of ids with room to grow (oscillators 16 apart, routes 4 apart), so ids can
-stay put once released. The state saves each value with its id, so a state from a build with fewer
-params loads, and unknown ids are skipped.
+- [ARCHITECTURE.md](ARCHITECTURE.md) walks through the code: signal flow, timing, the voice, the
+  flock, the couplings, every parameter with its range, the presets, threads and state.
+- `src/params.h` writes a part's params once, as offsets; `partId(part, offset)` gives the host's id.
+  Each module is a block of ids with room to grow, so ids stay put once released, and unknown ids in
+  a saved state are skipped.
+- With `-DJCLAP_BUILD_TOOLS=ON`:
+  - `jsynth-screenshot out.png [part [routes [map-source [width height [view [voice-tab [env-tab
+    [osc-tab [preset]]]]]]]]]` renders the panel offscreen. [`docs/readme/make.sh`](docs/readme/make.sh)
+    makes this page's pictures with it.
+  - `jsynth-record out.wav|out.mp4 [preset] [cm7-swell|four-bar|drone|landscape]` plays a phrase
+    through a preset and writes the audio, or a video of the panel with it.

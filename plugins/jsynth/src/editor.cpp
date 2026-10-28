@@ -2486,6 +2486,11 @@ public:
       envTabs_->select(tab);
       refresh();
    }
+   void showOscTab(int tab) {
+      oscTab_ = tab;
+      oscTabs_->select(tab);
+      refresh();
+   }
 
    void setView(int view) {
       host_.view = std::clamp(view, 0, 1);
@@ -3268,7 +3273,7 @@ private:
    // The panels shared by both parts: the tabs, the drawings (which follow the shown part), the
    // flock's sources under the sky, and the touch settings.
    void buildShared() {
-      auto &tabs = glassy(put<ui::TabBar>({26, 68, 260, 26}, std::vector<std::string>{"OSCILLATORS", "FM"}), kDim);
+      auto &tabs = *(oscTabs_ = &glassy(put<ui::TabBar>({26, 68, 260, 26}, std::vector<std::string>{"OSCILLATORS", "FM"}), kDim));
       tabs.select(oscTab_);
       tabs.onChange = [this](int t) {
          oscTab_ = t;
@@ -3491,7 +3496,7 @@ private:
    SourceChip *busChips_[kPartCount][kBusCount] = {};
    std::vector<ui::Dropdown *> routeSources_[kPartCount], routeDests_[kPartCount];
    int voiceTab_ = 0; // and the panel under the sky's: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH
-   ui::TabBar *voiceTabs_ = nullptr, *envTabs_ = nullptr;
+   ui::TabBar *voiceTabs_ = nullptr, *envTabs_ = nullptr, *oscTabs_ = nullptr;
    // A, B and the main output's peaks, falling slowly, for the level bars.
    float meters_[3] = {};
    std::vector<ui::EnvelopeEditor::Playhead> heads_;
@@ -3515,6 +3520,7 @@ bool renderScreenshot(EditorHost &host, const ScreenshotView &view, double secon
    panel.setView(view.view);
    panel.showVoiceTab(view.voiceTab);
    panel.showEnvTab(view.envTab);
+   panel.showOscTab(view.oscTab);
    const int frames = static_cast<int>(seconds * 60.0);
    for (int i = 0; i < frames; ++i)
       panel.step(1.0f / 60.0f);

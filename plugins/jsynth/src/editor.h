@@ -69,6 +69,7 @@ struct ScreenshotView {
    int view = 0;
    int voiceTab = 0; // the tab under the sky: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH
    int envTab = 0;   // the envelope card's: 0 ENVELOPES, 1 LFOS, 2 BUSES
+   int oscTab = 0;   // the oscillator card's: 0 OSCILLATORS, 1 FM
 };
 
 // Flies the flock for `seconds`, then draws the panel offscreen at the given pixel size and saves it
