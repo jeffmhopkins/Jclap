@@ -39,10 +39,12 @@ constexpr float kDesignWidth = 720.0f;
 constexpr float kDesignHeight = 480.0f;
 constexpr float kHeaderHeight = 64.0f;
 
-constexpr unsigned kTeal = 0xff3fc1b0;
-constexpr unsigned kAmber = 0xfff2b13c;
+// The house orange for what is live, a yellow for warnings.
+constexpr unsigned kAccent = 0xfff28c28;
+constexpr unsigned kAmber = 0xffe8c547;
 constexpr unsigned kRed = 0xffe5534b;
 constexpr unsigned kIdle = 0xff59606a;
+constexpr unsigned kDim = 0xff8d939c; // the theme's dimText, for small headings
 
 // The panel's timer, and how much of it the history graph shows.
 constexpr int kTickMs = 30;
@@ -175,7 +177,7 @@ private:
 
    std::unique_ptr<Editor> editor_;
    std::string text_, placeholder_;
-   unsigned accent_ = kTeal;
+   unsigned accent_ = kAccent;
    bool hover_ = false;
 };
 
@@ -221,7 +223,7 @@ public:
          if (searchAvailable_) {
             for (int i = 0; i < 3; ++i) {
                const float a = 0.5f + 0.5f * std::sin((frame_ * 0.15f) - i * 0.9f);
-               canvas.setColor(withAlpha(kTeal, static_cast<unsigned>(60 + 160 * a)));
+               canvas.setColor(withAlpha(kAccent, static_cast<unsigned>(60 + 160 * a)));
                canvas.circle(width() * 0.5f - 14 * s + i * 11 * s, cy - 18 * s, 6 * s);
             }
             canvas.setColor(t.dimText);
@@ -248,9 +250,9 @@ public:
          const float y = 3 * s + i * rowH, h = rowH - 3 * s, x = 3 * s, w = width() - 6 * s;
          const bool on = e.name == selected_, over = scroll_ + i == hover_;
          if (on) {
-            canvas.setColor(withAlpha(kTeal, 0x2a));
+            canvas.setColor(withAlpha(kAccent, 0x2a));
             canvas.roundedRectangle(x, y, w, h, 4 * s);
-            canvas.setColor(withAlpha(kTeal, 0xb0));
+            canvas.setColor(withAlpha(kAccent, 0xb0));
             canvas.roundedRectangleBorder(x, y, w, h, 4 * s, 1.0f * s);
          }
          else if (over) {
@@ -259,7 +261,7 @@ public:
          }
          // A dot per tunnel: filled for the one listened to.
          const float d = 8 * s, cx = x + 12 * s, cy = y + h * 0.5f;
-         canvas.setColor(on ? kTeal : over ? t.text : kIdle);
+         canvas.setColor(on ? kAccent : over ? t.text : kIdle);
          if (on)
             canvas.circle(cx - d * 0.5f, cy - d * 0.5f, d);
          else
@@ -538,9 +540,9 @@ public:
          if (a == kNone || b == kNone)
             continue;
          const float xa = X(age), xb = X(age - 1), ya = Y(a), yb = Y(b);
-         canvas.setColor(mix(t.background, kTeal, 0.16f));
+         canvas.setColor(mix(t.background, kAccent, 0.16f));
          canvas.fill(xa, std::min(ya, yb), xb - xa + 1.0f, floor - std::min(ya, yb));
-         canvas.setColor(kTeal);
+         canvas.setColor(kAccent);
          canvas.segment(xa, ya, xb, yb, 1.6f * s, true);
       }
       for (int age = 0; age < kHistory; ++age)
@@ -551,7 +553,7 @@ public:
       if (ms_) {
          // A small key.
          const float kx = px + 118 * s;
-         canvas.setColor(kTeal);
+         canvas.setColor(kAccent);
          canvas.fill(kx, 11 * s, 10 * s, 2 * s);
          canvas.setColor(t.dimText);
          canvas.text("lead", ui::font(10 * s), visage::Font::kLeft, kx + 14 * s, 4 * s, 40 * s, 14 * s);
@@ -623,13 +625,13 @@ public:
       update_ = &add<ui::UpdateNotice>({224, 19, 240, 26});
       update_->alignRight = true;
       auto &mode = add<ui::SegmentedSwitch>({476, 16, 230, 32}, std::vector<std::string>{"SEND", "RECEIVE"});
-      mode.setAccent(kTeal);
+      mode.setAccent(kAccent);
       bindings_.bind(mode, kParamMode);
       tips_.add(mode, "Send this track to the network, or play a tunnel from it");
 
       // The tunnel: its name, or what to listen to and what's out there.
       tunnelSection_ = &section({12, 76, 276, 240}, "");
-      nameLabel_ = &add<ui::Label>({28, 110, 244, 14}, "", kTeal, visage::Font::kLeft, 0.8f);
+      nameLabel_ = &add<ui::Label>({28, 110, 244, 14}, "", kDim, visage::Font::kLeft, 0.8f);
       name_ = &add<TextBox>({28, 127, 244, 34});
       name_->onCommit = [this](const std::string &value) {
          if (receiving())
@@ -638,7 +640,7 @@ public:
             host_.setSendName(value);
          sync();
       };
-      foundLabel_ = &add<ui::Label>({28, 174, 160, 14}, "ON THE NETWORK", kTeal, visage::Font::kLeft, 0.8f);
+      foundLabel_ = &add<ui::Label>({28, 174, 160, 14}, "ON THE NETWORK", kDim, visage::Font::kLeft, 0.8f);
       foundCount_ = &add<ui::Label>({188, 174, 84, 14}, "", 0, visage::Font::kRight, 0.8f);
       list_ = &add<TunnelList>({28, 192, 244, 116});
       list_->onPick = [this](const std::string &name) {
@@ -646,8 +648,8 @@ public:
          sync();
       };
       // The sender's side of the same box: where receivers can find it.
-      reachLabel_ = &add<ui::Label>({28, 174, 244, 14}, "REACHABLE AT", kTeal, visage::Font::kLeft, 0.8f);
-      address_ = &add<ui::Label>({28, 190, 244, 26}, "", kTeal, visage::Font::kLeft, 0.72f);
+      reachLabel_ = &add<ui::Label>({28, 174, 244, 14}, "REACHABLE AT", kDim, visage::Font::kLeft, 0.8f);
+      address_ = &add<ui::Label>({28, 190, 244, 26}, "", kAccent, visage::Font::kLeft, 0.72f);
       const char *hints[] = {"Receivers pick this name from their", "ON THE NETWORK list, or type the",
                              "address if their search can't see it.", "",
                              "Names: letters, digits, spaces, - and _"};
@@ -666,26 +668,26 @@ public:
       // Bottom left: how a sender codes, or how a receiver buffers. Same box, swapped with the mode.
       bottomSection_ = &section({12, 328, 404, 140}, "");
       codec_ = &add<ui::SegmentedSwitch>({28, 372, 180, 30}, std::vector<std::string>{"OPUS", "PCM 24-BIT"});
-      codec_->setAccent(kAmber);
+      codec_->setAccent(kAccent);
       bindings_.bind(*codec_, kParamCodec);
       tips_.add(*codec_, "Opus is the one to use on Wi-Fi; PCM is uncompressed, for wired networks");
       redundant_ = &add<ui::Button>({28, 416, 180, 30}, "REDUNDANT");
       redundant_->setToggle(true);
-      redundant_->setAccent(kAmber);
+      redundant_->setAccent(kAccent);
       bindings_.bind(*redundant_, kParamRedundancy);
       tips_.add(*redundant_, "Repeat each frame in the next packet: a single lost packet costs nothing");
-      bitrate_ = &knob(kParamBitrate, "BITRATE", kAmber, {222, 358, 96, 104}, 32.0);
+      bitrate_ = &knob(kParamBitrate, "BITRATE", kAccent, {222, 358, 96, 104}, 32.0);
       formatInfo_[0] = &add<ui::Label>({324, 372, 80, 14}, "", 0, visage::Font::kLeft, 0.8f);
       formatInfo_[1] = &add<ui::Label>({324, 388, 80, 18}, "", 0, visage::Font::kLeft, 0.8f);
       formatInfo_[2] = &add<ui::Label>({324, 408, 80, 14}, "", 0, visage::Font::kLeft, 0.8f);
       formatInfo_[0]->setColor(ui::defaultTheme().dimText);
       formatInfo_[2]->setColor(ui::defaultTheme().dimText);
 
-      buffer_ = &knob(kParamBuffer, "BUFFER", kTeal, {24, 358, 104, 104}, 1.0);
+      buffer_ = &knob(kParamBuffer, "BUFFER", kAccent, {24, 358, 104, 104}, 1.0);
       tips_.add(*buffer_, "How far ahead of late packets playback stays");
       autoBuffer_ = &add<ui::Button>({144, 374, 100, 30}, "AUTO");
       autoBuffer_->setToggle(true);
-      autoBuffer_->setAccent(kTeal);
+      autoBuffer_->setAccent(kAccent);
       bindings_.bind(*autoBuffer_, kParamAutoBuffer);
       tips_.add(*autoBuffer_, "Grow the buffer after dropouts, shrink it slowly when the network is quiet");
       const char *bufferHints[] = {"Grows after a dropout, shrinks", "back after 20 quiet seconds",
@@ -698,11 +700,11 @@ public:
 
       // Bottom right: what comes out.
       section({428, 328, 280, 140}, "OUTPUT");
-      level_ = &knob(kParamLevel, "LEVEL", kTeal, {440, 358, 96, 104}, 1.0);
+      level_ = &knob(kParamLevel, "LEVEL", kAccent, {440, 358, 96, 104}, 1.0);
       tips_.add(*level_, "Level of what this receiver plays");
       thru_ = &add<ui::Button>({548, 384, 84, 30}, "THRU");
       thru_->setToggle(true);
-      thru_->setAccent(kTeal);
+      thru_->setAccent(kAccent);
       bindings_.bind(*thru_, kParamThru);
       thruInfo_ = &add<ui::Label>({548, 418, 90, 14}, "", 0, visage::Font::kLeft, 0.8f);
       thruInfo_->setColor(ui::defaultTheme().dimText);
@@ -740,7 +742,7 @@ public:
       canvas.setColor(t.headerBar);
       canvas.fill(0, 0, width(), kHeaderHeight * s);
       drawLogo(canvas, s);
-      canvas.setColor(kTeal);
+      canvas.setColor(kAccent);
       canvas.text("J", ui::font(28 * s), visage::Font::kLeft, 58 * s, 12 * s, 30 * s, 40 * s);
       canvas.setColor(t.text);
       canvas.text("Tunnel", ui::font(28 * s), visage::Font::kLeft, 71 * s, 12 * s, 120 * s, 40 * s);
@@ -754,11 +756,11 @@ public:
 private:
    void drawLogo(visage::Canvas &canvas, float s) {
       // A tunnel mouth: an arch with a dot travelling through it.
-      canvas.setColor(kTeal);
+      canvas.setColor(kAccent);
       canvas.roundedRectangleBorder(14 * s, 14 * s, 36 * s, 36 * s, 16 * s, 3.0f * s);
       canvas.setColor(ui::defaultTheme().headerBar);
       canvas.fill(12 * s, 38 * s, 40 * s, 14 * s);
-      canvas.setColor(kTeal);
+      canvas.setColor(kAccent);
       canvas.fill(14 * s, 38 * s, 3 * s, 10 * s);
       canvas.fill(47 * s, 38 * s, 3 * s, 10 * s);
       canvas.setColor(kAmber);
@@ -899,7 +901,7 @@ private:
       if (!offline(st, link)) {
          if (st.listeners > 0) {
             link.headline = "SENDING";
-            link.color = kTeal;
+            link.color = kAccent;
             link.flowing = true;
             std::snprintf(buffer, sizeof(buffer), "%s, %.1f kHz%s", opus ? "Opus" : "PCM 24-bit", rate / 1000.0,
                           redundant ? ", redundant" : "");
@@ -923,7 +925,7 @@ private:
       graph_->push(std::max(db, -60.0f), 0.0f, 0);
 
       std::snprintf(buffer, sizeof(buffer), "%d", st.listeners);
-      readouts_->set(0, "RECEIVERS", buffer, st.listeners > 0 ? kTeal : 0);
+      readouts_->set(0, "RECEIVERS", buffer, st.listeners > 0 ? kAccent : 0);
       readouts_->set(1, "FORMAT", opus ? "Opus" : "PCM 24");
       std::snprintf(buffer, sizeof(buffer), "%.1f kHz", rate / 1000.0);
       readouts_->set(2, "RATE", rate > 0 ? buffer : "-");
@@ -964,7 +966,7 @@ private:
             break;
          case 3:
             link.headline = playing ? "RECEIVING" : "BUFFERING";
-            link.color = playing ? kTeal : kAmber;
+            link.color = playing ? kAccent : kAmber;
             link.flowing = true;
             link.left.lit = link.right.lit = true;
             if (st.sampleRate) {
