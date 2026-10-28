@@ -64,14 +64,13 @@ Polar XY also comes as a VST3, for hosts without CLAP: take `jclap-PolarXY-VST3-
 > with `curl` aren't flagged, so the easiest install is from Terminal:
 
 ```sh
-curl -sL https://github.com/jeffmhopkins/Jclap/releases/latest/download/jclap-macOS.zip -o /tmp/jclap.zip && rm -rf /tmp/jclap && ditto -x -k /tmp/jclap.zip /tmp/jclap \
-  && mkdir -p ~/Library/Audio/Plug-Ins/CLAP && (cd /tmp/jclap && for p in *.clap; do
-    rm -rf ~/Library/Audio/Plug-Ins/CLAP/"$p" && mv "$p" ~/Library/Audio/Plug-Ins/CLAP/; done) \
-  && find ~/Library/Caches/Bitwig -maxdepth 1 -name 'clap-metadata-*' -exec rm -rf {} + 2>/dev/null; true
+curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-macos.sh | bash
 ```
 
-It replaces older copies outright, since unzipping over an old bundle can leave stale files that stop
-it loading, and clears Bitwig's plugin cache so the next scan starts fresh.
+That runs [install-macos.sh](install-macos.sh), which installs the latest release's CLAPs and VST3s
+(`bash -s v0.10.6` instead of `bash` picks a release). It replaces older copies outright, since
+unzipping over an old bundle can leave stale files that stop it loading, and clears Bitwig's plugin
+cache so the next scan starts fresh.
 
 If you downloaded with a browser instead, clear the quarantine flag once after copying:
 
@@ -79,13 +78,7 @@ If you downloaded with a browser instead, clear the quarantine flag once after c
 xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap
 ```
 
-The same goes for the VST3: from Terminal,
-
-```sh
-curl -sL https://github.com/jeffmhopkins/Jclap/releases/latest/download/jclap-VST3-macOS.zip -o /tmp/jclap-vst3.zip && mkdir -p ~/Library/Audio/Plug-Ins/VST3 && ditto -x -k /tmp/jclap-vst3.zip ~/Library/Audio/Plug-Ins/VST3
-```
-
-or after a browser download, `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/PolarXY.vst3`.
+The VST3 needs the same after a browser download: `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/PolarXY.vst3`.
 
 > [!TIP]
 > Then restart Bitwig, or rescan plug-ins under Settings → Locations.
