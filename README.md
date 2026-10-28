@@ -26,6 +26,10 @@ and plugins that need a panel get one from the shared GUI library.
 <td align="center" valign="top"><a href="plugins/jsynth"><img src="plugins/jsynth/docs/panel.png" width="400" alt="JSynth panel"></a><br><b>JSynth</b></td>
 <td align="center" valign="top"><a href="plugins/monolith"><img src="plugins/monolith/docs/panel.png" width="400" alt="Monolith panel"></a><br><b>Monolith</b></td>
 </tr>
+<tr>
+<td align="center" valign="top"><a href="plugins/jtunnel"><img src="plugins/jtunnel/docs/panel.png" width="240" alt="JTunnel panel"></a><br><b>JTunnel</b></td>
+<td></td>
+</tr>
 </table>
 
 Panels are shown at one-third size. They are the screenshot-test references, so they always match the current build.
@@ -38,6 +42,7 @@ Panels are shown at one-third size. They are the screenshot-test references, so 
 | [JVerb](plugins/jverb) | Audio effect | Reverb moved by a live three-body gravity sim, each body its own voice in the tail, with a long echo, a loopable drive and presets ([manual](plugins/jverb/docs/JVerb-User-Manual.pdf)) |
 | [Monolith](plugins/monolith) | Note effect | Note generator that reads a slab of alien glyphs as MIDI phrases in time with the host, from a one-bar loop to a 55-glyph script that drifts and erodes, in five scripts, with presets |
 | [JSynth](plugins/jsynth) | Instrument | Two-part MPE FM synth where every note is a creature in a flock, and how the creatures fly shapes how they sound ([manual](plugins/jsynth/docs/JSynth-User-Manual.pdf)) |
+| [JTunnel](plugins/jtunnel) | Audio effect | Sends a track's audio and MIDI over the network to other JTunnels (found by name over mDNS), or plays what one sends, with Opus or PCM, a drift-following buffer for Wi-Fi, and redundancy against loss |
 
 ## Download
 

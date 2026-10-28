@@ -36,6 +36,7 @@ add_subdirectory(plugins/basic-synth)
 add_subdirectory(plugins/jverb)
 add_subdirectory(plugins/jsynth)
 add_subdirectory(plugins/monolith)
+add_subdirectory(plugins/jtunnel)
 
 # The starting point for new plugins (cmake/NewPlugin.cmake copies it). Built into build/template,
 # not build/clap, so it is checked in CI but never shipped.
