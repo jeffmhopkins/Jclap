@@ -60,8 +60,14 @@ example `jclap-JSynth-macOS.zip`). Copy the `.clap` files (bundles on macOS) to 
 > with `curl` aren't flagged, so the easiest install is from Terminal:
 
 ```sh
-curl -sL https://github.com/jeffmhopkins/Jclap/releases/latest/download/jclap-macOS.zip -o /tmp/jclap.zip && mkdir -p ~/Library/Audio/Plug-Ins/CLAP && ditto -x -k /tmp/jclap.zip ~/Library/Audio/Plug-Ins/CLAP
+curl -sL https://github.com/jeffmhopkins/Jclap/releases/latest/download/jclap-macOS.zip -o /tmp/jclap.zip && rm -rf /tmp/jclap && ditto -x -k /tmp/jclap.zip /tmp/jclap \
+  && mkdir -p ~/Library/Audio/Plug-Ins/CLAP && (cd /tmp/jclap && for p in *.clap; do
+    rm -rf ~/Library/Audio/Plug-Ins/CLAP/"$p" && mv "$p" ~/Library/Audio/Plug-Ins/CLAP/; done) \
+  && find ~/Library/Caches/Bitwig -maxdepth 1 -name 'clap-metadata-*' -exec rm -rf {} + 2>/dev/null; true
 ```
+
+It replaces older copies outright, since unzipping over an old bundle can leave stale files that stop
+it loading, and clears Bitwig's plugin cache so the next scan starts fresh.
 
 If you downloaded with a browser instead, clear the quarantine flag once after copying:
 
