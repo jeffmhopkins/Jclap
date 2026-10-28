@@ -20,3 +20,19 @@ if(JCLAP_BUILD_TOOLS)
    target_link_libraries(polar-xy-screenshot PRIVATE jclap::ui)
    jclap_add_screenshot_test(polar-xy-screenshot-test TOOL polar-xy-screenshot REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel.png)
 endif()
+
+# The VST3, for hosts without CLAP. The same plugin wrapped by clap-wrapper; see cmake/Vst3.cmake.
+jclap_add_vst3(polar-xy-vst3
+   OUTPUT_NAME "PolarXY"
+   BUNDLE_ID com.jeffmhopkins.jclap.polar-xy
+   SOURCES src/plugin.cpp src/editor.cpp)
+if(TARGET polar-xy-vst3)
+   target_include_directories(polar-xy-vst3 PRIVATE src)
+   target_link_libraries(polar-xy-vst3 PRIVATE jclap::ui)
+
+   # Loads the built .vst3 like a VST3 host and checks the CCs make it out.
+   add_executable(polar-xy-vst3-tests tests/test_vst3.cpp)
+   target_link_libraries(polar-xy-vst3-tests PRIVATE jclap_vst3_hosting)
+   add_dependencies(polar-xy-vst3-tests polar-xy-vst3)
+   add_test(NAME polar-xy-vst3-tests COMMAND polar-xy-vst3-tests ${CMAKE_BINARY_DIR}/vst3/PolarXY.vst3)
+endif()

@@ -4,7 +4,7 @@
 
 Small, single-purpose CLAP plugins, plus the shared toolkit they are built with.
 
-[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![Release](https://img.shields.io/github/v/release/jeffmhopkins/Jclap)](https://github.com/jeffmhopkins/Jclap/releases/latest) [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](CMakeLists.txt) [![CLAP 1.2](https://img.shields.io/badge/CLAP-1.2.2-blue)](https://github.com/free-audio/clap) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](.github/workflows/build.yml) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage)
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![Release](https://img.shields.io/github/v/release/jeffmhopkins/Jclap)](https://github.com/jeffmhopkins/Jclap/releases/latest) [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](CMakeLists.txt) [![CLAP 1.2](https://img.shields.io/badge/CLAP-1.2.10-blue)](https://github.com/free-audio/clap) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](.github/workflows/build.yml) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage)
 
 </div>
 
@@ -54,6 +54,10 @@ example `jclap-JSynth-macOS.zip`). Copy the `.clap` files (bundles on macOS) to 
 - Windows: `C:\Program Files\Common Files\CLAP`
 - Linux: `~/.clap`
 
+Polar XY also comes as a VST3, for hosts without CLAP: take `jclap-PolarXY-VST3-<OS>.zip` and copy
+`PolarXY.vst3` to your VST3 folder (`~/Library/Audio/Plug-Ins/VST3` on macOS,
+`C:\Program Files\Common Files\VST3` on Windows, `~/.vst3` on Linux).
+
 > [!WARNING]
 > **macOS: browser downloads are quarantined.** The plugins are only ad-hoc signed (not notarized), so
 > files downloaded through a browser are quarantined and Bitwig silently skips them. Files downloaded
@@ -68,6 +72,14 @@ If you downloaded with a browser instead, clear the quarantine flag once after c
 ```sh
 xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap
 ```
+
+The same goes for the VST3: from Terminal,
+
+```sh
+curl -sL https://github.com/jeffmhopkins/Jclap/releases/latest/download/jclap-VST3-macOS.zip -o /tmp/jclap-vst3.zip && mkdir -p ~/Library/Audio/Plug-Ins/VST3 && ditto -x -k /tmp/jclap-vst3.zip ~/Library/Audio/Plug-Ins/VST3
+```
+
+or after a browser download, `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/PolarXY.vst3`.
 
 > [!TIP]
 > Then restart Bitwig, or rescan plug-ins under Settings → Locations.
@@ -87,8 +99,15 @@ ctest --test-dir build -C Release
 > [!NOTE]
 > On Linux, install `libx11-dev libxrandr-dev libgl1-mesa-dev` first (the GUI library uses them).
 
-All plugins land in `build/clap/`. CI builds Linux, macOS (universal) and Windows on every push, runs
-the tests, and checks every plugin with [clap-validator](https://github.com/free-audio/clap-validator).
+All plugins land in `build/clap/`, and the VST3s (only Polar XY has one) in `build/vst3/`. CI builds
+Linux, macOS (universal) and Windows on every push, runs the tests, and checks every plugin with
+[clap-validator](https://github.com/free-audio/clap-validator) and every VST3 with Steinberg's validator.
+
+> [!NOTE]
+> **VST3.** A VST3 is the plugin's CLAP sources wrapped by [clap-wrapper](https://github.com/free-audio/clap-wrapper)
+> into one self-contained `.vst3`; `jclap_add_vst3` in [cmake/JClap.cmake](cmake/JClap.cmake) adds one.
+> The VST3 SDK it builds against is MIT licensed (since 3.8). Configure with `-DJCLAP_BUILD_VST3=OFF`
+> to skip them.
 
 ## Adding a plugin
 

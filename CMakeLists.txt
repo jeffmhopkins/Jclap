@@ -12,13 +12,25 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 include(FetchContent)
+# 1.2.10 rather than older: clap-wrapper (for the VST3s) builds against its headers.
 FetchContent_Declare(clap
    GIT_REPOSITORY https://github.com/free-audio/clap.git
-   GIT_TAG 1.2.2)
+   GIT_TAG 1.2.10)
 FetchContent_MakeAvailable(clap)
 
 include(cmake/JClap.cmake)
 enable_testing()
+
+# VST3 builds of the plugins that want one (only Polar XY), made by wrapping the CLAP with
+# clap-wrapper. The VST3 SDK is MIT licensed since 3.8.
+option(JCLAP_BUILD_VST3 "Build VST3 versions of the plugins that have one" ON)
+if(JCLAP_BUILD_VST3)
+   # clap-wrapper and the SDK's hosting code have Objective-C++ parts on macOS.
+   if(APPLE)
+      enable_language(OBJC OBJCXX)
+   endif()
+   include(cmake/Vst3.cmake)
+endif()
 
 # Offscreen renderers (panel screenshots, the widget gallery). They need a GPU or a software Vulkan driver.
 option(JCLAP_BUILD_TOOLS "Build developer tools" OFF)

@@ -40,19 +40,19 @@ jobs:
       - name: Sign (macOS)
         if: runner.os == 'macOS'
         run: |
-          codesign --force --sign - build/clap/*.clap build/template/*.clap
-          codesign --verify --strict --verbose=2 build/clap/*.clap
+          codesign --force --sign - build/clap/*.clap build/template/*.clap build/vst3/*.vst3
+          codesign --verify --strict --verbose=2 build/clap/*.clap build/vst3/*.vst3
       - name: Check minimum macOS version
         if: runner.os == 'macOS'
         run: |
-          for bin in build/clap/*.clap/Contents/MacOS/*; do
+          for bin in build/clap/*.clap/Contents/MacOS/* build/vst3/*.vst3/Contents/MacOS/*; do
             vtool -show-build "$bin"
             # arm64 can't go below 11.0, so accept 10.x or 11.x and fail on anything newer.
             if vtool -show-build "$bin" | awk '/minos/ {split($2, v, "."); if (v[1] > 11) bad=1} END {exit !bad}'; then
               echo "::error::$bin requires a newer macOS than 11"; exit 1
             fi
           done
-          find build/clap -maxdepth 3 | sort
+          find build/clap build/vst3 -maxdepth 3 | sort
       # The official CLAP validator loads each plugin the way a host does and checks it against the spec.
       - name: Install clap-validator
         run: cargo install --locked --git https://github.com/free-audio/clap-validator --tag 0.4.1 clap-validator
@@ -61,6 +61,22 @@ jobs:
         run: |
           for p in build/clap/*.clap build/template/*.clap; do
             clap-validator validate --only-failed "$p"
+          done
+      # Steinberg's validator does the same for the VST3s. It is built from the SDK the wrapper uses.
+      - name: Build VST3 validator
+        shell: bash
+        run: |
+          cmake -S build/_deps/vst3sdk-src -B build/vst3-validator -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF -DSMTG_ADD_VSTGUI=OFF \
+            -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=OFF \
+            -DSMTG_ADD_VST3_PLUGINS_SAMPLES=OFF -DSMTG_ADD_VST3_HOSTING_SAMPLES=OFF -DSMTG_RUN_VST_VALIDATOR=OFF
+          cmake --build build/vst3-validator --config Release --target validator
+      - name: Validate VST3s
+        shell: bash
+        run: |
+          validator=$(find build/vst3-validator/bin -type f \( -name validator -o -name validator.exe \) | head -n 1)
+          for p in build/vst3/*.vst3; do
+            "$validator" "$p"
           done
       - name: Package (macOS)
         if: runner.os == 'macOS'
@@ -72,6 +88,12 @@ jobs:
             name=$(basename "$p" .clap)
             ditto -c -k --sequesterRsrc --keepParent "$p" "dist/jclap-$name-${{ runner.os }}.zip"
           done
+          # VST3s get their own zips, so the CLAP zips still unpack straight into the CLAP folder.
+          ditto -c -k --sequesterRsrc build/vst3 "dist/jclap-VST3-${{ runner.os }}.zip"
+          for p in build/vst3/*.vst3; do
+            name=$(basename "$p" .vst3)
+            ditto -c -k --sequesterRsrc --keepParent "$p" "dist/jclap-$name-VST3-${{ runner.os }}.zip"
+          done
       - name: Package
         if: runner.os != 'macOS'
         shell: bash
@@ -81,6 +103,11 @@ jobs:
           cmake -E tar cf "../../dist/jclap-${{ runner.os }}.zip" --format=zip -- *.clap
           for p in *.clap; do
             cmake -E tar cf "../../dist/jclap-${p%.clap}-${{ runner.os }}.zip" --format=zip -- "$p"
+          done
+          cd ../vst3
+          cmake -E tar cf "../../dist/jclap-VST3-${{ runner.os }}.zip" --format=zip -- *.vst3
+          for p in *.vst3; do
+            cmake -E tar cf "../../dist/jclap-${p%.vst3}-VST3-${{ runner.os }}.zip" --format=zip -- "$p"
           done
       - name: Upload plugins
         uses: actions/upload-artifact@v4

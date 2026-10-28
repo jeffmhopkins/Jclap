@@ -10,7 +10,8 @@ Turns an XY controller's two CCs into angle and radius CCs for Omnisphere's Orb.
 
 A small CLAP note effect. It listens for two MIDI CCs carrying an X/Y position
 (Cartesian) and sends out two CCs carrying the same position as an angle and a radius (polar), ready to
-MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note effects works.
+MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note effects works, and
+there is a VST3 build for hosts without CLAP.
 
 ![Panel](docs/panel.png)
 
@@ -26,6 +27,16 @@ MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note 
 > [!TIP]
 > While learning, wiggle only along one axis near the edge so the CC you want is the one that changes
 > most.
+
+## VST3
+
+`PolarXY.vst3` is the same plugin, wrapped by clap-wrapper. It's in `jclap-PolarXY-VST3-<OS>.zip`
+on the release page; see the [main README](../../README.md#download) for where it goes.
+
+- It shows up as an instrument (VST3 has no MIDI-effect category), with a MIDI input and output.
+- The X/Y CCs reach it the usual VST3 way, as the host's MIDI CC mapping, and the angle and radius
+  go out as MIDI CC events, so the host has to pass a plugin's MIDI output on to the next device.
+  Ableton Live, for one, doesn't take MIDI out of VST3s; Bitwig, Cubase and Reaper do.
 
 ## Mapping
 

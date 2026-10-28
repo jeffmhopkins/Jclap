@@ -10,6 +10,15 @@ Then restart your DAW, or rescan plug-ins (in Bitwig: Settings → Locations).
 | Windows | `C:\Program Files\Common Files\CLAP` |
 | Linux | `~/.clap` |
 
+Polar XY also comes as a VST3: `jclap-PolarXY-VST3-<system>.zip` holds `PolarXY.vst3` (as does
+`jclap-VST3-<system>.zip`, which has every VST3). Copy it into your VST3 folder:
+
+| System | VST3 folder |
+|---|---|
+| macOS | `~/Library/Audio/Plug-Ins/VST3` |
+| Windows | `C:\Program Files\Common Files\VST3` |
+| Linux | `~/.vst3` |
+
 ### macOS: one extra step
 
 macOS puts a quarantine flag on anything downloaded through a web browser. A flagged plugin only loads
@@ -32,6 +41,14 @@ flag once:
 ```sh
 xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap
 ```
+
+The VST3 is the same: install it from Terminal with
+
+```sh
+curl -sL https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-VST3-macOS.zip -o /tmp/jclap-vst3.zip && mkdir -p ~/Library/Audio/Plug-Ins/VST3 && ditto -x -k /tmp/jclap-vst3.zip ~/Library/Audio/Plug-Ins/VST3
+```
+
+or, after a browser download, run `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/PolarXY.vst3`.
 
 Either way, restart Bitwig afterwards.
 

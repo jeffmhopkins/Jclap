@@ -70,3 +70,34 @@ function(jclap_add_screenshot_test name)
          -DOUT=${CMAKE_CURRENT_BINARY_DIR}/${name}.png -DPYTHON=${Python3_EXECUTABLE} "-DARGS=${ARG_ARGS}"
          -P ${CMAKE_SOURCE_DIR}/cmake/ScreenshotTest.cmake)
 endfunction()
+
+# jclap_add_vst3(<name> OUTPUT_NAME <FileName> BUNDLE_ID <id> SOURCES <files...>)
+#
+# Builds a VST3 of a plugin: the same sources as its CLAP (they must define clap_entry, as
+# JCLAP_ENTRY does) compiled into one self-contained .vst3 with clap-wrapper, so nothing else needs
+# installing. Lands in ${CMAKE_BINARY_DIR}/vst3. Needs JCLAP_BUILD_VST3; without it, does nothing.
+function(jclap_add_vst3 name)
+   cmake_parse_arguments(ARG "" "OUTPUT_NAME;BUNDLE_ID" "SOURCES" ${ARGN})
+   if(NOT JCLAP_BUILD_VST3)
+      return()
+   endif()
+
+   add_library(${name} MODULE ${ARG_SOURCES})
+   target_link_libraries(${name} PRIVATE clap)
+   target_compile_features(${name} PRIVATE cxx_std_17)
+   target_add_vst3_wrapper(TARGET ${name}
+      OUTPUT_NAME "${ARG_OUTPUT_NAME}"
+      BUNDLE_IDENTIFIER "${ARG_BUNDLE_ID}.vst3"
+      BUNDLE_VERSION "${PROJECT_VERSION}"
+      ASSET_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/vst3"
+      WINDOWS_FOLDER_VST3 FALSE)
+   # The wrapper only places the Linux bundle itself; $<1:...> keeps multi-config generators from
+   # adding /Release on macOS and Windows.
+   if(NOT UNIX OR APPLE)
+      set_target_properties(${name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "$<1:${CMAKE_BINARY_DIR}/vst3>")
+   endif()
+
+   if(NOT MSVC)
+      target_compile_options(${name} PRIVATE -Wall -Wextra -fvisibility=hidden)
+   endif()
+endfunction()
