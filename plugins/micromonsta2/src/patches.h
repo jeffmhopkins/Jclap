@@ -150,11 +150,11 @@ inline std::string modSentence(int slot, bool programLoaded, const ModRoute &r) 
    if (!programLoaded)
       return name + " amount" + cc + ". Pick a program to see what it modulates.";
    if (!r.used())
-      return name + " is off in this program, so this knob does nothing" + cc + ".";
+      return name + " is off in this program, so this amount does nothing" + cc + ".";
    std::string text = source(r).text;
    text[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(text[0])));
    return name + ": " + text + " modulates " + destination(r).text +
-          ". The knob sets how much: none at the centre, reversed below it" + cc + ".";
+          ". The slider sets how much: none at the centre, reversed below it" + cc + ".";
 }
 
 struct HardwarePatch {

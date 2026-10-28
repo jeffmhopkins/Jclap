@@ -21,7 +21,7 @@ target_link_libraries(<name> PRIVATE jclap::ui)
 
 | Header | What it is |
 |---|---|
-| `jclap/ui/knob.h` | Rotary knob: label, arc, value and an optional caption. Shows host modulation as an outer arc; `setMarker` ticks a value on the track, such as where a normal range ends |
+| `jclap/ui/knob.h` | Rotary knob: label, arc, value and an optional caption. Shows host modulation as an outer arc; `setMarker` ticks a value on the track, such as where a normal range ends; `setReach` shows a faint arc for how far something else (a mod matrix slot) can push it |
 | `jclap/ui/slider.h` | Horizontal or vertical fader with the same value model as the knob |
 | `jclap/ui/button.h` | Push button, or an on/off toggle with `setToggle(true)`. `onWheel` makes steppers easy |
 | `jclap/ui/dropdown.h` | Pick one of a list of options (menu on click, wheel to step), for enum params |

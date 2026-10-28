@@ -291,7 +291,7 @@ int main() {
       JCLAP_CHECK(paramName(53) == "Mod 2: Off");
       JCLAP_CHECK(paramName(74) == "Filter Cutoff");
       JCLAP_CHECK(mm2::modSentence(0, true, patch.routes[0]) ==
-                  "Mod slot 1: LFO 1 modulates the filter cutoff. The knob sets how much: none at the centre, "
+                  "Mod slot 1: LFO 1 modulates the filter cutoff. The slider sets how much: none at the centre, "
                   "reversed below it (CC 52).");
       const auto out = a.process();
       CHECK_EQ(out.midi.size(), 3u);

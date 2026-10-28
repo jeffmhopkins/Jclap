@@ -19,6 +19,14 @@ void Knob::setLiveModulation(double offset, unsigned color) {
    redraw();
 }
 
+void Knob::setReach(double amount, unsigned color) {
+   if (amount == reach_ && color == reachColor_)
+      return;
+   reach_ = amount;
+   reachColor_ = color;
+   redraw();
+}
+
 void Knob::draw(visage::Canvas &canvas) {
    const Theme &t = *theme_;
    const float w = width(), h = height();
@@ -47,6 +55,17 @@ void Knob::draw(visage::Canvas &canvas) {
       const float r0 = d * 0.5f + 1.5f * s, r1 = d * 0.5f + 6.0f * s;
       canvas.setColor(t.dimText);
       canvas.segment(cx + mx * r0, cy + my * r0, cx + mx * r1, cy + my * r1, 1.5f * s, true);
+   }
+
+   // Reach: drawn first and faint, so the host's and the plugin's modulation show over it.
+   if (reach_ > 0.0) {
+      const float lo = angleFor(std::clamp(value() - reach_, range().min, range().max));
+      const float hi = angleFor(std::clamp(value() + reach_, range().min, range().max));
+      if (hi - lo > 0.01f) {
+         const float md = d + 7.0f * s;
+         canvas.setColor((reachColor_ & 0x00ffffff) | 0x99000000);
+         canvas.arc(cx - md * 0.5f, cy - md * 0.5f, md, 2.0f * s, 0.5f * (lo + hi) - 0.5f * kPi, 0.5f * (hi - lo), true);
+      }
    }
 
    // Modulation: a thin outer arc from the knob's setting to the value in use.

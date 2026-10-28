@@ -36,11 +36,13 @@ Picking one:
 - moves every knob to that program's value without sending it, since the synth already has it. Turning
   a knob afterwards sends it as usual. Mod wheel, mod knob and volume aren't part of a program and stay
   where they are;
-- labels the mod matrix knobs with the program's routing in plain English: what the slot modulates on
-  top ("CUTOFF", "OSC2 SHAPE", "RELEASES" for all three envelopes), the source under the value
-  ("LFO 2", "LFO1×Wheel" for LFO 1 scaled by the mod wheel). Slots with no source or destination say
-  OFF. Hovering a mod knob says it in a sentence: "Mod slot 1: LFO 2 modulates the pitch of all
-  oscillators. The knob sets how much: none at the centre, reversed below it (CC 52)."
+- fills in the mod matrix table with the program's routing in plain English: each slot's source
+  ("LFO 2", "LFO1×Wheel" for LFO 1 scaled by the mod wheel), what it modulates ("CUTOFF", "RELEASES"
+  for all three envelopes) and where that is on the panel. Slots with no source or destination say
+  OFF. Hovering a slot's amount says it in a sentence: "Mod slot 1: LFO 2 modulates the pitch of all
+  oscillators. The slider sets how much: none at the centre, reversed below it (CC 52)." A knob a slot
+  is aimed at gets a faint ring in the source's colour, roughly as far as that slot's amount can push
+  it. Each LFO, the mod wheel and the mod knob say which slots they feed;
 - renames the mod matrix parameters in the host to match, so automation lanes read "Mod 1: LFO 2 →
   Pitch" instead of "Mod Matrix 1".
 
@@ -80,7 +82,7 @@ lists them; they're shared by every instance and kept between sessions.
 - A CC from your controller that passes through on the synth's channel counts as sent: the plugin
   doesn't push its knob back over it until you move that knob.
 - Values are plain 0 to 127. The manual doesn't say how each CC maps to ms, Hz or semitones, so the
-  panel shows the raw value. Tune, fine tune, filter env amount, EQ and the mod matrix knobs are drawn
+  panel shows the raw value. Tune, fine tune, filter env amount, EQ and the mod matrix amounts are drawn
   as centered (64 = middle).
 
 > [!WARNING]
@@ -102,14 +104,26 @@ From the *MicroMonsta 2 User manual v2.8*, section 7.1. The full list is in
 | Mod Matrix | Levels 1-10 52-61, Lag 1 62 |
 | Effects | Delay Time 26, Feedback 27, Level 28 · Reverb Decay 29, Mod 30, Level 31 · EQ 25 |
 | Voice | Glide 5, Detune 33, Osc Detune 34, Drive 91, Pan Spread 35, VCA/Filter Env Velocity 36/37 |
-| Header | Mod Wheel 1, Mod Knob 70, Volume 7 |
+| Performance | Mod Wheel 1, Mod Knob 70, Volume 7 |
 
 Bank select (0/32), sustain (64) and All Sound/Notes Off (120/123) are left out.
 
 ## Panel
 
 Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage. `src/editor.cpp`
-only holds the layout.
+holds the layout and `src/visuals.h` the pictures. The panel reads top to bottom like the synth:
+
+- **Audio path:** sources (three oscillators with their levels, noise and osc detune), filter, voice,
+  effects and out.
+- **Envelopes:** three large editors. Drag a corner, or drag or type in the A/D/S/R boxes under it.
+  Every stage keeps a minimum width, so a zero attack or decay still leaves each corner grabbable.
+- **Modulation:** the LFOs, mod wheel and mod knob, then the mod matrix table.
+
+The pictures are drawn only from the CC values and the program's routing, since the plugin can't hear
+the synth: a filter response (a guide; the filter type is set on the synth), delay echoes from time
+and feedback, a reverb tail from decay, the EQ tilt, the pan spread and the mix. The delay and reverb
+pictures dim when their level is 0. The LFO lights blink at a guess of each speed.
+
 Drag a knob up or down (shift for fine), use the mouse wheel for single steps, double-click to reset.
 Right-click a knob to reset it, type a value, or reach the host's menu for that parameter;
 right-click the background to pick a UI size. The window can be resized and keeps its shape.
