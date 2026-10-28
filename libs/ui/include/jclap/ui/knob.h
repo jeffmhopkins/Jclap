@@ -17,6 +17,10 @@ public:
    // the knob's units from the modulated value. 0 hides it.
    void setLiveModulation(double offset, unsigned color);
 
+   // How far something else can push the knob, such as a mod matrix slot aimed at it: a faint arc
+   // on the outer ring, `amount` either side of the setting, in the knob's units. 0 hides it.
+   void setReach(double amount, unsigned color);
+
    // A small tick just outside the track at `value`, e.g. to mark where a range's normal zone ends.
    void setMarker(double value) {
       marker_ = value;
@@ -32,6 +36,8 @@ protected:
 private:
    double liveOffset_ = 0.0;
    unsigned liveColor_ = 0;
+   double reach_ = 0.0;
+   unsigned reachColor_ = 0;
    double marker_ = 0.0;
    bool hasMarker_ = false;
 };

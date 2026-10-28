@@ -1,8 +1,9 @@
 // Renders the panel to a PNG without a host:
-//    jsynth-screenshot out.png [part [routes [map-source [width height [view [tab]]]]]]
+//    jsynth-screenshot out.png [part [routes [map-source [width height [view [voice-tab [env-tab [osc-tab [preset]]]]]]]]]
 // Part 0 is A, 1 is B. Routes 1 opens the route list. Map-source, a route source's number, turns MAP
-// on with that source armed. View 0 is the synth, 1 only the sky. Tab
-// is the one under the sky: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH.
+// on with that source armed. View 0 is the synth, 1 only the sky. Voice-tab is the one under the
+// sky: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH. Env-tab is 0 ENVELOPES, 1 LFOS, 2 BUSES; osc-tab is 0
+// OSCILLATORS, 1 FM. Preset, a factory preset's name, loads it in place of the demo patch.
 
 #include <cstdio>
 #include <cstdlib>
@@ -11,6 +12,7 @@
 
 #include "editor.h"
 #include "params.h"
+#include "presets.h"
 
 namespace {
 
@@ -95,6 +97,13 @@ public:
       b(chainParam(kChain), 5.0);
    }
 
+   // A factory preset instead: its values, every other param at its default, and its bus names.
+   explicit DemoHost(const Preset &preset) : name_(preset.name), names_(preset.buses) {
+      const std::vector<double> v = presetValues(preset);
+      for (size_t i = 0; i < paramCount(); ++i)
+         values_[kParams()[i].def.id] = v[i];
+   }
+
    double paramValue(clap_id id) const override {
       const auto it = values_.find(id);
       if (it != values_.end())
@@ -109,7 +118,7 @@ public:
    void noteOn(int, float) override {}
    void noteExpression(int, float, float, float) override {}
    void noteOff(int) override {}
-   std::string presetName() const override { return "Starling Bells"; }
+   std::string presetName() const override { return name_; }
    void setPresetName(const std::string &) override {}
    BusNames busNames() const override { return names_; }
    void setBusNames(const BusNames &names) override { names_ = names; }
@@ -124,6 +133,7 @@ public:
 
 private:
    std::map<clap_id, double> values_;
+   std::string name_ = "Starling Bells";
    BusNames names_{{{"Breath Swell", "", "Late Shimmer", ""}, {}}};
 };
 
@@ -131,7 +141,8 @@ private:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [part [routes [map-source [width height [view [voice-tab [env-tab]]]]]]]\n",
+      std::fprintf(stderr, "usage: %s out.png [part [routes [map-source [width height [view [voice-tab [env-tab [osc-tab "
+                   "[preset]]]]]]]]]\n",
                    argv[0]);
       return 1;
    }
@@ -143,8 +154,19 @@ int main(int argc, char **argv) {
    view.view = arg(7);
    view.voiceTab = arg(8);
    view.envTab = arg(9);
+   view.oscTab = arg(10);
    const int width = argc > 6 ? arg(5) : 1648;
    const int height = argc > 6 ? arg(6) : 940;
+   if (argc > 11) {
+      for (const Preset &p : factoryPresets()) {
+         if (p.name == argv[11]) {
+            DemoHost host(p);
+            return renderScreenshot(host, view, 6.0, width, height, argv[1]) ? 0 : 1;
+         }
+      }
+      std::fprintf(stderr, "no factory preset called %s\n", argv[11]);
+      return 1;
+   }
    DemoHost host;
    return renderScreenshot(host, view, 6.0, width, height, argv[1]) ? 0 : 1;
 }

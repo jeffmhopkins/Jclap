@@ -7,18 +7,19 @@
 
 #include <visage/ui.h>
 
+#include "jclap/ui/design_frame.h"
 #include "jclap/ui/theme.h"
 
 namespace jclap::ui {
 
 // A rounded panel with an optional title in its top-left corner. Sizes scale with `scale`, the
 // panel's design-to-pixel ratio.
-class Section : public visage::Frame {
+class Section : public visage::Frame, public Scalable {
 public:
    explicit Section(std::string title = {});
 
    void setTitle(std::string title);
-   void setScale(float scale);
+   void setScale(float scale) override;
    void setTheme(const Theme &theme);
 
    void draw(visage::Canvas &canvas) override;

@@ -9,6 +9,9 @@
 //    right    the decode view: the glyph large on its node grid, strokes numbered in the order they
 //             play, and the notes they read as. Drag from node to node to carve a stroke;
 //             right-click a stroke to wipe it. Under it the phrase being read, and the knobs.
+//
+// In LISTEN the whole panel gives way to the stage: a display with no controls, for capturing on a
+// stream (see StageView).
 
 #include "editor.h"
 
@@ -26,6 +29,7 @@
 #include <jclap/ui/update_notice.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -744,6 +748,251 @@ private:
    std::string title_;
 };
 
+// ---- the stage ----
+
+// What the panel becomes in LISTEN: no controls, just the stone listening, made to be captured for a
+// stream. The glyph being carved stands large in the middle, a stroke cut as each note is played,
+// over the faint glyph it replaces. Beside it the slab stands as it does on the panel, read from the
+// top right down each column, and under that the notes of the window so far as trails of embers,
+// with the last note heard. Everything moves with the song's steps, not the clock, so the same frame
+// always draws the same.
+class StageView : public visage::Frame {
+public:
+   explicit StageView(const SlabFrame &frame) : frame_(frame), tablet_(frame) {
+      tablet_.setIgnoresMouseEvents(true, false);
+      addChild(&tablet_);
+   }
+
+   void resized() override {
+      const float s = width() / kDesignWidth;
+      tablet_.setBounds(kTablet.x * s, kTablet.y * s, kTablet.w * s, kTablet.h * s);
+   }
+
+   // Redraws the stage and the slab on it, for a new frame.
+   void refresh() {
+      redraw();
+      tablet_.redraw();
+   }
+
+   // Back to SPEAK, from the faint button in the corner; and the background menu (UI size), for
+   // fitting the window to a capture.
+   std::function<void()> onSpeak;
+   std::function<void(visage::Point)> onMenu;
+
+   void draw(visage::Canvas &c) override {
+      const float s = width() / kDesignWidth;
+      const float step = frame_.playing ? frame_.step : 0.0f;
+      const int heard = std::clamp(frame_.heard, 0, kMaxHeard);
+
+      // How hot the stone is: the newest notes flare and cool over a few steps.
+      float heat = 0.0f;
+      int newest = -1;
+      for (int i = 0; i < heard; ++i) {
+         const HeardNote &n = frame_.heardNotes[i];
+         const float age = std::max(0.0f, step - n.start);
+         heat = std::max(heat, n.velocity / 127.0f * std::exp(-age * 0.45f));
+         if (newest < 0 || n.start >= frame_.heardNotes[newest].start)
+            newest = i;
+      }
+
+      c.setColor(kBackground);
+      c.fill(0, 0, width(), height());
+      // Faint strata across the stone.
+      for (int k = 1; k < 14; ++k) {
+         c.setColor(withAlpha(0xffffffff, k % 3 ? 0.012f : 0.022f));
+         c.fill(0, k * 48 * s, width(), 1);
+      }
+      // The glow behind the glyph, breathing with what's played: bright in the middle, falling off
+      // smoothly to nothing.
+      const float gx = 440 * s, gy = 330 * s, r = 400 * s * (1.0f + 0.05f * heat);
+      const float a = 0.16f + 0.2f * heat;
+      const visage::Gradient glow = visage::Gradient::fromSampleFunction(64, [a](float t) {
+         const float k = (1.0f - t) * (1.0f - t);
+         return visage::Color(withAlpha(kEmber, a * k * k + a * 0.6f * k));
+      });
+      c.setColor(visage::Brush::radial(glow, {gx, gy}, r));
+      c.fill(gx - r, gy - r, 2 * r, 2 * r);
+
+      drawHeader(c, s, step);
+      drawGlyphStage(c, s, step, heat, heard, newest);
+      drawWindow(c, s, step, heard);
+      drawTrails(c, s, step, heard, newest);
+
+      // The way back, barely there until the mouse finds it.
+      c.setColor(withAlpha(kText, hover_ ? 0.85f : 0.16f));
+      c.text(spaced("SPEAK"), ui::font(11 * s), visage::Font::kRight, 1040 * s, 640 * s, 140 * s, 24 * s);
+   }
+
+   void mouseDown(const visage::MouseEvent &e) override {
+      if (e.shouldTriggerPopup()) {
+         if (onMenu)
+            onMenu(e.position);
+      }
+      else if (overSpeak(e.position) && onSpeak)
+         onSpeak();
+   }
+   void mouseMove(const visage::MouseEvent &e) override {
+      if (overSpeak(e.position) != hover_) {
+         hover_ = !hover_;
+         redraw();
+      }
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = false;
+      redraw();
+   }
+
+private:
+   // The slab stands on the right, as on the panel and in its shape; the window's notes run under it.
+   static constexpr ui::Rect kTablet{840, 72, 260, 456}, kRoll{840, 566, 260, 58};
+
+   bool overSpeak(visage::Point p) const {
+      const float s = width() / kDesignWidth;
+      return p.x > 1080 * s && p.y > 630 * s;
+   }
+
+   // The name in the top left; LISTENING with a light that beats in the top right.
+   void drawHeader(visage::Canvas &c, float s, float step) const {
+      c.setColor(kEmber);
+      c.fill(40 * s, 34 * s, 6 * s, 26 * s);
+      c.setColor(withAlpha(kEmber, 0.6f));
+      c.fill(50 * s, 40 * s, 6 * s, 20 * s);
+      c.setColor(withAlpha(kEmber, 0.3f));
+      c.fill(60 * s, 46 * s, 6 * s, 14 * s);
+      c.setColor(kText);
+      c.text(spaced("MONOLITH"), ui::font(22 * s), visage::Font::kLeft, 78 * s, 26 * s, 300 * s, 30 * s);
+      c.setColor(kDim);
+      std::string script = kOrthographyNames[static_cast<int>(frame_.orthography)];
+      std::transform(script.begin(), script.end(), script.begin(), [](unsigned char ch) { return std::toupper(ch); });
+      c.text(spaced(script + " SCRIPT"), ui::font(9 * s), visage::Font::kLeft, 79 * s, 52 * s, 300 * s, 14 * s);
+
+      // One beat in four steps: the light is brightest on the beat.
+      const float beat = step - 4.0f * std::floor(step / 4.0f);
+      const float pulse = frame_.playing ? 0.35f + 0.65f * std::exp(-beat * 1.2f) : 0.3f;
+      const float lx = 1160 * s, ly = 46 * s, d = 12 * s;
+      c.setColor(withAlpha(kEmber, 0.25f * pulse));
+      c.circle(lx - d * 1.5f, ly - d * 1.5f, d * 3.0f);
+      c.setColor(withAlpha(kEmber, pulse));
+      c.circle(lx - d * 0.5f, ly - d * 0.5f, d);
+      c.setColor(frame_.playing ? kText : kDim);
+      c.text(spaced(frame_.playing ? "LISTENING" : "WAITING"), ui::font(13 * s), visage::Font::kRight, 850 * s,
+             36 * s, 280 * s, 20 * s);
+   }
+
+   // The cell's glyph large on its nodes: the one it holds faint, the one being carved burning over
+   // it, its newest stroke hottest.
+   void drawGlyphStage(visage::Canvas &c, float s, float step, float heat, int heard, int newest) const {
+      const Cell &cell = frame_.cells[std::clamp(frame_.current, 0, kCells - 1)];
+      const GlyphBox box = GlyphBox::fit(240 * s, 84 * s, 400 * s, 500 * s);
+      const float t = 4.5f * s;
+      GlyphStyle ghost;
+      ghost.thickness = t;
+      ghost.nodes = true;
+      ghost.color = withAlpha(kText, heard ? 0.07f : 0.16f);
+      drawGlyph(c, cell.glyph, cell.visible(), frame_.orthography, box, ghost);
+      // Each row's note beside it.
+      for (int r = 0; r < kGridRows; ++r) {
+         const Point p = box.node(frame_.orthography, nodeAt(0, r));
+         c.setColor(withAlpha(kDim, 0.8f));
+         c.text(ui::noteName(frame_.rowPitch[r]), ui::font(13 * s), visage::Font::kRight, p.x - 96 * s, p.y - 9 * s,
+                60 * s, 18 * s);
+      }
+      const Glyph &g = frame_.carving;
+      if (!heard || g.count == 0)
+         return;
+      GlyphStyle burning;
+      burning.thickness = t;
+      burning.glow = 0.6f;
+      drawGlyph(c, g, g.count, frame_.orthography, box, burning);
+      // The newest stroke flares, with a spark where the pen is.
+      const Stroke last = g.strokes[g.count - 1];
+      drawLitStroke(c, box, frame_.orthography, last, t, kEmber, 0.6f + 0.4f * heat);
+      if (newest >= 0) {
+         const HeardNote &n = frame_.heardNotes[newest];
+         const bool held = n.end < 0.0f;
+         const float along = held ? std::clamp((step - n.start) / 4.0f, 0.15f, 1.0f) : 1.0f;
+         const Point p = strokePoint(box, frame_.orthography, last, along);
+         const float d = t * (2.0f + 2.5f * heat);
+         c.setColor(withAlpha(kEmber, 0.3f + 0.3f * heat));
+         c.circle(p.x - d, p.y - d, d * 2.0f);
+         c.setColor(0xffffffffu);
+         c.circle(p.x - d * 0.35f, p.y - d * 0.35f, d * 0.7f);
+      }
+   }
+
+   // The window's sixteen steps under the glyph: those gone by lit, a mark where each note came in.
+   void drawWindow(visage::Canvas &c, float s, float step, int heard) const {
+      const float x0 = 250 * s, w = 380 * s, y = 600 * s, cellW = w / kWindowSteps;
+      for (int k = 0; k < kWindowSteps; ++k) {
+         const bool past = frame_.playing && k + 1 <= step;
+         const bool now = frame_.playing && k <= step && step < k + 1;
+         c.setColor(now ? kPeach : past ? withAlpha(kEmber, k % 4 ? 0.55f : 0.85f) : withAlpha(kEdge, k % 4 ? 0.8f : 1.0f));
+         c.fill(x0 + k * cellW + 2 * s, y, cellW - 4 * s, (k % 4 ? 4.0f : 6.0f) * s);
+      }
+      for (int i = 0; i < heard; ++i) {
+         const HeardNote &n = frame_.heardNotes[i];
+         const float x = x0 + std::clamp(n.start, 0.0f, 16.0f) * cellW;
+         const float d = (4.0f + 4.0f * n.velocity / 127.0f) * s;
+         c.setColor(withAlpha(kPeach, 0.9f));
+         c.circle(x - d * 0.5f, y - 10 * s - d * 0.5f, d);
+      }
+      char line[48];
+      std::snprintf(line, sizeof(line), "CELL %02d", std::clamp(frame_.current, 0, kCells - 1) + 1);
+      c.setColor(kDim);
+      c.text(spaced(line), ui::font(10 * s), visage::Font::kLeft, x0, y + 14 * s, w, 16 * s);
+      std::snprintf(line, sizeof(line), "%d HEARD", heard);
+      c.text(spaced(line), ui::font(10 * s), visage::Font::kRight, x0, y + 14 * s, w, 16 * s);
+   }
+
+   // The window's notes as trails of embers: across in steps, up in pitch.
+   // Under the slab, with the last note heard beside its title.
+   void drawTrails(visage::Canvas &c, float s, float step, int heard, int newest) const {
+      const float x = kRoll.x * s, y = kRoll.y * s, w = kRoll.w * s, h = kRoll.h * s;
+      c.setColor(kDim);
+      c.text(spaced("THIS GLYPH"), ui::font(10 * s), visage::Font::kLeft, x, y - 22 * s, w, 16 * s);
+      if (newest >= 0) {
+         const HeardNote &n = frame_.heardNotes[newest];
+         const float fresh = std::exp(-std::max(0.0f, step - n.start) * 0.35f);
+         c.setColor(fresh > 0.5f ? kPeach : withAlpha(kText, 0.55f + 0.9f * fresh));
+         c.text(ui::noteName(n.pitch), ui::font(14 * s), visage::Font::kRight, x, y - 25 * s, w, 20 * s);
+      }
+      c.setColor(withAlpha(kEdge, 0.6f));
+      for (int k = 0; k <= kWindowSteps; k += 4)
+         c.fill(x + w * k / kWindowSteps, y, 1, h);
+      int low = *std::min_element(frame_.rowPitch.begin(), frame_.rowPitch.end()) - 2;
+      int high = *std::max_element(frame_.rowPitch.begin(), frame_.rowPitch.end()) + 2;
+      for (int i = 0; i < heard; ++i) {
+         low = std::min<int>(low, frame_.heardNotes[i].pitch - 2);
+         high = std::max<int>(high, frame_.heardNotes[i].pitch + 2);
+      }
+      const auto yOf = [&](int pitch) { return y + h - (pitch - low) / static_cast<float>(std::max(1, high - low)) * h; };
+      for (int i = 0; i < heard; ++i) {
+         const HeardNote &n = frame_.heardNotes[i];
+         const bool held = n.end < 0.0f;
+         const float end = std::clamp(held ? std::max(step, n.start + 0.25f) : n.end, 0.0f, 16.0f);
+         const float x0 = x + w * std::clamp(n.start, 0.0f, 16.0f) / kWindowSteps, x1 = x + w * end / kWindowSteps;
+         const float py = yOf(n.pitch), t = (2.0f + 3.0f * n.velocity / 127.0f) * s;
+         const float fresh = std::exp(-std::max(0.0f, step - n.start) * 0.35f);
+         c.setColor(withAlpha(kEmber, 0.15f + 0.15f * fresh));
+         c.roundedRectangle(x0 - t, py - t * 1.5f, std::max(t * 2, x1 - x0 + 2 * t), t * 3, t * 1.5f);
+         c.setColor(withAlpha(held ? kPeach : kEmber, 0.6f + 0.4f * fresh));
+         c.roundedRectangle(x0, py - t * 0.5f, std::max(t, x1 - x0), t, t * 0.5f);
+         if (held) {
+            c.setColor(0xffffffffu);
+            c.circle(x1 - t * 0.6f, py - t * 0.6f, t * 1.2f);
+         }
+      }
+      if (frame_.playing) {
+         c.setColor(withAlpha(kPeach, 0.5f));
+         c.fill(x + w * std::clamp(step, 0.0f, 16.0f) / kWindowSteps, y - 4 * s, 1.5f * s, h + 8 * s);
+      }
+   }
+
+   const SlabFrame &frame_;
+   SlabView tablet_;
+   bool hover_ = false;
+};
+
 // ---- the panel ----
 
 class Panel : public ui::DesignFrame, public visage::EventTimer {
@@ -756,6 +1005,7 @@ public:
       buildSlab();
       buildDecode();
       buildKnobs();
+      buildStage();
       refresh();
       startTimer(30);
    }
@@ -784,6 +1034,13 @@ public:
    // Pulls the newest frame and redraws what shows it.
    void refresh() {
       frame_ = host_.frame();
+      // LISTEN turns the panel into the stage; nothing under it needs drawing meanwhile.
+      if (frame_.listening != stage_->isVisible())
+         stage_->setVisible(frame_.listening);
+      if (frame_.listening) {
+         stage_->refresh();
+         return;
+      }
       const int shown = selected_ >= 0 ? selected_ : frame_.current;
       slab_->selected = selected_;
       decode_->cell = shown;
@@ -906,7 +1163,7 @@ private:
       auto &mode = themed(add<ui::SegmentedSwitch>({28, y + 16, 156, 26}, std::vector<std::string>{"SPEAK", "LISTEN"}));
       bindings_.bind(mode, kMode);
       tips_.add(mode, "SPEAK reads the slab out as notes. LISTEN plays nothing: what you play is carved into the "
-                      "cell being read, a glyph per sixteen steps.");
+                      "cell being read, a glyph per sixteen steps, and the panel becomes a stage for streaming.");
       y += 52;
       caption({28, y, 156, 14}, "MIDI CHANNEL");
       auto &channel = themed(add<ui::NumberBox>({28, y + 16, 156, 26}, rangeOf(kChannel, 1.0)));
@@ -1006,6 +1263,17 @@ private:
       knob(kHumanize, "HUMANIZE", cells[9], "Small pushes in timing and velocity, the same each time round.");
    }
 
+   void buildStage() {
+      stage_ = &add<StageView>({0, 0, kDesignWidth, kDesignHeight}, frame_);
+      stage_->setVisible(false);
+      stage_->onSpeak = [this] {
+         host_.beginEdit(kMode);
+         host_.setParam(kMode, static_cast<double>(Mode::Speak));
+         host_.endEdit(kMode);
+      };
+      stage_->onMenu = [this](visage::Point p) { showZoomMenu(*stage_, p); };
+   }
+
    // The phrase: the glyph being read and the three after it in the slab, in reading order.
    void updateRoll() {
       std::vector<ui::NoteRoll::Note> notes;
@@ -1035,6 +1303,7 @@ private:
    DecodeView *decode_ = nullptr;
    Transcript *transcript_ = nullptr;
    ui::NoteRoll *roll_ = nullptr;
+   StageView *stage_ = nullptr;
    ui::Label *statusLabel_ = nullptr;
    std::string status_;
 };

@@ -14,6 +14,8 @@ namespace monolith {
 
 constexpr int kSlabColumns = 5, kSlabRows = 11, kCells = kSlabColumns * kSlabRows;
 constexpr int kHistory = 6;
+// The most notes Listen hears in one glyph's window.
+constexpr int kMaxHeard = 32;
 
 struct Cell {
    Glyph glyph;
@@ -25,6 +27,13 @@ struct Cell {
    // The strokes still standing: never fewer than one while the glyph has any.
    int visible() const { return std::max(glyph.count > 0 ? 1 : 0, static_cast<int>(glyph.count) - eroded); }
    bool operator==(const Cell &o) const { return glyph == o.glyph && eroded == o.eroded && word == o.word; }
+};
+
+// A note heard in Listen, in the window being carved.
+struct HeardNote {
+   // Steps into the window it started and ended; the end is negative while it's held.
+   float start = 0.0f, end = -1.0f;
+   uint8_t pitch = 0, velocity = 0;
 };
 
 struct SlabFrame {
@@ -41,8 +50,11 @@ struct SlabFrame {
    float step = 0.0f;
    bool playing = false;
    bool listening = false;
-   // Notes heard so far in the window being transcribed.
+   // Notes heard so far in the window being transcribed, and the glyph they carve as it stands
+   // (a held note lasting until now).
    int heard = 0;
+   std::array<HeardNote, kMaxHeard> heardNotes{};
+   Glyph carving;
    // The cells read most recently, oldest first; -1 where there are none yet.
    std::array<int, kHistory> history{-1, -1, -1, -1, -1, -1};
    // The pitch each glyph row plays right now (row 0 the top), key follow included.

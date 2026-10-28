@@ -213,7 +213,7 @@ struct Block {
 class Engine {
 public:
    static constexpr int kMaxActive = 32;
-   static constexpr int kMaxListen = 32;
+   static constexpr int kMaxListen = kMaxHeard;
    static constexpr double kFreeTempo = 120.0;
    static constexpr int kMaxRange = 4;
 
@@ -450,6 +450,10 @@ public:
       f.playing = running_;
       f.listening = params_.mode == Mode::Listen;
       f.heard = listenCount_;
+      for (int i = 0; i < listenCount_; ++i)
+         f.heardNotes[i] = {static_cast<float>(heard_[i].start), static_cast<float>(heard_[i].end), heard_[i].pitch,
+                            heard_[i].velocity};
+      f.carving = listenCount_ > 0 ? transcribeHeard(step_) : Glyph{};
       f.history = history_;
       f.rowPitch = pitches_;
       f.orthography = params_.orthography;
@@ -785,18 +789,23 @@ private:
          listenCount_ = 0;
          return;
       }
+      const Glyph g = transcribeHeard(kWindowSteps);
+      if (g.count > 0)
+         cells_[cellAt(listenGlyph_)] = {g, 0, -1};
+      listenCount_ = 0;
+   }
+
+   // The glyph the notes heard so far make, with a note still held lasting until step `held`.
+   Glyph transcribeHeard(double held) const {
       PlayedNote played[kMaxListen];
       for (int i = 0; i < listenCount_; ++i) {
          const Heard &h = heard_[i];
          const int start = std::clamp(static_cast<int>(std::lround(h.start)), 0, kWindowSteps - 1);
-         const double end = h.end < 0.0 ? kWindowSteps : h.end;
+         const double end = h.end < 0.0 ? held : h.end;
          played[i] = {start, std::max(1, static_cast<int>(std::lround(end - h.start))), nearestRow(h.pitch), h.velocity};
       }
       std::stable_sort(played, played + listenCount_, [](const PlayedNote &a, const PlayedNote &c) { return a.start < c.start; });
-      const Glyph g = transcribe(played, listenCount_, params_.orthography);
-      if (g.count > 0)
-         cells_[cellAt(listenGlyph_)] = {g, 0, -1};
-      listenCount_ = 0;
+      return transcribe(played, listenCount_, params_.orthography);
    }
 
    // The row whose pitch is nearest, octaves aside; on a tie, the nearest in absolute terms.
