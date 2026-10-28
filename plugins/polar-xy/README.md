@@ -43,6 +43,23 @@ MIDI Learn onto Omnisphere's Orb. Built for Bitwig, but any CLAP host with note 
 - If X and Y In (or Angle and Radius Out) are set to the same CC, nothing is converted and the input
   CCs pass through. The panel shows a warning.
 
+## Motion
+
+By default the Orb jumps to wherever the controller is. **Smoothing** and **Inertia** make it travel
+there instead, sending a stream of in-between CCs (one step every 32 samples, only when a value
+changes) until it arrives. Each channel moves on its own.
+
+- **Smoothing** is roughly how long the Orb takes to glide to the controller's position.
+- **Inertia** gives it weight: the heavier it is, the slower it gets going and the further it swings
+  past the target before settling.
+- **Motion Path** (PATH on the panel) picks what moves. *Straight* glides across the pad in X/Y, so going from one side to the
+  other passes through the centre. *Around* moves the angle and radius on their own, so the Orb travels
+  round the circle the short way. The angle keeps counting past a full turn, so stirring the controller
+  with some Inertia sets the Orb whirling, and it carries on past where you stop.
+
+The first position on a channel is jumped to, as there's nowhere to glide from. A reset lands anything
+still moving.
+
 > [!IMPORTANT]
 > Spectrasonics doesn't document where the Orb's angle 0 sits or which way it turns, so these are
 > exposed as settings. If the Orb dot lands rotated or mirrored from your controller, adjust
@@ -70,3 +87,6 @@ with angle 0 marked by the tick on the right. Comparing the two shows what `Angl
 | Direction | Counter-clockwise | Flip to clockwise to mirror |
 | Radius Mode | Clamp to circle | Or Fill square |
 | Pass Input CCs | Off | Also forward the raw X/Y CCs |
+| Smoothing | 0 ms | Glide time, up to 2 s |
+| Inertia | 0% | Weight: lag and overshoot |
+| Motion Path | Straight | Or Around, to move round the circle |

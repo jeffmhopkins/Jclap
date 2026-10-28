@@ -14,6 +14,7 @@
 #include <cstring>
 
 #include "editor.h"
+#include "motion.h"
 #include "params.h"
 #include "polar.h"
 
@@ -28,27 +29,44 @@ struct ChannelState {
    // The angle held at dead center, and what was last sent on the output CCs (-1: send again).
    int angle = -1;
    int sentAngle = -1, sentRadius = -1;
+   // Where the output is on its way to the X/Y, with Smoothing and Inertia.
+   jclap::Follower motion;
 };
 
 // What the conversion depends on, to notice when a setting changes.
 struct Settings {
    int outAngle = -1, outRadius = -1, direction = 0, radiusMode = 0;
    double angleOffset = 0.0;
+   bool around = false;
    bool operator==(const Settings &o) const {
       return outAngle == o.outAngle && outRadius == o.outRadius && direction == o.direction &&
-             radiusMode == o.radiusMode && angleOffset == o.angleOffset;
+             radiusMode == o.radiusMode && angleOffset == o.angleOffset && around == o.around;
    }
 };
 
-// State layout: 4-byte magic, uint32 version, then one double per parameter.
+// State layout: 4-byte magic, uint32 version, then one double per parameter. Version 1 had the
+// params before Smoothing; the ones it lacks load as their defaults.
 constexpr char kStateMagic[4] = {'J', 'C', 'O', 'P'};
-constexpr uint32_t kStateVersion = 1;
+constexpr uint32_t kStateVersion = 2;
 
-struct StateBlob {
+struct StateHeader {
    char magic[4];
    uint32_t version;
-   double values[kParamCount];
 };
+
+uint32_t savedParamCount(uint32_t version) {
+   switch (version) {
+   case 1:
+      return kParamSmoothing;
+   case 2:
+      return kParamCount;
+   default:
+      return 0;
+   }
+}
+
+// Smoothing and inertia move the output in steps this many samples apart.
+constexpr uint32_t kMotionStep = 32;
 
 const char *const kFeatures[] = {CLAP_PLUGIN_FEATURE_NOTE_EFFECT, CLAP_PLUGIN_FEATURE_UTILITY, nullptr};
 
@@ -70,7 +88,9 @@ public:
    }
 
    // A reset is not a controller move: keep the X/Y last seen, and only send them again with the next.
-   bool activate(double, uint32_t, uint32_t) override {
+   // Anything mid-glide lands where it was headed.
+   bool activate(double sampleRate, uint32_t, uint32_t) override {
+      sampleRate_ = sampleRate;
       forgetSent();
       return true;
    }
@@ -170,26 +190,35 @@ public:
    // ---- state ----
 
    bool stateSave(const clap_ostream_t *stream) override {
-      StateBlob blob{};
-      std::memcpy(blob.magic, kStateMagic, sizeof(kStateMagic));
-      blob.version = kStateVersion;
+      StateHeader header{};
+      std::memcpy(header.magic, kStateMagic, sizeof(kStateMagic));
+      header.version = kStateVersion;
+      double values[kParamCount];
       for (uint32_t i = 0; i < kParamCount; ++i)
-         blob.values[i] = params_[i].load();
-      return jclap::core::writeAll(stream, &blob, sizeof(blob));
+         values[i] = params_[i].load();
+      return jclap::core::writeAll(stream, &header, sizeof(header)) &&
+             jclap::core::writeAll(stream, values, sizeof(values));
    }
 
    bool stateLoad(const clap_istream_t *stream) override {
-      StateBlob blob{};
-      if (!jclap::core::readAll(stream, &blob, sizeof(blob)))
+      StateHeader header{};
+      if (!jclap::core::readAll(stream, &header, sizeof(header)) ||
+          std::memcmp(header.magic, kStateMagic, sizeof(kStateMagic)))
          return false;
-      if (std::memcmp(blob.magic, kStateMagic, sizeof(kStateMagic)) || blob.version != kStateVersion)
+      const uint32_t count = savedParamCount(header.version);
+      if (count == 0)
          return false;
+      double values[kParamCount];
       for (uint32_t i = 0; i < kParamCount; ++i)
-         if (!std::isfinite(blob.values[i]))
+         values[i] = kParams[i].def;
+      if (!jclap::core::readAll(stream, values, count * sizeof(double)))
+         return false;
+      for (uint32_t i = 0; i < count; ++i)
+         if (!std::isfinite(values[i]))
             return false;
 
       for (uint32_t i = 0; i < kParamCount; ++i)
-         params_[i].store(std::clamp(blob.values[i], kParams[i].min, kParams[i].max));
+         params_[i].store(std::clamp(values[i], kParams[i].min, kParams[i].max));
 
       // Tell the host the values changed so it refreshes what it shows.
       if (auto *hostParams = hostExtension<clap_host_params_t>(CLAP_EXT_PARAMS))
@@ -206,12 +235,15 @@ public:
       // Panel edits, flushes and state loads land between blocks.
       applySettings(out, 0);
       const uint32_t n = in->size(in);
+      frames_ = std::max<uint32_t>(proc->frames_count, 1);
+      clock_ = 0;
       for (uint32_t i = 0; i < n; ++i) {
          const clap_event_header_t *h = in->get(in, i);
          // X and Y moving at the same moment are one move: a channel converts once its events at that
          // time are all in, so no point made of the new X and the old Y goes out between them.
          if (h->time != pendingTime_)
             convertPending(out);
+         glide(out, h->time);
          if (h->space_id == CLAP_CORE_EVENT_SPACE_ID) {
             if (h->type == CLAP_EVENT_PARAM_VALUE) {
                convertPending(out);
@@ -230,6 +262,7 @@ public:
             out->try_push(out, h);
       }
       convertPending(out);
+      glide(out, frames_);
       // Audio is copied through untouched; the port only exists so hosts that expect audio IO accept us.
       jclap::core::passAudioThrough(proc);
       return CLAP_PROCESS_CONTINUE;
@@ -257,8 +290,49 @@ private:
    }
 
    void forgetSent() {
-      for (auto &c : channels_)
+      for (auto &c : channels_) {
          c.sentAngle = c.sentRadius = -1;
+         c.motion.land();
+      }
+   }
+
+   jclap::MotionSettings motion() const {
+      jclap::MotionSettings m;
+      m.smoothing = params_[kParamSmoothing].load() / 1000.0;
+      m.inertia = params_[kParamInertia].load() / 100.0;
+      m.around = intParam(kParamMotionPath) != 0;
+      return m;
+   }
+
+   // Moves every gliding channel on to `to` (a sample time in this block), in steps of kMotionStep
+   // samples, sending what changes as it goes. With Smoothing and Inertia both off, they land.
+   void glide(const clap_output_events_t *out, uint32_t to) {
+      to = std::max(to, clock_);
+      const jclap::MotionSettings m = motion();
+      if (!m.active()) {
+         for (int channel = 0; channel < 16; ++channel)
+            if (channels_[channel].motion.moving()) {
+               channels_[channel].motion.land();
+               send(out, std::min(to, frames_ - 1), channel);
+            }
+         clock_ = to;
+         return;
+      }
+      const double dt = kMotionStep / sampleRate_;
+      // Steps must land inside the block; one due right at its end runs at the start of the next.
+      while (clock_ + stepLeft_ <= to && clock_ + stepLeft_ < frames_) {
+         clock_ += stepLeft_;
+         stepLeft_ = kMotionStep;
+         for (int channel = 0; channel < 16; ++channel) {
+            ChannelState &st = channels_[channel];
+            if (st.motion.moving()) {
+               st.motion.step(dt, m);
+               send(out, clock_, channel);
+            }
+         }
+      }
+      stepLeft_ -= std::min(stepLeft_, to - clock_);
+      clock_ = to;
    }
 
    int intParam(ParamId id) const { return static_cast<int>(params_[id].load() + 0.5); }
@@ -275,6 +349,7 @@ private:
       s.direction = intParam(kParamDirection);
       s.radiusMode = intParam(kParamRadiusMode);
       s.angleOffset = params_[kParamAngleOffset].load();
+      s.around = intParam(kParamMotionPath) != 0;
       return s;
    }
 
@@ -297,6 +372,8 @@ private:
          return;
       const bool moved = now.outAngle != applied_.outAngle || now.outRadius != applied_.outRadius;
       applied_ = now;
+      for (ChannelState &st : channels_)
+         st.motion.setAround(now.around);
       for (int channel = 0; channel < 16; ++channel) {
          ChannelState &st = channels_[channel];
          if (moved)
@@ -305,16 +382,32 @@ private:
       }
    }
 
-   // Sends a channel's position as angle and radius, each only if it changed.
+   // Points the channel's output at its X/Y (at once, or gliding there with Smoothing or Inertia)
+   // and sends where it is.
    void convert(const clap_output_events_t *out, uint32_t time, int channel) {
       ChannelState &st = channels_[channel];
       if (!st.hasX || !st.hasY || conflicting())
+         return;
+      const double x = jclap::ccToBipolar(st.x), y = jclap::ccToBipolar(st.y);
+      if (motion().active())
+         st.motion.follow(x, y);
+      else
+         st.motion.place(x, y);
+      send(out, time, channel);
+   }
+
+   // Sends a channel's output position as angle and radius, each only if it changed.
+   void send(const clap_output_events_t *out, uint32_t time, int channel) {
+      ChannelState &st = channels_[channel];
+      if (!st.motion.placed() || conflicting())
          return;
       jclap::PolarSettings s;
       s.angleOffsetDeg = applied_.angleOffset;
       s.clockwise = applied_.direction != 0;
       s.radiusMode = static_cast<jclap::RadiusMode>(applied_.radiusMode);
-      const jclap::PolarCC p = jclap::toPolar(st.x, st.y, s);
+      double x, y;
+      st.motion.position(x, y);
+      const jclap::PolarCC p = jclap::toPolar(x, y, s);
 
       // At dead center the angle is undefined, so it holds its last value.
       if (p.hasAngle)
@@ -380,6 +473,10 @@ private:
    int inX_ = -1, inY_ = -1;
    // Channels with input waiting to convert, all at pendingTime_ (audio thread).
    uint32_t pendingMask_ = 0, pendingTime_ = 0;
+   // Gliding: the block's length, how far into it the motion has got, and the samples to its next
+   // step (audio thread).
+   double sampleRate_ = 48000.0;
+   uint32_t frames_ = 1, clock_ = 0, stepLeft_ = kMotionStep;
    // For the panel: the channel that moved last, its X/Y (channel << 16 | x << 8 | y) and what it
    // last sent (angle << 8 | radius, or -1 for nothing yet).
    int panelChannel_ = 0;
