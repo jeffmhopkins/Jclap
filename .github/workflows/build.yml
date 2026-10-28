@@ -1,9 +1,11 @@
 name: build
 
 on:
+  # Branches get CI from their pull request, so only main and release tags build on push. Building
+  # every branch push as well ran each PR commit twice.
   push:
     tags: ["v*"]
-    branches: ["**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -11,13 +13,50 @@ on:
         description: "Release tag to create, e.g. v0.1.0"
         required: true
 
+# A new push to a PR (or to main) cancels the run it replaces. Tags and manual releases always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
+
 jobs:
+  # Changes that only touch docs (Markdown, the manuals) skip the build. The build job then shows
+  # as skipped, which counts as passing. Releases always build.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+              - '!**/*.pdf'
+              - '!**/docs/manual/**'
+              - '!**/docs/readme/**'
+
   build:
+    needs: changes
+    if: >
+      needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/v')
+      || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      # MSVC compiles a project's files in parallel with /MP; the build step's --parallel only runs
+      # projects side by side.
+      CFLAGS: ${{ matrix.os == 'windows-latest' && '/MP' || '' }}
+      CXXFLAGS: ${{ matrix.os == 'windows-latest' && '/MP' || '' }}
     steps:
       - uses: actions/checkout@v4
       # Visage (the jclap::ui GUI library) needs X11 and OpenGL headers on Linux. The software Vulkan
@@ -25,6 +64,32 @@ jobs:
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libx11-dev libxrandr-dev libgl1-mesa-dev mesa-vulkan-drivers libvulkan1
+      # Build and test on every core the runner has (make and ctest default to one).
+      - name: Use every core
+        shell: bash
+        run: |
+          cores=$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=$cores" >> "$GITHUB_ENV"
+          echo "CTEST_PARALLEL_LEVEL=$cores" >> "$GITHUB_ENV"
+      # Compiler cache for Linux and macOS (MSVC's Visual Studio generator can't use one). Only main
+      # saves it, so PRs start from main's objects without filling the repo's cache quota.
+      - name: ccache
+        if: runner.os != 'Windows'
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ runner.os }}
+          max-size: 1G
+          save: ${{ github.ref == 'refs/heads/main' }}
+      # The fetched sources (bgfx alone is a 600 MB clone). FetchContent re-fetches any whose tag
+      # changed, so an older cache is still a good start.
+      - name: Cache fetched dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/_deps/*-src
+            build/_deps/*-subbuild
+          key: deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', '**/CMakeLists.txt', '**/patches/**') }}
+          restore-keys: deps-${{ runner.os }}-
       # The template is built and tested everywhere; screenshot tests (JCLAP_BUILD_TOOLS) run on Linux,
       # where rendering matches the committed reference images.
       - name: Configure
@@ -32,6 +97,7 @@ jobs:
         run: >
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
           -DJCLAP_BUILD_TEMPLATE=ON ${{ runner.os == 'Linux' && '-DJCLAP_BUILD_TOOLS=ON' || '' }}
+          ${{ runner.os != 'Windows' && '-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache' || '' }}
       - name: Build
         run: cmake --build build --config Release
       - name: Test
@@ -54,7 +120,14 @@ jobs:
           done
           find build/clap build/vst3 -maxdepth 3 | sort
       # The official CLAP validator loads each plugin the way a host does and checks it against the spec.
+      - name: Cache clap-validator
+        id: clap-validator
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/clap-validator*
+          key: clap-validator-0.4.1-${{ runner.os }}
       - name: Install clap-validator
+        if: steps.clap-validator.outputs.cache-hit != 'true'
         run: cargo install --locked --git https://github.com/free-audio/clap-validator --tag 0.4.1 clap-validator
       - name: Validate plugins
         shell: bash
@@ -69,7 +142,8 @@ jobs:
           cmake -S build/_deps/vst3sdk-src -B build/vst3-validator -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF -DSMTG_ADD_VSTGUI=OFF \
             -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=OFF \
-            -DSMTG_ADD_VST3_PLUGINS_SAMPLES=OFF -DSMTG_ADD_VST3_HOSTING_SAMPLES=OFF -DSMTG_RUN_VST_VALIDATOR=OFF
+            -DSMTG_ADD_VST3_PLUGINS_SAMPLES=OFF -DSMTG_ADD_VST3_HOSTING_SAMPLES=OFF -DSMTG_RUN_VST_VALIDATOR=OFF \
+            ${{ runner.os != 'Windows' && '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache' || '' }}
           cmake --build build/vst3-validator --config Release --target validator
       - name: Validate VST3s
         shell: bash
