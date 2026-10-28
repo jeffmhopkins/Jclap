@@ -1,3 +1,21 @@
+## Download
+
+The whole collection, one zip per system:
+
+| System | All CLAP plugins | VST3 (Polar XY) |
+|---|---|---|
+| macOS | [jclap-macOS.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-macOS.zip) | [jclap-VST3-macOS.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-VST3-macOS.zip) |
+| Windows | [jclap-Windows.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-Windows.zip) | [jclap-VST3-Windows.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-VST3-Windows.zip) |
+| Linux | [jclap-Linux.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-Linux.zip) | [jclap-VST3-Linux.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-VST3-Linux.zip) |
+
+On a Mac, the quickest install is from Terminal (see below for what it does):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-macos.sh | bash -s {{VERSION}}
+```
+
+The single-plugin zips are listed under Assets at the bottom.
+
 ## Install
 
 Download the zip for your system below, unzip it, and copy the `.clap` files into your CLAP folder.
