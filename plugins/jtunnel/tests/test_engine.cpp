@@ -26,6 +26,29 @@ namespace {
 constexpr double kPi = 3.14159265358979323846;
 
 void testProtocol() {
+   // MIDI only frames have no audio; one that claims some isn't well formed.
+   {
+      uint8_t packet[kMaxPacketBytes];
+      AudioHeader h;
+      h.streamId = 7;
+      h.seq = 3;
+      h.sampleRate = 48000;
+      h.codec = Codec::None;
+      h.frameSamples = 48;
+      Frame f;
+      f.midiCount = 1;
+      f.midi[0] = {5, {0x90, 60, 100}};
+      const Frame *frames[1] = {&f};
+      size_t size = writeAudio(packet, sizeof(packet), h, frames, 1);
+      AudioHeader back;
+      Frame parsed[kMaxFramesPerPacket];
+      int count = 0;
+      JCLAP_CHECK(size > 0 && parseAudio(packet, size, back, parsed, count));
+      JCLAP_CHECK(back.codec == Codec::None && count == 1 && parsed[0].midiCount == 1 && parsed[0].audioBytes == 0);
+      f.audioBytes = 4;
+      size = writeAudio(packet, sizeof(packet), h, frames, 1);
+      JCLAP_CHECK(!parseAudio(packet, size, back, parsed, count));
+   }
    Frame a, b;
    a.seq = 11;
    a.audioBytes = 3;
@@ -297,7 +320,8 @@ struct SimResult {
 
 // The sender's clock runs `ppm` fast. Audio is a 440 Hz tone; a note goes on at 10 s and off at
 // 10.5 s, and another goes on at 70 s and is never released before the sender goes quiet at 80 s.
-SimResult simulate(Codec codec, double ppm, double seconds, double senderRate = 48000.0, bool stalls = true) {
+SimResult simulate(Codec codec, double ppm, double seconds, double senderRate = 48000.0, bool stalls = true,
+                   double bufferMs = 10.0) {
    Sender sender;
    Receiver receiver;
    ReceiveRing ring;
@@ -305,7 +329,7 @@ SimResult simulate(Codec codec, double ppm, double seconds, double senderRate = 
    net.stalls = stalls;
    sender.setup(senderRate, 42);
    receiver.setup(48000.0);
-   receiver.setBuffer(10.0, true);
+   receiver.setBuffer(bufferMs, true);
    sender.configure(codec, 192, true);
 
    const uint32_t block = 256;
@@ -390,7 +414,7 @@ SimResult simulate(Codec codec, double ppm, double seconds, double senderRate = 
    result.concealedLate = result.concealed - result.concealedLate;
    std::printf("%s, %+.0f ppm: drift %+.1f ppm, buffer %.1f ms (target %.1f), lost %u, late %u (%u after 40 s), rms %.3f, "
                "longest silence %d, packets %u (dropped %u)\n",
-               codec == Codec::Opus ? "opus" : "pcm", ppm, result.integral * 1e6, result.fillMs, result.targetMs,
+               codec == Codec::Opus ? "opus" : codec == Codec::Pcm24 ? "pcm" : "midi only", ppm, result.integral * 1e6, result.fillMs, result.targetMs,
                result.lost, result.concealed, result.concealedLate, result.outputRms, result.longestSilence, net.sent, net.dropped);
    return result;
 }
@@ -443,6 +467,23 @@ void testSimulatedLink() {
       const SimResult r = simulate(codec, -80.0, 60.0, 44100.0);
       JCLAP_CHECK(std::abs(r.integral * 1e6 + 80.0) < 25.0);
       JCLAP_CHECK(std::abs(r.outputRms - tone) < 0.05);
+   }
+   // MIDI only: no audio, 1 ms frames and a 2 ms buffer, so notes arrive within a few ms of the
+   // network's own delay (2 ms plus a 3 ms tail here).
+   {
+      const SimResult r = simulate(Codec::None, 50.0, 30.0, 48000.0, false, 2.0);
+      double on = -1, off = -1;
+      for (const auto &event : r.midi) {
+         if (event.second.data[0] == 0x90 && event.second.data[1] == 60)
+            on = event.first;
+         if (event.second.data[0] == 0x80 && event.second.data[1] == 60)
+            off = event.first;
+      }
+      std::printf("midi only: note on after %.1f ms, target %.1f ms\n", (on - 10.0) * 1000.0, r.targetMs);
+      JCLAP_CHECK(on > 10.0 && on < 10.03);
+      JCLAP_CHECK(std::abs((off - on) - 0.5) < 0.005);
+      JCLAP_CHECK(r.outputRms < 1e-6);
+      JCLAP_CHECK_EQ(r.notesHeldAtEnd, 0);
    }
 }
 

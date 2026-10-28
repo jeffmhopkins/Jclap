@@ -126,7 +126,7 @@ bool parseAudio(const uint8_t *data, size_t size, AudioHeader &header, Frame *fr
    header.channels = r.u8();
    header.frameSamples = r.u16();
    count = r.u8();
-   if (!r.ok() || codec > static_cast<uint8_t>(Codec::Pcm24) || header.channels != kChannels ||
+   if (!r.ok() || codec > static_cast<uint8_t>(Codec::None) || header.channels != kChannels ||
        header.frameSamples == 0 || header.frameSamples > kMaxFrameSamples || header.sampleRate < 8000 ||
        header.sampleRate > 384000 || count < 1 || count > kMaxFramesPerPacket)
       return false;
@@ -151,6 +151,8 @@ bool parseAudio(const uint8_t *data, size_t size, AudioHeader &header, Frame *fr
       if (f.audioBytes > kMaxFrameBytes)
          return false;
       if (header.codec == Codec::Pcm24 && f.audioBytes != header.frameSamples * kChannels * 3)
+         return false;
+      if (header.codec == Codec::None && f.audioBytes != 0)
          return false;
       r.bytes(f.audio, f.audioBytes);
       if (!r.ok())

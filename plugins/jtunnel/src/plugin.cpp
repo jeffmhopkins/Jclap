@@ -225,6 +225,8 @@ public:
       s.concealed = r.concealed.load();
       s.sampleRate = r.sampleRate.load();
       s.codec = r.codec.load();
+      s.midiEvents = midiEvents_.load(std::memory_order_relaxed);
+      s.lastMidi = lastMidi_.load(std::memory_order_relaxed);
       s.inputPeak = inPeak_.exchange(0.0f);
       s.outputPeak = outPeak_.exchange(0.0f);
       return s;
@@ -310,10 +312,14 @@ public:
          return static_cast<uint32_t>(p[0]) | static_cast<uint32_t>(p[1]) << 8 | static_cast<uint32_t>(p[2]) << 16 |
                 static_cast<uint32_t>(p[3]) << 24;
       };
-      if (get32(head + 4) != kStateVersion || get32(head + 8) != kParamCount)
+      // Params are only ever added at the end: a project saved before one existed gets its default.
+      const uint32_t saved = get32(head + 8);
+      if (get32(head + 4) != kStateVersion || saved < kParamCarry || saved > kParamCount)
          return false;
       double values[kParamCount];
-      if (!jclap::core::readAll(stream, values, sizeof(values)))
+      for (uint32_t i = 0; i < kParamCount; ++i)
+         values[i] = kParams[i].def;
+      if (!jclap::core::readAll(stream, values, saved * sizeof(double)))
          return false;
       for (double v : values)
          if (!std::isfinite(v))
@@ -396,6 +402,7 @@ public:
          sending_ = false;
       }
       const bool thru = params_[kParamThru].load() >= 0.5;
+      const int carry = intParam(kParamCarry);
 
       if (m == kModeSend) {
          if (link_.listeners.load(std::memory_order_relaxed) > 0) {
@@ -403,15 +410,19 @@ public:
             if (!sending_)
                sender_.restart();
             sending_ = true;
-            sender_.configure(intParam(kParamCodec) == kCodecPcm ? Codec::Pcm24 : Codec::Opus, intParam(kParamBitrate),
-                              params_[kParamRedundancy].load() >= 0.5);
+            const Codec codec = !carriesAudio(carry)          ? Codec::None
+                                : intParam(kParamCodec) == kCodecPcm ? Codec::Pcm24
+                                                                     : Codec::Opus;
+            sender_.configure(codec, intParam(kParamBitrate), params_[kParamRedundancy].load() >= 0.5);
             QueueSink sink(link_);
-            sender_.process(inL, inR, frames, midiIn_, midiInCount_, sink);
+            sender_.process(inL, inR, frames, midiIn_, carriesMidi(carry) ? midiInCount_ : 0, sink);
             if (sink.sent())
                link_.outgoingReady.post();
          }
          else
             sending_ = false;
+         if (midiInCount_ > 0)
+            noteMidi(midiIn_[midiInCount_ - 1].data, midiInCount_);
          for (uint32_t i = 0; i < frames; ++i) {
             const float l = inL[i], r = inR[i];
             outL[i] = thru ? l : 0.0f;
@@ -425,12 +436,18 @@ public:
             std::copy(inR, inR + frames, thruR_.begin());
          }
          receiver_.setBuffer(params_[kParamBuffer].load(), params_[kParamAutoBuffer].load() >= 0.5);
-         const int received = receiver_.process(
+         int received = receiver_.process(
             link_.ring, outL, outR, frames, midiOut_, kMaxMidi,
             std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch())
                .count());
+         if (received > 0)
+            noteMidi(midiOut_[received - 1].data, received);
+         if (!carriesMidi(carry))
+            received = 0;
          const double levelDb = params_[kParamLevel].load();
-         const float gain = levelDb <= kParams[kParamLevel].min ? 0.0f : static_cast<float>(std::pow(10.0, levelDb / 20.0));
+         const float gain = levelDb <= kParams[kParamLevel].min || !carriesAudio(carry)
+                               ? 0.0f
+                               : static_cast<float>(std::pow(10.0, levelDb / 20.0));
          for (uint32_t i = 0; i < frames; ++i) {
             outL[i] = outL[i] * gain + (thru ? thruL_[i] : 0.0f);
             outR[i] = outR[i] * gain + (thru ? thruR_[i] : 0.0f);
@@ -460,6 +477,14 @@ private:
       for (uint32_t i = 0; i < frames; ++i)
          p = std::max(p, std::max(std::abs(l[i]), std::abs(r[i])));
       return p;
+   }
+
+   // For the panel's MIDI light: how many events went through, and the last of them.
+   void noteMidi(const uint8_t *last, int count) {
+      midiEvents_.fetch_add(static_cast<uint32_t>(count), std::memory_order_relaxed);
+      lastMidi_.store(static_cast<uint32_t>(last[0]) | static_cast<uint32_t>(last[1]) << 8 |
+                         static_cast<uint32_t>(last[2]) << 16,
+                      std::memory_order_relaxed);
    }
 
    void applyParam(const clap_event_param_value_t *ev) {
@@ -539,6 +564,7 @@ private:
    int midiInCount_ = 0;
    OutMidi midiOut_[kMaxMidi];
    std::atomic<float> inPeak_{0.0f}, outPeak_{0.0f};
+   std::atomic<uint32_t> midiEvents_{0}, lastMidi_{0};
 
    ImpairSettings impair_;
    uint32_t localIp_ = 0;

@@ -58,6 +58,8 @@ void Encoder::setBitrate(int kbps) {
 }
 
 int Encoder::encode(Codec codec, const float *interleaved, int frames, uint8_t *out, int capacity) {
+   if (codec == Codec::None)
+      return 0;
    if (codec == Codec::Pcm24) {
       const int bytes = frames * kChannels * 3;
       if (bytes > capacity)
@@ -100,6 +102,10 @@ void Decoder::reset() {
 }
 
 bool Decoder::decode(Codec codec, const uint8_t *data, int bytes, float *interleaved, int frames) {
+   if (codec == Codec::None) {
+      std::fill(interleaved, interleaved + frames * kChannels, 0.0f);
+      return bytes == 0;
+   }
    if (codec == Codec::Pcm24) {
       if (bytes != frames * kChannels * 3) {
          std::fill(interleaved, interleaved + frames * kChannels, 0.0f);

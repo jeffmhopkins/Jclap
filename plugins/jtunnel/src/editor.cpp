@@ -2,13 +2,14 @@
 // receiver share almost nothing. Top left is the tunnel (the name to send as, or what to listen to
 // and the tunnels found), top right the link: who is connected to whom, a few seconds of history
 // and the live readouts. The bottom row is the send format or the receive buffer, and the output.
-// 720 x 480 design grid scaled to the window.
+// 720 x 556 design grid scaled to the window.
 
 #include "editor.h"
 
 #include <jclap/ui/button.h>
 #include <jclap/ui/design_frame.h>
 #include <jclap/ui/knob.h>
+#include <jclap/ui/led.h>
 #include <jclap/ui/meter.h>
 #include <jclap/ui/param_bindings.h>
 #include <jclap/ui/section.h>
@@ -29,6 +30,7 @@
 #include <vector>
 
 #include "params.h"
+#include "protocol.h"
 
 namespace jtunnel {
 namespace {
@@ -36,7 +38,7 @@ namespace {
 namespace ui = jclap::ui;
 
 constexpr float kDesignWidth = 720.0f;
-constexpr float kDesignHeight = 480.0f;
+constexpr float kDesignHeight = 556.0f;
 constexpr float kHeaderHeight = 64.0f;
 
 // The house orange for what is live, a yellow for warnings.
@@ -472,6 +474,13 @@ public:
       redraw();
    }
    // Lead in ms (true), or level in dB (false).
+   // What the graph says while it has nothing to draw.
+   void setEmptyText(std::string text) {
+      if (text != empty_) {
+         empty_ = std::move(text);
+         redraw();
+      }
+   }
    void setMilliseconds(bool ms) {
       if (ms != ms_) {
          ms_ = ms;
@@ -506,7 +515,7 @@ public:
                   14 * s);
       canvas.text("LAST 8 S", ui::font(10 * s), visage::Font::kRight, px, 4 * s, pw, 14 * s);
       if (std::all_of(values_.begin(), values_.end(), [](float v) { return v == kNone; })) {
-         canvas.text("Nothing received yet", ui::font(12 * s), visage::Font::kCenter, px, py, pw, ph);
+         canvas.text(empty_, ui::font(12 * s), visage::Font::kCenter, px, py, pw, ph);
          return;
       }
 
@@ -574,8 +583,45 @@ private:
    std::array<uint8_t, kHistory> events_{};
    int head_ = 0;
    bool ms_ = true;
+   std::string empty_ = "Nothing received yet";
    float scale_ = 1.0f;
 };
+
+// One MIDI event in words: "Note on C4  vel 100  ch 1".
+std::string midiText(uint32_t packed) {
+   const int status = static_cast<int>(packed & 0xff), d1 = static_cast<int>((packed >> 8) & 0x7f),
+             d2 = static_cast<int>((packed >> 16) & 0x7f), channel = (status & 0x0f) + 1;
+   char buffer[64];
+   switch (status & 0xf0) {
+   case 0x90:
+      if (d2 > 0) {
+         std::snprintf(buffer, sizeof(buffer), "Note on %s  vel %d  ch %d", ui::noteName(d1).c_str(), d2, channel);
+         break;
+      }
+      [[fallthrough]];
+   case 0x80:
+      std::snprintf(buffer, sizeof(buffer), "Note off %s  ch %d", ui::noteName(d1).c_str(), channel);
+      break;
+   case 0xa0:
+      std::snprintf(buffer, sizeof(buffer), "Aftertouch %s %d  ch %d", ui::noteName(d1).c_str(), d2, channel);
+      break;
+   case 0xb0:
+      std::snprintf(buffer, sizeof(buffer), "CC %d = %d  ch %d", d1, d2, channel);
+      break;
+   case 0xc0:
+      std::snprintf(buffer, sizeof(buffer), "Program %d  ch %d", d1 + 1, channel);
+      break;
+   case 0xd0:
+      std::snprintf(buffer, sizeof(buffer), "Pressure %d  ch %d", d1, channel);
+      break;
+   case 0xe0:
+      std::snprintf(buffer, sizeof(buffer), "Pitch bend %+d  ch %d", (d1 | d2 << 7) - 8192, channel);
+      break;
+   default:
+      return "-";
+   }
+   return buffer;
+}
 
 // A row of readouts: a small caption over each value, split by thin lines.
 class Readouts : public visage::Frame, public ui::Scalable {
@@ -665,53 +711,66 @@ public:
       graph_ = &add<HistoryGraph>({316, 186, 376, 78});
       readouts_ = &add<Readouts>({316, 272, 376, 36});
 
+      // What the tunnel carries, and the MIDI going through it.
+      section({12, 328, 404, 64}, "");
+      add<ui::Label>({28, 352, 60, 16}, "CARRY", kDim, visage::Font::kLeft, 0.8f);
+      carry_ = &add<ui::SegmentedSwitch>({92, 344, 308, 32}, std::vector<std::string>{"AUDIO + MIDI", "AUDIO", "MIDI"});
+      carry_->setAccent(kAccent);
+      bindings_.bind(*carry_, kParamCarry);
+      tips_.add(*carry_, "What goes through the tunnel. MIDI only sends 1 ms frames with no audio, for the lowest latency");
+      section({428, 328, 280, 64}, "");
+      midiLed_ = &add<ui::ActivityLed>({444, 349, 70, 22}, "MIDI");
+      midiLed_->setColor(kAccent);
+      midiLast_ = &add<ui::Label>({520, 340, 180, 20}, "", 0, visage::Font::kLeft, 0.72f);
+      midiInfo_ = &add<ui::Label>({520, 362, 180, 16}, "", 0, visage::Font::kLeft, 0.75f);
+
       // Bottom left: how a sender codes, or how a receiver buffers. Same box, swapped with the mode.
-      bottomSection_ = &section({12, 328, 404, 140}, "");
-      codec_ = &add<ui::SegmentedSwitch>({28, 372, 180, 30}, std::vector<std::string>{"OPUS", "PCM 24-BIT"});
+      bottomSection_ = &section({12, 404, 404, 140}, "");
+      codec_ = &add<ui::SegmentedSwitch>({28, 448, 180, 30}, std::vector<std::string>{"OPUS", "PCM 24-BIT"});
       codec_->setAccent(kAccent);
       bindings_.bind(*codec_, kParamCodec);
       tips_.add(*codec_, "Opus is the one to use on Wi-Fi; PCM is uncompressed, for wired networks");
-      redundant_ = &add<ui::Button>({28, 416, 180, 30}, "REDUNDANT");
+      redundant_ = &add<ui::Button>({28, 492, 180, 30}, "REDUNDANT");
       redundant_->setToggle(true);
       redundant_->setAccent(kAccent);
       bindings_.bind(*redundant_, kParamRedundancy);
       tips_.add(*redundant_, "Repeat each frame in the next packet: a single lost packet costs nothing");
-      bitrate_ = &knob(kParamBitrate, "BITRATE", kAccent, {222, 358, 96, 104}, 32.0);
-      formatInfo_[0] = &add<ui::Label>({324, 372, 80, 14}, "", 0, visage::Font::kLeft, 0.8f);
-      formatInfo_[1] = &add<ui::Label>({324, 388, 80, 18}, "", 0, visage::Font::kLeft, 0.8f);
-      formatInfo_[2] = &add<ui::Label>({324, 408, 80, 14}, "", 0, visage::Font::kLeft, 0.8f);
+      bitrate_ = &knob(kParamBitrate, "BITRATE", kAccent, {222, 434, 96, 104}, 32.0);
+      formatInfo_[0] = &add<ui::Label>({324, 448, 80, 14}, "", 0, visage::Font::kLeft, 0.8f);
+      formatInfo_[1] = &add<ui::Label>({324, 464, 80, 18}, "", 0, visage::Font::kLeft, 0.8f);
+      formatInfo_[2] = &add<ui::Label>({324, 484, 80, 14}, "", 0, visage::Font::kLeft, 0.8f);
       formatInfo_[0]->setColor(ui::defaultTheme().dimText);
       formatInfo_[2]->setColor(ui::defaultTheme().dimText);
 
-      buffer_ = &knob(kParamBuffer, "BUFFER", kAccent, {24, 358, 104, 104}, 1.0);
+      buffer_ = &knob(kParamBuffer, "BUFFER", kAccent, {24, 434, 104, 104}, 1.0);
       tips_.add(*buffer_, "How far ahead of late packets playback stays");
-      autoBuffer_ = &add<ui::Button>({144, 374, 100, 30}, "AUTO");
+      autoBuffer_ = &add<ui::Button>({144, 450, 100, 30}, "AUTO");
       autoBuffer_->setToggle(true);
       autoBuffer_->setAccent(kAccent);
       bindings_.bind(*autoBuffer_, kParamAutoBuffer);
       tips_.add(*autoBuffer_, "Grow the buffer after dropouts, shrink it slowly when the network is quiet");
       const char *bufferHints[] = {"Grows after a dropout, shrinks", "back after 20 quiet seconds",
                                    "Wired: about 5 ms    Wi-Fi: 20 ms or more"};
-      bufferInfo_[0] = &add<ui::Label>({256, 375, 156, 14}, bufferHints[0], 0, visage::Font::kLeft, 0.8f);
-      bufferInfo_[1] = &add<ui::Label>({256, 389, 156, 14}, bufferHints[1], 0, visage::Font::kLeft, 0.8f);
-      bufferInfo_[2] = &add<ui::Label>({144, 422, 260, 16}, bufferHints[2], 0, visage::Font::kLeft, 0.75f);
+      bufferInfo_[0] = &add<ui::Label>({256, 451, 156, 14}, bufferHints[0], 0, visage::Font::kLeft, 0.8f);
+      bufferInfo_[1] = &add<ui::Label>({256, 465, 156, 14}, bufferHints[1], 0, visage::Font::kLeft, 0.8f);
+      bufferInfo_[2] = &add<ui::Label>({144, 498, 260, 16}, bufferHints[2], 0, visage::Font::kLeft, 0.75f);
       for (ui::Label *l : bufferInfo_)
          l->setColor(ui::defaultTheme().dimText);
 
       // Bottom right: what comes out.
-      section({428, 328, 280, 140}, "OUTPUT");
-      level_ = &knob(kParamLevel, "LEVEL", kAccent, {440, 358, 96, 104}, 1.0);
+      section({428, 404, 280, 140}, "OUTPUT");
+      level_ = &knob(kParamLevel, "LEVEL", kAccent, {440, 434, 96, 104}, 1.0);
       tips_.add(*level_, "Level of what this receiver plays");
-      thru_ = &add<ui::Button>({548, 384, 84, 30}, "THRU");
+      thru_ = &add<ui::Button>({548, 460, 84, 30}, "THRU");
       thru_->setToggle(true);
       thru_->setAccent(kAccent);
       bindings_.bind(*thru_, kParamThru);
-      thruInfo_ = &add<ui::Label>({548, 418, 90, 14}, "", 0, visage::Font::kLeft, 0.8f);
+      thruInfo_ = &add<ui::Label>({548, 494, 90, 14}, "", 0, visage::Font::kLeft, 0.8f);
       thruInfo_->setColor(ui::defaultTheme().dimText);
-      add<ui::Label>({642, 358, 26, 14}, "IN", 0, visage::Font::kCenter, 0.75f);
-      add<ui::Label>({670, 358, 26, 14}, "OUT", 0, visage::Font::kCenter, 0.75f);
-      inMeter_ = &add<ui::Meter>({648, 374, 14, 82});
-      outMeter_ = &add<ui::Meter>({676, 374, 14, 82});
+      add<ui::Label>({642, 434, 26, 14}, "IN", 0, visage::Font::kCenter, 0.75f);
+      add<ui::Label>({670, 434, 26, 14}, "OUT", 0, visage::Font::kCenter, 0.75f);
+      inMeter_ = &add<ui::Meter>({648, 450, 14, 82});
+      outMeter_ = &add<ui::Meter>({676, 450, 14, 82});
 
       sync();
       startTimer(kTickMs);
@@ -809,8 +868,8 @@ private:
 
       // The level is the receiver's; a sender's output is only its input passed through.
       level_->setVisible(rx);
-      move(*thru_, rx ? ui::Rect{548, 384, 84, 30} : ui::Rect{448, 384, 120, 30});
-      move(*thruInfo_, rx ? ui::Rect{548, 418, 90, 14} : ui::Rect{448, 418, 180, 14});
+      move(*thru_, rx ? ui::Rect{548, 460, 84, 30} : ui::Rect{448, 460, 120, 30});
+      move(*thruInfo_, rx ? ui::Rect{548, 494, 90, 14} : ui::Rect{448, 494, 180, 14});
       thruInfo_->setText(rx ? "mix input in" : "keep playing it here");
       tips_.setText(*thru_, rx ? "Mix this track's own input in with what is received"
                                : "Keep playing this track's input here as well as sending it");
@@ -864,6 +923,30 @@ private:
 
       inMeter_->setLevel(st.inputPeak);
       outMeter_->setLevel(st.outputPeak);
+      syncMidi(st, rx);
+   }
+
+   int carry() const { return static_cast<int>(std::lround(host_.paramValue(kParamCarry))); }
+
+   // The MIDI light flashes for each event through (coming in to be sent, or received), with the
+   // last one in words and whether it is getting through.
+   void syncMidi(const TunnelStatus &st, bool rx) {
+      midiLed_->setCount(st.midiEvents);
+      midiLast_->setText(st.lastMidi ? midiText(st.lastMidi) : "No MIDI yet");
+      midiLast_->setColor(st.lastMidi ? 0 : ui::defaultTheme().dimText);
+      char buffer[64];
+      unsigned color = ui::defaultTheme().dimText;
+      if (!carriesMidi(carry())) {
+         std::snprintf(buffer, sizeof(buffer), rx ? "Not played: Carry is Audio" : "Not sent: Carry is Audio");
+         color = kAmber;
+      }
+      else if (!rx && st.listeners == 0)
+         std::snprintf(buffer, sizeof(buffer), "Sent once someone listens");
+      else
+         std::snprintf(buffer, sizeof(buffer), "%u event%s %s", st.midiEvents, st.midiEvents == 1 ? "" : "s",
+                       rx ? "received" : "sent");
+      midiInfo_->setText(buffer);
+      midiInfo_->setColor(color);
    }
 
    // The common states before there is anything to show: switched off, or no socket.
@@ -891,20 +974,28 @@ private:
       char buffer[96];
       std::snprintf(buffer, sizeof(buffer), st.listeners == 1 ? "1 receiver" : "%d receivers", st.listeners);
       link.right = {st.listeners > 0 ? buffer : "Nobody yet", st.listeners > 0 ? "" : "waiting", st.listeners > 0};
-      const bool opus = std::lround(host_.paramValue(kParamCodec)) == kCodecOpus;
+      const bool midiOnly = !carriesAudio(carry());
+      const bool opus = !midiOnly && std::lround(host_.paramValue(kParamCodec)) == kCodecOpus;
       const bool redundant = host_.paramValue(kParamRedundancy) >= 0.5;
       const double rate = opus ? 48000.0 : st.hostRate;
-      // What one receiver costs: the codec's rate, twice over with redundancy. Packet headers aside.
-      const double kbps =
-         (opus ? host_.paramValue(kParamBitrate) : rate * 24.0 * 2.0 / 1000.0) * (redundant ? 2.0 : 1.0);
+      // What one receiver costs: the codec's rate, twice over with redundancy. Packet headers aside,
+      // except for MIDI only, where they are most of it: a packet a millisecond, about 26 bytes.
+      double kbps = (opus ? host_.paramValue(kParamBitrate) : rate * 24.0 * 2.0 / 1000.0) * (redundant ? 2.0 : 1.0);
+      if (midiOnly) {
+         const double frame = std::clamp(std::round(rate * kMidiFrameMs / 1000.0), 16.0, double(kMaxFrameSamples));
+         kbps = rate > 0 ? rate / frame * (23.0 + (redundant ? 6.0 : 3.0)) * 8.0 / 1000.0 : 0.0;
+      }
 
       if (!offline(st, link)) {
          if (st.listeners > 0) {
             link.headline = "SENDING";
             link.color = kAccent;
             link.flowing = true;
-            std::snprintf(buffer, sizeof(buffer), "%s, %.1f kHz%s", opus ? "Opus" : "PCM 24-bit", rate / 1000.0,
-                          redundant ? ", redundant" : "");
+            if (midiOnly)
+               std::snprintf(buffer, sizeof(buffer), "MIDI only, 1 ms frames%s", redundant ? ", redundant" : "");
+            else
+               std::snprintf(buffer, sizeof(buffer), "%s, %.1f kHz%s", opus ? "Opus" : "PCM 24-bit", rate / 1000.0,
+                             redundant ? ", redundant" : "");
             link.detail = buffer;
          }
          else {
@@ -936,26 +1027,35 @@ private:
 
       // The level going out, as a line. Silence floors it at the bottom of the scale.
       const float db = st.inputPeak > 0.0f ? 20.0f * std::log10(st.inputPeak) : -60.0f;
-      graph_->push(std::max(db, -60.0f), 0.0f, 0);
+      // MIDI only sends no audio, so there is no level to show.
+      graph_->setEmptyText(midiOnly ? "No audio sent: MIDI only" : "Nothing received yet");
+      if (midiOnly)
+         graph_->push(HistoryGraph::kNone, HistoryGraph::kNone, 0);
+      else
+         graph_->push(std::max(db, -60.0f), 0.0f, 0);
 
       std::snprintf(buffer, sizeof(buffer), "%d", st.listeners);
       readouts_->set(0, "RECEIVERS", buffer, st.listeners > 0 ? kAccent : 0);
-      readouts_->set(1, "FORMAT", opus ? "Opus" : "PCM 24");
+      readouts_->set(1, "FORMAT", midiOnly ? "MIDI" : opus ? "Opus" : "PCM 24");
       std::snprintf(buffer, sizeof(buffer), "%.1f kHz", rate / 1000.0);
       readouts_->set(2, "RATE", rate > 0 ? buffer : "-");
       readouts_->set(3, "UPLOAD", st.listeners > 0 ? rateText(kbps * st.listeners) : "-");
 
       // The bitrate knob only means something for Opus; PCM's rate is fixed by the host.
+      // MIDI only has no audio format to pick.
       bitrate_->setVisible(opus);
-      move(*formatInfo_[0], opus ? ui::Rect{330, 382, 76, 14} : ui::Rect{226, 382, 180, 14});
-      move(*formatInfo_[1], opus ? ui::Rect{330, 398, 76, 18} : ui::Rect{226, 398, 180, 18});
-      move(*formatInfo_[2], opus ? ui::Rect{330, 420, 76, 14} : ui::Rect{226, 420, 180, 14});
-      formatInfo_[0]->setText(opus ? "PER RECEIVER" : "UNCOMPRESSED, PER RECEIVER");
+      codec_->setVisible(!midiOnly);
+      move(*redundant_, midiOnly ? ui::Rect{28, 448, 180, 30} : ui::Rect{28, 492, 180, 30});
+      move(*formatInfo_[0], opus ? ui::Rect{330, 458, 76, 14} : ui::Rect{226, 458, 180, 14});
+      move(*formatInfo_[1], opus ? ui::Rect{330, 474, 76, 18} : ui::Rect{226, 474, 180, 18});
+      move(*formatInfo_[2], opus ? ui::Rect{330, 496, 76, 14} : ui::Rect{226, 496, 180, 14});
+      formatInfo_[0]->setText(midiOnly ? "MIDI ONLY, PER RECEIVER" : opus ? "PER RECEIVER" : "UNCOMPRESSED, PER RECEIVER");
       formatInfo_[1]->setText(rateText(kbps));
-      formatInfo_[2]->setText(opus ? "5 ms frames" : "2 ms frames: for wired networks");
+      formatInfo_[2]->setText(midiOnly ? "1 ms frames, no audio" : opus ? "5 ms frames" : "2 ms frames: for wired networks");
    }
 
    void syncReceiver(const TunnelStatus &st) {
+      graph_->setEmptyText("Nothing received yet");
       LinkView::State link;
       const std::string target = host_.listenTarget();
       link.left = {target.empty() ? "(nothing)" : target, st.source.empty() ? "sender" : st.source, false};
@@ -984,9 +1084,17 @@ private:
             link.flowing = true;
             link.left.lit = link.right.lit = true;
             if (st.sampleRate) {
-               std::snprintf(buffer, sizeof(buffer), "%s, %.1f kHz%s", st.codec == 0 ? "Opus" : "PCM 24-bit",
-                             st.sampleRate / 1000.0, playing ? "" : ", filling the buffer");
+               if (st.codec == 2)
+                  std::snprintf(buffer, sizeof(buffer), "MIDI only, 1 ms frames%s", playing ? "" : ", filling the buffer");
+               else
+                  std::snprintf(buffer, sizeof(buffer), "%s, %.1f kHz%s", st.codec == 0 ? "Opus" : "PCM 24-bit",
+                                st.sampleRate / 1000.0, playing ? "" : ", filling the buffer");
                link.detail = buffer;
+               // Set to play only what the sender doesn't send: nothing will come out.
+               if (st.codec == 2 && !carriesMidi(carry())) {
+                  link.detail = "The sender sends MIDI only, and Carry here is Audio";
+                  link.detailColor = kAmber;
+               }
             }
             break;
          default:
@@ -1044,6 +1152,9 @@ private:
    ui::Button *redundant_ = nullptr, *autoBuffer_ = nullptr, *thru_ = nullptr;
    ui::Knob *bitrate_ = nullptr, *buffer_ = nullptr, *level_ = nullptr;
    ui::Meter *inMeter_ = nullptr, *outMeter_ = nullptr;
+   ui::SegmentedSwitch *carry_ = nullptr;
+   ui::ActivityLed *midiLed_ = nullptr;
+   ui::Label *midiLast_ = nullptr, *midiInfo_ = nullptr;
    std::vector<ui::Section *> sections_;
    std::vector<std::string> names_;
    uint32_t lastLost_ = 0, lastConcealed_ = 0;
