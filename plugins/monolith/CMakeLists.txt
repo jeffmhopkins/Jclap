@@ -19,4 +19,6 @@ if(JCLAP_BUILD_TOOLS)
    target_include_directories(monolith-screenshot PRIVATE src)
    target_link_libraries(monolith-screenshot PRIVATE jclap::ui)
    jclap_add_screenshot_test(monolith-screenshot-test TOOL monolith-screenshot REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel.png)
+   jclap_add_screenshot_test(monolith-stage-screenshot-test TOOL monolith-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/stage.png ARGS 0 1200 680 listen)
 endif()
