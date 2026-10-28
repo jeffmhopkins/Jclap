@@ -75,8 +75,10 @@ jobs:
         shell: bash
         run: |
           validator=$(find build/vst3-validator/bin -type f \( -name validator -o -name validator.exe \) | head -n 1)
+          # Without its thousands of program-list lines, so a failure is easy to find in the log.
+          set -o pipefail
           for p in build/vst3/*.vst3; do
-            "$validator" "$p"
+            "$validator" "$p" 2>&1 | grep -v 'Programlist'
           done
       - name: Package (macOS)
         if: runner.os == 'macOS'
