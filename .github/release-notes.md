@@ -50,7 +50,9 @@ xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap
 The VST3 is the same: install it from Terminal with
 
 ```sh
-curl -sL https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-VST3-macOS.zip -o /tmp/jclap-vst3.zip && mkdir -p ~/Library/Audio/Plug-Ins/VST3 && ditto -x -k /tmp/jclap-vst3.zip ~/Library/Audio/Plug-Ins/VST3
+curl -sL https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-VST3-macOS.zip -o /tmp/jclap-vst3.zip && rm -rf /tmp/jclap-vst3 && ditto -x -k /tmp/jclap-vst3.zip /tmp/jclap-vst3 \
+  && mkdir -p ~/Library/Audio/Plug-Ins/VST3 && (cd /tmp/jclap-vst3 && for p in *.vst3; do
+    rm -rf ~/Library/Audio/Plug-Ins/VST3/"$p" && mv "$p" ~/Library/Audio/Plug-Ins/VST3/; done)
 ```
 
 or, after a browser download, run `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/PolarXY.vst3`.
