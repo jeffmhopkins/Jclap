@@ -906,7 +906,7 @@ const clap_plugin_descriptor_t BasicSynth::descriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.10.4",
+   "0.10.5",
    "An eight-voice MPE synth: oscillator, filter, VCA, two envelopes and an LFO",
    kFeatures,
 };
