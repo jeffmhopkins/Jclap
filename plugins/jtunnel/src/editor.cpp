@@ -922,6 +922,15 @@ private:
             link.detail = "Test impairment: " + st.impairment;
             link.detailColor = kAmber;
          }
+         // Another sender had this name first: we aren't announced, so nobody can find us by it.
+         if (!st.nameTakenBy.empty()) {
+            link.headline = "NAME IN USE";
+            link.color = kRed;
+            link.broken = true;
+            link.flowing = false;
+            link.detail = "Already sent from " + st.nameTakenBy + ": give this one another name";
+            link.detailColor = kRed;
+         }
       }
       link_->setState(std::move(link));
 

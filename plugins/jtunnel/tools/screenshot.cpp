@@ -1,7 +1,8 @@
-// Renders the panel to a PNG without a host: jtunnel-screenshot out.png [width height] [send|receive] [idle]
+// Renders the panel to a PNG without a host: jtunnel-screenshot out.png [width height] [send|receive] [idle|taken]
 // It shows a receiver mid-stream on Wi-Fi, with one stall that auto buffer answered, or with
 // "send", a sender with two receivers. "idle" shows them before anything connects instead: a
-// receiver searching without mDNS, a sender set to PCM with nobody listening. The panel polls status() a few seconds' worth of times
+// receiver searching without mDNS, a sender set to PCM with nobody listening. "taken" shows a
+// sender whose name another sender already has. The panel polls status() a few seconds' worth of times
 // before the render, so each call here is one 30 ms tick.
 
 #include <cmath>
@@ -16,7 +17,7 @@ namespace {
 
 class DemoHost : public jtunnel::EditorHost {
 public:
-   DemoHost(bool send, bool idle) : send_(send), idle_(idle) {}
+   DemoHost(bool send, bool idle, bool taken) : send_(send), idle_(idle), taken_(taken) {}
    double paramValue(clap_id id) const override {
       if (id == jtunnel::kParamMode)
          return send_ ? jtunnel::kModeSend : jtunnel::kModeReceive;
@@ -59,6 +60,12 @@ public:
          s.outputPeak = s.inputPeak;
          return s;
       }
+      if (send_ && taken_) {
+         s.nameTakenBy = "192.168.1.44:47000";
+         s.inputPeak = 0.03f + 0.8f * beat;
+         s.outputPeak = s.inputPeak;
+         return s;
+      }
       if (send_) {
          s.listeners = 2;
          s.inputPeak = 0.03f + 0.8f * beat + 0.02f * wobble;
@@ -90,7 +97,7 @@ public:
    }
 
 private:
-   bool send_, idle_;
+   bool send_, idle_, taken_;
    int tick_ = 0;
 };
 
@@ -98,11 +105,12 @@ private:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [width height] [send|receive] [idle]\n", argv[0]);
+      std::fprintf(stderr, "usage: %s out.png [width height] [send|receive] [idle|taken]\n", argv[0]);
       return 1;
    }
    const int width = argc > 3 ? std::atoi(argv[2]) : 720;
    const int height = argc > 3 ? std::atoi(argv[3]) : 480;
-   DemoHost host(argc > 4 && std::string(argv[4]) == "send", argc > 5 && std::string(argv[5]) == "idle");
+   const std::string variant = argc > 5 ? argv[5] : "";
+   DemoHost host(argc > 4 && std::string(argv[4]) == "send", variant == "idle", variant == "taken");
    return jtunnel::renderScreenshot(host, width, height, argv[1]) ? 0 : 1;
 }
