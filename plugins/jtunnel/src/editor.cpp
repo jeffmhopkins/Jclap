@@ -917,6 +917,11 @@ private:
             link.detail = "Network search unavailable: receivers must type the address";
             link.detailColor = kAmber;
          }
+         // A test setting nobody should forget is on.
+         if (!st.impairment.empty()) {
+            link.detail = "Test impairment: " + st.impairment;
+            link.detailColor = kAmber;
+         }
       }
       link_->setState(std::move(link));
 

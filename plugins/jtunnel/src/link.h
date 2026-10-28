@@ -14,6 +14,7 @@
 #include <thread>
 #include <vector>
 
+#include "impair.h"
 #include "net.h"
 #include "protocol.h"
 #include "receive_ring.h"
@@ -64,7 +65,8 @@ public:
    Link &operator=(const Link &) = delete;
 
    // Main thread. Opens the socket and starts the threads; false if no socket could be opened.
-   bool start(LinkState &state, uint64_t owner);
+   // `impair` makes the sending side worse on purpose, for testing (see impair.h).
+   bool start(LinkState &state, uint64_t owner, const ImpairSettings &impair = {});
    void stop();
    bool running() const { return running_; }
 
@@ -87,6 +89,7 @@ private:
    std::thread receiveThread_, sendThread_;
    std::atomic<bool> running_{false};
    bool discoveryHeld_ = false;
+   ImpairSettings impair_;
 
    std::mutex subscribersMutex_;
    std::vector<Subscriber> subscribers_;

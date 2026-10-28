@@ -85,6 +85,19 @@ runs with its host's. The first time JTunnel runs, macOS asks whether your DAW m
 the local network; allow it, or turn it on later in **System Settings > Privacy & Security > Local
 Network**. Without it nothing reaches the network, though instances in the same DAW still work.
 
+## Testing on a bad network
+
+To try a link against Wi-Fi-like trouble on a wired network or one machine, start the sender's host
+with `JTUNNEL_IMPAIR` set:
+
+```sh
+JTUNNEL_IMPAIR="jitter=6,stall=80,every=10,loss=1" /Applications/Bitwig\ Studio.app/Contents/MacOS/BitwigStudio
+```
+
+Every packet it sends is then held back a random time (`jitter` ms on average, kept in order as Wi-Fi
+does), everything stops for `stall` ms about every `every` seconds and goes out in a burst, and
+`loss` percent are dropped. Any key can be left out. The sender's panel says the impairment is on.
+
 ## Panel
 
 **SEND / RECEIVE** in the header sets the mode, and the panel below follows it. **LINK** draws the
