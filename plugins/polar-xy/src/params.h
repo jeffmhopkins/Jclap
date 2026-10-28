@@ -20,6 +20,9 @@ enum ParamId : clap_id {
    kParamDirection,
    kParamRadiusMode,
    kParamPassThrough,
+   kParamSmoothing,
+   kParamInertia,
+   kParamMotionPath,
    kParamCount
 };
 
@@ -38,12 +41,16 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Direction", 0, 1, 0, true},
    {"Radius Mode", 0, 1, 0, true},
    {"Pass Input CCs", 0, 1, 0, true},
+   {"Smoothing", 0, 2000, 0, false}, // ms
+   {"Inertia", 0, 100, 0, false},    // %
+   {"Motion Path", 0, 1, 0, true},
 };
 
 // Labels for the two-state params, off first.
 inline const char *const kDirectionLabels[] = {"Counter-clockwise", "Clockwise"};
 inline const char *const kRadiusModeLabels[] = {"Clamp to circle", "Fill square"};
 inline const char *const kOnOffLabels[] = {"Off", "On"};
+inline const char *const kMotionPathLabels[] = {"Straight", "Around"};
 
 inline const char *const *choiceLabels(clap_id id) {
    switch (id) {
@@ -53,6 +60,8 @@ inline const char *const *choiceLabels(clap_id id) {
       return kRadiusModeLabels;
    case kParamPassThrough:
       return kOnOffLabels;
+   case kParamMotionPath:
+      return kMotionPathLabels;
    default:
       return nullptr;
    }
@@ -68,6 +77,10 @@ inline void formatParam(clap_id id, double value, char *out, uint32_t size) {
          shown -= 360.0;
       std::snprintf(out, size, "%.1f deg", shown);
    }
+   else if (id == kParamSmoothing)
+      std::snprintf(out, size, value >= 1000.0 ? "%.2f s" : "%.0f ms", value >= 1000.0 ? value / 1000.0 : value);
+   else if (id == kParamInertia)
+      std::snprintf(out, size, "%.0f%%", value);
    else
       std::snprintf(out, size, "CC %d", static_cast<int>(value + 0.5));
 }
@@ -80,7 +93,7 @@ inline bool sameText(const char *a, const char *b) {
 }
 
 // Labels in any case, or a number ("CC 20", "cc20" and " 20" too), kept to the param's range. An
-// angle offset wraps around the circle instead, so -90 is 270.
+// angle offset wraps around the circle instead, so -90 is 270. Smoothing reads "1.5 s" as 1500 ms.
 inline bool parseParam(clap_id id, const char *text, double &value) {
    while (std::isspace(static_cast<unsigned char>(*text)))
       ++text;
@@ -100,6 +113,15 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
       v = std::fmod(v, 360.0);
       value = v < 0.0 ? v + 360.0 : v + 0.0; // + 0.0 turns -0 into 0
       return true;
+   }
+   if (id == kParamSmoothing) {
+      const char *unit = text;
+      while (*unit && (std::isdigit(static_cast<unsigned char>(*unit)) || std::strchr("+-.eE", *unit)))
+         ++unit;
+      while (std::isspace(static_cast<unsigned char>(*unit)))
+         ++unit;
+      if (std::tolower(static_cast<unsigned char>(unit[0])) == 's')
+         v *= 1000.0;
    }
    value = std::clamp(v, kParams[id].min, kParams[id].max);
    return true;

@@ -1,5 +1,5 @@
 // Polar XY's panel, in the MicroMonsta 2 style: a title bar, live views of the XY input and the polar
-// output, and the settings, all on a 720 x 480 design grid scaled to the window.
+// output, and the settings, all on a 720 x 612 design grid scaled to the window.
 
 #include "editor.h"
 
@@ -24,7 +24,7 @@ namespace {
 namespace ui = jclap::ui;
 
 constexpr float kDesignWidth = 720.0f;
-constexpr float kDesignHeight = 480.0f;
+constexpr float kDesignHeight = 612.0f;
 constexpr float kHeaderHeight = 64.0f;
 
 // The MicroMonsta 2 palette.
@@ -48,6 +48,7 @@ public:
       add<ui::Section>({500, 76, 208, 124}, "INPUT CC");
       add<ui::Section>({500, 212, 208, 124}, "OUTPUT CC");
       add<ui::Section>({12, 348, 696, 120}, "MAPPING");
+      add<ui::Section>({12, 480, 696, 120}, "MOTION");
 
       // Live views: what comes in on the X/Y CCs, and the angle/radius that goes out. Display only.
       const ui::ValueRange cc{0.0, 127.0, 64.0, 1.0};
@@ -67,19 +68,22 @@ public:
       knob(kParamOutAngle, "ANGLE", kOrange, out[0]);
       knob(kParamOutRadius, "RADIUS", kOrange, out[1]);
 
-      auto &offset = add<ui::Knob>({36, 374, 96, 90}, ui::ValueRange{0.0, 360.0, 0.0, 1.0});
-      offset.setLabel("OFFSET");
-      offset.setAccent(kPurple);
-      offset.valueText = [](double v) { return text(kParamAngleOffset, v); };
-      offset.parseText = [](const std::string &t, double &v) { return parseParam(kParamAngleOffset, t.c_str(), v); };
-      bindings_.bind(offset, kParamAngleOffset);
+      knob(kParamAngleOffset, "OFFSET", kPurple, {36, 374, 96, 90}, 1.0);
 
-      choice(kParamDirection, "DIRECTION", kDirectionLabels, 150);
-      choice(kParamRadiusMode, "RADIUS MODE", kRadiusModeLabels, 370);
+      choice(kParamDirection, "DIRECTION", kDirectionLabels, 150, 348);
+      choice(kParamRadiusMode, "RADIUS MODE", kRadiusModeLabels, 370, 348);
       add<ui::Label>({590, 392, 106, 16}, "PASS INPUT CCS", kPurple, visage::Font::kLeft);
       auto &pass = add<ui::Button>({590, 410, 106, 30}, "PASS");
       pass.setAccent(kPurple);
       bindings_.bind(pass, kParamPassThrough);
+      // How the output follows the controller.
+      knob(kParamSmoothing, "SMOOTHING", kBlue, {36, 506, 96, 90}, 10.0);
+      knob(kParamInertia, "INERTIA", kBlue, {150, 506, 96, 90}, 1.0);
+      choice(kParamMotionPath, "PATH", kMotionPathLabels, 264, 480);
+      add<ui::Label>({484, 518, 212, 16}, "Straight: across the pad", ui::defaultTheme().dimText, visage::Font::kLeft);
+      add<ui::Label>({484, 538, 212, 16}, "Around: spins round the circle", ui::defaultTheme().dimText,
+                     visage::Font::kLeft);
+
       // Shown when two inputs or two outputs share a CC, which the plugin won't convert.
       warning_ = &add<ui::Label>({380, 44, 320, 16}, "", kOrange, visage::Font::kRight, 0.7f);
 
@@ -119,9 +123,9 @@ private:
       canvas.circle(41 * s, 19 * s, 7 * s);
    }
 
-   void knob(clap_id id, const char *label, unsigned accent, ui::Rect cell) {
+   void knob(clap_id id, const char *label, unsigned accent, ui::Rect cell, double step = 1.0) {
       const ParamInfo &p = kParams[id];
-      auto &k = add<ui::Knob>(cell, ui::ValueRange{p.min, p.max, p.def, 1.0, false, p.stepped});
+      auto &k = add<ui::Knob>(cell, ui::ValueRange{p.min, p.max, p.def, step, false, p.stepped});
       k.setLabel(label);
       k.setAccent(accent);
       k.valueText = [id](double v) { return text(id, v); };
@@ -129,9 +133,10 @@ private:
       bindings_.bind(k, id);
    }
 
-   void choice(clap_id id, const char *label, const char *const *labels, float x) {
-      add<ui::Label>({x, 392, 200, 16}, label, kPurple, visage::Font::kLeft);
-      auto &d = add<ui::Dropdown>({x, 410, 200, 30}, std::vector<std::string>{labels[0], labels[1]});
+   // A two-way dropdown in the section whose top is at `top`.
+   void choice(clap_id id, const char *label, const char *const *labels, float x, float top) {
+      add<ui::Label>({x, top + 44, 200, 16}, label, kPurple, visage::Font::kLeft);
+      auto &d = add<ui::Dropdown>({x, top + 62, 200, 30}, std::vector<std::string>{labels[0], labels[1]});
       d.setAccent(kPurple);
       bindings_.bind(d, id);
    }

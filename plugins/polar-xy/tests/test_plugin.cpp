@@ -9,6 +9,102 @@
 
 extern "C" const clap_plugin_entry_t clap_entry;
 
+namespace {
+
+// The angle and radius CCs a run of blocks sends on channel 1, in order.
+struct Path {
+   std::vector<int> angles, radii;
+   bool sorted = true; // each block's events in time order
+};
+
+Path run(jclap::core::TestHost &h, int blocks) {
+   Path p;
+   for (int b = 0; b < blocks; ++b) {
+      const auto out = h.process();
+      uint32_t last = 0;
+      for (const auto &m : out.midi) {
+         p.sorted = p.sorted && m.time >= last && m.time < 256;
+         last = m.time;
+         if (m.data1 == 18)
+            p.angles.push_back(m.data2);
+         if (m.data1 == 19)
+            p.radii.push_back(m.data2);
+      }
+   }
+   return p;
+}
+
+void motionTests() {
+   jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+   // 100 ms of smoothing. The first position is jumped to: there is nowhere to glide from.
+   h.setParam(8, 100.0);
+   h.midi(0xB0, 16, 127);
+   h.midi(0xB0, 17, 64);
+   Path p = run(h, 1);
+   JCLAP_CHECK(p.angles.size() == 1 && p.angles[0] == 0 && p.radii.size() == 1 && p.radii[0] == 127);
+
+   // Straight across to the left edge: the radius glides down through the centre and back out, in
+   // many small steps over about 100 ms (19 blocks), and ends exactly on the target.
+   h.midi(0xB0, 16, 0);
+   p = run(h, 40);
+   JCLAP_CHECK(p.sorted);
+   JCLAP_CHECK(p.radii.size() > 40);
+   JCLAP_CHECK(!p.radii.empty() && *std::min_element(p.radii.begin(), p.radii.end()) == 0);
+   JCLAP_CHECK(!p.radii.empty() && p.radii.back() == 127);
+   JCLAP_CHECK(!p.angles.empty() && p.angles.back() == 64);
+   JCLAP_CHECK(run(h, 5).radii.empty()); // settled: nothing more is sent
+
+   // Around the circle: back to the right edge keeps the full radius and sweeps the angle the short
+   // way (here either way is half a turn) instead of cutting through the middle.
+   h.setParam(10, 1.0);
+   h.midi(0xB0, 16, 127);
+   p = run(h, 40);
+   JCLAP_CHECK(p.sorted);
+   JCLAP_CHECK(p.radii.empty() || *std::min_element(p.radii.begin(), p.radii.end()) >= 125);
+   JCLAP_CHECK(p.angles.size() > 20);
+   JCLAP_CHECK(!p.angles.empty() && p.angles.back() == 0);
+
+   // Inertia: a quarter turn up swings past the top and comes back to settle there.
+   h.setParam(8, 0.0);
+   h.setParam(9, 60.0);
+   h.midi(0xB0, 16, 64);
+   h.midi(0xB0, 17, 127);
+   p = run(h, 400);
+   JCLAP_CHECK(!p.angles.empty() && *std::max_element(p.angles.begin(), p.angles.end()) > 36);
+   JCLAP_CHECK(!p.angles.empty() && p.angles.back() == 32);
+   JCLAP_CHECK(p.radii.empty() || p.radii.back() == 127);
+
+   // A whirl: a turn and a half round the circle in quarter steps, about 50 ms apart. Around unwraps the
+   // angle, so the output keeps going round the same way, through the bottom, and on past the top.
+   std::vector<int> whirl;
+   const int steps[][2] = {{0, 64}, {64, 0}, {127, 64}, {64, 127}, {0, 64}, {64, 0}};
+   for (const auto &xy : steps) {
+      h.midi(0xB0, 16, static_cast<uint8_t>(xy[0]));
+      h.midi(0xB0, 17, static_cast<uint8_t>(xy[1]));
+      p = run(h, 10);
+      whirl.insert(whirl.end(), p.angles.begin(), p.angles.end());
+   }
+   // Counter-clockwise all the way: each angle is the last plus a small step (mod 127), never a
+   // jump back.
+   int backwards = 0;
+   for (size_t i = 1; i < whirl.size(); ++i)
+      backwards += ((whirl[i] - whirl[i - 1] + 127) % 127) > 63;
+   JCLAP_CHECK(whirl.size() > 30);
+   JCLAP_CHECK(backwards <= 2);
+
+   // Turning both off mid-glide lands at once.
+   h.setParam(9, 100.0);
+   h.midi(0xB0, 16, 127);
+   h.midi(0xB0, 17, 64);
+   run(h, 2);
+   h.setParam(9, 0.0);
+   p = run(h, 1);
+   JCLAP_CHECK(!p.angles.empty() && p.angles.back() == 0);
+   JCLAP_CHECK(run(h, 2).angles.empty());
+}
+
+} // namespace
+
 int main() {
    jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
 
@@ -122,6 +218,30 @@ int main() {
                         }};
       JCLAP_CHECK(state2->load(h2.plugin(), &is));
       JCLAP_CHECK(h2.paramValue(0) == 20.0 && h2.paramValue(1) == 17.0);
+
+      // Version 1 state, from before Smoothing, Inertia and Motion Path: those load as defaults.
+      h2.setParam(8, 500.0);
+      h2.process();
+      const char magic[4] = {'J', 'C', 'O', 'P'};
+      const uint32_t version = 1;
+      const double v1[8] = {21, 22, 23, 24, 45, 1, 1, 0};
+      bytes.assign(magic, magic + 4);
+      bytes.insert(bytes.end(), reinterpret_cast<const uint8_t *>(&version), reinterpret_cast<const uint8_t *>(&version) + 4);
+      bytes.insert(bytes.end(), reinterpret_cast<const uint8_t *>(v1), reinterpret_cast<const uint8_t *>(v1) + sizeof(v1));
+      pos = 0;
+      JCLAP_CHECK(state2->load(h2.plugin(), &is));
+      JCLAP_CHECK(h2.paramValue(0) == 21.0 && h2.paramValue(4) == 45.0 && h2.paramValue(6) == 1.0);
+      JCLAP_CHECK(h2.paramValue(8) == 0.0 && h2.paramValue(9) == 0.0 && h2.paramValue(10) == 0.0);
    }
+
+   JCLAP_CHECK(h.paramText(8, 250.0) == "250 ms");
+   JCLAP_CHECK(h.paramText(8, 1500.0) == "1.50 s");
+   JCLAP_CHECK(h.paramText(9, 40.0) == "40%");
+   JCLAP_CHECK(h.paramText(10, 1.0) == "Around");
+   JCLAP_CHECK(h.textToValue(8, "1.5 s", v) && v == 1500.0);
+   JCLAP_CHECK(h.textToValue(8, "80ms", v) && v == 80.0);
+   JCLAP_CHECK(h.textToValue(10, "around", v) && v == 1.0);
+
+   motionTests();
    return jclap::core::testResult();
 }

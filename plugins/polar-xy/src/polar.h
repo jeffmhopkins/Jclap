@@ -40,11 +40,8 @@ inline double wrapDegrees(double deg) {
    return deg;
 }
 
-// xcc/ycc are raw 0..127 CC values; Y grows upward.
-inline PolarCC toPolar(int xcc, int ycc, const PolarSettings &s) {
-   const double x = ccToBipolar(xcc);
-   const double y = ccToBipolar(ycc);
-
+// x/y on the -1..+1 scale (see ccToBipolar); Y grows upward.
+inline PolarCC toPolar(double x, double y, const PolarSettings &s) {
    PolarCC out;
    double r = s.radiusMode == RadiusMode::FillSquare ? std::max(std::abs(x), std::abs(y))
                                                      : std::hypot(x, y);
@@ -62,6 +59,11 @@ inline PolarCC toPolar(int xcc, int ycc, const PolarSettings &s) {
    out.angle = static_cast<int>(std::lround(deg / 360.0 * 127.0)) % 127;
    out.hasAngle = true;
    return out;
+}
+
+// xcc/ycc are raw 0..127 CC values.
+inline PolarCC toPolar(int xcc, int ycc, const PolarSettings &s) {
+   return toPolar(ccToBipolar(xcc), ccToBipolar(ycc), s);
 }
 
 } // namespace jclap

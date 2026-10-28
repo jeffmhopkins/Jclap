@@ -12,9 +12,13 @@ namespace {
 class DemoHost : public polar_xy::EditorHost {
 public:
    double paramValue(clap_id id) const override {
-      // Defaults, with the angle turned 45 degrees so the two views differ.
+      // Defaults, with the angle turned 45 degrees so the two views differ, and some motion.
       if (id == polar_xy::kParamAngleOffset)
          return 45.0;
+      if (id == polar_xy::kParamSmoothing)
+         return 250.0;
+      if (id == polar_xy::kParamInertia)
+         return 30.0;
       return id < polar_xy::kParamCount ? polar_xy::kParams[id].def : 0.0;
    }
    void beginEdit(clap_id) override {}
@@ -44,7 +48,7 @@ int main(int argc, char **argv) {
       return 1;
    }
    const int width = argc > 3 ? std::atoi(argv[2]) : 720;
-   const int height = argc > 3 ? std::atoi(argv[3]) : 480;
+   const int height = argc > 3 ? std::atoi(argv[3]) : 612;
    DemoHost host;
    return polar_xy::renderScreenshot(host, width, height, argv[1]) ? 0 : 1;
 }
