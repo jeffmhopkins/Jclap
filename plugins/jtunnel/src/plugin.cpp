@@ -590,7 +590,7 @@ const clap_plugin_descriptor_t JTunnel::descriptor = {
    "https://github.com/jeffmhopkins/Jclap",
    "",
    "",
-   "0.10.6",
+   "0.10.7",
    "Sends audio and MIDI to other JTunnel instances on the network, or plays what they send",
    kFeatures,
 };
