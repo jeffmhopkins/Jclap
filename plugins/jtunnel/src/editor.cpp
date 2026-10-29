@@ -587,6 +587,40 @@ private:
    float scale_ = 1.0f;
 };
 
+// A system message or a note expression in words (see packMidi in plugin.cpp).
+std::string systemText(uint32_t packed) {
+   const int status = static_cast<int>(packed & 0xff), d1 = static_cast<int>((packed >> 8) & 0x7f),
+             d2 = static_cast<int>((packed >> 16) & 0x7f);
+   char buffer[64];
+   if (status == kTagExpression) {
+      static const char *const names[] = {"Volume", "Pan", "Tuning", "Vibrato", "Expression", "Brightness", "Pressure"};
+      const int id = static_cast<int>((packed >> 8) & 0xff), channel = static_cast<int>((packed >> 16) & 0xff),
+                key = static_cast<int>(packed >> 24);
+      std::snprintf(buffer, sizeof(buffer), "%s %s  ch %s", id < 7 ? names[id] : "Expression",
+                    key == 255 ? "all" : ui::noteName(key).c_str(),
+                    channel == 255 ? "all" : std::to_string(channel + 1).c_str());
+      return buffer;
+   }
+   switch (status) {
+   case 0xf0: return "SysEx";
+   case 0xf1: return "MIDI time code";
+   case 0xf2:
+      std::snprintf(buffer, sizeof(buffer), "Song position %d", d1 | d2 << 7);
+      return buffer;
+   case 0xf3:
+      std::snprintf(buffer, sizeof(buffer), "Song select %d", d1 + 1);
+      return buffer;
+   case 0xf6: return "Tune request";
+   case 0xf8: return "Clock";
+   case 0xfa: return "Start";
+   case 0xfb: return "Continue";
+   case 0xfc: return "Stop";
+   case 0xfe: return "Active sensing";
+   case 0xff: return "Reset";
+   default: return "-";
+   }
+}
+
 // One MIDI event in words: "Note on C4  vel 100  ch 1".
 std::string midiText(uint32_t packed) {
    const int status = static_cast<int>(packed & 0xff), d1 = static_cast<int>((packed >> 8) & 0x7f),
@@ -618,7 +652,7 @@ std::string midiText(uint32_t packed) {
       std::snprintf(buffer, sizeof(buffer), "Pitch bend %+d  ch %d", (d1 | d2 << 7) - 8192, channel);
       break;
    default:
-      return "-";
+      return systemText(packed);
    }
    return buffer;
 }

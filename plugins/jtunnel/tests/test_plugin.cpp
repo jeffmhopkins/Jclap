@@ -17,6 +17,7 @@
 
 #include "editor.h"
 #include "params.h"
+#include "protocol.h"
 
 extern "C" const clap_plugin_entry_t clap_entry;
 
@@ -89,6 +90,11 @@ int main() {
    float *rxOut[2] = {rxL.data(), rxR.data()};
    uint64_t frame = 0;
    bool heard = false, noteSent = false, noteHeard = false;
+   // Everything else a note port brings goes through too, in order.
+   const std::vector<uint8_t> dump = {0xF0, 0x43, 0x10, 0x4C, 0x00, 0x00, 0x7E, 0x00, 0xF7};
+   std::vector<jclap::core::TestMidi> otherMidi;
+   std::vector<std::vector<uint8_t>> sysexHeard;
+   std::vector<clap_event_note_expression_t> expressionsHeard;
    double rms = 0.0;
    const auto start = std::chrono::steady_clock::now();
    auto next = start;
@@ -101,19 +107,29 @@ int main() {
       frame += block;
       if (heard && !noteSent) {
          sender.midi(0x90, 62, 110);
+         sender.midi(0xB0, 74, 99, 1);
+         sender.midi(0xE1, 0x00, 0x50, 2);
+         sender.midi(0xF8, 0, 0, 3);
+         sender.sysex(dump, 4);
+         sender.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, 62, 0.75, -1, 0, 5);
          noteSent = true;
       }
       sender.process(block, txIn, txOut);
       const jclap::core::TestOutput out = receiver.process(block, rxIn, rxOut);
-      for (const auto &m : out.midi)
+      for (const auto &m : out.midi) {
          noteHeard = noteHeard || (m.status == 0x90 && m.data1 == 62 && m.data2 == 110);
+         if (m.status != 0x90 && m.status != 0x80)
+            otherMidi.push_back(m);
+      }
+      sysexHeard.insert(sysexHeard.end(), out.sysex.begin(), out.sysex.end());
+      expressionsHeard.insert(expressionsHeard.end(), out.expressions.begin(), out.expressions.end());
 
       double sum = 0.0;
       for (uint32_t i = 0; i < block; ++i)
          sum += rxL[i] * rxL[i];
       rms = std::sqrt(sum / block);
       heard = heard || rms > 0.2;
-      if (heard && noteHeard)
+      if (heard && noteHeard && !sysexHeard.empty() && !expressionsHeard.empty())
          break;
       next += std::chrono::microseconds(5333);
       std::this_thread::sleep_until(next);
@@ -131,11 +147,22 @@ int main() {
                noteHeard, txStatus.listeners, rxStatus.connection, rxStatus.state, rxStatus.fillMs);
    JCLAP_CHECK(heard);
    JCLAP_CHECK(noteHeard);
+   JCLAP_CHECK_EQ(otherMidi.size(), size_t{3});
+   if (otherMidi.size() == 3) {
+      JCLAP_CHECK(otherMidi[0].status == 0xB0 && otherMidi[0].data1 == 74 && otherMidi[0].data2 == 99);
+      JCLAP_CHECK(otherMidi[1].status == 0xE1 && otherMidi[1].data1 == 0x00 && otherMidi[1].data2 == 0x50);
+      JCLAP_CHECK(otherMidi[2].status == 0xF8);
+   }
+   JCLAP_CHECK(sysexHeard.size() == 1 && sysexHeard[0] == dump);
+   JCLAP_CHECK(expressionsHeard.size() == 1 && expressionsHeard[0].expression_id == CLAP_NOTE_EXPRESSION_PRESSURE &&
+               expressionsHeard[0].key == 62 && expressionsHeard[0].channel == 0 && expressionsHeard[0].value == 0.75);
    JCLAP_CHECK_EQ(txStatus.listeners, 1);
    JCLAP_CHECK_EQ(rxStatus.connection, 3);
-   // The panels' MIDI lights saw the note go out and come in.
-   JCLAP_CHECK(txStatus.midiEvents >= 1 && (txStatus.lastMidi & 0xff) == 0x90);
-   JCLAP_CHECK(rxStatus.midiEvents >= 1 && ((rxStatus.lastMidi >> 8) & 0x7f) == 62);
+   // The panels' MIDI lights saw all six go out and come in (the SysEx once), the last of them the
+   // expression on the note's key.
+   JCLAP_CHECK(txStatus.midiEvents >= 6 && (txStatus.lastMidi & 0xff) == jtunnel::kTagExpression);
+   JCLAP_CHECK(rxStatus.midiEvents >= 6 && (rxStatus.lastMidi & 0xff) == jtunnel::kTagExpression &&
+               (rxStatus.lastMidi >> 24) == 62);
    // The sender's own output is its input (Thru on).
    JCLAP_CHECK(std::abs(outL[10] - inL[10]) < 1e-6f);
    // The receiver lists the tunnel it found.

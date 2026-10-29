@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -96,6 +97,8 @@ struct TestOutput {
    std::vector<clap_event_param_value_t> paramValues;
    std::vector<clap_event_param_gesture_t> gestures; // header.type tells begin from end
    std::vector<clap_event_note_t> noteEnds;
+   std::vector<std::vector<uint8_t>> sysex;
+   std::vector<clap_event_note_expression_t> expressions;
 };
 
 class TestHost {
@@ -215,6 +218,16 @@ public:
       in_.add(ev.header);
    }
 
+   // A SysEx message (F0 to F7). The bytes are kept until the block that carries it has run.
+   void sysex(std::vector<uint8_t> bytes, uint32_t time = 0) {
+      sysexBytes_.push_back(std::move(bytes));
+      clap_event_midi_sysex_t ev{};
+      ev.header = {sizeof(ev), time, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI_SYSEX, 0};
+      ev.buffer = sysexBytes_.back().data();
+      ev.size = static_cast<uint32_t>(sysexBytes_.back().size());
+      in_.add(ev.header);
+   }
+
    // Gives every following block this transport, as a host does while it plays or is stopped. Each
    // block moves it on by its length (song position in beats and seconds), as a playing host would.
    // Off by default: the plugin gets no transport.
@@ -292,6 +305,7 @@ public:
          proc.transport = &transport_;
       plugin_->process(plugin_, &proc);
       in_.events.clear();
+      sysexBytes_.clear();
       if (hasTransport_ && (transport_.flags & CLAP_TRANSPORT_IS_PLAYING))
          setTransport(transport_.tempo, transportBeats() + frames * transport_.tempo / 60.0 / sampleRate_, true);
       return collect(out);
@@ -327,6 +341,12 @@ private:
             result.paramValues.push_back(*reinterpret_cast<const clap_event_param_value_t *>(h));
          else if (h->type == CLAP_EVENT_NOTE_END)
             result.noteEnds.push_back(*reinterpret_cast<const clap_event_note_t *>(h));
+         else if (h->type == CLAP_EVENT_MIDI_SYSEX) {
+            auto *m = reinterpret_cast<const clap_event_midi_sysex_t *>(h);
+            result.sysex.emplace_back(m->buffer, m->buffer + m->size);
+         }
+         else if (h->type == CLAP_EVENT_NOTE_EXPRESSION)
+            result.expressions.push_back(*reinterpret_cast<const clap_event_note_expression_t *>(h));
          else if (h->type == CLAP_EVENT_PARAM_GESTURE_BEGIN || h->type == CLAP_EVENT_PARAM_GESTURE_END)
             result.gestures.push_back(*reinterpret_cast<const clap_event_param_gesture_t *>(h));
       }
@@ -348,6 +368,7 @@ private:
    float *scratchPointers_[4] = {};
    const clap_plugin_params_t *params_ = nullptr;
    TestEventList in_;
+   std::deque<std::vector<uint8_t>> sysexBytes_;
    size_t outputLimit_ = SIZE_MAX;
 };
 

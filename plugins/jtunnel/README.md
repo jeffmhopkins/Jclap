@@ -24,8 +24,13 @@ LAN, Wi-Fi included.
 3. Audio starts within a second. The link turns green and **LATENCY** shows how much the receiver
    is buffering.
 
-One sender can feed any number of receivers. MIDI (notes and channel messages) travels with the
-audio, sample-locked to it, so a receiver can drive an instrument on the far machine.
+One sender can feed any number of receivers. All of a track's MIDI travels with the audio,
+sample-locked to it, so a receiver can drive an instrument on the far machine: notes, CC, pitch
+bend, aftertouch (channel and polyphonic), program changes, clock, start, stop and song position,
+SysEx of any length up to 15 KB, and CLAP note expressions (MPE-style per-note tuning, pressure and
+brightness). A long SysEx message goes over a few frames, and one that loses a piece on the way is
+dropped whole rather than delivered broken. Both ends need JTunnel 0.11 or later: older versions
+don't speak this format, and simply don't hear each other.
 
 **CARRY** picks what goes through: **AUDIO + MIDI**, **AUDIO** or **MIDI**. On a sender it is what
 gets sent; on a receiver, what of the stream gets played. **MIDI** alone sends no audio at all, in
@@ -149,5 +154,8 @@ so in amber when **CARRY** is keeping MIDI back.
 every rate pair), and a sender and receiver whose clocks run 150 ppm apart, joined by a simulated
 Wi-Fi link with jitter, 60 ms stalls and 2% loss, for 90 simulated seconds: the receiver must find
 the clock offset, stop dropping out, keep the tone at its level and deliver a note with its length
-intact, and a MIDI-only link that must deliver a note within 30 ms. `jtunnel-plugin-tests` runs two whole plugins in one process over real UDP on the loopback
-interface, one sending a tone and a note, the other finding the tunnel by name and playing them.
+intact, and a MIDI-only link that must deliver a note within 30 ms. It also sends every kind of
+MIDI event through a sender and receiver, a 1000-byte SysEx dump among them, and checks they come
+out in order and whole, and that a dump missing a piece never comes out. `jtunnel-plugin-tests` runs two whole plugins in one process over real UDP on the loopback
+interface, one sending a tone, a note, a CC, pitch bend, clock, SysEx and a note expression, the
+other finding the tunnel by name and playing them.

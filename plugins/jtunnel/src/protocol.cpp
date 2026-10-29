@@ -65,6 +65,9 @@ public:
       std::memcpy(out, data_ + pos_, n);
       pos_ += n;
    }
+   // Copies up to n bytes without moving on.
+   void peek(void *out, size_t n) const { std::memcpy(out, data_ + pos_, n < size_ - pos_ ? n : size_ - pos_); }
+   size_t remaining() const { return size_ - pos_; }
    bool ok() const { return !failed_; }
 
 private:
@@ -80,6 +83,37 @@ void writeHeader(Writer &w, PacketType type) {
 }
 
 } // namespace
+
+int midiMessageSize(uint8_t status) {
+   if (status < 0x80 || status == 0xF0 || status == 0xF7)
+      return 0;
+   if (status < 0xF0) {
+      const uint8_t kind = status & 0xF0;
+      return kind == 0xC0 || kind == 0xD0 ? 2 : 3;
+   }
+   // System common (song position, MTC, song select, tune request) and real time (clock and the rest).
+   return status == 0xF2 ? 3 : status == 0xF1 || status == 0xF3 ? 2 : 1;
+}
+
+int eventSize(const uint8_t *data, size_t available) {
+   if (available < 1)
+      return 0;
+   int size = 0;
+   if (data[0] == kTagSysex)
+      size = available >= 4 && data[3] >= 1 && data[3] <= kSysexPieceBytes ? 4 + data[3] : 0;
+   else if (data[0] == kTagExpression)
+      size = kExpressionBytes;
+   else
+      size = midiMessageSize(data[0]);
+   if (size == 0 || static_cast<size_t>(size) > available)
+      return 0;
+   // Data bytes are 7-bit.
+   if (data[0] >= 0x80)
+      for (int i = 1; i < size; ++i)
+         if (data[i] & 0x80)
+            return 0;
+   return size;
+}
 
 uint8_t packetType(const uint8_t *data, size_t size) {
    if (size < kHeaderBytes || std::memcmp(data, kMagic, 4) || data[4] != kProtocolVersion)
@@ -104,8 +138,11 @@ size_t writeAudio(uint8_t *out, size_t capacity, const AudioHeader &header, cons
       const int midi = f.midiCount < kMaxMidiPerFrame ? f.midiCount : kMaxMidiPerFrame;
       w.u8(static_cast<uint8_t>(midi));
       for (int m = 0; m < midi; ++m) {
-         w.u16(f.midi[m].offset);
-         w.bytes(f.midi[m].data, 3);
+         const MidiEvent &e = f.midi[m];
+         if (e.size > kMaxEventBytes || eventSize(e.data, e.size) != e.size)
+            return 0;
+         w.u16(e.offset);
+         w.bytes(e.data, e.size);
       }
       if (f.audioBytes > kMaxFrameBytes)
          return 0;
@@ -142,10 +179,17 @@ bool parseAudio(const uint8_t *data, size_t size, AudioHeader &header, Frame *fr
       if (f.midiCount > kMaxMidiPerFrame)
          return false;
       for (int m = 0; m < f.midiCount; ++m) {
-         f.midi[m].offset = r.u16();
-         r.bytes(f.midi[m].data, 3);
-         if (f.midi[m].offset >= header.frameSamples)
+         MidiEvent &e = f.midi[m];
+         e.offset = r.u16();
+         if (!r.ok() || e.offset >= header.frameSamples)
             return false;
+         // The first bytes say how long the event is.
+         r.peek(e.data, kMaxEventBytes);
+         const int size = eventSize(e.data, r.remaining() < kMaxEventBytes ? r.remaining() : kMaxEventBytes);
+         if (size == 0)
+            return false;
+         r.bytes(e.data, static_cast<size_t>(size));
+         e.size = static_cast<uint8_t>(size);
       }
       f.audioBytes = r.u16();
       if (f.audioBytes > kMaxFrameBytes)
