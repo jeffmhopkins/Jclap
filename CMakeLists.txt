@@ -44,6 +44,7 @@ add_subdirectory(libs/dsp)
 # One folder per plugin under plugins/, each with its own CMakeLists.txt.
 add_subdirectory(plugins/polar-xy)
 add_subdirectory(plugins/micromonsta2)
+add_subdirectory(plugins/matrixbrute)
 add_subdirectory(plugins/basic-synth)
 add_subdirectory(plugins/jverb)
 add_subdirectory(plugins/jsynth)

@@ -1,0 +1,78 @@
+cc,fine_cc,name,section,centered
+9,41,VCO1 Sub,Vco1,no
+10,42,VCO1 Saw,Vco1,no
+12,44,VCO1 Square,Vco1,no
+13,45,VCO1 Triangle,Vco1,no
+66,,VCO1 Coarse,Vco1,yes
+65,,VCO1 Fine,Vco1,yes
+68,,VCO1 Ultrasaw,Vco1,no
+69,,VCO1 Pulse Width,Vco1,no
+70,,VCO1 Metalizer,Vco1,no
+67,,VCO1 Waveform Selection,Vco1,no
+14,46,VCO2 Sub,Vco2,no
+15,47,VCO2 Saw,Vco2,no
+16,48,VCO2 Square,Vco2,no
+17,49,VCO2 Triangle,Vco2,no
+72,,VCO2 Coarse,Vco2,yes
+71,,VCO2 Fine,Vco2,yes
+74,,VCO2 Ultrasaw,Vco2,no
+75,,VCO2 Pulse Width,Vco2,no
+76,,VCO2 Metalizer,Vco2,no
+73,,VCO2 Waveform Selection,Vco2,no
+22,54,VCO3/LFO3 Coarse,Vco3,yes
+77,,Audio Mod VCO1 > VCO2,AudioMod,no
+78,,Audio Mod VCO1 < VCO3 > VCO2,AudioMod,yes
+79,,Audio Mod VCF1 < VCO3 > VCF2,AudioMod,yes
+80,,Audio Mod VCO1 < Noise > VCF1,AudioMod,yes
+18,50,Mixer VCO1,Mixer,no
+19,51,Mixer VCO2,Mixer,no
+20,52,Mixer VCO3,Mixer,no
+21,53,Mixer Noise,Mixer,no
+89,,Mixer External,Mixer,no
+23,55,Steiner Cutoff,Steiner,no
+83,,Steiner Resonance,Steiner,no
+82,,Steiner Brute Factor,Steiner,no
+81,,Steiner Drive,Steiner,no
+24,56,Steiner Env1 Amount,Steiner,yes
+7,39,Steiner Out,Steiner,no
+25,57,Ladder Cutoff,Ladder,no
+87,,Ladder Resonance,Ladder,no
+86,,Ladder Brute Factor,Ladder,no
+85,,Ladder Drive,Ladder,no
+26,58,Ladder Env1 Amount,Ladder,yes
+8,40,Ladder Out,Ladder,no
+27,59,Master Cutoff,Filters,yes
+102,,ENV1 Attack,Env1,no
+103,,ENV1 Decay,Env1,no
+28,60,ENV1 Sustain,Env1,no
+104,,ENV1 Release,Env1,no
+94,,ENV1 Velocity to VCF,Env1,no
+105,,ENV2 Attack,Env2,no
+106,,ENV2 Decay,Env2,no
+29,61,ENV2 Sustain,Env2,no
+107,,ENV2 Release,Env2,no
+95,,ENV2 Velocity to VCA,Env2,no
+108,,ENV3 Delay,Env3,no
+109,,ENV3 Attack,Env3,no
+110,,ENV3 Decay,Env3,no
+30,62,ENV3 Sustain,Env3,no
+111,,ENV3 Release,Env3,no
+91,,LFO1 Rate,Lfo,no
+90,,LFO1 Phase,Lfo,no
+93,,LFO2 Rate,Lfo,no
+92,,LFO2 Delay,Lfo,no
+31,63,Analog FX Dry/Wet,Fx,no
+112,,Analog FX Delay Time,Fx,no
+113,,Analog FX Regeneration,Fx,no
+114,,Analog FX Tone/Rate,Fx,no
+115,,Analog FX Width/Depth,Fx,no
+116,,Sequencer Rate,Sequencer,no
+117,,Sequencer Swing,Sequencer,no
+118,,Sequencer Gate,Sequencer,no
+1,33,Mod Wheel,Performance,no
+5,37,Glide,Performance,no
+119,,Bend Range,Performance,no
+11,43,Macro M1,Performance,no
+2,34,Macro M2,Performance,no
+4,36,Macro M3,Performance,no
+3,35,Macro M4,Performance,no
