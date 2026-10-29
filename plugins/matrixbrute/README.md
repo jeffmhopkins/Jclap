@@ -43,7 +43,7 @@ draws a knob dim, with a dash for its value, until it knows it, which is when:
 - the synth sent it (its own knob moved, or a controller on the track did).
 
 When a Program Change comes in on the channel the synth has loaded another preset, so every knob goes
-dim again. The **FROM THE SYNTH** box under the matrix shows how many knobs are known and the last
+dim again. The bottom strip shows how many knobs are known and the last
 preset change heard. **FOLLOW** off keeps the knobs where they are; incoming CCs still pass through to
 the synth and the plugin doesn't push its own value back over them.
 
@@ -96,13 +96,16 @@ The sustain pedal (64) is left out; it passes through.
 ## Panel
 
 Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage. `src/editor.cpp`
-holds the layout and `src/visuals.h` the pictures. It follows the synth's panel: the synthesis
-sections on the left in three rows (oscillators; mixer and filters with Master Cutoff between them;
-performance, LFOs and the envelope sliders), and the analog effects, matrix and sequencer on the right.
+holds the layout and `src/visuals.h` the pictures. It copies the synth's panel section by section:
+VCO 1 and 2 (enhancers above the wave levels), VCO 3, noise, audio mod, wheels and voice down the
+left; the mixer and LFO 1; the Steiner and ladder filters with Master Cutoff between them, and LFO 2;
+the preset display and the envelope sliders; the matrix; and the analog effects and sequencer on the
+right. Glide, the mod wheel and the macros sit along the bottom, like the synth's front edge.
 
-The pictures are drawn only from the CC values, since the plugin can't hear the synth and its switches
-aren't on MIDI: each VCO's wave mix, the filter responses (low-pass guides; the modes are buttons on
-the synth), the envelope shapes and the effect's echoes. The matrix is a map of its sources, A to P.
+The synth's buttons (filter modes, LFO waves, routing...) are drawn for reference only, since they
+aren't on MIDI. The preset display shows the last Program Change heard. The pictures are drawn only
+from the CC values: each VCO's wave mix, the two filters' responses (low-pass guides), the envelope
+shapes and the effect's echoes.
 
 Drag a knob or slider up or down (shift for fine), use the mouse wheel for single steps, double-click
 to reset. Right-click a control to reset it, type a value, or reach the host's menu for that

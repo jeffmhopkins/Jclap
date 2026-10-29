@@ -11,7 +11,9 @@
 #include <cmath>
 #include <functional>
 #include <string>
+#include <vector>
 
+#include <jclap/ui/design_frame.h>
 #include <visage/ui.h>
 
 namespace mb::visuals {
@@ -136,18 +138,22 @@ private:
    unsigned color_;
 };
 
-// A low-pass response from a filter's cutoff and resonance, offset by Master Cutoff (CC 27,
-// centred), with a dashed second curve for where ENV 1 takes the cutoff at its peak. Each filter's
-// mode and slope are buttons on the synth, so this is a guide, not a measurement.
-class FilterCurve : public Picture {
+// Both filters' low-pass responses on one plot, the Steiner's and the ladder's in their colours,
+// each from its cutoff and resonance offset by Master Cutoff (CC 27, centred), with dashed curves
+// for where ENV 1 takes each cutoff at its peak. The modes, slopes and routing are buttons on the
+// synth, so this is a guide, not a measurement.
+class DualFilter : public Picture {
 public:
-   FilterCurve(CcValue value, int cutoff, int resonance, int envAmount, unsigned color)
-      : Picture(std::move(value)), cutoff_(cutoff), res_(resonance), env_(envAmount), color_(color) {}
+   struct Filter {
+      int cutoff, resonance, envAmount;
+      unsigned color;
+   };
+   DualFilter(CcValue value, Filter a, Filter b) : Picture(std::move(value)), filters_{a, b} {}
    void draw(visage::Canvas &c) override {
       const ui::Theme &t = ui::defaultTheme();
-      const float k = s(120.0f), w = width(), h = height(), pad = 6 * k;
+      const float k = s(110.0f), w = width(), h = height(), pad = 6 * k;
       inset(c);
-      constexpr int kPoints = 140;
+      constexpr int kPoints = 120;
       const auto yOf = [&](float db) { return pad + (h - 2 * pad) * (18.0f - std::clamp(db, -48.0f, 18.0f)) / 66.0f; };
       for (float hz : {100.0f, 1000.0f, 10000.0f}) {
          const float x = pad + (w - 2 * pad) * std::log(hz / 20.0f) / std::log(1000.0f);
@@ -159,43 +165,41 @@ public:
       }
       c.setColor(t.track);
       c.fill(0, yOf(0), w, 1);
-
-      const float cutoff = std::clamp(static_cast<float>(cc(cutoff_) + (cc(27) - 64.0)), 0.0f, 127.0f);
-      const float peak = std::clamp(cutoff + (static_cast<float>(cc(env_)) - 64.0f) * 0.9f, 0.0f, 127.0f);
-      const float q = 0.6f + 6.0f * f(res_);
-      float xs[kPoints], ys[kPoints], ye[kPoints];
-      const auto curve = [&](float cut, float *out) {
-         const float fc = 20.0f * std::pow(1000.0f, cut / 127.0f);
-         for (int i = 0; i < kPoints; ++i) {
-            const float hz = 20.0f * std::pow(1000.0f, i / float(kPoints - 1)), x = hz / fc;
-            const float m = 1.0f / std::sqrt((1 - x * x) * (1 - x * x) + (x / q) * (x / q));
-            out[i] = yOf(20.0f * std::log10(m * m));
-         }
-      };
+      float xs[kPoints];
       for (int i = 0; i < kPoints; ++i)
          xs[i] = pad + (w - 2 * pad) * i / (kPoints - 1);
-      curve(cutoff, ys);
-      curve(peak, ye);
-      c.setColor(withAlpha(color_, 0x30));
-      fillUnder(c, xs, ys, kPoints, h - 1);
-      c.setColor(withAlpha(0xffe6e8eb, 0x90));
-      line(c, xs, ye, kPoints, 1.2f * k, 3);
-      c.setColor(color_);
-      line(c, xs, ys, kPoints, 2.0f * k);
-      const float hx = pad + (w - 2 * pad) * cutoff / 127.0f;
-      const float hy = *std::min_element(ys, ys + kPoints);
-      c.setColor(withAlpha(color_, 0x40));
-      c.circle(hx - 9 * k, hy - 9 * k, 18 * k);
-      c.setColor(color_);
-      c.circle(hx - 6 * k, hy - 6 * k, 12 * k);
+      for (const Filter &fl : filters_) {
+         const float cutoff = std::clamp(static_cast<float>(cc(fl.cutoff) + (cc(27) - 64.0)), 0.0f, 127.0f);
+         const float peak = std::clamp(cutoff + (static_cast<float>(cc(fl.envAmount)) - 64.0f) * 0.9f, 0.0f, 127.0f);
+         const float q = 0.6f + 6.0f * f(fl.resonance);
+         float ys[kPoints], ye[kPoints];
+         const auto curve = [&](float cut, float *out) {
+            const float fc = 20.0f * std::pow(1000.0f, cut / 127.0f);
+            for (int i = 0; i < kPoints; ++i) {
+               const float hz = 20.0f * std::pow(1000.0f, i / float(kPoints - 1)), x = hz / fc;
+               const float m = 1.0f / std::sqrt((1 - x * x) * (1 - x * x) + (x / q) * (x / q));
+               out[i] = yOf(20.0f * std::log10(m * m));
+            }
+         };
+         curve(cutoff, ys);
+         curve(peak, ye);
+         c.setColor(withAlpha(fl.color, 0x22));
+         fillUnder(c, xs, ys, kPoints, h - 1);
+         c.setColor(withAlpha(fl.color, 0x90));
+         line(c, xs, ye, kPoints, 1.0f * k, 3);
+         c.setColor(fl.color);
+         line(c, xs, ys, kPoints, 1.8f * k);
+      }
    }
 
 protected:
-   double signature() const override { return sum({cutoff_, res_, env_, 27}); }
+   double signature() const override {
+      return sum({filters_[0].cutoff, filters_[0].resonance, filters_[0].envAmount, 27}) +
+             1e9 * sum({filters_[1].cutoff, filters_[1].resonance, filters_[1].envAmount});
+   }
 
 private:
-   int cutoff_, res_, env_;
-   unsigned color_;
+   Filter filters_[2];
 };
 
 // The mixer's five levels side by side, as wide as they are loud.
@@ -320,49 +324,217 @@ private:
    unsigned color_;
 };
 
-// The 16 x 16 matrix as a map of its rows (the sources, A to P) and columns. Its routing isn't on
-// MIDI, so the cells are drawn empty; the row and column heads say what each one is on the synth.
-class MatrixMap : public visage::Frame {
+// A section box drawn like the synth's: a filled panel (dark for the sound sources and filters,
+// grey for the modulation), a rule across the top in its colour, and the title on a tab in the
+// middle of the rule.
+class HwSection : public visage::Frame {
 public:
-   MatrixMap() { setIgnoresMouseEvents(true, false); }
-   static constexpr const char *kSources[16] = {"ENV 1", "ENV 2",      "ENV 3",      "ENV FOLLOW", "LFO 1",       "LFO 2",
-                                                "LFO 3", "MOD WHEEL",  "KBD / SEQ",  "AFTERTOUCH", "VELOCITY",    "SEQ MOD",
-                                                "M1",    "M2",         "EXP 1 / M3", "EXP 2 / M4"};
-   void setAccents(unsigned rows, unsigned custom) {
-      rowColor_ = rows;
-      customColor_ = custom;
-      redraw();
+   HwSection(std::string title, bool dark, unsigned rule = 0xffc9d0d8)
+      : title_(std::move(title)), dark_(dark), rule_(rule) {
+      setIgnoresMouseEvents(true, false);
    }
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
-      const float w = width(), h = height(), k = h / 400.0f;
-      const float labelW = 112 * k, headH = 24 * k, footH = 12 * k;
-      const float cell = std::min((w - labelW) / 16.0f, (h - headH - footH) / 16.0f);
-      const float gx = labelW, gy = headH;
-      const auto small = ui::font(9.5f * k);
-      for (int col = 0; col < 16; ++col) {
-         c.setColor(col >= 12 ? customColor_ : t.dimText);
-         c.text(std::to_string(col + 1), small, visage::Font::kCenter, gx + col * cell, 4 * k, cell, 14 * k);
-      }
-      for (int row = 0; row < 16; ++row) {
-         const float y = gy + row * cell;
-         c.setColor(rowColor_);
-         c.text(std::string(1, static_cast<char>('A' + row)), small, visage::Font::kLeft, 2 * k, y, 14 * k, cell);
-         c.setColor(t.text);
-         c.text(kSources[row], small, visage::Font::kLeft, 18 * k, y, labelW - 20 * k, cell);
-         for (int col = 0; col < 16; ++col) {
-            const float x = gx + col * cell, m = cell * 0.18f;
-            c.setColor(col >= 12 ? withAlpha(customColor_, 0x30) : 0xff262b33);
-            c.roundedRectangle(x + m, y + m, cell - 2 * m, cell - 2 * m, cell * 0.12f);
-         }
-      }
-      c.setColor(t.dimText);
-      c.text("COLUMNS 1-12: FIXED DESTINATIONS \xC2\xB7 13-16: ASSIGNABLE BANKS", small, visage::Font::kLeft, gx,
-             gy + 16 * cell + 4 * k, 16 * cell, footH);
+      const float k = ui::designScale(*this), w = width(), h = height();
+      c.setColor(dark_ ? 0xff15181c : 0xff272c33);
+      c.roundedRectangle(0, 5 * k, w, h - 5 * k, 3 * k);
+      c.setColor(rule_);
+      c.fill(0, 5 * k, w, 2.5f * k);
+      if (title_.empty())
+         return;
+      const float size = 11.5f * k;
+      const float tw = ui::font(size, dpiScale()).stringWidth(visage::String(title_).toUtf32()) + 28 * k;
+      const float tx = (w - tw) * 0.5f;
+      c.fill(tx + 4 * k, 0, tw - 8 * k, 17 * k);
+      c.triangle(tx, 0, tx + 4 * k, 0, tx + 4 * k, 17 * k);
+      c.triangle(tx + tw, 0, tx + tw - 4 * k, 0, tx + tw - 4 * k, 17 * k);
+      c.setColor(0xff1a1d22);
+      c.text(title_, ui::font(size), visage::Font::kCenter, tx, 0, tw, 17 * k);
    }
 
 private:
-   unsigned rowColor_ = 0xff8d939c, customColor_ = 0xff8d939c;
+   std::string title_;
+   bool dark_;
+   unsigned rule_;
+};
+
+// One of the synth's buttons that isn't on MIDI (a filter mode, an LFO wave...), drawn so the panel
+// reads like the hardware: its row of lights with their names, the button, and its name below. It
+// does nothing when clicked; hovering it says it's set on the synth.
+class HwButton : public visage::Frame {
+public:
+   HwButton(std::string label, std::vector<std::string> lights, bool column = false)
+      : label_(std::move(label)), lights_(std::move(lights)), column_(column) {}
+   void draw(visage::Canvas &c) override {
+      const ui::Theme &t = ui::defaultTheme();
+      const float k = ui::designScale(*this), w = width(), h = height();
+      const auto small = ui::font(9 * k);
+      const float bw = std::min(w - 4 * k, 64 * k), bh = 20 * k;
+      float by = lights_.empty() ? (h - bh - 14 * k) * 0.5f : 30 * k;
+      if (column_ && !lights_.empty()) {
+         // Lights in a column to the right of the button, as on the filters' mode and slope.
+         const float lh = std::min(15 * k, h / lights_.size());
+         const float ly = (h - lh * lights_.size()) * 0.5f;
+         for (size_t i = 0; i < lights_.size(); ++i) {
+            const float y = ly + i * lh;
+            c.setColor(0xff3a4048);
+            c.circle(w - 46 * k, y + lh * 0.5f - 3.5f * k, 7 * k);
+            c.setColor(t.dimText);
+            c.text(lights_[i], small, visage::Font::kLeft, w - 36 * k, y, 36 * k, lh);
+         }
+         by = (h - bh - 14 * k) * 0.5f;
+         drawButton(c, 0, by, std::min(bw, w - 54 * k), bh, k);
+         c.setColor(t.text);
+         c.text(label_, ui::font(10.5f * k), visage::Font::kCenter, 0, by + bh + 2 * k, std::min(bw, w - 54 * k), 13 * k);
+         return;
+      }
+      if (!lights_.empty()) {
+         const float lw = w / lights_.size();
+         for (size_t i = 0; i < lights_.size(); ++i) {
+            const float cx = lw * (i + 0.5f);
+            c.setColor(0xff3a4048);
+            c.circle(cx - 3.5f * k, 4 * k, 7 * k);
+            c.setColor(t.dimText);
+            c.text(lights_[i], small, visage::Font::kCenter, cx - lw * 0.5f, 13 * k, lw, 12 * k);
+         }
+      }
+      drawButton(c, (w - bw) * 0.5f, by, bw, bh, k);
+      c.setColor(t.text);
+      c.text(label_, ui::font(10.5f * k), visage::Font::kCenter, 0, by + bh + 3 * k, w, 13 * k);
+   }
+
+private:
+   static void drawButton(visage::Canvas &c, float x, float y, float w, float h, float k) {
+      c.setColor(0xff0d0f12);
+      c.roundedRectangle(x, y + 1.5f * k, w, h, 3 * k);
+      c.setColor(0xff1f2329);
+      c.roundedRectangle(x, y, w, h - 1 * k, 3 * k);
+      c.setColor(0xff30353d);
+      c.fill(x + 3 * k, y + 2 * k, w - 6 * k, 1 * k);
+   }
+
+   std::string label_;
+   std::vector<std::string> lights_;
+   bool column_;
+};
+
+// The preset display: three red seven-segment-style characters, as the synth shows "A01".
+class PresetDisplay : public visage::Frame {
+public:
+   PresetDisplay() { setIgnoresMouseEvents(true, false); }
+   void setText(std::string text) {
+      if (text != text_) {
+         text_ = std::move(text);
+         redraw();
+      }
+   }
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height();
+      c.setColor(0xff0b0c0e);
+      c.roundedRectangle(0, 0, w, h, 3);
+      c.setColor(withAlpha(0xffff4a3a, 0x28));
+      c.text("888", ui::font(h * 0.78f), visage::Font::kRight, 0, 0, w - h * 0.25f, h);
+      c.setColor(0xffff5a48);
+      c.text(text_, ui::font(h * 0.78f), visage::Font::kRight, 0, 0, w - h * 0.25f, h);
+   }
+
+private:
+   std::string text_ = "---";
+};
+
+// The matrix as it's printed on the synth: PRESET, SEQ and MOD above, the Mod Amount knob and the
+// display; the 16 sources (A to P) down the left, the destinations along the top, and 256 buttons
+// in 4 x 4 blocks with every fourth row in pink. Its routing isn't on MIDI, so the buttons are drawn
+// unlit; the display shows what the plugin knows about the synth instead.
+class MatrixMap : public visage::Frame {
+public:
+   static constexpr const char *kSources[16] = {"ENV 1", "ENV 2", "ENV 3",    "ENV Follow", "LFO 1",    "LFO 2",
+                                                "LFO 3", "Mod Wheel", "Kbd / Seq", "Aftertouch", "Velocity", "Seq Mod",
+                                                "M1",    "M2",        "Exp 1 / M3", "Exp 2 / M4"};
+   static constexpr const char *kDestinations[12][2] = {
+      {"VCO 1", "Pitch"}, {"VCO 1", "Ultra"}, {"VCO 1", "PW"},   {"VCO 1", "Metal"}, {"VCO 2", "Pitch"}, {"VCO 2", "Ultra"},
+      {"VCO 2", "PW"},    {"VCO 2", "Metal"}, {"Steiner", "Cutoff"}, {"Ladder", "Cutoff"}, {"LFO 1", "AMT"}, {"VCA", ""}};
+
+   MatrixMap() { setIgnoresMouseEvents(true, false); }
+   // Up to four lines for the display.
+   void setDisplay(std::vector<std::string> lines) {
+      if (lines != lines_) {
+         lines_ = std::move(lines);
+         redraw();
+      }
+   }
+   void draw(visage::Canvas &c) override {
+      const ui::Theme &t = ui::defaultTheme();
+      const float k = ui::designScale(*this), w = width();
+      const auto small = ui::font(9.5f * k), tiny = ui::font(8.5f * k);
+
+      // PRESET, SEQ, MOD, the Mod Amount knob and the display.
+      const char *modes[3] = {"PRESET", "SEQ", "MOD"};
+      for (int i = 0; i < 3; ++i) {
+         const float cx = 150 * k + i * 92 * k, cy = 58 * k, r = 30 * k;
+         c.setColor(0xff4a5560);
+         c.circle(cx - r, cy - r, 2 * r);
+         c.setColor(0xff8da0ad);
+         c.circle(cx - r + 3 * k, cy - r + 3 * k, 2 * r - 6 * k);
+         c.setColor(0xff1a1d22);
+         c.text(modes[i], small, visage::Font::kCenter, cx - r, cy - 7 * k, 2 * r, 14 * k);
+      }
+      c.setColor(t.dimText);
+      c.text("Mod Amount", small, visage::Font::kLeft, 336 * k, 94 * k, 100 * k, 13 * k);
+      const float kx = 440 * k, ky = 58 * k, kr = 34 * k;
+      c.setColor(0xff0b0c0e);
+      c.circle(kx - kr, ky - kr, 2 * kr);
+      c.setColor(visage::Brush::linear(visage::Color(0xffd7dce0), visage::Color(0xff6c747c), visage::Point(kx - kr, ky - kr),
+                                       visage::Point(kx + kr, ky + kr)));
+      c.circle(kx - kr * 0.62f, ky - kr * 0.62f, 1.24f * kr);
+      const float lx = 500 * k, lw = w - lx - 8 * k;
+      c.setColor(0xff1b2a22);
+      c.roundedRectangle(lx, 18 * k, lw, 82 * k, 3 * k);
+      c.setColor(0xff9fe0b4);
+      for (size_t i = 0; i < lines_.size() && i < 4; ++i)
+         c.text(lines_[i], ui::font(10.5f * k), visage::Font::kLeft, lx + 10 * k, 24 * k + i * 18 * k, lw - 20 * k, 16 * k);
+
+      // The grid. Blocks of four columns and rows sit a little apart, as on the synth.
+      const float gx = 136 * k, gy = 170 * k, block = 8 * k;
+      const float cw = (w - gx - 8 * k - 3 * block) / 16.0f;
+      const float ch = (height() - gy - 40 * k - 3 * block) / 16.0f;
+      const auto colX = [&](int col) { return gx + col * cw + (col / 4) * block; };
+      const auto rowY = [&](int row) { return gy + row * ch + (row / 4) * block; };
+      for (int col = 0; col < 16; ++col) {
+         const float x = colX(col);
+         c.setColor(t.dimText);
+         c.roundedRectangleBorder(x + 2 * k, 126 * k, cw - 4 * k, 30 * k, 2 * k, 1.0f);
+         c.setColor(t.text);
+         if (col < 12) {
+            c.text(kDestinations[col][0], tiny, visage::Font::kCenter, x, 128 * k, cw, 13 * k);
+            c.text(kDestinations[col][1], tiny, visage::Font::kCenter, x, 141 * k, cw, 13 * k);
+         } else {
+            c.text(std::to_string(col + 1), small, visage::Font::kCenter, x, 126 * k, cw, 30 * k);
+         }
+         c.setColor(t.dimText);
+         c.ring(x + cw * 0.5f - 9 * k, rowY(15) + ch + 8 * k, 18 * k, 1.2f * k);
+         c.text(std::to_string(col + 1), tiny, visage::Font::kCenter, x + cw * 0.5f - 9 * k, rowY(15) + ch + 8 * k, 18 * k, 18 * k);
+      }
+      for (int row = 0; row < 16; ++row) {
+         const float y = rowY(row);
+         c.setColor(t.dimText);
+         c.ring(4 * k, y + ch * 0.5f - 9 * k, 18 * k, 1.2f * k);
+         c.setColor(t.text);
+         c.text(std::string(1, static_cast<char>('A' + row)), tiny, visage::Font::kCenter, 4 * k, y + ch * 0.5f - 9 * k, 18 * k, 18 * k);
+         c.setColor(t.dimText);
+         c.roundedRectangleBorder(28 * k, y + ch * 0.5f - 8 * k, 100 * k, 16 * k, 2 * k, 1.0f);
+         c.setColor(t.text);
+         c.text(kSources[row], tiny, visage::Font::kLeft, 33 * k, y + ch * 0.5f - 8 * k, 94 * k, 16 * k);
+         const bool pink = row % 4 == 3;
+         for (int col = 0; col < 16; ++col) {
+            const float x = colX(col), m = std::min(cw, ch) * 0.12f;
+            c.setColor(pink ? 0xff5b4248 : 0xff3a454f);
+            c.roundedRectangle(x + m, y + m, cw - 2 * m, ch - 2 * m, 3 * k);
+         }
+      }
+   }
+
+private:
+   std::vector<std::string> lines_;
 };
 
 // A darker rounded box to group a few widgets inside a section.
