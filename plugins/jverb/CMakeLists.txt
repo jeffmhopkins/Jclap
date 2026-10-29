@@ -28,4 +28,6 @@ if(JCLAP_BUILD_TOOLS)
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-six.png ARGS 6)
    jclap_add_screenshot_test(jverb-screenshot-orbit-test TOOL jverb-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-orbit.png ARGS 3 2)
+   jclap_add_screenshot_test(jverb-screenshot-dice-test TOOL jverb-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-dice.png ARGS 3 0 1200 780 1)
 endif()

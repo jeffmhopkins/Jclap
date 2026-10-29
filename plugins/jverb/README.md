@@ -113,6 +113,17 @@ Click the **star** beside the name to make the current preset a favorite (click 
 are kept in `Favorites.txt` beside the `Presets` folder, so they last between sessions and every
 instance of the plugin shares them.
 
+## The dice
+
+**DICE** in the header opens a card over the stage. **RANDOMIZE** builds a new space from scratch: it
+picks a kind (a room, a plate, a hall, an ambient wash or a cloud), then fills in every card inside the
+ranges that sound for it. **COMPLEXITY** says how much of what JVerb adds it reaches for: at 0 a plain
+space, at 100% shimmer and feedback in the loop, the drive, the echo, more bodies routed to more
+targets and the orbit past 100%. **MUTATE** nudges every value by **AMOUNT** (times and frequencies
+on a log scale), keeps what's off switched off, and holds the loop and the echo below where a tail
+would grow. **UNDO** and **REDO** step through what the dice replaced, and a **LOCK** keeps a
+section as it is. Neither touches Mix or Level, so a send stays a send.
+
 ## Threads
 
 The audio thread owns the simulation and the reverb. Every 32 samples it steps the orbits and
@@ -124,8 +135,8 @@ audio thread allocates after activate.
 
 ## Panel
 
-1200 x 780, scalable. Renders for the docs come from `jverb-screenshot out.png [bodies [page]]` (page 0
-SPACE, 1 SHAPE, 2 ORBIT), which runs the orbits with a made-up drum and pad input. With
+1200 x 780, scalable. Renders for the docs come from `jverb-screenshot out.png [bodies [page [width height [dice]]]]` (page 0
+SPACE, 1 SHAPE, 2 ORBIT; dice 1 opens the dice card), which runs the orbits with a made-up drum and pad input. With
 `-DJCLAP_BUILD_TOOLS=ON`, `ctest` checks all three renders in `docs/`:
 
 ![Six bodies](docs/panel-six.png)

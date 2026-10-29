@@ -8,6 +8,7 @@
 #include <jclap/ui/params.h>
 #include <jclap/ui/window.h>
 
+#include "randomize.h"
 #include "shared.h"
 
 namespace jverb {
@@ -36,14 +37,20 @@ public:
          endEdit(id);
       }
    }
+
+   // The dice card: whether it is open, Randomize's complexity, Mutate's amount and the sections
+   // both leave alone, and the spaces they replaced, so UNDO can bring one back. Main thread only.
+   bool diceOpen = false;
+   DiceSettings dice;
+   DiceHistory diceHistory;
 };
 
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // Draws the panel offscreen at the given pixel size and saves it as a PNG. The view is run for
 // `seconds` of frames first (pulled from the host), so the trails and gas have built up.
-// `spacePage` picks the left card's page: 0 SPACE, 1 SHAPE, 2 ORBIT.
+// `spacePage` picks the left card's page: 0 SPACE, 1 SHAPE, 2 ORBIT, and `dice` opens the dice card.
 bool renderScreenshot(EditorHost &host, double seconds, int width, int height, const char *pngPath,
-                      int spacePage = 0);
+                      int spacePage = 0, bool dice = false);
 
 } // namespace jverb
