@@ -18,6 +18,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <string>
 
 #include "editor.h"
 #include "params.h"
@@ -86,10 +87,11 @@ struct PendingMod {
    double amount;
 };
 
-// State layout: 4-byte magic, uint32 version, uint32 param count, then one double per param in id
-// order. A state from a version with fewer params loads them and leaves the rest at their defaults.
+// State layout: 4-byte magic, uint32 version, uint32 param count, one double per param in id order,
+// then (from version 2) uint32 name length and the preset name. A state from a version with fewer
+// params loads them and leaves the rest at their defaults.
 constexpr char kStateMagic[4] = {'J', 'B', 'S', 'Y'};
-constexpr uint32_t kStateVersion = 1;
+constexpr uint32_t kStateVersion = 2;
 
 class BasicSynth final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -216,6 +218,8 @@ public:
       value = lfoValue_.load();
       return true;
    }
+   std::string presetName() const override { return presetName_; }
+   void setPresetName(const std::string &name) override { presetName_ = name; }
    void envelopes(int index, std::vector<EnvState> &out) const override {
       out.clear();
       if (index < 0 || index >= kEnvCount)
@@ -284,14 +288,16 @@ public:
          if (!jclap::core::writeAll(stream, &v, sizeof(v)))
             return false;
       }
-      return true;
+      const uint32_t nameLength = static_cast<uint32_t>(std::min<size_t>(presetName_.size(), 255));
+      return jclap::core::writeAll(stream, &nameLength, sizeof(nameLength)) &&
+             jclap::core::writeAll(stream, presetName_.data(), nameLength);
    }
 
    bool stateLoad(const clap_istream_t *stream) override {
       char magic[4];
       uint32_t version = 0, count = 0;
       if (!jclap::core::readAll(stream, magic, 4) || std::memcmp(magic, kStateMagic, 4) ||
-          !jclap::core::readAll(stream, &version, 4) || version != kStateVersion ||
+          !jclap::core::readAll(stream, &version, 4) || version < 1 || version > kStateVersion ||
           !jclap::core::readAll(stream, &count, 4))
          return false;
       // Params past ours are from a newer version, and ignored.
@@ -304,6 +310,17 @@ public:
             return false;
          if (i < kParamCount)
             v[i] = d;
+      }
+      // Version 1 has no name: it was whatever the settings were, not a preset.
+      uint32_t nameLength = 0;
+      char name[256];
+      if (version >= 2) {
+         if (!jclap::core::readAll(stream, &nameLength, sizeof(nameLength)) || nameLength >= sizeof(name) ||
+             !jclap::core::readAll(stream, name, nameLength))
+            return false;
+         presetName_.assign(name, nameLength);
+      } else {
+         presetName_.clear();
       }
       for (size_t i = 0; i < kParamCount; ++i)
          values_[i].store(std::clamp(v[i], kParams[i].min, kParams[i].max));
@@ -857,6 +874,8 @@ private:
    std::atomic<double> mods_[kParamCount];
    jclap::core::EditQueue edits_;
    jclap::ui::HostMenu hostMenu_;
+   // The preset last loaded or saved (main thread).
+   std::string presetName_ = "Init";
 
    // Audio thread.
    Slot slots_[kVoiceCount];
