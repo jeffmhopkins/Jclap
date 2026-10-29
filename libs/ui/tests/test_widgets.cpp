@@ -322,6 +322,48 @@ void dropdownRightClickDoesntPick() {
    JCLAP_CHECK(p.log.empty());
 }
 
+void popupMenuCloses() {
+   // The open menu covers the window, so a click anywhere off its list (the dropdown that opened
+   // it included) lands on the menu and closes it rather than reaching, or reopening, what is under it.
+   visage::Frame window;
+   window.setBounds(0, 0, 400, 300);
+   ui::Dropdown dropdown({"Saw", "Square"});
+   dropdown.setBounds(10, 10, 100, 24);
+   window.addChild(&dropdown);
+
+   int cancels = 0, picks = 0;
+   visage::PopupMenu menu;
+   menu.addOption(0, "Saw");
+   menu.onCancel() += [&] { ++cancels; };
+   menu.onSelection() += [&](int) { ++picks; };
+   visage::PopupMenuFrame open(menu);
+   window.addChild(&open);
+   open.setOnTop(true);
+   open.setBounds(window.localBounds());
+   JCLAP_CHECK(window.frameAtPoint({20, 20}) == &open);
+   JCLAP_CHECK(window.frameAtPoint({300, 200}) == &open);
+
+   open.mouseDown(press(300, 200));
+   JCLAP_CHECK_EQ(cancels, 1);
+   JCLAP_CHECK(!open.isVisible());
+   // Closing again (focus going, say) doesn't cancel twice.
+   open.focusChanged(false, true);
+   open.mouseDown(press(300, 200));
+   JCLAP_CHECK_EQ(cancels, 1);
+   JCLAP_CHECK_EQ(picks, 0);
+
+   visage::PopupMenuFrame escaped(menu);
+   JCLAP_CHECK(!escaped.keyPress(visage::KeyEvent(visage::KeyCode::A, 0, true)));
+   JCLAP_CHECK(escaped.keyPress(visage::KeyEvent(visage::KeyCode::Escape, 0, true)));
+   JCLAP_CHECK_EQ(cancels, 2);
+
+   visage::PopupMenuFrame unfocused(menu);
+   unfocused.focusChanged(false, true);
+   JCLAP_CHECK_EQ(cancels, 3);
+   window.removeChild(&open);
+   window.removeChild(&dropdown);
+}
+
 void measuresAtAScale() {
    // stringWidth needs a DPI scale (Debug Visage asserts without one); this is what popups use.
    const float w1 = ui::font(12.0f, 1.0f).stringWidth(U"D 400 ms", 8);
@@ -591,6 +633,7 @@ int main() {
    polarDotClickKeepsValue();
    tooltipsOutlivedByFrames();
    dropdownRightClickDoesntPick();
+   popupMenuCloses();
    measuresAtAScale();
    stopsSnap();
    noteRollLanes();

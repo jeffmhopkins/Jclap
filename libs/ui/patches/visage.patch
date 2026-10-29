@@ -18,6 +18,86 @@ index 6095bc2..93bc52a 100644
      mouse_down_frame_ = content_frame_->frameAtPoint(mouse_event.window_position);
      temporary_frame_ = mouse_down_frame_;
      while (temporary_frame_ && !temporary_frame_->acceptsKeystrokes())
+diff --git a/visage_ui/popup_menu.cpp b/visage_ui/popup_menu.cpp
+index 787a926..8d3f08c 100644
+--- a/visage_ui/popup_menu.cpp
++++ b/visage_ui/popup_menu.cpp
+@@ -224,7 +224,10 @@ namespace visage {
+       menu_(std::move(menu)), font_(10, fonts::Lato_Regular_ttf) {
+     opacity_animation_.setTargetValue(1.0f);
+     setAcceptsKeystrokes(true);
+-    setIgnoresMouseEvents(true, true);
++    // jclap: the frame covers the window and takes clicks outside the lists, so a click anywhere
++    // else closes the menu instead of reaching what is under it (a click on the box that opened
++    // the menu closes it rather than opening it again).
++    setIgnoresMouseEvents(false, true);
+ 
+     for (auto& list : lists_) {
+       addChild(&list);
+@@ -299,16 +302,34 @@ namespace visage {
+     startTimer(1);
+   }
+ 
++  void PopupMenuFrame::cancel() {
++    if (done_)
++      return;
++    setVisible(false);
++    menu_.onCancel().callback();
++    exit();
++  }
++
++  void PopupMenuFrame::mouseDown(const MouseEvent& e) {
++    cancel();
++  }
++
++  bool PopupMenuFrame::keyPress(const KeyEvent& e) {
++    if (e.keyCode() != KeyCode::Escape)
++      return false;
++    cancel();
++    return true;
++  }
++
+   void PopupMenuFrame::hierarchyChanged() {
+     if (parent() == nullptr)
+       startTimer(1);
+   }
+ 
+   void PopupMenuFrame::focusChanged(bool is_focused, bool was_clicked) {
+-    if (!is_focused && isVisible()) {
+-      startTimer(1);
+-      opacity_animation_.target(false);
+-    }
++    // jclap: losing focus (the window losing it, or another frame taking it) cancels too.
++    if (!is_focused && isVisible())
++      cancel();
+ 
+     redraw();
+   }
+@@ -414,8 +435,7 @@ namespace visage {
+     if (isRunning())
+       return;
+ 
+-    menu_.onCancel().callback();
+-    exit();
++    cancel();
+   }
+ 
+   void ValueDisplay::showDisplay(const String& text, Bounds bounds, Font::Justification justification) {
+diff --git a/visage_ui/popup_menu.h b/visage_ui/popup_menu.h
+index b141a6a..9d109b6 100644
+--- a/visage_ui/popup_menu.h
++++ b/visage_ui/popup_menu.h
+@@ -197,6 +197,10 @@ namespace visage {
+     }
+ 
+     void exit();
++    // jclap: closes without a choice (calls onCancel once), for a click outside or Escape.
++    void cancel();
++    void mouseDown(const MouseEvent& e) override;
++    bool keyPress(const KeyEvent& e) override;
+     void hierarchyChanged() override;
+     void focusChanged(bool is_focused, bool was_clicked) override;
+     void visibilityChanged() override { opacity_animation_.target(isVisible(), true); }
 diff --git a/visage_windowing/linux/windowing_x11.cpp b/visage_windowing/linux/windowing_x11.cpp
 index a0fbf2d..52ce823 100644
 --- a/visage_windowing/linux/windowing_x11.cpp
