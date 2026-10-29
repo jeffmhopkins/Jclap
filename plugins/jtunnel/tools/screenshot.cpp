@@ -1,5 +1,5 @@
 // Renders the panel to a PNG without a host:
-// jtunnel-screenshot out.png [width height] [send|receive] [idle|taken|midi]
+// jtunnel-screenshot out.png [width height] [send|receive] [idle|taken|midi|filter]
 // It shows a receiver mid-stream on Wi-Fi, with one stall that auto buffer answered, or with
 // "send", a sender with two receivers. "idle" shows them before anything connects instead: a
 // receiver searching without mDNS, a sender set to PCM with nobody listening. "taken" shows a
@@ -20,8 +20,12 @@ namespace {
 
 class DemoHost : public jtunnel::EditorHost {
 public:
-   DemoHost(bool send, bool idle, bool taken, bool midi) : send_(send), idle_(idle), taken_(taken), midi_(midi) {}
+   DemoHost(bool send, bool idle, bool taken, bool midi, bool filter = false)
+      : send_(send), idle_(idle), taken_(taken), midi_(midi), filter_(filter) {}
    double paramValue(clap_id id) const override {
+      // The filter's view holds a few kinds and a channel back, to show both states.
+      if (filter_ && (id == jtunnel::kParamClock || id == jtunnel::kParamSystem || id == jtunnel::kParamChannel1 + 9))
+         return 0.0;
       if (id == jtunnel::kParamMode)
          return send_ ? jtunnel::kModeSend : jtunnel::kModeReceive;
       if (id == jtunnel::kParamCodec && idle_)
@@ -116,7 +120,7 @@ public:
    }
 
 private:
-   bool send_, idle_, taken_, midi_;
+   bool send_, idle_, taken_, midi_, filter_;
    int tick_ = 0;
 };
 
@@ -124,12 +128,13 @@ private:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [width height] [send|receive] [idle|taken|midi]\n", argv[0]);
+      std::fprintf(stderr, "usage: %s out.png [width height] [send|receive] [idle|taken|midi|filter]\n", argv[0]);
       return 1;
    }
    const int width = argc > 3 ? std::atoi(argv[2]) : 720;
    const int height = argc > 3 ? std::atoi(argv[3]) : 556;
    const std::string variant = argc > 5 ? argv[5] : "";
-   DemoHost host(argc > 4 && std::string(argv[4]) == "send", variant == "idle", variant == "taken", variant == "midi");
-   return jtunnel::renderScreenshot(host, width, height, argv[1]) ? 0 : 1;
+   DemoHost host(argc > 4 && std::string(argv[4]) == "send", variant == "idle", variant == "taken", variant == "midi",
+                 variant == "filter");
+   return jtunnel::renderScreenshot(host, width, height, argv[1], variant == "filter") ? 0 : 1;
 }

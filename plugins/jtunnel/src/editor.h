@@ -66,6 +66,6 @@ public:
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // Draws the panel offscreen at the given pixel size and saves it as a PNG.
-bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath);
+bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, bool midiFilter = false);
 
 } // namespace jtunnel

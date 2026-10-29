@@ -137,15 +137,38 @@ void testMidiEvents() {
    JCLAP_CHECK_EQ(midiMessageSize(0xF7), 0);
    JCLAP_CHECK_EQ(midiMessageSize(0x40), 0);
 
-   // The MIDI filter's kinds.
-   const uint8_t sysexPiece[] = {kTagSysex}, clock[] = {0xF8}, start[] = {0xFA}, reset[] = {0xFF}, cc[] = {0xB0},
-                 expression[] = {kTagExpression};
-   JCLAP_CHECK_EQ(midiFilterParam(sysexPiece), kParamSysex);
-   JCLAP_CHECK_EQ(midiFilterParam(clock), kParamClock);
-   JCLAP_CHECK_EQ(midiFilterParam(start), kParamTransport);
-   JCLAP_CHECK_EQ(midiFilterParam(reset), kParamSystem);
-   JCLAP_CHECK_EQ(midiFilterParam(cc), kParamCount);
-   JCLAP_CHECK_EQ(midiFilterParam(expression), kParamCount);
+   // The MIDI filter: each kind's switch, and the channel switches for channel messages and
+   // expressions. Note offs always go.
+   {
+      const std::vector<std::pair<std::vector<uint8_t>, clap_id>> kinds = {
+         {{kTagSysex}, kParamSysex},           {{0xF8}, kParamClock},
+         {{0xF1, 0}, kParamClock},             {{0xFA}, kParamTransport},
+         {{0xF2, 0, 0}, kParamTransport},      {{0xFF}, kParamSystem},
+         {{0x93, 60, 100}, kParamNotes},       {{0xB2, 1, 64}, kParamCc},
+         {{0xE5, 0, 64}, kParamPitchBend},     {{0xD1, 40}, kParamChannelPressure},
+         {{0xA0, 60, 40}, kParamPolyPressure}, {{0xC4, 3}, kParamProgram},
+         {{kTagExpression, 6, 3, 60}, kParamExpressions},
+      };
+      for (const auto &[event, param] : kinds)
+         JCLAP_CHECK_EQ(midiKindParam(event.data()), param);
+
+      bool params[kParamCount];
+      std::fill(std::begin(params), std::end(params), true);
+      const auto on = [&](clap_id id) { return params[id]; };
+      const uint8_t cc3[] = {0xB2, 1, 64}, cc4[] = {0xB3, 1, 64}, bend3[] = {0xE2, 0, 64}, clock[] = {0xF8},
+                    noteOn3[] = {0x92, 60, 100}, noteOff3[] = {0x82, 60, 0}, zeroOn3[] = {0x92, 60, 0},
+                    exprCh3[] = {kTagExpression, 6, 2, 60}, exprAll[] = {kTagExpression, 6, 255, 60};
+      params[kParamChannel1 + 2] = false; // channel 3
+      JCLAP_CHECK(!midiPasses(cc3, on) && midiPasses(cc4, on) && !midiPasses(bend3, on) && midiPasses(clock, on));
+      JCLAP_CHECK(!midiPasses(noteOn3, on) && midiPasses(noteOff3, on) && midiPasses(zeroOn3, on));
+      JCLAP_CHECK(!midiPasses(exprCh3, on) && midiPasses(exprAll, on));
+      params[kParamChannel1 + 2] = true;
+      params[kParamCc] = false;
+      params[kParamClock] = false;
+      JCLAP_CHECK(!midiPasses(cc4, on) && midiPasses(bend3, on) && !midiPasses(clock, on));
+      params[kParamNotes] = false;
+      JCLAP_CHECK(!midiPasses(noteOn3, on) && midiPasses(noteOff3, on));
+   }
 
    Frame f;
    f.midiCount = 0;
