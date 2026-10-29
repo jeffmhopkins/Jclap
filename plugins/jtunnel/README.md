@@ -83,7 +83,8 @@ it under **REACHABLE AT**, such as `192.168.1.20:47000`.
 | Thru | Off, On | Sender: keep playing its input locally. Receiver: mix its input in with what it receives |
 | Level | -inf to +12 dB | Receiver output level |
 | Carry | Audio + MIDI, Audio, MIDI | What a sender sends, or what a receiver plays of what arrives |
-| SysEx, Clock, Transport, System Messages | On, Off | The MIDI filter: whether each kind of non-note MIDI goes through (sent, or played), all on by default |
+| Notes, CC, Pitch Bend, Channel Pressure, Poly Pressure, Program Change, Note Expressions, SysEx, Clock, Transport, System Messages | On, Off | The MIDI filter's kinds: whether each goes through (sent, or played), all on by default |
+| Channel 1 to Channel 16 | On, Off | The MIDI filter's channels, all on by default |
 
 The tunnel name and the listen target are saved with the project, not as parameters.
 
@@ -139,13 +140,19 @@ lost or late frame; a sender's level going out.
 
 Under them, **CARRY** sets what the tunnel carries, and the **MIDI** light flashes for each event
 going out (a sender) or coming in (a receiver), with the last one in words and the count. It says
-so in amber when **CARRY** is keeping MIDI back. **FILTER** under the light opens a menu of the
-non-note MIDI that can be held back: **SysEx**, **clock** (and MIDI time code), **transport**
-(start, stop, continue, song position and song select) and **other system** messages (tune
-request, active sensing, reset). A ticked kind goes through; pick one to turn it off or on. Like
-**CARRY**, on a sender it decides what is sent and on a receiver what is played. The button lights
-amber while anything is held back. Notes, CC, pitch bend, aftertouch, program changes and note
-expressions always go through.
+so in amber when **CARRY** is keeping MIDI back. **FILTER** under the light opens the MIDI filter:
+
+![MIDI filter](docs/midi-filter.png)
+
+It has a switch for each kind of MIDI (**NOTES**, **CC**, **PITCH BEND**, **PROGRAM**, channel
+**AFTERTOUCH**, **POLY AT**, **MPE / EXPR** for CLAP note expressions, **SYSEX**, **CLOCK** with
+MIDI time code, **TRANSPORT** for start, stop, continue, song position and song select, and
+**SYSTEM** for tune request, active sensing and reset), and one for each of the 16 channels. A lit
+switch goes through; **ALL ON** lights a row again. Like **CARRY**, on a sender it decides what is
+sent and on a receiver what is played. Note offs always go through, so turning a switch off while
+a note is held can't leave it hanging. FILTER lights amber while anything is held back, and a
+second click on it, or a click anywhere off the card, closes it. Each switch is also a host
+parameter, so a project can automate it.
 
 **OUTPUT** has **THRU**, the receiver's **LEVEL**, and input and output meters.
 
@@ -153,7 +160,8 @@ expressions always go through.
 > To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
 > `build/plugins/jtunnel/jtunnel-screenshot plugins/jtunnel/docs/panel.png`. Add `1440 1112 send` for
 > the sender's view, and `idle` after that to see either before anything connects (or `taken` for a
-> sender whose name is in use, or `midi` for a tunnel carrying MIDI only).
+> sender whose name is in use, `midi` for a tunnel carrying MIDI only, or `filter` for the MIDI
+> filter open).
 
 ## Tests
 
@@ -164,5 +172,7 @@ the clock offset, stop dropping out, keep the tone at its level and deliver a no
 intact, and a MIDI-only link that must deliver a note within 30 ms. It also sends every kind of
 MIDI event through a sender and receiver, a 1000-byte SysEx dump among them, and checks they come
 out in order and whole, and that a dump missing a piece never comes out. `jtunnel-plugin-tests` runs two whole plugins in one process over real UDP on the loopback
-interface, one sending a tone, a note, a CC, pitch bend, clock, SysEx and a note expression, the
-other finding the tunnel by name and playing them.
+interface, one sending a tone, a note, CC, pitch bend, both kinds of aftertouch, a program change,
+an MPE voice, clock, SysEx and a note expression, the other finding the tunnel by name and playing
+them, with the sender's MIDI filter holding transport back and the receiver's holding channel 10
+back.

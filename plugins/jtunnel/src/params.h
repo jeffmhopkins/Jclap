@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "protocol.h"
+
 namespace jtunnel {
 
 enum ParamId : clap_id {
@@ -21,11 +23,20 @@ enum ParamId : clap_id {
    kParamThru,
    kParamLevel,
    kParamCarry,
-   // Which kinds of non-note MIDI go through (MIDI FILTER on the panel).
+   // The MIDI filter: which kinds of MIDI go through, and on which channels.
    kParamSysex,
    kParamClock,
    kParamTransport,
    kParamSystem,
+   kParamNotes,
+   kParamCc,
+   kParamPitchBend,
+   kParamChannelPressure,
+   kParamPolyPressure,
+   kParamProgram,
+   kParamExpressions,
+   kParamChannel1,
+   kParamChannel16 = kParamChannel1 + 15,
    kParamCount
 };
 
@@ -56,22 +67,78 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Clock", 0, 1, 1, true},
    {"Transport", 0, 1, 1, true},
    {"System Messages", 0, 1, 1, true},
+   {"Notes", 0, 1, 1, true},
+   {"CC", 0, 1, 1, true},
+   {"Pitch Bend", 0, 1, 1, true},
+   {"Channel Pressure", 0, 1, 1, true},
+   {"Poly Pressure", 0, 1, 1, true},
+   {"Program Change", 0, 1, 1, true},
+   {"Note Expressions", 0, 1, 1, true},
+   {"Channel 1", 0, 1, 1, true},
+   {"Channel 2", 0, 1, 1, true},
+   {"Channel 3", 0, 1, 1, true},
+   {"Channel 4", 0, 1, 1, true},
+   {"Channel 5", 0, 1, 1, true},
+   {"Channel 6", 0, 1, 1, true},
+   {"Channel 7", 0, 1, 1, true},
+   {"Channel 8", 0, 1, 1, true},
+   {"Channel 9", 0, 1, 1, true},
+   {"Channel 10", 0, 1, 1, true},
+   {"Channel 11", 0, 1, 1, true},
+   {"Channel 12", 0, 1, 1, true},
+   {"Channel 13", 0, 1, 1, true},
+   {"Channel 14", 0, 1, 1, true},
+   {"Channel 15", 0, 1, 1, true},
+   {"Channel 16", 0, 1, 1, true},
 };
 
-// The MIDI filter: what kind of non-note MIDI an event in the wire's form is (see protocol.h), as
-// the param that lets it through, or kParamCount for what always goes (notes, channel messages,
-// note expressions).
-inline clap_id midiFilterParam(const uint8_t *event) {
+inline bool isMidiFilterParam(clap_id id) { return id >= kParamSysex && id <= kParamChannel16; }
+
+// The MIDI filter, for an event in the wire's form (see protocol.h): the param for its kind, and
+// its channel (-1 for none, or an expression for every channel).
+inline clap_id midiKindParam(const uint8_t *event) {
    const uint8_t status = event[0];
-   if (status == 1) // a SysEx piece
+   if (status == kTagSysex)
       return kParamSysex;
+   if (status == kTagExpression)
+      return kParamExpressions;
    if (status == 0xF8 || status == 0xF1) // clock and MIDI time code
       return kParamClock;
    if (status == 0xFA || status == 0xFB || status == 0xFC || status == 0xF2 || status == 0xF3)
       return kParamTransport; // start, continue, stop, song position, song select
    if (status >= 0xF0)
       return kParamSystem; // tune request, active sensing, reset
-   return kParamCount;
+   switch (status & 0xF0) {
+   case 0x80:
+   case 0x90:
+      return kParamNotes;
+   case 0xA0:
+      return kParamPolyPressure;
+   case 0xB0:
+      return kParamCc;
+   case 0xC0:
+      return kParamProgram;
+   case 0xD0:
+      return kParamChannelPressure;
+   default:
+      return kParamPitchBend;
+   }
+}
+
+inline int midiChannel(const uint8_t *event) {
+   if (event[0] == kTagExpression)
+      return event[2] == 255 ? -1 : event[2];
+   return event[0] >= 0x80 && event[0] < 0xF0 ? event[0] & 0x0F : -1;
+}
+
+// Whether the filter lets an event through, with `on(id)` reading a param as on or off. Note offs
+// always go, so a note can't be left hanging by a switch turned off while it is held.
+template <typename On> bool midiPasses(const uint8_t *event, On on) {
+   const uint8_t kind = event[0] & 0xF0;
+   if (event[0] >= 0x80 && (kind == 0x80 || (kind == 0x90 && event[2] == 0)))
+      return true;
+   const int channel = midiChannel(event);
+   return on(midiKindParam(event)) && (channel < 0 || on(static_cast<clap_id>(kParamChannel1 + channel)));
 }
 
 inline const char *const kModeLabels[] = {"Send", "Receive"};
@@ -90,13 +157,9 @@ inline const char *const *choiceLabels(clap_id id) {
    case kParamRedundancy:
    case kParamAutoBuffer:
    case kParamThru:
-   case kParamSysex:
-   case kParamClock:
-   case kParamTransport:
-   case kParamSystem:
       return kOnOffLabels;
    default:
-      return nullptr;
+      return isMidiFilterParam(id) ? kOnOffLabels : nullptr;
    }
 }
 

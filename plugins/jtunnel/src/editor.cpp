@@ -17,7 +17,6 @@
 #include <jclap/ui/tooltip.h>
 #include <jclap/ui/update_notice.h>
 
-#include <visage_ui/popup_menu.h>
 #include <visage_widgets/text_editor.h>
 
 #include <algorithm>
@@ -327,6 +326,41 @@ private:
 
 // The link as a picture: the sending end on the left, the receiving end(s) on the right, and the
 // wire between them in the state's colour, with packets running along it while audio flows.
+// Behind the MIDI filter: dims the panel and draws the filter's card. A click off the card closes it.
+class FilterBackdrop : public visage::Frame, public ui::Scalable {
+public:
+   std::function<void()> onClose;
+
+   // The card, in design units relative to the backdrop.
+   void setCard(ui::Rect card) { card_ = card; }
+   void setScale(float scale) override { scale_ = scale; }
+
+   void draw(visage::Canvas &canvas) override {
+      const ui::Theme &t = ui::defaultTheme();
+      const float s = scale_;
+      canvas.setColor(0x99000000);
+      canvas.fill(0, 0, width(), height());
+      canvas.setColor(t.panel);
+      canvas.roundedRectangle(card_.x * s, card_.y * s, card_.w * s, card_.h * s, 6 * s);
+      canvas.setColor(kAccent);
+      canvas.roundedRectangleBorder(card_.x * s, card_.y * s, card_.w * s, card_.h * s, 6 * s, 1.0f);
+      canvas.text("MIDI FILTER", ui::font(15 * s), visage::Font::kLeft, (card_.x + 14) * s, (card_.y + 6) * s,
+                  card_.w * s, 22 * s);
+   }
+
+   void mouseDown(const visage::MouseEvent &e) override {
+      const float s = scale_;
+      const bool onCard = e.position.x >= card_.x * s && e.position.x < (card_.x + card_.w) * s &&
+                          e.position.y >= card_.y * s && e.position.y < (card_.y + card_.h) * s;
+      if (!onCard && onClose)
+         onClose();
+   }
+
+private:
+   ui::Rect card_;
+   float scale_ = 1.0f;
+};
+
 class LinkView : public visage::Frame, public ui::Scalable {
 public:
    struct End {
@@ -759,8 +793,8 @@ public:
       // Which non-note MIDI goes through, in a menu: lit while any of it is held back.
       midiFilter_ = &add<ui::Button>({444, 362, 66, 22}, "FILTER");
       midiFilter_->setAccent(kAmber);
-      midiFilter_->onClick = [this] { showMidiFilter(); };
-      tips_.add(*midiFilter_, "Which non-note MIDI goes through: SysEx, clock, transport and other system messages");
+      midiFilter_->onClick = [this] { showMidiFilter(!filterOpen_); };
+      tips_.add(*midiFilter_, "Which kinds of MIDI go through, and on which channels");
       midiLast_ = &add<ui::Label>({520, 340, 180, 20}, "", 0, visage::Font::kLeft, 0.72f);
       midiInfo_ = &add<ui::Label>({520, 362, 180, 16}, "", 0, visage::Font::kLeft, 0.75f);
 
@@ -812,8 +846,18 @@ public:
       inMeter_ = &add<ui::Meter>({648, 450, 14, 82});
       outMeter_ = &add<ui::Meter>({676, 450, 14, 82});
 
+      buildMidiFilter();
+
       sync();
       startTimer(kTickMs);
+   }
+
+   // Opens or closes the MIDI filter.
+   void showMidiFilter(bool open) {
+      filterOpen_ = open;
+      for (visage::Frame *f : filterFrames_)
+         f->setVisible(open);
+      redraw();
    }
 
    void timerCallback() override { sync(); }
@@ -968,31 +1012,70 @@ private:
 
    int carry() const { return static_cast<int>(std::lround(host_.paramValue(kParamCarry))); }
 
-   // The MIDI filter's menu: each kind ticked goes through; picking one turns it on or off.
-   void showMidiFilter() {
-      static const std::pair<clap_id, const char *> kinds[] = {
-         {kParamSysex, "SysEx"},
-         {kParamClock, "Clock and MIDI time code"},
-         {kParamTransport, "Transport: start, stop, song position"},
-         {kParamSystem, "Other system: active sensing, reset"},
-      };
-      visage::PopupMenu menu;
-      for (const auto &[id, name] : kinds)
-         menu.addOption(static_cast<int>(id), name).select(host_.paramValue(id) >= 0.5);
-      menu.onSelection() += [this](int id) {
-         const clap_id param = static_cast<clap_id>(id);
-         host_.beginEdit(param);
-         host_.setParam(param, host_.paramValue(param) >= 0.5 ? 0.0 : 1.0);
-         host_.endEdit(param);
-      };
-      menu.show(midiFilter_, {0, midiFilter_->height()});
-   }
-
    bool filtersMidi() const {
-      for (const clap_id id : {kParamSysex, kParamClock, kParamTransport, kParamSystem})
+      for (clap_id id = kParamSysex; id <= kParamChannel16; ++id)
          if (host_.paramValue(id) < 0.5)
             return true;
       return false;
+   }
+
+   // The MIDI filter: a card over the top half of the panel, with a switch for each kind of MIDI
+   // and each channel, lit while it goes through. FILTER, or a click off the card, closes it.
+   void buildMidiFilter() {
+      const ui::Rect card{236, 70, 472, 252};
+      auto &backdrop = add<FilterBackdrop>({0, 0, kDesignWidth, kDesignHeight});
+      backdrop.setCard(card);
+      backdrop.onClose = [this] { showMidiFilter(false); };
+      filterFrames_.push_back(&backdrop);
+      const auto label = [&](ui::Rect r, const char *text, unsigned color, visage::Font::Justification j) {
+         auto &l = add<ui::Label>(r, text, 0, j, 0.75f);
+         l.setColor(color);
+         filterFrames_.push_back(&l);
+      };
+      const auto toggle = [&](ui::Rect r, const char *text, clap_id id) {
+         auto &b = add<ui::Button>(r, text);
+         b.setToggle(true);
+         b.setAccent(kAccent);
+         bindings_.bind(b, id);
+         filterFrames_.push_back(&b);
+      };
+      const auto allOn = [&](ui::Rect r, clap_id first, clap_id last) {
+         auto &b = add<ui::Button>(r, "ALL ON");
+         b.onClick = [this, first, last] {
+            for (clap_id id = first; id <= last; ++id) {
+               host_.beginEdit(id);
+               host_.setParam(id, 1.0);
+               host_.endEdit(id);
+            }
+         };
+         filterFrames_.push_back(&b);
+      };
+      const float x = card.x + 16, w = card.w - 32;
+      label({card.x + 150, card.y + 10, card.w - 166, 16}, "Lit goes through. Note offs always do.",
+            ui::defaultTheme().dimText, visage::Font::kRight);
+
+      label({x, card.y + 42, 120, 14}, "MESSAGES", kDim, visage::Font::kLeft);
+      allOn({x + w - 64, card.y + 38, 64, 20}, kParamSysex, kParamExpressions);
+      static const std::pair<clap_id, const char *> kinds[] = {
+         {kParamNotes, "NOTES"},         {kParamCc, "CC"},
+         {kParamPitchBend, "PITCH BEND"}, {kParamProgram, "PROGRAM"},
+         {kParamChannelPressure, "AFTERTOUCH"}, {kParamPolyPressure, "POLY AT"},
+         {kParamExpressions, "MPE / EXPR"}, {kParamSysex, "SYSEX"},
+         {kParamClock, "CLOCK"},         {kParamTransport, "TRANSPORT"},
+         {kParamSystem, "SYSTEM"},
+      };
+      const std::vector<ui::Rect> kindCells = ui::grid({x, card.y + 62, w, 88}, 4, 3, 6);
+      for (size_t i = 0; i < std::size(kinds); ++i)
+         toggle(kindCells[i], kinds[i].second, kinds[i].first);
+
+      label({x, card.y + 164, 120, 14}, "CHANNELS", kDim, visage::Font::kLeft);
+      allOn({x + w - 64, card.y + 160, 64, 20}, kParamChannel1, kParamChannel16);
+      static const char *const channels[] = {"1", "2", "3", "4", "5", "6", "7", "8",
+                                             "9", "10", "11", "12", "13", "14", "15", "16"};
+      const std::vector<ui::Rect> channelCells = ui::grid({x, card.y + 184, w, 56}, 8, 2, 6);
+      for (int i = 0; i < 16; ++i)
+         toggle(channelCells[static_cast<size_t>(i)], channels[i], static_cast<clap_id>(kParamChannel1 + i));
+      showMidiFilter(false);
    }
 
    // The MIDI light flashes for each event through (coming in to be sent, or received), with the
@@ -1223,6 +1306,8 @@ private:
    ui::SegmentedSwitch *carry_ = nullptr;
    ui::ActivityLed *midiLed_ = nullptr;
    ui::Button *midiFilter_ = nullptr;
+   std::vector<visage::Frame *> filterFrames_;
+   bool filterOpen_ = false;
    ui::Label *midiLast_ = nullptr, *midiInfo_ = nullptr;
    std::vector<ui::Section *> sections_;
    std::vector<std::string> names_;
@@ -1238,9 +1323,10 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
                                        ui::WindowOptions{static_cast<int>(kDesignWidth), static_cast<int>(kDesignHeight)});
 }
 
-bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath) {
+bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, bool midiFilter) {
    Panel panel(host);
    panel.simulate(kHistory);
+   panel.showMidiFilter(midiFilter);
    return ui::renderToPng(panel, width, height, pngPath);
 }
 

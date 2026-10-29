@@ -483,11 +483,10 @@ private:
    // Keeps the events the MIDI filter lets through, in order. Returns how many.
    template <typename Event> int filterMidi(Event *events, int count) const {
       int kept = 0;
-      for (int i = 0; i < count; ++i) {
-         const clap_id filter = midiFilterParam(events[i].data);
-         if (filter == kParamCount || params_[filter].load() >= 0.5)
+      const auto on = [this](clap_id id) { return params_[id].load() >= 0.5; };
+      for (int i = 0; i < count; ++i)
+         if (midiPasses(events[i].data, on))
             events[kept++] = events[i];
-      }
       return kept;
    }
 

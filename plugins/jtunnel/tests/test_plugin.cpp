@@ -81,7 +81,9 @@ int main() {
    tx->setSendName(name);
    rx->setListenTarget(name);
    receiver.setParam(jtunnel::kParamMode, jtunnel::kModeReceive);
+   // The sender's filter holds transport back, and the receiver's holds back channel 10.
    sender.setParam(jtunnel::kParamTransport, 0.0);
+   receiver.setParam(jtunnel::kParamChannel1 + 9, 0.0);
 
    const uint32_t block = 256;
    std::vector<float> inL(block), inR(block), outL(block), outR(block), rxL(block), rxR(block);
@@ -112,6 +114,14 @@ int main() {
          sender.midi(0xE1, 0x00, 0x50, 2);
          sender.midi(0xF8, 0, 0, 3);
          sender.midi(0xFA, 0, 0, 3);
+         sender.midi(0xA0, 62, 40, 3);   // poly aftertouch
+         sender.midi(0xD0, 55, 0, 3);    // channel pressure
+         sender.midi(0xC0, 7, 0, 3);     // program change
+         // An MPE voice on channel 2: its own bend, slide (CC 74) and pressure.
+         sender.midi(0xE1, 0x10, 0x48, 3);
+         sender.midi(0xB1, 74, 80, 3);
+         sender.midi(0xD1, 90, 0, 3);
+         sender.midi(0xB9, 7, 100, 3);   // channel 10: held back by the receiver
          sender.sysex(dump, 4);
          sender.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, 62, 0.75, -1, 0, 5);
          noteSent = true;
@@ -150,12 +160,14 @@ int main() {
    JCLAP_CHECK(heard);
    JCLAP_CHECK(noteHeard);
    // The sender's MIDI filter holds transport back (see below), so start doesn't arrive.
-   JCLAP_CHECK_EQ(otherMidi.size(), size_t{3});
-   if (otherMidi.size() == 3) {
-      JCLAP_CHECK(otherMidi[0].status == 0xB0 && otherMidi[0].data1 == 74 && otherMidi[0].data2 == 99);
-      JCLAP_CHECK(otherMidi[1].status == 0xE1 && otherMidi[1].data1 == 0x00 && otherMidi[1].data2 == 0x50);
-      JCLAP_CHECK(otherMidi[2].status == 0xF8);
-   }
+   const std::vector<std::vector<int>> expected = {
+      {0xB0, 74, 99}, {0xE1, 0x00, 0x50}, {0xF8, 0, 0},  {0xA0, 62, 40}, {0xD0, 55, 0},
+      {0xC0, 7, 0},   {0xE1, 0x10, 0x48}, {0xB1, 74, 80}, {0xD1, 90, 0},
+   };
+   JCLAP_CHECK_EQ(otherMidi.size(), expected.size());
+   for (size_t i = 0; i < otherMidi.size() && i < expected.size(); ++i)
+      JCLAP_CHECK(otherMidi[i].status == expected[i][0] && otherMidi[i].data1 == expected[i][1] &&
+                  otherMidi[i].data2 == expected[i][2]);
    JCLAP_CHECK(sysexHeard.size() == 1 && sysexHeard[0] == dump);
    JCLAP_CHECK(expressionsHeard.size() == 1 && expressionsHeard[0].expression_id == CLAP_NOTE_EXPRESSION_PRESSURE &&
                expressionsHeard[0].key == 62 && expressionsHeard[0].channel == 0 && expressionsHeard[0].value == 0.75);
