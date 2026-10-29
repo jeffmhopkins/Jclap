@@ -4,7 +4,7 @@ Each round sets every sound CC to a known pattern, the user saves the panel into
 the synth, and the slot is read back. With a few rounds, each byte of the preset that follows a knob
 shows up as a function of that knob's value.
 
-    python mb_calibrate.py send ROUND            set the CCs for round 0-3 (on all 16 channels)
+    python mb_calibrate.py send ROUND            set the CCs for round 0-4 (on all 16 channels)
     python mb_calibrate.py read ROUND OUTDIR [--bank 15 --slot 3]
                                                  read the scratch slot into OUTDIR/calib-ROUND.syx
 
@@ -41,9 +41,16 @@ def pattern(round_):
         values = [127 - (5 * i + 3) % 128 for i in range(n)]
     elif round_ == 3:
         values = [(77 * i + 50) % 128 for i in range(n)]
+    elif round_ == 4:
+        # Round 1, with the audio mod knobs 78 and 80 on opposite sides of centre (in rounds 0-3
+        # they were always on the same side) and the VCO 1 mixer level at 0 again.
+        values = [(37 * i + 11) % 128 for i in range(n)]
     else:
-        sys.exit("round is 0-3")
-    return dict(zip(CCS, values))
+        sys.exit("round is 0-4")
+    v = dict(zip(CCS, values))
+    if round_ == 4:
+        v.update({78: 100, 80: 20, 18: 0})
+    return v
 
 
 def send(round_):
