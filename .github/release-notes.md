@@ -8,11 +8,11 @@ Each plugin has its own version, and only changes it when the plugin itself chan
 
 The whole collection, one zip per system:
 
-| System | All CLAP plugins | VST3 (Polar XY) |
-|---|---|---|
-| macOS | [jclap-macOS.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-macOS.zip) | [jclap-VST3-macOS.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-VST3-macOS.zip) |
-| Windows | [jclap-Windows.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-Windows.zip) | [jclap-VST3-Windows.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-VST3-Windows.zip) |
-| Linux | [jclap-Linux.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-Linux.zip) | [jclap-VST3-Linux.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-VST3-Linux.zip) |
+| System | All CLAP plugins |
+|---|---|
+| macOS | [jclap-macOS.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-macOS.zip) |
+| Windows | [jclap-Windows.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-Windows.zip) |
+| Linux | [jclap-Linux.zip](https://github.com/jeffmhopkins/Jclap/releases/download/{{VERSION}}/jclap-Linux.zip) |
 
 On a Mac, the quickest install is from Terminal (see below for what it does):
 
@@ -20,7 +20,8 @@ On a Mac, the quickest install is from Terminal (see below for what it does):
 curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-macos.sh | bash -s {{VERSION}}
 ```
 
-The single-plugin zips, named with the plugin's version, are listed under Assets at the bottom.
+The single-plugin zips, named with the plugin's version, are listed under Assets at the bottom, along
+with the VST3 zips. Only Polar XY has a VST3 build; every other plugin is CLAP only.
 
 ## Install
 
