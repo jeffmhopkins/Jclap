@@ -1,4 +1,4 @@
-﻿"""Reads every preset off a MatrixBrute the way MIDI Control Center does, and saves the raw replies.
+"""Reads every preset off a MatrixBrute the way MIDI Control Center does, and saves the raw replies.
 
 Needs Python 3 and `pip install mido python-rtmidi`. With the synth on USB and MIDI Control Center
 closed (it holds the port):
