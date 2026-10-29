@@ -201,12 +201,14 @@ int main() {
       panel.skyLook = 1;
       panel.skyPalettes[0] = 3;
       panel.skyPalettes[1] = 5;
+      panel.creatureScale = 2.25f;
       Buffer saved;
       JCLAP_CHECK(state->save(h.plugin(), &saved.out));
       h.setParam(level, 0.0);
       panel.setBusNames({});
       panel.skyLook = 0;
       panel.skyPalettes[0] = panel.skyPalettes[1] = 0;
+      panel.creatureScale = 1.0f;
       h.process();
       JCLAP_CHECK(state->load(h.plugin(), &saved.in));
       JCLAP_CHECK_EQ(h.paramValue(level), -12.0);
@@ -215,6 +217,7 @@ int main() {
       JCLAP_CHECK_EQ(panel.skyLook, 1);
       JCLAP_CHECK_EQ(panel.skyPalettes[0], 3);
       JCLAP_CHECK_EQ(panel.skyPalettes[1], 5);
+      JCLAP_CHECK_EQ(panel.creatureScale, 2.25f);
 
       Buffer partial;
       partial.bytes.insert(partial.bytes.end(), {'J', 'J', 'S', 'Y'});
