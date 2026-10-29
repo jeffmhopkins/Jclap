@@ -13,6 +13,7 @@
 #include <jclap/ui/number_box.h>
 #include <jclap/ui/octave_shift.h>
 #include <jclap/ui/param_bindings.h>
+#include <jclap/ui/preset_bar.h>
 #include <jclap/ui/scope.h>
 #include <jclap/ui/section.h>
 #include <jclap/ui/segmented.h>
@@ -25,6 +26,7 @@
 #include <vector>
 
 #include "params.h"
+#include "presets.h"
 
 namespace basic_synth {
 namespace {
@@ -59,8 +61,12 @@ ui::ValueRange rangeOf(clap_id id, double step = 0.0, bool bipolar = false) {
 class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
-      update_ = &add<ui::UpdateNotice>({480, 15, 220, 26});
-      update_->alignRight = true;
+      add<ui::UpdateNotice>({228, 15, 164, 26});
+      auto &presets = add<ui::PresetBar>({400, 14, 308, 28}, factoryPresets(), kPresetFormat, host_);
+      presets.setAccent(kOrange);
+      presets.defaults = defaultValues();
+      presets.currentName = [this] { return host_.presetName(); };
+      presets.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
       buildOscillator();
       buildFilter();
       buildEnvelopes();
@@ -127,11 +133,6 @@ public:
       canvas.text("Basic", ui::font(26 * s), visage::Font::kLeft, 60 * s, 8 * s, 80 * s, 40 * s);
       canvas.setColor(t.text);
       canvas.text("Synth", ui::font(26 * s), visage::Font::kLeft, 128 * s, 8 * s, 90 * s, 40 * s);
-      canvas.setColor(t.dimText);
-      // A newer release's notice takes the tagline's place.
-      if (!update_->isVisible())
-         canvas.text("8 voices  ·  MPE  ·  built on jclap::dsp", ui::font(13 * s), visage::Font::kRight, 360 * s,
-                     8 * s, 340 * s, 40 * s);
    }
 
 private:
@@ -311,7 +312,6 @@ private:
    EditorHost &host_;
    ui::ParamBindings bindings_;
    ui::Tooltips tips_;
-   ui::UpdateNotice *update_ = nullptr;
    ui::TabBar *tabs_ = nullptr;
    ui::PianoKeyboard *keyboard_ = nullptr;
    ui::NoteGrid *grid_ = nullptr;

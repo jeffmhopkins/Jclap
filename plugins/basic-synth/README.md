@@ -71,6 +71,32 @@ host (`NOTE_END`), so Bitwig's per-note modulators know when a note is done.
 > In Bitwig, MPE controllers and per-note expressions from the piano roll arrive as CLAP note
 > expressions, with no MPE setup needed.
 
+## Presets
+
+The preset bar in the header steps through a factory bank of 27 presets and then your own. Click the
+name for a menu of them by category:
+
+| Category | What's in it |
+|---|---|
+| Init | Every knob at its default |
+| Bass | Analog, acid, sub, pulse and wobble basses, with Env 2 snapping the filter shut |
+| Leads | Saw and square leads, a pitch blip, and one played with MPE pressure and slide |
+| Keys | Soft keys, an organ and a clav, with velocity opening the filter |
+| Plucks | No sustain, so each note dies away by itself |
+| Pads | Slow envelopes, with the LFO or a looping Env 2 keeping them moving |
+| Motion | A trance gate, looping envelopes, random steps and a band-pass sweep |
+| FX | The envelopes on the pitch: a zap, a siren, and a thin high-passed air |
+
+**SAVE** names the current settings and writes them as a small text file:
+
+- macOS: `~/Library/Application Support/BasicSynth/Presets`
+- Windows: `%APPDATA%\BasicSynth\Presets`
+- Linux: `~/.config/BasicSynth/Presets`
+
+Click the **star** beside the name to make the current preset a favorite. **Favorites** at the top of
+the name menu lists every starred preset, factory or your own. The project keeps the name of the
+preset last loaded or saved.
+
 ## Panel
 
 The **GRID** tab is a LinnStrument-style note grid: rows a fourth apart (or a fifth, or an octave for

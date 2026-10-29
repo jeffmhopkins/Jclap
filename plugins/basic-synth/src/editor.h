@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <jclap/ui/params.h>
@@ -39,6 +40,9 @@ public:
       float level, releaseFrom;
    };
    virtual void envelopes(int index, std::vector<EnvState> &out) const = 0;
+   // The name of the preset last loaded or saved, kept with the project.
+   virtual std::string presetName() const = 0;
+   virtual void setPresetName(const std::string &name) = 0;
 
    // Where the panel's keyboard and grid were left, so reopening it shows the same notes: octaves
    // up or down, and the grid's row interval in semitones. Main thread only.

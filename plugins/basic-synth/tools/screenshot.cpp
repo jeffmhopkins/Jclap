@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 
 #include "editor.h"
 #include "params.h"
@@ -72,6 +73,8 @@ public:
                                      0.15 * std::exp(-edge * 25.0) * std::sin(edge * 120.0) * (phase < 0.3 ? 1 : -1));
       }
    }
+   std::string presetName() const override { return "Init"; }
+   void setPresetName(const std::string &) override {}
    void noteOn(int, float) override {}
    void noteExpression(int, float, float, float) override {}
    void noteOff(int) override {}

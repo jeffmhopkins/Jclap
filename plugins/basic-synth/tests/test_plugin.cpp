@@ -7,6 +7,7 @@
 #include <clap/ext/state.h>
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #include <vector>
@@ -16,6 +17,7 @@
 
 #include "editor.h"
 #include "params.h"
+#include "presets.h"
 
 extern "C" const clap_plugin_entry_t clap_entry;
 
@@ -604,29 +606,35 @@ int main() {
       JCLAP_CHECK(states.size() == 1 && states[0].stage == 0);
    }
 
-   // State: a round trip, and a state with fewer params (an older version) loads them and leaves
-   // the rest at their defaults.
+   // State: a round trip with the preset name, and a version 1 state with fewer params (from before
+   // presets) loads them, leaves the rest at their defaults and has no name.
    {
       auto *state = static_cast<const clap_plugin_state_t *>(h.plugin()->get_extension(h.plugin(), CLAP_EXT_STATE));
+      JCLAP_CHECK(panel.presetName() == "Init");
+      panel.setPresetName("Acid Bass");
       h.setParam(kResonance, 0.8);
       h.setParam(kTimbreAmount, 1.0);
       run(64);
       Buffer saved;
       JCLAP_CHECK(state->save(h.plugin(), &saved.out));
-      JCLAP_CHECK_EQ(saved.bytes.size(), 12u + 8u * kParamCount);
+      JCLAP_CHECK_EQ(saved.bytes.size(), 12u + 8u * kParamCount + 4u + 9u);
       h.setParam(kResonance, 0.1);
+      panel.setPresetName("Other");
       run(64);
       JCLAP_CHECK(state->load(h.plugin(), &saved.in));
       JCLAP_CHECK(near(h.paramValue(kResonance), 0.8, 1e-12));
+      JCLAP_CHECK(panel.presetName() == "Acid Bass");
 
       Buffer older;
       older.bytes = saved.bytes;
-      const uint32_t count = kTimbreAmount;
+      const uint32_t version = 1, count = kTimbreAmount;
+      std::memcpy(older.bytes.data() + 4, &version, 4);
       std::memcpy(older.bytes.data() + 8, &count, 4);
       older.bytes.resize(12 + 8 * count);
       JCLAP_CHECK(state->load(h.plugin(), &older.in));
       JCLAP_CHECK(near(h.paramValue(kResonance), 0.8, 1e-12));
       JCLAP_CHECK(near(h.paramValue(kTimbreAmount), kParams[kTimbreAmount].defaultValue, 1e-12));
+      JCLAP_CHECK(panel.presetName().empty());
 
       Buffer cut;
       cut.bytes.assign(saved.bytes.begin(), saved.bytes.end() - 4);
@@ -1009,6 +1017,38 @@ int main() {
       JCLAP_CHECK(jump < 0.07f * peak);
       h3.note(CLAP_EVENT_NOTE_OFF, 69, 0.0, 40, 0);
       r(9600);
+   }
+
+   // The factory bank: Init first and at the defaults, every preset complete, in range and named
+   // once, and each one sounds when played, without blowing up.
+   {
+      const auto &factory = factoryPresets();
+      JCLAP_CHECK(factory.size() > 20 && factory[0].name == "Init");
+      for (const auto &[id, value] : factory[0].values)
+         JCLAP_CHECK(value == kParams[id].defaultValue);
+      for (size_t i = 0; i < factory.size(); ++i) {
+         const auto &preset = factory[i];
+         JCLAP_CHECK(preset.values.size() == kParamCount);
+         for (size_t j = 0; j < i; ++j)
+            JCLAP_CHECK(factory[j].name != preset.name);
+         jclap::core::TestHost hp(clap_entry, "com.jeffmhopkins.jclap.basic-synth");
+         Run r{hp, {}, {}, {}};
+         for (const auto &[id, value] : preset.values) {
+            JCLAP_CHECK(id < kParamCount && value >= kParams[id].min && value <= kParams[id].max);
+            hp.setParam(id, value);
+         }
+         hp.note(CLAP_EVENT_NOTE_ON, 48, 0.8, 1);
+         r(48000);
+         float peak = 0.0f;
+         bool finite = true;
+         for (float x : r.left) {
+            finite = finite && std::isfinite(x);
+            peak = std::max(peak, std::fabs(x));
+         }
+         if (!finite || r.rms() < 0.005 || peak > 1.0f)
+            std::printf("preset %s: rms %g, peak %g\n", preset.name.c_str(), r.rms(), peak);
+         JCLAP_CHECK(finite && r.rms() > 0.005 && peak <= 1.0f);
+      }
    }
 
    return jclap::core::testResult();
