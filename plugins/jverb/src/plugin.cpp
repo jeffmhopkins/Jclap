@@ -509,6 +509,7 @@ private:
    int choice(clap_id id) const { return static_cast<int>(value(id) + 0.5); }
 
    void controlTick() {
+      ++ticks_;
       double mass[kMaxBodies];
       masses(mass);
       const double gravity = value(kGravity);
@@ -743,6 +744,7 @@ private:
       f.decay = static_cast<float>(c.decay);
       f.running = value(kRun) >= 0.5;
       f.frozen = c.freeze;
+      f.time = static_cast<double>(ticks_) * kControlTick / sampleRate_;
       frames_.publish();
    }
 
@@ -773,6 +775,8 @@ private:
    double sampleRate_ = 48000.0, tempo_ = 120.0, barBeats_ = 4.0, expectedBeats_ = 0.0;
    bool playing_ = false;
    int tick_ = 0, publish_ = 0;
+   // Control ticks since the plugin was made, for the frames' times.
+   uint64_t ticks_ = 0;
    Engine engine_;
    Analyzer analyzer_;
    OrbitSim sim_;

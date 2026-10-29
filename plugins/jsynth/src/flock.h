@@ -412,6 +412,8 @@ struct FlockFrame {
    };
    int playheadCount = 0;
    Playhead playheads[kVoiceSlots];
+   // Seconds of audio processed when it was taken, so the panel can play the frames back evenly.
+   double time = 0.0;
 };
 
 inline void Flock::show(FlockFrame &f) const {

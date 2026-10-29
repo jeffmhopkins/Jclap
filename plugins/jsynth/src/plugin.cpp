@@ -412,6 +412,7 @@ public:
 
       publish();
       sinceFrame_ += frames;
+      streamTime_ += frames / sampleRate_;
       if (sinceFrame_ >= static_cast<int>(sampleRate_ / 120.0)) {
          sinceFrame_ = 0;
          publishFlock();
@@ -624,6 +625,7 @@ private:
       for (int part = 0; part < kPartCount; ++part)
          if (!engine_->destinationsNow(part, f.dest[part], f.moved[part]))
             std::fill(std::begin(f.moved[part]), std::end(f.moved[part]), false);
+      f.time = streamTime_;
       flockFrames_.publish();
       lastFrame_.store(nowMs(), std::memory_order_relaxed);
    }
@@ -655,6 +657,8 @@ private:
    std::unique_ptr<Engine> engine_;
    double sampleRate_ = 48000.0;
    int sinceFrame_ = 0;
+   // Seconds of audio processed, for the flock frames' times.
+   double streamTime_ = 0.0;
    mutable jclap::core::TripleBuffer<FlockFrame> flockFrames_;
    std::atomic<int64_t> lastFrame_{0};
    // Somewhere to render when the host gives no main port.

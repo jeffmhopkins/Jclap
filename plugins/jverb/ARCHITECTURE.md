@@ -692,9 +692,12 @@ takes a lock or calls the OS.
 **The panel** reads an `OrbitFrame` ([`src/shared.h`](src/shared.h)) that the audio thread publishes
 every 4 ticks (about 375 a second at 48 kHz) through a triple buffer: positions, velocities, masses,
 each body's signal, target and amount, what each voice is doing (pan, tone, swirl), the analyzer's
-band levels and transients, the tail's level, the decay, and whether it is running or frozen. The
-panel reads the newest when it draws, about 60 times a second, and keeps the trails, gas and dust to
-itself. Drags, velocity edits, spawns and resets go back through a lock-free queue. Neither side ever
+band levels and transients, the tail's level, the decay, whether it is running or frozen, and how
+many seconds of audio had been processed when it was taken. The panel steps about 60 times a second,
+on screen refreshes a `jclap::ui::FramePacer` picks. The frames come in bursts, as the host runs its
+blocks, so a `jclap::ui::FrameSmoother` plays them back on a clock about a block behind the newest
+and the bodies are drawn partway between the two frames either side. Its fading colours go through
+`jclap::ui::steady()` (see `libs/ui/README.md`). It keeps the trails, gas and dust to itself. Drags, velocity edits, spawns and resets go back through a lock-free queue. Neither side ever
 waits for the other.
 
 **The knobs show what is heard.** For each param the bodies can move, the audio thread stores the
