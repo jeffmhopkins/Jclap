@@ -16,9 +16,12 @@
 #include <jclap/ui/button.h>
 #include <jclap/ui/design_frame.h>
 #include <jclap/ui/dropdown.h>
+#include <jclap/ui/frame_pacer.h>
+#include <jclap/ui/frame_smoother.h>
 #include <jclap/ui/envelope.h>
 #include <jclap/ui/knob.h>
 #include <jclap/ui/number_box.h>
+#include <jclap/ui/paint.h>
 #include <jclap/ui/param_bindings.h>
 #include <jclap/ui/preset_bar.h>
 #include <jclap/ui/section.h>
@@ -36,7 +39,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -115,7 +117,8 @@ const SkyPalette &skyPalette(int index) {
 }
 constexpr unsigned kOscColors[kOscCount] = {0xff6fe0ff, 0xffffb05a, 0xffa98bff};
 
-visage::Color glow(unsigned argb, float alpha, float hdr) { return visage::Color(argb, hdr).withAlpha(alpha); }
+// Steady (see jclap/ui/paint.h): the sky fades and twinkles these every frame.
+visage::Color glow(unsigned argb, float alpha, float hdr) { return ui::steady(visage::Color(argb, hdr).withAlpha(alpha)); }
 
 // Each route source's colour, for its chip and the rings it draws on knobs.
 unsigned sourceColor(int source) {
@@ -909,9 +912,16 @@ public:
       time_ += dt;
       for (int part = 0; part < kPartCount; ++part)
          species_[part].read(host_, part);
-      live_ = host_.flockFrame(frame_);
-      if (!live_)
+      live_ = host_.flockFrame(fresh_);
+      if (live_) {
+         frames_.push(fresh_, fresh_.time);
+         frames_.advance(dt);
+         between(frames_.older(), frames_.newer(), frames_.mix());
+      }
+      else {
+         frames_.clear();
          flyLocal(notes, dt);
+      }
       sync();
       shed(dt);
       moveInk(dt);
@@ -1091,6 +1101,29 @@ private:
          next.push_back(std::move(b));
       }
       creatures_ = std::move(next);
+   }
+
+   // frame_ as `b`, its creatures partway (0..1) from where `a` had them. One that has just hatched or
+   // wrapped round the sky is where `b` has it.
+   void between(const FlockFrame &a, const FlockFrame &b, float t) {
+      frame_ = b;
+      if (t >= 1.0f)
+         return;
+      for (int i = 0; i < frame_.count; ++i) {
+         FlockFrame::Shown &s = frame_.creatures[i];
+         for (int j = 0; j < a.count; ++j) {
+            const FlockFrame::Shown &o = a.creatures[j];
+            if (o.id != s.id)
+               continue;
+            if (std::fabs(s.x - o.x) < 0.3f && std::fabs(s.y - o.y) < 0.3f) {
+               const auto mix = [t](float from, float to) { return from + (to - from) * t; };
+               s.x = mix(o.x, s.x), s.y = mix(o.y, s.y), s.vx = mix(o.vx, s.vx), s.vy = mix(o.vy, s.vy);
+               s.energy = mix(o.energy, s.energy), s.press = mix(o.press, s.press), s.wing = mix(o.wing, s.wing);
+               s.lureX = mix(o.lureX, s.lureX), s.lureY = mix(o.lureY, s.lureY);
+            }
+            break;
+         }
+      }
    }
 
    // The panel's own flock, while the plugin isn't processing: the same sim, fed the held notes and
@@ -1309,12 +1342,12 @@ private:
             tint = tint.interpolateWith(visage::Color(0xffffffff), std::min(0.45f, 0.25f * p.heat));
             a *= 0.6f;
             tint.setHdr(1.0f + 0.3f * p.heat);
-            c.setColor(visage::Brush::radial(tint.withAlpha(a * 0.5f), tint.withAlpha(0.0f), visage::Point(x, y), r));
+            c.setColor(ui::steadyGlow(tint.withAlpha(a * 0.5f), visage::Point(x, y), r));
             c.circle(x - r, y - r, 2 * r);
             const float v = std::hypot(p.vx, p.vy) + 1e-5f;
             const float dx = p.vx / v, dy = p.vy / v, len = r * 0.35f + std::min(v * ppu * 0.3f, r * 0.6f);
             const float bend = 0.5f * len * std::sin(p.x * 23.0f + p.y * 17.0f + time_ * 0.3f);
-            c.setColor(tint.withAlpha(std::min(1.0f, a * 1.1f)));
+            c.setColor(ui::steady(tint.withAlpha(std::min(1.0f, a * 1.1f))));
             c.quadratic(x - dx * len, y - dy * len, x - dy * bend, y + dx * bend, x + dx * len, y + dy * len,
                         std::max(0.6f * s, r * 0.08f));
          }
@@ -1325,13 +1358,14 @@ private:
             a = std::min(0.12f, a * 0.12f * (1.0f + 0.3f * p.heat));
             tint.setHdr(1.0f + 0.35f * (1.0f - t) + 0.25f * p.heat);
             const float h = r * (2.5f + 2.0f * (1.0f - t)), w = r * 0.55f;
-            c.setColor(visage::Brush::radial(tint.withAlpha(a), tint.withAlpha(0.0f), visage::Point(x, y - h * 0.45f), w,
-                                             h * 0.6f, visage::Point(x, y - 0.1f * h)));
+            tint = ui::steady(tint.withAlpha(a));
+            c.setColor(visage::Brush::radial(tint, tint.withAlpha(0.0f), visage::Point(x, y - h * 0.45f), w, h * 0.6f,
+                                             visage::Point(x, y - 0.1f * h)));
             c.fill(x - w, y - h * 1.05f, 2 * w, h * 1.2f);
-            c.setColor(visage::Brush::linear(tint.withAlpha(std::min(1.0f, a * 2.5f)), tint.withAlpha(0.0f), visage::Point(x, y),
-                                             visage::Point(x, y - h)));
+            const visage::Color ray = ui::steady(tint.withAlpha(std::min(1.0f, a * 2.5f)));
+            c.setColor(visage::Brush::linear(ray, ray.withAlpha(0.0f), visage::Point(x, y), visage::Point(x, y - h)));
             c.segment(x, y, x, y - h, 1.0f * s, true);
-            c.setColor(visage::Brush::radial(tint.withAlpha(a * 0.8f), tint.withAlpha(0.0f), visage::Point(x, y), r * 0.5f));
+            c.setColor(ui::steadyGlow(tint.withAlpha(a * 0.8f), visage::Point(x, y), r * 0.5f));
             c.circle(x - 0.5f * r, y - 0.5f * r, 1.0f * r);
          }
       }
@@ -1362,7 +1396,7 @@ private:
                }
                else {
                   const float mx = (ax + bx) / 2, my = (ay + by) / 2 - 0.3f * std::hypot(bx - ax, by - ay);
-                  c.setColor(visage::Color(a.color).interpolateWith(visage::Color(0xffffffff), 0.5f).withAlpha(k * 0.3f));
+                  c.setColor(ui::steady(visage::Color(a.color).interpolateWith(visage::Color(0xffffffff), 0.5f).withAlpha(k * 0.3f)));
                   c.quadratic(ax, ay, mx, my, bx, by, 0.9f * s);
                   const float ph = std::fmod(time_ * 0.7f + a.slot * 0.37f, 1.0f), u = 1.0f - ph;
                   const float px = u * u * ax + 2 * u * ph * mx + ph * ph * bx, py = u * u * ay + 2 * u * ph * my + ph * ph * by;
@@ -1394,10 +1428,10 @@ private:
          }
          else {
             const visage::Color col(b.color);
-            c.setColor(col.withAlpha(0.05f * b.energy));
+            c.setColor(ui::steady(col.withAlpha(0.05f * b.energy)));
             c.segment(lx, ly, lx, Y(1.0f), 1.0f * s, false);
             const float d = (6.0f + 3.0f * b.press) * s;
-            c.setColor(col.withAlpha(0.4f * b.energy));
+            c.setColor(ui::steady(col.withAlpha(0.4f * b.energy)));
             c.diamond(lx - d / 2, ly - d / 2, d, 1.0f * s);
          }
       }
@@ -1476,7 +1510,7 @@ private:
             c.segment(X(b.path[i - 1].x), Y(b.path[i - 1].y), X(b.path[i].x), Y(b.path[i].y), w, true);
          }
          const float halo = 10.0f * s;
-         c.setColor(visage::Brush::radial(col.withAlpha(0.25f * b.energy * shown), col.withAlpha(0.0f), visage::Point(x, y), halo));
+         c.setColor(ui::steadyGlow(col.withAlpha(0.25f * b.energy * shown), visage::Point(x, y), halo));
          c.circle(x - halo, y - halo, 2 * halo);
          const float r = (2.6f + 1.0f * b.press) * s;
          c.setColor(glow(col.interpolateWith(visage::Color(0xfffff4e0), 0.6f).toARGB(), std::min(1.0f, b.energy * shown), 1.6f));
@@ -1491,7 +1525,7 @@ private:
             c.segment(X(b.path[i - 1].x), Y(b.path[i - 1].y), X(b.path[i].x), Y(b.path[i].y), (0.6f + 1.0f * k) * s, false);
          }
          const float halo = (14.0f + 6.0f * b.press) * s;
-         c.setColor(visage::Brush::radial(col.withAlpha(0.22f * b.energy * shown), col.withAlpha(0.0f), visage::Point(x, y), halo));
+         c.setColor(ui::steadyGlow(col.withAlpha(0.22f * b.energy * shown), visage::Point(x, y), halo));
          c.circle(x - halo, y - halo, 2 * halo);
          const float v = std::hypot(b.vx, b.vy) + 1e-5f, hx = b.vx / v, hy = b.vy / v;
          const float len = (10.0f + 6.0f * b.press) * s * (0.75f + 0.25f * b.wing);
@@ -1559,8 +1593,10 @@ private:
    visage::BloomPostEffect bloom_;
    Species species_[kPartCount];
    std::vector<Creature> creatures_;
-   // The frame being drawn: the engine's, or the panel's own flock's.
-   FlockFrame frame_;
+   // The frame being drawn: the engine's, or the panel's own flock's. The engine's come as the host
+   // runs its blocks; frames_ plays them back evenly.
+   FlockFrame frame_, fresh_;
+   ui::FrameSmoother<FlockFrame, 6> frames_;
    bool live_ = false;
    Flock local_;
    int localNote_[kVoiceSlots] = {};
@@ -2556,8 +2592,8 @@ public:
       setView(host_.view);
       setLook(host_.skyLook);
       refreshBusNames();
-      last_ = std::chrono::steady_clock::now();
-      startTimer(16);
+      // Checked at every screen refresh; the pacer picks the ones that step (see frame_pacer.h).
+      startTimer(1);
    }
 
    // A source's name as the panel shows it: a bus by its label.
@@ -2680,10 +2716,8 @@ public:
    }
 
    void timerCallback() override {
-      const auto now = std::chrono::steady_clock::now();
-      const float dt = std::chrono::duration<float>(now - last_).count();
-      last_ = now;
-      step(std::clamp(dt, 0.0f, 0.05f));
+      if (const float dt = pacer_.tick())
+         step(std::min(dt, 0.05f));
    }
 
    // Pulls every control's value from the host now, as the bindings' timer does.
@@ -3767,7 +3801,7 @@ private:
    // A, B and the main output's peaks, falling slowly, for the level bars.
    float meters_[3] = {};
    std::vector<ui::EnvelopeEditor::Playhead> heads_;
-   std::chrono::steady_clock::time_point last_;
+   ui::FramePacer pacer_;
 };
 
 } // namespace

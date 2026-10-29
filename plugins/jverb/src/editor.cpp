@@ -11,9 +11,12 @@
 #include <jclap/ui/button.h>
 #include <jclap/ui/design_frame.h>
 #include <jclap/ui/dropdown.h>
+#include <jclap/ui/frame_pacer.h>
+#include <jclap/ui/frame_smoother.h>
 #include <jclap/ui/knob.h>
 #include <jclap/ui/meter.h>
 #include <jclap/ui/number_box.h>
+#include <jclap/ui/paint.h>
 #include <jclap/ui/param_bindings.h>
 #include <jclap/ui/preset_bar.h>
 #include <jclap/ui/section.h>
@@ -27,7 +30,6 @@
 #include <visage_widgets/text_editor.h>
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -68,7 +70,8 @@ constexpr int kTrailPoints = 420;
 constexpr int kMaxPuffs = 1600;
 constexpr int kMaxDust = 1800;
 
-visage::Color glow(unsigned argb, float alpha, float hdr) { return visage::Color(argb, hdr).withAlpha(alpha); }
+// Steady (see jclap/ui/paint.h): the scene fades and twinkles these every frame.
+visage::Color glow(unsigned argb, float alpha, float hdr) { return ui::steady(visage::Color(argb, hdr).withAlpha(alpha)); }
 
 std::string text(clap_id id, double value) {
    char buffer[48];
@@ -292,7 +295,7 @@ public:
          const float r = p.size * ppu;
          visage::Color tint = visage::Color(kBodyColors[p.body]).interpolateWith(0xffffffff, std::min(0.25f, 0.15f * p.heat));
          tint.setHdr(1.0f + 0.3f * p.heat);
-         c.setColor(visage::Brush::radial(tint.withAlpha(alpha), tint.withAlpha(0.0f), visage::Point(X(p.x), Y(p.y)), r));
+         c.setColor(ui::steadyGlow(tint.withAlpha(alpha), visage::Point(X(p.x), Y(p.y)), r));
          c.circle(X(p.x) - r, Y(p.y) - r, 2 * r);
       }
 
@@ -330,12 +333,11 @@ public:
          const float bx = X(f.x[b]), by = Y(f.y[b]);
          const float halo = r * (3.0f + 1.5f * energy) * (1.0f + 0.2f * tone);
          const visage::Color core = visage::Color(kBodyColors[b]).interpolateWith(0xffffffff, std::max(0.0f, 0.3f * tone));
-         c.setColor(visage::Brush::radial(core.withAlpha(0.22f + 0.12f * energy + 0.06f * tone),
-                                          core.withAlpha(0.0f), visage::Point(bx, by), halo));
+         c.setColor(ui::steadyGlow(core.withAlpha(0.22f + 0.12f * energy + 0.06f * tone), visage::Point(bx, by), halo));
          c.circle(bx - halo, by - halo, 2 * halo);
          visage::Color body = core;
          body.setHdr(1.5f + 0.5f * energy + 0.25f * tone);
-         c.setColor(body);
+         c.setColor(ui::steady(body));
          c.circle(bx - r, by - r, 2 * r);
          c.setColor(glow(0xffffffff, 1.0f, 1.8f + 0.5f * energy + 0.15f * tone));
          c.circle(bx - 0.4f * r, by - 0.4f * r, 0.8f * r);
@@ -1186,6 +1188,22 @@ private:
    bool hover_ = false;
 };
 
+// The bodies partway from `a` to `b` (0..1), and everything else as `b` has it.
+OrbitFrame between(const OrbitFrame &a, const OrbitFrame &b, float t) {
+   OrbitFrame f = b;
+   // A restart or a body coming or going moves them all to new places (a removed body's successors
+   // move down a place): no in-between.
+   if (a.resets != b.resets || a.count != b.count)
+      return f;
+   for (int i = 0; i < b.count; ++i) {
+      f.x[i] = a.x[i] + (b.x[i] - a.x[i]) * t;
+      f.y[i] = a.y[i] + (b.y[i] - a.y[i]) * t;
+      f.vx[i] = a.vx[i] + (b.vx[i] - a.vx[i]) * t;
+      f.vy[i] = a.vy[i] + (b.vy[i] - a.vy[i]) * t;
+   }
+   return f;
+}
+
 class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
@@ -1199,15 +1217,18 @@ public:
       buildBodies();
       buildOutput();
       layoutBodies(currentBodies());
-      last_ = std::chrono::steady_clock::now();
-      startTimer(16);
+      // Checked at every screen refresh; the pacer picks the ones that step (see frame_pacer.h).
+      startTimer(1);
    }
 
    // One animation frame; the timer calls it with the real time since the last one.
    void step(float dt) {
       OrbitFrame f;
       if (host_.readFrame(f))
-         frame_ = f;
+         frames_.push(f, f.time);
+      frames_.advance(dt);
+      if (!frames_.empty())
+         frame_ = between(frames_.older(), frames_.newer(), frames_.mix());
       view_->systemSize = static_cast<float>(host_.paramValue(kSize));
       view_->advance(frame_, dt);
       const int count = currentBodies();
@@ -1224,10 +1245,8 @@ public:
    }
 
    void timerCallback() override {
-      const auto now = std::chrono::steady_clock::now();
-      const float dt = std::chrono::duration<float>(now - last_).count();
-      last_ = now;
-      step(std::clamp(dt, 0.0f, 0.05f));
+      if (const float dt = pacer_.tick())
+         step(std::min(dt, 0.05f));
    }
 
    OrbitView &view() { return *view_; }
@@ -1546,9 +1565,11 @@ private:
    ui::TabBar *spaceTabs_ = nullptr;
    VoiceList *voices_ = nullptr;
    ui::Meter *meters_[2] = {};
+   // The frames the audio thread publishes, played back evenly, and the one shown now.
+   ui::FrameSmoother<OrbitFrame> frames_;
    OrbitFrame frame_;
    int laidOut_ = 0;
-   std::chrono::steady_clock::time_point last_;
+   ui::FramePacer pacer_;
 };
 
 } // namespace

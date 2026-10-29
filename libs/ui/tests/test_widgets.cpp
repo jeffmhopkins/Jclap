@@ -14,6 +14,9 @@
 #include <jclap/ui/button.h>
 #include <jclap/ui/dropdown.h>
 #include <jclap/ui/envelope.h>
+#include <jclap/ui/frame_pacer.h>
+#include <jclap/ui/frame_smoother.h>
+#include <jclap/ui/paint.h>
 #include <jclap/ui/theme.h>
 #include <jclap/ui/tooltip.h>
 #include <jclap/ui/update_notice.h>
@@ -577,6 +580,72 @@ void presetFavoritesShared() {
    JCLAP_CHECK(ui::PresetFavorites::fileFor("JclapTest") == ui::userFolder("JclapTest") / "Favorites.txt");
    std::filesystem::remove_all(dir);
 }
+
+// Steps on a refresh: every one at 60 Hz, every other at 120 and 144 Hz, even when they come a
+// millisecond or two early or late (a 16 ms timer missed those and stalled a frame).
+void framePacing() {
+   const auto stepsAt = [](double hz) {
+      ui::FramePacer pacer;
+      int steps = 0;
+      double gaps = 0.0, worst = 0.0, last = 0.0;
+      for (int i = 0; i < 600; ++i) {
+         const double now = i / hz + ((i * 7919) % 5 - 2) * 0.0005; // +-1 ms of jitter
+         if (pacer.tick(now) > 0.0f) {
+            if (steps > 30) {
+               gaps += now - last;
+               worst = std::max(worst, now - last);
+            }
+            last = now;
+            ++steps;
+         }
+      }
+      return std::make_pair(steps * hz / 600.0, worst);
+   };
+   const auto at60 = stepsAt(60.0), at120 = stepsAt(120.0), at144 = stepsAt(144.0);
+   JCLAP_CHECK(std::fabs(at60.first - 60.0) < 0.5 && at60.second < 0.02);
+   JCLAP_CHECK(std::fabs(at120.first - 60.0) < 0.5 && at120.second < 0.02);
+   JCLAP_CHECK(std::fabs(at144.first - 72.0) < 0.5 && at144.second < 0.016);
+}
+
+// Frames that come in bursts (two blocks at once, then a wait) play back at an even pace.
+void frameSmoothing() {
+   ui::FrameSmoother<double> frames;
+   const double block = 1024.0 / 48000.0;
+   double audio = 0.0, last = 0.0, worst = 0.0;
+   int pushed = 0;
+   for (int i = 1; i <= 600; ++i) {
+      const double now = i / 60.0;
+      // The host runs two blocks back to back whenever it has fallen behind.
+      while (audio + block <= now - 0.01) {
+         audio += block;
+         if (++pushed % 2 == 0 || audio + block > now - 0.01)
+            frames.push(audio, audio);
+      }
+      frames.advance(1.0f / 60.0f);
+      const double shown = frames.older() + (frames.newer() - frames.older()) * frames.mix();
+      if (i > 120)
+         worst = std::max(worst, std::fabs(shown - last - 1.0 / 60.0));
+      last = shown;
+   }
+   // Every refresh moves on about a refresh's worth: within 1.5 ms of 16.7 ms.
+   JCLAP_CHECK(worst < 0.0015);
+
+   // Frames whose times don't move show the newest.
+   ui::FrameSmoother<int> still;
+   still.push(1, 0.0);
+   still.push(2, 0.0);
+   still.advance(0.1f);
+   JCLAP_CHECK(still.newer() == 2 && still.mix() == 1.0f);
+}
+
+// steady() keeps colours on a grid: nearby ones are the same, and it stays close.
+void steadyColours() {
+   const visage::Color a = ui::steady(visage::Color(0.1001f, 0.5f, 0.25f, 0.75f, 1.3f));
+   const visage::Color b = ui::steady(visage::Color(0.1003f, 0.5004f, 0.2504f, 0.7496f, 1.302f));
+   JCLAP_CHECK(visage::Color::compare(a, b) == 0);
+   JCLAP_CHECK(std::fabs(a.alpha() - 0.1f) < 0.01f && std::fabs(a.red() - 0.5f) < 0.011f);
+   JCLAP_CHECK(ui::steady(visage::Color(0.0f, 0.0f, 0.0f, 0.0f)).alpha() == 0.0f);
+}
 } // namespace
 
 int main() {
@@ -597,5 +666,8 @@ int main() {
    presetFilesRoundTrip();
    updateChecks();
    presetFavoritesShared();
+   framePacing();
+   frameSmoothing();
+   steadyColours();
    return jclap::core::testResult();
 }

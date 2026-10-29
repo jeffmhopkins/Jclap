@@ -921,7 +921,13 @@ with denormals off. With no main port, it renders into scratch so time and the f
 about 120 times a second through a triple buffer: every live creature's place, velocity, energy,
 press, wingbeat, lure, sources, its strongest neighbour and its hunter; each part's newest note's
 envelope and LFO levels (for the chips' lights); and where every sounding voice is on its envelopes
-(for the dots riding the curves). The panel keeps its ink, trails and stars to itself. Notes played
+(for the dots riding the curves); and how many seconds of audio had been processed when it was taken.
+The frames come when the host runs its blocks, which is in bursts, so the panel plays them back
+through a `jclap::ui::FrameSmoother`: a clock of its own, about a block behind the newest frame, at
+which each creature is drawn partway between the two frames either side. The panel steps on screen
+refreshes picked by a `jclap::ui::FramePacer` (60 a second, or 72 at 144 Hz), and draws its fading
+colours through `jclap::ui::steady()` so Visage can reuse them rather than upload new ones every
+frame (see `libs/ui/README.md`). The panel keeps its ink, trails and stars to itself. Notes played
 on the sky go to the audio thread through a lock-free queue; while the host isn't processing, the
 panel flies its own copy of the same flock so the sky still moves.
 
