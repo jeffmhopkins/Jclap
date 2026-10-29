@@ -149,7 +149,9 @@ def decode(u):
 
 def check(calib_dir):
     """Decodes the calibration reads and compares them with the CCs that were sent."""
-    # mb_calibrate.py needs mido to send; only its patterns are needed here.
+    # mb_calibrate.py needs mido to send; only its patterns are needed here. No .pyc in the source
+    # tree (ctest runs this).
+    sys.dont_write_bytecode = True
     sys.modules.setdefault("mido", types.ModuleType("mido"))
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import mb_calibrate
