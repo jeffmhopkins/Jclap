@@ -3,12 +3,16 @@
 
 # Visage has no releases yet, so it is pinned to a commit. patches/visage.patch carries our fixes to
 # it (each marked "jclap:"): a press mid-drag keeps the drag, Linux follows only CLAP's set_size and
-# set_scale and takes the desktop's scale rather than the monitor's physical DPI, and Windows
-# leaves the host's window alone.
+# set_scale and takes the desktop's scale rather than the monitor's physical DPI, Windows
+# leaves the host's window alone, and a popup menu closes on a click outside it (the box that
+# opened it included) or Escape. The patch's hash is in the command so a cached checkout is
+# re-patched when the patch changes.
+file(SHA256 ${CMAKE_CURRENT_SOURCE_DIR}/patches/visage.patch _visage_patch_hash)
 FetchContent_Declare(visage
    GIT_REPOSITORY https://github.com/VitalAudio/visage.git
    GIT_TAG 7654e32a84f95aacf9d15390272a47d2952d9565
    PATCH_COMMAND ${CMAKE_COMMAND} -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/visage.patch
+                 -DPATCH_HASH=${_visage_patch_hash}
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/ApplyPatch.cmake)
 FetchContent_MakeAvailable(visage)
 
