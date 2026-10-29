@@ -17,8 +17,8 @@
 namespace jclap::ui {
 
 inline visage::Color steady(const visage::Color &c) {
-   // Steps of 1/48 per colour channel, 1/256 for alpha (an 8-bit display's own step) and 1/16 for
-   // the HDR boost.
+   // Steps of 1/48 per colour channel and 1/16 for the HDR boost. Alpha is stepped on its square root
+   // (48 steps), so faint glows, where a step shows most, get the finest ones.
    const auto round = [](float v, float steps) { return std::round(v * steps) / steps; };
    const float a = round(std::sqrt(std::max(c.alpha(), 0.0f)), 48.0f);
    return {a * a, round(c.red(), 48.0f), round(c.green(), 48.0f), round(c.blue(), 48.0f),
