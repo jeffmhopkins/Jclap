@@ -39,6 +39,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -51,6 +52,7 @@
 #include "flock.h"
 #include "params.h"
 #include "presets.h"
+#include "randomize.h"
 
 namespace jsynth {
 
@@ -175,6 +177,18 @@ const ui::Theme &glassTheme() {
       t.buttonHover = 0x60283040;
       t.panel = 0x80141a26;
       t.panelBorder = 0x40ffffff;
+      return t;
+   }();
+   return theme;
+}
+
+// The same, for a button with nothing to do: its text and border faded.
+const ui::Theme &idleGlassTheme() {
+   static const ui::Theme theme = [] {
+      ui::Theme t = glassTheme();
+      t.text = 0x55e6e8eb;
+      t.panelBorder = 0x1effffff;
+      t.buttonHover = t.button;
       return t;
    }();
    return theme;
@@ -2593,7 +2607,9 @@ public:
       group_ = kSynth;
       buildShared();
       buildRouteControls();
+      buildDice();
       showRoutes(host_.routesOpen);
+      showDice(host_.diceOpen);
       showPart(host_.part);
       setView(host_.view);
       setLook(host_.skyLook);
@@ -2740,9 +2756,20 @@ public:
       partSwitch_->setAccent(kPartColors[host_.part]);
       refresh();
    }
+   // The route list and the dice card both sit over the sky, so opening one closes the other.
    void showRoutes(bool open) {
       host_.routesOpen = open;
       routesButton_->setOn(open);
+      if (open && host_.diceOpen)
+         showDice(false);
+      refresh();
+   }
+   void showDice(bool open) {
+      host_.diceOpen = open;
+      diceButton_->setOn(open);
+      if (open && host_.routesOpen)
+         showRoutes(false);
+      refreshDice();
       refresh();
    }
    // Switches the view: the synth's panels beside the sky, or the sky alone filling the window. The
@@ -2800,7 +2827,7 @@ public:
       // The preset bar stays in SKY, centred along the top, the update notice beside it.
       const float px = host_.view == kSynthView ? 416 : (kDesignWidth - 250) / 2;
       move(*presetBar_, {px, 13, 250, 26});
-      move(*update_, host_.view == kSynthView ? ui::Rect{146, 13, 220, 26} : ui::Rect{px + 260, 13, 220, 26});
+      move(*update_, host_.view == kSynthView ? ui::Rect{146, 13, 188, 26} : ui::Rect{px + 260, 13, 220, 26});
       idle_ = 0.0f;
       if (host_.view == kSkyOnly && mapping_)
          setMapping(false, kSourceOff);
@@ -2915,7 +2942,8 @@ private:
       kFlockPage,
       kMotionPage,
       kTouchPage,
-      kRoutes
+      kRoutes,
+      kDice
    };
    struct Placed {
       visage::Frame *frame;
@@ -3055,6 +3083,7 @@ private:
       case kMotionPage: return voiceTab_ == 2;
       case kTouchPage: return voiceTab_ == 3;
       case kRoutes: return host_.routesOpen;
+      case kDice: return host_.diceOpen;
       default: return true;
       }
    }
@@ -3222,9 +3251,15 @@ private:
    }
 
    void buildHeader() {
-      update_ = &glassy(add<ui::UpdateNotice>({146, 13, 220, 26}), kPartColors[0]);
+      update_ = &glassy(add<ui::UpdateNotice>({146, 13, 188, 26}), kPartColors[0]);
       // Not put(): it stays in SKY too (setView places it).
       presetBar_ = &add<PresetBar>({416, 13, 250, 26}, host_);
+      auto &dice = glassy(put<ui::Button>({344, 13, 62, 26}, "DICE"), kPartColors[0]);
+      dice.setToggle(true);
+      dice.onToggle = [this](bool on) { showDice(on); };
+      diceButton_ = &dice;
+      tips_.add(dice, "RANDOMIZE a new patch for this part, or MUTATE the one it has. UNDO steps back through "
+                      "what they replaced.");
       auto &parts = glassy(put<ui::SegmentedSwitch>({676, 13, 146, 26}, std::vector<std::string>{"PART A", "PART B"}),
                            kPartColors[0]);
       parts.onChange = [this](int p) { showPart(p); };
@@ -3630,6 +3665,130 @@ private:
 
    // The panels shared by both parts: the tabs, the drawings (which follow the shown part), the
    // flock's sources under the sky, and the touch settings.
+   // The dice card, over the sky's top right: RANDOMIZE by COMPLEXITY, MUTATE by AMOUNT, UNDO and
+   // REDO, and a lock for each section both leave alone. It works on the part shown.
+   void buildDice() {
+      const ui::Rect b = kDiceBox;
+      group_ = kDice;
+      for (int part = 0; part < kPartCount; ++part) {
+         part_ = part;
+         glass(b, part == 0 ? "DICE  PART A" : "DICE  PART B", kPartColors[part]);
+         // Its buttons in the part's colour too.
+         auto &rnd = glassy(put<ui::Button>({b.x + 14, b.y + 36, 124, 26}, "RANDOMIZE"), kPartColors[part]);
+         rnd.onClick = [this] { roll(false); };
+         tips_.add(rnd, "A new patch for this part from scratch, from an instrument up: oscillators, filter, "
+                        "envelopes, LFOs, routes and flock, at sane levels. Locked sections stay as they are.");
+         auto &mut = glassy(put<ui::Button>({b.x + 14, b.y + 70, 124, 26}, "MUTATE"), kPartColors[part]);
+         mut.onClick = [this] { roll(true); };
+         tips_.add(mut, "Nudges every value of this part by AMOUNT. What's off stays off and a choice only moves to "
+                        "a near one, so the patch stays itself. Click again to keep going.");
+      }
+      part_ = -1;
+      const auto percent = [](double v) { return std::to_string(static_cast<int>(std::lround(v * 100.0))) + "%"; };
+      const auto amountBox = [&](float y, const char *name, double &value, const char *tip) {
+         auto &box = glassy(put<ui::NumberBox>({b.x + 146, y, b.w - 160, 26}, ui::ValueRange{0.0, 1.0, 0.5, 0.05}), kDim);
+         box.setLabel(name);
+         box.valueText = percent;
+         box.parseText = [](const std::string &t, double &v) {
+            char *end = nullptr;
+            const double n = std::strtod(t.c_str(), &end);
+            if (end == t.c_str())
+               return false;
+            v = std::clamp(n / 100.0, 0.0, 1.0);
+            return true;
+         };
+         box.setValue(value);
+         box.onChange = [&value](double v) { value = v; };
+         tips_.add(box, tip);
+      };
+      amountBox(b.y + 36, "COMPLEXITY", host_.dice.complexity,
+                "How much RANDOMIZE reaches for: at 0 one or two oscillators, one filter and a route or two; at "
+                "100% stacked oscillators and FM, two filters, Shape envelopes, buses and the flock's couplings.");
+      amountBox(b.y + 70, "AMOUNT", host_.dice.amount,
+                "How far MUTATE moves each value: 5% is a touch, 25% a cousin of the patch, 100% a distant one.");
+      auto &undo = glassy(put<ui::Button>({b.x + b.w - 120, b.y + 8, 52, 20}, "UNDO"), kDim);
+      undo.onClick = [this] { stepHistory(false); };
+      undoButton_ = &undo;
+      tips_.add(undo, "Back to the patch before the last RANDOMIZE or MUTATE.");
+      auto &redo = glassy(put<ui::Button>({b.x + b.w - 64, b.y + 8, 52, 20}, "REDO"), kDim);
+      redo.onClick = [this] { stepHistory(true); };
+      redoButton_ = &redo;
+      tips_.add(redo, "Forward again to the patch UNDO left.");
+      label({b.x + 14, b.y + 108, 200, 16}, "LOCK", kDim, visage::Font::kLeft);
+      static const char *const lockTips[kDiceSectionCount] = {
+          "the oscillators and the mixer", "the FM grid", "both filters, their routing and the drive",
+          "the three envelopes and how they chain", "the wingbeat, the wind and LFO 1 and 2", "the routes and the mod buses",
+          "how the species flies, and the couplings between creatures", "level, pan, voice mode, glide, drift and velocity"};
+      const auto cells = ui::row({b.x + 14, b.y + 128, b.w - 28, 22}, 4, 6);
+      const auto cells2 = ui::row({b.x + 14, b.y + 156, b.w - 28, 22}, 4, 6);
+      for (int s = 0; s < kDiceSectionCount; ++s) {
+         auto &lock = glassy(put<ui::Button>(s < 4 ? cells[s] : cells2[s - 4], kDiceSectionNames[s]), kDim);
+         lock.setToggle(true);
+         lock.setOn(host_.dice.locked(s));
+         lock.onToggle = [this, s](bool on) {
+            host_.dice.locks = on ? host_.dice.locks | (1u << s) : host_.dice.locks & ~(1u << s);
+         };
+         tips_.add(lock, std::string("Locked, RANDOMIZE and MUTATE leave ") + lockTips[s] + " as they are.");
+      }
+      group_ = kSynth;
+   }
+   // Every param, with the preset's name and the bus names, as the dice found them.
+   DiceSnapshot snapshot() const {
+      DiceSnapshot now;
+      now.values.resize(paramCount());
+      for (size_t i = 0; i < paramCount(); ++i)
+         now.values[i] = host_.paramValue(kParams()[i].def.id);
+      now.name = host_.presetName();
+      now.buses = host_.busNames();
+      return now;
+   }
+   void restore(const DiceSnapshot &s) {
+      host_.setParams(s.values.data());
+      host_.setPresetName(s.name);
+      host_.setBusNames(s.buses);
+      syncControls();
+      presetBar_->redraw();
+   }
+   // Randomize or mutate the part shown, keeping what it was to go back to.
+   void roll(bool mutate) {
+      DiceSnapshot now = snapshot();
+      std::vector<double> values = now.values;
+      BusNames buses = now.buses;
+      // Each roll is new: the clock and a count, mixed by the dice's own generator.
+      const uint64_t seed = DiceRng(static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()) +
+                                    ++diceSeed_).next();
+      std::string name;
+      if (mutate) {
+         mutatePart(values, host_.part, host_.dice, seed);
+         name = mutantName(now.name);
+      }
+      else {
+         name = randomizePart(values, host_.part, host_.dice, seed);
+         // Its routes are new, so the part's bus names go with the old ones.
+         if (!host_.dice.locked(kDiceRoutes))
+            buses[host_.part] = {};
+      }
+      host_.diceHistory.push(std::move(now));
+      restore({values, name, buses});
+      refreshDice();
+   }
+   void stepHistory(bool forward) {
+      DiceHistory &h = host_.diceHistory;
+      if (forward ? !h.canRedo() : !h.canUndo())
+         return;
+      restore(forward ? h.redo(snapshot()) : h.undo(snapshot()));
+      refreshDice();
+   }
+   // UNDO and REDO dim when there's nothing to step to.
+   void refreshDice() {
+      const auto dim = [](ui::Button *b, bool on) {
+         if (b)
+            b->setTheme(on ? glassTheme() : idleGlassTheme());
+      };
+      dim(undoButton_, host_.diceHistory.canUndo());
+      dim(redoButton_, host_.diceHistory.canRedo());
+   }
+
    void buildShared() {
       auto &tabs = *(oscTabs_ = &glassy(put<ui::TabBar>({26, 68, 260, 26}, std::vector<std::string>{"OSCILLATORS", "FM"}), kDim));
       tabs.select(oscTab_);
@@ -3815,6 +3974,7 @@ private:
    static constexpr ui::Rect kVoiceBox{kSkyX, 650, kSkyW, 274};
    // The route list, over the sky.
    static constexpr ui::Rect kRoutesBox{kSkyX + 12, 80, kSkyW - 24, 494};
+   static constexpr ui::Rect kDiceBox{kSkyX + kSkyW - 302, kSkyY + 10, 292, 192};
    // The voice panel's knobs, one row along its bottom.
    static std::vector<ui::Rect> kVoiceKnobs() { return ui::row({kVoiceBox.x + 8, kVoiceBox.y + 172, kVoiceBox.w - 16, 100}, 9); }
    static constexpr float kCleanMargin = 16.0f;
@@ -3857,6 +4017,8 @@ private:
    ui::Dropdown *paletteMenu_ = nullptr;
    ui::NumberBox *sizeBox_ = nullptr;
    PresetBar *presetBar_ = nullptr;
+   ui::Button *diceButton_ = nullptr, *undoButton_ = nullptr, *redoButton_ = nullptr;
+   uint64_t diceSeed_ = 0;
    // The controls that stay in SKY, and fade there while the mouse rests: whether it is over each,
    // how long since it last moved, and how much they show.
    std::vector<visage::Frame *> skyControls_;
@@ -3892,6 +4054,7 @@ bool renderScreenshot(EditorHost &host, const ScreenshotView &view, double secon
    panel.stopTimer();
    panel.showPart(view.part);
    panel.showRoutes(view.routes);
+   panel.showDice(view.dice);
    panel.setMapping(view.mapSource != 0, view.mapSource);
    panel.setView(view.view);
    panel.showVoiceTab(view.voiceTab);
@@ -3910,6 +4073,7 @@ bool renderFrames(EditorHost &host, const ScreenshotView &view, int width, int h
    panel.stopTimer();
    panel.showPart(view.part);
    panel.showRoutes(view.routes);
+   panel.showDice(view.dice);
    panel.setMapping(view.mapSource != 0, view.mapSource);
    panel.setView(view.view);
    visage::ApplicationEditor editor;
