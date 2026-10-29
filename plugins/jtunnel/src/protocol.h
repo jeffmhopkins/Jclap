@@ -8,7 +8,11 @@
 //    header   magic "JTUN" (4), version (1), type (1)
 //    audio    stream id (4), seq (4), sample rate (4), codec (1: Opus, PCM or none), channels (1), frame samples (2),
 //             frame count (1), then per frame (frame i is seq - i):
-//             midi count (1), midi count x [offset (2), status, data1, data2], audio bytes (2), audio
+//             midi count (1), midi count x [offset (2), event], audio bytes (2), audio
+//    event    a MIDI message: its status byte and its data bytes (one to three bytes in all, by status)
+//             a SysEx piece: tag 1, flags (1: first, 2: last), index (1), size (1), that many bytes
+//             a note expression: tag 2, expression id (1), channel (1), key (1), value (8, a double),
+//             with 255 for a channel or key of -1
 //    subscribe  name length (1), name (no terminator)
 //    bye      nothing
 #pragma once
@@ -22,7 +26,7 @@ enum class PacketType : uint8_t { Audio = 1, Subscribe = 2, Bye = 3 };
 // None carries no audio: MIDI only, in short frames at the sender's rate, so it arrives sooner.
 enum class Codec : uint8_t { Opus = 0, Pcm24 = 1, None = 2 };
 
-constexpr uint8_t kProtocolVersion = 1;
+constexpr uint8_t kProtocolVersion = 2;
 constexpr int kChannels = 2;
 // 5 ms at 48 kHz: short enough for low latency, long enough that Opus codes it well.
 constexpr int kOpusFrameSamples = 240;
@@ -34,15 +38,34 @@ constexpr int kMaxFrameSamples = 240;
 constexpr int kMidiFrameMs = 1;
 constexpr int kMaxFrameBytes = kPcmFrameSamples * kChannels * 3;
 constexpr int kMaxMidiPerFrame = 24;
+// What a frame's events may take, so that two frames of the largest audio still fit one packet.
+constexpr int kMaxMidiBytesPerFrame = 145;
 constexpr int kMaxFramesPerPacket = 2;
 // Under the 1472 bytes of UDP payload a 1500-byte MTU leaves, so packets are never fragmented.
 constexpr size_t kMaxPacketBytes = 1472;
 constexpr size_t kMaxTunnelName = 31;
 
+// An event as it goes on the wire (see above): a MIDI message, a piece of a SysEx message, or a
+// note expression. A SysEx message goes in pieces, numbered from 0 so a receiver can tell when one
+// went missing.
+constexpr uint8_t kTagSysex = 1, kTagExpression = 2;
+constexpr uint8_t kSysexFirst = 1, kSysexLast = 2;
+constexpr int kMaxEventBytes = 64;
+constexpr int kSysexPieceBytes = kMaxEventBytes - 4;
+// The longest SysEx message carried (256 pieces); longer ones are dropped whole.
+constexpr int kMaxSysexBytes = 256 * kSysexPieceBytes;
+constexpr int kExpressionBytes = 12;
+
 struct MidiEvent {
    uint16_t offset; // samples into the frame
-   uint8_t data[3];
+   uint8_t size;    // of data
+   uint8_t data[kMaxEventBytes];
 };
+
+// The length of a MIDI message from its status byte (0 for SysEx's F0 and F7, which have none).
+int midiMessageSize(uint8_t status);
+// The length of the event at `data`, or 0 if it isn't a well-formed one in `available` bytes.
+int eventSize(const uint8_t *data, size_t available);
 
 struct Frame {
    uint32_t seq = 0;

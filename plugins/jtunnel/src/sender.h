@@ -18,9 +18,11 @@ public:
    virtual void send(const uint8_t *data, size_t size) = 0;
 };
 
+// An event in the wire's form (see protocol.h), at a sample offset in the block.
 struct TimedMidi {
-   uint32_t time; // sample offset in the block
-   uint8_t data[3];
+   uint32_t time;
+   uint8_t size;
+   uint8_t data[kMaxEventBytes];
 };
 
 class Sender {
@@ -47,10 +49,12 @@ private:
    void emitFrame(PacketSink &sink);
    uint32_t nextRandom();
 
-   static constexpr int kMaxPending = 64;
+   // Room for the longest SysEx message and then some.
+   static constexpr int kMaxPending = 512;
    struct PendingMidi {
       uint64_t pos; // stream sample
-      uint8_t data[3];
+      uint8_t size;
+      uint8_t data[kMaxEventBytes];
    };
 
    double hostRate_ = 48000.0;

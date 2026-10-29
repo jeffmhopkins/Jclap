@@ -21,6 +21,11 @@ enum ParamId : clap_id {
    kParamThru,
    kParamLevel,
    kParamCarry,
+   // Which kinds of non-note MIDI go through (MIDI FILTER on the panel).
+   kParamSysex,
+   kParamClock,
+   kParamTransport,
+   kParamSystem,
    kParamCount
 };
 
@@ -47,7 +52,27 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Thru", 0, 1, 1, true},
    {"Level", -60, 12, 0, false},
    {"Carry", 0, 2, kCarryBoth, true},
+   {"SysEx", 0, 1, 1, true},
+   {"Clock", 0, 1, 1, true},
+   {"Transport", 0, 1, 1, true},
+   {"System Messages", 0, 1, 1, true},
 };
+
+// The MIDI filter: what kind of non-note MIDI an event in the wire's form is (see protocol.h), as
+// the param that lets it through, or kParamCount for what always goes (notes, channel messages,
+// note expressions).
+inline clap_id midiFilterParam(const uint8_t *event) {
+   const uint8_t status = event[0];
+   if (status == 1) // a SysEx piece
+      return kParamSysex;
+   if (status == 0xF8 || status == 0xF1) // clock and MIDI time code
+      return kParamClock;
+   if (status == 0xFA || status == 0xFB || status == 0xFC || status == 0xF2 || status == 0xF3)
+      return kParamTransport; // start, continue, stop, song position, song select
+   if (status >= 0xF0)
+      return kParamSystem; // tune request, active sensing, reset
+   return kParamCount;
+}
 
 inline const char *const kModeLabels[] = {"Send", "Receive"};
 inline const char *const kCodecLabels[] = {"Opus", "PCM 24-bit"};
@@ -65,6 +90,10 @@ inline const char *const *choiceLabels(clap_id id) {
    case kParamRedundancy:
    case kParamAutoBuffer:
    case kParamThru:
+   case kParamSysex:
+   case kParamClock:
+   case kParamTransport:
+   case kParamSystem:
       return kOnOffLabels;
    default:
       return nullptr;

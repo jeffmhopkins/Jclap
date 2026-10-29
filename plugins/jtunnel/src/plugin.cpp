@@ -403,6 +403,8 @@ public:
       }
       const bool thru = params_[kParamThru].load() >= 0.5;
       const int carry = intParam(kParamCarry);
+      // A sender sends only what the MIDI filter lets through; a receiver plays only that.
+      midiInCount_ = filterMidi(midiIn_, midiInCount_);
 
       if (m == kModeSend) {
          if (link_.listeners.load(std::memory_order_relaxed) > 0) {
@@ -421,8 +423,7 @@ public:
          }
          else
             sending_ = false;
-         if (midiInCount_ > 0)
-            noteMidi(midiIn_[midiInCount_ - 1].data, midiInCount_);
+         noteMidi(midiIn_, midiInCount_);
          for (uint32_t i = 0; i < frames; ++i) {
             const float l = inL[i], r = inR[i];
             outL[i] = thru ? l : 0.0f;
@@ -440,8 +441,8 @@ public:
             link_.ring, outL, outR, frames, midiOut_, kMaxMidi,
             std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch())
                .count());
-         if (received > 0)
-            noteMidi(midiOut_[received - 1].data, received);
+         received = filterMidi(midiOut_, received);
+         noteMidi(midiOut_, received);
          if (!carriesMidi(carry))
             received = 0;
          const double levelDb = params_[kParamLevel].load();
@@ -479,12 +480,45 @@ private:
       return p;
    }
 
-   // For the panel's MIDI light: how many events went through, and the last of them.
-   void noteMidi(const uint8_t *last, int count) {
-      midiEvents_.fetch_add(static_cast<uint32_t>(count), std::memory_order_relaxed);
-      lastMidi_.store(static_cast<uint32_t>(last[0]) | static_cast<uint32_t>(last[1]) << 8 |
-                         static_cast<uint32_t>(last[2]) << 16,
-                      std::memory_order_relaxed);
+   // Keeps the events the MIDI filter lets through, in order. Returns how many.
+   template <typename Event> int filterMidi(Event *events, int count) const {
+      int kept = 0;
+      for (int i = 0; i < count; ++i) {
+         const clap_id filter = midiFilterParam(events[i].data);
+         if (filter == kParamCount || params_[filter].load() >= 0.5)
+            events[kept++] = events[i];
+      }
+      return kept;
+   }
+
+   // For the panel's MIDI light: how many messages went through (a SysEx message once, not each
+   // piece), and the last of them, passing over clock and the other real-time messages while there
+   // is anything else.
+   template <typename Event> void noteMidi(const Event *events, int count) {
+      uint32_t messages = 0;
+      const Event *last = nullptr;
+      for (int i = 0; i < count; ++i) {
+         const uint8_t *d = events[i].data;
+         if (d[0] == kTagSysex && !(d[1] & kSysexFirst))
+            continue;
+         ++messages;
+         if (!last || d[0] < 0xF8 || last->data[0] >= 0xF8)
+            last = &events[i];
+      }
+      if (!last)
+         return;
+      midiEvents_.fetch_add(messages, std::memory_order_relaxed);
+      lastMidi_.store(packMidi(last->data, last->size), std::memory_order_relaxed);
+   }
+
+   // An event in four bytes for the panel (see midiText).
+   uint32_t packMidi(const uint8_t *d, int size) {
+      if (d[0] == kTagSysex)
+         return 0xF0;
+      uint32_t packed = 0;
+      for (int i = 0; i < std::min(size, 4); ++i)
+         packed |= static_cast<uint32_t>(d[i]) << (8 * i);
+      return packed;
    }
 
    void applyParam(const clap_event_param_value_t *ev) {
@@ -492,41 +526,111 @@ private:
          params_[ev->param_id].store(std::clamp(ev->value, kParams[ev->param_id].min, kParams[ev->param_id].max));
    }
 
-   // Notes go on the wire as MIDI (pushMerged passes the originals through).
+   // Everything a note port brings goes on the wire: notes (as MIDI), MIDI messages of every kind,
+   // SysEx (in pieces) and note expressions. pushMerged passes the originals through.
    void collectNote(const clap_event_header_t *h) {
-      if (!jclap::core::isNoteEvent(h))
+      if (!jclap::core::isNoteEvent(h) || midiInCount_ >= kMaxMidi)
          return;
-      TimedMidi m{h->time, {0, 0, 0}};
-      bool wire = true;
+      TimedMidi &m = midiIn_[midiInCount_];
+      m.time = h->time;
+      m.size = 0;
       switch (h->type) {
       case CLAP_EVENT_NOTE_ON:
       case CLAP_EVENT_NOTE_OFF:
       case CLAP_EVENT_NOTE_CHOKE: {
          const auto *note = reinterpret_cast<const clap_event_note_t *>(h);
-         if (note->key < 0 || note->key > 127) {
-            wire = false;
+         if (note->key < 0 || note->key > 127)
             break;
-         }
          const int channel = note->channel >= 0 && note->channel < 16 ? note->channel : 0;
          const bool on = h->type == CLAP_EVENT_NOTE_ON;
          const int velocity = static_cast<int>(std::lround(std::clamp(note->velocity, 0.0, 1.0) * 127.0));
          m.data[0] = static_cast<uint8_t>((on ? 0x90 : 0x80) | channel);
          m.data[1] = static_cast<uint8_t>(note->key);
          m.data[2] = static_cast<uint8_t>(on ? std::max(1, velocity) : velocity);
+         m.size = 3;
+         break;
+      }
+      case CLAP_EVENT_NOTE_EXPRESSION: {
+         const auto *ev = reinterpret_cast<const clap_event_note_expression_t *>(h);
+         if (ev->expression_id < 0 || ev->expression_id > CLAP_NOTE_EXPRESSION_PRESSURE || !std::isfinite(ev->value))
+            break;
+         m.data[0] = kTagExpression;
+         m.data[1] = static_cast<uint8_t>(ev->expression_id);
+         m.data[2] = ev->channel >= 0 && ev->channel < 16 ? static_cast<uint8_t>(ev->channel) : 255;
+         m.data[3] = ev->key >= 0 && ev->key < 128 ? static_cast<uint8_t>(ev->key) : 255;
+         uint64_t bits;
+         std::memcpy(&bits, &ev->value, 8);
+         for (int i = 0; i < 8; ++i)
+            m.data[4 + i] = static_cast<uint8_t>(bits >> (8 * i));
+         m.size = kExpressionBytes;
          break;
       }
       case CLAP_EVENT_MIDI: {
          const auto *midi = reinterpret_cast<const clap_event_midi_t *>(h);
+         const int size = midiMessageSize(midi->data[0]);
          std::memcpy(m.data, midi->data, 3);
-         // Only channel messages make sense on the far side.
-         wire = midi->data[0] >= 0x80 && midi->data[0] < 0xF0;
+         if (size > 0 && eventSize(m.data, static_cast<size_t>(size)) == size)
+            m.size = static_cast<uint8_t>(size);
          break;
       }
+      case CLAP_EVENT_MIDI_SYSEX:
+         collectSysex(reinterpret_cast<const clap_event_midi_sysex_t *>(h));
+         return;
       default:
-         wire = false;
+         break;
       }
-      if (wire && midiInCount_ < kMaxMidi)
-         midiIn_[midiInCount_++] = m;
+      if (m.size > 0)
+         ++midiInCount_;
+   }
+
+   // A SysEx message goes in pieces, all or none of it.
+   void collectSysex(const clap_event_midi_sysex_t *ev) {
+      if (!ev->buffer || ev->size == 0 || ev->size > static_cast<uint32_t>(kMaxSysexBytes))
+         return;
+      const int pieces = static_cast<int>((ev->size + kSysexPieceBytes - 1) / kSysexPieceBytes);
+      if (midiInCount_ + pieces > kMaxMidi)
+         return;
+      for (int i = 0; i < pieces; ++i) {
+         const uint32_t at = static_cast<uint32_t>(i) * kSysexPieceBytes;
+         const uint32_t n = std::min<uint32_t>(ev->size - at, kSysexPieceBytes);
+         TimedMidi &m = midiIn_[midiInCount_++];
+         m.time = ev->header.time;
+         m.data[0] = kTagSysex;
+         m.data[1] = static_cast<uint8_t>((i == 0 ? kSysexFirst : 0) | (i == pieces - 1 ? kSysexLast : 0));
+         m.data[2] = static_cast<uint8_t>(i);
+         m.data[3] = static_cast<uint8_t>(n);
+         std::memcpy(m.data + 4, ev->buffer + at, n);
+         m.size = static_cast<uint8_t>(4 + n);
+      }
+   }
+
+   // A received event, as the CLAP event it came in as.
+   void pushReceived(const clap_output_events_t *out, const OutMidi &m) {
+      const uint8_t *d = m.data;
+      if (m.sysex) {
+         clap_event_midi_sysex_t ev{};
+         ev.header = {sizeof(ev), m.time, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI_SYSEX, 0};
+         ev.port_index = 0;
+         ev.buffer = m.sysex;
+         ev.size = m.sysexSize;
+         out->try_push(out, &ev.header);
+      }
+      else if (d[0] == kTagExpression) {
+         clap_event_note_expression_t ev{};
+         ev.header = {sizeof(ev), m.time, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_EXPRESSION, 0};
+         ev.expression_id = d[1];
+         ev.note_id = -1;
+         ev.port_index = 0;
+         ev.channel = d[2] == 255 ? -1 : d[2];
+         ev.key = d[3] == 255 ? -1 : d[3];
+         uint64_t bits = 0;
+         for (int i = 0; i < 8; ++i)
+            bits |= static_cast<uint64_t>(d[4 + i]) << (8 * i);
+         std::memcpy(&ev.value, &bits, 8);
+         out->try_push(out, &ev.header);
+      }
+      else if (d[0] >= 0x80)
+         jclap::core::pushMidi(out, m.time, d[0], m.size > 1 ? d[1] : 0, m.size > 2 ? d[2] : 0);
    }
 
    // The input's notes and MIDI, merged in time order with what was received.
@@ -539,12 +643,12 @@ private:
             continue;
          const uint32_t until = h ? h->time : frames;
          for (; r < received && midiOut_[r].time <= until; ++r)
-            jclap::core::pushMidi(out, midiOut_[r].time, midiOut_[r].data[0], midiOut_[r].data[1], midiOut_[r].data[2]);
+            pushReceived(out, midiOut_[r]);
          if (h)
             out->try_push(out, h);
       }
       for (; r < received; ++r)
-         jclap::core::pushMidi(out, midiOut_[r].time, midiOut_[r].data[0], midiOut_[r].data[1], midiOut_[r].data[2]);
+         pushReceived(out, midiOut_[r]);
    }
 
    std::atomic<double> params_[kParamCount];
