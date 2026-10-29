@@ -83,6 +83,12 @@ radius the plugin sent for that channel (a dash until both axes have arrived),
 with angle 0 marked by the tick on the right. Comparing the two shows what `Angle Offset` and
 `Direction` do. Below them are all the settings, which are also plain host parameters.
 
+You can also play the Orb from the panel: click or drag in **XY IN** and that channel goes there just as
+if the controller had sent it, gliding with Smoothing and Inertia like any other move (and, with Pass
+Input CCs on, sending the X/Y CCs on too). While the mouse is down it has that channel, so the
+controller's X/Y CCs on it are ignored; once you let go, the controller takes over again with its next
+move. Double-click puts it back in the centre. Before any CC has arrived the pad drives channel 1.
+
 The preset bar in the header steps through presets with its arrows, lists them from the name, stars
 favourites, and SAVE stores the current settings as your own preset. The factory bank is a single
 **Init** with everything at its default.
