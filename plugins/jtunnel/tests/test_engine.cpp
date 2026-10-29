@@ -15,6 +15,7 @@
 
 #include "codec.h"
 #include "impair.h"
+#include "params.h"
 #include "protocol.h"
 #include "receive_ring.h"
 #include "receiver.h"
@@ -135,6 +136,16 @@ void testMidiEvents() {
    JCLAP_CHECK_EQ(midiMessageSize(0xF0), 0);
    JCLAP_CHECK_EQ(midiMessageSize(0xF7), 0);
    JCLAP_CHECK_EQ(midiMessageSize(0x40), 0);
+
+   // The MIDI filter's kinds.
+   const uint8_t sysexPiece[] = {kTagSysex}, clock[] = {0xF8}, start[] = {0xFA}, reset[] = {0xFF}, cc[] = {0xB0},
+                 expression[] = {kTagExpression};
+   JCLAP_CHECK_EQ(midiFilterParam(sysexPiece), kParamSysex);
+   JCLAP_CHECK_EQ(midiFilterParam(clock), kParamClock);
+   JCLAP_CHECK_EQ(midiFilterParam(start), kParamTransport);
+   JCLAP_CHECK_EQ(midiFilterParam(reset), kParamSystem);
+   JCLAP_CHECK_EQ(midiFilterParam(cc), kParamCount);
+   JCLAP_CHECK_EQ(midiFilterParam(expression), kParamCount);
 
    Frame f;
    f.midiCount = 0;

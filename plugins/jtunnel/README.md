@@ -83,6 +83,7 @@ it under **REACHABLE AT**, such as `192.168.1.20:47000`.
 | Thru | Off, On | Sender: keep playing its input locally. Receiver: mix its input in with what it receives |
 | Level | -inf to +12 dB | Receiver output level |
 | Carry | Audio + MIDI, Audio, MIDI | What a sender sends, or what a receiver plays of what arrives |
+| SysEx, Clock, Transport, System Messages | On, Off | The MIDI filter: whether each kind of non-note MIDI goes through (sent, or played), all on by default |
 
 The tunnel name and the listen target are saved with the project, not as parameters.
 
@@ -138,7 +139,13 @@ lost or late frame; a sender's level going out.
 
 Under them, **CARRY** sets what the tunnel carries, and the **MIDI** light flashes for each event
 going out (a sender) or coming in (a receiver), with the last one in words and the count. It says
-so in amber when **CARRY** is keeping MIDI back.
+so in amber when **CARRY** is keeping MIDI back. **FILTER** under the light opens a menu of the
+non-note MIDI that can be held back: **SysEx**, **clock** (and MIDI time code), **transport**
+(start, stop, continue, song position and song select) and **other system** messages (tune
+request, active sensing, reset). A ticked kind goes through; pick one to turn it off or on. Like
+**CARRY**, on a sender it decides what is sent and on a receiver what is played. The button lights
+amber while anything is held back. Notes, CC, pitch bend, aftertouch, program changes and note
+expressions always go through.
 
 **OUTPUT** has **THRU**, the receiver's **LEVEL**, and input and output meters.
 

@@ -17,6 +17,7 @@
 #include <jclap/ui/tooltip.h>
 #include <jclap/ui/update_notice.h>
 
+#include <visage_ui/popup_menu.h>
 #include <visage_widgets/text_editor.h>
 
 #include <algorithm>
@@ -753,8 +754,13 @@ public:
       bindings_.bind(*carry_, kParamCarry);
       tips_.add(*carry_, "What goes through the tunnel. MIDI only sends 1 ms frames with no audio, for the lowest latency");
       section({428, 328, 280, 64}, "");
-      midiLed_ = &add<ui::ActivityLed>({444, 349, 70, 22}, "MIDI");
+      midiLed_ = &add<ui::ActivityLed>({444, 336, 70, 22}, "MIDI");
       midiLed_->setColor(kAccent);
+      // Which non-note MIDI goes through, in a menu: lit while any of it is held back.
+      midiFilter_ = &add<ui::Button>({444, 362, 66, 22}, "FILTER");
+      midiFilter_->setAccent(kAmber);
+      midiFilter_->onClick = [this] { showMidiFilter(); };
+      tips_.add(*midiFilter_, "Which non-note MIDI goes through: SysEx, clock, transport and other system messages");
       midiLast_ = &add<ui::Label>({520, 340, 180, 20}, "", 0, visage::Font::kLeft, 0.72f);
       midiInfo_ = &add<ui::Label>({520, 362, 180, 16}, "", 0, visage::Font::kLeft, 0.75f);
 
@@ -962,10 +968,38 @@ private:
 
    int carry() const { return static_cast<int>(std::lround(host_.paramValue(kParamCarry))); }
 
+   // The MIDI filter's menu: each kind ticked goes through; picking one turns it on or off.
+   void showMidiFilter() {
+      static const std::pair<clap_id, const char *> kinds[] = {
+         {kParamSysex, "SysEx"},
+         {kParamClock, "Clock and MIDI time code"},
+         {kParamTransport, "Transport: start, stop, song position"},
+         {kParamSystem, "Other system: active sensing, reset"},
+      };
+      visage::PopupMenu menu;
+      for (const auto &[id, name] : kinds)
+         menu.addOption(static_cast<int>(id), name).select(host_.paramValue(id) >= 0.5);
+      menu.onSelection() += [this](int id) {
+         const clap_id param = static_cast<clap_id>(id);
+         host_.beginEdit(param);
+         host_.setParam(param, host_.paramValue(param) >= 0.5 ? 0.0 : 1.0);
+         host_.endEdit(param);
+      };
+      menu.show(midiFilter_, {0, midiFilter_->height()});
+   }
+
+   bool filtersMidi() const {
+      for (const clap_id id : {kParamSysex, kParamClock, kParamTransport, kParamSystem})
+         if (host_.paramValue(id) < 0.5)
+            return true;
+      return false;
+   }
+
    // The MIDI light flashes for each event through (coming in to be sent, or received), with the
    // last one in words and whether it is getting through.
    void syncMidi(const TunnelStatus &st, bool rx) {
       midiLed_->setCount(st.midiEvents);
+      midiFilter_->setOn(filtersMidi());
       midiLast_->setText(st.lastMidi ? midiText(st.lastMidi) : "No MIDI yet");
       midiLast_->setColor(st.lastMidi ? 0 : ui::defaultTheme().dimText);
       char buffer[64];
@@ -1188,6 +1222,7 @@ private:
    ui::Meter *inMeter_ = nullptr, *outMeter_ = nullptr;
    ui::SegmentedSwitch *carry_ = nullptr;
    ui::ActivityLed *midiLed_ = nullptr;
+   ui::Button *midiFilter_ = nullptr;
    ui::Label *midiLast_ = nullptr, *midiInfo_ = nullptr;
    std::vector<ui::Section *> sections_;
    std::vector<std::string> names_;

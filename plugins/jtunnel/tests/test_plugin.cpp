@@ -81,6 +81,7 @@ int main() {
    tx->setSendName(name);
    rx->setListenTarget(name);
    receiver.setParam(jtunnel::kParamMode, jtunnel::kModeReceive);
+   sender.setParam(jtunnel::kParamTransport, 0.0);
 
    const uint32_t block = 256;
    std::vector<float> inL(block), inR(block), outL(block), outR(block), rxL(block), rxR(block);
@@ -110,6 +111,7 @@ int main() {
          sender.midi(0xB0, 74, 99, 1);
          sender.midi(0xE1, 0x00, 0x50, 2);
          sender.midi(0xF8, 0, 0, 3);
+         sender.midi(0xFA, 0, 0, 3);
          sender.sysex(dump, 4);
          sender.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, 62, 0.75, -1, 0, 5);
          noteSent = true;
@@ -147,6 +149,7 @@ int main() {
                noteHeard, txStatus.listeners, rxStatus.connection, rxStatus.state, rxStatus.fillMs);
    JCLAP_CHECK(heard);
    JCLAP_CHECK(noteHeard);
+   // The sender's MIDI filter holds transport back (see below), so start doesn't arrive.
    JCLAP_CHECK_EQ(otherMidi.size(), size_t{3});
    if (otherMidi.size() == 3) {
       JCLAP_CHECK(otherMidi[0].status == 0xB0 && otherMidi[0].data1 == 74 && otherMidi[0].data2 == 99);
@@ -224,7 +227,7 @@ int main() {
       jclap::core::TestHost copy(clap_entry, kId);
       JCLAP_CHECK(loadState(copy, bytes));
       JCLAP_CHECK_EQ(copy.paramValue(jtunnel::kParamCarry), 2.0);
-      bytes.erase(bytes.begin() + 12 + 8 * jtunnel::kParamCarry, bytes.begin() + 12 + 8 * (jtunnel::kParamCarry + 1));
+      bytes.erase(bytes.begin() + 12 + 8 * jtunnel::kParamCarry, bytes.begin() + 12 + 8 * jtunnel::kParamCount);
       bytes[8] = static_cast<uint8_t>(jtunnel::kParamCarry);
       jclap::core::TestHost old(clap_entry, kId);
       JCLAP_CHECK(loadState(old, bytes));
