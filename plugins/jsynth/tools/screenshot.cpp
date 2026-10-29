@@ -1,10 +1,11 @@
 // Renders the panel to a PNG without a host:
-//    jsynth-screenshot out.png [part [routes [map-source [width height [view [voice-tab [env-tab [osc-tab [preset [look [palette]]]]]]]]]]]
+//    jsynth-screenshot out.png [part [routes [map-source [width height [view [voice-tab [env-tab [osc-tab [preset [look [palette [creature-scale]]]]]]]]]]]]
 // Part 0 is A, 1 is B. Routes 1 opens the route list. Map-source, a route source's number, turns MAP
 // on with that source armed. View 0 is the synth, 1 only the sky. Voice-tab is the one under the
 // sky: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH. Env-tab is 0 ENVELOPES, 1 LFOS, 2 BUSES; osc-tab is 0
 // OSCILLATORS, 1 FM. Preset, a factory preset's name, loads it in place of the demo patch ("" for the
-// demo). Look is the sky's: 0 Sumi, 1 Aurora; palette, by number, the look's own when left out.
+// demo). Look is the sky's: 0 Sumi, 1 Aurora; palette, by number, the look's own when left out;
+// creature-scale, how big the creatures are drawn (1 as designed).
 
 #include <cstdio>
 #include <cstdlib>
@@ -143,7 +144,7 @@ private:
 int main(int argc, char **argv) {
    if (argc < 2) {
       std::fprintf(stderr, "usage: %s out.png [part [routes [map-source [width height [view [voice-tab [env-tab [osc-tab "
-                   "[preset]]]]]]]]]\n",
+                   "[preset [look [palette [creature-scale]]]]]]]]]]]]]\n",
                    argv[0]);
       return 1;
    }
@@ -163,6 +164,8 @@ int main(int argc, char **argv) {
          host.skyLook = arg(12);
       if (argc > 13)
          host.skyPalettes[host.skyLook & 1] = arg(13);
+      if (argc > 14)
+         host.creatureScale = static_cast<float>(std::atof(argv[14]));
       return renderScreenshot(host, view, 6.0, width, height, argv[1]) ? 0 : 1;
    };
    if (argc > 11 && argv[11][0] != '\0') {

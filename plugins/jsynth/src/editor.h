@@ -16,6 +16,9 @@
 
 namespace jsynth {
 
+// How small and how big the sky can draw its creatures (EditorHost::creatureScale).
+constexpr float kCreatureScaleMin = 0.5f, kCreatureScaleMax = 3.0f;
+
 // What the panel needs from the plugin, on the main thread.
 class EditorHost : public jclap::ui::ParamAccess {
 public:
@@ -60,6 +63,9 @@ public:
    // Unlike the above, these are kept with the plugin's state.
    int skyLook = 0;
    int skyPalettes[2] = {0, 1};
+   // How big the creatures and their ink are drawn, 1 as designed, kCreatureScaleMin to
+   // kCreatureScaleMax. Kept with the plugin's state.
+   float creatureScale = 1.0f;
 };
 
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);

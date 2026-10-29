@@ -35,6 +35,7 @@
 #include <visage_widgets/text_editor.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -615,6 +616,9 @@ public:
       return true;
    }
 
+   // Whether a preset's name is being typed, to save it.
+   bool editing() const { return editor_ && editor_->isVisible(); }
+
 private:
    enum class Zone { None, Prev, Name, Star, Next, Save };
    static constexpr float kArrow = 24.0f, kSave = 48.0f, kStar = 22.0f;
@@ -784,8 +788,6 @@ private:
       }
    };
 
-   bool editing() const { return editor_ && editor_->isVisible(); }
-
    void startSave() {
       if (!editor_) {
          editor_ = std::make_unique<NameEditor>();
@@ -899,6 +901,8 @@ public:
    // How the sky is drawn: a SkyLook, and the palette it is drawn in.
    int look = kSumi;
    int palette = 0;
+   // How big the creatures, their strokes and their ink are drawn: 1 as designed.
+   float creatureScale = 1.0f;
    // A line of help at the top of the sky (MAP mode's), in its colour.
    std::string hint;
    unsigned hintColor = kText;
@@ -1302,7 +1306,8 @@ private:
          if (a < 0.003f)
             continue;
          visage::Color tint = visage::Color(inkColor(p.part, p.ink)).interpolateWith(visage::Color(oldColor(p.part)), std::pow(t, 0.6f));
-         const float r = p.size * ppu, x = X(p.x), y = Y(p.y);
+         // Ink grows more gently than the creatures, so big ones don't drown the sky.
+         const float r = p.size * ppu * std::sqrt(creatureScale), x = X(p.x), y = Y(p.y);
          if (sumi) {
             // A thin wash, and a filament along the way the ink drifts, bent along the curl so it
             // reads as marbling. Ink pressed against another creature's goes paler.
@@ -1406,7 +1411,7 @@ private:
       for (int pass = 0; pass < 2; ++pass)
          for (const Creature &b : creatures_)
             if ((b.part == shownPart) == (pass == 1))
-               drawCreature(c, b, s, X, Y, &b == hover);
+               drawCreature(c, b, s * creatureScale, X, Y, &b == hover);
 
       // The mouse: ripples in Sumi's water (it stirs the ink there, and in Aurora), a soft light in
       // Aurora's sky. Over a creature, a readout of what it is doing.
@@ -1459,6 +1464,7 @@ private:
       c.ring(x - r, y - r, 2 * r, 1.0f * s);
    }
 
+   // `s` sizes the creature: the view's scale times creatureScale.
    template <typename FX, typename FY>
    void drawCreature(visage::Canvas &c, const Creature &b, float s, FX X, FY Y, bool hover) {
       if (b.energy < 0.01f)
@@ -2598,6 +2604,11 @@ public:
       // Loading the plugin's state can change the look under an open panel.
       if (host_.skyLook != view_->look || host_.skyPalettes[host_.skyLook] != view_->palette)
          setLook(host_.skyLook);
+      if (host_.creatureScale != view_->creatureScale) {
+         view_->creatureScale = host_.creatureScale;
+         sizeBox_->setValue(host_.creatureScale);
+      }
+      fadeControls(dt);
       view_->shownPart = host_.part;
       view_->hint = !mapping_ ? std::string()
                     : armed_ != kSourceOff
@@ -2751,6 +2762,12 @@ public:
       const float lx = host_.view == kSynthView ? kSkyX + 10 : kCleanMargin, ly = host_.view == kSynthView ? kSkyY + 10 : 13;
       move(*lookSwitch_, {lx, ly, 136, 26});
       move(*paletteMenu_, {lx + 144, ly, 120, 26});
+      move(*sizeBox_, {lx + 272, ly, 120, 26});
+      // The preset bar stays in SKY, centred along the top, the update notice beside it.
+      const float px = host_.view == kSynthView ? 416 : (kDesignWidth - 250) / 2;
+      move(*presetBar_, {px, 13, 250, 26});
+      move(*update_, host_.view == kSynthView ? ui::Rect{146, 13, 220, 26} : ui::Rect{px + 260, 13, 220, 26});
+      idle_ = 0.0f;
       if (host_.view == kSkyOnly && mapping_)
          setMapping(false, kSourceOff);
       refresh();
@@ -3172,7 +3189,8 @@ private:
 
    void buildHeader() {
       update_ = &glassy(add<ui::UpdateNotice>({146, 13, 220, 26}), kPartColors[0]);
-      put<PresetBar>({416, 13, 250, 26}, host_);
+      // Not put(): it stays in SKY too (setView places it).
+      presetBar_ = &add<PresetBar>({416, 13, 250, 26}, host_);
       auto &parts = glassy(put<ui::SegmentedSwitch>({676, 13, 146, 26}, std::vector<std::string>{"PART A", "PART B"}),
                            kPartColors[0]);
       parts.onChange = [this](int p) { showPart(p); };
@@ -3228,6 +3246,54 @@ private:
       };
       paletteMenu_ = &palette;
       tips_.add(palette, "The colours the creatures and their ink are drawn in. Each look keeps its own.");
+      auto &size = glassy(add<ui::NumberBox>({0, 0, 120, 26}, ui::ValueRange{kCreatureScaleMin, kCreatureScaleMax, 1.0, 0.25}),
+                          kDim);
+      size.setLabel("SIZE");
+      size.setStepButtons(true);
+      size.valueText = [](double v) { return std::to_string(static_cast<int>(std::lround(v * 100.0))) + "%"; };
+      size.setValue(host_.creatureScale);
+      size.onChange = [this](double v) { view_->creatureScale = host_.creatureScale = static_cast<float>(v); };
+      sizeBox_ = &size;
+      view_->creatureScale = host_.creatureScale;
+      tips_.add(size, "How big the creatures and their ink are drawn. Only drawn: it never changes the sound.");
+      // In SKY these hide while the mouse rests (see fadeControls): any movement over the window
+      // brings them back, and they stay while the mouse is over one.
+      skyControls_ = {viewSwitch_, lookSwitch_, paletteMenu_, sizeBox_, presetBar_};
+      for (size_t i = 0; i < skyControls_.size(); ++i) {
+         skyControls_[i]->onMouseEnter() += [this, i](const visage::MouseEvent &) { overControl_[i] = true; };
+         skyControls_[i]->onMouseExit() += [this, i](const visage::MouseEvent &) { overControl_[i] = false; };
+      }
+      const auto moved = [this](const visage::MouseEvent &) { idle_ = 0.0f; };
+      view_->onMouseMove() += moved;
+      view_->onMouseDrag() += moved;
+      for (visage::Frame *f : skyControls_) {
+         f->onMouseMove() += moved;
+         f->onMouseDrag() += moved;
+      }
+   }
+
+   // In SKY, the controls along the top fade out after kIdleSeconds without the mouse moving over
+   // the window (unless it rests on one, or the preset's name is being typed), and fade back in as
+   // soon as it moves. With the panels shown, they always show.
+   void fadeControls(float dt) {
+      idle_ += dt;
+      bool busy = presetBar_->editing();
+      for (bool over : overControl_)
+         busy = busy || over;
+      if (busy)
+         idle_ = 0.0f;
+      const bool shown = host_.view != kSkyOnly || idle_ < kIdleSeconds;
+      const float alpha = shown ? std::min(1.0f, controlsAlpha_ + dt / 0.15f) : std::max(0.0f, controlsAlpha_ - dt / 0.8f);
+      if (alpha == controlsAlpha_)
+         return;
+      controlsAlpha_ = alpha;
+      for (visage::Frame *f : skyControls_) {
+         f->setVisible(alpha > 0.0f);
+         if (alpha < 1.0f)
+            f->setAlphaTransparency(alpha);
+         else
+            f->removeAlphaTransparency();
+      }
    }
 
    // One part's panels: the oscillators, the filters and the envelopes down the left, each drawn as
@@ -3755,6 +3821,15 @@ private:
    ui::SegmentedSwitch *viewSwitch_ = nullptr;
    ui::SegmentedSwitch *lookSwitch_ = nullptr;
    ui::Dropdown *paletteMenu_ = nullptr;
+   ui::NumberBox *sizeBox_ = nullptr;
+   PresetBar *presetBar_ = nullptr;
+   // The controls that stay in SKY, and fade there while the mouse rests: whether it is over each,
+   // how long since it last moved, and how much they show.
+   std::vector<visage::Frame *> skyControls_;
+   std::array<bool, 5> overControl_{};
+   static constexpr float kIdleSeconds = 10.0f;
+   float idle_ = 0.0f;
+   float controlsAlpha_ = 1.0f;
    int oscTab_ = 0;   // the oscillator panel's tab: 0 OSCILLATORS, 1 FM
    int envTab_ = 0;   // the envelope panel's: 0 ENVELOPES, 1 LFOS, 2 BUSES
    // The bus names the chips and route menus show, to notice when a preset or the host changes them.
