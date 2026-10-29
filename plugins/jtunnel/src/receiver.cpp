@@ -70,6 +70,7 @@ void Receiver::begin(const StreamInfo &info) {
    dropoutInWindow_ = false;
    lateRun_ = 0;
    pendingCount_ = 0;
+   sysexNext_ = -1;
    startSeq_ = info.newest;
    state_ = ReceiveState::Buffering;
 }
@@ -79,6 +80,7 @@ int Receiver::process(ReceiveRing &ring, float *left, float *right, uint32_t fra
    out_ = midi;
    outCount_ = 0;
    outCapacity_ = capacity;
+   sysexDoneSize_ = 0;
    if (releasePending_)
       releaseNotes(0);
 
@@ -134,7 +136,7 @@ int Receiver::process(ReceiveRing &ring, float *left, float *right, uint32_t fra
       const PendingMidi &p = pending_[i];
       if (p.pos < end) {
          const double at = std::floor((p.pos - start) / ratio);
-         emit(static_cast<uint32_t>(std::clamp(at, 0.0, frames - 1.0)), p.data);
+         emit(static_cast<uint32_t>(std::clamp(at, 0.0, frames - 1.0)), p.data, p.size);
       }
       else
          pending_[kept++] = p;
@@ -187,6 +189,7 @@ int Receiver::process(ReceiveRing &ring, float *left, float *right, uint32_t fra
       resampler_.reset();
       decoder_.reset();
       pendingCount_ = 0;
+      sysexNext_ = -1;
    }
    publish(fill);
    return outCount_;
@@ -200,7 +203,8 @@ void Receiver::pullFrame(ReceiveRing &ring, uint32_t newest) {
       for (int i = 0; i < frame.midiCount && pendingCount_ < kMaxPending; ++i) {
          PendingMidi &p = pending_[pendingCount_++];
          p.pos = base + frame.midi[i].offset;
-         std::memcpy(p.data, frame.midi[i].data, 3);
+         p.size = frame.midi[i].size;
+         std::memcpy(p.data, frame.midi[i].data, p.size);
       }
       ++nextSeq_;
       lateRun_ = 0;
@@ -326,19 +330,52 @@ void Receiver::closeSegment() {
    segmentOpen_ = false;
 }
 
-void Receiver::emit(uint32_t time, const uint8_t *data) {
+void Receiver::emit(uint32_t time, const uint8_t *data, int size) {
+   if (data[0] == kTagSysex) {
+      emitSysexPiece(time, data);
+      return;
+   }
    const uint8_t kind = data[0] & 0xF0;
-   const int channel = data[0] & 0x0F;
-   const int key = data[1] & 0x7F;
-   if (kind == 0x90 && data[2] > 0)
-      held_[channel][key] = true;
-   else if (kind == 0x80 || kind == 0x90)
-      held_[channel][key] = false;
+   if (kind == 0x80 || kind == 0x90)
+      held_[data[0] & 0x0F][data[1] & 0x7F] = kind == 0x90 && data[2] > 0;
    if (outCount_ < outCapacity_) {
       OutMidi &m = out_[outCount_++];
       m.time = time;
-      std::memcpy(m.data, data, 3);
+      m.size = static_cast<uint8_t>(size);
+      std::memcpy(m.data, data, static_cast<size_t>(size));
+      m.sysex = nullptr;
+      m.sysexSize = 0;
    }
+}
+
+void Receiver::emitSysexPiece(uint32_t time, const uint8_t *data) {
+   const uint8_t flags = data[1], index = data[2], n = data[3];
+   if (flags & kSysexFirst) {
+      sysexSize_ = 0;
+      sysexNext_ = 0;
+   }
+   // A piece missing (lost with its frame, both copies) loses the message: wait for the next one.
+   if (sysexNext_ != index || sysexSize_ + n > kMaxSysexBytes) {
+      sysexNext_ = -1;
+      return;
+   }
+   std::memcpy(sysex_ + sysexSize_, data + 4, n);
+   sysexSize_ += n;
+   sysexNext_ = index + 1;
+   if (!(flags & kSysexLast))
+      return;
+   sysexNext_ = -1;
+   if (outCount_ >= outCapacity_ || sysexDoneSize_ + sysexSize_ > static_cast<int>(sizeof(sysexDone_)))
+      return;
+   uint8_t *done = sysexDone_ + sysexDoneSize_;
+   std::memcpy(done, sysex_, static_cast<size_t>(sysexSize_));
+   sysexDoneSize_ += sysexSize_;
+   OutMidi &m = out_[outCount_++];
+   m.time = time;
+   m.size = 4;
+   std::memcpy(m.data, data, 4);
+   m.sysex = done;
+   m.sysexSize = static_cast<uint32_t>(sysexSize_);
 }
 
 void Receiver::releaseNotes(uint32_t time) {
@@ -353,7 +390,7 @@ void Receiver::releaseNotes(uint32_t time) {
             return;
          }
          const uint8_t off[3] = {static_cast<uint8_t>(0x80 | channel), static_cast<uint8_t>(key), 0};
-         emit(time, off);
+         emit(time, off, 3);
       }
 }
 

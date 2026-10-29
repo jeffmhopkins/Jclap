@@ -81,7 +81,8 @@ void Sender::process(const float *left, const float *right, uint32_t frames, con
          at = (static_cast<double>(resampler_.pushed()) + midi[i].time - resampler_.position()) / ratio_;
       PendingMidi &p = pending_[pendingCount_++];
       p.pos = made + static_cast<uint64_t>(std::max(0.0, std::floor(at)));
-      std::copy(midi[i].data, midi[i].data + 3, p.data);
+      p.size = midi[i].size;
+      std::copy(midi[i].data, midi[i].data + midi[i].size, p.data);
    }
 
    if (!resample_) {
@@ -117,21 +118,23 @@ void Sender::emitFrame(PacketSink &sink) {
    f.seq = seq_;
    f.audioBytes = static_cast<uint16_t>(encoder_.encode(codec_, frame_, frameSamples_, f.audio, kMaxFrameBytes));
 
-   // MIDI up to the end of this frame goes with it; anything that doesn't fit waits for the next.
+   // MIDI up to the end of this frame goes with it, in order; from the first that doesn't fit, the
+   // rest wait for the next frame (a long SysEx message takes a few).
    const uint64_t end = frameStart_ + static_cast<uint64_t>(frameSamples_);
    f.midiCount = 0;
-   int kept = 0;
-   for (int i = 0; i < pendingCount_; ++i) {
-      const PendingMidi &p = pending_[i];
-      if (p.pos < end && f.midiCount < kMaxMidiPerFrame) {
-         MidiEvent &m = f.midi[f.midiCount++];
-         m.offset = static_cast<uint16_t>(p.pos > frameStart_ ? p.pos - frameStart_ : 0);
-         std::copy(p.data, p.data + 3, m.data);
-      }
-      else
-         pending_[kept++] = p;
+   int taken = 0, bytes = 0;
+   for (; taken < pendingCount_; ++taken) {
+      const PendingMidi &p = pending_[taken];
+      if (p.pos >= end || f.midiCount >= kMaxMidiPerFrame || bytes + 2 + p.size > kMaxMidiBytesPerFrame)
+         break;
+      bytes += 2 + p.size;
+      MidiEvent &m = f.midi[f.midiCount++];
+      m.offset = static_cast<uint16_t>(p.pos > frameStart_ ? p.pos - frameStart_ : 0);
+      m.size = p.size;
+      std::copy(p.data, p.data + p.size, m.data);
    }
-   pendingCount_ = kept;
+   std::copy(pending_ + taken, pending_ + pendingCount_, pending_);
+   pendingCount_ -= taken;
 
    AudioHeader header;
    header.streamId = streamId_;

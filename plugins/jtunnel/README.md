@@ -24,8 +24,13 @@ LAN, Wi-Fi included.
 3. Audio starts within a second. The link turns green and **LATENCY** shows how much the receiver
    is buffering.
 
-One sender can feed any number of receivers. MIDI (notes and channel messages) travels with the
-audio, sample-locked to it, so a receiver can drive an instrument on the far machine.
+One sender can feed any number of receivers. All of a track's MIDI travels with the audio,
+sample-locked to it, so a receiver can drive an instrument on the far machine: notes, CC, pitch
+bend, aftertouch (channel and polyphonic), program changes, clock, start, stop and song position,
+SysEx of any length up to 15 KB, and CLAP note expressions (MPE-style per-note tuning, pressure and
+brightness). A long SysEx message goes over a few frames, and one that loses a piece on the way is
+dropped whole rather than delivered broken. Both ends need JTunnel 0.11 or later: older versions
+don't speak this format, and simply don't hear each other.
 
 **CARRY** picks what goes through: **AUDIO + MIDI**, **AUDIO** or **MIDI**. On a sender it is what
 gets sent; on a receiver, what of the stream gets played. **MIDI** alone sends no audio at all, in
@@ -78,6 +83,7 @@ it under **REACHABLE AT**, such as `192.168.1.20:47000`.
 | Thru | Off, On | Sender: keep playing its input locally. Receiver: mix its input in with what it receives |
 | Level | -inf to +12 dB | Receiver output level |
 | Carry | Audio + MIDI, Audio, MIDI | What a sender sends, or what a receiver plays of what arrives |
+| SysEx, Clock, Transport, System Messages | On, Off | The MIDI filter: whether each kind of non-note MIDI goes through (sent, or played), all on by default |
 
 The tunnel name and the listen target are saved with the project, not as parameters.
 
@@ -133,7 +139,13 @@ lost or late frame; a sender's level going out.
 
 Under them, **CARRY** sets what the tunnel carries, and the **MIDI** light flashes for each event
 going out (a sender) or coming in (a receiver), with the last one in words and the count. It says
-so in amber when **CARRY** is keeping MIDI back.
+so in amber when **CARRY** is keeping MIDI back. **FILTER** under the light opens a menu of the
+non-note MIDI that can be held back: **SysEx**, **clock** (and MIDI time code), **transport**
+(start, stop, continue, song position and song select) and **other system** messages (tune
+request, active sensing, reset). A ticked kind goes through; pick one to turn it off or on. Like
+**CARRY**, on a sender it decides what is sent and on a receiver what is played. The button lights
+amber while anything is held back. Notes, CC, pitch bend, aftertouch, program changes and note
+expressions always go through.
 
 **OUTPUT** has **THRU**, the receiver's **LEVEL**, and input and output meters.
 
@@ -149,5 +161,8 @@ so in amber when **CARRY** is keeping MIDI back.
 every rate pair), and a sender and receiver whose clocks run 150 ppm apart, joined by a simulated
 Wi-Fi link with jitter, 60 ms stalls and 2% loss, for 90 simulated seconds: the receiver must find
 the clock offset, stop dropping out, keep the tone at its level and deliver a note with its length
-intact, and a MIDI-only link that must deliver a note within 30 ms. `jtunnel-plugin-tests` runs two whole plugins in one process over real UDP on the loopback
-interface, one sending a tone and a note, the other finding the tunnel by name and playing them.
+intact, and a MIDI-only link that must deliver a note within 30 ms. It also sends every kind of
+MIDI event through a sender and receiver, a 1000-byte SysEx dump among them, and checks they come
+out in order and whole, and that a dump missing a piece never comes out. `jtunnel-plugin-tests` runs two whole plugins in one process over real UDP on the loopback
+interface, one sending a tone, a note, a CC, pitch bend, clock, SysEx and a note expression, the
+other finding the tunnel by name and playing them.

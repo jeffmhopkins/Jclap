@@ -23,9 +23,15 @@
 
 namespace jtunnel {
 
+// A received event in the wire's form (see protocol.h), at a sample offset in the block. SysEx
+// comes out whole, once its last piece is in: `sysex` points at the message (F0 to F7), valid
+// until the next process(), and `data` holds just its first piece's header.
 struct OutMidi {
    uint32_t time;
-   uint8_t data[3];
+   uint8_t size;
+   uint8_t data[kMaxEventBytes];
+   const uint8_t *sysex = nullptr;
+   uint32_t sysexSize = 0;
 };
 
 enum class ReceiveState : int { Idle = 0, Buffering = 1, Playing = 2 };
@@ -74,7 +80,8 @@ private:
    void endWindow(uint32_t newest);
    void closeSegment();
    double targetSamples() const;
-   void emit(uint32_t time, const uint8_t *data);
+   void emit(uint32_t time, const uint8_t *data, int size);
+   void emitSysexPiece(uint32_t time, const uint8_t *data);
    void releaseNotes(uint32_t time);
    void publish(double fill);
 
@@ -82,7 +89,8 @@ private:
    static constexpr int kHistory = 4;
    struct PendingMidi {
       double pos; // resampler input index
-      uint8_t data[3];
+      uint8_t size;
+      uint8_t data[kMaxEventBytes];
    };
 
    double hostRate_ = 48000.0;
@@ -137,6 +145,11 @@ private:
    PendingMidi pending_[kMaxPending];
    int pendingCount_ = 0;
    bool held_[16][128] = {};
+   // The SysEx message coming in, piece by piece (-1: none), and this block's finished ones.
+   uint8_t sysex_[kMaxSysexBytes];
+   int sysexSize_ = 0, sysexNext_ = -1;
+   uint8_t sysexDone_[2 * kMaxSysexBytes];
+   int sysexDoneSize_ = 0;
    bool releasePending_ = false;
    OutMidi *out_ = nullptr;
    int outCount_ = 0, outCapacity_ = 0;

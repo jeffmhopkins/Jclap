@@ -7,12 +7,15 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <functional>
+#include <initializer_list>
 #include <queue>
 #include <random>
 #include <vector>
 
 #include "codec.h"
 #include "impair.h"
+#include "params.h"
 #include "protocol.h"
 #include "receive_ring.h"
 #include "receiver.h"
@@ -37,7 +40,7 @@ void testProtocol() {
       h.frameSamples = 48;
       Frame f;
       f.midiCount = 1;
-      f.midi[0] = {5, {0x90, 60, 100}};
+      f.midi[0] = {5, 3, {0x90, 60, 100}};
       const Frame *frames[1] = {&f};
       size_t size = writeAudio(packet, sizeof(packet), h, frames, 1);
       AudioHeader back;
@@ -56,7 +59,7 @@ void testProtocol() {
    a.audio[1] = 2;
    a.audio[2] = 3;
    a.midiCount = 1;
-   a.midi[0] = {7, {0x90, 60, 100}};
+   a.midi[0] = {7, 3, {0x90, 60, 100}};
    b.seq = 10;
    b.audioBytes = 1;
    b.audio[0] = 9;
@@ -95,10 +98,17 @@ void testProtocol() {
    JCLAP_CHECK(writeAudio(packet, sizeof(packet), h, frames, 2) > 0);
    JCLAP_CHECK(!parseAudio(packet, size, got, out, count));
 
-   // The biggest packet (two full PCM frames with full MIDI) fits one MTU.
+   // The biggest packet (two full PCM frames with as much MIDI as a frame takes) fits one MTU.
    Frame full;
    full.audioBytes = kMaxFrameBytes;
-   full.midiCount = kMaxMidiPerFrame;
+   full.midiCount = 1;
+   full.midi[0] = {0, kMaxEventBytes, {kTagSysex, kSysexFirst, 0, kSysexPieceBytes}};
+   int bytes = 2 + kMaxEventBytes;
+   for (; bytes + 2 + 3 <= kMaxMidiBytesPerFrame; bytes += 2 + 3)
+      full.midi[full.midiCount++] = {0, 3, {0xB0, 1, 64}};
+   for (; bytes + 2 + 1 <= kMaxMidiBytesPerFrame; bytes += 2 + 1)
+      full.midi[full.midiCount++] = {0, 1, {0xF8}};
+   JCLAP_CHECK(full.midiCount <= kMaxMidiPerFrame);
    h.codec = Codec::Pcm24;
    h.sampleRate = 48000;
    h.frameSamples = kPcmFrameSamples;
@@ -112,6 +122,181 @@ void testProtocol() {
    JCLAP_CHECK_EQ(packetType(packet, sub), static_cast<uint8_t>(PacketType::Subscribe));
    const size_t bye = writeBye(packet, sizeof(packet));
    JCLAP_CHECK_EQ(packetType(packet, bye), static_cast<uint8_t>(PacketType::Bye));
+}
+
+// Every kind of event goes on the wire and comes back: messages of each length, SysEx pieces and
+// note expressions. Anything malformed is refused.
+void testMidiEvents() {
+   JCLAP_CHECK_EQ(midiMessageSize(0x90), 3);
+   JCLAP_CHECK_EQ(midiMessageSize(0xC3), 2);
+   JCLAP_CHECK_EQ(midiMessageSize(0xD0), 2);
+   JCLAP_CHECK_EQ(midiMessageSize(0xF2), 3);
+   JCLAP_CHECK_EQ(midiMessageSize(0xF3), 2);
+   JCLAP_CHECK_EQ(midiMessageSize(0xF8), 1);
+   JCLAP_CHECK_EQ(midiMessageSize(0xF0), 0);
+   JCLAP_CHECK_EQ(midiMessageSize(0xF7), 0);
+   JCLAP_CHECK_EQ(midiMessageSize(0x40), 0);
+
+   // The MIDI filter's kinds.
+   const uint8_t sysexPiece[] = {kTagSysex}, clock[] = {0xF8}, start[] = {0xFA}, reset[] = {0xFF}, cc[] = {0xB0},
+                 expression[] = {kTagExpression};
+   JCLAP_CHECK_EQ(midiFilterParam(sysexPiece), kParamSysex);
+   JCLAP_CHECK_EQ(midiFilterParam(clock), kParamClock);
+   JCLAP_CHECK_EQ(midiFilterParam(start), kParamTransport);
+   JCLAP_CHECK_EQ(midiFilterParam(reset), kParamSystem);
+   JCLAP_CHECK_EQ(midiFilterParam(cc), kParamCount);
+   JCLAP_CHECK_EQ(midiFilterParam(expression), kParamCount);
+
+   Frame f;
+   f.midiCount = 0;
+   const auto add = [&](std::initializer_list<uint8_t> bytes) {
+      MidiEvent &e = f.midi[f.midiCount++];
+      e.offset = static_cast<uint16_t>(f.midiCount);
+      e.size = static_cast<uint8_t>(bytes.size());
+      std::copy(bytes.begin(), bytes.end(), e.data);
+   };
+   add({0xB2, 74, 127});                       // CC
+   add({0xE0, 0x00, 0x40});                    // pitch bend
+   add({0xA1, 60, 33});                        // poly aftertouch
+   add({0xD1, 90});                            // channel pressure
+   add({0xC0, 5});                             // program change
+   add({0xF2, 0x10, 0x02});                    // song position
+   add({0xF8});                                // clock
+   add({0xFA});                                // start
+   add({kTagSysex, kSysexFirst | kSysexLast, 0, 4, 0xF0, 0x7E, 0x01, 0xF7});
+   add({kTagExpression, 6, 3, 61, 0, 0, 0, 0, 0, 0, 0xE0, 0x3F}); // pressure 0.5
+   uint8_t packet[kMaxPacketBytes];
+   AudioHeader h;
+   h.sampleRate = 48000;
+   h.codec = Codec::None;
+   h.frameSamples = 48;
+   const Frame *frames[1] = {&f};
+   const size_t size = writeAudio(packet, sizeof(packet), h, frames, 1);
+   AudioHeader back;
+   Frame parsed[kMaxFramesPerPacket];
+   int count = 0;
+   JCLAP_CHECK(size > 0 && parseAudio(packet, size, back, parsed, count));
+   JCLAP_CHECK_EQ(parsed[0].midiCount, f.midiCount);
+   for (int i = 0; i < f.midiCount && i < parsed[0].midiCount; ++i) {
+      JCLAP_CHECK_EQ(parsed[0].midi[i].offset, f.midi[i].offset);
+      JCLAP_CHECK_EQ(parsed[0].midi[i].size, f.midi[i].size);
+      JCLAP_CHECK(std::equal(f.midi[i].data, f.midi[i].data + f.midi[i].size, parsed[0].midi[i].data));
+   }
+   for (size_t cut = 0; cut < size; ++cut)
+      JCLAP_CHECK(!parseAudio(packet, cut, back, parsed, count));
+
+   // A data byte with its top bit set, a bare F0, and a SysEx piece that claims more than it has.
+   for (const MidiEvent &bad : {MidiEvent{0, 3, {0x90, 0x80, 1}}, MidiEvent{0, 1, {0xF0}},
+                                MidiEvent{0, 5, {kTagSysex, kSysexFirst, 0, 9, 0xF0}}}) {
+      Frame one;
+      one.midiCount = 1;
+      one.midi[0] = bad;
+      const Frame *ones[1] = {&one};
+      JCLAP_CHECK_EQ(writeAudio(packet, sizeof(packet), h, ones, 1), size_t{0});
+   }
+}
+
+// A sender straight into a receiver's ring, dropping the packets `drop` says to.
+struct DirectLink : PacketSink {
+   ReceiveRing &ring;
+   std::function<bool(int)> drop;
+   int packets = 0;
+   explicit DirectLink(ReceiveRing &r) : ring(r) {}
+   void send(const uint8_t *data, size_t size) override {
+      if (drop && drop(packets++))
+         return;
+      AudioHeader h;
+      Frame frames[kMaxFramesPerPacket];
+      int count = 0;
+      if (parseAudio(data, size, h, frames, count))
+         for (int i = 0; i < count; ++i)
+            ring.store(h, frames[i]);
+   }
+};
+
+// Runs a MIDI-only link for `blocks` blocks with `events` going in at block 10 and returns what
+// came out, SysEx messages whole.
+struct Received {
+   std::vector<std::vector<uint8_t>> events, sysex;
+};
+Received runMidi(const std::vector<TimedMidi> &events, int blocks, bool redundancy,
+                 std::function<bool(int)> drop = nullptr) {
+   Sender sender;
+   Receiver receiver;
+   ReceiveRing ring;
+   DirectLink link(ring);
+   link.drop = std::move(drop);
+   sender.setup(48000.0, 7);
+   receiver.setup(48000.0);
+   receiver.setBuffer(2.0, false);
+   sender.configure(Codec::None, 192, redundancy);
+   const uint32_t block = 64;
+   float in[block] = {}, outL[block], outR[block];
+   OutMidi midi[256];
+   Received got;
+   for (int b = 0; b < blocks; ++b) {
+      if (b == 10)
+         sender.process(in, in, block, events.data(), static_cast<int>(events.size()), link);
+      else
+         sender.process(in, in, block, nullptr, 0, link);
+      const int n = receiver.process(ring, outL, outR, block, midi, 256);
+      for (int i = 0; i < n; ++i) {
+         if (midi[i].sysex)
+            got.sysex.emplace_back(midi[i].sysex, midi[i].sysex + midi[i].sysexSize);
+         else
+            got.events.emplace_back(midi[i].data, midi[i].data + midi[i].size);
+      }
+   }
+   return got;
+}
+
+// Every kind of MIDI through a sender and receiver: in order, and SysEx far longer than a frame
+// takes comes out whole. A SysEx message missing a piece never comes out.
+void testAllMidi() {
+   std::vector<uint8_t> dump(1000);
+   dump.front() = 0xF0;
+   for (size_t i = 1; i + 1 < dump.size(); ++i)
+      dump[i] = static_cast<uint8_t>(i % 128);
+   dump.back() = 0xF7;
+   std::vector<TimedMidi> events;
+   const auto add = [&](uint32_t time, std::initializer_list<uint8_t> bytes) {
+      TimedMidi m{time, static_cast<uint8_t>(bytes.size()), {}};
+      std::copy(bytes.begin(), bytes.end(), m.data);
+      events.push_back(m);
+   };
+   add(0, {0xB0, 7, 100});
+   add(1, {0xE3, 0x7F, 0x7F});
+   add(2, {0xA0, 60, 20});
+   add(3, {0xD0, 64});
+   add(4, {0xC1, 12});
+   add(5, {0xF8});
+   add(5, {0xFA});
+   add(6, {0xF2, 1, 0});
+   add(7, {kTagExpression, 2, 255, 255, 0, 0, 0, 0, 0, 0, 0xF0, 0x3F});
+   const int sysexAt = static_cast<int>(events.size());
+   for (int i = 0; i * kSysexPieceBytes < static_cast<int>(dump.size()); ++i) {
+      const int at = i * kSysexPieceBytes;
+      const int n = std::min(kSysexPieceBytes, static_cast<int>(dump.size()) - at);
+      const bool last = at + n == static_cast<int>(dump.size());
+      TimedMidi m{8, static_cast<uint8_t>(4 + n), {kTagSysex, static_cast<uint8_t>((i == 0 ? kSysexFirst : 0) | (last ? kSysexLast : 0)),
+                                                   static_cast<uint8_t>(i), static_cast<uint8_t>(n)}};
+      std::copy(dump.begin() + at, dump.begin() + at + n, m.data + 4);
+      events.push_back(m);
+   }
+   add(9, {0x90, 60, 100});
+
+   const Received got = runMidi(events, 200, true);
+   JCLAP_CHECK_EQ(got.events.size(), static_cast<size_t>(sysexAt + 1));
+   for (int i = 0; i < sysexAt && i < static_cast<int>(got.events.size()); ++i)
+      JCLAP_CHECK(got.events[i] == std::vector<uint8_t>(events[i].data, events[i].data + events[i].size));
+   JCLAP_CHECK(!got.events.empty() && got.events.back() == std::vector<uint8_t>({0x90, 60, 100}));
+   JCLAP_CHECK_EQ(got.sysex.size(), size_t{1});
+   JCLAP_CHECK(!got.sysex.empty() && got.sysex[0] == dump);
+
+   // Without redundancy, one lost packet in the middle of the SysEx loses it, and nothing else.
+   const Received lossy = runMidi(events, 200, false, [](int packet) { return packet == 13; });
+   JCLAP_CHECK(lossy.sysex.empty());
+   JCLAP_CHECK(!lossy.events.empty() && lossy.events.back() == std::vector<uint8_t>({0x90, 60, 100}));
 }
 
 void testCodecs() {
@@ -356,15 +541,15 @@ SimResult simulate(Codec codec, double ppm, double seconds, double senderRate = 
          int count = 0;
          const double blockStart = sentFrames / (senderRate * (1.0 + ppm * 1e-6));
          if (!noteOn1 && blockStart >= 10.0) {
-            events[count++] = {17, {0x90, 60, 100}};
+            events[count++] = {17, 3, {0x90, 60, 100}};
             noteOn1 = true;
          }
          if (!noteOff1 && blockStart >= 10.5) {
-            events[count++] = {33, {0x80, 60, 0}};
+            events[count++] = {33, 3, {0x80, 60, 0}};
             noteOff1 = true;
          }
          if (!noteOn2 && blockStart >= 70.0) {
-            events[count++] = {0, {0x91, 64, 90}};
+            events[count++] = {0, 3, {0x91, 64, 90}};
             noteOn2 = true;
          }
          sender.process(inL, inR, block, events, count, net);
@@ -529,6 +714,8 @@ void testImpairment() {
 
 int main() {
    testProtocol();
+   testMidiEvents();
+   testAllMidi();
    testCodecs();
    testResampler();
    testRing();
