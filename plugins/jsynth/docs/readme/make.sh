@@ -40,3 +40,13 @@ Image.open(src).convert("RGB").crop((2 * x, 2 * y, 2 * (x + w), 2 * (y + h))).sa
 PY
    echo "wrote $name.jpg"
 done
+
+# The dice card, open over the sky's top right (the tool's last argument opens it).
+HOME="$tmp/home" XDG_CONFIG_HOME="" "$tool" "$tmp/dice.png" 0 0 0 3296 1880 0 0 0 0 Murmuration\ Riot 0 0 1 1
+python3 - "$tmp/dice.png" dice.jpg <<'PY'
+import sys
+from PIL import Image
+x, y, w, h = 1322, 62, 318, 208
+Image.open(sys.argv[1]).convert("RGB").crop((2 * x, 2 * y, 2 * (x + w), 2 * (y + h))).save(sys.argv[2], quality=86, optimize=True)
+PY
+echo "wrote dice.jpg"

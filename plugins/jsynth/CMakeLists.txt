@@ -38,4 +38,6 @@ if(JCLAP_BUILD_TOOLS)
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-sky.png ARGS 0 0 0 1648 940 1)
    jclap_add_screenshot_test(jsynth-screenshot-touch-test TOOL jsynth-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-touch.png ARGS 0 0 0 1648 940 0 3)
+   jclap_add_screenshot_test(jsynth-screenshot-dice-test TOOL jsynth-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-dice.png ARGS 0 0 0 1648 940 0 0 0 0 - 0 0 1 1)
 endif()

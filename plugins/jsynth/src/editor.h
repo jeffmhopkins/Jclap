@@ -13,6 +13,7 @@
 #include <jclap/ui/window.h>
 
 #include "flock.h"
+#include "randomize.h"
 
 namespace jsynth {
 
@@ -59,6 +60,11 @@ public:
    int view = 0;
    // Whether the sky draws the held notes' lure rings.
    bool ringsShown = true;
+   // The dice card: whether it is open, Randomize's complexity, Mutate's amount and the sections
+   // both leave alone, and the patches they replaced, so UNDO can bring one back.
+   bool diceOpen = false;
+   DiceSettings dice;
+   DiceHistory diceHistory;
    // How the sky is drawn: its look (0 Sumi, 1 Aurora), and the palette each look was left in.
    // Unlike the above, these are kept with the plugin's state.
    int skyLook = 0;
@@ -80,6 +86,7 @@ struct ScreenshotView {
    int voiceTab = 0; // the tab under the sky: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH
    int envTab = 0;   // the envelope card's: 0 ENVELOPES, 1 LFOS, 2 BUSES
    int oscTab = 0;   // the oscillator card's: 0 OSCILLATORS, 1 FM
+   bool dice = false; // the dice card open
 };
 
 // Flies the flock for `seconds`, then draws the panel offscreen at the given pixel size and saves it
