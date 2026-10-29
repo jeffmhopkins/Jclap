@@ -56,7 +56,8 @@ public:
       add<ui::Section>({12, 348, 696, 120}, "MAPPING");
       add<ui::Section>({12, 480, 696, 120}, "MOTION");
 
-      // Live views: what comes in on the X/Y CCs, and the angle/radius that goes out. Display only.
+      // Live views: what comes in on the X/Y CCs, and the angle/radius that goes out. Dragging the
+      // XY pad moves the input itself, holding off the controller until the mouse lets go.
       const ui::ValueRange cc{0.0, 127.0, 64.0, 1.0};
       xy_ = &add<ui::XYPad>({32, 106, 192, 216}, cc, cc);
       xy_->setAccent(kBlue);
@@ -64,8 +65,13 @@ public:
                                ui::ValueRange{0.0, 127.0, 0.0, 1.0});
       polar_->setGrid(ui::XYPad::Grid::Polar);
       polar_->setAccent(kOrange);
-      for (ui::XYPad *pad : {xy_, polar_})
-         pad->setIgnoresMouseEvents(true, false);
+      for (ui::XYPad::Axis *axis : {&xy_->x(), &xy_->y()}) {
+         axis->onChange = [this](double) {
+            host_.dragInput(static_cast<int>(std::lround(xy_->x().value)), static_cast<int>(std::lround(xy_->y().value)));
+         };
+         axis->onEndEdit = [this] { host_.releaseInput(); };
+      }
+      polar_->setIgnoresMouseEvents(true, false);
 
       const auto in = ui::row({508, 104, 192, 92}, 2);
       knob(kParamInX, "X", kBlue, in[0]);

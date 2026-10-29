@@ -131,6 +131,15 @@ public:
       x = static_cast<int>(v >> 8) & 0x7F;
       y = static_cast<int>(v) & 0x7F;
    }
+   void dragInput(int x, int y) override {
+      // A new number each move, so the audio thread takes every one, even if released before it runs.
+      const uint32_t seq = ((dragIn_.load() >> 16) + 1) & 0xFFFF;
+      dragIn_.store((seq ? seq : 1) << 16 | static_cast<uint32_t>(std::clamp(x, 0, 127)) << 8 |
+                    static_cast<uint32_t>(std::clamp(y, 0, 127)));
+      dragging_.store(true);
+      host()->request_process(host());
+   }
+   void releaseInput() override { dragging_.store(false); }
    std::string presetName() const override { return presetName_; }
    void setPresetName(const std::string &name) override { presetName_ = name; }
    bool lastOutput(int &angle, int &radius) const override {
@@ -250,6 +259,7 @@ public:
       edits_.drain(out);
       // Panel edits, flushes and state loads land between blocks.
       applySettings(out, 0);
+      applyDrag(out);
       const uint32_t n = in->size(in);
       frames_ = std::max<uint32_t>(proc->frames_count, 1);
       clock_ = 0;
@@ -445,6 +455,29 @@ private:
                             static_cast<uint8_t>(value));
    }
 
+   // A move of the panel's XY pad: the shown channel goes there as if the controller had sent it.
+   void applyDrag(const clap_output_events_t *out) {
+      const uint32_t v = dragIn_.load();
+      if (v == dragSeen_)
+         return;
+      dragSeen_ = v;
+      const int channel = panelChannel_;
+      ChannelState &st = channels_[channel];
+      st.x = static_cast<int>(v >> 8) & 0x7F;
+      st.y = static_cast<int>(v) & 0x7F;
+      st.hasX = st.hasY = true;
+      lastIn_.store(static_cast<uint32_t>(channel) << 16 | static_cast<uint32_t>(st.x) << 8 |
+                    static_cast<uint32_t>(st.y));
+      if (conflicting())
+         return;
+      // Pass Input CCs sends on the X/Y as if it came from the controller.
+      if (intParam(kParamPassThrough) != 0) {
+         pushCC(out, 0, channel, intParam(kParamInX), st.x);
+         pushCC(out, 0, channel, intParam(kParamInY), st.y);
+      }
+      convert(out, 0, channel);
+   }
+
    // Returns true if the event was an XY input CC and should not be forwarded.
    bool handleMidi(const clap_event_midi_t *ev, const clap_output_events_t *out) {
       if ((ev->data[0] & 0xF0) != 0xB0)
@@ -456,26 +489,31 @@ private:
 
       if (conflicting())
          return false;
+      if (cc != intParam(kParamInX) && cc != intParam(kParamInY))
+         return false;
+      const bool passThrough = intParam(kParamPassThrough) != 0;
+      if (passThrough)
+         out->try_push(out, &ev->header);
+      // While the pad is held the mouse has that channel (and the panel stays on it); the controller
+      // takes over again with its next move after release.
+      const bool dragging = dragging_.load();
+      if (dragging && channel == panelChannel_)
+         return true;
       if (cc == intParam(kParamInX)) {
          st.x = value;
          st.hasX = true;
       } else if (cc == intParam(kParamInY)) {
          st.y = value;
          st.hasY = true;
-      } else {
-         return false;
       }
       // The panel follows the channel that moved last, as one tear-free value.
-      if (channel != panelChannel_) {
+      if (channel != panelChannel_ && !dragging) {
          panelChannel_ = channel;
          lastOut_.store(st.sentAngle >= 0 ? st.sentAngle << 8 | st.sentRadius : -1);
       }
-      lastIn_.store(static_cast<uint32_t>(channel) << 16 | static_cast<uint32_t>(st.x) << 8 |
-                    static_cast<uint32_t>(st.y));
-
-      const bool passThrough = intParam(kParamPassThrough) != 0;
-      if (passThrough)
-         out->try_push(out, &ev->header);
+      if (channel == panelChannel_)
+         lastIn_.store(static_cast<uint32_t>(channel) << 16 | static_cast<uint32_t>(st.x) << 8 |
+                       static_cast<uint32_t>(st.y));
 
       pendingMask_ |= 1u << channel;
       pendingTime_ = ev->header.time;
@@ -498,6 +536,11 @@ private:
    int panelChannel_ = 0;
    std::atomic<uint32_t> lastIn_{64u << 8 | 64u};
    std::atomic<int32_t> lastOut_{-1};
+   // The XY pad's last move (sequence << 16 | x << 8 | y; 0 for none yet), whether it is held, and
+   // the last move the audio thread took.
+   std::atomic<uint32_t> dragIn_{0};
+   std::atomic<bool> dragging_{false};
+   uint32_t dragSeen_ = 0;
    // The preset last loaded or saved (main thread).
    std::string presetName_ = "Init";
    jclap::core::EditQueue edits_;

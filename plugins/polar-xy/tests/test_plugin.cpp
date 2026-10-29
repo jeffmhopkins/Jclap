@@ -106,6 +106,67 @@ void motionTests() {
    JCLAP_CHECK(run(h, 2).angles.empty());
 }
 
+// The panel's XY pad: dragging it moves the shown channel like the controller, and holds that
+// channel against the controller's X/Y CCs until released.
+void dragTests() {
+   jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+   auto *editor = h.object<polar_xy::EditorHost>();
+
+   // Before any CC, the pad drives channel 1, and both axes count as arrived.
+   editor->dragInput(127, 64);
+   auto out = h.process();
+   JCLAP_CHECK(out.midi.size() == 2 && out.midi[0].status == 0xB0 && out.midi[0].data1 == 18 &&
+               out.midi[0].data2 == 0 && out.midi[1].data1 == 19 && out.midi[1].data2 == 127);
+   int x = 0, y = 0, channel = -1;
+   editor->lastInput(x, y, channel);
+   JCLAP_CHECK(x == 127 && y == 64 && channel == 0);
+
+   // Held: the controller's X/Y on that channel are swallowed and change nothing.
+   h.midi(0xB0, 16, 0);
+   JCLAP_CHECK_EQ(h.process().midi.size(), 0u);
+   editor->lastInput(x, y, channel);
+   JCLAP_CHECK(x == 127);
+   // Other channels still convert, but the panel stays on the dragged one.
+   h.midi(0xB1, 16, 0);
+   h.midi(0xB1, 17, 64);
+   out = h.process();
+   JCLAP_CHECK(out.midi.size() == 2 && (out.midi[0].status & 0x0F) == 1);
+   editor->lastInput(x, y, channel);
+   JCLAP_CHECK(channel == 0);
+
+   // Released: the controller takes over with its next move.
+   editor->releaseInput();
+   h.midi(0xB0, 16, 64);
+   h.midi(0xB0, 17, 127);
+   out = h.process();
+   JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 18 && out.midi[0].data2 == 32);
+
+   // A move released before the next block still lands (a double-click reset is set and let go at once).
+   editor->dragInput(0, 64);
+   editor->releaseInput();
+   out = h.process();
+   JCLAP_CHECK(!out.midi.empty() && out.midi[0].data1 == 18 && out.midi[0].data2 == 64);
+
+   // Smoothing applies to the pad too: it glides there in steps.
+   h.setParam(8, 100.0);
+   h.process();
+   editor->dragInput(127, 64);
+   Path p = run(h, 40);
+   JCLAP_CHECK(p.radii.size() > 10);
+   JCLAP_CHECK(!p.radii.empty() && p.radii.back() == 127);
+   editor->releaseInput();
+
+   // Pass Input CCs sends the pad's X/Y on too.
+   h.setParam(8, 0.0);
+   h.setParam(7, 1.0);
+   h.process();
+   editor->dragInput(64, 0);
+   out = h.process();
+   JCLAP_CHECK(out.midi.size() >= 2 && out.midi[0].data1 == 16 && out.midi[0].data2 == 64 &&
+               out.midi[1].data1 == 17 && out.midi[1].data2 == 0);
+   editor->releaseInput();
+}
+
 } // namespace
 
 int main() {
@@ -257,5 +318,6 @@ int main() {
          JCLAP_CHECK(value == polar_xy::kParams[id].def);
 
    motionTests();
+   dragTests();
    return jclap::core::testResult();
 }
