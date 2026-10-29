@@ -12,6 +12,8 @@
 
 namespace mb {
 
+struct HardwarePatch;
+
 // What the panel needs from the plugin, on the main (GUI) thread. Params are addressed by CLAP id:
 // the CC number, or one of the settings ids. paramModulated() is what is actually sent, with host
 // modulation.
@@ -27,8 +29,12 @@ public:
    virtual bool known(int cc) const = 0;
    // Counts every CC that came in on the channel and moved a knob, for the activity light.
    virtual uint32_t heardCount() const = 0;
-   // The Program Change last seen coming in (0-127), or -1 if none since the plugin started.
-   virtual int heardProgram() const = 0;
+   // The preset the synth has loaded as far as the plugin knows (0-255, A01-P16): the last one the
+   // plugin picked, or the last Bank Select and Program Change that came in. -1 if neither.
+   virtual int synthPreset() const = 0;
+   // Loads one of the synth's own presets: sends Bank Select and Program Change, and moves every knob
+   // the preset stores to its value without sending it.
+   virtual void loadProgram(const HardwarePatch &patch) = 0;
 
    // The name the preset bar shows, kept with the project.
    virtual std::string presetName() const = 0;

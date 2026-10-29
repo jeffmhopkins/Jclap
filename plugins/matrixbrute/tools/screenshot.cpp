@@ -5,13 +5,16 @@
 
 #include "cc_map.h"
 #include "editor.h"
+#include "patches.h"
 
 namespace {
 
-// A spread of values, with most knobs heard from the synth and a few not yet, and some host
-// modulation, so every style of control shows up.
+// The synth's A01 Juggernaut, as the plugin loads it, with the 14-bit and follow settings on. The
+// knobs a preset doesn't store (the sequencer's rate, swing and gate, the mod wheel) haven't been
+// heard yet, and some knobs show host modulation, so every style of control shows up.
 class DemoHost : public mb::EditorHost {
 public:
+   static const mb::HardwarePatch &patch() { return *mb::findFactoryPatch("A01 Juggernaut"); }
    double paramValue(clap_id id) const override {
       if (id == mb::kChannelParamId)
          return 1;
@@ -20,21 +23,10 @@ public:
       const int i = mb::indexOfCc(static_cast<int>(id));
       if (i < 0)
          return 0;
-      switch (id) {
-      case 9: return 40;   // VCO1 sub
-      case 10: return 110; // VCO1 saw
-      case 12: return 0;
-      case 13: return 30;
-      case 15: return 20;
-      case 16: return 100;
-      case 17: return 0;
-      case 23: return 78;  // Steiner cutoff
-      case 25: return 52;  // ladder cutoff
-      case 28: return 90;
-      case 29: return 110;
-      case 30: return 40;
-      default: return mb::kCcParams[i].bipolar ? 64 + (i * 13) % 40 - 20 : (i * 37) % 128;
-      }
+      for (auto [cc, v] : patch().values)
+         if (cc == static_cast<int>(id))
+            return v;
+      return mb::defaultValue(mb::kCcParams[i]);
    }
    // Every seventh knob shows some host modulation.
    double paramModulated(clap_id id) const override {
@@ -47,11 +39,11 @@ public:
    int channel() const override { return 1; }
    void setChannel(int) override {}
    void sendAll() override {}
-   // The sequencer, macros and LFO 2 haven't been heard yet.
-   bool known(int cc) const override { return !(cc >= 116 && cc <= 118) && cc != 2 && cc != 3 && cc != 92 && cc != 93; }
+   bool known(int cc) const override { return !(cc >= 116 && cc <= 118) && cc != 1; }
    uint32_t heardCount() const override { return 0; }
-   int heardProgram() const override { return 12; }
-   std::string presetName() const override { return "Init"; }
+   int synthPreset() const override { return patch().preset; }
+   void loadProgram(const mb::HardwarePatch &) override {}
+   std::string presetName() const override { return mb::displayName(patch()); }
    void setPresetName(const std::string &) override {}
 };
 

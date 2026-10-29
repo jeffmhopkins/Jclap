@@ -11,6 +11,7 @@
 
 #include "cc_map.h"
 #include "editor.h"
+#include "patches.h"
 
 extern "C" const clap_plugin_entry_t clap_entry;
 
@@ -144,10 +145,12 @@ int main() {
    h.setParam(mb::kFollowParamId, 1);
    h.process();
 
-   // A Program Change from the synth: it loaded another preset, so no knob is known and none is sent.
+   // Bank Select and a Program Change from the synth: it loaded another preset (B13), so no knob is
+   // known and none is sent.
+   h.midi(0xB0, 0, 1);
    h.midi(0xC0, 12, 0);
    h.process();
-   CHECK_EQ(panel.heardProgram(), 12);
+   CHECK_EQ(panel.synthPreset(), 28);
    CHECK_EQ(panel.known(23), false);
    CHECK_EQ(panel.known(25), false);
    CHECK_EQ(ccs(h.process()).size(), 0u);
@@ -174,6 +177,55 @@ int main() {
       Buffer bad;
       bad.bytes = {'J', 'M', 'M', '2'};
       JCLAP_CHECK(!stateOf(b)->load(b.plugin(), &bad.in));
+   }
+
+   // Picking one of the synth's presets sends Bank Select and Program Change, and moves the knobs to
+   // the preset's values without sending them: the synth has them already.
+   {
+      const mb::HardwarePatch *patch = mb::findFactoryPatch("B01 Lead And Bass AF");
+      JCLAP_CHECK(patch != nullptr);
+      if (patch) {
+         panel.loadProgram(*patch);
+         block = h.process();
+         std::vector<std::vector<int>> sent;
+         for (const auto &m : block.midi)
+            sent.push_back({m.status, m.data1, m.data2});
+         CHECK_EQ(sent.size(), 3u);
+         JCLAP_CHECK(sent.size() == 3 && sent[0] == std::vector<int>({0xB0, 0, 1}) &&
+                     sent[1] == std::vector<int>({0xB0, 32, 0}) && sent[2] == std::vector<int>({0xC0, 0, 0}));
+         CHECK_EQ(panel.synthPreset(), 16);
+         JCLAP_CHECK(panel.presetName() == "B01 Lead And Bass AF");
+         for (auto [cc, v] : patch->values) {
+            CHECK_EQ(panel.paramValue(static_cast<clap_id>(cc)), v);
+            CHECK_EQ(panel.known(cc), true);
+         }
+         CHECK_EQ(ccs(h.process()).size(), 0u);
+
+         // A saved project loads the preset again, then its knobs as they were.
+         Buffer saved;
+         JCLAP_CHECK(stateOf(h)->save(h.plugin(), &saved.out));
+         jclap::core::TestHost b(clap_entry, kId);
+         JCLAP_CHECK(stateOf(b)->load(b.plugin(), &saved.in));
+         block = b.process();
+         JCLAP_CHECK(block.midi.size() >= 3 && block.midi[2].status == 0xC0 && block.midi[0].data2 == 1);
+         CHECK_EQ(b.object<mb::EditorHost>()->synthPreset(), 16);
+      }
+   }
+
+   // The decoded bank: 158 named presets, every value in range, and every name unique.
+   {
+      const auto &bank = mb::factoryBank();
+      CHECK_EQ(bank.size(), 158u);
+      for (size_t i = 0; i < bank.size(); ++i) {
+         JCLAP_CHECK(bank[i].preset >= 0 && bank[i].preset < mb::kPresetCount);
+         CHECK_EQ(bank[i].values.size(), 73u);
+         for (auto [cc, v] : bank[i].values)
+            JCLAP_CHECK(mb::indexOfCc(cc) >= 0 && v >= 0.0 && v <= 127.0);
+         for (size_t j = 0; j < i; ++j)
+            JCLAP_CHECK(mb::displayName(bank[i]) != mb::displayName(bank[j]));
+      }
+      const mb::HardwarePatch *jugg = mb::findFactoryPatch("A01 Juggernaut");
+      JCLAP_CHECK(jugg != nullptr && mb::presetCode(jugg->preset) == "A01");
    }
 
    // Notes pass straight through.

@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "cc_map.h"
+#include "patches.h"
 #include "visuals.h"
 
 namespace mb {
@@ -89,18 +90,6 @@ constexpr unsigned kSteiner = 0xfff07a3a;
 constexpr unsigned kLadder = 0xff2fd1c5;
 constexpr unsigned kEnvColors[] = {kSteiner, kGreen, kPurple};
 
-// User presets are the knobs' values; there's no factory bank until the synth's own presets can be read.
-const ui::PresetFormat kPresetFormat{"MatrixBrute CC", 1, ".mbpreset", 128};
-std::vector<double> presetDefaults() {
-   std::vector<double> d(kPresetFormat.paramCount, 0.0);
-   for (const CcParam &p : kCcParams)
-      d[p.cc] = defaultValue(p);
-   return d;
-}
-const std::vector<ui::Preset> &factoryPresets() {
-   static const std::vector<ui::Preset> none;
-   return none;
-}
 
 class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
@@ -250,6 +239,12 @@ private:
       bar.defaults = presetDefaults();
       bar.currentName = [this] { return host_.presetName(); };
       bar.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
+      bar.onLoad = [this](const ui::Preset &p) {
+         if (const HardwarePatch *patch = findFactoryPatch(p.name))
+            host_.loadProgram(*patch);
+         else
+            ui::applyPreset(p, host_, presetDefaults());
+      };
       add<ui::UpdateNotice>({300, 20, 220, 24});
 
       const float r = kDesignWidth - kMargin;
@@ -409,8 +404,8 @@ private:
       const char *names[4] = {"Panel", "Save", "<", ">"};
       for (int i = 0; i < 4; ++i)
          button(names[i], {}, {x + 8 + i * 76, y + 74, 72, 50});
-      hint("LAST PROGRAM CHANGE", {x + 12, y + 32, 140, 12}, visage::Font::kLeft);
-      hint("HEARD FROM THE SYNTH", {x + 12, y + 46, 140, 12}, visage::Font::kLeft);
+      hint("THE SYNTH'S PRESET:", {x + 12, y + 32, 140, 12}, visage::Font::kLeft);
+      hint("PICKED HERE OR HEARD", {x + 12, y + 46, 140, 12}, visage::Font::kLeft);
    }
 
    // The synth's envelopes are sliders: velocity (or ENV 3's delay) in white on the left, then
@@ -501,7 +496,7 @@ private:
       hint("A DIM KNOB IS A GUESS: NOT HEARD OR SET SINCE THE SYNTH'S LAST PRESET CHANGE. TURN IT ON THE SYNTH, "
            "WITH ITS MIDI OUT ROUTED INTO THIS TRACK, TO READ IT.",
            {sx, y + 46, 1060, 12}, visage::Font::kLeft);
-      hint("PRESETS, BUTTONS AND THE MATRIX AREN'T SENT AS CCS, SO THE PLUGIN CAN'T SHOW THEM.", {sx, y + 62, 1060, 12},
+      hint("PICK ONE OF THE SYNTH'S PRESETS IN THE PRESET BAR TO LOAD IT AND READ ITS KNOBS. BUTTONS AND THE MATRIX AREN'T CCS.", {sx, y + 62, 1060, 12},
            visage::Font::kLeft);
    }
 
@@ -529,23 +524,21 @@ private:
       for (auto [readout, cc] : readouts_)
          readout->setText(host_.known(cc) ? std::to_string(toCcValue(host_.paramModulated(static_cast<clap_id>(cc))))
                                           : "\xE2\x80\x94");
-      const int program = host_.heardProgram();
-      status_->setText(program < 0 ? "NO PRESET CHANGE HEARD SINCE THE PLUGIN OPENED"
-                                   : "THE SYNTH CHANGED PRESET (PROGRAM CHANGE " + std::to_string(program + 1) + ")");
+      const int program = host_.synthPreset();
+      const std::string code = program < 0 ? "---" : presetCode(program);
+      status_->setText(program < 0 ? "NO SYNTH PRESET PICKED OR HEARD SINCE THE PLUGIN OPENED"
+                                   : "THE SYNTH IS ON PRESET " + code);
       knownCount_->setText(std::to_string(known) + " OF " + std::to_string(kCcParamCount) + " KNOBS KNOWN");
       wheelValue_->setText(host_.known(1) ? std::to_string(toCcValue(host_.paramModulated(1))) : "\xE2\x80\x94");
 
-      // The synth's display shows the preset it switched to, which the plugin only hears as a
+      // The synth's display shows its preset, which the plugin knows when it picked it or heard the
       // Program Change; the matrix's screen shows what the plugin knows.
-      char preset[8] = "---";
-      if (program >= 0)
-         std::snprintf(preset, sizeof(preset), "%c%02d", 'A' + program / 64 % 4, program % 64 + 1);
-      display_->setText(preset);
+      display_->setText(code);
       if (known != shownKnownCount_ || program != shownProgram_) {
          shownKnownCount_ = known;
          shownProgram_ = program;
          matrix_->setDisplay({"MATRIXBRUTE CC", std::to_string(known) + " / " + std::to_string(kCcParamCount) + " KNOBS KNOWN",
-                              program < 0 ? "NO PRESET CHANGE HEARD" : std::string("PRESET ") + preset + " LOADED",
+                              program < 0 ? "NO PRESET CHANGE HEARD" : "PRESET " + code + " LOADED",
                               "MATRIX ROUTING IS SET ON THE SYNTH"});
       }
    }

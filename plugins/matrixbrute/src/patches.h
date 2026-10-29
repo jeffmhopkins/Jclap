@@ -25,10 +25,12 @@ struct HardwarePatch {
 
 inline constexpr int kPresetCount = 256;
 
-// The synth's 256 presets are 16 banks (A-P) of 16. Over MIDI, Bank Select (CC 0) picks the half
-// and Program Change 0-127 the preset within it. Checked on a real unit.
-inline int bankSelectOf(int preset) { return preset / 128; }
-inline int programChangeOf(int preset) { return preset % 128; }
+// The synth's 256 presets are 16 banks (A-P) of 16. Over MIDI, Bank Select (CC 0) 0-15 picks the
+// bank and Program Change 0-15 the preset in it; a Program Change above 15 does nothing. The manual
+// doesn't say so; it was checked on a real unit (CC 0 = 1 then PC 5 loads B06). The synth only
+// takes Program Changes with its Program Change setting on (MIDI Control Center, Device Settings).
+inline int bankSelectOf(int preset) { return preset / 16; }
+inline int programChangeOf(int preset) { return preset % 16; }
 
 // "A01" to "P16", as the synth's display shows it.
 inline std::string presetCode(int preset) {

@@ -34,23 +34,52 @@ and the host can record the move as automation.
 > Leave the synth's MIDI param send and receive on (Settings row E). Its pot mode (Hook, Jump or
 > Scaled) decides when a hardware knob starts sending after a preset change.
 
+## The synth's presets
+
+The preset bar lists the synth's own presets, A01 to P16, filed by bank. Picking one:
+
+- sends Bank Select (CC 0 = bank, 0-15 for A-P) and Program Change (0-15 for slot 01-16) on the
+  panel's MIDI channel, so the synth loads it;
+- moves every knob to that preset's value without sending it, since the synth already has it. Turning
+  a knob afterwards sends it as usual.
+
+> [!IMPORTANT]
+> The synth ignores Program Changes until its **Program Change** setting is on: in MIDI Control
+> Center, open the MatrixBrute's Device Settings and turn it on.
+
+A preset stores 73 of the panel's knobs. The sequencer's rate, swing and gate and the mod wheel aren't
+part of a preset, so they stay where they are. The buttons and the matrix are in the preset too, but
+they aren't CCs, so the panel doesn't show them.
+
+> [!NOTE]
+> Arturia hasn't published the preset format. The bank here is the 158 named presets read off a real
+> unit the way MIDI Control Center reads them (`tools/mb_dump.py`, raw replies in `data/dump`), which
+> is the factory bank plus whatever its owner saved. `tools/mb_bank.py` decodes it into
+> `src/factory_bank.inc` and checks the decoding against `data/calib`: one scratch slot read back
+> after `tools/mb_calibrate.py` set every CC to a known pattern and the panel was saved there. The
+> protocol and the format are written up in the two scripts, and [docs/capture.md](docs/capture.md)
+> is how the USB capture of MIDI Control Center was made.
+>
+> To use your own synth's presets: close MIDI Control Center, run `python tools/mb_dump.py data/dump`
+> with the synth on USB, then `python tools/mb_bank.py data/dump src/factory_bank.inc` and rebuild.
+
 ## What the plugin knows
 
 The synth doesn't say what its knobs are set to: it only sends a knob when it moves. So the panel
 draws a knob dim, with a dash for its value, until it knows it, which is when:
 
-- the plugin sent it (a panel edit, automation, modulation, a saved project or SEND ALL), or
+- the plugin sent it (a panel edit, automation, modulation, a saved project or SEND ALL),
+- the plugin loaded one of the synth's presets, or
 - the synth sent it (its own knob moved, or a controller on the track did).
 
 When a Program Change comes in on the channel the synth has loaded another preset, so every knob goes
-dim again. The bottom strip shows how many knobs are known and the last
+dim again. (The synth only sends one with its Program Change setting on.) The bottom strip shows how many knobs are known and the last
 preset change heard. **FOLLOW** off keeps the knobs where they are; incoming CCs still pass through to
 the synth and the plugin doesn't push its own value back over them.
 
 > [!NOTE]
-> Presets, the buttons (filter modes, LFO waves, routing...) and the matrix's routing aren't sent as
-> CCs, so the plugin can't show or change them. Reading presets needs the synth's SysEx, which Arturia
-> hasn't published; [docs/capture.md](docs/capture.md) is the plan for finding it.
+> The buttons (filter modes, LFO waves, routing...) and the matrix's routing aren't sent as CCs, so the
+> plugin can't show or change them.
 
 ## How it sends
 
@@ -103,7 +132,8 @@ the preset display and the envelope sliders; the matrix; and the analog effects 
 right. Glide, the mod wheel and the macros sit along the bottom, like the synth's front edge.
 
 The synth's buttons (filter modes, LFO waves, routing...) are drawn for reference only, since they
-aren't on MIDI. The preset display shows the last Program Change heard. The pictures are drawn only
+aren't on MIDI. The preset display shows the synth's preset: the one picked in the preset bar, or the
+last Bank Select and Program Change heard. The pictures are drawn only
 from the CC values: each VCO's wave mix, the two filters' responses (low-pass guides), the envelope
 shapes and the effect's echoes.
 
