@@ -7,6 +7,14 @@ plugin can send it itself and build its preset library on demand.
 
 This is for Windows. Nothing sits between MCC and the synth: USBPcap only listens to the USB bus.
 
+> [!NOTE]
+> This has been done: the request is plain SysEx, decoded in `tools/mb_dump.py`, and the capture's
+> messages are in `data/capture1`. Two things differed from the steps below on a real PC. Wireshark's
+> `dumpcap` needs Npcap, so it was simpler to run USBPcap on its own from an admin PowerShell:
+> `& 'C:\Program Files\USBPcap\USBPcapCMD.exe' -d \\.\USBPcap1 -A --inject-descriptors -o capture1.pcap`
+> (it opens its own window; close it to stop). And a USBPcap installed after Wireshark needs
+> `USBPcapCMD.exe` copied into Wireshark's `extcap` folder before Wireshark lists it.
+
 ## 1. Install the tools (once)
 
 1. Wireshark, with **USBPcap** ticked in its installer (or `winget install WiresharkFoundation.Wireshark`

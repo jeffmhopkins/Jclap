@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.1.0)
+jclap_plugin_version(0.2.0)
 
 jclap_add_plugin(matrixbrute
    OUTPUT_NAME "MatrixBruteCC"
@@ -20,6 +20,10 @@ target_link_libraries(matrixbrute-plugin-tests PRIVATE jclap::ui)
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_FOUND)
    add_test(NAME matrixbrute-usb-extract COMMAND Python3::Interpreter -I ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_usb_extract.py)
+   # The preset bank is generated from the dump; this decodes it again, checks the decoding against
+   # the calibration reads, and fails if src/factory_bank.inc is stale.
+   add_test(NAME matrixbrute-bank COMMAND Python3::Interpreter -I ${CMAKE_CURRENT_SOURCE_DIR}/tools/mb_bank.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/data/dump ${CMAKE_CURRENT_SOURCE_DIR}/src/factory_bank.inc --check)
 endif()
 
 # Offscreen render of the panel, for docs and visual checks. Needs a GPU (or a software Vulkan driver).

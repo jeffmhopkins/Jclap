@@ -18,6 +18,7 @@
 
 #include "cc_map.h"
 #include "editor.h"
+#include "patches.h"
 
 namespace {
 
@@ -46,9 +47,10 @@ const char *sectionName(Section s) {
 
 // State layout: 4-byte magic, uint32 version, int32 channel, int32 fine, int32 follow, uint32 count,
 // then per CC parameter {int32 cc, int32 touched, double value}, then the preset name as uint32
-// length + bytes. Keyed by CC so the list can change between versions.
+// length + bytes. Keyed by CC so the list can change between versions. Version 2 adds int32 preset
+// at the end: the synth preset the plugin loaded (0-255), or -1.
 constexpr char kStateMagic[4] = {'J', 'M', 'A', 'T'};
-constexpr uint32_t kStateVersion = 1;
+constexpr uint32_t kStateVersion = 2;
 
 struct StateHeader {
    char magic[4];
@@ -177,10 +179,44 @@ public:
       return i >= 0 && touched_[i].load();
    }
    uint32_t heardCount() const override { return heardCount_.load(); }
-   int heardProgram() const override { return heardProgram_.load(); }
+   int synthPreset() const override { return synthPreset_.load(); }
+
+   void loadProgram(const HardwarePatch &patch) override {
+      if (patch.preset < 0 || patch.preset >= kPresetCount)
+         return;
+      loadedPreset_ = patch.preset;
+      presetName_ = displayName(patch);
+
+      // The knobs the preset sets stop sending before their values change, and the audio thread
+      // counts them as sent once the Program Change is out, so none of them goes out on its own.
+      for (auto &f : fromProgram_)
+         f.store(false);
+      for (auto [cc, v] : patch.values) {
+         const int i = indexOfCc(cc);
+         if (i < 0)
+            continue;
+         touched_[i].store(false);
+         fromProgram_[i].store(true);
+         const double value = std::clamp(v, 0.0, 127.0);
+         values_[i].store(value);
+         edits_.begin(static_cast<clap_id>(cc));
+         edits_.value(static_cast<clap_id>(cc), value);
+         edits_.end(static_cast<clap_id>(cc));
+      }
+      synthPreset_.store(patch.preset);
+      programRequested_.store(patch.preset);
+      if (hostState_)
+         hostState_->mark_dirty(host());
+      if (hostParams_)
+         hostParams_->request_flush(host());
+   }
 
    std::string presetName() const override { return presetName_; }
-   void setPresetName(const std::string &name) override { presetName_ = name; }
+   // A preset of the plugin's own (or a rename) isn't one of the synth's.
+   void setPresetName(const std::string &name) override {
+      presetName_ = name;
+      loadedPreset_ = -1;
+   }
 
    // ---- params ----
 
@@ -275,8 +311,10 @@ public:
             return false;
       }
       const uint32_t nameLength = static_cast<uint32_t>(std::min<size_t>(presetName_.size(), 255));
+      const int32_t preset = loadedPreset_;
       return jclap::core::writeAll(stream, &nameLength, sizeof(nameLength)) &&
-             jclap::core::writeAll(stream, presetName_.data(), nameLength);
+             jclap::core::writeAll(stream, presetName_.data(), nameLength) &&
+             jclap::core::writeAll(stream, &preset, sizeof(preset));
    }
 
    bool stateLoad(const clap_istream_t *stream) override {
@@ -296,6 +334,9 @@ public:
       char buffer[256];
       if (!jclap::core::readAll(stream, &nameLength, sizeof(nameLength)) || nameLength >= sizeof(buffer) ||
           !jclap::core::readAll(stream, buffer, nameLength))
+         return false;
+      int32_t preset = -1;
+      if (header.version >= 2 && !jclap::core::readAll(stream, &preset, sizeof(preset)))
          return false;
 
       // A knob the state leaves out (or saved as NaN) is back at its default, untouched, rather than
@@ -327,7 +368,14 @@ public:
       fine_.store(header.fine != 0);
       follow_.store(header.follow != 0);
       presetName_.assign(buffer, nameLength);
-      // Send every knob that was set to the synth on the next block.
+      loadedPreset_ = preset >= 0 && preset < kPresetCount ? preset : -1;
+      // Send the restored sound to the synth on the next block: its preset first, then every knob
+      // that was set, in case one moved after the preset was loaded.
+      for (auto &f : fromProgram_)
+         f.store(false);
+      synthPreset_.store(loadedPreset_);
+      if (loadedPreset_ >= 0)
+         programRequested_.store(loadedPreset_);
       loaded_.store(true);
       resendRequested_.store(true);
 
@@ -355,6 +403,8 @@ public:
          for (int i = 0; i < kCcParamCount; ++i)
             modulatedOnce_[i] = modulatedOnce_[i] && mods_[i].load() != 0.0;
       syncSettings(resendRequested_.exchange(false));
+      if (const int preset = programRequested_.exchange(-1); preset >= 0 && !sendProgram(out, preset))
+         programRequested_.store(preset);
       for (int i = 0; i < kCcParamCount; ++i)
          sendIfChanged(out, 0, i, false);
 
@@ -421,6 +471,25 @@ private:
       return true;
    }
 
+   // Bank Select and Program Change for `preset`, on the channel the CCs go out on. The knobs the
+   // preset set now match the synth, so they count as sent. False if the host's queue was full.
+   bool sendProgram(const clap_output_events_t *out, int preset) {
+      const auto status = static_cast<uint8_t>(0xB0 | (sentChannel_ - 1));
+      if (!jclap::core::pushMidi(out, 0, status, 0, static_cast<uint8_t>(bankSelectOf(preset))) ||
+          !jclap::core::pushMidi(out, 0, status, 32, 0) ||
+          !jclap::core::pushMidi(out, 0, static_cast<uint8_t>(0xC0 | (sentChannel_ - 1)),
+                                 static_cast<uint8_t>(programChangeOf(preset)), 0))
+         return false;
+      // The synth has these values now, whether or not 14-bit is on.
+      for (int i = 0; i < kCcParamCount; ++i) {
+         if (!fromProgram_[i].exchange(false))
+            continue;
+         sender_.sent(i, toWire(effective(i), fineOut(i)));
+         touched_[i].store(true);
+      }
+      return true;
+   }
+
    // A CC on our channel: the synth has that value now. It came from the synth's own panel or from a
    // controller on the track; with Follow on, the knob moves to it and the host hears about it as a
    // gesture, so it can record the move as automation. A Program Change means the synth loaded
@@ -429,8 +498,12 @@ private:
       const int status = ev->data[0] & 0xF0;
       if ((ev->data[0] & 0x0F) != sentChannel_ - 1)
          return;
+      if (status == 0xB0 && ev->data[1] == 0) {
+         heardBank_ = ev->data[2] & 0x7F;
+         return;
+      }
       if (status == 0xC0) {
-         heardProgram_.store(ev->data[1] & 0x7F);
+         synthPreset_.store((heardBank_ & 15) * 16 + (ev->data[1] & 15));
          for (int i = 0; i < kCcParamCount; ++i)
             touched_[i].store(false);
          sender_.reset();
@@ -573,10 +646,14 @@ private:
    std::atomic<bool> fine_{false}, follow_{true};
    std::atomic<bool> resendRequested_{false}, loaded_{false};
    std::atomic<uint32_t> heardCount_{0};
-   std::atomic<int> heardProgram_{-1};
+   std::atomic<int> synthPreset_{-1};
+   // A synth preset for the audio thread to send (-1 = none), and the knobs that preset set.
+   std::atomic<int> programRequested_{-1};
+   std::atomic<bool> fromProgram_[kCcParamCount] = {};
 
    // Main thread only.
    std::string presetName_;
+   int loadedPreset_ = -1; // the synth preset the plugin last loaded, kept with the project
 
    // Audio thread only.
    static constexpr double kMinGapSeconds = 0.005;
@@ -588,6 +665,7 @@ private:
    CcSender sender_;
    CcReceiver receiver_;
    int sentChannel_ = 1;
+   int heardBank_ = 0;
    bool sentFine_ = false;
    bool modulatedOnce_[kCcParamCount] = {};
    bool inGesture_[kCcParamCount] = {};
