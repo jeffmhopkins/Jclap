@@ -108,7 +108,7 @@ private:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [bodies [page [width height]]]\n", argv[0]);
+      std::fprintf(stderr, "usage: %s out.png [bodies [page [width height [dice]]]]\n", argv[0]);
       return 1;
    }
    const int bodies = argc > 2 ? std::atoi(argv[2]) : 3;
@@ -116,5 +116,6 @@ int main(int argc, char **argv) {
    const int width = argc > 5 ? std::atoi(argv[4]) : 1200;
    const int height = argc > 5 ? std::atoi(argv[5]) : 780;
    DemoHost host(bodies < 2 ? 3 : bodies);
-   return renderScreenshot(host, 7.0, width, height, argv[1], page) ? 0 : 1;
+   const bool dice = argc > 6 && std::atoi(argv[6]) != 0;
+   return renderScreenshot(host, 7.0, width, height, argv[1], page, dice) ? 0 : 1;
 }

@@ -30,6 +30,7 @@
 #include <visage_widgets/text_editor.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -39,6 +40,7 @@
 
 #include "params.h"
 #include "presets.h"
+#include "randomize.h"
 
 namespace jverb {
 namespace {
@@ -96,6 +98,18 @@ const ui::Theme &glassTheme() {
       t.buttonHover = 0x60283040;
       t.panel = 0x80141a26;
       t.panelBorder = 0x40ffffff;
+      return t;
+   }();
+   return theme;
+}
+
+// The same, for a button with nothing to do: its text and border faded.
+const ui::Theme &idleGlassTheme() {
+   static const ui::Theme theme = [] {
+      ui::Theme t = glassTheme();
+      t.text = 0x55e6e8eb;
+      t.panelBorder = 0x1effffff;
+      t.buttonHover = t.button;
       return t;
    }();
    return theme;
@@ -1216,7 +1230,9 @@ public:
       buildLoop();
       buildBodies();
       buildOutput();
+      buildDice();
       layoutBodies(currentBodies());
+      showDice(host_.diceOpen);
       // Checked at every screen refresh; the pacer picks the ones that step (see frame_pacer.h).
       startTimer(1);
    }
@@ -1251,6 +1267,13 @@ public:
 
    OrbitView &view() { return *view_; }
    void selectSpacePage(int page) { spaceTabs_->select(page); }
+   void showDice(bool open) {
+      host_.diceOpen = open;
+      diceButton_->setOn(open);
+      for (visage::Frame *f : dice_)
+         f->setVisible(open);
+      refreshDice();
+   }
    // Pulls every control's value from the host now, as the bindings' timer does.
    void syncControls() { bindings_.sync(); }
 
@@ -1313,8 +1336,14 @@ private:
    }
 
    void buildHeader() {
-      update_ = &glassy(add<ui::UpdateNotice>({140, 13, 226, 26}), kOrange);
-      add<PresetBar>({380, 12, 340, 28}, host_);
+      update_ = &glassy(add<ui::UpdateNotice>({140, 13, 164, 26}), kOrange);
+      presetBar_ = &add<PresetBar>({380, 12, 340, 28}, host_);
+      auto &dice = glassy(add<ui::Button>({312, 14, 60, 24}, "DICE"), kOrange);
+      dice.setToggle(true);
+      dice.onToggle = [this](bool on) { showDice(on); };
+      diceButton_ = &dice;
+      tips_.add(dice, "RANDOMIZE a new space, or MUTATE the one there is. UNDO steps back through what they "
+                      "replaced.");
       auto &run = glassy(add<ui::Button>({760, 14, 60, 24}, "RUN"), kOrange);
       bindings_.bind(run, kRun);
       tips_.add(run, "Pause or run the orbits. Paused, the reverb keeps the shape it had.");
@@ -1547,7 +1576,127 @@ private:
       }
    }
 
+   // The dice card, over the stage's top left: RANDOMIZE by COMPLEXITY, MUTATE by AMOUNT, UNDO and
+   // REDO, and a lock for each section both leave alone.
+   void buildDice() {
+      const ui::Rect b = kDiceBox;
+      const auto keep = [this](visage::Frame &f) -> visage::Frame & {
+         dice_.push_back(&f);
+         return f;
+      };
+      keep(glass(b, "DICE", kOrange));
+      auto &rnd = glassy(add<ui::Button>({b.x + 14, b.y + 36, 124, 26}, "RANDOMIZE"), kOrange);
+      rnd.onClick = [this] { roll(false); };
+      keep(rnd);
+      tips_.add(rnd, "A new space from scratch: a room, a plate, a hall or a wash, then every card in ranges that "
+                     "sound for it. MIX and LEVEL stay as they are, and so do locked sections.");
+      auto &mut = glassy(add<ui::Button>({b.x + 14, b.y + 70, 124, 26}, "MUTATE"), kOrange);
+      mut.onClick = [this] { roll(true); };
+      keep(mut);
+      tips_.add(mut, "Nudges every value by AMOUNT. What's off stays off and the loop never runs away, so the space "
+                     "stays itself. Click again to keep going.");
+      const auto amountBox = [&](float y, const char *name, double &value, const char *tip) {
+         auto &box = glassy(add<ui::NumberBox>({b.x + 146, y, b.w - 160, 26}, ui::ValueRange{0.0, 1.0, 0.5, 0.05}), kDim);
+         box.setLabel(name);
+         box.valueText = [](double v) { return std::to_string(static_cast<int>(std::lround(v * 100.0))) + "%"; };
+         box.parseText = [](const std::string &t, double &v) {
+            char *end = nullptr;
+            const double n = std::strtod(t.c_str(), &end);
+            if (end == t.c_str())
+               return false;
+            v = std::clamp(n / 100.0, 0.0, 1.0);
+            return true;
+         };
+         box.setValue(value);
+         box.onChange = [&value](double v) { value = v; };
+         keep(box);
+         tips_.add(box, tip);
+      };
+      amountBox(b.y + 36, "COMPLEXITY", host_.dice.complexity,
+                "How much RANDOMIZE reaches for: at 0 a plain space; at 100% shimmer and feedback in the loop, the "
+                "drive, the echo, more bodies routed to more targets and the orbit past 100%.");
+      amountBox(b.y + 70, "AMOUNT", host_.dice.amount,
+                "How far MUTATE moves each value: 5% is a touch, 25% a cousin of the space, 100% a distant one.");
+      auto &undo = glassy(add<ui::Button>({b.x + b.w - 120, b.y + 8, 52, 20}, "UNDO"), kDim);
+      undo.onClick = [this] { stepHistory(false); };
+      undoButton_ = &undo;
+      keep(undo);
+      tips_.add(undo, "Back to the space before the last RANDOMIZE or MUTATE.");
+      auto &redo = glassy(add<ui::Button>({b.x + b.w - 64, b.y + 8, 52, 20}, "REDO"), kDim);
+      redo.onClick = [this] { stepHistory(true); };
+      redoButton_ = &redo;
+      keep(redo);
+      tips_.add(redo, "Forward again to the space UNDO left.");
+      keep(add<ui::Label>(ui::Rect{b.x + 14, b.y + 108, 200, 16}, "LOCK", kDim, visage::Font::kLeft));
+      static const char *const lockTips[kDiceSectionCount] = {
+          "decay, size, gravity, bodies, motion, predelay and damping", "attack, diffusion, early/late, bass, the cuts and React",
+          "orbit pan, tone and swirl", "each body's mass, velocity and routing", "feedback, shimmer, tilt, smear and safety",
+          "the drive", "the echo", "width and duck"};
+      const auto cells = ui::row({b.x + 14, b.y + 128, b.w - 28, 22}, 4, 6);
+      const auto cells2 = ui::row({b.x + 14, b.y + 156, b.w - 28, 22}, 4, 6);
+      for (int s = 0; s < kDiceSectionCount; ++s) {
+         auto &lock = glassy(add<ui::Button>(s < 4 ? cells[s] : cells2[s - 4], kDiceSectionNames[s]), kDim);
+         lock.setToggle(true);
+         lock.setOn(host_.dice.locked(s));
+         lock.onToggle = [this, s](bool on) {
+            host_.dice.locks = on ? host_.dice.locks | (1u << s) : host_.dice.locks & ~(1u << s);
+         };
+         keep(lock);
+         tips_.add(lock, std::string("Locked, RANDOMIZE and MUTATE leave ") + lockTips[s] + " as they are.");
+      }
+   }
+   // Every param, with the preset's name, as the dice found them.
+   DiceSnapshot snapshot() const {
+      DiceSnapshot now;
+      now.values.resize(kParamCount);
+      for (clap_id id = 0; id < kParamCount; ++id)
+         now.values[id] = host_.paramValue(id);
+      now.name = host_.presetName();
+      return now;
+   }
+   // Puts a space back, restarting the orbits from its masses and velocities as loading a preset does.
+   void restore(const DiceSnapshot &s, bool restart) {
+      host_.setParams(s.values.data());
+      host_.setPresetName(s.name);
+      if (restart)
+         host_.send({OrbitCommand::Kind::Reset, 0, 0.0f, 0.0f});
+      syncControls();
+      presetBar_->redraw();
+   }
+   // Randomize or mutate, keeping what it was to go back to.
+   void roll(bool mutate) {
+      DiceSnapshot now = snapshot();
+      std::vector<double> values = now.values;
+      // Each roll is new: the clock and a count, mixed by the dice's own generator.
+      const uint64_t seed = DiceRng(static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()) +
+                                    ++diceSeed_).next();
+      std::string name;
+      if (mutate) {
+         mutateSpace(values, host_.dice, seed);
+         name = mutantName(now.name);
+      }
+      else
+         name = randomizeSpace(values, host_.dice, seed);
+      host_.diceHistory.push(std::move(now));
+      // A new space starts its orbits afresh; a mutated one keeps flying.
+      restore({values, name}, !mutate);
+      refreshDice();
+   }
+   void stepHistory(bool forward) {
+      DiceHistory &h = host_.diceHistory;
+      if (forward ? !h.canRedo() : !h.canUndo())
+         return;
+      restore(forward ? h.redo(snapshot()) : h.undo(snapshot()), true);
+      refreshDice();
+   }
+   // UNDO and REDO dim when there's nothing to step to.
+   void refreshDice() {
+      undoButton_->setTheme(host_.diceHistory.canUndo() ? glassTheme() : idleGlassTheme());
+      redoButton_->setTheme(host_.diceHistory.canRedo() ? glassTheme() : idleGlassTheme());
+   }
+
    static constexpr float kCardTop = 612.0f, kCardHeight = 152.0f;
+   static constexpr ui::Rect kDiceBox{242, 64, 292, 192};
 
    struct Card {
       Glass *glass = nullptr;
@@ -1559,6 +1708,10 @@ private:
    ui::ParamBindings bindings_;
    ui::Tooltips tips_;
    ui::UpdateNotice *update_ = nullptr;
+   PresetBar *presetBar_ = nullptr;
+   ui::Button *diceButton_ = nullptr, *undoButton_ = nullptr, *redoButton_ = nullptr;
+   std::vector<visage::Frame *> dice_;
+   uint64_t diceSeed_ = 0;
    OrbitView *view_ = nullptr;
    Card cards_[kMaxBodies];
    AddSlot *addSlot_ = nullptr;
@@ -1580,10 +1733,11 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
 }
 
 bool renderScreenshot(EditorHost &host, double seconds, int width, int height, const char *pngPath,
-                      int spacePage) {
+                      int spacePage, bool dice) {
    Panel panel(host);
    panel.stopTimer();
    panel.selectSpacePage(spacePage);
+   panel.showDice(dice);
    const int frames = static_cast<int>(seconds * 60.0);
    for (int i = 0; i < frames; ++i)
       panel.step(1.0f / 60.0f);
