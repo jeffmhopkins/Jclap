@@ -254,9 +254,9 @@ inline void randomLoop(Values &v, DiceRng &rng, Space space, double c) {
    }
    // Feedback stays below where the tail would grow on its own: that's the Extremes' job.
    if (rng.chance((wash ? 0.25 : 0.05) + 0.45 * c))
-      v.set(kFeedback, rng.range(0.15, wash ? 0.8 : 0.55));
+      v.set(kFeedback, rng.range(0.15, wash ? 0.7 : 0.5));
    if (rng.chance(0.5))
-      v.set(kTilt, rng.range(-0.35, 0.3));
+      v.set(kTilt, rng.range(-0.25, 0.25));
    v.set(kSmear, rng.range(0.1, 0.6));
 }
 
@@ -379,7 +379,7 @@ inline void mutateSpace(std::vector<double> &values, const DiceSettings &setting
       // A body's amount only where it's routed, and its target only to another while it is.
       if (body >= 0 && bodyRole(id) == kBody1Amount) {
          if (v.choice(bodyParam(body, kBody1Target)) != static_cast<int>(Target::Off))
-            v.set(id, std::clamp(now + rng.normal() * a * 0.15 * span, -std::max(0.8, std::fabs(now)), std::max(0.8, std::fabs(now))));
+            v.set(id, std::clamp(now + rng.normal() * a * 0.15 * span, -std::max(0.7, std::fabs(now)), std::max(0.7, std::fabs(now))));
          continue;
       }
       if (body >= 0 && bodyRole(id) == kBody1Target) {
@@ -427,8 +427,13 @@ inline void mutateSpace(std::vector<double> &values, const DiceSettings &setting
    // Keep the tail one that fades: the loop and the echo no hotter than they were or than where a
    // tail starts to grow, and the drive's trim following its drive.
    const auto atMost = [&](clap_id id, double most) { v.set(id, std::min(v.get(id), std::max(before[id], most))); };
-   if (!settings.locked(kDiceLoop))
-      atMost(kFeedback, 0.85);
+   if (!settings.locked(kDiceLoop)) {
+      atMost(kFeedback, 0.6);
+      // Tilt is in the loop too: past a quarter either way, with feedback, it can feed the bass or
+      // the top back louder than it went in.
+      const double tilt = std::max(0.25, std::fabs(before[kTilt]));
+      v.set(kTilt, std::clamp(v.get(kTilt), -tilt, tilt));
+   }
    if (!settings.locked(kDiceEcho))
       atMost(kEchoFeedback, 0.75);
    if (!settings.locked(kDiceDrive)) {
