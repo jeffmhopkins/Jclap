@@ -198,6 +198,62 @@ void dragTests() {
    editor->releaseInput();
 }
 
+// 14-bit output: each value goes out as its MSB on the output CC, then its LSB on that CC + 32.
+void fineTests() {
+   jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+   h.setParam(11, 1.0);
+   h.midi(0xB0, 16, 96);
+   h.midi(0xB0, 17, 64);
+   auto out = h.process();
+   const jclap::PolarCC want = jclap::toPolar(jclap::ccToBipolar(96), 0.0, {}, jclap::kSteps14);
+   JCLAP_CHECK(want.radius > 0 && (want.radius & 0x7F) != 0); // an LSB that shows
+   JCLAP_CHECK(out.midi.size() == 4);
+   if (out.midi.size() == 4) {
+      JCLAP_CHECK(out.midi[0].data1 == 18 && out.midi[0].data2 == 0 && out.midi[1].data1 == 50 &&
+                  out.midi[1].data2 == 0);
+      JCLAP_CHECK(out.midi[2].data1 == 19 && out.midi[2].data2 == (want.radius >> 7) && out.midi[3].data1 == 51 &&
+                  out.midi[3].data2 == (want.radius & 0x7F));
+   }
+   // The panel shows it at 7 bits.
+   int angle = -1, radius = -1;
+   JCLAP_CHECK(h.object<polar_xy::EditorHost>()->lastOutput(angle, radius) && angle == 0 &&
+               radius == (want.radius >> 7));
+
+   // 45 degrees, on the 14-bit circle: 16383 / 8 rounds to 2048, MSB 16 and LSB 0.
+   h.midi(0xB0, 16, 127);
+   h.midi(0xB0, 17, 127);
+   out = h.process();
+   JCLAP_CHECK(out.midi.size() >= 2 && out.midi[0].data1 == 18 && out.midi[0].data2 == 16 &&
+               out.midi[1].data1 == 50 && out.midi[1].data2 == 0);
+
+   // Gliding at 14 bits moves in far finer steps: a slow quarter turn sends many more angles than
+   // the 32 a 7-bit CC has.
+   h.setParam(10, 1.0);
+   h.setParam(8, 1000.0);
+   h.midi(0xB0, 16, 0);
+   h.midi(0xB0, 17, 127);
+   int lsbs = 0;
+   for (int b = 0; b < 400; ++b)
+      for (const auto &m : h.process().midi)
+         lsbs += m.data1 == 50;
+   JCLAP_CHECK(lsbs > 200);
+   h.setParam(8, 0.0);
+   h.setParam(10, 0.0);
+   h.process();
+
+   // Output CCs above 31 have no LSB CC to pair with, so the output goes back to 7-bit.
+   h.setParam(3, 40.0);
+   h.midi(0xB0, 16, 127);
+   h.midi(0xB0, 17, 64);
+   out = h.process();
+   // (The new CC sends the old position first, then the move.)
+   for (const auto &m : out.midi)
+      JCLAP_CHECK(m.data1 == 18 || m.data1 == 40);
+   JCLAP_CHECK(!out.midi.empty() && out.midi.back().data1 == 18 && out.midi.back().data2 == 0);
+
+   JCLAP_CHECK(h.paramText(11, 1.0) == "14-bit");
+}
+
 } // namespace
 
 int main() {
@@ -317,8 +373,10 @@ int main() {
       JCLAP_CHECK(h2.paramValue(0) == 20.0 && h2.paramValue(1) == 17.0);
       JCLAP_CHECK(h2.object<polar_xy::EditorHost>()->presetName() == "Whirlpool");
 
-      // Version 1 state, from before Smoothing, Inertia and Motion Path: those load as defaults.
+      // Version 1 state, from before Smoothing, Inertia, Motion Path and Output Resolution: those load
+      // as defaults.
       h2.setParam(8, 500.0);
+      h2.setParam(11, 1.0);
       h2.process();
       const char magic[4] = {'J', 'C', 'O', 'P'};
       const uint32_t version = 1;
@@ -329,7 +387,8 @@ int main() {
       pos = 0;
       JCLAP_CHECK(state2->load(h2.plugin(), &is));
       JCLAP_CHECK(h2.paramValue(0) == 21.0 && h2.paramValue(4) == 45.0 && h2.paramValue(6) == 1.0);
-      JCLAP_CHECK(h2.paramValue(8) == 0.0 && h2.paramValue(9) == 0.0 && h2.paramValue(10) == 0.0);
+      JCLAP_CHECK(h2.paramValue(8) == 0.0 && h2.paramValue(9) == 0.0 && h2.paramValue(10) == 0.0 &&
+                  h2.paramValue(11) == 0.0);
       JCLAP_CHECK(h2.object<polar_xy::EditorHost>()->presetName().empty()); // no name before version 3
    }
 
@@ -350,5 +409,6 @@ int main() {
 
    motionTests();
    dragTests();
+   fineTests();
    return jclap::core::testResult();
 }

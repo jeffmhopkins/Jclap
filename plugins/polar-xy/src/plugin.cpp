@@ -31,7 +31,8 @@ struct ChannelState {
    // controller moves again. The mouse arrives a block at a time, so the output glides between moves.
    double padX = 64.0, padY = 64.0;
    bool fromPad = false;
-   // The angle held at dead center, and what was last sent on the output CCs (-1: send again).
+   // The angle held at dead center, and what was last sent on the output CCs (-1: send again), in
+   // the output's resolution.
    int angle = -1;
    int sentAngle = -1, sentRadius = -1;
    // Where the output is on its way to the X/Y, with Smoothing and Inertia.
@@ -43,17 +44,18 @@ struct Settings {
    int outAngle = -1, outRadius = -1, direction = 0, radiusMode = 0;
    double angleOffset = 0.0;
    bool around = false;
+   bool fine = false; // 14-bit output
    bool operator==(const Settings &o) const {
       return outAngle == o.outAngle && outRadius == o.outRadius && direction == o.direction &&
-             radiusMode == o.radiusMode && angleOffset == o.angleOffset && around == o.around;
+             radiusMode == o.radiusMode && angleOffset == o.angleOffset && around == o.around && fine == o.fine;
    }
 };
 
 // State layout: 4-byte magic, uint32 version, one double per parameter, then (from version 3) uint32
-// name length and the preset name. Version 1 had the params before Smoothing; the ones it lacks load
-// as their defaults.
+// name length and the preset name. Version 1 had the params before Smoothing, versions 2 and 3 those
+// before Output Resolution; the ones they lack load as their defaults.
 constexpr char kStateMagic[4] = {'J', 'C', 'O', 'P'};
-constexpr uint32_t kStateVersion = 3;
+constexpr uint32_t kStateVersion = 4;
 
 struct StateHeader {
    char magic[4];
@@ -66,6 +68,8 @@ uint32_t savedParamCount(uint32_t version) {
       return kParamSmoothing;
    case 2:
    case 3:
+      return kParamResolution;
+   case 4:
       return kParamCount;
    default:
       return 0;
@@ -398,6 +402,7 @@ private:
       s.radiusMode = intParam(kParamRadiusMode);
       s.angleOffset = params_[kParamAngleOffset].load();
       s.around = intParam(kParamMotionPath) != 0;
+      s.fine = fineOutput(s.outAngle, s.outRadius, intParam(kParamResolution) != 0);
       return s;
    }
 
@@ -419,7 +424,17 @@ private:
       if (now == applied_)
          return;
       const bool moved = now.outAngle != applied_.outAngle || now.outRadius != applied_.outRadius;
+      // The held angle carries over to the new resolution; what was sent is sent again in it.
+      const bool rescaled = now.fine != applied_.fine;
       applied_ = now;
+      if (rescaled)
+         for (ChannelState &st : channels_) {
+            if (st.angle >= 0)
+               st.angle = now.fine ? static_cast<int>(std::lround(st.angle * double(jclap::kSteps14) / jclap::kSteps7))
+                                   : static_cast<int>(std::lround(st.angle * double(jclap::kSteps7) / jclap::kSteps14)) %
+                                        jclap::kSteps7;
+            st.sentAngle = st.sentRadius = -1;
+         }
       for (ChannelState &st : channels_)
          st.motion.setAround(now.around);
       for (int channel = 0; channel < 16; ++channel) {
@@ -456,21 +471,39 @@ private:
       s.radiusMode = static_cast<jclap::RadiusMode>(applied_.radiusMode);
       double x, y;
       st.motion.position(x, y);
-      const jclap::PolarCC p = jclap::toPolar(x, y, s);
+      const jclap::PolarCC p = jclap::toPolar(x, y, s, applied_.fine ? jclap::kSteps14 : jclap::kSteps7);
 
       // At dead center the angle is undefined, so it holds its last value.
       if (p.hasAngle)
          st.angle = p.angle;
       if (st.angle >= 0 && st.angle != st.sentAngle) {
-         pushCC(out, time, channel, applied_.outAngle, st.angle);
+         pushValue(out, time, channel, applied_.outAngle, st.angle);
          st.sentAngle = st.angle;
       }
       if (p.radius != st.sentRadius) {
-         pushCC(out, time, channel, applied_.outRadius, p.radius);
+         pushValue(out, time, channel, applied_.outRadius, p.radius);
          st.sentRadius = p.radius;
       }
       if (channel == panelChannel_ && st.sentAngle >= 0)
-         lastOut_.store(st.sentAngle << 8 | st.sentRadius);
+         lastOut_.store(panelOutput(st));
+   }
+
+   // What a channel last sent, for the panel: angle << 8 | radius at 7 bits, or -1 for nothing yet.
+   int32_t panelOutput(const ChannelState &st) const {
+      if (st.sentAngle < 0)
+         return -1;
+      const int shift = applied_.fine ? 7 : 0;
+      return (st.sentAngle >> shift) << 8 | (st.sentRadius >> shift);
+   }
+
+   // An output value: one CC, or at 14 bits the MSB on `cc` then the LSB on cc + 32.
+   void pushValue(const clap_output_events_t *out, uint32_t time, int channel, int cc, int value) {
+      if (!applied_.fine) {
+         pushCC(out, time, channel, cc, value);
+         return;
+      }
+      pushCC(out, time, channel, cc, value >> 7);
+      pushCC(out, time, channel, cc + 32, value & 0x7F);
    }
 
    void pushCC(const clap_output_events_t *out, uint32_t time, int channel, int cc, int value) {
@@ -536,7 +569,7 @@ private:
       // The panel follows the channel that moved last, as one tear-free value.
       if (channel != panelChannel_ && !dragging) {
          panelChannel_ = channel;
-         lastOut_.store(st.sentAngle >= 0 ? st.sentAngle << 8 | st.sentRadius : -1);
+         lastOut_.store(panelOutput(st));
       }
       if (channel == panelChannel_)
          lastIn_.store(static_cast<uint32_t>(channel) << 16 | static_cast<uint32_t>(st.x) << 8 |

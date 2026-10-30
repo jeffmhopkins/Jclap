@@ -76,6 +76,16 @@ still moving.
 > exposed as settings. If the Orb dot lands rotated or mirrored from your controller, adjust
 > `Angle Offset` (degrees) and `Direction`.
 
+## 14-bit output
+
+A 7-bit CC gives the angle 127 steps round the circle (about 2.8 degrees each) and the radius 127
+steps, so a slow sweep moves in audible stairs. **Output Resolution** set to 14-bit (the **14-BIT**
+button on the panel) sends each value as a standard 14-bit CC pair: the top 7 bits on the output CC,
+then the bottom 7 on that CC + 32 (so the defaults, 18 and 19, also send on 50 and 51). That is
+16383 steps each. It needs both output CCs below 32; on higher ones the output stays 7-bit and the
+panel says so. Whether the receiving end reads the pair as one fine value is up to it; one that
+doesn't just sees the coarse CC move as before, plus two extra CCs.
+
 ## Panel
 
 **XY IN** shows the last X/Y position received, with its channel, and **POLAR OUT** the angle and
@@ -113,3 +123,4 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 | Smoothing | 0 ms | Glide time, up to 2 s |
 | Inertia | 0% | Weight: lag and overshoot |
 | Motion Path | Straight | Or Around, to move round the circle |
+| Output Resolution | 7-bit | Or 14-bit (14-BIT on the panel): MSB on the output CC, LSB on CC + 32 |

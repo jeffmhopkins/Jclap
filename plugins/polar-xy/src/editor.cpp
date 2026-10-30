@@ -78,6 +78,10 @@ public:
       const auto out = ui::row({508, 240, 192, 92}, 2);
       knob(kParamOutAngle, "ANGLE", kOrange, out[0]);
       knob(kParamOutRadius, "RADIUS", kOrange, out[1]);
+      // 14-bit output, in the section's title bar.
+      auto &fine = add<ui::Button>({636, 216, 64, 20}, "14-BIT");
+      fine.setAccent(kOrange);
+      bindings_.bind(fine, kParamResolution);
 
       knob(kParamAngleOffset, "OFFSET", kPurple, {36, 374, 96, 90}, 1.0);
 
@@ -165,8 +169,12 @@ private:
       const auto same = [this](clap_id a, clap_id b) {
          return std::lround(host_.paramValue(a)) == std::lround(host_.paramValue(b));
       };
+      const auto cc = [this](clap_id id) { return static_cast<int>(std::lround(host_.paramValue(id))); };
+      const bool coarse = std::lround(host_.paramValue(kParamResolution)) != 0 &&
+                          !fineOutput(cc(kParamOutAngle), cc(kParamOutRadius), true);
       warning_->setText(same(kParamInX, kParamInY)               ? "X and Y share a CC: not converting"
                         : same(kParamOutAngle, kParamOutRadius) ? "Angle and radius share a CC: not converting"
+                        : coarse                                ? "14-bit needs output CCs 0-31: sending 7-bit"
                                                                 : "");
    }
 
