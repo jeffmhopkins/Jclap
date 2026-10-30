@@ -174,6 +174,11 @@ function fail(why) {
    }
    println("MatrixBrute " + code(job.preset) + ": " + why + ", skipped");
    job.failed++;
+   if (job.found === 0 && job.failed >= 3) {
+      host.showPopupNotification("MatrixBrute: no answer from the synth" + (job.heard ? " (it sent " + job.heard + ")" : ""));
+      job = null;
+      return;
+   }
    next();
 }
 
@@ -194,8 +199,11 @@ function next() {
 function onSysex(hex) {
    if (!job)
       return;
-   var r = bytesOf(hex.toLowerCase());
-   if (hex.substr(0, 12).toLowerCase() !== ARTURIA || r[6] !== job.seq)
+   hex = hex.replace(/ /g, "").toLowerCase();
+   var r = bytesOf(hex);
+   if (!job.heard)
+      job.heard = hex.substr(0, 24); // shown if the read gives up: what did come back
+   if (hex.substr(0, 12) !== ARTURIA || r[6] !== job.seq)
       return;
    job.token++; // the timeout for this request is void
    if (job.stage === "header" && r[7] === 0x23 && r[8] === 0x52) {
