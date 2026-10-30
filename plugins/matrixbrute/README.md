@@ -60,8 +60,30 @@ they aren't CCs, so the panel doesn't show them.
 > protocol and the format are written up in the two scripts, and [docs/capture.md](docs/capture.md)
 > is how the USB capture of MIDI Control Center was made.
 >
-> To use your own synth's presets: close MIDI Control Center, run `python tools/mb_dump.py data/dump`
+> To build your own synth's presets in: close MIDI Control Center, run `python tools/mb_dump.py data/dump`
 > with the synth on USB, then `python tools/mb_bank.py data/dump src/factory_bank.inc` and rebuild.
+
+### Reading them off the synth (Bitwig)
+
+**READ SYNTH** (in the PRESET section) reads every preset stored on the synth, which takes about a
+minute, and lists those in the preset bar in place of the built-in bank. A plugin can't send or
+receive SysEx in Bitwig, so a controller script does the reading:
+
+1. Copy [bitwig/MatrixBrute.control.js](bitwig/MatrixBrute.control.js) to
+   `Documents/Bitwig Studio/Controller Scripts/`.
+2. In Bitwig's Settings > Controllers, add **Arturia > MatrixBrute presets** with **MatrixBrute** as
+   its input and output. Bitwig gives a MIDI port to one controller only, so remove any generic
+   controller on that port: this one passes the synth's keys and knobs on to tracks instead. Set the
+   MatrixBrute track's input to it.
+3. Press **READ SYNTH** in the plugin (or Read in the controller's panel). The status next to the
+   button counts the presets as they come in.
+
+The script serves the presets on `localhost:58017`, which is how the plugin gets them; the last read
+stays there until Bitwig closes, and a plugin opened later picks it up. It only sends read requests
+to the synth, the same ones MIDI Control Center uses to read presets. `tools/mb_bitwig_log.py`
+follows its log, for checking a read without the script console. The synth's second USB port
+(MIDIIN2/MIDIOUT2) answers the identity request but not preset reads, so the script needs the main
+one.
 
 ## What the plugin knows
 
@@ -79,7 +101,7 @@ the synth and the plugin doesn't push its own value back over them.
 
 > [!NOTE]
 > The buttons (filter modes, LFO waves, routing...) and the matrix's routing aren't sent as CCs, so the
-> plugin can't show or change them.
+> plugin can't show or change them, and the panel leaves them out.
 
 ## How it sends
 
@@ -125,17 +147,19 @@ The sustain pedal (64) is left out; it passes through.
 ## Panel
 
 Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage. `src/editor.cpp`
-holds the layout and `src/visuals.h` the pictures. It copies the synth's panel section by section:
-VCO 1 and 2 (enhancers above the wave levels), VCO 3, noise, audio mod, wheels and voice down the
-left; the mixer and LFO 1; the Steiner and ladder filters with Master Cutoff between them, and LFO 2;
-the preset display and the envelope sliders; the matrix; and the analog effects and sequencer on the
-right. Glide, the mod wheel and the macros sit along the bottom, like the synth's front edge.
+holds the layout and `src/visuals.h` the pictures. It follows the synth's panel section by section:
+VCO 1 and 2 (enhancers above the wave levels), VCO 3, bend range and audio mod down the left; the
+mixer and LFO 1; the Steiner and ladder filters with Master Cutoff between them, and LFO 2; the
+preset display and the envelope sliders; and the analog effects and sequencer on the right. Glide,
+the mod wheel and the macros sit along the bottom, like the synth's front edge. Only knobs and
+sliders that are on MIDI are there: the synth's buttons and its matrix aren't.
 
-The synth's buttons (filter modes, LFO waves, routing...) are drawn for reference only, since they
-aren't on MIDI. The preset display shows the synth's preset: the one picked in the preset bar, or the
-last Bank Select and Program Change heard. The pictures are drawn only
-from the CC values: each VCO's wave mix, the two filters' responses (low-pass guides), the envelope
-shapes and the effect's echoes.
+The preset display shows the synth's preset: the one picked in the preset bar, or the last Bank
+Select and Program Change heard. The pictures are drawn from the CC values: each VCO's wave mix, the
+two filters' responses (low-pass guides), the envelope shapes and the effect's echoes. On a note, a
+dot runs along each envelope (delay, attack, decay, held at sustain, then release), timed from the
+notes going through the plugin and a guess of 1 ms to 10 s per slider, since the synth doesn't report
+its envelopes and Arturia doesn't publish their times.
 
 Drag a knob or slider up or down (shift for fine), use the mouse wheel for single steps, double-click
 to reset. Right-click a control to reset it, type a value, or reach the host's menu for that

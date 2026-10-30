@@ -3,6 +3,7 @@
 // The plugin's knob panel, built from jclap::ui widgets. Kept behind this small interface so
 // plugin.cpp never includes Visage.
 
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -13,6 +14,18 @@
 namespace mb {
 
 struct HardwarePatch;
+
+// Notes going through the plugin, for the envelopes' moving dots: how many keys are down, and when
+// the last one went down and the last key came up, in noteClock() seconds (< 0 if never).
+struct NoteActivity {
+   int held = 0;
+   double lastOn = -1, lastOff = -1;
+};
+
+// Seconds on a steady clock, safe to read on the audio thread.
+inline double noteClock() {
+   return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 // What the panel needs from the plugin, on the main (GUI) thread. Params are addressed by CLAP id:
 // the CC number, or one of the settings ids. paramModulated() is what is actually sent, with host
@@ -35,6 +48,8 @@ public:
    // Loads one of the synth's own presets: sends Bank Select and Program Change, and moves every knob
    // the preset stores to its value without sending it.
    virtual void loadProgram(const HardwarePatch &patch) = 0;
+
+   virtual NoteActivity notes() const { return {}; }
 
    // The name the preset bar shows, kept with the project.
    virtual std::string presetName() const = 0;

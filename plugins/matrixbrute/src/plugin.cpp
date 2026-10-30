@@ -180,6 +180,7 @@ public:
    }
    uint32_t heardCount() const override { return heardCount_.load(); }
    int synthPreset() const override { return synthPreset_.load(); }
+   NoteActivity notes() const override { return {heldNotes_.load(), lastNoteOn_.load(), lastNoteOff_.load()}; }
 
    void loadProgram(const HardwarePatch &patch) override {
       if (patch.preset < 0 || patch.preset >= kPresetCount)
@@ -426,6 +427,7 @@ public:
          // Notes and other MIDI go straight through; anything else (transport...) must not be echoed.
          // With the synth's Local off, its own knobs only reach it this way.
          if (jclap::core::isNoteEvent(h)) {
+            trackNotes(h);
             if (h->type == CLAP_EVENT_MIDI)
                heardMidi(reinterpret_cast<const clap_event_midi_t *>(h), out);
             // Once one is refused, the rest wait behind it so they stay in order.
@@ -534,6 +536,30 @@ private:
          inGesture_[i] = jclap::core::pushParamGesture(out, id, true, ev->header.time);
       jclap::core::pushParamValue(out, id, value, ev->header.time);
       lastHeardFrame_[i] = frame_ + ev->header.time;
+   }
+
+   // Keys down and when they went down and up, for the panel's envelopes. Any channel: the synth's
+   // own keys or the host's notes.
+   void trackNotes(const clap_event_header_t *h) {
+      int change = 0;
+      if (h->type == CLAP_EVENT_NOTE_ON) {
+         change = 1;
+      } else if (h->type == CLAP_EVENT_NOTE_OFF || h->type == CLAP_EVENT_NOTE_CHOKE) {
+         change = -1;
+      } else if (h->type == CLAP_EVENT_MIDI) {
+         const auto *m = reinterpret_cast<const clap_event_midi_t *>(h);
+         const int status = m->data[0] & 0xF0;
+         if (status == 0x90 && m->data[2] > 0)
+            change = 1;
+         else if (status == 0x80 || status == 0x90)
+            change = -1;
+      }
+      if (change > 0) {
+         heldNotes_.fetch_add(1);
+         lastNoteOn_.store(noteClock());
+      } else if (change < 0 && heldNotes_.load() > 0 && heldNotes_.fetch_sub(1) == 1) {
+         lastNoteOff_.store(noteClock());
+      }
    }
 
    // A knob the synth moved ends its gesture once it has been still for a moment.
@@ -647,6 +673,8 @@ private:
    std::atomic<bool> resendRequested_{false}, loaded_{false};
    std::atomic<uint32_t> heardCount_{0};
    std::atomic<int> synthPreset_{-1};
+   std::atomic<int> heldNotes_{0};
+   std::atomic<double> lastNoteOn_{-1}, lastNoteOff_{-1};
    // A synth preset for the audio thread to send (-1 = none), and the knobs that preset set.
    std::atomic<int> programRequested_{-1};
    std::atomic<bool> fromProgram_[kCcParamCount] = {};

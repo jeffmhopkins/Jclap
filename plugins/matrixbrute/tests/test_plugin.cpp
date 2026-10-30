@@ -12,6 +12,7 @@
 #include "cc_map.h"
 #include "editor.h"
 #include "patches.h"
+#include "synth_link.h"
 
 extern "C" const clap_plugin_entry_t clap_entry;
 
@@ -228,11 +229,54 @@ int main() {
       JCLAP_CHECK(jugg != nullptr && mb::presetCode(jugg->preset) == "A01");
    }
 
+   // Presets read off the synth by the Bitwig script: a read's lines only replace the list once it's
+   // done, and a bad line is skipped.
+   {
+      mb::HardwarePatch p;
+      JCLAP_CHECK(mb::SynthLink::parsePreset("PRESET\t17\tLead\t9:12.5,10:0", p));
+      CHECK_EQ(p.preset, 17);
+      JCLAP_CHECK(p.name == "Lead" && p.values.size() == 2 && p.values[0].first == 9 && p.values[0].second == 12.5);
+      JCLAP_CHECK(!mb::SynthLink::parsePreset("PRESET\t256\tX\t9:1", p));
+      JCLAP_CHECK(!mb::SynthLink::parsePreset("PRESET\t3\tX\t9:200", p));
+      JCLAP_CHECK(!mb::SynthLink::parsePreset("PRESET\t3\tX", p));
+
+      mb::SynthLink &link = mb::SynthLink::get();
+      const uint32_t before = link.version();
+      link.handleLine("READING");
+      JCLAP_CHECK(link.status().reading);
+      link.handleLine("PRESET\t20\tSecond\t9:1");
+      link.handleLine("PRESET\tbad");
+      link.handleLine("PRESET\t0\tFirst\t9:2,13:127");
+      CHECK_EQ(link.status().found, 2);
+      CHECK_EQ(link.version(), before);
+      JCLAP_CHECK(link.presets().empty());
+      link.handleLine("DONE\t2\t1");
+      CHECK_EQ(link.version(), before + 1);
+      const auto read = link.presets();
+      JCLAP_CHECK(read.size() == 2 && read[0].preset == 0 && read[1].preset == 20);
+      JCLAP_CHECK(mb::findPatch(read, "B05 Second") != nullptr);
+      CHECK_EQ(link.status().failed, 1);
+      JCLAP_CHECK(!link.status().reading);
+      link.handleLine("READING");
+      link.handleLine("FAILED\tno answer from the synth");
+      JCLAP_CHECK(link.status().error == "no answer from the synth" && link.presets().size() == 2);
+   }
+
    // Notes pass straight through.
    h.midi(0x90, 60, 100);
    block = h.process();
    CHECK_EQ(block.midi.size(), 1u);
    CHECK_EQ(block.midi.empty() ? 0 : block.midi[0].status, 0x90);
+
+   // ... and the panel's envelopes see them: a key down, then up.
+   {
+      const mb::NoteActivity down = h.object<mb::EditorHost>()->notes();
+      JCLAP_CHECK(down.held == 1 && down.lastOn > 0 && down.lastOff < 0);
+      h.midi(0x80, 60, 0);
+      h.process();
+      const mb::NoteActivity up = h.object<mb::EditorHost>()->notes();
+      JCLAP_CHECK(up.held == 0 && up.lastOff >= down.lastOn);
+   }
 
    return jclap::core::testFailures() ? 1 : 0;
 }
