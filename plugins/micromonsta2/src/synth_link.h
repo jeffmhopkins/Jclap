@@ -2,8 +2,8 @@
 
 // Programs read off the MicroMonsta 2 itself. In Bitwig a plugin can't send or receive SysEx, so the
 // controller script in bitwig/MicroMonsta2.control.js talks to the synth and passes its program dumps
-// on over a local TCP port; this connects to it. Every instance of the plugin shares the one
-// connection.
+// on by OSC over UDP on localhost; this subscribes to them. Every instance of the plugin shares the
+// one subscription.
 //
 //    SynthLink::Use use;                          // connects while any panel holds one
 //    const int ticket = SynthLink::get().requestSound('A');
@@ -77,7 +77,8 @@ private:
    Status status_;
    Sound sound_;
    int lastTicket_ = 0;
-   std::string pendingRequest_; // for the connection thread to send
+   int pendingTicket_ = 0; // a sound request for the connection thread to send, and its part
+   char pendingPart_ = 'A';
    std::vector<HardwarePatch> bank_;
    std::vector<std::vector<uint8_t>> incoming_;
    std::atomic<uint32_t> bankVersion_{0};
