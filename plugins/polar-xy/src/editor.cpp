@@ -84,10 +84,6 @@ public:
          send.setAccent(kOrange);
          send.onClick = [this, i] { host_.sendOutput(i); };
       }
-      // 14-bit output, in the section's title bar.
-      auto &fine = add<ui::Button>({636, 216, 64, 20}, "14-BIT");
-      fine.setAccent(kOrange);
-      bindings_.bind(fine, kParamResolution);
 
       knob(kParamAngleOffset, "OFFSET", kPurple, {36, 374, 96, 90}, 1.0);
 
@@ -101,9 +97,10 @@ public:
       knob(kParamSmoothing, "SMOOTHING", kBlue, {36, 506, 96, 90}, 10.0);
       knob(kParamInertia, "INERTIA", kBlue, {150, 506, 96, 90}, 1.0);
       choice(kParamMotionPath, "PATH", kMotionPathLabels, 264, 480);
-      add<ui::Label>({484, 518, 212, 16}, "Straight: across the pad", ui::defaultTheme().dimText, visage::Font::kLeft);
-      add<ui::Label>({484, 538, 212, 16}, "Around: spins round the circle", ui::defaultTheme().dimText,
-                     visage::Font::kLeft);
+      choice(kParamResolution, "RESOLUTION", kResolutionLabels, 484, 480);
+      const unsigned dim = ui::defaultTheme().dimText;
+      add<ui::Label>({264, 576, 200, 14}, "Straight: across  /  Around: round", dim, visage::Font::kLeft);
+      add<ui::Label>({484, 576, 200, 14}, "14-bit: fine part on CC + 32", dim, visage::Font::kLeft);
 
       // Shown when two inputs or two outputs share a CC, which the plugin won't convert.
       warning_ = &add<ui::Label>({380, 48, 328, 14}, "", kOrange, visage::Font::kRight, 0.7f);
