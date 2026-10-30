@@ -66,6 +66,33 @@ lists them; they're shared by every instance and kept between sessions.
 > you through the U02 and U01 dumps), then `python tools/mm2_bank.py data/bank.syx src/factory_bank.inc`
 > and rebuild.
 
+### Reading the synth (Bitwig)
+
+A plugin can't send or receive SysEx in Bitwig, so a controller script talks to the synth for it:
+
+1. Copy [bitwig/MicroMonsta2.control.js](bitwig/MicroMonsta2.control.js) to
+   `Documents/Bitwig Studio/Controller Scripts/`.
+2. In Bitwig's Settings > Controllers, add **Audiothingies > MicroMonsta 2 programs** with the
+   MicroMonsta 2's USB port as its input and output. Bitwig gives a MIDI port to one controller only,
+   so remove any generic controller on that port: this one passes the synth's keys and knobs on to
+   tracks instead. Set the MicroMonsta 2 track's input to it.
+
+Then, in the header:
+
+- **READ SOUND** reads the sound on the part beside it (**PART A** or **PART B**) into the panel: every
+  knob and the mod matrix routing, edits you haven't saved included. Nothing is sent to the synth, and
+  the preset bar names the program it came from when the name matches one. It needs firmware 2.7 or
+  later, which answers the request; a project saved afterwards sends those knobs again when it opens.
+- **READ BANK** lists the programs stored on the synth in the preset bar, in place of the built-in
+  bank. The synth only sends them from its own panel, so the line under the header says what to do:
+  **UTILITY > U02**, choose every program (from P001, so they're numbered right), then hold **Yes**.
+  The line counts them as they come in. The script keeps the last bank until Bitwig closes, and a
+  panel opened later picks it up.
+
+The script serves the programs on `localhost:58018`. The one message it sends the synth is the sound
+request (`F0 00 21 22 4D 02 41 F7` for part A, `42` for part B), which the
+[Monstaguru](https://monstaguru.com/) librarian uses too; nothing on the synth is changed or stored.
+
 ## How it sends
 
 > [!NOTE]

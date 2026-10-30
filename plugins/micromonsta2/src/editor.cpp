@@ -30,6 +30,7 @@
 
 #include "cc_map.h"
 #include "patches.h"
+#include "synth_link.h"
 #include "visuals.h"
 
 namespace mm2 {
@@ -152,6 +153,7 @@ public:
       buildModSources();
       buildMatrix();
       syncChannel();
+      syncLink();
       syncRoutes();
       syncReadouts();
       startTimer(30);
@@ -159,6 +161,7 @@ public:
 
    void timerCallback() override {
       syncChannel();
+      syncLink();
       syncRoutes();
       syncReadouts();
       for (vis::Picture *p : pictures_)
@@ -270,18 +273,47 @@ private:
    // ---- header ----
 
    void buildHeader() {
-      auto &bar = add<ui::PresetBar>({(kDesignWidth - 480) * 0.5f, 18, 480, 28}, factoryPresets(), kPresetFormat, host_);
+      // The synth's programs: the bank compiled in, until READ BANK brings the ones it has now.
+      auto &bar = add<ui::PresetBar>({(kDesignWidth - 480) * 0.5f, 18, 480, 28}, presets_, kPresetFormat, host_);
+      bar_ = &bar;
       bar.setAccent(kOrange);
       bar.defaults = presetDefaults();
       bar.currentName = [this] { return host_.presetName(); };
       bar.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
       bar.onLoad = [this](const ui::Preset &p) {
-         if (const HardwarePatch *patch = findFactoryPatch(p.name))
+         if (const HardwarePatch *patch = findPatch(patches_, p.name))
             host_.loadProgram(*patch);
          else
             ui::applyPreset(p, host_, presetDefaults());
       };
       add<ui::UpdateNotice>({300, 20, 220, 24});
+
+      // Reading the synth, through the Bitwig script. The line under the header says what's going on,
+      // and what to do on the synth for a bank.
+      place(readSound_, {1068, 18, 100, 28});
+      place(part_, {1172, 18, 64, 28});
+      place(readBank_, {1240, 18, 96, 28});
+      readSound_.setAccent(kOrange);
+      readBank_.setAccent(kOrange);
+      readSound_.onClick = [this] {
+         used_ = true;
+         soundTicket_ = SynthLink::get().requestSound(partB_ ? 'B' : 'A');
+      };
+      part_.onClick = [this] {
+         partB_ = !partB_;
+         part_.setText(partB_ ? "PART B" : "PART A");
+      };
+      readBank_.onClick = [this] {
+         used_ = true;
+         waitingBank_ = !waitingBank_;
+      };
+      tips_.add(readSound_, "Reads the sound on the part shown beside it (A or B) into the panel: every knob and the mod "
+                            "matrix routing, edits included. Nothing is sent to the synth. Needs the Bitwig script "
+                            "and firmware 2.7 or later.");
+      tips_.add(part_, "Which of the synth's two parts READ SOUND reads.");
+      tips_.add(readBank_, "Lists the programs stored on the synth in the preset bar, in place of the built-in bank. "
+                           "The synth only sends them from its own panel: press this, then UTILITY > U02 on the synth.");
+      linkStatus_ = &label("", {300, 48, 1040, 14}, kDim, visage::Font::kCenter, 0.8f);
 
       place(chDown_, {1344, 18, 30, 28});
       place(channel_, {1378, 18, 116, 28});
@@ -510,10 +542,63 @@ private:
 
    void syncChannel() { channel_.setText("MIDI CH " + std::to_string(host_.channel())); }
 
+   // The Bitwig script: what it's doing, a sound this panel asked for, and a bank once one arrives.
+   void syncLink() {
+      SynthLink &link = SynthLink::get();
+      const SynthLink::Status st = link.status();
+      std::string text;
+      if (st.receiving)
+         text = "RECEIVING PROGRAMS FROM THE SYNTH... " + std::to_string(st.received);
+      else if (waitingBank_ && st.connected)
+         text = "ON THE SYNTH: UTILITY > U02 DUMP, CHOOSE EVERY PROGRAM (FROM P001), THEN HOLD YES. "
+                "PRESS READ BANK AGAIN TO STOP WAITING.";
+      else if (!used_)
+         text = "";
+      else if (!st.connected)
+         text = "READ SOUND AND READ BANK NEED THE BITWIG SCRIPT (BITWIG/MICROMONSTA2.CONTROL.JS, SEE THE README)";
+      else if (st.askingSound)
+         text = std::string("ASKING THE SYNTH FOR PART ") + (partB_ ? "B" : "A") + "'S SOUND...";
+      else if (!st.error.empty())
+         text = "READ FAILED: " + upper(st.error);
+      else
+         text = done_;
+      linkStatus_->setText(text);
+
+      const SynthLink::Sound sound = link.sound();
+      if (soundTicket_ != 0 && sound.ticket == soundTicket_) {
+         soundTicket_ = 0;
+         HardwarePatch patch = sound.patch;
+         // The synth doesn't say which program a part's sound came from; the name usually does.
+         for (const HardwarePatch &p : patches_)
+            if (p.name == patch.name)
+               patch.program = p.program;
+         host_.loadSound(patch);
+         done_ = "READ THE SOUND ON PART " + std::string(partB_ ? "B" : "A") + ": " + upper(patch.name);
+      }
+
+      if (link.bankVersion() == shownBankVersion_)
+         return;
+      shownBankVersion_ = link.bankVersion();
+      std::vector<HardwarePatch> read = link.bank();
+      if (read.empty())
+         return;
+      waitingBank_ = false;
+      done_ = std::to_string(read.size()) + " PROGRAMS FROM THE SYNTH IN THE PRESET BAR";
+      patches_ = std::move(read);
+      presets_ = toPresets(patches_);
+      bar_->rescan();
+   }
+
+   static std::string upper(std::string s) {
+      for (char &c : s)
+         c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+      return s;
+   }
+
    // The matrix rows follow the loaded program's routing, in plain English.
    void syncRoutes() {
-      const int program = host_.program();
-      bool changed = program != shownProgram_;
+      const int known = host_.routingKnown() ? 1 : 0;
+      bool changed = known != shownKnown_;
       ModRoute routes[kModSlots];
       for (int s = 0; s < kModSlots; ++s) {
          routes[s] = host_.route(s);
@@ -521,16 +606,16 @@ private:
       }
       if (!changed)
          return;
-      shownProgram_ = program;
+      shownKnown_ = known;
       for (int s = 0; s < kModSlots; ++s) {
          shownRoutes_[s] = routes[s];
          Row &row = rows_[s];
-         const bool used = program > 0 && routes[s].used();
+         const bool used = known && routes[s].used();
          const unsigned color = used ? sourceColor(routes[s]) : kDim;
          row.chip->set(used ? source(routes[s]).label : "", color);
          row.arrow->setColor(color);
          row.amount->setAccent(used ? color : 0xff4b515a);
-         if (program == 0) {
+         if (!known) {
             row.destination->setText(s == 0 ? "PICK A PROGRAM" : "");
             row.destination->setColor(kDim);
             row.where->setText(s == 0 ? "TO SEE ITS ROUTING" : "");
@@ -549,13 +634,13 @@ private:
             row.destination->setColor(kWhite);
             row.where->setText(targetOf(routes[s]).where);
          }
-         tips_.setText(*row.amount, modSentence(s, program > 0, routes[s]));
+         tips_.setText(*row.amount, modSentence(s, known, routes[s]));
       }
       // Which slots each LFO and performance control feeds.
       const auto feeds = [&](auto matches) {
          std::string list;
          for (int s = 0; s < kModSlots; ++s)
-            if (program > 0 && routes[s].used() && matches(std::string(source(routes[s]).code)))
+            if (known && routes[s].used() && matches(std::string(source(routes[s]).code)))
                list += (list.empty() ? "" : " \xC2\xB7 ") + std::to_string(s + 1);
          return list.empty() ? std::string("NOT ROUTED") : "FEEDS SLOT " + list;
       };
@@ -575,7 +660,7 @@ private:
       for (int s = 0; s < kModSlots; ++s) {
          const int v = toCcValue(value(52 + s)) - 64;
          rows_[s].value->setText((v > 0 ? "+" : "") + std::to_string(v));
-         rows_[s].value->setColor(shownProgram_ > 0 && shownRoutes_[s].used() ? kWhite : kDim);
+         rows_[s].value->setColor(shownKnown_ > 0 && shownRoutes_[s].used() ? kWhite : kDim);
       }
       lagValue_->setText(std::to_string(toCcValue(value(62))));
       for (auto [readout, cc] : readouts_)
@@ -584,7 +669,7 @@ private:
 
       double reach[128] = {};
       unsigned color[128] = {};
-      if (shownProgram_ > 0)
+      if (shownKnown_ > 0)
          for (int s = 0; s < kModSlots; ++s) {
             if (!shownRoutes_[s].used())
                continue;
@@ -618,6 +703,15 @@ private:
    };
 
    EditorHost &host_;
+   SynthLink::Use linkUse_;
+   std::vector<HardwarePatch> patches_ = factoryBank();
+   std::vector<ui::Preset> presets_ = factoryPresets();
+   ui::PresetBar *bar_ = nullptr;
+   ui::Label *linkStatus_ = nullptr;
+   uint32_t shownBankVersion_ = 0;
+   int soundTicket_ = 0;
+   bool partB_ = false, waitingBank_ = false, used_ = false;
+   std::string done_;
    ui::ParamBindings bindings_;
    ui::Tooltips tips_;
    ui::Knob *knobs_[128] = {};
@@ -628,9 +722,10 @@ private:
    ui::Label *feeds_[5] = {}; // LFO 1-3, mod wheel, mod knob
    ui::ActivityLed *leds_[3] = {};
    double lfoPhase_[3] = {};
-   int shownProgram_ = -1;
+   int shownKnown_ = -1;
    ModRoute shownRoutes_[kModSlots];
    ui::Button chDown_{"<"}, chUp_{">"}, channel_{"MIDI CH 1"}, sendAll_{"SEND ALL"};
+   ui::Button readSound_{"READ SOUND"}, part_{"PART A"}, readBank_{"READ BANK"};
 };
 
 } // namespace

@@ -164,38 +164,19 @@ public:
    void loadProgram(const HardwarePatch &patch) override {
       if (patch.program < 1 || patch.program > kProgramCount)
          return;
-      for (int s = 0; s < kModSlots; ++s)
-         routes_[s] = patch.routes[s];
-      program_ = patch.program;
-      presetName_ = displayName(patch);
-
-      // The knobs the program sets stop sending before their values change, and the audio thread
-      // counts them as sent once the Program Change is out, so none of them goes out on its own.
-      for (int i = 0; i < kCcParamCount; ++i)
-         fromProgram_[i].store(false);
-      for (auto [cc, v] : patch.values) {
-         const int i = indexOfCc(cc);
-         if (i < 0 || kCcParams[i].section == Section::Performance)
-            continue;
-         touched_[i].store(false);
-         fromProgram_[i].store(true);
-         const double value = std::clamp(static_cast<double>(v), 0.0, 127.0);
-         values_[i].store(value);
-         edits_.begin(static_cast<clap_id>(cc));
-         edits_.value(static_cast<clap_id>(cc), value);
-         edits_.end(static_cast<clap_id>(cc));
-      }
+      setProgramValues(patch, displayName(patch));
       programRequested_.store(patch.program);
-      if (hostState_)
-         hostState_->mark_dirty(host());
-      if (hostParams_) {
-         // The mod matrix params are named after the routing.
-         hostParams_->rescan(host(), CLAP_PARAM_RESCAN_INFO);
-         hostParams_->request_flush(host());
-      }
+      afterProgramChange();
+   }
+
+   void loadSound(const HardwarePatch &patch) override {
+      setProgramValues(patch, patch.program >= 1 && patch.program <= kProgramCount ? displayName(patch) : patch.name);
+      soundLoaded_.store(true);
+      afterProgramChange();
    }
 
    int program() const override { return program_; }
+   bool routingKnown() const override { return routesKnown_; }
    ModRoute route(int slot) const override { return slot >= 0 && slot < kModSlots ? routes_[slot] : ModRoute{}; }
    std::string presetName() const override { return presetName_; }
    void setPresetName(const std::string &name) override { presetName_ = name; }
@@ -216,7 +197,7 @@ public:
       // A mod matrix slot is named after the loaded program's routing, e.g. "Mod 1: LFO 2 → Pitch".
       std::string name = p.name;
       if (p.cc >= 52 && p.cc < 52 + kModSlots)
-         name = modParamName(p.cc - 52, program_ > 0, routes_[p.cc - 52]);
+         name = modParamName(p.cc - 52, routesKnown_, routes_[p.cc - 52]);
       jclap::core::fillParamInfo({static_cast<clap_id>(p.cc), name.c_str(), sectionName(p.section), 0, 127,
                                   defaultValue(p), CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE},
                                  info);
@@ -343,8 +324,12 @@ public:
       }
       midiChannel_.store(std::clamp(static_cast<int>(header.channel), 1, 16));
       program_ = program >= 1 && program <= kProgramCount ? program : 0;
-      for (int s = 0; s < kModSlots; ++s)
+      routesKnown_ = program_ > 0;
+      for (int s = 0; s < kModSlots; ++s) {
          routes_[s] = ModRoute{routes[2 * s], routes[2 * s + 1]};
+         // A sound read off the synth has routing without a program.
+         routesKnown_ = routesKnown_ || routes_[s].used();
+      }
       presetName_ = name;
       // Send the restored sound to the synth on the next block: its program first, then every knob
       // that was set, in case one moved after the program was loaded.
@@ -380,6 +365,8 @@ public:
             modulatedOnce_[i] = modulatedOnce_[i] && mods_[i].load() != 0.0;
       if (const int program = programRequested_.exchange(0); program > 0 && !sendProgram(out, ch, program))
          programRequested_.store(program);
+      if (soundLoaded_.exchange(false))
+         markProgramSent();
       const bool resend = resendRequested_.exchange(false);
       if (ch != sentChannel_ || resend) {
          sentChannel_ = ch;
@@ -420,6 +407,43 @@ public:
    }
 
 private:
+   // The routing and knob values of a program the synth is about to have (or has): the knobs it sets
+   // stop sending before their values change, and the audio thread counts them as sent once the
+   // Program Change is out (or straight away for a sound read off the synth), so none goes out on
+   // its own.
+   void setProgramValues(const HardwarePatch &patch, const std::string &name) {
+      for (int s = 0; s < kModSlots; ++s)
+         routes_[s] = patch.routes[s];
+      routesKnown_ = true;
+      if (patch.program >= 1 && patch.program <= kProgramCount)
+         program_ = patch.program;
+      presetName_ = name;
+      for (int i = 0; i < kCcParamCount; ++i)
+         fromProgram_[i].store(false);
+      for (auto [cc, v] : patch.values) {
+         const int i = indexOfCc(cc);
+         if (i < 0 || kCcParams[i].section == Section::Performance)
+            continue;
+         touched_[i].store(false);
+         fromProgram_[i].store(true);
+         const double value = std::clamp(static_cast<double>(v), 0.0, 127.0);
+         values_[i].store(value);
+         edits_.begin(static_cast<clap_id>(cc));
+         edits_.value(static_cast<clap_id>(cc), value);
+         edits_.end(static_cast<clap_id>(cc));
+      }
+   }
+
+   void afterProgramChange() {
+      if (hostState_)
+         hostState_->mark_dirty(host());
+      if (hostParams_) {
+         // The mod matrix params are named after the routing.
+         hostParams_->rescan(host(), CLAP_PARAM_RESCAN_INFO);
+         hostParams_->request_flush(host());
+      }
+   }
+
    double effective(int i) const { return modulated(values_[i].load(), mods_[i].load()); }
 
    // Bank Select and Program Change for `program`, on the channel the CCs go out on. The knobs the
@@ -431,13 +455,18 @@ private:
           !jclap::core::pushMidi(out, 0, static_cast<uint8_t>(0xC0 | (ch - 1)),
                                  static_cast<uint8_t>(programChangeOf(program)), 0))
          return false;
+      markProgramSent();
+      return true;
+   }
+
+   // The knobs a program set now match the synth: they count as sent, and are saved as set.
+   void markProgramSent() {
       for (int i = 0; i < kCcParamCount; ++i) {
          if (!fromProgram_[i].exchange(false))
             continue;
          sender_.sent(i, toCcValue(effective(i)));
          touched_[i].store(true);
       }
-      return true;
    }
 
    // A controller's CC passed through on our channel: the synth now has that value, and the knob
@@ -545,10 +574,12 @@ private:
    std::atomic<bool> resendRequested_{false}, loaded_{false};
    // A Program Change for the audio thread to send (0 = none), and the knobs that program set.
    std::atomic<int> programRequested_{0};
+   std::atomic<bool> soundLoaded_{false}; // loadSound(): count its knobs as sent
    std::atomic<bool> fromProgram_[kCcParamCount] = {};
 
    // Main thread only.
    int program_ = 0;
+   bool routesKnown_ = false;
    ModRoute routes_[kModSlots];
    std::string presetName_;
 

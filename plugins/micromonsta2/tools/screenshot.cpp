@@ -31,8 +31,10 @@ public:
    void setChannel(int) override {}
    void sendAll() override {}
    void loadProgram(const mm2::HardwarePatch &) override {}
+   void loadSound(const mm2::HardwarePatch &) override {}
    // A program from the bank, so the mod matrix labels show.
    int program() const override { return patch().program; }
+   bool routingKnown() const override { return true; }
    mm2::ModRoute route(int slot) const override { return patch().routes[slot]; }
    std::string presetName() const override { return mm2::displayName(patch()); }
    void setPresetName(const std::string &) override {}

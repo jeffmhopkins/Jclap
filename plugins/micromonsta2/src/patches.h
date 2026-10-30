@@ -192,12 +192,14 @@ inline const std::vector<HardwarePatch> &factoryBank() {
    return bank;
 }
 
-inline const HardwarePatch *findFactoryPatch(const std::string &name) {
-   for (const HardwarePatch &p : factoryBank())
+inline const HardwarePatch *findPatch(const std::vector<HardwarePatch> &patches, const std::string &name) {
+   for (const HardwarePatch &p : patches)
       if (displayName(p) == name)
          return &p;
    return nullptr;
 }
+
+inline const HardwarePatch *findFactoryPatch(const std::string &name) { return findPatch(factoryBank(), name); }
 
 // User presets are the panel's knobs saved to a file. They don't hold a program or its routing:
 // loading one sends its CCs to whatever program the synth has.
@@ -211,18 +213,20 @@ inline std::vector<double> presetDefaults() {
    return d;
 }
 
-// The factory bank as presets for the preset bar.
+// Programs as presets for the preset bar, filed by category.
+inline std::vector<jclap::ui::Preset> toPresets(const std::vector<HardwarePatch> &patches) {
+   std::vector<jclap::ui::Preset> out;
+   for (const HardwarePatch &p : patches) {
+      jclap::ui::Preset preset{displayName(p), p.category, {}};
+      for (auto [cc, v] : p.values)
+         preset.values.emplace_back(static_cast<clap_id>(cc), v);
+      out.push_back(std::move(preset));
+   }
+   return out;
+}
+
 inline const std::vector<jclap::ui::Preset> &factoryPresets() {
-   static const std::vector<jclap::ui::Preset> presets = [] {
-      std::vector<jclap::ui::Preset> out;
-      for (const HardwarePatch &p : factoryBank()) {
-         jclap::ui::Preset preset{displayName(p), p.category, {}};
-         for (auto [cc, v] : p.values)
-            preset.values.emplace_back(static_cast<clap_id>(cc), v);
-         out.push_back(std::move(preset));
-      }
-      return out;
-   }();
+   static const std::vector<jclap::ui::Preset> presets = toPresets(factoryBank());
    return presets;
 }
 
