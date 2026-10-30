@@ -107,7 +107,6 @@ var midiOut;
 var seq = 0;
 var job = null; // the read in progress
 var token = 0; // bumped on every request and reply, so a stale timeout does nothing
-var shown = 0; // diagnostic popups so far in this read
 var LOG_PORT = 58017;
 var logLines = []; // everything logged, for clients that connect later
 var clients = [];
@@ -168,12 +167,9 @@ function say(text) {
    host.showPopupNotification("MatrixBrute: " + text);
 }
 
-// The first few requests and replies of a read, as popups: enough to see where it stops.
+// Every request and reply, for the log only: a read is about 30 of each a second.
 function trace(text) {
-   if (shown++ < 6)
-      say(text);
-   else
-      log(text);
+   log(text);
 }
 
 function later(fn, ms) {
@@ -248,9 +244,8 @@ function request(cmd, s) {
 function readPresets(first, last) {
    // Pressing Read again starts over, in case a read got stuck.
    token++;
-   shown = 0;
    job = {preset: first, last: last, retried: false, found: 0, failed: 0};
-   say("reading bank " + String.fromCharCode(65 + (first >> 4)));
+   say("reading...");
    startPreset();
 }
 
@@ -285,8 +280,6 @@ function next() {
       return;
    }
    job.preset++;
-   if (job.preset % 16 === 0)
-      say("reading bank " + String.fromCharCode(65 + (job.preset >> 4)));
    startPreset();
 }
 
@@ -339,7 +332,9 @@ function onSysex(hex) {
       seq = (seq + 1) & 0x7f;
       midiOut.sendSysex(ARTURIA + hex2(seq) + "011800f7");
       job.found++;
-      host.showPopupNotification("MatrixBrute: " + code(job.preset) + " " + job.name);
+      log(code(job.preset) + " " + job.name);
+      if (job.found % 10 === 0)
+         host.showPopupNotification("MatrixBrute: " + job.found + " presets...");
       deliver(job.preset, job.name, decode(unpack([].concat.apply([], job.chunks))));
       next();
    }
