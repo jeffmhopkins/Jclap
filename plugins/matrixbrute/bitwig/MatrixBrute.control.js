@@ -4,20 +4,21 @@
 // same read-only requests as tools/mb_dump.py) and hands them to the MatrixBrute CC plugin.
 //
 // Install: copy this file to Documents/Bitwig Studio/Controller Scripts/, then in Settings >
-// Controllers add "Arturia > MatrixBrute presets" with the synth's second USB port (MIDIIN2 /
-// MIDIOUT2 (MatrixBrute)) as its input and output, so port 1 stays free for tracks.
+// Controllers add "Arturia > MatrixBrute presets" with the synth's "MatrixBrute" port as its input
+// and output. (Its second USB port, MIDIIN2 / MIDIOUT2, answers the identity request but not preset
+// reads.)
 //
 // READ ONLY: it sends the preset header/name read (03 19 bb ss 00), the data read (03 19 bb ss 01)
 // and the chunk poll (01 18 00), nothing else.
 //
-// Still open, to test on a real unit: whether the synth answers SysEx on its second port, and how the
-// presets reach the plugin (deliver() below only logs them for now).
+// Still open, to test on a real unit: whether tracks can still play the synth while this script holds
+// its port, and how the presets reach the plugin (deliver() below only logs them for now).
 
 loadAPI(18);
 
 host.defineController("Arturia", "MatrixBrute presets", "0.1", "01787193-1328-48d6-a1b0-b9b2a3aea2af", "Jclap");
 host.defineMidiPorts(1, 1);
-host.addDeviceNameBasedDiscoveryPair(["MIDIIN2 (MatrixBrute)"], ["MIDIOUT2 (MatrixBrute)"]);
+host.addDeviceNameBasedDiscoveryPair(["MatrixBrute"], ["MatrixBrute"]);
 
 var ARTURIA = "f000206b0601";
 var CHUNKS = 50;
