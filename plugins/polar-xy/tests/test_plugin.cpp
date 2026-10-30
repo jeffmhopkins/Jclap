@@ -3,6 +3,7 @@
 #include <jclap/core/test_host.h>
 
 #include "editor.h"
+#include "motion.h"
 #include "polar.h"
 #include "presets.h"
 
@@ -107,6 +108,74 @@ void motionTests() {
    p = run(h, 1);
    JCLAP_CHECK(!p.angles.empty() && p.angles.back() == 0);
    JCLAP_CHECK(run(h, 2).angles.empty());
+}
+
+// Inertia's coast: once the controller stops, the output carries on the way it was going.
+void coastTests() {
+   jclap::MotionSettings m;
+   m.inertia = 1.0;
+   m.around = true;
+   const double dt = 32.0 / 48000.0;
+   // Steps the follower for `seconds`, counting how long the output spends at the centre.
+   auto run = [&](jclap::Follower &f, double seconds, double &centred) {
+      for (double t = 0.0; t < seconds && f.moving(); t += dt) {
+         f.step(dt, m);
+         double x, y;
+         f.position(x, y);
+         centred += std::hypot(x, y) < jclap::kDeadZone ? dt : 0.0;
+      }
+   };
+
+   // Pulled in from the edge toward the middle and let go: it coasts on in, through the centre and
+   // out the other side, rather than sitting there with its radius swung below zero.
+   jclap::Follower f;
+   f.setAround(true);
+   f.place(1.0, 0.0);
+   double centred = 0.0;
+   for (int i = 1; i <= 15; ++i) {
+      f.follow(1.0 - 0.8 * i / 15.0, 0.0);
+      run(f, 0.02, centred);
+   }
+   double minX = 1.0;
+   for (double t = 0.0; t < 30.0 && f.moving(); t += dt) {
+      f.step(dt, m);
+      double x, y;
+      f.position(x, y);
+      minX = std::min(minX, x);
+      centred += std::hypot(x, y) < jclap::kDeadZone ? dt : 0.0;
+   }
+   JCLAP_CHECK(minX < -0.2);
+   JCLAP_CHECK(centred < 0.2);
+
+   // A whirl let go keeps turning the same way, slowing, and settles where it runs out.
+   jclap::Follower w;
+   w.setAround(true);
+   w.place(0.6, 0.0);
+   centred = 0.0;
+   for (int i = 1; i <= 50; ++i) {
+      const double a = i * 0.02 * 2.0 * jclap::kPi;
+      w.follow(0.6 * std::cos(a), 0.6 * std::sin(a));
+      run(w, 0.02, centred);
+   }
+   double tx, ty;
+   w.target(tx, ty);
+   run(w, 0.5, centred);
+   double tx2, ty2;
+   w.target(tx2, ty2);
+   const double turned = jclap::wrapPi(std::atan2(ty2, tx2) - std::atan2(ty, tx));
+   JCLAP_CHECK(turned > 0.5);
+   run(w, 60.0, centred);
+   JCLAP_CHECK(!w.moving());
+
+   // A jump from rest has no speed to carry on with: it swings there and settles on the spot.
+   jclap::Follower j;
+   j.setAround(true);
+   j.place(1.0, 0.0);
+   j.follow(0.0, 1.0);
+   run(j, 60.0, centred);
+   double x, y;
+   j.position(x, y);
+   JCLAP_CHECK(!j.moving() && x == 0.0 && y == 1.0);
 }
 
 // The panel's XY pad: dragging it moves the shown channel like the controller, and holds that
@@ -484,6 +553,7 @@ int main() {
          JCLAP_CHECK(value == polar_xy::kParams[id].def);
 
    motionTests();
+   coastTests();
    dragTests();
    fineTests();
    learnTests();
