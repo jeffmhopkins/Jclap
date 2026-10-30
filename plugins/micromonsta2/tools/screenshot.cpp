@@ -1,4 +1,4 @@
-// Renders the panel to a PNG without a host: micromonsta2-screenshot out.png [width height]
+// Renders the panel to a PNG without a host: micromonsta2-screenshot out.png [width height [page]]
 
 #include <cstdio>
 #include <cstdlib>
@@ -58,11 +58,12 @@ public:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [width height]\n", argv[0]);
+      std::fprintf(stderr, "usage: %s out.png [width height [page]]\n", argv[0]);
       return 1;
    }
    const int width = argc > 3 ? std::atoi(argv[2]) : 1640;
    const int height = argc > 3 ? std::atoi(argv[3]) : 1142;
+   const int page = argc > 4 ? std::atoi(argv[4]) : 0;
    DemoHost host;
-   return mm2::renderScreenshot(host, width, height, argv[1]) ? 0 : 1;
+   return mm2::renderScreenshot(host, width, height, argv[1], page) ? 0 : 1;
 }
