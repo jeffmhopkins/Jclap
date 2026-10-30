@@ -82,6 +82,12 @@ public:
          follow(tx, ty);
    }
 
+   // Where it is headed: the last target, on the pad.
+   void target(double &x, double &y) const {
+      x = tx_;
+      y = ty_;
+   }
+
    void position(double &x, double &y) const {
       if (!moving_) {
          // Exactly the target, so a settled output is the same as converting the input directly.

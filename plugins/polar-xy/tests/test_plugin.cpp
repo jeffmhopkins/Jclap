@@ -116,6 +116,8 @@ void dragTests() {
    auto *editor = h.object<polar_xy::EditorHost>();
 
    // Before any CC, the pad drives channel 1, and both axes count as arrived.
+   double ox = 0, oy = 0, tx = 0, ty = 0;
+   JCLAP_CHECK(!editor->liveOutput(ox, oy, tx, ty));
    editor->dragInput(127, 64);
    auto out = h.process();
    JCLAP_CHECK(out.midi.size() == 2 && out.midi[0].status == 0xB0 && out.midi[0].data1 == 18 &&
@@ -182,9 +184,14 @@ void dragTests() {
    h.setParam(8, 100.0);
    h.process();
    editor->dragInput(127, 64);
+   // The panel sees it on its way, short of the pad's position, and then all but there.
+   h.process();
+   JCLAP_CHECK(editor->liveOutput(ox, oy, tx, ty));
+   JCLAP_CHECK(std::abs(tx - 1.0) < 1e-3 && std::abs(ty) < 1e-3 && ox < 0.9);
    p = run(h, 40);
    JCLAP_CHECK(p.radii.size() > 10);
    JCLAP_CHECK(!p.radii.empty() && p.radii.back() == 127);
+   JCLAP_CHECK(editor->liveOutput(ox, oy, tx, ty) && std::abs(ox - 1.0) < 1e-2 && std::abs(oy) < 1e-2);
    editor->releaseInput();
 
    // Pass Input CCs sends the pad's X/Y on too.
