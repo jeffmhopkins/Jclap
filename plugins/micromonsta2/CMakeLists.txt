@@ -1,25 +1,36 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.10.9)
+jclap_plugin_version(0.12.0)
 
 jclap_add_plugin(micromonsta2
    OUTPUT_NAME "MicroMonsta2CC"
    BUNDLE_ID com.jeffmhopkins.jclap.micromonsta2
-   SOURCES src/plugin.cpp src/editor.cpp)
+   SOURCES src/plugin.cpp src/editor.cpp src/synth_link.cpp)
 target_include_directories(micromonsta2 PRIVATE src)
 target_link_libraries(micromonsta2 PRIVATE jclap::ui)
+if(WIN32)
+   target_link_libraries(micromonsta2 PRIVATE ws2_32)
+endif()
 
 jclap_add_test(micromonsta2-tests SOURCES tests/test_cc_map.cpp)
 target_include_directories(micromonsta2-tests PRIVATE src)
 
 # Host-style test of the whole plugin. It never opens the panel, but links it.
-jclap_add_test(micromonsta2-plugin-tests SOURCES tests/test_plugin.cpp src/plugin.cpp src/editor.cpp)
+jclap_add_test(micromonsta2-plugin-tests SOURCES tests/test_plugin.cpp src/plugin.cpp src/editor.cpp src/synth_link.cpp)
 target_include_directories(micromonsta2-plugin-tests PRIVATE src)
 target_link_libraries(micromonsta2-plugin-tests PRIVATE jclap::ui)
+# The dump decoder is checked against the bank dump the built-in bank was made from.
+target_compile_definitions(micromonsta2-plugin-tests PRIVATE MM2_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+if(WIN32)
+   target_link_libraries(micromonsta2-plugin-tests PRIVATE ws2_32)
+endif()
 
 # Offscreen render of the panel, for docs and visual checks. Needs a GPU (or a software Vulkan driver).
 if(JCLAP_BUILD_TOOLS)
-   add_executable(micromonsta2-screenshot tools/screenshot.cpp src/editor.cpp)
+   add_executable(micromonsta2-screenshot tools/screenshot.cpp src/editor.cpp src/synth_link.cpp)
    target_include_directories(micromonsta2-screenshot PRIVATE src)
    target_link_libraries(micromonsta2-screenshot PRIVATE jclap::ui)
+   if(WIN32)
+      target_link_libraries(micromonsta2-screenshot PRIVATE ws2_32)
+   endif()
    jclap_add_screenshot_test(micromonsta2-screenshot-test TOOL micromonsta2-screenshot REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel.png)
 endif()

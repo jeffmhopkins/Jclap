@@ -7,12 +7,15 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
 #include <iterator>
 #include <string>
 #include <vector>
 
 #include "cc_map.h"
 #include "editor.h"
+#include "program_dump.h"
+#include "synth_link.h"
 
 extern "C" const clap_plugin_entry_t clap_entry;
 
@@ -32,6 +35,31 @@ std::vector<Cc> ccs(const jclap::core::TestOutput &out) {
          result.push_back({(m.status & 0x0F) + 1, m.data1, m.data2});
    }
    return result;
+}
+
+std::vector<uint8_t> readFile(const std::string &path) {
+   std::ifstream f(path, std::ios::binary);
+   return std::vector<uint8_t>(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+}
+
+std::string toHex(const uint8_t *bytes, size_t n) {
+   static const char digits[] = "0123456789abcdef";
+   std::string out;
+   for (size_t i = 0; i < n; ++i) {
+      out += digits[bytes[i] >> 4];
+      out += digits[bytes[i] & 15];
+   }
+   return out;
+}
+
+bool samePatch(const mm2::HardwarePatch &a, const mm2::HardwarePatch &b) {
+   if (a.program != b.program || a.name != b.name || a.category != b.category || a.values != b.values ||
+       a.settings != b.settings)
+      return false;
+   for (int s = 0; s < mm2::kModSlots; ++s)
+      if (!(a.routes[s] == b.routes[s]))
+         return false;
+   return true;
 }
 
 // A byte buffer the plugin's state extension writes to and reads from.
@@ -303,8 +331,8 @@ int main() {
          CHECK_EQ(out.midi[2].status, 0xC1);
          CHECK_EQ(out.midi[2].data1, 11);
       }
-      // The host hears about each knob that moved, as a gesture.
-      CHECK_EQ(out.paramValues.size(), 3u);
+      // The host hears about each knob that moved, and each routing setting, as a gesture.
+      CHECK_EQ(out.paramValues.size(), 3u + 2u * mm2::kModSlots);
       CHECK_EQ(a.paramValue(74), 40.0);
       CHECK_EQ(a.paramValue(71), 99.0);
       CHECK_EQ(a.paramValue(52), 80.0);
@@ -363,6 +391,166 @@ int main() {
       const mm2::HardwarePatch *p106 = mm2::findFactoryPatch("P106 Stretchr");
       JCLAP_CHECK(p106 && mm2::bankOf(p106->program) == 1 && mm2::programChangeOf(p106->program) == 5);
       CHECK_EQ(mm2::factoryPresets().size(), bank.size());
+   }
+
+   // The plugin's dump decoder gives the same bank as tools/mm2_bank.py did from the same dump.
+   const std::vector<uint8_t> bankDump = readFile(std::string(MM2_DATA_DIR) + "/bank.syx");
+   CHECK_EQ(bankDump.size(), 500u * mm2::kProgramDumpSize);
+   std::vector<std::vector<uint8_t>> messages;
+   for (size_t at = 0; at + mm2::kProgramDumpSize <= bankDump.size(); at += mm2::kProgramDumpSize)
+      messages.emplace_back(bankDump.begin() + at, bankDump.begin() + at + mm2::kProgramDumpSize);
+   {
+      const std::vector<mm2::HardwarePatch> decoded = mm2::decodeBank(messages);
+      const auto &bank = mm2::factoryBank();
+      CHECK_EQ(decoded.size(), bank.size());
+      for (size_t i = 0; i < std::min(decoded.size(), bank.size()); ++i)
+         JCLAP_CHECK(samePatch(decoded[i], bank[i]));
+      // Not a program: wrong length, or another maker's SysEx.
+      mm2::HardwarePatch p;
+      JCLAP_CHECK(!mm2::decodeProgram(messages[0].data(), 175, 1, p));
+      std::vector<uint8_t> other = messages[0];
+      other[1] = 0x7E;
+      JCLAP_CHECK(!mm2::decodeProgram(other.data(), other.size(), 1, p));
+      // A part's sound (byte 6 = 01) decodes like a stored program.
+      std::vector<uint8_t> partA = messages[12];
+      partA[6] = 0x01;
+      JCLAP_CHECK(mm2::decodeProgram(partA.data(), partA.size(), 13, p) && samePatch(p, *mm2::findFactoryPatch("P013 OctaBass")));
+   }
+
+   // The Bitwig script's lines: a U02 dump becomes the bank, a sound answers only its own request.
+   {
+      mm2::SynthLink &link = mm2::SynthLink::get();
+      const uint32_t before = link.bankVersion();
+      link.handleLine("RECEIVING");
+      JCLAP_CHECK(link.status().receiving);
+      for (const auto &m : messages)
+         link.handleLine("PROGRAM\t" + toHex(m.data(), m.size()));
+      link.handleLine("PROGRAM\tnot hex");
+      CHECK_EQ(link.status().received, 500);
+      link.handleLine("DONE\t500");
+      JCLAP_CHECK(!link.status().receiving);
+      CHECK_EQ(link.bankVersion(), before + 1);
+      CHECK_EQ(link.bank().size(), mm2::factoryBank().size());
+      JCLAP_CHECK(link.bank().size() > 12 && link.bank()[12].name == "OctaBass");
+
+      // One program on its own (U01) isn't a bank.
+      link.handleLine("RECEIVING");
+      link.handleLine("PROGRAM\t" + toHex(messages[0].data(), messages[0].size()));
+      link.handleLine("DONE\t1");
+      CHECK_EQ(link.bankVersion(), before + 1);
+      JCLAP_CHECK(!link.status().error.empty());
+
+      // Not connected to the script (no Bitwig here), so no request goes out.
+      CHECK_EQ(link.requestSound('A'), 0);
+      // An answer nobody is waiting for is ignored.
+      link.handleLine("SOUND\t1\t" + toHex(messages[12].data(), messages[12].size()));
+      CHECK_EQ(link.sound().ticket, 0);
+      JCLAP_CHECK(mm2::SynthLink::parseHex("00ff7F", messages[0]) && messages[0].size() == 3 && messages[0][1] == 0xFF);
+      JCLAP_CHECK(!mm2::SynthLink::parseHex("0g", messages[0]) && !mm2::SynthLink::parseHex("abc", messages[0]));
+   }
+
+   // A sound read off the synth: the knobs and routing move to it and nothing is sent, not even a
+   // Program Change, since the synth already has it. A project saved after it sends its knobs again.
+   {
+      jclap::core::TestHost a(clap_entry, "com.jeffmhopkins.jclap.micromonsta2");
+      mm2::EditorHost &p = *a.object<mm2::EditorHost>();
+      a.process();
+      JCLAP_CHECK(!p.routingKnown());
+      mm2::HardwarePatch sound;
+      sound.program = 0; // not known
+      sound.name = "Edited";
+      sound.values = {{74, 40}, {52, 80}};
+      sound.routes[0] = {18, 12};
+      p.loadSound(sound);
+      const auto out = a.process();
+      CHECK_EQ(out.midi.size(), 0u);
+      CHECK_EQ(a.paramValue(74), 40.0);
+      JCLAP_CHECK(p.routingKnown() && p.route(0) == (mm2::ModRoute{18, 12}));
+      CHECK_EQ(p.program(), 0);
+      JCLAP_CHECK(p.presetName() == "Edited");
+      CHECK_EQ(ccs(a.process()).size(), 0u);
+
+      auto *state = static_cast<const clap_plugin_state_t *>(a.plugin()->get_extension(a.plugin(), CLAP_EXT_STATE));
+      Buffer saved;
+      JCLAP_CHECK(state->save(a.plugin(), &saved.out));
+      jclap::core::TestHost b(clap_entry, "com.jeffmhopkins.jclap.micromonsta2");
+      mm2::EditorHost &pb = *b.object<mm2::EditorHost>();
+      auto *stateB = static_cast<const clap_plugin_state_t *>(b.plugin()->get_extension(b.plugin(), CLAP_EXT_STATE));
+      JCLAP_CHECK(stateB->load(b.plugin(), &saved.in));
+      JCLAP_CHECK(pb.routingKnown());
+      const auto restored = ccs(b.process());
+      bool sent74 = false;
+      for (const Cc &c : restored)
+         sent74 = sent74 || (c.cc == 74 && c.value == 40);
+      JCLAP_CHECK(sent74);
+   }
+
+   // Settings no CC reaches go out as NRPN on the CC channel: CC 99, 98, then the value on CC 6.
+   {
+      jclap::core::TestHost a(clap_entry, "com.jeffmhopkins.jclap.micromonsta2");
+      mm2::EditorHost &p = *a.object<mm2::EditorHost>();
+      a.setParam(mm2::kChannelParamId, 3);
+      a.process();
+      // Nothing set yet, so nothing goes out.
+      CHECK_EQ(a.process().midi.size(), 0u);
+      a.setParam(mm2::settingId(125), 5); // filter type: Bandpass 2
+      auto out = ccs(a.process());
+      CHECK_EQ(out.size(), 3u);
+      if (out.size() == 3) {
+         CHECK_EQ(out[0].channel, 3);
+         CHECK_EQ(out[0].cc, 99);
+         CHECK_EQ(out[0].value, 0);
+         CHECK_EQ(out[1].cc, 98);
+         CHECK_EQ(out[1].value, 125);
+         CHECK_EQ(out[2].cc, 6);
+         CHECK_EQ(out[2].value, 5);
+      }
+      CHECK_EQ(ccs(a.process()).size(), 0u);
+      // NRPN 128 and up use the MSB.
+      JCLAP_CHECK(!p.routingKnown());
+      p.beginEdit(mm2::settingId(mm2::sourceNrpn(2)));
+      p.setParam(mm2::settingId(mm2::sourceNrpn(2)), 24); // slot 3: LFO 2
+      p.endEdit(mm2::settingId(mm2::sourceNrpn(2)));
+      out = ccs(a.process());
+      CHECK_EQ(out.size(), 3u);
+      CHECK_EQ(out.size() == 3 ? out[1].value : -1, 76);
+      CHECK_EQ(out.size() == 3 ? out[2].value : -1, 24);
+      JCLAP_CHECK(p.routingKnown() && p.route(2).source == 24);
+      // Out of range is clamped; the host shows the choice's name.
+      a.setParam(mm2::settingId(126), 99);
+      a.process();
+      CHECK_EQ(a.paramValue(mm2::settingId(126)), 3.0);
+      auto *params = static_cast<const clap_plugin_params_t *>(a.plugin()->get_extension(a.plugin(), CLAP_EXT_PARAMS));
+      char text[64] = {};
+      JCLAP_CHECK(params->value_to_text(a.plugin(), mm2::settingId(125), 5, text, sizeof(text)) &&
+                  std::string(text) == "Bandpass 2");
+      double back = -1;
+      JCLAP_CHECK(params->text_to_value(a.plugin(), mm2::settingId(125), "Notch", &back) && back == 6.0);
+      CHECK_EQ(params->count(a.plugin()), static_cast<uint32_t>(mm2::kCcParamCount + 1 + mm2::kSettingCount));
+
+      // Saved and restored, and sent again when the project opens.
+      auto *state = static_cast<const clap_plugin_state_t *>(a.plugin()->get_extension(a.plugin(), CLAP_EXT_STATE));
+      Buffer saved;
+      JCLAP_CHECK(state->save(a.plugin(), &saved.out));
+      jclap::core::TestHost b(clap_entry, "com.jeffmhopkins.jclap.micromonsta2");
+      mm2::EditorHost &pb = *b.object<mm2::EditorHost>();
+      auto *stateB = static_cast<const clap_plugin_state_t *>(b.plugin()->get_extension(b.plugin(), CLAP_EXT_STATE));
+      JCLAP_CHECK(stateB->load(b.plugin(), &saved.in));
+      CHECK_EQ(b.paramValue(mm2::settingId(125)), 5.0);
+      JCLAP_CHECK(pb.routingKnown() && pb.route(2).source == 24);
+      int nrpnValues = 0;
+      for (const Cc &c : ccs(b.process()))
+         nrpnValues += c.cc == 6;
+      CHECK_EQ(nrpnValues, 3);
+
+      // A program's settings come with it and aren't sent: the Program Change brings them.
+      mm2::HardwarePatch patch = *mm2::findFactoryPatch("P013 OctaBass");
+      pb.loadProgram(patch);
+      const auto loaded = ccs(b.process());
+      for (const Cc &c : loaded)
+         JCLAP_CHECK(c.cc == 0 || c.cc == 32);
+      CHECK_EQ(b.paramValue(mm2::settingId(125)), 3.0);
+      JCLAP_CHECK(pb.route(0) == (mm2::ModRoute{21, 1})); // LFO1×Wheel → Pitch
    }
 
    // Program numbers map onto banks of 100.

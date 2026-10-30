@@ -2,13 +2,15 @@
 // grid and scaled to the window, which keeps its aspect ratio.
 //
 // Three bands, read top to bottom like the synth's signal: the audio path (sources, filter, voice,
-// effects, out), the envelopes, and the modulation (sources feeding the mod matrix). Every control is
-// one CC. The pictures in visuals.h are drawn from those CC values and the program's routing only.
+// effects, out), the envelopes, and the modulation (sources feeding the mod matrix). Every knob is
+// one CC; the dropdowns are the settings no CC reaches, sent as NRPN (settings.h). The pictures in
+// visuals.h are drawn from those CC values and the program's routing only.
 
 #include "editor.h"
 
 #include <jclap/ui/button.h>
 #include <jclap/ui/design_frame.h>
+#include <jclap/ui/dropdown.h>
 #include <jclap/ui/envelope.h>
 #include <jclap/ui/knob.h>
 #include <jclap/ui/led.h>
@@ -30,6 +32,8 @@
 
 #include "cc_map.h"
 #include "patches.h"
+#include "settings.h"
+#include "synth_link.h"
 #include "visuals.h"
 
 namespace mm2 {
@@ -152,6 +156,7 @@ public:
       buildModSources();
       buildMatrix();
       syncChannel();
+      syncLink();
       syncRoutes();
       syncReadouts();
       startTimer(30);
@@ -159,6 +164,7 @@ public:
 
    void timerCallback() override {
       syncChannel();
+      syncLink();
       syncRoutes();
       syncReadouts();
       for (vis::Picture *p : pictures_)
@@ -244,6 +250,18 @@ private:
       readouts_.push_back({&label("", {r.x + 4, r.y + r.h + 1, 60, 13}, kWhite, visage::Font::kLeft, 0.85f), cc});
       caption(cc, {r.x + r.w - 64, r.y + r.h + 2, 60, 12}, visage::Font::kRight);
    }
+   // A dropdown for one of the settings in settings.h, named in capitals.
+   ui::Dropdown &setting(int nrpn, unsigned accent, Rect r, const char *tip = nullptr) {
+      std::vector<std::string> names = choiceNames(kSettings[indexOfSetting(nrpn)].choices);
+      for (std::string &n : names)
+         n = upper(n);
+      auto &d = add<ui::Dropdown>(r, std::move(names));
+      d.setAccent(accent);
+      bindings_.bind(d, settingId(nrpn));
+      if (tip)
+         tips_.add(d, tip);
+      return d;
+   }
    ui::Label &label(const std::string &text, Rect r, unsigned color = kWhite,
                     visage::Font::Justification j = visage::Font::kLeft, float fontScale = 0.78f) {
       return add<ui::Label>(r, text, color, j, fontScale);
@@ -270,18 +288,47 @@ private:
    // ---- header ----
 
    void buildHeader() {
-      auto &bar = add<ui::PresetBar>({(kDesignWidth - 480) * 0.5f, 18, 480, 28}, factoryPresets(), kPresetFormat, host_);
+      // The synth's programs: the bank compiled in, until READ BANK brings the ones it has now.
+      auto &bar = add<ui::PresetBar>({(kDesignWidth - 480) * 0.5f, 18, 480, 28}, presets_, kPresetFormat, host_);
+      bar_ = &bar;
       bar.setAccent(kOrange);
       bar.defaults = presetDefaults();
       bar.currentName = [this] { return host_.presetName(); };
       bar.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
       bar.onLoad = [this](const ui::Preset &p) {
-         if (const HardwarePatch *patch = findFactoryPatch(p.name))
+         if (const HardwarePatch *patch = findPatch(patches_, p.name))
             host_.loadProgram(*patch);
          else
             ui::applyPreset(p, host_, presetDefaults());
       };
       add<ui::UpdateNotice>({300, 20, 220, 24});
+
+      // Reading the synth, through the Bitwig script. The line under the header says what's going on,
+      // and what to do on the synth for a bank.
+      place(readSound_, {1068, 18, 100, 28});
+      place(part_, {1172, 18, 64, 28});
+      place(readBank_, {1240, 18, 96, 28});
+      readSound_.setAccent(kOrange);
+      readBank_.setAccent(kOrange);
+      readSound_.onClick = [this] {
+         used_ = true;
+         soundTicket_ = SynthLink::get().requestSound(partB_ ? 'B' : 'A');
+      };
+      part_.onClick = [this] {
+         partB_ = !partB_;
+         part_.setText(partB_ ? "PART B" : "PART A");
+      };
+      readBank_.onClick = [this] {
+         used_ = true;
+         waitingBank_ = !waitingBank_;
+      };
+      tips_.add(readSound_, "Reads the sound on the part shown beside it (A or B) into the panel: every knob and the mod "
+                            "matrix routing, edits included. Nothing is sent to the synth. Needs the Bitwig script "
+                            "and firmware 2.7 or later.");
+      tips_.add(part_, "Which of the synth's two parts READ SOUND reads.");
+      tips_.add(readBank_, "Lists the programs stored on the synth in the preset bar, in place of the built-in bank. "
+                           "The synth only sends them from its own panel: press this, then UTILITY > U02 on the synth.");
+      linkStatus_ = &label("", {300, 48, 1040, 14}, kDim, visage::Font::kCenter, 0.8f);
 
       place(chDown_, {1344, 18, 30, 28});
       place(channel_, {1378, 18, 116, 28});
@@ -306,10 +353,13 @@ private:
       const char *heads[] = {"SHAPE", "TUNE", "FINE TUNE"};
       for (int c = 0; c < 3; ++c)
          label(heads[c], {x + 64 + 62 * c, y + 34, 62, 12}, kDim, visage::Font::kCenter, 0.8f);
-      label("LEVEL", {x + 262, y + 34, 100, 12}, kDim, visage::Font::kLeft, 0.8f);
       for (int o = 0; o < 3; ++o) {
          const float ry = y + 44 + o * 80;
          label("OSC " + std::to_string(o + 1), {x + 14, ry + 16, 50, 20}, kOscColors[o]);
+         setting(27 + 4 * o, kOscColors[o], {x + 262, ry - 12, 164, 18},
+                 o == 0 ? "Oscillator 1's algorithm (NRPN 27). The shape knob morphs within it."
+                        : "The oscillator's algorithm, wavetables included (NRPN 31 / 35). The shape knob morphs "
+                          "within it.");
          for (int c = 0; c < 3; ++c)
             knob(39 + 3 * o + c, kOscColors[o], {x + 64 + 62 * c, ry - 14, 62, 92}, "");
          level(48 + o, kOscColors[o], {x + 262, ry + 8, 164, 30});
@@ -324,7 +374,8 @@ private:
    void buildFilter() {
       const float x = audioX(1), y = kBand1Y, w = kAudioW[1];
       section("FILTER", {x, y, w, kBand1H});
-      hint("GUIDE \xC2\xB7 FILTER TYPE IS SET ON THE SYNTH", {x + 110, y + 10, w - 124, 12});
+      setting(125, kOrange, {x + 110, y + 6, 150, 20}, "Filter type (NRPN 125). The picture below is a lowpass guide.");
+      setting(126, kOrange, {x + 266, y + 6, 114, 20}, "Filter character: how hard the filter is driven (NRPN 126).");
       picture<vis::FilterCurve>({x + 12, y + 34, w - 24, 170});
       knobRow({74, 71, 88, 89, 90}, kOrange, {x + 12, y + 210, w - 24, 100});
       hint("LINE: CUTOFF AND RESONANCE   \xC2\xB7   DASHED: ENV AMOUNT AT ITS PEAK", {x + 12, y + 318, w - 24, 12},
@@ -440,8 +491,11 @@ private:
          led.fadeMs = 0;
          led.setLevel(1.0f);
          leds_[i] = &led;
-         knob(76 + i, kLfoColors[i], {tx + 26, ty + 26, 100, 116}, "SPEED");
-         feeds_[i] = &label("", {tx + 6, ty + 150, tw - 12, 12}, kLfoColors[i], visage::Font::kCenter, 0.8f);
+         knob(76 + i, kLfoColors[i], {tx + 26, ty + 22, 100, 100}, "SPEED");
+         setting(61 + 3 * i, kLfoColors[i], {tx + 6, ty + 124, 84, 20}, "The LFO's wave (NRPN 61 / 64 / 67).");
+         setting(63 + 3 * i, kLfoColors[i], {tx + 94, ty + 124, 52, 20},
+                 "When the LFO restarts: per voice, once, on each key, or free running (NRPN 63 / 66 / 69).");
+         feeds_[i] = &label("", {tx + 6, ty + 152, tw - 12, 12}, kLfoColors[i], visage::Font::kCenter, 0.8f);
       }
       hint("PERFORMANCE \xC2\xB7 NOT SAVED IN THE PROGRAM \xC2\xB7 ENV 1-3 CAN FEED THE MATRIX TOO", {x + 12, y + 214, w - 24, 12},
            visage::Font::kLeft);
@@ -464,7 +518,7 @@ private:
    void buildMatrix() {
       const float x = kMargin + kModW[0] + kGutter, y = kBand3Y, w = kModW[1];
       section("MOD MATRIX", {x, y, w, kBand3H});
-      hint("SLOTS SHOW THE LOADED PROGRAM'S ROUTING", {x + 600, y + 10, w - 614, 12});
+      hint("PICK A SOURCE AND DESTINATION, OR LOAD A PROGRAM FOR ITS ROUTING", {x + 500, y + 10, w - 514, 12});
       // Columns: slot, source, arrow, destination, where it is on the panel, amount, value, CC.
       constexpr float kSlot = 12, kSource = 48, kArrow = 152, kDest = 180, kWhere = 320, kAmount = 500,
                       kAmountW = 470, kValue = 980, kCc = 1032;
@@ -484,9 +538,9 @@ private:
          const float ry = y + 52 + s * 24.0f;
          Row &row = rows_[s];
          label(std::to_string(s + 1), {x + kSlot + 6, ry + 5, 30, 14}, kDim);
-         row.chip = &add<vis::Chip>({x + kSource, ry + 3, 100, 18});
+         row.source = &setting(sourceNrpn(s), kDim, {x + kSource, ry + 2, 100, 20});
          row.arrow = &add<vis::Arrow>({x + kArrow, ry + 6, 18, 12});
-         row.destination = &label("", {x + kDest, ry + 5, 136, 14});
+         row.destination = &setting(destinationNrpn(s), kDim, {x + kDest, ry + 2, 132, 20});
          row.where = &label("", {x + kWhere, ry + 5, 170, 14}, kDim);
          row.amount = &slider(52 + s, kNoise, {x + kAmount, ry - 4, kAmountW, 26});
          row.amount->valueText = [](double) { return std::string(); };
@@ -496,13 +550,14 @@ private:
       }
       divider({x + 12, y + 296, w - 24, 1});
       label("LAG 1", {x + kSlot + 6, y + 309, 130, 14});
-      hint("SMOOTHS THE LAG SOURCE", {x + kDest, y + 310, 300, 12}, visage::Font::kLeft);
+      setting(100, kOrange, {x + kSource, y + 305, 100, 20}, "The source the lag operator smooths (NRPN 100).");
+      hint("THE SOURCE THE LAG OPERATOR SMOOTHS", {x + kDest, y + 310, 300, 12}, visage::Font::kLeft);
       auto &lag = slider(62, kOrange, {x + kAmount, y + 300, kAmountW, 26});
       lag.valueText = [](double) { return std::string(); };
       lagValue_ = &label("", {x + kValue, y + 309, 44, 14}, kWhite, visage::Font::kRight);
       caption(62, {x + kCc, y + 310, 48, 12});
-      hint("ROUTING COMES FROM THE LOADED PROGRAM; ONLY THE AMOUNT IS A CC. A FAINT RING ON A KNOB SHOWS ROUGHLY "
-           "HOW FAR ITS SLOT CAN PUSH IT. HOVER A ROW FOR THE SENTENCE.",
+      hint("THE ROUTING IS SENT AS NRPN AND THE AMOUNT AS A CC. A FAINT RING ON A KNOB SHOWS ROUGHLY HOW FAR ITS "
+           "SLOT CAN PUSH IT. HOVER A ROW FOR THE SENTENCE.",
            {x + 12, y + 334, w - 24, 12}, visage::Font::kLeft);
    }
 
@@ -510,10 +565,63 @@ private:
 
    void syncChannel() { channel_.setText("MIDI CH " + std::to_string(host_.channel())); }
 
+   // The Bitwig script: what it's doing, a sound this panel asked for, and a bank once one arrives.
+   void syncLink() {
+      SynthLink &link = SynthLink::get();
+      const SynthLink::Status st = link.status();
+      std::string text;
+      if (st.receiving)
+         text = "RECEIVING PROGRAMS FROM THE SYNTH... " + std::to_string(st.received);
+      else if (waitingBank_ && st.connected)
+         text = "ON THE SYNTH: UTILITY > U02 DUMP, CHOOSE EVERY PROGRAM (FROM P001), THEN HOLD YES. "
+                "PRESS READ BANK AGAIN TO STOP WAITING.";
+      else if (!used_)
+         text = "";
+      else if (!st.connected)
+         text = "READ SOUND AND READ BANK NEED THE BITWIG SCRIPT (BITWIG/MICROMONSTA2.CONTROL.JS, SEE THE README)";
+      else if (st.askingSound)
+         text = std::string("ASKING THE SYNTH FOR PART ") + (partB_ ? "B" : "A") + "'S SOUND...";
+      else if (!st.error.empty())
+         text = "READ FAILED: " + upper(st.error);
+      else
+         text = done_;
+      linkStatus_->setText(text);
+
+      const SynthLink::Sound sound = link.sound();
+      if (soundTicket_ != 0 && sound.ticket == soundTicket_) {
+         soundTicket_ = 0;
+         HardwarePatch patch = sound.patch;
+         // The synth doesn't say which program a part's sound came from; the name usually does.
+         for (const HardwarePatch &p : patches_)
+            if (p.name == patch.name)
+               patch.program = p.program;
+         host_.loadSound(patch);
+         done_ = "READ THE SOUND ON PART " + std::string(partB_ ? "B" : "A") + ": " + upper(patch.name);
+      }
+
+      if (link.bankVersion() == shownBankVersion_)
+         return;
+      shownBankVersion_ = link.bankVersion();
+      std::vector<HardwarePatch> read = link.bank();
+      if (read.empty())
+         return;
+      waitingBank_ = false;
+      done_ = std::to_string(read.size()) + " PROGRAMS FROM THE SYNTH IN THE PRESET BAR";
+      patches_ = std::move(read);
+      presets_ = toPresets(patches_);
+      bar_->rescan();
+   }
+
+   static std::string upper(std::string s) {
+      for (char &c : s)
+         c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+      return s;
+   }
+
    // The matrix rows follow the loaded program's routing, in plain English.
    void syncRoutes() {
-      const int program = host_.program();
-      bool changed = program != shownProgram_;
+      const int known = host_.routingKnown() ? 1 : 0;
+      bool changed = known != shownKnown_;
       ModRoute routes[kModSlots];
       for (int s = 0; s < kModSlots; ++s) {
          routes[s] = host_.route(s);
@@ -521,41 +629,27 @@ private:
       }
       if (!changed)
          return;
-      shownProgram_ = program;
+      shownKnown_ = known;
       for (int s = 0; s < kModSlots; ++s) {
          shownRoutes_[s] = routes[s];
          Row &row = rows_[s];
-         const bool used = program > 0 && routes[s].used();
+         const bool used = known && routes[s].used();
          const unsigned color = used ? sourceColor(routes[s]) : kDim;
-         row.chip->set(used ? source(routes[s]).label : "", color);
+         row.source->setAccent(color);
+         row.destination->setAccent(color);
          row.arrow->setColor(color);
          row.amount->setAccent(used ? color : 0xff4b515a);
-         if (program == 0) {
-            row.destination->setText(s == 0 ? "PICK A PROGRAM" : "");
-            row.destination->setColor(kDim);
-            row.where->setText(s == 0 ? "TO SEE ITS ROUTING" : "");
-         }
-         else if (!used) {
-            row.destination->setText("OFF");
-            row.destination->setColor(kDim);
-            row.where->setText("");
-         }
-         else {
-            const ModName &dest = destination(routes[s]);
-            std::string text = dest.knob ? dest.knob : dest.label;
-            for (char &c : text)
-               c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-            row.destination->setText(text);
-            row.destination->setColor(kWhite);
-            row.where->setText(targetOf(routes[s]).where);
-         }
-         tips_.setText(*row.amount, modSentence(s, program > 0, routes[s]));
+         if (!known)
+            row.where->setText(s == 0 ? "LOAD A PROGRAM TO SEE ITS ROUTING" : "");
+         else
+            row.where->setText(used ? targetOf(routes[s]).where : "");
+         tips_.setText(*row.amount, modSentence(s, known, routes[s]));
       }
       // Which slots each LFO and performance control feeds.
       const auto feeds = [&](auto matches) {
          std::string list;
          for (int s = 0; s < kModSlots; ++s)
-            if (program > 0 && routes[s].used() && matches(std::string(source(routes[s]).code)))
+            if (known && routes[s].used() && matches(std::string(source(routes[s]).code)))
                list += (list.empty() ? "" : " \xC2\xB7 ") + std::to_string(s + 1);
          return list.empty() ? std::string("NOT ROUTED") : "FEEDS SLOT " + list;
       };
@@ -575,7 +669,7 @@ private:
       for (int s = 0; s < kModSlots; ++s) {
          const int v = toCcValue(value(52 + s)) - 64;
          rows_[s].value->setText((v > 0 ? "+" : "") + std::to_string(v));
-         rows_[s].value->setColor(shownProgram_ > 0 && shownRoutes_[s].used() ? kWhite : kDim);
+         rows_[s].value->setColor(shownKnown_ > 0 && shownRoutes_[s].used() ? kWhite : kDim);
       }
       lagValue_->setText(std::to_string(toCcValue(value(62))));
       for (auto [readout, cc] : readouts_)
@@ -584,7 +678,7 @@ private:
 
       double reach[128] = {};
       unsigned color[128] = {};
-      if (shownProgram_ > 0)
+      if (shownKnown_ > 0)
          for (int s = 0; s < kModSlots; ++s) {
             if (!shownRoutes_[s].used())
                continue;
@@ -611,13 +705,22 @@ private:
    }
 
    struct Row {
-      vis::Chip *chip = nullptr;
+      ui::Dropdown *source = nullptr, *destination = nullptr;
       vis::Arrow *arrow = nullptr;
-      ui::Label *destination = nullptr, *where = nullptr, *value = nullptr;
+      ui::Label *where = nullptr, *value = nullptr;
       ui::Slider *amount = nullptr;
    };
 
    EditorHost &host_;
+   SynthLink::Use linkUse_;
+   std::vector<HardwarePatch> patches_ = factoryBank();
+   std::vector<ui::Preset> presets_ = factoryPresets();
+   ui::PresetBar *bar_ = nullptr;
+   ui::Label *linkStatus_ = nullptr;
+   uint32_t shownBankVersion_ = 0;
+   int soundTicket_ = 0;
+   bool partB_ = false, waitingBank_ = false, used_ = false;
+   std::string done_;
    ui::ParamBindings bindings_;
    ui::Tooltips tips_;
    ui::Knob *knobs_[128] = {};
@@ -628,9 +731,10 @@ private:
    ui::Label *feeds_[5] = {}; // LFO 1-3, mod wheel, mod knob
    ui::ActivityLed *leds_[3] = {};
    double lfoPhase_[3] = {};
-   int shownProgram_ = -1;
+   int shownKnown_ = -1;
    ModRoute shownRoutes_[kModSlots];
    ui::Button chDown_{"<"}, chUp_{">"}, channel_{"MIDI CH 1"}, sendAll_{"SEND ALL"};
+   ui::Button readSound_{"READ SOUND"}, part_{"PART A"}, readBank_{"READ BANK"};
 };
 
 } // namespace
