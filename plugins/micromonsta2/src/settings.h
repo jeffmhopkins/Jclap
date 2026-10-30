@@ -2,7 +2,8 @@
 
 // The program settings no CC reaches: the mod matrix routing, the oscillator algorithms, filter type
 // and character, LFO waves, trigger modes and tempo sync, the lag and mult operators, the voice
-// modes, bend range, effect modes, tempo, volume, the arpeggiator and the panel's knob assignments.
+// modes, bend range, effect modes, tempo, volume, the arpeggiator, the panel's knob assignments and
+// the program's name.
 // The synth takes them as NRPN on the part's channel (CC 99 = NRPN >> 7, CC 98 = NRPN & 127, CC 6 =
 // value, and CC 38 = the low 7 bits for 14-bit ones), the way the Monstaguru editor sends its live
 // edits, and stores them at fixed bytes of the program dump (see program_dump.h). The NRPN numbers,
@@ -19,6 +20,7 @@ namespace mm2 {
 
 enum class Choices {
    Number, // no names: min..max, shown as value - offset
+   Char,   // one character of the program's name: its ASCII code, 32..126
    Source,
    Destination,
    OpSource, // the lag and mult operators' sources: the matrix's up to LFO3×Env3
@@ -62,6 +64,11 @@ inline constexpr uint32_t kSettingIdBase = 2000;
 
 // clang-format off
 inline constexpr Setting kSettings[] = {
+   // The program's name: one NRPN per character, at bytes 8-15 of the dump.
+   {1, "Name 1", 8, Choices::Char, Group::Program, 32, 32, 126},  {2, "Name 2", 9, Choices::Char, Group::Program, 32, 32, 126},
+   {3, "Name 3", 10, Choices::Char, Group::Program, 32, 32, 126}, {4, "Name 4", 11, Choices::Char, Group::Program, 32, 32, 126},
+   {5, "Name 5", 12, Choices::Char, Group::Program, 32, 32, 126}, {6, "Name 6", 13, Choices::Char, Group::Program, 32, 32, 126},
+   {7, "Name 7", 14, Choices::Char, Group::Program, 32, 32, 126}, {8, "Name 8", 15, Choices::Char, Group::Program, 32, 32, 126},
    {27, "Osc1 Algorithm", 35, Choices::Osc1Algo, Group::Oscillators, 6},
    {31, "Osc2 Algorithm", 39, Choices::OscAlgo, Group::Oscillators, 6},
    {35, "Osc3 Algorithm", 43, Choices::OscAlgo, Group::Oscillators, 6},
@@ -148,6 +155,10 @@ inline int indexOfSettingId(uint32_t id) {
    return id >= kSettingIdBase && id < kSettingIdBase + 256 ? indexOfSetting(static_cast<int>(id - kSettingIdBase)) : -1;
 }
 
+inline constexpr int kNameLength = 8;
+inline constexpr int nameNrpn(int i) { return 1 + i; }
+inline constexpr bool isNumber(const Setting &s) { return s.choices == Choices::Number || s.choices == Choices::Char; }
+
 inline bool isRouting(const Setting &s) { return s.choices == Choices::Source || s.choices == Choices::Destination; }
 // A tempo sync choice is sent and stored as 127 + the choice: above the free speeds (0-127), which
 // the CC knob sets.
@@ -205,7 +216,8 @@ inline std::vector<std::string> choiceNames(Choices c) {
    const auto add = [&](const char *const *names, size_t n) { out.insert(out.end(), names, names + n); };
 #define MM2_ADD(list) add(list, sizeof(list) / sizeof(list[0]))
    switch (c) {
-   case Choices::Number: break;
+   case Choices::Number:
+   case Choices::Char: break;
    case Choices::Source:
       for (const ModName &m : kModSources)
          out.push_back(m.label);
@@ -248,7 +260,8 @@ inline std::vector<std::string> choiceNames(Choices c) {
 
 inline constexpr int choiceCount(Choices c) {
    switch (c) {
-   case Choices::Number: return 0;
+   case Choices::Number:
+   case Choices::Char: return 0;
    case Choices::Source: return kModSourceCount;
    case Choices::Destination: return kModDestinationCount;
    case Choices::OpSource: return 36;
@@ -275,13 +288,15 @@ inline constexpr int choiceCount(Choices c) {
    return 1;
 }
 
-inline constexpr int settingMin(const Setting &s) { return s.choices == Choices::Number ? s.min : 0; }
+inline constexpr int settingMin(const Setting &s) { return isNumber(s) ? s.min : 0; }
 inline constexpr int settingMax(const Setting &s) {
-   return s.choices == Choices::Number ? s.max : choiceCount(s.choices) - 1;
+   return isNumber(s) ? s.max : choiceCount(s.choices) - 1;
 }
 
 // What the panel and the host show for value v: a choice's name, or the number less its offset.
 inline std::string settingText(const Setting &s, int v) {
+   if (s.choices == Choices::Char)
+      return std::string(1, static_cast<char>(v));
    if (s.choices == Choices::Number)
       return std::to_string(v - s.offset);
    const std::vector<std::string> names = choiceNames(s.choices);

@@ -94,6 +94,8 @@ SETTINGS = {
 }
 for step in range(16):
     SETTINGS[134 + step] = (159 + step, False, 0)
+for char in range(8):  # the name, one character per NRPN
+    SETTINGS[1 + char] = (8 + char, False, 0)
 
 
 def setting(program, nrpn):
@@ -101,6 +103,8 @@ def setting(program, nrpn):
     v = program[byte] * 128 + program[byte + 1] if wide else program[byte]
     if sync:
         return v - 127 if 127 < v <= 127 + sync else 0
+    if nrpn <= 8:  # a name character, as printable ASCII
+        return min(max(v, 32), 126)
     return v
 
 

@@ -578,6 +578,12 @@ int main() {
          CHECK_EQ(out[2].value, 1);
          CHECK_EQ(out[3].value, 4);
       }
+      // A name character goes out as its ASCII code on NRPN 1-8.
+      a.setParam(mm2::settingId(mm2::nameNrpn(0)), 'B');
+      out = ccs(a.process());
+      CHECK_EQ(out.size(), 3u);
+      CHECK_EQ(out.size() == 3 ? out[1].value : -1, 1);
+      CHECK_EQ(out.size() == 3 ? out[2].value : -1, 'B');
       a.setParam(mm2::settingId(62), 0);
       bool speed = false;
       for (const Cc &c : ccs(a.process()))
@@ -588,7 +594,7 @@ int main() {
    // Every setting has its own NRPN and dump byte, and an INIT value in range.
    for (int i = 0; i < mm2::kSettingCount; ++i) {
       const mm2::Setting &s = mm2::kSettings[i];
-      JCLAP_CHECK(s.byte > 15 && s.byte + (s.wide ? 1 : 0) < static_cast<int>(mm2::kProgramDumpSize) - 1);
+      JCLAP_CHECK(s.byte >= 8 && s.byte + (s.wide ? 1 : 0) < static_cast<int>(mm2::kProgramDumpSize) - 1);
       JCLAP_CHECK(s.defaultValue >= mm2::settingMin(s) && s.defaultValue <= mm2::settingMax(s));
       for (int j = 0; j < i; ++j)
          JCLAP_CHECK(mm2::kSettings[j].nrpn != s.nrpn && mm2::kSettings[j].byte != s.byte);

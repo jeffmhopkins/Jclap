@@ -4,7 +4,7 @@
 
 A full panel for the Audiothingies MicroMonsta 2: every sound parameter, sent as MIDI CC or NRPN.
 
-[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: note effect](https://img.shields.io/badge/CLAP-note%20effect-blue)](https://github.com/free-audio/clap) [![parameters: 61 CCs + 84 NRPN settings](https://img.shields.io/badge/parameters-61%20CCs%20%2B%2084%20NRPN-blue)](docs/cc-map.csv) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage)
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: note effect](https://img.shields.io/badge/CLAP-note%20effect-blue)](https://github.com/free-audio/clap) [![parameters: 61 CCs + 92 NRPN settings](https://img.shields.io/badge/parameters-61%20CCs%20%2B%2092%20NRPN-blue)](docs/cc-map.csv) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage)
 
 </div>
 
@@ -14,7 +14,7 @@ out to the synth as a CC. The program settings no CC reaches (the mod matrix rou
 algorithms, filter type, LFO waves and sync, voice and effect modes, the arpeggiator and more) are
 host parameters too, sent as NRPN. Notes and other MIDI pass straight through.
 
-![Sound page](docs/panel.png)
+![Synth page](docs/panel.png)
 
 ## Using it in Bitwig
 
@@ -139,7 +139,7 @@ Bank select (0/32), sustain (64) and All Sound/Notes Off (120/123) are left out.
 
 ## Settings (NRPN)
 
-The synth stores 84 settings in a program that no CC reaches. The plugin sends them as NRPN on the
+The synth stores 92 settings in a program that no CC reaches. The plugin sends them as NRPN on the
 panel's channel (CC 99 = NRPN >> 7, CC 98 = NRPN & 127, CC 6 = the value, and CC 38 = its low 7 bits
 for the 14-bit ones), the same way the Monstaguru editor sends its live edits. The numbers, ranges and
 dump bytes come from that editor, and the full list is in `src/settings.h`.
@@ -154,7 +154,7 @@ dump bytes come from that editor, and the full list is in `src/settings.h`.
 | Voice | Voice mode 117, unison 118, pan spread mode 119, bend down 23 and up 24 |
 | Effects | Chorus mode 127, delay mode 128, delay sync 108 |
 | Arpeggiator | On 130, latch 131, style 114, speed 116, gate 115, octaves 132, length 133, steps 1-16 134-149 |
-| Program | Tempo 18, volume 17, category 9, F/Q/M knobs and encoders 1-4 10-16 |
+| Program | Name 1-8 (one character each), tempo 18, volume 17, category 9, F/Q/M knobs and encoders 1-4 10-16 |
 
 - As with the CCs, a setting only goes out once something has set it. After a Program Change or a
   sound read off the synth, the program's settings count as sent.
@@ -168,27 +168,32 @@ dump bytes come from that editor, and the full list is in `src/settings.h`.
 
 ## Panel
 
-Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage. `src/editor.cpp`
-holds the layout and `src/visuals.h` the pictures. The tabs in the header pick one of three pages:
+Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage, and styled like
+JSynth: dark translucent cards, with each knob's name over it and its value under it (its CC is in
+its hover help). `src/editor.cpp` holds the layout and `src/visuals.h` the pictures. The tabs in the
+header pick one of three pages:
 
-- **Sound** reads top to bottom like the synth. First the audio path: sources (three oscillators with
-  their algorithms and levels, noise and osc detune), filter (with its type and character), voice,
-  effects and out. Then the three envelopes: drag a corner, or drag or type in the A/D/S/R boxes under
-  each. Every stage keeps a minimum width, so a zero attack or decay still leaves each corner grabbable.
-  Last, the voice mode, unison, bend range, effect modes and the program's tempo, volume and category.
-- **Modulation:** the three LFOs (speed, wave, tempo sync and trigger), the mod wheel and mod knob,
-  the mod matrix table with each slot's source and destination, and the lag and multiply operators.
-- **Arp & knobs:** the arpeggiator's settings and its 16 steps, drawn as a small piano roll, and what
-  the synth's own F, Q and M knobs and four encoders control in the program.
+- **Synth:** the whole sound on one page. Oscillators (algorithm, a picture of the wave, shape, tune,
+  fine and level, then noise, osc detune, the mix and phase reset), voice (mode, unison, glide,
+  detune, drive, pan spread, velocity, volume, bend range), the filter (type, character, a response
+  curve and its knobs), the three LFOs (a picture of the wave, speed, wave, tempo sync and trigger),
+  the envelopes (drag a corner, or drag or type in a box; each has its reset-to-zero toggle) and the
+  effects (delay with its mode and sync, reverb, chorus and the tilt EQ).
+- **Mod matrix:** the ten slots with each one's source, destination and amount, the mod wheel and
+  mod knob, and the lag and multiply operators.
+- **Arp & program:** the arpeggiator's settings and its 16 steps, drawn as a small piano roll; the
+  program's name, tempo, volume and category; and what the synth's own F, Q and M knobs and four
+  encoders control.
 
-![Modulation page](docs/panel-modulation.png)
+![Mod matrix page](docs/panel-modulation.png)
 
-![Arp & knobs page](docs/panel-arp.png)
+![Arp & program page](docs/panel-arp.png)
 
 The pictures are drawn only from the CC values and the program's routing, since the plugin can't hear
 the synth: a lowpass filter response (a guide, whatever the filter type), delay echoes from time
 and feedback, a reverb tail from decay, the EQ tilt, the pan spread and the mix. The delay and reverb
-pictures dim when their level is 0. The LFO lights blink at a guess of each speed.
+pictures dim when their level is 0. The oscillator and LFO waves are guides drawn from the algorithm
+or wave and the shape knob. The LFO lights blink at a guess of each speed.
 
 Drag a knob up or down (shift for fine), use the mouse wheel for single steps, double-click to reset.
 Right-click a knob to reset it, type a value, or reach the host's menu for that parameter;

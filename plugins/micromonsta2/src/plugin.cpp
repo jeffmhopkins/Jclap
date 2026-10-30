@@ -235,8 +235,9 @@ public:
          jclap::core::fillParamInfo({settingId(st.nrpn), st.name, groupName(st.group),
                                      static_cast<double>(settingMin(st)), static_cast<double>(settingMax(st)),
                                      static_cast<double>(st.defaultValue),
-                                     CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED |
-                                        (st.choices == Choices::Number ? 0u : CLAP_PARAM_IS_ENUM)},
+                                     st.choices == Choices::Char ? CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_HIDDEN
+                                     : CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED |
+                                          (isNumber(st) ? 0u : CLAP_PARAM_IS_ENUM)},
                                     info);
          return true;
       }
@@ -289,6 +290,10 @@ public:
                *value = static_cast<double>(n);
                return true;
             }
+         if (st.choices == Choices::Char && std::strlen(text) == 1 && text[0] >= 32 && text[0] <= 126) {
+            *value = static_cast<double>(text[0]);
+            return true;
+         }
          double v;
          if (st.choices != Choices::Number || !jclap::core::parseNumber(text, v))
             return false;

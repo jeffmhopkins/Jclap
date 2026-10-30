@@ -23,6 +23,24 @@ using CcValue = std::function<double(int cc)>;
 
 inline unsigned withAlpha(unsigned color, unsigned alpha) { return (color & 0x00ffffff) | (alpha << 24); }
 
+// The panel's look: translucent widgets on dark cards, like JSynth's.
+inline const ui::Theme &glassTheme() {
+   static const ui::Theme theme = [] {
+      ui::Theme t;
+      t.background = 0xff090c13;
+      t.track = 0x40ffffff;
+      t.knobLight = 0xff3a4152;
+      t.knobDark = 0xff141823;
+      t.dimText = 0xff9aa3b5;
+      t.button = 0x40141a26;
+      t.buttonHover = 0x60283040;
+      t.panel = 0x80141a26;
+      t.panelBorder = 0x40ffffff;
+      return t;
+   }();
+   return theme;
+}
+
 // Base for a picture: ignores the mouse and draws on a dark inset like the envelope editor.
 class Picture : public visage::Frame {
 public:
@@ -44,7 +62,7 @@ protected:
    float s(float designHeight) const { return height() / designHeight; }
 
    void inset(visage::Canvas &c) {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float r = std::min(width(), height()) * 0.05f;
       c.setColor(t.knobDark);
       c.roundedRectangle(0, 0, width(), height(), r);
@@ -79,7 +97,7 @@ class FilterCurve : public Picture {
 public:
    using Picture::Picture;
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float k = s(176.0f), w = width(), h = height(), pad = 8 * k;
       inset(c);
       constexpr int kPoints = 160;
@@ -139,7 +157,7 @@ public:
       std::copy(colors, colors + 4, colors_);
    }
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float w = width(), h = height();
       double total = 0;
       for (int i = 0; i < 4; ++i)
@@ -172,7 +190,7 @@ class DelayTaps : public Picture {
 public:
    DelayTaps(CcValue value, unsigned color) : Picture(std::move(value)), color_(color) {}
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float k = s(72.0f), w = width(), h = height(), pad = 10 * k, floor = h - pad;
       inset(c);
       const bool heard = cc(28) > 0;
@@ -208,7 +226,7 @@ class ReverbTail : public Picture {
 public:
    ReverbTail(CcValue value, unsigned color) : Picture(std::move(value)), color_(color) {}
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float k = s(72.0f), w = width(), h = height(), pad = 10 * k, floor = h - pad;
       inset(c);
       const bool heard = cc(31) > 0;
@@ -247,7 +265,7 @@ class EqTilt : public Picture {
 public:
    EqTilt(CcValue value, unsigned color) : Picture(std::move(value)), color_(color) {}
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float k = s(72.0f), w = width(), h = height(), pad = 14 * k, mid = h * 0.5f;
       inset(c);
       c.setColor(t.track);
@@ -276,7 +294,7 @@ class PanFan : public Picture {
 public:
    using Picture::Picture;
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float k = s(100.0f), w = width(), h = height();
       inset(c);
       const float cx = w * 0.5f, cy = h - 18 * k, r = std::min(w * 0.5f - 16 * k, h - 34 * k);
@@ -312,7 +330,7 @@ public:
 
    void draw(visage::Canvas &c) override {
       inset(c);
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float w = width(), h = height(), col = w / 16.0f;
       constexpr int kLanes = 6;
       const float top = h * 0.06f, laneH = (h * 0.88f) / kLanes;
@@ -404,7 +422,7 @@ class KnobGlyph : public visage::Frame {
 public:
    explicit KnobGlyph(bool encoder) : encoder_(encoder) { setIgnoresMouseEvents(true, false); }
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float d = std::min(width(), height()), cx = width() * 0.5f, cy = height() * 0.5f;
       const float r = d * (encoder_ ? 0.36f : 0.42f);
       if (encoder_) {
@@ -428,15 +446,188 @@ private:
    bool encoder_;
 };
 
+// A card for a group of controls, with its title in the accent colour.
+class Card : public visage::Frame {
+public:
+   Card(std::string title, unsigned accent, float designHeight)
+       : title_(std::move(title)), accent_(accent), designHeight_(designHeight) {
+      setIgnoresMouseEvents(true, false);
+   }
+   void draw(visage::Canvas &c) override {
+      const float s = height() / designHeight_;
+      c.setColor(visage::Color(0xc80b0e17));
+      c.roundedRectangle(0, 0, width(), height(), 10 * s);
+      c.setColor(visage::Color(0x2effffff));
+      c.roundedRectangleBorder(0, 0, width(), height(), 10 * s, 1.0f * s);
+      if (!title_.empty()) {
+         c.setColor(accent_);
+         c.text(title_, ui::font(14 * s), visage::Font::kLeft, 16 * s, 8 * s, width(), 20 * s);
+      }
+   }
+
+private:
+   std::string title_;
+   unsigned accent_;
+   float designHeight_;
+};
+
+// One cycle of an oscillator: a guide drawn from its algorithm (a setting, read by CLAP id) and its
+// shape knob, since the synth's own waves aren't published. FM shows the shape as the FM depth;
+// a wavetable shows a made-up blend of harmonics that moves with the shape.
+class OscWave : public Picture {
+public:
+   OscWave(CcValue value, unsigned color, int algoId, int shapeCc, bool fmChoices)
+       : Picture(std::move(value)), color_(color), algoId_(algoId), shapeCc_(shapeCc), fm_(fmChoices) {}
+
+   void draw(visage::Canvas &c) override {
+      inset(c);
+      const float w = width(), h = height(), mid = h * 0.5f, amp = h * 0.36f;
+      c.setColor(withAlpha(glassTheme().panelBorder, 0x50));
+      c.fill(0, mid, w, 1.0f);
+      const int algo = static_cast<int>(std::lround(cc(algoId_)));
+      const double shape = cc(shapeCc_) / 127.0;
+      constexpr int kN = 160;
+      float xs[kN], ys[kN];
+      for (int i = 0; i < kN; ++i) {
+         const double p = static_cast<double>(i) / (kN - 1);
+         xs[i] = 4.0f + (w - 8.0f) * static_cast<float>(p);
+         ys[i] = mid - amp * static_cast<float>(std::clamp(sample(algo, shape, p), -1.0, 1.0));
+      }
+      c.setColor(withAlpha(color_, 0x30));
+      for (int i = 0; i + 1 < kN; ++i) {
+         const float top = std::min(ys[i], mid), bottom = std::max(ys[i], mid);
+         c.fill(xs[i], top, xs[i + 1] - xs[i], bottom - top);
+      }
+      c.setColor(color_);
+      line(c, xs, ys, kN, std::max(1.5f, h * 0.025f));
+   }
+
+protected:
+   double signature() const override { return cc(algoId_) * 1000.0 + cc(shapeCc_); }
+
+private:
+   static double saw(double p) { return 1.0 - 2.0 * (p - std::floor(p)); }
+   static double tri(double p) {
+      p -= std::floor(p);
+      return p < 0.5 ? -1.0 + 4.0 * p : 3.0 - 4.0 * p;
+   }
+   double sample(int algo, double shape, double p) const {
+      constexpr double kTau = 6.283185307179586;
+      const double sn = std::sin(kTau * p);
+      if (fm_ && algo >= 12) { // FM sine, triangle, saw, square
+         const double depth = shape * 4.0, ph = p + depth * std::sin(kTau * p * 2.0) / kTau;
+         switch (algo - 12) {
+         case 0: return std::sin(kTau * ph);
+         case 1: return tri(ph + 0.25);
+         case 2: return saw(ph + 0.5);
+         default: return std::sin(kTau * ph) >= 0 ? 0.8 : -0.8;
+         }
+      }
+      if (!fm_ && algo >= 12) { // wavetables
+         const int table = algo - 12;
+         double v = 0;
+         for (int k = 1; k <= 6; ++k) {
+            const double weight = std::cos(shape * 3.0 + k * (0.7 + 0.31 * table)) / k;
+            v += weight * std::sin(kTau * p * k + table * 0.4 * k);
+         }
+         return v * 0.9;
+      }
+      switch (algo) {
+      case 0: return std::sin(kTau * p + shape * 2.0 * sn);                 // sine, folded by shape
+      case 1: return std::fabs(sn) * 2.0 - 1.0 + shape * 0.3 * sn;          // sine full (rectified)
+      case 2: return sn > 0 ? sn * 2.0 - 1.0 : -1.0 + shape * 0.4;          // sine half
+      case 3: return tri(p + 0.25) > 1.0 - 2.0 * shape ? 0.9 : tri(p + 0.25); // tri > pulse
+      case 4: {                                                              // tri > saw
+         const double k = 0.5 + 0.49 * shape, q = p - std::floor(p);
+         return q < k ? -1.0 + 2.0 * q / k : 1.0 - 2.0 * (q - k) / (1.0 - k);
+      }
+      case 5: return std::clamp(tri(p + 0.25) * (1.0 + shape * 8.0), -0.9, 0.9); // tri > square
+      case 6: return saw(p) * 0.9;
+      case 7:
+      case 8: { // supersaws: detuned saws, wider with shape
+         const double spread = 0.02 + shape * (algo == 7 ? 0.08 : 0.16);
+         return (saw(p) + saw(p * (1.0 + spread) + 0.3) + saw(p * (1.0 - spread) + 0.6)) * 0.35;
+      }
+      case 9: return saw(p * (1.0 + shape * 3.0)) * 0.9;  // synced saw
+      case 10: return (p - std::floor(p)) < 0.5 - shape * 0.45 ? 0.8 : -0.8; // square > pulse
+      case 11: return std::sin(kTau * p * (1.0 + shape * 3.0)) >= 0 ? 0.8 : -0.8; // synced square
+      default: return sn;
+      }
+   }
+
+   unsigned color_;
+   int algoId_, shapeCc_;
+   bool fm_;
+};
+
+// An LFO's wave over two cycles, from its wave setting (read by CLAP id).
+class LfoShape : public Picture {
+public:
+   LfoShape(CcValue value, unsigned color, int waveId) : Picture(std::move(value)), color_(color), waveId_(waveId) {}
+
+   void draw(visage::Canvas &c) override {
+      inset(c);
+      const float w = width(), h = height(), mid = h * 0.5f, amp = h * 0.34f;
+      const int wave = static_cast<int>(std::lround(cc(waveId_)));
+      const bool unipolar = wave >= 6 && wave != 4 && wave != 5;
+      const float base = unipolar ? mid + amp : mid;
+      c.setColor(withAlpha(glassTheme().panelBorder, 0x50));
+      c.fill(0, base, w, 1.0f);
+      constexpr int kN = 120;
+      float xs[kN], ys[kN];
+      for (int i = 0; i < kN; ++i) {
+         const double p = 2.0 * i / (kN - 1);
+         xs[i] = 4.0f + (w - 8.0f) * static_cast<float>(i) / (kN - 1);
+         const double v = value(wave, p);
+         ys[i] = unipolar ? mid + amp - 2.0f * amp * static_cast<float>(v) : mid - amp * static_cast<float>(v);
+      }
+      c.setColor(color_);
+      line(c, xs, ys, kN, std::max(1.5f, h * 0.03f));
+   }
+
+protected:
+   double signature() const override { return cc(waveId_); }
+
+private:
+   // -1..1 for the bipolar waves, 0..1 for the unipolar ones, at phase p (cycles).
+   static double value(int wave, double p) {
+      const double q = p - std::floor(p);
+      const int cycle = static_cast<int>(p);
+      const auto noise = [](int k) { return std::fmod(std::sin(k * 12.9898 + 4.1) * 43758.5453, 1.0); };
+      const double held = noise(static_cast<int>(p * 4.0));
+      switch (wave) {
+      case 0: return std::sin(6.283185307179586 * q);
+      case 1: return q < 0.25 ? 4 * q : q < 0.75 ? 2 - 4 * q : 4 * q - 4;
+      case 2: return 1.0 - 2.0 * q;
+      case 3: return q < 0.5 ? 1.0 : -1.0;
+      case 4: return held;                                        // S&H bipolar
+      case 5: return std::sin(p * 9.0 + noise(cycle) * 6) * 0.8; // random, smooth
+      case 6: case 7: case 8: return std::pow(q, 0.5 + (wave - 6) * 1.2);            // attacks
+      case 9: case 10: case 11: return std::pow(1.0 - q, 0.5 + (wave - 9) * 1.2);    // decays
+      case 12: case 13: case 14: {                                                   // attack-decays
+         const double k = 0.5 + (wave - 13) * 0.3;
+         return q < k ? q / k : (1.0 - q) / (1.0 - k);
+      }
+      case 15: return q < 0.5 ? 1.0 : 0.0;
+      case 16: return q < 0.5 ? 0.0 : 1.0;
+      case 17: return std::fabs(held);
+      default: return 0.5 + 0.4 * std::sin(p * 9.0 + noise(cycle) * 6);
+      }
+   }
+
+   unsigned color_;
+   int waveId_;
+};
+
 // A darker rounded box to group a few widgets inside a section.
 class Tile : public visage::Frame {
 public:
    Tile() { setIgnoresMouseEvents(true, false); }
    void draw(visage::Canvas &c) override {
-      c.setColor(0xff191c22);
-      c.roundedRectangle(0, 0, width(), height(), 4);
-      c.setColor(ui::defaultTheme().panelBorder);
-      c.roundedRectangleBorder(0, 0, width(), height(), 4, 1.0f);
+      c.setColor(0x40141a26);
+      c.roundedRectangle(0, 0, width(), height(), 6);
+      c.setColor(0x1effffff);
+      c.roundedRectangleBorder(0, 0, width(), height(), 6, 1.0f);
    }
 };
 
@@ -454,7 +645,7 @@ public:
    void draw(visage::Canvas &c) override {
       const float h = height();
       if (text_.empty()) {
-         c.setColor(ui::defaultTheme().dimText);
+         c.setColor(glassTheme().dimText);
          c.text("\xE2\x80\x94", ui::font(h * 0.6f), visage::Font::kLeft, 2, 0, width(), h);
          return;
       }
@@ -498,7 +689,7 @@ class WheelStrip : public ui::Slider {
 public:
    explicit WheelStrip(ui::ValueRange range) : ui::Slider(ui::Slider::Orientation::Vertical, range) {}
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float w = width(), h = height(), r = w * 0.3f;
       c.setColor(visage::Brush::linear(visage::Color(t.knobLight), visage::Color(t.knobDark), visage::Point(0, 0),
                                        visage::Point(w, 0)));
