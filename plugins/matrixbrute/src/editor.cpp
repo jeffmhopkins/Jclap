@@ -3,9 +3,9 @@
 //
 // It follows the synth's own panel in six columns, as the plugin's first panel did: VCO 1 and 2
 // (their wave mix drawn tall under the knobs), VCO 3 and noise, audio mod and VCO sync, the wheels
-// and voice down the left; the mixer (each row its level, Filter button, lights and mix share) over
-// LFO 1; the Steiner and ladder filters with the routing and the big silver Master Cutoff in a box
-// between them, over LFO 2; the preset display (with the read from the synth) over the three
+// and voice down the left; the mixer (each row its level, Filter button, lights and mix share) and
+// the Steiner and ladder filters with the routing and the big silver Master Cutoff in a box between
+// them, over LFO 1 and LFO 2 side by side, mirror images of each other; the preset display (with the read from the synth) over the three
 // envelopes; the 16 x 16 matrix; and the analog effects, the sequencer, glide and play control, and
 // master on the right. Along the bottom, like the synth's front edge, are glide, the mod wheel, the
 // macros, the MATRIXBRUTE wordmark and what the plugin knows. Each box's title tab and top rule are
@@ -141,11 +141,11 @@ public:
       buildAudioModAndSync();
       buildWheelsAndVoice();
       buildMixer();
-      buildLfo1();
+      buildLfo(0, "LFO 1", kLime, 90, "PHASE", 91);
       buildFilter(kTop, "VCF1 STEINER", kSteiner, {81, 23, 83, 82, 24, 7});
       buildMasterCutoff();
       buildFilter(kVcf2Y, "VCF2 LADDER", kLadder, {85, 25, 87, 86, 26, 8});
-      buildLfo2();
+      buildLfo(1, "LFO 2", kPink, 92, "DELAY", 93);
       buildPreset();
       for (int i = 0; i < 3; ++i) {
          const float y = kTop + kPresetH + kGutter + i * (kEnvH + kGutter);
@@ -426,7 +426,7 @@ private:
       indicator("voice.mode", "Mode", {"MONO", "PARA", "DUO"}, {x + 320, y + 28, 138, 96}, vis::HwButton::Lights::Right);
    }
 
-   // ---- column 2: mixer and LFO 1 ----
+   // ---- column 2: the mixer, and the LFOs under it and the filters ----
 
    // Five rows as on the synth, each the level knob then the Filter button with its two lights,
    // named in the source's colour; the mix drawn at the foot.
@@ -457,16 +457,26 @@ private:
       picture<vis::MixBar>({x + 54, my + 18, w - 68, 10}, ccs, colors);
    }
 
-   void buildLfo1() {
-      const float x = colX(1), y = kLfoY, w = kColW[1];
-      section("LFO 1", {x, y, w, kLfoH}, false, kLime);
-      knob(90, kLime, {x + 4, y + 22, 100, 110}, "PHASE");
-      knob(91, kLime, {x + 106, y + 22, 100, 110}, "RATE");
-      leds_[0] = &rateLed({x + w - 20, y + 10}, kLime);
-      indicator("lfo1.sync", "Seq-Sync", {}, {x + 6, y + 138, 96, 56});
-      indicator("lfo1.retrig", "Retrig", {"OFF", "SNGL", "MULTI"}, {x + 106, y + 134, 98, 64}, vis::HwButton::Lights::Right, kLime);
-      indicator("lfo1.wave", "< Wave >", {"SIN", "TRI", "SQR", "RSAW", "SAW", "RND", "S&H"}, {x + 4, y + 198, w - 8, 80},
-                vis::HwButton::Lights::Above, kLime);
+   // LFO 1 and LFO 2 side by side under the mixer and filters, mirror images as on the synth: the
+   // phase or delay, sync and rate, then the wave's lights in a row over its button, and retrigger
+   // with its lights beside it. Together they span the mixer's and filters' width, split evenly.
+   void buildLfo(int index, const char *title, unsigned color, int first, const char *firstName, int rate) {
+      const float w = (kColW[1] + kGutter + kColW[2] - kGutter) / 2, x = colX(1) + index * (w + kGutter), y = kLfoY,
+                  h = kLfoH;
+      section(title, {x, y, w, h}, false, color);
+      const std::string id = index == 0 ? "lfo1" : "lfo2";
+      const float ky = y + kTitleH;
+      knob(first, color, {x + kPad, ky, kCellW, kKnobH}, firstName);
+      indicator(id + ".sync", "Seq-Sync", {}, {x + kPad + kCellW, ky + 16, w - 2 * kPad - 2 * kCellW, 60});
+      knob(rate, color, {x + w - kPad - kCellW, ky, kCellW, kKnobH}, "RATE");
+      leds_[index] = &rateLed({x + w - 20, y + 10}, color);
+      // The second row centred in what's left under the knobs.
+      const float rowH = 96, by = ky + kKnobH + (y + h - kPad - (ky + kKnobH) - rowH) * 0.5f;
+      const float rw = 100, ww = w - 2 * kPad - rw - 6;
+      indicator(id + ".wave", "< Wave >", {"SIN", "TRI", "SQR", "RSAW", "SAW", "RND", "S&H"}, {x + kPad, by, ww, rowH},
+                vis::HwButton::Lights::Above, color);
+      indicator(id + ".retrig", "Retrig", {"OFF", "SNGL", "MULTI"}, {x + w - kPad - rw, by + 22, rw, 70},
+                vis::HwButton::Lights::Right, color);
    }
 
    ui::ActivityLed &rateLed(ui::Rect at, unsigned color) {
@@ -477,7 +487,7 @@ private:
       return led;
    }
 
-   // ---- column 3: filters, the routing and Master Cutoff, and LFO 2 ----
+   // ---- column 3: filters, the routing and Master Cutoff ----
 
    // Mode and slope down the left; drive, cutoff and resonance on top; brute factor, env amount
    // and out below.
@@ -514,19 +524,6 @@ private:
       cutoff.setCapColors(0xffe8ebee, 0xff858d96, 0xff1a1d22);
       picture<vis::DualFilter>({x + lw + 18, y + 30, w - lw - 30, h - 42}, vis::DualFilter::Filter{23, 83, 24, kSteiner},
                                vis::DualFilter::Filter{25, 87, 26, kLadder});
-   }
-
-   void buildLfo2() {
-      const float x = colX(2), y = kLfoY, w = kColW[2];
-      section("LFO 2", {x, y, w, kLfoH}, false, kPink);
-      knob(92, kPink, {x + 10, y + 22, 120, 116}, "DELAY");
-      indicator("lfo2.sync", "Seq-Sync", {}, {x + 150, y + 48, 100, 60});
-      knob(93, kPink, {x + w - 130, y + 22, 120, 116}, "RATE");
-      leds_[1] = &rateLed({x + w - 20, y + 10}, kPink);
-      indicator("lfo2.wave", "< Wave >", {"SIN", "TRI", "SQR", "RSAW", "SAW", "RND", "S&H"}, {x + 10, y + 158, 250, 90},
-                vis::HwButton::Lights::Above, kPink);
-      indicator("lfo2.retrig", "Retrig", {"OFF", "SNGL", "MULTI"}, {x + 272, y + 158, 118, 90}, vis::HwButton::Lights::Above,
-                kPink);
    }
 
    // ---- column 4: preset and envelopes ----
