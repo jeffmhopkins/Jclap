@@ -148,10 +148,11 @@ The sustain pedal (64) is left out; it passes through.
 
 Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage. `src/editor.cpp`
 holds the layout and `src/visuals.h` the pictures. It follows the synth's panel section by section:
-VCO 1 and 2 (enhancers above the wave levels), VCO 3, bend range and audio mod down the left; the
-mixer and LFO 1; the Steiner and ladder filters with Master Cutoff between them, and LFO 2; the
-preset display and the envelope sliders; and the analog effects and sequencer on the right. Glide,
-the mod wheel and the macros sit along the bottom, like the synth's front edge. Only knobs and
+VCO 1 and 2 (enhancers above the wave levels) down the left; the mixer; the Steiner and ladder
+filters with Master Cutoff between them; the three envelopes' sliders; and the analog effects on the
+right. A row under them holds VCO 3 and audio mod, LFO 1, LFO 2, the preset display and the
+sequencer. Glide, the mod wheel, bend range and the macros sit along the bottom, like the synth's
+front edge. Only knobs and
 sliders that are on MIDI are there: the synth's buttons and its matrix aren't.
 
 The preset display shows the synth's preset: the one picked in the preset bar, or the last Bank
