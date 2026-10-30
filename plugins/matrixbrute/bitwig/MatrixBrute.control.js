@@ -105,6 +105,7 @@ var LAYOUT = [
 var midiOut;
 var seq = 0;
 var job = null; // the read in progress
+var lastMidiLog = 0;
 var token = 0; // bumped on every request and reply, so a stale timeout does nothing
 var PORT = 58017;
 var logLines = []; // everything logged, for log clients that connect later
@@ -237,6 +238,15 @@ function init() {
    // Bitwig gives a port to one controller only, so this one passes the synth's keys and knobs on
    // to tracks (as "MatrixBrute presets" in a track's input list), as a generic controller would.
    midiIn.createNoteInput("MatrixBrute", "??????");
+   // CCs and Program Changes from the synth go in the log (at most 20 a second), to check that its
+   // knobs send. The note input above still gets them.
+   midiIn.setMidiCallback(guarded(function (status, d1, d2) {
+      var kind = status & 0xf0, now = Date.now();
+      if ((kind !== 0xb0 && kind !== 0xc0) || now - lastMidiLog < 50)
+         return;
+      lastMidiLog = now;
+      log((kind === 0xb0 ? "cc " + d1 + " = " + d2 : "program change " + d1) + " on channel " + ((status & 15) + 1));
+   }));
    var state = host.getDocumentState();
    state.getSignalSetting("Read all presets", "MatrixBrute", "Read").addSignalObserver(guarded(function () {
       readPresets(0, 255);
