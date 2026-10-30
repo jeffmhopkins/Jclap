@@ -161,7 +161,7 @@ function startPreset() {
    job.stage = "header";
    job.chunks = [];
    job.name = "";
-   request([0x03, 0x19, job.preset >> 4, job.preset & 15, 0x00]);
+   request([0x19, job.preset >> 4, job.preset & 15, 0x00]);
 }
 
 function fail(why) {
@@ -204,14 +204,14 @@ function onSysex(hex) {
          return;
       }
       job.stage = "ready";
-      request([0x03, 0x19, job.preset >> 4, job.preset & 15, 0x01]);
+      request([0x19, job.preset >> 4, job.preset & 15, 0x01]);
    } else if (job.stage === "ready" && r[7] === 0x00 && r[8] === 0x15) {
       job.stage = "chunks";
-      request([0x01, 0x18, 0x00], job.seq);
+      request([0x18, 0x00], job.seq);
    } else if (job.stage === "chunks" && r[7] === 0x20 && (r[8] === 0x16 || r[8] === 0x17)) {
       job.chunks.push(r.slice(9, r.length - 1));
       if (r[8] === 0x16) {
-         request([0x01, 0x18, 0x00]);
+         request([0x18, 0x00]);
          return;
       }
       if (job.chunks.length !== CHUNKS) {
