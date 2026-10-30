@@ -34,8 +34,15 @@ void Knob::draw(visage::Canvas &canvas) {
    const float d = std::min(w * 0.7f, 48.0f * s);
    const float cx = w * 0.5f, cy = 18.0f * s + d * 0.5f + 2.0f * s;
 
+   float labelSize = labelSize_ * s;
+   if (fitLabel_ && !label_.empty()) {
+      const float room = w - 4.0f * s;
+      const float textW = font(labelSize, dpiScale()).stringWidth(visage::String(label_).toUtf32());
+      if (textW > room && textW > 0.0f)
+         labelSize *= std::max(0.8f, room / textW);
+   }
    canvas.setColor(labelColor_ ? labelColor_ : t.text);
-   canvas.text(label_, font(10.5f * s), visage::Font::kCenter, 0, 0, w, 16.0f * s);
+   canvas.text(label_, font(labelSize), visage::Font::kCenter, 0, 0, w, 16.0f * s);
 
    // Track and value arc. Our angles run clockwise from 12 o'clock; Visage's start at 3 o'clock.
    const auto angleFor = [this](double v) { return -kSweep + 2.0f * kSweep * fraction(v); };
@@ -92,7 +99,8 @@ void Knob::draw(visage::Canvas &canvas) {
    const float body = d * 0.72f;
    canvas.setColor(t.shadow);
    canvas.circle(cx - body * 0.5f - 1.0f * s, cy - body * 0.5f + 1.5f * s, body + 2.0f * s);
-   canvas.setColor(visage::Brush::radial(visage::Color(t.knobLight), visage::Color(t.knobDark),
+   canvas.setColor(visage::Brush::radial(visage::Color(capLight_ ? capLight_ : t.knobLight),
+                                         visage::Color(capDark_ ? capDark_ : t.knobDark),
                                          visage::Point(cx - body * 0.15f, cy - body * 0.2f), body * 0.65f,
                                          body * 0.65f));
    canvas.circle(cx - body * 0.5f, cy - body * 0.5f, body);
@@ -100,16 +108,16 @@ void Knob::draw(visage::Canvas &canvas) {
    canvas.ring(cx - body * 0.5f, cy - body * 0.5f, body, 1.0f * s);
 
    const float px = std::sin(angle), py = -std::cos(angle);
-   canvas.setColor(t.text);
+   canvas.setColor(pointer_ ? pointer_ : t.text);
    canvas.segment(cx + px * body * 0.12f, cy + py * body * 0.12f, cx + px * body * 0.4f, cy + py * body * 0.4f,
                   2.0f * s, true);
 
    const float textY = cy + d * 0.5f + 3.0f * s;
    canvas.setColor(t.text);
-   canvas.text(text(), font(12.0f * s), visage::Font::kCenter, 0, textY, w, 15.0f * s);
+   canvas.text(text(), font(valueSize_ * s), visage::Font::kCenter, 0, textY, w, 15.0f * s);
    if (!caption_.empty()) {
       canvas.setColor(t.dimText);
-      canvas.text(caption_, font(9.5f * s), visage::Font::kCenter, 0, textY + 14.0f * s, w, 13.0f * s);
+      canvas.text(caption_, font(captionSize_ * s), visage::Font::kCenter, 0, textY + 14.0f * s, w, 13.0f * s);
    }
 }
 

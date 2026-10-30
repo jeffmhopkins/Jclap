@@ -27,6 +27,25 @@ public:
       redraw();
    }
 
+   // The label's, value's and caption's type sizes at a 100-unit-tall knob (10.5, 12 and 9.5 by
+   // default). A label set this way shrinks to fit the knob's width when it's too long.
+   void setTextSizes(float label, float value, float caption) {
+      labelSize_ = label;
+      valueSize_ = value;
+      captionSize_ = caption;
+      fitLabel_ = true;
+      redraw();
+   }
+
+   // The knob's cap as two shades and its pointer's colour, in place of the theme's, e.g. for a
+   // silver knob. 0 keeps the theme's.
+   void setCapColors(unsigned light, unsigned dark, unsigned pointer) {
+      capLight_ = light;
+      capDark_ = dark;
+      pointer_ = pointer;
+      redraw();
+   }
+
    // A small tick just outside the track at `value`, e.g. to mark where a range's normal zone ends.
    void setMarker(double value) {
       marker_ = value;
@@ -47,6 +66,9 @@ private:
    double marker_ = 0.0;
    bool hasMarker_ = false;
    unsigned labelColor_ = 0;
+   float labelSize_ = 10.5f, valueSize_ = 12.0f, captionSize_ = 9.5f;
+   bool fitLabel_ = false;
+   unsigned capLight_ = 0, capDark_ = 0, pointer_ = 0;
 };
 
 } // namespace jclap::ui
