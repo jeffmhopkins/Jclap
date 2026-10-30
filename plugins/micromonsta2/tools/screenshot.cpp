@@ -5,6 +5,7 @@
 
 #include "cc_map.h"
 #include "editor.h"
+#include "settings.h"
 
 namespace {
 
@@ -15,6 +16,19 @@ public:
 
    // The program's values, and a spread for the header knobs it doesn't set.
    double paramValue(clap_id id) const override {
+      if (const int k = mm2::indexOfSettingId(id); k >= 0) {
+         const int nrpn = mm2::kSettings[k].nrpn;
+         for (int s = 0; s < mm2::kModSlots; ++s) {
+            if (nrpn == mm2::sourceNrpn(s))
+               return patch().routes[s].source;
+            if (nrpn == mm2::destinationNrpn(s))
+               return patch().routes[s].destination;
+         }
+         for (auto [n, v] : patch().settings)
+            if (n == nrpn)
+               return v;
+         return mm2::kSettings[k].defaultValue;
+      }
       for (auto [cc, v] : patch().values)
          if (cc == static_cast<int>(id))
             return v;

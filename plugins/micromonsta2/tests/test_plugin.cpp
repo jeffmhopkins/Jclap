@@ -53,7 +53,8 @@ std::string toHex(const uint8_t *bytes, size_t n) {
 }
 
 bool samePatch(const mm2::HardwarePatch &a, const mm2::HardwarePatch &b) {
-   if (a.program != b.program || a.name != b.name || a.category != b.category || a.values != b.values)
+   if (a.program != b.program || a.name != b.name || a.category != b.category || a.values != b.values ||
+       a.settings != b.settings)
       return false;
    for (int s = 0; s < mm2::kModSlots; ++s)
       if (!(a.routes[s] == b.routes[s]))
@@ -330,8 +331,8 @@ int main() {
          CHECK_EQ(out.midi[2].status, 0xC1);
          CHECK_EQ(out.midi[2].data1, 11);
       }
-      // The host hears about each knob that moved, as a gesture.
-      CHECK_EQ(out.paramValues.size(), 3u);
+      // The host hears about each knob that moved, and each routing setting, as a gesture.
+      CHECK_EQ(out.paramValues.size(), 3u + 2u * mm2::kModSlots);
       CHECK_EQ(a.paramValue(74), 40.0);
       CHECK_EQ(a.paramValue(71), 99.0);
       CHECK_EQ(a.paramValue(52), 80.0);
@@ -482,6 +483,74 @@ int main() {
       for (const Cc &c : restored)
          sent74 = sent74 || (c.cc == 74 && c.value == 40);
       JCLAP_CHECK(sent74);
+   }
+
+   // Settings no CC reaches go out as NRPN on the CC channel: CC 99, 98, then the value on CC 6.
+   {
+      jclap::core::TestHost a(clap_entry, "com.jeffmhopkins.jclap.micromonsta2");
+      mm2::EditorHost &p = *a.object<mm2::EditorHost>();
+      a.setParam(mm2::kChannelParamId, 3);
+      a.process();
+      // Nothing set yet, so nothing goes out.
+      CHECK_EQ(a.process().midi.size(), 0u);
+      a.setParam(mm2::settingId(125), 5); // filter type: Bandpass 2
+      auto out = ccs(a.process());
+      CHECK_EQ(out.size(), 3u);
+      if (out.size() == 3) {
+         CHECK_EQ(out[0].channel, 3);
+         CHECK_EQ(out[0].cc, 99);
+         CHECK_EQ(out[0].value, 0);
+         CHECK_EQ(out[1].cc, 98);
+         CHECK_EQ(out[1].value, 125);
+         CHECK_EQ(out[2].cc, 6);
+         CHECK_EQ(out[2].value, 5);
+      }
+      CHECK_EQ(ccs(a.process()).size(), 0u);
+      // NRPN 128 and up use the MSB.
+      JCLAP_CHECK(!p.routingKnown());
+      p.beginEdit(mm2::settingId(mm2::sourceNrpn(2)));
+      p.setParam(mm2::settingId(mm2::sourceNrpn(2)), 24); // slot 3: LFO 2
+      p.endEdit(mm2::settingId(mm2::sourceNrpn(2)));
+      out = ccs(a.process());
+      CHECK_EQ(out.size(), 3u);
+      CHECK_EQ(out.size() == 3 ? out[1].value : -1, 76);
+      CHECK_EQ(out.size() == 3 ? out[2].value : -1, 24);
+      JCLAP_CHECK(p.routingKnown() && p.route(2).source == 24);
+      // Out of range is clamped; the host shows the choice's name.
+      a.setParam(mm2::settingId(126), 99);
+      a.process();
+      CHECK_EQ(a.paramValue(mm2::settingId(126)), 3.0);
+      auto *params = static_cast<const clap_plugin_params_t *>(a.plugin()->get_extension(a.plugin(), CLAP_EXT_PARAMS));
+      char text[64] = {};
+      JCLAP_CHECK(params->value_to_text(a.plugin(), mm2::settingId(125), 5, text, sizeof(text)) &&
+                  std::string(text) == "Bandpass 2");
+      double back = -1;
+      JCLAP_CHECK(params->text_to_value(a.plugin(), mm2::settingId(125), "Notch", &back) && back == 6.0);
+      CHECK_EQ(params->count(a.plugin()), static_cast<uint32_t>(mm2::kCcParamCount + 1 + mm2::kSettingCount));
+
+      // Saved and restored, and sent again when the project opens.
+      auto *state = static_cast<const clap_plugin_state_t *>(a.plugin()->get_extension(a.plugin(), CLAP_EXT_STATE));
+      Buffer saved;
+      JCLAP_CHECK(state->save(a.plugin(), &saved.out));
+      jclap::core::TestHost b(clap_entry, "com.jeffmhopkins.jclap.micromonsta2");
+      mm2::EditorHost &pb = *b.object<mm2::EditorHost>();
+      auto *stateB = static_cast<const clap_plugin_state_t *>(b.plugin()->get_extension(b.plugin(), CLAP_EXT_STATE));
+      JCLAP_CHECK(stateB->load(b.plugin(), &saved.in));
+      CHECK_EQ(b.paramValue(mm2::settingId(125)), 5.0);
+      JCLAP_CHECK(pb.routingKnown() && pb.route(2).source == 24);
+      int nrpnValues = 0;
+      for (const Cc &c : ccs(b.process()))
+         nrpnValues += c.cc == 6;
+      CHECK_EQ(nrpnValues, 3);
+
+      // A program's settings come with it and aren't sent: the Program Change brings them.
+      mm2::HardwarePatch patch = *mm2::findFactoryPatch("P013 OctaBass");
+      pb.loadProgram(patch);
+      const auto loaded = ccs(b.process());
+      for (const Cc &c : loaded)
+         JCLAP_CHECK(c.cc == 0 || c.cc == 32);
+      CHECK_EQ(b.paramValue(mm2::settingId(125)), 3.0);
+      JCLAP_CHECK(pb.route(0) == (mm2::ModRoute{21, 1})); // LFO1×Wheel → Pitch
    }
 
    // Program numbers map onto banks of 100.

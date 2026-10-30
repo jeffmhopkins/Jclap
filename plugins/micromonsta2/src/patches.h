@@ -165,6 +165,8 @@ struct HardwarePatch {
    // volume) aren't part of a program and are left alone.
    std::vector<std::pair<int, int>> values;
    ModRoute routes[kModSlots];
+   // {nrpn, value} for the settings in settings.h other than the routing (which is `routes`).
+   std::vector<std::pair<int, int>> settings;
 };
 
 inline constexpr int kProgramCount = 300;
