@@ -48,6 +48,12 @@ inline unsigned mixColor(unsigned a, unsigned b, float amount) {
 inline unsigned labelTint(unsigned accent) { return mixColor(accent, 0xffffffff, 0.3f); }
 // The same label while its control's setting isn't known yet: toward the dim grey.
 inline unsigned dimTint(unsigned tint) { return mixColor(tint, 0xff8d939c, 0.45f); }
+// A string's width in `size` type, for fitting text.
+inline float textWidth(const visage::Frame &frame, const std::string &text, float size) {
+   return ui::font(size, frame.dpiScale()).stringWidth(visage::String(text).toUtf32());
+}
+// The smallest text anywhere on the panel and the size of control names, in design units.
+constexpr float kSmallText = 12.0f, kNameText = 13.5f;
 
 // Base for a picture: ignores the mouse and draws on a dark inset like the envelope editor.
 class Picture : public visage::Frame {
@@ -102,9 +108,10 @@ protected:
          if (!dash || (i / dash) % 2 == 0)
             c.segment(xs[i], ys[i], xs[i + 1], ys[i + 1], thick, true);
    }
-   static void note(visage::Canvas &c, const std::string &text, float k, float w) {
+   void note(visage::Canvas &c, const std::string &text) const {
+      const float d = ui::designScale(*this);
       c.setColor(ui::defaultTheme().dimText);
-      c.text(text, ui::font(9 * k), visage::Font::kRight, 0, 3 * k, w - 8 * k, 12 * k);
+      c.text(text, ui::font(kSmallText * d), visage::Font::kRight, 0, 4 * d, width() - 8 * d, 15 * d);
    }
 
 private:
@@ -150,7 +157,7 @@ public:
       c.setColor(color_);
       line(c, xs, ys, kPoints, 1.6f * k);
       if (sub + saw + sq + tri <= 0.0f)
-         note(c, "ALL WAVE LEVELS AT 0", k, w);
+         note(c, "ALL WAVE LEVELS AT 0");
    }
 
 protected:
@@ -176,28 +183,34 @@ public:
    DualFilter(CcValue value, Filter a, Filter b) : Picture(std::move(value)), filters_{a, b} {}
    void draw(visage::Canvas &c) override {
       const ui::Theme &t = ui::defaultTheme();
+      const float d = ui::designScale(*this);
       const float k = std::min(s(110.0f), width() / 280.0f), w = width(), h = height(), pad = 6 * k;
+      // The curves stay above a strip for the frequency labels.
+      const float bottom = h - 18 * d, top = pad + 22 * d;
       inset(c);
-      constexpr int kPoints = 120;
-      const auto yOf = [&](float db) { return pad + (h - 2 * pad) * (18.0f - std::clamp(db, -48.0f, 18.0f)) / 66.0f; };
+      constexpr int kPoints = 160;
+      const auto yOf = [&](float db) { return top + (bottom - top) * (18.0f - std::clamp(db, -48.0f, 18.0f)) / 66.0f; };
+      const auto small = ui::font(kSmallText * d);
       for (float hz : {100.0f, 1000.0f, 10000.0f}) {
          const float x = pad + (w - 2 * pad) * std::log(hz / 20.0f) / std::log(1000.0f);
          c.setColor(t.track);
-         c.fill(x, 0, 1, h);
+         c.fill(x, top - 4 * d, 1, bottom - top + 4 * d);
          c.setColor(t.dimText);
-         c.text(hz < 1000 ? "100" : hz < 10000 ? "1k" : "10k", ui::font(9 * k), visage::Font::kLeft, x + 3 * k,
-                h - 15 * k, 40 * k, 12 * k);
+         c.text(hz < 1000 ? "100" : hz < 10000 ? "1k" : "10k", small, visage::Font::kCenter, x - 30 * d, bottom + 1 * d,
+                60 * d, 16 * d);
       }
       c.setColor(t.track);
-      c.fill(0, yOf(0), w, 1);
+      c.fill(pad, yOf(0), w - 2 * pad, 1);
+      c.fill(pad, bottom, w - 2 * pad, 1);
       float xs[kPoints];
       for (int i = 0; i < kPoints; ++i)
          xs[i] = pad + (w - 2 * pad) * i / (kPoints - 1);
-      for (const Filter &fl : filters_) {
+      float ys[2][kPoints], ye[2][kPoints];
+      for (int n = 0; n < 2; ++n) {
+         const Filter &fl = filters_[n];
          const float cutoff = std::clamp(static_cast<float>(cc(fl.cutoff) + (cc(27) - 64.0)), 0.0f, 127.0f);
          const float peak = std::clamp(cutoff + (static_cast<float>(cc(fl.envAmount)) - 64.0f) * 0.9f, 0.0f, 127.0f);
          const float q = 0.6f + 6.0f * f(fl.resonance);
-         float ys[kPoints], ye[kPoints];
          const auto curve = [&](float cut, float *out) {
             const float fc = 20.0f * std::pow(1000.0f, cut / 127.0f);
             for (int i = 0; i < kPoints; ++i) {
@@ -206,15 +219,34 @@ public:
                out[i] = yOf(20.0f * std::log10(m * m));
             }
          };
-         curve(cutoff, ys);
-         curve(peak, ye);
-         c.setColor(withAlpha(fl.color, 0x22));
-         fillUnder(c, xs, ys, kPoints, h - 1);
-         c.setColor(withAlpha(fl.color, 0x90));
-         line(c, xs, ye, kPoints, 1.0f * k, 3);
-         c.setColor(fl.color);
-         line(c, xs, ys, kPoints, 1.8f * k);
+         curve(cutoff, ys[n]);
+         curve(peak, ye[n]);
       }
+      // Both fills first, faint, then ENV 1's peak as a thin solid line, then the responses on top.
+      for (int n = 0; n < 2; ++n) {
+         c.setColor(withAlpha(filters_[n].color, 0x33));
+         fillUnder(c, xs, ys[n], kPoints, bottom);
+      }
+      for (int n = 0; n < 2; ++n) {
+         c.setColor(withAlpha(filters_[n].color, 0x66));
+         line(c, xs, ye[n], kPoints, 1.2f * k);
+      }
+      for (int n = 0; n < 2; ++n) {
+         c.setColor(filters_[n].color);
+         line(c, xs, ys[n], kPoints, 1.8f * k);
+      }
+      // The key: each filter's colour, and the faint line for where ENV 1 takes it.
+      const char *names[2] = {"VCF1", "VCF2"};
+      float x = pad + 8 * d;
+      for (int n = 0; n < 2; ++n) {
+         c.setColor(filters_[n].color);
+         c.fill(x, pad + 9 * d, 14 * d, 3 * d);
+         c.text(names[n], small, visage::Font::kLeft, x + 18 * d, pad + 2 * d, 40 * d, 16 * d);
+         x += 18 * d + textWidth(*this, names[n], kSmallText * d) + 14 * d;
+      }
+      c.setColor(t.dimText);
+      c.fill(x, pad + 10 * d, 14 * d, 1.2f * d);
+      c.text("ENV 1 PEAK", small, visage::Font::kLeft, x + 18 * d, pad + 2 * d, 100 * d, 16 * d);
    }
 
 protected:
@@ -261,6 +293,39 @@ protected:
 private:
    int ccs_[5] = {};
    unsigned colors_[5] = {};
+};
+
+// One mixer source's level as a meter in its colour, with its share of the whole mix.
+class MixMeter : public Picture {
+public:
+   MixMeter(CcValue value, const int (&ccs)[5], int index, unsigned color) : Picture(std::move(value)), index_(index), color_(color) {
+      std::copy(ccs, ccs + 5, ccs_);
+   }
+   void draw(visage::Canvas &c) override {
+      const ui::Theme &t = ui::defaultTheme();
+      const float d = ui::designScale(*this), w = width();
+      double total = 0;
+      for (int n : ccs_)
+         total += cc(n);
+      const float level = f(ccs_[index_]);
+      c.setColor(t.track);
+      c.roundedRectangle(0, 0, w, 8 * d, 3 * d);
+      if (level > 0) {
+         c.setColor(color_);
+         c.roundedRectangle(0, 0, std::max(6 * d, w * level), 8 * d, 3 * d);
+      }
+      const int share = total > 0 ? static_cast<int>(std::lround(100.0 * cc(ccs_[index_]) / total)) : 0;
+      c.setColor(t.dimText);
+      c.text(std::to_string(share) + "% OF THE MIX", ui::font(kSmallText * d), visage::Font::kLeft, 0, 13 * d, w, 16 * d);
+   }
+
+protected:
+   double signature() const override { return sum({ccs_[0], ccs_[1], ccs_[2], ccs_[3], ccs_[4]}); }
+
+private:
+   int ccs_[5] = {};
+   int index_;
+   unsigned color_;
 };
 
 // An envelope's shape from its sliders: an optional delay, then attack, decay, sustain and release,
@@ -387,7 +452,7 @@ public:
       c.setColor(withAlpha(color, 0x60));
       c.fill(w * 0.5f - spread, floor + 3 * k, 2 * spread, 2 * k);
       if (wet <= 0)
-         note(c, "DRY/WET 0 \xC2\xB7 NOT HEARD", k, w);
+         note(c, "DRY/WET 0 \xC2\xB7 NOT HEARD");
    }
 
 protected:
@@ -414,14 +479,14 @@ public:
       c.fill(0, 5 * k, w, 2.5f * k);
       if (title_.empty())
          return;
-      const float size = 11.5f * k;
-      const float tw = ui::font(size, dpiScale()).stringWidth(visage::String(title_).toUtf32()) + 28 * k;
+      const float size = 14.0f * k, th = 20 * k;
+      const float tw = textWidth(*this, title_, size) + 28 * k;
       const float tx = (w - tw) * 0.5f;
-      c.fill(tx + 4 * k, 0, tw - 8 * k, 17 * k);
-      c.triangle(tx, 0, tx + 4 * k, 0, tx + 4 * k, 17 * k);
-      c.triangle(tx + tw, 0, tx + tw - 4 * k, 0, tx + tw - 4 * k, 17 * k);
+      c.fill(tx + 5 * k, 0, tw - 10 * k, th);
+      c.triangle(tx, 0, tx + 5 * k, 0, tx + 5 * k, th);
+      c.triangle(tx + tw, 0, tx + tw - 5 * k, 0, tx + tw - 5 * k, th);
       c.setColor(0xff1a1d22);
-      c.text(title_, ui::font(size), visage::Font::kCenter, tx, 0, tw, 17 * k);
+      c.text(title_, ui::font(size), visage::Font::kCenter, tx, 0, tw, th);
    }
 
 private:
@@ -430,10 +495,13 @@ private:
    unsigned rule_;
 };
 
-// The preset display: three red seven-segment-style characters, as the synth shows "A01".
+// A red seven-segment-style display, as the synth shows its preset ("A01") or the sequencer its
+// tempo ("100.0"): every place drawn faintly as an 8 (the decimal point as a dot), and the text on
+// top, one character to a place.
 class PresetDisplay : public visage::Frame {
 public:
-   PresetDisplay() { setIgnoresMouseEvents(true, false); }
+   // `places` is the faint pattern, e.g. "888" or "888.8".
+   explicit PresetDisplay(std::string places = "888") : places_(std::move(places)) { setIgnoresMouseEvents(true, false); }
    void setText(std::string text) {
       if (text != text_) {
          text_ = std::move(text);
@@ -441,16 +509,37 @@ public:
       }
    }
    void draw(visage::Canvas &c) override {
-      const float w = width(), h = height();
+      const float w = width(), h = height(), size = h * 0.74f;
       c.setColor(0xff0b0c0e);
       c.roundedRectangle(0, 0, w, h, 3);
-      c.setColor(withAlpha(0xffff4a3a, 0x28));
-      c.text("888", ui::font(h * 0.78f), visage::Font::kRight, 0, 0, w - h * 0.25f, h);
-      c.setColor(0xffff5a48);
-      c.text(text_, ui::font(h * 0.78f), visage::Font::kRight, 0, 0, w - h * 0.25f, h);
+      const auto font = ui::font(size);
+      const float digit = textWidth(*this, "8", size) * 1.08f, dot = digit * 0.45f;
+      float total = 0;
+      for (char p : places_)
+         total += p == '.' ? dot : digit;
+      // The characters fill the places left to right, skipping a point the text doesn't have.
+      std::vector<std::string> shown(places_.size());
+      size_t t = 0;
+      for (size_t i = 0; i < places_.size() && t < text_.size(); ++i) {
+         if (places_[i] == '.' && text_[t] != '.')
+            continue;
+         shown[i] = std::string(1, text_[t++]);
+      }
+      float x = (w - total) * 0.5f;
+      for (size_t i = 0; i < places_.size(); ++i) {
+         const float pw = places_[i] == '.' ? dot : digit;
+         c.setColor(withAlpha(0xffff4a3a, 0x28));
+         c.text(std::string(1, places_[i]), font, visage::Font::kCenter, x, 0, pw, h);
+         if (!shown[i].empty()) {
+            c.setColor(0xffff5a48);
+            c.text(shown[i], font, visage::Font::kCenter, x, 0, pw, h);
+         }
+         x += pw;
+      }
    }
 
 private:
+   std::string places_;
    std::string text_ = "---";
 };
 
@@ -480,47 +569,64 @@ public:
    void draw(visage::Canvas &c) override {
       const ui::Theme &t = ui::defaultTheme();
       const float k = ui::designScale(*this), w = width(), h = height();
-      const auto small = ui::font(8.5f * k);
       const bool known = state_ >= 0;
       const unsigned name = labelColor_ ? labelColor_ : t.text;
-      const unsigned text = known ? name : (labelColor_ ? dimTint(labelColor_) : t.dimText), lightText = known ? t.dimText : 0xff5d646e;
+      const unsigned text = known ? name : (labelColor_ ? dimTint(labelColor_) : t.dimText);
+      const unsigned lightText = known ? t.dimText : 0xff7a818b;
+      const auto nameFont = ui::font(kNameText * 0.93f * k);
+      float widest = 0;
+      for (const std::string &l : lights_)
+         widest = std::max(widest, textWidth(*this, l, kSmallText * k));
       const auto light = [&](float x, float y, size_t i) {
          const bool lit = known && static_cast<size_t>(state_) == i;
-         c.setColor(lit ? accent_ : (known ? 0xff3a4048 : 0xff2c3138));
+         c.setColor(lit ? accent_ : (known ? 0xff3a4048 : 0xff31363e));
          c.circle(x, y, 7 * k);
       };
-      const float bh = 18 * k;
+      const float bh = 18 * k, nameH = 16 * k;
       if (place_ == Lights::Right && !lights_.empty()) {
-         const float lw = std::clamp(w - 64 * k, 44 * k, 72 * k), bw = std::min(w - lw - 4 * k, 60 * k);
-         const float lh = std::min(14 * k, h / lights_.size()), ly = (h - lh * lights_.size()) * 0.5f;
+         // The button on the left, its lights in a column to its right.
+         const float lw = std::min(widest + 13 * k, w - 40 * k), bw = std::min(w - lw - 6 * k, 60 * k);
+         const auto small = ui::font(kSmallText * k * std::min(1.0f, (lw - 12 * k) / std::max(widest, 1.0f)));
+         const float lh = std::min(16 * k, h / lights_.size()), ly = (h - lh * lights_.size()) * 0.5f;
          for (size_t i = 0; i < lights_.size(); ++i) {
             const float y = ly + i * lh;
             light(w - lw, y + lh * 0.5f - 3.5f * k, i);
             c.setColor(lightText);
-            c.text(lights_[i], small, visage::Font::kLeft, w - lw + 10 * k, y, lw - 10 * k, lh);
+            c.text(lights_[i], small, visage::Font::kLeft, w - lw + 11 * k, y, lw - 11 * k, lh);
          }
-         const float by = (h - bh - 14 * k) * 0.5f;
+         const float by = (h - bh - nameH) * 0.5f;
          drawButton(c, 0, by, bw, bh, k, known && lights_.empty() && state_ > 0);
+         // The name centred under the button, unless that would cut it off at the left.
+         const float nameW = textWidth(*this, label_, kNameText * 0.93f * k) + 4 * k;
+         const float ncx = std::max(bw * 0.5f, nameW * 0.5f);
          c.setColor(text);
-         c.text(label_, ui::font(10 * k), visage::Font::kCenter, -8 * k, by + bh + 2 * k, bw + 16 * k, 13 * k);
+         c.text(label_, nameFont, visage::Font::kCenter, ncx - nameW * 0.5f, by + bh + 1 * k, nameW, nameH);
          return;
       }
       const float bw = std::min(w - 4 * k, 60 * k);
-      float by = (h - bh - 14 * k) * 0.5f;
+      float by = (h - bh - nameH) * 0.5f;
       if (!lights_.empty()) {
-         by = std::max(by, 26 * k);
-         const float lw = w / lights_.size(), top = by - 26 * k;
-         const auto fit = ui::font(std::min(8.5f * k, lw * 0.34f));
+         const float lw = w / lights_.size();
+         // Names too wide for their light's share take turns above and below the row of lights.
+         const bool stagger = widest > lw - 2 * k && lights_.size() > 2;
+         const float room = stagger ? 2 * lw - 4 * k : lw - 2 * k;
+         const auto small = ui::font(kSmallText * k * std::min(1.0f, room / std::max(widest, 1.0f)));
+         by = std::max(by, (stagger ? 46 : 30) * k);
+         const float top = by - (stagger ? 46 : 30) * k, ledY = top + (stagger ? 18 : 2) * k;
          for (size_t i = 0; i < lights_.size(); ++i) {
             const float cx = lw * (i + 0.5f);
-            light(cx - 3.5f * k, top + 2 * k, i);
+            light(cx - 3.5f * k, ledY, i);
             c.setColor(lightText);
-            c.text(lights_[i], fit, visage::Font::kCenter, cx - lw * 0.5f, top + 10 * k, lw, 11 * k);
+            const float ty = !stagger ? top + 10 * k : (i % 2 == 0 ? top : ledY + 8 * k);
+            c.text(lights_[i], small, visage::Font::kCenter, cx - room * 0.5f, ty, room, 15 * k);
          }
       }
       drawButton(c, (w - bw) * 0.5f, by, bw, bh, k, known && lights_.empty() && state_ > 0);
+      // The name under the button, made a little smaller if the button's width can't hold it.
+      const float nameSize = kNameText * 0.93f * k, nameW = textWidth(*this, label_, nameSize);
       c.setColor(text);
-      c.text(label_, ui::font(10 * k), visage::Font::kCenter, 0, by + bh + 2 * k, w, 13 * k);
+      c.text(label_, ui::font(nameSize * std::min(1.0f, (w - 2 * k) / std::max(nameW, 1.0f))), visage::Font::kCenter, 0,
+             by + bh + 1 * k, w, nameH);
    }
 
 private:
@@ -541,12 +647,14 @@ private:
    int state_ = -1;
 };
 
-// One of the synth's knobs that isn't on MIDI (fine tune, phones, master volume), drawn like the
-// panel's knobs but dim and without a value. Its state is a 0-127 position, or -1 while unknown;
-// setState() is the hook for when the plugin can read it.
+// One of the synth's knobs that isn't on MIDI (fine tune, phones, master volume), drawn small and
+// dim with its name beside it and no value. Its state is a 0-127 position, or -1 while unknown;
+// setState() is the hook for when the plugin can read it. `ringed` adds the white ring the synth
+// has round Master Volume.
 class HwKnob : public visage::Frame {
 public:
-   explicit HwKnob(std::string label, unsigned labelColor = 0) : label_(std::move(label)), labelColor_(labelColor) {}
+   explicit HwKnob(std::string label, unsigned labelColor = 0, bool ringed = false)
+      : label_(std::move(label)), labelColor_(labelColor), ringed_(ringed) {}
    void setState(int state) {
       if (state != state_) {
          state_ = state;
@@ -555,29 +663,54 @@ public:
    }
    void draw(visage::Canvas &c) override {
       const ui::Theme &t = ui::defaultTheme();
-      const float w = width(), h = height(), s = h / 100.0f;
-      const float d = std::min(w * 0.7f, 48.0f * s), cx = w * 0.5f, cy = 18.0f * s + d * 0.5f + 2.0f * s;
-      c.setColor(labelColor_ ? dimTint(labelColor_) : t.dimText);
-      c.text(label_, ui::font(10.5f * s), visage::Font::kCenter, 0, 0, w, 16.0f * s);
+      const float k = ui::designScale(*this), h = height();
+      const float d = std::min(h - 6 * k, 36 * k), cx = d * 0.5f + 3 * k, cy = h * 0.5f;
+      if (ringed_) {
+         c.setColor(0xffd8dce0);
+         c.ring(cx - d * 0.5f - 2 * k, cy - d * 0.5f - 2 * k, d + 4 * k, 1.5f * k);
+      }
       c.setColor(t.track);
-      c.ring(cx - d * 0.5f, cy - d * 0.5f, d, 3.2f * s);
-      const float body = d * 0.74f;
+      c.ring(cx - d * 0.5f, cy - d * 0.5f, d, 3 * k);
+      const float body = d * 0.72f;
       c.setColor(0xff23272d);
       c.circle(cx - body * 0.5f, cy - body * 0.5f, body);
       if (state_ >= 0) {
          const float a = (-0.75f + 1.5f * state_ / 127.0f) * 3.14159265f, px = std::sin(a), py = -std::cos(a);
          c.setColor(t.text);
-         c.segment(cx + px * body * 0.12f, cy + py * body * 0.12f, cx + px * body * 0.4f, cy + py * body * 0.4f, 2 * s, true);
+         c.segment(cx + px * body * 0.12f, cy + py * body * 0.12f, cx + px * body * 0.4f, cy + py * body * 0.4f, 2 * k, true);
       }
+      const float tx = d + 9 * k, tw = width() - tx;
+      c.setColor(labelColor_ ? dimTint(labelColor_) : t.dimText);
+      c.text(label_, ui::font(kNameText * k), visage::Font::kLeft, tx, cy - 18 * k, tw, 17 * k);
       c.setColor(t.dimText);
-      c.text(state_ >= 0 ? std::to_string(state_) : std::string("NOT ON MIDI"), ui::font(9.5f * s), visage::Font::kCenter, 0,
-             cy + d * 0.5f + 3 * s, w, 15 * s);
+      c.text(state_ >= 0 ? std::to_string(state_) : std::string("NO MIDI"), ui::font(kSmallText * k), visage::Font::kLeft, tx,
+             cy + 1 * k, tw, 15 * k);
    }
 
 private:
    std::string label_;
    unsigned labelColor_;
+   bool ringed_;
    int state_ = -1;
+};
+
+// The ring round the synth's big Master Cutoff knob: a silver bezel with ticks, drawn under the knob.
+class Bezel : public visage::Frame {
+public:
+   Bezel() { setIgnoresMouseEvents(true, false); }
+   void draw(visage::Canvas &c) override {
+      const float k = ui::designScale(*this), w = width(), h = height(), d = std::min(w, h), cx = w * 0.5f, cy = h * 0.5f;
+      c.setColor(visage::Brush::linear(visage::Color(0xffe4e8ec), visage::Color(0xff5f666e), visage::Point(cx - d * 0.5f, cy - d * 0.5f),
+                                       visage::Point(cx + d * 0.5f, cy + d * 0.5f)));
+      // A 270 degree ring like the knob's sweep, open at the bottom where the value sits.
+      c.arc(cx - d * 0.5f, cy - d * 0.5f, d, 3 * k, -0.5f * 3.14159265f, 0.75f * 3.14159265f, true);
+      c.setColor(0xff8a9199);
+      for (int i = 0; i <= 10; ++i) {
+         const float a = (-0.75f + 1.5f * i / 10.0f) * 3.14159265f, px = std::sin(a), py = -std::cos(a);
+         const float r0 = d * 0.5f - 11 * k, r1 = d * 0.5f - 6 * k;
+         c.segment(cx + px * r0, cy + py * r0, cx + px * r1, cy + py * r1, 1.5f * k, true);
+      }
+   }
 };
 
 // The matrix as it's printed on the synth: PRESET, SEQ and MOD above, the Mod Amount knob and the
@@ -599,7 +732,7 @@ public:
       setIgnoresMouseEvents(true, false);
       cells_.fill(-1);
    }
-   // Up to four lines for the display.
+   // The display's lines, up to seven.
    void setDisplay(std::vector<std::string> lines) {
       if (lines != lines_) {
          lines_ = std::move(lines);
@@ -613,84 +746,107 @@ public:
          redraw();
       }
    }
-   // The top of the grid, for placing things over the strip above it.
-   static constexpr float kGridTop = 170;
 
    void draw(visage::Canvas &c) override {
       const ui::Theme &t = ui::defaultTheme();
-      const float k = ui::designScale(*this), w = width();
-      const auto small = ui::font(9.5f * k), tiny = ui::font(8.5f * k);
+      const float k = ui::designScale(*this), w = width(), h = height();
+      const auto small = ui::font(kSmallText * k);
+      // Columns: the source labels, the 16 columns in blocks of four, then the sequencer lanes.
+      const float gx = 142 * k, lanes = 58 * k, block = 10 * k;
+      const float px = (w - gx - lanes - 3 * block) / 16.0f;
+      const auto colX = [&](int col) { return gx + col * px + (col / 4) * block; };
 
-      // PRESET, SEQ, MOD, the Mod Amount knob and the display.
+      // The top strip: PRESET, SEQ and MOD over the grid's first columns, the Mod Amount encoder,
+      // the display, and the user destinations' buttons (13 to 16) under it.
+      // The grid's rows as square as the height allows (a little taller at most), sat at the bottom
+      // with the step numbers; the top strip takes the rest.
+      const float numbersH = 34 * k, headerH = 38 * k, rowBlock = 16 * k, userD = 26 * k;
+      const float minTop = 6 * k + (7 * 18 + 14) * k + 10 * k + userD + 12 * k + headerH + 8 * k;
+      const float py = std::clamp((h - minTop - numbersH - 3 * rowBlock) / 16.0f, px, px * 1.2f);
+      const float gridH = 16 * py + 3 * rowBlock, gy = h - numbersH - gridH;
+      const float hy = gy - 8 * k - headerH, userY = hy - 14 * k - userD;
+      const float lcdX = colX(8) - 6 * k, lcdH = userY - 10 * k - 6 * k, lineH = std::min(24 * k, (lcdH - 14 * k) / 7);
       const char *modes[3] = {"PRESET", "SEQ", "MOD"};
+      const float r = 32 * k, cy = 6 * k + std::max(r + 4 * k, (lcdH - 24 * k) * 0.5f);
       for (int i = 0; i < 3; ++i) {
-         const float cx = 168 * k + i * 80 * k, cy = 56 * k, r = 27 * k;
+         const float cx = gx + r + i * (2 * r + 18 * k);
          c.setColor(0xff4a5560);
          c.circle(cx - r, cy - r, 2 * r);
          c.setColor(0xff76848f);
          c.circle(cx - r + 3 * k, cy - r + 3 * k, 2 * r - 6 * k);
          c.setColor(0xff1a1d22);
-         c.text(modes[i], small, visage::Font::kCenter, cx - r, cy - 7 * k, 2 * r, 14 * k);
+         c.text(modes[i], small, visage::Font::kCenter, cx - r, cy - 8 * k, 2 * r, 16 * k);
       }
-      c.setColor(t.dimText);
-      c.text("Mod Amount", small, visage::Font::kCenter, 380 * k, 94 * k, 80 * k, 13 * k);
-      const float kx = 420 * k, ky = 54 * k, kr = 30 * k;
+      // Mod Amount: an endless encoder with a ring of LEDs, dim while the plugin can't read it.
+      const float ex = gx + 3 * (2 * r + 18 * k) + 44 * k, er = 26 * k;
+      for (int i = 0; i < 15; ++i) {
+         const float a = (-0.75f + 1.5f * i / 14.0f) * 3.14159265f;
+         c.setColor(0xff2f3a52);
+         c.circle(ex + std::sin(a) * (er + 10 * k) - 2.5f * k, cy - std::cos(a) * (er + 10 * k) - 2.5f * k, 5 * k);
+      }
       c.setColor(0xff0b0c0e);
-      c.circle(kx - kr, ky - kr, 2 * kr);
-      c.setColor(visage::Brush::linear(visage::Color(0xffd7dce0), visage::Color(0xff6c747c), visage::Point(kx - kr, ky - kr),
-                                       visage::Point(kx + kr, ky + kr)));
-      c.circle(kx - kr * 0.62f, ky - kr * 0.62f, 1.24f * kr);
-      const float lx = 476 * k, lw = w - lx - 8 * k;
+      c.circle(ex - er, cy - er, 2 * er);
+      c.setColor(0xff2a2f36);
+      c.circle(ex - er + 4 * k, cy - er + 4 * k, 2 * er - 8 * k);
+      c.setColor(t.dimText);
+      c.text("Mod Amount", small, visage::Font::kCenter, ex - 50 * k, cy + er + 12 * k, 100 * k, 16 * k);
       c.setColor(0xff1b2a22);
-      c.roundedRectangle(lx, 14 * k, lw, 84 * k, 3 * k);
+      c.roundedRectangle(lcdX, 6 * k, w - lcdX - 4 * k, lcdH, 3 * k);
       c.setColor(0xff9fe0b4);
-      for (size_t i = 0; i < lines_.size() && i < 4; ++i)
-         c.text(lines_[i], ui::font(10.5f * k), visage::Font::kLeft, lx + 10 * k, 20 * k + i * 19 * k, lw - 20 * k, 16 * k);
+      const float lineTop = 6 * k + (lcdH - lineH * 7) * 0.5f;
+      for (size_t i = 0; i < lines_.size() && i < 7; ++i)
+         c.text(lines_[i], ui::font(13 * k), visage::Font::kLeft, lcdX + 12 * k, lineTop + i * lineH, w - lcdX - 24 * k, lineH);
+      for (int col = 12; col < 16; ++col) {
+         const float x = colX(col) + px * 0.5f - userD * 0.5f;
+         c.setColor(0xff3a454f);
+         c.circle(x, userY, userD);
+         c.setColor(t.dimText);
+         c.text(std::to_string(col + 1), small, visage::Font::kCenter, x, userY, userD, userD);
+      }
 
-      // The grid. Blocks of four columns and rows sit a little apart, as on the synth.
-      const float gx = 136 * k, gy = kGridTop * k, block = 8 * k;
-      const float cw = (w - gx - 8 * k - 3 * block) / 16.0f;
-      const float ch = (height() - gy - 34 * k - 3 * block) / 16.0f;
-      const auto colX = [&](int col) { return gx + col * cw + (col / 4) * block; };
-      const auto rowY = [&](int row) { return gy + row * ch + (row / 4) * block; };
+      const auto rowY = [&](int row) { return gy + row * py + (row / 4) * rowBlock; };
       for (int col = 0; col < 16; ++col) {
          const float x = colX(col);
          c.setColor(t.dimText);
-         c.roundedRectangleBorder(x + 2 * k, 126 * k, cw - 4 * k, 30 * k, 2 * k, 1.0f);
+         c.roundedRectangleBorder(x + 2 * k, hy, px - 4 * k, headerH, 2 * k, 1.0f);
          c.setColor(labelColor_);
          if (col < 12) {
-            c.text(kDestinations[col][0], tiny, visage::Font::kCenter, x, 128 * k, cw, 13 * k);
-            c.text(kDestinations[col][1], tiny, visage::Font::kCenter, x, 141 * k, cw, 13 * k);
+            c.text(kDestinations[col][0], small, visage::Font::kCenter, x, hy + 3 * k, px, 16 * k);
+            c.text(kDestinations[col][1], small, visage::Font::kCenter, x, hy + 19 * k, px, 16 * k);
          } else {
-            c.text(std::to_string(col + 1), small, visage::Font::kCenter, x, 126 * k, cw, 30 * k);
+            c.text("User", small, visage::Font::kCenter, x, hy + 3 * k, px, 16 * k);
+            c.text(std::to_string(col + 1), small, visage::Font::kCenter, x, hy + 19 * k, px, 16 * k);
          }
          c.setColor(t.dimText);
-         c.ring(x + cw * 0.5f - 9 * k, rowY(15) + ch + 8 * k, 18 * k, 1.2f * k);
-         c.text(std::to_string(col + 1), tiny, visage::Font::kCenter, x + cw * 0.5f - 9 * k, rowY(15) + ch + 8 * k, 18 * k,
-                18 * k);
+         const float nd = 22 * k, nx = x + px * 0.5f - nd * 0.5f, ny = gy + gridH + 8 * k;
+         c.ring(nx, ny, nd, 1.2f * k);
+         c.text(std::to_string(col + 1), small, visage::Font::kCenter, nx, ny, nd, nd);
       }
+      const char *laneNames[4] = {"Mod", "Slide", "Accent", "Step"};
+      const float cell = std::min(px, py) - 6 * k;
       for (int row = 0; row < 16; ++row) {
-         const float y = rowY(row);
+         const float y = rowY(row), mid = y + py * 0.5f;
          c.setColor(t.dimText);
-         c.ring(4 * k, y + ch * 0.5f - 9 * k, 18 * k, 1.2f * k);
+         c.ring(2 * k, mid - 11 * k, 22 * k, 1.2f * k);
          c.setColor(labelColor_);
-         c.text(std::string(1, static_cast<char>('A' + row)), tiny, visage::Font::kCenter, 4 * k, y + ch * 0.5f - 9 * k,
-                18 * k, 18 * k);
+         c.text(std::string(1, static_cast<char>('A' + row)), small, visage::Font::kCenter, 2 * k, mid - 11 * k, 22 * k, 22 * k);
          c.setColor(t.dimText);
-         c.roundedRectangleBorder(28 * k, y + ch * 0.5f - 8 * k, 100 * k, 16 * k, 2 * k, 1.0f);
+         c.roundedRectangleBorder(30 * k, mid - 10 * k, 104 * k, 20 * k, 2 * k, 1.0f);
          c.setColor(labelColor_);
-         c.text(kSources[row], tiny, visage::Font::kLeft, 33 * k, y + ch * 0.5f - 8 * k, 94 * k, 16 * k);
-         const bool pink = row % 4 == 3;
+         c.text(kSources[row], small, visage::Font::kLeft, 36 * k, mid - 10 * k, 98 * k, 20 * k);
+         const bool step = row % 4 == 3;
+         c.setColor(step ? 0xffb07f8a : t.dimText);
+         c.text(laneNames[row % 4], small, visage::Font::kLeft, colX(15) + px + 8 * k, mid - 8 * k, lanes - 8 * k, 16 * k);
          for (int col = 0; col < 16; ++col) {
-            const float x = colX(col), m = std::min(cw, ch) * 0.12f;
+            const float x = colX(col) + (px - cell) * 0.5f, cy2 = mid - cell * 0.5f;
             const int state = cells_[row * 16 + col];
-            unsigned color = pink ? 0xff5b4248 : 0xff3a454f;
+            unsigned color = step ? 0xff5b4248 : 0xff3a454f;
             if (state < 0)
-               color = pink ? 0xff3a3034 : 0xff2a3138;
+               color = step ? 0xff3a3034 : 0xff2a3138;
             else if (state > 0)
                color = 0xff6f8cff;
             c.setColor(color);
-            c.roundedRectangle(x + m, y + m, cw - 2 * m, ch - 2 * m, 3 * k);
+            c.roundedRectangle(x, cy2, cell, cell, 3 * k);
          }
       }
    }
