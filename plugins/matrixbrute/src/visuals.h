@@ -163,7 +163,7 @@ public:
    DualFilter(CcValue value, Filter a, Filter b) : Picture(std::move(value)), filters_{a, b} {}
    void draw(visage::Canvas &c) override {
       const ui::Theme &t = ui::defaultTheme();
-      const float k = std::min(s(110.0f), width() / 160.0f), w = width(), h = height(), pad = 6 * k;
+      const float k = std::min(s(110.0f), width() / 280.0f), w = width(), h = height(), pad = 6 * k;
       inset(c);
       constexpr int kPoints = 120;
       const auto yOf = [&](float db) { return pad + (h - 2 * pad) * (18.0f - std::clamp(db, -48.0f, 18.0f)) / 66.0f; };
@@ -260,7 +260,7 @@ public:
         gate_(std::move(gate)) {}
    void draw(visage::Canvas &c) override {
       const ui::Theme &t = ui::defaultTheme();
-      const float k = s(90.0f), w = width(), h = height(), pad = 8 * k;
+      const float k = std::min(s(90.0f), width() / 220.0f), w = width(), h = height(), pad = 8 * k;
       inset(c);
       float xs[6], ys[6];
       corners(xs, ys);
@@ -294,7 +294,7 @@ private:
    // The curve's corners: start, end of delay, peak, end of decay, end of the held sustain, end of
    // release. The segments are drawn wider for longer times, but not to scale.
    void corners(float *xs, float *ys) const {
-      const float k = height() / 90.0f, w = width(), h = height(), pad = 8 * k, floor = h - pad, top = pad + 4 * k;
+      const float k = std::min(height() / 90.0f, width() / 220.0f), w = width(), h = height(), pad = 8 * k, floor = h - pad, top = pad + 4 * k;
       const auto span = [&](int n) { return n < 0 ? 0.0f : 0.04f + std::sqrt(f(n)); };
       const float spans[] = {span(d_), span(a_), span(dc_), 0.5f, span(r_)};
       float total = 0;
@@ -518,6 +518,44 @@ private:
    std::vector<std::string> lights_;
    Lights place_;
    unsigned accent_;
+   int state_ = -1;
+};
+
+// One of the synth's knobs that isn't on MIDI (fine tune, phones, master volume), drawn like the
+// panel's knobs but dim and without a value. Its state is a 0-127 position, or -1 while unknown;
+// setState() is the hook for when the plugin can read it.
+class HwKnob : public visage::Frame {
+public:
+   explicit HwKnob(std::string label) : label_(std::move(label)) {}
+   void setState(int state) {
+      if (state != state_) {
+         state_ = state;
+         redraw();
+      }
+   }
+   void draw(visage::Canvas &c) override {
+      const ui::Theme &t = ui::defaultTheme();
+      const float w = width(), h = height(), s = h / 100.0f;
+      const float d = std::min(w * 0.7f, 48.0f * s), cx = w * 0.5f, cy = 18.0f * s + d * 0.5f + 2.0f * s;
+      c.setColor(t.dimText);
+      c.text(label_, ui::font(10.5f * s), visage::Font::kCenter, 0, 0, w, 16.0f * s);
+      c.setColor(t.track);
+      c.ring(cx - d * 0.5f, cy - d * 0.5f, d, 3.2f * s);
+      const float body = d * 0.74f;
+      c.setColor(0xff23272d);
+      c.circle(cx - body * 0.5f, cy - body * 0.5f, body);
+      if (state_ >= 0) {
+         const float a = (-0.75f + 1.5f * state_ / 127.0f) * 3.14159265f, px = std::sin(a), py = -std::cos(a);
+         c.setColor(t.text);
+         c.segment(cx + px * body * 0.12f, cy + py * body * 0.12f, cx + px * body * 0.4f, cy + py * body * 0.4f, 2 * s, true);
+      }
+      c.setColor(t.dimText);
+      c.text(state_ >= 0 ? std::to_string(state_) : std::string("NOT ON MIDI"), ui::font(9.5f * s), visage::Font::kCenter, 0,
+             cy + d * 0.5f + 3 * s, w, 15 * s);
+   }
+
+private:
+   std::string label_;
    int state_ = -1;
 };
 

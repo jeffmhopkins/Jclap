@@ -152,7 +152,8 @@ with a dark upper band over a lighter strip: VCO 1 and 2 (enhancers above the wa
 mix drawn under them), VCO 3 and noise, over audio mod, VCO sync, the wheels and voice; the mixer's
 column beside the Steiner and ladder filters, with the routing and the big Master Cutoff between
 them, over LFO 1 and LFO 2; the preset display and the three envelopes' sliders; the 16 x 16 matrix;
-and the analog effects, the sequencer, and glide, play control and the macros on the right. The
+and master (fine tune, phones and volume, drawn but not on MIDI), the analog effects, the sequencer,
+and glide, play control and the macros on the right. The
 synth's buttons, lights and matrix aren't on MIDI, so they're drawn as dim indicators until the
 plugin can read them from the synth's presets.
 
