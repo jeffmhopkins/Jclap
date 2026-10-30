@@ -4,7 +4,8 @@
 
 Connects to the script's log server (localhost:58017), prints every line it has logged since it
 loaded, then follows new ones. "read" starts a preset read first, as the script's Read button does;
-"stop" abandons one. Bitwig frames every message on that connection with a 4-byte big-endian length.
+"stop" abandons one. What a client sends needs a 4-byte little-endian length in front; what the script
+sends comes as plain lines (checked with Bitwig 5 on Windows).
 """
 
 import socket
@@ -25,10 +26,9 @@ def main():
     sock = socket.create_connection(("127.0.0.1", PORT), timeout=5)
     if args:
         word = args[0].encode()
-        sock.sendall(struct.pack(">I", len(word)) + word)
+        sock.sendall(struct.pack("<I", len(word)) + word)
     sock.settimeout(0.5)
     end = time.time() + seconds if seconds else None
-    buf = b""
     while end is None or time.time() < end:
         try:
             data = sock.recv(65536)
@@ -37,14 +37,8 @@ def main():
         if not data:
             print("(Bitwig closed the connection)")
             return
-        buf += data
-        while len(buf) >= 4:
-            n = struct.unpack(">I", buf[:4])[0]
-            if len(buf) < 4 + n:
-                break
-            sys.stdout.write(buf[4:4 + n].decode("ascii", "replace"))
-            sys.stdout.flush()
-            buf = buf[4 + n:]
+        sys.stdout.write(data.decode("ascii", "replace"))
+        sys.stdout.flush()
 
 
 if __name__ == "__main__":
