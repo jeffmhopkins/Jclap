@@ -89,6 +89,11 @@ constexpr double kPadGlide = 0.04;
 // in 1/512 steps, so whole CC values (the centre above all) come through exact.
 constexpr double kPadScale = 512.0;
 
+// The output's live position packed for the panel: a has-one bit (63), then x, y, target x and
+// target y at 15 bits each, over -2..+2 so Inertia's swings past the edge come through too.
+constexpr double kLiveRange = 2.0;
+constexpr uint64_t kLiveBits = 0x7FFF;
+
 const char *const kFeatures[] = {CLAP_PLUGIN_FEATURE_NOTE_EFFECT, CLAP_PLUGIN_FEATURE_UTILITY, nullptr};
 
 class PolarXY final : public jclap::core::Plugin, public EditorHost {
@@ -176,6 +181,20 @@ public:
          return false;
       angle = (v >> 8) & 0x7F;
       radius = v & 0x7F;
+      return true;
+   }
+
+   bool liveOutput(double &x, double &y, double &targetX, double &targetY) const override {
+      const uint64_t v = liveOut_.load();
+      if (!(v >> 63))
+         return false;
+      const auto axis = [v](int field) {
+         return static_cast<double>((v >> (15 * field)) & kLiveBits) / kLiveBits * 2.0 * kLiveRange - kLiveRange;
+      };
+      x = axis(3);
+      y = axis(2);
+      targetX = axis(1);
+      targetY = axis(0);
       return true;
    }
 
@@ -491,8 +510,10 @@ private:
          pushValue(out, time, channel, applied_.outRadius, p.radius);
          st.sentRadius = p.radius;
       }
-      if (channel == panelChannel_ && st.sentAngle >= 0)
+      if (channel == panelChannel_ && st.sentAngle >= 0) {
          lastOut_.store(panelOutput(st));
+         liveOut_.store(panelLive(st));
+      }
    }
 
    // What a channel last sent, for the panel: angle << 8 | radius at 7 bits, or -1 for nothing yet.
@@ -501,6 +522,21 @@ private:
          return -1;
       const int shift = applied_.fine ? 7 : 0;
       return (st.sentAngle >> shift) << 8 | (st.sentRadius >> shift);
+   }
+
+   // Where a channel's output is and is headed, for the panel (see kLiveRange), or 0 for nothing yet.
+   static uint64_t panelLive(const ChannelState &st) {
+      if (st.sentAngle < 0 || !st.motion.placed())
+         return 0;
+      double v[4];
+      st.motion.position(v[0], v[1]);
+      st.motion.target(v[2], v[3]);
+      uint64_t packed = 1ull << 63;
+      for (int i = 0; i < 4; ++i) {
+         const double f = (std::clamp(v[i], -kLiveRange, kLiveRange) + kLiveRange) / (2.0 * kLiveRange);
+         packed |= static_cast<uint64_t>(std::lround(f * kLiveBits)) << (15 * (3 - i));
+      }
+      return packed;
    }
 
    // An output value: one CC, or at 14 bits the MSB on `cc` then the LSB on cc + 32.
@@ -607,6 +643,7 @@ private:
       if (channel != panelChannel_ && !dragging) {
          panelChannel_ = channel;
          lastOut_.store(panelOutput(st));
+         liveOut_.store(panelLive(st));
       }
       if (channel == panelChannel_)
          lastIn_.store(static_cast<uint32_t>(channel) << 16 | static_cast<uint32_t>(st.x) << 8 |
@@ -629,10 +666,11 @@ private:
    double sampleRate_ = 48000.0;
    uint32_t frames_ = 1, clock_ = 0, stepLeft_ = kMotionStep;
    // For the panel: the channel that moved last, its X/Y (channel << 16 | x << 8 | y) and what it
-   // last sent (angle << 8 | radius, or -1 for nothing yet).
+   // last sent (angle << 8 | radius, or -1 for nothing yet), and where its output is (panelLive).
    int panelChannel_ = 0;
    std::atomic<uint32_t> lastIn_{64u << 8 | 64u};
    std::atomic<int32_t> lastOut_{-1};
+   std::atomic<uint64_t> liveOut_{0};
    // The XY pad's last move (see kPadScale; 0 for none yet), whether it is held, and the last move
    // the audio thread took.
    std::atomic<uint64_t> dragIn_{0};

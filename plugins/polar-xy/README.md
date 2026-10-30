@@ -96,7 +96,15 @@ and each MSB on its own is the whole value, so nothing changes for one.
 **XY IN** shows the last X/Y position received, with its channel, and **POLAR OUT** the angle and
 radius the plugin sent for that channel (a dash until both axes have arrived),
 with angle 0 marked by the tick on the right. Comparing the two shows what `Angle Offset` and
-`Direction` do. Below them are all the settings, which are also plain host parameters.
+`Direction` do. Under each view are its CCs: X and Y with Pass Input CCs, and angle and radius with
+the MIDI learn buttons. Below them, **MAPPING** holds Angle Offset, Direction and Radius Mode, and
+**MOTION** Smoothing, Inertia, Path and Resolution. Every setting is also a plain host parameter.
+
+Both views are small night skies that move at the screen's rate. The input dot and the output orb
+leave a trail of ink that drifts and fades behind them, so you can see the path a glide took
+(straight across, or round the circle) and Inertia swinging it past the target and back. The orb
+is drawn where the output really is, between the CC steps, and while Smoothing or Inertia hold it
+back a faint band ties it to a blue ring where the controller is pointing it.
 
 You can also play the Orb from the panel: click or drag in **XY IN** and that channel goes there just as
 if the controller had sent it, gliding with Smoothing and Inertia like any other move (and, with Pass
@@ -106,8 +114,8 @@ stepping each time it reports. While the mouse is down it has that channel, so t
 controller's X/Y CCs on it are ignored; once you let go, the controller takes over again with its next
 move. Double-click puts it back in the centre. Before any CC has arrived the pad drives channel 1.
 
-To map the outputs with a MIDI learn, press **SEND** under the angle or radius CC: it sends that CC
-alone (at the value last sent on it), so the learn picks it up without the other one getting in
+To map the outputs with a MIDI learn, press **SEND ANGLE** or **SEND RADIUS**, beside the output CCs: it
+sends that CC alone (at the value last sent on it), so the learn picks it up without the other one getting in
 first. At 14-bit it sends only the MSB CC, the one to learn.
 
 The preset bar in the header steps through presets with its arrows, lists them from the name, stars
