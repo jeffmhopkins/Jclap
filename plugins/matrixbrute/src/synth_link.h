@@ -23,6 +23,8 @@ namespace mb {
 class SynthLink {
 public:
    static constexpr int kPort = 58017;
+   // Clients listen on one of these; the script opens a connection to each as it starts.
+   static constexpr int kClientPortFirst = 58018, kClientPortCount = 8;
 
    static SynthLink &get();
 

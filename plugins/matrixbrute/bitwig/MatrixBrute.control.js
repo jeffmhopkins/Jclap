@@ -108,6 +108,10 @@ var job = null; // the read in progress
 var lastMidiLog = 0;
 var token = 0; // bumped on every request and reply, so a stale timeout does nothing
 var PORT = 58017;
+// Clients listen on one of these ports. Bitwig only lets a script open a connection while it starts,
+// so the script opens one to each of them then and answers whichever say hello.
+var CLIENT_PORT_FIRST = 58018, CLIENT_PORT_COUNT = 8;
+var clientConns = {}; // by port
 var logLines = []; // everything logged, for log subscribers that come later
 var lastRead = []; // the last complete read's PRESET lines, and its DONE line
 var reading = []; // the read in progress's PRESET lines
@@ -118,7 +122,8 @@ var SUBSCRIBER_TIMEOUT_MS = 10000;
 // Clients on this computer talk to the script by OSC over UDP on PORT. (Bitwig's TCP
 // RemoteConnection mixed up two clients' messages and stopped taking new ones after a while.)
 //
-//    /mb/hello  ,is  port kind    subscribe the UDP `port` on 127.0.0.1 to "log" or "data", and say
+//    /mb/hello  ,is  port kind    subscribe the UDP `port` on 127.0.0.1 (one of 58018-58025) to "log"
+//                                 or "data", and say
 //                                 it's still there: a subscriber that's quiet for 10 s is dropped,
 //                                 so clients repeat this every few seconds. The script answers with
 //                                 /mb/hello ,i 1, and on the first hello a "log" subscriber gets
@@ -178,14 +183,14 @@ function startServer() {
       var space = osc.createAddressSpace();
       space.registerMethod("/mb/hello", ",is", "Subscribe a UDP port to the log or the presets", guarded(function (source, msg) {
          var port = msg.getInt(0), kind = String(msg.getString(1));
-         if (port <= 0 || port > 65535 || (kind !== "log" && kind !== "data"))
+         if (!clientConns[port] || (kind !== "log" && kind !== "data")) {
+            host.errorln("MatrixBrute presets: hello from port " + port + ", which isn't 58018-58025");
             return;
+         }
          var sub = subscribers[port];
          var fresh = !sub || !sub[kind];
-         if (!sub) {
-            sub = subscribers[port] = {conn: osc.connectToUdpServer("127.0.0.1", port, osc.createAddressSpace()),
-                                       log: false, data: false, seen: 0};
-         }
+         if (!sub)
+            sub = subscribers[port] = {conn: clientConns[port], log: false, data: false, seen: 0};
          sub.seen = Date.now();
          sub[kind] = true;
          try {
@@ -212,6 +217,8 @@ function startServer() {
          host.errorln("MatrixBrute presets: unexpected OSC message " + msg.getAddressPattern() + " " + msg.getTypeTag());
       });
       osc.createUdpServer(PORT, space);
+      for (var p = CLIENT_PORT_FIRST; p < CLIENT_PORT_FIRST + CLIENT_PORT_COUNT; p++)
+         clientConns[p] = osc.connectToUdpServer("127.0.0.1", p, osc.createAddressSpace());
       log("OSC on UDP port " + PORT);
       host.errorln("MatrixBrute presets: OSC on UDP port " + PORT); // errorln reaches Bitwig's log file
    } catch (e) {

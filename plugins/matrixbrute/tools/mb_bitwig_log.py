@@ -13,6 +13,18 @@ import sys
 import time
 
 PORT = 58017
+# The script can only answer these ports (it opens its connections as it starts).
+CLIENT_PORTS = range(58018, 58026)
+
+
+def bind_client(sock):
+    for p in CLIENT_PORTS:
+        try:
+            sock.bind(("127.0.0.1", p))
+            return p
+        except OSError:
+            continue
+    sys.exit("Ports 58018-58025 are all taken")
 
 
 def pad(b):
@@ -58,9 +70,8 @@ def main():
     args = [a for a in args if a != "--data"]
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 20)
-    sock.bind(("127.0.0.1", 0))
+    port = bind_client(sock)
     sock.settimeout(0.5)
-    port = sock.getsockname()[1]
     script = ("127.0.0.1", PORT)
     sock.sendto(osc("/mb/hello", port, kind), script)
     if args:
