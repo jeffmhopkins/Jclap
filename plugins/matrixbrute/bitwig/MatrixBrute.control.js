@@ -119,6 +119,8 @@ function say(text) {
 function trace(text) {
    if (shown++ < 6)
       say(text);
+   else if (shown < 400)
+      println(text); // the console gets more of the read
 }
 
 function later(fn, ms) {
@@ -178,8 +180,10 @@ function request(cmd, s) {
    trace("sent " + msg + "f7");
    midiOut.sendSysex(msg + "f7");
    later(guarded(function () {
-      if (job && token === mine)
+      if (job && token === mine) {
+         println("timeout in stage " + job.stage + ", seq " + job.seq);
          fail("no reply");
+      }
    }), TIMEOUT_MS);
 }
 
@@ -236,8 +240,10 @@ function onSysex(hex) {
    trace("got " + hex.substr(0, 30) + (hex.length > 30 ? "..." : ""));
    if (!job.heard)
       job.heard = hex.substr(0, 24); // shown if the read gives up: what did come back
-   if (hex.substr(0, 12) !== ARTURIA || r[6] !== job.seq)
+   if (hex.substr(0, 12) !== ARTURIA || r[6] !== job.seq) {
+      println("ignored (waiting for seq " + job.seq + "): " + hex.substr(0, 30));
       return;
+   }
    // Matched on the reply code (r[8]) alone, as mb_dump.py does; r[7] is a length.
    var known = (job.stage === "header" && r[8] === 0x52) || (job.stage === "ready" && r[8] === 0x15) ||
                (job.stage === "chunks" && (r[8] === 0x16 || r[8] === 0x17));
