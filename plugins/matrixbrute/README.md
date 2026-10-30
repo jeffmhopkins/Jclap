@@ -151,7 +151,7 @@ holds the layout and `src/visuals.h` the pictures. It follows the synth's panel 
 with a dark upper band over a lighter strip: VCO 1 and 2 (enhancers above the wave levels, the wave
 mix drawn under them), VCO 3 and noise, over audio mod, VCO sync, the wheels and voice; the mixer's
 column beside the Steiner and ladder filters, with the routing and the big Master Cutoff between
-them, over LFO 1 and LFO 2; the three envelopes' sliders over the preset display; the 16 x 16 matrix;
+them, over LFO 1 and LFO 2; the preset display over the three envelopes' sliders; the 16 x 16 matrix;
 and master (fine tune, phones and volume, drawn but not on MIDI), the analog effects, the sequencer,
 and glide, play control and the macros on the right. The
 synth's buttons, lights and matrix aren't on MIDI, so they're drawn as dim indicators until the

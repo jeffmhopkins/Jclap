@@ -4,8 +4,8 @@
 // It follows the synth's own panel, column by column, with every box sized to its contents on one
 // knob pitch: VCO 1 and 2 (the wave mix drawn under them), VCO 3 and noise, over audio mod, VCO
 // sync, the wheels and voice; the mixer's column beside the Steiner and ladder filters with Master
-// Cutoff and the routing between them, over LFO 1 and LFO 2; the three envelopes over the preset
-// display; the 16 x 16 matrix; and master, the analog effects, the sequencer and, from the synth's
+// Cutoff and the routing between them, over LFO 1 and LFO 2; the preset display over the three
+// envelopes; the 16 x 16 matrix; and master, the analog effects, the sequencer and, from the synth's
 // left end, glide, play control and the macros. As on the synth, a dark upper band sits over a lighter
 // strip. Every knob and slider is one CC. The synth's buttons, lights and matrix aren't on MIDI:
 // they're drawn as indicators with a state the preset read can set later (setIndicator() and
@@ -74,7 +74,8 @@ constexpr float colX(int column) {
 static_assert(colX(4) + kColW[4] + kMargin == kDesignWidth, "the columns fill the width");
 // A dark band over a lighter strip. The band is as tall as two VCOs (their waves under the knobs)
 // and VCO 3's row; the strip is two rows of one-knob-row boxes on one rhythm: audio mod and VCO sync
-// over the wheels and voice, each LFO's knobs over its wave and retrigger, and the preset box.
+// over the wheels and voice, and each LFO's knobs over its wave and retrigger. The preset box and the
+// envelopes run the full height beside them.
 constexpr float kTop = kHeaderHeight + kMargin;
 constexpr float kWaveH = 224;
 constexpr float kVcoH = boxH(2) + kWaveH + 14, kSmallH = boxH(1);
@@ -85,8 +86,8 @@ static_assert(kStripY + kStripH + kMargin == kDesignHeight, "the band and strip 
 constexpr float kVco2Y = kTop + kVcoH + kGutter, kVco3Y = kVco2Y + kVcoH + kGutter;
 // The filters sit at the top and bottom of the band with Master Cutoff and the routing between.
 constexpr float kCutoffH = kBandH - 2 * boxH(2) - 2 * kGutter;
-// The three envelopes down the band; the preset box is in the strip.
-constexpr float kEnvH = (kBandH - 2 * kGutter) / 3;
+// The preset box at the top, then the three envelopes, down the full height (band and strip).
+constexpr float kPresetH = 202, kEnvH = (kBandH + kGutter + kStripH - kPresetH - 3 * kGutter) / 3;
 // The effects, the sequencer and the performance controls down the last column.
 // The sequencer is compact as on the synth: the tempo display and a row of buttons over a tight grid
 // with Rate, Swing and Gate down its right edge. Analog FX's echoes take what's left.
@@ -130,9 +131,10 @@ public:
       buildLfo(0, "LFO 1", kCyan, 90, "PHASE", 91);
       buildLfo(1, "LFO 2", kPink, 92, "DELAY", 93);
       buildPreset();
-      buildEnvelope(kTop, kEnvH, "ENV 1 (VCF)", 0, {-1, 102, 103, 28, 104}, 94, "VELO / VCF");
-      buildEnvelope(kTop + kEnvH + kGutter, kEnvH, "ENV 2 (VCA)", 1, {-1, 105, 106, 29, 107}, 95, "VELO / VCA");
-      buildEnvelope(kTop + 2 * (kEnvH + kGutter), kEnvH, "ENV 3", 2, {108, 109, 110, 30, 111}, -1, "");
+      const float envY = kTop + kPresetH + kGutter;
+      buildEnvelope(envY, kEnvH, "ENV 1 (VCF)", 0, {-1, 102, 103, 28, 104}, 94, "VELO / VCF");
+      buildEnvelope(envY + kEnvH + kGutter, kEnvH, "ENV 2 (VCA)", 1, {-1, 105, 106, 29, 107}, 95, "VELO / VCA");
+      buildEnvelope(envY + 2 * (kEnvH + kGutter), kEnvH, "ENV 3", 2, {108, 109, 110, 30, 111}, -1, "");
       buildMatrix();
       buildMaster();
       buildFx();
@@ -449,13 +451,13 @@ private:
    // Master Cutoff knob on the right, as on the synth.
    void buildMasterCutoff() {
       const float x = colX(1) + kMixerW + kGutter, y = kTop + boxH(2) + kGutter, w = kFilterW, h = kCutoffH;
-      add<vis::Tile>({x, y, w, h});
+      section("ROUTING / MASTER CUTOFF", {x, y, w, h}, true);
       const float kw = 160, kh = 176, ky = y + h - kh - 8;
-      picture<vis::DualFilter>({x + 12, y + 12, w - 24, ky - y - 20}, vis::DualFilter::Filter{23, 83, 24, kSteiner},
+      picture<vis::DualFilter>({x + 12, y + kTitleH + 4, w - 24, ky - y - kTitleH - 12}, vis::DualFilter::Filter{23, 83, 24, kSteiner},
                                vis::DualFilter::Filter{25, 87, 26, kLadder});
       indicator("vcf.routing", "Routing", {"PAR", "SER"}, {x + 40, ky + (kh - 64) * 0.5f, 120, 64},
                 vis::HwButton::Lights::Right);
-      knob(27, kWhite, {x + w - kw - 40, ky, kw, kh}, "MASTER CUTOFF");
+      knob(27, kWhite, {x + w - kw - 40, ky, kw, kh}, "");
    }
 
    // LFO 1 and LFO 2 side by side under the mixer and filters, mirror images as on the synth: the
@@ -491,21 +493,21 @@ private:
    // The synth's preset as far as the plugin knows, its preset buttons, and the read of every
    // preset stored on it.
    void buildPreset() {
-      const float x = colX(2), y = kStripY, w = kColW[2], h = kStripH;
+      const float x = colX(2), y = kTop, w = kColW[2], h = kPresetH;
       section("PRESET", {x, y, w, h}, true);
-      display_ = &add<vis::PresetDisplay>({x + (w - 156) * 0.5f, y + kTitleH + 8, 156, 52});
+      display_ = &add<vis::PresetDisplay>({x + (w - 156) * 0.5f, y + 28, 156, 48});
       const char *names[4] = {"Panel", "Save", "<", ">"};
       const char *ids[4] = {"preset.panel", "preset.save", "preset.prev", "preset.next"};
       const float bw = (w - 2 * kPad) / 4;
       for (int i = 0; i < 4; ++i)
-         indicator(ids[i], names[i], {}, {x + kPad + i * bw, kStripRow2Y - 34, bw, 50});
-      place(readSynth_, {x + (w - 150) * 0.5f, kStripRow2Y + kTitleH + 12, 150, 30});
+         indicator(ids[i], names[i], {}, {x + kPad + i * bw, y + 82, bw, 44});
+      place(readSynth_, {x + (w - 150) * 0.5f, y + 134, 150, 28});
       readSynth_.setAccent(kSteiner);
       readSynth_.onClick = [] { SynthLink::get().requestRead(); };
       tips_.add(readSynth_, "Reads every preset stored on the synth into the preset bar (about a minute). In Bitwig "
                             "this needs the MatrixBrute presets controller script (bitwig/MatrixBrute.control.js), "
                             "since a plugin there can't send or receive SysEx.");
-      linkStatus_ = &label("", {x + kPad, kStripRow2Y + kTitleH + 52, w - 2 * kPad, 18}, kDim, visage::Font::kCenter, 0.8f);
+      linkStatus_ = &label("", {x + kPad, y + 172, w - 2 * kPad, 18}, kDim, visage::Font::kCenter, 0.8f);
    }
 
    // The synth's envelopes are sliders: velocity (or ENV 3's delay) in white on the left, then
