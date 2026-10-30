@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
       return 1;
    }
    const int width = argc > 3 ? std::atoi(argv[2]) : 2696;
-   const int height = argc > 3 ? std::atoi(argv[3]) : 1536;
+   const int height = argc > 3 ? std::atoi(argv[3]) : 1488;
    DemoHost host;
    return mb::renderScreenshot(host, width, height, argv[1]) ? 0 : 1;
 }

@@ -4,9 +4,9 @@
 // It follows the synth's own panel, column by column, with every box sized to its contents on one
 // knob pitch: VCO 1 and 2 (the wave mix drawn under them), VCO 3 and noise, over audio mod, VCO
 // sync, the wheels and voice; the mixer's column beside the Steiner and ladder filters with Master
-// Cutoff and the routing between them, over LFO 1 and LFO 2; the preset display and the three
-// envelopes; the 16 x 16 matrix; and master, the analog effects, the sequencer and, from the synth's left
-// end, glide, play control and the macros. As on the synth, a dark upper band sits over a lighter
+// Cutoff and the routing between them, over LFO 1 and LFO 2; the three envelopes over the preset
+// display; the 16 x 16 matrix; and master, the analog effects, the sequencer and, from the synth's
+// left end, glide, play control and the macros. As on the synth, a dark upper band sits over a lighter
 // strip. Every knob and slider is one CC. The synth's buttons, lights and matrix aren't on MIDI:
 // they're drawn as indicators with a state the preset read can set later (setIndicator() and
 // MatrixMap::setCell()), and until then they're dim.
@@ -48,7 +48,7 @@ namespace vis = visuals;
 using ui::Rect;
 
 constexpr float kDesignWidth = 2696.0f;
-constexpr float kDesignHeight = 1536.0f;
+constexpr float kDesignHeight = 1488.0f;
 constexpr float kHeaderHeight = 64.0f;
 // The window opens at this fraction of the design size; right-click the background for others.
 constexpr float kOpenScale = 0.5f;
@@ -73,19 +73,20 @@ constexpr float colX(int column) {
 }
 static_assert(colX(4) + kColW[4] + kMargin == kDesignWidth, "the columns fill the width");
 // A dark band over a lighter strip. The band is as tall as two VCOs (their waves under the knobs)
-// and VCO 3's row; the strip holds two rows of the oscillators' small sections, the LFOs and ENV 3.
+// and VCO 3's row; the strip is two rows of one-knob-row boxes on one rhythm: audio mod and VCO sync
+// over the wheels and voice, each LFO's knobs over its wave and retrigger, and the preset box.
 constexpr float kTop = kHeaderHeight + kMargin;
-constexpr float kWaveH = 200;
+constexpr float kWaveH = 224;
 constexpr float kVcoH = boxH(2) + kWaveH + 14, kSmallH = boxH(1);
 constexpr float kBandH = 2 * kVcoH + kSmallH + 2 * kGutter;
-constexpr float kStripY = kTop + kBandH + kGutter, kStripH = 372, kStripRowH = (kStripH - kGutter) / 2;
-constexpr float kStripInset = (kStripRowH - kSmallH) / 2;
+constexpr float kStripRowH = kSmallH, kStripH = 2 * kStripRowH + kGutter, kStripY = kTop + kBandH + kGutter;
+constexpr float kStripRow2Y = kStripY + kStripRowH + kGutter;
 static_assert(kStripY + kStripH + kMargin == kDesignHeight, "the band and strip fill the height");
 constexpr float kVco2Y = kTop + kVcoH + kGutter, kVco3Y = kVco2Y + kVcoH + kGutter;
 // The filters sit at the top and bottom of the band with Master Cutoff and the routing between.
 constexpr float kCutoffH = kBandH - 2 * boxH(2) - 2 * kGutter;
-// The preset box, then ENV 1 and ENV 2 down the band; ENV 3 is in the strip.
-constexpr float kPresetH = 202, kEnvH = (kBandH - kPresetH - 2 * kGutter) / 2;
+// The three envelopes down the band; the preset box is in the strip.
+constexpr float kEnvH = (kBandH - 2 * kGutter) / 3;
 // The effects, the sequencer and the performance controls down the last column.
 // The sequencer is compact as on the synth: the tempo display and a row of buttons over a tight grid
 // with Rate, Swing and Gate down its right edge. Analog FX's echoes take what's left.
@@ -129,10 +130,9 @@ public:
       buildLfo(0, "LFO 1", kCyan, 90, "PHASE", 91);
       buildLfo(1, "LFO 2", kPink, 92, "DELAY", 93);
       buildPreset();
-      buildEnvelope(kTop + kPresetH + kGutter, kEnvH, "ENV 1 (VCF)", 0, {-1, 102, 103, 28, 104}, 94, "VELO / VCF");
-      buildEnvelope(kTop + kPresetH + kEnvH + 2 * kGutter, kEnvH, "ENV 2 (VCA)", 1, {-1, 105, 106, 29, 107}, 95,
-                    "VELO / VCA");
-      buildEnvelope(kStripY, kStripH, "ENV 3", 2, {108, 109, 110, 30, 111}, -1, "");
+      buildEnvelope(kTop, kEnvH, "ENV 1 (VCF)", 0, {-1, 102, 103, 28, 104}, 94, "VELO / VCF");
+      buildEnvelope(kTop + kEnvH + kGutter, kEnvH, "ENV 2 (VCA)", 1, {-1, 105, 106, 29, 107}, 95, "VELO / VCA");
+      buildEnvelope(kTop + 2 * (kEnvH + kGutter), kEnvH, "ENV 3", 2, {108, 109, 110, 30, 111}, -1, "");
       buildMatrix();
       buildMaster();
       buildFx();
@@ -366,34 +366,40 @@ private:
       indicator("noise.type", "Type", {"WHT", "PNK", "RED", "BLU"}, {nx + kPad, by, nw - 2 * kPad, bh});
    }
 
+   // A light box across the strip with a narrow side panel at its right end, split by a rule and
+   // titled in small type, as the synth's VCO Sync and Voice panels sit beside audio mod and the
+   // wheels.
+   void sidePanel(float x, float y, float w, const char *title) {
+      add<ui::Divider>({x, y + kTitleH, 1, kStripRowH - kTitleH - kPad});
+      label(title, {x + 6, y + kTitleH, w - 12, 12}, kDim, visage::Font::kCenter, 0.75f);
+   }
+
    void buildAudioModAndSync() {
-      const float x = colX(0), y = kStripY, w = boxW(4);
+      const float x = colX(0), y = kStripY, w = kColW[0], sw = 124, sx = x + w - sw;
       section("AUDIO MOD", {x, y, w, kStripRowH}, false);
-      knobRow(x, y + kStripInset, {77, 78, 79, 80}, {"VCO1 > VCO2", "VCO3 > 1 | 2", "VCO3 > F1 | F2", "NOISE > 1 | F1"},
+      knobRow(x, y, {77, 78, 79, 80}, {"VCO1 > VCO2", "VCO3 > 1 | 2", "VCO3 > F1 | F2", "NOISE > 1 | F1"},
               {kAmber, kPurple, kPurple, kNoise});
-      const float sx = x + w + kGutter, sw = kColW[0] - w - kGutter;
-      section("VCO SYNC", {sx, y, sw, kStripRowH}, false);
-      indicator("vco.sync", "VCO 2 > VCO 1", {}, {sx + kPad, y + kStripInset + kTitleH + 4, sw - 2 * kPad, kKnobH - 8});
+      sidePanel(sx, y, sw, "VCO SYNC");
+      indicator("vco.sync", "VCO 2 > VCO 1", {}, {sx + kPad, y + kTitleH + 20, sw - 2 * kPad, 60});
    }
 
    // Bend range, the mod wheel's routing and the mod wheel itself; then the voice mode.
    void buildWheelsAndVoice() {
-      const float x = colX(0), y = kStripY + kStripRowH + kGutter, vw = 140, w = kColW[0] - vw - kGutter;
+      const float x = colX(0), y = kStripRow2Y, w = kColW[0], vw = 144, vx = x + w - vw;
       section("WHEELS", {x, y, w, kStripRowH}, false);
-      knobRow(x, y + kStripInset, {119}, {"BEND RANGE"}, {kWhite});
-      const float by = y + kStripInset + kTitleH + 4, bh = kKnobH - 8;
-      indicator("wheel.mod", "Mod Wheel", {"MATRIX", "CUTOFF", "LFO1 VIB", "LFO1 AMT"},
-                {x + kPad + kCellW + 4, by, 128, bh}, vis::HwButton::Lights::Right);
-      const float wx = x + kPad + kCellW + 140;
-      auto &wheel = add<vis::WheelStrip>({wx, y + kStripInset + kTitleH + 2, 26, kKnobH - 6}, rangeOf(1));
+      knobRow(x, y, {119}, {"BEND RANGE"}, {kWhite});
+      const float by = y + kTitleH + 8, bh = kKnobH - 12;
+      indicator("wheel.mod", "Mod Wheel", {"MATRIX", "CUTOFF", "LFO1 VIB", "LFO1 AMT"}, {x + kPad + kCellW + 4, by, 132, bh},
+                vis::HwButton::Lights::Right);
+      const float wx = x + kPad + kCellW + 150;
+      auto &wheel = add<vis::WheelStrip>({wx, y + kTitleH + 2, 26, kKnobH - 6}, rangeOf(1));
       wire(wheel, 1, kWheel);
-      const float lx = wx + 34, lw = x + w - kPad - lx;
-      label("MOD WHEEL", {lx, y + kStripInset + 46, lw, 14}, kWheel, visage::Font::kLeft, 0.75f);
-      wheelValue_ = &label("", {lx, y + kStripInset + 66, lw, 16}, kWhite, visage::Font::kLeft, 0.8f);
-      label("CC 1", {lx, y + kStripInset + 86, lw, 12}, kDim, visage::Font::kLeft, 0.8f);
-      const float vx = x + w + kGutter;
-      section("VOICE", {vx, y, vw, kStripRowH}, false);
-      indicator("voice.mode", "Mode", {"MONO", "PARA", "DUO"}, {vx + kPad, by, vw - 2 * kPad, bh},
+      const float lx = wx + 34, lw = vx - kPad - lx;
+      label("MOD WHEEL", {lx, y + 46, lw, 14}, kWheel, visage::Font::kLeft, 0.75f);
+      wheelValue_ = &label("", {lx, y + 66, lw, 16}, kWhite, visage::Font::kLeft, 0.8f);
+      label("CC 1", {lx, y + 86, lw, 12}, kDim, visage::Font::kLeft, 0.8f);
+      sidePanel(vx, y, vw, "VOICE");
+      indicator("voice.mode", "Mode", {"MONO", "PARA", "DUO"}, {vx + kPad, by + 10, vw - 2 * kPad, bh - 10},
                 vis::HwButton::Lights::Right);
    }
 
@@ -458,16 +464,18 @@ private:
       const float w = (kColW[1] - kGutter) / 2, x = colX(1) + index * (w + kGutter), y = kStripY, h = kStripH;
       section(title, {x, y, w, h}, false);
       const std::string id = index == 0 ? "lfo1" : "lfo2";
-      const float ky = y + kTitleH + 12;
+      const float ky = y + kTitleH;
       knob(first, color, {x + kPad, ky, kCellW, kKnobH}, firstName);
-      indicator(id + ".sync", "Seq-Sync", {}, {x + kPad + kCellW, ky + 10, w - 2 * kPad - 2 * kCellW, kKnobH - 20});
+      indicator(id + ".sync", "Seq-Sync", {}, {x + kPad + kCellW, ky + 16, w - 2 * kPad - 2 * kCellW, 60});
       knob(rate, color, {x + w - kPad - kCellW, ky, kCellW, kKnobH}, "RATE");
       leds_[index] = &rateLed({x + w - 20, y + 10}, color);
-      const float by = ky + kKnobH + 10, bh = (y + h - kPad - by) / 2;
-      indicator(id + ".wave", "< Wave >", {"SIN", "TRI", "SQR", "RSAW", "SAW", "RND", "S&H"}, {x + kPad, by, w - 2 * kPad, bh},
-                vis::HwButton::Lights::Above, color);
-      indicator(id + ".retrig", "Retrig", {"OFF", "SNGL", "MULTI"}, {x + kPad + 30, by + bh, w - 2 * kPad - 60, bh},
-                vis::HwButton::Lights::Above, color);
+      // On the strip's second row, level with the wheels' controls: the wave and retrigger buttons
+      // with their lights in columns beside them.
+      const float by = kStripRow2Y + kTitleH - 6, ww = 120;
+      indicator(id + ".wave", "< Wave >", {"SIN", "TRI", "SQR", "RSAW", "SAW", "RND", "S&H"}, {x + kPad + 4, by, ww, 104},
+                vis::HwButton::Lights::Right, color);
+      indicator(id + ".retrig", "Retrig", {"OFF", "SNGL", "MULTI"}, {x + kPad + ww + 10, by + 14, w - 2 * kPad - ww - 14, 76},
+                vis::HwButton::Lights::Right, color);
    }
 
    ui::ActivityLed &rateLed(ui::Rect at, unsigned color) {
@@ -483,21 +491,21 @@ private:
    // The synth's preset as far as the plugin knows, its preset buttons, and the read of every
    // preset stored on it.
    void buildPreset() {
-      const float x = colX(2), y = kTop, w = kColW[2], h = kPresetH;
+      const float x = colX(2), y = kStripY, w = kColW[2], h = kStripH;
       section("PRESET", {x, y, w, h}, true);
-      display_ = &add<vis::PresetDisplay>({x + (w - 156) * 0.5f, y + 28, 156, 48});
+      display_ = &add<vis::PresetDisplay>({x + (w - 156) * 0.5f, y + kTitleH + 8, 156, 52});
       const char *names[4] = {"Panel", "Save", "<", ">"};
       const char *ids[4] = {"preset.panel", "preset.save", "preset.prev", "preset.next"};
       const float bw = (w - 2 * kPad) / 4;
       for (int i = 0; i < 4; ++i)
-         indicator(ids[i], names[i], {}, {x + kPad + i * bw, y + 82, bw, 44});
-      place(readSynth_, {x + (w - 150) * 0.5f, y + 134, 150, 28});
+         indicator(ids[i], names[i], {}, {x + kPad + i * bw, kStripRow2Y - 34, bw, 50});
+      place(readSynth_, {x + (w - 150) * 0.5f, kStripRow2Y + kTitleH + 12, 150, 30});
       readSynth_.setAccent(kSteiner);
       readSynth_.onClick = [] { SynthLink::get().requestRead(); };
       tips_.add(readSynth_, "Reads every preset stored on the synth into the preset bar (about a minute). In Bitwig "
                             "this needs the MatrixBrute presets controller script (bitwig/MatrixBrute.control.js), "
                             "since a plugin there can't send or receive SysEx.");
-      linkStatus_ = &label("", {x + kPad, y + 172, w - 2 * kPad, 18}, kDim, visage::Font::kCenter, 0.8f);
+      linkStatus_ = &label("", {x + kPad, kStripRow2Y + kTitleH + 52, w - 2 * kPad, 18}, kDim, visage::Font::kCenter, 0.8f);
    }
 
    // The synth's envelopes are sliders: velocity (or ENV 3's delay) in white on the left, then
