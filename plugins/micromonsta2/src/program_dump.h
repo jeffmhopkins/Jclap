@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "patches.h"
+#include "settings.h"
 
 namespace mm2 {
 
@@ -118,7 +119,11 @@ inline bool decodeProgram(const uint8_t *bytes, size_t size, int program, Hardwa
       out.values.emplace_back(f.cc, dump::ccValue(bytes, f));
    std::sort(out.values.begin(), out.values.end());
    for (int k = 0; k < kModSlots; ++k)
-      out.routes[k] = ModRoute{bytes[87 + 4 * k], bytes[84 + 4 * k]};
+      out.routes[k] = ModRoute{bytes[83 + 4 * k], bytes[84 + 4 * k]};
+   for (const Setting &st : kSettings)
+      if (st.choices != Choices::Source && st.choices != Choices::Destination)
+         out.settings.emplace_back(st.nrpn, bytes[st.byte]);
+   std::sort(out.settings.begin(), out.settings.end());
    return true;
 }
 

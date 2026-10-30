@@ -2,13 +2,15 @@
 // grid and scaled to the window, which keeps its aspect ratio.
 //
 // Three bands, read top to bottom like the synth's signal: the audio path (sources, filter, voice,
-// effects, out), the envelopes, and the modulation (sources feeding the mod matrix). Every control is
-// one CC. The pictures in visuals.h are drawn from those CC values and the program's routing only.
+// effects, out), the envelopes, and the modulation (sources feeding the mod matrix). Every knob is
+// one CC; the dropdowns are the settings no CC reaches, sent as NRPN (settings.h). The pictures in
+// visuals.h are drawn from those CC values and the program's routing only.
 
 #include "editor.h"
 
 #include <jclap/ui/button.h>
 #include <jclap/ui/design_frame.h>
+#include <jclap/ui/dropdown.h>
 #include <jclap/ui/envelope.h>
 #include <jclap/ui/knob.h>
 #include <jclap/ui/led.h>
@@ -30,6 +32,7 @@
 
 #include "cc_map.h"
 #include "patches.h"
+#include "settings.h"
 #include "synth_link.h"
 #include "visuals.h"
 
@@ -247,6 +250,18 @@ private:
       readouts_.push_back({&label("", {r.x + 4, r.y + r.h + 1, 60, 13}, kWhite, visage::Font::kLeft, 0.85f), cc});
       caption(cc, {r.x + r.w - 64, r.y + r.h + 2, 60, 12}, visage::Font::kRight);
    }
+   // A dropdown for one of the settings in settings.h, named in capitals.
+   ui::Dropdown &setting(int nrpn, unsigned accent, Rect r, const char *tip = nullptr) {
+      std::vector<std::string> names = choiceNames(kSettings[indexOfSetting(nrpn)].choices);
+      for (std::string &n : names)
+         n = upper(n);
+      auto &d = add<ui::Dropdown>(r, std::move(names));
+      d.setAccent(accent);
+      bindings_.bind(d, settingId(nrpn));
+      if (tip)
+         tips_.add(d, tip);
+      return d;
+   }
    ui::Label &label(const std::string &text, Rect r, unsigned color = kWhite,
                     visage::Font::Justification j = visage::Font::kLeft, float fontScale = 0.78f) {
       return add<ui::Label>(r, text, color, j, fontScale);
@@ -338,10 +353,13 @@ private:
       const char *heads[] = {"SHAPE", "TUNE", "FINE TUNE"};
       for (int c = 0; c < 3; ++c)
          label(heads[c], {x + 64 + 62 * c, y + 34, 62, 12}, kDim, visage::Font::kCenter, 0.8f);
-      label("LEVEL", {x + 262, y + 34, 100, 12}, kDim, visage::Font::kLeft, 0.8f);
       for (int o = 0; o < 3; ++o) {
          const float ry = y + 44 + o * 80;
          label("OSC " + std::to_string(o + 1), {x + 14, ry + 16, 50, 20}, kOscColors[o]);
+         setting(27 + 4 * o, kOscColors[o], {x + 262, ry - 12, 164, 18},
+                 o == 0 ? "Oscillator 1's algorithm (NRPN 27). The shape knob morphs within it."
+                        : "The oscillator's algorithm, wavetables included (NRPN 31 / 35). The shape knob morphs "
+                          "within it.");
          for (int c = 0; c < 3; ++c)
             knob(39 + 3 * o + c, kOscColors[o], {x + 64 + 62 * c, ry - 14, 62, 92}, "");
          level(48 + o, kOscColors[o], {x + 262, ry + 8, 164, 30});
@@ -356,7 +374,8 @@ private:
    void buildFilter() {
       const float x = audioX(1), y = kBand1Y, w = kAudioW[1];
       section("FILTER", {x, y, w, kBand1H});
-      hint("GUIDE \xC2\xB7 FILTER TYPE IS SET ON THE SYNTH", {x + 110, y + 10, w - 124, 12});
+      setting(125, kOrange, {x + 110, y + 6, 150, 20}, "Filter type (NRPN 125). The picture below is a lowpass guide.");
+      setting(126, kOrange, {x + 266, y + 6, 114, 20}, "Filter character: how hard the filter is driven (NRPN 126).");
       picture<vis::FilterCurve>({x + 12, y + 34, w - 24, 170});
       knobRow({74, 71, 88, 89, 90}, kOrange, {x + 12, y + 210, w - 24, 100});
       hint("LINE: CUTOFF AND RESONANCE   \xC2\xB7   DASHED: ENV AMOUNT AT ITS PEAK", {x + 12, y + 318, w - 24, 12},
@@ -472,8 +491,11 @@ private:
          led.fadeMs = 0;
          led.setLevel(1.0f);
          leds_[i] = &led;
-         knob(76 + i, kLfoColors[i], {tx + 26, ty + 26, 100, 116}, "SPEED");
-         feeds_[i] = &label("", {tx + 6, ty + 150, tw - 12, 12}, kLfoColors[i], visage::Font::kCenter, 0.8f);
+         knob(76 + i, kLfoColors[i], {tx + 26, ty + 22, 100, 100}, "SPEED");
+         setting(61 + 3 * i, kLfoColors[i], {tx + 6, ty + 124, 84, 20}, "The LFO's wave (NRPN 61 / 64 / 67).");
+         setting(63 + 3 * i, kLfoColors[i], {tx + 94, ty + 124, 52, 20},
+                 "When the LFO restarts: per voice, once, on each key, or free running (NRPN 63 / 66 / 69).");
+         feeds_[i] = &label("", {tx + 6, ty + 152, tw - 12, 12}, kLfoColors[i], visage::Font::kCenter, 0.8f);
       }
       hint("PERFORMANCE \xC2\xB7 NOT SAVED IN THE PROGRAM \xC2\xB7 ENV 1-3 CAN FEED THE MATRIX TOO", {x + 12, y + 214, w - 24, 12},
            visage::Font::kLeft);
@@ -496,7 +518,7 @@ private:
    void buildMatrix() {
       const float x = kMargin + kModW[0] + kGutter, y = kBand3Y, w = kModW[1];
       section("MOD MATRIX", {x, y, w, kBand3H});
-      hint("SLOTS SHOW THE LOADED PROGRAM'S ROUTING", {x + 600, y + 10, w - 614, 12});
+      hint("PICK A SOURCE AND DESTINATION, OR LOAD A PROGRAM FOR ITS ROUTING", {x + 500, y + 10, w - 514, 12});
       // Columns: slot, source, arrow, destination, where it is on the panel, amount, value, CC.
       constexpr float kSlot = 12, kSource = 48, kArrow = 152, kDest = 180, kWhere = 320, kAmount = 500,
                       kAmountW = 470, kValue = 980, kCc = 1032;
@@ -516,9 +538,9 @@ private:
          const float ry = y + 52 + s * 24.0f;
          Row &row = rows_[s];
          label(std::to_string(s + 1), {x + kSlot + 6, ry + 5, 30, 14}, kDim);
-         row.chip = &add<vis::Chip>({x + kSource, ry + 3, 100, 18});
+         row.source = &setting(sourceNrpn(s), kDim, {x + kSource, ry + 2, 100, 20});
          row.arrow = &add<vis::Arrow>({x + kArrow, ry + 6, 18, 12});
-         row.destination = &label("", {x + kDest, ry + 5, 136, 14});
+         row.destination = &setting(destinationNrpn(s), kDim, {x + kDest, ry + 2, 132, 20});
          row.where = &label("", {x + kWhere, ry + 5, 170, 14}, kDim);
          row.amount = &slider(52 + s, kNoise, {x + kAmount, ry - 4, kAmountW, 26});
          row.amount->valueText = [](double) { return std::string(); };
@@ -528,13 +550,14 @@ private:
       }
       divider({x + 12, y + 296, w - 24, 1});
       label("LAG 1", {x + kSlot + 6, y + 309, 130, 14});
-      hint("SMOOTHS THE LAG SOURCE", {x + kDest, y + 310, 300, 12}, visage::Font::kLeft);
+      setting(100, kOrange, {x + kSource, y + 305, 100, 20}, "The source the lag operator smooths (NRPN 100).");
+      hint("THE SOURCE THE LAG OPERATOR SMOOTHS", {x + kDest, y + 310, 300, 12}, visage::Font::kLeft);
       auto &lag = slider(62, kOrange, {x + kAmount, y + 300, kAmountW, 26});
       lag.valueText = [](double) { return std::string(); };
       lagValue_ = &label("", {x + kValue, y + 309, 44, 14}, kWhite, visage::Font::kRight);
       caption(62, {x + kCc, y + 310, 48, 12});
-      hint("ROUTING COMES FROM THE LOADED PROGRAM; ONLY THE AMOUNT IS A CC. A FAINT RING ON A KNOB SHOWS ROUGHLY "
-           "HOW FAR ITS SLOT CAN PUSH IT. HOVER A ROW FOR THE SENTENCE.",
+      hint("THE ROUTING IS SENT AS NRPN AND THE AMOUNT AS A CC. A FAINT RING ON A KNOB SHOWS ROUGHLY HOW FAR ITS "
+           "SLOT CAN PUSH IT. HOVER A ROW FOR THE SENTENCE.",
            {x + 12, y + 334, w - 24, 12}, visage::Font::kLeft);
    }
 
@@ -612,28 +635,14 @@ private:
          Row &row = rows_[s];
          const bool used = known && routes[s].used();
          const unsigned color = used ? sourceColor(routes[s]) : kDim;
-         row.chip->set(used ? source(routes[s]).label : "", color);
+         row.source->setAccent(color);
+         row.destination->setAccent(color);
          row.arrow->setColor(color);
          row.amount->setAccent(used ? color : 0xff4b515a);
-         if (!known) {
-            row.destination->setText(s == 0 ? "PICK A PROGRAM" : "");
-            row.destination->setColor(kDim);
-            row.where->setText(s == 0 ? "TO SEE ITS ROUTING" : "");
-         }
-         else if (!used) {
-            row.destination->setText("OFF");
-            row.destination->setColor(kDim);
-            row.where->setText("");
-         }
-         else {
-            const ModName &dest = destination(routes[s]);
-            std::string text = dest.knob ? dest.knob : dest.label;
-            for (char &c : text)
-               c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-            row.destination->setText(text);
-            row.destination->setColor(kWhite);
-            row.where->setText(targetOf(routes[s]).where);
-         }
+         if (!known)
+            row.where->setText(s == 0 ? "LOAD A PROGRAM TO SEE ITS ROUTING" : "");
+         else
+            row.where->setText(used ? targetOf(routes[s]).where : "");
          tips_.setText(*row.amount, modSentence(s, known, routes[s]));
       }
       // Which slots each LFO and performance control feeds.
@@ -696,9 +705,9 @@ private:
    }
 
    struct Row {
-      vis::Chip *chip = nullptr;
+      ui::Dropdown *source = nullptr, *destination = nullptr;
       vis::Arrow *arrow = nullptr;
-      ui::Label *destination = nullptr, *where = nullptr, *value = nullptr;
+      ui::Label *where = nullptr, *value = nullptr;
       ui::Slider *amount = nullptr;
    };
 
