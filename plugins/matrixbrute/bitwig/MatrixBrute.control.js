@@ -277,6 +277,7 @@ function onSysex(hex) {
          return;
       }
       job.found++;
+      host.showPopupNotification("MatrixBrute: " + code(job.preset) + " " + job.name);
       deliver(job.preset, job.name, decode(unpack([].concat.apply([], job.chunks))));
       next();
    }
