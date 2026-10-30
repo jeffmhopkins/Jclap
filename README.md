@@ -15,20 +15,20 @@ and plugins that need a panel get one from the shared GUI library.
 
 <table>
 <tr>
+<td align="center" valign="top"><a href="plugins/jsynth"><img src="plugins/jsynth/docs/panel.png" width="400" alt="JSynth panel"></a><br><b>JSynth</b></td>
 <td align="center" valign="top"><a href="plugins/jverb"><img src="plugins/jverb/docs/panel.png" width="400" alt="JVerb panel"></a><br><b>JVerb</b></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="plugins/matrixbrute"><img src="plugins/matrixbrute/docs/panel.png" width="400" alt="MatrixBrute CC panel"></a><br><b>MatrixBrute CC</b></td>
 <td align="center" valign="top"><a href="plugins/micromonsta2"><img src="plugins/micromonsta2/docs/panel.png" width="387" alt="MicroMonsta 2 CC panel"></a><br><b>MicroMonsta 2 CC</b></td>
 </tr>
 <tr>
-<td align="center" valign="top"><a href="plugins/basic-synth"><img src="plugins/basic-synth/docs/panel.png" width="240" alt="Basic Synth panel"></a><br><b>Basic Synth</b></td>
-<td align="center" valign="top"><a href="plugins/polar-xy"><img src="plugins/polar-xy/docs/panel.png" width="240" alt="Polar XY panel"></a><br><b>Polar XY</b></td>
-</tr>
-<tr>
-<td align="center" valign="top"><a href="plugins/jsynth"><img src="plugins/jsynth/docs/panel.png" width="400" alt="JSynth panel"></a><br><b>JSynth</b></td>
 <td align="center" valign="top"><a href="plugins/monolith"><img src="plugins/monolith/docs/panel.png" width="400" alt="Monolith panel"></a><br><b>Monolith</b></td>
+<td align="center" valign="top"><a href="plugins/basic-synth"><img src="plugins/basic-synth/docs/panel.png" width="240" alt="Basic Synth panel"></a><br><b>Basic Synth</b></td>
 </tr>
 <tr>
 <td align="center" valign="top"><a href="plugins/jtunnel"><img src="plugins/jtunnel/docs/panel.png" width="240" alt="JTunnel panel"></a><br><b>JTunnel</b></td>
-<td align="center" valign="top"><a href="plugins/matrixbrute"><img src="plugins/matrixbrute/docs/panel.png" width="400" alt="MatrixBrute CC panel"></a><br><b>MatrixBrute CC</b></td>
+<td align="center" valign="top"><a href="plugins/polar-xy"><img src="plugins/polar-xy/docs/panel.png" width="240" alt="Polar XY panel"></a><br><b>Polar XY</b></td>
 </tr>
 </table>
 
@@ -36,20 +36,20 @@ Panels are shown at one-third size. They are the screenshot-test references, so 
 
 | Plugin | Type | What it does |
 |---|---|---|
-| [Polar XY](plugins/polar-xy) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
-| [MicroMonsta 2 CC](plugins/micromonsta2) | Note effect | Knob panel that sends every MicroMonsta 2 parameter as a MIDI CC and loads the synth's programs |
-| [MatrixBrute CC](plugins/matrixbrute) | Note effect | Two-way knob panel for the Arturia MatrixBrute: sends every parameter as a MIDI CC (14-bit where it can) and follows the synth's own knobs |
-| [Basic Synth](plugins/basic-synth) | Instrument | Eight-voice MPE synth: dual detunable oscillators, key-tracking filter, VCA, two looping envelopes and an LFO |
-| [JVerb](plugins/jverb) | Audio effect | Reverb moved by a live three-body gravity sim, each body its own voice in the tail, with a long echo, a loopable drive and presets ([manual](plugins/jverb/docs/JVerb-User-Manual.pdf)) |
-| [Monolith](plugins/monolith) | Note effect | Note generator that reads a slab of alien glyphs as MIDI phrases in time with the host, from a one-bar loop to a 55-glyph script that drifts and erodes, in five scripts, with presets |
 | [JSynth](plugins/jsynth) | Instrument | Two-part MPE FM synth where every note is a creature in a flock, and how the creatures fly shapes how they sound ([manual](plugins/jsynth/docs/JSynth-User-Manual.pdf)) |
+| [JVerb](plugins/jverb) | Audio effect | Reverb moved by a live three-body gravity sim, each body its own voice in the tail, with a long echo, a loopable drive and presets ([manual](plugins/jverb/docs/JVerb-User-Manual.pdf)) |
+| [MatrixBrute CC](plugins/matrixbrute) | Note effect | Two-way knob panel for the Arturia MatrixBrute: sends every parameter as a MIDI CC (14-bit where it can) and follows the synth's own knobs |
+| [MicroMonsta 2 CC](plugins/micromonsta2) | Note effect | Knob panel that sends every MicroMonsta 2 parameter as a MIDI CC and loads the synth's programs |
+| [Monolith](plugins/monolith) | Note effect | Note generator that reads a slab of alien glyphs as MIDI phrases in time with the host, from a one-bar loop to a 55-glyph script that drifts and erodes, in five scripts, with presets |
+| [Basic Synth](plugins/basic-synth) | Instrument | Eight-voice MPE synth: dual detunable oscillators, key-tracking filter, VCA, two looping envelopes and an LFO |
 | [JTunnel](plugins/jtunnel) | Audio effect | Sends a track's audio and MIDI over the network to other JTunnels (found by name over mDNS), or plays what one sends, with Opus or PCM, a drift-following buffer for Wi-Fi, and redundancy against loss |
+| [Polar XY](plugins/polar-xy) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
 
 ## Download
 
 Grab the zip for your OS from the [latest release](https://github.com/jeffmhopkins/Jclap/releases/latest).
 `jclap-<OS>.zip` contains every plugin; to get just one, take `jclap-<Plugin>-<version>-<OS>.zip` instead
-(for example `jclap-JSynth-0.10.8-macOS.zip`). Copy the `.clap` files (bundles on macOS) to your CLAP folder:
+(for example `jclap-JSynth-0.12.0-macOS.zip`). Copy the `.clap` files (bundles on macOS) to your CLAP folder:
 
 - macOS: `~/Library/Audio/Plug-Ins/CLAP`
 - Windows: `C:\Program Files\Common Files\CLAP`
@@ -69,7 +69,7 @@ curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-mac
 ```
 
 That runs [install-macos.sh](install-macos.sh), which installs the latest release's CLAPs and VST3s
-(`bash -s v0.10.8` instead of `bash` picks a release). It replaces older copies outright, since
+(`bash -s v0.12.0` instead of `bash` picks a release). It replaces older copies outright, since
 unzipping over an old bundle can leave stale files that stop it loading, and clears Bitwig's plugin
 cache so the next scan starts fresh.
 

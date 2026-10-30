@@ -42,6 +42,9 @@ target_link_libraries(<name> PRIVATE jclap::ui)
 | `jclap/ui/tooltip.h` | Hover help for any widget |
 | `jclap/ui/section.h` | `Section` (titled panel box), `Label` and `Divider`. They ignore the mouse |
 | `jclap/ui/theme.h` | Colours shared by every widget, and the `font()` and `noteName()` helpers |
+| `jclap/ui/frame_pacer.h` | Paces an animation to the screen: start the timer at 1 ms and step when `tick()` says. A 16 ms timer, checked only at refreshes in whole milliseconds, skips frames |
+| `jclap/ui/frame_smoother.h` | Plays back frames the audio thread publishes (stamped with audio time) evenly, a block behind, so motion doesn't step with the host's blocks |
+| `jclap/ui/paint.h` | `steady()` and `steadyGlow()`: colours rounded to a grid for drawings that fade or twinkle every frame. Visage uploads every new colour to the GPU, so unrounded fades cost hundreds of uploads a frame |
 
 Knob and Slider share `ValueControl`: a `ValueRange` (min, max, default, wheel step, bipolar, and
 optional `stops`, the only values a drag, the wheel or a stepper lands on, such as loop lengths of

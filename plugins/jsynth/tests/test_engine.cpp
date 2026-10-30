@@ -15,6 +15,7 @@
 
 #include "engine.h"
 #include "presets.h"
+#include "randomize.h"
 
 using namespace jsynth;
 
@@ -433,6 +434,61 @@ int main() {
       if (!ok)
          std::printf("preset %s: peak %g\n", preset.name.c_str(), peak(out));
       JCLAP_CHECK(ok);
+   }
+
+   // Every roll of the dice sounds, finite, under full scale and not silent: Randomize at any
+   // complexity, and Mutate at any amount, a few times over.
+   {
+      const auto sounds = [](const std::vector<double> &v, const char *what, uint64_t seed) {
+         Params p;
+         for (size_t i = 0; i < paramCount(); ++i)
+            p.values[i].store(v[i]);
+         auto held = std::make_unique<Engine>(); // on the heap: Windows gives a test 1 MB of stack
+         held->prepare(kRate, {p.values.get(), p.mods.get()});
+         const auto out = render(*held, 96000, 256, phrase());
+         const bool ok = finite(out) && peak(out) <= 1.0f && peak(out) > 1e-3f;
+         if (!ok)
+            std::printf("%s %llu: peak %g\n", what, static_cast<unsigned long long>(seed), peak(out));
+         JCLAP_CHECK(ok);
+      };
+      std::vector<double> defaults(paramCount());
+      for (size_t i = 0; i < paramCount(); ++i)
+         defaults[i] = kParams()[i].def.defaultValue;
+      for (uint64_t seed = 1; seed <= 40; ++seed) {
+         DiceSettings dice;
+         dice.complexity = static_cast<double>(seed % 5) / 4.0;
+         std::vector<double> v = defaults;
+         JCLAP_CHECK(!randomizePart(v, 0, dice, seed).empty());
+         sounds(v, "randomize", seed);
+         dice.amount = static_cast<double>(seed % 4 + 1) / 4.0;
+         for (int n = 0; n < 4; ++n)
+            mutatePart(v, 0, dice, seed * 101 + n);
+         sounds(v, "mutate", seed);
+      }
+      // A seed is the same patch every time, and a lock keeps its section. The other part and the
+      // globals are never touched.
+      DiceSettings dice;
+      std::vector<double> a = defaults, b = defaults;
+      randomizePart(a, 1, dice, 7);
+      randomizePart(b, 1, dice, 7);
+      JCLAP_CHECK(a == b);
+      dice.locks = ~(1u << kDiceOsc);
+      std::vector<double> locked = defaults;
+      randomizePart(locked, 0, dice, 9);
+      mutatePart(locked, 0, DiceSettings{0.5, 1.0, dice.locks}, 10);
+      bool keptOthers = true, changedOsc = false;
+      for (size_t i = 0; i < paramCount(); ++i) {
+         const clap_id id = kParams()[i].def.id;
+         const bool osc = partOf(id) == 0 && diceSection(offsetOf(id)) == kDiceOsc;
+         if (osc)
+            changedOsc = changedOsc || locked[i] != defaults[i];
+         else
+            keptOthers = keptOthers && locked[i] == defaults[i];
+      }
+      JCLAP_CHECK(keptOthers);
+      JCLAP_CHECK(changedOsc);
+      JCLAP_CHECK(mutantName("Starling Bells") == "Starling Bells ~1");
+      JCLAP_CHECK(mutantName("Starling Bells ~1") == "Starling Bells ~2");
    }
 
    // Synced LFOs that aren't retriggered sit on the host's bar: playback started a bar in hears

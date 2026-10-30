@@ -54,7 +54,7 @@ struct HeldNotes {
 // source; an older state's route sources are moved to match. Version 4 adds the bus names after the
 // preset's name, and version 5 the sky's look and each look's palette after them (three uint32s).
 constexpr char kStateMagic[4] = {'J', 'J', 'S', 'Y'};
-constexpr uint32_t kStateVersion = 5;
+constexpr uint32_t kStateVersion = 6;
 
 class JSynth final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -258,7 +258,10 @@ public:
       // Version 5: how the sky is drawn.
       const uint32_t sky[3] = {static_cast<uint32_t>(skyLook), static_cast<uint32_t>(skyPalettes[0]),
                                static_cast<uint32_t>(skyPalettes[1])};
-      return jclap::core::writeAll(stream, sky, sizeof(sky));
+      if (!jclap::core::writeAll(stream, sky, sizeof(sky)))
+         return false;
+      // Version 6: how big the creatures are drawn.
+      return jclap::core::writeAll(stream, &creatureScale, sizeof(creatureScale));
    }
 
    bool stateLoad(const clap_istream_t *stream) override {
@@ -303,6 +306,9 @@ public:
                          static_cast<uint32_t>(skyPalettes[1])};
       if (version >= 5 && !jclap::core::readAll(stream, sky, sizeof(sky)))
          return false;
+      float scale = creatureScale;
+      if (version >= 6 && (!jclap::core::readAll(stream, &scale, sizeof(scale)) || !std::isfinite(scale)))
+         return false;
       for (size_t i = 0; i < paramCount(); ++i)
          values_[i].store(loaded[i]);
       presetName_ = name;
@@ -311,6 +317,7 @@ public:
       skyLook = static_cast<int>(std::min<uint32_t>(sky[0], 1));
       skyPalettes[0] = static_cast<int>(std::min<uint32_t>(sky[1], 255));
       skyPalettes[1] = static_cast<int>(std::min<uint32_t>(sky[2], 255));
+      creatureScale = std::clamp(scale, kCreatureScaleMin, kCreatureScaleMax);
       if (auto *hostParams = hostExtension<clap_host_params_t>(CLAP_EXT_PARAMS))
          hostParams->rescan(host(), CLAP_PARAM_RESCAN_VALUES);
       return true;
@@ -405,6 +412,7 @@ public:
 
       publish();
       sinceFrame_ += frames;
+      streamTime_ += frames / sampleRate_;
       if (sinceFrame_ >= static_cast<int>(sampleRate_ / 120.0)) {
          sinceFrame_ = 0;
          publishFlock();
@@ -617,6 +625,7 @@ private:
       for (int part = 0; part < kPartCount; ++part)
          if (!engine_->destinationsNow(part, f.dest[part], f.moved[part]))
             std::fill(std::begin(f.moved[part]), std::end(f.moved[part]), false);
+      f.time = streamTime_;
       flockFrames_.publish();
       lastFrame_.store(nowMs(), std::memory_order_relaxed);
    }
@@ -648,6 +657,8 @@ private:
    std::unique_ptr<Engine> engine_;
    double sampleRate_ = 48000.0;
    int sinceFrame_ = 0;
+   // Seconds of audio processed, for the flock frames' times.
+   double streamTime_ = 0.0;
    mutable jclap::core::TripleBuffer<FlockFrame> flockFrames_;
    std::atomic<int64_t> lastFrame_{0};
    // Somewhere to render when the host gives no main port.

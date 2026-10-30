@@ -22,6 +22,7 @@ it gives a number, the number is the one in the code.
 - [The output stage](#the-output-stage)
 - [Every parameter](#every-parameter)
 - [Presets](#presets)
+- [The dice](#the-dice)
 - [Threads, timing and state](#threads-timing-and-state)
 
 ## The pieces
@@ -34,7 +35,8 @@ it gives a number, the number is the one in the code.
 | [`src/flock.h`](src/flock.h) | The boids: every creature's flight, who hears whom, the ink field and the eight flock sources. |
 | [`src/plugin.cpp`](src/plugin.cpp) | The CLAP plugin: params, state, note and MIDI events, ports, NOTE_END, and what the panel reads back. |
 | [`src/presets.h`](src/presets.h) | The factory bank and user preset files. |
-| [`src/editor.cpp`](src/editor.cpp) | The panel: the sky, its two views (SYNTH with big drawn panels beside the sky, SKY alone), MAP and the route list. |
+| [`src/randomize.h`](src/randomize.h) | The dice: Randomize and Mutate for one part, their section locks, and the history UNDO steps through. |
+| [`src/editor.cpp`](src/editor.cpp) | The panel: the sky, its two views (SYNTH with big drawn panels beside the sky, SKY alone), MAP, the route list and the dice card. |
 
 A part's params are written once, as offsets, and `partId(part, offset)` gives the host's id: part
 A's start at 64 and part B's at 1088. Each module (oscillator, filter, envelope, LFO, route) is a
@@ -909,6 +911,39 @@ doesn't list load at their defaults. They live in:
 Loading a preset is a normal edit of every param that changes, so the host sees each one and can
 undo it.
 
+## The dice
+
+[`src/randomize.h`](src/randomize.h) works on the whole param list and touches one part only: never
+the globals, nor the part's key range, polyphony, transpose, bend range, output, its lures' sources or
+its envelopes' time ranges. Every other part param belongs to one of eight sections (OSC with the
+mixer, FM, FILTER with the drive, ENV with Shape mode and the chain, LFO, ROUTES with the buses,
+FLOCK, VOICE), and a locked section is left exactly as it is. The random numbers are SplitMix64, so a
+seed gives the same patch on every platform; the panel seeds each roll from the clock.
+
+**Randomize** puts every unlocked param at its default, then builds: analog (40%) or FM, an amp
+envelope of a kind (pluck, keys, pad, lead, organ, swell, each with its own time ranges), oscillators
+(analog waves at musical intervals and a few cents' detune, or sine-family operators on the ratios
+0.5 to 14), an FM topology, filters in ranges by type (a low pass from about 275 Hz to 7 kHz, say),
+two modulation envelopes, the LFOs, the flock, and routes drawn by weight from a list that fits the
+patch (Env 2 to the cutoff when the filter can sweep, Env 3 to the FM when there is FM, LFO 1 to the
+pulse width of a square). No knob gets more than three routes. Complexity (0 to 1) moves the weights:
+how many oscillators sound, whether there's FM on an analog patch, a second filter, Shape envelopes
+and a chain, how many routes (1 to 7), a bus, and the couplings between creatures. Last, the part's
+level comes from the oscillators' summed levels, the drive and the resonance.
+
+**Mutate** moves each continuous value by a normal step of Amount × 15% of its range (pitches by
+octaves and fifths now and then, ratios to a neighbour in the list, cents by up to about 12). A value
+that is off at 0 (an FM cell, an oscillator's level, a coupling) stays off, but for a 12% × Amount
+chance to come in a little. A choice changes on a 20% × Amount chance, and only to a near one: a wave
+in its family, low pass and ladder, band pass and peak, a slope by one, a shape in its bank. Then it
+holds the patch playable: the amp's attack no longer than 600 ms (or than it was), its delay short,
+resonance and FM no higher than they were or a sane top, a low pass no lower than about 240 Hz, pans
+no wider than half way, and enough oscillator to sound. Above 40% it can add a route.
+
+The panel keeps the patches the dice replaced (every param, the preset's name and the bus names),
+64 deep, for UNDO and REDO, which a new roll clears forward of. A randomized patch gets a two-word
+name, and a mutated one its name with a count, "Starling Bells ~2".
+
 ## Threads, timing and state
 
 **The audio thread** owns the engine and the flock. Each block it drains the panel's edits (and
@@ -921,7 +956,13 @@ with denormals off. With no main port, it renders into scratch so time and the f
 about 120 times a second through a triple buffer: every live creature's place, velocity, energy,
 press, wingbeat, lure, sources, its strongest neighbour and its hunter; each part's newest note's
 envelope and LFO levels (for the chips' lights); and where every sounding voice is on its envelopes
-(for the dots riding the curves). The panel keeps its ink, trails and stars to itself. Notes played
+(for the dots riding the curves); and how many seconds of audio had been processed when it was taken.
+The frames come when the host runs its blocks, which is in bursts, so the panel plays them back
+through a `jclap::ui::FrameSmoother`: a clock of its own, about a block behind the newest frame, at
+which each creature is drawn partway between the two frames either side. The panel steps on screen
+refreshes picked by a `jclap::ui::FramePacer` (60 a second, or 72 at 144 Hz), and draws its fading
+colours through `jclap::ui::steady()` so Visage can reuse them rather than upload new ones every
+frame (see `libs/ui/README.md`). The panel keeps its ink, trails and stars to itself. Notes played
 on the sky go to the audio thread through a lock-free queue; while the host isn't processing, the
 panel flies its own copy of the same flock so the sky still moves.
 

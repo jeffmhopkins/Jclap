@@ -16,9 +16,12 @@
 #include <jclap/ui/button.h>
 #include <jclap/ui/design_frame.h>
 #include <jclap/ui/dropdown.h>
+#include <jclap/ui/frame_pacer.h>
+#include <jclap/ui/frame_smoother.h>
 #include <jclap/ui/envelope.h>
 #include <jclap/ui/knob.h>
 #include <jclap/ui/number_box.h>
+#include <jclap/ui/paint.h>
 #include <jclap/ui/param_bindings.h>
 #include <jclap/ui/preset_bar.h>
 #include <jclap/ui/section.h>
@@ -35,8 +38,9 @@
 #include <visage_widgets/text_editor.h>
 
 #include <algorithm>
-#include <cctype>
+#include <array>
 #include <chrono>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -48,6 +52,7 @@
 #include "flock.h"
 #include "params.h"
 #include "presets.h"
+#include "randomize.h"
 
 namespace jsynth {
 
@@ -115,7 +120,8 @@ const SkyPalette &skyPalette(int index) {
 }
 constexpr unsigned kOscColors[kOscCount] = {0xff6fe0ff, 0xffffb05a, 0xffa98bff};
 
-visage::Color glow(unsigned argb, float alpha, float hdr) { return visage::Color(argb, hdr).withAlpha(alpha); }
+// Steady (see jclap/ui/paint.h): the sky fades and twinkles these every frame.
+visage::Color glow(unsigned argb, float alpha, float hdr) { return ui::steady(visage::Color(argb, hdr).withAlpha(alpha)); }
 
 // Each route source's colour, for its chip and the rings it draws on knobs.
 unsigned sourceColor(int source) {
@@ -171,6 +177,18 @@ const ui::Theme &glassTheme() {
       t.buttonHover = 0x60283040;
       t.panel = 0x80141a26;
       t.panelBorder = 0x40ffffff;
+      return t;
+   }();
+   return theme;
+}
+
+// The same, for a button with nothing to do: its text and border faded.
+const ui::Theme &idleGlassTheme() {
+   static const ui::Theme theme = [] {
+      ui::Theme t = glassTheme();
+      t.text = 0x55e6e8eb;
+      t.panelBorder = 0x1effffff;
+      t.buttonHover = t.button;
       return t;
    }();
    return theme;
@@ -615,6 +633,9 @@ public:
       return true;
    }
 
+   // Whether a preset's name is being typed, to save it.
+   bool editing() const { return editor_ && editor_->isVisible(); }
+
 private:
    enum class Zone { None, Prev, Name, Star, Next, Save };
    static constexpr float kArrow = 24.0f, kSave = 48.0f, kStar = 22.0f;
@@ -784,8 +805,6 @@ private:
       }
    };
 
-   bool editing() const { return editor_ && editor_->isVisible(); }
-
    void startSave() {
       if (!editor_) {
          editor_ = std::make_unique<NameEditor>();
@@ -899,6 +918,8 @@ public:
    // How the sky is drawn: a SkyLook, and the palette it is drawn in.
    int look = kSumi;
    int palette = 0;
+   // How big the creatures, their strokes and their ink are drawn: 1 as designed.
+   float creatureScale = 1.0f;
    // A line of help at the top of the sky (MAP mode's), in its colour.
    std::string hint;
    unsigned hintColor = kText;
@@ -909,9 +930,16 @@ public:
       time_ += dt;
       for (int part = 0; part < kPartCount; ++part)
          species_[part].read(host_, part);
-      live_ = host_.flockFrame(frame_);
-      if (!live_)
+      live_ = host_.flockFrame(fresh_);
+      if (live_) {
+         frames_.push(fresh_, fresh_.time);
+         frames_.advance(dt);
+         between(frames_.older(), frames_.newer(), frames_.mix());
+      }
+      else {
+         frames_.clear();
          flyLocal(notes, dt);
+      }
       sync();
       shed(dt);
       moveInk(dt);
@@ -1091,6 +1119,29 @@ private:
          next.push_back(std::move(b));
       }
       creatures_ = std::move(next);
+   }
+
+   // frame_ as `b`, its creatures partway (0..1) from where `a` had them. One that has just hatched or
+   // wrapped round the sky is where `b` has it.
+   void between(const FlockFrame &a, const FlockFrame &b, float t) {
+      frame_ = b;
+      if (t >= 1.0f)
+         return;
+      for (int i = 0; i < frame_.count; ++i) {
+         FlockFrame::Shown &s = frame_.creatures[i];
+         for (int j = 0; j < a.count; ++j) {
+            const FlockFrame::Shown &o = a.creatures[j];
+            if (o.id != s.id)
+               continue;
+            if (std::fabs(s.x - o.x) < 0.3f && std::fabs(s.y - o.y) < 0.3f) {
+               const auto mix = [t](float from, float to) { return from + (to - from) * t; };
+               s.x = mix(o.x, s.x), s.y = mix(o.y, s.y), s.vx = mix(o.vx, s.vx), s.vy = mix(o.vy, s.vy);
+               s.energy = mix(o.energy, s.energy), s.press = mix(o.press, s.press), s.wing = mix(o.wing, s.wing);
+               s.lureX = mix(o.lureX, s.lureX), s.lureY = mix(o.lureY, s.lureY);
+            }
+            break;
+         }
+      }
    }
 
    // The panel's own flock, while the plugin isn't processing: the same sim, fed the held notes and
@@ -1302,19 +1353,20 @@ private:
          if (a < 0.003f)
             continue;
          visage::Color tint = visage::Color(inkColor(p.part, p.ink)).interpolateWith(visage::Color(oldColor(p.part)), std::pow(t, 0.6f));
-         const float r = p.size * ppu, x = X(p.x), y = Y(p.y);
+         // Ink grows more gently than the creatures, so big ones don't drown the sky.
+         const float r = p.size * ppu * std::sqrt(creatureScale), x = X(p.x), y = Y(p.y);
          if (sumi) {
             // A thin wash, and a filament along the way the ink drifts, bent along the curl so it
             // reads as marbling. Ink pressed against another creature's goes paler.
             tint = tint.interpolateWith(visage::Color(0xffffffff), std::min(0.45f, 0.25f * p.heat));
             a *= 0.6f;
             tint.setHdr(1.0f + 0.3f * p.heat);
-            c.setColor(visage::Brush::radial(tint.withAlpha(a * 0.5f), tint.withAlpha(0.0f), visage::Point(x, y), r));
+            c.setColor(ui::steadyGlow(tint.withAlpha(a * 0.5f), visage::Point(x, y), r));
             c.circle(x - r, y - r, 2 * r);
             const float v = std::hypot(p.vx, p.vy) + 1e-5f;
             const float dx = p.vx / v, dy = p.vy / v, len = r * 0.35f + std::min(v * ppu * 0.3f, r * 0.6f);
             const float bend = 0.5f * len * std::sin(p.x * 23.0f + p.y * 17.0f + time_ * 0.3f);
-            c.setColor(tint.withAlpha(std::min(1.0f, a * 1.1f)));
+            c.setColor(ui::steady(tint.withAlpha(std::min(1.0f, a * 1.1f))));
             c.quadratic(x - dx * len, y - dy * len, x - dy * bend, y + dx * bend, x + dx * len, y + dy * len,
                         std::max(0.6f * s, r * 0.08f));
          }
@@ -1325,13 +1377,14 @@ private:
             a = std::min(0.12f, a * 0.12f * (1.0f + 0.3f * p.heat));
             tint.setHdr(1.0f + 0.35f * (1.0f - t) + 0.25f * p.heat);
             const float h = r * (2.5f + 2.0f * (1.0f - t)), w = r * 0.55f;
-            c.setColor(visage::Brush::radial(tint.withAlpha(a), tint.withAlpha(0.0f), visage::Point(x, y - h * 0.45f), w,
-                                             h * 0.6f, visage::Point(x, y - 0.1f * h)));
+            tint = ui::steady(tint.withAlpha(a));
+            c.setColor(visage::Brush::radial(tint, tint.withAlpha(0.0f), visage::Point(x, y - h * 0.45f), w, h * 0.6f,
+                                             visage::Point(x, y - 0.1f * h)));
             c.fill(x - w, y - h * 1.05f, 2 * w, h * 1.2f);
-            c.setColor(visage::Brush::linear(tint.withAlpha(std::min(1.0f, a * 2.5f)), tint.withAlpha(0.0f), visage::Point(x, y),
-                                             visage::Point(x, y - h)));
+            const visage::Color ray = ui::steady(tint.withAlpha(std::min(1.0f, a * 2.5f)));
+            c.setColor(visage::Brush::linear(ray, ray.withAlpha(0.0f), visage::Point(x, y), visage::Point(x, y - h)));
             c.segment(x, y, x, y - h, 1.0f * s, true);
-            c.setColor(visage::Brush::radial(tint.withAlpha(a * 0.8f), tint.withAlpha(0.0f), visage::Point(x, y), r * 0.5f));
+            c.setColor(ui::steadyGlow(tint.withAlpha(a * 0.8f), visage::Point(x, y), r * 0.5f));
             c.circle(x - 0.5f * r, y - 0.5f * r, 1.0f * r);
          }
       }
@@ -1362,7 +1415,7 @@ private:
                }
                else {
                   const float mx = (ax + bx) / 2, my = (ay + by) / 2 - 0.3f * std::hypot(bx - ax, by - ay);
-                  c.setColor(visage::Color(a.color).interpolateWith(visage::Color(0xffffffff), 0.5f).withAlpha(k * 0.3f));
+                  c.setColor(ui::steady(visage::Color(a.color).interpolateWith(visage::Color(0xffffffff), 0.5f).withAlpha(k * 0.3f)));
                   c.quadratic(ax, ay, mx, my, bx, by, 0.9f * s);
                   const float ph = std::fmod(time_ * 0.7f + a.slot * 0.37f, 1.0f), u = 1.0f - ph;
                   const float px = u * u * ax + 2 * u * ph * mx + ph * ph * bx, py = u * u * ay + 2 * u * ph * my + ph * ph * by;
@@ -1394,10 +1447,10 @@ private:
          }
          else {
             const visage::Color col(b.color);
-            c.setColor(col.withAlpha(0.05f * b.energy));
+            c.setColor(ui::steady(col.withAlpha(0.05f * b.energy)));
             c.segment(lx, ly, lx, Y(1.0f), 1.0f * s, false);
             const float d = (6.0f + 3.0f * b.press) * s;
-            c.setColor(col.withAlpha(0.4f * b.energy));
+            c.setColor(ui::steady(col.withAlpha(0.4f * b.energy)));
             c.diamond(lx - d / 2, ly - d / 2, d, 1.0f * s);
          }
       }
@@ -1406,7 +1459,7 @@ private:
       for (int pass = 0; pass < 2; ++pass)
          for (const Creature &b : creatures_)
             if ((b.part == shownPart) == (pass == 1))
-               drawCreature(c, b, s, X, Y, &b == hover);
+               drawCreature(c, b, s * creatureScale, X, Y, &b == hover);
 
       // The mouse: ripples in Sumi's water (it stirs the ink there, and in Aurora), a soft light in
       // Aurora's sky. Over a creature, a readout of what it is doing.
@@ -1459,6 +1512,7 @@ private:
       c.ring(x - r, y - r, 2 * r, 1.0f * s);
    }
 
+   // `s` sizes the creature: the view's scale times creatureScale.
    template <typename FX, typename FY>
    void drawCreature(visage::Canvas &c, const Creature &b, float s, FX X, FY Y, bool hover) {
       if (b.energy < 0.01f)
@@ -1476,7 +1530,7 @@ private:
             c.segment(X(b.path[i - 1].x), Y(b.path[i - 1].y), X(b.path[i].x), Y(b.path[i].y), w, true);
          }
          const float halo = 10.0f * s;
-         c.setColor(visage::Brush::radial(col.withAlpha(0.25f * b.energy * shown), col.withAlpha(0.0f), visage::Point(x, y), halo));
+         c.setColor(ui::steadyGlow(col.withAlpha(0.25f * b.energy * shown), visage::Point(x, y), halo));
          c.circle(x - halo, y - halo, 2 * halo);
          const float r = (2.6f + 1.0f * b.press) * s;
          c.setColor(glow(col.interpolateWith(visage::Color(0xfffff4e0), 0.6f).toARGB(), std::min(1.0f, b.energy * shown), 1.6f));
@@ -1491,7 +1545,7 @@ private:
             c.segment(X(b.path[i - 1].x), Y(b.path[i - 1].y), X(b.path[i].x), Y(b.path[i].y), (0.6f + 1.0f * k) * s, false);
          }
          const float halo = (14.0f + 6.0f * b.press) * s;
-         c.setColor(visage::Brush::radial(col.withAlpha(0.22f * b.energy * shown), col.withAlpha(0.0f), visage::Point(x, y), halo));
+         c.setColor(ui::steadyGlow(col.withAlpha(0.22f * b.energy * shown), visage::Point(x, y), halo));
          c.circle(x - halo, y - halo, 2 * halo);
          const float v = std::hypot(b.vx, b.vy) + 1e-5f, hx = b.vx / v, hy = b.vy / v;
          const float len = (10.0f + 6.0f * b.press) * s * (0.75f + 0.25f * b.wing);
@@ -1559,8 +1613,10 @@ private:
    visage::BloomPostEffect bloom_;
    Species species_[kPartCount];
    std::vector<Creature> creatures_;
-   // The frame being drawn: the engine's, or the panel's own flock's.
-   FlockFrame frame_;
+   // The frame being drawn: the engine's, or the panel's own flock's. The engine's come as the host
+   // runs its blocks; frames_ plays them back evenly.
+   FlockFrame frame_, fresh_;
+   ui::FrameSmoother<FlockFrame, 6> frames_;
    bool live_ = false;
    Flock local_;
    int localNote_[kVoiceSlots] = {};
@@ -2551,13 +2607,15 @@ public:
       group_ = kSynth;
       buildShared();
       buildRouteControls();
+      buildDice();
       showRoutes(host_.routesOpen);
+      showDice(host_.diceOpen);
       showPart(host_.part);
       setView(host_.view);
       setLook(host_.skyLook);
       refreshBusNames();
-      last_ = std::chrono::steady_clock::now();
-      startTimer(16);
+      // Checked at every screen refresh; the pacer picks the ones that step (see frame_pacer.h).
+      startTimer(1);
    }
 
    // A source's name as the panel shows it: a bus by its label.
@@ -2598,6 +2656,11 @@ public:
       // Loading the plugin's state can change the look under an open panel.
       if (host_.skyLook != view_->look || host_.skyPalettes[host_.skyLook] != view_->palette)
          setLook(host_.skyLook);
+      if (host_.creatureScale != view_->creatureScale) {
+         view_->creatureScale = host_.creatureScale;
+         sizeBox_->setValue(host_.creatureScale);
+      }
+      fadeControls(dt);
       view_->shownPart = host_.part;
       view_->hint = !mapping_ ? std::string()
                     : armed_ != kSourceOff
@@ -2680,10 +2743,8 @@ public:
    }
 
    void timerCallback() override {
-      const auto now = std::chrono::steady_clock::now();
-      const float dt = std::chrono::duration<float>(now - last_).count();
-      last_ = now;
-      step(std::clamp(dt, 0.0f, 0.05f));
+      if (const float dt = pacer_.tick())
+         step(std::min(dt, 0.05f));
    }
 
    // Pulls every control's value from the host now, as the bindings' timer does.
@@ -2695,9 +2756,20 @@ public:
       partSwitch_->setAccent(kPartColors[host_.part]);
       refresh();
    }
+   // The route list and the dice card both sit over the sky, so opening one closes the other.
    void showRoutes(bool open) {
       host_.routesOpen = open;
       routesButton_->setOn(open);
+      if (open && host_.diceOpen)
+         showDice(false);
+      refresh();
+   }
+   void showDice(bool open) {
+      host_.diceOpen = open;
+      diceButton_->setOn(open);
+      if (open && host_.routesOpen)
+         showRoutes(false);
+      refreshDice();
       refresh();
    }
    // Switches the view: the synth's panels beside the sky, or the sky alone filling the window. The
@@ -2751,6 +2823,12 @@ public:
       const float lx = host_.view == kSynthView ? kSkyX + 10 : kCleanMargin, ly = host_.view == kSynthView ? kSkyY + 10 : 13;
       move(*lookSwitch_, {lx, ly, 136, 26});
       move(*paletteMenu_, {lx + 144, ly, 120, 26});
+      move(*sizeBox_, {lx + 272, ly, 120, 26});
+      // The preset bar stays in SKY, centred along the top, the update notice beside it.
+      const float px = host_.view == kSynthView ? 416 : (kDesignWidth - 250) / 2;
+      move(*presetBar_, {px, 13, 250, 26});
+      move(*update_, host_.view == kSynthView ? ui::Rect{146, 13, 188, 26} : ui::Rect{px + 260, 13, 220, 26});
+      idle_ = 0.0f;
       if (host_.view == kSkyOnly && mapping_)
          setMapping(false, kSourceOff);
       refresh();
@@ -2864,7 +2942,8 @@ private:
       kFlockPage,
       kMotionPage,
       kTouchPage,
-      kRoutes
+      kRoutes,
+      kDice
    };
    struct Placed {
       visage::Frame *frame;
@@ -3004,6 +3083,7 @@ private:
       case kMotionPage: return voiceTab_ == 2;
       case kTouchPage: return voiceTab_ == 3;
       case kRoutes: return host_.routesOpen;
+      case kDice: return host_.diceOpen;
       default: return true;
       }
    }
@@ -3171,8 +3251,15 @@ private:
    }
 
    void buildHeader() {
-      update_ = &glassy(add<ui::UpdateNotice>({146, 13, 220, 26}), kPartColors[0]);
-      put<PresetBar>({416, 13, 250, 26}, host_);
+      update_ = &glassy(add<ui::UpdateNotice>({146, 13, 188, 26}), kPartColors[0]);
+      // Not put(): it stays in SKY too (setView places it).
+      presetBar_ = &add<PresetBar>({416, 13, 250, 26}, host_);
+      auto &dice = glassy(put<ui::Button>({344, 13, 62, 26}, "DICE"), kPartColors[0]);
+      dice.setToggle(true);
+      dice.onToggle = [this](bool on) { showDice(on); };
+      diceButton_ = &dice;
+      tips_.add(dice, "RANDOMIZE a new patch for this part, or MUTATE the one it has. UNDO steps back through "
+                      "what they replaced.");
       auto &parts = glassy(put<ui::SegmentedSwitch>({676, 13, 146, 26}, std::vector<std::string>{"PART A", "PART B"}),
                            kPartColors[0]);
       parts.onChange = [this](int p) { showPart(p); };
@@ -3228,6 +3315,54 @@ private:
       };
       paletteMenu_ = &palette;
       tips_.add(palette, "The colours the creatures and their ink are drawn in. Each look keeps its own.");
+      auto &size = glassy(add<ui::NumberBox>({0, 0, 120, 26}, ui::ValueRange{kCreatureScaleMin, kCreatureScaleMax, 1.0, 0.25}),
+                          kDim);
+      size.setLabel("SIZE");
+      size.setStepButtons(true);
+      size.valueText = [](double v) { return std::to_string(static_cast<int>(std::lround(v * 100.0))) + "%"; };
+      size.setValue(host_.creatureScale);
+      size.onChange = [this](double v) { view_->creatureScale = host_.creatureScale = static_cast<float>(v); };
+      sizeBox_ = &size;
+      view_->creatureScale = host_.creatureScale;
+      tips_.add(size, "How big the creatures and their ink are drawn. Only drawn: it never changes the sound.");
+      // In SKY these hide while the mouse rests (see fadeControls): any movement over the window
+      // brings them back, and they stay while the mouse is over one.
+      skyControls_ = {viewSwitch_, lookSwitch_, paletteMenu_, sizeBox_, presetBar_};
+      for (size_t i = 0; i < skyControls_.size(); ++i) {
+         skyControls_[i]->onMouseEnter() += [this, i](const visage::MouseEvent &) { overControl_[i] = true; };
+         skyControls_[i]->onMouseExit() += [this, i](const visage::MouseEvent &) { overControl_[i] = false; };
+      }
+      const auto moved = [this](const visage::MouseEvent &) { idle_ = 0.0f; };
+      view_->onMouseMove() += moved;
+      view_->onMouseDrag() += moved;
+      for (visage::Frame *f : skyControls_) {
+         f->onMouseMove() += moved;
+         f->onMouseDrag() += moved;
+      }
+   }
+
+   // In SKY, the controls along the top fade out after kIdleSeconds without the mouse moving over
+   // the window (unless it rests on one, or the preset's name is being typed), and fade back in as
+   // soon as it moves. With the panels shown, they always show.
+   void fadeControls(float dt) {
+      idle_ += dt;
+      bool busy = presetBar_->editing();
+      for (bool over : overControl_)
+         busy = busy || over;
+      if (busy)
+         idle_ = 0.0f;
+      const bool shown = host_.view != kSkyOnly || idle_ < kIdleSeconds;
+      const float alpha = shown ? std::min(1.0f, controlsAlpha_ + dt / 0.15f) : std::max(0.0f, controlsAlpha_ - dt / 0.8f);
+      if (alpha == controlsAlpha_)
+         return;
+      controlsAlpha_ = alpha;
+      for (visage::Frame *f : skyControls_) {
+         f->setVisible(alpha > 0.0f);
+         if (alpha < 1.0f)
+            f->setAlphaTransparency(alpha);
+         else
+            f->removeAlphaTransparency();
+      }
    }
 
    // One part's panels: the oscillators, the filters and the envelopes down the left, each drawn as
@@ -3530,6 +3665,130 @@ private:
 
    // The panels shared by both parts: the tabs, the drawings (which follow the shown part), the
    // flock's sources under the sky, and the touch settings.
+   // The dice card, over the sky's top right: RANDOMIZE by COMPLEXITY, MUTATE by AMOUNT, UNDO and
+   // REDO, and a lock for each section both leave alone. It works on the part shown.
+   void buildDice() {
+      const ui::Rect b = kDiceBox;
+      group_ = kDice;
+      for (int part = 0; part < kPartCount; ++part) {
+         part_ = part;
+         glass(b, part == 0 ? "DICE  PART A" : "DICE  PART B", kPartColors[part]);
+         // Its buttons in the part's colour too.
+         auto &rnd = glassy(put<ui::Button>({b.x + 14, b.y + 36, 124, 26}, "RANDOMIZE"), kPartColors[part]);
+         rnd.onClick = [this] { roll(false); };
+         tips_.add(rnd, "A new patch for this part from scratch, from an instrument up: oscillators, filter, "
+                        "envelopes, LFOs, routes and flock, at sane levels. Locked sections stay as they are.");
+         auto &mut = glassy(put<ui::Button>({b.x + 14, b.y + 70, 124, 26}, "MUTATE"), kPartColors[part]);
+         mut.onClick = [this] { roll(true); };
+         tips_.add(mut, "Nudges every value of this part by AMOUNT. What's off stays off and a choice only moves to "
+                        "a near one, so the patch stays itself. Click again to keep going.");
+      }
+      part_ = -1;
+      const auto percent = [](double v) { return std::to_string(static_cast<int>(std::lround(v * 100.0))) + "%"; };
+      const auto amountBox = [&](float y, const char *name, double &value, const char *tip) {
+         auto &box = glassy(put<ui::NumberBox>({b.x + 146, y, b.w - 160, 26}, ui::ValueRange{0.0, 1.0, 0.5, 0.05}), kDim);
+         box.setLabel(name);
+         box.valueText = percent;
+         box.parseText = [](const std::string &t, double &v) {
+            char *end = nullptr;
+            const double n = std::strtod(t.c_str(), &end);
+            if (end == t.c_str())
+               return false;
+            v = std::clamp(n / 100.0, 0.0, 1.0);
+            return true;
+         };
+         box.setValue(value);
+         box.onChange = [&value](double v) { value = v; };
+         tips_.add(box, tip);
+      };
+      amountBox(b.y + 36, "COMPLEXITY", host_.dice.complexity,
+                "How much RANDOMIZE reaches for: at 0 one or two oscillators, one filter and a route or two; at "
+                "100% stacked oscillators and FM, two filters, Shape envelopes, buses and the flock's couplings.");
+      amountBox(b.y + 70, "AMOUNT", host_.dice.amount,
+                "How far MUTATE moves each value: 5% is a touch, 25% a cousin of the patch, 100% a distant one.");
+      auto &undo = glassy(put<ui::Button>({b.x + b.w - 120, b.y + 8, 52, 20}, "UNDO"), kDim);
+      undo.onClick = [this] { stepHistory(false); };
+      undoButton_ = &undo;
+      tips_.add(undo, "Back to the patch before the last RANDOMIZE or MUTATE.");
+      auto &redo = glassy(put<ui::Button>({b.x + b.w - 64, b.y + 8, 52, 20}, "REDO"), kDim);
+      redo.onClick = [this] { stepHistory(true); };
+      redoButton_ = &redo;
+      tips_.add(redo, "Forward again to the patch UNDO left.");
+      label({b.x + 14, b.y + 108, 200, 16}, "LOCK", kDim, visage::Font::kLeft);
+      static const char *const lockTips[kDiceSectionCount] = {
+          "the oscillators and the mixer", "the FM grid", "both filters, their routing and the drive",
+          "the three envelopes and how they chain", "the wingbeat, the wind and LFO 1 and 2", "the routes and the mod buses",
+          "how the species flies, and the couplings between creatures", "level, pan, voice mode, glide, drift and velocity"};
+      const auto cells = ui::row({b.x + 14, b.y + 128, b.w - 28, 22}, 4, 6);
+      const auto cells2 = ui::row({b.x + 14, b.y + 156, b.w - 28, 22}, 4, 6);
+      for (int s = 0; s < kDiceSectionCount; ++s) {
+         auto &lock = glassy(put<ui::Button>(s < 4 ? cells[s] : cells2[s - 4], kDiceSectionNames[s]), kDim);
+         lock.setToggle(true);
+         lock.setOn(host_.dice.locked(s));
+         lock.onToggle = [this, s](bool on) {
+            host_.dice.locks = on ? host_.dice.locks | (1u << s) : host_.dice.locks & ~(1u << s);
+         };
+         tips_.add(lock, std::string("Locked, RANDOMIZE and MUTATE leave ") + lockTips[s] + " as they are.");
+      }
+      group_ = kSynth;
+   }
+   // Every param, with the preset's name and the bus names, as the dice found them.
+   DiceSnapshot snapshot() const {
+      DiceSnapshot now;
+      now.values.resize(paramCount());
+      for (size_t i = 0; i < paramCount(); ++i)
+         now.values[i] = host_.paramValue(kParams()[i].def.id);
+      now.name = host_.presetName();
+      now.buses = host_.busNames();
+      return now;
+   }
+   void restore(const DiceSnapshot &s) {
+      host_.setParams(s.values.data());
+      host_.setPresetName(s.name);
+      host_.setBusNames(s.buses);
+      syncControls();
+      presetBar_->redraw();
+   }
+   // Randomize or mutate the part shown, keeping what it was to go back to.
+   void roll(bool mutate) {
+      DiceSnapshot now = snapshot();
+      std::vector<double> values = now.values;
+      BusNames buses = now.buses;
+      // Each roll is new: the clock and a count, mixed by the dice's own generator.
+      const uint64_t seed = DiceRng(static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()) +
+                                    ++diceSeed_).next();
+      std::string name;
+      if (mutate) {
+         mutatePart(values, host_.part, host_.dice, seed);
+         name = mutantName(now.name);
+      }
+      else {
+         name = randomizePart(values, host_.part, host_.dice, seed);
+         // Its routes are new, so the part's bus names go with the old ones.
+         if (!host_.dice.locked(kDiceRoutes))
+            buses[host_.part] = {};
+      }
+      host_.diceHistory.push(std::move(now));
+      restore({values, name, buses});
+      refreshDice();
+   }
+   void stepHistory(bool forward) {
+      DiceHistory &h = host_.diceHistory;
+      if (forward ? !h.canRedo() : !h.canUndo())
+         return;
+      restore(forward ? h.redo(snapshot()) : h.undo(snapshot()));
+      refreshDice();
+   }
+   // UNDO and REDO dim when there's nothing to step to.
+   void refreshDice() {
+      const auto dim = [](ui::Button *b, bool on) {
+         if (b)
+            b->setTheme(on ? glassTheme() : idleGlassTheme());
+      };
+      dim(undoButton_, host_.diceHistory.canUndo());
+      dim(redoButton_, host_.diceHistory.canRedo());
+   }
+
    void buildShared() {
       auto &tabs = *(oscTabs_ = &glassy(put<ui::TabBar>({26, 68, 260, 26}, std::vector<std::string>{"OSCILLATORS", "FM"}), kDim));
       tabs.select(oscTab_);
@@ -3715,6 +3974,7 @@ private:
    static constexpr ui::Rect kVoiceBox{kSkyX, 650, kSkyW, 274};
    // The route list, over the sky.
    static constexpr ui::Rect kRoutesBox{kSkyX + 12, 80, kSkyW - 24, 494};
+   static constexpr ui::Rect kDiceBox{kSkyX + kSkyW - 302, kSkyY + 10, 292, 192};
    // The voice panel's knobs, one row along its bottom.
    static std::vector<ui::Rect> kVoiceKnobs() { return ui::row({kVoiceBox.x + 8, kVoiceBox.y + 172, kVoiceBox.w - 16, 100}, 9); }
    static constexpr float kCleanMargin = 16.0f;
@@ -3755,6 +4015,17 @@ private:
    ui::SegmentedSwitch *viewSwitch_ = nullptr;
    ui::SegmentedSwitch *lookSwitch_ = nullptr;
    ui::Dropdown *paletteMenu_ = nullptr;
+   ui::NumberBox *sizeBox_ = nullptr;
+   PresetBar *presetBar_ = nullptr;
+   ui::Button *diceButton_ = nullptr, *undoButton_ = nullptr, *redoButton_ = nullptr;
+   uint64_t diceSeed_ = 0;
+   // The controls that stay in SKY, and fade there while the mouse rests: whether it is over each,
+   // how long since it last moved, and how much they show.
+   std::vector<visage::Frame *> skyControls_;
+   std::array<bool, 5> overControl_{};
+   static constexpr float kIdleSeconds = 10.0f;
+   float idle_ = 0.0f;
+   float controlsAlpha_ = 1.0f;
    int oscTab_ = 0;   // the oscillator panel's tab: 0 OSCILLATORS, 1 FM
    int envTab_ = 0;   // the envelope panel's: 0 ENVELOPES, 1 LFOS, 2 BUSES
    // The bus names the chips and route menus show, to notice when a preset or the host changes them.
@@ -3767,7 +4038,7 @@ private:
    // A, B and the main output's peaks, falling slowly, for the level bars.
    float meters_[3] = {};
    std::vector<ui::EnvelopeEditor::Playhead> heads_;
-   std::chrono::steady_clock::time_point last_;
+   ui::FramePacer pacer_;
 };
 
 } // namespace
@@ -3783,6 +4054,7 @@ bool renderScreenshot(EditorHost &host, const ScreenshotView &view, double secon
    panel.stopTimer();
    panel.showPart(view.part);
    panel.showRoutes(view.routes);
+   panel.showDice(view.dice);
    panel.setMapping(view.mapSource != 0, view.mapSource);
    panel.setView(view.view);
    panel.showVoiceTab(view.voiceTab);
@@ -3801,6 +4073,7 @@ bool renderFrames(EditorHost &host, const ScreenshotView &view, int width, int h
    panel.stopTimer();
    panel.showPart(view.part);
    panel.showRoutes(view.routes);
+   panel.showDice(view.dice);
    panel.setMapping(view.mapSource != 0, view.mapSource);
    panel.setView(view.view);
    visage::ApplicationEditor editor;

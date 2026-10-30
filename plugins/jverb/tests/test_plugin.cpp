@@ -19,6 +19,7 @@
 #include "orbit.h"
 #include "params.h"
 #include "presets.h"
+#include "randomize.h"
 
 extern "C" const clap_plugin_entry_t clap_entry;
 
@@ -500,6 +501,69 @@ int main() {
          JCLAP_CHECK(!grows && e.back() <= e.front());
       }
       JCLAP_CHECK(names.size() >= 20);
+   }
+
+   // Every roll of the dice plays cleanly, and its tail fades as a factory preset's does: Randomize
+   // at any complexity, and Mutate at any amount, a few times over. A seed is the same space every
+   // time, a lock keeps its section, and Mix and Level are never touched.
+   {
+      std::vector<double> defaults(kParamCount);
+      for (clap_id id = 0; id < kParamCount; ++id)
+         defaults[id] = kParams[id].defaultValue;
+      const auto plays = [&](const std::vector<double> &v, const char *what, uint64_t seed) {
+         jclap::core::TestHost h(clap_entry, kId, kRate);
+         h.object<EditorHost>()->setParams(v.data());
+         Noise noise;
+         std::vector<float> inL(static_cast<size_t>(kRate)), inR(inL.size()), outL, outR;
+         for (size_t i = 0; i < inL.size() / 4; ++i)
+            inL[i] = inR[i] = 0.5f * noise.next();
+         run(h, inL, inR, outL, outR, 512);
+         const bool bounded = finiteAndBounded(outL, 4.0f) && finiteAndBounded(outR, 4.0f);
+         constexpr double kLongRate = 24000.0;
+         jclap::core::TestHost slow(clap_entry, kId, kLongRate);
+         slow.object<EditorHost>()->setParams(v.data());
+         const auto e = windows(tail(slow, kLongRate, 20.0), kLongRate, 2.0, 4.0);
+         bool grows = false;
+         double loudest = e.front();
+         for (size_t i = 1; i < e.size(); ++i) {
+            grows |= e[i] > 1e-6 && e[i] > loudest;
+            loudest = std::max(loudest, e[i]);
+         }
+         if (!bounded || grows || e.back() > e.front())
+            std::printf("%s %llu: bounded %d, tail %.3g -> %.3g\n", what, static_cast<unsigned long long>(seed), bounded,
+                        e.front(), e.back());
+         JCLAP_CHECK(bounded && !grows && e.back() <= e.front());
+      };
+      for (uint64_t seed = 1; seed <= 12; ++seed) {
+         DiceSettings dice;
+         dice.complexity = static_cast<double>(seed % 5) / 4.0;
+         std::vector<double> v = defaults;
+         JCLAP_CHECK(!randomizeSpace(v, dice, seed).empty());
+         JCLAP_CHECK(v[kMix] == defaults[kMix] && v[kLevel] == defaults[kLevel] && v[kFreeze] == 0.0);
+         plays(v, "randomize", seed);
+         dice.amount = static_cast<double>(seed % 4 + 1) / 4.0;
+         for (int n = 0; n < 4; ++n)
+            mutateSpace(v, dice, seed * 101 + n);
+         plays(v, "mutate", seed);
+      }
+      DiceSettings dice;
+      std::vector<double> a = defaults, b = defaults;
+      randomizeSpace(a, dice, 7);
+      randomizeSpace(b, dice, 7);
+      JCLAP_CHECK(a == b);
+      dice.locks = ~(1u << kDiceSpace);
+      std::vector<double> locked = defaults;
+      randomizeSpace(locked, dice, 9);
+      mutateSpace(locked, DiceSettings{0.5, 1.0, dice.locks}, 10);
+      bool keptOthers = true, changedSpace = false;
+      for (clap_id id = 0; id < kParamCount; ++id) {
+         if (diceSection(id) == kDiceSpace)
+            changedSpace = changedSpace || locked[id] != defaults[id];
+         else
+            keptOthers = keptOthers && locked[id] == defaults[id];
+      }
+      JCLAP_CHECK(keptOthers && changedSpace);
+      JCLAP_CHECK(mutantName("Shimmer Halo") == "Shimmer Halo ~1" && mutantName("Shimmer Halo ~1") == "Shimmer Halo ~2");
    }
 
    // User presets write and read back.

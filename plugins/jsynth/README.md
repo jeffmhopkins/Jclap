@@ -26,6 +26,7 @@ each one trails ink across the sky.
 - **Shape envelopes** after XAOC's Zadar: 60 contours in ten banks, from 1 ms to 30 minutes, chained
   into each other.
 - **MAP** instead of a matrix page: arm a source, drag a knob.
+- **Dice:** randomize a playable patch by complexity, or mutate one by an amount, with undo and locks.
 - **166 factory presets** in ten categories, with favorites.
 
 ## Sound
@@ -73,6 +74,20 @@ result (linear, exponential, log, S-curve, absolute), sets its polarity (as is, 
 bipolar, inverted), can wait and fade in
 after the note, lags it, and runs per note or once for the whole part. Name it and it routes on under
 that name, as *Flight Steps* does with **Wing Speed** and **Flock Heading**.
+
+## The dice
+
+![The dice card](docs/readme/dice.jpg)
+
+**DICE** in the header opens a card over the sky for the part shown. **RANDOMIZE** builds a new patch
+from scratch the way you would: it picks an instrument (analog, or FM on musical ratios), an envelope
+(a pluck, keys, a pad, a lead, an organ or a swell), then fills in each module inside the ranges that
+sound, draws its routes from a list of ones that make sense, and sets the part's level for what it
+stacked. **COMPLEXITY** says how much it reaches for: at 0 one or two oscillators, one filter and a
+route or two; at 100% stacked oscillators and FM, two filters, Shape envelopes, a bus and the
+couplings between creatures. **MUTATE** nudges every value by **AMOUNT**, keeps what's off switched
+off and changes a choice only to a near one, so the patch stays itself. **UNDO** and **REDO** step
+through what the dice replaced, and a **LOCK** keeps a section as it is.
 
 ## The flock
 
@@ -164,11 +179,14 @@ These three knobs sit on the FM tab and start at zero.
 
 ![The SKY view](docs/readme/sky.jpg)
 
-**SKY**, top right, hides everything but the flocks. The sky has two looks, picked over its top left:
+**SKY**, top right, hides everything but the flocks and a few controls along the top (the preset
+bar among them, so you can still browse and switch presets), which fade away after 10 seconds without
+the mouse moving and come back when it moves. The sky has two looks, picked over its top left:
 **SUMI** draws each creature as a brush stroke, its ink marbling in dark water, and **AURORA** each
 one as a star, its ink hanging curtains of light over a horizon. The menu beside them picks a palette
 (Ember, Borealis, Glacier, Sunset, Moonlight, Neon or Classic); each look keeps its own, and both are
-saved with the project. Lures show as ripples or small diamonds (**RINGS** shows or hides them), a
+saved with the project. **SIZE** beside them draws the creatures and their ink from 50% to 300% as
+big. Lures show as ripples or small diamonds (**RINGS** shows or hides them), a
 pink ring is a creature that's been caught, and links join each creature to the neighbour it hears
 most. Hover a creature to read its Speed, Turn and Nearest; in Sumi the mouse stirs the ink. A
 creature glows brighter the harder you press, and fades with its sound after you let go. The flock flies on the audio

@@ -34,6 +34,8 @@ struct OrbitFrame {
    float late = 0.0f;
    float decay = 4.0f;
    bool running = true, frozen = false;
+   // Seconds of audio processed when it was taken, so the panel can play the frames back evenly.
+   double time = 0.0;
 };
 
 struct OrbitCommand {

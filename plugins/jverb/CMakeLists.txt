@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.10.8)
+jclap_plugin_version(0.11.0)
 
 jclap_add_plugin(jverb
    OUTPUT_NAME "JVerb"
@@ -28,4 +28,6 @@ if(JCLAP_BUILD_TOOLS)
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-six.png ARGS 6)
    jclap_add_screenshot_test(jverb-screenshot-orbit-test TOOL jverb-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-orbit.png ARGS 3 2)
+   jclap_add_screenshot_test(jverb-screenshot-dice-test TOOL jverb-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-dice.png ARGS 3 0 1200 780 1)
 endif()
