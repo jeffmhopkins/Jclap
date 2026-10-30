@@ -99,7 +99,9 @@ public:
          return;
       }
       const float dx = to.x - at_.x, dy = to.y - at_.y, d = std::hypot(dx, dy);
-      const float vx = dt > 0.0f ? dx / dt : 0.0f, vy = dt > 0.0f ? dy / dt : 0.0f;
+      // The dot's speed, held to kMaxSpeed: a flick shouldn't fling its ink across the sky.
+      const float speed = dt > 0.0f ? d / dt : 0.0f, k = speed > kMaxSpeed ? kMaxSpeed / speed : 1.0f;
+      const float vx = dt > 0.0f ? k * dx / dt : 0.0f, vy = dt > 0.0f ? k * dy / dt : 0.0f;
       // A jump (another channel, a preset) starts a new stroke instead of drawing across.
       if (d > 0.6f) {
          at_ = to;
@@ -193,6 +195,8 @@ private:
    // Apart along the way, in sky units, and at most this many at once.
    static constexpr float kSpacing = 0.02f;
    static constexpr size_t kMaxPuffs = 900;
+   // The fastest the ink is pushed by (sky units a second): about the pad's width in half a second.
+   static constexpr float kMaxSpeed = 4.0f;
 
    unsigned fresh_, old_;
    float life_;
@@ -284,7 +288,11 @@ public:
       // The ink follows the dot a touch behind, so a 7-bit controller's X and Y steps (they come
       // one axis at a time) draw a line rather than a staircase.
       const Spot to = spot();
-      const float a = started_ ? 1.0f - std::exp(-dt / 0.06f) : 1.0f;
+      // A jump (a click across the pad) goes straight there, so the ink starts a new stroke rather
+      // than chasing it across.
+      const bool jumped = std::hypot(to.x - lastTo_.x, to.y - lastTo_.y) > 0.6f;
+      lastTo_ = to;
+      const float a = started_ && !jumped ? 1.0f - std::exp(-dt / 0.06f) : 1.0f;
       inkAt_ = {inkAt_.x + (to.x - inkAt_.x) * a, inkAt_.y + (to.y - inkAt_.y) * a};
       started_ = true;
       ink_.follow(inkAt_, dt);
@@ -329,8 +337,8 @@ private:
 
    Sky sky_;
    Ink ink_{kBlue, kOldBlue, 1.6f};
-   // Where the ink is being laid, just behind the dot, from the first frame on.
-   Spot inkAt_;
+   // Where the ink is being laid, just behind the dot, from the first frame on, and the dot last frame.
+   Spot inkAt_, lastTo_;
    bool started_ = false;
    std::string left_, right_;
 };
