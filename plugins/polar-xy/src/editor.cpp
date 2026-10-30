@@ -136,8 +136,9 @@ public:
       const float drag = std::exp(-2.5f * dt);
       for (Puff &p : puffs_) {
          p.age += dt;
-         p.x += p.vx * dt;
-         p.y += p.vy * dt;
+         // Kept just within the sky, so a flick's ink crackles across it instead of flying off.
+         p.x = std::clamp(p.x + p.vx * dt, -kReach, kReach);
+         p.y = std::clamp(p.y + p.vy * dt, -kReach, kReach);
          p.vx *= drag;
          p.vy *= drag;
       }
@@ -195,8 +196,9 @@ private:
    // Apart along the way, in sky units, and at most this many at once.
    static constexpr float kSpacing = 0.02f;
    static constexpr size_t kMaxPuffs = 900;
-   // The fastest the ink is pushed by (sky units a second): about the pad's width in half a second.
-   static constexpr float kMaxSpeed = 4.0f;
+   // The fastest the ink is pushed by (sky units a second), and how far out it may drift.
+   static constexpr float kMaxSpeed = 12.0f;
+   static constexpr float kReach = 1.05f;
 
    unsigned fresh_, old_;
    float life_;
@@ -288,11 +290,7 @@ public:
       // The ink follows the dot a touch behind, so a 7-bit controller's X and Y steps (they come
       // one axis at a time) draw a line rather than a staircase.
       const Spot to = spot();
-      // A jump (a click across the pad) goes straight there, so the ink starts a new stroke rather
-      // than chasing it across.
-      const bool jumped = std::hypot(to.x - lastTo_.x, to.y - lastTo_.y) > 0.6f;
-      lastTo_ = to;
-      const float a = started_ && !jumped ? 1.0f - std::exp(-dt / 0.06f) : 1.0f;
+      const float a = started_ ? 1.0f - std::exp(-dt / 0.06f) : 1.0f;
       inkAt_ = {inkAt_.x + (to.x - inkAt_.x) * a, inkAt_.y + (to.y - inkAt_.y) * a};
       started_ = true;
       ink_.follow(inkAt_, dt);
@@ -337,8 +335,8 @@ private:
 
    Sky sky_;
    Ink ink_{kBlue, kOldBlue, 1.6f};
-   // Where the ink is being laid, just behind the dot, from the first frame on, and the dot last frame.
-   Spot inkAt_, lastTo_;
+   // Where the ink is being laid, just behind the dot, from the first frame on.
+   Spot inkAt_;
    bool started_ = false;
    std::string left_, right_;
 };
