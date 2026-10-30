@@ -19,8 +19,9 @@ struct MotionSettings {
    bool active() const { return smoothing > 0.0 || inertia > 0.0; }
 };
 
-// The heaviest inertia swings for about this long per cycle.
-constexpr double kInertiaPeriod = 1.5;
+// How long inertia (0..1) takes to swing through a cycle. It grows faster than the knob, so the
+// low end stays light and full inertia swings for about 5 s, three to four times the weight it had.
+inline double inertiaPeriod(double inertia) { return 1.5 * inertia * (1.0 + 2.5 * inertia); }
 
 // An angle difference brought into -pi..pi: the short way round.
 inline double wrapPi(double a) { return std::remainder(a, 2.0 * kPi); }
@@ -112,7 +113,7 @@ public:
       // Inertia: a mass on a spring pulled toward the smoothed position. Heavier swings slower and
       // with less damping, so it overshoots further.
       if (m.inertia > 0.0) {
-         const double w = 2.0 * kPi / (m.inertia * kInertiaPeriod);
+         const double w = 2.0 * kPi / inertiaPeriod(m.inertia);
          const double zeta = 0.85 - 0.7 * m.inertia;
          const int n = std::max(1, static_cast<int>(std::ceil(w * dt / 0.05)));
          const double h = dt / n;

@@ -3,9 +3,11 @@
 #include <jclap/core/test_host.h>
 
 #include "editor.h"
+#include "polar.h"
 #include "presets.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <utility>
 #include <vector>
@@ -67,24 +69,25 @@ void motionTests() {
    JCLAP_CHECK(p.angles.size() > 20);
    JCLAP_CHECK(!p.angles.empty() && p.angles.back() == 0);
 
-   // Inertia: a quarter turn up swings past the top and comes back to settle there.
+   // Inertia: a quarter turn up swings past the top and comes back to settle there (60% swings
+   // for a couple of seconds, so this runs 8 s).
    h.setParam(8, 0.0);
    h.setParam(9, 60.0);
    h.midi(0xB0, 16, 64);
    h.midi(0xB0, 17, 127);
-   p = run(h, 400);
+   p = run(h, 1500);
    JCLAP_CHECK(!p.angles.empty() && *std::max_element(p.angles.begin(), p.angles.end()) > 36);
    JCLAP_CHECK(!p.angles.empty() && p.angles.back() == 32);
    JCLAP_CHECK(p.radii.empty() || p.radii.back() == 127);
 
-   // A whirl: a turn and a half round the circle in quarter steps, about 50 ms apart. Around unwraps the
+   // A whirl: a turn and a half round the circle in quarter steps, about 150 ms apart. Around unwraps the
    // angle, so the output keeps going round the same way, through the bottom, and on past the top.
    std::vector<int> whirl;
    const int steps[][2] = {{0, 64}, {64, 0}, {127, 64}, {64, 127}, {0, 64}, {64, 0}};
    for (const auto &xy : steps) {
       h.midi(0xB0, 16, static_cast<uint8_t>(xy[0]));
       h.midi(0xB0, 17, static_cast<uint8_t>(xy[1]));
-      p = run(h, 10);
+      p = run(h, 28);
       whirl.insert(whirl.end(), p.angles.begin(), p.angles.end());
    }
    // Counter-clockwise all the way: each angle is the last plus a small step (mod 127), never a
@@ -141,17 +144,45 @@ void dragTests() {
    out = h.process();
    JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 18 && out.midi[0].data2 == 32);
 
-   // A move released before the next block still lands (a double-click reset is set and let go at once).
+   // A move released before the next block still lands (a double-click reset is set and let go at
+   // once), gliding there briefly like every pad move.
    editor->dragInput(0, 64);
    editor->releaseInput();
-   out = h.process();
-   JCLAP_CHECK(!out.midi.empty() && out.midi[0].data1 == 18 && out.midi[0].data2 == 64);
+   Path p = run(h, 40);
+   JCLAP_CHECK(!p.angles.empty() && p.angles.back() == 64);
+   JCLAP_CHECK(run(h, 2).angles.empty());
+
+   // Pad moves glide even with Smoothing off: the mouse comes a few dozen times a second, a block at
+   // a time, and stepping straight to each move is choppy. A quarter turn sweeps the angle through
+   // the values between, one CC step at a time.
+   editor->dragInput(64, 127);
+   p = run(h, 40);
+   JCLAP_CHECK(p.angles.size() > 10);
+   int jumps = 0;
+   for (size_t i = 1; i < p.angles.size(); ++i)
+      jumps += std::abs(p.angles[i] - p.angles[i - 1]) > 2;
+   JCLAP_CHECK_EQ(jumps, 0);
+   JCLAP_CHECK(!p.angles.empty() && p.angles.back() == 32);
+
+   // The pad isn't rounded to CC steps: circling it slowly at a small radius, where the CC grid has
+   // only a few angles, each position still settles on its own angle, not the nearest grid point's.
+   int angle = -1, wrong = 0;
+   for (int i = 0; i <= 40; ++i) {
+      const double a = i * jclap::kPi / 80.0;
+      editor->dragInput(64.0 + 12.0 * std::cos(a), 64.0 + 12.0 * std::sin(a));
+      p = run(h, 40);
+      if (!p.angles.empty())
+         angle = p.angles.back();
+      wrong += angle != static_cast<int>(std::lround(a / (2.0 * jclap::kPi) * 127.0));
+   }
+   JCLAP_CHECK_EQ(wrong, 0);
+   editor->releaseInput();
 
    // Smoothing applies to the pad too: it glides there in steps.
    h.setParam(8, 100.0);
    h.process();
    editor->dragInput(127, 64);
-   Path p = run(h, 40);
+   p = run(h, 40);
    JCLAP_CHECK(p.radii.size() > 10);
    JCLAP_CHECK(!p.radii.empty() && p.radii.back() == 127);
    editor->releaseInput();
@@ -165,6 +196,131 @@ void dragTests() {
    JCLAP_CHECK(out.midi.size() >= 2 && out.midi[0].data1 == 16 && out.midi[0].data2 == 64 &&
                out.midi[1].data1 == 17 && out.midi[1].data2 == 0);
    editor->releaseInput();
+}
+
+// The panel's SEND buttons: one output CC alone, for a MIDI learn.
+void learnTests() {
+   jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+   auto *editor = h.object<polar_xy::EditorHost>();
+   // Before anything was sent: 0.
+   editor->sendOutput(1);
+   auto out = h.process();
+   JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 19 && out.midi[0].data2 == 0);
+
+   // After: the value last sent, on that CC only.
+   h.midi(0xB0, 16, 64);
+   h.midi(0xB0, 17, 127);
+   h.process();
+   editor->sendOutput(0);
+   out = h.process();
+   JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 18 && out.midi[0].data2 == 32);
+   editor->sendOutput(1);
+   out = h.process();
+   JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 19 && out.midi[0].data2 == 127);
+   JCLAP_CHECK(h.process().midi.empty());
+
+   // At 14 bits, only the MSB: the CC to learn.
+   h.setParam(11, 1.0);
+   h.process();
+   editor->sendOutput(0);
+   out = h.process();
+   JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 18 && out.midi[0].data2 == 32);
+}
+
+// 14-bit output: each value goes out as its MSB on the output CC, then its LSB on that CC + 32.
+void fineTests() {
+   jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+   h.setParam(11, 1.0);
+   h.midi(0xB0, 16, 96);
+   h.midi(0xB0, 17, 64);
+   auto out = h.process();
+   const jclap::PolarCC want = jclap::toPolar(jclap::ccToBipolar(96), 0.0, {}, jclap::kSteps14);
+   JCLAP_CHECK(want.radius > 0 && (want.radius & 0x7F) != 0); // an LSB that shows
+   JCLAP_CHECK(out.midi.size() == 4);
+   if (out.midi.size() == 4) {
+      JCLAP_CHECK(out.midi[0].data1 == 18 && out.midi[0].data2 == 0 && out.midi[1].data1 == 50 &&
+                  out.midi[1].data2 == 0);
+      JCLAP_CHECK(out.midi[2].data1 == 19 && out.midi[2].data2 == (want.radius >> 7) && out.midi[3].data1 == 51 &&
+                  out.midi[3].data2 == (want.radius & 0x7F));
+   }
+   // The panel shows it at 7 bits.
+   int angle = -1, radius = -1;
+   JCLAP_CHECK(h.object<polar_xy::EditorHost>()->lastOutput(angle, radius) && angle == 0 &&
+               radius == (want.radius >> 7));
+
+   // 45 degrees, on the 14-bit circle: 16383 / 8 rounds to 2048, MSB 16 and LSB 0.
+   h.midi(0xB0, 16, 127);
+   h.midi(0xB0, 17, 127);
+   out = h.process();
+   JCLAP_CHECK(out.midi.size() >= 2 && out.midi[0].data1 == 18 && out.midi[0].data2 == 16 &&
+               out.midi[1].data1 == 50 && out.midi[1].data2 == 0);
+
+   // Gliding at 14 bits moves in far finer steps: a slow quarter turn sends many more angles than
+   // the 32 a 7-bit CC has.
+   h.setParam(10, 1.0);
+   h.setParam(8, 1000.0);
+   h.midi(0xB0, 16, 0);
+   h.midi(0xB0, 17, 127);
+   int lsbs = 0;
+   for (int b = 0; b < 400; ++b)
+      for (const auto &m : h.process().midi)
+         lsbs += m.data1 == 50;
+   JCLAP_CHECK(lsbs > 200);
+   h.setParam(8, 0.0);
+   h.setParam(10, 0.0);
+   h.process();
+
+   // Output CCs above 31 have no LSB CC to pair with, so the output goes back to 7-bit.
+   h.setParam(3, 40.0);
+   h.midi(0xB0, 16, 127);
+   h.midi(0xB0, 17, 64);
+   out = h.process();
+   // (The new CC sends the old position first, then the move.)
+   for (const auto &m : out.midi)
+      JCLAP_CHECK(m.data1 == 18 || m.data1 == 40);
+   JCLAP_CHECK(!out.midi.empty() && out.midi.back().data1 == 18 && out.midi.back().data2 == 0);
+
+   JCLAP_CHECK(h.paramText(11, 1.0) == "14-bit");
+}
+
+// 14-bit input: an LSB on the input CC + 32 places the axis between the CC steps.
+void fineInputTests() {
+   jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+   h.setParam(11, 1.0);
+   h.midi(0xB0, 16, 96);
+   h.midi(0xB0, 48, 64); // X's LSB: half a step on, 96.5
+   h.midi(0xB0, 17, 64);
+   auto out = h.process();
+   const int radius = jclap::toPolar(jclap::ccToBipolar(96.5), 0.0, {}, jclap::kSteps14).radius;
+   JCLAP_CHECK(radius != jclap::toPolar(jclap::ccToBipolar(96), 0.0, {}, jclap::kSteps14).radius);
+   int msb = -1, lsb = -1;
+   for (const auto &m : out.midi) {
+      JCLAP_CHECK(m.data1 != 48); // taken, not passed on
+      msb = m.data1 == 19 ? m.data2 : msb;
+      lsb = m.data1 == 51 ? m.data2 : lsb;
+   }
+   JCLAP_CHECK(msb == (radius >> 7) && lsb == (radius & 0x7F));
+
+   // A new MSB on its own is the whole value again: a 7-bit controller is unaffected.
+   h.midi(0xB0, 16, 96);
+   out = h.process();
+   msb = lsb = -1;
+   for (const auto &m : out.midi) {
+      msb = m.data1 == 19 ? m.data2 : msb;
+      lsb = m.data1 == 51 ? m.data2 : lsb;
+   }
+   const int coarse = jclap::toPolar(jclap::ccToBipolar(96), 0.0, {}, jclap::kSteps14).radius;
+   JCLAP_CHECK(msb == (coarse >> 7) && lsb == (coarse & 0x7F));
+
+   // Y on X's LSB CC is Y: the input CCs come first.
+   h.setParam(1, 48.0);
+   h.midi(0xB0, 16, 64);
+   h.midi(0xB0, 48, 127);
+   out = h.process();
+   int angle = -1;
+   for (const auto &m : out.midi)
+      angle = m.data1 == 18 ? m.data2 : angle;
+   JCLAP_CHECK_EQ(angle, 32); // straight up: 16383 / 4 rounds to 4096, MSB 32
 }
 
 } // namespace
@@ -286,8 +442,10 @@ int main() {
       JCLAP_CHECK(h2.paramValue(0) == 20.0 && h2.paramValue(1) == 17.0);
       JCLAP_CHECK(h2.object<polar_xy::EditorHost>()->presetName() == "Whirlpool");
 
-      // Version 1 state, from before Smoothing, Inertia and Motion Path: those load as defaults.
+      // Version 1 state, from before Smoothing, Inertia, Motion Path and Output Resolution: those load
+      // as defaults.
       h2.setParam(8, 500.0);
+      h2.setParam(11, 1.0);
       h2.process();
       const char magic[4] = {'J', 'C', 'O', 'P'};
       const uint32_t version = 1;
@@ -298,7 +456,8 @@ int main() {
       pos = 0;
       JCLAP_CHECK(state2->load(h2.plugin(), &is));
       JCLAP_CHECK(h2.paramValue(0) == 21.0 && h2.paramValue(4) == 45.0 && h2.paramValue(6) == 1.0);
-      JCLAP_CHECK(h2.paramValue(8) == 0.0 && h2.paramValue(9) == 0.0 && h2.paramValue(10) == 0.0);
+      JCLAP_CHECK(h2.paramValue(8) == 0.0 && h2.paramValue(9) == 0.0 && h2.paramValue(10) == 0.0 &&
+                  h2.paramValue(11) == 0.0);
       JCLAP_CHECK(h2.object<polar_xy::EditorHost>()->presetName().empty()); // no name before version 3
    }
 
@@ -319,5 +478,8 @@ int main() {
 
    motionTests();
    dragTests();
+   fineTests();
+   learnTests();
+   fineInputTests();
    return jclap::core::testResult();
 }

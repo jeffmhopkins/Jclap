@@ -51,8 +51,8 @@ public:
       presets.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
       add<ui::Section>({12, 76, 232, 260}, "XY IN");
       add<ui::Section>({256, 76, 232, 260}, "POLAR OUT");
-      add<ui::Section>({500, 76, 208, 124}, "INPUT CC");
-      add<ui::Section>({500, 212, 208, 124}, "OUTPUT CC");
+      add<ui::Section>({500, 76, 208, 112}, "INPUT CC");
+      add<ui::Section>({500, 200, 208, 136}, "OUTPUT CC");
       add<ui::Section>({12, 348, 696, 120}, "MAPPING");
       add<ui::Section>({12, 480, 696, 120}, "MOTION");
 
@@ -65,20 +65,25 @@ public:
                                ui::ValueRange{0.0, 127.0, 0.0, 1.0});
       polar_->setGrid(ui::XYPad::Grid::Polar);
       polar_->setAccent(kOrange);
-      for (ui::XYPad::Axis *axis : {&xy_->x(), &xy_->y()}) {
-         axis->onChange = [this](double) {
-            host_.dragInput(static_cast<int>(std::lround(xy_->x().value)), static_cast<int>(std::lround(xy_->y().value)));
-         };
+      // The pad sets X then Y, so a move is sent once Y has it too, never as the new X with the old
+      // Y. It goes at full resolution, not rounded to CC steps, for a smooth angle and radius.
+      xy_->y().onChange = [this](double) { host_.dragInput(xy_->x().value, xy_->y().value); };
+      for (ui::XYPad::Axis *axis : {&xy_->x(), &xy_->y()})
          axis->onEndEdit = [this] { host_.releaseInput(); };
-      }
       polar_->setIgnoresMouseEvents(true, false);
 
-      const auto in = ui::row({508, 104, 192, 92}, 2);
+      const auto in = ui::row({508, 102, 192, 84}, 2);
       knob(kParamInX, "X", kBlue, in[0]);
       knob(kParamInY, "Y", kBlue, in[1]);
-      const auto out = ui::row({508, 240, 192, 92}, 2);
+      const auto out = ui::row({508, 226, 192, 84}, 2);
       knob(kParamOutAngle, "ANGLE", kOrange, out[0]);
       knob(kParamOutRadius, "RADIUS", kOrange, out[1]);
+      // Each sends its CC alone, for a MIDI learn on the receiving end.
+      for (int i = 0; i < 2; ++i) {
+         auto &send = add<ui::Button>({524.0f + i * 96.0f, 308, 64, 20}, "SEND");
+         send.setAccent(kOrange);
+         send.onClick = [this, i] { host_.sendOutput(i); };
+      }
 
       knob(kParamAngleOffset, "OFFSET", kPurple, {36, 374, 96, 90}, 1.0);
 
@@ -92,9 +97,10 @@ public:
       knob(kParamSmoothing, "SMOOTHING", kBlue, {36, 506, 96, 90}, 10.0);
       knob(kParamInertia, "INERTIA", kBlue, {150, 506, 96, 90}, 1.0);
       choice(kParamMotionPath, "PATH", kMotionPathLabels, 264, 480);
-      add<ui::Label>({484, 518, 212, 16}, "Straight: across the pad", ui::defaultTheme().dimText, visage::Font::kLeft);
-      add<ui::Label>({484, 538, 212, 16}, "Around: spins round the circle", ui::defaultTheme().dimText,
-                     visage::Font::kLeft);
+      choice(kParamResolution, "RESOLUTION", kResolutionLabels, 484, 480);
+      const unsigned dim = ui::defaultTheme().dimText;
+      add<ui::Label>({264, 576, 200, 14}, "Straight: across  /  Around: round", dim, visage::Font::kLeft);
+      add<ui::Label>({484, 576, 200, 14}, "14-bit: fine part on CC + 32", dim, visage::Font::kLeft);
 
       // Shown when two inputs or two outputs share a CC, which the plugin won't convert.
       warning_ = &add<ui::Label>({380, 48, 328, 14}, "", kOrange, visage::Font::kRight, 0.7f);
@@ -166,8 +172,12 @@ private:
       const auto same = [this](clap_id a, clap_id b) {
          return std::lround(host_.paramValue(a)) == std::lround(host_.paramValue(b));
       };
+      const auto cc = [this](clap_id id) { return static_cast<int>(std::lround(host_.paramValue(id))); };
+      const bool coarse = std::lround(host_.paramValue(kParamResolution)) != 0 &&
+                          !fineOutput(cc(kParamOutAngle), cc(kParamOutRadius), true);
       warning_->setText(same(kParamInX, kParamInY)               ? "X and Y share a CC: not converting"
                         : same(kParamOutAngle, kParamOutRadius) ? "Angle and radius share a CC: not converting"
+                        : coarse                                ? "14-bit needs output CCs 0-31: sending 7-bit"
                                                                 : "");
    }
 

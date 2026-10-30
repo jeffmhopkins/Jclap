@@ -26,8 +26,9 @@ public:
    void endEdit(clap_id) override {}
    std::string presetName() const override { return "Init"; }
    void setPresetName(const std::string &) override {}
-   void dragInput(int, int) override {}
+   void dragInput(double, double) override {}
    void releaseInput() override {}
+   void sendOutput(int) override {}
    void lastInput(int &x, int &y, int &channel) const override {
       x = 104;
       y = 88;

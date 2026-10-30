@@ -62,7 +62,7 @@ changes) until it arrives. Each channel moves on its own.
 
 - **Smoothing** is roughly how long the Orb takes to glide to the controller's position.
 - **Inertia** gives it weight: the heavier it is, the slower it gets going and the further it swings
-  past the target before settling.
+  past the target before settling. At 100% it swings for about 5 s; the knob's low end stays light.
 - **Motion Path** (PATH on the panel) picks what moves. *Straight* glides across the pad in X/Y, so going from one side to the
   other passes through the centre. *Around* moves the angle and radius on their own, so the Orb travels
   round the circle the short way. The angle keeps counting past a full turn, so stirring the controller
@@ -76,6 +76,21 @@ still moving.
 > exposed as settings. If the Orb dot lands rotated or mirrored from your controller, adjust
 > `Angle Offset` (degrees) and `Direction`.
 
+## 14-bit output
+
+A 7-bit CC gives the angle 127 steps round the circle (about 2.8 degrees each) and the radius 127
+steps, so a slow sweep moves in audible stairs. **Output Resolution** set to 14-bit (**RESOLUTION**
+in the MOTION section of the panel) sends each value as a standard 14-bit CC pair: the top 7 bits on the output CC,
+then the bottom 7 on that CC + 32 (so the defaults, 18 and 19, also send on 50 and 51). That is
+16383 steps each. It needs both output CCs below 32; on higher ones the output stays 7-bit and the
+panel says so. Whether the receiving end reads the pair as one fine value is up to it; one that
+doesn't just sees the coarse CC move as before, plus two extra CCs.
+
+Input takes 14-bit too, with nothing to set: when an input CC is below 32, an LSB on that CC + 32
+(sent after the MSB, as 14-bit controllers do) places the axis between the CC steps. The LSB CCs are
+taken like the input CCs (passed on only with Pass Input CCs). A 7-bit controller never sends them,
+and each MSB on its own is the whole value, so nothing changes for one.
+
 ## Panel
 
 **XY IN** shows the last X/Y position received, with its channel, and **POLAR OUT** the angle and
@@ -85,9 +100,15 @@ with angle 0 marked by the tick on the right. Comparing the two shows what `Angl
 
 You can also play the Orb from the panel: click or drag in **XY IN** and that channel goes there just as
 if the controller had sent it, gliding with Smoothing and Inertia like any other move (and, with Pass
-Input CCs on, sending the X/Y CCs on too). While the mouse is down it has that channel, so the
+Input CCs on, sending the X/Y CCs on too). The pad's position isn't rounded to CC steps, and its moves
+always get at least 40 ms of Smoothing, so the angle and radius follow the mouse evenly instead of
+stepping each time it reports. While the mouse is down it has that channel, so the
 controller's X/Y CCs on it are ignored; once you let go, the controller takes over again with its next
 move. Double-click puts it back in the centre. Before any CC has arrived the pad drives channel 1.
+
+To map the outputs with a MIDI learn, press **SEND** under the angle or radius CC: it sends that CC
+alone (at the value last sent on it), so the learn picks it up without the other one getting in
+first. At 14-bit it sends only the MSB CC, the one to learn.
 
 The preset bar in the header steps through presets with its arrows, lists them from the name, stars
 favourites, and SAVE stores the current settings as your own preset. The factory bank is a single
@@ -111,3 +132,4 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 | Smoothing | 0 ms | Glide time, up to 2 s |
 | Inertia | 0% | Weight: lag and overshoot |
 | Motion Path | Straight | Or Around, to move round the circle |
+| Output Resolution | 7-bit | Or 14-bit (RESOLUTION on the panel): MSB on the output CC, LSB on CC + 32 |
