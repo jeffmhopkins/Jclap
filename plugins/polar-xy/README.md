@@ -63,10 +63,15 @@ changes) until it arrives. Each channel moves on its own.
 - **Smoothing** is roughly how long the Orb takes to glide to the controller's position.
 - **Inertia** gives it weight: the heavier it is, the slower it gets going and the further it swings
   past the target before settling. At 100% it swings for about 5 s; the knob's low end stays light.
+  When the controller stops (or you let go of the pad), the Orb doesn't stop with it: it carries on
+  the way the controller was going, slowing down (over a couple of seconds at 100%), and bounces off
+  the edge. It settles wherever it runs out of speed, and the controller's next move picks it up from
+  there. A jump from rest has no speed to carry, so it settles on the spot.
 - **Motion Path** (PATH on the panel) picks what moves. *Straight* glides across the pad in X/Y, so going from one side to the
   other passes through the centre. *Around* moves the angle and radius on their own, so the Orb travels
   round the circle the short way. The angle keeps counting past a full turn, so stirring the controller
-  with some Inertia sets the Orb whirling, and it carries on past where you stop.
+  with some Inertia sets the Orb whirling, and it carries on past where you stop. A radius that swings
+  or coasts in past the centre comes out the other side rather than waiting there.
 
 The first position on a channel is jumped to, as there's nowhere to glide from. A reset lands anything
 still moving.
