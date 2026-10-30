@@ -198,7 +198,11 @@ function guarded(fn) {
 
 function init() {
    midiOut = host.getMidiOutPort(0);
-   host.getMidiInPort(0).setSysexCallback(guarded(onSysex));
+   var midiIn = host.getMidiInPort(0);
+   midiIn.setSysexCallback(guarded(onSysex));
+   // Bitwig gives a port to one controller only, so this one passes the synth's keys and knobs on
+   // to tracks (as "MatrixBrute presets" in a track's input list), as a generic controller would.
+   midiIn.createNoteInput("MatrixBrute", "??????");
    var state = host.getDocumentState();
    state.getSignalSetting("Read all presets", "MatrixBrute", "Read").addSignalObserver(guarded(function () {
       readPresets(0, 255);
