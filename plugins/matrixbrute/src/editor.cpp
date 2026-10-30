@@ -114,13 +114,14 @@ constexpr unsigned kWheel = 0xffd9a6f5;
 // The filters' own colours, as printed on the synth: orange for the Steiner, teal for the ladder.
 constexpr unsigned kSteiner = 0xfff07a3a;
 constexpr unsigned kLadder = 0xff2fd1c5;
-constexpr unsigned kEnvColors[] = {kSteiner, kGreen, kPurple};
+// ENV 1 is yellow rather than the Steiner's orange it feeds, so it stands apart from the filter beside it.
+constexpr unsigned kEnv1 = 0xffffd45a;
+constexpr unsigned kEnvColors[] = {kEnv1, kGreen, kPurple};
 // Section accents for the boxes that don't take a sound's colour: lime for audio mod, silver for
-// the mixer and the routing between the filters, the display's red for the preset, the matrix's
+// the mixer, the routing between the filters and the preset, the matrix's
 // blue, mint for master, gold for glide and the macros, and grey for the notes.
 constexpr unsigned kLime = 0xffc6dc5a;
 constexpr unsigned kSilver = 0xffc9d0d8;
-constexpr unsigned kDisplayRed = 0xffff5a48;
 constexpr unsigned kMatrixBlue = 0xff6f8cff;
 constexpr unsigned kMint = 0xff6fd8a6;
 constexpr unsigned kGold = 0xffe3b45c;
@@ -514,7 +515,7 @@ private:
    // preset stored on it.
    void buildPreset() {
       const float x = colX(2), y = kTop, w = kColW[2], h = kPresetH;
-      section("PRESET", {x, y, w, h}, true, kDisplayRed);
+      section("PRESET", {x, y, w, h}, true, kSilver);
       display_ = &add<vis::PresetDisplay>({x + (w - 156) * 0.5f, y + 28, 156, 48});
       const char *names[4] = {"Panel", "Save", "<", ">"};
       const char *ids[4] = {"preset.panel", "preset.save", "preset.prev", "preset.next"};
