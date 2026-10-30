@@ -34,7 +34,7 @@ void Knob::draw(visage::Canvas &canvas) {
    const float d = std::min(w * 0.7f, 48.0f * s);
    const float cx = w * 0.5f, cy = 18.0f * s + d * 0.5f + 2.0f * s;
 
-   canvas.setColor(t.text);
+   canvas.setColor(labelColor_ ? labelColor_ : t.text);
    canvas.text(label_, font(10.5f * s), visage::Font::kCenter, 0, 0, w, 16.0f * s);
 
    // Track and value arc. Our angles run clockwise from 12 o'clock; Visage's start at 3 o'clock.

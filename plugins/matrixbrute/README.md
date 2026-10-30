@@ -49,7 +49,7 @@ The preset bar lists the synth's own presets, A01 to P16, filed by bank. Picking
 
 A preset stores 73 of the panel's knobs. The sequencer's rate, swing and gate and the mod wheel aren't
 part of a preset, so they stay where they are. The buttons and the matrix are in the preset too, but
-they aren't CCs, so the panel doesn't show them.
+they aren't CCs and where they sit in the preset data isn't mapped yet, so the panel draws them dim.
 
 > [!NOTE]
 > Arturia hasn't published the preset format. The bank here is the 158 named presets read off a real
@@ -147,13 +147,18 @@ The sustain pedal (64) is left out; it passes through.
 ## Panel
 
 Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage. `src/editor.cpp`
-holds the layout and `src/visuals.h` the pictures. It follows the synth's panel section by section:
-VCO 1 and 2 (enhancers above the wave levels, wave mix drawn under them) and VCO 3 down the left, with audio mod, the wheels and glide in the lighter strip
-below; the mixer's narrow column beside the Steiner and ladder filters, with the big Master Cutoff
-between them and LFO 1 and LFO 2 in the strip; the preset display over the envelopes' sliders (ENV 3
-in the strip); and the analog effects over the macros and the sequencer's Rate, Swing and Gate, with
-the plugin's status in the strip. The synth's matrix, buttons and the rest of what isn't on MIDI are
-left out.
+holds the layout and `src/visuals.h` the pictures. It follows the synth's panel column by column,
+with a dark upper band over a lighter strip: VCO 1 and 2 (enhancers above the wave levels, the wave
+mix drawn under them), VCO 3 and noise, over audio mod, VCO sync, the wheels and voice; the mixer's
+column beside the Steiner and ladder filters, with the routing and the big Master Cutoff between
+them, over LFO 1 and LFO 2; the preset display over the three envelopes' sliders; the 16 x 16 matrix;
+and master (fine tune, phones and volume, drawn but not on MIDI), the analog effects, the sequencer,
+and glide, play control and the macros on the right. Each box's title tab and top rule are in its
+accent (the oscillator's or filter's colour, or one of its own: the matrix's blue, silver
+for the preset), and its controls are named in a light tint of it; the mixer names each source in
+that source's colour. Values and CC numbers stay grey and white. The synth's buttons, lights and
+matrix aren't on MIDI, so they're drawn as dim indicators until the plugin can read them from the
+synth's presets.
 
 The preset display shows the synth's preset: the one picked in the preset bar, or the last Bank
 Select and Program Change heard. The pictures are drawn from the CC values: each VCO's wave mix, the

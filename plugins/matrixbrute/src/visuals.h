@@ -1,14 +1,16 @@
 #pragma once
 
-// The panel's pictures: small drawings made only from the knobs' CC values (and, for the envelopes,
-// the notes going through the plugin). The plugin can't hear the synth, and its switches (filter
-// modes, LFO waves, the matrix routing) aren't on MIDI, so none of them claim to show the sound; they
-// are guides to what the numbers mean. Only editor.cpp includes this.
+// The panel's pictures: small drawings made from the knobs' CC values (and, for the envelopes, the
+// notes going through the plugin), and the synth's buttons and matrix drawn as indicators. The
+// plugin can't hear the synth's switches (filter modes, LFO waves, the matrix routing) over MIDI, so
+// the indicators start unknown and dim, with a state a later preset read can set; the pictures are
+// guides to what the numbers mean. Only editor.cpp includes this.
 
 #include <jclap/ui/slider.h>
 #include <jclap/ui/theme.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <functional>
 #include <string>
@@ -33,6 +35,19 @@ struct Gate {
 using GateSource = std::function<Gate()>;
 
 inline unsigned withAlpha(unsigned color, unsigned alpha) { return (color & 0x00ffffff) | (alpha << 24); }
+// `a` moved `amount` (0 to 1) of the way to `b`, opaque.
+inline unsigned mixColor(unsigned a, unsigned b, float amount) {
+   unsigned out = 0xff000000;
+   for (int shift = 0; shift <= 16; shift += 8) {
+      const float x = (a >> shift) & 0xff, y = (b >> shift) & 0xff;
+      out |= static_cast<unsigned>(x + (y - x) * amount + 0.5f) << shift;
+   }
+   return out;
+}
+// A section's label colour: its accent lifted toward white, so it reads on the dark and grey panels.
+inline unsigned labelTint(unsigned accent) { return mixColor(accent, 0xffffffff, 0.3f); }
+// The same label while its control's setting isn't known yet: toward the dim grey.
+inline unsigned dimTint(unsigned tint) { return mixColor(tint, 0xff8d939c, 0.45f); }
 
 // Base for a picture: ignores the mouse and draws on a dark inset like the envelope editor.
 class Picture : public visage::Frame {
@@ -108,7 +123,8 @@ public:
    VcoWave(CcValue value, Ccs ccs, unsigned color) : Picture(std::move(value)), ccs_(ccs), color_(color) {}
    void draw(visage::Canvas &c) override {
       const ui::Theme &t = ui::defaultTheme();
-      const float k = s(44.0f), w = width(), h = height(), pad = 6 * k, mid = h * 0.5f;
+      // Strokes scale with the smaller of height and width, so a tall picture keeps thin lines.
+      const float k = std::min(s(44.0f), width() / 240.0f), w = width(), h = height(), pad = 6 * k, mid = h * 0.5f;
       inset(c);
       c.setColor(t.track);
       c.fill(pad, mid, w - 2 * pad, 1);
@@ -160,7 +176,7 @@ public:
    DualFilter(CcValue value, Filter a, Filter b) : Picture(std::move(value)), filters_{a, b} {}
    void draw(visage::Canvas &c) override {
       const ui::Theme &t = ui::defaultTheme();
-      const float k = s(110.0f), w = width(), h = height(), pad = 6 * k;
+      const float k = std::min(s(110.0f), width() / 280.0f), w = width(), h = height(), pad = 6 * k;
       inset(c);
       constexpr int kPoints = 120;
       const auto yOf = [&](float db) { return pad + (h - 2 * pad) * (18.0f - std::clamp(db, -48.0f, 18.0f)) / 66.0f; };
@@ -257,7 +273,7 @@ public:
         gate_(std::move(gate)) {}
    void draw(visage::Canvas &c) override {
       const ui::Theme &t = ui::defaultTheme();
-      const float k = s(90.0f), w = width(), h = height(), pad = 8 * k;
+      const float k = std::min(s(90.0f), width() / 220.0f), w = width(), h = height(), pad = 8 * k;
       inset(c);
       float xs[6], ys[6];
       corners(xs, ys);
@@ -291,7 +307,7 @@ private:
    // The curve's corners: start, end of delay, peak, end of decay, end of the held sustain, end of
    // release. The segments are drawn wider for longer times, but not to scale.
    void corners(float *xs, float *ys) const {
-      const float k = height() / 90.0f, w = width(), h = height(), pad = 8 * k, floor = h - pad, top = pad + 4 * k;
+      const float k = std::min(height() / 90.0f, width() / 220.0f), w = width(), h = height(), pad = 8 * k, floor = h - pad, top = pad + 4 * k;
       const auto span = [&](int n) { return n < 0 ? 0.0f : 0.04f + std::sqrt(f(n)); };
       const float spans[] = {span(d_), span(a_), span(dc_), 0.5f, span(r_)};
       float total = 0;
@@ -347,7 +363,7 @@ public:
    FxTaps(CcValue value, unsigned color) : Picture(std::move(value)), color_(color) {}
    void draw(visage::Canvas &c) override {
       const ui::Theme &t = ui::defaultTheme();
-      const float k = s(90.0f), w = width(), h = height(), pad = 10 * k, floor = h - pad;
+      const float k = std::min(s(90.0f), width() / 320.0f), w = width(), h = height(), pad = 10 * k, floor = h - pad;
       inset(c);
       const float wet = f(31);
       const unsigned color = wet > 0 ? color_ : withAlpha(color_, 0x70);
@@ -436,6 +452,253 @@ public:
 
 private:
    std::string text_ = "---";
+};
+
+// One of the synth's buttons that isn't on MIDI (a filter mode, an LFO wave...), drawn as on the
+// hardware: its lights with their names, the button, and its name below. It does nothing when
+// clicked. Its state is the lit light (or, for a button without lights, 1 for on), or -1 while it
+// isn't known; the plugin can't read these from the synth's presets yet, so they start unknown and
+// are drawn dim. setState() is the hook for when they're mapped.
+class HwButton : public visage::Frame {
+public:
+   enum class Lights { Above, Right };
+   HwButton(std::string label, std::vector<std::string> lights, Lights place = Lights::Above, unsigned accent = 0xff6fa8ff)
+      : label_(std::move(label)), lights_(std::move(lights)), place_(place), accent_(accent) {}
+   void setState(int state) {
+      if (state != state_) {
+         state_ = state;
+         redraw();
+      }
+   }
+   int state() const { return state_; }
+   const std::string &label() const { return label_; }
+   // The name's colour (0 for the theme's), e.g. its section's tint.
+   void setLabelColor(unsigned color) {
+      labelColor_ = color;
+      redraw();
+   }
+   void draw(visage::Canvas &c) override {
+      const ui::Theme &t = ui::defaultTheme();
+      const float k = ui::designScale(*this), w = width(), h = height();
+      const auto small = ui::font(8.5f * k);
+      const bool known = state_ >= 0;
+      const unsigned name = labelColor_ ? labelColor_ : t.text;
+      const unsigned text = known ? name : (labelColor_ ? dimTint(labelColor_) : t.dimText), lightText = known ? t.dimText : 0xff5d646e;
+      const auto light = [&](float x, float y, size_t i) {
+         const bool lit = known && static_cast<size_t>(state_) == i;
+         c.setColor(lit ? accent_ : (known ? 0xff3a4048 : 0xff2c3138));
+         c.circle(x, y, 7 * k);
+      };
+      const float bh = 18 * k;
+      if (place_ == Lights::Right && !lights_.empty()) {
+         const float lw = std::clamp(w - 64 * k, 44 * k, 72 * k), bw = std::min(w - lw - 4 * k, 60 * k);
+         const float lh = std::min(14 * k, h / lights_.size()), ly = (h - lh * lights_.size()) * 0.5f;
+         for (size_t i = 0; i < lights_.size(); ++i) {
+            const float y = ly + i * lh;
+            light(w - lw, y + lh * 0.5f - 3.5f * k, i);
+            c.setColor(lightText);
+            c.text(lights_[i], small, visage::Font::kLeft, w - lw + 10 * k, y, lw - 10 * k, lh);
+         }
+         const float by = (h - bh - 14 * k) * 0.5f;
+         drawButton(c, 0, by, bw, bh, k, known && lights_.empty() && state_ > 0);
+         c.setColor(text);
+         c.text(label_, ui::font(10 * k), visage::Font::kCenter, -8 * k, by + bh + 2 * k, bw + 16 * k, 13 * k);
+         return;
+      }
+      const float bw = std::min(w - 4 * k, 60 * k);
+      float by = (h - bh - 14 * k) * 0.5f;
+      if (!lights_.empty()) {
+         by = std::max(by, 26 * k);
+         const float lw = w / lights_.size(), top = by - 26 * k;
+         const auto fit = ui::font(std::min(8.5f * k, lw * 0.34f));
+         for (size_t i = 0; i < lights_.size(); ++i) {
+            const float cx = lw * (i + 0.5f);
+            light(cx - 3.5f * k, top + 2 * k, i);
+            c.setColor(lightText);
+            c.text(lights_[i], fit, visage::Font::kCenter, cx - lw * 0.5f, top + 10 * k, lw, 11 * k);
+         }
+      }
+      drawButton(c, (w - bw) * 0.5f, by, bw, bh, k, known && lights_.empty() && state_ > 0);
+      c.setColor(text);
+      c.text(label_, ui::font(10 * k), visage::Font::kCenter, 0, by + bh + 2 * k, w, 13 * k);
+   }
+
+private:
+   void drawButton(visage::Canvas &c, float x, float y, float w, float h, float k, bool lit) const {
+      c.setColor(0xff0d0f12);
+      c.roundedRectangle(x, y + 1.5f * k, w, h, 3 * k);
+      c.setColor(0xff1f2329);
+      c.roundedRectangle(x, y, w, h - 1 * k, 3 * k);
+      c.setColor(lit ? accent_ : 0xff30353d);
+      c.fill(x + 6 * k, y + (lit ? 7 : 2) * k, w - 12 * k, (lit ? 2 : 1) * k);
+   }
+
+   std::string label_;
+   std::vector<std::string> lights_;
+   Lights place_;
+   unsigned accent_;
+   unsigned labelColor_ = 0;
+   int state_ = -1;
+};
+
+// One of the synth's knobs that isn't on MIDI (fine tune, phones, master volume), drawn like the
+// panel's knobs but dim and without a value. Its state is a 0-127 position, or -1 while unknown;
+// setState() is the hook for when the plugin can read it.
+class HwKnob : public visage::Frame {
+public:
+   explicit HwKnob(std::string label, unsigned labelColor = 0) : label_(std::move(label)), labelColor_(labelColor) {}
+   void setState(int state) {
+      if (state != state_) {
+         state_ = state;
+         redraw();
+      }
+   }
+   void draw(visage::Canvas &c) override {
+      const ui::Theme &t = ui::defaultTheme();
+      const float w = width(), h = height(), s = h / 100.0f;
+      const float d = std::min(w * 0.7f, 48.0f * s), cx = w * 0.5f, cy = 18.0f * s + d * 0.5f + 2.0f * s;
+      c.setColor(labelColor_ ? dimTint(labelColor_) : t.dimText);
+      c.text(label_, ui::font(10.5f * s), visage::Font::kCenter, 0, 0, w, 16.0f * s);
+      c.setColor(t.track);
+      c.ring(cx - d * 0.5f, cy - d * 0.5f, d, 3.2f * s);
+      const float body = d * 0.74f;
+      c.setColor(0xff23272d);
+      c.circle(cx - body * 0.5f, cy - body * 0.5f, body);
+      if (state_ >= 0) {
+         const float a = (-0.75f + 1.5f * state_ / 127.0f) * 3.14159265f, px = std::sin(a), py = -std::cos(a);
+         c.setColor(t.text);
+         c.segment(cx + px * body * 0.12f, cy + py * body * 0.12f, cx + px * body * 0.4f, cy + py * body * 0.4f, 2 * s, true);
+      }
+      c.setColor(t.dimText);
+      c.text(state_ >= 0 ? std::to_string(state_) : std::string("NOT ON MIDI"), ui::font(9.5f * s), visage::Font::kCenter, 0,
+             cy + d * 0.5f + 3 * s, w, 15 * s);
+   }
+
+private:
+   std::string label_;
+   unsigned labelColor_;
+   int state_ = -1;
+};
+
+// The matrix as it's printed on the synth: PRESET, SEQ and MOD above, the Mod Amount knob and the
+// display; the 16 sources (A to P) down the left, the destinations along the top, and 256 buttons
+// in 4 x 4 blocks with every fourth row in pink. Each cell's state is -1 while unknown (drawn dim),
+// 0 for no routing, or a routing; the plugin can't read the routings from the synth's presets yet,
+// so setCell() is the hook for when they're mapped. The display shows what the plugin knows.
+class MatrixMap : public visage::Frame {
+public:
+   static constexpr const char *kSources[16] = {"ENV 1", "ENV 2", "ENV 3",      "ENV Follow", "LFO 1",    "LFO 2",
+                                                "LFO 3", "Mod Wheel", "Kbd / Seq", "Aftertouch", "Velocity", "Seq Mod",
+                                                "M1",    "M2",        "Exp 1 / M3", "Exp 2 / M4"};
+   static constexpr const char *kDestinations[12][2] = {
+      {"VCO 1", "Pitch"}, {"VCO 1", "Ultra"},    {"VCO 1", "PW"},       {"VCO 1", "Metal"},
+      {"VCO 2", "Pitch"}, {"VCO 2", "Ultra"},    {"VCO 2", "PW"},       {"VCO 2", "Metal"},
+      {"Steiner", "Cutoff"}, {"Ladder", "Cutoff"}, {"LFO 1", "AMT"}, {"VCA", ""}};
+
+   explicit MatrixMap(unsigned labelColor = 0xffe6e8eb) : labelColor_(labelColor) {
+      setIgnoresMouseEvents(true, false);
+      cells_.fill(-1);
+   }
+   // Up to four lines for the display.
+   void setDisplay(std::vector<std::string> lines) {
+      if (lines != lines_) {
+         lines_ = std::move(lines);
+         redraw();
+      }
+   }
+   void setCell(int source, int destination, int state) {
+      int &cell = cells_[source * 16 + destination];
+      if (cell != state) {
+         cell = state;
+         redraw();
+      }
+   }
+   // The top of the grid, for placing things over the strip above it.
+   static constexpr float kGridTop = 170;
+
+   void draw(visage::Canvas &c) override {
+      const ui::Theme &t = ui::defaultTheme();
+      const float k = ui::designScale(*this), w = width();
+      const auto small = ui::font(9.5f * k), tiny = ui::font(8.5f * k);
+
+      // PRESET, SEQ, MOD, the Mod Amount knob and the display.
+      const char *modes[3] = {"PRESET", "SEQ", "MOD"};
+      for (int i = 0; i < 3; ++i) {
+         const float cx = 168 * k + i * 80 * k, cy = 56 * k, r = 27 * k;
+         c.setColor(0xff4a5560);
+         c.circle(cx - r, cy - r, 2 * r);
+         c.setColor(0xff76848f);
+         c.circle(cx - r + 3 * k, cy - r + 3 * k, 2 * r - 6 * k);
+         c.setColor(0xff1a1d22);
+         c.text(modes[i], small, visage::Font::kCenter, cx - r, cy - 7 * k, 2 * r, 14 * k);
+      }
+      c.setColor(t.dimText);
+      c.text("Mod Amount", small, visage::Font::kCenter, 380 * k, 94 * k, 80 * k, 13 * k);
+      const float kx = 420 * k, ky = 54 * k, kr = 30 * k;
+      c.setColor(0xff0b0c0e);
+      c.circle(kx - kr, ky - kr, 2 * kr);
+      c.setColor(visage::Brush::linear(visage::Color(0xffd7dce0), visage::Color(0xff6c747c), visage::Point(kx - kr, ky - kr),
+                                       visage::Point(kx + kr, ky + kr)));
+      c.circle(kx - kr * 0.62f, ky - kr * 0.62f, 1.24f * kr);
+      const float lx = 476 * k, lw = w - lx - 8 * k;
+      c.setColor(0xff1b2a22);
+      c.roundedRectangle(lx, 14 * k, lw, 84 * k, 3 * k);
+      c.setColor(0xff9fe0b4);
+      for (size_t i = 0; i < lines_.size() && i < 4; ++i)
+         c.text(lines_[i], ui::font(10.5f * k), visage::Font::kLeft, lx + 10 * k, 20 * k + i * 19 * k, lw - 20 * k, 16 * k);
+
+      // The grid. Blocks of four columns and rows sit a little apart, as on the synth.
+      const float gx = 136 * k, gy = kGridTop * k, block = 8 * k;
+      const float cw = (w - gx - 8 * k - 3 * block) / 16.0f;
+      const float ch = (height() - gy - 34 * k - 3 * block) / 16.0f;
+      const auto colX = [&](int col) { return gx + col * cw + (col / 4) * block; };
+      const auto rowY = [&](int row) { return gy + row * ch + (row / 4) * block; };
+      for (int col = 0; col < 16; ++col) {
+         const float x = colX(col);
+         c.setColor(t.dimText);
+         c.roundedRectangleBorder(x + 2 * k, 126 * k, cw - 4 * k, 30 * k, 2 * k, 1.0f);
+         c.setColor(labelColor_);
+         if (col < 12) {
+            c.text(kDestinations[col][0], tiny, visage::Font::kCenter, x, 128 * k, cw, 13 * k);
+            c.text(kDestinations[col][1], tiny, visage::Font::kCenter, x, 141 * k, cw, 13 * k);
+         } else {
+            c.text(std::to_string(col + 1), small, visage::Font::kCenter, x, 126 * k, cw, 30 * k);
+         }
+         c.setColor(t.dimText);
+         c.ring(x + cw * 0.5f - 9 * k, rowY(15) + ch + 8 * k, 18 * k, 1.2f * k);
+         c.text(std::to_string(col + 1), tiny, visage::Font::kCenter, x + cw * 0.5f - 9 * k, rowY(15) + ch + 8 * k, 18 * k,
+                18 * k);
+      }
+      for (int row = 0; row < 16; ++row) {
+         const float y = rowY(row);
+         c.setColor(t.dimText);
+         c.ring(4 * k, y + ch * 0.5f - 9 * k, 18 * k, 1.2f * k);
+         c.setColor(labelColor_);
+         c.text(std::string(1, static_cast<char>('A' + row)), tiny, visage::Font::kCenter, 4 * k, y + ch * 0.5f - 9 * k,
+                18 * k, 18 * k);
+         c.setColor(t.dimText);
+         c.roundedRectangleBorder(28 * k, y + ch * 0.5f - 8 * k, 100 * k, 16 * k, 2 * k, 1.0f);
+         c.setColor(labelColor_);
+         c.text(kSources[row], tiny, visage::Font::kLeft, 33 * k, y + ch * 0.5f - 8 * k, 94 * k, 16 * k);
+         const bool pink = row % 4 == 3;
+         for (int col = 0; col < 16; ++col) {
+            const float x = colX(col), m = std::min(cw, ch) * 0.12f;
+            const int state = cells_[row * 16 + col];
+            unsigned color = pink ? 0xff5b4248 : 0xff3a454f;
+            if (state < 0)
+               color = pink ? 0xff3a3034 : 0xff2a3138;
+            else if (state > 0)
+               color = 0xff6f8cff;
+            c.setColor(color);
+            c.roundedRectangle(x + m, y + m, cw - 2 * m, ch - 2 * m, 3 * k);
+         }
+      }
+   }
+
+private:
+   unsigned labelColor_;
+   std::vector<std::string> lines_;
+   std::array<int, 256> cells_{};
 };
 
 // A darker rounded box to group a few widgets inside a section.
