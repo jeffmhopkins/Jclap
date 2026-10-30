@@ -321,40 +321,66 @@ protected:
 };
 
 // The arpeggiator's 16 steps as a little piano roll: one column per step, a block on the lane of the
-// held note it plays (1st at the bottom), as wide as the gate. AUTO steps are outlined and follow
-// the style; ties join the step before, chords stack, and steps past the length are dim. Reads the
+// held note it plays (1st at the bottom), as wide as the gate. AUTO steps are faint and follow the
+// style; ties join the step before, chords stack, and steps past the length are dim. Reads the
 // settings by CLAP id (idBase + NRPN), as the panel's host has them.
 class ArpPattern : public Picture {
 public:
    ArpPattern(CcValue value, unsigned accent, int idBase) : Picture(std::move(value)), accent_(accent), base_(idBase) {}
 
    void draw(visage::Canvas &c) override {
-      inset(c);
       const ui::Theme &t = glassTheme();
-      const float w = width(), h = height(), col = w / 16.0f;
+      const float w = width(), h = height(), col = w / 16.0f, r = std::min(w, h) * 0.03f;
       constexpr int kLanes = 6;
-      const float top = h * 0.06f, laneH = (h * 0.88f) / kLanes;
+      const float top = h * 0.05f, laneH = (h * 0.9f) / kLanes;
       const auto laneY = [&](int lane) { return top + (kLanes - 1 - lane) * laneH; };
-      c.setColor(withAlpha(t.panelBorder, 0x90));
-      for (int l = 1; l < kLanes; ++l)
-         c.fill(0, laneY(l) + laneH, w, 1.0f);
-      for (int i = 1; i < 16; ++i)
-         c.fill(i * col, 0, 1.0f, h);
-
       const bool on = setting(130) > 0;
       const int length = setting(133) + 1, style = setting(114);
-      const float gate = 0.25f + 0.75f * static_cast<float>(setting(115)) / 127.0f;
-      int lane = 0, autoIndex = 0;
+      const float gate = 0.2f + 0.8f * static_cast<float>(setting(115)) / 127.0f;
+      const unsigned accent = on ? accent_ : withAlpha(accent_, 0x90);
+
+      // The roll: lanes in alternating shades, beats marked every four steps, and the steps past the
+      // length shaded out.
+      c.setColor(0xff0d1119);
+      c.roundedRectangle(0, 0, w, h, r);
+      for (int l = 0; l < kLanes; ++l) {
+         c.setColor(l % 2 ? 0x0affffff : 0x04ffffff);
+         c.fill(0, laneY(l), w, laneH);
+      }
+      for (int i = 1; i < 16; ++i) {
+         c.setColor(i % 4 == 0 ? 0x24ffffff : 0x0cffffff);
+         c.fill(i * col, 0, 1.0f, h);
+      }
+      if (length < 16) {
+         c.setColor(0x70070910);
+         c.fill(length * col, 0, w - length * col, h);
+         c.setColor(withAlpha(accent_, 0x60));
+         c.fill(length * col - 1.0f, 0, 2.0f, h);
+      }
+      c.setColor(t.dimText);
+      const char *lanes[] = {"1ST", "2ND", "3RD", "4TH", "5TH", "6TH"};
+      for (int l = 0; l < kLanes; ++l)
+         c.text(lanes[l], ui::font(laneH * 0.15f), visage::Font::kLeft, 5.0f, laneY(l) + 1.0f, col, laneH * 0.18f);
+
+      // The notes: a block per step on the lane of the note it plays.
+      int lane = 0, autoIndex = 0, prevLane = -1;
+      float prevRight = 0;
       for (int i = 0; i < 16; ++i) {
          const int step = setting(134 + i);
-         const unsigned color = withAlpha(accent_, (i < length ? 0xff : 0x40) * (on ? 4u : 2u) / 4u);
-         const float x = i * col + col * 0.12f, bw = (col * 0.76f) * gate, pad = laneH * 0.18f;
-         const auto block = [&](int l, bool outline) {
-            c.setColor(color);
-            if (outline)
-               c.roundedRectangleBorder(x, laneY(l) + pad, bw, laneH - 2 * pad, 3.0f, 1.5f);
-            else
-               c.roundedRectangle(x, laneY(l) + pad, bw, laneH - 2 * pad, 3.0f);
+         const unsigned alpha = i < length ? 0xff : 0x50;
+         const float x = i * col + col * 0.1f, bw = col * 0.8f * gate, pad = laneH * 0.2f;
+         const auto block = [&](int l, bool fromStyle) {
+            const float y = laneY(l) + pad, bh = laneH - 2 * pad;
+            c.setColor(withAlpha(accent, fromStyle ? alpha * 0x50 / 0xff : alpha * 0xd0 / 0xff));
+            c.roundedRectangle(x, y, bw, bh, bh * 0.22f);
+            c.setColor(withAlpha(accent, alpha));
+            c.roundedRectangleBorder(x, y, bw, bh, bh * 0.22f, 1.5f);
+            if (!fromStyle) {
+               c.setColor(withAlpha(0xffffffff, alpha * 0x50 / 0xff));
+               c.fill(x + bh * 0.2f, y + 2.0f, bw - bh * 0.4f, 1.5f);
+            }
+            prevLane = l;
+            prevRight = x + bw;
          };
          switch (step) {
          case 0: // auto: the style's next note
@@ -362,12 +388,17 @@ public:
             block(lane, true);
             break;
          case 1: // off: a rest
-            c.setColor(color);
-            c.fill(x, h - top - 3.0f, col * 0.76f, 2.0f);
+            c.setColor(withAlpha(t.dimText, alpha * 0x80 / 0xff));
+            c.fill(i * col + col * 0.38f, laneY(0) + laneH * 0.5f, col * 0.24f, 2.0f);
+            prevLane = -1;
             break;
-         case 2: // tie: holds the last note into this step
-            c.setColor(color);
-            c.roundedRectangle(i * col - col * 0.2f, laneY(lane) + laneH * 0.36f, col * 1.1f, laneH * 0.28f, 2.0f);
+         case 2: // tie: the last note carries on through this step
+            if (prevLane >= 0) {
+               const float y = laneY(prevLane) + laneH * 0.4f;
+               c.setColor(withAlpha(accent, alpha * 0xb0 / 0xff));
+               c.roundedRectangle(prevRight - 2.0f, y, (i + 0.9f) * col - prevRight + 2.0f, laneH * 0.2f, laneH * 0.1f);
+               prevRight = (i + 0.9f) * col;
+            }
             break;
          case 3: lane = std::max(0, lane - 1); block(lane, false); break;
          case 10: lane = std::min(kLanes - 1, lane + 1); block(lane, false); break;
@@ -381,10 +412,16 @@ public:
             break;
          }
       }
-      c.setColor(t.dimText);
-      const std::string octaves = std::to_string(setting(132) + 1) + (setting(132) > 0 ? " OCTAVES" : " OCTAVE");
-      c.text(on ? octaves : "ARP OFF", ui::font(h * 0.035f), visage::Font::kRight, 0, h * 0.01f, w - h * 0.02f,
-             h * 0.05f);
+
+      c.setColor(withAlpha(0xffffffff, 0x1e));
+      c.roundedRectangleBorder(0, 0, w, h, r, 1.0f);
+      if (!on) {
+         const float bw = h * 0.36f, bh = h * 0.08f;
+         c.setColor(0xd0070910);
+         c.roundedRectangle(w - bw - h * 0.03f, h * 0.03f, bw, bh, bh * 0.5f);
+         c.setColor(t.dimText);
+         c.text("ARP OFF", ui::font(bh * 0.5f), visage::Font::kCenter, w - bw - h * 0.03f, h * 0.03f, bw, bh);
+      }
    }
 
 protected:

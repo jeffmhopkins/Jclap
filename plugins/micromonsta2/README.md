@@ -173,7 +173,7 @@ JSynth: dark translucent cards, with each knob's name over it and its value unde
 its hover help). `src/editor.cpp` holds the layout and `src/visuals.h` the pictures. The tabs in the
 header pick one of three pages:
 
-- **Synth:** the whole sound on one page. Oscillators (algorithm, a picture of the wave, shape, tune,
+- **Synth:** the whole sound on one page, with the mod wheel and mod knob in the voice card. Oscillators (algorithm, a picture of the wave, shape, tune,
   fine and level, then noise, osc detune, the mix and phase reset), voice (mode, unison, glide,
   detune, drive, pan spread, velocity, volume, bend range), the filter (type, character, a response
   curve and its knobs), the three LFOs (a picture of the wave, speed, wave, tempo sync and trigger),
@@ -181,7 +181,7 @@ header pick one of three pages:
   effects (delay with its mode and sync, reverb, chorus and the tilt EQ).
 - **Mod matrix:** the ten slots with each one's source, destination and amount, the mod wheel and
   mod knob, and the lag and multiply operators.
-- **Arp & program:** the arpeggiator's settings and its 16 steps, drawn as a small piano roll; the
+- **Arp & program:** the arpeggiator's settings and its 16 steps, drawn as a piano roll over a pad per step; the
   program's name, tempo, volume and category; and what the synth's own F, Q and M knobs and four
   encoders control.
 

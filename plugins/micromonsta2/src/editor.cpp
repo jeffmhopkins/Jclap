@@ -556,7 +556,14 @@ private:
       knobRow({5, 33, 91, 35, 36, 37, 7}, kOrange, {x + 8, y + 96, w - 16, 96});
       knobs_[36]->setLabel("VEL > VCA");
       knobs_[37]->setLabel("VEL > FILT");
-      picture<vis::PanFan>({x + 16, y + 208, 184, 112});
+      // The performance controls, beside the voice they play.
+      add<vis::Tile>({x + 16, y + 204, 184, 116});
+      auto &wheel = add<vis::WheelStrip>({x + 26, y + 212, 30, 100}, rangeOf(1));
+      wire(wheel, 1, kWheel);
+      tips_.add(wheel, "Mod wheel (CC 1). Not saved in the program.");
+      label("WHEEL", {x + 60, y + 214, 50, 12}, kWheel, visage::Font::kLeft, 0.85f);
+      frontWheel_ = &label("", {x + 60, y + 230, 50, 16}, kWhite, visage::Font::kLeft, 0.8f);
+      knob(70, kGreen, {x + 104, y + 206, 92, 100}, "MOD KNOB");
       name("PAN SPREAD", {x + 216, y + 208, 200, 12});
       segments(119, kOrange, {x + 216, y + 224, 200, 26}, {},
                "How PAN SPREAD places the voices in the stereo field (NRPN 119).");
@@ -740,7 +747,10 @@ private:
 
       x += kPerfW + kGutter;
       card("MOD KNOB", kGreen, {x, y, kPerfW, h});
+      // The SYNTH page's mod knob keeps the reach ring.
+      ui::Knob *front = knobs_[70];
       knob(70, kGreen, {x + 16, y + 44, kPerfW - 32, 150}, "M");
+      knobs_[70] = front;
       hint("THE SYNTH'S M KNOB, NOT SAVED", {x + 16, y + 206, kPerfW - 32, 12}, visage::Font::kCenter);
       feeds_[4] = &label("", {x + 16, y + h - 34, kPerfW - 32, 14}, kGreen, visage::Font::kCenter, 0.8f);
    }
@@ -795,19 +805,21 @@ private:
       number(133, kOrange, {x + 972, y + 60, 150, 28},
              "Steps in the pattern, 1-16 (NRPN 133). Steps past it are skipped.");
 
-      // The pattern, then each step's dropdown under its column.
-      const Rect pattern{x + 16, y + 108, w - 32, h - 108 - 104};
+      // The pattern, then a pad per step under its column: its number and what it plays.
+      const Rect pattern{x + 16, y + 106, w - 32, 384};
       picture<vis::ArpPattern>(pattern, kOrange, static_cast<int>(kSettingIdBase));
-      const std::vector<Rect> cols = ui::row({pattern.x, pattern.y + pattern.h + 10, pattern.w, 50}, 16);
+      const std::vector<Rect> cols = ui::row({pattern.x, pattern.y + pattern.h + 12, pattern.w, 132}, 16, 6.0f);
       for (int i = 0; i < 16; ++i) {
          const Rect c = cols[static_cast<size_t>(i)];
-         name(std::to_string(i + 1), {c.x, c.y, c.w, 12}, visage::Font::kCenter);
-         steps_[i] = &setting(134 + i, kOrange, {c.x + 3, c.y + 18, c.w - 6, 24},
+         add<vis::Tile>(c);
+         stepNumbers_[i] = &label(std::to_string(i + 1), {c.x, c.y + 14, c.w, 40}, kOrange, visage::Font::kCenter, 0.7f);
+         name(i % 4 == 0 ? "BEAT " + std::to_string(i / 4 + 1) : "", {c.x, c.y + 60, c.w, 12}, visage::Font::kCenter);
+         steps_[i] = &setting(134 + i, kOrange, {c.x + 6, c.y + c.h - 34, c.w - 12, 24},
                               "What this step plays (NRPN 134-149): AUTO follows the style, TIE holds the last note, "
                               "1ST-6TH a held note by order, < AND > the one before or after, CHORD all of them.");
       }
-      hint("BLOCKS: THE HELD NOTE EACH STEP PLAYS (OUTLINED: AUTO, FROM THE STYLE)  \xC2\xB7  BARS: TIES  \xC2\xB7  "
-           "STACKS: CHORDS  \xC2\xB7  DIM: PAST THE LENGTH",
+      hint("FAINT: AUTO, THE NEXT NOTE OF THE STYLE  \xC2\xB7  BARS: TIES  \xC2\xB7  STACKS: CHORDS  \xC2\xB7  "
+           "SHADED: PAST THE LENGTH  \xC2\xB7  FOUR NOTES HELD",
            {x + 16, y + h - 26, w - 32, 12}, visage::Font::kLeft);
    }
 
@@ -977,13 +989,16 @@ private:
          rows_[s].value->setColor(shownKnown_ > 0 && shownRoutes_[s].used() ? kWhite : kDim);
       }
       wheelValue_->setText(std::to_string(toCcValue(value(1))));
+      frontWheel_->setText(std::to_string(toCcValue(value(1))));
       for (int i = 0; i < 3; ++i)
          syncHints_[i]->setText(std::lround(value(settingId(62 + 3 * i))) > 0
                                    ? "SYNCED"
                                    : "");
       const long length = std::lround(value(settingId(133))) + 1;
-      for (int i = 0; i < 16; ++i)
+      for (int i = 0; i < 16; ++i) {
          steps_[i]->setAccent(i < length ? kOrange : 0xff4b515a);
+         stepNumbers_[i]->setColor(i < length ? kOrange : 0xff4b515a);
+      }
 
       double reach[128] = {};
       unsigned color[128] = {};
@@ -1035,11 +1050,12 @@ private:
    ui::Knob *knobs_[128] = {};
    std::vector<vis::Picture *> pictures_;
    Row rows_[kModSlots];
-   ui::Label *wheelValue_ = nullptr;
+   ui::Label *wheelValue_ = nullptr, *frontWheel_ = nullptr;
    ui::Label *feeds_[5] = {}; // LFO 1-3, mod wheel, mod knob
    ui::Label *feedsOps_[3] = {}; // lag, mult 1, mult 2
    ui::Label *syncHints_[3] = {};
    ui::Dropdown *steps_[16] = {};
+   ui::Label *stepNumbers_[16] = {};
    ui::TabBar *tabs_ = nullptr;
    NameField *name_ = nullptr;
    int page_ = -1; // the page being built
