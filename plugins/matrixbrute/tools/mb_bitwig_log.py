@@ -1,13 +1,10 @@
 """Follows the MatrixBrute presets controller script's log while Bitwig runs.
 
-Add "data" to see what the plugin gets instead of the log.
+    python tools/mb_bitwig_log.py [read|stop] [--data] [--seconds N]
 
-    python tools/mb_bitwig_log.py [read|stop] [--seconds N]
-
-Connects to the script's log server (localhost:58017), prints every line it has logged since it
-loaded, then follows new ones. "read" starts a preset read first, as the script's Read button does;
-"stop" abandons one. What a client sends needs a 4-byte big-endian length in front; what the script
-sends comes as plain lines (checked with Bitwig 5 on Windows).
+Subscribes to the script over OSC (UDP, localhost:58017; see bitwig/MatrixBrute.control.js), prints
+every line it has logged since it loaded, then follows new ones. "read" starts a preset read, as the
+script's Read button does; "stop" abandons one. --data shows what the plugin gets instead of the log.
 """
 
 import socket
@@ -18,6 +15,38 @@ import time
 PORT = 58017
 
 
+def pad(b):
+    return b + b"\0" * (4 - len(b) % 4)
+
+
+def osc(address, *args):
+    tags = "," + "".join("i" if isinstance(a, int) else "s" for a in args)
+    out = pad(address.encode()) + pad(tags.encode())
+    for a in args:
+        out += struct.pack(">i", a) if isinstance(a, int) else pad(a.encode())
+    return out
+
+
+def string_at(data, i):
+    end = data.index(b"\0", i)
+    return data[i:end].decode("ascii", "replace"), (end + 4) & ~3
+
+
+def parse(data):
+    """(address, [args]) for a message of strings and ints."""
+    address, i = string_at(data, 0)
+    tags, i = string_at(data, i)
+    args = []
+    for t in tags[1:]:
+        if t == "i":
+            args.append(struct.unpack(">i", data[i:i + 4])[0])
+            i += 4
+        elif t == "s":
+            s, i = string_at(data, i)
+            args.append(s)
+    return address, args
+
+
 def main():
     args = sys.argv[1:]
     seconds = None
@@ -25,21 +54,37 @@ def main():
         i = args.index("--seconds")
         seconds = float(args[i + 1])
         del args[i:i + 2]
-    sock = socket.create_connection(("127.0.0.1", PORT), timeout=5)
-    for word in ["log"] + args[:1]:
-        sock.sendall(struct.pack(">I", len(word)) + word.encode())
+    kind = "data" if "--data" in args else "log"
+    args = [a for a in args if a != "--data"]
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 20)
+    sock.bind(("127.0.0.1", 0))
     sock.settimeout(0.5)
+    port = sock.getsockname()[1]
+    script = ("127.0.0.1", PORT)
+    sock.sendto(osc("/mb/hello", port, kind), script)
+    if args:
+        sock.sendto(osc("/mb/" + args[0]), script)
     end = time.time() + seconds if seconds else None
+    last_hello, answered = time.time(), False
     while end is None or time.time() < end:
+        if time.time() - last_hello > 3:
+            sock.sendto(osc("/mb/hello", port, kind), script)
+            last_hello = time.time()
         try:
-            data = sock.recv(65536)
+            data, _ = sock.recvfrom(65536)
         except socket.timeout:
             continue
-        if not data:
-            print("(Bitwig closed the connection)")
-            return
-        sys.stdout.write(data.decode("ascii", "replace"))
-        sys.stdout.flush()
+        except ConnectionResetError:
+            # Windows reports a port nobody listens on (Bitwig closed) this way.
+            continue
+        address, values = parse(data)
+        if address == "/mb/hello":
+            if not answered:
+                print("(connected to the script)", file=sys.stderr)
+                answered = True
+        elif address == "/mb/line" and values:
+            print(values[0], flush=True)
 
 
 if __name__ == "__main__":
