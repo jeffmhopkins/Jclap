@@ -2,8 +2,8 @@
 
 // The synth's presets as read off the MatrixBrute itself. In Bitwig a plugin can't send or receive
 // SysEx, so the controller script in bitwig/MatrixBrute.control.js does the reading and serves the
-// presets on a local TCP port; this connects to it. Every instance of the plugin shares the one
-// connection.
+// presets by OSC over UDP on localhost; this subscribes to them. Every instance of the plugin shares
+// the one subscription.
 //
 //    SynthLink::Use use;            // connects while any panel holds one
 //    SynthLink::get().requestRead();

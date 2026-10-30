@@ -49,31 +49,67 @@ bool toInt(const std::string &s, int &out) {
    return true;
 }
 
-// The script's messages from us carry a 4-byte big-endian length (Bitwig's RemoteConnection).
-bool sendMessage(Socket s, const std::string &text) {
-   std::string frame(4, '\0');
-   const auto n = static_cast<uint32_t>(text.size());
-   frame[0] = static_cast<char>(n >> 24);
-   frame[1] = static_cast<char>(n >> 16);
-   frame[2] = static_cast<char>(n >> 8);
-   frame[3] = static_cast<char>(n);
-   frame += text;
-   return send(s, frame.data(), static_cast<int>(frame.size()), 0) == static_cast<int>(frame.size());
+// OSC messages of ints and strings, the little the script and the plugin say to each other.
+void padTo4(std::string &out) {
+   do
+      out += '\0';
+   while (out.size() % 4);
 }
 
-Socket connectToScript() {
-   Socket s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+std::string oscMessage(const std::string &address, int port = -1, const std::string &kind = {}) {
+   std::string out = address;
+   padTo4(out);
+   out += port < 0 ? "," : ",is";
+   padTo4(out);
+   if (port >= 0) {
+      const auto v = static_cast<uint32_t>(port);
+      out += static_cast<char>(v >> 24);
+      out += static_cast<char>(v >> 16);
+      out += static_cast<char>(v >> 8);
+      out += static_cast<char>(v);
+      out += kind;
+      padTo4(out);
+   }
+   return out;
+}
+
+// The OSC string starting at `at`, moving `at` past its padding; false if it runs off the end.
+bool oscString(const char *data, size_t size, size_t &at, std::string &out) {
+   const void *end = at < size ? std::memchr(data + at, '\0', size - at) : nullptr;
+   if (!end)
+      return false;
+   const size_t length = static_cast<const char *>(end) - (data + at);
+   out.assign(data + at, length);
+   at = (at + length + 4) & ~size_t(3);
+   return at <= size;
+}
+
+Socket openSocket(int &port) {
+   Socket s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
    if (s == kNoSocket)
       return kNoSocket;
+   // A read's 160-odd lines can arrive in one burst.
+   const int buffer = 1 << 20;
+   setsockopt(s, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char *>(&buffer), sizeof(buffer));
    sockaddr_in addr{};
    addr.sin_family = AF_INET;
-   addr.sin_port = htons(static_cast<uint16_t>(SynthLink::kPort));
    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-   if (connect(s, reinterpret_cast<const sockaddr *>(&addr), sizeof(addr)) != 0) {
+   socklen_t length = sizeof(addr);
+   if (bind(s, reinterpret_cast<const sockaddr *>(&addr), sizeof(addr)) != 0 ||
+       getsockname(s, reinterpret_cast<sockaddr *>(&addr), &length) != 0) {
       closeSocket(s);
       return kNoSocket;
    }
+   port = ntohs(addr.sin_port);
    return s;
+}
+
+void sendToScript(Socket s, const std::string &message) {
+   sockaddr_in to{};
+   to.sin_family = AF_INET;
+   to.sin_port = htons(static_cast<uint16_t>(SynthLink::kPort));
+   to.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+   sendto(s, message.data(), static_cast<int>(message.size()), 0, reinterpret_cast<const sockaddr *>(&to), sizeof(to));
 }
 
 // Waits up to `ms` for data. 1 = readable, 0 = nothing yet, -1 = error.
@@ -200,52 +236,50 @@ void SynthLink::release() {
    status_.reading = false;
 }
 
+// Subscribes to the script's preset lines and repeats that every couple of seconds, which also
+// tells whether the script is there: it answers each hello.
 void SynthLink::run() {
-   using namespace std::chrono;
+   using clock = std::chrono::steady_clock;
+   int port = 0;
+   Socket s = openSocket(port);
+   if (s == kNoSocket)
+      return;
+   const std::string hello = oscMessage("/mb/hello", port, "data");
+   clock::time_point lastHello{}, lastAnswer{};
    while (running_.load()) {
-      Socket s = connectToScript();
-      if (s == kNoSocket || !sendMessage(s, "data")) {
-         if (s != kNoSocket)
-            closeSocket(s);
-         // Bitwig, or the script, isn't running: try again in a second.
-         for (int i = 0; i < 10 && running_.load(); ++i)
-            std::this_thread::sleep_for(milliseconds(100));
-         continue;
+      const clock::time_point now = clock::now();
+      if (now - lastHello > std::chrono::seconds(2)) {
+         sendToScript(s, hello);
+         lastHello = now;
       }
+      if (readRequested_.exchange(false))
+         sendToScript(s, oscMessage("/mb/read"));
       {
          std::lock_guard<std::mutex> lock(mutex_);
-         status_.connected = true;
-      }
-      std::string buffer;
-      while (running_.load()) {
-         if (readRequested_.exchange(false) && !sendMessage(s, "read"))
-            break;
-         const int r = waitReadable(s, 100);
-         if (r < 0)
-            break;
-         if (r == 0)
-            continue;
-         char chunk[4096];
-         const int n = static_cast<int>(recv(s, chunk, sizeof(chunk), 0));
-         if (n <= 0)
-            break;
-         for (int i = 0; i < n; ++i) {
-            const char c = chunk[i];
-            if (c == '\n') {
-               if (!buffer.empty())
-                  handleLine(buffer);
-               buffer.clear();
-            } else if (c == '\t' || (c >= ' ' && c <= '~')) {
-               // Anything else (a length prefix, say) isn't part of a line.
-               buffer += c;
-            }
+         if (status_.connected && now - lastAnswer > std::chrono::seconds(5)) {
+            status_.connected = false;
+            status_.reading = false;
          }
       }
-      closeSocket(s);
-      std::lock_guard<std::mutex> lock(mutex_);
-      status_.connected = false;
-      status_.reading = false;
+      if (waitReadable(s, 100) <= 0)
+         continue;
+      char packet[65536];
+      const int n = static_cast<int>(recv(s, packet, sizeof(packet), 0));
+      if (n <= 0)
+         continue; // Windows reports a hello to a closed port (no Bitwig) as an error here
+      size_t at = 0;
+      std::string address, tags, text;
+      if (!oscString(packet, n, at, address) || !oscString(packet, n, at, tags))
+         continue;
+      if (address == "/mb/hello") {
+         lastAnswer = clock::now();
+         std::lock_guard<std::mutex> lock(mutex_);
+         status_.connected = true;
+      } else if (address == "/mb/line" && tags == ",s" && oscString(packet, n, at, text)) {
+         handleLine(text);
+      }
    }
+   closeSocket(s);
 }
 
 } // namespace mb

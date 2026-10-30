@@ -208,10 +208,14 @@ function startServer() {
             data("FAILED\tstopped");
          }
       }));
+      space.registerDefaultMethod(function (source, msg) {
+         host.errorln("MatrixBrute presets: unexpected OSC message " + msg.getAddressPattern() + " " + msg.getTypeTag());
+      });
       osc.createUdpServer(PORT, space);
       log("OSC on UDP port " + PORT);
+      host.errorln("MatrixBrute presets: OSC on UDP port " + PORT); // errorln reaches Bitwig's log file
    } catch (e) {
-      println("no OSC server: " + e);
+      host.errorln("MatrixBrute presets: no OSC server: " + e);
    }
 }
 
@@ -241,6 +245,7 @@ function guarded(fn) {
          fn.apply(null, arguments);
       } catch (e) {
          say("script error: " + e);
+         host.errorln("MatrixBrute presets: script error: " + e);
          if (job)
             data("FAILED\tscript error: " + e);
          job = null;
