@@ -91,7 +91,7 @@ Then, in the header:
   The line counts them as they come in. The script keeps the last bank until Bitwig closes, and a
   panel opened later picks it up.
 
-The script serves the programs on `localhost:58018`. The one message it sends the synth is the sound
+The script serves the programs by OSC on UDP port 58018 of `localhost`. If you installed an older copy of the script, replace it with this one. The one message it sends the synth is the sound
 request (`F0 00 21 22 4D 02 41 F7` for part A, `42` for part B), which the
 [Monstaguru](https://monstaguru.com/) librarian uses too; nothing on the synth is changed or stored.
 
