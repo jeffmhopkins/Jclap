@@ -147,21 +147,20 @@ The sustain pedal (64) is left out; it passes through.
 ## Panel
 
 Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage. `src/editor.cpp`
-holds the layout and `src/visuals.h` the pictures. It follows the synth's panel column by column,
-with a dark upper band over a lighter strip: VCO 1 and 2 (enhancers above the wave levels, the wave
-mix drawn under them), VCO 3 and noise, over audio mod, VCO sync, the wheels and voice; the mixer
-(each row a level knob, its Filter button and lights, and a meter of its share of the mix) beside the Steiner and ladder filters, with the
-routing and the big silver Master Cutoff between them, over LFO 1 and LFO 2; the preset display over
-the three envelopes' sliders; the 16 x 16 mod matrix with its display, mode buttons, user
-destinations and sequencer lanes; and master (fine tune, phones and volume, drawn but not on MIDI),
-the analog effects, the sequencer, and glide, play control and the macros on the right. Box edges
-line up across the columns. Each box's title tab and top rule are in its accent, from about eight
-hues kept apart (the filters' orange and teal, the envelopes' yellow, green and purple, the matrix's
-blue, and so on, with silver for the boxes that route or hold the rest), and its controls are named
-in a light tint of it; the mixer and audio mod name each source in that source's colour. Values and
-CC numbers stay grey and white. The display in the matrix says what the plugin knows and how to read
-the panel. The synth's buttons, lights and matrix aren't on MIDI, so they're drawn as dim indicators
-until the plugin can read them from the synth's presets.
+holds the layout and `src/visuals.h` the pictures. It follows the synth's panel in six columns: VCO 1
+and 2 (enhancers above the wave levels, the wave mix drawn tall under them), VCO 3 and noise, audio
+mod and VCO sync, the wheels and voice down the left; the mixer (each row a level knob, its Filter
+button and lights, and a meter of its share of the mix) over LFO 1; the Steiner and ladder filters
+with the routing and the big silver Master Cutoff between them, over LFO 2; the preset display and
+the read from the synth over the three envelopes' sliders; the 16 x 16 matrix; and the analog
+effects, the sequencer, glide and play control, and master (fine tune, phones and volume, drawn but
+not on MIDI) on the right. Along the bottom, like the synth's front edge, are glide, the mod wheel,
+the macros and what the plugin knows. Each box's title tab and top rule are in its accent (the
+filters' orange and teal, the envelopes' yellow, green and purple, the matrix's blue, and so on, with
+silver for the boxes that route or hold the rest), and its controls are named in a light tint of it;
+the mixer and audio mod name each source in that source's colour. Values and CC numbers stay grey
+and white. The synth's buttons, lights and matrix aren't on MIDI, so they're drawn as dim
+indicators until the plugin can read them from the synth's presets.
 
 The preset display shows the synth's preset: the one picked in the preset bar, or the last Bank
 Select and Program Change heard. The pictures are drawn from the CC values: each VCO's wave mix, the

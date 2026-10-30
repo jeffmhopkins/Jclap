@@ -618,7 +618,11 @@ public:
             light(cx - 3.5f * k, ledY, i);
             c.setColor(lightText);
             const float ty = !stagger ? top + 10 * k : (i % 2 == 0 ? top : ledY + 8 * k);
-            c.text(lights_[i], small, visage::Font::kCenter, cx - room * 0.5f, ty, room, 15 * k);
+            // Kept inside the button's width, so the outer names aren't cut off.
+            const float tx = std::clamp(cx - room * 0.5f, 0.0f, std::max(0.0f, w - room));
+            const float tw = textWidth(*this, lights_[i], kSmallText * k) * std::min(1.0f, room / std::max(widest, 1.0f));
+            const float nx = std::clamp(cx - tw * 0.5f, 0.0f, std::max(0.0f, w - tw)) - tx;
+            c.text(lights_[i], small, visage::Font::kLeft, tx + nx, ty, room, 15 * k);
          }
       }
       drawButton(c, (w - bw) * 0.5f, by, bw, bh, k, known && lights_.empty() && state_ > 0);
@@ -732,7 +736,7 @@ public:
       setIgnoresMouseEvents(true, false);
       cells_.fill(-1);
    }
-   // The display's lines, up to seven.
+   // The display's lines, up to four.
    void setDisplay(std::vector<std::string> lines) {
       if (lines != lines_) {
          lines_ = std::move(lines);
@@ -751,102 +755,81 @@ public:
       const ui::Theme &t = ui::defaultTheme();
       const float k = ui::designScale(*this), w = width(), h = height();
       const auto small = ui::font(kSmallText * k);
-      // Columns: the source labels, the 16 columns in blocks of four, then the sequencer lanes.
-      const float gx = 142 * k, lanes = 58 * k, block = 10 * k;
-      const float px = (w - gx - lanes - 3 * block) / 16.0f;
-      const auto colX = [&](int col) { return gx + col * px + (col / 4) * block; };
 
-      // The top strip: PRESET, SEQ and MOD over the grid's first columns, the Mod Amount encoder,
-      // the display, and the user destinations' buttons (13 to 16) under it.
-      // The grid's rows as square as the height allows (a little taller at most), sat at the bottom
-      // with the step numbers; the top strip takes the rest.
-      const float numbersH = 34 * k, headerH = 38 * k, rowBlock = 16 * k, userD = 26 * k;
-      const float minTop = 6 * k + (7 * 18 + 14) * k + 10 * k + userD + 12 * k + headerH + 8 * k;
-      const float py = std::clamp((h - minTop - numbersH - 3 * rowBlock) / 16.0f, px, px * 1.2f);
-      const float gridH = 16 * py + 3 * rowBlock, gy = h - numbersH - gridH;
-      const float hy = gy - 8 * k - headerH, userY = hy - 14 * k - userD;
-      const float lcdX = colX(8) - 6 * k, lcdH = userY - 10 * k - 6 * k, lineH = std::min(24 * k, (lcdH - 14 * k) / 7);
+      // PRESET, SEQ, MOD, the Mod Amount knob and the display.
       const char *modes[3] = {"PRESET", "SEQ", "MOD"};
-      const float r = 32 * k, cy = 6 * k + std::max(r + 4 * k, (lcdH - 24 * k) * 0.5f);
       for (int i = 0; i < 3; ++i) {
-         const float cx = gx + r + i * (2 * r + 18 * k);
+         const float cx = 150 * k + i * 92 * k, cy = 58 * k, r = 30 * k;
          c.setColor(0xff4a5560);
          c.circle(cx - r, cy - r, 2 * r);
-         c.setColor(0xff76848f);
+         c.setColor(0xff8da0ad);
          c.circle(cx - r + 3 * k, cy - r + 3 * k, 2 * r - 6 * k);
          c.setColor(0xff1a1d22);
          c.text(modes[i], small, visage::Font::kCenter, cx - r, cy - 8 * k, 2 * r, 16 * k);
       }
-      // Mod Amount: an endless encoder with a ring of LEDs, dim while the plugin can't read it.
-      const float ex = gx + 3 * (2 * r + 18 * k) + 44 * k, er = 26 * k;
-      for (int i = 0; i < 15; ++i) {
-         const float a = (-0.75f + 1.5f * i / 14.0f) * 3.14159265f;
-         c.setColor(0xff2f3a52);
-         c.circle(ex + std::sin(a) * (er + 10 * k) - 2.5f * k, cy - std::cos(a) * (er + 10 * k) - 2.5f * k, 5 * k);
-      }
-      c.setColor(0xff0b0c0e);
-      c.circle(ex - er, cy - er, 2 * er);
-      c.setColor(0xff2a2f36);
-      c.circle(ex - er + 4 * k, cy - er + 4 * k, 2 * er - 8 * k);
       c.setColor(t.dimText);
-      c.text("Mod Amount", small, visage::Font::kCenter, ex - 50 * k, cy + er + 12 * k, 100 * k, 16 * k);
+      c.text("Mod Amount", small, visage::Font::kLeft, 330 * k, 94 * k, 100 * k, 16 * k);
+      const float kx = 440 * k, ky = 58 * k, kr = 34 * k;
+      c.setColor(0xff0b0c0e);
+      c.circle(kx - kr, ky - kr, 2 * kr);
+      c.setColor(visage::Brush::linear(visage::Color(0xffd7dce0), visage::Color(0xff6c747c), visage::Point(kx - kr, ky - kr),
+                                       visage::Point(kx + kr, ky + kr)));
+      c.circle(kx - kr * 0.62f, ky - kr * 0.62f, 1.24f * kr);
+      const float lx = 500 * k, lw = w - lx - 8 * k;
       c.setColor(0xff1b2a22);
-      c.roundedRectangle(lcdX, 6 * k, w - lcdX - 4 * k, lcdH, 3 * k);
+      c.roundedRectangle(lx, 16 * k, lw, 86 * k, 3 * k);
       c.setColor(0xff9fe0b4);
-      const float lineTop = 6 * k + (lcdH - lineH * 7) * 0.5f;
-      for (size_t i = 0; i < lines_.size() && i < 7; ++i)
-         c.text(lines_[i], ui::font(13 * k), visage::Font::kLeft, lcdX + 12 * k, lineTop + i * lineH, w - lcdX - 24 * k, lineH);
-      for (int col = 12; col < 16; ++col) {
-         const float x = colX(col) + px * 0.5f - userD * 0.5f;
-         c.setColor(0xff3a454f);
-         c.circle(x, userY, userD);
-         c.setColor(t.dimText);
-         c.text(std::to_string(col + 1), small, visage::Font::kCenter, x, userY, userD, userD);
-      }
+      for (size_t i = 0; i < lines_.size() && i < 4; ++i)
+         c.text(lines_[i], ui::font(12.5f * k), visage::Font::kLeft, lx + 10 * k, 22 * k + i * 19 * k, lw - 20 * k, 17 * k);
 
-      const auto rowY = [&](int row) { return gy + row * py + (row / 4) * rowBlock; };
+      // The grid. Blocks of four columns and rows sit a little apart, as on the synth.
+      const float gx = 136 * k, gy = 172 * k, block = 8 * k;
+      const float cw = (w - gx - 8 * k - 3 * block) / 16.0f;
+      const float ch = (h - gy - 40 * k - 3 * block) / 16.0f;
+      const auto colX = [&](int col) { return gx + col * cw + (col / 4) * block; };
+      const auto rowY = [&](int row) { return gy + row * ch + (row / 4) * block; };
+      // The column names at the smallest size that fits the narrowest of them.
+      float widest = 1;
+      for (const auto &d : kDestinations)
+         widest = std::max({widest, textWidth(*this, d[0], kSmallText * k), textWidth(*this, d[1], kSmallText * k)});
+      const auto head = ui::font(kSmallText * k * std::min(1.0f, (cw - 3 * k) / widest));
       for (int col = 0; col < 16; ++col) {
          const float x = colX(col);
          c.setColor(t.dimText);
-         c.roundedRectangleBorder(x + 2 * k, hy, px - 4 * k, headerH, 2 * k, 1.0f);
+         c.roundedRectangleBorder(x + 2 * k, 126 * k, cw - 4 * k, 34 * k, 2 * k, 1.0f);
          c.setColor(labelColor_);
          if (col < 12) {
-            c.text(kDestinations[col][0], small, visage::Font::kCenter, x, hy + 3 * k, px, 16 * k);
-            c.text(kDestinations[col][1], small, visage::Font::kCenter, x, hy + 19 * k, px, 16 * k);
+            c.text(kDestinations[col][0], head, visage::Font::kCenter, x, 128 * k, cw, 15 * k);
+            c.text(kDestinations[col][1], head, visage::Font::kCenter, x, 143 * k, cw, 15 * k);
          } else {
-            c.text("User", small, visage::Font::kCenter, x, hy + 3 * k, px, 16 * k);
-            c.text(std::to_string(col + 1), small, visage::Font::kCenter, x, hy + 19 * k, px, 16 * k);
+            c.text(std::to_string(col + 1), small, visage::Font::kCenter, x, 126 * k, cw, 34 * k);
          }
          c.setColor(t.dimText);
-         const float nd = 22 * k, nx = x + px * 0.5f - nd * 0.5f, ny = gy + gridH + 8 * k;
+         const float nd = 22 * k, nx = x + cw * 0.5f - nd * 0.5f, ny = rowY(15) + ch + 8 * k;
          c.ring(nx, ny, nd, 1.2f * k);
          c.text(std::to_string(col + 1), small, visage::Font::kCenter, nx, ny, nd, nd);
       }
-      const char *laneNames[4] = {"Mod", "Slide", "Accent", "Step"};
-      const float cell = std::min(px, py) - 6 * k;
       for (int row = 0; row < 16; ++row) {
-         const float y = rowY(row), mid = y + py * 0.5f;
+         const float y = rowY(row), mid = y + ch * 0.5f;
          c.setColor(t.dimText);
          c.ring(2 * k, mid - 11 * k, 22 * k, 1.2f * k);
          c.setColor(labelColor_);
          c.text(std::string(1, static_cast<char>('A' + row)), small, visage::Font::kCenter, 2 * k, mid - 11 * k, 22 * k, 22 * k);
          c.setColor(t.dimText);
-         c.roundedRectangleBorder(30 * k, mid - 10 * k, 104 * k, 20 * k, 2 * k, 1.0f);
+         c.roundedRectangleBorder(28 * k, mid - 10 * k, 102 * k, 20 * k, 2 * k, 1.0f);
          c.setColor(labelColor_);
-         c.text(kSources[row], small, visage::Font::kLeft, 36 * k, mid - 10 * k, 98 * k, 20 * k);
-         const bool step = row % 4 == 3;
-         c.setColor(step ? 0xffb07f8a : t.dimText);
-         c.text(laneNames[row % 4], small, visage::Font::kLeft, colX(15) + px + 8 * k, mid - 8 * k, lanes - 8 * k, 16 * k);
+         c.text(kSources[row], small, visage::Font::kLeft, 33 * k, mid - 10 * k, 96 * k, 20 * k);
+         const bool pink = row % 4 == 3;
          for (int col = 0; col < 16; ++col) {
-            const float x = colX(col) + (px - cell) * 0.5f, cy2 = mid - cell * 0.5f;
+            const float x = colX(col), m = std::min(cw, ch) * 0.12f;
             const int state = cells_[row * 16 + col];
-            unsigned color = step ? 0xff5b4248 : 0xff3a454f;
+            unsigned color = pink ? 0xff5b4248 : 0xff3a454f;
             if (state < 0)
-               color = step ? 0xff3a3034 : 0xff2a3138;
+               color = pink ? 0xff3a3034 : 0xff2a3138;
             else if (state > 0)
                color = 0xff6f8cff;
             c.setColor(color);
-            c.roundedRectangle(x, cy2, cell, cell, 3 * k);
+            c.roundedRectangle(x + m, y + m, cw - 2 * m, ch - 2 * m, 3 * k);
          }
       }
    }
