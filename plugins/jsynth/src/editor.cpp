@@ -913,8 +913,6 @@ public:
    // Where the sky is, in design units from the view's top left: its left, top and height (its width
    // follows from kSkyAspect). The panel moves it when its panels are hidden.
    float skyLeft = kSkyX, skyTop = kSkyY - kHeaderHeight, skyHeight = kSkyH;
-   // Whether each held note's lure ring is drawn.
-   bool showRings = true;
    // How the sky is drawn: a SkyLook, and the palette it is drawn in.
    int look = kSumi;
    int palette = 0;
@@ -1430,11 +1428,10 @@ private:
          }
       }
 
-      // Lures: where each held note pulls its creature. Faint, so they read as guides; RINGS turns
-      // them off. Sumi's ripple like a drop, wider the harder it is pressed; Aurora's are a small
+      // Lures: where each held note pulls its creature. Faint, so they read as guides. Sumi's ripple like a drop, wider the harder it is pressed; Aurora's are a small
       // diamond with a plumb line to the horizon.
       for (const Creature &b : creatures_) {
-         if (!showRings || !b.held || b.energy < 0.05f)
+         if (!b.held || b.energy < 0.05f)
             continue;
          const float lx = X(b.lureX), ly = Y(b.lureY);
          if (sumi) {
@@ -2837,7 +2834,6 @@ public:
    void setMapping(bool on, int source) {
       mapping_ = on;
       armed_ = on ? source : kSourceOff;
-      mapButton_->setOn(on);
       for (MapKnob *k : mapKnobs_)
          k->redraw();
       for (visage::Frame *f : mapped_)
@@ -3240,10 +3236,10 @@ private:
       return sw;
    }
    // A source to map: touching one turns MAP on with it armed, and touching the armed one again
-   // lets it go.
+   // turns MAP off.
    SourceChip &chip(int source, const std::string &name, ui::Rect r, const char *tip = nullptr) {
       auto &c = put<SourceChip>(r, source, name);
-      c.onClick = [this](int s) { setMapping(true, mapping_ && armed_ == s ? kSourceOff : s); };
+      c.onClick = [this](int s) { setMapping(!(mapping_ && armed_ == s), s); };
       chips_.push_back(&c);
       if (tip)
          tips_.add(c, tip);
@@ -3266,28 +3262,16 @@ private:
       partSwitch_ = &parts;
       tips_.add(parts, "Each part is a species with its own patch and its own way of flying. The panels edit "
                        "this one; the sky shows both.");
-      auto &map = glassy(put<ui::Button>({954, 13, 62, 26}, "MAP"), kMapColor);
-      map.setToggle(true);
-      map.onToggle = [this](bool on) { setMapping(on, kSourceOff); };
-      mapButton_ = &map;
-      tips_.add(map, "Touch a source (which turns MAP on), then drag any knob to set how much the source moves it. "
-                     "Double-click a knob to flip its route, right-click to remove it.");
-      const auto cells = ui::row({1026, 13, 398, 26}, kTouchSourceCount, 4);
+      // Touching a source turns MAP on with it armed; drag any knob to set how much it moves it.
+      const auto cells = ui::row({954, 13, 470, 26}, kTouchSourceCount, 4);
       for (int i = 0; i < kTouchSourceCount; ++i)
          chip(kSourceVelocity + i, upper(kTouchNames[i]), cells[i]);
       auto &mode = glassy(put<ui::Dropdown>({832, 13, 112, 26}, upper(kPlayModeNames)), kPartColors[0]);
       bindings_.bind(mode, kPlayMode);
       tips_.add(mode, "Which species a note hatches: A only, both, split by key or by velocity, by MPE zone, "
                       "or crossfaded by Slide or Press.");
-      // RINGS and ROUTES sit under the sky, after the flock's own sources.
+      // ROUTES sits under the sky, after the flock's own sources.
       group_ = kSynth;
-      auto &rings = glassy(put<ui::Button>({kSkyX + kSkyW - 162, kSkyY + kSkyH + 12, 70, 24}, "RINGS"), kDim);
-      rings.setToggle(true);
-      rings.setOn(host_.ringsShown);
-      view_->showRings = host_.ringsShown;
-      rings.onToggle = [this](bool on) { view_->showRings = host_.ringsShown = on; };
-      tips_.add(rings, "Show each held note's lure: the ring its creature is pulled toward, placed by LURE X "
-                       "and LURE Y on the FLOCK tab.");
       auto &routes = glassy(put<ui::Button>({kSkyX + kSkyW - 84, kSkyY + kSkyH + 12, 84, 24}, "ROUTES"), kMapColor);
       routes.setToggle(true);
       routes.onToggle = [this](bool on) { showRoutes(on); };
@@ -3968,12 +3952,11 @@ private:
    ui::UpdateNotice *update_ = nullptr;
    FlockView *view_ = nullptr;
    ui::SegmentedSwitch *partSwitch_ = nullptr;
-   ui::Button *mapButton_ = nullptr;
    ui::Button *routesButton_ = nullptr;
    static constexpr int kSynthView = 0, kSkyOnly = 1;
    static constexpr ui::Rect kVoiceBox{kSkyX, 650, kSkyW, 274};
    // The route list, over the sky.
-   static constexpr ui::Rect kRoutesBox{kSkyX + 12, 80, kSkyW - 24, 494};
+   static constexpr ui::Rect kRoutesBox{kSkyX + 10, kSkyY + 44, kSkyW - 20, kSkyH - 56};
    static constexpr ui::Rect kDiceBox{kSkyX + kSkyW - 302, kSkyY + 10, 292, 192};
    // The voice panel's knobs, one row along its bottom.
    static std::vector<ui::Rect> kVoiceKnobs() { return ui::row({kVoiceBox.x + 8, kVoiceBox.y + 172, kVoiceBox.w - 16, 100}, 9); }
