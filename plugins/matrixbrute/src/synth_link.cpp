@@ -84,24 +84,26 @@ bool oscString(const char *data, size_t size, size_t &at, std::string &out) {
    return at <= size;
 }
 
+// Bound to the first free port the script answers on (it can only open its connections as it starts).
 Socket openSocket(int &port) {
-   Socket s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-   if (s == kNoSocket)
-      return kNoSocket;
-   // A read's 160-odd lines can arrive in one burst.
-   const int buffer = 1 << 20;
-   setsockopt(s, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char *>(&buffer), sizeof(buffer));
-   sockaddr_in addr{};
-   addr.sin_family = AF_INET;
-   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-   socklen_t length = sizeof(addr);
-   if (bind(s, reinterpret_cast<const sockaddr *>(&addr), sizeof(addr)) != 0 ||
-       getsockname(s, reinterpret_cast<sockaddr *>(&addr), &length) != 0) {
+   for (int p = SynthLink::kClientPortFirst; p < SynthLink::kClientPortFirst + SynthLink::kClientPortCount; ++p) {
+      Socket s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+      if (s == kNoSocket)
+         return kNoSocket;
+      // A read's 160-odd lines can arrive in one burst.
+      const int buffer = 1 << 20;
+      setsockopt(s, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char *>(&buffer), sizeof(buffer));
+      sockaddr_in addr{};
+      addr.sin_family = AF_INET;
+      addr.sin_port = htons(static_cast<uint16_t>(p));
+      addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+      if (bind(s, reinterpret_cast<const sockaddr *>(&addr), sizeof(addr)) == 0) {
+         port = p;
+         return s;
+      }
       closeSocket(s);
-      return kNoSocket;
    }
-   port = ntohs(addr.sin_port);
-   return s;
+   return kNoSocket;
 }
 
 void sendToScript(Socket s, const std::string &message) {

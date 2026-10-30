@@ -78,7 +78,8 @@ receive SysEx in Bitwig, so a controller script does the reading:
 3. Press **READ SYNTH** in the plugin (or Read in the controller's panel). The status next to the
    button counts the presets as they come in.
 
-The script serves the presets by OSC on UDP port 58017 of this computer, which is how the plugin
+The script serves the presets by OSC on UDP port 58017 of this computer (answering on ports
+58018-58025, where the plugin and the log tool listen), which is how the plugin
 gets them; the last read stays there until Bitwig closes, and a plugin opened later picks it up. It only sends read requests
 to the synth, the same ones MIDI Control Center uses to read presets. `tools/mb_bitwig_log.py`
 follows its log, for checking a read without the script console. The synth's second USB port
