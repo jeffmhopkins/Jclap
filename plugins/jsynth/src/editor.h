@@ -58,8 +58,6 @@ public:
    bool routesOpen = false;
    // The view: 0 the synth (its panels beside the sky), 1 only the sky.
    int view = 0;
-   // Whether the sky draws the held notes' lure rings.
-   bool ringsShown = true;
    // The dice card: whether it is open, Randomize's complexity, Mutate's amount and the sections
    // both leave alone, and the patches they replaced, so UNDO can bring one back.
    bool diceOpen = false;
