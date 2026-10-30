@@ -108,10 +108,63 @@ var seq = 0;
 var job = null; // the read in progress
 var token = 0; // bumped on every request and reply, so a stale timeout does nothing
 var shown = 0; // diagnostic popups so far in this read
+var LOG_PORT = 58017;
+var logLines = []; // everything logged, for clients that connect later
+var clients = [];
+
+// The script console, plus a TCP log anyone on this computer can read (tools/mb_bitwig_log.py):
+// Bitwig only shows a script's output in its console. A client can also send "read" to start a read.
+function log(text) {
+   println(text);
+   var line = new Date().toISOString().substr(11, 12) + " " + text;
+   if (logLines.length < 20000)
+      logLines.push(line);
+   for (var i = 0; i < clients.length; i++)
+      sendLine(clients[i], line);
+}
+
+function sendLine(conn, line) {
+   var bytes = [];
+   for (var i = 0; i < line.length; i++)
+      bytes.push(line.charCodeAt(i) & 0x7f);
+   bytes.push(10);
+   try {
+      conn.send(bytes);
+   } catch (e) {
+      println("log client: " + e);
+   }
+}
+
+function startLogServer() {
+   try {
+      var server = host.createRemoteConnection("MatrixBrute log", LOG_PORT);
+      server.setClientConnectCallback(function (conn) {
+         clients.push(conn);
+         conn.setDisconnectCallback(function () {
+            clients.splice(clients.indexOf(conn), 1);
+         });
+         conn.setReceiveCallback(guarded(function (data) {
+            var text = "";
+            for (var i = 0; i < data.length; i++)
+               text += String.fromCharCode(data[i] & 0xff);
+            log("log client sent: " + text.trim());
+            if (text.trim() === "read")
+               readPresets(0, 255);
+            else if (text.trim() === "stop")
+               job = null;
+         }));
+         for (var i = 0; i < logLines.length; i++)
+            sendLine(conn, logLines[i]);
+      });
+      log("log server on port " + LOG_PORT);
+   } catch (e) {
+      println("no log server: " + e);
+   }
+}
 
 // Popups are the only output a user sees without opening the script console.
 function say(text) {
-   println(text);
+   log(text);
    host.showPopupNotification("MatrixBrute: " + text);
 }
 
@@ -119,8 +172,8 @@ function say(text) {
 function trace(text) {
    if (shown++ < 6)
       say(text);
-   else if (shown < 400)
-      println(text); // the console gets more of the read
+   else
+      log(text);
 }
 
 function later(fn, ms) {
@@ -150,7 +203,8 @@ function init() {
    state.getSignalSetting("Read all presets", "MatrixBrute", "Read").addSignalObserver(guarded(function () {
       readPresets(0, 255);
    }));
-   println("MatrixBrute presets ready");
+   startLogServer();
+   log("MatrixBrute presets ready");
 }
 
 function exit() {}
@@ -181,7 +235,7 @@ function request(cmd, s) {
    midiOut.sendSysex(msg + "f7");
    later(guarded(function () {
       if (job && token === mine) {
-         println("timeout in stage " + job.stage + ", seq " + job.seq);
+         log("timeout in stage " + job.stage + ", seq " + job.seq);
          fail("no reply");
       }
    }), TIMEOUT_MS);
@@ -209,7 +263,7 @@ function fail(why) {
       startPreset();
       return;
    }
-   println("MatrixBrute " + code(job.preset) + ": " + why + ", skipped");
+   log("MatrixBrute " + code(job.preset) + ": " + why + ", skipped");
    job.failed++;
    if (job.found === 0 && job.failed >= 3) {
       say("no answer from the synth" + (job.heard ? " (it sent " + job.heard + ")" : ""));
@@ -241,7 +295,7 @@ function onSysex(hex) {
    if (!job.heard)
       job.heard = hex.substr(0, 24); // shown if the read gives up: what did come back
    if (hex.substr(0, 12) !== ARTURIA || r[6] !== job.seq) {
-      println("ignored (waiting for seq " + job.seq + "): " + hex.substr(0, 30));
+      log("ignored (waiting for seq " + job.seq + "): " + hex.substr(0, 30));
       return;
    }
    // Matched on the reply code (r[8]) alone, as mb_dump.py does; r[7] is a length.
@@ -338,5 +392,5 @@ function code(preset) {
 
 // TODO: hand the preset to the plugin. For now it only logs (Bitwig's Controller Script Console).
 function deliver(preset, name, values) {
-   println(code(preset) + " " + name + ": " + values.length + " knobs");
+   log(code(preset) + " " + name + ": " + values.length + " knobs");
 }
