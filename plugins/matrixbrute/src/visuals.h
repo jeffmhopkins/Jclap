@@ -35,6 +35,19 @@ struct Gate {
 using GateSource = std::function<Gate()>;
 
 inline unsigned withAlpha(unsigned color, unsigned alpha) { return (color & 0x00ffffff) | (alpha << 24); }
+// `a` moved `amount` (0 to 1) of the way to `b`, opaque.
+inline unsigned mixColor(unsigned a, unsigned b, float amount) {
+   unsigned out = 0xff000000;
+   for (int shift = 0; shift <= 16; shift += 8) {
+      const float x = (a >> shift) & 0xff, y = (b >> shift) & 0xff;
+      out |= static_cast<unsigned>(x + (y - x) * amount + 0.5f) << shift;
+   }
+   return out;
+}
+// A section's label colour: its accent lifted toward white, so it reads on the dark and grey panels.
+inline unsigned labelTint(unsigned accent) { return mixColor(accent, 0xffffffff, 0.3f); }
+// The same label while its control's setting isn't known yet: toward the dim grey.
+inline unsigned dimTint(unsigned tint) { return mixColor(tint, 0xff8d939c, 0.45f); }
 
 // Base for a picture: ignores the mouse and draws on a dark inset like the envelope editor.
 class Picture : public visage::Frame {
@@ -459,12 +472,18 @@ public:
    }
    int state() const { return state_; }
    const std::string &label() const { return label_; }
+   // The name's colour (0 for the theme's), e.g. its section's tint.
+   void setLabelColor(unsigned color) {
+      labelColor_ = color;
+      redraw();
+   }
    void draw(visage::Canvas &c) override {
       const ui::Theme &t = ui::defaultTheme();
       const float k = ui::designScale(*this), w = width(), h = height();
       const auto small = ui::font(8.5f * k);
       const bool known = state_ >= 0;
-      const unsigned text = known ? t.text : t.dimText, lightText = known ? t.dimText : 0xff5d646e;
+      const unsigned name = labelColor_ ? labelColor_ : t.text;
+      const unsigned text = known ? name : (labelColor_ ? dimTint(labelColor_) : t.dimText), lightText = known ? t.dimText : 0xff5d646e;
       const auto light = [&](float x, float y, size_t i) {
          const bool lit = known && static_cast<size_t>(state_) == i;
          c.setColor(lit ? accent_ : (known ? 0xff3a4048 : 0xff2c3138));
@@ -518,6 +537,7 @@ private:
    std::vector<std::string> lights_;
    Lights place_;
    unsigned accent_;
+   unsigned labelColor_ = 0;
    int state_ = -1;
 };
 
@@ -526,7 +546,7 @@ private:
 // setState() is the hook for when the plugin can read it.
 class HwKnob : public visage::Frame {
 public:
-   explicit HwKnob(std::string label) : label_(std::move(label)) {}
+   explicit HwKnob(std::string label, unsigned labelColor = 0) : label_(std::move(label)), labelColor_(labelColor) {}
    void setState(int state) {
       if (state != state_) {
          state_ = state;
@@ -537,7 +557,7 @@ public:
       const ui::Theme &t = ui::defaultTheme();
       const float w = width(), h = height(), s = h / 100.0f;
       const float d = std::min(w * 0.7f, 48.0f * s), cx = w * 0.5f, cy = 18.0f * s + d * 0.5f + 2.0f * s;
-      c.setColor(t.dimText);
+      c.setColor(labelColor_ ? dimTint(labelColor_) : t.dimText);
       c.text(label_, ui::font(10.5f * s), visage::Font::kCenter, 0, 0, w, 16.0f * s);
       c.setColor(t.track);
       c.ring(cx - d * 0.5f, cy - d * 0.5f, d, 3.2f * s);
@@ -556,6 +576,7 @@ public:
 
 private:
    std::string label_;
+   unsigned labelColor_;
    int state_ = -1;
 };
 
@@ -574,7 +595,7 @@ public:
       {"VCO 2", "Pitch"}, {"VCO 2", "Ultra"},    {"VCO 2", "PW"},       {"VCO 2", "Metal"},
       {"Steiner", "Cutoff"}, {"Ladder", "Cutoff"}, {"LFO 1", "AMT"}, {"VCA", ""}};
 
-   MatrixMap() {
+   explicit MatrixMap(unsigned labelColor = 0xffe6e8eb) : labelColor_(labelColor) {
       setIgnoresMouseEvents(true, false);
       cells_.fill(-1);
    }
@@ -636,7 +657,7 @@ public:
          const float x = colX(col);
          c.setColor(t.dimText);
          c.roundedRectangleBorder(x + 2 * k, 126 * k, cw - 4 * k, 30 * k, 2 * k, 1.0f);
-         c.setColor(t.text);
+         c.setColor(labelColor_);
          if (col < 12) {
             c.text(kDestinations[col][0], tiny, visage::Font::kCenter, x, 128 * k, cw, 13 * k);
             c.text(kDestinations[col][1], tiny, visage::Font::kCenter, x, 141 * k, cw, 13 * k);
@@ -652,12 +673,12 @@ public:
          const float y = rowY(row);
          c.setColor(t.dimText);
          c.ring(4 * k, y + ch * 0.5f - 9 * k, 18 * k, 1.2f * k);
-         c.setColor(t.text);
+         c.setColor(labelColor_);
          c.text(std::string(1, static_cast<char>('A' + row)), tiny, visage::Font::kCenter, 4 * k, y + ch * 0.5f - 9 * k,
                 18 * k, 18 * k);
          c.setColor(t.dimText);
          c.roundedRectangleBorder(28 * k, y + ch * 0.5f - 8 * k, 100 * k, 16 * k, 2 * k, 1.0f);
-         c.setColor(t.text);
+         c.setColor(labelColor_);
          c.text(kSources[row], tiny, visage::Font::kLeft, 33 * k, y + ch * 0.5f - 8 * k, 94 * k, 16 * k);
          const bool pink = row % 4 == 3;
          for (int col = 0; col < 16; ++col) {
@@ -675,6 +696,7 @@ public:
    }
 
 private:
+   unsigned labelColor_;
    std::vector<std::string> lines_;
    std::array<int, 256> cells_{};
 };

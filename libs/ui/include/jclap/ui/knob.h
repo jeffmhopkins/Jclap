@@ -21,6 +21,12 @@ public:
    // on the outer ring, `amount` either side of the setting, in the knob's units. 0 hides it.
    void setReach(double amount, unsigned color);
 
+   // The name above the knob in `color` (0 for the theme's text colour), e.g. a section's tint.
+   void setLabelColor(unsigned color) {
+      labelColor_ = color;
+      redraw();
+   }
+
    // A small tick just outside the track at `value`, e.g. to mark where a range's normal zone ends.
    void setMarker(double value) {
       marker_ = value;
@@ -40,6 +46,7 @@ private:
    unsigned reachColor_ = 0;
    double marker_ = 0.0;
    bool hasMarker_ = false;
+   unsigned labelColor_ = 0;
 };
 
 } // namespace jclap::ui

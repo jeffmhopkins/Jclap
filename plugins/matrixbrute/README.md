@@ -153,9 +153,12 @@ mix drawn under them), VCO 3 and noise, over audio mod, VCO sync, the wheels and
 column beside the Steiner and ladder filters, with the routing and the big Master Cutoff between
 them, over LFO 1 and LFO 2; the preset display over the three envelopes' sliders; the 16 x 16 matrix;
 and master (fine tune, phones and volume, drawn but not on MIDI), the analog effects, the sequencer,
-and glide, play control and the macros on the right. The
-synth's buttons, lights and matrix aren't on MIDI, so they're drawn as dim indicators until the
-plugin can read them from the synth's presets.
+and glide, play control and the macros on the right. Each box's title tab and top rule are in its
+accent (the oscillator's or filter's colour, or one of its own: the matrix's blue, the display's red
+for the preset), and its controls are named in a light tint of it; the mixer names each source in
+that source's colour. Values and CC numbers stay grey and white. The synth's buttons, lights and
+matrix aren't on MIDI, so they're drawn as dim indicators until the plugin can read them from the
+synth's presets.
 
 The preset display shows the synth's preset: the one picked in the preset bar, or the last Bank
 Select and Program Change heard. The pictures are drawn from the CC values: each VCO's wave mix, the
