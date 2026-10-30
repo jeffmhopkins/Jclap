@@ -276,6 +276,10 @@ function onSysex(hex) {
          fail(job.chunks.length + " chunks");
          return;
       }
+      // MCC sends one more poll after the last chunk, which the synth doesn't answer. Without it the
+      // synth seems to stay in the transfer and ignore the next preset's requests.
+      seq = (seq + 1) & 0x7f;
+      midiOut.sendSysex(ARTURIA + hex2(seq) + "011800f7");
       job.found++;
       host.showPopupNotification("MatrixBrute: " + code(job.preset) + " " + job.name);
       deliver(job.preset, job.name, decode(unpack([].concat.apply([], job.chunks))));
