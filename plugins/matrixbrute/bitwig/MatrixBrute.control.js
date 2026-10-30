@@ -154,7 +154,8 @@ function readPresets(first, last) {
       host.showPopupNotification("MatrixBrute: already reading");
       return;
    }
-   job = {preset: first, last: last, token: 0, retried: false, found: 0};
+   job = {preset: first, last: last, token: 0, retried: false, found: 0, failed: 0};
+   host.showPopupNotification("MatrixBrute: reading bank " + String.fromCharCode(65 + (first >> 4)));
    startPreset();
 }
 
@@ -172,13 +173,15 @@ function fail(why) {
       return;
    }
    println("MatrixBrute " + code(job.preset) + ": " + why + ", skipped");
+   job.failed++;
    next();
 }
 
 function next() {
    job.retried = false;
    if (job.preset >= job.last) {
-      host.showPopupNotification("MatrixBrute: read " + job.found + " named presets");
+      host.showPopupNotification("MatrixBrute: read " + job.found + " named presets" +
+                                  (job.failed ? ", " + job.failed + " got no answer" : ""));
       job = null;
       return;
    }
