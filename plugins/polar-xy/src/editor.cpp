@@ -51,8 +51,8 @@ public:
       presets.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
       add<ui::Section>({12, 76, 232, 260}, "XY IN");
       add<ui::Section>({256, 76, 232, 260}, "POLAR OUT");
-      add<ui::Section>({500, 76, 208, 124}, "INPUT CC");
-      add<ui::Section>({500, 212, 208, 124}, "OUTPUT CC");
+      add<ui::Section>({500, 76, 208, 112}, "INPUT CC");
+      add<ui::Section>({500, 200, 208, 136}, "OUTPUT CC");
       add<ui::Section>({12, 348, 696, 120}, "MAPPING");
       add<ui::Section>({12, 480, 696, 120}, "MOTION");
 
@@ -72,15 +72,15 @@ public:
          axis->onEndEdit = [this] { host_.releaseInput(); };
       polar_->setIgnoresMouseEvents(true, false);
 
-      const auto in = ui::row({508, 104, 192, 92}, 2);
+      const auto in = ui::row({508, 102, 192, 84}, 2);
       knob(kParamInX, "X", kBlue, in[0]);
       knob(kParamInY, "Y", kBlue, in[1]);
-      const auto out = ui::row({508, 236, 192, 72}, 2);
+      const auto out = ui::row({508, 226, 192, 84}, 2);
       knob(kParamOutAngle, "ANGLE", kOrange, out[0]);
       knob(kParamOutRadius, "RADIUS", kOrange, out[1]);
       // Each sends its CC alone, for a MIDI learn on the receiving end.
       for (int i = 0; i < 2; ++i) {
-         auto &send = add<ui::Button>({524.0f + i * 96.0f, 310, 64, 20}, "SEND");
+         auto &send = add<ui::Button>({524.0f + i * 96.0f, 308, 64, 20}, "SEND");
          send.setAccent(kOrange);
          send.onClick = [this, i] { host_.sendOutput(i); };
       }
