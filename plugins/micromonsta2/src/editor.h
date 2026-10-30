@@ -24,9 +24,14 @@ public:
    // Has the synth load `patch` (Bank Select + Program Change) and moves the knobs to its values
    // without sending them, since the synth already has them.
    virtual void loadProgram(const HardwarePatch &patch) = 0;
+   // Moves the knobs and the routing to a sound the synth already has (read off one of its parts),
+   // sending nothing. `patch.program` is the program it came from if that's known, otherwise 0.
+   virtual void loadSound(const HardwarePatch &patch) = 0;
    // The program last loaded (1-300), or 0 if none has been.
    virtual int program() const = 0;
-   // That program's routing for mod matrix slot 0-9 (all "off" if none has been loaded).
+   // Whether route() is known: a program or a sound read off the synth has been loaded.
+   virtual bool routingKnown() const = 0;
+   // The loaded program's routing for mod matrix slot 0-9 (all "off" until one is known).
    virtual ModRoute route(int slot) const = 0;
    // The name the preset bar shows, kept with the project.
    virtual std::string presetName() const = 0;
