@@ -65,12 +65,11 @@ public:
                                ui::ValueRange{0.0, 127.0, 0.0, 1.0});
       polar_->setGrid(ui::XYPad::Grid::Polar);
       polar_->setAccent(kOrange);
-      for (ui::XYPad::Axis *axis : {&xy_->x(), &xy_->y()}) {
-         axis->onChange = [this](double) {
-            host_.dragInput(static_cast<int>(std::lround(xy_->x().value)), static_cast<int>(std::lround(xy_->y().value)));
-         };
+      // The pad sets X then Y, so a move is sent once Y has it too, never as the new X with the old
+      // Y. It goes at full resolution, not rounded to CC steps, for a smooth angle and radius.
+      xy_->y().onChange = [this](double) { host_.dragInput(xy_->x().value, xy_->y().value); };
+      for (ui::XYPad::Axis *axis : {&xy_->x(), &xy_->y()})
          axis->onEndEdit = [this] { host_.releaseInput(); };
-      }
       polar_->setIgnoresMouseEvents(true, false);
 
       const auto in = ui::row({508, 104, 192, 92}, 2);

@@ -27,6 +27,10 @@ struct ChannelState {
    // The last X/Y seen. Nothing is sent until both have arrived: the other axis isn't known.
    int x = 64, y = 64;
    bool hasX = false, hasY = false;
+   // Set by the panel's XY pad: where it really is, between the CC steps (0..127), until the
+   // controller moves again. The mouse arrives a block at a time, so the output glides between moves.
+   double padX = 64.0, padY = 64.0;
+   bool fromPad = false;
    // The angle held at dead center, and what was last sent on the output CCs (-1: send again).
    int angle = -1;
    int sentAngle = -1, sentRadius = -1;
@@ -70,6 +74,15 @@ uint32_t savedParamCount(uint32_t version) {
 
 // Smoothing and inertia move the output in steps this many samples apart.
 constexpr uint32_t kMotionStep = 32;
+
+// The least Smoothing a move of the panel's XY pad gets (seconds). The mouse reports a few dozen
+// times a second, and each move is picked up at the start of a block, so jumping straight to each
+// one steps the output unevenly; this glides between them.
+constexpr double kPadGlide = 0.04;
+
+// The XY pad's position packed for the audio thread: sequence << 32 | x << 16 | y, each axis 0..127
+// in 1/512 steps, so whole CC values (the centre above all) come through exact.
+constexpr double kPadScale = 512.0;
 
 const char *const kFeatures[] = {CLAP_PLUGIN_FEATURE_NOTE_EFFECT, CLAP_PLUGIN_FEATURE_UTILITY, nullptr};
 
@@ -131,11 +144,15 @@ public:
       x = static_cast<int>(v >> 8) & 0x7F;
       y = static_cast<int>(v) & 0x7F;
    }
-   void dragInput(int x, int y) override {
+   void dragInput(double x, double y) override {
+      if (!std::isfinite(x) || !std::isfinite(y))
+         return;
       // A new number each move, so the audio thread takes every one, even if released before it runs.
-      const uint32_t seq = ((dragIn_.load() >> 16) + 1) & 0xFFFF;
-      dragIn_.store((seq ? seq : 1) << 16 | static_cast<uint32_t>(std::clamp(x, 0, 127)) << 8 |
-                    static_cast<uint32_t>(std::clamp(y, 0, 127)));
+      const uint64_t seq = ((dragIn_.load() >> 32) + 1) & 0xFFFFFFFF;
+      const auto axis = [](double v) {
+         return static_cast<uint64_t>(std::lround(std::clamp(v, 0.0, 127.0) * kPadScale));
+      };
+      dragIn_.store((seq ? seq : 1) << 32 | axis(x) << 16 | axis(y));
       dragging_.store(true);
       host()->request_process(host());
    }
@@ -330,19 +347,24 @@ private:
       return m;
    }
 
+   // A channel's motion: the settings, with at least kPadGlide of Smoothing while the pad has it.
+   static jclap::MotionSettings motionFor(const ChannelState &st, jclap::MotionSettings m) {
+      if (st.fromPad)
+         m.smoothing = std::max(m.smoothing, kPadGlide);
+      return m;
+   }
+
    // Moves every gliding channel on to `to` (a sample time in this block), in steps of kMotionStep
-   // samples, sending what changes as it goes. With Smoothing and Inertia both off, they land.
+   // samples, sending what changes as it goes. A channel with Smoothing and Inertia both off lands.
    void glide(const clap_output_events_t *out, uint32_t to) {
       to = std::max(to, clock_);
       const jclap::MotionSettings m = motion();
-      if (!m.active()) {
-         for (int channel = 0; channel < 16; ++channel)
-            if (channels_[channel].motion.moving()) {
-               channels_[channel].motion.land();
-               send(out, std::min(to, frames_ - 1), channel);
-            }
-         clock_ = to;
-         return;
+      for (int channel = 0; channel < 16; ++channel) {
+         ChannelState &st = channels_[channel];
+         if (st.motion.moving() && !motionFor(st, m).active()) {
+            st.motion.land();
+            send(out, std::min(to, frames_ - 1), channel);
+         }
       }
       const double dt = kMotionStep / sampleRate_;
       // Steps must land inside the block; one due right at its end runs at the start of the next.
@@ -352,7 +374,7 @@ private:
          for (int channel = 0; channel < 16; ++channel) {
             ChannelState &st = channels_[channel];
             if (st.motion.moving()) {
-               st.motion.step(dt, m);
+               st.motion.step(dt, motionFor(st, m));
                send(out, clock_, channel);
             }
          }
@@ -414,8 +436,9 @@ private:
       ChannelState &st = channels_[channel];
       if (!st.hasX || !st.hasY || conflicting())
          return;
-      const double x = jclap::ccToBipolar(st.x), y = jclap::ccToBipolar(st.y);
-      if (motion().active())
+      const double x = st.fromPad ? jclap::ccToBipolar(st.padX) : jclap::ccToBipolar(st.x);
+      const double y = st.fromPad ? jclap::ccToBipolar(st.padY) : jclap::ccToBipolar(st.y);
+      if (motionFor(st, motion()).active())
          st.motion.follow(x, y);
       else
          st.motion.place(x, y);
@@ -457,14 +480,17 @@ private:
 
    // A move of the panel's XY pad: the shown channel goes there as if the controller had sent it.
    void applyDrag(const clap_output_events_t *out) {
-      const uint32_t v = dragIn_.load();
+      const uint64_t v = dragIn_.load();
       if (v == dragSeen_)
          return;
       dragSeen_ = v;
       const int channel = panelChannel_;
       ChannelState &st = channels_[channel];
-      st.x = static_cast<int>(v >> 8) & 0x7F;
-      st.y = static_cast<int>(v) & 0x7F;
+      st.padX = static_cast<double>((v >> 16) & 0xFFFF) / kPadScale;
+      st.padY = static_cast<double>(v & 0xFFFF) / kPadScale;
+      st.fromPad = true;
+      st.x = static_cast<int>(std::lround(st.padX));
+      st.y = static_cast<int>(std::lround(st.padY));
       st.hasX = st.hasY = true;
       lastIn_.store(static_cast<uint32_t>(channel) << 16 | static_cast<uint32_t>(st.x) << 8 |
                     static_cast<uint32_t>(st.y));
@@ -499,6 +525,7 @@ private:
       const bool dragging = dragging_.load();
       if (dragging && channel == panelChannel_)
          return true;
+      st.fromPad = false;
       if (cc == intParam(kParamInX)) {
          st.x = value;
          st.hasX = true;
@@ -536,11 +563,11 @@ private:
    int panelChannel_ = 0;
    std::atomic<uint32_t> lastIn_{64u << 8 | 64u};
    std::atomic<int32_t> lastOut_{-1};
-   // The XY pad's last move (sequence << 16 | x << 8 | y; 0 for none yet), whether it is held, and
-   // the last move the audio thread took.
-   std::atomic<uint32_t> dragIn_{0};
+   // The XY pad's last move (see kPadScale; 0 for none yet), whether it is held, and the last move
+   // the audio thread took.
+   std::atomic<uint64_t> dragIn_{0};
    std::atomic<bool> dragging_{false};
-   uint32_t dragSeen_ = 0;
+   uint64_t dragSeen_ = 0;
    // The preset last loaded or saved (main thread).
    std::string presetName_ = "Init";
    jclap::core::EditQueue edits_;

@@ -3,9 +3,11 @@
 #include <jclap/core/test_host.h>
 
 #include "editor.h"
+#include "polar.h"
 #include "presets.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <utility>
 #include <vector>
@@ -67,24 +69,25 @@ void motionTests() {
    JCLAP_CHECK(p.angles.size() > 20);
    JCLAP_CHECK(!p.angles.empty() && p.angles.back() == 0);
 
-   // Inertia: a quarter turn up swings past the top and comes back to settle there.
+   // Inertia: a quarter turn up swings past the top and comes back to settle there (60% swings
+   // for a couple of seconds, so this runs 8 s).
    h.setParam(8, 0.0);
    h.setParam(9, 60.0);
    h.midi(0xB0, 16, 64);
    h.midi(0xB0, 17, 127);
-   p = run(h, 400);
+   p = run(h, 1500);
    JCLAP_CHECK(!p.angles.empty() && *std::max_element(p.angles.begin(), p.angles.end()) > 36);
    JCLAP_CHECK(!p.angles.empty() && p.angles.back() == 32);
    JCLAP_CHECK(p.radii.empty() || p.radii.back() == 127);
 
-   // A whirl: a turn and a half round the circle in quarter steps, about 50 ms apart. Around unwraps the
+   // A whirl: a turn and a half round the circle in quarter steps, about 150 ms apart. Around unwraps the
    // angle, so the output keeps going round the same way, through the bottom, and on past the top.
    std::vector<int> whirl;
    const int steps[][2] = {{0, 64}, {64, 0}, {127, 64}, {64, 127}, {0, 64}, {64, 0}};
    for (const auto &xy : steps) {
       h.midi(0xB0, 16, static_cast<uint8_t>(xy[0]));
       h.midi(0xB0, 17, static_cast<uint8_t>(xy[1]));
-      p = run(h, 10);
+      p = run(h, 28);
       whirl.insert(whirl.end(), p.angles.begin(), p.angles.end());
    }
    // Counter-clockwise all the way: each angle is the last plus a small step (mod 127), never a
@@ -141,17 +144,45 @@ void dragTests() {
    out = h.process();
    JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 18 && out.midi[0].data2 == 32);
 
-   // A move released before the next block still lands (a double-click reset is set and let go at once).
+   // A move released before the next block still lands (a double-click reset is set and let go at
+   // once), gliding there briefly like every pad move.
    editor->dragInput(0, 64);
    editor->releaseInput();
-   out = h.process();
-   JCLAP_CHECK(!out.midi.empty() && out.midi[0].data1 == 18 && out.midi[0].data2 == 64);
+   Path p = run(h, 40);
+   JCLAP_CHECK(!p.angles.empty() && p.angles.back() == 64);
+   JCLAP_CHECK(run(h, 2).angles.empty());
+
+   // Pad moves glide even with Smoothing off: the mouse comes a few dozen times a second, a block at
+   // a time, and stepping straight to each move is choppy. A quarter turn sweeps the angle through
+   // the values between, one CC step at a time.
+   editor->dragInput(64, 127);
+   p = run(h, 40);
+   JCLAP_CHECK(p.angles.size() > 10);
+   int jumps = 0;
+   for (size_t i = 1; i < p.angles.size(); ++i)
+      jumps += std::abs(p.angles[i] - p.angles[i - 1]) > 2;
+   JCLAP_CHECK_EQ(jumps, 0);
+   JCLAP_CHECK(!p.angles.empty() && p.angles.back() == 32);
+
+   // The pad isn't rounded to CC steps: circling it slowly at a small radius, where the CC grid has
+   // only a few angles, each position still settles on its own angle, not the nearest grid point's.
+   int angle = -1, wrong = 0;
+   for (int i = 0; i <= 40; ++i) {
+      const double a = i * jclap::kPi / 80.0;
+      editor->dragInput(64.0 + 12.0 * std::cos(a), 64.0 + 12.0 * std::sin(a));
+      p = run(h, 40);
+      if (!p.angles.empty())
+         angle = p.angles.back();
+      wrong += angle != static_cast<int>(std::lround(a / (2.0 * jclap::kPi) * 127.0));
+   }
+   JCLAP_CHECK_EQ(wrong, 0);
+   editor->releaseInput();
 
    // Smoothing applies to the pad too: it glides there in steps.
    h.setParam(8, 100.0);
    h.process();
    editor->dragInput(127, 64);
-   Path p = run(h, 40);
+   p = run(h, 40);
    JCLAP_CHECK(p.radii.size() > 10);
    JCLAP_CHECK(!p.radii.empty() && p.radii.back() == 127);
    editor->releaseInput();

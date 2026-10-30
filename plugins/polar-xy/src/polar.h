@@ -14,6 +14,12 @@ inline double ccToBipolar(int v) {
    return v >= 64 ? (v - 64) / 63.0 : (v - 64) / 64.0;
 }
 
+// The same for a position between the CC steps (0..127), as the panel's XY pad gives.
+inline double ccToBipolar(double v) {
+   v = std::clamp(v, 0.0, 127.0);
+   return v >= 64.0 ? (v - 64.0) / 63.0 : (v - 64.0) / 64.0;
+}
+
 // Around the centre a controller's ±1 jitter would swing the angle across quadrants, so inside this
 // radius (on the -1..+1 scale; one CC step is about 0.016) the angle holds and the radius is 0. The
 // radius is measured from its edge, so it still starts at 1.

@@ -19,9 +19,10 @@ public:
    // What that channel last sent: its angle and radius CCs. False while it hasn't sent any (only one
    // axis has arrived), and then angle and radius are left as they were.
    virtual bool lastOutput(int &angle, int &radius) const = 0;
-   // The XY IN pad dragged with the mouse: moves the shown channel to this X/Y (0..127) as the
-   // controller would, and holds it there, ignoring that channel's X/Y CCs, until released.
-   virtual void dragInput(int x, int y) = 0;
+   // The XY IN pad dragged with the mouse: moves the shown channel to this X/Y (0..127, between the
+   // CC steps too) as the controller would, and holds it there, ignoring that channel's X/Y CCs,
+   // until released.
+   virtual void dragInput(double x, double y) = 0;
    virtual void releaseInput() = 0;
    // The name of the preset last loaded or saved, kept with the project.
    virtual std::string presetName() const = 0;
