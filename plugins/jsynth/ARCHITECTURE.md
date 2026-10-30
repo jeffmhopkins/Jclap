@@ -431,7 +431,7 @@ A route whose destination is a flock param moves that creature's own flight: Pre
 the creature you press harder fly faster. Those are read only on ticks that end with a flock step.
 
 **MAP** writes the same routes from the panel: touch a source chip (which turns MAP on with it
-armed), then drag a knob. The
+armed), then drag a knob; touching the armed chip again turns MAP off. The
 first drag on a knob takes a free route for that source and destination; double-click flips its
 sign, right-click removes it. The value boxes MAP the same way, and a Shape envelope's drawing
 takes a sideways drag as a route onto its Warp and an up-or-down one onto its Bend. Route rings show only in MAP with a source armed: each knob that

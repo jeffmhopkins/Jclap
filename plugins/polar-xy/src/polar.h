@@ -14,6 +14,12 @@ inline double ccToBipolar(int v) {
    return v >= 64 ? (v - 64) / 63.0 : (v - 64) / 64.0;
 }
 
+// The same for a position between the CC steps (0..127), as the panel's XY pad gives.
+inline double ccToBipolar(double v) {
+   v = std::clamp(v, 0.0, 127.0);
+   return v >= 64.0 ? (v - 64.0) / 63.0 : (v - 64.0) / 64.0;
+}
+
 // Around the centre a controller's ±1 jitter would swing the angle across quadrants, so inside this
 // radius (on the -1..+1 scale; one CC step is about 0.016) the angle holds and the radius is 0. The
 // radius is measured from its edge, so it still starts at 1.
@@ -27,9 +33,13 @@ struct PolarSettings {
    RadiusMode radiusMode = RadiusMode::ClampToCircle;
 };
 
+// The top of a 7-bit CC, and of a 14-bit one (an MSB and LSB pair).
+constexpr int kSteps7 = 127;
+constexpr int kSteps14 = 16383;
+
 struct PolarCC {
-   int angle = 0;       // 0..126 in steps of 360/127 degrees (127 would be 360, the same as 0)
-   int radius = 0;      // 0..127, 0 = center, 127 = edge
+   int angle = 0;       // 0..steps-1 in steps of 360/steps degrees (steps would be 360, the same as 0)
+   int radius = 0;      // 0..steps, 0 = center, steps = edge
    bool hasAngle = false; // false at dead center, where the angle is undefined
 };
 
@@ -40,23 +50,24 @@ inline double wrapDegrees(double deg) {
    return deg;
 }
 
-// x/y on the -1..+1 scale (see ccToBipolar); Y grows upward.
-inline PolarCC toPolar(double x, double y, const PolarSettings &s) {
+// x/y on the -1..+1 scale (see ccToBipolar); Y grows upward. `steps` is the CC's top value: 127,
+// or 16383 for 14-bit.
+inline PolarCC toPolar(double x, double y, const PolarSettings &s, int steps = kSteps7) {
    PolarCC out;
    double r = s.radiusMode == RadiusMode::FillSquare ? std::max(std::abs(x), std::abs(y))
                                                      : std::hypot(x, y);
    r = std::clamp(r, 0.0, 1.0);
    if (r < kDeadZone)
       return out;
-   out.radius = static_cast<int>(std::lround((r - kDeadZone) / (1.0 - kDeadZone) * 127.0));
+   out.radius = static_cast<int>(std::lround((r - kDeadZone) / (1.0 - kDeadZone) * steps));
 
    double deg = std::atan2(y, x) * 180.0 / kPi;
    if (s.clockwise)
       deg = -deg;
    deg = wrapDegrees(deg + s.angleOffsetDeg);
    // A 0..127 CC read as v / 127 of a turn makes 127 the same angle as 0, so a turn is 0..126 and
-   // what would round to 127 is sent as 0.
-   out.angle = static_cast<int>(std::lround(deg / 360.0 * 127.0)) % 127;
+   // what would round to 127 is sent as 0 (and likewise for 14-bit).
+   out.angle = static_cast<int>(std::lround(deg / 360.0 * steps)) % steps;
    out.hasAngle = true;
    return out;
 }

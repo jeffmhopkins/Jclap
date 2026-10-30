@@ -186,7 +186,7 @@ the mouse moving and come back when it moves. The sky has two looks, picked over
 one as a star, its ink hanging curtains of light over a horizon. The menu beside them picks a palette
 (Ember, Borealis, Glacier, Sunset, Moonlight, Neon or Classic); each look keeps its own, and both are
 saved with the project. **SIZE** beside them draws the creatures and their ink from 50% to 300% as
-big. Lures show as ripples or small diamonds (**RINGS** shows or hides them), a
+big. Lures show as ripples or small diamonds, a
 pink ring is a creature that's been caught, and links join each creature to the neighbour it hears
 most. Hover a creature to read its Speed, Turn and Nearest; in Sumi the mouse stirs the ink. A
 creature glows brighter the harder you press, and fades with its sound after you let go. The flock flies on the audio
@@ -197,7 +197,8 @@ from the same start.
 
 There is no matrix page. Click a source chip and **MAP** turns on with it armed; drag any knob and
 the drag sets how far that source moves it, drawn as a ring in the source's colour (up to four per
-knob). Double-click a knob to flip its route, right-click to remove it. Sources are the touch chips
+knob). Double-click a knob to flip its route, right-click to remove it. Click the armed chip again
+to turn MAP off. Sources are the touch chips
 in the header (Velocity, Press, Glide, Slide, Release), the envelope, LFO and bus chips on their
 cards, and the flock's own under the sky (Speed, Nearest, Heading, Turn, Random). Key, Mod Wheel and
 four macros are in the route list. While a part plays, each moved knob shows a white line out to
