@@ -283,6 +283,46 @@ void fineTests() {
    JCLAP_CHECK(h.paramText(11, 1.0) == "14-bit");
 }
 
+// 14-bit input: an LSB on the input CC + 32 places the axis between the CC steps.
+void fineInputTests() {
+   jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+   h.setParam(11, 1.0);
+   h.midi(0xB0, 16, 96);
+   h.midi(0xB0, 48, 64); // X's LSB: half a step on, 96.5
+   h.midi(0xB0, 17, 64);
+   auto out = h.process();
+   const int radius = jclap::toPolar(jclap::ccToBipolar(96.5), 0.0, {}, jclap::kSteps14).radius;
+   JCLAP_CHECK(radius != jclap::toPolar(jclap::ccToBipolar(96), 0.0, {}, jclap::kSteps14).radius);
+   int msb = -1, lsb = -1;
+   for (const auto &m : out.midi) {
+      JCLAP_CHECK(m.data1 != 48); // taken, not passed on
+      msb = m.data1 == 19 ? m.data2 : msb;
+      lsb = m.data1 == 51 ? m.data2 : lsb;
+   }
+   JCLAP_CHECK(msb == (radius >> 7) && lsb == (radius & 0x7F));
+
+   // A new MSB on its own is the whole value again: a 7-bit controller is unaffected.
+   h.midi(0xB0, 16, 96);
+   out = h.process();
+   msb = lsb = -1;
+   for (const auto &m : out.midi) {
+      msb = m.data1 == 19 ? m.data2 : msb;
+      lsb = m.data1 == 51 ? m.data2 : lsb;
+   }
+   const int coarse = jclap::toPolar(jclap::ccToBipolar(96), 0.0, {}, jclap::kSteps14).radius;
+   JCLAP_CHECK(msb == (coarse >> 7) && lsb == (coarse & 0x7F));
+
+   // Y on X's LSB CC is Y: the input CCs come first.
+   h.setParam(1, 48.0);
+   h.midi(0xB0, 16, 64);
+   h.midi(0xB0, 48, 127);
+   out = h.process();
+   int angle = -1;
+   for (const auto &m : out.midi)
+      angle = m.data1 == 18 ? m.data2 : angle;
+   JCLAP_CHECK_EQ(angle, 32); // straight up: 16383 / 4 rounds to 4096, MSB 32
+}
+
 } // namespace
 
 int main() {
@@ -440,5 +480,6 @@ int main() {
    dragTests();
    fineTests();
    learnTests();
+   fineInputTests();
    return jclap::core::testResult();
 }

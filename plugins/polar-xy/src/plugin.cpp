@@ -27,9 +27,10 @@ struct ChannelState {
    // The last X/Y seen. Nothing is sent until both have arrived: the other axis isn't known.
    int x = 64, y = 64;
    bool hasX = false, hasY = false;
-   // Set by the panel's XY pad: where it really is, between the CC steps (0..127), until the
-   // controller moves again. The mouse arrives a block at a time, so the output glides between moves.
-   double padX = 64.0, padY = 64.0;
+   // The same X/Y between the CC steps (0..127), which is what converts: from a 14-bit controller's
+   // LSBs, or the panel's XY pad. fromPad: the pad has it, until the controller moves again; the mouse
+   // arrives a block at a time, so the output glides between its moves.
+   double fx = 64.0, fy = 64.0;
    bool fromPad = false;
    // The angle held at dead center, and what was last sent on the output CCs (-1: send again), in
    // the output's resolution.
@@ -458,8 +459,7 @@ private:
       ChannelState &st = channels_[channel];
       if (!st.hasX || !st.hasY || conflicting())
          return;
-      const double x = st.fromPad ? jclap::ccToBipolar(st.padX) : jclap::ccToBipolar(st.x);
-      const double y = st.fromPad ? jclap::ccToBipolar(st.padY) : jclap::ccToBipolar(st.y);
+      const double x = jclap::ccToBipolar(st.fx), y = jclap::ccToBipolar(st.fy);
       if (motionFor(st, motion()).active())
          st.motion.follow(x, y);
       else
@@ -526,11 +526,11 @@ private:
       dragSeen_ = v;
       const int channel = panelChannel_;
       ChannelState &st = channels_[channel];
-      st.padX = static_cast<double>((v >> 16) & 0xFFFF) / kPadScale;
-      st.padY = static_cast<double>(v & 0xFFFF) / kPadScale;
+      st.fx = static_cast<double>((v >> 16) & 0xFFFF) / kPadScale;
+      st.fy = static_cast<double>(v & 0xFFFF) / kPadScale;
       st.fromPad = true;
-      st.x = static_cast<int>(std::lround(st.padX));
-      st.y = static_cast<int>(std::lround(st.padY));
+      st.x = static_cast<int>(std::lround(st.fx));
+      st.y = static_cast<int>(std::lround(st.fy));
       st.hasX = st.hasY = true;
       lastIn_.store(static_cast<uint32_t>(channel) << 16 | static_cast<uint32_t>(st.x) << 8 |
                     static_cast<uint32_t>(st.y));
@@ -569,7 +569,12 @@ private:
 
       if (conflicting())
          return false;
-      if (cc != intParam(kParamInX) && cc != intParam(kParamInY))
+      const int inX = intParam(kParamInX), inY = intParam(kParamInY);
+      // A 14-bit controller sends each axis's LSB on its CC + 32 (MIDI's pairing for CCs 0-31), after
+      // the MSB; a 7-bit one just never does.
+      const bool lsbX = inX < 32 && cc == inX + 32 && cc != inY;
+      const bool lsbY = inY < 32 && cc == inY + 32 && cc != inX;
+      if (cc != inX && cc != inY && !lsbX && !lsbY)
          return false;
       const bool passThrough = intParam(kParamPassThrough) != 0;
       if (passThrough)
@@ -579,13 +584,24 @@ private:
       const bool dragging = dragging_.load();
       if (dragging && channel == panelChannel_)
          return true;
-      st.fromPad = false;
-      if (cc == intParam(kParamInX)) {
+      if (st.fromPad) {
+         st.fx = st.x;
+         st.fy = st.y;
+         st.fromPad = false;
+      }
+      // An MSB on its own is the whole value, so a 7-bit controller lands on the CC step exactly.
+      if (cc == inX) {
          st.x = value;
+         st.fx = value;
          st.hasX = true;
-      } else if (cc == intParam(kParamInY)) {
+      } else if (cc == inY) {
          st.y = value;
+         st.fy = value;
          st.hasY = true;
+      } else if (lsbX) {
+         st.fx = std::min(st.x + value / 128.0, 127.0);
+      } else {
+         st.fy = std::min(st.y + value / 128.0, 127.0);
       }
       // The panel follows the channel that moved last, as one tear-free value.
       if (channel != panelChannel_ && !dragging) {

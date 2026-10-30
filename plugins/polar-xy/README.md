@@ -86,6 +86,11 @@ then the bottom 7 on that CC + 32 (so the defaults, 18 and 19, also send on 50 a
 panel says so. Whether the receiving end reads the pair as one fine value is up to it; one that
 doesn't just sees the coarse CC move as before, plus two extra CCs.
 
+Input takes 14-bit too, with nothing to set: when an input CC is below 32, an LSB on that CC + 32
+(sent after the MSB, as 14-bit controllers do) places the axis between the CC steps. The LSB CCs are
+taken like the input CCs (passed on only with Pass Input CCs). A 7-bit controller never sends them,
+and each MSB on its own is the whole value, so nothing changes for one.
+
 ## Panel
 
 **XY IN** shows the last X/Y position received, with its channel, and **POLAR OUT** the angle and
