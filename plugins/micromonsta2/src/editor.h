@@ -41,7 +41,8 @@ public:
 // The plugin window with the panel in it.
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
-// Draws the panel offscreen at the given pixel size and saves it as a PNG (for docs and checks).
-bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath);
+// Draws one page of the panel (0 SOUND, 1 MODULATION, 2 ARP & KNOBS) offscreen at the given pixel
+// size and saves it as a PNG (for docs and checks).
+bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, int page = 0);
 
 } // namespace mm2

@@ -156,6 +156,8 @@ public:
       return v;
    }
    void sent(int i, int value) { lastSent_[i] = lastKnob_[i] = value; }
+   // Sends parameter i again even if it hasn't moved (the synth's value was changed another way).
+   void forget(int i) { lastSent_[i] = lastKnob_[i] = -1; }
    // The synth got `value` for this CC from elsewhere (a controller's CC passed through).
    void heard(int i, int value) { lastSent_[i] = value; }
 

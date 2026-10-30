@@ -2,17 +2,19 @@
 
 # MicroMonsta 2 CC
 
-A knob panel that sends every Audiothingies MicroMonsta 2 sound parameter as a MIDI CC.
+A full panel for the Audiothingies MicroMonsta 2: every sound parameter, sent as MIDI CC or NRPN.
 
-[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: note effect](https://img.shields.io/badge/CLAP-note%20effect-blue)](https://github.com/free-audio/clap) [![parameters: 61 CCs](https://img.shields.io/badge/parameters-61%20CCs-blue)](docs/cc-map.csv) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage)
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: note effect](https://img.shields.io/badge/CLAP-note%20effect-blue)](https://github.com/free-audio/clap) [![parameters: 61 CCs + 92 NRPN settings](https://img.shields.io/badge/parameters-61%20CCs%20%2B%2092%20NRPN-blue)](docs/cc-map.csv) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage)
 
 </div>
 
 A CLAP note effect for the Audiothingies MicroMonsta 2. Every sound parameter the
 synth accepts over MIDI CC is a host parameter, so it can be automated or modulated, and each change goes
-out to the synth as a CC. Notes and other MIDI pass straight through.
+out to the synth as a CC. The program settings no CC reaches (the mod matrix routing, oscillator
+algorithms, filter type, LFO waves and sync, voice and effect modes, the arpeggiator and more) are
+host parameters too, sent as NRPN. Notes and other MIDI pass straight through.
 
-![Panel](docs/panel.png)
+![Synth page](docs/panel.png)
 
 ## Using it in Bitwig
 
@@ -135,21 +137,63 @@ From the *MicroMonsta 2 User manual v2.8*, section 7.1. The full list is in
 
 Bank select (0/32), sustain (64) and All Sound/Notes Off (120/123) are left out.
 
+## Settings (NRPN)
+
+The synth stores 92 settings in a program that no CC reaches. The plugin sends them as NRPN on the
+panel's channel (CC 99 = NRPN >> 7, CC 98 = NRPN & 127, CC 6 = the value, and CC 38 = its low 7 bits
+for the 14-bit ones), the same way the Monstaguru editor sends its live edits. The numbers, ranges and
+dump bytes come from that editor, and the full list is in `src/settings.h`.
+
+| Group | Settings (NRPN) |
+|---|---|
+| Oscillators | Osc1/2/3 algorithm 27/31/35 (wavetables on 2 and 3), phase reset 124 |
+| Filter | Type 125, character 126 |
+| Envelopes | Env1/2/3 reset to zero 120-122 |
+| LFOs | Wave 61/64/67, tempo sync 62/65/68, trigger 63/66/69 |
+| Mod matrix | Slot 1-10 source and destination 70-98, lag source 100, mult 1 and 2 sources 102-105 |
+| Voice | Voice mode 117, unison 118, pan spread mode 119, bend down 23 and up 24 |
+| Effects | Chorus mode 127, delay mode 128, delay sync 108 |
+| Arpeggiator | On 130, latch 131, style 114, speed 116, gate 115, octaves 132, length 133, steps 1-16 134-149 |
+| Program | Name 1-8 (one character each), tempo 18, volume 17, category 9, F/Q/M knobs and encoders 1-4 10-16 |
+
+- As with the CCs, a setting only goes out once something has set it. After a Program Change or a
+  sound read off the synth, the program's settings count as sent.
+- A tempo sync (LFO or delay) overrides its speed knob on the synth. Setting it back to FREE sends the
+  speed knob's CC again.
+- Programs from the built-in bank, READ BANK and READ SOUND bring their settings, so the panel shows
+  the program's routing, modes and arp pattern.
+
+> [!NOTE]
+> These were checked against the Monstaguru editor's code and the factory bank, not yet on a synth.
+
 ## Panel
 
-Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage. `src/editor.cpp`
-holds the layout and `src/visuals.h` the pictures. The panel reads top to bottom like the synth:
+Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage, and styled like
+JSynth: dark translucent cards, with each knob's name over it and its value under it (its CC is in
+its hover help). `src/editor.cpp` holds the layout and `src/visuals.h` the pictures. The tabs in the
+header pick one of three pages:
 
-- **Audio path:** sources (three oscillators with their levels, noise and osc detune), filter, voice,
-  effects and out.
-- **Envelopes:** three large editors. Drag a corner, or drag or type in the A/D/S/R boxes under it.
-  Every stage keeps a minimum width, so a zero attack or decay still leaves each corner grabbable.
-- **Modulation:** the LFOs, mod wheel and mod knob, then the mod matrix table.
+- **Synth:** the whole sound on one page, with the mod wheel and mod knob in the voice card. Oscillators (algorithm, a picture of the wave, shape, tune,
+  fine and level, then noise, osc detune, the mix and phase reset), voice (mode, unison, glide,
+  detune, drive, pan spread, velocity, volume, bend range), the filter (type, character, a response
+  curve and its knobs), the three LFOs (a picture of the wave, speed, wave, tempo sync and trigger),
+  the envelopes (drag a corner, or drag or type in a box; each has its reset-to-zero toggle) and the
+  effects (delay with its mode and sync, reverb, chorus and the tilt EQ).
+- **Mod matrix:** the ten slots with each one's source, destination and amount, the mod wheel and
+  mod knob, and the lag and multiply operators.
+- **Arp & program:** the arpeggiator's settings and its 16 steps, drawn as a piano roll over a pad per step; the
+  program's name, tempo, volume and category; and what the synth's own F, Q and M knobs and four
+  encoders control.
+
+![Mod matrix page](docs/panel-modulation.png)
+
+![Arp & program page](docs/panel-arp.png)
 
 The pictures are drawn only from the CC values and the program's routing, since the plugin can't hear
-the synth: a filter response (a guide; the filter type is set on the synth), delay echoes from time
+the synth: a lowpass filter response (a guide, whatever the filter type), delay echoes from time
 and feedback, a reverb tail from decay, the EQ tilt, the pan spread and the mix. The delay and reverb
-pictures dim when their level is 0. The LFO lights blink at a guess of each speed.
+pictures dim when their level is 0. The oscillator and LFO waves are guides drawn from the algorithm
+or wave and the shape knob. The LFO lights blink at a guess of each speed.
 
 Drag a knob up or down (shift for fine), use the mouse wheel for single steps, double-click to reset.
 Right-click a knob to reset it, type a value, or reach the host's menu for that parameter;
@@ -157,5 +201,6 @@ right-click the background to pick a UI size. The window can be resized and keep
 
 > [!TIP]
 > To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
-> `build/plugins/micromonsta2/micromonsta2-screenshot plugins/micromonsta2/docs/panel.png`. With tools
-> on, `ctest` checks the panel still renders like that image.
+> `build/plugins/micromonsta2/micromonsta2-screenshot plugins/micromonsta2/docs/panel.png`. Add
+> `1640 1142 1` or `1640 1142 2` for the other pages (`panel-modulation.png`, `panel-arp.png`). With
+> tools on, `ctest` checks the pages still render like those images.

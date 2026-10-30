@@ -33,4 +33,8 @@ if(JCLAP_BUILD_TOOLS)
       target_link_libraries(micromonsta2-screenshot PRIVATE ws2_32)
    endif()
    jclap_add_screenshot_test(micromonsta2-screenshot-test TOOL micromonsta2-screenshot REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel.png)
+   jclap_add_screenshot_test(micromonsta2-screenshot-modulation-test TOOL micromonsta2-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-modulation.png ARGS 1640 1142 1)
+   jclap_add_screenshot_test(micromonsta2-screenshot-arp-test TOOL micromonsta2-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-arp.png ARGS 1640 1142 2)
 endif()

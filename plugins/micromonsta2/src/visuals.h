@@ -23,6 +23,24 @@ using CcValue = std::function<double(int cc)>;
 
 inline unsigned withAlpha(unsigned color, unsigned alpha) { return (color & 0x00ffffff) | (alpha << 24); }
 
+// The panel's look: translucent widgets on dark cards, like JSynth's.
+inline const ui::Theme &glassTheme() {
+   static const ui::Theme theme = [] {
+      ui::Theme t;
+      t.background = 0xff090c13;
+      t.track = 0x40ffffff;
+      t.knobLight = 0xff3a4152;
+      t.knobDark = 0xff141823;
+      t.dimText = 0xff9aa3b5;
+      t.button = 0x40141a26;
+      t.buttonHover = 0x60283040;
+      t.panel = 0x80141a26;
+      t.panelBorder = 0x40ffffff;
+      return t;
+   }();
+   return theme;
+}
+
 // Base for a picture: ignores the mouse and draws on a dark inset like the envelope editor.
 class Picture : public visage::Frame {
 public:
@@ -44,7 +62,7 @@ protected:
    float s(float designHeight) const { return height() / designHeight; }
 
    void inset(visage::Canvas &c) {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float r = std::min(width(), height()) * 0.05f;
       c.setColor(t.knobDark);
       c.roundedRectangle(0, 0, width(), height(), r);
@@ -79,7 +97,7 @@ class FilterCurve : public Picture {
 public:
    using Picture::Picture;
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float k = s(176.0f), w = width(), h = height(), pad = 8 * k;
       inset(c);
       constexpr int kPoints = 160;
@@ -139,7 +157,7 @@ public:
       std::copy(colors, colors + 4, colors_);
    }
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float w = width(), h = height();
       double total = 0;
       for (int i = 0; i < 4; ++i)
@@ -172,7 +190,7 @@ class DelayTaps : public Picture {
 public:
    DelayTaps(CcValue value, unsigned color) : Picture(std::move(value)), color_(color) {}
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float k = s(72.0f), w = width(), h = height(), pad = 10 * k, floor = h - pad;
       inset(c);
       const bool heard = cc(28) > 0;
@@ -208,7 +226,7 @@ class ReverbTail : public Picture {
 public:
    ReverbTail(CcValue value, unsigned color) : Picture(std::move(value)), color_(color) {}
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float k = s(72.0f), w = width(), h = height(), pad = 10 * k, floor = h - pad;
       inset(c);
       const bool heard = cc(31) > 0;
@@ -247,7 +265,7 @@ class EqTilt : public Picture {
 public:
    EqTilt(CcValue value, unsigned color) : Picture(std::move(value)), color_(color) {}
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float k = s(72.0f), w = width(), h = height(), pad = 14 * k, mid = h * 0.5f;
       inset(c);
       c.setColor(t.track);
@@ -276,7 +294,7 @@ class PanFan : public Picture {
 public:
    using Picture::Picture;
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float k = s(100.0f), w = width(), h = height();
       inset(c);
       const float cx = w * 0.5f, cy = h - 18 * k, r = std::min(w * 0.5f - 16 * k, h - 34 * k);
@@ -302,15 +320,351 @@ protected:
    double signature() const override { return cc(35); }
 };
 
+// The arpeggiator's 16 steps as a little piano roll: one column per step, a block on the lane of the
+// held note it plays (1st at the bottom), as wide as the gate. AUTO steps are faint and follow the
+// style; ties join the step before, chords stack, and steps past the length are dim. Reads the
+// settings by CLAP id (idBase + NRPN), as the panel's host has them.
+class ArpPattern : public Picture {
+public:
+   ArpPattern(CcValue value, unsigned accent, int idBase) : Picture(std::move(value)), accent_(accent), base_(idBase) {}
+
+   void draw(visage::Canvas &c) override {
+      const ui::Theme &t = glassTheme();
+      const float w = width(), h = height(), col = w / 16.0f, r = std::min(w, h) * 0.03f;
+      constexpr int kLanes = 6;
+      const float top = h * 0.05f, laneH = (h * 0.9f) / kLanes;
+      const auto laneY = [&](int lane) { return top + (kLanes - 1 - lane) * laneH; };
+      const bool on = setting(130) > 0;
+      const int length = setting(133) + 1, style = setting(114);
+      const float gate = 0.2f + 0.8f * static_cast<float>(setting(115)) / 127.0f;
+      const unsigned accent = on ? accent_ : withAlpha(accent_, 0x90);
+
+      // The roll: lanes in alternating shades, beats marked every four steps, and the steps past the
+      // length shaded out.
+      c.setColor(0xff0d1119);
+      c.roundedRectangle(0, 0, w, h, r);
+      for (int l = 0; l < kLanes; ++l) {
+         c.setColor(l % 2 ? 0x0affffff : 0x04ffffff);
+         c.fill(0, laneY(l), w, laneH);
+      }
+      for (int i = 1; i < 16; ++i) {
+         c.setColor(i % 4 == 0 ? 0x24ffffff : 0x0cffffff);
+         c.fill(i * col, 0, 1.0f, h);
+      }
+      if (length < 16) {
+         c.setColor(0x70070910);
+         c.fill(length * col, 0, w - length * col, h);
+         c.setColor(withAlpha(accent_, 0x60));
+         c.fill(length * col - 1.0f, 0, 2.0f, h);
+      }
+      c.setColor(t.dimText);
+      const char *lanes[] = {"1ST", "2ND", "3RD", "4TH", "5TH", "6TH"};
+      for (int l = 0; l < kLanes; ++l)
+         c.text(lanes[l], ui::font(laneH * 0.15f), visage::Font::kLeft, 5.0f, laneY(l) + 1.0f, col, laneH * 0.18f);
+
+      // The notes: a block per step on the lane of the note it plays.
+      int lane = 0, autoIndex = 0, prevLane = -1;
+      float prevRight = 0;
+      for (int i = 0; i < 16; ++i) {
+         const int step = setting(134 + i);
+         const unsigned alpha = i < length ? 0xff : 0x50;
+         const float x = i * col + col * 0.1f, bw = col * 0.8f * gate, pad = laneH * 0.2f;
+         const auto block = [&](int l, bool fromStyle) {
+            const float y = laneY(l) + pad, bh = laneH - 2 * pad;
+            c.setColor(withAlpha(accent, fromStyle ? alpha * 0x50 / 0xff : alpha * 0xd0 / 0xff));
+            c.roundedRectangle(x, y, bw, bh, bh * 0.22f);
+            c.setColor(withAlpha(accent, alpha));
+            c.roundedRectangleBorder(x, y, bw, bh, bh * 0.22f, 1.5f);
+            if (!fromStyle) {
+               c.setColor(withAlpha(0xffffffff, alpha * 0x50 / 0xff));
+               c.fill(x + bh * 0.2f, y + 2.0f, bw - bh * 0.4f, 1.5f);
+            }
+            prevLane = l;
+            prevRight = x + bw;
+         };
+         switch (step) {
+         case 0: // auto: the style's next note
+            lane = autoLane(style, autoIndex++, kLanes);
+            block(lane, true);
+            break;
+         case 1: // off: a rest
+            c.setColor(withAlpha(t.dimText, alpha * 0x80 / 0xff));
+            c.fill(i * col + col * 0.38f, laneY(0) + laneH * 0.5f, col * 0.24f, 2.0f);
+            prevLane = -1;
+            break;
+         case 2: // tie: the last note carries on through this step
+            if (prevLane >= 0) {
+               const float y = laneY(prevLane) + laneH * 0.4f;
+               c.setColor(withAlpha(accent, alpha * 0xb0 / 0xff));
+               c.roundedRectangle(prevRight - 2.0f, y, (i + 0.9f) * col - prevRight + 2.0f, laneH * 0.2f, laneH * 0.1f);
+               prevRight = (i + 0.9f) * col;
+            }
+            break;
+         case 3: lane = std::max(0, lane - 1); block(lane, false); break;
+         case 10: lane = std::min(kLanes - 1, lane + 1); block(lane, false); break;
+         case 11: // chord: every held note
+            for (int l = 0; l < 4; ++l)
+               block(l, false);
+            break;
+         default: // 1st-6th held note
+            lane = std::clamp(step - 4, 0, kLanes - 1);
+            block(lane, false);
+            break;
+         }
+      }
+
+      c.setColor(withAlpha(0xffffffff, 0x1e));
+      c.roundedRectangleBorder(0, 0, w, h, r, 1.0f);
+      if (!on) {
+         const float bw = h * 0.36f, bh = h * 0.08f;
+         c.setColor(0xd0070910);
+         c.roundedRectangle(w - bw - h * 0.03f, h * 0.03f, bw, bh, bh * 0.5f);
+         c.setColor(t.dimText);
+         c.text("ARP OFF", ui::font(bh * 0.5f), visage::Font::kCenter, w - bw - h * 0.03f, h * 0.03f, bw, bh);
+      }
+   }
+
+protected:
+   double signature() const override {
+      double sum = 0;
+      for (int n = 114; n <= 149; ++n)
+         sum = sum * 1.000003 + cc(base_ + n) * (n % 13 + 1);
+      return sum;
+   }
+
+private:
+   int setting(int nrpn) const { return static_cast<int>(std::lround(cc(base_ + nrpn))); }
+   // Which held note an AUTO step plays, for the styles: up, 3 up, down, 3 down, up/down, random,
+   // as played. A guide with four notes held.
+   static int autoLane(int style, int k, int lanes) {
+      constexpr int kHeld = 4;
+      switch (style) {
+      case 2:
+      case 3: return kHeld - 1 - k % kHeld;
+      case 4: {
+         const int p = k % (2 * kHeld - 2);
+         return p < kHeld ? p : 2 * kHeld - 2 - p;
+      }
+      case 5: return static_cast<int>((k * 7 + 3) % kHeld);
+      default: return std::min(lanes - 1, k % kHeld);
+      }
+   }
+
+   unsigned accent_;
+   int base_;
+};
+
+// One of the synth's own knobs (or an encoder, with ticks round it), drawn for the knob page.
+class KnobGlyph : public visage::Frame {
+public:
+   explicit KnobGlyph(bool encoder) : encoder_(encoder) { setIgnoresMouseEvents(true, false); }
+   void draw(visage::Canvas &c) override {
+      const ui::Theme &t = glassTheme();
+      const float d = std::min(width(), height()), cx = width() * 0.5f, cy = height() * 0.5f;
+      const float r = d * (encoder_ ? 0.36f : 0.42f);
+      if (encoder_) {
+         c.setColor(t.dimText);
+         for (int i = 0; i < 24; ++i) {
+            const float a = static_cast<float>(i) * 6.2831853f / 24.0f;
+            c.segment(cx + std::cos(a) * r * 1.18f, cy + std::sin(a) * r * 1.18f, cx + std::cos(a) * r * 1.3f,
+                      cy + std::sin(a) * r * 1.3f, 1.5f, true);
+         }
+      }
+      c.setColor(visage::Brush::linear(visage::Color(t.knobLight), visage::Color(t.knobDark), visage::Point(cx, cy - r),
+                                       visage::Point(cx, cy + r)));
+      c.circle(cx - r, cy - r, 2 * r);
+      c.setColor(t.knobEdge);
+      c.ring(cx - r, cy - r, 2 * r, 1.5f);
+      c.setColor(t.text);
+      c.segment(cx, cy - r * 0.25f, cx, cy - r * 0.85f, 3.0f, true);
+   }
+
+private:
+   bool encoder_;
+};
+
+// A card for a group of controls, with its title in the accent colour.
+class Card : public visage::Frame {
+public:
+   Card(std::string title, unsigned accent, float designHeight)
+       : title_(std::move(title)), accent_(accent), designHeight_(designHeight) {
+      setIgnoresMouseEvents(true, false);
+   }
+   void draw(visage::Canvas &c) override {
+      const float s = height() / designHeight_;
+      c.setColor(visage::Color(0xc80b0e17));
+      c.roundedRectangle(0, 0, width(), height(), 10 * s);
+      c.setColor(visage::Color(0x2effffff));
+      c.roundedRectangleBorder(0, 0, width(), height(), 10 * s, 1.0f * s);
+      if (!title_.empty()) {
+         c.setColor(accent_);
+         c.text(title_, ui::font(14 * s), visage::Font::kLeft, 16 * s, 8 * s, width(), 20 * s);
+      }
+   }
+
+private:
+   std::string title_;
+   unsigned accent_;
+   float designHeight_;
+};
+
+// One cycle of an oscillator: a guide drawn from its algorithm (a setting, read by CLAP id) and its
+// shape knob, since the synth's own waves aren't published. FM shows the shape as the FM depth;
+// a wavetable shows a made-up blend of harmonics that moves with the shape.
+class OscWave : public Picture {
+public:
+   OscWave(CcValue value, unsigned color, int algoId, int shapeCc, bool fmChoices)
+       : Picture(std::move(value)), color_(color), algoId_(algoId), shapeCc_(shapeCc), fm_(fmChoices) {}
+
+   void draw(visage::Canvas &c) override {
+      inset(c);
+      const float w = width(), h = height(), mid = h * 0.5f, amp = h * 0.36f;
+      c.setColor(withAlpha(glassTheme().panelBorder, 0x50));
+      c.fill(0, mid, w, 1.0f);
+      const int algo = static_cast<int>(std::lround(cc(algoId_)));
+      const double shape = cc(shapeCc_) / 127.0;
+      constexpr int kN = 160;
+      float xs[kN], ys[kN];
+      for (int i = 0; i < kN; ++i) {
+         const double p = static_cast<double>(i) / (kN - 1);
+         xs[i] = 4.0f + (w - 8.0f) * static_cast<float>(p);
+         ys[i] = mid - amp * static_cast<float>(std::clamp(sample(algo, shape, p), -1.0, 1.0));
+      }
+      c.setColor(withAlpha(color_, 0x30));
+      for (int i = 0; i + 1 < kN; ++i) {
+         const float top = std::min(ys[i], mid), bottom = std::max(ys[i], mid);
+         c.fill(xs[i], top, xs[i + 1] - xs[i], bottom - top);
+      }
+      c.setColor(color_);
+      line(c, xs, ys, kN, std::max(1.5f, h * 0.025f));
+   }
+
+protected:
+   double signature() const override { return cc(algoId_) * 1000.0 + cc(shapeCc_); }
+
+private:
+   static double saw(double p) { return 1.0 - 2.0 * (p - std::floor(p)); }
+   static double tri(double p) {
+      p -= std::floor(p);
+      return p < 0.5 ? -1.0 + 4.0 * p : 3.0 - 4.0 * p;
+   }
+   double sample(int algo, double shape, double p) const {
+      constexpr double kTau = 6.283185307179586;
+      const double sn = std::sin(kTau * p);
+      if (fm_ && algo >= 12) { // FM sine, triangle, saw, square
+         const double depth = shape * 4.0, ph = p + depth * std::sin(kTau * p * 2.0) / kTau;
+         switch (algo - 12) {
+         case 0: return std::sin(kTau * ph);
+         case 1: return tri(ph + 0.25);
+         case 2: return saw(ph + 0.5);
+         default: return std::sin(kTau * ph) >= 0 ? 0.8 : -0.8;
+         }
+      }
+      if (!fm_ && algo >= 12) { // wavetables
+         const int table = algo - 12;
+         double v = 0;
+         for (int k = 1; k <= 6; ++k) {
+            const double weight = std::cos(shape * 3.0 + k * (0.7 + 0.31 * table)) / k;
+            v += weight * std::sin(kTau * p * k + table * 0.4 * k);
+         }
+         return v * 0.9;
+      }
+      switch (algo) {
+      case 0: return std::sin(kTau * p + shape * 2.0 * sn);                 // sine, folded by shape
+      case 1: return std::fabs(sn) * 2.0 - 1.0 + shape * 0.3 * sn;          // sine full (rectified)
+      case 2: return sn > 0 ? sn * 2.0 - 1.0 : -1.0 + shape * 0.4;          // sine half
+      case 3: return tri(p + 0.25) > 1.0 - 2.0 * shape ? 0.9 : tri(p + 0.25); // tri > pulse
+      case 4: {                                                              // tri > saw
+         const double k = 0.5 + 0.49 * shape, q = p - std::floor(p);
+         return q < k ? -1.0 + 2.0 * q / k : 1.0 - 2.0 * (q - k) / (1.0 - k);
+      }
+      case 5: return std::clamp(tri(p + 0.25) * (1.0 + shape * 8.0), -0.9, 0.9); // tri > square
+      case 6: return saw(p) * 0.9;
+      case 7:
+      case 8: { // supersaws: detuned saws, wider with shape
+         const double spread = 0.02 + shape * (algo == 7 ? 0.08 : 0.16);
+         return (saw(p) + saw(p * (1.0 + spread) + 0.3) + saw(p * (1.0 - spread) + 0.6)) * 0.35;
+      }
+      case 9: return saw(p * (1.0 + shape * 3.0)) * 0.9;  // synced saw
+      case 10: return (p - std::floor(p)) < 0.5 - shape * 0.45 ? 0.8 : -0.8; // square > pulse
+      case 11: return std::sin(kTau * p * (1.0 + shape * 3.0)) >= 0 ? 0.8 : -0.8; // synced square
+      default: return sn;
+      }
+   }
+
+   unsigned color_;
+   int algoId_, shapeCc_;
+   bool fm_;
+};
+
+// An LFO's wave over two cycles, from its wave setting (read by CLAP id).
+class LfoShape : public Picture {
+public:
+   LfoShape(CcValue value, unsigned color, int waveId) : Picture(std::move(value)), color_(color), waveId_(waveId) {}
+
+   void draw(visage::Canvas &c) override {
+      inset(c);
+      const float w = width(), h = height(), mid = h * 0.5f, amp = h * 0.34f;
+      const int wave = static_cast<int>(std::lround(cc(waveId_)));
+      const bool unipolar = wave >= 6 && wave != 4 && wave != 5;
+      const float base = unipolar ? mid + amp : mid;
+      c.setColor(withAlpha(glassTheme().panelBorder, 0x50));
+      c.fill(0, base, w, 1.0f);
+      constexpr int kN = 120;
+      float xs[kN], ys[kN];
+      for (int i = 0; i < kN; ++i) {
+         const double p = 2.0 * i / (kN - 1);
+         xs[i] = 4.0f + (w - 8.0f) * static_cast<float>(i) / (kN - 1);
+         const double v = value(wave, p);
+         ys[i] = unipolar ? mid + amp - 2.0f * amp * static_cast<float>(v) : mid - amp * static_cast<float>(v);
+      }
+      c.setColor(color_);
+      line(c, xs, ys, kN, std::max(1.5f, h * 0.03f));
+   }
+
+protected:
+   double signature() const override { return cc(waveId_); }
+
+private:
+   // -1..1 for the bipolar waves, 0..1 for the unipolar ones, at phase p (cycles).
+   static double value(int wave, double p) {
+      const double q = p - std::floor(p);
+      const int cycle = static_cast<int>(p);
+      const auto noise = [](int k) { return std::fmod(std::sin(k * 12.9898 + 4.1) * 43758.5453, 1.0); };
+      const double held = noise(static_cast<int>(p * 4.0));
+      switch (wave) {
+      case 0: return std::sin(6.283185307179586 * q);
+      case 1: return q < 0.25 ? 4 * q : q < 0.75 ? 2 - 4 * q : 4 * q - 4;
+      case 2: return 1.0 - 2.0 * q;
+      case 3: return q < 0.5 ? 1.0 : -1.0;
+      case 4: return held;                                        // S&H bipolar
+      case 5: return std::sin(p * 9.0 + noise(cycle) * 6) * 0.8; // random, smooth
+      case 6: case 7: case 8: return std::pow(q, 0.5 + (wave - 6) * 1.2);            // attacks
+      case 9: case 10: case 11: return std::pow(1.0 - q, 0.5 + (wave - 9) * 1.2);    // decays
+      case 12: case 13: case 14: {                                                   // attack-decays
+         const double k = 0.5 + (wave - 13) * 0.3;
+         return q < k ? q / k : (1.0 - q) / (1.0 - k);
+      }
+      case 15: return q < 0.5 ? 1.0 : 0.0;
+      case 16: return q < 0.5 ? 0.0 : 1.0;
+      case 17: return std::fabs(held);
+      default: return 0.5 + 0.4 * std::sin(p * 9.0 + noise(cycle) * 6);
+      }
+   }
+
+   unsigned color_;
+   int waveId_;
+};
+
 // A darker rounded box to group a few widgets inside a section.
 class Tile : public visage::Frame {
 public:
    Tile() { setIgnoresMouseEvents(true, false); }
    void draw(visage::Canvas &c) override {
-      c.setColor(0xff191c22);
-      c.roundedRectangle(0, 0, width(), height(), 4);
-      c.setColor(ui::defaultTheme().panelBorder);
-      c.roundedRectangleBorder(0, 0, width(), height(), 4, 1.0f);
+      c.setColor(0x40141a26);
+      c.roundedRectangle(0, 0, width(), height(), 6);
+      c.setColor(0x1effffff);
+      c.roundedRectangleBorder(0, 0, width(), height(), 6, 1.0f);
    }
 };
 
@@ -328,7 +682,7 @@ public:
    void draw(visage::Canvas &c) override {
       const float h = height();
       if (text_.empty()) {
-         c.setColor(ui::defaultTheme().dimText);
+         c.setColor(glassTheme().dimText);
          c.text("\xE2\x80\x94", ui::font(h * 0.6f), visage::Font::kLeft, 2, 0, width(), h);
          return;
       }
@@ -372,7 +726,7 @@ class WheelStrip : public ui::Slider {
 public:
    explicit WheelStrip(ui::ValueRange range) : ui::Slider(ui::Slider::Orientation::Vertical, range) {}
    void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
+      const ui::Theme &t = glassTheme();
       const float w = width(), h = height(), r = w * 0.3f;
       c.setColor(visage::Brush::linear(visage::Color(t.knobLight), visage::Color(t.knobDark), visage::Point(0, 0),
                                        visage::Point(w, 0)));
