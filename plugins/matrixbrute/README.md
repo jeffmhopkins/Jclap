@@ -78,8 +78,8 @@ receive SysEx in Bitwig, so a controller script does the reading:
 3. Press **READ SYNTH** in the plugin (or Read in the controller's panel). The status next to the
    button counts the presets as they come in.
 
-The script serves the presets on `localhost:58017`, which is how the plugin gets them; the last read
-stays there until Bitwig closes, and a plugin opened later picks it up. It only sends read requests
+The script serves the presets by OSC on UDP port 58017 of this computer, which is how the plugin
+gets them; the last read stays there until Bitwig closes, and a plugin opened later picks it up. It only sends read requests
 to the synth, the same ones MIDI Control Center uses to read presets. `tools/mb_bitwig_log.py`
 follows its log, for checking a read without the script console. The synth's second USB port
 (MIDIIN2/MIDIOUT2) answers the identity request but not preset reads, so the script needs the main
@@ -148,11 +148,12 @@ The sustain pedal (64) is left out; it passes through.
 
 Built from the shared [jclap::ui](../../libs/ui) widgets, which draw with Visage. `src/editor.cpp`
 holds the layout and `src/visuals.h` the pictures. It follows the synth's panel section by section:
-VCO 1 and 2 (enhancers above the wave levels), VCO 3, bend range and audio mod down the left; the
-mixer and LFO 1; the Steiner and ladder filters with Master Cutoff between them, and LFO 2; the
-preset display and the envelope sliders; and the analog effects and sequencer on the right. Glide,
-the mod wheel and the macros sit along the bottom, like the synth's front edge. Only knobs and
-sliders that are on MIDI are there: the synth's buttons and its matrix aren't.
+VCO 1 and 2 (enhancers above the wave levels) down the left with the mixer under them; VCO 3,
+audio mod and the two LFOs; the Steiner and ladder filters with Master Cutoff between them and the
+preset display below; the three envelopes' sliders; and the analog effects and sequencer on the
+right. Glide, the mod wheel, bend range and the macros sit along the bottom, like the synth's
+front edge. Only knobs and sliders that are on MIDI are there: the synth's buttons and its matrix
+aren't.
 
 The preset display shows the synth's preset: the one picked in the preset bar, or the last Bank
 Select and Program Change heard. The pictures are drawn from the CC values: each VCO's wave mix, the

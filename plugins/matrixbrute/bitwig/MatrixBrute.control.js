@@ -108,21 +108,27 @@ var job = null; // the read in progress
 var lastMidiLog = 0;
 var token = 0; // bumped on every request and reply, so a stale timeout does nothing
 var PORT = 58017;
-var logLines = []; // everything logged, for log clients that connect later
-var clients = []; // {conn, log: wants the log, data: wants presets}
+var logLines = []; // everything logged, for log subscribers that come later
 var lastRead = []; // the last complete read's PRESET lines, and its DONE line
 var reading = []; // the read in progress's PRESET lines
+var osc = null;
+var subscribers = {}; // by UDP port: {conn, log: wants the log, data: wants presets, seen: ms}
+var SUBSCRIBER_TIMEOUT_MS = 10000;
 
-// A local TCP server (Bitwig's RemoteConnection) on PORT, for two kinds of client. Each message a
-// client sends has a 4-byte big-endian length in front; what the script sends is plain lines.
+// Clients on this computer talk to the script by OSC over UDP on PORT. (Bitwig's TCP
+// RemoteConnection mixed up two clients' messages and stopped taking new ones after a while.)
 //
-//    "log"   the log so far, then every new line (tools/mb_bitwig_log.py): Bitwig only shows a
-//            script's own output in its console
-//    "data"  the presets, for the MatrixBrute CC plugin: the last complete read's lines straight
-//            away, then every new read's as it goes
-//    "read"  starts a read, as the Read button does; "stop" abandons one
+//    /mb/hello  ,is  port kind    subscribe the UDP `port` on 127.0.0.1 to "log" or "data", and say
+//                                 it's still there: a subscriber that's quiet for 10 s is dropped,
+//                                 so clients repeat this every few seconds. The script answers with
+//                                 /mb/hello ,i 1, and on the first hello a "log" subscriber gets
+//                                 the log so far and a "data" one the last complete read.
+//    /mb/read                     start a read, as the Read button does
+//    /mb/stop                     abandon one
 //
-// The data lines, tab-separated:
+// The script sends each line as /mb/line ,s text. The log is timestamped lines: Bitwig only shows a
+// script's own output in its console (tools/mb_bitwig_log.py follows it). The data lines, for the
+// MatrixBrute CC plugin, are tab-separated:
 //    READING                          a read started
 //    PRESET  n  name  cc:value,...    one named preset; n is 0-255 (A01-P16), values 0-127
 //    DONE    found  failed            the read finished
@@ -132,9 +138,7 @@ function log(text) {
    var line = new Date().toISOString().substr(11, 12) + " " + text;
    if (logLines.length < 20000)
       logLines.push(line);
-   for (var i = 0; i < clients.length; i++)
-      if (clients[i].log)
-         sendLine(clients[i].conn, line);
+   send("log", line);
 }
 
 function data(line) {
@@ -144,57 +148,74 @@ function data(line) {
       reading = [];
    else if (line.indexOf("DONE") === 0)
       lastRead = reading.concat([line]);
-   for (var i = 0; i < clients.length; i++)
-      if (clients[i].data)
-         sendLine(clients[i].conn, line);
+   send("data", line);
 }
 
-function sendLine(conn, line) {
-   var bytes = [];
-   for (var i = 0; i < line.length; i++)
-      bytes.push(line.charCodeAt(i) & 0x7f);
-   bytes.push(10);
+function send(kind, line) {
+   var now = Date.now();
+   for (var port in subscribers) {
+      var sub = subscribers[port];
+      if (now - sub.seen > SUBSCRIBER_TIMEOUT_MS) {
+         delete subscribers[port];
+         continue;
+      }
+      if (sub[kind])
+         sendTo(sub, line);
+   }
+}
+
+function sendTo(sub, line) {
    try {
-      conn.send(bytes);
+      sub.conn.sendMessage("/mb/line", line);
    } catch (e) {
-      println("client: " + e);
+      println("send: " + e);
    }
 }
 
 function startServer() {
    try {
-      var server = host.createRemoteConnection("MatrixBrute presets", PORT);
-      server.setClientConnectCallback(function (conn) {
-         var client = {conn: conn, log: false, data: false};
-         clients.push(client);
-         conn.setDisconnectCallback(function () {
-            clients.splice(clients.indexOf(client), 1);
-         });
-         conn.setReceiveCallback(guarded(function (bytes) {
-            var text = "";
-            for (var i = 0; i < bytes.length; i++)
-               text += String.fromCharCode(bytes[i] & 0xff);
-            text = text.replace(/[^ -~]/g, "").trim();
-            log("client sent: " + text);
-            if (text === "log") {
-               client.log = true;
-               for (var j = 0; j < logLines.length; j++)
-                  sendLine(conn, logLines[j]);
-            } else if (text === "data") {
-               client.data = true;
-               for (var k = 0; k < lastRead.length; k++)
-                  sendLine(conn, lastRead[k]);
-            } else if (text === "read") {
-               readPresets(0, 255);
-            } else if (text === "stop" && job) {
-               job = null;
-               data("FAILED\tstopped");
-            }
-         }));
+      osc = host.getOscModule();
+      var space = osc.createAddressSpace();
+      space.registerMethod("/mb/hello", ",is", "Subscribe a UDP port to the log or the presets", guarded(function (source, msg) {
+         var port = msg.getInt(0), kind = String(msg.getString(1));
+         if (port <= 0 || port > 65535 || (kind !== "log" && kind !== "data"))
+            return;
+         var sub = subscribers[port];
+         var fresh = !sub || !sub[kind];
+         if (!sub) {
+            sub = subscribers[port] = {conn: osc.connectToUdpServer("127.0.0.1", port, osc.createAddressSpace()),
+                                       log: false, data: false, seen: 0};
+         }
+         sub.seen = Date.now();
+         sub[kind] = true;
+         try {
+            sub.conn.sendMessage("/mb/hello", 1);
+         } catch (e) {
+            println("hello: " + e);
+         }
+         if (!fresh)
+            return;
+         var lines = kind === "log" ? logLines : lastRead;
+         for (var i = 0; i < lines.length; i++)
+            sendTo(sub, lines[i]);
+      }));
+      space.registerMethod("/mb/read", "*", "Read every preset off the synth", guarded(function () {
+         readPresets(0, 255);
+      }));
+      space.registerMethod("/mb/stop", "*", "Abandon a read", guarded(function () {
+         if (job) {
+            job = null;
+            data("FAILED\tstopped");
+         }
+      }));
+      space.registerDefaultMethod(function (source, msg) {
+         host.errorln("MatrixBrute presets: unexpected OSC message " + msg.getAddressPattern() + " " + msg.getTypeTag());
       });
-      log("server on port " + PORT);
+      osc.createUdpServer(PORT, space);
+      log("OSC on UDP port " + PORT);
+      host.errorln("MatrixBrute presets: OSC on UDP port " + PORT); // errorln reaches Bitwig's log file
    } catch (e) {
-      println("no server: " + e);
+      host.errorln("MatrixBrute presets: no OSC server: " + e);
    }
 }
 
@@ -219,11 +240,12 @@ function later(fn, ms) {
 
 // Errors in callbacks are otherwise silent.
 function guarded(fn) {
-   return function (a) {
+   return function () {
       try {
-         fn(a);
+         fn.apply(null, arguments);
       } catch (e) {
          say("script error: " + e);
+         host.errorln("MatrixBrute presets: script error: " + e);
          if (job)
             data("FAILED\tscript error: " + e);
          job = null;
