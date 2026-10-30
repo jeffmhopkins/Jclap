@@ -302,6 +302,132 @@ protected:
    double signature() const override { return cc(35); }
 };
 
+// The arpeggiator's 16 steps as a little piano roll: one column per step, a block on the lane of the
+// held note it plays (1st at the bottom), as wide as the gate. AUTO steps are outlined and follow
+// the style; ties join the step before, chords stack, and steps past the length are dim. Reads the
+// settings by CLAP id (idBase + NRPN), as the panel's host has them.
+class ArpPattern : public Picture {
+public:
+   ArpPattern(CcValue value, unsigned accent, int idBase) : Picture(std::move(value)), accent_(accent), base_(idBase) {}
+
+   void draw(visage::Canvas &c) override {
+      inset(c);
+      const ui::Theme &t = ui::defaultTheme();
+      const float w = width(), h = height(), col = w / 16.0f;
+      constexpr int kLanes = 6;
+      const float top = h * 0.06f, laneH = (h * 0.88f) / kLanes;
+      const auto laneY = [&](int lane) { return top + (kLanes - 1 - lane) * laneH; };
+      c.setColor(withAlpha(t.panelBorder, 0x90));
+      for (int l = 1; l < kLanes; ++l)
+         c.fill(0, laneY(l) + laneH, w, 1.0f);
+      for (int i = 1; i < 16; ++i)
+         c.fill(i * col, 0, 1.0f, h);
+
+      const bool on = setting(130) > 0;
+      const int length = setting(133) + 1, style = setting(114);
+      const float gate = 0.25f + 0.75f * static_cast<float>(setting(115)) / 127.0f;
+      int lane = 0, autoIndex = 0;
+      for (int i = 0; i < 16; ++i) {
+         const int step = setting(134 + i);
+         const unsigned color = withAlpha(accent_, (i < length ? 0xff : 0x40) * (on ? 4u : 2u) / 4u);
+         const float x = i * col + col * 0.12f, bw = (col * 0.76f) * gate, pad = laneH * 0.18f;
+         const auto block = [&](int l, bool outline) {
+            c.setColor(color);
+            if (outline)
+               c.roundedRectangleBorder(x, laneY(l) + pad, bw, laneH - 2 * pad, 3.0f, 1.5f);
+            else
+               c.roundedRectangle(x, laneY(l) + pad, bw, laneH - 2 * pad, 3.0f);
+         };
+         switch (step) {
+         case 0: // auto: the style's next note
+            lane = autoLane(style, autoIndex++, kLanes);
+            block(lane, true);
+            break;
+         case 1: // off: a rest
+            c.setColor(color);
+            c.fill(x, h - top - 3.0f, col * 0.76f, 2.0f);
+            break;
+         case 2: // tie: holds the last note into this step
+            c.setColor(color);
+            c.roundedRectangle(i * col - col * 0.2f, laneY(lane) + laneH * 0.36f, col * 1.1f, laneH * 0.28f, 2.0f);
+            break;
+         case 3: lane = std::max(0, lane - 1); block(lane, false); break;
+         case 10: lane = std::min(kLanes - 1, lane + 1); block(lane, false); break;
+         case 11: // chord: every held note
+            for (int l = 0; l < 4; ++l)
+               block(l, false);
+            break;
+         default: // 1st-6th held note
+            lane = std::clamp(step - 4, 0, kLanes - 1);
+            block(lane, false);
+            break;
+         }
+      }
+      c.setColor(t.dimText);
+      const std::string octaves = std::to_string(setting(132) + 1) + (setting(132) > 0 ? " OCTAVES" : " OCTAVE");
+      c.text(on ? octaves : "ARP OFF", ui::font(h * 0.035f), visage::Font::kRight, 0, h * 0.01f, w - h * 0.02f,
+             h * 0.05f);
+   }
+
+protected:
+   double signature() const override {
+      double sum = 0;
+      for (int n = 114; n <= 149; ++n)
+         sum = sum * 1.000003 + cc(base_ + n) * (n % 13 + 1);
+      return sum;
+   }
+
+private:
+   int setting(int nrpn) const { return static_cast<int>(std::lround(cc(base_ + nrpn))); }
+   // Which held note an AUTO step plays, for the styles: up, 3 up, down, 3 down, up/down, random,
+   // as played. A guide with four notes held.
+   static int autoLane(int style, int k, int lanes) {
+      constexpr int kHeld = 4;
+      switch (style) {
+      case 2:
+      case 3: return kHeld - 1 - k % kHeld;
+      case 4: {
+         const int p = k % (2 * kHeld - 2);
+         return p < kHeld ? p : 2 * kHeld - 2 - p;
+      }
+      case 5: return static_cast<int>((k * 7 + 3) % kHeld);
+      default: return std::min(lanes - 1, k % kHeld);
+      }
+   }
+
+   unsigned accent_;
+   int base_;
+};
+
+// One of the synth's own knobs (or an encoder, with ticks round it), drawn for the knob page.
+class KnobGlyph : public visage::Frame {
+public:
+   explicit KnobGlyph(bool encoder) : encoder_(encoder) { setIgnoresMouseEvents(true, false); }
+   void draw(visage::Canvas &c) override {
+      const ui::Theme &t = ui::defaultTheme();
+      const float d = std::min(width(), height()), cx = width() * 0.5f, cy = height() * 0.5f;
+      const float r = d * (encoder_ ? 0.36f : 0.42f);
+      if (encoder_) {
+         c.setColor(t.dimText);
+         for (int i = 0; i < 24; ++i) {
+            const float a = static_cast<float>(i) * 6.2831853f / 24.0f;
+            c.segment(cx + std::cos(a) * r * 1.18f, cy + std::sin(a) * r * 1.18f, cx + std::cos(a) * r * 1.3f,
+                      cy + std::sin(a) * r * 1.3f, 1.5f, true);
+         }
+      }
+      c.setColor(visage::Brush::linear(visage::Color(t.knobLight), visage::Color(t.knobDark), visage::Point(cx, cy - r),
+                                       visage::Point(cx, cy + r)));
+      c.circle(cx - r, cy - r, 2 * r);
+      c.setColor(t.knobEdge);
+      c.ring(cx - r, cy - r, 2 * r, 1.5f);
+      c.setColor(t.text);
+      c.segment(cx, cy - r * 0.25f, cx, cy - r * 0.85f, 3.0f, true);
+   }
+
+private:
+   bool encoder_;
+};
+
 // A darker rounded box to group a few widgets inside a section.
 class Tile : public visage::Frame {
 public:

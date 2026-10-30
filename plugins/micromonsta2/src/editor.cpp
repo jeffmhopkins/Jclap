@@ -1,10 +1,17 @@
 // Visage panel for the MicroMonsta 2 controller, laid out on a fixed kDesignWidth x kDesignHeight
 // grid and scaled to the window, which keeps its aspect ratio.
 //
-// Three bands, read top to bottom like the synth's signal: the audio path (sources, filter, voice,
-// effects, out), the envelopes, and the modulation (sources feeding the mod matrix). Every knob is
-// one CC; the dropdowns are the settings no CC reaches, sent as NRPN (settings.h). The pictures in
-// visuals.h are drawn from those CC values and the program's routing only.
+// Three pages, picked by the tabs in the header:
+//
+//    SOUND          the audio path (sources, filter, voice, effects, out), the envelopes, and the
+//                   voice, effect and program modes;
+//    MODULATION     the LFOs and performance controls, the mod matrix and its operators;
+//    ARP & PROGRAM  the arpeggiator, what the synth's own knobs do, and the program's tempo,
+//                   volume and category.
+//
+// Every knob is one CC; the dropdowns, toggles and number boxes are the settings no CC reaches, sent
+// as NRPN (settings.h). The pictures in visuals.h are drawn from those values and the program's
+// routing only.
 
 #include "editor.h"
 
@@ -19,6 +26,7 @@
 #include <jclap/ui/preset_bar.h>
 #include <jclap/ui/section.h>
 #include <jclap/ui/slider.h>
+#include <jclap/ui/tabs.h>
 #include <jclap/ui/tooltip.h>
 #include <jclap/ui/update_notice.h>
 
@@ -47,24 +55,33 @@ constexpr float kDesignWidth = 1640.0f;
 constexpr float kDesignHeight = 1142.0f;
 constexpr float kHeaderHeight = 64.0f;
 
-// The grid: 16 point margins and gutters around three bands.
+// The grid: 16 point margins and gutters around three bands on each page.
 constexpr float kMargin = 16.0f, kGutter = 16.0f;
+constexpr float kInner = 1640.0f - 2 * kMargin; // a band's width
 constexpr float kBand1Y = kHeaderHeight + kMargin, kBand1H = 340.0f;
 constexpr float kBand2Y = kBand1Y + kBand1H + kGutter, kBand2H = 322.0f;
 constexpr float kBand3Y = kBand2Y + kBand2H + kGutter, kBand3H = 352.0f;
 static_assert(kBand3Y + kBand3H + kMargin == kDesignHeight, "the bands fill the panel");
 
-// Band 1, left to right: sources, filter, voice, effects, out. Band 3: mod sources, mod matrix.
+// SOUND, band 1, left to right: sources, filter, voice, effects, out. Band 3: voice, effect modes, program.
 constexpr float kAudioW[] = {440, 392, 200, 424, 88};
-constexpr float kModW[] = {500, 1092};
-static_assert(440 + 392 + 200 + 424 + 88 + 4 * kGutter == kDesignWidth - 2 * kMargin, "band 1 fills the width");
-static_assert(500 + 1092 + kGutter == kDesignWidth - 2 * kMargin, "band 3 fills the width");
+constexpr float kModesW[] = {660, 504, 412};
+static_assert(440 + 392 + 200 + 424 + 88 + 4 * kGutter == kInner, "band 1 fills the width");
+static_assert(660 + 504 + 412 + 2 * kGutter == kInner, "band 3 fills the width");
 constexpr float audioX(int column) {
    float x = kMargin;
    for (int i = 0; i < column; ++i)
       x += kAudioW[i] + kGutter;
    return x;
 }
+
+// MODULATION: the mod sources, the matrix and the operators, top to bottom.
+constexpr float kSourcesY = kBand1Y, kSourcesH = 300.0f;
+constexpr float kMatrixY = kSourcesY + kSourcesH + kGutter, kMatrixH = 484.0f;
+constexpr float kOpsY = kMatrixY + kMatrixH + kGutter, kOpsH = 230.0f;
+static_assert(kOpsY + kOpsH + kMargin == kDesignHeight, "the modulation bands fill the panel");
+
+enum Page { kSoundPage, kModPage, kArpPage };
 
 constexpr unsigned kOrange = 0xfff28c28;
 constexpr unsigned kBlue = 0xff9fc3ee;
@@ -147,14 +164,24 @@ class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       buildHeader();
+      page_ = kSoundPage;
       buildSources();
       buildFilter();
       buildVoice();
       buildEffects();
       buildOut();
       buildEnvelopes();
+      buildPlay();
+      buildEffectModes();
+      buildProgram();
+      page_ = kModPage;
       buildModSources();
       buildMatrix();
+      buildOperators();
+      page_ = kArpPage;
+      buildArp();
+      buildPanelKnobs();
+      page_ = -1;
       syncChannel();
       syncLink();
       syncRoutes();
@@ -188,6 +215,8 @@ public:
       canvas.text("Monsta 2", ui::font(28 * s), visage::Font::kLeft, 143 * s, 10 * s, 160 * s, 44 * s);
 
       // Chevrons in the gutters show which way the signal flows.
+      if (tabs_->selected() != kSoundPage)
+         return;
       canvas.setColor(0xff3d444e);
       const auto chevron = [&](float x, float y) {
          canvas.segment((x - 3) * s, (y - 6) * s, (x + 3) * s, y * s, 2.2f * s, true);
@@ -195,8 +224,10 @@ public:
       };
       for (int c = 0; c < 4; ++c)
          chevron(audioX(c) + kAudioW[c] + kGutter * 0.5f, kBand1Y + kBand1H * 0.5f);
-      chevron(kMargin + kModW[0] + kGutter * 0.5f, kBand3Y + kBand3H * 0.5f);
    }
+
+   // Shows `page` (kSoundPage...), as clicking its tab does.
+   void selectPage(int page) { tabs_->select(page); }
 
 private:
    void drawLogo(visage::Canvas &canvas, float s) {
@@ -208,6 +239,20 @@ private:
    }
 
    // ---- building blocks ----
+
+   // Children go on the page being built (page_), or on every page while it is -1.
+   template <typename T, typename... Args>
+   T &add(Rect bounds, Args &&...args) {
+      T &frame = DesignFrame::add<T>(bounds, std::forward<Args>(args)...);
+      if (page_ >= 0)
+         tabs_->addToPage(page_, frame);
+      return frame;
+   }
+   void place(visage::Frame &frame, Rect bounds) {
+      DesignFrame::place(frame, bounds);
+      if (page_ >= 0)
+         tabs_->addToPage(page_, frame);
+   }
 
    const CcParam &param(int cc) const { return kCcParams[indexOfCc(cc)]; }
    ui::ValueRange rangeOf(int cc) const {
@@ -262,6 +307,47 @@ private:
          tips_.add(d, tip);
       return d;
    }
+   // An on/off setting as a toggle button.
+   ui::Button &toggle(int nrpn, const char *text, unsigned accent, Rect r, const char *tip = nullptr) {
+      auto &b = add<ui::Button>(r, text);
+      b.setAccent(accent);
+      bindings_.bind(b, settingId(nrpn));
+      if (tip)
+         tips_.add(b, tip);
+      return b;
+   }
+   // A number setting as a box with - and +, showing the synth's number for it.
+   ui::NumberBox &number(int nrpn, unsigned accent, Rect r, const char *tip = nullptr) {
+      const Setting &st = kSettings[indexOfSetting(nrpn)];
+      auto &box = add<ui::NumberBox>(r, ui::ValueRange{static_cast<double>(st.min), static_cast<double>(st.max),
+                                                       static_cast<double>(st.defaultValue), 1.0, false});
+      box.setStepButtons(true);
+      box.setAccent(accent);
+      box.valueText = [&st](double v) { return settingText(st, static_cast<int>(std::lround(v))); };
+      bindings_.bind(box, settingId(nrpn));
+      if (tip)
+         tips_.add(box, tip);
+      return box;
+   }
+   // Whichever of the three fits the setting.
+   visage::Frame &control(int nrpn, unsigned accent, Rect r, const char *tip = nullptr) {
+      const Setting &st = kSettings[indexOfSetting(nrpn)];
+      if (st.choices == Choices::Number)
+         return number(nrpn, accent, r, tip);
+      if (st.choices == Choices::OnOff)
+         return toggle(nrpn, "ON", accent, r, tip);
+      return setting(nrpn, accent, r, tip);
+   }
+   // A tile with a setting's name, its control and a line or two about it.
+   void settingTile(int nrpn, const char *title, unsigned accent, Rect r, const char *about,
+                    const char *about2 = nullptr, const char *tip = nullptr) {
+      add<vis::Tile>(r);
+      label(title, {r.x + 12, r.y + 10, r.w - 24, 14}, kDim, visage::Font::kLeft, 0.8f);
+      control(nrpn, accent, {r.x + 12, r.y + 30, r.w - 24, 24}, tip);
+      hint(about, {r.x + 12, r.y + 64, r.w - 24, 12}, visage::Font::kLeft);
+      if (about2)
+         hint(about2, {r.x + 12, r.y + 79, r.w - 24, 12}, visage::Font::kLeft);
+   }
    ui::Label &label(const std::string &text, Rect r, unsigned color = kWhite,
                     visage::Font::Justification j = visage::Font::kLeft, float fontScale = 0.78f) {
       return add<ui::Label>(r, text, color, j, fontScale);
@@ -289,7 +375,10 @@ private:
 
    void buildHeader() {
       // The synth's programs: the bank compiled in, until READ BANK brings the ones it has now.
-      auto &bar = add<ui::PresetBar>({(kDesignWidth - 480) * 0.5f, 18, 480, 28}, presets_, kPresetFormat, host_);
+      tabs_ = &add<ui::TabBar>({300, 18, 312, 28}, std::vector<std::string>{"SOUND", "MODULATION", "ARP & KNOBS"});
+      tabs_->setAccent(kOrange);
+      tabs_->onChange = [this](int) { redraw(); };
+      auto &bar = add<ui::PresetBar>({624, 18, 432, 28}, presets_, kPresetFormat, host_);
       bar_ = &bar;
       bar.setAccent(kOrange);
       bar.defaults = presetDefaults();
@@ -301,7 +390,7 @@ private:
          else
             ui::applyPreset(p, host_, presetDefaults());
       };
-      add<ui::UpdateNotice>({300, 20, 220, 24});
+      add<ui::UpdateNotice>({1344, 47, 280, 16}).alignRight = true;
 
       // Reading the synth, through the Bitwig script. The line under the header says what's going on,
       // and what to do on the synth for a bank.
@@ -328,7 +417,7 @@ private:
       tips_.add(part_, "Which of the synth's two parts READ SOUND reads.");
       tips_.add(readBank_, "Lists the programs stored on the synth in the preset bar, in place of the built-in bank. "
                            "The synth only sends them from its own panel: press this, then UTILITY > U02 on the synth.");
-      linkStatus_ = &label("", {300, 48, 1040, 14}, kDim, visage::Font::kCenter, 0.8f);
+      linkStatus_ = &label("", {624, 48, 712, 14}, kDim, visage::Font::kCenter, 0.8f);
 
       place(chDown_, {1344, 18, 30, 28});
       place(channel_, {1378, 18, 116, 28});
@@ -444,7 +533,9 @@ private:
       for (int e = 0; e < 3; ++e) {
          const float bx = x + 12 + e * 484;
          label("ENV " + std::to_string(e + 1), {bx + 2, y + 34, 80, 18}, kOscColors[e]);
-         hint("ALSO A MOD SOURCE", {bx + 260, y + 38, 200, 11});
+         hint("ALSO A MOD SOURCE", {bx + 64, y + 38, 160, 11}, visage::Font::kLeft);
+         toggle(120 + e, "RESET TO ZERO", kOscColors[e], {bx + 340, y + 32, 120, 22},
+                "Each note starts the envelope from zero instead of where it is (NRPN 120 / 121 / 122).");
          auto &env = add<ui::EnvelopeEditor>({bx, y + 58, 460, 194}, rangeOf(ccs[e][0]), rangeOf(ccs[e][1]),
                                              rangeOf(ccs[e][2]), rangeOf(ccs[e][3]));
          env.setAccent(kOscColors[e]);
@@ -475,90 +566,263 @@ private:
       knob(37, kOrange, {x + 1479, y + 184, 110, 120}, "FILTER ENV");
    }
 
-   // ---- band 3: modulation ----
+   // ---- band 3: how the voice plays, the effect modes, the program ----
+
+   // Tiles in a grid of `cols` columns inside a section's body.
+   static Rect cell(Rect body, int cols, int rows, int i) {
+      return ui::grid(body, cols, rows, 12.0f)[static_cast<size_t>(i)];
+   }
+
+   void buildPlay() {
+      const float x = kMargin, y = kBand3Y, w = kModesW[0];
+      section("VOICE & PLAY", {x, y, w, kBand3H});
+      hint("SETTINGS NO CC REACHES, SENT AS NRPN", {x + 200, y + 10, w - 214, 12});
+      const Rect body{x + 12, y + 34, w - 24, kBand3H - 46};
+      settingTile(117, "VOICE MODE", kOrange, cell(body, 3, 2, 0), "MODERN AND VINTAGE ARE POLY,", "MONO AND LEGATO ONE VOICE",
+                  "How the voices play (NRPN 117): Modern or Vintage polyphony, or one voice, Mono retriggering "
+                  "and Legato not.");
+      settingTile(118, "UNISON", kOrange, cell(body, 3, 2, 1), "VOICES STACKED ON EACH NOTE", nullptr,
+                  "Unison voices per note (NRPN 118). The detune knob spreads them.");
+      settingTile(119, "PAN SPREAD", kOrange, cell(body, 3, 2, 2), "HOW THE VOICES ARE PANNED", nullptr,
+                  "How the voices are spread across the stereo field (NRPN 119).");
+      settingTile(23, "BEND DOWN", kOrange, cell(body, 3, 2, 3), "SEMITONES, 0 TO -12", nullptr,
+                  "The pitch bend's range down, in semitones (NRPN 23).");
+      settingTile(24, "BEND UP", kOrange, cell(body, 3, 2, 4), "SEMITONES, 0 TO +12", nullptr,
+                  "The pitch bend's range up, in semitones (NRPN 24).");
+      settingTile(124, "OSC PHASE RESET", kOrange, cell(body, 3, 2, 5), "EACH NOTE STARTS THE OSCILLATORS",
+                  "AT THE SAME PHASE", "Restarts the oscillators' phase on each note (NRPN 124).");
+   }
+
+   void buildEffectModes() {
+      const float x = kMargin + kModesW[0] + kGutter, y = kBand3Y, w = kModesW[1];
+      section("EFFECT MODES", {x, y, w, kBand3H});
+      const Rect body{x + 12, y + 34, w - 24, kBand3H - 46};
+      settingTile(127, "CHORUS", kBlue, cell(body, 2, 2, 0), "THE CHORUS AFTER THE FILTER", nullptr,
+                  "Chorus type, or off (NRPN 127).");
+      settingTile(128, "DELAY MODE", kBlue, cell(body, 2, 2, 1), "CLEAN, DARKER, OR WOBBLING", "REPEATS",
+                  "How the delay's repeats sound (NRPN 128).");
+      settingTile(108, "DELAY SYNC", kBlue, cell(body, 2, 2, 2), "A NOTE LENGTH AT THE PROGRAM'S",
+                  "TEMPO, IN PLACE OF THE TIME KNOB",
+                  "Locks the delay time to the program's tempo (NRPN 108). FREE uses the TIME knob (CC 26).");
+      // A reminder of where the effect levels are, in the fourth cell.
+      const Rect r = cell(body, 2, 2, 3);
+      hint("THE DELAY, REVERB AND EQ KNOBS ARE", {r.x + 12, r.y + 34, r.w - 24, 12}, visage::Font::kLeft);
+      hint("IN EFFECTS, ABOVE", {r.x + 12, r.y + 49, r.w - 24, 12}, visage::Font::kLeft);
+   }
+
+   void buildProgram() {
+      const float x = kMargin + kModesW[0] + kModesW[1] + 2 * kGutter, y = kBand3Y, w = kModesW[2];
+      section("PROGRAM", {x, y, w, kBand3H});
+      const Rect body{x + 12, y + 34, w - 24, kBand3H - 46};
+      settingTile(18, "TEMPO", kWhite, cell(body, 1, 3, 0), "BPM, FOR THE ARP AND TEMPO SYNC", nullptr,
+                  "The program's tempo, 40 to 295 BPM (NRPN 18). The arpeggiator and the synced LFOs and delay "
+                  "follow it.");
+      settingTile(17, "PROGRAM VOLUME", kWhite, cell(body, 1, 3, 1), "SAVED IN THE PROGRAM, UNLIKE CC 7", nullptr,
+                  "The program's own level, -24 to +24 (NRPN 17).");
+      settingTile(9, "CATEGORY", kWhite, cell(body, 1, 3, 2), "WHERE THE SYNTH FILES IT", nullptr,
+                  "The program's category on the synth (NRPN 9).");
+   }
+
+   // ---- MODULATION ----
 
    void buildModSources() {
-      const float x = kMargin, y = kBand3Y, w = kModW[0];
-      section("MOD SOURCES", {x, y, w, kBand3H});
-      hint("LIGHTS BLINK AT ROUGHLY EACH SPEED", {x + 200, y + 10, w - 214, 12});
+      const float x = kMargin, y = kSourcesY, w = kInner;
+      section("MOD SOURCES", {x, y, w, kSourcesH});
+      hint("LIGHTS BLINK AT ROUGHLY EACH SPEED  \xC2\xB7  ENV 1-3 ON THE SOUND PAGE FEED THE MATRIX TOO",
+           {x + 200, y + 10, w - 214, 12});
       for (int i = 0; i < 3; ++i) {
-         const float tx = x + 12 + i * 162, ty = y + 34, tw = 152;
-         add<vis::Tile>({tx, ty, tw, 170});
-         label("LFO " + std::to_string(i + 1), {tx + 10, ty + 8, 60, 16}, kLfoColors[i]);
-         hint("RATE", {tx + tw - 74, ty + 10, 44, 12});
-         auto &led = add<ui::ActivityLed>({tx + tw - 26, ty + 8, 16, 16});
-         led.setColor(kLfoColors[i]);
+         const float tx = x + 12 + i * 376, ty = y + 34, tw = 364, th = 254;
+         const unsigned c = kLfoColors[i];
+         const std::string n = std::to_string(i + 1);
+         add<vis::Tile>({tx, ty, tw, th});
+         label("LFO " + n, {tx + 12, ty + 10, 60, 16}, c);
+         hint("RATE", {tx + tw - 76, ty + 12, 44, 12});
+         auto &led = add<ui::ActivityLed>({tx + tw - 28, ty + 10, 16, 16});
+         led.setColor(c);
          led.fadeMs = 0;
          led.setLevel(1.0f);
          leds_[i] = &led;
-         knob(76 + i, kLfoColors[i], {tx + 26, ty + 22, 100, 100}, "SPEED");
-         setting(61 + 3 * i, kLfoColors[i], {tx + 6, ty + 124, 84, 20}, "The LFO's wave (NRPN 61 / 64 / 67).");
-         setting(63 + 3 * i, kLfoColors[i], {tx + 94, ty + 124, 52, 20},
+         knob(76 + i, c, {tx + 12, ty + 40, 130, 140}, "SPEED");
+         const float cx = tx + 160, cw = tw - 172;
+         label("WAVE", {cx, ty + 40, cw, 12}, kDim, visage::Font::kLeft, 0.8f);
+         setting(61 + 3 * i, c, {cx, ty + 56, cw, 22}, "The LFO's wave (NRPN 61 / 64 / 67).");
+         label("TEMPO SYNC", {cx, ty + 90, cw, 12}, kDim, visage::Font::kLeft, 0.8f);
+         setting(62 + 3 * i, c, {cx, ty + 106, cw, 22},
+                 "Locks the LFO's speed to a note length at the program's tempo (NRPN 62 / 65 / 68). FREE uses "
+                 "the SPEED knob.");
+         label("TRIGGER", {cx, ty + 140, cw, 12}, kDim, visage::Font::kLeft, 0.8f);
+         setting(63 + 3 * i, c, {cx, ty + 156, cw, 22},
                  "When the LFO restarts: per voice, once, on each key, or free running (NRPN 63 / 66 / 69).");
-         feeds_[i] = &label("", {tx + 6, ty + 152, tw - 12, 12}, kLfoColors[i], visage::Font::kCenter, 0.8f);
+         syncHints_[i] = &hint("", {tx + 12, ty + 192, tw - 24, 12}, visage::Font::kLeft);
+         feeds_[i] = &label("", {tx + 12, ty + 222, tw - 24, 14}, c, visage::Font::kLeft, 0.8f);
       }
-      hint("PERFORMANCE \xC2\xB7 NOT SAVED IN THE PROGRAM \xC2\xB7 ENV 1-3 CAN FEED THE MATRIX TOO", {x + 12, y + 214, w - 24, 12},
-           visage::Font::kLeft);
 
-      const float py = y + 232;
-      add<vis::Tile>({x + 12, py, 233, 108});
-      auto &wheel = add<vis::WheelStrip>({x + 26, py + 8, 30, 92}, rangeOf(1));
+      const float px = x + 12 + 3 * 376, pw = (w - 12 - (px - x) - 12) * 0.5f, ty = y + 34, th = 254;
+      add<vis::Tile>({px, ty, pw, th});
+      label("MOD WHEEL", {px + 12, ty + 10, pw - 24, 16}, kWheel);
+      auto &wheel = add<vis::WheelStrip>({px + 16, ty + 40, 36, 170}, rangeOf(1));
       wire(wheel, 1, kWheel);
-      label("MOD WHEEL", {x + 70, py + 16, 170, 16}, kWheel);
-      wheelValue_ = &label("", {x + 70, py + 36, 170, 20}, kWhite, visage::Font::kLeft, 0.8f);
-      caption(1, {x + 70, py + 58, 170, 11});
-      feeds_[3] = &label("", {x + 70, py + 80, 166, 12}, kWheel, visage::Font::kLeft, 0.8f);
+      wheelValue_ = &label("", {px + 66, ty + 44, pw - 78, 20}, kWhite, visage::Font::kLeft, 0.8f);
+      caption(1, {px + 66, ty + 68, pw - 78, 11});
+      hint("PERFORMANCE,", {px + 66, ty + 160, pw - 78, 12}, visage::Font::kLeft);
+      hint("NOT SAVED", {px + 66, ty + 175, pw - 78, 12}, visage::Font::kLeft);
+      feeds_[3] = &label("", {px + 12, ty + 222, pw - 24, 14}, kWheel, visage::Font::kLeft, 0.8f);
 
-      add<vis::Tile>({x + 255, py, 233, 108});
-      knob(70, kGreen, {x + 261, py + 2, 90, 104}, "");
-      label("MOD KNOB", {x + 356, py + 16, 128, 16}, kGreen);
-      feeds_[4] = &label("", {x + 356, py + 80, 128, 12}, kGreen, visage::Font::kLeft, 0.8f);
+      const float kx = px + pw + 12;
+      add<vis::Tile>({kx, ty, pw, th});
+      label("MOD KNOB", {kx + 12, ty + 10, pw - 24, 16}, kGreen);
+      knob(70, kGreen, {kx + 12, ty + 40, pw - 24, 140}, "");
+      hint("THE M KNOB, NOT SAVED", {kx + 12, ty + 192, pw - 24, 12}, visage::Font::kCenter);
+      feeds_[4] = &label("", {kx + 12, ty + 222, pw - 24, 14}, kGreen, visage::Font::kLeft, 0.8f);
    }
 
    void buildMatrix() {
-      const float x = kMargin + kModW[0] + kGutter, y = kBand3Y, w = kModW[1];
-      section("MOD MATRIX", {x, y, w, kBand3H});
+      const float x = kMargin, y = kMatrixY, w = kInner;
+      section("MOD MATRIX", {x, y, w, kMatrixH});
       hint("PICK A SOURCE AND DESTINATION, OR LOAD A PROGRAM FOR ITS ROUTING", {x + 500, y + 10, w - 514, 12});
       // Columns: slot, source, arrow, destination, where it is on the panel, amount, value, CC.
-      constexpr float kSlot = 12, kSource = 48, kArrow = 152, kDest = 180, kWhere = 320, kAmount = 500,
-                      kAmountW = 470, kValue = 980, kCc = 1032;
+      constexpr float kSlot = 12, kSource = 52, kArrow = 252, kDest = 286, kWhere = 516, kAmount = 744,
+                      kAmountW = 700, kValue = 1480, kCc = 1540;
       const auto head = [&](const char *t, float cx, float cw, visage::Font::Justification j = visage::Font::kLeft) {
          label(t, {x + cx, y + 34, cw, 12}, kDim, j, 0.8f);
       };
       head("SLOT", kSlot, 36);
-      head("SOURCE", kSource, 100);
-      head("DESTINATION", kDest, 136);
-      head("ON THE PANEL", kWhere, 170);
+      head("SOURCE", kSource, 180);
+      head("DESTINATION", kDest, 200);
+      head("ON THE PANEL", kWhere, 200);
       head("\xE2\x88\x92 REVERSED", kAmount, 120);
       head("NONE", kAmount, kAmountW, visage::Font::kCenter);
       head("MORE +", kAmount, kAmountW, visage::Font::kRight);
       head("AMOUNT", kValue - 20, 64, visage::Font::kRight);
       head("CC", kCc, 48);
       for (int s = 0; s < kModSlots; ++s) {
-         const float ry = y + 52 + s * 24.0f;
+         const float ry = y + 56 + s * 38.0f;
          Row &row = rows_[s];
-         label(std::to_string(s + 1), {x + kSlot + 6, ry + 5, 30, 14}, kDim);
-         row.source = &setting(sourceNrpn(s), kDim, {x + kSource, ry + 2, 100, 20});
-         row.arrow = &add<vis::Arrow>({x + kArrow, ry + 6, 18, 12});
-         row.destination = &setting(destinationNrpn(s), kDim, {x + kDest, ry + 2, 132, 20});
-         row.where = &label("", {x + kWhere, ry + 5, 170, 14}, kDim);
-         row.amount = &slider(52 + s, kNoise, {x + kAmount, ry - 4, kAmountW, 26});
+         if (s > 0)
+            divider({x + 12, ry - 6, w - 24, 1});
+         label(std::to_string(s + 1), {x + kSlot + 6, ry + 7, 30, 14}, kDim);
+         row.source = &setting(sourceNrpn(s), kDim, {x + kSource, ry + 2, 180, 24});
+         row.arrow = &add<vis::Arrow>({x + kArrow, ry + 8, 22, 12});
+         row.destination = &setting(destinationNrpn(s), kDim, {x + kDest, ry + 2, 200, 24});
+         row.where = &label("", {x + kWhere, ry + 7, 220, 14}, kDim);
+         row.amount = &slider(52 + s, kNoise, {x + kAmount, ry - 2, kAmountW, 28});
          row.amount->valueText = [](double) { return std::string(); };
-         row.value = &label("", {x + kValue, ry + 5, 44, 14}, kWhite, visage::Font::kRight);
-         caption(52 + s, {x + kCc, ry + 6, 48, 12});
+         row.value = &label("", {x + kValue, ry + 7, 44, 14}, kWhite, visage::Font::kRight);
+         caption(52 + s, {x + kCc, ry + 8, 48, 12});
          tips_.add(*row.amount, modSentence(s, false, {}));
       }
-      divider({x + 12, y + 296, w - 24, 1});
-      label("LAG 1", {x + kSlot + 6, y + 309, 130, 14});
-      setting(100, kOrange, {x + kSource, y + 305, 100, 20}, "The source the lag operator smooths (NRPN 100).");
-      hint("THE SOURCE THE LAG OPERATOR SMOOTHS", {x + kDest, y + 310, 300, 12}, visage::Font::kLeft);
-      auto &lag = slider(62, kOrange, {x + kAmount, y + 300, kAmountW, 26});
-      lag.valueText = [](double) { return std::string(); };
-      lagValue_ = &label("", {x + kValue, y + 309, 44, 14}, kWhite, visage::Font::kRight);
-      caption(62, {x + kCc, y + 310, 48, 12});
-      hint("THE ROUTING IS SENT AS NRPN AND THE AMOUNT AS A CC. A FAINT RING ON A KNOB SHOWS ROUGHLY HOW FAR ITS "
-           "SLOT CAN PUSH IT. HOVER A ROW FOR THE SENTENCE.",
-           {x + 12, y + 334, w - 24, 12}, visage::Font::kLeft);
+      hint("THE ROUTING IS SENT AS NRPN AND THE AMOUNT AS A CC. A FAINT RING ON A SOUND PAGE KNOB SHOWS ROUGHLY "
+           "HOW FAR ITS SLOT CAN PUSH IT. HOVER A ROW FOR THE SENTENCE.",
+           {x + 12, y + kMatrixH - 22, w - 24, 12}, visage::Font::kLeft);
+   }
+
+   // The lag and the two multipliers: sources made from other sources, which the matrix can route.
+   void buildOperators() {
+      const float x = kMargin, y = kOpsY, w = kInner;
+      section("OPERATORS", {x, y, w, kOpsH});
+      hint("LAG, MULT 1 AND MULT 2 ARE SOURCES IN THE MATRIX", {x + 200, y + 10, w - 214, 12});
+      const float ty = y + 34, th = kOpsH - 46, tw = (w - 24 - 24) / 3;
+      for (int t = 0; t < 3; ++t) {
+         const float tx = x + 12 + t * (tw + 12);
+         add<vis::Tile>({tx, ty, tw, th});
+         if (t == 0) {
+            label("LAG", {tx + 12, ty + 10, 100, 16}, kOrange);
+            hint("SMOOTHS A SOURCE: THE KNOB IS HOW SLOWLY IT FOLLOWS", {tx + 12, ty + 30, tw - 24, 12},
+                 visage::Font::kLeft);
+            label("SOURCE", {tx + 12, ty + 58, 120, 12}, kDim, visage::Font::kLeft, 0.8f);
+            setting(100, kOrange, {tx + 12, ty + 74, 200, 24}, "The source the lag operator smooths (NRPN 100).");
+            auto &lag = slider(62, kOrange, {tx + 12, ty + 116, tw - 24, 28}, "TIME");
+            lag.valueText = [](double) { return std::string(); };
+            lagValue_ = &label("", {tx + tw - 64, ty + 74, 52, 14}, kWhite, visage::Font::kRight);
+            caption(62, {tx + tw - 64, ty + 90, 52, 12}, visage::Font::kRight);
+            feedsOps_[0] = &label("", {tx + 12, ty + 158, tw - 24, 14}, kOrange, visage::Font::kLeft, 0.8f);
+         } else {
+            const int a = t == 1 ? 102 : 104;
+            label(t == 1 ? "MULT 1" : "MULT 2", {tx + 12, ty + 10, 100, 16}, kOrange);
+            hint("ONE SOURCE SCALED BY ANOTHER", {tx + 12, ty + 30, tw - 24, 12}, visage::Font::kLeft);
+            const float cw = (tw - 24 - 40) * 0.5f;
+            label("SOURCE A", {tx + 12, ty + 58, cw, 12}, kDim, visage::Font::kLeft, 0.8f);
+            label("SOURCE B", {tx + 52 + cw, ty + 58, cw, 12}, kDim, visage::Font::kLeft, 0.8f);
+            setting(a, kOrange, {tx + 12, ty + 74, cw, 24},
+                    t == 1 ? "Multiplier 1's first source (NRPN 102)." : "Multiplier 2's first source (NRPN 104).");
+            label("\xC3\x97", {tx + 12 + cw, ty + 76, 40, 20}, kWhite, visage::Font::kCenter, 1.0f);
+            setting(a + 1, kOrange, {tx + 52 + cw, ty + 74, cw, 24},
+                    t == 1 ? "Multiplier 1's second source (NRPN 103)." : "Multiplier 2's second source (NRPN 105).");
+            feedsOps_[t] = &label("", {tx + 12, ty + 158, tw - 24, 14}, kOrange, visage::Font::kLeft, 0.8f);
+         }
+      }
+   }
+
+   // ---- ARP & KNOBS ----
+
+   static constexpr float kArpH = kBand1H + kGutter + kBand2H;
+
+   void buildArp() {
+      const float x = kMargin, y = kBand1Y, w = kInner;
+      section("ARPEGGIATOR", {x, y, w, kArpH});
+      hint("THE ARPEGGIATOR'S SETTINGS ARE SAVED IN THE PROGRAM", {x + 200, y + 10, w - 214, 12});
+      // The top row: on, latch, style, speed, gate, octaves, length, tempo.
+      struct Item {
+         int nrpn;
+         const char *name;
+         float width;
+         const char *tip;
+      };
+      const Item items[] = {
+         {130, "ON / OFF", 110, "Turns the arpeggiator on (NRPN 130)."},
+         {131, "HOLD NOTES", 110, "Keeps the notes playing after the keys are let go (NRPN 131)."},
+         {114, "STYLE", 200, "The order the held notes are played in (NRPN 114)."},
+         {116, "SPEED", 150, "Each step's length, at the program's tempo (NRPN 116)."},
+         {115, "GATE", 150, "How long each step sounds, 0-127 (NRPN 115)."},
+         {132, "OCTAVES", 150, "How many octaves the pattern climbs (NRPN 132)."},
+         {133, "LENGTH", 150, "Steps in the pattern, 1-16 (NRPN 133). Steps past it are skipped."},
+         {18, "TEMPO", 170, "The program's tempo in BPM (NRPN 18), also on the SOUND page."},
+      };
+      float ix = x + 12;
+      for (const Item &it : items) {
+         label(it.name, {ix, y + 36, it.width, 12}, kDim, visage::Font::kLeft, 0.8f);
+         const Rect r{ix, y + 52, it.width, 28};
+         if (it.nrpn == 130 || it.nrpn == 131)
+            toggle(it.nrpn, it.nrpn == 130 ? "ARP ON" : "LATCH", kOrange, r, it.tip);
+         else
+            control(it.nrpn, it.nrpn == 18 ? kWhite : kOrange, r, it.tip);
+         ix += it.width + 16;
+      }
+
+      // The pattern, then each step's dropdown under its column.
+      const Rect pattern{x + 12, y + 100, w - 24, 452};
+      picture<vis::ArpPattern>(pattern, kOrange, static_cast<int>(kSettingIdBase));
+      const std::vector<Rect> cols = ui::row({pattern.x, y + 564, pattern.w, 52}, 16);
+      for (int i = 0; i < 16; ++i) {
+         const Rect c = cols[static_cast<size_t>(i)];
+         label(std::to_string(i + 1), {c.x, c.y, c.w, 14}, kDim, visage::Font::kCenter, 0.8f);
+         steps_[i] = &setting(134 + i, kOrange, {c.x + 3, c.y + 20, c.w - 6, 24},
+                              "What this step plays (NRPN 134-149): AUTO follows the style, TIE holds the last note, "
+                              "1ST-6TH a held note by order, < AND > the one before or after, CHORD all of them.");
+      }
+      hint("BARS: THE HELD NOTE EACH STEP PLAYS (AUTO FOLLOWS THE STYLE)  \xC2\xB7  LINKS: TIES  \xC2\xB7  STACKS: "
+           "CHORDS  \xC2\xB7  DIM: PAST THE LENGTH",
+           {x + 12, y + kArpH - 22, w - 24, 12}, visage::Font::kLeft);
+   }
+
+   // What the synth's own F, Q and M knobs and its four encoders do in this program.
+   void buildPanelKnobs() {
+      const float x = kMargin, y = kBand3Y, w = kInner;
+      section("THE SYNTH'S KNOBS", {x, y, w, kBand3H});
+      hint("WHAT EACH KNOB ON THE SYNTH CONTROLS IN THIS PROGRAM  \xC2\xB7  SYSTEM: THE SYNTH'S GLOBAL CHOICE",
+           {x + 220, y + 10, w - 234, 12});
+      const char *names[] = {"F KNOB", "Q KNOB", "M KNOB", "ENCODER 1", "ENCODER 2", "ENCODER 3", "ENCODER 4"};
+      const std::vector<Rect> tiles = ui::row({x + 12, y + 34, w - 24, kBand3H - 46}, 7, 12.0f);
+      for (int i = 0; i < 7; ++i) {
+         const Rect t = tiles[static_cast<size_t>(i)];
+         add<vis::Tile>(t);
+         label(names[i], {t.x + 12, t.y + 10, t.w - 24, 16}, i < 3 ? kOrange : kWhite);
+         add<vis::KnobGlyph>({t.x + t.w * 0.5f - 75, t.y + 44, 150, 150}, i >= 3);
+         label("CONTROLS", {t.x + 12, t.y + 216, t.w - 24, 12}, kDim, visage::Font::kLeft, 0.8f);
+         setting(10 + i, i < 3 ? kOrange : kWhite, {t.x + 12, t.y + 232, t.w - 24, 24},
+                 "What this knob on the synth controls in the program (NRPN 10-16).");
+         hint("NRPN " + std::to_string(10 + i), {t.x + 12, t.y + 268, t.w - 24, 12}, visage::Font::kCenter);
+      }
    }
 
    // ---- keeping it current ----
@@ -658,6 +922,9 @@ private:
          feeds_[i]->setText(feeds([&](const std::string &c) { return c.rfind(lfo, 0) == 0; }));
       }
       feeds_[3]->setText(feeds([](const std::string &c) { return c == "modwheel" || c.find("whl") != std::string::npos; }));
+      const char *ops[] = {"lag", "mult1", "mult2"};
+      for (int i = 0; i < 3; ++i)
+         feedsOps_[i]->setText(feeds([&](const std::string &c) { return c == ops[i]; }));
       feeds_[4]->setText(feeds([](const std::string &c) {
          return c == "mod knob" || c.find("knb") != std::string::npos;
       }));
@@ -675,6 +942,13 @@ private:
       for (auto [readout, cc] : readouts_)
          readout->setText(std::to_string(toCcValue(value(cc))));
       wheelValue_->setText(std::to_string(toCcValue(value(1))));
+      for (int i = 0; i < 3; ++i)
+         syncHints_[i]->setText(std::lround(value(settingId(62 + 3 * i))) > 0
+                                   ? "SYNCED TO THE TEMPO: THE SPEED KNOB IS IGNORED"
+                                   : "");
+      const long length = std::lround(value(settingId(133))) + 1;
+      for (int i = 0; i < 16; ++i)
+         steps_[i]->setAccent(i < length ? kOrange : 0xff4b515a);
 
       double reach[128] = {};
       unsigned color[128] = {};
@@ -729,6 +1003,11 @@ private:
    std::vector<std::pair<ui::Label *, int>> readouts_;
    ui::Label *lagValue_ = nullptr, *wheelValue_ = nullptr;
    ui::Label *feeds_[5] = {}; // LFO 1-3, mod wheel, mod knob
+   ui::Label *feedsOps_[3] = {}; // lag, mult 1, mult 2
+   ui::Label *syncHints_[3] = {};
+   ui::Dropdown *steps_[16] = {};
+   ui::TabBar *tabs_ = nullptr;
+   int page_ = -1; // the page being built
    ui::ActivityLed *leds_[3] = {};
    double lfoPhase_[3] = {};
    int shownKnown_ = -1;
@@ -744,8 +1023,9 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
                                        ui::WindowOptions{static_cast<int>(kDesignWidth), static_cast<int>(kDesignHeight)});
 }
 
-bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath) {
+bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, int page) {
    Panel panel(host);
+   panel.selectPage(page);
    return ui::renderToPng(panel, width, height, pngPath);
 }
 

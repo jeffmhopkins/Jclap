@@ -23,6 +23,21 @@ namespace {
 
 using namespace mm2;
 
+const char *groupName(Group g) {
+   switch (g) {
+   case Group::Oscillators: return "Oscillators";
+   case Group::Filter: return "Filter";
+   case Group::Envelopes: return "Envelopes";
+   case Group::Lfo: return "LFO";
+   case Group::ModMatrix: return "Mod Matrix";
+   case Group::Voice: return "Voice";
+   case Group::Effects: return "Effects";
+   case Group::Arp: return "Arpeggiator";
+   case Group::Program: return "Program";
+   }
+   return "";
+}
+
 const char *sectionName(Section s) {
    switch (s) {
    case Section::Oscillators: return "Oscillators";
@@ -217,10 +232,11 @@ public:
          return false;
       if (index >= static_cast<uint32_t>(kParamCount)) {
          const Setting &st = kSettings[index - kParamCount];
-         jclap::core::fillParamInfo({settingId(st.nrpn), st.name, isRouting(index - kParamCount) ? "Mod Matrix" : "Settings",
-                                     0, static_cast<double>(choiceCount(st.choices) - 1),
+         jclap::core::fillParamInfo({settingId(st.nrpn), st.name, groupName(st.group),
+                                     static_cast<double>(settingMin(st)), static_cast<double>(settingMax(st)),
                                      static_cast<double>(st.defaultValue),
-                                     CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_ENUM},
+                                     CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED |
+                                        (st.choices == Choices::Number ? 0u : CLAP_PARAM_IS_ENUM)},
                                     info);
          return true;
       }
@@ -253,9 +269,9 @@ public:
          return true;
       }
       if (const int k = indexOfSettingId(id); k >= 0) {
-         const std::vector<std::string> names = choiceNames(kSettings[k].choices);
-         const int v = std::clamp(static_cast<int>(std::lround(value)), 0, static_cast<int>(names.size()) - 1);
-         std::snprintf(out, size, "%s", names[v].c_str());
+         const Setting &st = kSettings[k];
+         const int v = std::clamp(static_cast<int>(std::lround(value)), settingMin(st), settingMax(st));
+         std::snprintf(out, size, "%s", settingText(st, v).c_str());
          return true;
       }
       if (indexOfCc(static_cast<int>(id)) < 0)
@@ -266,13 +282,18 @@ public:
 
    bool paramsTextToValue(clap_id id, const char *text, double *value) const override {
       if (const int k = indexOfSettingId(id); k >= 0) {
-         const std::vector<std::string> names = choiceNames(kSettings[k].choices);
+         const Setting &st = kSettings[k];
+         const std::vector<std::string> names = choiceNames(st.choices);
          for (size_t n = 0; n < names.size(); ++n)
             if (names[n] == text) {
                *value = static_cast<double>(n);
                return true;
             }
-         return false;
+         double v;
+         if (st.choices != Choices::Number || !jclap::core::parseNumber(text, v))
+            return false;
+         *value = std::clamp(v + st.offset, static_cast<double>(settingMin(st)), static_cast<double>(settingMax(st)));
+         return true;
       }
       if (id != kChannelParamId && indexOfCc(static_cast<int>(id)) < 0)
          return false;
@@ -378,7 +399,7 @@ public:
             const int k = indexOfSetting(entry.nrpn);
             if (k < 0)
                continue;
-            setting[k] = std::clamp(static_cast<int>(entry.value), 0, choiceCount(kSettings[k].choices) - 1);
+            setting[k] = std::clamp(static_cast<int>(entry.value), settingMin(kSettings[k]), settingMax(kSettings[k]));
             settingTouched[k] = entry.touched != 0;
          }
       }
@@ -523,7 +544,7 @@ private:
             return;
          settingTouched_[k].store(false);
          settingFromProgram_[k].store(true);
-         settings_[k].store(std::clamp(v, 0, choiceCount(kSettings[k].choices) - 1));
+         settings_[k].store(std::clamp(v, settingMin(kSettings[k]), settingMax(kSettings[k])));
          edits_.begin(settingId(kSettings[k].nrpn));
          edits_.value(settingId(kSettings[k].nrpn), settings_[k].load());
          edits_.end(settingId(kSettings[k].nrpn));
@@ -568,13 +589,11 @@ private:
 
    static constexpr int kSettingOffset = 1 << 16; // applyParamEvent's return for setting k
 
-   static bool isRouting(int k) {
-      return kSettings[k].choices == Choices::Source || kSettings[k].choices == Choices::Destination;
-   }
+   static bool isRouting(int k) { return mm2::isRouting(kSettings[k]); }
 
    // Any thread. Stores setting k as set by hand or automation; returns the value stored.
    int setSetting(int k, double value) {
-      const int v = std::clamp(static_cast<int>(std::lround(value)), 0, choiceCount(kSettings[k].choices) - 1);
+      const int v = std::clamp(static_cast<int>(std::lround(value)), settingMin(kSettings[k]), settingMax(kSettings[k]));
       settingFromProgram_[k].store(false);
       settings_[k].store(v);
       settingTouched_[k].store(true);
@@ -583,18 +602,35 @@ private:
       return v;
    }
 
-   // NRPN select (CC 99, 98) and value (CC 6) on the CC channel, once set and changed.
+   // NRPN select (CC 99, 98) and value (CC 6, then CC 38 for a 14-bit one) on the CC channel, once
+   // set and changed. A tempo sync going back to free sends its speed knob's CC instead, which is
+   // what sets a free speed.
    void sendSettingIfChanged(const clap_output_events_t *out, uint32_t time, int k) {
       if (!settingTouched_[k].load())
          return;
       const int v = settings_[k].load();
       if (v == settingSent_[k])
          return;
+      const Setting &st = kSettings[k];
+      if (isSync(st) && v == 0) {
+         settingSent_[k] = v;
+         if (const int i = indexOfCc(syncedCc(st)); i >= 0) {
+            touched_[i].store(true);
+            sender_.forget(i);
+            sendIfChanged(out, time, i, false);
+         }
+         return;
+      }
       const auto status = static_cast<uint8_t>(0xB0 | (sentChannel_ - 1));
-      const int nrpn = kSettings[k].nrpn;
-      if (jclap::core::pushMidi(out, time, status, 99, static_cast<uint8_t>(nrpn >> 7)) &&
-          jclap::core::pushMidi(out, time, status, 98, static_cast<uint8_t>(nrpn & 127)) &&
-          jclap::core::pushMidi(out, time, status, 6, static_cast<uint8_t>(v)))
+      const int n = nrpnValue(st, v);
+      bool ok = jclap::core::pushMidi(out, time, status, 99, static_cast<uint8_t>(st.nrpn >> 7)) &&
+                jclap::core::pushMidi(out, time, status, 98, static_cast<uint8_t>(st.nrpn & 127));
+      if (st.wide)
+         ok = ok && jclap::core::pushMidi(out, time, status, 6, static_cast<uint8_t>((n >> 7) & 127)) &&
+              jclap::core::pushMidi(out, time, status, 38, static_cast<uint8_t>(n & 127));
+      else
+         ok = ok && jclap::core::pushMidi(out, time, status, 6, static_cast<uint8_t>(n & 127));
+      if (ok)
          settingSent_[k] = v;
    }
 

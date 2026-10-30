@@ -77,8 +77,31 @@ def cc_value(program, cc):
     return same[len(same) // 2]
 
 
-# nrpn: byte, for the settings in src/settings.h other than the routing.
-SETTINGS = {27: 35, 31: 39, 35: 43, 125: 150, 126: 151, 61: 71, 63: 74, 64: 75, 66: 78, 67: 79, 69: 82, 100: 123}
+# nrpn: (byte, 14-bit, sync choices), for the settings in src/settings.h other than the routing. A
+# sync setting is 0 (free) unless the stored speed is above 127: then it's that minus 127.
+SETTINGS = {
+    9: (16, False, 0), 10: (17, False, 0), 11: (18, False, 0), 12: (19, False, 0), 13: (20, False, 0),
+    14: (21, False, 0), 15: (22, False, 0), 16: (23, False, 0), 17: (24, False, 0), 18: (25, True, 0),
+    23: (31, False, 0), 24: (32, False, 0), 27: (35, False, 0), 31: (39, False, 0), 35: (43, False, 0),
+    61: (71, False, 0), 62: (72, True, 30), 63: (74, False, 0), 64: (75, False, 0), 65: (76, True, 30),
+    66: (78, False, 0), 67: (79, False, 0), 68: (80, True, 30), 69: (82, False, 0), 100: (123, False, 0),
+    102: (125, False, 0), 103: (126, False, 0), 104: (127, False, 0), 105: (128, False, 0),
+    108: (132, True, 6), 114: (139, False, 0), 115: (140, False, 0), 116: (141, False, 0),
+    117: (142, False, 0), 118: (143, False, 0), 119: (144, False, 0), 120: (145, False, 0),
+    121: (146, False, 0), 122: (147, False, 0), 124: (149, False, 0), 125: (150, False, 0),
+    126: (151, False, 0), 127: (152, False, 0), 128: (153, False, 0), 130: (155, False, 0),
+    131: (156, False, 0), 132: (157, False, 0), 133: (158, False, 0),
+}
+for step in range(16):
+    SETTINGS[134 + step] = (159 + step, False, 0)
+
+
+def setting(program, nrpn):
+    byte, wide, sync = SETTINGS[nrpn]
+    v = program[byte] * 128 + program[byte + 1] if wide else program[byte]
+    if sync:
+        return v - 127 if 127 < v <= 127 + sync else 0
+    return v
 
 
 def routes(program):
@@ -132,7 +155,7 @@ def main():
         category = CATEGORIES[p[16]] if p[16] < len(CATEGORIES) else "Misc"
         values = ", ".join("{%d, %d}" % (cc, cc_value(p, cc)) for cc in sorted(LAYOUT))
         mods = ", ".join("{%d, %d}" % r for r in routes(p))
-        settings = ", ".join("{%d, %d}" % (nrpn, p[byte]) for nrpn, byte in sorted(SETTINGS.items()))
+        settings = ", ".join("{%d, %d}" % (nrpn, setting(p, nrpn)) for nrpn in sorted(SETTINGS))
         escaped = name.replace("\\", "\\\\").replace('"', '\\"')
         lines.append('{%d, "%s", "%s", {%s}, {%s}, {%s}},' % (n + 1, escaped, category, values, mods, settings))
         count += 1
