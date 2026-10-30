@@ -54,8 +54,8 @@ int main(int argc, char **argv) {
       std::fprintf(stderr, "usage: %s out.png [width height]\n", argv[0]);
       return 1;
    }
-   const int width = argc > 3 ? std::atoi(argv[2]) : 2994;
-   const int height = argc > 3 ? std::atoi(argv[3]) : 1488;
+   const int width = argc > 3 ? std::atoi(argv[2]) : 2708;
+   const int height = argc > 3 ? std::atoi(argv[3]) : 1570;
    DemoHost host;
    return mb::renderScreenshot(host, width, height, argv[1]) ? 0 : 1;
 }

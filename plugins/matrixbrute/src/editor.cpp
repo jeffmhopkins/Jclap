@@ -1,20 +1,18 @@
 // Visage panel for the MatrixBrute controller, laid out on a fixed kDesignWidth x kDesignHeight grid
 // and scaled to the window, which keeps its aspect ratio.
 //
-// It follows the synth's own panel, column by column, with every box sized to its contents on one
-// knob pitch: VCO 1 and 2 (the wave mix drawn under them), VCO 3 and noise, over audio mod, VCO
-// sync, the wheels and voice; the mixer (each row its level, Filter button, lights and mix share) beside the
-// Steiner and ladder filters, with the routing and the big silver Master Cutoff between them, over
-// LFO 1 and LFO 2; the preset display over the three envelopes; the 16 x 16 mod matrix with its
-// display, mode buttons and sequencer lanes; and master, the analog effects, the sequencer and, from
-// the synth's left end, glide, play control and the macros. As on the synth, a dark upper band sits
-// over a lighter strip, and box edges line up across columns (ENV 2 with the sequencer, ENV 3 with
-// VCO 3, the strip's two rows). Each box's title tab and top rule are in its accent, from about
-// eight hues kept apart, and its controls are named in a light tint of it (the mixer's and audio
-// mod's in each source's colour); values and CC numbers stay neutral. Names are at least 13.5 units
-// and the smallest text 12. Every knob and slider is one CC. The synth's buttons, lights and matrix
-// aren't on MIDI: they're drawn as indicators with a state the preset read can set later
-// (setIndicator() and MatrixMap::setCell()), and until then they're dim.
+// It follows the synth's own panel in six columns, as the plugin's first panel did: VCO 1 and 2
+// (their wave mix drawn tall under the knobs), VCO 3 and noise, audio mod and VCO sync, the wheels
+// and voice down the left; the mixer (each row its level, Filter button, lights and mix share) and
+// the Steiner and ladder filters with the routing and the big silver Master Cutoff in a box between
+// them, over LFO 1 and LFO 2 side by side, mirror images of each other; the preset display (with the read from the synth) over the three
+// envelopes; the 16 x 16 matrix; and the analog effects, the sequencer, glide and play control, and
+// master on the right. Along the bottom, like the synth's front edge, are glide, the mod wheel, the
+// macros, the MATRIXBRUTE wordmark and what the plugin knows. Each box's title tab and top rule are
+// in its accent and its controls are named in a light tint of it; values and CC numbers stay
+// neutral, and the smallest text is about 12 units. Every knob and slider is one CC. The synth's
+// buttons, lights and matrix aren't on MIDI: they're drawn as indicators with a state the preset read
+// can set later (setIndicator() and MatrixMap::setCell()), and until then they're dim.
 // Knobs the plugin hasn't heard from the synth or set itself are drawn dim, since their value is a
 // guess.
 
@@ -52,61 +50,56 @@ namespace ui = jclap::ui;
 namespace vis = visuals;
 using ui::Rect;
 
-constexpr float kDesignHeight = 1488.0f;
 constexpr float kHeaderHeight = 64.0f;
 // The window opens at this fraction of the design size; right-click the background for others.
 constexpr float kOpenScale = 0.5f;
 
-// One knob pitch everywhere: a cell is kCellW wide and kKnobH tall, rows kRowPitch apart, and a box
-// holding n cells across and r rows down is boxW(n) x boxH(r).
+// The knob pitch the right-hand column's boxes are built on: a cell is kCellW wide and kKnobH tall,
+// rows kRowPitch apart.
 constexpr float kCellW = 92, kKnobH = 100, kRowPitch = 104;
 constexpr float kPad = 8, kTitleH = 24;
 constexpr float boxW(int n) { return 2 * kPad + n * kCellW; }
-constexpr float boxH(int r) { return kTitleH + r * kRowPitch - (kRowPitch - kKnobH) + kPad; }
 // Type sizes: control names, values and the smallest text (CC numbers, light names).
 constexpr float kNameSize = vis::kNameText, kValueSize = 13.0f, kSmallSize = vis::kSmallText;
 
-// The synth's columns, left to right, with 16 point margins and 12 point gutters: oscillators,
-// mixer and filters, preset and envelopes, the matrix, and effects and sequencer.
+// Six columns, as on the synth, with 16 point margins and 12 point gutters: oscillators, the mixer,
+// the filters, preset and envelopes, the matrix, and effects, sequencer, play control and master;
+// then the front edge.
 constexpr float kMargin = 16.0f, kGutter = 12.0f;
-// The mixer's rows run across as on the synth: the level knob, then the Filter button with its lights.
-constexpr float kMixerButtonW = 100, kMixerW = 2 * kPad + kCellW + kMixerButtonW;
-constexpr float kFilterButtonsW = 110, kFilterW = boxW(3) + kFilterButtonsW;
-// The matrix's 16 columns are 46 wide, between the source names (142) and the sequencer lanes (58),
-// in blocks of four 10 apart, inside a 10 point border.
-constexpr float kMatrixW = 20 + 142 + 58 + 3 * 10 + 16 * 46;
-constexpr float kColW[] = {boxW(4) + 136, kMixerW + kGutter + kFilterW, 310, kMatrixW, boxW(5)};
+constexpr float kColW[] = {470, 210, 400, 320, 740, boxW(5)};
 constexpr float colX(int column) {
    float x = kMargin;
    for (int i = 0; i < column; ++i)
       x += kColW[i] + kGutter;
    return x;
 }
-constexpr float kDesignWidth = colX(4) + kColW[4] + kMargin;
-// A dark band over a lighter strip. The band is as tall as two VCOs (their waves under the knobs)
-// and VCO 3's row; the strip is two rows of one-knob-row boxes on one rhythm: audio mod and VCO sync
-// over the wheels and voice, and each LFO's knobs over its wave and retrigger.
+constexpr float kDesignWidth = colX(5) + kColW[5] + kMargin;
 constexpr float kTop = kHeaderHeight + kMargin;
-constexpr float kWaveH = 224;
-constexpr float kVcoH = boxH(2) + kWaveH + 14, kSmallH = boxH(1);
-constexpr float kBandH = 2 * kVcoH + kSmallH + 2 * kGutter;
-constexpr float kStripRowH = kSmallH, kStripH = 2 * kStripRowH + kGutter, kStripY = kTop + kBandH + kGutter;
-constexpr float kStripRow2Y = kStripY + kStripRowH + kGutter;
-static_assert(kStripY + kStripH + kMargin == kDesignHeight, "the band and strip fill the height");
-constexpr float kVco2Y = kTop + kVcoH + kGutter, kVco3Y = kVco2Y + kVcoH + kGutter;
-// The filters at the top and bottom of the band, with the routing and Master Cutoff between.
-constexpr float kFilterH = 300, kCutoffH = kBandH - 2 * kFilterH - 2 * kGutter;
-// The preset at the top of its column, then the envelopes: ENV 3 starts level with VCO 3's row and
-// runs to the foot, ENV 1 and ENV 2 share what's between.
-constexpr float kPresetH = 166;
-constexpr float kEnv1Y = kTop + kPresetH + kGutter, kEnv3Y = kVco3Y;
-constexpr float kEnvH = (kEnv3Y - kEnv1Y - 2 * kGutter) / 2, kEnv2Y = kEnv1Y + kEnvH + kGutter;
-constexpr float kEnv3H = kDesignHeight - kMargin - kEnv3Y;
-// The last column: master, the analog effects down to ENV 2's top, the sequencer level with ENV 2
-// down to the strip, and glide, play control and the macros across the strip.
-constexpr float kMasterH = 92;
-constexpr float kFxY = kTop + kMasterH + kGutter, kSeqY = kEnv2Y;
-constexpr float kFxH = kSeqY - kGutter - kFxY, kSeqH = kStripY - kGutter - kSeqY;
+// The left column sets the rows: VCO 1 and 2 (their waves drawn tall under the knobs), VCO 3 and
+// noise, audio mod and VCO sync, the wheels and voice.
+constexpr float kWaveH = 200;
+constexpr float kVcoH = 244 + kWaveH + 8, kSmallRowH = 130, kModRowH = 140;
+constexpr float kBodyH = 2 * kVcoH + 2 * kSmallRowH + kModRowH + 4 * kGutter;
+constexpr float kLipY = kTop + kBodyH + kGutter, kLipH = 110;
+constexpr float kDesignHeight = kLipY + kLipH + kMargin;
+constexpr float kVco2Y = kTop + kVcoH + kGutter;
+constexpr float kVco3Y = kVco2Y + kVcoH + kGutter;
+constexpr float kAudioModY = kVco3Y + kSmallRowH + kGutter;
+constexpr float kWheelsY = kAudioModY + kModRowH + kGutter;
+// The mixer and filters end with VCO 3's row, and the LFOs fill the rest.
+constexpr float kMixerH = 2 * kVcoH + kSmallRowH + 2 * kGutter;
+constexpr float kLfoY = kAudioModY, kLfoH = kTop + kBodyH - kLfoY;
+constexpr float kMixerButtonW = 100;
+// The filters at the top and bottom, with the routing and Master Cutoff between.
+constexpr float kFilterH = 290, kVcf2Y = kTop + kMixerH - kFilterH, kCutoffY = kTop + kFilterH + kGutter;
+constexpr float kCutoffH = kVcf2Y - kGutter - kCutoffY;
+// The preset over the three envelopes.
+constexpr float kPresetH = 166, kEnvH = (kBodyH - kPresetH - 3 * kGutter) / 3;
+// The right column: the analog effects, the sequencer, glide and play control, and master.
+constexpr float kFxY = kTop, kFxH = 462;
+constexpr float kSeqY = kFxY + kFxH + kGutter, kSeqH = 604;
+constexpr float kPlayY = kSeqY + kSeqH + kGutter, kPlayH = 120;
+constexpr float kMasterY = kPlayY + kPlayH + kGutter, kMasterH = kTop + kBodyH - kMasterY;
 
 // Section accents, about eight hues kept apart: the filters' orange and teal as printed on the
 // synth, the envelopes' yellow, green and purple, VCO 1 amber, VCO 2 blue, VCO 3 coral, LFO 1 lime
@@ -148,20 +141,27 @@ public:
       buildAudioModAndSync();
       buildWheelsAndVoice();
       buildMixer();
+      buildLfo(0, "LFO 1", kLime, 90, "PHASE", 91);
       buildFilter(kTop, "VCF1 STEINER", kSteiner, {81, 23, 83, 82, 24, 7});
       buildMasterCutoff();
-      buildFilter(kTop + kBandH - kFilterH, "VCF2 LADDER", kLadder, {85, 25, 87, 86, 26, 8});
-      buildLfo(0, "LFO 1", kLime, 90, "PHASE", 91);
+      buildFilter(kVcf2Y, "VCF2 LADDER", kLadder, {85, 25, 87, 86, 26, 8});
       buildLfo(1, "LFO 2", kPink, 92, "DELAY", 93);
       buildPreset();
-      buildEnvelope(kEnv1Y, kEnvH, "ENV 1 (VCF)", 0, {-1, 102, 103, 28, 104}, 94, "VELO/VCF");
-      buildEnvelope(kEnv2Y, kEnvH, "ENV 2 (VCA)", 1, {-1, 105, 106, 29, 107}, 95, "VELO/VCA");
-      buildEnvelope(kEnv3Y, kEnv3H, "ENV 3", 2, {108, 109, 110, 30, 111}, -1, "");
+      for (int i = 0; i < 3; ++i) {
+         const float y = kTop + kPresetH + kGutter + i * (kEnvH + kGutter);
+         if (i == 0)
+            buildEnvelope(y, kEnvH, "ENV 1 (VCF)", 0, {-1, 102, 103, 28, 104}, 94, "VELO/VCF");
+         else if (i == 1)
+            buildEnvelope(y, kEnvH, "ENV 2 (VCA)", 1, {-1, 105, 106, 29, 107}, 95, "VELO/VCA");
+         else
+            buildEnvelope(y, kEnvH, "ENV 3", 2, {108, 109, 110, 30, 111}, -1, "");
+      }
       buildMatrix();
-      buildMaster();
       buildFx();
       buildSequencer();
-      buildPerformance();
+      buildPlayControl();
+      buildMaster();
+      buildLip();
       sync();
       startTimer(30);
    }
@@ -189,6 +189,10 @@ public:
       canvas.text("Brute", ui::font(28 * s), visage::Font::kLeft, 146 * s, 10 * s, 100 * s, 44 * s);
       canvas.setColor(kHint);
       canvas.text("CC", ui::font(16 * s), visage::Font::kLeft, 222 * s, 18 * s, 40 * s, 30 * s);
+
+      // The front edge, under the panel.
+      canvas.setColor(0xff0f1114);
+      canvas.fill(0, (kLipY - 6) * s, width(), (kLipH + 6 + kMargin) * s);
    }
 
 private:
@@ -291,7 +295,7 @@ private:
 
    void buildHeader() {
       // The synth's presets: the bank compiled in, until READ SYNTH brings the ones it has now.
-      auto &bar = add<ui::PresetBar>({474, 18, 520, 28}, presets_, kPresetFormat, host_);
+      auto &bar = add<ui::PresetBar>({(kDesignWidth - 520) * 0.5f, 18, 520, 28}, presets_, kPresetFormat, host_);
       bar_ = &bar;
       bar.setAccent(kSteiner);
       bar.defaults = presetDefaults();
@@ -363,91 +367,71 @@ public:
    void setMatrixCell(int source, int destination, int state) { matrix_->setCell(source, destination, state); }
 
 private:
-   // ---- column 1: oscillators, over audio mod, sync, wheels and voice ----
+   // ---- column 1: oscillators, audio mod, wheels ----
 
    // Five columns as on the synth: Fine above Coarse, then each wave's level on the bottom row with
    // its enhancer (for the sub, its waveform) above it; the wave mix drawn under them.
    void buildVco(float y, const char *title, unsigned color, std::initializer_list<int> list) {
       const std::vector<int> ccs(list); // sub, saw, square, tri, coarse, fine, ultrasaw, pw, metal, wave
-      const float x = colX(0), w = kColW[0], h = kVcoH;
-      section(title, {x, y, w, h}, true, color);
+      const float x = colX(0), w = kColW[0];
+      section(title, {x, y, w, kVcoH}, true, color);
       const int top[5] = {ccs[5], ccs[9], ccs[6], ccs[7], ccs[8]};
       const int bottom[5] = {ccs[4], ccs[0], ccs[1], ccs[2], ccs[3]};
       const char *topNames[5] = {"FINE", "SUB WAVE", "ULTRASAW", "PULSE WIDTH", "METALIZER"};
       const char *bottomNames[5] = {"COARSE", "SUB", "SAW", "SQUARE", "TRIANGLE"};
-      const float cw = (w - 2 * kPad) / 5;
+      const float cw = (w - 24) / 5;
       for (int c = 0; c < 5; ++c) {
-         knob(top[c], c == 0 ? kWhite : color, {x + kPad + c * cw, y + kTitleH, cw, kKnobH}, topNames[c]);
-         knob(bottom[c], c == 0 ? kWhite : color, {x + kPad + c * cw, y + kTitleH + kRowPitch, cw, kKnobH},
-              bottomNames[c]);
+         knob(top[c], c == 0 ? kWhite : color, {x + 12 + c * cw, y + 24, cw, 106}, topNames[c]);
+         knob(bottom[c], c == 0 ? kWhite : color, {x + 12 + c * cw, y + 132, cw, 106}, bottomNames[c]);
       }
       for (int c = 1; c <= 2; ++c)
-         add<ui::Divider>({x + kPad + c * cw, y + kTitleH + 6, 1, kRowPitch + kKnobH - 12});
-      const float py = y + kTitleH + kRowPitch + kKnobH + 6;
-      picture<vis::VcoWave>({x + 12, py, w - 24, y + h - 10 - py},
+         add<ui::Divider>({x + 12 + c * cw, y + 30, 1, 204});
+      picture<vis::VcoWave>({x + 12, y + 244, w - 24, kWaveH},
                             vis::VcoWave::Ccs{ccs[0], ccs[1], ccs[2], ccs[3], ccs[6], ccs[7], ccs[8]}, color);
    }
 
-   // VCO 3's coarse tune, wave, LFO divider and keyboard tracking; then the noise type. The lights
-   // stand in a column beside each button, so their names keep a readable size.
    void buildVco3AndNoise() {
-      const float x = colX(0), y = kVco3Y, w = 400, h = kSmallH;
-      section("VCO 3 - LFO 3", {x, y, w, h}, true, kCoral);
-      knobRow(x, y, {22}, {"COARSE"}, {kCoral});
-      const float bx = x + kPad + kCellW, by = y + kTitleH + 4, bh = kKnobH - 8;
-      const auto right = vis::HwButton::Lights::Right;
-      indicator("vco3.wave", "Wave", {"RSAW", "SQR", "TRI", "SIN"}, {bx + 4, by, 100, bh}, right, kCoral);
-      indicator("vco3.lfoDiv", "LFO Div", {"16", "32", "64", "128"}, {bx + 112, by, 90, bh}, right, kCoral);
-      indicator("vco3.kbdTrack", "Kbd Track", {}, {bx + 208, by, x + w - kPad - (bx + 208), bh});
-      const float nx = x + w + kGutter, nw = kColW[0] - w - kGutter;
-      section("NOISE", {nx, y, nw, h}, true, kNoise);
-      indicator("noise.type", "Type", {"WHT", "PNK", "RED", "BLU"}, {nx + kPad, by, nw - 2 * kPad, bh}, right);
+      const float x = colX(0), y = kVco3Y;
+      section("VCO 3 - LFO 3", {x, y, 360, kSmallRowH}, true, kCoral);
+      knob(22, kCoral, {x + 8, y + 22, 90, 104}, "COARSE");
+      indicator("vco3.wave", "Wave", {"RSAW", "SQR", "TRI", "SIN"}, {x + 106, y + 30, 90, 90}, vis::HwButton::Lights::Above, kCoral);
+      indicator("vco3.lfoDiv", "LFO Div", {"16", "32", "64", "128"}, {x + 200, y + 30, 90, 90}, vis::HwButton::Lights::Above,
+                kCoral);
+      indicator("vco3.kbdTrack", "Kbd Track", {}, {x + 290, y + 30, 66, 90});
+      section("NOISE", {x + 372, y, 98, kSmallRowH}, true, kNoise);
+      indicator("noise.type", "Type", {"WHT", "PNK", "RED", "BLU"}, {x + 376, y + 30, 90, 90});
    }
 
-   // The four audio mod amounts, each named in its source's colour, and VCO sync in a small box of
-   // its own beside them.
+   // The four audio mod amounts, each named in its source's colour, and VCO sync beside them.
    void buildAudioModAndSync() {
-      const float x = colX(0), y = kStripY, sw = 120, w = kColW[0] - sw - kGutter;
-      section("AUDIO MOD", {x, y, w, kStripRowH}, false, kSilver);
+      const float x = colX(0), y = kAudioModY;
+      section("AUDIO MOD", {x, y, 360, kModRowH}, false, kSilver);
       const int ccs[4] = {77, 78, 79, 80};
       const char *names[4] = {"VCO1 > VCO2", "VCO3 > 1 | 2", "VCO3 > F1 | F2", "NOISE > 1 | F1"};
       const unsigned colors[4] = {kAmber, kCoral, kCoral, kNoise};
-      const float cw = (w - 2 * kPad) / 4;
       for (int i = 0; i < 4; ++i)
-         knob(ccs[i], colors[i], {x + kPad + i * cw, y + kTitleH, cw, kKnobH}, names[i], vis::labelTint(colors[i]));
-      const float sx = x + w + kGutter;
-      section("VCO SYNC", {sx, y, sw, kStripRowH}, false, kSilver);
-      indicator("vco.sync", "VCO 2 > VCO 1", {}, {sx + kPad, y + kTitleH + 14, sw - 2 * kPad, 64});
+         knob(ccs[i], colors[i], {x + 4 + i * 88, y + 26, 88, 106}, names[i], vis::labelTint(colors[i]))
+            .setTextSizes(11.0f, kValueSize, kSmallSize);
+      section("VCO SYNC", {x + 372, y, 98, kModRowH}, false, kSilver);
+      indicator("vco.sync", "VCO 2 > VCO 1", {}, {x + 376, y + 30, 90, 90});
    }
 
-   // Bend range, the mod wheel's destination and the mod wheel itself; then the voice mode in a
-   // small box of its own.
    void buildWheelsAndVoice() {
-      const float x = colX(0), y = kStripRow2Y, vw = 136, w = kColW[0] - vw - kGutter;
-      section("WHEELS", {x, y, w, kStripRowH}, false, kGrey);
-      knobRow(x, y, {119}, {"BEND RANGE"}, {kWhite});
-      const float by = y + kTitleH + 4, bh = kKnobH - 8;
-      indicator("wheel.mod", "Wheel Dest", {"MATRIX", "CUTOFF", "LFO1 VIB", "LFO1 AMT"}, {x + kPad + kCellW + 4, by, 136, bh},
+      const float x = colX(0), y = kWheelsY;
+      section("WHEELS", {x, y, 300, kSmallRowH}, false, kGrey);
+      knob(119, kWhite, {x + 8, y + 22, 90, 104}, "BEND RANGE");
+      indicator("wheel.mod", "Mod Wheel", {"MATRIX", "CUTOFF", "LFO1 VIB", "LFO1 AMT"}, {x + 116, y + 28, 176, 96},
                 vis::HwButton::Lights::Right);
-      const float wx = x + kPad + kCellW + 146;
-      auto &wheel = add<vis::WheelStrip>({wx, y + kTitleH + 2, 24, kKnobH - 6}, rangeOf(1));
-      wire(wheel, 1, kWheel);
-      const float lx = wx + 30, lw = x + w - 4 - lx;
-      text("MOD WHEEL", lx, y + 40, lw, 13, tint_, visage::Font::kLeft);
-      wheelValue_ = &text("", lx, y + 62, lw, kValueSize, kWhite, visage::Font::kLeft);
-      text("CC 1", lx, y + 82, lw, kSmallSize, kDim, visage::Font::kLeft);
-      const float vx = x + w + kGutter;
-      section("VOICE", {vx, y, vw, kStripRowH}, false, kGrey);
-      indicator("voice.mode", "Mode", {"MONO", "PARA", "DUO"}, {vx + kPad, by, vw - 2 * kPad, bh},
-                vis::HwButton::Lights::Right);
+      section("VOICE", {x + 312, y, 158, kSmallRowH}, false, kGrey);
+      indicator("voice.mode", "Mode", {"MONO", "PARA", "DUO"}, {x + 320, y + 28, 138, 96}, vis::HwButton::Lights::Right);
    }
 
-   // ---- column 2: mixer, filters, routing and Master Cutoff, over the LFOs ----
+   // ---- column 2: the mixer, and the LFOs under it and the filters ----
 
    // Five rows as on the synth, each the level knob then the Filter button with its two lights,
    // named in the source's colour; the mix drawn at the foot.
    void buildMixer() {
-      const float x = colX(1), y = kTop, w = kMixerW, h = kBandH;
+      const float x = colX(1), y = kTop, w = kColW[1], h = kMixerH;
       section("MIXER", {x, y, w, h}, true, kSilver);
       const int ccs[5] = {18, 19, 20, 21, 89};
       const char *names[5] = {"VCO 1", "VCO 2", "VCO 3", "NOISE", "EXTERNAL"};
@@ -473,50 +457,12 @@ private:
       picture<vis::MixBar>({x + 54, my + 18, w - 68, 10}, ccs, colors);
    }
 
-   // Mode and slope down the left, then drive, cutoff, resonance over brute factor, env amount, out.
-   void buildFilter(float y, const char *title, unsigned color, std::initializer_list<int> list) {
-      const std::vector<int> ccs(list);
-      const bool steiner = ccs[5] == 7;
-      const float x = colX(1) + kMixerW + kGutter, h = kFilterH;
-      section(title, {x, y, kFilterW, h}, true, color);
-      // The two rows, with the box's spare height shared out above, between and below them.
-      const float gap = (h - kTitleH - kPad - 2 * kKnobH) / 3, row1 = y + kTitleH + gap, row2 = row1 + kKnobH + gap;
-      const std::string id = steiner ? "vcf1" : "vcf2";
-      std::vector<std::string> modes = {"LP", "BP", "HP"};
-      if (steiner)
-         modes.push_back("NOTCH");
-      indicator(id + ".mode", "Mode", std::move(modes), {x + kPad, row1, kFilterButtonsW - 6, kKnobH},
-                vis::HwButton::Lights::Right, color);
-      indicator(id + ".slope", "Slope", {"24dB", "12dB"}, {x + kPad, row2, kFilterButtonsW - 6, kKnobH},
-                vis::HwButton::Lights::Right, color);
-      const char *names[6] = {"DRIVE", "CUTOFF", "RESONANCE", "BRUTE", "ENV AMT", steiner ? "STEINER OUT" : "LADDER OUT"};
-      const float kx = x + kPad + kFilterButtonsW;
-      for (int i = 0; i < 6; ++i)
-         knob(ccs[i], color, {kx + (i % 3) * kCellW, i < 3 ? row1 : row2, kCellW, kKnobH}, names[i]);
-   }
-
-   // The routing between the filters: both responses drawn across the top, then the routing switch
-   // beside the big silver Master Cutoff knob in its ring, as on the synth.
-   void buildMasterCutoff() {
-      const float x = colX(1) + kMixerW + kGutter, y = kTop + kFilterH + kGutter, w = kFilterW, h = kCutoffH;
-      section("ROUTING / MASTER CUTOFF", {x, y, w, h}, true, kSilver);
-      // The knob's cell: no name (the box has it), the ring 86 across, its centre 79 from the top.
-      const float kw = 150, kh = 180, ky = y + h - kh - 4, ringY = ky + 79, ring = 86 + 40;
-      picture<vis::DualFilter>({x + 12, y + kTitleH + 4, w - 24, ky - y - kTitleH - 16}, vis::DualFilter::Filter{23, 83, 24, kSteiner},
-                               vis::DualFilter::Filter{25, 87, 26, kLadder});
-      const float groupW = 130 + 36 + ring, gx = x + (w - groupW) * 0.5f;
-      indicator("vcf.routing", "Routing", {"PAR", "SER"}, {gx, ringY - 32, 130, 64}, vis::HwButton::Lights::Right);
-      const float kcx = gx + 130 + 36 + ring * 0.5f;
-      add<vis::Bezel>({kcx - ring * 0.5f, ringY - ring * 0.5f, ring, ring});
-      auto &cutoff = knob(27, kSilver, {kcx - kw * 0.5f, ky, kw, kh}, "");
-      cutoff.setCapColors(0xffe8ebee, 0xff858d96, 0xff1a1d22);
-   }
-
    // LFO 1 and LFO 2 side by side under the mixer and filters, mirror images as on the synth: the
-   // phase or delay, sync and rate, then right under them the wave's lights in a row over its
-   // button, and retrigger with its lights beside it.
+   // phase or delay, sync and rate, then the wave's lights in a row over its button, and retrigger
+   // with its lights beside it. Together they span the mixer's and filters' width, split evenly.
    void buildLfo(int index, const char *title, unsigned color, int first, const char *firstName, int rate) {
-      const float w = (kColW[1] - kGutter) / 2, x = colX(1) + index * (w + kGutter), y = kStripY, h = kStripH;
+      const float w = (kColW[1] + kGutter + kColW[2] - kGutter) / 2, x = colX(1) + index * (w + kGutter), y = kLfoY,
+                  h = kLfoH;
       section(title, {x, y, w, h}, false, color);
       const std::string id = index == 0 ? "lfo1" : "lfo2";
       const float ky = y + kTitleH;
@@ -524,8 +470,10 @@ private:
       indicator(id + ".sync", "Seq-Sync", {}, {x + kPad + kCellW, ky + 16, w - 2 * kPad - 2 * kCellW, 60});
       knob(rate, color, {x + w - kPad - kCellW, ky, kCellW, kKnobH}, "RATE");
       leds_[index] = &rateLed({x + w - 20, y + 10}, color);
-      const float by = ky + kKnobH + 22, rw = 100, ww = w - 2 * kPad - rw - 6;
-      indicator(id + ".wave", "< Wave >", {"SIN", "TRI", "SQR", "RSAW", "SAW", "RND", "S&H"}, {x + kPad, by, ww, 96},
+      // The second row centred in what's left under the knobs.
+      const float rowH = 96, by = ky + kKnobH + (y + h - kPad - (ky + kKnobH) - rowH) * 0.5f;
+      const float rw = 100, ww = w - 2 * kPad - rw - 6;
+      indicator(id + ".wave", "< Wave >", {"SIN", "TRI", "SQR", "RSAW", "SAW", "RND", "S&H"}, {x + kPad, by, ww, rowH},
                 vis::HwButton::Lights::Above, color);
       indicator(id + ".retrig", "Retrig", {"OFF", "SNGL", "MULTI"}, {x + w - kPad - rw, by + 22, rw, 70},
                 vis::HwButton::Lights::Right, color);
@@ -539,28 +487,67 @@ private:
       return led;
    }
 
-   // ---- column 3: preset and envelopes ----
+   // ---- column 3: filters, the routing and Master Cutoff ----
+
+   // Mode and slope down the left; drive, cutoff and resonance on top; brute factor, env amount
+   // and out below.
+   void buildFilter(float y, const char *title, unsigned color, std::initializer_list<int> list) {
+      const std::vector<int> ccs(list);
+      const bool steiner = ccs[5] == 7;
+      const float x = colX(2), w = kColW[2];
+      section(title, {x, y, w, kFilterH}, true, color);
+      const std::string id = steiner ? "vcf1" : "vcf2";
+      std::vector<std::string> modes = {"LP", "BP", "HP"};
+      if (steiner)
+         modes.push_back("NOTCH");
+      indicator(id + ".mode", "Mode", std::move(modes), {x + 10, y + 28, 120, 110}, vis::HwButton::Lights::Right, color);
+      indicator(id + ".slope", "Slope", {"24dB", "12dB"}, {x + 10, y + 154, 120, 96}, vis::HwButton::Lights::Right, color);
+      const char *names[6] = {"DRIVE", "CUTOFF", "RESONANCE", "BRUTE", "ENV AMT", steiner ? "STEINER OUT" : "LADDER OUT"};
+      const float cw = (w - 146) / 3;
+      for (int i = 0; i < 6; ++i)
+         knob(ccs[i], color, {x + 138 + (i % 3) * cw, y + 26 + (i / 3) * 128, cw, 116}, names[i]);
+   }
+
+   // The routing between the filters, in its own box as on the synth: the routing switch over the
+   // big silver Master Cutoff knob in its ring, and both filters' responses drawn beside them.
+   void buildMasterCutoff() {
+      const float x = colX(2), y = kCutoffY, w = kColW[2], h = kCutoffH;
+      section("ROUTING / MASTER CUTOFF", {x, y, w, h}, true, kSilver);
+      const float lw = 140;
+      // The knob's cell: no name (the box has it), the ring 82 across, its centre 75 from the top; the
+      // routing switch above it, the pair centred down the box.
+      const float kw = 140, kh = 170, gy = y + kTitleH + (h - kTitleH - 64 - 24 - kh) * 0.5f;
+      indicator("vcf.routing", "Routing", {"PAR", "SER"}, {x + 10, gy, 130, 64}, vis::HwButton::Lights::Right);
+      const float ky = gy + 64 + 24, ringY = ky + 75, ring = 82 + 38, kcx = x + 8 + lw * 0.5f;
+      add<vis::Bezel>({kcx - ring * 0.5f, ringY - ring * 0.5f, ring, ring});
+      auto &cutoff = knob(27, kSilver, {kcx - kw * 0.5f, ky, kw, kh}, "");
+      cutoff.setCapColors(0xffe8ebee, 0xff858d96, 0xff1a1d22);
+      picture<vis::DualFilter>({x + lw + 18, y + 30, w - lw - 30, h - 42}, vis::DualFilter::Filter{23, 83, 24, kSteiner},
+                               vis::DualFilter::Filter{25, 87, 26, kLadder});
+   }
+
+   // ---- column 4: preset and envelopes ----
 
    // The synth's preset as far as the plugin knows, its preset buttons, and the read of every
    // preset stored on it.
    void buildPreset() {
-      const float x = colX(2), y = kTop, w = kColW[2], h = kPresetH;
+      const float x = colX(3), y = kTop, w = kColW[3], h = kPresetH;
       section("PRESET", {x, y, w, h}, true, kSilver);
-      display_ = &add<vis::PresetDisplay>({x + (w - 150) * 0.5f, y + 26, 150, 40});
-      tips_.add(*display_, "The synth's preset: the one picked in the preset bar, or the last Program Change heard. "
-                           "Every knob is a guess (drawn dim) until it's heard or set after a preset change.");
+      display_ = &add<vis::PresetDisplay>({x + w - 170, y + 26, 156, 46});
+      tips_.add(*display_, "The synth's preset: the one picked in the preset bar, or the last Program Change heard.");
+      text("THE SYNTH'S PRESET,", x + 12, y + 32, 140, kSmallSize, kHint, visage::Font::kLeft);
+      text("PICKED OR HEARD", x + 12, y + 48, 140, kSmallSize, kHint, visage::Font::kLeft);
       const char *names[4] = {"Panel", "Save", "<", ">"};
       const char *ids[4] = {"preset.panel", "preset.save", "preset.prev", "preset.next"};
-      const float bw = (w - 2 * kPad) / 4;
       for (int i = 0; i < 4; ++i)
-         indicator(ids[i], names[i], {}, {x + kPad + i * bw, y + 70, bw, 38});
-      place(readSynth_, {x + (w - 150) * 0.5f, y + 112, 150, 26});
+         indicator(ids[i], names[i], {}, {x + 8 + i * 76, y + 76, 72, 44});
+      place(readSynth_, {x + 10, y + 128, 130, 28});
       readSynth_.setAccent(kSteiner);
       readSynth_.onClick = [] { SynthLink::get().requestRead(); };
       tips_.add(readSynth_, "Reads every preset stored on the synth into the preset bar (about a minute). In Bitwig "
                             "this needs the MatrixBrute presets controller script (bitwig/MatrixBrute.control.js), "
                             "since a plugin there can't send or receive SysEx.");
-      linkStatus_ = &text("", x + kPad, y + 142, w - 2 * kPad, kSmallSize, kDim);
+      linkStatus_ = &text("", x + 150, y + 134, w - 158, kSmallSize, kDim, visage::Font::kLeft);
    }
 
    // The synth's envelopes are sliders: velocity (or ENV 3's delay) on a darker tile on the left,
@@ -568,13 +555,13 @@ private:
    void buildEnvelope(float y, float h, const char *title, int index, std::initializer_list<int> list, int velocity,
                       const char *velocityName) {
       const std::vector<int> st(list); // delay (or -1), attack, decay, sustain, release
-      const float x = colX(2), w = kColW[2];
+      const float x = colX(3), w = kColW[3];
       const unsigned color = kEnvColors[index];
       section(title, {x, y, w, h}, false, color);
-      const float shapeH = std::round(h * 0.39f);
-      picture<vis::EnvShape>({x + kPad, y + kTitleH, w - 2 * kPad, shapeH}, st[0], st[1], st[2], st[3], st[4], color,
+      const float shapeH = 150;
+      picture<vis::EnvShape>({x + 12, y + 26, w - 24, shapeH}, st[0], st[1], st[2], st[3], st[4], color,
                              gate());
-      const float cw = (w - 2 * kPad) / 5, top = y + kTitleH + shapeH + 10, sh = y + h - kPad - kSliderExtraH - top;
+      const float cw = (w - 2 * kPad) / 5, top = y + 26 + shapeH + 10, sh = y + h - kPad - kSliderExtraH - top;
       add<vis::Tile>({x + kPad - 2, top - 4, cw + 4, y + h - kPad - top + 4});
       const int first = velocity >= 0 ? velocity : st[0];
       vslider(first, kWhite, {x + kPad, 0, cw, 0}, top, sh, velocity >= 0 ? velocityName : "DELAY", true);
@@ -583,45 +570,24 @@ private:
          vslider(st[1 + i], color, {x + kPad + (i + 1) * cw, 0, cw, 0}, top, sh, names[i]);
    }
 
-   // ---- column 4: the matrix ----
+   // ---- column 5: the matrix ----
 
-   // The matrix as printed on the synth. Its display shows what the plugin knows of the synth and
-   // how to read the panel.
    void buildMatrix() {
-      const float x = colX(3), y = kTop, w = kColW[3], h = kBandH + kGutter + kStripH;
-      section("MOD MATRIX", {x, y, w, h}, true, kMatrixBlue);
-      matrix_ = &add<vis::MatrixMap>({x + 10, y + 26, w - 20, h - 26 - 10}, tint_);
+      const float x = colX(4), y = kTop, w = kColW[4], h = kBodyH;
+      section("", {x, y, w, h}, true, kMatrixBlue);
+      matrix_ = &add<vis::MatrixMap>({x + 10, y + 14, w - 20, h - 22}, tint_);
       tips_.add(*matrix_, "The matrix's routings are set on the synth: they aren't sent over MIDI. They're dim until "
                           "the plugin can read them from the synth's presets.");
    }
 
-   // ---- column 5: master, analog effects, sequencer, glide, play control and the macros ----
-
-   // Fine tune, phones and master volume as on the synth (not on MIDI), with the light for CCs heard
-   // from the synth between them.
-   void buildMaster() {
-      const float x = colX(4), y = kTop, w = kColW[4], kw = 112, ky = y + kTitleH + 2, kh = kMasterH - kTitleH - 6;
-      section("MASTER", {x, y, w, kMasterH}, true, kSilver);
-      const char *names[3] = {"FINE TUNE", "PHONES", "VOLUME"};
-      const float xs[3] = {x + kPad, x + w - kPad - 2 * kw, x + w - kPad - kw}, ws[3] = {kw + 14, kw, kw};
-      for (int i = 0; i < 3; ++i) {
-         auto &k = add<vis::HwKnob>({xs[i], ky, ws[i], kh}, names[i], tint_, i == 2);
-         tips_.add(k, std::string(names[i]) + " is a knob on the synth that isn't sent over MIDI.");
-      }
-      const float lx = xs[0] + ws[0] + 6;
-      auto &led = add<ui::ActivityLed>({lx, ky + kh * 0.5f - 11, xs[1] - 4 - lx, 22}, "FROM SYNTH");
-      led.setColor(kGreen);
-      heardLed_ = &led;
-      tips_.add(led, "Lights when a CC comes in on the MIDI channel: the synth's own knobs, with its MIDI out "
-                     "routed into this track, or another controller.");
-   }
+   // ---- column 6: analog effects, sequencer, glide and play control, and master ----
 
    // As on the synth: the echoes drawn on top, then delay time, regeneration, tone and width; under
    // them sync, mode with its five lights in a column, and dry/wet.
    void buildFx() {
-      const float x = colX(4), y = kFxY, w = kColW[4], h = kFxH, cw = (w - 2 * kPad) / 4;
+      const float x = colX(5), y = kFxY, w = kColW[5], h = kFxH, cw = (w - 2 * kPad) / 4;
       section("ANALOG FX", {x, y, w, h}, true, kAzure);
-      const float tapsH = 120, rows = y + kTitleH + 6 + tapsH;
+      const float tapsH = h - kTitleH - 6 - 2 * kKnobH - 3 * 20 - kPad, rows = y + kTitleH + 6 + tapsH;
       picture<vis::FxTaps>({x + 10, y + kTitleH + 6, w - 20, tapsH}, kAzure);
       const float gap = (y + h - kPad - rows - 2 * kKnobH) / 3, row1 = rows + gap, row2 = row1 + kKnobH + gap;
       const int ccs[4] = {112, 113, 114, 115};
@@ -639,7 +605,7 @@ private:
    // mode buttons, then the grid of note lengths, rates, directions, step and transport with Rate,
    // Swing and Gate down the right edge.
    void buildSequencer() {
-      const float x = colX(4), y = kSeqY, w = kColW[4], h = kSeqH;
+      const float x = colX(5), y = kSeqY, w = kColW[5], h = kSeqH;
       section("SEQUENCER", {x, y, w, h}, true, kRed);
       const float ty = y + kTitleH, rowH = 52;
       tempo_ = &add<vis::PresetDisplay>({x + kPad + 14, ty + 6, 200, rowH - 12}, "888.8");
@@ -687,18 +653,11 @@ private:
       }
    }
 
-   // Glide, play control and the macros, from the synth's left end: the knobs over their buttons.
-   void buildPerformance() {
-      const float x = colX(4), y = kStripY, w = kColW[4], h = kStripH;
-      section("GLIDE / PLAY CONTROL / MACROS", {x, y, w, h}, false, kLime);
-      const int ccs[5] = {5, 11, 2, 4, 3};
-      const char *names[5] = {"GLIDE", "M1", "M2", "M3 / EXP 1", "M4 / EXP 2"};
-      for (int i = 0; i < 5; ++i) {
-         auto &k = knob(ccs[i], i == 0 ? kLime : kWhite, {x + kPad + i * kCellW, y + kTitleH, kCellW, kKnobH}, names[i]);
-         if (i > 0)
-            k.setCapColors(0xffc3c8ce, 0xff6f767e, 0xff1a1d22); // the macros' light grey caps
-      }
-      const float by = y + kTitleH + kKnobH + 20, bh = h - (by - y) - kPad;
+   // Glide's switch and the play control buttons, from the synth's left end (the knobs are on the front edge).
+   void buildPlayControl() {
+      const float x = colX(5), y = kPlayY, w = kColW[5], h = kPlayH;
+      section("GLIDE / PLAY CONTROL", {x, y, w, h}, false, kLime);
+      const float by = y + kTitleH + 4, bh = h - kTitleH - 4 - kPad;
       // Note Priority's and Legato's lights get the room their names need, at the same size as Octave's.
       const float ws[5] = {70, 74, 104, 114, w - 2 * kPad - 362};
       const char *ids[5] = {"glide.on", "play.keyHold", "play.priority", "play.legato", "play.octave"};
@@ -709,6 +668,55 @@ private:
          indicator(ids[i], labels[i], lights[i], {bx, by, ws[i], bh});
          bx += ws[i];
       }
+   }
+
+   // Fine tune, phones and master volume as on the synth (not on MIDI).
+   void buildMaster() {
+      const float x = colX(5), y = kMasterY, w = kColW[5], kw = 112, kh = 60, ky = y + kTitleH + (kMasterH - kTitleH - kh) * 0.5f;
+      section("MASTER", {x, y, w, kMasterH}, true, kSilver);
+      const char *names[3] = {"FINE TUNE", "PHONES", "VOLUME"};
+      // Spread evenly across the box.
+      const float ws[3] = {kw + 14, kw, kw}, gap = (w - 2 * kPad - ws[0] - ws[1] - ws[2]) / 2;
+      const float xs[3] = {x + kPad, x + kPad + ws[0] + gap, x + w - kPad - kw};
+      for (int i = 0; i < 3; ++i) {
+         auto &k = add<vis::HwKnob>({xs[i], ky, ws[i], kh}, names[i], tint_, i == 2);
+         tips_.add(k, std::string(names[i]) + " is a knob on the synth that isn't sent over MIDI.");
+      }
+   }
+
+   // ---- the front edge: glide, mod wheel, macros, and what the plugin knows ----
+
+   void buildLip() {
+      const float x = kMargin, y = kLipY;
+      tint_ = vis::labelTint(kLime);
+      knob(5, kLime, {x + 8, y + 2, 92, 104}, "GLIDE");
+      auto &wheel = add<vis::WheelStrip>({x + 120, y + 8, 30, 92}, rangeOf(1));
+      wire(wheel, 1, kWheel);
+      text("MOD WHEEL", x + 158, y + 28, 104, kNameSize * 0.96f, vis::labelTint(kGrey), visage::Font::kLeft);
+      wheelValue_ = &text("", x + 158, y + 50, 100, kValueSize, kWhite, visage::Font::kLeft);
+      text("CC 1", x + 158, y + 70, 100, kSmallSize, kDim, visage::Font::kLeft);
+      const int macros[4] = {11, 2, 4, 3};
+      const char *names[4] = {"M1", "M2", "M3 / EXP 1", "M4 / EXP 2"};
+      for (int i = 0; i < 4; ++i) {
+         auto &k = knob(macros[i], kWhite, {x + 270 + i * 96, y + 2, 92, 104}, names[i]);
+         k.setCapColors(0xffc3c8ce, 0xff6f767e, 0xff1a1d22); // the macros' light grey caps
+      }
+      label("MATRIXBRUTE", {x + 700, y + 30, 420, 44}, 0xff9aa3ad, visage::Font::kLeft, 0.9f);
+
+      const float sx = colX(3);
+      auto &led = add<ui::ActivityLed>({sx, y + 12, 140, 22}, "FROM SYNTH");
+      led.setColor(kGreen);
+      heardLed_ = &led;
+      tips_.add(led, "Lights when a CC comes in on the MIDI channel: the synth's own knobs, with its MIDI out "
+                     "routed into this track, or another controller.");
+      knownCount_ = &text("", sx + 150, y + 14, 300, 15, kWhite, visage::Font::kLeft);
+      status_ = &text("", sx + 460, y + 14, 600, 15, kDim, visage::Font::kLeft);
+      const char *hints[3] = {
+         "A DIM KNOB IS A GUESS: NOT HEARD OR SET SINCE THE SYNTH'S LAST PRESET CHANGE. TURN IT ON THE SYNTH TO READ IT,",
+         "WITH ITS MIDI OUT ROUTED INTO THIS TRACK. PICK ONE OF THE SYNTH'S PRESETS IN THE PRESET BAR TO LOAD IT.",
+         "BUTTONS AND THE MATRIX AREN'T SENT AS CCS: THEY'RE DIM UNTIL THE PLUGIN CAN READ THEM FROM THE SYNTH'S PRESETS."};
+      for (int i = 0; i < 3; ++i)
+         text(hints[i], sx, y + 44 + i * 18, 1100, kSmallSize, kHint, visage::Font::kLeft);
    }
 
    // ---- keeping it current ----
@@ -738,11 +746,11 @@ private:
                                           : "\xE2\x80\x94");
       const int program = host_.synthPreset();
       const std::string code = program < 0 ? "---" : presetCode(program);
-      matrix_->setDisplay({"MATRIXBRUTE CC", std::to_string(known) + " OF " + std::to_string(kCcParamCount) + " KNOBS KNOWN",
-                           program < 0 ? "NO SYNTH PRESET PICKED OR HEARD YET" : "THE SYNTH IS ON PRESET " + code,
-                           "BUTTONS AND MATRIX: NOT READ YET", "",
-                           "A DIM KNOB IS A GUESS: TURN IT ON THE SYNTH",
-                           "PICK A PRESET IN THE BAR TO LOAD IT"});
+      matrix_->setDisplay({"MATRIXBRUTE CC", std::to_string(known) + " / " + std::to_string(kCcParamCount) + " KNOBS KNOWN",
+                           program < 0 ? "NO PRESET PICKED OR HEARD" : "PRESET " + code + " LOADED",
+                           "MATRIX: NOT READ YET"});
+      knownCount_->setText(std::to_string(known) + " OF " + std::to_string(kCcParamCount) + " KNOBS KNOWN");
+      status_->setText(program < 0 ? "NO SYNTH PRESET PICKED OR HEARD YET" : "THE SYNTH IS ON PRESET " + code);
       wheelValue_->setText(host_.known(1) ? std::to_string(toCcValue(host_.paramModulated(1))) : "\xE2\x80\x94");
 
       // The synth's display shows its preset, which the plugin knows when it picked it or heard the
@@ -810,7 +818,7 @@ private:
    std::vector<std::pair<ui::Label *, int>> readouts_;
    ui::ActivityLed *leds_[2] = {};
    ui::ActivityLed *heardLed_ = nullptr;
-   ui::Label *wheelValue_ = nullptr;
+   ui::Label *wheelValue_ = nullptr, *status_ = nullptr, *knownCount_ = nullptr;
    vis::PresetDisplay *display_ = nullptr;
    vis::MatrixMap *matrix_ = nullptr;
    // The names' colour for the box being built.
