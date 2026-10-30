@@ -1,18 +1,17 @@
-// MatrixBrute preset reader for Bitwig Studio. DRAFT: not yet run on a real setup.
+// MatrixBrute preset reader for Bitwig Studio.
 //
 // Bitwig doesn't pass SysEx to plugins, so this controller script reads the synth's presets (the
-// same read-only requests as tools/mb_dump.py) and hands them to the MatrixBrute CC plugin.
+// same read-only requests as tools/mb_dump.py) and hands them to the MatrixBrute CC plugin over a
+// local connection (see startServer). A read of all 256 slots takes about a minute.
 //
 // Install: copy this file to Documents/Bitwig Studio/Controller Scripts/, then in Settings >
 // Controllers add "Arturia > MatrixBrute presets" with the synth's "MatrixBrute" port as its input
-// and output. (Its second USB port, MIDIIN2 / MIDIOUT2, answers the identity request but not preset
-// reads.)
+// and output, in place of any generic controller on that port: Bitwig gives a port to one controller,
+// so this one also passes the synth's MIDI on to tracks. (The synth's second USB port, MIDIIN2 /
+// MIDIOUT2, answers the identity request but not preset reads.)
 //
 // READ ONLY: it sends the preset header/name read (03 19 bb ss 00), the data read (03 19 bb ss 01)
 // and the chunk poll (01 18 00), nothing else.
-//
-// Still open, to test on a real unit: whether tracks can still play the synth while this script holds
-// its port, and how the presets reach the plugin (deliver() below only logs them for now).
 
 loadAPI(18);
 
@@ -107,19 +106,46 @@ var midiOut;
 var seq = 0;
 var job = null; // the read in progress
 var token = 0; // bumped on every request and reply, so a stale timeout does nothing
-var LOG_PORT = 58017;
-var logLines = []; // everything logged, for clients that connect later
-var clients = [];
+var PORT = 58017;
+var logLines = []; // everything logged, for log clients that connect later
+var clients = []; // {conn, log: wants the log, data: wants presets}
+var lastRead = []; // the last complete read's PRESET lines, and its DONE line
+var reading = []; // the read in progress's PRESET lines
 
-// The script console, plus a TCP log anyone on this computer can read (tools/mb_bitwig_log.py):
-// Bitwig only shows a script's output in its console. A client can also send "read" to start a read.
+// A local TCP server (Bitwig's RemoteConnection) on PORT, for two kinds of client. Each message a
+// client sends has a 4-byte big-endian length in front; what the script sends is plain lines.
+//
+//    "log"   the log so far, then every new line (tools/mb_bitwig_log.py): Bitwig only shows a
+//            script's own output in its console
+//    "data"  the presets, for the MatrixBrute CC plugin: the last complete read's lines straight
+//            away, then every new read's as it goes
+//    "read"  starts a read, as the Read button does; "stop" abandons one
+//
+// The data lines, tab-separated:
+//    READING                          a read started
+//    PRESET  n  name  cc:value,...    one named preset; n is 0-255 (A01-P16), values 0-127
+//    DONE    found  failed            the read finished
+//    FAILED  why                      the read stopped
 function log(text) {
    println(text);
    var line = new Date().toISOString().substr(11, 12) + " " + text;
    if (logLines.length < 20000)
       logLines.push(line);
    for (var i = 0; i < clients.length; i++)
-      sendLine(clients[i], line);
+      if (clients[i].log)
+         sendLine(clients[i].conn, line);
+}
+
+function data(line) {
+   if (line.indexOf("PRESET") === 0)
+      reading.push(line);
+   else if (line.indexOf("READING") === 0)
+      reading = [];
+   else if (line.indexOf("DONE") === 0)
+      lastRead = reading.concat([line]);
+   for (var i = 0; i < clients.length; i++)
+      if (clients[i].data)
+         sendLine(clients[i].conn, line);
 }
 
 function sendLine(conn, line) {
@@ -130,34 +156,44 @@ function sendLine(conn, line) {
    try {
       conn.send(bytes);
    } catch (e) {
-      println("log client: " + e);
+      println("client: " + e);
    }
 }
 
-function startLogServer() {
+function startServer() {
    try {
-      var server = host.createRemoteConnection("MatrixBrute log", LOG_PORT);
+      var server = host.createRemoteConnection("MatrixBrute presets", PORT);
       server.setClientConnectCallback(function (conn) {
-         clients.push(conn);
+         var client = {conn: conn, log: false, data: false};
+         clients.push(client);
          conn.setDisconnectCallback(function () {
-            clients.splice(clients.indexOf(conn), 1);
+            clients.splice(clients.indexOf(client), 1);
          });
-         conn.setReceiveCallback(guarded(function (data) {
+         conn.setReceiveCallback(guarded(function (bytes) {
             var text = "";
-            for (var i = 0; i < data.length; i++)
-               text += String.fromCharCode(data[i] & 0xff);
-            log("log client sent: " + text.trim());
-            if (text.trim() === "read")
+            for (var i = 0; i < bytes.length; i++)
+               text += String.fromCharCode(bytes[i] & 0xff);
+            text = text.replace(/[^ -~]/g, "").trim();
+            log("client sent: " + text);
+            if (text === "log") {
+               client.log = true;
+               for (var j = 0; j < logLines.length; j++)
+                  sendLine(conn, logLines[j]);
+            } else if (text === "data") {
+               client.data = true;
+               for (var k = 0; k < lastRead.length; k++)
+                  sendLine(conn, lastRead[k]);
+            } else if (text === "read") {
                readPresets(0, 255);
-            else if (text.trim() === "stop")
+            } else if (text === "stop" && job) {
                job = null;
+               data("FAILED\tstopped");
+            }
          }));
-         for (var i = 0; i < logLines.length; i++)
-            sendLine(conn, logLines[i]);
       });
-      log("log server on port " + LOG_PORT);
+      log("server on port " + PORT);
    } catch (e) {
-      println("no log server: " + e);
+      println("no server: " + e);
    }
 }
 
@@ -187,6 +223,8 @@ function guarded(fn) {
          fn(a);
       } catch (e) {
          say("script error: " + e);
+         if (job)
+            data("FAILED\tscript error: " + e);
          job = null;
       }
    };
@@ -203,7 +241,7 @@ function init() {
    state.getSignalSetting("Read all presets", "MatrixBrute", "Read").addSignalObserver(guarded(function () {
       readPresets(0, 255);
    }));
-   startLogServer();
+   startServer();
    log("MatrixBrute presets ready");
 }
 
@@ -246,6 +284,7 @@ function readPresets(first, last) {
    token++;
    job = {preset: first, last: last, retried: false, found: 0, failed: 0};
    say("reading...");
+   data("READING");
    startPreset();
 }
 
@@ -266,6 +305,7 @@ function fail(why) {
    job.failed++;
    if (job.found === 0 && job.failed >= 3) {
       say("no answer from the synth" + (job.heard ? " (it sent " + job.heard + ")" : ""));
+      data("FAILED\tno answer from the synth");
       job = null;
       return;
    }
@@ -276,6 +316,7 @@ function next() {
    job.retried = false;
    if (job.preset >= job.last) {
       say("read " + job.found + " named presets" + (job.failed ? ", " + job.failed + " got no answer" : ""));
+      data("DONE\t" + job.found + "\t" + job.failed);
       job = null;
       return;
    }
@@ -389,7 +430,10 @@ function code(preset) {
    return String.fromCharCode(65 + (preset >> 4)) + ((preset & 15) < 9 ? "0" : "") + ((preset & 15) + 1);
 }
 
-// TODO: hand the preset to the plugin. For now it only logs (Bitwig's Controller Script Console).
 function deliver(preset, name, values) {
+   var cells = [];
+   for (var i = 0; i < values.length; i++)
+      cells.push(values[i][0] + ":" + values[i][1]);
    log(code(preset) + " " + name + ": " + values.length + " knobs");
+   data("PRESET\t" + preset + "\t" + name.replace(/[\t\r\n]/g, " ") + "\t" + cells.join(","));
 }
