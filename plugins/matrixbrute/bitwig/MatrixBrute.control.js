@@ -106,14 +106,48 @@ var LAYOUT = [
 var midiOut;
 var seq = 0;
 var job = null; // the read in progress
+var token = 0; // bumped on every request and reply, so a stale timeout does nothing
+var shown = 0; // diagnostic popups so far in this read
+
+// Popups are the only output a user sees without opening the script console.
+function say(text) {
+   println(text);
+   host.showPopupNotification("MatrixBrute: " + text);
+}
+
+// The first few requests and replies of a read, as popups: enough to see where it stops.
+function trace(text) {
+   if (shown++ < 6)
+      say(text);
+}
+
+function later(fn, ms) {
+   try {
+      host.scheduleTask(fn, ms);
+   } catch (e) {
+      host.scheduleTask(fn, null, ms); // older API signature
+   }
+}
+
+// Errors in callbacks are otherwise silent.
+function guarded(fn) {
+   return function (a) {
+      try {
+         fn(a);
+      } catch (e) {
+         say("script error: " + e);
+         job = null;
+      }
+   };
+}
 
 function init() {
    midiOut = host.getMidiOutPort(0);
-   host.getMidiInPort(0).setSysexCallback(onSysex);
+   host.getMidiInPort(0).setSysexCallback(guarded(onSysex));
    var state = host.getDocumentState();
-   state.getSignalSetting("Read all presets", "MatrixBrute", "Read").addSignalObserver(function () {
+   state.getSignalSetting("Read all presets", "MatrixBrute", "Read").addSignalObserver(guarded(function () {
       readPresets(0, 255);
-   });
+   }));
    println("MatrixBrute presets ready");
 }
 
@@ -140,22 +174,21 @@ function request(cmd, s) {
    for (var i = 0; i < cmd.length; i++)
       msg += hex2(cmd[i]);
    job.seq = s;
-   job.token++;
-   var token = job.token;
+   var mine = ++token;
+   trace("sent " + msg + "f7");
    midiOut.sendSysex(msg + "f7");
-   host.scheduleTask(function () {
-      if (job && job.token === token)
+   later(guarded(function () {
+      if (job && token === mine)
          fail("no reply");
-   }, TIMEOUT_MS);
+   }), TIMEOUT_MS);
 }
 
 function readPresets(first, last) {
-   if (job) {
-      host.showPopupNotification("MatrixBrute: already reading");
-      return;
-   }
-   job = {preset: first, last: last, token: 0, retried: false, found: 0, failed: 0};
-   host.showPopupNotification("MatrixBrute: reading bank " + String.fromCharCode(65 + (first >> 4)));
+   // Pressing Read again starts over, in case a read got stuck.
+   token++;
+   shown = 0;
+   job = {preset: first, last: last, retried: false, found: 0, failed: 0};
+   say("reading bank " + String.fromCharCode(65 + (first >> 4)));
    startPreset();
 }
 
@@ -175,7 +208,7 @@ function fail(why) {
    println("MatrixBrute " + code(job.preset) + ": " + why + ", skipped");
    job.failed++;
    if (job.found === 0 && job.failed >= 3) {
-      host.showPopupNotification("MatrixBrute: no answer from the synth" + (job.heard ? " (it sent " + job.heard + ")" : ""));
+      say("no answer from the synth" + (job.heard ? " (it sent " + job.heard + ")" : ""));
       job = null;
       return;
    }
@@ -185,14 +218,13 @@ function fail(why) {
 function next() {
    job.retried = false;
    if (job.preset >= job.last) {
-      host.showPopupNotification("MatrixBrute: read " + job.found + " named presets" +
-                                  (job.failed ? ", " + job.failed + " got no answer" : ""));
+      say("read " + job.found + " named presets" + (job.failed ? ", " + job.failed + " got no answer" : ""));
       job = null;
       return;
    }
    job.preset++;
    if (job.preset % 16 === 0)
-      host.showPopupNotification("MatrixBrute: reading bank " + String.fromCharCode(65 + (job.preset >> 4)));
+      say("reading bank " + String.fromCharCode(65 + (job.preset >> 4)));
    startPreset();
 }
 
@@ -201,12 +233,20 @@ function onSysex(hex) {
       return;
    hex = hex.replace(/ /g, "").toLowerCase();
    var r = bytesOf(hex);
+   trace("got " + hex.substr(0, 30) + (hex.length > 30 ? "..." : ""));
    if (!job.heard)
       job.heard = hex.substr(0, 24); // shown if the read gives up: what did come back
    if (hex.substr(0, 12) !== ARTURIA || r[6] !== job.seq)
       return;
-   job.token++; // the timeout for this request is void
-   if (job.stage === "header" && r[7] === 0x23 && r[8] === 0x52) {
+   // Matched on the reply code (r[8]) alone, as mb_dump.py does; r[7] is a length.
+   var known = (job.stage === "header" && r[8] === 0x52) || (job.stage === "ready" && r[8] === 0x15) ||
+               (job.stage === "chunks" && (r[8] === 0x16 || r[8] === 0x17));
+   if (!known) {
+      say("unexpected reply " + hex.substr(0, 30));
+      return; // the request's timeout still runs
+   }
+   token++; // the timeout for this request is void
+   if (job.stage === "header") {
       var name = "";
       for (var i = 21; i < r.length - 1 && r[i] !== 0; i++)
          name += String.fromCharCode(r[i]);
@@ -217,10 +257,10 @@ function onSysex(hex) {
       }
       job.stage = "ready";
       request([0x19, job.preset >> 4, job.preset & 15, 0x01]);
-   } else if (job.stage === "ready" && r[7] === 0x00 && r[8] === 0x15) {
+   } else if (job.stage === "ready") {
       job.stage = "chunks";
       request([0x18, 0x00], job.seq);
-   } else if (job.stage === "chunks" && r[7] === 0x20 && (r[8] === 0x16 || r[8] === 0x17)) {
+   } else {
       job.chunks.push(r.slice(9, r.length - 1));
       if (r[8] === 0x16) {
          request([0x18, 0x00]);
