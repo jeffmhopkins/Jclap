@@ -161,6 +161,12 @@ public:
       host()->request_process(host());
    }
    void releaseInput() override { dragging_.store(false); }
+   void sendOutput(int which) override {
+      if (which < 0 || which > 1)
+         return;
+      learn_.fetch_or(1u << which);
+      host()->request_process(host());
+   }
    std::string presetName() const override { return presetName_; }
    void setPresetName(const std::string &name) override { presetName_ = name; }
    bool lastOutput(int &angle, int &radius) const override {
@@ -281,6 +287,7 @@ public:
       // Panel edits, flushes and state loads land between blocks.
       applySettings(out, 0);
       applyDrag(out);
+      applyLearn(out);
       const uint32_t n = in->size(in);
       frames_ = std::max<uint32_t>(proc->frames_count, 1);
       clock_ = 0;
@@ -537,6 +544,20 @@ private:
       convert(out, 0, channel);
    }
 
+   // The panel's SEND buttons: one output CC alone, for a MIDI learn. It goes at the value last sent
+   // on it (0 before any), and at 14 bits as the MSB only, the CC to learn.
+   void applyLearn(const clap_output_events_t *out) {
+      const uint32_t which = learn_.exchange(0);
+      if (which == 0)
+         return;
+      const ChannelState &st = channels_[panelChannel_];
+      const int shift = applied_.fine ? 7 : 0;
+      if (which & 1u)
+         pushCC(out, 0, panelChannel_, intParam(kParamOutAngle), std::max(st.sentAngle, 0) >> shift);
+      if (which & 2u)
+         pushCC(out, 0, panelChannel_, intParam(kParamOutRadius), std::max(st.sentRadius, 0) >> shift);
+   }
+
    // Returns true if the event was an XY input CC and should not be forwarded.
    bool handleMidi(const clap_event_midi_t *ev, const clap_output_events_t *out) {
       if ((ev->data[0] & 0xF0) != 0xB0)
@@ -601,6 +622,8 @@ private:
    std::atomic<uint64_t> dragIn_{0};
    std::atomic<bool> dragging_{false};
    uint64_t dragSeen_ = 0;
+   // SEND presses not yet sent: bit 0 angle, bit 1 radius.
+   std::atomic<uint32_t> learn_{0};
    // The preset last loaded or saved (main thread).
    std::string presetName_ = "Init";
    jclap::core::EditQueue edits_;

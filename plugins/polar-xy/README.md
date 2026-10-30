@@ -101,6 +101,10 @@ stepping each time it reports. While the mouse is down it has that channel, so t
 controller's X/Y CCs on it are ignored; once you let go, the controller takes over again with its next
 move. Double-click puts it back in the centre. Before any CC has arrived the pad drives channel 1.
 
+To map the outputs with a MIDI learn, press **SEND** under the angle or radius CC: it sends that CC
+alone (at the value last sent on it), so the learn picks it up without the other one getting in
+first. At 14-bit it sends only the MSB CC, the one to learn.
+
 The preset bar in the header steps through presets with its arrows, lists them from the name, stars
 favourites, and SAVE stores the current settings as your own preset. The factory bank is a single
 **Init** with everything at its default.

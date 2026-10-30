@@ -24,6 +24,9 @@ public:
    // until released.
    virtual void dragInput(double x, double y) = 0;
    virtual void releaseInput() = 0;
+   // Sends just one output CC (0: angle, 1: radius) on the shown channel, at its last value, so a
+   // MIDI learn picks up that CC alone.
+   virtual void sendOutput(int which) = 0;
    // The name of the preset last loaded or saved, kept with the project.
    virtual std::string presetName() const = 0;
    virtual void setPresetName(const std::string &name) = 0;
