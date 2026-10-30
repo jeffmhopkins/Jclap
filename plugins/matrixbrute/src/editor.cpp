@@ -86,7 +86,10 @@ constexpr float kCutoffH = kBandH - 2 * boxH(2) - 2 * kGutter;
 // The preset box, then ENV 1 and ENV 2 down the band; ENV 3 is in the strip.
 constexpr float kPresetH = 202, kEnvH = (kBandH - kPresetH - 2 * kGutter) / 2;
 // The effects, the sequencer and the performance controls down the last column.
-constexpr float kFxH = 360, kPerfH = 216, kSeqH = kBandH + kGutter + kStripH - kFxH - kPerfH - 2 * kGutter;
+// The sequencer is compact as on the synth: the tempo display and a row of buttons over a tight grid
+// with Rate, Swing and Gate down its right edge. Analog FX's echoes take what's left.
+constexpr float kSeqTopRowH = 44, kSeqH = kTitleH + 2 * kSeqTopRowH + 3 * kRowPitch + kPad;
+constexpr float kPerfH = 216, kFxH = kBandH + kGutter + kStripH - kSeqH - kPerfH - 2 * kGutter;
 
 constexpr unsigned kAmber = 0xfff2c94c;
 constexpr unsigned kBlue = 0xff9fc3ee;
@@ -555,28 +558,37 @@ private:
       const float x = colX(4), y = kTop + kFxH + kGutter, w = kColW[4], h = kSeqH;
       section("SEQUENCER", {x, y, w, h}, true);
       // The tempo display (blank: the plugin doesn't know the synth's tempo) with Save and MIDI Sync,
-      // then the rows of buttons.
-      const float rh = (h - kTitleH - kPad) / 7;
-      tempo_ = &add<vis::PresetDisplay>({x + kPad + 12, y + kTitleH + 8, 2 * kCellW, rh - 18});
+      // then the mode buttons, over the grid of note lengths, rates, directions and transport.
+      const float ty = y + kTitleH;
+      tempo_ = &add<vis::PresetDisplay>({x + kPad + 10, ty + 6, 128, kSeqTopRowH - 10});
       tempo_->setText("---");
       tips_.add(*tempo_, "The synth's tempo isn't sent over MIDI, so the display stays blank.");
-      const char *rows[7][5] = {{nullptr, nullptr, nullptr, "Save", "MIDI Sync"},
-                                {"Patterns", "Link", "SEQ Length", "Sequencer", "Arpeggiator"},
-                                {"Note", "Triplet", "Dotted", nullptr, nullptr},
-                                {"1/4", "1/8", "1/16", "1/32", nullptr},
-                                {"Fwd", "Rev", "Fwd / Rev", "Rand", nullptr},
-                                {"Step <", "Step >", "Tap", nullptr, nullptr},
-                                {"Rec", "Play / Pause", "Play", nullptr, nullptr}};
-      for (int r = 0; r < 7; ++r)
-         for (int c = 0; c < 5; ++c)
-            if (rows[r][c])
-               indicator(std::string("seq.") + rows[r][c], rows[r][c], {},
-                         {x + kPad + c * kCellW, y + kTitleH + r * rh, kCellW, rh - 4}, vis::HwButton::Lights::Above, kRed);
+      struct Cell {
+         const char *id, *name;
+      };
+      const auto button = [&](Cell cell, float bx, float by, float bh) {
+         if (cell.id)
+            indicator(std::string("seq.") + cell.id, cell.name, {}, {bx, by, kCellW, bh}, vis::HwButton::Lights::Above, kRed);
+      };
+      button({"save", "Save"}, x + kPad + 3 * kCellW, ty, kSeqTopRowH);
+      button({"midiSync", "MIDI Sync"}, x + kPad + 4 * kCellW, ty, kSeqTopRowH);
+      const Cell modes[5] = {{"patterns", "Patterns"}, {"link", "Link"}, {"length", "Length"}, {"sequencer", "Seq"},
+                             {"arpeggiator", "Arp"}};
+      for (int c = 0; c < 5; ++c)
+         button(modes[c], x + kPad + c * kCellW, ty + kSeqTopRowH, kSeqTopRowH);
+      const Cell grid[5][4] = {{{"note", "Note"}, {"triplet", "Trip"}, {"dotted", "Dot"}, {}},
+                               {{"1/4", "1/4"}, {"1/8", "1/8"}, {"1/16", "1/16"}, {"1/32", "1/32"}},
+                               {{"fwd", "Fwd"}, {"rev", "Rev"}, {"fwdRev", "Fwd/Rev"}, {"rand", "Rand"}},
+                               {{"stepBack", "Step <"}, {"stepNext", "Step >"}, {"tap", "Tap"}, {}},
+                               {{"rec", "Rec"}, {"playPause", "Pause"}, {"play", "Play"}, {}}};
+      const float top = ty + 2 * kSeqTopRowH, rh = (y + h - kPad - top) / 5;
+      for (int r = 0; r < 5; ++r)
+         for (int c = 0; c < 4; ++c)
+            button(grid[r][c], x + kPad + c * kCellW, top + r * rh, rh);
       const int ccs[3] = {116, 117, 118};
       const char *names[3] = {"RATE", "SWING", "GATE"};
-      const float top = y + kTitleH + 2 * rh, kp = (y + h - kPad - top) / 3;
       for (int i = 0; i < 3; ++i)
-         knob(ccs[i], kRed, {x + kPad + 4 * kCellW, top + i * kp + (kp - kKnobH) * 0.5f, kCellW, kKnobH}, names[i]);
+         knob(ccs[i], kRed, {x + kPad + 4 * kCellW, top + i * kRowPitch, kCellW, kKnobH}, names[i]);
    }
 
    // Glide, play control and the macros, from the synth's left end.
