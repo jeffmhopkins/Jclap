@@ -12,6 +12,11 @@ and prints the bytes that changed since the last step. Type s to skip a step, r 
 to stop. The changes add up (nothing is put back), so each step only differs from the one before.
 Everything it prints also goes to OUTDIR/map.log.
 
+    python mb_map.py OUTDIR --once NAME
+
+reads the slot once instead, saves it as the next OUTDIR/NN-NAME.syx and prints what changed since the
+newest file there, for driving the steps from somewhere else.
+
 READ ONLY, like mb_dump.py: it never sends a write or a setting. The saving is done on the synth.
 Needs Python 3, mido and python-rtmidi, with MIDI Control Center and Bitwig closed (they hold the port).
 """
@@ -103,15 +108,42 @@ def unpacked(raw):
     return mb_bank.unpack(b"".join(c[9:-1] for c in chunks))
 
 
+def once(args, log):
+    files = sorted(f for f in os.listdir(args.outdir) if f.endswith(".syx"))
+    raw = read_slot(mb_dump.Synth(), args.bank, args.slot)
+    if raw is None:
+        sys.exit("The read failed; check the cable and try again.")
+    path = os.path.join(args.outdir, "%02d-%s.syx" % (len(files), args.once))
+    with open(path, "wb") as f:
+        f.write(raw)
+    current = unpacked(raw)
+    log("%s:" % os.path.basename(path))
+    if not files:
+        log("  read %d bytes (the first file)" % len(current))
+        return
+    with open(os.path.join(args.outdir, files[-1]), "rb") as f:
+        previous = unpacked(f.read())
+    changed = [(o, previous[o], current[o]) for o in range(min(len(previous), len(current)))
+               if previous[o] != current[o]]
+    if not changed:
+        log("  no byte changed since %s" % files[-1])
+    for o, a, b in changed:
+        log("  byte %3d: %3d -> %3d" % (o, a, b))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("outdir")
     ap.add_argument("--bank", type=int, default=15)
     ap.add_argument("--slot", type=int, default=3)
     ap.add_argument("--start", type=int, default=0, help="step to start at (to carry on after a stop)")
+    ap.add_argument("--once", metavar="NAME", help="read the slot once, as the next file, and exit")
     args = ap.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
     log = Log(os.path.join(args.outdir, "map.log"))
+    if args.once:
+        once(args, log)
+        return
     slot_name = "%s%02d" % ("ABCDEFGHIJKLMNOP"[args.bank], args.slot + 1)
     syn = mb_dump.Synth()
     log("Mapping into %s. Each time: make the change, save the panel into %s on the synth, then press "

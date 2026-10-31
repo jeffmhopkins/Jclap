@@ -239,6 +239,10 @@ int main() {
       JCLAP_CHECK(!mb::SynthLink::parsePreset("PRESET\t256\tX\t9:1", p));
       JCLAP_CHECK(!mb::SynthLink::parsePreset("PRESET\t3\tX\t9:200", p));
       JCLAP_CHECK(!mb::SynthLink::parsePreset("PRESET\t3\tX", p));
+      JCLAP_CHECK(mb::SynthLink::parsePreset("PRESET\t3\tX\t9:1\tvco.sync:1,glide.on:0", p));
+      JCLAP_CHECK(p.switches.size() == 2 && p.switches[0].first == "vco.sync" && p.switches[0].second == 1);
+      JCLAP_CHECK(mb::SynthLink::parsePreset("PRESET\t3\tX\t9:1\t", p) && p.switches.empty());
+      JCLAP_CHECK(!mb::SynthLink::parsePreset("PRESET\t3\tX\t9:1\tvco.sync", p));
 
       mb::SynthLink &link = mb::SynthLink::get();
       const uint32_t before = link.version();

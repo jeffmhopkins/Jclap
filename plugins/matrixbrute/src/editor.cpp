@@ -11,8 +11,8 @@
 // macros, the MATRIXBRUTE wordmark and what the plugin knows. Each box's title tab and top rule are
 // in its accent and its controls are named in a light tint of it; values and CC numbers stay
 // neutral, and the smallest text is about 12 units. Every knob and slider is one CC. The synth's
-// buttons, lights and matrix aren't on MIDI: they're drawn as indicators with a state the preset read
-// can set later (setIndicator() and MatrixMap::setCell()), and until then they're dim.
+// buttons, lights and matrix aren't on MIDI: they're drawn as indicators, dim until a preset read off
+// the synth says how they're set (showSwitches(); only some buttons are mapped so far).
 // Knobs the plugin hasn't heard from the synth or set itself are drawn dim, since their value is a
 // guess.
 
@@ -302,10 +302,12 @@ private:
       bar.currentName = [this] { return host_.presetName(); };
       bar.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
       bar.onLoad = [this](const ui::Preset &p) {
-         if (const HardwarePatch *patch = findPatch(patches_, p.name))
+         const HardwarePatch *patch = findPatch(patches_, p.name);
+         if (patch)
             host_.loadProgram(*patch);
          else
             ui::applyPreset(p, host_, presetDefaults());
+         showSwitches(patch);
       };
       add<ui::UpdateNotice>({272, 20, 190, 24});
 
@@ -356,12 +358,20 @@ private:
    }
 
 public:
-   // Shows a hardware button's setting: the lit light (or 1 for on), or -1 for unknown. Nothing
-   // feeds these yet; a later change maps them from the synth's presets.
+   // Shows a hardware button's setting: the lit light (or 1 for on), or -1 for unknown.
    void setIndicator(const std::string &id, int state) {
       for (auto &[name, button] : indicators_)
          if (name == id)
             button->setState(state);
+   }
+   // The buttons a preset read off the synth sets; the rest (and all of them for any other preset)
+   // go back to unknown.
+   void showSwitches(const HardwarePatch *patch) {
+      for (auto &entry : indicators_)
+         entry.second->setState(-1);
+      if (patch)
+         for (const auto &[id, state] : patch->switches)
+            setIndicator(id, state);
    }
    // A matrix cell's routing (-1 unknown, 0 none).
    void setMatrixCell(int source, int destination, int state) { matrix_->setCell(source, destination, state); }
