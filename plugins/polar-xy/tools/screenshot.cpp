@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
       return 1;
    }
    const int width = argc > 3 ? std::atoi(argv[2]) : 720;
-   const int height = argc > 3 ? std::atoi(argv[3]) : 640;
+   const int height = argc > 3 ? std::atoi(argv[3]) : 690;
    DemoHost host;
    return polar_xy::renderScreenshot(host, width, height, argv[1], kSeconds,
                                      [&host](double dt) { host.advance(dt); })
