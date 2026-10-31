@@ -26,6 +26,16 @@ var STEP24 = 32767 / 24;
 var STEP12 = 32767 / 12;
 
 // [cc, offset, kind, flag offset]: the byte map from tools/mb_bank.py (LAYOUT there).
+// The buttons that aren't on MIDI, as far as they're mapped: {plugin indicator id, offset of the
+// word it sets}, found by pressing one at a time on the synth and reading the preset back
+// (tools/mb_map.py). Only on/off ones so far; the multi-way buttons' light order isn't known yet.
+var SWITCHES = [
+   ["vco.sync", 1276],
+   ["lfo2.sync", 1070],
+   ["fx.sync", 1058],
+   ["glide.on", 1118]
+];
+
 var LAYOUT = [
    [9, 1240, "level"],
    [10, 1236, "level"],
@@ -135,7 +145,9 @@ var SUBSCRIBER_TIMEOUT_MS = 10000;
 // script's own output in its console (tools/mb_bitwig_log.py follows it). The data lines, for the
 // MatrixBrute CC plugin, are tab-separated:
 //    READING                          a read started
-//    PRESET  n  name  cc:value,...    one named preset; n is 0-255 (A01-P16), values 0-127
+//    PRESET  n  name  cc:value,...  id:state,...
+//                                     one named preset; n is 0-255 (A01-P16), values 0-127, then
+//                                     the mapped buttons (SWITCHES) by the panel's indicator ids
 //    DONE    found  failed            the read finished
 //    FAILED  why                      the read stopped
 function log(text) {
@@ -415,7 +427,8 @@ function onSysex(hex) {
       log(code(job.preset) + " " + job.name);
       if (job.found % 10 === 0)
          host.showPopupNotification("MatrixBrute: " + job.found + " presets...");
-      deliver(job.preset, job.name, decode(unpack([].concat.apply([], job.chunks))));
+      var u = unpack([].concat.apply([], job.chunks));
+      deliver(job.preset, job.name, decode(u), readSwitches(u));
       next();
    }
 }
@@ -469,10 +482,18 @@ function code(preset) {
    return String.fromCharCode(65 + (preset >> 4)) + ((preset & 15) < 9 ? "0" : "") + ((preset & 15) + 1);
 }
 
-function deliver(preset, name, values) {
+function deliver(preset, name, values, switches) {
    var cells = [];
    for (var i = 0; i < values.length; i++)
       cells.push(values[i][0] + ":" + values[i][1]);
    log(code(preset) + " " + name + ": " + values.length + " knobs");
-   data("PRESET\t" + preset + "\t" + name.replace(/[\t\r\n]/g, " ") + "\t" + cells.join(","));
+   data("PRESET\t" + preset + "\t" + name.replace(/[\t\r\n]/g, " ") + "\t" + cells.join(",") + "\t" + switches.join(","));
+}
+
+// The panel's on/off buttons as "id:0" or "id:1", by the word each one sets.
+function readSwitches(u) {
+   var out = [];
+   for (var i = 0; i < SWITCHES.length; i++)
+      out.push(SWITCHES[i][0] + ":" + (word(u, SWITCHES[i][1]) ? 1 : 0));
+   return out;
 }

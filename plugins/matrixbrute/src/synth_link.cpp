@@ -139,7 +139,7 @@ SynthLink &SynthLink::get() {
 bool SynthLink::parsePreset(const std::string &line, HardwarePatch &out) {
    const std::vector<std::string> f = split(line, '\t');
    int preset = -1;
-   if (f.size() != 4 || f[0] != "PRESET" || !toInt(f[1], preset) || preset < 0 || preset >= kPresetCount)
+   if (f.size() < 4 || f.size() > 5 || f[0] != "PRESET" || !toInt(f[1], preset) || preset < 0 || preset >= kPresetCount)
       return false;
    out = HardwarePatch{};
    out.preset = preset;
@@ -155,6 +155,15 @@ bool SynthLink::parsePreset(const std::string &line, HardwarePatch &out) {
       if (text.empty() || *end || !(v >= 0.0 && v <= 127.0))
          return false;
       out.values.emplace_back(cc, v);
+   }
+   if (f.size() == 5 && !f[4].empty()) {
+      for (const std::string &cell : split(f[4], ',')) {
+         const size_t colon = cell.find(':');
+         int state = -1;
+         if (colon == std::string::npos || colon == 0 || !toInt(cell.substr(colon + 1), state) || state < 0)
+            return false;
+         out.switches.emplace_back(cell.substr(0, colon), state);
+      }
    }
    return !out.values.empty();
 }

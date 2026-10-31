@@ -21,6 +21,9 @@ struct HardwarePatch {
    // {cc, 0-127} for every CC the preset stores. The mod wheel and the sequencer's rate, swing and
    // gate aren't part of a preset, so they're left alone.
    std::vector<std::pair<int, double>> values;
+   // {indicator id, setting} for the buttons that aren't on MIDI, as far as they're mapped (see
+   // SWITCHES in bitwig/MatrixBrute.control.js). The ones left out stay unknown.
+   std::vector<std::pair<std::string, int>> switches;
 };
 
 inline constexpr int kPresetCount = 256;
