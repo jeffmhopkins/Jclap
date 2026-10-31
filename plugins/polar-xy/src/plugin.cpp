@@ -54,9 +54,10 @@ struct Settings {
 
 // State layout: 4-byte magic, uint32 version, one double per parameter, then (from version 3) uint32
 // name length and the preset name. Version 1 had the params before Smoothing, versions 2 and 3 those
-// before Output Resolution; the ones they lack load as their defaults.
+// before Output Resolution, and version 4 those before Inertia Mode; the ones they lack load as their
+// defaults.
 constexpr char kStateMagic[4] = {'J', 'C', 'O', 'P'};
-constexpr uint32_t kStateVersion = 4;
+constexpr uint32_t kStateVersion = 5;
 
 struct StateHeader {
    char magic[4];
@@ -71,6 +72,8 @@ uint32_t savedParamCount(uint32_t version) {
    case 3:
       return kParamResolution;
    case 4:
+      return kParamInertiaMode;
+   case 5:
       return kParamCount;
    default:
       return 0;
@@ -375,6 +378,7 @@ private:
       m.smoothing = params_[kParamSmoothing].load() / 1000.0;
       m.inertia = params_[kParamInertia].load() / 100.0;
       m.around = intParam(kParamMotionPath) != 0;
+      m.push = intParam(kParamInertiaMode) != 0;
       return m;
    }
 

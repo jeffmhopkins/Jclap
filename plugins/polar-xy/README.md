@@ -67,6 +67,11 @@ changes) until it arrives. Each channel moves on its own.
   the way the controller was going, slowing down (over a couple of seconds at 100%), and bounces off
   the edge. It settles wherever it runs out of speed, and the controller's next move picks it up from
   there. A jump from rest has no speed to carry, so it settles on the spot.
+- **Inertia Mode** (INERTIA MODE on the panel) picks how Inertia follows. *Pull*, as above, draws the
+  Orb to where the controller is. *Push* only lets the controller's movement move it: while the
+  controller moves, the Orb picks up its speed and direction (slower the heavier it is), and once it
+  holds still it has no say at all, so the Orb coasts on, slows to a stop and stays there. Where the
+  controller is doesn't matter, only how it's moving, so the Orb can end up anywhere on the pad.
 - **Motion Path** (PATH on the panel) picks what moves. *Straight* glides across the pad in X/Y, so going from one side to the
   other passes through the centre. *Around* moves the angle and radius on their own, so the Orb travels
   round the circle the short way. The angle keeps counting past a full turn, so stirring the controller
@@ -103,7 +108,7 @@ radius the plugin sent for that channel (a dash until both axes have arrived),
 with angle 0 marked by the tick on the right. Comparing the two shows what `Angle Offset` and
 `Direction` do. Under each view are its CCs: X and Y with Pass Input CCs, and angle and radius with
 the MIDI learn buttons. Below them, **MAPPING** holds Angle Offset, Direction and Radius Mode, and
-**MOTION** Smoothing, Inertia, Path and Resolution. Every setting is also a plain host parameter.
+**MOTION** Smoothing, Inertia, Path, Inertia Mode and Resolution. Every setting is also a plain host parameter.
 
 Both views are small night skies that move at the screen's rate. The input dot and the output orb
 leave a trail of ink that drifts and fades behind them, so you can see the path a glide took
@@ -145,4 +150,5 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 | Smoothing | 0 ms | Glide time, up to 2 s |
 | Inertia | 0% | Weight: lag and overshoot |
 | Motion Path | Straight | Or Around, to move round the circle |
+| Inertia Mode | Pull | Or Push, where only the controller's movement moves the output |
 | Output Resolution | 7-bit | Or 14-bit (RESOLUTION on the panel): MSB on the output CC, LSB on CC + 32 |

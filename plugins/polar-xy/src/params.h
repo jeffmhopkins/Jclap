@@ -24,6 +24,7 @@ enum ParamId : clap_id {
    kParamInertia,
    kParamMotionPath,
    kParamResolution,
+   kParamInertiaMode,
    kParamCount
 };
 
@@ -46,6 +47,7 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Inertia", 0, 100, 0, false},    // %
    {"Motion Path", 0, 1, 0, true},
    {"Output Resolution", 0, 1, 0, true},
+   {"Inertia Mode", 0, 1, 0, true},
 };
 
 // Labels for the two-state params, off first.
@@ -54,6 +56,7 @@ inline const char *const kRadiusModeLabels[] = {"Clamp to circle", "Fill square"
 inline const char *const kOnOffLabels[] = {"Off", "On"};
 inline const char *const kMotionPathLabels[] = {"Straight", "Around"};
 inline const char *const kResolutionLabels[] = {"7-bit", "14-bit"};
+inline const char *const kInertiaModeLabels[] = {"Pull", "Push"};
 
 // 14-bit output sends each value's LSB on its CC + 32, so it needs both output CCs below 32; on
 // higher ones the output stays 7-bit.
@@ -71,6 +74,8 @@ inline const char *const *choiceLabels(clap_id id) {
       return kMotionPathLabels;
    case kParamResolution:
       return kResolutionLabels;
+   case kParamInertiaMode:
+      return kInertiaModeLabels;
    default:
       return nullptr;
    }

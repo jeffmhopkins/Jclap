@@ -176,6 +176,65 @@ void coastTests() {
    double x, y;
    j.position(x, y);
    JCLAP_CHECK(!j.moving() && x == 0.0 && y == 1.0);
+
+   // Push: only the controller's movement moves it. A move right carries the output on right after
+   // the controller stops, and it comes to rest without being drawn back to where the controller is.
+   m.push = true;
+   m.around = false;
+   m.inertia = 0.3;
+   jclap::Follower p;
+   p.place(-0.5, 0.0);
+   for (int i = 1; i <= 15; ++i) {
+      p.follow(-0.5 + 0.5 * i / 15.0, 0.0);
+      run(p, 0.02, centred);
+   }
+   double released, py;
+   p.position(released, py);
+   double last = released, back = 0.0;
+   for (double t = 0.0; t < 30.0 && p.moving(); t += dt) {
+      p.step(dt, m);
+      double px;
+      p.position(px, py);
+      back = std::max(back, last - px);
+      last = px;
+   }
+   JCLAP_CHECK(!p.moving());
+   JCLAP_CHECK(last > released + 0.05);
+   JCLAP_CHECK(std::abs(last) > 0.01); // not where the controller stopped
+   JCLAP_CHECK(back < 1e-9);
+   // Held still, the controller leaves it where it is.
+   double sx, sy;
+   p.position(sx, sy);
+   run(p, 1.0, centred);
+   p.position(x, y);
+   JCLAP_CHECK(x == sx && y == sy);
+
+   // A jump after a pause still nudges it that way, but doesn't take it all the way there.
+   p.follow(1.0, 0.0);
+   run(p, 30.0, centred);
+   p.position(x, y);
+   JCLAP_CHECK(!p.moving() && x > sx + 0.05 && x < 1.0);
+
+   // Around, pushed in through the middle: out the other side, never stuck there.
+   m.around = true;
+   m.inertia = 1.0;
+   jclap::Follower q;
+   q.setAround(true);
+   q.place(1.0, 0.0);
+   centred = 0.0;
+   for (int i = 1; i <= 15; ++i) {
+      q.follow(1.0 - 0.8 * i / 15.0, 0.0);
+      run(q, 0.02, centred);
+   }
+   minX = 1.0;
+   for (double t = 0.0; t < 30.0 && q.moving(); t += dt) {
+      q.step(dt, m);
+      q.position(x, y);
+      minX = std::min(minX, x);
+      centred += std::hypot(x, y) < jclap::kDeadZone ? dt : 0.0;
+   }
+   JCLAP_CHECK(minX < -0.2);
+   JCLAP_CHECK(centred < 0.2);
 }
 
 // The panel's XY pad: dragging it moves the shown channel like the controller, and holds that
@@ -522,6 +581,7 @@ int main() {
       // as defaults.
       h2.setParam(8, 500.0);
       h2.setParam(11, 1.0);
+      h2.setParam(12, 1.0);
       h2.process();
       const char magic[4] = {'J', 'C', 'O', 'P'};
       const uint32_t version = 1;
@@ -533,7 +593,7 @@ int main() {
       JCLAP_CHECK(state2->load(h2.plugin(), &is));
       JCLAP_CHECK(h2.paramValue(0) == 21.0 && h2.paramValue(4) == 45.0 && h2.paramValue(6) == 1.0);
       JCLAP_CHECK(h2.paramValue(8) == 0.0 && h2.paramValue(9) == 0.0 && h2.paramValue(10) == 0.0 &&
-                  h2.paramValue(11) == 0.0);
+                  h2.paramValue(11) == 0.0 && h2.paramValue(12) == 0.0);
       JCLAP_CHECK(h2.object<polar_xy::EditorHost>()->presetName().empty()); // no name before version 3
    }
 
@@ -544,6 +604,8 @@ int main() {
    JCLAP_CHECK(h.textToValue(8, "1.5 s", v) && v == 1500.0);
    JCLAP_CHECK(h.textToValue(8, "80ms", v) && v == 80.0);
    JCLAP_CHECK(h.textToValue(10, "around", v) && v == 1.0);
+   JCLAP_CHECK(h.paramText(12, 1.0) == "Push");
+   JCLAP_CHECK(h.textToValue(12, "pull", v) && v == 0.0);
 
    // The factory bank is one Init with every param at its default.
    const auto &factory = polar_xy::factoryPresets();

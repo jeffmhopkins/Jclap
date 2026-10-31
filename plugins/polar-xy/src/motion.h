@@ -16,6 +16,9 @@ struct MotionSettings {
    // false: moves in a straight line across the pad. true: angle and radius move on their own, so
    // the output goes around the circle and keeps its spin (a whirl carries on past where it stopped).
    bool around = false;
+   // How Inertia follows. false (pull): the output is drawn to where the controller is. true (push):
+   // only the controller's movement pushes it, so a controller held still leaves it coasting.
+   bool push = false;
 
    bool active() const { return smoothing > 0.0 || inertia > 0.0; }
 };
@@ -78,7 +81,10 @@ public:
       // The controller's speed, from how far it went since its last move, a little smoothed as the
       // moves arrive unevenly. A move after a pause starts from rest.
       const double a = still_ < kCoastHold ? 1.0 - std::exp(-still_ / 0.05) : 0.0;
+      // Push takes a move after a pause as made over the hold, so even a jump gives it a nudge.
+      fresh_ = still_ >= kCoastHold;
       for (int i = 0; i < 2; ++i) {
+         kick_[i] = fresh_ ? (t[i] - real_[i]) / kCoastHold : 0.0;
          drift_[i] = still_ < kCoastHold ? drift_[i] : 0.0;
          if (still_ > 0.0)
             drift_[i] += a * ((t[i] - real_[i]) / still_ - drift_[i]);
@@ -136,6 +142,8 @@ public:
          land();
          return false;
       }
+      if (m.push && m.inertia > 0.0)
+         return pushed(dt, m);
       if (m.inertia > 0.0)
          coast(dt, m);
       else
@@ -175,6 +183,37 @@ public:
    }
 
 private:
+   // Push: the output's speed is drawn to the controller's while it moves (slower the heavier it
+   // is), and only slows with friction while it holds still. Where the controller is plays no part.
+   bool pushed(double dt, const MotionSettings &m) {
+      still_ += dt;
+      const bool driven = still_ < kCoastHold;
+      const double tau = coastTime(m.inertia);
+      const double take = 1.0 - std::exp(-dt * 2.0 * kPi / inertiaPeriod(m.inertia));
+      const double drag = std::exp(-dt / tau);
+      for (int i = 0; i < 2; ++i) {
+         const double speed = fresh_ ? kick_[i] : drift_[i];
+         vel_[i] = driven ? vel_[i] + take * (speed - vel_[i]) : vel_[i] * drag;
+         pos_[i] += vel_[i] * dt;
+      }
+      // Through the centre in around, the radius comes out the other side, still a radius.
+      if (around_ && pos_[1] < 0.0) {
+         pos_[0] += kPi;
+         pos_[1] = -pos_[1];
+         vel_[1] = -vel_[1];
+      }
+      for (int i = around_ ? 1 : 0; i < 2; ++i)
+         if (std::abs(pos_[i]) > 1.0 && pos_[i] * vel_[i] > 0.0)
+            vel_[i] *= -kCoastBounce;
+      if (driven || std::abs(vel_[0]) * tau > 1e-3 || std::abs(vel_[1]) * tau > 1e-3)
+         return true;
+      // At rest: wherever it got to is where it stays, until the controller moves again.
+      double x, y;
+      toPad(pos_, x, y);
+      place(std::clamp(x, -1.0, 1.0), std::clamp(y, -1.0, 1.0));
+      return false;
+   }
+
    bool coasting() const { return still_ >= kCoastHold; }
 
    // Once the controller has stopped, the target drifts on at its speed, slowing with friction and
@@ -238,6 +277,8 @@ private:
    double tx_ = 0.0, ty_ = 0.0; // the target on the pad
    double rx_ = 0.0, ry_ = 0.0; // the controller on the pad
    double still_ = 0.0;         // seconds since the controller last moved
+   bool fresh_ = false;         // its last move came after a pause: kick_ is its speed, for push
+   double kick_[2] = {};
    // The target, the controller (the target's start when it coasts) and its speed, and the output.
    double target_[2] = {}, real_[2] = {}, drift_[2] = {}, smooth_[2] = {}, pos_[2] = {}, vel_[2] = {};
 };

@@ -1,6 +1,6 @@
 // Polar XY's panel, in the MicroMonsta 2 style: a title bar, then the XY input and the polar output
 // side by side, each a small night sky with its CCs beneath, and the mapping and motion settings
-// below them, all on a 720 x 640 design grid scaled to the window.
+// below them, all on a 720 x 690 design grid scaled to the window.
 //
 // Both skies animate at the display's rate, about 60 frames a second, on the main thread. The input
 // dot and the output orb shed ink as they move, which drifts, spreads and fades behind them like the
@@ -41,7 +41,7 @@ namespace {
 namespace ui = jclap::ui;
 
 constexpr float kDesignWidth = 720.0f;
-constexpr float kDesignHeight = 640.0f;
+constexpr float kDesignHeight = 690.0f;
 constexpr float kHeaderHeight = 64.0f;
 // Every knob gets a cell this size, so they all come out alike.
 constexpr float kKnobWidth = 76.0f;
@@ -460,8 +460,8 @@ public:
       // happens in between.
       add<ui::Section>({12, 76, 342, 400}, "XY IN");
       add<ui::Section>({366, 76, 342, 400}, "POLAR OUT");
-      add<ui::Section>({12, 488, 342, 140}, "MAPPING");
-      add<ui::Section>({366, 488, 342, 140}, "MOTION");
+      add<ui::Section>({12, 488, 342, 190}, "MAPPING");
+      add<ui::Section>({366, 488, 342, 190}, "MOTION");
 
       // Live views: what comes in on the X/Y CCs, and the angle/radius that goes out. Dragging the
       // XY pad moves the input itself, holding off the controller until the mouse lets go.
@@ -507,7 +507,8 @@ public:
       knob(kParamSmoothing, "SMOOTHING", kBlue, 378, row, 10.0);
       knob(kParamInertia, "INERTIA", kBlue, 454, row, 1.0);
       choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 546, row);
-      choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 546, row + 50);
+      choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "PUSH"}, 546, row + 50);
+      choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 546, row + 100);
 
       // Shown when two inputs or two outputs share a CC, which the plugin won't convert.
       warning_ = &add<ui::Label>({380, 48, 328, 14}, "", kOrange, visage::Font::kRight, 0.7f);
