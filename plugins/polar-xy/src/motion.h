@@ -1,5 +1,6 @@
 // How Polar XY's output follows the controller: Smoothing glides it, Inertia gives it weight so it
-// lags, swings past and settles. No CLAP dependencies so it can be unit tested.
+// lags and swings past, and when the controller stops it carries on the way it was going, slowing
+// down before it settles. No CLAP dependencies so it can be unit tested.
 #pragma once
 
 #include <algorithm>
@@ -23,11 +24,26 @@ struct MotionSettings {
 // low end stays light and full inertia swings for about 5 s, three to four times the weight it had.
 inline double inertiaPeriod(double inertia) { return 1.5 * inertia * (1.0 + 2.5 * inertia); }
 
+// How long a coast takes to lose about two thirds of its speed (seconds): 2 s at full inertia.
+inline double coastTime(double inertia) { return 0.4 * inertiaPeriod(inertia); }
+
+// How long the controller has to hold still before it counts as stopped and the output coasts on.
+// Long enough to bridge the gaps between a moving controller's CCs; after a longer pause, a move
+// starts again from rest.
+constexpr double kCoastHold = 0.1;
+
+// How much speed a coast keeps when it bounces off the edge of the pad.
+constexpr double kCoastBounce = 0.5;
+
 // An angle difference brought into -pi..pi: the short way round.
 inline double wrapPi(double a) { return std::remainder(a, 2.0 * kPi); }
 
 // Follows a target position on the -1..+1 pad. In the around space the two axes are an unwrapped
-// angle (radians, so a full turn and more is still a turn's worth of distance) and the radius.
+// angle (radians, so a full turn and more is still a turn's worth of distance) and the radius, which
+// can go below 0: that's through the centre and out the other side.
+//
+// With Inertia, the follower tracks how fast the controller is going. When it stops, the target
+// carries on at that speed, slowing with friction, and the output keeps chasing it.
 class Follower {
 public:
    bool placed() const { return placed_; }
@@ -35,13 +51,14 @@ public:
 
    // Jumps straight to (x, y).
    void place(double x, double y) {
-      tx_ = x;
-      ty_ = y;
+      tx_ = rx_ = x;
+      ty_ = ry_ = y;
       toSpace(x, y, target_);
       for (int i = 0; i < 2; ++i) {
-         smooth_[i] = pos_[i] = target_[i];
-         vel_[i] = 0.0;
+         real_[i] = smooth_[i] = pos_[i] = target_[i];
+         vel_[i] = drift_[i] = 0.0;
       }
+      still_ = kCoastHold;
       placed_ = true;
       moving_ = false;
    }
@@ -52,16 +69,29 @@ public:
          place(x, y);
          return;
       }
-      if (!moving_ && x == tx_ && y == ty_)
+      if (x == rx_ && y == ry_)
          return;
-      tx_ = x;
-      ty_ = y;
-      toSpace(x, y, target_);
+      tx_ = rx_ = x;
+      ty_ = ry_ = y;
+      double t[2];
+      toSpace(x, y, t);
+      // The controller's speed, from how far it went since its last move, a little smoothed as the
+      // moves arrive unevenly. A move after a pause starts from rest.
+      const double a = still_ < kCoastHold ? 1.0 - std::exp(-still_ / 0.05) : 0.0;
+      for (int i = 0; i < 2; ++i) {
+         drift_[i] = still_ < kCoastHold ? drift_[i] : 0.0;
+         if (still_ > 0.0)
+            drift_[i] += a * ((t[i] - real_[i]) / still_ - drift_[i]);
+         real_[i] = target_[i] = t[i];
+      }
+      still_ = 0.0;
       moving_ = true;
    }
 
-   // Stops wherever it is headed.
+   // Stops wherever it is headed (where the controller is, or where a coast would rest).
    void land() {
+      if (moving_ && coasting())
+         restTarget();
       if (moving_)
          place(tx_, ty_);
    }
@@ -72,7 +102,7 @@ public:
          return;
       double x, y;
       position(x, y);
-      const double tx = tx_, ty = ty_;
+      const double tx = rx_, ty = ry_;
       const bool wasMoving = moving_;
       around_ = around;
       if (!placed_)
@@ -82,7 +112,7 @@ public:
          follow(tx, ty);
    }
 
-   // Where it is headed: the last target, on the pad.
+   // Where it is headed, on the pad: the controller, or where a coast has got to.
    void target(double &x, double &y) const {
       x = tx_;
       y = ty_;
@@ -93,13 +123,8 @@ public:
          // Exactly the target, so a settled output is the same as converting the input directly.
          x = tx_;
          y = ty_;
-      } else if (around_) {
-         const double r = std::max(pos_[1], 0.0);
-         x = r * std::cos(pos_[0]);
-         y = r * std::sin(pos_[0]);
       } else {
-         x = pos_[0];
-         y = pos_[1];
+         toPad(pos_, x, y);
       }
    }
 
@@ -111,6 +136,11 @@ public:
          land();
          return false;
       }
+      if (m.inertia > 0.0)
+         coast(dt, m);
+      else
+         drift_[0] = drift_[1] = 0.0;
+
       // Smoothing: a one-pole glide, about 95% of the way in m.smoothing (three time constants).
       const double a = m.smoothing > 0.0 ? 1.0 - std::exp(-dt * 3.0 / m.smoothing) : 1.0;
       for (int i = 0; i < 2; ++i)
@@ -138,13 +168,58 @@ public:
       constexpr double eps = 1e-4;
       for (int i = 0; i < 2; ++i)
          if (std::abs(target_[i] - pos_[i]) > eps || std::abs(target_[i] - smooth_[i]) > eps ||
-             std::abs(vel_[i]) > eps * 10.0)
+             std::abs(vel_[i]) > eps * 10.0 || std::abs(drift_[i]) > 0.0)
             return true;
       land();
       return false;
    }
 
 private:
+   bool coasting() const { return still_ >= kCoastHold; }
+
+   // Once the controller has stopped, the target drifts on at its speed, slowing with friction and
+   // bouncing off the edge of the pad (each axis's in straight, the circle's in around).
+   void coast(double dt, const MotionSettings &m) {
+      const double before = still_;
+      still_ += dt;
+      if (!coasting() || (drift_[0] == 0.0 && drift_[1] == 0.0))
+         return;
+      // Starting out, it catches up on the hold it waited, so the coast follows on from the move.
+      const double ran = before < kCoastHold ? still_ : dt;
+      const double tau = coastTime(m.inertia);
+      const double drag = std::exp(-ran / tau);
+      for (int i = 0; i < 2; ++i) {
+         target_[i] += drift_[i] * tau * (1.0 - drag);
+         drift_[i] *= drag;
+      }
+      for (int i = around_ ? 1 : 0; i < 2; ++i)
+         if (std::abs(target_[i]) > 1.0 && target_[i] * drift_[i] > 0.0)
+            drift_[i] *= -kCoastBounce;
+      // Stopped once what's left of the coast is well under a CC step.
+      if (std::abs(drift_[0]) * tau < 1e-3 && std::abs(drift_[1]) * tau < 1e-3)
+         drift_[0] = drift_[1] = 0.0;
+      toPad(target_, tx_, ty_);
+   }
+
+   // Makes where the coast has got to the place to land: the target, on the pad and inside it.
+   void restTarget() {
+      if (target_[0] == real_[0] && target_[1] == real_[1])
+         return; // never left the controller, so exactly there
+      toPad(target_, tx_, ty_);
+      tx_ = rx_ = std::clamp(tx_, -1.0, 1.0);
+      ty_ = ry_ = std::clamp(ty_, -1.0, 1.0);
+   }
+
+   void toPad(const double p[2], double &x, double &y) const {
+      if (around_) {
+         x = p[1] * std::cos(p[0]);
+         y = p[1] * std::sin(p[0]);
+      } else {
+         x = p[0];
+         y = p[1];
+      }
+   }
+
    void toSpace(double x, double y, double out[2]) const {
       if (!around_) {
          out[0] = x;
@@ -161,7 +236,10 @@ private:
 
    bool around_ = false, placed_ = false, moving_ = false;
    double tx_ = 0.0, ty_ = 0.0; // the target on the pad
-   double target_[2] = {}, smooth_[2] = {}, pos_[2] = {}, vel_[2] = {};
+   double rx_ = 0.0, ry_ = 0.0; // the controller on the pad
+   double still_ = 0.0;         // seconds since the controller last moved
+   // The target, the controller (the target's start when it coasts) and its speed, and the output.
+   double target_[2] = {}, real_[2] = {}, drift_[2] = {}, smooth_[2] = {}, pos_[2] = {}, vel_[2] = {};
 };
 
 } // namespace jclap

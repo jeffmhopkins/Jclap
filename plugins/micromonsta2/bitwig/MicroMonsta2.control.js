@@ -1,7 +1,7 @@
 // MicroMonsta 2 program reader for Bitwig Studio.
 //
 // Bitwig doesn't pass SysEx to plugins, so this controller script talks to the synth and hands its
-// program dumps to the MicroMonsta 2 CC plugin over a local connection (see startServer):
+// program dumps to the MicroMonsta 2 CC plugin by OSC on localhost (see startServer):
 //
 //    - the sound on part A or B, which the synth sends when asked (firmware 2.7 or later);
 //    - a whole bank, which the synth only sends from its own panel: UTILITY > U02.
@@ -16,7 +16,7 @@
 
 loadAPI(18);
 
-host.defineController("Audiothingies", "MicroMonsta 2 programs", "0.1", "5b0e4d0c-3f7a-4b6e-9a51-2c8d7e1f6a43", "Jclap");
+host.defineController("Audiothingies", "MicroMonsta 2 programs", "0.2", "5b0e4d0c-3f7a-4b6e-9a51-2c8d7e1f6a43", "Jclap");
 host.defineMidiPorts(1, 1);
 host.addDeviceNameBasedDiscoveryPair(["MicroMonsta 2"], ["MicroMonsta 2"]);
 
@@ -30,19 +30,23 @@ var midiOut;
 var asking = null; // {ticket, part, token}: a sound request waiting for its answer
 var token = 0; // bumped on every request, so a stale timeout does nothing
 var dump = null; // {lines, count, seq}: a U02 dump coming in
-var lastDump = []; // the last complete dump's lines, for clients that connect later
+var lastDump = []; // the last complete dump's lines, for subscribers that come later
 var logLines = [];
-var clients = []; // {conn, log: wants the log, data: wants programs}
+var osc = null;
+var subscribers = {}; // by UDP port: {conn, log: wants the log, data: wants programs, seen: ms}
+var SUBSCRIBER_TIMEOUT_MS = 10000;
 
-// A local TCP server (Bitwig's RemoteConnection) on PORT. Each message a client sends has a 4-byte
-// big-endian length in front; what the script sends is plain lines.
+// Clients on this computer talk to the script by OSC over UDP on PORT, as the MatrixBrute script
+// does. (Bitwig's TCP RemoteConnection never handed this script the plugin's messages.)
 //
-//    "log"            the log so far, then every new line
-//    "data"           the programs, for the MicroMonsta 2 CC plugin: the last complete dump's lines
-//                     straight away, then everything new as it comes
-//    "sound N A"      asks the synth for part A's (or B's) sound; N is the client's ticket
+//    /mm2/hello  ,is  port kind     subscribe the UDP `port` on 127.0.0.1 to "log" or "data", and
+//                                   say it's still there: a subscriber quiet for 10 s is dropped, so
+//                                   clients repeat this every few seconds. The script answers with
+//                                   /mm2/hello ,i 1, and on the first hello a "log" subscriber gets
+//                                   the log so far and a "data" one the last complete dump.
+//    /mm2/sound  ,is  ticket part   asks the synth for part "A"'s (or "B"'s) sound
 //
-// The data lines, tab-separated:
+// The script sends each line as /mm2/line ,s text. The data lines, tab-separated:
 //    SOUND      N  hex          the answer to sound request N: one 176-byte program
 //    FAILED     N  why          request N got no answer (N = 0: the dump went wrong)
 //    RECEIVING                  the synth started sending programs nobody asked for (U02)
@@ -53,63 +57,77 @@ function log(text) {
    var line = new Date().toISOString().substr(11, 12) + " " + text;
    if (logLines.length < 20000)
       logLines.push(line);
-   for (var i = 0; i < clients.length; i++)
-      if (clients[i].log)
-         sendLine(clients[i].conn, line);
+   send("log", line);
 }
 
 function data(line) {
    if (dump && line.indexOf("SOUND") !== 0 && line.indexOf("FAILED") !== 0)
       dump.lines.push(line);
-   for (var i = 0; i < clients.length; i++)
-      if (clients[i].data)
-         sendLine(clients[i].conn, line);
+   send("data", line);
 }
 
-function sendLine(conn, line) {
-   var bytes = [];
-   for (var i = 0; i < line.length; i++)
-      bytes.push(line.charCodeAt(i) & 0x7f);
-   bytes.push(10);
+function send(kind, line) {
+   var now = Date.now();
+   for (var port in subscribers) {
+      var sub = subscribers[port];
+      if (now - sub.seen > SUBSCRIBER_TIMEOUT_MS) {
+         delete subscribers[port];
+         continue;
+      }
+      if (sub[kind])
+         sendTo(sub, line);
+   }
+}
+
+function sendTo(sub, line) {
    try {
-      conn.send(bytes);
+      sub.conn.sendMessage("/mm2/line", line);
    } catch (e) {
-      println("client: " + e);
+      println("send: " + e);
    }
 }
 
 function startServer() {
    try {
-      var server = host.createRemoteConnection("MicroMonsta 2 programs", PORT);
-      server.setClientConnectCallback(function (conn) {
-         var client = {conn: conn, log: false, data: false};
-         clients.push(client);
-         conn.setDisconnectCallback(function () {
-            clients.splice(clients.indexOf(client), 1);
-         });
-         conn.setReceiveCallback(guarded(function (bytes) {
-            var text = "";
-            for (var i = 0; i < bytes.length; i++)
-               text += String.fromCharCode(bytes[i] & 0xff);
-            text = text.replace(/[^ -~]/g, "").trim();
-            log("client sent: " + text);
-            var words = text.split(" ");
-            if (text === "log") {
-               client.log = true;
-               for (var j = 0; j < logLines.length; j++)
-                  sendLine(conn, logLines[j]);
-            } else if (text === "data") {
-               client.data = true;
-               for (var k = 0; k < lastDump.length; k++)
-                  sendLine(conn, lastDump[k]);
-            } else if (words[0] === "sound" && words.length === 3 && (words[2] === "A" || words[2] === "B")) {
-               askSound(parseInt(words[1], 10), words[2]);
-            }
-         }));
+      osc = host.getOscModule();
+      var space = osc.createAddressSpace();
+      space.registerMethod("/mm2/hello", ",is", "Subscribe a UDP port to the log or the programs", guarded(function (source, msg) {
+         var port = msg.getInt(0), kind = String(msg.getString(1));
+         if (port <= 0 || port > 65535 || (kind !== "log" && kind !== "data"))
+            return;
+         var sub = subscribers[port];
+         var fresh = !sub || !sub[kind];
+         if (!sub) {
+            sub = subscribers[port] = {conn: osc.connectToUdpServer("127.0.0.1", port, osc.createAddressSpace()),
+                                       log: false, data: false, seen: 0};
+         }
+         sub.seen = Date.now();
+         sub[kind] = true;
+         try {
+            sub.conn.sendMessage("/mm2/hello", 1);
+         } catch (e) {
+            println("hello: " + e);
+         }
+         if (!fresh)
+            return;
+         var lines = kind === "log" ? logLines : lastDump;
+         for (var i = 0; i < lines.length; i++)
+            sendTo(sub, lines[i]);
+      }));
+      space.registerMethod("/mm2/sound", ",is", "Ask the synth for a part's sound", guarded(function (source, msg) {
+         var ticket = msg.getInt(0), part = String(msg.getString(1));
+         log("asked for part " + part + "'s sound (" + ticket + ")");
+         if (part === "A" || part === "B")
+            askSound(ticket, part);
+      }));
+      space.registerDefaultMethod(function (source, msg) {
+         host.errorln("MicroMonsta 2 programs: unexpected OSC message " + msg.getAddressPattern() + " " + msg.getTypeTag());
       });
-      log("server on port " + PORT);
+      osc.createUdpServer(PORT, space);
+      log("OSC on UDP port " + PORT);
+      host.errorln("MicroMonsta 2 programs: OSC on UDP port " + PORT); // errorln reaches Bitwig's log file
    } catch (e) {
-      println("no server: " + e);
+      host.errorln("MicroMonsta 2 programs: no OSC server: " + e);
    }
 }
 
@@ -128,11 +146,12 @@ function later(fn, ms) {
 
 // Errors in callbacks are otherwise silent.
 function guarded(fn) {
-   return function (a) {
+   return function () {
       try {
-         fn(a);
+         fn.apply(null, arguments);
       } catch (e) {
          say("script error: " + e);
+         host.errorln("MicroMonsta 2 programs: script error: " + e);
       }
    };
 }

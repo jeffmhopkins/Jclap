@@ -235,9 +235,10 @@ public:
          jclap::core::fillParamInfo({settingId(st.nrpn), st.name, groupName(st.group),
                                      static_cast<double>(settingMin(st)), static_cast<double>(settingMax(st)),
                                      static_cast<double>(st.defaultValue),
-                                     st.choices == Choices::Char ? CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_HIDDEN
-                                     : CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED |
-                                          (isNumber(st) ? 0u : CLAP_PARAM_IS_ENUM)},
+                                     st.choices == Choices::Char
+                                        ? uint32_t{CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_HIDDEN}
+                                        : uint32_t{CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED} |
+                                             (isNumber(st) ? 0u : uint32_t{CLAP_PARAM_IS_ENUM})},
                                     info);
          return true;
       }

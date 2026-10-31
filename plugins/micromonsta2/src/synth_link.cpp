@@ -51,31 +51,79 @@ bool toInt(const std::string &s, int &out) {
    return true;
 }
 
-// The script's messages from us carry a 4-byte big-endian length (Bitwig's RemoteConnection).
-bool sendMessage(Socket s, const std::string &text) {
-   std::string frame(4, '\0');
-   const auto n = static_cast<uint32_t>(text.size());
-   frame[0] = static_cast<char>(n >> 24);
-   frame[1] = static_cast<char>(n >> 16);
-   frame[2] = static_cast<char>(n >> 8);
-   frame[3] = static_cast<char>(n);
-   frame += text;
-   return send(s, frame.data(), static_cast<int>(frame.size()), 0) == static_cast<int>(frame.size());
+// OSC messages of ints and strings, the little the script and the plugin say to each other.
+void padTo4(std::string &out) {
+   do
+      out += '\0';
+   while (out.size() % 4);
 }
 
-Socket connectToScript() {
-   Socket s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+struct OscArg {
+   bool isInt;
+   int i;
+   std::string s;
+};
+std::string oscMessage(const std::string &address, const std::vector<OscArg> &args = {}) {
+   std::string out = address;
+   padTo4(out);
+   std::string tags = ",";
+   for (const OscArg &a : args)
+      tags += a.isInt ? 'i' : 's';
+   out += tags;
+   padTo4(out);
+   for (const OscArg &a : args) {
+      if (a.isInt) {
+         const auto v = static_cast<uint32_t>(a.i);
+         out += static_cast<char>(v >> 24);
+         out += static_cast<char>(v >> 16);
+         out += static_cast<char>(v >> 8);
+         out += static_cast<char>(v);
+      } else {
+         out += a.s;
+         padTo4(out);
+      }
+   }
+   return out;
+}
+
+// The OSC string starting at `at`, moving `at` past its padding; false if it runs off the end.
+bool oscString(const char *data, size_t size, size_t &at, std::string &out) {
+   const void *end = at < size ? std::memchr(data + at, '\0', size - at) : nullptr;
+   if (!end)
+      return false;
+   const size_t length = static_cast<size_t>(static_cast<const char *>(end) - (data + at));
+   out.assign(data + at, length);
+   at = (at + length + 4) & ~size_t(3);
+   return at <= size;
+}
+
+Socket openSocket(int &port) {
+   Socket s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
    if (s == kNoSocket)
       return kNoSocket;
+   // A bank's 500 lines can arrive in one burst.
+   const int buffer = 1 << 21;
+   setsockopt(s, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char *>(&buffer), sizeof(buffer));
    sockaddr_in addr{};
    addr.sin_family = AF_INET;
-   addr.sin_port = htons(static_cast<uint16_t>(SynthLink::kPort));
    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-   if (connect(s, reinterpret_cast<const sockaddr *>(&addr), sizeof(addr)) != 0) {
+   socklen_t length = sizeof(addr);
+   if (bind(s, reinterpret_cast<const sockaddr *>(&addr), sizeof(addr)) != 0 ||
+       getsockname(s, reinterpret_cast<sockaddr *>(&addr), &length) != 0) {
       closeSocket(s);
       return kNoSocket;
    }
+   port = ntohs(addr.sin_port);
    return s;
+}
+
+void sendToScript(Socket s, const std::string &message) {
+   sockaddr_in to{};
+   to.sin_family = AF_INET;
+   to.sin_port = htons(static_cast<uint16_t>(SynthLink::kPort));
+   to.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+   sendto(s, message.data(), static_cast<int>(message.size()), 0, reinterpret_cast<const sockaddr *>(&to),
+          sizeof(to));
 }
 
 // Waits up to `ms` for data. 1 = readable, 0 = nothing yet, -1 = error.
@@ -180,7 +228,8 @@ int SynthLink::requestSound(char part) {
    ++lastTicket_;
    status_.askingSound = true;
    status_.error.clear();
-   pendingRequest_ = "sound " + std::to_string(lastTicket_) + " " + part;
+   pendingTicket_ = lastTicket_;
+   pendingPart_ = part;
    return lastTicket_;
 }
 
@@ -229,58 +278,59 @@ void SynthLink::release() {
    status_.receiving = false;
 }
 
+// Subscribes to the script's lines and repeats that every couple of seconds, which also tells
+// whether the script is there: it answers each hello. A sound request the script never answers
+// (it says FAILED itself when the synth doesn't) gives up after a few seconds.
 void SynthLink::run() {
-   using namespace std::chrono;
+   using clock = std::chrono::steady_clock;
+   int port = 0;
+   Socket s = openSocket(port);
+   if (s == kNoSocket)
+      return;
+   const std::string hello = oscMessage("/mm2/hello", {{true, port, {}}, {false, 0, "data"}});
+   clock::time_point lastHello{}, lastAnswer{}, asked{};
    while (running_.load()) {
-      Socket s = connectToScript();
-      if (s == kNoSocket || !sendMessage(s, "data")) {
-         if (s != kNoSocket)
-            closeSocket(s);
-         // Bitwig, or the script, isn't running: try again in a second.
-         for (int i = 0; i < 10 && running_.load(); ++i)
-            std::this_thread::sleep_for(milliseconds(100));
-         continue;
+      const clock::time_point now = clock::now();
+      if (now - lastHello > std::chrono::seconds(2)) {
+         sendToScript(s, hello);
+         lastHello = now;
       }
       {
          std::lock_guard<std::mutex> lock(mutex_);
+         if (pendingTicket_ != 0) {
+            sendToScript(s, oscMessage("/mm2/sound", {{true, pendingTicket_, {}}, {false, 0, std::string(1, pendingPart_)}}));
+            pendingTicket_ = 0;
+            asked = now;
+         }
+         if (status_.askingSound && now - asked > std::chrono::seconds(5)) {
+            status_.askingSound = false;
+            status_.error = "no answer from the Bitwig script";
+         }
+         if (status_.connected && now - lastAnswer > std::chrono::seconds(5)) {
+            status_.connected = false;
+            status_.askingSound = false;
+            status_.receiving = false;
+         }
+      }
+      if (waitReadable(s, 100) <= 0)
+         continue;
+      char packet[65536];
+      const int n = static_cast<int>(recv(s, packet, sizeof(packet), 0));
+      if (n <= 0)
+         continue; // Windows reports a hello to a closed port (no Bitwig) as an error here
+      size_t at = 0;
+      std::string address, tags, text;
+      if (!oscString(packet, static_cast<size_t>(n), at, address) || !oscString(packet, static_cast<size_t>(n), at, tags))
+         continue;
+      if (address == "/mm2/hello") {
+         lastAnswer = clock::now();
+         std::lock_guard<std::mutex> lock(mutex_);
          status_.connected = true;
+      } else if (address == "/mm2/line" && tags == ",s" && oscString(packet, static_cast<size_t>(n), at, text)) {
+         handleLine(text);
       }
-      std::string buffer;
-      while (running_.load()) {
-         std::string request;
-         {
-            std::lock_guard<std::mutex> lock(mutex_);
-            request.swap(pendingRequest_);
-         }
-         if (!request.empty() && !sendMessage(s, request))
-            break;
-         const int r = waitReadable(s, 100);
-         if (r < 0)
-            break;
-         if (r == 0)
-            continue;
-         char chunk[4096];
-         const int n = static_cast<int>(recv(s, chunk, sizeof(chunk), 0));
-         if (n <= 0)
-            break;
-         for (int i = 0; i < n; ++i) {
-            const char c = chunk[i];
-            if (c == '\n') {
-               if (!buffer.empty())
-                  handleLine(buffer);
-               buffer.clear();
-            } else if (c == '\t' || (c >= ' ' && c <= '~')) {
-               // Anything else (a length prefix, say) isn't part of a line.
-               buffer += c;
-            }
-         }
-      }
-      closeSocket(s);
-      std::lock_guard<std::mutex> lock(mutex_);
-      status_.connected = false;
-      status_.askingSound = false;
-      status_.receiving = false;
    }
+   closeSocket(s);
 }
 
 } // namespace mm2
