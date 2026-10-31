@@ -69,7 +69,7 @@ curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-mac
 ```
 
 That runs [install-macos.sh](install-macos.sh), which installs the latest release's CLAPs and VST3s
-(`bash -s v0.13.0` instead of `bash` picks a release). It replaces older copies outright, since
+(`bash -s v0.14.0` instead of `bash` picks a release). It replaces older copies outright, since
 unzipping over an old bundle can leave stale files that stop it loading, and clears Bitwig's plugin
 cache so the next scan starts fresh.
 
