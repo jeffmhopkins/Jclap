@@ -16,11 +16,14 @@ struct MotionSettings {
    // false: moves in a straight line across the pad. true: angle and radius move on their own, so
    // the output goes around the circle and keeps its spin (a whirl carries on past where it stopped).
    bool around = false;
-   // How Inertia follows. false (pull): the output is drawn to where the controller is. true (push):
-   // only the controller's movement pushes it, so a controller held still leaves it coasting.
-   bool push = false;
+   // How Inertia follows. Pull: the output is drawn to where the controller is. Coast: only the
+   // controller's movement pushes it, so a controller held still leaves it coasting. Pad: like a
+   // trackpad, a touch doesn't move it, a drag moves it by as much from wherever it is, and letting go
+   // flings it on (Inertia sets how far).
+   enum class Mode { Pull, Coast, Pad } mode = Mode::Pull;
 
-   bool active() const { return smoothing > 0.0 || inertia > 0.0; }
+   // Pad is relative even with no Smoothing or Inertia, so it's never a straight jump.
+   bool active() const { return smoothing > 0.0 || inertia > 0.0 || mode == Mode::Pad; }
 };
 
 // How long inertia (0..1) takes to swing through a cycle. It grows faster than the knob, so the
@@ -37,6 +40,13 @@ constexpr double kCoastHold = 0.1;
 
 // How much speed a coast keeps when it bounces off the edge of the pad.
 constexpr double kCoastBounce = 0.5;
+
+// How much speed Pad mode's glide keeps when it bounces off the edge: livelier than a coast's.
+constexpr double kPadBounce = 0.8;
+
+// In Pad mode, a controller step longer than this (on the -1..+1 pad) is a finger landing or lifting,
+// not a drag, so it doesn't move the output.
+constexpr double kPadJump = 0.25;
 
 // An angle difference brought into -pi..pi: the short way round.
 inline double wrapPi(double a) { return std::remainder(a, 2.0 * kPi); }
@@ -70,10 +80,13 @@ public:
    void follow(double x, double y) {
       if (!placed_) {
          place(x, y);
+         px_ = x;
+         py_ = y;
          return;
       }
       if (x == rx_ && y == ry_)
          return;
+      padFollow(x, y);
       tx_ = rx_ = x;
       ty_ = ry_ = y;
       double t[2];
@@ -81,7 +94,7 @@ public:
       // The controller's speed, from how far it went since its last move, a little smoothed as the
       // moves arrive unevenly. A move after a pause starts from rest.
       const double a = still_ < kCoastHold ? 1.0 - std::exp(-still_ / 0.05) : 0.0;
-      // Push takes a move after a pause as made over the hold, so even a jump gives it a nudge.
+      // Coast mode takes a move after a pause as made over the hold, so even a jump gives it a nudge.
       fresh_ = still_ >= kCoastHold;
       for (int i = 0; i < 2; ++i) {
          kick_[i] = fresh_ ? (t[i] - real_[i]) / kCoastHold : 0.0;
@@ -142,8 +155,10 @@ public:
          land();
          return false;
       }
-      if (m.push && m.inertia > 0.0)
-         return pushed(dt, m);
+      if (m.mode == MotionSettings::Mode::Pad)
+         return padStep(dt, m);
+      if (m.mode == MotionSettings::Mode::Coast && m.inertia > 0.0)
+         return coastStep(dt, m);
       if (m.inertia > 0.0)
          coast(dt, m);
       else
@@ -183,9 +198,83 @@ public:
    }
 
 private:
-   // Push: the output's speed is drawn to the controller's while it moves (slower the heavier it
+   // Pad mode's view of a controller move: a drag adds its step to what's still to be moved, and tracks
+   // the drag's speed for the fling. Called before the move counts toward still_.
+   void padFollow(double x, double y) {
+      const double d[2] = {x - px_, y - py_};
+      px_ = x;
+      py_ = y;
+      const bool jump = std::hypot(d[0], d[1]) > kPadJump;
+      if (still_ >= kCoastHold) {
+         // A touch after a pause catches anything still gliding, like a trackpad.
+         padCatch_ = true;
+         padLift_ = false;
+         padVel_[0] = padVel_[1] = 0.0;
+         if (!jump)
+            for (int i = 0; i < 2; ++i)
+               padMove_[i] += d[i];
+      } else if (jump) {
+         // Mid-drag: the finger lifting (some pads snap to the centre). Fling now.
+         padLift_ = true;
+      } else {
+         padLift_ = false;
+         const double a = 1.0 - std::exp(-still_ / 0.05);
+         for (int i = 0; i < 2; ++i) {
+            padMove_[i] += d[i];
+            if (still_ > 0.0)
+               padVel_[i] += a * (d[i] / still_ - padVel_[i]);
+         }
+      }
+   }
+
+   // Pad mode: drags move the output by as much, from wherever it is (in around, across turns it and
+   // up and down sets the radius, a full sweep of the pad being a full turn or the whole radius); let
+   // go and it glides on at the drag's speed, slowing as in Coast.
+   bool padStep(double dt, const MotionSettings &m) {
+      still_ += dt;
+      const double scale[2] = {around_ ? kPi : 1.0, around_ ? 0.5 : 1.0};
+      if (padCatch_) {
+         vel_[0] = vel_[1] = 0.0;
+         padCatch_ = false;
+      }
+      const bool driven = still_ < kCoastHold && !padLift_;
+      const double tau = coastTime(m.inertia);
+      for (int i = 0; i < 2; ++i) {
+         pos_[i] += padMove_[i] * scale[i];
+         padMove_[i] = 0.0;
+         if (driven) {
+            vel_[i] = padVel_[i] * scale[i];
+         } else if (tau > 0.0) {
+            const double drag = std::exp(-dt / tau);
+            pos_[i] += vel_[i] * tau * (1.0 - drag);
+            vel_[i] *= drag;
+         } else {
+            vel_[i] = 0.0;
+         }
+      }
+      if (around_ && pos_[1] < 0.0) {
+         pos_[0] += kPi;
+         pos_[1] = -pos_[1];
+         vel_[1] = -vel_[1];
+      }
+      // A drag stops at the edge; a glide bounces off it.
+      for (int i = around_ ? 1 : 0; i < 2; ++i)
+         if (std::abs(pos_[i]) > 1.0) {
+            pos_[i] = std::clamp(pos_[i], -1.0, 1.0);
+            if (pos_[i] * vel_[i] > 0.0)
+               vel_[i] *= -kPadBounce;
+         }
+      if (driven || std::abs(vel_[0]) * tau > 1e-3 || std::abs(vel_[1]) * tau > 1e-3)
+         return true;
+      double x, y;
+      toPad(pos_, x, y);
+      place(std::clamp(x, -1.0, 1.0), std::clamp(y, -1.0, 1.0));
+      return false;
+   }
+
+   // Coast mode: the output's speed is drawn to the controller's while it moves (slower the heavier it
    // is), and only slows with friction while it holds still. Where the controller is plays no part.
-   bool pushed(double dt, const MotionSettings &m) {
+   bool coastStep(double dt, const MotionSettings &m) {
       still_ += dt;
       const bool driven = still_ < kCoastHold;
       const double tau = coastTime(m.inertia);
@@ -277,8 +366,12 @@ private:
    double tx_ = 0.0, ty_ = 0.0; // the target on the pad
    double rx_ = 0.0, ry_ = 0.0; // the controller on the pad
    double still_ = 0.0;         // seconds since the controller last moved
-   bool fresh_ = false;         // its last move came after a pause: kick_ is its speed, for push
+   bool fresh_ = false;         // its last move came after a pause: kick_ is its speed, for coast mode
    double kick_[2] = {};
+   // Pad mode: the controller's last position, the drag not yet moved, the drag's speed (on the pad),
+   // and whether a touch has caught the glide or the finger has lifted.
+   double px_ = 0.0, py_ = 0.0, padMove_[2] = {}, padVel_[2] = {};
+   bool padCatch_ = false, padLift_ = false;
    // The target, the controller (the target's start when it coasts) and its speed, and the output.
    double target_[2] = {}, real_[2] = {}, drift_[2] = {}, smooth_[2] = {}, pos_[2] = {}, vel_[2] = {};
 };
