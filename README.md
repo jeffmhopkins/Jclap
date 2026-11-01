@@ -59,6 +59,9 @@ Polar XY also comes as a VST3, for hosts without CLAP: take `jclap-PolarXY-<vers
 `PolarXY.vst3` to your VST3 folder (`~/Library/Audio/Plug-Ins/VST3` on macOS,
 `C:\Program Files\Common Files\VST3` on Windows, `~/.vst3` on Linux).
 
+For Ableton Live, Polar XY also comes as a Max for Live MIDI effect: take `jclap-PolarXY-<version>-M4L.zip`
+and see [Using it in Ableton Live](plugins/polar-xy#using-it-in-ableton-live-max-for-live).
+
 > [!WARNING]
 > **macOS: browser downloads are quarantined.** The plugins are only ad-hoc signed (not notarized), so
 > files downloaded through a browser are quarantined and Bitwig silently skips them. Files downloaded

@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.14.0)
+jclap_plugin_version(0.15.0)
 
 jclap_add_plugin(polar-xy
    OUTPUT_NAME "PolarXY"
@@ -38,4 +38,15 @@ if(TARGET polar-xy-vst3)
    target_link_libraries(polar-xy-vst3-tests PRIVATE jclap_vst3_hosting)
    add_dependencies(polar-xy-vst3-tests polar-xy-vst3)
    add_test(NAME polar-xy-vst3-tests COMMAND polar-xy-vst3-tests ${CMAKE_BINARY_DIR}/vst3/PolarXY.vst3)
+endif()
+
+# The Max for Live device (m4l/), for Ableton Live: the same conversion and motion, ported to Max's
+# JavaScript. node runs its tests, and the device must match the script that writes it.
+find_program(JCLAP_NODE node)
+if(JCLAP_NODE)
+   add_test(NAME polar-xy-m4l-tests COMMAND ${JCLAP_NODE} ${CMAKE_CURRENT_SOURCE_DIR}/m4l/test_polarxy.js)
+endif()
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_FOUND)
+   add_test(NAME polar-xy-m4l-device COMMAND Python3::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/m4l/make_device.py --check)
 endif()
