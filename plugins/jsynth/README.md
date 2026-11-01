@@ -79,7 +79,7 @@ that name, as *Flight Steps* does with **Wing Speed** and **Flock Heading**.
 
 ![The dice card](docs/readme/dice.jpg)
 
-**DICE** in the header opens a card over the sky for the part shown. **RANDOMIZE** builds a new patch
+The die at the left of the preset bar, opposite the favorite star, opens a card over the sky for the part shown. **RANDOMIZE** builds a new patch
 from scratch the way you would: it picks an instrument (analog, or FM on musical ratios), an envelope
 (a pluck, keys, a pad, a lead, an organ or a swell), then fills in each module inside the ranges that
 sound, draws its routes from a list of ones that make sense, and sets the part's level for what it
