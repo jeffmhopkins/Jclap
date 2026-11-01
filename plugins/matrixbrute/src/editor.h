@@ -15,7 +15,7 @@ namespace mb {
 
 struct HardwarePatch;
 
-// Notes going through the plugin, for the envelopes' moving dots: how many keys are down, and when
+// Notes going through the plugin: how many keys are down, and when
 // the last one went down and the last key came up, in noteClock() seconds (< 0 if never).
 struct NoteActivity {
    int held = 0;

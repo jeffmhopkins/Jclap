@@ -139,7 +139,7 @@ SynthLink &SynthLink::get() {
 bool SynthLink::parsePreset(const std::string &line, HardwarePatch &out) {
    const std::vector<std::string> f = split(line, '\t');
    int preset = -1;
-   if (f.size() < 4 || f.size() > 5 || f[0] != "PRESET" || !toInt(f[1], preset) || preset < 0 || preset >= kPresetCount)
+   if (f.size() < 4 || f.size() > 7 || f[0] != "PRESET" || !toInt(f[1], preset) || preset < 0 || preset >= kPresetCount)
       return false;
    out = HardwarePatch{};
    out.preset = preset;
@@ -156,7 +156,7 @@ bool SynthLink::parsePreset(const std::string &line, HardwarePatch &out) {
          return false;
       out.values.emplace_back(cc, v);
    }
-   if (f.size() == 5 && !f[4].empty()) {
+   if (f.size() >= 5 && !f[4].empty()) {
       for (const std::string &cell : split(f[4], ',')) {
          const size_t colon = cell.find(':');
          int state = -1;
@@ -164,6 +164,31 @@ bool SynthLink::parsePreset(const std::string &line, HardwarePatch &out) {
             return false;
          out.switches.emplace_back(cell.substr(0, colon), state);
       }
+   }
+   if (f.size() >= 6) {
+      out.hasMatrix = true;
+      if (!f[5].empty())
+         for (const std::string &cell : split(f[5], ',')) {
+            const size_t dot = cell.find('.');
+            int row = -1, column = -1;
+            if (dot == std::string::npos || !toInt(cell.substr(0, dot), row) || !toInt(cell.substr(dot + 1), column) ||
+                row < 0 || row > 15 || column < 0 || column > 27)
+               return false;
+            out.matrix.emplace_back(row, column);
+         }
+   }
+   if (f.size() == 7) {
+      // "s,s,...;s,s,..." with each step -100 to 100.
+      const std::vector<std::string> lfos = split(f[6], ';');
+      if (lfos.size() != 2)
+         return false;
+      for (int i = 0; i < 2; ++i)
+         for (const std::string &step : split(lfos[i], ',')) {
+            int v = 0;
+            if (!toInt(step, v) || v < -100 || v > 100)
+               return false;
+            out.customLfo[i].push_back(v / 100.0f);
+         }
    }
    return !out.values.empty();
 }

@@ -243,6 +243,15 @@ int main() {
       JCLAP_CHECK(p.switches.size() == 2 && p.switches[0].first == "vco.sync" && p.switches[0].second == 1);
       JCLAP_CHECK(mb::SynthLink::parsePreset("PRESET\t3\tX\t9:1\t", p) && p.switches.empty());
       JCLAP_CHECK(!mb::SynthLink::parsePreset("PRESET\t3\tX\t9:1\tvco.sync", p));
+      JCLAP_CHECK(mb::SynthLink::parsePreset("PRESET\t3\tX\t9:1\tvco.sync:1\t0.0,1.27", p));
+      JCLAP_CHECK(p.hasMatrix && p.matrix.size() == 2 && p.matrix[1].first == 1 && p.matrix[1].second == 27);
+      JCLAP_CHECK(mb::SynthLink::parsePreset("PRESET\t3\tX\t9:1\t\t", p) && p.hasMatrix && p.matrix.empty());
+      JCLAP_CHECK(!mb::SynthLink::parsePreset("PRESET\t3\tX\t9:1\t\t16.0", p));
+      JCLAP_CHECK(mb::SynthLink::parsePreset("PRESET\t3\tX\t9:1\t\t\t100,-50;0", p));
+      JCLAP_CHECK(mb::SynthLink::parsePreset("PRESET\t3\tX\t9:1\tvco.sync:1\t2.5\t100,-50;0", p));
+      JCLAP_CHECK(p.switches.size() == 1 && p.matrix.size() == 1 && p.customLfo[0].size() == 2 && p.customLfo[0][1] == -0.5f &&
+                  p.customLfo[1].size() == 1);
+      JCLAP_CHECK(!mb::SynthLink::parsePreset("PRESET\t3\tX\t9:1\t\t\t100", p));
 
       mb::SynthLink &link = mb::SynthLink::get();
       const uint32_t before = link.version();

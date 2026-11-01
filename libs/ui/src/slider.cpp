@@ -34,7 +34,7 @@ void Slider::draw(visage::Canvas &canvas) {
    const float w = width(), h = height();
    const float thick = vertical() ? w : h; // the short side
    const float line = thick * kTextLine;
-   const float bar = std::max(2.0f, thick * 0.08f);
+   const float bar = std::max(2.0f, thick * barShare_);
    const float thumb = thick * kThumb;
 
    // Positions along the axis: vertical sliders grow upwards.

@@ -1,10 +1,9 @@
 #pragma once
 
-// The panel's pictures: small drawings made from the knobs' CC values (and, for the envelopes, the
-// notes going through the plugin), and the synth's buttons and matrix drawn as indicators. The
-// plugin can't hear the synth's switches (filter modes, LFO waves, the matrix routing) over MIDI, so
-// the indicators start unknown and dim, with a state a later preset read can set; the pictures are
-// guides to what the numbers mean. Only editor.cpp includes this.
+// The panel's pictures: small drawings made from the knobs' CC values, and the synth's buttons and
+// matrix drawn as indicators. The plugin can't hear the synth's switches (filter modes, LFO waves,
+// the matrix routing) over MIDI, so the indicators start unknown and dim, with a state a later
+// preset read can set; the pictures are guides to what the numbers mean. Only editor.cpp includes this.
 
 #include <jclap/ui/slider.h>
 #include <jclap/ui/theme.h>
@@ -25,14 +24,6 @@ namespace ui = jclap::ui;
 
 // A CC's current 0-127 value, by CC number.
 using CcValue = std::function<double(int cc)>;
-
-// The notes going through the plugin, for the envelopes' moving dots: whether a key is down, and
-// the seconds since the last note started and since the last key went up (< 0 if none yet).
-struct Gate {
-   bool held = false;
-   double sinceOn = -1, sinceOff = -1;
-};
-using GateSource = std::function<Gate()>;
 
 inline unsigned withAlpha(unsigned color, unsigned alpha) { return (color & 0x00ffffff) | (alpha << 24); }
 // `a` moved `amount` (0 to 1) of the way to `b`, opaque.
@@ -328,98 +319,6 @@ private:
    unsigned color_;
 };
 
-// An envelope's shape from its sliders: an optional delay, then attack, decay, sustain and release,
-// with the times on a square-root curve so short ones still show.
-class EnvShape : public Picture {
-public:
-   // delay < 0 for an envelope without one.
-   EnvShape(CcValue value, int delay, int attack, int decay, int sustain, int release, unsigned color, GateSource gate = {})
-      : Picture(std::move(value)), d_(delay), a_(attack), dc_(decay), s_(sustain), r_(release), color_(color),
-        gate_(std::move(gate)) {}
-   void draw(visage::Canvas &c) override {
-      const ui::Theme &t = ui::defaultTheme();
-      const float k = std::min(s(90.0f), width() / 220.0f), w = width(), h = height(), pad = 8 * k;
-      inset(c);
-      float xs[6], ys[6];
-      corners(xs, ys);
-      const float floor = h - pad;
-      c.setColor(t.track);
-      c.fill(pad, floor, w - 2 * pad, 1);
-      c.setColor(withAlpha(color_, 0x38));
-      fillUnder(c, xs, ys, 6, floor);
-      c.setColor(color_);
-      line(c, xs, ys, 6, 1.8f * k);
-      for (int i = 2; i <= 4; ++i)
-         c.circle(xs[i] - 3 * k, ys[i] - 3 * k, 6 * k);
-      // Where a note has got to, as a bright dot on the curve.
-      const float at = position();
-      if (at >= 0) {
-         const int seg = std::min(4, static_cast<int>(at));
-         const float frac = at - seg, x = xs[seg] + (xs[seg + 1] - xs[seg]) * frac,
-                     y = ys[seg] + (ys[seg + 1] - ys[seg]) * frac;
-         c.setColor(0xffffffff);
-         c.circle(x - 5 * k, y - 5 * k, 10 * k);
-      }
-   }
-
-protected:
-   double signature() const override {
-      // The dot moves without any knob moving, so its place is part of what's drawn.
-      return sum({d_ < 0 ? a_ : d_, a_, dc_, s_, r_}) + 1e11 * std::round(position() * 200.0f + 1.0f);
-   }
-
-private:
-   // The curve's corners: start, end of delay, peak, end of decay, end of the held sustain, end of
-   // release. The segments are drawn wider for longer times, but not to scale.
-   void corners(float *xs, float *ys) const {
-      const float k = std::min(height() / 90.0f, width() / 220.0f), w = width(), h = height(), pad = 8 * k, floor = h - pad, top = pad + 4 * k;
-      const auto span = [&](int n) { return n < 0 ? 0.0f : 0.04f + std::sqrt(f(n)); };
-      const float spans[] = {span(d_), span(a_), span(dc_), 0.5f, span(r_)};
-      float total = 0;
-      for (float sp : spans)
-         total += sp;
-      const float unit = (w - 2 * pad) / total, sus = floor - (floor - top) * f(s_);
-      const float levels[6] = {floor, floor, top, sus, sus, floor};
-      float x = pad;
-      for (int i = 0; i < 6; ++i) {
-         if (i > 0)
-            x += spans[i - 1] * unit;
-         xs[i] = x;
-         ys[i] = levels[i];
-      }
-   }
-
-   // A stage's time in seconds for its slider. Arturia doesn't publish the curve; this guesses 1 ms
-   // to 10 s, evenly in log time.
-   double seconds(int n) const { return n < 0 ? 0.0 : 0.001 * std::pow(10000.0, f(n)); }
-
-   // Where a note is along the curve, as segment index plus fraction (0-5), or -1 for no note: it
-   // runs through delay, attack and decay, waits at the sustain while a key is down, and runs the
-   // release once the keys are up.
-   float position() const {
-      if (!gate_)
-         return -1;
-      const Gate g = gate_();
-      if (g.held && g.sinceOn >= 0) {
-         double t = g.sinceOn;
-         const double stages[3] = {seconds(d_), seconds(a_), seconds(dc_)};
-         for (int i = 0; i < 3; ++i) {
-            if (t < stages[i])
-               return static_cast<float>(i + t / stages[i]);
-            t -= stages[i];
-         }
-         return 3.0f;
-      }
-      if (!g.held && g.sinceOff >= 0 && g.sinceOff < seconds(r_))
-         return static_cast<float>(4.0 + g.sinceOff / seconds(r_));
-      return -1;
-   }
-
-   int d_, a_, dc_, s_, r_;
-   unsigned color_;
-   GateSource gate_;
-};
-
 // The analog effect's echoes: spaced by Delay Time (CC 112), each one quieter by Regeneration
 // (CC 113), as loud as Dry/Wet (CC 31). The effect's mode is a button on the synth, so for the
 // chorus, flanger and the others this only shows the knobs.
@@ -560,6 +459,11 @@ public:
       }
    }
    int state() const { return state_; }
+   // Light i lit by the state's bit i, rather than the state naming one light.
+   void setBitLights(bool bits) {
+      bitLights_ = bits;
+      redraw();
+   }
    const std::string &label() const { return label_; }
    // The name's colour (0 for the theme's), e.g. its section's tint.
    void setLabelColor(unsigned color) {
@@ -578,7 +482,7 @@ public:
       for (const std::string &l : lights_)
          widest = std::max(widest, textWidth(*this, l, kSmallText * k));
       const auto light = [&](float x, float y, size_t i) {
-         const bool lit = known && static_cast<size_t>(state_) == i;
+         const bool lit = known && (bitLights_ ? ((state_ >> i) & 1) != 0 : static_cast<size_t>(state_) == i);
          c.setColor(lit ? accent_ : (known ? 0xff3a4048 : 0xff31363e));
          c.circle(x, y, 7 * k);
       };
@@ -649,6 +553,43 @@ private:
    unsigned accent_;
    unsigned labelColor_ = 0;
    int state_ = -1;
+   bool bitLights_ = false;
+};
+
+// An LFO's custom shape (drawn on the synth's matrix in LFO Draw mode): its 16 steps, -1 to 1, as
+// a stepped line. Nothing until a preset read off the synth gives the steps; dim unless the LFO's
+// wave is set to Custom.
+class CustomLfo : public visage::Frame {
+public:
+   explicit CustomLfo(unsigned color) : color_(color) { setIgnoresMouseEvents(true, false); }
+   void setSteps(std::vector<float> steps, bool active) {
+      if (steps != steps_ || active != active_) {
+         steps_ = std::move(steps);
+         active_ = active;
+         redraw();
+      }
+   }
+   void draw(visage::Canvas &c) override {
+      if (steps_.empty())
+         return;
+      const ui::Theme &t = ui::defaultTheme();
+      const float d = ui::designScale(*this), w = width(), h = height();
+      const float top = 14 * d, ph = h - top, mid = top + ph * 0.5f, sw = w / steps_.size();
+      c.setColor(t.dimText);
+      c.text(active_ ? "CUSTOM" : "CUSTOM (OFF)", ui::font(kSmallText * d), visage::Font::kCenter, 0, 0, w, 13 * d);
+      c.setColor(t.track);
+      c.rectangle(0, mid, w, 1 * d);
+      c.setColor(active_ ? color_ : dimTint(color_));
+      for (size_t i = 0; i < steps_.size(); ++i) {
+         const float v = std::clamp(steps_[i], -1.0f, 1.0f) * ph * 0.5f;
+         c.rectangle(i * sw + 1 * d, std::min(mid, mid - v), sw - 2 * d, std::max(2 * d, std::abs(v)));
+      }
+   }
+
+private:
+   unsigned color_;
+   std::vector<float> steps_;
+   bool active_ = false;
 };
 
 // One of the synth's knobs that isn't on MIDI (fine tune, phones, master volume), drawn small and
@@ -821,7 +762,9 @@ public:
          c.text(kSources[row], small, visage::Font::kLeft, 33 * k, mid - 10 * k, 96 * k, 20 * k);
          const bool pink = row % 4 == 3;
          for (int col = 0; col < 16; ++col) {
-            const float x = colX(col), m = std::min(cw, ch) * 0.12f;
+            // Square pads, as on the synth, centred in their cell.
+            const float side = std::min(cw, ch), m = side * 0.12f, x = colX(col) + (cw - side) * 0.5f;
+            const float py = y + (ch - side) * 0.5f;
             const int state = cells_[row * 16 + col];
             unsigned color = pink ? 0xff5b4248 : 0xff3a454f;
             if (state < 0)
@@ -829,7 +772,7 @@ public:
             else if (state > 0)
                color = 0xff6f8cff;
             c.setColor(color);
-            c.roundedRectangle(x + m, y + m, cw - 2 * m, ch - 2 * m, 3 * k);
+            c.roundedRectangle(x + m, py + m, side - 2 * m, side - 2 * m, 3 * k);
          }
       }
    }
