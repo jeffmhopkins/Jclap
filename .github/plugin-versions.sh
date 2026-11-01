@@ -73,22 +73,32 @@ check() {
    [ "$failed" = 1 ] || echo "Every plugin changed since $prev has a new version."
 }
 
-# The table of plugin versions, and the line the update check reads (libs/ui/src/updates.cpp).
+# The formats a plugin ships in, from its folder: CLAP always, VST3 when it builds one, and Max for
+# Live when it has a device.
+formats() {
+   local f=CLAP
+   grep -q '^ *jclap_add_vst3(' "plugins/$1/CMakeLists.txt" && f="$f, VST3"
+   [ -d "plugins/$1/m4l" ] && f="$f, Max for Live"
+   echo "$f"
+}
+
+# The table of plugins with their versions and zips (as .github/package.sh names them), and the line
+# the update check reads (libs/ui/src/updates.cpp).
 table() {
-   local prev old d name version was pairs=""
+   local tag=$1 prev old d name version was zip pairs=""
    prev=$(previous_release)
    old=$([ -n "$prev" ] && list "$prev" || true)
-   echo "| Plugin | Version |"
-   echo "|---|---|"
+   echo "| Plugin | Version | Formats | Zip |"
+   echo "|---|---|---|---|"
    while read -r d name version; do
       was=$(version_in "$d" "$old")
+      zip="jclap-$name-$version.zip"
       if [ -n "$prev" ] && [ "$version" != "$was" ]; then
-         echo "| $name | **$version** (new since $prev) |"
-      else
-         echo "| $name | $version |"
+         version="**$version** (new since $prev)"
       fi
-      pairs="$pairs $d=$version"
+      echo "| $name | $version | $(formats "$d") | [$zip](https://github.com/jeffmhopkins/Jclap/releases/download/$tag/$zip) |"
    done <<< "$(list)"
+   while read -r d name version; do pairs="$pairs $d=$version"; done <<< "$(list)"
    echo
    echo "<!-- jclap-versions:$pairs -->"
 }
@@ -97,7 +107,7 @@ notes() {
    local tag=$1 line
    while IFS= read -r line; do
       if [ "$line" = "{{PLUGINS}}" ]; then
-         table
+         table "$tag"
       else
          echo "${line//'{{VERSION}}'/$tag}"
       fi

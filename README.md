@@ -47,20 +47,23 @@ Panels are shown at one-third size. They are the screenshot-test references, so 
 
 ## Download
 
-Grab the zip for your OS from the [latest release](https://github.com/jeffmhopkins/Jclap/releases/latest).
-`jclap-<OS>.zip` contains every plugin; to get just one, take `jclap-<Plugin>-<version>-<OS>.zip` instead
-(for example `jclap-JSynth-0.12.1-macOS.zip`). Copy the `.clap` files (bundles on macOS) to your CLAP folder:
+Every [release](https://github.com/jeffmhopkins/Jclap/releases/latest) comes two ways:
+
+- **By system:** `jclap-macOS.zip`, `jclap-Windows.zip` or `jclap-Linux.zip` has every plugin, in a `CLAP`
+  folder and a `VST3` folder (and on macOS and Windows a `Max for Live` folder).
+- **By plugin:** `jclap-<Plugin>-<version>.zip` (for example `jclap-JSynth-0.12.2.zip`) has just that
+  plugin, with a `macOS`, `Windows` and `Linux` folder inside.
+
+Copy the `.clap` files (bundles on macOS) to your CLAP folder:
 
 - macOS: `~/Library/Audio/Plug-Ins/CLAP`
 - Windows: `C:\Program Files\Common Files\CLAP`
 - Linux: `~/.clap`
 
-Polar XY also comes as a VST3, for hosts without CLAP: take `jclap-PolarXY-<version>-VST3-<OS>.zip` and copy
-`PolarXY.vst3` to your VST3 folder (`~/Library/Audio/Plug-Ins/VST3` on macOS,
-`C:\Program Files\Common Files\VST3` on Windows, `~/.vst3` on Linux).
-
-For Ableton Live, Polar XY also comes as a Max for Live MIDI effect: take `jclap-PolarXY-<version>-M4L.zip`
-and see [Using it in Ableton Live](plugins/polar-xy#using-it-in-ableton-live-max-for-live).
+Polar XY also comes as a VST3, for hosts without CLAP: copy `PolarXY.vst3` to your VST3 folder
+(`~/Library/Audio/Plug-Ins/VST3` on macOS, `C:\Program Files\Common Files\VST3` on Windows, `~/.vst3` on
+Linux). For Ableton Live it also comes as a Max for Live MIDI effect, in the `Max for Live` folder; see
+[Using it in Ableton Live](plugins/polar-xy#using-it-in-ableton-live-max-for-live).
 
 > [!WARNING]
 > **macOS: browser downloads are quarantined.** The plugins are only ad-hoc signed (not notarized), so
@@ -146,7 +149,8 @@ Plugins build on three shared libraries:
 
 > [!IMPORTANT]
 > In GitHub, open Actions → build → Run workflow and enter a version such as `v0.2.0`. The run builds
-> every platform, tags the commit and publishes a release with one zip per OS. Pushing a `v*` tag does
+> every platform, tags the commit and publishes a release with one zip per OS and one per plugin
+> ([.github/package.sh](.github/package.sh) packs them). Pushing a `v*` tag does
 > the same. Bump the release's version in `CMakeLists.txt` (`project()`) first.
 >
 > Each plugin also has its own version, `jclap_plugin_version(...)` at the top of its
