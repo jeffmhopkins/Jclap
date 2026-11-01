@@ -169,10 +169,8 @@ against button presses read back off a real unit.
 
 The preset display shows the synth's preset: the one picked in the preset bar, or the last Bank
 Select and Program Change heard. The pictures are drawn from the CC values: each VCO's wave mix, the
-two filters' responses (low-pass guides), the envelope shapes and the effect's echoes. On a note, a
-dot runs along each envelope (delay, attack, decay, held at sustain, then release), timed from the
-notes going through the plugin and a guess of 1 ms to 10 s per slider, since the synth doesn't report
-its envelopes and Arturia doesn't publish their times.
+two filters' responses (low-pass guides) and the effect's echoes. The envelopes are just their
+sliders, as on the synth.
 
 Drag a knob or slider up or down (shift for fine), use the mouse wheel for single steps, double-click
 to reset. Right-click a control to reset it, type a value, or reach the host's menu for that

@@ -280,13 +280,6 @@ private:
       pictures_.push_back(&p);
       return p;
    }
-   vis::GateSource gate() {
-      return [this] {
-         const NoteActivity n = host_.notes();
-         const double now = noteClock();
-         return vis::Gate{n.held > 0, n.lastOn < 0 ? -1 : now - n.lastOn, n.lastOff < 0 ? -1 : now - n.lastOff};
-      };
-   }
    vis::CcValue ccValue() {
       return [this](int cc) { return host_.paramModulated(static_cast<clap_id>(cc)); };
    }
@@ -582,17 +575,15 @@ private:
    }
 
    // The synth's envelopes are sliders: velocity (or ENV 3's delay) on a darker tile on the left,
-   // then attack, decay, sustain and release, with the shape they make drawn above.
+   // then attack, decay, sustain and release.
    void buildEnvelope(float y, float h, const char *title, int index, std::initializer_list<int> list, int velocity,
                       const char *velocityName) {
       const std::vector<int> st(list); // delay (or -1), attack, decay, sustain, release
       const float x = colX(3), w = kColW[3];
       const unsigned color = kEnvColors[index];
       section(title, {x, y, w, h}, false, color);
-      const float shapeH = 150;
-      picture<vis::EnvShape>({x + 12, y + 26, w - 24, shapeH}, st[0], st[1], st[2], st[3], st[4], color,
-                             gate());
-      const float cw = (w - 2 * kPad) / 5, top = y + 26 + shapeH + 10, sh = y + h - kPad - kSliderExtraH - top;
+      // Just the sliders, as on the synth, filling the box.
+      const float cw = (w - 2 * kPad) / 5, top = y + kTitleH + 8, sh = y + h - kPad - kSliderExtraH - top;
       add<vis::Tile>({x + kPad - 2, top - 4, cw + 4, y + h - kPad - top + 4});
       const int first = velocity >= 0 ? velocity : st[0];
       vslider(first, kWhite, {x + kPad, 0, cw, 0}, top, sh, velocity >= 0 ? velocityName : "DELAY", true);
