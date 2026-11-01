@@ -47,16 +47,16 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Inertia", 0, 100, 0, false},    // %
    {"Motion Path", 0, 1, 0, true},
    {"Output Resolution", 0, 1, 0, true},
-   {"Inertia Mode", 0, 1, 0, true},
+   {"Inertia Mode", 0, 2, 0, true},
 };
 
-// Labels for the two-state params, off first.
+// Labels for the choice params, off (or the first) first: one per step of the param's range.
 inline const char *const kDirectionLabels[] = {"Counter-clockwise", "Clockwise"};
 inline const char *const kRadiusModeLabels[] = {"Clamp to circle", "Fill square"};
 inline const char *const kOnOffLabels[] = {"Off", "On"};
 inline const char *const kMotionPathLabels[] = {"Straight", "Around"};
 inline const char *const kResolutionLabels[] = {"7-bit", "14-bit"};
-inline const char *const kInertiaModeLabels[] = {"Pull", "Coast"};
+inline const char *const kInertiaModeLabels[] = {"Pull", "Coast", "Pad"};
 
 // 14-bit output sends each value's LSB on its CC + 32, so it needs both output CCs below 32; on
 // higher ones the output stays 7-bit.
@@ -83,7 +83,7 @@ inline const char *const *choiceLabels(clap_id id) {
 
 inline void formatParam(clap_id id, double value, char *out, uint32_t size) {
    if (const char *const *labels = choiceLabels(id))
-      std::snprintf(out, size, "%s", labels[value >= 0.5 ? 1 : 0]);
+      std::snprintf(out, size, "%s", labels[std::clamp(static_cast<int>(std::lround(value)), 0, static_cast<int>(kParams[id].max))]);
    else if (id == kParamAngleOffset) {
       // Rounded first, so 359.96 shows as 0.0, the angle it is, not 360.0.
       double shown = std::round(value * 10.0) / 10.0;
@@ -112,7 +112,7 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
    while (std::isspace(static_cast<unsigned char>(*text)))
       ++text;
    if (const char *const *labels = choiceLabels(id)) {
-      for (int i = 0; i < 2; ++i)
+      for (int i = 0; i <= static_cast<int>(kParams[id].max); ++i)
          if (sameText(text, labels[i])) {
             value = i;
             return true;

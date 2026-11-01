@@ -378,7 +378,7 @@ private:
       m.smoothing = params_[kParamSmoothing].load() / 1000.0;
       m.inertia = params_[kParamInertia].load() / 100.0;
       m.around = intParam(kParamMotionPath) != 0;
-      m.coast = intParam(kParamInertiaMode) != 0;
+      m.mode = static_cast<jclap::MotionSettings::Mode>(std::clamp(intParam(kParamInertiaMode), 0, 2));
       return m;
    }
 

@@ -507,7 +507,7 @@ public:
       knob(kParamSmoothing, "SMOOTHING", kBlue, 378, row, 10.0);
       knob(kParamInertia, "INERTIA", kBlue, 454, row, 1.0);
       choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 546, row);
-      choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST"}, 546, row + 50);
+      choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 546, row + 50);
       choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 546, row + 100);
 
       // Shown when two inputs or two outputs share a CC, which the plugin won't convert.

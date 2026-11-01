@@ -179,7 +179,7 @@ void coastTests() {
 
    // Coast: only the controller's movement moves it. A move right carries the output on right after
    // the controller stops, and it comes to rest without being drawn back to where the controller is.
-   m.coast = true;
+   m.mode = jclap::MotionSettings::Mode::Coast;
    m.around = false;
    m.inertia = 0.3;
    jclap::Follower p;
@@ -235,6 +235,93 @@ void coastTests() {
    }
    JCLAP_CHECK(minX < -0.2);
    JCLAP_CHECK(centred < 0.2);
+}
+
+// Pad: the controller as a trackpad.
+void padTests() {
+   jclap::MotionSettings m;
+   m.mode = jclap::MotionSettings::Mode::Pad;
+   m.inertia = 0.3;
+   const double dt = 32.0 / 48000.0;
+   auto run = [&](jclap::Follower &f, double seconds) {
+      for (double t = 0.0; t < seconds && f.moving(); t += dt)
+         f.step(dt, m);
+   };
+   // A drag that eases to a stop, so there's no speed left to fling.
+   auto drag = [&](jclap::Follower &f, double x0, double y0, double x1, double y1) {
+      for (int i = 0; i <= 40; ++i) {
+         const double u = i / 40.0, e = 1.0 - (1.0 - u) * (1.0 - u) * (1.0 - u);
+         f.follow(x0 + (x1 - x0) * e, y0 + (y1 - y0) * e);
+         run(f, 0.02);
+      }
+   };
+   jclap::Follower f;
+   f.place(0.5, 0.5); // where the output is
+   double x, y;
+
+   // A finger landing far away doesn't move it.
+   f.follow(-0.8, -0.8);
+   run(f, 1.0);
+   f.position(x, y);
+   JCLAP_CHECK(std::abs(x - 0.5) < 1e-9 && std::abs(y - 0.5) < 1e-9);
+
+   // Dragging moves it by as much, from where it was: 0.3 left from x 0.5.
+   drag(f, -0.8, -0.8, -0.8, -0.8); // touch and hold
+   run(f, 1.0);
+   drag(f, -0.8, -0.8, -1.1, -0.8);
+   run(f, 1.0);
+   f.position(x, y);
+   JCLAP_CHECK(std::abs(x - 0.2) < 0.02 && std::abs(y - 0.5) < 0.02);
+
+   // A flick then a lift that snaps to the centre: it glides on the way it was going.
+   f.follow(0.0, 0.0); // a new touch, after the pause
+   run(f, 0.02);
+   for (int i = 1; i <= 10; ++i) {
+      f.follow(0.0, -0.04 * i);
+      run(f, 0.02);
+   }
+   double before;
+   f.position(x, before);
+   f.follow(0.0, 0.0); // lifted: back to the centre
+   run(f, 30.0);
+   f.position(x, y);
+   JCLAP_CHECK(!f.moving());
+   JCLAP_CHECK(y < before - 0.05); // carried on down
+   JCLAP_CHECK(std::abs(x - 0.2) < 0.02);
+
+   // A touch catches a glide.
+   jclap::Follower g;
+   g.place(0.0, 0.0);
+   g.follow(0.0, 0.0);
+   for (int i = 1; i <= 6; ++i) {
+      g.follow(0.05 * i, 0.0);
+      run(g, 0.02);
+   }
+   run(g, 0.2); // gliding
+   double gx, gy;
+   g.position(gx, gy);
+   g.follow(-0.9, 0.9); // touch
+   run(g, 0.2);
+   g.follow(-0.9, 0.9);
+   run(g, 30.0);
+   g.position(x, y);
+   JCLAP_CHECK(std::abs(x - gx) < 0.05 && std::abs(y - gy) < 1e-6);
+
+   // Around: across turns it, up and down sets the radius.
+   m.around = true;
+   jclap::Follower a;
+   a.setAround(true);
+   a.place(0.5, 0.0);
+   a.follow(0.0, 0.0);
+   run(a, 1.0);
+   drag(a, 0.0, 0.0, 0.5, 0.0); // a quarter of the pad: a quarter turn
+   run(a, 1.0);
+   a.position(x, y);
+   JCLAP_CHECK(std::abs(x) < 0.03 && std::abs(y - 0.5) < 0.03);
+   drag(a, 0.5, 0.0, 0.5, 0.6); // up: the radius grows by 0.3
+   run(a, 1.0);
+   a.position(x, y);
+   JCLAP_CHECK(std::abs(x) < 0.03 && std::abs(y - 0.8) < 0.03);
 }
 
 // The panel's XY pad: dragging it moves the shown channel like the controller, and holds that
@@ -606,6 +693,8 @@ int main() {
    JCLAP_CHECK(h.textToValue(10, "around", v) && v == 1.0);
    JCLAP_CHECK(h.paramText(12, 1.0) == "Coast");
    JCLAP_CHECK(h.textToValue(12, "pull", v) && v == 0.0);
+   JCLAP_CHECK(h.paramText(12, 2.0) == "Pad");
+   JCLAP_CHECK(h.textToValue(12, "pad", v) && v == 2.0);
 
    // The factory bank is one Init with every param at its default.
    const auto &factory = polar_xy::factoryPresets();
@@ -616,6 +705,7 @@ int main() {
 
    motionTests();
    coastTests();
+   padTests();
    dragTests();
    fineTests();
    learnTests();

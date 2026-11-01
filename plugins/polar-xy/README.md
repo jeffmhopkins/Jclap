@@ -72,6 +72,13 @@ changes) until it arrives. Each channel moves on its own.
   controller moves, the Orb picks up its speed and direction (slower the heavier it is), and once it
   holds still it has no say at all, so the Orb coasts on, slows to a stop and stays there. Where the
   controller is doesn't matter, only how it's moving, so the Orb can end up anywhere on the pad.
+  *Pad* treats the controller like a trackpad, for a touch XY controller used as a chaos pad.
+  Touching down doesn't move the Orb, wherever the finger lands; dragging moves it by as much as the
+  finger moves, from wherever it is; and letting go mid-drag flings it on, gliding and bouncing off
+  the walls, with Inertia setting how far (at 0% it stops where you let go). Touching again catches
+  it. A pad that jumps back to the centre when released is fine: any big jump counts as a finger
+  landing or lifting, not a drag. With Path on *Around*, dragging across turns the Orb (a full sweep
+  of the pad is a full turn) and dragging up and down changes the radius.
 - **Motion Path** (PATH on the panel) picks what moves. *Straight* glides across the pad in X/Y, so going from one side to the
   other passes through the centre. *Around* moves the angle and radius on their own, so the Orb travels
   round the circle the short way. The angle keeps counting past a full turn, so stirring the controller
@@ -150,5 +157,5 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 | Smoothing | 0 ms | Glide time, up to 2 s |
 | Inertia | 0% | Weight: lag and overshoot |
 | Motion Path | Straight | Or Around, to move round the circle |
-| Inertia Mode | Pull | Or Coast, where only the controller's movement moves the output |
+| Inertia Mode | Pull | Or Coast, where only the controller's movement moves the output, or Pad, to use it like a trackpad |
 | Output Resolution | 7-bit | Or 14-bit (RESOLUTION on the panel): MSB on the output CC, LSB on CC + 32 |
