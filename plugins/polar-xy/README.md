@@ -31,11 +31,12 @@ there is a VST3 build for hosts without CLAP.
 ## Using it in Ableton Live (Max for Live)
 
 Live doesn't load CLAPs, and won't put a VST3 in front of an instrument on the same track, so for Live
-there is a Max for Live MIDI effect instead: `Polar XY.amxd`, in `jclap-PolarXY-<version>-M4L.zip` on
-the release page (or [m4l/](m4l) here). It needs Live Suite, or Live Standard with Max for Live.
+there is a Max for Live MIDI effect instead: `Polar XY.amxd`, in the `Max for Live` folder of
+`jclap-PolarXY-<version>.zip` (and of `jclap-macOS.zip` and `jclap-Windows.zip`) on the release page,
+or [m4l/](m4l) here. It needs Live Suite, or Live Standard with Max for Live.
 
-1. Unzip it and keep `Polar XY.amxd` and `polarxy.js` together in one folder, for example in your
-   User Library (`Presets/MIDI Effects/Max MIDI Effect`).
+1. Copy the `Polar XY` folder from `Max for Live`, which keeps `Polar XY.amxd` and `polarxy.js`
+   together, for example into your User Library (`Presets/MIDI Effects/Max MIDI Effect`).
 2. Drag `Polar XY.amxd` onto the Omnisphere track, in front of Omnisphere. No extra track or MIDI
    routing is needed.
 3. MIDI Learn the Orb as in Bitwig (step 3 above), using **SEND ANGLE** and **SEND RADIUS**.
@@ -52,8 +53,9 @@ channel's X/Y in and angle/radius out. The motion steps every 4 ms rather than e
 
 ## VST3
 
-`PolarXY.vst3` is the same plugin, wrapped by clap-wrapper. It's in `jclap-PolarXY-<version>-VST3-<OS>.zip`
-on the release page; see the [main README](../../README.md#download) for where it goes.
+`PolarXY.vst3` is the same plugin, wrapped by clap-wrapper. It's in each system's folder of
+`jclap-PolarXY-<version>.zip`, and in the `VST3` folder of `jclap-<OS>.zip`, on the release page; see
+the [main README](../../README.md#download) for where it goes.
 
 - It shows up as an instrument (VST3 has no MIDI-effect category), with a MIDI input and output.
 - The X/Y CCs reach it the usual VST3 way, as the host's MIDI CC mapping, and the angle and radius

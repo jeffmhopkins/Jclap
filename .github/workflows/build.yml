@@ -154,54 +154,58 @@ jobs:
           for p in build/vst3/*.vst3; do
             "$validator" "$p" 2>&1 | grep -v 'Programlist'
           done
-      # The collection zips keep fixed names, so the installer and "latest" links always find them.
-      # The one-plugin zips carry that plugin's version.
-      - name: Package (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          versions=$(.github/plugin-versions.sh list)
-          version() { awk -v n="$1" '$2 == n { print $3 }' <<< "$versions"; }
-          mkdir dist
-          ditto -c -k --sequesterRsrc build/clap "dist/jclap-${{ runner.os }}.zip"
-          # One zip per plugin as well, for anyone who only wants one of them.
-          for p in build/clap/*.clap; do
-            name=$(basename "$p" .clap)
-            ditto -c -k --sequesterRsrc --keepParent "$p" "dist/jclap-$name-$(version "$name")-${{ runner.os }}.zip"
-          done
-          # VST3s get their own zips, so the CLAP zips still unpack straight into the CLAP folder.
-          ditto -c -k --sequesterRsrc build/vst3 "dist/jclap-VST3-${{ runner.os }}.zip"
-          for p in build/vst3/*.vst3; do
-            name=$(basename "$p" .vst3)
-            ditto -c -k --sequesterRsrc --keepParent "$p" "dist/jclap-$name-$(version "$name")-VST3-${{ runner.os }}.zip"
-          done
-      - name: Package
-        if: runner.os != 'macOS'
+      # Each system's plugins go to the package job as a tar, which keeps file permissions (artifact
+      # uploads drop them). COPYFILE_DISABLE keeps macOS's tar from adding ._ metadata files.
+      - name: Stage plugins
         shell: bash
         run: |
-          versions=$(.github/plugin-versions.sh list)
-          version() { awk -v n="$1" '$2 == n { print $3 }' <<< "$versions"; }
-          mkdir dist
-          cd build/clap
-          cmake -E tar cf "../../dist/jclap-${{ runner.os }}.zip" --format=zip -- *.clap
-          for p in *.clap; do
-            cmake -E tar cf "../../dist/jclap-${p%.clap}-$(version "${p%.clap}")-${{ runner.os }}.zip" --format=zip -- "$p"
-          done
-          cd ../vst3
-          cmake -E tar cf "../../dist/jclap-VST3-${{ runner.os }}.zip" --format=zip -- *.vst3
-          for p in *.vst3; do
-            cmake -E tar cf "../../dist/jclap-${p%.vst3}-$(version "${p%.vst3}")-VST3-${{ runner.os }}.zip" --format=zip -- "$p"
-          done
-          # The Max for Live device is the same on every system, so only Linux packages it.
-          if [ "${{ runner.os }}" = Linux ]; then
-            mkdir -p ../m4l/"Polar XY"
-            cp ../../plugins/polar-xy/m4l/"Polar XY.amxd" ../../plugins/polar-xy/m4l/polarxy.js ../m4l/"Polar XY"/
-            cd ../m4l
-            cmake -E tar cf "../../dist/jclap-PolarXY-$(version PolarXY)-M4L.zip" --format=zip -- "Polar XY"
-          fi
-      - name: Upload plugins
+          mkdir -p "stage/${{ runner.os }}/CLAP" "stage/${{ runner.os }}/VST3" dist
+          cp -R build/clap/*.clap "stage/${{ runner.os }}/CLAP/"
+          cp -R build/vst3/*.vst3 "stage/${{ runner.os }}/VST3/"
+          COPYFILE_DISABLE=1 tar -cf "dist/stage-${{ runner.os }}.tar" -C stage "${{ runner.os }}"
+      - name: Upload staged plugins
         uses: actions/upload-artifact@v4
         with:
-          name: jclap-${{ runner.os }}
+          name: stage-${{ runner.os }}
+          path: dist/stage-${{ runner.os }}.tar
+
+  # Packs the release zips from the three builds: one per system with every plugin, and one per plugin
+  # with every system (.github/package.sh). It runs on macOS so ditto packs the bundles as macOS
+  # expects, and checks the macOS signatures survive the trip.
+  package:
+    needs: build
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: stage-*
+          path: staged
+          merge-multiple: true
+      - name: Unpack the builds
+        run: |
+          mkdir stage
+          for t in staged/*.tar; do tar -xf "$t" -C stage; done
+          find stage -maxdepth 3 | sort
+      - name: Package
+        run: .github/package.sh stage dist
+      - name: Check the macOS zips
+        run: |
+          mkdir check
+          ditto -x -k dist/jclap-macOS.zip check/system
+          codesign --verify --strict --verbose=2 check/system/CLAP/*.clap check/system/VST3/*.vst3
+          for z in dist/jclap-*-*.zip; do
+            d="check/$(basename "$z" .zip)"
+            ditto -x -k "$z" "$d"
+            codesign --verify --strict "$d"/macOS/*.clap
+          done
+          find check -maxdepth 3 | sort
+      - name: Upload release zips
+        uses: actions/upload-artifact@v4
+        with:
+          name: jclap-release
           path: dist/*.zip
 
   # Each plugin has its own version (jclap_plugin_version in its CMakeLists.txt). A plugin changed
@@ -222,15 +226,15 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    needs: [build, plugin-versions]
+    needs: [package, plugin-versions]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
+          name: jclap-release
           path: dist
-          merge-multiple: true
       # The whole history, so the notes can say which plugins are new since the last release.
       - uses: actions/checkout@v4
         with:
@@ -251,7 +255,7 @@ jobs:
   # tagged version.
   dev-release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
+    needs: package
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -261,8 +265,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          name: jclap-release
           path: dist
-          merge-multiple: true
       - uses: actions/checkout@v4
         with:
           path: src
