@@ -153,9 +153,9 @@ and 2 (enhancers above the wave levels, the wave mix drawn tall under them), VCO
 mod and VCO sync, the wheels and voice down the left; the mixer (each row a level knob, its Filter
 button and lights, and a meter of its share of the mix) and the Steiner and ladder filters with the
 routing and the big silver Master Cutoff between them, over LFO 1 and LFO 2 side by side, mirror
-images of each other; the preset display and
-the read from the synth over the three envelopes' sliders; the 16 x 16 matrix; and the analog
-effects, the sequencer, glide and play control, and master (fine tune, phones and volume, drawn but
+images of each other; the three envelopes' sliders; the 16 x 16 matrix as a square block with
+square pads, the sequencer under it; and the preset display with the read from the synth, the
+analog effects, glide and play control, and master (fine tune, phones and volume, drawn but
 not on MIDI) on the right. Along the bottom, like the synth's front edge, are glide, the mod wheel,
 the macros and what the plugin knows. Each box's title tab and top rule are in its accent (the
 filters' orange and teal, the envelopes' yellow, green and purple, the matrix's blue, and so on, with
