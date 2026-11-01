@@ -99,6 +99,10 @@ private:
 // Preset bars draw it beside the name to mark a favorite.
 void drawStar(visage::Canvas &canvas, float cx, float cy, float radius, bool filled);
 
+// A die showing five, `size` across and centred on (cx, cy), in the canvas's current color. A plugin
+// with dice draws it at the left of its preset bar, opposite the star, to open its dice card.
+void drawDie(visage::Canvas &canvas, float cx, float cy, float size);
+
 // Applies `preset` through `params`, one gesture per param that changes. Params the preset leaves
 // out go to `defaults` (one per id) when it is given.
 void applyPreset(const Preset &preset, ParamAccess &params, const std::vector<double> &defaults = {});

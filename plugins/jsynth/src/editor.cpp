@@ -570,13 +570,19 @@ private:
 };
 
 // The header's preset bar: arrows step through the presets, the name opens a menu of them by
-// category (and the user's own), and SAVE names the current sound and saves it as a user preset.
+// category (and the user's own), and SAVE names the current sound and saves it as a user preset. The
+// die at the name's left, opposite the favorite star, opens the dice card.
 class PresetBar : public visage::Frame {
 public:
    explicit PresetBar(EditorHost &host)
       : host_(host), favorites_(userPresetFolder().parent_path() / "Favorites.txt") {
       rescan();
    }
+
+   // Opens or closes the dice card; the die is lit while host_.diceOpen. Without the synth view's
+   // panels there is no dice card, so the bar leaves the die out.
+   std::function<void(bool)> onDice;
+   bool showDie = true;
 
    void draw(visage::Canvas &c) override {
       const float s = height() / 26.0f, w = width(), h = height();
@@ -600,10 +606,14 @@ public:
       if (editing())
          return;
       const std::string name = host_.presetName();
-      const float star = kStar * s;
+      const float star = kStar * s, die = dieWidth() * s;
+      if (showDie) {
+         c.setColor(host_.diceOpen ? kPartColors[0] : hover_ == Zone::Dice ? kText : kDim);
+         ui::drawDie(c, a + die / 2, h / 2, 12.0f * s);
+      }
       c.setColor(hover_ == Zone::Name ? 0xffffffff : kText);
-      c.text(name.empty() ? std::string("Untitled") : name, ui::font(13 * s), visage::Font::kCenter, a, 0,
-             w - 2 * a - save - star, h);
+      c.text(name.empty() ? std::string("Untitled") : name, ui::font(13 * s), visage::Font::kCenter, a + die, 0,
+             w - 2 * a - save - star - die, h);
       if (indexOf(name) >= 0) {
          const bool starred = favorites_.contains(name);
          c.setColor(starred ? kPartColors[0] : hover_ == Zone::Star ? kText : kDim);
@@ -621,6 +631,10 @@ public:
       case Zone::Save: editing() ? finishSave(true) : startSave(); break;
       case Zone::Name: showMenu(); break;
       case Zone::Star: toggleFavorite(); break;
+      case Zone::Dice:
+         if (onDice)
+            onDice(!host_.diceOpen);
+         break;
       case Zone::None: break;
       }
    }
@@ -637,15 +651,18 @@ public:
    bool editing() const { return editor_ && editor_->isVisible(); }
 
 private:
-   enum class Zone { None, Prev, Name, Star, Next, Save };
-   static constexpr float kArrow = 24.0f, kSave = 48.0f, kStar = 22.0f;
+   enum class Zone { None, Prev, Dice, Name, Star, Next, Save };
+   static constexpr float kArrow = 24.0f, kSave = 48.0f, kStar = 22.0f, kDie = 22.0f;
    static constexpr int kSaveId = 1 << 20, kDeleteId = kSaveId + 1, kFavoriteId = kSaveId + 2, kUserBase = 1 << 16,
                         kFavoritesBase = 1 << 18;
 
+   float dieWidth() const { return showDie ? kDie : 0.0f; }
    Zone zoneAt(float x) const {
       const float s = height() / 26.0f, w = width();
       if (x < kArrow * s)
          return Zone::Prev;
+      if (x < (kArrow + dieWidth()) * s)
+         return Zone::Dice;
       if (x >= w - kSave * s)
          return Zone::Save;
       if (x >= w - (kSave + kArrow) * s)
@@ -2763,7 +2780,7 @@ public:
    }
    void showDice(bool open) {
       host_.diceOpen = open;
-      diceButton_->setOn(open);
+      presetBar_->redraw();
       if (open && host_.routesOpen)
          showRoutes(false);
       refreshDice();
@@ -2822,8 +2839,11 @@ public:
       move(*paletteMenu_, {lx + 144, ly, 120, 26});
       move(*sizeBox_, {lx + 272, ly, 120, 26});
       // The preset bar stays in SKY, centred along the top, the update notice beside it.
-      const float px = host_.view == kSynthView ? 416 : (kDesignWidth - 250) / 2;
-      move(*presetBar_, {px, 13, 250, 26});
+      // In the synth view it takes the header's middle, the die at its left opening the dice card.
+      const bool synth = host_.view == kSynthView;
+      const float pw = synth ? kPresetBarW : 250, px = synth ? 344 : (kDesignWidth - pw) / 2;
+      presetBar_->showDie = synth;
+      move(*presetBar_, {px, 13, pw, 26});
       move(*update_, host_.view == kSynthView ? ui::Rect{146, 13, 188, 26} : ui::Rect{px + 260, 13, 220, 26});
       idle_ = 0.0f;
       if (host_.view == kSkyOnly && mapping_)
@@ -3248,14 +3268,10 @@ private:
 
    void buildHeader() {
       update_ = &glassy(add<ui::UpdateNotice>({146, 13, 188, 26}), kPartColors[0]);
-      // Not put(): it stays in SKY too (setView places it).
-      presetBar_ = &add<PresetBar>({416, 13, 250, 26}, host_);
-      auto &dice = glassy(put<ui::Button>({344, 13, 62, 26}, "DICE"), kPartColors[0]);
-      dice.setToggle(true);
-      dice.onToggle = [this](bool on) { showDice(on); };
-      diceButton_ = &dice;
-      tips_.add(dice, "RANDOMIZE a new patch for this part, or MUTATE the one it has. UNDO steps back through "
-                      "what they replaced.");
+      // Not put(): it stays in SKY too (setView places it). Its die opens the dice card, which
+      // RANDOMIZEs a new patch for this part or MUTATEs the one it has.
+      presetBar_ = &add<PresetBar>({344, 13, kPresetBarW, 26}, host_);
+      presetBar_->onDice = [this](bool on) { showDice(on); };
       auto &parts = glassy(put<ui::SegmentedSwitch>({676, 13, 146, 26}, std::vector<std::string>{"PART A", "PART B"}),
                            kPartColors[0]);
       parts.onChange = [this](int p) { showPart(p); };
@@ -3957,6 +3973,7 @@ private:
    static constexpr ui::Rect kVoiceBox{kSkyX, 650, kSkyW, 274};
    // The route list, over the sky.
    static constexpr ui::Rect kRoutesBox{kSkyX + 10, kSkyY + 44, kSkyW - 20, kSkyH - 56};
+   static constexpr float kPresetBarW = 322;
    static constexpr ui::Rect kDiceBox{kSkyX + kSkyW - 302, kSkyY + 10, 292, 192};
    // The voice panel's knobs, one row along its bottom.
    static std::vector<ui::Rect> kVoiceKnobs() { return ui::row({kVoiceBox.x + 8, kVoiceBox.y + 172, kVoiceBox.w - 16, 100}, 9); }
@@ -4000,7 +4017,7 @@ private:
    ui::Dropdown *paletteMenu_ = nullptr;
    ui::NumberBox *sizeBox_ = nullptr;
    PresetBar *presetBar_ = nullptr;
-   ui::Button *diceButton_ = nullptr, *undoButton_ = nullptr, *redoButton_ = nullptr;
+   ui::Button *undoButton_ = nullptr, *redoButton_ = nullptr;
    uint64_t diceSeed_ = 0;
    // The controls that stay in SKY, and fade there while the mouse rests: whether it is over each,
    // how long since it last moved, and how much they show.

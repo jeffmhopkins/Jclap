@@ -43,6 +43,15 @@ void drawStar(visage::Canvas &canvas, float cx, float cy, float radius, bool fil
       canvas.fill(star.stroke(std::max(1.0f, radius * 0.16f)));
 }
 
+void drawDie(visage::Canvas &canvas, float cx, float cy, float size) {
+   const float x = cx - size / 2, y = cy - size / 2;
+   canvas.roundedRectangleBorder(x, y, size, size, size * 0.24f, std::max(1.0f, size * 0.11f));
+   const float pip = size * 0.2f, near = size * 0.3f, far = size * 0.7f;
+   const float spots[5][2] = {{near, near}, {far, near}, {0.5f * size, 0.5f * size}, {near, far}, {far, far}};
+   for (const auto &spot : spots)
+      canvas.circle(x + spot[0] - pip / 2, y + spot[1] - pip / 2, pip);
+}
+
 void applyPreset(const Preset &preset, ParamAccess &params, const std::vector<double> &defaults) {
    std::vector<std::pair<clap_id, double>> values;
    for (clap_id id = 0; id < defaults.size(); ++id)

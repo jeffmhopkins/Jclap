@@ -806,13 +806,17 @@ private:
 };
 
 // The preset browser in the header: arrows step through every preset, the name opens a menu of them
-// by category, and SAVE names the current settings and writes them to the user's preset folder.
+// by category, and SAVE names the current settings and writes them to the user's preset folder. The
+// die at the name's left, opposite the favorite star, opens the dice card.
 class PresetBar : public visage::Frame {
 public:
    explicit PresetBar(EditorHost &host)
       : host_(host), favorites_(userPresetFolder().parent_path() / "Favorites.txt") {
       rescan();
    }
+
+   // Opens or closes the dice card; the die is lit while host_.diceOpen.
+   std::function<void(bool)> onDice;
 
    void draw(visage::Canvas &c) override {
       const float s = height() / 28.0f, w = width(), h = height();
@@ -837,13 +841,15 @@ public:
          return;
       const std::string name = host_.presetName();
       const Preset *p = find(name);
-      const float star = kStar * s;
+      const float star = kStar * s, die = kDie * s;
+      c.setColor(host_.diceOpen ? kOrange : hover_ == Zone::Dice ? kText : kDim);
+      ui::drawDie(c, a + die / 2, h / 2, 13.0f * s);
       c.setColor(hover_ == Zone::Name ? 0xffffffff : kText);
-      c.text(name.empty() ? std::string("Untitled") : name, ui::font(13 * s), visage::Font::kCenter, a, 0,
-             w - 2 * a - save - star, h);
+      c.text(name.empty() ? std::string("Untitled") : name, ui::font(13 * s), visage::Font::kCenter, a + die, 0,
+             w - 2 * a - save - star - die, h);
       if (p) {
          c.setColor(kDim);
-         c.text(p->category, ui::font(9 * s), visage::Font::kLeft, a + 8 * s, 0, 80 * s, h);
+         c.text(p->category, ui::font(9 * s), visage::Font::kLeft, a + die + 4 * s, 0, 80 * s, h);
          const bool starred = favorites_.contains(name);
          c.setColor(starred ? kOrange : hover_ == Zone::Star ? kText : kDim);
          ui::drawStar(c, w - save - a - star / 2, h / 2, 6.5f * s, starred);
@@ -860,6 +866,10 @@ public:
       case Zone::Save: editing() ? finishSave(true) : startSave(); break;
       case Zone::Name: showMenu(); break;
       case Zone::Star: toggleFavorite(); break;
+      case Zone::Dice:
+         if (onDice)
+            onDice(!host_.diceOpen);
+         break;
       case Zone::None: break;
       }
    }
@@ -874,8 +884,8 @@ public:
    }
 
 private:
-   enum class Zone { None, Prev, Name, Star, Next, Save };
-   static constexpr float kArrow = 26.0f, kSave = 52.0f, kStar = 24.0f;
+   enum class Zone { None, Prev, Dice, Name, Star, Next, Save };
+   static constexpr float kArrow = 26.0f, kSave = 52.0f, kStar = 24.0f, kDie = 24.0f;
    static constexpr int kSaveId = 1 << 20, kDeleteId = kSaveId + 1, kFavoriteId = kSaveId + 2, kUserBase = 1 << 16,
                         kFavoritesBase = 1 << 18;
 
@@ -883,6 +893,8 @@ private:
       const float s = height() / 28.0f, w = width();
       if (x < kArrow * s)
          return Zone::Prev;
+      if (x < (kArrow + kDie) * s)
+         return Zone::Dice;
       if (x >= w - kSave * s)
          return Zone::Save;
       if (x >= w - (kSave + kArrow) * s)
@@ -1269,7 +1281,7 @@ public:
    void selectSpacePage(int page) { spaceTabs_->select(page); }
    void showDice(bool open) {
       host_.diceOpen = open;
-      diceButton_->setOn(open);
+      presetBar_->redraw();
       for (visage::Frame *f : dice_)
          f->setVisible(open);
       refreshDice();
@@ -1337,13 +1349,9 @@ private:
 
    void buildHeader() {
       update_ = &glassy(add<ui::UpdateNotice>({140, 13, 164, 26}), kOrange);
-      presetBar_ = &add<PresetBar>({380, 12, 340, 28}, host_);
-      auto &dice = glassy(add<ui::Button>({312, 14, 60, 24}, "DICE"), kOrange);
-      dice.setToggle(true);
-      dice.onToggle = [this](bool on) { showDice(on); };
-      diceButton_ = &dice;
-      tips_.add(dice, "RANDOMIZE a new space, or MUTATE the one there is. UNDO steps back through what they "
-                      "replaced.");
+      // Its die opens the dice card, which RANDOMIZEs a new space or MUTATEs the one there is.
+      presetBar_ = &add<PresetBar>({312, 12, 408, 28}, host_);
+      presetBar_->onDice = [this](bool on) { showDice(on); };
       auto &run = glassy(add<ui::Button>({760, 14, 60, 24}, "RUN"), kOrange);
       bindings_.bind(run, kRun);
       tips_.add(run, "Pause or run the orbits. Paused, the reverb keeps the shape it had.");
@@ -1709,7 +1717,7 @@ private:
    ui::Tooltips tips_;
    ui::UpdateNotice *update_ = nullptr;
    PresetBar *presetBar_ = nullptr;
-   ui::Button *diceButton_ = nullptr, *undoButton_ = nullptr, *redoButton_ = nullptr;
+   ui::Button *undoButton_ = nullptr, *redoButton_ = nullptr;
    std::vector<visage::Frame *> dice_;
    uint64_t diceSeed_ = 0;
    OrbitView *view_ = nullptr;
