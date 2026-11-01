@@ -115,7 +115,7 @@ instance of the plugin shares them.
 
 ## The dice
 
-**DICE** in the header opens a card over the stage. **RANDOMIZE** builds a new space from scratch: it
+The die at the left of the preset bar, opposite the favorite star, opens a card over the stage. **RANDOMIZE** builds a new space from scratch: it
 picks a kind (a room, a plate, a hall, an ambient wash or a cloud), then fills in every card inside the
 ranges that sound for it. **COMPLEXITY** says how much of what JVerb adds it reaches for: at 0 a plain
 space, at 100% shimmer and feedback in the loop, the drive, the echo, more bodies routed to more
