@@ -28,6 +28,28 @@ there is a VST3 build for hosts without CLAP.
 > While learning, wiggle only along one axis near the edge so the CC you want is the one that changes
 > most.
 
+## Using it in Ableton Live (Max for Live)
+
+Live doesn't load CLAPs, and won't put a VST3 in front of an instrument on the same track, so for Live
+there is a Max for Live MIDI effect instead: `Polar XY.amxd`, in `jclap-PolarXY-<version>-M4L.zip` on
+the release page (or [m4l/](m4l) here). It needs Live Suite, or Live Standard with Max for Live.
+
+1. Unzip it and keep `Polar XY.amxd` and `polarxy.js` together in one folder, for example in your
+   User Library (`Presets/MIDI Effects/Max MIDI Effect`).
+2. Drag `Polar XY.amxd` onto the Omnisphere track, in front of Omnisphere. No extra track or MIDI
+   routing is needed.
+3. MIDI Learn the Orb as in Bitwig (step 3 above), using **SEND ANGLE** and **SEND RADIUS**.
+
+It is the same conversion and motion as the plugin, with the same settings, each a Live parameter
+you can automate or map. The panel has no XY pad or night skies: a status line shows the last
+channel's X/Y in and angle/radius out. The motion steps every 4 ms rather than every 32 samples.
+
+> [!NOTE]
+> To make it one self-contained file, open it in the Max editor (the edit button in its title bar)
+> and press **Freeze Device**, then save. The device is written by
+> [m4l/make_device.py](m4l/make_device.py) from the logic in [m4l/polarxy.js](m4l/polarxy.js);
+> `node m4l/test_polarxy.js` runs its tests.
+
 ## VST3
 
 `PolarXY.vst3` is the same plugin, wrapped by clap-wrapper. It's in `jclap-PolarXY-<version>-VST3-<OS>.zip`
@@ -36,7 +58,8 @@ on the release page; see the [main README](../../README.md#download) for where i
 - It shows up as an instrument (VST3 has no MIDI-effect category), with a MIDI input and output.
 - The X/Y CCs reach it the usual VST3 way, as the host's MIDI CC mapping, and the angle and radius
   go out as MIDI CC events, so the host has to pass a plugin's MIDI output on to the next device.
-  Ableton Live, for one, doesn't take MIDI out of VST3s; Bitwig, Cubase and Reaper do.
+  Ableton Live can't put it in front of an instrument on the same track; use the
+  [Max for Live device](#using-it-in-ableton-live-max-for-live) there instead.
 
 ## Mapping
 

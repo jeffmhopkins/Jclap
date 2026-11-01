@@ -59,6 +59,9 @@ Polar XY also comes as a VST3, for hosts without CLAP: take `jclap-PolarXY-<vers
 `PolarXY.vst3` to your VST3 folder (`~/Library/Audio/Plug-Ins/VST3` on macOS,
 `C:\Program Files\Common Files\VST3` on Windows, `~/.vst3` on Linux).
 
+For Ableton Live, Polar XY also comes as a Max for Live MIDI effect: take `jclap-PolarXY-<version>-M4L.zip`
+and see [Using it in Ableton Live](plugins/polar-xy#using-it-in-ableton-live-max-for-live).
+
 > [!WARNING]
 > **macOS: browser downloads are quarantined.** The plugins are only ad-hoc signed (not notarized), so
 > files downloaded through a browser are quarantined and Bitwig silently skips them. Files downloaded
@@ -69,7 +72,7 @@ curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-mac
 ```
 
 That runs [install-macos.sh](install-macos.sh), which installs the latest release's CLAPs and VST3s
-(`bash -s v0.16.0` instead of `bash` picks a release). It replaces older copies outright, since
+(`bash -s v0.17.0` instead of `bash` picks a release). It replaces older copies outright, since
 unzipping over an old bundle can leave stale files that stop it loading, and clears Bitwig's plugin
 cache so the next scan starts fresh.
 

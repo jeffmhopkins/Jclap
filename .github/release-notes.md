@@ -21,7 +21,8 @@ curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-mac
 ```
 
 The single-plugin zips, named with the plugin's version, are listed under Assets at the bottom, along
-with the VST3 zips. Only Polar XY has a VST3 build; every other plugin is CLAP only.
+with the VST3 zips. Only Polar XY has a VST3 build; every other plugin is CLAP only. Polar XY also
+comes as a Max for Live device for Ableton Live, in `jclap-PolarXY-<version>-M4L.zip`.
 
 ## Install
 

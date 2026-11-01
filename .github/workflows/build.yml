@@ -191,6 +191,13 @@ jobs:
           for p in *.vst3; do
             cmake -E tar cf "../../dist/jclap-${p%.vst3}-$(version "${p%.vst3}")-VST3-${{ runner.os }}.zip" --format=zip -- "$p"
           done
+          # The Max for Live device is the same on every system, so only Linux packages it.
+          if [ "${{ runner.os }}" = Linux ]; then
+            mkdir -p ../m4l/"Polar XY"
+            cp ../../plugins/polar-xy/m4l/"Polar XY.amxd" ../../plugins/polar-xy/m4l/polarxy.js ../m4l/"Polar XY"/
+            cd ../m4l
+            cmake -E tar cf "../../dist/jclap-PolarXY-$(version PolarXY)-M4L.zip" --format=zip -- "Polar XY"
+          fi
       - name: Upload plugins
         uses: actions/upload-artifact@v4
         with:
