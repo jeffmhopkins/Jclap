@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.12.1)
+jclap_plugin_version(0.12.2)
 
 jclap_add_plugin(jsynth
    OUTPUT_NAME "JSynth"
