@@ -560,6 +560,11 @@ public:
       }
    }
    int state() const { return state_; }
+   // Light i lit by the state's bit i, rather than the state naming one light.
+   void setBitLights(bool bits) {
+      bitLights_ = bits;
+      redraw();
+   }
    const std::string &label() const { return label_; }
    // The name's colour (0 for the theme's), e.g. its section's tint.
    void setLabelColor(unsigned color) {
@@ -578,7 +583,7 @@ public:
       for (const std::string &l : lights_)
          widest = std::max(widest, textWidth(*this, l, kSmallText * k));
       const auto light = [&](float x, float y, size_t i) {
-         const bool lit = known && static_cast<size_t>(state_) == i;
+         const bool lit = known && (bitLights_ ? ((state_ >> i) & 1) != 0 : static_cast<size_t>(state_) == i);
          c.setColor(lit ? accent_ : (known ? 0xff3a4048 : 0xff31363e));
          c.circle(x, y, 7 * k);
       };
@@ -649,6 +654,43 @@ private:
    unsigned accent_;
    unsigned labelColor_ = 0;
    int state_ = -1;
+   bool bitLights_ = false;
+};
+
+// An LFO's custom shape (drawn on the synth's matrix in LFO Draw mode): its 16 steps, -1 to 1, as
+// a stepped line. Nothing until a preset read off the synth gives the steps; dim unless the LFO's
+// wave is set to Custom.
+class CustomLfo : public visage::Frame {
+public:
+   explicit CustomLfo(unsigned color) : color_(color) { setIgnoresMouseEvents(true, false); }
+   void setSteps(std::vector<float> steps, bool active) {
+      if (steps != steps_ || active != active_) {
+         steps_ = std::move(steps);
+         active_ = active;
+         redraw();
+      }
+   }
+   void draw(visage::Canvas &c) override {
+      if (steps_.empty())
+         return;
+      const ui::Theme &t = ui::defaultTheme();
+      const float d = ui::designScale(*this), w = width(), h = height();
+      const float top = 14 * d, ph = h - top, mid = top + ph * 0.5f, sw = w / steps_.size();
+      c.setColor(t.dimText);
+      c.text(active_ ? "CUSTOM" : "CUSTOM (OFF)", ui::font(kSmallText * d), visage::Font::kCenter, 0, 0, w, 13 * d);
+      c.setColor(t.track);
+      c.rectangle(0, mid, w, 1 * d);
+      c.setColor(active_ ? color_ : dimTint(color_));
+      for (size_t i = 0; i < steps_.size(); ++i) {
+         const float v = std::clamp(steps_[i], -1.0f, 1.0f) * ph * 0.5f;
+         c.rectangle(i * sw + 1 * d, std::min(mid, mid - v), sw - 2 * d, std::max(2 * d, std::abs(v)));
+      }
+   }
+
+private:
+   unsigned color_;
+   std::vector<float> steps_;
+   bool active_ = false;
 };
 
 // One of the synth's knobs that isn't on MIDI (fine tune, phones, master volume), drawn small and

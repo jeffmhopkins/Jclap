@@ -26,15 +26,54 @@ var STEP24 = 32767 / 24;
 var STEP12 = 32767 / 12;
 
 // [cc, offset, kind, flag offset]: the byte map from tools/mb_bank.py (LAYOUT there).
-// The buttons that aren't on MIDI, as far as they're mapped: {plugin indicator id, offset of the
-// word it sets}, found by pressing one at a time on the synth and reading the preset back
-// (tools/mb_map.py). Only on/off ones so far; the multi-way buttons' light order isn't known yet.
+// The buttons that aren't on MIDI: {plugin indicator id, offset of the byte it sets, and for one
+// with lights, the lit light (in the panel's order) for each value}. On/off ones are 0 or 1. The
+// offsets are the Matrixbrute Patch Viewer's (github.com/MatrixbrutePatchViewer/MBPV), checked by
+// pressing buttons on the synth and reading the preset back (tools/mb_map.py); Filter Routing and the
+// External mixer channel's filter are where those presses put them instead (MBPV has 1148 and 1112).
+// The mixer filters' value is which filters get the source: 1 Steiner, 2 Ladder, 3 both, as bits.
+// A value with no light (LFO Custom) is 99: known, nothing lit.
 var SWITCHES = [
+   ["vco3.wave", 1258, [3, 2, 1, 0]],
+   ["vco3.lfoDiv", 1080, [0, 1, 2, 3]],
+   ["vco3.kbdTrack", 1138],
+   ["noise.type", 1256, [0, 1, 2, 3]],
    ["vco.sync", 1276],
+   ["wheel.mod", 1142, [0, 1, 2, 3]],
+   ["voice.mode", 1140, [0, 1, 2]],
+   ["mixer.vco1.filter", 1104, [0, 1, 2, 3]],
+   ["mixer.vco2.filter", 1106, [0, 1, 2, 3]],
+   ["mixer.vco3.filter", 1108, [0, 1, 2, 3]],
+   ["mixer.noise.filter", 1110, [0, 1, 2, 3]],
+   ["mixer.ext.filter", 1310, [0, 1, 2, 3]],
+   ["vcf1.mode", 1278, [0, 1, 2, 3]],
+   ["vcf1.slope", 1196, [1, 0]],
+   ["vcf2.mode", 1174, [0, 1, 2]],
+   ["vcf2.slope", 1176, [1, 0]],
+   ["vcf.routing", 1290, [1, 0]],
+   ["lfo1.sync", 1060],
+   ["lfo1.wave", 1064, [0, 1, 2, 3, 4, 6, 5, 99]],
+   ["lfo1.retrig", 1066, [0, 1, 2]],
    ["lfo2.sync", 1070],
+   ["lfo2.wave", 1074, [0, 1, 2, 3, 4, 6, 5, 99]],
+   ["lfo2.retrig", 1076, [0, 1, 2]],
    ["fx.sync", 1058],
-   ["glide.on", 1118]
+   ["fx.mode", 1264, [0, 1, 2, 3, 4]],
+   ["glide.on", 1118],
+   ["play.keyHold", 1120],
+   ["play.priority", 1122, [0, 1, 2]],
+   ["play.legato", 1124, [0, 1, 2]]
 ];
+
+// The mod matrix: 16 sources (rows A-P) by 28 destinations, the 12 fixed columns then the four
+// user banks (columns 13-16) of four routes each. A bit per cell from MATRIX_USED (row by row, low
+// bit first) says it's routed; MBPV keeps each cell's amount as a word from offset 0, which isn't
+// shown yet.
+var MATRIX_USED = 960;
+var MATRIX_COLUMNS = 28;
+
+// LFO 1's and LFO 2's custom shapes: 16 signed words each from here, 32 bytes apart (MBPV).
+var CUSTOM_LFO = 896;
 
 var LAYOUT = [
    [9, 1240, "level"],
@@ -145,9 +184,11 @@ var SUBSCRIBER_TIMEOUT_MS = 10000;
 // script's own output in its console (tools/mb_bitwig_log.py follows it). The data lines, for the
 // MatrixBrute CC plugin, are tab-separated:
 //    READING                          a read started
-//    PRESET  n  name  cc:value,...  id:state,...
+//    PRESET  n  name  cc:value,...  id:state,...  row.column,...  steps;steps
 //                                     one named preset; n is 0-255 (A01-P16), values 0-127, then
-//                                     the mapped buttons (SWITCHES) by the panel's indicator ids
+//                                     the buttons (SWITCHES) by the panel's indicator ids, then the
+//                                     routed matrix cells (readMatrix()), then the custom LFO
+//                                     shapes (readCustomLfos())
 //    DONE    found  failed            the read finished
 //    FAILED  why                      the read stopped
 function log(text) {
@@ -428,7 +469,7 @@ function onSysex(hex) {
       if (job.found % 10 === 0)
          host.showPopupNotification("MatrixBrute: " + job.found + " presets...");
       var u = unpack([].concat.apply([], job.chunks));
-      deliver(job.preset, job.name, decode(u), readSwitches(u));
+      deliver(job.preset, job.name, decode(u), readSwitches(u), readMatrix(u), readCustomLfos(u));
       next();
    }
 }
@@ -482,18 +523,45 @@ function code(preset) {
    return String.fromCharCode(65 + (preset >> 4)) + ((preset & 15) < 9 ? "0" : "") + ((preset & 15) + 1);
 }
 
-function deliver(preset, name, values, switches) {
+function deliver(preset, name, values, switches, matrix, custom) {
    var cells = [];
    for (var i = 0; i < values.length; i++)
       cells.push(values[i][0] + ":" + values[i][1]);
    log(code(preset) + " " + name + ": " + values.length + " knobs");
-   data("PRESET\t" + preset + "\t" + name.replace(/[\t\r\n]/g, " ") + "\t" + cells.join(",") + "\t" + switches.join(","));
+   data("PRESET\t" + preset + "\t" + name.replace(/[\t\r\n]/g, " ") + "\t" + cells.join(",") + "\t" + switches.join(",") + "\t" + matrix.join(",") + "\t" + custom);
 }
 
-// The panel's on/off buttons as "id:0" or "id:1", by the word each one sets.
+// The panel's buttons as "id:light" (or "id:0"/"id:1" for on/off). A value the map doesn't have is
+// left out, so that button stays unknown.
 function readSwitches(u) {
    var out = [];
-   for (var i = 0; i < SWITCHES.length; i++)
-      out.push(SWITCHES[i][0] + ":" + (word(u, SWITCHES[i][1]) ? 1 : 0));
+   for (var i = 0; i < SWITCHES.length; i++) {
+      var v = u[SWITCHES[i][1]], map = SWITCHES[i][2];
+      if (!map)
+         out.push(SWITCHES[i][0] + ":" + (v ? 1 : 0));
+      else if (v < map.length)
+         out.push(SWITCHES[i][0] + ":" + map[v]);
+   }
+   return out;
+}
+
+// Both custom LFO shapes as "s,s,...;s,s,...", each step -100 to 100.
+function readCustomLfos(u) {
+   var lfos = [];
+   for (var l = 0; l < 2; l++) {
+      var steps = [];
+      for (var i = 0; i < 16; i++)
+         steps.push(Math.round(word(u, CUSTOM_LFO + 32 * l + 2 * i, true) * 100 / 32767));
+      lfos.push(steps.join(","));
+   }
+   return lfos.join(";");
+}
+
+// The routed matrix cells as "row.column", columns 0-27 as in MATRIX_COLUMNS.
+function readMatrix(u) {
+   var out = [];
+   for (var cell = 0; cell < 16 * MATRIX_COLUMNS; cell++)
+      if ((u[MATRIX_USED + (cell >> 3)] >> (cell & 7)) & 1)
+         out.push(Math.floor(cell / MATRIX_COLUMNS) + "." + cell % MATRIX_COLUMNS);
    return out;
 }

@@ -162,7 +162,10 @@ filters' orange and teal, the envelopes' yellow, green and purple, the matrix's 
 silver for the boxes that route or hold the rest), and its controls are named in a light tint of it;
 the mixer and audio mod name each source in that source's colour. Values and CC numbers stay grey
 and white. The synth's buttons, lights and matrix aren't on MIDI, so they're drawn as dim
-indicators until the plugin can read them from the synth's presets.
+indicators until you load a preset read off the synth (READ SYNTH): then every button's light, the
+routed matrix cells and both LFOs' custom shapes show how that preset has them. The preset layout
+comes from the [Matrixbrute Patch Viewer](https://github.com/MatrixbrutePatchViewer/MBPV), checked
+against button presses read back off a real unit.
 
 The preset display shows the synth's preset: the one picked in the preset bar, or the last Bank
 Select and Program Change heard. The pictures are drawn from the CC values: each VCO's wave mix, the

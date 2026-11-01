@@ -21,9 +21,16 @@ struct HardwarePatch {
    // {cc, 0-127} for every CC the preset stores. The mod wheel and the sequencer's rate, swing and
    // gate aren't part of a preset, so they're left alone.
    std::vector<std::pair<int, double>> values;
-   // {indicator id, setting} for the buttons that aren't on MIDI, as far as they're mapped (see
-   // SWITCHES in bitwig/MatrixBrute.control.js). The ones left out stay unknown.
+   // {indicator id, setting} for the buttons that aren't on MIDI (see SWITCHES in
+   // bitwig/MatrixBrute.control.js). The ones left out stay unknown.
    std::vector<std::pair<std::string, int>> switches;
+   // The routed mod matrix cells, {source row 0-15, destination 0-27}: the 12 fixed columns, then
+   // the user banks (columns 13-16) of four routes each. Empty if the read didn't include them.
+   std::vector<std::pair<int, int>> matrix;
+   bool hasMatrix = false;
+   // LFO 1's and LFO 2's custom shapes, 16 steps each from -1 to 1. Empty if the read didn't
+   // include them.
+   std::vector<float> customLfo[2];
 };
 
 inline constexpr int kPresetCount = 256;

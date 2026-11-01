@@ -12,7 +12,7 @@
 // in its accent and its controls are named in a light tint of it; values and CC numbers stay
 // neutral, and the smallest text is about 12 units. Every knob and slider is one CC. The synth's
 // buttons, lights and matrix aren't on MIDI: they're drawn as indicators, dim until a preset read off
-// the synth says how they're set (showSwitches(); only some buttons are mapped so far).
+// the synth says how they're set (showSwitches()).
 // Knobs the plugin hasn't heard from the synth or set itself are drawn dim, since their value is a
 // guess.
 
@@ -364,14 +364,32 @@ public:
          if (name == id)
             button->setState(state);
    }
-   // The buttons a preset read off the synth sets; the rest (and all of them for any other preset)
-   // go back to unknown.
+   // The buttons and matrix a preset read off the synth sets; the rest (and all of them for any
+   // other preset) go back to unknown.
    void showSwitches(const HardwarePatch *patch) {
       for (auto &entry : indicators_)
          entry.second->setState(-1);
       if (patch)
          for (const auto &[id, state] : patch->switches)
             setIndicator(id, state);
+      // The custom shapes, bright when the LFO's wave is set to Custom (its lights all off, 99).
+      for (int i = 0; i < 2; ++i) {
+         bool active = false;
+         if (patch)
+            for (const auto &[id, state] : patch->switches)
+               if (id == (i == 0 ? "lfo1.wave" : "lfo2.wave"))
+                  active = state == 99;
+         customLfo_[i]->setSteps(patch ? patch->customLfo[i] : std::vector<float>{}, active);
+      }
+      // A user bank's column (13-16) lights when any of its four routes in that row is used.
+      const bool known = patch && patch->hasMatrix;
+      matrixRoutes_ = known ? static_cast<int>(patch->matrix.size()) : -1;
+      for (int row = 0; row < 16; ++row)
+         for (int col = 0; col < 16; ++col)
+            matrix_->setCell(row, col, known ? 0 : -1);
+      if (known)
+         for (const auto &[row, col] : patch->matrix)
+            matrix_->setCell(row, col < 12 ? col : 12 + (col - 12) / 4, 1);
    }
    // A matrix cell's routing (-1 unknown, 0 none).
    void setMatrixCell(int source, int destination, int state) { matrix_->setCell(source, destination, state); }
@@ -457,9 +475,11 @@ private:
          add<vis::Tile>({x + kPad - 2, ty, w - 2 * kPad + 4, tileH});
          const unsigned tint = vis::labelTint(colors[i]);
          knob(ccs[i], colors[i], {x + kPad, ry, kCellW, kKnobH}, names[i], tint);
-         indicator(ids[i], "Filter", {"VCF 1", "VCF 2"}, {x + kPad + kCellW, ry + 14, kMixerButtonW, kKnobH - 28},
-                   vis::HwButton::Lights::Right, kSteiner)
-            .setLabelColor(tint);
+         auto &filter = indicator(ids[i], "Filter", {"VCF 1", "VCF 2"}, {x + kPad + kCellW, ry + 14, kMixerButtonW, kKnobH - 28},
+                   vis::HwButton::Lights::Right, kSteiner);
+         filter.setLabelColor(tint);
+         // Either filter, both or neither: a light per bit.
+         filter.setBitLights(true);
          picture<vis::MixMeter>({x + 16, ry + kKnobH + 6, w - 32, meterH}, ccs, i, colors[i]);
       }
       const float my = y + h - kPad - mixH;
@@ -480,6 +500,7 @@ private:
       indicator(id + ".sync", "Seq-Sync", {}, {x + kPad + kCellW, ky + 16, w - 2 * kPad - 2 * kCellW, 60});
       knob(rate, color, {x + w - kPad - kCellW, ky, kCellW, kKnobH}, "RATE");
       leds_[index] = &rateLed({x + w - 20, y + 10}, color);
+      customLfo_[index] = &add<vis::CustomLfo>(Rect{x + kPad + kCellW + 8, ky + 80, w - 2 * kPad - 2 * kCellW - 16, 44}, color);
       // The second row centred in what's left under the knobs.
       const float rowH = 96, by = ky + kKnobH + (y + h - kPad - (ky + kKnobH) - rowH) * 0.5f;
       const float rw = 100, ww = w - 2 * kPad - rw - 6;
@@ -758,7 +779,7 @@ private:
       const std::string code = program < 0 ? "---" : presetCode(program);
       matrix_->setDisplay({"MATRIXBRUTE CC", std::to_string(known) + " / " + std::to_string(kCcParamCount) + " KNOBS KNOWN",
                            program < 0 ? "NO PRESET PICKED OR HEARD" : "PRESET " + code + " LOADED",
-                           "MATRIX: NOT READ YET"});
+                           matrixRoutes_ < 0 ? "MATRIX: NOT READ YET" : "MATRIX: " + std::to_string(matrixRoutes_) + " ROUTES"});
       knownCount_->setText(std::to_string(known) + " OF " + std::to_string(kCcParamCount) + " KNOBS KNOWN");
       status_->setText(program < 0 ? "NO SYNTH PRESET PICKED OR HEARD YET" : "THE SYNTH IS ON PRESET " + code);
       wheelValue_->setText(host_.known(1) ? std::to_string(toCcValue(host_.paramModulated(1))) : "\xE2\x80\x94");
@@ -827,6 +848,9 @@ private:
    std::vector<vis::Picture *> pictures_;
    std::vector<std::pair<ui::Label *, int>> readouts_;
    ui::ActivityLed *leds_[2] = {};
+   vis::CustomLfo *customLfo_[2] = {};
+   // The loaded preset's routed matrix cells, or -1 if it wasn't read off the synth.
+   int matrixRoutes_ = -1;
    ui::ActivityLed *heardLed_ = nullptr;
    ui::Label *wheelValue_ = nullptr, *status_ = nullptr, *knownCount_ = nullptr;
    vis::PresetDisplay *display_ = nullptr;

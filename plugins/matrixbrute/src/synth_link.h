@@ -55,8 +55,9 @@ public:
 
    // One line from the script (see the protocol in MatrixBrute.control.js). Public for tests.
    void handleLine(const std::string &line);
-   // "PRESET\t5\tName\t9:12.5,10:0\tvco.sync:1" into `out` (the switches are optional); false if
-   // the line isn't a valid preset.
+   // "PRESET\t5\tName\t9:12.5,10:0\tvco.sync:1\t0.3,4.8\t100,50,...;0,..." into `out` (the
+   // switches, matrix cells and custom LFO steps are optional); false if the line isn't a valid
+   // preset.
    static bool parsePreset(const std::string &line, HardwarePatch &out);
 
 private:
