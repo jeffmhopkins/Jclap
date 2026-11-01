@@ -56,7 +56,7 @@ inline const char *const kRadiusModeLabels[] = {"Clamp to circle", "Fill square"
 inline const char *const kOnOffLabels[] = {"Off", "On"};
 inline const char *const kMotionPathLabels[] = {"Straight", "Around"};
 inline const char *const kResolutionLabels[] = {"7-bit", "14-bit"};
-inline const char *const kInertiaModeLabels[] = {"Pull", "Push"};
+inline const char *const kInertiaModeLabels[] = {"Pull", "Coast"};
 
 // 14-bit output sends each value's LSB on its CC + 32, so it needs both output CCs below 32; on
 // higher ones the output stays 7-bit.

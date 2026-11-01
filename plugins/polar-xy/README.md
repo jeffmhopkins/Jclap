@@ -68,7 +68,7 @@ changes) until it arrives. Each channel moves on its own.
   the edge. It settles wherever it runs out of speed, and the controller's next move picks it up from
   there. A jump from rest has no speed to carry, so it settles on the spot.
 - **Inertia Mode** (INERTIA MODE on the panel) picks how Inertia follows. *Pull*, as above, draws the
-  Orb to where the controller is. *Push* only lets the controller's movement move it: while the
+  Orb to where the controller is. *Coast* only lets the controller's movement move it: while the
   controller moves, the Orb picks up its speed and direction (slower the heavier it is), and once it
   holds still it has no say at all, so the Orb coasts on, slows to a stop and stays there. Where the
   controller is doesn't matter, only how it's moving, so the Orb can end up anywhere on the pad.
@@ -150,5 +150,5 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 | Smoothing | 0 ms | Glide time, up to 2 s |
 | Inertia | 0% | Weight: lag and overshoot |
 | Motion Path | Straight | Or Around, to move round the circle |
-| Inertia Mode | Pull | Or Push, where only the controller's movement moves the output |
+| Inertia Mode | Pull | Or Coast, where only the controller's movement moves the output |
 | Output Resolution | 7-bit | Or 14-bit (RESOLUTION on the panel): MSB on the output CC, LSB on CC + 32 |

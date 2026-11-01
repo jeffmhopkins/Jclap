@@ -177,9 +177,9 @@ void coastTests() {
    j.position(x, y);
    JCLAP_CHECK(!j.moving() && x == 0.0 && y == 1.0);
 
-   // Push: only the controller's movement moves it. A move right carries the output on right after
+   // Coast: only the controller's movement moves it. A move right carries the output on right after
    // the controller stops, and it comes to rest without being drawn back to where the controller is.
-   m.push = true;
+   m.coast = true;
    m.around = false;
    m.inertia = 0.3;
    jclap::Follower p;
@@ -604,7 +604,7 @@ int main() {
    JCLAP_CHECK(h.textToValue(8, "1.5 s", v) && v == 1500.0);
    JCLAP_CHECK(h.textToValue(8, "80ms", v) && v == 80.0);
    JCLAP_CHECK(h.textToValue(10, "around", v) && v == 1.0);
-   JCLAP_CHECK(h.paramText(12, 1.0) == "Push");
+   JCLAP_CHECK(h.paramText(12, 1.0) == "Coast");
    JCLAP_CHECK(h.textToValue(12, "pull", v) && v == 0.0);
 
    // The factory bank is one Init with every param at its default.

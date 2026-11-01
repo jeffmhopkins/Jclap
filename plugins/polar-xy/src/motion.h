@@ -16,9 +16,9 @@ struct MotionSettings {
    // false: moves in a straight line across the pad. true: angle and radius move on their own, so
    // the output goes around the circle and keeps its spin (a whirl carries on past where it stopped).
    bool around = false;
-   // How Inertia follows. false (pull): the output is drawn to where the controller is. true (push):
+   // How Inertia follows. false (pull): the output is drawn to where the controller is. true (coast):
    // only the controller's movement pushes it, so a controller held still leaves it coasting.
-   bool push = false;
+   bool coast = false;
 
    bool active() const { return smoothing > 0.0 || inertia > 0.0; }
 };
@@ -81,7 +81,7 @@ public:
       // The controller's speed, from how far it went since its last move, a little smoothed as the
       // moves arrive unevenly. A move after a pause starts from rest.
       const double a = still_ < kCoastHold ? 1.0 - std::exp(-still_ / 0.05) : 0.0;
-      // Push takes a move after a pause as made over the hold, so even a jump gives it a nudge.
+      // Coast mode takes a move after a pause as made over the hold, so even a jump gives it a nudge.
       fresh_ = still_ >= kCoastHold;
       for (int i = 0; i < 2; ++i) {
          kick_[i] = fresh_ ? (t[i] - real_[i]) / kCoastHold : 0.0;
@@ -142,8 +142,8 @@ public:
          land();
          return false;
       }
-      if (m.push && m.inertia > 0.0)
-         return pushed(dt, m);
+      if (m.coast && m.inertia > 0.0)
+         return coastStep(dt, m);
       if (m.inertia > 0.0)
          coast(dt, m);
       else
@@ -183,9 +183,9 @@ public:
    }
 
 private:
-   // Push: the output's speed is drawn to the controller's while it moves (slower the heavier it
+   // Coast mode: the output's speed is drawn to the controller's while it moves (slower the heavier it
    // is), and only slows with friction while it holds still. Where the controller is plays no part.
-   bool pushed(double dt, const MotionSettings &m) {
+   bool coastStep(double dt, const MotionSettings &m) {
       still_ += dt;
       const bool driven = still_ < kCoastHold;
       const double tau = coastTime(m.inertia);
@@ -277,7 +277,7 @@ private:
    double tx_ = 0.0, ty_ = 0.0; // the target on the pad
    double rx_ = 0.0, ry_ = 0.0; // the controller on the pad
    double still_ = 0.0;         // seconds since the controller last moved
-   bool fresh_ = false;         // its last move came after a pause: kick_ is its speed, for push
+   bool fresh_ = false;         // its last move came after a pause: kick_ is its speed, for coast mode
    double kick_[2] = {};
    // The target, the controller (the target's start when it coasts) and its speed, and the output.
    double target_[2] = {}, real_[2] = {}, drift_[2] = {}, smooth_[2] = {}, pos_[2] = {}, vel_[2] = {};
