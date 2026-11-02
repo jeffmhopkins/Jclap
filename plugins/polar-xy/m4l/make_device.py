@@ -155,7 +155,7 @@ label("Resolution", [484, 86, 88, 14]); menu("resolution", "Output Resolution", 
 # same as Touch Filter.
 label("TOUCH", [584, 2, 110, 16], bold=True)
 label("Filter ms", [584, 32, 56, 15]); numbox("touchfilter", "Touch Filter", "Touch", 0, [644, 32, 44, 15], hi=100)
-label("Press ms", [584, 52, 56, 15]); numbox("touchpress", "Press Time", "Press", -1, [644, 52, 44, 15], lo=-1, hi=100)
+label("Press delay", [584, 52, 56, 15]); numbox("touchpress", "Press Delay", "Press", -1, [644, 52, 44, 15], lo=-1, hi=100)
 label("Jump", [584, 72, 56, 15]); numbox("touchjump", "Jump Limit", "Jump", 16, [644, 72, 44, 15], lo=8, hi=64)
 label("Agree", [584, 92, 56, 15]); numbox("touchagree", "Agree", "Agree", 4, [644, 92, 44, 15], lo=1, hi=16)
 label("Check", [584, 112, 56, 15]); menu("touchheading", "Jump Check", "Check", ["Distance", "Heading"], [644, 112, 52, 15])

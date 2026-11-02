@@ -65,7 +65,7 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Polar Out", 0, 1, 1, true},        // Off: no angle or radius goes out
    {"Center", 0, 50, 0, false},           // %: the centre zone, where the angle is steadied and Around motion goes straight
    {"Jump Limit", 8, 64, 16, true},       // CC steps one reading may jump before a second must agree
-   {"Press Time", -1, 100, -1, true},     // ms a touch's press is held back; -1: the same as Touch Filter
+   {"Press Delay", -1, 100, -1, true},     // ms a touch's press is held back; -1: the same as Touch Filter
    {"Agree", 1, 16, 4, true},             // CC steps two readings may differ by and still agree
    {"Unused", 0, 1, 0, true, true},       // was Center Lag; kept so Jump Check keeps its id
    {"Jump Check", 0, 1, 0, true},         // Distance (from the last reading) or Heading (from where it was going)

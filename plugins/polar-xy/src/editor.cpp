@@ -634,32 +634,33 @@ public:
       pages_[0].assign(children().begin() + first, children().end());
 
       first = children().size();
-      tip(knob(kParamTouchPress, "PRESS", kBlue, 24, row),
-          "Press Time: when a finger lands, its first readings are often wrong while the contact is light, so the "
+      tip(knob(kParamTouchPress, "PRESS DELAY", kBlue, 24, row),
+          "Press Delay: when a finger lands, its first readings are often wrong while the contact is light, so the "
           "start of each touch is held back this long and then its latest reading goes out (without a touch CC, "
           "only once two readings agree). Longer settles more but adds delay to every new touch. Same (all the way "
           "down) uses the Touch Filter time.");
-      // Touch Filter again, as the lift-off it throws away beside the press.
-      filterPicker("LIFT (TOUCH FILTER)", 139, row);
-      hint("Held back to drop each lift-off", 139, row + 52);
-      add<ui::Divider>({317, row, 1, 92});
-      tip(knob(kParamTouchJump, "JUMP LIMIT", kBlue, 328, row),
+      // Touch Filter again, as the lift-off it throws away beside the press. This page spreads its
+      // fewer controls evenly across the row (Jump Limit and Agree side by side, as a pair).
+      filterPicker("LIFT (TOUCH FILTER)", 141, row);
+      hint("Held back to drop each lift-off", 141, row + 52);
+      add<ui::Divider>({332, row, 1, 92});
+      tip(knob(kParamTouchJump, "JUMP LIMIT", kBlue, 374, row),
           "Jump Limit, in CC steps: a reading further than this from the last one (or, with Jump Check on Heading, "
           "from where the finger was going) is taken as a possible skitter or a new touch, and is held until a "
           "second reading agrees with it; a lone spike is thrown away. Lower catches smaller skitters but can "
           "drop real fast moves. 16 is the default; 32 with Heading suits a resistive pad with a touch CC.");
-      tip(knob(kParamTouchAgree, "AGREE", kBlue, 404, row),
+      tip(knob(kParamTouchAgree, "AGREE", kBlue, 450, row),
           "Agree, in CC steps: how close two readings must be to count as the same spot. A press or a jump only "
           "goes out once two readings agree, so raise this for a jittery pad whose resting finger wanders a "
           "little, and lower it to be stricter. 4 is the default.");
-      tip(choice(kParamTouchHeading, "JUMP CHECK", {"DISTANCE", "HEADING"}, 519, row),
+      tip(choice(kParamTouchHeading, "JUMP CHECK", {"DISTANCE", "HEADING"}, 567, row),
           "Jump Check: what Jump Limit measures from. Distance compares each reading with the last one. Heading "
           "carries the finger's recent speed and direction on and compares the reading with where it should be, "
           "so a fast drag that keeps its course passes while a reading that leaps off course is held. Heading "
           "suits fast playing.");
-      hint("What a jump is measured from", 519, row + 52);
-      add<ui::Divider>({697, row, 1, 92});
-      tip(knob(kParamCenterSmoothing, "CENTER", kPurple, 762, row),
+      hint("What a jump is measured from", 567, row + 52);
+      add<ui::Divider>({758, row, 1, 92});
+      tip(knob(kParamCenterSmoothing, "CENTER", kPurple, 800, row),
           "Center: a zone around the middle, as a share of the radius (up to 50%). Near the centre a wobble of a "
           "step or two swings the angle a long way, and crossing the centre flips it half a turn; in the zone, "
           "small wobbles are ignored and a real move turns the angle at once, with no lag. With Motion Path set to "

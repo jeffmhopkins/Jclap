@@ -124,7 +124,7 @@ edges of each touch and throws them away, leaving the rest exactly as it came:
 - X and Y that arrive within 3 ms of each other are one reading, so no point made of the new X and the
   old Y goes out.
 - A reading that jumps more than the Jump Limit (16 CC steps), or lands somewhere new after a 50 ms
-  pause, starts a touch. For its first stretch, the press (the Touch Filter time, unless Press Time is
+  pause, starts a touch. For its first stretch, the press (the Touch Filter time, unless Press Delay is
   set apart), nothing goes out. Then the latest reading goes out if the last two agree (within Agree,
   4 CC steps), and everything after flows on. A touch that never gets two readings, such as a single
   blip as the finger lifts, never goes out.
@@ -141,7 +141,7 @@ The panel's **TOUCH** tab (next to SETTINGS at the bottom) tunes it further:
 
 | Control | Default | |
 |---|---|---|
-| Press Time | Same | How long a new touch's press is held back; Same follows Touch Filter |
+| Press Delay | Same | How long a new touch's press is held back; Same follows Touch Filter |
 | Jump Limit | 16 steps | How far one reading may move before it waits for a second to agree |
 | Jump Check | Distance | Distance measures from the last reading. Heading measures from where the finger was going (its speed and direction carried on), so a fast drag that keeps its course passes and a reading that leaps off course waits |
 | Agree | 4 steps | How close two readings must be to agree |
@@ -280,7 +280,7 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 | Inertia Mode | Pull | Or Coast, where only the controller's movement moves the output, or Pad, to use it like a trackpad |
 | Output Resolution | 7-bit | Or 14-bit (RESOLUTION on the panel): MSB on the output CC, LSB on CC + 32 |
 | Touch Filter | Off | 10 to 100 ms: throws away each touch's press and release, for a resistive pad |
-| Press Time, Jump Limit, Jump Check, Agree | Same, 16, Distance, 4 | Touch Filter's tuning (the TOUCH tab) |
+| Press Delay, Jump Limit, Jump Check, Agree | Same, 16, Distance, 4 | Touch Filter's tuning (the TOUCH tab) |
 | Center | Off | Steadies the middle, and makes Around motion straight there (the TOUCH tab) |
 | Touch In CC | Off | The pad's touch CC, so Touch Filter knows each touch's edges |
 | Touch Out CC | Off | Sends the touch on (127 / 0), in step with the filtered motion |
