@@ -642,7 +642,7 @@ public:
       // Touch Filter again, as the lift-off it throws away beside the press. This page spreads its
       // fewer controls evenly across the row (Jump Limit and Agree side by side, as a pair).
       filterPicker("LIFT (TOUCH FILTER)", 141, row);
-      hint("Held back to drop each lift-off", 141, row + 52);
+      hint("Drops the skitter as a finger lifts", 141, row + 52);
       add<ui::Divider>({332, row, 1, 92});
       tip(knob(kParamTouchJump, "JUMP LIMIT", kBlue, 374, row),
           "Jump Limit, in CC steps: a reading further than this from the last one (or, with Jump Check on Heading, "
@@ -660,7 +660,7 @@ public:
           "suits fast playing.");
       hint("What a jump is measured from", 567, row + 52);
       add<ui::Divider>({758, row, 1, 92});
-      tip(knob(kParamCenterSmoothing, "CENTER", kPurple, 800, row),
+      tip(knob(kParamCenterSmoothing, "CENTER", kPurple, 779, row),
           "Center: a zone around the middle, as a share of the radius (up to 50%). Near the centre a wobble of a "
           "step or two swings the angle a long way, and crossing the centre flips it half a turn; in the zone, "
           "small wobbles are ignored and a real move turns the angle at once, with no lag. With Motion Path set to "
