@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release tag to create, e.g. v0.1.0"
+        description: "Release number to make, e.g. 20 (tagged v20.0.0, named Release 20)"
         required: true
 
 # A new push to a PR (or to main) cancels the run it replaces. Tags and manual releases always finish.
@@ -240,11 +240,23 @@ jobs:
         with:
           path: src
           fetch-depth: 0
+      # Release N is tagged vN.0.0 and named "Release N", so its number never reads as a plugin's version.
+      - name: Name the release
+        id: release
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            tag=$(src/.github/plugin-versions.sh tag "${{ inputs.version }}")
+          else
+            tag=${{ github.ref_name }}
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "name=$(src/.github/plugin-versions.sh name "$tag")" >> "$GITHUB_OUTPUT"
       - name: Render install notes
-        run: src/.github/plugin-versions.sh notes "${{ inputs.version || github.ref_name }}" > notes.md
+        run: src/.github/plugin-versions.sh notes "${{ steps.release.outputs.tag }}" > notes.md
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.version || github.ref_name }}
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: ${{ steps.release.outputs.name }}
           target_commitish: ${{ github.sha }}
           files: dist/*.zip
           body_path: notes.md
