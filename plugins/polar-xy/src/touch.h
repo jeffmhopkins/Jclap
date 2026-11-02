@@ -50,12 +50,10 @@ public:
    // Forgets everything, held readings included (but not the tuning below).
    void reset() {
       const double press = press_, jump = jump_, agree = agree_;
-      const bool heading = heading_;
       *this = TouchFilter{};
       press_ = press;
       jump_ = jump;
       agree_ = agree;
-      heading_ = heading;
    }
 
    // Tuning, all optional. How long a press is held back before its reading goes out (seconds; below
@@ -66,9 +64,6 @@ public:
    // How far one reading may step from the last before it counts as a jump, which only goes out once
    // a second reading agrees: kTouchJump by default. Kept above the agreement.
    void setJump(double jump) { jump_ = jump; }
-   // Whether the jump is measured from where the finger was headed instead of from the last reading,
-   // so a fast drag that keeps its course isn't taken for a jump.
-   void setHeading(bool heading) { heading_ = heading; }
 
    // A reading (on the -1..+1 pad) arriving at `now` (seconds, always going forward), with the window
    // (seconds) as it is now.
@@ -160,12 +155,13 @@ private:
       if (settling_ && t >= start_ + press())
          settle();
       const double step = has_last_ ? std::hypot(x - last_x_, y - last_y_) : 0.0;
-      // How far off it is: from the last reading, or with the heading on, from where the finger was
-      // headed (the last two readings' velocity carried on, at most twice their gap).
+      // How far off it is: from the last reading or from where the finger was headed (the last two
+      // readings' velocity carried on, at most twice their gap), whichever is nearer. So a fast drag
+      // that keeps its course isn't taken for a jump, and nor is a sharp turn back.
       double off = step;
-      if (heading_ && has_prev_ && t - last_t_ < kTouchLift && last_t_ > prev_t_) {
+      if (has_prev_ && t - last_t_ < kTouchLift && last_t_ > prev_t_) {
          const double k = std::fmin((t - last_t_) / (last_t_ - prev_t_), 2.0);
-         off = std::hypot(x - (last_x_ + (last_x_ - prev_rx_) * k), y - (last_y_ + (last_y_ - prev_ry_) * k));
+         off = std::fmin(step, std::hypot(x - (last_x_ + (last_x_ - prev_rx_) * k), y - (last_y_ + (last_y_ - prev_ry_) * k)));
       }
       // A pause before a new spot only means a new touch without the touch CC: with it, a finger can
       // rest and move on (a pad that only sends changes goes quiet while it rests).
@@ -232,7 +228,6 @@ private:
 
    double window_ = 0.0;
    double press_ = -1.0, jump_ = kTouchJump, agree_ = kTouchAgree;
-   bool heading_ = false;
    // The whole reading before the last, for the heading.
    bool has_prev_ = false;
    double prev_rx_ = 0.0, prev_ry_ = 0.0, prev_t_ = 0.0;

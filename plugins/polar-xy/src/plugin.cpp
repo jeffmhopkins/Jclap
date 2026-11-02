@@ -68,7 +68,7 @@ struct Settings {
 // version 6 those before Touch In CC and version 7 those before Center (and the rest of
 // the TOUCH page); the ones they lack
 // load as their defaults. Before version 8, Touch Filter was a choice: Off, 10, 20 or 40 ms. Param 21
-// was Center Lag (ms) and is unused now.
+// was Center Lag (ms) and 22 Jump Check; both are unused now.
 constexpr char kStateMagic[4] = {'J', 'C', 'O', 'P'};
 constexpr uint32_t kStateVersion = 8;
 
@@ -308,8 +308,9 @@ public:
       for (uint32_t i = 0; i < count; ++i)
          if (!std::isfinite(values[i]))
             return false;
-      // Param 21 was Center Lag, in ms, and is unused now.
+      // Params 21 and 22 were Center Lag and Jump Check, and are unused now.
       values[kParamUnused21] = kParams[kParamUnused21].def;
+      values[kParamUnused22] = kParams[kParamUnused22].def;
       if (header.version < 8 && count > kParamTouchFilter) {
          constexpr double kOldWindows[] = {0.0, 10.0, 20.0, 40.0};
          values[kParamTouchFilter] = kOldWindows[std::clamp(static_cast<int>(std::lround(values[kParamTouchFilter])), 0, 3)];
@@ -417,7 +418,6 @@ private:
       f.setPress(press < 0 ? -1.0 : press / 1000.0);
       f.setJump(intParam(kParamTouchJump) * 2.0 / 127.0);
       f.setAgree(intParam(kParamTouchAgree) * 2.0 / 127.0);
-      f.setHeading(intParam(kParamTouchHeading) != 0);
    }
 
    // Touch Filter's window (seconds). 1 to 3 are the choices it had before it was in ms (10, 20 and

@@ -366,13 +366,12 @@ TouchFilter.prototype.reset = function () {
    // Tuning (kept by reset): the press (below 0, the window), the jump limit and the agreement.
    this.hasPrev = false; this.prevRX = 0; this.prevRY = 0; this.prevT = 0;
    if (this.pressTime === undefined) {
-      this.pressTime = -1; this.jump = TOUCH_JUMP; this.agree = TOUCH_AGREE; this.heading = false;
+      this.pressTime = -1; this.jump = TOUCH_JUMP; this.agree = TOUCH_AGREE;
    }
 };
 
 TouchFilter.prototype.setPress = function (press) { this.pressTime = press; };
 TouchFilter.prototype.setJump = function (jump) { this.jump = jump; };
-TouchFilter.prototype.setHeading = function (heading) { this.heading = heading; };
 TouchFilter.prototype.setAgree = function (agree) { this.agree = Math.max(agree, 0); };
 TouchFilter.prototype.press = function () { return this.pressTime < 0 ? this.window : this.pressTime; };
 
@@ -434,12 +433,12 @@ TouchFilter.prototype.finalize = function () {
    if (this.gated && !this.touched) return;
    if (this.settling && t >= this.start + this.press()) this.settle();
    var step = this.hasLast ? Math.sqrt((x - this.lastX) * (x - this.lastX) + (y - this.lastY) * (y - this.lastY)) : 0;
-   // From the last reading, or with the heading on, from where the finger was headed.
+   // From the last reading or from where the finger was headed, whichever is nearer.
    var off = step;
-   if (this.heading && this.hasPrev && t - this.lastT < TOUCH_LIFT && this.lastT > this.prevT) {
+   if (this.hasPrev && t - this.lastT < TOUCH_LIFT && this.lastT > this.prevT) {
       var k = Math.min((t - this.lastT) / (this.lastT - this.prevT), 2);
       var hx = x - (this.lastX + (this.lastX - this.prevRX) * k), hy = y - (this.lastY + (this.lastY - this.prevRY) * k);
-      off = Math.sqrt(hx * hx + hy * hy);
+      off = Math.min(step, Math.sqrt(hx * hx + hy * hy));
    }
    // The pause only means a new touch without the touch CC (see src/touch.h).
    var paused = !this.gated && t - this.lastT >= TOUCH_LIFT && step > this.agree;
@@ -514,8 +513,7 @@ var PARAMS = {
    centersmoothing: [0, 50, 0], // %: the Center zone, where the angle is steadied and Around goes straight
    touchjump: [8, 64, 16],  // CC steps one reading may jump before a second must agree
    touchpress: [-1, 100, -1], // ms a press is held back, -1 the same as touchfilter
-   touchagree: [1, 16, 4],  // CC steps two readings may differ by and still agree
-   touchheading: [0, 1, 0]  // jump check: 0 distance from the last reading, 1 from its heading
+   touchagree: [1, 16, 4]   // CC steps two readings may differ by and still agree
 };
 
 function Channel() {
@@ -609,7 +607,6 @@ Engine.prototype.tune = function (f) {
    f.setPress(press < 0 ? -1 : press / 1000);
    f.setJump(this.int('touchjump') * 2 / 127);
    f.setAgree(this.int('touchagree') * 2 / 127);
-   f.setHeading(this.int('touchheading') !== 0);
 };
 
 Engine.prototype.motionSettings = function () {

@@ -142,14 +142,13 @@ The panel's **TOUCH** tab (next to SETTINGS at the bottom) tunes it further:
 | Control | Default | |
 |---|---|---|
 | Press Delay | Same | How long a new touch's press is held back; Same follows Touch Filter |
-| Jump Limit | 16 steps | How far one reading may move before it waits for a second to agree |
-| Jump Check | Distance | Distance measures from the last reading. Heading measures from where the finger was going (its speed and direction carried on), so a fast drag that keeps its course passes and a reading that leaps off course waits |
+| Jump Limit | 16 steps | How far one reading may move before it waits for a second to agree. It's measured from the last reading and from where the finger was heading (its speed and direction carried on), whichever is nearer, so a fast drag that keeps its course passes, and so does a sharp turn back |
 | Agree | 4 steps | How close two readings must be to agree |
 | Center | Off | A zone around the middle that steadies the angle and, with Around, makes motion straight (see below) |
 
 The **Geren** factory preset is tuned on recordings of a resistive pad (an XYMIDI mini) with a touch
 CC: X In 12, Y In 13, Touch In 92, Angle and Radius Out 107 and 108, Touch Filter 50 ms, Jump Limit
-32 steps with Heading, Center 15% and Smoothing 150 ms. For another resistive pad, load it
+24 steps, Center 15% and Smoothing 150 ms. For another resistive pad, load it
 and set the CCs to that pad's. **Init** has every setting at its default, with no filtering. On those recordings, lift-offs sometimes started
 skittering two or three readings (up to about 50 ms) before the touch CC went off, which is why it
 holds back 50 ms.
@@ -280,7 +279,7 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 | Inertia Mode | Pull | Or Coast, where only the controller's movement moves the output, or Pad, to use it like a trackpad |
 | Output Resolution | 7-bit | Or 14-bit (RESOLUTION on the panel): MSB on the output CC, LSB on CC + 32 |
 | Touch Filter | Off | 10 to 100 ms: throws away each touch's press and release, for a resistive pad |
-| Press Delay, Jump Limit, Jump Check, Agree | Same, 16, Distance, 4 | Touch Filter's tuning (the TOUCH tab) |
+| Press Delay, Jump Limit, Agree | Same, 16, 4 | Touch Filter's tuning (the TOUCH tab) |
 | Center | Off | Steadies the middle, and makes Around motion straight there (the TOUCH tab) |
 | Touch In CC | Off | The pad's touch CC, so Touch Filter knows each touch's edges |
 | Touch Out CC | Off | Sends the touch on (127 / 0), in step with the filtered motion |

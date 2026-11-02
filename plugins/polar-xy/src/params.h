@@ -34,7 +34,7 @@ enum ParamId : clap_id {
    kParamTouchPress,
    kParamTouchAgree,
    kParamUnused21, // was Center Lag (until 0.18), then briefly Center Steady: now unused
-   kParamTouchHeading,
+   kParamUnused22, // was Jump Check (Distance or Heading): now always both, whichever is nearer
    kParamCount
 };
 
@@ -67,8 +67,8 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Jump Limit", 8, 64, 16, true},       // CC steps one reading may jump before a second must agree
    {"Press Delay", -1, 100, -1, true},     // ms a touch's press is held back; -1: the same as Touch Filter
    {"Agree", 1, 16, 4, true},             // CC steps two readings may differ by and still agree
-   {"Unused", 0, 1, 0, true, true},       // was Center Lag; kept so Jump Check keeps its id
-   {"Jump Check", 0, 1, 0, true},         // Distance (from the last reading) or Heading (from where it was going)
+   {"Unused", 0, 1, 0, true, true},       // was Center Lag
+   {"Unused 2", 0, 1, 0, true, true},     // was Jump Check
 };
 
 // Labels for the choice params, off (or the first) first: one per step of the param's range.
@@ -79,7 +79,6 @@ inline const char *const kOnOffLabels[] = {"Off", "On"};
 inline const char *const kMotionPathLabels[] = {"Straight", "Around"};
 inline const char *const kResolutionLabels[] = {"7-bit", "14-bit"};
 inline const char *const kInertiaModeLabels[] = {"Pull", "Coast", "Pad"};
-inline const char *const kJumpCheckLabels[] = {"Distance", "Heading"};
 
 // 14-bit output sends each value's LSB on its CC + 32, so it needs both output CCs below 32; on
 // higher ones the output stays 7-bit.
@@ -101,8 +100,6 @@ inline const char *const *choiceLabels(clap_id id) {
       return kResolutionLabels;
    case kParamInertiaMode:
       return kInertiaModeLabels;
-   case kParamTouchHeading:
-      return kJumpCheckLabels;
    default:
       return nullptr;
    }
