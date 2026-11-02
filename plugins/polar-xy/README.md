@@ -220,9 +220,10 @@ and each MSB on its own is the whole value, so nothing changes for one.
 radius the plugin sent for that channel (a dash until both axes have arrived),
 with angle 0 marked by the tick on the right. Comparing the two shows what `Angle Offset` and
 `Direction` do. Under each view are its CCs: X, Y and Touch In with Pass Input CCs, and angle, radius
-and Touch Out with the MIDI learn buttons. Below them, **SETTINGS** holds Angle Offset, Direction
-and Radius Mode, then Smoothing, Inertia, Path, Inertia Mode, Touch Filter and Resolution. Hover over
-any control for a tip on what it does. Every setting is also a plain host parameter.
+and Touch Out with the MIDI learn buttons. Below them, two tabs: **SETTINGS** holds Angle Offset,
+Direction and Radius Mode, then Smoothing, Inertia, Path, Inertia Mode, Touch Filter and Resolution;
+**TOUCH** holds Touch Filter's tuning and Center Smoothing (see [Touch Filter](#touch-filter)). Hover
+over any control for a tip on what it does. Every setting is also a plain host parameter.
 
 The OFF / ON switch in the POLAR OUT title is **Polar Out**. Off, the view goes dark and says so, and
 the angle and radius CCs and their learn buttons are greyed out: nothing goes out on them. Touch Out

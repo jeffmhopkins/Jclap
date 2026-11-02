@@ -12,8 +12,10 @@
 
 #include <jclap/ui/button.h>
 #include <jclap/ui/design_frame.h>
+#include <jclap/ui/dropdown.h>
 #include <jclap/ui/frame_pacer.h>
 #include <jclap/ui/knob.h>
+#include <jclap/ui/number_box.h>
 #include <jclap/ui/paint.h>
 #include <jclap/ui/param_bindings.h>
 #include <jclap/ui/preset_bar.h>
@@ -465,6 +467,63 @@ private:
    std::string left_, right_;
 };
 
+// A section's title as tabs: each name in the title's place and font, the shown one in the accent
+// colour and underlined, the others dim until hovered. Click one to show its page.
+class TitleTabs : public visage::Frame {
+public:
+   explicit TitleTabs(std::vector<std::string> names) : names_(std::move(names)) {}
+
+   int selected() const { return selected_; }
+   void select(int index) {
+      if (index < 0 || index >= static_cast<int>(names_.size()) || index == selected_)
+         return;
+      selected_ = index;
+      redraw();
+      if (onChange)
+         onChange(index);
+   }
+   std::function<void(int)> onChange;
+
+   void draw(visage::Canvas &c) override {
+      const ui::Theme &t = ui::defaultTheme();
+      const float s = ui::designScale(*this);
+      spans_.clear();
+      float x = 14.0f * s;
+      for (int i = 0; i < static_cast<int>(names_.size()); ++i) {
+         const float w = ui::font(15.0f * s, dpiScale()).stringWidth(visage::String(names_[i]).toUtf32());
+         c.setColor(i == selected_ ? t.accent : i == hover_ ? t.text : t.dimText);
+         c.text(names_[i], ui::font(15.0f * s), visage::Font::kLeft, x, 6.0f * s, w + 4.0f * s, 22.0f * s);
+         if (i == selected_) {
+            c.setColor(t.accent);
+            c.roundedRectangle(x, 28.0f * s, w, 2.0f * s, 1.0f * s);
+         }
+         spans_.push_back({x - 8.0f * s, x + w + 8.0f * s});
+         x += w + 24.0f * s;
+      }
+   }
+   void mouseMove(const visage::MouseEvent &e) override { setHover(indexAt(e.position.x)); }
+   void mouseExit(const visage::MouseEvent &) override { setHover(-1); }
+   void mouseDown(const visage::MouseEvent &e) override { select(indexAt(e.position.x)); }
+
+private:
+   int indexAt(float x) const {
+      for (int i = 0; i < static_cast<int>(spans_.size()); ++i)
+         if (x >= spans_[i].first && x < spans_[i].second)
+            return i;
+      return -1;
+   }
+   void setHover(int i) {
+      if (i != hover_) {
+         hover_ = i;
+         redraw();
+      }
+   }
+
+   std::vector<std::string> names_;
+   std::vector<std::pair<float, float>> spans_;
+   int selected_ = 0, hover_ = -1;
+};
+
 // A wash of the section colour over controls that do nothing for now, which also keeps the mouse
 // off them.
 class Veil : public visage::Frame {
@@ -492,7 +551,7 @@ public:
       // happens in between.
       add<ui::Section>({12, 76, 432, 498}, "XY IN");
       add<ui::Section>({456, 76, 432, 498}, "POLAR OUT");
-      add<ui::Section>({12, 586, 876, 140}, "SETTINGS");
+      add<ui::Section>({12, 586, 876, 140});
 
       // Live views, their skies 4:3 (an XYPad keeps a tenth of its shorter side for the labels):
       // what comes in on the X/Y CCs, and the angle/radius that goes out. Dragging the
@@ -549,9 +608,11 @@ public:
          tips_.add(*v, "Polar Out is off. Turn it on in the title row to send the angle and radius.");
       }
 
-      // Between the two, in one row: where the angle starts and turns, and then, past a divider, how
-      // the output follows.
+      // Between the two, on two tabs named in the section's title row. SETTINGS, in one row: where
+      // the angle starts and turns, and then, past a divider, how the output follows. TOUCH: the
+      // Touch Filter's finer settings, on the same grid so nothing jumps about between them.
       constexpr float row = 622.0f;
+      size_t first = children().size();
       tip(knob(kParamAngleOffset, "OFFSET", kPurple, 24, row, 1.0),
           "Angle Offset: turns where angle 0 sits, to line your controller up with the Orb.");
       tip(choice(kParamDirection, "DIRECTION", {"CCW", "CW"}, 139, row),
@@ -567,18 +628,62 @@ public:
           "Straight glides across the pad in X/Y. Around moves the angle and radius, round the circle the short way.");
       tip(choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 519, row + 50),
           "Pull draws the Orb to the controller. Coast follows only its movement. Pad works like a trackpad you can fling.");
-      // How much of each touch's press and release a resistive pad's skitter is thrown away.
-      tip(choice(kParamTouchFilter, "TOUCH FILTER", {"OFF", "10 MS", "20 MS", "40 MS"}, 726, row),
-          "Throws away each touch's skittery press and lift-off on a resistive pad, for this much latency.");
+      filterPicker("TOUCH FILTER", 726, row);
       tip(choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 726, row + 50),
           "14-bit sends each value as a CC pair (the CC and CC + 32) for smooth sweeps. Needs output CCs below 32.");
+      pages_[0].assign(children().begin() + first, children().end());
+
+      first = children().size();
+      tip(knob(kParamTouchPress, "PRESS", kBlue, 24, row),
+          "Press Time: when a finger lands, its first readings are often wrong while the contact is light, so the "
+          "start of each touch is held back this long and then its latest reading goes out (without a touch CC, "
+          "only once two readings agree). Longer settles more but adds delay to every new touch. Same (all the way "
+          "down) uses the Touch Filter time.");
+      // Touch Filter again, as the lift-off it throws away beside the press.
+      filterPicker("LIFT (TOUCH FILTER)", 139, row);
+      hint("Held back to drop each lift-off", 139, row + 52);
+      add<ui::Divider>({317, row, 1, 92});
+      tip(knob(kParamTouchJump, "JUMP LIMIT", kBlue, 328, row),
+          "Jump Limit, in CC steps: a reading further than this from the last one (or, with Jump Check on Heading, "
+          "from where the finger was going) is taken as a possible skitter or a new touch, and is held until a "
+          "second reading agrees with it; a lone spike is thrown away. Lower catches smaller skitters but can "
+          "drop real fast moves. 16 is the default; 32 with Heading suits a resistive pad with a touch CC.");
+      tip(knob(kParamTouchAgree, "AGREE", kBlue, 404, row),
+          "Agree, in CC steps: how close two readings must be to count as the same spot. A press or a jump only "
+          "goes out once two readings agree, so raise this for a jittery pad whose resting finger wanders a "
+          "little, and lower it to be stricter. 4 is the default.");
+      tip(choice(kParamTouchHeading, "JUMP CHECK", {"DISTANCE", "HEADING"}, 519, row),
+          "Jump Check: what Jump Limit measures from. Distance compares each reading with the last one. Heading "
+          "carries the finger's recent speed and direction on and compares the reading with where it should be, "
+          "so a fast drag that keeps its course passes while a reading that leaps off course is held. Heading "
+          "suits fast playing.");
+      hint("What a jump is measured from", 519, row + 52);
+      add<ui::Divider>({697, row, 1, 92});
+      tip(knob(kParamCenterSmoothing, "CENTER SMOOTH", kPurple, 724, row),
+          "Center Smoothing: near the centre, a wobble of a step or two swings the angle a long way, and crossing "
+          "the centre flips it half a turn. Within this share of the radius (up to 50%), the angle follows more "
+          "slowly the nearer the centre: up to Center Lag at the very centre, at once at the zone's edge. The "
+          "radius always goes out exactly. Off at 0; try 10-20%.");
+      tip(knob(kParamCenterLag, "CENTER LAG", kPurple, 800, row),
+          "Center Lag: how long the angle takes to follow at the very centre with Center Smoothing on, easing to "
+          "no lag at the edge of its zone. Longer is calmer but turns the Orb later when you start from the "
+          "middle. 250 ms is the default.");
+      pages_[1].assign(children().begin() + first, children().end());
+
+      tabs_ = &add<TitleTabs>({12, 586, 300, 34}, std::vector<std::string>{"SETTINGS", "TOUCH"});
+      tabs_->onChange = [this](int page) { showTab(page); };
+      showTab(0);
 
       // Shown when two inputs or two outputs share a CC, which the plugin won't convert.
       warning_ = &add<ui::Label>({kDesignWidth - 340, 48, 328, 14}, "", kOrange, visage::Font::kRight, 0.7f);
 
       sync();
+      tips_.maxWidth = 420.0f; // the TOUCH tab's tips explain a lot, so they wrap
       startTimer(1);
    }
+
+   // Shows the bottom section's page: 0 SETTINGS, 1 TOUCH.
+   void showPage(int page) { showTab(page); }
 
    // Shows the tip of the `index`th control given one straight away (for screenshots).
    void showTip(int index) {
@@ -662,6 +767,73 @@ private:
       return segments;
    }
 
+   // Touch Filter's presets on a dropdown, and Custom, which shows a box for any ms beside it. The
+   // presets aren't evenly spaced, so the dropdown sets the param itself rather than through a binding.
+   static constexpr int kFilterPresets[] = {0, 10, 20, 40, 50, 60};
+   static constexpr int kCustomFilter = 6;
+
+   void filterPicker(const char *label, float x, float y) {
+      heading(label, x, y);
+      auto &menu = add<ui::Dropdown>({x, y + 18, 150, 24},
+                                     std::vector<std::string>{"Off", "10 ms", "20 ms", "40 ms", "50 ms", "60 ms", "Custom"});
+      menu.setAccent(kPurple);
+      menu.onChange = [this](int index) { pickFilter(index); };
+      menu.onContextMenu = [this](visage::PopupMenu &m) { bindings_.addHostMenu(m, kParamTouchFilter); };
+      tip(menu, "Touch Filter: every reading is held back this long, so when a touch ends (the touch CC goes off, or "
+                "a jump starts a new touch) the readings from the lift-off can be thrown away before they go out. "
+                "It adds this much delay. 40-60 ms suits a resistive pad that sends 60 times a second; pick Custom "
+                "for any time from 5 to 100 ms. Off passes everything straight through.");
+      auto &ms = add<ui::NumberBox>({x + 96, y + 18, 54, 24}, ui::ValueRange{5.0, 100.0, 20.0, 1.0, false, true});
+      ms.setAccent(kPurple);
+      ms.valueText = [](double v) { return text(kParamTouchFilter, v); };
+      ms.parseText = [](const std::string &t, double &v) { return parseParam(kParamTouchFilter, t.c_str(), v); };
+      bindings_.bind(ms, kParamTouchFilter);
+      tip(ms, "Touch Filter in ms, from 5 to 100: drag or scroll, or right-click to type it.");
+      filters_.push_back({&menu, &ms, x, y + 18});
+   }
+
+   void pickFilter(int index) {
+      const double now = host_.paramValue(kParamTouchFilter);
+      customFilter_ = index == kCustomFilter;
+      const double to = customFilter_ ? (now < 5.0 ? 30.0 : now) : kFilterPresets[index];
+      if (to != now) {
+         host_.beginEdit(kParamTouchFilter);
+         host_.setParam(kParamTouchFilter, to);
+         host_.endEdit(kParamTouchFilter);
+      }
+      showFilter(true);
+   }
+
+   // Each picker on the preset the value is, or on Custom with its box when it is none of them (or
+   // Custom was picked).
+   void showFilter(bool force = false) {
+      const int value = static_cast<int>(std::lround(host_.paramValue(kParamTouchFilter)));
+      int index = kCustomFilter;
+      for (int i = 0; i < kCustomFilter; ++i)
+         if (kFilterPresets[i] == value)
+            index = i;
+      if (customFilter_)
+         index = kCustomFilter;
+      if (index == filterShown_ && !force)
+         return;
+      filterShown_ = index;
+      const bool custom = index == kCustomFilter;
+      for (const FilterPicker &f : filters_) {
+         f.menu->setSelected(index);
+         move(*f.menu, {f.x, f.y, custom ? 90.0f : 150.0f, 24.0f});
+         f.ms->setVisible(custom && f.menu->isVisible());
+      }
+   }
+
+   void showTab(int page) {
+      for (int p = 0; p < 2; ++p)
+         for (visage::Frame *f : pages_[p])
+            f->setVisible(p == page);
+      if (tabs_)
+         tabs_->select(page);
+      showFilter(true);
+   }
+
    // Gives `frame` a hover tip, and returns it.
    template <typename T>
    T &tip(T &frame, std::string text) {
@@ -676,6 +848,7 @@ private:
       // What the plugin really sent on that channel (it holds the angle at the centre, and sends
       // nothing until both axes have arrived), rather than a guess from the input.
       int angle = 0, radius = 0;
+      showFilter();
       const bool polar = std::lround(host_.paramValue(kParamPolarOut)) != 0;
       const bool sent = polar && host_.lastOutput(angle, radius);
       // With the output off, its view and controls dim, and they don't take the mouse.
@@ -726,6 +899,18 @@ private:
    ui::Label *warning_ = nullptr;
    // What dims with the angle/radius output off, and whether it is on as shown.
    std::vector<Veil *> polarVeils_;
+   // The bottom section's tabs and what each page shows.
+   TitleTabs *tabs_ = nullptr;
+   std::vector<visage::Frame *> pages_[2];
+   // The Touch Filter pickers (one on each page), what they show, and whether Custom was picked.
+   struct FilterPicker {
+      ui::Dropdown *menu;
+      ui::NumberBox *ms;
+      float x, y;
+   };
+   std::vector<FilterPicker> filters_;
+   int filterShown_ = -1;
+   bool customFilter_ = false;
    ui::Tooltips tips_;
    // Every frame with a tip, in the order given (see showTip).
    std::vector<visage::Frame *> tipped_;
@@ -741,8 +926,9 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
 }
 
 bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, double seconds,
-                      const std::function<void(double)> &advance, int tip) {
+                      const std::function<void(double)> &advance, int tip, int page) {
    Panel panel(host);
+   panel.showPage(page);
    panel.stopTimer();
    const int frames = static_cast<int>(seconds * 60.0 + 0.5);
    for (int i = 0; i < frames; ++i) {
