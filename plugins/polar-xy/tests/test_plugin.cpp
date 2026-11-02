@@ -586,6 +586,54 @@ void touchTests() {
       JCLAP_CHECK(!on.radii.empty() && on.radii[0] == held.radius);
    }
 
+   // With the pad's touch CC (92 in, sent on as 93): a lift-off that slides away in small steps,
+   // with no jump to give it away, is still dropped, and the touch goes out around the motion.
+   {
+      jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+      h.setParam(13, 2.0);
+      h.setParam(14, 92.0);
+      h.setParam(15, 93.0);
+      std::vector<std::pair<int, int>> sent; // CC, value
+      const auto block = [&] {
+         for (const auto &m : h.process().midi)
+            sent.push_back({m.data1, m.data2});
+      };
+      h.midi(0xB0, 92, 127);
+      block();
+      for (int b = 0; b < 19; ++b) {
+         h.midi(0xB0, 16, 90, 0);
+         h.midi(0xB0, 17, 90, 48);
+         block();
+      }
+      const int slide[][2] = {{96, 96}, {104, 102}, {112, 110}};
+      for (const auto &xy : slide) {
+         h.midi(0xB0, 16, static_cast<uint8_t>(xy[0]), 0);
+         h.midi(0xB0, 17, static_cast<uint8_t>(xy[1]), 48);
+         block();
+      }
+      h.midi(0xB0, 92, 0);
+      for (int b = 0; b < 30; ++b)
+         block();
+      std::vector<int> angles, touches;
+      size_t firstTouch = sent.size(), firstAngle = sent.size();
+      for (size_t i = 0; i < sent.size(); ++i) {
+         if (sent[i].first == 18) {
+            angles.push_back(sent[i].second);
+            firstAngle = std::min(firstAngle, i);
+         }
+         if (sent[i].first == 93) {
+            touches.push_back(sent[i].second);
+            firstTouch = std::min(firstTouch, i);
+         }
+      }
+      JCLAP_CHECK(angles.size() == 1 && angles[0] == held.angle);
+      JCLAP_CHECK(touches == std::vector<int>({127, 0}));
+      JCLAP_CHECK(firstTouch < firstAngle);
+      JCLAP_CHECK(h.paramText(14, -1.0) == "Off" && h.paramText(14, 92.0) == "CC 92");
+      double off = 0.0;
+      JCLAP_CHECK(h.textToValue(15, "off", off) && off == -1.0);
+   }
+
    jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
    JCLAP_CHECK(h.paramText(13, 0.0) == "Off");
    JCLAP_CHECK(h.paramText(13, 2.0) == "20 ms");

@@ -251,6 +251,44 @@ for (var now = 0; now < 0.2; now += 0.0005) {
 check(popped.length === 2 && popped[1][0] === 0.2 && popped[1][1] === 0.2 && popped[0][0] === 0,
       'touch filter pairs X and Y');
 
+// The real thing: a resistive pad played by hand (tests/data/resistive-pad-capture.txt), whose last
+// two lifts skitter to a wrong spot just before its touch CC goes up.
+function replay(settings) {
+   var dev = device(), fs = require('fs');
+   for (var k in settings) dev.engine.setParam(k, settings[k]);
+   var lines = fs.readFileSync(path.join(__dirname, '..', 'tests', 'data', 'resistive-pad-capture.txt'), 'utf8')
+      .split('\n').filter(function (l) { return l && l[0] !== '#'; })
+      .map(function (l) { return l.split(' ').map(Number); });
+   var out = { visited: [], touches: [] }, angle = -1, radius = -1, next = 0;
+   for (var now = 0; now < 16; now += 0.004) {
+      while (next < lines.length && lines[next][0] <= now) {
+         dev.send(0xB0, lines[next][1], lines[next][2]);
+         ++next;
+      }
+      dev.engine.tick(0.004);
+      dev.take().forEach(function (m) {
+         if (m[1] === 18) angle = m[2];
+         if (m[1] === 19) radius = m[2];
+         if (m[1] === 93) out.touches.push(m[2]);
+      });
+      out.visited.push(angle + '/' + radius);
+   }
+   return out;
+}
+var skitter = [[64, 127], [60, 95]].map(function (xy) { var q = polar(xy[0], xy[1]); return q.angle + '/' + q.radius; });
+function visits(o, spot) { return o.visited.indexOf(spot) >= 0; }
+var capture = { inx: 12, iny: 13, touchout: 93 };
+var rawRun = replay(capture);
+check(visits(rawRun, skitter[0]) && visits(rawRun, skitter[1]), 'capture: unfiltered, the lifts skitter');
+capture.touchfilter = 2;
+var filtered = replay(capture);
+check(!visits(filtered, skitter[0]) && !visits(filtered, skitter[1]), 'capture: Touch Filter drops the skitter');
+capture.touchin = 92;
+var gated = replay(capture);
+check(!visits(gated, skitter[0]) && !visits(gated, skitter[1]), 'capture: with the touch CC too');
+check(gated.touches.length >= 8 && gated.touches.every(function (v, i) { return v === (i % 2 ? 0 : 127); }) &&
+      gated.touches[gated.touches.length - 1] === 0, 'capture: the touch goes out, down and up in turn');
+
 if (failures) {
    console.log(failures + ' failure(s)');
    process.exit(1);

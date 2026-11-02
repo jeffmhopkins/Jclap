@@ -1,6 +1,6 @@
 // Polar XY's panel, in the MicroMonsta 2 style: a title bar, then the XY input and the polar output
 // side by side, each a small night sky with its CCs beneath, and the mapping and motion settings
-// below them, all on a 720 x 690 design grid scaled to the window.
+// below them, all on a 960 x 720 design grid scaled to the window.
 //
 // Both skies animate at the display's rate, about 60 frames a second, on the main thread. The input
 // dot and the output orb shed ink as they move, which drifts, spreads and fades behind them like the
@@ -40,8 +40,8 @@ namespace {
 
 namespace ui = jclap::ui;
 
-constexpr float kDesignWidth = 720.0f;
-constexpr float kDesignHeight = 690.0f;
+constexpr float kDesignWidth = kEditorWidth;
+constexpr float kDesignHeight = kEditorHeight;
 constexpr float kHeaderHeight = 64.0f;
 // Every knob gets a cell this size, so they all come out alike.
 constexpr float kKnobWidth = 76.0f;
@@ -450,7 +450,7 @@ class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       add<ui::UpdateNotice>({196, 19, 196, 26});
-      auto &presets = add<ui::PresetBar>({400, 18, 308, 28}, factoryPresets(), kPresetFormat, host_);
+      auto &presets = add<ui::PresetBar>({kDesignWidth - 360, 18, 348, 28}, factoryPresets(), kPresetFormat, host_);
       presets.setAccent(kOrange);
       presets.defaults = defaultValues();
       presets.currentName = [this] { return host_.presetName(); };
@@ -458,62 +458,62 @@ public:
 
       // Signal flow left to right: the input and its CCs, the output and its CCs; and below, what
       // happens in between.
-      add<ui::Section>({12, 76, 342, 400}, "XY IN");
-      add<ui::Section>({366, 76, 342, 400}, "POLAR OUT");
-      add<ui::Section>({12, 488, 342, 190}, "MAPPING");
-      add<ui::Section>({366, 488, 342, 190}, "MOTION");
+      add<ui::Section>({12, 76, 462, 430}, "XY IN");
+      add<ui::Section>({486, 76, 462, 430}, "POLAR OUT");
+      add<ui::Section>({12, 518, 462, 190}, "MAPPING");
+      add<ui::Section>({486, 518, 462, 190}, "MOTION");
 
       // Live views: what comes in on the X/Y CCs, and the angle/radius that goes out. Dragging the
       // XY pad moves the input itself, holding off the controller until the mouse lets go.
       const ui::ValueRange cc{0.0, 127.0, 64.0, 1.0};
-      xy_ = &add<InkPad>({24, 116, 318, 236}, cc, cc);
+      xy_ = &add<InkPad>({24, 116, 438, 266}, cc, cc);
       xy_->setAccent(kBlue);
-      orb_ = &add<OrbView>({378, 116, 318, 236});
+      orb_ = &add<OrbView>({498, 116, 438, 266});
       // The pad sets X then Y, so a move is sent once Y has it too, never as the new X with the old
       // Y. It goes at full resolution, not rounded to CC steps, for a smooth angle and radius.
       xy_->y().onChange = [this](double) { host_.dragInput(xy_->x().value, xy_->y().value); };
       for (ui::XYPad::Axis *axis : {&xy_->x(), &xy_->y()})
          axis->onEndEdit = [this] { host_.releaseInput(); };
-      add<ui::Divider>({24, 364, 318, 1});
-      add<ui::Divider>({378, 364, 318, 1});
+      add<ui::Divider>({24, 394, 438, 1});
+      add<ui::Divider>({498, 394, 438, 1});
 
-      // Each view's CCs: two knobs, and beside them a column of what else goes with them.
-      constexpr float strip = 376.0f;
+      // Each view's CCs: three knobs (the touch CC Off until set), and at the right a column of what
+      // else goes with them.
+      constexpr float strip = 406.0f;
       knob(kParamInX, "X", kBlue, 24, strip);
       knob(kParamInY, "Y", kBlue, 100, strip);
-      heading("PASS INPUT CCS", 192, strip);
-      auto &pass = add<ui::Button>({192, strip + 18, 150, 24}, "PASS");
+      knob(kParamTouchIn, "TOUCH", kBlue, 176, strip);
+      heading("PASS INPUT CCS", 312, strip);
+      auto &pass = add<ui::Button>({312, strip + 18, 150, 24}, "PASS");
       pass.setAccent(kPurple);
       bindings_.bind(pass, kParamPassThrough);
-      hint("Sends the X/Y CCs on as well", 192, strip + 52);
+      hint("Sends the input CCs on as well", 312, strip + 52);
 
-      knob(kParamOutAngle, "ANGLE", kOrange, 378, strip);
-      knob(kParamOutRadius, "RADIUS", kOrange, 454, strip);
+      knob(kParamOutAngle, "ANGLE", kOrange, 498, strip);
+      knob(kParamOutRadius, "RADIUS", kOrange, 574, strip);
+      knob(kParamTouchOut, "TOUCH", kOrange, 650, strip);
       // Each sends its CC alone, for a MIDI learn on the receiving end.
-      heading("MIDI LEARN", 546, strip);
-      const char *const sends[] = {"SEND ANGLE", "SEND RADIUS"};
-      for (int i = 0; i < 2; ++i) {
-         auto &send = add<ui::Button>({546.0f + i * 78.0f, strip + 18, 72, 24}, sends[i]);
-         send.setAccent(kOrange);
-         send.onClick = [this, i] { host_.sendOutput(i); };
-      }
-      hint("Sends one CC alone, to learn it", 546, strip + 52);
+      heading("MIDI LEARN", 786, strip);
+      const char *const sends[] = {"ANGLE", "RADIUS", "TOUCH"};
+      for (int i = 0; i < 3; ++i)
+         send(i, sends[i], {786.0f + i * 51.0f, strip + 18, 48, 24});
+      hint("Sends one CC alone, to learn it", 786, strip + 52);
 
       // Between the two: where the angle starts and turns, and how the output follows.
-      constexpr float row = 524.0f;
+      constexpr float row = 554.0f;
       knob(kParamAngleOffset, "OFFSET", kPurple, 62, row, 1.0);
-      choice(kParamDirection, "DIRECTION", {"CCW", "CW"}, 192, row);
-      choice(kParamRadiusMode, "RADIUS MODE", {"CIRCLE", "SQUARE"}, 192, row + 50);
-      knob(kParamSmoothing, "SMOOTHING", kBlue, 378, row, 10.0);
-      knob(kParamInertia, "INERTIA", kBlue, 454, row, 1.0);
-      choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 546, row);
-      choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 546, row + 50);
-      choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 546, row + 100);
+      choice(kParamDirection, "DIRECTION", {"CCW", "CW"}, 312, row);
+      choice(kParamRadiusMode, "RADIUS MODE", {"CIRCLE", "SQUARE"}, 312, row + 50);
+      knob(kParamSmoothing, "SMOOTHING", kBlue, 498, row, 10.0);
+      knob(kParamInertia, "INERTIA", kBlue, 574, row, 1.0);
+      choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 786, row);
+      choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 786, row + 50);
+      choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 786, row + 100);
       // How much of each touch's press and release a resistive pad's skitter is thrown away.
-      choice(kParamTouchFilter, "TOUCH FILTER", {"OFF", "10 MS", "20 MS", "40 MS"}, 378, row + 100);
+      choice(kParamTouchFilter, "TOUCH FILTER", {"OFF", "10 MS", "20 MS", "40 MS"}, 498, row + 100);
 
       // Shown when two inputs or two outputs share a CC, which the plugin won't convert.
-      warning_ = &add<ui::Label>({380, 48, 328, 14}, "", kOrange, visage::Font::kRight, 0.7f);
+      warning_ = &add<ui::Label>({kDesignWidth - 340, 48, 328, 14}, "", kOrange, visage::Font::kRight, 0.7f);
 
       sync();
       startTimer(1);
@@ -555,6 +555,13 @@ private:
       canvas.ring(18 * s, 16 * s, 32 * s, 2.0f * s);
       canvas.segment(34 * s, 32 * s, 44 * s, 23 * s, 2.0f * s, true);
       canvas.circle(41 * s, 19 * s, 7 * s);
+   }
+
+   // A button that sends output CC `which` alone.
+   void send(int which, const char *label, ui::Rect bounds) {
+      auto &button = add<ui::Button>(bounds, label);
+      button.setAccent(kOrange);
+      button.onClick = [this, which] { host_.sendOutput(which); };
    }
 
    // A knob in a kKnobWidth x kKnobHeight cell at (x, y).

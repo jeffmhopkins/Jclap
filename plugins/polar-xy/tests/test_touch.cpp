@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <utility>
 #include <vector>
 
 #include "touch.h"
@@ -150,6 +151,74 @@ int main() {
       const auto out = run({{0.5, 0.5, 0.0}, {0.5, 0.5, 0.005}, {0.5, 0.5, 0.03}, {-1.0, -1.0, 0.04}}, 0.02, 0.3);
       for (const auto &o : out)
          CHECK(o.x == 0.5);
+   }
+
+   // With a touch CC: a lift-off that slides gently away (no jump to give it away) is still thrown
+   // away, readings while lifted are ignored, a press needs only one reading, and the touch comes
+   // out as Down before the first reading and Up after the last.
+   {
+      TouchFilter f;
+      const double w = 0.02;
+      std::vector<std::pair<TouchFilter::Event, double>> events; // event, x
+      std::vector<double> times;
+      const auto poll = [&](double from, double to) {
+         for (double now = from; now <= to; now += 0.0005) {
+            double x, y;
+            TouchFilter::Event e;
+            while (f.pop(now, w, x, y, e)) {
+               events.push_back({e, x});
+               times.push_back(now);
+            }
+         }
+      };
+      f.push(-0.9, -0.9, 0.0, w); // noise before any touch... the filter doesn't know yet
+      f.touch(false, 0.001, w);    // ...until the touch CC says the finger is up
+      poll(0.0, 0.05);
+      f.push(0.8, 0.8, 0.06, w); // lifted: ignored
+      poll(0.05, 0.1);
+      f.touch(true, 0.1, w);
+      f.push(0.5, 0.3, 0.102, w); // one reading, then the finger holds still: out a window later
+      poll(0.1, 0.2);
+      for (int i = 0; i < 10; ++i) { // a slow drag...
+         f.push(0.5 + 0.01 * i, 0.3, 0.2 + 0.005 * i, w);
+         poll(0.2 + 0.005 * i, 0.2 + 0.005 * (i + 1) - 0.0005);
+      }
+      for (int i = 1; i <= 3; ++i) { // ...then the lift-off slides away in small steps
+         f.push(0.59 + 0.1 * i, 0.3 + 0.1 * i, 0.25 + 0.003 * i, w);
+         poll(0.25 + 0.003 * i, 0.25 + 0.003 * (i + 1) - 0.0005);
+      }
+      f.touch(false, 0.262, w);
+      poll(0.262, 0.4);
+      CHECK(!events.empty() && events.front().first == TouchFilter::Event::Down);
+      CHECK(events.size() >= 2 && events[1].first == TouchFilter::Event::Move && events[1].second == 0.5 &&
+            std::abs(times[1] - 0.122) < 0.001);
+      CHECK(!events.empty() && events.back().first == TouchFilter::Event::Up);
+      int downs = 0, ups = 0;
+      for (const auto &[e, x] : events) {
+         downs += e == TouchFilter::Event::Down;
+         ups += e == TouchFilter::Event::Up;
+         if (e == TouchFilter::Event::Move)
+            CHECK(x >= 0.5 && x <= 0.59 + 1e-9);
+      }
+      CHECK(downs == 1 && ups == 1);
+   }
+
+   // A touch too short for anything to go out: no Down, so no Up either.
+   {
+      TouchFilter f;
+      int n = 0;
+      double x, y;
+      TouchFilter::Event e;
+      f.touch(true, 0.0, 0.02);
+      f.push(0.1, 0.1, 0.001, 0.02);
+      for (double now = 0.0; now < 0.015; now += 0.0005)
+         while (f.pop(now, 0.02, x, y, e))
+            ++n;
+      f.touch(false, 0.015, 0.02);
+      for (double now = 0.015; now < 0.1; now += 0.0005)
+         while (f.pop(now, 0.02, x, y, e))
+            ++n;
+      CHECK(n == 0);
    }
 
    if (failures)

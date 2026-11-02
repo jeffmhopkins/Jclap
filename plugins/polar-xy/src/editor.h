@@ -28,13 +28,17 @@ public:
    // until released.
    virtual void dragInput(double x, double y) = 0;
    virtual void releaseInput() = 0;
-   // Sends just one output CC (0: angle, 1: radius) on the shown channel, at its last value, so a
+   // Sends just one output CC (0: angle, 1: radius, 2: touch) on the shown channel, at its last value, so a
    // MIDI learn picks up that CC alone.
    virtual void sendOutput(int which) = 0;
    // The name of the preset last loaded or saved, kept with the project.
    virtual std::string presetName() const = 0;
    virtual void setPresetName(const std::string &name) = 0;
 };
+
+// The panel's size at 100% zoom, in pixels.
+constexpr int kEditorWidth = 960;
+constexpr int kEditorHeight = 720;
 
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
