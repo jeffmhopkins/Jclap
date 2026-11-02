@@ -250,6 +250,70 @@ int main() {
          CHECK(x == 0.2);
    }
 
+   // Tuning: a press set apart from the window, a tighter jump limit and a looser agreement.
+   {
+      // Press 30 ms, window 10 ms: a new touch's reading goes out at 30 ms; the next one 10 ms after
+      // it arrives.
+      TouchFilter f;
+      f.setPress(0.03);
+      std::vector<std::pair<double, double>> got; // time, x
+      const auto poll = [&](double from, double to) {
+         double x, y;
+         for (double now = from; now <= to; now += 0.0005)
+            while (f.pop(now, 0.01, x, y))
+               got.push_back({now, x});
+      };
+      f.push(0.1, 0.1, 0.0, 0.01);
+      poll(0.0, 0.01);
+      f.push(0.1, 0.1, 0.01, 0.01);
+      poll(0.01, 0.04);
+      f.push(0.12, 0.1, 0.04, 0.01);
+      poll(0.04, 0.1);
+      CHECK(got.size() == 2 && std::abs(got[0].first - 0.03) < 0.001 && std::abs(got[1].first - 0.05) < 0.001);
+   }
+   {
+      // Jump limit 0.1: a step of 0.15 is a jump, so it waits for a second reading to agree; with
+      // the default (0.25) it's a drag and goes straight on.
+      const auto steps = [](double jump) {
+         TouchFilter f;
+         if (jump > 0.0)
+            f.setJump(jump);
+         int n = 0;
+         double x, y;
+         const double at[][2] = {{0.0, 0.0}, {0.0, 0.01}, {0.0, 0.02}, {0.15, 0.03}};
+         for (double now = 0.0; now < 0.2; now += 0.0005) {
+            for (const auto &r : at)
+               if (std::abs(now - r[1]) < 0.00025)
+                  f.push(r[0], 0.0, r[1], 0.01);
+            while (f.pop(now, 0.01, x, y))
+               n += x == 0.15;
+         }
+         return n;
+      };
+      CHECK(steps(0.0) == 1);
+      CHECK(steps(0.1) == 0);
+   }
+   {
+      // Agree 0.2: two press readings 0.1 apart agree, so the press goes out; by default they don't.
+      const auto presses = [](double agree) {
+         TouchFilter f;
+         if (agree > 0.0)
+            f.setAgree(agree);
+         int n = 0;
+         double x, y;
+         f.push(0.5, 0.5, 0.0, 0.02);
+         for (double now = 0.0; now < 0.005; now += 0.0005)
+            f.pop(now, 0.02, x, y);
+         f.push(0.6, 0.5, 0.01, 0.02);
+         for (double now = 0.01; now < 0.2; now += 0.0005)
+            while (f.pop(now, 0.02, x, y))
+               ++n;
+         return n;
+      };
+      CHECK(presses(0.0) == 0);
+      CHECK(presses(0.2) == 1);
+   }
+
    if (failures)
       std::printf("%d failure(s)\n", failures);
    else

@@ -29,6 +29,12 @@ enum ParamId : clap_id {
    kParamTouchIn,
    kParamTouchOut,
    kParamPolarOut,
+   kParamCenterSmoothing,
+   kParamTouchJump,
+   kParamTouchPress,
+   kParamTouchAgree,
+   kParamCenterLag,
+   kParamTouchHeading,
    kParamCount
 };
 
@@ -52,10 +58,16 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Motion Path", 0, 1, 0, true},
    {"Output Resolution", 0, 1, 0, true},
    {"Inertia Mode", 0, 2, 0, true},
-   {"Touch Filter", 0, 3, 0, true}, // Off, then the windows in kTouchWindows (touch.h)
+   {"Touch Filter", 0, 100, 0, true}, // ms; 0: off
    {"Touch In CC", -1, 127, -1, true},  // -1: none
    {"Touch Out CC", -1, 127, -1, true}, // -1: none
    {"Polar Out", 0, 1, 1, true},        // Off: no angle or radius goes out
+   {"Center Smoothing", 0, 50, 0, false}, // %: how far out from the centre the angle is steadied
+   {"Jump Limit", 8, 64, 16, true},       // CC steps one reading may jump before a second must agree
+   {"Press Time", -1, 100, -1, true},     // ms a touch's press is held back; -1: the same as Touch Filter
+   {"Agree", 1, 16, 4, true},             // CC steps two readings may differ by and still agree
+   {"Center Lag", 50, 1000, 250, false},  // ms the angle takes to follow at the very centre
+   {"Jump Check", 0, 1, 0, true},         // Distance (from the last reading) or Heading (from where it was going)
 };
 
 // Labels for the choice params, off (or the first) first: one per step of the param's range.
@@ -66,7 +78,7 @@ inline const char *const kOnOffLabels[] = {"Off", "On"};
 inline const char *const kMotionPathLabels[] = {"Straight", "Around"};
 inline const char *const kResolutionLabels[] = {"7-bit", "14-bit"};
 inline const char *const kInertiaModeLabels[] = {"Pull", "Coast", "Pad"};
-inline const char *const kTouchFilterLabels[] = {"Off", "10 ms", "20 ms", "40 ms"};
+inline const char *const kJumpCheckLabels[] = {"Distance", "Heading"};
 
 // 14-bit output sends each value's LSB on its CC + 32, so it needs both output CCs below 32; on
 // higher ones the output stays 7-bit.
@@ -88,8 +100,8 @@ inline const char *const *choiceLabels(clap_id id) {
       return kResolutionLabels;
    case kParamInertiaMode:
       return kInertiaModeLabels;
-   case kParamTouchFilter:
-      return kTouchFilterLabels;
+   case kParamTouchHeading:
+      return kJumpCheckLabels;
    default:
       return nullptr;
    }
@@ -107,8 +119,16 @@ inline void formatParam(clap_id id, double value, char *out, uint32_t size) {
    }
    else if (id == kParamSmoothing)
       std::snprintf(out, size, value >= 1000.0 ? "%.2f s" : "%.0f ms", value >= 1000.0 ? value / 1000.0 : value);
-   else if (id == kParamInertia)
-      std::snprintf(out, size, "%.0f%%", value);
+   else if (id == kParamInertia || id == kParamCenterSmoothing)
+      std::snprintf(out, size, value <= 0.0 && id == kParamCenterSmoothing ? "Off" : "%.0f%%", value);
+   else if (id == kParamTouchJump || id == kParamTouchAgree)
+      std::snprintf(out, size, std::lround(value) == 1 ? "%.0f step" : "%.0f steps", value);
+   else if (id == kParamTouchPress && std::lround(value) < 0)
+      std::snprintf(out, size, "Same");
+   else if (id == kParamTouchPress || id == kParamCenterLag)
+      std::snprintf(out, size, "%.0f ms", value);
+   else if (id == kParamTouchFilter)
+      std::snprintf(out, size, std::lround(value) <= 0 ? "Off" : "%.0f ms", value);
    else if (std::lround(value) < 0)
       std::snprintf(out, size, "Off");
    else
@@ -130,8 +150,9 @@ inline bool sameText(const char *a, const char *b) {
 inline bool parseParam(clap_id id, const char *text, double &value) {
    while (std::isspace(static_cast<unsigned char>(*text)))
       ++text;
-   if ((id == kParamTouchIn || id == kParamTouchOut) && (sameText(text, "off") || sameText(text, "none"))) {
-      value = -1.0;
+   if ((id == kParamTouchIn || id == kParamTouchOut || id == kParamTouchFilter || id == kParamCenterSmoothing) &&
+       (sameText(text, "off") || sameText(text, "none"))) {
+      value = kParams[id].min;
       return true;
    }
    if (const char *const *labels = choiceLabels(id)) {
@@ -140,6 +161,10 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
             value = i;
             return true;
          }
+   }
+   if (id == kParamTouchPress && sameText(text, "same")) {
+      value = -1.0;
+      return true;
    }
    if (std::tolower(static_cast<unsigned char>(text[0])) == 'c' && std::tolower(static_cast<unsigned char>(text[1])) == 'c')
       text += 2;

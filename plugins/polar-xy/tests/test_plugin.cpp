@@ -579,7 +579,7 @@ void touchTests() {
    JCLAP_CHECK(off.angles.size() > 4);
 
    // On, at each window: one move, straight to where the finger was held, and nothing else.
-   for (double filter : {1.0, 2.0, 3.0}) {
+   for (double filter : {10.0, 20.0, 40.0}) {
       const Path on = touch(filter);
       JCLAP_CHECK(on.angles.size() == 1 && on.radii.size() == 1);
       JCLAP_CHECK(!on.angles.empty() && on.angles[0] == held.angle);
@@ -590,7 +590,7 @@ void touchTests() {
    // with no jump to give it away, is still dropped, and the touch goes out around the motion.
    {
       jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
-      h.setParam(13, 2.0);
+      h.setParam(13, 20.0);
       h.setParam(14, 92.0);
       h.setParam(15, 93.0);
       std::vector<std::pair<int, int>> sent; // CC, value
@@ -638,7 +638,7 @@ void touchTests() {
    for (int mode : {1, 2}) {
       jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
       h.setParam(7, mode);
-      h.setParam(13, 2.0);
+      h.setParam(13, 20.0);
       h.setParam(14, 92.0);
       std::vector<std::pair<int, int>> passed; // CC, value
       const auto block = [&] {
@@ -694,9 +694,48 @@ void touchTests() {
 
    jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
    JCLAP_CHECK(h.paramText(13, 0.0) == "Off");
-   JCLAP_CHECK(h.paramText(13, 2.0) == "20 ms");
+   JCLAP_CHECK(h.paramText(13, 20.0) == "20 ms");
    double v = 0.0;
-   JCLAP_CHECK(h.textToValue(13, "40 ms", v) && v == 3.0);
+   JCLAP_CHECK(h.textToValue(13, "40 ms", v) && v == 40.0);
+   JCLAP_CHECK(h.textToValue(13, "off", v) && v == 0.0);
+   JCLAP_CHECK(h.textToValue(13, "65", v) && v == 65.0);
+   JCLAP_CHECK(h.paramText(17, 0.0) == "Off" && h.paramText(17, 25.0) == "25%");
+   JCLAP_CHECK(h.paramText(18, 16.0) == "16 steps");
+   JCLAP_CHECK(h.paramText(19, -1.0) == "Same" && h.paramText(19, 30.0) == "30 ms");
+   JCLAP_CHECK(h.textToValue(19, "same", v) && v == -1.0);
+   JCLAP_CHECK(h.paramText(20, 1.0) == "1 step" && h.paramText(21, 250.0) == "250 ms");
+}
+
+// Center Smoothing: near the centre, a wobble across it swings the angle less, while the radius
+// goes out as it is; out past the zone, nothing changes.
+void centerTests() {
+   // The angles sent while X/Y wobble across the centre, 3 CC steps from it, a reading each 10 ms.
+   const auto wobble = [](double center, int x0, int y0, int x1, int y1) {
+      jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+      h.setParam(17, center);
+      std::vector<int> angles, radii;
+      for (int i = 0; i < 20; ++i) {
+         const bool odd = i % 2;
+         h.midi(0xB0, 16, odd ? x1 : x0);
+         h.midi(0xB0, 17, odd ? y1 : y0);
+         const Path p = run(h, 1);
+         angles.insert(angles.end(), p.angles.begin(), p.angles.end());
+         radii.insert(radii.end(), p.radii.begin(), p.radii.end());
+      }
+      int swing = 0;
+      for (size_t i = 1; i < angles.size(); ++i) {
+         const int d = std::abs(angles[i] - angles[i - 1]);
+         swing = std::max(swing, std::min(d, 127 - d));
+      }
+      return std::make_pair(swing, radii);
+   };
+   const auto off = wobble(0.0, 67, 64, 61, 64); // right of centre, then left: half a turn
+   const auto on = wobble(30.0, 67, 64, 61, 64);
+   JCLAP_CHECK(off.first >= 60);
+   JCLAP_CHECK(on.first > 0 && on.first < 20);
+   JCLAP_CHECK(on.second == off.second); // the radius is never slowed
+   // Near the edge, well outside a 30% zone: the angle goes out as it is.
+   JCLAP_CHECK(wobble(0.0, 127, 64, 64, 127).first == wobble(30.0, 127, 64, 64, 127).first);
 }
 
 int main() {
@@ -834,6 +873,23 @@ int main() {
       JCLAP_CHECK(h2.paramValue(8) == 0.0 && h2.paramValue(9) == 0.0 && h2.paramValue(10) == 0.0 &&
                   h2.paramValue(11) == 0.0 && h2.paramValue(12) == 0.0);
       JCLAP_CHECK(h2.object<polar_xy::EditorHost>()->presetName().empty()); // no name before version 3
+
+      // Version 7 state, from before Center Smoothing and Jump Limit, with Touch Filter as a choice
+      // (3: 40 ms).
+      const uint32_t version7 = 7;
+      double v7[17];
+      for (int i = 0; i < 17; ++i)
+         v7[i] = polar_xy::kParams[i].def;
+      v7[13] = 3.0;
+      bytes.assign(magic, magic + 4);
+      bytes.insert(bytes.end(), reinterpret_cast<const uint8_t *>(&version7), reinterpret_cast<const uint8_t *>(&version7) + 4);
+      bytes.insert(bytes.end(), reinterpret_cast<const uint8_t *>(v7), reinterpret_cast<const uint8_t *>(v7) + sizeof(v7));
+      const uint32_t noName = 0;
+      bytes.insert(bytes.end(), reinterpret_cast<const uint8_t *>(&noName), reinterpret_cast<const uint8_t *>(&noName) + 4);
+      pos = 0;
+      JCLAP_CHECK(state2->load(h2.plugin(), &is));
+      JCLAP_CHECK(h2.paramValue(13) == 40.0 && h2.paramValue(17) == 0.0 && h2.paramValue(18) == 16.0 &&
+                  h2.paramValue(19) == -1.0 && h2.paramValue(20) == 4.0 && h2.paramValue(21) == 250.0);
    }
 
    JCLAP_CHECK(h.paramText(8, 250.0) == "250 ms");
@@ -848,9 +904,11 @@ int main() {
    JCLAP_CHECK(h.paramText(12, 2.0) == "Pad");
    JCLAP_CHECK(h.textToValue(12, "pad", v) && v == 2.0);
 
-   // The factory bank is one Init with every param at its default.
+   // The factory bank: Init with every param at its default, then Geren.
    const auto &factory = polar_xy::factoryPresets();
-   JCLAP_CHECK(factory.size() == 1 && factory[0].name == "Init" && factory[0].values.size() == polar_xy::kParamCount);
+   JCLAP_CHECK(factory.size() == 2 && factory[0].name == "Init" && factory[0].values.size() == polar_xy::kParamCount);
+   JCLAP_CHECK(factory.size() == 2 && factory[1].name == "Geren" &&
+               factory[1].values.size() == polar_xy::kParamCount);
    if (!factory.empty())
       for (const auto &[id, value] : factory[0].values)
          JCLAP_CHECK(value == polar_xy::kParams[id].def);
@@ -863,5 +921,6 @@ int main() {
    learnTests();
    fineInputTests();
    touchTests();
+   centerTests();
    return jclap::core::testResult();
 }

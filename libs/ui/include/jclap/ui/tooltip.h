@@ -1,7 +1,7 @@
 #pragma once
 
 // Hover help. Register widgets with their text; hovering one for a moment shows the text in a
-// small box under it, and moving away or clicking hides it.
+// small box under it (wrapped onto more lines past maxWidth), and moving away or clicking hides it.
 //
 //    Tooltips tips;                       // a panel member
 //    tips.add(cutoffKnob, "Filter cutoff. Shift-drag for fine control.");
@@ -26,6 +26,8 @@ public:
    void setText(visage::Frame &frame, std::string text);
    // How long the mouse has to rest on a widget before its tip shows.
    int delayMs = 600;
+   // A tip wider than this (design units) wraps onto more lines; 0 keeps every tip on one line.
+   float maxWidth = 0.0f;
 
    void setTheme(const Theme &theme);
    void timerCallback() override;
@@ -40,7 +42,8 @@ private:
       Popup() { setIgnoresMouseEvents(true, false); }
       void draw(visage::Canvas &canvas) override;
       const Theme *theme = &defaultTheme();
-      std::string text;
+      std::vector<std::string> lines;
+      float lineHeight = 0.0f;
    };
 
    const std::string *textFor(const visage::Frame *frame) const;

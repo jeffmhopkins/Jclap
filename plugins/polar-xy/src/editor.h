@@ -45,8 +45,9 @@ std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 // Draws the panel offscreen at the given pixel size and saves it as a PNG. It is animated for
 // `seconds` first, at 60 frames a second, calling `advance` with each frame's length before it, so
 // the host can move the output and the panel's ink has a trail to show. `tip`, when not -1, shows
-// the hover tip of the panel's tip-th control (in the order the panel gives them).
+// the hover tip of the panel's tip-th control (in the order the panel gives them). `page` picks the
+// bottom section's tab: 0 SETTINGS, 1 TOUCH.
 bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, double seconds = 0.0,
-                      const std::function<void(double)> &advance = {}, int tip = -1);
+                      const std::function<void(double)> &advance = {}, int tip = -1, int page = 0);
 
 } // namespace polar_xy

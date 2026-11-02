@@ -35,6 +35,13 @@ function wrapDegrees(deg) {
    return deg;
 }
 
+// The angle of x/y in degrees, 0..360, with the direction and offset applied.
+function polarDegrees(x, y, s) {
+   var deg = Math.atan2(y, x) * 180 / PI;
+   if (s.clockwise) deg = -deg;
+   return wrapDegrees(deg + s.angleOffset);
+}
+
 // x/y on -1..+1, Y up. s: {angleOffset (deg), clockwise, fillSquare}. steps: 127, or 16383 for 14-bit.
 function toPolar(x, y, s, steps) {
    steps = steps || STEPS7;
@@ -43,9 +50,7 @@ function toPolar(x, y, s, steps) {
    r = clamp(r, 0, 1);
    if (r < DEAD_ZONE) return out;
    out.radius = Math.round((r - DEAD_ZONE) / (1 - DEAD_ZONE) * steps);
-   var deg = Math.atan2(y, x) * 180 / PI;
-   if (s.clockwise) deg = -deg;
-   deg = wrapDegrees(deg + s.angleOffset);
+   var deg = polarDegrees(x, y, s);
    // A turn is 0..steps-1: what would round to a full turn is the same angle as 0.
    out.angle = Math.round(deg / 360 * steps) % steps;
    out.hasAngle = true;
@@ -312,7 +317,6 @@ Follower.prototype.toSpace = function (x, y, out) {
 // ---- touch.h ----
 
 var TOUCH_PAIR = 0.003, TOUCH_JUMP = 0.25, TOUCH_LIFT = 0.05, TOUCH_AGREE = 0.06;
-var TOUCH_WINDOWS = [0, 0.01, 0.02, 0.04];
 
 // Throws away the press and release of each touch on a resistive pad: see TouchFilter in src/touch.h,
 // which this mirrors line for line.
@@ -329,7 +333,18 @@ TouchFilter.prototype.reset = function () {
    this.gated = false; this.touched = false; this.downDue = false; this.downOut = false;
    this.pressed = false; // settling a press the touch CC started, so one reading will do
    this.queue = [];
+   // Tuning (kept by reset): the press (below 0, the window), the jump limit and the agreement.
+   this.hasPrev = false; this.prevRX = 0; this.prevRY = 0; this.prevT = 0;
+   if (this.pressTime === undefined) {
+      this.pressTime = -1; this.jump = TOUCH_JUMP; this.agree = TOUCH_AGREE; this.heading = false;
+   }
 };
+
+TouchFilter.prototype.setPress = function (press) { this.pressTime = press; };
+TouchFilter.prototype.setJump = function (jump) { this.jump = jump; };
+TouchFilter.prototype.setHeading = function (heading) { this.heading = heading; };
+TouchFilter.prototype.setAgree = function (agree) { this.agree = Math.max(agree, 0); };
+TouchFilter.prototype.press = function () { return this.pressTime < 0 ? this.window : this.pressTime; };
 
 // The touch CC: a finger down or up at `now`. From the first one on, the touch decides the edges.
 TouchFilter.prototype.touch = function (down, now, window) {
@@ -337,6 +352,7 @@ TouchFilter.prototype.touch = function (down, now, window) {
    this.gated = true;
    if (down === this.touched) return;
    this.touched = down;
+   this.hasPrev = false;
    this.open = false;
    if (down) {
       this.settling = true;
@@ -374,7 +390,7 @@ TouchFilter.prototype.push = function (x, y, now, window) {
 TouchFilter.prototype.pop = function (now, window) {
    this.window = window;
    if (this.open && now - this.openT >= TOUCH_PAIR) this.finalize();
-   if (this.settling && now >= this.start + this.window) this.settle();
+   if (this.settling && now >= this.start + this.press()) this.settle();
    if (!this.queue.length || this.queue[0].due > now) return null;
    var r = this.queue.shift();
    return [r.x, r.y, r.event];
@@ -386,9 +402,18 @@ TouchFilter.prototype.finalize = function () {
    this.open = false;
    var x = this.openX, y = this.openY, t = this.openT;
    if (this.gated && !this.touched) return;
-   if (this.settling && t >= this.start + this.window) this.settle();
+   if (this.settling && t >= this.start + this.press()) this.settle();
    var step = this.hasLast ? Math.sqrt((x - this.lastX) * (x - this.lastX) + (y - this.lastY) * (y - this.lastY)) : 0;
-   var onset = !this.hasLast || step > TOUCH_JUMP || (t - this.lastT >= TOUCH_LIFT && step > TOUCH_AGREE);
+   // From the last reading, or with the heading on, from where the finger was headed.
+   var off = step;
+   if (this.heading && this.hasPrev && t - this.lastT < TOUCH_LIFT && this.lastT > this.prevT) {
+      var k = Math.min((t - this.lastT) / (this.lastT - this.prevT), 2);
+      var hx = x - (this.lastX + (this.lastX - this.prevRX) * k), hy = y - (this.lastY + (this.lastY - this.prevRY) * k);
+      off = Math.sqrt(hx * hx + hy * hy);
+   }
+   // The pause only means a new touch without the touch CC (see src/touch.h).
+   var paused = !this.gated && t - this.lastT >= TOUCH_LIFT && step > this.agree;
+   var onset = !this.hasLast || off > Math.max(this.jump, this.agree) || paused;
    if (onset && this.window > 0) {
       // Still the touch CC's press if nothing has arrived in it yet; a jump later in the touch
       // (often the finger starting to lift) needs two readings that agree, as without it.
@@ -407,6 +432,8 @@ TouchFilter.prototype.finalize = function () {
    } else {
       this.hold(x, y, t + this.window);
    }
+   this.hasPrev = this.hasLast && !onset;
+   this.prevRX = this.lastX; this.prevRY = this.lastY; this.prevT = this.lastT;
    this.hasLast = true;
    this.lastX = x;
    this.lastY = y;
@@ -414,10 +441,11 @@ TouchFilter.prototype.finalize = function () {
 };
 
 TouchFilter.prototype.settle = function () {
+   if (this.pressed && this.readings === 0) return; // the touch CC's press waits for its first reading
    this.settling = false;
    var dx = this.candX - this.prevX, dy = this.candY - this.prevY;
-   var rested = this.readings >= 2 && Math.sqrt(dx * dx + dy * dy) <= TOUCH_AGREE;
-   if (rested || (this.pressed && this.readings >= 1)) this.hold(this.candX, this.candY, this.start + this.window);
+   var rested = this.readings >= 2 && Math.sqrt(dx * dx + dy * dy) <= this.agree;
+   if (rested || (this.pressed && this.readings >= 1)) this.hold(this.candX, this.candY, this.start + this.press());
    this.pressed = false;
 };
 
@@ -449,10 +477,16 @@ var PARAMS = {
    path: [0, 1, 0],         // 0 straight, 1 around
    resolution: [0, 1, 0],   // 0 7-bit, 1 14-bit
    inertiamode: [0, 2, 0],  // 0 pull, 1 coast, 2 pad
-   touchfilter: [0, 3, 0],  // 0 off, then TOUCH_WINDOWS
+   touchfilter: [0, 100, 0], // ms, 0 off
    touchin: [-1, 127, -1],  // the pad's touch CC, -1 none
    touchout: [-1, 127, -1], // the touch sent on, -1 none
-   polarout: [0, 1, 1]      // 0: no angle or radius goes out
+   polarout: [0, 1, 1],     // 0: no angle or radius goes out
+   centersmoothing: [0, 50, 0], // %: how far out from the centre the angle is steadied
+   touchjump: [8, 64, 16],  // CC steps one reading may jump before a second must agree
+   touchpress: [-1, 100, -1], // ms a press is held back, -1 the same as touchfilter
+   touchagree: [1, 16, 4],  // CC steps two readings may differ by and still agree
+   centerlag: [50, 1000, 250], // ms the angle takes to follow at the very centre
+   touchheading: [0, 1, 0]  // jump check: 0 distance from the last reading, 1 from its heading
 };
 
 function Channel() {
@@ -461,6 +495,7 @@ function Channel() {
    this.angle = -1; this.sentAngle = -1; this.sentRadius = -1; this.sentTouch = -1;
    this.motion = new Follower();
    this.touch = new TouchFilter();
+   this.centerAngle = -1; this.centerAt = 0; this.centerBusy = false; // Center Smoothing
 }
 
 // emit(status, data1, data2) sends one MIDI message out.
@@ -533,7 +568,20 @@ Engine.prototype.sendTouch = function (channel, down) {
    st.sentTouch = value;
 };
 
-Engine.prototype.touchWindow = function () { return TOUCH_WINDOWS[clamp(this.int('touchfilter'), 0, 3)]; };
+// 1 to 3 are the old choices (10, 20, 40 ms), as saved before Touch Filter was in ms.
+Engine.prototype.touchWindow = function () {
+   var ms = this.int('touchfilter');
+   return (ms >= 1 && ms <= 3 ? 10 << (ms - 1) : Math.max(ms, 0)) / 1000;
+};
+
+// Touch Filter's tuning (CC steps are 2/127 of the -1..+1 pad).
+Engine.prototype.tune = function (f) {
+   var press = Math.round(this.p.touchpress);
+   f.setPress(press < 0 ? -1 : press / 1000);
+   f.setJump(this.int('touchjump') * 2 / 127);
+   f.setAgree(this.int('touchagree') * 2 / 127);
+   f.setHeading(this.int('touchheading') !== 0);
+};
 
 Engine.prototype.motionSettings = function () {
    return {
@@ -610,6 +658,7 @@ Engine.prototype.convert = function (channel, fresh) {
    var x = ccToBipolar(st.fx), y = ccToBipolar(st.fy);
    var filtered = this.touchWindow() > 0;
    if (filtered && fresh) {
+      this.tune(st.touch);
       st.touch.push(x, y, this.time, this.touchWindow());
       return;
    }
@@ -649,8 +698,9 @@ Engine.prototype.send = function (channel) {
    if (!st.motion.placed || this.conflicting()) return;
    var s = this.applied;
    var pos = st.motion.position();
-   var p = toPolar(pos[0], pos[1], s, s.fine ? STEPS14 : STEPS7);
-   if (p.hasAngle) st.angle = p.angle;
+   var steps = s.fine ? STEPS14 : STEPS7;
+   var p = toPolar(pos[0], pos[1], s, steps);
+   if (p.hasAngle) st.angle = this.centered(st, pos[0], pos[1], s, p, steps);
    if (!s.polar) return; // Polar Out off: nothing goes out, nothing counts as sent
    if (st.angle >= 0 && st.angle !== st.sentAngle) {
       this.pushValue(channel, s.outAngle, st.angle);
@@ -660,6 +710,27 @@ Engine.prototype.send = function (channel) {
       this.pushValue(channel, s.outRadius, p.radius);
       st.sentRadius = p.radius;
    }
+};
+
+// Center Smoothing: near the centre the angle follows more slowly (Center Lag at the very centre,
+// none at the zone's edge); the radius never does. See centered in src/plugin.cpp.
+Engine.prototype.centered = function (st, x, y, s, p, steps) {
+   var zone = this.p.centersmoothing / 100;
+   var deg = polarDegrees(x, y, s);
+   if (zone <= 0 || st.centerAngle < 0) {
+      st.centerAngle = deg;
+      st.centerAt = this.time;
+      st.centerBusy = false;
+      return p.angle;
+   }
+   var near = Math.max(0, 1 - p.radius / steps / zone);
+   var lag = this.p.centerlag / 1000 * near * near;
+   var dt = Math.max(0, this.time - st.centerAt);
+   st.centerAt = this.time;
+   var gap = wrapDegrees(deg - st.centerAngle + 180) - 180;
+   st.centerAngle = wrapDegrees(st.centerAngle + (lag > 0 ? gap * (1 - Math.exp(-dt / lag)) : gap));
+   st.centerBusy = Math.abs(wrapDegrees(deg - st.centerAngle + 180) - 180) * steps / 360 > 0.5;
+   return Math.round(st.centerAngle / 360 * steps) % steps;
 };
 
 Engine.prototype.pushValue = function (channel, cc, value) {
@@ -685,7 +756,10 @@ Engine.prototype.handleCC = function (channel, cc, value) {
    if (touch) {
       this.convertPending(); // readings before the edge are on their side of it
       this.lastChannel = channel;
-      if (this.touchWindow() > 0) st.touch.touch((value & 0x7F) >= 64, this.time, this.touchWindow());
+      if (this.touchWindow() > 0) {
+         this.tune(st.touch);
+         st.touch.touch((value & 0x7F) >= 64, this.time, this.touchWindow());
+      }
       else this.sendTouch(channel, (value & 0x7F) >= 64);
       return true;
    }
@@ -714,9 +788,11 @@ Engine.prototype.tick = function (dt) {
    var m = this.motionSettings();
    for (var c = 0; c < 16; ++c) {
       var st = this.channels[c];
-      if (!st.motion.moving) continue;
-      if (!motionActive(m)) st.motion.land();
-      else st.motion.step(dt, m);
+      if (!st.motion.moving && !st.centerBusy) continue;
+      if (st.motion.moving) {
+         if (!motionActive(m)) st.motion.land();
+         else st.motion.step(dt, m);
+      }
       this.send(c);
    }
 };

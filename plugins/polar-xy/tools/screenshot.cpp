@@ -1,4 +1,4 @@
-// Renders the panel to a PNG without a host: polar-xy-screenshot out.png [width height] [--polar-off] [--tip N]
+// Renders the panel to a PNG without a host: polar-xy-screenshot out.png [width height] [--polar-off] [--tip N] [--tab touch] [--touch-ms N]
 
 #include <algorithm>
 #include <cmath>
@@ -47,9 +47,12 @@ public:
          return motion_.inertia * 100.0;
       if (id == polar_xy::kParamPolarOut)
          return polarOut ? 1.0 : 0.0;
+      if (id == polar_xy::kParamTouchFilter && touchMs >= 0.0)
+         return touchMs;
       return id < polar_xy::kParamCount ? polar_xy::kParams[id].def : 0.0;
    }
    bool polarOut = true;
+   double touchMs = -1.0; // Touch Filter, when set
 
    void beginEdit(clap_id) override {}
    void setParam(clap_id, double) override {}
@@ -105,28 +108,35 @@ private:
 
 int main(int argc, char **argv) {
    // Flags anywhere: --polar-off shows the angle/radius output switched off, --tip N one control's
-   // hover tip. The rest are positional.
+   // hover tip, --tab touch the bottom section's TOUCH tab, --touch-ms N Touch Filter at N ms. The
+   // rest are positional.
    bool polarOff = false;
-   int tip = -1;
+   int tip = -1, page = 0;
+   double touchMs = -1.0;
    std::vector<const char *> args;
    for (int i = 1; i < argc; ++i) {
       if (std::strcmp(argv[i], "--polar-off") == 0)
          polarOff = true;
       else if (std::strcmp(argv[i], "--tip") == 0 && i + 1 < argc)
          tip = std::atoi(argv[++i]);
+      else if (std::strcmp(argv[i], "--tab") == 0 && i + 1 < argc)
+         page = std::strcmp(argv[++i], "touch") == 0 ? 1 : 0;
+      else if (std::strcmp(argv[i], "--touch-ms") == 0 && i + 1 < argc)
+         touchMs = std::atof(argv[++i]);
       else
          args.push_back(argv[i]);
    }
    if (args.empty()) {
-      std::fprintf(stderr, "usage: %s out.png [width height] [--polar-off] [--tip N]\n", argv[0]);
+      std::fprintf(stderr, "usage: %s out.png [width height] [--polar-off] [--tip N] [--tab touch] [--touch-ms N]\n", argv[0]);
       return 1;
    }
    const int width = args.size() > 2 ? std::atoi(args[1]) : polar_xy::kEditorWidth;
    const int height = args.size() > 2 ? std::atoi(args[2]) : polar_xy::kEditorHeight;
    DemoHost host;
    host.polarOut = !polarOff;
+   host.touchMs = touchMs;
    return polar_xy::renderScreenshot(host, width, height, args[0], kSeconds,
-                                     [&host](double dt) { host.advance(dt); }, tip)
+                                     [&host](double dt) { host.advance(dt); }, tip, page)
              ? 0
              : 1;
 }
