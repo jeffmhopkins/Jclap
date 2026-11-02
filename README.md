@@ -95,16 +95,56 @@ didn't change stay quiet); click the notice to open the release page, or its cro
 the next one. The plugins look at GitHub at most once a day. To stop
 them, right-click the panel background and untick **Check for Updates**.
 
-## Building
+## Building from source
+
+### What you need
+
+- **CMake** 3.17 or newer, **git**, and a **C++17** compiler. The first configure downloads the CLAP
+  headers, the GUI library and the VST3 SDK, so it needs to be online.
+- **macOS:** Apple's command line tools (`xcode-select --install`) and CMake (`brew install cmake`,
+  or the installer from [cmake.org](https://cmake.org/download/)).
+- **Windows:** Visual Studio 2022 with the *Desktop development with C++* workload, which includes
+  CMake. Run the commands below in the *Developer PowerShell for VS 2022*.
+- **Linux (Debian/Ubuntu):** `sudo apt install build-essential cmake git libx11-dev libxrandr-dev libgl1-mesa-dev`
+
+### Build
 
 ```sh
+git clone https://github.com/jeffmhopkins/Jclap.git
+cd Jclap
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release
-ctest --test-dir build -C Release
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release        # optional: runs the tests
 ```
 
-> [!NOTE]
-> On Linux, install `libx11-dev libxrandr-dev libgl1-mesa-dev` first (the GUI library uses them).
+To build just one plugin, name its target. For Polar XY, CLAP and VST3:
+
+```sh
+cmake --build build --config Release --parallel --target polar-xy polar-xy-vst3
+```
+
+Each plugin's target is its folder name under [plugins/](plugins). On a Mac, add
+`-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"` to the first `cmake` line for a universal build that runs
+on both Apple Silicon and Intel; without it, the build is for your Mac only. To update later, run
+`git pull` and the `cmake --build` line again.
+
+### Install
+
+Copy the built plugins (from `build/clap/` and `build/vst3/`) to where your DAW looks, then rescan:
+
+| | CLAP | VST3 |
+|---|---|---|
+| macOS | `~/Library/Audio/Plug-Ins/CLAP` | `~/Library/Audio/Plug-Ins/VST3` |
+| Windows | `C:\Program Files\Common Files\CLAP` | `C:\Program Files\Common Files\VST3` |
+| Linux | `~/.clap` | `~/.vst3` |
+
+On a Mac, for example:
+
+```sh
+mkdir -p ~/Library/Audio/Plug-Ins/CLAP ~/Library/Audio/Plug-Ins/VST3
+cp -R build/clap/PolarXY.clap ~/Library/Audio/Plug-Ins/CLAP/
+cp -R build/vst3/PolarXY.vst3 ~/Library/Audio/Plug-Ins/VST3/
+```
 
 All plugins land in `build/clap/`, and the VST3s (only Polar XY has one) in `build/vst3/`. CI builds
 Linux, macOS (universal) and Windows on every push, runs the tests, and checks every plugin with
