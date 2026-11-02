@@ -337,6 +337,39 @@ d.engine.setParam('polarout', 1);
 p = run(d, 1);
 check(p.angles.length === 1 && p.angles[0] === 64 && p.radii.length === 1, 'polar out back on: both go out');
 
+
+// Center Smoothing: two steps either side of the centre flips the angle each reading without it and
+// not at all with it; a real move through the centre lands at once and nothing moves after.
+function centreWobble(zone) {
+   var d = device(), angles = [];
+   d.engine.setParam('centersmoothing', zone);
+   for (var i = 0; i < 20; ++i) {
+      d.send(0xB0, 16, i % 2 ? 62 : 66, 0xB0, 17, 64);
+      angles = angles.concat(run(d, 2).angles);
+   }
+   var swing = 0;
+   for (var k = 1; k < angles.length; ++k) {
+      var dd = Math.abs(angles[k] - angles[k - 1]);
+      swing = Math.max(swing, Math.min(dd, 127 - dd));
+   }
+   return swing;
+}
+check(centreWobble(0) >= 60, 'centre wobble flips without Center Smoothing');
+check(centreWobble(30) === 0, 'Center Smoothing holds a centre wobble');
+(function () {
+   var d = device(), angles = [];
+   d.engine.setParam('centersmoothing', 30);
+   d.send(0xB0, 16, 100, 0xB0, 17, 64);
+   run(d, 2);
+   for (var x = 96; x >= 28; x -= 4) {
+      d.send(0xB0, 16, x);
+      angles = angles.concat(run(d, 2).angles);
+   }
+   check(last(angles) === 64, 'through the centre: half a turn round at once');
+   var after = run(d, 40);
+   check(after.angles.length === 0 && after.radii.length === 0, 'nothing moves once the finger stops');
+})();
+
 if (failures) {
    console.log(failures + ' failure(s)');
    process.exit(1);

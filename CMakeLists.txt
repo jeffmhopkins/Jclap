@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.17)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS version")
 
 # The release number: Release N is N.0.0 (tagged vN.0.0). Each plugin has its own version too.
-project(jclap VERSION 21.0.0 LANGUAGES CXX)
+project(jclap VERSION 22.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

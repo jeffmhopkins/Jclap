@@ -703,13 +703,13 @@ void touchTests() {
    JCLAP_CHECK(h.paramText(18, 16.0) == "16 steps");
    JCLAP_CHECK(h.paramText(19, -1.0) == "Same" && h.paramText(19, 30.0) == "30 ms");
    JCLAP_CHECK(h.textToValue(19, "same", v) && v == -1.0);
-   JCLAP_CHECK(h.paramText(20, 1.0) == "1 step" && h.paramText(21, 250.0) == "250 ms");
+   JCLAP_CHECK(h.paramText(20, 1.0) == "1 step" && h.paramText(21, 4.0) == "4 steps");
 }
 
 // Center Smoothing: near the centre, a wobble across it swings the angle less, while the radius
 // goes out as it is; out past the zone, nothing changes.
 void centerTests() {
-   // The angles sent while X/Y wobble across the centre, 3 CC steps from it, a reading each 10 ms.
+   // The angles sent while X/Y wobble across the centre, a reading each 10 ms.
    const auto wobble = [](double center, int x0, int y0, int x1, int y1) {
       jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
       h.setParam(17, center);
@@ -729,13 +729,33 @@ void centerTests() {
       }
       return std::make_pair(swing, radii);
    };
-   const auto off = wobble(0.0, 67, 64, 61, 64); // right of centre, then left: half a turn
-   const auto on = wobble(30.0, 67, 64, 61, 64);
+   // Two steps either side of the centre (just outside its dead zone): half a turn each reading
+   // without it, none with it.
+   const auto off = wobble(0.0, 66, 64, 62, 64);
+   const auto on = wobble(30.0, 66, 64, 62, 64);
    JCLAP_CHECK(off.first >= 60);
-   JCLAP_CHECK(on.first > 0 && on.first < 20);
-   JCLAP_CHECK(on.second == off.second); // the radius is never slowed
+   JCLAP_CHECK(on.first == 0);
+   JCLAP_CHECK(on.second == off.second); // the radius always goes out as it is
    // Near the edge, well outside a 30% zone: the angle goes out as it is.
    JCLAP_CHECK(wobble(0.0, 127, 64, 64, 127).first == wobble(30.0, 127, 64, 64, 127).first);
+
+   // A real move through the centre turns the angle as it goes, and nothing moves once the finger
+   // stops: no lag in time, so no hang at the centre and no catching up after.
+   jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+   h.setParam(17, 30.0);
+   h.midi(0xB0, 16, 100);
+   h.midi(0xB0, 17, 64);
+   run(h, 1);
+   std::vector<int> angles;
+   for (int x = 96; x >= 28; x -= 4) {
+      h.midi(0xB0, 16, x);
+      const Path p = run(h, 1);
+      angles.insert(angles.end(), p.angles.begin(), p.angles.end());
+   }
+   // Left of the centre the angle is half a turn round (64), as soon as the finger is there.
+   JCLAP_CHECK(!angles.empty() && angles.back() == 64);
+   const Path after = run(h, 20);
+   JCLAP_CHECK(after.angles.empty() && after.radii.empty());
 }
 
 int main() {
@@ -889,7 +909,22 @@ int main() {
       pos = 0;
       JCLAP_CHECK(state2->load(h2.plugin(), &is));
       JCLAP_CHECK(h2.paramValue(13) == 40.0 && h2.paramValue(17) == 0.0 && h2.paramValue(18) == 16.0 &&
-                  h2.paramValue(19) == -1.0 && h2.paramValue(20) == 4.0 && h2.paramValue(21) == 250.0);
+                  h2.paramValue(19) == -1.0 && h2.paramValue(20) == 4.0 && h2.paramValue(21) == 4.0);
+
+      // Version 8 state: param 21 was Center Lag (250 ms), and loads as Center Steady's default.
+      const uint32_t version8 = 8;
+      double v8[23];
+      for (int i = 0; i < 23; ++i)
+         v8[i] = polar_xy::kParams[i].def;
+      v8[17] = 15.0;
+      v8[21] = 250.0;
+      bytes.assign(magic, magic + 4);
+      bytes.insert(bytes.end(), reinterpret_cast<const uint8_t *>(&version8), reinterpret_cast<const uint8_t *>(&version8) + 4);
+      bytes.insert(bytes.end(), reinterpret_cast<const uint8_t *>(v8), reinterpret_cast<const uint8_t *>(v8) + sizeof(v8));
+      bytes.insert(bytes.end(), reinterpret_cast<const uint8_t *>(&noName), reinterpret_cast<const uint8_t *>(&noName) + 4);
+      pos = 0;
+      JCLAP_CHECK(state2->load(h2.plugin(), &is));
+      JCLAP_CHECK(h2.paramValue(17) == 15.0 && h2.paramValue(21) == 4.0);
    }
 
    JCLAP_CHECK(h.paramText(8, 250.0) == "250 ms");

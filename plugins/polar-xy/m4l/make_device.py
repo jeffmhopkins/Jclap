@@ -102,8 +102,8 @@ def menu(name, longname, short, items, rect, initial=0):
                    outs=3, outtype=("", "", "float"))
 
 
-def dial(name, longname, short, hi, rect, lo=0, initial=0, **extra):
-    return control("live.dial", name, rect, param_attrs(longname, short, 0, lo, hi, initial, **extra))
+def dial(name, longname, short, hi, rect, lo=0, initial=0, ptype=0, **extra):
+    return control("live.dial", name, rect, param_attrs(longname, short, ptype, lo, hi, initial, **extra))
 
 
 # ---- the panel ----
@@ -161,7 +161,7 @@ label("Agree", [584, 92, 56, 15]); numbox("touchagree", "Agree", "Agree", 4, [64
 label("Check", [584, 112, 56, 15]); menu("touchheading", "Jump Check", "Check", ["Distance", "Heading"], [644, 112, 52, 15])
 label("CENTER", [704, 2, 96, 16], bold=True)
 dial("centersmoothing", "Center Smoothing", "Center", 50, [704, 22, 44, 48], parameter_unitstyle=5)
-dial("centerlag", "Center Lag", "Lag", 1000, [752, 22, 44, 48], lo=50, initial=250, parameter_unitstyle=2)
+dial("centersteady", "Center Steady", "Steady", 16, [752, 22, 44, 48], lo=1, initial=4, ptype=1, parameter_unitstyle=0)
 
 # The status line: the last channel's X/Y in and angle/radius out, or what stops it converting.
 status = box("comment", text="waiting for X/Y CCs", numinlets=1, numoutlets=0, presentation=1,

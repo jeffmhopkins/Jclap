@@ -661,13 +661,14 @@ public:
       add<ui::Divider>({697, row, 1, 92});
       tip(knob(kParamCenterSmoothing, "CENTER SMOOTH", kPurple, 724, row),
           "Center Smoothing: near the centre, a wobble of a step or two swings the angle a long way, and crossing "
-          "the centre flips it half a turn. Within this share of the radius (up to 50%), the angle follows more "
-          "slowly the nearer the centre: up to Center Lag at the very centre, at once at the zone's edge. The "
-          "radius always goes out exactly. Off at 0; try 10-20%.");
-      tip(knob(kParamCenterLag, "CENTER LAG", kPurple, 800, row),
-          "Center Lag: how long the angle takes to follow at the very centre with Center Smoothing on, easing to "
-          "no lag at the edge of its zone. Longer is calmer but turns the Orb later when you start from the "
-          "middle. 250 ms is the default.");
+          "the centre flips it half a turn. Within this share of the radius (up to 50%), small wobbles are "
+          "ignored: the angle only turns once the position has moved further than Center Steady, and a real move "
+          "turns it at once, with no lag. The ignored wobble shrinks to nothing toward the zone's edge. The radius "
+          "always goes out exactly. Off at 0; try 10-20%.");
+      tip(knob(kParamCenterSteady, "CENTER STEADY", kPurple, 800, row),
+          "Center Steady: how far (in CC steps) the position may wobble near the centre without turning the "
+          "angle, with Center Smoothing on. Set it just above the pad's wobble when the finger rests: higher is "
+          "calmer, but the angle sits that far behind the finger near the centre. 4 steps is the default.");
       pages_[1].assign(children().begin() + first, children().end());
 
       tabs_ = &add<TitleTabs>({12, 586, 300, 34}, std::vector<std::string>{"SETTINGS", "TOUCH"});

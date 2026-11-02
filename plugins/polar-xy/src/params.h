@@ -33,7 +33,7 @@ enum ParamId : clap_id {
    kParamTouchJump,
    kParamTouchPress,
    kParamTouchAgree,
-   kParamCenterLag,
+   kParamCenterSteady,
    kParamTouchHeading,
    kParamCount
 };
@@ -66,7 +66,7 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Jump Limit", 8, 64, 16, true},       // CC steps one reading may jump before a second must agree
    {"Press Time", -1, 100, -1, true},     // ms a touch's press is held back; -1: the same as Touch Filter
    {"Agree", 1, 16, 4, true},             // CC steps two readings may differ by and still agree
-   {"Center Lag", 50, 1000, 250, false},  // ms the angle takes to follow at the very centre
+   {"Center Steady", 1, 16, 4, true},      // CC steps the position may wobble at the very centre without turning the angle
    {"Jump Check", 0, 1, 0, true},         // Distance (from the last reading) or Heading (from where it was going)
 };
 
@@ -121,11 +121,11 @@ inline void formatParam(clap_id id, double value, char *out, uint32_t size) {
       std::snprintf(out, size, value >= 1000.0 ? "%.2f s" : "%.0f ms", value >= 1000.0 ? value / 1000.0 : value);
    else if (id == kParamInertia || id == kParamCenterSmoothing)
       std::snprintf(out, size, value <= 0.0 && id == kParamCenterSmoothing ? "Off" : "%.0f%%", value);
-   else if (id == kParamTouchJump || id == kParamTouchAgree)
+   else if (id == kParamTouchJump || id == kParamTouchAgree || id == kParamCenterSteady)
       std::snprintf(out, size, std::lround(value) == 1 ? "%.0f step" : "%.0f steps", value);
    else if (id == kParamTouchPress && std::lround(value) < 0)
       std::snprintf(out, size, "Same");
-   else if (id == kParamTouchPress || id == kParamCenterLag)
+   else if (id == kParamTouchPress)
       std::snprintf(out, size, "%.0f ms", value);
    else if (id == kParamTouchFilter)
       std::snprintf(out, size, std::lround(value) <= 0 ? "Off" : "%.0f ms", value);

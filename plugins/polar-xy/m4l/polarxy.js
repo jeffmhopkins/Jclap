@@ -485,7 +485,7 @@ var PARAMS = {
    touchjump: [8, 64, 16],  // CC steps one reading may jump before a second must agree
    touchpress: [-1, 100, -1], // ms a press is held back, -1 the same as touchfilter
    touchagree: [1, 16, 4],  // CC steps two readings may differ by and still agree
-   centerlag: [50, 1000, 250], // ms the angle takes to follow at the very centre
+   centersteady: [1, 16, 4], // CC steps the position may wobble at the very centre without turning the angle
    touchheading: [0, 1, 0]  // jump check: 0 distance from the last reading, 1 from its heading
 };
 
@@ -495,7 +495,7 @@ function Channel() {
    this.angle = -1; this.sentAngle = -1; this.sentRadius = -1; this.sentTouch = -1;
    this.motion = new Follower();
    this.touch = new TouchFilter();
-   this.centerAngle = -1; this.centerAt = 0; this.centerBusy = false; // Center Smoothing
+   this.centerX = 0; this.centerY = 0; this.centerSet = false; // Center Smoothing's anchor
 }
 
 // emit(status, data1, data2) sends one MIDI message out.
@@ -712,25 +712,22 @@ Engine.prototype.send = function (channel) {
    }
 };
 
-// Center Smoothing: near the centre the angle follows more slowly (Center Lag at the very centre,
-// none at the zone's edge); the radius never does. See centered in src/plugin.cpp.
+// Center Smoothing: near the centre the angle is read from an anchor the position drags along on a
+// string (Center Steady long in the inner half of the zone, none at its edge), so a wobble shorter than the
+// string doesn't turn it and a real move turns it at once. See centered in src/plugin.cpp.
 Engine.prototype.centered = function (st, x, y, s, p, steps) {
    var zone = this.p.centersmoothing / 100;
-   var deg = polarDegrees(x, y, s);
-   if (zone <= 0 || st.centerAngle < 0) {
-      st.centerAngle = deg;
-      st.centerAt = this.time;
-      st.centerBusy = false;
-      return p.angle;
+   var near = zone > 0 ? Math.max(0, 1 - p.radius / steps / zone) : 0;
+   var string = this.p.centersteady * 2 / 127 * Math.min(1, 2 * near);
+   var dx = x - st.centerX, dy = y - st.centerY, d = Math.sqrt(dx * dx + dy * dy);
+   if (!st.centerSet || d > string) {
+      var keep = st.centerSet && d > 0 ? string / d : 0;
+      st.centerX = x - dx * keep;
+      st.centerY = y - dy * keep;
+      st.centerSet = true;
    }
-   var near = Math.max(0, 1 - p.radius / steps / zone);
-   var lag = this.p.centerlag / 1000 * near * near;
-   var dt = Math.max(0, this.time - st.centerAt);
-   st.centerAt = this.time;
-   var gap = wrapDegrees(deg - st.centerAngle + 180) - 180;
-   st.centerAngle = wrapDegrees(st.centerAngle + (lag > 0 ? gap * (1 - Math.exp(-dt / lag)) : gap));
-   st.centerBusy = Math.abs(wrapDegrees(deg - st.centerAngle + 180) - 180) * steps / 360 > 0.5;
-   return Math.round(st.centerAngle / 360 * steps) % steps;
+   if (Math.sqrt(st.centerX * st.centerX + st.centerY * st.centerY) < 1e-9) return st.angle >= 0 ? st.angle : p.angle;
+   return Math.round(polarDegrees(st.centerX, st.centerY, s) / 360 * steps) % steps;
 };
 
 Engine.prototype.pushValue = function (channel, cc, value) {
@@ -788,11 +785,9 @@ Engine.prototype.tick = function (dt) {
    var m = this.motionSettings();
    for (var c = 0; c < 16; ++c) {
       var st = this.channels[c];
-      if (!st.motion.moving && !st.centerBusy) continue;
-      if (st.motion.moving) {
-         if (!motionActive(m)) st.motion.land();
-         else st.motion.step(dt, m);
-      }
+      if (!st.motion.moving) continue;
+      if (!motionActive(m)) st.motion.land();
+      else st.motion.step(dt, m);
       this.send(c);
    }
 };
