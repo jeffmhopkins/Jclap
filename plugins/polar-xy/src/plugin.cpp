@@ -37,6 +37,8 @@ struct ChannelState {
    // the output's resolution.
    int angle = -1;
    int sentAngle = -1, sentRadius = -1;
+   // What was last sent on Touch Out CC (127 down, 0 up, -1: nothing yet).
+   int sentTouch = -1;
    // Where the output is on its way to the X/Y, with Smoothing and Inertia.
    jclap::Follower motion;
    // The controller's readings on their way to the motion, with Touch Filter on.
@@ -48,19 +50,21 @@ struct Settings {
    int outAngle = -1, outRadius = -1, direction = 0, radiusMode = 0;
    double angleOffset = 0.0;
    bool around = false;
-   bool fine = false; // 14-bit output
+   bool fine = false;  // 14-bit output
+   bool polar = true;  // Polar Out: angle and radius go out at all
    bool operator==(const Settings &o) const {
       return outAngle == o.outAngle && outRadius == o.outRadius && direction == o.direction &&
-             radiusMode == o.radiusMode && angleOffset == o.angleOffset && around == o.around && fine == o.fine;
+             radiusMode == o.radiusMode && angleOffset == o.angleOffset && around == o.around && fine == o.fine &&
+             polar == o.polar;
    }
 };
 
 // State layout: 4-byte magic, uint32 version, one double per parameter, then (from version 3) uint32
 // name length and the preset name. Version 1 had the params before Smoothing, versions 2 and 3 those
-// before Output Resolution, version 4 those before Inertia Mode and version 5 those before Touch
-// Filter; the ones they lack load as their defaults.
+// before Output Resolution, version 4 those before Inertia Mode, version 5 those before Touch Filter
+// and version 6 those before Touch In CC; the ones they lack load as their defaults.
 constexpr char kStateMagic[4] = {'J', 'C', 'O', 'P'};
-constexpr uint32_t kStateVersion = 6;
+constexpr uint32_t kStateVersion = 7;
 
 struct StateHeader {
    char magic[4];
@@ -79,6 +83,8 @@ uint32_t savedParamCount(uint32_t version) {
    case 5:
       return kParamTouchFilter;
    case 6:
+      return kParamTouchIn;
+   case 7:
       return kParamCount;
    default:
       return 0;
@@ -177,7 +183,7 @@ public:
    }
    void releaseInput() override { dragging_.store(false); }
    void sendOutput(int which) override {
-      if (which < 0 || which > 1)
+      if (which < 0 || which > 2)
          return;
       learn_.fetch_or(1u << which);
       host()->request_process(host());
@@ -315,6 +321,10 @@ public:
       edits_.drain(out);
       // Panel edits, flushes and state loads land between blocks.
       applySettings(out, 0);
+      if (padDown_ && !dragging_.load()) {
+         padDown_ = false;
+         sendTouch(out, 0, panelChannel_, false);
+      }
       applyDrag(out);
       applyLearn(out);
       const uint32_t n = in->size(in);
@@ -375,7 +385,7 @@ private:
 
    void forgetSent() {
       for (auto &c : channels_) {
-         c.sentAngle = c.sentRadius = -1;
+         c.sentAngle = c.sentRadius = c.sentTouch = -1;
          c.motion.land();
          c.touch.reset();
       }
@@ -395,13 +405,83 @@ private:
          ChannelState &st = channels_[channel];
          double x, y;
          bool any = false;
-         while (st.touch.busy() && st.touch.pop(now, window, x, y)) {
-            moveTo(st, x, y);
-            any = true;
+         jclap::TouchFilter::Event event;
+         while (st.touch.busy() && st.touch.pop(now, window, x, y, event)) {
+            const bool pass = passMode() == kPassFiltered;
+            if (event == jclap::TouchFilter::Event::Move) {
+               moveTo(st, x, y);
+               if (pass)
+                  passReading(out, at, channel, x, y);
+               any = true;
+               continue;
+            }
+            if (pass && touchIn() >= 0)
+               pushCC(out, at, channel, touchIn(), event == jclap::TouchFilter::Event::Down ? 127 : 0);
+            // The touch goes out in step: down before its first move, up after its last.
+            if (any)
+               send(out, at, channel);
+            any = false;
+            sendTouch(out, at, channel, event == jclap::TouchFilter::Event::Down);
          }
          if (any)
             send(out, at, channel);
       }
+   }
+
+   enum PassMode { kPassOff = 0, kPassRaw = 1, kPassFiltered = 2 };
+   PassMode passMode() const { return static_cast<PassMode>(std::clamp(intParam(kParamPassThrough), 0, 2)); }
+
+   // Pass Input CCs on Filtered: a reading Touch Filter let through, sent on as the X/Y CCs it came
+   // in on (with each axis's LSB too where a 14-bit controller sent one).
+   void passReading(const clap_output_events_t *out, uint32_t time, int channel, double x, double y) {
+      const int ccs[2] = {intParam(kParamInX), intParam(kParamInY)};
+      const double v[2] = {x, y};
+      for (int i = 0; i < 2; ++i) {
+         const double cc = std::clamp(v[i] >= 0.0 ? 64.0 + v[i] * 63.0 : 64.0 + v[i] * 64.0, 0.0, 127.0);
+         const int msb = static_cast<int>(std::floor(cc + 1e-9));
+         const int lsb = std::clamp(static_cast<int>(std::lround((cc - msb) * 128.0)), 0, 127);
+         pushCC(out, time, channel, ccs[i], msb);
+         if (ccs[i] < 32 && lsb > 0)
+            pushCC(out, time, channel, ccs[i] + 32, lsb);
+      }
+   }
+
+   // Touch In CC, or -1 for none (or when it would take one of the X/Y CCs).
+   int touchIn() const {
+      const int cc = touchCC(params_[kParamTouchIn].load());
+      const int inX = intParam(kParamInX), inY = intParam(kParamInY);
+      if (cc == inX || cc == inY || (inX < 32 && cc == inX + 32) || (inY < 32 && cc == inY + 32))
+         return -1;
+      return cc;
+   }
+
+   // Touch Out CC, or -1 for none (or when it would take one of the angle/radius CCs).
+   int touchOut() const {
+      const int cc = touchCC(params_[kParamTouchOut].load());
+      const int a = applied_.outAngle, r = applied_.outRadius;
+      if (cc == a || cc == r || (applied_.fine && (cc == a + 32 || cc == r + 32)))
+         return -1;
+      return cc;
+   }
+
+   // Sends a finger down (127) or up (0) on Touch Out CC, if it changed.
+   void sendTouch(const clap_output_events_t *out, uint32_t time, int channel, bool down) {
+      ChannelState &st = channels_[channel];
+      const int cc = touchOut(), value = down ? 127 : 0;
+      if (cc < 0 || conflicting() || value == st.sentTouch)
+         return;
+      pushCC(out, time, channel, cc, value);
+      st.sentTouch = value;
+   }
+
+   // The touch CC came in: through Touch Filter if it's on, so it goes out in step with the
+   // filtered motion, or straight out.
+   void touchEdge(const clap_output_events_t *out, uint32_t time, int channel, bool down) {
+      ChannelState &st = channels_[channel];
+      if (touchWindow() > 0.0 && !st.fromPad)
+         st.touch.touch(down, secondsAt(time), touchWindow());
+      else
+         sendTouch(out, time, channel, down);
    }
 
    // Points a channel's output at (x, y) on the pad: at once, or gliding there.
@@ -475,6 +555,7 @@ private:
       s.angleOffset = params_[kParamAngleOffset].load();
       s.around = intParam(kParamMotionPath) != 0;
       s.fine = fineOutput(s.outAngle, s.outRadius, intParam(kParamResolution) != 0);
+      s.polar = intParam(kParamPolarOut) != 0;
       return s;
    }
 
@@ -495,7 +576,9 @@ private:
       const Settings now = settings();
       if (now == applied_)
          return;
-      const bool moved = now.outAngle != applied_.outAngle || now.outRadius != applied_.outRadius;
+      // New output CCs, or Polar Out back on: send everything again.
+      const bool moved = now.outAngle != applied_.outAngle || now.outRadius != applied_.outRadius ||
+                         (now.polar && !applied_.polar);
       // The held angle carries over to the new resolution; what was sent is sent again in it.
       const bool rescaled = now.fine != applied_.fine;
       applied_ = now;
@@ -551,6 +634,9 @@ private:
       // At dead center the angle is undefined, so it holds its last value.
       if (p.hasAngle)
          st.angle = p.angle;
+      // With Polar Out off, nothing goes out (and nothing counts as sent, for when it's back on).
+      if (!applied_.polar)
+         return;
       if (st.angle >= 0 && st.angle != st.sentAngle) {
          pushValue(out, time, channel, applied_.outAngle, st.angle);
          st.sentAngle = st.angle;
@@ -615,6 +701,11 @@ private:
       st.fy = static_cast<double>(v & 0xFFFF) / kPadScale;
       st.fromPad = true;
       st.touch.reset(); // the mouse has it now, not the controller's readings still on their way
+      // Holding the mouse down on the pad is a touch.
+      if (!padDown_) {
+         padDown_ = true;
+         sendTouch(out, 0, channel, true);
+      }
       st.x = static_cast<int>(std::lround(st.fx));
       st.y = static_cast<int>(std::lround(st.fy));
       st.hasX = st.hasY = true;
@@ -623,7 +714,7 @@ private:
       if (conflicting())
          return;
       // Pass Input CCs sends on the X/Y as if it came from the controller.
-      if (intParam(kParamPassThrough) != 0) {
+      if (passMode() != kPassOff) {
          pushCC(out, 0, channel, intParam(kParamInX), st.x);
          pushCC(out, 0, channel, intParam(kParamInY), st.y);
       }
@@ -638,10 +729,12 @@ private:
          return;
       const ChannelState &st = channels_[panelChannel_];
       const int shift = applied_.fine ? 7 : 0;
-      if (which & 1u)
+      if ((which & 1u) && applied_.polar)
          pushCC(out, 0, panelChannel_, intParam(kParamOutAngle), std::max(st.sentAngle, 0) >> shift);
-      if (which & 2u)
+      if ((which & 2u) && applied_.polar)
          pushCC(out, 0, panelChannel_, intParam(kParamOutRadius), std::max(st.sentRadius, 0) >> shift);
+      if ((which & 4u) && touchOut() >= 0)
+         pushCC(out, 0, panelChannel_, touchOut(), std::max(st.sentTouch, 0));
    }
 
    // Returns true if the event was an XY input CC and should not be forwarded.
@@ -660,11 +753,20 @@ private:
       // the MSB; a 7-bit one just never does.
       const bool lsbX = inX < 32 && cc == inX + 32 && cc != inY;
       const bool lsbY = inY < 32 && cc == inY + 32 && cc != inX;
-      if (cc != inX && cc != inY && !lsbX && !lsbY)
+      const bool touch = cc == touchIn();
+      if (cc != inX && cc != inY && !lsbX && !lsbY && !touch)
          return false;
-      const bool passThrough = intParam(kParamPassThrough) != 0;
-      if (passThrough)
+      // Raw passes them on now; Filtered when Touch Filter lets them through (see releaseTouches),
+      // or now too if it's off.
+      if (passMode() == kPassRaw || (passMode() == kPassFiltered && touchWindow() <= 0.0))
          out->try_push(out, &ev->header);
+      if (touch) {
+         if (!(dragging_.load() && channel == panelChannel_)) {
+            convertPending(out); // readings before the edge are on their side of it
+            touchEdge(out, ev->header.time, channel, value >= 64);
+         }
+         return true;
+      }
       // While the pad is held the mouse has that channel (and the panel stays on it); the controller
       // takes over again with its next move after release.
       const bool dragging = dragging_.load();
@@ -727,8 +829,10 @@ private:
    // the audio thread took.
    std::atomic<uint64_t> dragIn_{0};
    std::atomic<bool> dragging_{false};
+   // Whether the pad's touch went out, so its release does too (audio thread).
+   bool padDown_ = false;
    uint64_t dragSeen_ = 0;
-   // SEND presses not yet sent: bit 0 angle, bit 1 radius.
+   // SEND presses not yet sent: bit 0 angle, bit 1 radius, bit 2 touch.
    std::atomic<uint32_t> learn_{0};
    // The preset last loaded or saved (main thread).
    std::string presetName_ = "Init";

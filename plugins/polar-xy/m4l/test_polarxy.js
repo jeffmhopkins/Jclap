@@ -251,6 +251,92 @@ for (var now = 0; now < 0.2; now += 0.0005) {
 check(popped.length === 2 && popped[1][0] === 0.2 && popped[1][1] === 0.2 && popped[0][0] === 0,
       'touch filter pairs X and Y');
 
+// With the touch CC, a lone lift-off reading more than a window before the touch goes up still
+// needs a second that agrees, so it never goes out (see tests/test_touch.cpp).
+var tg = new px.TouchFilter(), moves = [];
+function tgPoll(from, to) {
+   for (var now = from; now <= to; now += 0.0005)
+      while ((r = tg.pop(now, 0.01))) if (r[2] === 0) moves.push(r[0]);
+}
+tg.touch(true, 0, 0.01);
+for (var i = 0; i < 10; ++i) {
+   tg.push(0.2, 0.2, 0.002 + 0.01 * i, 0.01);
+   tgPoll(0.002 + 0.01 * i, 0.002 + 0.01 * (i + 1) - 0.0005);
+}
+tg.push(0.9, 0.9, 0.102, 0.01);
+tgPoll(0.102, 0.117);
+tg.touch(false, 0.1175, 0.01);
+tgPoll(0.1175, 0.2);
+check(moves.length > 0 && moves.every(function (x) { return x === 0.2; }),
+      'touch filter with touch CC: a lone lift-off reading never goes out');
+
+// The real thing: a resistive pad played by hand (tests/data/resistive-pad-capture.txt), whose last
+// two lifts skitter to a wrong spot just before its touch CC goes up.
+function replay(settings) {
+   var dev = device(), fs = require('fs');
+   for (var k in settings) dev.engine.setParam(k, settings[k]);
+   var lines = fs.readFileSync(path.join(__dirname, '..', 'tests', 'data', 'resistive-pad-capture.txt'), 'utf8')
+      .split('\n').filter(function (l) { return l && l[0] !== '#'; })
+      .map(function (l) { return l.split(' ').map(Number); });
+   var out = { visited: [], touches: [], passed: [], passedTouch: [] }, angle = -1, radius = -1, next = 0;
+   var px12 = -1, py13 = -1;
+   for (var now = 0; now < 16; now += 0.004) {
+      while (next < lines.length && lines[next][0] <= now) {
+         dev.send(0xB0, lines[next][1], lines[next][2]);
+         ++next;
+      }
+      dev.engine.tick(0.004);
+      dev.take().forEach(function (m) {
+         if (m[1] === 18) angle = m[2];
+         if (m[1] === 19) radius = m[2];
+         if (m[1] === 93) out.touches.push(m[2]);
+         if (m[1] === 12) px12 = m[2];
+         if (m[1] === 13) py13 = m[2];
+         if (m[1] === 92) out.passedTouch.push(m[2]);
+      });
+      out.passed.push(px12 + ',' + py13);
+      out.visited.push(angle + '/' + radius);
+   }
+   return out;
+}
+var skitter = [[64, 127], [60, 95]].map(function (xy) { var q = polar(xy[0], xy[1]); return q.angle + '/' + q.radius; });
+function visits(o, spot) { return o.visited.indexOf(spot) >= 0; }
+var capture = { inx: 12, iny: 13, touchout: 93 };
+var rawRun = replay(capture);
+check(visits(rawRun, skitter[0]) && visits(rawRun, skitter[1]), 'capture: unfiltered, the lifts skitter');
+capture.touchfilter = 2;
+var filtered = replay(capture);
+check(!visits(filtered, skitter[0]) && !visits(filtered, skitter[1]), 'capture: Touch Filter drops the skitter');
+capture.touchin = 92;
+var gated = replay(capture);
+check(!visits(gated, skitter[0]) && !visits(gated, skitter[1]), 'capture: with the touch CC too');
+check(gated.touches.length >= 8 && gated.touches.every(function (v, i) { return v === (i % 2 ? 0 : 127); }) &&
+      gated.touches[gated.touches.length - 1] === 0, 'capture: the touch goes out, down and up in turn');
+
+// Pass Input CCs: Raw sends the skitter on as it came; Filtered sends only what Touch Filter let through.
+capture.passthrough = 1;
+var passRaw = replay(capture);
+check(passRaw.passed.indexOf('64,127') >= 0 && passRaw.passed.indexOf('60,95') >= 0, 'capture: raw pass-through skitters');
+capture.passthrough = 2;
+var passFiltered = replay(capture);
+check(passFiltered.passed.indexOf('64,127') < 0 && passFiltered.passed.indexOf('60,95') < 0 &&
+      passFiltered.passed[passFiltered.passed.length - 1] !== '-1,-1', 'capture: filtered pass-through drops it');
+check(passFiltered.passedTouch.length === gated.touches.length &&
+      passFiltered.passedTouch.every(function (v, i) { return v === gated.touches[i]; }),
+      'capture: filtered pass-through sends the touch in step');
+
+// Polar Out off: no angle or radius goes out; back on, both go out again.
+d = device();
+d.send(0xB0, 16, 127, 0xB0, 17, 64);
+run(d, 1);
+d.engine.setParam('polarout', 0);
+d.send(0xB0, 16, 0);
+p = run(d, 5);
+check(p.angles.length === 0 && p.radii.length === 0, 'polar out off: nothing goes out');
+d.engine.setParam('polarout', 1);
+p = run(d, 1);
+check(p.angles.length === 1 && p.angles[0] === 64 && p.radii.length === 1, 'polar out back on: both go out');
+
 if (failures) {
    console.log(failures + ' failure(s)');
    process.exit(1);

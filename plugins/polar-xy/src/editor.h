@@ -28,7 +28,7 @@ public:
    // until released.
    virtual void dragInput(double x, double y) = 0;
    virtual void releaseInput() = 0;
-   // Sends just one output CC (0: angle, 1: radius) on the shown channel, at its last value, so a
+   // Sends just one output CC (0: angle, 1: radius, 2: touch) on the shown channel, at its last value, so a
    // MIDI learn picks up that CC alone.
    virtual void sendOutput(int which) = 0;
    // The name of the preset last loaded or saved, kept with the project.
@@ -36,12 +36,17 @@ public:
    virtual void setPresetName(const std::string &name) = 0;
 };
 
+// The panel's size at 100% zoom, in pixels.
+constexpr int kEditorWidth = 900;
+constexpr int kEditorHeight = 738;
+
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // Draws the panel offscreen at the given pixel size and saves it as a PNG. It is animated for
 // `seconds` first, at 60 frames a second, calling `advance` with each frame's length before it, so
-// the host can move the output and the panel's ink has a trail to show.
+// the host can move the output and the panel's ink has a trail to show. `tip`, when not -1, shows
+// the hover tip of the panel's tip-th control (in the order the panel gives them).
 bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, double seconds = 0.0,
-                      const std::function<void(double)> &advance = {});
+                      const std::function<void(double)> &advance = {}, int tip = -1);
 
 } // namespace polar_xy

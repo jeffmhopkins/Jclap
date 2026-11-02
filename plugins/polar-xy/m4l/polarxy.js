@@ -318,13 +318,42 @@ var TOUCH_WINDOWS = [0, 0.01, 0.02, 0.04];
 // which this mirrors line for line.
 function TouchFilter() { this.reset(); }
 
+var TOUCH_MOVE = 0, TOUCH_DOWN = 1, TOUCH_UP = 2; // what pop gives
+
 TouchFilter.prototype.reset = function () {
    this.window = 0;
    this.open = false; this.openX = 0; this.openY = 0; this.openT = 0;
    this.hasLast = false; this.lastX = 0; this.lastY = 0; this.lastT = 0;
    this.settling = false; this.start = 0; this.readings = 0;
    this.candX = 0; this.candY = 0; this.prevX = 0; this.prevY = 0;
+   this.gated = false; this.touched = false; this.downDue = false; this.downOut = false;
+   this.pressed = false; // settling a press the touch CC started, so one reading will do
    this.queue = [];
+};
+
+// The touch CC: a finger down or up at `now`. From the first one on, the touch decides the edges.
+TouchFilter.prototype.touch = function (down, now, window) {
+   this.window = window;
+   this.gated = true;
+   if (down === this.touched) return;
+   this.touched = down;
+   this.open = false;
+   if (down) {
+      this.settling = true;
+      this.start = now;
+      this.readings = 0;
+      this.downDue = true;
+      this.pressed = true;
+      return;
+   }
+   var downHeld = false;
+   for (var i = 0; i < this.queue.length; ++i) downHeld = downHeld || this.queue[i].event === TOUCH_DOWN;
+   this.queue = [];
+   this.settling = false;
+   this.pressed = false;
+   this.downDue = false;
+   if (this.downOut && !downHeld) this.hold(0, 0, now, TOUCH_UP);
+   this.downOut = false;
 };
 
 TouchFilter.prototype.push = function (x, y, now, window) {
@@ -341,14 +370,14 @@ TouchFilter.prototype.push = function (x, y, now, window) {
    this.openT = now;
 };
 
-// The next reading due by `now` as [x, y], oldest first, or null.
+// The next event due by `now` as [x, y, event], oldest first, or null.
 TouchFilter.prototype.pop = function (now, window) {
    this.window = window;
    if (this.open && now - this.openT >= TOUCH_PAIR) this.finalize();
    if (this.settling && now >= this.start + this.window) this.settle();
    if (!this.queue.length || this.queue[0].due > now) return null;
    var r = this.queue.shift();
-   return [r.x, r.y];
+   return [r.x, r.y, r.event];
 };
 
 TouchFilter.prototype.busy = function () { return this.open || this.settling || this.queue.length > 0; };
@@ -356,10 +385,14 @@ TouchFilter.prototype.busy = function () { return this.open || this.settling || 
 TouchFilter.prototype.finalize = function () {
    this.open = false;
    var x = this.openX, y = this.openY, t = this.openT;
+   if (this.gated && !this.touched) return;
    if (this.settling && t >= this.start + this.window) this.settle();
    var step = this.hasLast ? Math.sqrt((x - this.lastX) * (x - this.lastX) + (y - this.lastY) * (y - this.lastY)) : 0;
    var onset = !this.hasLast || step > TOUCH_JUMP || (t - this.lastT >= TOUCH_LIFT && step > TOUCH_AGREE);
    if (onset && this.window > 0) {
+      // Still the touch CC's press if nothing has arrived in it yet; a jump later in the touch
+      // (often the finger starting to lift) needs two readings that agree, as without it.
+      this.pressed = this.pressed && this.settling && this.readings === 0;
       this.queue = [];
       this.settling = true;
       this.start = t;
@@ -383,13 +416,20 @@ TouchFilter.prototype.finalize = function () {
 TouchFilter.prototype.settle = function () {
    this.settling = false;
    var dx = this.candX - this.prevX, dy = this.candY - this.prevY;
-   if (this.readings >= 2 && Math.sqrt(dx * dx + dy * dy) <= TOUCH_AGREE)
-      this.hold(this.candX, this.candY, this.start + this.window);
+   var rested = this.readings >= 2 && Math.sqrt(dx * dx + dy * dy) <= TOUCH_AGREE;
+   if (rested || (this.pressed && this.readings >= 1)) this.hold(this.candX, this.candY, this.start + this.window);
+   this.pressed = false;
 };
 
-TouchFilter.prototype.hold = function (x, y, due) {
+TouchFilter.prototype.hold = function (x, y, due, event) {
+   event = event || TOUCH_MOVE;
+   if (event === TOUCH_MOVE && this.downDue) {
+      this.downDue = false;
+      this.downOut = true;
+      this.hold(x, y, due, TOUCH_DOWN);
+   }
    if (this.queue.length === 64) this.queue.shift();
-   this.queue.push({ x: x, y: y, due: due });
+   this.queue.push({ x: x, y: y, due: due, event: event });
 };
 
 // ---- the plugin's MIDI handling (src/plugin.cpp) ----
@@ -403,19 +443,22 @@ var PARAMS = {
    angleoffset: [0, 360, 0],
    direction: [0, 1, 0],    // 0 counter-clockwise, 1 clockwise
    radiusmode: [0, 1, 0],   // 0 clamp to circle, 1 fill square
-   passthrough: [0, 1, 0],  // also forward the raw X/Y CCs
+   passthrough: [0, 2, 0],  // forward the X/Y and touch CCs: 0 off, 1 raw, 2 filtered
    smoothing: [0, 2000, 0], // ms
    inertia: [0, 100, 0],    // %
    path: [0, 1, 0],         // 0 straight, 1 around
    resolution: [0, 1, 0],   // 0 7-bit, 1 14-bit
    inertiamode: [0, 2, 0],  // 0 pull, 1 coast, 2 pad
-   touchfilter: [0, 3, 0]   // 0 off, then TOUCH_WINDOWS
+   touchfilter: [0, 3, 0],  // 0 off, then TOUCH_WINDOWS
+   touchin: [-1, 127, -1],  // the pad's touch CC, -1 none
+   touchout: [-1, 127, -1], // the touch sent on, -1 none
+   polarout: [0, 1, 1]      // 0: no angle or radius goes out
 };
 
 function Channel() {
    this.x = 64; this.y = 64; this.fx = 64; this.fy = 64;
    this.hasX = false; this.hasY = false;
-   this.angle = -1; this.sentAngle = -1; this.sentRadius = -1;
+   this.angle = -1; this.sentAngle = -1; this.sentRadius = -1; this.sentTouch = -1;
    this.motion = new Follower();
    this.touch = new TouchFilter();
 }
@@ -456,6 +499,40 @@ Engine.prototype.fineBlocked = function () {
    return this.fineWanted() && (this.int('outangle') >= 32 || this.int('outradius') >= 32);
 };
 
+// Touch In CC, or -1 for none (or when it would take one of the X/Y CCs).
+Engine.prototype.touchIn = function () {
+   var cc = Math.round(this.p.touchin), inX = this.int('inx'), inY = this.int('iny');
+   if (cc < 0 || cc === inX || cc === inY || (inX < 32 && cc === inX + 32) || (inY < 32 && cc === inY + 32)) return -1;
+   return cc;
+};
+
+// Touch Out CC, or -1 for none (or when it would take one of the angle/radius CCs).
+Engine.prototype.touchOut = function () {
+   var cc = Math.round(this.p.touchout), s = this.applied;
+   if (cc < 0 || cc === s.outAngle || cc === s.outRadius || (s.fine && (cc === s.outAngle + 32 || cc === s.outRadius + 32)))
+      return -1;
+   return cc;
+};
+
+// Pass Input CCs on Filtered: a reading Touch Filter let through, sent on as the X/Y CCs it came in
+// on (with each axis's LSB too where a 14-bit controller sent one).
+Engine.prototype.passReading = function (channel, x, y) {
+   var ccs = [this.int('inx'), this.int('iny')], v = [x, y];
+   for (var i = 0; i < 2; ++i) {
+      var cc = clamp(v[i] >= 0 ? 64 + v[i] * 63 : 64 + v[i] * 64, 0, 127);
+      var msb = Math.floor(cc + 1e-9), lsb = clamp(Math.round((cc - msb) * 128), 0, 127);
+      this.emit(0xB0 | channel, ccs[i], msb);
+      if (ccs[i] < 32 && lsb > 0) this.emit(0xB0 | channel, ccs[i] + 32, lsb);
+   }
+};
+
+Engine.prototype.sendTouch = function (channel, down) {
+   var st = this.channels[channel], cc = this.touchOut(), value = down ? 127 : 0;
+   if (cc < 0 || this.conflicting() || value === st.sentTouch) return;
+   this.emit(0xB0 | channel, cc, value);
+   st.sentTouch = value;
+};
+
 Engine.prototype.touchWindow = function () { return TOUCH_WINDOWS[clamp(this.int('touchfilter'), 0, 3)]; };
 
 Engine.prototype.motionSettings = function () {
@@ -475,14 +552,15 @@ Engine.prototype.settings = function () {
       fillSquare: this.int('radiusmode') !== 0,
       angleOffset: this.p.angleoffset,
       around: this.int('path') !== 0,
-      fine: this.fineWanted() && outAngle < 32 && outRadius < 32
+      fine: this.fineWanted() && outAngle < 32 && outRadius < 32,
+      polar: this.int('polarout') !== 0
    };
 };
 
 function sameSettings(a, b) {
    return a.outAngle === b.outAngle && a.outRadius === b.outRadius && a.clockwise === b.clockwise &&
           a.fillSquare === b.fillSquare && a.angleOffset === b.angleOffset && a.around === b.around &&
-          a.fine === b.fine;
+          a.fine === b.fine && a.polar === b.polar;
 }
 
 // A changed setting changes what each channel's position means, so each sends it again.
@@ -501,7 +579,7 @@ Engine.prototype.applySettings = function () {
    var now = this.settings();
    var was = this.applied;
    if (sameSettings(now, was)) return;
-   var moved = now.outAngle !== was.outAngle || now.outRadius !== was.outRadius;
+   var moved = now.outAngle !== was.outAngle || now.outRadius !== was.outRadius || (now.polar && !was.polar);
    var rescaled = now.fine !== was.fine;
    this.applied = now;
    for (c = 0; c < 16; ++c) {
@@ -550,8 +628,17 @@ Engine.prototype.releaseTouches = function () {
    for (var c = 0; c < 16; ++c) {
       var st = this.channels[c], any = false, r;
       while (st.touch.busy() && (r = st.touch.pop(this.time, window))) {
-         this.moveTo(st, r[0], r[1]);
-         any = true;
+         var pass = this.int('passthrough') === 2;
+         if (r[2] === TOUCH_MOVE) {
+            this.moveTo(st, r[0], r[1]);
+            if (pass) this.passReading(c, r[0], r[1]);
+            any = true;
+            continue;
+         }
+         if (pass && this.touchIn() >= 0) this.emit(0xB0 | c, this.touchIn(), r[2] === TOUCH_DOWN ? 127 : 0);
+         if (any) this.send(c);
+         any = false;
+         this.sendTouch(c, r[2] === TOUCH_DOWN);
       }
       if (any) this.send(c);
    }
@@ -564,6 +651,7 @@ Engine.prototype.send = function (channel) {
    var pos = st.motion.position();
    var p = toPolar(pos[0], pos[1], s, s.fine ? STEPS14 : STEPS7);
    if (p.hasAngle) st.angle = p.angle;
+   if (!s.polar) return; // Polar Out off: nothing goes out, nothing counts as sent
    if (st.angle >= 0 && st.angle !== st.sentAngle) {
       this.pushValue(channel, s.outAngle, st.angle);
       st.sentAngle = st.angle;
@@ -589,9 +677,18 @@ Engine.prototype.handleCC = function (channel, cc, value) {
    var inX = this.int('inx'), inY = this.int('iny');
    var lsbX = inX < 32 && cc === inX + 32 && cc !== inY;
    var lsbY = inY < 32 && cc === inY + 32 && cc !== inX;
-   if (cc !== inX && cc !== inY && !lsbX && !lsbY) return false;
-   if (this.int('passthrough') !== 0) this.emit(0xB0 | channel, cc, value);
+   var touch = cc === this.touchIn();
+   if (cc !== inX && cc !== inY && !lsbX && !lsbY && !touch) return false;
+   var pass = this.int('passthrough');
+   if (pass === 1 || (pass === 2 && this.touchWindow() <= 0)) this.emit(0xB0 | channel, cc, value);
    var st = this.channels[channel];
+   if (touch) {
+      this.convertPending(); // readings before the edge are on their side of it
+      this.lastChannel = channel;
+      if (this.touchWindow() > 0) st.touch.touch((value & 0x7F) >= 64, this.time, this.touchWindow());
+      else this.sendTouch(channel, (value & 0x7F) >= 64);
+      return true;
+   }
    value &= 0x7F;
    if (cc === inX) {
       st.x = st.fx = value;
@@ -629,8 +726,10 @@ Engine.prototype.tick = function (dt) {
 Engine.prototype.learn = function (which) {
    var c = this.lastChannel, st = this.channels[c];
    var shift = this.applied.fine ? 7 : 0;
+   if ((which === 'angle' || which === 'radius') && !this.applied.polar) return;
    if (which === 'angle') this.emit(0xB0 | c, this.int('outangle'), Math.max(st.sentAngle, 0) >> shift);
    else if (which === 'radius') this.emit(0xB0 | c, this.int('outradius'), Math.max(st.sentRadius, 0) >> shift);
+   else if (which === 'touch' && this.touchOut() >= 0) this.emit(0xB0 | c, this.touchOut(), Math.max(st.sentTouch, 0));
 };
 
 // Lands every glide (after a reset, say) and forgets what was sent, so the next move sends both.
@@ -639,7 +738,7 @@ Engine.prototype.reset = function () {
       var st = this.channels[c];
       st.motion.land();
       st.touch.reset();
-      st.sentAngle = st.sentRadius = -1;
+      st.sentAngle = st.sentRadius = st.sentTouch = -1;
    }
 };
 
@@ -650,7 +749,7 @@ Engine.prototype.status = function () {
    var c = this.lastChannel, st = this.channels[c];
    var text = 'ch ' + (c + 1) + '  in ' + (st.hasX ? st.x : '-') + ',' + (st.hasY ? st.y : '-');
    var shift = this.applied.fine ? 7 : 0;
-   text += '  out ' + (st.sentAngle >= 0 ? (st.sentAngle >> shift) + ' / ' + (st.sentRadius >> shift) : '-');
+   text += '  out ' + (!this.applied.polar ? 'off' : st.sentAngle >= 0 ? (st.sentAngle >> shift) + ' / ' + (st.sentRadius >> shift) : '-');
    if (this.fineBlocked()) text += '  (14-bit needs out CCs < 32)';
    return text;
 };

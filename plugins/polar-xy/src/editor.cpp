@@ -1,6 +1,6 @@
 // Polar XY's panel, in the MicroMonsta 2 style: a title bar, then the XY input and the polar output
 // side by side, each a small night sky with its CCs beneath, and the mapping and motion settings
-// below them, all on a 720 x 690 design grid scaled to the window.
+// below them, all on a 900 x 738 design grid scaled to the window.
 //
 // Both skies animate at the display's rate, about 60 frames a second, on the main thread. The input
 // dot and the output orb shed ink as they move, which drifts, spreads and fades behind them like the
@@ -18,6 +18,7 @@
 #include <jclap/ui/param_bindings.h>
 #include <jclap/ui/preset_bar.h>
 #include <jclap/ui/section.h>
+#include <jclap/ui/tooltip.h>
 #include <jclap/ui/segmented.h>
 #include <jclap/ui/update_notice.h>
 #include <jclap/ui/xy_pad.h>
@@ -40,8 +41,8 @@ namespace {
 
 namespace ui = jclap::ui;
 
-constexpr float kDesignWidth = 720.0f;
-constexpr float kDesignHeight = 690.0f;
+constexpr float kDesignWidth = kEditorWidth;
+constexpr float kDesignHeight = kEditorHeight;
 constexpr float kHeaderHeight = 64.0f;
 // Every knob gets a cell this size, so they all come out alike.
 constexpr float kKnobWidth = 76.0f;
@@ -370,6 +371,14 @@ public:
       target_ = target;
    }
 
+   // Off: the output is switched off, so the sky is dimmed and says so, with no orb.
+   void setOff(bool off) {
+      if (off != off_) {
+         off_ = off;
+         redraw();
+      }
+   }
+
    // One frame, `dt` seconds after the last. Redraws while there is ink to fade.
    void step(float dt) {
       const bool inked = !ink_.empty();
@@ -404,12 +413,22 @@ public:
       }
       c.setColor(glow(0xffffffff, 0.2f));
       c.ring(cx - radius, cy - radius, 2 * radius, 1.0f);
-      c.setColor(t.dimText);
-      c.segment(cx + radius * 0.88f, cy, cx + radius + 5.0f * s, cy, 2.0f * s, true);
+      if (!off_) {
+         c.setColor(t.dimText);
+         c.segment(cx + radius * 0.88f, cy, cx + radius + 5.0f * s, cy, 2.0f * s, true);
+      }
 
-      ink_.draw(c, at, 9.0f * s, s);
+      if (off_) {
+         // A veil over the Orb, and what it means in the middle.
+         c.setColor(glow(0xff0b0e14, 0.6f));
+         c.fill(b.x(), b.y(), b.width(), b.height());
+         c.setColor(t.dimText);
+         c.text("POLAR OUT OFF", ui::font(15.0f * s), visage::Font::kCenter, b.x(), cy - 12.0f * s, b.width(), 24.0f * s);
+      }
+      else
+         ink_.draw(c, at, 9.0f * s, s);
 
-      if (shown_) {
+      if (shown_ && !off_) {
          const visage::Point p = at(orb_), q = at(target_);
          // The radius: a faint line out from the centre and the circle it sweeps.
          const float r = std::hypot(p.x - cx, p.y - cy);
@@ -441,82 +460,130 @@ public:
 private:
    Sky sky_;
    Ink ink_{kOrange, kOldOrange, 2.2f};
-   bool shown_ = false;
+   bool shown_ = false, off_ = false;
    Spot orb_, target_;
    std::string left_, right_;
+};
+
+// A wash of the section colour over controls that do nothing for now, which also keeps the mouse
+// off them.
+class Veil : public visage::Frame {
+public:
+   void draw(visage::Canvas &c) override {
+      c.setColor(visage::Color(ui::defaultTheme().panel).withAlpha(0.65f));
+      c.fill(0, 0, width(), height());
+   }
+   void mouseDown(const visage::MouseEvent &) override {}
 };
 
 class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       add<ui::UpdateNotice>({196, 19, 196, 26});
-      auto &presets = add<ui::PresetBar>({400, 18, 308, 28}, factoryPresets(), kPresetFormat, host_);
+      auto &presets = add<ui::PresetBar>({kDesignWidth - 360, 18, 348, 28}, factoryPresets(), kPresetFormat, host_);
       presets.setAccent(kOrange);
+      tip(presets, "Presets: the arrows step through them, the name opens the menu, the star marks a favorite and SAVE "
+                   "keeps the current settings.");
       presets.defaults = defaultValues();
       presets.currentName = [this] { return host_.presetName(); };
       presets.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
 
       // Signal flow left to right: the input and its CCs, the output and its CCs; and below, what
       // happens in between.
-      add<ui::Section>({12, 76, 342, 400}, "XY IN");
-      add<ui::Section>({366, 76, 342, 400}, "POLAR OUT");
-      add<ui::Section>({12, 488, 342, 190}, "MAPPING");
-      add<ui::Section>({366, 488, 342, 190}, "MOTION");
+      add<ui::Section>({12, 76, 432, 498}, "XY IN");
+      add<ui::Section>({456, 76, 432, 498}, "POLAR OUT");
+      add<ui::Section>({12, 586, 876, 140}, "SETTINGS");
 
-      // Live views: what comes in on the X/Y CCs, and the angle/radius that goes out. Dragging the
+      // Live views, their skies 4:3 (an XYPad keeps a tenth of its shorter side for the labels):
+      // what comes in on the X/Y CCs, and the angle/radius that goes out. Dragging the
       // XY pad moves the input itself, holding off the controller until the mouse lets go.
       const ui::ValueRange cc{0.0, 127.0, 64.0, 1.0};
-      xy_ = &add<InkPad>({24, 116, 318, 236}, cc, cc);
+      xy_ = &add<InkPad>({24, 116, 408, 340}, cc, cc);
       xy_->setAccent(kBlue);
-      orb_ = &add<OrbView>({378, 116, 318, 236});
+      orb_ = &add<OrbView>({468, 116, 408, 340});
+      tip(*xy_, "The last X/Y received, with its channel. Drag the dot to move the input yourself; double-click centres it.");
+      tip(*orb_, "The angle and radius sent for that channel, angle 0 at the tick on the right. The band shows where it's headed.");
       // The pad sets X then Y, so a move is sent once Y has it too, never as the new X with the old
       // Y. It goes at full resolution, not rounded to CC steps, for a smooth angle and radius.
       xy_->y().onChange = [this](double) { host_.dragInput(xy_->x().value, xy_->y().value); };
       for (ui::XYPad::Axis *axis : {&xy_->x(), &xy_->y()})
          axis->onEndEdit = [this] { host_.releaseInput(); };
-      add<ui::Divider>({24, 364, 318, 1});
-      add<ui::Divider>({378, 364, 318, 1});
+      add<ui::Divider>({24, 462, 408, 1});
+      add<ui::Divider>({468, 462, 408, 1});
 
-      // Each view's CCs: two knobs, and beside them a column of what else goes with them.
-      constexpr float strip = 376.0f;
-      knob(kParamInX, "X", kBlue, 24, strip);
-      knob(kParamInY, "Y", kBlue, 100, strip);
-      heading("PASS INPUT CCS", 192, strip);
-      auto &pass = add<ui::Button>({192, strip + 18, 150, 24}, "PASS");
-      pass.setAccent(kPurple);
-      bindings_.bind(pass, kParamPassThrough);
-      hint("Sends the X/Y CCs on as well", 192, strip + 52);
+      // Each view's CCs: three knobs (the touch CC Off until set), and at the right a column of what
+      // else goes with them.
+      constexpr float strip = 474.0f;
+      tip(knob(kParamInX, "X", kBlue, 24, strip), "X In CC: the controller's X axis comes in on this CC.");
+      tip(knob(kParamInY, "Y", kBlue, 100, strip), "Y In CC: the controller's Y axis comes in on this CC.");
+      tip(knob(kParamTouchIn, "TOUCH", kBlue, 176, strip),
+          "Touch In CC: the pad's finger-down CC, so Touch Filter knows exactly when each touch starts and ends.");
+      // The input CCs sent on as well: as they came, or with the touch filtered.
+      tip(choice(kParamPassThrough, "PASS INPUT CCS", {"OFF", "RAW", "FILTERED"}, 282, strip),
+          "Off: the input CCs are taken. Raw: they go on untouched too. Filtered: they go on cleaned by the Touch Filter.");
+      hint("Filtered: by the Touch Filter", 282, strip + 52);
 
-      knob(kParamOutAngle, "ANGLE", kOrange, 378, strip);
-      knob(kParamOutRadius, "RADIUS", kOrange, 454, strip);
+      // The angle/radius output on or off (the touch CC goes out either way), in the title row.
+      auto &polar = add<ui::SegmentedSwitch>({796, 84, 80, 22}, std::vector<std::string>{"OFF", "ON"});
+      polar.setAccent(kOrange);
+      bindings_.bind(polar, kParamPolarOut);
+      tip(polar, "Polar Out: off sends no angle or radius at all, for passing the X/Y on by themselves. Touch Out still works.");
+
+      tip(knob(kParamOutAngle, "ANGLE", kOrange, 468, strip), "Angle Out CC: the angle goes out on this CC, for the Orb's angle.");
+      tip(knob(kParamOutRadius, "RADIUS", kOrange, 544, strip), "Radius Out CC: the radius goes out on this CC, for the Orb's radius.");
+      tip(knob(kParamTouchOut, "TOUCH", kOrange, 620, strip),
+          "Touch Out CC: sends the touch on, 127 down and 0 up, in step with the filtered motion.");
       // Each sends its CC alone, for a MIDI learn on the receiving end.
-      heading("MIDI LEARN", 546, strip);
-      const char *const sends[] = {"SEND ANGLE", "SEND RADIUS"};
-      for (int i = 0; i < 2; ++i) {
-         auto &send = add<ui::Button>({546.0f + i * 78.0f, strip + 18, 72, 24}, sends[i]);
-         send.setAccent(kOrange);
-         send.onClick = [this, i] { host_.sendOutput(i); };
+      heading("MIDI LEARN", 726, strip);
+      const char *const sends[] = {"ANGLE", "RADIUS", "TOUCH"};
+      const char *const sendTips[] = {"Sends the angle CC alone, so a MIDI Learn picks up just that one.",
+                                      "Sends the radius CC alone, so a MIDI Learn picks up just that one.",
+                                      "Sends the touch CC alone, so a MIDI Learn picks up just that one."};
+      for (int i = 0; i < 3; ++i)
+         tip(send(i, sends[i], {726.0f + i * 51.0f, strip + 18, 48, 24}), sendTips[i]);
+      hint("Sends one CC alone, to learn it", 726, strip + 52);
+      // Over the angle/radius knobs and their sends while that output is off.
+      polarVeils_ = {&add<Veil>({468, strip, 2 * kKnobWidth, kKnobHeight}), &add<Veil>({726, strip + 18, 99, 24})};
+      for (Veil *v : polarVeils_) {
+         v->setVisible(false);
+         tips_.add(*v, "Polar Out is off. Turn it on in the title row to send the angle and radius.");
       }
-      hint("Sends one CC alone, to learn it", 546, strip + 52);
 
-      // Between the two: where the angle starts and turns, and how the output follows.
-      constexpr float row = 524.0f;
-      knob(kParamAngleOffset, "OFFSET", kPurple, 62, row, 1.0);
-      choice(kParamDirection, "DIRECTION", {"CCW", "CW"}, 192, row);
-      choice(kParamRadiusMode, "RADIUS MODE", {"CIRCLE", "SQUARE"}, 192, row + 50);
-      knob(kParamSmoothing, "SMOOTHING", kBlue, 378, row, 10.0);
-      knob(kParamInertia, "INERTIA", kBlue, 454, row, 1.0);
-      choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 546, row);
-      choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 546, row + 50);
-      choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 546, row + 100);
+      // Between the two, in one row: where the angle starts and turns, and then, past a divider, how
+      // the output follows.
+      constexpr float row = 622.0f;
+      tip(knob(kParamAngleOffset, "OFFSET", kPurple, 24, row, 1.0),
+          "Angle Offset: turns where angle 0 sits, to line your controller up with the Orb.");
+      tip(choice(kParamDirection, "DIRECTION", {"CCW", "CW"}, 139, row),
+          "Which way the angle grows. Flip it if the Orb moves mirrored from your controller.");
+      tip(choice(kParamRadiusMode, "RADIUS MODE", {"CIRCLE", "SQUARE"}, 139, row + 50),
+          "Circle clamps the pad's corners to the circle's edge. Square lets the whole square edge reach full radius.");
+      add<ui::Divider>({317, row, 1, 92});
+      tip(knob(kParamSmoothing, "SMOOTHING", kBlue, 328, row, 10.0),
+          "Roughly how long the Orb takes to glide to the controller's position. At 0 it jumps.");
+      tip(knob(kParamInertia, "INERTIA", kBlue, 404, row, 1.0),
+          "Gives the Orb weight: slower to get going, it swings past the target and coasts on when the controller stops.");
+      tip(choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 519, row),
+          "Straight glides across the pad in X/Y. Around moves the angle and radius, round the circle the short way.");
+      tip(choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 519, row + 50),
+          "Pull draws the Orb to the controller. Coast follows only its movement. Pad works like a trackpad you can fling.");
       // How much of each touch's press and release a resistive pad's skitter is thrown away.
-      choice(kParamTouchFilter, "TOUCH FILTER", {"OFF", "10 MS", "20 MS", "40 MS"}, 378, row + 100);
+      tip(choice(kParamTouchFilter, "TOUCH FILTER", {"OFF", "10 MS", "20 MS", "40 MS"}, 726, row),
+          "Throws away each touch's skittery press and lift-off on a resistive pad, for this much latency.");
+      tip(choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 726, row + 50),
+          "14-bit sends each value as a CC pair (the CC and CC + 32) for smooth sweeps. Needs output CCs below 32.");
 
       // Shown when two inputs or two outputs share a CC, which the plugin won't convert.
-      warning_ = &add<ui::Label>({380, 48, 328, 14}, "", kOrange, visage::Font::kRight, 0.7f);
+      warning_ = &add<ui::Label>({kDesignWidth - 340, 48, 328, 14}, "", kOrange, visage::Font::kRight, 0.7f);
 
       sync();
       startTimer(1);
+   }
+
+   // Shows the tip of the `index`th control given one straight away (for screenshots).
+   void showTip(int index) {
+      if (index >= 0 && index < static_cast<int>(tipped_.size()))
+         tips_.show(*tipped_[index]);
    }
 
    // Steps at the display's rate (see FramePacer).
@@ -557,8 +624,16 @@ private:
       canvas.circle(41 * s, 19 * s, 7 * s);
    }
 
+   // A button that sends output CC `which` alone.
+   ui::Button &send(int which, const char *label, ui::Rect bounds) {
+      auto &button = add<ui::Button>(bounds, label);
+      button.setAccent(kOrange);
+      button.onClick = [this, which] { host_.sendOutput(which); };
+      return button;
+   }
+
    // A knob in a kKnobWidth x kKnobHeight cell at (x, y).
-   void knob(clap_id id, const char *label, unsigned accent, float x, float y, double step = 1.0) {
+   ui::Knob &knob(clap_id id, const char *label, unsigned accent, float x, float y, double step = 1.0) {
       const ParamInfo &p = kParams[id];
       auto &k = add<ui::Knob>({x, y, kKnobWidth, kKnobHeight}, ui::ValueRange{p.min, p.max, p.def, step, false, p.stepped});
       k.setLabel(label);
@@ -566,6 +641,7 @@ private:
       k.valueText = [id](double v) { return text(id, v); };
       k.parseText = [id](const std::string &t, double &v) { return parseParam(id, t.c_str(), v); };
       bindings_.bind(k, id);
+      return k;
    }
 
    // A small title over a control, level with the knobs' labels.
@@ -578,11 +654,20 @@ private:
    }
 
    // A switch under its title, every option in view.
-   void choice(clap_id id, const char *label, std::vector<std::string> options, float x, float y) {
+   ui::SegmentedSwitch &choice(clap_id id, const char *label, std::vector<std::string> options, float x, float y) {
       heading(label, x, y);
       auto &segments = add<ui::SegmentedSwitch>({x, y + 18, 150, 24}, std::move(options));
       segments.setAccent(kPurple);
       bindings_.bind(segments, id);
+      return segments;
+   }
+
+   // Gives `frame` a hover tip, and returns it.
+   template <typename T>
+   T &tip(T &frame, std::string text) {
+      tips_.add(frame, std::move(text));
+      tipped_.push_back(&frame);
+      return frame;
    }
 
    void sync() {
@@ -591,11 +676,19 @@ private:
       // What the plugin really sent on that channel (it holds the angle at the centre, and sends
       // nothing until both axes have arrived), rather than a guess from the input.
       int angle = 0, radius = 0;
-      const bool sent = host_.lastOutput(angle, radius);
+      const bool polar = std::lround(host_.paramValue(kParamPolarOut)) != 0;
+      const bool sent = polar && host_.lastOutput(angle, radius);
+      // With the output off, its view and controls dim, and they don't take the mouse.
+      if (polar != polarShown_) {
+         polarShown_ = polar;
+         orb_->setOff(!polar);
+         for (Veil *v : polarVeils_)
+            v->setVisible(!polar);
+      }
 
       xy_->setLabels("X " + std::to_string(x), "Y " + std::to_string(y) + "  CH " + std::to_string(channel + 1));
-      orb_->setLabels(sent ? "ANGLE " + std::to_string(angle) : "ANGLE -",
-                      sent ? "RADIUS " + std::to_string(radius) : "RADIUS -");
+      orb_->setLabels(!polar ? "ANGLE OFF" : sent ? "ANGLE " + std::to_string(angle) : "ANGLE -",
+                      !polar ? "RADIUS OFF" : sent ? "RADIUS " + std::to_string(radius) : "RADIUS -");
       xy_->setValues(x, y);
 
       // The orb where the output really is, between the CC steps, and the input it is gliding to,
@@ -617,10 +710,10 @@ private:
          return std::lround(host_.paramValue(a)) == std::lround(host_.paramValue(b));
       };
       const auto cc = [this](clap_id id) { return static_cast<int>(std::lround(host_.paramValue(id))); };
-      const bool coarse = std::lround(host_.paramValue(kParamResolution)) != 0 &&
+      const bool coarse = polar && std::lround(host_.paramValue(kParamResolution)) != 0 &&
                           !fineOutput(cc(kParamOutAngle), cc(kParamOutRadius), true);
       warning_->setText(same(kParamInX, kParamInY)               ? "X and Y share a CC: not converting"
-                        : same(kParamOutAngle, kParamOutRadius) ? "Angle and radius share a CC: not converting"
+                        : polar && same(kParamOutAngle, kParamOutRadius) ? "Angle and radius share a CC: not converting"
                         : coarse                                ? "14-bit needs output CCs 0-31: sending 7-bit"
                                                                 : "");
    }
@@ -631,6 +724,12 @@ private:
    InkPad *xy_ = nullptr;
    OrbView *orb_ = nullptr;
    ui::Label *warning_ = nullptr;
+   // What dims with the angle/radius output off, and whether it is on as shown.
+   std::vector<Veil *> polarVeils_;
+   ui::Tooltips tips_;
+   // Every frame with a tip, in the order given (see showTip).
+   std::vector<visage::Frame *> tipped_;
+   bool polarShown_ = true;
    // The angles last drawn (radians), held at the centre where there is none.
    double orbAngle_ = 0.0, targetAngle_ = 0.0;
 };
@@ -642,7 +741,7 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
 }
 
 bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, double seconds,
-                      const std::function<void(double)> &advance) {
+                      const std::function<void(double)> &advance, int tip) {
    Panel panel(host);
    panel.stopTimer();
    const int frames = static_cast<int>(seconds * 60.0 + 0.5);
@@ -651,6 +750,9 @@ bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPa
          advance(1.0 / 60.0);
       panel.step(1.0f / 60.0f);
    }
+   // Laid out at the final size first, so the tip lands under its control.
+   panel.setBounds(0, 0, static_cast<float>(width), static_cast<float>(height));
+   panel.showTip(tip);
    return ui::renderToPng(panel, width, height, pngPath);
 }
 

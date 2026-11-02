@@ -1,9 +1,11 @@
-// Renders the panel to a PNG without a host: polar-xy-screenshot out.png [width height]
+// Renders the panel to a PNG without a host: polar-xy-screenshot out.png [width height] [--polar-off] [--tip N]
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <vector>
 
 #include "editor.h"
 #include "motion.h"
@@ -43,8 +45,12 @@ public:
          return motion_.smoothing * 1000.0;
       if (id == polar_xy::kParamInertia)
          return motion_.inertia * 100.0;
+      if (id == polar_xy::kParamPolarOut)
+         return polarOut ? 1.0 : 0.0;
       return id < polar_xy::kParamCount ? polar_xy::kParams[id].def : 0.0;
    }
+   bool polarOut = true;
+
    void beginEdit(clap_id) override {}
    void setParam(clap_id, double) override {}
    void endEdit(clap_id) override {}
@@ -98,15 +104,29 @@ private:
 } // namespace
 
 int main(int argc, char **argv) {
-   if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [width height]\n", argv[0]);
+   // Flags anywhere: --polar-off shows the angle/radius output switched off, --tip N one control's
+   // hover tip. The rest are positional.
+   bool polarOff = false;
+   int tip = -1;
+   std::vector<const char *> args;
+   for (int i = 1; i < argc; ++i) {
+      if (std::strcmp(argv[i], "--polar-off") == 0)
+         polarOff = true;
+      else if (std::strcmp(argv[i], "--tip") == 0 && i + 1 < argc)
+         tip = std::atoi(argv[++i]);
+      else
+         args.push_back(argv[i]);
+   }
+   if (args.empty()) {
+      std::fprintf(stderr, "usage: %s out.png [width height] [--polar-off] [--tip N]\n", argv[0]);
       return 1;
    }
-   const int width = argc > 3 ? std::atoi(argv[2]) : 720;
-   const int height = argc > 3 ? std::atoi(argv[3]) : 690;
+   const int width = args.size() > 2 ? std::atoi(args[1]) : polar_xy::kEditorWidth;
+   const int height = args.size() > 2 ? std::atoi(args[2]) : polar_xy::kEditorHeight;
    DemoHost host;
-   return polar_xy::renderScreenshot(host, width, height, argv[1], kSeconds,
-                                     [&host](double dt) { host.advance(dt); })
+   host.polarOut = !polarOff;
+   return polar_xy::renderScreenshot(host, width, height, args[0], kSeconds,
+                                     [&host](double dt) { host.advance(dt); }, tip)
              ? 0
              : 1;
 }

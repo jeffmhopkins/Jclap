@@ -91,9 +91,9 @@ def control(maxclass, name, rect, attrs, outs=2, outtype=("", "float")):
     return cid
 
 
-def numbox(name, longname, short, initial, rect):
+def numbox(name, longname, short, initial, rect, lo=0):
     return control("live.numbox", name, rect,
-                   param_attrs(longname, short, 1, 0, 127, initial, parameter_unitstyle=0))
+                   param_attrs(longname, short, 1, lo, 127, initial, parameter_unitstyle=0))
 
 
 def menu(name, longname, short, items, rect):
@@ -111,20 +111,23 @@ def dial(name, longname, short, hi, rect, **extra):
 label("XY IN", [8, 2, 100, 16], bold=True)
 label("X CC", [8, 32, 44, 15]); numbox("inx", "X In CC", "X In", 16, [56, 32, 44, 15])
 label("Y CC", [8, 52, 44, 15]); numbox("iny", "Y In CC", "Y In", 17, [56, 52, 44, 15])
-control("live.text", "passthrough", [8, 76, 92, 16],
-        param_attrs("Pass Input CCs", "Pass In", 2, 0, 1, 0, parameter_enum=["off", "on"]))
-boxes[-2]["box"].update(text="PASS X/Y ON", texton="PASS X/Y ON", mode=1)
+label("Touch", [8, 72, 44, 15]); numbox("touchin", "Touch In CC", "Touch In", -1, [56, 72, 44, 15], lo=-1)
+label("Pass", [8, 96, 44, 15]); menu("passthrough", "Pass Input CCs", "Pass In", ["Off", "Raw", "Filtered"], [56, 96, 52, 15])
 
-label("POLAR OUT", [116, 2, 100, 16], bold=True)
+label("POLAR OUT", [116, 2, 60, 16], bold=True)
+control("live.text", "polarout", [176, 3, 32, 14],
+        param_attrs("Polar Out", "Polar Out", 2, 0, 1, 1, parameter_enum=["off", "on"]))
+boxes[-2]["box"].update(text="OFF", texton="ON", mode=1)
 label("Angle", [116, 32, 44, 15]); numbox("outangle", "Angle Out CC", "Angle Out", 18, [164, 32, 44, 15])
 label("Radius", [116, 52, 44, 15]); numbox("outradius", "Radius Out CC", "Radius Out", 19, [164, 52, 44, 15])
+label("Touch", [116, 72, 44, 15]); numbox("touchout", "Touch Out CC", "Touch Out", -1, [164, 72, 44, 15], lo=-1)
 
 # SEND buttons, for a MIDI learn in Omnisphere: that CC alone. Not parameters, so not automatable.
-label("MIDI LEARN", [116, 80, 100, 15])
-for i, (which, text) in enumerate((("angle", "SEND ANGLE"), ("radius", "SEND RADIUS"))):
-    x = 116 + i * 48
+label("SEND (MIDI LEARN)", [116, 90, 100, 15])
+for i, (which, text) in enumerate((("angle", "ANGLE"), ("radius", "RADIUS"), ("touch", "TOUCH"))):
+    x = 116 + i * 33
     btn = box("live.text", text=text, texton=text, mode=0, fontsize=8.0, numinlets=1, numoutlets=2,
-              outlettype=["", ""], parameter_enable=1, presentation=1, presentation_rect=[x, 96, 44, 16],
+              outlettype=["", ""], parameter_enable=1, presentation=1, presentation_rect=[x, 104, 31, 16],
               patching_rect=[700 + i * 80, 300, 70, 20], varname=f"Send {which.title()}",
               saved_attribute_attributes=param_attrs(f"Send {which.title()}", f"Send {which.title()}", 2, 0, 1, 0,
                                                      parameter_enum=["off", "on"], parameter_invisible=1))

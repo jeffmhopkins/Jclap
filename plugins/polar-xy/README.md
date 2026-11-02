@@ -39,7 +39,7 @@ or [m4l/](m4l) here. It needs Live Suite, or Live Standard with Max for Live.
    together, for example into your User Library (`Presets/MIDI Effects/Max MIDI Effect`).
 2. Drag `Polar XY.amxd` onto the Omnisphere track, in front of Omnisphere. No extra track or MIDI
    routing is needed.
-3. MIDI Learn the Orb as in Bitwig (step 3 above), using **SEND ANGLE** and **SEND RADIUS**.
+3. MIDI Learn the Orb as in Bitwig (step 3 above), using the **ANGLE** and **RADIUS** learn buttons.
 
 It is the same conversion and motion as the plugin, with the same settings, each a Live parameter
 you can automate or map. The panel has no XY pad or night skies: a status line shows the last
@@ -118,7 +118,7 @@ still moving.
 A resistive XY pad reads its position through the finger's contact, so for a few milliseconds while
 the finger presses down and while it lifts off, the contact is light and the readings are wrong: they
 skitter toward an edge or the centre, and the Orb jumps there and back. Smoothing hides that by
-smearing it into every move. **Touch Filter** (TOUCH FILTER in the MOTION section) instead finds the
+smearing it into every move. **Touch Filter** (TOUCH FILTER in the SETTINGS section) instead finds the
 edges of each touch and throws them away, leaving the rest exactly as it came:
 
 - X and Y that arrive within 3 ms of each other are one reading, so no point made of the new X and the
@@ -135,6 +135,36 @@ So it costs that much latency (twice that at the start of a touch), but never sm
 drag from a controller that only sends when the value changes comes through whole. Use the shortest
 setting that stops the skitter. The panel's XY pad doesn't go through it.
 
+### Touch CC
+
+Many pads also send a CC that is on (64 and up) while a finger is down and off when it lifts. Set
+**Touch In CC** (TOUCH under XY IN) to it and Touch Filter knows the edges for certain instead of
+guessing them from jumps:
+
+- While the touch is off, X and Y are ignored.
+- When it goes on, the press is held back for the window as above, and then the latest reading goes
+  out (one is enough, as the finger is known to be down).
+- When it goes off, everything still held back is thrown away. That is the last 10, 20 or 40 ms
+  before the lift, so a lift-off is dropped even when it slides away gently with no jump to give it
+  away. The touch CC usually arrives a few milliseconds after the skitter starts, so use a window at
+  least that long (20 ms is a good start).
+
+Until the first touch CC arrives, Touch Filter works as above, so a pad that doesn't send one loses
+nothing. Touch In CC needs Touch Filter on; with it off, the touch CC only goes on to Touch Out.
+
+**Touch Out CC** (TOUCH under POLAR OUT) sends the touch on, as 127 and 0, in step with the filtered
+motion: on just before a touch's first position goes out, off once it lifts. A touch whose press never
+went out sends neither. Holding the mouse down on the panel's XY pad is a touch too.
+
+### Passing the CCs on, filtered
+
+**Pass Input CCs** sends the X/Y CCs (and the touch CC) on as well as converting them. *Raw* sends
+them on the moment they arrive, exactly as the controller sent them, skitter and all. *Filtered* sends
+them on as Touch Filter lets them through instead: the same CCs and values, a window later, with each
+touch's press and lift-off left out and the touch CC in step. So Polar XY can clean up a resistive
+pad's X/Y for something else, alongside the angle and radius, or on its own with **Polar Out**
+off (no angle or radius goes out at all). With Touch Filter off, Filtered is the same as Raw.
+
 > [!IMPORTANT]
 > Spectrasonics doesn't document where the Orb's angle 0 sits or which way it turns, so these are
 > exposed as settings. If the Orb dot lands rotated or mirrored from your controller, adjust
@@ -144,7 +174,7 @@ setting that stops the skitter. The panel's XY pad doesn't go through it.
 
 A 7-bit CC gives the angle 127 steps round the circle (about 2.8 degrees each) and the radius 127
 steps, so a slow sweep moves in audible stairs. **Output Resolution** set to 14-bit (**RESOLUTION**
-in the MOTION section of the panel) sends each value as a standard 14-bit CC pair: the top 7 bits on the output CC,
+in the SETTINGS section of the panel) sends each value as a standard 14-bit CC pair: the top 7 bits on the output CC,
 then the bottom 7 on that CC + 32 (so the defaults, 18 and 19, also send on 50 and 51). That is
 16383 steps each. It needs both output CCs below 32; on higher ones the output stays 7-bit and the
 panel says so. Whether the receiving end reads the pair as one fine value is up to it; one that
@@ -160,9 +190,14 @@ and each MSB on its own is the whole value, so nothing changes for one.
 **XY IN** shows the last X/Y position received, with its channel, and **POLAR OUT** the angle and
 radius the plugin sent for that channel (a dash until both axes have arrived),
 with angle 0 marked by the tick on the right. Comparing the two shows what `Angle Offset` and
-`Direction` do. Under each view are its CCs: X and Y with Pass Input CCs, and angle and radius with
-the MIDI learn buttons. Below them, **MAPPING** holds Angle Offset, Direction and Radius Mode, and
-**MOTION** Smoothing, Inertia, Path, Inertia Mode, Resolution and Touch Filter. Every setting is also a plain host parameter.
+`Direction` do. Under each view are its CCs: X, Y and Touch In with Pass Input CCs, and angle, radius
+and Touch Out with the MIDI learn buttons. Below them, **SETTINGS** holds Angle Offset, Direction
+and Radius Mode, then Smoothing, Inertia, Path, Inertia Mode, Touch Filter and Resolution. Hover over
+any control for a tip on what it does. Every setting is also a plain host parameter.
+
+The OFF / ON switch in the POLAR OUT title is **Polar Out**. Off, the view goes dark and says so, and
+the angle and radius CCs and their learn buttons are greyed out: nothing goes out on them. Touch Out
+still works.
 
 Both views are small night skies that move at the screen's rate. The input dot and the output orb
 leave a trail of ink that drifts and fades behind them, so you can see the path a glide took
@@ -178,9 +213,9 @@ stepping each time it reports. While the mouse is down it has that channel, so t
 controller's X/Y CCs on it are ignored; once you let go, the controller takes over again with its next
 move. Double-click puts it back in the centre. Before any CC has arrived the pad drives channel 1.
 
-To map the outputs with a MIDI learn, press **SEND ANGLE** or **SEND RADIUS**, beside the output CCs: it
-sends that CC alone (at the value last sent on it), so the learn picks it up without the other one getting in
-first. At 14-bit it sends only the MSB CC, the one to learn.
+To map the outputs with a MIDI learn, press **ANGLE**, **RADIUS** or **TOUCH** under MIDI LEARN: it
+sends that CC alone (at the value last sent on it), so the learn picks it up without the others getting in
+first. At 14-bit it sends only the MSB CC, the one to learn. TOUCH needs a Touch Out CC set.
 
 The preset bar in the header steps through presets with its arrows, lists them from the name, stars
 favourites, and SAVE stores the current settings as your own preset. The factory bank is a single
@@ -189,7 +224,7 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 > [!TIP]
 > To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
 > `build/plugins/polar-xy/polar-xy-screenshot plugins/polar-xy/docs/panel.png`. With tools on,
-> `ctest` checks the panel still renders like that image.
+> `ctest` checks the panel still renders like that image. Add `--polar-off` to see it with Polar Out off.
 
 ## Settings
 
@@ -200,10 +235,13 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 | Angle Offset | 0 deg | Rotates the angle |
 | Direction | Counter-clockwise | Flip to clockwise to mirror |
 | Radius Mode | Clamp to circle | Or Fill square |
-| Pass Input CCs | Off | Also forward the raw X/Y CCs |
+| Pass Input CCs | Off | Also send on the X/Y (and touch) CCs: Raw as they came, or Filtered through Touch Filter |
 | Smoothing | 0 ms | Glide time, up to 2 s |
 | Inertia | 0% | Weight: lag and overshoot |
 | Motion Path | Straight | Or Around, to move round the circle |
 | Inertia Mode | Pull | Or Coast, where only the controller's movement moves the output, or Pad, to use it like a trackpad |
 | Output Resolution | 7-bit | Or 14-bit (RESOLUTION on the panel): MSB on the output CC, LSB on CC + 32 |
 | Touch Filter | Off | Or 10, 20 or 40 ms: throws away each touch's press and release, for a resistive pad |
+| Touch In CC | Off | The pad's touch CC, so Touch Filter knows each touch's edges |
+| Touch Out CC | Off | Sends the touch on (127 / 0), in step with the filtered motion |
+| Polar Out | On | Off sends no angle or radius at all, for using Polar XY just to filter the X/Y CCs |

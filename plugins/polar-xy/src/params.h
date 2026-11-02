@@ -26,6 +26,9 @@ enum ParamId : clap_id {
    kParamResolution,
    kParamInertiaMode,
    kParamTouchFilter,
+   kParamTouchIn,
+   kParamTouchOut,
+   kParamPolarOut,
    kParamCount
 };
 
@@ -43,18 +46,22 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Angle Offset", 0, 360, 0, false},
    {"Direction", 0, 1, 0, true},
    {"Radius Mode", 0, 1, 0, true},
-   {"Pass Input CCs", 0, 1, 0, true},
+   {"Pass Input CCs", 0, 2, 0, true}, // Off, Raw, Filtered (through Touch Filter)
    {"Smoothing", 0, 2000, 0, false}, // ms
    {"Inertia", 0, 100, 0, false},    // %
    {"Motion Path", 0, 1, 0, true},
    {"Output Resolution", 0, 1, 0, true},
    {"Inertia Mode", 0, 2, 0, true},
    {"Touch Filter", 0, 3, 0, true}, // Off, then the windows in kTouchWindows (touch.h)
+   {"Touch In CC", -1, 127, -1, true},  // -1: none
+   {"Touch Out CC", -1, 127, -1, true}, // -1: none
+   {"Polar Out", 0, 1, 1, true},        // Off: no angle or radius goes out
 };
 
 // Labels for the choice params, off (or the first) first: one per step of the param's range.
 inline const char *const kDirectionLabels[] = {"Counter-clockwise", "Clockwise"};
 inline const char *const kRadiusModeLabels[] = {"Clamp to circle", "Fill square"};
+inline const char *const kPassLabels[] = {"Off", "Raw", "Filtered"};
 inline const char *const kOnOffLabels[] = {"Off", "On"};
 inline const char *const kMotionPathLabels[] = {"Straight", "Around"};
 inline const char *const kResolutionLabels[] = {"7-bit", "14-bit"};
@@ -72,6 +79,8 @@ inline const char *const *choiceLabels(clap_id id) {
    case kParamRadiusMode:
       return kRadiusModeLabels;
    case kParamPassThrough:
+      return kPassLabels;
+   case kParamPolarOut:
       return kOnOffLabels;
    case kParamMotionPath:
       return kMotionPathLabels;
@@ -100,9 +109,14 @@ inline void formatParam(clap_id id, double value, char *out, uint32_t size) {
       std::snprintf(out, size, value >= 1000.0 ? "%.2f s" : "%.0f ms", value >= 1000.0 ? value / 1000.0 : value);
    else if (id == kParamInertia)
       std::snprintf(out, size, "%.0f%%", value);
+   else if (std::lround(value) < 0)
+      std::snprintf(out, size, "Off");
    else
       std::snprintf(out, size, "CC %d", static_cast<int>(value + 0.5));
 }
+
+// A touch CC param (Touch In or Out CC): its CC, or -1 for none.
+inline int touchCC(double value) { return std::lround(value) < 0 ? -1 : static_cast<int>(std::lround(value)); }
 
 inline bool sameText(const char *a, const char *b) {
    for (; *a && *b; ++a, ++b)
@@ -116,6 +130,10 @@ inline bool sameText(const char *a, const char *b) {
 inline bool parseParam(clap_id id, const char *text, double &value) {
    while (std::isspace(static_cast<unsigned char>(*text)))
       ++text;
+   if ((id == kParamTouchIn || id == kParamTouchOut) && (sameText(text, "off") || sameText(text, "none"))) {
+      value = -1.0;
+      return true;
+   }
    if (const char *const *labels = choiceLabels(id)) {
       for (int i = 0; i <= static_cast<int>(kParams[id].max); ++i)
          if (sameText(text, labels[i])) {
