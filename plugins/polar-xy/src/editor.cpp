@@ -1,6 +1,6 @@
 // Polar XY's panel, in the MicroMonsta 2 style: a title bar, then the XY input and the polar output
 // side by side, each a small night sky with its CCs beneath, and the mapping and motion settings
-// below them, all on a 960 x 720 design grid scaled to the window.
+// below them, all on a 960 x 670 design grid scaled to the window.
 //
 // Both skies animate at the display's rate, about 60 frames a second, on the main thread. The input
 // dot and the output orb shed ink as they move, which drifts, spreads and fades behind them like the
@@ -489,8 +489,7 @@ public:
       // happens in between.
       add<ui::Section>({12, 76, 462, 430}, "XY IN");
       add<ui::Section>({486, 76, 462, 430}, "POLAR OUT");
-      add<ui::Section>({12, 518, 462, 190}, "MAPPING");
-      add<ui::Section>({486, 518, 462, 190}, "MOTION");
+      add<ui::Section>({12, 518, 936, 140}, "MAPPING & MOTION");
 
       // Live views: what comes in on the X/Y CCs, and the angle/radius that goes out. Dragging the
       // XY pad moves the input itself, holding off the controller until the mouse lets go.
@@ -535,18 +534,20 @@ public:
       for (Veil *v : polarVeils_)
          v->setVisible(false);
 
-      // Between the two: where the angle starts and turns, and how the output follows.
+      // Between the two, in one row: where the angle starts and turns, and then, past a divider, how
+      // the output follows.
       constexpr float row = 554.0f;
       knob(kParamAngleOffset, "OFFSET", kPurple, 24, row, 1.0);
-      choice(kParamDirection, "DIRECTION", {"CCW", "CW"}, 312, row);
-      choice(kParamRadiusMode, "RADIUS MODE", {"CIRCLE", "SQUARE"}, 312, row + 50);
-      knob(kParamSmoothing, "SMOOTHING", kBlue, 498, row, 10.0);
-      knob(kParamInertia, "INERTIA", kBlue, 574, row, 1.0);
-      choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 786, row);
-      choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 786, row + 50);
-      choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 786, row + 100);
+      choice(kParamDirection, "DIRECTION", {"CCW", "CW"}, 124, row);
+      choice(kParamRadiusMode, "RADIUS MODE", {"CIRCLE", "SQUARE"}, 124, row + 50);
+      add<ui::Divider>({358, row, 1, 92});
+      knob(kParamSmoothing, "SMOOTHING", kBlue, 442, row, 10.0);
+      knob(kParamInertia, "INERTIA", kBlue, 518, row, 1.0);
+      choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 618, row);
+      choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 618, row + 50);
       // How much of each touch's press and release a resistive pad's skitter is thrown away.
-      choice(kParamTouchFilter, "TOUCH FILTER", {"OFF", "10 MS", "20 MS", "40 MS"}, 498, row + 100);
+      choice(kParamTouchFilter, "TOUCH FILTER", {"OFF", "10 MS", "20 MS", "40 MS"}, 786, row);
+      choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 786, row + 50);
 
       // Shown when two inputs or two outputs share a CC, which the plugin won't convert.
       warning_ = &add<ui::Label>({kDesignWidth - 340, 48, 328, 14}, "", kOrange, visage::Font::kRight, 0.7f);
