@@ -18,6 +18,7 @@
 #include "motion.h"
 #include "params.h"
 #include "polar.h"
+#include "touch.h"
 
 namespace {
 
@@ -38,6 +39,8 @@ struct ChannelState {
    int sentAngle = -1, sentRadius = -1;
    // Where the output is on its way to the X/Y, with Smoothing and Inertia.
    jclap::Follower motion;
+   // The controller's readings on their way to the motion, with Touch Filter on.
+   jclap::TouchFilter touch;
 };
 
 // What the conversion depends on, to notice when a setting changes.
@@ -54,10 +57,10 @@ struct Settings {
 
 // State layout: 4-byte magic, uint32 version, one double per parameter, then (from version 3) uint32
 // name length and the preset name. Version 1 had the params before Smoothing, versions 2 and 3 those
-// before Output Resolution, and version 4 those before Inertia Mode; the ones they lack load as their
-// defaults.
+// before Output Resolution, version 4 those before Inertia Mode and version 5 those before Touch
+// Filter; the ones they lack load as their defaults.
 constexpr char kStateMagic[4] = {'J', 'C', 'O', 'P'};
-constexpr uint32_t kStateVersion = 5;
+constexpr uint32_t kStateVersion = 6;
 
 struct StateHeader {
    char magic[4];
@@ -74,6 +77,8 @@ uint32_t savedParamCount(uint32_t version) {
    case 4:
       return kParamInertiaMode;
    case 5:
+      return kParamTouchFilter;
+   case 6:
       return kParamCount;
    default:
       return 0;
@@ -120,6 +125,7 @@ public:
    // Anything mid-glide lands where it was headed.
    bool activate(double sampleRate, uint32_t, uint32_t) override {
       sampleRate_ = sampleRate;
+      samples_ = 0;
       forgetSent();
       return true;
    }
@@ -340,6 +346,7 @@ public:
       }
       convertPending(out);
       glide(out, frames_);
+      samples_ += proc->frames_count;
       // Audio is copied through untouched; the port only exists so hosts that expect audio IO accept us.
       jclap::core::passAudioThrough(proc);
       return CLAP_PROCESS_CONTINUE;
@@ -356,7 +363,7 @@ private:
       for (int channel = 0; pendingMask_ != 0; ++channel)
          if (pendingMask_ & (1u << channel)) {
             pendingMask_ &= ~(1u << channel);
-            convert(out, pendingTime_, channel);
+            convert(out, pendingTime_, channel, true);
          }
    }
 
@@ -370,7 +377,39 @@ private:
       for (auto &c : channels_) {
          c.sentAngle = c.sentRadius = -1;
          c.motion.land();
+         c.touch.reset();
       }
+   }
+
+   // Touch Filter's window (seconds), 0 for off.
+   double touchWindow() const { return jclap::kTouchWindows[std::clamp(intParam(kParamTouchFilter), 0, 3)]; }
+
+   // A sample time in this block, in seconds since activation, for Touch Filter.
+   double secondsAt(uint32_t time) const { return static_cast<double>(samples_ + time) / sampleRate_; }
+
+   // Sends on what Touch Filter has let through by `time` (in this block; `at` is where its events
+   // go, inside the block).
+   void releaseTouches(const clap_output_events_t *out, uint32_t time, uint32_t at) {
+      const double now = secondsAt(time), window = touchWindow();
+      for (int channel = 0; channel < 16; ++channel) {
+         ChannelState &st = channels_[channel];
+         double x, y;
+         bool any = false;
+         while (st.touch.busy() && st.touch.pop(now, window, x, y)) {
+            moveTo(st, x, y);
+            any = true;
+         }
+         if (any)
+            send(out, at, channel);
+      }
+   }
+
+   // Points a channel's output at (x, y) on the pad: at once, or gliding there.
+   void moveTo(ChannelState &st, double x, double y) {
+      if (motionFor(st, motion()).active())
+         st.motion.follow(x, y);
+      else
+         st.motion.place(x, y);
    }
 
    jclap::MotionSettings motion() const {
@@ -406,6 +445,7 @@ private:
       while (clock_ + stepLeft_ <= to && clock_ + stepLeft_ < frames_) {
          clock_ += stepLeft_;
          stepLeft_ = kMotionStep;
+         releaseTouches(out, clock_, clock_);
          for (int channel = 0; channel < 16; ++channel) {
             ChannelState &st = channels_[channel];
             if (st.motion.moving()) {
@@ -416,6 +456,7 @@ private:
       }
       stepLeft_ -= std::min(stepLeft_, to - clock_);
       clock_ = to;
+      releaseTouches(out, to, std::min(to, frames_ - 1));
    }
 
    int intParam(ParamId id) const { return static_cast<int>(params_[id].load() + 0.5); }
@@ -477,16 +518,20 @@ private:
    }
 
    // Points the channel's output at its X/Y (at once, or gliding there with Smoothing or Inertia)
-   // and sends where it is.
-   void convert(const clap_output_events_t *out, uint32_t time, int channel) {
+   // and sends where it is. A controller's new reading (`fresh`) goes through Touch Filter if it's on,
+   // and moves the output once it comes out; anything else (a setting changed) only sends again.
+   void convert(const clap_output_events_t *out, uint32_t time, int channel, bool fresh = false) {
       ChannelState &st = channels_[channel];
       if (!st.hasX || !st.hasY || conflicting())
          return;
       const double x = jclap::ccToBipolar(st.fx), y = jclap::ccToBipolar(st.fy);
-      if (motionFor(st, motion()).active())
-         st.motion.follow(x, y);
-      else
-         st.motion.place(x, y);
+      const bool filtered = !st.fromPad && touchWindow() > 0.0;
+      if (filtered && fresh) {
+         st.touch.push(x, y, secondsAt(time), touchWindow());
+         return;
+      }
+      if (!filtered)
+         moveTo(st, x, y);
       send(out, time, channel);
    }
 
@@ -569,6 +614,7 @@ private:
       st.fx = static_cast<double>((v >> 16) & 0xFFFF) / kPadScale;
       st.fy = static_cast<double>(v & 0xFFFF) / kPadScale;
       st.fromPad = true;
+      st.touch.reset(); // the mouse has it now, not the controller's readings still on their way
       st.x = static_cast<int>(std::lround(st.fx));
       st.y = static_cast<int>(std::lround(st.fy));
       st.hasX = st.hasY = true;
@@ -669,6 +715,8 @@ private:
    // step (audio thread).
    double sampleRate_ = 48000.0;
    uint32_t frames_ = 1, clock_ = 0, stepLeft_ = kMotionStep;
+   // Samples since activation, before this block: Touch Filter's clock (audio thread).
+   uint64_t samples_ = 0;
    // For the panel: the channel that moved last, its X/Y (channel << 16 | x << 8 | y) and what it
    // last sent (angle << 8 | radius, or -1 for nothing yet), and where its output is (panelLive).
    int panelChannel_ = 0;

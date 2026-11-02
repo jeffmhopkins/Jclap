@@ -113,6 +113,28 @@ changes) until it arrives. Each channel moves on its own.
 The first position on a channel is jumped to, as there's nowhere to glide from. A reset lands anything
 still moving.
 
+## Touch Filter
+
+A resistive XY pad reads its position through the finger's contact, so for a few milliseconds while
+the finger presses down and while it lifts off, the contact is light and the readings are wrong: they
+skitter toward an edge or the centre, and the Orb jumps there and back. Smoothing hides that by
+smearing it into every move. **Touch Filter** (TOUCH FILTER in the MOTION section) instead finds the
+edges of each touch and throws them away, leaving the rest exactly as it came:
+
+- X and Y that arrive within 3 ms of each other are one reading, so no point made of the new X and the
+  old Y goes out.
+- A reading that jumps more than about 16 CC steps, or lands somewhere new after a 50 ms pause, starts
+  a touch. For its first 10, 20 or 40 ms (the setting), the press, nothing goes out. Then the latest
+  reading goes out if the last two agree (within about 4 CC steps), and everything after flows on. A
+  touch that never gets two readings, such as a single blip as the finger lifts, never goes out.
+- Everything is held back by the same 10, 20 or 40 ms, so when a jump starts a new touch, the readings
+  from just before it (the last touch lifting off) are thrown away. The last few milliseconds of a
+  drag go with them.
+
+So it costs that much latency (twice that at the start of a touch), but never smears a move. A slow
+drag from a controller that only sends when the value changes comes through whole. Use the shortest
+setting that stops the skitter. The panel's XY pad doesn't go through it.
+
 > [!IMPORTANT]
 > Spectrasonics doesn't document where the Orb's angle 0 sits or which way it turns, so these are
 > exposed as settings. If the Orb dot lands rotated or mirrored from your controller, adjust
@@ -140,7 +162,7 @@ radius the plugin sent for that channel (a dash until both axes have arrived),
 with angle 0 marked by the tick on the right. Comparing the two shows what `Angle Offset` and
 `Direction` do. Under each view are its CCs: X and Y with Pass Input CCs, and angle and radius with
 the MIDI learn buttons. Below them, **MAPPING** holds Angle Offset, Direction and Radius Mode, and
-**MOTION** Smoothing, Inertia, Path, Inertia Mode and Resolution. Every setting is also a plain host parameter.
+**MOTION** Smoothing, Inertia, Path, Inertia Mode, Resolution and Touch Filter. Every setting is also a plain host parameter.
 
 Both views are small night skies that move at the screen's rate. The input dot and the output orb
 leave a trail of ink that drifts and fades behind them, so you can see the path a glide took
@@ -184,3 +206,4 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 | Motion Path | Straight | Or Around, to move round the circle |
 | Inertia Mode | Pull | Or Coast, where only the controller's movement moves the output, or Pad, to use it like a trackpad |
 | Output Resolution | 7-bit | Or 14-bit (RESOLUTION on the panel): MSB on the output CC, LSB on CC + 32 |
+| Touch Filter | Off | Or 10, 20 or 40 ms: throws away each touch's press and release, for a resistive pad |

@@ -209,6 +209,48 @@ run(d, 40);
 var landed = d.engine.channels[0].motion.position();
 check(Math.abs(landed[0] - start[0]) < 1e-9 && Math.abs(landed[1] - start[1]) < 1e-9, 'pad: a touch does not move it');
 
+// Touch Filter: a resistive pad's skittery press and release never reach the output. A reading
+// each 5 ms tick: two skittery ones as the finger presses, 100 ms held at (90, 90), two as it lifts.
+function touch(filter) {
+   var dev = device();
+   dev.engine.setParam('touchfilter', filter);
+   var readings = [[10, 12, 1], [100, 40, 1], [90, 90, 20], [60, 30, 1], [5, 2, 1]];
+   var out = { angles: [], radii: [] };
+   readings.forEach(function (r) {
+      for (var k = 0; k < r[2]; ++k) {
+         dev.send(0xB0, 16, r[0], 0xB0, 17, r[1]);
+         var q = run(dev, 1);
+         out.angles = out.angles.concat(q.angles);
+         out.radii = out.radii.concat(q.radii);
+      }
+   });
+   var q = run(dev, 40);
+   out.angles = out.angles.concat(q.angles);
+   out.radii = out.radii.concat(q.radii);
+   return out;
+}
+var heldTouch = polar(90, 90);
+check(touch(0).angles.length > 2, 'touch filter off: the skitter goes out');
+[1, 2, 3].forEach(function (f) {
+   var on = touch(f);
+   check(on.angles.length === 1 && on.angles[0] === heldTouch.angle && on.radii.length === 1 &&
+         on.radii[0] === heldTouch.radius, 'touch filter ' + f + ': only where the finger was held');
+});
+
+// The filter on its own: X and Y apart in time are one reading (see tests/test_touch.cpp).
+var tf = new px.TouchFilter();
+var tfIn = [[0, 0, 0], [0, 0, 0.002], [0, 0, 0.004], [0.2, 0, 0.05], [0.2, 0.2, 0.051], [0.2, 0.2, 0.056]];
+var popped = [], r, next = 0;
+for (var now = 0; now < 0.2; now += 0.0005) {
+   while (next < tfIn.length && tfIn[next][2] <= now) {
+      tf.push(tfIn[next][0], tfIn[next][1], tfIn[next][2], 0.01);
+      ++next;
+   }
+   while ((r = tf.pop(now, 0.01))) popped.push(r);
+}
+check(popped.length === 2 && popped[1][0] === 0.2 && popped[1][1] === 0.2 && popped[0][0] === 0,
+      'touch filter pairs X and Y');
+
 if (failures) {
    console.log(failures + ' failure(s)');
    process.exit(1);

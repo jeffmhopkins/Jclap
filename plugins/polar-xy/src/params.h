@@ -25,6 +25,7 @@ enum ParamId : clap_id {
    kParamMotionPath,
    kParamResolution,
    kParamInertiaMode,
+   kParamTouchFilter,
    kParamCount
 };
 
@@ -48,6 +49,7 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Motion Path", 0, 1, 0, true},
    {"Output Resolution", 0, 1, 0, true},
    {"Inertia Mode", 0, 2, 0, true},
+   {"Touch Filter", 0, 3, 0, true}, // Off, then the windows in kTouchWindows (touch.h)
 };
 
 // Labels for the choice params, off (or the first) first: one per step of the param's range.
@@ -57,6 +59,7 @@ inline const char *const kOnOffLabels[] = {"Off", "On"};
 inline const char *const kMotionPathLabels[] = {"Straight", "Around"};
 inline const char *const kResolutionLabels[] = {"7-bit", "14-bit"};
 inline const char *const kInertiaModeLabels[] = {"Pull", "Coast", "Pad"};
+inline const char *const kTouchFilterLabels[] = {"Off", "10 ms", "20 ms", "40 ms"};
 
 // 14-bit output sends each value's LSB on its CC + 32, so it needs both output CCs below 32; on
 // higher ones the output stays 7-bit.
@@ -76,6 +79,8 @@ inline const char *const *choiceLabels(clap_id id) {
       return kResolutionLabels;
    case kParamInertiaMode:
       return kInertiaModeLabels;
+   case kParamTouchFilter:
+      return kTouchFilterLabels;
    default:
       return nullptr;
    }

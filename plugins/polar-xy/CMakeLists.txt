@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.15.0)
+jclap_plugin_version(0.16.0)
 
 jclap_add_plugin(polar-xy
    OUTPUT_NAME "PolarXY"
@@ -10,6 +10,8 @@ target_link_libraries(polar-xy PRIVATE jclap::ui)
 
 jclap_add_test(polar-xy-tests SOURCES tests/test_polar.cpp)
 target_include_directories(polar-xy-tests PRIVATE src)
+jclap_add_test(polar-xy-touch-tests SOURCES tests/test_touch.cpp)
+target_include_directories(polar-xy-touch-tests PRIVATE src)
 
 # Host-style test of the whole plugin.
 jclap_add_test(polar-xy-plugin-tests SOURCES tests/test_plugin.cpp src/plugin.cpp src/editor.cpp)

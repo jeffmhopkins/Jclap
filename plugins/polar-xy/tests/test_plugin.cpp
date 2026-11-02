@@ -547,6 +547,52 @@ void fineInputTests() {
 
 } // namespace
 
+// Touch Filter: a resistive pad's skittery press and release never reach the output, and X and Y a
+// millisecond apart are one move.
+void touchTests() {
+   // The angles and radii a run of the touch below sends, with Touch Filter at `filter`.
+   const auto touch = [](double filter) {
+      jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+      h.setParam(13, filter);
+      // Each block (5.3 ms) a reading, Y a millisecond after X: two skittery ones as the finger
+      // presses, 100 ms held at (90, 90), and two more as it lifts.
+      const int readings[][2] = {{10, 12}, {100, 40}, {90, 90}, {60, 30}, {5, 2}};
+      const int blocks[] = {1, 1, 19, 1, 1};
+      Path p;
+      for (int i = 0; i < 5; ++i)
+         for (int b = 0; b < blocks[i]; ++b) {
+            h.midi(0xB0, 16, static_cast<uint8_t>(readings[i][0]), 0);
+            h.midi(0xB0, 17, static_cast<uint8_t>(readings[i][1]), 48);
+            const Path q = run(h, 1);
+            p.angles.insert(p.angles.end(), q.angles.begin(), q.angles.end());
+            p.radii.insert(p.radii.end(), q.radii.begin(), q.radii.end());
+         }
+      const Path q = run(h, 40);
+      p.angles.insert(p.angles.end(), q.angles.begin(), q.angles.end());
+      p.radii.insert(p.radii.end(), q.radii.begin(), q.radii.end());
+      return p;
+   };
+   const jclap::PolarCC held = jclap::toPolar(90, 90, jclap::PolarSettings{});
+
+   // Off: the output goes everywhere the readings do (and to the new X with the old Y between them).
+   const Path off = touch(0.0);
+   JCLAP_CHECK(off.angles.size() > 4);
+
+   // On, at each window: one move, straight to where the finger was held, and nothing else.
+   for (double filter : {1.0, 2.0, 3.0}) {
+      const Path on = touch(filter);
+      JCLAP_CHECK(on.angles.size() == 1 && on.radii.size() == 1);
+      JCLAP_CHECK(!on.angles.empty() && on.angles[0] == held.angle);
+      JCLAP_CHECK(!on.radii.empty() && on.radii[0] == held.radius);
+   }
+
+   jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+   JCLAP_CHECK(h.paramText(13, 0.0) == "Off");
+   JCLAP_CHECK(h.paramText(13, 2.0) == "20 ms");
+   double v = 0.0;
+   JCLAP_CHECK(h.textToValue(13, "40 ms", v) && v == 3.0);
+}
+
 int main() {
    jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
 
@@ -710,5 +756,6 @@ int main() {
    fineTests();
    learnTests();
    fineInputTests();
+   touchTests();
    return jclap::core::testResult();
 }
