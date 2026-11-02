@@ -370,6 +370,14 @@ public:
       target_ = target;
    }
 
+   // Off: the output is switched off, so the sky is dimmed and says so, with no orb.
+   void setOff(bool off) {
+      if (off != off_) {
+         off_ = off;
+         redraw();
+      }
+   }
+
    // One frame, `dt` seconds after the last. Redraws while there is ink to fade.
    void step(float dt) {
       const bool inked = !ink_.empty();
@@ -404,12 +412,22 @@ public:
       }
       c.setColor(glow(0xffffffff, 0.2f));
       c.ring(cx - radius, cy - radius, 2 * radius, 1.0f);
-      c.setColor(t.dimText);
-      c.segment(cx + radius * 0.88f, cy, cx + radius + 5.0f * s, cy, 2.0f * s, true);
+      if (!off_) {
+         c.setColor(t.dimText);
+         c.segment(cx + radius * 0.88f, cy, cx + radius + 5.0f * s, cy, 2.0f * s, true);
+      }
 
-      ink_.draw(c, at, 9.0f * s, s);
+      if (off_) {
+         // A veil over the Orb, and what it means in the middle.
+         c.setColor(glow(0xff0b0e14, 0.6f));
+         c.fill(b.x(), b.y(), b.width(), b.height());
+         c.setColor(t.dimText);
+         c.text("POLAR OUT OFF", ui::font(15.0f * s), visage::Font::kCenter, b.x(), cy - 12.0f * s, b.width(), 24.0f * s);
+      }
+      else
+         ink_.draw(c, at, 9.0f * s, s);
 
-      if (shown_) {
+      if (shown_ && !off_) {
          const visage::Point p = at(orb_), q = at(target_);
          // The radius: a faint line out from the centre and the circle it sweeps.
          const float r = std::hypot(p.x - cx, p.y - cy);
@@ -441,9 +459,20 @@ public:
 private:
    Sky sky_;
    Ink ink_{kOrange, kOldOrange, 2.2f};
-   bool shown_ = false;
+   bool shown_ = false, off_ = false;
    Spot orb_, target_;
    std::string left_, right_;
+};
+
+// A wash of the section colour over controls that do nothing for now, which also keeps the mouse
+// off them.
+class Veil : public visage::Frame {
+public:
+   void draw(visage::Canvas &c) override {
+      c.setColor(visage::Color(ui::defaultTheme().panel).withAlpha(0.65f));
+      c.fill(0, 0, width(), height());
+   }
+   void mouseDown(const visage::MouseEvent &) override {}
 };
 
 class Panel : public ui::DesignFrame, public visage::EventTimer {
@@ -483,11 +512,14 @@ public:
       knob(kParamInX, "X", kBlue, 24, strip);
       knob(kParamInY, "Y", kBlue, 100, strip);
       knob(kParamTouchIn, "TOUCH", kBlue, 176, strip);
-      heading("PASS INPUT CCS", 312, strip);
-      auto &pass = add<ui::Button>({312, strip + 18, 150, 24}, "PASS");
-      pass.setAccent(kPurple);
-      bindings_.bind(pass, kParamPassThrough);
-      hint("Sends the input CCs on as well", 312, strip + 52);
+      // The input CCs sent on as well: as they came, or with the touch filtered.
+      choice(kParamPassThrough, "PASS INPUT CCS", {"OFF", "RAW", "FILTERED"}, 312, strip);
+      hint("Filtered: by the Touch Filter", 312, strip + 52);
+
+      // The angle/radius output on or off (the touch CC goes out either way), in the title row.
+      auto &polar = add<ui::SegmentedSwitch>({856, 84, 80, 22}, std::vector<std::string>{"OFF", "ON"});
+      polar.setAccent(kOrange);
+      bindings_.bind(polar, kParamPolarOut);
 
       knob(kParamOutAngle, "ANGLE", kOrange, 498, strip);
       knob(kParamOutRadius, "RADIUS", kOrange, 574, strip);
@@ -498,6 +530,10 @@ public:
       for (int i = 0; i < 3; ++i)
          send(i, sends[i], {786.0f + i * 51.0f, strip + 18, 48, 24});
       hint("Sends one CC alone, to learn it", 786, strip + 52);
+      // Over the angle/radius knobs and their sends while that output is off.
+      polarVeils_ = {&add<Veil>({498, strip, 2 * kKnobWidth, kKnobHeight}), &add<Veil>({786, strip + 18, 99, 24})};
+      for (Veil *v : polarVeils_)
+         v->setVisible(false);
 
       // Between the two: where the angle starts and turns, and how the output follows.
       constexpr float row = 554.0f;
@@ -558,14 +594,15 @@ private:
    }
 
    // A button that sends output CC `which` alone.
-   void send(int which, const char *label, ui::Rect bounds) {
+   ui::Button &send(int which, const char *label, ui::Rect bounds) {
       auto &button = add<ui::Button>(bounds, label);
       button.setAccent(kOrange);
       button.onClick = [this, which] { host_.sendOutput(which); };
+      return button;
    }
 
    // A knob in a kKnobWidth x kKnobHeight cell at (x, y).
-   void knob(clap_id id, const char *label, unsigned accent, float x, float y, double step = 1.0) {
+   ui::Knob &knob(clap_id id, const char *label, unsigned accent, float x, float y, double step = 1.0) {
       const ParamInfo &p = kParams[id];
       auto &k = add<ui::Knob>({x, y, kKnobWidth, kKnobHeight}, ui::ValueRange{p.min, p.max, p.def, step, false, p.stepped});
       k.setLabel(label);
@@ -573,6 +610,7 @@ private:
       k.valueText = [id](double v) { return text(id, v); };
       k.parseText = [id](const std::string &t, double &v) { return parseParam(id, t.c_str(), v); };
       bindings_.bind(k, id);
+      return k;
    }
 
    // A small title over a control, level with the knobs' labels.
@@ -598,11 +636,19 @@ private:
       // What the plugin really sent on that channel (it holds the angle at the centre, and sends
       // nothing until both axes have arrived), rather than a guess from the input.
       int angle = 0, radius = 0;
-      const bool sent = host_.lastOutput(angle, radius);
+      const bool polar = std::lround(host_.paramValue(kParamPolarOut)) != 0;
+      const bool sent = polar && host_.lastOutput(angle, radius);
+      // With the output off, its view and controls dim, and they don't take the mouse.
+      if (polar != polarShown_) {
+         polarShown_ = polar;
+         orb_->setOff(!polar);
+         for (Veil *v : polarVeils_)
+            v->setVisible(!polar);
+      }
 
       xy_->setLabels("X " + std::to_string(x), "Y " + std::to_string(y) + "  CH " + std::to_string(channel + 1));
-      orb_->setLabels(sent ? "ANGLE " + std::to_string(angle) : "ANGLE -",
-                      sent ? "RADIUS " + std::to_string(radius) : "RADIUS -");
+      orb_->setLabels(!polar ? "ANGLE OFF" : sent ? "ANGLE " + std::to_string(angle) : "ANGLE -",
+                      !polar ? "RADIUS OFF" : sent ? "RADIUS " + std::to_string(radius) : "RADIUS -");
       xy_->setValues(x, y);
 
       // The orb where the output really is, between the CC steps, and the input it is gliding to,
@@ -624,10 +670,10 @@ private:
          return std::lround(host_.paramValue(a)) == std::lround(host_.paramValue(b));
       };
       const auto cc = [this](clap_id id) { return static_cast<int>(std::lround(host_.paramValue(id))); };
-      const bool coarse = std::lround(host_.paramValue(kParamResolution)) != 0 &&
+      const bool coarse = polar && std::lround(host_.paramValue(kParamResolution)) != 0 &&
                           !fineOutput(cc(kParamOutAngle), cc(kParamOutRadius), true);
       warning_->setText(same(kParamInX, kParamInY)               ? "X and Y share a CC: not converting"
-                        : same(kParamOutAngle, kParamOutRadius) ? "Angle and radius share a CC: not converting"
+                        : polar && same(kParamOutAngle, kParamOutRadius) ? "Angle and radius share a CC: not converting"
                         : coarse                                ? "14-bit needs output CCs 0-31: sending 7-bit"
                                                                 : "");
    }
@@ -638,6 +684,9 @@ private:
    InkPad *xy_ = nullptr;
    OrbView *orb_ = nullptr;
    ui::Label *warning_ = nullptr;
+   // What dims with the angle/radius output off, and whether it is on as shown.
+   std::vector<Veil *> polarVeils_;
+   bool polarShown_ = true;
    // The angles last drawn (radians), held at the centre where there is none.
    double orbAngle_ = 0.0, targetAngle_ = 0.0;
 };

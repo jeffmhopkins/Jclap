@@ -39,7 +39,7 @@ or [m4l/](m4l) here. It needs Live Suite, or Live Standard with Max for Live.
    together, for example into your User Library (`Presets/MIDI Effects/Max MIDI Effect`).
 2. Drag `Polar XY.amxd` onto the Omnisphere track, in front of Omnisphere. No extra track or MIDI
    routing is needed.
-3. MIDI Learn the Orb as in Bitwig (step 3 above), using **SEND ANGLE** and **SEND RADIUS**.
+3. MIDI Learn the Orb as in Bitwig (step 3 above), using the **ANGLE** and **RADIUS** learn buttons.
 
 It is the same conversion and motion as the plugin, with the same settings, each a Live parameter
 you can automate or map. The panel has no XY pad or night skies: a status line shows the last
@@ -118,7 +118,7 @@ still moving.
 A resistive XY pad reads its position through the finger's contact, so for a few milliseconds while
 the finger presses down and while it lifts off, the contact is light and the readings are wrong: they
 skitter toward an edge or the centre, and the Orb jumps there and back. Smoothing hides that by
-smearing it into every move. **Touch Filter** (TOUCH FILTER under XY IN, in the ADVANCED view) instead finds the
+smearing it into every move. **Touch Filter** (TOUCH FILTER in the MOTION section) instead finds the
 edges of each touch and throws them away, leaving the rest exactly as it came:
 
 - X and Y that arrive within 3 ms of each other are one reading, so no point made of the new X and the
@@ -138,7 +138,7 @@ setting that stops the skitter. The panel's XY pad doesn't go through it.
 ### Touch CC
 
 Many pads also send a CC that is on (64 and up) while a finger is down and off when it lifts. Set
-**Touch In CC** (TOUCH under XY IN, in ADVANCED) to it and Touch Filter knows the edges for certain instead of
+**Touch In CC** (TOUCH under XY IN) to it and Touch Filter knows the edges for certain instead of
 guessing them from jumps:
 
 - While the touch is off, X and Y are ignored.
@@ -152,7 +152,7 @@ guessing them from jumps:
 Until the first touch CC arrives, Touch Filter works as above, so a pad that doesn't send one loses
 nothing. Touch In CC needs Touch Filter on; with it off, the touch CC only goes on to Touch Out.
 
-**Touch Out CC** (TOUCH under POLAR OUT, in ADVANCED) sends the touch on, as 127 and 0, in step with the filtered
+**Touch Out CC** (TOUCH under POLAR OUT) sends the touch on, as 127 and 0, in step with the filtered
 motion: on just before a touch's first position goes out, off once it lifts. A touch whose press never
 went out sends neither. Holding the mouse down on the panel's XY pad is a touch too.
 
@@ -190,17 +190,14 @@ and each MSB on its own is the whole value, so nothing changes for one.
 **XY IN** shows the last X/Y position received, with its channel, and **POLAR OUT** the angle and
 radius the plugin sent for that channel (a dash until both axes have arrived),
 with angle 0 marked by the tick on the right. Comparing the two shows what `Angle Offset` and
-`Direction` do. Under each view are its CCs: X and Y with Pass Input CCs, and angle and radius with
-the MIDI learn buttons. Below them, **MAPPING** holds Angle Offset, Direction and Radius Mode, and
-**MOTION** Smoothing, Inertia, Path, Inertia Mode and Resolution. Every setting is also a plain host
-parameter.
+`Direction` do. Under each view are its CCs: X, Y and Touch In with Pass Input CCs, and angle, radius
+and Touch Out with the MIDI learn buttons. Below them, **MAPPING** holds Angle Offset, Direction and
+Radius Mode, and **MOTION** Smoothing, Inertia, Touch Filter, Path, Inertia Mode and Resolution. Every
+setting is also a plain host parameter.
 
-**BASIC / ADVANCED** in the header switches the panel's view. It opens on BASIC, which leaves out
-what only some controllers need. ADVANCED adds the touch CCs (Touch In under XY IN, Touch Out under
-POLAR OUT) with Touch Filter and a TOUCH learn button, moving Pass Input CCs and Resolution to a row
-beneath the CCs to make room. It only changes what's shown: hidden settings still apply.
-
-![Panel, ADVANCED view](docs/panel-advanced.png)
+The OFF / ON switch in the POLAR OUT title is **Polar Out**. Off, the view goes dark and says so, and
+the angle and radius CCs and their learn buttons are greyed out: nothing goes out on them. Touch Out
+still works.
 
 Both views are small night skies that move at the screen's rate. The input dot and the output orb
 leave a trail of ink that drifts and fades behind them, so you can see the path a glide took
@@ -216,8 +213,7 @@ stepping each time it reports. While the mouse is down it has that channel, so t
 controller's X/Y CCs on it are ignored; once you let go, the controller takes over again with its next
 move. Double-click puts it back in the centre. Before any CC has arrived the pad drives channel 1.
 
-To map the outputs with a MIDI learn, press **SEND ANGLE** or **SEND RADIUS** (in ADVANCED, **ANGLE**,
-**RADIUS** or **TOUCH**) under MIDI LEARN: it
+To map the outputs with a MIDI learn, press **ANGLE**, **RADIUS** or **TOUCH** under MIDI LEARN: it
 sends that CC alone (at the value last sent on it), so the learn picks it up without the others getting in
 first. At 14-bit it sends only the MSB CC, the one to learn. TOUCH needs a Touch Out CC set.
 
@@ -228,8 +224,7 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 > [!TIP]
 > To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
 > `build/plugins/polar-xy/polar-xy-screenshot plugins/polar-xy/docs/panel.png`. With tools on,
-> `ctest` checks the panel still renders like that image. Add `--advanced` for the ADVANCED view
-> (`docs/panel-advanced.png`).
+> `ctest` checks the panel still renders like that image. Add `--polar-off` to see it with Polar Out off.
 
 ## Settings
 

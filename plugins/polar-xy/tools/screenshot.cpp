@@ -1,9 +1,10 @@
-// Renders the panel to a PNG without a host: polar-xy-screenshot out.png [width height]
+// Renders the panel to a PNG without a host: polar-xy-screenshot out.png [width height] [--polar-off]
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 #include "editor.h"
 #include "motion.h"
@@ -43,8 +44,12 @@ public:
          return motion_.smoothing * 1000.0;
       if (id == polar_xy::kParamInertia)
          return motion_.inertia * 100.0;
+      if (id == polar_xy::kParamPolarOut)
+         return polarOut ? 1.0 : 0.0;
       return id < polar_xy::kParamCount ? polar_xy::kParams[id].def : 0.0;
    }
+   bool polarOut = true;
+
    void beginEdit(clap_id) override {}
    void setParam(clap_id, double) override {}
    void endEdit(clap_id) override {}
@@ -98,13 +103,18 @@ private:
 } // namespace
 
 int main(int argc, char **argv) {
+   // --polar-off, last, shows the panel with the angle/radius output switched off.
+   const bool polarOff = argc > 2 && std::strcmp(argv[argc - 1], "--polar-off") == 0;
+   if (polarOff)
+      --argc;
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [width height]\n", argv[0]);
+      std::fprintf(stderr, "usage: %s out.png [width height] [--polar-off]\n", argv[0]);
       return 1;
    }
    const int width = argc > 3 ? std::atoi(argv[2]) : polar_xy::kEditorWidth;
    const int height = argc > 3 ? std::atoi(argv[3]) : polar_xy::kEditorHeight;
    DemoHost host;
+   host.polarOut = !polarOff;
    return polar_xy::renderScreenshot(host, width, height, argv[1], kSeconds,
                                      [&host](double dt) { host.advance(dt); })
              ? 0
