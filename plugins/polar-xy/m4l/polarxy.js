@@ -314,6 +314,36 @@ Follower.prototype.toSpace = function (x, y, out) {
    out[1] = r;
 };
 
+// A Follower whose Around motion fades to Straight near the centre: see CenterFollower in
+// src/motion.h.
+function CenterFollower() {
+   this.main = new Follower();
+   this.straight = new Follower();
+   this.around = false;
+   this.zone = 0;
+}
+CenterFollower.prototype.blending = function () { return this.around && this.zone > 0; };
+Object.defineProperty(CenterFollower.prototype, 'placed', { get: function () { return this.main.placed; } });
+Object.defineProperty(CenterFollower.prototype, 'moving', {
+   get: function () { return this.main.moving || (this.blending() && this.straight.moving); }
+});
+CenterFollower.prototype.place = function (x, y) { this.main.place(x, y); this.straight.place(x, y); };
+CenterFollower.prototype.follow = function (x, y) { this.main.follow(x, y); this.straight.follow(x, y); };
+CenterFollower.prototype.land = function () { this.main.land(); this.straight.land(); };
+CenterFollower.prototype.setAround = function (around) { this.around = around; this.main.setAround(around); };
+CenterFollower.prototype.position = function () {
+   var p = this.main.position();
+   if (!this.blending()) return p;
+   var s = this.straight.position();
+   var w = Math.min(1, Math.sqrt(s[0] * s[0] + s[1] * s[1]) / this.zone);
+   return [s[0] + w * (p[0] - s[0]), s[1] + w * (p[1] - s[1])];
+};
+CenterFollower.prototype.step = function (dt, m) {
+   var a = this.main.step(dt, m);
+   var b = this.straight.step(dt, m);
+   return a || (this.blending() && b);
+};
+
 // ---- touch.h ----
 
 var TOUCH_PAIR = 0.003, TOUCH_JUMP = 0.25, TOUCH_LIFT = 0.05, TOUCH_AGREE = 0.06;
@@ -336,13 +366,12 @@ TouchFilter.prototype.reset = function () {
    // Tuning (kept by reset): the press (below 0, the window), the jump limit and the agreement.
    this.hasPrev = false; this.prevRX = 0; this.prevRY = 0; this.prevT = 0;
    if (this.pressTime === undefined) {
-      this.pressTime = -1; this.jump = TOUCH_JUMP; this.agree = TOUCH_AGREE; this.heading = false;
+      this.pressTime = -1; this.jump = TOUCH_JUMP; this.agree = TOUCH_AGREE;
    }
 };
 
 TouchFilter.prototype.setPress = function (press) { this.pressTime = press; };
 TouchFilter.prototype.setJump = function (jump) { this.jump = jump; };
-TouchFilter.prototype.setHeading = function (heading) { this.heading = heading; };
 TouchFilter.prototype.setAgree = function (agree) { this.agree = Math.max(agree, 0); };
 TouchFilter.prototype.press = function () { return this.pressTime < 0 ? this.window : this.pressTime; };
 
@@ -404,12 +433,12 @@ TouchFilter.prototype.finalize = function () {
    if (this.gated && !this.touched) return;
    if (this.settling && t >= this.start + this.press()) this.settle();
    var step = this.hasLast ? Math.sqrt((x - this.lastX) * (x - this.lastX) + (y - this.lastY) * (y - this.lastY)) : 0;
-   // From the last reading, or with the heading on, from where the finger was headed.
+   // From the last reading or from where the finger was headed, whichever is nearer.
    var off = step;
-   if (this.heading && this.hasPrev && t - this.lastT < TOUCH_LIFT && this.lastT > this.prevT) {
+   if (this.hasPrev && t - this.lastT < TOUCH_LIFT && this.lastT > this.prevT) {
       var k = Math.min((t - this.lastT) / (this.lastT - this.prevT), 2);
       var hx = x - (this.lastX + (this.lastX - this.prevRX) * k), hy = y - (this.lastY + (this.lastY - this.prevRY) * k);
-      off = Math.sqrt(hx * hx + hy * hy);
+      off = Math.min(step, Math.sqrt(hx * hx + hy * hy));
    }
    // The pause only means a new touch without the touch CC (see src/touch.h).
    var paused = !this.gated && t - this.lastT >= TOUCH_LIFT && step > this.agree;
@@ -481,21 +510,19 @@ var PARAMS = {
    touchin: [-1, 127, -1],  // the pad's touch CC, -1 none
    touchout: [-1, 127, -1], // the touch sent on, -1 none
    polarout: [0, 1, 1],     // 0: no angle or radius goes out
-   centersmoothing: [0, 50, 0], // %: how far out from the centre the angle is steadied
+   centersmoothing: [0, 50, 0], // %: the Center zone, where the angle is steadied and Around goes straight
    touchjump: [8, 64, 16],  // CC steps one reading may jump before a second must agree
    touchpress: [-1, 100, -1], // ms a press is held back, -1 the same as touchfilter
-   touchagree: [1, 16, 4],  // CC steps two readings may differ by and still agree
-   centerlag: [50, 1000, 250], // ms the angle takes to follow at the very centre
-   touchheading: [0, 1, 0]  // jump check: 0 distance from the last reading, 1 from its heading
+   touchagree: [1, 16, 4]   // CC steps two readings may differ by and still agree
 };
 
 function Channel() {
    this.x = 64; this.y = 64; this.fx = 64; this.fy = 64;
    this.hasX = false; this.hasY = false;
    this.angle = -1; this.sentAngle = -1; this.sentRadius = -1; this.sentTouch = -1;
-   this.motion = new Follower();
+   this.motion = new CenterFollower();
    this.touch = new TouchFilter();
-   this.centerAngle = -1; this.centerAt = 0; this.centerBusy = false; // Center Smoothing
+   this.centerX = 0; this.centerY = 0; this.centerSet = false; // Center's anchor
 }
 
 // emit(status, data1, data2) sends one MIDI message out.
@@ -580,7 +607,6 @@ Engine.prototype.tune = function (f) {
    f.setPress(press < 0 ? -1 : press / 1000);
    f.setJump(this.int('touchjump') * 2 / 127);
    f.setAgree(this.int('touchagree') * 2 / 127);
-   f.setHeading(this.int('touchheading') !== 0);
 };
 
 Engine.prototype.motionSettings = function () {
@@ -667,6 +693,7 @@ Engine.prototype.convert = function (channel, fresh) {
 };
 
 Engine.prototype.moveTo = function (st, x, y) {
+   st.motion.zone = this.p.centersmoothing / 100;
    if (motionActive(this.motionSettings())) st.motion.follow(x, y);
    else st.motion.place(x, y);
 };
@@ -697,6 +724,7 @@ Engine.prototype.send = function (channel) {
    var st = this.channels[channel];
    if (!st.motion.placed || this.conflicting()) return;
    var s = this.applied;
+   st.motion.zone = this.p.centersmoothing / 100;
    var pos = st.motion.position();
    var steps = s.fine ? STEPS14 : STEPS7;
    var p = toPolar(pos[0], pos[1], s, steps);
@@ -712,25 +740,23 @@ Engine.prototype.send = function (channel) {
    }
 };
 
-// Center Smoothing: near the centre the angle follows more slowly (Center Lag at the very centre,
-// none at the zone's edge); the radius never does. See centered in src/plugin.cpp.
+// Center: near the centre the angle is read from an anchor the position drags along on a string
+// (CENTER_STEADY steps long in the inner half of the zone, none at its edge), so a wobble shorter than
+// the string doesn't turn it and a real move turns it at once. See centered in src/plugin.cpp.
+var CENTER_STEADY = 4;
 Engine.prototype.centered = function (st, x, y, s, p, steps) {
    var zone = this.p.centersmoothing / 100;
-   var deg = polarDegrees(x, y, s);
-   if (zone <= 0 || st.centerAngle < 0) {
-      st.centerAngle = deg;
-      st.centerAt = this.time;
-      st.centerBusy = false;
-      return p.angle;
+   var near = zone > 0 ? Math.max(0, 1 - p.radius / steps / zone) : 0;
+   var string = CENTER_STEADY * 2 / 127 * Math.min(1, 2 * near);
+   var dx = x - st.centerX, dy = y - st.centerY, d = Math.sqrt(dx * dx + dy * dy);
+   if (!st.centerSet || d > string) {
+      var keep = st.centerSet && d > 0 ? string / d : 0;
+      st.centerX = x - dx * keep;
+      st.centerY = y - dy * keep;
+      st.centerSet = true;
    }
-   var near = Math.max(0, 1 - p.radius / steps / zone);
-   var lag = this.p.centerlag / 1000 * near * near;
-   var dt = Math.max(0, this.time - st.centerAt);
-   st.centerAt = this.time;
-   var gap = wrapDegrees(deg - st.centerAngle + 180) - 180;
-   st.centerAngle = wrapDegrees(st.centerAngle + (lag > 0 ? gap * (1 - Math.exp(-dt / lag)) : gap));
-   st.centerBusy = Math.abs(wrapDegrees(deg - st.centerAngle + 180) - 180) * steps / 360 > 0.5;
-   return Math.round(st.centerAngle / 360 * steps) % steps;
+   if (Math.sqrt(st.centerX * st.centerX + st.centerY * st.centerY) < 1e-9) return st.angle >= 0 ? st.angle : p.angle;
+   return Math.round(polarDegrees(st.centerX, st.centerY, s) / 360 * steps) % steps;
 };
 
 Engine.prototype.pushValue = function (channel, cc, value) {
@@ -788,11 +814,9 @@ Engine.prototype.tick = function (dt) {
    var m = this.motionSettings();
    for (var c = 0; c < 16; ++c) {
       var st = this.channels[c];
-      if (!st.motion.moving && !st.centerBusy) continue;
-      if (st.motion.moving) {
-         if (!motionActive(m)) st.motion.land();
-         else st.motion.step(dt, m);
-      }
+      if (!st.motion.moving) continue;
+      if (!motionActive(m)) st.motion.land();
+      else st.motion.step(dt, m);
       this.send(c);
    }
 };

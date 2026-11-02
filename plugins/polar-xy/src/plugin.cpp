@@ -40,13 +40,12 @@ struct ChannelState {
    // What was last sent on Touch Out CC (127 down, 0 up, -1: nothing yet).
    int sentTouch = -1;
    // Where the output is on its way to the X/Y, with Smoothing and Inertia.
-   jclap::Follower motion;
+   jclap::CenterFollower motion;
    // The controller's readings on their way to the motion, with Touch Filter on.
    jclap::TouchFilter touch;
-   // Center Smoothing: the steadied angle (degrees, -1: none yet), when it last moved (seconds), and
-   // whether it is still catching up with the angle, so it keeps stepping.
-   double centerAngle = -1.0, centerAt = 0.0;
-   bool centerBusy = false;
+   // Center's anchor: where the angle is read from, dragged along behind the position.
+   double centerX = 0.0, centerY = 0.0;
+   bool centerSet = false;
 };
 
 // What the conversion depends on, to notice when a setting changes.
@@ -66,11 +65,15 @@ struct Settings {
 // State layout: 4-byte magic, uint32 version, one double per parameter, then (from version 3) uint32
 // name length and the preset name. Version 1 had the params before Smoothing, versions 2 and 3 those
 // before Output Resolution, version 4 those before Inertia Mode, version 5 those before Touch Filter
-// version 6 those before Touch In CC and version 7 those before Center Smoothing (and the rest of
+// version 6 those before Touch In CC and version 7 those before Center (and the rest of
 // the TOUCH page); the ones they lack
-// load as their defaults. Before version 8, Touch Filter was a choice: Off, 10, 20 or 40 ms.
+// load as their defaults. Before version 8, Touch Filter was a choice: Off, 10, 20 or 40 ms. Param 21
+// was Center Lag (ms) and 22 Jump Check; both are unused now.
 constexpr char kStateMagic[4] = {'J', 'C', 'O', 'P'};
 constexpr uint32_t kStateVersion = 8;
+
+// How far (CC steps) the position may wobble in the middle of the Center zone without turning the angle.
+constexpr double kCenterSteady = 4.0;
 
 struct StateHeader {
    char magic[4];
@@ -239,7 +242,8 @@ public:
       const ParamInfo &p = kParams[index];
       jclap::core::fillParamInfo(
          {index, p.name, "", p.min, p.max, p.def,
-          static_cast<clap_param_info_flags>(CLAP_PARAM_IS_AUTOMATABLE | (p.stepped ? CLAP_PARAM_IS_STEPPED : 0))},
+          static_cast<clap_param_info_flags>((p.hidden ? CLAP_PARAM_IS_HIDDEN : CLAP_PARAM_IS_AUTOMATABLE) |
+                                             (p.stepped ? CLAP_PARAM_IS_STEPPED : 0))},
          info);
       return true;
    }
@@ -304,6 +308,9 @@ public:
       for (uint32_t i = 0; i < count; ++i)
          if (!std::isfinite(values[i]))
             return false;
+      // Params 21 and 22 were Center Lag and Jump Check, and are unused now.
+      values[kParamUnused21] = kParams[kParamUnused21].def;
+      values[kParamUnused22] = kParams[kParamUnused22].def;
       if (header.version < 8 && count > kParamTouchFilter) {
          constexpr double kOldWindows[] = {0.0, 10.0, 20.0, 40.0};
          values[kParamTouchFilter] = kOldWindows[std::clamp(static_cast<int>(std::lround(values[kParamTouchFilter])), 0, 3)];
@@ -411,7 +418,6 @@ private:
       f.setPress(press < 0 ? -1.0 : press / 1000.0);
       f.setJump(intParam(kParamTouchJump) * 2.0 / 127.0);
       f.setAgree(intParam(kParamTouchAgree) * 2.0 / 127.0);
-      f.setHeading(intParam(kParamTouchHeading) != 0);
    }
 
    // Touch Filter's window (seconds). 1 to 3 are the choices it had before it was in ms (10, 20 and
@@ -514,6 +520,7 @@ private:
 
    // Points a channel's output at (x, y) on the pad: at once, or gliding there.
    void moveTo(ChannelState &st, double x, double y) {
+      st.motion.setCenter(params_[kParamCenterSmoothing].load() / 100.0);
       if (motionFor(st, motion()).active())
          st.motion.follow(x, y);
       else
@@ -556,9 +563,8 @@ private:
          releaseTouches(out, clock_, clock_);
          for (int channel = 0; channel < 16; ++channel) {
             ChannelState &st = channels_[channel];
-            if (st.motion.moving() || st.centerBusy) {
-               if (st.motion.moving())
-                  st.motion.step(dt, motionFor(st, m));
+            if (st.motion.moving()) {
+               st.motion.step(dt, motionFor(st, m));
                send(out, clock_, channel);
             }
          }
@@ -658,13 +664,14 @@ private:
       s.clockwise = applied_.direction != 0;
       s.radiusMode = static_cast<jclap::RadiusMode>(applied_.radiusMode);
       double x, y;
+      st.motion.setCenter(params_[kParamCenterSmoothing].load() / 100.0);
       st.motion.position(x, y);
       const int steps = applied_.fine ? jclap::kSteps14 : jclap::kSteps7;
       const jclap::PolarCC p = jclap::toPolar(x, y, s, steps);
 
       // At dead center the angle is undefined, so it holds its last value.
       if (p.hasAngle)
-         st.angle = centered(st, x, y, s, p, steps, secondsAt(time));
+         st.angle = centered(st, x, y, s, p, steps);
       // With Polar Out off, nothing goes out (and nothing counts as sent, for when it's back on).
       if (!applied_.polar)
          return;
@@ -682,28 +689,30 @@ private:
       }
    }
 
-   // Center Smoothing: near the centre a small wobble swings the angle a long way, so there the angle
-   // follows more slowly, the more so the nearer the centre (Center Lag at the very centre, none at
-   // the edge of the zone). The radius is never slowed.
+   // Center: near the centre a wobble of a step or two swings the angle a long way, so within the
+   // zone the angle is read from an anchor that the position drags along on a string: a wobble shorter
+   // than the string doesn't move it, while a real move pulls it along at once, with no lag in time. The
+   // string is kCenterSteady long in the inner half of the zone and shrinks to nothing at its edge. The
+   // radius always goes out as it is. (With Motion Path Around, the zone also makes motion straight:
+   // see CenterFollower.)
    int centered(ChannelState &st, double x, double y, const jclap::PolarSettings &s, const jclap::PolarCC &p,
-                int steps, double now) {
+                int steps) {
       const double zone = params_[kParamCenterSmoothing].load() / 100.0;
-      const double deg = jclap::polarDegrees(x, y, s);
-      if (zone <= 0.0 || st.centerAngle < 0.0) {
-         st.centerAngle = deg;
-         st.centerAt = now;
-         st.centerBusy = false;
-         return p.angle;
-      }
       const double r = static_cast<double>(p.radius) / steps;
-      const double near = std::max(0.0, 1.0 - r / zone);
-      const double lag = params_[kParamCenterLag].load() / 1000.0 * near * near;
-      const double dt = std::max(0.0, now - st.centerAt);
-      st.centerAt = now;
-      const double gap = jclap::wrapDegrees(deg - st.centerAngle + 180.0) - 180.0;
-      st.centerAngle = jclap::wrapDegrees(st.centerAngle + (lag > 0.0 ? gap * (1.0 - std::exp(-dt / lag)) : gap));
-      st.centerBusy = std::abs(jclap::wrapDegrees(deg - st.centerAngle + 180.0) - 180.0) * steps / 360.0 > 0.5;
-      return static_cast<int>(std::lround(st.centerAngle / 360.0 * steps)) % steps;
+      const double near = zone > 0.0 ? std::max(0.0, 1.0 - r / zone) : 0.0;
+      const double string = kCenterSteady * 2.0 / 127.0 * std::min(1.0, 2.0 * near);
+      const double dx = x - st.centerX, dy = y - st.centerY, d = std::hypot(dx, dy);
+      if (!st.centerSet || d > string) {
+         const double keep = st.centerSet && d > 0.0 ? string / d : 0.0;
+         st.centerX = x - dx * keep;
+         st.centerY = y - dy * keep;
+         st.centerSet = true;
+      }
+      // Right at the centre the anchor gives no direction: hold what was sent.
+      if (std::hypot(st.centerX, st.centerY) < 1e-9)
+         return st.angle >= 0 ? st.angle : p.angle;
+      const double deg = jclap::polarDegrees(st.centerX, st.centerY, s);
+      return static_cast<int>(std::lround(deg / 360.0 * steps)) % steps;
    }
 
    // What a channel last sent, for the panel: angle << 8 | radius at 7 bits, or -1 for nothing yet.

@@ -34,8 +34,7 @@ inline const std::vector<Preset> &factoryPresets() {
                               {kParamOutRadius, 108.0},
                               {kParamTouchIn, 92.0},
                               {kParamTouchFilter, 50.0},
-                              {kParamTouchJump, 32.0},
-                              {kParamTouchHeading, 1.0},
+                              {kParamTouchJump, 24.0},
                               {kParamCenterSmoothing, 15.0},
                               {kParamSmoothing, 150.0}}}};
       jclap::ui::completePresets(p, defaultValues());

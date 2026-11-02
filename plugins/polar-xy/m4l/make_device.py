@@ -102,8 +102,8 @@ def menu(name, longname, short, items, rect, initial=0):
                    outs=3, outtype=("", "", "float"))
 
 
-def dial(name, longname, short, hi, rect, lo=0, initial=0, **extra):
-    return control("live.dial", name, rect, param_attrs(longname, short, 0, lo, hi, initial, **extra))
+def dial(name, longname, short, hi, rect, lo=0, initial=0, ptype=0, **extra):
+    return control("live.dial", name, rect, param_attrs(longname, short, ptype, lo, hi, initial, **extra))
 
 
 # ---- the panel ----
@@ -155,13 +155,11 @@ label("Resolution", [484, 86, 88, 14]); menu("resolution", "Output Resolution", 
 # same as Touch Filter.
 label("TOUCH", [584, 2, 110, 16], bold=True)
 label("Filter ms", [584, 32, 56, 15]); numbox("touchfilter", "Touch Filter", "Touch", 0, [644, 32, 44, 15], hi=100)
-label("Press ms", [584, 52, 56, 15]); numbox("touchpress", "Press Time", "Press", -1, [644, 52, 44, 15], lo=-1, hi=100)
+label("Press delay", [584, 52, 56, 15]); numbox("touchpress", "Press Delay", "Press", -1, [644, 52, 44, 15], lo=-1, hi=100)
 label("Jump", [584, 72, 56, 15]); numbox("touchjump", "Jump Limit", "Jump", 16, [644, 72, 44, 15], lo=8, hi=64)
 label("Agree", [584, 92, 56, 15]); numbox("touchagree", "Agree", "Agree", 4, [644, 92, 44, 15], lo=1, hi=16)
-label("Check", [584, 112, 56, 15]); menu("touchheading", "Jump Check", "Check", ["Distance", "Heading"], [644, 112, 52, 15])
 label("CENTER", [704, 2, 96, 16], bold=True)
-dial("centersmoothing", "Center Smoothing", "Center", 50, [704, 22, 44, 48], parameter_unitstyle=5)
-dial("centerlag", "Center Lag", "Lag", 1000, [752, 22, 44, 48], lo=50, initial=250, parameter_unitstyle=2)
+dial("centersmoothing", "Center", "Center", 50, [728, 22, 44, 48], parameter_unitstyle=5)
 
 # The status line: the last channel's X/Y in and angle/radius out, or what stops it converting.
 status = box("comment", text="waiting for X/Y CCs", numinlets=1, numoutlets=0, presentation=1,

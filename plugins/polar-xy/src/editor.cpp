@@ -634,40 +634,33 @@ public:
       pages_[0].assign(children().begin() + first, children().end());
 
       first = children().size();
-      tip(knob(kParamTouchPress, "PRESS", kBlue, 24, row),
-          "Press Time: when a finger lands, its first readings are often wrong while the contact is light, so the "
+      tip(knob(kParamTouchPress, "PRESS DELAY", kBlue, 24, row),
+          "Press Delay: when a finger lands, its first readings are often wrong while the contact is light, so the "
           "start of each touch is held back this long and then its latest reading goes out (without a touch CC, "
           "only once two readings agree). Longer settles more but adds delay to every new touch. Same (all the way "
           "down) uses the Touch Filter time.");
-      // Touch Filter again, as the lift-off it throws away beside the press.
-      filterPicker("LIFT (TOUCH FILTER)", 139, row);
-      hint("Held back to drop each lift-off", 139, row + 52);
-      add<ui::Divider>({317, row, 1, 92});
-      tip(knob(kParamTouchJump, "JUMP LIMIT", kBlue, 328, row),
-          "Jump Limit, in CC steps: a reading further than this from the last one (or, with Jump Check on Heading, "
-          "from where the finger was going) is taken as a possible skitter or a new touch, and is held until a "
-          "second reading agrees with it; a lone spike is thrown away. Lower catches smaller skitters but can "
-          "drop real fast moves. 16 is the default; 32 with Heading suits a resistive pad with a touch CC.");
-      tip(knob(kParamTouchAgree, "AGREE", kBlue, 404, row),
+      // Touch Filter again, as the lift-off it throws away beside the press. This page has three
+      // sections (the press and lift, the jump, the centre), each centred in its share of the row.
+      filterPicker("LIFT (TOUCH FILTER)", 141, row);
+      hint("Drops the skitter as a finger lifts", 141, row + 52);
+      add<ui::Divider>({318, row, 1, 92});
+      tip(knob(kParamTouchJump, "JUMP LIMIT", kBlue, 383, row),
+          "Jump Limit, in CC steps: a reading further than this both from the last one and from where the finger "
+          "was heading (its speed and direction carried on) is taken as a possible skitter or a new touch, and is "
+          "held until a second reading agrees with it; a lone spike is thrown away. So a fast drag that keeps its "
+          "course passes, and so does a sharp turn back. Lower catches smaller skitters but can drop real fast "
+          "moves. 16 is the default; 24 suits a resistive pad with a touch CC.");
+      tip(knob(kParamTouchAgree, "AGREE", kBlue, 459, row),
           "Agree, in CC steps: how close two readings must be to count as the same spot. A press or a jump only "
           "goes out once two readings agree, so raise this for a jittery pad whose resting finger wanders a "
           "little, and lower it to be stricter. 4 is the default.");
-      tip(choice(kParamTouchHeading, "JUMP CHECK", {"DISTANCE", "HEADING"}, 519, row),
-          "Jump Check: what Jump Limit measures from. Distance compares each reading with the last one. Heading "
-          "carries the finger's recent speed and direction on and compares the reading with where it should be, "
-          "so a fast drag that keeps its course passes while a reading that leaps off course is held. Heading "
-          "suits fast playing.");
-      hint("What a jump is measured from", 519, row + 52);
-      add<ui::Divider>({697, row, 1, 92});
-      tip(knob(kParamCenterSmoothing, "CENTER SMOOTH", kPurple, 724, row),
-          "Center Smoothing: near the centre, a wobble of a step or two swings the angle a long way, and crossing "
-          "the centre flips it half a turn. Within this share of the radius (up to 50%), the angle follows more "
-          "slowly the nearer the centre: up to Center Lag at the very centre, at once at the zone's edge. The "
-          "radius always goes out exactly. Off at 0; try 10-20%.");
-      tip(knob(kParamCenterLag, "CENTER LAG", kPurple, 800, row),
-          "Center Lag: how long the angle takes to follow at the very centre with Center Smoothing on, easing to "
-          "no lag at the edge of its zone. Longer is calmer but turns the Orb later when you start from the "
-          "middle. 250 ms is the default.");
+      add<ui::Divider>({600, row, 1, 92});
+      tip(knob(kParamCenterSmoothing, "CENTER", kPurple, 706, row),
+          "Center: a zone around the middle, as a share of the radius (up to 50%). Near the centre a wobble of a "
+          "step or two swings the angle a long way, and crossing the centre flips it half a turn; in the zone, "
+          "small wobbles are ignored and a real move turns the angle at once, with no lag. With Motion Path set to "
+          "Around, the zone also makes motion go straight, so the Orb cuts through the middle instead of swinging "
+          "round it. The radius always goes out exactly. Off at 0; try 15-25%.");
       pages_[1].assign(children().begin() + first, children().end());
 
       tabs_ = &add<TitleTabs>({12, 586, 300, 34}, std::vector<std::string>{"SETTINGS", "TOUCH"});
