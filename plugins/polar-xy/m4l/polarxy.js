@@ -436,7 +436,7 @@ var PARAMS = {
    angleoffset: [0, 360, 0],
    direction: [0, 1, 0],    // 0 counter-clockwise, 1 clockwise
    radiusmode: [0, 1, 0],   // 0 clamp to circle, 1 fill square
-   passthrough: [0, 1, 0],  // also forward the raw X/Y CCs
+   passthrough: [0, 2, 0],  // forward the X/Y and touch CCs: 0 off, 1 raw, 2 filtered
    smoothing: [0, 2000, 0], // ms
    inertia: [0, 100, 0],    // %
    path: [0, 1, 0],         // 0 straight, 1 around
@@ -504,6 +504,18 @@ Engine.prototype.touchOut = function () {
    if (cc < 0 || cc === s.outAngle || cc === s.outRadius || (s.fine && (cc === s.outAngle + 32 || cc === s.outRadius + 32)))
       return -1;
    return cc;
+};
+
+// Pass Input CCs on Filtered: a reading Touch Filter let through, sent on as the X/Y CCs it came in
+// on (with each axis's LSB too where a 14-bit controller sent one).
+Engine.prototype.passReading = function (channel, x, y) {
+   var ccs = [this.int('inx'), this.int('iny')], v = [x, y];
+   for (var i = 0; i < 2; ++i) {
+      var cc = clamp(v[i] >= 0 ? 64 + v[i] * 63 : 64 + v[i] * 64, 0, 127);
+      var msb = Math.floor(cc + 1e-9), lsb = clamp(Math.round((cc - msb) * 128), 0, 127);
+      this.emit(0xB0 | channel, ccs[i], msb);
+      if (ccs[i] < 32 && lsb > 0) this.emit(0xB0 | channel, ccs[i] + 32, lsb);
+   }
 };
 
 Engine.prototype.sendTouch = function (channel, down) {
@@ -607,11 +619,14 @@ Engine.prototype.releaseTouches = function () {
    for (var c = 0; c < 16; ++c) {
       var st = this.channels[c], any = false, r;
       while (st.touch.busy() && (r = st.touch.pop(this.time, window))) {
+         var pass = this.int('passthrough') === 2;
          if (r[2] === TOUCH_MOVE) {
             this.moveTo(st, r[0], r[1]);
+            if (pass) this.passReading(c, r[0], r[1]);
             any = true;
             continue;
          }
+         if (pass && this.touchIn() >= 0) this.emit(0xB0 | c, this.touchIn(), r[2] === TOUCH_DOWN ? 127 : 0);
          if (any) this.send(c);
          any = false;
          this.sendTouch(c, r[2] === TOUCH_DOWN);
@@ -654,7 +669,8 @@ Engine.prototype.handleCC = function (channel, cc, value) {
    var lsbY = inY < 32 && cc === inY + 32 && cc !== inX;
    var touch = cc === this.touchIn();
    if (cc !== inX && cc !== inY && !lsbX && !lsbY && !touch) return false;
-   if (this.int('passthrough') !== 0) this.emit(0xB0 | channel, cc, value);
+   var pass = this.int('passthrough');
+   if (pass === 1 || (pass === 2 && this.touchWindow() <= 0)) this.emit(0xB0 | channel, cc, value);
    var st = this.channels[channel];
    if (touch) {
       this.convertPending(); // readings before the edge are on their side of it

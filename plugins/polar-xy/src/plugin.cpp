@@ -405,11 +405,16 @@ private:
          bool any = false;
          jclap::TouchFilter::Event event;
          while (st.touch.busy() && st.touch.pop(now, window, x, y, event)) {
+            const bool pass = passMode() == kPassFiltered;
             if (event == jclap::TouchFilter::Event::Move) {
                moveTo(st, x, y);
+               if (pass)
+                  passReading(out, at, channel, x, y);
                any = true;
                continue;
             }
+            if (pass && touchIn() >= 0)
+               pushCC(out, at, channel, touchIn(), event == jclap::TouchFilter::Event::Down ? 127 : 0);
             // The touch goes out in step: down before its first move, up after its last.
             if (any)
                send(out, at, channel);
@@ -418,6 +423,24 @@ private:
          }
          if (any)
             send(out, at, channel);
+      }
+   }
+
+   enum PassMode { kPassOff = 0, kPassRaw = 1, kPassFiltered = 2 };
+   PassMode passMode() const { return static_cast<PassMode>(std::clamp(intParam(kParamPassThrough), 0, 2)); }
+
+   // Pass Input CCs on Filtered: a reading Touch Filter let through, sent on as the X/Y CCs it came
+   // in on (with each axis's LSB too where a 14-bit controller sent one).
+   void passReading(const clap_output_events_t *out, uint32_t time, int channel, double x, double y) {
+      const int ccs[2] = {intParam(kParamInX), intParam(kParamInY)};
+      const double v[2] = {x, y};
+      for (int i = 0; i < 2; ++i) {
+         const double cc = std::clamp(v[i] >= 0.0 ? 64.0 + v[i] * 63.0 : 64.0 + v[i] * 64.0, 0.0, 127.0);
+         const int msb = static_cast<int>(std::floor(cc + 1e-9));
+         const int lsb = std::clamp(static_cast<int>(std::lround((cc - msb) * 128.0)), 0, 127);
+         pushCC(out, time, channel, ccs[i], msb);
+         if (ccs[i] < 32 && lsb > 0)
+            pushCC(out, time, channel, ccs[i] + 32, lsb);
       }
    }
 
@@ -683,7 +706,7 @@ private:
       if (conflicting())
          return;
       // Pass Input CCs sends on the X/Y as if it came from the controller.
-      if (intParam(kParamPassThrough) != 0) {
+      if (passMode() != kPassOff) {
          pushCC(out, 0, channel, intParam(kParamInX), st.x);
          pushCC(out, 0, channel, intParam(kParamInY), st.y);
       }
@@ -725,8 +748,9 @@ private:
       const bool touch = cc == touchIn();
       if (cc != inX && cc != inY && !lsbX && !lsbY && !touch)
          return false;
-      const bool passThrough = intParam(kParamPassThrough) != 0;
-      if (passThrough)
+      // Raw passes them on now; Filtered when Touch Filter lets them through (see releaseTouches),
+      // or now too if it's off.
+      if (passMode() == kPassRaw || (passMode() == kPassFiltered && touchWindow() <= 0.0))
          out->try_push(out, &ev->header);
       if (touch) {
          if (!(dragging_.load() && channel == panelChannel_)) {

@@ -45,7 +45,7 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Angle Offset", 0, 360, 0, false},
    {"Direction", 0, 1, 0, true},
    {"Radius Mode", 0, 1, 0, true},
-   {"Pass Input CCs", 0, 1, 0, true},
+   {"Pass Input CCs", 0, 2, 0, true}, // Off, Raw, Filtered (through Touch Filter)
    {"Smoothing", 0, 2000, 0, false}, // ms
    {"Inertia", 0, 100, 0, false},    // %
    {"Motion Path", 0, 1, 0, true},
@@ -59,7 +59,7 @@ inline constexpr ParamInfo kParams[kParamCount] = {
 // Labels for the choice params, off (or the first) first: one per step of the param's range.
 inline const char *const kDirectionLabels[] = {"Counter-clockwise", "Clockwise"};
 inline const char *const kRadiusModeLabels[] = {"Clamp to circle", "Fill square"};
-inline const char *const kOnOffLabels[] = {"Off", "On"};
+inline const char *const kPassLabels[] = {"Off", "Raw", "Filtered"};
 inline const char *const kMotionPathLabels[] = {"Straight", "Around"};
 inline const char *const kResolutionLabels[] = {"7-bit", "14-bit"};
 inline const char *const kInertiaModeLabels[] = {"Pull", "Coast", "Pad"};
@@ -76,7 +76,7 @@ inline const char *const *choiceLabels(clap_id id) {
    case kParamRadiusMode:
       return kRadiusModeLabels;
    case kParamPassThrough:
-      return kOnOffLabels;
+      return kPassLabels;
    case kParamMotionPath:
       return kMotionPathLabels;
    case kParamResolution:

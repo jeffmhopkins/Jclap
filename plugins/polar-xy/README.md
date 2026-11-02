@@ -154,8 +154,16 @@ nothing. Touch In CC needs Touch Filter on; with it off, the touch CC only goes 
 
 **Touch Out CC** (TOUCH under POLAR OUT, in ADVANCED) sends the touch on, as 127 and 0, in step with the filtered
 motion: on just before a touch's first position goes out, off once it lifts. A touch whose press never
-went out sends neither. Holding the mouse down on the panel's XY pad is a touch too. With Pass Input
-CCs on, the raw touch CC goes on as well.
+went out sends neither. Holding the mouse down on the panel's XY pad is a touch too.
+
+### Passing the CCs on, filtered
+
+**Pass Input CCs** sends the X/Y CCs (and the touch CC) on as well as converting them. *Raw* sends
+them on the moment they arrive, exactly as the controller sent them, skitter and all. *Filtered* sends
+them on as Touch Filter lets them through instead: the same CCs and values, a window later, with each
+touch's press and lift-off left out and the touch CC in step. So Polar XY can clean up a resistive
+pad's X/Y for something else, alongside the angle and radius. With Touch Filter off,
+Filtered is the same as Raw.
 
 > [!IMPORTANT]
 > Spectrasonics doesn't document where the Orb's angle 0 sits or which way it turns, so these are
@@ -232,7 +240,7 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 | Angle Offset | 0 deg | Rotates the angle |
 | Direction | Counter-clockwise | Flip to clockwise to mirror |
 | Radius Mode | Clamp to circle | Or Fill square |
-| Pass Input CCs | Off | Also forward the raw X/Y (and touch) CCs |
+| Pass Input CCs | Off | Also send on the X/Y (and touch) CCs: Raw as they came, or Filtered through Touch Filter |
 | Smoothing | 0 ms | Glide time, up to 2 s |
 | Inertia | 0% | Weight: lag and overshoot |
 | Motion Path | Straight | Or Around, to move round the circle |

@@ -112,9 +112,7 @@ label("XY IN", [8, 2, 100, 16], bold=True)
 label("X CC", [8, 32, 44, 15]); numbox("inx", "X In CC", "X In", 16, [56, 32, 44, 15])
 label("Y CC", [8, 52, 44, 15]); numbox("iny", "Y In CC", "Y In", 17, [56, 52, 44, 15])
 label("Touch", [8, 72, 44, 15]); numbox("touchin", "Touch In CC", "Touch In", -1, [56, 72, 44, 15], lo=-1)
-control("live.text", "passthrough", [8, 96, 92, 16],
-        param_attrs("Pass Input CCs", "Pass In", 2, 0, 1, 0, parameter_enum=["off", "on"]))
-boxes[-2]["box"].update(text="PASS X/Y ON", texton="PASS X/Y ON", mode=1)
+label("Pass", [8, 96, 44, 15]); menu("passthrough", "Pass Input CCs", "Pass In", ["Off", "Raw", "Filtered"], [56, 96, 52, 15])
 
 label("POLAR OUT", [116, 2, 100, 16], bold=True)
 label("Angle", [116, 32, 44, 15]); numbox("outangle", "Angle Out CC", "Angle Out", 18, [164, 32, 44, 15])

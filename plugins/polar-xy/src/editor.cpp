@@ -501,7 +501,7 @@ public:
 
       // Between the two: where the angle starts and turns, and how the output follows.
       constexpr float row = 554.0f;
-      knob(kParamAngleOffset, "OFFSET", kPurple, 62, row, 1.0);
+      knob(kParamAngleOffset, "OFFSET", kPurple, 24, row, 1.0);
       choice(kParamDirection, "DIRECTION", {"CCW", "CW"}, 312, row);
       choice(kParamRadiusMode, "RADIUS MODE", {"CIRCLE", "SQUARE"}, 312, row + 50);
       knob(kParamSmoothing, "SMOOTHING", kBlue, 498, row, 10.0);

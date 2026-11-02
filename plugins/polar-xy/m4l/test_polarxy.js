@@ -259,7 +259,8 @@ function replay(settings) {
    var lines = fs.readFileSync(path.join(__dirname, '..', 'tests', 'data', 'resistive-pad-capture.txt'), 'utf8')
       .split('\n').filter(function (l) { return l && l[0] !== '#'; })
       .map(function (l) { return l.split(' ').map(Number); });
-   var out = { visited: [], touches: [] }, angle = -1, radius = -1, next = 0;
+   var out = { visited: [], touches: [], passed: [], passedTouch: [] }, angle = -1, radius = -1, next = 0;
+   var px12 = -1, py13 = -1;
    for (var now = 0; now < 16; now += 0.004) {
       while (next < lines.length && lines[next][0] <= now) {
          dev.send(0xB0, lines[next][1], lines[next][2]);
@@ -270,7 +271,11 @@ function replay(settings) {
          if (m[1] === 18) angle = m[2];
          if (m[1] === 19) radius = m[2];
          if (m[1] === 93) out.touches.push(m[2]);
+         if (m[1] === 12) px12 = m[2];
+         if (m[1] === 13) py13 = m[2];
+         if (m[1] === 92) out.passedTouch.push(m[2]);
       });
+      out.passed.push(px12 + ',' + py13);
       out.visited.push(angle + '/' + radius);
    }
    return out;
@@ -288,6 +293,18 @@ var gated = replay(capture);
 check(!visits(gated, skitter[0]) && !visits(gated, skitter[1]), 'capture: with the touch CC too');
 check(gated.touches.length >= 8 && gated.touches.every(function (v, i) { return v === (i % 2 ? 0 : 127); }) &&
       gated.touches[gated.touches.length - 1] === 0, 'capture: the touch goes out, down and up in turn');
+
+// Pass Input CCs: Raw sends the skitter on as it came; Filtered sends only what Touch Filter let through.
+capture.passthrough = 1;
+var passRaw = replay(capture);
+check(passRaw.passed.indexOf('64,127') >= 0 && passRaw.passed.indexOf('60,95') >= 0, 'capture: raw pass-through skitters');
+capture.passthrough = 2;
+var passFiltered = replay(capture);
+check(passFiltered.passed.indexOf('64,127') < 0 && passFiltered.passed.indexOf('60,95') < 0 &&
+      passFiltered.passed[passFiltered.passed.length - 1] !== '-1,-1', 'capture: filtered pass-through drops it');
+check(passFiltered.passedTouch.length === gated.touches.length &&
+      passFiltered.passedTouch.every(function (v, i) { return v === gated.touches[i]; }),
+      'capture: filtered pass-through sends the touch in step');
 
 if (failures) {
    console.log(failures + ' failure(s)');
