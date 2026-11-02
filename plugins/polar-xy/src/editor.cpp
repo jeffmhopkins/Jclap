@@ -492,7 +492,7 @@ public:
       // happens in between.
       add<ui::Section>({12, 76, 432, 498}, "XY IN");
       add<ui::Section>({456, 76, 432, 498}, "POLAR OUT");
-      add<ui::Section>({12, 586, 876, 140}, "MAPPING & MOTION");
+      add<ui::Section>({12, 586, 876, 140}, "SETTINGS");
 
       // Live views, their skies 4:3 (an XYPad keeps a tenth of its shorter side for the labels):
       // what comes in on the X/Y CCs, and the angle/radius that goes out. Dragging the

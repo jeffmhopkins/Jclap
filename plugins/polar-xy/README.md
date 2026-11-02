@@ -118,7 +118,7 @@ still moving.
 A resistive XY pad reads its position through the finger's contact, so for a few milliseconds while
 the finger presses down and while it lifts off, the contact is light and the readings are wrong: they
 skitter toward an edge or the centre, and the Orb jumps there and back. Smoothing hides that by
-smearing it into every move. **Touch Filter** (TOUCH FILTER in the MAPPING & MOTION section) instead finds the
+smearing it into every move. **Touch Filter** (TOUCH FILTER in the SETTINGS section) instead finds the
 edges of each touch and throws them away, leaving the rest exactly as it came:
 
 - X and Y that arrive within 3 ms of each other are one reading, so no point made of the new X and the
@@ -174,7 +174,7 @@ off (no angle or radius goes out at all). With Touch Filter off, Filtered is the
 
 A 7-bit CC gives the angle 127 steps round the circle (about 2.8 degrees each) and the radius 127
 steps, so a slow sweep moves in audible stairs. **Output Resolution** set to 14-bit (**RESOLUTION**
-in the MAPPING & MOTION section of the panel) sends each value as a standard 14-bit CC pair: the top 7 bits on the output CC,
+in the SETTINGS section of the panel) sends each value as a standard 14-bit CC pair: the top 7 bits on the output CC,
 then the bottom 7 on that CC + 32 (so the defaults, 18 and 19, also send on 50 and 51). That is
 16383 steps each. It needs both output CCs below 32; on higher ones the output stays 7-bit and the
 panel says so. Whether the receiving end reads the pair as one fine value is up to it; one that
@@ -191,7 +191,7 @@ and each MSB on its own is the whole value, so nothing changes for one.
 radius the plugin sent for that channel (a dash until both axes have arrived),
 with angle 0 marked by the tick on the right. Comparing the two shows what `Angle Offset` and
 `Direction` do. Under each view are its CCs: X, Y and Touch In with Pass Input CCs, and angle, radius
-and Touch Out with the MIDI learn buttons. Below them, **MAPPING & MOTION** holds Angle Offset, Direction
+and Touch Out with the MIDI learn buttons. Below them, **SETTINGS** holds Angle Offset, Direction
 and Radius Mode, then Smoothing, Inertia, Path, Inertia Mode, Touch Filter and Resolution. Hover over
 any control for a tip on what it does. Every setting is also a plain host parameter.
 
