@@ -1,3 +1,4 @@
+{{INTRO}}
 ## Download
 
 **Everything for your system.** Every plugin, in a `CLAP` folder and a `VST3` folder (and on macOS and
@@ -17,7 +18,7 @@ you need. Each plugin has its own version, and only changes it when the plugin i
 On a Mac, the quickest install is from Terminal (see below for why):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-macos.sh | bash -s {{VERSION}}
+curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-macos.sh | bash -s {{RELEASE}}
 ```
 
 ## Install

@@ -75,7 +75,7 @@ curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-mac
 ```
 
 That runs [install-macos.sh](install-macos.sh), which installs the latest release's CLAPs and VST3s
-(`bash -s v0.19.0` instead of `bash` picks a release). It replaces older copies outright, since
+(`bash -s 20` instead of `bash` picks Release 20). It replaces older copies outright, since
 unzipping over an old bundle can leave stale files that stop it loading, and clears Bitwig's plugin
 cache so the next scan starts fresh.
 
@@ -148,10 +148,14 @@ Plugins build on three shared libraries:
 ## Releasing
 
 > [!IMPORTANT]
-> In GitHub, open Actions → build → Run workflow and enter a version such as `v0.2.0`. The run builds
-> every platform, tags the commit and publishes a release with one zip per OS and one per plugin
-> ([.github/package.sh](.github/package.sh) packs them). Pushing a `v*` tag does
-> the same. Bump the release's version in `CMakeLists.txt` (`project()`) first.
+> Releases are counted: Release 19, Release 20 and so on, one number per release, so a release never
+> looks like a plugin's version. In GitHub, open Actions → build → Run workflow and enter the next
+> number, such as `20`. The run builds every platform, tags the commit `v20.0.0`, and publishes
+> "Release 20" with one zip per OS and one per plugin ([.github/package.sh](.github/package.sh) packs
+> them). Pushing a `v20.0.0` tag does the same. Set `project()` in `CMakeLists.txt` to `20.0.0` first.
+>
+> The tag stays three numbers because plugins already installed read the newest release's tag that
+> way to find their update. The count carries on from the older `v0.N.0` tags: `v0.19.0` was Release 19.
 >
 > Each plugin also has its own version, `jclap_plugin_version(...)` at the top of its
 > `CMakeLists.txt`, which its descriptor, bundles and update notice use. Bump it only when that plugin

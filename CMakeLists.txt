@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 3.17)
 # produces plugins that refuse to load on macOS 15). Must be set before project().
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS version")
 
+# The release number: Release N is N.0.0 (tagged vN.0.0). Each plugin has its own version too.
 project(jclap VERSION 0.19.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)

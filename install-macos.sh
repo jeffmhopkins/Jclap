@@ -3,13 +3,18 @@
 #
 #    curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-macos.sh | bash
 #
-# installs the latest release; add "-s v0.19.0" after bash for a given one. Files fetched with curl
+# installs the latest release; add "-s 20" after bash for Release 20 (its tag, "-s v20.0.0", works
+# too, as do older tags like v0.19.0). Files fetched with curl
 # aren't quarantined, so the plugins load without notarization. Each bundle replaces the old copy
 # outright, since unzipping over an old bundle can leave stale files that stop it loading, and
 # Bitwig's CLAP cache is cleared so its next scan starts fresh.
 set -euo pipefail
 
 version=${1:-latest}
+# Release N is tagged vN.0.0.
+if [[ $version =~ ^[1-9][0-9]*$ ]]; then
+   version=v$version.0.0
+fi
 if [ "$version" = latest ]; then
    base=https://github.com/jeffmhopkins/Jclap/releases/latest/download
 else
