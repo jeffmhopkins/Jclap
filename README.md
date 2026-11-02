@@ -97,6 +97,18 @@ them, right-click the panel background and untick **Check for Updates**.
 
 ## Building from source
 
+### One command (macOS)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/build-macos.sh | bash -s polar-xy
+```
+
+downloads the source to `~/Jclap-src`, builds Polar XY, and installs its CLAP and VST3. Leave off
+`-s polar-xy` to build and install every plugin, or name others (their folder names under
+[plugins/](plugins)). Run it again to update: it pulls the latest code and rebuilds only what changed.
+It needs Apple's command line tools (`xcode-select --install`) and CMake (`brew install cmake`); it
+says so if either is missing. See [build-macos.sh](build-macos.sh).
+
 ### What you need
 
 - **CMake** 3.17 or newer, **git**, and a **C++17** compiler. The first configure downloads the CLAP
