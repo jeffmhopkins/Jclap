@@ -327,6 +327,7 @@ TouchFilter.prototype.reset = function () {
    this.settling = false; this.start = 0; this.readings = 0;
    this.candX = 0; this.candY = 0; this.prevX = 0; this.prevY = 0;
    this.gated = false; this.touched = false; this.downDue = false; this.downOut = false;
+   this.pressed = false; // settling a press the touch CC started, so one reading will do
    this.queue = [];
 };
 
@@ -342,12 +343,14 @@ TouchFilter.prototype.touch = function (down, now, window) {
       this.start = now;
       this.readings = 0;
       this.downDue = true;
+      this.pressed = true;
       return;
    }
    var downHeld = false;
    for (var i = 0; i < this.queue.length; ++i) downHeld = downHeld || this.queue[i].event === TOUCH_DOWN;
    this.queue = [];
    this.settling = false;
+   this.pressed = false;
    this.downDue = false;
    if (this.downOut && !downHeld) this.hold(0, 0, now, TOUCH_UP);
    this.downOut = false;
@@ -387,6 +390,9 @@ TouchFilter.prototype.finalize = function () {
    var step = this.hasLast ? Math.sqrt((x - this.lastX) * (x - this.lastX) + (y - this.lastY) * (y - this.lastY)) : 0;
    var onset = !this.hasLast || step > TOUCH_JUMP || (t - this.lastT >= TOUCH_LIFT && step > TOUCH_AGREE);
    if (onset && this.window > 0) {
+      // Still the touch CC's press if nothing has arrived in it yet; a jump later in the touch
+      // (often the finger starting to lift) needs two readings that agree, as without it.
+      this.pressed = this.pressed && this.settling && this.readings === 0;
       this.queue = [];
       this.settling = true;
       this.start = t;
@@ -411,7 +417,8 @@ TouchFilter.prototype.settle = function () {
    this.settling = false;
    var dx = this.candX - this.prevX, dy = this.candY - this.prevY;
    var rested = this.readings >= 2 && Math.sqrt(dx * dx + dy * dy) <= TOUCH_AGREE;
-   if (rested || (this.gated && this.readings >= 1)) this.hold(this.candX, this.candY, this.start + this.window);
+   if (rested || (this.pressed && this.readings >= 1)) this.hold(this.candX, this.candY, this.start + this.window);
+   this.pressed = false;
 };
 
 TouchFilter.prototype.hold = function (x, y, due, event) {

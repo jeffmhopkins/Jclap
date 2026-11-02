@@ -22,7 +22,7 @@
 // A pad that also sends a touch CC (on while a finger is down) makes the edges exact. Once one has
 // arrived (see touch()), readings while lifted are ignored, a touch's press starts when it goes on,
 // and everything still held when it goes off is thrown away: the lift-off, however gently it slid. A
-// press then needs only one reading. The touch also comes out, as Down before a touch's first
+// press it starts then needs only one reading; a jump later in the touch still needs two that agree. The touch also comes out, as Down before a touch's first
 // reading and Up when it lifts, so it can be sent on in step with the motion.
 #pragma once
 
@@ -82,6 +82,7 @@ public:
          start_ = now;
          readings_ = 0;
          down_due_ = true;
+         pressed_ = true;
          return;
       }
       // Everything still held is the lift-off. If that includes the touch's Down, it never went out,
@@ -91,6 +92,7 @@ public:
          down_held = down_held || queue_[(head_ + i) % kCapacity].event == Event::Down;
       count_ = 0;
       settling_ = false;
+      pressed_ = false;
       down_due_ = false;
       if (down_out_ && !down_held)
          hold(0.0, 0.0, now, Event::Up);
@@ -141,6 +143,9 @@ private:
       const double step = has_last_ ? std::hypot(x - last_x_, y - last_y_) : 0.0;
       const bool onset = !has_last_ || step > kTouchJump || (t - last_t_ >= kTouchLift && step > kTouchAgree);
       if (onset && window_ > 0.0) {
+         // Still the touch CC's press if nothing has arrived in it yet. A jump later in the touch
+         // (often the finger starting to lift) needs two readings that agree, as without it.
+         pressed_ = pressed_ && settling_ && readings_ == 0;
          count_ = 0; // what was still held was the last touch lifting off
          settling_ = true;
          start_ = t;
@@ -163,12 +168,13 @@ private:
    }
 
    // The end of a touch's press: its latest reading goes out now, if the finger has come to rest
-   // (with a touch CC, the finger is known to be down, so one reading will do).
+   // (in a press the touch CC started, the finger is known to be down, so one reading will do).
    void settle() {
       settling_ = false;
       const bool rested = readings_ >= 2 && std::hypot(cand_x_ - prev_x_, cand_y_ - prev_y_) <= kTouchAgree;
-      if (rested || (gated_ && readings_ >= 1))
+      if (rested || (pressed_ && readings_ >= 1))
          hold(cand_x_, cand_y_, start_ + window_);
+      pressed_ = false;
    }
 
    void hold(double x, double y, double due, Event event = Event::Move) {
@@ -201,6 +207,8 @@ private:
    // The touch CC: whether one has arrived, whether the finger is down, and whether its Down is
    // still to go out (before its first reading) or has gone out (so its Up goes too).
    bool gated_ = false, touched_ = false, down_due_ = false, down_out_ = false;
+   // Settling a press the touch CC started (so one reading will do), not a jump within the touch.
+   bool pressed_ = false;
    // Readings waiting to go out, in order.
    Reading queue_[kCapacity] = {};
    std::size_t head_ = 0, count_ = 0;

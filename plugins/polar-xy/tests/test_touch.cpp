@@ -221,6 +221,35 @@ int main() {
       CHECK(n == 0);
    }
 
+   // With the touch CC, a jump within the touch still needs two readings that agree: a lone lift-off
+   // reading more than a window before the touch CC goes off (as Jeff's pad sends them, about 15 ms
+   // early, with a 10 ms window) never goes out.
+   {
+      TouchFilter f;
+      const double w = 0.01;
+      std::vector<double> xs;
+      const auto poll = [&](double from, double to) {
+         double x, y;
+         TouchFilter::Event e;
+         for (double now = from; now <= to; now += 0.0005)
+            while (f.pop(now, w, x, y, e))
+               if (e == TouchFilter::Event::Move)
+                  xs.push_back(x);
+      };
+      f.touch(true, 0.0, w);
+      for (int i = 0; i < 10; ++i) {
+         f.push(0.2, 0.2, 0.002 + 0.01 * i, w);
+         poll(0.002 + 0.01 * i, 0.002 + 0.01 * (i + 1) - 0.0005);
+      }
+      f.push(0.9, 0.9, 0.102, w); // the lift-off, alone
+      poll(0.102, 0.117);
+      f.touch(false, 0.1175, w);
+      poll(0.1175, 0.2);
+      CHECK(!xs.empty());
+      for (double x : xs)
+         CHECK(x == 0.2);
+   }
+
    if (failures)
       std::printf("%d failure(s)\n", failures);
    else

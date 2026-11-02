@@ -251,6 +251,25 @@ for (var now = 0; now < 0.2; now += 0.0005) {
 check(popped.length === 2 && popped[1][0] === 0.2 && popped[1][1] === 0.2 && popped[0][0] === 0,
       'touch filter pairs X and Y');
 
+// With the touch CC, a lone lift-off reading more than a window before the touch goes up still
+// needs a second that agrees, so it never goes out (see tests/test_touch.cpp).
+var tg = new px.TouchFilter(), moves = [];
+function tgPoll(from, to) {
+   for (var now = from; now <= to; now += 0.0005)
+      while ((r = tg.pop(now, 0.01))) if (r[2] === 0) moves.push(r[0]);
+}
+tg.touch(true, 0, 0.01);
+for (var i = 0; i < 10; ++i) {
+   tg.push(0.2, 0.2, 0.002 + 0.01 * i, 0.01);
+   tgPoll(0.002 + 0.01 * i, 0.002 + 0.01 * (i + 1) - 0.0005);
+}
+tg.push(0.9, 0.9, 0.102, 0.01);
+tgPoll(0.102, 0.117);
+tg.touch(false, 0.1175, 0.01);
+tgPoll(0.1175, 0.2);
+check(moves.length > 0 && moves.every(function (x) { return x === 0.2; }),
+      'touch filter with touch CC: a lone lift-off reading never goes out');
+
 // The real thing: a resistive pad played by hand (tests/data/resistive-pad-capture.txt), whose last
 // two lifts skitter to a wrong spot just before its touch CC goes up.
 function replay(settings) {
