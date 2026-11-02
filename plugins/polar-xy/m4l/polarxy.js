@@ -309,6 +309,89 @@ Follower.prototype.toSpace = function (x, y, out) {
    out[1] = r;
 };
 
+// ---- touch.h ----
+
+var TOUCH_PAIR = 0.003, TOUCH_JUMP = 0.25, TOUCH_LIFT = 0.05, TOUCH_AGREE = 0.06;
+var TOUCH_WINDOWS = [0, 0.01, 0.02, 0.04];
+
+// Throws away the press and release of each touch on a resistive pad: see TouchFilter in src/touch.h,
+// which this mirrors line for line.
+function TouchFilter() { this.reset(); }
+
+TouchFilter.prototype.reset = function () {
+   this.window = 0;
+   this.open = false; this.openX = 0; this.openY = 0; this.openT = 0;
+   this.hasLast = false; this.lastX = 0; this.lastY = 0; this.lastT = 0;
+   this.settling = false; this.start = 0; this.readings = 0;
+   this.candX = 0; this.candY = 0; this.prevX = 0; this.prevY = 0;
+   this.queue = [];
+};
+
+TouchFilter.prototype.push = function (x, y, now, window) {
+   this.window = window;
+   if (this.open && now - this.openT < TOUCH_PAIR) {
+      this.openX = x;
+      this.openY = y;
+      return;
+   }
+   if (this.open) this.finalize();
+   this.open = true;
+   this.openX = x;
+   this.openY = y;
+   this.openT = now;
+};
+
+// The next reading due by `now` as [x, y], oldest first, or null.
+TouchFilter.prototype.pop = function (now, window) {
+   this.window = window;
+   if (this.open && now - this.openT >= TOUCH_PAIR) this.finalize();
+   if (this.settling && now >= this.start + this.window) this.settle();
+   if (!this.queue.length || this.queue[0].due > now) return null;
+   var r = this.queue.shift();
+   return [r.x, r.y];
+};
+
+TouchFilter.prototype.busy = function () { return this.open || this.settling || this.queue.length > 0; };
+
+TouchFilter.prototype.finalize = function () {
+   this.open = false;
+   var x = this.openX, y = this.openY, t = this.openT;
+   if (this.settling && t >= this.start + this.window) this.settle();
+   var step = this.hasLast ? Math.sqrt((x - this.lastX) * (x - this.lastX) + (y - this.lastY) * (y - this.lastY)) : 0;
+   var onset = !this.hasLast || step > TOUCH_JUMP || (t - this.lastT >= TOUCH_LIFT && step > TOUCH_AGREE);
+   if (onset && this.window > 0) {
+      this.queue = [];
+      this.settling = true;
+      this.start = t;
+      this.readings = 0;
+   }
+   if (this.settling) {
+      this.prevX = this.candX;
+      this.prevY = this.candY;
+      this.candX = x;
+      this.candY = y;
+      ++this.readings;
+   } else {
+      this.hold(x, y, t + this.window);
+   }
+   this.hasLast = true;
+   this.lastX = x;
+   this.lastY = y;
+   this.lastT = t;
+};
+
+TouchFilter.prototype.settle = function () {
+   this.settling = false;
+   var dx = this.candX - this.prevX, dy = this.candY - this.prevY;
+   if (this.readings >= 2 && Math.sqrt(dx * dx + dy * dy) <= TOUCH_AGREE)
+      this.hold(this.candX, this.candY, this.start + this.window);
+};
+
+TouchFilter.prototype.hold = function (x, y, due) {
+   if (this.queue.length === 64) this.queue.shift();
+   this.queue.push({ x: x, y: y, due: due });
+};
+
 // ---- the plugin's MIDI handling (src/plugin.cpp) ----
 
 // Name: [min, max, default]. The same ranges and defaults as the CLAP's params (src/params.h).
@@ -325,7 +408,8 @@ var PARAMS = {
    inertia: [0, 100, 0],    // %
    path: [0, 1, 0],         // 0 straight, 1 around
    resolution: [0, 1, 0],   // 0 7-bit, 1 14-bit
-   inertiamode: [0, 2, 0]   // 0 pull, 1 coast, 2 pad
+   inertiamode: [0, 2, 0],  // 0 pull, 1 coast, 2 pad
+   touchfilter: [0, 3, 0]   // 0 off, then TOUCH_WINDOWS
 };
 
 function Channel() {
@@ -333,6 +417,7 @@ function Channel() {
    this.hasX = false; this.hasY = false;
    this.angle = -1; this.sentAngle = -1; this.sentRadius = -1;
    this.motion = new Follower();
+   this.touch = new TouchFilter();
 }
 
 // emit(status, data1, data2) sends one MIDI message out.
@@ -343,6 +428,7 @@ function Engine(emit) {
    this.channels = [];
    for (var c = 0; c < 16; ++c) this.channels.push(new Channel());
    this.pending = [];
+   this.time = 0; // seconds of ticks, Touch Filter's clock
    this.lastChannel = 0; // the channel that moved last: the SEND buttons and the status line use it
    this.inX = this.int('inx');
    this.inY = this.int('iny');
@@ -369,6 +455,8 @@ Engine.prototype.fineWanted = function () { return this.int('resolution') !== 0;
 Engine.prototype.fineBlocked = function () {
    return this.fineWanted() && (this.int('outangle') >= 32 || this.int('outradius') >= 32);
 };
+
+Engine.prototype.touchWindow = function () { return TOUCH_WINDOWS[clamp(this.int('touchfilter'), 0, 3)]; };
 
 Engine.prototype.motionSettings = function () {
    return {
@@ -433,16 +521,40 @@ Engine.prototype.applySettings = function () {
 Engine.prototype.convertPending = function () {
    var list = this.pending;
    this.pending = [];
-   for (var i = 0; i < list.length; ++i) this.convert(list[i]);
+   for (var i = 0; i < list.length; ++i) this.convert(list[i], true);
 };
 
-Engine.prototype.convert = function (channel) {
+// A controller's new reading (`fresh`) goes through Touch Filter if it's on; anything else (a
+// setting changed) only sends again.
+Engine.prototype.convert = function (channel, fresh) {
    var st = this.channels[channel];
    if (!st.hasX || !st.hasY || this.conflicting()) return;
    var x = ccToBipolar(st.fx), y = ccToBipolar(st.fy);
+   var filtered = this.touchWindow() > 0;
+   if (filtered && fresh) {
+      st.touch.push(x, y, this.time, this.touchWindow());
+      return;
+   }
+   if (!filtered) this.moveTo(st, x, y);
+   this.send(channel);
+};
+
+Engine.prototype.moveTo = function (st, x, y) {
    if (motionActive(this.motionSettings())) st.motion.follow(x, y);
    else st.motion.place(x, y);
-   this.send(channel);
+};
+
+// Sends on what Touch Filter has let through by now.
+Engine.prototype.releaseTouches = function () {
+   var window = this.touchWindow();
+   for (var c = 0; c < 16; ++c) {
+      var st = this.channels[c], any = false, r;
+      while (st.touch.busy() && (r = st.touch.pop(this.time, window))) {
+         this.moveTo(st, r[0], r[1]);
+         any = true;
+      }
+      if (any) this.send(c);
+   }
 };
 
 Engine.prototype.send = function (channel) {
@@ -500,6 +612,8 @@ Engine.prototype.handleCC = function (channel, cc, value) {
 // Converts what arrived since the last tick, then moves every glide dt seconds on.
 Engine.prototype.tick = function (dt) {
    this.convertPending();
+   this.time += dt;
+   this.releaseTouches();
    var m = this.motionSettings();
    for (var c = 0; c < 16; ++c) {
       var st = this.channels[c];
@@ -524,6 +638,7 @@ Engine.prototype.reset = function () {
    for (var c = 0; c < 16; ++c) {
       var st = this.channels[c];
       st.motion.land();
+      st.touch.reset();
       st.sentAngle = st.sentRadius = -1;
    }
 };
@@ -601,7 +716,7 @@ MidiParser.prototype.byte = function (b) {
 
 if (typeof module !== 'undefined' && module.exports) {
    module.exports = {
-      ccToBipolar: ccToBipolar, toPolar: toPolar, Follower: Follower, Engine: Engine,
+      ccToBipolar: ccToBipolar, toPolar: toPolar, Follower: Follower, TouchFilter: TouchFilter, Engine: Engine,
       MidiParser: MidiParser, PARAMS: PARAMS, STEPS7: STEPS7, STEPS14: STEPS14
    };
 }

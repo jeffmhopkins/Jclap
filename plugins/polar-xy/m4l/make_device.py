@@ -147,6 +147,7 @@ dial("inertia", "Inertia", "Inertia", 100, [432, 22, 44, 48], parameter_unitstyl
 label("Path", [484, 18, 88, 14]); menu("path", "Motion Path", "Path", ["Straight", "Around"], [484, 32, 88, 15])
 label("Inertia mode", [484, 52, 88, 14]); menu("inertiamode", "Inertia Mode", "Mode", ["Pull", "Coast", "Pad"], [484, 66, 88, 15])
 label("Resolution", [484, 86, 88, 14]); menu("resolution", "Output Resolution", "Res", ["7-bit", "14-bit"], [484, 100, 88, 15])
+label("Touch filter", [384, 86, 92, 14]); menu("touchfilter", "Touch Filter", "Touch", ["Off", "10 ms", "20 ms", "40 ms"], [384, 100, 92, 15])
 
 # The status line: the last channel's X/Y in and angle/radius out, or what stops it converting.
 status = box("comment", text="waiting for X/Y CCs", numinlets=1, numoutlets=0, presentation=1,

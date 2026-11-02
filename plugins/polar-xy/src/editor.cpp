@@ -509,6 +509,8 @@ public:
       choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 546, row);
       choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 546, row + 50);
       choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 546, row + 100);
+      // How much of each touch's press and release a resistive pad's skitter is thrown away.
+      choice(kParamTouchFilter, "TOUCH FILTER", {"OFF", "10 MS", "20 MS", "40 MS"}, 378, row + 100);
 
       // Shown when two inputs or two outputs share a CC, which the plugin won't convert.
       warning_ = &add<ui::Label>({380, 48, 328, 14}, "", kOrange, visage::Font::kRight, 0.7f);
@@ -575,7 +577,7 @@ private:
       add<ui::Label>({x, y, 150, 13}, label, ui::defaultTheme().dimText, visage::Font::kLeft);
    }
 
-   // A two-way switch under its title, both options in view.
+   // A switch under its title, every option in view.
    void choice(clap_id id, const char *label, std::vector<std::string> options, float x, float y) {
       heading(label, x, y);
       auto &segments = add<ui::SegmentedSwitch>({x, y + 18, 150, 24}, std::move(options));
