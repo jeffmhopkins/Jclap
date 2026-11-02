@@ -37,8 +37,8 @@ public:
 };
 
 // The panel's size at 100% zoom, in pixels.
-constexpr int kEditorWidth = 960;
-constexpr int kEditorHeight = 670;
+constexpr int kEditorWidth = 900;
+constexpr int kEditorHeight = 738;
 
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 

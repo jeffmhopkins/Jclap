@@ -1,6 +1,6 @@
 // Polar XY's panel, in the MicroMonsta 2 style: a title bar, then the XY input and the polar output
 // side by side, each a small night sky with its CCs beneath, and the mapping and motion settings
-// below them, all on a 960 x 670 design grid scaled to the window.
+// below them, all on a 900 x 738 design grid scaled to the window.
 //
 // Both skies animate at the display's rate, about 60 frames a second, on the main thread. The input
 // dot and the output orb shed ink as they move, which drifts, spreads and fades behind them like the
@@ -487,67 +487,68 @@ public:
 
       // Signal flow left to right: the input and its CCs, the output and its CCs; and below, what
       // happens in between.
-      add<ui::Section>({12, 76, 462, 430}, "XY IN");
-      add<ui::Section>({486, 76, 462, 430}, "POLAR OUT");
-      add<ui::Section>({12, 518, 936, 140}, "MAPPING & MOTION");
+      add<ui::Section>({12, 76, 432, 498}, "XY IN");
+      add<ui::Section>({456, 76, 432, 498}, "POLAR OUT");
+      add<ui::Section>({12, 586, 876, 140}, "MAPPING & MOTION");
 
-      // Live views: what comes in on the X/Y CCs, and the angle/radius that goes out. Dragging the
+      // Live views, their skies 4:3 (an XYPad keeps a tenth of its shorter side for the labels):
+      // what comes in on the X/Y CCs, and the angle/radius that goes out. Dragging the
       // XY pad moves the input itself, holding off the controller until the mouse lets go.
       const ui::ValueRange cc{0.0, 127.0, 64.0, 1.0};
-      xy_ = &add<InkPad>({24, 116, 438, 266}, cc, cc);
+      xy_ = &add<InkPad>({24, 116, 408, 340}, cc, cc);
       xy_->setAccent(kBlue);
-      orb_ = &add<OrbView>({498, 116, 438, 266});
+      orb_ = &add<OrbView>({468, 116, 408, 340});
       // The pad sets X then Y, so a move is sent once Y has it too, never as the new X with the old
       // Y. It goes at full resolution, not rounded to CC steps, for a smooth angle and radius.
       xy_->y().onChange = [this](double) { host_.dragInput(xy_->x().value, xy_->y().value); };
       for (ui::XYPad::Axis *axis : {&xy_->x(), &xy_->y()})
          axis->onEndEdit = [this] { host_.releaseInput(); };
-      add<ui::Divider>({24, 394, 438, 1});
-      add<ui::Divider>({498, 394, 438, 1});
+      add<ui::Divider>({24, 462, 408, 1});
+      add<ui::Divider>({468, 462, 408, 1});
 
       // Each view's CCs: three knobs (the touch CC Off until set), and at the right a column of what
       // else goes with them.
-      constexpr float strip = 406.0f;
+      constexpr float strip = 474.0f;
       knob(kParamInX, "X", kBlue, 24, strip);
       knob(kParamInY, "Y", kBlue, 100, strip);
       knob(kParamTouchIn, "TOUCH", kBlue, 176, strip);
       // The input CCs sent on as well: as they came, or with the touch filtered.
-      choice(kParamPassThrough, "PASS INPUT CCS", {"OFF", "RAW", "FILTERED"}, 312, strip);
-      hint("Filtered: by the Touch Filter", 312, strip + 52);
+      choice(kParamPassThrough, "PASS INPUT CCS", {"OFF", "RAW", "FILTERED"}, 282, strip);
+      hint("Filtered: by the Touch Filter", 282, strip + 52);
 
       // The angle/radius output on or off (the touch CC goes out either way), in the title row.
-      auto &polar = add<ui::SegmentedSwitch>({856, 84, 80, 22}, std::vector<std::string>{"OFF", "ON"});
+      auto &polar = add<ui::SegmentedSwitch>({796, 84, 80, 22}, std::vector<std::string>{"OFF", "ON"});
       polar.setAccent(kOrange);
       bindings_.bind(polar, kParamPolarOut);
 
-      knob(kParamOutAngle, "ANGLE", kOrange, 498, strip);
-      knob(kParamOutRadius, "RADIUS", kOrange, 574, strip);
-      knob(kParamTouchOut, "TOUCH", kOrange, 650, strip);
+      knob(kParamOutAngle, "ANGLE", kOrange, 468, strip);
+      knob(kParamOutRadius, "RADIUS", kOrange, 544, strip);
+      knob(kParamTouchOut, "TOUCH", kOrange, 620, strip);
       // Each sends its CC alone, for a MIDI learn on the receiving end.
-      heading("MIDI LEARN", 786, strip);
+      heading("MIDI LEARN", 726, strip);
       const char *const sends[] = {"ANGLE", "RADIUS", "TOUCH"};
       for (int i = 0; i < 3; ++i)
-         send(i, sends[i], {786.0f + i * 51.0f, strip + 18, 48, 24});
-      hint("Sends one CC alone, to learn it", 786, strip + 52);
+         send(i, sends[i], {726.0f + i * 51.0f, strip + 18, 48, 24});
+      hint("Sends one CC alone, to learn it", 726, strip + 52);
       // Over the angle/radius knobs and their sends while that output is off.
-      polarVeils_ = {&add<Veil>({498, strip, 2 * kKnobWidth, kKnobHeight}), &add<Veil>({786, strip + 18, 99, 24})};
+      polarVeils_ = {&add<Veil>({468, strip, 2 * kKnobWidth, kKnobHeight}), &add<Veil>({726, strip + 18, 99, 24})};
       for (Veil *v : polarVeils_)
          v->setVisible(false);
 
       // Between the two, in one row: where the angle starts and turns, and then, past a divider, how
       // the output follows.
-      constexpr float row = 554.0f;
+      constexpr float row = 622.0f;
       knob(kParamAngleOffset, "OFFSET", kPurple, 24, row, 1.0);
       choice(kParamDirection, "DIRECTION", {"CCW", "CW"}, 124, row);
       choice(kParamRadiusMode, "RADIUS MODE", {"CIRCLE", "SQUARE"}, 124, row + 50);
-      add<ui::Divider>({358, row, 1, 92});
-      knob(kParamSmoothing, "SMOOTHING", kBlue, 442, row, 10.0);
-      knob(kParamInertia, "INERTIA", kBlue, 518, row, 1.0);
-      choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 618, row);
-      choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 618, row + 50);
+      add<ui::Divider>({328, row, 1, 92});
+      knob(kParamSmoothing, "SMOOTHING", kBlue, 382, row, 10.0);
+      knob(kParamInertia, "INERTIA", kBlue, 458, row, 1.0);
+      choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 558, row);
+      choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 558, row + 50);
       // How much of each touch's press and release a resistive pad's skitter is thrown away.
-      choice(kParamTouchFilter, "TOUCH FILTER", {"OFF", "10 MS", "20 MS", "40 MS"}, 786, row);
-      choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 786, row + 50);
+      choice(kParamTouchFilter, "TOUCH FILTER", {"OFF", "10 MS", "20 MS", "40 MS"}, 726, row);
+      choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 726, row + 50);
 
       // Shown when two inputs or two outputs share a CC, which the plugin won't convert.
       warning_ = &add<ui::Label>({kDesignWidth - 340, 48, 328, 14}, "", kOrange, visage::Font::kRight, 0.7f);
