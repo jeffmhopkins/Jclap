@@ -1,7 +1,7 @@
 #pragma once
 
-// Polar XY's presets: a factory bank of just Init (every param at its default), and the user's own
-// saved through jclap::ui's preset files.
+// Polar XY's presets: a factory bank of Init (every param at its default) and Resistive Pad, and the
+// user's own saved through jclap::ui's preset files.
 
 #include <jclap/ui/presets.h>
 
@@ -24,7 +24,15 @@ inline std::vector<double> defaultValues() {
 
 inline const std::vector<Preset> &factoryPresets() {
    static const std::vector<Preset> presets = [] {
-      std::vector<Preset> p{{"Init", "Init", {}}};
+      // Resistive Pad: tuned on a resistive XY pad's recordings (see the README). Set Touch In CC to the
+      // pad's touch CC too: the filter is far better with it.
+      std::vector<Preset> p{{"Init", "Init", {}},
+                            {"Resistive Pad", "Controllers",
+                             {{kParamTouchFilter, 50.0},
+                              {kParamTouchJump, 32.0},
+                              {kParamTouchHeading, 1.0},
+                              {kParamCenterSmoothing, 15.0},
+                              {kParamSmoothing, 150.0}}}};
       jclap::ui::completePresets(p, defaultValues());
       return p;
    }();

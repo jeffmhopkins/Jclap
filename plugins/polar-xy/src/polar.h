@@ -50,6 +50,14 @@ inline double wrapDegrees(double deg) {
    return deg;
 }
 
+// The angle of x/y in degrees, 0..360, with the direction and offset applied.
+inline double polarDegrees(double x, double y, const PolarSettings &s) {
+   double deg = std::atan2(y, x) * 180.0 / kPi;
+   if (s.clockwise)
+      deg = -deg;
+   return wrapDegrees(deg + s.angleOffsetDeg);
+}
+
 // x/y on the -1..+1 scale (see ccToBipolar); Y grows upward. `steps` is the CC's top value: 127,
 // or 16383 for 14-bit.
 inline PolarCC toPolar(double x, double y, const PolarSettings &s, int steps = kSteps7) {
@@ -61,10 +69,7 @@ inline PolarCC toPolar(double x, double y, const PolarSettings &s, int steps = k
       return out;
    out.radius = static_cast<int>(std::lround((r - kDeadZone) / (1.0 - kDeadZone) * steps));
 
-   double deg = std::atan2(y, x) * 180.0 / kPi;
-   if (s.clockwise)
-      deg = -deg;
-   deg = wrapDegrees(deg + s.angleOffsetDeg);
+   const double deg = polarDegrees(x, y, s);
    // A 0..127 CC read as v / 127 of a turn makes 127 the same angle as 0, so a turn is 0..126 and
    // what would round to 127 is sent as 0 (and likewise for 14-bit).
    out.angle = static_cast<int>(std::lround(deg / 360.0 * steps)) % steps;

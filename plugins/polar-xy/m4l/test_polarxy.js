@@ -231,7 +231,7 @@ function touch(filter) {
 }
 var heldTouch = polar(90, 90);
 check(touch(0).angles.length > 2, 'touch filter off: the skitter goes out');
-[1, 2, 3].forEach(function (f) {
+[10, 20, 40].forEach(function (f) {
    var on = touch(f);
    check(on.angles.length === 1 && on.angles[0] === heldTouch.angle && on.radii.length === 1 &&
          on.radii[0] === heldTouch.radius, 'touch filter ' + f + ': only where the finger was held');
@@ -304,7 +304,7 @@ function visits(o, spot) { return o.visited.indexOf(spot) >= 0; }
 var capture = { inx: 12, iny: 13, touchout: 93 };
 var rawRun = replay(capture);
 check(visits(rawRun, skitter[0]) && visits(rawRun, skitter[1]), 'capture: unfiltered, the lifts skitter');
-capture.touchfilter = 2;
+capture.touchfilter = 20;
 var filtered = replay(capture);
 check(!visits(filtered, skitter[0]) && !visits(filtered, skitter[1]), 'capture: Touch Filter drops the skitter');
 capture.touchin = 92;
