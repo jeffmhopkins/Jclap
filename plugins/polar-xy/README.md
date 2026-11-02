@@ -55,7 +55,7 @@ channel's X/Y in and angle/radius out. The motion steps every 4 ms rather than e
 
 `PolarXY.vst3` is the same plugin, wrapped by clap-wrapper. It's in each system's folder of
 `jclap-PolarXY-<version>.zip`, and in the `VST3` folder of `jclap-<OS>.zip`, on the release page; see
-the [main README](../../README.md#download) for where it goes.
+the [main README](../../README.md#download-and-install) for where it goes.
 
 - It shows up as an instrument (VST3 has no MIDI-effect category), with a MIDI input and output.
 - The X/Y CCs reach it the usual VST3 way, as the host's MIDI CC mapping, and the angle and radius
