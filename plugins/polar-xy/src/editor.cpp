@@ -18,6 +18,7 @@
 #include <jclap/ui/param_bindings.h>
 #include <jclap/ui/preset_bar.h>
 #include <jclap/ui/section.h>
+#include <jclap/ui/tooltip.h>
 #include <jclap/ui/segmented.h>
 #include <jclap/ui/update_notice.h>
 #include <jclap/ui/xy_pad.h>
@@ -481,6 +482,8 @@ public:
       add<ui::UpdateNotice>({196, 19, 196, 26});
       auto &presets = add<ui::PresetBar>({kDesignWidth - 360, 18, 348, 28}, factoryPresets(), kPresetFormat, host_);
       presets.setAccent(kOrange);
+      tip(presets, "Presets: the arrows step through them, the name opens the menu, the star marks a favorite and SAVE "
+                   "keeps the current settings.");
       presets.defaults = defaultValues();
       presets.currentName = [this] { return host_.presetName(); };
       presets.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
@@ -498,6 +501,8 @@ public:
       xy_ = &add<InkPad>({24, 116, 408, 340}, cc, cc);
       xy_->setAccent(kBlue);
       orb_ = &add<OrbView>({468, 116, 408, 340});
+      tip(*xy_, "The last X/Y received, with its channel. Drag the dot to move the input yourself; double-click centres it.");
+      tip(*orb_, "The angle and radius sent for that channel, angle 0 at the tick on the right. The band shows where it's headed.");
       // The pad sets X then Y, so a move is sent once Y has it too, never as the new X with the old
       // Y. It goes at full resolution, not rounded to CC steps, for a smooth angle and radius.
       xy_->y().onChange = [this](double) { host_.dragInput(xy_->x().value, xy_->y().value); };
@@ -509,52 +514,76 @@ public:
       // Each view's CCs: three knobs (the touch CC Off until set), and at the right a column of what
       // else goes with them.
       constexpr float strip = 474.0f;
-      knob(kParamInX, "X", kBlue, 24, strip);
-      knob(kParamInY, "Y", kBlue, 100, strip);
-      knob(kParamTouchIn, "TOUCH", kBlue, 176, strip);
+      tip(knob(kParamInX, "X", kBlue, 24, strip), "X In CC: the controller's X axis comes in on this CC.");
+      tip(knob(kParamInY, "Y", kBlue, 100, strip), "Y In CC: the controller's Y axis comes in on this CC.");
+      tip(knob(kParamTouchIn, "TOUCH", kBlue, 176, strip),
+          "Touch In CC: the pad's finger-down CC, so Touch Filter knows exactly when each touch starts and ends.");
       // The input CCs sent on as well: as they came, or with the touch filtered.
-      choice(kParamPassThrough, "PASS INPUT CCS", {"OFF", "RAW", "FILTERED"}, 282, strip);
+      tip(choice(kParamPassThrough, "PASS INPUT CCS", {"OFF", "RAW", "FILTERED"}, 282, strip),
+          "Off: the input CCs are taken. Raw: they go on untouched too. Filtered: they go on cleaned by the Touch Filter.");
       hint("Filtered: by the Touch Filter", 282, strip + 52);
 
       // The angle/radius output on or off (the touch CC goes out either way), in the title row.
       auto &polar = add<ui::SegmentedSwitch>({796, 84, 80, 22}, std::vector<std::string>{"OFF", "ON"});
       polar.setAccent(kOrange);
       bindings_.bind(polar, kParamPolarOut);
+      tip(polar, "Polar Out: off sends no angle or radius at all, for passing the X/Y on by themselves. Touch Out still works.");
 
-      knob(kParamOutAngle, "ANGLE", kOrange, 468, strip);
-      knob(kParamOutRadius, "RADIUS", kOrange, 544, strip);
-      knob(kParamTouchOut, "TOUCH", kOrange, 620, strip);
+      tip(knob(kParamOutAngle, "ANGLE", kOrange, 468, strip), "Angle Out CC: the angle goes out on this CC, for the Orb's angle.");
+      tip(knob(kParamOutRadius, "RADIUS", kOrange, 544, strip), "Radius Out CC: the radius goes out on this CC, for the Orb's radius.");
+      tip(knob(kParamTouchOut, "TOUCH", kOrange, 620, strip),
+          "Touch Out CC: sends the touch on, 127 down and 0 up, in step with the filtered motion.");
       // Each sends its CC alone, for a MIDI learn on the receiving end.
       heading("MIDI LEARN", 726, strip);
       const char *const sends[] = {"ANGLE", "RADIUS", "TOUCH"};
+      const char *const sendTips[] = {"Sends the angle CC alone, so a MIDI Learn picks up just that one.",
+                                      "Sends the radius CC alone, so a MIDI Learn picks up just that one.",
+                                      "Sends the touch CC alone, so a MIDI Learn picks up just that one."};
       for (int i = 0; i < 3; ++i)
-         send(i, sends[i], {726.0f + i * 51.0f, strip + 18, 48, 24});
+         tip(send(i, sends[i], {726.0f + i * 51.0f, strip + 18, 48, 24}), sendTips[i]);
       hint("Sends one CC alone, to learn it", 726, strip + 52);
       // Over the angle/radius knobs and their sends while that output is off.
       polarVeils_ = {&add<Veil>({468, strip, 2 * kKnobWidth, kKnobHeight}), &add<Veil>({726, strip + 18, 99, 24})};
-      for (Veil *v : polarVeils_)
+      for (Veil *v : polarVeils_) {
          v->setVisible(false);
+         tips_.add(*v, "Polar Out is off. Turn it on in the title row to send the angle and radius.");
+      }
 
       // Between the two, in one row: where the angle starts and turns, and then, past a divider, how
       // the output follows.
       constexpr float row = 622.0f;
-      knob(kParamAngleOffset, "OFFSET", kPurple, 24, row, 1.0);
-      choice(kParamDirection, "DIRECTION", {"CCW", "CW"}, 124, row);
-      choice(kParamRadiusMode, "RADIUS MODE", {"CIRCLE", "SQUARE"}, 124, row + 50);
+      tip(knob(kParamAngleOffset, "OFFSET", kPurple, 24, row, 1.0),
+          "Angle Offset: turns where angle 0 sits, to line your controller up with the Orb.");
+      tip(choice(kParamDirection, "DIRECTION", {"CCW", "CW"}, 124, row),
+          "Which way the angle grows. Flip it if the Orb moves mirrored from your controller.");
+      tip(choice(kParamRadiusMode, "RADIUS MODE", {"CIRCLE", "SQUARE"}, 124, row + 50),
+          "Circle clamps the pad's corners to the circle's edge. Square lets the whole square edge reach full radius.");
       add<ui::Divider>({328, row, 1, 92});
-      knob(kParamSmoothing, "SMOOTHING", kBlue, 382, row, 10.0);
-      knob(kParamInertia, "INERTIA", kBlue, 458, row, 1.0);
-      choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 558, row);
-      choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 558, row + 50);
+      tip(knob(kParamSmoothing, "SMOOTHING", kBlue, 382, row, 10.0),
+          "Roughly how long the Orb takes to glide to the controller's position. At 0 it jumps.");
+      tip(knob(kParamInertia, "INERTIA", kBlue, 458, row, 1.0),
+          "Gives the Orb weight: slower to get going, it swings past the target and coasts on when the controller stops.");
+      tip(choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 558, row),
+          "Straight glides across the pad in X/Y. Around moves the angle and radius, round the circle the short way.");
+      tip(choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 558, row + 50),
+          "Pull draws the Orb to the controller. Coast follows only its movement. Pad works like a trackpad you can fling.");
       // How much of each touch's press and release a resistive pad's skitter is thrown away.
-      choice(kParamTouchFilter, "TOUCH FILTER", {"OFF", "10 MS", "20 MS", "40 MS"}, 726, row);
-      choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 726, row + 50);
+      tip(choice(kParamTouchFilter, "TOUCH FILTER", {"OFF", "10 MS", "20 MS", "40 MS"}, 726, row),
+          "Throws away each touch's skittery press and lift-off on a resistive pad, for this much latency.");
+      tip(choice(kParamResolution, "RESOLUTION", {"7-BIT", "14-BIT"}, 726, row + 50),
+          "14-bit sends each value as a CC pair (the CC and CC + 32) for smooth sweeps. Needs output CCs below 32.");
 
       // Shown when two inputs or two outputs share a CC, which the plugin won't convert.
       warning_ = &add<ui::Label>({kDesignWidth - 340, 48, 328, 14}, "", kOrange, visage::Font::kRight, 0.7f);
 
       sync();
       startTimer(1);
+   }
+
+   // Shows the tip of the `index`th control given one straight away (for screenshots).
+   void showTip(int index) {
+      if (index >= 0 && index < static_cast<int>(tipped_.size()))
+         tips_.show(*tipped_[index]);
    }
 
    // Steps at the display's rate (see FramePacer).
@@ -625,11 +654,20 @@ private:
    }
 
    // A switch under its title, every option in view.
-   void choice(clap_id id, const char *label, std::vector<std::string> options, float x, float y) {
+   ui::SegmentedSwitch &choice(clap_id id, const char *label, std::vector<std::string> options, float x, float y) {
       heading(label, x, y);
       auto &segments = add<ui::SegmentedSwitch>({x, y + 18, 150, 24}, std::move(options));
       segments.setAccent(kPurple);
       bindings_.bind(segments, id);
+      return segments;
+   }
+
+   // Gives `frame` a hover tip, and returns it.
+   template <typename T>
+   T &tip(T &frame, std::string text) {
+      tips_.add(frame, std::move(text));
+      tipped_.push_back(&frame);
+      return frame;
    }
 
    void sync() {
@@ -688,6 +726,9 @@ private:
    ui::Label *warning_ = nullptr;
    // What dims with the angle/radius output off, and whether it is on as shown.
    std::vector<Veil *> polarVeils_;
+   ui::Tooltips tips_;
+   // Every frame with a tip, in the order given (see showTip).
+   std::vector<visage::Frame *> tipped_;
    bool polarShown_ = true;
    // The angles last drawn (radians), held at the centre where there is none.
    double orbAngle_ = 0.0, targetAngle_ = 0.0;
@@ -700,7 +741,7 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
 }
 
 bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, double seconds,
-                      const std::function<void(double)> &advance) {
+                      const std::function<void(double)> &advance, int tip) {
    Panel panel(host);
    panel.stopTimer();
    const int frames = static_cast<int>(seconds * 60.0 + 0.5);
@@ -709,6 +750,9 @@ bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPa
          advance(1.0 / 60.0);
       panel.step(1.0f / 60.0f);
    }
+   // Laid out at the final size first, so the tip lands under its control.
+   panel.setBounds(0, 0, static_cast<float>(width), static_cast<float>(height));
+   panel.showTip(tip);
    return ui::renderToPng(panel, width, height, pngPath);
 }
 

@@ -1,10 +1,11 @@
-// Renders the panel to a PNG without a host: polar-xy-screenshot out.png [width height] [--polar-off]
+// Renders the panel to a PNG without a host: polar-xy-screenshot out.png [width height] [--polar-off] [--tip N]
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 
 #include "editor.h"
 #include "motion.h"
@@ -103,20 +104,29 @@ private:
 } // namespace
 
 int main(int argc, char **argv) {
-   // --polar-off, last, shows the panel with the angle/radius output switched off.
-   const bool polarOff = argc > 2 && std::strcmp(argv[argc - 1], "--polar-off") == 0;
-   if (polarOff)
-      --argc;
-   if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [width height] [--polar-off]\n", argv[0]);
+   // Flags anywhere: --polar-off shows the angle/radius output switched off, --tip N one control's
+   // hover tip. The rest are positional.
+   bool polarOff = false;
+   int tip = -1;
+   std::vector<const char *> args;
+   for (int i = 1; i < argc; ++i) {
+      if (std::strcmp(argv[i], "--polar-off") == 0)
+         polarOff = true;
+      else if (std::strcmp(argv[i], "--tip") == 0 && i + 1 < argc)
+         tip = std::atoi(argv[++i]);
+      else
+         args.push_back(argv[i]);
+   }
+   if (args.empty()) {
+      std::fprintf(stderr, "usage: %s out.png [width height] [--polar-off] [--tip N]\n", argv[0]);
       return 1;
    }
-   const int width = argc > 3 ? std::atoi(argv[2]) : polar_xy::kEditorWidth;
-   const int height = argc > 3 ? std::atoi(argv[3]) : polar_xy::kEditorHeight;
+   const int width = args.size() > 2 ? std::atoi(args[1]) : polar_xy::kEditorWidth;
+   const int height = args.size() > 2 ? std::atoi(args[2]) : polar_xy::kEditorHeight;
    DemoHost host;
    host.polarOut = !polarOff;
-   return polar_xy::renderScreenshot(host, width, height, argv[1], kSeconds,
-                                     [&host](double dt) { host.advance(dt); })
+   return polar_xy::renderScreenshot(host, width, height, args[0], kSeconds,
+                                     [&host](double dt) { host.advance(dt); }, tip)
              ? 0
              : 1;
 }
