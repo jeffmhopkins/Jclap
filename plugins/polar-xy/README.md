@@ -162,8 +162,8 @@ went out sends neither. Holding the mouse down on the panel's XY pad is a touch 
 them on the moment they arrive, exactly as the controller sent them, skitter and all. *Filtered* sends
 them on as Touch Filter lets them through instead: the same CCs and values, a window later, with each
 touch's press and lift-off left out and the touch CC in step. So Polar XY can clean up a resistive
-pad's X/Y for something else, alongside the angle and radius. With Touch Filter off,
-Filtered is the same as Raw.
+pad's X/Y for something else, alongside the angle and radius, or on its own with **Polar Out**
+off (no angle or radius goes out at all). With Touch Filter off, Filtered is the same as Raw.
 
 > [!IMPORTANT]
 > Spectrasonics doesn't document where the Orb's angle 0 sits or which way it turns, so these are
@@ -249,3 +249,4 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 | Touch Filter | Off | Or 10, 20 or 40 ms: throws away each touch's press and release, for a resistive pad |
 | Touch In CC | Off | The pad's touch CC, so Touch Filter knows each touch's edges |
 | Touch Out CC | Off | Sends the touch on (127 / 0), in step with the filtered motion |
+| Polar Out | On | Off sends no angle or radius at all, for using Polar XY just to filter the X/Y CCs |

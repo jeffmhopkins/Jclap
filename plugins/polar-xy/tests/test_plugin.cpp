@@ -673,6 +673,25 @@ void touchTests() {
       JCLAP_CHECK(h.textToValue(15, "off", off) && off == -1.0);
    }
 
+   // Polar Out off: no angle or radius goes out (not even from the SEND buttons); back on, both
+   // go out again at once.
+   {
+      jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+      h.midi(0xB0, 16, 127);
+      h.midi(0xB0, 17, 64);
+      run(h, 1);
+      h.setParam(16, 0.0);
+      h.midi(0xB0, 16, 0);
+      Path p = run(h, 3);
+      JCLAP_CHECK(p.angles.empty() && p.radii.empty());
+      h.object<polar_xy::EditorHost>()->sendOutput(0);
+      JCLAP_CHECK(run(h, 1).angles.empty());
+      h.setParam(16, 1.0);
+      p = run(h, 1);
+      JCLAP_CHECK(p.angles.size() == 1 && p.angles[0] == 64 && p.radii.size() == 1);
+      JCLAP_CHECK(h.paramText(16, 0.0) == "Off");
+   }
+
    jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
    JCLAP_CHECK(h.paramText(13, 0.0) == "Off");
    JCLAP_CHECK(h.paramText(13, 2.0) == "20 ms");

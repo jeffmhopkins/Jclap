@@ -444,7 +444,8 @@ var PARAMS = {
    inertiamode: [0, 2, 0],  // 0 pull, 1 coast, 2 pad
    touchfilter: [0, 3, 0],  // 0 off, then TOUCH_WINDOWS
    touchin: [-1, 127, -1],  // the pad's touch CC, -1 none
-   touchout: [-1, 127, -1]  // the touch sent on, -1 none
+   touchout: [-1, 127, -1], // the touch sent on, -1 none
+   polarout: [0, 1, 1]      // 0: no angle or radius goes out
 };
 
 function Channel() {
@@ -544,14 +545,15 @@ Engine.prototype.settings = function () {
       fillSquare: this.int('radiusmode') !== 0,
       angleOffset: this.p.angleoffset,
       around: this.int('path') !== 0,
-      fine: this.fineWanted() && outAngle < 32 && outRadius < 32
+      fine: this.fineWanted() && outAngle < 32 && outRadius < 32,
+      polar: this.int('polarout') !== 0
    };
 };
 
 function sameSettings(a, b) {
    return a.outAngle === b.outAngle && a.outRadius === b.outRadius && a.clockwise === b.clockwise &&
           a.fillSquare === b.fillSquare && a.angleOffset === b.angleOffset && a.around === b.around &&
-          a.fine === b.fine;
+          a.fine === b.fine && a.polar === b.polar;
 }
 
 // A changed setting changes what each channel's position means, so each sends it again.
@@ -570,7 +572,7 @@ Engine.prototype.applySettings = function () {
    var now = this.settings();
    var was = this.applied;
    if (sameSettings(now, was)) return;
-   var moved = now.outAngle !== was.outAngle || now.outRadius !== was.outRadius;
+   var moved = now.outAngle !== was.outAngle || now.outRadius !== was.outRadius || (now.polar && !was.polar);
    var rescaled = now.fine !== was.fine;
    this.applied = now;
    for (c = 0; c < 16; ++c) {
@@ -642,6 +644,7 @@ Engine.prototype.send = function (channel) {
    var pos = st.motion.position();
    var p = toPolar(pos[0], pos[1], s, s.fine ? STEPS14 : STEPS7);
    if (p.hasAngle) st.angle = p.angle;
+   if (!s.polar) return; // Polar Out off: nothing goes out, nothing counts as sent
    if (st.angle >= 0 && st.angle !== st.sentAngle) {
       this.pushValue(channel, s.outAngle, st.angle);
       st.sentAngle = st.angle;
@@ -716,6 +719,7 @@ Engine.prototype.tick = function (dt) {
 Engine.prototype.learn = function (which) {
    var c = this.lastChannel, st = this.channels[c];
    var shift = this.applied.fine ? 7 : 0;
+   if ((which === 'angle' || which === 'radius') && !this.applied.polar) return;
    if (which === 'angle') this.emit(0xB0 | c, this.int('outangle'), Math.max(st.sentAngle, 0) >> shift);
    else if (which === 'radius') this.emit(0xB0 | c, this.int('outradius'), Math.max(st.sentRadius, 0) >> shift);
    else if (which === 'touch' && this.touchOut() >= 0) this.emit(0xB0 | c, this.touchOut(), Math.max(st.sentTouch, 0));
@@ -738,7 +742,7 @@ Engine.prototype.status = function () {
    var c = this.lastChannel, st = this.channels[c];
    var text = 'ch ' + (c + 1) + '  in ' + (st.hasX ? st.x : '-') + ',' + (st.hasY ? st.y : '-');
    var shift = this.applied.fine ? 7 : 0;
-   text += '  out ' + (st.sentAngle >= 0 ? (st.sentAngle >> shift) + ' / ' + (st.sentRadius >> shift) : '-');
+   text += '  out ' + (!this.applied.polar ? 'off' : st.sentAngle >= 0 ? (st.sentAngle >> shift) + ' / ' + (st.sentRadius >> shift) : '-');
    if (this.fineBlocked()) text += '  (14-bit needs out CCs < 32)';
    return text;
 };

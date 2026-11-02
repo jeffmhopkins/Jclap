@@ -306,6 +306,18 @@ check(passFiltered.passedTouch.length === gated.touches.length &&
       passFiltered.passedTouch.every(function (v, i) { return v === gated.touches[i]; }),
       'capture: filtered pass-through sends the touch in step');
 
+// Polar Out off: no angle or radius goes out; back on, both go out again.
+d = device();
+d.send(0xB0, 16, 127, 0xB0, 17, 64);
+run(d, 1);
+d.engine.setParam('polarout', 0);
+d.send(0xB0, 16, 0);
+p = run(d, 5);
+check(p.angles.length === 0 && p.radii.length === 0, 'polar out off: nothing goes out');
+d.engine.setParam('polarout', 1);
+p = run(d, 1);
+check(p.angles.length === 1 && p.angles[0] === 64 && p.radii.length === 1, 'polar out back on: both go out');
+
 if (failures) {
    console.log(failures + ' failure(s)');
    process.exit(1);

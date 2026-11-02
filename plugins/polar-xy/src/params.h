@@ -28,6 +28,7 @@ enum ParamId : clap_id {
    kParamTouchFilter,
    kParamTouchIn,
    kParamTouchOut,
+   kParamPolarOut,
    kParamCount
 };
 
@@ -54,12 +55,14 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Touch Filter", 0, 3, 0, true}, // Off, then the windows in kTouchWindows (touch.h)
    {"Touch In CC", -1, 127, -1, true},  // -1: none
    {"Touch Out CC", -1, 127, -1, true}, // -1: none
+   {"Polar Out", 0, 1, 1, true},        // Off: no angle or radius goes out
 };
 
 // Labels for the choice params, off (or the first) first: one per step of the param's range.
 inline const char *const kDirectionLabels[] = {"Counter-clockwise", "Clockwise"};
 inline const char *const kRadiusModeLabels[] = {"Clamp to circle", "Fill square"};
 inline const char *const kPassLabels[] = {"Off", "Raw", "Filtered"};
+inline const char *const kOnOffLabels[] = {"Off", "On"};
 inline const char *const kMotionPathLabels[] = {"Straight", "Around"};
 inline const char *const kResolutionLabels[] = {"7-bit", "14-bit"};
 inline const char *const kInertiaModeLabels[] = {"Pull", "Coast", "Pad"};
@@ -77,6 +80,8 @@ inline const char *const *choiceLabels(clap_id id) {
       return kRadiusModeLabels;
    case kParamPassThrough:
       return kPassLabels;
+   case kParamPolarOut:
+      return kOnOffLabels;
    case kParamMotionPath:
       return kMotionPathLabels;
    case kParamResolution:

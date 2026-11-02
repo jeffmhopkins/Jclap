@@ -50,10 +50,12 @@ struct Settings {
    int outAngle = -1, outRadius = -1, direction = 0, radiusMode = 0;
    double angleOffset = 0.0;
    bool around = false;
-   bool fine = false; // 14-bit output
+   bool fine = false;  // 14-bit output
+   bool polar = true;  // Polar Out: angle and radius go out at all
    bool operator==(const Settings &o) const {
       return outAngle == o.outAngle && outRadius == o.outRadius && direction == o.direction &&
-             radiusMode == o.radiusMode && angleOffset == o.angleOffset && around == o.around && fine == o.fine;
+             radiusMode == o.radiusMode && angleOffset == o.angleOffset && around == o.around && fine == o.fine &&
+             polar == o.polar;
    }
 };
 
@@ -553,6 +555,7 @@ private:
       s.angleOffset = params_[kParamAngleOffset].load();
       s.around = intParam(kParamMotionPath) != 0;
       s.fine = fineOutput(s.outAngle, s.outRadius, intParam(kParamResolution) != 0);
+      s.polar = intParam(kParamPolarOut) != 0;
       return s;
    }
 
@@ -573,7 +576,9 @@ private:
       const Settings now = settings();
       if (now == applied_)
          return;
-      const bool moved = now.outAngle != applied_.outAngle || now.outRadius != applied_.outRadius;
+      // New output CCs, or Polar Out back on: send everything again.
+      const bool moved = now.outAngle != applied_.outAngle || now.outRadius != applied_.outRadius ||
+                         (now.polar && !applied_.polar);
       // The held angle carries over to the new resolution; what was sent is sent again in it.
       const bool rescaled = now.fine != applied_.fine;
       applied_ = now;
@@ -629,6 +634,9 @@ private:
       // At dead center the angle is undefined, so it holds its last value.
       if (p.hasAngle)
          st.angle = p.angle;
+      // With Polar Out off, nothing goes out (and nothing counts as sent, for when it's back on).
+      if (!applied_.polar)
+         return;
       if (st.angle >= 0 && st.angle != st.sentAngle) {
          pushValue(out, time, channel, applied_.outAngle, st.angle);
          st.sentAngle = st.angle;
@@ -721,9 +729,9 @@ private:
          return;
       const ChannelState &st = channels_[panelChannel_];
       const int shift = applied_.fine ? 7 : 0;
-      if (which & 1u)
+      if ((which & 1u) && applied_.polar)
          pushCC(out, 0, panelChannel_, intParam(kParamOutAngle), std::max(st.sentAngle, 0) >> shift);
-      if (which & 2u)
+      if ((which & 2u) && applied_.polar)
          pushCC(out, 0, panelChannel_, intParam(kParamOutRadius), std::max(st.sentRadius, 0) >> shift);
       if ((which & 4u) && touchOut() >= 0)
          pushCC(out, 0, panelChannel_, touchOut(), std::max(st.sentTouch, 0));

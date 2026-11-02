@@ -114,7 +114,10 @@ label("Y CC", [8, 52, 44, 15]); numbox("iny", "Y In CC", "Y In", 17, [56, 52, 44
 label("Touch", [8, 72, 44, 15]); numbox("touchin", "Touch In CC", "Touch In", -1, [56, 72, 44, 15], lo=-1)
 label("Pass", [8, 96, 44, 15]); menu("passthrough", "Pass Input CCs", "Pass In", ["Off", "Raw", "Filtered"], [56, 96, 52, 15])
 
-label("POLAR OUT", [116, 2, 100, 16], bold=True)
+label("POLAR OUT", [116, 2, 60, 16], bold=True)
+control("live.text", "polarout", [176, 3, 32, 14],
+        param_attrs("Polar Out", "Polar Out", 2, 0, 1, 1, parameter_enum=["off", "on"]))
+boxes[-2]["box"].update(text="OFF", texton="ON", mode=1)
 label("Angle", [116, 32, 44, 15]); numbox("outangle", "Angle Out CC", "Angle Out", 18, [164, 32, 44, 15])
 label("Radius", [116, 52, 44, 15]); numbox("outradius", "Radius Out CC", "Radius Out", 19, [164, 52, 44, 15])
 label("Touch", [116, 72, 44, 15]); numbox("touchout", "Touch Out CC", "Touch Out", -1, [164, 72, 44, 15], lo=-1)
