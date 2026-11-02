@@ -142,8 +142,7 @@ notes() {
       elif [ "$line" = "{{INTRO}}" ]; then
          # Only a numbered release says what its number is (not the dev build).
          if [ "$release" != "$tag" ]; then
-            echo "**Release $release** is the number of this JClap release, counted one per release. It isn't a"
-            echo "plugin version: each plugin has its own, listed below, and that's the one the plugin shows."
+            echo "**Release $release** is this release's number. Each plugin also has its own version (in the table below), which is the one the plugin shows."
             echo
          fi
       else

@@ -45,50 +45,58 @@ Panels are shown at one-third size. They are the screenshot-test references, so 
 | [JTunnel](plugins/jtunnel) | Audio effect | Sends a track's audio and MIDI over the network to other JTunnels (found by name over mDNS), or plays what one sends, with Opus or PCM, a drift-following buffer for Wi-Fi, and redundancy against loss |
 | [Polar XY](plugins/polar-xy) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
 
-## Download
+## Download and install
 
-Every [release](https://github.com/jeffmhopkins/Jclap/releases/latest) comes two ways:
+### Mac
 
-- **By system:** `jclap-macOS.zip`, `jclap-Windows.zip` or `jclap-Linux.zip` has every plugin, in a `CLAP`
-  folder and a `VST3` folder (and on macOS and Windows a `Max for Live` folder).
-- **By plugin:** `jclap-<Plugin>-<version>.zip` (for example `jclap-JSynth-0.12.2.zip`) has just that
-  plugin, with a `macOS`, `Windows` and `Linux` folder inside.
+This installs every plugin from the latest release, and replaces any older versions.
 
-Copy the `.clap` files (bundles on macOS) to your CLAP folder:
-
-- macOS: `~/Library/Audio/Plug-Ins/CLAP`
-- Windows: `C:\Program Files\Common Files\CLAP`
-- Linux: `~/.clap`
-
-Polar XY also comes as a VST3, for hosts without CLAP: copy `PolarXY.vst3` to your VST3 folder
-(`~/Library/Audio/Plug-Ins/VST3` on macOS, `C:\Program Files\Common Files\VST3` on Windows, `~/.vst3` on
-Linux). For Ableton Live it also comes as a Max for Live MIDI effect, in the `Max for Live` folder; see
-[Using it in Ableton Live](plugins/polar-xy#using-it-in-ableton-live-max-for-live).
-
-> [!WARNING]
-> **macOS: browser downloads are quarantined.** The plugins are only ad-hoc signed (not notarized), so
-> files downloaded through a browser are quarantined and Bitwig silently skips them. Files downloaded
-> with `curl` aren't flagged, so the easiest install is from Terminal:
+1. Quit Bitwig (or whichever music app you use).
+2. Open **Terminal**: press **⌘ Command + Space**, type **Terminal**, and press **Return**.
+3. Copy the line below (the copy button is at its right), paste it into Terminal with **⌘ Command + V**, and press **Return**:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-macos.sh | bash
 ```
 
-That runs [install-macos.sh](install-macos.sh), which installs the latest release's CLAPs and VST3s
-(`bash -s 20` instead of `bash` picks Release 20). It replaces older copies outright, since
-unzipping over an old bundle can leave stale files that stop it loading, and clears Bitwig's plugin
-cache so the next scan starts fresh.
+4. Wait until it says **Done**. It takes under a minute.
+5. Open Bitwig again. The plugins are in its plugin list.
 
-If you downloaded with a browser instead, clear the quarantine flag once after copying:
+Please don't download the plugins with a web browser on a Mac: macOS blocks plugins downloaded that way, and Bitwig quietly leaves them out. If you already did, see [Mac: installed from a browser download?](#mac-installed-from-a-browser-download) below.
+
+### Windows
+
+1. Download **jclap-Windows.zip** from the [latest release](https://github.com/jeffmhopkins/Jclap/releases/latest).
+2. Right-click the downloaded file and choose **Extract All**.
+3. Open the extracted folder. Copy everything in its **CLAP** folder into `C:\Program Files\Common Files\CLAP` (make that folder if it isn't there).
+4. If your music app uses VST3, also copy everything in the **VST3** folder into `C:\Program Files\Common Files\VST3`.
+5. Restart your music app.
+
+### Linux
+
+Download **jclap-Linux.zip** from the [latest release](https://github.com/jeffmhopkins/Jclap/releases/latest), unzip it, copy the `.clap` files to `~/.clap` and the `.vst3` folders to `~/.vst3`, and restart your music app.
+
+### Ableton Live
+
+Polar XY also comes as a Max for Live device, in the **Max for Live** folder of the Mac and Windows zips. See [Using it in Ableton Live](plugins/polar-xy#using-it-in-ableton-live-max-for-live).
+
+### More
+
+- **One plugin only:** each release also has a zip per plugin, such as `jclap-PolarXY-0.18.0.zip`, with a macOS, Windows and Linux folder inside.
+- **An older release:** add its number to the Mac install line, for example `bash -s 20` instead of `bash` at the end.
+- **What the Mac install line does:** it runs [install-macos.sh](install-macos.sh) (you can read it first). It downloads `jclap-macOS.zip`, puts every plugin in `~/Library/Audio/Plug-Ins/CLAP` and `~/Library/Audio/Plug-Ins/VST3`, replacing older copies, and clears Bitwig's plugin list so Bitwig looks again.
+
+#### Mac: installed from a browser download?
+
+macOS blocks plugins downloaded with a web browser unless Apple has approved them (notarized them), which needs a paid Apple developer account this project doesn't have. The easiest fix is the Terminal steps above. Or, after copying the plugins into `~/Library/Audio/Plug-Ins/CLAP` and `~/Library/Audio/Plug-Ins/VST3`, open Terminal, paste this line, and press Return:
 
 ```sh
-xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap
+xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap ~/Library/Audio/Plug-Ins/VST3/PolarXY.vst3
 ```
 
-The VST3 needs the same after a browser download: `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/PolarXY.vst3`.
+Then restart Bitwig.
 
-> [!TIP]
-> Then restart Bitwig, or rescan plug-ins under Settings → Locations.
+### Update notices
 
 When a release has a newer version of a plugin, that plugin's header says so (plugins a release
 didn't change stay quiet); click the notice to open the release page, or its cross to hide it until
