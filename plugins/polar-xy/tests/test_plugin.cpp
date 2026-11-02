@@ -904,10 +904,10 @@ int main() {
    JCLAP_CHECK(h.paramText(12, 2.0) == "Pad");
    JCLAP_CHECK(h.textToValue(12, "pad", v) && v == 2.0);
 
-   // The factory bank: Init with every param at its default, then Resistive Pad.
+   // The factory bank: Init with every param at its default, then Geren.
    const auto &factory = polar_xy::factoryPresets();
    JCLAP_CHECK(factory.size() == 2 && factory[0].name == "Init" && factory[0].values.size() == polar_xy::kParamCount);
-   JCLAP_CHECK(factory.size() == 2 && factory[1].name == "Resistive Pad" &&
+   JCLAP_CHECK(factory.size() == 2 && factory[1].name == "Geren" &&
                factory[1].values.size() == polar_xy::kParamCount);
    if (!factory.empty())
       for (const auto &[id, value] : factory[0].values)

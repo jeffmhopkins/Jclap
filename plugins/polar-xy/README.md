@@ -148,9 +148,10 @@ The panel's **TOUCH** tab (next to SETTINGS at the bottom) tunes it further:
 | Center Smoothing | Off | See below |
 | Center Lag | 250 ms | How slowly the angle follows at the very centre |
 
-The **Resistive Pad** factory preset is tuned on recordings of a resistive pad with a touch CC:
-Touch Filter 50 ms, Jump Limit 32 steps with Heading, Center Smoothing 15% and Smoothing 150 ms. Load
-it, then set Touch In CC to the pad's touch CC. On those recordings, lift-offs sometimes started
+The **Geren** factory preset is tuned on recordings of a resistive pad (an XYMIDI mini) with a touch
+CC: X In 12, Y In 13, Touch In 92, Angle and Radius Out 107 and 108, Touch Filter 50 ms, Jump Limit
+32 steps with Heading, Center Smoothing 15% and Smoothing 150 ms. For another resistive pad, load it
+and set the CCs to that pad's. **Init** has every setting at its default, with no filtering. On those recordings, lift-offs sometimes started
 skittering two or three readings (up to about 50 ms) before the touch CC went off, which is why it
 holds back 50 ms.
 
