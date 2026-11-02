@@ -338,7 +338,7 @@ p = run(d, 1);
 check(p.angles.length === 1 && p.angles[0] === 64 && p.radii.length === 1, 'polar out back on: both go out');
 
 
-// Center Smoothing: two steps either side of the centre flips the angle each reading without it and
+// Center: two steps either side of the centre flips the angle each reading without it and
 // not at all with it; a real move through the centre lands at once and nothing moves after.
 function centreWobble(zone) {
    var d = device(), angles = [];
@@ -354,8 +354,8 @@ function centreWobble(zone) {
    }
    return swing;
 }
-check(centreWobble(0) >= 60, 'centre wobble flips without Center Smoothing');
-check(centreWobble(30) === 0, 'Center Smoothing holds a centre wobble');
+check(centreWobble(0) >= 60, 'centre wobble flips without Center');
+check(centreWobble(30) === 0, 'Center holds a centre wobble');
 (function () {
    var d = device(), angles = [];
    d.engine.setParam('centersmoothing', 30);
@@ -369,6 +369,20 @@ check(centreWobble(30) === 0, 'Center Smoothing holds a centre wobble');
    var after = run(d, 40);
    check(after.angles.length === 0 && after.radii.length === 0, 'nothing moves once the finger stops');
 })();
+// Around with Smoothing: a jump across swings round the circle; with a Center zone it cuts through.
+function lowestRadius(zone) {
+   var d = device();
+   d.engine.setParam('smoothing', 300);
+   d.engine.setParam('path', 1);
+   d.engine.setParam('centersmoothing', zone);
+   d.send(0xB0, 16, 100, 0xB0, 17, 70);
+   run(d, 2);
+   d.send(0xB0, 16, 28, 0xB0, 17, 58);
+   var r = run(d, 400).radii;
+   return r.length ? min(r) : 127;
+}
+check(lowestRadius(0) > 40, 'Around swings round the circle');
+check(lowestRadius(50) < 15, 'Center makes Around cut through the middle');
 
 if (failures) {
    console.log(failures + ' failure(s)');

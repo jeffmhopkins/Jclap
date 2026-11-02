@@ -314,6 +314,36 @@ Follower.prototype.toSpace = function (x, y, out) {
    out[1] = r;
 };
 
+// A Follower whose Around motion fades to Straight near the centre: see CenterFollower in
+// src/motion.h.
+function CenterFollower() {
+   this.main = new Follower();
+   this.straight = new Follower();
+   this.around = false;
+   this.zone = 0;
+}
+CenterFollower.prototype.blending = function () { return this.around && this.zone > 0; };
+Object.defineProperty(CenterFollower.prototype, 'placed', { get: function () { return this.main.placed; } });
+Object.defineProperty(CenterFollower.prototype, 'moving', {
+   get: function () { return this.main.moving || (this.blending() && this.straight.moving); }
+});
+CenterFollower.prototype.place = function (x, y) { this.main.place(x, y); this.straight.place(x, y); };
+CenterFollower.prototype.follow = function (x, y) { this.main.follow(x, y); this.straight.follow(x, y); };
+CenterFollower.prototype.land = function () { this.main.land(); this.straight.land(); };
+CenterFollower.prototype.setAround = function (around) { this.around = around; this.main.setAround(around); };
+CenterFollower.prototype.position = function () {
+   var p = this.main.position();
+   if (!this.blending()) return p;
+   var s = this.straight.position();
+   var w = Math.min(1, Math.sqrt(s[0] * s[0] + s[1] * s[1]) / this.zone);
+   return [s[0] + w * (p[0] - s[0]), s[1] + w * (p[1] - s[1])];
+};
+CenterFollower.prototype.step = function (dt, m) {
+   var a = this.main.step(dt, m);
+   var b = this.straight.step(dt, m);
+   return a || (this.blending() && b);
+};
+
 // ---- touch.h ----
 
 var TOUCH_PAIR = 0.003, TOUCH_JUMP = 0.25, TOUCH_LIFT = 0.05, TOUCH_AGREE = 0.06;
@@ -481,11 +511,10 @@ var PARAMS = {
    touchin: [-1, 127, -1],  // the pad's touch CC, -1 none
    touchout: [-1, 127, -1], // the touch sent on, -1 none
    polarout: [0, 1, 1],     // 0: no angle or radius goes out
-   centersmoothing: [0, 50, 0], // %: how far out from the centre the angle is steadied
+   centersmoothing: [0, 50, 0], // %: the Center zone, where the angle is steadied and Around goes straight
    touchjump: [8, 64, 16],  // CC steps one reading may jump before a second must agree
    touchpress: [-1, 100, -1], // ms a press is held back, -1 the same as touchfilter
    touchagree: [1, 16, 4],  // CC steps two readings may differ by and still agree
-   centersteady: [1, 16, 4], // CC steps the position may wobble at the very centre without turning the angle
    touchheading: [0, 1, 0]  // jump check: 0 distance from the last reading, 1 from its heading
 };
 
@@ -493,9 +522,9 @@ function Channel() {
    this.x = 64; this.y = 64; this.fx = 64; this.fy = 64;
    this.hasX = false; this.hasY = false;
    this.angle = -1; this.sentAngle = -1; this.sentRadius = -1; this.sentTouch = -1;
-   this.motion = new Follower();
+   this.motion = new CenterFollower();
    this.touch = new TouchFilter();
-   this.centerX = 0; this.centerY = 0; this.centerSet = false; // Center Smoothing's anchor
+   this.centerX = 0; this.centerY = 0; this.centerSet = false; // Center's anchor
 }
 
 // emit(status, data1, data2) sends one MIDI message out.
@@ -667,6 +696,7 @@ Engine.prototype.convert = function (channel, fresh) {
 };
 
 Engine.prototype.moveTo = function (st, x, y) {
+   st.motion.zone = this.p.centersmoothing / 100;
    if (motionActive(this.motionSettings())) st.motion.follow(x, y);
    else st.motion.place(x, y);
 };
@@ -697,6 +727,7 @@ Engine.prototype.send = function (channel) {
    var st = this.channels[channel];
    if (!st.motion.placed || this.conflicting()) return;
    var s = this.applied;
+   st.motion.zone = this.p.centersmoothing / 100;
    var pos = st.motion.position();
    var steps = s.fine ? STEPS14 : STEPS7;
    var p = toPolar(pos[0], pos[1], s, steps);
@@ -712,13 +743,14 @@ Engine.prototype.send = function (channel) {
    }
 };
 
-// Center Smoothing: near the centre the angle is read from an anchor the position drags along on a
-// string (Center Steady long in the inner half of the zone, none at its edge), so a wobble shorter than the
-// string doesn't turn it and a real move turns it at once. See centered in src/plugin.cpp.
+// Center: near the centre the angle is read from an anchor the position drags along on a string
+// (CENTER_STEADY steps long in the inner half of the zone, none at its edge), so a wobble shorter than
+// the string doesn't turn it and a real move turns it at once. See centered in src/plugin.cpp.
+var CENTER_STEADY = 4;
 Engine.prototype.centered = function (st, x, y, s, p, steps) {
    var zone = this.p.centersmoothing / 100;
    var near = zone > 0 ? Math.max(0, 1 - p.radius / steps / zone) : 0;
-   var string = this.p.centersteady * 2 / 127 * Math.min(1, 2 * near);
+   var string = CENTER_STEADY * 2 / 127 * Math.min(1, 2 * near);
    var dx = x - st.centerX, dy = y - st.centerY, d = Math.sqrt(dx * dx + dy * dy);
    if (!st.centerSet || d > string) {
       var keep = st.centerSet && d > 0 ? string / d : 0;

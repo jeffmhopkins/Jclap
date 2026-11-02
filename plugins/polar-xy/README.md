@@ -145,27 +145,30 @@ The panel's **TOUCH** tab (next to SETTINGS at the bottom) tunes it further:
 | Jump Limit | 16 steps | How far one reading may move before it waits for a second to agree |
 | Jump Check | Distance | Distance measures from the last reading. Heading measures from where the finger was going (its speed and direction carried on), so a fast drag that keeps its course passes and a reading that leaps off course waits |
 | Agree | 4 steps | How close two readings must be to agree |
-| Center Smoothing | Off | See below |
-| Center Steady | 4 steps | How far the position may wobble near the centre without turning the angle |
+| Center | Off | A zone around the middle that steadies the angle and, with Around, makes motion straight (see below) |
 
 The **Geren** factory preset is tuned on recordings of a resistive pad (an XYMIDI mini) with a touch
 CC: X In 12, Y In 13, Touch In 92, Angle and Radius Out 107 and 108, Touch Filter 50 ms, Jump Limit
-32 steps with Heading, Center Smoothing 15% and Smoothing 150 ms. For another resistive pad, load it
+32 steps with Heading, Center 15% and Smoothing 150 ms. For another resistive pad, load it
 and set the CCs to that pad's. **Init** has every setting at its default, with no filtering. On those recordings, lift-offs sometimes started
 skittering two or three readings (up to about 50 ms) before the touch CC went off, which is why it
 holds back 50 ms.
 
-### Center Smoothing
+### Center
 
-Near the centre, a wobble of a CC step or two swings the angle a long way, and across the centre it
-flips it half a turn. **Center Smoothing** steadies the angle there: within that share of the radius
-(up to 50%), the angle is read from a point the position drags along on a string, Center Steady long.
-A wobble shorter than the string doesn't move it, so the angle stays put; a real move pulls it along at
-once. It goes by distance, not time, so a move through the centre is never held up and the Orb never
-hangs there or curves around it. The string is full length in the inner half of the zone and shrinks
-to nothing at its edge. The radius always goes out exactly. Set Center Steady just above the pad's
-wobble when the finger rests: higher is calmer, but near the centre the angle sits that far behind the
-finger.
+**Center** is a zone around the middle, as a share of the radius (up to 50%; Off at 0). Inside it:
+
+- **The angle holds still through small wobbles.** Near the centre, a wobble of a CC step or two swings
+  the angle a long way, and across the centre it flips it half a turn. In the zone, the angle is read
+  from a point the position drags along on a short string (4 CC steps): a wobble shorter than that
+  doesn't move it, and a real move pulls it along at once. It goes by distance, not time, so a move
+  through the centre is never held up and the Orb never hangs there. The string shrinks to nothing
+  toward the zone's edge.
+- **With Motion Path on Around, motion goes straight.** Around moves the angle and radius on their own,
+  so a glide across the middle would swing round the centre; in the zone it fades to Straight, so the
+  Orb cuts through the middle and orbits further out.
+
+The radius always goes out exactly. Try 15-25%.
 
 ### Touch CC
 
@@ -227,7 +230,7 @@ with angle 0 marked by the tick on the right. Comparing the two shows what `Angl
 `Direction` do. Under each view are its CCs: X, Y and Touch In with Pass Input CCs, and angle, radius
 and Touch Out with the MIDI learn buttons. Below them, two tabs: **SETTINGS** holds Angle Offset,
 Direction and Radius Mode, then Smoothing, Inertia, Path, Inertia Mode, Touch Filter and Resolution;
-**TOUCH** holds Touch Filter's tuning and Center Smoothing (see [Touch Filter](#touch-filter)). Hover
+**TOUCH** holds Touch Filter's tuning and Center (see [Touch Filter](#touch-filter)). Hover
 over any control for a tip on what it does. Every setting is also a plain host parameter.
 
 The OFF / ON switch in the POLAR OUT title is **Polar Out**. Off, the view goes dark and says so, and
@@ -278,7 +281,7 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 | Output Resolution | 7-bit | Or 14-bit (RESOLUTION on the panel): MSB on the output CC, LSB on CC + 32 |
 | Touch Filter | Off | 10 to 100 ms: throws away each touch's press and release, for a resistive pad |
 | Press Time, Jump Limit, Jump Check, Agree | Same, 16, Distance, 4 | Touch Filter's tuning (the TOUCH tab) |
-| Center Smoothing / Center Steady | Off / 4 steps | Steadies the angle near the centre (the TOUCH tab) |
+| Center | Off | Steadies the middle, and makes Around motion straight there (the TOUCH tab) |
 | Touch In CC | Off | The pad's touch CC, so Touch Filter knows each touch's edges |
 | Touch Out CC | Off | Sends the touch on (127 / 0), in step with the filtered motion |
 | Polar Out | On | Off sends no angle or radius at all, for using Polar XY just to filter the X/Y CCs |

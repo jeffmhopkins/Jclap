@@ -703,7 +703,7 @@ void touchTests() {
    JCLAP_CHECK(h.paramText(18, 16.0) == "16 steps");
    JCLAP_CHECK(h.paramText(19, -1.0) == "Same" && h.paramText(19, 30.0) == "30 ms");
    JCLAP_CHECK(h.textToValue(19, "same", v) && v == -1.0);
-   JCLAP_CHECK(h.paramText(20, 1.0) == "1 step" && h.paramText(21, 4.0) == "4 steps");
+   JCLAP_CHECK(h.paramText(20, 1.0) == "1 step");
 }
 
 // Center Smoothing: near the centre, a wobble across it swings the angle less, while the radius
@@ -756,6 +756,24 @@ void centerTests() {
    JCLAP_CHECK(!angles.empty() && angles.back() == 64);
    const Path after = run(h, 20);
    JCLAP_CHECK(after.angles.empty() && after.radii.empty());
+
+   // Motion Path Around with Smoothing: a jump from right to left swings round the circle, so the
+   // radius stays up; with a Center zone it cuts through the middle, so the radius dips near 0.
+   const auto lowest = [](double center) {
+      jclap::core::TestHost a(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
+      a.setParam(8, 300.0); // Smoothing
+      a.setParam(10, 1.0);  // Around
+      a.setParam(17, center);
+      a.midi(0xB0, 16, 100);
+      a.midi(0xB0, 17, 70);
+      run(a, 1);
+      a.midi(0xB0, 16, 28);
+      a.midi(0xB0, 17, 58);
+      const Path p = run(a, 200);
+      return p.radii.empty() ? 127 : *std::min_element(p.radii.begin(), p.radii.end());
+   };
+   JCLAP_CHECK(lowest(0.0) > 40);
+   JCLAP_CHECK(lowest(50.0) < 15);
 }
 
 int main() {
@@ -909,9 +927,9 @@ int main() {
       pos = 0;
       JCLAP_CHECK(state2->load(h2.plugin(), &is));
       JCLAP_CHECK(h2.paramValue(13) == 40.0 && h2.paramValue(17) == 0.0 && h2.paramValue(18) == 16.0 &&
-                  h2.paramValue(19) == -1.0 && h2.paramValue(20) == 4.0 && h2.paramValue(21) == 4.0);
+                  h2.paramValue(19) == -1.0 && h2.paramValue(20) == 4.0 && h2.paramValue(21) == 0.0);
 
-      // Version 8 state: param 21 was Center Lag (250 ms), and loads as Center Steady's default.
+      // Version 8 state from Release 21: param 21 was Center Lag (250 ms), and is unused now.
       const uint32_t version8 = 8;
       double v8[23];
       for (int i = 0; i < 23; ++i)
@@ -924,7 +942,7 @@ int main() {
       bytes.insert(bytes.end(), reinterpret_cast<const uint8_t *>(&noName), reinterpret_cast<const uint8_t *>(&noName) + 4);
       pos = 0;
       JCLAP_CHECK(state2->load(h2.plugin(), &is));
-      JCLAP_CHECK(h2.paramValue(17) == 15.0 && h2.paramValue(21) == 4.0);
+      JCLAP_CHECK(h2.paramValue(17) == 15.0 && h2.paramValue(21) == 0.0);
    }
 
    JCLAP_CHECK(h.paramText(8, 250.0) == "250 ms");

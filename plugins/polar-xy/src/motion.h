@@ -376,4 +376,55 @@ private:
    double target_[2] = {}, real_[2] = {}, drift_[2] = {}, smooth_[2] = {}, pos_[2] = {}, vel_[2] = {};
 };
 
+// A Follower whose Around motion fades to Straight near the centre. Around glides angle and radius,
+// so a move across the middle swings round the centre; within the centre zone (a share of the radius)
+// this blends toward a straight follower tracking the same target, all straight at the very centre
+// and all around at the zone's edge. With Around off, or no zone, it's just the one follower.
+class CenterFollower {
+public:
+   bool placed() const { return main_.placed(); }
+   bool moving() const { return main_.moving() || (blending() && straight_.moving()); }
+   void setCenter(double zone) { zone_ = zone; }
+
+   void place(double x, double y) {
+      main_.place(x, y);
+      straight_.place(x, y);
+   }
+   void follow(double x, double y) {
+      main_.follow(x, y);
+      straight_.follow(x, y);
+   }
+   void land() {
+      main_.land();
+      straight_.land();
+   }
+   void setAround(bool around) {
+      around_ = around;
+      main_.setAround(around);
+   }
+   void target(double &x, double &y) const { main_.target(x, y); }
+   void position(double &x, double &y) const {
+      main_.position(x, y);
+      if (!blending())
+         return;
+      double sx, sy;
+      straight_.position(sx, sy);
+      const double w = std::min(1.0, std::hypot(sx, sy) / zone_);
+      x = sx + w * (x - sx);
+      y = sy + w * (y - sy);
+   }
+   bool step(double dt, const MotionSettings &m) {
+      const bool a = main_.step(dt, m);
+      const bool b = straight_.step(dt, m);
+      return a || (blending() && b);
+   }
+
+private:
+   bool blending() const { return around_ && zone_ > 0.0; }
+
+   Follower main_, straight_;
+   bool around_ = false;
+   double zone_ = 0.0;
+};
+
 } // namespace jclap

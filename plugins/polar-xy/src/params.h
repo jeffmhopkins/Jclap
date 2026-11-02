@@ -33,7 +33,7 @@ enum ParamId : clap_id {
    kParamTouchJump,
    kParamTouchPress,
    kParamTouchAgree,
-   kParamCenterSteady,
+   kParamUnused21, // was Center Lag (until 0.18), then briefly Center Steady: now unused
    kParamTouchHeading,
    kParamCount
 };
@@ -42,6 +42,7 @@ struct ParamInfo {
    const char *name;
    double min, max, def;
    bool stepped;
+   bool hidden = false; // kept only so the params after it keep their ids; not shown or automatable
 };
 
 inline constexpr ParamInfo kParams[kParamCount] = {
@@ -62,11 +63,11 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Touch In CC", -1, 127, -1, true},  // -1: none
    {"Touch Out CC", -1, 127, -1, true}, // -1: none
    {"Polar Out", 0, 1, 1, true},        // Off: no angle or radius goes out
-   {"Center Smoothing", 0, 50, 0, false}, // %: how far out from the centre the angle is steadied
+   {"Center", 0, 50, 0, false},           // %: the centre zone, where the angle is steadied and Around motion goes straight
    {"Jump Limit", 8, 64, 16, true},       // CC steps one reading may jump before a second must agree
    {"Press Time", -1, 100, -1, true},     // ms a touch's press is held back; -1: the same as Touch Filter
    {"Agree", 1, 16, 4, true},             // CC steps two readings may differ by and still agree
-   {"Center Steady", 1, 16, 4, true},      // CC steps the position may wobble at the very centre without turning the angle
+   {"Unused", 0, 1, 0, true, true},       // was Center Lag; kept so Jump Check keeps its id
    {"Jump Check", 0, 1, 0, true},         // Distance (from the last reading) or Heading (from where it was going)
 };
 
@@ -121,7 +122,7 @@ inline void formatParam(clap_id id, double value, char *out, uint32_t size) {
       std::snprintf(out, size, value >= 1000.0 ? "%.2f s" : "%.0f ms", value >= 1000.0 ? value / 1000.0 : value);
    else if (id == kParamInertia || id == kParamCenterSmoothing)
       std::snprintf(out, size, value <= 0.0 && id == kParamCenterSmoothing ? "Off" : "%.0f%%", value);
-   else if (id == kParamTouchJump || id == kParamTouchAgree || id == kParamCenterSteady)
+   else if (id == kParamTouchJump || id == kParamTouchAgree)
       std::snprintf(out, size, std::lround(value) == 1 ? "%.0f step" : "%.0f steps", value);
    else if (id == kParamTouchPress && std::lround(value) < 0)
       std::snprintf(out, size, "Same");
