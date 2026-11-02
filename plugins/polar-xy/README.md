@@ -123,17 +123,44 @@ edges of each touch and throws them away, leaving the rest exactly as it came:
 
 - X and Y that arrive within 3 ms of each other are one reading, so no point made of the new X and the
   old Y goes out.
-- A reading that jumps more than about 16 CC steps, or lands somewhere new after a 50 ms pause, starts
-  a touch. For its first 10, 20 or 40 ms (the setting), the press, nothing goes out. Then the latest
-  reading goes out if the last two agree (within about 4 CC steps), and everything after flows on. A
-  touch that never gets two readings, such as a single blip as the finger lifts, never goes out.
-- Everything is held back by the same 10, 20 or 40 ms, so when a jump starts a new touch, the readings
+- A reading that jumps more than the Jump Limit (16 CC steps), or lands somewhere new after a 50 ms
+  pause, starts a touch. For its first stretch, the press (the Touch Filter time, unless Press Time is
+  set apart), nothing goes out. Then the latest reading goes out if the last two agree (within Agree,
+  4 CC steps), and everything after flows on. A touch that never gets two readings, such as a single
+  blip as the finger lifts, never goes out.
+- Everything is held back by the Touch Filter time, so when a jump starts a new touch, the readings
   from just before it (the last touch lifting off) are thrown away. The last few milliseconds of a
   drag go with them.
 
-So it costs that much latency (twice that at the start of a touch), but never smears a move. A slow
-drag from a controller that only sends when the value changes comes through whole. Use the shortest
-setting that stops the skitter. The panel's XY pad doesn't go through it.
+Touch Filter is a time in ms: pick 10, 20, 40, 50 or 60 ms from its menu, or Custom for any time up
+to 100 ms. It costs that much latency (plus the press at the start of a touch), but never smears a
+move. A slow drag from a controller that only sends when the value changes comes through whole. Use
+the shortest time that stops the skitter. The panel's XY pad doesn't go through it.
+
+The panel's **TOUCH** tab (next to SETTINGS at the bottom) tunes it further:
+
+| Control | Default | |
+|---|---|---|
+| Press Time | Same | How long a new touch's press is held back; Same follows Touch Filter |
+| Jump Limit | 16 steps | How far one reading may move before it waits for a second to agree |
+| Jump Check | Distance | Distance measures from the last reading. Heading measures from where the finger was going (its speed and direction carried on), so a fast drag that keeps its course passes and a reading that leaps off course waits |
+| Agree | 4 steps | How close two readings must be to agree |
+| Center Smoothing | Off | See below |
+| Center Lag | 250 ms | How slowly the angle follows at the very centre |
+
+The **Resistive Pad** factory preset is tuned on recordings of a resistive pad with a touch CC:
+Touch Filter 50 ms, Jump Limit 32 steps with Heading, Center Smoothing 15% and Smoothing 150 ms. Load
+it, then set Touch In CC to the pad's touch CC. On those recordings, lift-offs sometimes started
+skittering two or three readings (up to about 50 ms) before the touch CC went off, which is why it
+holds back 50 ms.
+
+### Center Smoothing
+
+Near the centre, a wobble of a CC step or two swings the angle a long way, and across the centre it
+flips it half a turn. **Center Smoothing** steadies the angle there: within that share of the radius
+(up to 50%), the angle follows more slowly the nearer the centre, taking up to Center Lag at the very
+centre and following at once at the zone's edge. The radius always goes out exactly, so the Orb still
+moves in and out at once; only its turning is calmed.
 
 ### Touch CC
 
@@ -142,12 +169,14 @@ Many pads also send a CC that is on (64 and up) while a finger is down and off w
 guessing them from jumps:
 
 - While the touch is off, X and Y are ignored.
-- When it goes on, the press is held back for the window as above, and then the latest reading goes
-  out (one is enough, as the finger is known to be down).
-- When it goes off, everything still held back is thrown away. That is the last 10, 20 or 40 ms
+- When it goes on, the press is held back as above, and then the latest reading goes out (one is
+  enough, as the finger is known to be down). A jump later in the touch still waits for a second
+  reading to agree, and a pause no longer counts as a new touch: the finger is known to be down, and
+  a pad that only sends changes goes quiet while the finger rests.
+- When it goes off, everything still held back is thrown away. That is the last Touch Filter time
   before the lift, so a lift-off is dropped even when it slides away gently with no jump to give it
-  away. The touch CC usually arrives a few milliseconds after the skitter starts, so use a window at
-  least that long (20 ms is a good start).
+  away. The touch CC usually arrives a reading or more after the skitter starts, so use a time at
+  least that long (40 to 50 ms for a pad that sends 60 times a second).
 
 Until the first touch CC arrives, Touch Filter works as above, so a pad that doesn't send one loses
 nothing. Touch In CC needs Touch Filter on; with it off, the touch CC only goes on to Touch Out.
@@ -241,7 +270,9 @@ favourites, and SAVE stores the current settings as your own preset. The factory
 | Motion Path | Straight | Or Around, to move round the circle |
 | Inertia Mode | Pull | Or Coast, where only the controller's movement moves the output, or Pad, to use it like a trackpad |
 | Output Resolution | 7-bit | Or 14-bit (RESOLUTION on the panel): MSB on the output CC, LSB on CC + 32 |
-| Touch Filter | Off | Or 10, 20 or 40 ms: throws away each touch's press and release, for a resistive pad |
+| Touch Filter | Off | 10 to 100 ms: throws away each touch's press and release, for a resistive pad |
+| Press Time, Jump Limit, Jump Check, Agree | Same, 16, Distance, 4 | Touch Filter's tuning (the TOUCH tab) |
+| Center Smoothing / Center Lag | Off / 250 ms | Steadies the angle near the centre (the TOUCH tab) |
 | Touch In CC | Off | The pad's touch CC, so Touch Filter knows each touch's edges |
 | Touch Out CC | Off | Sends the touch on (127 / 0), in step with the filtered motion |
 | Polar Out | On | Off sends no angle or radius at all, for using Polar XY just to filter the X/Y CCs |
