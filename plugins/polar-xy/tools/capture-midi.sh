@@ -9,23 +9,37 @@
 # Desktop (or in the current folder if there's no Desktop).
 #
 # The first run sets up a small Python environment in ~/.jclap-midi-capture with python-rtmidi (from
-# PyPI); later runs reuse it. It needs python3: on a Mac, if it's missing, macOS offers to install the
-# command line tools when it's first run.
+# PyPI); later runs reuse it. It needs python3: on a Mac that's Apple's command line tools, which macOS
+# offers to install the first time python3 runs. macOS may also ask once to let Terminal save to the
+# Desktop.
 set -euo pipefail
 
 ENV="$HOME/.jclap-midi-capture"
 
-if ! command -v python3 >/dev/null 2>&1; then
-   echo "python3 is needed. On a Mac, run: xcode-select --install   then run this again." >&2
+# On a Mac without the command line tools, /usr/bin/python3 is only a stub that offers to install
+# them, so check it runs rather than that it exists.
+PYTHON=python3
+# On a Mac, Apple's own python3 (from the command line tools) has ready-built python-rtmidi; a newer
+# one from elsewhere might have to build it.
+if [ "$(uname)" = Darwin ] && /usr/bin/python3 -c "import venv" >/dev/null 2>&1; then
+   PYTHON=/usr/bin/python3
+fi
+if ! "$PYTHON" -c "import venv" >/dev/null 2>&1; then
+   echo "python3 is needed. On a Mac, install Apple's command line tools (a window may already be" >&2
+   echo "offering to; or run: xcode-select --install), then run this again." >&2
    exit 1
 fi
 
 if [ ! -x "$ENV/bin/python" ] || ! "$ENV/bin/python" -c "import rtmidi" 2>/dev/null; then
    echo "Setting up (once): a Python environment with python-rtmidi in $ENV ..."
    rm -rf "$ENV"
-   python3 -m venv "$ENV"
+   "$PYTHON" -m venv "$ENV"
    "$ENV/bin/python" -m pip install --quiet --upgrade pip
-   "$ENV/bin/python" -m pip install --quiet python-rtmidi
+   if ! "$ENV/bin/python" -m pip install --quiet python-rtmidi; then
+      rm -rf "$ENV"
+      echo "Couldn't install python-rtmidi (is the Mac online?). Run this again to retry." >&2
+      exit 1
+   fi
 fi
 
 OUT_DIR="$HOME/Desktop"
