@@ -554,18 +554,18 @@ public:
       constexpr float row = 622.0f;
       tip(knob(kParamAngleOffset, "OFFSET", kPurple, 24, row, 1.0),
           "Angle Offset: turns where angle 0 sits, to line your controller up with the Orb.");
-      tip(choice(kParamDirection, "DIRECTION", {"CCW", "CW"}, 124, row),
+      tip(choice(kParamDirection, "DIRECTION", {"CCW", "CW"}, 139, row),
           "Which way the angle grows. Flip it if the Orb moves mirrored from your controller.");
-      tip(choice(kParamRadiusMode, "RADIUS MODE", {"CIRCLE", "SQUARE"}, 124, row + 50),
+      tip(choice(kParamRadiusMode, "RADIUS MODE", {"CIRCLE", "SQUARE"}, 139, row + 50),
           "Circle clamps the pad's corners to the circle's edge. Square lets the whole square edge reach full radius.");
-      add<ui::Divider>({328, row, 1, 92});
-      tip(knob(kParamSmoothing, "SMOOTHING", kBlue, 382, row, 10.0),
+      add<ui::Divider>({317, row, 1, 92});
+      tip(knob(kParamSmoothing, "SMOOTHING", kBlue, 328, row, 10.0),
           "Roughly how long the Orb takes to glide to the controller's position. At 0 it jumps.");
-      tip(knob(kParamInertia, "INERTIA", kBlue, 458, row, 1.0),
+      tip(knob(kParamInertia, "INERTIA", kBlue, 404, row, 1.0),
           "Gives the Orb weight: slower to get going, it swings past the target and coasts on when the controller stops.");
-      tip(choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 558, row),
+      tip(choice(kParamMotionPath, "PATH", {"STRAIGHT", "AROUND"}, 519, row),
           "Straight glides across the pad in X/Y. Around moves the angle and radius, round the circle the short way.");
-      tip(choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 558, row + 50),
+      tip(choice(kParamInertiaMode, "INERTIA MODE", {"PULL", "COAST", "PAD"}, 519, row + 50),
           "Pull draws the Orb to the controller. Coast follows only its movement. Pad works like a trackpad you can fling.");
       // How much of each touch's press and release a resistive pad's skitter is thrown away.
       tip(choice(kParamTouchFilter, "TOUCH FILTER", {"OFF", "10 MS", "20 MS", "40 MS"}, 726, row),
