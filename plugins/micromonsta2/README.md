@@ -4,7 +4,7 @@
 
 A full panel for the Audiothingies MicroMonsta 2: every sound parameter, sent as MIDI CC or NRPN.
 
-[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: note effect](https://img.shields.io/badge/CLAP-note%20effect-blue)](https://github.com/free-audio/clap) [![parameters: 61 CCs + 92 NRPN settings](https://img.shields.io/badge/parameters-61%20CCs%20%2B%2092%20NRPN-blue)](docs/cc-map.csv) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage)
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: note effect](https://img.shields.io/badge/CLAP-note%20effect-blue)](https://github.com/free-audio/clap) [![parameters: 61 CCs + 92 NRPN settings](https://img.shields.io/badge/parameters-61%20CCs%20%2B%2092%20NRPN-blue)](docs/cc-map.csv) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](../../LICENSE)
 
 </div>
 

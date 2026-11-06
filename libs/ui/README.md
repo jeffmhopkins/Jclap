@@ -4,7 +4,7 @@
 
 Shared GUI widgets, layout and CLAP glue for JClap plugins.
 
-[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![CLAP: gui | context-menu](https://img.shields.io/badge/CLAP-gui%20%7C%20context--menu-blue)](https://github.com/free-audio/clap) [![screenshots: tested](https://img.shields.io/badge/screenshots-tested-brightgreen)](docs/gallery.png)
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![CLAP: gui | context-menu](https://img.shields.io/badge/CLAP-gui%20%7C%20context--menu-blue)](https://github.com/free-audio/clap) [![screenshots: tested](https://img.shields.io/badge/screenshots-tested-brightgreen)](docs/gallery.png) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](../../LICENSE)
 
 </div>
 

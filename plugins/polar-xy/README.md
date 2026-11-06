@@ -4,7 +4,7 @@
 
 Turns an XY controller's two CCs into angle and radius CCs for Omnisphere's Orb.
 
-[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: note effect](https://img.shields.io/badge/CLAP-note%20effect-blue)](https://github.com/free-audio/clap) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](#panel) [![host: Bitwig](https://img.shields.io/badge/host-Bitwig-blue)](#using-it-in-bitwig)
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: note effect](https://img.shields.io/badge/CLAP-note%20effect-blue)](https://github.com/free-audio/clap) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](#panel) [![host: Bitwig](https://img.shields.io/badge/host-Bitwig-blue)](#using-it-in-bitwig) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](../../LICENSE)
 
 </div>
 
