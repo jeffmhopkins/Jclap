@@ -4,7 +4,7 @@
 
 Header-only audio building blocks for synths and effects: oscillator, filter, envelope, LFO and VCA.
 
-[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![header only](https://img.shields.io/badge/header-only-blue)](include/jclap/dsp) [![tests: measured](https://img.shields.io/badge/tests-measured-blue)](tests)
+[![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![header only](https://img.shields.io/badge/header-only-blue)](include/jclap/dsp) [![tests: measured](https://img.shields.io/badge/tests-measured-blue)](tests) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](../../LICENSE)
 
 </div>
 
