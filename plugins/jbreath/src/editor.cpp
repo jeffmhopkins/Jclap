@@ -1115,10 +1115,10 @@ private:
       bindings_.bind(mode, kVoiceMode);
       tips_.add(mode, "Poly: eight voices. Mono: one, tongued between notes. Legato: one, slurred between notes.");
       add<ui::Label>({1240, 656, 120, 16}, "BREATH FROM", kDim, visage::Font::kRight, 0.68f);
-      auto &source = add<ui::SegmentedSwitch>({1368, 652, 252, 26}, std::vector<std::string>{"AUTO", "PRESS", "VELOCITY"});
+      auto &source = add<ui::SegmentedSwitch>({1368, 652, 252, 26}, std::vector<std::string>{"AUTO", "PRESS", "VEL", "INPUT"});
       source.setAccent(kPress);
       bindings_.bind(source, kBreathSource);
-      tips_.add(source, "Where the breath comes from. Auto: velocity, until pressure (or a breath controller on CC 2) takes over.");
+      tips_.add(source, "Where the breath comes from. Auto: velocity, until pressure, a breath controller (CC 2) or Breath In takes over. Input: only Breath In.");
 
       curve_ = &add<CurveGraph>({920, 652, 200, 124}, 200.0f);
       tips_.add(*curve_, "How pressure becomes breath. Each dot is a voice's pressure.");
@@ -1128,11 +1128,13 @@ private:
       meter_->setRange(-48.0f, 6.0f);
       tips_.add(*meter_, "The output level.");
 
-      const auto cells = ui::row({920, 800, 700, 120}, 4);
-      knob(kCurve, "CURVE", kPress, cells[0], "The press curve: above 1 you have to press harder.");
-      knob(kSlide, "SLIDE", 0xff8fe8a8, cells[1], "How far MPE slide (CC 74) moves the embouchure.");
-      knob(kBendRange, "BEND", 0xffb98bff, cells[2], "MPE pitch bend range of the note channels, in semitones.");
-      knob(kLevel, "LEVEL", 0xfff28c28, cells[3], "Output level.");
+      const auto cells = ui::row({920, 800, 700, 120}, 5);
+      knob(kBreathIn, "BREATH IN", kPress, cells[0],
+           "A breath to blow from: modulate it from a CV, an LFO or automation. Heard with Breath From on Input (or Auto).");
+      knob(kCurve, "CURVE", kPress, cells[1], "The press curve: above 1 you have to press harder.");
+      knob(kSlide, "SLIDE", 0xff8fe8a8, cells[2], "How far MPE slide (CC 74) moves the embouchure.");
+      knob(kBendRange, "BEND", 0xffb98bff, cells[3], "MPE pitch bend range of the note channels, in semitones.");
+      knob(kLevel, "LEVEL", 0xfff28c28, cells[4], "Output level.");
    }
 
    EditorHost &host_;

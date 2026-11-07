@@ -33,10 +33,12 @@ or more (2x at 44.1 and 48 kHz) and are decimated once.
 
 The player model turns a note into breath, embouchure and pitch:
 
-- **Breath** comes from MPE pressure, a breath controller (CC 2), or velocity. BREATH FROM picks:
-  **Auto** blows with the velocity until pressure arrives and then follows it (so it plays from a
-  keyboard and from an MPE controller alike), **Press** only from pressure, **Velocity** only from
-  velocity. CURVE shapes how pressure becomes breath.
+- **Breath** comes from MPE pressure, a breath controller (CC 2), velocity, or the BREATH IN
+  parameter (modulate it from a CV, an LFO or automation: in Bitwig, route a eurorack CV in to it).
+  BREATH FROM picks: **Auto** blows with the velocity until pressure or Breath In arrives and then
+  follows it (so it plays from a keyboard and from an MPE controller alike), **Press** only from
+  pressure, **Vel** only from velocity, **Input** only from Breath In. CURVE shapes how pressure
+  becomes breath.
 - **The tongue** lets the air go with a small burst of pressure (KICK), the breath rises over ATTACK
   and dies over RELEASE.
 - **Embouchure** (lip and jaw) is the EMBOUCHURE knob, moved by MPE slide (CC 74) by SLIDE: the jet's

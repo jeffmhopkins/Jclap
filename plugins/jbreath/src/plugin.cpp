@@ -442,6 +442,7 @@ private:
       vs.vibPitch = value(kVibPitch, s);
       vs.vibDelayMs = value(kVibDelay, s);
       vs.source = static_cast<int>(value(kBreathSource) + 0.5);
+      vs.breathIn = std::clamp(value(kBreathIn, s), 0.0, 1.0);
       vs.curve = value(kCurve, s);
       vs.slide = value(kSlide, s);
       return vs;

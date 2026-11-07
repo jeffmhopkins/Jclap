@@ -29,6 +29,7 @@ struct VoiceSettings {
    double glideMs = 0.0;
    double vibRate = 5.1, vibDepth = 0.05, vibPitch = 0.0, vibDelayMs = 350.0;
    int source = 0; // BreathSource
+   double breathIn = 0.0; // the Breath In parameter, 0..1
    double curve = 1.0, slide = 0.5;
 };
 
@@ -293,7 +294,8 @@ private:
       kickEnv_ = kickAge_ >= 0 ? std::exp(-kickAge_ / (0.04 * fs_)) : 0.0;
       tongueDecay_ = static_cast<float>(std::exp(-1.0 / (0.017 * fs_)));
 
-      // Breath from velocity, pressure, or (Auto) velocity until pressure takes over.
+      // Breath from velocity, pressure, the Breath In input, or (Auto) velocity until pressure or
+      // the input takes over.
       const double vel = velocity_;
       switch (settings_.source) {
       case 1:
@@ -302,11 +304,16 @@ private:
       case 2:
          levelNow_ = vel;
          break;
-      default:
-         if (pressure_ > 0.04)
-            hold_ *= std::exp(-dt / 0.15);
-         levelNow_ = std::max(pressure_, vel * hold_);
+      case 3:
+         levelNow_ = settings_.breathIn;
          break;
+      default: {
+         const double blown = std::max(pressure_, settings_.breathIn);
+         if (blown > 0.04)
+            hold_ *= std::exp(-dt / 0.15);
+         levelNow_ = std::max(blown, vel * hold_);
+         break;
+      }
       }
 
       // Vibrato grows in after its delay; its rate and depth wander a little.

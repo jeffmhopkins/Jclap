@@ -41,6 +41,8 @@ enum ParamId : clap_id {
    kSlide,
    kBendRange,
    kLevel,
+   // Added after the first build: an input to blow from (a CV, an LFO, automation).
+   kBreathIn,
    kParamCount
 };
 
@@ -52,7 +54,7 @@ constexpr auto kStepped = kMod | CLAP_PARAM_IS_STEPPED;
 constexpr auto kGlobalChoice = kGlobalMod | CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_ENUM;
 
 enum VoiceMode { kPoly, kMono, kLegato };
-enum BreathSource { kSourceAuto, kSourcePressure, kSourceVelocity };
+enum BreathSource { kSourceAuto, kSourcePressure, kSourceVelocity, kSourceInput };
 
 inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kModel, "Instrument", "Exciter", 0.0, 4.0, 1.0, kGlobalChoice},
@@ -72,16 +74,17 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kVibPitch, "Vibrato Pitch", "Vibrato", 0.0, 50.0, 0.0, kMod},
    {kVibDelay, "Vibrato Delay", "Vibrato", 0.0, 2000.0, 350.0, kMod},
    {kVoiceMode, "Voice Mode", "Voice", 0.0, 2.0, 0.0, kGlobalChoice},
-   {kBreathSource, "Breath Source", "Voice", 0.0, 2.0, 0.0, kGlobalChoice},
+   {kBreathSource, "Breath Source", "Voice", 0.0, 3.0, 0.0, kGlobalChoice},
    {kCurve, "Press Curve", "Voice", 0.3, 3.0, 1.0, kMod},
    {kSlide, "Slide", "Voice", 0.0, 1.0, 0.5, kMod},
    {kBendRange, "MPE Bend Range", "Voice", 1.0, 96.0, 48.0, kGlobalMod | CLAP_PARAM_IS_STEPPED},
    {kLevel, "Level", "Output", -60.0, 12.0, 0.0, kMod},
+   {kBreathIn, "Breath In", "Voice", 0.0, 1.0, 0.0, kMod},
 };
 
 inline const char *const kModelNames[] = {"Flute", "Clarinet", "Sax", "Oboe", "Trumpet"};
 inline const char *const kVoiceModeNames[] = {"Poly", "Mono", "Legato"};
-inline const char *const kBreathSourceNames[] = {"Auto", "Pressure", "Velocity"};
+inline const char *const kBreathSourceNames[] = {"Auto", "Pressure", "Velocity", "Input"};
 
 inline const char *const *choiceNames(clap_id id, int &count) {
    switch (id) {
@@ -92,7 +95,7 @@ inline const char *const *choiceNames(clap_id id, int &count) {
       count = 3;
       return kVoiceModeNames;
    case kBreathSource:
-      count = 3;
+      count = 4;
       return kBreathSourceNames;
    default:
       count = 0;
@@ -109,6 +112,7 @@ inline bool isPercent(clap_id id) {
    case kKick:
    case kVibDepth:
    case kSlide:
+   case kBreathIn:
       return true;
    default:
       return false;

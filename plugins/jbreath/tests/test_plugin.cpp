@@ -194,6 +194,23 @@ int main() {
    h.midi(0xB1, 2, 0);
    run.seconds(1.0);
    JCLAP_CHECK(run.left.back() == 0.0f);
+
+   // Breath from the Breath In parameter (a CV in the host): silent until it rises, then it blows.
+   h.setParam(kBreathSource, kSourceInput);
+   h.midi(0x91, 60, 100);
+   run.seconds(0.3);
+   JCLAP_CHECK(run.rms() < 1e-3);
+   h.setParam(kBreathIn, 0.8);
+   run.seconds(0.5);
+   JCLAP_CHECK(run.rms() > 0.02);
+   JCLAP_CHECK(std::fabs(cents(run.pitch(hzOf(60)), hzOf(60))) < 10.0);
+   h.setParam(kBreathIn, 0.0);
+   run.seconds(0.5);
+   run.seconds(0.3);
+   JCLAP_CHECK(run.rms() < 1e-3);
+   h.midi(0x81, 60, 0);
+   run.seconds(1.0);
+   JCLAP_CHECK(run.left.back() == 0.0f);
    h.setParam(kBreathSource, kSourceAuto);
 
    run.noteEnds.clear();
