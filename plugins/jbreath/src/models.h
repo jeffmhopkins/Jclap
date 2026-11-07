@@ -137,13 +137,39 @@ struct Biquad {
       a1 = 2 * ((A - 1) - (A + 1) * cs) / a0;
       a2 = ((A + 1) - (A - 1) * cs - 2 * std::sqrt(A) * al) / a0;
    }
+   void lowshelf(double hz, double db, double fs) {
+      const double A = std::pow(10, db / 40), w = 2 * kPi * hz / fs, cs = std::cos(w),
+                   al = std::sin(w) / 2 * std::sqrt(2.0);
+      const double a0 = (A + 1) + (A - 1) * cs + 2 * std::sqrt(A) * al;
+      b0 = A * ((A + 1) - (A - 1) * cs + 2 * std::sqrt(A) * al) / a0;
+      b1 = 2 * A * ((A - 1) - (A + 1) * cs) / a0;
+      b2 = A * ((A + 1) - (A - 1) * cs - 2 * std::sqrt(A) * al) / a0;
+      a1 = -2 * ((A - 1) + (A + 1) * cs) / a0;
+      a2 = ((A + 1) + (A - 1) * cs - 2 * std::sqrt(A) * al) / a0;
+   }
 };
 
 // The player's settings a model reads, beyond breath and embouchure. Each is a multiplier around 1.
 struct Character {
    float noise = 1.0f; // breath noise and turbulence
    float edge = 1.0f;  // the forte bite: the flute's 2nd harmonic, the reeds' growl, brass steepening
+   float growl = 1.0f; // the forte growl in the reed (the Growl knob over its default)
+   // 0..1, 0.5 as the models were tuned: the reed's or lips' stiffness (the jet's gain on a flute),
+   // how far the valve stands open (the jet's width), the bore's taper (sax and oboe), and how far
+   // a trumpet's wave steepens into a blare.
+   float stiffness = 0.5f, aperture = 0.5f, cone = 0.5f, brass = 0.5f;
+   // The bore's extra loss (0.04 as tuned), and its holes' cutoff over 1.3 kHz.
+   float loss = 0.04f, cutoff = 1.0f;
+
+   // A loop's reflection with the Loss knob's share taken out (or, under its default, put back).
+   float keep(float base) const { return std::min(0.995f, base * (1.0f - 0.4f * (loss - 0.04f))); }
 };
+
+// A one-pole lowpass's phase delay at hz, in samples.
+inline double onePoleDelay(double hz, double cut, double fs) {
+   const double a = std::exp(-2.0 * kPi * std::min(cut, 0.45 * fs) / fs), w = 2.0 * kPi * hz / fs;
+   return std::atan2(a * std::sin(w), 1.0 - a * std::cos(w)) / w;
+}
 
 class Model {
 public:
@@ -156,6 +182,9 @@ public:
    virtual double nominal(double hz) const = 0;
    // Filters that follow the note; called when the note or its bend moves.
    virtual void notePitch(double /*hz*/) {}
+   // How much longer (in samples, at hz) the loop's filters make the trip with the Hole Cutoff
+   // where it is than where the model was tuned: the bore is that much shorter to stay in tune.
+   virtual double cutoffDelay(double /*hz*/) const { return 0.0; }
    // One sample. tongue is the tongue's noise burst, 1 at a tongued attack and decaying.
    virtual float tick(float breath, float emb, double len, float tongue) = 0;
 
@@ -194,21 +223,24 @@ public:
       notePitch(hz_);
    }
    double nominal(double hz) const override { return fs_ / hz; }
+   double cutoffDelay(double hz) const override {
+      return onePoleDelay(hz, hz * 3.2 * character.cutoff, fs_) - onePoleDelay(hz, hz * 3.2, fs_);
+   }
    void notePitch(double hz) override {
       hz_ = hz;
-      lp_.setHz(hz * 3.2, fs_);
-      jlp_.setHz(hz * 2.0, fs_);
+      lp_.setHz(hz * 3.2 * character.cutoff, fs_);
+      jlp_.setHz(hz * (1.4 + 1.2 * character.aperture), fs_);
    }
    float tick(float breath, float emb, double len, float tn) override {
       const float U = std::sqrt(std::max(breath, 0.0f));
       const float raw = bore_.read(len);
-      const float p = 0.97f * lp_.tick(raw);
+      const float p = character.keep(0.97f) * lp_.tick(raw);
       jet_.push(p);
       const double tau = std::clamp((0.33 + 0.1 * (emb - 0.5)) * len / std::max(U, 0.08f), 2.0, jet_.size() - 8.0);
       const float turb = nlp_.tick(rng.white());
       const float y = jlp_.tick(jet_.read(tau)) + (0.012f * character.noise + 0.12f * tn) * turb;
       // The jet's flow grows with pressure, not just its speed.
-      const float q = 1.2f * U * U * std::tanh(8.0f * y + 0.3f);
+      const float q = 1.2f * U * U * std::tanh(8.0f * (0.5f + character.stiffness) * y + 0.3f);
       bore_.push(dc_.tick(p - 0.5f * q));
       // What leaves the embouchure hole and the open end: the tube wave, tilted up a little
       // (radiation), plus edge noise riding on the jet.
@@ -254,30 +286,36 @@ public:
       tx_ = 0.0f;
    }
    double nominal(double hz) const override { return fs_ / (2.0 * hz); }
+   double cutoffDelay(double hz) const override {
+      const double cut = std::max(1300.0, 2.2 * hz);
+      return 2.0 * (onePoleDelay(hz, cut * character.cutoff, fs_) - onePoleDelay(hz, cut, fs_));
+   }
    // The bore's loss sits near 1.3 kHz, which only lets the low and middle register speak; it moves
    // up with notes above that, so they play too (as a real clarinet's tone holes leave more bore).
    void notePitch(double hz) override {
       hz_ = hz;
       // High notes need a firmer push to speak (a player bites and blows harder up there).
       lift_ = 1.0 + 0.2 * std::clamp(std::log2(hz / 440.0) / 0.8, 0.0, 1.0);
-      const double cut = std::max(1300.0, 2.2 * hz);
+      const double cut = std::max(1300.0, 2.2 * hz) * character.cutoff;
       lp_.setHz(cut, fs_);
       lp2_.setHz(cut, fs_);
    }
    float tick(float breath, float emb, double len, float tn) override {
       const float noise = noiseLP_.tick(rng.white());
-      const float growl = std::max(0.0f, breath - 0.9f) * 0.1f * character.edge;
+      const float growl = std::max(0.0f, breath - 0.9f) * 0.1f * character.edge * character.growl;
       const double g = 0.7 * lift_ * breath * (1 + (0.012f * character.noise + growl) * noise) + tn * 0.04f * noise;
-      const double z = 0.35 * (0.8 + 0.4 * emb);
+      const double z = 0.35 * (0.8 + 0.4 * emb) * (0.6 + 0.8 * character.aperture);
+      // A stiffer reed closes over a shorter curl of its tip.
+      const double knee = 0.04 + 0.16 * (1.0 - character.stiffness);
       const double inc = bore_.read(len);
-      const double back = -0.96 * lp2_.tick(lp_.tick(static_cast<float>(inc)));
-      const auto F = [g, z](double p) {
+      const double back = -character.keep(0.96f) * lp2_.tick(lp_.tick(static_cast<float>(inc)));
+      const auto F = [g, z, knee](double p) {
          // The reed closes softly (its tip curls onto the lay), not at a hard corner, which would
          // make a beating reed's tone rough and noisy.
          const double W = g - p, gap = 1 - W;
-         if (gap <= -0.12)
+         if (gap <= -knee)
             return 0.0;
-         const double open = gap >= 0.12 ? gap : (gap + 0.12) * (gap + 0.12) / 0.48;
+         const double open = gap >= knee ? gap : (gap + knee) * (gap + knee) / (4 * knee);
          return z * open * (W >= 0 ? 1 : -1) * std::sqrt(std::fabs(W));
       };
       // u = F(2 back + u): the flow and the pressure it makes, by bisection (F falls as u rises).
@@ -321,7 +359,7 @@ public:
       d0_.clear();
       d1_.clear();
       lp_ = {};
-      lp_.setHz(cut_, fs_);
+      cutK_ = -1.0f;
       dc_ = {};
       dc_.setFs(fs_);
       noiseLP_ = {};
@@ -333,10 +371,17 @@ public:
       resetColour();
    }
    double nominal(double hz) const override { return fs_ / hz; }
+   double cutoffDelay(double hz) const override {
+      return onePoleDelay(hz, cut_ * character.cutoff, fs_) - onePoleDelay(hz, cut_, fs_);
+   }
    // A split bore lets the second mode compete with the first, and on its own the loop jumps to the
    // octave on most notes. A gentle lift at the fundamental (a cone's wider first resonance, from
    // its missing apex) keeps it in the low register; on release the loop still dies away.
    void notePitch(double hz) override {
+      if (character.cutoff != cutK_) {
+         cutK_ = character.cutoff;
+         lp_.setHz(std::min(cut_ * cutK_, 0.45f * static_cast<float>(fs_)), fs_);
+      }
       if (hz == regHz_)
          return;
       regHz_ = hz_ = hz;
@@ -344,15 +389,18 @@ public:
    }
    float tick(float breath, float emb, double len, float tn) override {
       const float noise = noiseLP_.tick(rng.white());
-      const float growl = std::max(0.0f, breath - 0.95f) * growl_ * character.edge;
+      const float growl = std::max(0.0f, breath - 0.95f) * growl_ * character.edge * character.growl;
       const float p = breath * (1 + (breathNoise_ * character.noise + growl) * noise) + tn * tongueNoise_ * noise;
-      const double pos = 0.2 + posEmb_ * (emb - 0.5);
+      // Where the reed sits along the split bore: the cone's truncation, moved by the Cone knob.
+      const double pos = 0.2 + posEmb_ * (emb - 0.5) + 0.16 * (character.cone - 0.5);
       // The lift puts the loop's gain a little over one at the fundamental; the reed's losses hold it
       // there in normal playing, and the bore's walls (a clip far above any played level) at extremes.
-      const float temp = std::clamp(-0.95f * register_.tick(lp_.tick(d0_.read(std::max(2.0, len * (1 - pos))))), -6.0f, 6.0f);
+      const float temp = std::clamp(-character.keep(0.95f) * register_.tick(lp_.tick(d0_.read(std::max(2.0, len * (1 - pos))))), -6.0f, 6.0f);
       out0_ = temp - d1_.read(std::max(2.0, len * pos));
       const float pd = p - out0_;
-      const float r = std::clamp(0.7f + (stiff_ + stiffEmb_ * emb) * pd, -1.0f, 1.0f);
+      const float r = std::clamp(0.7f - 0.24f * (character.aperture - 0.5f) +
+                                    (stiff_ + stiffEmb_ * emb) * (0.6f + 0.8f * character.stiffness) * pd,
+                                 -1.0f, 1.0f);
       d1_.push(temp);
       // A tongue on the reed stops it vibrating, so the tube rings down quickly.
       const float stopped = std::clamp(breath * 8.0f, 0.0f, 1.0f);
@@ -372,7 +420,7 @@ private:
    Biquad register_;
    DCBlock dc_;
    double hz_ = 294.0, regHz_ = 0.0;
-   float out0_ = 0.0f;
+   float out0_ = 0.0f, cutK_ = -1.0f;
 };
 
 // Saxophone: a mouthpiece-cavity resonance gives the honk; noise in the reed gives a little growl
@@ -445,21 +493,24 @@ public:
       notePitch(lipHz_);
    }
    double nominal(double hz) const override { return fs_ / hz; }
+   double cutoffDelay(double hz) const override {
+      return onePoleDelay(hz, hz * 8.0 * character.cutoff, fs_) - onePoleDelay(hz, hz * 8.0, fs_);
+   }
    void notePitch(double hz) override {
       lipHz_ = hz;
-      bell_.setHz(hz * 8.0, fs_);
+      bell_.setHz(std::min(hz * 8.0 * character.cutoff, 0.45 * fs_), fs_);
    }
    float tick(float breath, float emb, double len, float tn) override {
       const double dt = 1.0 / fs_, w = 2 * kPi * lipHz_ * (0.9 + 0.08 * (emb - 0.5));
       const double pm = breath * (1 + 0.02 * tn * rng.white());
       const double xin = bore_.read(len);
       dcz_ += (xin - dcz_) * (2 * kPi * 20 / fs_);
-      const double pin = 0.985 * (bell_.tick(static_cast<float>(xin)) - 2.0 * dcz_);
+      const double pin = character.keep(0.985f) * (bell_.tick(static_cast<float>(xin)) - 2.0 * dcz_);
       // Lips: pushed open by mouth pressure minus mouthpiece pressure (before this sample's flow).
-      const double a = -w * w * x_ - (w / 4.0) * v_ + 0.25 * w * w * (pm - 2 * pin) + 1e-4 * rng.white();
+      const double a = -w * w * x_ - (w / (2.0 + 4.0 * character.stiffness)) * v_ + 0.25 * w * w * (pm - 2 * pin) + 1e-4 * rng.white();
       v_ += dt * a;
       x_ += dt * v_;
-      const double h = std::max(x_, 0.0);
+      const double h = std::max(x_, 0.0) * (0.5 + character.aperture);
       // The flow through the slit, solved in closed form with the pressure it makes:
       // u = h sgn(D) sqrt|D - u|, D = pm - 2 pin.
       const double D = pm - 2 * pin;
@@ -471,8 +522,8 @@ public:
       // a read delay that follows the pressure, changing by less than a sample per sample.
       shock_.push(static_cast<float>(pplus));
       const double k = fs_ / 96000.0;
-      const double want = k * (120.0 - 2.0 * character.edge * 40.0 * std::clamp(pplus, -1.5, 1.5));
-      shockD_ += std::clamp(want - shockD_, -0.6, 0.6);
+      const double want = k * (120.0 - 160.0 * character.edge * character.brass * std::clamp(pplus, -1.5, 1.5));
+      shockD_ += std::clamp(std::clamp(want, 2.0, 240.0 * k) - shockD_, -0.6, 0.6);
       // The bell passes highs and reflects lows.
       return radLP_.tick(radHP_.tick(shock_.read(shockD_))) * 3.0f;
    }

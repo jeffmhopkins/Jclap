@@ -58,8 +58,56 @@ enum ParamId : clap_id {
    kSwellLoop,
    kBusBase,
    kRouteBase = kBusBase + 4 * 5,
-   kParamCount = kRouteBase + 32 * 3
+   // The rest of the exciter (added with the full panel): the reed's or lips' stiffness, how far
+   // the valve stands open, and a growl in the throat.
+   kStiffness = kRouteBase + 32 * 3,
+   kAperture,
+   kGrowl,
+   // How the player tongues and where their vibrato comes from, and how human they are.
+   kTongueType,
+   kVibType,
+   kHumanize,
+   // HYBRID: a second instrument blown with the same breath, layered with the first.
+   kHybridModel,
+   kHybridMix,
+   kHybridOctave,
+   kHybridDetune,
+   kHybridBreath,
+   // The rest of the bore: its body, losses, holes and walls.
+   kLength,
+   kLoss,
+   kHoleCutoff,
+   kCone,
+   kRadiate,
+   kBrass,
+   kBarrel,
+   kWall,
+   kDetune,
+   kHoles,
+   kTube,
+   // The voice card: stereo spread, air around the instrument, the room, master and limiter.
+   kSpread,
+   kAir,
+   kRoom,
+   kRoomSize,
+   kRoomDecay,
+   kRoomDamp,
+   kRoomPreDelay,
+   kMaster,
+   kLimiter,
+   // The AIR view's look. Kept with the project, not with presets.
+   kLook,
+   kPalette,
+   kTurbulence,
+   kRise,
+   kSwirl,
+   kTail,
+   kLine,
+   kGlow,
+   kParamCount
 };
+// Presets cover every param before the look.
+constexpr clap_id kPresetParamCount = kLook;
 
 constexpr int kLfoCount = 2, kBusCount = 4, kRouteCount = 32;
 constexpr int kBusStride = 5, kRouteStride = 3;
@@ -106,18 +154,22 @@ inline bool bipolarSource(int s) {
 }
 
 // What a route can move: these params, by index. A bus's Amount knob is where its inputs go.
-inline const clap_id kModDestinations[] = {
+inline constexpr clap_id kModDestinations[] = {
    kBreath, kEmbouchure, kNoise, kEdge, kKick, kAttack, kRelease, kTune, kFine, kGlide, kVibRate, kVibDepth,
-   kVibPitch, kVibDelay, kCurve, kLevel, kLfo1Rate, kLfo2Rate, kSwellTime,
+   kVibPitch, kVibDelay, kCurve, kLevel, kLfo1Rate, kLfo2Rate, kSwellTime, kStiffness, kAperture, kGrowl,
+   kHumanize, kHybridMix, kHybridDetune, kLoss, kHoleCutoff, kCone, kBrass, kDetune, kAir,
    busParam(0, kBusAmount), busParam(1, kBusAmount), busParam(2, kBusAmount), busParam(3, kBusAmount)};
 constexpr int kModDestCount = static_cast<int>(sizeof(kModDestinations) / sizeof(kModDestinations[0]));
 constexpr int kFirstBusDest = kModDestCount - kBusCount;
-inline int destinationOf(clap_id id) {
+constexpr int destinationOf(clap_id id) {
    for (int i = 0; i < kModDestCount; ++i)
       if (kModDestinations[i] == id)
          return i;
    return -1;
 }
+// A destination's index, worked out when compiling.
+template <clap_id Id>
+constexpr int kDest = destinationOf(Id);
 
 enum LfoShape { kLfoSine, kLfoTriangle, kLfoSaw, kLfoSquare, kLfoSampleHold, kLfoSmooth };
 inline const char *const kLfoShapeNames[] = {"Sine", "Triangle", "Saw", "Square", "S&H", "Smooth"};
@@ -140,7 +192,25 @@ constexpr auto kStepped = kMod | CLAP_PARAM_IS_STEPPED;
 // The instrument, voice mode and breath source are the whole plugin's: no per-voice meaning.
 constexpr auto kGlobalChoice = kGlobalMod | CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_ENUM;
 
+// The look's params are the panel's, not the sound's: not for the host to automate.
+constexpr auto kLookFlags = static_cast<clap_param_info_flags>(CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_ENUM);
+constexpr auto kLookKnob = static_cast<clap_param_info_flags>(0);
+
 enum VoiceMode { kPoly, kMono, kLegato };
+// How a note is tongued: a soft "da", a hard "ta", every note tongued even when slurred
+// ("ta-ka"), a rolled R through the note, or no tongue at all (a breath attack).
+enum TongueType { kTongueSoft, kTongueHard, kTongueDouble, kTongueFlutter, kTongueBreath };
+inline const char *const kTongueTypeNames[] = {"Soft", "Hard", "Double", "Flutter", "Breath"};
+// Where the vibrato comes from: the diaphragm (breath), the jaw (embouchure, so pitch and colour),
+// both, or the lips (pitch alone).
+enum VibType { kVibBreath, kVibJaw, kVibBoth, kVibLip };
+inline const char *const kVibTypeNames[] = {"Breath", "Jaw", "Breath+Jaw", "Lip"};
+inline const char *const kHolesNames[] = {"Closed", "Lattice 3", "Lattice 5", "Lattice 7", "Lattice 9", "Open"};
+inline const char *const kTubeNames[] = {"Grenadilla", "Boxwood", "Maple", "Bamboo", "Brass", "Silver", "Resin", "Glass"};
+inline const char *const kLimiterNames[] = {"Off", "Soft", "Hard"};
+inline const char *const kLookNames[] = {"Smoke", "Ink"};
+inline const char *const kPaletteNames[] = {"Dusk", "Ember", "Frost", "Moss", "Mono"};
+inline const char *const kHybridOctaveNames[] = {"-2 oct", "-1 oct", "0 oct", "+1 oct", "+2 oct"};
 enum BreathSource { kSourceAuto, kSourcePressure, kSourceVelocity, kSourceInput, kSourceMix };
 
 namespace detail {
@@ -151,13 +221,13 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
    {kBreath, "Breath", "Exciter", 0.25, 1.5, 1.0, kMod},
    {kEmbouchure, "Embouchure", "Exciter", 0.0, 1.0, 0.5, kMod},
    {kNoise, "Noise", "Exciter", 0.0, 2.0, 1.0, kMod},
-   {kEdge, "Edge", "Exciter", 0.0, 2.0, 1.0, kMod},
+   {kEdge, "Bite", "Exciter", 0.0, 2.0, 1.0, kMod},
    {kKick, "Kick", "Articulation", 0.0, 1.0, 0.25, kMod},
    {kAttack, "Attack", "Articulation", 1.0, 400.0, 25.0, kMod},
    {kRelease, "Release", "Articulation", 5.0, 2000.0, 90.0, kMod},
-   {kTune, "Tune", "Bore", -24.0, 24.0, 0.0, kStepped},
-   {kFine, "Fine", "Bore", -100.0, 100.0, 0.0, kMod},
-   {kBright, "Bright", "Bore", -12.0, 12.0, 0.0, kGlobalMod},
+   {kTune, "Transpose", "Voice", -24.0, 24.0, 0.0, kStepped},
+   {kFine, "Tune", "Bore", -100.0, 100.0, 0.0, kMod},
+   {kBright, "Tone", "Room", -12.0, 12.0, 0.0, kGlobalMod},
    {kGlide, "Glide", "Bore", 0.0, 1000.0, 0.0, kMod},
    {kVibRate, "Vibrato Rate", "Vibrato", 2.0, 9.0, 5.1, kMod},
    {kVibDepth, "Vibrato Depth", "Vibrato", 0.0, 0.3, 0.05, kMod},
@@ -179,6 +249,45 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kSwellShape, "Swell Shape", "Swell", 0.0, 5.0, 0.0, kGlobalChoice},
       {kSwellTime, "Swell Time", "Swell", 0.05, 30.0, 3.0, kMod},
       {kSwellLoop, "Swell Loop", "Swell", 0.0, 1.0, 0.0, kGlobalChoice},
+      {kStiffness, "Stiffness", "Exciter", 0.0, 1.0, 0.5, kMod},
+      {kAperture, "Aperture", "Exciter", 0.0, 1.0, 0.5, kMod},
+      {kGrowl, "Growl", "Exciter", 0.0, 1.0, 0.2, kMod},
+      {kTongueType, "Tongue", "Articulation", 0.0, 4.0, 1.0, kGlobalChoice},
+      {kVibType, "Vibrato Type", "Vibrato", 0.0, 3.0, 0.0, kGlobalChoice},
+      {kHumanize, "Humanize", "Articulation", 0.0, 1.0, 0.0, kMod},
+      {kHybridModel, "Hybrid Instrument", "Hybrid", 0.0, 4.0, 0.0, kGlobalChoice},
+      {kHybridMix, "Hybrid Mix", "Hybrid", 0.0, 1.0, 0.0, kMod},
+      {kHybridOctave, "Hybrid Octave", "Hybrid", -2.0, 2.0, 0.0, kGlobalMod | CLAP_PARAM_IS_STEPPED},
+      {kHybridDetune, "Hybrid Detune", "Hybrid", -50.0, 50.0, 0.0, kMod},
+      {kHybridBreath, "Hybrid Breath", "Hybrid", 0.5, 1.5, 1.0, kMod},
+      {kLength, "Length", "Bore", 0.0, 1.0, 0.65, kGlobalMod},
+      {kLoss, "Loss", "Bore", 0.0, 0.5, 0.04, kMod},
+      {kHoleCutoff, "Hole Cutoff", "Bore", 500.0, 4000.0, 1300.0, kMod},
+      {kCone, "Cone", "Bore", 0.0, 1.0, 0.5, kMod},
+      {kRadiate, "Radiate", "Bore", 0.0, 1.0, 0.66, kGlobalMod},
+      {kBrass, "Brass", "Bore", 0.0, 1.0, 0.5, kMod},
+      {kBarrel, "Barrel", "Bore", 0.0, 1.0, 0.4, kGlobalMod},
+      {kWall, "Wall", "Bore", 0.0, 1.0, 0.5, kGlobalMod},
+      {kDetune, "Detune", "Bore", 0.0, 25.0, 0.0, kMod},
+      {kHoles, "Holes", "Bore", 0.0, 5.0, 3.0, kGlobalChoice},
+      {kTube, "Tube", "Bore", 0.0, 7.0, 0.0, kGlobalChoice},
+      {kSpread, "Spread", "Output", 0.0, 1.0, 0.5, kGlobalMod},
+      {kAir, "Air", "Output", 0.0, 1.0, 0.0, kMod},
+      {kRoom, "Room", "Room", 0.0, 1.0, 0.15, kGlobalMod},
+      {kRoomSize, "Room Size", "Room", 0.0, 1.0, 0.5, kGlobalMod},
+      {kRoomDecay, "Room Decay", "Room", 0.2, 10.0, 1.6, kGlobalMod},
+      {kRoomDamp, "Room Damping", "Room", 0.0, 1.0, 0.5, kGlobalMod},
+      {kRoomPreDelay, "Room Pre-Delay", "Room", 0.0, 100.0, 12.0, kGlobalMod},
+      {kMaster, "Master", "Output", -36.0, 6.0, 0.0, kGlobalMod},
+      {kLimiter, "Limiter", "Output", 0.0, 2.0, 1.0, kGlobalChoice},
+      {kLook, "Look", "View", 0.0, 1.0, 0.0, kLookFlags},
+      {kPalette, "Palette", "View", 0.0, 4.0, 0.0, kLookFlags},
+      {kTurbulence, "Turbulence", "View", 0.0, 1.0, 0.42, kLookKnob},
+      {kRise, "Rise", "View", 0.0, 1.0, 0.55, kLookKnob},
+      {kSwirl, "Swirl", "View", 0.0, 1.0, 0.38, kLookKnob},
+      {kTail, "Tail", "View", 0.5, 8.0, 4.0, kLookKnob},
+      {kLine, "Line", "View", 0.0, 1.0, 0.4, kLookKnob},
+      {kGlow, "Glow", "View", 0.0, 1.0, 0.5, kLookKnob},
    };
    for (const auto &d : fixed)
       p[d.id] = d;
@@ -239,6 +348,30 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kSwellLoop:
       count = 2;
       return kSwellLoopNames;
+   case kHybridModel:
+      count = 5;
+      return kModelNames;
+   case kTongueType:
+      count = 5;
+      return kTongueTypeNames;
+   case kVibType:
+      count = 4;
+      return kVibTypeNames;
+   case kHoles:
+      count = 6;
+      return kHolesNames;
+   case kTube:
+      count = 8;
+      return kTubeNames;
+   case kLimiter:
+      count = 3;
+      return kLimiterNames;
+   case kLook:
+      count = 2;
+      return kLookNames;
+   case kPalette:
+      count = 5;
+      return kPaletteNames;
    default:
       if (id >= kBusBase && id < kRouteBase) {
          switch ((id - kBusBase) % kBusStride) {
@@ -274,6 +407,27 @@ inline bool isPercent(clap_id id) {
    case kVibDepth:
    case kSlide:
    case kBreathIn:
+   case kAperture:
+   case kGrowl:
+   case kHumanize:
+   case kHybridMix:
+   case kHybridBreath:
+   case kLoss:
+   case kCone:
+   case kRadiate:
+   case kBrass:
+   case kBarrel:
+   case kWall:
+   case kSpread:
+   case kAir:
+   case kRoom:
+   case kRoomSize:
+   case kRoomDamp:
+   case kTurbulence:
+   case kRise:
+   case kSwirl:
+   case kLine:
+   case kGlow:
       return true;
    default:
       if (id >= kBusBase && id < kRouteBase)
@@ -282,6 +436,15 @@ inline bool isPercent(clap_id id) {
          return (id - kRouteBase) % kRouteStride == kRouteAmount;
       return false;
    }
+}
+
+// The Length knob's body, in metres: 0.15 to 1.5, evenly in octaves.
+inline double bodyLength(double v) { return 0.15 * std::pow(10.0, std::clamp(v, 0.0, 1.0)); }
+
+// What the Wall knob's value is like, for the panel.
+inline const char *wallName(double v) {
+   static const char *const walls[] = {"Metal", "Resin", "Wood", "Cane", "Bone"};
+   return walls[std::clamp(static_cast<int>(v * 4.999), 0, 4)];
 }
 
 // Shared by the host's display and the panel.
@@ -317,7 +480,31 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kRelease:
    case kGlide:
    case kVibDelay:
+   case kRoomPreDelay:
       std::snprintf(out, size, "%.0f ms", value);
+      break;
+   case kStiffness:
+      std::snprintf(out, size, "%.2f", value);
+      break;
+   case kHybridOctave:
+      std::snprintf(out, size, "%+d oct", static_cast<int>(std::lround(value)));
+      break;
+   case kHybridDetune:
+   case kDetune:
+      std::snprintf(out, size, "%+.0f ct", value);
+      break;
+   case kLength:
+      std::snprintf(out, size, "%.2f m", bodyLength(value));
+      break;
+   case kHoleCutoff:
+      std::snprintf(out, size, "%.2f kHz", value / 1000.0);
+      break;
+   case kRoomDecay:
+   case kTail:
+      std::snprintf(out, size, "%.1f s", value);
+      break;
+   case kMaster:
+      std::snprintf(out, size, "%.1f dB", value);
       break;
    case kTune:
       std::snprintf(out, size, "%+d st", static_cast<int>(std::lround(value)));
@@ -373,6 +560,10 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
       return false;
    if (isPercent(id))
       value = v / 100.0;
+   else if (id == kHoleCutoff)
+      value = v < 50.0 ? v * 1000.0 : v;
+   else if (id == kLength)
+      value = std::clamp(std::log10(std::max(v, 0.15) / 0.15), 0.0, 1.0);
    else
       value = (kParams[id].flags & CLAP_PARAM_IS_STEPPED) ? std::round(v) : v;
    return true;

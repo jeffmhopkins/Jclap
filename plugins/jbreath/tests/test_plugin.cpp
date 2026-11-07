@@ -111,10 +111,24 @@ struct Buffer {
                      }};
 };
 
+// The voices' own sound: no room, and every note in the middle (the output stage has its own test).
+void dry(jclap::core::TestHost &h) {
+   h.setParam(kRoom, 0.0);
+   h.setParam(kSpread, 0.0);
+}
+
+double energy(const std::vector<float> &x) {
+   double e = 0.0;
+   for (float v : x)
+      e += v * v;
+   return e;
+}
+
 // Every instrument plays a held note in tune and at a sensible level, at this rate.
 void playsInTune(double rate) {
    jclap::core::TestHost h(clap_entry, kId, rate);
    Run run{h, rate};
+   dry(h);
    for (int m = 0; m < 5; ++m) {
       h.setParam(kModel, m);
       h.setParam(kVibDepth, 0.0);
@@ -140,6 +154,7 @@ int main() {
    jclap::core::TestHost h(clap_entry, kId);
    EditorHost &panel = *h.object<EditorHost>();
    Run run{h};
+   dry(h);
 
    // Silent until a note arrives.
    run(4800);
@@ -305,6 +320,8 @@ int main() {
    run(256);
    JCLAP_CHECK_EQ(sounding(panel), 0);
    JCLAP_CHECK_EQ(run.noteEnds.size(), 9u);
+   // Only the body's short ring (the tube below the holes) is left, and it's gone in 60 ms.
+   run.seconds(0.06);
    run.seconds(0.1);
    JCLAP_CHECK(run.rms() == 0.0);
    run.noteEnds.clear();
@@ -376,7 +393,7 @@ int main() {
    const auto &presets = factoryPresets();
    JCLAP_CHECK(presets.size() >= 10);
    for (const auto &p : presets) {
-      JCLAP_CHECK_EQ(p.values.size(), static_cast<size_t>(kParamCount));
+      JCLAP_CHECK_EQ(p.values.size(), static_cast<size_t>(kPresetParamCount));
       for (const auto &[id, v] : p.values)
          JCLAP_CHECK(v >= kParams[id].min && v <= kParams[id].max);
    }
@@ -410,6 +427,73 @@ int main() {
          ph.note(CLAP_EVENT_NOTE_OFF, key, 0.0, key);
          pr.seconds(2.5);
       }
+   }
+
+   // The output stage: Spread puts a low note left of the middle and a high one right; the Room rings
+   // on after the voices stop, then empties and is silent.
+   {
+      jclap::core::TestHost oh(clap_entry, kId);
+      EditorHost &op = *oh.object<EditorHost>();
+      Run o{oh};
+      oh.setParam(kSpread, 1.0);
+      oh.setParam(kRoom, 0.0);
+      oh.note(CLAP_EVENT_NOTE_ON, 45, 0.8, 1);
+      o.seconds(0.5);
+      JCLAP_CHECK(energy(o.left) > 2.0 * energy(o.right));
+      oh.note(CLAP_EVENT_NOTE_OFF, 45, 0.0, 1);
+      o.seconds(1.0);
+      JCLAP_CHECK(o.left.back() == 0.0f);
+      oh.setParam(kRoom, 0.6);
+      oh.setParam(kRoomDecay, 1.0);
+      oh.note(CLAP_EVENT_NOTE_ON, 84, 0.8, 2);
+      o.seconds(0.5);
+      JCLAP_CHECK(energy(o.right) > 2.0 * energy(o.left));
+      oh.note(CLAP_EVENT_NOTE_OFF, 84, 0.0, 2);
+      o.seconds(0.4);
+      JCLAP_CHECK_EQ(sounding(op), 0);
+      o.seconds(0.2);
+      JCLAP_CHECK(o.rms() > 1e-4);
+      o.seconds(2.0);
+      JCLAP_CHECK(o.finite());
+      JCLAP_CHECK(o.left.back() == 0.0f && o.right.back() == 0.0f);
+   }
+
+   // Every new control at both ends, on every instrument: still sounding, finite, not too loud, and
+   // at the note's pitch (or an octave from it, where a setting overblows it).
+   {
+      struct Extreme {
+         clap_id id;
+         double value;
+      };
+      const Extreme extremes[] = {
+         {kStiffness, 0.0}, {kStiffness, 1.0}, {kAperture, 0.0}, {kAperture, 1.0}, {kGrowl, 1.0},
+         {kLoss, 0.0}, {kLoss, 0.25}, {kHoleCutoff, 700.0}, {kHoleCutoff, 4000.0}, {kCone, 0.0}, {kCone, 1.0},
+         {kBrass, 1.0}, {kRadiate, 0.0}, {kRadiate, 1.0}, {kBarrel, 1.0}, {kWall, 1.0}, {kLength, 1.0},
+         {kHoles, 5.0}, {kTube, 7.0}, {kDetune, 25.0}, {kHumanize, 1.0}, {kAir, 1.0},
+         {kTongueType, kTongueFlutter}, {kTongueType, kTongueBreath}, {kTongueType, kTongueSoft},
+         {kVibType, kVibJaw}, {kVibType, kVibLip}, {kHybridMix, 0.5}, {kHybridMix, 1.0}, {kLimiter, 2.0},
+      };
+      for (int m = 0; m < 5; ++m)
+         for (const Extreme &x : extremes) {
+            jclap::core::TestHost eh(clap_entry, kId);
+            Run e{eh};
+            dry(eh);
+            eh.setParam(kModel, m);
+            eh.setParam(kVibDepth, 0.0);
+            eh.setParam(x.id, x.value);
+            const int key = m == 4 ? 62 : 60;
+            eh.note(CLAP_EVENT_NOTE_ON, key, 0.75, 1);
+            e.seconds(0.8);
+            const double db = 20.0 * std::log10(e.rms() + 1e-12);
+            double best = 9999.0;
+            for (double oct : {-1.0, 0.0, 1.0})
+               best = std::min(best, std::fabs(cents(e.pitch(hzOf(key + 12 * oct)), hzOf(key + 12 * oct))));
+            const bool ok = e.finite() && db > -40.0 && db < -3.0 && best < 40.0;
+            if (!ok)
+               std::printf("%s with %s at %g: %.1f dB, %.0f cents\n", kModelNames[m], kParams[x.id].name, x.value, db,
+                           best);
+            JCLAP_CHECK(ok);
+         }
    }
 
    // State round trip, with the preset name.

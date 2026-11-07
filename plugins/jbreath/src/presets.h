@@ -14,12 +14,13 @@ namespace jbreath {
 
 using jclap::ui::Preset;
 
-inline const jclap::ui::PresetFormat kPresetFormat{"JBreath", 1, ".jbpreset", kParamCount};
+inline const jclap::ui::PresetFormat kPresetFormat{"JBreath", 1, ".jbpreset", kPresetParamCount};
 
 inline std::vector<double> defaultValues() {
    std::vector<double> d;
-   for (const auto &p : kParams)
-      d.push_back(p.defaultValue);
+   // Not the look's: a preset leaves the AIR view as it is.
+   for (clap_id id = 0; id < kPresetParamCount; ++id)
+      d.push_back(kParams[id].defaultValue);
    return d;
 }
 

@@ -20,6 +20,7 @@
 
 #include "editor.h"
 #include "params.h"
+#include "output.h"
 #include "voice.h"
 
 namespace {
@@ -50,6 +51,8 @@ struct Slot {
    double bend = 0.0, pressure = 0.0, timbre = 0.5, volume = 1.0, velocity = 1.0;
    // Per-voice param modulation from the host, added to the param and its global modulation.
    double mod[kParamCount] = {};
+   // Where it sits in the stereo field (the Spread), as a gain on each side.
+   float panL = 1.0f, panR = 1.0f;
    // When it started, for stealing the oldest.
    uint64_t started = 0;
    bool ended = true; // NOTE_END already sent
@@ -126,7 +129,13 @@ public:
          s.ended = true;
       }
       decimator_.prepare(oversampling_);
-      bright_.clear();
+      decimatorR_.prepare(oversampling_);
+      for (int c = 0; c < 2; ++c) {
+         bright_[c].clear();
+         body_[c].prepare(sampleRate);
+      }
+      room_.prepare(sampleRate);
+      limiter_.prepare(sampleRate);
       brightDb_ = 1e9;
       for (ChannelState &c : channels_)
          c = ChannelState{};
@@ -144,7 +153,13 @@ public:
       for (ChannelState &c : channels_)
          c = ChannelState{};
       decimator_.reset();
-      bright_.clear();
+      decimatorR_.reset();
+      for (int c = 0; c < 2; ++c) {
+         bright_[c].clear();
+         body_[c].reset();
+      }
+      room_.reset();
+      limiter_.reset();
       mpeMembers_ = 15;
       pendingCount_ = 0;
       heldCount_ = 0;
@@ -345,7 +360,7 @@ public:
          }
          for (uint32_t i = start; i < end; ++i) {
             lfoClock_ += 1.0 / sampleRate_;
-            float fast[8] = {};
+            float fastL[8] = {}, fastR[8] = {};
             for (int v = 0; v < kVoiceCount; ++v) {
                Slot &s = slots_[v];
                if (!s.voice.isActive())
@@ -353,21 +368,30 @@ public:
                float y = 0.0f;
                for (int k = 0; k < os; ++k) {
                   y = s.voice.tick();
-                  fast[k] += y;
+                  fastL[k] += y * s.panL;
+                  fastR[k] += y * s.panR;
                }
                // Every os-th sample, for the panel's loops: aliasing doesn't show in a drawing.
                voiceScopes_[v].push(y);
             }
-            float sum = decimator_.process(fast);
-            sum = jclap::dsp::softClip(bright_.tick(sum * kVoiceGain));
-            // Where flush-to-zero is not available, a fading tail could still go subnormal.
-            if (std::fabs(sum) < 1e-20f)
-               sum = 0.0f;
-            peak = std::max(peak, std::fabs(sum));
+            float l = decimator_.process(fastL) * kVoiceGain, r = decimatorR_.process(fastR) * kVoiceGain;
+            l = bright_[0].tick(body_[0].tick(l));
+            r = bright_[1].tick(body_[1].tick(r));
+            room_.tick(l, r);
+            limiter_.tick(l, r, limiterMode_);
+            l *= master_;
+            r *= master_;
+            // A fading tail (the body's and room's filters ring on, ever quieter) is cut at -180 dB,
+            // so it ends, and never goes subnormal where flush-to-zero is not available.
+            if (std::fabs(l) < 1e-9f)
+               l = 0.0f;
+            if (std::fabs(r) < 1e-9f)
+               r = 0.0f;
+            peak = std::max(peak, std::max(std::fabs(l), std::fabs(r)));
             if (left)
-               left[i] = sum;
+               left[i] = right ? l : 0.5f * (l + r);
             if (right)
-               right[i] = sum;
+               right[i] = r;
          }
          start = std::max(end, start + 1);
       }
@@ -389,8 +413,14 @@ public:
       for (const Slot &s : slots_)
          if (s.voice.isActive()) {
             tail_ = 64;
+            quietFrames_ = 0;
             return CLAP_PROCESS_CONTINUE;
          }
+      // The room rings on after the voices.
+      if (room_.active() && quietFrames_ < static_cast<uint64_t>(sampleRate_ * (value(kRoomDecay) + 0.2))) {
+         quietFrames_ += frames;
+         return CLAP_PROCESS_CONTINUE;
+      }
       if (tail_ > 0) {
          tail_ = tail_ > frames ? tail_ - frames : 0;
          return CLAP_PROCESS_CONTINUE;
@@ -404,8 +434,28 @@ private:
       const double bright = value(kBright);
       if (bright != brightDb_) {
          brightDb_ = bright;
-         bright_.highshelf(1500.0, bright, sampleRate_);
+         for (Biquad &b : bright_)
+            b.highshelf(1500.0, bright, sampleRate_);
       }
+      BodySettings body;
+      body.radiate = value(kRadiate);
+      body.barrel = value(kBarrel);
+      body.wall = value(kWall);
+      body.length = value(kLength);
+      body.holes = static_cast<int>(value(kHoles) + 0.5);
+      body.tube = static_cast<int>(value(kTube) + 0.5);
+      for (Body &b : body_)
+         b.set(body);
+      RoomSettings room;
+      room.mix = value(kRoom);
+      room.size = value(kRoomSize);
+      room.decay = value(kRoomDecay);
+      room.damp = value(kRoomDamp);
+      room.preDelayMs = value(kRoomPreDelay);
+      room_.set(room);
+      limiterMode_ = static_cast<int>(value(kLimiter) + 0.5);
+      master_ = static_cast<float>(jclap::dsp::dbToGain(value(kMaster)));
+      spread_ = value(kSpread);
       const int mode = static_cast<int>(value(kVoiceMode) + 0.5);
       if (mode != voiceMode_) {
          // Back to poly, the keys a mono mode was holding are forgotten (they still end as usual).
@@ -421,6 +471,12 @@ private:
 
    void configure(Slot &s) {
       s.voice.configure(settings(s));
+      // Spread: low notes to the left and high to the right, as across a section, at equal power
+      // (and unchanged in the middle).
+      const double at = spread_ * std::clamp((s.key - 64) / 24.0, -1.0, 1.0);
+      const double angle = (at + 1.0) * kPi / 4.0;
+      s.panL = static_cast<float>(std::sqrt(2.0) * std::cos(angle));
+      s.panR = static_cast<float>(std::sqrt(2.0) * std::sin(angle));
       s.voice.setPitch(pitchOf(s));
       s.voice.setBend(bendOf(s) / std::max(1.0, isMember(s.channel) ? bendRange(s.channel) : 2.0));
       s.voice.setExpression(pressureOf(s), timbreOf(s));
@@ -461,6 +517,23 @@ private:
       vs.tune = std::round(value(kTune, s));
       vs.fine = value(kFine, s);
       vs.level = value(kLevel, s);
+      vs.stiffness = value(kStiffness, s);
+      vs.aperture = value(kAperture, s);
+      vs.growl = value(kGrowl, s);
+      vs.cone = value(kCone, s);
+      vs.brass = value(kBrass, s);
+      vs.loss = value(kLoss, s);
+      vs.cutoffHz = value(kHoleCutoff, s);
+      vs.detune = value(kDetune, s);
+      vs.humanize = value(kHumanize, s);
+      vs.air = value(kAir, s);
+      vs.tongueType = choice(kTongueType, *s);
+      vs.vibType = choice(kVibType, *s);
+      vs.hybridModel = choice(kHybridModel, *s);
+      vs.hybridOctave = static_cast<int>(std::lround(value(kHybridOctave, s)));
+      vs.hybridMix = value(kHybridMix, s);
+      vs.hybridDetune = value(kHybridDetune, s);
+      vs.hybridBreath = value(kHybridBreath, s);
       for (int i = 0; i < kLfoCount; ++i) {
          vs.lfoRate[i] = value(lfoParam(i, 0), s);
          vs.lfoShape[i] = choice(lfoParam(i, 1), *s);
@@ -940,8 +1013,15 @@ private:
    int voiceMode_ = kPoly;
    double sampleRate_ = 48000.0;
    int oversampling_ = 2;
-   Decimator decimator_;
-   Biquad bright_;
+   Decimator decimator_, decimatorR_;
+   Biquad bright_[2];
+   Body body_[2];
+   Room room_;
+   Limiter limiter_;
+   int limiterMode_ = kLimitSoft;
+   float master_ = 1.0f;
+   double spread_ = 0.5;
+   uint64_t quietFrames_ = 0;
    double brightDb_ = 1e9;
    uint32_t tail_ = 0;
    uint64_t clock_ = 0;

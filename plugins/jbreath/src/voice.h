@@ -49,6 +49,13 @@ struct VoiceSettings {
    double busAmount[kBusCount] = {}, busLag[kBusCount] = {};
    int busMode[kBusCount] = {}, busCurve[kBusCount] = {}, busPolarity[kBusCount] = {};
    double tune = 0.0, fine = 0.0, level = 0.0; // only as bases for their routes
+   // The rest of the exciter and bore (Character in models.h), the player's habits, and the air.
+   double stiffness = 0.5, aperture = 0.5, growl = 0.2, cone = 0.5, brass = 0.5;
+   double loss = 0.04, cutoffHz = 1300.0, detune = 0.0, humanize = 0.0, air = 0.0;
+   int tongueType = kTongueHard, vibType = kVibBreath;
+   // HYBRID: a second instrument on the same breath.
+   int hybridModel = kFlute, hybridOctave = 0;
+   double hybridMix = 0.0, hybridDetune = 0.0, hybridBreath = 1.0;
 };
 
 // A model's tuning for a (fractional) MIDI note: the bore-length ratio and the levelling gain, and
@@ -148,8 +155,17 @@ public:
       models_[kSax] = std::make_unique<Sax>();
       models_[kOboe] = std::make_unique<Oboe>();
       models_[kTrumpet] = std::make_unique<Trumpet>();
+      hybrid_[kFlute] = std::make_unique<Flute>();
+      hybrid_[kClarinet] = std::make_unique<Clarinet>();
+      hybrid_[kSax] = std::make_unique<Sax>();
+      hybrid_[kOboe] = std::make_unique<Oboe>();
+      hybrid_[kTrumpet] = std::make_unique<Trumpet>();
       for (auto &m : models_)
          m->prepare(fs_);
+      for (auto &m : hybrid_)
+         m->prepare(fs_);
+      airLP_.setHz(1500.0, fs_);
+      roughCoef_ = 1.0 - std::exp(-2.0 * kPi * 30.0 * kControl / fs_);
       fallCoef_ = coef(15.0);
       stopCoef_ = coef(0.75);
       gainCoef_ = coef(5.0);
@@ -158,8 +174,11 @@ public:
       reset();
    }
    void setSeed(uint32_t seed) {
-      for (int i = 0; i < kModelCount; ++i)
+      for (int i = 0; i < kModelCount; ++i) {
          models_[i]->rng.s = seed * (i + 1) | 1u;
+         hybrid_[i]->rng.s = (seed ^ 0x2545f491u) * (i + 7) | 1u;
+      }
+      air_.s = seed ^ 0x68e31da4u;
       jitter_.s = seed ^ 0x51ed270bu;
    }
 
@@ -170,16 +189,19 @@ public:
          models_[std::clamp(s.model, 0, kModelCount - 1)]->reset();
          len_ = -1.0;
       }
+      if (s.hybridModel != settings_.hybridModel) {
+         hybrid_[std::clamp(s.hybridModel, 0, kModelCount - 1)]->reset();
+         hlen_ = -1.0;
+      }
       settings_ = s;
       settings_.model = std::clamp(s.model, 0, kModelCount - 1);
+      settings_.hybridModel = std::clamp(s.hybridModel, 0, kModelCount - 1);
       live_ = settings_;
       liveAttack_ = live_.attackMs;
       liveRelease_ = live_.releaseMs;
       liveGlide_ = live_.glideMs;
-      Model &m = model();
-      m.character.noise = static_cast<float>(s.noise);
-      m.character.edge = static_cast<float>(s.edge);
-      attackCoef_ = coef(s.attackMs / 4.0);
+      applyCharacter();
+      attackCoef_ = coef(s.attackMs / 4.0 * attackScale());
       releaseCoef_ = coef(s.releaseMs / 4.0);
       glideCoef_ = coef(std::max(3.0, s.glideMs / 3.0));
    }
@@ -188,6 +210,8 @@ public:
    void start(double pitch, double velocity, double gain) {
       if (!active_ || releasing_) {
          model().reset();
+         hybrid().reset();
+         hlen_ = -1.0;
          breath_ = 0.0;
          pitchNow_ = pitch;
          len_ = -1.0;
@@ -201,9 +225,15 @@ public:
       stop_ = false;
       age_ = 0;
       kickAge_ = 0;
-      tongue_ = 1.0f;
+      tongue_ = tongueAmount();
+      flutterPhase_ = 0.0;
       velocity_ = velocity;
       gain_ = gain;
+      // A player never plays two notes quite the same: a little off in pitch, breath, attack and
+      // vibrato (Humanize), and each note's own detune.
+      for (double &r : human_)
+         r = jitter_.white();
+      attackCoef_ = coef(liveAttack_ / 4.0 * attackScale());
       pitch_ = pitch;
       quiet_ = 0;
       lift_ = 0.0;
@@ -223,7 +253,7 @@ public:
       stop_ = true;
       age_ = 0;
       kickAge_ = -static_cast<int>(0.035 * fs_);
-      tongue_ = 1.0f;
+      tongue_ = tongueAmount();
       velocity_ = velocity;
       pitch_ = pitch;
       hold_ = 1.0;
@@ -235,6 +265,11 @@ public:
       age_ = 0;
       pitch_ = pitch;
       velocity_ = std::max(velocity_ * 0.8, velocity);
+      // Double tonguing: every note gets its own light tongue, even slurred.
+      if (settings_.tongueType == kTongueDouble) {
+         kickAge_ = 0;
+         tongue_ = 0.6f;
+      }
    }
    void release(double velocity = 0.5) {
       if (active_ && !releasing_) {
@@ -250,6 +285,9 @@ public:
       env_ = 0.0;
       if (models_[settings_.model])
          model().reset();
+      if (hybrid_[settings_.hybridModel])
+         hybrid().reset();
+      hlen_ = -1.0;
    }
 
    // The note's pitch in semitones (key, tune and bend), and its expression, 0..1.
@@ -295,8 +333,26 @@ public:
       ++kickAge_;
       // The tongue's noise rides on the air, so there's none without breath.
       const float tongue = tongue_ * static_cast<float>(std::min(1.0, breath_ * 20.0));
-      const float y = model().tick(static_cast<float>(breath_), static_cast<float>(emb_), len_, tongue) *
-                      static_cast<float>(gainNow_);
+      // A growl in the throat or a fluttering tongue roughens the air on its way in.
+      const float blown = static_cast<float>(breath_ * shake_);
+      const float mix = static_cast<float>(live_.hybridMix);
+      float y = 0.0f;
+      if (mix < 0.999f)
+         y = model().tick(blown, static_cast<float>(emb_), len_, tongue) * static_cast<float>(gainNow_) * (1.0f - mix);
+      if (mix > 0.0f) {
+         if (hlen_ > 0.0) {
+            hlen_ += hlenStep_;
+            hgainNow_ += (hgainTarget_ - hgainNow_) * gainCoef_;
+            y += hybrid().tick(blown * static_cast<float>(hratio_), static_cast<float>(emb_), hlen_, tongue) *
+                 static_cast<float>(hgainNow_) * mix;
+         }
+      }
+      // Air: the breath heard around the instrument, not through it.
+      if (live_.air > 0.0) {
+         const float w = air_.white();
+         const float hiss = w - airLP_.tick(w);
+         y += hiss * static_cast<float>(live_.air * 0.05 * std::sqrt(std::max(0.0, breath_)) * gain_ * levelMod_);
+      }
       if (!std::isfinite(y)) {
          // A model pushed somewhere it can't go: silence it rather than the whole plugin.
          reset();
@@ -329,8 +385,54 @@ private:
       b *= std::min(1.0, level / 0.08);
       // The tongue's release comes with a burst of pressure that kicks the oscillation off.
       if (kickAge_ >= 0)
-         b *= 1.0 + live_.kick * kickEnv_;
-      return b * vibBreath_;
+         b *= 1.0 + live_.kick * kickScale() * kickEnv_;
+      return b * vibBreath_ * (1.0 + 0.08 * live_.humanize * human_[1]);
+   }
+   // The same breath for another instrument: its own offset and scale on the player's level.
+   double breathFor(int model) const {
+      const ModelInfo &info = modelInfo(model);
+      return info.breathOffset + info.breathScale * live_.breath * std::pow(std::max(levelNow_, 0.0), live_.curve);
+   }
+
+   Model &hybrid() { return *hybrid_[settings_.hybridModel]; }
+   // Each tongue's burst of pressure, its noise, and how it eases the attack.
+   double kickScale() const {
+      switch (settings_.tongueType) {
+      case kTongueSoft:
+         return 0.35;
+      case kTongueBreath:
+         return 0.0;
+      default:
+         return 1.0;
+      }
+   }
+   float tongueAmount() const {
+      switch (settings_.tongueType) {
+      case kTongueSoft:
+         return 0.35f;
+      case kTongueBreath:
+         return 0.0f;
+      default:
+         return 1.0f;
+      }
+   }
+   double attackScale() const {
+      const double t = settings_.tongueType == kTongueSoft ? 1.8 : settings_.tongueType == kTongueBreath ? 1.3 : 1.0;
+      return t * (1.0 + 0.4 * live_.humanize * human_[2]);
+   }
+   void applyCharacter() {
+      for (Model *m : {&model(), &hybrid()}) {
+         Character &c = m->character;
+         c.noise = static_cast<float>(live_.noise);
+         c.edge = static_cast<float>(live_.edge);
+         c.growl = static_cast<float>(live_.growl / 0.2);
+         c.stiffness = static_cast<float>(live_.stiffness);
+         c.aperture = static_cast<float>(live_.aperture);
+         c.cone = static_cast<float>(live_.cone);
+         c.brass = static_cast<float>(live_.brass);
+         c.loss = static_cast<float>(live_.loss);
+         c.cutoff = static_cast<float>(live_.cutoffHz / 1300.0);
+      }
    }
 
    // Every kControl samples: the player's level, vibrato, pitch and the bore length.
@@ -373,29 +475,48 @@ private:
       modulate(dt);
 
       // Vibrato grows in after its delay; its rate and depth wander a little.
-      const double vd = std::clamp((age_ / fs_ - live_.vibDelayMs / 1000.0) / 0.6, 0.0, 1.0);
+      const double hum = live_.humanize;
+      const double vd = std::clamp((age_ / fs_ - live_.vibDelayMs * (1.0 + 0.3 * hum * human_[3]) / 1000.0) / 0.6, 0.0, 1.0);
       // (Steps scaled from the prototype's, which wandered every 256 samples at 96 kHz.)
       const double walk = std::sqrt(dt * 375.0), pull = 0.02 * dt * 375.0;
-      vibRate_ += pull * (live_.vibRate - vibRate_) + 0.05 * jitter_.white() * walk;
+      vibRate_ += pull * (live_.vibRate * (1.0 + 0.06 * hum * human_[4]) - vibRate_) + 0.05 * jitter_.white() * walk;
       vibAmt_ += pull * (1.0 - vibAmt_) + 0.04 * jitter_.white() * walk;
       vibPhase_ += 2 * kPi * vibRate_ * dt;
       if (vibPhase_ > 2 * kPi)
          vibPhase_ -= 2 * kPi;
       const double vib = vibAmt_ * vd * std::sin(vibPhase_);
-      vibBreath_ = 1.0 + live_.vibDepth * vib;
+      const int vt = settings_.vibType;
+      vibBreath_ = vt == kVibBreath || vt == kVibBoth ? 1.0 + live_.vibDepth * vib : 1.0;
+      const double vibEmb = vt == kVibJaw || vt == kVibBoth ? 1.6 * live_.vibDepth * vib : 0.0;
+      const double vibCents = live_.vibPitch + (vt == kVibLip ? 150.0 * live_.vibDepth : 0.0);
 
-      // Embouchure: the knob, moved by MPE slide.
-      emb_ = std::clamp(live_.embouchure + settings_.slide * (timbre_ - 0.5) * 2.0, 0.0, 1.0);
+      // Growl: a rough, low flutter of the throat; Flutter tongue: a rolled R through the note.
+      const double growl = std::max(0.0, live_.growl - 0.2) / 0.8;
+      rough_ += (jitter_.white() - rough_) * roughCoef_;
+      shake_ = 1.0 + growl * 0.35 * std::clamp(6.0 * rough_, -1.0, 1.0);
+      if (settings_.tongueType == kTongueFlutter && !releasing_ && age_ > 0.06 * fs_) {
+         flutterPhase_ += 24.0 * dt;
+         if (flutterPhase_ >= 1.0) {
+            flutterPhase_ -= 1.0;
+            tongue_ = std::max(tongue_, 0.3f);
+         }
+         const double c = 0.5 + 0.5 * std::cos(2 * kPi * flutterPhase_);
+         shake_ *= 1.0 - 0.45 * c * c;
+      }
+
+      // Embouchure: the knob, moved by MPE slide (and a jaw vibrato).
+      emb_ = std::clamp(live_.embouchure + settings_.slide * (timbre_ - 0.5) * 2.0 + vibEmb, 0.0, 1.0);
 
       // Pitch glides to the note (a finger lands in a couple of ms, or the Glide time).
       const double g = 1.0 - std::pow(1.0 - glideCoef_, kControl);
       pitchNow_ += (pitch_ - pitchNow_) * g;
-      const double sounding = pitchNow_ + pitchMod_ + live_.vibPitch / 100.0 * vib;
+      const double sounding = pitchNow_ + pitchMod_ + vibCents / 100.0 * vib +
+                              (6.0 * hum * human_[0] + live_.detune * human_[5]) / 100.0;
       const Tuning t = TuningTable::get().at(settings_.model, sounding, fs_);
       const double hz = 440.0 * std::pow(2.0, (sounding - 69.0) / 12.0 + t.octaves);
       Model &m = model();
       m.notePitch(hz);
-      const double len = m.nominal(hz) * t.ratio;
+      const double len = m.nominal(hz) * t.ratio - (m.character.cutoff != 1.0f ? m.cutoffDelay(hz) : 0.0);
       if (len_ < 0.0) {
          len_ = len;
          lenStep_ = 0.0;
@@ -404,6 +525,32 @@ private:
          lenStep_ = (len - len_) / kControl;
       }
       gainTarget_ = t.gain * gain_ * levelMod_;
+
+      // HYBRID: the second instrument at its own octave and detune, blown with the same breath.
+      if (live_.hybridMix > 0.0) {
+         const int hm = settings_.hybridModel;
+         const double hs = sounding + 12.0 * settings_.hybridOctave + live_.hybridDetune / 100.0;
+         const Tuning ht = TuningTable::get().at(hm, hs, fs_);
+         const double hhz = 440.0 * std::pow(2.0, (hs - 69.0) / 12.0 + ht.octaves);
+         Model &h = hybrid();
+         if (hlen_ < 0.0)
+            h.reset();
+         h.notePitch(hhz);
+         const double hlen = h.nominal(hhz) * ht.ratio - (h.character.cutoff != 1.0f ? h.cutoffDelay(hhz) : 0.0);
+         if (hlen_ < 0.0) {
+            hlen_ = hlen;
+            hlenStep_ = 0.0;
+            hgainNow_ = ht.gain * gain_ * levelMod_;
+         } else {
+            hlenStep_ = (hlen - hlen_) / kControl;
+         }
+         hgainTarget_ = ht.gain * gain_ * levelMod_;
+         const double a = breathFor(settings_.model), b = breathFor(hm);
+         if (a > 1e-4)
+            hratio_ = b / a * live_.hybridBreath;
+      } else {
+         hlen_ = -1.0;
+      }
 
       // Silent long enough after letting go (or tongued to nothing): the voice is free.
       level_ = static_cast<float>(env_);
@@ -601,12 +748,22 @@ private:
       live_.lfoRate[0] = at(16, s.lfoRate[0]);
       live_.lfoRate[1] = at(17, s.lfoRate[1]);
       live_.swellTime = at(18, s.swellTime);
-      Model &m = model();
-      m.character.noise = static_cast<float>(live_.noise);
-      m.character.edge = static_cast<float>(live_.edge);
+      live_.stiffness = at(kDest<kStiffness>, s.stiffness);
+      live_.aperture = at(kDest<kAperture>, s.aperture);
+      live_.growl = at(kDest<kGrowl>, s.growl);
+      live_.humanize = at(kDest<kHumanize>, s.humanize);
+      live_.hybridMix = at(kDest<kHybridMix>, s.hybridMix);
+      live_.hybridDetune = at(kDest<kHybridDetune>, s.hybridDetune);
+      live_.loss = at(kDest<kLoss>, s.loss);
+      live_.cutoffHz = at(kDest<kHoleCutoff>, s.cutoffHz);
+      live_.cone = at(kDest<kCone>, s.cone);
+      live_.brass = at(kDest<kBrass>, s.brass);
+      live_.detune = at(kDest<kDetune>, s.detune);
+      live_.air = at(kDest<kAir>, s.air);
+      applyCharacter();
       if (attack != liveAttack_) {
          liveAttack_ = attack;
-         attackCoef_ = coef(attack / 4.0);
+         attackCoef_ = coef(attack / 4.0 * attackScale());
       }
       if (release != liveRelease_) {
          liveRelease_ = release;
@@ -618,7 +775,12 @@ private:
       }
    }
 
-   std::unique_ptr<Model> models_[kModelCount];
+   std::unique_ptr<Model> models_[kModelCount], hybrid_[kModelCount];
+   double hlen_ = -1.0, hlenStep_ = 0.0, hgainNow_ = 0.0, hgainTarget_ = 0.0, hratio_ = 1.0;
+   double human_[6] = {};
+   double shake_ = 1.0, rough_ = 0.0, roughCoef_ = 0.03, flutterPhase_ = 0.0;
+   Noise air_;
+   OnePoleLP airLP_;
    VoiceSettings settings_, live_;
    float sources_[kModSourceCount] = {};
    float offsets_[kModDestCount] = {};
