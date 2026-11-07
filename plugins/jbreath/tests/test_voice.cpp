@@ -69,6 +69,18 @@ double pitchOf(const std::vector<float> &x, size_t from, double hz) {
    return kRate / (best + (den != 0 ? 0.5 * (a - c) / den : 0.0));
 }
 
+// The level of the component at `hz` over the last `n` samples (Hann window).
+double partial(const std::vector<float> &x, size_t n, double hz) {
+   const size_t from = x.size() - n;
+   double re = 0, im = 0;
+   for (size_t i = 0; i < n; ++i) {
+      const double w = 0.5 - 0.5 * std::cos(2 * kPi * i / n), ph = 2 * kPi * hz * i / kRate;
+      re += w * x[from + i] * std::cos(ph);
+      im -= w * x[from + i] * std::sin(ph);
+   }
+   return 4.0 * std::sqrt(re * re + im * im) / n;
+}
+
 } // namespace
 
 int main() {
@@ -98,6 +110,33 @@ int main() {
                   table.lowest(m), table.highest(m), worstCents, worst, minDb, maxDb);
       JCLAP_CHECK(std::fabs(worstCents) < 15.0);
       JCLAP_CHECK(minDb > -32.0 && maxDb < -10.0);
+
+      // Soft, middling and hard, every third semitone: it sounds, and in its own register (a tone
+      // that jumps to the octave has almost nothing left at the fundamental).
+      {
+         int silent = 0, octave = 0;
+         double worstRatio = 0.0;
+         for (double velocity : {0.3, 0.75, 1.0})
+            for (int note = lo; note <= hi; note += 3) {
+               VoiceSettings s;
+               s.vibDepth = 0.0;
+               const Take t = play(m, note, 0.5, velocity, s);
+               const double hz = 440.0 * std::pow(2.0, (note - 69) / 12.0);
+               const double rms = t.rms(t.out.size() - 9600, t.out.size());
+               const double h1 = partial(t.out, 9600, hz), h2 = partial(t.out, 9600, 2 * hz);
+               const double ratio = h2 / (h1 + 1e-12);
+               worstRatio = std::max(worstRatio, ratio);
+               if (rms < 0.003) {
+                  ++silent;
+                  std::printf("         note %d at %.2f: silent\n", note, velocity);
+               } else if (ratio > 3.0) {
+                  ++octave;
+                  std::printf("         note %d at %.2f: octave (H2/H1 %.1f)\n", note, velocity, ratio);
+               }
+            }
+         std::printf("         register: %d silent, %d at the octave, worst H2/H1 %.2f\n", silent, octave, worstRatio);
+         JCLAP_CHECK(silent == 0 && octave == 0);
+      }
 
       // A tongued start speaks within 80 ms.
       {
@@ -142,6 +181,8 @@ int main() {
             peak = std::max(peak, std::fabs(y));
          }
          JCLAP_CHECK(ok);
+         if (peak >= 40.0f)
+            std::printf("         corner %d: peak %.1f\n", corner, peak);
          JCLAP_CHECK(peak < 40.0f);
       }
    }

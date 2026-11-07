@@ -250,7 +250,7 @@ public:
       dc_ = {};
       dc_.setFs(fs_);
       noiseLP_ = {};
-      noiseLP_.setHz(2500, fs_);
+      noiseLP_.setHz(800, fs_);
       tx_ = 0.0f;
    }
    double nominal(double hz) const override { return fs_ / (2.0 * hz); }
@@ -258,21 +258,26 @@ public:
    // up with notes above that, so they play too (as a real clarinet's tone holes leave more bore).
    void notePitch(double hz) override {
       hz_ = hz;
+      // High notes need a firmer push to speak (a player bites and blows harder up there).
+      lift_ = 1.0 + 0.2 * std::clamp(std::log2(hz / 440.0) / 0.8, 0.0, 1.0);
       const double cut = std::max(1300.0, 2.2 * hz);
       lp_.setHz(cut, fs_);
       lp2_.setHz(cut, fs_);
    }
    float tick(float breath, float emb, double len, float tn) override {
       const float noise = noiseLP_.tick(rng.white());
-      const float growl = std::max(0.0f, breath - 0.9f) * 0.3f * character.edge;
-      const double g = 0.7 * breath * (1 + (0.03f * character.noise + growl) * noise) + tn * 0.04f * noise;
+      const float growl = std::max(0.0f, breath - 0.9f) * 0.1f * character.edge;
+      const double g = 0.7 * lift_ * breath * (1 + (0.012f * character.noise + growl) * noise) + tn * 0.04f * noise;
       const double z = 0.35 * (0.8 + 0.4 * emb);
       const double inc = bore_.read(len);
       const double back = -0.96 * lp2_.tick(lp_.tick(static_cast<float>(inc)));
       const auto F = [g, z](double p) {
-         const double W = g - p, open = 1 - W;
-         if (open <= 0)
+         // The reed closes softly (its tip curls onto the lay), not at a hard corner, which would
+         // make a beating reed's tone rough and noisy.
+         const double W = g - p, gap = 1 - W;
+         if (gap <= -0.12)
             return 0.0;
+         const double open = gap >= 0.12 ? gap : (gap + 0.12) * (gap + 0.12) / 0.48;
          return z * open * (W >= 0 ? 1 : -1) * std::sqrt(std::fabs(W));
       };
       // u = F(2 back + u): the flow and the pressure it makes, by bisection (F falls as u rises).
@@ -296,7 +301,7 @@ private:
    Delay bore_;
    OnePoleLP lp_, lp2_, noiseLP_;
    DCBlock dc_;
-   double hz_ = 294.0;
+   double hz_ = 294.0, lift_ = 1.0;
    float tx_ = 0.0f;
 };
 
@@ -322,15 +327,29 @@ public:
       noiseLP_ = {};
       noiseLP_.setHz(noiseHz_, fs_);
       out0_ = 0.0f;
+      register_.clear();
+      regHz_ = 0.0;
+      notePitch(hz_);
       resetColour();
    }
    double nominal(double hz) const override { return fs_ / hz; }
+   // A split bore lets the second mode compete with the first, and on its own the loop jumps to the
+   // octave on most notes. A gentle lift at the fundamental (a cone's wider first resonance, from
+   // its missing apex) keeps it in the low register; on release the loop still dies away.
+   void notePitch(double hz) override {
+      if (hz == regHz_)
+         return;
+      regHz_ = hz_ = hz;
+      register_.peak(hz, 0.7, 1.5, fs_);
+   }
    float tick(float breath, float emb, double len, float tn) override {
       const float noise = noiseLP_.tick(rng.white());
       const float growl = std::max(0.0f, breath - 0.95f) * growl_ * character.edge;
       const float p = breath * (1 + (breathNoise_ * character.noise + growl) * noise) + tn * tongueNoise_ * noise;
       const double pos = 0.2 + posEmb_ * (emb - 0.5);
-      const float temp = -0.95f * lp_.tick(d0_.read(std::max(2.0, len * (1 - pos))));
+      // The lift puts the loop's gain a little over one at the fundamental; the reed's losses hold it
+      // there in normal playing, and the bore's walls (a clip far above any played level) at extremes.
+      const float temp = std::clamp(-0.95f * register_.tick(lp_.tick(d0_.read(std::max(2.0, len * (1 - pos))))), -6.0f, 6.0f);
       out0_ = temp - d1_.read(std::max(2.0, len * pos));
       const float pd = p - out0_;
       const float r = std::clamp(0.7f + (stiff_ + stiffEmb_ * emb) * pd, -1.0f, 1.0f);
@@ -350,7 +369,9 @@ protected:
 private:
    Delay d0_, d1_;
    OnePoleLP lp_, noiseLP_;
+   Biquad register_;
    DCBlock dc_;
+   double hz_ = 294.0, regHz_ = 0.0;
    float out0_ = 0.0f;
 };
 
@@ -474,9 +495,9 @@ struct ModelInfo {
 inline const ModelInfo &modelInfo(int id) {
    static const ModelInfo info[kModelCount] = {
       {"Flute", 0.8f, 0.15f, 0.75f},
-      {"Clarinet", 0.62f, 0.25f, 0.715f},
+      {"Clarinet", 0.42f, 0.5f, 0.815f},
       {"Sax", 0.65f, 0.2f, 0.6875f},
-      {"Oboe", 0.65f, 0.25f, 0.7375f},
+      {"Oboe", 0.42f, 0.48f, 0.795f},
       {"Trumpet", 0.6f, 0.2f, 0.65f},
    };
    return info[std::clamp(id, 0, kModelCount - 1)];
