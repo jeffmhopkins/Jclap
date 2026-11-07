@@ -235,7 +235,7 @@ public:
       if (slot >= 0 && slot < kVoiceCount)
          voiceScopes_[slot].read(out, count);
    }
-   float outputPeak() override { return outputPeak_.exchange(0.0f); }
+   float outputPeak(int channel) override { return outputPeak_[channel & 1].exchange(0.0f); }
    double sampleRate() const override { return shownRate_.load(); }
    std::string presetName() const override { return presetName_; }
    void setPresetName(const std::string &name) override { presetName_ = name; }
@@ -347,7 +347,7 @@ public:
       const clap_input_events_t *in = proc->in_events;
       const uint32_t eventCount = in->size(in), frames = proc->frames_count;
       const int os = oversampling_;
-      float peak = 0.0f;
+      float peak[2] = {};
       uint32_t next = 0;
       for (uint32_t start = 0; start < frames;) {
          while (next < eventCount && in->get(in, next)->time <= start)
@@ -387,7 +387,8 @@ public:
                l = 0.0f;
             if (std::fabs(r) < 1e-9f)
                r = 0.0f;
-            peak = std::max(peak, std::max(std::fabs(l), std::fabs(r)));
+            peak[0] = std::max(peak[0], std::fabs(l));
+            peak[1] = std::max(peak[1], std::fabs(r));
             if (left)
                left[i] = right ? l : 0.5f * (l + r);
             if (right)
@@ -402,8 +403,9 @@ public:
       for (Slot &s : slots_)
          if (!s.voice.isActive())
             endNote(s, proc->out_events, frames > 0 ? frames - 1 : 0);
-      if (peak > outputPeak_.load(std::memory_order_relaxed))
-         outputPeak_.store(peak, std::memory_order_relaxed);
+      for (int c = 0; c < 2; ++c)
+         if (peak[c] > outputPeak_[c].load(std::memory_order_relaxed))
+            outputPeak_[c].store(peak[c], std::memory_order_relaxed);
       publishVoices();
       blockFrames_ = 0;
       // Per-note modulation that never found its note this block isn't kept for later notes.
@@ -1036,7 +1038,7 @@ private:
    };
    Shown shown_[kVoiceCount];
    jclap::core::SampleFifo<2048> voiceScopes_[kVoiceCount];
-   std::atomic<float> outputPeak_{0.0f};
+   std::atomic<float> outputPeak_[2]{{0.0f}, {0.0f}};
    std::atomic<double> shownRate_{48000.0};
    // The MPE lower zone's size (see isMember), set by an MPE Configuration Message.
    int mpeMembers_ = 15;

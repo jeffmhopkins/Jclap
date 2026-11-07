@@ -36,8 +36,8 @@ public:
    virtual void readVoice(int slot, float *out, size_t count) = 0;
    // The host's sample rate, which readVoice's samples are at.
    virtual double sampleRate() const = 0;
-   // The output's peak since the panel last asked, linear.
-   virtual float outputPeak() = 0;
+   // A channel's output peak (0 left, 1 right) since the panel last asked, linear.
+   virtual float outputPeak(int channel) = 0;
    // The name of the preset last loaded or saved, kept with the project.
    virtual std::string presetName() const = 0;
    virtual void setPresetName(const std::string &name) = 0;
@@ -47,14 +47,27 @@ std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // Draws the panel offscreen at the given pixel size and saves it as a PNG. `frames` steps the
 // breath loops' animation that many timer ticks first.
-// `options` opens a view first: a tab of the Player card (0 PLAYER, 1 LFOS, 2 BUSES), the ROUTES
-// list in place of the loops, and MAP with a source armed (a ModSource; 0 for MAP off).
+// `options` opens a view first: a tab of the Player card (0 PLAYER, 1 VIBRATO, 2 LFOS, 3 BUSES),
+// of the Exciter (0 EXCITER, 1 HYBRID) and of the Voice card (0 VOICE, 1 AIR, 2 ROOM), the ROUTES
+// list in place of the loops, MAP with a source armed (a ModSource; 0 for MAP off), and the AIR
+// view in place of the panel.
 struct ScreenshotOptions {
    int playerTab = 0;
    bool routes = false;
    int armed = 0;
+   int exciterTab = 0;
+   int voiceTab = 0;
+   bool air = false;
 };
 bool renderScreenshot(EditorHost &host, int width, int height, int frames, const char *pngPath,
                       const ScreenshotOptions &options = {});
+
+// Times the panel offscreen over `frames` frames at 60 a second: its step (reading the voices,
+// moving the smoke) and its drawing, in ms a frame over the second half, once the smoke has built.
+struct PanelBenchmark {
+   double stepMs = 0.0, drawMs = 0.0;
+   int puffs = 0;
+};
+PanelBenchmark benchmarkPanel(EditorHost &host, int width, int height, int frames, bool air);
 
 } // namespace jbreath

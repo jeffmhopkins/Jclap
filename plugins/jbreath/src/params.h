@@ -106,6 +106,8 @@ enum ParamId : clap_id {
    kGlow,
    kParamCount
 };
+// The routes' params end where the panel's later params begin.
+constexpr clap_id kRouteEnd = kStiffness;
 // Presets cover every param before the look.
 constexpr clap_id kPresetParamCount = kLook;
 
@@ -388,7 +390,7 @@ inline const char *const *choiceNames(clap_id id, int &count) {
             break;
          }
       }
-      if (id >= kRouteBase && id < kParamCount && (id - kRouteBase) % kRouteStride == kRouteSource) {
+      if (id >= kRouteBase && id < kRouteEnd && (id - kRouteBase) % kRouteStride == kRouteSource) {
          count = kModSourceCount;
          return kModSourceNames;
       }
@@ -432,7 +434,7 @@ inline bool isPercent(clap_id id) {
    default:
       if (id >= kBusBase && id < kRouteBase)
          return (id - kBusBase) % kBusStride == kBusAmount;
-      if (id >= kRouteBase && id < kParamCount)
+      if (id >= kRouteBase && id < kRouteEnd)
          return (id - kRouteBase) % kRouteStride == kRouteAmount;
       return false;
    }
@@ -459,7 +461,7 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
       std::snprintf(out, size, "%.0f%%", value * 100.0);
       return;
    }
-   if (id >= kRouteBase && id < kParamCount && (id - kRouteBase) % kRouteStride == kRouteDestination) {
+   if (id >= kRouteBase && id < kRouteEnd && (id - kRouteBase) % kRouteStride == kRouteDestination) {
       const int d = std::clamp(static_cast<int>(value + 0.5), 0, kModDestCount - 1);
       std::snprintf(out, size, "%s", kParams[kModDestinations[d]].name);
       return;
@@ -549,7 +551,7 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
             return true;
          }
    }
-   if (id >= kRouteBase && id < kParamCount && (id - kRouteBase) % kRouteStride == kRouteDestination)
+   if (id >= kRouteBase && id < kRouteEnd && (id - kRouteBase) % kRouteStride == kRouteDestination)
       for (int d = 0; d < kModDestCount; ++d)
          if (!std::strcmp(text, kParams[kModDestinations[d]].name)) {
             value = d;

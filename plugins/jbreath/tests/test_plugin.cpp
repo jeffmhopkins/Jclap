@@ -367,7 +367,7 @@ int main() {
    std::vector<float> loop(512);
    panel.readVoice(0, loop.data(), loop.size());
    JCLAP_CHECK(std::any_of(loop.begin(), loop.end(), [](float v) { return std::fabs(v) > 1e-3f; }));
-   JCLAP_CHECK(panel.outputPeak() > 0.0f);
+   JCLAP_CHECK(panel.outputPeak(0) > 0.0f && panel.outputPeak(1) > 0.0f);
    h.note(CLAP_EVENT_NOTE_OFF, 62, 0.0, 9);
    run.seconds(1.0);
 
