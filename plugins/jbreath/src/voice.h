@@ -294,8 +294,8 @@ private:
       kickEnv_ = kickAge_ >= 0 ? std::exp(-kickAge_ / (0.04 * fs_)) : 0.0;
       tongueDecay_ = static_cast<float>(std::exp(-1.0 / (0.017 * fs_)));
 
-      // Breath from velocity, pressure, the Breath In input, or (Auto) velocity until pressure or
-      // the input takes over.
+      // Breath from velocity, pressure, the Breath In input, (Auto) velocity until pressure or the
+      // input takes over, or (Mix) the input shaped by each note's pressure or velocity.
       const double vel = velocity_;
       switch (settings_.source) {
       case 1:
@@ -306,6 +306,13 @@ private:
          break;
       case 3:
          levelNow_ = settings_.breathIn;
+         break;
+      case 4:
+         // Mix: Breath In is the lungs, shared by every note, and each note's own pressure (or its
+         // velocity, until pressure arrives) is how much of it that note lets through.
+         if (pressure_ > 0.04)
+            hold_ *= std::exp(-dt / 0.15);
+         levelNow_ = settings_.breathIn * std::max(pressure_, vel * hold_);
          break;
       default: {
          const double blown = std::max(pressure_, settings_.breathIn);

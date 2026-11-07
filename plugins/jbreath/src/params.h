@@ -54,7 +54,7 @@ constexpr auto kStepped = kMod | CLAP_PARAM_IS_STEPPED;
 constexpr auto kGlobalChoice = kGlobalMod | CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_ENUM;
 
 enum VoiceMode { kPoly, kMono, kLegato };
-enum BreathSource { kSourceAuto, kSourcePressure, kSourceVelocity, kSourceInput };
+enum BreathSource { kSourceAuto, kSourcePressure, kSourceVelocity, kSourceInput, kSourceMix };
 
 inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kModel, "Instrument", "Exciter", 0.0, 4.0, 1.0, kGlobalChoice},
@@ -74,7 +74,7 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kVibPitch, "Vibrato Pitch", "Vibrato", 0.0, 50.0, 0.0, kMod},
    {kVibDelay, "Vibrato Delay", "Vibrato", 0.0, 2000.0, 350.0, kMod},
    {kVoiceMode, "Voice Mode", "Voice", 0.0, 2.0, 0.0, kGlobalChoice},
-   {kBreathSource, "Breath Source", "Voice", 0.0, 3.0, 0.0, kGlobalChoice},
+   {kBreathSource, "Breath Source", "Voice", 0.0, 4.0, 0.0, kGlobalChoice},
    {kCurve, "Press Curve", "Voice", 0.3, 3.0, 1.0, kMod},
    {kSlide, "Slide", "Voice", 0.0, 1.0, 0.5, kMod},
    {kBendRange, "MPE Bend Range", "Voice", 1.0, 96.0, 48.0, kGlobalMod | CLAP_PARAM_IS_STEPPED},
@@ -84,7 +84,7 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
 
 inline const char *const kModelNames[] = {"Flute", "Clarinet", "Sax", "Oboe", "Trumpet"};
 inline const char *const kVoiceModeNames[] = {"Poly", "Mono", "Legato"};
-inline const char *const kBreathSourceNames[] = {"Auto", "Pressure", "Velocity", "Input"};
+inline const char *const kBreathSourceNames[] = {"Auto", "Pressure", "Velocity", "Input", "Mix"};
 
 inline const char *const *choiceNames(clap_id id, int &count) {
    switch (id) {
@@ -95,7 +95,7 @@ inline const char *const *choiceNames(clap_id id, int &count) {
       count = 3;
       return kVoiceModeNames;
    case kBreathSource:
-      count = 4;
+      count = 5;
       return kBreathSourceNames;
    default:
       count = 0;

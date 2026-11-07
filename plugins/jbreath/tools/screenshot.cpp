@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
    }
    const int width = argc > 3 ? std::atoi(argv[2]) : 1648;
    const int height = argc > 3 ? std::atoi(argv[3]) : 940;
-   const int frames = argc > 4 ? std::atoi(argv[4]) : 40;
+   const int frames = argc > 4 ? std::atoi(argv[4]) : 150;
    DemoHost host;
    return renderScreenshot(host, width, height, frames, argv[1]) ? 0 : 1;
 }

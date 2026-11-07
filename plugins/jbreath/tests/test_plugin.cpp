@@ -211,6 +211,27 @@ int main() {
    h.midi(0x81, 60, 0);
    run.seconds(1.0);
    JCLAP_CHECK(run.left.back() == 0.0f);
+
+   // Mix: Breath In times each note's own velocity, or its pressure once that arrives. No input is
+   // silent whatever the note does.
+   h.setParam(kBreathSource, kSourceMix);
+   h.setParam(kBreathIn, 1.0);
+   h.midi(0x91, 60, 100);
+   run.seconds(0.4);
+   JCLAP_CHECK(run.rms() > 0.02);
+   h.setParam(kBreathIn, 0.0);
+   run.seconds(0.5);
+   run.seconds(0.3);
+   JCLAP_CHECK(run.rms() < 1e-3);
+   h.setParam(kBreathIn, 1.0);
+   h.midi(0xD1, 90, 0);
+   run.seconds(0.6);
+   JCLAP_CHECK(run.rms() > 0.02);
+   h.midi(0x81, 60, 0);
+   h.midi(0xD1, 0, 0);
+   h.setParam(kBreathIn, 0.0);
+   run.seconds(1.0);
+   JCLAP_CHECK(run.left.back() == 0.0f);
    h.setParam(kBreathSource, kSourceAuto);
 
    run.noteEnds.clear();
