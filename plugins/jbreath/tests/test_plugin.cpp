@@ -234,6 +234,61 @@ int main() {
    JCLAP_CHECK(run.left.back() == 0.0f);
    h.setParam(kBreathSource, kSourceAuto);
 
+   // A route: LFO 1 (a 4 Hz sine) onto Fine at a quarter of its range (+-50 cents) bends the
+   // pitch up and down; with the route's amount at zero the pitch holds still.
+   {
+      jclap::core::TestHost mh(clap_entry, kId);
+      Run mr{mh};
+      mh.setParam(kVibDepth, 0.0);
+      mh.setParam(kLfo1Rate, 4.0);
+      mh.setParam(routeParam(0, kRouteSource), kSrcLfo1);
+      mh.setParam(routeParam(0, kRouteDestination), destinationOf(kFine));
+      mh.setParam(routeParam(0, kRouteAmount), 0.25);
+      mh.note(CLAP_EVENT_NOTE_ON, 62, 0.8, 1);
+      mr.seconds(0.5);
+      double lo = 1e9, hi = -1e9;
+      for (int i = 0; i < 8; ++i) {
+         mr.seconds(0.03125);
+         // A short window: the pitch over the last 30 ms.
+         const double c = cents(mr.pitch(hzOf(62)), hzOf(62));
+         lo = std::min(lo, c);
+         hi = std::max(hi, c);
+      }
+      std::printf("LFO 1 onto Fine: %.0f..%.0f cents\n", lo, hi);
+      JCLAP_CHECK(hi - lo > 40.0 && hi - lo < 130.0);
+      mh.setParam(routeParam(0, kRouteAmount), 0.0);
+      mr.seconds(0.3);
+      lo = 1e9, hi = -1e9;
+      for (int i = 0; i < 8; ++i) {
+         mr.seconds(0.03125);
+         const double c = cents(mr.pitch(hzOf(62)), hzOf(62));
+         lo = std::min(lo, c);
+         hi = std::max(hi, c);
+      }
+      JCLAP_CHECK(hi - lo < 10.0);
+
+      // Press through Bus 1 onto Breath: a note with no pressure plays from its velocity, and
+      // pressure (through the bus) makes it louder.
+      mh.note(CLAP_EVENT_NOTE_OFF, 62, 0.0, 1);
+      mr.seconds(1.0);
+      mh.setParam(kBreathSource, kSourceVelocity);
+      mh.setParam(routeParam(1, kRouteSource), kSrcPress);
+      mh.setParam(routeParam(1, kRouteDestination), kFirstBusDest);
+      mh.setParam(routeParam(1, kRouteAmount), 1.0);
+      mh.setParam(routeParam(2, kRouteSource), kSrcBus1);
+      mh.setParam(routeParam(2, kRouteDestination), destinationOf(kBreath));
+      mh.setParam(routeParam(2, kRouteAmount), 0.3);
+      mh.setParam(kBreath, 0.8);
+      mh.midi(0x91, 60, 70);
+      mr.seconds(0.6);
+      const double quiet = mr.rms();
+      mh.midi(0xD1, 127, 0);
+      mr.seconds(0.6);
+      const double loud = mr.rms();
+      std::printf("Press through Bus 1 onto Breath: %.3f -> %.3f RMS\n", quiet, loud);
+      JCLAP_CHECK(quiet > 0.01 && loud > quiet * 1.15);
+   }
+
    run.noteEnds.clear();
    // Eight voices; a ninth note steals one, and the host hears that note ended.
    for (int i = 0; i < 8; ++i)

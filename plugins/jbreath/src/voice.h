@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "models.h"
+#include "params.h"
 #include "tuning_table.h"
 
 namespace jbreath {
@@ -31,6 +32,23 @@ struct VoiceSettings {
    int source = 0; // BreathSource
    double breathIn = 0.0; // the Breath In parameter, 0..1
    double curve = 1.0, slide = 0.5;
+
+   // Modulation (params.h): the routes in use, the generators and the buses. A destination's
+   // value is its param's plus each route's amount times its source, in the param's full range.
+   struct Route {
+      int source = 0, dest = 0;
+      float amount = 0.0f;
+   };
+   Route routes[kRouteCount];
+   int routeCount = 0;
+   double lfoRate[kLfoCount] = {1.0, 0.25};
+   int lfoShape[kLfoCount] = {kLfoSine, kLfoSmooth}, lfoSync[kLfoCount] = {0, 1};
+   int swellShape = kSwellArch;
+   double swellTime = 3.0;
+   bool swellLoop = false;
+   double busAmount[kBusCount] = {}, busLag[kBusCount] = {};
+   int busMode[kBusCount] = {}, busCurve[kBusCount] = {}, busPolarity[kBusCount] = {};
+   double tune = 0.0, fine = 0.0, level = 0.0; // only as bases for their routes
 };
 
 // A model's tuning for a (fractional) MIDI note: the bore-length ratio and the levelling gain, and
@@ -136,6 +154,7 @@ public:
       stopCoef_ = coef(0.75);
       gainCoef_ = coef(5.0);
       envCoef_ = coef(30.0);
+      hpCoef_ = static_cast<float>(1.0 - std::exp(-2.0 * kPi * 2000.0 / fs_));
       reset();
    }
    void setSeed(uint32_t seed) {
@@ -153,6 +172,10 @@ public:
       }
       settings_ = s;
       settings_.model = std::clamp(s.model, 0, kModelCount - 1);
+      live_ = settings_;
+      liveAttack_ = live_.attackMs;
+      liveRelease_ = live_.releaseMs;
+      liveGlide_ = live_.glideMs;
       Model &m = model();
       m.character.noise = static_cast<float>(s.noise);
       m.character.edge = static_cast<float>(s.edge);
@@ -183,6 +206,15 @@ public:
       gain_ = gain;
       pitch_ = pitch;
       quiet_ = 0;
+      lift_ = 0.0;
+      key_ = pitch;
+      random_ = jitter_.white();
+      for (int i = 0; i < kLfoCount; ++i) {
+         if (settings_.lfoSync[i] == 0)
+            lfoPhase_[i] = 0.0;
+         lfoHeld_[i] = lfoLast_[i] = jitter_.white();
+      }
+      swellAge_ = 0.0;
    }
    // Mono: the tongue stops the air for 35 ms, then releases it on the new note with a kick.
    void retongue(double pitch, double velocity) {
@@ -204,9 +236,11 @@ public:
       pitch_ = pitch;
       velocity_ = std::max(velocity_ * 0.8, velocity);
    }
-   void release() {
-      if (active_)
+   void release(double velocity = 0.5) {
+      if (active_ && !releasing_) {
          releasing_ = true;
+         lift_ = std::clamp(velocity, 0.0, 1.0);
+      }
    }
    // Only the instrument playing has sound in it: the others were cleared when it was picked.
    void reset() {
@@ -225,6 +259,15 @@ public:
       timbre_ = timbre;
    }
    void setGain(double gain) { gain_ = gain; }
+   // The note's bend now, -1..1 over its bend range: the Glide source.
+   void setBend(double bend) { bend_ = std::clamp(bend, -1.0, 1.0); }
+   // Seconds on a clock every voice shares, for LFOs that run free of the notes.
+   void setClock(const double *seconds) { clock_ = seconds; }
+
+   // The sources and each destination's offset (in its param's 0..1 range) at the last control
+   // tick, for the panel.
+   const float *sources() const { return sources_; }
+   const float *offsets() const { return offsets_; }
 
    bool isActive() const { return active_; }
    bool isReleasing() const { return releasing_; }
@@ -260,6 +303,10 @@ public:
          return 0.0f;
       }
       env_ += (std::fabs(y) - env_) * envCoef_;
+      // How knotted the sound is: the share of it above about 2 kHz.
+      hpX_ += (y - hpX_) * hpCoef_;
+      const float hi = y - hpX_;
+      hiEnv_ += (std::fabs(hi) - hiEnv_) * envCoef_;
       return y;
    }
 
@@ -277,12 +324,12 @@ private:
       if (level <= 0.0)
          return 0.0;
       const ModelInfo &info = modelInfo(settings_.model);
-      double b = info.breathOffset + info.breathScale * settings_.breath * std::pow(level, settings_.curve);
+      double b = info.breathOffset + info.breathScale * live_.breath * std::pow(level, live_.curve);
       // Fading out towards no pressure at all, rather than stopping at the offset.
       b *= std::min(1.0, level / 0.08);
       // The tongue's release comes with a burst of pressure that kicks the oscillation off.
       if (kickAge_ >= 0)
-         b *= 1.0 + settings_.kick * kickEnv_;
+         b *= 1.0 + live_.kick * kickEnv_;
       return b * vibBreath_;
    }
 
@@ -323,25 +370,27 @@ private:
       }
       }
 
+      modulate(dt);
+
       // Vibrato grows in after its delay; its rate and depth wander a little.
-      const double vd = std::clamp((age_ / fs_ - settings_.vibDelayMs / 1000.0) / 0.6, 0.0, 1.0);
+      const double vd = std::clamp((age_ / fs_ - live_.vibDelayMs / 1000.0) / 0.6, 0.0, 1.0);
       // (Steps scaled from the prototype's, which wandered every 256 samples at 96 kHz.)
       const double walk = std::sqrt(dt * 375.0), pull = 0.02 * dt * 375.0;
-      vibRate_ += pull * (settings_.vibRate - vibRate_) + 0.05 * jitter_.white() * walk;
+      vibRate_ += pull * (live_.vibRate - vibRate_) + 0.05 * jitter_.white() * walk;
       vibAmt_ += pull * (1.0 - vibAmt_) + 0.04 * jitter_.white() * walk;
       vibPhase_ += 2 * kPi * vibRate_ * dt;
       if (vibPhase_ > 2 * kPi)
          vibPhase_ -= 2 * kPi;
       const double vib = vibAmt_ * vd * std::sin(vibPhase_);
-      vibBreath_ = 1.0 + settings_.vibDepth * vib;
+      vibBreath_ = 1.0 + live_.vibDepth * vib;
 
       // Embouchure: the knob, moved by MPE slide.
-      emb_ = std::clamp(settings_.embouchure + settings_.slide * (timbre_ - 0.5) * 2.0, 0.0, 1.0);
+      emb_ = std::clamp(live_.embouchure + settings_.slide * (timbre_ - 0.5) * 2.0, 0.0, 1.0);
 
       // Pitch glides to the note (a finger lands in a couple of ms, or the Glide time).
       const double g = 1.0 - std::pow(1.0 - glideCoef_, kControl);
       pitchNow_ += (pitch_ - pitchNow_) * g;
-      const double sounding = pitchNow_ + settings_.vibPitch / 100.0 * vib;
+      const double sounding = pitchNow_ + pitchMod_ + live_.vibPitch / 100.0 * vib;
       const Tuning t = TuningTable::get().at(settings_.model, sounding, fs_);
       const double hz = 440.0 * std::pow(2.0, (sounding - 69.0) / 12.0 + t.octaves);
       Model &m = model();
@@ -350,11 +399,11 @@ private:
       if (len_ < 0.0) {
          len_ = len;
          lenStep_ = 0.0;
-         gainNow_ = t.gain * gain_;
+         gainNow_ = t.gain * gain_ * levelMod_;
       } else {
          lenStep_ = (len - len_) / kControl;
       }
-      gainTarget_ = t.gain * gain_;
+      gainTarget_ = t.gain * gain_ * levelMod_;
 
       // Silent long enough after letting go (or tongued to nothing): the voice is free.
       level_ = static_cast<float>(env_);
@@ -366,8 +415,219 @@ private:
       }
    }
 
+   // One generator's value now: an LFO -1..1.
+   double lfo(int i, double dt) {
+      double &ph = lfoPhase_[i];
+      if (live_.lfoSync[i] == 1 && clock_)
+         ph = std::fmod(*clock_ * live_.lfoRate[i], 1.0);
+      else
+         ph += live_.lfoRate[i] * dt;
+      if (ph >= 1.0) {
+         ph -= std::floor(ph);
+         lfoLast_[i] = lfoHeld_[i];
+         lfoHeld_[i] = jitter_.white();
+      }
+      const double x = ph;
+      switch (live_.lfoShape[i]) {
+      case kLfoTriangle:
+         return 1.0 - 4.0 * std::fabs(x - 0.5);
+      case kLfoSaw:
+         return 2.0 * x - 1.0;
+      case kLfoSquare:
+         return x < 0.5 ? 1.0 : -1.0;
+      case kLfoSampleHold:
+         return lfoHeld_[i];
+      case kLfoSmooth: {
+         const double f = x * x * (3 - 2 * x);
+         return lfoLast_[i] + (lfoHeld_[i] - lfoLast_[i]) * f;
+      }
+      default:
+         return std::sin(2 * kPi * x);
+      }
+   }
+   // The Swell: one contour over its time, 0..1.
+   double swell(double dt) {
+      swellAge_ += dt;
+      double t = swellAge_ / std::max(0.05, live_.swellTime);
+      if (live_.swellLoop)
+         t -= std::floor(t);
+      else
+         t = std::min(t, 1.0);
+      switch (live_.swellShape) {
+      case kSwellRise:
+         return t * t * (3 - 2 * t);
+      case kSwellFall:
+         return 1.0 - t * t * (3 - 2 * t);
+      case kSwellWave:
+         return 0.5 - 0.5 * std::cos(4 * kPi * t);
+      case kSwellBloom:
+         return t < 0.15 ? t / 0.15 : 1.0 - 0.6 * (t - 0.15) / 0.85;
+      case kSwellTide:
+         return 0.5 - 0.5 * std::cos(2 * kPi * t * t);
+      default:
+         return std::sin(kPi * t);
+      }
+   }
+   static double busCurve(double x, int curve) {
+      switch (curve) {
+      case 1:
+         return x * std::fabs(x);
+      case 2:
+         return (x < 0 ? -1.0 : 1.0) * std::sqrt(std::fabs(x));
+      case 3: {
+         const double a = std::clamp(0.5 + 0.5 * x, 0.0, 1.0);
+         return 2.0 * (a * a * (3 - 2 * a)) - 1.0;
+      }
+      case 4:
+         return std::fabs(x);
+      default:
+         return x;
+      }
+   }
+
+   // The sources now, the buses they feed, and every route's offset on its destination; then the
+   // destinations' live values.
+   void modulate(double dt) {
+      float *src = sources_;
+      const ModelInfo &info = modelInfo(settings_.model);
+      src[kSrcOff] = 0.0f;
+      src[kSrcStrike] = static_cast<float>(velocity_);
+      src[kSrcPress] = static_cast<float>(pressure_);
+      src[kSrcGlide] = static_cast<float>(bend_);
+      src[kSrcSlide] = static_cast<float>(timbre_);
+      src[kSrcLift] = static_cast<float>(lift_);
+      src[kSrcLoop] = static_cast<float>(std::clamp(breath_, 0.0, 1.0));
+      src[kSrcKnot] = static_cast<float>(std::clamp(3.0 * hiEnv_ / (env_ + 1e-6), 0.0, 1.0));
+      src[kSrcFold] = static_cast<float>(std::clamp((breath_ - info.tuneBreath) / 0.35, 0.0, 1.0));
+      const TuningTable &table = TuningTable::get();
+      const double lo = table.lowest(settings_.model), hi = std::max(lo + 1.0, static_cast<double>(table.highest(settings_.model)));
+      src[kSrcRegister] = static_cast<float>(std::clamp((pitchNow_ - lo) / (hi - lo), 0.0, 1.0));
+      src[kSrcVapor] = static_cast<float>(std::clamp(0.5 * live_.noise * std::min(1.0, breath_), 0.0, 1.0));
+      // A draught: a slow random walk pulled back to the middle.
+      draft_ += (-0.4 * draft_) * dt + 0.35 * std::sqrt(dt) * jitter_.white();
+      draft_ = std::clamp(draft_, -1.0, 1.0);
+      src[kSrcDraft] = static_cast<float>(draft_);
+      src[kSrcSwell] = static_cast<float>(swell(dt));
+      src[kSrcLfo1] = static_cast<float>(lfo(0, dt));
+      src[kSrcLfo2] = static_cast<float>(lfo(1, dt));
+      src[kSrcKey] = static_cast<float>(std::clamp((key_ - 60.0) / 48.0, -1.0, 1.0));
+      src[kSrcRandom] = static_cast<float>(random_);
+
+      float *off = offsets_;
+      std::fill(off, off + kModDestCount, 0.0f);
+      const VoiceSettings &s = settings_;
+      if (s.routeCount > 0) {
+         // The buses first, from every source but the buses, then everything else from any source.
+         float in[kBusCount][kRouteCount];
+         int inCount[kBusCount] = {};
+         for (int i = 0; i < s.routeCount; ++i) {
+            const VoiceSettings::Route &r = s.routes[i];
+            if (r.dest >= kFirstBusDest && r.source < kSrcBus1) {
+               const int b = r.dest - kFirstBusDest;
+               in[b][inCount[b]++] = src[r.source] * r.amount;
+            }
+         }
+         for (int b = 0; b < kBusCount; ++b) {
+            double x = s.busAmount[b];
+            if (inCount[b] > 0) {
+               double m = in[b][0];
+               for (int i = 1; i < inCount[b]; ++i) {
+                  switch (s.busMode[b]) {
+                  case kBusMultiply:
+                     m *= in[b][i];
+                     break;
+                  case kBusMin:
+                     m = std::min<double>(m, in[b][i]);
+                     break;
+                  case kBusMax:
+                     m = std::max<double>(m, in[b][i]);
+                     break;
+                  default:
+                     m += in[b][i];
+                     break;
+                  }
+               }
+               x += m;
+            }
+            x = busCurve(std::clamp(x, -1.0, 1.0), s.busCurve[b]);
+            switch (s.busPolarity[b]) {
+            case 1:
+               x = 0.5 + 0.5 * x;
+               break;
+            case 2:
+               x = 2.0 * x - 1.0;
+               break;
+            case 3:
+               x = -x;
+               break;
+            default:
+               break;
+            }
+            x = std::clamp(x, -1.0, 1.0);
+            const double lagged = s.busLag[b] > 0.5 ? 1.0 - std::exp(-dt * 1000.0 / s.busLag[b]) : 1.0;
+            bus_[b] += (x - bus_[b]) * lagged;
+            src[kSrcBus1 + b] = static_cast<float>(bus_[b]);
+         }
+         for (int i = 0; i < s.routeCount; ++i) {
+            const VoiceSettings::Route &r = s.routes[i];
+            if (r.dest < kFirstBusDest)
+               off[r.dest] += src[r.source] * r.amount;
+         }
+      }
+      else {
+         for (int b = 0; b < kBusCount; ++b)
+            src[kSrcBus1 + b] = static_cast<float>(bus_[b] = s.busAmount[b]);
+      }
+
+      // Each destination's live value: its param plus the offset over the param's range.
+      const auto at = [&](int dest, double base) {
+         const auto &p = kParams[kModDestinations[dest]];
+         return off[dest] == 0.0f ? base : std::clamp(base + off[dest] * (p.max - p.min), p.min, p.max);
+      };
+      live_.breath = at(0, s.breath);
+      live_.embouchure = at(1, s.embouchure);
+      live_.noise = at(2, s.noise);
+      live_.edge = at(3, s.edge);
+      live_.kick = at(4, s.kick);
+      const double attack = at(5, s.attackMs), release = at(6, s.releaseMs);
+      pitchMod_ = (at(7, s.tune) - s.tune) + (at(8, s.fine) - s.fine) / 100.0;
+      const double glide = at(9, s.glideMs);
+      live_.vibRate = at(10, s.vibRate);
+      live_.vibDepth = at(11, s.vibDepth);
+      live_.vibPitch = at(12, s.vibPitch);
+      live_.vibDelayMs = at(13, s.vibDelayMs);
+      live_.curve = at(14, s.curve);
+      levelMod_ = off[15] == 0.0f ? 1.0 : std::pow(10.0, (at(15, s.level) - s.level) / 20.0);
+      live_.lfoRate[0] = at(16, s.lfoRate[0]);
+      live_.lfoRate[1] = at(17, s.lfoRate[1]);
+      live_.swellTime = at(18, s.swellTime);
+      Model &m = model();
+      m.character.noise = static_cast<float>(live_.noise);
+      m.character.edge = static_cast<float>(live_.edge);
+      if (attack != liveAttack_) {
+         liveAttack_ = attack;
+         attackCoef_ = coef(attack / 4.0);
+      }
+      if (release != liveRelease_) {
+         liveRelease_ = release;
+         releaseCoef_ = coef(release / 4.0);
+      }
+      if (glide != liveGlide_) {
+         liveGlide_ = glide;
+         glideCoef_ = coef(std::max(3.0, glide / 3.0));
+      }
+   }
+
    std::unique_ptr<Model> models_[kModelCount];
-   VoiceSettings settings_;
+   VoiceSettings settings_, live_;
+   float sources_[kModSourceCount] = {};
+   float offsets_[kModDestCount] = {};
+   const double *clock_ = nullptr;
+   double lfoPhase_[kLfoCount] = {}, lfoHeld_[kLfoCount] = {}, lfoLast_[kLfoCount] = {};
+   double swellAge_ = 0.0, draft_ = 0.0, random_ = 0.0, bend_ = 0.0, lift_ = 0.0, key_ = 60.0;
+   double bus_[kBusCount] = {};
+   double pitchMod_ = 0.0, levelMod_ = 1.0, liveAttack_ = -1.0, liveRelease_ = -1.0, liveGlide_ = -1.0;
+   float hpX_ = 0.0f, hiEnv_ = 0.0f, hpCoef_ = 0.1f;
    Noise jitter_;
    double fs_ = 96000.0;
    bool active_ = false, releasing_ = false, stop_ = false;

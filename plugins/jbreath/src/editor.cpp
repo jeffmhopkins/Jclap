@@ -15,6 +15,9 @@
 #include <jclap/ui/preset_bar.h>
 #include <jclap/ui/section.h>
 #include <jclap/ui/segmented.h>
+#include <jclap/ui/tabs.h>
+#include <jclap/ui/button.h>
+#include <jclap/ui/dropdown.h>
 #include <jclap/ui/tooltip.h>
 #include <jclap/ui/update_notice.h>
 
@@ -22,7 +25,9 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <cctype>
 #include <cstdint>
+#include <functional>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -759,6 +764,10 @@ class BreathLoops : public Drawn {
 public:
    explicit BreathLoops(float w) : Drawn(w) {}
 
+   // A line of help along the top (MAP mode's), in its colour.
+   std::string hint;
+   unsigned hintColor = kPress;
+
    struct Loop {
       int slot, note;
       float hz, breath, level;
@@ -821,6 +830,8 @@ public:
                     kFamilyNames[model_]);
       label(c, head, W - 320, 14, 304, kDim, 11.0f, visage::Font::kRight);
       label(c, "BREATH LOOPS", 18, 14, 200, kText, 12.0f);
+      if (!hint.empty())
+         label(c, hint, 160, 14, W - 180 - 150, hintColor, 12.0f, visage::Font::kCenter);
       if (loops_.empty()) {
          label(c, "Play a note: each voice draws its breath here", 0, H / 2 - 10, W, kFaint, 13.0f, visage::Font::kCenter);
          return;
@@ -830,7 +841,7 @@ public:
    }
 
 private:
-   static constexpr float kWidth = 720.0f, kHeight = 536.0f;
+   static constexpr float kWidth = 720.0f, kHeight = 494.0f;
    static constexpr int kMaxPuffs = 1400;
 
    struct Place {
@@ -1039,9 +1050,320 @@ private:
    float angle_ = 0.0f, time_ = 0.0f, vapour_ = 0.0f;
 };
 
+// ------------------------------------------------------------------ MAP
+
+unsigned sourceColor(int source) { return kModSourceColors[std::clamp(source, 0, kModSourceCount - 1)]; }
+std::string upper(std::string t) {
+   for (char &ch : t)
+      ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+   return t;
+}
+
+// What MAP mode needs from the panel. Knobs ask it for their rings and hand it their drags.
+class Mapper {
+public:
+   virtual ~Mapper() = default;
+   virtual bool mapping() const = 0;
+   // The source MAP mode draws routes from, or kSrcOff.
+   virtual int armedSource() const = 0;
+   struct Ring {
+      int route, source;
+      double amount;
+   };
+   // The routes onto destination `dest`, in route order.
+   virtual void rings(int dest, std::vector<Ring> &out) const = 0;
+   // The route from the armed source to `dest`, made if there is none (-1 when all are taken).
+   virtual int routeFor(int dest) = 0;
+   virtual double routeAmount(int route) const = 0;
+   virtual void beginRoute(int route) = 0;
+   virtual void setRouteAmount(int route, double amount) = 0;
+   // Ends the drag; a route left at zero is removed.
+   virtual void endRoute(int route) = 0;
+   // Removes the armed source's routes to `dest`, or every route to it with nothing armed.
+   virtual void unmap(int dest) = 0;
+};
+
+// A knob MAP mode can map. With a source armed, dragging it sets that route's amount instead of the
+// knob's value, a double-click flips the route's sign and a right-click removes it. In MAP with a
+// source armed it shows the route as a ring outside its own, in the source's colour, spanning what
+// the route adds.
+class MapKnob : public ui::Knob {
+public:
+   MapKnob(ui::ValueRange range, Mapper &mapper, clap_id id) : Knob(range), mapper_(mapper), dest_(destinationOf(id)) {}
+
+   int destination() const { return dest_; }
+
+   void draw(visage::Canvas &c) override {
+      Knob::draw(c);
+      const int armed = mapper_.armedSource();
+      if (dest_ < 0 || !mapper_.mapping() || armed == kSrcOff)
+         return;
+      rings_.clear();
+      mapper_.rings(dest_, rings_);
+      const float w = width(), h = height(), s = h / 100.0f;
+      const float d = std::min(w * 0.7f, 48.0f * s);
+      const float cx = w * 0.5f, cy = 18.0f * s + d * 0.5f + 2.0f * s;
+      const float rd = d + 13.0f * s, sweep = 0.75f * kPiF;
+      const float from = fraction(value());
+      c.setColor(glow(sourceColor(armed), 0.55f));
+      c.arc(cx - rd * 0.5f, cy - rd * 0.5f, rd, 1.4f * s, -0.5f * kPiF, sweep, true);
+      for (const Mapper::Ring &r : rings_) {
+         if (r.source != armed)
+            continue;
+         const float to = std::clamp(from + static_cast<float>(r.amount), 0.0f, 1.0f);
+         if (std::fabs(to - from) > 0.002f) {
+            const float a0 = -sweep + 2.0f * sweep * from, a1 = -sweep + 2.0f * sweep * to;
+            c.setColor(glow(sourceColor(armed), 1.0f, 1.6f));
+            c.arc(cx - rd * 0.5f, cy - rd * 0.5f, rd, 3.4f * s, 0.5f * (a0 + a1) - 0.5f * kPiF, 0.5f * std::fabs(a1 - a0), true);
+         }
+      }
+   }
+
+   void mouseDown(const visage::MouseEvent &e) override {
+      if (!mapper_.mapping() || dest_ < 0)
+         return Knob::mouseDown(e);
+      if (e.isRightButton()) {
+         mapper_.unmap(dest_);
+         redraw();
+         return;
+      }
+      if (mapper_.armedSource() == kSrcOff)
+         return;
+      route_ = mapper_.routeFor(dest_);
+      if (route_ < 0)
+         return;
+      mapper_.beginRoute(route_);
+      start_ = mapper_.routeAmount(route_);
+      if (e.repeatClickCount() == 2)
+         mapper_.setRouteAmount(route_, start_ = -start_);
+      startY_ = e.position.y;
+      redraw();
+   }
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (route_ < 0)
+         return Knob::mouseDrag(e);
+      mapper_.setRouteAmount(route_, std::clamp(start_ + (startY_ - e.position.y) / (2.0f * height()), -1.0, 1.0));
+      redraw();
+   }
+   void mouseUp(const visage::MouseEvent &e) override {
+      if (route_ < 0)
+         return Knob::mouseUp(e);
+      mapper_.endRoute(route_);
+      route_ = -1;
+      redraw();
+   }
+
+private:
+   Mapper &mapper_;
+   int dest_;
+   int route_ = -1;
+   double start_ = 0.0;
+   float startY_ = 0.0f;
+   std::vector<Mapper::Ring> rings_;
+};
+
+// A modulation source you can touch: a pill with its name, filled as far as the source is now. In
+// MAP mode it pulses in its colour; armed, it is lit.
+class SourceChip : public visage::Frame {
+public:
+   SourceChip(int source, std::string label) : source_(source), label_(std::move(label)) {}
+
+   int source() const { return source_; }
+   void setState(bool mapping, bool armed, float pulse) {
+      if (mapping != mapping_ || armed != armed_ || (mapping && std::fabs(pulse - pulse_) > 0.02f)) {
+         mapping_ = mapping;
+         armed_ = armed;
+         pulse_ = pulse;
+         redraw();
+      }
+   }
+   // How far the source is now, 0..1; a bipolar one passes -1..1 as 0..1.
+   void setLevel(float level, bool bipolar) {
+      level = std::clamp(level, 0.0f, 1.0f);
+      const float led = bipolar ? std::fabs(2.0f * level - 1.0f) : level;
+      if (std::fabs(level - level_) > 0.004f || std::fabs(led - led_) > 0.004f) {
+         level_ = level;
+         led_ = led;
+         redraw();
+      }
+   }
+   std::function<void(int)> onClick;
+
+   void mouseDown(const visage::MouseEvent &) override {
+      if (onClick)
+         onClick(source_);
+   }
+
+   void draw(visage::Canvas &c) override {
+      const float w = width(), h = height(), s = h / 26.0f, r = h * 0.5f;
+      const unsigned color = sourceColor(source_);
+      c.setColor(visage::Color(armed_ ? 0xe0161a26 : 0xa0101420));
+      c.roundedRectangle(0, 0, w, h, r);
+      if (armed_) {
+         c.setColor(glow(color, 0.3f));
+         c.roundedRectangle(0, 0, w, h, r);
+      }
+      if (level_ > 0.0f) {
+         c.setColor(glow(color, armed_ ? 0.35f : 0.2f));
+         c.roundedRectangle(0, 0, std::max(h, w * level_), h, r);
+      }
+      const float border = armed_ ? 1.0f : mapping_ ? 0.35f + 0.5f * pulse_ : 0.0f;
+      if (border > 0.0f) {
+         c.setColor(glow(color, border, armed_ ? 1.8f : 1.2f));
+         c.roundedRectangleBorder(0, 0, w, h, r, (armed_ ? 1.6f : 1.2f) * s);
+      }
+      else {
+         c.setColor(visage::Color(0x26ffffff));
+         c.roundedRectangleBorder(0, 0, w, h, r, 1.0f * s);
+      }
+      const float lx = 12 * s, ly = h * 0.5f, halo = 10 * s;
+      c.setColor(visage::Brush::radial(glow(color, 0.7f * led_), glow(color, 0.0f), visage::Point(lx, ly), halo));
+      c.circle(lx - halo, ly - halo, 2 * halo);
+      c.setColor(visage::Color(color).interpolateWith(0xff20232c, 0.6f * (1.0f - led_)));
+      c.circle(lx - 4.0f * s, ly - 4.0f * s, 8 * s);
+      c.setColor(armed_ ? 0xffffffff : kText);
+      c.text(label_, ui::font(12 * s), visage::Font::kLeft, 22 * s, 0, w - 24 * s, h);
+   }
+
+private:
+   int source_;
+   std::string label_;
+   bool mapping_ = false, armed_ = false;
+   float pulse_ = 0.0f, level_ = 0.0f, led_ = 0.0f;
+};
+
+// An LFO's or the Swell's contour, with a dot where the newest voice is on it.
+class GeneratorGraph : public Drawn {
+public:
+   GeneratorGraph(float w, int source) : Drawn(w), source_(source) {}
+   void set(int shape, double value) {
+      if (shape != shape_ || std::fabs(value - value_) > 0.003) {
+         shape_ = shape;
+         value_ = value;
+         redraw();
+      }
+   }
+   void draw(visage::Canvas &c) override {
+      well(c);
+      const float k = s(), W = width() / k, H = height() / k;
+      const unsigned color = sourceColor(source_);
+      const bool swell = source_ == kSrcSwell;
+      const auto y = [&](double t) {
+         if (swell) {
+            switch (shape_) {
+            case kSwellRise:
+               return t * t * (3 - 2 * t);
+            case kSwellFall:
+               return 1.0 - t * t * (3 - 2 * t);
+            case kSwellWave:
+               return 0.5 - 0.5 * std::cos(4 * kPi * t);
+            case kSwellBloom:
+               return t < 0.15 ? t / 0.15 : 1.0 - 0.6 * (t - 0.15) / 0.85;
+            case kSwellTide:
+               return 0.5 - 0.5 * std::cos(2 * kPi * t * t);
+            default:
+               return std::sin(kPi * t);
+            }
+         }
+         const double x = std::fmod(2.0 * t, 1.0);
+         // S&H and Smooth drawn from a fixed row of steps.
+         static const double steps[] = {0.3, -0.6, 0.8, -0.1, 0.5, -0.9, 0.2, 0.7};
+         const int i = static_cast<int>(t * 8.0) % 8;
+         switch (shape_) {
+         case kLfoTriangle:
+            return 0.5 + 0.5 * (1.0 - 4.0 * std::fabs(x - 0.5));
+         case kLfoSaw:
+            return x;
+         case kLfoSquare:
+            return x < 0.5 ? 1.0 : 0.0;
+         case kLfoSampleHold:
+            return 0.5 + 0.5 * steps[i];
+         case kLfoSmooth: {
+            const double f = std::fmod(t * 8.0, 1.0), e = f * f * (3 - 2 * f);
+            return 0.5 + 0.5 * (steps[(i + 7) % 8] + (steps[i] - steps[(i + 7) % 8]) * e);
+         }
+         default:
+            return 0.5 + 0.5 * std::sin(2 * kPi * x);
+         }
+      };
+      const float x0 = 10, x1 = W - 10, y0 = H - 12, y1 = 14;
+      visage::Path p;
+      constexpr int n = 96;
+      for (int i = 0; i <= n; ++i) {
+         const double t = static_cast<double>(i) / n;
+         const float px = (x0 + (x1 - x0) * t) * k, py = (y0 + (y1 - y0) * y(t)) * k;
+         if (i == 0)
+            p.moveTo(px, py);
+         else
+            p.lineTo(px, py);
+      }
+      c.setColor(glow(color, 0.3f));
+      c.fill(p.stroke(4 * k));
+      c.setColor(glow(color, 0.95f, 1.2f));
+      c.fill(p.stroke(1.6f * k));
+      // Where the newest voice is: a level line across.
+      const double v = bipolarSource(source_) ? 0.5 + 0.5 * value_ : value_;
+      const float ly = (y0 + (y1 - y0) * std::clamp(v, 0.0, 1.0)) * k;
+      c.setColor(glow(0xffffffff, 0.25f));
+      c.fill(x0 * k, ly - 0.5f * k, (x1 - x0) * k, 1.0f * k);
+   }
+
+private:
+   int source_;
+   int shape_ = -1;
+   double value_ = 0.0;
+};
+
+// A route in the ROUTES list: its source and destination, the amount as a bar you drag, and a
+// cross that removes it.
+class RouteAmount : public Drawn {
+public:
+   RouteAmount(float w, EditorHost &host, int route) : Drawn(w), host_(host), route_(route) {}
+   void draw(visage::Canvas &c) override {
+      const float k = s(), W = width() / k, H = height() / k;
+      const double a = host_.paramValue(routeParam(route_, kRouteAmount));
+      const int src = static_cast<int>(host_.paramValue(routeParam(route_, kRouteSource)) + 0.5);
+      const unsigned color = sourceColor(src);
+      const float mid = W * 0.5f, y = H * 0.5f;
+      c.setColor(visage::Color(0x22ffffff));
+      c.roundedRectangle(0, (y - 1.5f) * k, W * k, 3 * k, 1.5f * k);
+      const float to = mid + static_cast<float>(a) * (W * 0.5f - 6);
+      c.setColor(glow(color, 0.9f, 1.3f));
+      c.roundedRectangle(std::min(mid, to) * k, (y - 2) * k, std::fabs(to - mid) * k, 4 * k, 2 * k);
+      c.setColor(visage::Color(0x55ffffff));
+      c.fill((mid - 0.5f) * k, (y - 5) * k, 1 * k, 10 * k);
+      c.setColor(kText);
+      c.circle((to - 5) * k, (y - 5) * k, 10 * k);
+      char t[16];
+      std::snprintf(t, sizeof(t), "%+.0f%%", a * 100.0);
+      label(c, t, W - 60, -2, 60, kDim, 10.0f, visage::Font::kRight);
+   }
+   void mouseDown(const visage::MouseEvent &e) override {
+      host_.beginEdit(routeParam(route_, kRouteAmount));
+      if (e.repeatClickCount() == 2) {
+         host_.setParam(routeParam(route_, kRouteAmount), -host_.paramValue(routeParam(route_, kRouteAmount)));
+         redraw();
+         return;
+      }
+      drag(e);
+   }
+   void mouseDrag(const visage::MouseEvent &e) override { drag(e); }
+   void mouseUp(const visage::MouseEvent &) override { host_.endEdit(routeParam(route_, kRouteAmount)); }
+
+private:
+   void drag(const visage::MouseEvent &e) {
+      const float k = s(), W = width() / k;
+      const double a = std::clamp((e.position.x / k - W * 0.5f) / (W * 0.5f - 6), -1.0f, 1.0f);
+      host_.setParam(routeParam(route_, kRouteAmount), std::round(a * 100.0) / 100.0);
+      redraw();
+   }
+   EditorHost &host_;
+   int route_;
+};
+
 // ------------------------------------------------------------------ the panel
 
-class Panel : public ui::DesignFrame, public visage::EventTimer {
+class Panel : public ui::DesignFrame, public visage::EventTimer, public Mapper {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       add<ui::UpdateNotice>({1460, 13, 164, 26});
@@ -1054,11 +1376,23 @@ public:
       buildBore();
       buildPlayer();
       buildVoice();
-      loops_ = &add<BreathLoops>({912, 64, 720, 536}, 720.0f);
+      loops_ = &add<BreathLoops>({912, 64, 720, 494}, 720.0f);
       tips_.add(*loops_, "Each voice as a loop: its sound now, a quarter period ago and half a period ago. "
-                         "A steady tone draws a clean loop; growl and breath fray it.");
+                         "A steady tone draws a clean loop; growl and breath fray it. Smoke rises off it as it blows.");
+      buildMap();
+      buildRoutes();
       timerCallback();
       startTimer(33);
+   }
+
+   void open(const ScreenshotOptions &o) {
+      playerTabs_->select(o.playerTab);
+      if (o.routes) {
+         view_->setSelected(1);
+         showRoutes(true);
+      }
+      if (o.armed > 0)
+         setMapping(true, o.armed);
    }
 
    void timerCallback() override {
@@ -1115,6 +1449,7 @@ public:
       meter_->redraw();
       loops_->set(std::move(loops), model, rate);
       loops_->step();
+      updateMap();
    }
 
    void draw(visage::Canvas &c) override {
@@ -1137,8 +1472,14 @@ public:
 
       card(c, k, {16, 64, 880, 332}, "EXCITER", color);
       card(c, k, {16, 406, 880, 316}, "BORE", color);
-      card(c, k, {16, 732, 880, 196}, "PLAYER", color);
+      card(c, k, {16, 732, 880, 196}, "", color);
       card(c, k, {904, 612, 728, 316}, "VOICE", color);
+      if (routes_) {
+         c.setColor(0xff141820);
+         c.roundedRectangle(912 * k, 64 * k, 720 * k, 494 * k, 10 * k);
+         c.setColor(kCardBorder);
+         c.roundedRectangleBorder(912 * k, 64 * k, 720 * k, 494 * k, 10 * k, 1 * k);
+      }
    }
 
 private:
@@ -1200,7 +1541,9 @@ private:
    }
 
    ui::Knob &knob(clap_id id, const char *label, unsigned accent, ui::Rect cell, const char *tip = nullptr) {
-      auto &k = add<ui::Knob>(cell, rangeOf(id));
+      auto &k = add<MapKnob>(cell, rangeOf(id), *this, id);
+      if (k.destination() >= 0)
+         mapKnobs_.push_back(&k);
       k.setLabel(label);
       k.setAccent(accent);
       k.valueText = [id](double v) { return text(id, v); };
@@ -1252,13 +1595,264 @@ private:
    }
 
    void buildPlayer() {
-      tongue_ = &add<TongueGraph>({32, 766, 270, 152}, 270.0f);
-      vibrato_ = &add<VibratoGraph>({314, 766, 270, 152}, 270.0f);
+      playerTabs_ = &add<ui::TabBar>({28, 736, 330, 28}, std::vector<std::string>{"PLAYER", "LFOS", "BUSES"});
+      playerTabs_->setAccent(0xfff28c28);
+      auto &tabs = *playerTabs_;
+      tabs.addToPage(0, *(tongue_ = &add<TongueGraph>({32, 766, 270, 152}, 270.0f)));
+      tabs.addToPage(0, *(vibrato_ = &add<VibratoGraph>({314, 766, 270, 152}, 270.0f)));
       const auto cells = ui::row({594, 786, 290, 110}, 4);
-      familyKnob(kVibRate, "RATE", cells[0], "Vibrato rate. A player's wanders a little.");
-      familyKnob(kVibDepth, "DEPTH", cells[1], "Vibrato in the breath.");
-      familyKnob(kVibPitch, "PITCH", cells[2], "Vibrato in the pitch, in cents (the lips' or jaw's).");
-      familyKnob(kVibDelay, "DELAY", cells[3], "How long a note is held before the vibrato grows in.");
+      tabs.addToPage(0, familyKnob(kVibRate, "RATE", cells[0], "Vibrato rate. A player's wanders a little."));
+      tabs.addToPage(0, familyKnob(kVibDepth, "DEPTH", cells[1], "Vibrato in the breath."));
+      tabs.addToPage(0, familyKnob(kVibPitch, "PITCH", cells[2], "Vibrato in the pitch, in cents (the lips' or jaw's)."));
+      tabs.addToPage(0, familyKnob(kVibDelay, "DELAY", cells[3], "How long a note is held before the vibrato grows in."));
+
+      // LFOS: two LFOs and the Swell, each a source to arm with its chip.
+      const char *const lfoTips[2] = {"LFO 1: a plain LFO, a source for routes. Note restarts it with each note; Free runs it for every voice together.",
+                                      "LFO 2: a plain LFO, a source for routes. Note restarts it with each note; Free runs it for every voice together."};
+      for (int i = 0; i < 3; ++i) {
+         const float x = 32 + i * 284.0f;
+         const int source = i < 2 ? kSrcLfo1 + i : kSrcSwell;
+         tabs.addToPage(1, chip(source, {x, 772, 92, 24}));
+         tabs.addToPage(1, choiceBox(i < 2 ? lfoParam(i, 1) : kSwellShape, {x + 98, 772, 96, 24}, sourceColor(source)));
+         auto &sync = tabs.addToPage(1, add<ui::SegmentedSwitch>({x + 198, 772, 72, 24},
+                                                                  i < 2 ? std::vector<std::string>{"NOTE", "FREE"}
+                                                                        : std::vector<std::string>{"ONCE", "LOOP"}));
+         sync.setAccent(sourceColor(source));
+         bindings_.bind(sync, i < 2 ? lfoParam(i, 2) : kSwellLoop);
+         generators_[i] = &tabs.addToPage(1, add<GeneratorGraph>({x, 804, 150, 114}, 150.0f, source));
+         auto &k = tabs.addToPage(1, knob(i < 2 ? lfoParam(i, 0) : kSwellTime, i < 2 ? "RATE" : "TIME", sourceColor(source),
+                                          {x + 154, 800, 116, 120},
+                                          i < 2 ? lfoTips[i]
+                                                : "The Swell: one contour over this time from each note's start, a source for routes."));
+         (void)k;
+      }
+
+      // BUSES: mix routes into one, bend it, and send it on as a source of its own.
+      for (int b = 0; b < kBusCount; ++b) {
+         const float x = 32 + b * 213.0f;
+         tabs.addToPage(2, chip(kSrcBus1 + b, {x, 772, 98, 24}));
+         const unsigned bc = sourceColor(kSrcBus1 + b);
+         tabs.addToPage(2, choiceBox(busParam(b, kBusMode), {x + 104, 772, 96, 24}, bc));
+         tabs.addToPage(2, choiceBox(busParam(b, kBusCurve), {x, 802, 98, 24}, bc));
+         tabs.addToPage(2, choiceBox(busParam(b, kBusPolarity), {x + 104, 802, 96, 24}, bc));
+         tabs.addToPage(2, knob(busParam(b, kBusAmount), "AMOUNT", sourceColor(kSrcBus1 + b), {x, 830, 100, 96},
+                                "The bus's base, which its routes are added to (or mixed with, by its mode). Route sources onto it in MAP."));
+         tabs.addToPage(2, knob(busParam(b, kBusLag), "LAG", sourceColor(kSrcBus1 + b), {x + 100, 830, 100, 96},
+                                "How slowly the bus follows its mix."));
+      }
+      tabs.select(0);
+   }
+
+   // A dropdown of a choice param's names, bound to it.
+   ui::Dropdown &choiceBox(clap_id id, ui::Rect r, unsigned accent) {
+      int count = 0;
+      const char *const *names = choiceNames(id, count);
+      auto &d = add<ui::Dropdown>(r, std::vector<std::string>(names, names + count));
+      d.setAccent(accent);
+      bindings_.bind(d, id);
+      return d;
+   }
+
+   SourceChip &chip(int source, ui::Rect r) {
+      auto &c = add<SourceChip>(r, source, upper(kModSourceNames[source]));
+      c.onClick = [this](int src) { arm(src); };
+      chips_.push_back(&c);
+      tips_.add(c, std::string(kModSourceNames[source]) + ": touch to map it, then drag a knob to set how much it moves it.");
+      return c;
+   }
+
+   // MAP and the source chips: the player's hands in the header, the breath's under the loops.
+   void buildMap() {
+      mapButton_ = &add<ui::Button>({772, 13, 64, 26}, "MAP");
+      mapButton_->setToggle(true);
+      mapButton_->setAccent(kPress);
+      mapButton_->onClick = [this] { setMapping(!mapping_, kSrcOff); };
+      tips_.add(*mapButton_, "MAP: touch a source, then drag any knob to set how much it moves it. Right-click a knob to unmap it.");
+      const int hands[] = {kSrcStrike, kSrcPress, kSrcGlide, kSrcSlide, kSrcLift};
+      for (int i = 0; i < 5; ++i)
+         chip(hands[i], {846 + i * 106.0f, 13, 100, 26});
+      const int breath[] = {kSrcLoop, kSrcKnot, kSrcFold, kSrcRegister, kSrcVapor, kSrcDraft};
+      const float widths[] = {84, 84, 84, 112, 92, 92};
+      float x = 912;
+      for (int i = 0; i < 6; ++i) {
+         chip(breath[i], {x, 568, widths[i], 26});
+         x += widths[i] + 6;
+      }
+      view_ = &add<ui::SegmentedSwitch>({1484, 568, 148, 26}, std::vector<std::string>{"LOOPS", "ROUTES"});
+      view_->setAccent(kPress);
+      view_->onChange = [this](int v) { showRoutes(v == 1); };
+   }
+
+   void buildRoutes() {
+      routesTitle_ = &add<ui::Label>({936, 80, 300, 24}, "ROUTES", kPress, visage::Font::kLeft, 1.0f);
+      routesCount_ = &add<ui::Label>({1200, 82, 180, 20}, "", kDim, visage::Font::kRight, 0.8f);
+      auto &addRoute = add<ui::Button>({1392, 78, 90, 26}, "+ ADD");
+      addRoute.onClick = [this] { addRouteNow(); };
+      auto &prev = add<ui::Button>({1490, 78, 40, 26}, "<");
+      prev.onClick = [this] { page(-1); };
+      auto &next = add<ui::Button>({1536, 78, 40, 26}, ">");
+      next.onClick = [this] { page(1); };
+      routeChrome_ = {routesTitle_, routesCount_, &addRoute, &prev, &next};
+      std::vector<std::string> sources(kModSourceNames, kModSourceNames + kModSourceCount), dests;
+      for (int d = 0; d < kModDestCount; ++d)
+         dests.push_back(kParams[kModDestinations[d]].name);
+      for (int r = 0; r < kRouteCount; ++r) {
+         RouteRow &row = rows_[r];
+         const float y = 118 + (r % kRowsPerPage) * 54.0f;
+         row.number = &add<ui::Label>({928, y + 2, 30, 24}, std::to_string(r + 1), kDim, visage::Font::kCenter, 0.9f);
+         row.source = &add<ui::Dropdown>({966, y, 200, 26}, sources);
+         bindings_.bind(*row.source, routeParam(r, kRouteSource));
+         row.dest = &add<ui::Dropdown>({1174, y, 330, 26}, dests);
+         bindings_.bind(*row.dest, routeParam(r, kRouteDestination));
+         row.remove = &add<ui::Button>({1512, y, 34, 26}, "x");
+         row.remove->onClick = [this, r] { removeRoute(r); };
+         row.amount = &add<RouteAmount>({966, y + 30, 580, 18}, 580.0f, host_, r);
+      }
+      showRoutes(false);
+   }
+
+   void showRoutes(bool on) {
+      routes_ = on;
+      loops_->setVisible(!on);
+      for (visage::Frame *f : routeChrome_)
+         f->setVisible(on);
+      for (int r = 0; r < kRouteCount; ++r) {
+         const bool shown = on && r / kRowsPerPage == page_;
+         RouteRow &row = rows_[r];
+         for (visage::Frame *f : {static_cast<visage::Frame *>(row.number), static_cast<visage::Frame *>(row.source),
+                                  static_cast<visage::Frame *>(row.dest), static_cast<visage::Frame *>(row.remove),
+                                  static_cast<visage::Frame *>(row.amount)})
+            f->setVisible(shown);
+      }
+      redraw();
+   }
+   void page(int by) {
+      page_ = std::clamp(page_ + by, 0, kRouteCount / kRowsPerPage - 1);
+      showRoutes(true);
+   }
+   int usedRoutes() const {
+      int n = 0;
+      for (int r = 0; r < kRouteCount; ++r)
+         n += static_cast<int>(host_.paramValue(routeParam(r, kRouteSource)) + 0.5) != kSrcOff;
+      return n;
+   }
+   void setRouteParam(int r, RouteParam p, double v) {
+      host_.beginEdit(routeParam(r, p));
+      host_.setParam(routeParam(r, p), v);
+      host_.endEdit(routeParam(r, p));
+   }
+   void addRouteNow() {
+      for (int r = 0; r < kRouteCount; ++r)
+         if (static_cast<int>(host_.paramValue(routeParam(r, kRouteSource)) + 0.5) == kSrcOff) {
+            setRouteParam(r, kRouteSource, armed_ != kSrcOff ? armed_ : kSrcPress);
+            setRouteParam(r, kRouteDestination, 0);
+            setRouteParam(r, kRouteAmount, 0.5);
+            page_ = r / kRowsPerPage;
+            showRoutes(true);
+            return;
+         }
+   }
+   void removeRoute(int r) {
+      setRouteParam(r, kRouteSource, kSrcOff);
+      setRouteParam(r, kRouteDestination, 0);
+      setRouteParam(r, kRouteAmount, 0.0);
+   }
+
+   // ---- Mapper
+   bool mapping() const override { return mapping_; }
+   int armedSource() const override { return armed_; }
+   void rings(int dest, std::vector<Ring> &out) const override {
+      for (int r = 0; r < kRouteCount; ++r) {
+         const int src = static_cast<int>(host_.paramValue(routeParam(r, kRouteSource)) + 0.5);
+         const int dst = static_cast<int>(host_.paramValue(routeParam(r, kRouteDestination)) + 0.5);
+         if (src != kSrcOff && dst == dest)
+            out.push_back({r, src, host_.paramValue(routeParam(r, kRouteAmount))});
+      }
+   }
+   int routeFor(int dest) override {
+      int free = -1;
+      for (int r = 0; r < kRouteCount; ++r) {
+         const int src = static_cast<int>(host_.paramValue(routeParam(r, kRouteSource)) + 0.5);
+         const int dst = static_cast<int>(host_.paramValue(routeParam(r, kRouteDestination)) + 0.5);
+         if (src == armed_ && dst == dest)
+            return r;
+         if (src == kSrcOff && free < 0)
+            free = r;
+      }
+      if (free >= 0) {
+         setRouteParam(free, kRouteAmount, 0.0);
+         setRouteParam(free, kRouteDestination, dest);
+         setRouteParam(free, kRouteSource, armed_);
+      }
+      return free;
+   }
+   double routeAmount(int route) const override { return host_.paramValue(routeParam(route, kRouteAmount)); }
+   void beginRoute(int route) override { host_.beginEdit(routeParam(route, kRouteAmount)); }
+   void setRouteAmount(int route, double amount) override { host_.setParam(routeParam(route, kRouteAmount), amount); }
+   void endRoute(int route) override {
+      host_.endEdit(routeParam(route, kRouteAmount));
+      if (std::fabs(routeAmount(route)) < 0.005)
+         removeRoute(route);
+   }
+   void unmap(int dest) override {
+      std::vector<Ring> found;
+      rings(dest, found);
+      for (const Ring &r : found)
+         if (armed_ == kSrcOff || r.source == armed_)
+            removeRoute(r.route);
+   }
+
+   void setMapping(bool on, int source) {
+      mapping_ = on;
+      armed_ = on ? source : kSrcOff;
+      mapButton_->setOn(on);
+      for (MapKnob *k : mapKnobs_)
+         k->redraw();
+   }
+   // A chip touched: MAP on with it armed, or (touched again) disarmed.
+   void arm(int source) {
+      if (mapping_ && armed_ == source)
+         setMapping(true, kSrcOff);
+      else
+         setMapping(true, source);
+   }
+
+   // Each tick: the chips' levels and MAP state, the live modulation on the knobs, the generator
+   // graphs and the routes list.
+   void updateMap() {
+      pulse_ += 0.08f;
+      const float pulse = 0.5f + 0.5f * std::sin(pulse_);
+      // The newest sounding voice's sources and offsets.
+      const EditorHost::Voice *newest = nullptr;
+      for (const EditorHost::Voice &v : voices_)
+         if (v.note >= 0 && !v.releasing && (!newest || v.level > newest->level))
+            newest = &v;
+      for (SourceChip *c : chips_) {
+         c->setState(mapping_, mapping_ && c->source() == armed_, pulse);
+         const float v = newest ? newest->sources[c->source()] : 0.0f;
+         const bool bi = bipolarSource(c->source());
+         c->setLevel(bi ? 0.5f + 0.5f * v : v, bi);
+      }
+      for (MapKnob *k : mapKnobs_) {
+         const int d = k->destination();
+         const auto &p = kParams[kModDestinations[d]];
+         const double off = newest ? newest->offsets[d] * (p.max - p.min) : 0.0;
+         k->setLiveModulation(off, 0xffffffff);
+      }
+      generators_[0]->set(static_cast<int>(host_.paramValue(kLfo1Shape) + 0.5), newest ? newest->sources[kSrcLfo1] : 0.0);
+      generators_[1]->set(static_cast<int>(host_.paramValue(kLfo2Shape) + 0.5), newest ? newest->sources[kSrcLfo2] : 0.0);
+      generators_[2]->set(static_cast<int>(host_.paramValue(kSwellShape) + 0.5), newest ? newest->sources[kSrcSwell] : 0.0);
+      loops_->hint = !mapping_ ? std::string()
+                     : armed_ != kSrcOff ? "Now drag any knob to set how much " + upper(kModSourceNames[armed_]) + " moves it"
+                                         : "MAP: touch a source, then drag a knob";
+      loops_->hintColor = armed_ != kSrcOff ? sourceColor(armed_) : kPress;
+      if (routes_) {
+         char t[32];
+         std::snprintf(t, sizeof(t), "%d of %d routes", usedRoutes(), kRouteCount);
+         routesCount_->setText(t);
+         for (int r = page_ * kRowsPerPage; r < (page_ + 1) * kRowsPerPage; ++r)
+            rows_[r].amount->redraw();
+      }
    }
 
    void buildVoice() {
@@ -1290,9 +1884,29 @@ private:
       knob(kLevel, "LEVEL", 0xfff28c28, cells[4], "Output level.");
    }
 
+   static constexpr int kRowsPerPage = 8;
+   struct RouteRow {
+      ui::Label *number = nullptr;
+      ui::Dropdown *source = nullptr, *dest = nullptr;
+      ui::Button *remove = nullptr;
+      RouteAmount *amount = nullptr;
+   };
+
    EditorHost &host_;
    ui::ParamBindings bindings_;
    ui::Tooltips tips_;
+   ui::TabBar *playerTabs_ = nullptr;
+   ui::Button *mapButton_ = nullptr;
+   ui::SegmentedSwitch *view_ = nullptr;
+   std::vector<SourceChip *> chips_;
+   std::vector<MapKnob *> mapKnobs_;
+   GeneratorGraph *generators_[3] = {};
+   RouteRow rows_[kRouteCount];
+   ui::Label *routesTitle_ = nullptr, *routesCount_ = nullptr;
+   std::vector<visage::Frame *> routeChrome_;
+   bool mapping_ = false, routes_ = false;
+   int armed_ = kSrcOff, page_ = 0;
+   float pulse_ = 0.0f;
    InstrumentList *list_ = nullptr;
    ValveGraph *valve_ = nullptr;
    BoreGraph *bore_ = nullptr;
@@ -1318,8 +1932,10 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
                                        ui::WindowOptions{static_cast<int>(kDesignWidth), static_cast<int>(kDesignHeight)});
 }
 
-bool renderScreenshot(EditorHost &host, int width, int height, int frames, const char *pngPath) {
+bool renderScreenshot(EditorHost &host, int width, int height, int frames, const char *pngPath,
+                      const ScreenshotOptions &options) {
    Panel panel(host);
+   panel.open(options);
    for (int i = 0; i < frames; ++i)
       panel.timerCallback();
    return ui::renderToPng(panel, width, height, pngPath);

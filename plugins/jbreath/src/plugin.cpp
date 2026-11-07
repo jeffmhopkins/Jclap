@@ -120,6 +120,7 @@ public:
          Slot &s = slots_[i];
          s.voice.prepare(sampleRate * oversampling_);
          s.voice.setSeed(0x9e3779b9u * (i + 1));
+         s.voice.setClock(&lfoClock_);
          s.noteId = -1;
          s.key = -1;
          s.ended = true;
@@ -201,8 +202,18 @@ public:
       out.resize(kVoiceCount);
       for (int i = 0; i < kVoiceCount; ++i) {
          const Shown &v = shown_[i];
-         out[i] = {v.note.load(), v.hz.load(), v.breath.load(), v.pressure.load(), v.timbre.load(), v.level.load(),
-                   v.releasing.load()};
+         Voice &o = out[i];
+         o.note = v.note.load();
+         o.hz = v.hz.load();
+         o.breath = v.breath.load();
+         o.pressure = v.pressure.load();
+         o.timbre = v.timbre.load();
+         o.level = v.level.load();
+         o.releasing = v.releasing.load();
+         for (int k = 0; k < kModSourceCount; ++k)
+            o.sources[k] = v.sources[k].load(std::memory_order_relaxed);
+         for (int k = 0; k < kModDestCount; ++k)
+            o.offsets[k] = v.offsets[k].load(std::memory_order_relaxed);
       }
    }
    void readVoice(int slot, float *out, size_t count) override {
@@ -333,6 +344,7 @@ public:
             dirty_ = false;
          }
          for (uint32_t i = start; i < end; ++i) {
+            lfoClock_ += 1.0 / sampleRate_;
             float fast[8] = {};
             for (int v = 0; v < kVoiceCount; ++v) {
                Slot &s = slots_[v];
@@ -410,6 +422,7 @@ private:
    void configure(Slot &s) {
       s.voice.configure(settings(s));
       s.voice.setPitch(pitchOf(s));
+      s.voice.setBend(bendOf(s) / std::max(1.0, isMember(s.channel) ? bendRange(s.channel) : 2.0));
       s.voice.setExpression(pressureOf(s), timbreOf(s));
       s.voice.setGain(gainOf(s));
    }
@@ -445,6 +458,32 @@ private:
       vs.breathIn = std::clamp(value(kBreathIn, s), 0.0, 1.0);
       vs.curve = value(kCurve, s);
       vs.slide = value(kSlide, s);
+      vs.tune = std::round(value(kTune, s));
+      vs.fine = value(kFine, s);
+      vs.level = value(kLevel, s);
+      for (int i = 0; i < kLfoCount; ++i) {
+         vs.lfoRate[i] = value(lfoParam(i, 0), s);
+         vs.lfoShape[i] = choice(lfoParam(i, 1), *s);
+         vs.lfoSync[i] = choice(lfoParam(i, 2), *s);
+      }
+      vs.swellShape = choice(kSwellShape, *s);
+      vs.swellTime = value(kSwellTime, s);
+      vs.swellLoop = choice(kSwellLoop, *s) != 0;
+      for (int b = 0; b < kBusCount; ++b) {
+         vs.busAmount[b] = value(busParam(b, kBusAmount), s);
+         vs.busMode[b] = choice(busParam(b, kBusMode), *s);
+         vs.busCurve[b] = choice(busParam(b, kBusCurve), *s);
+         vs.busPolarity[b] = choice(busParam(b, kBusPolarity), *s);
+         vs.busLag[b] = value(busParam(b, kBusLag), s);
+      }
+      // The routes in use: a source, a destination and an amount that isn't zero.
+      for (int r = 0; r < kRouteCount; ++r) {
+         const int src = choice(routeParam(r, kRouteSource), *s), dst = choice(routeParam(r, kRouteDestination), *s);
+         const double amount = value(routeParam(r, kRouteAmount), s);
+         if (src <= kSrcOff || src >= kModSourceCount || dst < 0 || dst >= kModDestCount || amount == 0.0)
+            continue;
+         vs.routes[vs.routeCount++] = {src, dst, static_cast<float>(amount)};
+      }
       return vs;
    }
 
@@ -515,7 +554,7 @@ private:
       if (pedalDown(s))
          s.sustained = true;
       else
-         s.voice.release();
+         s.voice.release(liftVelocity_);
    }
 
    void handleEvent(const clap_event_header_t *h, const clap_output_events_t *out) {
@@ -563,6 +602,7 @@ private:
       case CLAP_EVENT_NOTE_CHOKE: {
          auto *ev = reinterpret_cast<const clap_event_note_t *>(h);
          if (h->type == CLAP_EVENT_NOTE_OFF) {
+            liftVelocity_ = ev->velocity;
             noteOff(ev->note_id, ev->port_index, ev->channel, ev->key, false, out, h->time);
             break;
          }
@@ -620,6 +660,7 @@ private:
          if (status == 0x90 && ev->data[2] > 0) {
             startNote(-1, ev->port_index, channel, ev->data[1], ev->data[2] / 127.0, true, out, h->time);
          } else if (status == 0x80 || status == 0x90) {
+            liftVelocity_ = status == 0x80 ? ev->data[2] / 127.0 : 0.5;
             noteOff(-1, ev->port_index, channel, ev->data[1], true, out, h->time);
          } else if (status == 0xE0) {
             c.bend = ((ev->data[2] << 7 | ev->data[1]) - 8192) / 8192.0;
@@ -875,6 +916,11 @@ private:
          v.timbre.store(on ? static_cast<float>(timbreOf(s)) : 0.5f);
          v.level.store(on ? s.voice.level() : 0.0f);
          v.releasing.store(on && s.voice.isReleasing());
+         const float *src = s.voice.sources(), *off = s.voice.offsets();
+         for (int k = 0; k < kModSourceCount; ++k)
+            v.sources[k].store(on ? src[k] : 0.0f, std::memory_order_relaxed);
+         for (int k = 0; k < kModDestCount; ++k)
+            v.offsets[k].store(on ? off[k] : 0.0f, std::memory_order_relaxed);
       }
    }
 
@@ -905,6 +951,8 @@ private:
       std::atomic<int> note{-1};
       std::atomic<float> hz{0.0f}, breath{0.0f}, pressure{0.0f}, timbre{0.5f}, level{0.0f};
       std::atomic<bool> releasing{false};
+      std::atomic<float> sources[kModSourceCount] = {};
+      std::atomic<float> offsets[kModDestCount] = {};
    };
    Shown shown_[kVoiceCount];
    jclap::core::SampleFifo<2048> voiceScopes_[kVoiceCount];
@@ -917,6 +965,8 @@ private:
    int pendingCount_ = 0;
    // Something every voice hears changed since they were last configured.
    bool dirty_ = true;
+   // The note-off velocity being handled (the Lift source), and the free LFOs' clock in seconds.
+   double liftVelocity_ = 0.5, lfoClock_ = 0.0;
    // This block's length, while it runs; 0 outside a block.
    uint32_t blockFrames_ = 0;
 
