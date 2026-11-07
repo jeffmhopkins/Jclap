@@ -31,6 +31,8 @@ public:
    int selected() const { return selected_; }
    // Shows that page (and calls onChange if it changed).
    void select(int page);
+   // Shows only the selected page's frames again, after something else showed or hid them.
+   void showSelected();
 
    void setAccent(unsigned color);
    void setTheme(const Theme &theme);
@@ -45,7 +47,6 @@ public:
 private:
    void addFrame(int page, visage::Frame *frame);
    int indexAt(float x) const;
-   void showSelected();
 
    const Theme *theme_ = &defaultTheme();
    std::vector<std::string> names_;

@@ -45,7 +45,7 @@ Panels are shown at one-third size. They are the screenshot-test references, so 
 | [MatrixBrute CC](plugins/matrixbrute) | Note effect | Two-way knob panel for the Arturia MatrixBrute: sends every parameter as a MIDI CC (14-bit where it can) and follows the synth's own knobs |
 | [MicroMonsta 2 CC](plugins/micromonsta2) | Note effect | Knob panel that sends every MicroMonsta 2 parameter as a MIDI CC and loads the synth's programs |
 | [Monolith](plugins/monolith) | Note effect | Note generator that reads a slab of alien glyphs as MIDI phrases in time with the host, from a one-bar loop to a 55-glyph script that drifts and erodes, in five scripts, with presets |
-| [JBreath](plugins/jbreath) | Instrument | Eight-voice MPE wind instrument from physical models (flute, clarinet, sax, oboe, trumpet), each a waveguide blown by a model of the player, every voice drawn as a loop of its own breath |
+| [JBreath](plugins/jbreath) | Instrument | Eight-voice MPE wind instrument from physical models (flute, clarinet, sax, oboe, trumpet), each a waveguide blown by a model of the player, with a hybrid second instrument, JSynth-style MAP modulation, a stereo room, and every voice drawn as a loop of its own breath trailing smoke |
 | [Basic Synth](plugins/basic-synth) | Instrument | Eight-voice MPE synth: dual detunable oscillators, key-tracking filter, VCA, two looping envelopes and an LFO |
 | [JTunnel](plugins/jtunnel) | Audio effect | Sends a track's audio and MIDI over the network to other JTunnels (found by name over mDNS), or plays what one sends, with Opus or PCM, a drift-following buffer for Wi-Fi, and redundancy against loss |
 | [Polar XY](plugins/polar-xy) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb |
