@@ -146,7 +146,7 @@ public:
    void configure(const VoiceSettings &s) {
       // A different instrument starts from silence: a bore full of another model's sound would only
       // click.
-      if (s.model != settings_.model && active_) {
+      if (s.model != settings_.model) {
          models_[std::clamp(s.model, 0, kModelCount - 1)]->reset();
          len_ = -1.0;
       }
@@ -207,13 +207,14 @@ public:
       if (active_)
          releasing_ = true;
    }
+   // Only the instrument playing has sound in it: the others were cleared when it was picked.
    void reset() {
       active_ = releasing_ = stop_ = false;
       breath_ = 0.0;
       level_ = 0.0f;
-      for (auto &m : models_)
-         if (m)
-            m->reset();
+      env_ = 0.0;
+      if (models_[settings_.model])
+         model().reset();
    }
 
    // The note's pitch in semitones (key, tune and bend), and its expression, 0..1.

@@ -176,7 +176,7 @@ public:
       fs_ = fs;
       const int n = static_cast<int>(fs / 20.0) + 8;
       bore_.init(n);
-      jet_.init(n * 8);
+      jet_.init(n * 4);
       reset();
    }
    void reset() override {
