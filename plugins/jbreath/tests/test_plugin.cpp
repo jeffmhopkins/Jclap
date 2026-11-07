@@ -304,6 +304,37 @@ int main() {
       for (const auto &[id, v] : p.values)
          JCLAP_CHECK(v >= kParams[id].min && v <= kParams[id].max);
    }
+   for (size_t i = 0; i < presets.size(); ++i)
+      for (size_t j = i + 1; j < presets.size(); ++j)
+         JCLAP_CHECK(presets[i].name != presets[j].name);
+
+   // Every factory preset plays a low and a middle note: sounding, finite, at a usable level, and in
+   // tune (a note past the instrument's range plays a whole octave away, so pitch class only).
+   for (const auto &p : presets) {
+      jclap::core::TestHost ph(clap_entry, kId);
+      Run pr{ph};
+      for (const auto &[id, v] : p.values)
+         ph.setParam(id, v);
+      double tune = 0.0;
+      for (const auto &[id, v] : p.values)
+         tune += id == kTune ? std::round(v) : id == kFine ? v / 100.0 : 0.0;
+      for (int key : {50, 62}) {
+         ph.note(CLAP_EVENT_NOTE_ON, key, 0.75, key);
+         pr.seconds(1.2);
+         const double db = 20.0 * std::log10(pr.rms() + 1e-12);
+         const double hz = hzOf(key + tune);
+         double best = 9999.0;
+         for (double oct : {-2.0, -1.0, 0.0, 1.0, 2.0})
+            best = std::min(best, std::fabs(cents(pr.pitch(hz * std::pow(2.0, oct)), hz * std::pow(2.0, oct))));
+         if (db < -40.0 || db > -6.0 || best > 35.0)
+            std::printf("preset %s, key %d: %.1f dB, %.0f cents\n", p.name.c_str(), key, db, best);
+         JCLAP_CHECK(pr.finite());
+         JCLAP_CHECK(db > -40.0 && db < -6.0);
+         JCLAP_CHECK(best < 35.0);
+         ph.note(CLAP_EVENT_NOTE_OFF, key, 0.0, key);
+         pr.seconds(2.5);
+      }
+   }
 
    // State round trip, with the preset name.
    {

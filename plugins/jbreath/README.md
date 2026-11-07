@@ -57,6 +57,13 @@ LEGATO play one: letting go of a note goes back to the newest key still held. In
 stops the air between notes; in LEGATO the fingers change and the air doesn't stop (a slur), with
 GLIDE setting how long the pitch takes to get there.
 
+### Presets
+
+Fifty factory presets, about ten for each instrument, from clean to grungy, airy, bass and the
+odd ones: Concert Flute to Tin Whistle, Piccolo and Bass Flute; Wooden Reed to Klezmer Cry and Bass
+Clarinet; Clean Alto to Gutbucket and Bass Honk; Pastoral to Bassoon, Shawm and Duduk Air; Brass
+Plume to Flugel Glow, French Horn, Tuba and Blat. Each plays in tune at a usable level (tested).
+
 ## The panel
 
 - **EXCITER**: the five instruments, the valve curve of the one playing (how the air through it
