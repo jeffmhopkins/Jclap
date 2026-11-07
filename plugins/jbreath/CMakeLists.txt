@@ -18,6 +18,11 @@ jclap_add_test(jbreath-voice-tests SOURCES tests/test_voice.cpp)
 target_include_directories(jbreath-voice-tests PRIVATE src)
 target_link_libraries(jbreath-voice-tests PRIVATE jclap::core)
 
+# The smoke's fluid solver alone, and its thread.
+jclap_add_test(jbreath-vapor-tests SOURCES tests/test_vapor.cpp)
+target_include_directories(jbreath-vapor-tests PRIVATE src)
+target_link_libraries(jbreath-vapor-tests PRIVATE jclap::core)
+
 if(JCLAP_BUILD_TOOLS)
    # Offscreen render of the panel, for docs and visual checks. Needs a GPU (or a software Vulkan driver).
    add_executable(jbreath-screenshot tools/screenshot.cpp src/editor.cpp)
