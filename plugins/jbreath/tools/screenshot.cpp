@@ -161,8 +161,8 @@ int main(int argc, char **argv) {
       for (bool air : {false, true}) {
          DemoHost bench;
          const PanelBenchmark b = benchmarkPanel(bench, 1648, 940, frames, air);
-         std::printf("%s: step %.2f ms, draw %.2f ms a frame (smoke budget %d)\n", air ? "AIR " : "PLAY", b.stepMs, b.drawMs,
-                     b.puffs);
+         std::printf("%s: step %.2f ms, draw %.2f ms a frame (smoke grid %d cells)\n", air ? "AIR " : "PLAY", b.stepMs, b.drawMs,
+                     b.cells);
       }
       return 0;
    }

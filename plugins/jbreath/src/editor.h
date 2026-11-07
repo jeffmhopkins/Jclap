@@ -66,7 +66,7 @@ bool renderScreenshot(EditorHost &host, int width, int height, int frames, const
 // moving the smoke) and its drawing, in ms a frame over the second half, once the smoke has built.
 struct PanelBenchmark {
    double stepMs = 0.0, drawMs = 0.0;
-   int puffs = 0;
+   int cells = 0; // the smoke grid's
 };
 PanelBenchmark benchmarkPanel(EditorHost &host, int width, int height, int frames, bool air);
 

@@ -742,7 +742,7 @@ private:
 // growl, a split note or breath noise frays it. Vapour gathers behind the voices.
 class BreathLoops : public Drawn {
 public:
-   BreathLoops(float w, float h) : Drawn(w), W_(w), H_(h) {}
+   BreathLoops(float w, float h) : Drawn(w), W_(w), H_(h) { layoutField(w, h); }
 
    // A line of help along the top (MAP mode's), in its colour.
    std::string hint;
@@ -770,15 +770,15 @@ public:
       W_ = w;
       H_ = h;
       setDesignWidth(w);
+      layoutField(w, h);
    }
    void set(std::vector<Loop> loops, int model, double rate) {
       loops_ = std::move(loops);
       model_ = model;
       rate_ = rate;
    }
-   // How many puffs of smoke it may keep: fewer when frames are coming late.
-   void setBudget(int puffs) { budget_ = std::clamp(puffs, 200, kMaxPuffs); }
-   int puffs() const { return static_cast<int>(puffs_.size()); }
+   // How many cells the smoke's grid has (its cost a step).
+   int cells() const { return gw_ * gh_; }
 
    // One animation step of dt seconds: the loops turn, each drifts towards where its note puts it,
    // sheds warm smoke off its line, and the smoke rises (or ink sinks), curls, cools and thins.
@@ -863,7 +863,6 @@ public:
    }
 
 private:
-   static constexpr int kMaxPuffs = 1400;
 
    struct Place {
       float x = 0.5f, y = 0.5f;
@@ -876,28 +875,25 @@ private:
       int note = 0;
       void clear() { pts.clear(); }
    };
-   // A puff of smoke: warm (the voice's colour) when shed, cooling to vapour blue as it rises.
-   struct Puff {
-      float x, y, vx, vy, age, life, size, grow, alpha, warm;
-   };
-   // The palette: the warm colour of fresh smoke (or ink) and the cold of vapour.
+   // The palette: the warm colour of fresh smoke (or ink), the lavender it cools to, the vapour's blue.
    struct Colors {
-      unsigned hot, cold, line;
+      unsigned hot, cold, mist, line;
    };
    Colors colors() const {
       switch (look.palette) {
       case 1: // ember
-         return {0xffff6a2a, 0xff8a4a6a, 0xffffe2c8};
+         return {0xffff6a2a, 0xff8a4a6a, 0xff5a3a6a, 0xffffe2c8};
       case 2: // frost
-         return {0xff9fe8ff, 0xff6f8cff, 0xfff0fbff};
+         return {0xff9fe8ff, 0xff6f8cff, 0xff4a6ad8, 0xfff0fbff};
       case 3: // moss
-         return {0xff9be07a, 0xff3f8f7a, 0xfff0ffe0};
+         return {0xff9be07a, 0xff3f8f7a, 0xff2f6a7a, 0xfff0ffe0};
       case 4: // mono
-         return {0xfff0ece4, 0xff7a7f8a, 0xffffffff};
-      default: // dusk: the instrument's own colour, cooling to lavender
-         return {modelColor(model_), 0xff9c98d8, 0xfffff4e0};
+         return {0xfff0ece4, 0xff7a7f8a, 0xff5a5f6a, 0xffffffff};
+      default: // dusk: the instrument's own colour, cooling to lavender, over blue vapour
+         return {modelColor(model_), 0xff9c98d8, 0xff5a72d0, 0xfffff4e0};
       }
    }
+
 
    // The loop's line: the tone now, a quarter period ago and half a period ago, turned in 3D.
    void trace(const Loop &l, Shape &sh, float W, float H) {
@@ -948,120 +944,212 @@ private:
       return static_cast<float>(rng_ & 0xffffff) / 8388608.0f - 1.0f;
    }
 
-   // Each loop breathes smoke off its line, more the harder it blows; cold vapour hangs low and
-   // rises slowly whether anything plays or not. Ink drops from the loops and sinks instead.
+   // The smoke is three fields of density on a grid over the view: warm (fresh off a loop, in its
+   // colour), cool (smoke that has cooled and dusted towards lavender) and mist (cold vapour
+   // welling up from below). Each step the air carries them along a slow curling current, warm
+   // smoke rises on its heat and cools, and everything thins out. Drawn as heat maps the GPU
+   // smooths, it reads as soft billows rather than dots, and costs the same however much smoke
+   // there is.
+   enum { kWarm, kCool, kMist, kFields };
+   static constexpr int kCoarse = 4; // the current is worked out every 4th cell and blended between
+
+   void layoutField(float W, float H) {
+      const float cell = std::max(4.0f, W / 300.0f);
+      const int gw = std::max(8, static_cast<int>(std::ceil(W / cell)) + 1);
+      const int gh = std::max(8, static_cast<int>(std::ceil(H / cell)) + 1);
+      if (gw == gw_ && gh == gh_ && cell == cell_)
+         return;
+      gw_ = gw;
+      gh_ = gh;
+      cell_ = cell;
+      const size_t n = static_cast<size_t>(gw) * gh;
+      for (int f = 0; f < kFields; ++f) {
+         field_[f].assign(n, 0.0f);
+         next_[f].assign(n, 0.0f);
+         heat_[f].setDimensions(gw, gh);
+      }
+      cw_ = gw / kCoarse + 2;
+      ch_ = gh / kCoarse + 2;
+      u_.assign(static_cast<size_t>(cw_) * ch_, 0.0f);
+      v_.assign(static_cast<size_t>(cw_) * ch_, 0.0f);
+   }
+
+   // The air's current at a point (design units), in units a second: the curl of a few slow waves
+   // of different sizes and directions, so it only ever swirls (nothing piles up or empties out),
+   // plus each loop's breath blowing up (or, for ink, down) out of it.
+   void current(float x, float y, float &u, float &v) const {
+      const float turb = look.turbulence / 0.42f, swirl = 0.45f + 0.55f * look.swirl / 0.38f, t = time_;
+      // wavelength (design units), direction, drift, phase, strength (units a second)
+      struct Wave {
+         float len, dx, dy, w, p, a;
+      };
+      static constexpr Wave kWaves[] = {
+         {620, 0.80f, 0.60f, 0.21f, 0.3f, 34}, {410, -0.45f, 0.89f, -0.27f, 1.9f, 32},
+         {260, 0.97f, -0.24f, 0.39f, 4.1f, 30}, {170, -0.70f, -0.71f, -0.47f, 2.6f, 26},
+         {110, 0.31f, 0.95f, 0.61f, 5.3f, 21},  {72, -0.93f, 0.37f, -0.83f, 0.7f, 15},
+         {46, 0.55f, -0.83f, 1.07f, 3.4f, 9},
+      };
+      u = 0;
+      v = 0;
+      for (const Wave &wv : kWaves) {
+         const float kk = 6.2831853f * swirl / wv.len;
+         const float c = std::cos(kk * (wv.dx * x + wv.dy * y) + wv.w * t + wv.p) * wv.a * turb;
+         // psi = a/k sin(k (d . p) + w t), u = dpsi/dy, v = -dpsi/dx
+         u += c * wv.dy;
+         v -= c * wv.dx;
+      }
+      const float rise = look.rise / 0.55f, sink = look.ink ? -0.6f : 1.0f;
+      for (const Shape &sh : shapes_) {
+         if (sh.pts.size() < 4)
+            continue;
+         const float r = sh.radius * 1.5f + 20.0f, dx = x - sh.cx, dy = y - (sh.cy - 0.6f * sh.radius * sink);
+         const float g = std::exp(-(dx * dx + dy * dy) / (r * r));
+         if (g < 0.01f)
+            continue;
+         const float jet = (14.0f + 14.0f * std::min(1.0f, sh.breath)) * rise * sh.fade;
+         v -= sink * jet * g;
+         u += 0.6f * jet * g * dx / r;
+      }
+   }
+
+   // Adds density at a point (design units), spread over the four cells round it.
+   void deposit(std::vector<float> &f, float x, float y, float amount) {
+      const float gx = x / cell_, gy = y / cell_;
+      const int i = static_cast<int>(std::floor(gx)), j = static_cast<int>(std::floor(gy));
+      if (i < 1 || j < 1 || i >= gw_ - 2 || j >= gh_ - 2)
+         return;
+      const float fx = gx - i, fy = gy - j;
+      float *r0 = &f[static_cast<size_t>(j) * gw_ + i], *r1 = r0 + gw_;
+      r0[0] += amount * (1 - fx) * (1 - fy);
+      r0[1] += amount * fx * (1 - fy);
+      r1[0] += amount * (1 - fx) * fy;
+      r1[1] += amount * fx * fy;
+   }
+
+   // Each loop breathes smoke off its line, more the harder it blows, in puffs that come and go
+   // along it so it billows rather than streams; mist wells up from below whether anything plays or
+   // not. Ink drops from the loops, and its mist hangs above.
    void shed(float dt, float W, float H) {
-      const float rise = look.rise / 0.55f, sink = look.ink ? -0.6f : 1.0f, tail = look.tail / 4.0f;
-      // Bigger views shed more, so the smoke is as thick.
-      const float area = std::sqrt(W * H / (720.0f * 494.0f));
+      const float t = time_;
       for (Shape &sh : shapes_) {
          if (sh.pts.size() < 4)
             continue;
-         sh.emit += dt * 34.0f * (0.35f + std::min(1.2f, sh.breath)) * sh.fade * std::sqrt(area);
-         while (sh.emit >= 1.0f && static_cast<int>(puffs_.size()) < budget_) {
-            sh.emit -= 1.0f;
-            const visage::Point &q = sh.pts[static_cast<size_t>((0.5f + 0.5f * random()) * (sh.pts.size() - 1))];
-            const float ox = q.x - sh.cx, oy = q.y - sh.cy;
-            Puff f;
-            f.x = q.x + 3 * random();
-            f.y = q.y + 3 * random();
-            f.vx = 0.35f * ox + 10 * random();
-            f.vy = sink * (0.25f * oy - (28 + 14 * std::min(1.0f, sh.breath)) * rise) + 8 * random();
-            f.age = 0;
-            f.life = tail * (4.0f + 1.4f * random());
-            f.size = (5 + 3 * random()) * area;
-            f.grow = ((look.ink ? 13 : 19) + 6 * random()) * area;
-            f.alpha = (0.55f + 0.45f * std::min(1.0f, sh.breath)) * sh.fade;
-            f.warm = 1;
-            puffs_.push_back(f);
+         const float amount = dt * 220.0f * (0.35f + std::min(1.2f, sh.breath)) * sh.fade;
+         const size_t step = std::max<size_t>(1, sh.pts.size() / 40);
+         const float each = amount / static_cast<float>(sh.pts.size() / step);
+         for (size_t i = sh.pts.size() / 3; i < sh.pts.size(); i += step) {
+            const float puff = std::max(0.0f, std::sin(t * 2.3f + 0.21f * static_cast<float>(i) + sh.note) +
+                                                   0.6f * std::sin(t * 3.7f - 0.13f * static_cast<float>(i)));
+            deposit(field_[kWarm], sh.pts[i].x + 6 * random(), sh.pts[i].y + 6 * random(), each * 2.2f * puff);
          }
-         sh.emit = std::min(sh.emit, 1.0f);
       }
-      vapour_ += dt * 5.0f * area;
-      while (vapour_ >= 1.0f && static_cast<int>(puffs_.size()) < budget_) {
-         vapour_ -= 1.0f;
-         Puff f;
-         f.x = W * (0.5f + 0.55f * random());
-         f.y = look.ink ? H * (0.1f + 0.1f * random()) : H * (0.86f + 0.12f * random());
-         f.vx = 6 * random();
-         f.vy = sink * (-9 * rise + 3 * random());
-         f.age = 0;
-         f.life = 9 + 2 * random();
-         f.size = (36 + 12 * random()) * area;
-         f.grow = 7;
-         f.alpha = 0.5f;
-         f.warm = 0;
-         puffs_.push_back(f);
+      const float y0 = look.ink ? 0.14f * H : 0.86f * H;
+      for (int p = 0; p < 4; ++p) {
+         const float x = W * (0.5f + 0.42f * std::sin(t * (0.05f + 0.023f * p) + 1.7f * p));
+         const float strength = 0.5f + 0.5f * std::sin(t * (0.11f + 0.04f * p) + 2.3f * p);
+         for (int s = 0; s < 64; ++s)
+            deposit(field_[kMist], x + 130.0f * random(), y0 + 0.08f * H * random(), dt * 40.0f * strength / 64.0f);
       }
-      vapour_ = std::min(vapour_, 1.0f);
    }
 
-   // Warm smoke rises (more while it's warm) and slows; all of it rides a slow curl of air that
-   // wanders with time. Turbulence is how hard the air curls, Swirl how tightly.
+   // The air carries every field along its current; warm smoke rises on its own heat and cools,
+   // and everything thins out over the tail.
    void drift(float dt, float W, float H) {
-      const float drag = std::exp(-dt * 0.9f), cool = std::exp(-dt / (2.4f * look.tail / 4.0f));
-      const float turb = look.turbulence / 0.42f, swirl = 0.4f + 0.6f * look.swirl / 0.38f;
-      const float lift = (look.ink ? -14.0f : 26.0f) * look.rise / 0.55f;
-      for (Puff &f : puffs_) {
-         f.age += dt;
-         f.size += f.grow * dt;
-         const float t = time_;
-         const float ax = 38.0f * turb *
-                          (std::sin(f.y * 0.014f * swirl + t * 0.37f) + 0.6f * std::sin(f.y * 0.033f * swirl - f.x * 0.012f + t * 0.83f));
-         const float ay = 22.0f * turb *
-                             (std::cos(f.x * 0.012f * swirl - t * 0.29f) + 0.6f * std::cos(f.x * 0.029f * swirl + f.y * 0.017f + t * 0.71f)) -
-                          lift * f.warm;
-         f.vx = f.vx * drag + ax * dt;
-         f.vy = f.vy * drag + ay * dt;
-         f.x += f.vx * dt;
-         f.y += f.vy * dt;
-         f.warm *= cool;
-      }
-      puffs_.erase(std::remove_if(puffs_.begin(), puffs_.end(),
-                                  [&](const Puff &f) {
-                                     return f.age >= f.life || f.y < -f.size || f.y > H + f.size || f.x < -f.size ||
-                                            f.x > W + f.size;
-                                  }),
-                   puffs_.end());
-   }
-
-   void drawSmoke(visage::Canvas &c, const Colors &pal, float k) {
-      const visage::Color hot(pal.hot), cold(pal.cold), white(0xfffff1dc);
-      const float glowAmount = look.glow / 0.5f, swirl = look.swirl / 0.38f;
-      // Ink has no glow: it's dye in water, laid over itself.
-      const int passes = look.ink ? 1 : 2;
-      for (int pass = 0; pass < passes; ++pass) {
-         // First the body of the smoke, then (added on top) the glow of the warm part near its loop.
-         c.setBlendMode(pass ? visage::BlendMode::Add : visage::BlendMode::Alpha);
-         for (const Puff &f : puffs_) {
-            const float t = f.age / f.life;
-            const float in = std::min(1.0f, f.age * 4.0f), out = std::pow(1.0f - t, 1.6f);
-            float a = f.alpha * in * out;
-            if (pass)
-               a *= 0.3f * f.warm * glowAmount;
-            else
-               a *= (f.warm > 0.0f ? 0.1f : 0.08f) * (look.ink ? 2.2f : 1.0f);
-            if (a < 0.002f)
+      (void)W;
+      (void)H;
+      for (int j = 0; j < ch_; ++j)
+         for (int i = 0; i < cw_; ++i) {
+            const size_t a = static_cast<size_t>(j) * cw_ + i;
+            current(i * kCoarse * cell_, j * kCoarse * cell_, u_[a], v_[a]);
+         }
+      const float tail = look.tail / 4.0f, rise = look.rise / 0.55f;
+      const float lift = (look.ink ? -6.0f : 12.0f) * rise, drift = (look.ink ? -2.0f : 4.0f) * rise;
+      const float toCells = dt / cell_;
+      const std::vector<float> &warm = field_[kWarm], &cool = field_[kCool];
+      // Carry each field back along the current to where it came from (semi-Lagrangian).
+      for (int j = 0; j < gh_; ++j) {
+         const float cj = static_cast<float>(j) / kCoarse;
+         const int j0 = std::min(ch_ - 2, static_cast<int>(cj));
+         const float fj = cj - j0;
+         for (int i = 0; i < gw_; ++i) {
+            const float ci = static_cast<float>(i) / kCoarse;
+            const int i0 = std::min(cw_ - 2, static_cast<int>(ci));
+            const float fi = ci - i0;
+            const size_t a = static_cast<size_t>(j0) * cw_ + i0;
+            const float u = (u_[a] + (u_[a + 1] - u_[a]) * fi) * (1 - fj) + (u_[a + cw_] + (u_[a + cw_ + 1] - u_[a + cw_]) * fi) * fj;
+            const float v = (v_[a] + (v_[a + 1] - v_[a]) * fi) * (1 - fj) + (v_[a + cw_] + (v_[a + cw_ + 1] - v_[a + cw_]) * fi) * fj;
+            const size_t c = static_cast<size_t>(j) * gw_ + i;
+            // Warm smoke rises faster than the cool around it.
+            const float hot = warm[c] / (warm[c] + cool[c] + 0.05f);
+            const float x0 = i - u * toCells, y0 = j - (v - lift * hot - drift) * toCells;
+            if (x0 < 0 || y0 < 0 || x0 >= gw_ - 1 || y0 >= gh_ - 1) {
+               for (int f = 0; f < kFields; ++f)
+                  next_[f][c] = 0.0f;
                continue;
-            visage::Color tint = cold.interpolateWith(hot, std::min(1.0f, 1.6f * std::sqrt(f.warm)));
-            if (pass)
-               tint = hot.interpolateWith(white, 0.3f * f.warm);
-            const float r = f.size * k * (pass ? 0.6f : 1.0f), x = f.x * k, y = f.y * k;
-            c.setColor(ui::steadyGlow(tint.withAlpha(a), {x, y}, r));
-            c.circle(x - r, y - r, 2 * r);
-            // A wisp along the way it drifts, bent by the curl, so smoke reads as curling strands
-            // rather than a fog.
-            if (!pass && f.warm > 0.0f) {
-               const float v = std::hypot(f.vx, f.vy) + 1e-4f, dx = f.vx / v, dy = f.vy / v;
-               const float len = (0.4f * f.size + std::min(0.3f * v, 0.6f * f.size)) * k;
-               const float bend = 0.6f * swirl * len * std::sin(f.x * 0.05f + f.y * 0.037f + time_ * 0.6f);
-               c.setColor(ui::steady(tint.withAlpha(std::min(1.0f, a * 0.9f))));
-               c.quadratic(x - dx * len, y - dy * len, x - dy * bend, y + dx * bend, x + dx * len, y + dy * len,
-                           std::max(1.2f * k, 0.3f * r));
+            }
+            const int xi = static_cast<int>(x0), yi = static_cast<int>(y0);
+            const float fx = x0 - xi, fy = y0 - yi;
+            const float w00 = (1 - fx) * (1 - fy), w01 = fx * (1 - fy), w10 = (1 - fx) * fy, w11 = fx * fy;
+            const size_t s0 = static_cast<size_t>(yi) * gw_ + xi, s1 = s0 + gw_;
+            for (int f = 0; f < kFields; ++f) {
+               const float *d = field_[f].data();
+               next_[f][c] = d[s0] * w00 + d[s0 + 1] * w01 + d[s1] * w10 + d[s1 + 1] * w11;
             }
          }
       }
+      const float coolK = 1.0f - std::exp(-dt / (4.0f * tail));
+      const float fadeWarm = std::exp(-dt / (5.0f * tail)), fadeCool = std::exp(-dt / (3.2f * tail));
+      const float fadeMist = std::exp(-dt / (4.0f * tail));
+      for (size_t c = 0; c < next_[kWarm].size(); ++c) {
+         const float moved = next_[kWarm][c] * coolK;
+         field_[kWarm][c] = (next_[kWarm][c] - moved) * fadeWarm;
+         field_[kCool][c] = (next_[kCool][c] + 0.85f * moved) * fadeCool;
+         field_[kMist][c] = next_[kMist][c] * fadeMist;
+      }
+   }
+
+   void drawSmoke(visage::Canvas &c, const Colors &pal, float k) {
+      if (gw_ == 0)
+         return;
+      const float glowAmount = look.glow / 0.5f;
+      // Density to 0..1 with a soft knee, faded out over the last few cells at each edge, so the
+      // smoke never shows the grid's square edges against the rounded view.
+      static constexpr float kGain[kFields] = {1.6f, 2.8f, 2.4f};
+      const float edge = 6.0f;
+      for (int j = 0; j < gh_; ++j) {
+         const float ey = std::min(1.0f, std::min(static_cast<float>(j), static_cast<float>(gh_ - 1 - j)) / edge);
+         for (int i = 0; i < gw_; ++i) {
+            const float ex = std::min(1.0f, std::min(static_cast<float>(i), static_cast<float>(gw_ - 1 - i)) / edge);
+            const size_t n = static_cast<size_t>(j) * gw_ + i;
+            for (int f = 0; f < kFields; ++f)
+               heat_[f].at(i, j) = ex * ey * (1.0f - std::exp(-kGain[f] * field_[f][n]));
+         }
+      }
+      const float x = -0.5f * cell_ * k, y = -0.5f * cell_ * k, w = gw_ * cell_ * k, h = gh_ * cell_ * k;
+      const visage::Color hot(pal.hot), cold(pal.cold), mist(pal.mist), white(0xfffff1dc);
+      // Fresh smoke is the instrument's colour dusted towards the vapour's, as smoke is.
+      const visage::Color dusty = hot.interpolateWith(cold, 0.4f);
+      const float a = look.ink ? 1.6f : 1.0f;
+      const auto ramp = [](visage::Color from, visage::Color to, float a1, float a2, float a3) {
+         return visage::Brush::horizontal(
+               visage::Gradient(from.withAlpha(0.0f), from.withAlpha(a1), to.withAlpha(a2), to.interpolateWith(visage::Color(0xffffffff), 0.15f).withAlpha(a3)));
+      };
       c.setBlendMode(visage::BlendMode::Alpha);
+      c.setColor(ramp(mist, mist, 0.2f * a, 0.4f * a, 0.55f * a));
+      c.heatMap(heat_[kMist], x, y, w, h);
+      c.setColor(ramp(cold, cold.interpolateWith(dusty, 0.3f), 0.2f * a, 0.42f * a, 0.6f * a));
+      c.heatMap(heat_[kCool], x, y, w, h);
+      c.setColor(ramp(dusty, hot, 0.3f * a, 0.55f * a, 0.75f * a));
+      c.heatMap(heat_[kWarm], x, y, w, h);
+      // The glow of the warm smoke close to its loop, added on top. Ink has none: it's dye in water.
+      if (!look.ink && glowAmount > 0.01f) {
+         c.setBlendMode(visage::BlendMode::Add);
+         const float g = std::min(1.0f, 0.22f * glowAmount);
+         c.setColor(visage::Brush::horizontal(visage::Gradient(hot.withAlpha(0.0f), hot.withAlpha(0.0f), hot.withAlpha(0.4f * g),
+                                                               hot.interpolateWith(white, 0.35f).withAlpha(g))));
+         c.heatMap(heat_[kWarm], x, y, w, h);
+         c.setBlendMode(visage::BlendMode::Alpha);
+      }
    }
 
    void drawLoop(visage::Canvas &c, const Loop &l, const Colors &pal, float k) {
@@ -1099,12 +1187,15 @@ private:
    std::vector<Loop> loops_;
    Place places_[kVoiceCount];
    Shape shapes_[kVoiceCount];
-   std::vector<Puff> puffs_;
+   std::vector<float> field_[kFields], next_[kFields], u_, v_;
+   visage::HeatMapData heat_[kFields];
+   int gw_ = 0, gh_ = 0, cw_ = 0, ch_ = 0;
+   float cell_ = 0.0f;
    uint32_t rng_ = 20251107u;
-   int model_ = kClarinet, budget_ = kMaxPuffs;
+   int model_ = kClarinet;
    double rate_ = 48000.0;
    float W_, H_;
-   float angle_ = 0.0f, time_ = 0.0f, vapour_ = 0.0f;
+   float angle_ = 0.0f, time_ = 0.0f;
 };
 
 // ------------------------------------------------------------------ MAP
@@ -1485,17 +1576,9 @@ public:
    }
 
    // One frame: the voices read once, the loops and smoke stepped by dt, and the rest of the panel
-   // brought up to date at half the rate (none of it moves fast enough to need more). When frames
-   // come late the smoke is thinned, so drawing it never holds the next one up.
+   // brought up to date at half the rate (none of it moves fast enough to need more). The smoke
+   // lives on a fixed grid, so its cost doesn't grow with how much of it there is.
    void frame(float dt) {
-      // A frame late by more than half again: fewer puffs. On time for a while: more again.
-      const float period = 1.0f / 60.0f;
-      lateness_ += ((dt > 1.5f * period ? 1.0f : 0.0f) - lateness_) * 0.1f;
-      if (lateness_ > 0.3f)
-         budget_ = std::max(300, budget_ - 40);
-      else if (lateness_ < 0.05f)
-         budget_ = std::min(1400, budget_ + 5);
-      loops_->setBudget(budget_);
       ++frameCount_;
       fpsTime_ += dt;
       if (fpsTime_ >= 1.0f) {
@@ -1596,9 +1679,9 @@ public:
       loops_->step(dt);
    }
 
-   // Frames per second over the last second, and the smoke's budget: for the rendering check.
+   // Frames per second over the last second, and the size of the smoke's grid: for the rendering check.
    float fps() const { return fps_; }
-   int smokeBudget() const { return budget_; }
+   int smokeCells() const { return loops_->cells(); }
 
    void draw(visage::Canvas &c) override {
       const float k = scale();
@@ -2210,8 +2293,8 @@ private:
    ui::ParamBindings bindings_;
    ui::Tooltips tips_;
    ui::FramePacer pacer_{60.0f};
-   float lateness_ = 0.0f, fpsTime_ = 0.0f, fps_ = 0.0f;
-   int budget_ = 1400, frameCount_ = 0;
+   float fpsTime_ = 0.0f, fps_ = 0.0f;
+   int frameCount_ = 0;
    unsigned tick_ = 0;
    bool air_ = false;
    std::vector<visage::Frame *> playFrames_;
@@ -2297,7 +2380,7 @@ PanelBenchmark benchmarkPanel(EditorHost &host, int width, int height, int frame
    const int timed = frames - frames / 2;
    b.stepMs = step / std::max(1, timed);
    b.drawMs = draw / std::max(1, timed);
-   b.puffs = panel.smokeBudget();
+   b.cells = panel.smokeCells();
    editor.removeChild(&panel);
    return b;
 }
