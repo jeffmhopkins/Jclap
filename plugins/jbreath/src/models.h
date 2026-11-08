@@ -158,11 +158,28 @@ struct Character {
    // how far the valve stands open (the jet's width), the bore's taper (sax and oboe), and how far
    // a trumpet's wave steepens into a blare.
    float stiffness = 0.5f, aperture = 0.5f, cone = 0.5f, brass = 0.5f;
-   // The bore's extra loss (0.04 as tuned), and its holes' cutoff over 1.3 kHz.
+   // The bore's extra loss (0.04 as tuned: the Loss knob plus the tube's inner surface), and the
+   // cutoff of its tone holes over 1.3 kHz (the Hole Cutoff knob, the Holes count and the tube).
    float loss = 0.04f, cutoff = 1.0f;
 
+   // The loss over the models' tuning, easing off towards the top so a reed or lips can still
+   // sustain a note at full Loss (a very lossy bore is soft and slow, not silent).
+   float extraLoss() const { const float d = loss - 0.04f; return d > 0.0f ? d / (1.0f + d / 0.3f) : d; }
    // A loop's reflection with the Loss knob's share taken out (or, under its default, put back).
-   float keep(float base) const { return std::min(0.995f, base * (1.0f - 0.4f * (loss - 0.04f))); }
+   float keep(float base) const { return std::min(0.995f, base * (1.0f - 0.4f * extraLoss())); }
+   // A loop filter tuned at `base` Hz moved by the holes' cutoff, but never under `floor` (a note
+   // whose own pitch is near the cutoff stops speaking; a real instrument's top notes just get
+   // thinner). The floor never lifts a filter above where it was tuned.
+   double cut(double base, double floor) const { return std::max(base * cutoff, std::min(base, floor)); }
+   // How far the loss moves the model's pitch (in cents: a per unit of loss over its tuning, b per
+   // unit squared, measured), as a bore-length change at `nominal` samples that takes it back out.
+   double lossDelay(double nominal, double a, double b) const {
+      const double d = extraLoss();
+      return -nominal * (std::pow(2.0, (a * d + b * d * d) / 1200.0) - 1.0);
+   }
+   // The Cone knob on the trumpet's bore, which isn't split around its mouthpiece: how much a filter
+   // tuned at the model's own taper moves, 2^(-depth (cone - 0.5)): more conical is darker.
+   double taper(double depth) const { return std::pow(2.0, -depth * (cone - 0.5)); }
 };
 
 // A one-pole lowpass's phase delay at hz, in samples.
@@ -223,12 +240,16 @@ public:
       notePitch(hz_);
    }
    double nominal(double hz) const override { return fs_ / hz; }
+   // The holes', tube's and taper's cutoff, its delay taken out (the jet's delay follows the bore,
+   // so it shows only part of the filter's), and the loss's pitch.
    double cutoffDelay(double hz) const override {
-      return onePoleDelay(hz, hz * 3.2 * character.cutoff, fs_) - onePoleDelay(hz, hz * 3.2, fs_);
+      return (0.8 + 0.06 * std::log2(loopCut(hz) / (hz * 3.2))) *
+                (onePoleDelay(hz, loopCut(hz), fs_) - onePoleDelay(hz, hz * 3.2, fs_)) +
+             character.lossDelay(nominal(hz), kLossA, kLossB);
    }
    void notePitch(double hz) override {
       hz_ = hz;
-      lp_.setHz(hz * 3.2 * character.cutoff, fs_);
+      lp_.setHz(loopCut(hz), fs_);
       jlp_.setHz(hz * (1.4 + 1.2 * character.aperture), fs_);
    }
    float tick(float breath, float emb, double len, float tn) override {
@@ -259,6 +280,9 @@ public:
    }
 
 private:
+   double loopCut(double hz) const { return character.cut(hz * 3.2, 1.5 * hz); }
+   // The loss's pitch, in cents (measured), which cutoffDelay() takes back out.
+   static constexpr double kLossA = 60.5, kLossB = -16.7;
    Delay bore_, jet_;
    OnePoleLP lp_, jlp_, nlp_;
    DCBlock dc_, dco_;
@@ -292,7 +316,8 @@ public:
    double nominal(double hz) const override { return fs_ / (2.0 * hz); }
    double cutoffDelay(double hz) const override {
       const double cut = std::max(1300.0, 2.2 * hz);
-      return 2.0 * (onePoleDelay(hz, cut * character.cutoff, fs_) - onePoleDelay(hz, cut, fs_));
+      return kCutPitch * 2.0 * (onePoleDelay(hz, character.cut(cut, 2.1 * hz), fs_) - onePoleDelay(hz, cut, fs_)) +
+             character.lossDelay(nominal(hz), kLossA, kLossB);
    }
    // The bore's loss sits near 1.3 kHz, which only lets the low and middle register speak; it moves
    // up with notes above that, so they play too (as a real clarinet's tone holes leave more bore).
@@ -300,7 +325,7 @@ public:
       hz_ = hz;
       // High notes need a firmer push to speak (a player bites and blows harder up there).
       lift_ = 1.0 + 0.2 * std::clamp(std::log2(hz / 440.0) / 0.8, 0.0, 1.0);
-      const double cut = std::max(1300.0, 2.2 * hz) * character.cutoff;
+      const double cut = character.cut(std::max(1300.0, 2.2 * hz), 2.1 * hz);
       lp_.setHz(cut, fs_);
       lp2_.setHz(cut, fs_);
    }
@@ -340,6 +365,8 @@ public:
    }
 
 private:
+   // How much of the filters' delay shows in the pitch, and the loss's pitch in cents (measured).
+   static constexpr double kCutPitch = 1.0, kLossA = -13.0, kLossB = 1.8;
    Delay bore_;
    OnePoleLP lp_, lp2_, noiseLP_;
    DCBlock dc_;
@@ -376,15 +403,20 @@ public:
    }
    double nominal(double hz) const override { return fs_ / hz; }
    double cutoffDelay(double hz) const override {
-      return onePoleDelay(hz, cut_ * character.cutoff, fs_) - onePoleDelay(hz, cut_, fs_);
+      // The Cone knob moves the reed along the split bore, which sharpens it towards a full cone
+      // (measured, in cents): taken back out.
+      const double c = 2.0 * (character.cone - 0.5), coneCents = c * (3.33 + 4.3 * c + 2.87 * c * c);
+      return cutPitch_ * (onePoleDelay(hz, loopCut(hz), fs_) - onePoleDelay(hz, cut_, fs_)) +
+             character.lossDelay(nominal(hz), lossA_, lossB_) -
+             nominal(hz) * (std::pow(2.0, coneCents / 1200.0) - 1.0);
    }
    // A split bore lets the second mode compete with the first, and on its own the loop jumps to the
    // octave on most notes. A gentle lift at the fundamental (a cone's wider first resonance, from
    // its missing apex) keeps it in the low register; on release the loop still dies away.
    void notePitch(double hz) override {
-      if (character.cutoff != cutK_) {
+      if (character.cutoff != cutK_ || hz != regHz_) {
          cutK_ = character.cutoff;
-         lp_.setHz(std::min(cut_ * cutK_, 0.45f * static_cast<float>(fs_)), fs_);
+         lp_.setHz(std::min(loopCut(hz), 0.45 * fs_), fs_);
       }
       if (hz == regHz_)
          return;
@@ -396,8 +428,12 @@ public:
       const float noise = noiseLP_.tick(rng.white());
       const float growl = std::max(0.0f, breath - 0.95f) * growl_ * character.edge * character.growl;
       const float p = breath * (1 + (breathNoise_ * character.noise + growl) * noise) + tn * tongueNoise_ * noise;
-      // Where the reed sits along the split bore: the cone's truncation, moved by the Cone knob.
-      const double pos = posBase_ + posEmb_ * (emb - 0.5) + 0.16 * (character.cone - 0.5);
+      // Where the reed sits along the split bore: the cone's truncation, moved by the Cone knob. The
+      // short side is the missing apex; harmonics that fit a whole number of times into it are
+      // cancelled, so at 1/2 (Cone 0) the evens go and it sounds like a cylinder, a clarinet; near
+      // the apex (Cone 1) every harmonic is there, as in a long, sharp cone.
+      const double cone = character.cone - 0.5;
+      const double pos = posBase_ + posEmb_ * (emb - 0.5) - (cone < 0 ? 0.2 : 0.22) * cone;
       // The lift puts the loop's gain a little over one at the fundamental; the reed's losses hold it
       // there in normal playing, and the bore's walls (a clip far above any played level) at extremes.
       const float temp = std::clamp(-character.keep(0.95f) * register_.tick(lp_.tick(d0_.read(std::max(2.0, len * (1 - pos))))), -6.0f, 6.0f);
@@ -416,6 +452,9 @@ public:
 protected:
    virtual void resetColour() = 0;
    virtual float colour(float x) = 0;
+   double loopCut(double hz) const { return character.cut(cut_, 2.6 * hz); }
+   // How much of the filter's delay shows in the pitch, and the loss's pitch in cents (measured).
+   double cutPitch_ = 0.83, lossA_ = -2.5, lossB_ = -124.0;
    float cut_ = 5200, noiseHz_ = 3000, breathNoise_ = 0.06f, tongueNoise_ = 0.3f, growl_ = 0.6f;
    float breath_ = 0.0f;
    float posBase_ = 0.2f, posEmb_ = 0.08f, stiff_ = 0.22f, stiffEmb_ = 0.14f;
@@ -450,6 +489,9 @@ class Oboe final : public ConicalReed {
 public:
    Oboe() {
       cut_ = 3800;
+      cutPitch_ = 0.89;
+      lossA_ = -32.0;
+      lossB_ = -65.0;
       noiseHz_ = 3500;
       breathNoise_ = 0.04f;
       tongueNoise_ = 0.25f;

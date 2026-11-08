@@ -461,6 +461,7 @@ private:
       body.barrel = value(kBarrel);
       body.wall = value(kWall);
       body.length = value(kLength);
+      body.cutoffHz = value(kHoleCutoff);
       body.holes = static_cast<int>(value(kHoles) + 0.5);
       body.tube = static_cast<int>(value(kTube) + 0.5);
       for (Body &b : body_)
@@ -582,10 +583,8 @@ private:
       vs.hybridReleaseMs = hybridEnvMs(value(kHybridRelease, s));
       vs.hybridFollow = value(kHybridFollow, s);
       vs.hybridFilterEnv = value(kHybridFilterEnv, s);
-#if defined(JBREATH_HAS_MUTE)
       vs.mute = choice(kMute, *s);
       vs.muteAmount = value(kMuteAmount, s);
-#endif
       vs.flutter = value(kFlutter, s);
       vs.flutterRate = value(kFlutterRate, s);
       vs.pan = value(kPan, s);

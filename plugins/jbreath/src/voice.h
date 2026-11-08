@@ -71,6 +71,9 @@ struct VoiceSettings {
    int unison = 1;
    // The bore's holes and what the tube is made of (Body in output.h colours the sound after).
    int holes = 3, tube = 0;
+   // The mute in the bell (Mute below) and how far it's in, 0..1.
+   int mute = 0;
+   double muteAmount = 1.0;
 };
 
 constexpr int kMaxUnison = 4;
@@ -165,6 +168,123 @@ private:
    int low_[kModelCount] = {}, high_[kModelCount] = {};
 };
 
+// A mute in the bell (or the open end of any of the models), per voice: Open, Straight, Cup,
+// Harmon, Plunger or Bucket, pushed in by `amount` (0 open, 1 fully in). A mute does two things
+// (Ancell 1960, JASA 32: 1101; Backus 1976, JASA 60: 470; Fletcher & Rossing 14.x):
+// - what it lets out: a filter on the radiated sound, here. The straight mute's cone and its gap
+//   make a Helmholtz resonator: lows cut, a nasal peak near 1.8 kHz. The cup adds a cup over that:
+//   a resonance near 900 Hz and the highs cut. The Harmon seals the bell and lets the sound out
+//   through its stem: a strong, sharp resonance near 2 kHz with the fundamental weak, buzzy. A
+//   plunger closes over the bell: a resonant lowpass that falls as it closes (the "wah"). A
+//   bucket's felt absorbs the highs: dark and soft.
+// - what it sends back into the bore: less radiated means more reflected, so the bell's cutoff
+//   rises a little (felt also absorbs: loss). That's in applyCharacter, and the bore length
+//   correction keeps the note in tune (a mute played as is sharpens it a few cents).
+// The amount glides (about 8 ms, as fast as a hand can move one) and the filters are set again
+// only while it moves (once per control block at most), their gains following it, so working it
+// while a note sounds, or a route jumping it, doesn't click. A new note starts where it's set.
+class Mute {
+public:
+   // `step` is how often set() is called, in samples.
+   void prepare(double fs, int step) {
+      fs_ = fs;
+      glide_ = 1.0 - std::exp(-step / (0.008 * fs));
+      reset();
+   }
+   void reset() {
+      for (Biquad &b : bq_)
+         b.clear();
+      snap_ = true;
+   }
+   bool active() const { return on_; }
+   // The amount in now (gliding to the one set), for the bore (bore()).
+   double amount() const { return mute_ <= kOpen ? 0.0 : amount_; }
+   void set(int mute, double target) {
+      mute = std::clamp(mute, 0, kMuteKinds - 1);
+      target = std::clamp(target, 0.0, 1.0);
+      if (mute != mute_)
+         snap_ = true;
+      double amount = snap_ ? target : amount_ + (target - amount_) * glide_;
+      if (std::fabs(amount - target) < 1e-4)
+         amount = target;
+      snap_ = false;
+      if (mute == mute_ && amount == amount_)
+         return;
+      // Starting from open (or back to it), the filters' memories are of nothing.
+      if (!on_)
+         for (Biquad &b : bq_)
+            b.clear();
+      mute_ = mute;
+      amount_ = amount;
+      on_ = mute != kOpen && amount > 0.0;
+      if (!on_)
+         return;
+      const double a = amount;
+      double db = 0.0;
+      switch (mute) {
+      case kStraight:
+         bq_[0].lowshelf(700.0, -14.0 * a, fs_);
+         bq_[1].peak(1800.0, 2.5, 8.0 * a, fs_);
+         bq_[2].highshelf(std::min(6000.0, 0.4 * fs_), -3.0 * a, fs_);
+         db = -1.0 * a;
+         break;
+      case kCup:
+         bq_[0].lowshelf(200.0, -4.0 * a, fs_);
+         bq_[1].peak(950.0, 2.0, 7.0 * a, fs_);
+         bq_[2].highshelf(1500.0, -16.0 * a, fs_);
+         db = 0.0;
+         break;
+      case kHarmon:
+         bq_[0].lowshelf(1000.0, -15.0 * a, fs_);
+         bq_[1].peak(1900.0, 4.5, 13.0 * a, fs_);
+         bq_[2].highshelf(std::min(4500.0, 0.4 * fs_), -8.0 * a, fs_);
+         db = -1.0 * a;
+         break;
+      case kPlunger: {
+         // Closing: the opening's resonance falls from 4.5 kHz to 600 Hz and sharpens, and
+         // what's above it is shut in.
+         const double f = 4500.0 * std::pow(2.0, -2.9 * a);
+         bq_[0].lowshelf(150.0, -3.0 * a, fs_);
+         bq_[1].peak(f, 1.2 + 2.0 * a, 6.0 * a, fs_);
+         bq_[2].highshelf(std::min(1.5 * f, 0.4 * fs_), -20.0 * a, fs_);
+         db = 1.5 * a * a;
+         break;
+      }
+      default: // bucket
+         bq_[0].lowshelf(300.0, 2.0 * a, fs_);
+         bq_[1].peak(3000.0, 0.7, -6.0 * a, fs_);
+         bq_[2].highshelf(900.0, -12.0 * a, fs_);
+         db = 4.0 * a;
+         break;
+      }
+      gain_ = static_cast<float>(std::pow(10.0, db / 20.0));
+   }
+   float tick(float x) {
+      if (!on_)
+         return x;
+      return bq_[2].tick(bq_[1].tick(bq_[0].tick(x))) * gain_;
+   }
+   // What the mute does inside the bore at `amount` (applyCharacter): the bell's cutoff and the
+   // loss added.
+   static void bore(int mute, double amount, float &cutoff, float &loss) {
+      static const float cut[kMuteKinds] = {0.0f, 0.15f, 0.05f, 0.3f, 0.2f, -0.1f};
+      static const float lossAdd[kMuteKinds] = {0.0f, 0.0f, 0.01f, 0.0f, 0.0f, 0.04f};
+      const int m = std::clamp(mute, 0, kMuteKinds - 1);
+      const float a = static_cast<float>(std::clamp(amount, 0.0, 1.0));
+      cutoff *= 1.0f + cut[m] * a;
+      loss += lossAdd[m] * a;
+   }
+   enum { kOpen, kStraight, kCup, kHarmon, kPlunger, kBucket, kMuteKinds };
+
+private:
+   Biquad bq_[3];
+   double fs_ = 96000.0, amount_ = -1.0, glide_ = 1.0;
+   bool snap_ = true;
+   int mute_ = -1;
+   bool on_ = false;
+   float gain_ = 1.0f;
+};
+
 class BreathVoice {
 public:
    // Allocates the models for the internal rate. Not real-time safe.
@@ -183,6 +303,7 @@ public:
          o.setSampleRate(fs_);
       filter_.setSampleRate(fs_);
       filter_.setSlope(jclap::dsp::Filter::Slope::Db24);
+      mute_.prepare(fs_, kControl);
       airLP_.setHz(1500.0, fs_);
       roughCoef_ = 1.0 - std::exp(-2.0 * kPi * 30.0 * kControl / fs_);
       fallCoef_ = coef(15.0);
@@ -236,6 +357,7 @@ public:
          for (auto &copy : models_)
             copy[settings_.model]->reset();
          filter_.reset();
+         mute_.reset();
          // Each unison copy of the oscillator starts somewhere of its own, so they don't sum to one.
          for (int u = 0; u < kMaxUnison; ++u)
             osc_[u].reset(u == 0 ? 0.0 : 0.5 + 0.5 * jitter_.white());
@@ -322,6 +444,7 @@ public:
          for (auto &copy : models_)
             copy[settings_.model]->reset();
       filter_.reset();
+      mute_.reset();
       len_[0] = -1.0;
    }
    // Where the note sits left to right, -1..1, before the spread: the Pan param and its routes.
@@ -380,7 +503,7 @@ public:
             len_[u] += lenStep_[u];
             sum += models_[u][settings_.model]->tick(blown, static_cast<float>(emb_), len_[u], tongue);
          }
-         y = sum * unisonGain_ * static_cast<float>(gainNow_) * (1.0f - mix);
+         y = mute_.tick(sum * unisonGain_ * static_cast<float>(gainNow_) * (1.0f - mix));
       }
       if (mix > 0.0f) {
          // HYBRID: the oscillator, as loud as the breath blows it, through a lowpass the breath opens.
@@ -474,23 +597,45 @@ private:
       return t * (2.2 - 1.6 * strike()) * (1.0 + 0.4 * live_.humanize * human_[2]);
    }
    void applyCharacter() {
-      // More open holes below the note let more highs out of the bore (and fewer keep it darker);
-      // the tube's material soaks up more or less of each trip.
-      static const float holes[] = {0.55f, 0.72f, 0.86f, 1.0f, 1.18f, 1.4f};
-      static const float tubeLoss[] = {0.0f, 0.04f, 0.07f, 0.05f, -0.02f, -0.03f, 0.02f, -0.035f};
+      // HOLES: the tone-hole lattice below the sounding hole. Above its cutoff the waves leave
+      // through the open holes instead of reflecting, so the bore stops supporting those harmonics
+      // (Benade: f_c ~ 0.11 c (b/a) / sqrt(s t)). Fewer open holes radiate and pass less (a
+      // single open hole above a closed tube reflects highs from further down, out of tune with the
+      // note), so the effective cutoff falls; all open is the bore simply cut off at the hole.
+      // On the trumpet the same scale moves the bell's cutoff. Lattice 7 is as each model was tuned.
+      static const float holes[] = {0.5f, 0.64f, 0.8f, 1.0f, 1.22f, 1.5f};
+      // TUBE: what the inner surface does to each trip (the only part of the material that really
+      // matters inside the bore, Backus 1964, Coltman 1971): viscothermal losses at the wall, larger
+      // on porous or rough wood, which grow with frequency (so they also pull the cutoff down), and
+      // more turbulence noise over a rough bore. The wall's own vibration and the stylised colour
+      // are the Body's (output.h).
+      struct Surface { float loss, cut, noise; };
+      static const Surface tubes[] = {
+         {0.0f, 1.0f, 1.0f},     // grenadilla: dense, oiled, smooth: as tuned
+         {0.03f, 0.86f, 1.1f},   // boxwood: more open grain
+         {0.06f, 0.74f, 1.2f},   // maple: porous, soft
+         {0.05f, 0.82f, 1.6f},   // bamboo: rough, with the nodes' ridges
+         {-0.02f, 1.08f, 1.0f},  // brass: drawn smooth
+         {-0.025f, 1.12f, 0.95f},// silver: polished
+         {0.015f, 0.93f, 1.0f},  // resin: smooth, but soft and damped
+         {-0.03f, 1.18f, 0.9f},  // glass: the smoothest and hardest
+      };
       const float holeK = holes[std::clamp(live_.holes, 0, 5)];
-      const float lossAdd = tubeLoss[std::clamp(live_.tube, 0, 7)];
+      const Surface &tube = tubes[std::clamp(live_.tube, 0, 7)];
+      mute_.set(settings_.mute, live_.muteAmount);
       for (auto &copy : models_) {
          Character &c = copy[settings_.model]->character;
-         c.noise = static_cast<float>(live_.noise);
+         c.noise = static_cast<float>(live_.noise) * tube.noise;
          c.edge = static_cast<float>(live_.edge);
          c.growl = static_cast<float>(live_.growl / 0.2);
          c.stiffness = static_cast<float>(live_.stiffness);
          c.aperture = static_cast<float>(live_.aperture);
          c.cone = static_cast<float>(live_.cone);
          c.brass = static_cast<float>(live_.brass);
-         c.loss = std::max(0.0f, static_cast<float>(live_.loss) + lossAdd);
-         c.cutoff = static_cast<float>(live_.cutoffHz / 1300.0) * holeK;
+         float cutoff = static_cast<float>(live_.cutoffHz / 1300.0) * holeK * tube.cut, loss = tube.loss;
+         Mute::bore(settings_.mute, mute_.amount(), cutoff, loss);
+         c.loss = std::max(0.0f, static_cast<float>(live_.loss) + loss);
+         c.cutoff = std::clamp(cutoff, 0.25f, 3.1f);
       }
    }
 
@@ -588,7 +733,7 @@ private:
       // headjoint in, a trumpeter lips up): the bore is shortened or lengthened by the model's drift
       // at this breath, measured against the breath its tuning was baked at.
       const double drift = breathDrift(settings_.model, breath_) - breathDrift(settings_.model, modelInfo(settings_.model).tuneBreath);
-      const double len = (m.nominal(hz) * t.ratio - (m.character.cutoff != 1.0f ? m.cutoffDelay(hz) : 0.0)) *
+      const double len = (m.nominal(hz) * t.ratio - m.cutoffDelay(hz)) *
                          std::pow(2.0, drift / 1200.0);
       // Unison: the copies spread evenly across the detune, the first in the middle of an odd count.
       const int unison = std::clamp(settings_.unison, 1, kMaxUnison);
@@ -888,6 +1033,7 @@ private:
       live_.flutterRate = at(kDest<kFlutterRate>, s.flutterRate);
       live_.pan = at(kDest<kPan>, s.pan);
       live_.unisonDetune = at(kDest<kUnisonDetune>, s.unisonDetune);
+      live_.muteAmount = at(kDest<kMuteAmount>, s.muteAmount);
       live_.loss = at(kDest<kLoss>, s.loss);
       live_.cutoffHz = at(kDest<kHoleCutoff>, s.cutoffHz);
       live_.cone = at(kDest<kCone>, s.cone);
@@ -912,6 +1058,7 @@ private:
    std::unique_ptr<Model> models_[kMaxUnison][kModelCount];
    jclap::dsp::Oscillator osc_[kMaxUnison];
    jclap::dsp::Filter filter_;
+   Mute mute_;
    double synthLevel_ = 0.0, synthTarget_ = 0.0, synthCoef_ = 0.001;
    // The HYBRID envelope, 0..1, stepped every control tick.
    enum HybStage { kHybIdle, kHybAttack, kHybDecay, kHybSustain, kHybRelease };
