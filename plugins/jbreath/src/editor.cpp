@@ -1837,7 +1837,7 @@ public:
             filterGraph_->set(host_.paramModulated(kHybridCutoff), host_.paramModulated(kHybridResonance), amount, opens);
          }
          bore_->set(model, hz, loudest >= 0, partials, host_.paramModulated(kLoss), host_.paramModulated(kHoleCutoff) / 1300.0);
-         const bool cone = model == kSax || model == kOboe || model == kAlien, brass = model == kTrumpet;
+         const bool cone = model == kSax || model == kOboe || model == kTrumpet || model == kAlien, brass = model == kTrumpet;
          coneKnob_->setAccent(cone ? color : kFaint);
          brassKnob_->setAccent(brass ? color : kFaint);
          if (voiceTabs_->selected() == 1)
@@ -2053,7 +2053,7 @@ private:
       tips_.add(*shape_, "The bore's shape, which sets which harmonics it resonates on.");
       add<ui::Label>({404, 418, 52, 18}, "HOLES", kDim, visage::Font::kRight, 0.75f);
       tips_.add(choiceBox(kHoles, {462, 414, 96, 26}, 0xfff28c28),
-                "The open tone holes below the note: more of them let more tube ring on above their cutoff.");
+                "How many tone holes below the note are open: more is brighter. The tube below rings most with them Closed.");
       add<ui::Label>({560, 418, 46, 18}, "TUBE", kDim, visage::Font::kRight, 0.75f);
       tips_.add(choiceBox(kTube, {612, 414, 96, 26}, 0xfff28c28), "What the instrument is made of: its body's colour.");
       add<ui::Label>({714, 418, 50, 18}, "MUTE", kDim, visage::Font::kRight, 0.75f);
@@ -2072,7 +2072,7 @@ private:
       small(kLength, "LENGTH", 1, "The tube below the open holes: its length sets where its own resonances ring.");
       small(kLoss, "LOSS", 2, "How much the bore loses each trip: more is softer, darker and slower to speak.");
       small(kHoleCutoff, "HOLE CUTOFF", 3, "Above this the tone holes let the sound out: lower is darker. The pitch stays put.");
-      coneKnob_ = &small(kCone, "CONE", 4, "Sax and oboe: how far the cone is cut short at the reed, which tilts its upper modes. Alien: how tightly its bores are coiled, which stretches their modes apart.");
+      coneKnob_ = &small(kCone, "CONE", 4, "Sax and oboe: how far the cone is cut short at the reed, towards a cylinder or a full cone. Trumpet: how conical the bore is, towards a flugelhorn. Alien: how tightly its bores are coiled, which stretches their modes apart.");
       small(kRadiate, "RADIATE", 5, "How well the bell and holes send the highs out.");
       brassKnob_ = &small(kBrass, "BRASS", 6, "Trumpet: how far the wave steepens on its way down the horn, into a blare.");
       small(kBarrel, "BARREL", 7, "The barrel's or mouthpiece's cavity: bigger is lower and rounder.");

@@ -89,6 +89,12 @@ the breath opens it: soft is dark, hard is bright. The graph shows the lowpass a
 softest and hardest breath move it, with a dot for each sounding voice. Unison and vibrato shape it
 too.
 
+It has an envelope of its own, so it can be a pad under the instrument: **ATTACK**, **DECAY**,
+**SUSTAIN** and **RELEASE** (1 ms to 10 s), and **FOLLOW**, how much its level still follows the
+breath. At full FOLLOW it is blown like the instrument; turn it down and the envelope plays it at
+the note's strike instead, swelling in and ringing on after the breath stops. **F.ENV** is how far
+the envelope opens (or, below zero, closes) the lowpass.
+
 ### The bore
 
 ![The bore](docs/readme/bore.jpg)
@@ -97,13 +103,16 @@ The graph is the bore's input impedance, worked out from the same loop the model
 partials of the loudest note as it sounds. Every knob changes the curve:
 
 - **TUNE** in cents. **LENGTH**: the tube below the open holes, whose own resonances ring above
-  their cutoff; **HOLES** picks how many are open, from Closed to Open. More open holes also let
-  more highs out of the bore itself, on every instrument: Closed is dark and muffled, Open bright.
+  their cutoff, which rings most with the holes below it Closed (nothing lets it out on the way) and
+  not at all with them Open. **HOLES** picks how many are open, from Closed to Open: more open holes
+  move the tone holes' cutoff up and radiate more highs, on every instrument, so Closed is dark and
+  veiled and Open bright.
 - **LOSS**: what the bore loses each trip: softer, darker, slower to speak.
 - **HOLE CUTOFF**: above it the tone holes let the sound out. The pitch stays put: the filter's delay
   is taken out of the bore.
-- **CONE** (sax and oboe): how far the cone is cut short at the reed; on the alien, how tightly its
-  bores are coiled. **BRASS** (trumpet): how far the
+- **CONE** (sax and oboe): how far the cone is cut short at the reed, from towards a cylinder to a
+  full cone; on the trumpet, how conical its bore is (towards a flugelhorn: darker, less blare); on
+  the alien, how tightly its bores are coiled. **BRASS** (trumpet): how far the
   wave steepens into a blare. Each is dimmed on the instruments it doesn't apply to.
 - **RADIATE**, **BARREL** and **WALL**: how the bell sends the highs out, the mouthpiece's cavity,
   and how much the walls soak up (metal to bone). **TUBE** is what it's made of: grenadilla,
@@ -184,10 +193,18 @@ range), **TRANSP**, **ROOM**, **AIR** (the breath heard around the instrument, n
 
 **AIR** is where the breath comes from, and how it's shaped (see [Breath and MPE](#breath-and-mpe)).
 
-![The ROOM tab](docs/readme/room.jpg)
+![The REVERB tab](docs/readme/room.jpg)
 
-**ROOM**: a small room (SIZE, DECAY, DAMP, PRE-DELAY), the output's TONE, and the **LIMITER**: Off,
-Soft (overs saturate) or Hard (a peak limiter holds the output under full scale).
+**REVERB**: a switch, then a small room (SIZE, DECAY, DAMP, PRE-DELAY), the output's TONE, and the
+**LIMITER**: Off, Soft (overs saturate) or Hard (a peak limiter holds the output under full scale).
+Switched off, the room's tail rings out rather than stopping.
+
+![The DELAY tab](docs/readme/delay.jpg)
+
+**DELAY**: a stereo echo before the reverb, off until switched on. **SYNC** sets its time as a note
+value at the host's tempo (1/32 to 1/1, with dotted and triplet values), or Free for **TIME** in ms
+(10 ms to 2 s). **MIX** is how loud the echoes are, **FEEDBACK** how many there are, **TONE** how
+much darker each one gets, and **SPREAD** how far they bounce between left and right.
 
 ### The AIR view
 
