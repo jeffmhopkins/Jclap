@@ -78,6 +78,15 @@ struct PendingMod {
    double amount;
 };
 
+// A note expression that arrived before its note did (an MPE controller's pressure can come just
+// ahead of the note-on): kept until the end of the block for the note to start on.
+struct PendingExpression {
+   int32_t noteId;
+   int16_t port, channel, key;
+   clap_note_expression id;
+   double value;
+};
+
 // A key held down in a mono mode, in the order they were pressed: letting go of the sounding one
 // goes back to the newest still held.
 struct Held {
@@ -140,7 +149,7 @@ public:
       for (ChannelState &c : channels_)
          c = ChannelState{};
       mpeMembers_ = 15;
-      pendingCount_ = 0;
+      pendingCount_ = pendingExpressionCount_ = 0;
       heldCount_ = 0;
       dirty_ = true;
       publishVoices();
@@ -161,7 +170,7 @@ public:
       room_.reset();
       limiter_.reset();
       mpeMembers_ = 15;
-      pendingCount_ = 0;
+      pendingCount_ = pendingExpressionCount_ = 0;
       heldCount_ = 0;
    }
 
@@ -410,7 +419,7 @@ public:
       publishVoices();
       blockFrames_ = 0;
       // Per-note modulation that never found its note this block isn't kept for later notes.
-      pendingCount_ = 0;
+      pendingCount_ = pendingExpressionCount_ = 0;
       // With every voice silent, only the decimator's short tail is left; then nothing until the
       // next event.
       for (const Slot &s : slots_)
@@ -720,30 +729,17 @@ private:
          auto *ev = reinterpret_cast<const clap_event_note_expression_t *>(h);
          if (!std::isfinite(ev->value))
             break;
+         bool found = false;
          for (Slot &s : slots_) {
             if (!hostMatches(s, ev->note_id, ev->port_index, ev->channel, ev->key))
                continue;
-            switch (ev->expression_id) {
-            // Clamped to the ranges CLAP gives them.
-            case CLAP_NOTE_EXPRESSION_TUNING:
-               s.bend = std::clamp(ev->value, -120.0, 120.0);
-               break;
-            case CLAP_NOTE_EXPRESSION_PRESSURE:
-               s.pressure = std::clamp(ev->value, 0.0, 1.0);
-               s.ownPressure = true;
-               break;
-            case CLAP_NOTE_EXPRESSION_BRIGHTNESS:
-               s.timbre = std::clamp(ev->value, 0.0, 1.0);
-               s.ownTimbre = true;
-               break;
-            case CLAP_NOTE_EXPRESSION_VOLUME:
-               s.volume = std::clamp(ev->value, 0.0, 4.0);
-               break;
-            default:
-               break;
-            }
+            express(s, ev->expression_id, ev->value);
             configure(s);
+            found = true;
          }
+         if (!found && pendingExpressionCount_ < kMaxPending)
+            pendingExpressions_[pendingExpressionCount_++] = {ev->note_id, ev->port_index, ev->channel, ev->key,
+                                                              ev->expression_id, ev->value};
          break;
       }
       case CLAP_EVENT_MIDI: {
@@ -825,6 +821,28 @@ private:
          }
          break;
       }
+      default:
+         break;
+      }
+   }
+
+   // A note expression on its note, clamped to the range CLAP gives it.
+   static void express(Slot &s, clap_note_expression id, double value) {
+      switch (id) {
+      case CLAP_NOTE_EXPRESSION_TUNING:
+         s.bend = std::clamp(value, -120.0, 120.0);
+         break;
+      case CLAP_NOTE_EXPRESSION_PRESSURE:
+         s.pressure = std::clamp(value, 0.0, 1.0);
+         s.ownPressure = true;
+         break;
+      case CLAP_NOTE_EXPRESSION_BRIGHTNESS:
+         s.timbre = std::clamp(value, 0.0, 1.0);
+         s.ownTimbre = true;
+         break;
+      case CLAP_NOTE_EXPRESSION_VOLUME:
+         s.volume = std::clamp(value, 0.0, 4.0);
+         break;
       default:
          break;
       }
@@ -930,6 +948,14 @@ private:
                             : (m.key == -1 || m.key == key) && (m.channel == -1 || m.channel == channel) &&
                                   (m.port == -1 || m.port == port))
             s.mod[m.param] = m.amount;
+      }
+      // Its expressions that came just ahead of it, so it starts on its pressure.
+      for (int i = 0; i < pendingExpressionCount_; ++i) {
+         const PendingExpression &e = pendingExpressions_[i];
+         if (e.noteId != -1 ? e.noteId == noteId
+                            : (e.key == -1 || e.key == key) && (e.channel == -1 || e.channel == channel) &&
+                                  (e.port == -1 || e.port == port))
+            express(s, e.id, e.value);
       }
    }
 
@@ -1066,6 +1092,8 @@ private:
    static constexpr int kMaxPending = 32;
    PendingMod pending_[kMaxPending];
    int pendingCount_ = 0;
+   PendingExpression pendingExpressions_[kMaxPending];
+   int pendingExpressionCount_ = 0;
    // Something every voice hears changed since they were last configured.
    bool dirty_ = true;
    // The note-off velocity being handled (the Lift source), and the free LFOs' clock in seconds.

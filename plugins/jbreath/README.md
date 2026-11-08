@@ -51,7 +51,7 @@ shuts; the flute's jet overblows). The knobs are how it's blown:
 - **APERTURE**: how far the reed or lips stand open (the jet's width): wide is loud and free,
   narrow thin and focused.
 - **NOISE**: breath noise and turbulence. **KICK**: the burst of pressure as the tongue lets the
-  air go. **GROWL**: above 20%, a rough flutter of the throat rides on the air, on any instrument.
+  air go. **GROWL**: a rough flutter of the throat rides on the air, on any instrument, and a hard-blown reed rasps more.
 
 ### Hybrid
 
