@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <mutex>
 #include <sstream>
 #include <system_error>
@@ -43,7 +44,6 @@ constexpr const char *kApiHost = "api.github.com";
 constexpr const char *kApiPath = "/repos/jeffmhopkins/Jclap/releases/latest";
 constexpr const char *kReleasePage = "https://github.com/jeffmhopkins/Jclap/releases/tag/v";
 constexpr const char *kFileHeader = "JClap updates 1";
-constexpr long long kCheckEverySeconds = 24 * 60 * 60;
 constexpr int kTimeoutMs = 8000;
 // A release reply is a few kilobytes; anything far bigger isn't one.
 constexpr size_t kMaxReply = 1 << 20;
@@ -301,9 +301,9 @@ struct Checker {
    bool loaded = false;
    State state;
    int users = 0;
-   // One try per session, so being offline doesn't mean a request every time a panel opens.
-   bool tried = false;
    bool running = false;
+   // Stands in for the network in tests (setFetchForTesting()).
+   std::function<bool(std::string &)> fakeFetch;
    std::thread worker;
    std::atomic<bool> cancel{false};
    // Which plugin this binary is (setPlugin()).
@@ -330,7 +330,12 @@ void saveLocked(Checker &c) { writeState(fileLocked(c), c.state); }
 void check() {
    Checker &c = checker();
    std::string body;
-   const bool ok = fetch(c.cancel, body);
+   std::function<bool(std::string &)> fake;
+   {
+      std::lock_guard<std::mutex> lock(c.mutex);
+      fake = c.fakeFetch;
+   }
+   const bool ok = fake ? fake(body) : fetch(c.cancel, body);
    const std::string latest = ok ? parseLatestRelease(body) : std::string();
    std::lock_guard<std::mutex> lock(c.mutex);
    if (!latest.empty()) {
@@ -345,12 +350,12 @@ void check() {
    c.running = false;
 }
 
-void startIfDueLocked(Checker &c) {
-   if (c.users <= 0 || c.running || c.tried || !checkDue(c.state, unixNow()))
+// Checks now, unless checking is off, no window is open, or a check is already under way.
+void startLocked(Checker &c) {
+   if (c.users <= 0 || c.running || !c.state.enabled)
       return;
    if (c.worker.joinable())
       c.worker.join(); // the last one has finished: it cleared `running`
-   c.tried = true;
    c.running = true;
    c.cancel = false;
    try {
@@ -369,9 +374,6 @@ void release() {
       if (--c.users > 0)
          return;
       c.cancel = true;
-      // A check cut short is tried again the next time a window opens.
-      if (c.running)
-         c.tried = false;
       worker = std::move(c.worker);
    }
    cancelFetch();
@@ -533,11 +535,6 @@ bool writeState(const std::filesystem::path &file, const State &state) {
    return true;
 }
 
-bool checkDue(const State &state, long long now) {
-   // A check time in the future means the clock moved back: check again.
-   return state.enabled && (now - state.checkedAt >= kCheckEverySeconds || state.checkedAt > now);
-}
-
 std::optional<Release> available() {
    Checker &c = checker();
    std::lock_guard<std::mutex> lock(c.mutex);
@@ -585,10 +582,8 @@ void setEnabled(bool on) {
       loadLocked(c);
    c.state.enabled = on;
    saveLocked(c);
-   if (on) {
-      c.tried = false;
-      startIfDueLocked(c);
-   }
+   if (on)
+      startLocked(c);
 }
 
 std::shared_ptr<void> startChecking() {
@@ -599,7 +594,8 @@ std::shared_ptr<void> startChecking() {
       // Pick up what other plugins (or other hosts) have written since.
       if (!c.running)
          loadLocked(c);
-      startIfDueLocked(c);
+      // Every time a window opens, so a new release shows the first time a panel opens after it.
+      startLocked(c);
    }
    return std::shared_ptr<void>(&c, [](void *) { release(); });
 }
@@ -609,6 +605,12 @@ void setStateFileForTesting(const std::filesystem::path &file) {
    std::lock_guard<std::mutex> lock(c.mutex);
    c.testFile = file;
    c.loaded = false;
+}
+
+void setFetchForTesting(std::function<bool(std::string &)> fetch) {
+   Checker &c = checker();
+   std::lock_guard<std::mutex> lock(c.mutex);
+   c.fakeFetch = std::move(fetch);
 }
 
 void openInBrowser(const std::string &url) {
