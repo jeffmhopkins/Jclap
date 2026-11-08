@@ -2,7 +2,7 @@
 
 # JBreath
 
-An eight-voice MPE wind instrument built from physical models: flute, clarinet, sax, oboe and trumpet, each a digital waveguide blown by a model of the player, with every voice drawn live as a glowing loop of its own breath.
+An eight-voice MPE wind instrument built from physical models: flute, clarinet, sax, oboe, trumpet and an alien, each a digital waveguide blown by a model of the player, with every voice drawn live as a glowing loop of its own breath.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![voices: 8](https://img.shields.io/badge/voices-8-blue)](#voices) [![MPE: yes](https://img.shields.io/badge/MPE-yes-blue)](#breath-and-mpe) [![synthesis: waveguide](https://img.shields.io/badge/synthesis-waveguide-blue)](#the-instruments) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
@@ -22,6 +22,30 @@ reflections of the real one) driven by a nonlinear exciter, the part the player 
 | **Sax** | the same kind of reed, softer | a cone, as a split bore: every harmonic, overblowing at the octave | the mouthpiece's honk; growl when it's pushed |
 | **Oboe** | a stiff double reed, its two blades beating shut each cycle | a narrow cone, darker | the reed's buzz, richer the harder it's blown, through formants near 1.25 and 2.9 kHz with a thin fundamental: nasal, not a soprano sax |
 | **Trumpet** | the lips: a mass on a spring blown open by the mouth pressure (outward striking), with the flow through them in closed form | a flared horn: resonances on every harmonic, none at DC | the wave steepening on its way down the horn, more the harder it's blown, towards a shock at forte: the brassy blare |
+| **Alien** | twin reeds in one small chamber, each blown by the player's breath and by the other's flow | two closed bores coiled as helices, the second shorter by an irrational ratio: stretched, inharmonic resonances | a hollow, nearly pure tone when soft; harder, the ghost bore's inharmonic partial rises out of it (2.76 times the note) and the two reeds fight, filling the spectrum with combination tones: a bell-like, ring-modulated roar over a steady pitch |
+
+### The alien
+
+An instrument that couldn't be built, from physics that could. A coiled tube is dispersive: high
+frequencies travel along a helix faster than low ones, so its resonances are stretched apart like a
+bell's or a stiff bar's instead of falling on the harmonic series (an allpass chain in the loop, set
+in ratios of the note so every register is stretched alike). Every attack and release rings at
+those stretched modes, a spring-like chirp. Its mouthpiece holds two reeds: the main one on a
+clarinet-like helix that holds the pitch, and a stiffer one on a second, shorter helix tuned 2.76
+times higher (a free bar's second mode over its first), whose sound leaves through an iris the
+breath pushes open. The reeds share the chamber, so each is blown by the other's flow: two
+oscillations that aren't harmonically related, driven through one nonlinearity, give every
+combination tone m f0 + n f1 (a multiphonic) and pull on each other's pitch, locking when they come
+near a simple ratio.
+
+So the breath changes what it is. Softly it's a hollow, almost pure tone; a little harder its 3rd
+and 5th harmonics come up together; from about mezzo-forte the ghost's partial rises out of it as a
+shimmer; at full breath (more with BREATH up) the ghost is nearly as loud as the note and the
+spectrum fills with sidebands spaced 0.24 times the note. Letting go, the coil rings on at its own
+stretched modes, a short upward "boing". **EMBOUCHURE**
+(and MPE slide) tunes the ghost from about 2.3 to 3.4 times the note, through 3, where it locks
+into a harmonic and the tone turns consonant. **BITE** is how hard the two reeds pull on each
+other, and **CONE** how tightly the bores are coiled (how far their modes are stretched).
 
 Every note plays in tune: the bore length for each model and note was measured offline by playing
 it and correcting the length until the pitch was within a cent, at the rates the voices run at, and
@@ -78,7 +102,8 @@ partials of the loudest note as it sounds. Every knob changes the curve:
 - **LOSS**: what the bore loses each trip: softer, darker, slower to speak.
 - **HOLE CUTOFF**: above it the tone holes let the sound out. The pitch stays put: the filter's delay
   is taken out of the bore.
-- **CONE** (sax and oboe): how far the cone is cut short at the reed. **BRASS** (trumpet): how far the
+- **CONE** (sax and oboe): how far the cone is cut short at the reed; on the alien, how tightly its
+  bores are coiled. **BRASS** (trumpet): how far the
   wave steepens into a blare. Each is dimmed on the instruments it doesn't apply to.
 - **RADIATE**, **BARREL** and **WALL**: how the bell sends the highs out, the mouthpiece's cavity,
   and how much the walls soak up (metal to bone). **TUBE** is what it's made of: grenadilla,
@@ -205,10 +230,11 @@ GLIDE setting how long the pitch takes to get there.
 
 ### Presets
 
-Fifty factory presets, about ten for each instrument, from clean to grungy, airy, bass and the
+Fifty-seven factory presets, about ten for each instrument, from clean to grungy, airy, bass and the
 odd ones: Concert Flute to Tin Whistle, Piccolo and Bass Flute; Wooden Reed to Klezmer Cry and Bass
 Clarinet; Clean Alto to Gutbucket and Bass Honk; Pastoral to Bassoon, Shawm and Duduk Air; Brass
-Plume to Flugel Glow, French Horn, Tuba and Blat. Each plays in tune at a usable level (tested).
+Plume to Flugel Glow, French Horn, Tuba and Blat; and seven Alien ones, First Contact, Ghost Helix,
+Xeno Choir, Tractor Beam, Coil Whistle, Mothership and Signal Lost. Each plays in tune at a usable level (tested).
 
 ## Drawing it smoothly
 

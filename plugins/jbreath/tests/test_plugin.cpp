@@ -129,7 +129,7 @@ void playsInTune(double rate) {
    jclap::core::TestHost h(clap_entry, kId, rate);
    Run run{h, rate};
    dry(h);
-   for (int m = 0; m < 5; ++m) {
+   for (int m = 0; m < 6; ++m) {
       h.setParam(kModel, m);
       h.setParam(kVibDepth, 0.0);
       const int key = m == 0 ? 72 : m == 2 ? 55 : 64;
@@ -474,7 +474,7 @@ int main() {
          {kTongueType, kTongueFlutter}, {kTongueType, kTongueBreath}, {kTongueType, kTongueSoft},
          {kVibType, kVibJaw}, {kVibType, kVibLip}, {kHybridMix, 0.5}, {kHybridMix, 1.0}, {kLimiter, 2.0},
       };
-      for (int m = 0; m < 5; ++m)
+      for (int m = 0; m < 6; ++m)
          for (const Extreme &x : extremes) {
             jclap::core::TestHost eh(clap_entry, kId);
             Run e{eh};
