@@ -112,8 +112,10 @@ int main() {
       JCLAP_CHECK(minDb > -32.0 && maxDb < -10.0);
 
       // Soft, middling and hard, every third semitone: it sounds, and in its own register (a tone
-      // that jumps to the octave has almost nothing left at the fundamental).
+      // that jumps to the octave has almost nothing left at the fundamental). A trumpet's bell sends
+      // out little of its fundamental, and at forte its 2nd and 3rd harmonics stand well above it.
       {
+         const double octaveRatio = m == kTrumpet ? 6.0 : 3.0;
          int silent = 0, octave = 0;
          double worstRatio = 0.0;
          for (double velocity : {0.3, 0.75, 1.0})
@@ -129,7 +131,7 @@ int main() {
                if (rms < 0.003) {
                   ++silent;
                   std::printf("         note %d at %.2f: silent\n", note, velocity);
-               } else if (ratio > 3.0) {
+               } else if (ratio > octaveRatio) {
                   ++octave;
                   std::printf("         note %d at %.2f: octave (H2/H1 %.1f)\n", note, velocity, ratio);
                }

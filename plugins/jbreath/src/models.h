@@ -246,11 +246,15 @@ public:
       // (radiation), plus edge noise riding on the jet.
       const float rad = raw - 0.85f * rawPrev_;
       rawPrev_ = raw;
-      // A flute's strong 2nd harmonic grows as it's blown harder: the jet's asymmetry, as a
-      // level-normalised square term on the tube wave.
+      // A flute is nearly pure when it's blown softly; harder, the jet's asymmetry brings up a strong
+      // 2nd harmonic, and at forte the 3rd: level-normalised Chebyshev terms on the tube wave, so
+      // the colour follows the breath and not the note's loudness.
       envF_ += 0.002f * (96000.0f / static_cast<float>(fs_)) * (std::fabs(raw) - envF_);
-      const float even = 0.3f * character.edge * (0.4f + 0.8f * breath) * raw * (raw / (envF_ + 1e-4f));
-      return dco_.tick(0.2f * (0.5f * raw + rad + even) +
+      const float a = 1.5708f * envF_ + 1e-4f, n = std::clamp(raw / a, -1.3f, 1.3f);
+      const float push = std::clamp((breath - 0.22f) / 0.7f, 0.0f, 1.5f);
+      const float even = a * character.edge * (0.03f + 0.75f * push * push) * (2.0f * n * n - 1.0f);
+      const float odd = a * character.edge * 0.3f * push * push * push * n * (4.0f * n * n - 3.0f);
+      return dco_.tick(0.2f * (0.5f * raw + rad + even + odd) +
                        0.025f * character.noise * U * turb * (0.25f + std::fabs(y)));
    }
 
@@ -388,11 +392,12 @@ public:
       register_.peak(hz, 0.7, 1.5, fs_);
    }
    float tick(float breath, float emb, double len, float tn) override {
+      breath_ = breath;
       const float noise = noiseLP_.tick(rng.white());
       const float growl = std::max(0.0f, breath - 0.95f) * growl_ * character.edge * character.growl;
       const float p = breath * (1 + (breathNoise_ * character.noise + growl) * noise) + tn * tongueNoise_ * noise;
       // Where the reed sits along the split bore: the cone's truncation, moved by the Cone knob.
-      const double pos = 0.2 + posEmb_ * (emb - 0.5) + 0.16 * (character.cone - 0.5);
+      const double pos = posBase_ + posEmb_ * (emb - 0.5) + 0.16 * (character.cone - 0.5);
       // The lift puts the loop's gain a little over one at the fundamental; the reed's losses hold it
       // there in normal playing, and the bore's walls (a clip far above any played level) at extremes.
       const float temp = std::clamp(-character.keep(0.95f) * register_.tick(lp_.tick(d0_.read(std::max(2.0, len * (1 - pos))))), -6.0f, 6.0f);
@@ -412,7 +417,8 @@ protected:
    virtual void resetColour() = 0;
    virtual float colour(float x) = 0;
    float cut_ = 5200, noiseHz_ = 3000, breathNoise_ = 0.06f, tongueNoise_ = 0.3f, growl_ = 0.6f;
-   float posEmb_ = 0.08f, stiff_ = 0.22f, stiffEmb_ = 0.14f;
+   float breath_ = 0.0f;
+   float posBase_ = 0.2f, posEmb_ = 0.08f, stiff_ = 0.22f, stiffEmb_ = 0.14f;
 
 private:
    Delay d0_, d1_;
@@ -455,15 +461,33 @@ public:
 protected:
    void resetColour() override {
       f1_ = {};
-      f1_.peak(1100, 1.6, 7.0, fs_);
+      f1_.peak(1250, 1.0, 6.0, fs_);
       f2_ = {};
-      f2_.peak(2900, 2.5, 5.0, fs_);
+      f2_.peak(2900, 1.8, 5.0, fs_);
       f3_ = {};
-      f3_.highshelf(400, -6.0, fs_);
+      f3_.lowshelf(550, -7.0, fs_);
+      env_ = 0.0f;
+      envCoef_ = static_cast<float>(1.0 - std::exp(-2.0 * kPi * 20.0 / fs_));
+      dc_ = {};
+      dc_.setFs(fs_);
    }
-   float colour(float x) override { return f3_.tick(f2_.tick(f1_.tick(x))); }
+   // The two blades beat shut every cycle, so what leaves the reed is a train of narrow pulses rich
+   // in harmonics, more so the harder it's blown: shaped here on the level-normalised wave, so
+   // it brightens with the breath and not with the note's loudness.
+   float colour(float x) override {
+      env_ += (std::fabs(x) - env_) * envCoef_;
+      const float a = 1.5708f * env_ + 1e-6f;
+      const float n = std::clamp(x / a, -1.3f, 1.3f), n2 = n * n;
+      const float buzz = (0.25f + 0.5f * std::clamp(breath_ - 0.5f, 0.0f, 0.6f)) * character.edge;
+      // Chebyshev T2, T3 and T5 of the normalised wave: the 2nd, 3rd and 5th harmonics on a sine.
+      const float t2 = 2 * n2 - 1, t3 = n * (4 * n2 - 3), t5 = n * (16 * n2 * n2 - 20 * n2 + 5);
+      const float y = x + a * buzz * (0.35f * t2 + 0.5f * t3 + 0.4f * t5);
+      return f3_.tick(f2_.tick(f1_.tick(dc_.tick(y))));
+   }
 
 private:
+   DCBlock dc_;
+   float env_ = 0.0f, envCoef_ = 0.001f;
    Biquad f1_, f2_, f3_;
 };
 
@@ -477,7 +501,7 @@ public:
    void prepare(double fs) override {
       fs_ = fs;
       bore_.init(static_cast<int>(fs / 20.0) + 8);
-      shock_.init(static_cast<int>(256 * fs / 96000.0) + 8);
+      shock_.init(static_cast<int>(1024 * fs / 96000.0) + 8);
       reset();
    }
    void reset() override {
@@ -485,7 +509,11 @@ public:
       shock_.clear();
       bell_ = {};
       x_ = v_ = dcz_ = 0.0;
-      shockD_ = 120.0 * fs_ / 96000.0;
+      shockD_ = kShock0 * fs_ / 96000.0;
+      acMean_ = acEnv_ = 0.0;
+      acLP_ = {};
+      acLP2_ = {};
+      acCoef_ = 1.0 - std::exp(-2.0 * kPi * 25.0 / fs_);
       radHP_ = {};
       radHP_.highpass(1200, 0.7, fs_);
       radLP_ = {};
@@ -498,6 +526,8 @@ public:
    }
    void notePitch(double hz) override {
       lipHz_ = hz;
+      acLP_.setHz(hz * 1.2, fs_);
+      acLP2_.setHz(hz * 1.2, fs_);
       bell_.setHz(std::min(hz * 8.0 * character.cutoff, 0.45 * fs_), fs_);
    }
    float tick(float breath, float emb, double len, float tn) override {
@@ -519,19 +549,30 @@ public:
       const double pplus = pin + u;
       bore_.push(static_cast<float>(pplus));
       // Louder pressure travels faster down the horn, so the outgoing wave steepens towards a shock:
-      // a read delay that follows the pressure, changing by less than a sample per sample.
+      // a read delay that follows the pressure. How far it steepens (sigma, the delay's steepest
+      // slope: 1 is a shock) grows with the breath, so a trumpet only blares when it's pushed; the
+      // pressure's own level is divided out, so every note and setting steepens alike.
       shock_.push(static_cast<float>(pplus));
       const double k = fs_ / 96000.0;
-      const double want = k * (120.0 - 160.0 * character.edge * character.brass * std::clamp(pplus, -1.5, 1.5));
-      shockD_ += std::clamp(std::clamp(want, 2.0, 240.0 * k) - shockD_, -0.6, 0.6);
+      acMean_ += (pplus - acMean_) * acCoef_;
+      // Driven by the wave's fundamental, so the read never runs faster than the wave allows.
+      const double ac = acLP2_.tick(acLP_.tick(static_cast<float>(pplus - acMean_)));
+      acEnv_ += (std::fabs(ac) - acEnv_) * acCoef_;
+      const double push = std::clamp((breath - 0.2) / 0.48, 0.0, 1.5);
+      const double sigma = (0.3 + 1.4 * push * push) * character.edge * (character.brass / 0.5);
+      const double K = sigma * fs_ / (2.0 * kPi * lipHz_ * (1.5708 * acEnv_ + 1e-4));
+      const double want = k * kShock0 - K * ac;
+      shockD_ += std::clamp(std::clamp(want, 2.0, 2.0 * kShock0 * k) - shockD_, -0.95, 0.95);
       // The bell passes highs and reflects lows.
       return radLP_.tick(radHP_.tick(shock_.read(shockD_))) * 3.0f;
    }
 
 private:
    Delay bore_, shock_;
-   OnePoleLP bell_;
+   OnePoleLP bell_, acLP_, acLP2_;
    Biquad radHP_, radLP_;
+   static constexpr double kShock0 = 480.0;
+   double acMean_ = 0, acEnv_ = 0, acCoef_ = 0.001;
    double x_ = 0, v_ = 0, lipHz_ = 440, dcz_ = 0, shockD_ = 120;
 };
 
@@ -549,9 +590,37 @@ inline const ModelInfo &modelInfo(int id) {
       {"Clarinet", 0.42f, 0.5f, 0.815f},
       {"Sax", 0.65f, 0.2f, 0.6875f},
       {"Oboe", 0.42f, 0.48f, 0.795f},
-      {"Trumpet", 0.6f, 0.2f, 0.65f},
+      {"Trumpet", 0.48f, 0.2f, 0.65f},
    };
    return info[std::clamp(id, 0, kModelCount - 1)];
+}
+
+// How far (in cents) a model's pitch moves from its tuning as the breath changes, measured on
+// every model across its range (it hardly depends on the note). Between the points it's
+// interpolated; past them it holds.
+inline double breathDrift(int model, double breath) {
+   struct Point { float breath, cents; };
+   static const Point flute[] = {{0.21f, -80}, {0.25f, -55}, {0.31f, -32}, {0.39f, -20}, {0.51f, -10},
+                                 {0.63f, -5}, {0.79f, 1}, {0.95f, 7}, {1.2f, 14}};
+   static const Point clarinet[] = {{0.53f, -5}, {0.63f, -5}, {0.75f, -2}, {0.84f, 0}, {0.92f, 1}};
+   static const Point trumpet[] = {{0.24f, -12}, {0.30f, -9}, {0.34f, -8}, {0.42f, -5}, {0.49f, -3},
+                                   {0.58f, -1}, {0.68f, 1}};
+   const Point *p = nullptr;
+   int n = 0;
+   switch (model) {
+   case kFlute: p = flute; n = 9; break;
+   case kClarinet: p = clarinet; n = 5; break;
+   case kTrumpet: p = trumpet; n = 7; break;
+   default: return 0.0;
+   }
+   if (breath <= p[0].breath)
+      return p[0].cents;
+   for (int i = 1; i < n; ++i)
+      if (breath < p[i].breath) {
+         const double f = (breath - p[i - 1].breath) / (p[i].breath - p[i - 1].breath);
+         return p[i - 1].cents + f * (p[i].cents - p[i - 1].cents);
+      }
+   return p[n - 1].cents;
 }
 
 } // namespace jbreath

@@ -63,7 +63,7 @@ struct VoiceSettings {
 // sound inside its range borrow their neighbours' tuning; notes past either end play an octave (or
 // more) in, so every key sounds.
 struct Tuning {
-   double ratio = 1.0, gain = 1.0;
+   double ratio = 1.0, gain = 1.0, speak = 0.0;
    int octaves = 0;
 };
 
@@ -88,9 +88,11 @@ public:
       if (b.octaves == a.octaves) {
          t.ratio = ra + f * (rb - ra);
          t.gain = a.gain + f * (b.gain - a.gain);
+         t.speak = a.speak + f * (b.speak - a.speak);
       } else {
          t.ratio = ra;
          t.gain = a.gain;
+         t.speak = a.speak;
       }
       return t;
    }
@@ -100,7 +102,7 @@ public:
 
 private:
    struct Resolved {
-      double ratio88 = 1.0, ratio96 = 1.0, gain = 1.0;
+      double ratio88 = 1.0, ratio96 = 1.0, gain = 1.0, speak = 0.0;
       int octaves = 0;
    };
    TuningTable() {
@@ -138,6 +140,7 @@ private:
             r.ratio88 = mix(a.ratio88, c.ratio88);
             r.ratio96 = mix(a.ratio96, c.ratio96);
             r.gain = mix(a.gain, c.gain);
+            r.speak = mix(a.speak, c.speak);
          }
       }
    }
@@ -225,9 +228,10 @@ public:
       stop_ = false;
       age_ = 0;
       kickAge_ = 0;
+      velocity_ = velocity;
       tongue_ = tongueAmount();
       flutterPhase_ = 0.0;
-      velocity_ = velocity;
+      pressureSeen_ = false;
       gain_ = gain;
       // A player never plays two notes quite the same: a little off in pitch, breath, attack and
       // vibrato (Humanize), and each note's own detune.
@@ -253,8 +257,8 @@ public:
       stop_ = true;
       age_ = 0;
       kickAge_ = -static_cast<int>(0.035 * fs_);
-      tongue_ = tongueAmount();
       velocity_ = velocity;
+      tongue_ = tongueAmount();
       pitch_ = pitch;
       hold_ = 1.0;
    }
@@ -268,7 +272,7 @@ public:
       // Double tonguing: every note gets its own light tongue, even slurred.
       if (settings_.tongueType == kTongueDouble) {
          kickAge_ = 0;
-         tongue_ = 0.6f;
+         tongue_ = 0.6f * strike();
       }
    }
    void release(double velocity = 0.5) {
@@ -379,20 +383,28 @@ private:
       double level = levelNow_;
       if (level <= 0.0)
          return 0.0;
-      const ModelInfo &info = modelInfo(settings_.model);
-      double b = info.breathOffset + info.breathScale * live_.breath * std::pow(level, live_.curve);
-      // Fading out towards no pressure at all, rather than stopping at the offset.
-      b *= std::min(1.0, level / 0.08);
-      // The tongue's release comes with a burst of pressure that kicks the oscillation off.
+      double b = breathAt(settings_.model, speak_, level);
+      // The tongue's release comes with a burst of pressure that kicks the oscillation off: as hard
+      // as the note was struck, so a soft touch starts softly and a hard one with a "ta".
       if (kickAge_ >= 0)
-         b *= 1.0 + live_.kick * kickScale() * kickEnv_;
+         b *= 1.0 + live_.kick * kickScale() * (0.15 + 1.35 * strike()) * kickEnv_;
       return b * vibBreath_ * (1.0 + 0.08 * live_.humanize * human_[1]);
    }
-   // The same breath for another instrument: its own offset and scale on the player's level.
-   double breathFor(int model) const {
+   // The breath for the player's level on `model`, whose note starts speaking at `speak`: from
+   // there at the lightest touch up to the model's full breath (its offset and scale, times the
+   // Breath knob), so every pressure above nothing sounds; under the lightest touch it fades out.
+   double breathAt(int model, double speak, double level) const {
+      if (level <= 0.0)
+         return 0.0;
       const ModelInfo &info = modelInfo(model);
-      return info.breathOffset + info.breathScale * live_.breath * std::pow(std::max(levelNow_, 0.0), live_.curve);
+      const double top = std::max(info.breathOffset + info.breathScale * live_.breath, 1.08 * speak + 0.02);
+      const double from = std::min(speak * 1.02, top);
+      return (from + (top - from) * std::pow(level, live_.curve)) * std::min(1.0, level / 0.03);
    }
+   // The same breath for another instrument.
+   double breathFor(int model, double speak) const { return breathAt(model, speak, std::max(levelNow_, 0.0)); }
+   // How hard the note was struck, 0..1: the tongue's force.
+   float strike() const { return static_cast<float>(std::clamp(velocity_, 0.0, 1.0)); }
 
    Model &hybrid() { return *hybrid_[settings_.hybridModel]; }
    // Each tongue's burst of pressure, its noise, and how it eases the attack.
@@ -406,19 +418,23 @@ private:
          return 1.0;
       }
    }
+   // The tongue's noise burst: its style's, as hard as the note was struck (a soft touch barely
+   // tongues at all).
    float tongueAmount() const {
+      const float s = strike(), force = 0.06f + 0.94f * s * s;
       switch (settings_.tongueType) {
       case kTongueSoft:
-         return 0.35f;
+         return 0.35f * force;
       case kTongueBreath:
          return 0.0f;
       default:
-         return 1.0f;
+         return force;
       }
    }
+   // The attack: the style's, slower for a soft touch and quicker for a hard one.
    double attackScale() const {
       const double t = settings_.tongueType == kTongueSoft ? 1.8 : settings_.tongueType == kTongueBreath ? 1.3 : 1.0;
-      return t * (1.0 + 0.4 * live_.humanize * human_[2]);
+      return t * (2.2 - 1.6 * strike()) * (1.0 + 0.4 * live_.humanize * human_[2]);
    }
    void applyCharacter() {
       for (Model *m : {&model(), &hybrid()}) {
@@ -459,14 +475,20 @@ private:
       case 4:
          // Mix: Breath In is the lungs, shared by every note, and each note's own pressure (or its
          // velocity, until pressure arrives) is how much of it that note lets through.
-         if (pressure_ > 0.04)
-            hold_ *= std::exp(-dt / 0.15);
+         if (pressure_ > 0.002)
+            pressureSeen_ = true;
+         if (pressureSeen_)
+            hold_ *= std::exp(-dt / 0.03);
          levelNow_ = settings_.breathIn * std::max(pressure_, vel * hold_);
          break;
       default: {
+         // Velocity holds the note until pressure (or the input) arrives; from then on the pressure
+         // is the breath and the velocity only how the note was tongued.
          const double blown = std::max(pressure_, settings_.breathIn);
-         if (blown > 0.04)
-            hold_ *= std::exp(-dt / 0.15);
+         if (blown > 0.002)
+            pressureSeen_ = true;
+         if (pressureSeen_)
+            hold_ *= std::exp(-dt / 0.03);
          levelNow_ = std::max(blown, vel * hold_);
          break;
       }
@@ -513,10 +535,16 @@ private:
       const double sounding = pitchNow_ + pitchMod_ + vibCents / 100.0 * vib +
                               (6.0 * hum * human_[0] + live_.detune * human_[5]) / 100.0;
       const Tuning t = TuningTable::get().at(settings_.model, sounding, fs_);
+      speak_ = t.speak;
       const double hz = 440.0 * std::pow(2.0, (sounding - 69.0) / 12.0 + t.octaves);
       Model &m = model();
       m.notePitch(hz);
-      const double len = m.nominal(hz) * t.ratio - (m.character.cutoff != 1.0f ? m.cutoffDelay(hz) : 0.0);
+      // A player keeps a note in tune as they blow softer or harder (a flautist rolls the
+      // headjoint in, a trumpeter lips up): the bore is shortened or lengthened by the model's drift
+      // at this breath, measured against the breath its tuning was baked at.
+      const double drift = breathDrift(settings_.model, breath_) - breathDrift(settings_.model, modelInfo(settings_.model).tuneBreath);
+      const double len = (m.nominal(hz) * t.ratio - (m.character.cutoff != 1.0f ? m.cutoffDelay(hz) : 0.0)) *
+                         std::pow(2.0, drift / 1200.0);
       if (len_ < 0.0) {
          len_ = len;
          lenStep_ = 0.0;
@@ -545,7 +573,7 @@ private:
             hlenStep_ = (hlen - hlen_) / kControl;
          }
          hgainTarget_ = ht.gain * gain_ * levelMod_;
-         const double a = breathFor(settings_.model), b = breathFor(hm);
+         const double a = breathFor(settings_.model, speak_), b = breathFor(hm, ht.speak);
          if (a > 1e-4)
             hratio_ = b / a * live_.hybridBreath;
       } else {
@@ -793,7 +821,8 @@ private:
    Noise jitter_;
    double fs_ = 96000.0;
    bool active_ = false, releasing_ = false, stop_ = false;
-   double breath_ = 0.0, levelNow_ = 0.0, hold_ = 1.0;
+   double breath_ = 0.0, levelNow_ = 0.0, hold_ = 1.0, speak_ = 0.0;
+   bool pressureSeen_ = false;
    double velocity_ = 1.0, pressure_ = 0.0, timbre_ = 0.5, gain_ = 1.0;
    double pitch_ = 60.0, pitchNow_ = 60.0, emb_ = 0.5;
    double len_ = -1.0, lenStep_ = 0.0, gainNow_ = 0.0, gainTarget_ = 0.0;
