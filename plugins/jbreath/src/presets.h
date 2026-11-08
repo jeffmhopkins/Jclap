@@ -185,6 +185,35 @@ inline const std::vector<Preset> &factoryPresets() {
                    {{kModel, T}, {kTune, 12}, {kEdge, 1.2}, {kKick, 0.35}, {kAttack, 10}, {kBright, 1},
                     {kVibDepth, 0.0}, {kVibPitch, 4}}});
 
+      // Alien: twin reeds on coiled bores. The breath brings the ghost bore's inharmonic voice up out
+      // of the tone, Bite is how hard the two reeds pull on each other, Cone how tight the coils are,
+      // and the slide (embouchure) tunes the ghost against the note.
+      constexpr double kAlienModel = 5;
+      const double A = kAlienModel;
+      p.push_back({"First Contact", "Alien",
+                   {{kModel, A}, {kBreath, 1.25}, {kAttack, 30}, {kRelease, 220}, {kVibDepth, 0.03},
+                    {kRoom, 0.3}}});
+      p.push_back({"Ghost Helix", "Alien",
+                   {{kModel, A}, {kBreath, 1.35}, {kEdge, 1.4}, {kSlide, 1.0}, {kAttack, 40}, {kRelease, 400},
+                    {kVibDepth, 0.0}, {kVibPitch, 6}, {kVoiceMode, kLegatoMode}, {kGlide, 60}, {kRoom, 0.35}}});
+      p.push_back({"Xeno Choir", "Alien",
+                   {{kModel, A}, {kBreath, 1.15}, {kCone, 0.8}, {kEdge, 0.8}, {kAttack, 260}, {kRelease, 1200},
+                    {kVibDepth, 0.06}, {kVibRate, 3.8}, {kBright, -3}, {kUnison, 3}, {kUnisonDetune, 14},
+                    {kRoom, 0.5}, {kRoomDecay, 4.0}}});
+      p.push_back({"Tractor Beam", "Alien",
+                   {{kModel, A}, {kTune, -12}, {kBreath, 1.5}, {kEdge, 2.0}, {kKick, 0.6}, {kAttack, 15},
+                    {kRelease, 300}, {kVibDepth, 0.0}, {kVoiceMode, kMonoMode}, {kGlide, 80}}});
+      p.push_back({"Coil Whistle", "Alien",
+                   {{kModel, A}, {kTune, 12}, {kCone, 1.0}, {kEdge, 0.6}, {kNoise, 0.5}, {kAttack, 20},
+                    {kRelease, 350}, {kVibPitch, 12}, {kVibRate, 6.5}, {kVibDelay, 200}, {kRoom, 0.4}}});
+      p.push_back({"Mothership", "Alien",
+                   {{kModel, A}, {kTune, -12}, {kBreath, 1.15}, {kEdge, 1.3}, {kCone, 0.3}, {kAttack, 400},
+                    {kRelease, 2000}, {kVibDepth, 0.04}, {kVibRate, 2.4}, {kRoom, 0.6}, {kRoomDecay, 6.0}}});
+      p.push_back({"Signal Lost", "Alien",
+                   {{kModel, A}, {kBreath, 1.5}, {kEdge, 2.0}, {kNoise, 1.8}, {kCone, 0.15}, {kFlutter, 0.25},
+                    {kAttack, 10}, {kRelease, 150}, {kVibPitch, 30}, {kVibRate, 7.5}, {kVibDelay, 0},
+                    {kVoiceMode, kMonoMode}}});
+
       jclap::ui::completePresets(p, defaultValues());
       return p;
    }();

@@ -31,6 +31,7 @@ std::unique_ptr<Model> make(int id) {
    case kClarinet: return std::make_unique<Clarinet>();
    case kSax: return std::make_unique<Sax>();
    case kOboe: return std::make_unique<Oboe>();
+   case kAlien: return std::make_unique<Alien>();
    default: return std::make_unique<Trumpet>();
    }
 }

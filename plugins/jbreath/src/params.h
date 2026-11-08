@@ -272,7 +272,7 @@ namespace detail {
 inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
    std::array<jclap::core::ParamDef, kParamCount> p{};
    const jclap::core::ParamDef fixed[] = {
-   {kModel, "Instrument", "Exciter", 0.0, 4.0, 1.0, kGlobalChoice},
+   {kModel, "Instrument", "Exciter", 0.0, 5.0, 1.0, kGlobalChoice},
    {kBreath, "Breath", "Exciter", 0.25, 1.5, 1.0, kMod},
    {kEmbouchure, "Embouchure", "Exciter", 0.0, 1.0, 0.5, kMod},
    {kNoise, "Noise", "Exciter", 0.0, 2.0, 1.0, kMod},
@@ -404,14 +404,14 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
 
 inline const std::array<jclap::core::ParamDef, kParamCount> kParams = detail::buildParams();
 
-inline const char *const kModelNames[] = {"Flute", "Clarinet", "Sax", "Oboe", "Trumpet"};
+inline const char *const kModelNames[] = {"Flute", "Clarinet", "Sax", "Oboe", "Trumpet", "Alien"};
 inline const char *const kVoiceModeNames[] = {"Poly", "Mono", "Legato"};
 inline const char *const kBreathSourceNames[] = {"Auto", "Pressure", "Velocity", "Input", "Mix"};
 
 inline const char *const *choiceNames(clap_id id, int &count) {
    switch (id) {
    case kModel:
-      count = 5;
+      count = 6;
       return kModelNames;
    case kVoiceMode:
       count = 3;

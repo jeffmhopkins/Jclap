@@ -296,6 +296,7 @@ public:
          copy[kSax] = std::make_unique<Sax>();
          copy[kOboe] = std::make_unique<Oboe>();
          copy[kTrumpet] = std::make_unique<Trumpet>();
+         copy[kAlien] = std::make_unique<Alien>();
          for (auto &m : copy)
             m->prepare(fs_);
       }

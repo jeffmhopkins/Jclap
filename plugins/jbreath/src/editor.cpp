@@ -65,13 +65,14 @@ constexpr unsigned kPress = 0xffff6fd2;
 constexpr unsigned kSynthColor = 0xffb98bff;
 
 // Each instrument's family colour: the jet cyan, the single reeds orange, the double reed violet,
-// the lips coral.
-constexpr unsigned kModelColors[kModelCount] = {0xff6fe0ff, 0xfff28c28, 0xfff2a54a, 0xffa98bff, 0xffff7a59};
+// the lips coral, the alien's twin reeds an acid green.
+constexpr unsigned kModelColors[kModelCount] = {0xff6fe0ff, 0xfff28c28, 0xfff2a54a, 0xffa98bff, 0xffff7a59, 0xff9dff5c};
 unsigned modelColor(int model) { return kModelColors[std::clamp(model, 0, kModelCount - 1)]; }
 
-const char *const kFamilyNames[kModelCount] = {"JET", "REED", "REED", "DOUBLE REED", "LIPS"};
+const char *const kFamilyNames[kModelCount] = {"JET", "REED", "REED", "DOUBLE REED", "LIPS", "TWIN REED"};
 const char *const kModelSubtitles[kModelCount] = {"jet  ·  open pipe", "single reed  ·  cylinder", "single reed  ·  cone",
-                                                  "double reed  ·  narrow cone", "lips  ·  flared horn"};
+                                                  "double reed  ·  narrow cone", "lips  ·  flared horn",
+                                                  "twin reeds  ·  helix bores"};
 
 visage::Color glow(unsigned argb, float alpha, float hdr = 1.0f) {
    return ui::steady(visage::Color(argb, hdr).withAlpha(alpha));
@@ -129,11 +130,11 @@ public:
 
    void draw(visage::Canvas &c) override {
       const float k = s(), rowH = rowHeight();
-      const int selected = std::clamp(static_cast<int>(host_.paramValue(param_) + 0.5), 0, kModelCount - 1);
+      const int selected = std::clamp(static_cast<int>(host_.paramValue(param_) + 0.5), 0, rows() - 1);
       const bool waves = param_ == kHybridModel;
       static const char *const kWaveSubtitles[] = {"Pure and round", "Soft, odd harmonics", "Bright, every harmonic",
                                                    "Hollow, odd harmonics", "Nasal, a quarter wide"};
-      for (int i = 0; i < kModelCount; ++i) {
+      for (int i = 0; i < rows(); ++i) {
          const float y = i * (rowH + kGap);
          const unsigned color = waves ? kSynthColor : modelColor(i);
          const bool on = i == selected;
@@ -173,11 +174,13 @@ public:
 
 private:
    static constexpr float kGap = 6.0f;
+   // The instruments, or the HYBRID tab's five waves.
+   int rows() const { return param_ == kHybridModel ? 5 : kModelCount; }
    float designW() const { return width() / s(); }
-   float rowHeight() const { return (height() / s() - kGap * (kModelCount - 1)) / kModelCount; }
+   float rowHeight() const { return (height() / s() - kGap * (rows() - 1)) / rows(); }
    int rowAt(float y) const {
       const int i = static_cast<int>(y / s() / (rowHeight() + kGap));
-      return i >= 0 && i < kModelCount ? i : -1;
+      return i >= 0 && i < rows() ? i : -1;
    }
 
    // Two cycles of the wave, 36 x 16 design units, centred on (x, y).
@@ -217,6 +220,9 @@ private:
    R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(24 12) rotate(24) scale(0.92) translate(-24 -12)"><path d="M2.2 10 Q1.3 12 2.2 14 L6.5 12.6 L6.5 11.4 Z" fill="currentColor" fill-opacity="0.25"/><path d="M2.6 12 L6.5 12" stroke-width="0.9"/><rect x="6.5" y="10.8" width="2.8" height="2.4" rx="0.5" fill="currentColor" stroke="none"/><path d="M9.3 11.1 L37 10.2 Q41 9.9 42.5 9.1 L44.8 8.8 L44.8 15.2 L42.5 14.9 Q41 14.1 37 13.8 L9.3 12.9"/><path d="M20.5 10.2 L20.5 13.8 M31 9.9 L31 14.1" stroke-width="1.3"/><circle cx="13" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="16.5" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="24" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="27.5" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="34" cy="12" r="0.65" fill="currentColor" stroke="none"/></g></svg>)svg",
    // trumpet
    R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.2 L4.5 9 L36 9 M2.5 9.8 L4.5 9"/><path d="M36 8.2 Q41 8 45 3.5 L45 14.5 Q41 10 36 9.8"/><path d="M12 9 Q8.5 9 8.5 13 Q8.5 17 12.5 17 L29 17 Q32.5 17 32.5 13 L32.5 9"/><path d="M17 6 L17 17 M21 6 L21 17 M25 6 L25 17" stroke-width="2.2"/><circle cx="17" cy="4.6" r="1.1" fill="currentColor" stroke="none"/><circle cx="21" cy="4.6" r="1.1" fill="currentColor" stroke="none"/><circle cx="25" cy="4.6" r="1.1" fill="currentColor" stroke="none"/></svg>)svg",
+   // alien: a mouthpiece, a bore coiled as a spring, a bulb with an eye, its flare, and the ghost
+   // bore's thin horn rising out of the bulb
+   R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 11.3 L6.3 10.8 L6.3 13.2 L2.5 12.7 Z"/><path d="M6.3 12 L8.5 12"/><path d="M8.5 12.0 L8.2 10.2 L7.9 8.6 L7.8 7.6 L8.0 7.2 L8.4 7.6 L9.1 8.6 L10.0 10.2 L10.9 12.0 L11.8 13.8 L12.7 15.4 L13.4 16.4 L13.8 16.8 L14.0 16.4 L13.9 15.4 L13.6 13.8 L13.3 12.0 L13.0 10.2 L12.7 8.6 L12.6 7.6 L12.8 7.2 L13.2 7.6 L13.9 8.6 L14.8 10.2 L15.7 12.0 L16.6 13.8 L17.5 15.4 L18.2 16.4 L18.6 16.8 L18.8 16.4 L18.7 15.4 L18.4 13.8 L18.1 12.0 L17.8 10.2 L17.5 8.6 L17.4 7.6 L17.6 7.2 L18.0 7.6 L18.7 8.6 L19.6 10.2 L20.5 12.0 L21.4 13.8 L22.3 15.4 L23.0 16.4 L23.4 16.8 L23.6 16.4 L23.5 15.4 L23.2 13.8 L22.9 12.0 L22.6 10.2 L22.3 8.6 L22.2 7.6 L22.4 7.2 L22.8 7.6 L23.5 8.6 L24.4 10.2 L25.3 12.0 L26.2 13.8 L27.1 15.4 L27.8 16.4 L28.2 16.8 L28.4 16.4 L28.3 15.4 L28.0 13.8 L27.7 12.0 L27.4 10.2 L27.1 8.6 L27.0 7.6 L27.2 7.2 L27.6 7.6 L28.3 8.6 L29.2 10.2 L30.1 12.0 L31.0 13.8 L31.9 15.4 L32.6 16.4 L33.0 16.8 L33.2 16.4 L33.1 15.4 L32.8 13.8 L32.5 12.0" stroke-width="1.2"/><path d="M32.5 12 L33.6 12"/><circle cx="36.6" cy="12" r="3"/><circle cx="36.6" cy="12" r="0.9" fill="currentColor" stroke="none"/><path d="M39.5 10.9 Q42.2 10.2 45.5 7 L45.5 17 Q42.2 13.8 39.5 13.1"/><path d="M37.6 9.2 Q38.6 5 42.4 3.3" stroke-width="1.1"/><path d="M41.2 1.9 L43.8 4.6" stroke-width="1.3"/></svg>)svg",
       };
       static const std::vector<visage::Svg> kIcons = [] {
          std::vector<visage::Svg> icons;
@@ -410,6 +416,7 @@ private:
       case kClarinet:
       case kSax:
       case kOboe:
+      case kAlien:
          // A softer reed curls shut later.
          return 1.0 + 0.12 * (0.5 - stiffness_);
       default:
@@ -424,14 +431,14 @@ private:
          return std::min(1.0, 0.92 * std::pow(x / 1.3, 1.5) * (0.5 + aperture_));
       default: { // a reed valve: u = (1 - W) sqrt(W), shut at W = 1; normalised to its peak
          const double shut = shutAt(), w = std::min(x / shut, 1.0), open = 0.6 + 0.8 * aperture_;
-         const double soft = model_ == kClarinet ? 1.0 : model_ == kSax ? 0.85 + 0.3 * (1 - embouchure_) : 0.7;
-         return std::min(1.0, 0.95 * (1 - w) * std::sqrt(w) / 0.3849 * (model_ == kClarinet ? 1.0 : soft) * open);
+         const double soft = model_ == kClarinet || model_ == kAlien ? 1.0 : model_ == kSax ? 0.85 + 0.3 * (1 - embouchure_) : 0.7;
+         return std::min(1.0, 0.95 * (1 - w) * std::sqrt(w) / 0.3849 * (model_ == kClarinet || model_ == kAlien ? 1.0 : soft) * open);
       }
       }
    }
    // A voice's breath, as a point on the x axis.
    double operating(float breath) const {
-      return model_ == kClarinet ? 0.7 * breath : model_ == kFlute || model_ == kTrumpet ? breath : 0.75 * breath;
+      return model_ == kClarinet || model_ == kAlien ? 0.7 * breath : model_ == kFlute || model_ == kTrumpet ? breath : 0.75 * breath;
    }
 
    int model_ = kClarinet;
@@ -560,6 +567,21 @@ private:
       case kOboe:
          r = static_cast<double>(ch.keep(0.95f)) * onePole(f, 3800 * k);
          break;
+      case kAlien: {
+         // The main bore: a closed cylinder coiled as a helix (two allpass sections at twice the
+         // note), shortened by the helix's delay at the note, as the model plays it.
+         const auto helix = [this](double at) {
+            const double r0 = std::exp(-kPi * 2.8 * hz_ / kFs), th = 2 * kPi * 2.0 * hz_ / kFs;
+            const double a1 = -2 * r0 * std::cos(th), a2 = r0 * r0;
+            const std::complex<double> z = std::polar(1.0, -2 * kPi * at / kFs);
+            return (a2 + a1 * z + z * z) / (1.0 + a1 * z + a2 * z * z);
+         };
+         const std::complex<double> h = helix(f);
+         r = -static_cast<double>(ch.keep(0.96f)) * onePole(f, 6 * hz_ * k) * h * h;
+         const double w0 = 2 * kPi * hz_ / kFs;
+         period = 0.5 / hz_ - 2.0 * std::fmod(-std::arg(helix(hz_)) + 2 * kPi, 2 * kPi) / w0 / kFs;
+         break;
+      }
       default:
          r = static_cast<double>(ch.keep(0.985f)) * (onePole(f, 8 * hz_ * k) - 2.0 * onePole(f, 20));
          break;
@@ -577,6 +599,8 @@ private:
          return "CONE: EVERY HARMONIC, OVERBLOWS AT THE OCTAVE";
       case kOboe:
          return "NARROW CONE: EVERY HARMONIC, A DARKER LOOP";
+      case kAlien:
+         return "HELIX: STRETCHED, INHARMONIC RESONANCES";
       default:
          return "FLARED HORN: HARMONIC RESONANCES, NO PEDAL";
       }
@@ -598,7 +622,7 @@ public:
    }
    void draw(visage::Canvas &c) override {
       static const char *const names[4] = {"OPEN PIPE", "CYLINDER", "CONE", "FLARE"};
-      const int lit = model_ == kFlute ? 0 : model_ == kClarinet ? 1 : model_ == kTrumpet ? 3 : 2;
+      const int lit = model_ == kFlute ? 0 : model_ == kClarinet || model_ == kAlien ? 1 : model_ == kTrumpet ? 3 : 2;
       const float k = s(), w = width() / k / 4;
       const unsigned color = modelColor(model_);
       for (int i = 0; i < 4; ++i) {
@@ -1106,12 +1130,13 @@ private:
       static constexpr Ramp kFrost = {{{.6f, .9f, 1}, {.45f, .7f, 1}, {.75f, .66f, 1}}};
       static constexpr Ramp kMoss = {{{.62f, .95f, .45f}, {.36f, .86f, .58f}, {.8f, .9f, .36f}}};
       static constexpr Ramp kMono = {{{1, .97f, .92f}, {.92f, .92f, .95f}, {.86f, .88f, .96f}}};
-      static constexpr Ramp kFamilies[5] = {kFlute, kClarinet, kSax, kOboe, kTrumpet};
+      static constexpr Ramp kAlien = {{{.62f, 1, .36f}, {.3f, .95f, .7f}, {.72f, .5f, 1}}};
+      static constexpr Ramp kFamilies[6] = {kFlute, kClarinet, kSax, kOboe, kTrumpet, kAlien};
       const Ramp &st = look.palette == 1   ? kEmber
                        : look.palette == 2 ? kFrost
                        : look.palette == 3 ? kMoss
                        : look.palette == 4 ? kMono
-                                           : kFamilies[std::clamp(model_, 0, 4)];
+                                           : kFamilies[std::clamp(model_, 0, 5)];
       const float t = static_cast<float>((((note * 7) % 12) + 12) % 12) / 11.0f;
       const float u = t < 0.5f ? t * 2 : (t - 0.5f) * 2;
       const auto &a = st[t < 0.5f ? 0 : 1], &b = st[t < 0.5f ? 1 : 2];
@@ -1812,7 +1837,7 @@ public:
             filterGraph_->set(host_.paramModulated(kHybridCutoff), host_.paramModulated(kHybridResonance), amount, opens);
          }
          bore_->set(model, hz, loudest >= 0, partials, host_.paramModulated(kLoss), host_.paramModulated(kHoleCutoff) / 1300.0);
-         const bool cone = model == kSax || model == kOboe, brass = model == kTrumpet;
+         const bool cone = model == kSax || model == kOboe || model == kAlien, brass = model == kTrumpet;
          coneKnob_->setAccent(cone ? color : kFaint);
          brassKnob_->setAccent(brass ? color : kFaint);
          if (voiceTabs_->selected() == 1)
@@ -2047,7 +2072,7 @@ private:
       small(kLength, "LENGTH", 1, "The tube below the open holes: its length sets where its own resonances ring.");
       small(kLoss, "LOSS", 2, "How much the bore loses each trip: more is softer, darker and slower to speak.");
       small(kHoleCutoff, "HOLE CUTOFF", 3, "Above this the tone holes let the sound out: lower is darker. The pitch stays put.");
-      coneKnob_ = &small(kCone, "CONE", 4, "Sax and oboe: how far the cone is cut short at the reed, which tilts its upper modes.");
+      coneKnob_ = &small(kCone, "CONE", 4, "Sax and oboe: how far the cone is cut short at the reed, which tilts its upper modes. Alien: how tightly its bores are coiled, which stretches their modes apart.");
       small(kRadiate, "RADIATE", 5, "How well the bell and holes send the highs out.");
       brassKnob_ = &small(kBrass, "BRASS", 6, "Trumpet: how far the wave steepens on its way down the horn, into a blare.");
       small(kBarrel, "BARREL", 7, "The barrel's or mouthpiece's cavity: bigger is lower and rounder.");
