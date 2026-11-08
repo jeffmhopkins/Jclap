@@ -44,7 +44,7 @@ inline const std::vector<Preset> &factoryPresets() {
                    {{kModel, F}, {kNoise, 2.0}, {kEdge, 0.3}, {kBreath, 0.7}, {kAttack, 300}, {kRelease, 900},
                     {kVibDepth, 0.04}, {kVibRate, 3.5}, {kBright, -3}}});
       p.push_back({"Tin Whistle", "Flute",
-                   {{kModel, F}, {kTune, 12}, {kEdge, 1.4}, {kNoise, 1.2}, {kKick, 0.5}, {kAttack, 8}, {kRelease, 60},
+                   {{kModel, F}, {kTune, 12}, {kEdge, 1.4}, {kNoise, 1.2}, {kKick, 0.35}, {kAttack, 8}, {kRelease, 60},
                     {kVibDepth, 0.0}, {kVibPitch, 12}, {kVibRate, 6.2}, {kVibDelay, 250}, {kVoiceMode, kLegatoMode},
                     {kGlide, 25}, {kBright, 2}}});
       p.push_back({"Piccolo", "Flute",
@@ -159,7 +159,7 @@ inline const std::vector<Preset> &factoryPresets() {
       const double T = kTrumpetModel;
       p.push_back({"Brass Plume", "Trumpet", {{kModel, T}, {kVibDepth, 0.02}, {kVibPitch, 6}, {kAttack, 20}}});
       p.push_back({"Fanfare", "Trumpet",
-                   {{kModel, T}, {kEdge, 1.8}, {kKick, 0.5}, {kAttack, 10}, {kBright, 3}, {kVibDepth, 0.0}, {kVibPitch, 0}}});
+                   {{kModel, T}, {kEdge, 1.8}, {kKick, 0.4}, {kAttack, 10}, {kBright, 3}, {kVibDepth, 0.0}, {kVibPitch, 0}}});
       p.push_back({"Muted Night", "Trumpet",
                    {{kModel, T}, {kEdge, 0.5}, {kBright, -8}, {kVibPitch, 8}, {kVibDepth, 0.03}, {kAttack, 30},
                     {kRelease, 160}, {kVoiceMode, kLegatoMode}}});
@@ -182,7 +182,7 @@ inline const std::vector<Preset> &factoryPresets() {
                    {{kModel, T}, {kNoise, 2.0}, {kEdge, 0.3}, {kBreath, 0.8}, {kBright, -10}, {kAttack, 60},
                     {kRelease, 300}, {kVibPitch, 10}, {kVibDepth, 0.05}}});
       p.push_back({"Piccolo Trumpet", "Trumpet",
-                   {{kModel, T}, {kTune, 12}, {kEdge, 1.2}, {kKick, 0.5}, {kAttack, 10}, {kBright, 1},
+                   {{kModel, T}, {kTune, 12}, {kEdge, 1.2}, {kKick, 0.35}, {kAttack, 10}, {kBright, 1},
                     {kVibDepth, 0.0}, {kVibPitch, 4}}});
 
       jclap::ui::completePresets(p, defaultValues());

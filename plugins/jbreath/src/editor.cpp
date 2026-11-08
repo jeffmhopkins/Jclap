@@ -1983,7 +1983,8 @@ private:
       tabs.addToPage(0, familyKnob(kNoise, "NOISE", bottom[1], "Breath noise and turbulence."));
       tabs.addToPage(0, familyKnob(kKick, "KICK", bottom[2], "The burst of pressure as the tongue lets the air go."));
       tabs.addToPage(0, familyKnob(kGrowl, "GROWL", bottom[3],
-                                   "A growl in the throat: above 20% a rough flutter rides on the air, on any instrument."));
+                                   "A growl in the throat: a rough flutter rides on the air, on any instrument, and a hard-blown "
+                                   "reed rasps more."));
       rangeText_ = &tabs.addToPage(0, add<ui::Label>({236, 370, 646, 16}, rangeText(modelOf(host_)), kFaint,
                                                      visage::Font::kLeft, 0.68f));
 

@@ -53,7 +53,7 @@ struct VoiceSettings {
    int busMode[kBusCount] = {}, busCurve[kBusCount] = {}, busPolarity[kBusCount] = {};
    double tune = 0.0, fine = 0.0, level = 0.0; // only as bases for their routes
    // The rest of the exciter and bore (Character in models.h), the player's habits, and the air.
-   double stiffness = 0.5, aperture = 0.5, growl = 0.2, cone = 0.5, brass = 0.5;
+   double stiffness = 0.5, aperture = 0.5, growl = 0.0, cone = 0.5, brass = 0.5;
    double loss = 0.04, cutoffHz = 1300.0, detune = 0.0, humanize = 0.0, air = 0.0;
    int tongueType = kTongueHard, vibType = kVibBreath;
    // HYBRID: a plain subtractive voice on the same breath: its wave, octave and detune, how loud it
@@ -306,11 +306,14 @@ public:
       mute_.prepare(fs_, kControl);
       airLP_.setHz(1500.0, fs_);
       roughCoef_ = 1.0 - std::exp(-2.0 * kPi * 30.0 * kControl / fs_);
-      fallCoef_ = coef(15.0);
-      stopCoef_ = coef(0.75);
+      // Each of the breath's two smoothing stages (see tick()): together a held note's fall takes
+      // about 35 ms to 90%, and the tongue stops the air in about 2 ms.
+      fallCoef_ = coef(9.0);
+      stopCoef_ = coef(0.5);
       gainCoef_ = coef(5.0);
       synthCoef_ = coef(4.0);
       envCoef_ = coef(30.0);
+      pulseLength_ = std::max(1, static_cast<int>(kPulseMs * 0.001 * fs_));
       hpCoef_ = static_cast<float>(1.0 - std::exp(-2.0 * kPi * 2000.0 / fs_));
       reset();
    }
@@ -346,14 +349,31 @@ public:
       liveRelease_ = live_.releaseMs;
       liveGlide_ = live_.glideMs;
       applyCharacter();
-      attackCoef_ = coef(s.attackMs / 4.0 * attackScale());
-      releaseCoef_ = coef(s.releaseMs / 4.0);
+      updateAttack();
+      releaseCoef_ = coef(s.releaseMs / kReleasePerStage);
       glideCoef_ = coef(std::max(3.0, s.glideMs / 3.0));
    }
 
    // A note from silence (or a stolen voice): the tongue releases the air with a kick.
+   //
+   // A voice still sounding is never cut: the same note played again is tongued again on the air
+   // and bore that are still there (as a player re-tongues), and a different note waits a few
+   // milliseconds while the old one fades out, then starts from silence.
    void start(double pitch, double velocity, double gain) {
-      if (!active_ || releasing_) {
+      if (fading_ > 0 || (active_ && releasing_ && std::fabs(pitch - pitch_) > 0.5 && env_ > kAudible)) {
+         if (fading_ <= 0)
+            fading_ = fadeLength_ = std::max(1, static_cast<int>(kFadeMs * 0.001 * fs_));
+         next_ = {pitch, velocity, gain, false, 0.5};
+         gain_ = gain;
+         return;
+      }
+      begin(pitch, velocity, gain);
+   }
+
+private:
+   void begin(double pitch, double velocity, double gain) {
+      const bool fresh = !active_ || (releasing_ && (std::fabs(pitch - pitch_) > 0.5 || env_ <= kAudible));
+      if (fresh) {
          for (auto &copy : models_)
             copy[settings_.model]->reset();
          filter_.reset();
@@ -361,13 +381,15 @@ public:
          // Each unison copy of the oscillator starts somewhere of its own, so they don't sum to one.
          for (int u = 0; u < kMaxUnison; ++u)
             osc_[u].reset(u == 0 ? 0.0 : 0.5 + 0.5 * jitter_.white());
-         breath_ = 0.0;
+         breath_ = puff_ = 0.0;
          pitchNow_ = pitch;
          len_[0] = -1.0;
-         hold_ = 1.0;
          levelNow_ = 0.0;
          hybEnv_ = 0.0;
       }
+      // Velocity only blows the note if no pressure arrives in its first few milliseconds (see
+      // control()), so an MPE note starts on its pressure, never on a burst from its velocity.
+      hold_ = 0.0;
       // The player's level, pitch and bore length are worked out before the first sample.
       counter_ = 0;
       active_ = true;
@@ -375,6 +397,7 @@ public:
       stop_ = false;
       age_ = 0;
       kickAge_ = 0;
+      pulseAt_ = -1;
       velocity_ = velocity;
       tongue_ = tongueAmount();
       flutterPhase_ = 0.0;
@@ -384,7 +407,7 @@ public:
       // vibrato (Humanize), and each note's own detune.
       for (double &r : human_)
          r = jitter_.white();
-      attackCoef_ = coef(liveAttack_ / 4.0 * attackScale());
+      updateAttack();
       pitch_ = pitch;
       quiet_ = 0;
       lift_ = 0.0;
@@ -399,6 +422,8 @@ public:
       // The HYBRID envelope starts again from where it is (from 0 after silence).
       hybStage_ = kHybAttack;
    }
+
+public:
    // Mono: the tongue stops the air for 35 ms, then releases it on the new note with a kick.
    void retongue(double pitch, double velocity) {
       if (!active_ || releasing_)
@@ -406,6 +431,7 @@ public:
       stop_ = true;
       age_ = 0;
       kickAge_ = -static_cast<int>(0.035 * fs_);
+      pulseAt_ = -1;
       velocity_ = velocity;
       tongue_ = tongueAmount();
       pitch_ = pitch;
@@ -422,10 +448,17 @@ public:
       // Double tonguing: every note gets its own light tongue, even slurred.
       if (settings_.tongueType == kTongueDouble) {
          kickAge_ = 0;
+         pulseAt_ = -1;
          tongue_ = 0.6f * strike();
       }
    }
    void release(double velocity = 0.5) {
+      if (fading_ > 0) {
+         // Let go before it began (a very short tap): it starts and is let go at once.
+         next_.release = true;
+         next_.lift = velocity;
+         return;
+      }
       if (active_ && !releasing_) {
          releasing_ = true;
          lift_ = std::clamp(velocity, 0.0, 1.0);
@@ -435,7 +468,8 @@ public:
    // Only the instrument playing has sound in it: the others were cleared when it was picked.
    void reset() {
       active_ = releasing_ = stop_ = false;
-      breath_ = 0.0;
+      fading_ = 0;
+      breath_ = puff_ = 0.0;
       level_ = 0.0f;
       env_ = 0.0;
       hybEnv_ = 0.0;
@@ -468,7 +502,8 @@ public:
    const float *offsets() const { return offsets_; }
 
    bool isActive() const { return active_; }
-   bool isReleasing() const { return releasing_; }
+   // A voice fading out for the note that takes it next already belongs to that note.
+   bool isReleasing() const { return releasing_ && fading_ <= 0; }
    // A rough loudness, for stealing the quietest and for the panel.
    float level() const { return level_; }
    // The breath blowing now, 0..about 1.3, and the pitch sounding, for the panel.
@@ -481,19 +516,43 @@ public:
          return 0.0f;
       if ((counter_++ & (kControl - 1)) == 0)
          control();
-      // Breath follows its target: the attack time going up, the release time (or a held note's
-      // quicker fall) going down, and 3 ms when the tongue stops it.
+      // Breath follows its target through two smoothing stages, so it leaves silence (and every
+      // pressure step from the controller) with no corner: a reed or lip valve's flow goes as the
+      // square root of the pressure, so a breath that starts with a slope starts with a click.
+      // Each stage takes the attack time going up, the release time (or a held note's quicker
+      // fall) going down, and the tongue's stop when it stops the air.
       const double target = targetBreath();
-      const double c = target > breath_ ? attackCoef_ : stop_ ? stopCoef_ : releasing_ ? releaseCoef_ : fallCoef_;
-      breath_ += (target - breath_) * c;
+      const auto stage = [this](double to, double from) {
+         return to > from ? attackCoef_ : stop_ ? stopCoef_ : releasing_ ? releaseCoef_ : fallCoef_;
+      };
+      puff_ += (target - puff_) * stage(target, puff_);
+      breath_ += (puff_ - breath_) * stage(puff_, breath_);
       gainNow_ += (gainTarget_ - gainNow_) * gainCoef_;
       tongue_ *= tongueDecay_;
       ++age_;
       ++kickAge_;
-      // The tongue's noise rides on the air, so there's none without breath.
-      const float tongue = tongue_ * static_cast<float>(std::min(1.0, breath_ * 20.0));
+      // The tongue's noise rides on the air, so there's none without breath: it comes in with the
+      // air as it reaches the note's speaking pressure.
+      const double airIn = std::clamp(breath_ / std::max(speak_, 0.1), 0.0, 1.0);
+      const float tongue = tongue_ * static_cast<float>(airIn * airIn);
+      // The tongue's release: the pressure built up behind it is let go at once, a short surge of
+      // flow (a few ms) that sets the bore ringing, so a tongued note starts on the wave it makes
+      // instead of growing out of the reed's noise. It comes when the air has built up behind the
+      // tongue, as hard as the note was struck: a soft touch has none.
+      if (pulseAt_ < 0 && kickAge_ >= 0 && !releasing_ && target > 0.0 && puff_ >= 0.6 * target &&
+          puff_ >= 0.5 * speak_) {
+         pulseAt_ = 0;
+         pulseAmp_ = articulation().surge * registerKick() * std::min(4.0 * live_.kick, 2.0) * kickScale() * kickOf(strike()) /
+                     kickOf(1.0) * puff_;
+      }
+      double surge = 0.0;
+      if (pulseAt_ >= 0 && pulseAt_ < pulseLength_) {
+         const double x = std::sin(kPi * pulseAt_ / pulseLength_);
+         surge = pulseAmp_ * x * x;
+         ++pulseAt_;
+      }
       // A growl in the throat or a fluttering tongue roughens the air on its way in.
-      const float blown = static_cast<float>(breath_ * shake_);
+      const float blown = static_cast<float>((breath_ + surge) * shake_);
       const float mix = static_cast<float>(live_.hybridMix);
       float y = 0.0f;
       if (mix < 0.999f) {
@@ -525,6 +584,18 @@ public:
          reset();
          return 0.0f;
       }
+      if (fading_ > 0) {
+         // Fading out for the next note: a quarter cosine to nothing, then that note starts.
+         const double f = static_cast<double>(fading_) / fadeLength_;
+         y *= static_cast<float>(std::sin(0.5 * kPi * f));
+         if (--fading_ == 0) {
+            const Next n = next_;
+            reset();
+            begin(n.pitch, n.velocity, n.gain);
+            if (n.release)
+               release(n.lift);
+         }
+      }
       env_ += (std::fabs(y) - env_) * envCoef_;
       // How knotted the sound is: the share of it above about 2 kHz.
       hpX_ += (y - hpX_) * hpCoef_;
@@ -535,6 +606,24 @@ public:
 
 private:
    static constexpr int kControl = 16;
+   // The articulation's shape (see targetBreath() and start()): how long the tongue's burst lasts,
+   // the extra breath that starts a soft note and how long it lasts, how long velocity waits for
+   // pressure, how quickly a sounding voice fades for the next note, and a level under which a
+   // voice is silent enough to restart at once. Each release stage is the Release time over this.
+   static constexpr double kKickMs = 25.0, kSupportMs = 60.0, kWaitMs = 6.0, kFadeMs = 4.0,
+                           kPulseMs = 4.0, kShortestAttackMs = 2.0;
+   static constexpr double kAudible = 3e-4, kReleasePerStage = 6.7;
+   // The note waiting for a fade to finish, and whether it was let go meanwhile (and how).
+   struct Next {
+      double pitch, velocity, gain;
+      bool release;
+      double lift;
+   };
+   Next next_{60.0, 1.0, 1.0, false, 0.5};
+   int fading_ = 0, fadeLength_ = 1;
+   // The tongue's release surge: where it is (-1 before it), how long, and how big.
+   int pulseAt_ = -1, pulseLength_ = 1;
+   double pulseAmp_ = 0.0;
 
    Model &model() { return *models_[0][settings_.model]; }
    double coef(double ms) const { return 1.0 - std::exp(-1000.0 / (std::max(ms, 0.05) * fs_)); }
@@ -547,11 +636,24 @@ private:
       if (level <= 0.0)
          return 0.0;
       double b = breathAt(settings_.model, speak_, level);
-      // The tongue's release comes with a burst of pressure that kicks the oscillation off: as hard
-      // as the note was struck, so a soft touch starts softly and a hard one with a "ta".
-      if (kickAge_ >= 0)
-         b *= 1.0 + live_.kick * kickScale() * (0.15 + 1.35 * strike()) * kickEnv_;
-      return b * vibBreath_ * (1.0 + 0.08 * live_.humanize * human_[1]);
+      if (kickAge_ >= 0) {
+         // A reed or lips only start once the pressure is a little past where they speak (the
+         // dynamic threshold): a player gives a soft note that much more at its start, then eases
+         // to the note's own breath, so even the softest touch speaks in good time.
+         // (The hybrid voice speaks at any breath, so as it takes over it needs no more than a reed's
+         // usual support.)
+         const double blown = std::min(1.0, level / 0.03);
+         const double support = articulation().support + (std::min(articulation().support, 0.25) -
+                                                           articulation().support) * live_.hybridMix;
+         b = std::max(b, blown * speak_ * (1.0 + support * supportEnv_));
+         // The tongue's release lets out the pressure built up behind it, a burst that kicks the
+         // oscillation off: none for a soft touch ("da"), up to the Kick for a hard one ("ta").
+         // It lifts the breath over where the note speaks (pushing a note near its threshold harder
+         // would only make a soft note's start many times louder than the note).
+         b += articulation().kick * registerKick() * live_.kick * kickScale() * kickOf(strike()) * kickEnv_ *
+              std::max(0.0, b - speak_);
+      }
+      return b * vibBreath_ * (1.0 + 0.12 * live_.humanize * human_[1]);
    }
    // The breath for the player's level on `model`, whose note starts speaking at `speak`: from
    // there at the lightest touch up to the model's full breath (its offset and scale, times the
@@ -566,6 +668,14 @@ private:
    }
    // How hard the note was struck, 0..1: the tongue's force.
    float strike() const { return static_cast<float>(std::clamp(velocity_, 0.0, 1.0)); }
+   // The tongue's burst for a strike, over the Kick: rising smoothly from nothing at the softest.
+   // A high note's shorter period builds up sooner and takes less of the tongue's burst before it
+   // settles (a real ff attack overshoots less up high), so the kick halves for each octave over
+   // the instrument's middle (and no more below it, where a burst would overblow a low note).
+   double registerKick() const {
+      return std::clamp(std::exp2((articulation().middle - pitch_) / 12.0), 0.25, 1.0);
+   }
+   static double kickOf(double strike) { return 1.6 * strike * std::sqrt(strike); }
 
    // Each tongue's burst of pressure, its noise, and how it eases the attack.
    double kickScale() const {
@@ -584,17 +694,43 @@ private:
       const float s = strike(), force = 0.06f + 0.94f * s * s;
       switch (settings_.tongueType) {
       case kTongueSoft:
-         return 0.35f * force;
+         return 0.35f * force * static_cast<float>(articulation().noise);
       case kTongueBreath:
          return 0.0f;
       default:
-         return force;
+         return force * static_cast<float>(articulation().noise);
       }
    }
-   // The attack: the style's, slower for a soft touch and quicker for a hard one.
+   // How long the breath takes to reach the player's pressure (to 90%) once the tongue lets it go:
+   // the Attack time, scaled by how hard the note was struck, evenly in log time from 1.4 times it
+   // at the softest touch to 0.4 times it at the hardest (35 ms down to 10 ms at the default
+   // 25 ms: even a hard tongue takes some milliseconds to let the air go), and slower for the soft
+   // and breath styles. The instrument's own build-up comes after.
    double attackScale() const {
-      const double t = settings_.tongueType == kTongueSoft ? 1.8 : settings_.tongueType == kTongueBreath ? 1.3 : 1.0;
-      return t * (2.2 - 1.6 * strike()) * (1.0 + 0.4 * live_.humanize * human_[2]);
+      const double t = settings_.tongueType == kTongueSoft ? 1.6 : settings_.tongueType == kTongueBreath ? 2.0 : 1.0;
+      return t * 1.4 * std::pow(0.4 / 1.4, strike()) * (1.0 + 0.6 * live_.humanize * human_[2]);
+   }
+   // Two stages of tau each reach 90% in about 3.9 tau. Never quicker than a tongue lets go: a
+   // breath that steps would click.
+   void updateAttack() { attackCoef_ = coef(std::max(kShortestAttackMs, liveAttack_ * attackScale()) / 3.9); }
+
+   // How each instrument takes the tongue: the size of its release surge, its kick, the extra
+   // breath that starts its soft notes, and its tongue noise (all over the shared shape above). A
+   // clarinet's reed speaks at once and its tone is the bore's pressure differentiated, so it needs
+   // little surge or support; a flute's jet overblows on a burst, so it takes less kick, and its
+   // edge already hisses, so half the noise (a real flute's attack is no noisier up top than its
+   // note); a trumpet's lips blare on a burst, so less kick; the conical reeds build up slowly
+   // from the tongue's start, so they take it all, and more support for their soft notes (a slow
+   // reed would otherwise start a soft note and lose it). The middle note the kick is set for.
+   struct Articulation {
+      double surge, kick, support, noise, middle;
+   };
+   const Articulation &articulation() const {
+      static const Articulation table[kModelCount] = {
+         {1.0, 0.6, 0.25, 0.5, 72.0}, {0.25, 0.6, 0.1, 1.0, 62.0}, {1.0, 1.0, 0.6, 1.0, 61.0},
+         {1.0, 1.0, 0.6, 1.0, 69.0},  {1.0, 0.4, 0.25, 1.0, 65.0},
+      };
+      return table[settings_.model];
    }
    void applyCharacter() {
       // HOLES: the tone-hole lattice below the sounding hole. Above its cutoff the waves leave
@@ -627,7 +763,7 @@ private:
          Character &c = copy[settings_.model]->character;
          c.noise = static_cast<float>(live_.noise) * tube.noise;
          c.edge = static_cast<float>(live_.edge);
-         c.growl = static_cast<float>(live_.growl / 0.2);
+         c.growl = static_cast<float>(1.0 + 4.0 * live_.growl); // the reed's own rasp at 0, five times at 1
          c.stiffness = static_cast<float>(live_.stiffness);
          c.aperture = static_cast<float>(live_.aperture);
          c.cone = static_cast<float>(live_.cone);
@@ -639,12 +775,24 @@ private:
       }
    }
 
+   // Auto and Mix: velocity blows a note that has no pressure. It waits a few milliseconds for
+   // the pressure an MPE controller sends just after its note-on (a hard strike starting on its
+   // velocity and then falling to a light pressure would be a burst, not a note); with none, the
+   // velocity holds the note, until pressure arrives and takes over.
+   void holdVelocity(double dt) {
+      if (pressureSeen_)
+         hold_ *= std::exp(-dt / 0.03);
+      else if (age_ >= kWaitMs * 0.001 * fs_)
+         hold_ = 1.0;
+   }
+
    // Every kControl samples: the player's level, vibrato, pitch and the bore length.
    void control() {
       const double dt = kControl / fs_;
       if (stop_ && kickAge_ >= 0)
          stop_ = false;
-      kickEnv_ = kickAge_ >= 0 ? std::exp(-kickAge_ / (0.04 * fs_)) : 0.0;
+      kickEnv_ = kickAge_ >= 0 ? std::exp(-kickAge_ / (kKickMs * 0.001 * fs_)) : 0.0;
+      supportEnv_ = kickAge_ >= 0 ? std::exp(-kickAge_ / (kSupportMs * 0.001 * fs_)) : 0.0;
       tongueDecay_ = static_cast<float>(std::exp(-1.0 / (0.017 * fs_)));
 
       // Breath from velocity, pressure, the Breath In input, (Auto) velocity until pressure or the
@@ -665,8 +813,7 @@ private:
          // velocity, until pressure arrives) is how much of it that note lets through.
          if (pressure_ > 0.002)
             pressureSeen_ = true;
-         if (pressureSeen_)
-            hold_ *= std::exp(-dt / 0.03);
+         holdVelocity(dt);
          levelNow_ = settings_.breathIn * std::max(pressure_, vel * hold_);
          break;
       default: {
@@ -675,8 +822,7 @@ private:
          const double blown = std::max(pressure_, settings_.breathIn);
          if (blown > 0.002)
             pressureSeen_ = true;
-         if (pressureSeen_)
-            hold_ *= std::exp(-dt / 0.03);
+         holdVelocity(dt);
          levelNow_ = std::max(blown, vel * hold_);
          break;
       }
@@ -701,7 +847,7 @@ private:
       const double vibCents = live_.vibPitch + (vt == kVibLip ? 150.0 * live_.vibDepth : 0.0);
 
       // Growl: a rough, low flutter of the throat; Flutter tongue: a rolled R through the note.
-      const double growl = std::max(0.0, live_.growl - 0.2) / 0.8;
+      const double growl = live_.growl;
       rough_ += (jitter_.white() - rough_) * roughCoef_;
       shake_ = 1.0 + growl * 0.35 * std::clamp(6.0 * rough_, -1.0, 1.0);
       // The Flutter knob rolls it on any style; the Flutter style rolls it at least halfway.
@@ -723,7 +869,7 @@ private:
       const double g = 1.0 - std::pow(1.0 - glideCoef_, kControl);
       pitchNow_ += (pitch_ - pitchNow_) * g;
       const double sounding = pitchNow_ + pitchMod_ + vibCents / 100.0 * vib +
-                              (6.0 * hum * human_[0] + live_.detune * human_[5]) / 100.0;
+                              (10.0 * hum * human_[0] + live_.detune * human_[5]) / 100.0;
       const Tuning t = TuningTable::get().at(settings_.model, sounding, fs_);
       speak_ = t.speak;
       const double hz = 440.0 * std::pow(2.0, (sounding - 69.0) / 12.0 + t.octaves);
@@ -791,7 +937,7 @@ private:
       level_ = static_cast<float>(env_);
       // A HYBRID pad still in its release keeps the voice going after the breath has stopped.
       const bool padding = live_.hybridMix > 0.0 && hybEnv_ > 1e-4 && live_.hybridFollow < 0.999;
-      if (releasing_ && breath_ < 1e-4 && env_ < 2e-5 && !padding) {
+      if (releasing_ && fading_ <= 0 && breath_ < 1e-4 && env_ < 2e-5 && !padding) {
          if (++quiet_ > static_cast<int>(0.02 * fs_ / kControl))
             reset();
       } else {
@@ -1043,11 +1189,11 @@ private:
       applyCharacter();
       if (attack != liveAttack_) {
          liveAttack_ = attack;
-         attackCoef_ = coef(attack / 4.0 * attackScale());
+         updateAttack();
       }
       if (release != liveRelease_) {
          liveRelease_ = release;
-         releaseCoef_ = coef(release / 4.0);
+         releaseCoef_ = coef(release / kReleasePerStage);
       }
       if (glide != liveGlide_) {
          liveGlide_ = glide;
@@ -1082,14 +1228,14 @@ private:
    Noise jitter_;
    double fs_ = 96000.0;
    bool active_ = false, releasing_ = false, stop_ = false;
-   double breath_ = 0.0, levelNow_ = 0.0, hold_ = 1.0, speak_ = 0.0;
+   double breath_ = 0.0, puff_ = 0.0, levelNow_ = 0.0, hold_ = 1.0, speak_ = 0.0;
    bool pressureSeen_ = false;
    double velocity_ = 1.0, pressure_ = 0.0, timbre_ = 0.5, gain_ = 1.0;
    double pitch_ = 60.0, pitchNow_ = 60.0, emb_ = 0.5;
    double len_[kMaxUnison] = {-1.0, -1.0, -1.0, -1.0}, lenStep_[kMaxUnison] = {}, gainNow_ = 0.0, gainTarget_ = 0.0;
    double attackCoef_ = 0.01, releaseCoef_ = 0.001, glideCoef_ = 0.01;
    double fallCoef_ = 0.001, stopCoef_ = 0.01, gainCoef_ = 0.002, envCoef_ = 0.0003;
-   double kickEnv_ = 0.0, vibBreath_ = 1.0, vibRate_ = 5.1, vibAmt_ = 1.0, vibPhase_ = 0.0;
+   double kickEnv_ = 0.0, supportEnv_ = 0.0, vibBreath_ = 1.0, vibRate_ = 5.1, vibAmt_ = 1.0, vibPhase_ = 0.0;
    double env_ = 0.0;
    float tongue_ = 0.0f, tongueDecay_ = 0.9994f;
    float level_ = 0.0f;

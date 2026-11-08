@@ -306,7 +306,7 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kSwellLoop, "Swell Loop", "Swell", 0.0, 1.0, 0.0, kGlobalChoice},
       {kStiffness, "Stiffness", "Exciter", 0.0, 1.0, 0.5, kMod},
       {kAperture, "Aperture", "Exciter", 0.0, 1.0, 0.5, kMod},
-      {kGrowl, "Growl", "Exciter", 0.0, 1.0, 0.2, kMod},
+      {kGrowl, "Growl", "Exciter", 0.0, 1.0, 0.0, kMod},
       {kTongueType, "Tongue", "Articulation", 0.0, 4.0, 1.0, kGlobalChoice},
       {kVibType, "Vibrato Type", "Vibrato", 0.0, 3.0, 0.0, kGlobalChoice},
       {kHumanize, "Humanize", "Articulation", 0.0, 1.0, 0.0, kMod},
