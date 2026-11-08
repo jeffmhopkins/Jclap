@@ -32,6 +32,7 @@ inline const std::vector<Preset> &factoryPresets() {
       constexpr double kSoft = kTongueSoft, kDouble = kTongueDouble, kFlutterTongue = kTongueFlutter,
                        kBreathTongue = kTongueBreath;
       constexpr double kJaw = kVibJaw, kLip = kVibLip;
+      // The Holes, Tube, Mute and Hybrid Wave choices, by index.
       constexpr double kLattice3 = 1, kLattice5 = 2, kLattice9 = 4, kOpen = 5;
       constexpr double kBoxwood = 1, kMaple = 2, kBamboo = 3, kBrassTube = 4, kSilver = 5, kGlass = 7;
       constexpr double kStraight = 1, kCup = 2, kHarmon = 3, kPlunger = 4, kBucket = 5;
@@ -141,7 +142,7 @@ inline const std::vector<Preset> &factoryPresets() {
                    {{kModel, S}, {kTune, -24}, {kEdge, 1.6}, {kBreath, 1.1}, {kKick, 0.5}, {kAttack, 12},
                     {kRelease, 80}, {kVibDepth, 0.0}, {kVoiceMode, kMonoMode}}});
       p.push_back({"Gutbucket", "Sax",
-                   {{kModel, S}, {kCone, kSaxCone}, {kBreath, 1.25}, {kEdge, 2.0}, {kNoise, 1.8}, {kGrowl, 0.4},
+                   {{kModel, S}, {kCone, kSaxCone}, {kRadiate, 0.9}, {kBreath, 1.25}, {kEdge, 2.0}, {kNoise, 1.8}, {kGrowl, 0.4},
                     {kKick, 0.6}, {kAttack, 8}, {kBright, 2}, {kVibPitch, 18}, {kVibRate, 6.5}, {kVoiceMode, kMonoMode}}});
       p.push_back({"Flutter Tenor", "Sax",
                    {{kModel, S}, {kTune, -7}, {kCone, kSaxCone}, {kTongueType, kFlutterTongue}, {kFlutter, 0.6},
@@ -153,7 +154,9 @@ inline const std::vector<Preset> &factoryPresets() {
 
       // Double reeds: a stiff reed beating on a narrow cone, its formant near 1.3 kHz; a quick, singing
       // vibrato. A fuller cone and the tone holes' cutoff a little up bring the middle register's
-      // formant (H3 to H5) up towards the Iowa oboe's.
+      // formant (H3 to H5) up towards the Iowa oboe's. Below the oboe's range (the cor anglais a fifth
+      // down, the bassoon an octave, so the keyboard's middle is its tenor register) the plain cone
+      // starts cleaner.
       const double O = kOboeModel;
       constexpr double kOboeCone = 0.6, kOboeCutoff = 1500;
       p.push_back({"Dusk Oboe", "Oboe",
@@ -190,7 +193,8 @@ inline const std::vector<Preset> &factoryPresets() {
                    {{kModel, O}, {kMute, kCup}, {kMuteAmount, 0.6}, {kEdge, 1.6}, {kNoise, 1.3}, {kVibPitch, 25},
                     {kVibRate, 6.8}, {kVibDelay, 100}, {kVoiceMode, kLegatoMode}, {kGlide, 180}, {kKick, 0.4}}});
 
-      // Brass: the lips on a flared horn; the vibrato is in the lips (the pitch). The mutes are the
+      // Brass: the lips on a flared horn, as the Iowa trumpet at the defaults; the vibrato is in the
+      // lips (the pitch), and a fuller cone goes towards flugelhorn and horn. The mutes are the
       // jazz player's: straight (nasal, thin), cup (round, dark), Harmon (the buzzing stem), plunger
       // (a wah, here on the slide) and bucket (felt, soft).
       const double T = kTrumpetModel;
@@ -209,7 +213,7 @@ inline const std::vector<Preset> &factoryPresets() {
                    {{kModel, T}, {kMute, kHarmon}, {kBreath, 0.9}, {kNoise, 1.3}, {kVibType, kLip}, {kVibDepth, 0.0},
                     {kVibPitch, 6}, {kRelease, 160}, {kVoiceMode, kLegatoMode}, {kRoom, 0.25}}});
       p.push_back({"Plunger Wah", "Trumpet",
-                   {{kModel, T}, {kMute, kPlunger}, {kMuteAmount, 0.9}, {kSlide, 0.2}, {kGrowl, 0.25},
+                   {{kModel, T}, {kMute, kPlunger}, {kMuteAmount, 0.9}, {kSlide, 0.2}, {kGrowl, 0.25}, {kLevel, 3},
                     {kVibType, kLip}, {kVibDepth, 0.0}, {kVibPitch, 6},
                     {routeParam(0, kRouteSource), kSrcSlide},
                     {routeParam(0, kRouteDestination), kDest<kMuteAmount>},

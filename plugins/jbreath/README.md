@@ -247,11 +247,31 @@ GLIDE setting how long the pitch takes to get there.
 
 ### Presets
 
-Fifty-seven factory presets, about ten for each instrument, from clean to grungy, airy, bass and the
-odd ones: Concert Flute to Tin Whistle, Piccolo and Bass Flute; Wooden Reed to Klezmer Cry and Bass
-Clarinet; Clean Alto to Gutbucket and Bass Honk; Pastoral to Bassoon, Shawm and Duduk Air; Brass
-Plume to Flugel Glow, French Horn, Tuba and Blat; and seven Alien ones, First Contact, Ghost Helix,
-Xeno Choir, Tractor Beam, Coil Whistle, Mothership and Signal Lost. Each plays in tune at a usable level (tested).
+Seventy-one factory presets: Init, then eight to eleven for each instrument, each family starting
+from its most natural sound (Concert Flute, Wooden Reed, Clean Alto, Dusk Oboe, Brass Plume, First
+Contact: the model's own voice, measured against the Iowa recordings, with a player's vibrato and a
+little room) and running through darker, breathier, brighter and harder variants, its relatives by
+Transpose and its oddities:
+
+- **Flute** (10): Concert Flute, Night Flute, Bamboo Air, Shakuhachi Bend, Tin Whistle, Piccolo, Alto
+  Flute, Bass Flute, Overblown Jet (flutter-tongued) and Glass Ocarina.
+- **Clarinet** (9): Wooden Reed, Legato Clarinet, Chalumeau, Bass Clarinet, Bright Eb, Klezmer Cry,
+  Breathy Reed, Low Rasp Reed and Felt Clarinet (a felt bucket over the bell).
+- **Sax** (10): Clean Alto, Smoke Tenor, Growl Alto, Subtone Ballad, Soprano Line, Baritone, Bass
+  Honk, Gutbucket, Flutter Tenor and Hat Alto (a hat over the bell).
+- **Oboe** (10): Dusk Oboe, Pastoral, Oboe d'Amore, Cor Anglais, Bassoon, Contra Buzz, Shawm, Musette,
+  Duduk Air and Snake Charmer (a gourd cup over the reed).
+- **Trumpet** (11): Brass Plume, Fanfare, the mutes (Straight Mute, Cup Mute, Muted Night with a
+  Harmon, Plunger Wah with the plunger on the slide, Bucket Ballad), Flugel Glow, French Horn,
+  Trombone Slide and Piccolo Trumpet.
+- **Alien** (8): First Contact, Ghost Helix, Xeno Choir, Tractor Beam, Coil Whistle, Mothership,
+  Signal Lost and Ion Flutter.
+- **Pad** (6): the HYBRID voice as a pad under an instrument, at a low FOLLOW with a slow attack and a
+  long release: Flute Halo, Hollow Pad, Section Pad, Reed Choir, Brass Swell and Nebula.
+- **Space** (6): the DELAY, synced and free, and the REVERB: Echo Flute, Canyon Trumpet, Dub Tenor,
+  Night Cathedral, Slapback Bari and Star Signal.
+
+Each plays in tune at a usable level (tested).
 
 ## Drawing it smoothly
 
