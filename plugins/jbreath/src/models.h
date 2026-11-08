@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <cstdint>
 #include <vector>
 
@@ -453,163 +454,230 @@ private:
    float tx_ = 0.0f;
 };
 
-// Reed on a cone: the sax and oboe. The bore is split around the reed so the loop behaves like a
-// cone (every harmonic, overblowing at the octave). The reed's opening follows the pressure across
-// it, clipped where it slams shut.
+// Reed on a cone: the sax and oboe. A truncated cone's input admittance is an open pipe's in
+// parallel with a short one as long as the missing apex (Ayers; Dalmont and Kergomard's "cylindrical
+// saddle"): -j cot(kL) - j cot(kx0), whose zeros fall on every harmonic of L + x0. So the bore is two
+// tubes meeting at the reed, both open at their far ends: the body, whose bell and open holes reflect
+// the lows and let the highs out, and the missing apex (the mouthpiece's or the reed's own volume),
+// a round trip of tau. Blown hard, the reed shuts for about that round trip once a period (the
+// two-step Helmholtz motion, as on a bowed string), a pulse of fixed length: so the spectrum has
+// minima at fixed frequencies (multiples of 1/tau) with formants between them, the same on every
+// note, and the share of the period the reed is shut grows up the range, which takes the even
+// harmonics out of the middle register. Blown softly the reed never shuts and the tone is nearly
+// pure; the harder it's blown, the more it beats and the brighter it gets.
+//
+// The reed is quasi-static (its own resonance, 2 to 3 kHz on a real reed, sits above every note
+// played): its opening closes in proportion to the pressure drop across it, onto a lay that it
+// meets over a short curl of its tip, and the flow through its slit is Bernoulli's, u = zeta h
+// sgn(dp) sqrt|dp|, solved in closed form with the pressure it makes. Pressures are in units of the
+// one that would shut the reed.
+//
+// The losses on each trip are a little less at the fundamental than at the harmonics above it (the
+// wall losses grow with frequency, and the radiation from the holes more so); that keeps a cone in
+// its low register, where with flat losses the octave can take over.
 class ConicalReed : public Model {
 public:
    void prepare(double fs) override {
       fs_ = fs;
-      const int n = static_cast<int>(fs / 20.0) + 8;
-      d0_.init(n);
-      d1_.init(n);
+      body_.init(static_cast<int>(fs / 20.0) + 8);
+      apex_.init(static_cast<int>(fs / 20.0) + 8); // up to the cylinder (Cone 0) at the lowest note
       reset();
    }
    void reset() override {
-      d0_.clear();
-      d1_.clear();
-      lp_ = {};
-      cutK_ = -1.0f;
-      dc_ = {};
-      dc_.setFs(fs_);
+      body_.clear();
+      apex_.clear();
+      lattice_ = {};
+      apexLattice_ = {};
+      lift_ = {};
+      radiate_ = {};
+      wall_ = {};
+      apexWall_ = {};
       noiseLP_ = {};
       noiseLP_.setHz(noiseHz_, fs_);
-      out0_ = 0.0f;
-      register_.clear();
-      regHz_ = 0.0;
+      dc_ = {};
+      dc_.setFs(fs_);
+      y_ = dp_ = 0.0;
+      cutHz_ = liftHz_ = wallHz_ = radHz0_ = -1.0;
       notePitch(hz_);
-      resetColour();
    }
    double nominal(double hz) const override { return fs_ / hz; }
    double cutoffDelay(double hz) const override {
-      // The Cone knob moves the reed along the split bore, which sharpens it towards a full cone
-      // (measured, in cents): taken back out.
-      const double c = 2.0 * (character.cone - 0.5), coneCents = c * (3.33 + 4.3 * c + 2.87 * c * c);
-      return cutPitch_ * (onePoleDelay(hz, loopCut(hz), fs_) - onePoleDelay(hz, cut_, fs_)) +
-             character.lossDelay(nominal(hz), lossA_, lossB_) -
-             nominal(hz) * (std::pow(2.0, coneCents / 1200.0) - 1.0);
+      // (The apex's share of the holes' filter moves the pitch as well, in proportion.)
+      const double cut = cutFor(hz);
+      return (1.0 + apexMix_) * (latticeDelay(hz, holeCut(cut, 2.6 * hz)) - latticeDelay(hz, cut));
    }
-   // A split bore lets the second mode compete with the first, and on its own the loop jumps to the
-   // octave on most notes. A gentle lift at the fundamental (a cone's wider first resonance, from
-   // its missing apex) keeps it in the low register; on release the loop still dies away.
+   // Below the instrument's lowest note it plays as a bigger member of its family (a baritone or bass
+   // sax, a cor anglais or a bassoon): the whole bore scaled up, so the holes' cutoff and the apex
+   // follow the note down.
+   double family(double hz) const { return std::clamp(hz / lowHz_, familyMin_, 1.0); }
    void notePitch(double hz) override {
-      if (character.cutoff != cutK_ || hz != regHz_) {
-         cutK_ = character.cutoff;
-         lp_.setHz(std::min(loopCut(hz), 0.45 * fs_), fs_);
+      hz_ = hz;
+      const double cut = holeCut(cutFor(hz), 2.6 * hz);
+      if (cut != cutHz_) {
+         cutHz_ = cut;
+         lattice_.lowpass(cut, latticeQ_, fs_);
+         apexLattice_.lowpass(cut, latticeQ_, fs_);
+         // The lowest octave comes out of the bell, which lets more of the highs out than the open
+         // holes do above it; a bigger family member sends more of its lows out of the bell.
+         const double up = std::clamp(std::log2(hz / lowHz_), 0.0, 1.0), bell = radBell_ > 0 ? radBell_ : radHigh_;
+         radMix_ = static_cast<float>((bell + (radHigh_ - bell) * up) * std::sqrt(family(hz)));
       }
-      if (hz == regHz_)
-         return;
-      regHz_ = hz_ = hz;
-      register_.peak(hz, 0.7, 1.5, fs_);
+      const double rad = holeCut(radHz_ * family(hz), 2.6 * hz);
+      if (rad != radHz0_) {
+         radHz0_ = rad;
+         radiate_.lowpass(rad, radQ_, fs_);
+      }
+      // (A bigger family member has a bigger reed and a wider bore, which loses less on each trip.)
+      const double fam = family(hz), low = (1.0 - fam) / (1.0 - familyMin_);
+      reedScale_ = 1.0 / std::pow(fam, reedLow_);
+      tauS_ = tau_ * fs_ / std::pow(fam, familyApex_);
+      // The Loss knob: a rougher, lossier bore soaks up its highs on every trip (wall losses grow
+      // with frequency) far more than its fundamental, so most of it darkens the tone through the
+      // wall filters and only a tenth of it takes from the whole reflection (all of it would stop the
+      // note: a reed sustains only while the bore gives back enough at the fundamental).
+      const double lossK = character.keep(0.5f) / 0.5f;
+      keepNow_ = static_cast<float>(std::min(0.995, (keep_ + (std::max(keep_, keepLow_) - keep_) * low) *
+                                                        (1.0 - 0.1 * (1.0 - lossK))));
+      if (hz != liftHz_) {
+         liftHz_ = hz;
+         lift_.peak(hz, liftQ_, liftDb_, fs_);
+      }
+      const double wallHz = wallK_ * hz * std::pow(std::min(lossK, 1.2), 5.0);
+      if (wallHz != wallHz_) {
+         wallHz_ = wallHz;
+         wall_.setHz(wallHz, fs_);
+         apexWall_.setHz(wallHz, fs_);
+         // (and the darker walls' extra delay comes out of the bore, so the note stays in tune).
+         wallDelay_ = 2.0 * (onePoleDelay(hz, wallHz, fs_) - onePoleDelay(hz, wallK_ * hz, fs_));
+      }
    }
    float tick(float breath, float emb, double len, float tn) override {
-      breath_ = breath;
       const float noise = noiseLP_.tick(rng.white());
       const float growl = std::max(0.0f, breath - 0.95f) * growl_ * character.edge * character.growl;
-      const float p = breath * (1 + (breathNoise_ * character.noise + growl) * noise) + tn * tongueNoise_ * noise;
-      // Where the reed sits along the split bore: the cone's truncation, moved by the Cone knob. The
-      // short side is the missing apex; harmonics that fit a whole number of times into it are
-      // cancelled, so at 1/2 (Cone 0) the evens go and it sounds like a cylinder, a clarinet; near
-      // the apex (Cone 1) every harmonic is there, as in a long, sharp cone.
-      const double cone = character.cone - 0.5;
-      const double pos = posBase_ + posEmb_ * (emb - 0.5) - (cone < 0 ? 0.2 : 0.22) * cone;
-      // The lift puts the loop's gain a little over one at the fundamental; the reed's losses hold it
-      // there in normal playing, and the bore's walls (a clip far above any played level) at extremes.
-      const float temp = std::clamp(-character.keep(0.95f) * register_.tick(lp_.tick(d0_.read(std::max(2.0, len * (1 - pos))))), -6.0f, 6.0f);
-      out0_ = temp - d1_.read(std::max(2.0, len * pos));
-      const float pd = p - out0_;
-      const float r = std::clamp(0.7f - 0.24f * (character.aperture - 0.5f) +
-                                    (stiff_ + stiffEmb_ * emb) * (0.6f + 0.8f * character.stiffness) * pd,
-                                 -1.0f, 1.0f);
-      d1_.push(temp);
-      // A tongue on the reed stops it vibrating, so the tube rings down quickly.
-      const float stopped = std::clamp(breath * 8.0f, 0.0f, 1.0f);
-      d0_.push((p - pd * r - temp) * (0.9f + 0.1f * stopped));
-      return colour(dc_.tick(out0_)) * 0.6f;
+      // The lip's pressure on the reed (embouchure) narrows its opening and lowers the pressure that
+      // shuts it; a stiffer reed takes more; a more open lay (aperture) passes more air.
+      // (Within what a player's breath still makes up for: a reed so stiff or so pinched that the
+      // note's own breath can't start it would only fall silent.)
+      const double stiff = (0.92 + 0.16 * character.stiffness) * (1.1 - 0.2 * emb);
+      // Mouth pressure: the breath, its turbulence and the tongue's burst as it leaves the reed. A
+      // reed blown past its closing pressure would stay shut, so it eases in under it.
+      double g = gamma_ / stiff * breath * (1 + (breathNoise_ * character.noise + growl) * noise) +
+                 tn * tongueNoise_ * noise;
+      g = g < 0.8 ? g : 0.8 + 0.15 * std::tanh((g - 0.8) / 0.15);
+      // The apex's round trip; the body is the rest of the loop. The Cone knob runs from a cylinder
+      // (0: the reed half way round the loop, so only the odd harmonics fit, as in a clarinet)
+      // through the instrument's own truncated cone (0.5) to a sharp, nearly complete one (1: a
+      // short missing apex, every harmonic and the pulse's minima pushed up).
+      const double c = character.cone, tau = tauS_;
+      const double la0 = c >= 0.5 ? tau * std::pow(2.0, -2.0 * (c - 0.5)) : tau + (0.5 * len - tau) * (1.0 - 2.0 * c);
+      const double la = std::clamp(la0, 2.0, 0.8 * len), lb = std::max(2.0, len - la - wallDelay_);
+      // The waves arriving back at the reed, each inverted by its open end: the body's through its
+      // bell and holes (which keep the lows and let the highs out), the apex's with the same losses
+      // in proportion.
+      const float fromBody = wall_.tick(body_.read(lb));
+      const float heldBody = lattice_.tick(fromBody);
+      const double inBody = -keepNow_ * lift_.tick(heldBody);
+      const float fromApex = apexWall_.tick(apex_.read(la));
+      const double inApex = -keepNow_ * (apexMix_ * apexLattice_.tick(fromApex) + (1 - apexMix_) * fromApex);
+      const double P = inBody + inApex;
+      // The reed closes with the drop across it (a sample behind), meeting the lay over a curl of its
+      // tip: shorter, so a harder, buzzier closure, as the Edge (bite) goes up or the reed is
+      // stiffer (a soft reed rolls shut gently and sounds darker).
+      y_ += (dp_ - y_) * reedCoef_;
+      const double knee = 0.3 * std::exp(-1.2 * character.edge) * std::max(0.1, 2.2 - 2.4 * character.stiffness), gap = 1.0 - y_;
+      const double open = gap >= knee ? gap : gap <= -knee ? 0.0 : (gap + knee) * (gap + knee) / (4 * knee);
+      const double h = open * zeta_ * (0.5 + character.aperture) * (1.2 - 0.4 * emb) * reedScale_ / std::sqrt(stiff);
+      // u = h sgn(D) sqrt|D - u/2|: D the drop before this sample's flow; the two tubes in parallel
+      // take half the flow's pressure each.
+      const double D0 = g - P;
+      const double s = 0.5 * (-0.5 * h + std::sqrt(0.25 * h * h + 4.0 * std::fabs(D0)));
+      const double u = (D0 >= 0 ? 1.0 : -1.0) * h * s;
+      const double p = P + 0.5 * u;
+      dp_ = g - p;
+      // A tongue on the reed stops it, so the tube rings down quickly.
+      const double stopped = 0.9 + 0.1 * std::clamp(breath * 8.0f, 0.0f, 1.0f);
+      body_.push(static_cast<float>((p - inBody) * stopped));
+      apex_.push(static_cast<float>((p - inApex) * stopped));
+      // Heard: the wave reaching the bell and open holes, the part they let through brought up (they
+      // radiate the highs better than the lows).
+      return dc_.tick(fromBody - radMix_ * radiate_.tick(fromBody)) * outGain_;
    }
 
 protected:
-   virtual void resetColour() = 0;
-   virtual float colour(float x) = 0;
-   double loopCut(double hz) const { return character.cut(cut_, 2.6 * hz); }
-   // How much of the filter's delay shows in the pitch, and the loss's pitch in cents (measured).
-   double cutPitch_ = 0.83, lossA_ = -2.5, lossB_ = -124.0;
-   float cut_ = 5200, noiseHz_ = 3000, breathNoise_ = 0.06f, tongueNoise_ = 0.3f, growl_ = 0.6f;
-   float breath_ = 0.0f;
-   float posBase_ = 0.2f, posEmb_ = 0.08f, stiff_ = 0.22f, stiffEmb_ = 0.14f;
+   // The holes' cutoff, moved up for the top notes so they still find a resonance there.
+   // (Its Hole Cutoff scale as Character::cut on the Holes branch: max(base k, min(base, floor)).)
+   double holeCut(double base, double floor) const { return std::max(base * character.cutoff, std::min(base, floor)); }
+   double cutFor(double hz) const { return std::max(cut_ * family(hz), 2.0 * hz); }
+   // The holes' phase delay at hz, in samples.
+   double latticeDelay(double hz, double cut) const {
+      Biquad b;
+      b.lowpass(cut, latticeQ_, fs_);
+      const double w = 2.0 * kPi * hz / fs_;
+      const std::complex<double> z1 = std::polar(1.0, -w), z2 = z1 * z1;
+      const std::complex<double> H = (b.b0 + b.b1 * z1 + b.b2 * z2) / (1.0 + b.a1 * z1 + b.a2 * z2);
+      return -std::arg(H) / w;
+   }
+
+   // The apex's round trip (s), the holes' cutoff (Hz) and resonance, the walls' loss (a lowpass at
+   // wallK times the note), how much less the fundamental loses than the harmonics above it (dB, Q);
+   // the instrument's lowest note and how far below it the bigger family members go (the apex
+   // growing as family^-familyApex); the reed's flow and the breath that shuts it; the radiation's
+   // corner and resonance (the formant); the reflection per trip (keepLow for the biggest family
+   // member), the apex's share of the holes' filter, how much of the highs the open holes (radHigh)
+   // and, in the lowest octave, the bell (radBell) send out; the breath's noise, the tongue's and
+   // the forte growl; and how much bigger the family's reeds are (family^-reedLow).
+   double tau_ = 1.0e-3, cut_ = 1200.0, latticeQ_ = 0.8, wallK_ = 30.0, liftDb_ = 2.0, liftQ_ = 0.7;
+   double lowHz_ = 138.6, familyMin_ = 0.25, familyApex_ = 1.0, zeta_ = 0.6, gamma_ = 0.6, radHz_ = 1200.0, radQ_ = 1.5;
+   float keep_ = 0.92f, keepLow_ = 0.95f, apexMix_ = 0.5f, radHigh_ = 0.5f, radBell_ = 0.8f, outGain_ = 1.0f;
+   float noiseHz_ = 3000, breathNoise_ = 0.05f, tongueNoise_ = 0.3f, growl_ = 0.6f;
+   double reedCoef_ = 1.0, reedLow_ = 1.0;
 
 private:
-   Delay d0_, d1_;
-   OnePoleLP lp_, noiseLP_;
-   Biquad register_;
+   Delay body_, apex_;
+   Biquad lattice_, apexLattice_, lift_, radiate_;
+   OnePoleLP wall_, apexWall_, noiseLP_;
    DCBlock dc_;
-   double hz_ = 294.0, regHz_ = 0.0;
-   float out0_ = 0.0f, cutK_ = -1.0f;
+   double hz_ = 294.0, cutHz_ = -1.0, liftHz_ = -1.0, wallHz_ = -1.0, radHz0_ = -1.0, wallDelay_ = 0.0;
+   double y_ = 0.0, dp_ = 0.0;
+   float radMix_ = 0.5f;
+   double reedScale_ = 1.0, tauS_ = 48.0;
+   float keepNow_ = 0.92f;
 };
 
-// Saxophone: a mouthpiece-cavity resonance gives the honk; noise in the reed gives a little growl
-// when it's pushed hard.
-class Sax final : public ConicalReed {
-protected:
-   void resetColour() override {
-      honk_ = {};
-      honk_.peak(1250, 1.2, 5.0, fs_);
-   }
-   float colour(float x) override { return honk_.tick(x); }
+// Alto saxophone: a single reed on a wide mouthpiece whose volume stands in for a long missing cone
+// (a 1 ms round trip: the pulse's minima near 1, 2 and 3 kHz), a wide bore that loses little on each
+// trip, holes that cut off near 1.2 kHz, and a bell that lets more of the highs out of the lowest
+// octave than the holes do above it. Below Db3 it plays as a baritone or bass sax.
+class Sax final : public ConicalReed {};
 
-private:
-   Biquad honk_;
-};
-
-// Oboe (double reed): two cane blades beating at the top of a narrow cone. The sax's loop with a
-// stiffer, smaller reed and a darker bore, and fixed formants near 1.1 and 2.9 kHz from the bell and
-// tone holes, which is what makes it read as an oboe and not a soprano sax.
+// Oboe (double reed): two cane blades beating at the top of a narrow cone. The reed and its staple
+// stand in for a short missing apex (0.5 ms: the pulse's minima near 2 and 4 kHz), the narrow bore
+// loses more on each trip, its holes cut off near 1.2 kHz and radiate through a sharp formant there
+// (the oboe's nasal 1 to 1.5 kHz peak), and its stiffer reed takes more breath to start. Below Ab3 it plays as
+// a cor anglais or a bassoon.
 class Oboe final : public ConicalReed {
 public:
    Oboe() {
-      cut_ = 3800;
-      cutPitch_ = 0.89;
-      lossA_ = -32.0;
-      lossB_ = -65.0;
+      lowHz_ = 207.7;
+      familyApex_ = 1.0;
+      tau_ = 0.5e-3;
+      cut_ = 1200.0;
+      wallK_ = 20.0;
+      liftDb_ = 2.5;
+      liftQ_ = 1.0;
+      keep_ = 0.88f;
+      keepLow_ = 0.93f;
+      zeta_ = 0.6;
+      gamma_ = 0.55;
+      radHz_ = 1200.0;
+      radQ_ = 2.5;
+      radHigh_ = 0.97f;
+      radBell_ = 0.0f;
       noiseHz_ = 3500;
       breathNoise_ = 0.04f;
       tongueNoise_ = 0.25f;
       growl_ = 0.3f;
-      posEmb_ = 0.06f;
-      stiffEmb_ = 0.12f;
    }
-
-protected:
-   void resetColour() override {
-      f1_ = {};
-      f1_.peak(1250, 1.0, 6.0, fs_);
-      f2_ = {};
-      f2_.peak(2900, 1.8, 5.0, fs_);
-      f3_ = {};
-      f3_.lowshelf(550, -7.0, fs_);
-      env_ = 0.0f;
-      envCoef_ = static_cast<float>(1.0 - std::exp(-2.0 * kPi * 20.0 / fs_));
-      dc_ = {};
-      dc_.setFs(fs_);
-   }
-   // The two blades beat shut every cycle, so what leaves the reed is a train of narrow pulses rich
-   // in harmonics, more so the harder it's blown: shaped here on the level-normalised wave, so
-   // it brightens with the breath and not with the note's loudness.
-   float colour(float x) override {
-      env_ += (std::fabs(x) - env_) * envCoef_;
-      const float a = 1.5708f * env_ + 1e-6f;
-      const float n = std::clamp(x / a, -1.3f, 1.3f), n2 = n * n;
-      const float buzz = (0.25f + 0.5f * std::clamp(breath_ - 0.5f, 0.0f, 0.6f)) * character.edge;
-      // Chebyshev T2, T3 and T5 of the normalised wave: the 2nd, 3rd and 5th harmonics on a sine.
-      const float t2 = 2 * n2 - 1, t3 = n * (4 * n2 - 3), t5 = n * (16 * n2 * n2 - 20 * n2 + 5);
-      const float y = x + a * buzz * (0.35f * t2 + 0.5f * t3 + 0.4f * t5);
-      return f3_.tick(f2_.tick(f1_.tick(dc_.tick(y))));
-   }
-
-private:
-   DCBlock dc_;
-   float env_ = 0.0f, envCoef_ = 0.001f;
-   Biquad f1_, f2_, f3_;
 };
 
 // Trumpet: the lips are a mass on a spring, pushed open by the mouth pressure against the pressure
@@ -996,8 +1064,8 @@ inline const ModelInfo &modelInfo(int id) {
    static const ModelInfo info[kModelCount] = {
       {"Flute", 0.8f, 0.15f, 0.75f},
       {"Clarinet", 0.42f, 0.5f, 0.815f},
-      {"Sax", 0.65f, 0.2f, 0.6875f},
-      {"Oboe", 0.42f, 0.48f, 0.795f},
+      {"Sax", 0.6f, 0.5f, 0.85f},
+      {"Oboe", 0.5f, 0.6f, 0.9f},
       {"Trumpet", 0.48f, 0.2f, 0.65f},
       {"Alien", 0.6f, 0.5f, 0.8f},
    };
