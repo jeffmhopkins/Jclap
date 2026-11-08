@@ -14,7 +14,7 @@ namespace jbreath {
 
 struct DelaySettings {
    bool on = false;
-   double mix = 0.3, timeMs = 375.0, feedback = 0.4, tone = 0.6, spread = 0.5;
+   double mix = 0.3, timeMs = 375.0, feedback = 0.4, tone = 0.72, spread = 0.5;
 };
 
 // The Delay Sync choices, as beats (quarter notes); 0 is free (ms).
@@ -48,8 +48,8 @@ public:
    void set(const DelaySettings &s) {
       settings_ = s;
       target_ = std::clamp(s.timeMs * 0.001 * fs_, 2.0, kMaxSeconds * fs_);
-      // Tone: the repeats' lowpass, from 1.2 kHz (dark tape) to open.
-      const double hz = 1200.0 * std::pow(16.0, std::clamp(s.tone, 0.0, 1.0));
+      // Tone: the repeats' lowpass, from 400 Hz (a muffled, distant echo) to open.
+      const double hz = 400.0 * std::pow(48.0, std::clamp(s.tone, 0.0, 1.0));
       lpCoef_ = static_cast<float>(1.0 - std::exp(-2.0 * 3.14159265358979 * std::min(hz, 0.45 * fs_) / fs_));
    }
    // Whether there is anything to hear: on, or still ringing after being turned off.

@@ -143,11 +143,13 @@ Context contextFor(clap_id id) {
    case kHybridCutoff:
    case kHybridResonance:
    case kHybridFilterBreath:
+   case kHybridFollow:
       c.set = {{kHybridMix, 0.5}};
       c.note = "Hybrid Mix 50%";
       break;
    case kVibRate:
    case kVibType:
+   case kVibDelay:
       // The default vibrato (5% breath) is faint: its rate and kind need some to be heard.
       c.set = {{kVibDepth, 0.15}};
       c.note = "Vibrato Depth 15%";
@@ -161,8 +163,35 @@ Context contextFor(clap_id id) {
    case kRoomDecay:
    case kRoomDamp:
    case kRoomPreDelay:
+   case kReverbOn:
       c.set = {{kRoom, 0.4}};
       c.note = "Room 40%";
+      break;
+   case kHybridDecay:
+      // Decay falls to the sustain level: at full sustain there's nothing to fall.
+      c.set = {{kHybridMix, 0.5}, {kHybridFollow, 0.0}, {kHybridSustain, 0.3}};
+      c.note = "Hybrid 50%, Sus 30%";
+      break;
+   case kHybridAttack:
+   case kHybridSustain:
+   case kHybridRelease:
+   case kHybridFilterEnv:
+      // The envelope plays the Hybrid voice: heard with some of it, and most clearly as a pad (Follow 0).
+      c.set = {{kHybridMix, 0.5}, {kHybridFollow, 0.0}};
+      c.note = "Hybrid 50%, Follow 0";
+      break;
+   case kDelayMix:
+   case kDelayTime:
+   case kDelaySync:
+   case kDelayFeedback:
+   case kDelayTone:
+   case kDelaySpread:
+      c.set = {{kDelayOn, 1.0}};
+      c.note = "Delay On";
+      break;
+   case kMuteAmount:
+      c.set = {{kMute, 1.0}};
+      c.note = "Mute Straight";
       break;
    default:
       break;
@@ -173,7 +202,7 @@ Context contextFor(clap_id id) {
 // Params meant for some models only (the panel says so): audible elsewhere isn't expected.
 std::vector<int> intendedModels(clap_id id) {
    if (id == kCone)
-      return {kSax, kOboe};
+      return {kSax, kOboe, kTrumpet, kAlien};
    if (id == kBrass)
       return {kTrumpet};
    return {};

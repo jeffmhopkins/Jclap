@@ -369,7 +369,7 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kDelayTime, "Delay Time", "Delay", 0.0, 1.0, 0.684, kGlobalMod},
       {kDelaySync, "Delay Sync", "Delay", 0.0, 13.0, 0.0, kGlobalChoice},
       {kDelayFeedback, "Delay Feedback", "Delay", 0.0, 0.95, 0.4, kGlobalMod},
-      {kDelayTone, "Delay Tone", "Delay", 0.0, 1.0, 0.6, kGlobalMod},
+      {kDelayTone, "Delay Tone", "Delay", 0.0, 1.0, 0.72, kGlobalMod},
       {kDelaySpread, "Delay Spread", "Delay", 0.0, 1.0, 0.5, kGlobalMod},
       {kMute, "Mute", "Bore", 0.0, 5.0, 0.0, kGlobalChoice},
       {kMuteAmount, "Mute Amount", "Bore", 0.0, 1.0, 1.0, kMod},

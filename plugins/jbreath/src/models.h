@@ -734,11 +734,15 @@ public:
       coneDelay_ = character.cone != 0.5f || character.loss != 0.04f
                       ? bellDelay(hz, 1.0f, character.cone, character.loss) - bellDelay(hz, 1.0f, 0.5f, 0.04f)
                       : 0.0;
-      trim_ = std::exp2((trim(character.aperture, kTrimAp0, kTrimAp1) + trim(character.stiffness, kTrimSt0, kTrimSt1) +
+      trim_ = std::exp2((trim(character.aperture, kTrimAp0, kTrimAp1) + trim(lipStiffness(), kTrimSt0, kTrimSt1) +
                          150.0 * (character.loss - 0.04f)) /
                         1200.0);
    }
    float tick(float breath, float emb, double len, float tn) override {
+      // Over the middle the embouchure tightens the lips by less: pinched any tighter, they'd sit so
+      // far over a high note that it stops speaking (a real player's lips crack up a partial instead).
+      if (emb > 0.5f)
+         emb = 0.5f + 0.4f * (emb - 0.5f);
       // The lips' own frequency: under the note, tighter with the embouchure.
       const double dt = 1.0 / fs_, w = 2 * kPi * lipHz_ * (0.9 + 0.12 * (emb - 0.5));
       const double pm = breath * (1 + 0.02 * tn * rng.white()) * (1 + 0.03 * character.noise * rng.white());
@@ -753,7 +757,7 @@ public:
       dcz_ += (xin - dcz_) * (2 * kPi * 20 / fs_);
       const double pin = character.keep(0.95f) * (bell2_.tick(bell1_.tick(static_cast<float>(xin))) - 2.0 * dcz_);
       // Lips: pushed open by mouth pressure minus mouthpiece pressure (with the last sample's flow).
-      const double a = -w * w * x_ - (w / (4.0 * std::exp2(character.stiffness - 0.5))) * v_ + 0.7 * w * w * (pm - 2 * pin - u_) +
+      const double a = -w * w * x_ - (w / (4.0 * std::exp2(lipStiffness() - 0.5))) * v_ + 0.7 * w * w * (pm - 2 * pin - u_) +
                        1e-4 * rng.white();
       v_ += dt * a;
       // The tongue's release plucks the lips open, so the note starts at once, as hard as tongued.
@@ -798,11 +802,20 @@ private:
    // The Cone knob flares the bore: under the middle a narrower, more cylindrical trumpet (a
    // higher cutoff), over it a wider, more conical one like a flugelhorn's (a lower cutoff).
    // The Loss knob's wall losses grow with frequency, so a lossier tube is also a darker one.
+   // However they darken it, the bell never cuts off under the note's 2nd harmonic (or, if that's
+   // under where it's tuned, where it's tuned): a top note with no resonance over it dies.
    double bellCut(double hz, float cutoff, float cone, float loss) const {
-      return std::max(1400.0, 2.0 * hz) * cutoff * std::exp2(-1.4 * (cone - 0.5) - 1.2 * (loss - 0.04f));
+      const double base = std::max(1400.0, 2.0 * hz);
+      return std::max(base * cutoff * std::exp2(-1.4 * (cone - 0.5) - 1.2 * (loss - 0.04f)), std::min(base, 2.0 * hz));
    }
    double bellDelay(double hz, float cutoff, float cone, float loss) const {
       return 2.0 * onePoleDelay(hz, std::min(bellCut(hz, cutoff, cone, loss), 0.45 * fs_), fs_);
+   }
+   // Stiffness under the middle softens the lips by half as much: lips any slacker are damped so
+   // heavily that the top of the range stops speaking.
+   float lipStiffness() const {
+      const float st = character.stiffness;
+      return st < 0.5f ? 0.5f - 0.5f * (0.5f - st) : st;
    }
    // The lips' settings move the pitch (they pull it towards their own frequency, more or less):
    // a player lips it back, here the bore is trimmed by as much (in cents of length, measured).

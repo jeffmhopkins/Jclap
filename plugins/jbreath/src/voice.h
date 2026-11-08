@@ -559,13 +559,19 @@ public:
       if (mix < 0.999f) {
          // Unison: copies of the instrument, each a little detuned, summed at equal power.
          float sum = 0.0f;
+         airPos_ = (airPos_ + 1) & (kAirLen - 1);
+         airBlown_[airPos_] = blown;
+         airTongue_[airPos_] = tongue;
          for (int u = 0; u < unison_; ++u) {
             len_[u] += lenStep_[u];
-            // A copy that's still waiting to come in (see the unison's note-on) isn't blown yet.
-            const bool waiting = stagger_[u] > 0;
-            stagger_[u] -= waiting ? 1 : 0;
-            sum += models_[u][settings_.model]->tick(waiting ? 0.0f : blown, static_cast<float>(emb_), len_[u],
-                                                     waiting ? 0.0f : tongue);
+            // Each copy past the first is blown a few ms behind it (see the unison's note-on).
+            float b = blown, tg = tongue;
+            if (u > 0 && stagger_[u] > 0) {
+               const int at = (airPos_ - stagger_[u]) & (kAirLen - 1);
+               b = airBlown_[at];
+               tg = airTongue_[at];
+            }
+            sum += models_[u][settings_.model]->tick(b, static_cast<float>(emb_), len_[u], tg);
          }
          y = mute_.tick(sum * unisonGain_ * static_cast<float>(gainNow_) * (1.0f - mix));
       }
@@ -899,10 +905,15 @@ private:
             lenStep_[u] = 0.0;
             // The copies come in a few ms apart, as players in a section do: copies that started
             // together would beat in step, so the unison's level would sink and swell with them.
+            // Each is blown by the breath as it was a few ms earlier, so it starts just as smoothly.
             // (Copies with no detune play as one, in step; so the spread grows with the detune.)
             static const double kStagger[kMaxUnison] = {0.0, 0.0047, 0.0029, 0.0071};
             const double spread = std::clamp(std::fabs(live_.unisonDetune) / 10.0, 0.0, 1.0);
-            stagger_[u] = static_cast<int>(kStagger[u] * spread * fs_);
+            stagger_[u] = std::min(kAirLen - 1, static_cast<int>(kStagger[u] * spread * fs_));
+            if (fresh && u == 0) {
+               std::fill(std::begin(airBlown_), std::end(airBlown_), 0.0f);
+               std::fill(std::begin(airTongue_), std::end(airTongue_), 0.0f);
+            }
          } else {
             lenStep_[u] = (lu - len_[u]) / kControl;
          }
@@ -1243,7 +1254,10 @@ private:
    bool pressureSeen_ = false;
    double velocity_ = 1.0, pressure_ = 0.0, timbre_ = 0.5, gain_ = 1.0;
    double pitch_ = 60.0, pitchNow_ = 60.0, emb_ = 0.5;
-   int stagger_[kMaxUnison] = {};
+   // The breath and tongue of the last few ms, which the later unison copies are blown by.
+   static constexpr int kAirLen = 2048;
+   int stagger_[kMaxUnison] = {}, airPos_ = 0;
+   float airBlown_[kAirLen] = {}, airTongue_[kAirLen] = {};
    double len_[kMaxUnison] = {-1.0, -1.0, -1.0, -1.0}, lenStep_[kMaxUnison] = {}, gainNow_ = 0.0, gainTarget_ = 0.0;
    double attackCoef_ = 0.01, releaseCoef_ = 0.001, glideCoef_ = 0.01;
    double fallCoef_ = 0.001, stopCoef_ = 0.01, gainCoef_ = 0.002, envCoef_ = 0.0003;
