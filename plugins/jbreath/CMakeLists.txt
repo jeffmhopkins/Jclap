@@ -35,4 +35,9 @@ if(JCLAP_BUILD_TOOLS)
    target_include_directories(jbreath-tune PRIVATE src)
    find_package(Threads REQUIRED)
    target_link_libraries(jbreath-tune PRIVATE Threads::Threads)
+   # Measures how audibly each sound param changes every instrument (min, centre and max), through
+   # the whole plugin: jbreath-knob-audit --out DIR [--wav DIR]. A developer tool; not run in CI.
+   add_executable(jbreath-knob-audit tools/knob_audit.cpp src/plugin.cpp src/editor.cpp)
+   target_include_directories(jbreath-knob-audit PRIVATE src)
+   target_link_libraries(jbreath-knob-audit PRIVATE jclap::ui jclap::dsp Threads::Threads)
 endif()
