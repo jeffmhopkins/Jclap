@@ -35,6 +35,7 @@
 #include <functional>
 #include <memory>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -137,7 +138,7 @@ public:
          c.roundedRectangleBorder(0, y * k, width(), rowH * k, 6 * k, (on ? 1.5f : 1.0f) * k);
          label(c, kModelNames[i], 12, y + 5, 140, on ? color : kText, 15.0f);
          label(c, kModelSubtitles[i], 12, y + 25, 150, kDim, 10.5f);
-         drawIcon(c, i, (designW() - 26) * k, (y + rowH / 2) * k, k, on ? color : kDim);
+         drawIcon(c, i, (designW() - 30) * k, (y + rowH / 2) * k, k, on ? color : kDim);
       }
    }
 
@@ -171,35 +172,30 @@ private:
       return i >= 0 && i < kModelCount ? i : -1;
    }
 
-   // A small glyph of how the instrument makes its sound.
+   // The instrument, side on, in the row's colour (the SVGs draw in currentColor).
    static void drawIcon(visage::Canvas &c, int model, float x, float y, float k, unsigned color) {
+      static const char *const kSources[kModelCount] = {
+   // flute
+   R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="10.5" width="42" height="3" rx="1.5"/><ellipse cx="9" cy="10.2" rx="2.4" ry="1.1"/><path d="M38.5 10.5 L38.5 13.5"/><circle cx="18" cy="12" r="0.75" fill="currentColor" stroke="none"/><circle cx="22" cy="12" r="0.75" fill="currentColor" stroke="none"/><circle cx="26" cy="12" r="0.75" fill="currentColor" stroke="none"/><circle cx="30" cy="12" r="0.75" fill="currentColor" stroke="none"/><circle cx="34" cy="12" r="0.75" fill="currentColor" stroke="none"/></svg>)svg",
+   // clarinet
+   R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 11.4 L7.5 10.6 L7.5 13.4 L2.5 12.6 Z"/><rect x="7.5" y="10" width="4.5" height="4" rx="0.8"/><path d="M12 10.6 L37 10.6 Q41 10.4 45 7.5 L45 16.5 Q41 13.6 37 13.4 L12 13.4"/><circle cx="17" cy="12" r="0.7" fill="currentColor" stroke="none"/><circle cx="21" cy="12" r="0.7" fill="currentColor" stroke="none"/><circle cx="25" cy="12" r="0.7" fill="currentColor" stroke="none"/><circle cx="29" cy="12" r="0.7" fill="currentColor" stroke="none"/><circle cx="33" cy="12" r="0.7" fill="currentColor" stroke="none"/></svg>)svg",
+   // sax
+   R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3.4 L4.8 3.1 M3.6 3.3 Q8 3 11 5.7"/><path d="M11 4.6 L27.5 15.3 Q30.5 17.3 33.2 16.3 Q35 15.5 34.8 12 Q34.6 9 31.5 6 L44.5 6 Q39 9 38.8 13 Q38.8 18.6 35.2 20.2 Q30.5 22.2 25.5 17.8 L11 6.8 Z"/><circle cx="15.5" cy="8.3" r="0.75" fill="currentColor" stroke="none"/><circle cx="19.5" cy="11" r="0.75" fill="currentColor" stroke="none"/><circle cx="23.5" cy="13.7" r="0.75" fill="currentColor" stroke="none"/></svg>)svg",
+   // oboe
+   R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(24 12) rotate(24) scale(0.92) translate(-24 -12)"><path d="M2.2 10 Q1.3 12 2.2 14 L6.5 12.6 L6.5 11.4 Z" fill="currentColor" fill-opacity="0.25"/><path d="M2.6 12 L6.5 12" stroke-width="0.9"/><rect x="6.5" y="10.8" width="2.8" height="2.4" rx="0.5" fill="currentColor" stroke="none"/><path d="M9.3 11.1 L37 10.2 Q41 9.9 42.5 9.1 L44.8 8.8 L44.8 15.2 L42.5 14.9 Q41 14.1 37 13.8 L9.3 12.9"/><path d="M20.5 10.2 L20.5 13.8 M31 9.9 L31 14.1" stroke-width="1.3"/><circle cx="13" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="16.5" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="24" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="27.5" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="34" cy="12" r="0.65" fill="currentColor" stroke="none"/></g></svg>)svg",
+   // trumpet
+   R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.2 L4.5 9 L36 9 M2.5 9.8 L4.5 9"/><path d="M36 8.2 Q41 8 45 3.5 L45 14.5 Q41 10 36 9.8"/><path d="M12 9 Q8.5 9 8.5 13 Q8.5 17 12.5 17 L29 17 Q32.5 17 32.5 13 L32.5 9"/><path d="M17 6 L17 17 M21 6 L21 17 M25 6 L25 17" stroke-width="2.2"/><circle cx="17" cy="4.6" r="1.1" fill="currentColor" stroke="none"/><circle cx="21" cy="4.6" r="1.1" fill="currentColor" stroke="none"/><circle cx="25" cy="4.6" r="1.1" fill="currentColor" stroke="none"/></svg>)svg",
+      };
+      static const std::vector<visage::Svg> kIcons = [] {
+         std::vector<visage::Svg> icons;
+         for (const char *source : kSources)
+            icons.emplace_back(reinterpret_cast<const unsigned char *>(source), static_cast<int>(std::strlen(source)));
+         return icons;
+      }();
+      // 40 x 20 design units, centred on (x, y).
+      const float w = 40 * k, h = 20 * k;
       c.setColor(color);
-      const float w = 1.6f * k;
-      switch (model) {
-      case kFlute: // the jet, split by the edge
-         c.segment(x - 12 * k, y, x + 8 * k, y, w, true);
-         c.segment(x + 3 * k, y - 5 * k, x + 9 * k, y, w, true);
-         c.segment(x + 3 * k, y + 5 * k, x + 9 * k, y, w, true);
-         break;
-      case kClarinet: // a reed on a straight tube
-         c.segment(x - 12 * k, y + 6 * k, x + 10 * k, y + 6 * k, w, true);
-         c.segment(x - 12 * k, y + 6 * k, x + 10 * k, y - 4 * k, w, true);
-         break;
-      case kSax: // a reed on a widening cone
-         c.segment(x - 12 * k, y + 2 * k, x + 10 * k, y + 8 * k, w, true);
-         c.segment(x - 12 * k, y + 2 * k, x + 10 * k, y - 6 * k, w, true);
-         break;
-      case kOboe: // two blades
-         c.segment(x - 12 * k, y - 6 * k, x + 10 * k, y - 1 * k, w, true);
-         c.segment(x - 12 * k, y + 6 * k, x + 10 * k, y + 1 * k, w, true);
-         break;
-      default: // lips
-         c.segment(x - 11 * k, y - 4 * k, x + 9 * k, y - 4 * k, w, true);
-         c.segment(x - 11 * k, y + 4 * k, x + 9 * k, y + 4 * k, w, true);
-         c.segment(x - 11 * k, y - 4 * k, x - 11 * k, y + 4 * k, w, true);
-         c.segment(x + 9 * k, y - 4 * k, x + 9 * k, y + 4 * k, w, true);
-         break;
-      }
+      c.svg(kIcons[static_cast<size_t>(std::clamp(model, 0, kModelCount - 1))], x - w / 2, y - h / 2, w, h);
    }
 
    EditorHost &host_;
