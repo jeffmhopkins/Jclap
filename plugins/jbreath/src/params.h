@@ -104,12 +104,28 @@ enum ParamId : clap_id {
    kTail,
    kLine,
    kGlow,
+   // Added after the first release: flutter tongue on any style, note pan, unison, the HYBRID
+   // tab's subtractive voice's filter, and where the AIR view's loops sit and how big they are.
+   kFlutter,
+   kFlutterRate,
+   kPan,
+   kUnison,
+   kUnisonDetune,
+   kHybridCutoff,
+   kHybridResonance,
+   kHybridFilterBreath,
+   kLoopX,
+   kLoopY,
+   kLoopSize,
+   kLoopSizeMin,
    kParamCount
 };
+// The AIR view's look: the panel's own, kept with the project but not with presets.
+inline bool isLookParam(clap_id id) { return (id >= kLook && id <= kGlow) || (id >= kLoopX && id <= kLoopSizeMin); }
 // The routes' params end where the panel's later params begin.
 constexpr clap_id kRouteEnd = kStiffness;
-// Presets cover every param before the look.
-constexpr clap_id kPresetParamCount = kLook;
+// Presets cover every param but the look's (isLookParam), which loading one leaves as it is.
+constexpr clap_id kPresetParamCount = kParamCount;
 
 constexpr int kLfoCount = 2, kBusCount = 4, kRouteCount = 32;
 constexpr int kBusStride = 5, kRouteStride = 3;
@@ -160,9 +176,13 @@ inline constexpr clap_id kModDestinations[] = {
    kBreath, kEmbouchure, kNoise, kEdge, kKick, kAttack, kRelease, kTune, kFine, kGlide, kVibRate, kVibDepth,
    kVibPitch, kVibDelay, kCurve, kLevel, kLfo1Rate, kLfo2Rate, kSwellTime, kStiffness, kAperture, kGrowl,
    kHumanize, kHybridMix, kHybridDetune, kLoss, kHoleCutoff, kCone, kBrass, kDetune, kAir,
-   busParam(0, kBusAmount), busParam(1, kBusAmount), busParam(2, kBusAmount), busParam(3, kBusAmount)};
+   busParam(0, kBusAmount), busParam(1, kBusAmount), busParam(2, kBusAmount), busParam(3, kBusAmount),
+   // Added after the first release, after the buses so saved routes keep their destinations.
+   kFlutter, kFlutterRate, kPan, kUnisonDetune, kHybridCutoff, kHybridResonance, kHybridFilterBreath};
 constexpr int kModDestCount = static_cast<int>(sizeof(kModDestinations) / sizeof(kModDestinations[0]));
-constexpr int kFirstBusDest = kModDestCount - kBusCount;
+constexpr int kFirstBusDest = 31;
+constexpr bool isBusDest(int d) { return d >= kFirstBusDest && d < kFirstBusDest + kBusCount; }
+static_assert(kModDestinations[kFirstBusDest] == busParam(0, kBusAmount), "the buses' destinations moved");
 constexpr int destinationOf(clap_id id) {
    for (int i = 0; i < kModDestCount; ++i)
       if (kModDestinations[i] == id)
@@ -207,6 +227,11 @@ inline const char *const kTongueTypeNames[] = {"Soft", "Hard", "Double", "Flutte
 // both, or the lips (pitch alone).
 enum VibType { kVibBreath, kVibJaw, kVibBoth, kVibLip };
 inline const char *const kVibTypeNames[] = {"Breath", "Jaw", "Breath+Jaw", "Lip"};
+// The HYBRID tab's voice: a plain oscillator, filtered, blown with the same breath.
+inline const char *const kHybridWaveNames[] = {"Sine", "Triangle", "Saw", "Square", "Pulse"};
+// What places a loop in the AIR view, along each axis, and what sets its size.
+enum LoopSource { kLoopPitch, kLoopStrike, kLoopPress, kLoopSlide, kLoopBreath, kLoopRandom, kLoopCentre };
+inline const char *const kLoopSourceNames[] = {"Pitch", "Strike", "Press", "Slide", "Breath", "Random", "Centre"};
 inline const char *const kHolesNames[] = {"Closed", "Lattice 3", "Lattice 5", "Lattice 7", "Lattice 9", "Open"};
 inline const char *const kTubeNames[] = {"Grenadilla", "Boxwood", "Maple", "Bamboo", "Brass", "Silver", "Resin", "Glass"};
 inline const char *const kLimiterNames[] = {"Off", "Soft", "Hard"};
@@ -257,7 +282,7 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kTongueType, "Tongue", "Articulation", 0.0, 4.0, 1.0, kGlobalChoice},
       {kVibType, "Vibrato Type", "Vibrato", 0.0, 3.0, 0.0, kGlobalChoice},
       {kHumanize, "Humanize", "Articulation", 0.0, 1.0, 0.0, kMod},
-      {kHybridModel, "Hybrid Instrument", "Hybrid", 0.0, 4.0, 0.0, kGlobalChoice},
+      {kHybridModel, "Hybrid Wave", "Hybrid", 0.0, 4.0, 2.0, kGlobalChoice},
       {kHybridMix, "Hybrid Mix", "Hybrid", 0.0, 1.0, 0.0, kMod},
       {kHybridOctave, "Hybrid Octave", "Hybrid", -2.0, 2.0, 0.0, kGlobalMod | CLAP_PARAM_IS_STEPPED},
       {kHybridDetune, "Hybrid Detune", "Hybrid", -50.0, 50.0, 0.0, kMod},
@@ -273,7 +298,7 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kDetune, "Detune", "Bore", 0.0, 25.0, 0.0, kMod},
       {kHoles, "Holes", "Bore", 0.0, 5.0, 3.0, kGlobalChoice},
       {kTube, "Tube", "Bore", 0.0, 7.0, 0.0, kGlobalChoice},
-      {kSpread, "Spread", "Output", 0.0, 1.0, 0.5, kGlobalMod},
+      {kSpread, "Spread", "Output", -1.0, 1.0, 0.5, kGlobalMod},
       {kAir, "Air", "Output", 0.0, 1.0, 0.0, kMod},
       {kRoom, "Room", "Room", 0.0, 1.0, 0.15, kGlobalMod},
       {kRoomSize, "Room Size", "Room", 0.0, 1.0, 0.5, kGlobalMod},
@@ -290,6 +315,18 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kTail, "Tail", "View", 0.5, 8.0, 4.0, kLookKnob},
       {kLine, "Line", "View", 0.0, 1.0, 0.4, kLookKnob},
       {kGlow, "Glow", "View", 0.0, 1.0, 0.5, kLookKnob},
+      {kFlutter, "Flutter", "Articulation", 0.0, 1.0, 0.0, kMod},
+      {kFlutterRate, "Flutter Rate", "Articulation", 10.0, 40.0, 24.0, kMod},
+      {kPan, "Pan", "Output", -1.0, 1.0, 0.0, kMod},
+      {kUnison, "Unison", "Voice", 1.0, 4.0, 1.0, kGlobalMod | CLAP_PARAM_IS_STEPPED},
+      {kUnisonDetune, "Unison Detune", "Voice", 0.0, 50.0, 12.0, kMod},
+      {kHybridCutoff, "Hybrid Cutoff", "Hybrid", 80.0, 12000.0, 1800.0, kMod},
+      {kHybridResonance, "Hybrid Resonance", "Hybrid", 0.0, 1.0, 0.2, kMod},
+      {kHybridFilterBreath, "Hybrid Filter Breath", "Hybrid", 0.0, 1.0, 0.6, kMod},
+      {kLoopX, "Loop X", "View", 0.0, 6.0, 0.0, kLookFlags},
+      {kLoopY, "Loop Y", "View", 0.0, 6.0, 4.0, kLookFlags},
+      {kLoopSize, "Loop Size", "View", 0.0, 6.0, 4.0, kLookFlags},
+      {kLoopSizeMin, "Loop Size Min", "View", 0.1, 1.0, 0.25, kLookKnob},
    };
    for (const auto &d : fixed)
       p[d.id] = d;
@@ -352,7 +389,12 @@ inline const char *const *choiceNames(clap_id id, int &count) {
       return kSwellLoopNames;
    case kHybridModel:
       count = 5;
-      return kModelNames;
+      return kHybridWaveNames;
+   case kLoopX:
+   case kLoopY:
+   case kLoopSize:
+      count = 7;
+      return kLoopSourceNames;
    case kTongueType:
       count = 5;
       return kTongueTypeNames;
@@ -430,6 +472,11 @@ inline bool isPercent(clap_id id) {
    case kSwirl:
    case kLine:
    case kGlow:
+   case kFlutter:
+   case kPan:
+   case kHybridResonance:
+   case kHybridFilterBreath:
+   case kLoopSizeMin:
       return true;
    default:
       if (id >= kBusBase && id < kRouteBase)
@@ -501,6 +548,18 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kHoleCutoff:
       std::snprintf(out, size, "%.2f kHz", value / 1000.0);
       break;
+   case kHybridCutoff:
+      std::snprintf(out, size, value < 1000.0 ? "%.0f Hz" : "%.2f kHz", value < 1000.0 ? value : value / 1000.0);
+      break;
+   case kFlutterRate:
+      std::snprintf(out, size, "%.1f Hz", value);
+      break;
+   case kUnison:
+      std::snprintf(out, size, "%d", static_cast<int>(std::lround(value)));
+      break;
+   case kUnisonDetune:
+      std::snprintf(out, size, "%.0f ct", value);
+      break;
    case kRoomDecay:
    case kTail:
       std::snprintf(out, size, "%.1f s", value);
@@ -564,6 +623,8 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
       value = v / 100.0;
    else if (id == kHoleCutoff)
       value = v < 50.0 ? v * 1000.0 : v;
+   else if (id == kHybridCutoff)
+      value = std::strstr(text, "k") ? v * 1000.0 : v;
    else if (id == kLength)
       value = std::clamp(std::log10(std::max(v, 0.15) / 0.15), 0.0, 1.0);
    else

@@ -188,5 +188,61 @@ int main() {
          JCLAP_CHECK(peak < 40.0f);
       }
    }
+
+   // The lightest MPE touch: a soft strike and a little pressure arriving a moment later. Every
+   // instrument sounds (no pressure is too soft to play), and its start is no louder than where it
+   // settles (the tongue's burst follows the strike, so a soft touch doesn't click).
+   for (int m = 0; m < kModelCount; ++m) {
+      const int os = oversamplingFor(kRate);
+      BreathVoice v;
+      v.prepare(kRate * os);
+      v.setSeed(5);
+      VoiceSettings s;
+      s.model = m;
+      v.configure(s);
+      Decimator d;
+      d.prepare(os);
+      v.setExpression(0.0, 0.5);
+      v.start(m == kFlute ? 72 : 62, 0.1, 1.0);
+      Take t;
+      float buf[8];
+      for (int i = 0; i < static_cast<int>(0.6 * kRate); ++i) {
+         if (i == static_cast<int>(0.004 * kRate))
+            v.setExpression(0.08, 0.5);
+         for (int k = 0; k < os; ++k)
+            buf[k] = v.tick();
+         t.out.push_back(d.process(buf));
+      }
+      float onset = 0.0f;
+      for (int i = 0; i < static_cast<int>(0.05 * kRate); ++i)
+         onset = std::max(onset, std::fabs(t.out[static_cast<size_t>(i)]));
+      const double steady = t.rms(static_cast<size_t>(0.4 * kRate), t.out.size());
+      std::printf("%-8s at the lightest touch: %.1f dB, its start peaks at %.1f x the steady level\n", modelInfo(m).name,
+                  20.0 * std::log10(steady + 1e-12), onset / (1.414 * steady + 1e-12));
+      JCLAP_CHECK(steady > 0.003);
+      JCLAP_CHECK(onset < 3.0 * 1.414 * steady);
+   }
+
+   // Unison, the hybrid oscillator and a flutter tongue together: louder than nothing, always
+   // finite, and the unison copies don't add up past the single voice's level by more than they should.
+   for (int m = 0; m < kModelCount; ++m) {
+      VoiceSettings s;
+      s.vibDepth = 0.0;
+      const double one = play(m, 62, 0.6, 0.75, s).rms(14400, 28800);
+      s.unison = 4;
+      s.unisonDetune = 20.0;
+      s.hybridMix = 0.5;
+      s.hybridModel = 2;
+      s.flutter = 0.6;
+      const Take t = play(m, 62, 0.6, 0.75, s);
+      bool finite = true;
+      for (float y : t.out)
+         finite = finite && std::isfinite(y);
+      const double fat = t.rms(14400, 28800);
+      std::printf("%-8s unison 4 + hybrid + flutter: %.1f dB (one voice %.1f dB)\n", modelInfo(m).name,
+                  20.0 * std::log10(fat + 1e-12), 20.0 * std::log10(one + 1e-12));
+      JCLAP_CHECK(finite);
+      JCLAP_CHECK(fat > 0.3 * one && fat < 3.0 * one);
+   }
    return jclap::core::testResult();
 }

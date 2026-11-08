@@ -17,16 +17,19 @@ reflections of the real one) driven by a nonlinear exciter, the part the player 
 
 | Instrument | Exciter | Bore | What gives it its sound |
 |---|---|---|---|
-| **Flute** | an air jet crossing the embouchure hole, split in or out of the pipe by the sound in it | open at both ends: every harmonic | the jet takes longer to reach the edge when it's slow, so blowing harder pushes it up a register; edge noise; a 2nd harmonic that grows with the breath |
+| **Flute** | an air jet crossing the embouchure hole, split in or out of the pipe by the sound in it | open at both ends: every harmonic | the jet takes longer to reach the edge when it's slow, so blowing harder pushes it up a register; edge noise; nearly pure when soft, a strong 2nd and then 3rd harmonic as it's blown harder |
 | **Clarinet** | a single reed: a pressure-controlled valve (Kergomard / Wilson-Beavers), solved each sample with the pressure it makes | a cylinder closed at the reed: odd harmonics | the reed slamming shut at forte; the bell letting the highs out |
 | **Sax** | the same kind of reed, softer | a cone, as a split bore: every harmonic, overblowing at the octave | the mouthpiece's honk; growl when it's pushed |
-| **Oboe** | a stiff double reed | a narrow cone, darker | formants near 1.1 and 2.9 kHz from the bell and tone holes: nasal, not a soprano sax |
-| **Trumpet** | the lips: a mass on a spring blown open by the mouth pressure (outward striking), with the flow through them in closed form | a flared horn: resonances on every harmonic, none at DC | the wave steepening towards a shock at forte: the brassy blare |
+| **Oboe** | a stiff double reed, its two blades beating shut each cycle | a narrow cone, darker | the reed's buzz, richer the harder it's blown, through formants near 1.25 and 2.9 kHz with a thin fundamental: nasal, not a soprano sax |
+| **Trumpet** | the lips: a mass on a spring blown open by the mouth pressure (outward striking), with the flow through them in closed form | a flared horn: resonances on every harmonic, none at DC | the wave steepening on its way down the horn, more the harder it's blown, towards a shock at forte: the brassy blare |
 
 Every note plays in tune: the bore length for each model and note was measured offline by playing
 it and correcting the length until the pitch was within a cent, at the rates the voices run at, and
 baked into [`src/tuning_table.h`](src/tuning_table.h) along with a gain that levels each note's
-steady tone. Notes past an instrument's range play an octave (or more) in. The voices run at 88.2 kHz
+steady tone and the softest breath that sounds it (so the lightest pressure plays). A player keeps
+the note in tune as they blow softer or harder, and so do the voices: each instrument's drift in
+pitch with the breath was measured, and the bore is corrected for it. Notes past an instrument's
+range play an octave (or more) in. The voices run at 88.2 kHz
 or more (2x at 44.1 and 48 kHz) and are decimated once.
 
 ## A tour of the panel
@@ -54,9 +57,13 @@ shuts; the flute's jet overblows). The knobs are how it's blown:
 
 ![The HYBRID tab](docs/readme/hybrid.jpg)
 
-A second instrument blown by the same breath and layered with the first: a flute an octave over an
-oboe, a clarinet under a trumpet. **MIX** is how much of it, **OCTAVE** and **DETUNE** where it
-plays, **BREATH** how hard it's blown against the first. The exciter's knobs shape both.
+A plain subtractive voice blown by the same breath and layered with the instrument: a **Sine**,
+**Triangle**, **Saw**, **Square** or **Pulse** through a 24 dB lowpass. **MIX** is how much of it,
+**OCTAVE** and **DETUNE** where it plays, and **BREATH** how strongly its level follows the breath.
+**CUTOFF** and **RESONANCE** set the lowpass (it follows the note half way), and **OPEN** how far
+the breath opens it: soft is dark, hard is bright. The graph shows the lowpass and, faint, where the
+softest and hardest breath move it, with a dot for each sounding voice. Unison and vibrato shape it
+too.
 
 ### The bore
 
@@ -66,15 +73,18 @@ The graph is the bore's input impedance, worked out from the same loop the model
 partials of the loudest note as it sounds. Every knob changes the curve:
 
 - **TUNE** in cents. **LENGTH**: the tube below the open holes, whose own resonances ring above
-  their cutoff; **HOLES** picks how many are open, from Closed to Open.
+  their cutoff; **HOLES** picks how many are open, from Closed to Open. More open holes also let
+  more highs out of the bore itself, on every instrument: Closed is dark and muffled, Open bright.
 - **LOSS**: what the bore loses each trip: softer, darker, slower to speak.
 - **HOLE CUTOFF**: above it the tone holes let the sound out. The pitch stays put: the filter's delay
   is taken out of the bore.
 - **CONE** (sax and oboe): how far the cone is cut short at the reed. **BRASS** (trumpet): how far the
   wave steepens into a blare. Each is dimmed on the instruments it doesn't apply to.
 - **RADIATE**, **BARREL** and **WALL**: how the bell sends the highs out, the mouthpiece's cavity,
-  and how much the walls soak up (metal to bone). **TUBE** is the material's colour: grenadilla,
-  boxwood, maple, bamboo, brass, silver, resin or glass.
+  and how much the walls soak up (metal to bone). **TUBE** is what it's made of: grenadilla,
+  boxwood, maple, bamboo, brass, silver, resin or glass. Each has its own body resonance and tilt,
+  and soaks up more or less of every trip down the bore (wood warm and soft, metal and glass bright
+  and ringing), on every instrument.
 - **DETUNE**: each note a little off, by up to 25 cents: a section rather than one player.
 
 ### The player
@@ -83,8 +93,11 @@ partials of the loudest note as it sounds. Every knob changes the curve:
 
 The tongue's breath envelope. **STYLE** is how the note is tongued: Soft (a gentle "da"), Hard
 ("ta"), Double (every note tongued, even slurred), Flutter (a rolled R through the note) or Breath
-(no tongue at all). **ATTACK** and **RELEASE** shape the breath, and **HUMANIZE** makes every note a
-little different in pitch, breath, attack and vibrato.
+(no tongue at all). Whatever the style, the note's velocity is how hard it's tongued: a soft touch
+starts gently, with little of the tongue's burst and a slower attack, and a hard one with a crisp
+"ta". **ATTACK** and **RELEASE** shape the breath, and **HUMANIZE** makes every note a little
+different in pitch, breath, attack and vibrato. **FLUTTER** rolls the tongue through the note on
+any style (the Flutter style rolls it at least half way), and **RATE** is how fast.
 
 ![The VIBRATO tab](docs/readme/vibrato.jpg)
 
@@ -135,9 +148,12 @@ rises and curls away. **SMOKE / INK** and the palette set its look.
 ![The VOICE tab](docs/readme/voice.jpg)
 
 **VOICE** shows the eight voices, the family, and the meters: the breath coming in, and the output
-left and right. Along the bottom: **SPREAD** (low notes left, high right, as across a section),
-**GLIDE**, **BEND** (the MPE bend range), **TRANSP**, **ROOM**, **AIR** (the breath heard around the
-instrument, not through it), **LEVEL** and **MASTER**.
+left and right. Along the bottom: **SPREAD** (low notes left, high right, as across a section, or
+below zero the other way round), **PAN** (where the notes sit before the spread: map Key, Slide or
+Random onto it to place each note), **UNISON** (up to four copies of every voice, detuned against
+each other) and **U.DETUNE** (how far they spread, in cents), **GLIDE**, **BEND** (the MPE bend
+range), **TRANSP**, **ROOM**, **AIR** (the breath heard around the instrument, not through it),
+**LEVEL** and **MASTER**.
 
 ![The AIR tab](docs/readme/air.jpg)
 
@@ -154,8 +170,11 @@ Soft (overs saturate) or Hard (a peak limiter holds the output under full scale)
 
 **AIR** in the header gives the loops the whole window. **TURBULENCE** (how hard the air curls the
 smoke), **RISE** (how fast it rises), **SWIRL** (how tightly it curls into strands) and **TAIL** (how
-long it hangs), then the loops' **LINE** and **GLOW**. The look is kept with the project, not with
-presets, so changing preset leaves it alone.
+long it hangs), then the loops' **LINE** and **GLOW**. **PLACE** says what puts each loop where it
+is, as JSynth places its creatures: **ACROSS** (Pitch by default), **UP** (Breath) and **SIZE**
+(Breath) can each follow the note's Pitch, Strike, Press, Slide, Breath, a Random place of its own,
+or stay in the Centre, and **MIN SIZE** is the smallest a loop gets (25% of the largest by
+default). The look is kept with the project, not with presets, so changing preset leaves it alone.
 
 ![Ink, in Ember](docs/readme/ink.jpg)
 
@@ -167,7 +186,8 @@ presets, so changing preset leaves it alone.
 - **Breath** comes from MPE pressure, a breath controller (CC 2), velocity, or the BREATH IN
   parameter (modulate it from a CV, an LFO or automation: in Bitwig, route a eurorack CV in to it).
   BREATH FROM picks: **Auto** blows with the velocity until pressure or Breath In arrives and then
-  follows it (so it plays from a keyboard and from an MPE controller alike), **Press** only from
+  follows it within a few milliseconds (so it plays from a keyboard and from an MPE controller
+  alike; with pressure, velocity is only how hard the note is tongued), **Press** only from
   pressure, **Vel** only from velocity, **Input** only from Breath In, and **Mix** from Breath In
   times each note's own pressure (or velocity, until pressure arrives): the CV is the lungs for the
   whole chord, each finger how much of it its note lets through. CURVE shapes how pressure becomes

@@ -320,8 +320,9 @@ int main() {
    run(256);
    JCLAP_CHECK_EQ(sounding(panel), 0);
    JCLAP_CHECK_EQ(run.noteEnds.size(), 9u);
-   // Only the body's short ring (the tube below the holes) is left, and it's gone in 60 ms.
-   run.seconds(0.06);
+   // Only the body's short ring (the tube below the holes, and its material's resonance) is left,
+   // and it's gone in 150 ms.
+   run.seconds(0.15);
    run.seconds(0.1);
    JCLAP_CHECK(run.rms() == 0.0);
    run.noteEnds.clear();
