@@ -32,7 +32,7 @@ inline const std::vector<Preset> &factoryPresets() {
       constexpr double kSoft = kTongueSoft, kDouble = kTongueDouble, kFlutterTongue = kTongueFlutter,
                        kBreathTongue = kTongueBreath;
       constexpr double kJaw = kVibJaw, kLip = kVibLip;
-      constexpr double kClosed = 0, kLattice3 = 1, kLattice5 = 2, kLattice9 = 4, kOpen = 5;
+      constexpr double kLattice3 = 1, kLattice5 = 2, kLattice9 = 4, kOpen = 5;
       constexpr double kBoxwood = 1, kMaple = 2, kBamboo = 3, kBrassTube = 4, kSilver = 5, kGlass = 7;
       constexpr double kStraight = 1, kCup = 2, kHarmon = 3, kPlunger = 4, kBucket = 5;
       constexpr double kTriangle = 1, kSaw = 2, kSquare = 3, kPulse = 4;
@@ -52,17 +52,18 @@ inline const std::vector<Preset> &factoryPresets() {
                     {kRelease, 120}, {kRoom, 0.2}}});
       p.push_back({"Night Flute", "Flute",
                    {{kModel, F}, {kNoise, 1.5}, {kEdge, 0.7}, {kAperture, 0.65}, {kBright, -3}, {kVibDepth, 0.08},
-                    {kVibRate, 4.8}, {kAttack, 40}, {kRelease, 160}, {kTongueType, kSoft}, {kRoom, 0.3}}});
+                    {kVibRate, 4.8}, {kAttack, 30}, {kRelease, 160}, {kTongueType, kBreathTongue}, {kLevel, 3},
+                    {kRoom, 0.3}}});
       p.push_back({"Bamboo Air", "Flute",
-                   {{kModel, F}, {kTube, kBamboo}, {kNoise, 1.8}, {kEdge, 0.8}, {kVibDepth, 0.1}, {kVibRate, 4.6},
+                   {{kModel, F}, {kTube, kBamboo}, {kNoise, 1.8}, {kEdge, 0.8}, {kLevel, 4}, {kVibDepth, 0.1}, {kVibRate, 4.6},
                     {kVibDelay, 500}, {kAttack, 45}, {kRelease, 220}, {kVoiceMode, kLegatoMode}, {kGlide, 50},
                     {kRoom, 0.25}}});
       p.push_back({"Shakuhachi Bend", "Flute",
-                   {{kModel, F}, {kTube, kBamboo}, {kNoise, 2.0}, {kEdge, 1.2}, {kEmbouchure, 0.4}, {kSlide, 1.0},
+                   {{kModel, F}, {kTube, kBamboo}, {kNoise, 2.0}, {kEdge, 1.2}, {kSlide, 1.0}, {kFine, -6}, {kLevel, 4},
                     {kTongueType, kSoft}, {kAttack, 60}, {kRelease, 300}, {kVibDepth, 0.06}, {kVibPitch, 15},
                     {kVibRate, 4.0}, {kVibDelay, 700}, {kVoiceMode, kLegatoMode}, {kGlide, 120}, {kRoom, 0.3}}});
       p.push_back({"Tin Whistle", "Flute",
-                   {{kModel, F}, {kTune, 12}, {kTube, kBrassTube}, {kHoles, kOpen}, {kEdge, 1.3}, {kNoise, 1.1},
+                   {{kModel, F}, {kTune, 12}, {kFine, 6}, {kTube, kBrassTube}, {kHoles, kOpen}, {kEdge, 1.3}, {kNoise, 1.1},
                     {kKick, 0.35}, {kAttack, 10}, {kRelease, 70}, {kVibDepth, 0.0}, {kVibPitch, 10}, {kVibRate, 6.0},
                     {kVibDelay, 250}, {kVoiceMode, kLegatoMode}, {kGlide, 20}}});
       p.push_back({"Piccolo", "Flute",
@@ -115,13 +116,13 @@ inline const std::vector<Preset> &factoryPresets() {
       // the low register as the Iowa alto's. The vibrato is in the jaw, so in the pitch too. Tenor is a
       // fifth below the alto, baritone an octave, soprano a fourth above.
       const double S = kSaxModel;
-      constexpr double kSaxCone = 0.3;
+      constexpr double kSaxCone = 0.35;
       p.push_back({"Clean Alto", "Sax",
                    {{kModel, S}, {kCone, kSaxCone}, {kVibDepth, 0.02}, {kVibPitch, 8}, {kVibRate, 5.2},
                     {kVibDelay, 400}, {kRoom, 0.2}}});
       p.push_back({"Smoke Tenor", "Sax",
                    {{kModel, S}, {kTune, -7}, {kCone, kSaxCone}, {kNoise, 1.4}, {kEdge, 1.1}, {kBright, -1},
-                    {kVibDepth, 0.03}, {kVibPitch, 10}, {kVibRate, 5.0}, {kKick, 0.35}, {kRelease, 120}, {kRoom, 0.2}}});
+                    {kVibType, kJaw}, {kVibDepth, 0.03}, {kVibPitch, 10}, {kVibRate, 5.0}, {kKick, 0.35}, {kRelease, 120}, {kRoom, 0.2}}});
       p.push_back({"Growl Alto", "Sax",
                    {{kModel, S}, {kCone, kSaxCone}, {kGrowl, 0.55}, {kEdge, 1.7}, {kBreath, 1.15}, {kNoise, 1.4},
                     {kVibDepth, 0.03}, {kVibPitch, 12}, {kVibRate, 5.6}, {kKick, 0.4}, {kVoiceMode, kMonoMode}}});
@@ -163,14 +164,13 @@ inline const std::vector<Preset> &factoryPresets() {
                     {kVibDepth, 0.05}, {kVibPitch, 6}, {kVibRate, 5.6}, {kVoiceMode, kLegatoMode}, {kGlide, 25},
                     {kRoom, 0.25}}});
       p.push_back({"Oboe d'Amore", "Oboe",
-                   {{kModel, O}, {kTune, -3}, {kCone, kOboeCone}, {kHoles, kLattice5}, {kBright, -1.5},
+                   {{kModel, O}, {kTune, -3}, {kCone, kOboeCone}, {kBright, -1.5},
                     {kVibDepth, 0.04}, {kVibPitch, 7}, {kVibRate, 5.2}, {kRelease, 130}, {kRoom, 0.2}}});
       p.push_back({"Cor Anglais", "Oboe",
-                   {{kModel, O}, {kTune, -7}, {kCone, kOboeCone}, {kHoles, kLattice5}, {kBright, -3}, {kVibDepth, 0.04},
+                   {{kModel, O}, {kTune, -7}, {kHoles, kLattice5}, {kBright, -3}, {kKick, 0.15}, {kVibDepth, 0.04},
                     {kVibPitch, 7}, {kAttack, 30}, {kRelease, 160}, {kRoom, 0.25}}});
       p.push_back({"Bassoon", "Oboe",
-                   {{kModel, O}, {kTune, -24}, {kTube, kMaple}, {kKick, 0.35}, {kVibDepth, 0.03}, {kVibPitch, 5},
-                    {kBright, -2}, {kRoom, 0.2}}});
+                   {{kModel, O}, {kTune, -12}, {kKick, 0.2}, {kVibDepth, 0.03}, {kVibPitch, 5}, {kRoom, 0.2}}});
       p.push_back({"Contra Buzz", "Oboe",
                    {{kModel, O}, {kTune, -24}, {kTube, kMaple}, {kEdge, 2.0}, {kBreath, 1.15}, {kNoise, 1.4},
                     {kKick, 0.5}, {kVibDepth, 0.0}, {kVoiceMode, kMonoMode}}});
@@ -197,7 +197,7 @@ inline const std::vector<Preset> &factoryPresets() {
       p.push_back({"Brass Plume", "Trumpet",
                    {{kModel, T}, {kVibType, kLip}, {kVibDepth, 0.0}, {kVibPitch, 5}, {kVibDelay, 450}, {kRoom, 0.2}}});
       p.push_back({"Fanfare", "Trumpet",
-                   {{kModel, T}, {kEdge, 1.6}, {kBrass, 0.8}, {kKick, 0.4}, {kAttack, 10}, {kBright, 2},
+                   {{kModel, T}, {kEdge, 1.6}, {kBrass, 0.8}, {kKick, 0.4}, {kTongueType, kDouble}, {kAttack, 10}, {kBright, 2},
                     {kVibDepth, 0.0}, {kVibPitch, 0}, {kRoom, 0.25}}});
       p.push_back({"Straight Mute", "Trumpet",
                    {{kModel, T}, {kMute, kStraight}, {kVibType, kLip}, {kVibDepth, 0.0}, {kVibPitch, 5},
@@ -215,14 +215,14 @@ inline const std::vector<Preset> &factoryPresets() {
                     {routeParam(0, kRouteDestination), kDest<kMuteAmount>},
                     {routeParam(0, kRouteAmount), -0.8}}});
       p.push_back({"Bucket Ballad", "Trumpet",
-                   {{kModel, T}, {kMute, kBucket}, {kBreath, 0.9}, {kVibType, kLip}, {kVibDepth, 0.0}, {kVibPitch, 7},
+                   {{kModel, T}, {kMute, kBucket}, {kBreath, 0.9}, {kLevel, 4}, {kVibType, kLip}, {kVibDepth, 0.0}, {kVibPitch, 7},
                     {kVoiceMode, kLegatoMode}, {kGlide, 30}, {kRelease, 180}, {kRoom, 0.25}}});
       p.push_back({"Flugel Glow", "Trumpet",
-                   {{kModel, T}, {kCone, 0.9}, {kBright, -2}, {kBreath, 0.9}, {kAttack, 35}, {kRelease, 200},
+                   {{kModel, T}, {kCone, 0.9}, {kBright, -2}, {kBreath, 0.9}, {kLevel, 4}, {kAttack, 35}, {kRelease, 200},
                     {kVibType, kLip}, {kVibDepth, 0.0}, {kVibPitch, 6}, {kVoiceMode, kLegatoMode}, {kGlide, 30},
                     {kRoom, 0.25}}});
       p.push_back({"French Horn", "Trumpet",
-                   {{kModel, T}, {kTune, -7}, {kCone, 0.8}, {kRadiate, 0.35}, {kBright, -4}, {kAttack, 40},
+                   {{kModel, T}, {kTune, -7}, {kCone, 0.8}, {kRadiate, 0.35}, {kBright, -4}, {kLevel, 3}, {kAttack, 40},
                     {kRelease, 250}, {kVibDepth, 0.0}, {kVibPitch, 0}, {kRoom, 0.3}}});
       p.push_back({"Trombone Slide", "Trumpet",
                    {{kModel, T}, {kTune, -12}, {kEdge, 1.2}, {kVoiceMode, kLegatoMode}, {kGlide, 160},
@@ -257,16 +257,16 @@ inline const std::vector<Preset> &factoryPresets() {
                    {{kModel, A}, {kBreath, 1.5}, {kEdge, 2.0}, {kNoise, 1.8}, {kCone, 0.15}, {kFlutter, 0.25},
                     {kAttack, 10}, {kRelease, 150}, {kVibPitch, 30}, {kVibRate, 7.5}, {kVibDelay, 0},
                     {kVoiceMode, kMonoMode}}});
-      // A Harmon in the alien's flare: its ghost buzzes through the stem.
-      p.push_back({"Muted Probe", "Alien",
-                   {{kModel, A}, {kBreath, 1.3}, {kMute, kHarmon}, {kEdge, 1.2}, {kAttack, 25}, {kRelease, 300},
-                    {kVibDepth, 0.0}, {kVibPitch, 8}, {kVibRate, 5.5}, {kRoom, 0.3}}});
+      // A rolled tongue through the coils: the two reeds chopped against each other.
+      p.push_back({"Ion Flutter", "Alien",
+                   {{kModel, A}, {kBreath, 1.1}, {kCone, 0.7}, {kTongueType, kFlutterTongue}, {kFlutter, 0.5},
+                    {kFlutterRate, 18}, {kAttack, 20}, {kRelease, 250}, {kVibDepth, 0.0}, {kRoom, 0.3}}});
 
       // Pads: the HYBRID voice as a pad under the instrument. Its Follow is low, so its envelope (not
       // the breath) plays it: it swells in behind the note and rings on after the breath stops.
       p.push_back({"Flute Halo", "Pad",
                    {{kModel, F}, {kVibDepth, 0.06}, {kRelease, 250}, {kHybridModel, kTriangle}, {kHybridMix, 0.4},
-                    {kHybridAttack, 0.78}, {kHybridDecay, 0.7}, {kHybridSustain, 0.8}, {kHybridRelease, 0.82},
+                    {kHybridAttack, 0.78}, {kHybridRelease, 0.82},
                     {kHybridFollow, 0.1}, {kHybridCutoff, 1600}, {kHybridFilterEnv, 0.2}, {kRoom, 0.4},
                     {kRoomDecay, 3.0}}});
       p.push_back({"Hollow Pad", "Pad",
