@@ -531,23 +531,32 @@ void updateChecks() {
    up::setStateFileForTesting(file);
    JCLAP_CHECK(!up::available());
 
-   // Every window that opens checks, even straight after another check, and even when the last one
-   // failed. Offline here, so the file keeps what was written above.
+   // The first window this session checks, even though the file says another session just did;
+   // closing and reopening it doesn't check again, even when that check failed. Turning checking
+   // back on lets the next window check. Offline here, so the file keeps what was written above.
    std::atomic<int> fetches{0};
    up::setFetchForTesting([&fetches](std::string &) {
       ++fetches;
       return false;
    });
+   const auto waitFor = [&fetches](int n) {
+      for (int i = 0; i < 500 && fetches < n; ++i)
+         std::this_thread::sleep_for(std::chrono::milliseconds(2));
+   };
    for (int open = 1; open <= 3; ++open) {
       const auto handle = up::startChecking();
-      for (int i = 0; i < 500 && fetches < open; ++i)
-         std::this_thread::sleep_for(std::chrono::milliseconds(2));
-      JCLAP_CHECK_EQ(fetches.load(), open);
+      waitFor(1);
    } // closing the window waits for the check
+   JCLAP_CHECK_EQ(fetches.load(), 1);
    up::setEnabled(false);
    { const auto handle = up::startChecking(); } // turned off: no check
-   JCLAP_CHECK_EQ(fetches.load(), 3);
+   JCLAP_CHECK_EQ(fetches.load(), 1);
    up::setEnabled(true);
+   for (int open = 1; open <= 2; ++open) {
+      const auto handle = up::startChecking();
+      waitFor(2);
+   }
+   JCLAP_CHECK_EQ(fetches.load(), 2);
    JCLAP_CHECK(up::readState(file).release == newer);
 
    {

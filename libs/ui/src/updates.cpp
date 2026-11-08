@@ -301,6 +301,8 @@ struct Checker {
    bool loaded = false;
    State state;
    int users = 0;
+   // One check per session (until the host quits), made when the first window opens.
+   bool tried = false;
    bool running = false;
    // Stands in for the network in tests (setFetchForTesting()).
    std::function<bool(std::string &)> fakeFetch;
@@ -350,12 +352,13 @@ void check() {
    c.running = false;
 }
 
-// Checks now, unless checking is off, no window is open, or a check is already under way.
+// Checks now, unless checking is off, no window is open, or this session has already checked.
 void startLocked(Checker &c) {
-   if (c.users <= 0 || c.running || !c.state.enabled)
+   if (c.users <= 0 || c.running || c.tried || !c.state.enabled)
       return;
    if (c.worker.joinable())
       c.worker.join(); // the last one has finished: it cleared `running`
+   c.tried = true;
    c.running = true;
    c.cancel = false;
    try {
@@ -374,6 +377,9 @@ void release() {
       if (--c.users > 0)
          return;
       c.cancel = true;
+      // A check cut short is tried again the next time a window opens.
+      if (c.running)
+         c.tried = false;
       worker = std::move(c.worker);
    }
    cancelFetch();
@@ -582,8 +588,10 @@ void setEnabled(bool on) {
       loadLocked(c);
    c.state.enabled = on;
    saveLocked(c);
-   if (on)
+   if (on) {
+      c.tried = false;
       startLocked(c);
+   }
 }
 
 std::shared_ptr<void> startChecking() {
@@ -594,7 +602,7 @@ std::shared_ptr<void> startChecking() {
       // Pick up what other plugins (or other hosts) have written since.
       if (!c.running)
          loadLocked(c);
-      // Every time a window opens, so a new release shows the first time a panel opens after it.
+      // The first window this session checks, however recently another session did.
       startLocked(c);
    }
    return std::shared_ptr<void>(&c, [](void *) { release(); });

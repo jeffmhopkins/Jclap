@@ -38,7 +38,7 @@ struct Window::Impl {
    visage::ApplicationWindow app;
    std::unique_ptr<visage::Frame> root;
    WindowOptions options;
-   // Held while shown on screen: checks for a newer release each time it opens.
+   // Held while shown on screen: checks for a newer release, once per session.
    std::shared_ptr<void> updateCheck;
 };
 
