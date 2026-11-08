@@ -561,7 +561,11 @@ public:
          float sum = 0.0f;
          for (int u = 0; u < unison_; ++u) {
             len_[u] += lenStep_[u];
-            sum += models_[u][settings_.model]->tick(blown, static_cast<float>(emb_), len_[u], tongue);
+            // A copy that's still waiting to come in (see the unison's note-on) isn't blown yet.
+            const bool waiting = stagger_[u] > 0;
+            stagger_[u] -= waiting ? 1 : 0;
+            sum += models_[u][settings_.model]->tick(waiting ? 0.0f : blown, static_cast<float>(emb_), len_[u],
+                                                     waiting ? 0.0f : tongue);
          }
          y = mute_.tick(sum * unisonGain_ * static_cast<float>(gainNow_) * (1.0f - mix));
       }
@@ -893,6 +897,12 @@ private:
                models_[u][settings_.model]->reset();
             len_[u] = lu;
             lenStep_[u] = 0.0;
+            // The copies come in a few ms apart, as players in a section do: copies that started
+            // together would beat in step, so the unison's level would sink and swell with them.
+            // (Copies with no detune play as one, in step; so the spread grows with the detune.)
+            static const double kStagger[kMaxUnison] = {0.0, 0.0047, 0.0029, 0.0071};
+            const double spread = std::clamp(std::fabs(live_.unisonDetune) / 10.0, 0.0, 1.0);
+            stagger_[u] = static_cast<int>(kStagger[u] * spread * fs_);
          } else {
             lenStep_[u] = (lu - len_[u]) / kControl;
          }
@@ -1233,6 +1243,7 @@ private:
    bool pressureSeen_ = false;
    double velocity_ = 1.0, pressure_ = 0.0, timbre_ = 0.5, gain_ = 1.0;
    double pitch_ = 60.0, pitchNow_ = 60.0, emb_ = 0.5;
+   int stagger_[kMaxUnison] = {};
    double len_[kMaxUnison] = {-1.0, -1.0, -1.0, -1.0}, lenStep_[kMaxUnison] = {}, gainNow_ = 0.0, gainTarget_ = 0.0;
    double attackCoef_ = 0.01, releaseCoef_ = 0.001, glideCoef_ = 0.01;
    double fallCoef_ = 0.001, stopCoef_ = 0.01, gainCoef_ = 0.002, envCoef_ = 0.0003;
