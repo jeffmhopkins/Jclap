@@ -15,7 +15,7 @@ trap 'rm -rf "$tmp"' EXIT
 shots=(
    "panel    0 0 0 0 0 0   0   0   1648 940  -"
    "exciter  0 0 0 0 0 0   10  58  892  344  -"
-   "hybrid   0 0 0 1 0 0   10  58  892  344  preset=Pastoral Hybrid_Instrument=Flute Hybrid_Mix=35 Hybrid_Octave=1"
+   "hybrid   0 0 0 1 0 0   10  58  892  344  preset=Pastoral Hybrid_Wave=Saw Hybrid_Mix=35 Hybrid_Octave=1"
    "map      0 0 2 0 0 0   0   0   1648 404  -"
    "bore     0 0 0 0 0 0   10  400 892  328  preset=Brass_Plume"
    "player   0 0 0 0 0 0   10  726 892  208  Tongue=Flutter Humanize=30"

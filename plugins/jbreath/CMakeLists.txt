@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.1.0)
+jclap_plugin_version(0.2.0)
 
 jclap_add_plugin(jbreath
    OUTPUT_NAME "JBreath"
@@ -16,7 +16,7 @@ target_link_libraries(jbreath-tests PRIVATE jclap::ui jclap::dsp)
 # The instruments alone: tuning, loudness, articulation and stability, with no host.
 jclap_add_test(jbreath-voice-tests SOURCES tests/test_voice.cpp)
 target_include_directories(jbreath-voice-tests PRIVATE src)
-target_link_libraries(jbreath-voice-tests PRIVATE jclap::core)
+target_link_libraries(jbreath-voice-tests PRIVATE jclap::core jclap::dsp)
 
 # The smoke's fluid solver alone, and its thread.
 jclap_add_test(jbreath-vapor-tests SOURCES tests/test_vapor.cpp)
@@ -27,7 +27,7 @@ if(JCLAP_BUILD_TOOLS)
    # Offscreen render of the panel, for docs and visual checks. Needs a GPU (or a software Vulkan driver).
    add_executable(jbreath-screenshot tools/screenshot.cpp src/editor.cpp)
    target_include_directories(jbreath-screenshot PRIVATE src)
-   target_link_libraries(jbreath-screenshot PRIVATE jclap::ui)
+   target_link_libraries(jbreath-screenshot PRIVATE jclap::ui jclap::dsp)
    jclap_add_screenshot_test(jbreath-screenshot-test TOOL jbreath-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel.png)
    # Bakes src/tuning_table.h: jbreath-tune > src/tuning_table.h

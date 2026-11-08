@@ -61,6 +61,8 @@ constexpr unsigned kCard = 0xff1a1e25;
 constexpr unsigned kCardBorder = 0xff2a303a;
 constexpr unsigned kWell = 0xff111419;
 constexpr unsigned kPress = 0xffff6fd2;
+// The HYBRID tab's subtractive voice.
+constexpr unsigned kSynthColor = 0xffb98bff;
 
 // Each instrument's family colour: the jet cyan, the single reeds orange, the double reed violet,
 // the lips coral.
@@ -128,17 +130,23 @@ public:
    void draw(visage::Canvas &c) override {
       const float k = s(), rowH = rowHeight();
       const int selected = std::clamp(static_cast<int>(host_.paramValue(param_) + 0.5), 0, kModelCount - 1);
+      const bool waves = param_ == kHybridModel;
+      static const char *const kWaveSubtitles[] = {"Pure and round", "Soft, odd harmonics", "Bright, every harmonic",
+                                                   "Hollow, odd harmonics", "Nasal, a quarter wide"};
       for (int i = 0; i < kModelCount; ++i) {
          const float y = i * (rowH + kGap);
-         const unsigned color = modelColor(i);
+         const unsigned color = waves ? kSynthColor : modelColor(i);
          const bool on = i == selected;
          c.setColor(on ? glow(color, 0.16f) : visage::Color(i == hover_ ? 0xff262c35 : 0xff1f242c));
          c.roundedRectangle(0, y * k, width(), rowH * k, 6 * k);
          c.setColor(on ? glow(color, 0.85f, 1.2f) : visage::Color(0x18ffffff));
          c.roundedRectangleBorder(0, y * k, width(), rowH * k, 6 * k, (on ? 1.5f : 1.0f) * k);
-         label(c, kModelNames[i], 12, y + 5, 140, on ? color : kText, 15.0f);
-         label(c, kModelSubtitles[i], 12, y + 25, 150, kDim, 10.5f);
-         drawIcon(c, i, (designW() - 30) * k, (y + rowH / 2) * k, k, on ? color : kDim);
+         label(c, waves ? kHybridWaveNames[i] : kModelNames[i], 12, y + 5, 140, on ? color : kText, 15.0f);
+         label(c, waves ? kWaveSubtitles[i] : kModelSubtitles[i], 12, y + 25, 150, kDim, 10.5f);
+         if (waves)
+            drawWave(c, i, (designW() - 30) * k, (y + rowH / 2) * k, k, on ? color : kDim);
+         else
+            drawIcon(c, i, (designW() - 30) * k, (y + rowH / 2) * k, k, on ? color : kDim);
       }
    }
 
@@ -170,6 +178,30 @@ private:
    int rowAt(float y) const {
       const int i = static_cast<int>(y / s() / (rowHeight() + kGap));
       return i >= 0 && i < kModelCount ? i : -1;
+   }
+
+   // Two cycles of the wave, 36 x 16 design units, centred on (x, y).
+   static void drawWave(visage::Canvas &c, int wave, float x, float y, float k, unsigned color) {
+      visage::Path path;
+      constexpr int n = 64;
+      for (int i = 0; i <= n; ++i) {
+         const double t = 2.0 * i / n, ph = t - std::floor(t);
+         double v = 0;
+         switch (wave) {
+         case 0: v = std::sin(2 * kPi * ph); break;
+         case 1: v = 1 - 4 * std::fabs(ph - 0.5); break;
+         case 2: v = 2 * ph - 1; break;
+         case 3: v = ph < 0.5 ? 1 : -1; break;
+         default: v = ph < 0.25 ? 1 : -1; break;
+         }
+         const float px = x + (-18 + 36.0f * i / n) * k, py = y - static_cast<float>(v) * 7 * k;
+         if (i == 0)
+            path.moveTo(px, py);
+         else
+            path.lineTo(px, py);
+      }
+      c.setColor(color);
+      c.fill(path.stroke(1.6f * k));
    }
 
    // The instrument, side on, in the row's colour (the SVGs draw in currentColor).
@@ -205,6 +237,88 @@ private:
 
 // The exciter's valve: how the air through it answers the pressure across it, with a dot where
 // each sounding voice is blowing.
+// The HYBRID voice's lowpass: its response from 20 Hz to 20 kHz, where it sits now and how far
+// the breath opens it, with each sounding voice's cutoff as a dot.
+class FilterGraph : public Drawn {
+public:
+   explicit FilterGraph(float w) : Drawn(w) {}
+   void set(double cutoff, double resonance, double breathAmount, std::vector<float> opens) {
+      cutoff_ = cutoff;
+      resonance_ = resonance;
+      amount_ = breathAmount;
+      opens_ = std::move(opens);
+      redraw();
+   }
+   void draw(visage::Canvas &c) override {
+      well(c);
+      const float k = s(), W = width() / k, H = height() / k;
+      const float x0 = 14, x1 = W - 14, y0 = 34, y1 = H - 26;
+      c.setColor(visage::Color(0x0effffff));
+      for (double f : {100.0, 1000.0, 10000.0})
+         c.fill((x0 + (x1 - x0) * xOf(f)) * k, y0 * k, 1 * k, (y1 - y0) * k);
+      label(c, "LOWPASS  ·  24 dB", 12, 8, W - 24, kDim, 10.5f);
+      label(c, "100 Hz", x0 + (x1 - x0) * xOf(100) - 30, H - 20, 60, kFaint, 10.0f, visage::Font::kCenter);
+      label(c, "1 kHz", x0 + (x1 - x0) * xOf(1000) - 30, H - 20, 60, kFaint, 10.0f, visage::Font::kCenter);
+      label(c, "10 kHz", x0 + (x1 - x0) * xOf(10000) - 30, H - 20, 60, kFaint, 10.0f, visage::Font::kCenter);
+      const auto curve = [&](double cut, visage::Path &line, visage::Path *area) {
+         constexpr int n = 140;
+         for (int i = 0; i <= n; ++i) {
+            const double x = static_cast<double>(i) / n, f = 20.0 * std::pow(1000.0, x);
+            const float px = (x0 + (x1 - x0) * static_cast<float>(x)) * k;
+            const float py = (y1 - (y1 - y0) * static_cast<float>(std::clamp((dbAt(f, cut) + 48.0) / 60.0, 0.0, 1.0))) * k;
+            if (i == 0) {
+               line.moveTo(px, py);
+               if (area) {
+                  area->moveTo(px, y1 * k);
+                  area->lineTo(px, py);
+               }
+            } else {
+               line.lineTo(px, py);
+               if (area)
+                  area->lineTo(px, py);
+            }
+         }
+         if (area) {
+            area->lineTo(x1 * k, y1 * k);
+            area->close();
+         }
+      };
+      // How far the breath opens it: the curve at the softest and the hardest breath, faint.
+      for (double blow : {0.0, 1.0}) {
+         visage::Path line;
+         curve(cutoff_ * std::pow(2.0, amount_ * 6.0 * (blow - 0.7)), line, nullptr);
+         c.setColor(visage::Color(0x30ffffff));
+         c.fill(line.stroke(1.0f * k));
+      }
+      visage::Path line, area;
+      curve(cutoff_, line, &area);
+      c.setColor(visage::Brush::vertical(glow(kSynthColor, 0.35f), glow(kSynthColor, 0.02f)));
+      c.fill(area);
+      c.setColor(glow(kSynthColor, 0.95f, 1.3f));
+      c.fill(line.stroke(2.0f * k));
+      for (float open : opens_) {
+         const double f = std::clamp(cutoff_ * open, 20.0, 20000.0);
+         const float cx = (x0 + (x1 - x0) * xOf(f)) * k;
+         const float cy = (y1 - (y1 - y0) * static_cast<float>(std::clamp((dbAt(f, cutoff_ * open) + 48.0) / 60.0, 0.0, 1.0))) * k;
+         c.setColor(ui::steadyGlow(visage::Color(kSynthColor).withAlpha(0.5f), {cx, cy}, 14 * k));
+         c.circle(cx - 14 * k, cy - 14 * k, 28 * k);
+         c.setColor(visage::Color(0xffffffff));
+         c.circle(cx - 3.5f * k, cy - 3.5f * k, 7 * k);
+      }
+   }
+
+private:
+   static float xOf(double f) { return static_cast<float>(std::log(f / 20.0) / std::log(1000.0)); }
+   // A 4-pole lowpass's level at f in dB, its peak set by the resonance.
+   double dbAt(double f, double cut) const {
+      const double r = f / std::max(cut, 1.0), q = 0.5 + 6.0 * resonance_ * resonance_;
+      const double one = 1.0 / std::sqrt((1 - r * r) * (1 - r * r) + (r / q) * (r / q));
+      return 2.0 * 20.0 * std::log10(one + 1e-9);
+   }
+   double cutoff_ = 1800, resonance_ = 0.2, amount_ = 0.6;
+   std::vector<float> opens_;
+};
+
 class ValveGraph : public Drawn {
 public:
    explicit ValveGraph(float w) : Drawn(w) {}
@@ -764,7 +878,16 @@ public:
       float hz, breath, level;
       bool releasing;
       std::vector<float> samples;
+      // The note's touch: strike (velocity), press and slide, 0..1, and a random -1..1 of its own.
+      float strike = 0.5f, press = 0.0f, slide = 0.5f, random = 0.0f;
    };
+   // What places the loops along each axis and sets their size (LoopSource), and the smallest size,
+   // as a share of the largest.
+   struct Placing {
+      int x = kLoopPitch, y = kLoopBreath, size = kLoopBreath;
+      float sizeMin = 0.25f;
+   };
+   Placing placing;
 
    // A new size in design units, after the panel moved it.
    void resize(float w, float h) {
@@ -792,10 +915,12 @@ public:
       for (const Loop &l : loops_) {
          Place &p = places_[l.slot];
          live[l.slot] = true;
-         // Low notes to the left, high to the right; alternate voices a row apart, and the harder
-         // a voice blows the higher it floats.
-         const float tx = std::clamp((l.note - 36) / 52.0f, 0.0f, 1.0f);
-         const float ty = (l.slot % 2 ? 0.66f : 0.42f) - 0.12f * std::min(1.0f, l.breath);
+         // Each axis from its source (by default low notes to the left, high to the right, and the
+         // harder a voice blows the higher it floats); alternate voices a little apart, so two
+         // notes alike don't sit on each other.
+         const float apart = l.slot % 2 ? 1.0f : -1.0f;
+         const float tx = std::clamp(0.06f + 0.88f * along(placing.x, l) + (placing.x == kLoopPitch ? 0.0f : 0.03f * apart), 0.0f, 1.0f);
+         const float ty = std::clamp(0.82f - 0.6f * along(placing.y, l) + 0.08f * apart, 0.08f, 0.92f);
          if (!p.seen) {
             p = {tx, ty, true};
          } else {
@@ -896,7 +1021,8 @@ private:
       sh.breath = l.breath;
       sh.note = l.note;
       sh.fade = l.releasing ? 0.45f : 1.0f;
-      sh.radius = (26 + 44 * std::min(1.0f, l.breath)) * std::min(1.5f, H / 494.0f);
+      const float size = placing.sizeMin + (1.0f - placing.sizeMin) * along(placing.size, l);
+      sh.radius = 70 * size * std::min(1.5f, H / 494.0f);
       sh.pts.clear();
       const int n = static_cast<int>(l.samples.size());
       const double period = rate_ / std::max(20.0f, l.hz);
@@ -926,6 +1052,19 @@ private:
          const float X = a * ca + z * sa, Z = -a * sa + z * ca;
          const float Y = b * ct - Z * st;
          sh.pts.push_back({sh.cx + X * sh.radius, sh.cy - Y * sh.radius});
+      }
+   }
+
+   // Where a source puts a loop along an axis, 0..1.
+   static float along(int source, const Loop &l) {
+      switch (source) {
+      case kLoopPitch: return std::clamp((l.note - 36) / 52.0f, 0.0f, 1.0f);
+      case kLoopStrike: return std::clamp(l.strike, 0.0f, 1.0f);
+      case kLoopPress: return std::clamp(l.press, 0.0f, 1.0f);
+      case kLoopSlide: return std::clamp(l.slide, 0.0f, 1.0f);
+      case kLoopBreath: return std::clamp(l.breath, 0.0f, 1.0f);
+      case kLoopRandom: return 0.5f + 0.5f * std::clamp(l.random, -1.0f, 1.0f);
+      default: return 0.5f;
       }
    }
 
@@ -1512,6 +1651,10 @@ public:
       c.roundedRectangleBorder(0, 0, width(), height(), 8 * k, 1 * k);
       label(c, "VAPOR", 16, 10, 200, kDim, 11.0f);
       label(c, "LOOPS", 16 + 4 * 92, 10, 200, kDim, 11.0f);
+      label(c, "PLACE", 584, 10, 200, kDim, 11.0f);
+      label(c, "ACROSS", 584, 40, 60, kDim, 10.0f);
+      label(c, "UP", 584, 74, 60, kDim, 10.0f);
+      label(c, "SIZE", 584, 108, 60, kDim, 10.0f);
    }
 };
 
@@ -1522,6 +1665,21 @@ public:
       auto &presets = add<ui::PresetBar>({416, 11, 340, 30}, factoryPresets(), kPresetFormat, host_);
       presets.setAccent(0xfff28c28);
       presets.defaults = defaultValues();
+      // A preset sets the sound; the AIR view's look stays as it is.
+      presets.onLoad = [this](const ui::Preset &p) {
+         const std::vector<double> d = defaultValues();
+         std::vector<double> values = d;
+         for (const auto &[id, v] : p.values)
+            if (id < values.size())
+               values[id] = v;
+         for (clap_id id = 0; id < values.size(); ++id) {
+            if (isLookParam(id) || host_.paramValue(id) == values[id])
+               continue;
+            host_.beginEdit(id);
+            host_.setParam(id, values[id]);
+            host_.endEdit(id);
+         }
+      };
       presets.currentName = [this] { return host_.presetName(); };
       presets.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
       (void)notice;
@@ -1598,6 +1756,10 @@ public:
          if (v.note < 0)
             continue;
          BreathLoops::Loop l{i, v.note, v.hz, v.breath, v.level, v.releasing, std::vector<float>(kLoopSamples)};
+         l.strike = v.sources[kSrcStrike];
+         l.press = v.pressure;
+         l.slide = v.timbre;
+         l.random = v.sources[kSrcRandom];
          host_.readVoice(i, l.samples.data(), l.samples.size());
          if (!v.releasing) {
             breaths.push_back(v.breath);
@@ -1617,6 +1779,12 @@ public:
       look.line = static_cast<float>(host_.paramValue(kLine));
       look.glow = static_cast<float>(host_.paramValue(kGlow));
       loops_->look = look;
+      BreathLoops::Placing placing;
+      placing.x = static_cast<int>(host_.paramValue(kLoopX) + 0.5);
+      placing.y = static_cast<int>(host_.paramValue(kLoopY) + 0.5);
+      placing.size = static_cast<int>(host_.paramValue(kLoopSize) + 0.5);
+      placing.sizeMin = static_cast<float>(host_.paramValue(kLoopSizeMin));
+      loops_->placing = placing;
 
       // The rest of the panel every other frame, and only what's showing.
       if ((tick_++ & 1) == 0 && !air_) {
@@ -1633,8 +1801,16 @@ public:
             valve_->set(model, host_.paramModulated(kEmbouchure), breaths, host_.paramModulated(kStiffness),
                         host_.paramModulated(kAperture));
          else
-            hybridValve_->set(static_cast<int>(host_.paramValue(kHybridModel) + 0.5), host_.paramModulated(kEmbouchure),
-                              breaths, host_.paramModulated(kStiffness), host_.paramModulated(kAperture));
+         {
+            // Where each voice's breath has the lowpass now (as the voice works it out).
+            const ModelInfo &info = modelInfo(model);
+            const double full = std::max(info.breathOffset + info.breathScale * host_.paramModulated(kBreath), 0.1);
+            const double amount = host_.paramModulated(kHybridFilterBreath);
+            std::vector<float> opens;
+            for (float b : breaths)
+               opens.push_back(static_cast<float>(std::pow(2.0, amount * 6.0 * (std::clamp(b / full, 0.0, 1.5) - 0.7))));
+            filterGraph_->set(host_.paramModulated(kHybridCutoff), host_.paramModulated(kHybridResonance), amount, opens);
+         }
          bore_->set(model, hz, loudest >= 0, partials, host_.paramModulated(kLoss), host_.paramModulated(kHoleCutoff) / 1300.0);
          const bool cone = model == kSax || model == kOboe, brass = model == kTrumpet;
          coneKnob_->setAccent(cone ? color : kFaint);
@@ -1811,17 +1987,25 @@ private:
       rangeText_ = &tabs.addToPage(0, add<ui::Label>({236, 370, 646, 16}, rangeText(modelOf(host_)), kFaint,
                                                      visage::Font::kLeft, 0.68f));
 
-      // HYBRID: a second instrument on the same breath.
+      // HYBRID: a plain subtractive voice, blown with the same breath.
       auto &hlist = tabs.addToPage(1, add<InstrumentList>({32, 104, 190, 276}, 190.0f, host_, kHybridModel));
-      tips_.add(hlist, "HYBRID: a second instrument, blown with the same breath and layered with the first.");
-      hybridValve_ = &tabs.addToPage(1, add<ValveGraph>({236, 104, 306, 262}, 306.0f));
-      const auto htop = ui::row({556, 96, 326, 120}, 3), hbottom = ui::row({556, 222, 326, 120}, 3);
-      tabs.addToPage(1, familyKnob(kHybridMix, "MIX", htop[0], "How much of the second instrument: 0 is only the first, 100% only the second."));
-      tabs.addToPage(1, familyKnob(kHybridOctave, "OCTAVE", htop[1], "Where the second instrument plays, in octaves from the note."));
-      tabs.addToPage(1, familyKnob(kHybridDetune, "DETUNE", htop[2], "The second instrument's detune, in cents: a little beats against the first."));
-      tabs.addToPage(1, familyKnob(kHybridBreath, "BREATH", hbottom[0], "How hard the second instrument is blown, against the first."));
+      tips_.add(hlist, "HYBRID: a plain oscillator through a lowpass, blown with the same breath and layered with the instrument.");
+      filterGraph_ = &tabs.addToPage(1, add<FilterGraph>({236, 104, 306, 262}, 306.0f));
+      tips_.add(*filterGraph_, "The lowpass, and (faint) where the softest and hardest breath move it. Each dot is a sounding voice.");
+      const auto htop = ui::row({556, 96, 326, 120}, 4), hbottom = ui::row({556, 222, 326, 120}, 4);
+      const auto synthKnob = [&](clap_id id, const char *name, ui::Rect cell, const char *tip) {
+         ui::Knob &k = knob(id, name, kSynthColor, cell, tip);
+         tabs.addToPage(1, k);
+      };
+      synthKnob(kHybridMix, "MIX", htop[0], "How much of the oscillator: 0 is only the instrument, 100% only the oscillator.");
+      synthKnob(kHybridOctave, "OCTAVE", htop[1], "Where the oscillator plays, in octaves from the note.");
+      synthKnob(kHybridDetune, "DETUNE", htop[2], "The oscillator's detune, in cents: a little beats against the instrument.");
+      synthKnob(kHybridBreath, "BREATH", htop[3], "How strongly the oscillator's level follows the breath: higher swells sooner.");
+      synthKnob(kHybridCutoff, "CUTOFF", hbottom[0], "The lowpass's cutoff at a middling breath (it follows the note half way).");
+      synthKnob(kHybridResonance, "RESONANCE", hbottom[1], "The lowpass's peak at its cutoff.");
+      synthKnob(kHybridFilterBreath, "OPEN", hbottom[2], "How far the breath opens the lowpass: soft is dark, hard is bright.");
       tabs.addToPage(1, add<ui::Label>({236, 370, 646, 16},
-                                       "BOTH ARE BLOWN BY ONE BREATH  ·  THE EXCITER'S KNOBS SHAPE BOTH", kFaint,
+                                       "BLOWN BY THE SAME BREATH  ·  UNISON AND VIBRATO SHAPE IT TOO", kFaint,
                                        visage::Font::kLeft, 0.68f));
       tabs.select(0);
    }
@@ -1866,11 +2050,17 @@ private:
       tips_.add(tabs.addToPage(0, choiceBox(kTongueType, {378, 796, 130, 26}, 0xfff28c28)),
                 "Soft: a gentle \"da\". Hard: a crisp \"ta\". Double: every note tongued, even slurred. "
                 "Flutter: a rolled R through the note. Breath: no tongue, the air just starts.");
-      const auto cells = ui::row({520, 784, 364, 120}, 3);
-      tabs.addToPage(0, familyKnob(kAttack, "ATTACK", cells[0], "How fast the breath rises."));
-      tabs.addToPage(0, familyKnob(kRelease, "RELEASE", cells[1], "How fast the breath dies away after the note."));
-      tabs.addToPage(0, familyKnob(kHumanize, "HUMANIZE", cells[2],
-                                   "No two notes the same: each a little off in pitch, breath, attack and vibrato."));
+      const auto cells = ui::row({516, 784, 372, 120}, 5);
+      const auto player = [&](clap_id id, const char *name, int cell, const char *tip) {
+         ui::Knob &k = familyKnob(id, name, cells[cell], tip);
+         k.setTextSizes(9.0f, 10.5f, 9.0f);
+         tabs.addToPage(0, k);
+      };
+      player(kAttack, "ATTACK", 0, "How fast the breath rises (slower for a soft touch, quicker for a hard one).");
+      player(kRelease, "RELEASE", 1, "How fast the breath dies away after the note.");
+      player(kHumanize, "HUMANIZE", 2, "No two notes the same: each a little off in pitch, breath, attack and vibrato.");
+      player(kFlutter, "FLUTTER", 3, "A flutter tongue, a rolled R through the note, on any style (the Flutter style rolls at least half).");
+      player(kFlutterRate, "RATE", 4, "How fast the tongue flutters.");
 
       // VIBRATO: where it comes from, and how it moves.
       tabs.addToPage(1, *(vibrato_ = &add<VibratoGraph>({32, 770, 330, 148}, 330.0f)));
@@ -2197,15 +2387,21 @@ private:
       tips_.add(limiter, "Off: nothing. Soft: overs saturate. Hard: a peak limiter holds the output under full scale.");
       tabs.select(0);
 
-      const auto cells = ui::row({920, 800, 700, 120}, 8);
-      knob(kSpread, "SPREAD", 0xfff28c28, cells[0], "Low notes to the left, high to the right, as across a section.");
-      knob(kGlide, "GLIDE", 0xfff28c28, cells[1], "How long a slur takes to reach the next note (a finger lands in a few ms).");
-      knob(kBendRange, "BEND", 0xffb98bff, cells[2], "MPE pitch bend range of the note channels, in semitones.");
-      knob(kTune, "TRANSP", 0xfff28c28, cells[3], "Transposes in semitones.");
-      knob(kRoom, "ROOM", rc, cells[4], "How much room: shape it on the ROOM tab.");
-      knob(kAir, "AIR", kPress, cells[5], "The breath heard around the instrument, not through it.");
-      knob(kLevel, "LEVEL", 0xfff28c28, cells[6], "Each voice's level (modulate it per note).");
-      knob(kMaster, "MASTER", 0xfff28c28, cells[7], "The output level, after the room and limiter.");
+      const auto cells = ui::row({920, 800, 704, 120}, 11);
+      const auto card = [&](clap_id id, const char *name, unsigned accent, int cell, const char *tip) {
+         knob(id, name, accent, cells[cell], tip).setTextSizes(9.0f, 10.5f, 9.0f);
+      };
+      card(kSpread, "SPREAD", 0xfff28c28, 0, "Low notes to the left, high to the right, as across a section (below zero, the other way).");
+      card(kPan, "PAN", 0xfff28c28, 1, "Where the notes sit, before the spread: modulate it per note (Key, Slide, Random...).");
+      card(kUnison, "UNISON", 0xfff28c28, 2, "Copies of every voice, detuned against each other, to fatten it up.");
+      card(kUnisonDetune, "U.DETUNE", 0xfff28c28, 3, "How far the unison copies spread, in cents, from the lowest to the highest.");
+      card(kGlide, "GLIDE", 0xfff28c28, 4, "How long a slur takes to reach the next note (a finger lands in a few ms).");
+      card(kBendRange, "BEND", 0xffb98bff, 5, "MPE pitch bend range of the note channels, in semitones.");
+      card(kTune, "TRANSP", 0xfff28c28, 6, "Transposes in semitones.");
+      card(kRoom, "ROOM", rc, 7, "How much room: shape it on the ROOM tab.");
+      card(kAir, "AIR", kPress, 8, "The breath heard around the instrument, not through it.");
+      card(kLevel, "LEVEL", 0xfff28c28, 9, "Each voice's level (modulate it per note).");
+      card(kMaster, "MASTER", 0xfff28c28, 10, "The output level, after the room and limiter.");
    }
 
    // The AIR view's own controls: the look, and the vapour and loops knobs.
@@ -2220,7 +2416,20 @@ private:
       tips_.add(*look_, "Smoke rises off the loops and glows; ink drops from them and sinks.");
       palette_ = &choiceBox(kPalette, {1076, 76, 110, 24}, 0xff9c98d8);
       tips_.add(*palette_, "The smoke's colours.");
-      airPanel_ = &add<AirBackdrop>({32, 712, 568, 168}, 568.0f);
+      airPanel_ = &add<AirBackdrop>({32, 712, 872, 168}, 872.0f);
+      // Where the loops sit and how big they are, as JSynth places its creatures.
+      const clap_id place[3] = {kLoopX, kLoopY, kLoopSize};
+      const char *const placeTips[3] = {"What moves the loops left to right: the note's pitch by default.",
+                                        "What lifts the loops up the window: the breath by default.",
+                                        "What sets each loop's size: the breath by default."};
+      for (int i = 0; i < 3; ++i) {
+         auto &d = choiceBox(place[i], {680, 748.0f + 34 * i, 120, 24}, 0xffb98bff);
+         tips_.add(d, placeTips[i]);
+         airFrames_.push_back(&d);
+      }
+      auto &minSize = knob(kLoopSizeMin, "MIN SIZE", 0xffb98bff, {808, 744, 88, 128},
+                           "The smallest a loop gets, as a share of the largest: its size runs from here to full.");
+      airKnobs_.push_back(&minSize);
       const auto cells = ui::row({40, 744, 552, 128}, 6);
       const clap_id ids[6] = {kTurbulence, kRise, kSwirl, kTail, kLine, kGlow};
       const char *const names[6] = {"TURBULENCE", "RISE", "SWIRL", "TAIL", "LINE", "GLOW"};
@@ -2249,6 +2458,8 @@ private:
       airPanel_->setVisible(on);
       for (ui::Knob *k : airKnobs_)
          k->setVisible(on);
+      for (visage::Frame *f : airFrames_)
+         f->setVisible(on);
       const ui::Rect loops = on ? ui::Rect{16, 64, 1616, 864} : kLoopsRect;
       move(*loops_, loops);
       loops_->resize(loops.w, loops.h);
@@ -2292,8 +2503,9 @@ private:
    ui::Dropdown *palette_ = nullptr;
    visage::Frame *airPanel_ = nullptr;
    std::vector<ui::Knob *> airKnobs_;
+   std::vector<visage::Frame *> airFrames_;
    ui::TabBar *exciterTabs_ = nullptr, *voiceTabs_ = nullptr;
-   ValveGraph *hybridValve_ = nullptr;
+   FilterGraph *filterGraph_ = nullptr;
    ui::Knob *coneKnob_ = nullptr, *brassKnob_ = nullptr;
    ui::Meter *inMeter_ = nullptr, *outMeters_[2] = {};
    ui::TabBar *playerTabs_ = nullptr;

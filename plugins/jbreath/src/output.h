@@ -35,7 +35,7 @@ public:
       set(settings_, true);
    }
    void reset() {
-      for (Biquad *b : {&radiate_, &barrel_, &wall_, &low_, &tone_})
+      for (Biquad *b : {&radiate_, &barrel_, &wall_, &low_, &tone_, &high_})
          b->clear();
       std::fill(comb_.begin(), comb_.end(), 0.0f);
       pos_ = 0;
@@ -53,22 +53,23 @@ public:
       // Walls soak up the highs: brass hardly at all, soft wood and bone more.
       wall_.lowpass(std::min(0.45 * fs_, 18000.0 * std::pow(2.0, -2.5 * (s.wall - 0.2))), 0.6, fs_);
       // The material's own colour: a low shelf and a body resonance.
-      struct Material { double low, hz, db, q; };
+      struct Material { double low, hz, db, q, high; };
       static const Material materials[] = {
-         {1.0, 1800, 1.5, 1.0},  // grenadilla: dense, dark, focused
-         {2.0, 900, 2.0, 0.9},   // boxwood: warm, round
-         {2.5, 600, 1.5, 0.8},   // maple: soft, woody
-         {0.0, 2500, 3.0, 1.6},  // bamboo: hollow, breathy
-         {-1.0, 3200, 3.0, 1.2}, // brass: bright, ringing
-         {-1.5, 4500, 2.5, 1.0}, // silver: sweet, airy top
-         {0.0, 1200, -1.5, 0.8}, // resin: plain
-         {-2.0, 6000, 4.0, 2.0}, // glass: thin and glassy
+         {2.0, 1800, 3.5, 1.2, -2.0},  // grenadilla: dense, dark, focused
+         {4.0, 900, 4.5, 1.0, -4.0},   // boxwood: warm, round
+         {5.0, 600, 3.5, 0.9, -6.0},   // maple: soft, woody
+         {-1.5, 2500, 6.0, 2.0, 1.0},  // bamboo: hollow, breathy
+         {-2.5, 3200, 6.0, 1.6, 3.0},  // brass: bright, ringing
+         {-3.0, 4500, 5.0, 1.4, 4.0},  // silver: sweet, airy top
+         {0.0, 1200, -3.0, 0.8, -1.0}, // resin: plain
+         {-4.0, 6000, 8.0, 3.0, 5.0},  // glass: thin and glassy
       };
       const Material &m = materials[std::clamp(s.tube, 0, 7)];
       low_.lowshelf(250.0, m.low, fs_);
       tone_.peak(std::min(m.hz, 0.4 * fs_), m.q, m.db, fs_);
+      high_.highshelf(std::min(6000.0, 0.4 * fs_), m.high, fs_);
       // Below the open holes: more tube rings on above the holes' cutoff, the more holes are open.
-      static const float feedback[] = {0.0f, 0.12f, 0.2f, 0.28f, 0.36f, 0.45f};
+      static const float feedback[] = {0.0f, 0.2f, 0.32f, 0.42f, 0.52f, 0.62f};
       fb_ = feedback[std::clamp(s.holes, 0, 5)];
       delay_ = std::clamp(2.0 * bodyLength(s.length) / 343.0 * fs_, 2.0, comb_.size() - 2.0);
       dampA_ = static_cast<float>(std::exp(-2 * kPi * 2500.0 / fs_));
@@ -88,12 +89,12 @@ public:
          pos_ = (pos_ + 1) % n;
          x = y * (1.0f - 0.5f * fb_);
       }
-      return wall_.tick(tone_.tick(low_.tick(barrel_.tick(radiate_.tick(x)))));
+      return high_.tick(wall_.tick(tone_.tick(low_.tick(barrel_.tick(radiate_.tick(x))))));
    }
 
 private:
    BodySettings settings_;
-   Biquad radiate_, barrel_, wall_, low_, tone_;
+   Biquad radiate_, barrel_, wall_, low_, tone_, high_;
    std::vector<float> comb_;
    size_t pos_ = 0;
    double delay_ = 100.0, fs_ = 48000.0;

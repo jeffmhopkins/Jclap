@@ -52,7 +52,7 @@ struct Slot {
    // Per-voice param modulation from the host, added to the param and its global modulation.
    double mod[kParamCount] = {};
    // Where it sits in the stereo field (the Spread), as a gain on each side.
-   float panL = 1.0f, panR = 1.0f;
+   float panL = 1.0f, panR = 1.0f, spreadAt = 0.0f, panAt = 0.0f;
    // When it started, for stealing the oldest.
    uint64_t started = 0;
    bool ended = true; // NOTE_END already sent
@@ -366,6 +366,7 @@ public:
                if (!s.voice.isActive())
                   continue;
                float y = 0.0f;
+               updatePan(s);
                for (int k = 0; k < os; ++k) {
                   y = s.voice.tick();
                   fastL[k] += y * s.panL;
@@ -473,16 +474,26 @@ private:
 
    void configure(Slot &s) {
       s.voice.configure(settings(s));
-      // Spread: low notes to the left and high to the right, as across a section, at equal power
-      // (and unchanged in the middle).
-      const double at = spread_ * std::clamp((s.key - 64) / 24.0, -1.0, 1.0);
-      const double angle = (at + 1.0) * kPi / 4.0;
-      s.panL = static_cast<float>(std::sqrt(2.0) * std::cos(angle));
-      s.panR = static_cast<float>(std::sqrt(2.0) * std::sin(angle));
+      // Spread: low notes to the left and high to the right, as across a section (or, below zero,
+      // the other way round); the voice's Pan moves it from there.
+      s.spreadAt = static_cast<float>(spread_ * std::clamp((s.key - 64) / 24.0, -1.0, 1.0));
+      s.panAt = 2.0f; // worked out again before its next sample
+      updatePan(s);
       s.voice.setPitch(pitchOf(s));
       s.voice.setBend(bendOf(s) / std::max(1.0, isMember(s.channel) ? bendRange(s.channel) : 2.0));
       s.voice.setExpression(pressureOf(s), timbreOf(s));
       s.voice.setGain(gainOf(s));
+   }
+
+   // Equal power, and unchanged in the middle.
+   static void updatePan(Slot &s) {
+      const float at = std::clamp(s.spreadAt + s.voice.pan(), -1.0f, 1.0f);
+      if (at == s.panAt)
+         return;
+      s.panAt = at;
+      const double angle = (at + 1.0) * kPi / 4.0;
+      s.panL = static_cast<float>(std::sqrt(2.0) * std::cos(angle));
+      s.panR = static_cast<float>(std::sqrt(2.0) * std::sin(angle));
    }
 
    // The level (with any per-voice modulation) and the note's own volume expression. Velocity and
@@ -536,6 +547,16 @@ private:
       vs.hybridMix = value(kHybridMix, s);
       vs.hybridDetune = value(kHybridDetune, s);
       vs.hybridBreath = value(kHybridBreath, s);
+      vs.hybridCutoff = value(kHybridCutoff, s);
+      vs.hybridResonance = value(kHybridResonance, s);
+      vs.hybridFilterBreath = value(kHybridFilterBreath, s);
+      vs.flutter = value(kFlutter, s);
+      vs.flutterRate = value(kFlutterRate, s);
+      vs.pan = value(kPan, s);
+      vs.unison = static_cast<int>(std::lround(value(kUnison, s)));
+      vs.unisonDetune = value(kUnisonDetune, s);
+      vs.holes = static_cast<int>(value(kHoles) + 0.5);
+      vs.tube = static_cast<int>(value(kTube) + 0.5);
       for (int i = 0; i < kLfoCount; ++i) {
          vs.lfoRate[i] = value(lfoParam(i, 0), s);
          vs.lfoShape[i] = choice(lfoParam(i, 1), *s);
