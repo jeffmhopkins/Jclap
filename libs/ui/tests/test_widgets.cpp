@@ -1,6 +1,7 @@
 // Widget input checks: calls the mouse handlers directly and records what reaches the params.
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -8,6 +9,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <jclap/core/test_host.h>
@@ -507,15 +509,6 @@ void updateChecks() {
    JCLAP_CHECK(up::parsePluginVersions(reply).empty());
    JCLAP_CHECK(up::parsePluginVersions(R"({"body":"jclap-versions: jsynth=dev"})").empty());
 
-   // Due once a day, or when the clock went back; never when turned off.
-   up::State state;
-   state.checkedAt = 1000000;
-   JCLAP_CHECK(!up::checkDue(state, 1000000 + 3600));
-   JCLAP_CHECK(up::checkDue(state, 1000000 + 86400));
-   JCLAP_CHECK(up::checkDue(state, 999000));
-   state.enabled = false;
-   JCLAP_CHECK(!up::checkDue(state, 1000000 + 86400));
-
    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "jclap-update-test";
    std::filesystem::remove_all(dir);
    const std::filesystem::path file = dir / "updates.txt";
@@ -537,6 +530,35 @@ void updateChecks() {
                back.versions.empty() && back.dismissedVersions.empty());
    up::setStateFileForTesting(file);
    JCLAP_CHECK(!up::available());
+
+   // The first window this session checks, even though the file says another session just did;
+   // closing and reopening it doesn't check again, even when that check failed. Turning checking
+   // back on lets the next window check. Offline here, so the file keeps what was written above.
+   std::atomic<int> fetches{0};
+   up::setFetchForTesting([&fetches](std::string &) {
+      ++fetches;
+      return false;
+   });
+   const auto waitFor = [&fetches](int n) {
+      for (int i = 0; i < 500 && fetches < n; ++i)
+         std::this_thread::sleep_for(std::chrono::milliseconds(2));
+   };
+   for (int open = 1; open <= 3; ++open) {
+      const auto handle = up::startChecking();
+      waitFor(1);
+   } // closing the window waits for the check
+   JCLAP_CHECK_EQ(fetches.load(), 1);
+   up::setEnabled(false);
+   { const auto handle = up::startChecking(); } // turned off: no check
+   JCLAP_CHECK_EQ(fetches.load(), 1);
+   up::setEnabled(true);
+   for (int open = 1; open <= 2; ++open) {
+      const auto handle = up::startChecking();
+      waitFor(2);
+   }
+   JCLAP_CHECK_EQ(fetches.load(), 2);
+   JCLAP_CHECK(up::readState(file).release == newer);
+
    {
       const auto handle = up::startChecking();
       const auto release = up::available();
@@ -597,6 +619,7 @@ void updateChecks() {
       JCLAP_CHECK(!up::readState(file).enabled);
    }
    JCLAP_CHECK(!up::available());
+   up::setFetchForTesting({});
    up::setStateFileForTesting({});
    std::filesystem::remove_all(dir);
 }

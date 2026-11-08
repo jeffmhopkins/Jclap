@@ -105,8 +105,8 @@ Then restart Bitwig.
 
 When a release has a newer version of a plugin, that plugin's header says so (plugins a release
 didn't change stay quiet); click the notice to open the release page, or its cross to hide it until
-the next one. The plugins look at GitHub at most once a day. To stop
-them, right-click the panel background and untick **Check for Updates**.
+the next one. A plugin looks at GitHub once per session, the first time its window opens after the
+host starts. To stop them, right-click the panel background and untick **Check for Updates**.
 
 ## Building from source
 

@@ -1,7 +1,7 @@
 #pragma once
 
-// Update notices: looks up the newest JClap release on GitHub, at most once a day, in the
-// background, and says whether it has a newer version of this plugin. Each plugin has its own
+// Update notices: looks up the newest JClap release on GitHub once per session (the first time a
+// plugin window opens after the host starts), in the background, and says whether it has a newer version of this plugin. Each plugin has its own
 // version, and a release lists them all (see .github/release-notes.md), so a release that only
 // changed JSynth shows a notice in JSynth and nowhere else. Doesn't include Visage;
 // jclap/ui/update_notice.h is the header widget that shows it.
@@ -14,6 +14,7 @@
 // than an UpdateNotice in its header.
 
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -51,8 +52,8 @@ void setEnabled(bool on);
 // Opens a web page in the user's browser.
 void openInBrowser(const std::string &url);
 
-// Keeps the checker alive while held: the first call starts a check if one is due, and dropping
-// the last handle stops one still running and waits for it. Window holds one while it is shown.
+// Keeps the checker alive while held: the first call this session starts a check (unless checking
+// is off), and dropping the last handle stops one still running and waits for it. Window holds one while it is shown.
 std::shared_ptr<void> startChecking();
 
 // ---- The parts below are internal, exposed for tests. ----
@@ -88,10 +89,11 @@ std::filesystem::path stateFile();
 State readState(const std::filesystem::path &file);
 bool writeState(const std::filesystem::path &file, const State &state);
 
-// Whether a check is due `now` (Unix time): checking is on, and the last one was a day ago or more.
-bool checkDue(const State &state, long long now);
-
 // Points the checker at another settings file, for tests. Empty restores the default.
 void setStateFileForTesting(const std::filesystem::path &file);
+
+// Replaces the request to GitHub, for tests: `fetch` fills in the reply and says whether it got one.
+// Empty restores the network.
+void setFetchForTesting(std::function<bool(std::string &)> fetch);
 
 } // namespace jclap::ui::updates
