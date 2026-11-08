@@ -61,6 +61,11 @@ struct VoiceSettings {
    int hybridModel = 2, hybridOctave = 0; // hybridModel is the wave (kHybridWaveNames)
    double hybridMix = 0.0, hybridDetune = 0.0, hybridBreath = 1.0;
    double hybridCutoff = 1800.0, hybridResonance = 0.2, hybridFilterBreath = 0.6;
+   // Its own envelope (times in ms), how much its level still follows the breath (0 is a pad that
+   // plays at the note's velocity and keeps sounding through its release), and how far the envelope
+   // opens the lowpass (-1..1, up to 5 octaves either way).
+   double hybridAttackMs = 5.0, hybridDecayMs = 250.0, hybridSustain = 1.0, hybridReleaseMs = 60.0;
+   double hybridFollow = 1.0, hybridFilterEnv = 0.0;
    // A flutter tongue on any style, the note's pan, and unison: copies of the voice, detuned.
    double flutter = 0.0, flutterRate = 24.0, pan = 0.0, unisonDetune = 12.0;
    int unison = 1;
@@ -239,6 +244,7 @@ public:
          len_[0] = -1.0;
          hold_ = 1.0;
          levelNow_ = 0.0;
+         hybEnv_ = 0.0;
       }
       // The player's level, pitch and bore length are worked out before the first sample.
       counter_ = 0;
@@ -268,6 +274,8 @@ public:
          lfoHeld_[i] = lfoLast_[i] = jitter_.white();
       }
       swellAge_ = 0.0;
+      // The HYBRID envelope starts again from where it is (from 0 after silence).
+      hybStage_ = kHybAttack;
    }
    // Mono: the tongue stops the air for 35 ms, then releases it on the new note with a kick.
    void retongue(double pitch, double velocity) {
@@ -280,6 +288,7 @@ public:
       tongue_ = tongueAmount();
       pitch_ = pitch;
       hold_ = 1.0;
+      hybStage_ = kHybAttack;
    }
    // Legato: the fingers change, the air doesn't stop.
    void slur(double pitch, double velocity) {
@@ -298,6 +307,7 @@ public:
       if (active_ && !releasing_) {
          releasing_ = true;
          lift_ = std::clamp(velocity, 0.0, 1.0);
+         hybStage_ = kHybRelease;
       }
    }
    // Only the instrument playing has sound in it: the others were cleared when it was picked.
@@ -306,6 +316,8 @@ public:
       breath_ = 0.0;
       level_ = 0.0f;
       env_ = 0.0;
+      hybEnv_ = 0.0;
+      hybStage_ = kHybIdle;
       if (models_[0][settings_.model])
          for (auto &copy : models_)
             copy[settings_.model]->reset();
@@ -614,21 +626,66 @@ private:
          const ModelInfo &info = modelInfo(settings_.model);
          const double full = std::max(info.breathOffset + info.breathScale * live_.breath, 0.1);
          const double blow = std::clamp(breath_ / full, 0.0, 1.5);
-         synthTarget_ = 0.18 * std::pow(blow, 1.5 / std::max(0.5, live_.hybridBreath));
-         const double open = std::pow(2.0, live_.hybridFilterBreath * 6.0 * (blow - 0.7));
+         stepHybridEnvelope();
+         // Follow mixes a level blown by the breath with one set by the note's velocity alone.
+         const double blown = std::pow(blow, 1.5 / std::max(0.5, live_.hybridBreath));
+         const double struck = 0.45 + 0.55 * strike();
+         const double follow = std::clamp(live_.hybridFollow, 0.0, 1.0);
+         synthTarget_ = 0.18 * hybEnv_ * (follow * blown + (1.0 - follow) * struck);
+         // The breath opens the lowpass in proportion to how much the level follows it.
+         const double open = std::pow(2.0, live_.hybridFilterBreath * 6.0 * (blow - 0.7) * (0.25 + 0.75 * follow) +
+                                               live_.hybridFilterEnv * 5.0 * hybEnv_);
          filter_.setCutoff(std::clamp(live_.hybridCutoff * open * std::sqrt(hhz / 261.63), 30.0, 0.45 * fs_));
          filter_.setResonance(live_.hybridResonance);
       } else {
          synthLevel_ = synthTarget_ = 0.0;
+         hybEnv_ = 0.0;
       }
 
       // Silent long enough after letting go (or tongued to nothing): the voice is free.
       level_ = static_cast<float>(env_);
-      if (releasing_ && breath_ < 1e-4 && env_ < 2e-5) {
+      // A HYBRID pad still in its release keeps the voice going after the breath has stopped.
+      const bool padding = live_.hybridMix > 0.0 && hybEnv_ > 1e-4 && live_.hybridFollow < 0.999;
+      if (releasing_ && breath_ < 1e-4 && env_ < 2e-5 && !padding) {
          if (++quiet_ > static_cast<int>(0.02 * fs_ / kControl))
             reset();
       } else {
          quiet_ = 0;
+      }
+   }
+
+   // The HYBRID envelope, one control tick on: a straight attack, then decay and release that fall
+   // like a real envelope (by 99% over their times).
+   void stepHybridEnvelope() {
+      const double dt = kControl / fs_;
+      const auto rate = [&](double ms) { return 1.0 - std::exp(-dt * 4.6 / std::max(0.001, ms / 1000.0)); };
+      const double sustain = std::clamp(live_.hybridSustain, 0.0, 1.0);
+      switch (hybStage_) {
+      case kHybAttack:
+         hybEnv_ += dt / std::max(0.001, live_.hybridAttackMs / 1000.0);
+         if (hybEnv_ >= 1.0) {
+            hybEnv_ = 1.0;
+            hybStage_ = kHybDecay;
+         }
+         break;
+      case kHybDecay:
+         hybEnv_ += (sustain - hybEnv_) * rate(live_.hybridDecayMs);
+         if (std::fabs(hybEnv_ - sustain) < 1e-4)
+            hybStage_ = kHybSustain;
+         break;
+      case kHybSustain:
+         hybEnv_ = sustain;
+         break;
+      case kHybRelease:
+         hybEnv_ -= hybEnv_ * rate(live_.hybridReleaseMs);
+         if (hybEnv_ < 1e-5) {
+            hybEnv_ = 0.0;
+            hybStage_ = kHybIdle;
+         }
+         break;
+      default:
+         hybEnv_ = 0.0;
+         break;
       }
    }
 
@@ -856,6 +913,10 @@ private:
    jclap::dsp::Oscillator osc_[kMaxUnison];
    jclap::dsp::Filter filter_;
    double synthLevel_ = 0.0, synthTarget_ = 0.0, synthCoef_ = 0.001;
+   // The HYBRID envelope, 0..1, stepped every control tick.
+   enum HybStage { kHybIdle, kHybAttack, kHybDecay, kHybSustain, kHybRelease };
+   int hybStage_ = kHybIdle;
+   double hybEnv_ = 0.0;
    int unison_ = 1;
    float unisonGain_ = 1.0f;
    double human_[6] = {};

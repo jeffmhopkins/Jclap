@@ -5,6 +5,8 @@
 
 #include <jclap/core/helpers.h>
 
+#include "fx.h"
+
 #include <algorithm>
 #include <array>
 #include <string>
@@ -118,6 +120,28 @@ enum ParamId : clap_id {
    kLoopY,
    kLoopSize,
    kLoopSizeMin,
+   // Added after Release 24: the HYBRID voice's own envelope, so it can be a pad under the
+   // instrument: attack, decay, sustain and release, how much its level still follows the breath,
+   // and how far the envelope opens its lowpass.
+   kHybridAttack,
+   kHybridDecay,
+   kHybridSustain,
+   kHybridRelease,
+   kHybridFollow,
+   kHybridFilterEnv,
+   // The FX: the reverb (the Room params) switched on and off, and a delay.
+   kReverbOn,
+   kDelayOn,
+   kDelayMix,
+   kDelayTime,
+   kDelaySync,
+   kDelayFeedback,
+   kDelayTone,
+   kDelaySpread,
+   // A mute in the bell (or over the end of any instrument): which kind, and how far it's in. Its
+   // amount is a route destination, so slide or pressure can work a plunger.
+   kMute,
+   kMuteAmount,
    kParamCount
 };
 // The AIR view's look: the panel's own, kept with the project but not with presets.
@@ -178,7 +202,9 @@ inline constexpr clap_id kModDestinations[] = {
    kHumanize, kHybridMix, kHybridDetune, kLoss, kHoleCutoff, kCone, kBrass, kDetune, kAir,
    busParam(0, kBusAmount), busParam(1, kBusAmount), busParam(2, kBusAmount), busParam(3, kBusAmount),
    // Added after the first release, after the buses so saved routes keep their destinations.
-   kFlutter, kFlutterRate, kPan, kUnisonDetune, kHybridCutoff, kHybridResonance, kHybridFilterBreath};
+   kFlutter, kFlutterRate, kPan, kUnisonDetune, kHybridCutoff, kHybridResonance, kHybridFilterBreath,
+   // Added after Release 24.
+   kMuteAmount};
 constexpr int kModDestCount = static_cast<int>(sizeof(kModDestinations) / sizeof(kModDestinations[0]));
 constexpr int kFirstBusDest = 31;
 constexpr bool isBusDest(int d) { return d >= kFirstBusDest && d < kFirstBusDest + kBusCount; }
@@ -235,6 +261,8 @@ inline const char *const kLoopSourceNames[] = {"Pitch", "Strike", "Press", "Slid
 inline const char *const kHolesNames[] = {"Closed", "Lattice 3", "Lattice 5", "Lattice 7", "Lattice 9", "Open"};
 inline const char *const kTubeNames[] = {"Grenadilla", "Boxwood", "Maple", "Bamboo", "Brass", "Silver", "Resin", "Glass"};
 inline const char *const kLimiterNames[] = {"Off", "Soft", "Hard"};
+inline const char *const kOffOnNames[] = {"Off", "On"};
+inline const char *const kMuteNames[] = {"Open", "Straight", "Cup", "Harmon", "Plunger", "Bucket"};
 inline const char *const kLookNames[] = {"Smoke", "Ink"};
 inline const char *const kPaletteNames[] = {"Dusk", "Ember", "Frost", "Moss", "Mono"};
 inline const char *const kHybridOctaveNames[] = {"-2 oct", "-1 oct", "0 oct", "+1 oct", "+2 oct"};
@@ -327,6 +355,24 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kLoopY, "Loop Y", "View", 0.0, 6.0, 4.0, kLookFlags},
       {kLoopSize, "Loop Size", "View", 0.0, 6.0, 4.0, kLookFlags},
       {kLoopSizeMin, "Loop Size Min", "View", 0.1, 1.0, 0.25, kLookKnob},
+      // Times are 0..1 knobs, shown in ms on a log scale (hybridEnvMs()).
+      {kHybridAttack, "Hybrid Attack", "Hybrid", 0.0, 1.0, 0.18, kMod},
+      {kHybridDecay, "Hybrid Decay", "Hybrid", 0.0, 1.0, 0.6, kMod},
+      {kHybridSustain, "Hybrid Sustain", "Hybrid", 0.0, 1.0, 1.0, kMod},
+      {kHybridRelease, "Hybrid Release", "Hybrid", 0.0, 1.0, 0.45, kMod},
+      {kHybridFollow, "Hybrid Follow", "Hybrid", 0.0, 1.0, 1.0, kMod},
+      {kHybridFilterEnv, "Hybrid Filter Env", "Hybrid", -1.0, 1.0, 0.0, kMod},
+      {kReverbOn, "Reverb", "Reverb", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kDelayOn, "Delay", "Delay", 0.0, 1.0, 0.0, kGlobalChoice},
+      {kDelayMix, "Delay Mix", "Delay", 0.0, 1.0, 0.3, kGlobalMod},
+      // 0..1 to 10 ms .. 2 s on a log scale (delayTimeMs()); 0.684 is 375 ms.
+      {kDelayTime, "Delay Time", "Delay", 0.0, 1.0, 0.684, kGlobalMod},
+      {kDelaySync, "Delay Sync", "Delay", 0.0, 13.0, 0.0, kGlobalChoice},
+      {kDelayFeedback, "Delay Feedback", "Delay", 0.0, 0.95, 0.4, kGlobalMod},
+      {kDelayTone, "Delay Tone", "Delay", 0.0, 1.0, 0.6, kGlobalMod},
+      {kDelaySpread, "Delay Spread", "Delay", 0.0, 1.0, 0.5, kGlobalMod},
+      {kMute, "Mute", "Bore", 0.0, 5.0, 0.0, kGlobalChoice},
+      {kMuteAmount, "Mute Amount", "Bore", 0.0, 1.0, 1.0, kMod},
    };
    for (const auto &d : fixed)
       p[d.id] = d;
@@ -410,6 +456,16 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kLimiter:
       count = 3;
       return kLimiterNames;
+   case kReverbOn:
+   case kDelayOn:
+      count = 2;
+      return kOffOnNames;
+   case kDelaySync:
+      count = kDelaySyncCount;
+      return kDelaySyncNames;
+   case kMute:
+      count = 6;
+      return kMuteNames;
    case kLook:
       count = 2;
       return kLookNames;
@@ -477,6 +533,14 @@ inline bool isPercent(clap_id id) {
    case kHybridResonance:
    case kHybridFilterBreath:
    case kLoopSizeMin:
+   case kHybridSustain:
+   case kHybridFollow:
+   case kHybridFilterEnv:
+   case kMuteAmount:
+   case kDelayMix:
+   case kDelayFeedback:
+   case kDelayTone:
+   case kDelaySpread:
       return true;
    default:
       if (id >= kBusBase && id < kRouteBase)
@@ -488,6 +552,8 @@ inline bool isPercent(clap_id id) {
 }
 
 // The Length knob's body, in metres: 0.15 to 1.5, evenly in octaves.
+// The HYBRID envelope's times: a 0..1 knob to 1 ms .. 10 s on a log scale.
+inline double hybridEnvMs(double v) { return std::pow(10.0, 4.0 * std::clamp(v, 0.0, 1.0)); }
 inline double bodyLength(double v) { return 0.15 * std::pow(10.0, std::clamp(v, 0.0, 1.0)); }
 
 // What the Wall knob's value is like, for the panel.
@@ -545,6 +611,20 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kLength:
       std::snprintf(out, size, "%.2f m", bodyLength(value));
       break;
+   case kDelayTime:
+      std::snprintf(out, size, delayTimeMs(value) < 1000.0 ? "%.0f ms" : "%.2f s",
+                    delayTimeMs(value) < 1000.0 ? delayTimeMs(value) : delayTimeMs(value) / 1000.0);
+      break;
+   case kHybridAttack:
+   case kHybridDecay:
+   case kHybridRelease: {
+      const double ms = hybridEnvMs(value);
+      if (ms < 1000.0)
+         std::snprintf(out, size, ms < 10.0 ? "%.1f ms" : "%.0f ms", ms);
+      else
+         std::snprintf(out, size, "%.2f s", ms / 1000.0);
+      break;
+   }
    case kHoleCutoff:
       std::snprintf(out, size, "%.2f kHz", value / 1000.0);
       break;
@@ -627,6 +707,14 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
       value = std::strstr(text, "k") ? v * 1000.0 : v;
    else if (id == kLength)
       value = std::clamp(std::log10(std::max(v, 0.15) / 0.15), 0.0, 1.0);
+   else if (id == kDelayTime) {
+      const double ms = std::strstr(text, "ms") ? v : std::strstr(text, "s") ? v * 1000.0 : v;
+      value = std::clamp(std::log(std::max(ms, 10.0) / 10.0) / std::log(200.0), 0.0, 1.0);
+   }
+   else if (id == kHybridAttack || id == kHybridDecay || id == kHybridRelease) {
+      const double ms = std::strstr(text, "ms") ? v : std::strstr(text, "s") ? v * 1000.0 : v;
+      value = std::clamp(std::log10(std::max(ms, 1.0)) / 4.0, 0.0, 1.0);
+   }
    else
       value = (kParams[id].flags & CLAP_PARAM_IS_STEPPED) ? std::round(v) : v;
    return true;

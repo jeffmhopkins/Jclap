@@ -135,6 +135,7 @@ public:
          body_[c].prepare(sampleRate);
       }
       room_.prepare(sampleRate);
+      delay_.prepare(sampleRate);
       limiter_.prepare(sampleRate);
       brightDb_ = 1e9;
       for (ChannelState &c : channels_)
@@ -159,6 +160,7 @@ public:
          body_[c].reset();
       }
       room_.reset();
+      delay_.reset();
       limiter_.reset();
       mpeMembers_ = 15;
       pendingCount_ = 0;
@@ -334,6 +336,10 @@ public:
       jclap::dsp::ScopedNoDenormals noDenormals;
       edits_.drain(proc->out_events);
       blockFrames_ = proc->frames_count;
+      // The host's tempo, for a synced delay.
+      if (const clap_event_transport_t *t = proc->transport)
+         if ((t->flags & CLAP_TRANSPORT_HAS_TEMPO) && t->tempo > 1.0)
+            tempo_ = t->tempo;
       // The panel may have moved a knob since the last block.
       dirty_ = true;
 
@@ -378,7 +384,16 @@ public:
             float l = decimator_.process(fastL) * kVoiceGain, r = decimatorR_.process(fastR) * kVoiceGain;
             l = bright_[0].tick(body_[0].tick(l));
             r = bright_[1].tick(body_[1].tick(r));
-            room_.tick(l, r);
+            delay_.tick(l, r);
+            if (reverbOn_) {
+               room_.tick(l, r);
+            } else {
+               // Off, nothing more goes into the room, but what's in it rings out rather than stop dead.
+               float wl = 0.0f, wr = 0.0f;
+               room_.tick(wl, wr);
+               l += wl;
+               r += wr;
+            }
             limiter_.tick(l, r, limiterMode_);
             l *= master_;
             r *= master_;
@@ -419,8 +434,9 @@ public:
             quietFrames_ = 0;
             return CLAP_PROCESS_CONTINUE;
          }
-      // The room rings on after the voices.
-      if (room_.active() && quietFrames_ < static_cast<uint64_t>(sampleRate_ * (value(kRoomDecay) + 0.2))) {
+      // The delay and the room ring on after the voices.
+      const double ring = (room_.active() ? value(kRoomDecay) + 0.2 : 0.0) + (delay_.active() ? delay_.tailSeconds() + 0.1 : 0.0);
+      if ((room_.active() || delay_.active()) && quietFrames_ < static_cast<uint64_t>(sampleRate_ * ring)) {
          quietFrames_ += frames;
          return CLAP_PROCESS_CONTINUE;
       }
@@ -451,11 +467,21 @@ private:
          b.set(body);
       RoomSettings room;
       room.mix = value(kRoom);
+      reverbOn_ = value(kReverbOn) > 0.5;
       room.size = value(kRoomSize);
       room.decay = value(kRoomDecay);
       room.damp = value(kRoomDamp);
       room.preDelayMs = value(kRoomPreDelay);
       room_.set(room);
+      DelaySettings delay;
+      delay.on = value(kDelayOn) > 0.5;
+      delay.mix = value(kDelayMix);
+      const int sync = static_cast<int>(value(kDelaySync) + 0.5);
+      delay.timeMs = sync > 0 ? delaySyncBeats(sync) * 60000.0 / tempo_ : delayTimeMs(value(kDelayTime));
+      delay.feedback = value(kDelayFeedback);
+      delay.tone = value(kDelayTone);
+      delay.spread = value(kDelaySpread);
+      delay_.set(delay);
       limiterMode_ = static_cast<int>(value(kLimiter) + 0.5);
       master_ = static_cast<float>(jclap::dsp::dbToGain(value(kMaster)));
       spread_ = value(kSpread);
@@ -550,6 +576,16 @@ private:
       vs.hybridCutoff = value(kHybridCutoff, s);
       vs.hybridResonance = value(kHybridResonance, s);
       vs.hybridFilterBreath = value(kHybridFilterBreath, s);
+      vs.hybridAttackMs = hybridEnvMs(value(kHybridAttack, s));
+      vs.hybridDecayMs = hybridEnvMs(value(kHybridDecay, s));
+      vs.hybridSustain = value(kHybridSustain, s);
+      vs.hybridReleaseMs = hybridEnvMs(value(kHybridRelease, s));
+      vs.hybridFollow = value(kHybridFollow, s);
+      vs.hybridFilterEnv = value(kHybridFilterEnv, s);
+#if defined(JBREATH_HAS_MUTE)
+      vs.mute = choice(kMute, *s);
+      vs.muteAmount = value(kMuteAmount, s);
+#endif
       vs.flutter = value(kFlutter, s);
       vs.flutterRate = value(kFlutterRate, s);
       vs.pan = value(kPan, s);
@@ -1040,6 +1076,9 @@ private:
    Biquad bright_[2];
    Body body_[2];
    Room room_;
+   StereoDelay delay_;
+   bool reverbOn_ = true;
+   double tempo_ = 120.0;
    Limiter limiter_;
    int limiterMode_ = kLimitSoft;
    float master_ = 1.0f;
