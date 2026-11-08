@@ -215,7 +215,7 @@ protected:
 // Flute: an air jet crosses the embouchure hole and is deflected in or out of the pipe by the sound
 // in it. The jet takes time to reach the edge (longer when it's slow, so harder breath shortens the
 // delay and pushes the note up a register, as on a real flute); a tanh splits the jet in or out; the
-// pipe is open at both ends. Turbulence at the edge is the breath noise.
+// pipe is open at both ends. Turbulence at the edge is the breath noise, riding on the jet.
 class Flute final : public Model {
 public:
    void prepare(double fs) override {
@@ -236,65 +236,115 @@ public:
       dc_.setFs(fs_);
       dco_ = {};
       dco_.setFs(fs_);
-      envF_ = rawPrev_ = 0.0f;
+      envF_ = envS_ = rawPrev_ = 0.0f;
+      tau_ = 0.0;
+      nhp_ = {};
+      nhp_.setHz(500, fs_);
+      olp_.clear();
+      olp2_.clear();
       notePitch(hz_);
    }
    double nominal(double hz) const override { return fs_ / hz; }
    // The holes', tube's and taper's cutoff, its delay taken out (the jet's delay follows the bore,
    // so it shows only part of the filter's), and the loss's pitch.
    double cutoffDelay(double hz) const override {
-      return (0.8 + 0.06 * std::log2(loopCut(hz) / (hz * 3.2))) *
-                (onePoleDelay(hz, loopCut(hz), fs_) - onePoleDelay(hz, hz * 3.2, fs_)) +
-             character.lossDelay(nominal(hz), kLossA, kLossB);
+      return onePoleDelay(hz, loopCut(hz), fs_) - onePoleDelay(hz, 2.4 * hz, fs_);
    }
    void notePitch(double hz) override {
       hz_ = hz;
+      // The pipe's losses: its open holes let the upper harmonics out of the loop.
       lp_.setHz(loopCut(hz), fs_);
+      // How quickly the jet answers the sound: a wider jet (Aperture) follows higher harmonics.
       jlp_.setHz(hz * (1.4 + 1.2 * character.aperture), fs_);
+      // High notes are played with a short, fast jet over a small opening: it swings less across
+      // the edge for the same breath, so the third octave stays nearly pure even at forte.
+      reg_ = static_cast<float>(std::pow(std::min(1.0, 300.0 / hz), 1.2));
+      // Radiation from the embouchure hole and the open holes: a monopole, so the sound outside is
+      // the jet's flow differentiated (6 dB an octave), from about 100 Hz up.
+      rz_ = static_cast<float>(std::exp(-2.0 * kPi * 100.0 / fs_));
+      // From about 2.5 kHz up the tone holes' lattice and the head joint stop supporting the sound.
+      olp_.lowpass(2500.0, 0.7071, fs_);
+      olp2_.lowpass(6000.0, 0.7071, fs_);
+      // Edge turbulence: a broad band from about 500 Hz to 3 kHz.
+      nhp_.setHz(500.0, fs_);
    }
    float tick(float breath, float emb, double len, float tn) override {
       const float U = std::sqrt(std::max(breath, 0.0f));
       const float raw = bore_.read(len);
-      const float p = character.keep(0.97f) * lp_.tick(raw);
+      // The Loss knob: more of each trip soaked up by the walls: darker, and it needs more breath.
+      const float lossK = std::clamp(1.0f - 0.1f * (character.loss - 0.04f), 0.9f, 1.02f);
+      const float p = std::min(0.995f, 0.97f * lossK) * lp_.tick(raw);
       jet_.push(p);
-      const double tau = std::clamp((0.33 + 0.1 * (emb - 0.5)) * len / std::max(U, 0.08f), 2.0, jet_.size() - 8.0);
+      // The jet's length over its speed: Embouchure rolls the head joint (a longer or shorter jet).
+      const double tauT = std::clamp((0.33 + 0.12 * (emb - 0.5)) * len / std::max(U, 0.08f), 2.0, jet_.size() - 8.0);
+      // The jet's transit time can't jump faster than the air in it moves: a quick release would
+      // otherwise sweep the read point and chirp.
+      tau_ = tau_ <= 0.0 ? tauT : tau_ + std::clamp(tauT - tau_, -2.0, 0.5);
+      const double tau = tau_;
       const float turb = nlp_.tick(rng.white());
-      const float y = jlp_.tick(jet_.read(tau)) + (0.012f * character.noise + 0.12f * tn) * turb;
-      // The jet's flow grows with pressure, not just its speed.
+      // The jet's own turbulence goes with the jet: none once the breath stops.
+      const float y = jlp_.tick(jet_.read(tau)) + (0.012f * character.noise * std::min(1.0f, 1.5f * U) + 0.12f * tn) * turb;
+      // The jet's flow grows with pressure, not just its speed; Stiffness also firms the jet's gain.
       const float q = 1.2f * U * U * std::tanh(8.0f * (0.5f + character.stiffness) * y + 0.3f);
       bore_.push(dc_.tick(p - 0.5f * q));
-      // What leaves the embouchure hole and the open end: the tube wave, tilted up a little
-      // (radiation), plus edge noise riding on the jet.
-      const float rad = raw - 0.85f * rawPrev_;
-      rawPrev_ = raw;
-      // A flute is nearly pure when it's blown softly; harder, the jet's asymmetry brings up a strong
-      // 2nd harmonic, and at forte the 3rd: level-normalised Chebyshev terms on the tube wave, so
-      // the colour follows the breath and not the note's loudness.
-      envF_ += 0.002f * (96000.0f / static_cast<float>(fs_)) * (std::fabs(raw) - envF_);
-      const float a = 1.5708f * envF_ + 1e-4f, n = std::clamp(raw / a, -1.3f, 1.3f);
-      const float push = std::clamp((breath - 0.22f) / 0.7f, 0.0f, 1.5f);
-      const float even = a * character.edge * (0.03f + 0.75f * push * push) * (2.0f * n * n - 1.0f);
-      const float odd = a * character.edge * 0.3f * push * push * push * n * (4.0f * n * n - 3.0f);
-      return dco_.tick(0.2f * (0.5f * raw + rad + even + odd) +
-                       0.025f * character.noise * U * turb * (0.25f + std::fabs(y)));
+      // What we hear is the jet's flow into and out of the embouchure hole: the jet swung by the
+      // sound (y), split by the edge. Blown softly it swings only a little across the edge and its
+      // flow follows the sound, nearly pure; blown harder its swing is many times its width and the
+      // flow saturates both ways, all harmonics up. Where it's aimed (the player's embouchure) sets
+      // the evens: on the edge, a symmetric square (odd harmonics); off it, a pulse whose 2nd and 4th
+      // reach the fundamental's level at forte, as a low flute's do. The swing is measured against
+      // the jet's own level, so the colour follows the breath, not the note's loudness.
+      envF_ += 0.002f * (96000.0f / static_cast<float>(fs_)) * (std::fabs(y) - envF_);
+      const float a = 1.5708f * envF_ + 1e-4f, n = std::clamp(y / a, -1.5f, 1.5f);
+      // While the note is still growing, the swing is small against what it will be (the level above
+      // lags it): a slower follower holds the drive back until the tone settles, so the onset comes
+      // in darker than the held note, as a real flute's does.
+      envS_ += 0.0005f * (96000.0f / static_cast<float>(fs_)) * (std::fabs(y) - envS_);
+      // (Within 2 dB counts as settled, so a vibrato's swell doesn't darken a held note.)
+      const float settle = std::min(1.0f, 1.25f * (envS_ + 1e-6f) / (envF_ + 1e-6f));
+      const float grow = settle * settle;
+      const float push = std::clamp((breath - 0.2f) / 0.7f, 0.0f, 1.4f);
+      // Bite is how hard the jet is driven across the edge. A wider jet (Aperture) or a looser lip
+      // (Stiffness down) swings less of its width, and a lossier pipe (Loss) has less sound at the
+      // embouchure to swing it: purer and darker. (At the defaults every factor is 1.)
+      const float D = std::max(1e-3f, 8.0f * character.edge * (1.6f - 1.2f * character.aperture) *
+                                          (0.6f + 0.8f * character.stiffness) /
+                                          (1.0f + 4.0f * std::max(0.0f, character.loss - 0.04f)) * push * push * push *
+                                          std::sqrt(push) * reg_);
+      const float off = 1.2f * (0.4f + 1.2f * emb), s0 = std::tanh(off), d0 = 1.0f - s0 * s0;
+      // (Saturated, it still carries more flow at the fundamental, so forte keeps growing a little.)
+      const float Dg = std::max(1e-3f, D * grow);
+      const float J = a * (std::tanh(Dg * n + off) - s0) / (Dg * d0) * std::sqrt(std::max(1.0f, 0.8f * D));
+      const float rad = J - rz_ * rawPrev_;
+      rawPrev_ = J;
+      // The edge's turbulence, band-limited and swelling as the jet sweeps across the edge: more of
+      // it from a wide jet or a loose lip.
+      const float hiss = turb - nhp_.tick(turb);
+      const float airy = (0.5f + character.aperture) * (1.6f - 1.2f * character.stiffness);
+      return dco_.tick(olp2_.tick(olp_.tick(3.0f * rad)) + 0.04f * character.noise * airy * U * hiss * (0.3f + std::fabs(n)));
    }
 
 private:
-   double loopCut(double hz) const { return character.cut(hz * 3.2, 1.5 * hz); }
-   // The loss's pitch, in cents (measured), which cutoffDelay() takes back out.
-   static constexpr double kLossA = 60.5, kLossB = -16.7;
+   double loopCut(double hz) const { return character.cut(hz * 2.4, 1.5 * hz); }
    Delay bore_, jet_;
-   OnePoleLP lp_, jlp_, nlp_;
+   OnePoleLP lp_, jlp_, nlp_, nhp_;
+   Biquad olp_, olp2_;
    DCBlock dc_, dco_;
-   double hz_ = 440.0;
-   float rawPrev_ = 0.0f, envF_ = 0.0f;
+   double hz_ = 440.0, tau_ = 0.0;
+   float rawPrev_ = 0.0f, envF_ = 0.0f, envS_ = 0.0f, reg_ = 1.0f, rz_ = 0.0f;
 };
 
 // Clarinet: a single reed is a pressure-controlled valve on a cylinder closed at the reed. The reed
 // is the Kergomard / Wilson-Beavers valve, u = zeta (1 - gamma + p) sgn(gamma - p) sqrt|gamma - p|,
 // shut when the pressure drop closes it, solved each sample together with the pressure it makes.
-// The bell and tone holes reflect lows and let highs out (a 2-pole lowpass in the loop); what we
-// hear is the transmitted, radiated part.
+// The bell and tone holes reflect lows and let highs out (a 2-pole lowpass in the loop).
+//
+// What we hear is radiated by the open tone holes. Below the lattice's cutoff they radiate the
+// standing wave, whose pressure at the reed has almost no even harmonics (they fall on the bore's
+// impedance minima): the sound outside is that pressure tilted up 6 dB an octave (Benade's spectrum
+// transformation). Above the cutoff the wave runs past the holes and out, and every harmonic leaves.
+// So the low register is odd harmonics with a deep 2nd, and the clarion, whose 2nd harmonic lies
+// near the cutoff, has its even harmonics back.
 class Clarinet final : public Model {
 public:
    void prepare(double fs) override {
@@ -311,6 +361,13 @@ public:
       dc_.setFs(fs_);
       noiseLP_ = {};
       noiseLP_.setHz(800, fs_);
+      hissLP_ = {};
+      hissLP_.setHz(400, fs_);
+      outLP_ = {};
+      outLP_.setHz(3000.0, fs_);
+      outLP2_ = {};
+      outLP2_.setHz(3000.0, fs_);
+      thru_.clear();
       tx_ = 0.0f;
    }
    double nominal(double hz) const override { return fs_ / (2.0 * hz); }
@@ -328,16 +385,31 @@ public:
       const double cut = character.cut(std::max(1300.0, 2.2 * hz), 2.1 * hz);
       lp_.setHz(cut, fs_);
       lp2_.setHz(cut, fs_);
+      thru_.highpass(cut, 0.7071, fs_);
    }
    float tick(float breath, float emb, double len, float tn) override {
-      const float noise = noiseLP_.tick(rng.white());
+      const float white = rng.white();
+      const float noise = noiseLP_.tick(white);
       const float growl = std::max(0.0f, breath - 0.9f) * 0.1f * character.edge * character.growl;
-      const double g = 0.7 * lift_ * breath * (1 + (0.012f * character.noise + growl) * noise) + tn * 0.04f * noise;
-      const double z = 0.35 * (0.8 + 0.4 * emb) * (0.6 + 0.8 * character.aperture);
-      // A stiffer reed closes over a shorter curl of its tip.
-      const double knee = 0.04 + 0.16 * (1.0 - character.stiffness);
+      // Bite: the lip pressing the reed nearer the lay, so less breath closes it (a higher gamma for
+      // the same breath) through a narrower slit (a lower zeta): buzzier and brighter. Eased off, the
+      // lip cushions the reed, which closes softly onto the lay: round and dark. A softer reed bends
+      // with less breath (bright, buzzy); a harder one opens less under the same flow (a lower
+      // zeta: darker, and it needs more breath).
+      const float e = character.edge - 1.0f, st = character.stiffness - 0.5f;
+      const double bite = 1.0 + 0.2 * std::max(0.0f, e);
+      const double soft = 1.0 + 0.24 * std::max(0.0f, -st);
+      const double g = 0.7 * lift_ * breath * bite * soft * (1 + (0.012f * character.noise + growl) * noise) +
+                       tn * 0.04f * noise;
+      const double z = 0.35 * (0.8 + 0.4 * emb) * (0.6 + 0.8 * character.aperture) *
+                       (1.0 - 0.12 * std::max(0.0f, e) + 0.1 * std::min(0.0f, e)) * (1.0 - 0.4 * std::max(0.0f, st));
+      // A stiffer reed closes over a shorter curl of its tip; a cushioning lip lengthens it.
+      const double knee = 0.04 + 0.16 * (1.0 - character.stiffness) + 0.25 * std::max(0.0f, -e);
       const double inc = bore_.read(len);
-      const double back = -character.keep(0.96f) * lp2_.tick(lp_.tick(static_cast<float>(inc)));
+      // The Loss knob: more of each trip soaked up by the walls, so the tone is darker and needs more
+      // breath (the lightest touch may no longer speak near the knob's end).
+      const float lossK = std::clamp(1.0f - 0.1f * (character.loss - 0.04f), 0.9f, 1.02f);
+      const double back = -std::min(0.995f, 0.96f * lossK) * lp2_.tick(lp_.tick(static_cast<float>(inc)));
       const auto F = [g, z, knee](double p) {
          // The reed closes softly (its tip curls onto the lay), not at a hard corner, which would
          // make a beating reed's tone rough and noisy.
@@ -356,19 +428,26 @@ public:
          else
             lo = u;
       }
-      bore_.push(static_cast<float>(back + 0.5 * (lo + hi)));
-      // Radiated: what leaves the open end, (1 + R) p, differentiated (a monopole).
-      const float t = static_cast<float>(inc + back);
+      const double u = 0.5 * (lo + hi);
+      // Breath noise: the air rushing through the reed's slit is turbulent, and its hiss (a band
+      // above a few hundred Hz) rides on the flow into the bore, coloured by it on the way out.
+      const float hiss = (white - hissLP_.tick(white)) * 0.6f;
+      const double turb = hiss * character.noise * (0.5f + 0.5f * character.noise) * std::sqrt(std::max(0.0, u)) * 0.1;
+      bore_.push(static_cast<float>(back + u + turb));
+      // Radiated: the reed's pressure (the standing wave the holes radiate below the cutoff), less
+      // the wave that runs past the holes above it, and differentiated (the holes are monopoles).
+      const float t = outLP2_.tick(outLP_.tick(static_cast<float>(2.0 * back + u) - thru_.tick(static_cast<float>(inc))));
       const float o = (t - tx_) * static_cast<float>(fs_ / 96000.0);
       tx_ = t;
-      return dc_.tick(8.0f * o);
+      return dc_.tick(10.0f * o);
    }
 
 private:
    // How much of the filters' delay shows in the pitch, and the loss's pitch in cents (measured).
    static constexpr double kCutPitch = 1.0, kLossA = -13.0, kLossB = 1.8;
    Delay bore_;
-   OnePoleLP lp_, lp2_, noiseLP_;
+   OnePoleLP lp_, lp2_, noiseLP_, hissLP_, outLP_, outLP2_;
+   Biquad thru_;
    DCBlock dc_;
    double hz_ = 294.0, lift_ = 1.0;
    float tx_ = 0.0f;
