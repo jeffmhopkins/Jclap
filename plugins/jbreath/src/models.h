@@ -530,7 +530,14 @@ public:
       // (A bigger family member has a bigger reed and a wider bore, which loses less on each trip.)
       const double fam = family(hz), low = (1.0 - fam) / (1.0 - familyMin_);
       reedScale_ = 1.0 / std::pow(fam, reedLow_);
-      tauS_ = tau_ * fs_ / std::pow(fam, familyApex_);
+      // The apex's round trip grows with the family member, and on the lowest notes it is never
+      // shorter than apexTurns of the period, as if the family scaling began there. (A resonance
+      // of the two tubes takes the reed in proportion to sin^2(pi f tau). With a short apex under a
+      // long body the fundamental hardly couples while the third resonance couples five times as
+      // well, so a forte start first settles into the twelfth's two-step motion, the reed shutting
+      // three times a period, and the fundamental then grows through it at its bore's slow rate: a
+      // quick start, then a 6 dB swell over a quarter of a second.)
+      tauS_ = std::max(tau_ / std::pow(fam, familyApex_), apexTurns_ / hz) * fs_;
       // The Loss knob: a rougher, lossier bore soaks up its highs on every trip (wall losses grow
       // with frequency) far more than its fundamental, so most of it darkens the tone through the
       // wall filters and only a tenth of it takes from the whole reflection (all of it would stop the
@@ -625,12 +632,13 @@ protected:
    // corner and resonance (the formant); the reflection per trip (keepLow for the biggest family
    // member), the apex's share of the holes' filter, how much of the highs the open holes (radHigh)
    // and, in the lowest octave, the bell (radBell) send out; the breath's noise, the tongue's and
-   // the forte growl; and how much bigger the family's reeds are (family^-reedLow).
+   // the forte growl; how much bigger the family's reeds are (family^-reedLow); and the shortest
+   // apex round trip on the lowest notes, as a share of the period (apexTurns; 0 for none).
    double tau_ = 1.0e-3, cut_ = 1200.0, latticeQ_ = 0.8, wallK_ = 30.0, liftDb_ = 2.0, liftQ_ = 0.7;
    double lowHz_ = 138.6, familyMin_ = 0.25, familyApex_ = 1.0, zeta_ = 0.6, gamma_ = 0.6, radHz_ = 1200.0, radQ_ = 1.5;
    float keep_ = 0.92f, keepLow_ = 0.95f, apexMix_ = 0.5f, radHigh_ = 0.5f, radBell_ = 0.8f, outGain_ = 1.0f;
    float noiseHz_ = 3000, breathNoise_ = 0.05f, tongueNoise_ = 0.3f, growl_ = 0.6f;
-   double reedCoef_ = 1.0, reedLow_ = 1.0;
+   double reedCoef_ = 1.0, reedLow_ = 1.0, apexTurns_ = 0.0;
 
 private:
    Delay body_, apex_;
@@ -647,8 +655,12 @@ private:
 // Alto saxophone: a single reed on a wide mouthpiece whose volume stands in for a long missing cone
 // (a 1 ms round trip: the pulse's minima near 1, 2 and 3 kHz), a wide bore that loses little on each
 // trip, holes that cut off near 1.2 kHz, and a bell that lets more of the highs out of the lowest
-// octave than the holes do above it. Below Db3 it plays as a baritone or bass sax.
-class Sax final : public ConicalReed {};
+// octave than the holes do above it. Below Db3 it plays as a baritone or bass sax. From C#4 down its
+// apex keeps 0.28 of the period, so the bottom notes start on their fundamental.
+class Sax final : public ConicalReed {
+public:
+   Sax() { apexTurns_ = 0.28; }
+};
 
 // Oboe (double reed): two cane blades beating at the top of a narrow cone. The reed and its staple
 // stand in for a short missing apex (0.5 ms: the pulse's minima near 2 and 4 kHz), the narrow bore
