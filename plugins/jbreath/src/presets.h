@@ -320,6 +320,12 @@ inline const std::vector<Preset> &factoryPresets() {
                    {{kModel, A}, {kAlienTalk, 0.6}, {kAlienFollow, 1.0}, {kAlienVoice, 0.2}, {kAlienSharp, 0.6},
                     {kAttack, 20}, {kRelease, 250}, {kVibDepth, 0.02}, {kRoom, 0.3}}});
 
+      // A living creature: rough, growling, a wet throat, an octave under the note in its rasp.
+      p.push_back({"Swamp Creature", "Alien",
+                   {{kModel, A}, {kAlienTalk, 0.55}, {kAlienRough, 0.75}, {kAlienGrowl, 0.6}, {kAlienWet, 0.55},
+                    {kAlienShift, -0.25}, {kAlienVoice, 0.3}, {kAlienBreathy, 0.35}, {kAttack, 30}, {kRelease, 300},
+                    {kVibDepth, 0.0}, {kRoom, 0.3}}});
+
       // Talkers: the same voice set to speak in different ways, from crisp to drawled.
       // Crisp: each vowel snapped to, nothing wandering, no pitch slide: the clearest diction (play
       // it hard for s, t, k).
@@ -335,7 +341,8 @@ inline const std::vector<Preset> &factoryPresets() {
       // A machine reading out its words: every 1/4 a new syllable, snapped, dead steady.
       p.push_back({"Envoy Unit", "Alien",
                    {{kModel, A}, {kAlienTalk, 0.75}, {kAlienGlide, 10}, {kAlienPace, 3}, {kAlienLinger, 0.0},
-                    {kAlienSharp, 0.8}, {kAlienDrift, 0.0}, {kAlienBreathy, 0.0}, {kAlienSpread, 0.2}, {kAttack, 5},
+                    {kAlienSharp, 0.8}, {kAlienDrift, 0.0}, {kAlienBreathy, 0.0}, {kAlienSpread, 0.2}, {kAlienRough, 0.0},
+                    {kAlienWet, 0.0}, {kAttack, 5},
                     {kRelease, 90}, {kVibDepth, 0.0}, {kVoiceMode, kMonoMode}, {kRoom, 0.15}}});
       // Slow and slurred: long glides between vowels, a slide between notes.
       p.push_back({"Slow Drawl", "Alien",

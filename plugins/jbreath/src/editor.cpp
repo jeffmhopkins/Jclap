@@ -2333,7 +2333,7 @@ private:
          tips_.add(*vowelMap_, "Where its vowels are: hollow dots a human's, lit ones its own, moved by SHIFT, SPREAD and FLIP, "
                                "with ACCENT's reach around each.");
       }
-      const auto a1 = ui::row({496, 92, 386, 96}, 6), a2 = ui::row({496, 188, 386, 96}, 6), a3 = ui::row({496, 284, 386, 96}, 6);
+      const auto a1 = ui::row({492, 92, 394, 96}, 7), a2 = ui::row({492, 188, 394, 96}, 7), a3 = ui::row({492, 284, 394, 96}, 7);
       const auto alienKnob = [&](clap_id id, const char *name, ui::Rect cell, const char *tip) {
          ui::Knob &k = knob(id, name, modelColor(kAlien), cell, tip);
          k.setTextSizes(8.5f, 9.5f, 8.5f);
@@ -2351,15 +2351,23 @@ private:
       alienKnob(kAlienSharp, "SHARP", a1[4], "How narrow the resonances are: wide and soft, to ringing, to whistling.");
       alienKnob(kAlienFollow, "FOLLOW", a1[5], "How far the throat follows the note: none is a singer's (the vowels stay "
                                                "put), all moves them with the pitch, tiny up high and huge down low.");
+      // How alive it is.
+      alienKnob(kAlienWet, "WET", a1[6], "A throat with something moving in it: its resonances shiver and gurgle, "
+                                         "wetter and wider the more of it.");
+      alienKnob(kAlienRough, "ROUGH", a2[0], "How unsteady the folds are, as a living voice's: the pitch wanders, scoops "
+                                             "up into each syllable and falls away at the end, every pulse a little off. "
+                                             "None is a machine's.");
+      alienKnob(kAlienGrowl, "GROWL", a2[1], "A creature's rasp: every other pulse weaker and later (a growl an octave "
+                                             "under the note), a rattle, and now and then a creak.");
       // Its movement and its sound.
-      alienKnob(kAlienMorph, "WOBBLE", a2[0], "Each resonance swings on a slow wave of its own: a warble, then a wild "
+      alienKnob(kAlienMorph, "WOBBLE", a2[3], "Each resonance swings on a slow wave of its own: a warble, then a wild "
                                               "swirl of vowels.");
-      alienKnob(kAlienDrift, "DRIFT", a2[1], "How far the vowels wander on their own: every note a little different.");
-      alienKnob(kAlienGlide, "GLIDE", a2[2], "How long each vowel takes to arrive: a snap, as in speech, to a slow slide.");
-      alienKnob(kAlienBend, "BEND", a2[3], "How far the throat follows a pitch bend (MPE or the wheel): none keeps the "
+      alienKnob(kAlienDrift, "DRIFT", a2[4], "How far the vowels wander on their own: every note a little different.");
+      alienKnob(kAlienGlide, "GLIDE", a2[5], "How long each vowel takes to arrive: a snap, as in speech, to a slow slide.");
+      alienKnob(kAlienBend, "BEND", a2[6], "How far the throat follows a pitch bend (MPE or the wheel): none keeps the "
                                            "vowel where it is, all slides it with the pitch.");
-      alienKnob(kAlienBreathy, "BREATHY", a2[4], "How much air goes through the folds with the voice: clear, to a whisper.");
-      alienKnob(kAlienBow, "BOW", a2[5], "How much a bowed string takes the voice's place: all of it, and the string sings "
+      alienKnob(kAlienBreathy, "BREATHY", a2[2], "How much air goes through the folds with the voice: clear, to a whisper.");
+      alienKnob(kAlienBow, "BOW", a3[5], "How much a bowed string takes the voice's place: all of it, and the string sings "
                                          "the words.");
       // Its words.
       alienKnob(kAlienStrength, "CONSONANT", a3[0], "How strong the consonants are: none leaves only the vowels, all of it "

@@ -76,7 +76,10 @@ inline int diceSection(clap_id id) {
    case kAlienSpread:
    case kAlienFlip:
    case kAlienFollow:
-   case kAlienSeed: return kDiceInstrument;
+   case kAlienSeed:
+   case kAlienRough:
+   case kAlienGrowl:
+   case kAlienWet: return kDiceInstrument;
    case kLength:
    case kLoss:
    case kHoleCutoff:
@@ -325,6 +328,9 @@ inline Span sane(clap_id id, int model) {
    case kAlienSpread: return Span{-0.5, 0.5};
    case kAlienFlip: return Span{0.0, 0.6};
    case kAlienFollow: return Span{0.0, 0.5};
+   case kAlienRough: return Span{0.2, 0.8};
+   case kAlienGrowl: return Span{0.0, 0.6};
+   case kAlienWet: return Span{0.0, 0.6};
    case kAlienBow: return Span{0.0, 0.5};
    case kAlienTalk: return Span{0.1, 0.9};
    case kAlienLinger: return Span{0.0, 0.8};
@@ -443,6 +449,9 @@ inline void randomInstrument(Values &v, DiceRng &rng, int m, double c) {
       set(v, kAlienFlip, rng.range(0.0, 0.6) * c * c, m);
       set(v, kAlienFollow, rng.range(0.0, 0.5) * c, m);
       v.set(kAlienSeed, std::floor(rng.unit() * 1000.0));
+      set(v, kAlienRough, rng.range(0.3, 0.5 + 0.3 * c), m);
+      set(v, kAlienGrowl, rng.range(0.0, 0.1 + 0.5 * c), m);
+      set(v, kAlienWet, rng.range(0.05, 0.25 + 0.35 * c), m);
    }
 }
 

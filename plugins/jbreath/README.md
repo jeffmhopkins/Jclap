@@ -76,6 +76,12 @@ ALIEN tab:
   at the front and the close ones at the back; all the way, ee is where ah was.
 - **SIZE**: every resonance up or down an octave, a tiny throat or a huge one.
 - **SHARP**: how narrow the resonances are, from soft to ringing whistles like a throat singer's.
+- **WET**: a throat with something moving in it: its resonances shiver and gurgle.
+- **ROUGH**: how unsteady the folds are, as a living voice's: the pitch wanders, scoops up into each
+  syllable and falls away at its end, every pulse a little off in time and strength, the breath in
+  gusts. At none it's a machine.
+- **GROWL**: a creature's rasp: every other pulse weaker and later (a growl an octave under the
+  note), a rattle, and now and then a creak.
 - **FOLLOW**: how far the throat follows the note: none is a singer's, all moves the vowels with the
   pitch, tiny up high and huge down low.
 - **WOBBLE**: each resonance swings on a slow wave of its own, from a warble to a swirl.
@@ -295,7 +301,7 @@ GLIDE setting how long the pitch takes to get there.
 
 ### Presets
 
-Eighty-six factory presets: Init, then eight to twenty for each instrument, each family starting
+Eighty-seven factory presets: Init, then eight to twenty for each instrument, each family starting
 from its most natural sound (Concert Flute, Wooden Reed, Clean Alto, Dusk Oboe, Brass Plume, First
 Contact: the model's own voice, measured against the Iowa recordings, with a player's vibrato and a
 little room) and running through darker, breathier, brighter and harder variants, its relatives by
@@ -312,10 +318,10 @@ Transpose and its oddities:
 - **Trumpet** (11): Brass Plume, Fanfare, the mutes (Straight Mute, Cup Mute, Muted Night with a
   Harmon, Plunger Wah with the plunger on the slide, Bucket Ballad), Flugel Glow, French Horn,
   Trombone Slide and Piccolo Trumpet.
-- **Alien** (25): Alien Speech, First Contact (a plain voice for your words), Talking Bow (the
+- **Alien** (26): Alien Speech, First Contact (a plain voice for your words), Talking Bow (the
   string sings the words; the slide bends its accent), Throat Singer, Xeno Choir, Tractor Beam (a
   word a beat), Insect Hymn, Mothership, Signal Lost, Ion Flutter; five strange throats (Inside Out,
-  Glass Mouth, Muffled Moan, Warble Choir and Tiny Giant); five that speak in different ways (Crisp
+  Glass Mouth, Muffled Moan, Warble Choir and Tiny Giant), Swamp Creature (rough, growling and wet); five that speak in different ways (Crisp
   Diction, Chatterbox, Envoy Unit, Slow Drawl and Whisper Tongue); and five that sing (a syllable a
   note, a late vibrato): Hymn Singer, Ballad Voice, Folk Tenor, Baritone Chant and Lullaby.
 - **Pad** (6): the HYBRID voice as a pad under an instrument, at a low FOLLOW with a slow attack and a
