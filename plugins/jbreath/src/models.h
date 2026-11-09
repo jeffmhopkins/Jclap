@@ -592,6 +592,8 @@ public:
       tone_ = {};
       toneAt_ = 0;
       toneDyn_ = 0.0f;
+      formant_.clear();
+      lowCut_.clear();
       y_ = dp_ = 0.0;
       cutHz_ = liftHz_ = wallHz_ = radHz0_ = -1.0;
       notePitch(hz_);
@@ -644,6 +646,15 @@ public:
       if (hz != liftHz_) {
          liftHz_ = hz;
          lift_.peak(hz, liftQ_, liftDb_, fs_);
+         // The low register (Sax only): a real sax's lowest notes have a weak fundamental (the bell
+         // radiates little of it) under a strong band of harmonics near 650 Hz, its formant, and a
+         // plateau of harmonics on to 3 kHz: the honk (UNSW tenor, low Bb to G: H1 12 to 15 dB under
+         // the 500 to 700 Hz harmonics at every dynamic; Iowa alto from Db3: H1 to H5 level). It
+         // fades in from 300 Hz down, all of it by 150 Hz; the middle register keeps its round
+         // fundamental.
+         lowReg_ = static_cast<float>(toneDepth_ > 0.0 ? std::clamp((300.0 - hz) / 150.0, 0.0, 1.0) : 0.0);
+         formant_.peak(650.0, 1.1, 9.0 * lowReg_, fs_);
+         lowCut_.highpass(std::min(190.0, 0.4 * fs_), 0.6, fs_);
       }
       const double wallHz = wallK_ * hz * std::pow(std::min(lossK, 1.2), 5.0);
       if (wallHz != wallHz_) {
@@ -732,9 +743,9 @@ public:
       // harmonics is shelved down, by toneDepth dB at the softest and none from forte up, and the
       // level swings by rangeDb more over the dynamics, as a real one's does (about 15 dB, pp to ff).
       if ((toneAt_++ & 15) == 0) {
-         // (It follows the breath over a few tens of ms, as the reed's swing does, so a tongue's
+         // (It follows the breath over 60 ms, as the reed's swing does, so a tongue's
          // quick burst on a soft note is an accent, not a forte.)
-         toneDyn_ += (dyn - toneDyn_) * static_cast<float>(1.0 - std::exp(-16.0 / (0.04 * fs_)));
+         toneDyn_ += (dyn - toneDyn_) * static_cast<float>(1.0 - std::exp(-16.0 / (0.06 * fs_)));
          const float dyn = toneDyn_;
          const double fc = std::min(hz_ * std::exp2(toneLow_ + 1.6 * dyn), 0.45 * fs_);
          tone_.lowpass(fc, 0.7, fs_);
@@ -742,11 +753,21 @@ public:
          // (and pushed past forte the reed's buzz comes up over what the bore gives: the Iowa alto's
          // H6 to H12 at ff stand at -20 to -31 dB).
          const float push = std::clamp((dyn - 0.85f) / 0.25f, 0.0f, 1.0f);
-         toneShelf_ = static_cast<float>(std::pow(10.0, (8.0 * push - toneDepth_ * std::pow(soft, 1.3f)) / 20.0));
-         toneGain_ = static_cast<float>(std::pow(10.0, rangeDb_ * (dyn - 0.6) / 20.0));
+         // (The low register darkens far less when it's played softly: the UNSW tenor's low Bb,
+         // very soft, still has H1 to H4 level and H9 to H20 at -25 to -45 dB.)
+         const double depth = toneDepth_ * (1.0 - 0.7 * lowReg_);
+         toneShelf_ = static_cast<float>(std::pow(10.0, (8.0 * push * (1.0 - lowReg_) - depth * std::pow(soft, 1.3f)) / 20.0));
+         // (The low register's own swing is wider already: its harmonics grow faster than its weak
+         // fundamental, so it takes less of the extra.)
+         toneGain_ = static_cast<float>(std::pow(10.0, rangeDb_ * (1.0 - 0.75 * lowReg_) * (dyn - 0.6) / 20.0));
       }
       const float low = tone_.tick(out);
-      return (low + toneShelf_ * (out - low)) * toneGain_;
+      float y = low + toneShelf_ * (out - low);
+      if (lowReg_ > 0.0f) {
+         const float cut = lowCut_.tick(y);
+         y = formant_.tick(y + lowReg_ * (cut - y));
+      }
+      return y * toneGain_;
    }
 
 protected:
@@ -788,10 +809,10 @@ protected:
 
 private:
    Delay body_, apex_;
-   Biquad lattice_, apexLattice_, lift_, radiate_, tone_;
+   Biquad lattice_, apexLattice_, lift_, radiate_, tone_, formant_, lowCut_;
    Player player_;
    unsigned toneAt_ = 0;
-   float toneGain_ = 1.0f, toneShelf_ = 1.0f, toneDyn_ = 0.0f;
+   float toneGain_ = 1.0f, toneShelf_ = 1.0f, toneDyn_ = 0.0f, lowReg_ = 0.0f;
    OnePoleLP wall_, apexWall_, noiseLP_;
    DCBlock dc_;
    double hz_ = 294.0, cutHz_ = -1.0, liftHz_ = -1.0, wallHz_ = -1.0, radHz0_ = -1.0, wallDelay_ = 0.0;
@@ -812,7 +833,7 @@ public:
       apexTurns_ = 0.28;
       toneLow_ = 0.4;
       toneDepth_ = 40.0;
-      rangeDb_ = 6.0;
+      rangeDb_ = 4.0;
       scoopCents_ = 45.0;
    }
 };
