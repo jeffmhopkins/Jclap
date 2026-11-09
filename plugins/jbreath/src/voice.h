@@ -57,7 +57,8 @@ struct VoiceSettings {
    double stiffness = 0.5, aperture = 0.5, growl = 0.0, cone = 0.5, brass = 0.5;
    // The Alien's throat: Voice, Morph, Drift, Shift and Sharp.
    double alienVoice = 0.0, alienMorph = 0.3, alienDrift = 0.3, alienShift = 0.0, alienSharp = 0.5, alienBow = 0.15, alienTalk = 0.5, alienPaceSec = 0.0, alienLinger = 0.3, alienGlide = 30.0, alienBend = 0.6, alienStrength = 1.0;
-   uint32_t alienSounds = 0xffu;
+   uint32_t alienSounds = 0xffu, alienVowels = 0x1fu;
+   int alienOrder = 0;
    double loss = 0.04, cutoffHz = 1300.0, detune = 0.0, humanize = 0.0, air = 0.0;
    int tongueType = kTongueHard, vibType = kVibBreath;
    // HYBRID: a plain subtractive voice on the same breath: its wave, octave and detune, how loud it
@@ -868,6 +869,8 @@ private:
          c.bendSemis = static_cast<float>(bendSemis_ * live_.alienBend);
          c.consonants = static_cast<float>(live_.alienStrength);
          c.sounds = live_.alienSounds;
+         c.vowels = live_.alienVowels;
+         c.order = live_.alienOrder;
          float cutoff = static_cast<float>(live_.cutoffHz / 1300.0) * holeK * tube.cut, loss = tube.loss;
          Mute::bore(settings_.mute, mute_.amount(), cutoff, loss);
          c.loss = std::max(0.0f, static_cast<float>(live_.loss) + loss);
@@ -1317,6 +1320,8 @@ private:
       live_.alienBend = at(kDest<kAlienBend>, s.alienBend);
       live_.alienStrength = at(kDest<kAlienStrength>, s.alienStrength);
       live_.alienSounds = s.alienSounds;
+      live_.alienVowels = s.alienVowels;
+      live_.alienOrder = s.alienOrder;
       live_.detune = at(kDest<kDetune>, s.detune);
       live_.air = at(kDest<kAir>, s.air);
       applyCharacter();

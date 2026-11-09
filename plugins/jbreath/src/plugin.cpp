@@ -587,6 +587,10 @@ private:
       vs.alienSounds = 0;
       for (int f = 0; f < 8; ++f)
          vs.alienSounds |= value(kAlienSounds + f) > 0.5 ? 1u << f : 0u;
+      vs.alienVowels = 0;
+      for (int f = 0; f < 5; ++f)
+         vs.alienVowels |= value(kAlienVowels + f) > 0.5 ? 1u << f : 0u;
+      vs.alienOrder = static_cast<int>(value(kAlienOrder) + 0.5);
       vs.brass = value(kBrass, s);
       vs.loss = value(kLoss, s);
       vs.cutoffHz = value(kHoleCutoff, s);
@@ -1123,7 +1127,7 @@ private:
    bool reverbOn_ = true;
    double tempo_ = 120.0;
    Limiter limiter_;
-   int limiterMode_ = kLimitSoft;
+   int limiterMode_ = kLimitHard;
    float master_ = 1.0f;
    double spread_ = 0.5;
    uint64_t quietFrames_ = 0;

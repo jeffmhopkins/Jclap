@@ -33,6 +33,10 @@ public:
    void select(int page);
    // Shows only the selected page's frames again, after something else showed or hid them.
    void showSelected();
+   // Hides a tab (its place on the bar stays empty) or shows it again. A hidden tab can't be
+   // picked; hiding the one that's showing shows the first instead.
+   void setTabHidden(int page, bool hidden);
+   bool tabHidden(int page) const { return page >= 0 && page < static_cast<int>(hidden_.size()) && hidden_[page]; }
 
    void setAccent(unsigned color);
    void setTheme(const Theme &theme);
@@ -51,6 +55,7 @@ private:
    const Theme *theme_ = &defaultTheme();
    std::vector<std::string> names_;
    std::vector<std::vector<visage::Frame *>> pages_;
+   std::vector<bool> hidden_ = std::vector<bool>(names_.size(), false);
    int selected_ = 0;
    int hover_ = -1;
    unsigned accent_ = 0;

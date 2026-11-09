@@ -160,7 +160,11 @@ enum ParamId : clap_id {
    kAlienStrength,
    kAlienSounds,
    kAlienSoundsEnd = kAlienSounds + 8,
-   kParamCount = kAlienSoundsEnd
+   // Its vowels: which of A E I O U it says (each on or off), and how a note picks its first.
+   kAlienVowels = kAlienSoundsEnd,
+   kAlienVowelsEnd = kAlienVowels + 5,
+   kAlienOrder = kAlienVowelsEnd,
+   kParamCount
 };
 // The AIR view's look: the panel's own, kept with the project but not with presets.
 inline bool isLookParam(clap_id id) { return (id >= kLook && id <= kGlow) || (id >= kLoopX && id <= kLoopSizeMin); }
@@ -282,6 +286,7 @@ inline const char *const kHolesNames[] = {"Closed", "Lattice 3", "Lattice 5", "L
 inline const char *const kTubeNames[] = {"Grenadilla", "Boxwood", "Maple", "Bamboo", "Brass", "Silver", "Resin", "Glass"};
 inline const char *const kLimiterNames[] = {"Off", "Soft", "Hard"};
 inline const char *const kOffOnNames[] = {"Off", "On"};
+inline const char *const kAlienOrderNames[] = {"Random", "In Turn", "By Pitch", "Same"};
 inline const char *const kMuteNames[] = {"Open", "Straight", "Cup", "Harmon", "Plunger", "Bucket"};
 // How often a held Alien note goes on to its next syllable: free (by Talk), or a note value at the
 // host's tempo, in beats.
@@ -362,7 +367,7 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kRoomDamp, "Room Damping", "Room", 0.0, 1.0, 0.5, kGlobalMod},
       {kRoomPreDelay, "Room Pre-Delay", "Room", 0.0, 100.0, 12.0, kGlobalMod},
       {kMaster, "Master", "Output", -36.0, 6.0, 0.0, kGlobalMod},
-      {kLimiter, "Limiter", "Output", 0.0, 2.0, 1.0, kGlobalChoice},
+      {kLimiter, "Limiter", "Output", 0.0, 2.0, 2.0, kGlobalChoice},
       {kLook, "Look", "View", 0.0, 1.0, 0.0, kLookFlags},
       {kPalette, "Palette", "View", 0.0, 4.0, 0.0, kLookFlags},
       {kTurbulence, "Turbulence", "View", 0.0, 1.0, 0.42, kLookKnob},
@@ -421,6 +426,12 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kAlienSounds + 5, "Alien H", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
       {kAlienSounds + 6, "Alien F S", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
       {kAlienSounds + 7, "Alien P T K", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienVowels + 0, "Alien A", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienVowels + 1, "Alien E", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienVowels + 2, "Alien I", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienVowels + 3, "Alien O", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienVowels + 4, "Alien U", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienOrder, "Alien Vowel Order", "Alien", 0.0, 3.0, 0.0, kGlobalChoice},
    };
    for (const auto &d : fixed)
       p[d.id] = d;
@@ -516,8 +527,16 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kAlienSounds + 5:
    case kAlienSounds + 6:
    case kAlienSounds + 7:
+   case kAlienVowels + 0:
+   case kAlienVowels + 1:
+   case kAlienVowels + 2:
+   case kAlienVowels + 3:
+   case kAlienVowels + 4:
       count = 2;
       return kOffOnNames;
+   case kAlienOrder:
+      count = 4;
+      return kAlienOrderNames;
    case kDelaySync:
       count = kDelaySyncCount;
       return kDelaySyncNames;

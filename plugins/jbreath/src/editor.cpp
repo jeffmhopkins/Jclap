@@ -2039,6 +2039,8 @@ public:
                if (l.slot == loudest)
                   partials = harmonics(l.samples, hz, rate);
          }
+         // (The ALIEN tab only while the Alien is the instrument.)
+         exciterTabs_->setTabHidden(2, model != kAlien);
          if (exciterTabs_->selected() == 0)
             valve_->set(model, host_.paramModulated(kEmbouchure), breaths, host_.paramModulated(kStiffness),
                         host_.paramModulated(kAperture), host_.paramModulated(kEdge));
@@ -2238,8 +2240,8 @@ private:
       tabs.addToPage(0, familyKnob(kAperture, "APERTURE", bottom[0],
                                    "How far the reed or lips stand open (the jet's width on a flute): wide is loud and free, "
                                    "narrow is thin and focused. On the Alien, how wide the bow lies on the string."));
-      tabs.addToPage(0, familyKnob(kNoise, "NOISE", bottom[1], "Breath noise and turbulence."));
-      tabs.addToPage(0, familyKnob(kKick, "KICK", bottom[2], "The burst of pressure as the tongue lets the air go."));
+      tabs.addToPage(0, familyKnob(kNoise, "NOISE", bottom[1], "The hiss of air in the tone: up for breathy and airy, down for clean and pure."));
+      tabs.addToPage(0, familyKnob(kKick, "KICK", bottom[2], "The burst of air as the tongue lets go: up for a hard, spitty start, down for a smooth one."));
       tabs.addToPage(0, familyKnob(kGrowl, "GROWL", bottom[3],
                                    "A growl in the throat: a rough flutter rides on the air, on any instrument, and a hard-blown "
                                    "reed rasps more."));
@@ -2267,12 +2269,12 @@ private:
                 "How much the oscillator's level follows the breath. 0 is a pad: it plays at the note's velocity, "
                 "shaped only by its envelope, and rings on through its release after you let go.");
       synthKnob(kHybridCutoff, "CUTOFF", h2[0], "The lowpass's cutoff at a middling breath (it follows the note half way).");
-      synthKnob(kHybridResonance, "RESO", h2[1], "The lowpass's peak at its cutoff.");
+      synthKnob(kHybridResonance, "RESO", h2[1], "The lowpass's peak at its cutoff: up is a nasal, whistling edge, down a smooth fall-off.");
       synthKnob(kHybridFilterBreath, "OPEN", h2[2], "How far the breath opens the lowpass: soft is dark, hard is bright.");
       synthKnob(kHybridFilterEnv, "F.ENV", h2[3], "How far the envelope moves the lowpass, up to 5 octaves up (or down, below 0).");
       synthKnob(kHybridAttack, "ATTACK", h3[0], "The oscillator's envelope: how long it takes to rise, 1 ms to 10 s.");
-      synthKnob(kHybridDecay, "DECAY", h3[1], "How long it takes to fall from the top to the sustain.");
-      synthKnob(kHybridSustain, "SUSTAIN", h3[2], "Where it holds while the note is held.");
+      synthKnob(kHybridDecay, "DECAY", h3[1], "How long the oscillator takes to fall from its peak to the sustain: short is plucky, long blooms.");
+      synthKnob(kHybridSustain, "SUSTAIN", h3[2], "How loud the oscillator holds while the note is held, as a share of its peak.");
       synthKnob(kHybridRelease, "RELEASE", h3[3], "How long it rings on after the note ends, up to 10 s (at Follow 0).");
       tabs.addToPage(1, add<ui::Label>({236, 370, 646, 16},
                                        "BLOWN BY THE SAME BREATH, OR A PAD ON ITS OWN ENVELOPE (FOLLOW 0)  ·  UNISON AND VIBRATO SHAPE IT TOO",
@@ -2282,7 +2284,7 @@ private:
       throatRing_ = &tabs.addToPage(2, add<ThroatRing>({32, 104, 190, 276}, 190.0f));
       tips_.add(*throatRing_, "The Alien's throat travels round this ring of shapes: five vowels, and a ghost, an abyss and an "
                               "insect no throat has. The hollow ring is where each note starts; each dot is a voice's throat now.");
-      formantGraph_ = &tabs.addToPage(2, add<FormantGraph>({236, 104, 250, 262}, 250.0f));
+      formantGraph_ = &tabs.addToPage(2, add<FormantGraph>({236, 104, 250, 206}, 250.0f));
       tips_.add(*formantGraph_, "The throat's five resonances as they are now, and the note's harmonics they lift.");
       const auto a1 = ui::row({496, 90, 386, 112}, 6), a2 = ui::row({496, 206, 386, 112}, 6);
       const auto alienKnob = [&](clap_id id, const char *name, ui::Rect cell, const char *tip) {
@@ -2291,7 +2293,7 @@ private:
          alienKnobs_.push_back(&k);
          tabs.addToPage(2, k);
       };
-      alienKnob(kAlienVoice, "VOICE", a1[0], "Where on the ring each note's throat starts.");
+      alienKnob(kAlienVoice, "VOICE", a1[0], "Which vowel or shape each note's throat starts on, round the ring.");
       alienKnob(kAlienMorph, "MORPH", a1[1], "How fast the throat travels round the ring while a note is held: from still to a "
                                              "shape every third of a second.");
       alienKnob(kAlienDrift, "DRIFT", a1[2], "How far the throat wanders on its own, each resonance a little apart from the "
@@ -2331,19 +2333,36 @@ private:
       }
       alienKnob(kAlienPace, "PACE", a2[5], "How often a held note goes on to its next syllable. Free: by Talk. A note "
                                            "value: in time with the host's tempo.");
-      tabs.addToPage(2, add<ui::Label>({236, 370, 460, 16},
-                                       "THE ALIEN ONLY  ·  EVERY NOTE A SYLLABLE",
-                                       kFaint, visage::Font::kLeft, 0.68f));
+      // The vowels it says, each on or off, and how a note picks its first.
+      tabs.addToPage(2, add<ui::Label>({236, 316, 250, 14}, "VOWELS", kDim, visage::Font::kLeft, 0.68f));
+      {
+         static const char *const kVowelNames[5] = {"A", "E", "I", "O", "U"};
+         const auto vw = ui::row({236, 332, 250, 22}, 5, 4);
+         for (int v = 0; v < 5; ++v) {
+            auto &b = tabs.addToPage(2, add<ui::Button>(vw[v], kVowelNames[v]));
+            b.setAccent(modelColor(kAlien));
+            b.setToggle(true);
+            bindings_.bind(b, kAlienVowels + v);
+            tips_.add(b, std::string("The vowel ") + kVowelNames[v] + ": lit, the Alien says it; dark, it never does.");
+         }
+         auto &order = tabs.addToPage(2, add<ui::SegmentedSwitch>({236, 362, 250, 22},
+                                                                  std::vector<std::string>{"RANDOM", "IN TURN", "PITCH", "SAME"}));
+         order.setAccent(modelColor(kAlien));
+         bindings_.bind(order, kAlienOrder);
+         tips_.add(order, "How each new note picks its vowel. Random: any lit vowel but the last. In turn: A, E, I, O, U "
+                          "in order. Pitch: low notes the dark vowels (U, O), high the bright (E, I). Same: every note "
+                          "starts on the first lit vowel.");
+      }
       tabs.select(0);
    }
 
    void buildBore() {
       shape_ = &add<BoreShape>({112, 414, 290, 26}, 290.0f);
       shape_->setModel(modelOf(host_));
-      tips_.add(*shape_, "The bore's shape, which sets which harmonics it resonates on.");
+      tips_.add(*shape_, "The bore's shape, which sets which harmonics it rings on: a cylinder is hollow (odd ones), a cone full.");
       add<ui::Label>({404, 418, 52, 18}, "HOLES", kDim, visage::Font::kRight, 0.75f);
       tips_.add(choiceBox(kHoles, {462, 414, 96, 26}, 0xfff28c28),
-                "How many tone holes below the note are open: more is brighter. The tube below rings most with them Closed.");
+                "How many tone holes below the note are open: more is brighter and freer. The tube below rings most with them Closed.");
       add<ui::Label>({560, 418, 46, 18}, "TUBE", kDim, visage::Font::kRight, 0.75f);
       tips_.add(choiceBox(kTube, {612, 414, 96, 26}, 0xfff28c28), "What the instrument is made of: its body's colour.");
       add<ui::Label>({714, 418, 50, 18}, "MUTE", kDim, visage::Font::kRight, 0.75f);
@@ -2363,7 +2382,7 @@ private:
       small(kLoss, "LOSS", 2, "How much the bore loses each trip: more is softer, darker and slower to speak.");
       small(kHoleCutoff, "HOLE CUTOFF", 3, "Above this the tone holes let the sound out: lower is darker. The pitch stays put.");
       coneKnob_ = &small(kCone, "CONE", 4, "Sax and oboe: how far the cone is cut short at the reed, towards a cylinder or a full cone. Trumpet: how conical the bore is, towards a flugelhorn. Alien: how stiff its string is, which stretches its partials apart, from gut to wire to bar.");
-      small(kRadiate, "RADIATE", 5, "How well the bell and holes send the highs out.");
+      small(kRadiate, "RADIATE", 5, "How well the bell and holes send the highs out: up is bright and open, down muffled and inward.");
       brassKnob_ = &small(kBrass, "BRASS", 6, "Trumpet: how far the wave steepens on its way down the horn, into a blare.");
       small(kBarrel, "BARREL", 7, "The barrel's or mouthpiece's cavity: bigger is lower and rounder.");
       ui::Knob &wall = small(kWall, "WALL", 8, "The walls: metal hardly soaks up the highs, soft wood and bone more.");
@@ -2389,10 +2408,10 @@ private:
          tabs.addToPage(0, k);
       };
       player(kAttack, "ATTACK", 0, "How fast the breath rises (slower for a soft touch, quicker for a hard one).");
-      player(kRelease, "RELEASE", 1, "How fast the breath dies away after the note.");
+      player(kRelease, "RELEASE", 1, "How fast the breath dies away after the note: short stops dead, long trails off.");
       player(kHumanize, "HUMANIZE", 2, "No two notes the same: each a little off in pitch, breath, attack and vibrato.");
       player(kFlutter, "FLUTTER", 3, "A flutter tongue, a rolled R through the note, on any style (the Flutter style rolls at least half).");
-      player(kFlutterRate, "RATE", 4, "How fast the tongue flutters.");
+      player(kFlutterRate, "RATE", 4, "How fast the tongue flutters: slow is a purr, fast a buzz.");
 
       // VIBRATO: where it comes from, and how it moves.
       tabs.addToPage(1, *(vibrato_ = &add<VibratoGraph>({32, 770, 330, 148}, 330.0f)));
@@ -2401,14 +2420,14 @@ private:
                 "Breath: from the diaphragm, in the air. Jaw: in the embouchure, so pitch and colour. Both. "
                 "Lip: in the pitch alone.");
       const auto vib = ui::row({520, 784, 364, 120}, 4);
-      tabs.addToPage(1, familyKnob(kVibRate, "RATE", vib[0], "Vibrato rate. A player's wanders a little."));
-      tabs.addToPage(1, familyKnob(kVibDepth, "DEPTH", vib[1], "How deep the vibrato is."));
+      tabs.addToPage(1, familyKnob(kVibRate, "RATE", vib[0], "How fast the vibrato wavers: slow is lyrical, fast nervous. A player's rate wanders a little."));
+      tabs.addToPage(1, familyKnob(kVibDepth, "DEPTH", vib[1], "How deep the vibrato is: too much wobbles, none is a straight tone."));
       tabs.addToPage(1, familyKnob(kVibPitch, "PITCH", vib[2], "Vibrato in the pitch, in cents, on top of its type."));
       tabs.addToPage(1, familyKnob(kVibDelay, "DELAY", vib[3], "How long a note is held before the vibrato grows in."));
 
       // LFOS: two LFOs and the Swell, each a source to arm with its chip.
-      const char *const lfoTips[2] = {"LFO 1: a plain LFO, a source for routes. Note restarts it with each note; Free runs it for every voice together.",
-                                      "LFO 2: a plain LFO, a source for routes. Note restarts it with each note; Free runs it for every voice together."};
+      const char *const lfoTips[2] = {"LFO 1's rate: how fast its wave rises and falls. Slow is a sweep, fast a tremble.",
+                                      "LFO 2's rate: how fast its wave rises and falls. Slow is a sweep, fast a tremble."};
       for (int i = 0; i < 3; ++i) {
          const float x = 32 + i * 284.0f;
          const int source = i < 2 ? kSrcLfo1 + i : kSrcSwell;
@@ -2422,7 +2441,7 @@ private:
          generators_[i] = &tabs.addToPage(2, add<GeneratorGraph>({x, 804, 150, 114}, 150.0f, source));
          tabs.addToPage(2, knob(i < 2 ? lfoParam(i, 0) : kSwellTime, i < 2 ? "RATE" : "TIME", sourceColor(source),
                                 {x + 154, 800, 116, 120},
-                                i < 2 ? lfoTips[i] : "The Swell: one contour over this time from each note's start, a source for routes."));
+                                i < 2 ? lfoTips[i] : "How long the Swell takes to draw its contour from each note's start: short is a quick bloom, long a slow one."));
       }
 
       // BUSES: mix routes into one, bend it, and send it on as a source of its own.
@@ -2434,9 +2453,9 @@ private:
          tabs.addToPage(3, choiceBox(busParam(b, kBusCurve), {x, 802, 98, 24}, bc));
          tabs.addToPage(3, choiceBox(busParam(b, kBusPolarity), {x + 104, 802, 96, 24}, bc));
          tabs.addToPage(3, knob(busParam(b, kBusAmount), "AMOUNT", sourceColor(kSrcBus1 + b), {x, 830, 100, 96},
-                                "The bus's base, which its routes are added to (or mixed with, by its mode). Route sources onto it in MAP."));
+                                "The bus's value with nothing routed onto it: where it sits before its sources add to (or mix with) it."));
          tabs.addToPage(3, knob(busParam(b, kBusLag), "LAG", sourceColor(kSrcBus1 + b), {x + 100, 830, 100, 96},
-                                "How slowly the bus follows its mix."));
+                                "How slowly the bus follows its sources: up, jumps smooth into glides and jitter into drift."));
       }
       tabs.select(0);
    }
@@ -2451,11 +2470,39 @@ private:
       return d;
    }
 
+   // What each modulation source is: the value it carries, and where it comes from.
+   static std::string sourceTip(int source) {
+      static const char *const kTips[kSrcBus1] = {
+         "",
+         "STRIKE: how hard the note was struck, its velocity, 0 to 1. Fixed for the note.",
+         "PRESS: how hard you press the key while it's held (aftertouch or MPE pressure), 0 to 1.",
+         "GLIDE: the note's pitch bend, -1 to 1 over the bend range (MPE or the wheel).",
+         "SLIDE: the finger sliding up and down the key (MPE slide, CC 74), 0 to 1.",
+         "LIFT: how fast the key was let go, its release velocity, 0 to 1. Moves only after the note ends.",
+         "LOOP: how hard the note is being blown right now, the breath itself, 0 to 1. It's the size of the voice's loop.",
+         "KNOT: how bright the note sounds right now, from pure and round (0) to edgy and full of highs (1).",
+         "FOLD: how far the breath is past the point where the instrument jumps up a register, 0 to 1. "
+         "0 until it overblows.",
+         "REGISTER: how high the note sits in the instrument's range, from its lowest note (0) to its highest (1).",
+         "VAPOR: how much breath noise is riding on the note right now: more with a noisy, hard-blown breath.",
+         "DRAFT: a slow, wandering draught of air of the note's own, -1 to 1, drifting and pulled back to the middle. "
+         "Every voice wanders differently.",
+         "SWELL: a contour drawn once over its Time from each note's start (or looped), 0 to 1.",
+         "LFO 1: a steady wave, -1 to 1, at its Rate. Note restarts it with each note; Free shares one for all voices.",
+         "LFO 2: a steady wave, -1 to 1, at its Rate. Note restarts it with each note; Free shares one for all voices.",
+         "KEY: which note was played, -1 to 1: low notes below middle C negative, high notes positive.",
+         "RANDOM: a fresh random value for each note, -1 to 1, held for the note."};
+      if (source >= kSrcBus1)
+         return std::string("BUS ") + std::to_string(source - kSrcBus1 + 1) +
+                ": its base Amount with the sources routed onto it mixed in, curved and smoothed, -1 to 1.";
+      return kTips[source];
+   }
+
    SourceChip &chip(int source, ui::Rect r) {
       auto &c = add<SourceChip>(r, source, upper(kModSourceNames[source]));
       c.onClick = [this](int src) { arm(src); };
       chips_.push_back(&c);
-      tips_.add(c, std::string(kModSourceNames[source]) + ": touch to map it, then drag a knob to set how much it moves it.");
+      tips_.add(c, sourceTip(source));
       return c;
    }
 
@@ -2465,7 +2512,7 @@ private:
       mapButton_->setToggle(true);
       mapButton_->setAccent(kPress);
       mapButton_->onClick = [this] { setMapping(!mapping_, kSrcOff); };
-      tips_.add(*mapButton_, "MAP: touch a source, then drag any knob to set how much it moves it. Right-click a knob to unmap it.");
+      tips_.add(*mapButton_, "MAP: the modulation view. Lit, each knob shows a ring, in the source's colour, for every source that moves it.");
       const int hands[] = {kSrcStrike, kSrcPress, kSrcGlide, kSrcSlide, kSrcLift};
       for (int i = 0; i < 5; ++i)
          chip(hands[i], {846 + i * 106.0f, 13, 100, 26});
@@ -2687,7 +2734,7 @@ private:
       }
       inMeter_->setRange(-36.0f, 0.0f);
       tips_.add(*inMeter_, "The breath coming in: the hardest-blown voice, or Breath In.");
-      tips_.add(*outMeters_[0], "The output level, left and right.");
+      tips_.add(*outMeters_[0], "The output level, left and right. If it hits the top, lower Level or Master.");
 
       // AIR: where the breath comes from and how it's shaped.
       curve_ = &tabs.addToPage(1, add<CurveGraph>({920, 652, 200, 136}, 200.0f));
@@ -2700,9 +2747,9 @@ private:
       tips_.add(source, "Where the breath comes from. Auto: velocity, until pressure, a breath controller (CC 2) or Breath In takes over. Input: only Breath In. Mix: Breath In is the lungs and each note's pressure (or velocity) how much it lets through.");
       const auto air = ui::row({1132, 686, 488, 104}, 3);
       tabs.addToPage(1, knob(kBreathIn, "BREATH IN", kPress, air[0],
-                             "A breath to blow from: modulate it from a CV, an LFO or automation. Heard with Breath From on Input (or Auto)."));
-      tabs.addToPage(1, knob(kCurve, "CURVE", kPress, air[1], "The press curve: above 1 you have to press harder."));
-      tabs.addToPage(1, knob(kSlide, "SLIDE", 0xff8fe8a8, air[2], "How far MPE slide (CC 74) moves the embouchure."));
+                             "BREATH IN: a breath from outside the keys (a CV, automation or an LFO), 0 to 1. With Breath From on Input or Auto, it blows every note."));
+      tabs.addToPage(1, knob(kCurve, "CURVE", kPress, air[1], "How pressure becomes breath: above 1 you have to press harder to blow loud, below 1 a light touch is enough."));
+      tabs.addToPage(1, knob(kSlide, "SLIDE", 0xff8fe8a8, air[2], "How far MPE slide (CC 74) moves the embouchure, and with it the tone's colour."));
 
       // REVERB: on or off, the room, the tone and the limiter.
       const unsigned rc = 0xff7fd3ff;
@@ -2715,11 +2762,11 @@ private:
       };
       onOff(2, kReverbOn, "REVERB", rc, "The reverb on or off. Turned off, what's in the room rings out.");
       const auto room = ui::row({1024, 660, 460, 124}, 5);
-      tabs.addToPage(2, knob(kRoomSize, "SIZE", rc, room[0], "From a small room to a hall."));
-      tabs.addToPage(2, knob(kRoomDecay, "DECAY", rc, room[1], "How long the room rings."));
-      tabs.addToPage(2, knob(kRoomDamp, "DAMP", rc, room[2], "How fast the room's highs die away."));
-      tabs.addToPage(2, knob(kRoomPreDelay, "PRE-DELAY", rc, room[3], "The gap before the room answers."));
-      tabs.addToPage(2, knob(kBright, "TONE", kDim, room[4], "A tilt above 1.5 kHz on the output."));
+      tabs.addToPage(2, knob(kRoomSize, "SIZE", rc, room[0], "How big the room is: small is close and boxy, large a wide hall."));
+      tabs.addToPage(2, knob(kRoomDecay, "DECAY", rc, room[1], "How long the room rings after the sound: short is dry, long washes everything together."));
+      tabs.addToPage(2, knob(kRoomDamp, "DAMP", rc, room[2], "How fast the room's highs die away: up is a dark, warm room, down a bright, splashy one."));
+      tabs.addToPage(2, knob(kRoomPreDelay, "PRE-DELAY", rc, room[3], "The gap before the room answers: a little keeps the notes clear of the reverb."));
+      tabs.addToPage(2, knob(kBright, "TONE", kDim, room[4], "The brightness of the whole output, above 1.5 kHz: down tames harsh highs, up adds sparkle."));
       tabs.addToPage(2, add<ui::Label>({1494, 668, 126, 16}, "LIMITER", kDim, visage::Font::kLeft, 0.68f));
       auto &limiter = tabs.addToPage(2, add<ui::SegmentedSwitch>({1494, 690, 126, 26}, std::vector<std::string>{"OFF", "SOFT", "HARD"}));
       limiter.setAccent(0xfff28c28);
@@ -2751,11 +2798,11 @@ private:
       card(kUnison, "UNISON", 0xfff28c28, 2, "Copies of every voice, detuned against each other, to fatten it up.");
       card(kUnisonDetune, "U.DETUNE", 0xfff28c28, 3, "How far the unison copies spread, in cents, from the lowest to the highest.");
       card(kGlide, "GLIDE", 0xfff28c28, 4, "How long a slur takes to reach the next note (a finger lands in a few ms).");
-      card(kBendRange, "BEND", 0xffb98bff, 5, "MPE pitch bend range of the note channels, in semitones.");
+      card(kBendRange, "BEND", 0xffb98bff, 5, "How far an MPE pitch bend moves the note, in semitones, at full bend. Match it to your controller.");
       card(kTune, "TRANSP", 0xfff28c28, 6, "Transposes in semitones.");
       card(kRoom, "REVERB", rc, 7, "How much reverb: shape it, or turn it off, on the REVERB tab.");
-      card(kAir, "AIR", kPress, 8, "The breath heard around the instrument, not through it.");
-      card(kLevel, "LEVEL", 0xfff28c28, 9, "Each voice's level (modulate it per note).");
+      card(kAir, "AIR", kPress, 8, "The breath heard around the instrument, not through it: up for an airy, close-miked sound.");
+      card(kLevel, "LEVEL", 0xfff28c28, 9, "Each voice's level, before the room. Down if chords pile up too loud.");
       card(kMaster, "MASTER", 0xfff28c28, 10, "The output level, after the room and limiter.");
    }
 

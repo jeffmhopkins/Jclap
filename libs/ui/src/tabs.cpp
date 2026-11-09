@@ -12,7 +12,7 @@ void TabBar::addFrame(int page, visage::Frame *frame) {
 }
 
 void TabBar::select(int page) {
-   if (page < 0 || page >= static_cast<int>(names_.size()) || page == selected_)
+   if (page < 0 || page >= static_cast<int>(names_.size()) || page == selected_ || tabHidden(page))
       return;
    selected_ = page;
    showSelected();
@@ -26,6 +26,15 @@ void TabBar::showSelected() {
       for (visage::Frame *frame : pages_[p])
          frame->setVisible(static_cast<int>(p) == selected_);
    }
+}
+
+void TabBar::setTabHidden(int page, bool hidden) {
+   if (page < 0 || page >= static_cast<int>(hidden_.size()) || hidden_[page] == hidden)
+      return;
+   hidden_[page] = hidden;
+   if (hidden && selected_ == page)
+      select(0);
+   redraw();
 }
 
 void TabBar::setAccent(unsigned color) {
@@ -56,6 +65,8 @@ void TabBar::draw(visage::Canvas &canvas) {
    canvas.setColor(t.panelBorder);
    canvas.fill(0, h - 1.0f, w, 1.0f);
    for (int i = 0; i < n; ++i) {
+      if (tabHidden(i))
+         continue;
       const bool on = i == selected_;
       if (on || i == hover_) {
          canvas.setColor(on ? t.panel : t.buttonHover);
