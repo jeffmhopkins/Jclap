@@ -680,7 +680,7 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    switch (id) {
    case kLfo1Rate:
    case kLfo2Rate:
-      std::snprintf(out, size, value < 1.0 ? "%.2f Hz" : "%.1f Hz", value);
+      std::snprintf(out, size, value < 0.995 ? "%.2f Hz" : "%.1f Hz", value);
       break;
    case kSwellTime:
       std::snprintf(out, size, value < 10.0 ? "%.2f s" : "%.1f s", value);
@@ -696,9 +696,12 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kStiffness:
       std::snprintf(out, size, "%.2f", value);
       break;
-   case kAlienVoice:
-      std::snprintf(out, size, "%s %.0f%%", alienShapeName(value), value * 100.0);
+   case kAlienVoice: {
+      // The name from the shown percentage, so the text reads back to the same name.
+      const long percent = std::lround(value * 100.0);
+      std::snprintf(out, size, "%s %ld%%", alienShapeName(percent / 100.0), percent);
       break;
+   }
    case kAlienShift:
       std::snprintf(out, size, "%+.2f oct", value);
       break;
@@ -720,8 +723,8 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kHybridDecay:
    case kHybridRelease: {
       const double ms = hybridEnvMs(value);
-      if (ms < 1000.0)
-         std::snprintf(out, size, ms < 10.0 ? "%.1f ms" : "%.0f ms", ms);
+      if (ms < 999.5)
+         std::snprintf(out, size, ms < 9.95 ? "%.1f ms" : "%.0f ms", ms);
       else
          std::snprintf(out, size, "%.2f s", ms / 1000.0);
       break;
