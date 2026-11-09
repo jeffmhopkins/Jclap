@@ -820,6 +820,19 @@ private:
       };
       return table[settings_.model];
    }
+   // The breath noise's share at the breath blowing now: under a third at the softest, rising to all
+   // of it at full breath (three quarters of it half way up). A soft note's tone falls away faster than the rush of air through the
+   // reed, jet or lips, so at its full share the noise stood out over a soft note (as much as 20 dB
+   // more of it, against the tone, than at forte); a player blowing softly also blows less air.
+   // (Not the Alien's: its breath is a voice's.)
+   double softNoise() const {
+      if (settings_.model == kAlien || breath_ <= 0.0)
+         return 1.0;
+      const ModelInfo &info = modelInfo(settings_.model);
+      const double top = std::max(info.breathOffset + info.breathScale * live_.breath, 1.08 * speak_ + 0.02);
+      const double dyn = std::clamp((breath_ - speak_) / std::max(0.05, top - speak_), 0.0, 1.0);
+      return 0.3 + 0.7 * std::pow(dyn, 0.7);
+   }
    void applyCharacter() {
       // HOLES: the tone-hole lattice below the sounding hole. Above its cutoff the waves leave
       // through the open holes instead of reflecting, so the bore stops supporting those harmonics
@@ -847,9 +860,10 @@ private:
       const float holeK = holes[std::clamp(live_.holes, 0, 5)];
       const Surface &tube = tubes[std::clamp(live_.tube, 0, 7)];
       mute_.set(settings_.mute, live_.muteAmount);
+      const float noise = static_cast<float>(live_.noise) * tube.noise * softNoise();
       for (auto &copy : models_) {
          Character &c = copy[settings_.model]->character;
-         c.noise = static_cast<float>(live_.noise) * tube.noise;
+         c.noise = noise;
          c.edge = static_cast<float>(live_.edge);
          c.growl = static_cast<float>(1.0 + 4.0 * live_.growl); // the reed's own rasp at 0, five times at 1
          c.stiffness = static_cast<float>(live_.stiffness);
