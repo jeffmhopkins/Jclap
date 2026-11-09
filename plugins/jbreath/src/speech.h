@@ -392,7 +392,8 @@ class Voice {
       avs_ += aK * ((s ? s->avs : 0.0) - avs_);
       ah_ += aK * ((s ? s->ah : 0.0) - ah_);
       af_ += (s && s->ampMs < 2.0 ? 1.0 : aK) * ((s ? s->af : 0.0) - af_);
-      const double fMs = (s ? s->formantMs * (s->vowelPart ? glide_ : 1.0) : 20.0);
+      // (A jump is made in a few ms: a resonance moved at once, still ringing, clicks.)
+      const double fMs = !s ? 20.0 : s->setF ? kSnapMs : s->formantMs * (s->vowelPart ? glide_ : 1.0);
       const double fK = 1.0 - std::exp(-dt / (fMs * 0.001 * 0.3));
       for (int n = 0; n < kF; ++n) {
          fv_[n] += fK * (ft_[n] - fv_[n]);
@@ -533,7 +534,7 @@ class Voice {
    struct Segment {
       double ms = 0;    // its length (-1: held until released)
       double f[3] = {0, 0, 0}, b[3] = {0, 0, 0};
-      bool setF = false;  // jump the formants to f at its start (unheard under a closure)
+      bool setF = false;  // move the formants to f at once (in kSnapMs) at its start
       bool moveF = true;  // move the formants to f
       double formantMs = 30, ampMs = 6;
       double av = 0, avs = 0, ah = 0, af = 0;
@@ -629,7 +630,8 @@ class Voice {
             for (int n = 0; n < 3; ++n) {
                ft_[n] = s.f[n];
                bt_[n] = s.b[n] * (n == 0 ? s.widen : 1.0);
-               if (s.setF) {
+               // (From silence it can jump: nothing is ringing to click.)
+               if (s.setF && !sounding_) {
                   f_[n] = fv_[n] = s.f[n];
                   b_[n] = bt_[n];
                }
@@ -1027,6 +1029,7 @@ class Voice {
       return (static_cast<double>(seed_) / 4294967296.0) * 2.0 - 1.0;
    }
 
+   static constexpr double kSnapMs = 8.0;
    static constexpr double kFricScale = 0.7, kPresence = 1.5, kMurmur = -9.0;
    double fs_ = 48000;
    Plan segs_, scratch_;
