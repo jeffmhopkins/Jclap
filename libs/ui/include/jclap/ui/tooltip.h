@@ -5,6 +5,11 @@
 //
 //    Tooltips tips;                       // a panel member
 //    tips.add(cutoffKnob, "Filter cutoff. Shift-drag for fine control.");
+//
+// Something drawn rather than a widget, such as the plugin's name in the header, gets an invisible
+// HoverArea over it to carry the tip. Every plugin shows its own version on its name this way:
+//
+//    tips_.add(add<ui::HoverArea>({14, 8, 200, 40}), "JSynth version " JCLAP_PLUGIN_VERSION);
 
 #include <memory>
 #include <string>
@@ -15,6 +20,13 @@
 #include "jclap/ui/theme.h"
 
 namespace jclap::ui {
+
+// An invisible frame that is only there to be hovered for a tip. Right-clicking it offers the panel's
+// background menu, as the background under it would.
+class HoverArea : public visage::Frame {
+public:
+   void mouseDown(const visage::MouseEvent &e) override;
+};
 
 class Tooltips : public visage::EventTimer {
 public:

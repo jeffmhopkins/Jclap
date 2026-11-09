@@ -3276,6 +3276,8 @@ private:
                            kPartColors[0]);
       parts.onChange = [this](int p) { showPart(p); };
       partSwitch_ = &parts;
+      // The name in the header shows this plugin's version on hover (put(): SKY has no header).
+      tips_.add(put<ui::HoverArea>({4, 6, 136, 40}), "JSynth version " JCLAP_PLUGIN_VERSION);
       tips_.add(parts, "Each part is a species with its own patch and its own way of flying. The panels edit "
                        "this one; the sky shows both.");
       // Touching a source turns MAP on with it armed; drag any knob to set how much it moves it.

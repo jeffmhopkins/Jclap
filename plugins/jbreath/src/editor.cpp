@@ -1710,6 +1710,8 @@ class Panel : public ui::DesignFrame, public visage::EventTimer, public Mapper {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       auto &notice = add<ui::UpdateNotice>({1372, 13, 120, 26});
+      // The name in the header shows this plugin's version on hover.
+      tips_.add(add<ui::HoverArea>({8, 6, 164, 40}), "JBreath version " JCLAP_PLUGIN_VERSION);
       auto &presets = add<ui::PresetBar>({416, 11, 340, 30}, factoryPresets(), kPresetFormat, host_);
       presets.setAccent(0xfff28c28);
       presets.defaults = defaultValues();

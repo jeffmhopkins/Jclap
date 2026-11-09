@@ -6,6 +6,17 @@
 
 namespace jclap::ui {
 
+void HoverArea::mouseDown(const visage::MouseEvent &e) {
+   if (!e.shouldTriggerPopup())
+      return;
+   for (visage::Frame *f = parent(); f; f = f->parent()) {
+      if (auto *design = dynamic_cast<DesignFrame *>(f)) {
+         design->showZoomMenu(*this, e.position);
+         return;
+      }
+   }
+}
+
 Tooltips::Tooltips() : self_(std::make_shared<Tooltips *>(this)) {}
 
 Tooltips::~Tooltips() {

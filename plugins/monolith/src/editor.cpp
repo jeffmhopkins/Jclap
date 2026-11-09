@@ -1085,6 +1085,8 @@ private:
 
    void buildHeader() {
       auto &update = add<ui::UpdateNotice>({228, 15, 162, 26});
+      // The name in the header shows this plugin's version on hover.
+      tips_.add(add<ui::HoverArea>({16, 8, 206, 34}), "Monolith version " JCLAP_PLUGIN_VERSION);
       update.setTheme(emberTheme());
       update.setAccent(kEmber);
       auto &presets = add<ui::PresetBar>({400, 14, 380, 28}, factoryPresets(), kPresetFormat, host_);

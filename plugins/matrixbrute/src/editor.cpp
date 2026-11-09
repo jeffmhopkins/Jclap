@@ -309,6 +309,8 @@ private:
          showSwitches(patch);
       };
       add<ui::UpdateNotice>({272, 20, 190, 24});
+      // The name in the header shows this plugin's version on hover.
+      tips_.add(add<ui::HoverArea>({16, 10, 236, 44}), "MatrixBrute CC version " JCLAP_PLUGIN_VERSION);
 
       const float r = kDesignWidth - kMargin;
       place(sendAll_, {r - 160, 18, 160, 28});

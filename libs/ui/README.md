@@ -39,7 +39,7 @@ target_link_libraries(<name> PRIVATE jclap::ui)
 | `jclap/ui/octave_shift.h` | Octave - and + buttons around a readout, to move a keyboard or grid up and down |
 | `jclap/ui/scope.h` | Oscilloscope or waveform view, fed from a `jclap::core::SampleFifo` |
 | `jclap/ui/tabs.h` | Tab bar that shows one page of widgets at a time |
-| `jclap/ui/tooltip.h` | Hover help for any widget |
+| `jclap/ui/tooltip.h` | Hover help for any widget, and `HoverArea` to put a tip on something drawn (each plugin's name shows its version) |
 | `jclap/ui/section.h` | `Section` (titled panel box), `Label` and `Divider`. They ignore the mouse |
 | `jclap/ui/theme.h` | Colours shared by every widget, and the `font()` and `noteName()` helpers |
 | `jclap/ui/frame_pacer.h` | Paces an animation to the screen: start the timer at 1 ms and step when `tick()` says. A 16 ms timer, checked only at refreshes in whole milliseconds, skips frames |

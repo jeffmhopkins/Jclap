@@ -739,6 +739,8 @@ public:
       // Header: the mode is the first thing to set, so it lives up here, big.
       update_ = &add<ui::UpdateNotice>({224, 19, 240, 26});
       update_->alignRight = true;
+      // The name in the header shows this plugin's version on hover.
+      tips_.add(add<ui::HoverArea>({12, 12, 152, 40}), "JTunnel version " JCLAP_PLUGIN_VERSION);
       auto &mode = add<ui::SegmentedSwitch>({476, 16, 230, 32}, std::vector<std::string>{"SEND", "RECEIVE"});
       mode.setAccent(kAccent);
       bindings_.bind(mode, kParamMode);
