@@ -267,7 +267,7 @@ GLIDE setting how long the pitch takes to get there.
 
 ### Presets
 
-Seventy-one factory presets: Init, then eight to eleven for each instrument, each family starting
+Seventy-six factory presets: Init, then eight to fifteen for each instrument, each family starting
 from its most natural sound (Concert Flute, Wooden Reed, Clean Alto, Dusk Oboe, Brass Plume, First
 Contact: the model's own voice, measured against the Iowa recordings, with a player's vibrato and a
 little room) and running through darker, breathier, brighter and harder variants, its relatives by
@@ -284,9 +284,12 @@ Transpose and its oddities:
 - **Trumpet** (11): Brass Plume, Fanfare, the mutes (Straight Mute, Cup Mute, Muted Night with a
   Harmon, Plunger Wah with the plunger on the slide, Bucket Ballad), Flugel Glow, French Horn,
   Trombone Slide and Piccolo Trumpet.
-- **Alien** (10): Alien Speech, First Contact, Talking Bow (with a bowed string; the slide works
+- **Alien** (15): Alien Speech, First Contact, Talking Bow (with a bowed string; the slide works
   its mouth), Throat Singer (a new vowel every 2 bars), Xeno Choir, Tractor Beam (a word a beat),
-  Insect Hymn, Mothership, Signal Lost and Ion Flutter.
+  Insect Hymn, Mothership, Signal Lost, Ion Flutter, and five that speak in different ways: Crisp
+  Diction (vowels snapped to, the clearest), Chatterbox (a syllable every 1/16), Envoy Unit (a machine
+  reading out vowels), Slow Drawl (long glides, slurred) and Whisper Tongue (breathy, its hiss up
+  front).
 - **Pad** (6): the HYBRID voice as a pad under an instrument, at a low FOLLOW with a slow attack and a
   long release: Flute Halo, Hollow Pad, Section Pad, Reed Choir, Brass Swell and Nebula.
 - **Space** (6): the DELAY, synced and free, and the REVERB: Echo Flute, Canyon Trumpet, Dub Tenor,

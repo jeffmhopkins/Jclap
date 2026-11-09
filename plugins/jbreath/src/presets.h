@@ -291,6 +291,35 @@ inline const std::vector<Preset> &factoryPresets() {
                     {kFlutter, 0.5}, {kFlutterRate, 18}, {kAlienVoice, 0.125}, {kAlienSharp, 0.8}, {kAlienMorph, 0.1},
                     {kAttack, 20}, {kRelease, 250}, {kVibDepth, 0.0}, {kRoom, 0.3}}});
 
+      // Talkers: the same voice set to speak in different ways, from crisp to drawled.
+      // Crisp: each vowel snapped to in under 10 ms, nothing wandering, no pitch slide: the clearest
+      // diction (play it hard for s, t, k).
+      p.push_back({"Crisp Diction", "Alien",
+                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.85}, {kAlienGlide, 8}, {kAlienLinger, 0.15},
+                    {kAlienSharp, 0.55}, {kAlienMorph, 0.0}, {kAlienDrift, 0.05}, {kAttack, 8}, {kRelease, 120},
+                    {kVibDepth, 0.0}, {kRoom, 0.2}}});
+      // Fast chatter, every 1/16 on a held note a new syllable.
+      p.push_back({"Chatterbox", "Alien",
+                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.9}, {kAlienGlide, 12}, {kAlienPace, 1},
+                    {kAlienLinger, 0.25}, {kAlienSharp, 0.5}, {kAlienMorph, 0.0}, {kAlienDrift, 0.1}, {kTune, 12},
+                    {kAttack, 10}, {kRelease, 150}, {kVibDepth, 0.0}, {kRoom, 0.25}}});
+      // A machine reading out its vowels: every 1/8 a new one, snapped, dead steady.
+      p.push_back({"Envoy Unit", "Alien",
+                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.75}, {kAlienGlide, 5}, {kAlienPace, 2},
+                    {kAlienLinger, 0.0}, {kAlienSharp, 0.85}, {kAlienMorph, 0.0}, {kAlienDrift, 0.0}, {kAttack, 5},
+                    {kRelease, 90}, {kVibDepth, 0.0}, {kVoiceMode, kMonoMode}, {kRoom, 0.15}}});
+      // Slow and slurred: long glides between vowels, a slide between notes, lingering.
+      p.push_back({"Slow Drawl", "Alien",
+                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.6}, {kAlienGlide, 180}, {kAlienPace, 3},
+                    {kAlienLinger, 0.6}, {kAlienSharp, 0.6}, {kAlienMorph, 0.05}, {kAlienDrift, 0.4}, {kTune, -12},
+                    {kAttack, 60}, {kRelease, 400}, {kVibDepth, 0.04}, {kVoiceMode, kLegatoMode}, {kGlide, 120},
+                    {kRoom, 0.35}}});
+      // Breathy and close, the consonants' hiss up front.
+      p.push_back({"Whisper Tongue", "Alien",
+                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.8}, {kAlienGlide, 20}, {kAlienLinger, 0.3},
+                    {kAlienSharp, 0.4}, {kAlienMorph, 0.0}, {kAlienDrift, 0.15}, {kNoise, 1.6}, {kBreath, 0.9},
+                    {kAttack, 15}, {kRelease, 200}, {kVibDepth, 0.0}, {kRoom, 0.3}}});
+
       // Pads: the HYBRID voice as a pad under the instrument. Its Follow is low, so its envelope (not
       // the breath) plays it: it swells in behind the note and rings on after the breath stops.
       p.push_back({"Flute Halo", "Pad",
