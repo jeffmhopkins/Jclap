@@ -59,7 +59,12 @@ inline int diceSection(clap_id id) {
    case kNoise:
    case kEdge:
    case kStiffness:
-   case kAperture: return kDiceInstrument;
+   case kAperture:
+   case kAlienVoice:
+   case kAlienMorph:
+   case kAlienDrift:
+   case kAlienShift:
+   case kAlienSharp: return kDiceInstrument;
    case kLength:
    case kLoss:
    case kHoleCutoff:
@@ -299,6 +304,10 @@ inline Span sane(clap_id id, int model) {
    case kUnisonDetune: return Span{4.0, 20.0};
    case kSpread: return Span{-0.2, 0.8};
    case kPan: return Span{-0.3, 0.3};
+   case kAlienMorph: return Span{0.0, 0.8};
+   case kAlienDrift: return Span{0.0, 0.9};
+   case kAlienShift: return Span{-0.6, 0.6};
+   case kAlienSharp: return Span{0.2, 0.95};
    default: {
       if (id >= kBusBase && id < kRouteBase) {
          if ((id - kBusBase) % kBusStride == kBusAmount)
@@ -333,6 +342,10 @@ inline std::vector<RouteTarget> routeTargets(const Values &v) {
       t.push_back({kMuteAmount, 0.5});
    if (v.choice(kModel) == T)
       t.push_back({kBrass, 0.3});
+   if (v.choice(kModel) == A) {
+      t.push_back({kAlienVoice, 0.5});
+      t.push_back({kAlienShift, 0.3});
+   }
    return t;
 }
 
@@ -368,7 +381,8 @@ inline double routeMost(int destination) {
    for (const RouteTarget &t : std::initializer_list<RouteTarget>{
            {kBreath, 0.15}, {kEmbouchure, 0.2}, {kNoise, 0.2}, {kEdge, 0.2}, {kVibDepth, 0.3}, {kVibRate, 0.15},
            {kAperture, 0.15}, {kAir, 0.25}, {kPan, 0.3}, {kHoleCutoff, 0.15}, {kHybridCutoff, 0.25},
-           {kHybridMix, 0.2}, {kGrowl, 0.3}, {kFlutter, 0.3}, {kMuteAmount, 0.5}, {kBrass, 0.3}})
+           {kHybridMix, 0.2}, {kGrowl, 0.3}, {kFlutter, 0.3}, {kMuteAmount, 0.5}, {kBrass, 0.3}, {kAlienVoice, 0.5},
+           {kAlienShift, 0.3}})
       if (t.id == id)
          return t.most;
    return 0.0;
@@ -388,6 +402,14 @@ inline void randomInstrument(Values &v, DiceRng &rng, int m, double c) {
    set(v, kEdge, rng.range(0.55, 1.5 + 0.5 * c), m);
    set(v, kStiffness, rng.range(0.38, 0.62) + rng.range(-0.12, 0.12) * c, m);
    set(v, kAperture, rng.range(0.38, 0.62), m);
+   // The Alien's throat: anywhere on its ring, travelling and wandering further with complexity.
+   if (m == A) {
+      set(v, kAlienVoice, rng.unit(), m);
+      set(v, kAlienMorph, rng.range(0.0, 0.3 + 0.5 * c), m);
+      set(v, kAlienDrift, rng.range(0.1, 0.3 + 0.6 * c), m);
+      set(v, kAlienShift, rng.range(-0.2, 0.2) * (1.0 + 2.0 * c), m);
+      set(v, kAlienSharp, rng.range(0.35, 0.6 + 0.35 * c), m);
+   }
 }
 
 inline void randomBore(Values &v, DiceRng &rng, int m, double c) {
@@ -777,7 +799,7 @@ inline void mutatePatch(std::vector<double> &values, const DiceSettings &setting
           (id >= kHybridCutoff && id <= kHybridFilterBreath && v.get(kHybridMix) == 0.0) ||
           (id >= kHybridAttack && id <= kHybridFilterEnv && v.get(kHybridMix) == 0.0) ||
           (id >= kDelayMix && id <= kDelaySpread && v.choice(kDelayOn) == 0) || (id == kFlutterRate && v.get(kFlutter) == 0.0) ||
-          (id == kUnisonDetune && v.choice(kUnison) <= 1))
+          (id == kUnisonDetune && v.choice(kUnison) <= 1) || (id >= kAlienVoice && id <= kAlienSharp && m != A))
          continue;
       const Span s = sane(id, m);
       double next;

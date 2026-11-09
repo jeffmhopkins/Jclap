@@ -54,6 +54,8 @@ struct VoiceSettings {
    double tune = 0.0, fine = 0.0, level = 0.0; // only as bases for their routes
    // The rest of the exciter and bore (Character in models.h), the player's habits, and the air.
    double stiffness = 0.5, aperture = 0.5, growl = 0.0, cone = 0.5, brass = 0.5;
+   // The Alien's throat: Voice, Morph, Drift, Shift and Sharp.
+   double alienVoice = 0.0, alienMorph = 0.3, alienDrift = 0.3, alienShift = 0.0, alienSharp = 0.5;
    double loss = 0.04, cutoffHz = 1300.0, detune = 0.0, humanize = 0.0, air = 0.0;
    int tongueType = kTongueHard, vibType = kVibBreath;
    // HYBRID: a plain subtractive voice on the same breath: its wave, octave and detune, how loud it
@@ -512,6 +514,8 @@ public:
    float level() const { return level_; }
    // The breath blowing now, 0..about 1.3, and the pitch sounding, for the panel.
    float breath() const { return static_cast<float>(breath_); }
+   // Where the Alien's throat is on its ring of shapes (0..8), or -1 on another instrument.
+   float throat() const { return models_[0][settings_.model]->throat(); }
    double hz() const { return 440.0 * std::pow(2.0, (pitchNow_ - 69.0) / 12.0); }
 
    // One sample at the internal rate.
@@ -793,7 +797,7 @@ private:
    const Articulation &articulation() const {
       static const Articulation table[kModelCount] = {
          {1.0, 0.6, 0.25, 0.5, 72.0, 0.0}, {0.25, 0.6, 0.1, 1.0, 62.0, 0.0}, {1.0, 1.0, 0.6, 1.0, 61.0, 0.8},
-         {1.0, 0.7, 0.6, 1.0, 69.0, 0.8},  {1.0, 0.4, 0.25, 1.0, 65.0, 0.0},  {0.25, 1.0, 0.3, 0.5, 62.0, 0.5},
+         {1.0, 0.7, 0.6, 1.0, 69.0, 0.8},  {1.0, 0.4, 0.25, 1.0, 65.0, 0.0},  {0.25, 0.4, 0.3, 0.5, 62.0, 0.5},
       };
       return table[settings_.model];
    }
@@ -833,6 +837,11 @@ private:
          c.aperture = static_cast<float>(live_.aperture);
          c.cone = static_cast<float>(live_.cone);
          c.brass = static_cast<float>(live_.brass);
+         c.vowel = static_cast<float>(live_.alienVoice);
+         c.morph = static_cast<float>(live_.alienMorph);
+         c.drift = static_cast<float>(live_.alienDrift);
+         c.shift = static_cast<float>(live_.alienShift);
+         c.sharp = static_cast<float>(live_.alienSharp);
          float cutoff = static_cast<float>(live_.cutoffHz / 1300.0) * holeK * tube.cut, loss = tube.loss;
          Mute::bore(settings_.mute, mute_.amount(), cutoff, loss);
          c.loss = std::max(0.0f, static_cast<float>(live_.loss) + loss);
@@ -1269,6 +1278,11 @@ private:
       live_.cutoffHz = at(kDest<kHoleCutoff>, s.cutoffHz);
       live_.cone = at(kDest<kCone>, s.cone);
       live_.brass = at(kDest<kBrass>, s.brass);
+      live_.alienVoice = at(kDest<kAlienVoice>, s.alienVoice);
+      live_.alienMorph = at(kDest<kAlienMorph>, s.alienMorph);
+      live_.alienDrift = at(kDest<kAlienDrift>, s.alienDrift);
+      live_.alienShift = at(kDest<kAlienShift>, s.alienShift);
+      live_.alienSharp = at(kDest<kAlienSharp>, s.alienSharp);
       live_.detune = at(kDest<kDetune>, s.detune);
       live_.air = at(kDest<kAir>, s.air);
       applyCharacter();

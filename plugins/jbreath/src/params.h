@@ -11,6 +11,7 @@
 #include <array>
 #include <string>
 #include <vector>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -142,6 +143,13 @@ enum ParamId : clap_id {
    // amount is a route destination, so slide or pressure can work a plunger.
    kMute,
    kMuteAmount,
+   // Added after Release 25: the Alien's throat (Character in models.h): where on its ring of shapes
+   // each note starts, how fast it travels and wanders, its shift and how sharp it is.
+   kAlienVoice,
+   kAlienMorph,
+   kAlienDrift,
+   kAlienShift,
+   kAlienSharp,
    kParamCount
 };
 // The AIR view's look: the panel's own, kept with the project but not with presets.
@@ -204,7 +212,9 @@ inline constexpr clap_id kModDestinations[] = {
    // Added after the first release, after the buses so saved routes keep their destinations.
    kFlutter, kFlutterRate, kPan, kUnisonDetune, kHybridCutoff, kHybridResonance, kHybridFilterBreath,
    // Added after Release 24.
-   kMuteAmount};
+   kMuteAmount,
+   // Added after Release 25.
+   kAlienVoice, kAlienMorph, kAlienDrift, kAlienShift, kAlienSharp};
 constexpr int kModDestCount = static_cast<int>(sizeof(kModDestinations) / sizeof(kModDestinations[0]));
 constexpr int kFirstBusDest = 31;
 constexpr bool isBusDest(int d) { return d >= kFirstBusDest && d < kFirstBusDest + kBusCount; }
@@ -373,6 +383,11 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kDelaySpread, "Delay Spread", "Delay", 0.0, 1.0, 0.5, kGlobalMod},
       {kMute, "Mute", "Bore", 0.0, 5.0, 0.0, kGlobalChoice},
       {kMuteAmount, "Mute Amount", "Bore", 0.0, 1.0, 1.0, kMod},
+      {kAlienVoice, "Alien Voice", "Alien", 0.0, 1.0, 0.0, kMod},
+      {kAlienMorph, "Alien Morph", "Alien", 0.0, 1.0, 0.3, kMod},
+      {kAlienDrift, "Alien Drift", "Alien", 0.0, 1.0, 0.3, kMod},
+      {kAlienShift, "Alien Shift", "Alien", -1.0, 1.0, 0.0, kMod},
+      {kAlienSharp, "Alien Sharp", "Alien", 0.0, 1.0, 0.5, kMod},
    };
    for (const auto &d : fixed)
       p[d.id] = d;
@@ -541,6 +556,9 @@ inline bool isPercent(clap_id id) {
    case kDelayFeedback:
    case kDelayTone:
    case kDelaySpread:
+   case kAlienMorph:
+   case kAlienDrift:
+   case kAlienSharp:
       return true;
    default:
       if (id >= kBusBase && id < kRouteBase)
@@ -560,6 +578,12 @@ inline double bodyLength(double v) { return 0.15 * std::pow(10.0, std::clamp(v, 
 inline const char *wallName(double v) {
    static const char *const walls[] = {"Metal", "Resin", "Wood", "Cane", "Bone"};
    return walls[std::clamp(static_cast<int>(v * 4.999), 0, 4)];
+}
+
+// The Alien's ring of throat shapes (models.h), and the one a Voice value is nearest.
+inline const char *const kAlienShapeNames[] = {"A", "Ghost", "O", "Abyss", "U", "I", "Insect", "E"};
+inline const char *alienShapeName(double v) {
+   return kAlienShapeNames[static_cast<int>(std::lround(std::clamp(v, 0.0, 1.0) * 8.0)) % 8];
 }
 
 // Shared by the host's display and the panel.
@@ -600,6 +624,12 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
       break;
    case kStiffness:
       std::snprintf(out, size, "%.2f", value);
+      break;
+   case kAlienVoice:
+      std::snprintf(out, size, "%s %.0f%%", alienShapeName(value), value * 100.0);
+      break;
+   case kAlienShift:
+      std::snprintf(out, size, "%+.2f oct", value);
       break;
    case kHybridOctave:
       std::snprintf(out, size, "%+d oct", static_cast<int>(std::lround(value)));
@@ -696,9 +726,17 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
             value = d;
             return true;
          }
+   // (The Alien's Voice reads as its shape's name and then the knob's position.)
+   if (id == kAlienVoice)
+      while (*text && !std::isdigit(static_cast<unsigned char>(*text)) && *text != '.' && *text != '-')
+         ++text;
    double v = 0.0;
    if (!jclap::core::parseNumber(text, v, nullptr))
       return false;
+   if (id == kAlienVoice) {
+      value = v / 100.0;
+      return true;
+   }
    if (isPercent(id))
       value = v / 100.0;
    else if (id == kHoleCutoff)

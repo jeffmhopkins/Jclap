@@ -235,6 +235,7 @@ public:
          o.pressure = v.pressure.load();
          o.timbre = v.timbre.load();
          o.level = v.level.load();
+         o.throat = v.throat.load();
          o.releasing = v.releasing.load();
          for (int k = 0; k < kModSourceCount; ++k)
             o.sources[k] = v.sources[k].load(std::memory_order_relaxed);
@@ -570,6 +571,11 @@ private:
       vs.aperture = value(kAperture, s);
       vs.growl = value(kGrowl, s);
       vs.cone = value(kCone, s);
+      vs.alienVoice = value(kAlienVoice, s);
+      vs.alienMorph = value(kAlienMorph, s);
+      vs.alienDrift = value(kAlienDrift, s);
+      vs.alienShift = value(kAlienShift, s);
+      vs.alienSharp = value(kAlienSharp, s);
       vs.brass = value(kBrass, s);
       vs.loss = value(kLoss, s);
       vs.cutoffHz = value(kHoleCutoff, s);
@@ -1072,6 +1078,7 @@ private:
          v.pressure.store(on ? static_cast<float>(pressureOf(s)) : 0.0f);
          v.timbre.store(on ? static_cast<float>(timbreOf(s)) : 0.5f);
          v.level.store(on ? s.voice.level() : 0.0f);
+         v.throat.store(on ? s.voice.throat() : -1.0f);
          v.releasing.store(on && s.voice.isReleasing());
          const float *src = s.voice.sources(), *off = s.voice.offsets();
          for (int k = 0; k < kModSourceCount; ++k)
@@ -1116,7 +1123,7 @@ private:
    // Shared with the panel.
    struct Shown {
       std::atomic<int> note{-1};
-      std::atomic<float> hz{0.0f}, breath{0.0f}, pressure{0.0f}, timbre{0.5f}, level{0.0f};
+      std::atomic<float> hz{0.0f}, breath{0.0f}, pressure{0.0f}, timbre{0.5f}, level{0.0f}, throat{-1.0f};
       std::atomic<bool> releasing{false};
       std::atomic<float> sources[kModSourceCount] = {};
       std::atomic<float> offsets[kModDestCount] = {};

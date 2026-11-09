@@ -235,36 +235,52 @@ inline const std::vector<Preset> &factoryPresets() {
                    {{kModel, T}, {kTune, 12}, {kEdge, 1.2}, {kKick, 0.35}, {kAttack, 10}, {kVibDepth, 0.0},
                     {kVibPitch, 4}, {kRoom, 0.25}}});
 
-      // Alien: twin reeds on coiled bores. The breath brings the ghost bore's inharmonic voice up out
-      // of the tone, Bite is how hard the two reeds pull on each other, Cone how tight the coils are,
-      // and the slide (embouchure) tunes the ghost against the note.
       const double A = kAlienModel;
+      // The Alien: a bowed string through a throat that travels round its ring of shapes (Voice:
+      // A 0, Ghost 0.125, O 0.25, Abyss 0.375, U 0.5, I 0.625, Insect 0.75, E 0.875).
       p.push_back({"First Contact", "Alien",
-                   {{kModel, A}, {kBreath, 1.25}, {kAttack, 30}, {kRelease, 220}, {kVibDepth, 0.03}, {kRoom, 0.3}}});
-      p.push_back({"Ghost Helix", "Alien",
-                   {{kModel, A}, {kBreath, 1.35}, {kEdge, 1.4}, {kSlide, 1.0}, {kAttack, 40}, {kRelease, 400},
-                    {kVibDepth, 0.0}, {kVibPitch, 6}, {kVoiceMode, kLegatoMode}, {kGlide, 60}, {kRoom, 0.35}}});
+                   {{kModel, A}, {kBreath, 1.1}, {kAttack, 40}, {kRelease, 260}, {kVibDepth, 0.03},
+                    {kAlienMorph, 0.35}, {kAlienDrift, 0.3}, {kRoom, 0.3}}});
+      // MPE slide works the mouth: up the ring from A through the ghost to O, as a talking bow.
+      p.push_back({"Talking Bow", "Alien",
+                   {{kModel, A}, {kBreath, 1.0}, {kAttack, 30}, {kRelease, 220}, {kVibDepth, 0.0}, {kVibPitch, 6},
+                    {kAlienMorph, 0.0}, {kAlienDrift, 0.15}, {kAlienSharp, 0.6}, {kVoiceMode, kLegatoMode}, {kGlide, 50},
+                    {routeParam(0, kRouteSource), kSrcSlide},
+                    {routeParam(0, kRouteDestination), kDest<kAlienVoice>},
+                    {routeParam(0, kRouteAmount), 0.5}, {kRoom, 0.3}}});
+      // Narrow resonances ringing over a low drone, as a throat singer's overtones.
+      p.push_back({"Throat Singer", "Alien",
+                   {{kModel, A}, {kLevel, -6}, {kTune, -12}, {kBreath, 1.05}, {kAlienVoice, 0.25}, {kAlienMorph, 0.18},
+                    {kAlienDrift, 0.25}, {kAlienSharp, 0.92}, {kAlienShift, -0.15}, {kAttack, 80}, {kRelease, 600},
+                    {kVibDepth, 0.0}, {kVoiceMode, kLegatoMode}, {kGlide, 90}, {kRoom, 0.4}, {kRoomDecay, 3.5}}});
       p.push_back({"Xeno Choir", "Alien",
-                   {{kModel, A}, {kBreath, 1.0}, {kCone, 0.6}, {kEdge, 0.8}, {kAttack, 200}, {kRelease, 1200},
-                    {kVibDepth, 0.06}, {kVibRate, 3.8}, {kBright, -3}, {kUnison, 3}, {kUnisonDetune, 12},
-                    {kRoom, 0.5}, {kRoomDecay, 4.0}}});
+                   {{kModel, A}, {kLevel, -7}, {kBreath, 1.0}, {kEdge, 0.8}, {kAlienVoice, 0.875}, {kAlienMorph, 0.5},
+                    {kAlienDrift, 0.6}, {kAttack, 200}, {kRelease, 1200}, {kVibDepth, 0.06}, {kVibRate, 3.8},
+                    {kUnison, 3}, {kUnisonDetune, 12}, {kRoom, 0.5}, {kRoomDecay, 4.0}}});
+      // A heavy bow on a low string, through the abyss and a throat an octave too big.
       p.push_back({"Tractor Beam", "Alien",
-                   {{kModel, A}, {kTune, -12}, {kBreath, 1.5}, {kEdge, 2.0}, {kKick, 0.6}, {kAttack, 15},
-                    {kRelease, 300}, {kVibDepth, 0.0}, {kVoiceMode, kMonoMode}, {kGlide, 80}}});
-      p.push_back({"Coil Whistle", "Alien",
-                   {{kModel, A}, {kTune, 12}, {kCone, 1.0}, {kEdge, 0.6}, {kNoise, 0.5}, {kAttack, 20},
+                   {{kModel, A}, {kLevel, -7}, {kTune, -12}, {kBreath, 1.3}, {kEdge, 1.8}, {kKick, 0.6}, {kAlienVoice, 0.375},
+                    {kAlienShift, -0.6}, {kAlienMorph, 0.25}, {kAttack, 15}, {kRelease, 300}, {kVibDepth, 0.0},
+                    {kVoiceMode, kMonoMode}, {kGlide, 80}}});
+      // Bowed near the bridge, glassy, through the insect's whine.
+      p.push_back({"Insect Hymn", "Alien",
+                   {{kModel, A}, {kLevel, 6}, {kTune, 12}, {kEmbouchure, 0.1}, {kEdge, 0.7}, {kAlienVoice, 0.75},
+                    {kAlienSharp, 0.75}, {kAlienShift, 0.3}, {kAlienMorph, 0.2}, {kAlienDrift, 0.4}, {kAttack, 25},
                     {kRelease, 350}, {kVibPitch, 12}, {kVibRate, 6.5}, {kVibDelay, 200}, {kRoom, 0.4}}});
       p.push_back({"Mothership", "Alien",
-                   {{kModel, A}, {kTune, -12}, {kBreath, 1.15}, {kEdge, 1.3}, {kCone, 0.3}, {kAttack, 400},
-                    {kRelease, 2000}, {kVibDepth, 0.04}, {kVibRate, 2.4}, {kRoom, 0.6}, {kRoomDecay, 6.0}}});
+                   {{kModel, A}, {kLevel, -8}, {kTune, -12}, {kBreath, 1.1}, {kCone, 0.3}, {kAlienVoice, 0.375}, {kAlienMorph, 0.1},
+                    {kAlienDrift, 0.85}, {kAlienSharp, 0.65}, {kAttack, 400}, {kRelease, 2000}, {kVibDepth, 0.04},
+                    {kVibRate, 2.4}, {kRoom, 0.6}, {kRoomDecay, 6.0}}});
+      // A stiff wire scraped hard, its throat spinning.
       p.push_back({"Signal Lost", "Alien",
-                   {{kModel, A}, {kBreath, 1.5}, {kEdge, 2.0}, {kNoise, 1.4}, {kCone, 0.15}, {kFlutter, 0.25},
-                    {kAttack, 10}, {kRelease, 150}, {kVibPitch, 30}, {kVibRate, 7.5}, {kVibDelay, 0},
-                    {kVoiceMode, kMonoMode}}});
-      // A rolled tongue through the coils: the two reeds chopped against each other.
+                   {{kModel, A}, {kBreath, 1.4}, {kEdge, 2.0}, {kNoise, 1.4}, {kCone, 0.85}, {kFlutter, 0.25},
+                    {kAlienMorph, 0.9}, {kAlienDrift, 1.0}, {kAttack, 10}, {kRelease, 150}, {kVibPitch, 30},
+                    {kVibRate, 7.5}, {kVibDelay, 0}, {kVoiceMode, kMonoMode}}});
+      // A rolled tongue chopping the bow, through the ghost's whistle.
       p.push_back({"Ion Flutter", "Alien",
-                   {{kModel, A}, {kBreath, 1.1}, {kCone, 0.7}, {kTongueType, kFlutterTongue}, {kFlutter, 0.5},
-                    {kFlutterRate, 18}, {kAttack, 20}, {kRelease, 250}, {kVibDepth, 0.0}, {kRoom, 0.3}}});
+                   {{kModel, A}, {kLevel, 3}, {kBreath, 1.1}, {kTongueType, kFlutterTongue}, {kFlutter, 0.5}, {kFlutterRate, 18},
+                    {kAlienVoice, 0.125}, {kAlienSharp, 0.8}, {kAlienMorph, 0.3}, {kAttack, 20}, {kRelease, 250},
+                    {kVibDepth, 0.0}, {kRoom, 0.3}}});
 
       // Pads: the HYBRID voice as a pad under the instrument. Its Follow is low, so its envelope (not
       // the breath) plays it: it swells in behind the note and rings on after the breath stops.
