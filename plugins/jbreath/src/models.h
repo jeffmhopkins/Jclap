@@ -221,6 +221,56 @@ inline double onePoleDelay(double hz, double cut, double fs) {
    return std::atan2(a * std::sin(w), 1.0 - a * std::cos(w)) / w;
 }
 
+// What a player's breath and lips do to a held note that no bore does: the pitch never holds dead
+// still (a real sax or trumpet wanders by 1 to 3 cents, slowly, measured on the University of Iowa
+// recordings; a tone with none sounds synthetic, Dubnov et al. 1996, Barthet et al. 2005), and a
+// note starts a little under its pitch and rises into it (a trumpet by 40 to 130 cents at its
+// onset, settling in about 50 ms; a sax by 10 to 20 at forte). Both as cents, per sample.
+struct Player {
+   // Slow wander: three bands of filtered noise (0.15, 0.5 and 1.5 Hz), 1.0, 0.9 and 0.5 cents
+   // each. (Faster than a couple of Hz it would blur the upper harmonics, which a player's doesn't.)
+   void prepare(double fs) {
+      static constexpr double hz[3] = {0.15, 0.5, 1.5}, cents[3] = {1.0, 0.9, 0.5};
+      for (int i = 0; i < 3; ++i) {
+         a[i] = static_cast<float>(std::exp(-2.0 * 3.14159265358979 * hz[i] / fs));
+         // A one-pole's output of uniform noise (variance 1/3) has variance (1 - a) / (1 + a) / 3.
+         k[i] = static_cast<float>(cents[i] / std::sqrt((1.0 - a[i]) / (1.0 + a[i]) / 3.0));
+      }
+      hold = 0.008 * fs;
+      fs_ = fs;
+   }
+   void reset() {
+      z[0] = z[1] = z[2] = 0.0f;
+      age = since = 0.0;
+      tongue = 0.0f;
+   }
+   // A new tongued attack (the tongue's burst rising from nothing, a fifth of a second or more
+   // after the last) starts the scoop again; a flutter tongue's quick strokes don't.
+   void tongued(float tn) {
+      if (tn > 0.15f && tongue < 0.02f && since > 0.2 * fs_)
+         age = since = 0.0;
+      since += 1.0;
+      tongue = tn;
+   }
+   // The wander in cents, and (0..1) how much of the onset's scoop is left.
+   float wander(Noise &rng) {
+      float c = 0.0f;
+      for (int i = 0; i < 3; ++i) {
+         z[i] = (1.0f - a[i]) * rng.white() + a[i] * z[i];
+         c += k[i] * z[i];
+      }
+      return c;
+   }
+   // (rate: how fast its clock runs, so a note that speaks late still starts under its pitch.)
+   double scoop(double tauSec, double rate = 1.0) {
+      const double t = age - hold;
+      age += rate;
+      return t <= 0.0 ? 1.0 : std::exp(-t / (tauSec * fs_));
+   }
+   float a[3] = {}, k[3] = {}, z[3] = {}, tongue = 0.0f;
+   double age = 0.0, since = 0.0, hold = 700.0, fs_ = 96000.0;
+};
+
 class Model {
 public:
    virtual ~Model() = default;
@@ -536,6 +586,7 @@ public:
       fs_ = fs;
       body_.init(static_cast<int>(fs / 20.0) + 8);
       apex_.init(static_cast<int>(fs / 20.0) + 8); // up to the cylinder (Cone 0) at the lowest note
+      player_.prepare(fs);
       reset();
    }
    void reset() override {
@@ -551,6 +602,15 @@ public:
       noiseLP_.setHz(noiseHz_, fs_);
       dc_ = {};
       dc_.setFs(fs_);
+      player_.reset();
+      tone_ = {};
+      toneAt_ = 0;
+      toneDyn_ = 0.0f;
+      formant_.clear();
+      lowCut_.clear();
+      buzzLo_.clear();
+      buzzHi_.clear();
+      buzzMid_.clear();
       y_ = dp_ = 0.0;
       cutHz_ = liftHz_ = wallHz_ = radHz0_ = -1.0;
       notePitch(hz_);
@@ -603,6 +663,17 @@ public:
       if (hz != liftHz_) {
          liftHz_ = hz;
          lift_.peak(hz, liftQ_, liftDb_, fs_);
+         // The low register (Sax only): a real sax's lowest notes have a weak fundamental (the bell
+         // radiates little of it) under a strong band of harmonics near 650 Hz, its formant, and a
+         // plateau of harmonics on to 3 kHz: the honk (UNSW tenor, low Bb to G: H1 12 to 15 dB under
+         // the 500 to 700 Hz harmonics at every dynamic; Iowa alto from Db3: H1 to H5 level). It
+         // fades in from 300 Hz down, all of it by 150 Hz; the middle register keeps its round
+         // fundamental.
+         lowReg_ = static_cast<float>(toneDepth_ > 0.0 ? std::clamp((300.0 - hz) / 150.0, 0.0, 1.0) : 0.0);
+         formant_.peak(650.0, 1.1, 9.0 * lowReg_, fs_);
+         buzzLo_.highshelf(std::min(2000.0, 0.4 * fs_), toneDepth_ > 0.0 ? buzzDb_ : 0.0, fs_);
+         buzzHi_.highshelf(std::min(5000.0, 0.4 * fs_), toneDepth_ > 0.0 ? buzzDb_ + 6.0 * lowReg_ : 0.0, fs_);
+         lowCut_.highpass(std::min(190.0, 0.4 * fs_), 0.6, fs_);
       }
       const double wallHz = wallK_ * hz * std::pow(std::min(lossK, 1.2), 5.0);
       if (wallHz != wallHz_) {
@@ -614,6 +685,15 @@ public:
       }
    }
    float tick(float breath, float emb, double len, float tn) override {
+      // How hard it's blown, 0 where the reed starts to 1 at full breath (past it at more): what the
+      // player's dynamics move.
+      const float dyn = std::clamp((breath - dynLo_) / (dynHi_ - dynLo_), 0.0f, 1.3f);
+      if (scoopCents_ > 0.0) {
+         // The player's slow wander, and the start of the note from under its pitch (more at forte).
+         player_.tongued(tn);
+         const double cents = player_.wander(rng) - scoopCents_ * (0.4 + 0.6 * dyn) * player_.scoop(0.025);
+         len *= std::exp2(-cents / 1200.0);
+      }
       const float noise = noiseLP_.tick(rng.white());
       // (With the Growl knob at nothing the reed's own rasp is slight: a held forte note is a clean
       // tone, with the rasp coming in only as the knob goes up.)
@@ -671,7 +751,51 @@ public:
       apex_.push(static_cast<float>((p - inApex) * stopped));
       // Heard: the wave reaching the bell and open holes, the part they let through brought up (they
       // radiate the highs better than the lows).
-      return dc_.tick(fromBody - radMix_ * radiate_.tick(fromBody)) * outGain_;
+      const float out = dc_.tick(fromBody - radMix_ * radiate_.tick(fromBody)) * outGain_;
+      if (toneDepth_ <= 0.0)
+         return out;
+      // A reed blown softly hardly beats: its tone is nearly a sine with a little of the 2nd
+      // harmonic, and it fills in up to forte (Iowa alto: at pp H2 -16 to -31 dB and H3 under -27;
+      // at mf a steep fall to H3 and then a plateau, H8 to H20 at -40 to -60; at ff H2 -6 and H3 to
+      // H8 -7 to -28). The bore here makes almost the same spectrum at every breath, so the
+      // radiated tone is shaped by the dynamic: everything over a lowpass near the note's lowest
+      // harmonics is shelved down, by toneDepth dB at the softest and none from forte up, and the
+      // level swings by rangeDb more over the dynamics, as a real one's does (about 15 dB, pp to ff).
+      if ((toneAt_++ & 15) == 0) {
+         // (It follows the breath over 60 ms, as the reed's swing does, so a tongue's
+         // quick burst on a soft note is an accent, not a forte.)
+         toneDyn_ += (dyn - toneDyn_) * static_cast<float>(1.0 - std::exp(-16.0 / (0.06 * fs_)));
+         const float dyn = toneDyn_;
+         const double fc = std::min(hz_ * std::exp2(toneLow_ + 1.6 * dyn), 0.45 * fs_);
+         tone_.lowpass(fc, 0.7, fs_);
+         const float soft = std::max(0.0f, 1.0f - dyn / 0.85f);
+         // (and pushed past forte the reed's buzz comes up over what the bore gives: the Iowa alto's
+         // H6 to H12 at ff stand at -20 to -31 dB).
+         const float push = std::clamp((dyn - 0.85f) / 0.25f, 0.0f, 1.0f);
+         // (The low register darkens far less when it's played softly: the UNSW tenor's low Bb,
+         // very soft, still has H1 to H4 level and H9 to H20 at -25 to -45 dB.)
+         const double depth = toneDepth_ * (1.0 - 0.7 * lowReg_);
+         toneShelf_ = static_cast<float>(std::pow(10.0, (8.0 * push * (1.0 - lowReg_) - depth * std::pow(soft, 1.3f)) / 20.0));
+         // (The low register's own swing is wider already: its harmonics grow faster than its weak
+         // fundamental, so it takes less of the extra.)
+         toneGain_ = static_cast<float>(std::pow(10.0, rangeDb_ * (1.0 - 0.75 * lowReg_) * (dyn - 0.6) / 20.0));
+         buzzMid_.peak(std::min(2800.0, 0.4 * fs_), 0.9, 8.0 * (1.0 - std::min(1.0f, dyn * dyn)), fs_);
+      }
+      const float low = tone_.tick(out);
+      float y = low + toneShelf_ * (out - low);
+      if (lowReg_ > 0.0f) {
+         const float cut = lowCut_.tick(y);
+         y = formant_.tick(y + lowReg_ * (cut - y));
+      }
+      // The buzz: a real sax's spectrum falls only about 6 dB an octave over 2 kHz, at every
+      // dynamic (Iowa alto, C4 to G4: the third-octaves from 2 to 8 kHz at -20 to -44 dB of the
+      // whole at mf, still -43 to -55 at pp), where the bore's and bell's losses here took 12 dB
+      // an octave or more: 10 to 30 dB too little, a muffled tone. Two shelves give it back (the
+      // upper one more on the low register, whose highs the UNSW tenor holds out to 8 kHz).
+      // (and the sax's upper formant near 2.8 kHz stands out the more the softer it's played: at
+      // forte the reed's own buzz fills that octave anyway.)
+      y = buzzMid_.tick(buzzHi_.tick(buzzLo_.tick(y)));
+      return y * toneGain_;
    }
 
 protected:
@@ -703,10 +827,20 @@ protected:
    float keep_ = 0.92f, keepLow_ = 0.95f, apexMix_ = 0.5f, radHigh_ = 0.5f, radBell_ = 0.8f, outGain_ = 1.0f;
    float noiseHz_ = 3000, breathNoise_ = 0.05f, tongueNoise_ = 0.3f, growl_ = 0.6f;
    double reedCoef_ = 1.0, reedLow_ = 1.0, apexTurns_ = 0.0;
+   // The player (Sax only; 0 leaves the model as it was): the breath where the reed starts and
+   // full breath, for the dynamic (dynLo, dynHi); the tone's lowpass at the softest (octaves over
+   // the note) and how far the highs over it are shelved down there (toneDepth dB: 0 for none); how many dB
+   // louder full breath is than soft over what the bore gives (rangeDb); and how far under its
+   // pitch a note starts (scoopCents; 0 for no scoop and no wander).
+   float dynLo_ = 0.5f, dynHi_ = 1.1f;
+   double toneLow_ = 0.0, toneDepth_ = 0.0, rangeDb_ = 0.0, scoopCents_ = 0.0, buzzDb_ = 8.0;
 
 private:
    Delay body_, apex_;
-   Biquad lattice_, apexLattice_, lift_, radiate_;
+   Biquad lattice_, apexLattice_, lift_, radiate_, tone_, formant_, lowCut_, buzzLo_, buzzHi_, buzzMid_;
+   Player player_;
+   unsigned toneAt_ = 0;
+   float toneGain_ = 1.0f, toneShelf_ = 1.0f, toneDyn_ = 0.0f, lowReg_ = 0.0f;
    OnePoleLP wall_, apexWall_, noiseLP_;
    DCBlock dc_;
    double hz_ = 294.0, cutHz_ = -1.0, liftHz_ = -1.0, wallHz_ = -1.0, radHz0_ = -1.0, wallDelay_ = 0.0;
@@ -723,7 +857,13 @@ private:
 // apex keeps 0.28 of the period, so the bottom notes start on their fundamental.
 class Sax final : public ConicalReed {
 public:
-   Sax() { apexTurns_ = 0.28; }
+   Sax() {
+      apexTurns_ = 0.28;
+      toneLow_ = 0.4;
+      toneDepth_ = 30.0;
+      rangeDb_ = 4.0;
+      scoopCents_ = 45.0;
+   }
 };
 
 // Oboe (double reed): two cane blades beating at the top of a narrow cone. The reed and its staple
@@ -771,6 +911,7 @@ public:
       fs_ = fs;
       bore_.init(static_cast<int>(fs / 20.0) + 8);
       shock_.init(static_cast<int>(1024 * fs / 96000.0) + 8);
+      player_.prepare(fs);
       reset();
    }
    void reset() override {
@@ -780,6 +921,9 @@ public:
       bell2_ = {};
       x_ = v_ = u_ = dcz_ = closed_ = 0.0;
       tongue_ = 0.0f;
+      player_.reset();
+      tone_ = {};
+      toneAt_ = 0;
       shockD_ = kShock0 * fs_ / 96000.0;
       acMean_ = acEnv_ = 0.0;
       acLP_ = {};
@@ -823,6 +967,20 @@ public:
       // far over a high note that it stops speaking (a real player's lips crack up a partial instead).
       if (emb > 0.5f)
          emb = 0.5f + 0.4f * (emb - 0.5f);
+      // How hard it's blown, 0 where the lips start to 1 at full breath.
+      const double dyn = std::clamp((breath - 0.15) / 0.4, 0.0, 1.3);
+      // The player: a slow wander, and every tongued note starting under its pitch and rising into
+      // it as the lips tighten onto the horn's resonance (Iowa trumpet: 40 to 130 cents flat at the
+      // onset, settling in 50 to 80 ms; more and slower on soft and low notes, quick at forte, and
+      // little from C5 up). Its clock runs slowly until the lips close on every cycle, so a soft
+      // note that speaks late still rises into its pitch. The bore's length is what bends: the lips
+      // follow it (bent too, they'd settle a forte into a darker regime and stay there).
+      player_.tongued(tn);
+      const double dynTop = std::min(dyn, 1.0);
+      const double depth = 330.0 * std::clamp(1.2 - (lipHz_ - 260.0) / 300.0, 0.1, 1.2) * (1.3 - 0.75 * dynTop);
+      const double cents = player_.wander(rng) - depth * player_.scoop(0.015 + 0.03 * (1.0 - dynTop),
+                                                                      0.25 + 0.75 * std::min(1.0, closed_ / 0.3));
+      const double bend = std::exp2(cents / 1200.0);
       // The lips' own frequency: under the note, tighter with the embouchure.
       const double dt = 1.0 / fs_, w = 2 * kPi * lipHz_ * (0.9 + 0.12 * (emb - 0.5));
       // (The breath's turbulence in the mouthpiece cup is a rush under a couple of kHz: the lips and
@@ -836,7 +994,7 @@ public:
          emb_ = emb;
          embTrim_ = std::exp2(trim(emb, kTrimEm0, kTrimEm1) / 1200.0);
       }
-      const double xin = bore_.read((len * trim_ * embTrim_ - coneDelay_) * (1.0 + pull));
+      const double xin = bore_.read((len / bend * trim_ * embTrim_ - coneDelay_) * (1.0 + pull));
       dcz_ += (xin - dcz_) * (2 * kPi * 20 / fs_);
       const double pin = character.keep(0.95f) * (bell2_.tick(bell1_.tick(static_cast<float>(xin))) - 2.0 * dcz_);
       // Lips: pushed open by mouth pressure minus mouthpiece pressure (with the last sample's flow).
@@ -876,7 +1034,14 @@ public:
       const double want = k * kShock0 - K * ac;
       shockD_ += std::clamp(std::clamp(want, 2.0, 2.0 * kShock0 * k) - shockD_, -0.95, 0.95);
       // The bell passes highs and reflects lows.
-      return radLP_.tick(radHP_.tick(shock_.read(shockD_))) * 3.0f;
+      const float out = radLP_.tick(radHP_.tick(shock_.read(shockD_))) * 3.0f;
+      // Brass is mellow when it's played softly and brightens as it's pushed (Risset 1965: the
+      // spectrum's bandwidth grows with the level). Here the lips' pulse is nearly as rich at pp as
+      // at mf (Iowa trumpet at pp: H8 and over 15 to 25 dB further down than at mf), so the tone is
+      // shaped by the dynamic: a lowpass from 3 harmonics up at the softest to wide open at forte.
+      if ((toneAt_++ & 15) == 0)
+         tone_.lowpass(std::min(lipHz_ * std::exp2(1.6 + 3.4 * dyn), 0.45 * fs_), 0.7, fs_);
+      return tone_.tick(out);
    }
 
 private:
@@ -909,7 +1074,9 @@ private:
 
    Delay bore_, shock_;
    OnePoleLP bell1_, bell2_, acLP_, acLP2_, breathLP_, breathLP2_;
-   Biquad radHP_, radLP_;
+   Biquad radHP_, radLP_, tone_;
+   Player player_;
+   unsigned toneAt_ = 0;
    static constexpr double kShock0 = 480.0;
    double acMean_ = 0, acEnv_ = 0, acCoef_ = 0.001, envFall_ = 0.9997, closedCoef_ = 0.003;
    double x_ = 0, v_ = 0, u_ = 0, lipHz_ = 440, dcz_ = 0, shockD_ = 120, closed_ = 0, coneDelay_ = 0, trim_ = 1;

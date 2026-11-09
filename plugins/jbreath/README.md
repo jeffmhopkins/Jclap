@@ -19,10 +19,15 @@ reflections of the real one) driven by a nonlinear exciter, the part the player 
 |---|---|---|---|
 | **Flute** | an air jet crossing the embouchure hole, split in or out of the pipe by the sound in it | open at both ends: every harmonic | the jet takes longer to reach the edge when it's slow, so blowing harder pushes it up a register; edge noise; nearly pure when soft, a strong 2nd and then 3rd harmonic as it's blown harder |
 | **Clarinet** | a single reed: a pressure-controlled valve (Kergomard / Wilson-Beavers), solved each sample with the pressure it makes | a cylinder closed at the reed: odd harmonics | the reed slamming shut at forte; the bell letting the highs out |
-| **Sax** | the same kind of reed, softer | a cone, as a split bore: every harmonic, overblowing at the octave | the mouthpiece's honk; growl when it's pushed |
+| **Sax** | the same kind of reed, softer | a cone, as a split bore: every harmonic, overblowing at the octave | the mouthpiece's honk; nearly a pure tone when it's played softly in its middle register, filling in to a buzzing forte over about 15 dB; low notes (and the tenor and baritone) honk, with a weak fundamental under a strong band of harmonics near 650 Hz; growl when it's pushed |
 | **Oboe** | a stiff double reed, its two blades beating shut each cycle | a narrow cone, darker | the reed's buzz, richer the harder it's blown, through formants near 1.25 and 2.9 kHz with a thin fundamental: nasal, not a soprano sax |
-| **Trumpet** | the lips: a mass on a spring blown open by the mouth pressure (outward striking), with the flow through them in closed form | a flared horn: resonances on every harmonic, none at DC | the wave steepening on its way down the horn, more the harder it's blown, towards a shock at forte: the brassy blare |
+| **Trumpet** | the lips: a mass on a spring blown open by the mouth pressure (outward striking), with the flow through them in closed form | a flared horn: resonances on every harmonic, none at DC | the wave steepening on its way down the horn, more the harder it's blown, towards a shock at forte: the brassy blare; mellow when it's played softly; each tongued note scooping up into its pitch as the lips find the horn's resonance |
 | **Alien** | vocal folds, a pulse opening and snapping shut each period (or a bowed string) | a throat, nose and mouth: a formant synthesizer | every note a syllable of its words (typed, or its own made-up language), each consonant made at its place in the mouth, the vowel held for the note and closed off when it's let go |
+
+The sax and trumpet are measured against the University of Iowa's recordings of a real alto sax and Bb
+trumpet, at pp, mf and ff, and the sax's low register against UNSW's tenor sax: how their tone darkens and how much quieter they get when played softly,
+how far a note starts under its pitch, and the slow wander (1 to 3 cents) of a real player's pitch.
+Every instrument's breath noise is a smaller share of the sound the softer it's blown.
 
 ### The alien
 
@@ -374,6 +379,9 @@ It builds with the rest of JClap (see the [top-level README](../../README.md)). 
   [`docs/panel.png`](docs/panel.png)).
   [`docs/readme/make.sh`](docs/readme/make.sh) renders this README's pictures with it.
 - `jbreath-tune > src/tuning_table.h`: bakes the tuning table again, after a change to a model.
+- `jbreath-render score.txt out.wav`: plays a score of notes, pressures and params (or a preset)
+  through the whole plugin to a WAV, for listening; the format is at the top of
+  [`tools/render.cpp`](tools/render.cpp).
 
 `jbreath-voice-tests` checks every instrument across its range (tuning, level, how fast it speaks,
 and that nothing blows up with every control at its extremes); `jbreath-tests` drives the whole
