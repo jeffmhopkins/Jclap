@@ -71,7 +71,12 @@ inline int diceSection(clap_id id) {
    case kAlienLinger:
    case kAlienGlide:
    case kAlienBend:
-   case kAlienStrength: return kDiceInstrument;
+   case kAlienStrength:
+   case kAlienBreathy:
+   case kAlienSpread:
+   case kAlienFlip:
+   case kAlienFollow:
+   case kAlienSeed: return kDiceInstrument;
    case kLength:
    case kLoss:
    case kHoleCutoff:
@@ -311,10 +316,15 @@ inline Span sane(clap_id id, int model) {
    case kUnisonDetune: return Span{4.0, 20.0};
    case kSpread: return Span{-0.2, 0.8};
    case kPan: return Span{-0.3, 0.3};
-   case kAlienMorph: return Span{0.0, 0.8};
-   case kAlienDrift: return Span{0.0, 0.9};
-   case kAlienShift: return Span{-0.6, 0.6};
-   case kAlienSharp: return Span{0.2, 0.95};
+   case kAlienVoice: return Span{0.0, 0.7};
+   case kAlienMorph: return Span{0.0, 0.35};
+   case kAlienDrift: return Span{0.0, 0.6};
+   case kAlienShift: return Span{-0.5, 0.5};
+   case kAlienSharp: return Span{0.25, 0.8};
+   case kAlienBreathy: return Span{0.05, 0.6};
+   case kAlienSpread: return Span{-0.5, 0.5};
+   case kAlienFlip: return Span{0.0, 0.6};
+   case kAlienFollow: return Span{0.0, 0.5};
    case kAlienBow: return Span{0.0, 0.5};
    case kAlienTalk: return Span{0.1, 0.9};
    case kAlienLinger: return Span{0.0, 0.8};
@@ -415,11 +425,11 @@ inline void randomInstrument(Values &v, DiceRng &rng, int m, double c) {
    set(v, kEdge, rng.range(0.55, 1.5 + 0.5 * c), m);
    set(v, kStiffness, rng.range(0.38, 0.62) + rng.range(-0.12, 0.12) * c, m);
    set(v, kAperture, rng.range(0.38, 0.62), m);
-   // The Alien's throat: anywhere on its ring, travelling and wandering further with complexity.
+   // The Alien's throat: stranger, wobbling and wandering further with complexity.
    if (m == A) {
-      set(v, kAlienVoice, rng.unit(), m);
-      set(v, kAlienMorph, rng.range(0.0, 0.3 + 0.5 * c), m);
-      set(v, kAlienDrift, rng.range(0.1, 0.3 + 0.6 * c), m);
+      set(v, kAlienVoice, rng.range(0.0, 0.2 + 0.5 * c), m);
+      set(v, kAlienMorph, rng.range(0.0, 0.05 + 0.3 * c), m);
+      set(v, kAlienDrift, rng.range(0.05, 0.2 + 0.4 * c), m);
       set(v, kAlienShift, rng.range(-0.2, 0.2) * (1.0 + 2.0 * c), m);
       set(v, kAlienSharp, rng.range(0.35, 0.6 + 0.35 * c), m);
       set(v, kAlienBow, rng.range(0.0, 0.2 + 0.3 * c), m);
@@ -428,6 +438,11 @@ inline void randomInstrument(Values &v, DiceRng &rng, int m, double c) {
       set(v, kAlienGlide, rng.range(15.0, 60.0 + 140.0 * c), m);
       v.set(kAlienPace, rng.any({0, 0, 3, 4, 5}));
       v.set(kAlienBend, 0.6); // (not drawn: the dice's other draws stay as they were)
+      set(v, kAlienBreathy, rng.range(0.05, 0.35 + 0.25 * c), m);
+      set(v, kAlienSpread, rng.range(-0.5, 0.5) * c, m);
+      set(v, kAlienFlip, rng.range(0.0, 0.6) * c * c, m);
+      set(v, kAlienFollow, rng.range(0.0, 0.5) * c, m);
+      v.set(kAlienSeed, std::floor(rng.unit() * 1000.0));
    }
 }
 

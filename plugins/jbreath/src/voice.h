@@ -55,10 +55,13 @@ struct VoiceSettings {
    double tune = 0.0, fine = 0.0, level = 0.0; // only as bases for their routes
    // The rest of the exciter and bore (Character in models.h), the player's habits, and the air.
    double stiffness = 0.5, aperture = 0.5, growl = 0.0, cone = 0.5, brass = 0.5;
-   // The Alien's throat: Voice, Morph, Drift, Shift and Sharp.
-   double alienVoice = 0.0, alienMorph = 0.3, alienDrift = 0.3, alienShift = 0.0, alienSharp = 0.5, alienBow = 0.15, alienTalk = 0.5, alienPaceSec = 0.0, alienLinger = 0.3, alienGlide = 30.0, alienBend = 0.6, alienStrength = 1.0;
+   // The Alien's voice: Accent, Wobble, Drift, Shift and Sharp, the bow, Talk, Pace, Hold, Glide,
+   // Bend and Consonants; Breathy, Spread, Flip and Follow; and whether it sings typed words.
+   double alienVoice = 0.0, alienMorph = 0.0, alienDrift = 0.2, alienShift = 0.0, alienSharp = 0.5, alienBow = 0.0, alienTalk = 0.5, alienPaceSec = 0.0, alienLinger = 0.2, alienGlide = 30.0, alienBend = 0.6, alienStrength = 1.0;
+   double alienBreathy = 0.25, alienSpread = 0.0, alienFlip = 0.0, alienFollow = 0.0;
    uint32_t alienSounds = 0xffu, alienVowels = 0x1fu;
-   int alienOrder = 0;
+   int alienOrder = 1;
+   bool alienTyped = false;
    double loss = 0.04, cutoffHz = 1300.0, detune = 0.0, humanize = 0.0, air = 0.0;
    int tongueType = kTongueHard, vibType = kVibBreath;
    // HYBRID: a plain subtractive voice on the same breath: its wave, octave and detune, how loud it
@@ -475,6 +478,9 @@ public:
          releasing_ = true;
          lift_ = std::clamp(velocity, 0.0, 1.0);
          hybStage_ = kHybRelease;
+         for (auto &copy : models_)
+            if (copy[settings_.model])
+               copy[settings_.model]->letGo();
       }
    }
    // Only the instrument playing has sound in it: the others were cleared when it was picked.
@@ -522,8 +528,15 @@ public:
    float level() const { return level_; }
    // The breath blowing now, 0..about 1.3, and the pitch sounding, for the panel.
    float breath() const { return static_cast<float>(breath_); }
-   // Where the Alien's throat is on its ring of shapes (0..8), or -1 on another instrument.
-   float throat() const { return models_[0][settings_.model]->throat(); }
+   // The syllable of its words the Alien is singing, or -1 (and on another instrument).
+   int saying() const { return models_[0][settings_.model]->saying(); }
+   // The Alien's words, and which of them the next note (or slur) sings: its syllable's place.
+   void setBook(const speech::Book *book) {
+      for (auto &copy : models_)
+         if (copy[kAlien])
+            copy[kAlien]->setBook(book);
+   }
+   void setWord(uint32_t word) { word_ = word; }
    double hz() const { return 440.0 * std::pow(2.0, (pitchNow_ - 69.0) / 12.0); }
 
    // One sample at the internal rate.
@@ -677,6 +690,7 @@ private:
    };
    Next next_{60.0, 1.0, 1.0, false, 0.5};
    int fading_ = 0, fadeLength_ = 1;
+   uint32_t word_ = 0;
    // The tongue's release surge: where it is (-1 before it), how long, and how big.
    int pulseAt_ = -1, pulseLength_ = 1;
    // The tongue's valve: how far it has opened (-1 shut, waiting for the pressure behind it) and
@@ -690,11 +704,9 @@ private:
    void articulate(double velocity) {
       // (The pressure only once it's been played: a fresh note's is the last one's.)
       const double hardness = std::clamp(pressureSeen_ ? std::max(velocity, pressure_) : velocity, 0.0, 1.0);
-      static std::atomic<uint32_t> words{0};
-      const uint32_t word = words.fetch_add(1, std::memory_order_relaxed);
       for (auto &copies : models_)
          if (copies[settings_.model])
-            copies[settings_.model]->articulate(word, hardness);
+            copies[settings_.model]->articulate(word_, hardness);
    }
    double coef(double ms) const { return 1.0 - std::exp(-1000.0 / (std::max(ms, 0.05) * fs_)); }
 
@@ -871,6 +883,11 @@ private:
          c.sounds = live_.alienSounds;
          c.vowels = live_.alienVowels;
          c.order = live_.alienOrder;
+         c.breathy = static_cast<float>(live_.alienBreathy);
+         c.spread = static_cast<float>(live_.alienSpread);
+         c.flip = static_cast<float>(live_.alienFlip);
+         c.follow = static_cast<float>(live_.alienFollow);
+         c.typed = live_.alienTyped;
          float cutoff = static_cast<float>(live_.cutoffHz / 1300.0) * holeK * tube.cut, loss = tube.loss;
          Mute::bore(settings_.mute, mute_.amount(), cutoff, loss);
          c.loss = std::max(0.0f, static_cast<float>(live_.loss) + loss);
@@ -1059,7 +1076,9 @@ private:
       // Silent long enough after letting go (or tongued to nothing): the voice is free.
       level_ = static_cast<float>(env_);
       // A HYBRID pad still in its release keeps the voice going after the breath has stopped.
-      const bool padding = live_.hybridMix > 0.0 && hybEnv_ > 1e-4 && live_.hybridFollow < 0.999;
+      // So does the Alien, still saying its closing consonants.
+      const bool padding = (live_.hybridMix > 0.0 && hybEnv_ > 1e-4 && live_.hybridFollow < 0.999) ||
+                           (live_.hybridMix < 0.999 && models_[0][settings_.model]->ringing());
       if (releasing_ && fading_ <= 0 && breath_ < 1e-4 && env_ < 2e-5 && !padding) {
          if (++quiet_ > static_cast<int>(0.02 * fs_ / kControl))
             reset();
@@ -1322,6 +1341,11 @@ private:
       live_.alienSounds = s.alienSounds;
       live_.alienVowels = s.alienVowels;
       live_.alienOrder = s.alienOrder;
+      live_.alienBreathy = at(kDest<kAlienBreathy>, s.alienBreathy);
+      live_.alienSpread = at(kDest<kAlienSpread>, s.alienSpread);
+      live_.alienFlip = at(kDest<kAlienFlip>, s.alienFlip);
+      live_.alienFollow = at(kDest<kAlienFollow>, s.alienFollow);
+      live_.alienTyped = s.alienTyped;
       live_.detune = at(kDest<kDetune>, s.detune);
       live_.air = at(kDest<kAir>, s.air);
       applyCharacter();

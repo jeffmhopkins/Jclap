@@ -236,123 +236,148 @@ inline const std::vector<Preset> &factoryPresets() {
                     {kVibPitch, 4}, {kRoom, 0.25}}});
 
       const double A = kAlienModel;
-      // The Alien: a voice that talks (and a bowed string, if you like) through a throat that
-      // travels round its ring of shapes (Voice: A 0, Ghost 0.125, O 0.25, Abyss 0.375, U 0.5,
-      // I 0.625, Insect 0.75, E 0.875). Pace: 0 Free, 1 1/16, 2 1/8, 3 1/4, 4 1/2, 5 1 Bar, 6 2 Bars.
+      // The Alien: a voice that sings words, a syllable a note (its own, or what's typed on the
+      // ALIEN tab), through a throat that can be made stranger: Accent (kAlienVoice), Spread, Flip,
+      // Follow, Wobble (kAlienMorph), Shift and Sharp. Pace: 0 Free, 1 1/16, 2 1/8, 3 1/4, 4 1/2,
+      // 5 1 Bar, 6 2 Bars. Word Length (kAlienOrder): 0 Short, 1 Mixed, 2 Long, 3 Chant.
       p.push_back({"Alien Speech", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.7}, {kAlienLinger, 0.4}, {kAlienSharp, 0.6},
-                    {kAlienMorph, 0.05}, {kAlienDrift, 0.3}, {kAttack, 30}, {kRelease, 200}, {kVibDepth, 0.03},
-                    {kVoiceMode, kLegatoMode}, {kGlide, 60}, {kRoom, 0.3}}});
+                   {{kModel, A}, {kAlienTalk, 0.6}, {kAlienVoice, 0.3}, {kAlienDrift, 0.25}, {kAlienSeed, 7},
+                    {kAttack, 30}, {kRelease, 200}, {kVibDepth, 0.03}, {kVoiceMode, kLegatoMode}, {kGlide, 60},
+                    {kRoom, 0.3}}});
+      // A plain human voice for your words: a syllable a note, nothing strange.
       p.push_back({"First Contact", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.1}, {kAlienTalk, 0.55}, {kAlienLinger, 0.3}, {kBreath, 1.1}, {kAttack, 40},
-                    {kRelease, 260}, {kVibDepth, 0.03}, {kAlienMorph, 0.1}, {kAlienDrift, 0.3}, {kRoom, 0.3}}});
-      // A bowed string singing with the voice; MPE slide works the mouth round the ring.
+                   {{kModel, A}, {kAlienTalk, 0.1}, {kAlienVoice, 0.0}, {kAlienDrift, 0.1}, {kAlienBreathy, 0.2},
+                    {kAlienLinger, 0.35}, {kAttack, 35}, {kRelease, 260}, {kVibDepth, 0.02}, {kVibPitch, 18},
+                    {kVibDelay, 350}, {kRoom, 0.3}}});
+      // A bowed string singing the words; MPE slide bends its accent.
       p.push_back({"Talking Bow", "Alien",
-                   {{kModel, A}, {kLevel, 2}, {kAlienBow, 0.4}, {kAlienTalk, 0.5}, {kBreath, 1.0}, {kAttack, 30}, {kRelease, 220},
-                    {kVibDepth, 0.0}, {kVibPitch, 6}, {kAlienMorph, 0.0}, {kAlienDrift, 0.15}, {kAlienSharp, 0.6},
-                    {kVoiceMode, kLegatoMode}, {kGlide, 50},
+                   {{kModel, A}, {kLevel, 2}, {kAlienBow, 0.75}, {kAlienTalk, 0.5}, {kAlienVoice, 0.15}, {kBreath, 1.0},
+                    {kAttack, 30}, {kRelease, 220}, {kVibDepth, 0.0}, {kVibPitch, 6}, {kAlienDrift, 0.15},
+                    {kAlienSharp, 0.6}, {kVoiceMode, kLegatoMode}, {kGlide, 50},
                     {routeParam(0, kRouteSource), kSrcSlide},
                     {routeParam(0, kRouteDestination), kDest<kAlienVoice>},
                     {routeParam(0, kRouteAmount), 0.5}, {kRoom, 0.3}}});
-      // Narrow resonances ringing over a low drone, as a throat singer's overtones, a new one every
-      // two bars.
+      // Narrow resonances ringing over a low drone, as a throat singer's overtones, slowly turning.
       p.push_back({"Throat Singer", "Alien",
-                   {{kModel, A}, {kLevel, -4}, {kAlienBow, 0.0}, {kAlienTalk, 0.3}, {kAlienPace, 6}, {kAlienLinger, 0.5}, {kTune, -12},
-                    {kBreath, 1.05}, {kAlienVoice, 0.25}, {kAlienMorph, 0.05}, {kAlienDrift, 0.25}, {kAlienSharp, 0.92},
-                    {kAlienShift, -0.15}, {kAttack, 80}, {kRelease, 600}, {kVibDepth, 0.0}, {kVoiceMode, kLegatoMode},
-                    {kGlide, 90}, {kRoom, 0.4}, {kRoomDecay, 3.5}}});
+                   {{kModel, A}, {kLevel, -4}, {kAlienTalk, 0.3}, {kAlienPace, 6}, {kAlienLinger, 0.9}, {kTune, -12},
+                    {kBreath, 1.05}, {kAlienMorph, 0.08}, {kAlienDrift, 0.3}, {kAlienSharp, 0.92}, {kAlienShift, -0.15},
+                    {kAlienStrength, 0.4}, {kAlienGlide, 200}, {kAttack, 80}, {kRelease, 600}, {kVibDepth, 0.0},
+                    {kVoiceMode, kLegatoMode}, {kGlide, 90}, {kRoom, 0.4}, {kRoomDecay, 3.5}}});
       p.push_back({"Xeno Choir", "Alien",
-                   {{kModel, A}, {kLevel, -5}, {kAlienBow, 0.05}, {kAlienTalk, 0.45}, {kAlienPace, 4}, {kAlienLinger, 0.4}, {kBreath, 1.0},
-                    {kEdge, 0.8}, {kAlienVoice, 0.875}, {kAlienMorph, 0.1}, {kAlienDrift, 0.6}, {kAttack, 200},
+                   {{kModel, A}, {kLevel, -5}, {kAlienTalk, 0.45}, {kAlienPace, 4}, {kAlienLinger, 0.5}, {kBreath, 1.0},
+                    {kAlienVoice, 0.45}, {kAlienFollow, 0.2}, {kAlienDrift, 0.4}, {kAlienBreathy, 0.4}, {kAttack, 200},
                     {kRelease, 1200}, {kVibDepth, 0.06}, {kVibRate, 3.8}, {kUnison, 3}, {kUnisonDetune, 12},
                     {kRoom, 0.5}, {kRoomDecay, 4.0}}});
-      // A huge throat over a heavy bow, a word every beat.
+      // A huge, squeezed throat over a heavy bow, a word every beat.
       p.push_back({"Tractor Beam", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.4}, {kAlienTalk, 0.5}, {kAlienPace, 3}, {kTune, -12}, {kBreath, 1.3},
-                    {kEdge, 1.8}, {kKick, 0.6}, {kAlienVoice, 0.375}, {kAlienShift, -0.6}, {kAlienMorph, 0.05},
-                    {kAttack, 15}, {kRelease, 300}, {kVibDepth, 0.0}, {kVoiceMode, kMonoMode}, {kGlide, 80}}});
-      // A small, whining throat, chattering.
+                   {{kModel, A}, {kAlienBow, 0.45}, {kAlienTalk, 0.5}, {kAlienPace, 3}, {kTune, -12}, {kBreath, 1.2},
+                    {kEdge, 1.6}, {kAlienShift, -0.6}, {kAlienSpread, -0.5}, {kAlienVoice, 0.3}, {kAttack, 15},
+                    {kRelease, 300}, {kVibDepth, 0.0}, {kVoiceMode, kMonoMode}, {kGlide, 80}}});
+      // A small, whining throat, its resonances pulled apart and following the note up.
       p.push_back({"Insect Hymn", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.1}, {kAlienTalk, 0.75}, {kAlienLinger, 0.2}, {kTune, 12}, {kEdge, 0.7},
-                    {kAlienVoice, 0.75}, {kAlienSharp, 0.75}, {kAlienShift, 0.3}, {kAlienMorph, 0.0}, {kAlienDrift, 0.4},
-                    {kAttack, 25}, {kRelease, 350}, {kVibPitch, 12}, {kVibRate, 6.5}, {kVibDelay, 200}, {kRoom, 0.4}}});
+                   {{kModel, A}, {kAlienTalk, 0.75}, {kAlienLinger, 0.2}, {kTune, 12}, {kAlienShift, 0.45},
+                    {kAlienSpread, 0.6}, {kAlienSharp, 0.8}, {kAlienFollow, 0.4}, {kAlienDrift, 0.3}, {kAlienSeed, 31},
+                    {kAlienOrder, 0}, {kAttack, 25}, {kRelease, 350}, {kVibPitch, 12}, {kVibRate, 6.5},
+                    {kVibDelay, 200}, {kRoom, 0.4}}});
       p.push_back({"Mothership", "Alien",
-                   {{kModel, A}, {kLevel, -8}, {kAlienBow, 0.05}, {kAlienTalk, 0.35}, {kAlienPace, 5}, {kAlienLinger, 0.6}, {kTune, -12},
-                    {kBreath, 1.1}, {kAlienVoice, 0.375}, {kAlienMorph, 0.05}, {kAlienDrift, 0.85}, {kAlienSharp, 0.65},
-                    {kAttack, 400}, {kRelease, 2000}, {kVibDepth, 0.04}, {kVibRate, 2.4}, {kRoom, 0.6}, {kRoomDecay, 6.0}}});
-      // A stiff wire scraped hard, the voice gabbling over it.
+                   {{kModel, A}, {kLevel, -6}, {kAlienTalk, 0.35}, {kAlienPace, 5}, {kAlienLinger, 0.7}, {kTune, -12},
+                    {kBreath, 1.1}, {kAlienShift, -0.4}, {kAlienFlip, 0.3}, {kAlienMorph, 0.06}, {kAlienDrift, 0.6},
+                    {kAlienSharp, 0.65}, {kAlienGlide, 160}, {kAttack, 400}, {kRelease, 2000}, {kVibDepth, 0.04},
+                    {kVibRate, 2.4}, {kRoom, 0.6}, {kRoomDecay, 6.0}}});
+      // Gabbling, every vowel swirling, over a stiff scraped wire.
       p.push_back({"Signal Lost", "Alien",
-                   {{kModel, A}, {kLevel, -2}, {kAlienBow, 0.3}, {kAlienTalk, 0.95}, {kAlienLinger, 0.1}, {kBreath, 1.4}, {kEdge, 2.0},
-                    {kNoise, 1.4}, {kCone, 0.85}, {kFlutter, 0.25}, {kAlienMorph, 0.2}, {kAlienDrift, 1.0}, {kAttack, 10},
-                    {kRelease, 150}, {kVibPitch, 30}, {kVibRate, 7.5}, {kVibDelay, 0}, {kVoiceMode, kMonoMode}}});
-      // A rolled tongue chopping the voice, through the ghost's whistle.
+                   {{kModel, A}, {kLevel, -2}, {kAlienBow, 0.3}, {kAlienTalk, 0.95}, {kAlienLinger, 0.1}, {kBreath, 1.3},
+                    {kEdge, 1.8}, {kCone, 0.85}, {kFlutter, 0.2}, {kAlienMorph, 0.55}, {kAlienVoice, 0.7},
+                    {kAlienDrift, 0.6}, {kAttack, 10}, {kRelease, 150}, {kVibPitch, 30}, {kVibRate, 7.5}, {kVibDelay, 0},
+                    {kVoiceMode, kMonoMode}}});
+      // A rolled tongue chopping a voice turned a quarter round.
       p.push_back({"Ion Flutter", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.1}, {kAlienTalk, 0.5}, {kBreath, 1.1}, {kTongueType, kFlutterTongue},
-                    {kFlutter, 0.5}, {kFlutterRate, 18}, {kAlienVoice, 0.125}, {kAlienSharp, 0.8}, {kAlienMorph, 0.1},
-                    {kAttack, 20}, {kRelease, 250}, {kVibDepth, 0.0}, {kRoom, 0.3}}});
+                   {{kModel, A}, {kAlienTalk, 0.5}, {kBreath, 1.1}, {kTongueType, kFlutterTongue}, {kFlutter, 0.5},
+                    {kFlutterRate, 18}, {kAlienFlip, 0.45}, {kAlienSharp, 0.75}, {kAlienMorph, 0.1}, {kAttack, 20},
+                    {kRelease, 250}, {kVibDepth, 0.0}, {kRoom, 0.3}}});
+      // Strange throats: each of the panel's odd knobs taken a long way.
+      // Every vowel where its opposite is.
+      p.push_back({"Inside Out", "Alien",
+                   {{kModel, A}, {kAlienTalk, 0.55}, {kAlienFlip, 1.0}, {kAlienSharp, 0.55}, {kAlienDrift, 0.15},
+                    {kAttack, 25}, {kRelease, 250}, {kVibDepth, 0.02}, {kVoiceMode, kLegatoMode}, {kGlide, 40},
+                    {kRoom, 0.3}}});
+      // Resonances pushed far apart and narrowed: a voice of glass.
+      p.push_back({"Glass Mouth", "Alien",
+                   {{kModel, A}, {kLevel, -3}, {kAlienTalk, 0.5}, {kAlienSpread, 0.85}, {kAlienSharp, 0.85},
+                    {kAlienShift, 0.15}, {kAlienBreathy, 0.1}, {kAttack, 30}, {kRelease, 400}, {kVibPitch, 10},
+                    {kVibRate, 5.5}, {kRoom, 0.45}, {kRoomDecay, 3.0}}});
+      // Squeezed down to a hum, every vowel a muffled moan.
+      p.push_back({"Muffled Moan", "Alien",
+                   {{kModel, A}, {kAlienTalk, 0.4}, {kAlienSpread, -0.85}, {kAlienShift, -0.3}, {kAlienBreathy, 0.35},
+                    {kAlienLinger, 0.6}, {kAttack, 60}, {kRelease, 500}, {kVibDepth, 0.03}, {kRoom, 0.4}}});
+      // Every resonance swinging on its own wave: a warbling crowd.
+      p.push_back({"Warble Choir", "Alien",
+                   {{kModel, A}, {kLevel, -4}, {kAlienTalk, 0.3}, {kAlienPace, 5}, {kAlienMorph, 0.35},
+                    {kAlienVoice, 0.35}, {kAlienBreathy, 0.3}, {kAttack, 150}, {kRelease, 900}, {kUnison, 3},
+                    {kUnisonDetune, 10}, {kVibDepth, 0.03}, {kRoom, 0.5}, {kRoomDecay, 3.5}}});
+      // The throat follows the note all the way: tiny up high, a giant down low.
+      p.push_back({"Tiny Giant", "Alien",
+                   {{kModel, A}, {kAlienTalk, 0.6}, {kAlienFollow, 1.0}, {kAlienVoice, 0.2}, {kAlienSharp, 0.6},
+                    {kAttack, 20}, {kRelease, 250}, {kVibDepth, 0.02}, {kRoom, 0.3}}});
 
       // Talkers: the same voice set to speak in different ways, from crisp to drawled.
-      // Crisp: each vowel snapped to in under 10 ms, nothing wandering, no pitch slide: the clearest
-      // diction (play it hard for s, t, k).
+      // Crisp: each vowel snapped to, nothing wandering, no pitch slide: the clearest diction (play
+      // it hard for s, t, k).
       p.push_back({"Crisp Diction", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.85}, {kAlienGlide, 8}, {kAlienLinger, 0.15},
-                    {kAlienSharp, 0.55}, {kAlienMorph, 0.0}, {kAlienDrift, 0.05}, {kAttack, 8}, {kRelease, 120},
-                    {kVibDepth, 0.0}, {kRoom, 0.2}}});
-      // Fast chatter, every 1/16 on a held note a new syllable.
+                   {{kModel, A}, {kAlienTalk, 0.85}, {kAlienGlide, 15}, {kAlienLinger, 0.15}, {kAlienSharp, 0.55},
+                    {kAlienDrift, 0.05}, {kAlienBreathy, 0.15}, {kAttack, 8}, {kRelease, 120}, {kVibDepth, 0.0},
+                    {kRoom, 0.2}}});
+      // Fast chatter, every 1/8 on a held note a new syllable.
       p.push_back({"Chatterbox", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.9}, {kAlienGlide, 12}, {kAlienPace, 1},
-                    {kAlienLinger, 0.25}, {kAlienSharp, 0.5}, {kAlienMorph, 0.0}, {kAlienDrift, 0.1}, {kTune, 12},
-                    {kAttack, 10}, {kRelease, 150}, {kVibDepth, 0.0}, {kRoom, 0.25}}});
-      // A machine reading out its vowels: every 1/8 a new one, snapped, dead steady.
+                   {{kModel, A}, {kAlienTalk, 0.9}, {kAlienGlide, 15}, {kAlienPace, 2}, {kAlienLinger, 0.1},
+                    {kAlienDrift, 0.1}, {kAlienOrder, 0}, {kTune, 12}, {kAttack, 10}, {kRelease, 150},
+                    {kVibDepth, 0.0}, {kRoom, 0.25}}});
+      // A machine reading out its words: every 1/4 a new syllable, snapped, dead steady.
       p.push_back({"Envoy Unit", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.75}, {kAlienGlide, 5}, {kAlienPace, 2},
-                    {kAlienLinger, 0.0}, {kAlienSharp, 0.85}, {kAlienMorph, 0.0}, {kAlienDrift, 0.0}, {kAttack, 5},
+                   {{kModel, A}, {kAlienTalk, 0.75}, {kAlienGlide, 10}, {kAlienPace, 3}, {kAlienLinger, 0.0},
+                    {kAlienSharp, 0.8}, {kAlienDrift, 0.0}, {kAlienBreathy, 0.0}, {kAlienSpread, 0.2}, {kAttack, 5},
                     {kRelease, 90}, {kVibDepth, 0.0}, {kVoiceMode, kMonoMode}, {kRoom, 0.15}}});
-      // Slow and slurred: long glides between vowels, a slide between notes, lingering.
+      // Slow and slurred: long glides between vowels, a slide between notes.
       p.push_back({"Slow Drawl", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.6}, {kAlienGlide, 180}, {kAlienPace, 3},
-                    {kAlienLinger, 0.6}, {kAlienSharp, 0.6}, {kAlienMorph, 0.05}, {kAlienDrift, 0.4}, {kTune, -12},
-                    {kAttack, 60}, {kRelease, 400}, {kVibDepth, 0.04}, {kVoiceMode, kLegatoMode}, {kGlide, 120},
-                    {kRoom, 0.35}}});
+                   {{kModel, A}, {kAlienTalk, 0.6}, {kAlienGlide, 180}, {kAlienPace, 3}, {kAlienLinger, 0.8},
+                    {kAlienSharp, 0.55}, {kAlienDrift, 0.3}, {kTune, -12}, {kAttack, 60}, {kRelease, 400},
+                    {kVibDepth, 0.04}, {kVoiceMode, kLegatoMode}, {kGlide, 120}, {kRoom, 0.35}}});
       // Breathy and close, the consonants' hiss up front.
       p.push_back({"Whisper Tongue", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.8}, {kAlienGlide, 20}, {kAlienLinger, 0.3},
-                    {kAlienSharp, 0.4}, {kAlienMorph, 0.0}, {kAlienDrift, 0.15}, {kNoise, 1.6}, {kBreath, 0.9},
-                    {kAttack, 15}, {kRelease, 200}, {kVibDepth, 0.0}, {kRoom, 0.3}}});
+                   {{kModel, A}, {kAlienTalk, 0.8}, {kAlienGlide, 20}, {kAlienLinger, 0.3}, {kAlienSharp, 0.4},
+                    {kAlienBreathy, 0.9}, {kAlienDrift, 0.15}, {kNoise, 1.6}, {kBreath, 0.9}, {kAttack, 15},
+                    {kRelease, 200}, {kVibDepth, 0.0}, {kRoom, 0.3}}});
 
-      // Singers: a syllable a note, sung as English is: a quick consonant, then the vowel held
-      // steady for the whole note (a held note only moves on after two bars, and mostly lingers),
-      // reached in a singer's 40 to 70 ms, with a vibrato that comes in late.
+      // Singers: a syllable a note (type the words, or let it sing its own), the vowel held steady
+      // for the whole note and a diphthong's first vowel held as a singer holds it, with a vibrato
+      // that comes in late.
       p.push_back({"Hymn Singer", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.5}, {kAlienGlide, 50}, {kAlienPace, 6},
-                    {kAlienLinger, 0.8}, {kAlienSharp, 0.55}, {kAlienMorph, 0.0}, {kAlienDrift, 0.1}, {kAttack, 45},
-                    {kRelease, 350}, {kVibDepth, 0.02}, {kVibPitch, 22}, {kVibRate, 5.3}, {kVibDelay, 450},
-                    {kVoiceMode, kLegatoMode}, {kGlide, 25}, {kRoom, 0.45}, {kRoomDecay, 2.8}}});
+                   {{kModel, A}, {kAlienTalk, 0.1}, {kAlienGlide, 45}, {kAlienLinger, 0.8}, {kAlienSharp, 0.55},
+                    {kAlienDrift, 0.1}, {kAlienBreathy, 0.2}, {kAttack, 45}, {kRelease, 350}, {kVibDepth, 0.02},
+                    {kVibPitch, 22}, {kVibRate, 5.3}, {kVibDelay, 450}, {kVoiceMode, kLegatoMode}, {kGlide, 25},
+                    {kRoom, 0.45}, {kRoomDecay, 2.8}}});
       p.push_back({"Ballad Voice", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.55}, {kAlienGlide, 60}, {kAlienPace, 6},
-                    {kAlienLinger, 0.7}, {kAlienSharp, 0.5}, {kAlienMorph, 0.0}, {kAlienDrift, 0.15}, {kTune, -12},
-                    {kAttack, 40}, {kRelease, 400}, {kVibDepth, 0.03}, {kVibPitch, 28}, {kVibRate, 5.1},
-                    {kVibDelay, 350}, {kRoom, 0.35}, {kRoomDecay, 2.2}}});
-      // Plainer and quicker: words sung on the beat, a held note's vowel changing each bar.
+                   {{kModel, A}, {kAlienTalk, 0.1}, {kAlienGlide, 55}, {kAlienLinger, 0.7}, {kAlienSharp, 0.5},
+                    {kAlienDrift, 0.15}, {kAlienBreathy, 0.3}, {kTune, -12}, {kAttack, 40}, {kRelease, 400},
+                    {kVibDepth, 0.03}, {kVibPitch, 28}, {kVibRate, 5.1}, {kVibDelay, 350}, {kRoom, 0.35},
+                    {kRoomDecay, 2.2}}});
+      // Plainer and quicker: words sung on the beat.
       p.push_back({"Folk Tenor", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.65}, {kAlienGlide, 40}, {kAlienPace, 5},
-                    {kAlienLinger, 0.5}, {kAlienSharp, 0.55}, {kAlienMorph, 0.0}, {kAlienDrift, 0.1}, {kAttack, 25},
-                    {kRelease, 250}, {kVibDepth, 0.02}, {kVibPitch, 15}, {kVibRate, 5.6}, {kVibDelay, 500},
-                    {kVoiceMode, kMonoMode}, {kRoom, 0.25}}});
-      // A low, larger throat, the vowels slow and wide.
+                   {{kModel, A}, {kAlienTalk, 0.1}, {kAlienGlide, 35}, {kAlienLinger, 0.5}, {kAlienSharp, 0.55},
+                    {kAlienDrift, 0.1}, {kAttack, 25}, {kRelease, 250}, {kVibDepth, 0.02}, {kVibPitch, 15},
+                    {kVibRate, 5.6}, {kVibDelay, 500}, {kVoiceMode, kMonoMode}, {kRoom, 0.25}}});
+      // A low, larger throat, the vowels slow and wide, a word chanted over and over.
       p.push_back({"Baritone Chant", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.45}, {kAlienGlide, 70}, {kAlienPace, 6},
-                    {kAlienLinger, 0.9}, {kAlienSharp, 0.6}, {kAlienShift, -0.15}, {kAlienMorph, 0.0},
-                    {kAlienDrift, 0.1}, {kTune, -12}, {kAttack, 70}, {kRelease, 600}, {kVibDepth, 0.02},
-                    {kVibPitch, 18}, {kVibRate, 4.8}, {kVibDelay, 600}, {kVoiceMode, kLegatoMode}, {kGlide, 40},
-                    {kRoom, 0.55}, {kRoomDecay, 4.0}}});
+                   {{kModel, A}, {kAlienTalk, 0.1}, {kAlienGlide, 70}, {kAlienLinger, 0.9}, {kAlienSharp, 0.6},
+                    {kAlienShift, -0.15}, {kAlienOrder, 3}, {kAlienDrift, 0.1}, {kTune, -12}, {kAttack, 70},
+                    {kRelease, 600}, {kVibDepth, 0.02}, {kVibPitch, 18}, {kVibRate, 4.8}, {kVibDelay, 600},
+                    {kVoiceMode, kLegatoMode}, {kGlide, 40}, {kRoom, 0.55}, {kRoomDecay, 4.0}}});
       // Soft and breathy, sung close.
       p.push_back({"Lullaby", "Alien",
-                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.45}, {kAlienGlide, 80}, {kAlienPace, 6},
-                    {kAlienLinger, 0.8}, {kAlienSharp, 0.45}, {kAlienMorph, 0.0}, {kAlienDrift, 0.1}, {kNoise, 1.4},
-                    {kBreath, 0.85}, {kAttack, 70}, {kRelease, 500}, {kVibDepth, 0.02}, {kVibPitch, 14},
-                    {kVibRate, 4.9}, {kVibDelay, 500}, {kVoiceMode, kLegatoMode}, {kGlide, 30}, {kRoom, 0.4},
-                    {kRoomDecay, 2.5}}});
+                   {{kModel, A}, {kAlienTalk, 0.1}, {kAlienGlide, 80}, {kAlienLinger, 0.8}, {kAlienSharp, 0.45},
+                    {kAlienDrift, 0.1}, {kAlienBreathy, 0.55}, {kBreath, 0.85}, {kAttack, 70}, {kRelease, 500},
+                    {kVibDepth, 0.02}, {kVibPitch, 14}, {kVibRate, 4.9}, {kVibDelay, 500}, {kVoiceMode, kLegatoMode},
+                    {kGlide, 30}, {kRoom, 0.4}, {kRoomDecay, 2.5}}});
 
       // Pads: the HYBRID voice as a pad under the instrument. Its Follow is low, so its envelope (not
       // the breath) plays it: it swells in behind the note and rings on after the breath stops.
