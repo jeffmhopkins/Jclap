@@ -99,7 +99,11 @@ public:
       const float timbre[4] = {0.5f, 0.42f, 0.66f, 0.5f}, level[4] = {0.08f, 0.1f, 0.14f, 0.03f};
       for (int i = 0; i < 4; ++i) {
          const float hz = 440.0f * std::pow(2.0f, (kNotes[i] - 69) / 12.0f);
-         out[i] = {kNotes[i], hz, breath[i], pressure[i], timbre[i], level[i], i == 3};
+         out[i] = {kNotes[i], hz, breath[i], pressure[i], timbre[i], level[i]};
+         out[i].releasing = i == 3;
+         // On the Alien, the throats travelled a little way on from the Voice knob, apart.
+         if (static_cast<int>(std::lround(values_[kModel])) == 5) // the Alien
+            out[i].throat = static_cast<float>(std::fmod(values_[kAlienVoice] * std::size(kAlienShapeNames) + 0.35 * i + 0.2, std::size(kAlienShapeNames)));
          float *src = out[i].sources.data();
          src[kSrcStrike] = 0.7f;
          src[kSrcPress] = pressure[i];

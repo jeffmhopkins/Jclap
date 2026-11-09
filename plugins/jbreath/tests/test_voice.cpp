@@ -114,6 +114,9 @@ int main() {
       // Soft, middling and hard, every third semitone: it sounds, and in its own register (a tone
       // that jumps to the octave has almost nothing left at the fundamental). A trumpet's bell sends
       // out little of its fundamental, and at forte its 2nd and 3rd harmonics stand well above it.
+      // The Alien is a voice: its throat's resonances lift whichever harmonic they sit on (H2 well
+      // above H1 is what an "ah" does on some notes), so for it the register is checked by its
+      // pitch instead (more than a quarter-tone off, and it isn't sounding its note).
       {
          const double octaveRatio = m == kTrumpet ? 6.0 : 3.0;
          int silent = 0, octave = 0;
@@ -131,7 +134,8 @@ int main() {
                if (rms < 0.003) {
                   ++silent;
                   std::printf("         note %d at %.2f: silent\n", note, velocity);
-               } else if (ratio > octaveRatio) {
+               } else if (m == kAlien ? std::fabs(1200.0 * std::log2(pitchOf(t.out, t.out.size() - 7200, hz) / hz)) > 50.0
+                                      : ratio > octaveRatio) {
                   ++octave;
                   std::printf("         note %d at %.2f: octave (H2/H1 %.1f)\n", note, velocity, ratio);
                }

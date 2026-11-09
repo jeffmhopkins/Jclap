@@ -32,7 +32,15 @@ std::unique_ptr<Model> make(int id) {
    case kClarinet: return std::make_unique<Clarinet>();
    case kSax: return std::make_unique<Sax>();
    case kOboe: return std::make_unique<Oboe>();
-   case kAlien: return std::make_unique<Alien>();
+   case kAlien: {
+      // (Its throat held still and wide, so the gain levels the string, not where a harmonic
+      // happens to fall in a narrow resonance at one moment of a morph.)
+      auto a = std::make_unique<Alien>();
+      a->character.morph = a->character.drift = a->character.sharp = 0.0f;
+      a->character.bow = 0.15f;
+      a->character.talk = 0.0f;
+      return a;
+   }
    default: return std::make_unique<Trumpet>();
    }
 }
@@ -77,7 +85,7 @@ struct Articulation {
 };
 const Articulation kArticulation[kModelCount] = {
    {1.0, 0.6, 0.25, 0.5, 72.0, 0.0}, {0.25, 0.6, 0.1, 1.0, 62.0, 0.0}, {1.0, 1.0, 0.6, 1.0, 61.0, 0.8},
-   {1.0, 0.7, 0.6, 1.0, 69.0, 0.8},  {1.0, 0.4, 0.25, 1.0, 65.0, 0.0},  {0.25, 1.0, 0.3, 0.5, 62.0, 0.5},
+   {1.0, 0.7, 0.6, 1.0, 69.0, 0.8},  {1.0, 0.4, 0.25, 1.0, 65.0, 0.0},  {0.25, 0.4, 0.3, 0.5, 62.0, 0.5},
 };
 
 // `speaking`: the breath is a candidate for the softest that sounds the note, played as the

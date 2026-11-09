@@ -12,6 +12,7 @@
 // sums the voices there and decimates once.
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <memory>
 #include <vector>
@@ -54,6 +55,9 @@ struct VoiceSettings {
    double tune = 0.0, fine = 0.0, level = 0.0; // only as bases for their routes
    // The rest of the exciter and bore (Character in models.h), the player's habits, and the air.
    double stiffness = 0.5, aperture = 0.5, growl = 0.0, cone = 0.5, brass = 0.5;
+   // The Alien's throat: Voice, Morph, Drift, Shift and Sharp.
+   double alienVoice = 0.0, alienMorph = 0.3, alienDrift = 0.3, alienShift = 0.0, alienSharp = 0.5, alienBow = 0.15, alienTalk = 0.5, alienPaceSec = 0.0, alienLinger = 0.3, alienGlide = 30.0, alienBend = 0.6, alienStrength = 1.0;
+   uint32_t alienSounds = 0xffu;
    double loss = 0.04, cutoffHz = 1300.0, detune = 0.0, humanize = 0.0, air = 0.0;
    int tongueType = kTongueHard, vibType = kVibBreath;
    // HYBRID: a plain subtractive voice on the same breath: its wave, octave and detune, how loud it
@@ -425,6 +429,7 @@ private:
       swellAge_ = 0.0;
       // The HYBRID envelope starts again from where it is (from 0 after silence).
       hybStage_ = kHybAttack;
+      articulate(velocity);
    }
 
 public:
@@ -440,6 +445,7 @@ public:
       tongue_ = tongueAmount();
       pitch_ = pitch;
       hold_ = 1.0;
+      articulate(velocity);
       hybStage_ = kHybAttack;
    }
    // Legato: the fingers change, the air doesn't stop.
@@ -449,6 +455,7 @@ public:
       age_ = 0;
       pitch_ = pitch;
       velocity_ = std::max(velocity_ * 0.8, velocity);
+      articulate(velocity);
       // Double tonguing: every note gets its own light tongue, even slurred.
       if (settings_.tongueType == kTongueDouble) {
          kickAge_ = 0;
@@ -497,6 +504,8 @@ public:
    void setGain(double gain) { gain_ = gain; }
    // The note's bend now, -1..1 over its bend range: the Glide source.
    void setBend(double bend) { bend_ = std::clamp(bend, -1.0, 1.0); }
+   // The note's bend in semitones: how far the Alien's throat follows it (by its Bend).
+   void setBendSemitones(double semis) { bendSemis_ = semis; }
    // Seconds on a clock every voice shares, for LFOs that run free of the notes.
    void setClock(const double *seconds) { clock_ = seconds; }
 
@@ -512,6 +521,8 @@ public:
    float level() const { return level_; }
    // The breath blowing now, 0..about 1.3, and the pitch sounding, for the panel.
    float breath() const { return static_cast<float>(breath_); }
+   // Where the Alien's throat is on its ring of shapes (0..8), or -1 on another instrument.
+   float throat() const { return models_[0][settings_.model]->throat(); }
    double hz() const { return 440.0 * std::pow(2.0, (pitchNow_ - 69.0) / 12.0); }
 
    // One sample at the internal rate.
@@ -673,6 +684,17 @@ private:
    double pulseAmp_ = 0.0;
 
    Model &model() { return *models_[0][settings_.model]; }
+   // A new note (or a slurred one) for every copy: the Alien's next syllable, its consonant as hard
+   // as the note is struck or blown.
+   void articulate(double velocity) {
+      // (The pressure only once it's been played: a fresh note's is the last one's.)
+      const double hardness = std::clamp(pressureSeen_ ? std::max(velocity, pressure_) : velocity, 0.0, 1.0);
+      static std::atomic<uint32_t> words{0};
+      const uint32_t word = words.fetch_add(1, std::memory_order_relaxed);
+      for (auto &copies : models_)
+         if (copies[settings_.model])
+            copies[settings_.model]->articulate(word, hardness);
+   }
    double coef(double ms) const { return 1.0 - std::exp(-1000.0 / (std::max(ms, 0.05) * fs_)); }
 
    // The breath the player is aiming for now.
@@ -793,7 +815,7 @@ private:
    const Articulation &articulation() const {
       static const Articulation table[kModelCount] = {
          {1.0, 0.6, 0.25, 0.5, 72.0, 0.0}, {0.25, 0.6, 0.1, 1.0, 62.0, 0.0}, {1.0, 1.0, 0.6, 1.0, 61.0, 0.8},
-         {1.0, 0.7, 0.6, 1.0, 69.0, 0.8},  {1.0, 0.4, 0.25, 1.0, 65.0, 0.0},  {0.25, 1.0, 0.3, 0.5, 62.0, 0.5},
+         {1.0, 0.7, 0.6, 1.0, 69.0, 0.8},  {1.0, 0.4, 0.25, 1.0, 65.0, 0.0},  {0.25, 0.4, 0.3, 0.5, 62.0, 0.5},
       };
       return table[settings_.model];
    }
@@ -833,6 +855,19 @@ private:
          c.aperture = static_cast<float>(live_.aperture);
          c.cone = static_cast<float>(live_.cone);
          c.brass = static_cast<float>(live_.brass);
+         c.vowel = static_cast<float>(live_.alienVoice);
+         c.morph = static_cast<float>(live_.alienMorph);
+         c.drift = static_cast<float>(live_.alienDrift);
+         c.shift = static_cast<float>(live_.alienShift);
+         c.sharp = static_cast<float>(live_.alienSharp);
+         c.bow = static_cast<float>(live_.alienBow);
+         c.talk = static_cast<float>(live_.alienTalk);
+         c.paceSec = static_cast<float>(live_.alienPaceSec);
+         c.linger = static_cast<float>(live_.alienLinger);
+         c.glideMs = static_cast<float>(live_.alienGlide);
+         c.bendSemis = static_cast<float>(bendSemis_ * live_.alienBend);
+         c.consonants = static_cast<float>(live_.alienStrength);
+         c.sounds = live_.alienSounds;
          float cutoff = static_cast<float>(live_.cutoffHz / 1300.0) * holeK * tube.cut, loss = tube.loss;
          Mute::bore(settings_.mute, mute_.amount(), cutoff, loss);
          c.loss = std::max(0.0f, static_cast<float>(live_.loss) + loss);
@@ -1269,6 +1304,19 @@ private:
       live_.cutoffHz = at(kDest<kHoleCutoff>, s.cutoffHz);
       live_.cone = at(kDest<kCone>, s.cone);
       live_.brass = at(kDest<kBrass>, s.brass);
+      live_.alienVoice = at(kDest<kAlienVoice>, s.alienVoice);
+      live_.alienMorph = at(kDest<kAlienMorph>, s.alienMorph);
+      live_.alienDrift = at(kDest<kAlienDrift>, s.alienDrift);
+      live_.alienShift = at(kDest<kAlienShift>, s.alienShift);
+      live_.alienSharp = at(kDest<kAlienSharp>, s.alienSharp);
+      live_.alienBow = at(kDest<kAlienBow>, s.alienBow);
+      live_.alienTalk = at(kDest<kAlienTalk>, s.alienTalk);
+      live_.alienPaceSec = s.alienPaceSec;
+      live_.alienLinger = at(kDest<kAlienLinger>, s.alienLinger);
+      live_.alienGlide = at(kDest<kAlienGlide>, s.alienGlide);
+      live_.alienBend = at(kDest<kAlienBend>, s.alienBend);
+      live_.alienStrength = at(kDest<kAlienStrength>, s.alienStrength);
+      live_.alienSounds = s.alienSounds;
       live_.detune = at(kDest<kDetune>, s.detune);
       live_.air = at(kDest<kAir>, s.air);
       applyCharacter();
@@ -1307,6 +1355,7 @@ private:
    float offsets_[kModDestCount] = {};
    const double *clock_ = nullptr;
    double lfoPhase_[kLfoCount] = {}, lfoHeld_[kLfoCount] = {}, lfoLast_[kLfoCount] = {};
+   double bendSemis_ = 0.0;
    double swellAge_ = 0.0, draft_ = 0.0, random_ = 0.0, bend_ = 0.0, lift_ = 0.0, key_ = 60.0;
    double bus_[kBusCount] = {};
    double pitchMod_ = 0.0, levelMod_ = 1.0, liveAttack_ = -1.0, liveRelease_ = -1.0, liveGlide_ = -1.0;

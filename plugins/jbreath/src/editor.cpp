@@ -67,14 +67,14 @@ constexpr unsigned kPress = 0xffff6fd2;
 constexpr unsigned kSynthColor = 0xffb98bff;
 
 // Each instrument's family colour: the jet cyan, the single reeds orange, the double reed violet,
-// the lips coral, the alien's twin reeds an acid green.
+// the lips coral, the alien's bowed string an acid green.
 constexpr unsigned kModelColors[kModelCount] = {0xff6fe0ff, 0xfff28c28, 0xfff2a54a, 0xffa98bff, 0xffff7a59, 0xff9dff5c};
 unsigned modelColor(int model) { return kModelColors[std::clamp(model, 0, kModelCount - 1)]; }
 
-const char *const kFamilyNames[kModelCount] = {"JET", "REED", "REED", "DOUBLE REED", "LIPS", "TWIN REED"};
+const char *const kFamilyNames[kModelCount] = {"JET", "REED", "REED", "DOUBLE REED", "LIPS", "BOW"};
 const char *const kModelSubtitles[kModelCount] = {"jet  ·  open pipe", "single reed  ·  cylinder", "single reed  ·  cone",
                                                   "double reed  ·  narrow cone", "lips  ·  flared horn",
-                                                  "twin reeds  ·  helix bores"};
+                                                  "bowed string  ·  shifting throat"};
 
 visage::Color glow(unsigned argb, float alpha, float hdr = 1.0f) {
    return ui::steady(visage::Color(argb, hdr).withAlpha(alpha));
@@ -222,9 +222,9 @@ private:
    R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(24 12) rotate(24) scale(0.92) translate(-24 -12)"><path d="M2.2 10 Q1.3 12 2.2 14 L6.5 12.6 L6.5 11.4 Z" fill="currentColor" fill-opacity="0.25"/><path d="M2.6 12 L6.5 12" stroke-width="0.9"/><rect x="6.5" y="10.8" width="2.8" height="2.4" rx="0.5" fill="currentColor" stroke="none"/><path d="M9.3 11.1 L37 10.2 Q41 9.9 42.5 9.1 L44.8 8.8 L44.8 15.2 L42.5 14.9 Q41 14.1 37 13.8 L9.3 12.9"/><path d="M20.5 10.2 L20.5 13.8 M31 9.9 L31 14.1" stroke-width="1.3"/><circle cx="13" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="16.5" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="24" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="27.5" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="34" cy="12" r="0.65" fill="currentColor" stroke="none"/></g></svg>)svg",
    // trumpet
    R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.2 L4.5 9 L36 9 M2.5 9.8 L4.5 9"/><path d="M36 8.2 Q41 8 45 3.5 L45 14.5 Q41 10 36 9.8"/><path d="M12 9 Q8.5 9 8.5 13 Q8.5 17 12.5 17 L29 17 Q32.5 17 32.5 13 L32.5 9"/><path d="M17 6 L17 17 M21 6 L21 17 M25 6 L25 17" stroke-width="2.2"/><circle cx="17" cy="4.6" r="1.1" fill="currentColor" stroke="none"/><circle cx="21" cy="4.6" r="1.1" fill="currentColor" stroke="none"/><circle cx="25" cy="4.6" r="1.1" fill="currentColor" stroke="none"/></svg>)svg",
-   // alien: a mouthpiece, a bore coiled as a spring, a bulb with an eye, its flare, and the ghost
-   // bore's thin horn rising out of the bulb
-   R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 11.3 L6.3 10.8 L6.3 13.2 L2.5 12.7 Z"/><path d="M6.3 12 L8.5 12"/><path d="M8.5 12.0 L8.2 10.2 L7.9 8.6 L7.8 7.6 L8.0 7.2 L8.4 7.6 L9.1 8.6 L10.0 10.2 L10.9 12.0 L11.8 13.8 L12.7 15.4 L13.4 16.4 L13.8 16.8 L14.0 16.4 L13.9 15.4 L13.6 13.8 L13.3 12.0 L13.0 10.2 L12.7 8.6 L12.6 7.6 L12.8 7.2 L13.2 7.6 L13.9 8.6 L14.8 10.2 L15.7 12.0 L16.6 13.8 L17.5 15.4 L18.2 16.4 L18.6 16.8 L18.8 16.4 L18.7 15.4 L18.4 13.8 L18.1 12.0 L17.8 10.2 L17.5 8.6 L17.4 7.6 L17.6 7.2 L18.0 7.6 L18.7 8.6 L19.6 10.2 L20.5 12.0 L21.4 13.8 L22.3 15.4 L23.0 16.4 L23.4 16.8 L23.6 16.4 L23.5 15.4 L23.2 13.8 L22.9 12.0 L22.6 10.2 L22.3 8.6 L22.2 7.6 L22.4 7.2 L22.8 7.6 L23.5 8.6 L24.4 10.2 L25.3 12.0 L26.2 13.8 L27.1 15.4 L27.8 16.4 L28.2 16.8 L28.4 16.4 L28.3 15.4 L28.0 13.8 L27.7 12.0 L27.4 10.2 L27.1 8.6 L27.0 7.6 L27.2 7.2 L27.6 7.6 L28.3 8.6 L29.2 10.2 L30.1 12.0 L31.0 13.8 L31.9 15.4 L32.6 16.4 L33.0 16.8 L33.2 16.4 L33.1 15.4 L32.8 13.8 L32.5 12.0" stroke-width="1.2"/><path d="M32.5 12 L33.6 12"/><circle cx="36.6" cy="12" r="3"/><circle cx="36.6" cy="12" r="0.9" fill="currentColor" stroke="none"/><path d="M39.5 10.9 Q42.2 10.2 45.5 7 L45.5 17 Q42.2 13.8 39.5 13.1"/><path d="M37.6 9.2 Q38.6 5 42.4 3.3" stroke-width="1.1"/><path d="M41.2 1.9 L43.8 4.6" stroke-width="1.3"/></svg>)svg",
+   // alien: a string between its nut and bridge, a bow crossing it near the bridge, and the throat
+   // it sounds through, an open mouth with its resonances rippling inside
+   R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 L3 14.5 M29 9.5 L29 14.5"/><path d="M3 12 L29 12" stroke-width="1.1"/><path d="M14 3.5 L24 20.5" stroke-width="1.3"/><path d="M15.6 3 L25.6 20" stroke-width="0.8"/><path d="M29 12 L32 12"/><path d="M32 12 Q34 4.5 40 4.5 Q46 4.5 46 12 Q46 19.5 40 19.5 Q34 19.5 32 12 Z"/><path d="M35.5 12 Q37 9 38.5 12 Q40 15 41.5 12 Q43 9 44 11" stroke-width="1.1"/></svg>)svg",
       };
       static const std::vector<visage::Svg> kIcons = [] {
          std::vector<visage::Svg> icons;
@@ -241,6 +241,153 @@ private:
    EditorHost &host_;
    clap_id param_;
    int hover_ = -1;
+};
+
+// The Alien's throat: its ring of eight shapes, where each note started (the Voice knob, a hollow
+// ring) and where each sounding voice's throat has travelled to since (a dot).
+class ThroatRing : public Drawn {
+public:
+   explicit ThroatRing(float w) : Drawn(w) {}
+   void set(double voice, std::vector<float> positions, bool lit) {
+      voice_ = voice;
+      positions_ = std::move(positions);
+      lit_ = lit;
+      redraw();
+   }
+   void draw(visage::Canvas &c) override {
+      well(c);
+      const float k = s(), W = width() / k, H = height() / k;
+      const unsigned color = lit_ ? modelColor(kAlien) : kFaint;
+      label(c, "THROAT", 12, 8, W - 24, kDim, 10.5f);
+      const float cx = W / 2, cy = 34 + (H - 34) / 2 - 4, r = std::min(W, H - 40) / 2 - 30;
+      const auto at = [&](double pos, float radius) {
+         const double a = 2 * kPi * pos / kAlienShapes - kPi / 2;
+         return std::pair<float, float>{cx + radius * static_cast<float>(std::cos(a)), cy + radius * static_cast<float>(std::sin(a))};
+      };
+      // The ring, and the eight shapes on it (the vowels plain, the others the instrument's colour).
+      visage::Path ring;
+      for (int i = 0; i <= 96; ++i) {
+         const auto [x, y] = at(kAlienShapes * i / 96.0, r);
+         if (i == 0)
+            ring.moveTo(x * k, y * k);
+         else
+            ring.lineTo(x * k, y * k);
+      }
+      c.setColor(visage::Color(0x30ffffff));
+      c.fill(ring.stroke(1.5f * k));
+      static const bool vowel[kAlienShapes] = {true, false, true, false, true, true, false, true};
+      for (int i = 0; i < kAlienShapes; ++i) {
+         const auto [x, y] = at(i, r);
+         c.setColor(vowel[i] ? visage::Color(0xff3a414d) : glow(color, 0.55f));
+         c.circle((x - 3) * k, (y - 3) * k, 6 * k);
+         const auto [lx, ly] = at(i, r + 17);
+         label(c, kAlienShapeNames[i], lx - 30, ly - 8, 60, vowel[i] ? kDim : color, 10.0f, visage::Font::kCenter);
+      }
+      // Where each note starts.
+      {
+         const auto [x, y] = at(voice_ * kAlienShapes, r);
+         visage::Path hoop;
+         for (int m = 0; m <= 24; ++m) {
+            const double a = 2 * kPi * m / 24;
+            const float hx = (x + 7 * static_cast<float>(std::cos(a))) * k, hy = (y + 7 * static_cast<float>(std::sin(a))) * k;
+            if (m == 0)
+               hoop.moveTo(hx, hy);
+            else
+               hoop.lineTo(hx, hy);
+         }
+         c.setColor(glow(color, 0.9f));
+         c.fill(hoop.stroke(1.6f * k));
+      }
+      // Each voice's throat now.
+      for (float pos : positions_) {
+         const auto [x, y] = at(pos, r);
+         c.setColor(ui::steadyGlow(visage::Color(color).withAlpha(0.5f), {x * k, y * k}, 14 * k));
+         c.circle((x - 14) * k, (y - 14) * k, 28 * k);
+         c.setColor(glow(0xffffffff, 0.95f));
+         c.circle((x - 4) * k, (y - 4) * k, 8 * k);
+      }
+   }
+
+private:
+   double voice_ = 0.0;
+   std::vector<float> positions_;
+   bool lit_ = true;
+};
+
+// The throat's resonances as they stand for the loudest voice (or where a note would start): its
+// response from 50 Hz to 10 kHz, and the note's harmonics along the bottom, so you can see which of
+// them each resonance lifts.
+class FormantGraph : public Drawn {
+public:
+   explicit FormantGraph(float w) : Drawn(w) {}
+   void set(double pos, double shift, double sharp, double hz, bool lit) {
+      pos_ = pos;
+      shift_ = shift;
+      sharp_ = sharp;
+      hz_ = hz;
+      lit_ = lit;
+      redraw();
+   }
+   void draw(visage::Canvas &c) override {
+      well(c);
+      const float k = s(), W = width() / k, H = height() / k;
+      const float x0 = 14, x1 = W - 14, y0 = 34, y1 = H - 30;
+      const unsigned color = lit_ ? modelColor(kAlien) : kFaint;
+      const int i = static_cast<int>(std::floor(pos_)) % kAlienShapes, j = (i + 1) % kAlienShapes;
+      const int pct = static_cast<int>(std::lround(100.0 * (pos_ - std::floor(pos_))));
+      std::string title = std::string("RESONANCES  ·  ") + kAlienShapeNames[i];
+      if (pct > 2 && pct < 98)
+         title += std::string(" to ") + kAlienShapeNames[j] + " " + std::to_string(pct) + "%";
+      label(c, title, 12, 8, W - 24, kDim, 10.5f);
+      c.setColor(visage::Color(0x0effffff));
+      for (double f : {100.0, 1000.0, 5000.0})
+         c.fill((x0 + (x1 - x0) * xOf(f)) * k, y0 * k, 1 * k, (y1 - y0) * k);
+      label(c, "100 Hz", x0 + (x1 - x0) * xOf(100) - 30, H - 20, 60, kFaint, 10.0f, visage::Font::kCenter);
+      label(c, "1 kHz", x0 + (x1 - x0) * xOf(1000) - 30, H - 20, 60, kFaint, 10.0f, visage::Font::kCenter);
+      label(c, "5 kHz", x0 + (x1 - x0) * xOf(5000) - 30, H - 20, 60, kFaint, 10.0f, visage::Font::kCenter);
+      AlienThroat t;
+      alienThroat(pos_, shift_, sharp_, t);
+      const auto db = [&](double f) {
+         return 20.0 * std::log10(t.norm * t.cascade(f) + 1e-9);
+      };
+      const auto py = [&](double d) { return (y1 - (y1 - y0) * static_cast<float>(std::clamp((d + 64.0) / 84.0, 0.0, 1.0))) * k; };
+      visage::Path line, area;
+      constexpr int n = 160;
+      for (int m = 0; m <= n; ++m) {
+         const double x = static_cast<double>(m) / n, f = kLow * std::pow(kHigh / kLow, x);
+         const float px = (x0 + (x1 - x0) * static_cast<float>(x)) * k, y = py(db(f));
+         if (m == 0) {
+            line.moveTo(px, y);
+            area.moveTo(px, y1 * k);
+            area.lineTo(px, y);
+         } else {
+            line.lineTo(px, y);
+            area.lineTo(px, y);
+         }
+      }
+      area.lineTo(x1 * k, y1 * k);
+      area.close();
+      c.setColor(visage::Brush::vertical(glow(color, 0.35f), glow(color, 0.02f)));
+      c.fill(area);
+      c.setColor(glow(color, 0.95f, 1.3f));
+      c.fill(line.stroke(2.0f * k));
+      // The note's harmonics, as tall as the throat lifts them.
+      if (hz_ > 0.0)
+         for (int h = 1; h * hz_ < kHigh; ++h) {
+            const double f = h * hz_;
+            if (f < kLow)
+               continue;
+            const float px = (x0 + (x1 - x0) * xOf(f)) * k, top = py(db(f));
+            c.setColor(visage::Color(0x50ffffff));
+            c.fill(px - 0.75f * k, top, 1.5f * k, y1 * k - top);
+         }
+   }
+
+private:
+   static constexpr double kLow = 50.0, kHigh = 10000.0;
+   static float xOf(double f) { return static_cast<float>(std::log(f / kLow) / std::log(kHigh / kLow)); }
+   double pos_ = 0.0, shift_ = 0.0, sharp_ = 0.5, hz_ = 0.0;
+   bool lit_ = true;
 };
 
 // The exciter's valve: how the air through it answers the pressure across it, with a dot where
@@ -331,9 +478,11 @@ class ValveGraph : public Drawn {
 public:
    explicit ValveGraph(float w) : Drawn(w) {}
 
-   void set(int model, double embouchure, std::vector<float> breaths, double stiffness = 0.5, double aperture = 0.5) {
+   void set(int model, double embouchure, std::vector<float> breaths, double stiffness = 0.5, double aperture = 0.5,
+            double bite = 1.0) {
       model_ = model;
       embouchure_ = embouchure;
+      bite_ = bite;
       stiffness_ = stiffness;
       aperture_ = aperture;
       breaths_ = std::move(breaths);
@@ -397,28 +546,43 @@ public:
    }
 
 private:
-   const char *yName() const { return model_ == kFlute ? "JET SPEED" : model_ == kTrumpet ? "AIR THROUGH THE LIPS" : "AIR FLOW"; }
+   const char *yName() const {
+      return model_ == kFlute ? "JET SPEED" : model_ == kTrumpet ? "AIR THROUGH THE LIPS" : model_ == kAlien ? "THE BOW'S GRIP" : "AIR FLOW";
+   }
    const char *xName() const {
       switch (model_) {
       case kFlute:
          return "BREATH  →";
       case kTrumpet:
          return "MOUTH PRESSURE  →";
+      case kAlien:
+         return "THE STRING SLIPPING PAST THE BOW  →";
       default:
          return "PRESSURE ACROSS THE REED  →";
       }
    }
-   const char *shutName() const { return model_ == kFlute ? "OVERBLOWS" : "REED SHUTS"; }
+   const char *shutName() const { return model_ == kFlute ? "OVERBLOWS" : model_ == kAlien ? "SLIPS" : "REED SHUTS"; }
    double xMax() const { return model_ == kFlute || model_ == kTrumpet ? 1.3 : 1.25; }
    // Where the curve turns over: the reed closes, or the jet is fast enough to jump a register.
    double shutAt() const {
       switch (model_) {
       case kFlute:
          return 1.05;
+      case kAlien: {
+         // Where the grip peaks: past it, the string breaks free and slips.
+         double best = 0.0, at = 0.0;
+         for (int i = 1; i <= 200; ++i) {
+            const double x = xMax() * i / 200.0, g = grip(x);
+            if (g > best) {
+               best = g;
+               at = x;
+            }
+         }
+         return at;
+      }
       case kClarinet:
       case kSax:
       case kOboe:
-      case kAlien:
          // A softer reed curls shut later.
          return 1.0 + 0.12 * (0.5 - stiffness_);
       default:
@@ -431,20 +595,33 @@ private:
          return std::sqrt(x / 1.3) * 0.92;
       case kTrumpet: // the lips open with the pressure, and the flow through them as its root: x^1.5
          return std::min(1.0, 0.92 * std::pow(x / 1.3, 1.5) * (0.5 + aperture_));
+      case kAlien: { // the bow's friction (models.h), normalised to its peak at the middle Bite
+         double peak = 0.0;
+         for (int i = 1; i <= 200; ++i)
+            peak = std::max(peak, grip(xMax() * i / 200.0, 1.0));
+         return std::min(1.0, 0.92 * grip(x) / peak);
+      }
       default: { // a reed valve: u = (1 - W) sqrt(W), shut at W = 1; normalised to its peak
          const double shut = shutAt(), w = std::min(x / shut, 1.0), open = 0.6 + 0.8 * aperture_;
-         const double soft = model_ == kClarinet || model_ == kAlien ? 1.0 : model_ == kSax ? 0.85 + 0.3 * (1 - embouchure_) : 0.7;
-         return std::min(1.0, 0.95 * (1 - w) * std::sqrt(w) / 0.3849 * (model_ == kClarinet || model_ == kAlien ? 1.0 : soft) * open);
+         const double soft = model_ == kClarinet ? 1.0 : model_ == kSax ? 0.85 + 0.3 * (1 - embouchure_) : 0.7;
+         return std::min(1.0, 0.95 * (1 - w) * std::sqrt(w) / 0.3849 * soft * open);
       }
       }
    }
-   // A voice's breath, as a point on the x axis.
+   // A voice's breath, as a point on the x axis (the Alien's: the bow's speed, the string's slip).
    double operating(float breath) const {
-      return model_ == kClarinet || model_ == kAlien ? 0.7 * breath : model_ == kFlute || model_ == kTrumpet ? breath : 0.75 * breath;
+      return model_ == kClarinet ? 0.7 * breath : model_ == kAlien ? 0.5 * breath : model_ == kFlute || model_ == kTrumpet ? breath : 0.75 * breath;
+   }
+   // The Alien's bow: its grip on the string as the string slips past it at x (the model's bow
+   // table over the axis, 0..1.25 as 0..0.6 of slip), the Bite pressing it harder.
+   double grip(double x, double bite = -1.0) const {
+      const double force = std::clamp(0.4 + 0.35 * ((bite < 0.0 ? bite_ : bite) - 1.0), 0.04, 0.95), slope = 5.0 - 4.0 * force;
+      const double dv = 0.6 * x / xMax(), f = std::fabs(dv * slope) + 0.75;
+      return dv * std::clamp(1.0 / (f * f * f * f), 0.01, 0.98);
    }
 
    int model_ = kClarinet;
-   double embouchure_ = 0.5, stiffness_ = 0.5, aperture_ = 0.5;
+   double embouchure_ = 0.5, stiffness_ = 0.5, aperture_ = 0.5, bite_ = 1.0;
    std::vector<float> breaths_;
 };
 
@@ -456,8 +633,10 @@ class BoreGraph : public Drawn {
 public:
    explicit BoreGraph(float w) : Drawn(w) {}
 
-   void set(int model, double hz, bool playing, std::vector<float> partials, double loss = 0.04, double cutoff = 1.0) {
+   void set(int model, double hz, bool playing, std::vector<float> partials, double loss = 0.04, double cutoff = 1.0,
+            double cone = 0.5) {
       model_ = model;
+      cone_ = cone;
       hz_ = hz;
       playing_ = playing;
       partials_ = std::move(partials);
@@ -570,18 +749,13 @@ private:
          r = static_cast<double>(ch.keep(0.95f)) * onePole(f, 3800 * k);
          break;
       case kAlien: {
-         // The main bore: a closed cylinder coiled as a helix (two allpass sections at twice the
-         // note), shortened by the helix's delay at the note, as the model plays it.
-         const auto helix = [this](double at) {
-            const double r0 = std::exp(-kPi * 2.8 * hz_ / kFs), th = 2 * kPi * 2.0 * hz_ / kFs;
-            const double a1 = -2 * r0 * std::cos(th), a2 = r0 * r0;
-            const std::complex<double> z = std::polar(1.0, -2 * kPi * at / kFs);
-            return (a2 + a1 * z + z * z) / (1.0 + a1 * z + a2 * z * z);
-         };
-         const std::complex<double> h = helix(f);
-         r = -static_cast<double>(ch.keep(0.96f)) * onePole(f, 6 * hz_ * k) * h * h;
-         const double w0 = 2 * kPi * hz_ / kFs;
-         period = 0.5 / hz_ - 2.0 * std::fmod(-std::arg(helix(hz_)) + 2 * kPi, 2 * kPi) / w0 / kFs;
+         // The string: both ends turn its waves over (so every harmonic), through its lowpass, and a
+         // stiff string's two allpasses stretch its partials apart (the Cone knob).
+         const double a = -0.7 * std::pow(std::clamp(cone_, 0.0, 1.0), 1.5);
+         const std::complex<double> z = std::polar(1.0, -2 * kPi * f / kFs), z0 = std::polar(1.0, -2 * kPi * hz_ / kFs);
+         const std::complex<double> ap = (a + z) / (1.0 + a * z), ap0 = (a + z0) / (1.0 + a * z0);
+         r = static_cast<double>(ch.keep(0.995f)) * onePole(f, 14 * hz_ * k) * ap * ap;
+         period = 1.0 / hz_ + 2.0 * std::arg(ap0) / (2 * kPi * hz_);
          break;
       }
       default:
@@ -602,14 +776,14 @@ private:
       case kOboe:
          return "NARROW CONE: EVERY HARMONIC, A DARKER LOOP";
       case kAlien:
-         return "HELIX: STRETCHED, INHARMONIC RESONANCES";
+         return cone_ > 0.6 ? "STIFF STRING: PARTIALS STRETCHED APART" : "STRING: RESONANCES ON EVERY HARMONIC";
       default:
          return "FLARED HORN: HARMONIC RESONANCES, NO PEDAL";
       }
    }
 
    int model_ = kClarinet;
-   double hz_ = 293.66, loss_ = 0.04, cut_ = 1.0;
+   double hz_ = 293.66, loss_ = 0.04, cut_ = 1.0, cone_ = 0.5;
    bool playing_ = false;
    std::vector<float> partials_;
 };
@@ -624,7 +798,8 @@ public:
    }
    void draw(visage::Canvas &c) override {
       static const char *const names[4] = {"OPEN PIPE", "CYLINDER", "CONE", "FLARE"};
-      const int lit = model_ == kFlute ? 0 : model_ == kClarinet || model_ == kAlien ? 1 : model_ == kTrumpet ? 3 : 2;
+      // (The Alien's string has none of these.)
+      const int lit = model_ == kFlute ? 0 : model_ == kClarinet ? 1 : model_ == kTrumpet ? 3 : model_ == kAlien ? -1 : 2;
       const float k = s(), w = width() / k / 4;
       const unsigned color = modelColor(model_);
       for (int i = 0; i < 4; ++i) {
@@ -1866,9 +2041,22 @@ public:
          }
          if (exciterTabs_->selected() == 0)
             valve_->set(model, host_.paramModulated(kEmbouchure), breaths, host_.paramModulated(kStiffness),
-                        host_.paramModulated(kAperture));
-         else
-         {
+                        host_.paramModulated(kAperture), host_.paramModulated(kEdge));
+         else if (exciterTabs_->selected() == 2) {
+            // The Alien's throat: each voice's place on the ring, and the loudest one's resonances.
+            const bool alien = model == kAlien;
+            std::vector<float> throats;
+            for (const EditorHost::Voice &v : voices_)
+               if (v.note >= 0 && !v.releasing && v.throat >= 0.0f)
+                  throats.push_back(v.throat);
+            const double voice = host_.paramModulated(kAlienVoice);
+            throatRing_->set(voice, throats, alien);
+            const double pos = loudest >= 0 && voices_[loudest].throat >= 0.0f ? voices_[loudest].throat : voice * kAlienShapes;
+            formantGraph_->set(pos, host_.paramModulated(kAlienShift), host_.paramModulated(kAlienSharp),
+                               loudest >= 0 ? hz : 0.0, alien);
+            for (ui::Knob *kn : alienKnobs_)
+               kn->setAccent(alien ? modelColor(kAlien) : kFaint);
+         } else {
             // Where each voice's breath has the lowpass now (as the voice works it out).
             const ModelInfo &info = modelInfo(model);
             const double full = std::max(info.breathOffset + info.breathScale * host_.paramModulated(kBreath), 0.1);
@@ -1878,7 +2066,8 @@ public:
                opens.push_back(static_cast<float>(std::pow(2.0, amount * 6.0 * (std::clamp(b / full, 0.0, 1.5) - 0.7))));
             filterGraph_->set(host_.paramModulated(kHybridCutoff), host_.paramModulated(kHybridResonance), amount, opens);
          }
-         bore_->set(model, hz, loudest >= 0, partials, host_.paramModulated(kLoss), host_.paramModulated(kHoleCutoff) / 1300.0);
+         bore_->set(model, hz, loudest >= 0, partials, host_.paramModulated(kLoss), host_.paramModulated(kHoleCutoff) / 1300.0,
+                    host_.paramModulated(kCone));
          const bool cone = model == kSax || model == kOboe || model == kTrumpet || model == kAlien, brass = model == kTrumpet;
          coneKnob_->setAccent(cone ? color : kFaint);
          brassKnob_->setAccent(brass ? color : kFaint);
@@ -2028,7 +2217,7 @@ private:
    }
 
    void buildExciter() {
-      exciterTabs_ = &add<ui::TabBar>({28, 68, 290, 28}, std::vector<std::string>{"EXCITER", "HYBRID"});
+      exciterTabs_ = &add<ui::TabBar>({28, 68, 360, 28}, std::vector<std::string>{"EXCITER", "HYBRID", "ALIEN"});
       exciterTabs_->setAccent(0xfff28c28);
       auto &tabs = *exciterTabs_;
       list_ = &tabs.addToPage(0, add<InstrumentList>({32, 104, 190, 276}, 190.0f, host_));
@@ -2043,12 +2232,12 @@ private:
                                    "MPE slide moves it."));
       tabs.addToPage(0, familyKnob(kStiffness, "STIFFNESS", top[2],
                                    "How stiff the reed or lips are (the jet's gain on a flute): stiff is bright and quick to "
-                                   "shut, soft is dark and lazy."));
+                                   "shut, soft is dark and lazy. On the Alien, the bow hair's tension: taut grips and bites."));
       tabs.addToPage(0, familyKnob(kEdge, "BITE", top[3],
                                    "The forte bite: the flute's 2nd harmonic, the reeds' edge, the brass wave steepening into its blare."));
       tabs.addToPage(0, familyKnob(kAperture, "APERTURE", bottom[0],
                                    "How far the reed or lips stand open (the jet's width on a flute): wide is loud and free, "
-                                   "narrow is thin and focused."));
+                                   "narrow is thin and focused. On the Alien, how wide the bow lies on the string."));
       tabs.addToPage(0, familyKnob(kNoise, "NOISE", bottom[1], "Breath noise and turbulence."));
       tabs.addToPage(0, familyKnob(kKick, "KICK", bottom[2], "The burst of pressure as the tongue lets the air go."));
       tabs.addToPage(0, familyKnob(kGrowl, "GROWL", bottom[3],
@@ -2088,6 +2277,63 @@ private:
       tabs.addToPage(1, add<ui::Label>({236, 370, 646, 16},
                                        "BLOWN BY THE SAME BREATH, OR A PAD ON ITS OWN ENVELOPE (FOLLOW 0)  ·  UNISON AND VIBRATO SHAPE IT TOO",
                                        kFaint, visage::Font::kLeft, 0.68f));
+
+      // ALIEN: the throat its bowed string sounds through.
+      throatRing_ = &tabs.addToPage(2, add<ThroatRing>({32, 104, 190, 276}, 190.0f));
+      tips_.add(*throatRing_, "The Alien's throat travels round this ring of shapes: five vowels, and a ghost, an abyss and an "
+                              "insect no throat has. The hollow ring is where each note starts; each dot is a voice's throat now.");
+      formantGraph_ = &tabs.addToPage(2, add<FormantGraph>({236, 104, 250, 262}, 250.0f));
+      tips_.add(*formantGraph_, "The throat's five resonances as they are now, and the note's harmonics they lift.");
+      const auto a1 = ui::row({496, 90, 386, 112}, 6), a2 = ui::row({496, 206, 386, 112}, 6);
+      const auto alienKnob = [&](clap_id id, const char *name, ui::Rect cell, const char *tip) {
+         ui::Knob &k = knob(id, name, modelColor(kAlien), cell, tip);
+         k.setTextSizes(8.5f, 9.5f, 8.5f);
+         alienKnobs_.push_back(&k);
+         tabs.addToPage(2, k);
+      };
+      alienKnob(kAlienVoice, "VOICE", a1[0], "Where on the ring each note's throat starts.");
+      alienKnob(kAlienMorph, "MORPH", a1[1], "How fast the throat travels round the ring while a note is held: from still to a "
+                                             "shape every third of a second.");
+      alienKnob(kAlienDrift, "DRIFT", a1[2], "How far the throat wanders on its own, each resonance a little apart from the "
+                                             "others: every note different.");
+      alienKnob(kAlienTalk, "TALK", a2[0], "How much it talks: each note a new syllable, a consonant opening onto its own "
+                                           "vowel, one after another like a sentence; the breath's pressure moves the mouth; "
+                                           "turned up, it chatters on its own while a note is held.");
+      alienKnob(kAlienShift, "SHIFT", a1[3], "Moves every resonance up or down an octave: a smaller or a larger throat.");
+      alienKnob(kAlienSharp, "SHARP", a1[4], "How narrow the resonances are: wide and breathy, to ringing, to whistling.");
+      alienKnob(kAlienLinger, "LINGER", a2[3], "The chance a vowel is held on for two or three times as long, more the "
+                                               "harder it's blown.");
+      alienKnob(kAlienGlide, "GLIDE", a2[2], "How quickly each syllable moves on to its vowel: a snap, as in speech, to a "
+                                             "slow slide.");
+      alienKnob(kAlienStrength, "CONSONANT", a2[1], "How strong each syllable's consonant is: none leaves only the vowels, all "
+                                                     "of it the full stop, hiss or hum.");
+      alienKnob(kAlienBend, "BEND", a2[4], "How far the throat follows a pitch bend (MPE or the wheel): none keeps "
+                                           "the vowel where it is, all slides every resonance with the pitch.");
+      alienKnob(kAlienBow, "BOW", a1[5], "How much a bowed string sings along with the voice: none is pure voice, all "
+                                         "of it the string's buzz through the throat.");
+      // The consonant families, each on or off.
+      tabs.addToPage(2, add<ui::Label>({496, 330, 386, 14}, "CONSONANTS", kDim, visage::Font::kLeft, 0.68f));
+      {
+         static const char *const kFamilies[8] = {"M N", "L R", "W Y", "V Z", "B D G", "H", "F S", "P T K"};
+         static const char *const kFamilyTips[8] = {
+            "Nasals: m, n and ng, hummed through the nose.", "Liquids: l and r.", "Glides: w and y, sliding into the vowel.",
+            "Voiced fricatives: v, th (as in this), z and zh, buzzing.", "Voiced stops: b, d, g and j.",
+            "H: breath through the vowel's own shape.", "Fricatives: f, th, s and sh, a hiss at the lips or teeth.",
+            "Stops: p, t, k and ch, a closure, a pop and a breath."};
+         const auto fam = ui::row({496, 348, 386, 24}, 8, 4);
+         for (int f = 0; f < 8; ++f) {
+            auto &b = tabs.addToPage(2, add<ui::Button>(fam[f], kFamilies[f]));
+            b.setAccent(modelColor(kAlien));
+            b.setToggle(true);
+            bindings_.bind(b, kAlienSounds + f);
+            tips_.add(b, std::string(kFamilyTips[f]) + " Off, the Alien never says them.");
+         }
+      }
+      alienKnob(kAlienPace, "PACE", a2[5], "How often a held note goes on to its next syllable. Free: by Talk. A note "
+                                           "value: in time with the host's tempo.");
+      tabs.addToPage(2, add<ui::Label>({236, 370, 460, 16},
+                                       "THE ALIEN ONLY  ·  EVERY NOTE A SYLLABLE",
+                                       kFaint, visage::Font::kLeft, 0.68f));
       tabs.select(0);
    }
 
@@ -2116,7 +2362,7 @@ private:
       small(kLength, "LENGTH", 1, "The tube below the open holes: its length sets where its own resonances ring.");
       small(kLoss, "LOSS", 2, "How much the bore loses each trip: more is softer, darker and slower to speak.");
       small(kHoleCutoff, "HOLE CUTOFF", 3, "Above this the tone holes let the sound out: lower is darker. The pitch stays put.");
-      coneKnob_ = &small(kCone, "CONE", 4, "Sax and oboe: how far the cone is cut short at the reed, towards a cylinder or a full cone. Trumpet: how conical the bore is, towards a flugelhorn. Alien: how tightly its bores are coiled, which stretches their modes apart.");
+      coneKnob_ = &small(kCone, "CONE", 4, "Sax and oboe: how far the cone is cut short at the reed, towards a cylinder or a full cone. Trumpet: how conical the bore is, towards a flugelhorn. Alien: how stiff its string is, which stretches its partials apart, from gut to wire to bar.");
       small(kRadiate, "RADIATE", 5, "How well the bell and holes send the highs out.");
       brassKnob_ = &small(kBrass, "BRASS", 6, "Trumpet: how far the wave steepens on its way down the horn, into a blare.");
       small(kBarrel, "BARREL", 7, "The barrel's or mouthpiece's cavity: bigger is lower and rounder.");
@@ -2775,6 +3021,9 @@ private:
    std::vector<visage::Frame *> airFrames_;
    ui::TabBar *exciterTabs_ = nullptr, *voiceTabs_ = nullptr;
    FilterGraph *filterGraph_ = nullptr;
+   ThroatRing *throatRing_ = nullptr;
+   FormantGraph *formantGraph_ = nullptr;
+   std::vector<ui::Knob *> alienKnobs_;
    ui::Knob *coneKnob_ = nullptr, *brassKnob_ = nullptr, *delayTimeKnob_ = nullptr;
    unsigned delayAccent_ = 0;
    ui::Meter *inMeter_ = nullptr, *outMeters_[2] = {};

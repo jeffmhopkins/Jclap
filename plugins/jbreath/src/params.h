@@ -11,6 +11,7 @@
 #include <array>
 #include <string>
 #include <vector>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -142,7 +143,24 @@ enum ParamId : clap_id {
    // amount is a route destination, so slide or pressure can work a plunger.
    kMute,
    kMuteAmount,
-   kParamCount
+   // Added after Release 25: the Alien's throat (Character in models.h): where on its ring of shapes
+   // each note starts, how fast it travels and wanders, its shift and how sharp it is.
+   kAlienVoice,
+   kAlienMorph,
+   kAlienDrift,
+   kAlienShift,
+   kAlienSharp,
+   kAlienBow,
+   kAlienTalk,
+   kAlienPace,
+   kAlienLinger,
+   kAlienGlide,
+   kAlienBend,
+   // The Alien's consonants: how strong, and which families it says (each on or off).
+   kAlienStrength,
+   kAlienSounds,
+   kAlienSoundsEnd = kAlienSounds + 8,
+   kParamCount = kAlienSoundsEnd
 };
 // The AIR view's look: the panel's own, kept with the project but not with presets.
 inline bool isLookParam(clap_id id) { return (id >= kLook && id <= kGlow) || (id >= kLoopX && id <= kLoopSizeMin); }
@@ -204,7 +222,9 @@ inline constexpr clap_id kModDestinations[] = {
    // Added after the first release, after the buses so saved routes keep their destinations.
    kFlutter, kFlutterRate, kPan, kUnisonDetune, kHybridCutoff, kHybridResonance, kHybridFilterBreath,
    // Added after Release 24.
-   kMuteAmount};
+   kMuteAmount,
+   // Added after Release 25.
+   kAlienVoice, kAlienMorph, kAlienDrift, kAlienShift, kAlienSharp, kAlienBow, kAlienTalk, kAlienLinger, kAlienGlide, kAlienBend, kAlienStrength};
 constexpr int kModDestCount = static_cast<int>(sizeof(kModDestinations) / sizeof(kModDestinations[0]));
 constexpr int kFirstBusDest = 31;
 constexpr bool isBusDest(int d) { return d >= kFirstBusDest && d < kFirstBusDest + kBusCount; }
@@ -263,6 +283,14 @@ inline const char *const kTubeNames[] = {"Grenadilla", "Boxwood", "Maple", "Bamb
 inline const char *const kLimiterNames[] = {"Off", "Soft", "Hard"};
 inline const char *const kOffOnNames[] = {"Off", "On"};
 inline const char *const kMuteNames[] = {"Open", "Straight", "Cup", "Harmon", "Plunger", "Bucket"};
+// How often a held Alien note goes on to its next syllable: free (by Talk), or a note value at the
+// host's tempo, in beats.
+inline const char *const kAlienPaceNames[] = {"Free", "1/16", "1/8", "1/4", "1/2", "1 Bar", "2 Bars"};
+constexpr int kAlienPaceCount = 7;
+inline double alienPaceBeats(int pace) {
+   static const double beats[kAlienPaceCount] = {0.0, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0};
+   return beats[std::clamp(pace, 0, kAlienPaceCount - 1)];
+}
 inline const char *const kLookNames[] = {"Smoke", "Ink"};
 inline const char *const kPaletteNames[] = {"Dusk", "Ember", "Frost", "Moss", "Mono"};
 inline const char *const kHybridOctaveNames[] = {"-2 oct", "-1 oct", "0 oct", "+1 oct", "+2 oct"};
@@ -373,6 +401,26 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kDelaySpread, "Delay Spread", "Delay", 0.0, 1.0, 0.5, kGlobalMod},
       {kMute, "Mute", "Bore", 0.0, 5.0, 0.0, kGlobalChoice},
       {kMuteAmount, "Mute Amount", "Bore", 0.0, 1.0, 1.0, kMod},
+      {kAlienVoice, "Alien Voice", "Alien", 0.0, 1.0, 0.0, kMod},
+      {kAlienMorph, "Alien Morph", "Alien", 0.0, 1.0, 0.3, kMod},
+      {kAlienDrift, "Alien Drift", "Alien", 0.0, 1.0, 0.3, kMod},
+      {kAlienShift, "Alien Shift", "Alien", -1.0, 1.0, 0.0, kMod},
+      {kAlienSharp, "Alien Sharp", "Alien", 0.0, 1.0, 0.5, kMod},
+      {kAlienBow, "Alien Bow", "Alien", 0.0, 1.0, 0.15, kMod},
+      {kAlienTalk, "Alien Talk", "Alien", 0.0, 1.0, 0.5, kMod},
+      {kAlienPace, "Alien Pace", "Alien", 0.0, 6.0, 0.0, kGlobalChoice},
+      {kAlienLinger, "Alien Linger", "Alien", 0.0, 1.0, 0.3, kMod},
+      {kAlienGlide, "Alien Glide", "Alien", 5.0, 400.0, 30.0, kMod},
+      {kAlienBend, "Alien Bend", "Alien", 0.0, 1.0, 0.6, kMod},
+      {kAlienStrength, "Alien Consonants", "Alien", 0.0, 1.0, 1.0, kMod},
+      {kAlienSounds + 0, "Alien M N", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 1, "Alien L R", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 2, "Alien W Y", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 3, "Alien V Z", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 4, "Alien B D G", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 5, "Alien H", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 6, "Alien F S", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 7, "Alien P T K", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
    };
    for (const auto &d : fixed)
       p[d.id] = d;
@@ -460,12 +508,25 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kDelayOn:
       count = 2;
       return kOffOnNames;
+   case kAlienSounds + 0:
+   case kAlienSounds + 1:
+   case kAlienSounds + 2:
+   case kAlienSounds + 3:
+   case kAlienSounds + 4:
+   case kAlienSounds + 5:
+   case kAlienSounds + 6:
+   case kAlienSounds + 7:
+      count = 2;
+      return kOffOnNames;
    case kDelaySync:
       count = kDelaySyncCount;
       return kDelaySyncNames;
    case kMute:
       count = 6;
       return kMuteNames;
+   case kAlienPace:
+      count = kAlienPaceCount;
+      return kAlienPaceNames;
    case kLook:
       count = 2;
       return kLookNames;
@@ -541,6 +602,14 @@ inline bool isPercent(clap_id id) {
    case kDelayFeedback:
    case kDelayTone:
    case kDelaySpread:
+   case kAlienMorph:
+   case kAlienDrift:
+   case kAlienSharp:
+   case kAlienBow:
+   case kAlienTalk:
+   case kAlienLinger:
+   case kAlienBend:
+   case kAlienStrength:
       return true;
    default:
       if (id >= kBusBase && id < kRouteBase)
@@ -560,6 +629,12 @@ inline double bodyLength(double v) { return 0.15 * std::pow(10.0, std::clamp(v, 
 inline const char *wallName(double v) {
    static const char *const walls[] = {"Metal", "Resin", "Wood", "Cane", "Bone"};
    return walls[std::clamp(static_cast<int>(v * 4.999), 0, 4)];
+}
+
+// The Alien's ring of throat shapes (models.h), and the one a Voice value is nearest.
+inline const char *const kAlienShapeNames[] = {"A", "Ghost", "O", "Abyss", "U", "I", "Insect", "E"};
+inline const char *alienShapeName(double v) {
+   return kAlienShapeNames[static_cast<int>(std::lround(std::clamp(v, 0.0, 1.0) * 8.0)) % 8];
 }
 
 // Shared by the host's display and the panel.
@@ -594,12 +669,19 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kAttack:
    case kRelease:
    case kGlide:
+   case kAlienGlide:
    case kVibDelay:
    case kRoomPreDelay:
       std::snprintf(out, size, "%.0f ms", value);
       break;
    case kStiffness:
       std::snprintf(out, size, "%.2f", value);
+      break;
+   case kAlienVoice:
+      std::snprintf(out, size, "%s %.0f%%", alienShapeName(value), value * 100.0);
+      break;
+   case kAlienShift:
+      std::snprintf(out, size, "%+.2f oct", value);
       break;
    case kHybridOctave:
       std::snprintf(out, size, "%+d oct", static_cast<int>(std::lround(value)));
@@ -696,9 +778,17 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
             value = d;
             return true;
          }
+   // (The Alien's Voice reads as its shape's name and then the knob's position.)
+   if (id == kAlienVoice)
+      while (*text && !std::isdigit(static_cast<unsigned char>(*text)) && *text != '.' && *text != '-')
+         ++text;
    double v = 0.0;
    if (!jclap::core::parseNumber(text, v, nullptr))
       return false;
+   if (id == kAlienVoice) {
+      value = v / 100.0;
+      return true;
+   }
    if (isPercent(id))
       value = v / 100.0;
    else if (id == kHoleCutoff)

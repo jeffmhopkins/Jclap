@@ -22,30 +22,58 @@ reflections of the real one) driven by a nonlinear exciter, the part the player 
 | **Sax** | the same kind of reed, softer | a cone, as a split bore: every harmonic, overblowing at the octave | the mouthpiece's honk; growl when it's pushed |
 | **Oboe** | a stiff double reed, its two blades beating shut each cycle | a narrow cone, darker | the reed's buzz, richer the harder it's blown, through formants near 1.25 and 2.9 kHz with a thin fundamental: nasal, not a soprano sax |
 | **Trumpet** | the lips: a mass on a spring blown open by the mouth pressure (outward striking), with the flow through them in closed form | a flared horn: resonances on every harmonic, none at DC | the wave steepening on its way down the horn, more the harder it's blown, towards a shock at forte: the brassy blare |
-| **Alien** | twin reeds in one small chamber, each blown by the player's breath and by the other's flow | two closed bores coiled as helices, the second shorter by an irrational ratio: stretched, inharmonic resonances | a hollow, nearly pure tone when soft; harder, the ghost bore's inharmonic partial rises out of it (2.76 times the note) and the two reeds fight, filling the spectrum with combination tones: a bell-like, ring-modulated roar over a steady pitch |
+| **Alien** | vocal folds, a pulse opening and snapping shut each period (and, as much as you like, a bowed string) | a throat: five resonances in a row | every note a syllable: a consonant opening onto a new vowel, the vowels running on from note to note like a sentence, the pressure moving the mouth while it's held |
 
 ### The alien
 
-An instrument that couldn't be built, from physics that could. A coiled tube is dispersive: high
-frequencies travel along a helix faster than low ones, so its resonances are stretched apart like a
-bell's or a stiff bar's instead of falling on the harmonic series (an allpass chain in the loop, set
-in ratios of the note so every register is stretched alike). Every attack and release rings at
-those stretched modes, a spring-like chirp. Its mouthpiece holds two reeds: the main one on a
-clarinet-like helix that holds the pitch, and a stiffer one on a second, shorter helix tuned 2.76
-times higher (a free bar's second mode over its first), whose sound leaves through an iris the
-breath pushes open. The reeds share the chamber, so each is blown by the other's flow: two
-oscillations that aren't harmonically related, driven through one nonlinearity, give every
-combination tone m f0 + n f1 (a multiphonic) and pull on each other's pitch, locking when they come
-near a simple ratio.
+An alien that talks. Its voice is vocal folds (a pulse that opens and snaps shut once a period,
+shutting faster the harder it's blown, brighter, with breath hissing through it as **NOISE** sets),
+sung through a throat, and every note is a syllable: a consonant, then one of the five vowels (A, E,
+I, O, U, never the last one again), so a run of notes reads as a sentence in no language at all.
+How hard the note is played (its velocity, and its pressure once it's blown) picks the consonant:
+soft notes the soft ones (m, n, ng, l, r, w, y), harder the voiced ones (v, th, z, zh, b, d, g, j,
+h), hardest the hiss and pop of f, th, s, sh, p, t, k and ch. Each has its own sound: a nasal's hum,
+a fricative's hiss at the lips or teeth, a stop's closure, burst and breath, and the vowel glides
+out of where it leaves the mouth. While a note is held the breath's pressure moves the mouth, and after a
+while it goes on to its next syllable. A bowed string can sing along with it (**BOW**): the breath
+is the bow's speed, **BITE** its weight, **EMBOUCHURE** where it crosses the string, **STIFFNESS**
+the hair's tension, **APERTURE** how wide it lies, and **CONE** how stiff the string is, from gut to
+a steel wire whose partials stretch apart like a bell's.
 
-So the breath changes what it is. Softly it's a hollow, almost pure tone; a little harder its 3rd
-and 5th harmonics come up together; from about mezzo-forte the ghost's partial rises out of it as a
-shimmer; at full breath (more with BREATH up) the ghost is nearly as loud as the note and the
-spectrum fills with sidebands spaced 0.24 times the note. Letting go, the coil rings on at its own
-stretched modes, a short upward "boing". **EMBOUCHURE**
-(and MPE slide) tunes the ghost from about 2.3 to 3.4 times the note, through 3, where it locks
-into a harmonic and the tone turns consonant. **BITE** is how hard the two reeds pull on each
-other, and **CONE** how tightly the bores are coiled (how far their modes are stretched).
+The throat is five resonances in a row, as a vocal tract's are (sharp peaks with deep valleys
+between them, so each shape is a clear vowel), on a ring of eight shapes: the vowels A, O, U, I and
+E, and between them three no throat has, a **Ghost** (high, hollow peaks), an **Abyss** (low, dark
+and huge) and an **Insect** (a narrow, buzzing whine). It's held to its source's level, so every
+shape plays as loud. High notes are sung as a singer sings them: from about E4 up the folds close
+more gently, the first resonance rides above the note, and the upper ones widen and roll off, so the
+top stays round rather than whistling. On the ALIEN tab:
+
+![The ALIEN tab](docs/readme/alien.jpg)
+
+- **VOICE**: where on the ring the throat starts. Route the slide or pressure to it to steer it.
+- **MORPH**: how fast the throat also glides round the ring on its own while a note is held.
+- **DRIFT**: how far it wanders, each resonance a little apart from the others.
+- **TALK**: how much it talks: how full each syllable's consonant is, how far the syllables move it
+  round the ring, and how far the pressure moves the mouth. At none it's one steady vowel.
+- **GLIDE**: how quickly each syllable moves onto its vowel, from a snap (5 ms) to a slow slur.
+- **SHIFT**: every resonance up or down an octave, a smaller or a much larger throat.
+- **SHARP**: how narrow the resonances are, from a soft vowel to ringing whistles like a throat
+  singer's overtones.
+- **BOW**: how much bowed string sings with the voice, from none to all string.
+- **LINGER**: the chance a syllable is held on two or three times as long, more the harder it's
+  blown.
+- **CONSONANT**: how strong each syllable's consonant is, from none (only the vowels) to the full
+  stop, hiss or hum.
+- **CONSONANTS**: its eight families, each on or off (M N, L R, W Y, V Z, B D G, H, F S, P T K):
+  turned off, it never says them, and a note that would have picks one that's on.
+- **BEND**: how far the throat follows a pitch bend (an MPE note's own, or the wheel): none keeps the
+  vowel where it is, all slides every resonance with the pitch, the way a talk box's mouth would.
+- **PACE**: how often a held note goes on to its next syllable: Free (by Talk, from about every 2 s
+  to under 1 s), or a note value from 1/16 to 2 bars at the host's tempo.
+
+The ring shows where each note started (the hollow ring) and where each voice's throat is now (a
+dot); the graph the throat's resonances and the note's harmonics they lift. The knobs are dimmed on
+the other instruments.
 
 Every note plays in tune: the bore length for each model and note was measured offline by playing
 it and correcting the length until the pitch was within a cent, at the rates the voices run at, and
@@ -112,7 +140,7 @@ partials of the loudest note as it sounds. Every knob changes the curve:
   is taken out of the bore.
 - **CONE** (sax and oboe): how far the cone is cut short at the reed, from towards a cylinder to a
   full cone; on the trumpet, how conical its bore is (towards a flugelhorn: darker, less blare); on
-  the alien, how tightly its bores are coiled. **BRASS** (trumpet): how far the
+  the alien, how stiff its string is. **BRASS** (trumpet): how far the
   wave steepens into a blare. Each is dimmed on the instruments it doesn't apply to.
 - **RADIATE**, **BARREL** and **WALL**: how the bell sends the highs out, the mouthpiece's cavity,
   and how much the walls soak up (metal to bone). **TUBE** is what it's made of: grenadilla,
@@ -247,7 +275,7 @@ GLIDE setting how long the pitch takes to get there.
 
 ### Presets
 
-Seventy-one factory presets: Init, then eight to eleven for each instrument, each family starting
+Eighty-one factory presets: Init, then eight to twenty for each instrument, each family starting
 from its most natural sound (Concert Flute, Wooden Reed, Clean Alto, Dusk Oboe, Brass Plume, First
 Contact: the model's own voice, measured against the Iowa recordings, with a player's vibrato and a
 little room) and running through darker, breathier, brighter and harder variants, its relatives by
@@ -264,8 +292,13 @@ Transpose and its oddities:
 - **Trumpet** (11): Brass Plume, Fanfare, the mutes (Straight Mute, Cup Mute, Muted Night with a
   Harmon, Plunger Wah with the plunger on the slide, Bucket Ballad), Flugel Glow, French Horn,
   Trombone Slide and Piccolo Trumpet.
-- **Alien** (8): First Contact, Ghost Helix, Xeno Choir, Tractor Beam, Coil Whistle, Mothership,
-  Signal Lost and Ion Flutter.
+- **Alien** (20): Alien Speech, First Contact, Talking Bow (with a bowed string; the slide works
+  its mouth), Throat Singer (a new vowel every 2 bars), Xeno Choir, Tractor Beam (a word a beat),
+  Insect Hymn, Mothership, Signal Lost, Ion Flutter, and five that speak in different ways: Crisp
+  Diction (vowels snapped to, the clearest), Chatterbox (a syllable every 1/16), Envoy Unit (a machine
+  reading out vowels), Slow Drawl (long glides, slurred) and Whisper Tongue (breathy, its hiss up
+  front), and five that sing (a syllable a note, its vowel held steady, a late vibrato): Hymn Singer,
+  Ballad Voice, Folk Tenor, Baritone Chant and Lullaby.
 - **Pad** (6): the HYBRID voice as a pad under an instrument, at a low FOLLOW with a slow attack and a
   long release: Flute Halo, Hollow Pad, Section Pad, Reed Choir, Brass Swell and Nebula.
 - **Space** (6): the DELAY, synced and free, and the REVERB: Echo Flute, Canyon Trumpet, Dub Tenor,

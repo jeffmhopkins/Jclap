@@ -13,6 +13,7 @@
 // prototype; the constants here are that prototype's.
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <complex>
 #include <cstdint>
@@ -111,6 +112,15 @@ struct Biquad {
       a1 = b1;
       a2 = (1 - al / A) / a0;
    }
+   // A bandpass whose peak is 0 dB, at hz with bandwidth hz / q.
+   void bandpass(double hz, double q, double fs) {
+      const double w = 2 * kPi * hz / fs, al = std::sin(w) / (2 * q), a0 = 1 + al;
+      b0 = al / a0;
+      b1 = 0.0;
+      b2 = -al / a0;
+      a1 = -2 * std::cos(w) / a0;
+      a2 = (1 - al) / a0;
+   }
    void highpass(double hz, double q, double fs) {
       const double w = 2 * kPi * hz / fs, al = std::sin(w) / (2 * q), cs = std::cos(w), a0 = 1 + al;
       b0 = (1 + cs) / 2 / a0;
@@ -162,6 +172,14 @@ struct Character {
    // The bore's extra loss (0.04 as tuned: the Loss knob plus the tube's inner surface), and the
    // cutoff of its tone holes over 1.3 kHz (the Hole Cutoff knob, the Holes count and the tube).
    float loss = 0.04f, cutoff = 1.0f;
+   // The Alien's throat: where on its ring of shapes a note starts (0..1), how fast it travels and
+   // how far it wanders (0..1), its shift in octaves (-1..1) and how sharp its resonances are (0..1).
+   float vowel = 0.0f, morph = 0.3f, drift = 0.3f, shift = 0.0f, sharp = 0.5f, bow = 0.15f, talk = 0.5f, paceSec = 0.0f, linger = 0.3f, glideMs = 30.0f;
+   // (The Alien: how many semitones the note is bent that its throat follows.)
+   float bendSemis = 0.0f;
+   // (The Alien's consonants: how strong, and which of its eight families it says, a bit each.)
+   float consonants = 1.0f;
+   uint32_t sounds = 0xffu;
 
    // The loss over the models' tuning, easing off towards the top so a reed or lips can still
    // sustain a note at full Loss (a very lossy bore is soft and slow, not silent).
@@ -205,6 +223,13 @@ public:
    virtual double cutoffDelay(double /*hz*/) const { return 0.0; }
    // One sample. tongue is the tongue's noise burst, 1 at a tongued attack and decaying.
    virtual float tick(float breath, float emb, double len, float tongue) = 0;
+   // The Alien's throat's place on its ring of shapes (0..8), for the panel; -1 for the others.
+   virtual float throat() const { return -1.0f; }
+   // A new note, or a slurred one: the Alien starts a syllable.
+   virtual void articulate(uint32_t word, double hardness) {
+      (void)word;
+      (void)hardness;
+   }
 
    Noise rng;
    Character character;
@@ -874,241 +899,549 @@ private:
    float tongue_ = 0.0f;
 };
 
-// Alien: an instrument that couldn't be built, from physics that could. A mouthpiece with two reeds
-// in one small chamber, each on its own bore, and both bores coiled as springs (helices).
+// The Alien's throat: five resonances, at a point on a ring of eight shapes (a, ghost, o, abyss, u,
+// i, insect, e, and round to a), moved by Shift (-1..1 octaves) and sharpened by Sharp (0..1). The
+// vowels are a tenor's formants; the others no throat has. They sound in a row, each 1 at DC (a
+// Klatt cascade, as a vocal tract's do), so how loud each is comes from where they all stand.
+// Shared with the panel, which draws it.
+constexpr int kAlienFormants = 5, kAlienShapes = 8;
+struct AlienThroat {
+   double hz[kAlienFormants], bw[kAlienFormants];
+   double norm = 1.0;
+   // The cascade's response at f, before norm.
+   double cascade(double f) const {
+      double g = 1.0;
+      for (int k = 0; k < kAlienFormants; ++k) {
+         const double r = f / hz[k], d = bw[k] / hz[k];
+         g /= std::sqrt((1.0 - r * r) * (1.0 - r * r) + d * d * r * r);
+      }
+      return g;
+   }
+};
+// Its level over a voice's spectrum (falling 6 dB an octave), held at 1 so the level holds as the
+// throat moves.
+inline void alienNorm(AlienThroat &out) {
+   double e = 0.0, w = 0.0;
+   for (double fr = 110.0; fr < 8000.0; fr *= 1.12) {
+      const double g = out.cascade(fr), wt = 1.0 / fr;
+      e += wt * g * g;
+      w += wt;
+   }
+   out.norm = std::sqrt(w / std::max(e, 1e-12));
+}
+inline void alienThroat(double pos, double shift, double sharp, AlienThroat &out) {
+   struct Shape {
+      float hz[kAlienFormants], bw[kAlienFormants];
+   };
+   static const Shape ring[kAlienShapes] = {
+      {{730, 1090, 2440, 3400, 4000}, {70, 80, 110, 130, 150}},   // a
+      {{230, 1450, 1620, 5200, 7100}, {60, 18, 18, 40, 60}},      // ghost
+      {{500, 820, 2500, 3350, 4000}, {55, 70, 100, 130, 150}},    // o
+      {{140, 330, 520, 2100, 2350}, {30, 40, 50, 60, 60}},        // abyss
+      {{300, 870, 2240, 3300, 4000}, {45, 60, 100, 130, 150}},    // u
+      {{270, 2290, 3010, 3500, 4100}, {45, 90, 110, 130, 150}},   // i
+      {{1200, 2300, 4100, 6200, 8800}, {120, 50, 60, 80, 120}},   // insect
+      {{480, 1900, 2550, 3400, 4000}, {55, 85, 110, 130, 150}},   // e
+   };
+   const int i = static_cast<int>(std::floor(pos));
+   const double f0 = pos - i, f = f0 * f0 * (3.0 - 2.0 * f0);
+   const Shape &a = ring[((i % kAlienShapes) + kAlienShapes) % kAlienShapes];
+   const Shape &b = ring[(((i + 1) % kAlienShapes) + kAlienShapes) % kAlienShapes];
+   const double up = std::exp2(std::clamp(shift, -1.0, 1.0));
+   const double narrow = std::exp2(4.0 * (0.5 - std::clamp(sharp, 0.0, 1.0)));
+   for (int k = 0; k < kAlienFormants; ++k) {
+      out.hz[k] = std::exp(std::log(a.hz[k]) + f * (std::log(b.hz[k]) - std::log(a.hz[k]))) * up;
+      out.bw[k] = std::max(4.0, std::exp(std::log(a.bw[k]) + f * (std::log(b.bw[k]) - std::log(a.bw[k]))) * narrow);
+   }
+   alienNorm(out);
+}
+
+// The Alien's consonants, soft to hard: how voiced each is, where it puts the first three
+// resonances (its locus, which the vowel then glides out of), whether it's nasal, its hiss (a band
+// of noise at the lips and teeth: centre, sharpness, level), how long the mouth is shut before it
+// (a stop's closure), how long the hiss or the consonant's own sound lasts, and how long the
+// breath is let through the throat unvoiced after it (aspiration).
+struct AlienConsonant {
+   const char *name;
+   float voice, f1, f2, f3;
+   bool nasal;
+   float noiseHz, noiseQ, noise, closeMs, soundMs, aspMs;
+};
+// Soft (sonorants), middling (voiced), hard (voiceless): the order Talk's hardness picks from.
+inline constexpr AlienConsonant kAlienConsonants[] = {
+   // soft: nasals, liquids and glides
+   {"m", 0.45f, 250, 1000, 2200, true, 0, 0, 0, 0, 70, 0},
+   {"n", 0.45f, 250, 1600, 2500, true, 0, 0, 0, 0, 65, 0},
+   {"ng", 0.45f, 250, 2200, 2700, true, 0, 0, 0, 0, 70, 0},
+   {"l", 0.7f, 360, 1050, 2800, false, 0, 0, 0, 0, 55, 0},
+   {"r", 0.7f, 420, 1100, 1600, false, 0, 0, 0, 0, 60, 0},
+   {"w", 0.7f, 300, 650, 2200, false, 0, 0, 0, 0, 50, 0},
+   {"y", 0.7f, 270, 2100, 2900, false, 0, 0, 0, 0, 50, 0},
+   // middling: voiced fricatives and stops
+   {"v", 0.35f, 300, 1100, 2300, false, 4000, 0.7f, 0.15f, 0, 60, 0},
+   {"dh", 0.35f, 300, 1400, 2500, false, 5000, 0.8f, 0.1f, 0, 60, 0},
+   {"z", 0.35f, 300, 1700, 2500, false, 6000, 2.0f, 0.35f, 0, 70, 0},
+   {"zh", 0.35f, 300, 1800, 2500, false, 3200, 1.5f, 0.35f, 0, 70, 0},
+   {"b", 0.15f, 300, 900, 2200, false, 900, 0.7f, 0.4f, 35, 8, 0},
+   {"d", 0.15f, 300, 1700, 2600, false, 4000, 1.0f, 0.45f, 30, 8, 0},
+   {"g", 0.15f, 300, 2000, 2400, false, 2000, 1.5f, 0.5f, 35, 8, 0},
+   {"j", 0.15f, 300, 1800, 2500, false, 3200, 1.5f, 0.4f, 30, 40, 0},
+   {"h", 0.0f, 0, 0, 0, false, 0, 0, 0, 0, 0, 60},
+   // hard: voiceless fricatives, stops and affricates
+   {"f", 0.0f, 350, 1100, 2300, false, 6000, 0.5f, 0.15f, 0, 75, 0},
+   {"th", 0.0f, 350, 1400, 2500, false, 6500, 0.4f, 0.1f, 0, 70, 0},
+   {"s", 0.0f, 350, 1700, 2600, false, 7000, 2.5f, 0.5f, 0, 85, 0},
+   {"sh", 0.0f, 300, 1900, 2500, false, 3000, 1.8f, 0.5f, 0, 85, 0},
+   {"p", 0.0f, 300, 900, 2200, false, 900, 0.7f, 0.5f, 40, 10, 35},
+   {"t", 0.0f, 300, 1700, 2600, false, 4500, 1.0f, 0.6f, 35, 10, 35},
+   {"k", 0.0f, 300, 2000, 2400, false, 2000, 1.5f, 0.6f, 40, 10, 40},
+   {"ch", 0.0f, 300, 1900, 2500, false, 3000, 1.8f, 0.5f, 30, 55, 0},
+};
+inline constexpr int kAlienConsonantCount = static_cast<int>(sizeof(kAlienConsonants) / sizeof(kAlienConsonants[0]));
+inline constexpr int kAlienSoft = 7, kAlienMiddling = 16; // (the soft ones end, the middling ones end)
+// Its eight families, each of which can be turned off: m n ng, l r, w y, v dh z zh, b d g j, h,
+// f th s sh, p t k ch.
+inline constexpr int alienFamily(int consonant) {
+   constexpr int kStarts[8] = {0, 3, 5, 7, 11, 15, 16, 20};
+   int f = 0;
+   while (f < 7 && consonant >= kStarts[f + 1])
+      ++f;
+   return f;
+}
+
+// Alien: a bowed string sounding through a throat that keeps changing shape.
 //
-// - A helix is dispersive: a wave's speed along it depends on its frequency, so its resonances
-//   aren't the harmonic series a straight tube has but stretched like a bell's or a stiff bar's.
-//   Here that's a chain of allpass sections in the loop (all of the delay at the note, less above),
-//   placed at fixed ratios of the note so every register is stretched alike; the Cone knob sets how
-//   far. A note's attack and release ring at those stretched modes: a chirp, a spring's "boing".
-// - The main bore is a closed cylinder with a single reed (the clarinet's valve) and holds the
-//   pitch. The second, the "ghost", is shorter by an irrational ratio (2.76, a free bar's second
-//   mode over its first, at the middle embouchure; MPE slide moves it from about 2.3 to 3.3, through
-//   the harmonic 3 where it locks), with a stiffer reed that only opens once the breath is strong.
-// - The two reeds share the chamber, whose pressure falls as either draws air: each reed is blown by
-//   the other's flow as well as the player's breath. Two oscillations that aren't harmonic, driven
-//   through one nonlinearity, give every combination tone m f0 + n f1 (a multiphonic) and pull on
-//   each other's pitch; near a simple ratio they lock (a mode jump).
-//
-// So the colour runs with the breath: soft, a hollow, nearly pure tone; middling, the ghost's
-// inharmonic partial rises out of it as a bell-like shimmer; hard, the reeds fight and the spectrum
-// fills with sidebands, a ring-modulated roar, with the main bore's pitch still underneath.
+// - The string: two waveguides either side of the bow (towards the bridge and towards the nut),
+//   each end reflecting with its sign turned over, the bridge's through a lowpass (the string's
+//   losses, which the Hole Cutoff sets). The bow drags the string with stick-slip friction: while
+//   the string moves with it, they stick and the bow carries it; once the string's velocity falls
+//   too far behind, it slips. The friction's curve is the classic bow table (McIntyre, Schumacher &
+//   Woodhouse; Smith): its steepness is the bow's force. The breath is the bow's speed, the Bite its
+//   force (light: a flautando whisper; heavy: crunch and scratch), the Embouchure where it crosses
+//   the string (near the bridge: bright and glassy; towards the middle: round). Lifting the bow (the
+//   breath going) lets the string ring on, muted under the player's hand.
+// - The Cone knob is how stiff the string is: a stiff string's waves travel faster the higher they
+//   are, so its partials stretch apart, from a gut string (0) through a piano wire to a bar (1).
+// - The throat: the bridge's motion, through five resonances at once, as a voice's formants. They
+//   don't follow the note (like a mouth, they stay where they are while the note moves), and they
+//   travel through a ring of eight shapes: the vowels a, o, u, i and e, and three no throat has (a
+//   ghost's whistle, an abyss, an insect's whine). VOICE is where on the ring each note starts,
+//   MORPH how fast it travels from there while the note is held, DRIFT how far it wanders on its own
+//   (each resonance a little apart from the others), SHIFT moves them all up or down an octave (a
+//   smaller or larger throat), and SHARP narrows them, until they whistle.
 class Alien final : public Model {
 public:
    void prepare(double fs) override {
       fs_ = fs;
-      a_.bore.init(static_cast<int>(fs / 40.0) + 8);
-      b_.bore.init(static_cast<int>(fs / 100.0) + 8);
-      irisCoef_ = 1.0 - std::exp(-2.0 * kPi * 30.0 / fs);
+      neck_.init(static_cast<int>(std::max(fs / 20.0, 2.0 * kMinLoop)) + 8);
+      bridge_.init(static_cast<int>(std::max(fs / 20.0, 2.0 * kMinLoop)) + 8);
+      rate_ = fs;
+      control_ = std::max(1, static_cast<int>(fs / 3000.0));
       reset();
    }
    void reset() override {
-      a_.clear();
-      b_.clear();
+      neck_.clear();
+      bridge_.clear();
+      loop_ = {};
+      still_ = {};
+      for (auto &a : stiff_)
+         a = {};
+      x1_ = 0.0f;
+      low_.z = edge_.z = mellow_.z = mellow2_.z = 0.0f;
+      sawPower_ = throatPower_ = 0.0f;
+      match_ = 1.0f;
+      // (Each copy of a unison its own place in its period: voices that start together still don't
+      // start in step, so they swell and fade against each other less.)
+      phase_ = 0.5 + 0.5 * rng.white();
+      g1_ = 0.0;
+      sylT_ = 1e9;
+      mouthSet_ = false;
+      voiceT_ = voiceS_ = 1.0f;
+      aspT_ = aspS_ = fricT_ = fricS_ = 0.0f;
+      fric_.clear();
+      breathS_ = 0.0;
+      for (auto &r : res_)
+         r.y1 = r.y2 = 0.0;
       dc_ = {};
       dc_.setFs(fs_);
       noiseLP_ = {};
-      noiseLP_.setHz(1200, fs_);
-      radB_ = {};
-      rad_ = {};
-      chamber_ = {};
-      tx_ = 0.0f;
-      uA_ = uB_ = uMean_ = 0.0;
-      iris_ = 0.0;
-      coneK_ = -1.0f;
+      noiseLP_.setHz(3000, fs_);
+      travel_ = 0.0;
+      wander_ = 0.0;
+      wanderV_ = 0.0;
+      for (auto &j : jitter_)
+         j = 0.0;
+      count_ = 0;
+      lifted_ = 1.0;
       notePitch(hz_);
+      shape();
    }
-   // The main bore's loop is half the period, less the delay its helix and bell add at the note.
-   double nominal(double hz) const override {
-      return fs_ / (2.0 * hz) - Helix::delayAt(hz, kFc * hz, kBw * hz, fs_) * 2.0 - onePoleDelay(hz, bellA(hz), fs_);
-   }
-   double cutoffDelay(double hz) const override {
-      return onePoleDelay(hz, bellA(hz) * holes(), fs_) - onePoleDelay(hz, bellA(hz), fs_);
-   }
+   double nominal(double hz) const override { return fs_ / hz; }
    void notePitch(double hz) override {
-      a_.keep = character.keep(0.96f);
-      b_.keep = character.keep(0.95f);
-      const float cone = character.cone, emb = embNow_;
-      if (hz == hz_ && cone == coneK_ && emb == embK_ && character.cutoff == cutK_)
-         return;
       hz_ = hz;
-      coneK_ = cone;
-      embK_ = emb;
-      cutK_ = character.cutoff;
-      // The helix's pitch: Cone 0 is looser, 1 coiled tight. Its delay at the note moves with it, so
-      // the bore gives back (or takes) the difference; and the stretched modes pull the note away
-      // from the first one's own pitch (the reed plays a compromise between the resonances), by
-      // as much again, measured: the bore's length follows that too, so the Cone knob stays in tune.
-      const double bw = helixBw(cone);
-      a_.set(kFc * hz, bw * hz, bellA(hz) * holes(), fs_);
-      lenFix_ = 2.0 * (Helix::delayAt(hz, kFc * hz, kBw * hz, fs_) - Helix::delayAt(hz, kFc * hz, bw * hz, fs_));
-      const double c = std::clamp(static_cast<double>(cone), 0.0, 1.0);
-      const double above = std::clamp(12.0 * std::log2(hz / 82.4), 0.0, 48.0); // semitones over E2
-      lenScale_ = c >= 0.5 ? 1.0 + 0.08 * (c - 0.5) : 1.0 - (0.5 - c) * 2.0 * (0.05 - 0.00056 * above);
-      // The ghost bore, a little stiffer still, at its ratio over the note.
-      const double rho = kRho * std::pow(2.0, 0.6 * (emb - 0.5));
-      const double hb = hz * rho;
-      b_.set(kFc * hb, 0.8 * bw * hb, bellB(hb), fs_);
-      radB_.setHz(2.0 * bellB(hb), fs_);
-      rad_.setHz(std::max(5000.0, 10.0 * hz) * character.cutoff, fs_);
-      chamber_.setHz(std::min(6.0 * hz, 3000.0), fs_);
-      lenB_ = fs_ / (2.0 * hb) - 2.0 * Helix::delayAt(hb, kFc * hb, 0.8 * bw * hb, fs_) -
-              onePoleDelay(hb, bellB(hb), fs_);
-      nomA_ = nominal(hz);
-      extra_ = fs_ / (2.0 * hz) - nomA_;
-      meanCoef_ = 1.0 - std::exp(-2.0 * kPi * std::max(8.0, 0.25 * hz) / fs_);
+      // A bowed string only catches into its stick-slip motion with a couple of hundred steps to
+      // each period (fewer, and the slip's corner is lost between them): a high note's string is
+      // run that many times faster than the voice.
+      const int steps = std::clamp(static_cast<int>(std::ceil(kMinLoop * hz / fs_)), 1, kMaxSteps);
+      if (steps != steps_) {
+         steps_ = steps;
+         neck_.clear();
+         bridge_.clear();
+      }
+      rate_ = fs_ * steps_;
+      loop_.setHz(loopCut(hz), rate_);
+      still_.setFs(rate_);
+      // The stiffness: two first-order allpasses. Their delay at the note, and the loop's lowpass's,
+      // come out of the string (in its own steps), so it plays in tune at any stiffness and cutoff.
+      const double c = std::clamp(static_cast<double>(character.cone), 0.0, 1.0);
+      stiffA_ = -0.7 * std::pow(c, 1.5);
+      filterDelay_ = 2.0 * allpassDelay(hz, stiffA_) + onePoleDelay(hz, loopCut(hz), rate_);
+      tilt_ = static_cast<float>(fs_ / (2.0 * kPi * 400.0));
+      edge_.setHz(3500.0, fs_);
+      powerA_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.04 * fs_)));
+      easeA_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.002 * fs_)));
+      low_.setHz(hz, fs_);
+      // High notes as a singer sings them: from about E4 up (an octave, then two), the folds close
+      // more gently, the first resonance rides above the note, the upper ones widen, and the top is
+      // rolled off, so a few lone harmonics don't land on sharp peaks and whistle.
+      high_ = std::clamp(std::log2(hz / 330.0), 0.0, 2.0);
+      const double roll = high_ > 0.0 ? 9000.0 / (1.0 + 1.2 * high_) : 0.45 * fs_;
+      mellow_.setHz(roll, fs_);
+      mellow2_.setHz(roll, fs_);
+      // (The tilt makes a high note's string far louder than its voice: brought back level.)
+      sawLevel_ = static_cast<float>(1.0 / std::sqrt(1.0 + (hz / 300.0) * (hz / 300.0)));
+   }
+   // Where on its ring of shapes the throat is now, 0..8.
+   float throat() const override { return pos_; }
+   void articulate(uint32_t word, double hardness) override {
+      word_ = word;
+      said_ = 0;
+      syllable(1.0, hardness);
    }
    float tick(float breath, float emb, double len, float tn) override {
-      if (emb != embNow_ && ++embCount_ >= 32) {
-         embCount_ = 0;
-         embNow_ = emb;
-         notePitch(hz_);
+      breath_ = breath;
+      if (--count_ <= 0) {
+         count_ = control_;
+         shape();
       }
-      const float noise = noiseLP_.tick(rng.white());
-      // Over its forte the main reed growls, as a clarinet's does.
-      const float growl = std::max(0.0f, breath - 1.0f) * 0.12f * character.edge * character.growl;
-      // The shared chamber: only the flow's swing moves its pressure (the lungs hold its mean), and
-      // the air in it has mass, so it follows the swing through a lowpass.
-      const double uSum = uA_ + uB_;
-      uMean_ += (uSum - uMean_) * meanCoef_;
-      const double kappa = 1.5 * std::clamp(character.edge, 0.0f, 2.0f);
-      const double swing = chamber_.tick(static_cast<float>(kappa * (uSum - uMean_)));
-      const double pc = breath * (1.0 + (0.012 * character.noise + growl) * noise) - swing;
-      const double z = 0.35 * (0.6 + 0.8 * character.aperture);
-      const double knee = 0.04 + 0.16 * (1.0 - character.stiffness);
-      // The voice stretches the bore for bends, unison and the breath's drift: stretch the whole
-      // loop (the helix's delay at the note with it), so a cent asked for is a cent played.
-      const double lenA = std::max(2.0, (len * (nomA_ + extra_) / nomA_ - extra_ + lenFix_) * lenScale_);
-      uA_ = a_.tick(0.7 * pc + tn * 0.04 * noise, z, knee, lenA);
-      // The ghost's stiffer reed needs half as much pressure again to swing; its sound leaves through
-      // an iris that the breath pushes open, so it rises out of the tone as the player blows harder.
-      uB_ = b_.tick(0.7 * kShareB * pc + tn * 0.02 * noise, 0.85 * z, 0.75 * knee, std::max(2.0, lenB_ * len / nomA_));
-      const double open = std::clamp((breath - kIrisOn) / (kIrisFull - kIrisOn), 0.0, 1.0);
-      iris_ += (open * open * (3.0 - 2.0 * open) - iris_) * irisCoef_;
-      // Radiated: what leaves the open ends, (1 + R) p, differentiated (a monopole), as the clarinet.
-      // The ghost's reed beats shut when it's pushed, and its thin horn passes little of the buzz.
-      const float t = static_cast<float>(a_.t + kGhostLevel * iris_ * radB_.tick(static_cast<float>(b_.t)));
-      const float o = (t - tx_) * static_cast<float>(fs_ / 96000.0);
-      tx_ = t;
-      // A beating reed's corners would ring up to the top of the band: the coil's walls damp them.
-      return dc_.tick(32.0f * rad_.tick(o));
+      const float scrape = noiseLP_.tick(rng.white());
+      // The bow: its speed from the breath, roughened by the rosin (Noise) and the tongue's bite.
+      // Where it crosses the string: nearer the bridge it needs a slower, heavier bow (the bow's
+      // speed is scaled so a note keeps its one slip a period anywhere along it).
+      const double beta = betaK_ + 0.11 * std::clamp(static_cast<double>(emb), 0.0, 1.0);
+      // (Aperture is how wide the bow's hair lies on the string: more of it, more sound.)
+      const double vb = vbK_ * beta / 0.125 * (0.7 + 0.6 * character.aperture) * breath * (1.0 + 0.04 * character.noise * scrape) + 0.03 * tn * scrape;
+      const double force = std::clamp(f0_ + 0.35 * (character.edge - 1.0) + f1_ * (breath - 0.8), 0.04, 0.95);
+      // (Stiffness is the hair's tension and the rosin: a tauter, stickier bow grips and lets go
+      // more sharply, brighter and more biting.)
+      const double slope = (5.0 - 4.0 * force) * (0.8 + 0.4 * character.stiffness);
+      // Lifted as the breath goes, so the string rings out; the player's hand mutes it.
+      const double down = std::clamp(breath / 0.12, 0.0, 1.0);
+      lifted_ += (down - lifted_) * 0.002;
+      // (A hair longer: the string on its own sounds 3 cents sharp of its loop, and it must sing in
+      // tune with the voice.)
+      const double L = std::max(4.0, 1.0017 * len * steps_ - filterDelay_);
+      const double lb = std::max(1.0, beta * L), ln = std::max(1.0, L - lb);
+      const double keep = character.keep(0.995f) * (0.86 + 0.14 * lifted_);
+      double sum = 0.0;
+      const float bowMix = std::clamp(character.bow, 0.0f, 1.0f);
+      for (int step = 0; step < steps_ && bowMix > 0.0f; ++step) {
+         // (Its ends are fixed, so it can't drift along with the bow: no velocity at DC.)
+         double fromBridge = still_.tick(loop_.tick(bridge_.read(lb)));
+         for (auto &a : stiff_)
+            fromBridge = a.tick(fromBridge, stiffA_);
+         const double bridgeRefl = -keep * fromBridge;
+         const double nutRefl = -neck_.read(ln);
+         const double dv = vb - (bridgeRefl + nutRefl);
+         double friction = std::fabs((dv + 0.001) * slope) + 0.75;
+         friction = std::clamp(1.0 / (friction * friction * friction * friction), 0.01, 0.98);
+         const double nv = dv * friction * down;
+         neck_.push(static_cast<float>(bridgeRefl + nv));
+         bridge_.push(static_cast<float>(nutRefl + nv));
+         sum += bridgeRefl;
+      }
+      const float x = static_cast<float>(sum / steps_);
+      // (Its velocity, tilted up 6 dB an octave from 400 Hz towards the force on the bridge: the
+      // bowed string's bright sawtooth buzz.)
+      const float saw = (x + tilt_ * (x - x1_)) * sawLevel_;
+      x1_ = x;
+      // The voice: vocal folds opening and snapping shut once a period (a Rosenberg pulse, radiated:
+      // its slope), harder blowing closing them faster (brighter, as a voice pushed), and the
+      // breath hissing through them while they're open (Noise). A consonant closes the mouth
+      // over it for an instant at each syllable.
+      phase_ += 1.0 / std::max(len, 2.0);
+      phase_ -= std::floor(phase_);
+      const double push = std::clamp(static_cast<double>(breath), 0.0, 1.4);
+      const double open = std::clamp(0.72 - 0.18 * push - 0.08 * (character.stiffness - 0.5) + 0.1 * high_, 0.35, 0.9);
+      const double rise = 0.62 * open, fall = open - rise;
+      const double g = phase_ < rise    ? 0.5 * (1.0 - std::cos(kPi * phase_ / rise))
+                       : phase_ < open ? std::cos(0.5 * kPi * (phase_ - rise) / fall)
+                                       : 0.0;
+      const double glot = (g - g1_) * len * 0.12;
+      g1_ = g;
+      const float hiss = scrape * static_cast<float>(g) * (0.05f + 0.25f * character.noise);
+      // The consonant: how voiced it is, the breath let through the throat unvoiced, and its
+      // hiss at the lips (each eased over a couple of ms, so nothing clicks).
+      voiceS_ += (voiceT_ - voiceS_) * easeA_;
+      aspS_ += (aspT_ - aspS_) * easeA_;
+      fricS_ += (fricT_ - fricS_) * easeA_;
+      const float level = static_cast<float>(down * (0.35 + 0.65 * std::min(push, 1.0)));
+      const float air = rng.white();
+      const float voiced = level * voiceS_;
+      const float src = (1.0f - bowMix) * (voiced * (static_cast<float>(glot) + hiss) + level * aspS_ * 0.6f * air) +
+                        bowMix * voiceS_ * saw;
+      // The throat: five resonances in a row, as a vocal tract's are (deep valleys between sharp
+      // peaks), with the fundamental under them. It's held to the source's level (both measured
+      // over the last 40 ms, and only while it's voiced, so a consonant's breath doesn't set it),
+      // so it stays as loud whatever its shape and the note.
+      double v = src;
+      for (auto &r : res_)
+         v = r.tick(v);
+      const float throat = norm_ * static_cast<float>(v + low_.tick(src));
+      if (voiceS_ > 0.1f && aspS_ < 0.05f) {
+         sawPower_ += (src * src - sawPower_) * powerA_;
+         throatPower_ += (throat * throat - throatPower_) * powerA_;
+      }
+      const float hissOut = level * fricS_ * static_cast<float>(fric_.tick(air)) * kHiss;
+      // The bow's rosin edge, above the resonances, gets out round the throat.
+      const float buzz = saw - edge_.tick(saw);
+      float y = match_ * throat + hissOut + kBuzz * bowMix * buzz;
+      y = mellow2_.tick(mellow_.tick(y));
+      return dc_.tick(kOut * y);
    }
 
 private:
-   // A second-order allpass: the helix's frequency-dependent delay.
-   struct Helix {
-      double a1 = 0, a2 = 0, x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-      void clear() { x1 = x2 = y1 = y2 = 0; }
-      void set(double fc, double bw, double fs) {
-         const double r = std::exp(-kPi * bw / fs), th = 2.0 * kPi * std::min(fc, 0.45 * fs) / fs;
-         a1 = -2.0 * r * std::cos(th);
-         a2 = r * r;
+   static constexpr double kLoopCut = 14.0, kMinLoop = 240.0;
+   static constexpr int kMaxSteps = 12;
+   static constexpr float kOut = 9.0f, kBuzz = 0.5f, kHiss = 0.5f;
+   struct Allpass {
+      double x1 = 0, y1 = 0;
+      double tick(double x, double a) {
+         const double y = a * x + x1 - a * y1;
+         x1 = x;
+         y1 = y;
+         return y;
+      }
+   };
+   // A first-order allpass's phase delay at hz, in the string's steps.
+   double allpassDelay(double hz, double a) const {
+      const double w = 2.0 * kPi * hz / rate_;
+      const std::complex<double> z1 = std::polar(1.0, -w);
+      return -std::arg((a + z1) / (1.0 + a * z1)) / w;
+   }
+   // (The Hole Cutoff moves it half as far as on a bore: much brighter and the string would rather
+   // slip twice a period, up the octave.)
+   double loopCut(double hz) const {
+      return std::max(kLoopCut * hz * std::sqrt(std::clamp(static_cast<double>(character.cutoff), 0.25, 3.1)), 3.0 * hz);
+   }
+
+   // Every control_ samples: where on the ring the throat is, and its resonances there.
+   void shape() {
+      if (character.cone != coneK_) {
+         coneK_ = character.cone;
+         notePitch(hz_);
+      }
+      const double dt = control_ / fs_;
+      const double m = std::clamp(static_cast<double>(character.morph), 0.0, 1.0);
+      travel_ += 3.0 * m * m * dt;
+      // The drift: a slow random walk (about a second's memory), and each resonance its own.
+      const double d = std::clamp(static_cast<double>(character.drift), 0.0, 1.0);
+      const double leak = std::exp(-dt / 0.8);
+      wanderV_ = wanderV_ * leak + std::sqrt(dt) * 1.2 * rng.white();
+      wander_ = wander_ * std::exp(-dt / 3.0) + wanderV_ * dt * 2.0;
+      for (auto &j : jitter_)
+         j = j * leak + std::sqrt(dt) * 0.25 * rng.white();
+      // Talk: each syllable starts with the mouth shut (a consonant, the resonances low, wide and
+      // muffled) and opens onto its own vowel, a jump round the ring from the last; the breath's
+      // pressure moves the mouth (harder, further round), and the more it talks, the more it
+      // chatters on its own while a note is held, syllable after syllable.
+      const double talk = std::clamp(static_cast<double>(character.talk), 0.0, 1.0);
+      breathS_ += (breath_ - breathS_) * (1.0 - std::exp(-dt / 0.03));
+      const bool voiced = breath_ > 0.06;
+      // A held note goes on to its next syllable after a while, a lighter one (a glide more than a
+      // consonant): at the Pace's note value at the host's tempo, or free, every 1.6 s or so at
+      // half Talk and 0.8 s at full, each a little longer or shorter than the last, as speech is.
+      held_ += dt;
+      if (voiced && talk > 0.2 && held_ > nextAt_)
+         syllable(0.6, 0.6 * std::min(breathS_, 1.0));
+      // The syllable: its consonant (shut, then its hiss or burst, then the breath through the
+      // throat), then its vowel, gliding out of the consonant's locus in the Glide's time.
+      sylT_ += dt * 1000.0;
+      const AlienConsonant &k = kAlienConsonants[std::max(cons_, 0)];
+      const bool sounding = talk > 0.05 && cons_ >= 0;
+      const double closeEnd = sounding ? k.closeMs : 0.0, soundEnd = sounding ? closeEnd + k.soundMs : 0.0,
+                   aspEnd = sounding ? soundEnd + k.aspMs : -1.0;
+      const bool inCons = sounding && sylT_ < aspEnd;
+      if (!sounding || sylT_ >= aspEnd) {
+         voiceT_ = 1.0f;
+         aspT_ = fricT_ = 0.0f;
+      } else if (sylT_ < closeEnd) {
+         voiceT_ = k.voice; // (a stop's closure: silent, or a voiced one's murmur)
+         aspT_ = fricT_ = 0.0f;
+      } else if (sylT_ < soundEnd) {
+         voiceT_ = k.voice;
+         aspT_ = 0.0f;
+         fricT_ = k.noise * static_cast<float>(consDepth_);
+      } else {
+         voiceT_ = 0.0f;
+         aspT_ = static_cast<float>(consDepth_);
+         fricT_ = 0.0f;
+      }
+      // (Shallower, a lighter consonant: closer to the vowel.)
+      voiceT_ = static_cast<float>(1.0 - consDepth_ * (1.0 - voiceT_));
+      if (inCons)
+         glide_ = 0.0;
+      else
+         glide_ = std::min(1.0, glide_ + dt / (0.001 * std::clamp(static_cast<double>(character.glideMs), 5.0, 400.0)));
+      const double f = glide_ * glide_ * (3.0 - 2.0 * glide_);
+      const double base = character.vowel * kAlienShapes + travel_ + 0.6 * d * wander_ + talk * 0.5 * (breathS_ - 0.7);
+      AlienThroat ta, tb, t;
+      alienThroat(base + from_, character.shift, character.sharp, ta);
+      alienThroat(base + to_, character.shift, character.sharp, tb);
+      // The consonant's locus: its first three resonances where it puts them (an h, the vowel's
+      // own), the nasals' upper ones damped by the nose.
+      if (sounding && k.f1 <= 0.0f)
+         ta = tb; // (an h: the breath through the vowel's own shape)
+      else if (sounding) {
+         const double up = std::exp2(std::clamp(static_cast<double>(character.shift), -1.0, 1.0));
+         const double loc[3] = {k.f1 * up, k.f2 * up, k.f3 * up};
+         for (int n = 0; n < 3; ++n)
+            ta.hz[n] = std::exp(std::log(tb.hz[n]) + consDepth_ * (std::log(loc[n]) - std::log(tb.hz[n])));
+         for (int n = 3; n < kAlienFormants; ++n)
+            ta.hz[n] = tb.hz[n];
+         for (int n = 0; n < kAlienFormants; ++n)
+            ta.bw[n] = tb.bw[n] * (k.nasal && n > 0 ? 1.0 + 2.0 * consDepth_ : 1.0);
+      }
+      for (int n = 0; n < kAlienFormants; ++n) {
+         t.hz[n] = std::exp(std::log(ta.hz[n]) + f * (std::log(tb.hz[n]) - std::log(ta.hz[n])));
+         t.bw[n] = ta.bw[n] + f * (tb.bw[n] - ta.bw[n]);
+      }
+      // (The mouth can't jump: every move eased over 6 ms, a consonant's too, so none clicks.)
+      const double ease = 1.0 - std::exp(-dt / 0.006);
+      if (!mouthSet_)
+         mouth_ = t;
+      mouthSet_ = true;
+      for (int n = 0; n < kAlienFormants; ++n) {
+         mouth_.hz[n] = std::exp(std::log(mouth_.hz[n]) + ease * (std::log(t.hz[n]) - std::log(mouth_.hz[n])));
+         mouth_.bw[n] += ease * (t.bw[n] - mouth_.bw[n]);
+      }
+      t = mouth_;
+      // (Bent, the throat follows the bend, as far as Bend sets.)
+      if (character.bendSemis != 0.0f) {
+         const double follow = std::exp2(std::clamp(static_cast<double>(character.bendSemis), -48.0, 48.0) / 12.0);
+         for (int n = 0; n < kAlienFormants; ++n)
+            t.hz[n] *= follow;
+      }
+      // (A high note's first resonance above it, and the upper ones wider: see notePitch.)
+      const double ride = std::min(high_, 1.0);
+      t.hz[0] = std::max(t.hz[0], t.hz[0] + ride * (1.15 * hz_ - t.hz[0]));
+      for (int n = 1; n < kAlienFormants; ++n)
+         t.bw[n] *= 1.0 + 0.8 * high_;
+      alienNorm(t);
+      const double at = base + (f < 0.5 ? from_ : to_);
+      pos_ = static_cast<float>(at - kAlienShapes * std::floor(at / kAlienShapes));
+      for (int n = 0; n < kAlienFormants; ++n) {
+         const double fc = std::clamp(t.hz[n] * std::exp2(0.12 * d * jitter_[n]), 40.0, 0.42 * fs_);
+         res_[n].set(fc, std::max(t.bw[n], 4.0), fs_);
+      }
+      norm_ = static_cast<float>(t.norm);
+      match_ = std::clamp(std::sqrt((sawPower_ + 1e-12f) / (throatPower_ + 1e-12f)), 0.05f, 20.0f);
+   }
+
+   // A syllable: a consonant (how fully: 1 a note's own, less a held note's next) and a new vowel. Each
+   // note's word comes from the voice (one count across every voice, so they run on from note to
+   // note as one sentence), and a held note's syllables follow from it; each a good way round the
+   // ring from the one before (about three shapes, give or take one), so no two in a row say the
+   // same thing. (All from the count, so a unison's copies say it together.)
+   void syllable(double depth, double hardness) {
+      held_ = 0.0;
+      sylT_ = 0.0;
+      consDepth_ = std::clamp(depth * std::min(1.0, 2.0 * character.talk) * character.consonants, 0.0, 1.0);
+      const uint32_t k = word_ * 7919u + said_++;
+      uint32_t h = k * 2654435761u;
+      h ^= h >> 15;
+      h *= 2246822519u;
+      h ^= h >> 13;
+      const double r0 = (h & 0xffff) / 65536.0, r1 = (h >> 16) / 65536.0;
+      // Its vowel: one of the five (a, o, u, i, e on the ring), never the last one again.
+      static const double kVowels[5] = {0.0, 2.0, 4.0, 5.0, 7.0};
+      int next = static_cast<int>(r0 * 4.0) % 4;
+      next += next >= vowelIndex_ ? 1 : 0;
+      vowelIndex_ = next;
+      from_ = to_;
+      to_ = character.talk > 0.05f ? kVowels[next] : 0.0;
+      glide_ = 0.0;
+      // Its consonant: softer touches (velocity, pressure) the soft ones (m, n, l, r, w, y), harder
+      // the voiced (v, z, b, d, g...), hardest the hiss and pop of s, sh, f, t, k, p. Which one in
+      // its class is the syllable's own.
+      const double hard = std::clamp(hardness + 0.3 * (r1 - 0.5), 0.0, 0.999);
+      const int lo = hard < 0.38 ? 0 : hard < 0.7 ? kAlienSoft : kAlienMiddling;
+      const int hi = hard < 0.38 ? kAlienSoft : hard < 0.7 ? kAlienMiddling : kAlienConsonantCount;
+      uint32_t h2 = h * 2654435761u;
+      h2 ^= h2 >> 16;
+      // (Only the families that are on; none of them in this class, any that's on; none at all, or
+      // Consonants at nothing, just the vowel.)
+      int pick[kAlienConsonantCount], picks = 0;
+      for (int c = lo; c < hi; ++c)
+         if (character.sounds & (1u << alienFamily(c)))
+            pick[picks++] = c;
+      if (picks == 0)
+         for (int c = 0; c < kAlienConsonantCount; ++c)
+            if (character.sounds & (1u << alienFamily(c)))
+               pick[picks++] = c;
+      cons_ = picks > 0 && consDepth_ > 0.01 ? pick[h2 % static_cast<uint32_t>(picks)] : -1;
+      if (cons_ >= 0 && kAlienConsonants[cons_].noise > 0.0f)
+         fric_.bandpass(std::min(static_cast<double>(kAlienConsonants[cons_].noiseHz), 0.42 * fs_),
+                        kAlienConsonants[cons_].noiseQ, fs_);
+      const double talk = std::clamp(static_cast<double>(character.talk), 0.2, 1.0);
+      nextAt_ = character.paceSec > 0.0f ? character.paceSec : (2.4 - 1.6 * talk) * (0.75 + 0.5 * r1);
+      // Linger: a chance this vowel is held on for two or three times as long, more the harder it's
+      // blown.
+      const double linger = std::clamp(character.linger * (0.4 + 0.6 * std::min(breathS_, 1.3)), 0.0, 1.0);
+      if (r0 * 0.618 + r1 * 0.382 < linger)
+         nextAt_ *= r1 > 0.5 ? 3.0 : 2.0;
+   }
+   uint32_t word_ = 0, said_ = 0;
+   int vowelIndex_ = 0, cons_ = 0;
+   double sylT_ = 1e9, consDepth_ = 0.0;
+   float voiceT_ = 1.0f, aspT_ = 0.0f, fricT_ = 0.0f, voiceS_ = 1.0f, aspS_ = 0.0f, fricS_ = 0.0f, easeA_ = 0.01f;
+   Biquad fric_;
+   AlienThroat mouth_;
+   bool mouthSet_ = false;
+   double from_ = 0.0, to_ = 0.0, glide_ = 1.0;
+
+   Delay neck_, bridge_;
+   OnePoleLP loop_, noiseLP_;
+   double phase_ = 0.0, g1_ = 0.0, breathS_ = 0.0, held_ = 0.0, nextAt_ = 1.0;
+   float breath_ = 0.0f;
+   Allpass stiff_[2];
+   float sawLevel_ = 1.0f, tilt_ = 0.0f, x1_ = 0.0f, norm_ = 1.0f, match_ = 1.0f, sawPower_ = 0.0f, throatPower_ = 0.0f, powerA_ = 0.001f;
+   OnePoleLP low_, edge_, mellow_, mellow2_;
+   double high_ = 0.0;
+   // A Klatt resonator: 1 at DC, a peak at hz, bw wide.
+   struct Resonator {
+      double a = 1, b = 0, c = 0, y1 = 0, y2 = 0;
+      void set(double hz, double bw, double fs) {
+         const double r = std::exp(-kPi * bw / fs);
+         c = -r * r;
+         b = 2.0 * r * std::cos(2.0 * kPi * hz / fs);
+         a = 1.0 - b - c;
       }
       double tick(double x) {
-         const double y = a2 * x + a1 * x1 + x2 - a1 * y1 - a2 * y2;
-         x2 = x1;
-         x1 = x;
+         const double y = a * x + b * y1 + c * y2;
          y2 = y1;
          y1 = y;
          return y;
       }
-      // Its phase delay at hz, in samples (below the section's centre, where a note's fundamental is).
-      static double delayAt(double hz, double fc, double bw, double fs) {
-         Helix h;
-         h.set(fc, bw, fs);
-         const double w = 2.0 * kPi * hz / fs;
-         const double re = 1.0 + h.a1 * std::cos(w) + h.a2 * std::cos(2 * w);
-         const double im = -(h.a1 * std::sin(w) + h.a2 * std::sin(2 * w));
-         double lag = 2.0 * w + 2.0 * std::atan2(im, re);
-         while (lag < 0.0)
-            lag += 2.0 * kPi;
-         return lag / w;
-      }
    };
-   // A reed on a closed helix: the clarinet's valve, solved with the pressure it makes.
-   struct Bore {
-      static constexpr double kViscous = 1e-5;
-      Delay bore;
-      Helix h1, h2;
-      OnePoleLP bell;
-      double keep = 0.96, t = 0.0, flow = 0.0;
-      void clear() {
-         flow = 0.0;
-         bore.clear();
-         h1.clear();
-         h2.clear();
-         bell.z = 0.0f;
-         t = 0.0;
-      }
-      void set(double fc, double bw, double cut, double fs) {
-         h1.set(fc, bw, fs);
-         h2.set(fc, bw, fs);
-         bell.setHz(cut, fs);
-      }
-      double tick(double g, double z, double knee, double len) {
-         const double inc = bore.read(len);
-         const double back = -keep * bell.tick(static_cast<float>(h2.tick(h1.tick(inc))));
-         const auto F = [g, z, knee](double p) {
-            const double W = g - p, gap = 1 - W;
-            if (gap <= -knee)
-               return 0.0;
-            const double open = gap >= knee ? gap : (gap + knee) * (gap + knee) / (4 * knee);
-            // (Bernoulli's square root, eased into a straight line under a tiny drop, where the air
-            // through the slit is held by its viscosity: the root's endless slope at nothing would
-            // keep a bore with no breath in it buzzing on its own at the bottom of the level.)
-            return z * open * W / std::sqrt(std::fabs(W) + kViscous);
-         };
-         // u = F(2 back + u), by bisection (F falls as u rises), from a bracket around the last
-         // sample's flow when it holds the answer (it nearly always does), else the whole range.
-         const auto G = [&F, back](double u) { return u - F(2 * back + u); };
-         double lo = flow - 0.03, hi = flow + 0.03;
-         int steps = 12;
-         if (!(G(lo) <= 0 && G(hi) > 0)) {
-            lo = -3;
-            hi = 3;
-            steps = 22;
-         }
-         for (int it = 0; it < steps; ++it) {
-            const double u = 0.5 * (lo + hi);
-            if (G(u) > 0)
-               hi = u;
-            else
-               lo = u;
-         }
-         // (Finished on the straight line through the bracket's ends, so the flow is smooth, not
-         // stepped by the bisection's last interval.)
-         const double gl = G(lo), gh = G(hi);
-         flow = gh > gl ? lo - gl * (hi - lo) / (gh - gl) : 0.5 * (lo + hi);
-         bore.push(static_cast<float>(back + flow));
-         t = inc + back;
-         return flow;
-      }
-   };
-   // The Hole Cutoff and Holes: mostly how much of the highs the coil lets out (the radiation), only
-   // a little the loop's own loss, which would pull the note against the stretched modes.
-   double holes() const {
-      return std::clamp(std::pow(static_cast<double>(std::max(character.cutoff, 0.05f)), 0.25), 0.85, 1.12);
-   }
-   // The helix's allpass bandwidth over the note: 2.8 at Cone 0.5 (as tuned), narrower (a tighter
-   // coil, its delay more concentrated near the note, the modes above stretched further) as it rises.
-   static double helixBw(float cone) { return kBw * std::pow(2.0, 0.8 * (0.5 - std::clamp(cone, 0.0f, 1.0f))); }
-
-   // The bells: their cutoff follows the note, so every register is coloured alike and the upper
-   // (stretched) modes never lose less than the first, which would let a slow swell start a low
-   // note in a high, inharmonic register.
-   static double bellA(double hz) { return kCutA * hz; }
-   static double bellB(double hz) { return kCutB * hz; }
-   static constexpr double kFc = 2.0, kBw = 2.8, kCutA = 6.0, kCutB = 5.0, kRho = 2.756;
-   static constexpr double kShareB = 0.66, kIrisOn = 0.8, kIrisFull = 1.3, kGhostLevel = 0.35;
-   Bore a_, b_;
-   OnePoleLP noiseLP_, radB_, rad_, chamber_;
-   DCBlock dc_;
-   double hz_ = 220.0, lenB_ = 50.0, nomA_ = 200.0, lenFix_ = 0.0, lenScale_ = 1.0, extra_ = 0.0;
-   double meanCoef_ = 0.01, irisCoef_ = 0.002;
-   double uA_ = 0.0, uB_ = 0.0, uMean_ = 0.0, iris_ = 0.0;
-   float tx_ = 0.0f, coneK_ = -1.0f, embK_ = -1.0f, cutK_ = -1.0f, embNow_ = 0.5f;
-   int embCount_ = 0;
+   Resonator res_[kAlienFormants];
+   DCBlock dc_, still_;
+   double rate_ = 96000.0, filterDelay_ = 0.0, vbK_ = 0.1, f0_ = 0.4, f1_ = 0.2, betaK_ = 0.07;
+   int steps_ = 1;
+   double hz_ = 220.0, stiffA_ = 0.0, travel_ = 0.0, wander_ = 0.0, wanderV_ = 0.0, lifted_ = 1.0;
+   double jitter_[kAlienFormants] = {};
+   float coneK_ = 0.5f, pos_ = 0.0f;
+   int control_ = 32, count_ = 0;
 };
 
 // How each instrument is played: its breath scale and offset (mouth pressure from the player's 0..1
@@ -1144,16 +1477,13 @@ inline double breathDrift(int model, double breath) {
    static const Point trumpet[] = {{0.12f, -167}, {0.16f, -147}, {0.20f, -128}, {0.24f, -112},
                                    {0.30f, -91},  {0.36f, -72},  {0.42f, -53},  {0.50f, -33},
                                    {0.58f, -14},  {0.65f, 0},    {0.75f, 17},   {0.90f, 40}};
-   // The alien rises a little as its reed first swings, and the ghost reed pulls it flat once it joins.
-   static const Point alien[] = {{0.56f, 10}, {0.6f, 13}, {0.65f, 14}, {0.7f, 12}, {0.76f, 6}, {0.8f, 0},
-                                 {0.85f, -6.5f}, {0.9f, -9.5f}, {1.0f, -10}, {1.1f, -9}, {1.2f, -7}, {1.4f, -3}};
+   // (The Alien's bowed string holds its pitch whatever the bow's speed.)
    const Point *p = nullptr;
    int n = 0;
    switch (model) {
    case kFlute: p = flute; n = 9; break;
    case kClarinet: p = clarinet; n = 5; break;
    case kTrumpet: p = trumpet; n = 12; break;
-   case kAlien: p = alien; n = 12; break;
    default: return 0.0;
    }
    if (breath <= p[0].breath)

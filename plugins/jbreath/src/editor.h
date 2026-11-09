@@ -27,6 +27,8 @@ public:
    struct Voice {
       int note = -1;
       float hz = 0.0f, breath = 0.0f, pressure = 0.0f, timbre = 0.5f, level = 0.0f;
+      // Where the Alien's throat is on its ring of shapes (0..8), or -1 on another instrument.
+      float throat = -1.0f;
       bool releasing = false;
       // Its modulation sources now, and each destination's offset in its param's 0..1 range.
       std::array<float, kModSourceCount> sources{};
