@@ -45,6 +45,8 @@ public:
       pos_ = 0;
       damp_ = hp_ = 0.0f;
    }
+   // A filter's frequency, kept under the Nyquist limit (a host may run at as little as 1 kHz).
+   double lim(double hz) const { return std::min(hz, 0.4 * fs_); }
    void set(const BodySettings &s, bool force = false) {
       if (s == settings_ && !force)
          return;
@@ -52,13 +54,13 @@ public:
       // The open end and holes radiate the highs better than the lows (the radiation resistance
       // grows as (ka)^2 until ka ~ 1): a wider bell or bigger holes, up to +7 dB above 1.5 kHz; a
       // narrow end, as much as 13 dB less.
-      radiate_.highshelf(1500.0, (s.radiate - 0.66) * 20.0, fs_);
+      radiate_.highshelf(lim(1500.0), (s.radiate - 0.66) * 20.0, fs_);
       // The barrel's (or mouthpiece's) cavity: a resonance, lower and stronger the bigger it is.
-      barrel_.peak(3200.0 * std::pow(2.0, -2.0 * s.barrel), 1.2, 1.0 + 6.25 * s.barrel, fs_);
+      barrel_.peak(lim(3200.0 * std::pow(2.0, -2.0 * s.barrel)), 1.2, 1.0 + 6.25 * s.barrel, fs_);
       // Walls soak up the highs: the boundary layer's losses grow with frequency, more on a soft,
       // porous wall (bone, cane) than a hard one (metal): a tilt from +3 dB to -8 dB above 1.2 kHz,
       // and the very top rolled off.
-      wallTilt_.highshelf(1200.0, s.wall < 0.5 ? 6.0 * (0.5 - s.wall) : -16.0 * (s.wall - 0.5), fs_);
+      wallTilt_.highshelf(lim(1200.0), s.wall < 0.5 ? 6.0 * (0.5 - s.wall) : -16.0 * (s.wall - 0.5), fs_);
       wall_.lowpass(std::min(0.45 * fs_, 18000.0 * std::pow(2.0, -2.5 * (s.wall - 0.2))), 0.6, fs_);
       // HOLES, outside the bore: above the lattice's cutoff the sound leaves through the open holes,
       // so the more of them are open, the more highs are radiated; with few open (or all closed
@@ -102,7 +104,7 @@ public:
          {-3.0, 3800, 6.0, 4.0, 6200, 4.0, 5.0, 4.5}, // glass: thin and glassy
       };
       const Material &m = materials[std::clamp(s.tube, 0, 7)];
-      low_.lowshelf(250.0, m.low, fs_);
+      low_.lowshelf(lim(250.0), m.low, fs_);
       tone_.peak(std::min(m.hz1, 0.4 * fs_), m.q1, m.db1, fs_);
       tone2_.peak(std::min(m.hz2, 0.4 * fs_), m.q2, m.db2, fs_);
       high_.highshelf(std::min(3500.0, 0.4 * fs_), m.high, fs_);

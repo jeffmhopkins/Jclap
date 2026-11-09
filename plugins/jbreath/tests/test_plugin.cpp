@@ -148,6 +148,40 @@ void playsInTune(double rate) {
    }
 }
 
+// Hosts can run at any rate, down to 1 kHz (clap-validator tries 1234.57 Hz) and up to 768 kHz:
+// every instrument, the Hybrid, the delay and the room stay finite with notes and audio coming in.
+void oddRatesStayFinite() {
+   for (double rate : {1000.0, 1234.57, 8000.0, 22050.0, 768000.0}) {
+      jclap::core::TestHost h(clap_entry, kId, rate);
+      h.setParam(kDelayOn, 1.0);
+      h.setParam(kHybridMix, 0.5);
+      h.setParam(kMute, 2.0);
+      std::vector<float> inL(256), inR(256), outL(256), outR(256);
+      float *in[2] = {inL.data(), inR.data()}, *out[2] = {outL.data(), outR.data()};
+      uint32_t seed = 1;
+      bool finite = true;
+      for (int m = 0; m < 6; ++m) {
+         h.setParam(kModel, m);
+         for (int key : {24, 60, 108}) {
+            h.note(CLAP_EVENT_NOTE_ON, key, 0.9, key);
+            for (int b = 0; b < 8; ++b) {
+               for (int i = 0; i < 256; ++i) {
+                  seed = seed * 1664525u + 1013904223u;
+                  inL[i] = inR[i] = static_cast<float>(seed >> 8) / 8388608.0f - 1.0f;
+               }
+               h.process(256, in, out);
+               for (int i = 0; i < 256; ++i)
+                  finite = finite && std::isfinite(outL[i]) && std::isfinite(outR[i]);
+            }
+            h.note(CLAP_EVENT_NOTE_OFF, key, 0.0, key);
+         }
+      }
+      if (!finite)
+         std::printf("not finite at %.2f Hz\n", rate);
+      JCLAP_CHECK(finite);
+   }
+}
+
 // ---- A LinnStrument in MPE mode ----
 //
 // Each touch is a note on its own channel: its bend and Y (CC 74) just before the note-on, a
@@ -720,6 +754,7 @@ int main() {
    playsInTune(48000.0);
    playsInTune(96000.0);
    playsInTune(192000.0);
+   oddRatesStayFinite();
 
    linnStrument();
 
