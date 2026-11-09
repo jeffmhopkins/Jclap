@@ -22,6 +22,7 @@
 #include <chrono>
 
 #include <visage/app.h>
+#include <visage/widgets.h>
 #include <jclap/ui/dropdown.h>
 #include <jclap/ui/frame_pacer.h>
 #include <jclap/ui/tooltip.h>
@@ -36,6 +37,7 @@
 #include <functional>
 #include <memory>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -243,151 +245,149 @@ private:
    int hover_ = -1;
 };
 
-// The Alien's throat: its ring of eight shapes, where each note started (the Voice knob, a hollow
-// ring) and where each sounding voice's throat has travelled to since (a dot).
-class ThroatRing : public Drawn {
+// The Alien's words: what it sings (typed, or its own), wrapped to the box, each word lit while a
+// voice sings one of its syllables.
+class WordsView : public Drawn {
 public:
-   explicit ThroatRing(float w) : Drawn(w) {}
-   void set(double voice, std::vector<float> positions, bool lit) {
-      voice_ = voice;
-      positions_ = std::move(positions);
-      lit_ = lit;
-      redraw();
+   explicit WordsView(float w) : Drawn(w) {}
+   void set(const std::string &text, const std::vector<std::pair<int, int>> &syllables, std::vector<int> saying, bool typed, bool lit) {
+      if (text != text_ || syllables != syllables_ || saying != saying_ || typed != typed_ || lit != lit_) {
+         text_ = text;
+         syllables_ = syllables;
+         saying_ = std::move(saying);
+         typed_ = typed;
+         lit_ = lit;
+         redraw();
+      }
    }
    void draw(visage::Canvas &c) override {
       well(c);
       const float k = s(), W = width() / k, H = height() / k;
       const unsigned color = lit_ ? modelColor(kAlien) : kFaint;
-      label(c, "THROAT", 12, 8, W - 24, kDim, 10.5f);
-      const float cx = W / 2, cy = 34 + (H - 34) / 2 - 4, r = std::min(W, H - 40) / 2 - 30;
-      const auto at = [&](double pos, float radius) {
-         const double a = 2 * kPi * pos / kAlienShapes - kPi / 2;
-         return std::pair<float, float>{cx + radius * static_cast<float>(std::cos(a)), cy + radius * static_cast<float>(std::sin(a))};
-      };
-      // The ring, and the eight shapes on it (the vowels plain, the others the instrument's colour).
-      visage::Path ring;
-      for (int i = 0; i <= 96; ++i) {
-         const auto [x, y] = at(kAlienShapes * i / 96.0, r);
-         if (i == 0)
-            ring.moveTo(x * k, y * k);
-         else
-            ring.lineTo(x * k, y * k);
+      label(c, typed_ ? "SINGING  ·  YOUR WORDS" : "SINGING  ·  ITS OWN WORDS", 12, 8, W - 24, kDim, 10.5f);
+      if (syllables_.empty()) {
+         label(c, "No words: type some above, or switch to ALIEN.", 12, 34, W - 24, kFaint, 11.0f);
+         return;
       }
-      c.setColor(visage::Color(0x30ffffff));
-      c.fill(ring.stroke(1.5f * k));
-      static const bool vowel[kAlienShapes] = {true, false, true, false, true, true, false, true};
-      for (int i = 0; i < kAlienShapes; ++i) {
-         const auto [x, y] = at(i, r);
-         c.setColor(vowel[i] ? visage::Color(0xff3a414d) : glow(color, 0.55f));
-         c.circle((x - 3) * k, (y - 3) * k, 6 * k);
-         const auto [lx, ly] = at(i, r + 17);
-         label(c, kAlienShapeNames[i], lx - 30, ly - 8, 60, vowel[i] ? kDim : color, 10.0f, visage::Font::kCenter);
-      }
-      // Where each note starts.
-      {
-         const auto [x, y] = at(voice_ * kAlienShapes, r);
-         visage::Path hoop;
-         for (int m = 0; m <= 24; ++m) {
-            const double a = 2 * kPi * m / 24;
-            const float hx = (x + 7 * static_cast<float>(std::cos(a))) * k, hy = (y + 7 * static_cast<float>(std::sin(a))) * k;
-            if (m == 0)
-               hoop.moveTo(hx, hy);
-            else
-               hoop.lineTo(hx, hy);
+      // Which words are being sung, and the syllable of each (for the dot under it).
+      std::vector<std::pair<int, int>> lit;
+      for (int at : saying_)
+         if (at >= 0 && at < static_cast<int>(syllables_.size()))
+            lit.push_back(syllables_[at]);
+      const visage::Font f = ui::font(12.5f * k);
+      const float line = 18.0f, x0 = 12, x1 = W - 12;
+      float x = x0, y = 30;
+      // The words in turn (each syllable's range is its word's), wrapped.
+      int lastBegin = -1;
+      for (const auto &[b, e] : syllables_) {
+         if (b == lastBegin || b < 0 || e > static_cast<int>(text_.size()) || e <= b)
+            continue;
+         lastBegin = b;
+         const std::string word = text_.substr(b, e - b);
+         const std::u32string w32(word.begin(), word.end());
+         const float ww = f.stringWidth(w32) / k + 7.0f;
+         if (x + ww > x1 && x > x0) {
+            x = x0;
+            y += line;
          }
-         c.setColor(glow(color, 0.9f));
-         c.fill(hoop.stroke(1.6f * k));
-      }
-      // Each voice's throat now.
-      for (float pos : positions_) {
-         const auto [x, y] = at(pos, r);
-         c.setColor(ui::steadyGlow(visage::Color(color).withAlpha(0.5f), {x * k, y * k}, 14 * k));
-         c.circle((x - 14) * k, (y - 14) * k, 28 * k);
-         c.setColor(glow(0xffffffff, 0.95f));
-         c.circle((x - 4) * k, (y - 4) * k, 8 * k);
+         if (y + line > H - 6)
+            break;
+         bool on = false;
+         for (const auto &l : lit)
+            on = on || l.first == b;
+         if (on) {
+            c.setColor(glow(color, 0.28f));
+            c.roundedRectangle((x - 3) * k, (y - 1) * k, ww * k, (line - 1) * k, 4 * k);
+         }
+         c.setColor(on ? visage::Color(0xffffffff) : visage::Color(lit_ ? 0xffaab3c2 : 0xff5b6372));
+         c.text(word, f, visage::Font::kLeft, x * k, y * k, (ww + 4) * k, line * k);
+         x += ww;
       }
    }
 
 private:
-   double voice_ = 0.0;
-   std::vector<float> positions_;
+   std::string text_;
+   std::vector<std::pair<int, int>> syllables_;
+   std::vector<int> saying_;
+   bool typed_ = false, lit_ = true;
+};
+
+// The vowels as the Alien's throat makes them: each one's first two resonances (F2 across, high
+// to the left as phoneticians draw it; F1 down), where a human's are (hollow) and where Spread,
+// Flip and Shift have moved them (lit), with Accent's reach around each.
+class VowelMap : public Drawn {
+public:
+   explicit VowelMap(float w) : Drawn(w) {}
+   void set(double shift, double spread, double flip, double accent, bool lit) {
+      if (shift != shift_ || spread != spread_ || flip != flip_ || accent != accent_ || lit != lit_) {
+         shift_ = shift;
+         spread_ = spread;
+         flip_ = flip;
+         accent_ = accent;
+         lit_ = lit;
+         redraw();
+      }
+   }
+   void draw(visage::Canvas &c) override {
+      well(c);
+      const float k = s(), W = width() / k, H = height() / k;
+      const unsigned color = lit_ ? modelColor(kAlien) : kFaint;
+      label(c, "VOWELS  ·  F2 ACROSS, F1 DOWN", 12, 8, W - 24, kDim, 10.0f);
+      const float x0 = 16, x1 = W - 30, y0 = 32, y1 = H - 14;
+      const auto px = [&](double f2) {
+         return x0 + (x1 - x0) * static_cast<float>(std::clamp(std::log(2700.0 / f2) / std::log(2700.0 / 650.0), 0.0, 1.0));
+      };
+      const auto py = [&](double f1) {
+         return y0 + (y1 - y0) * static_cast<float>(std::clamp(std::log(f1 / 240.0) / std::log(900.0 / 240.0), 0.0, 1.0));
+      };
+      static const char *const kShown[] = {"IY", "IH", "EY", "EH", "AE", "AA", "AO", "OW", "UH", "UW", "AH", "ER"};
+      static const char *const kNames[] = {"ee", "i", "ay", "e", "a", "ah", "aw", "o", "uu", "oo", "u", "ur"};
+      const double size = std::exp2(std::clamp(shift_, -1.0, 1.0));
+      for (int i = 0; i < 12; ++i) {
+         const speech::Phone &v = speech::kPhones[speech::findPhone(kShown[i])];
+         double f1 = v.f1, f2 = v.f2;
+         const float hx = px(f2), hy = py(f1);
+         c.setColor(visage::Color(0x40ffffff));
+         c.circle((hx - 2) * k, (hy - 2) * k, 4 * k);
+         // (As speech.h's Voice moves them.)
+         if (flip_ > 0.0)
+            speech::flipVowel(f1, f2, flip_);
+         f2 = f1 * std::pow(f2 / f1, std::exp2(spread_));
+         f1 *= size;
+         f2 *= size;
+         const float x = px(f2), y = py(f1);
+         if (std::fabs(x - hx) + std::fabs(y - hy) > 2.0f) {
+            c.setColor(visage::Color(0x26ffffff));
+            visage::Path p;
+            p.moveTo(hx * k, hy * k);
+            p.lineTo(x * k, y * k);
+            c.fill(p.stroke(1.0f * k));
+         }
+         if (accent_ > 0.01) {
+            const float r = 3.0f + 12.0f * static_cast<float>(accent_);
+            c.setColor(glow(color, 0.1f));
+            c.circle((x - r) * k, (y - r) * k, 2 * r * k);
+         }
+         c.setColor(glow(color, 0.9f));
+         c.circle((x - 3) * k, (y - 3) * k, 6 * k);
+         label(c, kNames[i], x + 4, y - 9, 30, lit_ ? 0xffc9d3e6 : kFaint, 9.0f);
+      }
+   }
+
+private:
+   double shift_ = 0.0, spread_ = 0.0, flip_ = 0.0, accent_ = 0.0;
    bool lit_ = true;
 };
 
-// The throat's resonances as they stand for the loudest voice (or where a note would start): its
-// response from 50 Hz to 10 kHz, and the note's harmonics along the bottom, so you can see which of
-// them each resonance lifts.
-class FormantGraph : public Drawn {
+// The box the Alien's words are typed into: kept as the text changes, and sized with the panel.
+class LyricsBox : public visage::TextEditor, public ui::Scalable {
 public:
-   explicit FormantGraph(float w) : Drawn(w) {}
-   void set(double pos, double shift, double sharp, double hz, bool lit) {
-      pos_ = pos;
-      shift_ = shift;
-      sharp_ = sharp;
-      hz_ = hz;
-      lit_ = lit;
-      redraw();
+   void setScale(float scale) override {
+      setFont(ui::font(12.5f * scale));
+      setMargin(8 * scale, 4 * scale);
+      setBackgroundRounding(6 * scale);
+      setJustification(visage::Font::kLeft);
    }
-   void draw(visage::Canvas &c) override {
-      well(c);
-      const float k = s(), W = width() / k, H = height() / k;
-      const float x0 = 14, x1 = W - 14, y0 = 34, y1 = H - 30;
-      const unsigned color = lit_ ? modelColor(kAlien) : kFaint;
-      const int i = static_cast<int>(std::floor(pos_)) % kAlienShapes, j = (i + 1) % kAlienShapes;
-      const int pct = static_cast<int>(std::lround(100.0 * (pos_ - std::floor(pos_))));
-      std::string title = std::string("RESONANCES  ·  ") + kAlienShapeNames[i];
-      if (pct > 2 && pct < 98)
-         title += std::string(" to ") + kAlienShapeNames[j] + " " + std::to_string(pct) + "%";
-      label(c, title, 12, 8, W - 24, kDim, 10.5f);
-      c.setColor(visage::Color(0x0effffff));
-      for (double f : {100.0, 1000.0, 5000.0})
-         c.fill((x0 + (x1 - x0) * xOf(f)) * k, y0 * k, 1 * k, (y1 - y0) * k);
-      label(c, "100 Hz", x0 + (x1 - x0) * xOf(100) - 30, H - 20, 60, kFaint, 10.0f, visage::Font::kCenter);
-      label(c, "1 kHz", x0 + (x1 - x0) * xOf(1000) - 30, H - 20, 60, kFaint, 10.0f, visage::Font::kCenter);
-      label(c, "5 kHz", x0 + (x1 - x0) * xOf(5000) - 30, H - 20, 60, kFaint, 10.0f, visage::Font::kCenter);
-      AlienThroat t;
-      alienThroat(pos_, shift_, sharp_, t);
-      const auto db = [&](double f) {
-         return 20.0 * std::log10(t.norm * t.cascade(f) + 1e-9);
-      };
-      const auto py = [&](double d) { return (y1 - (y1 - y0) * static_cast<float>(std::clamp((d + 64.0) / 84.0, 0.0, 1.0))) * k; };
-      visage::Path line, area;
-      constexpr int n = 160;
-      for (int m = 0; m <= n; ++m) {
-         const double x = static_cast<double>(m) / n, f = kLow * std::pow(kHigh / kLow, x);
-         const float px = (x0 + (x1 - x0) * static_cast<float>(x)) * k, y = py(db(f));
-         if (m == 0) {
-            line.moveTo(px, y);
-            area.moveTo(px, y1 * k);
-            area.lineTo(px, y);
-         } else {
-            line.lineTo(px, y);
-            area.lineTo(px, y);
-         }
-      }
-      area.lineTo(x1 * k, y1 * k);
-      area.close();
-      c.setColor(visage::Brush::vertical(glow(color, 0.35f), glow(color, 0.02f)));
-      c.fill(area);
-      c.setColor(glow(color, 0.95f, 1.3f));
-      c.fill(line.stroke(2.0f * k));
-      // The note's harmonics, as tall as the throat lifts them.
-      if (hz_ > 0.0)
-         for (int h = 1; h * hz_ < kHigh; ++h) {
-            const double f = h * hz_;
-            if (f < kLow)
-               continue;
-            const float px = (x0 + (x1 - x0) * xOf(f)) * k, top = py(db(f));
-            c.setColor(visage::Color(0x50ffffff));
-            c.fill(px - 0.75f * k, top, 1.5f * k, y1 * k - top);
-         }
-   }
-
-private:
-   static constexpr double kLow = 50.0, kHigh = 10000.0;
-   static float xOf(double f) { return static_cast<float>(std::log(f / kLow) / std::log(kHigh / kLow)); }
-   double pos_ = 0.0, shift_ = 0.0, sharp_ = 0.5, hz_ = 0.0;
-   bool lit_ = true;
 };
 
 // The exciter's valve: how the air through it answers the pressure across it, with a dot where
@@ -2045,17 +2045,23 @@ public:
             valve_->set(model, host_.paramModulated(kEmbouchure), breaths, host_.paramModulated(kStiffness),
                         host_.paramModulated(kAperture), host_.paramModulated(kEdge));
          else if (exciterTabs_->selected() == 2) {
-            // The Alien's throat: each voice's place on the ring, and the loudest one's resonances.
+            // The Alien's words, each voice's syllable lit, and where its vowels are.
             const bool alien = model == kAlien;
-            std::vector<float> throats;
+            std::vector<int> saying;
             for (const EditorHost::Voice &v : voices_)
-               if (v.note >= 0 && !v.releasing && v.throat >= 0.0f)
-                  throats.push_back(v.throat);
-            const double voice = host_.paramModulated(kAlienVoice);
-            throatRing_->set(voice, throats, alien);
-            const double pos = loudest >= 0 && voices_[loudest].throat >= 0.0f ? voices_[loudest].throat : voice * kAlienShapes;
-            formantGraph_->set(pos, host_.paramModulated(kAlienShift), host_.paramModulated(kAlienSharp),
-                               loudest >= 0 ? hz : 0.0, alien);
+               if (v.note >= 0 && v.saying >= 0)
+                  saying.push_back(v.saying);
+            if (++wordsAge_ >= 6 || sungText_.empty()) {
+               // (What it sings only changes with a knob or the typing: looked at a few times a second.)
+               wordsAge_ = 0;
+               host_.sungWords(sungText_, sungSyllables_);
+            }
+            const bool typed = static_cast<int>(host_.paramValue(kAlienSource) + 0.5) == 1;
+            wordsView_->set(sungText_, sungSyllables_, saying, typed && !host_.lyrics().empty(), alien);
+            vowelMap_->set(host_.paramModulated(kAlienShift), host_.paramModulated(kAlienSpread),
+                           host_.paramModulated(kAlienFlip), host_.paramModulated(kAlienVoice), alien);
+            if (!lyricsBox_->hasKeyboardFocus() && lyricsBox_->text().toUtf8() != host_.lyrics())
+               lyricsBox_->setText(host_.lyrics());
             for (ui::Knob *kn : alienKnobs_)
                kn->setAccent(alien ? modelColor(kAlien) : kFaint);
          } else {
@@ -2280,41 +2286,114 @@ private:
                                        "BLOWN BY THE SAME BREATH, OR A PAD ON ITS OWN ENVELOPE (FOLLOW 0)  ·  UNISON AND VIBRATO SHAPE IT TOO",
                                        kFaint, visage::Font::kLeft, 0.68f));
 
-      // ALIEN: the throat its bowed string sounds through.
-      throatRing_ = &tabs.addToPage(2, add<ThroatRing>({32, 104, 190, 276}, 190.0f));
-      tips_.add(*throatRing_, "The Alien's throat travels round this ring of shapes: five vowels, and a ghost, an abyss and an "
-                              "insect no throat has. The hollow ring is where each note starts; each dot is a voice's throat now.");
-      formantGraph_ = &tabs.addToPage(2, add<FormantGraph>({236, 104, 250, 206}, 250.0f));
-      tips_.add(*formantGraph_, "The throat's five resonances as they are now, and the note's harmonics they lift.");
-      const auto a1 = ui::row({496, 90, 386, 112}, 6), a2 = ui::row({496, 206, 386, 112}, 6);
+      // ALIEN: the words it sings, and the throat it sings them with.
+      {
+         auto &source = tabs.addToPage(2, add<ui::SegmentedSwitch>({32, 100, 150, 22}, std::vector<std::string>{"ALIEN", "TYPED"}));
+         source.setAccent(modelColor(kAlien));
+         bindings_.bind(source, kAlienSource);
+         tips_.add(source, "Which words it sings, a syllable a note. ALIEN: words of its own, a language made up from the "
+                           "vowels and consonants lit below. TYPED: what you type in the box (English, or phones in "
+                           "brackets, as [HH AH0 L OW1]); with nothing typed, its own.");
+         auto &fresh = tabs.addToPage(2, add<ui::Button>({188, 100, 96, 22}, "NEW WORDS"));
+         fresh.setAccent(modelColor(kAlien));
+         fresh.onClick = [this] {
+            // A different language: the next of its thousand.
+            const double next = std::fmod(std::round(host_.paramValue(kAlienSeed)) + 1.0 + static_cast<double>(std::rand() % 37), 1000.0);
+            host_.beginEdit(kAlienSeed);
+            host_.setParam(kAlienSeed, next);
+            host_.endEdit(kAlienSeed);
+         };
+         tips_.add(fresh, "Makes up a new language for it: another vocabulary of its own words (the LANGUAGE knob's number).");
+         auto &length = tabs.addToPage(2, add<ui::SegmentedSwitch>({290, 100, 196, 22},
+                                                                   std::vector<std::string>{"SHORT", "MIXED", "LONG", "CHANT"}));
+         length.setAccent(modelColor(kAlien));
+         bindings_.bind(length, kAlienOrder);
+         tips_.add(length, "How long its own words are: a syllable each, one to three, two to four, or one word chanted "
+                           "over and over.");
+         lyricsBox_ = &tabs.addToPage(2, add<LyricsBox>({32, 128, 454, 26}));
+         lyricsBox_->setDefaultText("Type words for it to sing: hello I'm an alien");
+         lyricsBox_->setMaxCharacters(4000);
+         lyricsBox_->setSelectOnFocus(false);
+         lyricsBox_->onTextChange() += [this] {
+            host_.setLyrics(lyricsBox_->text().toUtf8());
+            // (Typing means singing them.)
+            if (!lyricsBox_->text().toUtf8().empty() && host_.paramValue(kAlienSource) < 0.5) {
+               host_.beginEdit(kAlienSource);
+               host_.setParam(kAlienSource, 1.0);
+               host_.endEdit(kAlienSource);
+            }
+            wordsAge_ = 1000;
+         };
+         tips_.add(*lyricsBox_, "The words it sings when TYPED: each note the next syllable, a chord's notes the same one, from "
+                                "the top again when the host starts playing. English is looked up in the CMU Pronouncing "
+                                "Dictionary; a word it hasn't got is read as spelled. Phones in brackets are sung as written.");
+         wordsView_ = &tabs.addToPage(2, add<WordsView>({32, 160, 454, 112}, 454.0f));
+         tips_.add(*wordsView_, "What it sings, in order: each word lights up while a voice sings one of its syllables.");
+         vowelMap_ = &tabs.addToPage(2, add<VowelMap>({32, 278, 200, 108}, 200.0f));
+         tips_.add(*vowelMap_, "Where its vowels are: hollow dots a human's, lit ones its own, moved by SHIFT, SPREAD and FLIP, "
+                               "with ACCENT's reach around each.");
+      }
+      const auto a1 = ui::row({492, 92, 394, 96}, 7), a2 = ui::row({492, 188, 394, 96}, 7), a3 = ui::row({492, 284, 394, 96}, 7);
       const auto alienKnob = [&](clap_id id, const char *name, ui::Rect cell, const char *tip) {
          ui::Knob &k = knob(id, name, modelColor(kAlien), cell, tip);
          k.setTextSizes(8.5f, 9.5f, 8.5f);
          alienKnobs_.push_back(&k);
          tabs.addToPage(2, k);
       };
-      alienKnob(kAlienVoice, "VOICE", a1[0], "Which vowel or shape each note's throat starts on, round the ring.");
-      alienKnob(kAlienMorph, "MORPH", a1[1], "How fast the throat travels round the ring while a note is held: from still to a "
-                                             "shape every third of a second.");
-      alienKnob(kAlienDrift, "DRIFT", a1[2], "How far the throat wanders on its own, each resonance a little apart from the "
-                                             "others: every note different.");
-      alienKnob(kAlienTalk, "TALK", a2[0], "How much it talks: each note a new syllable, a consonant opening onto its own "
-                                           "vowel, one after another like a sentence; the breath's pressure moves the mouth; "
-                                           "turned up, it chatters on its own while a note is held.");
-      alienKnob(kAlienShift, "SHIFT", a1[3], "Moves every resonance up or down an octave: a smaller or a larger throat.");
-      alienKnob(kAlienSharp, "SHARP", a1[4], "How narrow the resonances are: wide and breathy, to ringing, to whistling.");
-      alienKnob(kAlienLinger, "LINGER", a2[3], "The chance a vowel is held on for two or three times as long, more the "
-                                               "harder it's blown.");
-      alienKnob(kAlienGlide, "GLIDE", a2[2], "How quickly each syllable moves on to its vowel: a snap, as in speech, to a "
-                                             "slow slide.");
-      alienKnob(kAlienStrength, "CONSONANT", a2[1], "How strong each syllable's consonant is: none leaves only the vowels, all "
-                                                     "of it the full stop, hiss or hum.");
-      alienKnob(kAlienBend, "BEND", a2[4], "How far the throat follows a pitch bend (MPE or the wheel): none keeps "
-                                           "the vowel where it is, all slides every resonance with the pitch.");
-      alienKnob(kAlienBow, "BOW", a1[5], "How much a bowed string sings along with the voice: none is pure voice, all "
-                                         "of it the string's buzz through the throat.");
-      // The consonant families, each on or off.
-      tabs.addToPage(2, add<ui::Label>({496, 330, 386, 14}, "CONSONANTS", kDim, visage::Font::kLeft, 0.68f));
+      // The throat: strange shapes.
+      alienKnob(kAlienVoice, "ACCENT", a1[0], "How far each syllable's vowel is bent away from a human's: every resonance "
+                                              "moved somewhere of its own, a new place each syllable.");
+      alienKnob(kAlienSpread, "SPREAD", a1[1], "Squeezes the resonances together (left), every vowel a muffled hum, or pushes "
+                                               "them apart (right), glassy and thin.");
+      alienKnob(kAlienFlip, "FLIP", a1[2], "Turns the vowels round: half way, the open ones come out at the front and the "
+                                           "close ones at the back; all the way, ee is where ah was. Vowels no language has.");
+      alienKnob(kAlienShift, "SIZE", a1[3], "Moves every resonance up or down an octave: a tiny throat or a huge one.");
+      alienKnob(kAlienSharp, "SHARP", a1[4], "How narrow the resonances are: wide and soft, to ringing, to whistling.");
+      alienKnob(kAlienFollow, "FOLLOW", a1[5], "How far the throat follows the note: none is a singer's (the vowels stay "
+                                               "put), all moves them with the pitch, tiny up high and huge down low.");
+      // How alive it is.
+      alienKnob(kAlienWet, "WET", a1[6], "A throat with something moving in it: its resonances shiver and gurgle, "
+                                         "wetter and wider the more of it.");
+      alienKnob(kAlienRough, "ROUGH", a2[0], "How unsteady the folds are, as a living voice's: the pitch wanders, scoops "
+                                             "up into each syllable and falls away at the end, every pulse a little off. "
+                                             "None is a machine's.");
+      alienKnob(kAlienGrowl, "GROWL", a2[1], "A creature's rasp: every other pulse weaker and later (a growl an octave "
+                                             "under the note), a rattle, and now and then a creak.");
+      // Its movement and its sound.
+      alienKnob(kAlienMorph, "WOBBLE", a2[3], "Each resonance swings on a slow wave of its own: a warble, then a wild "
+                                              "swirl of vowels.");
+      alienKnob(kAlienDrift, "DRIFT", a2[4], "How far the vowels wander on their own: every note a little different.");
+      alienKnob(kAlienGlide, "GLIDE", a2[5], "How long each vowel takes to arrive: a snap, as in speech, to a slow slide.");
+      alienKnob(kAlienBend, "BEND", a2[6], "How far the throat follows a pitch bend (MPE or the wheel): none keeps the "
+                                           "vowel where it is, all slides it with the pitch.");
+      alienKnob(kAlienBreathy, "BREATHY", a2[2], "How much air goes through the folds with the voice: clear, to a whisper.");
+      alienKnob(kAlienBow, "BOW", a3[5], "How much a bowed string takes the voice's place: all of it, and the string sings "
+                                         "the words.");
+      // Its words.
+      alienKnob(kAlienStrength, "CONSONANT", a3[0], "How strong the consonants are: none leaves only the vowels, all of it "
+                                                     "every stop, hiss and hum. Harder notes say them harder.");
+      alienKnob(kAlienLinger, "HOLD", a3[1], "How long a diphthong (ai, ay, oy, ow, o) holds its first vowel before it "
+                                             "moves on: speech's quick glide, to a singer's long hold.");
+      alienKnob(kAlienTalk, "TALK", a3[2], "Its own words: how soon a held note goes on to the next syllable, chattering "
+                                           "while you hold it (under a fifth, never).");
+      alienKnob(kAlienPace, "PACE", a3[3], "How often a held note goes on to its next syllable. Free: by Talk. A note value: "
+                                           "in time with the host's tempo.");
+      alienKnob(kAlienSeed, "LANGUAGE", a3[4], "Which of a thousand made-up languages its own words come from.");
+      // The vowels and consonants its own words use, each on or off.
+      tabs.addToPage(2, add<ui::Label>({242, 282, 244, 14}, "VOWELS", kDim, visage::Font::kLeft, 0.68f));
+      {
+         static const char *const kVowelNames[5] = {"A", "E", "I", "O", "U"};
+         static const char *const kVowelTips[5] = {"ah, a, ai, ow", "e, ay, ur", "ee, i", "o, aw, oy", "oo, uu, u"};
+         const auto vw = ui::row({242, 298, 244, 22}, 5, 4);
+         for (int v = 0; v < 5; ++v) {
+            auto &b = tabs.addToPage(2, add<ui::Button>(vw[v], kVowelNames[v]));
+            b.setAccent(modelColor(kAlien));
+            b.setToggle(true);
+            bindings_.bind(b, kAlienVowels + v);
+            tips_.add(b, std::string("Its own words' vowels ") + kVowelTips[v] + ": lit, it uses them; dark, never.");
+         }
+      }
+      tabs.addToPage(2, add<ui::Label>({242, 326, 244, 14}, "CONSONANTS", kDim, visage::Font::kLeft, 0.68f));
       {
          static const char *const kFamilies[8] = {"M N", "L R", "W Y", "V Z", "B D G", "H", "F S", "P T K"};
          static const char *const kFamilyTips[8] = {
@@ -2322,36 +2401,14 @@ private:
             "Voiced fricatives: v, th (as in this), z and zh, buzzing.", "Voiced stops: b, d, g and j.",
             "H: breath through the vowel's own shape.", "Fricatives: f, th, s and sh, a hiss at the lips or teeth.",
             "Stops: p, t, k and ch, a closure, a pop and a breath."};
-         const auto fam = ui::row({496, 348, 386, 24}, 8, 4);
+         const auto fam = ui::grid({242, 342, 244, 44}, 4, 2, 4);
          for (int f = 0; f < 8; ++f) {
             auto &b = tabs.addToPage(2, add<ui::Button>(fam[f], kFamilies[f]));
             b.setAccent(modelColor(kAlien));
             b.setToggle(true);
             bindings_.bind(b, kAlienSounds + f);
-            tips_.add(b, std::string(kFamilyTips[f]) + " Off, the Alien never says them.");
+            tips_.add(b, std::string(kFamilyTips[f]) + " Off, its own words never use them.");
          }
-      }
-      alienKnob(kAlienPace, "PACE", a2[5], "How often a held note goes on to its next syllable. Free: by Talk. A note "
-                                           "value: in time with the host's tempo.");
-      // The vowels it says, each on or off, and how a note picks its first.
-      tabs.addToPage(2, add<ui::Label>({236, 316, 250, 14}, "VOWELS", kDim, visage::Font::kLeft, 0.68f));
-      {
-         static const char *const kVowelNames[5] = {"A", "E", "I", "O", "U"};
-         const auto vw = ui::row({236, 332, 250, 22}, 5, 4);
-         for (int v = 0; v < 5; ++v) {
-            auto &b = tabs.addToPage(2, add<ui::Button>(vw[v], kVowelNames[v]));
-            b.setAccent(modelColor(kAlien));
-            b.setToggle(true);
-            bindings_.bind(b, kAlienVowels + v);
-            tips_.add(b, std::string("The vowel ") + kVowelNames[v] + ": lit, the Alien says it; dark, it never does.");
-         }
-         auto &order = tabs.addToPage(2, add<ui::SegmentedSwitch>({236, 362, 250, 22},
-                                                                  std::vector<std::string>{"RANDOM", "IN TURN", "PITCH", "SAME"}));
-         order.setAccent(modelColor(kAlien));
-         bindings_.bind(order, kAlienOrder);
-         tips_.add(order, "How each new note picks its vowel. Random: any lit vowel but the last. In turn: A, E, I, O, U "
-                          "in order. Pitch: low notes the dark vowels (U, O), high the bright (E, I). Same: every note "
-                          "starts on the first lit vowel.");
       }
       tabs.select(0);
    }
@@ -3068,8 +3125,12 @@ private:
    std::vector<visage::Frame *> airFrames_;
    ui::TabBar *exciterTabs_ = nullptr, *voiceTabs_ = nullptr;
    FilterGraph *filterGraph_ = nullptr;
-   ThroatRing *throatRing_ = nullptr;
-   FormantGraph *formantGraph_ = nullptr;
+   WordsView *wordsView_ = nullptr;
+   VowelMap *vowelMap_ = nullptr;
+   LyricsBox *lyricsBox_ = nullptr;
+   std::string sungText_;
+   std::vector<std::pair<int, int>> sungSyllables_;
+   int wordsAge_ = 1000;
    std::vector<ui::Knob *> alienKnobs_;
    ui::Knob *coneKnob_ = nullptr, *brassKnob_ = nullptr, *delayTimeKnob_ = nullptr;
    unsigned delayAccent_ = 0;

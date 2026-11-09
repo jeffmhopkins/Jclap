@@ -12,6 +12,7 @@
 #include <cstring>
 #include <string>
 
+#include "lyrics.h"
 #include "editor.h"
 #include "params.h"
 #include "presets.h"
@@ -69,6 +70,10 @@ public:
       if (eq == std::string::npos)
          return false;
       const std::string key = setting.substr(0, eq), value = setting.substr(eq + 1);
+      if (key == "lyrics") {
+         lyrics_ = value;
+         return true;
+      }
       if (key == "preset") {
          for (const auto &p : factoryPresets())
             if (p.name == value) {
@@ -90,6 +95,27 @@ public:
       return false;
    }
    void setPresetName(const std::string &) override {}
+   std::string lyrics() const override { return lyrics_; }
+   void setLyrics(const std::string &text) override { lyrics_ = text; }
+   void sungWords(std::string &text, std::vector<std::pair<int, int>> &syllables) const override {
+      syllables.clear();
+      speech::Book book;
+      if (values_[kAlienSource] > 0.5 && !lyrics_.empty()) {
+         speech::readLyrics(lyrics_, book);
+         text = lyrics_;
+      } else {
+         uint32_t sounds = 0, vowels = 0;
+         for (int f = 0; f < 8; ++f)
+            sounds |= values_[kAlienSounds + f] > 0.5 ? 1u << f : 0u;
+         for (int f = 0; f < 5; ++f)
+            vowels |= values_[kAlienVowels + f] > 0.5 ? 1u << f : 0u;
+         speech::alienWords(static_cast<uint32_t>(std::lround(values_[kAlienSeed])), sounds, vowels,
+                            static_cast<int>(std::lround(values_[kAlienOrder])), book, &text);
+      }
+      for (int i = 0; i < book.count; ++i)
+         syllables.emplace_back(book.begin[i], book.end[i]);
+   }
+   std::string lyrics_;
 
    // D3 and A3 held, F#4 swelling, E5 let go and fading.
    static constexpr int kNotes[4] = {50, 57, 66, 76};
@@ -101,9 +127,9 @@ public:
          const float hz = 440.0f * std::pow(2.0f, (kNotes[i] - 69) / 12.0f);
          out[i] = {kNotes[i], hz, breath[i], pressure[i], timbre[i], level[i]};
          out[i].releasing = i == 3;
-         // On the Alien, the throats travelled a little way on from the Voice knob, apart.
+         // On the Alien, the first two singing one syllable, the others the next ones on.
          if (static_cast<int>(std::lround(values_[kModel])) == 5) // the Alien
-            out[i].throat = static_cast<float>(std::fmod(values_[kAlienVoice] * std::size(kAlienShapeNames) + 0.35 * i + 0.2, std::size(kAlienShapeNames)));
+            out[i].saying = i < 2 ? 2 : i + 1;
          float *src = out[i].sources.data();
          src[kSrcStrike] = 0.7f;
          src[kSrcPress] = pressure[i];

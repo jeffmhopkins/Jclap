@@ -33,11 +33,10 @@ std::unique_ptr<Model> make(int id) {
    case kSax: return std::make_unique<Sax>();
    case kOboe: return std::make_unique<Oboe>();
    case kAlien: {
-      // (Its throat held still and wide, so the gain levels the string, not where a harmonic
-      // happens to fall in a narrow resonance at one moment of a morph.)
+      // (Singing "ah", held still, so the gain levels the voice, not where a harmonic happens to
+      // fall in a resonance as it wanders.)
       auto a = std::make_unique<Alien>();
-      a->character.morph = a->character.drift = a->character.sharp = 0.0f;
-      a->character.bow = 0.15f;
+      a->character.morph = a->character.drift = a->character.rough = a->character.wet = 0.0f;
       a->character.talk = 0.0f;
       return a;
    }
@@ -97,6 +96,7 @@ const Articulation kArticulation[kModelCount] = {
 Played playSteady(Model &m, int id, double len, double hz, double target = -1.0, bool speaking = false) {
    m.reset();
    m.notePitch(hz);
+   m.articulate(0, 0.7); // (the Alien sings its syllable)
    const int n = static_cast<int>((hz < 80 ? 1.1 : 0.9) * kFs), tail = hz < 80 ? 16000 : 9000;
    std::vector<float> out;
    if (target < 0.0)
