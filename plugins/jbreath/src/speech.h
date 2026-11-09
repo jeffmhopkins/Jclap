@@ -310,6 +310,11 @@ class Voice {
       diffPrev_ = tiltY_ = barY_ = barY2_ = shelfLp_ = airLp_ = 0;
       glotPower_ = extPower_ = 0.01;
       held_ = false;
+      wander_ = scoop_ = fall_ = rattle_ = 0.0;
+      period_ = 1.0;
+      falling_ = false;
+      for (int n = 0; n < 3; ++n)
+         shiver_[n] = shiverA_[n] = 0.0;
    }
 
    // Starts a syllable: the last one's coda (if it's still to say), then this one's onset, then its
@@ -319,6 +324,9 @@ class Voice {
       plan.clear();
       if (held_)
          planCoda(plan, current_, true);
+      // (A living voice scoops up into each syllable's pitch, further from silence.)
+      scoop_ = -(40.0 + 160.0 * rough_) * (sounding_ ? 0.3 : 1.0);
+      falling_ = false;
       current_ = s;
       held_ = true;
       planOnset(plan, s, strength);
@@ -332,7 +340,18 @@ class Voice {
       plan.clear();
       planCoda(plan, current_, false);
       held_ = false;
+      falling_ = true;
       replace(plan);
+   }
+   // How alive it sounds: `rough` (0..1) the folds' unsteadiness (the pitch wandering and scooping,
+   // each pulse a little off in time and strength, the breath's turbulence); `growl` (0..1) a
+   // creature's rasp (every other pulse weaker and later, a subharmonic under the note, a rattle,
+   // now and then a creak); `wet` (0..1) a throat with something moving in it (its resonances
+   // shivering, a gurgle).
+   void setOrganic(double rough, double growl, double wet) {
+      rough_ = std::clamp(rough, 0.0, 1.0);
+      growl_ = std::clamp(growl, 0.0, 1.0);
+      wet_ = std::clamp(wet, 0.0, 1.0);
    }
    // How long a diphthong holds its first vowel before moving on (ms).
    void setDiphthongHold(double ms) { diphthongHold_ = ms; }
@@ -383,6 +402,23 @@ class Voice {
       sounding_ = av_ + avs_ + ah_ + af_ > 1e-4;
       if (++control_ >= 16) {
          control_ = 0;
+         // The living voice's slow movements: a flutter in pitch (a few tens of ms of
+         // memory, so it never leaves the note), the scoop settling, a fall as it's let go; the throat's shiver (a band of
+         // noise at 8 to 25 Hz for each resonance) and the growl's rattle.
+         const double cdt = 16.0 * dt;
+         wander_ += -wander_ * cdt / 0.06 + std::sqrt(cdt) * 4.0 * noise();
+         scoop_ *= std::exp(-cdt / 0.06);
+         if (falling_)
+            fall_ = std::max(fall_ - cdt * 400.0 * rough_, -250.0);
+         else
+            fall_ *= std::exp(-cdt / 0.03);
+         const double shK = 1.0 - std::exp(-cdt * 2.0 * kPi * 16.0);
+         for (int n = 0; n < 3; ++n) {
+            shiverA_[n] += shK * (noise() * 1.7 - shiverA_[n]);
+            shiver_[n] += shK * (shiverA_[n] - shiver_[n]);
+         }
+         const double raK = 1.0 - std::exp(-cdt * 2.0 * kPi * 35.0);
+         rattle_ += raK * (noise() - rattle_);
          double base[kF];
          for (int n = 0; n < kF; ++n)
             base[n] = f_[n];
@@ -394,10 +430,12 @@ class Voice {
                base[n] = base[0] * std::pow(base[n] / base[0], k);
          }
          for (int n = 0; n < kF; ++n) {
-            double f = base[n] * size_ * (n < 3 ? warp_[n] : 1.0);
+            double f = base[n] * size_ * (n < 3 ? warp_[n] * (1.0 + wet_ * (n == 0 ? 0.1 : 0.16) * shiver_[n]) : 1.0);
             if (n == 0)
                f = std::max(f, f + ride_ * (1.15 * hz - f));
-            const double bw = b_[n] * sharp_ * (n > 0 ? 1.0 + 0.8 * ride_ : 1.0);
+            double bw = b_[n] * sharp_ * (n > 0 ? 1.0 + 0.8 * ride_ : 1.0);
+            if (n < 3)
+               bw *= 1.0 + wet_ * 0.6 * std::fabs(shiver_[n]);
             cascadeK_[n].set(std::clamp(f, 50.0, 0.45 * fs_), std::max(bw, 8.0), fs_);
          }
          nasalZeroK_.set(nasalZeroHz_, 100.0, fs_);
@@ -408,18 +446,29 @@ class Voice {
 
       // The glottis: a KLGLOTT88 flow pulse, open for the open quotient of each period, its tilt
       // set by effort (a harder sung note closes faster and so is brighter).
-      phase_ += hz * dt;
+      //
+      // Alive (setOrganic), each period comes a little early or late and a little stronger or
+      // weaker, the pitch wanders, scoops in and falls away; growling, every other period is
+      // weaker and longer than the one before (a subharmonic, an octave under), and now and then
+      // one hardly opens (a creak).
+      const double cents = rough_ * 20.0 * wander_ + scoop_ + fall_;
+      const double hzNow = hz * std::exp2(cents / 1200.0);
+      phase_ += hzNow * dt * period_;
       if (phase_ >= 1.0) {
          phase_ -= 1.0;
-         jitter_ = 1.0 + 0.004 * noise();
-         shimmer_ = 1.0 + 0.03 * noise();
+         odd_ = !odd_;
+         const double split = 0.1 * growl_;
+         period_ = (1.0 + (odd_ ? -split : split)) * (1.0 + (0.003 + 0.012 * rough_) * noise());
+         shimmer_ = (1.0 + (0.02 + 0.08 * rough_) * noise()) * (odd_ ? 1.0 - 0.55 * growl_ : 1.0);
+         if (growl_ > 0.0 && 0.5 + 0.5 * noise() < 0.12 * growl_)
+            shimmer_ *= 0.15;
       }
       const double oq = 0.5 - 0.15 * effort;
       double flow = 0.0;
-      const double ph = phase_ * jitter_;
+      const double ph = phase_;
       if (ph < oq) {
          const double x = ph / oq;
-         flow = 6.75 * x * x * (1.0 - x) * shimmer_;
+         flow = 6.75 * x * x * (1.0 - x) * shimmer_ * (1.0 + 0.6 * growl_ * rattle_);
       }
       const double tilt = std::exp(-2.0 * kPi * std::min(20000.0, 0.45 * fs_) / fs_);
       tiltY_ = (1.0 - tilt) * flow + tilt * tiltY_;
@@ -439,8 +488,9 @@ class Voice {
       barY2_ += barK * (barY_ - barY2_);
       const double nz = noise();
       const double openMod = ph < oq ? 1.0 : 0.4;
-      const double asp = nz * (av_ > 0.05 ? openMod : 1.0);
-      double in = av_ * glot + avs_ * barY2_ * 2.0 + (ah_ + breath * 0.25 * av_) * asp * 0.35;
+      // (The breath's turbulence comes in gusts, as a living throat's does.)
+      const double asp = nz * (av_ > 0.05 ? openMod : 1.0) * (1.0 + rough_ * 0.8 * shiver_[2]);
+      double in = av_ * glot + avs_ * barY2_ * 2.0 + (ah_ + (breath + 0.1 * rough_ + 0.15 * growl_) * 0.25 * av_) * asp * 0.35;
       // The nose: a pole at 270 Hz and a zero, which sit together (and cancel) until a nasal moves
       // the zero up to where the mouth, shut off behind the nose, swallows its sound.
       // The nose: a pole at 270 Hz and a zero that sit together (and cancel) until a nasal lifts the
@@ -1006,6 +1056,9 @@ class Voice {
    double spread_ = 0.0, flip_ = 0.0, size_ = 1.0, sharp_ = 1.0, warp_[3] = {1.0, 1.0, 1.0}, ride_ = 0.0, glide_ = 1.0;
    double glotPower_ = 0.01, extPower_ = 0.01;
    int control_ = 0;
+   double rough_ = 0.0, growl_ = 0.0, wet_ = 0.0, wander_ = 0.0, scoop_ = 0.0, fall_ = 0.0, period_ = 1.0, rattle_ = 0.0;
+   double shiver_[3] = {}, shiverA_[3] = {};
+   bool odd_ = false, falling_ = false;
    uint32_t seed_ = 0x9e3779b9u;
 };
 

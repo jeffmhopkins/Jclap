@@ -648,6 +648,9 @@ private:
       vs.alienFlip = value(kAlienFlip, s);
       vs.alienFollow = value(kAlienFollow, s);
       vs.alienTyped = book_ == &typed_;
+      vs.alienRough = value(kAlienRough, s);
+      vs.alienGrowl = value(kAlienGrowl, s);
+      vs.alienWet = value(kAlienWet, s);
       vs.brass = value(kBrass, s);
       vs.loss = value(kLoss, s);
       vs.cutoffHz = value(kHoleCutoff, s);

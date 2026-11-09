@@ -175,6 +175,10 @@ enum ParamId : clap_id {
    kAlienFollow,
    kAlienSource,
    kAlienSeed,
+   // Added after 0.7.0: how alive it sounds (Voice::setOrganic in speech.h).
+   kAlienRough,
+   kAlienGrowl,
+   kAlienWet,
    kParamCount
 };
 // The AIR view's look: the panel's own, kept with the project but not with presets.
@@ -241,7 +245,9 @@ inline constexpr clap_id kModDestinations[] = {
    // Added after Release 25.
    kAlienVoice, kAlienMorph, kAlienDrift, kAlienShift, kAlienSharp, kAlienBow, kAlienTalk, kAlienLinger, kAlienGlide, kAlienBend, kAlienStrength,
    // Added after Release 27.
-   kAlienBreathy, kAlienSpread, kAlienFlip, kAlienFollow};
+   kAlienBreathy, kAlienSpread, kAlienFlip, kAlienFollow,
+   // Added after 0.7.0.
+   kAlienRough, kAlienGrowl, kAlienWet};
 constexpr int kModDestCount = static_cast<int>(sizeof(kModDestinations) / sizeof(kModDestinations[0]));
 constexpr int kFirstBusDest = 31;
 constexpr bool isBusDest(int d) { return d >= kFirstBusDest && d < kFirstBusDest + kBusCount; }
@@ -453,6 +459,9 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kAlienFollow, "Alien Follow", "Alien", 0.0, 1.0, 0.0, kMod},
       {kAlienSource, "Alien Words", "Alien", 0.0, 1.0, 0.0, kGlobalChoice},
       {kAlienSeed, "Alien Language", "Alien", 0.0, 999.0, 1.0, kGlobalMod | CLAP_PARAM_IS_STEPPED},
+      {kAlienRough, "Alien Rough", "Alien", 0.0, 1.0, 0.45, kMod},
+      {kAlienGrowl, "Alien Growl", "Alien", 0.0, 1.0, 0.0, kMod},
+      {kAlienWet, "Alien Wet", "Alien", 0.0, 1.0, 0.2, kMod},
    };
    for (const auto &d : fixed)
       p[d.id] = d;
@@ -658,6 +667,9 @@ inline bool isPercent(clap_id id) {
    case kAlienSpread:
    case kAlienFlip:
    case kAlienFollow:
+   case kAlienRough:
+   case kAlienGrowl:
+   case kAlienWet:
       return true;
    default:
       if (id >= kBusBase && id < kRouteBase)

@@ -59,6 +59,7 @@ struct VoiceSettings {
    // Bend and Consonants; Breathy, Spread, Flip and Follow; and whether it sings typed words.
    double alienVoice = 0.0, alienMorph = 0.0, alienDrift = 0.2, alienShift = 0.0, alienSharp = 0.5, alienBow = 0.0, alienTalk = 0.5, alienPaceSec = 0.0, alienLinger = 0.2, alienGlide = 30.0, alienBend = 0.6, alienStrength = 1.0;
    double alienBreathy = 0.25, alienSpread = 0.0, alienFlip = 0.0, alienFollow = 0.0;
+   double alienRough = 0.45, alienGrowl = 0.0, alienWet = 0.2;
    uint32_t alienSounds = 0xffu, alienVowels = 0x1fu;
    int alienOrder = 1;
    bool alienTyped = false;
@@ -888,6 +889,9 @@ private:
          c.flip = static_cast<float>(live_.alienFlip);
          c.follow = static_cast<float>(live_.alienFollow);
          c.typed = live_.alienTyped;
+         c.rough = static_cast<float>(live_.alienRough);
+         c.rasp = static_cast<float>(live_.alienGrowl);
+         c.wet = static_cast<float>(live_.alienWet);
          float cutoff = static_cast<float>(live_.cutoffHz / 1300.0) * holeK * tube.cut, loss = tube.loss;
          Mute::bore(settings_.mute, mute_.amount(), cutoff, loss);
          c.loss = std::max(0.0f, static_cast<float>(live_.loss) + loss);
@@ -1346,6 +1350,9 @@ private:
       live_.alienFlip = at(kDest<kAlienFlip>, s.alienFlip);
       live_.alienFollow = at(kDest<kAlienFollow>, s.alienFollow);
       live_.alienTyped = s.alienTyped;
+      live_.alienRough = at(kDest<kAlienRough>, s.alienRough);
+      live_.alienGrowl = at(kDest<kAlienGrowl>, s.alienGrowl);
+      live_.alienWet = at(kDest<kAlienWet>, s.alienWet);
       live_.detune = at(kDest<kDetune>, s.detune);
       live_.air = at(kDest<kAir>, s.air);
       applyCharacter();

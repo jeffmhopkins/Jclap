@@ -182,6 +182,8 @@ struct Character {
    // turned inside out and its throat follows the note (0..1), and whether it sings typed words.
    float vowel = 0.0f, morph = 0.0f, drift = 0.2f, shift = 0.0f, sharp = 0.5f, bow = 0.0f, talk = 0.5f, paceSec = 0.0f, linger = 0.2f, glideMs = 30.0f;
    float breathy = 0.25f, spread = 0.0f, flip = 0.0f, follow = 0.0f;
+   // How alive the Alien sounds: rough, rasping (its Growl) and wet (0..1 each).
+   float rough = 0.45f, rasp = 0.0f, wet = 0.2f;
    bool typed = false;
    // (The Alien: how many semitones the note is bent that its throat follows.)
    float bendSemis = 0.0f;
@@ -945,6 +947,7 @@ public:
       voice_.setRate(fs);
       letGoFall_ = std::exp(-1.0 / (0.25 * fs));
       onsetFall_ = std::exp(-1.0 / (0.12 * fs));
+      powerK_ = 1.0 - std::exp(-1.0 / (0.25 * fs));
       reset();
    }
    void reset() override {
@@ -969,6 +972,8 @@ public:
       held_ = 0.0;
       onset_ = 0.0;
       saying_ = -1;
+      power_ = kSungPower;
+      match_ = 1.0;
       notePitch(hz_);
       shape();
    }
@@ -1090,13 +1095,20 @@ public:
       const double sung = voice_.tick(fs_ / std::max(len, 2.0), breathy, effort, saw, bowMix);
       // The bow's rosin edge, above the resonances, gets out round the throat.
       const float buzz = saw - edge_.tick(saw);
-      float y = static_cast<float>(level_ * kVoice * sung) + kBuzz * bowMix * buzz;
+      // Held to one level whatever its throat's shape (measured on its vowels over the last quarter
+      // second), so a strange throat plays as loud as a human one.
+      if (voice_.vowelLevel() > 0.8) {
+         power_ += powerK_ * (sung * sung - power_);
+         const double want = std::clamp(std::sqrt(kSungPower / (power_ + 1e-12)), 0.3, 3.0);
+         match_ += 20.0 * powerK_ * (want - match_);
+      }
+      float y = static_cast<float>(level_ * kVoice * match_ * sung) + kBuzz * bowMix * buzz;
       y = mellow2_.tick(mellow_.tick(y));
       return dc_.tick(kOut * y);
    }
 
 private:
-   static constexpr double kLoopCut = 14.0, kMinLoop = 240.0, kVoice = 0.12;
+   static constexpr double kLoopCut = 14.0, kMinLoop = 240.0, kVoice = 0.12, kSungPower = 1.0;
    static constexpr int kMaxSteps = 12;
    static constexpr float kOut = 9.0f, kBuzz = 0.5f;
    struct Allpass {
@@ -1195,6 +1207,7 @@ private:
          size *= std::exp2(std::clamp(static_cast<double>(character.bendSemis), -48.0, 48.0) / 12.0);
       const double sharp = std::exp2(3.0 * (0.5 - std::clamp(static_cast<double>(character.sharp), 0.0, 1.0)));
       voice_.setShape(size, sharp, warp, std::min(high_, 1.0));
+      voice_.setOrganic(character.rough, character.rasp, character.wet);
       voice_.setStrange(std::clamp(static_cast<double>(character.spread), -1.0, 1.0), std::clamp(static_cast<double>(character.flip), 0.0, 1.0));
       voice_.setGlide(std::clamp(static_cast<double>(character.glideMs) / 30.0, 0.2, 12.0));
       voice_.setDiphthongHold(40.0 + 360.0 * std::clamp(static_cast<double>(character.linger), 0.0, 1.0));
@@ -1207,6 +1220,7 @@ private:
    double hardness_ = 0.5, level_ = 0.0, letGoLevel_ = 0.0, letGoFall_ = 0.99995, onset_ = 0.0, onsetFall_ = 0.9999;
    bool letGo_ = false;
    double accent_[3] = {}, accentS_[3] = {}, drift_[3] = {}, wobble_[3] = {0.0, 0.31, 0.67};
+   double power_ = kSungPower, match_ = 1.0, powerK_ = 1e-4;
 
    Delay neck_, bridge_;
    OnePoleLP loop_;

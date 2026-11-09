@@ -36,7 +36,7 @@ std::unique_ptr<Model> make(int id) {
       // (Singing "ah", held still, so the gain levels the voice, not where a harmonic happens to
       // fall in a resonance as it wanders.)
       auto a = std::make_unique<Alien>();
-      a->character.morph = a->character.drift = 0.0f;
+      a->character.morph = a->character.drift = a->character.rough = a->character.wet = 0.0f;
       a->character.talk = 0.0f;
       return a;
    }
