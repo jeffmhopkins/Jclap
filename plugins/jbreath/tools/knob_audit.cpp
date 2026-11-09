@@ -205,7 +205,7 @@ std::vector<int> intendedModels(clap_id id) {
       return {kSax, kOboe, kTrumpet, kAlien};
    if (id == kBrass)
       return {kTrumpet};
-   if (id >= kAlienVoice && id <= kAlienSharp)
+   if (id >= kAlienVoice && id <= kAlienThroat)
       return {kAlien};
    return {};
 }

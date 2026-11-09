@@ -64,7 +64,8 @@ inline int diceSection(clap_id id) {
    case kAlienMorph:
    case kAlienDrift:
    case kAlienShift:
-   case kAlienSharp: return kDiceInstrument;
+   case kAlienSharp:
+   case kAlienThroat: return kDiceInstrument;
    case kLength:
    case kLoss:
    case kHoleCutoff:
@@ -308,6 +309,7 @@ inline Span sane(clap_id id, int model) {
    case kAlienDrift: return Span{0.0, 0.9};
    case kAlienShift: return Span{-0.6, 0.6};
    case kAlienSharp: return Span{0.2, 0.95};
+   case kAlienThroat: return Span{0.5, 1.0};
    default: {
       if (id >= kBusBase && id < kRouteBase) {
          if ((id - kBusBase) % kBusStride == kBusAmount)
@@ -409,6 +411,7 @@ inline void randomInstrument(Values &v, DiceRng &rng, int m, double c) {
       set(v, kAlienDrift, rng.range(0.1, 0.3 + 0.6 * c), m);
       set(v, kAlienShift, rng.range(-0.2, 0.2) * (1.0 + 2.0 * c), m);
       set(v, kAlienSharp, rng.range(0.35, 0.6 + 0.35 * c), m);
+      set(v, kAlienThroat, rng.range(0.55, 0.95), m);
    }
 }
 
@@ -799,7 +802,7 @@ inline void mutatePatch(std::vector<double> &values, const DiceSettings &setting
           (id >= kHybridCutoff && id <= kHybridFilterBreath && v.get(kHybridMix) == 0.0) ||
           (id >= kHybridAttack && id <= kHybridFilterEnv && v.get(kHybridMix) == 0.0) ||
           (id >= kDelayMix && id <= kDelaySpread && v.choice(kDelayOn) == 0) || (id == kFlutterRate && v.get(kFlutter) == 0.0) ||
-          (id == kUnisonDetune && v.choice(kUnison) <= 1) || (id >= kAlienVoice && id <= kAlienSharp && m != A))
+          (id == kUnisonDetune && v.choice(kUnison) <= 1) || (id >= kAlienVoice && id <= kAlienThroat && m != A))
          continue;
       const Span s = sane(id, m);
       double next;

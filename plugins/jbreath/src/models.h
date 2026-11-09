@@ -173,7 +173,7 @@ struct Character {
    float loss = 0.04f, cutoff = 1.0f;
    // The Alien's throat: where on its ring of shapes a note starts (0..1), how fast it travels and
    // how far it wanders (0..1), its shift in octaves (-1..1) and how sharp its resonances are (0..1).
-   float vowel = 0.0f, morph = 0.3f, drift = 0.3f, shift = 0.0f, sharp = 0.5f;
+   float vowel = 0.0f, morph = 0.3f, drift = 0.3f, shift = 0.0f, sharp = 0.5f, throatMix = 0.75f;
 
    // The loss over the models' tuning, easing off towards the top so a reed or lips can still
    // sustain a note at full Loss (a very lossy bore is soft and slow, not silent).
@@ -890,24 +890,36 @@ private:
 
 // The Alien's throat: five resonances, at a point on a ring of eight shapes (a, ghost, o, abyss, u,
 // i, insect, e, and round to a), moved by Shift (-1..1 octaves) and sharpened by Sharp (0..1). The
-// vowels are a tenor's formants; the others no throat has. Shared with the panel, which draws it.
+// vowels are a tenor's formants; the others no throat has. They sound in a row, each 1 at DC (a
+// Klatt cascade, as a vocal tract's do), so how loud each is comes from where they all stand.
+// Shared with the panel, which draws it.
 constexpr int kAlienFormants = 5, kAlienShapes = 8;
 struct AlienThroat {
-   double hz[kAlienFormants], bw[kAlienFormants], gain[kAlienFormants];
+   double hz[kAlienFormants], bw[kAlienFormants];
+   double norm = 1.0;
+   // The cascade's response at f, before norm.
+   double cascade(double f) const {
+      double g = 1.0;
+      for (int k = 0; k < kAlienFormants; ++k) {
+         const double r = f / hz[k], d = bw[k] / hz[k];
+         g /= std::sqrt((1.0 - r * r) * (1.0 - r * r) + d * d * r * r);
+      }
+      return g;
+   }
 };
 inline void alienThroat(double pos, double shift, double sharp, AlienThroat &out) {
    struct Shape {
-      float hz[kAlienFormants], db[kAlienFormants], bw[kAlienFormants];
+      float hz[kAlienFormants], bw[kAlienFormants];
    };
    static const Shape ring[kAlienShapes] = {
-      {{650, 1080, 2650, 2900, 3250}, {0, -6, -7, -8, -22}, {80, 90, 120, 130, 140}},     // a
-      {{230, 1450, 1620, 5200, 7100}, {0, -2, -2, -9, -12}, {25, 18, 18, 40, 60}},        // ghost
-      {{400, 800, 2600, 2800, 3000}, {0, -10, -12, -12, -26}, {40, 80, 100, 120, 120}},   // o
-      {{140, 330, 520, 2100, 2350}, {0, -1, -3, -14, -16}, {30, 40, 50, 60, 60}},         // abyss
-      {{350, 600, 2700, 2900, 3300}, {0, -20, -17, -14, -26}, {40, 60, 100, 120, 120}},   // u
-      {{290, 1870, 2800, 3250, 3540}, {0, -15, -18, -20, -30}, {40, 90, 100, 120, 120}},  // i
-      {{1200, 2300, 4100, 6200, 8800}, {-6, 0, -4, -8, -12}, {60, 50, 60, 80, 120}},      // insect
-      {{400, 1700, 2600, 3200, 3580}, {0, -14, -12, -14, -20}, {70, 80, 100, 120, 120}},  // e
+      {{650, 1080, 2650, 2900, 3250}, {80, 90, 120, 130, 140}},   // a
+      {{230, 1450, 1620, 5200, 7100}, {60, 18, 18, 40, 60}},      // ghost
+      {{400, 800, 2600, 2800, 3000}, {40, 80, 100, 120, 120}},    // o
+      {{140, 330, 520, 2100, 2350}, {30, 40, 50, 60, 60}},        // abyss
+      {{350, 600, 2700, 2900, 3300}, {40, 60, 100, 120, 120}},    // u
+      {{290, 1870, 2800, 3250, 3540}, {40, 90, 100, 120, 120}},   // i
+      {{1200, 2300, 4100, 6200, 8800}, {120, 50, 60, 80, 120}},   // insect
+      {{400, 1700, 2600, 3200, 3580}, {70, 80, 100, 120, 120}},   // e
    };
    const int i = static_cast<int>(std::floor(pos));
    const double f0 = pos - i, f = f0 * f0 * (3.0 - 2.0 * f0);
@@ -915,18 +927,19 @@ inline void alienThroat(double pos, double shift, double sharp, AlienThroat &out
    const Shape &b = ring[(((i + 1) % kAlienShapes) + kAlienShapes) % kAlienShapes];
    const double up = std::exp2(std::clamp(shift, -1.0, 1.0));
    const double narrow = std::exp2(4.0 * (0.5 - std::clamp(sharp, 0.0, 1.0)));
-   double sum = 0.0;
    for (int k = 0; k < kAlienFormants; ++k) {
       out.hz[k] = std::exp(std::log(a.hz[k]) + f * (std::log(b.hz[k]) - std::log(a.hz[k]))) * up;
-      out.bw[k] = std::exp(std::log(a.bw[k]) + f * (std::log(b.bw[k]) - std::log(a.bw[k]))) * narrow;
-      const double db = a.db[k] + f * (b.db[k] - a.db[k]);
-      // (A narrower resonance passes less of a harmonic series: it's lifted to keep the level.)
-      out.gain[k] = std::pow(10.0, db / 20.0) * std::sqrt(std::clamp(100.0 / out.bw[k], 0.25, 8.0));
-      sum += std::pow(10.0, db / 10.0);
+      out.bw[k] = std::max(4.0, std::exp(std::log(a.bw[k]) + f * (std::log(b.bw[k]) - std::log(a.bw[k]))) * narrow);
    }
-   // (Every shape passes as much in all as the a does, so the level holds as the throat moves.)
-   for (double &g : out.gain)
-      g *= std::sqrt(1.61 / std::max(sum, 0.1));
+   // Its level over a bowed string's spectrum (falling 6 dB an octave, tilted up as the model
+   // tilts it), held at 1 so the level holds as the throat moves.
+   double e = 0.0, w = 0.0;
+   for (double fr = 110.0; fr < 8000.0; fr *= 1.12) {
+      const double g = out.cascade(fr), wt = (1.0 + fr * fr / (400.0 * 400.0)) / fr;
+      e += wt * g * g;
+      w += wt;
+   }
+   out.norm = std::sqrt(w / std::max(e, 1e-12));
 }
 
 // Alien: a bowed string sounding through a throat that keeps changing shape.
@@ -966,8 +979,12 @@ public:
       still_ = {};
       for (auto &a : stiff_)
          a = {};
-      for (auto &f : formant_)
-         f = Biquad{};
+      x1_ = 0.0f;
+      low_.z = edge_.z = 0.0f;
+      sawPower_ = throatPower_ = 0.0f;
+      match_ = 1.0f;
+      for (auto &r : res_)
+         r.y1 = r.y2 = 0.0;
       dc_ = {};
       dc_.setFs(fs_);
       noiseLP_ = {};
@@ -1002,6 +1019,10 @@ public:
       const double c = std::clamp(static_cast<double>(character.cone), 0.0, 1.0);
       stiffA_ = -0.7 * std::pow(c, 1.5);
       filterDelay_ = 2.0 * allpassDelay(hz, stiffA_) + onePoleDelay(hz, loopCut(hz), rate_);
+      tilt_ = static_cast<float>(fs_ / (2.0 * kPi * 400.0));
+      edge_.setHz(3500.0, fs_);
+      powerA_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.04 * fs_)));
+      low_.setHz(hz, fs_);
    }
    // Where on its ring of shapes the throat is now, 0..8.
    float throat() const override { return pos_; }
@@ -1046,16 +1067,30 @@ public:
       // The body: what the bridge passes on, through the throat's resonances, with a little of the
       // string itself through them.
       const float x = static_cast<float>(sum / steps_);
-      float y = 0.3f * x;
-      for (int i = 0; i < kAlienFormants; ++i)
-         y += gain_[i] * formant_[i].tick(x);
+      // (Its velocity, tilted up 6 dB an octave from 400 Hz towards the force on the bridge: the
+      // bowed string's bright sawtooth buzz.)
+      const float saw = x + tilt_ * (x - x1_);
+      x1_ = x;
+      // The throat: five resonances in a row, as a vocal tract's are (deep valleys between sharp
+      // peaks), with the string's fundamental under them. It's held to the bare string's level
+      // (both measured over the last 40 ms), so it stays as loud whatever its shape and the note.
+      double v = saw;
+      for (auto &r : res_)
+         v = r.tick(v);
+      const float throat = norm_ * static_cast<float>(v + low_.tick(x));
+      sawPower_ += (saw * saw - sawPower_) * powerA_;
+      throatPower_ += (throat * throat - throatPower_) * powerA_;
+      // Through the throat, its buzz above the resonances (the bow's rosin edge) still gets out.
+      const float buzz = saw - edge_.tick(saw);
+      const float mix = std::clamp(character.throatMix, 0.0f, 1.0f), bare = (1.0f - mix) * (1.0f - mix);
+      const float y = mix * (match_ * throat + kBuzz * buzz) + kBare * bare * saw;
       return dc_.tick(kOut * y);
    }
 
 private:
    static constexpr double kLoopCut = 14.0, kMinLoop = 240.0;
    static constexpr int kMaxSteps = 12;
-   static constexpr float kOut = 9.0f;
+   static constexpr float kOut = 9.0f, kBuzz = 0.5f, kBare = 0.6f;
    struct Allpass {
       double x1 = 0, y1 = 0;
       double tick(double x, double a) {
@@ -1099,16 +1134,34 @@ private:
       alienThroat(pos, character.shift, character.sharp, t);
       for (int k = 0; k < kAlienFormants; ++k) {
          const double fc = std::clamp(t.hz[k] * std::exp2(0.25 * d * jitter_[k]), 40.0, 0.42 * fs_);
-         formant_[k].bandpass(fc, fc / std::max(t.bw[k], 4.0), fs_);
-         gain_[k] = static_cast<float>(t.gain[k]);
+         res_[k].set(fc, std::max(t.bw[k], 4.0), fs_);
       }
+      norm_ = static_cast<float>(t.norm);
+      match_ = std::clamp(std::sqrt((sawPower_ + 1e-12f) / (throatPower_ + 1e-12f)), 0.05f, 20.0f);
    }
 
    Delay neck_, bridge_;
    OnePoleLP loop_, noiseLP_;
    Allpass stiff_[2];
-   Biquad formant_[kAlienFormants];
-   float gain_[kAlienFormants] = {};
+   float tilt_ = 0.0f, x1_ = 0.0f, norm_ = 1.0f, match_ = 1.0f, sawPower_ = 0.0f, throatPower_ = 0.0f, powerA_ = 0.001f;
+   OnePoleLP low_, edge_;
+   // A Klatt resonator: 1 at DC, a peak at hz, bw wide.
+   struct Resonator {
+      double a = 1, b = 0, c = 0, y1 = 0, y2 = 0;
+      void set(double hz, double bw, double fs) {
+         const double r = std::exp(-kPi * bw / fs);
+         c = -r * r;
+         b = 2.0 * r * std::cos(2.0 * kPi * hz / fs);
+         a = 1.0 - b - c;
+      }
+      double tick(double x) {
+         const double y = a * x + b * y1 + c * y2;
+         y2 = y1;
+         y1 = y;
+         return y;
+      }
+   };
+   Resonator res_[kAlienFormants];
    DCBlock dc_, still_;
    double rate_ = 96000.0, filterDelay_ = 0.0, vbK_ = 0.1, f0_ = 0.4, f1_ = 0.2, betaK_ = 0.07;
    int steps_ = 1;

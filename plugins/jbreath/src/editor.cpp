@@ -320,7 +320,8 @@ private:
 class FormantGraph : public Drawn {
 public:
    explicit FormantGraph(float w) : Drawn(w) {}
-   void set(double pos, double shift, double sharp, double hz, bool lit) {
+   void set(double pos, double shift, double sharp, double mix, double hz, bool lit) {
+      mix_ = std::clamp(mix, 0.0, 1.0);
       pos_ = pos;
       shift_ = shift;
       sharp_ = sharp;
@@ -348,15 +349,10 @@ public:
       AlienThroat t;
       alienThroat(pos_, shift_, sharp_, t);
       const auto db = [&](double f) {
-         double re = 0.3, im = 0.0; // (the string's own share, as the model mixes it)
-         for (int n = 0; n < kAlienFormants; ++n) {
-            const double q = t.hz[n] / std::max(t.bw[n], 4.0), d = q * (f / t.hz[n] - t.hz[n] / f);
-            re += t.gain[n] / (1.0 + d * d);
-            im -= t.gain[n] * d / (1.0 + d * d);
-         }
-         return 20.0 * std::log10(std::sqrt(re * re + im * im) + 1e-9);
+         // (The throat's resonances, and the bare string's share beside them.)
+         return 20.0 * std::log10(mix_ * t.norm * t.cascade(f) + (1.0 - mix_) + 1e-9);
       };
-      const auto py = [&](double d) { return (y1 - (y1 - y0) * static_cast<float>(std::clamp((d + 24.0) / 42.0, 0.0, 1.0))) * k; };
+      const auto py = [&](double d) { return (y1 - (y1 - y0) * static_cast<float>(std::clamp((d + 48.0) / 70.0, 0.0, 1.0))) * k; };
       visage::Path line, area;
       constexpr int n = 160;
       for (int m = 0; m <= n; ++m) {
@@ -392,7 +388,7 @@ public:
 private:
    static constexpr double kLow = 50.0, kHigh = 10000.0;
    static float xOf(double f) { return static_cast<float>(std::log(f / kLow) / std::log(kHigh / kLow)); }
-   double pos_ = 0.0, shift_ = 0.0, sharp_ = 0.5, hz_ = 0.0;
+   double pos_ = 0.0, shift_ = 0.0, sharp_ = 0.5, mix_ = 0.75, hz_ = 0.0;
    bool lit_ = true;
 };
 
@@ -2059,6 +2055,7 @@ public:
             throatRing_->set(voice, throats, alien);
             const double pos = loudest >= 0 && voices_[loudest].throat >= 0.0f ? voices_[loudest].throat : voice * kAlienShapes;
             formantGraph_->set(pos, host_.paramModulated(kAlienShift), host_.paramModulated(kAlienSharp),
+                               host_.paramModulated(kAlienThroat),
                                loudest >= 0 ? hz : 0.0, alien);
             for (ui::Knob *kn : alienKnobs_)
                kn->setAccent(alien ? modelColor(kAlien) : kFaint);
@@ -2304,6 +2301,8 @@ private:
                                              "others: every note different.");
       alienKnob(kAlienShift, "SHIFT", a2[0], "Moves every resonance up or down an octave: a smaller or a larger throat.");
       alienKnob(kAlienSharp, "SHARP", a2[1], "How narrow the resonances are: wide and breathy, to ringing, to whistling.");
+      alienKnob(kAlienThroat, "THROAT", a2[2], "How much of the string sounds through the throat: none is the bare bowed "
+                                               "string, all of it a voice.");
       tabs.addToPage(2, add<ui::Label>({236, 370, 646, 16},
                                        "THE ALIEN ONLY  ·  ITS BREATH BOWS A STRING: BITE IS THE BOW'S WEIGHT, EMBOUCHURE WHERE IT CROSSES",
                                        kFaint, visage::Font::kLeft, 0.68f));

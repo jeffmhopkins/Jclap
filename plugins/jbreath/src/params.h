@@ -150,6 +150,7 @@ enum ParamId : clap_id {
    kAlienDrift,
    kAlienShift,
    kAlienSharp,
+   kAlienThroat,
    kParamCount
 };
 // The AIR view's look: the panel's own, kept with the project but not with presets.
@@ -214,7 +215,7 @@ inline constexpr clap_id kModDestinations[] = {
    // Added after Release 24.
    kMuteAmount,
    // Added after Release 25.
-   kAlienVoice, kAlienMorph, kAlienDrift, kAlienShift, kAlienSharp};
+   kAlienVoice, kAlienMorph, kAlienDrift, kAlienShift, kAlienSharp, kAlienThroat};
 constexpr int kModDestCount = static_cast<int>(sizeof(kModDestinations) / sizeof(kModDestinations[0]));
 constexpr int kFirstBusDest = 31;
 constexpr bool isBusDest(int d) { return d >= kFirstBusDest && d < kFirstBusDest + kBusCount; }
@@ -388,6 +389,7 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kAlienDrift, "Alien Drift", "Alien", 0.0, 1.0, 0.3, kMod},
       {kAlienShift, "Alien Shift", "Alien", -1.0, 1.0, 0.0, kMod},
       {kAlienSharp, "Alien Sharp", "Alien", 0.0, 1.0, 0.5, kMod},
+      {kAlienThroat, "Alien Throat", "Alien", 0.0, 1.0, 0.75, kMod},
    };
    for (const auto &d : fixed)
       p[d.id] = d;
@@ -559,6 +561,7 @@ inline bool isPercent(clap_id id) {
    case kAlienMorph:
    case kAlienDrift:
    case kAlienSharp:
+   case kAlienThroat:
       return true;
    default:
       if (id >= kBusBase && id < kRouteBase)

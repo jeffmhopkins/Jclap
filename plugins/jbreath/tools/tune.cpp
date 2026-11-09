@@ -37,6 +37,7 @@ std::unique_ptr<Model> make(int id) {
       // happens to fall in a narrow resonance at one moment of a morph.)
       auto a = std::make_unique<Alien>();
       a->character.morph = a->character.drift = a->character.sharp = 0.0f;
+      a->character.throatMix = 0.75f;
       return a;
    }
    default: return std::make_unique<Trumpet>();

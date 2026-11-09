@@ -37,7 +37,8 @@ tension (taut grips and lets go sharply), **APERTURE** how wide the hair lies on
 **CONE** how stiff the string itself is, from a gut string to a steel wire whose partials stretch
 apart like a bell's.
 
-The string's sound leaves through the throat: five resonances on a ring of eight shapes, the
+The string's sound leaves through the throat: five resonances in a row, as a vocal tract's are
+(sharp peaks with deep valleys between them, so each shape is a clear vowel), on a ring of eight shapes, the
 vowels A, O, U, I and E, and between them three no throat has: a **Ghost** (high, hollow peaks), an
 **Abyss** (low, dark and huge) and an **Insect** (a narrow, buzzing whine). On the ALIEN tab:
 
@@ -52,6 +53,9 @@ vowels A, O, U, I and E, and between them three no throat has: a **Ghost** (high
 - **SHIFT**: every resonance up or down an octave, a smaller or a much larger throat.
 - **SHARP**: how narrow the resonances are, from a soft vowel to ringing whistles like a throat
   singer's overtones.
+- **THROAT**: how much of the string sounds through the throat. At none it is the bare bowed string,
+  bright and buzzing; all the way up, all voice (the bow's rosin edge still gets out above the
+  resonances). The throat is held to the string's own level, so every shape plays as loud.
 
 The ring shows where each note started (the hollow ring) and where each voice's throat is now (a
 dot); the graph the throat's resonances and the note's harmonics they lift. The knobs are dimmed on

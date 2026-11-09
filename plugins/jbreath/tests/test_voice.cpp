@@ -114,6 +114,9 @@ int main() {
       // Soft, middling and hard, every third semitone: it sounds, and in its own register (a tone
       // that jumps to the octave has almost nothing left at the fundamental). A trumpet's bell sends
       // out little of its fundamental, and at forte its 2nd and 3rd harmonics stand well above it.
+      // The Alien's throat is a fixed filter after the string whose resonances lift whichever
+      // harmonic they sit on (H2 well above H1 is what an "ah" does on some notes), so its string
+      // is checked bare, with the throat out; its tuning above is checked through the throat.
       {
          const double octaveRatio = m == kTrumpet ? 6.0 : 3.0;
          int silent = 0, octave = 0;
@@ -122,6 +125,7 @@ int main() {
             for (int note = lo; note <= hi; note += 3) {
                VoiceSettings s;
                s.vibDepth = 0.0;
+               s.alienThroat = 0.0;
                const Take t = play(m, note, 0.5, velocity, s);
                const double hz = 440.0 * std::pow(2.0, (note - 69) / 12.0);
                const double rms = t.rms(t.out.size() - 9600, t.out.size());

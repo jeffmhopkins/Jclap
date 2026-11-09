@@ -55,7 +55,7 @@ struct VoiceSettings {
    // The rest of the exciter and bore (Character in models.h), the player's habits, and the air.
    double stiffness = 0.5, aperture = 0.5, growl = 0.0, cone = 0.5, brass = 0.5;
    // The Alien's throat: Voice, Morph, Drift, Shift and Sharp.
-   double alienVoice = 0.0, alienMorph = 0.3, alienDrift = 0.3, alienShift = 0.0, alienSharp = 0.5;
+   double alienVoice = 0.0, alienMorph = 0.3, alienDrift = 0.3, alienShift = 0.0, alienSharp = 0.5, alienThroat = 0.75;
    double loss = 0.04, cutoffHz = 1300.0, detune = 0.0, humanize = 0.0, air = 0.0;
    int tongueType = kTongueHard, vibType = kVibBreath;
    // HYBRID: a plain subtractive voice on the same breath: its wave, octave and detune, how loud it
@@ -842,6 +842,7 @@ private:
          c.drift = static_cast<float>(live_.alienDrift);
          c.shift = static_cast<float>(live_.alienShift);
          c.sharp = static_cast<float>(live_.alienSharp);
+         c.throatMix = static_cast<float>(live_.alienThroat);
          float cutoff = static_cast<float>(live_.cutoffHz / 1300.0) * holeK * tube.cut, loss = tube.loss;
          Mute::bore(settings_.mute, mute_.amount(), cutoff, loss);
          c.loss = std::max(0.0f, static_cast<float>(live_.loss) + loss);
@@ -1283,6 +1284,7 @@ private:
       live_.alienDrift = at(kDest<kAlienDrift>, s.alienDrift);
       live_.alienShift = at(kDest<kAlienShift>, s.alienShift);
       live_.alienSharp = at(kDest<kAlienSharp>, s.alienSharp);
+      live_.alienThroat = at(kDest<kAlienThroat>, s.alienThroat);
       live_.detune = at(kDest<kDetune>, s.detune);
       live_.air = at(kDest<kAir>, s.air);
       applyCharacter();

@@ -576,6 +576,7 @@ private:
       vs.alienDrift = value(kAlienDrift, s);
       vs.alienShift = value(kAlienShift, s);
       vs.alienSharp = value(kAlienSharp, s);
+      vs.alienThroat = value(kAlienThroat, s);
       vs.brass = value(kBrass, s);
       vs.loss = value(kLoss, s);
       vs.cutoffHz = value(kHoleCutoff, s);
