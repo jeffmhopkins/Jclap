@@ -1840,6 +1840,8 @@ public:
          const bool cone = model == kSax || model == kOboe || model == kTrumpet || model == kAlien, brass = model == kTrumpet;
          coneKnob_->setAccent(cone ? color : kFaint);
          brassKnob_->setAccent(brass ? color : kFaint);
+         // The Time knob only sets the delay while Sync is Free.
+         delayTimeKnob_->setAccent(host_.paramValue(kDelaySync) < 0.5 ? delayAccent_ : kFaint);
          if (voiceTabs_->selected() == 1)
             curve_->set(host_.paramModulated(kCurve), pressures);
          if (voiceTabs_->selected() == 0) {
@@ -2444,7 +2446,9 @@ private:
                 "Free: the Time knob, in ms. A note value: the delay follows the host's tempo.");
       const auto echo = ui::row({1024, 660, 596, 124}, 5);
       tabs.addToPage(3, knob(kDelayMix, "MIX", dc, echo[0], "How loud the repeats are under the dry sound."));
-      tabs.addToPage(3, knob(kDelayTime, "TIME", dc, echo[1], "The time between repeats, 10 ms to 2 s, when Sync is Free."));
+      delayTimeKnob_ = &knob(kDelayTime, "TIME", dc, echo[1], "The time between repeats, 10 ms to 2 s, when Sync is Free.");
+      tabs.addToPage(3, *delayTimeKnob_);
+      delayAccent_ = dc;
       tabs.addToPage(3, knob(kDelayFeedback, "FEEDBACK", dc, echo[2], "How much of each repeat comes back: how many repeats, and how long they last."));
       tabs.addToPage(3, knob(kDelayTone, "TONE", dc, echo[3], "How bright the repeats stay: lower, each one is darker than the last."));
       tabs.addToPage(3, knob(kDelaySpread, "SPREAD", dc, echo[4], "Straight down each side, or bouncing between left and right (ping-pong)."));
@@ -2569,7 +2573,8 @@ private:
    std::vector<visage::Frame *> airFrames_;
    ui::TabBar *exciterTabs_ = nullptr, *voiceTabs_ = nullptr;
    FilterGraph *filterGraph_ = nullptr;
-   ui::Knob *coneKnob_ = nullptr, *brassKnob_ = nullptr;
+   ui::Knob *coneKnob_ = nullptr, *brassKnob_ = nullptr, *delayTimeKnob_ = nullptr;
+   unsigned delayAccent_ = 0;
    ui::Meter *inMeter_ = nullptr, *outMeters_[2] = {};
    ui::TabBar *playerTabs_ = nullptr;
    ui::Button *mapButton_ = nullptr;
