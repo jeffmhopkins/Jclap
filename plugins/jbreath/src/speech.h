@@ -70,21 +70,21 @@ inline const Phone kPhones[] = {
    {"V", kFric, kLabioDental, true, 250, 1100, 2100, 80, 100, 130, 0, 0, 0, 65, -28, kFlat},
    {"TH", kFric, kDental, false, 350, 1400, 2600, 200, 100, 200, 0, 0, 0, 100, -24, kDentalHiss},
    {"DH", kFric, kDental, true, 270, 1400, 2600, 70, 90, 170, 0, 0, 0, 50, -30, kDentalHiss},
-   {"S", kFric, kAlveolar, false, 350, 1600, 2600, 200, 100, 200, 0, 0, 0, 110, -7, kSibilant},
-   {"Z", kFric, kAlveolar, true, 260, 1600, 2600, 70, 90, 180, 0, 0, 0, 80, -12, kSibilant},
-   {"SH", kFric, kPostAlveolar, false, 350, 1900, 2500, 200, 120, 250, 0, 0, 0, 120, -5, kHush},
-   {"ZH", kFric, kPostAlveolar, true, 270, 1900, 2500, 70, 100, 200, 0, 0, 0, 80, -10, kHush},
-   {"HH", kAspirate, kGlottal, false, 0, 0, 0, 300, 120, 200, 0, 0, 0, 80, -4, kFlat},
+   {"S", kFric, kAlveolar, false, 350, 1600, 2600, 200, 100, 200, 0, 0, 0, 110, -11, kSibilant},
+   {"Z", kFric, kAlveolar, true, 260, 1600, 2600, 70, 90, 180, 0, 0, 0, 80, -13, kSibilant},
+   {"SH", kFric, kPostAlveolar, false, 350, 1900, 2500, 200, 120, 250, 0, 0, 0, 120, -11, kHush},
+   {"ZH", kFric, kPostAlveolar, true, 270, 1900, 2500, 70, 100, 200, 0, 0, 0, 80, -12, kHush},
+   {"HH", kAspirate, kGlottal, false, 0, 0, 0, 300, 120, 200, 0, 0, 0, 80, -25, kFlat},
    // stops: the closure's length, then the burst
-   {"P", kStop, kLabial, false, 400, 1000, 2150, 300, 150, 220, 0, 0, 0, 70, -20, kLabialBurst},
+   {"P", kStop, kLabial, false, 400, 1000, 2150, 300, 150, 220, 0, 0, 0, 70, -26, kLabialBurst},
    {"B", kStop, kLabial, true, 250, 1000, 2150, 60, 110, 130, 0, 0, 0, 60, -24, kLabialBurst},
-   {"T", kStop, kAlveolar, false, 400, 1700, 2650, 300, 120, 250, 0, 0, 0, 60, -10, kAlveolarBurst},
-   {"D", kStop, kAlveolar, true, 250, 1700, 2650, 60, 100, 170, 0, 0, 0, 50, -15, kAlveolarBurst},
-   {"K", kStop, kVelar, false, 350, 1900, 2400, 250, 160, 330, 0, 0, 0, 70, -11, kVelarBurst},
-   {"G", kStop, kVelar, true, 250, 1900, 2400, 60, 150, 280, 0, 0, 0, 60, -16, kVelarBurst},
+   {"T", kStop, kAlveolar, false, 400, 1700, 2650, 300, 120, 250, 0, 0, 0, 60, -19, kAlveolarBurst},
+   {"D", kStop, kAlveolar, true, 250, 1700, 2650, 60, 100, 170, 0, 0, 0, 50, -18, kAlveolarBurst},
+   {"K", kStop, kVelar, false, 350, 1900, 2400, 250, 160, 330, 0, 0, 0, 70, -16, kVelarBurst},
+   {"G", kStop, kVelar, true, 250, 1900, 2400, 60, 150, 280, 0, 0, 0, 60, -19, kVelarBurst},
    // affricates: a stop's closure, released into its fricative
-   {"CH", kAffricate, kPostAlveolar, false, 350, 1900, 2500, 200, 120, 250, 0, 0, 0, 60, -6, kHush},
-   {"JH", kAffricate, kPostAlveolar, true, 270, 1900, 2500, 70, 100, 200, 0, 0, 0, 50, -11, kHush},
+   {"CH", kAffricate, kPostAlveolar, false, 350, 1900, 2500, 200, 120, 250, 0, 0, 0, 60, -14, kHush},
+   {"JH", kAffricate, kPostAlveolar, true, 270, 1900, 2500, 70, 100, 200, 0, 0, 0, 50, -13, kHush},
 };
 constexpr int kPhoneCount = sizeof(kPhones) / sizeof(kPhones[0]);
 
@@ -715,7 +715,7 @@ class Voice {
                std::copy(vb, vb + 3, asp.b);
                asp.widen = 4.0;
                asp.formantMs = 40;
-               asp.ah = db(-14) * scale;
+               asp.ah = db(-25) * scale;
                asp.ampMs = 3;
                plan.push_back(asp);
                transition = 30;
@@ -901,7 +901,7 @@ class Voice {
             asp.ms = c.voiced ? 15 : 40;
             asp.moveF = false;
             asp.widen = 3.0;
-            asp.ah = c.voiced ? 0.0 : db(-14);
+            asp.ah = c.voiced ? 0.0 : db(-22);
             asp.ampMs = 6;
             plan.push_back(asp);
             break;
