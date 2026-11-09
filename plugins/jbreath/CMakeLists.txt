@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.3.0)
+jclap_plugin_version(0.4.0)
 
 jclap_add_plugin(jbreath
    OUTPUT_NAME "JBreath"
@@ -12,6 +12,11 @@ target_link_libraries(jbreath PRIVATE jclap::ui jclap::dsp)
 jclap_add_test(jbreath-tests SOURCES tests/test_plugin.cpp src/plugin.cpp src/editor.cpp)
 target_include_directories(jbreath-tests PRIVATE src)
 target_link_libraries(jbreath-tests PRIVATE jclap::ui jclap::dsp)
+
+# The dice: every patch RANDOMIZE writes and MUTATE nudges plays, in tune and at a usable level.
+jclap_add_test(jbreath-dice-tests SOURCES tests/test_dice.cpp src/plugin.cpp src/editor.cpp)
+target_include_directories(jbreath-dice-tests PRIVATE src)
+target_link_libraries(jbreath-dice-tests PRIVATE jclap::ui jclap::dsp)
 
 # The instruments alone: tuning, loudness, articulation and stability, with no host.
 jclap_add_test(jbreath-voice-tests SOURCES tests/test_voice.cpp)
