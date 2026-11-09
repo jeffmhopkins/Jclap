@@ -29,12 +29,20 @@ reflections of the real one) driven by a nonlinear exciter, the part the player 
 An alien that talks. Its voice is vocal folds (a pulse that opens and snaps shut once a period,
 shutting faster the harder it's blown, brighter, with breath hissing through it as **NOISE** sets),
 sung through a throat, and every note is a syllable: a consonant, then one of the five vowels (A, E,
-I, O, U, never the last one again), so a run of notes reads as a sentence in no language at all.
+I, O, U, never the last one again, unless **ORDER** says otherwise), so a run of notes reads as a
+sentence in no language at all.
 How hard the note is played (its velocity, and its pressure once it's blown) picks the consonant:
 soft notes the soft ones (m, n, ng, l, r, w, y), harder the voiced ones (v, th, z, zh, b, d, g, j,
-h), hardest the hiss and pop of f, th, s, sh, p, t, k and ch. Each has its own sound: a nasal's hum,
-a fricative's hiss at the lips or teeth, a stop's closure, burst and breath, and the vowel glides
-out of where it leaves the mouth. While a note is held the breath's pressure moves the mouth, and after a
+h), hardest the hiss and pop of f, th, s, sh, p, t, k and ch. The consonants are made the way a
+Klatt formant synthesizer makes them, and checked against recordings of each one: every consonant
+has a place in the mouth (lips, teeth, ridge, palate, velum or glottis) and runs through a closure,
+its sound, a breath of aspiration and then the vowel. A nasal hums low through the nose (most of it
+under 400 Hz) with the mouth shut; a fricative is a band of hiss at its own pitch and level (s high
+and strong, sh lower, f and th faint), buzzing with the voice when it's voiced; a stop goes silent
+(or, voiced, keeps a low voice bar), pops, breathes and opens. The vowel then glides out from
+where that place leaves the mouth, as speech's locus equations put it, so "ba", "da" and "ga" each
+open differently onto the same vowel, and only pairs English allows are said (no "ng" or "zh" to
+start a syllable, no "yi" or "wu"). While a note is held the breath's pressure moves the mouth, and after a
 while it goes on to its next syllable. A bowed string can sing along with it (**BOW**): the breath
 is the bow's speed, **BITE** its weight, **EMBOUCHURE** where it crosses the string, **STIFFNESS**
 the hair's tension, **APERTURE** how wide it lies, and **CONE** how stiff the string is, from gut to
@@ -44,7 +52,8 @@ The throat is five resonances in a row, as a vocal tract's are (sharp peaks with
 between them, so each shape is a clear vowel), on a ring of eight shapes: the vowels A, O, U, I and
 E, and between them three no throat has, a **Ghost** (high, hollow peaks), an **Abyss** (low, dark
 and huge) and an **Insect** (a narrow, buzzing whine). It's held to its source's level, so every
-shape plays as loud. High notes are sung as a singer sings them: from about E4 up the folds close
+shape plays as loud (from A3 up it's levelled on the note's own harmonics, so a high note
+doesn't surge as they cross a resonance). High notes are sung as a singer sings them: from about E4 up the folds close
 more gently, the first resonance rides above the note, and the upper ones widen and roll off, so the
 top stays round rather than whistling. On the ALIEN tab:
 
@@ -68,12 +77,16 @@ top stays round rather than whistling. On the ALIEN tab:
   turned off, it never says them, and a note that would have picks one that's on.
 - **BEND**: how far the throat follows a pitch bend (an MPE note's own, or the wheel): none keeps the
   vowel where it is, all slides every resonance with the pitch, the way a talk box's mouth would.
+- **VOWELS**: the five vowels, each on or off: turned off, the Alien never sings it.
+- **ORDER**: how each new note picks its vowel. Random (any lit vowel but the last), In Turn (A, E,
+  I, O, U in order), By Pitch (dark vowels low, bright ones high, U O A E I from C2 to C7) or Same
+  (always the first lit one). It sets only where a note starts: Talk still moves it while it's held.
 - **PACE**: how often a held note goes on to its next syllable: Free (by Talk, from about every 2 s
   to under 1 s), or a note value from 1/16 to 2 bars at the host's tempo.
 
 The ring shows where each note started (the hollow ring) and where each voice's throat is now (a
-dot); the graph the throat's resonances and the note's harmonics they lift. The knobs are dimmed on
-the other instruments.
+dot); the graph the throat's resonances and the note's harmonics they lift. The ALIEN tab only shows
+when the Alien is the instrument.
 
 Every note plays in tune: the bore length for each model and note was measured offline by playing
 it and correcting the length until the pitch was within a cent, at the rates the voices run at, and
@@ -172,7 +185,8 @@ both, or the Lip (pitch alone). **PITCH** adds vibrato in cents on top.
 ![MAP, with PRESS armed](docs/readme/map.jpg)
 
 As in JSynth. Touch **MAP** and a source chip, then drag any knob: the ring that appears is how far
-that source moves it, per voice. Right-click a knob to unmap it. The sources:
+that source moves it, per voice. Right-click a knob to unmap it. Hover a chip to see what the source
+is. The sources:
 
 - **The player's hands**, in the header: STRIKE (velocity), PRESS (pressure), GLIDE (pitch bend),
   SLIDE (CC 74), LIFT (release velocity).
@@ -224,7 +238,7 @@ range), **TRANSP**, **ROOM**, **AIR** (the breath heard around the instrument, n
 ![The REVERB tab](docs/readme/room.jpg)
 
 **REVERB**: a switch, then a small room (SIZE, DECAY, DAMP, PRE-DELAY), the output's TONE, and the
-**LIMITER**: Off, Soft (overs saturate) or Hard (a peak limiter holds the output under full scale).
+**LIMITER**: Off, Soft (overs saturate) or Hard (the default: a peak limiter holds the output under full scale, so a big chord never clips).
 Switched off, the room's tail rings out rather than stopping.
 
 ![The DELAY tab](docs/readme/delay.jpg)
