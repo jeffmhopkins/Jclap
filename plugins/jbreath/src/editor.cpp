@@ -2524,6 +2524,15 @@ private:
       palette_ = &choiceBox(kPalette, {1076, 76, 110, 24}, 0xff9c98d8);
       tips_.add(*palette_, "The smoke's colours.");
       airPanel_ = &add<AirBackdrop>({32, 712, 872, 168}, 872.0f);
+      airPanelButton_ = &add<ui::Button>({1286, 76, 96, 24}, "CONTROLS");
+      airPanelButton_->setToggle(true);
+      airPanelButton_->setAccent(0xff9c98d8);
+      airPanelButton_->setOn(!host_.airPanelHidden);
+      airPanelButton_->onToggle = [this](bool on) {
+         host_.airPanelHidden = !on;
+         showAirPanel();
+      };
+      tips_.add(*airPanelButton_, "Show or hide the VAPOR, LOOPS and PLACE controls, leaving the window to the loops.");
       // Where the loops sit and how big they are, as JSynth places its creatures.
       const clap_id place[3] = {kLoopX, kLoopY, kLoopSize};
       const char *const placeTips[3] = {"What moves the loops left to right: the note's pitch by default.",
@@ -2562,17 +2571,15 @@ private:
          playerTabs_->showSelected();
          voiceTabs_->showSelected();
       }
-      airPanel_->setVisible(on);
-      for (ui::Knob *k : airKnobs_)
-         k->setVisible(on);
-      for (visage::Frame *f : airFrames_)
-         f->setVisible(on);
+      airPanelButton_->setVisible(on);
+      showAirPanel();
       const ui::Rect loops = on ? ui::Rect{16, 64, 1616, 864} : kLoopsRect;
       move(*loops_, loops);
       loops_->resize(loops.w, loops.h);
       loops_->full = on;
       move(*look_, {loops.x + 16, loops.y + 12, 140, 24});
       move(*palette_, {loops.x + 164, loops.y + 12, 110, 24});
+      move(*airPanelButton_, {loops.x + 282, loops.y + 12, 96, 24});
       // The breath's chips and the LOOPS / ROUTES switch along the loops' bottom edge.
       const float chipsY = on ? 892.0f : 568.0f;
       for (auto &[c, r] : breathChips_)
@@ -2586,6 +2593,18 @@ private:
       // The dice card belongs to the PLAY view; it's back with it if it was open.
       for (visage::Frame *f : dice_)
          f->setVisible(!on && host_.diceOpen);
+      redraw();
+   }
+
+   // The AIR view's VAPOR / LOOPS / PLACE panel, unless it's tucked away.
+   void showAirPanel() {
+      const bool on = air_ && !host_.airPanelHidden;
+      airPanelButton_->setOn(!host_.airPanelHidden);
+      airPanel_->setVisible(on);
+      for (ui::Knob *k : airKnobs_)
+         k->setVisible(on);
+      for (visage::Frame *f : airFrames_)
+         f->setVisible(on);
       redraw();
    }
 
@@ -2749,6 +2768,7 @@ private:
    ui::SegmentedSwitch *playAir_ = nullptr, *look_ = nullptr;
    ui::Dropdown *palette_ = nullptr;
    visage::Frame *airPanel_ = nullptr;
+   ui::Button *airPanelButton_ = nullptr;
    std::vector<ui::Knob *> airKnobs_;
    std::vector<visage::Frame *> airFrames_;
    ui::TabBar *exciterTabs_ = nullptr, *voiceTabs_ = nullptr;
