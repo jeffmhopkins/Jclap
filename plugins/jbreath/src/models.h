@@ -594,6 +594,9 @@ public:
       toneDyn_ = 0.0f;
       formant_.clear();
       lowCut_.clear();
+      buzzLo_.clear();
+      buzzHi_.clear();
+      buzzMid_.clear();
       y_ = dp_ = 0.0;
       cutHz_ = liftHz_ = wallHz_ = radHz0_ = -1.0;
       notePitch(hz_);
@@ -654,6 +657,8 @@ public:
          // fundamental.
          lowReg_ = static_cast<float>(toneDepth_ > 0.0 ? std::clamp((300.0 - hz) / 150.0, 0.0, 1.0) : 0.0);
          formant_.peak(650.0, 1.1, 9.0 * lowReg_, fs_);
+         buzzLo_.highshelf(std::min(2000.0, 0.4 * fs_), toneDepth_ > 0.0 ? buzzDb_ : 0.0, fs_);
+         buzzHi_.highshelf(std::min(5000.0, 0.4 * fs_), toneDepth_ > 0.0 ? buzzDb_ + 6.0 * lowReg_ : 0.0, fs_);
          lowCut_.highpass(std::min(190.0, 0.4 * fs_), 0.6, fs_);
       }
       const double wallHz = wallK_ * hz * std::pow(std::min(lossK, 1.2), 5.0);
@@ -760,6 +765,7 @@ public:
          // (The low register's own swing is wider already: its harmonics grow faster than its weak
          // fundamental, so it takes less of the extra.)
          toneGain_ = static_cast<float>(std::pow(10.0, rangeDb_ * (1.0 - 0.75 * lowReg_) * (dyn - 0.6) / 20.0));
+         buzzMid_.peak(std::min(2800.0, 0.4 * fs_), 0.9, 8.0 * (1.0 - std::min(1.0f, dyn * dyn)), fs_);
       }
       const float low = tone_.tick(out);
       float y = low + toneShelf_ * (out - low);
@@ -767,6 +773,14 @@ public:
          const float cut = lowCut_.tick(y);
          y = formant_.tick(y + lowReg_ * (cut - y));
       }
+      // The buzz: a real sax's spectrum falls only about 6 dB an octave over 2 kHz, at every
+      // dynamic (Iowa alto, C4 to G4: the third-octaves from 2 to 8 kHz at -20 to -44 dB of the
+      // whole at mf, still -43 to -55 at pp), where the bore's and bell's losses here took 12 dB
+      // an octave or more: 10 to 30 dB too little, a muffled tone. Two shelves give it back (the
+      // upper one more on the low register, whose highs the UNSW tenor holds out to 8 kHz).
+      // (and the sax's upper formant near 2.8 kHz stands out the more the softer it's played: at
+      // forte the reed's own buzz fills that octave anyway.)
+      y = buzzMid_.tick(buzzHi_.tick(buzzLo_.tick(y)));
       return y * toneGain_;
    }
 
@@ -805,11 +819,11 @@ protected:
    // louder full breath is than soft over what the bore gives (rangeDb); and how far under its
    // pitch a note starts (scoopCents; 0 for no scoop and no wander).
    float dynLo_ = 0.5f, dynHi_ = 1.1f;
-   double toneLow_ = 0.0, toneDepth_ = 0.0, rangeDb_ = 0.0, scoopCents_ = 0.0;
+   double toneLow_ = 0.0, toneDepth_ = 0.0, rangeDb_ = 0.0, scoopCents_ = 0.0, buzzDb_ = 8.0;
 
 private:
    Delay body_, apex_;
-   Biquad lattice_, apexLattice_, lift_, radiate_, tone_, formant_, lowCut_;
+   Biquad lattice_, apexLattice_, lift_, radiate_, tone_, formant_, lowCut_, buzzLo_, buzzHi_, buzzMid_;
    Player player_;
    unsigned toneAt_ = 0;
    float toneGain_ = 1.0f, toneShelf_ = 1.0f, toneDyn_ = 0.0f, lowReg_ = 0.0f;
@@ -832,7 +846,7 @@ public:
    Sax() {
       apexTurns_ = 0.28;
       toneLow_ = 0.4;
-      toneDepth_ = 40.0;
+      toneDepth_ = 30.0;
       rangeDb_ = 4.0;
       scoopCents_ = 45.0;
    }
