@@ -47,6 +47,8 @@ public:
    // both leave alone, and the patches they replaced, so UNDO can bring one back. Kept with the
    // plugin while the project is open (as JSynth's and JVerb's are), not with presets. Main thread only.
    bool diceOpen = false;
+   // Whether the AIR view's VAPOR / LOOPS / PLACE panel is tucked away, leaving the window to the loops.
+   bool airPanelHidden = false;
    DiceSettings dice;
    DiceHistory diceHistory;
 };

@@ -284,7 +284,9 @@ public:
       const double tau = tau_;
       const float turb = nlp_.tick(rng.white());
       // The jet's own turbulence goes with the jet: none once the breath stops.
-      const float y = jlp_.tick(jet_.read(tau)) + (0.012f * character.noise * std::min(1.0f, 1.5f * U) + 0.12f * tn) * turb;
+      // (A soft jet is smooth, laminar: its turbulence grows faster than its speed.)
+      const float laminar = std::pow(std::min(1.0f, breath / 0.6f), 1.5f);
+      const float y = jlp_.tick(jet_.read(tau)) + (0.012f * character.noise * std::min(1.0f, 1.5f * U) * laminar + 0.12f * tn) * turb;
       // The jet's flow grows with pressure, not just its speed; Stiffness also firms the jet's gain.
       const float q = 1.2f * U * U * std::tanh(8.0f * (0.5f + character.stiffness) * y + 0.3f);
       bore_.push(dc_.tick(p - 0.5f * q));
@@ -322,7 +324,11 @@ public:
       // it from a wide jet or a loose lip.
       const float hiss = turb - nhp_.tick(turb);
       const float airy = (0.5f + character.aperture) * (1.6f - 1.2f * character.stiffness);
-      return dco_.tick(olp2_.tick(olp_.tick(3.0f * rad)) + 0.04f * character.noise * airy * U * hiss * (0.3f + std::fabs(n)));
+      // (It grows faster than the tone with the breath: a soft note is nearly pure, a hard-blown one
+      // rushes, as on a real flute.)
+      // (and high notes, blown through a smaller, faster jet, are breathier than low ones).
+      const float rush = U * std::min(3.0f, std::pow(breath / 0.67f, 1.5f)) * std::clamp(static_cast<float>(hz_) / 400.0f, 1.0f, 4.0f);
+      return dco_.tick(olp2_.tick(olp_.tick(3.0f * rad)) + 0.04f * character.noise * airy * rush * hiss * (0.3f + std::fabs(n)));
    }
 
 private:
@@ -364,6 +370,8 @@ public:
       noiseLP_.setHz(800, fs_);
       hissLP_ = {};
       hissLP_.setHz(400, fs_);
+      hissTop_ = {};
+      hissTop_.setHz(kHissTop, fs_);
       outLP_ = {};
       outLP_.setHz(3000.0, fs_);
       outLP2_ = {};
@@ -432,7 +440,9 @@ public:
       const double u = 0.5 * (lo + hi);
       // Breath noise: the air rushing through the reed's slit is turbulent, and its hiss (a band
       // above a few hundred Hz) rides on the flow into the bore, coloured by it on the way out.
-      const float hiss = (white - hissLP_.tick(white)) * 0.6f;
+      // (Turbulence in a slit that narrow is strongest around a couple of kHz and falls away above:
+      // the bell's radiation lifts the top of whatever comes out, so it goes in falling.)
+      const float hiss = hissTop_.tick(white - hissLP_.tick(white)) * kHissGain;
       const double turb = hiss * character.noise * (0.5f + 0.5f * character.noise) * std::sqrt(std::max(0.0, u)) * 0.1;
       bore_.push(static_cast<float>(back + u + turb));
       // Radiated: the reed's pressure (the standing wave the holes radiate below the cutoff), less
@@ -447,7 +457,8 @@ private:
    // How much of the filters' delay shows in the pitch, and the loss's pitch in cents (measured).
    static constexpr double kCutPitch = 1.0, kLossA = -13.0, kLossB = 1.8;
    Delay bore_;
-   OnePoleLP lp_, lp2_, noiseLP_, hissLP_, outLP_, outLP2_;
+   OnePoleLP lp_, lp2_, noiseLP_, hissLP_, hissTop_, outLP_, outLP2_;
+   static constexpr float kHissTop = 2000.0f, kHissGain = 0.9f;
    Biquad thru_;
    DCBlock dc_;
    double hz_ = 294.0, lift_ = 1.0;
@@ -560,7 +571,9 @@ public:
    }
    float tick(float breath, float emb, double len, float tn) override {
       const float noise = noiseLP_.tick(rng.white());
-      const float growl = std::max(0.0f, breath - 0.95f) * growl_ * character.edge * character.growl;
+      // (With the Growl knob at nothing the reed's own rasp is slight: a held forte note is a clean
+      // tone, with the rasp coming in only as the knob goes up.)
+      const float growl = std::max(0.0f, breath - 0.95f) * growl_ * character.edge * (character.growl - 0.6f);
       // The lip's pressure on the reed (embouchure) narrows its opening and lowers the pressure that
       // shuts it; a stiffer reed takes more; a more open lay (aperture) passes more air.
       // (Within what a player's breath still makes up for: a reed so stiff or so pinched that the
@@ -568,7 +581,10 @@ public:
       const double stiff = (0.92 + 0.16 * character.stiffness) * (1.1 - 0.2 * emb);
       // Mouth pressure: the breath, its turbulence and the tongue's burst as it leaves the reed. A
       // reed blown past its closing pressure would stay shut, so it eases in under it.
-      double g = gamma_ / stiff * breath * (1 + (breathNoise_ * character.noise + growl) * noise) +
+      // (Its turbulence is a smaller share of a hard-blown note: the reed slams shut each cycle and
+      // the tone grows faster than the rush through the slit.)
+      const float share = breath <= 0.88f ? 1.0f : std::pow(0.88f / breath, 3.3f);
+      double g = gamma_ / stiff * breath * (1 + (breathNoise_ * share * character.noise + growl) * noise) +
                  tn * tongueNoise_ * noise;
       g = g < 0.8 ? g : 0.8 + 0.15 * std::tanh((g - 0.8) / 0.15);
       // The apex's round trip; the body is the rest of the loop. The Cone knob runs from a cylinder
@@ -583,7 +599,11 @@ public:
       // in proportion.
       const float fromBody = wall_.tick(body_.read(lb));
       const float heldBody = lattice_.tick(fromBody);
-      const double inBody = -keepNow_ * lift_.tick(heldBody);
+      // (The lift is the reed's own pull on its fundamental, so it fades with the breath: a bore with
+      // nothing blowing it only rings down.)
+      const double liftMix = std::clamp(breath * 20.0f, 0.0f, 1.0f);
+      const double lifted = lift_.tick(heldBody);
+      const double inBody = -keepNow_ * (heldBody + liftMix * (lifted - heldBody));
       const float fromApex = apexWall_.tick(apex_.read(la));
       const double inApex = -keepNow_ * (apexMix_ * apexLattice_.tick(fromApex) + (1 - apexMix_) * fromApex);
       const double P = inBody + inApex;
@@ -727,6 +747,10 @@ public:
       radHP_.highpass(1300, 1.4, fs_);
       radLP_ = {};
       radLP_.lowpass(5000, 0.7, fs_);
+      breathLP_ = {};
+      breathLP_.setHz(1500.0, fs_);
+      breathLP2_ = {};
+      breathLP2_.setHz(1500.0, fs_);
       notePitch(lipHz_);
    }
    double nominal(double hz) const override { return fs_ / hz; }
@@ -757,7 +781,10 @@ public:
          emb = 0.5f + 0.4f * (emb - 0.5f);
       // The lips' own frequency: under the note, tighter with the embouchure.
       const double dt = 1.0 / fs_, w = 2 * kPi * lipHz_ * (0.9 + 0.12 * (emb - 0.5));
-      const double pm = breath * (1 + 0.02 * tn * rng.white()) * (1 + 0.03 * character.noise * rng.white());
+      // (The breath's turbulence in the mouthpiece cup is a rush under a couple of kHz: the lips and
+      // the bell would make a hiss of anything above it, which a trumpet hardly has. Loose, slow lips
+      // under a low note pass it on as a roar, so they take less of it.)
+      const double pm = breath * (1 + 0.02 * tn * rng.white()) * (1 + 0.05 * std::min(1.0, lipHz_ / 233.0) * character.noise * breathLP2_.tick(breathLP_.tick(rng.white())));
       // While the lips don't yet close on each cycle (the first few ms of a note), they pull the
       // pitch sharp: a real trumpet's long bore holds it, this one-period loop is lengthened instead.
       const double pull = 0.06 * (0.33 + breath) * std::max(0.0, 1.0 - closed_ / 0.3);
@@ -837,7 +864,7 @@ private:
    }
 
    Delay bore_, shock_;
-   OnePoleLP bell1_, bell2_, acLP_, acLP2_;
+   OnePoleLP bell1_, bell2_, acLP_, acLP2_, breathLP_, breathLP2_;
    Biquad radHP_, radLP_;
    static constexpr double kShock0 = 480.0;
    double acMean_ = 0, acEnv_ = 0, acCoef_ = 0.001, envFall_ = 0.9997, closedCoef_ = 0.003;
@@ -1001,6 +1028,7 @@ private:
    };
    // A reed on a closed helix: the clarinet's valve, solved with the pressure it makes.
    struct Bore {
+      static constexpr double kViscous = 1e-5;
       Delay bore;
       Helix h1, h2;
       OnePoleLP bell;
@@ -1026,7 +1054,10 @@ private:
             if (gap <= -knee)
                return 0.0;
             const double open = gap >= knee ? gap : (gap + knee) * (gap + knee) / (4 * knee);
-            return z * open * (W >= 0 ? 1 : -1) * std::sqrt(std::fabs(W));
+            // (Bernoulli's square root, eased into a straight line under a tiny drop, where the air
+            // through the slit is held by its viscosity: the root's endless slope at nothing would
+            // keep a bore with no breath in it buzzing on its own at the bottom of the level.)
+            return z * open * W / std::sqrt(std::fabs(W) + kViscous);
          };
          // u = F(2 back + u), by bisection (F falls as u rises), from a bracket around the last
          // sample's flow when it holds the answer (it nearly always does), else the whole range.
@@ -1045,7 +1076,10 @@ private:
             else
                lo = u;
          }
-         flow = 0.5 * (lo + hi);
+         // (Finished on the straight line through the bracket's ends, so the flow is smooth, not
+         // stepped by the bisection's last interval.)
+         const double gl = G(lo), gh = G(hi);
+         flow = gh > gl ? lo - gl * (hi - lo) / (gh - gl) : 0.5 * (lo + hi);
          bore.push(static_cast<float>(back + flow));
          t = inc + back;
          return flow;

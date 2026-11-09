@@ -661,6 +661,34 @@ int main() {
       }
    }
 
+   // Every factory preset lets go of every note: a chord across the whole keyboard, held, released,
+   // and after the longest release and a few seconds more no voice is left sounding (a bore that
+   // kept ringing on its own once the breath stopped would hold its voice for ever: a hung note).
+   for (const auto &p : presets) {
+      jclap::core::TestHost ph(clap_entry, kId);
+      EditorHost &panel = *ph.object<EditorHost>();
+      Run pr{ph};
+      for (const auto &[id, v] : p.values)
+         ph.setParam(id, v);
+      ph.setParam(kVoiceMode, 0.0); // Poly
+      const std::vector<int> keys = {28, 34, 40, 46, 52, 58, 64, 70, 76, 82, 88, 96};
+      for (int key : keys)
+         ph.note(CLAP_EVENT_NOTE_ON, key, 0.75, key);
+      pr.seconds(0.8);
+      for (int key : keys)
+         ph.note(CLAP_EVENT_NOTE_OFF, key, 0.0, key);
+      // (A HYBRID pad rings on through its own release, by 99% each Hybrid Release time.)
+      double pad = 0.0, mixed = 0.0;
+      for (const auto &[id, v] : p.values) {
+         pad = id == kHybridRelease ? 2.5 * hybridEnvMs(v) / 1000.0 : pad;
+         mixed = id == kHybridMix ? v : mixed;
+      }
+      pr.seconds(5.0 + (mixed > 0.0 ? pad : 0.0));
+      if (sounding(panel) != 0)
+         std::printf("preset %s: %d voices still sounding after release\n", p.name.c_str(), sounding(panel));
+      JCLAP_CHECK(sounding(panel) == 0);
+   }
+
    // The output stage: Spread puts a low note left of the middle and a high one right; the Room rings
    // on after the voices stop, then empties and is silent.
    {
