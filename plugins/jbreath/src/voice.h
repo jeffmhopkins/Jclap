@@ -12,6 +12,7 @@
 // sums the voices there and decimates once.
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <memory>
 #include <vector>
@@ -55,7 +56,7 @@ struct VoiceSettings {
    // The rest of the exciter and bore (Character in models.h), the player's habits, and the air.
    double stiffness = 0.5, aperture = 0.5, growl = 0.0, cone = 0.5, brass = 0.5;
    // The Alien's throat: Voice, Morph, Drift, Shift and Sharp.
-   double alienVoice = 0.0, alienMorph = 0.3, alienDrift = 0.3, alienShift = 0.0, alienSharp = 0.5, alienThroat = 0.75;
+   double alienVoice = 0.0, alienMorph = 0.3, alienDrift = 0.3, alienShift = 0.0, alienSharp = 0.5, alienBow = 0.15, alienTalk = 0.5, alienPaceSec = 0.0, alienLinger = 0.3;
    double loss = 0.04, cutoffHz = 1300.0, detune = 0.0, humanize = 0.0, air = 0.0;
    int tongueType = kTongueHard, vibType = kVibBreath;
    // HYBRID: a plain subtractive voice on the same breath: its wave, octave and detune, how loud it
@@ -427,6 +428,7 @@ private:
       swellAge_ = 0.0;
       // The HYBRID envelope starts again from where it is (from 0 after silence).
       hybStage_ = kHybAttack;
+      articulate();
    }
 
 public:
@@ -442,6 +444,7 @@ public:
       tongue_ = tongueAmount();
       pitch_ = pitch;
       hold_ = 1.0;
+      articulate();
       hybStage_ = kHybAttack;
    }
    // Legato: the fingers change, the air doesn't stop.
@@ -451,6 +454,7 @@ public:
       age_ = 0;
       pitch_ = pitch;
       velocity_ = std::max(velocity_ * 0.8, velocity);
+      articulate();
       // Double tonguing: every note gets its own light tongue, even slurred.
       if (settings_.tongueType == kTongueDouble) {
          kickAge_ = 0;
@@ -677,6 +681,14 @@ private:
    double pulseAmp_ = 0.0;
 
    Model &model() { return *models_[0][settings_.model]; }
+   // A new note (or a slurred one) for every copy: the Alien's next syllable.
+   void articulate() {
+      static std::atomic<uint32_t> words{0};
+      const uint32_t word = words.fetch_add(1, std::memory_order_relaxed);
+      for (auto &copies : models_)
+         if (copies[settings_.model])
+            copies[settings_.model]->articulate(word);
+   }
    double coef(double ms) const { return 1.0 - std::exp(-1000.0 / (std::max(ms, 0.05) * fs_)); }
 
    // The breath the player is aiming for now.
@@ -842,7 +854,10 @@ private:
          c.drift = static_cast<float>(live_.alienDrift);
          c.shift = static_cast<float>(live_.alienShift);
          c.sharp = static_cast<float>(live_.alienSharp);
-         c.throatMix = static_cast<float>(live_.alienThroat);
+         c.bow = static_cast<float>(live_.alienBow);
+         c.talk = static_cast<float>(live_.alienTalk);
+         c.paceSec = static_cast<float>(live_.alienPaceSec);
+         c.linger = static_cast<float>(live_.alienLinger);
          float cutoff = static_cast<float>(live_.cutoffHz / 1300.0) * holeK * tube.cut, loss = tube.loss;
          Mute::bore(settings_.mute, mute_.amount(), cutoff, loss);
          c.loss = std::max(0.0f, static_cast<float>(live_.loss) + loss);
@@ -1284,7 +1299,10 @@ private:
       live_.alienDrift = at(kDest<kAlienDrift>, s.alienDrift);
       live_.alienShift = at(kDest<kAlienShift>, s.alienShift);
       live_.alienSharp = at(kDest<kAlienSharp>, s.alienSharp);
-      live_.alienThroat = at(kDest<kAlienThroat>, s.alienThroat);
+      live_.alienBow = at(kDest<kAlienBow>, s.alienBow);
+      live_.alienTalk = at(kDest<kAlienTalk>, s.alienTalk);
+      live_.alienPaceSec = s.alienPaceSec;
+      live_.alienLinger = at(kDest<kAlienLinger>, s.alienLinger);
       live_.detune = at(kDest<kDetune>, s.detune);
       live_.air = at(kDest<kAir>, s.air);
       applyCharacter();

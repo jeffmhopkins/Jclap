@@ -22,40 +22,41 @@ reflections of the real one) driven by a nonlinear exciter, the part the player 
 | **Sax** | the same kind of reed, softer | a cone, as a split bore: every harmonic, overblowing at the octave | the mouthpiece's honk; growl when it's pushed |
 | **Oboe** | a stiff double reed, its two blades beating shut each cycle | a narrow cone, darker | the reed's buzz, richer the harder it's blown, through formants near 1.25 and 2.9 kHz with a thin fundamental: nasal, not a soprano sax |
 | **Trumpet** | the lips: a mass on a spring blown open by the mouth pressure (outward striking), with the flow through them in closed form | a flared horn: resonances on every harmonic, none at DC | the wave steepening on its way down the horn, more the harder it's blown, towards a shock at forte: the brassy blare |
-| **Alien** | a bow drawn across a string: stick-slip friction, the string gripped by the bow hair and let go each period | a string between nut and bridge, its stiffness stretching the partials apart | the string's sawtooth sung through a throat of five resonances that travels round a ring of vowels and shapes no throat has, on its own while a note is held |
+| **Alien** | vocal folds, a pulse opening and snapping shut each period (and, as much as you like, a bowed string) | a throat: five resonances in a row | every note a syllable: a consonant opening onto a new vowel, the vowels running on from note to note like a sentence, the pressure moving the mouth while it's held |
 
 ### The alien
 
-An instrument that couldn't be built, from physics that could: a bowed string sounding through a
-throat. The breath is the bow's speed, so a note swells and fades the way a bowed one does. The bow
-grips the string until the string pulls free, slips back and is caught again, once a period (the
-friction model of a violin's bow, with the string run at up to twelve times the rate inside the
-voice so its stick and slip stay sharp up high). **BITE** is the bow's weight: light is airy and
-glassy, heavy a gritty scrape. **EMBOUCHURE** (and MPE slide) is where the bow crosses the string:
-near the bridge is thin and glassy, further out round and full. **STIFFNESS** is the hair's
-tension (taut grips and lets go sharply), **APERTURE** how wide the hair lies on the string, and
-**CONE** how stiff the string itself is, from a gut string to a steel wire whose partials stretch
-apart like a bell's.
+An alien that talks. Its voice is vocal folds (a pulse that opens and snaps shut once a period,
+shutting faster the harder it's blown, brighter, with breath hissing through it as **NOISE** sets),
+sung through a throat, and every note is a syllable: the mouth shuts for an instant (a consonant)
+and opens onto a new vowel, a good way round from the last, so a run of notes reads as a sentence
+in no language at all. While a note is held the breath's pressure moves the mouth, and after a
+while it goes on to its next syllable. A bowed string can sing along with it (**BOW**): the breath
+is the bow's speed, **BITE** its weight, **EMBOUCHURE** where it crosses the string, **STIFFNESS**
+the hair's tension, **APERTURE** how wide it lies, and **CONE** how stiff the string is, from gut to
+a steel wire whose partials stretch apart like a bell's.
 
-The string's sound leaves through the throat: five resonances in a row, as a vocal tract's are
-(sharp peaks with deep valleys between them, so each shape is a clear vowel), on a ring of eight shapes, the
-vowels A, O, U, I and E, and between them three no throat has: a **Ghost** (high, hollow peaks), an
-**Abyss** (low, dark and huge) and an **Insect** (a narrow, buzzing whine). On the ALIEN tab:
+The throat is five resonances in a row, as a vocal tract's are (sharp peaks with deep valleys
+between them, so each shape is a clear vowel), on a ring of eight shapes: the vowels A, O, U, I and
+E, and between them three no throat has, a **Ghost** (high, hollow peaks), an **Abyss** (low, dark
+and huge) and an **Insect** (a narrow, buzzing whine). It's held to its source's level, so every
+shape plays as loud. On the ALIEN tab:
 
 ![The ALIEN tab](docs/readme/alien.jpg)
 
-- **VOICE**: where on the ring each note's throat starts. Route the slide or pressure to it and the
-  bow talks.
-- **MORPH**: how fast the throat travels round the ring while a note is held, from still to a full
-  turn in under three seconds.
-- **DRIFT**: how far it wanders on its own, each resonance a little apart from the others, so no two
-  notes say quite the same thing.
+- **VOICE**: where on the ring the throat starts. Route the slide or pressure to it to steer it.
+- **MORPH**: how fast the throat also glides round the ring on its own while a note is held.
+- **DRIFT**: how far it wanders, each resonance a little apart from the others.
+- **TALK**: how much it talks: how deep each syllable's consonant is, how far the syllables move it
+  round the ring, and how far the pressure moves the mouth. At none it's one steady vowel.
 - **SHIFT**: every resonance up or down an octave, a smaller or a much larger throat.
 - **SHARP**: how narrow the resonances are, from a soft vowel to ringing whistles like a throat
   singer's overtones.
-- **THROAT**: how much of the string sounds through the throat. At none it is the bare bowed string,
-  bright and buzzing; all the way up, all voice (the bow's rosin edge still gets out above the
-  resonances). The throat is held to the string's own level, so every shape plays as loud.
+- **BOW**: how much bowed string sings with the voice, from none to all string.
+- **LINGER**: the chance a syllable is held on two or three times as long, more the harder it's
+  blown.
+- **PACE**: how often a held note goes on to its next syllable: Free (by Talk, from about every 2 s
+  to under 1 s), or a note value from 1/16 to 2 bars at the host's tempo.
 
 The ring shows where each note started (the hollow ring) and where each voice's throat is now (a
 dot); the graph the throat's resonances and the note's harmonics they lift. The knobs are dimmed on
@@ -278,8 +279,9 @@ Transpose and its oddities:
 - **Trumpet** (11): Brass Plume, Fanfare, the mutes (Straight Mute, Cup Mute, Muted Night with a
   Harmon, Plunger Wah with the plunger on the slide, Bucket Ballad), Flugel Glow, French Horn,
   Trombone Slide and Piccolo Trumpet.
-- **Alien** (9): First Contact, Talking Bow (the slide works its mouth), Throat Singer, Xeno Choir,
-  Tractor Beam, Insect Hymn, Mothership, Signal Lost and Ion Flutter.
+- **Alien** (10): Alien Speech, First Contact, Talking Bow (with a bowed string; the slide works
+  its mouth), Throat Singer (a new vowel every 2 bars), Xeno Choir, Tractor Beam (a word a beat),
+  Insect Hymn, Mothership, Signal Lost and Ion Flutter.
 - **Pad** (6): the HYBRID voice as a pad under an instrument, at a low FOLLOW with a slow attack and a
   long release: Flute Halo, Hollow Pad, Section Pad, Reed Choir, Brass Swell and Nebula.
 - **Space** (6): the DELAY, synced and free, and the REVERB: Echo Flute, Canyon Trumpet, Dub Tenor,

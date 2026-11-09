@@ -65,7 +65,10 @@ inline int diceSection(clap_id id) {
    case kAlienDrift:
    case kAlienShift:
    case kAlienSharp:
-   case kAlienThroat: return kDiceInstrument;
+   case kAlienBow:
+   case kAlienTalk:
+   case kAlienPace:
+   case kAlienLinger: return kDiceInstrument;
    case kLength:
    case kLoss:
    case kHoleCutoff:
@@ -242,7 +245,7 @@ struct Span {
 inline Span sane(clap_id id, int model) {
    switch (id) {
    case kBreath: return model == A ? Span{0.95, 1.32} : Span{0.8, 1.3};
-   case kEmbouchure: return model == T ? Span{0.3, 0.7} : Span{0.25, 0.75};
+   case kEmbouchure: return model == T ? Span{0.36, 0.7} : Span{0.25, 0.75};
    case kNoise: return model == F ? Span{0.4, 2.0} : Span{0.3, 1.9};
    case kEdge: return Span{0.3, 2.0};
    case kStiffness: return model == T ? Span{0.3, 0.72} : Span{0.25, 0.72};
@@ -309,7 +312,9 @@ inline Span sane(clap_id id, int model) {
    case kAlienDrift: return Span{0.0, 0.9};
    case kAlienShift: return Span{-0.6, 0.6};
    case kAlienSharp: return Span{0.2, 0.95};
-   case kAlienThroat: return Span{0.5, 1.0};
+   case kAlienBow: return Span{0.0, 0.5};
+   case kAlienTalk: return Span{0.1, 0.9};
+   case kAlienLinger: return Span{0.0, 0.8};
    default: {
       if (id >= kBusBase && id < kRouteBase) {
          if ((id - kBusBase) % kBusStride == kBusAmount)
@@ -411,7 +416,10 @@ inline void randomInstrument(Values &v, DiceRng &rng, int m, double c) {
       set(v, kAlienDrift, rng.range(0.1, 0.3 + 0.6 * c), m);
       set(v, kAlienShift, rng.range(-0.2, 0.2) * (1.0 + 2.0 * c), m);
       set(v, kAlienSharp, rng.range(0.35, 0.6 + 0.35 * c), m);
-      set(v, kAlienThroat, rng.range(0.55, 0.95), m);
+      set(v, kAlienBow, rng.range(0.0, 0.2 + 0.3 * c), m);
+      set(v, kAlienTalk, rng.range(0.2, 0.5 + 0.4 * c), m);
+      set(v, kAlienLinger, rng.range(0.1, 0.6), m);
+      v.set(kAlienPace, rng.any({0, 0, 3, 4, 5}));
    }
 }
 
@@ -802,7 +810,7 @@ inline void mutatePatch(std::vector<double> &values, const DiceSettings &setting
           (id >= kHybridCutoff && id <= kHybridFilterBreath && v.get(kHybridMix) == 0.0) ||
           (id >= kHybridAttack && id <= kHybridFilterEnv && v.get(kHybridMix) == 0.0) ||
           (id >= kDelayMix && id <= kDelaySpread && v.choice(kDelayOn) == 0) || (id == kFlutterRate && v.get(kFlutter) == 0.0) ||
-          (id == kUnisonDetune && v.choice(kUnison) <= 1) || (id >= kAlienVoice && id <= kAlienThroat && m != A))
+          (id == kUnisonDetune && v.choice(kUnison) <= 1) || (id >= kAlienVoice && id <= kAlienLinger && m != A))
          continue;
       const Span s = sane(id, m);
       double next;

@@ -320,8 +320,7 @@ private:
 class FormantGraph : public Drawn {
 public:
    explicit FormantGraph(float w) : Drawn(w) {}
-   void set(double pos, double shift, double sharp, double mix, double hz, bool lit) {
-      mix_ = std::clamp(mix, 0.0, 1.0);
+   void set(double pos, double shift, double sharp, double hz, bool lit) {
       pos_ = pos;
       shift_ = shift;
       sharp_ = sharp;
@@ -349,10 +348,9 @@ public:
       AlienThroat t;
       alienThroat(pos_, shift_, sharp_, t);
       const auto db = [&](double f) {
-         // (The throat's resonances, and the bare string's share beside them.)
-         return 20.0 * std::log10(mix_ * t.norm * t.cascade(f) + (1.0 - mix_) + 1e-9);
+         return 20.0 * std::log10(t.norm * t.cascade(f) + 1e-9);
       };
-      const auto py = [&](double d) { return (y1 - (y1 - y0) * static_cast<float>(std::clamp((d + 48.0) / 70.0, 0.0, 1.0))) * k; };
+      const auto py = [&](double d) { return (y1 - (y1 - y0) * static_cast<float>(std::clamp((d + 64.0) / 84.0, 0.0, 1.0))) * k; };
       visage::Path line, area;
       constexpr int n = 160;
       for (int m = 0; m <= n; ++m) {
@@ -388,7 +386,7 @@ public:
 private:
    static constexpr double kLow = 50.0, kHigh = 10000.0;
    static float xOf(double f) { return static_cast<float>(std::log(f / kLow) / std::log(kHigh / kLow)); }
-   double pos_ = 0.0, shift_ = 0.0, sharp_ = 0.5, mix_ = 0.75, hz_ = 0.0;
+   double pos_ = 0.0, shift_ = 0.0, sharp_ = 0.5, hz_ = 0.0;
    bool lit_ = true;
 };
 
@@ -2055,7 +2053,6 @@ public:
             throatRing_->set(voice, throats, alien);
             const double pos = loudest >= 0 && voices_[loudest].throat >= 0.0f ? voices_[loudest].throat : voice * kAlienShapes;
             formantGraph_->set(pos, host_.paramModulated(kAlienShift), host_.paramModulated(kAlienSharp),
-                               host_.paramModulated(kAlienThroat),
                                loudest >= 0 ? hz : 0.0, alien);
             for (ui::Knob *kn : alienKnobs_)
                kn->setAccent(alien ? modelColor(kAlien) : kFaint);
@@ -2287,7 +2284,7 @@ private:
                               "insect no throat has. The hollow ring is where each note starts; each dot is a voice's throat now.");
       formantGraph_ = &tabs.addToPage(2, add<FormantGraph>({236, 104, 306, 262}, 306.0f));
       tips_.add(*formantGraph_, "The throat's five resonances as they are now, and the note's harmonics they lift.");
-      const auto a1 = ui::row({556, 96, 326, 120}, 3), a2 = ui::row({556, 222, 326, 120}, 3);
+      const auto a1 = ui::row({556, 96, 326, 120}, 4), a2 = ui::row({556, 222, 326, 120}, 4);
       const auto alienKnob = [&](clap_id id, const char *name, ui::Rect cell, const char *tip) {
          ui::Knob &k = knob(id, name, modelColor(kAlien), cell, tip);
          k.setTextSizes(9.5f, 11.0f, 9.0f);
@@ -2299,12 +2296,21 @@ private:
                                              "shape every third of a second.");
       alienKnob(kAlienDrift, "DRIFT", a1[2], "How far the throat wanders on its own, each resonance a little apart from the "
                                              "others: every note different.");
+      alienKnob(kAlienTalk, "TALK", a1[3], "How much it talks: each note a new syllable, a consonant opening onto its own "
+                                           "vowel, one after another like a sentence; the breath's pressure moves the mouth; "
+                                           "turned up, it chatters on its own while a note is held.");
       alienKnob(kAlienShift, "SHIFT", a2[0], "Moves every resonance up or down an octave: a smaller or a larger throat.");
       alienKnob(kAlienSharp, "SHARP", a2[1], "How narrow the resonances are: wide and breathy, to ringing, to whistling.");
-      alienKnob(kAlienThroat, "THROAT", a2[2], "How much of the string sounds through the throat: none is the bare bowed "
-                                               "string, all of it a voice.");
-      tabs.addToPage(2, add<ui::Label>({236, 370, 646, 16},
-                                       "THE ALIEN ONLY  ·  ITS BREATH BOWS A STRING: BITE IS THE BOW'S WEIGHT, EMBOUCHURE WHERE IT CROSSES",
+      alienKnob(kAlienLinger, "LINGER", a2[3], "The chance a vowel is held on for two or three times as long, more the "
+                                               "harder it's blown.");
+      alienKnob(kAlienBow, "BOW", a2[2], "How much a bowed string sings along with the voice: none is pure voice, all "
+                                         "of it the string's buzz through the throat.");
+      tabs.addToPage(2, add<ui::Label>({702, 366, 50, 16}, "PACE", kDim, visage::Font::kLeft, 0.68f));
+      tips_.add(tabs.addToPage(2, choiceBox(kAlienPace, {752, 360, 130, 26}, modelColor(kAlien))),
+                "How often a held note goes on to its next syllable. Free: by Talk. A note value: in time "
+                "with the host's tempo.");
+      tabs.addToPage(2, add<ui::Label>({236, 370, 460, 16},
+                                       "THE ALIEN ONLY  ·  EVERY NOTE A SYLLABLE",
                                        kFaint, visage::Font::kLeft, 0.68f));
       tabs.select(0);
    }
