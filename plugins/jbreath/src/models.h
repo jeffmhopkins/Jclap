@@ -583,7 +583,11 @@ public:
       // in proportion.
       const float fromBody = wall_.tick(body_.read(lb));
       const float heldBody = lattice_.tick(fromBody);
-      const double inBody = -keepNow_ * lift_.tick(heldBody);
+      // (The lift is the reed's own pull on its fundamental, so it fades with the breath: a bore with
+      // nothing blowing it only rings down.)
+      const double liftMix = std::clamp(breath * 20.0f, 0.0f, 1.0f);
+      const double lifted = lift_.tick(heldBody);
+      const double inBody = -keepNow_ * (heldBody + liftMix * (lifted - heldBody));
       const float fromApex = apexWall_.tick(apex_.read(la));
       const double inApex = -keepNow_ * (apexMix_ * apexLattice_.tick(fromApex) + (1 - apexMix_) * fromApex);
       const double P = inBody + inApex;
@@ -1001,6 +1005,7 @@ private:
    };
    // A reed on a closed helix: the clarinet's valve, solved with the pressure it makes.
    struct Bore {
+      static constexpr double kViscous = 1e-5;
       Delay bore;
       Helix h1, h2;
       OnePoleLP bell;
@@ -1026,7 +1031,10 @@ private:
             if (gap <= -knee)
                return 0.0;
             const double open = gap >= knee ? gap : (gap + knee) * (gap + knee) / (4 * knee);
-            return z * open * (W >= 0 ? 1 : -1) * std::sqrt(std::fabs(W));
+            // (Bernoulli's square root, eased into a straight line under a tiny drop, where the air
+            // through the slit is held by its viscosity: the root's endless slope at nothing would
+            // keep a bore with no breath in it buzzing on its own at the bottom of the level.)
+            return z * open * W / std::sqrt(std::fabs(W) + kViscous);
          };
          // u = F(2 back + u), by bisection (F falls as u rises), from a bracket around the last
          // sample's flow when it holds the answer (it nearly always does), else the whole range.
@@ -1045,7 +1053,10 @@ private:
             else
                lo = u;
          }
-         flow = 0.5 * (lo + hi);
+         // (Finished on the straight line through the bracket's ends, so the flow is smooth, not
+         // stepped by the bisection's last interval.)
+         const double gl = G(lo), gh = G(hi);
+         flow = gh > gl ? lo - gl * (hi - lo) / (gh - gl) : 0.5 * (lo + hi);
          bore.push(static_cast<float>(back + flow));
          t = inc + back;
          return flow;
