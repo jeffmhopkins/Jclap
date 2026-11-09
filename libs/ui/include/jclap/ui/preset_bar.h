@@ -43,6 +43,10 @@ public:
    // preset's edits, or restarts something after a load, sets its own.
    std::function<void(const Preset &)> onLoad;
    std::vector<double> defaults;
+   // A plugin with dice sets onDice: the bar then draws a die at the name's left, opposite the star,
+   // and a click on it calls onDice. The die is lit (in the accent) while diceLit says so.
+   std::function<void()> onDice;
+   std::function<bool()> diceLit;
 
    void setTheme(const Theme &theme);
    void setAccent(unsigned color);
@@ -68,7 +72,7 @@ public:
    bool mouseWheel(const visage::MouseEvent &e) override;
 
 private:
-   enum class Zone { None, Prev, Name, Star, Next, Save };
+   enum class Zone { None, Prev, Dice, Name, Star, Next, Save };
 
    Zone zoneAt(float x) const;
    void setHover(Zone z);

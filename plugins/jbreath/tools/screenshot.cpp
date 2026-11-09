@@ -1,9 +1,9 @@
 // Renders the panel to a PNG without a host:
 //    jbreath-screenshot out.png [width height [frames [player-tab [routes [armed-source [exciter-tab
 //       [voice-tab [air [settings...]]]]]]]]]
-// Each setting is preset=Name (a factory preset, underscores for spaces) or Param_Name=value. A
-// four-note chord is playing, with breath loops drawn from synthetic tones in the instrument's
-// colour of sound.
+// Each setting is preset=Name (a factory preset, underscores for spaces), Param_Name=value, or the
+// word dice, which opens the dice card. A four-note chord is playing, with breath loops drawn from
+// synthetic tones in the instrument's colour of sound.
 
 #include <algorithm>
 #include <cmath>
@@ -152,7 +152,7 @@ public:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [width height [frames [player-tab [routes [armed [exciter-tab [voice-tab [air]]]]]]]]\n", argv[0]);
+      std::fprintf(stderr, "usage: %s out.png [width height [frames [player-tab [routes [armed [exciter-tab [voice-tab [air [settings... | dice]]]]]]]]]\n", argv[0]);
       return 1;
    }
    if (!std::strcmp(argv[1], "--bench")) {
@@ -178,7 +178,9 @@ int main(int argc, char **argv) {
    options.air = argc > 10 && std::atoi(argv[10]) != 0;
    DemoHost host;
    for (int i = 11; i < argc; ++i)
-      if (!host.apply(argv[i])) {
+      if (!std::strcmp(argv[i], "dice"))
+         options.dice = true; // the dice card open
+      else if (!host.apply(argv[i])) {
          std::fprintf(stderr, "unknown setting: %s\n", argv[i]);
          return 1;
       }
