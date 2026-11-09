@@ -1033,7 +1033,7 @@ public:
       for (auto &a : stiff_)
          a = {};
       x1_ = 0.0f;
-      low_.z = edge_.z = 0.0f;
+      low_.z = edge_.z = mellow_.z = mellow2_.z = 0.0f;
       sawPower_ = throatPower_ = 0.0f;
       match_ = 1.0f;
       // (Each copy of a unison its own place in its period: voices that start together still don't
@@ -1087,6 +1087,13 @@ public:
       powerA_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.04 * fs_)));
       easeA_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.002 * fs_)));
       low_.setHz(hz, fs_);
+      // High notes as a singer sings them: from about E4 up (an octave, then two), the folds close
+      // more gently, the first resonance rides above the note, the upper ones widen, and the top is
+      // rolled off, so a few lone harmonics don't land on sharp peaks and whistle.
+      high_ = std::clamp(std::log2(hz / 330.0), 0.0, 2.0);
+      const double roll = high_ > 0.0 ? 9000.0 / (1.0 + 1.2 * high_) : 0.45 * fs_;
+      mellow_.setHz(roll, fs_);
+      mellow2_.setHz(roll, fs_);
       // (The tilt makes a high note's string far louder than its voice: brought back level.)
       sawLevel_ = static_cast<float>(1.0 / std::sqrt(1.0 + (hz / 300.0) * (hz / 300.0)));
    }
@@ -1151,7 +1158,7 @@ public:
       phase_ += 1.0 / std::max(len, 2.0);
       phase_ -= std::floor(phase_);
       const double push = std::clamp(static_cast<double>(breath), 0.0, 1.4);
-      const double open = std::clamp(0.72 - 0.18 * push - 0.08 * (character.stiffness - 0.5), 0.35, 0.8);
+      const double open = std::clamp(0.72 - 0.18 * push - 0.08 * (character.stiffness - 0.5) + 0.1 * high_, 0.35, 0.9);
       const double rise = 0.62 * open, fall = open - rise;
       const double g = phase_ < rise    ? 0.5 * (1.0 - std::cos(kPi * phase_ / rise))
                        : phase_ < open ? std::cos(0.5 * kPi * (phase_ - rise) / fall)
@@ -1184,7 +1191,8 @@ public:
       const float hissOut = level * fricS_ * static_cast<float>(fric_.tick(air)) * kHiss;
       // The bow's rosin edge, above the resonances, gets out round the throat.
       const float buzz = saw - edge_.tick(saw);
-      const float y = match_ * throat + hissOut + kBuzz * bowMix * buzz;
+      float y = match_ * throat + hissOut + kBuzz * bowMix * buzz;
+      y = mellow2_.tick(mellow_.tick(y));
       return dc_.tick(kOut * y);
    }
 
@@ -1303,6 +1311,11 @@ private:
          mouth_.bw[n] += ease * (t.bw[n] - mouth_.bw[n]);
       }
       t = mouth_;
+      // (A high note's first resonance above it, and the upper ones wider: see notePitch.)
+      const double ride = std::min(high_, 1.0);
+      t.hz[0] = std::max(t.hz[0], t.hz[0] + ride * (1.15 * hz_ - t.hz[0]));
+      for (int n = 1; n < kAlienFormants; ++n)
+         t.bw[n] *= 1.0 + 0.8 * high_;
       alienNorm(t);
       const double at = base + (f < 0.5 ? from_ : to_);
       pos_ = static_cast<float>(at - kAlienShapes * std::floor(at / kAlienShapes));
@@ -1372,7 +1385,8 @@ private:
    float breath_ = 0.0f;
    Allpass stiff_[2];
    float sawLevel_ = 1.0f, tilt_ = 0.0f, x1_ = 0.0f, norm_ = 1.0f, match_ = 1.0f, sawPower_ = 0.0f, throatPower_ = 0.0f, powerA_ = 0.001f;
-   OnePoleLP low_, edge_;
+   OnePoleLP low_, edge_, mellow_, mellow2_;
+   double high_ = 0.0;
    // A Klatt resonator: 1 at DC, a peak at hz, bw wide.
    struct Resonator {
       double a = 1, b = 0, c = 0, y1 = 0, y2 = 0;

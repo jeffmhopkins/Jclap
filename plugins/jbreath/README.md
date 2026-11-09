@@ -44,7 +44,9 @@ The throat is five resonances in a row, as a vocal tract's are (sharp peaks with
 between them, so each shape is a clear vowel), on a ring of eight shapes: the vowels A, O, U, I and
 E, and between them three no throat has, a **Ghost** (high, hollow peaks), an **Abyss** (low, dark
 and huge) and an **Insect** (a narrow, buzzing whine). It's held to its source's level, so every
-shape plays as loud. On the ALIEN tab:
+shape plays as loud. High notes are sung as a singer sings them: from about E4 up the folds close
+more gently, the first resonance rides above the note, and the upper ones widen and roll off, so the
+top stays round rather than whistling. On the ALIEN tab:
 
 ![The ALIEN tab](docs/readme/alien.jpg)
 
@@ -267,7 +269,7 @@ GLIDE setting how long the pitch takes to get there.
 
 ### Presets
 
-Seventy-six factory presets: Init, then eight to fifteen for each instrument, each family starting
+Eighty-one factory presets: Init, then eight to twenty for each instrument, each family starting
 from its most natural sound (Concert Flute, Wooden Reed, Clean Alto, Dusk Oboe, Brass Plume, First
 Contact: the model's own voice, measured against the Iowa recordings, with a player's vibrato and a
 little room) and running through darker, breathier, brighter and harder variants, its relatives by
@@ -284,12 +286,13 @@ Transpose and its oddities:
 - **Trumpet** (11): Brass Plume, Fanfare, the mutes (Straight Mute, Cup Mute, Muted Night with a
   Harmon, Plunger Wah with the plunger on the slide, Bucket Ballad), Flugel Glow, French Horn,
   Trombone Slide and Piccolo Trumpet.
-- **Alien** (15): Alien Speech, First Contact, Talking Bow (with a bowed string; the slide works
+- **Alien** (20): Alien Speech, First Contact, Talking Bow (with a bowed string; the slide works
   its mouth), Throat Singer (a new vowel every 2 bars), Xeno Choir, Tractor Beam (a word a beat),
   Insect Hymn, Mothership, Signal Lost, Ion Flutter, and five that speak in different ways: Crisp
   Diction (vowels snapped to, the clearest), Chatterbox (a syllable every 1/16), Envoy Unit (a machine
   reading out vowels), Slow Drawl (long glides, slurred) and Whisper Tongue (breathy, its hiss up
-  front).
+  front), and five that sing (a syllable a note, its vowel held steady, a late vibrato): Hymn Singer,
+  Ballad Voice, Folk Tenor, Baritone Chant and Lullaby.
 - **Pad** (6): the HYBRID voice as a pad under an instrument, at a low FOLLOW with a slow attack and a
   long release: Flute Halo, Hollow Pad, Section Pad, Reed Choir, Brass Swell and Nebula.
 - **Space** (6): the DELAY, synced and free, and the REVERB: Echo Flute, Canyon Trumpet, Dub Tenor,

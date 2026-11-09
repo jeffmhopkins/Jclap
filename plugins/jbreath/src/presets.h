@@ -320,6 +320,40 @@ inline const std::vector<Preset> &factoryPresets() {
                     {kAlienSharp, 0.4}, {kAlienMorph, 0.0}, {kAlienDrift, 0.15}, {kNoise, 1.6}, {kBreath, 0.9},
                     {kAttack, 15}, {kRelease, 200}, {kVibDepth, 0.0}, {kRoom, 0.3}}});
 
+      // Singers: a syllable a note, sung as English is: a quick consonant, then the vowel held
+      // steady for the whole note (a held note only moves on after two bars, and mostly lingers),
+      // reached in a singer's 40 to 70 ms, with a vibrato that comes in late.
+      p.push_back({"Hymn Singer", "Alien",
+                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.5}, {kAlienGlide, 50}, {kAlienPace, 6},
+                    {kAlienLinger, 0.8}, {kAlienSharp, 0.55}, {kAlienMorph, 0.0}, {kAlienDrift, 0.1}, {kAttack, 45},
+                    {kRelease, 350}, {kVibDepth, 0.02}, {kVibPitch, 22}, {kVibRate, 5.3}, {kVibDelay, 450},
+                    {kVoiceMode, kLegatoMode}, {kGlide, 25}, {kRoom, 0.45}, {kRoomDecay, 2.8}}});
+      p.push_back({"Ballad Voice", "Alien",
+                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.55}, {kAlienGlide, 60}, {kAlienPace, 6},
+                    {kAlienLinger, 0.7}, {kAlienSharp, 0.5}, {kAlienMorph, 0.0}, {kAlienDrift, 0.15}, {kTune, -12},
+                    {kAttack, 40}, {kRelease, 400}, {kVibDepth, 0.03}, {kVibPitch, 28}, {kVibRate, 5.1},
+                    {kVibDelay, 350}, {kRoom, 0.35}, {kRoomDecay, 2.2}}});
+      // Plainer and quicker: words sung on the beat, a held note's vowel changing each bar.
+      p.push_back({"Folk Tenor", "Alien",
+                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.65}, {kAlienGlide, 40}, {kAlienPace, 5},
+                    {kAlienLinger, 0.5}, {kAlienSharp, 0.55}, {kAlienMorph, 0.0}, {kAlienDrift, 0.1}, {kAttack, 25},
+                    {kRelease, 250}, {kVibDepth, 0.02}, {kVibPitch, 15}, {kVibRate, 5.6}, {kVibDelay, 500},
+                    {kVoiceMode, kMonoMode}, {kRoom, 0.25}}});
+      // A low, larger throat, the vowels slow and wide.
+      p.push_back({"Baritone Chant", "Alien",
+                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.45}, {kAlienGlide, 70}, {kAlienPace, 6},
+                    {kAlienLinger, 0.9}, {kAlienSharp, 0.6}, {kAlienShift, -0.15}, {kAlienMorph, 0.0},
+                    {kAlienDrift, 0.1}, {kTune, -12}, {kAttack, 70}, {kRelease, 600}, {kVibDepth, 0.02},
+                    {kVibPitch, 18}, {kVibRate, 4.8}, {kVibDelay, 600}, {kVoiceMode, kLegatoMode}, {kGlide, 40},
+                    {kRoom, 0.55}, {kRoomDecay, 4.0}}});
+      // Soft and breathy, sung close.
+      p.push_back({"Lullaby", "Alien",
+                   {{kModel, A}, {kAlienBow, 0.0}, {kAlienTalk, 0.45}, {kAlienGlide, 80}, {kAlienPace, 6},
+                    {kAlienLinger, 0.8}, {kAlienSharp, 0.45}, {kAlienMorph, 0.0}, {kAlienDrift, 0.1}, {kNoise, 1.4},
+                    {kBreath, 0.85}, {kAttack, 70}, {kRelease, 500}, {kVibDepth, 0.02}, {kVibPitch, 14},
+                    {kVibRate, 4.9}, {kVibDelay, 500}, {kVoiceMode, kLegatoMode}, {kGlide, 30}, {kRoom, 0.4},
+                    {kRoomDecay, 2.5}}});
+
       // Pads: the HYBRID voice as a pad under the instrument. Its Follow is low, so its envelope (not
       // the breath) plays it: it swells in behind the note and rings on after the breath stops.
       p.push_back({"Flute Halo", "Pad",
