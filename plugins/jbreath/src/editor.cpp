@@ -2284,7 +2284,7 @@ private:
                               "insect no throat has. The hollow ring is where each note starts; each dot is a voice's throat now.");
       formantGraph_ = &tabs.addToPage(2, add<FormantGraph>({236, 104, 250, 262}, 250.0f));
       tips_.add(*formantGraph_, "The throat's five resonances as they are now, and the note's harmonics they lift.");
-      const auto a1 = ui::row({496, 92, 386, 104}, 6), a2 = ui::row({496, 198, 386, 104}, 6);
+      const auto a1 = ui::row({496, 90, 386, 112}, 6), a2 = ui::row({496, 206, 386, 112}, 6);
       const auto alienKnob = [&](clap_id id, const char *name, ui::Rect cell, const char *tip) {
          ui::Knob &k = knob(id, name, modelColor(kAlien), cell, tip);
          k.setTextSizes(8.5f, 9.5f, 8.5f);
@@ -2312,7 +2312,7 @@ private:
       alienKnob(kAlienBow, "BOW", a1[5], "How much a bowed string sings along with the voice: none is pure voice, all "
                                          "of it the string's buzz through the throat.");
       // The consonant families, each on or off.
-      tabs.addToPage(2, add<ui::Label>({496, 304, 386, 14}, "CONSONANTS", kDim, visage::Font::kLeft, 0.68f));
+      tabs.addToPage(2, add<ui::Label>({496, 330, 386, 14}, "CONSONANTS", kDim, visage::Font::kLeft, 0.68f));
       {
          static const char *const kFamilies[8] = {"M N", "L R", "W Y", "V Z", "B D G", "H", "F S", "P T K"};
          static const char *const kFamilyTips[8] = {
@@ -2320,7 +2320,7 @@ private:
             "Voiced fricatives: v, th (as in this), z and zh, buzzing.", "Voiced stops: b, d, g and j.",
             "H: breath through the vowel's own shape.", "Fricatives: f, th, s and sh, a hiss at the lips or teeth.",
             "Stops: p, t, k and ch, a closure, a pop and a breath."};
-         const auto fam = ui::row({496, 320, 386, 24}, 8, 4);
+         const auto fam = ui::row({496, 348, 386, 24}, 8, 4);
          for (int f = 0; f < 8; ++f) {
             auto &b = tabs.addToPage(2, add<ui::Button>(fam[f], kFamilies[f]));
             b.setAccent(modelColor(kAlien));
@@ -2329,10 +2329,8 @@ private:
             tips_.add(b, std::string(kFamilyTips[f]) + " Off, the Alien never says them.");
          }
       }
-      tabs.addToPage(2, add<ui::Label>({702, 366, 50, 16}, "PACE", kDim, visage::Font::kLeft, 0.68f));
-      tips_.add(tabs.addToPage(2, choiceBox(kAlienPace, {752, 360, 130, 26}, modelColor(kAlien))),
-                "How often a held note goes on to its next syllable. Free: by Talk. A note value: in time "
-                "with the host's tempo.");
+      alienKnob(kAlienPace, "PACE", a2[5], "How often a held note goes on to its next syllable. Free: by Talk. A note "
+                                           "value: in time with the host's tempo.");
       tabs.addToPage(2, add<ui::Label>({236, 370, 460, 16},
                                        "THE ALIEN ONLY  ·  EVERY NOTE A SYLLABLE",
                                        kFaint, visage::Font::kLeft, 0.68f));
