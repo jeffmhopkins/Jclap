@@ -4,12 +4,13 @@
 //
 //    jbreath-tune > src/tuning_table.h
 //
-// Each note is tongued and held at the model's tuning breath, the way a voice starts a note (the
-// attack and kick of the default settings), its pitch measured by autocorrelation, and the length
+// Each note is tongued and held at the model's tuning breath, the way a voice starts a note (its
+// tongue, attack, kick and support at the default settings), its pitch measured by autocorrelation, and the length
 // corrected by secant steps until it is within a cent. That's done at 88.2 and 96 kHz, the two
 // rates voices run at for 44.1 and 48 kHz hosts; the ratio barely moves above that. A note the
 // model can't sound at its pitch is marked as not playing; the plugin borrows another.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <memory>
@@ -31,6 +32,7 @@ std::unique_ptr<Model> make(int id) {
    case kClarinet: return std::make_unique<Clarinet>();
    case kSax: return std::make_unique<Sax>();
    case kOboe: return std::make_unique<Oboe>();
+   case kAlien: return std::make_unique<Alien>();
    default: return std::make_unique<Trumpet>();
    }
 }
@@ -67,22 +69,69 @@ struct Played {
    double hz = 0, rms = 0;
 };
 
-Played playSteady(Model &m, int id, double len, double hz, double target = -1.0) {
+// How BreathVoice tongues each model (its articulation() table, voice.h): the release surge, the
+// kick, the support for a soft start and its growth under the middle note (not used here), the
+// tongue's noise, and the middle note. Keep in step with voice.h.
+struct Articulation {
+   double surge, kick, support, noise, middle, low;
+};
+const Articulation kArticulation[kModelCount] = {
+   {1.0, 0.6, 0.25, 0.5, 72.0, 0.0}, {0.25, 0.6, 0.1, 1.0, 62.0, 0.0}, {1.0, 1.0, 0.6, 1.0, 61.0, 0.8},
+   {1.0, 0.7, 0.6, 1.0, 69.0, 0.8},  {1.0, 0.4, 0.25, 1.0, 65.0, 0.0},  {0.25, 1.0, 0.3, 0.5, 62.0, 0.5},
+};
+
+// `speaking`: the breath is a candidate for the softest that sounds the note, played as the
+// voice's lightest touch: a soft strike, so no kick or surge to speak of and a slower tongue, and
+// without the voice's support. (A note the support has started can hang on far below where it
+// starts by itself, a reed's hysteresis, but only just; the voice's lightest touch must start by
+// itself, and the support only makes it start sooner.) Otherwise the note is tongued as at mf, well
+// over where it speaks.
+Played playSteady(Model &m, int id, double len, double hz, double target = -1.0, bool speaking = false) {
    m.reset();
    m.notePitch(hz);
    const int n = static_cast<int>((hz < 80 ? 1.1 : 0.9) * kFs), tail = hz < 80 ? 16000 : 9000;
    std::vector<float> out;
    if (target < 0.0)
       target = modelInfo(id).tuneBreath;
-   // As BreathVoice starts a note: breath rising with a 25 ms attack, a kick of 0.25 that dies away
-   // over 40 ms, and the tongue's noise on the air.
-   const double rise = 1.0 - std::exp(-4000.0 / (25.0 * kFs));
-   double breath = 0.0;
+   // As BreathVoice tongues a note at the default settings (Hard tongue, Attack 25 ms, Kick 0.25),
+   // struck at 0.7 (or 0.1, see above): the mouth's pressure builds behind the tongue in one stage
+   // (90% in 25 ms times the strike's attackScale), and the tongue's valve lets it go over 3 ms once
+   // it's nearly all there, with the release surge (a 4 ms pulse) and the tongue's noise; and the
+   // kick lifts the breath over where the note speaks for 25 ms.
+   const Articulation &a = kArticulation[id];
+   const double strike = speaking ? 0.1 : 0.7, kick = 1.6 * strike * std::sqrt(strike);
+   const double pitch = 69.0 + 12.0 * std::log2(hz / 440.0);
+   const double registerKick = std::clamp(std::exp2((a.middle - pitch) / 12.0), 0.25, 1.0);
+   const double speak = speaking ? target : 0.65 * target; // (for the kick: about where it speaks)
+   const auto coef = [](double ms) { return 1.0 - std::exp(-1000.0 / (ms * kFs)); };
+   const double puffCoef = coef(25.0 * 1.4 * std::pow(0.4 / 1.4, strike) / 2.3), valveCoef = coef(0.6);
+   const int valveLength = static_cast<int>(0.003 * kFs), pulseLength = static_cast<int>(0.004 * kFs);
+   const double pulseAmp = a.surge * registerKick * 1.0 * kick / 1.6;
+   const double noise = (0.06 + 0.94 * strike * strike) * a.noise;
+   double puff = 0.0, breath = 0.0;
+   int valveAt = -1, pulseAt = -1;
    for (int i = 0; i < n; ++i) {
-      const double kick = 1.0 + 0.25 * std::exp(-i / (0.04 * kFs));
-      breath += (target * kick - breath) * rise;
-      const float tongue = static_cast<float>(std::exp(-i / (0.017 * kFs)) * std::min(1.0, breath * 20.0));
-      const float y = m.tick(static_cast<float>(breath), 0.5f, len, tongue);
+      double b = target;
+      b += a.kick * registerKick * 0.25 * kick * std::exp(-i / (0.025 * kFs)) * std::max(0.0, b - speak);
+      puff += (b - puff) * (b > puff ? puffCoef : coef(9.0));
+      if (valveAt < 0 && (puff >= std::min(0.9 * b, 1.15 * speak) || i >= static_cast<int>(0.04 * kFs)))
+         valveAt = pulseAt = 0;
+      double valve = 1.0;
+      if (valveAt < valveLength) {
+         const double x = valveAt < 0 ? 0.0 : static_cast<double>(valveAt) / valveLength;
+         valve = x * x * (3.0 - 2.0 * x);
+         valveAt += valveAt >= 0 ? 1 : 0;
+      }
+      breath += (puff * valve - breath) * (puff * valve > breath ? valveCoef : coef(9.0));
+      double surge = 0.0;
+      if (pulseAt >= 0 && pulseAt < pulseLength) {
+         const double x = std::sin(3.14159265358979 * pulseAt / pulseLength);
+         surge = pulseAmp * puff * x * x;
+         ++pulseAt;
+      }
+      const double airIn = std::min(1.0, breath / std::max(speak, 0.1));
+      const float tongue = static_cast<float>(noise * std::exp(-i / (0.017 * kFs)) * airIn * airIn);
+      const float y = m.tick(static_cast<float>(breath + surge), 0.5f, len, tongue);
       if (i >= n - tail)
          out.push_back(y);
    }
@@ -108,7 +157,7 @@ double speakingBreath(Model &m, int id, double len, double hz, double rms) {
       const double mid = 0.5 * (lo + hi);
       // With the voice's drift correction at that breath, as it plays.
       const double drift = breathDrift(id, mid) - breathDrift(id, modelInfo(id).tuneBreath);
-      const Played p = playSteady(m, id, len * std::pow(2.0, drift / 1200.0), hz, mid);
+      const Played p = playSteady(m, id, len * std::pow(2.0, drift / 1200.0), hz, mid, true);
       const bool speaks = p.hz > 0 && std::fabs(1200 * std::log2(p.hz / hz)) < 50 && p.rms > 0.1 * rms;
       (speaks ? hi : lo) = mid;
    }

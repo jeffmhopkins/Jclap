@@ -129,7 +129,7 @@ void playsInTune(double rate) {
    jclap::core::TestHost h(clap_entry, kId, rate);
    Run run{h, rate};
    dry(h);
-   for (int m = 0; m < 5; ++m) {
+   for (int m = 0; m < 6; ++m) {
       h.setParam(kModel, m);
       h.setParam(kVibDepth, 0.0);
       const int key = m == 0 ? 72 : m == 2 ? 55 : 64;
@@ -145,6 +145,237 @@ void playsInTune(double rate) {
       h.note(CLAP_EVENT_NOTE_OFF, key, 0.0, 100 + m);
       run.seconds(1.0);
       JCLAP_CHECK(run.left.back() == 0.0f);
+   }
+}
+
+// Hosts can run at any rate, down to 1 kHz (clap-validator tries 1234.57 Hz) and up to 768 kHz:
+// every instrument, the Hybrid, the delay and the room stay finite with notes and audio coming in.
+void oddRatesStayFinite() {
+   for (double rate : {1000.0, 1234.57, 8000.0, 22050.0, 768000.0}) {
+      jclap::core::TestHost h(clap_entry, kId, rate);
+      h.setParam(kDelayOn, 1.0);
+      h.setParam(kHybridMix, 0.5);
+      h.setParam(kMute, 2.0);
+      std::vector<float> inL(256), inR(256), outL(256), outR(256);
+      float *in[2] = {inL.data(), inR.data()}, *out[2] = {outL.data(), outR.data()};
+      uint32_t seed = 1;
+      bool finite = true;
+      for (int m = 0; m < 6; ++m) {
+         h.setParam(kModel, m);
+         for (int key : {24, 60, 108}) {
+            h.note(CLAP_EVENT_NOTE_ON, key, 0.9, key);
+            for (int b = 0; b < 8; ++b) {
+               for (int i = 0; i < 256; ++i) {
+                  seed = seed * 1664525u + 1013904223u;
+                  inL[i] = inR[i] = static_cast<float>(seed >> 8) / 8388608.0f - 1.0f;
+               }
+               h.process(256, in, out);
+               for (int i = 0; i < 256; ++i)
+                  finite = finite && std::isfinite(outL[i]) && std::isfinite(outR[i]);
+            }
+            h.note(CLAP_EVENT_NOTE_OFF, key, 0.0, key);
+         }
+      }
+      if (!finite)
+         std::printf("not finite at %.2f Hz\n", rate);
+      JCLAP_CHECK(finite);
+   }
+}
+
+// ---- A LinnStrument in MPE mode ----
+//
+// Each touch is a note on its own channel: its bend and Y (CC 74) just before the note-on, a
+// velocity from how fast the pad went down, then channel pressure (Z) rising from 0 as the finger
+// presses in, updated every 1 to 5 ms in 7 bits, and when the finger lifts, Z falling back to 0
+// before the note-off. Rendered in 1 ms blocks, so every event lands where it would.
+
+constexpr int kMs = 48; // samples per millisecond at 48 kHz
+
+struct Touch {
+   int key = 62, channel = 1;
+   double velocity = 0.6, pressure = 0.4, rampMs = 10.0;
+   int onMs = 20, pressLeadMs = 1, holdMs = 450, liftMs = 30; // Z starts pressLeadMs after the note-on
+};
+
+std::vector<float> playTouches(jclap::core::TestHost &h, const std::vector<Touch> &touches, int totalMs) {
+   std::vector<float> y;
+   std::vector<int> nextZ(touches.size(), 0), lastZ(touches.size(), -1);
+   uint32_t rng = 7;
+   float l[kMs], r[kMs];
+   float *out[2] = {l, r};
+   for (int ms = 0; ms < totalMs; ++ms) {
+      for (size_t i = 0; i < touches.size(); ++i) {
+         const Touch &t = touches[i];
+         const int ch = t.channel, zFrom = t.onMs + t.pressLeadMs, liftAt = t.onMs + t.holdMs, offAt = liftAt + t.liftMs;
+         if (ms == t.onMs - 1) {
+            h.midi(static_cast<uint8_t>(0xE0 | ch), 0, 64);
+            h.midi(static_cast<uint8_t>(0xB0 | ch), 74, 64);
+         }
+         if (ms == t.onMs)
+            h.midi(static_cast<uint8_t>(0x90 | ch), static_cast<uint8_t>(t.key),
+                   static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(t.velocity * 127)), 1, 127)));
+         if (ms >= zFrom && ms <= offAt && ms >= nextZ[i]) {
+            rng ^= rng << 13;
+            rng ^= rng >> 17;
+            rng ^= rng << 5;
+            nextZ[i] = ms + 1 + static_cast<int>(rng % 5);
+            // Pressed in quickly, then settling; and at the lift, back to nothing.
+            const double x = std::min(1.0, (ms - zFrom + 1) / t.rampMs);
+            double z = t.pressure * (1.0 - (1.0 - x) * (1.0 - x));
+            if (ms > liftAt)
+               z = t.pressure * std::max(0.0, 1.0 - static_cast<double>(ms - liftAt) / t.liftMs);
+            const int zi = static_cast<int>(std::lround(std::clamp(z, 0.0, 1.0) * 127));
+            if (zi != lastZ[i]) {
+               lastZ[i] = zi;
+               h.midi(static_cast<uint8_t>(0xD0 | ch), static_cast<uint8_t>(zi), 0);
+            }
+         }
+         if (ms == offAt)
+            h.midi(static_cast<uint8_t>(0x80 | ch), static_cast<uint8_t>(t.key), 50);
+      }
+      h.process(kMs, nullptr, out);
+      y.insert(y.end(), l, l + kMs);
+   }
+   return y;
+}
+
+double rmsOf(const std::vector<float> &y, size_t a, size_t b) {
+   double s = 0.0;
+   b = std::min(b, y.size());
+   for (size_t i = a; i < b; ++i)
+      s += y[i] * y[i];
+   return b > a ? std::sqrt(s / (b - a)) : 0.0;
+}
+// The second difference's RMS: the sound's top end, where a click shows.
+double highsOf(const std::vector<float> &y, size_t a, size_t b) {
+   double s = 0.0;
+   a = std::max<size_t>(a, 2);
+   b = std::min(b, y.size());
+   for (size_t i = a; i < b; ++i) {
+      const double d = y[i] - 2.0 * y[i - 1] + y[i - 2];
+      s += d * d;
+   }
+   return b > a ? std::sqrt(s / (b - a)) : 0.0;
+}
+// The worst click in [a, b): a millisecond's highs over those of the few milliseconds either side
+// of it (at least a twentieth of the steady note's), so a step stands out however quiet it is.
+double worstClick(const std::vector<float> &y, size_t a, size_t b, double floor) {
+   double worst = 0.0;
+   for (size_t i = a + 6 * kMs; i + 7 * kMs < b; i += kMs / 2) {
+      const double around = 0.5 * (highsOf(y, i - 6 * kMs, i - kMs) + highsOf(y, i + 2 * kMs, i + 7 * kMs));
+      worst = std::max(worst, highsOf(y, i, i + kMs) / std::max(around, floor));
+   }
+   return worst;
+}
+
+struct Onset {
+   double t90 = 1e9, overshoot = 0.0, burstDb = 0.0, click = 0.0;
+   bool speaks = false;
+};
+
+// One touch on `model`, measured: when it reaches 90% of its steady level (5 ms windows), how far
+// its start overshoots that, how far the start's highs rise over the steady note's (a burst of
+// velocity, or a step, would be far above), the worst click from the note-on to the end of the
+// tail, and whether the note speaks at all.
+Onset touch(const std::vector<std::pair<clap_id, double>> &params, const Touch &t) {
+   jclap::core::TestHost h(clap_entry, kId);
+   dry(h);
+   h.setParam(kVibDepth, 0.0);
+   for (const auto &[id, v] : params)
+      h.setParam(id, v);
+   const std::vector<float> y = playTouches(h, {t}, t.onMs + t.holdMs + t.liftMs + 700);
+   const size_t on = static_cast<size_t>(t.onMs) * kMs, a = on + 300 * kMs, b = on + 440 * kMs;
+   Onset o;
+   const double steady = rmsOf(y, a, b);
+   o.speaks = steady > 0.002;
+   double highs = 0.0;
+   for (size_t i = a; i + kMs < b; i += kMs)
+      highs = std::max(highs, highsOf(y, i, i + kMs));
+   double peak = 0.0, burst = 0.0;
+   for (size_t i = on - 3 * kMs; i + 5 * kMs < a; i += kMs / 2) {
+      const double e = rmsOf(y, i, i + 5 * kMs);
+      if (o.t90 > 1e8 && e >= 0.9 * steady)
+         o.t90 = (static_cast<double>(i) + 2.5 * kMs - on) / kMs;
+      if (i < on + 250 * kMs)
+         peak = std::max(peak, e);
+      burst = std::max(burst, highsOf(y, i, i + kMs));
+   }
+   o.overshoot = peak / (steady + 1e-12);
+   o.burstDb = 20.0 * std::log10(burst / (highs + 1e-12) + 1e-12);
+   o.click = worstClick(y, on - 10 * kMs, y.size(), 0.05 * highs);
+   return o;
+}
+
+// Every instrument (and the Hybrid oscillator) played from a LinnStrument: soft to hard strikes,
+// quick to slow presses, light to full pressure, the note-on first or the pressure first. Each
+// speaks, starts without a click or a burst, never starts much louder than it settles (a hard
+// strike on light pressure is a tongued accent, not the velocity's level falling to the
+// pressure's), lets go cleanly, and a harder strike never speaks more slowly.
+void linnStrument() {
+   const std::vector<std::pair<clap_id, double>> patches[] = {
+      {{kModel, 0}}, {{kModel, 1}}, {{kModel, 2}}, {{kModel, 3}}, {{kModel, 4}}, {{kModel, 2}, {kHybridMix, 1.0}}};
+   const int keys[] = {72, 62, 61, 69, 65, 61};
+   const char *names[] = {"Flute", "Clarinet", "Sax", "Oboe", "Trumpet", "Hybrid"};
+   for (int m = 0; m < 6; ++m) {
+      double lastT90 = 0.0;
+      for (double velocity : {0.1, 0.6, 1.0}) {
+         std::vector<double> t90s;
+         for (double ramp : {2.0, 40.0})
+            for (double pressure : {0.1, 1.0})
+               for (int lead : {1, -3}) {
+                  Touch t;
+                  t.key = keys[m];
+                  t.velocity = velocity;
+                  t.pressure = pressure;
+                  t.rampMs = ramp;
+                  t.pressLeadMs = lead;
+                  const Onset o = touch(patches[m], t);
+                  t90s.push_back(o.t90);
+                  const bool ok = o.speaks && o.click < 7.0 && o.burstDb < 10.0 && o.overshoot < 1.6;
+                  if (!ok)
+                     std::printf("LinnStrument %s, velocity %.1f, %.0f ms to %.1f%s: %s, click %.1f, burst %+.1f dB, "
+                                 "start %.2f x\n",
+                                 names[m], velocity, ramp, pressure, lead < 0 ? " (pressure first)" : "",
+                                 o.speaks ? "speaks" : "silent", o.click, o.burstDb, o.overshoot);
+                  JCLAP_CHECK(ok);
+               }
+         std::sort(t90s.begin(), t90s.end());
+         const double median = 0.5 * (t90s[t90s.size() / 2 - 1] + t90s[t90s.size() / 2]);
+         if (lastT90 > 0.0 && median > 1.1 * lastT90 + 5.0)
+            std::printf("LinnStrument %s: velocity %.1f speaks in %.0f ms, slower than a softer strike's %.0f ms\n",
+                        names[m], velocity, median, lastT90);
+         JCLAP_CHECK(lastT90 == 0.0 || median <= 1.1 * lastT90 + 5.0);
+         lastT90 = median;
+      }
+
+      // Quick repeated taps on one pad (on the LinnStrument, round-robin channels), each lifted
+      // 15 ms before the next: every one tongued cleanly, none cutting the last one's tail.
+      jclap::core::TestHost h(clap_entry, kId);
+      dry(h);
+      h.setParam(kVibDepth, 0.0);
+      for (const auto &[id, v] : patches[m])
+         h.setParam(id, v);
+      std::vector<Touch> taps;
+      for (int i = 0; i < 6; ++i) {
+         Touch t;
+         t.key = keys[m];
+         t.channel = 1 + i % 3;
+         t.velocity = 0.4 + 0.1 * (i % 4);
+         t.pressure = 0.5;
+         t.rampMs = 6.0;
+         t.onMs = 20 + i * 75;
+         t.holdMs = 50;
+         t.liftMs = 10;
+         taps.push_back(t);
+      }
+      const std::vector<float> y = playTouches(h, taps, 20 + 6 * 75 + 800);
+      double highs = 0.0;
+      for (size_t i = 45 * kMs; i < 70 * kMs; i += kMs)
+         highs = std::max(highs, highsOf(y, i, i + kMs));
+      const double click = worstClick(y, 10 * kMs, y.size(), 0.05 * highs);
+      if (click >= 7.0)
+         std::printf("LinnStrument %s, repeated taps: click %.1f\n", names[m], click);
+      JCLAP_CHECK(click < 7.0);
    }
 }
 
@@ -474,7 +705,7 @@ int main() {
          {kTongueType, kTongueFlutter}, {kTongueType, kTongueBreath}, {kTongueType, kTongueSoft},
          {kVibType, kVibJaw}, {kVibType, kVibLip}, {kHybridMix, 0.5}, {kHybridMix, 1.0}, {kLimiter, 2.0},
       };
-      for (int m = 0; m < 5; ++m)
+      for (int m = 0; m < 6; ++m)
          for (const Extreme &x : extremes) {
             jclap::core::TestHost eh(clap_entry, kId);
             Run e{eh};
@@ -523,6 +754,9 @@ int main() {
    playsInTune(48000.0);
    playsInTune(96000.0);
    playsInTune(192000.0);
+   oddRatesStayFinite();
+
+   linnStrument();
 
    return jclap::core::testResult();
 }

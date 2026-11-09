@@ -78,6 +78,15 @@ struct PendingMod {
    double amount;
 };
 
+// A note expression that arrived before its note did (an MPE controller's pressure can come just
+// ahead of the note-on): kept until the end of the block for the note to start on.
+struct PendingExpression {
+   int32_t noteId;
+   int16_t port, channel, key;
+   clap_note_expression id;
+   double value;
+};
+
 // A key held down in a mono mode, in the order they were pressed: letting go of the sounding one
 // goes back to the newest still held.
 struct Held {
@@ -135,12 +144,13 @@ public:
          body_[c].prepare(sampleRate);
       }
       room_.prepare(sampleRate);
+      delay_.prepare(sampleRate);
       limiter_.prepare(sampleRate);
       brightDb_ = 1e9;
       for (ChannelState &c : channels_)
          c = ChannelState{};
       mpeMembers_ = 15;
-      pendingCount_ = 0;
+      pendingCount_ = pendingExpressionCount_ = 0;
       heldCount_ = 0;
       dirty_ = true;
       publishVoices();
@@ -159,9 +169,10 @@ public:
          body_[c].reset();
       }
       room_.reset();
+      delay_.reset();
       limiter_.reset();
       mpeMembers_ = 15;
-      pendingCount_ = 0;
+      pendingCount_ = pendingExpressionCount_ = 0;
       heldCount_ = 0;
    }
 
@@ -334,6 +345,10 @@ public:
       jclap::dsp::ScopedNoDenormals noDenormals;
       edits_.drain(proc->out_events);
       blockFrames_ = proc->frames_count;
+      // The host's tempo, for a synced delay.
+      if (const clap_event_transport_t *t = proc->transport)
+         if ((t->flags & CLAP_TRANSPORT_HAS_TEMPO) && t->tempo > 1.0)
+            tempo_ = t->tempo;
       // The panel may have moved a knob since the last block.
       dirty_ = true;
 
@@ -378,7 +393,16 @@ public:
             float l = decimator_.process(fastL) * kVoiceGain, r = decimatorR_.process(fastR) * kVoiceGain;
             l = bright_[0].tick(body_[0].tick(l));
             r = bright_[1].tick(body_[1].tick(r));
-            room_.tick(l, r);
+            delay_.tick(l, r);
+            if (reverbOn_) {
+               room_.tick(l, r);
+            } else {
+               // Off, nothing more goes into the room, but what's in it rings out rather than stop dead.
+               float wl = 0.0f, wr = 0.0f;
+               room_.tick(wl, wr);
+               l += wl;
+               r += wr;
+            }
             limiter_.tick(l, r, limiterMode_);
             l *= master_;
             r *= master_;
@@ -410,7 +434,7 @@ public:
       publishVoices();
       blockFrames_ = 0;
       // Per-note modulation that never found its note this block isn't kept for later notes.
-      pendingCount_ = 0;
+      pendingCount_ = pendingExpressionCount_ = 0;
       // With every voice silent, only the decimator's short tail is left; then nothing until the
       // next event.
       for (const Slot &s : slots_)
@@ -419,8 +443,9 @@ public:
             quietFrames_ = 0;
             return CLAP_PROCESS_CONTINUE;
          }
-      // The room rings on after the voices.
-      if (room_.active() && quietFrames_ < static_cast<uint64_t>(sampleRate_ * (value(kRoomDecay) + 0.2))) {
+      // The delay and the room ring on after the voices.
+      const double ring = (room_.active() ? value(kRoomDecay) + 0.2 : 0.0) + (delay_.active() ? delay_.tailSeconds() + 0.1 : 0.0);
+      if ((room_.active() || delay_.active()) && quietFrames_ < static_cast<uint64_t>(sampleRate_ * ring)) {
          quietFrames_ += frames;
          return CLAP_PROCESS_CONTINUE;
       }
@@ -445,17 +470,28 @@ private:
       body.barrel = value(kBarrel);
       body.wall = value(kWall);
       body.length = value(kLength);
+      body.cutoffHz = value(kHoleCutoff);
       body.holes = static_cast<int>(value(kHoles) + 0.5);
       body.tube = static_cast<int>(value(kTube) + 0.5);
       for (Body &b : body_)
          b.set(body);
       RoomSettings room;
       room.mix = value(kRoom);
+      reverbOn_ = value(kReverbOn) > 0.5;
       room.size = value(kRoomSize);
       room.decay = value(kRoomDecay);
       room.damp = value(kRoomDamp);
       room.preDelayMs = value(kRoomPreDelay);
       room_.set(room);
+      DelaySettings delay;
+      delay.on = value(kDelayOn) > 0.5;
+      delay.mix = value(kDelayMix);
+      const int sync = static_cast<int>(value(kDelaySync) + 0.5);
+      delay.timeMs = sync > 0 ? delaySyncBeats(sync) * 60000.0 / tempo_ : delayTimeMs(value(kDelayTime));
+      delay.feedback = value(kDelayFeedback);
+      delay.tone = value(kDelayTone);
+      delay.spread = value(kDelaySpread);
+      delay_.set(delay);
       limiterMode_ = static_cast<int>(value(kLimiter) + 0.5);
       master_ = static_cast<float>(jclap::dsp::dbToGain(value(kMaster)));
       spread_ = value(kSpread);
@@ -550,6 +586,14 @@ private:
       vs.hybridCutoff = value(kHybridCutoff, s);
       vs.hybridResonance = value(kHybridResonance, s);
       vs.hybridFilterBreath = value(kHybridFilterBreath, s);
+      vs.hybridAttackMs = hybridEnvMs(value(kHybridAttack, s));
+      vs.hybridDecayMs = hybridEnvMs(value(kHybridDecay, s));
+      vs.hybridSustain = value(kHybridSustain, s);
+      vs.hybridReleaseMs = hybridEnvMs(value(kHybridRelease, s));
+      vs.hybridFollow = value(kHybridFollow, s);
+      vs.hybridFilterEnv = value(kHybridFilterEnv, s);
+      vs.mute = choice(kMute, *s);
+      vs.muteAmount = value(kMuteAmount, s);
       vs.flutter = value(kFlutter, s);
       vs.flutterRate = value(kFlutterRate, s);
       vs.pan = value(kPan, s);
@@ -720,30 +764,17 @@ private:
          auto *ev = reinterpret_cast<const clap_event_note_expression_t *>(h);
          if (!std::isfinite(ev->value))
             break;
+         bool found = false;
          for (Slot &s : slots_) {
             if (!hostMatches(s, ev->note_id, ev->port_index, ev->channel, ev->key))
                continue;
-            switch (ev->expression_id) {
-            // Clamped to the ranges CLAP gives them.
-            case CLAP_NOTE_EXPRESSION_TUNING:
-               s.bend = std::clamp(ev->value, -120.0, 120.0);
-               break;
-            case CLAP_NOTE_EXPRESSION_PRESSURE:
-               s.pressure = std::clamp(ev->value, 0.0, 1.0);
-               s.ownPressure = true;
-               break;
-            case CLAP_NOTE_EXPRESSION_BRIGHTNESS:
-               s.timbre = std::clamp(ev->value, 0.0, 1.0);
-               s.ownTimbre = true;
-               break;
-            case CLAP_NOTE_EXPRESSION_VOLUME:
-               s.volume = std::clamp(ev->value, 0.0, 4.0);
-               break;
-            default:
-               break;
-            }
+            express(s, ev->expression_id, ev->value);
             configure(s);
+            found = true;
          }
+         if (!found && pendingExpressionCount_ < kMaxPending)
+            pendingExpressions_[pendingExpressionCount_++] = {ev->note_id, ev->port_index, ev->channel, ev->key,
+                                                              ev->expression_id, ev->value};
          break;
       }
       case CLAP_EVENT_MIDI: {
@@ -825,6 +856,28 @@ private:
          }
          break;
       }
+      default:
+         break;
+      }
+   }
+
+   // A note expression on its note, clamped to the range CLAP gives it.
+   static void express(Slot &s, clap_note_expression id, double value) {
+      switch (id) {
+      case CLAP_NOTE_EXPRESSION_TUNING:
+         s.bend = std::clamp(value, -120.0, 120.0);
+         break;
+      case CLAP_NOTE_EXPRESSION_PRESSURE:
+         s.pressure = std::clamp(value, 0.0, 1.0);
+         s.ownPressure = true;
+         break;
+      case CLAP_NOTE_EXPRESSION_BRIGHTNESS:
+         s.timbre = std::clamp(value, 0.0, 1.0);
+         s.ownTimbre = true;
+         break;
+      case CLAP_NOTE_EXPRESSION_VOLUME:
+         s.volume = std::clamp(value, 0.0, 4.0);
+         break;
       default:
          break;
       }
@@ -930,6 +983,14 @@ private:
                             : (m.key == -1 || m.key == key) && (m.channel == -1 || m.channel == channel) &&
                                   (m.port == -1 || m.port == port))
             s.mod[m.param] = m.amount;
+      }
+      // Its expressions that came just ahead of it, so it starts on its pressure.
+      for (int i = 0; i < pendingExpressionCount_; ++i) {
+         const PendingExpression &e = pendingExpressions_[i];
+         if (e.noteId != -1 ? e.noteId == noteId
+                            : (e.key == -1 || e.key == key) && (e.channel == -1 || e.channel == channel) &&
+                                  (e.port == -1 || e.port == port))
+            express(s, e.id, e.value);
       }
    }
 
@@ -1040,6 +1101,9 @@ private:
    Biquad bright_[2];
    Body body_[2];
    Room room_;
+   StereoDelay delay_;
+   bool reverbOn_ = true;
+   double tempo_ = 120.0;
    Limiter limiter_;
    int limiterMode_ = kLimitSoft;
    float master_ = 1.0f;
@@ -1066,6 +1130,8 @@ private:
    static constexpr int kMaxPending = 32;
    PendingMod pending_[kMaxPending];
    int pendingCount_ = 0;
+   PendingExpression pendingExpressions_[kMaxPending];
+   int pendingExpressionCount_ = 0;
    // Something every voice hears changed since they were last configured.
    bool dirty_ = true;
    // The note-off velocity being handled (the Lift source), and the free LFOs' clock in seconds.

@@ -65,13 +65,14 @@ constexpr unsigned kPress = 0xffff6fd2;
 constexpr unsigned kSynthColor = 0xffb98bff;
 
 // Each instrument's family colour: the jet cyan, the single reeds orange, the double reed violet,
-// the lips coral.
-constexpr unsigned kModelColors[kModelCount] = {0xff6fe0ff, 0xfff28c28, 0xfff2a54a, 0xffa98bff, 0xffff7a59};
+// the lips coral, the alien's twin reeds an acid green.
+constexpr unsigned kModelColors[kModelCount] = {0xff6fe0ff, 0xfff28c28, 0xfff2a54a, 0xffa98bff, 0xffff7a59, 0xff9dff5c};
 unsigned modelColor(int model) { return kModelColors[std::clamp(model, 0, kModelCount - 1)]; }
 
-const char *const kFamilyNames[kModelCount] = {"JET", "REED", "REED", "DOUBLE REED", "LIPS"};
+const char *const kFamilyNames[kModelCount] = {"JET", "REED", "REED", "DOUBLE REED", "LIPS", "TWIN REED"};
 const char *const kModelSubtitles[kModelCount] = {"jet  ·  open pipe", "single reed  ·  cylinder", "single reed  ·  cone",
-                                                  "double reed  ·  narrow cone", "lips  ·  flared horn"};
+                                                  "double reed  ·  narrow cone", "lips  ·  flared horn",
+                                                  "twin reeds  ·  helix bores"};
 
 visage::Color glow(unsigned argb, float alpha, float hdr = 1.0f) {
    return ui::steady(visage::Color(argb, hdr).withAlpha(alpha));
@@ -129,11 +130,11 @@ public:
 
    void draw(visage::Canvas &c) override {
       const float k = s(), rowH = rowHeight();
-      const int selected = std::clamp(static_cast<int>(host_.paramValue(param_) + 0.5), 0, kModelCount - 1);
+      const int selected = std::clamp(static_cast<int>(host_.paramValue(param_) + 0.5), 0, rows() - 1);
       const bool waves = param_ == kHybridModel;
       static const char *const kWaveSubtitles[] = {"Pure and round", "Soft, odd harmonics", "Bright, every harmonic",
                                                    "Hollow, odd harmonics", "Nasal, a quarter wide"};
-      for (int i = 0; i < kModelCount; ++i) {
+      for (int i = 0; i < rows(); ++i) {
          const float y = i * (rowH + kGap);
          const unsigned color = waves ? kSynthColor : modelColor(i);
          const bool on = i == selected;
@@ -173,11 +174,13 @@ public:
 
 private:
    static constexpr float kGap = 6.0f;
+   // The instruments, or the HYBRID tab's five waves.
+   int rows() const { return param_ == kHybridModel ? 5 : kModelCount; }
    float designW() const { return width() / s(); }
-   float rowHeight() const { return (height() / s() - kGap * (kModelCount - 1)) / kModelCount; }
+   float rowHeight() const { return (height() / s() - kGap * (rows() - 1)) / rows(); }
    int rowAt(float y) const {
       const int i = static_cast<int>(y / s() / (rowHeight() + kGap));
-      return i >= 0 && i < kModelCount ? i : -1;
+      return i >= 0 && i < rows() ? i : -1;
    }
 
    // Two cycles of the wave, 36 x 16 design units, centred on (x, y).
@@ -217,6 +220,9 @@ private:
    R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(24 12) rotate(24) scale(0.92) translate(-24 -12)"><path d="M2.2 10 Q1.3 12 2.2 14 L6.5 12.6 L6.5 11.4 Z" fill="currentColor" fill-opacity="0.25"/><path d="M2.6 12 L6.5 12" stroke-width="0.9"/><rect x="6.5" y="10.8" width="2.8" height="2.4" rx="0.5" fill="currentColor" stroke="none"/><path d="M9.3 11.1 L37 10.2 Q41 9.9 42.5 9.1 L44.8 8.8 L44.8 15.2 L42.5 14.9 Q41 14.1 37 13.8 L9.3 12.9"/><path d="M20.5 10.2 L20.5 13.8 M31 9.9 L31 14.1" stroke-width="1.3"/><circle cx="13" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="16.5" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="24" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="27.5" cy="12" r="0.65" fill="currentColor" stroke="none"/><circle cx="34" cy="12" r="0.65" fill="currentColor" stroke="none"/></g></svg>)svg",
    // trumpet
    R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.2 L4.5 9 L36 9 M2.5 9.8 L4.5 9"/><path d="M36 8.2 Q41 8 45 3.5 L45 14.5 Q41 10 36 9.8"/><path d="M12 9 Q8.5 9 8.5 13 Q8.5 17 12.5 17 L29 17 Q32.5 17 32.5 13 L32.5 9"/><path d="M17 6 L17 17 M21 6 L21 17 M25 6 L25 17" stroke-width="2.2"/><circle cx="17" cy="4.6" r="1.1" fill="currentColor" stroke="none"/><circle cx="21" cy="4.6" r="1.1" fill="currentColor" stroke="none"/><circle cx="25" cy="4.6" r="1.1" fill="currentColor" stroke="none"/></svg>)svg",
+   // alien: a mouthpiece, a bore coiled as a spring, a bulb with an eye, its flare, and the ghost
+   // bore's thin horn rising out of the bulb
+   R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="48" height="24" viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 11.3 L6.3 10.8 L6.3 13.2 L2.5 12.7 Z"/><path d="M6.3 12 L8.5 12"/><path d="M8.5 12.0 L8.2 10.2 L7.9 8.6 L7.8 7.6 L8.0 7.2 L8.4 7.6 L9.1 8.6 L10.0 10.2 L10.9 12.0 L11.8 13.8 L12.7 15.4 L13.4 16.4 L13.8 16.8 L14.0 16.4 L13.9 15.4 L13.6 13.8 L13.3 12.0 L13.0 10.2 L12.7 8.6 L12.6 7.6 L12.8 7.2 L13.2 7.6 L13.9 8.6 L14.8 10.2 L15.7 12.0 L16.6 13.8 L17.5 15.4 L18.2 16.4 L18.6 16.8 L18.8 16.4 L18.7 15.4 L18.4 13.8 L18.1 12.0 L17.8 10.2 L17.5 8.6 L17.4 7.6 L17.6 7.2 L18.0 7.6 L18.7 8.6 L19.6 10.2 L20.5 12.0 L21.4 13.8 L22.3 15.4 L23.0 16.4 L23.4 16.8 L23.6 16.4 L23.5 15.4 L23.2 13.8 L22.9 12.0 L22.6 10.2 L22.3 8.6 L22.2 7.6 L22.4 7.2 L22.8 7.6 L23.5 8.6 L24.4 10.2 L25.3 12.0 L26.2 13.8 L27.1 15.4 L27.8 16.4 L28.2 16.8 L28.4 16.4 L28.3 15.4 L28.0 13.8 L27.7 12.0 L27.4 10.2 L27.1 8.6 L27.0 7.6 L27.2 7.2 L27.6 7.6 L28.3 8.6 L29.2 10.2 L30.1 12.0 L31.0 13.8 L31.9 15.4 L32.6 16.4 L33.0 16.8 L33.2 16.4 L33.1 15.4 L32.8 13.8 L32.5 12.0" stroke-width="1.2"/><path d="M32.5 12 L33.6 12"/><circle cx="36.6" cy="12" r="3"/><circle cx="36.6" cy="12" r="0.9" fill="currentColor" stroke="none"/><path d="M39.5 10.9 Q42.2 10.2 45.5 7 L45.5 17 Q42.2 13.8 39.5 13.1"/><path d="M37.6 9.2 Q38.6 5 42.4 3.3" stroke-width="1.1"/><path d="M41.2 1.9 L43.8 4.6" stroke-width="1.3"/></svg>)svg",
       };
       static const std::vector<visage::Svg> kIcons = [] {
          std::vector<visage::Svg> icons;
@@ -410,6 +416,7 @@ private:
       case kClarinet:
       case kSax:
       case kOboe:
+      case kAlien:
          // A softer reed curls shut later.
          return 1.0 + 0.12 * (0.5 - stiffness_);
       default:
@@ -424,14 +431,14 @@ private:
          return std::min(1.0, 0.92 * std::pow(x / 1.3, 1.5) * (0.5 + aperture_));
       default: { // a reed valve: u = (1 - W) sqrt(W), shut at W = 1; normalised to its peak
          const double shut = shutAt(), w = std::min(x / shut, 1.0), open = 0.6 + 0.8 * aperture_;
-         const double soft = model_ == kClarinet ? 1.0 : model_ == kSax ? 0.85 + 0.3 * (1 - embouchure_) : 0.7;
-         return std::min(1.0, 0.95 * (1 - w) * std::sqrt(w) / 0.3849 * (model_ == kClarinet ? 1.0 : soft) * open);
+         const double soft = model_ == kClarinet || model_ == kAlien ? 1.0 : model_ == kSax ? 0.85 + 0.3 * (1 - embouchure_) : 0.7;
+         return std::min(1.0, 0.95 * (1 - w) * std::sqrt(w) / 0.3849 * (model_ == kClarinet || model_ == kAlien ? 1.0 : soft) * open);
       }
       }
    }
    // A voice's breath, as a point on the x axis.
    double operating(float breath) const {
-      return model_ == kClarinet ? 0.7 * breath : model_ == kFlute || model_ == kTrumpet ? breath : 0.75 * breath;
+      return model_ == kClarinet || model_ == kAlien ? 0.7 * breath : model_ == kFlute || model_ == kTrumpet ? breath : 0.75 * breath;
    }
 
    int model_ = kClarinet;
@@ -560,6 +567,21 @@ private:
       case kOboe:
          r = static_cast<double>(ch.keep(0.95f)) * onePole(f, 3800 * k);
          break;
+      case kAlien: {
+         // The main bore: a closed cylinder coiled as a helix (two allpass sections at twice the
+         // note), shortened by the helix's delay at the note, as the model plays it.
+         const auto helix = [this](double at) {
+            const double r0 = std::exp(-kPi * 2.8 * hz_ / kFs), th = 2 * kPi * 2.0 * hz_ / kFs;
+            const double a1 = -2 * r0 * std::cos(th), a2 = r0 * r0;
+            const std::complex<double> z = std::polar(1.0, -2 * kPi * at / kFs);
+            return (a2 + a1 * z + z * z) / (1.0 + a1 * z + a2 * z * z);
+         };
+         const std::complex<double> h = helix(f);
+         r = -static_cast<double>(ch.keep(0.96f)) * onePole(f, 6 * hz_ * k) * h * h;
+         const double w0 = 2 * kPi * hz_ / kFs;
+         period = 0.5 / hz_ - 2.0 * std::fmod(-std::arg(helix(hz_)) + 2 * kPi, 2 * kPi) / w0 / kFs;
+         break;
+      }
       default:
          r = static_cast<double>(ch.keep(0.985f)) * (onePole(f, 8 * hz_ * k) - 2.0 * onePole(f, 20));
          break;
@@ -577,6 +599,8 @@ private:
          return "CONE: EVERY HARMONIC, OVERBLOWS AT THE OCTAVE";
       case kOboe:
          return "NARROW CONE: EVERY HARMONIC, A DARKER LOOP";
+      case kAlien:
+         return "HELIX: STRETCHED, INHARMONIC RESONANCES";
       default:
          return "FLARED HORN: HARMONIC RESONANCES, NO PEDAL";
       }
@@ -598,7 +622,7 @@ public:
    }
    void draw(visage::Canvas &c) override {
       static const char *const names[4] = {"OPEN PIPE", "CYLINDER", "CONE", "FLARE"};
-      const int lit = model_ == kFlute ? 0 : model_ == kClarinet ? 1 : model_ == kTrumpet ? 3 : 2;
+      const int lit = model_ == kFlute ? 0 : model_ == kClarinet || model_ == kAlien ? 1 : model_ == kTrumpet ? 3 : 2;
       const float k = s(), w = width() / k / 4;
       const unsigned color = modelColor(model_);
       for (int i = 0; i < 4; ++i) {
@@ -1106,12 +1130,13 @@ private:
       static constexpr Ramp kFrost = {{{.6f, .9f, 1}, {.45f, .7f, 1}, {.75f, .66f, 1}}};
       static constexpr Ramp kMoss = {{{.62f, .95f, .45f}, {.36f, .86f, .58f}, {.8f, .9f, .36f}}};
       static constexpr Ramp kMono = {{{1, .97f, .92f}, {.92f, .92f, .95f}, {.86f, .88f, .96f}}};
-      static constexpr Ramp kFamilies[5] = {kFlute, kClarinet, kSax, kOboe, kTrumpet};
+      static constexpr Ramp kAlien = {{{.62f, 1, .36f}, {.3f, .95f, .7f}, {.72f, .5f, 1}}};
+      static constexpr Ramp kFamilies[6] = {kFlute, kClarinet, kSax, kOboe, kTrumpet, kAlien};
       const Ramp &st = look.palette == 1   ? kEmber
                        : look.palette == 2 ? kFrost
                        : look.palette == 3 ? kMoss
                        : look.palette == 4 ? kMono
-                                           : kFamilies[std::clamp(model_, 0, 4)];
+                                           : kFamilies[std::clamp(model_, 0, 5)];
       const float t = static_cast<float>((((note * 7) % 12) + 12) % 12) / 11.0f;
       const float u = t < 0.5f ? t * 2 : (t - 0.5f) * 2;
       const auto &a = st[t < 0.5f ? 0 : 1], &b = st[t < 0.5f ? 1 : 2];
@@ -1812,9 +1837,11 @@ public:
             filterGraph_->set(host_.paramModulated(kHybridCutoff), host_.paramModulated(kHybridResonance), amount, opens);
          }
          bore_->set(model, hz, loudest >= 0, partials, host_.paramModulated(kLoss), host_.paramModulated(kHoleCutoff) / 1300.0);
-         const bool cone = model == kSax || model == kOboe, brass = model == kTrumpet;
+         const bool cone = model == kSax || model == kOboe || model == kTrumpet || model == kAlien, brass = model == kTrumpet;
          coneKnob_->setAccent(cone ? color : kFaint);
          brassKnob_->setAccent(brass ? color : kFaint);
+         // The Time knob only sets the delay while Sync is Free.
+         delayTimeKnob_->setAccent(host_.paramValue(kDelaySync) < 0.5 ? delayAccent_ : kFaint);
          if (voiceTabs_->selected() == 1)
             curve_->set(host_.paramModulated(kCurve), pressures);
          if (voiceTabs_->selected() == 0) {
@@ -1983,7 +2010,8 @@ private:
       tabs.addToPage(0, familyKnob(kNoise, "NOISE", bottom[1], "Breath noise and turbulence."));
       tabs.addToPage(0, familyKnob(kKick, "KICK", bottom[2], "The burst of pressure as the tongue lets the air go."));
       tabs.addToPage(0, familyKnob(kGrowl, "GROWL", bottom[3],
-                                   "A growl in the throat: above 20% a rough flutter rides on the air, on any instrument."));
+                                   "A growl in the throat: a rough flutter rides on the air, on any instrument, and a hard-blown "
+                                   "reed rasps more."));
       rangeText_ = &tabs.addToPage(0, add<ui::Label>({236, 370, 646, 16}, rangeText(modelOf(host_)), kFaint,
                                                      visage::Font::kLeft, 0.68f));
 
@@ -1992,36 +2020,51 @@ private:
       tips_.add(hlist, "HYBRID: a plain oscillator through a lowpass, blown with the same breath and layered with the instrument.");
       filterGraph_ = &tabs.addToPage(1, add<FilterGraph>({236, 104, 306, 262}, 306.0f));
       tips_.add(*filterGraph_, "The lowpass, and (faint) where the softest and hardest breath move it. Each dot is a sounding voice.");
-      const auto htop = ui::row({556, 96, 326, 120}, 4), hbottom = ui::row({556, 222, 326, 120}, 4);
+      // Three rows: the oscillator, its lowpass, and its envelope.
+      const auto h1 = ui::row({556, 96, 326, 84}, 5), h2 = ui::row({556, 182, 326, 84}, 5),
+                 h3 = ui::row({556, 268, 326, 84}, 5);
       const auto synthKnob = [&](clap_id id, const char *name, ui::Rect cell, const char *tip) {
          ui::Knob &k = knob(id, name, kSynthColor, cell, tip);
+         k.setTextSizes(8.5f, 9.5f, 8.5f);
          tabs.addToPage(1, k);
       };
-      synthKnob(kHybridMix, "MIX", htop[0], "How much of the oscillator: 0 is only the instrument, 100% only the oscillator.");
-      synthKnob(kHybridOctave, "OCTAVE", htop[1], "Where the oscillator plays, in octaves from the note.");
-      synthKnob(kHybridDetune, "DETUNE", htop[2], "The oscillator's detune, in cents: a little beats against the instrument.");
-      synthKnob(kHybridBreath, "BREATH", htop[3], "How strongly the oscillator's level follows the breath: higher swells sooner.");
-      synthKnob(kHybridCutoff, "CUTOFF", hbottom[0], "The lowpass's cutoff at a middling breath (it follows the note half way).");
-      synthKnob(kHybridResonance, "RESONANCE", hbottom[1], "The lowpass's peak at its cutoff.");
-      synthKnob(kHybridFilterBreath, "OPEN", hbottom[2], "How far the breath opens the lowpass: soft is dark, hard is bright.");
+      synthKnob(kHybridMix, "MIX", h1[0], "How much of the oscillator: 0 is only the instrument, 100% only the oscillator.");
+      synthKnob(kHybridOctave, "OCTAVE", h1[1], "Where the oscillator plays, in octaves from the note.");
+      synthKnob(kHybridDetune, "DETUNE", h1[2], "The oscillator's detune, in cents: a little beats against the instrument.");
+      synthKnob(kHybridBreath, "BREATH", h1[3], "How strongly the oscillator's level follows the breath: higher swells sooner.");
+      synthKnob(kHybridFollow, "FOLLOW", h1[4],
+                "How much the oscillator's level follows the breath. 0 is a pad: it plays at the note's velocity, "
+                "shaped only by its envelope, and rings on through its release after you let go.");
+      synthKnob(kHybridCutoff, "CUTOFF", h2[0], "The lowpass's cutoff at a middling breath (it follows the note half way).");
+      synthKnob(kHybridResonance, "RESO", h2[1], "The lowpass's peak at its cutoff.");
+      synthKnob(kHybridFilterBreath, "OPEN", h2[2], "How far the breath opens the lowpass: soft is dark, hard is bright.");
+      synthKnob(kHybridFilterEnv, "F.ENV", h2[3], "How far the envelope moves the lowpass, up to 5 octaves up (or down, below 0).");
+      synthKnob(kHybridAttack, "ATTACK", h3[0], "The oscillator's envelope: how long it takes to rise, 1 ms to 10 s.");
+      synthKnob(kHybridDecay, "DECAY", h3[1], "How long it takes to fall from the top to the sustain.");
+      synthKnob(kHybridSustain, "SUSTAIN", h3[2], "Where it holds while the note is held.");
+      synthKnob(kHybridRelease, "RELEASE", h3[3], "How long it rings on after the note ends, up to 10 s (at Follow 0).");
       tabs.addToPage(1, add<ui::Label>({236, 370, 646, 16},
-                                       "BLOWN BY THE SAME BREATH  ·  UNISON AND VIBRATO SHAPE IT TOO", kFaint,
-                                       visage::Font::kLeft, 0.68f));
+                                       "BLOWN BY THE SAME BREATH, OR A PAD ON ITS OWN ENVELOPE (FOLLOW 0)  ·  UNISON AND VIBRATO SHAPE IT TOO",
+                                       kFaint, visage::Font::kLeft, 0.68f));
       tabs.select(0);
    }
 
    void buildBore() {
-      shape_ = &add<BoreShape>({112, 414, 360, 26}, 360.0f);
+      shape_ = &add<BoreShape>({112, 414, 290, 26}, 290.0f);
       shape_->setModel(modelOf(host_));
       tips_.add(*shape_, "The bore's shape, which sets which harmonics it resonates on.");
-      add<ui::Label>({484, 418, 52, 18}, "HOLES", kDim, visage::Font::kRight, 0.75f);
-      tips_.add(choiceBox(kHoles, {544, 414, 128, 26}, 0xfff28c28),
-                "The open tone holes below the note: more of them let more tube ring on above their cutoff.");
-      add<ui::Label>({682, 418, 46, 18}, "TUBE", kDim, visage::Font::kRight, 0.75f);
-      tips_.add(choiceBox(kTube, {736, 414, 144, 26}, 0xfff28c28), "What the instrument is made of: its body's colour.");
+      add<ui::Label>({404, 418, 52, 18}, "HOLES", kDim, visage::Font::kRight, 0.75f);
+      tips_.add(choiceBox(kHoles, {462, 414, 96, 26}, 0xfff28c28),
+                "How many tone holes below the note are open: more is brighter. The tube below rings most with them Closed.");
+      add<ui::Label>({560, 418, 46, 18}, "TUBE", kDim, visage::Font::kRight, 0.75f);
+      tips_.add(choiceBox(kTube, {612, 414, 96, 26}, 0xfff28c28), "What the instrument is made of: its body's colour.");
+      add<ui::Label>({714, 418, 50, 18}, "MUTE", kDim, visage::Font::kRight, 0.75f);
+      tips_.add(choiceBox(kMute, {770, 414, 110, 26}, 0xfff28c28),
+                "A mute in the bell (or over the end of any instrument): straight, cup, harmon, plunger or bucket. "
+                "MUTE AMT sets how far it's in.");
       bore_ = &add<BoreGraph>({32, 452, 848, 158}, 848.0f);
       tips_.add(*bore_, "The bore's resonances (its input impedance), with the loudest note's partials as it sounds.");
-      const auto cells = ui::row({32, 618, 848, 100}, 10);
+      const auto cells = ui::row({32, 618, 848, 100}, 11);
       const auto small = [&](clap_id id, const char *name, int cell, const char *tip) -> ui::Knob & {
          ui::Knob &k = familyKnob(id, name, cells[cell], tip);
          k.setTextSizes(9.0f, 10.5f, 9.0f);
@@ -2031,13 +2074,14 @@ private:
       small(kLength, "LENGTH", 1, "The tube below the open holes: its length sets where its own resonances ring.");
       small(kLoss, "LOSS", 2, "How much the bore loses each trip: more is softer, darker and slower to speak.");
       small(kHoleCutoff, "HOLE CUTOFF", 3, "Above this the tone holes let the sound out: lower is darker. The pitch stays put.");
-      coneKnob_ = &small(kCone, "CONE", 4, "Sax and oboe: how far the cone is cut short at the reed, which tilts its upper modes.");
+      coneKnob_ = &small(kCone, "CONE", 4, "Sax and oboe: how far the cone is cut short at the reed, towards a cylinder or a full cone. Trumpet: how conical the bore is, towards a flugelhorn. Alien: how tightly its bores are coiled, which stretches their modes apart.");
       small(kRadiate, "RADIATE", 5, "How well the bell and holes send the highs out.");
       brassKnob_ = &small(kBrass, "BRASS", 6, "Trumpet: how far the wave steepens on its way down the horn, into a blare.");
       small(kBarrel, "BARREL", 7, "The barrel's or mouthpiece's cavity: bigger is lower and rounder.");
       ui::Knob &wall = small(kWall, "WALL", 8, "The walls: metal hardly soaks up the highs, soft wood and bone more.");
       wall.valueText = [](double v) { return std::string(wallName(v)); };
       small(kDetune, "DETUNE", 9, "Each note a little off, by up to this many cents: a section rather than one player.");
+      small(kMuteAmount, "MUTE AMT", 10, "How far the mute is in, from open to all the way. Route slide or pressure to it to work a plunger.");
    }
 
    void buildPlayer() {
@@ -2334,7 +2378,7 @@ private:
    }
 
    void buildVoice() {
-      voiceTabs_ = &add<ui::TabBar>({912, 616, 330, 28}, std::vector<std::string>{"VOICE", "AIR", "ROOM"});
+      voiceTabs_ = &add<ui::TabBar>({912, 616, 440, 28}, std::vector<std::string>{"VOICE", "AIR", "REVERB", "DELAY"});
       voiceTabs_->setAccent(0xfff28c28);
       auto &tabs = *voiceTabs_;
       auto &mode = add<ui::SegmentedSwitch>({1368, 618, 252, 26}, std::vector<std::string>{"POLY", "MONO", "LEGATO"});
@@ -2372,9 +2416,17 @@ private:
       tabs.addToPage(1, knob(kCurve, "CURVE", kPress, air[1], "The press curve: above 1 you have to press harder."));
       tabs.addToPage(1, knob(kSlide, "SLIDE", 0xff8fe8a8, air[2], "How far MPE slide (CC 74) moves the embouchure."));
 
-      // ROOM: the room, the tone and the limiter.
-      const auto room = ui::row({920, 660, 560, 124}, 5);
+      // REVERB: on or off, the room, the tone and the limiter.
       const unsigned rc = 0xff7fd3ff;
+      const auto onOff = [&](int page, clap_id id, const char *name, unsigned accent, const char *tip) {
+         tabs.addToPage(page, add<ui::Label>({920, 664, 96, 16}, name, kDim, visage::Font::kLeft, 0.68f));
+         auto &sw = tabs.addToPage(page, add<ui::SegmentedSwitch>({920, 686, 96, 26}, std::vector<std::string>{"OFF", "ON"}));
+         sw.setAccent(accent);
+         bindings_.bind(sw, id);
+         tips_.add(sw, tip);
+      };
+      onOff(2, kReverbOn, "REVERB", rc, "The reverb on or off. Turned off, what's in the room rings out.");
+      const auto room = ui::row({1024, 660, 460, 124}, 5);
       tabs.addToPage(2, knob(kRoomSize, "SIZE", rc, room[0], "From a small room to a hall."));
       tabs.addToPage(2, knob(kRoomDecay, "DECAY", rc, room[1], "How long the room rings."));
       tabs.addToPage(2, knob(kRoomDamp, "DAMP", rc, room[2], "How fast the room's highs die away."));
@@ -2385,6 +2437,21 @@ private:
       limiter.setAccent(0xfff28c28);
       bindings_.bind(limiter, kLimiter);
       tips_.add(limiter, "Off: nothing. Soft: overs saturate. Hard: a peak limiter holds the output under full scale.");
+
+      // DELAY: on or off, synced or free, and its repeats.
+      const unsigned dc = 0xff8fe8a8;
+      onOff(3, kDelayOn, "DELAY", dc, "The delay on or off. Turned off, its repeats fade out.");
+      tabs.addToPage(3, add<ui::Label>({920, 724, 96, 16}, "SYNC", kDim, visage::Font::kLeft, 0.68f));
+      tips_.add(tabs.addToPage(3, choiceBox(kDelaySync, {920, 746, 96, 26}, dc)),
+                "Free: the Time knob, in ms. A note value: the delay follows the host's tempo.");
+      const auto echo = ui::row({1024, 660, 596, 124}, 5);
+      tabs.addToPage(3, knob(kDelayMix, "MIX", dc, echo[0], "How loud the repeats are under the dry sound."));
+      delayTimeKnob_ = &knob(kDelayTime, "TIME", dc, echo[1], "The time between repeats, 10 ms to 2 s, when Sync is Free.");
+      tabs.addToPage(3, *delayTimeKnob_);
+      delayAccent_ = dc;
+      tabs.addToPage(3, knob(kDelayFeedback, "FEEDBACK", dc, echo[2], "How much of each repeat comes back: how many repeats, and how long they last."));
+      tabs.addToPage(3, knob(kDelayTone, "TONE", dc, echo[3], "How bright the repeats stay: lower, each one is darker than the last."));
+      tabs.addToPage(3, knob(kDelaySpread, "SPREAD", dc, echo[4], "Straight down each side, or bouncing between left and right (ping-pong)."));
       tabs.select(0);
 
       const auto cells = ui::row({920, 800, 704, 120}, 11);
@@ -2398,7 +2465,7 @@ private:
       card(kGlide, "GLIDE", 0xfff28c28, 4, "How long a slur takes to reach the next note (a finger lands in a few ms).");
       card(kBendRange, "BEND", 0xffb98bff, 5, "MPE pitch bend range of the note channels, in semitones.");
       card(kTune, "TRANSP", 0xfff28c28, 6, "Transposes in semitones.");
-      card(kRoom, "ROOM", rc, 7, "How much room: shape it on the ROOM tab.");
+      card(kRoom, "REVERB", rc, 7, "How much reverb: shape it, or turn it off, on the REVERB tab.");
       card(kAir, "AIR", kPress, 8, "The breath heard around the instrument, not through it.");
       card(kLevel, "LEVEL", 0xfff28c28, 9, "Each voice's level (modulate it per note).");
       card(kMaster, "MASTER", 0xfff28c28, 10, "The output level, after the room and limiter.");
@@ -2506,7 +2573,8 @@ private:
    std::vector<visage::Frame *> airFrames_;
    ui::TabBar *exciterTabs_ = nullptr, *voiceTabs_ = nullptr;
    FilterGraph *filterGraph_ = nullptr;
-   ui::Knob *coneKnob_ = nullptr, *brassKnob_ = nullptr;
+   ui::Knob *coneKnob_ = nullptr, *brassKnob_ = nullptr, *delayTimeKnob_ = nullptr;
+   unsigned delayAccent_ = 0;
    ui::Meter *inMeter_ = nullptr, *outMeters_[2] = {};
    ui::TabBar *playerTabs_ = nullptr;
    ui::Button *mapButton_ = nullptr;

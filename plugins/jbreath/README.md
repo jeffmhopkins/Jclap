@@ -2,7 +2,7 @@
 
 # JBreath
 
-An eight-voice MPE wind instrument built from physical models: flute, clarinet, sax, oboe and trumpet, each a digital waveguide blown by a model of the player, with every voice drawn live as a glowing loop of its own breath.
+An eight-voice MPE wind instrument built from physical models: flute, clarinet, sax, oboe, trumpet and an alien, each a digital waveguide blown by a model of the player, with every voice drawn live as a glowing loop of its own breath.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![voices: 8](https://img.shields.io/badge/voices-8-blue)](#voices) [![MPE: yes](https://img.shields.io/badge/MPE-yes-blue)](#breath-and-mpe) [![synthesis: waveguide](https://img.shields.io/badge/synthesis-waveguide-blue)](#the-instruments) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
@@ -22,6 +22,30 @@ reflections of the real one) driven by a nonlinear exciter, the part the player 
 | **Sax** | the same kind of reed, softer | a cone, as a split bore: every harmonic, overblowing at the octave | the mouthpiece's honk; growl when it's pushed |
 | **Oboe** | a stiff double reed, its two blades beating shut each cycle | a narrow cone, darker | the reed's buzz, richer the harder it's blown, through formants near 1.25 and 2.9 kHz with a thin fundamental: nasal, not a soprano sax |
 | **Trumpet** | the lips: a mass on a spring blown open by the mouth pressure (outward striking), with the flow through them in closed form | a flared horn: resonances on every harmonic, none at DC | the wave steepening on its way down the horn, more the harder it's blown, towards a shock at forte: the brassy blare |
+| **Alien** | twin reeds in one small chamber, each blown by the player's breath and by the other's flow | two closed bores coiled as helices, the second shorter by an irrational ratio: stretched, inharmonic resonances | a hollow, nearly pure tone when soft; harder, the ghost bore's inharmonic partial rises out of it (2.76 times the note) and the two reeds fight, filling the spectrum with combination tones: a bell-like, ring-modulated roar over a steady pitch |
+
+### The alien
+
+An instrument that couldn't be built, from physics that could. A coiled tube is dispersive: high
+frequencies travel along a helix faster than low ones, so its resonances are stretched apart like a
+bell's or a stiff bar's instead of falling on the harmonic series (an allpass chain in the loop, set
+in ratios of the note so every register is stretched alike). Every attack and release rings at
+those stretched modes, a spring-like chirp. Its mouthpiece holds two reeds: the main one on a
+clarinet-like helix that holds the pitch, and a stiffer one on a second, shorter helix tuned 2.76
+times higher (a free bar's second mode over its first), whose sound leaves through an iris the
+breath pushes open. The reeds share the chamber, so each is blown by the other's flow: two
+oscillations that aren't harmonically related, driven through one nonlinearity, give every
+combination tone m f0 + n f1 (a multiphonic) and pull on each other's pitch, locking when they come
+near a simple ratio.
+
+So the breath changes what it is. Softly it's a hollow, almost pure tone; a little harder its 3rd
+and 5th harmonics come up together; from about mezzo-forte the ghost's partial rises out of it as a
+shimmer; at full breath (more with BREATH up) the ghost is nearly as loud as the note and the
+spectrum fills with sidebands spaced 0.24 times the note. Letting go, the coil rings on at its own
+stretched modes, a short upward "boing". **EMBOUCHURE**
+(and MPE slide) tunes the ghost from about 2.3 to 3.4 times the note, through 3, where it locks
+into a harmonic and the tone turns consonant. **BITE** is how hard the two reeds pull on each
+other, and **CONE** how tightly the bores are coiled (how far their modes are stretched).
 
 Every note plays in tune: the bore length for each model and note was measured offline by playing
 it and correcting the length until the pitch was within a cent, at the rates the voices run at, and
@@ -51,7 +75,7 @@ shuts; the flute's jet overblows). The knobs are how it's blown:
 - **APERTURE**: how far the reed or lips stand open (the jet's width): wide is loud and free,
   narrow thin and focused.
 - **NOISE**: breath noise and turbulence. **KICK**: the burst of pressure as the tongue lets the
-  air go. **GROWL**: above 20%, a rough flutter of the throat rides on the air, on any instrument.
+  air go. **GROWL**: a rough flutter of the throat rides on the air, on any instrument, and a hard-blown reed rasps more.
 
 ### Hybrid
 
@@ -65,6 +89,12 @@ the breath opens it: soft is dark, hard is bright. The graph shows the lowpass a
 softest and hardest breath move it, with a dot for each sounding voice. Unison and vibrato shape it
 too.
 
+It has an envelope of its own, so it can be a pad under the instrument: **ATTACK**, **DECAY**,
+**SUSTAIN** and **RELEASE** (1 ms to 10 s), and **FOLLOW**, how much its level still follows the
+breath. At full FOLLOW it is blown like the instrument; turn it down and the envelope plays it at
+the note's strike instead, swelling in and ringing on after the breath stops. **F.ENV** is how far
+the envelope opens (or, below zero, closes) the lowpass.
+
 ### The bore
 
 ![The bore](docs/readme/bore.jpg)
@@ -73,12 +103,16 @@ The graph is the bore's input impedance, worked out from the same loop the model
 partials of the loudest note as it sounds. Every knob changes the curve:
 
 - **TUNE** in cents. **LENGTH**: the tube below the open holes, whose own resonances ring above
-  their cutoff; **HOLES** picks how many are open, from Closed to Open. More open holes also let
-  more highs out of the bore itself, on every instrument: Closed is dark and muffled, Open bright.
+  their cutoff, which rings most with the holes below it Closed (nothing lets it out on the way) and
+  not at all with them Open. **HOLES** picks how many are open, from Closed to Open: more open holes
+  move the tone holes' cutoff up and radiate more highs, on every instrument, so Closed is dark and
+  veiled and Open bright.
 - **LOSS**: what the bore loses each trip: softer, darker, slower to speak.
 - **HOLE CUTOFF**: above it the tone holes let the sound out. The pitch stays put: the filter's delay
   is taken out of the bore.
-- **CONE** (sax and oboe): how far the cone is cut short at the reed. **BRASS** (trumpet): how far the
+- **CONE** (sax and oboe): how far the cone is cut short at the reed, from towards a cylinder to a
+  full cone; on the trumpet, how conical its bore is (towards a flugelhorn: darker, less blare); on
+  the alien, how tightly its bores are coiled. **BRASS** (trumpet): how far the
   wave steepens into a blare. Each is dimmed on the instruments it doesn't apply to.
 - **RADIATE**, **BARREL** and **WALL**: how the bell sends the highs out, the mouthpiece's cavity,
   and how much the walls soak up (metal to bone). **TUBE** is what it's made of: grenadilla,
@@ -159,10 +193,18 @@ range), **TRANSP**, **ROOM**, **AIR** (the breath heard around the instrument, n
 
 **AIR** is where the breath comes from, and how it's shaped (see [Breath and MPE](#breath-and-mpe)).
 
-![The ROOM tab](docs/readme/room.jpg)
+![The REVERB tab](docs/readme/room.jpg)
 
-**ROOM**: a small room (SIZE, DECAY, DAMP, PRE-DELAY), the output's TONE, and the **LIMITER**: Off,
-Soft (overs saturate) or Hard (a peak limiter holds the output under full scale).
+**REVERB**: a switch, then a small room (SIZE, DECAY, DAMP, PRE-DELAY), the output's TONE, and the
+**LIMITER**: Off, Soft (overs saturate) or Hard (a peak limiter holds the output under full scale).
+Switched off, the room's tail rings out rather than stopping.
+
+![The DELAY tab](docs/readme/delay.jpg)
+
+**DELAY**: a stereo echo before the reverb, off until switched on. **SYNC** sets its time as a note
+value at the host's tempo (1/32 to 1/1, with dotted and triplet values), or Free for **TIME** in ms
+(10 ms to 2 s). **MIX** is how loud the echoes are, **FEEDBACK** how many there are, **TONE** how
+much darker each one gets, and **SPREAD** how far they bounce between left and right.
 
 ### The AIR view
 
@@ -205,10 +247,31 @@ GLIDE setting how long the pitch takes to get there.
 
 ### Presets
 
-Fifty factory presets, about ten for each instrument, from clean to grungy, airy, bass and the
-odd ones: Concert Flute to Tin Whistle, Piccolo and Bass Flute; Wooden Reed to Klezmer Cry and Bass
-Clarinet; Clean Alto to Gutbucket and Bass Honk; Pastoral to Bassoon, Shawm and Duduk Air; Brass
-Plume to Flugel Glow, French Horn, Tuba and Blat. Each plays in tune at a usable level (tested).
+Seventy-one factory presets: Init, then eight to eleven for each instrument, each family starting
+from its most natural sound (Concert Flute, Wooden Reed, Clean Alto, Dusk Oboe, Brass Plume, First
+Contact: the model's own voice, measured against the Iowa recordings, with a player's vibrato and a
+little room) and running through darker, breathier, brighter and harder variants, its relatives by
+Transpose and its oddities:
+
+- **Flute** (10): Concert Flute, Night Flute, Bamboo Air, Shakuhachi Bend, Tin Whistle, Piccolo, Alto
+  Flute, Bass Flute, Overblown Jet (flutter-tongued) and Glass Ocarina.
+- **Clarinet** (9): Wooden Reed, Legato Clarinet, Chalumeau, Bass Clarinet, Bright Eb, Klezmer Cry,
+  Breathy Reed, Low Rasp Reed and Felt Clarinet (a felt bucket over the bell).
+- **Sax** (10): Clean Alto, Smoke Tenor, Growl Alto, Subtone Ballad, Soprano Line, Baritone, Bass
+  Honk, Gutbucket, Flutter Tenor and Hat Alto (a hat over the bell).
+- **Oboe** (10): Dusk Oboe, Pastoral, Oboe d'Amore, Cor Anglais, Bassoon, Contra Buzz, Shawm, Musette,
+  Duduk Air and Snake Charmer (a gourd cup over the reed).
+- **Trumpet** (11): Brass Plume, Fanfare, the mutes (Straight Mute, Cup Mute, Muted Night with a
+  Harmon, Plunger Wah with the plunger on the slide, Bucket Ballad), Flugel Glow, French Horn,
+  Trombone Slide and Piccolo Trumpet.
+- **Alien** (8): First Contact, Ghost Helix, Xeno Choir, Tractor Beam, Coil Whistle, Mothership,
+  Signal Lost and Ion Flutter.
+- **Pad** (6): the HYBRID voice as a pad under an instrument, at a low FOLLOW with a slow attack and a
+  long release: Flute Halo, Hollow Pad, Section Pad, Reed Choir, Brass Swell and Nebula.
+- **Space** (6): the DELAY, synced and free, and the REVERB: Echo Flute, Canyon Trumpet, Dub Tenor,
+  Night Cathedral, Slapback Bari and Star Signal.
+
+Each plays in tune at a usable level (tested).
 
 ## Drawing it smoothly
 
