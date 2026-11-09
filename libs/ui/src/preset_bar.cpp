@@ -8,7 +8,7 @@
 namespace jclap::ui {
 
 namespace {
-constexpr float kArrow = 26.0f, kSave = 52.0f, kStar = 24.0f;
+constexpr float kArrow = 26.0f, kSave = 52.0f, kStar = 24.0f, kDie = 24.0f;
 constexpr int kSaveId = 1 << 20, kDeleteId = kSaveId + 1, kFavoriteId = kSaveId + 2, kUserBase = 1 << 16,
               kFavoritesBase = 1 << 18;
 
@@ -171,6 +171,8 @@ PresetBar::Zone PresetBar::zoneAt(float x) const {
    const float s = height() / 28.0f, w = width();
    if (x < kArrow * s)
       return Zone::Prev;
+   if (onDice && x < (kArrow + kDie) * s)
+      return Zone::Dice;
    if (x >= w - kSave * s)
       return Zone::Save;
    if (x >= w - (kSave + kArrow) * s)
@@ -212,10 +214,14 @@ void PresetBar::draw(visage::Canvas &c) {
       return;
    const std::string current = name();
    const int i = indexOf(current);
-   const float star = kStar * s;
+   const float star = kStar * s, die = onDice ? kDie * s : 0.0f;
+   if (onDice) {
+      c.setColor(diceLit && diceLit() ? accent : hover_ == Zone::Dice ? t.text : t.dimText);
+      drawDie(c, a + die / 2, h / 2, 13.0f * s);
+   }
    c.setColor(hover_ == Zone::Name ? 0xffffffffu : t.text);
-   c.text(current.empty() ? std::string("Untitled") : current, font(13 * s), visage::Font::kCenter, a, 0,
-          w - 2 * a - save - star, h);
+   c.text(current.empty() ? std::string("Untitled") : current, font(13 * s), visage::Font::kCenter, a + die, 0,
+          w - 2 * a - save - star - die, h);
    if (i >= 0) {
       const bool starred = favorites_.contains(at(i).name);
       c.setColor(starred ? accent : hover_ == Zone::Star ? t.text : t.dimText);
@@ -223,7 +229,7 @@ void PresetBar::draw(visage::Canvas &c) {
    }
    if (i >= 0) {
       c.setColor(t.dimText);
-      c.text(at(i).category, font(9 * s), visage::Font::kLeft, a + 8 * s, 0, 80 * s, h);
+      c.text(at(i).category, font(9 * s), visage::Font::kLeft, a + die + (onDice ? 4 : 8) * s, 0, 80 * s, h);
    }
 }
 
@@ -237,6 +243,10 @@ void PresetBar::mouseDown(const visage::MouseEvent &e) {
    case Zone::Save: editor_ && editor_->isVisible() ? finishSave(true) : startSave(); break;
    case Zone::Name: showMenu(); break;
    case Zone::Star: toggleFavorite(); break;
+   case Zone::Dice:
+      if (onDice)
+         onDice();
+      break;
    case Zone::None: break;
    }
 }

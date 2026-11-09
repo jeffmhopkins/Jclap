@@ -13,6 +13,7 @@
 #include <jclap/ui/window.h>
 
 #include "params.h"
+#include "randomize.h"
 
 namespace jbreath {
 
@@ -41,6 +42,13 @@ public:
    // The name of the preset last loaded or saved, kept with the project.
    virtual std::string presetName() const = 0;
    virtual void setPresetName(const std::string &name) = 0;
+
+   // The dice card: whether it is open, Randomize's complexity, Mutate's amount and the sections
+   // both leave alone, and the patches they replaced, so UNDO can bring one back. Kept with the
+   // plugin while the project is open (as JSynth's and JVerb's are), not with presets. Main thread only.
+   bool diceOpen = false;
+   DiceSettings dice;
+   DiceHistory diceHistory;
 };
 
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
@@ -49,8 +57,8 @@ std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 // breath loops' animation that many timer ticks first.
 // `options` opens a view first: a tab of the Player card (0 PLAYER, 1 VIBRATO, 2 LFOS, 3 BUSES),
 // of the Exciter (0 EXCITER, 1 HYBRID) and of the Voice card (0 VOICE, 1 AIR, 2 ROOM), the ROUTES
-// list in place of the loops, MAP with a source armed (a ModSource; 0 for MAP off), and the AIR
-// view in place of the panel.
+// list in place of the loops, MAP with a source armed (a ModSource; 0 for MAP off), the AIR view
+// in place of the panel, and the dice card.
 struct ScreenshotOptions {
    int playerTab = 0;
    bool routes = false;
@@ -58,6 +66,7 @@ struct ScreenshotOptions {
    int exciterTab = 0;
    int voiceTab = 0;
    bool air = false;
+   bool dice = false; // the dice card open
 };
 bool renderScreenshot(EditorHost &host, int width, int height, int frames, const char *pngPath,
                       const ScreenshotOptions &options = {});

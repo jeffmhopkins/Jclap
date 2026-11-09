@@ -10,8 +10,8 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 # name player-tab routes armed exciter-tab voice-tab air, the crop in design pixels (x y w h), then
-# the settings. The cards: exciter 16 64 880 332, bore 16 406 880 316, player 16 732 880 196, the
-# loops 912 64 720 530 (with their chips), voice 904 612 728 316.
+# the settings (dice opens the dice card). The cards: exciter 16 64 880 332, bore 16 406 880 316,
+# player 16 732 880 196, the loops 912 64 720 530 (with their chips), voice 904 612 728 316.
 shots=(
    "panel    0 0 0 0 0 0   0   0   1648 940  -"
    "exciter  0 0 0 0 0 0   10  58  892  344  -"
@@ -30,6 +30,7 @@ shots=(
    "delay    0 0 0 0 3 0   898 606 740  328  Delay=On Delay_Sync=1/8D Delay_Feedback=55"
    "air-view 0 0 0 0 0 1   0   0   1648 940  preset=Smoke_Tenor"
    "ink      0 0 0 0 0 1   0   0   1648 940  preset=Gutbucket Look=Ink Palette=Ember"
+   "dice     0 0 0 0 0 0   406 4   1232 318  preset=Smoke_Tenor dice"
 )
 for line in "${shots[@]}"; do
    read -r name player routes armed exciter voice air x y w h settings <<< "$line"

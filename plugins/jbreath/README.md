@@ -273,6 +273,29 @@ Transpose and its oddities:
 
 Each plays in tune at a usable level (tested).
 
+### Dice
+
+![The dice card](docs/readme/dice.jpg)
+
+The die at the left of the preset bar opens the dice card, over the breath loops so nothing it
+changes is hidden. **RANDOMIZE** builds a new patch the way a player would pick one up: an
+instrument first, then its exciter, bore, tongue and vibrato within the ranges that sound for that
+instrument, and a name for it. **COMPLEXITY** says how much it reaches for: at 0 a plain, real
+instrument; higher brings growl or flutter, a mute, the HYBRID layer (as a pad, at times), unison,
+LFOs and routes, the delay, wider bore settings and the Alien. **MUTATE** nudges the patch there is
+by **AMOUNT**: what's off stays off, a choice moves only to a near one (a mute to the next mute, a
+tongue to its neighbour), and only a high amount changes the instrument or adds a route. **UNDO**
+and **REDO** step back and forward through what the dice replaced.
+
+**LOCK** keeps a section as it is through both: INSTRUMENT (the model and its exciter), BORE (the
+bore's knobs, holes, tube and mute), PLAYER (the tongue, attack, release, humanize, growl and
+flutter), VIBRATO, HYBRID, MOD (the LFOs, the Swell, the buses and the routes), FX (the reverb, its
+tone, the air and the delay) and VOICE (voice mode, glide, unison, spread and pan). Neither ever
+touches Level, Master or the Limiter, the breath source and the rest of the MIDI and MPE setup,
+Transpose or Tune, or the AIR view's look. The complexity, amount and locks stay with the plugin
+while the project is open, not with presets. Every patch the dice make plays in tune at a usable
+level (tested over many seeds, complexities and amounts).
+
 ## Drawing it smoothly
 
 The panel steps its animation in time with the display: its timer is checked at every screen
@@ -289,11 +312,14 @@ It builds with the rest of JClap (see the [top-level README](../../README.md)). 
 
 - `jbreath-screenshot out.png [width height [frames [player-tab [routes [armed [exciter-tab
   [voice-tab [air [settings...]]]]]]]]]`: renders the panel, with `preset=Name` or
-  `Param_Name=value` settings (the screenshot test's reference is [`docs/panel.png`](docs/panel.png)).
+  `Param_Name=value` settings, or `dice` to open the dice card (the screenshot test's reference is
+  [`docs/panel.png`](docs/panel.png)).
   [`docs/readme/make.sh`](docs/readme/make.sh) renders this README's pictures with it.
 - `jbreath-tune > src/tuning_table.h`: bakes the tuning table again, after a change to a model.
 
 `jbreath-voice-tests` checks every instrument across its range (tuning, level, how fast it speaks,
 and that nothing blows up with every control at its extremes); `jbreath-tests` drives the whole
 plugin the way a host does, at 44.1 to 192 kHz, including every new control at both ends on every
-instrument.
+instrument. `jbreath-dice-tests` rolls RANDOMIZE and MUTATE over many seeds, complexities and
+amounts and plays every patch, and checks that a seed is the same patch every time and that locks
+hold.

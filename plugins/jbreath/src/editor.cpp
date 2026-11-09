@@ -10,6 +10,7 @@
 #include <jclap/ui/design_frame.h>
 #include <jclap/ui/knob.h>
 #include <jclap/ui/meter.h>
+#include <jclap/ui/number_box.h>
 #include <jclap/ui/paint.h>
 #include <jclap/ui/param_bindings.h>
 #include <jclap/ui/preset_bar.h>
@@ -41,6 +42,7 @@
 
 #include "params.h"
 #include "presets.h"
+#include "randomize.h"
 #include "vapor.h"
 #include "voice.h"
 
@@ -1683,6 +1685,27 @@ public:
    }
 };
 
+// The dice card behind RANDOMIZE, MUTATE and the locks: one of the panel's cards, a little darker
+// and edged in the accent, so it reads as floating over the breath loops.
+class DiceCard : public Drawn {
+public:
+   explicit DiceCard(float w) : Drawn(w) {}
+   void draw(visage::Canvas &c) override {
+      const float k = s();
+      c.setColor(visage::Color(0xf4161a21));
+      c.roundedRectangle(0, 0, width(), height(), 10 * k);
+      c.setColor(visage::Color(0x80f28c28));
+      c.roundedRectangleBorder(0, 0, width(), height(), 10 * k, 1 * k);
+      c.setColor(0xfff28c28);
+      ui::drawDie(c, 24 * k, 21 * k, 14 * k);
+      label(c, "DICE", 40, 11, 120, 0xfff28c28, 15.0f);
+      c.setColor(kCardBorder);
+      c.fill(14 * k, 108 * k, width() - 28 * k, 1 * k);
+      label(c, "LOCK", 14, 116, 200, kDim, 10.0f);
+      label(c, "locked sections stay as they are", 60, 117, width() / k - 74, kFaint, 9.0f, visage::Font::kRight);
+   }
+};
+
 class Panel : public ui::DesignFrame, public visage::EventTimer, public Mapper {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
@@ -1707,6 +1730,10 @@ public:
       };
       presets.currentName = [this] { return host_.presetName(); };
       presets.setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
+      // Its die opens the dice card, which RANDOMIZEs a new patch or MUTATEs the one there is.
+      presets.onDice = [this] { showDice(!host_.diceOpen); };
+      presets.diceLit = [this] { return host_.diceOpen; };
+      presetBar_ = &presets;
       (void)notice;
       // Everything from here to the loops belongs to the PLAY view.
       const size_t first = children().size();
@@ -1722,8 +1749,19 @@ public:
       buildMap();
       buildRoutes();
       buildAir();
+      // Last, so it floats over the loops.
+      buildDice();
+      showDice(host_.diceOpen);
       frame(1.0f / 60.0f);
       startTimer(1);
+   }
+
+   void showDice(bool open) {
+      host_.diceOpen = open;
+      presetBar_->redraw();
+      for (visage::Frame *f : dice_)
+         f->setVisible(open && !air_);
+      refreshDice();
    }
 
    void open(const ScreenshotOptions &o) {
@@ -1738,6 +1776,8 @@ public:
       }
       if (o.armed > 0)
          setMapping(true, o.armed);
+      if (o.dice)
+         showDice(true);
    }
 
    // The timer is checked at every screen refresh; the pacer says which refreshes step the
@@ -2543,7 +2583,146 @@ private:
          showRoutes(false);
       }
       view_->setVisible(!on);
+      // The dice card belongs to the PLAY view; it's back with it if it was open.
+      for (visage::Frame *f : dice_)
+         f->setVisible(!on && host_.diceOpen);
       redraw();
+   }
+
+   // The dice card, over the breath loops' top right, clear of every knob it changes: RANDOMIZE by
+   // COMPLEXITY, MUTATE by AMOUNT, UNDO and REDO, and a lock for each section both leave alone.
+   void buildDice() {
+      const ui::Rect b = kDiceBox;
+      const auto keep = [this](visage::Frame &f) -> visage::Frame & {
+         dice_.push_back(&f);
+         return f;
+      };
+      constexpr unsigned kAccent = 0xfff28c28;
+      keep(add<DiceCard>(b, b.w));
+      auto &rnd = add<ui::Button>({b.x + 14, b.y + 38, 132, 26}, "RANDOMIZE");
+      rnd.setAccent(kAccent);
+      rnd.onClick = [this] { roll(false); };
+      keep(rnd);
+      tips_.add(rnd, "A new patch from scratch: an instrument, then its exciter, bore, tongue and vibrato in ranges "
+                     "that sound for it. Level, master, the MIDI setup and tuning stay as they are, and so do "
+                     "locked sections.");
+      auto &mut = add<ui::Button>({b.x + 14, b.y + 72, 132, 26}, "MUTATE");
+      mut.setAccent(kAccent);
+      mut.onClick = [this] { roll(true); };
+      keep(mut);
+      tips_.add(mut, "Nudges every value by AMOUNT. What's off stays off and a choice only moves to a near one, so "
+                     "the patch stays itself. Click again to keep going.");
+      const auto amountBox = [&](float y, const char *name, double &value, const char *tip) {
+         auto &box = add<ui::NumberBox>({b.x + 154, y, b.w - 168, 26}, ui::ValueRange{0.0, 1.0, 0.3, 0.05});
+         box.setAccent(kAccent);
+         box.setLabel(name);
+         box.valueText = [](double v) { return std::to_string(static_cast<int>(std::lround(v * 100.0))) + "%"; };
+         box.parseText = [](const std::string &t, double &v) {
+            char *end = nullptr;
+            const double n = std::strtod(t.c_str(), &end);
+            if (end == t.c_str())
+               return false;
+            v = std::clamp(n / 100.0, 0.0, 1.0);
+            return true;
+         };
+         box.setValue(value);
+         box.onChange = [&value](double v) { value = v; };
+         keep(box);
+         tips_.add(box, tip);
+      };
+      amountBox(b.y + 38, "COMPLEXITY", host_.dice.complexity,
+                "How much RANDOMIZE reaches for: at 0 a plain, real instrument; higher brings growl and flutter, "
+                "mutes, the HYBRID layer and pads, unison, LFOs and routes, the delay, wider bores and the Alien.");
+      amountBox(b.y + 72, "AMOUNT", host_.dice.amount,
+                "How far MUTATE moves each value: 5% is a touch, 25% a cousin of the patch, 100% a distant one. "
+                "Only a high amount changes the instrument or adds a route.");
+      auto &undo = add<ui::Button>({b.x + b.w - 124, b.y + 8, 54, 22}, "UNDO");
+      undo.onClick = [this] { stepHistory(false); };
+      undoButton_ = &undo;
+      keep(undo);
+      tips_.add(undo, "Back to the patch before the last RANDOMIZE or MUTATE.");
+      auto &redo = add<ui::Button>({b.x + b.w - 66, b.y + 8, 52, 22}, "REDO");
+      redo.onClick = [this] { stepHistory(true); };
+      redoButton_ = &redo;
+      keep(redo);
+      tips_.add(redo, "Forward again to the patch UNDO left.");
+      static const char *const lockTips[kDiceSectionCount] = {
+         "the instrument and its exciter (breath, embouchure, stiffness, bite, aperture, noise)",
+         "the bore's knobs, the holes, the tube and the mute",
+         "the tongue: style, kick, attack, release, humanize, growl and flutter",
+         "the vibrato",
+         "the HYBRID layer",
+         "the LFOs, the Swell, the buses and the routes",
+         "the reverb and its tone, the air and the delay",
+         "voice mode, glide, unison, spread and pan"};
+      const auto cells = ui::row({b.x + 14, b.y + 138, b.w - 28, 24}, 4, 6);
+      const auto cells2 = ui::row({b.x + 14, b.y + 168, b.w - 28, 24}, 4, 6);
+      for (int s = 0; s < kDiceSectionCount; ++s) {
+         auto &lock = add<ui::Button>(s < 4 ? cells[s] : cells2[s - 4], kDiceSectionNames[s]);
+         lock.setAccent(kAccent);
+         lock.setToggle(true);
+         lock.setOn(host_.dice.locked(s));
+         lock.onToggle = [this, s](bool on) {
+            host_.dice.locks = on ? host_.dice.locks | (1u << s) : host_.dice.locks & ~(1u << s);
+         };
+         keep(lock);
+         tips_.add(lock, std::string("Locked, RANDOMIZE and MUTATE leave ") + lockTips[s] + " as they are.");
+      }
+   }
+   // Every param, with the preset's name, as the dice found them.
+   DiceSnapshot snapshot() const {
+      DiceSnapshot now;
+      now.values.resize(kParamCount);
+      for (clap_id id = 0; id < kParamCount; ++id)
+         now.values[id] = host_.paramValue(id);
+      now.name = host_.presetName();
+      return now;
+   }
+   // Puts a patch in, one edit for each param that changes, as loading a preset does. The look
+   // stays as it is.
+   void restore(const DiceSnapshot &s) {
+      for (clap_id id = 0; id < kParamCount; ++id) {
+         if (isLookParam(id) || host_.paramValue(id) == s.values[id])
+            continue;
+         host_.beginEdit(id);
+         host_.setParam(id, s.values[id]);
+         host_.endEdit(id);
+      }
+      host_.setPresetName(s.name);
+      bindings_.sync();
+      presetBar_->redraw();
+      redraw();
+   }
+   // Randomize or mutate, keeping what it was to go back to.
+   void roll(bool mutate) {
+      DiceSnapshot now = snapshot();
+      std::vector<double> values = now.values;
+      // Each roll is new: the clock and a count, mixed by the dice's own generator.
+      const uint64_t seed = DiceRng(static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()) +
+                                    ++diceSeed_).next();
+      std::string name;
+      if (mutate) {
+         mutatePatch(values, host_.dice, seed);
+         name = mutantName(now.name);
+      } else
+         name = randomizePatch(values, host_.dice, seed);
+      host_.diceHistory.push(std::move(now));
+      restore({values, name});
+      refreshDice();
+   }
+   void stepHistory(bool forward) {
+      DiceHistory &h = host_.diceHistory;
+      if (forward ? !h.canRedo() : !h.canUndo())
+         return;
+      restore(forward ? h.redo(snapshot()) : h.undo(snapshot()));
+      refreshDice();
+   }
+   // UNDO and REDO dim when there's nothing to step to.
+   void refreshDice() {
+      undoButton_->setAccent(host_.diceHistory.canUndo() ? 0xfff28c28 : kFaint);
+      redoButton_->setAccent(host_.diceHistory.canRedo() ? 0xfff28c28 : kFaint);
+      undoButton_->redraw();
+      redoButton_->redraw();
    }
 
    static constexpr int kRowsPerPage = 8;
@@ -2555,6 +2734,7 @@ private:
    };
 
    static constexpr ui::Rect kLoopsRect{912, 64, 720, 494};
+   static constexpr ui::Rect kDiceBox{1252, 104, 368, 206};
 
    EditorHost &host_;
    ui::ParamBindings bindings_;
@@ -2600,6 +2780,10 @@ private:
    FamilyBadge *badge_ = nullptr;
    ui::Label *rangeText_ = nullptr;
    std::vector<ui::Knob *> familyKnobs_;
+   ui::PresetBar *presetBar_ = nullptr;
+   ui::Button *undoButton_ = nullptr, *redoButton_ = nullptr;
+   std::vector<visage::Frame *> dice_;
+   uint64_t diceSeed_ = 0;
    std::vector<EditorHost::Voice> voices_;
    int shownModel_ = -1;
 };
