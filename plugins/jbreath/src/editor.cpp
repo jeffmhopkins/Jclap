@@ -2284,10 +2284,10 @@ private:
                               "insect no throat has. The hollow ring is where each note starts; each dot is a voice's throat now.");
       formantGraph_ = &tabs.addToPage(2, add<FormantGraph>({236, 104, 250, 262}, 250.0f));
       tips_.add(*formantGraph_, "The throat's five resonances as they are now, and the note's harmonics they lift.");
-      const auto a1 = ui::row({496, 96, 386, 120}, 5), a2 = ui::row({496, 222, 386, 120}, 5);
+      const auto a1 = ui::row({496, 92, 386, 104}, 6), a2 = ui::row({496, 198, 386, 104}, 6);
       const auto alienKnob = [&](clap_id id, const char *name, ui::Rect cell, const char *tip) {
          ui::Knob &k = knob(id, name, modelColor(kAlien), cell, tip);
-         k.setTextSizes(9.5f, 11.0f, 9.0f);
+         k.setTextSizes(8.5f, 9.5f, 8.5f);
          alienKnobs_.push_back(&k);
          tabs.addToPage(2, k);
       };
@@ -2296,17 +2296,39 @@ private:
                                              "shape every third of a second.");
       alienKnob(kAlienDrift, "DRIFT", a1[2], "How far the throat wanders on its own, each resonance a little apart from the "
                                              "others: every note different.");
-      alienKnob(kAlienTalk, "TALK", a1[3], "How much it talks: each note a new syllable, a consonant opening onto its own "
+      alienKnob(kAlienTalk, "TALK", a2[0], "How much it talks: each note a new syllable, a consonant opening onto its own "
                                            "vowel, one after another like a sentence; the breath's pressure moves the mouth; "
                                            "turned up, it chatters on its own while a note is held.");
-      alienKnob(kAlienShift, "SHIFT", a2[0], "Moves every resonance up or down an octave: a smaller or a larger throat.");
-      alienKnob(kAlienSharp, "SHARP", a2[1], "How narrow the resonances are: wide and breathy, to ringing, to whistling.");
+      alienKnob(kAlienShift, "SHIFT", a1[3], "Moves every resonance up or down an octave: a smaller or a larger throat.");
+      alienKnob(kAlienSharp, "SHARP", a1[4], "How narrow the resonances are: wide and breathy, to ringing, to whistling.");
       alienKnob(kAlienLinger, "LINGER", a2[3], "The chance a vowel is held on for two or three times as long, more the "
                                                "harder it's blown.");
-      alienKnob(kAlienGlide, "GLIDE", a1[4], "How quickly each syllable moves on to its vowel: a snap, as in speech, to a "
+      alienKnob(kAlienGlide, "GLIDE", a2[2], "How quickly each syllable moves on to its vowel: a snap, as in speech, to a "
                                              "slow slide.");
-      alienKnob(kAlienBow, "BOW", a2[2], "How much a bowed string sings along with the voice: none is pure voice, all "
+      alienKnob(kAlienStrength, "CONSONANT", a2[1], "How strong each syllable's consonant is: none leaves only the vowels, all "
+                                                     "of it the full stop, hiss or hum.");
+      alienKnob(kAlienBend, "BEND", a2[4], "How far the throat follows a pitch bend (MPE or the wheel): none keeps "
+                                           "the vowel where it is, all slides every resonance with the pitch.");
+      alienKnob(kAlienBow, "BOW", a1[5], "How much a bowed string sings along with the voice: none is pure voice, all "
                                          "of it the string's buzz through the throat.");
+      // The consonant families, each on or off.
+      tabs.addToPage(2, add<ui::Label>({496, 304, 386, 14}, "CONSONANTS", kDim, visage::Font::kLeft, 0.68f));
+      {
+         static const char *const kFamilies[8] = {"M N", "L R", "W Y", "V Z", "B D G", "H", "F S", "P T K"};
+         static const char *const kFamilyTips[8] = {
+            "Nasals: m, n and ng, hummed through the nose.", "Liquids: l and r.", "Glides: w and y, sliding into the vowel.",
+            "Voiced fricatives: v, th (as in this), z and zh, buzzing.", "Voiced stops: b, d, g and j.",
+            "H: breath through the vowel's own shape.", "Fricatives: f, th, s and sh, a hiss at the lips or teeth.",
+            "Stops: p, t, k and ch, a closure, a pop and a breath."};
+         const auto fam = ui::row({496, 320, 386, 24}, 8, 4);
+         for (int f = 0; f < 8; ++f) {
+            auto &b = tabs.addToPage(2, add<ui::Button>(fam[f], kFamilies[f]));
+            b.setAccent(modelColor(kAlien));
+            b.setToggle(true);
+            bindings_.bind(b, kAlienSounds + f);
+            tips_.add(b, std::string(kFamilyTips[f]) + " Off, the Alien never says them.");
+         }
+      }
       tabs.addToPage(2, add<ui::Label>({702, 366, 50, 16}, "PACE", kDim, visage::Font::kLeft, 0.68f));
       tips_.add(tabs.addToPage(2, choiceBox(kAlienPace, {752, 360, 130, 26}, modelColor(kAlien))),
                 "How often a held note goes on to its next syllable. Free: by Talk. A note value: in time "

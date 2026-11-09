@@ -175,6 +175,11 @@ struct Character {
    // The Alien's throat: where on its ring of shapes a note starts (0..1), how fast it travels and
    // how far it wanders (0..1), its shift in octaves (-1..1) and how sharp its resonances are (0..1).
    float vowel = 0.0f, morph = 0.3f, drift = 0.3f, shift = 0.0f, sharp = 0.5f, bow = 0.15f, talk = 0.5f, paceSec = 0.0f, linger = 0.3f, glideMs = 30.0f;
+   // (The Alien: how many semitones the note is bent that its throat follows.)
+   float bendSemis = 0.0f;
+   // (The Alien's consonants: how strong, and which of its eight families it says, a bit each.)
+   float consonants = 1.0f;
+   uint32_t sounds = 0xffu;
 
    // The loss over the models' tuning, easing off towards the top so a reed or lips can still
    // sustain a note at full Loss (a very lossy bore is soft and slow, not silent).
@@ -994,6 +999,15 @@ inline constexpr AlienConsonant kAlienConsonants[] = {
 };
 inline constexpr int kAlienConsonantCount = static_cast<int>(sizeof(kAlienConsonants) / sizeof(kAlienConsonants[0]));
 inline constexpr int kAlienSoft = 7, kAlienMiddling = 16; // (the soft ones end, the middling ones end)
+// Its eight families, each of which can be turned off: m n ng, l r, w y, v dh z zh, b d g j, h,
+// f th s sh, p t k ch.
+inline constexpr int alienFamily(int consonant) {
+   constexpr int kStarts[8] = {0, 3, 5, 7, 11, 15, 16, 20};
+   int f = 0;
+   while (f < 7 && consonant >= kStarts[f + 1])
+      ++f;
+   return f;
+}
 
 // Alien: a bowed string sounding through a throat that keeps changing shape.
 //
@@ -1253,9 +1267,10 @@ private:
       // The syllable: its consonant (shut, then its hiss or burst, then the breath through the
       // throat), then its vowel, gliding out of the consonant's locus in the Glide's time.
       sylT_ += dt * 1000.0;
-      const AlienConsonant &k = kAlienConsonants[cons_];
+      const AlienConsonant &k = kAlienConsonants[std::max(cons_, 0)];
       const bool sounding = talk > 0.05 && cons_ >= 0;
-      const double closeEnd = k.closeMs, soundEnd = closeEnd + k.soundMs, aspEnd = soundEnd + k.aspMs;
+      const double closeEnd = sounding ? k.closeMs : 0.0, soundEnd = sounding ? closeEnd + k.soundMs : 0.0,
+                   aspEnd = sounding ? soundEnd + k.aspMs : -1.0;
       const bool inCons = sounding && sylT_ < aspEnd;
       if (!sounding || sylT_ >= aspEnd) {
          voiceT_ = 1.0f;
@@ -1274,7 +1289,7 @@ private:
       }
       // (Shallower, a lighter consonant: closer to the vowel.)
       voiceT_ = static_cast<float>(1.0 - consDepth_ * (1.0 - voiceT_));
-      if (inCons || sylT_ < aspEnd + 1.0)
+      if (inCons)
          glide_ = 0.0;
       else
          glide_ = std::min(1.0, glide_ + dt / (0.001 * std::clamp(static_cast<double>(character.glideMs), 5.0, 400.0)));
@@ -1311,6 +1326,12 @@ private:
          mouth_.bw[n] += ease * (t.bw[n] - mouth_.bw[n]);
       }
       t = mouth_;
+      // (Bent, the throat follows the bend, as far as Bend sets.)
+      if (character.bendSemis != 0.0f) {
+         const double follow = std::exp2(std::clamp(static_cast<double>(character.bendSemis), -48.0, 48.0) / 12.0);
+         for (int n = 0; n < kAlienFormants; ++n)
+            t.hz[n] *= follow;
+      }
       // (A high note's first resonance above it, and the upper ones wider: see notePitch.)
       const double ride = std::min(high_, 1.0);
       t.hz[0] = std::max(t.hz[0], t.hz[0] + ride * (1.15 * hz_ - t.hz[0]));
@@ -1335,7 +1356,7 @@ private:
    void syllable(double depth, double hardness) {
       held_ = 0.0;
       sylT_ = 0.0;
-      consDepth_ = std::clamp(depth * std::min(1.0, 2.0 * character.talk), 0.0, 1.0);
+      consDepth_ = std::clamp(depth * std::min(1.0, 2.0 * character.talk) * character.consonants, 0.0, 1.0);
       const uint32_t k = word_ * 7919u + said_++;
       uint32_t h = k * 2654435761u;
       h ^= h >> 15;
@@ -1358,10 +1379,20 @@ private:
       const int hi = hard < 0.38 ? kAlienSoft : hard < 0.7 ? kAlienMiddling : kAlienConsonantCount;
       uint32_t h2 = h * 2654435761u;
       h2 ^= h2 >> 16;
-      cons_ = lo + static_cast<int>(h2 % static_cast<uint32_t>(hi - lo));
-      const AlienConsonant &kc = kAlienConsonants[cons_];
-      if (kc.noise > 0.0f)
-         fric_.bandpass(std::min(static_cast<double>(kc.noiseHz), 0.42 * fs_), kc.noiseQ, fs_);
+      // (Only the families that are on; none of them in this class, any that's on; none at all, or
+      // Consonants at nothing, just the vowel.)
+      int pick[kAlienConsonantCount], picks = 0;
+      for (int c = lo; c < hi; ++c)
+         if (character.sounds & (1u << alienFamily(c)))
+            pick[picks++] = c;
+      if (picks == 0)
+         for (int c = 0; c < kAlienConsonantCount; ++c)
+            if (character.sounds & (1u << alienFamily(c)))
+               pick[picks++] = c;
+      cons_ = picks > 0 && consDepth_ > 0.01 ? pick[h2 % static_cast<uint32_t>(picks)] : -1;
+      if (cons_ >= 0 && kAlienConsonants[cons_].noise > 0.0f)
+         fric_.bandpass(std::min(static_cast<double>(kAlienConsonants[cons_].noiseHz), 0.42 * fs_),
+                        kAlienConsonants[cons_].noiseQ, fs_);
       const double talk = std::clamp(static_cast<double>(character.talk), 0.2, 1.0);
       nextAt_ = character.paceSec > 0.0f ? character.paceSec : (2.4 - 1.6 * talk) * (0.75 + 0.5 * r1);
       // Linger: a chance this vowel is held on for two or three times as long, more the harder it's

@@ -62,6 +62,12 @@ top stays round rather than whistling. On the ALIEN tab:
 - **BOW**: how much bowed string sings with the voice, from none to all string.
 - **LINGER**: the chance a syllable is held on two or three times as long, more the harder it's
   blown.
+- **CONSONANT**: how strong each syllable's consonant is, from none (only the vowels) to the full
+  stop, hiss or hum.
+- **CONSONANTS**: its eight families, each on or off (M N, L R, W Y, V Z, B D G, H, F S, P T K):
+  turned off, it never says them, and a note that would have picks one that's on.
+- **BEND**: how far the throat follows a pitch bend (an MPE note's own, or the wheel): none keeps the
+  vowel where it is, all slides every resonance with the pitch, the way a talk box's mouth would.
 - **PACE**: how often a held note goes on to its next syllable: Free (by Talk, from about every 2 s
   to under 1 s), or a note value from 1/16 to 2 bars at the host's tempo.
 

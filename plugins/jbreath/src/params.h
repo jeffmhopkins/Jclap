@@ -155,7 +155,12 @@ enum ParamId : clap_id {
    kAlienPace,
    kAlienLinger,
    kAlienGlide,
-   kParamCount
+   kAlienBend,
+   // The Alien's consonants: how strong, and which families it says (each on or off).
+   kAlienStrength,
+   kAlienSounds,
+   kAlienSoundsEnd = kAlienSounds + 8,
+   kParamCount = kAlienSoundsEnd
 };
 // The AIR view's look: the panel's own, kept with the project but not with presets.
 inline bool isLookParam(clap_id id) { return (id >= kLook && id <= kGlow) || (id >= kLoopX && id <= kLoopSizeMin); }
@@ -219,7 +224,7 @@ inline constexpr clap_id kModDestinations[] = {
    // Added after Release 24.
    kMuteAmount,
    // Added after Release 25.
-   kAlienVoice, kAlienMorph, kAlienDrift, kAlienShift, kAlienSharp, kAlienBow, kAlienTalk, kAlienLinger, kAlienGlide};
+   kAlienVoice, kAlienMorph, kAlienDrift, kAlienShift, kAlienSharp, kAlienBow, kAlienTalk, kAlienLinger, kAlienGlide, kAlienBend, kAlienStrength};
 constexpr int kModDestCount = static_cast<int>(sizeof(kModDestinations) / sizeof(kModDestinations[0]));
 constexpr int kFirstBusDest = 31;
 constexpr bool isBusDest(int d) { return d >= kFirstBusDest && d < kFirstBusDest + kBusCount; }
@@ -406,6 +411,16 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kAlienPace, "Alien Pace", "Alien", 0.0, 6.0, 0.0, kGlobalChoice},
       {kAlienLinger, "Alien Linger", "Alien", 0.0, 1.0, 0.3, kMod},
       {kAlienGlide, "Alien Glide", "Alien", 5.0, 400.0, 30.0, kMod},
+      {kAlienBend, "Alien Bend", "Alien", 0.0, 1.0, 0.6, kMod},
+      {kAlienStrength, "Alien Consonants", "Alien", 0.0, 1.0, 1.0, kMod},
+      {kAlienSounds + 0, "Alien M N", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 1, "Alien L R", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 2, "Alien W Y", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 3, "Alien V Z", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 4, "Alien B D G", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 5, "Alien H", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 6, "Alien F S", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
+      {kAlienSounds + 7, "Alien P T K", "Alien", 0.0, 1.0, 1.0, kGlobalChoice},
    };
    for (const auto &d : fixed)
       p[d.id] = d;
@@ -491,6 +506,16 @@ inline const char *const *choiceNames(clap_id id, int &count) {
       return kLimiterNames;
    case kReverbOn:
    case kDelayOn:
+      count = 2;
+      return kOffOnNames;
+   case kAlienSounds + 0:
+   case kAlienSounds + 1:
+   case kAlienSounds + 2:
+   case kAlienSounds + 3:
+   case kAlienSounds + 4:
+   case kAlienSounds + 5:
+   case kAlienSounds + 6:
+   case kAlienSounds + 7:
       count = 2;
       return kOffOnNames;
    case kDelaySync:
@@ -583,6 +608,8 @@ inline bool isPercent(clap_id id) {
    case kAlienBow:
    case kAlienTalk:
    case kAlienLinger:
+   case kAlienBend:
+   case kAlienStrength:
       return true;
    default:
       if (id >= kBusBase && id < kRouteBase)

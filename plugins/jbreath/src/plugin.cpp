@@ -518,6 +518,7 @@ private:
       updatePan(s);
       s.voice.setPitch(pitchOf(s));
       s.voice.setBend(bendOf(s) / std::max(1.0, isMember(s.channel) ? bendRange(s.channel) : 2.0));
+      s.voice.setBendSemitones(bendOf(s));
       s.voice.setExpression(pressureOf(s), timbreOf(s));
       s.voice.setGain(gainOf(s));
    }
@@ -581,6 +582,11 @@ private:
       vs.alienPaceSec = alienPaceBeats(static_cast<int>(value(kAlienPace) + 0.5)) * 60.0 / tempo_;
       vs.alienLinger = value(kAlienLinger, s);
       vs.alienGlide = value(kAlienGlide, s);
+      vs.alienBend = value(kAlienBend, s);
+      vs.alienStrength = value(kAlienStrength, s);
+      vs.alienSounds = 0;
+      for (int f = 0; f < 8; ++f)
+         vs.alienSounds |= value(kAlienSounds + f) > 0.5 ? 1u << f : 0u;
       vs.brass = value(kBrass, s);
       vs.loss = value(kLoss, s);
       vs.cutoffHz = value(kHoleCutoff, s);
