@@ -56,7 +56,7 @@ struct VoiceSettings {
    // The rest of the exciter and bore (Character in models.h), the player's habits, and the air.
    double stiffness = 0.5, aperture = 0.5, growl = 0.0, cone = 0.5, brass = 0.5;
    // The Alien's throat: Voice, Morph, Drift, Shift and Sharp.
-   double alienVoice = 0.0, alienMorph = 0.3, alienDrift = 0.3, alienShift = 0.0, alienSharp = 0.5, alienBow = 0.15, alienTalk = 0.5, alienPaceSec = 0.0, alienLinger = 0.3;
+   double alienVoice = 0.0, alienMorph = 0.3, alienDrift = 0.3, alienShift = 0.0, alienSharp = 0.5, alienBow = 0.15, alienTalk = 0.5, alienPaceSec = 0.0, alienLinger = 0.3, alienGlide = 30.0;
    double loss = 0.04, cutoffHz = 1300.0, detune = 0.0, humanize = 0.0, air = 0.0;
    int tongueType = kTongueHard, vibType = kVibBreath;
    // HYBRID: a plain subtractive voice on the same breath: its wave, octave and detune, how loud it
@@ -428,7 +428,7 @@ private:
       swellAge_ = 0.0;
       // The HYBRID envelope starts again from where it is (from 0 after silence).
       hybStage_ = kHybAttack;
-      articulate();
+      articulate(velocity);
    }
 
 public:
@@ -444,7 +444,7 @@ public:
       tongue_ = tongueAmount();
       pitch_ = pitch;
       hold_ = 1.0;
-      articulate();
+      articulate(velocity);
       hybStage_ = kHybAttack;
    }
    // Legato: the fingers change, the air doesn't stop.
@@ -454,7 +454,7 @@ public:
       age_ = 0;
       pitch_ = pitch;
       velocity_ = std::max(velocity_ * 0.8, velocity);
-      articulate();
+      articulate(velocity);
       // Double tonguing: every note gets its own light tongue, even slurred.
       if (settings_.tongueType == kTongueDouble) {
          kickAge_ = 0;
@@ -681,13 +681,16 @@ private:
    double pulseAmp_ = 0.0;
 
    Model &model() { return *models_[0][settings_.model]; }
-   // A new note (or a slurred one) for every copy: the Alien's next syllable.
-   void articulate() {
+   // A new note (or a slurred one) for every copy: the Alien's next syllable, its consonant as hard
+   // as the note is struck or blown.
+   void articulate(double velocity) {
+      // (The pressure only once it's been played: a fresh note's is the last one's.)
+      const double hardness = std::clamp(pressureSeen_ ? std::max(velocity, pressure_) : velocity, 0.0, 1.0);
       static std::atomic<uint32_t> words{0};
       const uint32_t word = words.fetch_add(1, std::memory_order_relaxed);
       for (auto &copies : models_)
          if (copies[settings_.model])
-            copies[settings_.model]->articulate(word);
+            copies[settings_.model]->articulate(word, hardness);
    }
    double coef(double ms) const { return 1.0 - std::exp(-1000.0 / (std::max(ms, 0.05) * fs_)); }
 
@@ -858,6 +861,7 @@ private:
          c.talk = static_cast<float>(live_.alienTalk);
          c.paceSec = static_cast<float>(live_.alienPaceSec);
          c.linger = static_cast<float>(live_.alienLinger);
+         c.glideMs = static_cast<float>(live_.alienGlide);
          float cutoff = static_cast<float>(live_.cutoffHz / 1300.0) * holeK * tube.cut, loss = tube.loss;
          Mute::bore(settings_.mute, mute_.amount(), cutoff, loss);
          c.loss = std::max(0.0f, static_cast<float>(live_.loss) + loss);
@@ -1303,6 +1307,7 @@ private:
       live_.alienTalk = at(kDest<kAlienTalk>, s.alienTalk);
       live_.alienPaceSec = s.alienPaceSec;
       live_.alienLinger = at(kDest<kAlienLinger>, s.alienLinger);
+      live_.alienGlide = at(kDest<kAlienGlide>, s.alienGlide);
       live_.detune = at(kDest<kDetune>, s.detune);
       live_.air = at(kDest<kAir>, s.air);
       applyCharacter();

@@ -28,9 +28,13 @@ reflections of the real one) driven by a nonlinear exciter, the part the player 
 
 An alien that talks. Its voice is vocal folds (a pulse that opens and snaps shut once a period,
 shutting faster the harder it's blown, brighter, with breath hissing through it as **NOISE** sets),
-sung through a throat, and every note is a syllable: the mouth shuts for an instant (a consonant)
-and opens onto a new vowel, a good way round from the last, so a run of notes reads as a sentence
-in no language at all. While a note is held the breath's pressure moves the mouth, and after a
+sung through a throat, and every note is a syllable: a consonant, then one of the five vowels (A, E,
+I, O, U, never the last one again), so a run of notes reads as a sentence in no language at all.
+How hard the note is played (its velocity, and its pressure once it's blown) picks the consonant:
+soft notes the soft ones (m, n, ng, l, r, w, y), harder the voiced ones (v, th, z, zh, b, d, g, j,
+h), hardest the hiss and pop of f, th, s, sh, p, t, k and ch. Each has its own sound: a nasal's hum,
+a fricative's hiss at the lips or teeth, a stop's closure, burst and breath, and the vowel glides
+out of where it leaves the mouth. While a note is held the breath's pressure moves the mouth, and after a
 while it goes on to its next syllable. A bowed string can sing along with it (**BOW**): the breath
 is the bow's speed, **BITE** its weight, **EMBOUCHURE** where it crosses the string, **STIFFNESS**
 the hair's tension, **APERTURE** how wide it lies, and **CONE** how stiff the string is, from gut to
@@ -47,8 +51,9 @@ shape plays as loud. On the ALIEN tab:
 - **VOICE**: where on the ring the throat starts. Route the slide or pressure to it to steer it.
 - **MORPH**: how fast the throat also glides round the ring on its own while a note is held.
 - **DRIFT**: how far it wanders, each resonance a little apart from the others.
-- **TALK**: how much it talks: how deep each syllable's consonant is, how far the syllables move it
+- **TALK**: how much it talks: how full each syllable's consonant is, how far the syllables move it
   round the ring, and how far the pressure moves the mouth. At none it's one steady vowel.
+- **GLIDE**: how quickly each syllable moves onto its vowel, from a snap (5 ms) to a slow slur.
 - **SHIFT**: every resonance up or down an octave, a smaller or a much larger throat.
 - **SHARP**: how narrow the resonances are, from a soft vowel to ringing whistles like a throat
   singer's overtones.

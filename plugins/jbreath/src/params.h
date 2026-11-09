@@ -154,6 +154,7 @@ enum ParamId : clap_id {
    kAlienTalk,
    kAlienPace,
    kAlienLinger,
+   kAlienGlide,
    kParamCount
 };
 // The AIR view's look: the panel's own, kept with the project but not with presets.
@@ -218,7 +219,7 @@ inline constexpr clap_id kModDestinations[] = {
    // Added after Release 24.
    kMuteAmount,
    // Added after Release 25.
-   kAlienVoice, kAlienMorph, kAlienDrift, kAlienShift, kAlienSharp, kAlienBow, kAlienTalk, kAlienLinger};
+   kAlienVoice, kAlienMorph, kAlienDrift, kAlienShift, kAlienSharp, kAlienBow, kAlienTalk, kAlienLinger, kAlienGlide};
 constexpr int kModDestCount = static_cast<int>(sizeof(kModDestinations) / sizeof(kModDestinations[0]));
 constexpr int kFirstBusDest = 31;
 constexpr bool isBusDest(int d) { return d >= kFirstBusDest && d < kFirstBusDest + kBusCount; }
@@ -404,6 +405,7 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kAlienTalk, "Alien Talk", "Alien", 0.0, 1.0, 0.5, kMod},
       {kAlienPace, "Alien Pace", "Alien", 0.0, 6.0, 0.0, kGlobalChoice},
       {kAlienLinger, "Alien Linger", "Alien", 0.0, 1.0, 0.3, kMod},
+      {kAlienGlide, "Alien Glide", "Alien", 5.0, 400.0, 30.0, kMod},
    };
    for (const auto &d : fixed)
       p[d.id] = d;
@@ -640,6 +642,7 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kAttack:
    case kRelease:
    case kGlide:
+   case kAlienGlide:
    case kVibDelay:
    case kRoomPreDelay:
       std::snprintf(out, size, "%.0f ms", value);

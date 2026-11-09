@@ -2282,9 +2282,9 @@ private:
       throatRing_ = &tabs.addToPage(2, add<ThroatRing>({32, 104, 190, 276}, 190.0f));
       tips_.add(*throatRing_, "The Alien's throat travels round this ring of shapes: five vowels, and a ghost, an abyss and an "
                               "insect no throat has. The hollow ring is where each note starts; each dot is a voice's throat now.");
-      formantGraph_ = &tabs.addToPage(2, add<FormantGraph>({236, 104, 306, 262}, 306.0f));
+      formantGraph_ = &tabs.addToPage(2, add<FormantGraph>({236, 104, 250, 262}, 250.0f));
       tips_.add(*formantGraph_, "The throat's five resonances as they are now, and the note's harmonics they lift.");
-      const auto a1 = ui::row({556, 96, 326, 120}, 4), a2 = ui::row({556, 222, 326, 120}, 4);
+      const auto a1 = ui::row({496, 96, 386, 120}, 5), a2 = ui::row({496, 222, 386, 120}, 5);
       const auto alienKnob = [&](clap_id id, const char *name, ui::Rect cell, const char *tip) {
          ui::Knob &k = knob(id, name, modelColor(kAlien), cell, tip);
          k.setTextSizes(9.5f, 11.0f, 9.0f);
@@ -2303,6 +2303,8 @@ private:
       alienKnob(kAlienSharp, "SHARP", a2[1], "How narrow the resonances are: wide and breathy, to ringing, to whistling.");
       alienKnob(kAlienLinger, "LINGER", a2[3], "The chance a vowel is held on for two or three times as long, more the "
                                                "harder it's blown.");
+      alienKnob(kAlienGlide, "GLIDE", a1[4], "How quickly each syllable moves on to its vowel: a snap, as in speech, to a "
+                                             "slow slide.");
       alienKnob(kAlienBow, "BOW", a2[2], "How much a bowed string sings along with the voice: none is pure voice, all "
                                          "of it the string's buzz through the throat.");
       tabs.addToPage(2, add<ui::Label>({702, 366, 50, 16}, "PACE", kDim, visage::Font::kLeft, 0.68f));

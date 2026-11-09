@@ -580,6 +580,7 @@ private:
       vs.alienTalk = value(kAlienTalk, s);
       vs.alienPaceSec = alienPaceBeats(static_cast<int>(value(kAlienPace) + 0.5)) * 60.0 / tempo_;
       vs.alienLinger = value(kAlienLinger, s);
+      vs.alienGlide = value(kAlienGlide, s);
       vs.brass = value(kBrass, s);
       vs.loss = value(kLoss, s);
       vs.cutoffHz = value(kHoleCutoff, s);
