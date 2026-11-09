@@ -316,6 +316,24 @@ void tooltipsOutlivedByFrames() {
    knob.onMouseDown().callback(press(10, 10));
 }
 
+void hoverAreaCarriesATip() {
+   // A plugin's name is drawn, not a widget; a HoverArea over it carries its version as a tip.
+   visage::Frame panel;
+   panel.setBounds(0, 0, 400, 300);
+   ui::HoverArea area;
+   area.setBounds(10, 10, 150, 40);
+   panel.addChild(&area);
+   ui::Tooltips tips;
+   tips.add(area, "Plugin version 1.2.3");
+   const size_t before = panel.children().size();
+   tips.show(area);
+   JCLAP_CHECK_EQ(panel.children().size(), before + 1);
+   // A left click only hides the tip; it opens nothing.
+   area.onMouseDown().callback(press(20, 20));
+   area.mouseDown(press(20, 20));
+   tips.hide();
+}
+
 void dropdownRightClickDoesntPick() {
    Params p;
    ui::ParamBindings bindings(p);
@@ -724,6 +742,7 @@ int main() {
    secondButtonMidDrag();
    polarDotClickKeepsValue();
    tooltipsOutlivedByFrames();
+   hoverAreaCarriesATip();
    dropdownRightClickDoesntPick();
    popupMenuCloses();
    measuresAtAScale();

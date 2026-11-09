@@ -76,6 +76,8 @@ public:
       tabs_ = &add<ui::TabBar>({270, 14, 310, 26}, std::vector<std::string>{"MIXER", "TEST TONE", "GRID"});
       // Hidden until a newer JClap release is out; then it links to it.
       add<ui::UpdateNotice>({168, 15, 96, 22});
+      // The name in the header shows this plugin's version on hover.
+      tips_.add(add<ui::HoverArea>({10, 10, 150, 28}), "Plugin Template version " JCLAP_PLUGIN_VERSION);
       buildMixer();
       buildTestTone();
       buildGrid();

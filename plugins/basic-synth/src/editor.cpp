@@ -62,6 +62,8 @@ class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       add<ui::UpdateNotice>({228, 15, 164, 26});
+      // The name in the header shows this plugin's version on hover.
+      tips_.add(add<ui::HoverArea>({12, 8, 206, 40}), "Basic Synth version " JCLAP_PLUGIN_VERSION);
       auto &presets = add<ui::PresetBar>({400, 14, 308, 28}, factoryPresets(), kPresetFormat, host_);
       presets.setAccent(kOrange);
       presets.defaults = defaultValues();

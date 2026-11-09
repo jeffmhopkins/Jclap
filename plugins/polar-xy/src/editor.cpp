@@ -539,6 +539,8 @@ class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       add<ui::UpdateNotice>({196, 19, 196, 26});
+      // The name in the header shows this plugin's version on hover.
+      tips_.add(add<ui::HoverArea>({14, 12, 168, 40}), "Polar XY version " JCLAP_PLUGIN_VERSION);
       auto &presets = add<ui::PresetBar>({kDesignWidth - 360, 18, 348, 28}, factoryPresets(), kPresetFormat, host_);
       presets.setAccent(kOrange);
       tip(presets, "Presets: the arrows step through them, the name opens the menu, the star marks a favorite and SAVE "

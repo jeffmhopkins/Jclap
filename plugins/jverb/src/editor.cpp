@@ -1349,6 +1349,8 @@ private:
 
    void buildHeader() {
       update_ = &glassy(add<ui::UpdateNotice>({140, 13, 164, 26}), kOrange);
+      // The name in the header shows this plugin's version on hover.
+      tips_.add(add<ui::HoverArea>({2, 6, 128, 40}), "JVerb version " JCLAP_PLUGIN_VERSION);
       // Its die opens the dice card, which RANDOMIZEs a new space or MUTATEs the one there is.
       presetBar_ = &add<PresetBar>({312, 12, 408, 28}, host_);
       presetBar_->onDice = [this](bool on) { showDice(on); };

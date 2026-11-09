@@ -472,6 +472,8 @@ private:
             ui::applyPreset(p, host_, presetDefaults());
       };
       add<ui::UpdateNotice>({1344, 45, 280, 14}).alignRight = true;
+      // The name in the header shows this plugin's version on hover.
+      tips_.add(add<ui::HoverArea>({14, 8, 236, 44}), "MicroMonsta 2 CC version " JCLAP_PLUGIN_VERSION);
 
       // Reading the synth, through the Bitwig script. The line under the header says what's going on,
       // and what to do on the synth for a bank.
