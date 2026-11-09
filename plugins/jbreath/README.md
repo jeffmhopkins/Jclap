@@ -22,71 +22,77 @@ reflections of the real one) driven by a nonlinear exciter, the part the player 
 | **Sax** | the same kind of reed, softer | a cone, as a split bore: every harmonic, overblowing at the octave | the mouthpiece's honk; growl when it's pushed |
 | **Oboe** | a stiff double reed, its two blades beating shut each cycle | a narrow cone, darker | the reed's buzz, richer the harder it's blown, through formants near 1.25 and 2.9 kHz with a thin fundamental: nasal, not a soprano sax |
 | **Trumpet** | the lips: a mass on a spring blown open by the mouth pressure (outward striking), with the flow through them in closed form | a flared horn: resonances on every harmonic, none at DC | the wave steepening on its way down the horn, more the harder it's blown, towards a shock at forte: the brassy blare |
-| **Alien** | vocal folds, a pulse opening and snapping shut each period (and, as much as you like, a bowed string) | a throat: five resonances in a row | every note a syllable: a consonant opening onto a new vowel, the vowels running on from note to note like a sentence, the pressure moving the mouth while it's held |
+| **Alien** | vocal folds, a pulse opening and snapping shut each period (or a bowed string) | a throat, nose and mouth: a formant synthesizer | every note a syllable of its words (typed, or its own made-up language), each consonant made at its place in the mouth, the vowel held for the note and closed off when it's let go |
 
 ### The alien
 
-An alien that talks. Its voice is vocal folds (a pulse that opens and snaps shut once a period,
-shutting faster the harder it's blown, brighter, with breath hissing through it as **NOISE** sets),
-sung through a throat, and every note is a syllable: a consonant, then one of the five vowels (A, E,
-I, O, U, never the last one again, unless **ORDER** says otherwise), so a run of notes reads as a
-sentence in no language at all.
-How hard the note is played (its velocity, and its pressure once it's blown) picks the consonant:
-soft notes the soft ones (m, n, ng, l, r, w, y), harder the voiced ones (v, th, z, zh, b, d, g, j,
-h), hardest the hiss and pop of f, th, s, sh, p, t, k and ch. The consonants are made the way a
-Klatt formant synthesizer makes them, and checked against recordings of each one: every consonant
-has a place in the mouth (lips, teeth, ridge, palate, velum or glottis) and runs through a closure,
-its sound, a breath of aspiration and then the vowel. A nasal hums low through the nose (most of it
-under 400 Hz) with the mouth shut; a fricative is a band of hiss at its own pitch and level (s high
-and strong, sh lower, f and th faint), buzzing with the voice when it's voiced; a stop goes silent
-(or, voiced, keeps a low voice bar), pops, breathes and opens. The vowel then glides out from
-where that place leaves the mouth, as speech's locus equations put it, so "ba", "da" and "ga" each
-open differently onto the same vowel, and only pairs English allows are said (no "ng" or "zh" to
-start a syllable, no "yi" or "wu"). While a note is held the breath's pressure moves the mouth, and after a
-while it goes on to its next syllable. A bowed string can sing along with it (**BOW**): the breath
-is the bow's speed, **BITE** its weight, **EMBOUCHURE** where it crosses the string, **STIFFNESS**
-the hair's tension, **APERTURE** how wide it lies, and **CONE** how stiff the string is, from gut to
-a steel wire whose partials stretch apart like a bell's.
+An alien that sings words, a syllable a note: yours, typed on the ALIEN tab, or words of its own.
+Its voice is a formant synthesizer, written for it after Klatt's (a cascade of eight resonances for
+the vowels, with a nose and a mouth beside them for the consonants), sung by vocal folds (a
+KLGLOTT88 pulse, shutting faster and brighter the harder it's blown, with a little jitter and
+shimmer) and checked against espeak-ng with an offline speech recognizer. Each syllable runs as a
+plan: the last one's closing consonants, this one's opening ones, then its vowel, held as long as
+the note is. A stop shuts the mouth, pops at its place and breathes; a fricative hisses through a
+bank shaped for its place (s high and strong, sh lower, f and th faint), buzzing in a voiced one; a
+nasal hums through the nose with the mouth's notch where its place puts it; l, r, w and y slide
+into the vowel. Every consonant opens onto the vowel from where its place leaves the mouth, as
+speech's locus equations put it, so "ba", "da" and "ga" each open differently onto the same vowel.
+A diphthong (ai, ay, oy, ow, o) holds its first vowel and then moves on, as a singer does. Let go,
+it says the syllable's closing consonants before it falls silent; a chord's notes sing the same
+syllable; a slur (Legato) runs one syllable straight into the next. The breath is how loud and how
+hard it sings, the velocity how hard it says the consonants.
 
-The throat is five resonances in a row, as a vocal tract's are (sharp peaks with deep valleys
-between them, so each shape is a clear vowel), on a ring of eight shapes: the vowels A, O, U, I and
-E, and between them three no throat has, a **Ghost** (high, hollow peaks), an **Abyss** (low, dark
-and huge) and an **Insect** (a narrow, buzzing whine). It's held to its source's level, so every
-shape plays as loud (from A3 up it's levelled on the note's own harmonics, so a high note
-doesn't surge as they cross a resonance). High notes are sung as a singer sings them: from about E4 up the folds close
-more gently, the first resonance rides above the note, and the upper ones widen and roll off, so the
-top stays round rather than whistling. On the ALIEN tab:
+Typed words are looked up in the CMU Pronouncing Dictionary (125,000 words, packed into the plugin);
+a word it hasn't got is read as an English reader would read it, so made-up names work too. Phones
+in ARPAbet between brackets, `[HH AH0 L OW1]`, are sung as written. The words start from the top
+whenever the host starts playing, and are kept with the project.
+
+Its own words come from a made-up language: a vocabulary of a dozen words (from the vowels and
+consonant families lit on the tab, put together as English would let them), and a run of them, the
+commoner words coming back more often, as they do in a real language. **NEW WORDS** (or the
+**LANGUAGE** knob) picks another of a thousand languages.
+
+A bowed string can take the voice's place (**BOW**): the breath is the bow's speed, **BITE** its
+weight, **EMBOUCHURE** where it crosses the string, **STIFFNESS** the hair's tension, **APERTURE**
+how wide it lies, and **CONE** how stiff the string is, from gut to a steel wire whose partials
+stretch apart like a bell's. All bow, and the string sings the words.
+
+High notes are sung as a singer sings them: from about E4 up the first resonance rides above the
+note, and the upper ones widen and roll off, so the top stays round rather than whistling. On the
+ALIEN tab:
 
 ![The ALIEN tab](docs/readme/alien.jpg)
 
-- **VOICE**: where on the ring the throat starts. Route the slide or pressure to it to steer it.
-- **MORPH**: how fast the throat also glides round the ring on its own while a note is held.
-- **DRIFT**: how far it wanders, each resonance a little apart from the others.
-- **TALK**: how much it talks: how full each syllable's consonant is, how far the syllables move it
-  round the ring, and how far the pressure moves the mouth. At none it's one steady vowel.
-- **GLIDE**: how quickly each syllable moves onto its vowel, from a snap (5 ms) to a slow slur.
-- **SHIFT**: every resonance up or down an octave, a smaller or a much larger throat.
-- **SHARP**: how narrow the resonances are, from a soft vowel to ringing whistles like a throat
-  singer's overtones.
-- **BOW**: how much bowed string sings with the voice, from none to all string.
-- **LINGER**: the chance a syllable is held on two or three times as long, more the harder it's
-  blown.
-- **CONSONANT**: how strong each syllable's consonant is, from none (only the vowels) to the full
-  stop, hiss or hum.
-- **CONSONANTS**: its eight families, each on or off (M N, L R, W Y, V Z, B D G, H, F S, P T K):
-  turned off, it never says them, and a note that would have picks one that's on.
-- **BEND**: how far the throat follows a pitch bend (an MPE note's own, or the wheel): none keeps the
-  vowel where it is, all slides every resonance with the pitch, the way a talk box's mouth would.
-- **VOWELS**: the five vowels, each on or off: turned off, the Alien never sings it.
-- **ORDER**: how each new note picks its vowel. Random (any lit vowel but the last), In Turn (A, E,
-  I, O, U in order), By Pitch (dark vowels low, bright ones high, U O A E I from C2 to C7) or Same
-  (always the first lit one). It sets only where a note starts: Talk still moves it while it's held.
-- **PACE**: how often a held note goes on to its next syllable: Free (by Talk, from about every 2 s
-  to under 1 s), or a note value from 1/16 to 2 bars at the host's tempo.
+- **ALIEN / TYPED**: which words it sings. Typing in the box switches to TYPED; with nothing typed
+  it sings its own. **SHORT / MIXED / LONG / CHANT**: how long its own words are (a syllable each,
+  one to three, two to four, or one word chanted over and over).
+- The box below shows what it's singing, each word lighting up while a voice sings it, and the map
+  where its vowels are (a human's hollow, its own lit) as the strange knobs move them.
+- **ACCENT**: how far each syllable's vowel is bent from a human's, every resonance somewhere of its
+  own, new each syllable.
+- **SPREAD**: squeezes the resonances together (every vowel a muffled hum) or pushes them apart
+  (glassy and thin).
+- **FLIP**: turns the vowels round the middle of the vowel space: half way, the open vowels come out
+  at the front and the close ones at the back; all the way, ee is where ah was.
+- **SIZE**: every resonance up or down an octave, a tiny throat or a huge one.
+- **SHARP**: how narrow the resonances are, from soft to ringing whistles like a throat singer's.
+- **FOLLOW**: how far the throat follows the note: none is a singer's, all moves the vowels with the
+  pitch, tiny up high and huge down low.
+- **WOBBLE**: each resonance swings on a slow wave of its own, from a warble to a swirl.
+- **DRIFT**: how far the vowels wander on their own, every note a little different.
+- **GLIDE**: how long each vowel takes to arrive, from a snap to a slow slide.
+- **BEND**: how far the throat follows a pitch bend (an MPE note's own, or the wheel), the way a
+  talk box's mouth would.
+- **BREATHY**: how much air goes through the folds, from clear to a whisper.
+- **CONSONANT**: how strong the consonants are, from none (only the vowels) to every stop, hiss and
+  hum.
+- **HOLD**: how long a diphthong holds its first vowel, from speech's quick glide to a singer's hold.
+- **TALK** and **PACE**: its own words only: how soon a held note goes on to the next syllable,
+  chattering while it's held: Free (by Talk; under a fifth, never), or a note value from 1/16 to 2
+  bars at the host's tempo.
+- **VOWELS** and **CONSONANTS**: which its own words use, each on or off.
 
-The ring shows where each note started (the hollow ring) and where each voice's throat is now (a
-dot); the graph the throat's resonances and the note's harmonics they lift. The ALIEN tab only shows
-when the Alien is the instrument.
+The ALIEN tab only shows when the Alien is the instrument.
 
 Every note plays in tune: the bore length for each model and note was measured offline by playing
 it and correcting the length until the pitch was within a cent, at the rates the voices run at, and
@@ -289,7 +295,7 @@ GLIDE setting how long the pitch takes to get there.
 
 ### Presets
 
-Eighty-one factory presets: Init, then eight to twenty for each instrument, each family starting
+Eighty-six factory presets: Init, then eight to twenty for each instrument, each family starting
 from its most natural sound (Concert Flute, Wooden Reed, Clean Alto, Dusk Oboe, Brass Plume, First
 Contact: the model's own voice, measured against the Iowa recordings, with a player's vibrato and a
 little room) and running through darker, breathier, brighter and harder variants, its relatives by
@@ -306,13 +312,12 @@ Transpose and its oddities:
 - **Trumpet** (11): Brass Plume, Fanfare, the mutes (Straight Mute, Cup Mute, Muted Night with a
   Harmon, Plunger Wah with the plunger on the slide, Bucket Ballad), Flugel Glow, French Horn,
   Trombone Slide and Piccolo Trumpet.
-- **Alien** (20): Alien Speech, First Contact, Talking Bow (with a bowed string; the slide works
-  its mouth), Throat Singer (a new vowel every 2 bars), Xeno Choir, Tractor Beam (a word a beat),
-  Insect Hymn, Mothership, Signal Lost, Ion Flutter, and five that speak in different ways: Crisp
-  Diction (vowels snapped to, the clearest), Chatterbox (a syllable every 1/16), Envoy Unit (a machine
-  reading out vowels), Slow Drawl (long glides, slurred) and Whisper Tongue (breathy, its hiss up
-  front), and five that sing (a syllable a note, its vowel held steady, a late vibrato): Hymn Singer,
-  Ballad Voice, Folk Tenor, Baritone Chant and Lullaby.
+- **Alien** (25): Alien Speech, First Contact (a plain voice for your words), Talking Bow (the
+  string sings the words; the slide bends its accent), Throat Singer, Xeno Choir, Tractor Beam (a
+  word a beat), Insect Hymn, Mothership, Signal Lost, Ion Flutter; five strange throats (Inside Out,
+  Glass Mouth, Muffled Moan, Warble Choir and Tiny Giant); five that speak in different ways (Crisp
+  Diction, Chatterbox, Envoy Unit, Slow Drawl and Whisper Tongue); and five that sing (a syllable a
+  note, a late vibrato): Hymn Singer, Ballad Voice, Folk Tenor, Baritone Chant and Lullaby.
 - **Pad** (6): the HYBRID voice as a pad under an instrument, at a low FOLLOW with a slow attack and a
   long release: Flute Halo, Hollow Pad, Section Pad, Reed Choir, Brass Swell and Nebula.
 - **Space** (6): the DELAY, synced and free, and the REVERB: Echo Flute, Canyon Trumpet, Dub Tenor,
@@ -370,3 +375,14 @@ plugin the way a host does, at 44.1 to 192 kHz, including every new control at b
 instrument. `jbreath-dice-tests` rolls RANDOMIZE and MUTATE over many seeds, complexities and
 amounts and plays every patch, and checks that a seed is the same patch every time and that locks
 hold.
+
+## Credits
+
+The Alien's typed words are looked up in the CMU Pronouncing Dictionary
+([cmusphinx/cmudict](https://github.com/cmusphinx/cmudict)), packed into
+[`src/cmudict_data.h`](src/cmudict_data.h) by [`tools/pack_cmudict.py`](tools/pack_cmudict.py).
+Copyright (C) 1993-2015 Carnegie Mellon University. All rights reserved. Used under its BSD-style
+licence, which is reproduced in full at the top of that file. This work was supported in part by
+funding from the Defense Advanced Research Projects Agency, the Office of Naval Research and the
+National Science Foundation of the United States of America, and by member companies of the
+Carnegie Mellon Sphinx Speech Consortium.

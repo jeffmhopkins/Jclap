@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <jclap/ui/params.h>
@@ -27,8 +28,8 @@ public:
    struct Voice {
       int note = -1;
       float hz = 0.0f, breath = 0.0f, pressure = 0.0f, timbre = 0.5f, level = 0.0f;
-      // Where the Alien's throat is on its ring of shapes (0..8), or -1 on another instrument.
-      float throat = -1.0f;
+      // The syllable of its words the Alien is singing (see sungWords), or -1.
+      int saying = -1;
       bool releasing = false;
       // Its modulation sources now, and each destination's offset in its param's 0..1 range.
       std::array<float, kModSourceCount> sources{};
@@ -44,6 +45,12 @@ public:
    // The name of the preset last loaded or saved, kept with the project.
    virtual std::string presetName() const = 0;
    virtual void setPresetName(const std::string &name) = 0;
+   // The words typed for the Alien to sing, kept with the project.
+   virtual std::string lyrics() const = 0;
+   virtual void setLyrics(const std::string &text) = 0;
+   // What the Alien sings now, written out (the typed words, or its own), and where each syllable's
+   // word is in it, in the order it sings them.
+   virtual void sungWords(std::string &text, std::vector<std::pair<int, int>> &syllables) const = 0;
 
    // The dice card: whether it is open, Randomize's complexity, Mutate's amount and the sections
    // both leave alone, and the patches they replaced, so UNDO can bring one back. Kept with the

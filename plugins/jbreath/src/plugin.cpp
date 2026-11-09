@@ -19,6 +19,7 @@
 #include <string>
 
 #include "editor.h"
+#include "lyrics.h"
 #include "params.h"
 #include "output.h"
 #include "voice.h"
@@ -98,10 +99,11 @@ struct Held {
 constexpr int kMaxHeld = 16;
 
 // State layout: 4-byte magic, uint32 version, uint32 param count, one double per param in id order,
-// then uint32 name length and the preset name. A state from a version with fewer params loads them
-// and leaves the rest at their defaults.
+// then uint32 name length and the preset name; from version 2, uint32 length and the Alien's typed
+// words. A state from a version with fewer params loads them and leaves the rest at their defaults.
 constexpr char kStateMagic[4] = {'J', 'B', 'R', 'E'};
-constexpr uint32_t kStateVersion = 1;
+constexpr uint32_t kStateVersion = 2;
+constexpr uint32_t kMaxLyrics = 8192;
 
 class JBreath final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -235,7 +237,7 @@ public:
          o.pressure = v.pressure.load();
          o.timbre = v.timbre.load();
          o.level = v.level.load();
-         o.throat = v.throat.load();
+         o.saying = v.saying.load();
          o.releasing = v.releasing.load();
          for (int k = 0; k < kModSourceCount; ++k)
             o.sources[k] = v.sources[k].load(std::memory_order_relaxed);
@@ -250,6 +252,35 @@ public:
    float outputPeak(int channel) override { return outputPeak_[channel & 1].exchange(0.0f); }
    double sampleRate() const override { return shownRate_.load(); }
    std::string presetName() const override { return presetName_; }
+   std::string lyrics() const override { return lyrics_; }
+   void setLyrics(const std::string &text) override {
+      const bool changed = text != lyrics_;
+      lyrics_ = text.substr(0, kMaxLyrics);
+      // Read on this thread, handed to the audio thread through three books (it takes the newest
+      // when it next looks; neither waits for the other).
+      speech::readLyrics(lyrics_, typedSlots_[typedBack_]);
+      typedBack_ = typedLatest_.exchange(typedBack_ | kFreshBook) & 3;
+      if (changed)
+         if (auto *state = hostExtension<clap_host_state_t>(CLAP_EXT_STATE))
+            state->mark_dirty(host());
+   }
+   void sungWords(std::string &text, std::vector<std::pair<int, int>> &syllables) const override {
+      syllables.clear();
+      if (static_cast<int>(values_[kAlienSource].load() + 0.5) == 1) {
+         speech::Book typed;
+         speech::readLyrics(lyrics_, typed);
+         if (typed.count > 0) {
+            text = lyrics_;
+            for (int i = 0; i < typed.count; ++i)
+               syllables.emplace_back(typed.begin[i], typed.end[i]);
+            return;
+         }
+      }
+      speech::Book alien;
+      speech::alienWords(alienSeed(), alienSounds(), alienVowels(), alienLength(), alien, &text);
+      for (int i = 0; i < alien.count; ++i)
+         syllables.emplace_back(alien.begin[i], alien.end[i]);
+   }
    void setPresetName(const std::string &name) override { presetName_ = name; }
 
    // ---- params ----
@@ -305,8 +336,11 @@ public:
             return false;
       }
       const uint32_t nameLength = static_cast<uint32_t>(std::min<size_t>(presetName_.size(), 255));
+      const uint32_t lyricsLength = static_cast<uint32_t>(std::min<size_t>(lyrics_.size(), kMaxLyrics));
       return jclap::core::writeAll(stream, &nameLength, sizeof(nameLength)) &&
-             jclap::core::writeAll(stream, presetName_.data(), nameLength);
+             jclap::core::writeAll(stream, presetName_.data(), nameLength) &&
+             jclap::core::writeAll(stream, &lyricsLength, sizeof(lyricsLength)) &&
+             jclap::core::writeAll(stream, lyrics_.data(), lyricsLength);
    }
 
    bool stateLoad(const clap_istream_t *stream) override {
@@ -333,6 +367,17 @@ public:
           !jclap::core::readAll(stream, name, nameLength))
          return false;
       presetName_.assign(name, nameLength);
+      std::string words;
+      if (version >= 2) {
+         uint32_t lyricsLength = 0;
+         if (!jclap::core::readAll(stream, &lyricsLength, sizeof(lyricsLength)) || lyricsLength > kMaxLyrics)
+            return false;
+         words.resize(lyricsLength);
+         if (lyricsLength > 0 && !jclap::core::readAll(stream, words.data(), lyricsLength))
+            return false;
+      }
+      lyrics_ = words;
+      setLyrics(words);
       for (size_t i = 0; i < kParamCount; ++i)
          values_[i].store(std::clamp(v[i], kParams[i].min, kParams[i].max));
       if (auto *hostParams = hostExtension<clap_host_params_t>(CLAP_EXT_PARAMS))
@@ -347,9 +392,16 @@ public:
       edits_.drain(proc->out_events);
       blockFrames_ = proc->frames_count;
       // The host's tempo, for a synced delay.
-      if (const clap_event_transport_t *t = proc->transport)
+      if (const clap_event_transport_t *t = proc->transport) {
          if ((t->flags & CLAP_TRANSPORT_HAS_TEMPO) && t->tempo > 1.0)
             tempo_ = t->tempo;
+         // The Alien starts its words again from the top as the host starts playing.
+         const bool playing = (t->flags & CLAP_TRANSPORT_IS_PLAYING) != 0;
+         if (playing && !playing_)
+            word_ = kNoWord;
+         playing_ = playing;
+      }
+      refreshBooks();
       // The panel may have moved a knob since the last block.
       dirty_ = true;
 
@@ -591,6 +643,11 @@ private:
       for (int f = 0; f < 5; ++f)
          vs.alienVowels |= value(kAlienVowels + f) > 0.5 ? 1u << f : 0u;
       vs.alienOrder = static_cast<int>(value(kAlienOrder) + 0.5);
+      vs.alienBreathy = value(kAlienBreathy, s);
+      vs.alienSpread = value(kAlienSpread, s);
+      vs.alienFlip = value(kAlienFlip, s);
+      vs.alienFollow = value(kAlienFollow, s);
+      vs.alienTyped = book_ == &typed_;
       vs.brass = value(kBrass, s);
       vs.loss = value(kLoss, s);
       vs.cutoffHz = value(kHoleCutoff, s);
@@ -957,6 +1014,7 @@ private:
    // A mono note onto the one voice: started from silence, or slurred or tongued from the last.
    void playMono(Slot &s) {
       configure(s);
+      nextWord(s);
       if (!s.voice.isActive() || s.voice.isReleasing())
          s.voice.start(pitchOf(s), s.velocity, gainOf(s));
       else if (static_cast<int>(value(kVoiceMode) + 0.5) == kLegato)
@@ -1037,6 +1095,7 @@ private:
       Slot &s = pickSlot(port, channel, key);
       take(s, noteId, port, channel, key, velocity, midi, out, time, false);
       configure(s);
+      nextWord(s);
       s.voice.start(pitchOf(s), velocity, gainOf(s));
    }
 
@@ -1093,7 +1152,7 @@ private:
          v.pressure.store(on ? static_cast<float>(pressureOf(s)) : 0.0f);
          v.timbre.store(on ? static_cast<float>(timbreOf(s)) : 0.5f);
          v.level.store(on ? s.voice.level() : 0.0f);
-         v.throat.store(on ? s.voice.throat() : -1.0f);
+         v.saying.store(on ? s.voice.saying() : -1);
          v.releasing.store(on && s.voice.isReleasing());
          const float *src = s.voice.sources(), *off = s.voice.offsets();
          for (int k = 0; k < kModSourceCount; ++k)
@@ -1138,7 +1197,8 @@ private:
    // Shared with the panel.
    struct Shown {
       std::atomic<int> note{-1};
-      std::atomic<float> hz{0.0f}, breath{0.0f}, pressure{0.0f}, timbre{0.5f}, level{0.0f}, throat{-1.0f};
+      std::atomic<float> hz{0.0f}, breath{0.0f}, pressure{0.0f}, timbre{0.5f}, level{0.0f};
+      std::atomic<int> saying{-1};
       std::atomic<bool> releasing{false};
       std::atomic<float> sources[kModSourceCount] = {};
       std::atomic<float> offsets[kModDestCount] = {};
@@ -1158,6 +1218,68 @@ private:
    bool dirty_ = true;
    // The note-off velocity being handled (the Lift source), and the free LFOs' clock in seconds.
    double liftVelocity_ = 0.5, lfoClock_ = 0.0;
+
+   // The Alien's words: what's typed (on the main thread, and handed over through three books), and
+   // on the audio thread, the typed book it took last, its own words (made again whenever what
+   // makes them changes), the one it sings from, and the syllable it's at (notes started together,
+   // a chord, sing the same one).
+   std::string lyrics_;
+   static constexpr int kFreshBook = 4;
+   speech::Book typedSlots_[3];
+   int typedBack_ = 2, typedFront_ = 0;
+   std::atomic<int> typedLatest_{1};
+   speech::Book typed_, alien_;
+   const speech::Book *book_ = &alien_;
+   uint64_t alienKey_ = ~0ull;
+   static constexpr uint32_t kNoWord = ~0u;
+   uint32_t word_ = kNoWord;
+   double wordAt_ = -1.0;
+   bool playing_ = false;
+
+   uint32_t alienSeed() const { return static_cast<uint32_t>(std::lround(values_[kAlienSeed].load())); }
+   int alienLength() const { return static_cast<int>(values_[kAlienOrder].load() + 0.5); }
+   uint32_t alienSounds() const {
+      uint32_t m = 0;
+      for (int f = 0; f < 8; ++f)
+         m |= values_[kAlienSounds + f].load() > 0.5 ? 1u << f : 0u;
+      return m;
+   }
+   uint32_t alienVowels() const {
+      uint32_t m = 0;
+      for (int f = 0; f < 5; ++f)
+         m |= values_[kAlienVowels + f].load() > 0.5 ? 1u << f : 0u;
+      return m;
+   }
+   // At each block: the newest typed words, the Alien's own made again if they've changed, and
+   // which it sings.
+   void refreshBooks() {
+      if (typedLatest_.load(std::memory_order_acquire) & kFreshBook) {
+         typedFront_ = typedLatest_.exchange(typedFront_, std::memory_order_acq_rel) & 3;
+         typed_ = typedSlots_[typedFront_];
+         word_ = kNoWord;
+      }
+      const uint64_t key = (static_cast<uint64_t>(alienSeed()) << 32) | (alienSounds() << 16) | (alienVowels() << 8) |
+                           static_cast<uint64_t>(alienLength());
+      if (key != alienKey_) {
+         alienKey_ = key;
+         speech::alienWords(alienSeed(), alienSounds(), alienVowels(), alienLength(), alien_);
+      }
+      const speech::Book *book = static_cast<int>(values_[kAlienSource].load() + 0.5) == 1 && typed_.count > 0 ? &typed_ : &alien_;
+      if (book != book_) {
+         book_ = book;
+         word_ = kNoWord;
+         dirty_ = true;
+      }
+   }
+   // A note's syllable: the next, or a chord's (notes within 30 ms of each other) the same.
+   void nextWord(Slot &s) {
+      const bool chord = !mono() && word_ != kNoWord && lfoClock_ - wordAt_ < 0.03;
+      if (!chord)
+         ++word_;
+      wordAt_ = lfoClock_;
+      s.voice.setBook(book_);
+      s.voice.setWord(word_);
+   }
    // This block's length, while it runs; 0 outside a block.
    uint32_t blockFrames_ = 0;
 

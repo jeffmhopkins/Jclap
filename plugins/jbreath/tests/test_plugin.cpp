@@ -762,6 +762,7 @@ int main() {
       h.setParam(kEdge, 1.7);
       run(64);
       panel.setPresetName("Brass Plume");
+      panel.setLyrics("Hello, I'm an alien");
       auto *state = static_cast<const clap_plugin_state_t *>(h.plugin()->get_extension(h.plugin(), CLAP_EXT_STATE));
       Buffer b;
       JCLAP_CHECK(state->save(h.plugin(), &b.out));
@@ -771,10 +772,70 @@ int main() {
       JCLAP_CHECK_EQ(panel2.paramValue(kModel), 4.0);
       JCLAP_CHECK_EQ(panel2.paramValue(kEdge), 1.7);
       JCLAP_CHECK(panel2.presetName() == "Brass Plume");
+      JCLAP_CHECK(panel2.lyrics() == "Hello, I'm an alien");
+      // A state from before the Alien's words (version 1, no words after the name) still loads.
+      {
+         const uint32_t words = static_cast<uint32_t>(std::string("Hello, I'm an alien").size());
+         Buffer old;
+         old.bytes.assign(b.bytes.begin(), b.bytes.end() - 4 - words);
+         old.bytes[4] = 1;
+         jclap::core::TestHost h3(clap_entry, kId);
+         JCLAP_CHECK(state->load(h3.plugin(), &old.in));
+         EditorHost &panel3 = *h3.object<EditorHost>();
+         JCLAP_CHECK_EQ(panel3.paramValue(kEdge), 1.7);
+         JCLAP_CHECK(panel3.presetName() == "Brass Plume");
+         JCLAP_CHECK(panel3.lyrics().empty());
+      }
       // Someone else's state is refused.
       Buffer bad;
       bad.bytes = {'J', 'B', 'S', 'Y', 1, 0, 0, 0};
       JCLAP_CHECK(!state->load(h2.plugin(), &bad.in));
+   }
+
+   // The Alien sings typed words, a syllable a note (a chord's notes the same one), and shows
+   // which; the words it sings are the typed ones, split as English splits them.
+   {
+      jclap::core::TestHost ah(clap_entry, kId);
+      Run ar{ah};
+      EditorHost &ap = *ah.object<EditorHost>();
+      ah.setParam(kModel, 5);
+      ah.setParam(kAlienSource, 1);
+      ap.setLyrics("hello alien");
+      ar.seconds(0.05);
+      std::string text;
+      std::vector<std::pair<int, int>> syllables;
+      ap.sungWords(text, syllables);
+      JCLAP_CHECK(text == "hello alien");
+      JCLAP_CHECK_EQ(syllables.size(), static_cast<size_t>(5)); // hel-lo a-li-en
+      JCLAP_CHECK(syllables[0] == std::make_pair(0, 5) && syllables[2] == std::make_pair(6, 11));
+      int said[3];
+      for (int n = 0; n < 3; ++n) {
+         ah.note(CLAP_EVENT_NOTE_ON, 60 + n, 0.8, 60 + n);
+         ar.seconds(0.3);
+         said[n] = -1;
+         for (int slot = 0; slot < kVoiceCount; ++slot) {
+            std::vector<EditorHost::Voice> v;
+            ap.voices(v);
+            if (v[slot].note == 60 + n)
+               said[n] = v[slot].saying;
+         }
+         ah.note(CLAP_EVENT_NOTE_OFF, 60 + n, 0.0, 60 + n);
+         ar.seconds(0.3);
+      }
+      std::printf("Alien sings syllables %d %d %d\n", said[0], said[1], said[2]);
+      JCLAP_CHECK(said[0] == 0 && said[1] == 1 && said[2] == 2);
+      JCLAP_CHECK(ar.finite());
+      // A chord: both notes on the next syllable.
+      ah.note(CLAP_EVENT_NOTE_ON, 64, 0.8, 64);
+      ah.note(CLAP_EVENT_NOTE_ON, 67, 0.8, 67);
+      ar.seconds(0.2);
+      std::vector<EditorHost::Voice> v;
+      ap.voices(v);
+      int chord[2] = {-1, -1}, k = 0;
+      for (const auto &voice : v)
+         if ((voice.note == 64 || voice.note == 67) && k < 2)
+            chord[k++] = voice.saying;
+      JCLAP_CHECK(k == 2 && chord[0] == 3 && chord[1] == 3);
    }
 
    // Every instrument, in tune at the common rates (oversampled 2x at 44.1 and 48 kHz, not at 96).
