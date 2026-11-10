@@ -289,6 +289,15 @@ inline const std::vector<Preset> &factoryPresets() {
       constexpr int kHard = 1, kTube = 2;
       constexpr int kLfoSaw = 2;
       constexpr int kLureCentre = 6, kLureRandom = 5;
+      // The room on the main output: the reverb's mix, size, decay in seconds and damping.
+      const auto room = [&](double mix, double size, double decay, double damp) {
+         return Values{g(kReverbOn, 1), g(kReverbMix, mix), g(kReverbSize, size), g(kReverbDecay, decay), g(kReverbDamp, damp)};
+      };
+      // Echoes in time with the host, at a division (kDelaySyncNames), their mix and feedback.
+      const auto echo = [&](int sync, double mix, double feedback) {
+         return Values{g(kDelayOn, 1), g(kDelaySync, sync), g(kDelayMix, mix), g(kDelayFeedback, feedback)};
+      };
+      constexpr int k8thDot = 7, kQuarterDot = 10;
 
       // ---- Ambient Drones: soft and spacey, the flock moving every note its own way ----
 
@@ -414,7 +423,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // scattered across a wrapping sky. Each one's speed lifts its air, its climb its top partial, its
       // turns pan its fourth harmonic, and a 12 s Shimmer loop sparkles the lot.
       p.push_back({"Snow Light", "Ambient Drones",
-                   join({op(0, 0, kAltSine, 1.0, 0.7), op(0, 1, kSine, 4.0, 0.0), op(0, 2, kSine, 6.01, 0.0),
+                   join({echo(kQuarterDot, 0.18, 0.5), op(0, 0, kAltSine, 1.0, 0.7), op(0, 1, kSine, 4.0, 0.0), op(0, 2, kSine, 6.01, 0.0),
                          {a(noise, 0.03), a(color, 0.6), a(flockParam(kBehaviour), kScatter), a(kSkyPan, 0.9)}, open(0),
                          filter(0, 1, kHighPass, 300, 0.0, 0.0), env(0, 0, 1500, 1000, 1.0, 5000), fly(0, 0.3, 0.6, 0.25),
                          sky(0.8, kWrap), shape(0, 1, "Shimmer", 12000, kForever),
@@ -555,7 +564,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // Half-sine sparks on a Sparkle amp, in a fast, scattered flock: the faster a creature flies the
       // denser its sparks, its climb lifts their pitch a little, and crowding brightens them.
       p.push_back({"Firefly Field", "Textures",
-                   join({op(0, 0, kHalfSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), open(0),
+                   join({echo(k8thDot, 0.25, 0.45), op(0, 0, kHalfSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), open(0),
                          {a(fm21, 0.1), a(kPartTranspose, 12), a(flockParam(kBehaviour), kScatter), a(kSkyPan, 0.9),
                           a(envParam(0, kEnvRelease), timeValue(600))},
                          shape(0, 0, "Sparkle", 2500, kForever), fly(0, 0.55, 0.7, 0.3), sky(0.8, kWrap), ink(0, 0.3, 0.8),
@@ -567,7 +576,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // the FM, its turns pan it, its speed quickens the drops, and a 20 s Gusts loop brings squalls,
       // flying the flock faster as it rains harder.
       p.push_back({"Rain on Glass", "Textures",
-                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.5, 0.0), open(0),
+                   join({echo(k8thDot, 0.22, 0.4), op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.5, 0.0), open(0),
                          {a(fm21, 0.2), a(kPartTranspose, 12), a(kSkyPan, 0.8), a(envParam(0, kEnvRelease), timeValue(900))},
                          shape(0, 0, "Sparkle", 1600, kForever), shape(0, 1, "Gusts", 20000, kForever), fly(0, 0.4, 0.5, 0.35), sky(0.7),
                          routes(0, {{nearest, fm21, 0.35}, {turn, kPartPan, 0.5}, {speed, tm(0), -0.08}, {env2, tm(0), -0.1},
@@ -575,7 +584,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // High FM chirps on a Stutter amp: the wingbeat bobs each creature, its turns bend its chirp, its
       // speed sets how fast it stutters and its climb how bright. A scattered, restless swarm.
       p.push_back({"Insect Choir", "Textures",
-                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), open(0),
+                   join({echo(k8thDot, 0.15, 0.3), op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), open(0),
                          {a(fm21, 0.25), a(kPartTranspose, 24), a(flockParam(kBehaviour), kScatter), a(kSkyPan, 0.9),
                           a(envParam(0, kEnvRelease), timeValue(300))},
                          shape(0, 0, "Stutter", 700, kForever), fly(0, 0.6, 0.8, 0.3), air(0, 0.6, 0.2), sky(0.7), ink(0, 0.25, 0.6),
@@ -617,7 +626,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // A looping Bell as the amp in a wind: FM tines, each struck as often as its creature turns
       // (sharper turns, quicker strikes) and brighter the higher it flies.
       p.push_back({"Chime Flock", "Textures",
-                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.5, 0.0), op(0, 2, kSine, 2.01, 0.2), open(0),
+                   join({echo(kQuarterDot, 0.2, 0.4), op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.5, 0.0), op(0, 2, kSine, 2.01, 0.2), open(0),
                          {a(fm21, 0.25), a(kPartTranspose, 12), a(kSkyPan, 0.8), a(envParam(0, kEnvRelease), timeValue(2500))},
                          shape(0, 0, "Bell", 1800, kForever), fly(0, 0.4, 0.5, 0.35), air(0, 0.1, 0.6), sky(0.7), absBus(0, 0, 80),
                          routes(0, {{turn, busIn(0), 1.0}, {bus1, tm(0), -0.15}, {heading, fm21, 0.25}, {speed, fineOf(2), 0.05},
@@ -627,7 +636,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // contour onto the pitch), each creature's climb setting how far its drops fall and its speed how
       // often they land.
       p.push_back({"Water Drops", "Textures",
-                   join({osc(0, 0, kSine, 12, 0, 1.0), op(0, 1, kSine, 2.0, 0.0), open(0),
+                   join({echo(kQuarterDot, 0.25, 0.5), osc(0, 0, kSine, 12, 0, 1.0), op(0, 1, kSine, 2.0, 0.0), open(0),
                          {a(fm21, 0.08), a(kSkyPan, 0.9), a(envParam(0, kEnvRelease), timeValue(400))},
                          shape(0, 0, "Sparkle", 3000, kForever), shape(0, 2, "Sparkle", 3000, kForever), fly(0, 0.4, 0.6, 0.35),
                          sky(0.75), ink(0, 0.4, 0.9),
@@ -644,7 +653,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // Sparse Steps as the amp of high sines: each creature a bird keying its own call, quicker the
       // faster it flies, its pitch leaning with its climb and its overtone with its turns.
       p.push_back({"Morse Birds", "Textures",
-                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), open(0),
+                   join({echo(k8thDot, 0.2, 0.35), op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), open(0),
                          {a(fm21, 0.05), a(kPartTranspose, 24), a(flockParam(kBehaviour), kScatter), a(kSkyPan, 0.9),
                           a(envParam(0, kEnvRelease), timeValue(200))},
                          shape(0, 0, "Sparse Steps", 2500, kForever), fly(0, 0.5, 0.6, 0.35), sky(0.8, kWrap), biBus(0, 0, 50),
@@ -775,7 +784,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // dragging its steps late, an Arp Up climbing the filter every two bars and the creature's climb
       // opening it further.
       p.push_back({"Conveyor", "Industrial",
-                   join({osc(0, 0, kSaw, 0, -5, 1.0), osc(0, 1, kSquare, -12, 0, 0.5), {a(tailParam(kDriveType), kHard), a(drive, 0.3)},
+                   join({echo(4, 0.15, 0.3), osc(0, 0, kSaw, 0, -5, 1.0), osc(0, 1, kSquare, -12, 0, 0.5), {a(tailParam(kDriveType), kHard), a(drive, 0.3)},
                          {a(kSkyPan, 0.5), a(envParam(0, kEnvRelease), timeValue(300))}, filter(0, 0, kLadder, 500, 0.45, 0.3),
                          shapeSync(0, 0, "Gate 8", kBar, kForever), shapeSync(0, 1, "Arp Up", kBars2, kForever), fly(0, 0.4, 0.5, 0.4),
                          sky(0.6),
@@ -871,7 +880,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // The drone's creatures open its filter as they climb; the birds sing quicker as they fly faster
       // and their calls lean with their turns.
       p.push_back({"Dawn Chorus", "Landscapes",
-                   join({{g(kPlayMode, 1.0)}, osc(0, 0, kSaw, 0, -5, 0.8), osc(0, 1, kTriangle, 0, 5, 0.8), osc(0, 2, kSine, -12, 0, 0.4),
+                   join({echo(k8thDot, 0.18, 0.4), {g(kPlayMode, 1.0)}, osc(0, 0, kSaw, 0, -5, 0.8), osc(0, 1, kTriangle, 0, 5, 0.8), osc(0, 2, kSine, -12, 0, 0.4),
                          {a(kSkyPan, 0.4)}, filter(0, 0, kLowPass, 600, 0.2, 0.3), env(0, 0, 2500, 1000, 1.0, 5000),
                          fly(0, 0.18, 0.35, 0.45), biBus(0, 0, 400),
                          routes(0, {{heading, busIn(0), 1.0}, {bus1, cutoff, 0.15}, {speed, level(2), 0.3}, {press, cutoff, 0.15},
@@ -1062,7 +1071,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // A kalimba: a ×3 FM blip with an inharmonic ×5.95 partial; each creature's climb brightens the
       // blip and its turns pan it.
       p.push_back({"Kalimba Swarm", "Keys and Bells",
-                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.0, 0.0), op(0, 2, kSine, 5.95, 0.06), open(0),
+                   join({echo(k8thDot, 0.2, 0.35), op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 3.0, 0.0), op(0, 2, kSine, 5.95, 0.06), open(0),
                          {a(fm21, 0.1), a(kSkyPan, 0.7)}, env(0, 0, 0.5, 1100, 0.0, 600), env(0, 2, 0.5, 60, 0.0, 50),
                          fly(0, 0.4, 0.5, 0.4),
                          routes(0, {{env3, fm21, 0.3}, {velocity, fm21, 0.1}, {heading, fm21, 0.1}, {turn, kPartPan, 0.3},
@@ -1087,7 +1096,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // A music box: a high triangle with a faint ×3, its tines ringing out; each creature's climb leans
       // its note a few cents and its speed adds a tremble.
       p.push_back({"Music Box Flock", "Keys and Bells",
-                   join({op(0, 0, kTriangle, 1.0, 1.0), op(0, 1, kSine, 3.0, 0.1), op(0, 2, kSine, 4.0, 0.0), open(0),
+                   join({echo(kQuarterDot, 0.2, 0.4), op(0, 0, kTriangle, 1.0, 1.0), op(0, 1, kSine, 3.0, 0.1), op(0, 2, kSine, 4.0, 0.0), open(0),
                          {a(kPartTranspose, 12), a(fm31, 0.08), a(kSkyPan, 0.6)}, env(0, 0, 0.5, 2500, 0.0, 1200),
                          env(0, 2, 0.5, 80, 0.0, 50), lfo(0, 2, kLfoSine, 6.0), fly(0, 0.35, 0.45, 0.4),
                          busSet(0, 0, kMul, kLinear, kAsIs, 0, 0, 50),
@@ -1131,7 +1140,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // Two detuned saws: the creature's speed is the depth of its vibrato, its climb opens the filter
       // and its turns lean the pitch a few cents.
       p.push_back({"Flight Lead", "Bass and Leads",
-                   join({osc(0, 0, kSaw, 0, -6, 1.0), osc(0, 1, kSaw, 0, 6, 0.85), filter(0, 0, kLowPass, 2800, 0.2, 0.5),
+                   join({echo(kQuarterDot, 0.2, 0.35), room(0.18, 0.6, 2.0, 0.5), osc(0, 0, kSaw, 0, -6, 1.0), osc(0, 1, kSaw, 0, 6, 0.85), filter(0, 0, kLowPass, 2800, 0.2, 0.5),
                          lfo(0, 2, kLfoSine, 5.5), mono(0, 45), env(0, 0, 3, 300, 1.0, 180), env(0, 1, 2, 400, 0.5, 200),
                          fly(0, 0.45, 0.5, 0.45), busSet(0, 0, kMul, kLinear, kAsIs, 0, 0, 80),
                          routes(0, {{env2, cutoff, 0.15}, {heading, cutoff, 0.12}, {lfo1, busIn(0), 1.0}, {speed, busIn(0), 1.0},
@@ -1140,7 +1149,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // A theremin: Press lifts the creature up the sky; flying upward bends it sharp, diving flat,
       // through a slow lag, and the wingbeat, deepened by its speed, is its vibrato.
       p.push_back({"Sky Theremin", "Bass and Leads",
-                   join({op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), open(0), {a(fm21, 0.06), a(flockParam(kLureY), 2)},
+                   join({echo(kQuarterDot, 0.18, 0.4), room(0.25, 0.7, 3.0, 0.5), op(0, 0, kSine, 1.0, 1.0), op(0, 1, kSine, 2.0, 0.0), open(0), {a(fm21, 0.06), a(flockParam(kLureY), 2)},
                          mono(0, 120), env(0, 0, 120, 300, 1.0, 400), fly(0, 0.4, 0.3, 0.6), air(0, 0.5, 0.1), biBus(0, 0, 250),
                          lfo(0, 2, kLfoSine, 5.5), busSet(0, 1, kMul, kLinear, kAsIs, 0, 0, 80),
                          routes(0, {{heading, busIn(0), 1.0}, {bus1, kPartFine, 0.08}, {lfo1, busIn(1), 1.0}, {speed, busIn(1), 1.0},
@@ -1149,7 +1158,7 @@ inline const std::vector<Preset> &factoryPresets() {
       // Hard sync: Osc 1 is silent and only resets Osc 2, whose pitch the creature's climb sweeps; its
       // turns open the filter either way.
       p.push_back({"Sync Flight", "Bass and Leads",
-                   join({osc(0, 0, kSine, 0, 0, 0.0), osc(0, 1, kSaw, 7, 0, 1.0), {a(oscParam(1, kOscSync), 1)},
+                   join({echo(k8thDot, 0.15, 0.3), room(0.15, 0.5, 1.6, 0.5), osc(0, 0, kSine, 0, 0, 0.0), osc(0, 1, kSaw, 7, 0, 1.0), {a(oscParam(1, kOscSync), 1)},
                          filter(0, 0, kLowPass, 5000, 0.1, 0.3), mono(0, 40), env(0, 0, 2, 300, 1.0, 200), env(0, 1, 1, 700, 0.25, 300),
                          fly(0, 0.45, 0.5, 0.45), absBus(0, 0, 80),
                          routes(0, {{env2, coarseOf(1), 0.12}, {heading, coarseOf(1), 0.1}, {turn, busIn(0), 1.0}, {bus1, cutoff, 0.1},
@@ -1165,41 +1174,59 @@ inline const std::vector<Preset> &factoryPresets() {
                                     {press, drive, 0.3}, {velocity, fm21, 0.2}, {wheel, fm21, 0.3}})}),
                    names({{0, 0, "Sharp Turns"}})});
 
+      // Each category's room, for every preset in it that doesn't set its own: long, soft halls for
+      // the ambient and dark drones, a tight, bright room for the industrial ones.
+      struct Space {
+         const char *category;
+         double mix, size, decay, damp;
+      };
+      static const Space spaces[] = {{"Ambient Drones", 0.42, 0.9, 7.0, 0.45}, {"Dark Drones", 0.36, 0.85, 6.0, 0.65},
+                                     {"Textures", 0.32, 0.7, 3.5, 0.5},        {"Industrial", 0.22, 0.45, 2.2, 0.3},
+                                     {"Landscapes", 0.36, 0.85, 5.5, 0.5},     {"Pads", 0.3, 0.75, 4.0, 0.5},
+                                     {"Keys and Bells", 0.22, 0.6, 2.2, 0.5}};
+      for (Preset &preset : p)
+         for (const Space &s : spaces)
+            if (preset.category == s.category &&
+                std::none_of(preset.values.begin(), preset.values.end(), [](const auto &v) { return v.first == kReverbOn; })) {
+               const Values r = room(s.mix, s.size, s.decay, s.damp);
+               preset.values.insert(preset.values.end(), r.begin(), r.end());
+            }
+
       // Each preset's level, matched by measurement so stepping through the bank doesn't jump: the
       // loudest 400 ms of a held three-note chord at velocity 0.8 (one note for the mono and bass
       // patches) sits near -20 dBFS, a little lower for the plucks and lower again for the hits,
       // which are heard by their peaks. A trim raises or lowers every part's Level together, keeping a
       // layer's balance, and spills into the Master Level past the parts' +6 dB.
             static const std::pair<const char *, double> trims[] = {
-         {"Slow Murmuration", -2.5},
+         {"Slow Murmuration", -3.5},
          {"Aurora Choir", 7.0},
          {"Weightless", -3.0},
-         {"Tidal Breath", 7.0},
+         {"Tidal Breath", 7.5},
          {"Halo", -6.5},
-         {"Horizon Glass", -2.0},
-         {"Floating Organ", -3.5},
+         {"Horizon Glass", -2.5},
+         {"Floating Organ", -4.0},
          {"Nebula", -1.5},
-         {"Deep Field", -4.5},
-         {"Lumen", -4.5},
-         {"Ether Strings", -4.0},
-         {"Snow Light", 3.5},
-         {"Breathing Planet", -4.0},
-         {"Cirrus", -4.0},
+         {"Deep Field", -5.0},
+         {"Lumen", -4.0},
+         {"Ether Strings", -3.5},
+         {"Snow Light", 2.5},
+         {"Breathing Planet", -3.5},
+         {"Cirrus", -4.5},
          {"Abyssal", -2.0},
          {"Leviathan", -3.5},
-         {"Cavern", -2.0},
+         {"Cavern", -2.5},
          {"Black Monolith", 0.0},
-         {"Night Tide", -6.5},
+         {"Night Tide", -7.0},
          {"Obsidian Choir", 6.5},
-         {"Submerged", -6.5},
-         {"Event Horizon", -4.5},
+         {"Submerged", -7.5},
+         {"Event Horizon", -5.0},
          {"Gravity Well", -4.5},
-         {"Tectonic", 0.0},
+         {"Tectonic", -0.5},
          {"Firefly Field", 12.0},
-         {"Rain on Glass", 9.5},
+         {"Rain on Glass", 9.0},
          {"Insect Choir", 1.0},
          {"Murmur Grains", 3.0},
-         {"Embers", 7.0},
+         {"Embers", 6.5},
          {"Aeolian Harp", -7.5},
          {"Chime Flock", 5.0},
          {"Water Drops", 7.5},
@@ -1212,47 +1239,47 @@ inline const std::vector<Preset> &factoryPresets() {
          {"Foundry", 3.5},
          {"Turbine", -3.5},
          {"Rust Belt", -1.5},
-         {"Iron Lung", -1.0},
+         {"Iron Lung", -0.5},
          {"Scrapyard", -1.5},
          {"Power Station", 2.5},
-         {"Grinder", 3.5},
+         {"Grinder", 2.5},
          {"Pressure Vessel", 0.0},
          {"Conveyor", 1.0},
-         {"Signal Decay", -0.5},
-         {"Engine Room", 0.0},
+         {"Signal Decay", 0.0},
+         {"Engine Room", 0.5},
          {"Dead Radio", 7.0},
          {"Furnace", -2.5},
          {"Machine Swarm", -1.5},
          {"Glass and Iron", -2.0},
          {"Predator Weather", -3.5},
          {"Dawn Chorus", -4.0},
-         {"Storm Front", 4.0},
+         {"Storm Front", 0.0},
          {"Low Tide, High Wind", -8.0},
          {"Two Flocks", -3.0},
          {"Hive", -4.0},
          {"Migration", -1.0},
          {"Flock Pad", -3.0},
          {"Glass Flock", -2.5},
-         {"PWM Strings", -6.0},
-         {"Choir Flock", 8.0},
+         {"PWM Strings", -5.5},
+         {"Choir Flock", 8.5},
          {"Flock Brass", -2.5},
-         {"Wide Unison", -3.5},
+         {"Wide Unison", -3.0},
          {"Dream Pad", -4.0},
-         {"Sweep Pad", -6.0},
+         {"Sweep Pad", -5.5},
          {"Flock Tines", -2.0},
          {"Flock Vibes", 0.0},
          {"Flock Bells", -1.5},
          {"Kalimba Swarm", 3.0},
-         {"Rotor Organ", -2.0},
+         {"Rotor Organ", -2.5},
          {"Flock Pluck", 4.0},
-         {"Music Box Flock", 2.5},
+         {"Music Box Flock", 2.0},
          {"Sub Flight", 1.5},
          {"Acid Flight", 4.5},
          {"Reese Flight", 6.0},
          {"FM Flight Bass", 2.5},
-         {"Flight Lead", 0.5},
-         {"Sky Theremin", 2.5},
-         {"Sync Flight", 4.5},
+         {"Flight Lead", 1.0},
+         {"Sky Theremin", 1.0},
+         {"Sync Flight", 3.5},
          {"Growl Flight", 5.0},
       };
       for (const auto &[name, trim] : trims)
