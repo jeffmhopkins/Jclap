@@ -201,8 +201,8 @@ both, or the Lip (pitch alone). **PITCH** adds vibrato in cents on top.
 
 ![MAP, with PRESS armed](docs/readme/map.jpg)
 
-As in JSynth. Touch **MAP** and a source chip, then drag any knob: the ring that appears is how far
-that source moves it, per voice. Right-click a knob to unmap it. Hover a chip to see what the source
+As in JSynth. Touch a source chip, then drag any knob: the ring that appears is how far that source
+moves it, per voice. Touch the chip again to leave MAP. Right-click a knob to unmap it. Hover a chip to see what the source
 is. The sources:
 
 - **The player's hands**, in the header: STRIKE (velocity), PRESS (pressure), GLIDE (pitch bend),

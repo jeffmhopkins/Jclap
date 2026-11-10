@@ -2563,13 +2563,8 @@ private:
       return c;
    }
 
-   // MAP and the source chips: the player's hands in the header, the breath's under the loops.
+   // The source chips, which turn MAP on: the player's hands in the header, the breath's under the loops.
    void buildMap() {
-      mapButton_ = &add<ui::Button>({772, 13, 64, 26}, "MAP");
-      mapButton_->setToggle(true);
-      mapButton_->setAccent(kPress);
-      mapButton_->onClick = [this] { setMapping(!mapping_, kSrcOff); };
-      tips_.add(*mapButton_, "MAP: the modulation view. Lit, each knob shows a ring, in the source's colour, for every source that moves it.");
       const int hands[] = {kSrcStrike, kSrcPress, kSrcGlide, kSrcSlide, kSrcLift};
       for (int i = 0; i < 5; ++i)
          chip(hands[i], {846 + i * 106.0f, 13, 100, 26});
@@ -2707,17 +2702,11 @@ private:
    void setMapping(bool on, int source) {
       mapping_ = on;
       armed_ = on ? source : kSrcOff;
-      mapButton_->setOn(on);
       for (MapKnob *k : mapKnobs_)
          k->redraw();
    }
-   // A chip touched: MAP on with it armed, or (touched again) disarmed.
-   void arm(int source) {
-      if (mapping_ && armed_ == source)
-         setMapping(true, kSrcOff);
-      else
-         setMapping(true, source);
-   }
+   // A chip touched: MAP on with it armed, or (touched again) MAP off.
+   void arm(int source) { setMapping(!(mapping_ && armed_ == source), source); }
 
    // Each tick: the chips' levels and MAP state, the live modulation on the knobs, the generator
    // graphs and the routes list.
@@ -3136,7 +3125,6 @@ private:
    unsigned delayAccent_ = 0;
    ui::Meter *inMeter_ = nullptr, *outMeters_[2] = {};
    ui::TabBar *playerTabs_ = nullptr;
-   ui::Button *mapButton_ = nullptr;
    ui::SegmentedSwitch *view_ = nullptr;
    std::vector<SourceChip *> chips_;
    std::vector<MapKnob *> mapKnobs_;
