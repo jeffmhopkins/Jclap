@@ -2237,17 +2237,19 @@ private:
       tabs.addToPage(0, familyKnob(kBreath, "BREATH", top[0], "How hard the player blows at full pressure (or velocity)."));
       tabs.addToPage(0, familyKnob(kEmbouchure, "EMBOUCHURE", top[1],
                                    "Lip and jaw: the jet's angle on the flute, the bite on a reed, the lips' tension on brass. "
-                                   "MPE slide moves it."));
+                                   "On the Alien, its jaw: nearly shut and muffled, or wide open and bright. MPE slide moves it."));
       tabs.addToPage(0, familyKnob(kStiffness, "STIFFNESS", top[2],
                                    "How stiff the reed or lips are (the jet's gain on a flute): stiff is bright and quick to "
-                                   "shut, soft is dark and lazy. On the Alien, the bow hair's tension: taut grips and bites."));
+                                   "shut, soft is dark and lazy. On the Alien, its vocal folds: lax and hooting, or pressed and buzzing."));
       tabs.addToPage(0, familyKnob(kEdge, "BITE", top[3],
-                                   "The forte bite: the flute's 2nd harmonic, the reeds' edge, the brass wave steepening into its blare."));
+                                   "The forte bite: the flute's 2nd harmonic, the reeds' edge, the brass wave steepening into its blare. "
+                                   "On the Alien: down, it sings through its nose; up, a bright, brassy twang."));
       tabs.addToPage(0, familyKnob(kAperture, "APERTURE", bottom[0],
                                    "How far the reed or lips stand open (the jet's width on a flute): wide is loud and free, "
-                                   "narrow is thin and focused. On the Alien, how wide the bow lies on the string."));
+                                   "narrow is thin and focused. On the Alien, its lips: rounded and dark, or spread in a bright grin."));
       tabs.addToPage(0, familyKnob(kNoise, "NOISE", bottom[1], "The hiss of air in the tone: up for breathy and airy, down for clean and pure."));
-      tabs.addToPage(0, familyKnob(kKick, "KICK", bottom[2], "The burst of air as the tongue lets go: up for a hard, spitty start, down for a smooth one."));
+      tabs.addToPage(0, familyKnob(kKick, "KICK", bottom[2], "The burst of air as the tongue lets go: up for a hard, spitty start, down for a smooth one. "
+                                   "On the Alien, how hard each word starts and its consonants hit."));
       tabs.addToPage(0, familyKnob(kGrowl, "GROWL", bottom[3],
                                    "A growl in the throat: a rough flutter rides on the air, on any instrument, and a hard-blown "
                                    "reed rasps more."));
@@ -2436,7 +2438,7 @@ private:
       };
       small(kFine, "TUNE", 0, "Fine tuning in cents.");
       small(kLength, "LENGTH", 1, "The tube below the open holes: its length sets where its own resonances ring.");
-      small(kLoss, "LOSS", 2, "How much the bore loses each trip: more is softer, darker and slower to speak.");
+      small(kLoss, "LOSS", 2, "How much the bore loses each trip: more is softer, darker and slower to speak. On the Alien, a damped, muffled throat.");
       small(kHoleCutoff, "HOLE CUTOFF", 3, "Above this the tone holes let the sound out: lower is darker. The pitch stays put.");
       coneKnob_ = &small(kCone, "CONE", 4, "Sax and oboe: how far the cone is cut short at the reed, towards a cylinder or a full cone. Trumpet: how conical the bore is, towards a flugelhorn. Alien: how stiff its string is, which stretches its partials apart, from gut to wire to bar.");
       small(kRadiate, "RADIATE", 5, "How well the bell and holes send the highs out: up is bright and open, down muffled and inward.");
@@ -2563,13 +2565,8 @@ private:
       return c;
    }
 
-   // MAP and the source chips: the player's hands in the header, the breath's under the loops.
+   // The source chips, which turn MAP on: the player's hands in the header, the breath's under the loops.
    void buildMap() {
-      mapButton_ = &add<ui::Button>({772, 13, 64, 26}, "MAP");
-      mapButton_->setToggle(true);
-      mapButton_->setAccent(kPress);
-      mapButton_->onClick = [this] { setMapping(!mapping_, kSrcOff); };
-      tips_.add(*mapButton_, "MAP: the modulation view. Lit, each knob shows a ring, in the source's colour, for every source that moves it.");
       const int hands[] = {kSrcStrike, kSrcPress, kSrcGlide, kSrcSlide, kSrcLift};
       for (int i = 0; i < 5; ++i)
          chip(hands[i], {846 + i * 106.0f, 13, 100, 26});
@@ -2707,17 +2704,11 @@ private:
    void setMapping(bool on, int source) {
       mapping_ = on;
       armed_ = on ? source : kSrcOff;
-      mapButton_->setOn(on);
       for (MapKnob *k : mapKnobs_)
          k->redraw();
    }
-   // A chip touched: MAP on with it armed, or (touched again) disarmed.
-   void arm(int source) {
-      if (mapping_ && armed_ == source)
-         setMapping(true, kSrcOff);
-      else
-         setMapping(true, source);
-   }
+   // A chip touched: MAP on with it armed, or (touched again) MAP off.
+   void arm(int source) { setMapping(!(mapping_ && armed_ == source), source); }
 
    // Each tick: the chips' levels and MAP state, the live modulation on the knobs, the generator
    // graphs and the routes list.
@@ -3136,7 +3127,6 @@ private:
    unsigned delayAccent_ = 0;
    ui::Meter *inMeter_ = nullptr, *outMeters_[2] = {};
    ui::TabBar *playerTabs_ = nullptr;
-   ui::Button *mapButton_ = nullptr;
    ui::SegmentedSwitch *view_ = nullptr;
    std::vector<SourceChip *> chips_;
    std::vector<MapKnob *> mapKnobs_;

@@ -9,11 +9,15 @@
 #include <jclap/dsp/lfo.h>
 #include <jclap/dsp/math.h>
 #include <jclap/dsp/oscillator.h>
+#include <jclap/dsp/reverb.h>
 #include <jclap/dsp/smoother.h>
+#include <jclap/dsp/stereo_delay.h>
 #include <jclap/dsp/vca.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <string>
 #include <vector>
 
 using namespace jclap::dsp;
@@ -465,6 +469,91 @@ int main() {
          line.write(static_cast<float>(i % 1000));
       const float a = line.read(400005.0), b = line.read(400005.3);
       JCLAP_CHECK(std::fabs((a - b) - 0.3f) < 1e-3f);
+   }
+
+   // ---- the stereo delay: its first repeat lands on time, at Mix, and off it adds nothing ----
+   {
+      StereoDelay delay;
+      delay.prepare(kRate);
+      DelaySettings s;
+      s.on = true;
+      s.mix = 0.5;
+      s.timeMs = 100.0;
+      s.feedback = 0.5;
+      s.tone = 1.0;
+      s.spread = 0.0;
+      delay.set(s);
+      delay.reset();
+      // Let the on fade settle, in silence, then a click.
+      for (int i = 0; i < 48000; ++i) {
+         float l = 0.0f, r = 0.0f;
+         delay.tick(l, r);
+      }
+      int peakAt = -1;
+      float peak = 0.0f;
+      for (int i = 0; i < 9000; ++i) {
+         float l = i == 0 ? 1.0f : 0.0f, r = l;
+         delay.tick(l, r);
+         if (i > 0 && std::fabs(l) > peak) {
+            peak = std::fabs(l);
+            peakAt = i;
+         }
+      }
+      JCLAP_CHECK(std::abs(peakAt - 4800) <= 3);
+      JCLAP_CHECK(peak > 0.3f && peak < 0.6f);
+      JCLAP_CHECK(delay.active());
+      JCLAP_CHECK(delay.tailSeconds() > 1.0 && delay.tailSeconds() < 2.0);
+      JCLAP_CHECK(near(delayTimeMs(0.0), 10.0, 1e-9) && near(delayTimeMs(1.0), 2000.0, 1e-6));
+      JCLAP_CHECK(near(delaySyncBeats(9), 1.0, 1e-12) && near(delaySyncBeats(0), 0.0, 1e-12));
+      JCLAP_CHECK(std::string(kDelaySyncNames[9]) == "1/4");
+
+      StereoDelay off;
+      off.prepare(kRate);
+      off.set(DelaySettings{});
+      float l = 0.7f, r = -0.2f;
+      off.tick(l, r);
+      JCLAP_CHECK_EQ(l, 0.7f);
+      JCLAP_CHECK_EQ(r, -0.2f);
+      JCLAP_CHECK(!off.active());
+   }
+
+   // ---- the room: a click rings on for about its Decay, in both sides, and then it empties ----
+   {
+      Room room;
+      room.prepare(kRate);
+      RoomSettings s;
+      s.mix = 1.0;
+      s.decay = 1.0;
+      room.set(s);
+      double early = 0.0, late = 0.0, left = 0.0, right = 0.0;
+      bool finite = true;
+      for (int i = 0; i < 3 * 48000; ++i) {
+         float l = i == 0 ? 1.0f : 0.0f, r = l;
+         room.tick(l, r);
+         if (i == 0)
+            continue;
+         finite = finite && std::isfinite(l) && std::isfinite(r);
+         if (i < 4800)
+            early += l * l + r * r;
+         else if (i >= 48000 && i < 52800)
+            late += l * l + r * r;
+         left += l * l;
+         right += r * r;
+         if (i == 3 * 48000 - 1)
+            JCLAP_CHECK(l == 0.0f && r == 0.0f);
+      }
+      JCLAP_CHECK(finite);
+      JCLAP_CHECK(early > 0.0 && left > 0.0 && right > 0.0);
+      // One Decay later the tail is about 60 dB down (the lines decay to -60 dB in Decay).
+      const double dropDb = 10.0 * std::log10(early / std::max(late, 1e-30));
+      JCLAP_CHECK(dropDb > 40.0 && dropDb < 80.0);
+
+      Room none;
+      none.prepare(kRate);
+      RoomSettings dry;
+      dry.mix = 0.0;
+      none.set(dry);
+      JCLAP_CHECK(!none.active());
    }
 
    return jclap::core::testResult();

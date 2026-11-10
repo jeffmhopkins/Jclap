@@ -288,6 +288,7 @@ class Voice {
       notchPole_ = {};
       nasalZeroHz_ = 270;
       notchBw_ = 600;
+      notchHz_ = 1000;
       for (auto &b : band_)
          b.clear();
       segs_.clear();
@@ -374,6 +375,16 @@ class Voice {
       spread_ = spread;
       flip_ = flip;
    }
+   // How it's voiced: `nasal` (0..1) sings through the nose, the velum lowered on every vowel (a
+   // low hum and a notch near 1 kHz); `twang` (0..1) narrows the throat over the folds, a bright,
+   // brassy ring around 3 kHz.
+   void setVoicing(double nasal, double twang) {
+      nasal_ = std::clamp(nasal, 0.0, 1.0);
+      twang_ = std::clamp(twang, 0.0, 1.0);
+   }
+   // The folds' tension (-1..1): lax, open longer and dark (a soft, hooting voice), or pressed,
+   // shut most of each period and buzzing.
+   void setTension(double t) { tension_ = std::clamp(t, -1.0, 1.0); }
    // How long the vowels take to glide in, over their own (1: as speech has it).
    void setGlide(double scale) { glide_ = scale; }
    bool active() const { return sounding_ || seg_ < segs_.size(); }
@@ -430,19 +441,29 @@ class Voice {
             for (int n = 1; n < kF; ++n)
                base[n] = base[0] * std::pow(base[n] / base[0], k);
          }
+         double below = 0.0;
          for (int n = 0; n < kF; ++n) {
             double f = base[n] * size_ * (n < 3 ? warp_[n] * (1.0 + wet_ * (n == 0 ? 0.1 : 0.16) * shiver_[n]) : 1.0);
+            // (A high note's first resonance rides over the second on purpose: the guard below
+            // looks at where it was.)
+            const double own = f;
             if (n == 0)
                f = std::max(f, f + ride_ * (1.15 * hz - f));
-            double bw = b_[n] * sharp_ * (n > 0 ? 1.0 + 0.8 * ride_ : 1.0);
+            double bw = b_[n] * sharp_ * (n > 0 ? 1.0 + 0.8 * ride_ : 1.0) * (n >= 2 ? 1.0 - 0.6 * twang_ : 1.0);
             if (n < 3)
                bw *= 1.0 + wet_ * 0.6 * std::fabs(shiver_[n]);
+            // (Two resonances pushed onto each other would ring together many times louder than
+            // either: closer than 10% apart, they're widened.)
+            if (below > 0.0 && n < 3 && own < 1.10 * below)
+               bw = std::max(bw, 1.5 * (1.10 * below - std::max(own, 0.0)) + 0.1 * own);
+            below = own;
             cascadeK_[n].set(std::clamp(f, 50.0, 0.45 * fs_), std::max(bw, 8.0), fs_);
          }
          nasalZeroK_.set(nasalZeroHz_, 100.0, fs_);
          nasalPoleK_.set(270.0, 100.0, fs_);
-         notchZeroK_.set(nasalHz_, notchBw_, fs_);
-         notchPoleK_.set(nasalHz_, 600.0, fs_);
+         // (A nasal vowel's notch sits near 1 kHz, between its first resonances.)
+         notchZeroK_.set(notchHz_, notchBw_, fs_);
+         notchPoleK_.set(notchHz_, 600.0, fs_);
       }
 
       // The glottis: a KLGLOTT88 flow pulse, open for the open quotient of each period, its tilt
@@ -464,14 +485,14 @@ class Voice {
          if (growl_ > 0.0 && 0.5 + 0.5 * noise() < 0.12 * growl_)
             shimmer_ *= 0.15;
       }
-      const double oq = 0.5 - 0.15 * effort;
+      const double oq = std::clamp((0.5 - 0.15 * effort) * std::exp2(-0.9 * tension_), 0.12, 0.9);
       double flow = 0.0;
       const double ph = phase_;
       if (ph < oq) {
          const double x = ph / oq;
          flow = 6.75 * x * x * (1.0 - x) * shimmer_ * (1.0 + 0.6 * growl_ * rattle_);
       }
-      const double tilt = std::exp(-2.0 * kPi * std::min(20000.0, 0.45 * fs_) / fs_);
+      const double tilt = std::exp(-2.0 * kPi * std::min(20000.0 * std::exp2(4.5 * std::min(tension_, 0.0)), 0.45 * fs_) / fs_);
       tiltY_ = (1.0 - tilt) * flow + tilt * tiltY_;
       double glot = tiltY_;
       if (extMix > 0.0) {
@@ -497,8 +518,9 @@ class Voice {
       // The nose: a pole at 270 Hz and a zero that sit together (and cancel) until a nasal lifts the
       // zero to 550 Hz, leaving the murmur's low hum; and a notch where the shut-off mouth swallows
       // its sound, deep in a nasal and gone (its zero's bandwidth that of its pole) otherwise.
-      nasalZeroHz_ += fK * ((nasalOn_ ? 550.0 : 270.0) - nasalZeroHz_);
-      notchBw_ += fK * ((nasalOn_ ? 80.0 : 600.0) - notchBw_);
+      nasalZeroHz_ += fK * ((nasalOn_ ? 550.0 : 270.0 + 230.0 * nasal_) - nasalZeroHz_);
+      notchBw_ += fK * ((nasalOn_ ? 80.0 : 600.0 - 480.0 * nasal_) - notchBw_);
+      notchHz_ += fK * ((nasalOn_ ? nasalHz_ : 1000.0) - notchHz_);
       in = nasalZero_.tick(nasalPole_.tick(in, nasalPoleK_), nasalZeroK_);
       in = notchPole_.tick(notchZero_.tick(in, notchZeroK_), notchPoleK_);
       double y = in;
@@ -511,7 +533,7 @@ class Voice {
       // A lift over 2 kHz: a real voice's top, which a smooth pulse through the cascade lacks.
       const double shK = std::exp(-2.0 * kPi * 2000.0 / fs_);
       shelfLp_ = shK * shelfLp_ + (1.0 - shK) * radiated;
-      radiated += kPresence * (radiated - shelfLp_);
+      radiated += kPresence * (1.0 + 5.0 * twang_) * (radiated - shelfLp_);
 
       // Frication: noise through the bank for this place, voiced fricatives buzzing with the pulse.
       double fr = 0.0;
@@ -1047,7 +1069,7 @@ class Voice {
    AntiRes nasalZero_, notchZero_;
    Res nasalPole_, notchPole_;
    bool nasalOn_ = false, fricVoiced_ = false, bandsSet_ = false;
-   double nasalHz_ = 1500, nasalZeroHz_ = 270, notchBw_ = 600;
+   double nasalHz_ = 1500, nasalZeroHz_ = 270, notchBw_ = 600, notchHz_ = 1000;
    Band band_[kBands];
    double bandGain_[kBands] = {}, bypass_ = 0, fricNorm_ = 1;
    Spectrum spectrum_ = kFlat;
@@ -1059,6 +1081,7 @@ class Voice {
    double spread_ = 0.0, flip_ = 0.0, size_ = 1.0, sharp_ = 1.0, warp_[3] = {1.0, 1.0, 1.0}, ride_ = 0.0, glide_ = 1.0;
    double glotPower_ = 0.01, extPower_ = 0.01;
    int control_ = 0;
+   double nasal_ = 0.0, twang_ = 0.0, tension_ = 0.0;
    double rough_ = 0.0, growl_ = 0.0, wet_ = 0.0, wander_ = 0.0, scoop_ = 0.0, fall_ = 0.0, period_ = 1.0, rattle_ = 0.0;
    double shiver_[3] = {}, shiverA_[3] = {};
    bool odd_ = false, falling_ = false;

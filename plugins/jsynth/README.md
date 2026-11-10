@@ -26,8 +26,9 @@ each one trails ink across the sky.
 - **Shape envelopes** after XAOC's Zadar: 60 contours in ten banks, from 1 ms to 30 minutes, chained
   into each other.
 - **MAP** instead of a matrix page: arm a source, drag a knob.
+- **Reverb and delay** on the main output, the same ones as JBreath's, on the FX tab.
 - **Dice:** randomize a playable patch by complexity, or mutate one by an amount, with undo and locks.
-- **166 factory presets** in ten categories, with favorites.
+- **83 factory presets** in 8 categories, led by flock-driven drones and textures, with favorites.
 
 ## Sound
 
@@ -43,10 +44,10 @@ couplings **between creatures** and the part's noise and drift.
 
 Two filters, serial or parallel with a balance between them: low pass, high pass, band pass, notch,
 peak, ladder and two combs, 12 to 48 dB. Each oscillator and the noise picks Filter 1, Filter 2 or
-both. The response is drawn and draggable (handle 1 and 2 set cutoff and resonance), and it follows
+both. Each filter's response is drawn in its own half of the graph, Filter 1 above Filter 2, and is draggable (handle 1 and 2 set cutoff and resonance), and it follows
 the newest note's modulated cutoff as it plays. A drive stage (soft, hard or tube) sits after them.
-This shot is in MAP mode with the Wah bus of *Finger Wah* armed: the rings on Cutoff and Res are how
-far it moves them.
+This shot is in MAP mode with the Climb bus of *Slow Murmuration* armed: the ring on Cutoff is how
+far the flock's heading moves it.
 
 ## Envelopes, LFOs and buses
 
@@ -58,14 +59,14 @@ The card at the bottom left has three tabs.
 contour from a library of 60 in ten banks (Rise, Fall, Swell, Pulse, Waves, Steps, Drift, Strike,
 ADSR and Acoustic), stretched over 1 ms to 30 minutes or a tempo length, then warped, bent, scaled,
 reversed, repeated and held at a sustain point. **Env Chain** starts one Shape envelope from another
-at a phase of its run, in a line or a loop, so drones keep moving. Above, *Two Tides*: Bloom, Arch
-and Wander, five, thirteen and twenty-nine seconds long.
+at a phase of its run, in a line or a loop, so drones keep moving. Above, *Breathing Planet*: a
+twelve second Breath on Env 2 and a Wobble 8 on Env 3, both repeating forever.
 
 ![LFOs](docs/readme/lfos.jpg)
 
 **LFOS.** Two plain LFOs per part (sine, triangle, saw, square, S&H, smooth), free or tempo-synced,
-retriggered per note, free-running or one for the whole part. *Twin Pulse* multiplies these two so
-its drone only swells where both are up.
+retriggered per note, free-running or one for the whole part. *Engine Room* throbs on LFO 1, and
+each creature's flight speed pushes that rate, so every voice idles at its own pace.
 
 ![Mod buses](docs/readme/buses.jpg)
 
@@ -73,7 +74,7 @@ its drone only swells where both are up.
 result (linear, exponential, log, S-curve, absolute), sets its polarity (as is, unipolar,
 bipolar, inverted), can wait and fade in
 after the note, lags it, and runs per note or once for the whole part. Name it and it routes on under
-that name, as *Flight Steps* does with **Wing Speed** and **Flock Heading**.
+that name, as *Embers* does with **Climb** and **Heat**.
 
 ## The dice
 
@@ -226,20 +227,21 @@ folder). To delete a user preset, load it and pick **Delete** from the name menu
 to make any preset a favorite; **Favorites** sits at the top of the menu and is shared by every
 instance.
 
-The 166 factory presets are level-matched and come in ten categories:
+The 83 factory presets are level-matched and come in 8 categories. Nearly every one is a sound the
+flock plays: each note's creature moves its own filter, shape, mix and FM as it climbs, turns,
+speeds up and gathers, and looping Shape envelopes reach back into the flock and the depth of its
+routes. Drones and textures run from soft and spacey to heavily modulated industrial noise.
 
 | Category | What's in it |
 |---|---|
-| **Essentials** | Plain patches to start from: basses, leads, keys, bells, plucks, brass, strings, pads, splits |
-| **Flock** | The creatures playing the sound: Neighbour FM, Bite, Tune Pull and the flock's sources |
-| **Pressure** | Press shaped by the buses: curved, multiplied, delayed and lagged |
-| **Expressive** | Played with Press, which bows, blows, bends, gates or blooms the sound |
-| **Drones** | Long drifting Shape envelopes under a held chord |
-| **Textures** | Shapes as the amp, so each held note plays a pattern |
-| **Motion** | Patches that keep moving on their own |
-| **Interplay** | Envelopes routed onto each other's Time, Warp and Bend |
-| **Landscapes** | Both parts at once on Shape envelopes that move each other |
-| **Monsta** | Variations on MicroMonsta 2 programs |
+| **Ambient Drones** | Soft, spacey held sounds: each creature's climb, turns and speed move its own note's filter, shape, mix and FM, under long halls |
+| **Dark Drones** | Low, slow and ominous: ladders, growls, stone-room combs and dark choirs that gather, sink and grind as the flock moves |
+| **Textures** | Patterns, grains and particles: Shape envelopes as the amp, each creature setting its own pace and colour |
+| **Industrial** | Heavily modulated machinery: sync grind, hard drive, inharmonic FM, combs and noise, driven and hammered by the flock |
+| **Landscapes** | Both parts at once: two flocks in one sky, hunting, biting, crossfaded by Press or split by velocity or key |
+| **Pads** | The classic pad shapes, flown by the flock |
+| **Keys and Bells** | Played sounds, each note shaded by its creature |
+| **Bass and Leads** | One creature each, playing its own tone |
 
 ## For developers
 

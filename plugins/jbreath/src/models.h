@@ -190,6 +190,8 @@ struct Character {
    float bendSemis = 0.0f;
    // (The Alien's consonants: how strong, and which of its eight families it says, a bit each.)
    float consonants = 1.0f;
+   // (The tongue's kick: the Alien's attack and consonants, harder with more.)
+   float kick = 0.25f;
    uint32_t sounds = 0xffu;
    // (Its vowels: which of A E I O U it says, a bit each. Those and the consonants' families make
    // its own words, which the plugin builds: see lyrics.h.)
@@ -1237,8 +1239,12 @@ public:
       hardness_ = hardness;
       letGo_ = false;
       // (A word's first consonant is said as the note starts, not as the breath swells behind it.)
-      onset_ = 0.5 + 0.4 * hardness;
-      say(word, 0.6 + 0.4 * hardness);
+      // (Kick: from a soft start, its consonants at 0.4 of their strength, through as written at
+      // the default, to a hard, punched one at twice.)
+      const double kc = std::clamp(static_cast<double>(character.kick), 0.0, 1.0);
+      const double kick = kc < 0.25 ? 0.4 + 2.4 * kc : 1.0 + (kc - 0.25) * 4.0 / 3.0;
+      onset_ = (0.5 + 0.4 * hardness) * std::sqrt(std::min(kick, 1.0));
+      say(word, (0.6 + 0.4 * hardness) * kick);
    }
    void letGo() override {
       if (letGo_)
@@ -1250,6 +1256,7 @@ public:
    bool ringing() const override { return voice_.active(); }
    float tick(float breath, float emb, double len, float tn) override {
       breath_ = breath;
+      emb_ = emb;
       if (--count_ <= 0) {
          count_ = control_;
          shape();
@@ -1309,9 +1316,10 @@ public:
          letGoLevel_ *= letGoFall_;
          level_ = std::max(level_, letGoLevel_);
       }
+      // (Stiffness is the folds' tension: lax and soft, or pressed, buzzing and bright.)
       const double effort = std::clamp(0.25 + 0.55 * push + 0.2 * (character.stiffness - 0.5), 0.0, 1.0);
       const double breathy = std::clamp(0.8 * static_cast<double>(character.breathy) + 0.1 * (character.noise - 1.0), 0.0, 1.0);
-      const double sung = voice_.tick(fs_ / std::max(len, 2.0), breathy, effort, saw, bowMix);
+      const double sung = voice_.tick(fs_ / std::max(len, 2.0), breathy, effort, saw, bowMix) * mouthGain_;
       // The bow's rosin edge, above the resonances, gets out round the throat.
       const float buzz = saw - edge_.tick(saw);
       // Held to one level whatever its throat's shape (measured on its vowels over the last quarter
@@ -1418,13 +1426,35 @@ private:
          warp[n] = std::exp2(0.8 * a * accentS_[n] * (n == 0 ? 0.6 : 1.0) + 0.25 * d * drift_[n] +
                              wob * std::sin(2.0 * kPi * wobble_[n]) * (n == 0 ? 0.4 : 1.0));
       }
+      // The mouth, from the Exciter knobs: Embouchure opens the jaw (the first resonance up an
+      // octave, wide open, or down one, nearly shut); Aperture spreads the lips (the upper
+      // resonances up) or rounds and pushes them out (down, darker).
+      embS_ += (emb_ - embS_) * ease;
+      const double jaw = std::clamp(embS_ - 0.5, -0.5, 0.5);
+      const double lips = std::clamp(static_cast<double>(character.aperture) - 0.5, -0.5, 0.5);
+      warp[0] *= std::exp2(2.0 * jaw + 0.3 * lips);
+      warp[1] *= std::exp2(0.5 * jaw + 1.0 * lips);
+      warp[2] *= std::exp2(0.8 * lips);
       // Smaller or larger, following the note (as far as Follow sets: from middle C) and the bend
       // (as far as Bend sets).
       double size = std::exp2(std::clamp(static_cast<double>(character.shift), -1.0, 1.0));
       size *= std::pow(hz_ / 261.63, std::clamp(static_cast<double>(character.follow), 0.0, 1.0));
       if (character.bendSemis != 0.0f)
          size *= std::exp2(std::clamp(static_cast<double>(character.bendSemis), -48.0, 48.0) / 12.0);
-      const double sharp = std::exp2(3.0 * (0.5 - std::clamp(static_cast<double>(character.sharp), 0.0, 1.0)));
+      // (Loss damps the throat's walls: its resonances widen, up to about six times, muffled.)
+      const double sharp = std::exp2(3.0 * (0.5 - std::clamp(static_cast<double>(character.sharp), 0.0, 1.0))) *
+                           std::max(0.6, 1.0 + 10.0 * (static_cast<double>(character.loss) - 0.04));
+      // (Bite: under the middle it sings more and more through its nose; over it, a brassy twang.)
+      const double bite = std::clamp(static_cast<double>(character.edge) - 1.0, -1.0, 1.0);
+      voice_.setVoicing(std::max(0.0, -bite), std::max(0.0, bite));
+
+      // (An open jaw or spread lips let out more of the voice, a damped throat less: each held
+      // level, so they change its colour and not how loud it is.)
+      const double jawOct = 2.0 * jaw, damp = std::log2(std::max(0.6, 1.0 + 10.0 * (static_cast<double>(character.loss) - 0.04)));
+      voice_.setTension(2.0 * (std::clamp(static_cast<double>(character.stiffness), 0.0, 1.0) - 0.5));
+      const double tense = 2.0 * (std::clamp(static_cast<double>(character.stiffness), 0.0, 1.0) - 0.5);
+      mouthGain_ = std::exp2(-(jawOct > 0.0 ? 2.26 : 0.83) * jawOct - 3.0 * std::max(lips, 0.0) + 0.5 * damp + 0.9 * std::max(-tense, 0.0) -
+                             0.4 * std::max(tense, 0.0) - 1.0 * std::max(bite, 0.0));
       voice_.setShape(size, sharp, warp, std::min(high_, 1.0));
       voice_.setOrganic(character.rough, character.rasp, character.wet);
       voice_.setStrange(std::clamp(static_cast<double>(character.spread), -1.0, 1.0), std::clamp(static_cast<double>(character.flip), 0.0, 1.0));
@@ -1444,7 +1474,8 @@ private:
    Delay neck_, bridge_;
    OnePoleLP loop_;
    double breathS_ = 0.0, held_ = 0.0, nextAt_ = 1.0, wanderV_ = 0.0;
-   float breath_ = 0.0f;
+   float breath_ = 0.0f, emb_ = 0.5f;
+   double embS_ = 0.5, mouthGain_ = 1.0;
    Allpass stiff_[2];
    float sawLevel_ = 1.0f, tilt_ = 0.0f, x1_ = 0.0f;
    OnePoleLP edge_, mellow_, mellow2_;
