@@ -67,24 +67,24 @@ inline const Phone kPhones[] = {
    {"NG", kNasal, kVelar, true, 450, 2100, 2900, 150, 120, 200, 0, 0, 0, 70, 0, kFlat},
    // fricatives
    {"F", kFric, kLabioDental, false, 350, 1100, 2100, 200, 120, 150, 0, 0, 0, 100, -18, kFlat},
-   {"V", kFric, kLabioDental, true, 250, 1100, 2100, 80, 100, 130, 0, 0, 0, 65, -28, kFlat},
+   {"V", kFric, kLabioDental, true, 250, 1100, 2100, 80, 100, 130, 0, 0, 0, 65, -24, kFlat},
    {"TH", kFric, kDental, false, 350, 1400, 2600, 200, 100, 200, 0, 0, 0, 100, -24, kDentalHiss},
-   {"DH", kFric, kDental, true, 270, 1400, 2600, 70, 90, 170, 0, 0, 0, 50, -30, kDentalHiss},
+   {"DH", kFric, kDental, true, 270, 1400, 2600, 70, 90, 170, 0, 0, 0, 50, -25, kDentalHiss},
    {"S", kFric, kAlveolar, false, 350, 1600, 2600, 200, 100, 200, 0, 0, 0, 110, -11, kSibilant},
    {"Z", kFric, kAlveolar, true, 260, 1600, 2600, 70, 90, 180, 0, 0, 0, 80, -13, kSibilant},
    {"SH", kFric, kPostAlveolar, false, 350, 1900, 2500, 200, 120, 250, 0, 0, 0, 120, -11, kHush},
    {"ZH", kFric, kPostAlveolar, true, 270, 1900, 2500, 70, 100, 200, 0, 0, 0, 80, -12, kHush},
-   {"HH", kAspirate, kGlottal, false, 0, 0, 0, 300, 120, 200, 0, 0, 0, 80, -25, kFlat},
+   {"HH", kAspirate, kGlottal, false, 0, 0, 0, 300, 120, 200, 0, 0, 0, 80, -13, kFlat},
    // stops: the closure's length, then the burst
-   {"P", kStop, kLabial, false, 400, 1000, 2150, 300, 150, 220, 0, 0, 0, 70, -26, kLabialBurst},
-   {"B", kStop, kLabial, true, 250, 1000, 2150, 60, 110, 130, 0, 0, 0, 60, -24, kLabialBurst},
-   {"T", kStop, kAlveolar, false, 400, 1700, 2650, 300, 120, 250, 0, 0, 0, 60, -19, kAlveolarBurst},
-   {"D", kStop, kAlveolar, true, 250, 1700, 2650, 60, 100, 170, 0, 0, 0, 50, -18, kAlveolarBurst},
-   {"K", kStop, kVelar, false, 350, 1900, 2400, 250, 160, 330, 0, 0, 0, 70, -16, kVelarBurst},
-   {"G", kStop, kVelar, true, 250, 1900, 2400, 60, 150, 280, 0, 0, 0, 60, -19, kVelarBurst},
+   {"P", kStop, kLabial, false, 400, 1000, 2150, 300, 150, 220, 0, 0, 0, 70, -17, kLabialBurst},
+   {"B", kStop, kLabial, true, 250, 1000, 2150, 60, 110, 130, 0, 0, 0, 60, -19, kLabialBurst},
+   {"T", kStop, kAlveolar, false, 400, 1700, 2650, 300, 120, 250, 0, 0, 0, 60, -10, kAlveolarBurst},
+   {"D", kStop, kAlveolar, true, 250, 1700, 2650, 60, 100, 170, 0, 0, 0, 50, -13, kAlveolarBurst},
+   {"K", kStop, kVelar, false, 350, 1900, 2400, 250, 160, 330, 0, 0, 0, 70, -9, kVelarBurst},
+   {"G", kStop, kVelar, true, 250, 1900, 2400, 60, 150, 280, 0, 0, 0, 60, -13, kVelarBurst},
    // affricates: a stop's closure, released into its fricative
-   {"CH", kAffricate, kPostAlveolar, false, 350, 1900, 2500, 200, 120, 250, 0, 0, 0, 60, -14, kHush},
-   {"JH", kAffricate, kPostAlveolar, true, 270, 1900, 2500, 70, 100, 200, 0, 0, 0, 50, -13, kHush},
+   {"CH", kAffricate, kPostAlveolar, false, 350, 1900, 2500, 200, 120, 250, 0, 0, 0, 70, -9, kHush},
+   {"JH", kAffricate, kPostAlveolar, true, 270, 1900, 2500, 70, 100, 200, 0, 0, 0, 55, -11, kHush},
 };
 constexpr int kPhoneCount = sizeof(kPhones) / sizeof(kPhones[0]);
 
@@ -98,21 +98,24 @@ inline int findPhone(std::string_view name) {
 // Where the formants start as a consonant opens onto a vowel (or end as it closes off one): its
 // locus, pulled towards the vowel (Sussman's locus equations: F2 onset = k F2 vowel + c by place).
 inline void locus(const Phone &c, const double vowel[3], double out[3]) {
-   // The first formant starts low under a closure and rises as the mouth opens: from about
-   // two-thirds of the vowel's after a stop, nearer it after a fricative.
-   out[0] = std::max(250.0, (c.kind == kStop ? (c.voiced ? 0.6 : 0.7) : 0.8) * vowel[0]);
+   // The first formant starts low under a closure and rises as the mouth opens: after a stop from
+   // near where a shut mouth leaves it (250 to 350 Hz, whatever the vowel: the rise that says
+   // "stop"), after a fricative from about half way, its narrow channel not quite shut.
+   const bool closes = c.kind == kStop || c.kind == kAffricate;
+   out[0] = std::min(vowel[0], closes ? 200.0 + 0.2 * vowel[0] : std::max(250.0, 0.5 * vowel[0] + 100.0));
    switch (c.place) {
    case kLabial:
    case kLabioDental:
-      out[1] = 0.75 * vowel[1] + 150.0;
-      out[2] = 0.92 * vowel[2];
+      // (Shut lips lower every resonance: F2 and F3 both rise out of a b, p or m.)
+      out[1] = 0.7 * vowel[1] + 150.0;
+      out[2] = 0.82 * vowel[2];
       break;
    case kDental:
       out[1] = 0.5 * vowel[1] + 750.0;
       out[2] = 0.5 * vowel[2] + 1300.0;
       break;
    case kAlveolar:
-      out[1] = 0.45 * vowel[1] + 1000.0;
+      out[1] = 0.43 * vowel[1] + 1225.0; // (Sussman et al. 1991, /d/)
       out[2] = 0.4 * vowel[2] + 1650.0;
       break;
    case kPostAlveolar:
@@ -323,8 +326,14 @@ class Voice {
    void start(const Syllable &s, double strength = 1.0) {
       Plan &plan = scratch_;
       plan.clear();
-      if (held_)
+      // (Whatever of the last syllable is still to be said is said first, quicker, not dropped: a
+      // quick run of notes still says every consonant, and a tongued line its closing ones.)
+      if (held_) {
+         carry(plan);
          planCoda(plan, current_, true);
+      } else if (falling_) {
+         carry(plan);
+      }
       // (A living voice scoops up into each syllable's pitch, further from silence.)
       scoop_ = -(40.0 + 160.0 * rough_) * (sounding_ ? 0.3 : 1.0);
       falling_ = false;
@@ -339,6 +348,7 @@ class Voice {
          return;
       Plan &plan = scratch_;
       plan.clear();
+      carry(plan);
       planCoda(plan, current_, false);
       held_ = false;
       falling_ = true;
@@ -617,7 +627,7 @@ class Voice {
    static constexpr int kBands = 6;
    // A syllable's segments, held in place (a voice plans them on the audio thread).
    struct Plan {
-      static constexpr int kMax = 48;
+      static constexpr int kMax = 64;
       Segment at[kMax];
       int n = 0;
       void push_back(const Segment &s) {
@@ -631,8 +641,37 @@ class Voice {
       void clear() { n = 0; }
    };
 
+   // What's still to be said of the plan under way, before a new one replaces it: the consonants
+   // not yet finished (a little quicker, to catch up), and the vowel if it hasn't yet sounded long
+   // enough to be heard (55 ms stressed, 35 unstressed).
+   void carry(Plan &plan) {
+      if (seg_ < 0 || seg_ >= segs_.size())
+         return;
+      const double msPer = 1000.0 / fs_;
+      int carried = 0;
+      for (int k = seg_; k < segs_.size() && carried < 16; ++k) {
+         const Segment &g = segs_[k];
+         if (g.vowelPart) {
+            const double had = k == seg_ ? segAt_ * msPer : 0.0;
+            const double need = (current_.stress == 1 ? 55.0 : 35.0) - had;
+            if (need > 3.0) {
+               Segment v = g;
+               v.ms = need;
+               plan.push_back(v);
+            }
+            return;
+         }
+         Segment rest = g;
+         rest.ms = 0.8 * (k == seg_ ? segLeft_ * msPer : g.ms);
+         if (rest.ms >= 1.0) {
+            plan.push_back(rest);
+            ++carried;
+         }
+      }
+   }
+
    void replace(Plan &plan) {
-      // Whatever was still to come is dropped; the new plan starts now.
+      // The new plan starts now (what was unfinished of the old one, carried into it, first).
       segs_ = plan;
       seg_ = -1;
       segLeft_ = 0;
@@ -648,6 +687,7 @@ class Voice {
          ++seg_;
          const Segment &s = segs_[seg_];
          segLeft_ = s.ms < 0 ? 1e12 : std::max(1.0, s.ms * 0.001 * fs_);
+         segAt_ = 0.0;
          if (s.moveF || s.setF)
             for (int n = 0; n < 3; ++n) {
                ft_[n] = s.f[n];
@@ -666,12 +706,14 @@ class Voice {
       }
       if (segLeft_ < 1e11)
          segLeft_ -= 1.0;
+      segAt_ += 1.0;
    }
 
    static double db(double d) { return std::pow(10.0, d / 20.0); }
    // Where the shut-off mouth, branching off the nose, swallows the murmur's sound.
    static double nasalZero(const Phone &c) {
-      return c.place == kLabial ? 1700.0 : c.place == kAlveolar ? 1250.0 : 3200.0;
+      // (Fujimura 1962: an m's about 1 kHz, an n's 1.5 to 2 kHz, an ng's over 3.)
+      return c.place == kLabial ? 1000.0 : c.place == kAlveolar ? 1750.0 : 3200.0;
    }
 
    void vowelTargets(const Phone &v, double out[3], double bw[3], bool end = false) const {
@@ -731,15 +773,20 @@ class Voice {
             burst.ampMs = 0.5;
             burst.fricVoiced = c.voiced;
             plan.push_back(burst);
+            // (After an s, as in "spin", "stay" and "sky", a p, t or k isn't aspirated: it sounds
+            // nearly as a b, d or g would.)
+            const bool afterS = i > 0 && kPhones[s.onset[i - 1]].kind == kFric && !kPhones[s.onset[i - 1]].voiced;
             if (!c.voiced) {
-               // Aspiration: the breath through the opening tract, the formants already moving.
+               // Aspiration: the breath through the opening tract, the formants already moving. Its
+               // length (the voice onset time) is longest at the back of the mouth: p 50 ms, t 60, k 70.
                Segment asp;
-               asp.ms = (c.kind == kAffricate ? 25 : 45) * (i + 1 < n ? 0.5 : 1.0);
+               const double vot = c.kind == kAffricate ? 25 : c.place == kLabial ? 50 : c.place == kVelar ? 70 : 60;
+               asp.ms = afterS ? 10 : vot * (i + 1 < n ? 0.8 : 1.0);
                std::copy(next, next + 3, asp.f);
                std::copy(vb, vb + 3, asp.b);
                asp.widen = 4.0;
                asp.formantMs = 40;
-               asp.ah = db(-25) * scale;
+               asp.ah = db(afterS ? -24 : -12) * scale;
                asp.ampMs = 3;
                plan.push_back(asp);
                transition = 30;
@@ -759,7 +806,9 @@ class Voice {
             f.fricVoiced = c.voiced;
             f.av = c.voiced ? 0.3 : 0.0;
             f.avs = c.voiced ? 0.3 : 0.0;
-            f.ampMs = 8;
+            // (A fricative's hiss swells in over 20 ms or so, where a stop's or an affricate's
+            // starts at once: the difference between "shop" and "chop", "fee" and "pea".)
+            f.ampMs = 18;
             plan.push_back(f);
             transition = 40;
             break;
@@ -815,7 +864,9 @@ class Voice {
             g.av = db(-3);
             g.ampMs = 12;
             plan.push_back(g);
-            transition = c.kind == kGlide ? 70 : 55;
+            // (An l lets go of the tongue's tip at once, a w or y glides: the difference between
+            // "lay" and "way".)
+            transition = c.kind == kGlide ? 75 : c.place == kAlveolar ? 25 : 60;
             break;
          }
          default:
@@ -891,7 +942,8 @@ class Voice {
             // The vowel bends towards where the consonant closes.
             Segment t;
             const bool voiceless = !c.voiced && (c.kind == kStop || c.kind == kAffricate || c.kind == kFric);
-            t.ms = voiceless ? 35 : 50;
+            // (Going straight on to the next syllable, it's said briskly: that one's note has started.)
+            t.ms = (voiceless ? 35 : 50) * (goingOn ? 0.7 : 1.0);
             std::copy(loc, loc + 3, t.f);
             std::copy(vb, vb + 3, t.b);
             t.formantMs = voiceless ? 25 : 35;
@@ -904,7 +956,7 @@ class Voice {
          case kStop:
          case kAffricate: {
             Segment closure;
-            closure.ms = c.ms;
+            closure.ms = c.ms * (goingOn ? 0.75 : 1.0);
             std::copy(loc, loc + 3, closure.f);
             std::copy(cb, cb + 3, closure.b);
             closure.avs = c.voiced ? 0.4 : 0.0;
@@ -915,17 +967,20 @@ class Voice {
             std::copy(loc, loc + 3, burst.f);
             std::copy(cb, cb + 3, burst.b);
             burst.moveF = false;
-            burst.af = db(c.level - 4);
+            burst.af = db(c.level - 2);
             burst.spectrum = c.spectrum;
             if (c.spectrum == kVelarBurst)
                burst.shift = loc[1] / 2000.0;
             burst.ampMs = 0.5;
             plan.push_back(burst);
+            // (Its release is a short breath, or none when another consonant follows straight on,
+            // as in "box": much longer, it's heard as a vowel after it, "tank" as "tannic".)
+            const bool more = i + 1 < n;
             Segment asp;
-            asp.ms = c.voiced ? 15 : 40;
+            asp.ms = more ? 5 : c.voiced ? 15 : goingOn ? 15 : 30;
             asp.moveF = false;
             asp.widen = 3.0;
-            asp.ah = c.voiced ? 0.0 : db(-22);
+            asp.ah = c.voiced || more ? 0.0 : db(goingOn ? -22 : -18);
             asp.ampMs = 6;
             plan.push_back(asp);
             break;
@@ -1004,8 +1059,8 @@ class Voice {
          {{2500, 3500, 4500, 6000, 7500, 9500}, {400, 500, 800, 1200, 1500, 2500}, {-40, -30, -20, -6, 0, -6}, 0.02},
          // hush (sh, zh, ch, j): a wide hump from 2 to 5 kHz
          {{1900, 2500, 3200, 4200, 5500, 7500}, {350, 500, 700, 1000, 1500, 2500}, {-14, 0, -2, -4, -10, -18}, 0.02},
-         // labial burst (p, b): weak and low, flat
-         {{800, 1500, 2500, 3500, 5000, 7000}, {800, 1000, 1500, 1500, 2000, 3000}, {-2, -4, -8, -10, -14, -18}, 0.5},
+         // labial burst (p, b): diffuse and falling, its energy low (Stevens & Blumstein)
+         {{600, 1200, 2000, 3000, 4500, 7000}, {600, 800, 1200, 1500, 2000, 3000}, {0, -3, -9, -15, -22, -30}, 0.03},
          // alveolar burst (t, d): high, over 3.5 kHz
          {{1700, 2700, 3700, 4500, 6000, 8000}, {500, 600, 800, 1200, 1500, 2500}, {-24, -12, -4, 0, -2, -8}, 0.05},
          // velar burst (k, g): compact, in the middle
@@ -1052,11 +1107,11 @@ class Voice {
    }
 
    static constexpr double kSnapMs = 8.0;
-   static constexpr double kFricScale = 0.7, kPresence = 1.5, kMurmur = -9.0;
+   static constexpr double kFricScale = 0.7, kPresence = 1.5, kMurmur = -5.0;
    double fs_ = 48000;
    Plan segs_, scratch_;
    int seg_ = 0;
-   double segLeft_ = 0;
+   double segLeft_ = 0, segAt_ = 0;
    Syllable current_;
    bool held_ = false, sounding_ = false;
    double av_ = 0, avs_ = 0, ah_ = 0, af_ = 0;

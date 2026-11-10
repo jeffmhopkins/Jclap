@@ -333,6 +333,16 @@ inline const std::vector<Preset> &factoryPresets() {
                    {{kModel, A}, {kAlienTalk, 0.85}, {kAlienGlide, 15}, {kAlienLinger, 0.15}, {kAlienSharp, 0.55},
                     {kAlienDrift, 0.05}, {kAlienBreathy, 0.15}, {kAttack, 8}, {kRelease, 120}, {kVibDepth, 0.0},
                     {kRoom, 0.2}}});
+      // Clear: the most intelligible English it speaks, set by playing whole sentences to a speech
+      // recognizer. A plain human throat that doesn't wander, a slur from syllable to syllable
+      // (play a note a syllable, each overlapping the next, as long as the syllable would be
+      // spoken) and only a little room, so a stop's silence stays silent. Type the words on the
+      // ALIEN tab.
+      p.push_back({"Clear Diction", "Alien",
+                   {{kModel, A}, {kAlienSource, 1}, {kAlienTalk, 0.0}, {kAlienGlide, 25}, {kAlienLinger, 0.15},
+                    {kAlienSharp, 0.5}, {kAlienDrift, 0.0}, {kAlienVoice, 0.0}, {kAlienBreathy, 0.2},
+                    {kAlienRough, 0.4}, {kAlienWet, 0.0}, {kAlienStrength, 1.0}, {kAttack, 15}, {kRelease, 160},
+                    {kVibDepth, 0.0}, {kVoiceMode, kLegatoMode}, {kGlide, 25}, {kRoom, 0.15}}});
       // Fast chatter, every 1/8 on a held note a new syllable.
       p.push_back({"Chatterbox", "Alien",
                    {{kModel, A}, {kAlienTalk, 0.9}, {kAlienGlide, 15}, {kAlienPace, 2}, {kAlienLinger, 0.1},
