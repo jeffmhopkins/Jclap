@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "bore_table.h"
 #include "speech.h"
 
 namespace jbreath {
@@ -898,34 +899,41 @@ public:
    }
 };
 
-// Trumpet: the lips are a mass on a spring, pushed open by the mouth pressure against the pressure
-// in the mouthpiece (an outward-striking valve, tuned a little under the note); air through the slit
-// goes as the square root of the pressure drop. The bore is a one-period loop whose resonances fall
-// on every harmonic, as a flared horn's do, with a reflection of -1 at DC (a horn can't hold a steady
-// pressure in the mouthpiece). The bell reflects the lows and lets the highs out above a fixed
-// cutoff (about 1.4 kHz, as a Bb trumpet's), so the resonances fade above it; what leaves the bell
-// is the wave's highs, with the bell's and mouthpiece's formant just above 1 kHz. Each trip loses
-// about 5% (a real trumpet's resonances have a Q of 20 to 40, so a note builds and settles in a few
-// tens of ms). At forte the wave steepens on its way down the tube: the brassy edge.
+// Trumpet: a Bb trumpet's own air column, as its resonances (bore.h, baked from the horn's
+// geometry by tools/bore.py: a mouthpiece cup and throat, a leadpipe, the cylinder through the
+// valves and a Bessel-horn bell), with the lips buzzing on it.
+//
+// The lips are a mass on a spring, pushed open by the mouth's pressure over the mouthpiece's (an
+// outward-striking valve, the "elementary" brass model: Elliott & Bowsher 1982, Velut et al. 2017),
+// tuned under the note they play; the air through them goes as the square root of the drop across
+// them, and they close softly (tissue meets tissue over a little travel, not at a corner). They
+// buzz on the horn's resonance just over them: the horn's resonances are where its notes are, and
+// as on a real trumpet each note is a partial of one of its seven valve combinations, picked as a
+// player would (the valves that put a resonance nearest the note), with the lips tightening into
+// it. The horn's resonances aren't quite harmonic, as a real one's aren't, and the higher ones
+// fade above the bell's cutoff near 1.5 kHz: so a note speaks and slots as a trumpet's does, and
+// its tone grows brighter the harder it's blown as the lips close for more of each cycle.
+//
+// What's heard is the bell's: the horn's flow at its rim, radiated (differentiated, and beamed on
+// its axis as the bell's rim nears the wavelength), with the wave that passes straight out of the
+// bell above its cutoff, through the response that the geometry alone misses of a real trumpet
+// heard in front of it (fitted to the Iowa recordings). At forte the wave steepens on its way
+// down the tube: the brassy edge.
 class Trumpet final : public Model {
 public:
    void prepare(double fs) override {
       fs_ = fs;
-      bore_.init(static_cast<int>(fs / 20.0) + 8);
       shock_.init(static_cast<int>(1024 * fs / 96000.0) + 8);
       player_.prepare(fs);
       reset();
    }
    void reset() override {
-      bore_.clear();
+      bore_.reset();
       shock_.clear();
-      bell1_ = {};
-      bell2_ = {};
-      x_ = v_ = u_ = dcz_ = closed_ = 0.0;
+      x_ = v_ = dpPrev_ = closed_ = puff_ = puffAt_ = puffTn_ = kickTn_ = 0.0;
       tongue_ = 0.0f;
       player_.reset();
-      tone_ = {};
-      toneAt_ = 0;
+      at_ = 0;
       shockD_ = kShock0 * fs_ / 96000.0;
       acMean_ = acEnv_ = 0.0;
       acLP_ = {};
@@ -933,157 +941,203 @@ public:
       acCoef_ = 1.0 - std::exp(-2.0 * kPi * 25.0 / fs_);
       envFall_ = std::exp(-1.0 / (0.03 * fs_));
       closedCoef_ = 1.0 - std::exp(-1.0 / (0.004 * fs_));
-      radHP_ = {};
-      radHP_.highpass(1300, 1.4, fs_);
-      radLP_ = {};
-      radLP_.lowpass(5000, 0.7, fs_);
+      pmCoef_ = 1.0 - std::exp(-1.0 / (0.008 * fs_));
+      pmS_ = 0.0;
       breathLP_ = {};
       breathLP_.setHz(1500.0, fs_);
       breathLP2_ = {};
       breathLP2_.setHz(1500.0, fs_);
-      notePitch(lipHz_);
+      dc_ = {};
+      dc_.setFs(fs_);
+      // What the horn's shape alone misses of a real trumpet heard in front of it: the Iowa
+      // trumpet's harmonics (C4 to B4, pp and mf) over this model's, fitted as one response. Its
+      // tone peaks near 1.2 kHz, some 30 dB over 200 Hz, and falls away above 2 kHz.
+      eqHp_.clear();
+      eqHp_.highpass(1144.0, 1.06, fs_);
+      eqPk_.clear();
+      eqPk_.peak(1257.0, 1.39, 11.9, fs_);
+      eqLp_.clear();
+      eqLp_.lowpass(3132.0, 0.1, fs_);
+      eqAt_ = 1.0;
+      fing_ = -1;
+      notePitch(hz_);
    }
    double nominal(double hz) const override { return fs_ / hz; }
-   double cutoffDelay(double hz) const override {
-      return bellDelay(hz, character.cutoff, character.cone, character.loss) -
-             bellDelay(hz, 1.0f, character.cone, character.loss);
-   }
+   double cutoffDelay(double) const override { return 0.0; }
    void notePitch(double hz) override {
-      lipHz_ = hz;
+      hz_ = hz;
       acLP_.setHz(hz * 1.2, fs_);
       acLP2_.setHz(hz * 1.2, fs_);
-      const double cut = std::min(bellCut(hz, character.cutoff, character.cone, character.loss), 0.45 * fs_);
-      bell1_.setHz(cut, fs_);
-      bell2_.setHz(cut, fs_);
-      // The Cone's and Loss's bell delays the trip by more or less than the tuned one: the bore
-      // makes it up (the Hole Cutoff's share is the voice's, through cutoffDelay()).
-      coneDelay_ = character.cone != 0.5f || character.loss != 0.04f
-                      ? bellDelay(hz, 1.0f, character.cone, character.loss) - bellDelay(hz, 1.0f, 0.5f, 0.04f)
-                      : 0.0;
-      trim_ = std::exp2((trim(character.aperture, kTrimAp0, kTrimAp1) + trim(lipStiffness(), kTrimSt0, kTrimSt1) +
-                         150.0 * (character.loss - 0.04f)) /
-                        1200.0);
+      // The fingering: the valves and partial whose resonance is nearest the note, a semitone of
+      // valves weighed as 8 cents (a player takes the open horn over a valve when it's in tune).
+      // Under the lowest (all the valves' second partial) or over the top, the horn is scaled to
+      // the note: a bigger or a smaller trumpet.
+      int fv = 0, fp = 1;
+      double best = 1e9;
+      for (int v = 0; v < 7; ++v) {
+         const BoreFingering &b = kTrumpetBore[v];
+         for (int p = 1; p < b.modes && b.peakHz[p] < 1300.0f; ++p) {
+            const double cost = std::fabs(1200.0 * std::log2(hz / b.peakHz[p])) + 8.0 * v;
+            if (cost < best) {
+               best = cost;
+               fv = v;
+               fp = p;
+            }
+         }
+      }
+      if (fv != fing_ || fp != partial_) {
+         fing_ = fv;
+         partial_ = fp;
+      }
+      peakHz_ = kTrumpetBore[fing_].peakHz[partial_];
+      // The lips' own frequency under the note's: slack on the low notes, nearer it as they
+      // tighten for the high ones (where the horn's resonances crowd together and slack lips
+      // would slip down to the one below).
+      // (Through the fifth octave, from about Eb5 to A5, the resonances are close enough that lips
+      // tuned any nearer slip to the one above.)
+      lipRatio_ = std::clamp(0.84 + 0.06 * std::log2(hz / 450.0), 0.76, 0.92);
+      if (hz < 900.0)
+         lipRatio_ = std::min(lipRatio_, 0.86);
+      // Lips heavier under C3, as a low brass player's are (lighter lips would be blown wide open
+      // and stop buzzing).
+      lipMu_ = kLipMu * std::max(1.0, std::pow(130.0 / hz, 1.5));
+      setBore(hz);
    }
    float tick(float breath, float emb, double len, float tn) override {
-      // Over the middle the embouchure tightens the lips by less: pinched any tighter, they'd sit so
-      // far over a high note that it stops speaking (a real player's lips crack up a partial instead).
-      if (emb > 0.5f)
-         emb = 0.5f + 0.4f * (emb - 0.5f);
       // How hard it's blown, 0 where the lips start to 1 at full breath.
       const double dyn = std::clamp((breath - 0.15) / 0.4, 0.0, 1.3);
       // The player: a slow wander, and every tongued note starting under its pitch and rising into
       // it as the lips tighten onto the horn's resonance (Iowa trumpet: 40 to 130 cents flat at the
       // onset, settling in 50 to 80 ms; more and slower on soft and low notes, quick at forte, and
-      // little from C5 up). Its clock runs slowly until the lips close on every cycle, so a soft
-      // note that speaks late still rises into its pitch. The bore's length is what bends: the lips
-      // follow it (bent too, they'd settle a forte into a darker regime and stay there).
+      // little from C5 up). Its clock runs slowly until the lips close on every cycle.
       player_.tongued(tn);
       const double dynTop = std::min(dyn, 1.0);
-      const double depth = 330.0 * std::clamp(1.2 - (lipHz_ - 260.0) / 300.0, 0.1, 1.2) * (1.3 - 0.75 * dynTop);
+      const double depth = kScoop * std::clamp(1.2 - (hz_ - 260.0) / 300.0, 0.1, 1.2) * (1.3 - 0.75 * dynTop);
       const double cents = player_.wander(rng) - depth * player_.scoop(0.015 + 0.03 * (1.0 - dynTop),
                                                                       0.25 + 0.75 * std::min(1.0, closed_ / 0.3));
-      const double bend = std::exp2(cents / 1200.0);
-      // The lips' own frequency: under the note, tighter with the embouchure.
-      const double dt = 1.0 / fs_, w = 2 * kPi * lipHz_ * (0.9 + 0.12 * (emb - 0.5));
-      // (The breath's turbulence in the mouthpiece cup is a rush under a couple of kHz: the lips and
-      // the bell would make a hiss of anything above it, which a trumpet hardly has. Loose, slow lips
-      // under a low note pass it on as a roar, so they take less of it.)
-      const double pm = breath * (1 + 0.02 * tn * rng.white()) * (1 + 0.05 * std::min(1.0, lipHz_ / 233.0) * character.noise * breathLP2_.tick(breathLP_.tick(rng.white())));
-      // While the lips don't yet close on each cycle (the first few ms of a note), they pull the
-      // pitch sharp: a real trumpet's long bore holds it, this one-period loop is lengthened instead.
-      const double pull = 0.06 * (0.33 + breath) * std::max(0.0, 1.0 - closed_ / 0.3);
-      if (emb != emb_) {
-         emb_ = emb;
-         embTrim_ = std::exp2(trim(emb, kTrimEm0, kTrimEm1) / 1200.0);
+      // The note the lips are asked for, and the horn under it (a little longer while it scoops).
+      const double hz = fs_ / len * std::exp2(cents / 1200.0);
+      if ((at_++ & 15) == 0)
+         setBore(hz);
+      // Mouth pressure: the breath (5 kPa at 1 on the trumpet's Bb4, more for the notes above it and
+      // less under it, as a player's), its turbulence (a rush under a couple of kHz in the cup) and
+      // the tongue's release.
+      // (The mouth is a volume of air behind the lips: its pressure follows the breath over a few
+      // milliseconds, so a hard tongue's surge doesn't slam the lips harder than the note asks.)
+      pmS_ += (breath - pmS_) * pmCoef_;
+      const double pm = kP0 * (hz_ / 466.0) * pmS_ * (1 + 0.02 * tn * rng.white()) *
+                        (1 + 0.05 * character.noise * breathLP2_.tick(breathLP_.tick(rng.white())));
+      // The lips: tuned under the note (tighter with the embouchure), their damping and mass from
+      // the Stiffness, pushed open by the drop across them.
+      // (Blown harder, a player's lips sit lower under the note: pressed tighter against the drop they'd
+      // jump to the resonance above.)
+      // (Through the fifth octave, from about Eb5, they ease off further: the resonances there are
+      // close, and lips held tight under the drop would buzz on their own, off the horn.)
+      const double loose = 0.10 + 0.08 * std::clamp((hz_ - 550.0) / 60.0, 0.0, 1.0);
+      const double lip = std::max(0.72, lipRatio_ - loose * std::clamp((1000.0 - hz_) / 250.0, 0.0, 1.0) * (pmS_ - 0.25));
+      const double wl = 2 * kPi * hz * (lip + 0.1 * (emb - 0.5));
+      const double q = kLipQ * std::exp2(lipStiffness() - 0.5);
+      const double acc = -wl * wl * x_ - (wl / q) * v_ + dpPrev_ / lipMu_ + 1e-6 * rng.white();
+      v_ += acc / fs_;
+      // The tongue's release plucks the lips open, so the note starts at once, as hard as tongued
+      // (up to a middling strike: harder is an accent in the breath, not a harder pluck).
+      if (tn > tongue_) {
+         const double d = std::min<double>(tn - tongue_, std::max(0.0, kHardest - kickTn_));
+         kickTn_ += tn - tongue_;
+         v_ += kKick * d * hz;
+      } else if (tn <= 0.0f)
+         kickTn_ = 0.0;
+      // ... and the air it held back bursts into the mouthpiece: a puff a period long, which sets
+      // the horn's resonance under the note ringing, so the lips lock onto it at once.
+      if (tn > tongue_) {
+         puffTn_ += tn - tongue_;
+         puffAt_ = 0.0;
+      } else if (puffTn_ > 0.0) {
+         // (Sized once the tongue is away: as hard as it struck, up to a middling strike; by the
+         // breath behind it then, as its square, so a soft note's is small against the note, up to
+         // a moderate breath; and larger over Bb4, where the lips need more to lock on.)
+         const double pb = std::clamp<double>(breath, 0.05, 0.3) / 0.5, up = std::max(hz_ / 466.0, 1.0);
+         // (and four times as much from Eb5 to G#5, where the lips, eased off, take longest to catch).
+         const double zone = std::clamp((hz_ - 560.0) / 60.0, 0.0, 1.0) * std::clamp((820.0 - hz_) / 60.0, 0.0, 1.0);
+         puff_ += kPuff * std::min(puffTn_, kHardest) * pb * pb * up * up * (1.0 + 3.0 * zone);
+         puffTn_ = 0.0;
       }
-      const double xin = bore_.read((len / bend * trim_ * embTrim_ - coneDelay_) * (1.0 + pull));
-      dcz_ += (xin - dcz_) * (2 * kPi * 20 / fs_);
-      const double pin = character.keep(0.95f) * (bell2_.tick(bell1_.tick(static_cast<float>(xin))) - 2.0 * dcz_);
-      // Lips: pushed open by mouth pressure minus mouthpiece pressure (with the last sample's flow).
-      const double a = -w * w * x_ - (w / (4.0 * std::exp2(lipStiffness() - 0.5))) * v_ + 0.7 * w * w * (pm - 2 * pin - u_) +
-                       1e-4 * rng.white();
-      v_ += dt * a;
-      // The tongue's release plucks the lips open, so the note starts at once, as hard as tongued.
-      v_ += 1.5 * std::max(0.0f, tn - tongue_) * w;
       tongue_ = tn;
-      x_ += dt * v_;
+      x_ += v_ / fs_;
       closed_ += ((x_ <= 0.0 ? 1.0 : 0.0) - closed_) * closedCoef_;
-      const double h = std::max(x_, 0.0) * (0.5 + character.aperture);
-      // The flow through the slit, solved in closed form with the pressure it makes:
-      // u = h sgn(D) sqrt|D - u|, D = pm - 2 pin.
-      const double D = pm - 2 * pin;
-      const double sq = 0.5 * (-h + std::sqrt(h * h + 4 * std::fabs(D)));
-      const double u = (D >= 0 ? 1 : -1) * h * sq;
-      const double pplus = pin + u;
-      u_ = u;
-      bore_.push(static_cast<float>(pplus));
+      // (They close over a tenth of a millimetre.)
+      const double h = 0.5 * (x_ + std::sqrt(x_ * x_ + kSoft * kSoft));
+      const double a = h * kLipWidth * (0.5 + character.aperture) * std::sqrt(2.0 / kRho);
+      // The flow, solved with the pressure it makes in the mouthpiece:
+      // u = a sgn(D) sqrt|D - Zi u|, D the drop before this sample's flow.
+      const double ph = bore_.history(), zi = bore_.instant(), D0 = pm - ph;
+      const double um = 0.5 * (-a * a * zi + std::sqrt(a * a * a * a * zi * zi + 4.0 * a * a * std::fabs(D0)));
+      double u = D0 >= 0 ? um : -um;
+      if (puff_ > 0.0) {
+         const double sn = std::sin(kPi * puffAt_);
+         u += puff_ * sn * sn;
+         puffAt_ += hz / fs_;
+         if (puffAt_ >= 1.0)
+            puff_ = 0.0;
+      }
+      bore_.push(u);
+      dpPrev_ = pm - (ph + zi * u);
+      const double y = dc_.tick(eqLp_.tick(eqPk_.tick(eqHp_.tick(static_cast<float>(bore_.radiated() * kOut)))));
       // Louder pressure travels faster down the horn, so the outgoing wave steepens towards a shock:
-      // a read delay that follows the pressure. How far it steepens (sigma, the delay's steepest
+      // a read delay that follows the wave. How far it steepens (sigma, the delay's steepest
       // slope: 1 is a shock) grows with the breath, so a trumpet only blares when it's pushed; the
-      // pressure's own level is divided out, so every note and setting steepens alike.
-      shock_.push(static_cast<float>(pplus));
+      // wave's own level is divided out, so every note and setting steepens alike.
+      shock_.push(static_cast<float>(y));
       const double k = fs_ / 96000.0;
-      acMean_ += (pplus - acMean_) * acCoef_;
-      // Driven by the wave's fundamental, so the read never runs faster than the wave allows; its
-      // level is a peak that rises at once, so a growing note never steepens past what was asked.
-      const double ac = acLP2_.tick(acLP_.tick(static_cast<float>(pplus - acMean_)));
+      acMean_ += (y - acMean_) * acCoef_;
+      const double ac = acLP2_.tick(acLP_.tick(static_cast<float>(y - acMean_)));
       acEnv_ = std::max(std::fabs(ac), acEnv_ * envFall_);
-      const double push = std::clamp((breath - 0.2) / 0.48, 0.0, 1.5);
-      // A conical bore spreads the wave out and steepens it less: a flugelhorn hardly blares.
-      const double sigma = (0.9 + 1.4 * push * push) * character.edge * (character.brass / 0.5) *
-                           (1.5 - character.cone);
-      const double K = sigma * fs_ / (2.0 * kPi * lipHz_ * (acEnv_ + 1e-4));
+      const double push = std::clamp((breath - 0.4) / 0.4, 0.0, 1.5);
+      const double sigma = 1.2 * push * push * character.edge * (character.brass / 0.5);
+      const double K = sigma * fs_ / (2.0 * kPi * hz_ * (acEnv_ + 1e-6));
       const double want = k * kShock0 - K * ac;
       shockD_ += std::clamp(std::clamp(want, 2.0, 2.0 * kShock0 * k) - shockD_, -0.95, 0.95);
-      // The bell passes highs and reflects lows.
-      const float out = radLP_.tick(radHP_.tick(shock_.read(shockD_))) * 3.0f;
-      // Brass is mellow when it's played softly and brightens as it's pushed (Risset 1965: the
-      // spectrum's bandwidth grows with the level). Here the lips' pulse is nearly as rich at pp as
-      // at mf (Iowa trumpet at pp: H8 and over 15 to 25 dB further down than at mf), so the tone is
-      // shaped by the dynamic: a lowpass from 3 harmonics up at the softest to wide open at forte.
-      if ((toneAt_++ & 15) == 0)
-         tone_.lowpass(std::min(lipHz_ * std::exp2(1.6 + 3.4 * dyn), 0.45 * fs_), 0.7, fs_);
-      return tone_.tick(out);
+      return shock_.read(shockD_);
    }
 
 private:
-   // The bell's cutoff: a Bb trumpet's 1.4 kHz, but never under the note's 2nd harmonic, so the
-   // top of the range still has a resonance to play on.
-   // The Cone knob flares the bore: under the middle a narrower, more cylindrical trumpet (a
-   // higher cutoff), over it a wider, more conical one like a flugelhorn's (a lower cutoff).
-   // The Loss knob's wall losses grow with frequency, so a lossier tube is also a darker one.
-   // However they darken it, the bell never cuts off under the note's 2nd harmonic (or, if that's
-   // under where it's tuned, where it's tuned): a top note with no resonance over it dies.
-   double bellCut(double hz, float cutoff, float cone, float loss) const {
-      const double base = std::max(1400.0, 2.0 * hz);
-      return std::max(base * cutoff * std::exp2(-1.4 * (cone - 0.5) - 1.2 * (loss - 0.04f)), std::min(base, 2.0 * hz));
+   // The horn for the note now: the fingering's resonances scaled so its partial sits on the note.
+   // The Loss knob widens every resonance (a rougher, lossier tube), the Hole Cutoff moves the
+   // bell's (its highs fade sooner or later), the Cone flares it (a lower cutoff, like a
+   // flugelhorn's).
+   void setBore(double hz) {
+      const double loss = std::clamp(1.0 + 1.5 * (character.loss - 0.04), 0.75, 1.35);
+      const double cut = kBellCut * character.cutoff * std::exp2(-(character.cone - 0.5));
+      bore_.set(kTrumpetBore[fing_], hz / peakHz_, fs_, loss, kBellCut, cut);
+      // What reaches the listener follows: the tone's peak and its fall above move with the bell's
+      // cutoff, and a lossier tube is duller.
+      const double r = cut / kBellCut / (1.0 + 1.5 * std::max(0.0, character.loss - 0.04));
+      if (std::fabs(r - eqAt_) > 1e-3) {
+         eqAt_ = r;
+         eqPk_.peak(1257.0 * std::sqrt(r), 1.39, 11.9, fs_);
+         eqLp_.lowpass(3132.0 * r, 0.1, fs_);
+      }
    }
-   double bellDelay(double hz, float cutoff, float cone, float loss) const {
-      return 2.0 * onePoleDelay(hz, std::min(bellCut(hz, cutoff, cone, loss), 0.45 * fs_), fs_);
-   }
-   // Stiffness under the middle softens the lips by half as much: lips any slacker are damped so
-   // heavily that the top of the range stops speaking.
+   // Stiffness under the middle softens the lips by half as much.
    float lipStiffness() const {
       const float st = character.stiffness;
       return st < 0.5f ? 0.5f - 0.5f * (0.5f - st) : st;
    }
-   // The lips' settings move the pitch (they pull it towards their own frequency, more or less):
-   // a player lips it back, here the bore is trimmed by as much (in cents of length, measured).
-   static double trim(double v, double at0, double at1) {
-      const double d = v - 0.5;
-      return (at1 - at0) * d + 2.0 * (at0 + at1) * d * d;
-   }
 
-   Delay bore_, shock_;
-   OnePoleLP bell1_, bell2_, acLP_, acLP2_, breathLP_, breathLP2_;
-   Biquad radHP_, radLP_, tone_;
+   static constexpr double kP0 = 8000.0, kRho = 1.2, kLipQ = 12.0, kLipMu = 3.0, kLipWidth = 0.012,
+                           kSoft = 1e-4, kOut = 1000.0, kBellCut = 1500.0, kKick = 5e-3, kPuff = 2e-3, kHardest = 0.4, kScoop = 100.0,
+                           kShock0 = 480.0;
+   ModalBore bore_;
+   Delay shock_;
+   OnePoleLP acLP_, acLP2_, breathLP_, breathLP2_;
+   DCBlock dc_;
+   Biquad eqHp_, eqPk_, eqLp_;
    Player player_;
-   unsigned toneAt_ = 0;
-   static constexpr double kShock0 = 480.0;
+   unsigned at_ = 0;
+   int fing_ = -1, partial_ = 1;
+   double peakHz_ = 466.0, hz_ = 466.0, lipRatio_ = 0.84, lipMu_ = 3.0, eqAt_ = 1.0;
    double acMean_ = 0, acEnv_ = 0, acCoef_ = 0.001, envFall_ = 0.9997, closedCoef_ = 0.003;
-   double x_ = 0, v_ = 0, u_ = 0, lipHz_ = 440, dcz_ = 0, shockD_ = 120, closed_ = 0, coneDelay_ = 0, trim_ = 1;
-   static constexpr double kTrimAp0 = -134, kTrimAp1 = 91, kTrimSt0 = 16, kTrimSt1 = -45, kTrimEm0 = -150, kTrimEm1 = 115;
-   double emb_ = 0.5, embTrim_ = 1;
+   double x_ = 0, v_ = 0, dpPrev_ = 0, closed_ = 0, shockD_ = 120, pmS_ = 0, pmCoef_ = 0.001, puff_ = 0, puffAt_ = 0, puffTn_ = 0, kickTn_ = 0;
    float tongue_ = 0.0f;
 };
 
@@ -1464,18 +1518,12 @@ inline double breathDrift(int model, double breath) {
    static const Point flute[] = {{0.21f, -80}, {0.25f, -55}, {0.31f, -32}, {0.39f, -20}, {0.51f, -10},
                                  {0.63f, -5}, {0.79f, 1}, {0.95f, 7}, {1.2f, 14}};
    static const Point clarinet[] = {{0.53f, -5}, {0.63f, -5}, {0.75f, -2}, {0.84f, 0}, {0.92f, 1}};
-   // (The trumpet's lips pull its pitch towards their own, so its bore moves further than its
-   // pitch would: these are the bore's cents that hold it in tune.)
-   static const Point trumpet[] = {{0.12f, -167}, {0.16f, -147}, {0.20f, -128}, {0.24f, -112},
-                                   {0.30f, -91},  {0.36f, -72},  {0.42f, -53},  {0.50f, -33},
-                                   {0.58f, -14},  {0.65f, 0},    {0.75f, 17},   {0.90f, 40}};
    // (The Alien's bowed string holds its pitch whatever the bow's speed.)
    const Point *p = nullptr;
    int n = 0;
    switch (model) {
    case kFlute: p = flute; n = 9; break;
    case kClarinet: p = clarinet; n = 5; break;
-   case kTrumpet: p = trumpet; n = 12; break;
    default: return 0.0;
    }
    if (breath <= p[0].breath)
