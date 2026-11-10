@@ -81,7 +81,7 @@ struct ScreenshotView {
    bool routes = false;
    int mapSource = 0;
    int view = 0;
-   int voiceTab = 0; // the tab under the sky: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH
+   int voiceTab = 0; // the tab under the sky: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH, 4 FX
    int envTab = 0;   // the envelope card's: 0 ENVELOPES, 1 LFOS, 2 BUSES
    int oscTab = 0;   // the oscillator card's: 0 OSCILLATORS, 1 FM
    bool dice = false; // the dice card open

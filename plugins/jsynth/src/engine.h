@@ -24,6 +24,9 @@
 #include <cstdint>
 #include <vector>
 
+#include <jclap/dsp/reverb.h>
+#include <jclap/dsp/stereo_delay.h>
+
 #include "dsp.h"
 #include "flock.h"
 #include "params.h"
@@ -84,6 +87,8 @@ public:
          for (auto &f : v.comb_)
             for (dsp::Comb &c : f)
                c.prepare(combMax);
+      room_.prepare(sampleRate);
+      delay_.prepare(sampleRate);
       first_ = true;
       readParams();
       reset(1);
@@ -128,6 +133,9 @@ public:
       managerBend_ = 0;
       managerPressure_ = managerTimbre_ = false;
       lastPitch_[0] = lastPitch_[1] = -1.0f;
+      room_.reset();
+      delay_.reset();
+      setFx();
       width_.snap(static_cast<float>(global(kOutputWidth)));
       master_.snap(static_cast<float>(std::pow(10.0, global(kMasterLevel) / 20.0)));
       routesBuilt_ = false;
@@ -905,6 +913,7 @@ private:
       }
 
       // Main bus settings.
+      setFx();
       width_.to(static_cast<float>(global(kOutputWidth)), static_cast<float>(kTick));
       master_.to(static_cast<float>(std::pow(10.0, global(kMasterLevel) / 20.0)), static_cast<float>(kTick));
       beats_ += tickSeconds * bpm_ / 60.0;
@@ -1517,12 +1526,44 @@ private:
             mainR += lr[1];
          }
       }
+      // The delay, then the reverb (JBreath's), on the main mix. Off, the reverb takes nothing more in
+      // but what's in it rings out, and the delay's repeats fade.
+      delay_.tick(mainL, mainR);
+      if (reverbOn_)
+         room_.tick(mainL, mainR);
+      else if (room_.active()) {
+         float wl = 0, wr = 0;
+         room_.tick(wl, wr);
+         mainL += wl;
+         mainR += wr;
+      }
       // Width (mid/side), master, and a soft safety limit.
       const float w = width_.next(), m = master_.next();
       const float mid = 0.5f * (mainL + mainR), side = 0.5f * (mainL - mainR) * w;
       out[0][0][n] = limit((mid + side) * m);
       out[0][1][n] = limit((mid - side) * m);
       meters_[2] = std::max(meters_[2], std::max(std::fabs(out[0][0][n]), std::fabs(out[0][1][n])));
+   }
+
+   // The FX's settings from their params; the delay's time follows the tempo when synced.
+   void setFx() {
+      jclap::dsp::RoomSettings room;
+      room.mix = global(kReverbMix);
+      room.size = global(kReverbSize);
+      room.decay = global(kReverbDecay);
+      room.damp = global(kReverbDamp);
+      room.preDelayMs = global(kReverbPreDelay);
+      room_.set(room);
+      reverbOn_ = global(kReverbOn) > 0.5;
+      jclap::dsp::DelaySettings delay;
+      delay.on = global(kDelayOn) > 0.5;
+      delay.mix = global(kDelayMix);
+      const int sync = static_cast<int>(global(kDelaySync) + 0.5);
+      delay.timeMs = sync > 0 ? jclap::dsp::delaySyncBeats(sync) * 60000.0 / bpm_ : jclap::dsp::delayTimeMs(global(kDelayTime));
+      delay.feedback = global(kDelayFeedback);
+      delay.tone = global(kDelayTone);
+      delay.spread = global(kDelaySpread);
+      delay_.set(delay);
    }
 
    static float limit(float x) {
@@ -2078,6 +2119,10 @@ private:
    // The peaks since the panel last took them: A, B and the main output.
    float meters_[3] = {};
    Ramp width_, master_;
+   // The main output's FX, shared with JBreath.
+   jclap::dsp::Room room_;
+   jclap::dsp::StereoDelay delay_;
+   bool reverbOn_ = false;
 
    float touchCurve_[kTouchCount] = {}, touchCoef_[kTouchCount] = {};
    float chanBend_[16] = {}, chanPressure_[16] = {}, chanTimbre_[16] = {};

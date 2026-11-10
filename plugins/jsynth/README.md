@@ -26,6 +26,7 @@ each one trails ink across the sky.
 - **Shape envelopes** after XAOC's Zadar: 60 contours in ten banks, from 1 ms to 30 minutes, chained
   into each other.
 - **MAP** instead of a matrix page: arm a source, drag a knob.
+- **Reverb and delay** on the main output, the same ones as JBreath's, on the FX tab.
 - **Dice:** randomize a playable patch by complexity, or mutate one by an amount, with undo and locks.
 - **166 factory presets** in ten categories, with favorites.
 

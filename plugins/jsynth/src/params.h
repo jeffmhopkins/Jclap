@@ -15,6 +15,8 @@
 
 #include "shapes.h"
 
+#include <jclap/dsp/stereo_delay.h>
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -67,6 +69,21 @@ enum GlobalParam : clap_id {
    kSkyWalls,
    // The output's stereo width: 0 is mono, 100% as is, 200% wider.
    kOutputWidth,
+   // The FX on the main output, JBreath's own (jclap/dsp): a reverb (a small room) and a delay, each
+   // switched on and off. The delay comes first, then the reverb, then Width and Master.
+   kReverbOn,
+   kReverbMix,
+   kReverbSize,
+   kReverbDecay,
+   kReverbDamp,
+   kReverbPreDelay,
+   kDelayOn,
+   kDelayMix,
+   kDelayTime,
+   kDelaySync,
+   kDelayFeedback,
+   kDelayTone,
+   kDelaySpread,
    kGlobalEnd
 };
 
@@ -303,6 +320,9 @@ inline const std::vector<std::string> kWaveNames = {"Sine",      "Triangle",   "
                                                     "Camel",     "Alt Camel",  "White",    "Pink",         "Random"};
 inline const std::vector<std::string> kPitchModeNames = {"Note", "Ratio", "Fixed"};
 inline const std::vector<std::string> kOnOffNames = {"Off", "On"};
+// The delay's Sync: Free (the Time knob), or a note value against the host's tempo.
+inline const std::vector<std::string> kDelaySyncNames(std::begin(jclap::dsp::kDelaySyncNames),
+                                                     std::end(jclap::dsp::kDelaySyncNames));
 inline const std::vector<std::string> kFmTypeNames = {"Phase", "Exponential"};
 inline const std::vector<std::string> kDriveTypeNames = {"Soft", "Hard", "Tube"};
 inline const std::vector<std::string> kRoutingNames = {"Serial", "Parallel"};
@@ -459,6 +479,9 @@ enum class Unit {
    Curve,          // -1..1, shown as a signed number
    ShapeTime,      // 0..1 on shapeMs()
    SustainPoint,   // 0..1 as a percentage, with the top as Off
+   EchoTime,       // 0..1 on jclap::dsp::delayTimeMs(): 10 ms to 2 s
+   Seconds,
+   Milliseconds,
 };
 
 struct Param {
@@ -774,6 +797,22 @@ inline std::vector<Param> buildParams() {
    b.add(kSkySize, "Size", "Sky", 0.0, 1.0, 0.5, kGlobalMod, Unit::Percent);
    b.choice(kSkyWalls, "Walls", "Sky", kWallNames, 0, kGlobalChoice);
    b.add(kOutputWidth, "Output Width", "Output", 0.0, 2.0, 1.0, kGlobalMod, Unit::Percent);
+   // The FX: the same ranges and defaults as JBreath's, but both start off, so a patch that doesn't
+   // ask for them is dry.
+   b.choice(kReverbOn, "Reverb", "Reverb", kOnOffNames, 0, kGlobalChoice);
+   b.add(kReverbMix, "Reverb Mix", "Reverb", 0.0, 1.0, 0.15, kGlobalMod, Unit::Percent);
+   b.add(kReverbSize, "Reverb Size", "Reverb", 0.0, 1.0, 0.5, kGlobalMod, Unit::Percent);
+   b.add(kReverbDecay, "Reverb Decay", "Reverb", 0.2, 10.0, 1.6, kGlobalMod, Unit::Seconds);
+   b.add(kReverbDamp, "Reverb Damping", "Reverb", 0.0, 1.0, 0.5, kGlobalMod, Unit::Percent);
+   b.add(kReverbPreDelay, "Reverb Pre-Delay", "Reverb", 0.0, 100.0, 12.0, kGlobalMod, Unit::Milliseconds);
+   b.choice(kDelayOn, "Delay", "Delay", kOnOffNames, 0, kGlobalChoice);
+   b.add(kDelayMix, "Delay Mix", "Delay", 0.0, 1.0, 0.3, kGlobalMod, Unit::Percent);
+   // 0..1 to 10 ms .. 2 s on a log scale (delayTimeMs()); 0.684 is 375 ms.
+   b.add(kDelayTime, "Delay Time", "Delay", 0.0, 1.0, 0.684, kGlobalMod, Unit::EchoTime);
+   b.choice(kDelaySync, "Delay Sync", "Delay", kDelaySyncNames, 0, kGlobalChoice);
+   b.add(kDelayFeedback, "Delay Feedback", "Delay", 0.0, 0.95, 0.4, kGlobalMod, Unit::Percent);
+   b.add(kDelayTone, "Delay Tone", "Delay", 0.0, 1.0, 0.72, kGlobalMod, Unit::Percent);
+   b.add(kDelaySpread, "Delay Spread", "Delay", 0.0, 1.0, 0.5, kGlobalMod, Unit::Percent);
    for (int part = 0; part < kPartCount; ++part)
       addPart(b, part);
    // The destination menu reads each destination's name from part A.
@@ -913,6 +952,20 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
          std::snprintf(out, size, "%.1f ms", ms);
       break;
    }
+   case Unit::EchoTime: {
+      const double ms = jclap::dsp::delayTimeMs(value);
+      if (ms >= 999.5)
+         std::snprintf(out, size, "%.2f s", ms / 1000.0);
+      else
+         std::snprintf(out, size, "%.0f ms", ms);
+      break;
+   }
+   case Unit::Seconds:
+      std::snprintf(out, size, "%.2f s", value);
+      break;
+   case Unit::Milliseconds:
+      std::snprintf(out, size, "%.0f ms", value);
+      break;
    }
 }
 
@@ -982,6 +1035,19 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
    case Unit::Time:
       // Milliseconds, or seconds with an s.
       value = timeValue(std::fmax(0.0, *end == 's' || *end == 'S' ? v * 1000.0 : v));
+      break;
+   case Unit::EchoTime: {
+      // Milliseconds, or seconds with an s.
+      const double ms = *end == 's' || *end == 'S' ? v * 1000.0 : v;
+      value = std::log(std::fmax(ms, 10.0) / 10.0) / std::log(200.0);
+      break;
+   }
+   case Unit::Seconds:
+      // Seconds, or milliseconds with ms.
+      value = *end == 'm' || *end == 'M' ? v / 1000.0 : v;
+      break;
+   case Unit::Milliseconds:
+      value = *end == 's' || *end == 'S' ? v * 1000.0 : v;
       break;
    case Unit::ShapeTime:
       // Milliseconds, seconds with an s, or minutes with min.
