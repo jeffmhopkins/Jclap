@@ -27,7 +27,7 @@ struct BoreMode {
    float rr, ri; // its residue in the radiated sound
 };
 
-inline constexpr int kBoreModes = 24, kBoreTaps = 96;
+inline constexpr int kBoreModes = 24, kBoreTaps = 256;
 inline constexpr double kBoreTapRate = 96000.0;
 
 struct BoreFingering {
@@ -38,11 +38,12 @@ struct BoreFingering {
    float peakHz[kBoreModes];
    BoreMode mode[kBoreModes];
    float fir[kBoreTaps]; // the straight-through wave, at kBoreTapRate
+   int taps;             // how many of its taps there are
 };
 
 class ModalBore {
 public:
-   static constexpr int kMaxTaps = 512, kHistory = 8192;
+   static constexpr int kMaxTaps = 768, kHistory = 8192;
 
    void reset() {
       for (auto &x : x_)
@@ -55,8 +56,11 @@ public:
    // wander leaves it be). Every resonance's damping can be multiplied by `loss` (a rougher,
    // lossier tube), and the bell's cutoff moved from `cutHz` to `toHz`: the resonances above it
    // are damped as much more (or less) as a bell cutting off there would.
+   // (And the resonances under lowHz damped lowDamp times as much: a register vent's leak; those
+   // over highHz highDamp times: a player's voicing.)
    void set(const BoreFingering &b, double scale, double fs, double loss = 1.0, double cutHz = 1500.0,
-            double toHz = 1500.0) {
+            double toHz = 1500.0, double lowHz = 0.0, double lowDamp = 1.0, double highHz = 0.0,
+            double highDamp = 1.0) {
       const bool newBore = &b != bore_ || fs != fs_;
       bore_ = &b;
       fs_ = fs;
@@ -69,6 +73,10 @@ public:
             const double f = m.im * scale / (2.0 * 3.14159265358979), a = f / toHz, c = f / cutHz;
             damp *= std::sqrt((1.0 + a * a * a * a) / (1.0 + c * c * c * c));
          }
+         if (m.im * scale < 2.0 * 3.14159265358979 * lowHz)
+            damp *= lowDamp;
+         if (highHz > 0.0 && m.im * scale > 2.0 * 3.14159265358979 * highHz)
+            damp *= highDamp;
          const std::complex<double> s(m.re * scale * damp, m.im * scale);
          z_[i] = std::exp(s / fs);
          c_[i] = std::complex<double>(m.zr, m.zi) * (scale / fs);
@@ -117,7 +125,7 @@ private:
    // windowed sinc, which keeps it band-limited as it was.
    void resample(const BoreFingering &b, double scale) {
       firScale_ = scale;
-      const double t0 = b.start / scale, span = kBoreTaps / kBoreTapRate / scale;
+      const double t0 = b.start / scale, span = b.taps / kBoreTapRate / scale;
       // (A lower new rate than the table's would need the sinc widened; voices run at 88.2 kHz or
       // more, where it's within a tenth of the table's.)
       const double ratio = std::min(1.0, fs_ / kBoreTapRate);
@@ -125,7 +133,7 @@ private:
       n0_ = std::max(1, static_cast<int>(std::floor(t0 * fs_)) - kHalf);
       taps_ = std::min(kMaxTaps, static_cast<int>(std::ceil(span * fs_)) + 2 * kHalf + 1);
       std::fill(std::begin(fir_), std::end(fir_), 0.0f);
-      for (int k = 0; k < kBoreTaps; ++k) {
+      for (int k = 0; k < b.taps; ++k) {
          const double at = (b.start + k / kBoreTapRate) / scale * fs_ - n0_;
          const int lo = static_cast<int>(std::ceil(at - kHalf)), hi = static_cast<int>(std::floor(at + kHalf));
          for (int m = std::max(0, lo); m <= hi && m < taps_; ++m) {

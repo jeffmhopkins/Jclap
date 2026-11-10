@@ -853,20 +853,215 @@ private:
    float keepNow_ = 0.92f;
 };
 
-// Alto saxophone: a single reed on a wide mouthpiece whose volume stands in for a long missing cone
-// (a 1 ms round trip: the pulse's minima near 1, 2 and 3 kHz), a wide bore that loses little on each
-// trip, holes that cut off near 1.2 kHz, and a bell that lets more of the highs out of the lowest
-// octave than the holes do above it. Below Db3 it plays as a baritone or bass sax. From C#4 down its
-// apex keeps 0.28 of the period, so the bottom notes start on their fundamental.
-class Sax final : public ConicalReed {
+// Alto saxophone: an alto's own air column, fingering by fingering (bore.h, baked from its
+// geometry by tools/bore.py: the mouthpiece's chamber and throat, the neck and the conical body
+// with its nineteen tone holes and the bell, and the octave key's vents), with a cane reed beating
+// on it.
+//
+// The reed is a mass on a spring under the player's lip, pushed shut by the mouth's pressure over
+// the mouthpiece's (an inward-striking valve: Wilson & Beavers 1974, Chaigne & Kergomard 2016),
+// with its own resonance well above the notes (about 2 kHz, damped by the lip). The air through
+// its slit goes as the square root of the drop across it; blown hard enough it beats against the
+// lay, shutting for part of every cycle, and closes softly over a little travel as cane rolls
+// onto the lay. Each note is the fingering a player would use: the first register from low Bb
+// with the holes opening from the bell one by one, the second with the octave key's vent, which
+// pulls the first resonance away so the reed takes the second. The resonances above the open
+// holes' cutoff fade, as a real alto's do, and what's heard is the flow out of the bell and every
+// open hole, radiated.
+//
+// Below the alto's low Bb (concert Db3) it plays as a bigger member of its family (a baritone or
+// bass sax): the whole instrument scaled up, its reed's resonance lower in proportion.
+class Sax final : public Model {
 public:
-   Sax() {
-      apexTurns_ = 0.28;
-      toneLow_ = 0.4;
-      toneDepth_ = 30.0;
-      rangeDb_ = 4.0;
-      scoopCents_ = 45.0;
+   void prepare(double fs) override {
+      fs_ = fs;
+      player_.prepare(fs);
+      reset();
    }
+   void reset() override {
+      bore_.reset();
+      x_ = v_ = dpPrev_ = pmS_ = 0.0;
+      tongue_ = 0.0f;
+      player_.reset();
+      at_ = 0;
+      pmCoef_ = 1.0 - std::exp(-1.0 / (0.004 * fs_));
+      breathLP_ = {};
+      breathLP_.setHz(2000.0, fs_);
+      dc_ = {};
+      dc_.setFs(fs_);
+      eqHp_.clear();
+      eqPk1_.clear();
+      eqPk2_.clear();
+      eqHs_.clear();
+      eqLp1_.clear();
+      eqLp2_.clear();
+      tone_.clear();
+      lift_.clear();
+      toneDb_ = 1e9;
+      liftDb_ = 1e9;
+      eqAt_ = -1.0;
+      fing_ = -1;
+      notePitch(hz_);
+   }
+   double nominal(double hz) const override { return fs_ / hz; }
+   double cutoffDelay(double) const override { return 0.0; }
+   void notePitch(double hz) override {
+      hz_ = hz;
+      // Under the alto's low Bb the horn is a bigger one of the family, the alto's bore scaled up:
+      // the tenor (a fourth down), the baritone (an octave), the bass (an octave and a fourth) or
+      // the contrabass (two octaves), each fingered as the alto is for its note, so every member's
+      // low notes come from its own tone holes.
+      member_ = 1.0;
+      for (double s : {0.7492, 0.5, 0.3746, 0.25})
+         if (hz < 0.999 * kLow * member_)
+            member_ = s;
+      const double ha = hz / member_;
+      // The fingering: written low Bb (0) to C#5 (15) in the first register, then the octave key
+      // over the fingerings from D4 (4) to the palm keys' F (19). The note is the resonance of the
+      // fingering nearest it (its first, or with the octave key its second).
+      const double m = 12.0 * std::log2(ha / kLow);
+      int f;
+      double want;
+      if (m < 15.5) {
+         const int n = std::clamp(static_cast<int>(std::lround(m)), 0, 15);
+         f = n;
+         want = kLow * std::exp2(n / 12.0);
+      } else {
+         const int n = std::clamp(static_cast<int>(std::lround(m - 12.0)), 4, kTopN);
+         f = 20 + n - 4;
+         want = 2.0 * kLow * std::exp2(n / 12.0);
+      }
+      const BoreFingering &b = kSaxBore[f];
+      int best = 0;
+      for (int i = 1; i < b.modes; ++i)
+         if (std::fabs(std::log(b.peakHz[i] / want)) < std::fabs(std::log(b.peakHz[best] / want)))
+            best = i;
+      fing_ = f;
+      peakHz_ = b.peakHz[best];
+      // (With the octave key, the vent's leak and the player's voicing keep the reed off the first
+      // resonance, which the vent has pulled away from the second's octave.)
+      vent_ = best > 0 ? 0.75 * peakHz_ : 0.0;
+      // The reed stands less open up the range, as a player's lip firms for the higher notes (more
+      // steeply above C#4): wide open on the low notes, which keeps them on their fundamental.
+      open_ = kOpen * std::pow(ha / 277.0, ha < 277.0 ? -0.5 : -1.0);
+      setBore(hz);
+   }
+   float tick(float breath, float emb, double len, float tn) override {
+      const double dyn = std::clamp((breath - 0.5) / 0.6, 0.0, 1.3);
+
+      player_.tongued(tn);
+      const double cents = player_.wander(rng) - kScoop * (0.4 + 0.6 * std::min(dyn, 1.0)) * player_.scoop(0.025);
+      const double hz = fs_ / len * std::exp2(cents / 1200.0);
+      pmS_ += (breath - pmS_) * pmCoef_;
+      if ((at_++ & 15) == 0)
+         setBore(hz);
+      // The mouth's pressure, over the pressure that shuts the reed: the breath, its turbulence,
+      // the tongue's burst and (with the Growl knob up, blown hard) the throat's rasp.
+      const float noise = breathLP_.tick(rng.white());
+      const float growl = std::max(0.0f, breath - 0.95f) * 0.6f * character.edge * (character.growl - 0.6f);
+      const double stiff = (0.8 + 0.4 * character.stiffness) * (1.1 - 0.2 * emb);
+      // A player blows softly by closing the lip on the reed as well as easing the breath: the reed
+      // stands less open, so less pressure shuts it, and the two fall together (the mouth's
+      // pressure over the pressure that shuts the reed, gamma, stays where the reed sounds).
+      const double lip = std::clamp(kLip0 + (1.0 - kLip0) * (pmS_ - 0.5) / 0.5, kLip0, 1.2);
+      const double g0 = std::min(1.0, pmS_ / 0.5) * kGamma + kGamma1 * std::max(0.0, pmS_ - 0.5);
+      const double gamma = g0 / stiff * (1.0 + (0.01 * character.noise + growl) * noise) + 0.2 * tn * noise;
+      const double pM = kPM * stiff * lip, pm = gamma * pM;
+      // The reed: x is its tip's travel over the opening at rest (-1 against the lay), pushed shut
+      // by the drop across it a sample behind, its resonance damped by the lip (and lower on a
+      // bigger family member's reed).
+      const double wr = 2.0 * kPi * kReedHz * std::sqrt(stiff) * (0.9 + 0.2 * emb) * std::sqrt(std::min(1.0, scale_));
+      double acc = -wr * wr * (x_ + dpPrev_ / pM) - kReedDamp * wr * v_;
+      // (Against the lay the cane meets the stiff facing.)
+      if (x_ < -1.0)
+         acc -= 30.0 * wr * wr * (x_ + 1.0) + 4.0 * wr * v_;
+      v_ += acc / fs_;
+      // (The tongue leaving the reed sets it moving.)
+      if (tn > tongue_)
+         v_ += kKick * (tn - tongue_) * wr;
+      tongue_ = tn;
+      x_ += v_ / fs_;
+      // The slit: closing softly over the curl of the reed's tip (shorter with more bite).
+      const double knee = 0.08 * std::exp(-1.2 * (character.edge - 1.0)), gap = 1.0 + x_;
+      const double open = 0.5 * (gap + std::sqrt(gap * gap + knee * knee)) - 0.5 * knee;
+      const double H = open_ * lip * (0.5 + character.aperture) * (1.2 - 0.4 * emb) / std::pow(std::min(1.0, scale_), 1.5);
+      const double a = std::max(0.0, open) * H * kWidth * std::sqrt(2.0 / kRho);
+      // u = a sgn(D) sqrt|D|, with D the drop with this sample's flow's own pressure in it.
+      const double ph = bore_.history(), zi = bore_.instant(), D0 = pm - ph;
+      const double um = 0.5 * (-a * a * zi + std::sqrt(a * a * a * a * zi * zi + 4.0 * a * a * std::fabs(D0)));
+      const double u = D0 >= 0 ? um : -um;
+      bore_.push(u);
+      dpPrev_ = pm - (ph + zi * u);
+      const float y = dc_.tick(static_cast<float>(bore_.radiated() * kOut));
+      return lift_.tick(tone_.tick(eqLp2_.tick(eqLp1_.tick(eqHs_.tick(eqPk2_.tick(eqPk1_.tick(eqHp_.tick(y)))))))) * softGain_;
+   }
+
+private:
+   void setBore(double hz) {
+      scale_ = hz / peakHz_;
+      // What's heard, as a real alto's in front of it (fitted to the Iowa recordings' harmonics):
+      // a broad formant near 290 Hz, a peak near 2.3 kHz and its bright top (falling away past 6 kHz), scaled down with a bigger family member.
+      const double fam = std::min(1.0, scale_);
+      if (std::fabs(fam - eqAt_) > 1e-3) {
+         eqAt_ = fam;
+         eqHp_.highpass(131.0 * fam, 3.0, fs_);
+         eqPk1_.peak(285.8 * fam, 0.60, 24.7, fs_);
+         eqPk2_.peak(2342.0 * fam, 1.83, 15.7, fs_);
+         eqHs_.highshelf(std::min(3764.0 * fam, 0.4 * fs_), 40.0, fs_);
+         // The shelf would hold to Nyquist; a real horn's top falls away past 5 kHz.
+         eqLp1_.lowpass(std::min(kTopHz * fam, 0.4 * fs_), 0.54, fs_);
+         eqLp2_.lowpass(std::min(kTopHz * fam, 0.4 * fs_), 1.31, fs_);
+      }
+      // Blown softly a real alto's reed hardly beats, and its tone is nearly the fundamental alone
+      // (Iowa, pp: H2 19 dB under it, H3 28); the reed here beats from the start, so its harmonics
+      // are shelved down as the breath eases under mezzo forte (and the fundamental's share of the
+      // shelf given back, most of it). With the octave key the second register's highs come through.
+      const double soft = std::clamp((0.77 - pmS_) / 0.2, 0.0, 1.0);
+      const double toneDb = -20.2 * soft + (vent_ > 0.0 ? 4.0 * (1.0 - soft) : 0.0);
+      const double toneHz = std::min((vent_ > 0.0 && soft < 0.5 ? 1.75 : 1.2) * hz, 0.4 * fs_);
+      if (std::fabs(toneDb - toneDb_) > 0.05 || std::fabs(toneHz / toneHz_ - 1.0) > 0.01) {
+         toneDb_ = toneDb;
+         toneHz_ = toneHz;
+         tone_.highshelf(toneHz, toneDb, fs_);
+      }
+      softGain_ = static_cast<float>(std::pow(10.0, 7.3 * soft / 20.0));
+      // (The voicing below takes the low notes' upper harmonics down; they're given back here.)
+      const double liftDb = 10.0 * std::clamp((300.0 - hz / member_) / 60.0, 0.0, 1.0);
+      const double liftHz = std::min(3.0 * hz, 0.4 * fs_);
+      if (std::fabs(liftDb - liftDb_) > 0.05 || std::fabs(liftHz / liftHz_ - 1.0) > 0.01) {
+         liftDb_ = liftDb;
+         liftHz_ = liftHz;
+         lift_.highshelf(liftHz, liftDb, fs_);
+      }
+      // The Loss knob widens the resonances; Hole Cutoff and Cone move the holes' cutoff.
+      const double loss = std::clamp(1.0 + 1.5 * (character.loss - 0.04), 0.75, 1.35);
+      const double cut = kHoleCut * character.cutoff * std::exp2(-(character.cone - 0.5));
+      // Under D4 (on a bigger horn, its D4) the walls' loss is eased to kLowLoss of it below B3,
+      // and the resonances over the note's 1.5th damped kVoicing times as much, as a player voices
+      // a low note: with neither, the long bore's fundamental gives way to its upper resonances
+      // and the tone hollows out or cracks up the octave.
+      const double low = std::clamp((300.0 - hz / member_) / 60.0, 0.0, 1.0);
+      bore_.set(kSaxBore[fing_], scale_, fs_, loss * (1.0 + (kLowLoss - 1.0) * low), kHoleCut, cut, vent_ * scale_, kVentDamp,
+                low > 0.0 ? 1.5 * peakHz_ * scale_ : 0.0, 1.0 + (kVoicing - 1.0) * low);
+   }
+
+   static constexpr double kLow = 138.59, kRho = 1.2, kPM = 6000.0, kWidth = 0.015, kOut = 1000.0, kHoleCut = 1200.0,
+                           kScoop = 45.0, kGamma = 0.45, kGamma1 = 0.1, kLip0 = 0.3, kReedHz = 2000.0, kReedDamp = 1.0,
+                           kOpen = 7e-4, kKick = 0.2, kVentDamp = 8.0;
+   static constexpr int kTopN = 15;
+   static constexpr double kTopHz = 6500.0;  // the output's 4-pole lowpass
+   static constexpr double kLowLoss = 0.6;  // the walls' loss on the low notes, of the full
+   static constexpr double kVoicing = 5.0;  // and their upper resonances' damping
+   ModalBore bore_;
+   OnePoleLP breathLP_;
+   DCBlock dc_;
+   Player player_;
+   Biquad eqHp_, eqPk1_, eqPk2_, eqHs_, eqLp1_, eqLp2_, tone_, lift_;
+   unsigned at_ = 0;
+   int fing_ = -1;
+   double peakHz_ = 277.0, hz_ = 277.0, member_ = 1.0, scale_ = 1.0, vent_ = 0.0, open_ = 7e-4, eqAt_ = -1.0, toneDb_ = 1e9, toneHz_ = 1.0, liftDb_ = 1e9, liftHz_ = 1.0;
+   double x_ = 0, v_ = 0, dpPrev_ = 0, pmS_ = 0, pmCoef_ = 0.01;
+   float tongue_ = 0.0f, softGain_ = 1.0f;
 };
 
 // Oboe (double reed): two cane blades beating at the top of a narrow cone. The reed and its staple
