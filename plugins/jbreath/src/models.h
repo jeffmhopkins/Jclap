@@ -1027,8 +1027,9 @@ public:
       const double pM = kPM * stiff * lip, pm = gamma * pM;
       // The reed: x is its tip's travel over the opening at rest (-1 against the lay), pushed shut
       // by the drop across it a sample behind, its resonance damped by the lip (and lower on a
-      // bigger family member's reed).
-      const double wr = 2.0 * kPi * kReedHz * std::sqrt(stiff) * (0.9 + 0.2 * emb) * std::sqrt(std::min(1.0, scale_));
+      // bigger family member's reed, though by less than its bore: lower, a baritone's E3 blown hard
+      // locked a semitone flat onto a resonance near 1.8 kHz).
+      const double wr = 2.0 * kPi * kReedHz * std::sqrt(stiff) * (0.9 + 0.2 * emb) * std::pow(std::min(1.0, scale_), 0.25);
       double acc = -wr * wr * (x_ + dpPrev_ / pM) - kReedDamp * wr * v_;
       // (Against the lay the cane meets the stiff facing.)
       if (x_ < -1.0)
@@ -1087,15 +1088,20 @@ private:
       // grow far less with a bigger horn than its bore does: scaled with it, they'd pile into a
       // narrow band near 1.2 kHz on a baritone, a ringing spike over its low notes.)
       const double up = std::pow(fam, 0.3);
+      // (And on a bigger horn that peak and the shelf are lower, and its top falls away sooner: a
+      // real baritone's spectrum is flat from 1 to 3.5 kHz and 30 dB down past it, Good-sounds. Left
+      // as the alto's they rang as a spike near 1.9 kHz.)
+      const double big = (1.0 - fam) / 0.5;
       if (std::fabs(fam - eqAt_) > 1e-3) {
          eqAt_ = fam;
          eqHp_.highpass(131.0 * fam, 3.0, fs_);
          eqPk1_.peak(285.8 * fam, 0.60, 24.7, fs_);
-         eqPk2_.peak(2342.0 * up, 1.83, 15.7, fs_);
-         eqHs_.highshelf(std::min(3764.0 * up, 0.4 * fs_), 40.0, fs_);
+         eqPk2_.peak(2342.0 * up, 1.83, 15.7 - kBigPeakDb * big, fs_);
+         eqHs_.highshelf(std::min(3764.0 * up, 0.4 * fs_), 40.0 - kBigShelfDb * big, fs_);
          // The shelf would hold to Nyquist; a real horn's top falls away past 5 kHz.
-         eqLp1_.lowpass(std::min(kTopHz * up, 0.4 * fs_), 0.54, fs_);
-         eqLp2_.lowpass(std::min(kTopHz * up, 0.4 * fs_), 1.31, fs_);
+         const double upLp = std::pow(fam, 1.3);
+         eqLp1_.lowpass(std::min(kTopHz * upLp, 0.4 * fs_), 0.54, fs_);
+         eqLp2_.lowpass(std::min(kTopHz * upLp, 0.4 * fs_), 1.31, fs_);
       }
       // Blown softly a real alto's reed hardly beats, and its tone is nearly the fundamental alone
       // (Iowa, pp: H2 19 dB under it, H3 28); the reed here beats from the start, so its harmonics
@@ -1159,15 +1165,17 @@ private:
       // Under D4 (on a bigger horn, its D4) the walls' loss is eased to kLowLoss of it below B3,
       // and the resonances over the note's 1.5th damped kVoicing times as much, as a player voices
       // a low note: with neither, the long bore's fundamental gives way to its upper resonances
-      // and the tone hollows out or cracks up the octave.
+      // and the tone hollows out or cracks up the octave. (On a bigger horn the octave vent's leak is
+      // kBigVent times as strong: as the alto's, its G4 and top A fell back to the low register.)
       const double low = std::clamp((300.0 - hz / member_) / 60.0, 0.0, 1.0);
-      bore_.set(kSaxBore[fing_], scale_, fs_, loss * (1.0 + (kLowLoss - 1.0) * low), kHoleCut, cut, vent_ * scale_, kVentDamp,
+      bore_.set(kSaxBore[fing_], scale_, fs_, loss * (1.0 + (kLowLoss - 1.0) * low), kHoleCut, cut, vent_ * scale_, kVentDamp * (member_ < 1.0 ? kBigVent : 1.0),
                 low > 0.0 ? 1.5 * peakHz_ * scale_ : 0.0, 1.0 + (kVoicing - 1.0) * low);
    }
 
    static constexpr double kLow = 138.59, kRho = 1.2, kPM = 6000.0, kWidth = 0.015, kOut = 500.0, kHoleCut = 1200.0,
                            kGamma = 0.45, kGamma1 = 0.1, kLip0 = 0.3, kReedHz = 2000.0, kReedDamp = 1.0,
-                           kOpen = 7e-4, kKick = 0.2, kVentDamp = 8.0;
+                           kOpen = 7e-4, kKick = 0.2, kVentDamp = 8.0,
+                           kBigVent = 2.5, kBigPeakDb = 12.0, kBigShelfDb = 5.0;
    static constexpr int kTopN = 15;
    static constexpr double kTopHz = 6500.0;  // the output's 4-pole lowpass
    static constexpr double kLowLoss = 0.6;  // the walls' loss on the low notes, of the full
