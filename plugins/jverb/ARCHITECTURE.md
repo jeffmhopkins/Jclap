@@ -386,9 +386,11 @@ once a block.
 ## The orbit simulation
 
 [`orbit.h`](src/orbit.h) is two to six bodies under their mutual gravity. The acceleration on each
-body is G x mass / r² toward every other body, with G the **Gravity** param and a softening of 0.05 so
-close passes stay finite. Inside 0.16 units (about the size a body is drawn) gravity turns repulsive,
-balancing at 0.16, so two bodies can circle each other closely but never sink on top of each other. It
+body is G x mass / r² toward every other body, with G the **Gravity** param, softened over 0.15 units
+(about the size a body is drawn) so close passes stay finite and bend smoothly: two bodies falling
+straight at each other slip through and out the far side. (It used to be a softening of 0.05 with
+gravity turning repulsive inside 0.16, which kept bodies apart like a wall: about four close passes in
+ten turned the wrong way, and the bodies visibly bounced off each other.) It
 steps with velocity Verlet, taking smaller substeps during close passes (up to 64 per tick) so
 slingshots stay accurate, and recentres the centre of mass at the origin and at rest after every step
 so the system never drifts off. A body flung past 2.4 units is pulled back by a spring.
@@ -403,6 +405,16 @@ Gravity), and after every step all speeds are scaled alike to ease back towards 
 time units. A transient's kick doesn't set it, so what **React** puts in dies away over a few seconds,
 and the drag past the tether runs only while there's such energy to spare, so a kicked body is still
 caught and turned around rather than bounced.
+
+**Loosening tight pairs.** Softening alone lets a pair sink into a tight orbit and stay there, the
+others taking its energy on every pass. So with three or more bodies, a pair bound tighter than an
+orbit 0.4 units across has its speed relative to each other raised a little every step, in proportion to
+how much too deep it is (at full depth by about twice its relative speed per time unit), and then
+every speed is scaled down alike by what that added. The pair's orbit widens over a second or so, the
+energy comes in effect from everything but the pair's own circling, and the total stays where the
+thermostat keeps it. Over five minutes of every body count from three to six, this cut the time a
+pair spent circling within 0.5 units for more than two time units from about 1000 time units to about
+20, and the close passes that turn the wrong way (bounce) from 39% to under 3%.
 
 **Where they start.** Three bodies start on the figure-eight orbit, which is stable with equal masses;
 the default masses (1, 1.25, 0.8) break it up within a few laps into motion that never repeats. Any
