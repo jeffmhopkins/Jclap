@@ -1025,9 +1025,11 @@ private:
          tone_.highshelf(toneHz, toneDb, fs_);
       }
       softGain_ = static_cast<float>(std::pow(10.0, 7.3 * soft / 20.0));
-      // (The voicing below takes the low notes' upper harmonics down; they're given back here.)
-      const double liftDb = 10.0 * std::clamp((300.0 - hz / member_) / 60.0, 0.0, 1.0);
-      const double liftHz = std::min(3.0 * hz, 0.4 * fs_);
+      // (The voicing below takes the low notes' upper harmonics down; they're given back here, and
+      // more on the bigger horns, whose low notes are richer still: a tenor's low Bb has its 3rd to
+      // 7th harmonics 5 to 9 dB over its fundamental.)
+      const double liftDb = 10.0 * std::clamp((300.0 - hz / member_) / 60.0, 0.0, 1.0) + 20.0 * (1.0 - member_);
+      const double liftHz = std::min(3.5 * hz, 0.4 * fs_);
       if (std::fabs(liftDb - liftDb_) > 0.05 || std::fabs(liftHz / liftHz_ - 1.0) > 0.01) {
          liftDb_ = liftDb;
          liftHz_ = liftHz;
