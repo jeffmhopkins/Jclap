@@ -905,6 +905,7 @@ private:
          c.typed = live_.alienTyped;
          c.rough = static_cast<float>(live_.alienRough);
          c.rasp = static_cast<float>(live_.alienGrowl);
+         c.kick = static_cast<float>(live_.kick);
          c.wet = static_cast<float>(live_.alienWet);
          float cutoff = static_cast<float>(live_.cutoffHz / 1300.0) * holeK * tube.cut, loss = tube.loss;
          Mute::bore(settings_.mute, mute_.amount(), cutoff, loss);
