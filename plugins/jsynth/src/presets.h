@@ -43,11 +43,6 @@ inline const std::vector<Preset> &factoryPresets() {
       const auto a = [](clap_id offset, double v) { return std::pair<clap_id, double>{partId(0, offset), v}; };
       const auto b = [](clap_id offset, double v) { return std::pair<clap_id, double>{partId(1, offset), v}; };
       const auto g = [](clap_id id, double v) { return std::pair<clap_id, double>{id, v}; };
-      const auto route = [](int part, int r, int source, clap_id dest, double amount) {
-         return Values{{partId(part, routeParam(r, kRouteSource)), source},
-                       {partId(part, routeParam(r, kRouteDestination)), destinationIndex(dest)},
-                       {partId(part, routeParam(r, kRouteAmount)), amount}};
-      };
       const auto join = [](std::initializer_list<Values> parts) {
          Values all;
          for (const Values &p : parts)
@@ -112,14 +107,6 @@ inline const std::vector<Preset> &factoryPresets() {
       const auto lfo = [](int part, int l, int shape, double hz) {
          return Values{{partId(part, lfoParam(l, kLfoShape)), shape}, {partId(part, lfoParam(l, kLfoRate)), lfoValue(hz)}};
       };
-      // The same, synced to the host's tempo at a division (kDivisionNames) and running Free, so it
-      // sits on the host's bar rather than starting with each note.
-      const auto lfoSync = [](int part, int l, int shape, int division) {
-         return Values{{partId(part, lfoParam(l, kLfoShape)), shape},
-                       {partId(part, lfoParam(l, kLfoSync)), 1},
-                       {partId(part, lfoParam(l, kLfoDivision)), division},
-                       {partId(part, lfoParam(l, kLfoTrigger)), 1}};
-      };
       // One voice that slides between held notes over `glide` ms, and restarts from a released one.
       const auto mono = [](int part, double glide) {
          return Values{{partId(part, kVoiceMode), 2}, {partId(part, kGlideTime), glide > 0 ? timeValue(glide) : 0.0},
@@ -141,24 +128,17 @@ inline const std::vector<Preset> &factoryPresets() {
                        {partId(part, shapeParam(e, kShapeDivision)), division},
                        {partId(part, shapeParam(e, kShapeRepeat)), repeat}};
       };
-      // A shape's warp and bend.
-      const auto bow = [](int part, int e, double warp, double bend) {
-         return Values{{partId(part, shapeParam(e, kShapeWarp)), warp}, {partId(part, shapeParam(e, kShapeBend)), bend}};
-      };
       constexpr int kOnce = 0, kForever = kRepeatForever;
-      constexpr int kHalfBar = 3, kBar = 4, kBars2 = 5, kBars4 = 7, kBars8 = 9, kBars16 = 11;
-      constexpr int kScatter = 1, kHunt = 2, kFlee = 3;
-      constexpr int kSine = 0, kTriangle = 1, kSaw = 2, kSquare = 3, kPulse = 4, kHalfSine = 5, kAltSine = 8, kRandom = 14;
-      constexpr int kRatio = 1;
+      constexpr int kBar = 4, kBars2 = 5;
+      constexpr int kScatter = 1, kFlee = 3;
+      constexpr int kSine = 0, kTriangle = 1, kSaw = 2, kSquare = 3, kPulse = 4, kHalfSine = 5, kAltSine = 8;
       constexpr int kLowPass = 0, kHighPass = 1, kBandPass = 2, kLadder = 5, kComb = 6;
-      constexpr int kLfoSine = 0, kLfoTriangle = 1, kLfoSquare = 3, kLfoHold = 4, kLfoSmooth = 5;
-      constexpr int k16th = 2, k8thDotted = 7;
-      const int env2 = kSourceEnv1 + 1, env3 = kSourceEnv1 + 2, lfo1 = kSourceLfo1, lfo2 = kSourceLfo1 + 1;
-      const int velocity = kSourceVelocity, press = kSourceVelocity + 1, slide = kSourceVelocity + 3;
-      const int release = kSourceVelocity + 4, wheel = kSourceModWheel, key = kSourceKey;
+      constexpr int kLfoSine = 0, kLfoTriangle = 1, kLfoHold = 4;
+      const int env2 = kSourceEnv1 + 1, env3 = kSourceEnv1 + 2, lfo1 = kSourceLfo1;
+      const int velocity = kSourceVelocity, press = kSourceVelocity + 1, wheel = kSourceModWheel, key = kSourceKey;
       const clap_id cutoff = filterParam(0, kFilterCutoff), resonance = filterParam(0, kFilterResonance);
       const clap_id cutoff2 = filterParam(1, kFilterCutoff);
-      const clap_id fm21 = fmCell(1, 0), fm31 = fmCell(2, 0), fm32 = fmCell(2, 1), fb1 = fmCell(0, 0), fb2 = fmCell(1, 1);
+      const clap_id fm21 = fmCell(1, 0), fm31 = fmCell(2, 0), fb1 = fmCell(0, 0), fb2 = fmCell(1, 1);
       // A route's own depth, for a route that moves another (the mod wheel deepening a vibrato, say).
       const auto depth = [](int r) { return routeParam(r, kRouteAmount); };
       std::vector<Preset> p;
@@ -189,10 +169,10 @@ inline const std::vector<Preset> &factoryPresets() {
       };
       // A bus's inputs are the routes onto its Base.
       const auto busIn = [](int b) { return busParam(b, kBusOffset); };
-      const int bus1 = kSourceBus1, bus2 = kSourceBus1 + 1, bus3 = kSourceBus1 + 2, bus4 = kSourceBus1 + 3;
-      constexpr int kSum = kBusSum, kMul = kBusMultiply, kMin = kBusMin, kMax = kBusMax;
-      constexpr int kLinear = 0, kExpo = 1, kLog = 2, kS = 3, kAbs = 4;
-      constexpr int kAsIs = 0, kToUni = 1, kToBi = 2;
+      const int bus1 = kSourceBus1, bus2 = kSourceBus1 + 1;
+      constexpr int kSum = kBusSum, kMul = kBusMultiply;
+      constexpr int kLinear = 0, kS = 3, kAbs = 4;
+      constexpr int kAsIs = 0, kToBi = 2;
       // A bus that only smooths what is routed onto it, over `lag` ms.
       const auto lagBus = [&](int part, int bus, double lag) { return busSet(part, bus, kSum, kLinear, kAsIs, 0, 0, lag); };
       // The same, turned bipolar: Heading (0 down, 1 up) comes out -1 diving to +1 climbing, so a
@@ -249,25 +229,21 @@ inline const std::vector<Preset> &factoryPresets() {
 
       // Sources and destinations by name.
       const int heading = kSourceHeading, nearest = kSourceNearest, speed = kSourceSpeed, turn = kSourceTurn;
-      const int random = kSourceRandom, macro1 = kSourceMacro1;
       const auto shapeOf = [](int o) { return oscParam(o, kOscShape); };
       const auto fineOf = [](int o) { return oscParam(o, kOscFine); };
       const auto ratioOf = [](int o) { return oscParam(o, kOscRatio); };
       const auto coarseOf = [](int o) { return oscParam(o, kOscCoarse); };
       const auto level = [](int o) { return mixParam(kMixLevel, o); };
       const auto panOf = [](int o) { return mixParam(kMixPan, o); };
-      const clap_id res2 = filterParam(1, kFilterResonance), noise = mixParam(kNoiseLevel), color = mixParam(kNoiseColor);
-      const clap_id drive = tailParam(kDriveAmount), balance = tailParam(kFilterBalance);
+      const clap_id noise = mixParam(kNoiseLevel), color = mixParam(kNoiseColor);
+      const clap_id drive = tailParam(kDriveAmount);
       const clap_id fSpeed = flockParam(kSpeed), fWander = flockParam(kWander), fCohesion = flockParam(kCohesion);
-      const clap_id fRange = flockParam(kRange), fPull = flockParam(kTunePull), fNfm = flockParam(kNeighbourFm);
-      const clap_id fLure = flockParam(kLure);
-      const clap_id windPush = lfoParam(1, kLfoPush), wingPush = lfoParam(0, kLfoPush);
-      const clap_id lfo1Rate = lfoParam(2, kLfoRate), lfo2Rate = lfoParam(3, kLfoRate);
-      const clap_id fm12 = fmCell(0, 1), fm13 = fmCell(0, 2), fb3 = fmCell(2, 2);
-      // Each envelope's Shape Time, Warp, Bend and Level as destinations.
+      const clap_id fRange = flockParam(kRange), fNfm = flockParam(kNeighbourFm);
+      const clap_id windPush = lfoParam(1, kLfoPush);
+      const clap_id lfo1Rate = lfoParam(2, kLfoRate);
+      // Each envelope's Shape Time, Warp and Level as destinations.
       const auto tm = [](int e) { return shapeParam(e, kShapeTime); };
       const auto wp = [](int e) { return shapeParam(e, kShapeWarp); };
-      const auto bd = [](int e) { return shapeParam(e, kShapeBend); };
       const auto lv = [](int e) { return shapeParam(e, kShapeLevel); };
       // A part param of either part.
       const auto pv = [](int part, clap_id offset, double v) { return std::pair<clap_id, double>{partId(part, offset), v}; };
@@ -277,18 +253,12 @@ inline const std::vector<Preset> &factoryPresets() {
          return join({{pv(part, tailParam(kFilterRouting), 1), pv(part, filterParam(0, kFilterSlope), 0), pv(part, filterParam(1, kFilterSlope), 0)},
                       filter(part, 0, kBandPass, f1, res, 0.0), filter(part, 1, kBandPass, f2, res, 0.0)});
       };
-      // Both filters side by side, each oscillator into the one given (0 for F1, 1 for F2).
-      const auto parallel = [&](int part) { return Values{pv(part, tailParam(kFilterRouting), 1)}; };
-      const auto into = [&](int part, int o, int f) { return Values{pv(part, oscParam(o, kOscFilter), f + 1)}; };
       // Part B at the note's own pitch (or `transpose` from it), flying with A rather than hunting it.
       const auto own = [&](int transpose, double lvl) {
          return Values{b(kPartTranspose, transpose), b(flockParam(kBehaviour), 0), b(kPartLevel, lvl)};
       };
-      constexpr int kAbsSine = 6, kQuarter = 7, kAltHalf = 9, kCamel = 10, kWhite = 12, kPink = 13;
-      constexpr int kNotch = 3, kPeak = 4, kCombOdd = 7;
+      constexpr int kCombOdd = 7;
       constexpr int kHard = 1, kTube = 2;
-      constexpr int kLfoSaw = 2;
-      constexpr int kLureCentre = 6, kLureRandom = 5;
       // The room on the main output: the reverb's mix, size, decay in seconds and damping.
       const auto room = [&](double mix, double size, double decay, double damp) {
          return Values{g(kReverbOn, 1), g(kReverbMix, mix), g(kReverbSize, size), g(kReverbDecay, decay), g(kReverbDamp, damp)};

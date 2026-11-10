@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/home/.config/JSynth"
-printf 'Starling Bells\nTwo Tides\nFlight Steps\nTwin Pulse\nMurmuration Riot\nTubular Bells\nFinger Wah\n' \
+printf 'Slow Murmuration\nBreathing Planet\nEngine Room\nEmbers\nTidal Breath\nFlock Bells\nPredator Weather\nGlass and Iron\n' \
    > "$tmp/home/.config/JSynth/Favorites.txt"
 
 # name part routes map-source view voice-tab env-tab osc-tab preset, then the crop in design pixels
@@ -17,15 +17,15 @@ printf 'Starling Bells\nTwo Tides\nFlight Steps\nTwin Pulse\nMurmuration Riot\nT
 # the tabs under the sky 912 650 720 274, the sky 912 52 720 590.
 shots=(
    "panel       0 0 0  0 0 0 0 -               0   0   1648 940"
-   "fm          0 0 0  0 0 0 1 Tubular_Bells   10  58  892  342"
-   "map-filter  0 0 22 0 0 0 0 Finger_Wah      10  398 892  324"
-   "shape       0 0 0  0 0 0 0 Two_Tides       10  721 892  208"
-   "lfos        0 0 0  0 0 1 0 Twin_Pulse      10  721 892  208"
-   "buses       0 0 0  0 1 2 0 Flight_Steps    10  721 892  208"
-   "flock       0 0 0  0 1 2 0 Flight_Steps    906 644 732  286"
-   "motion      0 0 0  0 2 0 0 Murmuration_Riot 906 644 732 286"
-   "routes      0 1 0  0 0 0 0 Flight_Steps    906 46  732  602"
-   "sky         0 0 0  1 0 0 0 Murmuration_Riot 0  0   1648 940"
+   "fm          0 0 0  0 0 0 1 Flock_Bells     10  58  892  342"
+   "map-filter  0 0 22 0 0 0 0 Slow_Murmuration 10 398 892  324"
+   "shape       0 0 0  0 0 0 0 Breathing_Planet 10 721 892  208"
+   "lfos        0 0 0  0 0 1 0 Engine_Room     10  721 892  208"
+   "buses       0 0 0  0 1 2 0 Embers          10  721 892  208"
+   "flock       0 0 0  0 1 2 0 Slow_Murmuration 906 644 732 286"
+   "motion      0 0 0  0 2 0 0 Tidal_Breath    906 644 732  286"
+   "routes      0 1 0  0 0 0 0 Slow_Murmuration 906 46 732  602"
+   "sky         0 0 0  1 0 0 0 Predator_Weather 0  0   1648 940"
 )
 for line in "${shots[@]}"; do
    read -r name part routes map view voice env osc preset x y w h <<< "$line"
@@ -42,7 +42,7 @@ PY
 done
 
 # The dice card, open over the sky's top right (the tool's last argument opens it).
-HOME="$tmp/home" XDG_CONFIG_HOME="" "$tool" "$tmp/dice.png" 0 0 0 3296 1880 0 0 0 0 Murmuration\ Riot 0 0 1 1
+HOME="$tmp/home" XDG_CONFIG_HOME="" "$tool" "$tmp/dice.png" 0 0 0 3296 1880 0 0 0 0 Glass\ and\ Iron 0 0 1 1
 python3 - "$tmp/dice.png" dice.jpg <<'PY'
 import sys
 from PIL import Image

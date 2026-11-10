@@ -737,192 +737,117 @@ it per note.
 
 ## Presets
 
-The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 166 presets in
-10 categories, in the menu's order (`kCategoryOrder`, whatever order they are written in):
-**Essentials** (a few plain patches by instrument family, and two using both parts, to start from), then the showcases: **Flock** (the creatures playing the sound, from one species to both, many through the mod buses), **Pressure** (Press shaped by the mod buses: curved, multiplied by LFOs and shapes, delayed and lagged),
-**Expressive** (patches played with Press, where it bows, blows, bends, gates or blooms), **Drones**
-and **Textures** (built on Shape-mode envelopes and the buses: long drifting shapes and chains under a
-held chord, and shapes as the amp so a held note plays a pattern), **Motion** (patches that move on
-their own), **Interplay** (envelopes routed onto each other's Time, Warp and Bend), **Landscapes** (both
-parts at once, each on Shape envelopes that move each other) and **Monsta** (variations on MicroMonsta
-2 programs, their aftertouch tricks on named Multiply buses). A preset can name its buses. Each
-preset is written as what it changes from the defaults, and loading one puts every other param (and
-bus name) at its default, so nothing (a route, say) carries over. Most answer the mod wheel and
+The factory bank is compiled in ([`src/presets.h`](src/presets.h)): **Init** and 83 presets in
+8 categories, in the menu's order (`kCategoryOrder`, whatever order they are written in).
+The bank is built around the flock: nearly every patch is a held sound the creatures play, each
+note's creature moving that note's filter, oscillator shape, mix and FM with its Heading, Turn,
+Speed and Nearest. Shape envelopes loop under them and reach back into the flock (its speed, wander,
+cohesion, range, the wind's push) and into the depth of the flock's own routes, so the modulation
+itself moves. Many routes go through a bus that turns Heading bipolar (diving to climbing), takes
+the absolute of Turn (how sharply, either way) or multiplies two sources (an LFO by Speed, say), and
+the buses are named for what they carry.
+
+**Ambient Drones** (soft, spacey held sounds: each creature's climb, turns and speed move its own note's filter, shape, mix and FM, under long halls); **Dark Drones** (low, slow and ominous: ladders, growls, stone-room combs and dark choirs that gather, sink and grind as the flock moves); **Textures** (patterns, grains and particles: Shape envelopes as the amp, each creature setting its own pace and colour); **Industrial** (heavily modulated machinery: sync grind, hard drive, inharmonic FM, combs and noise, driven and hammered by the flock); **Landscapes** (both parts at once: two flocks in one sky, hunting, biting, crossfaded by Press or split by velocity or key); **Pads** (the classic pad shapes, flown by the flock); **Keys and Bells** (played sounds, each note shaded by its creature); **Bass and Leads** (one creature each, playing its own tone).
+
+Each preset is written as what it changes from the defaults, and loading one puts every other param
+(and bus name) at its default, so nothing (a route, say) carries over. Most answer the mod wheel and
 Press, so they play from any keyboard.
 
+**Rooms.** Each category has its own reverb (`spaces` in the bank): long, soft halls for the ambient
+and dark drones, shorter rooms for textures, pads and keys, and a small bright room for the
+industrial patches. A preset can set its own instead, and the sparkling textures and the leads add
+echoes in time with the host.
+
 Every preset's level is matched by measurement: a trim table at the end of the bank sets each
-preset's part levels so the loudest 400 ms of a held chord at velocity 0.8 sits near -20 dBFS (a
-little lower for plucks and bells; the Pressure patches are measured at half Press). A trim
-moves both parts together, so a layer keeps its balance.
+preset's part levels so the loudest 400 ms of a three-note chord at velocity 0.8 and a quarter
+Press, held 16 s (one note for the mono patches), sits near -20 dBFS with its room (keys and bells
+-21). A trim moves both parts together, so a layer keeps its balance.
 
 | Category | Preset | What makes it |
 | --- | --- | --- |
-| Essentials | Sub Bass | A sine with a touch of feedback and a quiet octave; the wheel adds feedback. |
-|  | Analog Bass | Saw and a square an octave down through a ladder; Env 2 plucks it, harder when struck harder. |
-|  | FM Bass | A DX bass: 1:1 FM with feedback on the modulator, its depth dying away; Velocity bites. |
-|  | Acid Bass | Saw into a resonant, driven ladder with glide between held notes; Velocity accents, Slide opens it. |
-|  | Reese Bass | Two saws 22 cents apart over a sub, LFO 2 drifting the detune; drive. |
-|  | Saw Lead | Two detuned saws, vibrato after 350 ms. |
-|  | Sync Lead | Osc 2 synced to a silent Osc 1; Env 2, the wheel and Press sweep its pitch. |
-|  | Pressure Lead | Press opens 2:1 FM and brings in vibrato; Slide adds feedback grit. |
-|  | Tine Piano | A DX electric piano: a 1:1 pair and a ×14 tine, both harder when struck harder; high notes die sooner. |
-|  | Concert Grand | Layer: struck strings (two beating saws whose filter the hammer throws open, then closes as the note rings) over a pure FM body; low notes left, high right. |
-|  | Wurli Drive | The reed piano with Press on the drive: lean in and it snarls; the wheel adds tremolo. |
-|  | Clav | Narrow pulse through a resonant filter, Velocity on the cutoff. |
-|  | Tonewheel Organ | Drawbars 16', 8' and 5 1/3', key click, and a rotary speaker the wheel speeds up. |
-|  | Vibraphone | ×4 FM with a tremolo the wheel deepens. |
-|  | Tubular Bells | A ×3.5 modulator over a long ring, a second carrier an octave up. |
-|  | Synth Pluck | Saw and detuned pulse through a resonant filter; Slide on the resonance, the wheel lengthens it. |
-|  | Nylon Guitar | Saw through a key-tracked low pass, Env 2 on the cutoff. |
-|  | Kalimba | ×3 FM blip with an inharmonic ×5.95 partial. |
-|  | Synth Brass | Two detuned saws, Env 2 on the filter (deeper when struck harder), a pitch scoop, vibrato on the wheel. |
-|  | String Machine | Three saws with slow detune LFOs; Press and the wheel open the filter. |
-|  | Solo Cello | Mono saw and pulse with glide; Press brings in vibrato and opens the filter. |
-|  | Warm Analog | Saw pair through a low pass, slow Env 2. |
-|  | Glass Pad | ×3 and ×0.5, LFO 1 on the FM. |
-|  | Talk Box | Mono saw and pulse through two formants; Press slides the mouth from "ah" to "ee". |
-|  | Piano and Strings | Layer: the tine piano, and strings under it the wheel brings up. |
-|  | Bass and Keys Split | Split at C3: an analog bass below, the reed piano above. |
-| Flock | Fireflies | Half Sine blips; a fast, scattered flock with short ink, spread wide. |
-|  | Metal Rain | Inharmonic ×3.73 and ×7.11, scattered; each note detuned at random. |
-|  | Starling Bells | Neighbour FM, Tune Pull and a cohesive flock; Nearest deepens the FM. |
-|  | Dripping Ink | Long, wide ink; Turn, Speed and Heading play the filter and FM. |
-|  | Ink Ribbons | Long ink and a loose lure; Turn plays cutoff and FM. |
-|  | Murmuration Pad | Saws, an aligned flock spread wide; Heading pans each voice. |
-|  | Pressure Front | Press opens 2:1 FM, with Neighbour FM. |
-|  | Hunter Clicks | Layer: A flees, B hunts an octave up with Bite and Neighbour FM. |
-|  | Mallet Flock | Layer: vibes and an upper shoal with Neighbour FM and Tune Pull. |
-|  | Shark Bass | Split at C3: below, a hunting saw-and-pulse bass with Bite; Speed opens its filter. |
-|  | Predator and Prey | Layer: A flees, B hunts an octave down; A's filter opens as its own kind closes in. |
-|  | Murmuration Riot | Layer: a fast FM shoal opened by Press, Speed, Nearest and Turn, and driven ladder hunters that bite. |
-|  | Murmuration Storm | Layer: a saw shoal with Neighbour FM and Tune Pull, and FM hunters. |
-|  | Gathering Voices | A choir that swells and brightens as its creatures gather (Nearest, S-curved and slowed, on a bus), pulled into just intervals; Press lifts a creature, and a vibrato comes in only while one is pressed and climbing (LFO 1 × Press × Heading). |
-|  | Hunting Grounds | Layer: A's glass plucks flee and ring brighter the nearer their pursuer; B's driven saws hunt and bite, their filter on the greater of Speed and Nearest. |
-|  | Flight Steps | Arp Up as the amp, its steps quicker the faster each creature flies; Turn pans it, and a Global bus leans every note's timbre with the newest creature's heading. |
-|  | Creature Theremin | Press lifts the creature up the sky; flying upward bends it sharp, diving flat, through a slow lag, and the wingbeat is its vibrato. |
-|  | Scatter Glass | FM glass whose creatures keep apart: crowded, it dulls and quiets; alone, it opens up and shimmers. |
-|  | Shoal Current | A shoal in a strong wind; how fast each creature is carried rings a comb tuned to its note, slowed into swells. |
-|  | Circling Hawks | Layer: a low saw drone, and high sine hawks that hunt it and bite, only where a slow gust and their nearness agree (Min). |
-|  | Crowd Swing | Gate 8 in time with the host as the amp; the more crowded a creature, the later its steps land (Warp), so a tight flock grooves. |
-|  | Turning Strings | Strings whose bow roughens with how sharply each creature turns, either way (Absolute), with Tune Pull holding them together. |
-|  | Two Flocks Talking | Layer: both parts ring each other's creatures; each part's chatter (Nearest × Speed on the FM) comes in a second or two into the chord. |
-|  | Wingbeat Tremolo | LFO 1 × Speed on the level: a resting flock holds still, a flying one shivers. |
-|  | Panic Bells | Bells fleeing a silent hunter (part B, heard only through its bite); the faster they run, the brighter and more out of tune. |
-|  | Flock Organ | Detuned saws held in tune by Tune Pull; the flock's nearness and climb blend into one slow colour for the whole part (Global). |
-|  | Ink Song | Long ink tails; each creature's speed and turning blend into a bus that sweeps a resonant band pass, and Press lifts its lure. |
-| Pressure | Lean-In Vibrato | A mono lead whose vibrato is LFO 1 × Press, fading in after a short delay; Press on an exponential curve is its breath. |
-|  | Blown Reed | Press on an exponential curve is the breath: it speaks softly, then roars, with breath noise and a touch sharp on top. |
-|  | Held-Back Bloom | Press slows Env 2's Bloom, and the filter follows the greater of the bloom and Press (Max). |
-|  | Pressure Rotor | A drawbar organ whose rotor Press speeds up, on a lag over a second long like a rotor's inertia. |
-|  | Touch Glass | Press on a Log curve, so a light touch already brightens the FM; the release velocity rings a shimmer as you let go. |
-|  | Bowed Iron | Noise through a comb tuned to the note; the bow is the lesser of Press and Env 2's swell (Min). |
-|  | Thumb on the Tape | Press sinks the pitch and darkens it, only near the top of its travel (Exponential), like a thumb on a tape reel. |
-|  | Pressed Rhythm | A pad that Press turns into a rhythm: a synced Gate 8 × Press takes the level away in steps. |
-|  | Restless Swarm | Press makes the creatures restless: faster, wandering and ringing their neighbours; how near they crowd sets the FM. |
-|  | Patient Choir | Layer: hold a chord two seconds and a choir an octave up fades in over three more, as far as you press (a Global bus). |
-|  | Squeezed Vowel | Press sweeps two band passes from "oo" toward "ah" on an S-curve, over a buzzing pulse. |
-|  | Pressure Split | Split at middle C: Press drives the bass below, and brings a delayed vibrato to the lead above. |
-|  | Finger Wah | Press sweeps a resonant low pass on an S-curve with a short lag, over a clavinet-ish pulse. |
-|  | Holdable Pluck | A pluck that dies away, unless you press: Press holds it up, the harder the longer. |
-|  | Pushing the Tide | A looped Surge breathes the filter; Press slows the tide and lifts it. |
-|  | Dig-In Bass | Press raises the resonance and a sub; the drive bites only where Press and velocity agree (Min). |
-| Expressive | Solo Violin | Press is the bow: it swells the note, brightens it and lets the vibrato in. |
-|  | Breath Sax | Press is the breath: louder, brighter and, at the top, growling through the drive. |
-|  | Accordion | Press is the bellows; two reeds a little apart, which the wheel pulls further. |
-|  | Bending Lead | Press bends the note up a semitone, as a guitarist bends a string. |
-|  | Pressure Growl | A bass that growls as you lean on it: Press drives the FM feedback, the drive and the resonance. |
-|  | Bloom Bells | Strike a bell and it rings away; press and a pad grows out of it. |
-|  | Tension Wire | Noise through a comb tuned to the note; Press tightens it toward a bowed metal ring. |
-|  | Squeeze Organ | The tonewheel organ with Press on the rotor: lean in and it spins up, and the drive bites. |
-|  | Wilting Pad | A pad that sags flat and darkens under pressure. |
-|  | Flutter Pad | Press is the tremolo, deeper and faster the harder you press. |
-|  | Pressure Metal | Press slides the FM modulator off its ratio, from a pure tone to a clanging bell. |
-|  | Morph Pad | A low pass and a resonant high pass side by side: Press crossfades them, Slide moves the pulse width. |
-|  | Press Gate Pad | A pad that only stutters when you lean on it: Press deepens a sixteenth-note gate. |
-|  | Swell Brass | Brass that swells with Press: louder, brighter and a little sharper. |
-| Drones | Basalt | Saws and a sub through a ladder; a Slow S fade-in, and Wander and Gusts shapes (23 s, 37 s) on the filter and pan. |
-|  | Breathing Organ | Sine drawbars whose 2nd and 3rd partials breathe on their own Breath shapes, one reversed. |
-|  | Cathedral Air | Noise in a comb tuned to the note; Shimmer on its ring, Twin Hills on the tone and the noise colour. |
-|  | Undertow | A sub and a 1:2 FM growl that surges every 14 s; a Brownian walk turns its feedback. |
-|  | Long Bloom | Chain 1 > 2: the amp blooms in over 12 s, and from 70% of the way the filter opens and closes on a 30 s arch. |
-|  | Glacier | Chain 2 > 3 Loop: two 10 s arches start each other halfway, cross-fading a saw and FM glass forever. |
-|  | Iron Hum | Saws in a comb with tube drive; Flicker on the comb, a 41 s Wander on the drive. |
-|  | Tidal Pulse | Synced: four filter waves every eight bars, resonance wobbling down over sixteen. |
-|  | Slow Ignition | Three seconds in, drive and FM fade up over eight more (a Global bus), so the whole chord catches fire; the wheel holds it back. |
-|  | Singing Bowls | Noise through a comb tuned to the note, Shimmer moving its ring, and Tune Pull drawing the chord into just intervals. |
-|  | One Sky | A Brownian walk sets the colour, width and pan of every note at once (a Global bus), so the chord drifts together. |
-|  | Twin Pulse | Two slow LFOs multiplied: the drone swells only where both are up. |
-|  | Rare Light | The filter follows the lesser of a 17 s Surge and a 23 s Plateau (Min), so it opens rarely and briefly. |
-|  | Rust | Grit from the greater of a per-note random and a Flicker shape (Max), so each note crackles in its own way. |
-|  | Far Horizon | Layer: high sines arrive four seconds into the chord and fade in over six (a Global bus) above a low fifth. |
-|  | Drone Swarm | A vowel choir of creatures: Nearest and Heading, blended and slowed, set each voice's formants, Tune Pull holding the cluster. |
-| Textures | Rain Glass | FM glass whose amp is the Sparkle shape, each note stretched by Random so a chord rains. |
-|  | Bouncing Light | A dropped ball, over and over, faster up the keyboard; the filter bounces with it. |
-|  | Echo Chamber | Each note echoes itself on the beat (Echoes, synced) and darkens over four bars. |
-|  | Stutter Fields | Gates that speed up through each bar over a cutoff stepping at random. |
-|  | Number Station | A band-passed tone keyed in sparse steps, with static, drifting in pitch. |
-|  | Stairwell | The filter climbs a stair each beat and a fifth steps in at random. |
-|  | Breathing Machine | Chain 1 > 2 > 3 Loop: the amp breathes, the filter strikes, the FM bounces, round again. |
-|  | Night Pulse | A heartbeat, two beats a bar, under a 20 s wander through the dark. |
-|  | Falling Bells | FM bells struck over and over by the Collapse shape, each tap lower, the FM fading with it. |
-|  | Window Rain | Sparkle as the amp, its pace drawn per note; Press brings a downpour. |
-|  | Gliding Weave | Random 16 in time with the host on Env 2, through a short lag so each step glides, on pitch, filter and pan. |
-|  | Grain Swarm | Saw Train as the amp, its rate set by each creature's speed, its pitch smeared by how near its neighbour is. |
-|  | Wind Chimes | A looping Bell as the amp in a hard wind; how fast the wind carries each creature sets how often it strikes. |
-|  | Night Insects | High FM chirps on Stutter, the wingbeat bobbing each creature and its turning bending the chirp. |
-|  | Clock Shop | Each note a clock on its own Heartbeat, its pace set by its key, its tick brightened by Press. |
-|  | Tape Ghosts | A slow wow and a faster flutter summed into one bus, then multiplied by Press for a deeper wobble. |
-|  | Ember Glow | Noise through a comb, crackling on Sparkle; the hottest embers, the greater of Press and a Gusts shape, ring brightest. |
-| Motion | Shifting Glass | Three-operator FM with Env 3 wandering on the FM (a 9 s Wander shape) and two unsynced LFOs; the wheel deepens all of it. |
-|  | Random Garden | The Random wave: each note draws its own waves, LFO speed and pan. |
-|  | Pulsar | A Pluck shape looping as the amp: every held note pulses on its own clock, faster higher up and with Press. |
-|  | Clockwork | A sixteenth-note sample-and-hold on the FM and a dotted-eighth square on the filter. |
-|  | MPE Voices | Two band passes for a vowel: Press brightens and adds vibrato, Slide moves the vowel, Release sets the tail. |
-|  | Tide Machine | Layer: a saw drone breathing on slow LFOs, and FM bells an octave up echoing on an Echoes shape. |
-| Interplay | Tug of War | A filter arch that won't keep time: a slow wander onto its Time and Warp stretches and leans each pass. |
-|  | Quickening | Gate 8 on the filter, its Time pulled down by a 40 s ramp, so slow pulses become a shiver. |
-|  | Lingering Breath | A breath routed onto its own Time: it lingers when open and falls back quickly. |
-|  | Mutual Orbit | Two shapes in orbit, each warping or bending the other, on FM colour and stereo place. |
-|  | Tilting Steps | Random steps in time with the host, bent up and down by a slow arch. |
-|  | Gathering Storm | Env 1 onto Env 2's Time: as the note blooms the flicker on the comb and noise gets faster. |
-| Landscapes | Two Tides | Layer: saws open on a 13 s arch, FM glass swells on a 21 s one, each leaned by a wander. Macro 1 slows both, Macro 2 adds edge. |
-|  | Ember Field | Layer: pink noise crackles in a tuned comb on Sparkle, paced by a wander, over a tube-driven sub that surges. |
-|  | Glass Conversation | Layer: two bells on their own clocks, every 3 s and 4.7 s, a wander on each part speeding or slowing it. Macro 1 rings both faster. |
-|  | Low and High Weather | Split at C3: surging saws bent by a random walk below, a looped chain of air and glass above. |
-|  | Calm to Unrest | Press crossfade: a breathing sine choir, and a pulse swarm whose stutter quickens the harder you press. |
-|  | Between Worlds | Slide crossfade: a looped chain of arches across saw and FM glass, and tempo-synced random steps. |
-|  | Glass and Comets | Velocity: soft notes rain glass that settles as it ages, hard ones strike an 8 s comet. |
-|  | Hunter's Drone | Layer: a pad, and B's hunters ring-modding it whenever one catches; the gusts make them fly faster. |
-|  | Turning Choir | Layer: a dark pad under a choir whose root, fifth and octave hand over on a looped chain. Macro 1 slows it. |
-|  | Clockwork Garden | Layer, in tempo: a heartbeat on B's amp, bent soft to hard by a 16-bar arch, under A's random filter steps. |
-|  | Distant Engine | Layer: a driven comb hum, and B's Random wave spitting a saw train, slower on low notes. |
-|  | Afterglow | Layer: a soft pad, and a fifth above that swells in late and lingers, its shimmer bent by the amp. |
-| Monsta | Foggy EP | [Foggy EP] Soft keys behind a velocity-hungry filter; Press warbles one oscillator sharp, the wheel gives each note its own shape. |
-|  | Genetic Lead | [Genetic] A plucky lead whose filter snaps shut; Press brings in a pulse two octaves up. |
-|  | Monsta Voices | [MstaVoic] Formant voices that waver apart under Press; the wheel lets the vowel drift. |
-|  | Fifty Pad | [Die-50] A resonant filter sweeping open and sinking over seconds, pulse widths shimmering; Press wobbles it. |
-|  | Kingdome | [Kingdome] A driven three-oscillator pad; Press raises one oscillator up to a fifth and sets the filter wobbling. |
-|  | Therapy Strings | [Therapy] Strings in reverse: Press hushes them while their shape shimmers. |
-|  | Nightmare | [Nitemare] A low drone with a diving third oscillator; Press brings in its pulsing shriek. |
-|  | Quack Bass | [MG Quak] A squelchy, driven mono bass with a long glide; Press sets the filter quacking. |
-|  | Gristle Lead | [Gristle] Wide pulse waves whose widths swing; Press makes the resonance flutter. |
-|  | Cumulus | [Cumulous] A wide pad under a resonant, tracking filter; Press speeds its drift, the wheel sweeps it across the stereo field. |
-|  | Old Hills | [OldHills] Plucky keys over a held body; each note draws its own pulse width, and the pitch leans up as it settles. |
-|  | Sunshine Strings | [Sunshine] Bright strings under a resonant, tracking filter, the width turning slowly; the wheel adds a fifth. |
-|  | Worn Arp | [WornArp] Short plucks from a worn machine: each chirps, lands a little off pitch and somewhere new in the stereo field. |
-|  | Waxxy | [Waxxy] A driven, resonant pluck whose filter lands somewhere new on each note. |
-|  | Reptile | [Reptile] A crawling drone of three oscillators wandering on slow LFOs; Press drives it. |
-|  | Crystal Strings | [Crystal] Octaves under a dark, resonant filter each note sweeps open and lets close over seconds. |
-|  | Softy Drone | [Softy] A drone that takes seconds to arrive, its filter breathing; the wheel adds a fluttering resonance. |
-|  | Ceasefire | [Ceasefre] A wide pad whose widths turn as it swells; Press brings in a pulsing fifth. |
-|  | Chamber Strings | [ChamberS] Slow strings whose widths and levels move on an LFO; Press is the vibrato. |
-|  | Fresh Air | [FreshAir] Wide saws under a filter that whistles at the note; Press sets the whistle wobbling. |
-|  | Clang Heart | [ClangHrt] An inharmonic FM strike over a driven saw body; Press brings the clang back. |
-|  | Space God | [SpaceGod] A howling, resonant swell rising over seconds; Press throws its top oscillator into a warble. |
-|  | Opera Pad | [Opera2.0] A pad that sours as you press, one oscillator sinking flat; the wheel pulses in an octave. |
-|  | Ice Bells | [IceBells] A filter resonant enough to ring, pinged by each note, brighter the harder you strike. |
-|  | Oldfield Lead | [Oldfield] A second voice swells in under the lead as the vibrato speeds up. |
-|  | Pink Haze | [PinkHaze] A hazy pad that glides between chords; Press pumps the filter, the wheel fades it. |
+| Ambient Drones | Slow Murmuration | Saws and a sub under a slow, wide flock: each creature's climb opens its own filter, its turns swing it across the stereo field and its speed brings up the sub. A 9 s Breath loop makes the flock restless and deepens the climb as it peaks. |
+|  | Aurora Choir | A choir in two formants: each creature's climb opens its vowel from "oo" toward "ah", its turns brighten the second formant, and Tune Pull draws the chord into just intervals. Flying fast deepens the vibrato, and a slow Twin Hills loop lets the vowels swing wider, then settle. |
+|  | Weightless | FM glass that floats: the faster each creature flies the brighter its FM, its climb swells a sub an octave down, and its turns pull its carrier a few cents either way so the chord beats. A 20 s Arch loop speeds the whole flock up and lets it rest. |
+|  | Tidal Breath | Breath through a resonant band pass at the note: a 17 s Surge loop strengthens the wind, the gusts carry every creature at once, and how fast each is carried brings up its breath and rings its band; its climb swings the band up and down. |
+|  | Halo | A ring of light: a triangle and air through a comb tuned to the note. Each creature's climb lengthens its ring, its turns shade the ring a few cents off the note, and how near its neighbours are thickens the air. A 25 s Shimmer loop brightens the whole halo. |
+|  | Horizon Glass | Three-operator glass: each creature's climb rings its ×3 partial, crowding feeds the modulator back on itself, and a 31 s Wander drifts the ×3 off true and back, so the glass tints from pure to bell-like. |
+|  | Floating Organ | Sine drawbars that drift: each creature's climb draws out the octave, its turns either way the twelfth, and Tune Pull keeps the chord pure. Its speed sets the depth of a slow chorus. |
+|  | Nebula | Saws in a moving band: a low pass that each creature's climb opens and a high pass its speed raises, so a fast creature thins to a bright band. A 30 s Wander loop widens the flock's range and pulls it back, so creatures fall in and out of each other's company. |
+|  | Deep Field | The slowest of them: a pulse and a saw on a Slow S fade-in, and creatures in a huge sky whose climbs, lagged over two seconds, open the filter so slowly it reads as weather. A 40 s Brownian walk sets how fast they fly, and the amp itself deepens the flock's hold on the filter as the chord blooms. |
+|  | Lumen | Pulse waves whose widths the creatures bend as they turn, one each way, under a filter their climb opens; LFO 1 at an odd 0.13 Hz breathes the second width, and speed brightens the voice. |
+|  | Ether Strings | A string machine flown by the flock: each creature's speed is its vibrato depth, its climb its brightness, and its turns pull its two saws apart. Tune Pull keeps the section together. |
+|  | Snow Light | High and airy: an alt-sine and its far partials with a breath of white noise, the creatures scattered across a wrapping sky. Each one's speed lifts its air, its climb its top partial, its turns pan its fourth harmonic, and a 12 s Shimmer loop sparkles the lot. |
+|  | Breathing Planet | Envelopes that move each other, under the flock: a 12 s Breath on Env 2 opens the filter and quickens Env 3's wobble as it fills; each creature's climb leans its breath early or late, and its speed sets how deep its wobble runs. |
+|  | Cirrus | Soft sines that ring each other: Neighbour FM makes a gathered flock shimmer and a scattered one fall pure. A 22 s Arch loop pulls the creatures together and lets them drift apart, so the shimmer comes and goes; each one's climb lifts it into its octave. |
+| Dark Drones | Abyssal | A sub and a growl in a low ladder: each creature's climb opens the ladder, how near its neighbours are drives it, and a 23 s Surge loop sends the flock racing, so the growl rings when it does. |
+|  | Leviathan | A low 1:2 FM growl: each creature's speed turns up its modulator's feedback, its turns slide the modulator a little off its ratio so the growl beats and rolls, and its climb deepens the FM. |
+|  | Cavern | Dark air in a stone room: pink noise and a low saw through a comb tuned an octave down. Each creature's turns colour the noise, its climb lengthens the ring, and a 33 s Plateau loop lets the cave breathe out. |
+|  | Black Monolith | A pulse and a saw an octave apart in a resonant ladder that never opens far: each creature's climb slides its pulse width, crowding rings the resonance, and a Brownian walk slowly tilts the cutoff. Monolithic, but never still. |
+|  | Night Tide | Low saws on a slow tide: a 41 s Gusts shape strengthens the wind, and each gust carries the whole flock one way, so the chord leans together: the creatures' climbs open the filter, their turns pan them, and how fast they are carried rings the resonance. |
+|  | Obsidian Choir | A low, dark choir in two formants near "oo": each creature's climb opens its vowel toward "oh", its speed adds breath, and Tune Pull holds the chord in just intervals. A 29 s Bow loop deepens how far the vowels move. |
+|  | Submerged | A pad heard from under water: saws through a steep, key-tracked low pass, chorused by each creature's turns. Its climb lifts it toward the surface; a 25 s Brownian walk deepens the flock's hold on the filter and lets it go. |
+|  | Event Horizon | A chord that keeps falling in on itself: each creature's dive pulls its pitch a few cents flat and darkens it, Tune Pull keeps trying to straighten the chord, and a 20 s Collapse loop pulls the flock tight, where Neighbour FM grinds. |
+|  | Gravity Well | Creatures falling together: a Late Swell on Env 2 raises Cohesion and the range over 16 s, so a held chord gathers; the nearer each creature's neighbours, the more FM and resonance it gains, until the drone tightens into a ringing knot. Let go and it scatters. |
+|  | Tectonic | Plates grinding: three saws a few cents apart at the bottom, each creature's speed pushing tube drive and its turns slowly re-tuning the middle saw. A 37 s Wander bends the ladder; the mod wheel drags the filter down. |
+| Textures | Firefly Field | Half-sine sparks on a Sparkle amp, in a fast, scattered flock: the faster a creature flies the denser its sparks, its climb lifts their pitch a little, and crowding brightens them. |
+|  | Rain on Glass | FM glass struck by Sparkle, each creature its own rainfall: how near its neighbours are deepens the FM, its turns pan it, its speed quickens the drops, and a 20 s Gusts loop brings squalls, flying the flock faster as it rains harder. |
+|  | Insect Choir | High FM chirps on a Stutter amp: the wingbeat bobs each creature, its turns bend its chirp, its speed sets how fast it stutters and its climb how bright. A scattered, restless swarm. |
+|  | Murmur Grains | A grain cloud: Saw Train as the amp, its rate set by each creature's speed (S-curved and smoothed), its pitch smeared by how near its neighbour is, its colour by its climb. A 15 s Bloom loop makes the flock restless, and the cloud thickens. |
+|  | Embers | Pink noise in a comb tuned to the note, crackling on a Flicker amp: each creature's climb bends the comb up and down, its speed whitens the noise, and a hot creature (fast and crowded at once) rings longest. |
+|  | Aeolian Harp | A wind harp: noise through a ringing comb at the note in a strong, gusting wind, and how fast each creature is carried sets how loud its string sings; its climb brightens the bow and its turns lean the string a few cents off. |
+|  | Chime Flock | A looping Bell as the amp in a wind: FM tines, each struck as often as its creature turns (sharper turns, quicker strikes) and brighter the higher it flies. |
+|  | Water Drops | Drops into a still pool: sines that leap and fall on each Sparkle strike (Env 3 plays the same contour onto the pitch), each creature's climb setting how far its drops fall and its speed how often they land. |
+|  | Static Swarm | Radio static: white noise and a buzzing pulse through a band pass that jumps on Random 16, its steps quicker the faster each creature flies; its climb tunes the band, its turns the buzz. |
+|  | Morse Birds | Sparse Steps as the amp of high sines: each creature a bird keying its own call, quicker the faster it flies, its pitch leaning with its climb and its overtone with its turns. |
+|  | Bubble Chamber | Resonant pings bouncing: a ladder on the edge of ringing, struck by a looping Bounce on its cutoff; each creature's speed sets how fast it bounces, crowding tightens the ring and its climb lifts the pitch of the ping. |
+|  | Tape Murmur | A tape loop warping: saws whose wow is each creature's climb and whose flutter (LFO 1) runs faster and deeper the faster it flies; its turns tilt the tone, and a Flicker loop crackles in the hiss. |
+|  | Frost | Ice forming: a high comb rung by crackling white noise, each creature's crowding lengthening its ring and its climb tuning it a few cents up and down; its speed glints the air above. |
+|  | Clockwork Swarm | Gate 8 in time with the host as the amp of plucky saws, each creature's crowding pushing its steps late (Warp) so a tight flock swings; its climb opens each step. |
+| Industrial | Foundry | A foundry floor: saws and noise through a comb, hard-clipped. Each creature's speed drives it, its climb bends the comb, and a Saw Train loop hammers the noise, struck faster the more sharply the creature turns. |
+|  | Turbine | A turbine spinning up: a Slow S on Env 2 raises the flock's speed over 8 s, pushing the FM modulator's ratio up as it goes, and each creature's speed pushes it further, a whine climbing out of the hum; its turns add feedback, its climb opens the filter. Let go and it winds down. |
+|  | Rust Belt | Hard sync, ground by the flock: Osc 2 synced to Osc 1, each creature's climb sweeping the synced pitch, its turns its drive, its crowding the resonance; a Brownian walk keeps the grind uneven. |
+|  | Iron Lung | A machine breathing: a looping Breath on Env 2 opens a resonant ladder and lets in hiss, each creature's speed setting how fast it breathes, its crowding how hoarse and its climb how hard it drives. |
+|  | Scrapyard | Struck scrap: inharmonic FM (×3.73 and ×7.11) on a looping Collapse as the amp, each strike lower than the last; each creature's turns knock its ratios off true so no two hits ring alike, its speed sets how fast the pile collapses and its crowding how hard it clangs. |
+|  | Power Station | Mains hum and a transformer's buzz: a narrow pulse and its octave, tube-driven, with a sample-and-hold crackling the filter at a rate each creature's speed sets; its climb widens the pulse, its turns ring the resonance. |
+|  | Grinder | Exponential FM with heavy feedback: each creature's crowding grinds the FM deeper, its turns pitch the modulator sharp and flat, its climb sweeps a band pass over the noise of it. |
+|  | Pressure Vessel | Steam under pressure: hiss in an odd-harmonic comb tuned to the note, rising in gusts; each creature's climb tightens the comb, its speed whitens the hiss, its turns pan the leak. |
+|  | Conveyor | A conveyor in time with the host: Gate 8 as the amp of hard-driven saws, each creature's speed dragging its steps late, an Arp Up climbing the filter every two bars and the creature's climb opening it further. |
+|  | Signal Decay | A dying transmission: FM whose modulator steps on Random 16, quicker the faster each creature flies, through a comb its climb retunes; crowding scrambles it with Neighbour FM. |
+|  | Engine Room | Engines idling: detuned saws throbbing on LFO 1, whose rate is each creature's speed (an engine revving) and whose depth is how near its neighbours are; a 26 s Wander leans on the drive. |
+|  | Dead Radio | Shortwave between stations: noise and a whistle through a comb whose tuning a sample-and-hold throws about, at a rate set by each creature's speed; its climb sweeps a band pass over it all and its turns bend the whistle. |
+|  | Furnace | A furnace roaring: a resonant ladder on the edge of screaming, tube-driven, a Surge loop raising the drive, each creature's climb opening the ladder and crowding pushing the resonance into song. |
+|  | Machine Swarm | Layer: a driven saw drone that flees, and B's hunters a fifth up, square saw trains that quicken the faster they chase; when one catches its prey it bites, ring-modulating it. |
+| Landscapes | Glass and Iron | Press crossfades a calm sky into a storm: part A is FM glass drifting in a slow shoal, part B a driven comb of noise and saws whose hunters bite. Each part's creatures play its own sound: A's climb rings its glass, B's speed drives its grind and its turns hammer its comb. |
+|  | Predator Weather | Layer: a soft saw drone in a slow shoal, and high FM bells (part B, an octave up) that hunt it. When a bell catches a creature of the drone it bites, ring-modulating it; the bells' speed brightens them and their turns shift their ratio. |
+|  | Dawn Chorus | Layer: a low drone and, an octave and a fifth up, a scattered flock of birds keying Sparse Steps. The drone's creatures open its filter as they climb; the birds sing quicker as they fly faster and their calls lean with their turns. |
+|  | Storm Front | Velocity picks the weather: soft notes play a breathing pad whose creatures open its filter, hard ones a grinding sync drone whose climb sweeps the synced pitch and whose speed drives it. |
+|  | Low Tide, High Wind | Split at C3: below, a dark ladder drone whose creatures open it as they climb; above, a wind harp in a strong gusting wind, each string singing as loud as its creature is carried. |
+|  | Two Flocks | Layer: two flocks that ring each other. A flees and B hunts it a fifth up, both with Neighbour FM, so each species shimmers when it gathers; A's climb opens its filter, B's speed its FM. |
+|  | Hive | Layer: a hive. A buzzing pulse drone whose widths the creatures bend as they turn, and part B's workers an octave up, chirping on a Stutter amp quicker the faster they fly. |
+|  | Migration | Layer: a slow migration. A low sine-and-saw drone and, two octaves up, a thin alt-sine line flying with it; both pulled into just intervals, the lower climbing open, the upper chorused by its turns. Arch loops of 34 s and 21 s raise each flock's speed, out of step with each other. |
+| Pads | Flock Pad | A warm analog pad: two saws a few cents apart, each creature's climb opening its filter and its turns panning it, its speed adding a touch of resonance. |
+|  | Glass Flock | FM glass: a ×3 modulator over a carrier and a sub an octave down, each creature's climb brightening it, how near its neighbours are adding feedback and its turns a slow beat. |
+|  | PWM Strings | Pulse-width strings: LFO 1 and each creature's turns move the widths, its climb opens the filter, and its speed is a slow vibrato's depth. |
+|  | Choir Flock | A choir on "ah": each creature's climb leans its vowel toward "eh", its turns brighten the second formant, and Tune Pull holds the chord. |
+|  | Flock Brass | Brass that swells: two saws, the filter opening a little after the note speaks, each creature's climb brightening it and its speed adding vibrato. |
+|  | Wide Unison | Three saws spread wide: each creature's turns pull them apart and back, so the unison breathes wider and narrower note by note, and its climb opens the filter. |
+|  | Dream Pad | Soft sines that ring each other when they gather (Neighbour FM) and settle into just intervals (Tune Pull); each creature's climb lifts an octave into its voice. |
+|  | Sweep Pad | A slow filter sweep whose rate is each creature's speed: LFO 1 sweeps the cutoff, faster the faster the creature flies, deeper the higher it climbs. |
+| Keys and Bells | Flock Tines | A DX electric piano: a 1:1 pair for the body and a ×14 tine, both harder the harder you play. Each creature's climb brightens its note's bark, and its speed is the depth of a tremolo. |
+|  | Flock Vibes | A vibraphone: ×4 FM with a tremolo whose depth is how near each creature's neighbours are, so a gathered chord shimmers; its turns pan it. |
+|  | Flock Bells | Tubular bells: a ×3.5 modulator over a long ring and a carrier an octave up; each creature's turns knock the modulator off its ratio, so a held bell's colour wavers. |
+|  | Kalimba Swarm | A kalimba: a ×3 FM blip with an inharmonic ×5.95 partial; each creature's climb brightens the blip and its turns pan it. |
+|  | Rotor Organ | A drawbar organ whose rotary speaker runs at each creature's speed, so a chord's notes spin at their own rates; a key click, and the wheel speeds them all. |
+|  | Flock Pluck | A plucked saw and pulse through a resonant filter that each creature's climb tunes, its turns panning it; the wheel lengthens the pluck. |
+|  | Music Box Flock | A music box: a high triangle with a faint ×3, its tines ringing out; each creature's climb leans its note a few cents and its speed adds a tremble. |
+| Bass and Leads | Sub Flight | A sine sub with a quiet octave; the creature's turns add a little feedback, so it growls only as it banks, and its climb lifts the octave. |
+|  | Acid Flight | A saw into a resonant, driven ladder with glide between held notes: the creature's climb opens it, its speed raises the resonance, and harder notes accent the envelope. |
+|  | Reese Flight | Two saws over a sub, their detune pulled wider and narrower by the creature's turns; its climb opens the filter, and drive holds it together. |
+|  | FM Flight Bass | A DX bass: 1:1 FM with feedback on the modulator, its depth dying away fast; the creature's speed adds feedback grit and its climb holds the FM up. |
+|  | Flight Lead | Two detuned saws: the creature's speed is the depth of its vibrato, its climb opens the filter and its turns lean the pitch a few cents. |
+|  | Sky Theremin | A theremin: Press lifts the creature up the sky; flying upward bends it sharp, diving flat, through a slow lag, and the wingbeat, deepened by its speed, is its vibrato. |
+|  | Sync Flight | Hard sync: Osc 1 is silent and only resets Osc 2, whose pitch the creature's climb sweeps; its turns open the filter either way. |
+|  | Growl Flight | A growling bass: FM with a feedback loop the creature's turns pull open, tube drive, and a ladder its climb opens; Press leans on the growl. |
 
 **User presets** are plain text files ending `.jspreset`: a `JSynth preset 1` line, then one
 `<param id> <value>` per line, every param. Ids a build doesn't know are skipped, and params a file
