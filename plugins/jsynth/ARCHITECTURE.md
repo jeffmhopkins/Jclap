@@ -82,7 +82,7 @@ flowchart LR
     DB -->|Output Main| MAIN
     DA -.->|Output Own| PA([port 2: A])
     DB -.->|Output Own| PB([port 3: B])
-    MAIN --> W[Output Width, M/S] --> M[Master] --> L[Soft limit] --> OUT([port 1: main])
+    MAIN --> FX[Delay, then Reverb] --> W[Output Width, M/S] --> M[Master] --> L[Soft limit] --> OUT([port 1: main])
 ```
 
 The hexagons are the couplings between creatures: Neighbour FM reads the Osc 1 of up to three
@@ -531,9 +531,22 @@ to 0.45 of the output rate and over 100 dB down past 0.55), one stage per halvin
 report. A gentle DC block follows, for what the drive and the asymmetric waves leave.
 
 A part set to **Output Own** plays on its own stereo port (part A on the second, part B on the
-third) and skips the main bus. Otherwise it goes to the main bus, where **Output Width** (mid/side,
-0 is mono, 100% as is, 200% wider) and **Master** (-6 dB by default) apply, then a soft limit: above
-0.8 the level bends smoothly toward 1.0.
+third) and skips the main bus, dry. Otherwise it goes to the main bus, through the FX, then
+**Output Width** (mid/side, 0 is mono, 100% as is, 200% wider) and **Master** (-6 dB by default),
+then a soft limit: above 0.8 the level bends smoothly toward 1.0.
+
+The FX are JBreath's own, shared through `jclap::dsp` (`jclap/dsp/stereo_delay.h` and
+`jclap/dsp/reverb.h`), on the panel's **FX** tab under the sky. Both are off by default, so a patch
+that doesn't ask for them is dry.
+
+- **Delay**: a stereo echo, its time free (10 ms to 2 s) or synced to the host's tempo as a note
+  value. Feedback (soft clipped) sets the repeats, Tone darkens each one (a lowpass from 400 Hz to
+  open), and Spread crossfades from straight down each side to ping-pong. A time that moves glides,
+  like tape; switching it on or off fades.
+- **Reverb**: a small room, eight mutually prime delay lines (30 to 73 ms, scaled by Size) through a
+  Householder mix, each damped and decaying to -60 dB in Decay, after a pre-delay. Switched off, it
+  takes nothing more in but what's in it rings out. After a silence longer than it rings it empties
+  itself and costs nothing.
 
 ## Every parameter
 
@@ -561,6 +574,19 @@ it per note.
 | Velocity/Press/Glide/Slide/Release Smoothing | 0 ms to 20 s | 8 ms (Glide 2 ms) | Each touch's smoothing. |
 | Size | 0 to 100% | 50% | How big the sky is. |
 | Walls | Soft, Wrap, Open | Soft | What the sky's edges do. |
+| Reverb | Off, On | Off | The reverb on the main bus. |
+| Reverb Mix | 0 to 100% | 15% | How much reverb. |
+| Reverb Size | 0 to 100% | 50% | A closet to a hall. |
+| Reverb Decay | 0.2 to 10 s | 1.6 s | How long it rings, to -60 dB. |
+| Reverb Damping | 0 to 100% | 50% | How fast its highs die away. |
+| Reverb Pre-Delay | 0 to 100 ms | 12 ms | The gap before it answers. |
+| Delay | Off, On | Off | The delay on the main bus, before the reverb. |
+| Delay Mix | 0 to 100% | 30% | How loud the repeats are. |
+| Delay Time | 10 ms to 2 s | 375 ms | The time between repeats, when Sync is Free. |
+| Delay Sync | Free, 1/32 to 1/1 (with triplets and dots) | Free | A note value against the host's tempo. |
+| Delay Feedback | 0 to 95% | 40% | How many repeats. |
+| Delay Tone | 0 to 100% | 72% | How bright the repeats stay. |
+| Delay Spread | 0 to 100% | 50% | Down each side, or ping-pong. |
 
 ### Voice (per part)
 

@@ -2964,6 +2964,7 @@ private:
       kFlockPage,
       kMotionPage,
       kTouchPage,
+      kFxPage,
       kRoutes,
       kDice
    };
@@ -3104,6 +3105,7 @@ private:
       case kFlockPage: return voiceTab_ == 1;
       case kMotionPage: return voiceTab_ == 2;
       case kTouchPage: return voiceTab_ == 3;
+      case kFxPage: return voiceTab_ == 4;
       case kRoutes: return host_.routesOpen;
       case kDice: return host_.diceOpen;
       default: return true;
@@ -3829,7 +3831,7 @@ private:
          return ui::Rect{k[from].x + 6, vb.y + 44, k[to].x + k[to].w - k[from].x - 12, 124};
       };
       voiceTabs_ = &glassy(
-          put<ui::TabBar>({vb.x + 8, vb.y + 6, 324, 26}, std::vector<std::string>{"VOICE", "FLOCK", "MOTION", "TOUCH"}), kDim);
+          put<ui::TabBar>({vb.x + 8, vb.y + 6, 324, 26}, std::vector<std::string>{"VOICE", "FLOCK", "MOTION", "TOUCH", "FX"}), kDim);
       voiceTabs_->select(voiceTab_);
       voiceTabs_->onChange = [this](int t) {
          voiceTab_ = t;
@@ -3853,6 +3855,31 @@ private:
       knob(kGlideRounding, "ROUND", kDim, pk[0], "Pulls a resting finger to the nearest semitone.");
       knob(kRoundingTime, "ROUND TIME", kDim, pk[1]);
       knob(kManagerBendRange, "MGR BEND", kDim, pk[2], "The MPE manager channel's bend range.");
+
+      // FX, on the main output and shared by both parts: JBreath's reverb and delay. The delay
+      // comes first, then the reverb, then WIDTH and MASTER.
+      group_ = kFxPage;
+      const auto onOff = [&](float y, clap_id id, const char *name, unsigned accent, const char *tip) {
+         label({vb.x + 14, y, 96, 16}, name, accent, visage::Font::kLeft);
+         tips_.add(segments(id, accent, {vb.x + 14, y + 20, 96, 26}, std::vector<std::string>{"OFF", "ON"}), tip);
+      };
+      const unsigned rc = 0xff7fd3ff, dc = 0xff8fe8a8;
+      onOff(vb.y + 48, kReverbOn, "REVERB", rc, "The reverb on or off. Turned off, what's in the room rings out.");
+      const auto room = ui::row({vb.x + 120, vb.y + 40, vb.w - 128, 112}, 5);
+      knob(kReverbMix, "MIX", rc, room[0], "How much reverb under the dry sound.");
+      knob(kReverbSize, "SIZE", rc, room[1], "How big the room is: small is close and boxy, large a wide hall.");
+      knob(kReverbDecay, "DECAY", rc, room[2], "How long the room rings after the sound: short is dry, long washes everything together.");
+      knob(kReverbDamp, "DAMP", rc, room[3], "How fast the room's highs die away: up is a dark, warm room, down a bright, splashy one.");
+      knob(kReverbPreDelay, "PRE-DELAY", rc, room[4], "The gap before the room answers: a little keeps the notes clear of the reverb.");
+      onOff(vb.y + 158, kDelayOn, "DELAY", dc, "The delay on or off. Turned off, its repeats fade out.");
+      tips_.add(dropdown(kDelaySync, dc, {vb.x + 14, vb.y + 210, 96, 24}),
+                "Free: the Time knob, in ms. A note value: the delay follows the host's tempo.");
+      const auto echo = ui::row({vb.x + 120, vb.y + 156, vb.w - 128, 112}, 5);
+      knob(kDelayMix, "MIX", dc, echo[0], "How loud the repeats are under the dry sound.");
+      knob(kDelayTime, "TIME", dc, echo[1], "The time between repeats, 10 ms to 2 s, when Sync is Free.");
+      knob(kDelayFeedback, "FEEDBACK", dc, echo[2], "How much of each repeat comes back: how many repeats, and how long they last.");
+      knob(kDelayTone, "TONE", dc, echo[3], "How bright the repeats stay: lower, each one is darker than the last.");
+      knob(kDelaySpread, "SPREAD", dc, echo[4], "Straight down each side, or bouncing between left and right (ping-pong).");
       group_ = kSynth;
       // Each note's own creature, as a source: what it measures, for the chip's tip.
       const struct {
@@ -4041,7 +4068,7 @@ private:
    std::vector<BusNameBox *> busBoxes_;
    SourceChip *busChips_[kPartCount][kBusCount] = {};
    std::vector<ui::Dropdown *> routeSources_[kPartCount], routeDests_[kPartCount];
-   int voiceTab_ = 0; // and the panel under the sky's: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH
+   int voiceTab_ = 0; // and the panel under the sky's: 0 VOICE, 1 FLOCK, 2 MOTION, 3 TOUCH, 4 FX
    ui::TabBar *voiceTabs_ = nullptr, *envTabs_ = nullptr, *oscTabs_ = nullptr;
    // A, B and the main output's peaks, falling slowly, for the level bars.
    float meters_[3] = {};

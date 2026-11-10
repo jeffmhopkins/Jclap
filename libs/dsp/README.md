@@ -9,7 +9,8 @@ Header-only audio building blocks for synths and effects: oscillator, filter, en
 </div>
 
 Link it with `target_link_libraries(<name> PRIVATE jclap::dsp)`. It needs only the standard library:
-no CLAP, no GUI, no allocation, so everything is safe on the audio thread.
+no CLAP, no GUI, and no allocation outside the `prepare()`/`setMaxDelay()` calls made from activate, so
+everything else is safe on the audio thread.
 
 | Header | What it is |
 |---|---|
@@ -19,6 +20,8 @@ no CLAP, no GUI, no allocation, so everything is safe on the audio thread.
 | `jclap/dsp/envelope.h` | `Envelope`: ADSR with analog-style curves and an optional loop (attack and decay repeat while held). Retriggers from the current level, so no clicks |
 | `jclap/dsp/vca.h` | `Vca`: a smoothed gain times a control signal, with linear or exponential (60 dB) response |
 | `jclap/dsp/delay_line.h` | `DelayLine`: a circular buffer with whole-sample taps and Hermite-interpolated fractional reads, for delays whose time glides. It allocates once, in `setMaxDelay()` (call it from activate) |
+| `jclap/dsp/stereo_delay.h` | `StereoDelay`: a stereo echo with feedback, a darkening Tone and ping-pong Spread, its time free or synced (`delaySyncBeats`, `kDelaySyncNames`). It glides to a new time and fades when switched on or off. Allocates in `prepare()`. JBreath's and JSynth's DELAY |
+| `jclap/dsp/reverb.h` | `Room`: a small stereo reverb, eight damped delay lines through a Householder mix, with Size, Decay, Damping and pre-delay. Empties itself after a silence. Allocates in `prepare()`. JBreath's and JSynth's REVERB |
 | `jclap/dsp/smoother.h` | `Smoother`: a one-pole glide for param changes |
 | `jclap/dsp/denormals.h` | `ScopedNoDenormals`: flush-to-zero for the scope of `process()`, so decaying tails stay fast and never output subnormals |
 | `jclap/dsp/math.h` | `noteToHz`, `dbToGain`, `gainToDb`, and `softClip` to saturate overs at the end of a chain |

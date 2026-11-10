@@ -140,6 +140,32 @@ int main() {
       JCLAP_CHECK(peak(out) == 0.0f);
    }
 
+   // The FX (JBreath's reverb and delay): off by default, so a short note is silent soon after its
+   // release; with the reverb or the delay on, it rings on past it. Both stay finite and in range.
+   {
+      const auto tailAfter = [](bool reverb, bool delay) {
+         Params p;
+         p.set(kReverbOn, reverb ? 1.0 : 0.0);
+         p.set(kReverbMix, 0.5);
+         p.set(kReverbDecay, 2.0);
+         p.set(kDelayOn, delay ? 1.0 : 0.0);
+         p.set(kDelayMix, 0.5);
+         p.set(kDelayTime, 0.84); // about 860 ms
+         p.set(kDelayFeedback, 0.5);
+         auto held = std::make_unique<Engine>();
+         held->prepare(kRate, {p.values.get(), p.mods.get()});
+         const auto out = render(*held, 96000, 256, {{100, Event::On, 60, 0.8f}, {4800, Event::Off, 60, 0.0f}});
+         JCLAP_CHECK(finite(out));
+         JCLAP_CHECK(peak(out) <= 1.0f);
+         // A second after the release: the amp's release (a few ms by default) is long over.
+         return peak(std::vector<float>(out.begin() + 2 * 48000, out.begin() + 2 * 96000));
+      };
+      const float dry = tailAfter(false, false), wet = tailAfter(true, false), echo = tailAfter(false, true);
+      JCLAP_CHECK(dry < 1e-4f);
+      JCLAP_CHECK(wet > 1e-3f);
+      JCLAP_CHECK(echo > 1e-2f);
+   }
+
    // Six notes let go a few samples apart, the first-played last, end inside one tick in the
    // order they were let go, whichever voice slot each is in.
    {
