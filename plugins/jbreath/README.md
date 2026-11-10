@@ -105,6 +105,18 @@ ALIEN tab:
 
 The ALIEN tab only shows when the Alien is the instrument.
 
+On the Alien, the exciter's knobs shape its voice:
+
+- **EMBOUCHURE**: the jaw, from nearly shut and muffled to wide open and bright (MPE slide moves
+  it, so a slide opens the mouth).
+- **STIFFNESS**: the vocal folds, from lax and hooting to pressed and buzzing.
+- **BITE**: below the middle it sings more and more through its nose; above it, a brassy twang.
+- **APERTURE**: the lips, from rounded and dark to spread in a bright grin.
+- **KICK**: how hard each word starts and how hard its consonants hit.
+- **LOSS** (on the bore): a damped, muffled throat.
+
+Each of these changes its colour, not how loud it is.
+
 Every note plays in tune: the bore length for each model and note was measured offline by playing
 it and correcting the length until the pitch was within a cent, at the rates the voices run at, and
 baked into [`src/tuning_table.h`](src/tuning_table.h) along with a gain that levels each note's
