@@ -44,6 +44,13 @@ bank shaped for its place (s high and strong, sh lower, f and th faint), buzzing
 nasal hums through the nose with the mouth's notch where its place puts it; l, r, w and y slide
 into the vowel. Every consonant opens onto the vowel from where its place leaves the mouth, as
 speech's locus equations put it, so "ba", "da" and "ga" each open differently onto the same vowel.
+A p, t or k breathes before its vowel as long as a speaker's does (longest for k), but not after an
+s ("spin", "sky"); a b, p or m bursts soft and low, a t high, a k in the middle; a fricative's hiss
+swells in where a stop's starts at once; an l lets go of its vowel at once where a w glides.
+A quick run of notes still says every consonant: whatever of the last syllable isn't finished is
+said first, quicker, rather than cut off, and going straight on, the closing consonants are said
+briskly so the next vowel arrives soon after its note. All this was tuned by playing whole
+sentences through the plugin to speech recognizers.
 A diphthong (ai, ay, oy, ow, o) holds its first vowel and then moves on, as a singer does. Let go,
 it says the syllable's closing consonants before it falls silent; a chord's notes sing the same
 syllable; a slur (Legato) runs one syllable straight into the next. The breath is how loud and how
@@ -81,7 +88,9 @@ ALIEN tab:
   (glassy and thin).
 - **FLIP**: turns the vowels round the middle of the vowel space: half way, the open vowels come out
   at the front and the close ones at the back; all the way, ee is where ah was.
-- **SIZE**: every resonance up or down an octave, a tiny throat or a huge one.
+- **SIZE**: every resonance up or down an octave, a tiny throat or a huge one. A little goes a long
+  way: a woman's throat is about a fifth smaller than a man's, so a quarter up (with the notes up an
+  octave) is a woman's voice, a quarter down a big man's.
 - **SHARP**: how narrow the resonances are, from soft to ringing whistles like a throat singer's.
 - **WET**: a throat with something moving in it: its resonances shiver and gurgle.
 - **ROUGH**: how unsteady the folds are, as a living voice's: the pitch wanders, scoops up into each
@@ -337,11 +346,11 @@ Transpose and its oddities:
 - **Trumpet** (11): Brass Plume, Fanfare, the mutes (Straight Mute, Cup Mute, Muted Night with a
   Harmon, Plunger Wah with the plunger on the slide, Bucket Ballad), Flugel Glow, French Horn,
   Trombone Slide and Piccolo Trumpet.
-- **Alien** (26): Alien Speech, First Contact (a plain voice for your words), Talking Bow (the
+- **Alien** (27): Alien Speech, First Contact (a plain voice for your words), Talking Bow (the
   string sings the words; the slide bends its accent), Throat Singer, Xeno Choir, Tractor Beam (a
   word a beat), Insect Hymn, Mothership, Signal Lost, Ion Flutter; five strange throats (Inside Out,
-  Glass Mouth, Muffled Moan, Warble Choir and Tiny Giant), Swamp Creature (rough, growling and wet); five that speak in different ways (Crisp
-  Diction, Chatterbox, Envoy Unit, Slow Drawl and Whisper Tongue); and five that sing (a syllable a
+  Glass Mouth, Muffled Moan, Warble Choir and Tiny Giant), Swamp Creature (rough, growling and wet); six that speak in different ways (Clear
+  Diction, the most intelligible, for typed words; Crisp Diction, Chatterbox, Envoy Unit, Slow Drawl and Whisper Tongue); and five that sing (a syllable a
   note, a late vibrato): Hymn Singer, Ballad Voice, Folk Tenor, Baritone Chant and Lullaby.
 - **Pad** (6): the HYBRID voice as a pad under an instrument, at a low FOLLOW with a slow attack and a
   long release: Flute Halo, Hollow Pad, Section Pad, Reed Choir, Brass Swell and Nebula.
