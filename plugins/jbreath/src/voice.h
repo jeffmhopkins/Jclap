@@ -106,7 +106,7 @@ public:
    // above that.
    Tuning at(int model, double note, double fs) const {
       const double w = std::clamp((fs - 88200.0) / (96000.0 - 88200.0), 0.0, 1.0);
-      model = std::clamp(model, 0, kModelCount - 1);
+      model = std::clamp(model, 0, kTuneRows - 1);
       note = std::clamp(note, 0.0, 127.0);
       const int n = std::min(static_cast<int>(note), 126);
       const double f = note - n;
@@ -126,8 +126,8 @@ public:
       return t;
    }
    // The lowest and highest notes the model plays at their own pitch.
-   int lowest(int model) const { return low_[std::clamp(model, 0, kModelCount - 1)]; }
-   int highest(int model) const { return high_[std::clamp(model, 0, kModelCount - 1)]; }
+   int lowest(int model) const { return low_[std::clamp(model, 0, kTuneRows - 1)]; }
+   int highest(int model) const { return high_[std::clamp(model, 0, kTuneRows - 1)]; }
 
 private:
    struct Resolved {
@@ -136,7 +136,7 @@ private:
    };
    TuningTable() {
       constexpr int count = kTuneLastNote - kTuneFirstNote + 1;
-      for (int m = 0; m < kModelCount; ++m) {
+      for (int m = 0; m < kTuneRows; ++m) {
          const TuneEntry *e = kTuning[m];
          int lo = 0, hi = count - 1;
          while (lo < count && !e[lo].plays)
@@ -173,8 +173,8 @@ private:
          }
       }
    }
-   Resolved notes_[kModelCount][128];
-   int low_[kModelCount] = {}, high_[kModelCount] = {};
+   Resolved notes_[kTuneRows][128];
+   int low_[kTuneRows] = {}, high_[kTuneRows] = {};
 };
 
 // A mute in the bell (or the open end of any of the models), per voice: Open, Straight, Cup,
@@ -887,6 +887,7 @@ private:
          c.morph = static_cast<float>(live_.alienMorph);
          c.drift = static_cast<float>(live_.alienDrift);
          c.shift = static_cast<float>(live_.alienShift);
+         c.tuneSemis = static_cast<float>(settings_.tune);
          c.sharp = static_cast<float>(live_.alienSharp);
          c.bow = static_cast<float>(live_.alienBow);
          c.talk = static_cast<float>(live_.alienTalk);
@@ -1018,7 +1019,7 @@ private:
       pitchNow_ += (pitch_ - pitchNow_) * g;
       const double sounding = pitchNow_ + pitchMod_ + vibCents / 100.0 * vib +
                               (10.0 * hum * human_[0] + live_.detune * human_[5]) / 100.0;
-      const Tuning t = TuningTable::get().at(settings_.model, sounding, fs_);
+      const Tuning t = TuningTable::get().at(tuningRow(settings_.model, settings_.tune), sounding, fs_);
       speak_ = t.speak;
       const double hz = 440.0 * std::pow(2.0, (sounding - 69.0) / 12.0 + t.octaves);
       Model &m = model();
@@ -1226,7 +1227,8 @@ private:
       src[kSrcKnot] = static_cast<float>(std::clamp(3.0 * hiEnv_ / (env_ + 1e-6), 0.0, 1.0));
       src[kSrcFold] = static_cast<float>(std::clamp((breath_ - info.tuneBreath) / 0.35, 0.0, 1.0));
       const TuningTable &table = TuningTable::get();
-      const double lo = table.lowest(settings_.model), hi = std::max(lo + 1.0, static_cast<double>(table.highest(settings_.model)));
+      const int row = tuningRow(settings_.model, settings_.tune);
+      const double lo = table.lowest(row), hi = std::max(lo + 1.0, static_cast<double>(table.highest(row)));
       src[kSrcRegister] = static_cast<float>(std::clamp((pitchNow_ - lo) / (hi - lo), 0.0, 1.0));
       src[kSrcVapor] = static_cast<float>(std::clamp(0.5 * live_.noise * std::min(1.0, breath_), 0.0, 1.0));
       // A draught: a slow random walk pulled back to the middle.

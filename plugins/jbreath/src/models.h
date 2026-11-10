@@ -29,6 +29,28 @@ constexpr double kPi = 3.14159265358979323846;
 
 enum ModelId : int { kFlute, kClarinet, kSax, kOboe, kTrumpet, kAlien, kModelCount };
 
+// The tuning table's rows: one for each model, then one for each bigger sax horn a tuned-down sax
+// plays (tenor, baritone, bass, contrabass: see Sax::notePitch), whose tuning differs from the
+// alto's playing the same pitch.
+inline constexpr int kSaxHorns = 4, kTuneRows = kModelCount + kSaxHorns;
+inline constexpr double kSaxHornSize[kSaxHorns] = {0.7492, 0.5, 0.3746, 0.25};
+inline constexpr float kSaxHornTune[kSaxHorns] = {-5.0f, -12.0f, -17.0f, -24.0f};
+// The sax horn nearest a tuning of `tune` semitones (-1 for the alto: tuned down less than 4.5).
+inline int saxHorn(double tune) {
+   if (tune > -4.5)
+      return -1;
+   const double want = std::exp2(tune / 12.0);
+   int best = 0;
+   for (int j = 1; j < kSaxHorns; ++j)
+      if (std::fabs(std::log(kSaxHornSize[j] / want)) < std::fabs(std::log(kSaxHornSize[best] / want)))
+         best = j;
+   return best;
+}
+inline int tuningRow(int model, double tune) {
+   const int horn = model == kSax ? saxHorn(tune) : -1;
+   return horn < 0 ? model : kModelCount + horn;
+}
+
 struct Noise {
    uint32_t s = 0x9e3779b9u;
    float white() {
@@ -192,6 +214,8 @@ struct Character {
    float consonants = 1.0f;
    // (The tongue's kick: the Alien's attack and consonants, harder with more.)
    float kick = 0.25f;
+   // (The Tune knob, in semitones: a sax tuned down a fourth or more is a bigger horn of its family.)
+   float tuneSemis = 0.0f;
    uint32_t sounds = 0xffu;
    // (Its vowels: which of A E I O U it says, a bit each. Those and the consonants' families make
    // its own words, which the plugin builds: see lyrics.h.)
@@ -898,6 +922,8 @@ public:
       tone_.clear();
       lift_.clear();
       reg_.clear();
+      fam_.clear();
+      famDb_ = 1e9;
       regDb_ = 1e9;
       onT_ = 1.0;
       tnPrev_ = 0.0f;
@@ -921,6 +947,14 @@ public:
       for (double s : {0.7492, 0.5, 0.3746, 0.25})
          if (hz < 0.999 * kLow * member_)
             member_ = s;
+      // Tuned down (the Tenor and Baritone presets), the horn is the member nearest the tuning
+      // across its whole range, up to an octave over its top fingering: a real baritone's A3 is a
+      // baritone's, far brighter than an alto's (Good-sounds).
+      if (const int horn = saxHorn(character.tuneSemis); horn >= 0) {
+         const double near = kSaxHornSize[horn];
+         if (near < member_ && hz < 4.0 * kLow * std::exp2(kTopN / 12.0) * near)
+            member_ = near;
+      }
       const double ha = hz / member_;
       // The fingering: written low Bb (0) to C#5 (15) in the first register, then the octave key
       // over the fingerings from D4 (4) to the palm keys' F (19). The note is the resonance of the
@@ -1040,7 +1074,7 @@ public:
       bore_.push(u);
       dpPrev_ = pm - (ph + zi * u);
       const float y = dc_.tick(static_cast<float>(bore_.radiated() * kOut));
-      return reg_.tick(lift_.tick(tone_.tick(eqLp2_.tick(eqLp1_.tick(eqHs_.tick(eqPk2_.tick(eqPk1_.tick(eqHp_.tick(y))))))))) * softGain_ * regGain_;
+      return fam_.tick(reg_.tick(lift_.tick(tone_.tick(eqLp2_.tick(eqLp1_.tick(eqHs_.tick(eqPk2_.tick(eqPk1_.tick(eqHp_.tick(y)))))))))) * softGain_ * regGain_ * famGain_;
    }
 
 private:
@@ -1106,6 +1140,19 @@ private:
             reg_.highshelf(rHz, rdb, fs_);
          }
       }
+      // A bigger horn's 3rd harmonic up, brighter again (a real baritone's low notes have their 3rd
+      // to 6th harmonics 10 to 25 dB over the fundamental, Good-sounds): kFamilyDb on the
+      // baritone, half of it on the tenor.
+      {
+         const double db = kFamilyDb * (1.0 - member_) / 0.5, fHz = std::min(3.0 * hz, 0.4 * fs_);
+         if (std::fabs(db - famDb_) > 0.05 || std::fabs(fHz / famHz_ - 1.0) > 0.01) {
+            famDb_ = db;
+            famHz_ = fHz;
+            fam_.highshelf(fHz, db, fs_);
+            // (and the level it adds taken back, half of it: the boosted harmonics carry the note)
+            famGain_ = static_cast<float>(std::pow(10.0, -0.5 * db / 20.0));
+         }
+      }
       // The Loss knob widens the resonances; Hole Cutoff and Cone move the holes' cutoff.
       const double loss = std::clamp(1.0 + 1.5 * (character.loss - 0.04), 0.75, 1.35);
       const double cut = kHoleCut * character.cutoff * std::exp2(-(character.cone - 0.5));
@@ -1126,6 +1173,7 @@ private:
    static constexpr double kLowLoss = 0.6;  // the walls' loss on the low notes, of the full
    static constexpr double kVoicing = 5.0;  // and their upper resonances' damping
    static constexpr double kAccent = 1.4, kAccentSec = 0.03;  // the tongued attack's accent on the breath
+   static constexpr double kFamilyDb = 12.0;
    static constexpr int kRegPoints = 11;
    static constexpr double kRegDb[kRegPoints] = {8.0, 9.0, 10.0, 10.0, 8.3, -11.2, 15.0, 10.3, 4.2, 2.6, -15.0};
    // (and played softly, as much again: the real alto's piano is as even up its range as its forte)
@@ -1135,13 +1183,13 @@ private:
    OnePoleLP breathLP_;
    DCBlock dc_;
    Player player_;
-   Biquad eqHp_, eqPk1_, eqPk2_, eqHs_, eqLp1_, eqLp2_, tone_, lift_, reg_;
+   Biquad eqHp_, eqPk1_, eqPk2_, eqHs_, eqLp1_, eqLp2_, tone_, lift_, reg_, fam_;
    unsigned at_ = 0;
    int fing_ = -1;
    double peakHz_ = 277.0, hz_ = 277.0, member_ = 1.0, scale_ = 1.0, vent_ = 0.0, open_ = 7e-4, eqAt_ = -1.0, toneDb_ = 1e9, toneHz_ = 1.0, liftDb_ = 1e9, liftHz_ = 1.0;
-   double regDb_ = 1e9, regHz_ = 1.0, onT_ = 1.0, lift0_ = 0.0, xShut_ = 0.0, liftSec_ = 0.003;
+   double regDb_ = 1e9, regHz_ = 1.0, famDb_ = 1e9, famHz_ = 1.0, onT_ = 1.0, lift0_ = 0.0, xShut_ = 0.0, liftSec_ = 0.003;
    double x_ = 0, v_ = 0, dpPrev_ = 0, pmS_ = 0, pmB_ = 0, pmCoef_ = 0.01;
-   float tongue_ = 0.0f, tnPrev_ = 0.0f, softGain_ = 1.0f, regGain_ = 1.0f;
+   float tongue_ = 0.0f, tnPrev_ = 0.0f, softGain_ = 1.0f, regGain_ = 1.0f, famGain_ = 1.0f;
    bool shut_ = false;
 };
 
