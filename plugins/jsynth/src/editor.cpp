@@ -1782,7 +1782,6 @@ public:
    void draw(visage::Canvas &c) override {
       const float h = height();
       const float s = h / 120.0f;
-      const unsigned color = kPartColors[host_.part];
       const bool parallel = param(tailParam(kFilterRouting)) > 0.5;
       const double w2 = 0.5 + 0.5 * param(tailParam(kFilterBalance));
       // The newest voice's filters now, if the part is sounding.
@@ -1844,7 +1843,8 @@ public:
       };
       panel(0, "FILTER 1", kFilterColors[0], curveColor(0), true);
       panel(1, "FILTER 2", kFilterColors[1], curveColor(1), true);
-      panel(kFilterCount, "OUT", 0xffffffff, color, false);
+      // OUT in its own neutral white, the result of both rather than a third filter.
+      panel(kFilterCount, "OUT", 0xffffffff, 0xffe6ebf5, false);
       c.setColor(visage::Color(0x88ffffff));
       c.text(parallel ? "1 + 2" : "1 INTO 2", ui::font(9 * s), visage::Font::kRight, panelLeft(kFilterCount), 4 * s,
              panelWidth(kFilterCount) - 8 * s, 12 * s);
