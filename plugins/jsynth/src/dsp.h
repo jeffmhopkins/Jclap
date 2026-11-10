@@ -258,6 +258,10 @@ struct Comb {
       float r = static_cast<float>(write) - d;
       if (r < 0.0f)
          r += static_cast<float>(n);
+      // A read a hair behind the start wraps to just under n, which a float can round up to n
+      // itself: that is the start again, not one past the end.
+      if (r >= static_cast<float>(n))
+         r = 0.0f;
       const int i0 = static_cast<int>(r);
       const int i1 = i0 + 1 >= n ? 0 : i0 + 1;
       const float f = r - static_cast<float>(i0);
