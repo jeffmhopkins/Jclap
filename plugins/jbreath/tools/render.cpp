@@ -13,6 +13,12 @@
 //    press T KEY PRESS      the pressure of the note on KEY from T seconds
 //    swell T KEY P0 P1 SEC  the pressure of the note on KEY ramped from P0 to P1 over SEC seconds
 //    end T                  stop at T seconds (default: two seconds after the last note ends)
+//    words TEXT             the Alien's typed words (and switches it to TYPED)
+//    say T KEY SEC TEXT     the Alien says TEXT from T seconds: TEXT becomes its typed words and
+//                           each syllable a note on KEY, as long as speech would make it (SEC
+//                           scales the pace: 0.22 is natural; stressed syllables longer and
+//                           higher, little words short, the last falling, a pause at each comma
+//                           or full stop; in Legato the syllables run together)
 
 #include <jclap/core/test_host.h>
 
@@ -26,6 +32,8 @@
 #include <string>
 #include <vector>
 
+#include "editor.h"
+#include "lyrics.h"
 #include "params.h"
 #include "presets.h"
 
@@ -148,6 +156,59 @@ int main(int argc, char **argv) {
          s >> t >> key >> p0 >> p1 >> sec;
          for (double u = 0; u <= sec + 1e-9; u += 0.005)
             evs.push_back({t + u, 2, key, p0 + (p1 - p0) * std::min(1.0, u / std::max(sec, 1e-6)), 0, -1});
+      } else if (cmd == "words") {
+         std::string text;
+         std::getline(s >> std::ws, text);
+         h.setParam(kAlienSource, 1);
+         h.object<EditorHost>()->setLyrics(text);
+      } else if (cmd == "say") {
+         double t, sec;
+         int key;
+         std::string text;
+         s >> t >> key >> sec;
+         std::getline(s >> std::ws, text);
+         h.setParam(kAlienSource, 1);
+         h.object<EditorHost>()->setLyrics(text);
+         speech::Book book;
+         speech::readLyrics(text, book);
+         for (int i = 0; i < book.count; ++i) {
+            const speech::Syllable &y = book.syl[i];
+            const bool stressed = y.stress == 1, last = i + 1 == book.count;
+            const bool phraseEnd = last || text.find_first_of(",.;?!", book.end[i]) == static_cast<size_t>(book.end[i]);
+            // (Its length as speech has it: its consonants' and its vowel's own lengths, the vowel
+            // longer stressed and shorter in a little word, all longer at the end of a phrase; SEC
+            // sets the pace, 0.22 natural.)
+            std::string word = text.substr(book.begin[i], book.end[i] - book.begin[i]);
+            for (char &c : word)
+               c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            static const char *kLittle[] = {"the", "a", "an", "of", "to", "and", "in", "is", "it", "for", "on", "at",
+                                            "as", "by", "his", "her", "was", "or", "but", "from", "with"};
+            bool little = false;
+            for (const char *w : kLittle)
+               little = little || word == w;
+            const double vowelMs = speech::kPhones[y.vowel].ms * (little ? 0.6 : stressed ? 1.0 : y.stress == 2 ? 0.8 : 0.6);
+            double consMs = 0.0;
+            for (int c = 0; c < y.onsetCount(); ++c)
+               consMs += speech::kPhones[y.onset[c]].ms * (speech::kPhones[y.onset[c]].kind == speech::kStop ? 1.6 : 1.0);
+            // (The last syllable's closing consonants are said as this note starts, so they're in
+            // this one's length.)
+            if (i > 0)
+               for (int c = 0; c < book.syl[i - 1].codaCount(); ++c)
+                  consMs += 0.8 * speech::kPhones[book.syl[i - 1].coda[c]].ms;
+            double dur = sec / 0.22 * (vowelMs + consMs) * 0.001 * (phraseEnd ? 1.4 : 1.0);
+            // (Speech's tune: falling slowly through each phrase, up on its stressed syllables,
+            // down at its end.)
+            const double through = book.count > 1 ? static_cast<double>(i) / (book.count - 1) : 0.0;
+            const int k = key + static_cast<int>(std::lround(2.0 - 4.0 * through)) + (stressed && !little ? 3 : 0) - (phraseEnd ? 3 : 0);
+            const int id = nextId++;
+            const double gap = phraseEnd ? 0.2 : 0.0;
+            // (Within a phrase the notes overlap a little, so in Legato each syllable runs on into
+            // the next, as speech does.)
+            evs.push_back({t, 0, k, 0.75, stressed ? 0.75 : 0.6, id});
+            evs.push_back({t + dur + (phraseEnd ? 0.0 : 0.02), 1, k, 0.5, 0, id});
+            t += dur + gap;
+         }
+         last = std::max(last, t);
       } else if (cmd == "end") {
          s >> end;
       }
