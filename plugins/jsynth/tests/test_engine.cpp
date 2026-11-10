@@ -446,6 +446,15 @@ int main() {
       JCLAP_CHECK_EQ(played(), 0);
    }
 
+   // A comb read a hair behind the start of its buffer wraps to the start, never one past the end:
+   // a delay just over one sample, one sample after the first write, reads that write.
+   {
+      dsp::Comb c;
+      c.prepare(1000);
+      c.process(0.25f, 10.0f, 0.0f);
+      JCLAP_CHECK(std::fabs(c.process(0.0f, 1.0000001f, 0.0f) - 0.125f) < 1e-4f);
+   }
+
    // Every factory preset sounds, finite and under full scale.
    for (const Preset &preset : factoryPresets()) {
       Params p;
