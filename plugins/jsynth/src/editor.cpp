@@ -1710,11 +1710,12 @@ private:
    unsigned color_;
 };
 
-// Each filter's response over 20 Hz to 20 kHz in its own half, Filter 1 above and Filter 2 below:
-// while the part sounds, as its newest voice has it now, routes and key tracking and all, over a faint
-// line of where the knobs set it. Each filter has a handle at its knob's cutoff: drag it across for
-// cutoff and up or down for resonance, scroll for its drive, double-click to reset. In MAP with a
-// source armed, dragging across sets how much the source moves that cutoff instead.
+// Each filter's response over 20 Hz to 20 kHz in its own panel over its own knobs, and OUT, the two
+// together as the voice hears them, over Balance and Pre Drive: while the part sounds, as its newest
+// voice has it now, routes and key tracking and all, over a faint line of where the knobs set it.
+// Each filter has a handle at its knob's cutoff: drag it across for cutoff and up or down for
+// resonance, scroll for its drive, double-click to reset. In MAP with a source armed, dragging across
+// sets how much the source moves that cutoff instead.
 class FilterView : public visage::Frame {
 public:
    FilterView(EditorHost &host, Mapper &mapper, const FlockView &sky) : host_(host), mapper_(mapper), sky_(sky) {}
@@ -1749,7 +1750,7 @@ public:
       if (drag_ < 0)
          return;
       const float fine = e.isShiftDown() ? 0.2f : 1.0f;
-      const double across = (e.position.x - startX_) / width() * fine, up = (startY_ - e.position.y) / bandHeight() * fine;
+      const double across = (e.position.x - startX_) / panelWidth(drag_) * fine, up = (startY_ - e.position.y) / height() * fine;
       if (route_ >= 0) {
          mapper_.setRouteAmount(host_.part, route_, std::clamp(startCut_ + 2.0 * across, -1.0, 1.0));
          return;
@@ -1779,10 +1780,10 @@ public:
    }
 
    void draw(visage::Canvas &c) override {
-      const float w = width();
-      const float s = height() / 120.0f;
-      const unsigned color = kPartColors[host_.part];
+      const float h = height();
+      const float s = h / 120.0f;
       const bool parallel = param(tailParam(kFilterRouting)) > 0.5;
+      const double w2 = 0.5 + 0.5 * param(tailParam(kFilterBalance));
       // The newest voice's filters now, if the part is sounding.
       const FlockFrame &frame = sky_.frame();
       live_ = sky_.live() && frame.cutoff[host_.part][0] > 0.0f;
@@ -1790,52 +1791,62 @@ public:
          liveHz_[f] = frame.cutoff[host_.part][f];
          liveRes_[f] = frame.resonance[host_.part][f];
       }
-      constexpr int kPoints = 200;
-      const float h = bandHeight();
-      for (int f = 0; f < kFilterCount; ++f) {
-         const float top = bandTop(f);
-         const unsigned fc = kFilterColors[f];
+      const auto mix = [&](double a, double b) {
+         return static_cast<float>(parallel ? std::min(1.0, 2.0 - 2.0 * w2) * a + std::min(1.0, 2.0 * w2) * b : a * b);
+      };
+      // One panel: its grid, the response now filled, and while the part sounds, where the knobs set
+      // it, faint. `which` is a filter, or kFilterCount for both together.
+      const auto panel = [&](int which, const char *name, unsigned nameColor, unsigned fill, bool labels) {
+         const float left = panelLeft(which), w = panelWidth(which);
          c.setColor(visage::Color(0x40000000));
-         c.roundedRectangle(0, top, w, h, 6 * s);
+         c.roundedRectangle(left, 0, w, h, 6 * s);
          // Grid: decades across, 12 dB steps down.
          for (double hz : {100.0, 1000.0, 10000.0}) {
-            const float x = xOf(hz, w);
+            const float x = left + xOf(hz, w);
             c.setColor(visage::Color(0x18ffffff));
-            c.fill(x, top, 1, h);
-            if (f == kFilterCount - 1) {
-               c.setColor(visage::Color(0x55ffffff));
-               c.text(hz >= 1000.0 ? std::to_string(static_cast<int>(hz / 1000)) + "k" : std::to_string(static_cast<int>(hz)),
-                      ui::font(9 * s), visage::Font::kLeft, x + 3 * s, top + h - 14 * s, 30 * s, 12 * s);
-            }
+            c.fill(x, 0, 1, h);
+            if (!labels)
+               continue;
+            c.setColor(visage::Color(0x55ffffff));
+            c.text(hz >= 1000.0 ? std::to_string(static_cast<int>(hz / 1000)) + "k" : std::to_string(static_cast<int>(hz)),
+                   ui::font(9 * s), visage::Font::kLeft, x + 3 * s, h - 14 * s, 30 * s, 12 * s);
          }
          for (int db = 12; db >= -36; db -= 12) {
             c.setColor(visage::Color(db == 0 ? 0x30ffffff : 0x14ffffff));
-            c.fill(0, top + yOf(db, h), w, 1);
+            c.fill(left, yOf(db, h), w, 1);
          }
+         const auto at = [&](double hz, bool live) {
+            return which < kFilterCount ? magnitude(which, hz, live) : mix(magnitude(0, hz, live), magnitude(1, hz, live));
+         };
          float now[kPoints + 1], knobSet[kPoints + 1];
          for (int i = 0; i <= kPoints; ++i) {
             const double hz = 20.0 * std::pow(1000.0, static_cast<double>(i) / kPoints);
-            now[i] = static_cast<float>(magnitude(f, hz, live_));
-            knobSet[i] = live_ ? static_cast<float>(magnitude(f, hz, false)) : now[i];
+            now[i] = static_cast<float>(at(hz, live_));
+            knobSet[i] = live_ ? static_cast<float>(at(hz, false)) : now[i];
          }
-         // What this filter does now, filled; while it sounds, where the knobs set it, faint.
-         const auto y = [&](float m) { return top + yOf(20.0 * std::log10(std::max(m, 1e-4f)), h); };
+         const auto y = [&](float m) { return yOf(20.0 * std::log10(std::max(m, 1e-4f)), h); };
+         const auto x = [&](int i) { return left + w * i / kPoints; };
          for (int i = 0; live_ && i < kPoints; ++i) {
             c.setColor(visage::Color(0x55ffffff));
-            c.segment(w * i / kPoints, y(knobSet[i]), w * (i + 1) / kPoints, y(knobSet[i + 1]), 1.0f * s, true);
+            c.segment(x(i), y(knobSet[i]), x(i + 1), y(knobSet[i + 1]), 1.0f * s, true);
          }
-         const unsigned fill = curveColor(f);
          for (int i = 0; i < kPoints; ++i) {
-            const float x0 = w * i / kPoints, x1 = w * (i + 1) / kPoints, y0 = y(now[i]), y1 = y(now[i + 1]);
+            const float x0 = x(i), x1 = x(i + 1), y0 = y(now[i]), y1 = y(now[i + 1]);
             c.setColor(glow(fill, 0.18f, 1.0f));
-            c.fill(std::floor(x0), std::max(y0, y1), std::floor(x1) - std::floor(x0), top + h - std::max(y0, y1));
+            c.fill(std::floor(x0), std::max(y0, y1), std::floor(x1) - std::floor(x0), h - std::max(y0, y1));
             c.setColor(glow(fill, 1.0f, 1.4f));
             c.segment(x0, y0, x1, y1, 2.0f * s, true);
          }
-         c.setColor(glow(fc, 0.8f, 1.0f));
-         c.text(f == 0 ? "FILTER 1" : "FILTER 2", ui::font(9 * s), visage::Font::kLeft, 8 * s, top + 4 * s, 120 * s,
-                12 * s);
-      }
+         c.setColor(glow(nameColor, 0.8f, 1.0f));
+         c.text(name, ui::font(9 * s), visage::Font::kLeft, left + 8 * s, 4 * s, w - 16 * s, 12 * s);
+      };
+      panel(0, "FILTER 1", kFilterColors[0], curveColor(0), true);
+      panel(1, "FILTER 2", kFilterColors[1], curveColor(1), true);
+      // OUT in its own neutral white, the result of both rather than a third filter.
+      panel(kFilterCount, "OUT", 0xffffffff, 0xffe6ebf5, false);
+      c.setColor(visage::Color(0x88ffffff));
+      c.text(parallel ? "1 + 2" : "1 INTO 2", ui::font(9 * s), visage::Font::kRight, panelLeft(kFilterCount), 4 * s,
+             panelWidth(kFilterCount) - 8 * s, 12 * s);
       // The handles: a glowing dot on each filter's curve at its cutoff.
       for (int f = 0; f < kFilterCount; ++f) {
          const auto [hx, hy] = handle(f);
@@ -1848,9 +1859,6 @@ public:
          c.setColor(visage::Color(0xff0b0e17));
          c.text(f == 0 ? "1" : "2", ui::font(9 * s), visage::Font::kCenter, hx - r, hy - r, 2 * r, 2 * r);
       }
-      c.setColor(visage::Color(0x88ffffff));
-      c.text(parallel ? "PARALLEL" : "SERIAL: FILTER 1 INTO FILTER 2", ui::font(9 * s), visage::Font::kRight, 0, 4 * s,
-             w - 8 * s, 12 * s);
    }
 
 private:
@@ -1868,17 +1876,24 @@ private:
    std::pair<float, float> handle(int f) const {
       const double hz = cutoffHz(param(filterParam(f, kFilterCutoff)));
       const float m = static_cast<float>(magnitude(f, hz, false));
-      const float top = bandTop(f), h = bandHeight();
-      const float y = top + yOf(20.0 * std::log10(std::max(m, 1e-4f)), h);
-      return {std::clamp(xOf(hz, width()), 10.0f, width() - 10.0f), std::clamp(y, top + 8.0f, top + h - 8.0f)};
+      const float left = panelLeft(f), w = panelWidth(f);
+      const float y = yOf(20.0 * std::log10(std::max(m, 1e-4f)), height());
+      return {std::clamp(left + xOf(hz, w), left + 10.0f, left + w - 10.0f), std::clamp(y, 10.0f, height() - 10.0f)};
    }
-   // Filter `f`'s half: Filter 1 on top, Filter 2 under it, a small gap between.
-   float gap() const { return 4.0f * height() / 120.0f; }
-   float bandHeight() const { return (height() - gap() * (kFilterCount - 1)) / kFilterCount; }
-   float bandTop(int f) const { return f * (bandHeight() + gap()); }
+   // The panels line up with the knob row under the graph, ten columns across the card (see the
+   // filter card's layout): Filter 1 over its four knobs, Filter 2 over its four, and OUT, both
+   // together, over Balance and Pre Drive. In design pixels the row starts 4 before this frame and
+   // spans 864 with 10 between columns; `which` is a filter, or kFilterCount for OUT.
+   static constexpr float kDesignWidth = 856, kColumnGap = 10, kColumn = (864 - 9 * kColumnGap) / 10;
+   float columnLeft(int i) const { return (i * (kColumn + kColumnGap) - 4) * width() / kDesignWidth; }
+   float panelLeft(int which) const { return std::max(0.0f, columnLeft(which * 4)); }
+   float panelWidth(int which) const {
+      const float right = which < kFilterCount ? columnLeft(which * 4 + 3) + kColumn * width() / kDesignWidth : width();
+      return std::min(right, width()) - panelLeft(which);
+   }
    int handleAt(float x, float y) const {
       int best = -1;
-      float near = bandHeight() * 0.4f;
+      float near = height() * 0.2f;
       for (int f = 0; f < kFilterCount; ++f) {
          const auto [hx, hy] = handle(f);
          const float d = std::hypot(hx - x, hy - y);
@@ -1887,6 +1902,8 @@ private:
       }
       return best;
    }
+   // Points across each graph; a member, so the panel lambda can size its arrays with it on MSVC.
+   static constexpr int kPoints = 200;
    static constexpr unsigned kFilterColors[kFilterCount] = {0xffffffff, 0xff9fd8ff};
    // Each filter's curve in its knobs' colour: the part's for Filter 1, LFO 2's purple for Filter 2.
    unsigned curveColor(int f) const { return f == 0 ? kPartColors[host_.part] : sourceColor(kSourceLfo1 + 1); }
@@ -3422,7 +3439,7 @@ private:
       knob(kDrift, "DRIFT", c, b[5], "Each creature's own slow wander in pitch.");
       group_ = kSynth;
 
-      // Filters: each one's response in its own half of the graph, Filter 1 over Filter 2, then each one's knobs under its half.
+      // Filters: each one's response in its own panel over its own knobs, and OUT, the two together, then each one's knobs under its half.
       glass({x, 404, w, 313}, "FILTER", c);
       segments(tailParam(kFilterRouting), c, {x + 90, 410, 160, 24}, std::vector<std::string>{"SERIAL", "PARALLEL"});
       label({x + 270, 414, 90, 16}, "NOISE INTO", kDim, visage::Font::kRight);
