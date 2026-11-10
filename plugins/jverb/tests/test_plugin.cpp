@@ -738,6 +738,26 @@ int main() {
       }
    }
 
+   // Two bodies dropped straight at each other fall through and out the far side, as soft gravity
+   // does; they used to hit a repulsive core and bounce back the way they came.
+   {
+      const double mass[kMaxBodies] = {1, 1, 1, 1, 1, 1}, speed[kMaxBodies] = {1, 1, 1, 1, 1, 1};
+      OrbitSim sim;
+      sim.reset(3, mass, speed, 1.0);
+      sim.place(0, -0.6, 0.0);
+      sim.place(1, 0.6, 0.0);
+      sim.place(2, 0.0, 2.2);
+      for (int b = 0; b < 3; ++b)
+         sim.setVelocity(b, 0.0, 0.0);
+      const double dt = 0.8 * 32 / kRate;
+      bool through = false;
+      for (int t = 0; t < static_cast<int>(1.5 / dt); ++t) {
+         sim.step(dt, mass, 1.0);
+         through = through || sim.body(0).x > sim.body(1).x;
+      }
+      JCLAP_CHECK(through);
+   }
+
    // A preset file from 0.4.x (69 params) gets its body targets translated; one from 0.5 or 0.6
    // (more params, the same header) doesn't.
    {
