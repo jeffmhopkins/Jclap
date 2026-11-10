@@ -1002,15 +1002,19 @@ private:
       // What's heard, as a real alto's in front of it (fitted to the Iowa recordings' harmonics):
       // a broad formant near 290 Hz, a peak near 2.3 kHz and its bright top (falling away past 6 kHz), scaled down with a bigger family member.
       const double fam = std::min(1.0, scale_);
+      // (The peak near 2.3 kHz, the bright top and its fall come from the mouthpiece and reed, which
+      // grow far less with a bigger horn than its bore does: scaled with it, they'd pile into a
+      // narrow band near 1.2 kHz on a baritone, a ringing spike over its low notes.)
+      const double up = std::pow(fam, 0.3);
       if (std::fabs(fam - eqAt_) > 1e-3) {
          eqAt_ = fam;
          eqHp_.highpass(131.0 * fam, 3.0, fs_);
          eqPk1_.peak(285.8 * fam, 0.60, 24.7, fs_);
-         eqPk2_.peak(2342.0 * fam, 1.83, 15.7, fs_);
-         eqHs_.highshelf(std::min(3764.0 * fam, 0.4 * fs_), 40.0, fs_);
+         eqPk2_.peak(2342.0 * up, 1.83, 15.7, fs_);
+         eqHs_.highshelf(std::min(3764.0 * up, 0.4 * fs_), 40.0, fs_);
          // The shelf would hold to Nyquist; a real horn's top falls away past 5 kHz.
-         eqLp1_.lowpass(std::min(kTopHz * fam, 0.4 * fs_), 0.54, fs_);
-         eqLp2_.lowpass(std::min(kTopHz * fam, 0.4 * fs_), 1.31, fs_);
+         eqLp1_.lowpass(std::min(kTopHz * up, 0.4 * fs_), 0.54, fs_);
+         eqLp2_.lowpass(std::min(kTopHz * up, 0.4 * fs_), 1.31, fs_);
       }
       // Blown softly a real alto's reed hardly beats, and its tone is nearly the fundamental alone
       // (Iowa, pp: H2 19 dB under it, H3 28); the reed here beats from the start, so its harmonics
@@ -1028,7 +1032,7 @@ private:
       // (The voicing below takes the low notes' upper harmonics down; they're given back here, and
       // more on the bigger horns, whose low notes are richer still: a tenor's low Bb has its 3rd to
       // 7th harmonics 5 to 9 dB over its fundamental.)
-      const double liftDb = 10.0 * std::clamp((300.0 - hz / member_) / 60.0, 0.0, 1.0) + 20.0 * (1.0 - member_);
+      const double liftDb = 10.0 * std::clamp((300.0 - hz / member_) / 60.0, 0.0, 1.0) + 10.0 * (1.0 - member_);
       const double liftHz = std::min(3.5 * hz, 0.4 * fs_);
       if (std::fabs(liftDb - liftDb_) > 0.05 || std::fabs(liftHz / liftHz_ - 1.0) > 0.01) {
          liftDb_ = liftDb;
