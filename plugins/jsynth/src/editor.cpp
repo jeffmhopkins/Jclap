@@ -1791,7 +1791,6 @@ public:
          liveHz_[f] = frame.cutoff[host_.part][f];
          liveRes_[f] = frame.resonance[host_.part][f];
       }
-      constexpr int kPoints = 200;
       const auto mix = [&](double a, double b) {
          return static_cast<float>(parallel ? std::min(1.0, 2.0 - 2.0 * w2) * a + std::min(1.0, 2.0 * w2) * b : a * b);
       };
@@ -1903,6 +1902,8 @@ private:
       }
       return best;
    }
+   // Points across each graph; a member, so the panel lambda can size its arrays with it on MSVC.
+   static constexpr int kPoints = 200;
    static constexpr unsigned kFilterColors[kFilterCount] = {0xffffffff, 0xff9fd8ff};
    // Each filter's curve in its knobs' colour: the part's for Filter 1, LFO 2's purple for Filter 2.
    unsigned curveColor(int f) const { return f == 0 ? kPartColors[host_.part] : sourceColor(kSourceLfo1 + 1); }
