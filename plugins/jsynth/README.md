@@ -43,7 +43,7 @@ couplings **between creatures** and the part's noise and drift.
 
 Two filters, serial or parallel with a balance between them: low pass, high pass, band pass, notch,
 peak, ladder and two combs, 12 to 48 dB. Each oscillator and the noise picks Filter 1, Filter 2 or
-both. The response is drawn and draggable (handle 1 and 2 set cutoff and resonance), and it follows
+both. Each filter's response is drawn in its own half of the graph, Filter 1 above Filter 2, and is draggable (handle 1 and 2 set cutoff and resonance), and it follows
 the newest note's modulated cutoff as it plays. A drive stage (soft, hard or tube) sits after them.
 This shot is in MAP mode with the Wah bus of *Finger Wah* armed: the rings on Cutoff and Res are how
 far it moves them.
