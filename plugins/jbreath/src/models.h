@@ -1057,7 +1057,9 @@ public:
          // breath behind it then, as its square, so a soft note's is small against the note, up to
          // a moderate breath; and larger over Bb4, where the lips need more to lock on.)
          const double pb = std::clamp<double>(breath, 0.05, 0.3) / 0.5, up = std::max(hz_ / 466.0, 1.0);
-         puff_ += kPuff * std::min(puffTn_, kHardest) * pb * pb * up * up;
+         // (and four times as much from Eb5 to G#5, where the lips, eased off, take longest to catch).
+         const double zone = std::clamp((hz_ - 560.0) / 60.0, 0.0, 1.0) * std::clamp((820.0 - hz_) / 60.0, 0.0, 1.0);
+         puff_ += kPuff * std::min(puffTn_, kHardest) * pb * pb * up * up * (1.0 + 3.0 * zone);
          puffTn_ = 0.0;
       }
       tongue_ = tn;
