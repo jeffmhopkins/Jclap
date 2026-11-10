@@ -52,8 +52,11 @@ public:
    }
    // The fingering's bore, scaled in frequency by `scale`, at `fs`. Its straight-through wave is
    // only resampled when the scale has moved by more than a couple of percent (a bend or a
-   // wander leaves it be).
-   void set(const BoreFingering &b, double scale, double fs) {
+   // wander leaves it be). Every resonance's damping can be multiplied by `loss` (a rougher,
+   // lossier tube), and the bell's cutoff moved from `cutHz` to `toHz`: the resonances above it
+   // are damped as much more (or less) as a bell cutting off there would.
+   void set(const BoreFingering &b, double scale, double fs, double loss = 1.0, double cutHz = 1500.0,
+            double toHz = 1500.0) {
       const bool newBore = &b != bore_ || fs != fs_;
       bore_ = &b;
       fs_ = fs;
@@ -61,7 +64,12 @@ public:
       double inst = b.r0;
       for (int i = 0; i < n_; ++i) {
          const BoreMode &m = b.mode[i];
-         const std::complex<double> s(m.re * scale, m.im * scale);
+         double damp = loss;
+         if (toHz != cutHz) {
+            const double f = m.im * scale / (2.0 * 3.14159265358979), a = f / toHz, c = f / cutHz;
+            damp *= std::sqrt((1.0 + a * a * a * a) / (1.0 + c * c * c * c));
+         }
+         const std::complex<double> s(m.re * scale * damp, m.im * scale);
          z_[i] = std::exp(s / fs);
          c_[i] = std::complex<double>(m.zr, m.zi) * (scale / fs);
          d_[i] = std::complex<double>(m.rr, m.ri) * (scale / fs);

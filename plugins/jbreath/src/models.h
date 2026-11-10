@@ -18,7 +18,6 @@
 #include <complex>
 #include <string_view>
 #include <cstdint>
-#include <cstdlib>
 #include <vector>
 
 #include "bore_table.h"
@@ -898,39 +897,6 @@ public:
    }
 };
 
-#ifndef JB_PUFF
-#define JB_PUFF 2e-3
-#endif
-#ifndef JB_KICK
-#define JB_KICK 5e-3
-#endif
-#ifndef JB_Q
-#define JB_Q 12.0
-#endif
-#ifndef JB_MU
-#define JB_MU 3.0
-#endif
-#ifndef JB_W
-#define JB_W 0.012
-#endif
-#ifndef JB_XC
-#define JB_XC 0.0
-#endif
-#ifndef JB_KICKCAP
-#define JB_KICKCAP 0.4
-#endif
-#ifndef JB_PBMAX
-#define JB_PBMAX 0.3
-#endif
-#ifndef JB_PUFFCAP
-#define JB_PUFFCAP 0.4
-#endif
-#ifndef JB_PUFFPOW
-#define JB_PUFFPOW 2.0
-#endif
-#ifndef JB_SCOOP
-#define JB_SCOOP 100.0
-#endif
 // Trumpet: a Bb trumpet's own air column, as its resonances (bore.h, baked from the horn's
 // geometry by tools/bore.py: a mouthpiece cup and throat, a leadpipe, the cylinder through the
 // valves and a Bessel-horn bell), with the lips buzzing on it.
@@ -948,7 +914,9 @@ public:
 //
 // What's heard is the bell's: the horn's flow at its rim, radiated (differentiated, and beamed on
 // its axis as the bell's rim nears the wavelength), with the wave that passes straight out of the
-// bell above its cutoff. At forte the wave steepens on its way down the tube: the brassy edge.
+// bell above its cutoff, through the response that the geometry alone misses of a real trumpet
+// heard in front of it (fitted to the Iowa recordings). At forte the wave steepens on its way
+// down the tube: the brassy edge.
 class Trumpet final : public Model {
 public:
    void prepare(double fs) override {
@@ -988,6 +956,7 @@ public:
       eqPk_.peak(1257.0, 1.39, 11.9, fs_);
       eqLp_.clear();
       eqLp_.lowpass(3132.0, 0.1, fs_);
+      eqAt_ = 1.0;
       fing_ = -1;
       notePitch(hz_);
    }
@@ -1030,10 +999,6 @@ public:
       // Lips heavier under C3, as a low brass player's are (lighter lips would be blown wide open
       // and stop buzzing).
       lipMu_ = kLipMu * std::max(1.0, std::pow(130.0 / hz, 1.5));
-#ifdef JB_DEV
-      if (getenv("JB_LIP"))
-         lipRatio_ = atof(getenv("JB_LIP"));
-#endif
       setBore(hz);
    }
    float tick(float breath, float emb, double len, float tn) override {
@@ -1045,7 +1010,7 @@ public:
       // little from C5 up). Its clock runs slowly until the lips close on every cycle.
       player_.tongued(tn);
       const double dynTop = std::min(dyn, 1.0);
-      const double depth = JB_SCOOP * std::clamp(1.2 - (hz_ - 260.0) / 300.0, 0.1, 1.2) * (1.3 - 0.75 * dynTop);
+      const double depth = kScoop * std::clamp(1.2 - (hz_ - 260.0) / 300.0, 0.1, 1.2) * (1.3 - 0.75 * dynTop);
       const double cents = player_.wander(rng) - depth * player_.scoop(0.015 + 0.03 * (1.0 - dynTop),
                                                                       0.25 + 0.75 * std::min(1.0, closed_ / 0.3));
       // The note the lips are asked for, and the horn under it (a little longer while it scoops).
@@ -1066,27 +1031,16 @@ public:
       // jump to the resonance above.)
       // (Through the fifth octave, from about Eb5, they ease off further: the resonances there are
       // close, and lips held tight under the drop would buzz on their own, off the horn.)
-      double kLoose = 0.10 + 0.08 * std::clamp((hz_ - 550.0) / 60.0, 0.0, 1.0);
-#ifdef JB_DEV
-      if (getenv("JB_LOOSE")) kLoose = atof(getenv("JB_LOOSE"));
-#endif
-      const double lip = std::max(0.72, lipRatio_ - kLoose * std::clamp((1000.0 - hz_) / 250.0, 0.0, 1.0) * (pmS_ - 0.25));
+      const double loose = 0.10 + 0.08 * std::clamp((hz_ - 550.0) / 60.0, 0.0, 1.0);
+      const double lip = std::max(0.72, lipRatio_ - loose * std::clamp((1000.0 - hz_) / 250.0, 0.0, 1.0) * (pmS_ - 0.25));
       const double wl = 2 * kPi * hz * (lip + 0.1 * (emb - 0.5));
-      double q = kLipQ * std::exp2(lipStiffness() - 0.5);
-#ifdef JB_DEV
-      static const double eQ = getenv("JB_Q") ? atof(getenv("JB_Q")) : 0, eMu = getenv("JB_MU") ? atof(getenv("JB_MU")) : 0, eW = getenv("JB_W") ? atof(getenv("JB_W")) : 0;
-      if (eQ > 0) q = eQ;
-      const double lipMu = eMu > 0 ? eMu : lipMu_;
-      const double kLipWidth = eW > 0 ? eW : Trumpet::kLipWidth;
-#endif
-#ifndef JB_DEV
-      const double lipMu = lipMu_;
-#endif
-      const double acc = -wl * wl * x_ - (wl / q) * v_ + dpPrev_ / lipMu + 1e-6 * rng.white();
+      const double q = kLipQ * std::exp2(lipStiffness() - 0.5);
+      const double acc = -wl * wl * x_ - (wl / q) * v_ + dpPrev_ / lipMu_ + 1e-6 * rng.white();
       v_ += acc / fs_;
-      // The tongue's release plucks the lips open, so the note starts at once, as hard as tongued.
+      // The tongue's release plucks the lips open, so the note starts at once, as hard as tongued
+      // (up to a middling strike: harder is an accent in the breath, not a harder pluck).
       if (tn > tongue_) {
-         const double d = std::min<double>(tn - tongue_, std::max(0.0, JB_KICKCAP - kickTn_));
+         const double d = std::min<double>(tn - tongue_, std::max(0.0, kHardest - kickTn_));
          kickTn_ += tn - tongue_;
          v_ += kKick * d * hz;
       } else if (tn <= 0.0f)
@@ -1097,34 +1051,19 @@ public:
          puffTn_ += tn - tongue_;
          puffAt_ = 0.0;
       } else if (puffTn_ > 0.0) {
-         // (Sized once the tongue is away, by the breath behind it then.)
-         const double pb = std::clamp<double>(breath, 0.05, JB_PBMAX) / 0.5;
-#ifdef JB_PRINT
-         fprintf(stderr, "puff tn %.2f breath %.3f pmS %.3f hz %.0f\n", puffTn_, breath, pmS_, hz_);
-#endif
-#ifndef JB_PUFFHZ
-#define JB_PUFFHZ 2.0
-#endif
-         puff_ += kPuff * std::min<double>(puffTn_, JB_PUFFCAP) * std::pow(pb, JB_PUFFPOW) * std::pow(std::max(hz_ / 466.0, 1.0), JB_PUFFHZ);
+         // (Sized once the tongue is away: as hard as it struck, up to a middling strike; by the
+         // breath behind it then, as its square, so a soft note's is small against the note, up to
+         // a moderate breath; and larger over Bb4, where the lips need more to lock on.)
+         const double pb = std::clamp<double>(breath, 0.05, 0.3) / 0.5, up = std::max(hz_ / 466.0, 1.0);
+         puff_ += kPuff * std::min(puffTn_, kHardest) * pb * pb * up * up;
          puffTn_ = 0.0;
       }
       tongue_ = tn;
       x_ += v_ / fs_;
       closed_ += ((x_ <= 0.0 ? 1.0 : 0.0) - closed_) * closedCoef_;
       // (They close over a tenth of a millimetre.)
-      double kXc = JB_XC;
-#ifdef JB_DEV
-      if (getenv("JB_XC")) kXc = atof(getenv("JB_XC"));
-#endif
-      const double xc = kXc * pm / (lipMu * wl * wl);
-      const double xo = x_ - xc;
-      const double h = 0.5 * (xo + std::sqrt(xo * xo + kSoft * kSoft));
-      double hw = h;
-#ifdef JB_DEV
-      static const double kG = getenv("JB_G") ? atof(getenv("JB_G")) : 0.0, kHr = getenv("JB_HR") ? atof(getenv("JB_HR")) : 5e-4;
-      if (kG > 0) hw = h * std::pow(h / kHr, kG);
-#endif
-      const double a = hw * kLipWidth * (0.5 + character.aperture) * std::sqrt(2.0 / kRho);
+      const double h = 0.5 * (x_ + std::sqrt(x_ * x_ + kSoft * kSoft));
+      const double a = h * kLipWidth * (0.5 + character.aperture) * std::sqrt(2.0 / kRho);
       // The flow, solved with the pressure it makes in the mouthpiece:
       // u = a sgn(D) sqrt|D - Zi u|, D the drop before this sample's flow.
       const double ph = bore_.history(), zi = bore_.instant(), D0 = pm - ph;
@@ -1139,9 +1078,6 @@ public:
       }
       bore_.push(u);
       dpPrev_ = pm - (ph + zi * u);
-#ifdef JB_DEV
-      dbgP = ph + zi * u; dbgU = u; dbgH = h;
-#endif
       const double y = dc_.tick(eqLp_.tick(eqPk_.tick(eqHp_.tick(static_cast<float>(bore_.radiated() * kOut)))));
       // Louder pressure travels faster down the horn, so the outgoing wave steepens towards a shock:
       // a read delay that follows the wave. How far it steepens (sigma, the delay's steepest
@@ -1160,16 +1096,23 @@ public:
       return shock_.read(shockD_);
    }
 
-#ifdef JB_DEV
-   double dbgP = 0, dbgU = 0, dbgH = 0;
-#endif
 private:
    // The horn for the note now: the fingering's resonances scaled so its partial sits on the note.
    // The Loss knob widens every resonance (a rougher, lossier tube), the Hole Cutoff moves the
    // bell's (its highs fade sooner or later), the Cone flares it (a lower cutoff, like a
    // flugelhorn's).
    void setBore(double hz) {
-      bore_.set(kTrumpetBore[fing_], hz / peakHz_, fs_);
+      const double loss = std::clamp(1.0 + 1.5 * (character.loss - 0.04), 0.75, 1.35);
+      const double cut = kBellCut * character.cutoff * std::exp2(-(character.cone - 0.5));
+      bore_.set(kTrumpetBore[fing_], hz / peakHz_, fs_, loss, kBellCut, cut);
+      // What reaches the listener follows: the tone's peak and its fall above move with the bell's
+      // cutoff, and a lossier tube is duller.
+      const double r = cut / kBellCut / (1.0 + 1.5 * std::max(0.0, character.loss - 0.04));
+      if (std::fabs(r - eqAt_) > 1e-3) {
+         eqAt_ = r;
+         eqPk_.peak(1257.0 * std::sqrt(r), 1.39, 11.9, fs_);
+         eqLp_.lowpass(3132.0 * r, 0.1, fs_);
+      }
    }
    // Stiffness under the middle softens the lips by half as much.
    float lipStiffness() const {
@@ -1177,8 +1120,9 @@ private:
       return st < 0.5f ? 0.5f - 0.5f * (0.5f - st) : st;
    }
 
-   static constexpr double kP0 = 8000.0, kRho = 1.2, kLipQ = JB_Q, kLipMu = JB_MU, kLipWidth = JB_W,
-                           kSoft = 1e-4, kOut = 1000.0, kKick = JB_KICK, kPuff = JB_PUFF, kShock0 = 480.0;
+   static constexpr double kP0 = 8000.0, kRho = 1.2, kLipQ = 12.0, kLipMu = 3.0, kLipWidth = 0.012,
+                           kSoft = 1e-4, kOut = 1000.0, kBellCut = 1500.0, kKick = 5e-3, kPuff = 2e-3, kHardest = 0.4, kScoop = 100.0,
+                           kShock0 = 480.0;
    ModalBore bore_;
    Delay shock_;
    OnePoleLP acLP_, acLP2_, breathLP_, breathLP2_;
@@ -1187,7 +1131,7 @@ private:
    Player player_;
    unsigned at_ = 0;
    int fing_ = -1, partial_ = 1;
-   double peakHz_ = 466.0, hz_ = 466.0, lipRatio_ = 0.84, lipMu_ = 3.0;
+   double peakHz_ = 466.0, hz_ = 466.0, lipRatio_ = 0.84, lipMu_ = 3.0, eqAt_ = 1.0;
    double acMean_ = 0, acEnv_ = 0, acCoef_ = 0.001, envFall_ = 0.9997, closedCoef_ = 0.003;
    double x_ = 0, v_ = 0, dpPrev_ = 0, closed_ = 0, shockD_ = 120, pmS_ = 0, pmCoef_ = 0.001, puff_ = 0, puffAt_ = 0, puffTn_ = 0, kickTn_ = 0;
    float tongue_ = 0.0f;
