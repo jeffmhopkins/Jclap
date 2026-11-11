@@ -258,7 +258,8 @@ anything was sent), ending on that value again. TOUCH presses and releases twice
 is on the MSB CC only, the one to learn. TOUCH needs a Touch Out CC set. The Max for Live device's SEND
 buttons work the same way, and its status line shows which CC each press sends (or why it sends
 nothing) for a few seconds. In the device, typing a number into Angle, Radius or Touch Out and pressing
-Enter sends the same wiggle, even when the number is the one already there.
+Enter sends that output's value once on it (64 before anything was sent), even when the number is the
+one already there.
 
 The preset bar in the header steps through presets with its arrows, lists them from the name, stars
 favourites, and SAVE stores the current settings as your own preset. The factory bank is a single

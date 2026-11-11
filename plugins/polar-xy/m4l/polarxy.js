@@ -553,12 +553,36 @@ Engine.prototype.setParam = function (name, value) {
    var range = PARAMS[name];
    if (!range || typeof value !== 'number' || !isFinite(value)) return;
    this.convertPending();
+   var was = this.p[name];
    this.p[name] = clamp(value, range[0], range[1]);
    this.applySettings();
-   // Typing an Out CC (even the one already there) sends it as a SEND button does, for a MIDI learn.
-   // Not while the device loads, when every control sends its value once.
-   var learnFor = { outangle: 'angle', outradius: 'radius', touchout: 'touch' }[name];
-   if (learnFor && this.time >= LOAD_SETTLE && (learnFor !== 'touch' || this.touchOut() >= 0)) this.learn(learnFor);
+   // Typing an Out CC (even the one already there) sends that output's value once on it. Not while
+   // the device loads, when every control sends its value once.
+   var which = { outangle: 'angle', outradius: 'radius', touchout: 'touch' }[name];
+   // A new angle or radius CC already sent the position there, if there is one.
+   var st = this.channels[this.lastChannel];
+   var resent = which !== 'touch' && this.p[name] !== was && (which === 'angle' ? st.sentAngle : st.sentRadius) >= 0;
+   if (which && this.time >= LOAD_SETTLE && !resent) this.sendOnce(which);
+};
+
+// One output's value, once, on its CC: the value last sent (64 before any; touch released before
+// any). Angle and radius at 14 bits go as their MSB and LSB.
+Engine.prototype.sendOnce = function (which) {
+   var c = this.lastChannel, st = this.channels[c], cc, value;
+   if (which === 'touch') {
+      cc = this.touchOut();
+      if (cc < 0) return;
+      value = st.sentTouch === 127 ? 127 : 0;
+      this.emit(0xB0 | c, cc, value);
+   } else {
+      if (!this.applied.polar || this.conflicting()) return;
+      cc = this.int(which === 'angle' ? 'outangle' : 'outradius');
+      var sent = which === 'angle' ? st.sentAngle : st.sentRadius;
+      if (sent >= 0) this.pushValue(c, cc, sent);
+      else this.emit(0xB0 | c, cc, LEARN_VALUE);
+      value = sent >= 0 ? sent >> (this.applied.fine ? 7 : 0) : LEARN_VALUE;
+   }
+   this.learned(which + ': sent CC ' + cc + ' = ' + value + ' on ch ' + (c + 1));
 };
 
 // Seconds after the device starts ticking before a typed Out CC counts as typed.
