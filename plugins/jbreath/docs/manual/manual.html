@@ -1,0 +1,1183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JBreath User Manual</title>
+<style>
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Regular.ttf"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Italic.ttf"); font-weight: 400; font-style: italic; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Medium.ttf"); font-weight: 500; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-SemiBold.ttf"); font-weight: 600; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Bold.ttf"); font-weight: 700; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Light.ttf"); font-weight: 300; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Regular.ttf"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Medium.ttf"); font-weight: 500; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-SemiBold.ttf"); font-weight: 600; font-style: normal; }
+:root {
+  --ink: #15171d;
+  --ink-2: #3b3f4a;
+  --ink-3: #6d7280;
+  --rule: #e3e4e8;
+  --wash: #f5f5f7;
+  --night: #070910;
+  --orange: #f28c28;
+  --orange-ink: #c4650f;
+  --space: #ffb05a;  --space-ink: #b86a14;
+  --loop: #ff6fd2;   --loop-ink: #b8338f;
+  --drive: #ee6f5c;  --drive-ink: #c0412d;
+  --echo: #8fe8a8;   --echo-ink: #23864a;
+  --io: #6fe0ff;     --io-ink: #1489ad;
+  --rhea: #a98bff;   --luna: #ff8a7a;
+}
+@page {
+  size: 8.5in 11in;
+  margin: 0.85in 0.85in 0.8in 0.85in;
+  @bottom-left { content: "JBreath  ·  User Manual  ·  v0.12.0 draft"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
+  @bottom-right { content: counter(page); font: 600 8pt "InterM"; color: #15171d; }
+}
+@page cover { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+@page plain { @bottom-left { content: none; } @bottom-right { content: none; } }
+@page back { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  margin: 0; font-family: "InterM", sans-serif; font-size: 9.6pt; line-height: 1.55; color: var(--ink);
+  font-feature-settings: "cv11", "ss01", "tnum" 0; hyphens: manual;
+}
+p { margin: 0 0 0.75em; orphans: 3; widows: 3; }
+strong { font-weight: 600; }
+em { font-style: italic; }
+code, .mono { font-family: "JetBrains Mono", monospace; font-size: 0.86em; }
+code { background: var(--wash); border-radius: 3px; padding: 0.05em 0.3em; }
+a { color: inherit; text-decoration: none; }
+
+/* ---------- cover ---------- */
+.cover {
+  page: cover; width: 8.5in; height: 11in; background: var(--night); color: #fff; position: relative; overflow: hidden;
+  break-after: page;
+}
+.cover .stars { position: absolute; inset: 0; }
+.cover .loopart { position: absolute; right: -0.9in; top: 0.25in; width: 5.6in; }
+.cover .top { position: absolute; left: 0.85in; right: 0.85in; top: 0.8in; display: flex; justify-content: space-between; align-items: center; }
+.cover .brand { font: 600 8pt "InterM"; letter-spacing: 0.28em; color: #9aa0ad; text-transform: uppercase; }
+.cover .title { position: absolute; left: 0.85in; top: 1.9in; }
+.cover .word { font: 300 92pt/0.9 "InterDisplayM"; letter-spacing: -0.035em; }
+.cover .word .j { color: var(--orange); font-weight: 400; }
+.cover .sub { margin-top: 0.22in; font: 400 15pt "InterDisplayM"; color: #c9ccd4; letter-spacing: 0.01em; }
+.cover .sub b { color: #fff; font-weight: 500; }
+.cover .shot { position: absolute; left: 0.85in; right: 0.85in; top: 4.45in; }
+.cover .shot img { width: 100%; display: block; border-radius: 10px; box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 30px 80px rgba(255,111,210,0.18), 0 10px 40px rgba(111,224,255,0.12); }
+.cover .foot { position: absolute; left: 0.85in; right: 0.85in; bottom: 0.75in; display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid rgba(255,255,255,0.14); padding-top: 0.16in; }
+.cover .foot .k { font: 600 7pt "InterM"; letter-spacing: 0.22em; text-transform: uppercase; color: #7d8391; }
+.cover .foot .v { font: 500 10pt "InterM"; color: #e8e9ee; margin-top: 3px; }
+
+/* ---------- front matter ---------- */
+.front { page: plain; break-after: page; }
+.toc-title { font: 300 30pt/1 "InterDisplayM"; letter-spacing: -0.02em; margin: 0 0 0.25in; }
+.toc { columns: 2; column-gap: 0.4in; }
+.toc .grp { break-inside: avoid; }
+.toc .ch { display: flex; align-items: baseline; padding: 4px 0 4px; border-bottom: 1px solid var(--rule); }
+.toc .ch .n { width: 0.36in; font: 600 9pt "JetBrains Mono"; color: var(--orange-ink); }
+.toc .ch .t { flex: 1; font: 600 10.5pt "InterM"; }
+.toc .ch .p { font: 500 9.5pt "InterM"; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.toc .sec { display: flex; align-items: baseline; padding: 1px 0 1px 0.36in; font-size: 8.4pt; color: var(--ink-2); }
+.toc .sec .t { flex: 1; }
+.toc .sec .p { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.toc .grp { padding-bottom: 3px; }
+
+/* ---------- chapters ---------- */
+.chapter { break-before: page; }
+.chap-head { position: relative; margin: 0 0 0.32in; padding-top: 0.05in; }
+.chap-head .num { font: 600 8pt "JetBrains Mono"; letter-spacing: 0.18em; color: var(--accent, var(--orange-ink)); text-transform: uppercase; }
+.chap-head h1 { font: 300 32pt/1.02 "InterDisplayM"; letter-spacing: -0.025em; margin: 0.08in 0 0.12in; color: var(--ink); }
+.chap-head .lede { font: 400 12pt/1.5 "InterDisplayM"; color: var(--ink-2); max-width: 5.6in; margin: 0; }
+.chap-head .bar { height: 3px; width: 0.9in; background: var(--accent-bg, var(--orange)); margin-top: 0.22in; border-radius: 2px; }
+
+h2 { break-inside: avoid; font: 600 13.5pt/1.25 "InterDisplayM"; letter-spacing: -0.005em; margin: 0.32in 0 0.1in; break-after: avoid; }
+h2 .tag { font: 600 7pt "JetBrains Mono"; letter-spacing: 0.14em; color: var(--accent, var(--orange-ink)); display: block; margin-bottom: 3px; text-transform: uppercase; }
+h3 { font: 600 10.2pt/1.3 "InterM"; margin: 0.2in 0 0.06in; break-after: avoid; }
+h4 { font: 600 7.5pt "InterM"; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0.16in 0 0.06in; break-after: avoid; }
+ul, ol { margin: 0 0 0.8em; padding-left: 1.15em; }
+li { margin: 0 0 0.3em; }
+li::marker { color: var(--ink-3); }
+
+/* ---------- tables ---------- */
+table { width: 100%; border-collapse: collapse; margin: 0.06in 0 0.18in; font-size: 8.5pt; line-height: 1.42; }
+thead th { text-align: left; font: 600 6.8pt "InterM"; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3); border-bottom: 1.2px solid var(--ink); padding: 0 8px 5px 0; }
+tbody td { border-bottom: 1px solid var(--rule); padding: 5px 8px 5px 0; vertical-align: top; }
+tbody tr { break-inside: avoid; }
+td.c { font-weight: 600; white-space: nowrap; }
+td.r, td.d { font-family: "JetBrains Mono", monospace; font-size: 7.6pt; color: var(--ink-2); white-space: nowrap; }
+td.d { color: var(--ink); }
+table.params td.c { width: 1.05in; }
+table.params td.r { width: 1.3in; white-space: normal; }
+table.params td.d { width: 0.7in; white-space: normal; }
+table.compact td.c { width: 0.95in; }
+table.compact td.r { width: 1.05in; white-space: normal; line-height: 1.5; }
+table.compact .dflt { color: var(--ink); font-weight: 600; }
+.mod { display: inline-block; font: 600 6pt "InterM"; letter-spacing: 0.08em; padding: 0 4px; border-radius: 3px; margin-left: 4px; vertical-align: 1px; border: 1px solid currentColor; }
+.mod.m { color: #7b7f8b; }
+.mod.t { color: var(--loop-ink); }
+
+/* ---------- figures ---------- */
+figure { margin: 0.12in 0 0.22in; break-inside: avoid; }
+figure img { display: block; width: 100%; border-radius: 6px; }
+figure.dark img { box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 6px 22px rgba(10,12,20,0.18); }
+figcaption { font-size: 7.8pt; color: var(--ink-3); margin-top: 7px; line-height: 1.45; }
+figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
+
+.split { break-inside: avoid; display: grid; grid-template-columns: 1.72in 1fr; gap: 0.3in; align-items: start; margin-top: 0.1in; }
+.split figure { margin: 0; }
+.split figure img { border-radius: 8px; }
+.split .body > :first-child { margin-top: 0; }
+
+/* ---------- callouts ---------- */
+.note { border-left: 3px solid var(--accent-bg, var(--orange)); background: var(--wash); padding: 9px 13px 9px 13px; margin: 0.12in 0 0.2in; border-radius: 0 6px 6px 0; break-inside: avoid; font-size: 8.9pt; }
+.note .k { font: 700 6.6pt "InterM"; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent, var(--orange-ink)); display: block; margin-bottom: 2px; }
+.note p:last-child { margin-bottom: 0; }
+.note.warn { border-left-color: #d64545; }
+.note.warn .k { color: #b53030; }
+
+.cols2 { break-inside: avoid; display: grid; grid-template-columns: 1fr 1fr; gap: 0.28in; }
+.cols2 > div > :first-child { margin-top: 0; }
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 8.8pt; margin: 0 0 0.15in; }
+.kv dt { font-weight: 600; white-space: nowrap; }
+.kv dd { margin: 0; color: var(--ink-2); }
+
+/* numbered callouts legend */
+.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 0.28in; margin-top: 0.12in; font-size: 8.6pt; }
+.legend div { display: flex; gap: 9px; align-items: baseline; break-inside: avoid; }
+.dot { flex: none; display: inline-flex; width: 17px; height: 17px; border-radius: 50%; background: var(--orange); color: #fff; font: 700 7.5pt/17px "InterM"; justify-content: center; position: relative; top: -1px; }
+.legend b { font-weight: 600; }
+.anno { position: relative; }
+.anno svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* steps */
+.steps { counter-reset: s; list-style: none; padding: 0; margin: 0.08in 0 0.2in; }
+.steps > li { counter-increment: s; position: relative; padding: 0 0 0.13in 0.48in; margin: 0; break-inside: avoid; }
+.steps > li::before { content: counter(s, decimal-leading-zero); position: absolute; left: 0; top: -1px; font: 600 11pt "JetBrains Mono"; color: var(--orange-ink); }
+.steps > li b.h { display: block; font-weight: 600; font-size: 10pt; margin-bottom: 1px; }
+
+/* recipe cards */
+.recipes { display: grid; grid-template-columns: 1fr 1fr; gap: 0.16in; margin-top: 0.12in; }
+.recipe { border: 1px solid var(--rule); border-radius: 8px; padding: 11px 13px 9px; break-inside: avoid; position: relative; overflow: hidden; }
+.recipe::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: var(--rc, var(--orange)); }
+.recipe h3 { margin: 0 0 3px; font-size: 9.8pt; }
+.recipe p { font-size: 8.5pt; color: var(--ink-2); margin-bottom: 6px; }
+.recipe .set { font: 400 7.3pt/1.6 "JetBrains Mono"; color: var(--ink); background: var(--wash); border-radius: 5px; padding: 6px 8px; }
+.recipe .from { font-size: 7.4pt; color: var(--ink-3); margin-top: 5px; }
+
+.pill { display: inline-block; font: 600 6.6pt "InterM"; letter-spacing: 0.1em; text-transform: uppercase; padding: 1px 6px; border-radius: 10px; color: #fff; vertical-align: 1px; }
+.key { display: inline-block; font: 600 7.4pt "InterM"; border: 1px solid #c9ccd3; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: #fff; line-height: 1.5; }
+
+.swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+
+.specs td.c { width: 1.7in; }
+
+.back { page: back; width: 8.5in; height: 11in; background: var(--night); color: #fff; position: relative; break-before: page; }
+.back .mid { position: absolute; left: 0; right: 0; top: 4.4in; text-align: center; }
+.back .word { font: 300 40pt "InterDisplayM"; letter-spacing: -0.03em; }
+.back .word .j { color: var(--orange); font-weight: 400; }
+.back .small { font: 500 8pt "InterM"; letter-spacing: 0.22em; text-transform: uppercase; color: #7d8391; margin-top: 10px; }
+.back .url { position: absolute; bottom: 0.8in; left: 0; right: 0; text-align: center; font: 400 8.5pt "JetBrains Mono"; color: #9aa0ad; }
+
+.avoid { break-inside: avoid; }
+.pb { break-before: page; }
+.muted { color: var(--ink-3); }
+.small { font-size: 8.4pt; }
+</style>
+</head>
+<body>
+
+<!-- ================= COVER ================= -->
+<section class="cover">
+  <svg class="stars" viewBox="0 0 816 1056" preserveAspectRatio="none" id="stars"></svg>
+  <img class="loopart" src="img/cover-loop.png" alt="">
+  <div class="top">
+    <svg width="54" height="34" viewBox="0 0 54 34">
+      <path d="M6 26 C 10 8, 22 4, 27 14 C 32 24, 44 22, 48 8" fill="none" stroke="#f28c28" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M10 30 C 16 18, 24 18, 28 24 C 33 31, 42 28, 46 20" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.2" stroke-linecap="round"/>
+    </svg>
+    <div class="brand">JClap &nbsp;·&nbsp; CLAP Instrument</div>
+  </div>
+  <div class="title">
+    <div class="word"><span class="j">J</span>Breath</div>
+    <div class="sub"><b>Breathing physical models.</b> &nbsp;User Manual</div>
+  </div>
+  <div class="shot"><img src="img/panel.jpg" alt=""></div>
+  <div class="foot">
+    <div><div class="k">Version</div><div class="v">0.12.0 · Draft</div></div>
+    <div><div class="k">Format</div><div class="v">CLAP · MPE · 8 voices</div></div>
+    <div><div class="k">Platforms</div><div class="v">macOS · Windows · Linux</div></div>
+    <div style="text-align:right"><div class="k">Edition</div><div class="v">November 2026</div></div>
+  </div>
+</section>
+
+<!-- ================= CONTENTS ================= -->
+<section class="front">
+  <div class="chap-head" style="margin-bottom:0.25in">
+    <div class="num">Contents</div>
+  </div>
+  <div class="toc-title">Contents</div>
+  <div class="toc" id="toc"></div>
+  <div class="note warn"><span class="k">Draft</span><p>This is a working draft written against JBreath 0.12.0, which is still in review. The oboe's model is being rebuilt, so what this manual says about the oboe is kept brief and may change.</p></div>
+  <h2 style="margin-top:0.2in">About this manual</h2>
+  <p>Chapters 2 and 3 get you installed and playing in a few minutes. Chapter 4 tours the panel, and Chapters 5 to 7 explain how the sound is made, what each instrument is and how you blow it, which is the quickest way to understand what every control does. Chapters 8 to 14 cover every control in the order they sit on the panel, and Chapters 15 and 16 the presets, the dice and some recipes. The appendix lists every parameter with its exact range and default, plus specifications and troubleshooting.</p>
+  <p>Throughout the manual, control names are set in <strong>bold</strong> and panel labels as they appear on screen, such as <strong>EMBOUCHURE</strong>. Tags beside a parameter mean:</p>
+  <div class="kv">
+    <dt><span class="mod m">MOD</span></dt><dd>The host can modulate it with CLAP parameter modulation, on top of automation. Most JBreath knobs can be modulated per note.</dd>
+    <dt><span class="mod t">ROUTE</span></dt><dd>A modulation route can move it, from any source in MAP or the route list (Chapter 11).</dd>
+  </div>
+</section>
+
+<!-- ================= 1. WELCOME ================= -->
+<section class="chapter" data-ch="01" data-title="Welcome to JBreath">
+  <div class="chap-head">
+    <div class="num">Chapter 01</div>
+    <h1>Welcome to JBreath</h1>
+    <p class="lede">An eight-voice MPE wind instrument built from physical models. You don't play a recording of a flute: you blow one.</p>
+    <div class="bar"></div>
+  </div>
+  <p>Most wind instruments in a computer are samples, a fixed recording for each note at a few dynamics. JBreath has no samples at all. Each voice is a <em>bore</em>, a delay line that carries the sound down the tube and back with the losses and reflections of the real one, driven by an <em>exciter</em>: the reed, the lips, the air jet or the vocal folds that the player blows into. Blow harder and the reed slams shut for more of each cycle, the trumpet's wave steepens into a blare, the flute's jet jumps up a register. Nothing is crossfaded: the brightness, the growl and the split notes come out of the physics.</p>
+  <p>Six instruments share the engine: <strong>flute</strong>, <strong>clarinet</strong>, <strong>sax</strong>, <strong>oboe</strong>, <strong>trumpet</strong>, and an <strong>alien</strong> that sings words, a syllable a note. Around them sits a model of the player (the tongue, the vibrato, a hand on the bell), a second subtractive voice you can layer underneath, a modulation system read off the instrument's own breath, and a stage where every voice is drawn live as a glowing loop of its own sound, puffing smoke as it blows.</p>
+  <p>JBreath is made for expressive controllers. With an MPE keyboard or a breath controller every note has its own breath, bend and embouchure, so a chord can swell one note at a time. With a plain keyboard it still plays: the velocity blows the note.</p>
+
+  <h2>At a glance</h2>
+  <ul>
+    <li><strong>Six physical models</strong>: an air jet, a single reed on a cylinder, a cane reed on a real alto's cone, a double reed, brass lips on a real Bb trumpet's bore, and a formant voice that sings.</li>
+    <li><strong>Measured against real players.</strong> The sax and trumpet are fitted to the University of Iowa's recordings at pp, mf and ff, harmonic by harmonic.</li>
+    <li><strong>In tune everywhere.</strong> Every note of every model is tuned to within a cent, and stays in tune as you blow softer or harder.</li>
+    <li><strong>Eight voices, MPE throughout</strong>: per-note pressure, bend and slide; breath from pressure, a breath controller (CC 2), velocity or an input you can drive from CV.</li>
+    <li><strong>A player model</strong>: five tongue styles, re-tonguing from the pressure, flutter, humanize and a vibrato from the breath, the jaw or the lip.</li>
+    <li><strong>A bore you can rebuild</strong>: length, holes, cone, bell, barrel, walls, eight materials and five mutes.</li>
+    <li><strong>MAP modulation</strong>: 22 sources, including seven read off each voice's own sound, into 32 routes and four buses.</li>
+    <li><strong>The breath loops</strong>: every voice drawn as a turning loop of its own sound, in smoke or ink.</li>
+    <li><strong>87 factory presets</strong> and a dice card that builds new patches the way a player would pick up an instrument.</li>
+  </ul>
+  <div class="note"><span class="k">Blow, don't press</span><p>The single biggest difference from a synth is that the breath is a continuous control, not an envelope. If your controller sends pressure, use it: hold a note and lean into it, and listen to the tone change with the level. Chapter 7 shows how to set it up.</p></div>
+</section>
+
+<!-- ================= 2. INSTALLATION ================= -->
+<section class="chapter" data-ch="02" data-title="Installation">
+  <div class="chap-head">
+    <div class="num">Chapter 02</div>
+    <h1>Installation</h1>
+    <p class="lede">JBreath is a CLAP instrument. It ships in the JClap bundle alongside the other JClap plug-ins.</p>
+    <div class="bar"></div>
+  </div>
+  <h2>Requirements</h2>
+  <table class="specs"><tbody>
+    <tr><td class="c">Plug-in format</td><td>CLAP 1.2 (instrument, stereo out, MPE). Your host must support CLAP, for example Bitwig Studio, REAPER, FL Studio or Studio One. JBreath is CLAP only: there is no VST3 or AU version.</td></tr>
+    <tr><td class="c">macOS</td><td>Universal binary: macOS 10.15 or later on Intel, 11 or later on Apple Silicon.</td></tr>
+    <tr><td class="c">Windows</td><td>64-bit Windows.</td></tr>
+    <tr><td class="c">Linux</td><td>64-bit, X11.</td></tr>
+    <tr><td class="c">Controller</td><td>Any MIDI keyboard. An MPE controller (Linnstrument, Seaboard, Osmose, Continuum and the like) or a breath controller on CC 2 makes it far more expressive.</td></tr>
+  </tbody></table>
+  <h2>Installing</h2>
+  <ol class="steps">
+    <li><b class="h">Download</b>Grab the zip for your operating system from the latest release at <span class="mono">github.com/jeffmhopkins/Jclap/releases/latest</span>. It contains every JClap plug-in.</li>
+    <li><b class="h">Copy the plug-in</b>Copy <span class="mono">JBreath.clap</span> (a bundle on macOS) into your CLAP folder:
+      <table style="margin-top:6px"><tbody>
+        <tr><td class="c">macOS</td><td class="r">~/Library/Audio/Plug-Ins/CLAP</td></tr>
+        <tr><td class="c">Windows</td><td class="r">C:\Program Files\Common Files\CLAP</td></tr>
+        <tr><td class="c">Linux</td><td class="r">~/.clap</td></tr>
+      </tbody></table></li>
+    <li><b class="h">Rescan</b>Restart your host or rescan plug-ins. In Bitwig Studio this is under <em>Settings → Locations</em>. JBreath appears as an instrument (a synthesizer).</li>
+  </ol>
+  <div class="note warn"><span class="k">macOS: browser downloads are quarantined</span>
+    <p>The plug-ins are ad-hoc signed but not notarized, so macOS quarantines files downloaded through a web browser and some hosts (Bitwig among them) silently skip them. The simplest install is from Terminal, which fetches the latest release and installs every JClap plug-in:</p>
+    <p><code>curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-macos.sh | bash</code></p>
+    <p>If you already downloaded with a browser, clear the flag once after copying:</p>
+    <p><code>xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap</code></p>
+  </div>
+  <h2>Setting up your host</h2>
+  <p>Put JBreath on an instrument track and route your controller to it. For MPE, the host must pass MPE through to the plug-in: in Bitwig, JBreath declares MPE support and receives it with no extra setup; in REAPER, set the track's MIDI input to <em>All channels</em>. JBreath listens for a lower MPE zone (channel 1 the manager, 2 to 16 the notes) and follows an MPE Configuration Message if your controller sends one. It also accepts CLAP note expressions, so a host that edits per-note pressure, tuning and brightness in its piano roll plays it directly.</p>
+  <h2>Ableton Live</h2>
+  <p>Ableton Live is not supported. Live does not load CLAP plug-ins, and JBreath is CLAP only. If you use Live alongside a CLAP host, play JBreath in the CLAP host and bring the audio into Live.</p>
+  <p>JBreath reports its tail to the host (the release, the room and the delay), so hosts that stop processing silent tracks let it ring out.</p>
+</section>
+<!-- ================= 3. QUICK START ================= -->
+<section class="chapter" data-ch="03" data-title="Quick Start">
+  <div class="chap-head">
+    <div class="num">Chapter 03</div>
+    <h1>Quick Start</h1>
+    <p class="lede">Five minutes from an empty instrument track to a horn that breathes.</p>
+    <div class="bar"></div>
+  </div>
+  <ol class="steps">
+    <li><b class="h">Load JBreath and play a note</b>Put JBreath on an instrument track and hold a note. The default patch is a clarinet, <em>Wooden Reed</em>. Each note appears on the stage at the right as a glowing loop of its own sound, puffing smoke as it blows. On a plain keyboard, the velocity is how hard the note is blown.</li>
+    <li><b class="h">Blow it</b>If your controller sends pressure (MPE or channel aftertouch) or a breath controller on CC 2, JBreath switches to it on its own within a few milliseconds: <strong>BREATH FROM</strong> is <strong>AUTO</strong>. Hold a note and lean into it. The level and the tone both follow, and past a point a reed starts to buzz. Without pressure, play the same note softly and then hard.</li>
+    <li><b class="h">Pick an instrument</b>Click <strong>Flute</strong>, <strong>Sax</strong>, <strong>Oboe</strong>, <strong>Trumpet</strong> or <strong>Alien</strong> in the list on the left. Every other setting stays where it is, so this is a quick way to hear one breath through six instruments. Then try a preset: click the name in the header and choose <em>Clean Alto</em>, <em>Brass Plume</em>, <em>Concert Flute</em> or <em>First Contact</em>.</li>
+    <li><b class="h">Shape how it's blown</b>On the exciter card, <strong>BREATH</strong> sets how hard the player blows at full pressure, <strong>EMBOUCHURE</strong> the lip and jaw, <strong>BITE</strong> the edge that comes in at forte, and <strong>GROWL</strong> a rough flutter of the throat. The graph shows the reed's valve, with a dot for each sounding note.</li>
+    <li><b class="h">Change the tube</b>On the bore card, turn <strong>LOSS</strong> up for a softer, slower-speaking tube, set <strong>TUBE</strong> to Glass or Bamboo, or put a <strong>MUTE</strong> in the bell. The graph shows the bore's resonances and every note's partials on them.</li>
+    <li><b class="h">Map a source</b>Touch <strong>PRESS</strong> in the header, then drag <strong>BITE</strong> up: a ring appears showing how far pressure moves it. Touch PRESS again to leave MAP. Now the harder you lean, the brighter the edge.</li>
+    <li><b class="h">Save it</b>Click <strong>SAVE</strong> in the preset bar, type a name and press <span class="key">Enter</span>. Your preset appears under <em>User</em> in the preset menu. Settings are also saved with your project automatically.</li>
+  </ol>
+  <div class="note"><span class="k">Tip</span><p>Every control has a tooltip, and so does every source chip. Hover over anything on the panel for a one-line reminder of what it does.</p></div>
+</section>
+
+<!-- ================= 4. THE PANEL ================= -->
+<section class="chapter" data-ch="04" data-title="The Panel">
+  <div class="chap-head">
+    <div class="num">Chapter 04</div>
+    <h1>The Panel</h1>
+    <p class="lede">The instrument on the left, how it's played along the bottom, and the breath loops on the right.</p>
+    <div class="bar"></div>
+  </div>
+  <figure class="dark anno" id="overview">
+    <img src="img/panel.jpg" alt="">
+    <svg viewBox="0 0 1648 940"><g font-family="InterM" font-weight="700" font-size="17" text-anchor="middle"></g></svg>
+  </figure>
+  <div class="legend">
+    <div><span class="dot">1</span><span><b>Preset bar.</b> Step with the arrows, click the name for the menu, star a favorite, <b>SAVE</b> your own. The die opens the dice card.</span></div>
+    <div><span class="dot">2</span><span><b>The player's hands.</b> Seven source chips: STRIKE, PRESS, PUSH, GLIDE, SHAKE, SLIDE, LIFT. Touch one to MAP it.</span></div>
+    <div><span class="dot">3</span><span><b>PLAY / AIR.</b> AIR gives the breath loops the whole window.</span></div>
+    <div><span class="dot">4</span><span><b>Exciter card.</b> EXCITER, HYBRID and (on the Alien) ALIEN tabs, with the instrument list.</span></div>
+    <div><span class="dot">5</span><span><b>Air flow graph.</b> The valve: how the air through it answers the pressure across it.</span></div>
+    <div><span class="dot">6</span><span><b>Exciter knobs.</b> How the instrument is blown.</span></div>
+    <div><span class="dot">7</span><span><b>Bore card.</b> The tube: its shape, holes, material, mute, and the impedance graph.</span></div>
+    <div><span class="dot">8</span><span><b>Player card.</b> PLAYER, VIBRATO, LFOS and BUSES tabs.</span></div>
+    <div><span class="dot">9</span><span><b>Breath loops.</b> Every sounding voice as a turning loop, in smoke or ink.</span></div>
+    <div><span class="dot">10</span><span><b>The breath.</b> Six source chips read off each voice's sound: LOOP, KNOT, FOLD, REGISTER, FRAY, DRAFT.</span></div>
+    <div><span class="dot">11</span><span><b>LOOPS / ROUTES.</b> Swap the loops for the list of all 32 routes.</span></div>
+    <div><span class="dot">12</span><span><b>Voice card.</b> VOICE, AIR, REVERB and DELAY tabs, the voice mode, and the knobs along the bottom.</span></div>
+  </div>
+  <h2>Working with the controls</h2>
+  <p>Every knob, switch and menu is a host parameter, so everything can be automated, and most knobs also accept CLAP parameter modulation from the host, per note. Knobs work the same everywhere on the panel:</p>
+  <table>
+    <thead><tr><th>Action</th><th>On a knob</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Drag up / down</td><td>Change the value. A popup shows the value while you drag.</td></tr>
+      <tr><td class="c">Shift + drag</td><td>Fine adjustment.</td></tr>
+      <tr><td class="c">Scroll wheel</td><td>Step the value up or down.</td></tr>
+      <tr><td class="c">Double-click</td><td>Reset to the default value.</td></tr>
+      <tr><td class="c">Right-click</td><td>Menu with <em>Reset to default</em> and <em>Enter value…</em> to type an exact number.</td></tr>
+    </tbody>
+  </table>
+  <p>Each knob draws its value as an arc. When a route or the host is moving it, an outer ring shows how far, live, in the source's colour (Chapter 11).</p>
+  <h2>One colour per note</h2>
+  <p>Each sounding note keeps one colour across the whole panel, by the voice playing it: its loop and its label on the stage, its partials on the bore graph, its dot on the air flow graph, the tongue and press curves, the hybrid's filter, and its place in the stereo field on the VOICE tab. Play a chord and you can follow each note through every card.</p>
+  <h2>Panel size</h2>
+  <p>The panel is 1648 × 940 at 100%. Right-click any empty part of the panel and choose <strong>UI Size</strong> to scale it. The size you pick is remembered the next time the editor opens. The same menu has <strong>Check for Updates</strong>.</p>
+</section>
+
+<!-- ================= 5. HOW IT WORKS ================= -->
+<section class="chapter" data-ch="05" data-title="How JBreath Works">
+  <div class="chap-head">
+    <div class="num">Chapter 05</div>
+    <h1>How JBreath Works</h1>
+    <p class="lede">A player, a valve and a tube. The player blows, the valve turns the steady breath into pulses, and the tube decides which pulses ring.</p>
+    <div class="bar"></div>
+  </div>
+  <h2>Signal flow</h2>
+  <p>Every note gets its own voice: its own breath, its own exciter and its own bore. The voices are summed, then pass through the shared effects to the output.</p>
+  <figure>
+    <svg viewBox="0 0 700 300" width="100%" style="display:block">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#15171d"/></marker>
+        <marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9aa0ad"/></marker>
+      </defs>
+      <g id="flow" font-family="InterM"></g>
+    </svg>
+    <figcaption><b>Fig. 5.1</b>&nbsp; One voice (in the shaded band, eight of them) and the shared output. The exciter and bore form a loop: the exciter pushes air into the bore, and what comes back from the bore changes how the exciter opens. The hybrid voice is blown by the same breath and mixed in after the bore.</figcaption>
+  </figure>
+  <h2>The breath</h2>
+  <p>Each note's breath starts from its source: pressure, a breath controller, the velocity or the BREATH IN parameter (Chapter 7). <strong>CURVE</strong> shapes it. The <strong>tongue</strong> then shapes the start and end of the note: a burst of pressure as the tongue lets the air go (<strong>KICK</strong>), the <strong>ATTACK</strong> and <strong>RELEASE</strong>, and the flutter or re-tonguing through the note. Vibrato rides on the breath, the jaw, or both. The result is a mouth pressure that changes every sample, and that is all the exciter knows about the player.</p>
+  <h2>The exciter and the bore</h2>
+  <p>The exciter is a valve the breath blows through: a reed, the lips, or the air jet over the flute's embouchure hole. How much air it lets through depends on the pressure across it, which depends on the sound already in the bore. The bore is a pair of delay lines carrying the wave down the tube and back, losing a little and reflecting at the bell and the open tone holes. Each trip round the loop, the bore's resonances pull the valve into opening and closing at their frequency, and a note sounds. Nothing in this loop is a waveform or an envelope: soft playing is nearly a pure tone because the valve barely closes, and the buzz at forte is the valve slamming shut.</p>
+  <p>That is why changing the bore changes everything: <strong>LOSS</strong> makes notes speak slower and darker because the resonances are weaker, <strong>HOLES</strong> changes which highs escape, and a <strong>MUTE</strong> changes the bell.</p>
+  <h2>In tune at any breath</h2>
+  <p>The bore length for each model and note was measured offline, by playing it and correcting the length until the pitch was within a cent, and baked into the plug-in with a gain that levels each note and the softest breath that sounds it. A real player keeps a note in tune as they blow harder; JBreath measures how far each instrument drifts with the breath and corrects the bore for it. Notes past an instrument's range play an octave (or more) in.</p>
+  <h2>Sample rate</h2>
+  <p>The voices run at 88.2 kHz or more (twice the host's rate at 44.1 and 48 kHz) and are decimated once at the output, which keeps the reeds stable and the highs clean. At 88.2 kHz and above they run at the host's rate.</p>
+  <div class="note"><span class="k">The model's own sound first</span><p>The factory preset at the head of each family (<em>Concert Flute</em>, <em>Wooden Reed</em>, <em>Clean Alto</em>, <em>Dusk Oboe</em>, <em>Brass Plume</em>, <em>First Contact</em>) is the model with a player's vibrato and a little room: the sound the instrument was tuned to. Start there before reaching for the extreme settings.</p></div>
+</section>
+
+<!-- ================= 6. INSTRUMENTS ================= -->
+<section class="chapter" data-ch="06" data-title="The Instruments">
+  <div class="chap-head">
+    <div class="num">Chapter 06</div>
+    <h1>The Instruments</h1>
+    <p class="lede">Six exciters, six bores. Pick one from the list on the exciter card.</p>
+    <div class="bar"></div>
+  </div>
+  <table>
+    <thead><tr><th>Instrument</th><th>Exciter</th><th>Bore</th><th>What gives it its sound</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Flute</td><td>An air jet crossing the embouchure hole, split in or out of the pipe by the sound in it.</td><td>Open at both ends: every harmonic.</td><td>The jet takes longer to reach the edge when it's slow, so blowing harder pushes it up a register. Edge noise. Nearly pure when soft, a strong 2nd and then 3rd harmonic as it's blown harder.</td></tr>
+      <tr><td class="c">Clarinet</td><td>A single reed: a pressure-controlled valve, solved each sample with the pressure it makes.</td><td>A cylinder closed at the reed: odd harmonics.</td><td>The reed slamming shut at forte; the bell letting the highs out.</td></tr>
+      <tr><td class="c">Sax</td><td>A cane reed: a mass on a spring under the lip, pushed shut by the mouth pressure, beating on the lay at forte.</td><td>A real alto's air column, computed from its shape for each fingering: mouthpiece, conical body, nineteen tone holes, octave vents. Below the alto, the tenor, baritone, bass and contrabass.</td><td>Nearly a pure tone played softly, filling in to a buzzing forte over about 12 dB, as the Iowa alto does. Low notes hold their fundamental under rich harmonics. Growl when it's pushed.</td></tr>
+      <tr><td class="c">Oboe</td><td>A small, stiff double reed.</td><td>A real oboe's narrow conical air column, with the cor anglais and lower horns below its range.</td><td>Nasal and reedy, darker played softly. <em>The oboe is being reworked; details will follow in the final manual.</em></td></tr>
+      <tr><td class="c">Trumpet</td><td>The lips: a mass on a spring blown open by the mouth pressure.</td><td>A real Bb trumpet's air column for each of its seven valve combinations: mouthpiece, leadpipe, valves, Bessel bell.</td><td>The wave steepening on its way down the horn, towards a shock at forte: the brassy blare. Mellow played softly. Each tongued note scoops up into its pitch as the lips find the resonance.</td></tr>
+      <tr><td class="c">Alien</td><td>Vocal folds, a pulse opening and snapping shut each period, or a bowed string.</td><td>A throat, nose and mouth: a formant synthesizer.</td><td>Every note a syllable of its words, typed or its own made-up language (Chapter 12).</td></tr>
+    </tbody>
+  </table>
+  <h2>Measured against real instruments</h2>
+  <p>The sax and trumpet are measured against the University of Iowa's recordings of a real alto sax and Bb trumpet at pp, mf and ff, and the sax's low register against UNSW's tenor sax: how their tone darkens and how much quieter they get when played softly, how far a note starts under its pitch, and the slow 1 to 3 cent wander of a real player's pitch. The trumpet's tone through its bell is matched harmonic by harmonic without any per-note EQ: it brightens as it's blown harder because its lips close for more of each cycle. Every instrument's breath noise is a smaller share of the sound the softer it's blown.</p>
+  <h2>Ranges</h2>
+  <p>Under the instrument list the panel shows the range the model speaks in, for example <em>Speaks C1 – C8 · past that, an octave in</em> on the clarinet. Notes outside it are played an octave (or more) inside the range rather than failing to sound. Use <strong>TRANSP</strong> on the voice card, or the presets' relatives (<em>Piccolo</em>, <em>Bass Clarinet</em>, <em>Baritone</em>, <em>Cor Anglais</em>) to move the range.</p>
+  <h2>Changing instrument</h2>
+  <p>Choosing an instrument keeps every other setting, so the same breath, bore and player can be heard through each one. Some bore knobs only apply to some instruments (<strong>CONE</strong> to the sax, oboe and trumpet, <strong>BRASS</strong> to the trumpet): they are dimmed on the others. To start an instrument from its natural sound, load the first preset in its family instead.</p>
+</section>
+
+<!-- ================= 7. BREATH AND MPE ================= -->
+<section class="chapter" data-ch="07" data-title="Breath and MPE">
+  <div class="chap-head">
+    <div class="num">Chapter 07</div>
+    <h1>Breath and MPE</h1>
+    <p class="lede">Where each note's breath comes from, and how your controller's hands reach the instrument.</p>
+    <div class="bar"></div>
+  </div>
+  <figure class="dark"><img src="img/air.jpg" alt=""><figcaption><b>Fig. 7.1</b>&nbsp; The AIR tab on the voice card, here with BREATH FROM at MIX. The graph is the press curve, with a dot for each sounding note.</figcaption></figure>
+  <h2>Breath From</h2>
+  <table class="params">
+    <thead><tr><th>Setting</th><th>Breath comes from</th><th></th><th>Use it for</th></tr></thead>
+    <tbody>
+      <tr><td class="c">AUTO</td><td class="r" colspan="2">Velocity, until pressure or Breath In arrives</td><td>The default. Plays from a plain keyboard and from an MPE or breath controller alike. Once pressure arrives it follows it within a few milliseconds, and velocity is then only how hard the note is tongued.</td></tr>
+      <tr><td class="c">PRESS</td><td class="r" colspan="2">Pressure only</td><td>MPE controllers and breath controllers, when you never want velocity to blow.</td></tr>
+      <tr><td class="c">VEL</td><td class="r" colspan="2">Velocity only</td><td>A plain keyboard, or a controller whose aftertouch you want to ignore.</td></tr>
+      <tr><td class="c">INPUT</td><td class="r" colspan="2">The BREATH IN parameter only</td><td>Blowing from a CV, an LFO or automation. In Bitwig, route a eurorack CV into it.</td></tr>
+      <tr><td class="c">MIX</td><td class="r" colspan="2">Breath In × each note's own pressure</td><td>The CV is the lungs for the whole chord; each finger is how much of it its note lets through. Before a note has pressure, its velocity stands in.</td></tr>
+    </tbody>
+  </table>
+  <h2>What counts as pressure</h2>
+  <ul>
+    <li><strong>MPE pressure</strong>: channel pressure on a note's own MPE channel.</li>
+    <li><strong>Polyphonic aftertouch</strong>: that one note's pressure.</li>
+    <li><strong>Channel pressure</strong> on a plain MIDI channel: every note on the channel.</li>
+    <li><strong>A breath controller</strong> on <strong>CC 2</strong>: treated as the channel's pressure.</li>
+    <li><strong>CLAP pressure expressions</strong>, from a host that edits per-note pressure in its piano roll.</li>
+  </ul>
+  <h2>The AIR tab</h2>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">BREATH FROM</td><td class="r">Auto, Press, Vel, Input, Mix</td><td class="d">Auto</td><td>Where the breath comes from (above).</td></tr>
+      <tr><td class="c">BREATH IN</td><td class="r">0 – 100%</td><td class="d">0%</td><td>The breath, as a parameter, for INPUT and MIX. Automate it, or modulate it from the host. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">CURVE</td><td class="r">0.30 – 3.00</td><td class="d">1.00</td><td>How pressure becomes breath. Below 1 a light touch blows harder; above 1 the breath stays soft until you press deep. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">SLIDE</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How far MPE slide (CC 74) moves the embouchure. <span class="mod m">MOD</span></td></tr>
+    </tbody>
+  </table>
+  <h2>Bend and slide</h2>
+  <p><strong>Bend</strong> bends the bore, not a pitch shifter, so a big bend sounds like a player lipping the note. MPE bend moves each note on its own, over <strong>BEND</strong> on the voice card (48 semitones by default, the MPE standard). The manager channel's bend moves every note, and plain MIDI bend on a non-MPE channel moves its notes by ±2 semitones. JBreath also follows the bend range your controller sets with RPN 0, and CLAP tuning expressions.</p>
+  <p><strong>Slide</strong> (CC 74, or a CLAP brightness expression) moves the embouchure by the SLIDE amount: on reeds, the bite; on brass, the lips' tension; on the Alien, how wide the jaw opens.</p>
+  <h2>Tongue force</h2>
+  <p>Whatever the tongue style, a note's velocity is how hard it's tongued: a soft touch starts gently, with little of the tongue's burst and a slower attack, and a hard one with a crisp "ta". With <strong>FORCE</strong> on the PLAYER tab set to <strong>Press</strong>, the tongue's force comes instead from how hard the pressure arrives in the note's first few milliseconds. Use it for a controller whose velocity isn't reliable, or a breath controller with no velocity at all.</p>
+  <h2>Sustain and the MPE zone</h2>
+  <p>The sustain pedal (CC 64) holds notes as usual, on a note's own channel or the manager channel. JBreath assumes a lower MPE zone across all 15 member channels until it receives an MPE Configuration Message; a zone of 0 makes every channel a plain MIDI channel. Reset All Controllers, All Notes Off and All Sound Off are honoured, on one channel or the whole zone.</p>
+</section>
+<!-- ================= 8. EXCITER CARD ================= -->
+<section class="chapter" data-ch="08" data-title="The Exciter Card">
+  <div class="chap-head">
+    <div class="num">Chapter 08</div>
+    <h1>The Exciter Card</h1>
+    <p class="lede">The instrument, and how it's blown. The HYBRID tab layers a second voice under it.</p>
+    <div class="bar"></div>
+  </div>
+  <figure class="dark"><img src="img/exciter.jpg" alt=""><figcaption><b>Fig. 8.1</b>&nbsp; The EXCITER tab on the clarinet. The air flow graph's curve turns over and shuts as the pressure across the reed rises; the dots are three sounding notes.</figcaption></figure>
+  <h2>The air flow graph</h2>
+  <p>The graph is the exciter's valve: how much air passes (up) for the pressure across it (along). A reed's curve rises, turns over and shuts where the reed closes; the lips' curve opens instead; the flute's jet shows where it overblows. Each sounding note is a dot riding on the curve, in its own colour, so you can see a note being blown past the top and into the buzz.</p>
+  <h2>Page 1 &nbsp;EXCITER</h2>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Instrument</td><td class="r">Flute, Clarinet, Sax, Oboe, Trumpet, Alien</td><td class="d">Clarinet</td><td>The model. Every other setting is kept when you change it.</td></tr>
+      <tr><td class="c">BREATH</td><td class="r">25 – 150%</td><td class="d">100%</td><td>How hard the player blows at full pressure (or full velocity). Above 100% every instrument can be overblown. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">EMBOUCHURE</td><td class="r">0 – 100%</td><td class="d">50%</td><td>Lip and jaw: the jet's angle on the flute, the bite on a reed, the lips' tension on brass. MPE slide moves it. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">STIFFNESS</td><td class="r">0.00 – 1.00</td><td class="d">0.50</td><td>How stiff the reed or lips are (the jet's gain on a flute). Stiff is bright and quick to shut; soft is dark and lazy. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">BITE</td><td class="r">0 – 200%</td><td class="d">100%</td><td>The forte edge: the flute's 2nd harmonic, the reeds' edge, the brass blare. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">APERTURE</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How far the reed or lips stand open (the jet's width): wide is loud and free, narrow thin and focused. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">NOISE</td><td class="r">0 – 200%</td><td class="d">100%</td><td>Breath noise and turbulence. Always a smaller share of the sound the softer it's blown. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">KICK</td><td class="r">0 – 100%</td><td class="d">25%</td><td>The burst of pressure as the tongue lets the air go: the "t" at the start of a note. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">GROWL</td><td class="r">0 – 100%</td><td class="d">0%</td><td>A rough flutter of the throat rides on the air, on any instrument; a hard-blown reed rasps more. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+    </tbody>
+  </table>
+  <p>On the Alien, the same knobs shape its voice instead: EMBOUCHURE is the jaw, STIFFNESS the vocal folds, BITE nasal below the middle and a brassy twang above it, APERTURE the lips from rounded to a grin, and KICK how hard words start. See Chapter 12.</p>
+
+  <h2>Page 2 &nbsp;HYBRID</h2>
+  <figure class="dark"><img src="img/hybrid.jpg" alt=""><figcaption><b>Fig. 8.2</b>&nbsp; The HYBRID tab: a saw an octave up under <em>Pastoral</em>. The graph is its lowpass, with where the softest and hardest breath move it drawn faint.</figcaption></figure>
+  <p>A plain subtractive voice, blown by the same breath and layered with the instrument: a wave through a 24 dB lowpass that follows the note half way. Unison and vibrato shape it too. It has an envelope of its own, so it can also be a pad under the instrument: at full <strong>FOLLOW</strong> it is blown like the instrument; turn FOLLOW down and the envelope plays it from the note's strike instead, swelling in and ringing on after the breath stops.</p>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Wave</td><td class="r">Sine, Triangle, Saw, Square, Pulse</td><td class="d">Saw</td><td>The oscillator.</td></tr>
+      <tr><td class="c">MIX</td><td class="r">0 – 100%</td><td class="d">0%</td><td>How much of it. At 0% it is off. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">OCTAVE</td><td class="r">−2 – +2 oct</td><td class="d">0 oct</td><td>Where it plays against the instrument. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">DETUNE</td><td class="r">−50 – +50 ct</td><td class="d">+0 ct</td><td>Fine offset, for beating against the instrument. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">BREATH</td><td class="r">50 – 150%</td><td class="d">100%</td><td>How strongly its level follows the breath. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">CUTOFF</td><td class="r">80 Hz – 12 kHz</td><td class="d">1.80 kHz</td><td>The lowpass. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">RESONANCE</td><td class="r">0 – 100%</td><td class="d">20%</td><td>The lowpass's peak. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">OPEN</td><td class="r">0 – 100%</td><td class="d">60%</td><td>How far the breath opens the lowpass: soft is dark, hard is bright. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">ATTACK</td><td class="r">1 ms – 10 s</td><td class="d">5.2 ms</td><td>The envelope's attack. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">DECAY</td><td class="r">1 ms – 10 s</td><td class="d">251 ms</td><td>The envelope's decay. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">SUSTAIN</td><td class="r">0 – 100%</td><td class="d">100%</td><td>The envelope's sustain. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">RELEASE</td><td class="r">1 ms – 10 s</td><td class="d">63 ms</td><td>The envelope's release, after the note ends. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">FOLLOW</td><td class="r">0 – 100%</td><td class="d">100%</td><td>How much its level still follows the breath, against the envelope. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">F.ENV</td><td class="r">−100 – +100%</td><td class="d">0%</td><td>How far the envelope opens (or, below zero, closes) the lowpass. <span class="mod m">MOD</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= 9. BORE ================= -->
+<section class="chapter" data-ch="09" data-title="The Bore">
+  <div class="chap-head">
+    <div class="num">Chapter 09</div>
+    <h1>The Bore</h1>
+    <p class="lede">The tube the sound rings in: its shape, its holes, what it's made of, and what's in the bell.</p>
+    <div class="bar"></div>
+  </div>
+  <figure class="dark"><img src="img/bore.jpg" alt=""><figcaption><b>Fig. 9.1</b>&nbsp; The bore card on <em>Brass Plume</em>. The curve is the bore's input impedance: each peak is a resonance the exciter can lock to. The lit stems are the partials of every sounding note, in each note's colour.</figcaption></figure>
+  <h2>Reading the graph</h2>
+  <p>The graph is worked out from the same loop the model runs, so every knob on the card changes it. Peaks are where the tube rings; a note's partials that land on peaks are strong, those between them weak. The resonances drawn are the loudest note's. The tabs along the top (<strong>OPEN PIPE</strong>, <strong>CYLINDER</strong>, <strong>CONE</strong>, <strong>FLARE</strong>) show the instrument's family, and the title says what that means for its harmonics.</p>
+  <h2>Controls</h2>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">HOLES</td><td class="r">Closed, Lattice 3, 5, 7, 9, Open</td><td class="d">Lattice 7</td><td>How many tone holes are open below the note. More open holes move the holes' cutoff up and radiate more highs: Closed is dark and veiled, Open bright.</td></tr>
+      <tr><td class="c">TUBE</td><td class="r">Grenadilla, Boxwood, Maple, Bamboo, Brass, Silver, Resin, Glass</td><td class="d">Grenadilla</td><td>What it's made of. Each has its own body resonance and tilt, and soaks up more or less of every trip: wood warm and soft, metal and glass bright and ringing.</td></tr>
+      <tr><td class="c">MUTE</td><td class="r">Open, Straight, Cup, Harmon, Plunger, Bucket</td><td class="d">Open</td><td>Something in or over the bell, on any instrument.</td></tr>
+      <tr><td class="c">TUNE</td><td class="r">−100 – +100 ct</td><td class="d">+0 ct</td><td>Fine tuning. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">LENGTH</td><td class="r">0.15 – 1.50 m</td><td class="d">0.67 m</td><td>The tube below the open holes, whose own resonances ring above the holes' cutoff, most with HOLES at Closed and not at all at Open. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">LOSS</td><td class="r">0 – 50%</td><td class="d">4%</td><td>What the bore loses each trip: softer, darker, slower to speak. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">HOLE CUTOFF</td><td class="r">0.50 – 4.00 kHz</td><td class="d">1.30 kHz</td><td>Above it the tone holes let the sound out. The pitch stays put: the filter's delay is taken out of the bore. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">CONE</td><td class="r">0 – 100%</td><td class="d">50%</td><td>Sax and oboe: how far the cone is cut short at the reed, from towards a cylinder to a full cone. Trumpet: how conical its bore is, towards a flugelhorn. Alien: how stiff its string is. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">RADIATE</td><td class="r">0 – 100%</td><td class="d">66%</td><td>How the bell sends the highs out. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">BRASS</td><td class="r">0 – 100%</td><td class="d">50%</td><td>Trumpet only: how far the wave steepens into a blare. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">BARREL</td><td class="r">0 – 100%</td><td class="d">40%</td><td>The mouthpiece's cavity. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">WALL</td><td class="r">Metal, Resin, Wood, Cane, Bone</td><td class="d">Wood (50%)</td><td>How much the walls soak up. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">DETUNE</td><td class="r">0 – 25 ct</td><td class="d">+0 ct</td><td>Each note a little off, by up to this much: a section rather than one player. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">MUTE AMT</td><td class="r">0 – 100%</td><td class="d">100%</td><td>How far the mute is in. Route slide or pressure to it to work a plunger. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+    </tbody>
+  </table>
+  <h2>Mutes</h2>
+  <p>A mute does two things: it changes how the bell reflects, and it filters what comes out. <strong>Straight</strong>: lows cut and a nasal peak near 1.8 kHz. <strong>Cup</strong>: a cup over that, with a resonance near 900 Hz and the highs cut. <strong>Harmon</strong>: seals the bell and lets the sound out through its stem, a sharp resonance near 2 kHz over a weak fundamental: buzzy and distant. <strong>Plunger</strong>: a resonant lowpass that falls as it closes, the "wah", so route slide or pressure to MUTE AMT and work it like a hand. <strong>Bucket</strong>: felt that soaks up the highs, dark and soft. They work on every instrument: <em>Hat Alto</em>, <em>Felt Clarinet</em> and <em>Snake Charmer</em> put them on reeds.</p>
+</section>
+
+<!-- ================= 10. PLAYER CARD ================= -->
+<section class="chapter" data-ch="10" data-title="The Player Card">
+  <div class="chap-head">
+    <div class="num">Chapter 10</div>
+    <h1>The Player Card</h1>
+    <p class="lede">The tongue and the vibrato: how a player starts, shapes and ends each note.</p>
+    <div class="bar"></div>
+  </div>
+  <figure class="dark"><img src="img/player.jpg" alt=""><figcaption><b>Fig. 10.1</b>&nbsp; The PLAYER tab with the Flutter style. The curve is the tongue's breath envelope; the label above it shows the attack and the kick.</figcaption></figure>
+  <h2>Page 1 &nbsp;PLAYER</h2>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">STYLE</td><td class="r">Soft, Hard, Double, Flutter, Breath</td><td class="d">Hard</td><td>How the note is tongued (below).</td></tr>
+      <tr><td class="c">FORCE</td><td class="r">Strike, Press</td><td class="d">Strike</td><td>Where the tongue's force comes from: the velocity, or how hard the pressure arrives in the note's first few ms (Chapter 7).</td></tr>
+      <tr><td class="c">ATTACK</td><td class="r">1 – 400 ms</td><td class="d">25 ms</td><td>How long the breath takes to arrive. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">RELEASE</td><td class="r">5 – 2000 ms</td><td class="d">90 ms</td><td>How long it takes to stop. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">HUMANIZE</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Makes every note a little different in pitch, breath, attack and vibrato. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">FLUTTER</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Rolls the tongue through the note on any style. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">RATE</td><td class="r">10 – 40 Hz</td><td class="d">24.0 Hz</td><td>How fast the flutter rolls. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">RE-TONGUE</td><td class="r">0 – 100%</td><td class="d">50%</td><td>Tongues a held note again when its pressure dips quickly and comes back (below). At 0%, never. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+    </tbody>
+  </table>
+  <h2>Tongue styles</h2>
+  <table>
+    <thead><tr><th>Style</th><th>Sounds like</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Soft</td><td>"da"</td><td>A gentle start, little burst.</td></tr>
+      <tr><td class="c">Hard</td><td>"ta"</td><td>A crisp start with the full kick. The default.</td></tr>
+      <tr><td class="c">Double</td><td>"ta-ka"</td><td>Every note tongued, even when slurred in LEGATO.</td></tr>
+      <tr><td class="c">Flutter</td><td>a rolled R</td><td>Rolls the tongue through the note, at least half way whatever FLUTTER is set to.</td></tr>
+      <tr><td class="c">Breath</td><td>"hhh"</td><td>No tongue at all: the note starts from the air alone.</td></tr>
+    </tbody>
+  </table>
+  <h2>Re-tonguing</h2>
+  <p>A wind player repeats a note without changing fingers by tonguing it again. With pressure, JBreath does the same: when a held note's pressure falls under a dip within 150 ms and comes at least half way back within 300 ms more, the note is tongued again, as hard as the pressure came back. A slow diminuendo and swell never counts. Turned up, a lighter dip is enough; at 0% it never happens. On a single key you can now play repeated notes the way a player does on one fingering.</p>
+
+  <h2>Page 2 &nbsp;VIBRATO</h2>
+  <figure class="dark"><img src="img/vibrato.jpg" alt=""><figcaption><b>Fig. 10.2</b>&nbsp; The VIBRATO tab, from the breath and the jaw together. The graph shows how it grows in after the delay.</figcaption></figure>
+  <p>Vibrato grows in after <strong>DELAY</strong>, and its rate and depth wander a little as a player's do.</p>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">FROM</td><td class="r">Breath, Jaw, Breath+Jaw, Lip</td><td class="d">Breath</td><td>Where it comes from: the diaphragm (level and colour), the jaw (the embouchure, so pitch and colour), both, or the lip (pitch alone).</td></tr>
+      <tr><td class="c">RATE</td><td class="r">2 – 9 Hz</td><td class="d">5.10 Hz</td><td>How fast. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">DEPTH</td><td class="r">0 – 30%</td><td class="d">5%</td><td>How deep, from FROM. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">PITCH</td><td class="r">0 – 50 ct</td><td class="d">0 ct</td><td>Pitch vibrato in cents, on top. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">DELAY</td><td class="r">0 – 2000 ms</td><td class="d">350 ms</td><td>How long into the note before it grows in. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+    </tbody>
+  </table>
+  <p>The LFOS and BUSES tabs are part of the modulation system, in Chapter 11.</p>
+</section>
+<!-- ================= 11. MODULATION ================= -->
+<section class="chapter" data-ch="11" data-title="Modulation">
+  <div class="chap-head">
+    <div class="num">Chapter 11</div>
+    <h1>Modulation</h1>
+    <p class="lede">MAP any source onto any knob with a touch and a drag. Thirteen of the sources are your hands and the instrument's own breath.</p>
+    <div class="bar"></div>
+  </div>
+  <figure class="dark"><img src="img/map.jpg" alt=""><figcaption><b>Fig. 11.1</b>&nbsp; MAP with PRESS armed. Every knob that can be routed shows a ring in PRESS's colour; dragging one sets how far pressure moves it.</figcaption></figure>
+  <h2>MAP</h2>
+  <ol class="steps">
+    <li><b class="h">Arm a source</b>Touch a source chip: one of the hands in the header, or one of the breath sources under the loops. The panel shows a hint and every routable knob gets a ring.</li>
+    <li><b class="h">Drag a knob</b>Dragging now sets how far the source moves that knob, up or down, instead of the knob's value. The ring shows the reach. Double-click the knob to flip the route's sign; right-click it to remove the route.</li>
+    <li><b class="h">Leave MAP</b>Touch the chip again. The knob's outer ring keeps moving with the source, per voice, as you play.</li>
+  </ol>
+  <p>Outside MAP, right-click a knob to unmap every route into it. Hover a chip to read what its source is. Everything works per voice: PRESS on one note moves only that note.</p>
+  <h2>The sources</h2>
+  <p>New in 0.12.0: <strong>PUSH</strong> and <strong>SHAKE</strong> in the header, and <strong>FRAY</strong> in place of Vapor. Every breath source now runs 0 to 1 on every instrument, so a route sounds the same whichever instrument you pick.</p>
+  <table>
+    <thead><tr><th>Source</th><th>Range</th><th>What it follows</th></tr></thead>
+    <tbody>
+      <tr><td colspan="3" style="font:600 6.8pt InterM;letter-spacing:0.13em;color:#6d7280;padding-top:8px">THE PLAYER'S HANDS · IN THE HEADER</td></tr>
+      <tr><td class="c">STRIKE</td><td class="r">0 – 1</td><td>The note's velocity.</td></tr>
+      <tr><td class="c">PRESS</td><td class="r">0 – 1</td><td>Its pressure.</td></tr>
+      <tr><td class="c">PUSH</td><td class="r">0 – 1</td><td>How fast the pressure is rising: an accent, falling away once the finger stops pushing. Full at the whole range in 0.1 s.</td></tr>
+      <tr><td class="c">GLIDE</td><td class="r">−1 – +1</td><td>Its pitch bend, full at two semitones whatever the bend range.</td></tr>
+      <tr><td class="c">SHAKE</td><td class="r">0 – 1</td><td>How much the finger is moving the pitch: its vibrato, or a bend on its way. Full at a quarter of a semitone.</td></tr>
+      <tr><td class="c">SLIDE</td><td class="r">0 – 1</td><td>Its slide (CC 74).</td></tr>
+      <tr><td class="c">LIFT</td><td class="r">0 – 1</td><td>Its release velocity, moving only once the note is let go.</td></tr>
+      <tr><td colspan="3" style="font:600 6.8pt InterM;letter-spacing:0.13em;color:#6d7280;padding-top:8px">THE BREATH · UNDER THE LOOPS, READ OFF EACH VOICE</td></tr>
+      <tr><td class="c">LOOP</td><td class="r">0 – 1</td><td>How hard it blows, from the lightest breath that sounds to the instrument's full breath, with its attack and release.</td></tr>
+      <tr><td class="c">KNOT</td><td class="r">0 – 1</td><td>How bright it is for its note: the share of the sound above its 4th harmonic. Holds as the note dies away.</td></tr>
+      <tr><td class="c">FOLD</td><td class="r">0 – 1</td><td>How far into the top of its breath, from mezzo forte to full: towards where it overblows.</td></tr>
+      <tr><td class="c">REGISTER</td><td class="r">0 – 1</td><td>How high it plays in the instrument's range.</td></tr>
+      <tr><td class="c">FRAY</td><td class="r">0 – 1</td><td>How far the sound is from a steady tone: breath noise, growl, flutter, the attack or a split note, whatever frays the loop. Holds as the note dies away.</td></tr>
+      <tr><td class="c">DRAFT</td><td class="r">−1 – +1</td><td>A slow wandering draught of its own, carried from note to note.</td></tr>
+      <tr><td colspan="3" style="font:600 6.8pt InterM;letter-spacing:0.13em;color:#6d7280;padding-top:8px">GENERATORS AND BUSES · IN THE ROUTE LIST AND THE LFOS AND BUSES TABS</td></tr>
+      <tr><td class="c">LFO 1, LFO 2</td><td class="r">−1 – +1</td><td>Two LFOs (below).</td></tr>
+      <tr><td class="c">SWELL</td><td class="r">0 – 1</td><td>One contour over its time from each note's start (below).</td></tr>
+      <tr><td class="c">KEY</td><td class="r">−1 – +1</td><td>The note, around middle C.</td></tr>
+      <tr><td class="c">RANDOM</td><td class="r">−1 – +1</td><td>A fresh value for each note.</td></tr>
+      <tr><td class="c">BUS 1 – 4</td><td class="r">−1 – +1</td><td>The buses' outputs (below).</td></tr>
+    </tbody>
+  </table>
+  <div class="note warn"><span class="k">Breath sources can feed back</span><p>LOOP, FOLD, KNOT and FRAY are measured from the breath and the sound, so routed onto <strong>BREATH</strong> (or anything that changes how hard it blows) they feed back. That can be useful: FOLD onto BREATH latches a note once it's overblown, and LOOP onto BREATH at −100% flattens the dynamics. If a patch runs away, look for a breath source routed to Breath.</p></div>
+  <h2>Destinations</h2>
+  <p>A route can move any knob tagged <span class="mod t">ROUTE</span> in this manual: the exciter, the player and vibrato, the bore's Tune, Loss, Hole Cutoff, Cone, Brass, Detune and Mute Amount, the hybrid voice, the LFO rates and Swell time, Transpose, Glide, Curve, Pan, Unison Detune, Air and Level, every Alien knob, Re-Tongue, and the four buses' Amount. Several routes into one knob add up, and the result is kept within the knob's range. Host modulation is added first.</p>
+  <h2>The route list</h2>
+  <figure class="dark" style="width:70%"><img src="img/routes.jpg" alt=""><figcaption><b>Fig. 11.2</b>&nbsp; ROUTES replaces the loops with the list of all 32 routes.</figcaption></figure>
+  <p><strong>ROUTES</strong>, beside LOOPS under the stage, lists all 32 routes: each a source, a destination and an amount from −100% to +100%. Add, edit and remove them by hand here. A route's amount is a host parameter you can automate; its source and destination are not.</p>
+  <h2>LFOs and Swell</h2>
+  <figure class="dark"><img src="img/lfos.jpg" alt=""><figcaption><b>Fig. 11.3</b>&nbsp; The LFOS tab on the player card. Each chip arms its source for MAP, like the chips in the header.</figcaption></figure>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">LFO shape</td><td class="r">Sine, Triangle, Saw, Square, S&amp;H, Smooth</td><td class="d">Sine · Smooth</td><td>LFO 1's and LFO 2's wave. Smooth is a gliding random.</td></tr>
+      <tr><td class="c">NOTE / FREE</td><td class="r">Note, Free</td><td class="d">Note · Free</td><td>Restart with each note, or run free, shared by every voice.</td></tr>
+      <tr><td class="c">RATE</td><td class="r">0.02 – 20 Hz</td><td class="d">1.00 · 0.25 Hz</td><td>How fast. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">Swell shape</td><td class="r">Arch, Rise, Fall, Waves, Bloom, Tide</td><td class="d">Arch</td><td>A rise and fall, a rise to stay, a fall, two humps, a quick bloom that settles, or a slow breath in and out.</td></tr>
+      <tr><td class="c">ONCE / LOOP</td><td class="r">Once, Loop</td><td class="d">Once</td><td>Play the contour once per note, or keep repeating it.</td></tr>
+      <tr><td class="c">TIME</td><td class="r">0.05 – 30 s</td><td class="d">3.00 s</td><td>How long the contour takes. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+    </tbody>
+  </table>
+  <h2>Buses</h2>
+  <figure class="dark"><img src="img/buses.jpg" alt=""><figcaption><b>Fig. 11.4</b>&nbsp; The BUSES tab: four buses, each mixing what's routed to its AMOUNT and passing it on as a source.</figcaption></figure>
+  <p>A bus combines several sources into one. Route sources onto a bus's <strong>AMOUNT</strong>; the bus mixes them, bends the result and lags it, and sends it on as a source of its own (BUS 1 to 4). For example, PRESS and REGISTER into a bus set to Multiply, routed to GROWL, makes only loud, high notes growl.</p>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Mode</td><td class="r">Sum, Multiply, Min, Max</td><td class="d">Sum</td><td>How the routes onto it combine.</td></tr>
+      <tr><td class="c">Curve</td><td class="r">Linear, Exp, Log, S-Curve, Absolute</td><td class="d">Linear</td><td>Bends the mix.</td></tr>
+      <tr><td class="c">Polarity</td><td class="r">As Is, Unipolar, Bipolar, Invert</td><td class="d">As Is</td><td>Shifts or flips it.</td></tr>
+      <tr><td class="c">AMOUNT</td><td class="r">−100 – +100%</td><td class="d">0%</td><td>An offset, and where its inputs are routed. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">LAG</td><td class="r">0 – 2000 ms</td><td class="d">0 ms</td><td>Smooths the output. <span class="mod m">MOD</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= 12. ALIEN ================= -->
+<section class="chapter" data-ch="12" data-title="The Alien">
+  <div class="chap-head">
+    <div class="num">Chapter 12</div>
+    <h1>The Alien</h1>
+    <p class="lede">An instrument that sings words, a syllable a note: yours, typed in, or words of its own made-up language.</p>
+    <div class="bar"></div>
+  </div>
+  <figure class="dark"><img src="img/alien.jpg" alt=""><figcaption><b>Fig. 12.1</b>&nbsp; The ALIEN tab, singing typed words. Each word lights up while a voice sings it; the map shows where its vowels are (a human's hollow, its own lit).</figcaption></figure>
+  <p>Its voice is a formant synthesizer, a cascade of eight resonances for the vowels with a nose and a mouth beside them for the consonants, sung by vocal folds that shut faster and brighter the harder they're blown. Each syllable runs as a plan: the last syllable's closing consonants, this one's opening ones, then its vowel, held as long as the note is. Let go, it says the closing consonants before it falls silent. A chord's notes sing the same syllable; in LEGATO, a slur runs one syllable straight into the next. The breath is how loud and how hard it sings, the velocity how hard it says the consonants. It was tuned by playing whole sentences through the plug-in to speech recognizers.</p>
+  <h2>Words</h2>
+  <ul>
+    <li><strong>Typed words.</strong> Type in the box and the source switches to <strong>TYPED</strong>. Words are looked up in the CMU Pronouncing Dictionary (125,000 words, built in); a word it hasn't got is read the way an English reader would read it, so made-up names work too. Phones in ARPAbet between brackets, such as <code>[HH AH0 L OW1]</code>, are sung as written. The words start from the top whenever the host starts playing, and are saved with the project.</li>
+    <li><strong>Its own words.</strong> With nothing typed it sings a made-up language: a vocabulary of a dozen words built from the vowels and consonant families that are lit, the commoner words coming back more often. <strong>NEW WORDS</strong>, or the <strong>LANGUAGE</strong> knob, picks another of a thousand languages. <strong>SHORT / MIXED / LONG / CHANT</strong> sets how long its words are.</li>
+  </ul>
+  <h2>The throat</h2>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">ACCENT</td><td class="r">0 – 100%</td><td class="d">0%</td><td>How far each syllable's vowel is bent from a human's, new each syllable. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">SPREAD</td><td class="r">−100 – +100%</td><td class="d">0%</td><td>Squeezes the resonances together (a muffled hum) or pushes them apart (glassy and thin). <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">FLIP</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Turns the vowels round the middle of the vowel space; all the way, ee is where ah was. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">SIZE</td><td class="r">−1 – +1 oct</td><td class="d">+0.00 oct</td><td>Every resonance up or down an octave. A quarter up with the notes up an octave is a woman's voice; a quarter down a big man's. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">SHARP</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How narrow the resonances are, up to a throat singer's whistles. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">WET</td><td class="r">0 – 100%</td><td class="d">20%</td><td>Something moving in the throat: the resonances shiver and gurgle. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">ROUGH</td><td class="r">0 – 100%</td><td class="d">45%</td><td>How unsteady the folds are, as a living voice's. At 0% it's a machine. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">GROWL</td><td class="r">0 – 100%</td><td class="d">0%</td><td>A creature's rasp: a growl an octave under the note, a rattle, a creak. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">FOLLOW</td><td class="r">0 – 100%</td><td class="d">0%</td><td>How far the throat follows the note: none is a singer's. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">WOBBLE</td><td class="r">0 – 100%</td><td class="d">0%</td><td>Each resonance swings on a slow wave of its own. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">DRIFT</td><td class="r">0 – 100%</td><td class="d">20%</td><td>How far the vowels wander on their own. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">GLIDE</td><td class="r">5 – 400 ms</td><td class="d">30 ms</td><td>How long each vowel takes to arrive. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">BEND</td><td class="r">0 – 100%</td><td class="d">60%</td><td>How far the throat follows a pitch bend, like a talk box's mouth. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">BREATHY</td><td class="r">0 – 100%</td><td class="d">25%</td><td>How much air goes through the folds, from clear to a whisper. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">CONSONANT</td><td class="r">0 – 100%</td><td class="d">100%</td><td>How strong the consonants are, from vowels only to every stop, hiss and hum. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">HOLD</td><td class="r">0 – 100%</td><td class="d">20%</td><td>How long a diphthong holds its first vowel. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">TALK · PACE</td><td class="r">0 – 100% · Free, 1/16 – 2 Bars</td><td class="d">50% · Free</td><td>Its own words only: how soon a held note goes on to the next syllable, chattering while held. Free (by TALK; under a fifth, never), or a note value at the host's tempo. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">VOWELS · CONSONANTS</td><td class="r">each On / Off</td><td class="d">all On</td><td>Which its own words use: A E I O U, and M N, L R, W Y, V Z, B D G, H, F S, P T K.</td></tr>
+    </tbody>
+  </table>
+  <h2>The exciter on the Alien</h2>
+  <p><strong>EMBOUCHURE</strong> is the jaw, from nearly shut to wide open (slide opens the mouth). <strong>STIFFNESS</strong> is the vocal folds, from lax and hooting to pressed and buzzing. <strong>BITE</strong> sings through the nose below the middle and adds a brassy twang above it. <strong>APERTURE</strong> is the lips, from rounded and dark to a bright grin. <strong>KICK</strong> is how hard each word starts and its consonants hit, and <strong>LOSS</strong> on the bore a damped, muffled throat. Each changes its colour, not how loud it is.</p>
+  <h2>The bowed string</h2>
+  <p><strong>BOW</strong> replaces the folds with a bowed string that sings the words: the breath is the bow's speed, BITE its weight, EMBOUCHURE where it crosses the string, STIFFNESS the hair's tension, APERTURE how wide it lies, and CONE how stiff the string is, from gut to a steel wire whose partials stretch apart like a bell's. Try <em>Talking Bow</em>.</p>
+  <p>High notes are sung as a singer sings them: from about E4 up, the first resonance rides above the note and the upper ones widen, so the top stays round rather than whistling. The ALIEN tab only shows when the Alien is the instrument.</p>
+</section>
+<!-- ================= 13. LOOPS AND AIR ================= -->
+<section class="chapter" data-ch="13" data-title="The Breath Loops and AIR View">
+  <div class="chap-head">
+    <div class="num">Chapter 13</div>
+    <h1>The Breath Loops and AIR View</h1>
+    <p class="lede">Every voice drawn as a loop of its own sound, slowly turning, puffing smoke as it blows.</p>
+    <div class="bar"></div>
+  </div>
+  <figure class="dark"><img src="img/loops.jpg" alt=""><figcaption><b>Fig. 13.1</b>&nbsp; <em>Smoke Tenor</em>, four notes. Each loop is labelled with its note and how hard it's blowing.</figcaption></figure>
+  <h2>Reading a loop</h2>
+  <p>Each loop plots a voice's sound now against its sound a quarter of a period ago and half a period ago, in three dimensions, slowly turning. A steady tone draws a clean closed loop, its shape the tone's harmonics; growl, flutter, breath noise or a split note fray it. That fraying is what the <strong>FRAY</strong> source measures. Smoke comes off every loop as it blows, warm in the instrument's colour, cooling as it rises and curls away.</p>
+  <p>Above the stage, <strong>SMOKE / INK</strong> picks the look and the menu beside it the palette: <strong>Dusk</strong> (the instrument's own colour), <strong>Ember</strong>, <strong>Frost</strong>, <strong>Moss</strong> or <strong>Mono</strong>. <strong>INK</strong> drops dye from the loops that sinks and spreads instead of glowing smoke.</p>
+  <h2>The AIR view</h2>
+  <figure class="dark"><img src="img/air-view.jpg" alt=""><figcaption><b>Fig. 13.2</b>&nbsp; The AIR view with its controls open.</figcaption></figure>
+  <p><strong>AIR</strong> in the header gives the loops the whole window; <strong>PLAY</strong> brings the panel back. <strong>CONTROLS</strong> opens the look's knobs over the view.</p>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">SMOKE</td><td class="r">0 – 300%</td><td class="d">133%</td><td>How much smoke the loops puff out.</td></tr>
+      <tr><td class="c">TURBULENCE</td><td class="r">0 – 100%</td><td class="d">42%</td><td>How hard the air curls the smoke.</td></tr>
+      <tr><td class="c">RISE</td><td class="r">0 – 100%</td><td class="d">55%</td><td>How fast it rises.</td></tr>
+      <tr><td class="c">SWIRL</td><td class="r">0 – 100%</td><td class="d">38%</td><td>How tightly it curls into strands.</td></tr>
+      <tr><td class="c">TAIL</td><td class="r">0.5 – 8.0 s</td><td class="d">4.0 s</td><td>How long it hangs.</td></tr>
+      <tr><td class="c">LINE</td><td class="r">0 – 100%</td><td class="d">40%</td><td>The loops' line.</td></tr>
+      <tr><td class="c">GLOW</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How brightly loops and smoke are lit: 50% is the usual light, 100% four times it.</td></tr>
+      <tr><td class="c">ACROSS · UP · SIZE</td><td class="r">Pitch, Strike, Press, Slide, Breath, Random, Centre</td><td class="d">Pitch · Breath · Breath</td><td>What places each loop across and up the stage, and what sets its size.</td></tr>
+      <tr><td class="c">MIN SIZE</td><td class="r">10 – 100%</td><td class="d">25%</td><td>The smallest a loop gets, against the largest.</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><span class="k">The look stays with the project</span><p>The look is kept with the project, not with presets, so changing preset leaves it alone. Its knobs are not host parameters to automate.</p></div>
+  <p>The animation steps in time with the display and thins the smoke if frames run late, so the view stays smooth without taking time from the audio.</p>
+</section>
+
+<!-- ================= 14. VOICE CARD ================= -->
+<section class="chapter" data-ch="14" data-title="The Voice Card">
+  <div class="chap-head">
+    <div class="num">Chapter 14</div>
+    <h1>The Voice Card</h1>
+    <p class="lede">The voices, where they sit, and the room, the echo and the output they play into.</p>
+    <div class="bar"></div>
+  </div>
+  <figure class="dark"><img src="img/voice.jpg" alt=""><figcaption><b>Fig. 14.1</b>&nbsp; The VOICE tab: the eight voices, where each note sits in the stereo field, and the meters.</figcaption></figure>
+  <h2>Voice modes</h2>
+  <table class="params">
+    <thead><tr><th>Mode</th><th>Voices</th><th></th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">POLY</td><td class="r" colspan="2">8</td><td>A ninth note takes the quietest released voice, or the oldest.</td></tr>
+      <tr><td class="c">MONO</td><td class="r" colspan="2">1</td><td>The tongue stops the air between notes. Letting go goes back to the newest key still held.</td></tr>
+      <tr><td class="c">LEGATO</td><td class="r" colspan="2">1</td><td>The fingers change and the air doesn't stop: a slur, with GLIDE setting how long the pitch takes to get there. The Double tongue style still tongues every note.</td></tr>
+    </tbody>
+  </table>
+  <h2>The VOICE tab</h2>
+  <p>The tab shows the eight voices, lit while they sound; where each note sits in the stereo field, with the output's balance under it; and the meters, glowing as they rise: the breath coming in (<strong>IN</strong>), and the output left and right with the peak held (in dB at the top), red over 0 dB, with a notch where Master is set.</p>
+  <h2>The knobs along the bottom</h2>
+  <p>These stay on screen whichever tab is open.</p>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">SPREAD</td><td class="r">−100 – +100%</td><td class="d">50%</td><td>Low notes left, high right, as across a section; below zero the other way round. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">PAN</td><td class="r">−100 – +100%</td><td class="d">0%</td><td>Where the notes sit before the spread. Map Key, Slide or Random onto it to place each note. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">UNISON</td><td class="r">1 – 4</td><td class="d">1</td><td>Copies of every voice, detuned against each other. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">U.DETUNE</td><td class="r">0 – 50 ct</td><td class="d">12 ct</td><td>How far the unison copies spread. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">GLIDE</td><td class="r">0 – 1000 ms</td><td class="d">0 ms</td><td>How long the pitch takes to slide to a new note in LEGATO. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">BEND</td><td class="r">1 – 96 st</td><td class="d">48 st</td><td>The MPE bend range of the note channels. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">TRANSP</td><td class="r">−24 – +24 st</td><td class="d">+0 st</td><td>Transpose. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">REVERB</td><td class="r">0 – 100%</td><td class="d">15%</td><td>How much room. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">AIR</td><td class="r">0 – 100%</td><td class="d">0%</td><td>The breath heard around the instrument, not through it. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">LEVEL</td><td class="r">−60 – +12 dB</td><td class="d">0.0 dB</td><td>The patch's level, saved with presets. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">MASTER</td><td class="r">−36 – +6 dB</td><td class="d">0.0 dB</td><td>The output's level. The dice never touch it. <span class="mod m">MOD</span></td></tr>
+    </tbody>
+  </table>
+  <p>The <strong>AIR</strong> tab (where the breath comes from) is described in Chapter 7.</p>
+  <h2>The REVERB tab</h2>
+  <figure class="dark"><img src="img/room.jpg" alt=""><figcaption><b>Fig. 14.2</b>&nbsp; The REVERB tab, with the output's tone and the limiter.</figcaption></figure>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">REVERB</td><td class="r">Off, On</td><td class="d">On</td><td>Switched off, the room's tail rings out rather than stopping.</td></tr>
+      <tr><td class="c">SIZE</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How big the room is. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">DECAY</td><td class="r">0.2 – 10.0 s</td><td class="d">1.6 s</td><td>How long it rings. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">DAMP</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How fast the highs die. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">PRE-DELAY</td><td class="r">0 – 100 ms</td><td class="d">12 ms</td><td>Delay before the room answers. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">TONE</td><td class="r">−12 – +12 dB</td><td class="d">+0.0 dB</td><td>Darkens or brightens the whole output. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">LIMITER</td><td class="r">Off, Soft, Hard</td><td class="d">Hard</td><td>Off: nothing. Soft: overs saturate. Hard: a peak limiter holds the output under full scale, so a big chord never clips.</td></tr>
+    </tbody>
+  </table>
+  <h2>The DELAY tab</h2>
+  <figure class="dark"><img src="img/delay.jpg" alt=""><figcaption><b>Fig. 14.3</b>&nbsp; The DELAY tab, synced to a dotted eighth.</figcaption></figure>
+  <p>A stereo echo before the reverb, off until switched on.</p>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">DELAY</td><td class="r">Off, On</td><td class="d">Off</td><td>Switches the echo in.</td></tr>
+      <tr><td class="c">SYNC</td><td class="r">Free, 1/32 – 1/1, dotted and triplet</td><td class="d">Free</td><td>A note value at the host's tempo, or Free to use TIME.</td></tr>
+      <tr><td class="c">MIX</td><td class="r">0 – 100%</td><td class="d">30%</td><td>How loud the echoes are. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">TIME</td><td class="r">10 ms – 2 s</td><td class="d">375 ms</td><td>The echo time when SYNC is Free. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">FEEDBACK</td><td class="r">0 – 95%</td><td class="d">40%</td><td>How many echoes there are. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">TONE</td><td class="r">0 – 100%</td><td class="d">72%</td><td>How much darker each one gets. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">SPREAD</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How far they bounce between left and right. <span class="mod m">MOD</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= 15. PRESETS AND DICE ================= -->
+<section class="chapter" data-ch="15" data-title="Presets and Dice">
+  <div class="chap-head">
+    <div class="num">Chapter 15</div>
+    <h1>Presets and Dice</h1>
+    <p class="lede">Eighty-seven factory presets, your own, and a die that builds new instruments.</p>
+    <div class="bar"></div>
+  </div>
+  <h2>The preset bar</h2>
+  <ul>
+    <li><strong>◀ ▶</strong> step to the previous or next preset, in menu order. Scrolling over the bar does the same.</li>
+    <li>The <strong>name</strong> opens the preset menu: <em>Favorites</em>, the factory bank by family, a <em>User</em> submenu with your own presets, and <em>Save as…</em>. The family of the current preset is shown at the left of the name.</li>
+    <li><strong>☆</strong> beside the name makes the current preset a favorite; click it again to unstar it.</li>
+    <li><strong>SAVE</strong> asks for a name and writes the current settings as a user preset.</li>
+    <li>The <strong>die</strong> at the left opens the dice card (below).</li>
+  </ul>
+  <p>Loading a preset sets every parameter except the AIR view's look, so nothing else carries over from the previous sound. The host sees the change as an ordinary edit, so it can be undone.</p>
+  <h2>User presets</h2>
+  <p>User presets are small text files with the extension <span class="mono">.jbpreset</span>, one line per parameter. They live in:</p>
+  <table><tbody>
+    <tr><td class="c">macOS</td><td class="r">~/Library/Application Support/JBreath/Presets</td></tr>
+    <tr><td class="c">Windows</td><td class="r">%APPDATA%\JBreath\Presets</td></tr>
+    <tr><td class="c">Linux</td><td class="r">$XDG_CONFIG_HOME/JBreath/Presets &nbsp;(or ~/.config/JBreath/Presets)</td></tr>
+  </tbody></table>
+  <p>Copy files into this folder to share presets between machines; they appear the next time the menu opens. Favorites are kept beside it and shared by every JBreath you open.</p>
+  <h2>The factory bank</h2>
+  <p>Init, then eight to twenty-seven presets for each family. Each family starts from its most natural sound, the model with a player's vibrato and a little room, and runs through darker, breathier, brighter and harder variants, its relatives by Transpose, and its oddities. Every factory preset plays in tune at a usable level (tested).</p>
+  <div id="presets"></div>
+  <h2>Dice</h2>
+  <figure class="dark"><img src="img/dice.jpg" alt=""><figcaption><b>Fig. 15.1</b>&nbsp; The dice card opens over the breath loops, so nothing it changes is hidden.</figcaption></figure>
+  <p><strong>RANDOMIZE</strong> builds a new patch the way a player would pick one up: an instrument first, then its exciter, bore, tongue and vibrato within the ranges that sound for that instrument, and a name for it. <strong>COMPLEXITY</strong> says how much it reaches for: at 0 a plain, real instrument; higher brings growl or flutter, a mute, the hybrid layer, unison, LFOs and routes, the delay, wider bore settings and the Alien.</p>
+  <p><strong>MUTATE</strong> nudges the patch you have by <strong>AMOUNT</strong>: what's off stays off, a choice moves only to a near one (a mute to the next mute, a tongue to its neighbour), and only a high amount changes the instrument or adds a route. <strong>UNDO</strong> and <strong>REDO</strong> step through what the dice replaced.</p>
+  <p><strong>LOCK</strong> keeps a section as it is through both: INSTRUMENT, BORE, PLAYER, VIBRATO, HYBRID, MOD, FX and VOICE. The dice never touch Level, Master or the Limiter, the breath source and the rest of the MIDI and MPE setup, Transpose, Tune, or the AIR view's look. The complexity, amount and locks stay with the plug-in while the project is open, not with presets. Every patch the dice make plays in tune at a usable level (tested over many seeds).</p>
+</section>
+<!-- ================= 16. RECIPES ================= -->
+<section class="chapter" data-ch="16" data-title="Sound Design Recipes">
+  <div class="chap-head">
+    <div class="num">Chapter 16</div>
+    <h1>Sound Design Recipes</h1>
+    <p class="lede">Starting points for playing and for sound design. Begin from the preset named, then change only what is listed. A route is written SOURCE → destination, amount.</p>
+    <div class="bar"></div>
+  </div>
+  <div class="recipes">
+    <div class="recipe"><h3>Breath-controller sax</h3><p>A sax that brightens and buzzes as you lean in, from a breath controller or MPE pressure.</p><div class="set">from Clean Alto<br>BREATH FROM Press · CURVE 0.80<br>PRESS → Bite, +40%<br>FOLD → Growl, +30%</div><div class="from">Close to: Clean Alto, Growl Alto</div></div>
+    <div class="recipe" style="--rc:#ff8f6b"><h3>Accents on the push</h3><p>Pushing into a note bites; easing in stays round.</p><div class="set">from Brass Plume<br>PUSH → Bite, +60%<br>PUSH → Kick, +30%</div><div class="from">New sources in 0.12.0</div></div>
+    <div class="recipe" style="--rc:#c792ff"><h3>Finger vibrato that growls</h3><p>Shake the key and the tone roughens with the vibrato.</p><div class="set">from Smoke Tenor<br>VIBRATO DEPTH 0%<br>SHAKE → Growl, +70%</div><div class="from">Needs MPE pitch from the finger</div></div>
+    <div class="recipe" style="--rc:#7ee6a0"><h3>Repeated notes on one key</h3><p>Tongue a held trumpet note again with a quick dip in pressure, as a player does on one fingering.</p><div class="set">from Fanfare<br>RE-TONGUE 80% · STYLE Hard<br>FORCE Press</div><div class="from">Close to: Fanfare</div></div>
+    <div class="recipe" style="--rc:#ffb547"><h3>Plunger wah</h3><p>Slide works the plunger like a hand over the bell.</p><div class="set">from Brass Plume<br>MUTE Plunger · MUTE AMT 0%<br>SLIDE → Mute Amount, +100%</div><div class="from">Close to: Plunger Wah</div></div>
+    <div class="recipe" style="--rc:#6fe0ff"><h3>Section pad</h3><p>A small reed section with a soft sine under it, swelling in after each note.</p><div class="set">from Wooden Reed<br>UNISON 3 · U.DETUNE 14 ct · DETUNE 8 ct<br>HYBRID Sine −1 oct · MIX 30% · FOLLOW 20%<br>HYBRID ATTACK 800 ms · RELEASE 2 s</div><div class="from">Close to: Reed Choir, Section Pad</div></div>
+    <div class="recipe" style="--rc:#9b7bff"><h3>Only loud high notes growl</h3><p>Two sources multiplied on a bus.</p><div class="set">from Growl Alto · GROWL 0%<br>PRESS → Bus 1, +100% · REGISTER → Bus 1, +100%<br>BUS 1 Multiply<br>BUS 1 → Growl, +80%</div><div class="from">Uses a bus as an AND</div></div>
+    <div class="recipe" style="--rc:#ff5fc8"><h3>Overblow latch</h3><p>Once a note is blown past the top it stays there until you let go. Feedback on purpose.</p><div class="set">from Concert Flute<br>BREATH 120%<br>FOLD → Breath, +50%</div><div class="from">Back off the amount if it runs away</div></div>
+  </div>
+  <h2>General tips</h2>
+  <ul>
+    <li><strong>Blow the dynamics, don't mix them.</strong> A wind instrument's loudness and tone are the same control. Use the breath to play soft and loud, and LEVEL only to balance the patch.</li>
+    <li><strong>Lower Breath for a beginner, raise it for a pro.</strong> BREATH under 100% never quite reaches the instrument's top; over 100% every note can be overblown.</li>
+    <li><strong>Play in range.</strong> Each model is best in its own register. Use TRANSP or a relative preset rather than playing a flute two octaves down.</li>
+    <li><strong>Legato for lines.</strong> LEGATO with a little GLIDE sounds like one player; POLY sounds like a section.</li>
+    <li><strong>Humanize a little.</strong> 10 to 20% HUMANIZE and a little DETUNE make repeated notes sound played, not pasted.</li>
+  </ul>
+</section>
+
+<!-- ================= APPENDIX A ================= -->
+<section class="chapter" data-ch="A" data-title="Appendix: Parameter Reference">
+  <div class="chap-head">
+    <div class="num">Appendix A</div>
+    <h1>Parameter Reference</h1>
+    <p class="lede">Every parameter JBreath exposes to the host, grouped as the host lists them. Everything but the AIR view's look is automatable.</p>
+    <div class="bar"></div>
+  </div>
+  <div id="paramref"></div>
+</section>
+
+<!-- ================= APPENDIX B ================= -->
+<section class="chapter" data-ch="B" data-title="Appendix: Specifications">
+  <div class="chap-head">
+    <div class="num">Appendix B</div>
+    <h1>Specifications</h1>
+    <div class="bar"></div>
+  </div>
+  <table class="specs"><tbody>
+    <tr><td class="c">Format</td><td>CLAP 1.2 instrument. Features: instrument, synthesizer, stereo. CLAP only: no VST3 or AU. Not supported in Ableton Live.</td></tr>
+    <tr><td class="c">Notes</td><td>CLAP notes, MIDI and MIDI MPE. CLAP note expressions: tuning, pressure, brightness. Polyphonic aftertouch, channel pressure, CC 2 (breath), CC 74 (slide), CC 64 (sustain), RPN 0 (bend range), MPE Configuration Message.</td></tr>
+    <tr><td class="c">Voices</td><td>8, with up to 4 unison copies each. Poly, Mono and Legato.</td></tr>
+    <tr><td class="c">Output</td><td>Stereo.</td></tr>
+    <tr><td class="c">Platforms</td><td>macOS universal (10.15+ Intel, 11+ Apple Silicon), Windows (64-bit), Linux (64-bit).</td></tr>
+    <tr><td class="c">Synthesis</td><td>Digital waveguides with nonlinear exciters: air jet, single reed, cane reed, double reed, lips, vocal folds or bowed string over a formant synthesizer.</td></tr>
+    <tr><td class="c">Internal rate</td><td>88.2 kHz or more (2× at 44.1 and 48 kHz), decimated once.</td></tr>
+    <tr><td class="c">Tuning</td><td>Every note of every model within a cent, measured offline and corrected for breath.</td></tr>
+    <tr><td class="c">Modulation</td><td>22 sources, 32 routes, 4 buses, 2 LFOs and a Swell contour, per voice.</td></tr>
+    <tr><td class="c">Effects</td><td>Stereo delay (10 ms to 2 s, synced or free), room reverb, output tone, limiter.</td></tr>
+    <tr><td class="c">Tail</td><td>Reported to the host from the release, the room and the delay.</td></tr>
+    <tr><td class="c">Presets</td><td>87 factory presets; user presets as <span class="mono">.jbpreset</span> text files.</td></tr>
+    <tr><td class="c">State</td><td>Saved with the host project, including the preset name, the Alien's typed words and the AIR view's look.</td></tr>
+    <tr><td class="c">Panel</td><td>1648 × 940 at 100%, scalable.</td></tr>
+  </tbody></table>
+  <h2>Troubleshooting</h2>
+  <table>
+    <thead><tr><th>Symptom</th><th>What to check</th></tr></thead>
+    <tbody>
+      <tr><td class="c">JBreath doesn't appear in my host</td><td>Your host must load CLAP plug-ins; Ableton Live does not. On macOS the download may be quarantined: see the warning in Chapter 2, then rescan.</td></tr>
+      <tr><td class="c">Notes don't sound, or only on hard hits</td><td>With BREATH FROM at PRESS or INPUT, a note with no pressure or Breath In blows nothing. Set AUTO. Check BREATH isn't turned right down, and that CURVE isn't very high for a light-touch controller.</td></tr>
+      <tr><td class="c">Pressure does nothing</td><td>Check your host passes aftertouch or MPE to the plug-in, and that BREATH FROM is AUTO, PRESS or MIX.</td></tr>
+      <tr><td class="c">Bends are far too wide or too narrow</td><td>BEND on the voice card must match your controller's MPE bend range (48 is the standard). A controller that sends RPN 0 sets it for you.</td></tr>
+      <tr><td class="c">A note splits, squeals or jumps a register</td><td>That's overblowing, as on the real instrument. Lower BREATH, or EMBOUCHURE on the flute; check for a breath source routed to Breath.</td></tr>
+      <tr><td class="c">Repeated notes when I didn't mean them</td><td>RE-TONGUE is tonguing quick dips in your pressure. Turn it down, or to 0%.</td></tr>
+      <tr><td class="c">A patch runs away or latches loud</td><td>A breath source (LOOP, FOLD, KNOT, FRAY) is routed to Breath and feeding back. Open ROUTES and lower it.</td></tr>
+      <tr><td class="c">It sounds out of tune</td><td>Check TUNE, TRANSP, DETUNE, U.DETUNE, HUMANIZE and the vibrato's PITCH. Every note is in tune with these at zero.</td></tr>
+      <tr><td class="c">My user presets are missing</td><td>Check the preset folder for your OS (Chapter 15). Files must end in <span class="mono">.jbpreset</span>.</td></tr>
+    </tbody>
+  </table>
+  <h2>Glossary</h2>
+  <table class="specs"><tbody>
+    <tr><td class="c">Bore</td><td>The tube the sound rings in, modelled as delay lines carrying the wave down and back.</td></tr>
+    <tr><td class="c">Exciter</td><td>The part the player blows into: a reed, the lips, an air jet or vocal folds. A valve the breath drives.</td></tr>
+    <tr><td class="c">Waveguide</td><td>A way of modelling a tube or string with delay lines and filters, so the sound travels in it as in the real one.</td></tr>
+    <tr><td class="c">Impedance</td><td>How hard the bore resists air at each frequency. Its peaks are the notes it can play.</td></tr>
+    <tr><td class="c">Overblow</td><td>Blowing hard enough that the instrument jumps to a higher resonance: a split note or the next register.</td></tr>
+    <tr><td class="c">Embouchure</td><td>The lips, jaw and the way they meet the instrument.</td></tr>
+    <tr><td class="c">MPE</td><td>MIDI Polyphonic Expression: each note on its own channel, so each has its own bend, pressure and slide.</td></tr>
+    <tr><td class="c">Formant</td><td>A resonance of the throat and mouth. Vowels are told apart by where their formants are.</td></tr>
+    <tr><td class="c">Route</td><td>A link from a modulation source to a knob, with an amount.</td></tr>
+  </tbody></table>
+</section>
+
+<section class="back">
+  <div class="mid">
+    <div class="word"><span class="j">J</span>Breath</div>
+    <div class="small">Breathing physical models · v0.12.0 draft</div>
+  </div>
+  <div class="url">github.com/jeffmhopkins/Jclap</div>
+</section>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+function el(parent, tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  parent.appendChild(e);
+  return e;
+}
+
+// ----- cover: dust and a breath loop -----
+(function () {
+  const s = document.getElementById('stars');
+  let seed = 11;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 220; i++) {
+    const r = rnd() < 0.92 ? 0.4 + rnd() * 0.7 : 1.1 + rnd() * 0.7;
+    el(s, 'circle', { cx: rnd() * 816, cy: rnd() * 1056, r, fill: '#ffd9b0', opacity: (0.1 + rnd() * 0.45).toFixed(2) });
+  }
+  // a breath loop: a four-lobed curve with a rising smoke trail
+  const defs = el(s, 'defs', {});
+  const lg = el(defs, 'linearGradient', { id: 'lp', x1: '0', x2: '1', y1: '0', y2: '1' });
+  el(lg, 'stop', { offset: '0', 'stop-color': '#ffd08a' });
+  el(lg, 'stop', { offset: '1', 'stop-color': '#f28c28' });
+  const flt = el(defs, 'filter', { id: 'blur', x: '-50%', y: '-50%', width: '200%', height: '200%' });
+  el(flt, 'feGaussianBlur', { stdDeviation: 6 });
+})();
+
+// ----- overview callouts -----
+(function () {
+  const g = document.querySelector('#overview svg g');
+  const pts = [
+    [1, 470, 26], [2, 790, 26], [3, 1500, 26], [4, 30, 82],
+    [5, 250, 120], [6, 560, 92], [7, 32, 426], [8, 32, 748],
+    [9, 940, 120], [10, 905, 580], [11, 1630, 580], [12, 906, 630],
+  ];
+  for (const [n, x, y] of pts) {
+    el(g, 'circle', { cx: x, cy: y, r: 16, fill: '#f28c28', stroke: '#fff', 'stroke-width': 2.5 });
+    el(g, 'text', { x, y: y + 6, fill: '#fff' }, String(n));
+  }
+})();
+
+// ----- signal flow -----
+(function () {
+  const g = document.getElementById('flow');
+  const H = 36;
+  const colors = { box: ['#f5f5f7', '#15171d'], dark: ['#15171d', '#ffffff'], io: ['#ffffff', '#15171d'], acc: ['#fdf0e2', '#c4650f'] };
+  function box(x, y, w, label, sub, kind = 'box') {
+    const [fill, ink] = colors[kind];
+    if (kind === 'io') el(g, 'rect', { x, y, width: w, height: H, rx: H / 2, fill, stroke: ink, 'stroke-width': 1.2 });
+    else el(g, 'rect', { x, y, width: w, height: H, rx: 5, fill, stroke: kind === 'dark' ? 'none' : kind === 'acc' ? '#f0c49a' : '#c9ccd3', 'stroke-width': 1 });
+    el(g, 'text', { x: x + w / 2, y: y + (sub ? 15 : 22), 'text-anchor': 'middle', 'font-weight': 600, 'font-size': 8.6, fill: ink, 'letter-spacing': '0.04em' }, label);
+    if (sub) el(g, 'text', { x: x + w / 2, y: y + 27, 'text-anchor': 'middle', 'font-size': 7, fill: kind === 'dark' ? '#b8bcc6' : '#6d7280' }, sub);
+  }
+  function arrow(d, gray) {
+    el(g, 'path', { d, fill: 'none', stroke: gray ? '#9aa0ad' : '#15171d', 'stroke-width': 1.1, 'stroke-dasharray': gray ? '3 3' : 'none', 'marker-end': gray ? 'url(#ahg)' : 'url(#ah)' });
+  }
+  // the voice band
+  el(g, 'rect', { x: 2, y: 4, width: 696, height: 168, rx: 10, fill: '#fbf6f0', stroke: '#f0dcc4', 'stroke-width': 1 });
+  el(g, 'text', { x: 14, y: 20, 'font-size': 7.2, 'font-weight': 700, fill: '#c4650f', 'letter-spacing': '0.16em' }, 'EACH VOICE  ×8');
+  const y1 = 34;
+  box(10, y1, 92, 'BREATH', 'press · CC 2 · vel · in', 'io');
+  box(124, y1, 92, 'CURVE', 'press curve');
+  box(238, y1, 110, 'PLAYER', 'tongue · vibrato · flutter', 'acc');
+  arrow(`M102,${y1 + H / 2} L122,${y1 + H / 2}`);
+  arrow(`M216,${y1 + H / 2} L236,${y1 + H / 2}`);
+  // exciter <-> bore
+  box(380, y1, 100, 'EXCITER', 'reed · lips · jet · folds', 'dark');
+  box(540, y1, 140, 'BORE', 'tube · holes · bell · mute', 'dark');
+  arrow(`M348,${y1 + H / 2} L378,${y1 + H / 2}`);
+  arrow(`M480,${y1 + 11} L538,${y1 + 11}`);
+  arrow(`M538,${y1 + 25} L482,${y1 + 25}`);
+  el(g, 'text', { x: 509, y: y1 + 48, 'text-anchor': 'middle', 'font-size': 7, fill: '#6d7280' }, 'the wave, down and back');
+  // hybrid
+  box(380, 112, 100, 'HYBRID', 'wave · lowpass · env', 'acc');
+  arrow(`M293,${y1 + H} L293,130 L378,130`, true);
+  el(g, 'text', { x: 300, y: 124, 'font-size': 7, fill: '#6d7280' }, 'same breath');
+  // sum in voice
+  el(g, 'circle', { cx: 610, cy: 130, r: 11, fill: '#fff', stroke: '#15171d', 'stroke-width': 1.1 });
+  el(g, 'text', { x: 610, y: 134, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 600 }, '+');
+  arrow(`M610,${y1 + H} L610,117`);
+  arrow(`M480,130 L597,130`);
+  // output row
+  const y3 = 200;
+  box(10, y3, 110, 'VOICES', 'unison · pan · spread');
+  arrow(`M610,141 L610,186 L65,186 L65,${y3 - 2}`);
+  box(140, y3, 80, 'AIR', 'breath around it');
+  box(240, y3, 80, 'DELAY', 'stereo echo');
+  box(340, y3, 80, 'REVERB', 'small room');
+  box(440, y3, 90, 'TONE · LEVEL', 'master');
+  box(550, y3, 80, 'LIMITER', 'off · soft · hard');
+  box(650, y3 + 46, 46, 'OUT', null, 'io');
+  arrow(`M120,${y3 + H / 2} L138,${y3 + H / 2}`);
+  arrow(`M220,${y3 + H / 2} L238,${y3 + H / 2}`);
+  arrow(`M320,${y3 + H / 2} L338,${y3 + H / 2}`);
+  arrow(`M420,${y3 + H / 2} L438,${y3 + H / 2}`);
+  arrow(`M530,${y3 + H / 2} L548,${y3 + H / 2}`);
+  arrow(`M630,${y3 + H / 2} L673,${y3 + H / 2} L673,${y3 + 44}`);
+})();
+
+// ----- presets -----
+(function () {
+  const P = [
+    ['Flute', 'From the concert flute to its relatives and a few oddities.', ['Concert Flute', 'Night Flute', 'Bamboo Air', 'Shakuhachi Bend', 'Tin Whistle', 'Piccolo', 'Alto Flute', 'Bass Flute', 'Overblown Jet (flutter-tongued)', 'Glass Ocarina']],
+    ['Clarinet', 'A single reed on a cylinder, warm to raw.', ['Wooden Reed', 'Legato Clarinet', 'Chalumeau', 'Bass Clarinet', 'Bright Eb', 'Klezmer Cry', 'Breathy Reed', 'Low Rasp Reed', 'Felt Clarinet (a felt bucket over the bell)']],
+    ['Sax', 'Alto, tenor, baritone and bass, clean to gutbucket.', ['Clean Alto', 'Smoke Tenor', 'Growl Alto', 'Subtone Ballad', 'Soprano Line', 'Baritone', 'Bass Honk', 'Gutbucket', 'Flutter Tenor', 'Hat Alto (a hat over the bell)']],
+    ['Oboe', 'The double reeds and their relatives. Being reworked: may change.', ['Dusk Oboe', 'Pastoral', "Oboe d'Amore", 'Cor Anglais', 'Bassoon', 'Contra Buzz', 'Shawm', 'Musette', 'Duduk Air', 'Snake Charmer (a gourd cup over the reed)']],
+    ['Trumpet', 'Open, the five mutes, and the brass family.', ['Brass Plume', 'Fanfare', 'Straight Mute', 'Cup Mute', 'Muted Night (Harmon)', 'Plunger Wah (plunger on the slide)', 'Bucket Ballad', 'Flugel Glow', 'French Horn', 'Trombone Slide', 'Piccolo Trumpet']],
+    ['Alien', 'Voices that sing, speak and growl, for typed words or their own.', ['Alien Speech', 'First Contact (a plain voice for your words)', 'Talking Bow', 'Throat Singer', 'Xeno Choir', 'Tractor Beam (a word a beat)', 'Insect Hymn', 'Mothership', 'Signal Lost', 'Ion Flutter', 'Inside Out', 'Glass Mouth', 'Muffled Moan', 'Warble Choir', 'Tiny Giant', 'Swamp Creature', 'Clear Diction (most intelligible)', 'Crisp Diction', 'Chatterbox', 'Envoy Unit', 'Slow Drawl', 'Whisper Tongue', 'Hymn Singer', 'Ballad Voice', 'Folk Tenor', 'Baritone Chant', 'Lullaby']],
+    ['Pad', 'The HYBRID voice as a pad under an instrument: low Follow, slow attack, long release.', ['Flute Halo', 'Hollow Pad', 'Section Pad', 'Reed Choir', 'Brass Swell', 'Nebula']],
+    ['Space', 'The DELAY, synced and free, and the REVERB.', ['Echo Flute', 'Canyon Trumpet', 'Dub Tenor', 'Night Cathedral', 'Slapback Bari', 'Star Signal']],
+  ];
+  const cols = ['#ffd08a', '#f28c28', '#ff8f6b', '#c792ff', '#ffb547', '#7ee6a0', '#6fe0ff', '#a98bff'];
+  let html = '';
+  P.forEach(([cat, desc, list], i) => {
+    html += `<h3 style="margin-top:${i ? '0.18in' : '0.06in'}"><span class="swatch" style="background:${cols[i]};width:9px;height:9px"></span>${cat} <span class="muted" style="font-weight:500;font-size:8pt">· ${list.length}</span></h3>`;
+    html += `<p class="muted small" style="margin-bottom:3px">${desc}</p>`;
+    html += `<p class="small" style="margin-bottom:0">${list.join(' · ')}</p>`;
+  });
+  document.getElementById('presets').innerHTML = html;
+})();
+
+// ----- parameter reference -----
+(function () {
+  const M = '<span class="mod m">MOD</span>', T = '<span class="mod t">ROUTE</span>', MT = M + T;
+  const pc = (a, b) => `${a} – ${b}%`;
+  const G = [
+    ['Exciter', [
+      ['Instrument', 'Flute, Clarinet, Sax, Oboe, Trumpet, Alien', 'Clarinet', ''], ['Breath', pc(25, 150), '100%', MT], ['Embouchure', pc(0, 100), '50%', MT],
+      ['Stiffness', '0.00 – 1.00', '0.50', MT], ['Bite', pc(0, 200), '100%', MT], ['Aperture', pc(0, 100), '50%', MT],
+      ['Noise', pc(0, 200), '100%', MT], ['Kick', pc(0, 100), '25%', MT], ['Growl', pc(0, 100), '0%', MT],
+    ]],
+    ['Articulation', [
+      ['Tongue', 'Soft, Hard, Double, Flutter, Breath', 'Hard', ''], ['Attack', '1 – 400 ms', '25 ms', MT], ['Release', '5 – 2000 ms', '90 ms', MT],
+      ['Humanize', pc(0, 100), '0%', MT], ['Flutter', pc(0, 100), '0%', MT], ['Flutter Rate', '10 – 40 Hz', '24.0 Hz', MT],
+      ['Re-Tongue', pc(0, 100), '50%', MT],
+    ]],
+    ['Vibrato', [
+      ['Vibrato Type', 'Breath, Jaw, Breath+Jaw, Lip', 'Breath', ''], ['Vibrato Rate', '2 – 9 Hz', '5.10 Hz', MT], ['Vibrato Depth', pc(0, 30), '5%', MT],
+      ['Vibrato Pitch', '0 – 50 ct', '0 ct', MT], ['Vibrato Delay', '0 – 2000 ms', '350 ms', MT],
+    ]],
+    ['Bore', [
+      ['Tune', '−100 – +100 ct', '+0 ct', MT], ['Glide', '0 – 1000 ms', '0 ms', MT], ['Length', '0.15 – 1.50 m', '0.67 m', M], ['Loss', pc(0, 50), '4%', MT],
+      ['Hole Cutoff', '0.50 – 4.00 kHz', '1.30 kHz', MT], ['Cone', pc(0, 100), '50%', MT], ['Radiate', pc(0, 100), '66%', M], ['Brass', pc(0, 100), '50%', MT],
+      ['Barrel', pc(0, 100), '40%', M], ['Wall', 'Metal – Bone', 'Wood', M], ['Detune', '0 – 25 ct', '+0 ct', MT],
+      ['Holes', 'Closed, Lattice 3/5/7/9, Open', 'Lattice 7', ''], ['Tube', 'Grenadilla … Glass (8)', 'Grenadilla', ''],
+      ['Mute', 'Open, Straight, Cup, Harmon, Plunger, Bucket', 'Open', ''], ['Mute Amount', pc(0, 100), '100%', MT],
+    ]],
+    ['Voice', [
+      ['Voice Mode', 'Poly, Mono, Legato', 'Poly', ''], ['Breath Source', 'Auto, Pressure, Velocity, Input, Mix', 'Auto', ''], ['Tongue Force', 'Strike, Press', 'Strike', ''],
+      ['Press Curve', '0.30 – 3.00', '1.00', MT], ['Slide', pc(0, 100), '50%', M], ['MPE Bend Range', '1 – 96 st', '48 st', M],
+      ['Breath In', pc(0, 100), '0%', M], ['Transpose', '−24 – +24 st', '+0 st', MT], ['Unison', '1 – 4', '1', M], ['Unison Detune', '0 – 50 ct', '12 ct', MT],
+    ]],
+    ['Hybrid', [
+      ['Hybrid Wave', 'Sine, Triangle, Saw, Square, Pulse', 'Saw', ''], ['Hybrid Mix', pc(0, 100), '0%', MT], ['Hybrid Octave', '−2 – +2 oct', '+0 oct', M],
+      ['Hybrid Detune', '−50 – +50 ct', '+0 ct', MT], ['Hybrid Breath', pc(50, 150), '100%', M], ['Hybrid Cutoff', '80 Hz – 12 kHz', '1.80 kHz', MT],
+      ['Hybrid Resonance', pc(0, 100), '20%', MT], ['Hybrid Filter Breath', pc(0, 100), '60%', MT], ['Hybrid Attack', '1 ms – 10 s', '5.2 ms', M],
+      ['Hybrid Decay', '1 ms – 10 s', '251 ms', M], ['Hybrid Sustain', pc(0, 100), '100%', M], ['Hybrid Release', '1 ms – 10 s', '63 ms', M],
+      ['Hybrid Follow', pc(0, 100), '100%', M], ['Hybrid Filter Env', '−100 – +100%', '0%', M],
+    ]],
+    ['Output, Room and Delay', [
+      ['Spread', '−100 – +100%', '50%', M], ['Pan', '−100 – +100%', '0%', MT], ['Air', pc(0, 100), '0%', MT], ['Level', '−60 – +12 dB', '0.0 dB', MT],
+      ['Master', '−36 – +6 dB', '0.0 dB', M], ['Limiter', 'Off, Soft, Hard', 'Hard', ''], ['Reverb', 'Off, On', 'On', ''], ['Room', pc(0, 100), '15%', M],
+      ['Room Size', pc(0, 100), '50%', M], ['Room Decay', '0.2 – 10.0 s', '1.6 s', M], ['Room Damping', pc(0, 100), '50%', M], ['Room Pre-Delay', '0 – 100 ms', '12 ms', M],
+      ['Tone', '−12 – +12 dB', '+0.0 dB', M], ['Delay', 'Off, On', 'Off', ''], ['Delay Sync', 'Free, 1/32 – 1/1', 'Free', ''], ['Delay Mix', pc(0, 100), '30%', M],
+      ['Delay Time', '10 ms – 2 s', '375 ms', M], ['Delay Feedback', pc(0, 95), '40%', M], ['Delay Tone', pc(0, 100), '72%', M], ['Delay Spread', pc(0, 100), '50%', M],
+    ]],
+    ['Modulation', [
+      ['LFO 1 Rate · Shape · Sync', '0.02 – 20 Hz · 6 shapes · Note, Free', '1.00 Hz · Sine · Note', MT], ['LFO 2 Rate · Shape · Sync', '0.02 – 20 Hz · 6 shapes · Note, Free', '0.25 Hz · Smooth · Free', MT],
+      ['Swell Shape · Time · Loop', '6 shapes · 0.05 – 30 s · Once, Loop', 'Arch · 3.00 s · Once', MT],
+      ['Bus 1–4 Amount', '−100 – +100%', '0%', MT], ['Bus 1–4 Mode · Curve · Polarity', 'Sum, Multiply, Min, Max · 5 curves · 4 polarities', 'Sum · Linear · As Is', ''],
+      ['Bus 1–4 Lag', '0 – 2000 ms', '0 ms', M], ['Route 1–32 Source · Destination', '22 sources · 62 destinations', 'Off', ''], ['Route 1–32 Amount', '−100 – +100%', '0%', M],
+    ]],
+    ['Alien', [
+      ['Alien Accent', pc(0, 100), '0%', MT], ['Alien Wobble', pc(0, 100), '0%', MT], ['Alien Drift', pc(0, 100), '20%', MT], ['Alien Shift (Size)', '−1 – +1 oct', '+0.00 oct', MT],
+      ['Alien Sharp', pc(0, 100), '50%', MT], ['Alien Bow', pc(0, 100), '0%', MT], ['Alien Talk', pc(0, 100), '50%', MT], ['Alien Pace', 'Free, 1/16 – 2 Bars', 'Free', ''],
+      ['Alien Hold', pc(0, 100), '20%', MT], ['Alien Glide', '5 – 400 ms', '30 ms', MT], ['Alien Bend', pc(0, 100), '60%', MT], ['Alien Consonants', pc(0, 100), '100%', MT],
+      ['Alien M N … P T K (8)', 'Off, On', 'On', ''], ['Alien A … U (5)', 'Off, On', 'On', ''], ['Alien Word Length', 'Short, Mixed, Long, Chant', 'Mixed', ''],
+      ['Alien Breathy', pc(0, 100), '25%', MT], ['Alien Spread', '−100 – +100%', '0%', MT], ['Alien Flip', pc(0, 100), '0%', MT], ['Alien Follow', pc(0, 100), '0%', MT],
+      ['Alien Words', 'Alien, Typed', 'Alien', ''], ['Alien Language', '0 – 999', '1', M], ['Alien Rough', pc(0, 100), '45%', MT], ['Alien Growl', pc(0, 100), '0%', MT], ['Alien Wet', pc(0, 100), '20%', MT],
+    ]],
+    ['View (not automatable, not in presets)', [
+      ['Look', 'Smoke, Ink', 'Smoke', ''], ['Palette', 'Dusk, Ember, Frost, Moss, Mono', 'Dusk', ''], ['Smoke', pc(0, 300), '133%', ''], ['Turbulence', pc(0, 100), '42%', ''],
+      ['Rise', pc(0, 100), '55%', ''], ['Swirl', pc(0, 100), '38%', ''], ['Tail', '0.5 – 8.0 s', '4.0 s', ''], ['Line', pc(0, 100), '40%', ''], ['Glow', pc(0, 100), '50%', ''],
+      ['Loop X · Y · Size', 'Pitch, Strike, Press, Slide, Breath, Random, Centre', 'Pitch · Breath · Breath', ''], ['Loop Size Min', pc(10, 100), '25%', ''],
+    ]],
+  ];
+  let html = '';
+  for (const [name, rows] of G) {
+    html += `<h4>${name}</h4><table class="params"><thead><tr><th>Parameter</th><th>Range</th><th>Default</th><th></th></tr></thead><tbody>`;
+    html += rows.map(([n, r, d, f]) => `<tr><td class="c" style="width:1.6in;white-space:normal">${n}</td><td class="r" style="width:auto;white-space:normal">${r}</td><td class="d" style="width:1.3in">${d}</td><td style="width:0.95in;text-align:right">${f}</td></tr>`).join('');
+    html += '</tbody></table>';
+  }
+  document.getElementById('paramref').innerHTML = html;
+})();
+
+// ----- table of contents -----
+(function () {
+  const toc = document.getElementById('toc');
+  const pages = window.TOC_PAGES || {};
+  let html = '';
+  document.querySelectorAll('section.chapter').forEach(sec => {
+    const n = sec.dataset.ch, t = sec.dataset.title;
+    html += `<div class="grp"><div class="ch"><span class="n">${n}</span><span class="t">${t}</span><span class="p">${pages[t] || ''}</span></div>`;
+    sec.querySelectorAll('h2').forEach(h => {
+      const tt = h.childNodes[h.childNodes.length - 1].textContent.trim();
+      html += `<div class="sec"><span class="t">${tt}</span><span class="p">${pages[t + '/' + tt] || ''}</span></div>`;
+    });
+    html += '</div>';
+  });
+  toc.innerHTML = html;
+})();
+</script>
+</body>
+</html>
