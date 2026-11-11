@@ -34,6 +34,7 @@ enum ModelId : int { kFlute, kClarinet, kSax, kOboe, kTrumpet, kAlien, kModelCou
 // alto's playing the same pitch.
 inline constexpr int kSaxHorns = 4, kTuneRows = kModelCount + kSaxHorns;
 inline constexpr double kSaxHornSize[kSaxHorns] = {0.7492, 0.5, 0.3746, 0.25};
+inline constexpr float kSaxHornLevel = 0.7f;
 inline constexpr float kSaxHornTune[kSaxHorns] = {-5.0f, -12.0f, -17.0f, -24.0f};
 // The sax horn nearest a tuning of `tune` semitones (-1 for the alto: tuned down less than 4.5).
 inline int saxHorn(double tune) {

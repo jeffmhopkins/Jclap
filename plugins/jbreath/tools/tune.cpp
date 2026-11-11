@@ -223,6 +223,9 @@ std::vector<Entry> bake(double fs) {
             const double hz = 440.0 * std::pow(2.0, (kFirst + k - 69) / 12.0);
             Entry &e = table[row * kNotes + k];
             e = tune(*m, id, hz);
+            // (The bigger horns' low notes are richer and peakier still: their level a little under.)
+            if (row >= kModelCount)
+               e.gain *= kSaxHornLevel;
             std::fprintf(stderr, "%s%s %d: %s %.4f %.2f %.3f\n", modelInfo(id).name, row >= kModelCount ? " (horn)" : "",
                          kFirst + k, e.plays ? "plays" : "-----", e.ratio, e.gain, e.speak);
          }
