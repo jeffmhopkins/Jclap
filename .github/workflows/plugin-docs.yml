@@ -1,0 +1,29 @@
+name: plugin docs
+
+# A plugin whose source changes must keep its README (and its manual, if it has one) up to date.
+# See CLAUDE.md and .github/scripts/check-plugin-docs.sh. Re-runs when the PR description is edited,
+# so adding a "Docs unchanged:" line clears it.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check plugin docs kept up to date
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          printf '%s\n' "$PR_BODY" > "$RUNNER_TEMP/body.txt"
+          .github/scripts/check-plugin-docs.sh "$BASE" "$RUNNER_TEMP/body.txt"
