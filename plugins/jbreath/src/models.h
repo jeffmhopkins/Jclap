@@ -1237,6 +1237,8 @@ public:
       breathLP2_.setHz(1500.0, fs_);
       dc_ = {};
       dc_.setFs(fs_);
+      dcOut_ = {};
+      dcOut_.setFs(fs_);
       // What the horn's shape alone misses of a real trumpet heard in front of it: the Iowa
       // trumpet's harmonics (C4 to B4, pp and mf) over this model's, fitted as one response. Its
       // tone peaks near 1.2 kHz, some 30 dB over 200 Hz, and falls away above 2 kHz.
@@ -1385,7 +1387,9 @@ public:
       const double K = sigma * fs_ / (2.0 * kPi * hz_ * (acEnv_ + 1e-6));
       const double want = k * kShock0 - K * ac;
       shockD_ += std::clamp(std::clamp(want, 2.0, 2.0 * kShock0 * k) - shockD_, -0.95, 0.95);
-      return shock_.read(shockD_);
+      // (The steepening follows the wave's own level, so it rectifies a little of it: blown hard,
+      // the horn's sound came out with a DC offset up to half its level, a thump at each note's end.)
+      return dcOut_.tick(shock_.read(shockD_));
    }
 
 private:
@@ -1418,7 +1422,7 @@ private:
    ModalBore bore_;
    Delay shock_;
    OnePoleLP acLP_, acLP2_, breathLP_, breathLP2_;
-   DCBlock dc_;
+   DCBlock dc_, dcOut_;
    Biquad eqHp_, eqPk_, eqLp_;
    Player player_;
    unsigned at_ = 0;
