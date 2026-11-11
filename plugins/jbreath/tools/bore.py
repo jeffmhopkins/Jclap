@@ -232,10 +232,82 @@ def sax_vent(n):
     return (0.24, 0.0015, 0.005) if n < 12 else (0.11, 0.0015, 0.005)
 
 
-def bake_holes(prof, holes, n, vent, fmax=2400.0, floor_db=-6.0):
+def oboe_profile(L, reed_r=0.0017, reed_len=0.025, st_r0=0.0012, st_r1=0.0022, st_len=0.047, body_r1=0.0085,
+                 bell_r=0.019, bell_len=0.065):
+    """An oboe's air column: the reed's channel between its blades (as a 1.7 mm tube, 25 mm), the
+    staple (a narrow cone, 1.2 to 2.2 mm over 47 mm), then the body's cone (2.2 to 8.5 mm) opening
+    into the bell over its last 6.5 cm. With the reed's own volume (OBOE_CUP) these stand in for
+    the cone's missing apex: the second resonance within about 25 cents of the first's octave from
+    low Bb to D5."""
+    x0 = reed_len
+    x1 = x0 + st_len
+    xb = L - bell_len
+    pts = [(0.0, reed_r), (x0, reed_r), (x0 + 1e-6, st_r0), (x1, st_r1)]
+    for x in np.linspace(x1, xb, 30)[1:]:
+        pts.append((x, st_r1 + (body_r1 - st_r1) * (x - x1) / (xb - x1)))
+    for x in np.linspace(xb, L, 15)[1:]:
+        pts.append((x, body_r1 + (bell_r - body_r1) * ((x - xb) / bell_len) ** 2.2))
+    return pts
+
+
+OBOE_LOW, OBOE_CUP, OBOE_HOLES = 233.08, 0.15e-6, 16
+
+
+def reed_geometry(profile, low, cup, nholes, hole, top0=0.08):
+    """A reed instrument's length and its tone holes, each placed (by bisection) to sound its semitone
+    when it and every hole under it are open. hole(prof, x): the hole at x, (x, radius, chimney)."""
+    def tune(lo, hi, tgt, z_of):
+        fq = np.linspace(tgt * 0.7, tgt * 1.4, 700)
+        for _ in range(24):
+            x = 0.5 * (lo + hi)
+            if first_peak(fq, z_of(x, 2 * np.pi * fq)) > tgt:
+                lo = x
+            else:
+                hi = x
+        return x
+    L = tune(0.4 * 343.0 / (2 * low), 1.6 * 343.0 / (2 * low), low, lambda L, w: tmm_holes(profile(L), [], 0, w, cup)[0])
+    prof = profile(L)
+    holes = []
+    for n in range(1, nholes + 1):
+        top = holes[-1][0] - 0.008 if holes else L - 0.02
+        x = tune(top0, top, low * 2 ** (n / 12), lambda x, w: tmm_holes(prof, holes + [hole(prof, x)], n, w, cup)[0])
+        holes.append(hole(prof, x))
+    return prof, holes
+
+
+def oboe_geometry():
+    """The oboe's tone holes: small (0.55 of the bore's radius, at least 1.4 mm) through its thick
+    wooden wall (5 mm chimneys)."""
+    def hole(prof, x):
+        r = np.interp(x, [p[0] for p in prof], [p[1] for p in prof])
+        return (x, max(0.0014, 0.55 * r), 0.005)
+    return reed_geometry(oboe_profile, OBOE_LOW, OBOE_CUP, OBOE_HOLES, hole, top0=0.12)
+
+
+def oboe_vent(prof, holes, n):
+    """The octave key's vent for fingering n (the oboe has three): of the places from 9 to 21 cm
+    below the reed's tip, the one that puts the second resonance nearest the octave, favouring
+    those that also lift it over the first."""
+    f = np.linspace(100, 4000, 8000)
+    w = 2 * np.pi * f
+    tgt = 2 * OBOE_LOW * 2 ** (n / 12)
+    best, score = None, 1e9
+    for vx in np.arange(0.09, 0.215, 0.01):
+        v = (vx, 0.0007, 0.004)
+        a = 20 * np.log10(np.abs(tmm_holes(prof, holes, n, w, OBOE_CUP, v)[0]))
+        pk = [i for i in range(1, len(f) - 1) if a[i] > a[i - 1] and a[i] > a[i + 1]]
+        j = min(range(len(pk)), key=lambda j: abs(np.log(f[pk[j]] / tgt)))
+        lower = max([a[pk[i]] for i in range(j)] or [a[pk[j]] - 20])
+        sc = abs(1200 * np.log2(f[pk[j]] / tgt)) - 3.0 * min(a[pk[j]] - lower, 6.0)
+        if sc < score:
+            best, score = v, sc
+    return best
+
+
+def bake_holes(prof, holes, n, vent, fmax=2400.0, floor_db=-6.0, cup=SAX_CUP):
     f = np.linspace(20, 16000, 32000)
     w = 2 * np.pi * f
-    Z, R, Zc = tmm_holes(prof, holes, n, w, SAX_CUP, vent)
+    Z, R, Zc = tmm_holes(prof, holes, n, w, cup, vent)
     poles = peaks(f, Z, fmax, floor_db, Zc)
     lo = 1 / (1 + (f / 3000) ** 4)
     s, cz, r0, Zf = fit(f, Z / Zc, poles, [np.ones_like(f)], lo, 1e-8)
@@ -297,6 +369,15 @@ def main():
         print(f"sax {'octave ' if oct_ else ''}fingering {n}: {len(b['s'])} modes from {b['peaks'][0]:.1f} Hz, "
               f"Z {b['zerr']:.2f} dB, rad {b['rerr']:.2f} dB", file=sys.stderr)
     emit("Sax", fings, "Alto saxophone: fingerings 0 to 19 (written low Bb up a semitone each), then 4 to 19 with the octave key.", out)
+    # Oboe: each fingering from low Bb up (0 to 16, to D5), then with an octave key from D5 (4 to 16).
+    prof, holes = oboe_geometry()
+    fings = []
+    for oct_, n in [(0, n) for n in range(OBOE_HOLES + 1)] + [(1, n) for n in range(4, OBOE_HOLES + 1)]:
+        fings.append(bake_holes(prof, holes, n, oboe_vent(prof, holes, n) if oct_ else None, fmax=4000.0, cup=OBOE_CUP))
+        b = fings[-1]
+        print(f"oboe {'octave ' if oct_ else ''}fingering {n}: {len(b['s'])} modes from {b['peaks'][0]:.1f} Hz, "
+              f"Z {b['zerr']:.2f} dB, rad {b['rerr']:.2f} dB", file=sys.stderr)
+    emit("Oboe", fings, "Oboe: fingerings 0 to 16 (low Bb up a semitone each), then 4 to 16 with an octave key.", out)
     out.write("} // namespace jbreath\n")
 
 

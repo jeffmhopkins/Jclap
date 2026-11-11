@@ -147,8 +147,20 @@ Played playSteady(Model &m, int id, double len, double hz, double target = -1.0,
    for (float v : out)
       p.rms += v * v;
    p.rms = std::sqrt(p.rms / out.size());
-   if (std::isfinite(p.rms) && p.rms > 1e-4)
-      p.hz = measureHz(out, hz * 0.7, hz * 1.4);
+   // The pitch (the oboe's read through a lowpass near the fundamental: its fundamental lies under
+   // its harmonics, as a real oboe's, and its top harmonics jitter enough with the breath's noise to
+   // blur the waveform's repeat, though the tone holds its pitch).
+   if (std::isfinite(p.rms) && p.rms > 1e-4) {
+      std::vector<float> low(out);
+      const int passes = id == kOboe ? 4 : 0;
+      const double c = 1.0 - std::exp(-2.0 * kPi * 1.2 * hz / kFs);
+      for (int pass = 0; pass < passes; ++pass) {
+         double s = 0.0;
+         for (float &v : low)
+            v = static_cast<float>(s += c * (v - s));
+      }
+      p.hz = measureHz(low, hz * 0.7, hz * 1.4);
+   }
    return p;
 }
 
@@ -199,7 +211,7 @@ Entry tune(Model &m, int id, double hz) {
    if (!ok)
       return e;
    e.ratio = L1 / nominal;
-   e.gain = 0.1 / p1.rms; // about -20 dBFS RMS at the tuning breath
+   e.gain = 0.1 * modelInfo(id).level / p1.rms; // about -20 dBFS RMS at the tuning breath (by the model's level)
    // A note this quiet is barely oscillating, and levelling it would only bring up its noise.
    e.plays = e.ratio > 0.5 && e.ratio < 1.5 && e.gain < 8.0;
    if (e.plays && kFs == 96000.0)
@@ -223,6 +235,9 @@ std::vector<Entry> bake(double fs) {
             const double hz = 440.0 * std::pow(2.0, (kFirst + k - 69) / 12.0);
             Entry &e = table[row * kNotes + k];
             e = tune(*m, id, hz);
+            // (The bigger horns' low notes are richer and peakier still: their level a little under.)
+            if (row >= kModelCount)
+               e.gain *= kSaxHornLevel;
             std::fprintf(stderr, "%s%s %d: %s %.4f %.2f %.3f\n", modelInfo(id).name, row >= kModelCount ? " (horn)" : "",
                          kFirst + k, e.plays ? "plays" : "-----", e.ratio, e.gain, e.speak);
          }
