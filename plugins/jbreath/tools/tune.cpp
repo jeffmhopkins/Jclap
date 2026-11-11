@@ -199,7 +199,7 @@ Entry tune(Model &m, int id, double hz) {
    if (!ok)
       return e;
    e.ratio = L1 / nominal;
-   e.gain = 0.1 / p1.rms; // about -20 dBFS RMS at the tuning breath
+   e.gain = 0.1 * modelInfo(id).level / p1.rms; // about -20 dBFS RMS at the tuning breath (by the model's level)
    // A note this quiet is barely oscillating, and levelling it would only bring up its noise.
    e.plays = e.ratio > 0.5 && e.ratio < 1.5 && e.gain < 8.0;
    if (e.plays && kFs == 96000.0)

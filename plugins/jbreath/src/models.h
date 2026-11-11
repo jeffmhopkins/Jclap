@@ -943,9 +943,12 @@ public:
       // the tenor (a fourth down), the baritone (an octave), the bass (an octave and a fourth) or
       // the contrabass (two octaves), each fingered as the alto is for its note, so every member's
       // low notes come from its own tone holes.
+      // (The pitch here wanders with the player's drift and vibrato, a few cents either way: the
+      // switch to a bigger horn is a quarter tone under each one's bottom note, so a note played
+      // on it, the alto's own low C#3 above all, keeps to one horn instead of flipping between two.)
       member_ = 1.0;
       for (double s : {0.7492, 0.5, 0.3746, 0.25})
-         if (hz < 0.999 * kLow * member_)
+         if (hz < kQuarterDown * kLow * member_)
             member_ = s;
       // Tuned down (the Tenor and Baritone presets), the horn is the member nearest the tuning
       // across its whole range, up to an octave over its top fingering: a real baritone's A3 is a
@@ -1063,10 +1066,13 @@ public:
             v_ = std::min(v_, 0.0);
          }
       }
-      // The slit: closing softly over the curl of the reed's tip (shorter with more bite).
+      // The slit: closing softly over the curl of the reed's tip (shorter with more bite). A bigger
+      // horn's reed and lay open wider again than its scale on its low notes (with less, a baritone's
+      // and tenor's low notes buzzed between two pitches for most of a second; over them, as wide
+      // locked the baritone's E3 a semitone flat).
       const double knee = 0.08 * std::exp(-1.2 * (character.edge - 1.0)), gap = 1.0 + x_;
       const double open = 0.5 * (gap + std::sqrt(gap * gap + knee * knee)) - 0.5 * knee;
-      const double H = open_ * lip * (0.5 + character.aperture) * (1.2 - 0.4 * emb) / std::pow(std::min(1.0, scale_), 1.5);
+      const double H = open_ * lip * (0.5 + character.aperture) * (1.2 - 0.4 * emb) / std::pow(std::min(1.0, scale_), 1.5 + 0.5 * lowNote_);
       const double a = std::max(0.0, open) * H * kWidth * std::sqrt(2.0 / kRho);
       // u = a sgn(D) sqrt|D|, with D the drop with this sample's flow's own pressure in it.
       const double ph = bore_.history(), zi = bore_.instant(), D0 = pm - ph;
@@ -1119,7 +1125,7 @@ private:
       // (The voicing below takes the low notes' upper harmonics down; they're given back here, and
       // more on the bigger horns, whose low notes are richer still: a tenor's low Bb has its 3rd to
       // 7th harmonics 5 to 9 dB over its fundamental.)
-      const double liftDb = 10.0 * std::clamp((300.0 - hz / member_) / 60.0, 0.0, 1.0) + 10.0 * (1.0 - member_);
+      const double liftDb = 20.0 * std::clamp((300.0 - hz / member_) / 60.0, 0.0, 1.0) + 10.0 * (1.0 - member_);
       const double liftHz = std::min(3.5 * hz, 0.4 * fs_);
       if (std::fabs(liftDb - liftDb_) > 0.05 || std::fabs(liftHz / liftHz_ - 1.0) > 0.01) {
          liftDb_ = liftDb;
@@ -1168,6 +1174,7 @@ private:
       // and the tone hollows out or cracks up the octave. (On a bigger horn the octave vent's leak is
       // kBigVent times as strong: as the alto's, its G4 and top A fell back to the low register.)
       const double low = std::clamp((300.0 - hz / member_) / 60.0, 0.0, 1.0);
+      lowNote_ = low;
       bore_.set(kSaxBore[fing_], scale_, fs_, loss * (1.0 + (kLowLoss - 1.0) * low), kHoleCut, cut, vent_ * scale_, kVentDamp * (member_ < 1.0 ? kBigVent : 1.0),
                 low > 0.0 ? 1.5 * peakHz_ * scale_ : 0.0, 1.0 + (kVoicing - 1.0) * low);
    }
@@ -1175,11 +1182,13 @@ private:
    static constexpr double kLow = 138.59, kRho = 1.2, kPM = 6000.0, kWidth = 0.015, kOut = 500.0, kHoleCut = 1200.0,
                            kGamma = 0.45, kGamma1 = 0.1, kLip0 = 0.3, kReedHz = 2000.0, kReedDamp = 1.0,
                            kOpen = 7e-4, kKick = 0.2, kVentDamp = 8.0,
-                           kBigVent = 2.5, kBigPeakDb = 12.0, kBigShelfDb = 5.0;
+                           kBigVent = 2.5, kBigPeakDb = 12.0, kBigShelfDb = 5.0,
+                           kQuarterDown = 0.97153;
    static constexpr int kTopN = 15;
    static constexpr double kTopHz = 6500.0;  // the output's 4-pole lowpass
    static constexpr double kLowLoss = 0.6;  // the walls' loss on the low notes, of the full
-   static constexpr double kVoicing = 5.0;  // and their upper resonances' damping
+   static constexpr double kVoicing = 10.0;  // and their upper resonances' damping (at 5 the low notes
+                                             // blown hard buzzed between two pitches)
    static constexpr double kAccent = 1.4, kAccentSec = 0.03;  // the tongued attack's accent on the breath
    static constexpr double kFamilyDb = 12.0;
    static constexpr int kRegPoints = 11;
@@ -1194,7 +1203,7 @@ private:
    Biquad eqHp_, eqPk1_, eqPk2_, eqHs_, eqLp1_, eqLp2_, tone_, lift_, reg_, fam_;
    unsigned at_ = 0;
    int fing_ = -1;
-   double peakHz_ = 277.0, hz_ = 277.0, member_ = 1.0, scale_ = 1.0, vent_ = 0.0, open_ = 7e-4, eqAt_ = -1.0, toneDb_ = 1e9, toneHz_ = 1.0, liftDb_ = 1e9, liftHz_ = 1.0;
+   double lowNote_ = 0.0, peakHz_ = 277.0, hz_ = 277.0, member_ = 1.0, scale_ = 1.0, vent_ = 0.0, open_ = 7e-4, eqAt_ = -1.0, toneDb_ = 1e9, toneHz_ = 1.0, liftDb_ = 1e9, liftHz_ = 1.0;
    double regDb_ = 1e9, regHz_ = 1.0, famDb_ = 1e9, famHz_ = 1.0, onT_ = 1.0, lift0_ = 0.0, xShut_ = 0.0, liftSec_ = 0.003;
    double x_ = 0, v_ = 0, dpPrev_ = 0, pmS_ = 0, pmB_ = 0, pmCoef_ = 0.01;
    float tongue_ = 0.0f, tnPrev_ = 0.0f, softGain_ = 1.0f, regGain_ = 1.0f, famGain_ = 1.0f;
@@ -1828,13 +1837,16 @@ struct ModelInfo {
    const char *name;
    float breathScale, breathOffset;
    float tuneBreath;
+   // The steady tone's level at the tuning breath, against the others': under 1 for a model whose
+   // loud end and tongued attacks run well over it (the sax's hit the limiter, which distorted them).
+   float level = 1.0f;
 };
 
 inline const ModelInfo &modelInfo(int id) {
    static const ModelInfo info[kModelCount] = {
       {"Flute", 0.8f, 0.15f, 0.75f},
       {"Clarinet", 0.42f, 0.5f, 0.815f},
-      {"Sax", 0.6f, 0.5f, 0.85f},
+      {"Sax", 0.6f, 0.5f, 0.85f, 0.6f},
       {"Oboe", 0.5f, 0.6f, 0.9f},
       {"Trumpet", 0.48f, 0.2f, 0.65f},
       {"Alien", 0.6f, 0.5f, 0.8f},
