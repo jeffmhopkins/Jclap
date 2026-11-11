@@ -1,0 +1,1083 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Polar XY User Manual</title>
+<style>
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Regular.ttf"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Italic.ttf"); font-weight: 400; font-style: italic; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Medium.ttf"); font-weight: 500; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-SemiBold.ttf"); font-weight: 600; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Bold.ttf"); font-weight: 700; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Light.ttf"); font-weight: 300; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Regular.ttf"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Medium.ttf"); font-weight: 500; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-SemiBold.ttf"); font-weight: 600; font-style: normal; }
+:root {
+  --ink: #15171d;
+  --ink-2: #3b3f4a;
+  --ink-3: #6d7280;
+  --rule: #e3e4e8;
+  --wash: #f5f5f7;
+  --night: #070910;
+  --orange: #f28c28;
+  --orange-ink: #c4650f;
+  --space: #ffb05a;  --space-ink: #b86a14;
+  --loop: #ff6fd2;   --loop-ink: #b8338f;
+  --drive: #ee6f5c;  --drive-ink: #c0412d;
+  --echo: #8fe8a8;   --echo-ink: #23864a;
+  --io: #6fe0ff;     --io-ink: #1489ad;
+  --rhea: #a98bff;   --luna: #ff8a7a;
+}
+@page {
+  size: 8.5in 11in;
+  margin: 0.85in 0.85in 0.8in 0.85in;
+  @bottom-left { content: "Polar XY  ·  User Manual  ·  v0.19.3  ·  Draft"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
+  @bottom-right { content: counter(page); font: 600 8pt "InterM"; color: #15171d; }
+}
+@page cover { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+@page plain { @bottom-left { content: none; } @bottom-right { content: none; } }
+@page back { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  margin: 0; font-family: "InterM", sans-serif; font-size: 9.6pt; line-height: 1.55; color: var(--ink);
+  font-feature-settings: "cv11", "ss01", "tnum" 0; hyphens: manual;
+}
+p { margin: 0 0 0.75em; orphans: 3; widows: 3; }
+strong { font-weight: 600; }
+em { font-style: italic; }
+code, .mono { font-family: "JetBrains Mono", monospace; font-size: 0.86em; }
+code { background: var(--wash); border-radius: 3px; padding: 0.05em 0.3em; }
+a { color: inherit; text-decoration: none; }
+
+/* ---------- cover ---------- */
+.cover {
+  page: cover; width: 8.5in; height: 11in; background: var(--night); color: #fff; position: relative; overflow: hidden;
+  break-after: page;
+}
+.cover .stars { position: absolute; inset: 0; }
+.cover .top { position: absolute; left: 0.85in; right: 0.85in; top: 0.8in; display: flex; justify-content: space-between; align-items: center; }
+.cover .brand { font: 600 8pt "InterM"; letter-spacing: 0.28em; color: #9aa0ad; text-transform: uppercase; }
+.cover .title { position: absolute; left: 0.85in; top: 1.9in; }
+.cover .word { font: 300 92pt/0.9 "InterDisplayM"; letter-spacing: -0.035em; }
+.cover .word .j { color: var(--orange); font-weight: 400; }
+.cover .sub { margin-top: 0.22in; font: 400 15pt "InterDisplayM"; color: #c9ccd4; letter-spacing: 0.01em; }
+.cover .sub b { color: #fff; font-weight: 500; }
+.cover .shot { position: absolute; left: 0.85in; right: 0.85in; top: 4.45in; }
+.cover .shot img { width: 100%; display: block; border-radius: 10px; box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 30px 80px rgba(255,111,210,0.18), 0 10px 40px rgba(111,224,255,0.12); }
+.cover .foot { position: absolute; left: 0.85in; right: 0.85in; bottom: 0.75in; display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid rgba(255,255,255,0.14); padding-top: 0.16in; }
+.cover .foot .k { font: 600 7pt "InterM"; letter-spacing: 0.22em; text-transform: uppercase; color: #7d8391; }
+.cover .foot .v { font: 500 10pt "InterM"; color: #e8e9ee; margin-top: 3px; }
+
+/* ---------- front matter ---------- */
+.front { page: plain; break-after: page; }
+.toc-title { font: 300 30pt/1 "InterDisplayM"; letter-spacing: -0.02em; margin: 0 0 0.25in; }
+.toc { columns: 2; column-gap: 0.4in; }
+.toc .grp { break-inside: avoid; }
+.toc .ch { display: flex; align-items: baseline; padding: 4px 0 4px; border-bottom: 1px solid var(--rule); }
+.toc .ch .n { width: 0.36in; font: 600 9pt "JetBrains Mono"; color: var(--orange-ink); }
+.toc .ch .t { flex: 1; font: 600 10.5pt "InterM"; }
+.toc .ch .p { font: 500 9.5pt "InterM"; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.toc .sec { display: flex; align-items: baseline; padding: 1px 0 1px 0.36in; font-size: 8.4pt; color: var(--ink-2); }
+.toc .sec .t { flex: 1; }
+.toc .sec .p { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.toc .grp { padding-bottom: 3px; }
+
+/* ---------- chapters ---------- */
+.chapter { break-before: page; }
+.chap-head { position: relative; margin: 0 0 0.32in; padding-top: 0.05in; }
+.chap-head .num { font: 600 8pt "JetBrains Mono"; letter-spacing: 0.18em; color: var(--accent, var(--orange-ink)); text-transform: uppercase; }
+.chap-head h1 { font: 300 32pt/1.02 "InterDisplayM"; letter-spacing: -0.025em; margin: 0.08in 0 0.12in; color: var(--ink); }
+.chap-head .lede { font: 400 12pt/1.5 "InterDisplayM"; color: var(--ink-2); max-width: 5.6in; margin: 0; }
+.chap-head .bar { height: 3px; width: 0.9in; background: var(--accent-bg, var(--orange)); margin-top: 0.22in; border-radius: 2px; }
+
+h2 { break-inside: avoid; font: 600 13.5pt/1.25 "InterDisplayM"; letter-spacing: -0.005em; margin: 0.32in 0 0.1in; break-after: avoid; }
+h2 .tag { font: 600 7pt "JetBrains Mono"; letter-spacing: 0.14em; color: var(--accent, var(--orange-ink)); display: block; margin-bottom: 3px; text-transform: uppercase; }
+h3 { font: 600 10.2pt/1.3 "InterM"; margin: 0.2in 0 0.06in; break-after: avoid; }
+h4 { font: 600 7.5pt "InterM"; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0.16in 0 0.06in; break-after: avoid; }
+ul, ol { margin: 0 0 0.8em; padding-left: 1.15em; }
+li { margin: 0 0 0.3em; }
+li::marker { color: var(--ink-3); }
+
+/* ---------- tables ---------- */
+table { width: 100%; border-collapse: collapse; margin: 0.06in 0 0.18in; font-size: 8.5pt; line-height: 1.42; }
+thead th { text-align: left; font: 600 6.8pt "InterM"; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3); border-bottom: 1.2px solid var(--ink); padding: 0 8px 5px 0; }
+tbody td { border-bottom: 1px solid var(--rule); padding: 5px 8px 5px 0; vertical-align: top; }
+tbody tr { break-inside: avoid; }
+td.c { font-weight: 600; white-space: nowrap; }
+td.r, td.d { font-family: "JetBrains Mono", monospace; font-size: 7.6pt; color: var(--ink-2); white-space: nowrap; }
+td.d { color: var(--ink); }
+table.params td.c { width: 1.05in; }
+table.params td.r { width: 1.3in; white-space: normal; }
+table.params td.d { width: 0.7in; white-space: normal; }
+table.compact td.c { width: 0.95in; }
+table.compact td.r { width: 1.05in; white-space: normal; line-height: 1.5; }
+table.compact .dflt { color: var(--ink); font-weight: 600; }
+.mod { display: inline-block; font: 600 6pt "InterM"; letter-spacing: 0.08em; padding: 0 4px; border-radius: 3px; margin-left: 4px; vertical-align: 1px; border: 1px solid currentColor; }
+.mod.m { color: #7b7f8b; }
+.mod.t { color: var(--loop-ink); }
+
+/* ---------- figures ---------- */
+figure { margin: 0.12in 0 0.22in; break-inside: avoid; }
+figure img { display: block; width: 100%; border-radius: 6px; }
+figure.dark img { box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 6px 22px rgba(10,12,20,0.18); }
+figcaption { font-size: 7.8pt; color: var(--ink-3); margin-top: 7px; line-height: 1.45; }
+figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
+
+.split { break-inside: avoid; display: grid; grid-template-columns: 1.72in 1fr; gap: 0.3in; align-items: start; margin-top: 0.1in; }
+.split figure { margin: 0; }
+.split figure img { border-radius: 8px; }
+.split .body > :first-child { margin-top: 0; }
+
+/* ---------- callouts ---------- */
+.note { border-left: 3px solid var(--accent-bg, var(--orange)); background: var(--wash); padding: 9px 13px 9px 13px; margin: 0.12in 0 0.2in; border-radius: 0 6px 6px 0; break-inside: avoid; font-size: 8.9pt; }
+.note .k { font: 700 6.6pt "InterM"; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent, var(--orange-ink)); display: block; margin-bottom: 2px; }
+.note p:last-child { margin-bottom: 0; }
+.note.warn { border-left-color: #d64545; }
+.note.warn .k { color: #b53030; }
+
+.cols2 { break-inside: avoid; display: grid; grid-template-columns: 1fr 1fr; gap: 0.28in; }
+.cols2 > div > :first-child { margin-top: 0; }
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 8.8pt; margin: 0 0 0.15in; }
+.kv dt { font-weight: 600; white-space: nowrap; }
+.kv dd { margin: 0; color: var(--ink-2); }
+
+/* numbered callouts legend */
+.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 0.28in; margin-top: 0.12in; font-size: 8.6pt; }
+.legend div { display: flex; gap: 9px; align-items: baseline; break-inside: avoid; }
+.dot { flex: none; display: inline-flex; width: 17px; height: 17px; border-radius: 50%; background: var(--orange); color: #fff; font: 700 7.5pt/17px "InterM"; justify-content: center; position: relative; top: -1px; }
+.legend b { font-weight: 600; }
+.anno { position: relative; }
+.anno svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* steps */
+.steps { counter-reset: s; list-style: none; padding: 0; margin: 0.08in 0 0.2in; }
+.steps > li { counter-increment: s; position: relative; padding: 0 0 0.13in 0.48in; margin: 0; break-inside: avoid; }
+.steps > li::before { content: counter(s, decimal-leading-zero); position: absolute; left: 0; top: -1px; font: 600 11pt "JetBrains Mono"; color: var(--orange-ink); }
+.steps > li b.h { display: block; font-weight: 600; font-size: 10pt; margin-bottom: 1px; }
+
+/* recipe cards */
+.recipes { display: grid; grid-template-columns: 1fr 1fr; gap: 0.16in; margin-top: 0.12in; }
+.recipe { border: 1px solid var(--rule); border-radius: 8px; padding: 11px 13px 9px; break-inside: avoid; position: relative; overflow: hidden; }
+.recipe::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: var(--rc, var(--orange)); }
+.recipe h3 { margin: 0 0 3px; font-size: 9.8pt; }
+.recipe p { font-size: 8.5pt; color: var(--ink-2); margin-bottom: 6px; }
+.recipe .set { font: 400 7.3pt/1.6 "JetBrains Mono"; color: var(--ink); background: var(--wash); border-radius: 5px; padding: 6px 8px; }
+.recipe .from { font-size: 7.4pt; color: var(--ink-3); margin-top: 5px; }
+
+.pill { display: inline-block; font: 600 6.6pt "InterM"; letter-spacing: 0.1em; text-transform: uppercase; padding: 1px 6px; border-radius: 10px; color: #fff; vertical-align: 1px; }
+.key { display: inline-block; font: 600 7.4pt "InterM"; border: 1px solid #c9ccd3; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: #fff; line-height: 1.5; }
+
+.swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+
+.specs td.c { width: 1.7in; }
+
+.back { page: back; width: 8.5in; height: 11in; background: var(--night); color: #fff; position: relative; break-before: page; }
+.back .mid { position: absolute; left: 0; right: 0; top: 4.4in; text-align: center; }
+.back .word { font: 300 40pt "InterDisplayM"; letter-spacing: -0.03em; }
+.back .word .j { color: var(--orange); font-weight: 400; }
+.back .small { font: 500 8pt "InterM"; letter-spacing: 0.22em; text-transform: uppercase; color: #7d8391; margin-top: 10px; }
+.back .url { position: absolute; bottom: 0.8in; left: 0; right: 0; text-align: center; font: 400 8.5pt "JetBrains Mono"; color: #9aa0ad; }
+
+.avoid { break-inside: avoid; }
+.pb { break-before: page; }
+.muted { color: var(--ink-3); }
+.small { font-size: 8.4pt; }
+/* ---------- Polar XY additions ---------- */
+.m4l { font-weight: 600; color: var(--orange-ink); }
+.mod.m { color: var(--orange-ink); white-space: nowrap; }
+table.params td.c .mod { display: block; margin: 3px 0 0; width: max-content; }
+table.params td.c { width: 1.25in; white-space: normal; }
+table.ref td.c { width: 1.5in; }
+table.ref td.r { width: 1.9in; white-space: normal; }
+table.ref td.d { width: 1.1in; white-space: normal; }
+.cover .word { font-size: 84pt; }
+.cover .shot { left: 1.5in; right: 1.5in; top: 4.2in; }
+#overview { width: 5.6in; margin-left: auto; margin-right: auto; }
+.steps[start] { counter-reset: none; }
+.toc .ch { padding: 3px 0; }
+.toc .sec { padding: 0 0 0 0.36in; font-size: 8pt; line-height: 1.45; }
+.toc-title { margin-bottom: 0.18in; }
+</style>
+</head>
+<body>
+
+<!-- ================= COVER ================= -->
+<section class="cover">
+  <svg class="stars" viewBox="0 0 816 1056" preserveAspectRatio="none" id="stars"></svg>
+  <div class="top">
+    <svg width="34" height="34" viewBox="0 0 34 34">
+      <circle cx="17" cy="17" r="14" fill="none" stroke="#f28c28" stroke-width="2.2"/>
+      <line x1="17" y1="17" x2="28" y2="7" stroke="#f28c28" stroke-width="2.2" stroke-linecap="round"/>
+      <circle cx="17" cy="17" r="2.4" fill="#f28c28"/>
+    </svg>
+    <div class="brand">JClap &nbsp;·&nbsp; MIDI Note Effect &nbsp;·&nbsp; Max for Live</div>
+  </div>
+  <div class="title">
+    <div class="word"><span class="j">Polar</span> XY</div>
+    <div class="sub"><b>Take control of the Orb in Omnisphere 3.</b> &nbsp;User Manual</div>
+  </div>
+  <div class="shot"><img src="img/panel.jpg" alt=""></div>
+  <div class="foot">
+    <div><div class="k">Version</div><div class="v">0.19.3</div></div>
+    <div><div class="k">Format</div><div class="v">CLAP · VST3 · Max for Live</div></div>
+    <div><div class="k">Platforms</div><div class="v">macOS · Windows · Linux</div></div>
+    <div style="text-align:right"><div class="k">Edition</div><div class="v">Draft · November 2026</div></div>
+  </div>
+</section>
+
+<!-- ================= CONTENTS ================= -->
+<section class="front">
+  <div class="chap-head" style="margin-bottom:0.25in">
+    <div class="num">Contents</div>
+  </div>
+  <div class="toc-title">Contents</div>
+  <div class="toc" id="toc"></div>
+  <h2 style="margin-top:0.3in">About this manual</h2>
+  <p>Chapters 2 and 3 get you installed and steering the Orb in a few minutes. Chapter 4 tours the panel, and Chapter 5 explains how an X/Y position becomes an angle and a radius, which is the quickest way to understand what every control does. Chapters 6 to 9 cover the controls section by section. Chapters 10 and 11 are for <strong>Ableton Live</strong>: the Max for Live device, its setup, and MIDI-learning the Orb in Omnisphere 3. Chapter 12 has ready-made setups for different controllers. The appendix lists every parameter with its range and default, plus specifications and troubleshooting.</p>
+  <p>Throughout the manual, control names are set in <strong>bold</strong> and panel labels as they appear on screen, such as <strong>INERTIA MODE</strong>. Where the Max for Live device labels a control differently, the device's label follows in brackets, such as <strong>Smoothing</strong> (<span class="m4l">Smooth</span>).</p>
+  <div class="kv">
+    <dt><span class="mod m">M4L</span></dt><dd>Also on the Max for Live device, under the label shown.</dd>
+  </div>
+</section>
+
+<!-- ================= 1. WELCOME ================= -->
+<section class="chapter" data-ch="01" data-title="Welcome to Polar XY">
+  <div class="chap-head">
+    <div class="num">Chapter 01</div>
+    <h1>Welcome to Polar XY</h1>
+    <p class="lede">A small MIDI effect that turns any X/Y controller into a steering wheel for the Orb in Omnisphere 3.</p>
+    <div class="bar"></div>
+  </div>
+
+  <p>The Orb in Omnisphere 3 is a circle. Where its dot sits is described the way a radar would: an <strong>angle</strong> round the circle and a <strong>radius</strong> out from the centre. Omnisphere lets you MIDI-learn each of those to a CC. An X/Y pad, a joystick or a touch controller doesn't speak that language: it sends one CC for left and right and another for up and down. Learn those straight onto the Orb and pushing the stick right turns the Orb instead of moving it right.</p>
+  <p>Polar XY sits in front of Omnisphere and does the translation. It listens for your controller's two CCs, works out where on the circle that point is, and sends the angle and the radius on two CCs of their own, ready to MIDI-learn onto the Orb. Push right and the Orb goes right. Circle the stick and the Orb circles. Everything else on the MIDI channel (notes, pitch bend, other CCs) passes straight through.</p>
+  <p>Around that conversion are the controls that make it feel good: <strong>Smoothing</strong> and <strong>Inertia</strong> give the Orb weight so it glides, swings and coasts; a <strong>Touch Filter</strong> cleans up the skitter a resistive pad makes when a finger presses and lifts; and <strong>14-bit output</strong> takes the stairs out of a slow sweep.</p>
+
+  <h2>At a glance</h2>
+  <div class="cols2">
+    <div>
+      <ul>
+        <li><strong>X/Y in, angle and radius out</strong>, on any CCs you choose, on every MIDI channel independently.</li>
+        <li><strong>Angle Offset and Direction</strong> line the controller up with the Orb, however the Orb is rotated or mirrored.</li>
+        <li><strong>Clamp to circle or Fill square</strong>, so a square pad's corners do what you expect.</li>
+        <li><strong>Motion</strong>: Smoothing up to 2 s, Inertia with overshoot and coasting, Straight or Around paths, and Pull, Coast and Pad modes.</li>
+      </ul>
+    </div>
+    <div>
+      <ul>
+        <li><strong>Touch Filter</strong> for resistive pads, with an optional touch CC so it knows exactly when a finger is down.</li>
+        <li><strong>Center zone</strong> that steadies the angle around the middle.</li>
+        <li><strong>MIDI learn buttons</strong> that send one CC alone, so Omnisphere learns the right one.</li>
+        <li><strong>Three formats</strong>: CLAP, VST3, and a Max for Live device for Ableton Live.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note">
+    <span class="k">Which version should I use?</span>
+    <p>In <strong>Bitwig Studio</strong>, REAPER or any host that loads CLAP note effects, use the CLAP. In <strong>Ableton Live</strong>, use the Max for Live device (Chapter 10): Live doesn't load CLAPs, and won't put a VST3 in front of an instrument on the same track. The VST3 is for other hosts that can route a plug-in's MIDI output on to the next device.</p>
+  </div>
+</section>
+
+<!-- ================= 2. INSTALLATION ================= -->
+<section class="chapter" data-ch="02" data-title="Installation">
+  <div class="chap-head">
+    <div class="num">Chapter 02</div>
+    <h1>Installation</h1>
+    <p class="lede">Polar XY ships in the JClap bundle as a CLAP, a VST3 and a Max for Live device.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2>Requirements</h2>
+  <div class="kv">
+    <dt>CLAP</dt><dd>CLAP 1.2 note effect. Your host must support CLAP note effects, for example Bitwig Studio or REAPER.</dd>
+    <dt>VST3</dt><dd>Any VST3 host that can pass a plug-in's MIDI output on to the next device. It shows up as an instrument, since VST3 has no MIDI-effect category.</dd>
+    <dt>Max for Live</dt><dd>Ableton Live Suite, or Live Standard with Max for Live. See Chapter 10.</dd>
+    <dt>macOS</dt><dd>Universal binary: macOS 10.15 or later on Intel, 11 or later on Apple Silicon.</dd>
+    <dt>Windows</dt><dd>64-bit Windows.</dd>
+    <dt>Linux</dt><dd>64-bit, X11 (CLAP and VST3).</dd>
+  </div>
+
+  <h2>Installing the plug-in</h2>
+  <ol class="steps">
+    <li><b class="h">Download</b>Grab the zip from the latest release at <span class="mono">github.com/jeffmhopkins/Jclap/releases/latest</span>. <span class="mono">jclap-macOS.zip</span> and <span class="mono">jclap-Windows.zip</span> hold every JClap plug-in; <span class="mono">jclap-PolarXY-0.19.3.zip</span> holds only Polar XY, with a folder per system.</li>
+    <li><b class="h">Copy the plug-in</b>Copy <span class="mono">PolarXY.clap</span> into your CLAP folder, and <span class="mono">PolarXY.vst3</span> into your VST3 folder if you want it:
+      <table style="margin-top:6px">
+        <thead><tr><th style="width:0.9in"></th><th>CLAP</th><th>VST3</th></tr></thead>
+        <tbody>
+          <tr><td class="c">macOS</td><td class="r">~/Library/Audio/Plug-Ins/CLAP</td><td class="r">~/Library/Audio/Plug-Ins/VST3</td></tr>
+          <tr><td class="c">Windows</td><td class="r">C:\Program Files\Common Files\CLAP</td><td class="r">C:\Program Files\Common Files\VST3</td></tr>
+          <tr><td class="c">Linux</td><td class="r">~/.clap</td><td class="r">~/.vst3</td></tr>
+        </tbody>
+      </table>
+    </li>
+    <li><b class="h">Rescan</b>Restart your host or rescan plug-ins. In Bitwig Studio this is under <em>Settings → Locations</em>. Polar XY appears as a note effect.</li>
+  </ol>
+
+  <div class="note warn">
+    <span class="k">macOS: browser downloads are quarantined</span>
+    <p>The plug-ins are ad-hoc signed but not notarized, so macOS quarantines files downloaded through a web browser and some hosts (Bitwig among them) silently skip them. Clear the flag once after copying:</p>
+    <p class="mono" style="font-size:7.2pt; background:#fff; padding:7px 9px; border-radius:4px; word-break:break-all">xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap ~/Library/Audio/Plug-Ins/VST3/PolarXY.vst3</p>
+  </div>
+
+  <h2>Where it goes</h2>
+  <p>Polar XY works on MIDI, not audio, so it goes on the <strong>Omnisphere track, in front of Omnisphere</strong>. Your controller's MIDI reaches Polar XY first; the two X/Y CCs are swallowed and turned into the angle and radius CCs, and everything else carries on to Omnisphere unchanged. No extra tracks or MIDI routing are needed.</p>
+  <p>The Max for Live device is installed differently: see <em>Chapter 10</em>.</p>
+</section>
+
+<!-- ================= 3. QUICK START ================= -->
+<section class="chapter" data-ch="03" data-title="Quick Start">
+  <div class="chap-head">
+    <div class="num">Chapter 03</div>
+    <h1>Quick Start</h1>
+    <p class="lede">From an empty slot to steering the Orb, in Bitwig Studio. For Ableton Live, skip to Chapter 10.</p>
+    <div class="bar"></div>
+  </div>
+
+  <ol class="steps">
+    <li><b class="h">Load it in front of Omnisphere</b>On the Omnisphere track, put <strong>Polar XY</strong> before Omnisphere in the device chain.</li>
+    <li><b class="h">Tell it your controller's CCs</b>Set <strong>X</strong> and <strong>Y</strong> under XY IN to the CCs your controller sends (16 and 17 by default). Move the controller: the dot in the <strong>XY IN</strong> view follows it, and the orb in <strong>POLAR OUT</strong> follows that, with the angle and radius it is sending shown underneath.</li>
+    <li><b class="h">Pick the output CCs</b><strong>ANGLE</strong> and <strong>RADIUS</strong> under POLAR OUT are the CCs that go to Omnisphere (18 and 19 by default). Any CCs your controller and Omnisphere aren't already using will do.</li>
+    <li><b class="h">Learn the angle</b>Open Omnisphere's <strong>ORB</strong> page and switch the Orb on. Right-click the Orb, check the menu says the Orb is set for <em>Angle</em> (if it offers <em>Switch to Angle</em>, choose it first), and choose <strong>MIDI CC Learn</strong>. Then press <strong>ANGLE</strong> under MIDI LEARN on Polar XY. It sends the angle CC alone, once, so Omnisphere learns exactly that CC.</li>
+    <li><b class="h">Learn the radius</b>Right-click the Orb, choose <strong>Switch to Radius</strong>, right-click again, choose <strong>MIDI CC Learn</strong>, and press <strong>RADIUS</strong> on Polar XY.</li>
+    <li><b class="h">Line it up</b>Move the controller. If the Orb's dot lands rotated from where you are pointing, turn <strong>OFFSET</strong>. If it moves the opposite way round, flip <strong>DIRECTION</strong>.</li>
+    <li><b class="h">Give it some weight</b>Raise <strong>SMOOTHING</strong> to about 150 ms for a glide, or <strong>INERTIA</strong> to 40% to let the Orb swing past and settle. Click <strong>SAVE</strong> in the preset bar to keep the setup.</li>
+  </ol>
+
+  <div class="note">
+    <span class="k">Tip</span>
+    <p>Every control has a tooltip. Hover over anything on the panel for a one-line reminder of what it does.</p>
+  </div>
+</section>
+
+<!-- ================= 4. PANEL ================= -->
+<section class="chapter" data-ch="04" data-title="The Panel">
+  <div class="chap-head">
+    <div class="num">Chapter 04</div>
+    <h1>The Panel</h1>
+    <p class="lede">Input on the left, output on the right, and the settings that shape the journey between them along the bottom.</p>
+    <div class="bar"></div>
+  </div>
+
+  <figure class="dark anno" id="overview">
+    <img src="img/panel.jpg" alt="">
+    <svg viewBox="0 0 900 738">
+      <g font-family="InterM" font-weight="700" font-size="14" text-anchor="middle"></g>
+    </svg>
+  </figure>
+
+  <div class="legend">
+    <div><span class="dot">1</span><span><b>Preset bar.</b> Step with the arrows, click the name for the menu, star favourites, <b>SAVE</b> your own.</span></div>
+    <div><span class="dot">2</span><span><b>XY IN view.</b> The last position received. Click or drag to play the Orb from here.</span></div>
+    <div><span class="dot">3</span><span><b>Input CCs.</b> X, Y and the optional Touch CC from your controller.</span></div>
+    <div><span class="dot">4</span><span><b>PASS INPUT CCS.</b> Also send the X/Y CCs on: Off, Raw or Filtered.</span></div>
+    <div><span class="dot">5</span><span><b>Polar Out switch.</b> Off sends no angle or radius at all.</span></div>
+    <div><span class="dot">6</span><span><b>POLAR OUT view.</b> Where the output is, and where it is heading.</span></div>
+    <div><span class="dot">7</span><span><b>Output CCs.</b> Angle, Radius and the optional Touch Out CC.</span></div>
+    <div><span class="dot">8</span><span><b>MIDI LEARN.</b> Send one output CC alone, for Omnisphere to learn.</span></div>
+    <div><span class="dot">9</span><span><b>SETTINGS / TOUCH tabs.</b> Mapping, motion and resolution; Touch Filter tuning and Center.</span></div>
+  </div>
+
+  <h2>The two views</h2>
+  <p><strong>XY IN</strong> shows the last X/Y position received, with its channel, and <strong>POLAR OUT</strong> the angle and radius sent for that channel. Angle 0 is marked by the tick on the right of the circle. The numbers under each view read the same thing out: <em>X</em>, <em>Y</em> and <em>CH</em> on the left, <em>ANGLE</em> and <em>RADIUS</em> on the right (a dash until both axes have arrived). Comparing the two views shows exactly what Offset and Direction are doing.</p>
+  <p>Both views are small night skies. The input dot and the output orb leave a trail of ink that drifts and fades behind them, so you can see the path a glide took (straight across, or round the circle) and Inertia swinging it past the target and back. The orb is drawn where the output really is, between the CC steps. While Smoothing or Inertia hold it back, a faint band ties it to a blue ring showing where the controller is pointing it.</p>
+
+  <h2>Playing from the panel</h2>
+  <p>Click or drag in <strong>XY IN</strong> and that channel goes there just as if the controller had sent it, gliding with Smoothing and Inertia like any other move (and, with Pass Input CCs on, sending the X/Y CCs on too). The pad isn't rounded to CC steps, and its moves always get at least 40 ms of smoothing, so the Orb follows the mouse evenly. While the mouse is down it has that channel, and the controller's X/Y on it are ignored; let go and the controller takes over with its next move. Double-click to put it back in the centre. Before any CC has arrived the pad drives channel 1.</p>
+
+  <h2>Working with the controls</h2>
+  <p>Every knob, switch and menu is a host parameter, so everything can be automated. Knobs work the same everywhere on the panel:</p>
+  <table>
+    <thead><tr><th>Action</th><th>On a knob</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Drag up / down</td><td>Change the value. A popup shows the value while you drag.</td></tr>
+      <tr><td class="c"><span class="key">Shift</span> + drag</td><td>Fine adjustment.</td></tr>
+      <tr><td class="c">Scroll wheel</td><td>Step the value up or down.</td></tr>
+      <tr><td class="c">Right-click</td><td>Menu with <em>Reset to default</em> and <em>Enter value…</em> to type an exact number, such as a CC.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Presets</h2>
+  <p>The preset bar in the header steps through presets with its arrows, lists them when you click the name, and stars favourites. <strong>SAVE</strong> stores the current settings as your own preset; it appears under <em>User</em> in the menu. The factory bank has two: <strong>Init</strong>, with every setting at its default, and <strong>Geren</strong>, tuned for a resistive pad (Chapter 12). Settings are also saved with your project.</p>
+  <table class="specs">
+    <tbody>
+      <tr><td class="c">macOS</td><td class="r">~/Library/Application Support/PolarXY/Presets</td></tr>
+      <tr><td class="c">Windows</td><td class="r">%APPDATA%\PolarXY\Presets</td></tr>
+      <tr><td class="c">Linux</td><td class="r">~/.config/PolarXY/Presets</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Panel size</h2>
+  <p>The panel is 900 × 738 at 100%. Right-click any empty part of the panel and choose <em>UI Size</em> to scale it to 75%, 100%, 125%, 150% or 200%. The same menu has <em>Check for Updates</em>.</p>
+</section>
+
+<!-- ================= 5. HOW IT WORKS ================= -->
+<section class="chapter" data-ch="05" data-title="How Polar XY Works">
+  <div class="chap-head">
+    <div class="num">Chapter 05</div>
+    <h1>How Polar XY Works</h1>
+    <p class="lede">The same point, described two ways: how far across and how far up, or which way and how far out.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2>From X/Y to angle and radius</h2>
+  <p>Your controller sends a position as two numbers from 0 to 127, with 64 in the middle: X grows to the right and Y grows upward. Polar XY treats 64, 64 as the centre of the Orb. The <strong>radius</strong> is how far the point is from the centre: 0 there, 127 at the edge. The <strong>angle</strong> is which way the point lies, starting from straight right and turning counter-clockwise, in 127 steps for a full turn.</p>
+
+  <figure>
+    <svg viewBox="0 0 704 250" width="100%" font-family="InterM" font-size="9">
+      <defs>
+        <marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#15171d"/></marker>
+      </defs>
+      <!-- left: XY square -->
+      <g transform="translate(40,20)">
+        <rect x="0" y="0" width="200" height="200" rx="6" fill="#f5f5f7" stroke="#c9ccd3"/>
+        <line x1="100" y1="0" x2="100" y2="200" stroke="#dfe1e6"/>
+        <line x1="0" y1="100" x2="200" y2="100" stroke="#dfe1e6"/>
+        <line x1="150" y1="200" x2="150" y2="44" stroke="#1489ad" stroke-dasharray="3 3"/>
+        <line x1="0" y1="44" x2="150" y2="44" stroke="#1489ad" stroke-dasharray="3 3"/>
+        <circle cx="150" cy="44" r="6" fill="#1489ad"/>
+        <text x="150" y="214" text-anchor="middle" fill="#1489ad" font-weight="600">X 102</text>
+        <text x="-6" y="47" text-anchor="end" fill="#1489ad" font-weight="600">Y 108</text>
+        <text x="0" y="-6" font-weight="600" fill="#15171d" letter-spacing="0.08em">XY IN</text>
+        <text x="100" y="232" text-anchor="middle" fill="#6d7280">0 ← X → 127</text>
+      </g>
+      <!-- arrow -->
+      <path d="M282,120 L398,120" stroke="#15171d" stroke-width="1.2" marker-end="url(#ah)"/>
+      <text x="340" y="110" text-anchor="middle" font-weight="600" fill="#15171d" letter-spacing="0.05em">POLAR XY</text>
+      <text x="340" y="138" text-anchor="middle" fill="#6d7280">two CCs in, two CCs out</text>
+      <!-- right: polar -->
+      <g transform="translate(540,120)">
+        <circle r="100" fill="#fbf3ea" stroke="#e8c9a6"/>
+        <circle r="66" fill="none" stroke="#efdcc6"/>
+        <circle r="33" fill="none" stroke="#efdcc6"/>
+        <line x1="0" y1="0" x2="112" y2="0" stroke="#c4650f" stroke-width="1"/>
+        <text x="116" y="3" fill="#c4650f">0</text>
+        <path d="M30,0 A30,30 0 0 0 20.6,-21.8" fill="none" stroke="#c4650f" stroke-width="1.6" marker-end="url(#ah)"/>
+        <text x="38" y="-12" fill="#c4650f" font-weight="600">angle</text>
+        <line x1="0" y1="0" x2="62" y2="-68" stroke="#15171d" stroke-width="1.4"/>
+        <text x="16" y="-46" fill="#15171d" font-weight="600" transform="rotate(-47 16 -46)">radius</text>
+        <circle cx="62" cy="-68" r="7" fill="#f28c28" stroke="#fff" stroke-width="2"/>
+        <text x="-100" y="-106" font-weight="600" fill="#15171d" letter-spacing="0.08em">POLAR OUT</text>
+        <text x="0" y="118" text-anchor="middle" fill="#6d7280">angle 0 → 126 counter-clockwise · radius 0 → 127</text>
+      </g>
+    </svg>
+    <figcaption><b>Fig. 5.1</b> &nbsp;The same point as X/Y and as angle and radius. The angle starts at the right (the tick on the POLAR OUT view) and turns counter-clockwise by default.</figcaption>
+  </figure>
+
+  <h2>The details that matter</h2>
+  <ul>
+    <li><strong>Angle steps.</strong> One full turn is 127 steps, so the angle runs 0 to 126; 127 would be a full turn, the same place as 0, so the angle wraps from 126 straight to 0.</li>
+    <li><strong>The dead centre.</strong> Right at the middle (within about two CC steps) a point has no direction, and a resting controller's jitter would swing the angle wildly. So there Polar XY holds the last angle and sends radius 0. Outside that, the radius starts at 1.</li>
+    <li><strong>The corners.</strong> A square pad's corners are further from the centre than its edges, about 1.41 times. By default the radius stops at the circle; <strong>Radius Mode</strong> can instead make the whole square edge full radius (Chapter 6).</li>
+    <li><strong>One move at a time.</strong> X and Y arriving together are one move: only the final point goes out, never a point made of the new X and the old Y.</li>
+    <li><strong>Only changes.</strong> An output CC is sent only when its value changes.</li>
+    <li><strong>Every channel is separate.</strong> Each of the sixteen MIDI channels has its own position and its own motion. The output goes out on the channel the input came in on.</li>
+  </ul>
+
+  <h2>What passes through</h2>
+  <p>Everything that isn't one of the input CCs passes straight through: notes, pitch bend, aftertouch, other CCs, clock. The input CCs themselves are swallowed, unless <strong>Pass Input CCs</strong> sends them on as well (Chapter 8). If X and Y In are set to the same CC, or Angle and Radius Out are, nothing is converted and the input passes through; the panel shows a warning.</p>
+
+  <div class="note">
+    <span class="k">Why the Orb might look rotated</span>
+    <p>Spectrasonics doesn't document where the Orb's angle 0 sits or which way it turns, so Polar XY makes both settings: <strong>Angle Offset</strong> and <strong>Direction</strong>. If the Orb's dot lands rotated or mirrored from your controller, adjust those (Chapter 6).</p>
+  </div>
+</section>
+
+<!-- ================= 6. MAPPING ================= -->
+<section class="chapter" data-ch="06" data-title="Mapping and CCs" style="--accent: #7a52c7; --accent-bg: #b69cf0;">
+  <div class="chap-head">
+    <div class="num">Chapter 06</div>
+    <h1>Mapping and CCs</h1>
+    <p class="lede">Which CCs come in and go out, and how the controller's square lines up with the Orb's circle.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2><span class="tag">XY IN</span>Input CCs</h2>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">X<span class="mod m">M4L · X CC</span></td><td class="r">CC 0–127</td><td class="d">CC 16</td><td>The CC your controller sends for left and right.</td></tr>
+      <tr><td class="c">Y<span class="mod m">M4L · Y CC</span></td><td class="r">CC 0–127</td><td class="d">CC 17</td><td>The CC your controller sends for up and down.</td></tr>
+      <tr><td class="c">TOUCH<span class="mod m">M4L · Touch</span></td><td class="r">Off, CC 0–127</td><td class="d">Off</td><td>The CC a touch pad sends while a finger is down. Optional; see Chapter 8. On the Max for Live device, −1 is Off.</td></tr>
+    </tbody>
+  </table>
+  <p>Input takes <strong>14-bit</strong> CCs too, with nothing to set. When an input CC is below 32, a fine value on that CC + 32 (sent after the main one, as 14-bit controllers do) places the axis between the CC steps. A 7-bit controller never sends them, so nothing changes for one.</p>
+
+  <h2><span class="tag">POLAR OUT</span>Output CCs</h2>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">ANGLE<span class="mod m">M4L · Angle</span></td><td class="r">CC 0–127</td><td class="d">CC 18</td><td>The angle goes out on this CC, for the Orb's angle.</td></tr>
+      <tr><td class="c">RADIUS<span class="mod m">M4L · Radius</span></td><td class="r">CC 0–127</td><td class="d">CC 19</td><td>The radius goes out on this CC, for the Orb's radius.</td></tr>
+      <tr><td class="c">TOUCH<span class="mod m">M4L · Touch</span></td><td class="r">Off, CC 0–127</td><td class="d">Off</td><td>Sends the touch on, as 127 and 0. Leave it Off for Omnisphere.</td></tr>
+      <tr><td class="c">OFF / ON<span class="mod m">M4L · POLAR OUT</span></td><td class="r">Off, On</td><td class="d">On</td><td>The switch in the POLAR OUT title. Off sends no angle or radius at all (Chapter 8).</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="tag">SETTINGS</span>Lining up with the Orb</h2>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">OFFSET<span class="mod m">M4L · Offset</span></td><td class="r">0–360°</td><td class="d">0°</td><td>Rotates the angle. Turn it until the Orb's dot sits on the same side as your controller.</td></tr>
+      <tr><td class="c">DIRECTION<span class="mod m">M4L · Direction</span></td><td class="r">CCW, CW</td><td class="d">CCW</td><td>Which way the angle counts. Flip it to CW if the Orb goes round the opposite way to your controller.</td></tr>
+      <tr><td class="c">RADIUS MODE<span class="mod m">M4L · Radius</span></td><td class="r">Circle, Square</td><td class="d">Circle</td><td><em>Circle</em> (Clamp to circle) stops the radius at the edge of the circle, so the corners are no further out than the edges. <em>Square</em> (Fill square) makes the whole edge of the square full radius.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <span class="k">Circle or Square?</span>
+    <p>Joysticks move in a circle, so <em>Circle</em> fits them. On a square pad, <em>Circle</em> means the edges reach full radius only at their middles; <em>Square</em> lets you reach full radius by pushing to any edge, at the cost of the corners and edges feeling the same.</p>
+  </div>
+
+  <h2><span class="tag">MIDI LEARN</span>Sending one CC alone</h2>
+  <p>MIDI-learning an Orb control is awkward with an X/Y controller, because a controller never moves just one CC: Omnisphere learns whichever one gets there first. The <strong>ANGLE</strong>, <strong>RADIUS</strong> and <strong>TOUCH</strong> buttons under MIDI LEARN each send that output's CC alone, once, at the value last sent on it (64 before anything has been sent; TOUCH as it stands, or released if nothing has been sent), so the learn picks up exactly that CC. At 14-bit, only the main (MSB) CC is sent, which is the one to learn. TOUCH needs a Touch Out CC set.</p>
+  <p>On the Max for Live device these are the <strong>SEND (MIDI LEARN)</strong> buttons. Typing a number into the device's Angle, Radius or Touch Out box and pressing <span class="key">Enter</span> sends the same way, even when the number is the one already there (Chapter 10).</p>
+</section>
+
+<!-- ================= 7. MOTION ================= -->
+<section class="chapter" data-ch="07" data-title="Motion" style="--accent: #1489ad; --accent-bg: #6fe0ff;">
+  <div class="chap-head">
+    <div class="num">Chapter 07</div>
+    <h1>Motion</h1>
+    <p class="lede">By default the Orb jumps to wherever the controller is. Motion makes it travel there instead, with as much weight as you like.</p>
+    <div class="bar"></div>
+  </div>
+
+  <p>With <strong>Smoothing</strong> or <strong>Inertia</strong> up, Polar XY sends a stream of in-between CCs as the Orb travels (one step every 32 samples, or every 4 ms on the Max for Live device, and only when a value changes) until it arrives. Each MIDI channel moves on its own. The first position on a channel is jumped to, as there's nowhere to glide from.</p>
+
+  <h2><span class="tag">SETTINGS</span>Smoothing and Inertia</h2>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">SMOOTHING<span class="mod m">M4L · Smooth</span></td><td class="r">0 ms – 2 s</td><td class="d">0 ms</td><td>Roughly how long the Orb takes to glide to the controller's position.</td></tr>
+      <tr><td class="c">INERTIA<span class="mod m">M4L · Inertia</span></td><td class="r">0–100%</td><td class="d">0%</td><td>Gives the Orb weight. The heavier it is, the slower it gets going and the further it swings past the target before settling. At 100% it swings for about 5 s; the low end of the knob stays light.</td></tr>
+    </tbody>
+  </table>
+  <p>With Inertia up, the Orb doesn't stop when the controller does (or when you let go of the pad). It carries on the way the controller was going, slowing down over a couple of seconds at 100%, and bounces off the edge. It settles wherever it runs out of speed, and the controller's next move picks it up from there. A jump from rest has no speed to carry, so it settles on the spot.</p>
+
+  <h2><span class="tag">SETTINGS</span>Path</h2>
+  <figure>
+    <svg viewBox="0 0 704 170" width="100%" font-family="InterM" font-size="9">
+      <defs>
+        <marker id="ah2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#c4650f"/></marker>
+      </defs>
+      <g transform="translate(176,82)">
+        <circle r="66" fill="#fbf3ea" stroke="#e8c9a6"/>
+        <circle r="3" fill="#d6d8de"/>
+        <path d="M-50,-30 L48,26" stroke="#c4650f" stroke-width="2" fill="none" marker-end="url(#ah2)"/>
+        <circle cx="-50" cy="-30" r="5" fill="#fff" stroke="#c4650f" stroke-width="1.5"/>
+        <text x="0" y="86" text-anchor="middle" font-weight="600" fill="#15171d" letter-spacing="0.08em">STRAIGHT</text>
+      </g>
+      <g transform="translate(528,82)">
+        <circle r="66" fill="#fbf3ea" stroke="#e8c9a6"/>
+        <circle r="3" fill="#d6d8de"/>
+        <path d="M-50,-30 A58,58 0 0 0 48,26" stroke="#c4650f" stroke-width="2" fill="none" marker-end="url(#ah2)"/>
+        <circle cx="-50" cy="-30" r="5" fill="#fff" stroke="#c4650f" stroke-width="1.5"/>
+        <text x="0" y="86" text-anchor="middle" font-weight="600" fill="#15171d" letter-spacing="0.08em">AROUND</text>
+      </g>
+    </svg>
+    <figcaption><b>Fig. 7.1</b> &nbsp;The same glide with Path on Straight and on Around. Straight crosses the pad through the middle; Around turns the angle and changes the radius separately, so it goes round the circle the short way.</figcaption>
+  </figure>
+  <table class="params">
+    <thead><tr><th>Setting</th><th>What moves</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Straight</td><td>Glides across the pad in X/Y, so going from one side to the other passes through the centre.</td></tr>
+      <tr><td class="c">Around</td><td>Moves the angle and radius on their own, so the Orb travels round the circle. The angle keeps counting past a full turn, so stirring the controller with some Inertia sets the Orb whirling, and it carries on past where you stop. A radius that swings or coasts in past the centre comes out the other side rather than waiting there.</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="tag">SETTINGS</span>Inertia Mode</h2>
+  <p><strong>INERTIA MODE</strong> (<span class="m4l">Inertia mode</span>) picks how the Orb follows the controller once it has weight.</p>
+  <table class="params">
+    <thead><tr><th>Mode</th><th>How it follows</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Pull</td><td>The default. The Orb is drawn to where the controller is, swinging past and settling as described above.</td></tr>
+      <tr><td class="c">Coast</td><td>Only the controller's <em>movement</em> moves the Orb. While the controller moves, the Orb picks up its speed and direction (slower the heavier it is). Once the controller holds still it has no say at all: the Orb coasts on, slows to a stop and stays there. Where the controller is doesn't matter, so the Orb can end up anywhere.</td></tr>
+      <tr><td class="c">Pad</td><td>Treats the controller like a laptop trackpad, for a touch X/Y controller used as a chaos pad. Touching down doesn't move the Orb, wherever the finger lands. Dragging moves it by as much as the finger moves, from wherever it is. Letting go mid-drag flings it on, gliding and bouncing off the walls, with Inertia setting how far (at 0% it stops where you let go). Touching again catches it. With Path on Around, dragging across turns the Orb (a full sweep of the pad is a full turn) and dragging up and down changes the radius.</td></tr>
+    </tbody>
+  </table>
+  <div class="note">
+    <span class="k">Pads that spring back</span>
+    <p>In Pad mode, a controller that jumps back to the centre when released is fine: any big jump counts as a finger landing or lifting, not as a drag.</p>
+  </div>
+</section>
+
+<!-- ================= 8. TOUCH FILTER ================= -->
+<section class="chapter" data-ch="08" data-title="Touch Filter and Center" style="--accent: #1489ad; --accent-bg: #6fe0ff;">
+  <div class="chap-head">
+    <div class="num">Chapter 08</div>
+    <h1>Touch Filter and Center</h1>
+    <p class="lede">A resistive pad lies for a few milliseconds every time a finger lands or lifts. Touch Filter finds those moments and throws them away.</p>
+    <div class="bar"></div>
+  </div>
+
+  <p>A resistive X/Y pad reads its position through the finger's contact. For a few milliseconds while the finger presses down, and again while it lifts off, the contact is light and the readings are wrong: they skitter toward an edge or the centre, and the Orb jumps there and back. Smoothing hides that by smearing it into every move. <strong>Touch Filter</strong> instead finds the edges of each touch and drops them, leaving the rest of the movement exactly as it came.</p>
+
+  <h2><span class="tag">SETTINGS</span>Touch Filter</h2>
+  <p><strong>TOUCH FILTER</strong> (<span class="m4l">Filter ms</span>) is a time: pick 10, 20, 40, 50 or 60 ms from its menu, or <em>Custom</em> for any time up to 100 ms. Off (0) passes everything as it comes. Use the shortest time that stops the skitter. It costs that much latency (plus the press at the start of each touch), but it never smears a move. The panel's own XY pad doesn't go through it.</p>
+  <ul>
+    <li>X and Y that arrive within 3 ms of each other are one reading, so no point made of the new X and the old Y goes out.</li>
+    <li>A reading that jumps further than the <strong>Jump Limit</strong>, or lands somewhere new after a 50 ms pause, starts a touch. For the first stretch of it, the press, nothing goes out. Then the latest reading goes out if the last two <strong>Agree</strong>, and everything after flows on. A touch that never gets two readings, such as a single blip as the finger lifts, never goes out.</li>
+    <li>Everything is held back by the Touch Filter time, so when a jump starts a new touch, the readings from just before it (the last touch lifting off) are thrown away. The last few milliseconds of a drag go with them.</li>
+  </ul>
+
+  <h2><span class="tag">TOUCH tab</span>Tuning</h2>
+  <figure class="dark">
+    <img src="img/touch-tab.jpg" alt="">
+    <figcaption><b>Fig. 8.1</b> &nbsp;The TOUCH tab, with Touch Filter at 50 ms. Touch Filter appears here too, as <strong>LIFT (TOUCH FILTER)</strong>.</figcaption>
+  </figure>
+  <p>The <strong>TOUCH</strong> tab, next to SETTINGS at the bottom of the panel, tunes the filter. On the Max for Live device these are in the <strong>TOUCH</strong> section.</p>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">PRESS DELAY<span class="mod m">M4L · Press delay</span></td><td class="r">Same, 0–100 ms</td><td class="d">Same</td><td>How long a new touch's press is held back. <em>Same</em> follows Touch Filter. On the device, −1 is Same.</td></tr>
+      <tr><td class="c">JUMP LIMIT<span class="mod m">M4L · Jump</span></td><td class="r">8–64 steps</td><td class="d">16 steps</td><td>How far one reading may move before it has to wait for a second to agree. It's measured from the last reading and from where the finger was heading (its speed and direction carried on), whichever is nearer, so a fast drag that keeps its course passes, and so does a sharp turn back.</td></tr>
+      <tr><td class="c">AGREE<span class="mod m">M4L · Agree</span></td><td class="r">1–16 steps</td><td class="d">4 steps</td><td>How close two readings must be to agree.</td></tr>
+      <tr><td class="c">CENTER<span class="mod m">M4L · Center</span></td><td class="r">Off, 0–50%</td><td class="d">Off</td><td>A zone around the middle that steadies the angle (below).</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="tag">TOUCH tab</span>Center</h2>
+  <p><strong>CENTER</strong> is a zone around the middle, as a share of the radius. Inside it:</p>
+  <ul>
+    <li><strong>The angle holds still through small wobbles.</strong> Near the centre, a wobble of a CC step or two swings the angle a long way, and across the centre it flips it half a turn. In the zone, the angle is read from a point the position drags along on a short string (4 CC steps): a wobble shorter than that doesn't move it, and a real move pulls it along at once. It goes by distance, not time, so a move through the centre is never held up. The string shrinks to nothing toward the zone's edge.</li>
+    <li><strong>With Path on Around, motion goes straight.</strong> Around would swing a glide across the middle round the centre; in the zone it fades to Straight, so the Orb cuts through the middle and orbits further out.</li>
+  </ul>
+  <p>The radius always goes out exactly. Try 15 to 25%.</p>
+
+  <h2><span class="tag">XY IN / POLAR OUT</span>The touch CC</h2>
+  <p>Many pads also send a CC that is on (64 and up) while a finger is down and off when it lifts. Set <strong>TOUCH</strong> under XY IN to it, and Touch Filter knows the edges of each touch for certain instead of guessing them from jumps:</p>
+  <ul>
+    <li>While the touch is off, X and Y are ignored.</li>
+    <li>When it goes on, the press is held back as above, then the latest reading goes out (one is enough, as the finger is known to be down). A jump later in the touch still waits for a second reading to agree, and a pause no longer counts as a new touch.</li>
+    <li>When it goes off, everything still held back is thrown away: the last Touch Filter time before the lift. So a lift-off is dropped even when it slides away gently with no jump to give it away. The touch CC usually arrives a reading or more after the skitter starts, so use a time at least that long (40 to 50 ms for a pad that sends 60 times a second).</li>
+  </ul>
+  <p>Until the first touch CC arrives, Touch Filter works as before, so a pad that doesn't send one loses nothing. The touch CC needs Touch Filter on; with it off, the touch CC only goes on to Touch Out.</p>
+  <p><strong>TOUCH</strong> under POLAR OUT sends the touch on, as 127 and 0, in step with the filtered motion: on just before a touch's first position goes out, off once it lifts. Holding the mouse down on the panel's XY pad counts as a touch too.</p>
+
+  <h2><span class="tag">XY IN</span>Passing the CCs on</h2>
+  <p><strong>PASS INPUT CCS</strong> (<span class="m4l">Pass</span>) sends the X/Y CCs (and the touch CC) on as well as converting them.</p>
+  <table class="params">
+    <thead><tr><th>Setting</th><th>What goes on</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Off</td><td>The default. The input CCs are swallowed; only the angle and radius go out.</td></tr>
+      <tr><td class="c">Raw</td><td>The input CCs go on the moment they arrive, exactly as the controller sent them, skitter and all.</td></tr>
+      <tr><td class="c">Filtered</td><td>The input CCs go on as Touch Filter lets them through: the same CCs and values, a window later, with each touch's press and lift-off left out and the touch CC in step. With Touch Filter off, this is the same as Raw.</td></tr>
+    </tbody>
+  </table>
+  <p>With <strong>Polar Out</strong> switched off, no angle or radius goes out at all, so Polar XY can be used purely to clean up a resistive pad's X/Y for something else.</p>
+</section>
+
+<!-- ================= 9. RESOLUTION ================= -->
+<section class="chapter" data-ch="09" data-title="14-bit Output" style="--accent: #c4650f;">
+  <div class="chap-head">
+    <div class="num">Chapter 09</div>
+    <h1>14-bit Output</h1>
+    <p class="lede">Finer steps for slow sweeps, if the receiving end can use them.</p>
+    <div class="bar"></div>
+  </div>
+
+  <p>A 7-bit CC gives the angle 127 steps round the circle (about 2.8° each) and the radius 127 steps, so a slow sweep can move in audible stairs. <strong>RESOLUTION</strong> (<span class="m4l">Resolution</span>) set to <strong>14-bit</strong> sends each value as a standard 14-bit CC pair: the top 7 bits on the output CC, then the bottom 7 bits on that CC + 32. With the defaults, 18 and 19, the fine values also go out on 50 and 51. That is 16,383 steps each.</p>
+  <ul>
+    <li><strong>It needs both output CCs below 32.</strong> On higher ones the output stays 7-bit, and the panel (or the device's status line) says so.</li>
+    <li>Whether the receiving end reads the pair as one fine value is up to it. One that doesn't simply sees the main CC move as before, plus two extra CCs.</li>
+  </ul>
+
+  <div class="note">
+    <span class="k">With Omnisphere</span>
+    <p>Start at <strong>7-bit</strong>, especially while MIDI-learning. If Omnisphere won't learn the Orb with 14-bit on, switch to 7-bit and learn again (Chapter 11).</p>
+  </div>
+</section>
+
+<!-- ================= 10. ABLETON LIVE ================= -->
+<section class="chapter" data-ch="10" data-title="Using Polar XY with Ableton Live" style="--accent: #c4650f;">
+  <div class="chap-head">
+    <div class="num">Chapter 10</div>
+    <h1>Using Polar XY with Ableton Live</h1>
+    <p class="lede">In Live, Polar XY is a Max for Live MIDI effect that sits on the same track as Omnisphere 3.</p>
+    <div class="bar"></div>
+  </div>
+
+  <p>Polar XY works best when it can sit on the same track as Omnisphere 3. Live doesn't load CLAPs, and won't put a VST3 in front of an instrument on the same track, so for Live there is a <strong>Max for Live</strong> version: <span class="mono">Polar XY.amxd</span>. It needs Ableton Live Suite, or Live Standard with Max for Live installed.</p>
+  <p>It is the same conversion and motion as the plug-in, with the same settings, each a Live parameter you can automate or map. In place of the plug-in's night-sky views, a status line shows the last channel's X/Y in and angle and radius out.</p>
+
+  <div class="note">
+    <span class="k">Note</span>
+    <p>This chapter and the next were prepared with Polar XY 0.19.3 and Ableton Live Suite 12.4.16.</p>
+  </div>
+
+  <h2>The Max for Live device</h2>
+  <figure class="dark">
+    <img src="img/m4l-device-on.jpg" alt="">
+    <figcaption><b>Fig. 10.1</b> &nbsp;The Polar XY device in Live, here saved as an <em>Omnisphere Polar XY</em> preset for a pad sending X on CC 12, Y on CC 13 and touch on CC 92.</figcaption>
+  </figure>
+  <p>The device has six sections, left to right:</p>
+  <table>
+    <thead><tr><th style="width:1.1in">Section</th><th>What it holds</th><th style="width:0.75in">Chapter</th></tr></thead>
+    <tbody>
+      <tr><td class="c">XY IN</td><td>The Cartesian CC data coming from your X/Y controller: <strong>X CC</strong>, <strong>Y CC</strong>, <strong>Touch</strong> (−1 is off) and <strong>Pass</strong> (Off, Raw or Filtered).</td><td>6, 8</td></tr>
+      <tr><td class="c">POLAR OUT</td><td>The CCs carrying the converted polar output sent to Omnisphere: <strong>Angle</strong>, <strong>Radius</strong>, <strong>Touch</strong> (−1 is off), the <strong>OFF / ON</strong> switch in the title, and the three <strong>SEND (MIDI LEARN)</strong> buttons.</td><td>6</td></tr>
+      <tr><td class="c">MAPPING</td><td>How the Cartesian data maps onto Omnisphere's polar coordinates: <strong>Offset</strong>, <strong>Direction</strong> and <strong>Radius</strong> mode.</td><td>6</td></tr>
+      <tr><td class="c">MOTION</td><td>How the Orb responds and moves: <strong>Smooth</strong>, <strong>Inertia</strong>, <strong>Path</strong>, <strong>Inertia mode</strong> and <strong>Resolution</strong>.</td><td>7, 9</td></tr>
+      <tr><td class="c">TOUCH</td><td>Tuning for a jittery X/Y pad: <strong>Filter ms</strong> (0 is off), <strong>Press delay</strong> (−1 is the same as Filter ms), <strong>Jump</strong> and <strong>Agree</strong>.</td><td>8</td></tr>
+      <tr><td class="c">CENTER</td><td>The dead-zone behaviour around the origin: <strong>Center</strong>.</td><td>8</td></tr>
+    </tbody>
+  </table>
+
+  <h2>The status line</h2>
+  <p>Along the bottom of the device, the status line shows what Polar XY is doing, and ends with the device's version, so you can see which copy Live loaded.</p>
+  <table>
+    <thead><tr><th style="width:2.5in">It shows</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td class="c mono" style="font-weight:400">waiting for X/Y CCs</td><td>Nothing has arrived on the X or Y CC yet. Check the X CC and Y CC numbers, and that the controller's MIDI reaches the track.</td></tr>
+      <tr><td class="c mono" style="font-weight:400">ch 1  in 101,91  out 35 / 90  v0.19.3</td><td>The last channel that moved, its X,Y in, and the angle / radius sent. A dash means that value hasn't arrived or been sent yet; <span class="mono">out off</span> means Polar Out is switched off.</td></tr>
+      <tr><td class="c mono" style="font-weight:400">angle: sent CC 18 = 64 on ch 1</td><td>A SEND button (or Enter in an Out box) just sent that CC. Shown for a few seconds.</td></tr>
+      <tr><td class="c mono" style="font-weight:400">(14-bit needs out CCs &lt; 32)</td><td>Resolution is 14-bit but an output CC is 32 or above, so the output stays 7-bit.</td></tr>
+      <tr><td class="c mono" style="font-weight:400">… are the same CC: passing through</td><td>X and Y In, or Angle and Radius Out, are set to the same CC, so nothing is converted.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Installation and initial setup</h2>
+  <figure class="dark">
+    <img src="img/live-overview.jpg" alt="">
+    <figcaption><b>Fig. 10.2</b> &nbsp;Polar XY.amxd in Live's browser under <em>Max for Live</em>, and the device on the Omnisphere track.</figcaption>
+  </figure>
+  <ol class="steps">
+    <li><b class="h">Make a folder for it</b>In your Ableton Live User Library, create a folder for your Max MIDI effects, for example <em>MAX MIDI FX</em>. On a Mac the User Library is at <span class="mono">~/Music/Ableton/User Library/</span>.</li>
+    <li><b class="h">Unzip the device</b>From the <em>Max for Live</em> folder of the release zip, unzip <span class="mono">Polar XY.amxd</span> and <span class="mono">polarxy.js</span> into the new folder. Keep the two files together: the device runs the script beside it.</li>
+    <li><b class="h">Load it</b>Open Ableton Live and choose <em>Max for Live</em> in the browser. <span class="mono">Polar XY.amxd</span> is listed there. Drag it onto an available MIDI track. It loads with the default settings.</li>
+    <li><b class="h">Check Pass and Polar Out</b>Make sure <strong>Pass</strong> under XY IN is <em>Off</em> (the default), so only the angle and radius reach Omnisphere, and that the switch beside <strong>POLAR OUT</strong> reads <em>ON</em>.</li>
+    <li><b class="h">Enter your controller's CCs</b>In the <strong>X CC</strong> and <strong>Y CC</strong> boxes, enter the CC numbers your X/Y pad sends.</li>
+    <li><b class="h">Set the angle CC</b>Click the <strong>Angle</strong> value, type the CC you want for the angle and press <span class="key">Enter</span>.</li>
+    <li><b class="h">Set the radius CC</b>Click the <strong>Radius</strong> value, type the CC you want for the radius and press <span class="key">Enter</span>.</li>
+    <li><b class="h">Leave Touch off</b>For Omnisphere, the <strong>Touch</strong> value under POLAR OUT can be left at −1 (off).</li>
+    <li><b class="h">Set the resolution</b>Under the MOTION heading, set <strong>Resolution</strong> to <em>7-bit</em>.</li>
+    <li><b class="h">Save a preset</b>Click the small disk icon in the upper right of the device's title bar and save the settings as a preset, for example <em>Omnisphere Polar XY</em>.</li>
+  </ol>
+  <p>That completes the basic setup of the Max for Live version. The next chapter learns the Orb in Omnisphere.</p>
+
+  <div class="note">
+    <span class="k">One self-contained file</span>
+    <p>To make the device a single file that doesn't need <span class="mono">polarxy.js</span> beside it, open it in the Max editor (the edit button in its title bar), press <strong>Freeze Device</strong>, and save.</p>
+  </div>
+</section>
+
+<!-- ================= 11. OMNISPHERE ================= -->
+<section class="chapter" data-ch="11" data-title="Configuring Omnisphere" style="--accent: #c4650f;">
+  <div class="chap-head">
+    <div class="num">Chapter 11</div>
+    <h1>Configuring Omnisphere</h1>
+    <p class="lede">Teaching the Orb which CCs to follow. Set up is easy, but tedious, and you only do it once.</p>
+    <div class="bar"></div>
+  </div>
+
+  <p>The Max for Live version of Polar XY is a MIDI effect in Ableton Live, so it can be placed on the same MIDI track as Omnisphere 3. Setting the Orb's control CCs means a <strong>MIDI learn</strong>, which can be tricky, because an X/Y controller never sends just one CC. That is why Polar XY has dedicated buttons for the learn: each sends one CC alone.</p>
+
+  <h2>Learning the Orb</h2>
+  <ol class="steps">
+    <li><b class="h">Start from your Polar XY track</b>Add Polar XY to a MIDI track. The track from <em>Installation and initial setup</em> (Chapter 10) will do.</li>
+    <li><b class="h">Add Omnisphere</b>Add Omnisphere 3 to the same track, after Polar XY, and open its plug-in window.</li>
+    <li><b class="h">Load a patch that uses the Orb</b>For example <em>Clean Air at Last</em> from the <em>Ambient Dreams</em> directory.</li>
+    <li><b class="h">Keep both in view</b>Move the Omnisphere window so it doesn't cover the Polar XY device.</li>
+    <li><b class="h">Switch the Orb on</b>Go to the <strong>ORB</strong> page and click the Orb's power button.</li>
+  </ol>
+  <figure class="dark">
+    <img src="img/omni-orb.jpg" alt="">
+    <figcaption><b>Fig. 11.1</b> &nbsp;Omnisphere 3's ORB page with the Orb switched on, on the <em>Clean Air at Last</em> patch.</figcaption>
+  </figure>
+
+  <div class="split" style="grid-template-columns: 2.1in 1fr">
+    <figure class="dark">
+      <img src="img/omni-menu.jpg" alt="">
+      <figcaption><b>Fig. 11.2</b> &nbsp;The Orb's menu, set for Angle.</figcaption>
+    </figure>
+    <div class="body">
+      <ol class="steps" start="6" style="counter-reset: s 5">
+        <li><b class="h">Open the Orb's menu</b>Right-click (or <span class="key">Ctrl</span>-click) the Orb.</li>
+        <li><b class="h">Make sure it targets Angle</b>The first line should read <em>MIDI Learn and Automation for Angle</em>, as shown: that is the parameter to set first. If the menu offers <em>Switch to Angle</em>, click it and open the menu again.</li>
+        <li><b class="h">Start the learn</b>Click <strong>MIDI CC Learn</strong>. The menu closes and a flashing box appears around the Orb.</li>
+        <li><b class="h">Send the angle</b>On the Polar XY device, click <strong>ANGLE</strong> under SEND (MIDI LEARN). The status line confirms what was sent.</li>
+        <li><b class="h">Check it took</b>The blue box around the Orb stops flashing.</li>
+      </ol>
+    </div>
+  </div>
+
+  <ol class="steps" start="11" style="counter-reset: s 10">
+    <li><b class="h">Switch to Radius</b>Right-click the Orb and choose <strong>Switch to Radius</strong>.</li>
+    <li><b class="h">Start the learn again</b>Right-click the Orb again and choose <strong>MIDI CC Learn</strong>. The flashing blue box appears around the Orb.</li>
+    <li><b class="h">Send the radius</b>On the Polar XY device, click <strong>RADIUS</strong> under SEND (MIDI LEARN).</li>
+    <li><b class="h">Save</b>Save the Polar XY preset again.</li>
+  </ol>
+  <p>You should now be able to move the Orb with your X/Y controller. If it lands rotated or goes round the wrong way, adjust <strong>Offset</strong> and <strong>Direction</strong> in the MAPPING section (Chapter 6).</p>
+
+  <div class="split" style="grid-template-columns: 2.6in 1fr">
+    <figure class="dark">
+      <img src="img/live-browser-preset.jpg" alt="">
+      <figcaption><b>Fig. 11.3</b> &nbsp;A saved preset under Polar XY.amxd.</figcaption>
+    </figure>
+    <div class="body">
+      <p>That completes the basic setup of the Polar XY Max for Live device with Omnisphere 3. To avoid repeating it each time you use Polar XY, load the preset you created: it appears beneath <span class="mono">Polar XY.amxd</span> in your Max for Live device listing.</p>
+      <div class="note">
+        <span class="k">Typing a CC sends it too</span>
+        <p>Instead of a SEND button, you can click the Angle or Radius box, type its CC and press <span class="key">Enter</span> during the learn, even if the number is already there. It sends that CC alone, once, just like the button.</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>When MIDI learn doesn't work</h2>
+  <p>Sometimes Omnisphere 3 refuses to recognise the data coming from the SEND (MIDI LEARN) buttons. There are two things to try.</p>
+  <p>First, under the MOTION heading in Polar XY, check that <strong>Resolution</strong> is set to <em>7-bit</em>, and try the learn steps above again. In 14-bit mode Polar XY sends its MIDI data differently, and this may confuse Omnisphere 3.</p>
+  <p>If Omnisphere is still stubborn, send the CCs from another source. In Live's browser, under <em>MIDI Effects</em>, find the <strong>CC Control</strong> device and drag it between Polar XY and Omnisphere 3:</p>
+  <figure class="dark">
+    <img src="img/live-cc-chain.jpg" alt="">
+    <figcaption><b>Fig. 11.4</b> &nbsp;CC Control between Polar XY and Omnisphere, with <em>Custom B</em> on CC 18 and <em>Custom C</em> on CC 19.</figcaption>
+  </figure>
+  <p>Using the drop-down menus under <strong>Custom B</strong> and <strong>Custom C</strong>, choose the CCs you want to control the Orb with: Custom B for the angle and Custom C for the radius. In the example they are set to CC 18 and CC 19. These must match the <strong>Angle</strong> and <strong>Radius</strong> CCs in Polar XY.</p>
+  <p>Now repeat the learn steps above, but instead of the SEND (MIDI LEARN) buttons, move the matching knob on the CC Control device: Custom B for the angle, Custom C for the radius. Once both are learned, you can switch off or remove the CC Control device.</p>
+</section>
+
+<!-- ================= 12. RECIPES ================= -->
+<section class="chapter" data-ch="12" data-title="Setups and Recipes">
+  <div class="chap-head">
+    <div class="num">Chapter 12</div>
+    <h1>Setups and Recipes</h1>
+    <p class="lede">Starting points for different controllers and different feels. Load Init first, then set what's listed.</p>
+    <div class="bar"></div>
+  </div>
+
+  <div class="recipes">
+    <div class="recipe" style="--rc:#f28c28">
+      <h3>Direct steering</h3>
+      <p>The Orb goes exactly where the controller points, the moment it gets there. Good for joysticks and for checking a new setup.</p>
+      <div class="set">Init · Smoothing 0 ms · Inertia 0%</div>
+    </div>
+    <div class="recipe" style="--rc:#6fe0ff">
+      <h3>Gentle glide</h3>
+      <p>Takes the edges off quick moves without feeling slow. Most controllers want a little of this.</p>
+      <div class="set">Smoothing 120–250 ms · Inertia 0% · Path Straight</div>
+    </div>
+    <div class="recipe" style="--rc:#6fe0ff">
+      <h3>Heavy Orb</h3>
+      <p>The Orb lags, swings past where you point and settles back, and drifts on when you let go.</p>
+      <div class="set">Smoothing 100 ms · Inertia 60–80% · Mode Pull</div>
+    </div>
+    <div class="recipe" style="--rc:#b69cf0">
+      <h3>Whirlpool</h3>
+      <p>Stir the controller in circles and the Orb keeps spinning after you stop, round the circle rather than across it.</p>
+      <div class="set">Inertia 50% · Path Around · Mode Pull · Center 20%</div>
+    </div>
+    <div class="recipe" style="--rc:#b69cf0">
+      <h3>Coasting puck</h3>
+      <p>Only movement matters: flick the controller and the Orb slides off that way and stops wherever it runs out of speed.</p>
+      <div class="set">Inertia 40–60% · Mode Coast · Path Straight</div>
+    </div>
+    <div class="recipe" style="--rc:#ff8a7a">
+      <h3>Chaos pad</h3>
+      <p>A touch X/Y pad used like a trackpad: drag to push the Orb, let go to fling it off the walls, touch to catch it.</p>
+      <div class="set">Inertia 60% · Mode Pad · Touch In = the pad's touch CC · Touch Filter 40 ms</div>
+    </div>
+    <div class="recipe" style="--rc:#8fe8a8">
+      <h3>Resistive pad (Geren)</h3>
+      <p>The factory <em>Geren</em> preset, tuned on recordings of an XYMIDI mini. For another resistive pad, load it and set the CCs to your pad's.</p>
+      <div class="set">X In 12 · Y In 13 · Touch In 92 · Angle / Radius Out 107 / 108 · Touch Filter 50 ms · Jump Limit 24 · Center 15% · Smoothing 150 ms</div>
+      <div class="from">Lift-offs sometimes skitter up to about 50 ms before the touch CC goes off, which is why it holds back 50 ms.</div>
+    </div>
+    <div class="recipe" style="--rc:#8fe8a8">
+      <h3>Filter only</h3>
+      <p>Use Polar XY just to clean up a resistive pad's X/Y for some other synth, with no angle or radius at all.</p>
+      <div class="set">Polar Out Off · Pass Input CCs Filtered · Touch Filter 40 ms</div>
+    </div>
+  </div>
+
+  <h2>General tips</h2>
+  <ul>
+    <li><strong>Learn first, then add motion.</strong> MIDI-learn the Orb with everything at its default, then dial in Smoothing and Inertia.</li>
+    <li><strong>Line up with Offset before you play.</strong> Push the controller hard right and turn Offset until the Orb's dot is on the right.</li>
+    <li><strong>Use the shortest Touch Filter that works.</strong> Every millisecond of it is latency. Try 20 ms, and go up only if the Orb still jumps on touch and release.</li>
+    <li><strong>A touch CC beats guessing.</strong> If your pad sends one, set Touch In: the filter then knows each touch's edges for certain.</li>
+    <li><strong>Automate the feel.</strong> Every setting is a host parameter, so Inertia or Path can change across a song.</li>
+  </ul>
+</section>
+
+<!-- ================= APPENDIX A ================= -->
+<section class="chapter" data-ch="A" data-title="Appendix: Parameter Reference">
+  <div class="chap-head">
+    <div class="num">Appendix A</div>
+    <h1>Parameter Reference</h1>
+    <p class="lede">Every parameter Polar XY exposes to the host, with its label on the Max for Live device. Everything is automatable.</p>
+    <div class="bar"></div>
+  </div>
+  <table class="params ref">
+    <thead><tr><th>Parameter</th><th>Device label</th><th>Range</th><th>Default</th></tr></thead>
+    <tbody>
+      <tr><td class="c">X In CC</td><td>XY IN · X CC</td><td class="r">0–127</td><td class="d">16</td></tr>
+      <tr><td class="c">Y In CC</td><td>XY IN · Y CC</td><td class="r">0–127</td><td class="d">17</td></tr>
+      <tr><td class="c">Touch In CC</td><td>XY IN · Touch</td><td class="r">Off (−1), 0–127</td><td class="d">Off</td></tr>
+      <tr><td class="c">Pass Input CCs</td><td>XY IN · Pass</td><td class="r">Off, Raw, Filtered</td><td class="d">Off</td></tr>
+      <tr><td class="c">Polar Out</td><td>POLAR OUT · OFF / ON</td><td class="r">Off, On</td><td class="d">On</td></tr>
+      <tr><td class="c">Angle Out CC</td><td>POLAR OUT · Angle</td><td class="r">0–127</td><td class="d">18</td></tr>
+      <tr><td class="c">Radius Out CC</td><td>POLAR OUT · Radius</td><td class="r">0–127</td><td class="d">19</td></tr>
+      <tr><td class="c">Touch Out CC</td><td>POLAR OUT · Touch</td><td class="r">Off (−1), 0–127</td><td class="d">Off</td></tr>
+      <tr><td class="c">Angle Offset</td><td>MAPPING · Offset</td><td class="r">0–360°</td><td class="d">0°</td></tr>
+      <tr><td class="c">Direction</td><td>MAPPING · Direction</td><td class="r">Counter-clockwise, Clockwise</td><td class="d">CCW</td></tr>
+      <tr><td class="c">Radius Mode</td><td>MAPPING · Radius</td><td class="r">Clamp to circle, Fill square</td><td class="d">Clamp to circle</td></tr>
+      <tr><td class="c">Smoothing</td><td>MOTION · Smooth</td><td class="r">0 ms – 2 s</td><td class="d">0 ms</td></tr>
+      <tr><td class="c">Inertia</td><td>MOTION · Inertia</td><td class="r">0–100%</td><td class="d">0%</td></tr>
+      <tr><td class="c">Motion Path</td><td>MOTION · Path</td><td class="r">Straight, Around</td><td class="d">Straight</td></tr>
+      <tr><td class="c">Inertia Mode</td><td>MOTION · Inertia mode</td><td class="r">Pull, Coast, Pad</td><td class="d">Pull</td></tr>
+      <tr><td class="c">Output Resolution</td><td>MOTION · Resolution</td><td class="r">7-bit, 14-bit</td><td class="d">7-bit</td></tr>
+      <tr><td class="c">Touch Filter</td><td>TOUCH · Filter ms</td><td class="r">Off (0), up to 100 ms</td><td class="d">Off</td></tr>
+      <tr><td class="c">Press Delay</td><td>TOUCH · Press delay</td><td class="r">Same (−1), 0–100 ms</td><td class="d">Same</td></tr>
+      <tr><td class="c">Jump Limit</td><td>TOUCH · Jump</td><td class="r">8–64 steps</td><td class="d">16</td></tr>
+      <tr><td class="c">Agree</td><td>TOUCH · Agree</td><td class="r">1–16 steps</td><td class="d">4</td></tr>
+      <tr><td class="c">Center</td><td>CENTER · Center</td><td class="r">Off (0), up to 50%</td><td class="d">Off</td></tr>
+    </tbody>
+  </table>
+  <p class="muted small">The MIDI learn buttons (ANGLE, RADIUS, TOUCH, and SEND on the device) are not parameters and can't be automated.</p>
+</section>
+
+<!-- ================= APPENDIX B ================= -->
+<section class="chapter" data-ch="B" data-title="Appendix: Specifications">
+  <div class="chap-head">
+    <div class="num">Appendix B</div>
+    <h1>Specifications</h1>
+    <div class="bar"></div>
+  </div>
+  <table class="specs">
+    <tbody>
+      <tr><td class="c">Formats</td><td>CLAP 1.2 note effect (features: note-effect, utility). VST3, wrapped by clap-wrapper, listed as an instrument with a MIDI input and output. Max for Live MIDI effect.</td></tr>
+      <tr><td class="c">Platforms</td><td>macOS universal (10.15+ Intel, 11+ Apple Silicon), Windows (64-bit), Linux (64-bit). The Max for Live device runs wherever Live Suite or Max for Live does.</td></tr>
+      <tr><td class="c">MIDI</td><td>16 channels, each with its own position and motion. Input CCs swallowed (or passed on); everything else passes through.</td></tr>
+      <tr><td class="c">Conversion</td><td>Angle 0–126 (one turn in 127 steps), radius 0–127. Dead zone of about two CC steps around the centre.</td></tr>
+      <tr><td class="c">Resolution</td><td>7-bit, or 14-bit CC pairs (MSB on the CC, LSB on CC + 32) when both output CCs are below 32. 14-bit input read automatically.</td></tr>
+      <tr><td class="c">Motion rate</td><td>One step every 32 samples (plug-in), every 4 ms (Max for Live). Only changed values are sent.</td></tr>
+      <tr><td class="c">Latency</td><td>None, except Touch Filter, which holds input back by its time.</td></tr>
+      <tr><td class="c">Parameters</td><td>21, all automatable.</td></tr>
+      <tr><td class="c">State</td><td>Saved with the host project. User presets are <span class="mono">.pxypreset</span> files (Chapter 4).</td></tr>
+      <tr><td class="c">Panel</td><td>900 × 738 at 100%; 75%, 100%, 125%, 150% and 200%.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 style="margin-top:0.4in">Troubleshooting</h2>
+  <table>
+    <thead><tr><th style="width:2.1in">Symptom</th><th>What to check</th></tr></thead>
+    <tbody>
+      <tr><td class="c" style="white-space:normal">Polar XY doesn't appear in my host (macOS)</td><td>The download is probably quarantined. See the warning in Chapter 2, then rescan plug-ins.</td></tr>
+      <tr><td class="c" style="white-space:normal">The Orb doesn't move</td><td>Check that X and Y In match your controller (the XY IN view or the status line should follow it), that Polar Out is <em>On</em>, and that Omnisphere learned the Angle and Radius Out CCs. In Live, check the track's MIDI From and Monitor settings.</td></tr>
+      <tr><td class="c" style="white-space:normal">Omnisphere learned the wrong CC</td><td>Learn with the MIDI learn (SEND) buttons rather than moving the controller. If it still won't take, see <em>When MIDI learn doesn't work</em> in Chapter 11.</td></tr>
+      <tr><td class="c" style="white-space:normal">The Orb is rotated or mirrored</td><td>Turn <strong>Angle Offset</strong>, or flip <strong>Direction</strong>.</td></tr>
+      <tr><td class="c" style="white-space:normal">The Orb jumps when I touch or release a pad</td><td>A resistive pad. Turn on <strong>Touch Filter</strong> (try 20 to 50 ms), and set Touch In if the pad sends a touch CC.</td></tr>
+      <tr><td class="c" style="white-space:normal">The Orb spins when the controller rests in the middle</td><td>Raise <strong>Center</strong> to 15–25%.</td></tr>
+      <tr><td class="c" style="white-space:normal">14-bit makes no difference</td><td>Both output CCs must be below 32, and the receiving end must read 14-bit pairs.</td></tr>
+      <tr><td class="c" style="white-space:normal">Nothing is converted and a warning shows</td><td>X and Y In, or Angle and Radius Out, are set to the same CC.</td></tr>
+      <tr><td class="c" style="white-space:normal">Live: the device's version is old</td><td>The status line ends with the version Live loaded. Make sure the newer <span class="mono">Polar XY.amxd</span> and <span class="mono">polarxy.js</span> are together in the same folder, and remove older copies.</td></tr>
+      <tr><td class="c" style="white-space:normal">Live: the VST3 won't go in front of Omnisphere</td><td>Live doesn't allow that. Use the Max for Live device (Chapter 10).</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Glossary</h2>
+  <div class="kv">
+    <dt>Cartesian</dt><dd>A position given as how far across (X) and how far up (Y).</dd>
+    <dt>Polar</dt><dd>A position given as a direction (angle) and a distance from the centre (radius).</dd>
+    <dt>CC</dt><dd>A MIDI continuous controller message: a number 0–127 on one of 128 controller numbers.</dd>
+    <dt>MIDI learn</dt><dd>Telling a synth to follow whichever CC it receives next.</dd>
+    <dt>14-bit CC</dt><dd>A pair of CCs, n and n + 32, that together give 16,384 steps instead of 128.</dd>
+    <dt>Resistive pad</dt><dd>A touch surface that reads position through the finger's contact, which is unreliable as the finger lands and lifts.</dd>
+    <dt>Orb</dt><dd>Omnisphere 3's circular performance control, which morphs a patch as its dot moves.</dd>
+  </div>
+</section>
+
+<section class="back">
+  <div class="mid">
+    <svg width="48" height="48" viewBox="0 0 34 34">
+      <circle cx="17" cy="17" r="14" fill="none" stroke="#f28c28" stroke-width="2"/>
+      <line x1="17" y1="17" x2="28" y2="7" stroke="#f28c28" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="17" cy="17" r="2.4" fill="#f28c28"/>
+    </svg>
+    <div class="word"><span class="j">Polar</span> XY</div>
+    <div class="small">Take control of the Orb · v0.19.3</div>
+  </div>
+  <div class="url">github.com/jeffmhopkins/Jclap</div>
+</section>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+function el(parent, tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  parent.appendChild(e);
+  return e;
+}
+
+// ----- cover: stars, a polar grid and an orb's trail -----
+(function () {
+  const s = document.getElementById('stars');
+  let seed = 11;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 240; i++) {
+    const r = rnd() < 0.92 ? 0.4 + rnd() * 0.7 : 1.2 + rnd() * 0.8;
+    el(s, 'circle', { cx: rnd() * 816, cy: rnd() * 1056, r, fill: '#fff', opacity: (0.15 + rnd() * 0.6).toFixed(2) });
+  }
+  const cx = 640, cy = 250;
+  for (const r of [60, 120, 180]) el(s, 'circle', { cx, cy, r, fill: 'none', stroke: '#6fe0ff', 'stroke-width': 0.7, opacity: 0.22 });
+  for (let a = 0; a < 360; a += 45) {
+    const t = a * Math.PI / 180;
+    el(s, 'line', { x1: cx, y1: cy, x2: cx + 180 * Math.cos(t), y2: cy - 180 * Math.sin(t), stroke: '#6fe0ff', 'stroke-width': 0.5, opacity: 0.14 });
+  }
+  const defs = el(s, 'defs', {});
+  const lg = el(defs, 'linearGradient', { id: 'trail', x1: '0', x2: '1' });
+  el(lg, 'stop', { offset: '0', 'stop-color': '#f28c28', 'stop-opacity': 0 });
+  el(lg, 'stop', { offset: '1', 'stop-color': '#f28c28', 'stop-opacity': 0.9 });
+  const p = [];
+  for (let t = 0; t <= 1.0001; t += 0.01) {
+    const ang = 3.6 - t * 4.6, rad = 150 - 70 * Math.sin(t * 3.0);
+    p.push((p.length ? 'L' : 'M') + (cx + rad * Math.cos(ang)).toFixed(1) + ',' + (cy - rad * Math.sin(ang)).toFixed(1));
+  }
+  el(s, 'path', { d: p.join(''), fill: 'none', stroke: 'url(#trail)', 'stroke-width': 2, 'stroke-linecap': 'round' });
+  const ang = 3.6 - 4.6, rad = 150 - 70 * Math.sin(3.0);
+  const ox = cx + rad * Math.cos(ang), oy = cy - rad * Math.sin(ang);
+  const rg = el(defs, 'radialGradient', { id: 'glow' });
+  el(rg, 'stop', { offset: '0', 'stop-color': '#f28c28', 'stop-opacity': 0.6 });
+  el(rg, 'stop', { offset: '1', 'stop-color': '#f28c28', 'stop-opacity': 0 });
+  el(s, 'circle', { cx: ox, cy: oy, r: 30, fill: 'url(#glow)' });
+  el(s, 'circle', { cx: ox, cy: oy, r: 6, fill: '#ffd9b0' });
+  el(s, 'line', { x1: cx, y1: cy, x2: ox, y2: oy, stroke: '#f28c28', 'stroke-width': 0.8, opacity: 0.5 });
+})();
+
+// ----- overview callouts (on the 900 x 738 panel) -----
+(function () {
+  const g = document.querySelector('#overview svg g');
+  const pts = [
+    [1, 522, 31], [2, 52, 140], [3, 22, 472], [4, 268, 482], [5, 776, 94],
+    [6, 496, 140], [7, 466, 472], [8, 712, 482], [9, 230, 602],
+  ];
+  for (const [n, x, y] of pts) {
+    el(g, 'circle', { cx: x, cy: y, r: 12, fill: '#f28c28', stroke: '#fff', 'stroke-width': 2.2 });
+    el(g, 'text', { x, y: y + 5, fill: '#fff' }, String(n));
+  }
+})();
+
+// ----- table of contents -----
+(function () {
+  const toc = document.getElementById('toc');
+  const pages = window.TOC_PAGES || {};
+  let html = '';
+  document.querySelectorAll('section.chapter').forEach(sec => {
+    const n = sec.dataset.ch, t = sec.dataset.title;
+    html += `<div class="grp"><div class="ch"><span class="n">${n}</span><span class="t">${t}</span><span class="p">${pages[t] || ''}</span></div>`;
+    sec.querySelectorAll('h2').forEach(h => {
+      const tt = h.childNodes[h.childNodes.length - 1].textContent.trim();
+      html += `<div class="sec"><span class="t">${tt}</span><span class="p">${pages[t + '/' + tt] || ''}</span></div>`;
+    });
+    html += '</div>';
+  });
+  toc.innerHTML = html;
+})();
+</script>
+</body>
+</html>
