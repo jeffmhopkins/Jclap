@@ -932,6 +932,7 @@ class Oboe final : public Model {
 public:
    void prepare(double fs) override {
       fs_ = fs;
+      reedSteps_ = std::max(1, static_cast<int>(std::ceil(kReedRate / fs - 1e-9)));
       player_.prepare(fs);
       reset();
    }
@@ -1053,20 +1054,28 @@ public:
       const double gamma = g0 / stiff * (1.0 + (0.01 * character.noise + growl) * noise) + 0.05 * tn * noise;
       const double pM = kPM * stiff * lip, pm = gamma * pM;
       // The reed: x is its tips' travel over the opening at rest (-1 shut), pushed shut by the drop
-      // across it a sample behind, its resonance damped by the lip, well damped: less, and its
-      // high resonance beat against the bore's on the louder notes, a rough band near 1.5 kHz (and
-      // lower on a bigger family member's reed, by less than its bore).
+      // across it a sample behind, its resonance damped by the lip, well damped (and lower on a
+      // bigger family member's reed, by less than its bore). Blown at mezzo forte or more it beats:
+      // shut on the lay for a third to nearly half of each cycle, as a real double reed is.
       const double wr = 2.0 * kPi * kReedHz * std::sqrt(stiff) * (0.9 + 0.2 * emb) * std::pow(std::min(1.0, scale_), 0.25);
-      double acc = -wr * wr * (x_ + dpPrev_ / pM) - kReedDamp * wr * v_;
-      // (Shut, the blades meet.)
-      if (x_ < -1.0)
-         acc -= 30.0 * wr * wr * (x_ + 1.0) + 4.0 * wr * v_;
-      v_ += acc / fs_;
       // (The tongue leaving the reed sets it moving.)
       if (tn > tongue_)
          v_ += kKick * (tn - tongue_) * wr;
       tongue_ = tn;
-      x_ += v_ / fs_;
+      // (In reedSteps_ steps a sample, at kReedRate or more whatever the voice's rate. Shut, the
+      // blades meet as a spring 31 times as stiff as the reed's own, which rings near 45 kHz; one
+      // step a sample at 88.2 or 96 kHz is too coarse to follow it, and the reed chattered on the
+      // lay a little differently every cycle, so a held note never repeated itself: a rough, noisy
+      // tone that changed with the host's rate and smoothed out only at 192 kHz.)
+      const double h = 1.0 / (fs_ * reedSteps_);
+      for (int k = 0; k < reedSteps_; ++k) {
+         double acc = -wr * wr * (x_ + dpPrev_ / pM) - kReedDamp * wr * v_;
+         // (Shut, the blades meet.)
+         if (x_ < -1.0)
+            acc -= 30.0 * wr * wr * (x_ + 1.0) + 4.0 * wr * v_;
+         v_ += acc * h;
+         x_ += v_ * h;
+      }
       // (The tongue holds the reed shut against the lay while the mouth's pressure builds behind
       // it, and lets go once it's nearly there: the note starts on the wave that release makes,
       // not growing slowly out of a reed standing half open.)
@@ -1142,16 +1151,19 @@ private:
       // On the low notes (on a bigger horn, its own) the walls' loss is eased to kLowLoss of it and
       // the resonances over the note's 1.5th damped kVoicing times as much, as a player voices a low
       // note: with neither, the long bore's fundamental gives way to its upper resonances. (On a
-      // bigger horn the octave vent's leak is kBigVent times as strong, as on the sax.)
+      // bigger horn the octave vent's leak is kBigVent times as strong, as on the sax, and its upper
+      // resonances damped kBigVoicing times as much, as the sax's are: at kVoicing, once the reed
+      // was stepped finely enough to sound a steady note, the lowest horn's notes blown hard went
+      // over to their octave.)
       const double low = std::clamp((kLowEdge - hz / member_) / 60.0, 0.0, 1.0);
       lowNote_ = low;
       bore_.set(kOboeBore[fing_], scale_, fs_, loss * (1.0 + (kLowLoss - 1.0) * low), kHoleCut, cut, vent_ * scale_, kVentDamp * (member_ < 1.0 ? kBigVent : 1.0),
-                low > 0.0 ? 1.5 * peakHz_ * scale_ : 0.0, 1.0 + (kVoicing - 1.0) * low);
+                low > 0.0 ? 1.5 * peakHz_ * scale_ : 0.0, 1.0 + ((member_ < 1.0 ? kBigVoicing : kVoicing) - 1.0) * low);
    }
 
    static constexpr double kLow = 233.08, kRho = 1.2, kPM = 16000.0, kWidth = 0.007, kOut = 1000.0, kHoleCut = 1500.0,
                            kGamma = 0.8, kGamma1 = 0.1, kLip0 = 0.6, kReedHz = 8000.0, kReedDamp = 2.0,
-                           kOpen = 5.5e-5, kKick = 0.05, kVentDamp = 8.0,
+                           kOpen = 5.5e-5, kKick = 0.05, kVentDamp = 8.0, kReedRate = 384000.0,
                            kBigVent = 2.5,
                            kQuarterDown = 0.97153, kKneeHz = 466.0, kLowEdge = 650.0,
                            kOpenExpLow = -0.5, kOpenExpHigh = 0.0;
@@ -1159,7 +1171,7 @@ private:
    static constexpr double kHpHz = 881.0, kHpQ = 0.7, kPk1Hz = 728.0, kPk1Q = 0.8, kPk1Db = 3.8, kPk2Hz = 1910.0,
                            kPk2Q = 2.9, kPk2Db = 11.9, kHsHz = 1280.0, kHsDb = 7.5, kTopHz = 11100.0;
    static constexpr double kSoftAt = 0.85, kSoftDb = -12.0, kSoftGain = 4.0;
-   static constexpr double kLowLoss = 0.6, kVoicing = 5.0;
+   static constexpr double kLowLoss = 0.6, kVoicing = 5.0, kBigVoicing = 10.0;
    static constexpr double kAccentSec = 0.1, kAccentFrom = 0.15, kAccentLow = 2.0;
    ModalBore bore_;
    OnePoleLP breathLP_;
@@ -1167,7 +1179,7 @@ private:
    Player player_;
    Biquad eqHp_, eqPk1_, eqPk2_, eqHs_, eqLp1_, eqLp2_, tone_;
    unsigned at_ = 0;
-   int fing_ = -1;
+   int fing_ = -1, reedSteps_ = 4;
    double lowNote_ = 0.0, peakHz_ = 277.0, hz_ = 277.0, member_ = 1.0, scale_ = 1.0, vent_ = 0.0, open_ = 7e-4, eqAt_ = -1.0, toneDb_ = 1e9, toneHz_ = 1.0;
    double onT_ = 1.0, lift0_ = 0.0, xShut_ = 0.0, liftSec_ = 0.003;
    double x_ = 0, v_ = 0, dpPrev_ = 0, pmS_ = 0, pmB_ = 0, pmCoef_ = 0.01;
