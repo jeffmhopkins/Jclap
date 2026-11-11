@@ -67,6 +67,11 @@ constexpr unsigned kWell = 0xff111419;
 constexpr unsigned kPress = 0xffff6fd2;
 // A colour for each voice slot, so a note keeps it while it's held: its partials on the bore and its
 // place in the stereo field are drawn in it.
+// The VOICE tab's three views (the voices, the stereo field and the levels) share their rows, in
+// design units of a 132-high view: a title at the top, the field, a strip under it and a caption.
+constexpr float kVoiceViewHeight = 132, kFieldTop = 22, kFieldHeight = 80, kStripY = kFieldTop + kFieldHeight + 9,
+                kCaptionY = kVoiceViewHeight - 15;
+
 constexpr unsigned kSlotColors[kVoiceCount] = {0xffffe066, 0xff6fc8ff, 0xffc58bff, 0xff7fe0a0,
                                                0xffff7a9c, 0xff5fe0d8, 0xffc8f07a, 0xffe0e6ff};
 
@@ -1093,8 +1098,11 @@ public:
       const float k = s(), W = width() / k;
       const unsigned color = modelColor(model_);
       int count = 0;
+      // The same rows as the stereo view and the levels beside it: a title, the field, a caption.
+      label(c, "VOICES", 0, 0, W, kDim, 12.0f);
+      const float mid = kFieldTop + kFieldHeight / 2;
       for (int i = 0; i < kVoiceCount; ++i) {
-         const float cx = (W / 2 - 54 + (i % 4) * 36) * k, cy = (14 + (i / 4) * 34) * k;
+         const float cx = (W / 2 - 54 + (i % 4) * 36) * k, cy = (mid - 17 + (i / 4) * 34) * k;
          const bool on = i < static_cast<int>(voices_.size()) && voices_[i].note >= 0;
          if (on) {
             ++count;
@@ -1109,9 +1117,9 @@ public:
       }
       char t[64];
       std::snprintf(t, sizeof(t), "%d OF %d VOICES", count, mode_ == kPoly ? kVoiceCount : 1);
-      label(c, t, 0, 66, W, kDim, 10.5f, visage::Font::kCenter);
-      label(c, mode_ == kPoly ? "MPE  ·  LOWER ZONE  ·  15 CH" : mode_ == kMono ? "MONO  ·  TONGUED" : "MONO  ·  SLURRED", 0, 82, W,
-            kFaint, 10.0f, visage::Font::kCenter);
+      label(c, t, 0, kCaptionY, W, kDim, 9.5f, visage::Font::kCenter);
+      label(c, mode_ == kPoly ? "MPE  ·  15 CH" : mode_ == kMono ? "TONGUED" : "SLURRED", 0, 2, W, kFaint, 10.0f,
+            visage::Font::kRight);
    }
 
 private:
@@ -1156,7 +1164,7 @@ public:
          std::snprintf(t, sizeof(t), "%.1f kHz", rate_ / 1000.0);
       label(c, t, 0, 2, W, kFaint, 10.0f, visage::Font::kRight);
       // The field.
-      const float top = 22, fh = H - 52, mid = top + fh / 2;
+      const float top = kFieldTop, fh = kFieldHeight, mid = top + fh / 2;
       c.setColor(kWell);
       c.roundedRectangle(0, top * k, width(), fh * k, 6 * k);
       c.setColor(visage::Color(0x14ffffff));
@@ -1186,7 +1194,7 @@ public:
          label(c, ui::noteName(d.note), x / k - 20, mid - 30, 40, vc, 9.5f, visage::Font::kCenter);
       }
       // The output's balance, from its peaks: a needle under the field.
-      const float by = top + fh + 9;
+      const float by = kStripY;
       c.setColor(visage::Color(0x16ffffff));
       c.roundedRectangle(10 * k, by * k, (W - 20) * k, 4 * k, 2 * k);
       const float bx = xOf(balance_);
@@ -1194,9 +1202,9 @@ public:
       c.circle(bx - 8 * k, (by + 2) * k - 8 * k, 16 * k);
       c.setColor(glow(0xffdfe6f5, 0.95f, 1.3f));
       c.roundedRectangle(bx - 2 * k, (by - 2) * k, 4 * k, 8 * k, 2 * k);
-      label(c, "L", 2, H - 15, 20, kDim, 9.5f);
-      label(c, "BALANCE", 0, H - 15, W, kFaint, 9.0f, visage::Font::kCenter);
-      label(c, "R", W - 22, H - 15, 20, kDim, 9.5f, visage::Font::kRight);
+      label(c, "L", 2, kCaptionY, 20, kDim, 9.5f);
+      label(c, "BALANCE", 0, kCaptionY, W, kDim, 9.5f, visage::Font::kCenter);
+      label(c, "R", W - 22, kCaptionY, 20, kDim, 9.5f, visage::Font::kRight);
    }
 
 private:
@@ -1229,56 +1237,76 @@ public:
       redraw();
    }
    void draw(visage::Canvas &c) override {
-      const float k = s(), W = width() / k, H = height() / k;
-      bloom_.setBloomSize(12.0f * k * (dpiScale() > 0.0f ? dpiScale() : 1.0f));
-      const float top = 6, bottom = H - 20;
-      // IN is on its own scale, -36..0; the output -48..+6.
-      const auto unit = [](int i, double db) {
-         return i == 0 ? static_cast<float>((std::clamp(db, -36.0, 0.0) + 36.0) / 36.0)
-                       : static_cast<float>((std::clamp(db, -48.0, 6.0) + 48.0) / 54.0);
+      const float k = s(), W = width() / k;
+      bloom_.setBloomSize(10.0f * k * (dpiScale() > 0.0f ? dpiScale() : 1.0f));
+      // The same rows as the stereo view: the title (and the output's held peak, in dB), the bars
+      // in the field's height, their names on the caption row.
+      const double peakDb = std::max(hold_[1], hold_[2]) > 1e-5f ? 20.0 * std::log10(std::max(hold_[1], hold_[2])) : -90.0;
+      label(c, "LEVEL", 0, 0, W, kDim, 12.0f);
+      char t[32];
+      if (peakDb > -60.0)
+         std::snprintf(t, sizeof(t), "PEAK %+.1f dB", peakDb);
+      else
+         std::snprintf(t, sizeof(t), "PEAK  -inf");
+      label(c, t, 0, 2, W, peakDb > 0.0 ? 0xffff5a4a : kFaint, 10.0f, visage::Font::kRight);
+      const float top = kFieldTop, bottom = kFieldTop + kFieldHeight;
+      // IN is the breath, 0 to full, straight; the output is in dB, -48 to +6.
+      const auto unit = [](int i, double v) {
+         if (i == 0)
+            return static_cast<float>(std::clamp(v, 0.0, 1.0));
+         const double db = v > 1e-5 ? 20.0 * std::log10(v) : -90.0;
+         return static_cast<float>((std::clamp(db, -48.0, 6.0) + 48.0) / 54.0);
       };
-      const auto yOf = [&](int i, double db) { return bottom - unit(i, db) * (bottom - top); };
-      for (int db : {0, -12, -24, -36}) {
-         c.setColor(visage::Color(db == 0 ? 0x40ffffff : 0x16ffffff));
-         c.fill(W * 0.36f * k, yOf(1, db) * k, W * 0.64f * k, 1 * k);
-         label(c, db == 0 ? "0" : std::to_string(db), W - 24, yOf(1, db) - 14, 24, kFaint, 8.5f, visage::Font::kRight);
+      const auto yAt = [&](float u) { return bottom - u * (bottom - top); };
+      const auto yDb = [&](double db) { return yAt(static_cast<float>((db + 48.0) / 54.0)); };
+      const float bw = 14, xs[3] = {12, 84, 108};
+      // The output's scale: a line across L and R at each mark, its number to the right.
+      for (int db : {6, 0, -12, -24, -36, -48}) {
+         const float y = yDb(db);
+         c.setColor(visage::Color(db == 0 ? 0x50ffffff : 0x18ffffff));
+         c.fill((xs[1] - bw / 2 - 4) * k, y * k, (xs[2] - xs[1] + bw + 8) * k, 1 * k);
+         label(c, db > 0 ? "+6" : std::to_string(db), xs[2] + bw / 2 + 8, y - 8.5f, 30, db == 0 ? kDim : kFaint, 9.0f);
+      }
+      // IN's: quarters.
+      for (float q : {0.25f, 0.5f, 0.75f, 1.0f}) {
+         c.setColor(visage::Color(0x18ffffff));
+         c.fill((xs[0] + bw / 2 + 3) * k, yAt(q) * k, 4 * k, 1 * k);
       }
       const unsigned colors[3] = {modelColor(model_), 0xffdfe6f5, 0xffdfe6f5};
       const char *names[3] = {"IN", "L", "R"};
-      const float bw = 16, xs[3] = {W * 0.12f, W * 0.46f, W * 0.66f};
       for (int i = 0; i < 3; ++i) {
          const float x = xs[i] - bw / 2;
          c.setColor(visage::Color(0x16ffffff));
-         c.roundedRectangle(x * k, top * k, bw * k, (bottom - top) * k, 4 * k);
-         const double db = level_[i] > 1e-5f ? 20.0 * std::log10(level_[i]) : -90.0;
-         const float u = unit(i, db), y = yOf(i, db);
+         c.roundedRectangle(x * k, top * k, bw * k, (bottom - top) * k, 3 * k);
+         const float u = unit(i, level_[i]), y = yAt(u);
          if (u > 0.0f) {
-            // The glow grows with the level: a wide soft halo, then the bar itself.
-            for (int ring = 3; ring >= 1; --ring) {
-               const float g = ring * (1.5f + 3.5f * u);
-               c.setColor(glow(colors[i], 0.05f * u * (4 - ring)));
-               c.roundedRectangle((x - g) * k, (y - g) * k, (bw + 2 * g) * k, (bottom - y + g) * k, (4 + g) * k);
+            // A soft halo, wider the louder, then the bar.
+            for (int ring = 2; ring >= 1; --ring) {
+               const float g = ring * (1.0f + 2.0f * u);
+               c.setColor(glow(colors[i], 0.06f * u * (3 - ring)));
+               c.roundedRectangle((x - g) * k, (y - g) * k, (bw + 2 * g) * k, (bottom - y + g) * k, (3 + g) * k);
             }
-            c.setColor(visage::Brush::vertical(glow(colors[i], 0.75f + 0.25f * u, 1.0f + 0.35f * u), glow(colors[i], 0.5f)));
-            c.roundedRectangle(x * k, y * k, bw * k, (bottom - y) * k, 4 * k);
-            if (i > 0 && db > 0.0) {
+            c.setColor(visage::Brush::vertical(glow(colors[i], 0.8f + 0.2f * u, 1.0f + 0.35f * u), glow(colors[i], 0.45f)));
+            c.roundedRectangle(x * k, y * k, bw * k, (bottom - y) * k, 3 * k);
+            if (i > 0 && y < yDb(0.0)) {
                c.setColor(glow(0xffff5a4a, 1.0f, 1.6f));
-               c.roundedRectangle(x * k, y * k, bw * k, (yOf(i, 0.0) - y) * k, 3 * k);
+               c.roundedRectangle(x * k, y * k, bw * k, (yDb(0.0) - y) * k, 3 * k);
             }
          }
          // The held peak.
-         const double hdb = hold_[i] > 1e-5f ? 20.0 * std::log10(hold_[i]) : -90.0;
-         if (unit(i, hdb) > 0.0f) {
-            c.setColor(glow(hdb > 0.0 && i > 0 ? 0xffff5a4a : 0xffffffff, 0.9f, 1.4f));
-            c.fill(x * k, (yOf(i, hdb) - 1) * k, bw * k, 2 * k);
+         const float hu = unit(i, hold_[i]);
+         if (hu > 0.0f) {
+            const bool over = i > 0 && yAt(hu) < yDb(0.0);
+            c.setColor(glow(over ? 0xffff5a4a : 0xffffffff, 0.9f, 1.4f));
+            c.fill(x * k, (yAt(hu) - 1) * k, bw * k, 2 * k);
          }
-         if (i > 0) {
-            c.setColor(visage::Color(0xaaffffff));
-            const float ty = yOf(i, masterDb_);
-            c.fill((x - 4) * k, (ty - 0.5f) * k, 3 * k, 1 * k);
-         }
-         label(c, names[i], xs[i] - 20, H - 16, 40, i == 0 ? colors[0] : kDim, 9.5f, visage::Font::kCenter);
+         label(c, names[i], xs[i] - 20, kCaptionY, 40, i == 0 ? colors[0] : kDim, 9.5f, visage::Font::kCenter);
       }
+      // Where Master is set: a small notch on the scale's left, beside L.
+      const float my = yDb(std::clamp(masterDb_, -48.0, 6.0));
+      c.setColor(visage::Color(0xccffffff));
+      c.fill((xs[1] - bw / 2 - 7) * k, (my - 0.75f) * k, 4 * k, 1.5f * k);
+      label(c, "MASTER", 26, my - 8.5f, 44, kFaint, 8.0f, visage::Font::kRight);
    }
 
 private:
@@ -3035,10 +3063,10 @@ private:
       tips_.add(mode, "Poly: eight voices. Mono: one, tongued between notes. Legato: one, slurred between notes.");
 
       // VOICE: the voices, where they sit in the stereo field, and the levels.
-      lights_ = &tabs.addToPage(0, add<VoiceLights>({912, 668, 180, 100}, 180.0f));
+      lights_ = &tabs.addToPage(0, add<VoiceLights>({920, 656, 164, 132}, 164.0f));
       stereo_ = &tabs.addToPage(0, add<StereoView>({1100, 656, 284, 132}, 284.0f));
       tips_.add(*stereo_, "Where each voice is heard, left to right: Spread fans the notes out (low to the left), Pan moves them all. The needle under it is the output's balance.");
-      levels_ = &tabs.addToPage(0, add<LevelView>({1404, 652, 216, 138}, 216.0f));
+      levels_ = &tabs.addToPage(0, add<LevelView>({1404, 656, 216, 132}, 216.0f));
       tips_.add(*levels_, "In: the breath coming in (the hardest-blown voice, or Breath In). L and R: the output, with its peak held and a tick at Master. If it turns red, lower Level or Master.");
 
       // AIR: where the breath comes from and how it's shaped.
