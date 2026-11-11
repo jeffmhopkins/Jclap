@@ -67,8 +67,17 @@ constexpr unsigned kWell = 0xff111419;
 constexpr unsigned kPress = 0xffff6fd2;
 // A colour for each voice slot, so a note keeps it while it's held: its partials on the bore and its
 // place in the stereo field are drawn in it.
+// The VOICE tab's three views (the voices, the stereo field and the levels) share their rows, in
+// design units of a 132-high view: a title at the top, the field, a strip under it and a caption.
+constexpr float kVoiceViewHeight = 132, kFieldTop = 22, kFieldHeight = 80, kStripY = kFieldTop + kFieldHeight + 9,
+                kCaptionY = kVoiceViewHeight - 15;
+
 constexpr unsigned kSlotColors[kVoiceCount] = {0xffffe066, 0xff6fc8ff, 0xffc58bff, 0xff7fe0a0,
                                                0xffff7a9c, 0xff5fe0d8, 0xffc8f07a, 0xffe0e6ff};
+// A voice slot's colour, or `otherwise` when the mark isn't a voice's.
+inline unsigned slotColor(int slot, unsigned otherwise = 0xffffffff) {
+   return slot >= 0 ? kSlotColors[slot % kVoiceCount] : otherwise;
+}
 
 // The HYBRID tab's subtractive voice.
 constexpr unsigned kSynthColor = 0xffb98bff;
@@ -405,11 +414,12 @@ public:
 class FilterGraph : public Drawn {
 public:
    explicit FilterGraph(float w) : Drawn(w) {}
-   void set(double cutoff, double resonance, double breathAmount, std::vector<float> opens) {
+   void set(double cutoff, double resonance, double breathAmount, std::vector<float> opens, std::vector<int> slots = {}) {
       cutoff_ = cutoff;
       resonance_ = resonance;
       amount_ = breathAmount;
       opens_ = std::move(opens);
+      slots_ = std::move(slots);
       redraw();
    }
    void draw(visage::Canvas &c) override {
@@ -459,13 +469,15 @@ public:
       c.fill(area);
       c.setColor(glow(kSynthColor, 0.95f, 1.3f));
       c.fill(line.stroke(2.0f * k));
-      for (float open : opens_) {
+      for (size_t i = 0; i < opens_.size(); ++i) {
+         const float open = opens_[i];
+         const unsigned vc = slotColor(i < slots_.size() ? slots_[i] : -1, kSynthColor);
          const double f = std::clamp(cutoff_ * open, 20.0, 20000.0);
          const float cx = (x0 + (x1 - x0) * xOf(f)) * k;
          const float cy = (y1 - (y1 - y0) * static_cast<float>(std::clamp((dbAt(f, cutoff_ * open) + 48.0) / 60.0, 0.0, 1.0))) * k;
-         c.setColor(ui::steadyGlow(visage::Color(kSynthColor).withAlpha(0.5f), {cx, cy}, 14 * k));
+         c.setColor(ui::steadyGlow(visage::Color(vc).withAlpha(0.55f), {cx, cy}, 14 * k));
          c.circle(cx - 14 * k, cy - 14 * k, 28 * k);
-         c.setColor(visage::Color(0xffffffff));
+         c.setColor(glow(vc, 1.0f, 1.3f));
          c.circle(cx - 3.5f * k, cy - 3.5f * k, 7 * k);
       }
    }
@@ -480,6 +492,7 @@ private:
    }
    double cutoff_ = 1800, resonance_ = 0.2, amount_ = 0.6;
    std::vector<float> opens_;
+   std::vector<int> slots_;
 };
 
 class ValveGraph : public Drawn {
@@ -487,7 +500,8 @@ public:
    explicit ValveGraph(float w) : Drawn(w) {}
 
    void set(int model, double embouchure, std::vector<float> breaths, double stiffness = 0.5, double aperture = 0.5,
-            double bite = 1.0) {
+            double bite = 1.0, std::vector<int> slots = {}) {
+      slots_ = std::move(slots);
       model_ = model;
       embouchure_ = embouchure;
       bite_ = bite;
@@ -544,9 +558,11 @@ public:
       for (size_t i = 0; i < breaths_.size(); ++i) {
          const double x = std::clamp(static_cast<double>(operating(breaths_[i])), 0.0, xMax());
          const float cx = px(x), cy = py(curve(x));
-         c.setColor(ui::steadyGlow(visage::Color(color).withAlpha(0.5f), {cx, cy}, 14 * k));
+         const bool voice = i < slots_.size();
+         const unsigned vc = voice ? slotColor(slots_[i]) : color;
+         c.setColor(ui::steadyGlow(visage::Color(vc).withAlpha(0.55f), {cx, cy}, 14 * k));
          c.circle(cx - 14 * k, cy - 14 * k, 28 * k);
-         c.setColor(glow(0xffffffff, 0.95f));
+         c.setColor(voice ? glow(vc, 1.0f, 1.3f) : glow(0xffffffff, 0.95f));
          c.circle(cx - 4 * k, cy - 4 * k, 8 * k);
          if (breaths_.size() == 1)
             label(c, "this note", cx / k - 40, cy / k - 26, 80, kText, 10.5f, visage::Font::kCenter);
@@ -631,6 +647,7 @@ private:
    int model_ = kClarinet;
    double embouchure_ = 0.5, stiffness_ = 0.5, aperture_ = 0.5, bite_ = 1.0;
    std::vector<float> breaths_;
+   std::vector<int> slots_;
 };
 
 // ------------------------------------------------------------------ bore
@@ -919,7 +936,14 @@ private:
 class TongueGraph : public Drawn {
 public:
    explicit TongueGraph(float w) : Drawn(w) {}
-   void set(double attackMs, double kick, double releaseMs, unsigned color) {
+   // Where each sounding note is on it: its slot and how long since it was tongued (held notes stop
+   // at the end of the hold), or for a note let go, the hold plus how long since.
+   struct Mark {
+      int slot = 0;
+      double t = 0.0;
+   };
+   void set(double attackMs, double kick, double releaseMs, unsigned color, std::vector<Mark> marks = {}) {
+      marks_ = std::move(marks);
       attack_ = attackMs;
       kick_ = kick;
       release_ = releaseMs;
@@ -935,7 +959,7 @@ public:
       label(c, t, W - 170, 8, 158, kDim, 10.5f, visage::Font::kRight);
       const float x0 = 12, x1 = W - 12, y0 = 34, y1 = H - 12;
       // 0..hold s held, then the release; time on a square-root axis so short attacks show.
-      const double hold = 0.6, total = hold + std::max(0.15, release_ / 1000.0 * 1.5);
+      const double hold = kHold, total = hold + std::max(0.15, release_ / 1000.0 * 1.5);
       const auto px = [&](double t) { return static_cast<float>((x0 + (x1 - x0) * std::sqrt(t / total)) * k); };
       const auto py = [&](double v) { return static_cast<float>((y1 - (y1 - y0) * v / 1.5) * k); };
       visage::Path area, line;
@@ -972,9 +996,37 @@ public:
          const float x = px(tt), y = tt < hold ? py(1.0 + kick_ * std::exp(-tt / 0.04) * 0.9) : py(1.0);
          c.ring(x - 4 * k, y - 4 * k, 8 * k, 1.6f * k);
       }
+      // Each sounding note, in its colour, riding the curve.
+      for (const Mark &m : marks_) {
+         const double tt = std::clamp(m.t, 0.0, total);
+         const float x = px(tt), y = py(envelope(tt, hold));
+         const unsigned vc = slotColor(m.slot);
+         c.setColor(ui::steadyGlow(visage::Color(vc).withAlpha(0.6f), {x, y}, 12 * k));
+         c.circle(x - 12 * k, y - 12 * k, 24 * k);
+         c.setColor(glow(vc, 1.0f, 1.3f));
+         c.circle(x - 3.5f * k, y - 3.5f * k, 7 * k);
+      }
    }
 
+   // How long the graph holds a note before letting it go, in seconds.
+   static constexpr double kHold = 0.6;
+
 private:
+   // The curve's level at t, worked the way the drawing is.
+   double envelope(double t, double hold) const {
+      double b = 0.0, prev = 0.0;
+      constexpr int n = 96;
+      for (int i = 1; i <= n; ++i) {
+         const double tt = t * i / n, dt = tt - prev;
+         prev = tt;
+         if (tt < hold)
+            b += (1.0 + kick_ * std::exp(-tt / 0.04) - b) * (1.0 - std::exp(-4.0 * dt / (attack_ / 1000.0)));
+         else
+            b *= std::exp(-4.0 * dt / (release_ / 1000.0));
+      }
+      return b;
+   }
+   std::vector<Mark> marks_;
    double attack_ = 25, kick_ = 0.25, release_ = 90;
    unsigned color_ = 0xfff28c28;
 };
@@ -1040,9 +1092,10 @@ private:
 class CurveGraph : public Drawn {
 public:
    explicit CurveGraph(float w) : Drawn(w) {}
-   void set(double curve, std::vector<float> pressures) {
+   void set(double curve, std::vector<float> pressures, std::vector<int> slots = {}) {
       curve_ = curve;
       pressures_ = std::move(pressures);
+      slots_ = std::move(slots);
       redraw();
    }
    void draw(visage::Canvas &c) override {
@@ -1063,11 +1116,13 @@ public:
       }
       c.setColor(glow(kPress, 0.95f, 1.2f));
       c.fill(line.stroke(1.8f * k));
-      for (float p : pressures_) {
+      for (size_t i = 0; i < pressures_.size(); ++i) {
+         const float p = pressures_[i];
+         const unsigned vc = slotColor(i < slots_.size() ? slots_[i] : -1, kPress);
          const float px = (x0 + (x1 - x0) * p) * k, py = (y1 - (y1 - y0) * static_cast<float>(std::pow(p, curve_))) * k;
-         c.setColor(ui::steadyGlow(visage::Color(kPress).withAlpha(0.6f), {px, py}, 12 * k));
+         c.setColor(ui::steadyGlow(visage::Color(vc).withAlpha(0.6f), {px, py}, 12 * k));
          c.circle(px - 12 * k, py - 12 * k, 24 * k);
-         c.setColor(glow(0xffffffff, 0.95f));
+         c.setColor(glow(vc, 1.0f, 1.3f));
          c.circle(px - 3.5f * k, py - 3.5f * k, 7 * k);
       }
       label(c, "PRESS", 12, H - 20, 60, kDim, 10.0f);
@@ -1077,6 +1132,7 @@ public:
 private:
    double curve_ = 1.0;
    std::vector<float> pressures_;
+   std::vector<int> slots_;
 };
 
 // The eight voices as lights, lit by what they're playing.
@@ -1091,17 +1147,24 @@ public:
    }
    void draw(visage::Canvas &c) override {
       const float k = s(), W = width() / k;
-      const unsigned color = modelColor(model_);
       int count = 0;
+      // The same rows as the stereo view and the levels beside it: a title, the field, a caption.
+      label(c, "VOICES", 0, 0, W, kDim, 12.0f);
+      const float mid = kFieldTop + kFieldHeight / 2;
+      c.setColor(kWell);
+      c.roundedRectangle(0, kFieldTop * k, width(), kFieldHeight * k, 6 * k);
+      c.setColor(visage::Color(0x14ffffff));
+      c.roundedRectangleBorder(0, kFieldTop * k, width(), kFieldHeight * k, 6 * k, 1 * k);
       for (int i = 0; i < kVoiceCount; ++i) {
-         const float cx = (W / 2 - 54 + (i % 4) * 36) * k, cy = (14 + (i / 4) * 34) * k;
+         const float cx = (W / 2 - 54 + (i % 4) * 36) * k, cy = (mid - 17 + (i / 4) * 34) * k;
          const bool on = i < static_cast<int>(voices_.size()) && voices_[i].note >= 0;
          if (on) {
             ++count;
             const float a = voices_[i].releasing ? 0.4f : 0.95f;
-            c.setColor(ui::steadyGlow(visage::Color(color).withAlpha(0.45f * a), {cx, cy}, 16 * k));
+            const unsigned vc = slotColor(i);
+            c.setColor(ui::steadyGlow(visage::Color(vc).withAlpha(0.45f * a), {cx, cy}, 16 * k));
             c.circle(cx - 16 * k, cy - 16 * k, 32 * k);
-            c.setColor(glow(color, a, 1.2f));
+            c.setColor(glow(vc, a, 1.2f));
          } else {
             c.setColor(visage::Color(0xff2a3039));
          }
@@ -1109,9 +1172,9 @@ public:
       }
       char t[64];
       std::snprintf(t, sizeof(t), "%d OF %d VOICES", count, mode_ == kPoly ? kVoiceCount : 1);
-      label(c, t, 0, 66, W, kDim, 10.5f, visage::Font::kCenter);
-      label(c, mode_ == kPoly ? "MPE  ·  LOWER ZONE  ·  15 CH" : mode_ == kMono ? "MONO  ·  TONGUED" : "MONO  ·  SLURRED", 0, 82, W,
-            kFaint, 10.0f, visage::Font::kCenter);
+      label(c, t, 0, kCaptionY, W, kDim, 9.5f, visage::Font::kCenter);
+      label(c, mode_ == kPoly ? "MPE  ·  15 CH" : mode_ == kMono ? "TONGUED" : "SLURRED", 0, 2, W, kFaint, 10.0f,
+            visage::Font::kRight);
    }
 
 private:
@@ -1156,7 +1219,7 @@ public:
          std::snprintf(t, sizeof(t), "%.1f kHz", rate_ / 1000.0);
       label(c, t, 0, 2, W, kFaint, 10.0f, visage::Font::kRight);
       // The field.
-      const float top = 22, fh = H - 52, mid = top + fh / 2;
+      const float top = kFieldTop, fh = kFieldHeight, mid = top + fh / 2;
       c.setColor(kWell);
       c.roundedRectangle(0, top * k, width(), fh * k, 6 * k);
       c.setColor(visage::Color(0x14ffffff));
@@ -1186,7 +1249,7 @@ public:
          label(c, ui::noteName(d.note), x / k - 20, mid - 30, 40, vc, 9.5f, visage::Font::kCenter);
       }
       // The output's balance, from its peaks: a needle under the field.
-      const float by = top + fh + 9;
+      const float by = kStripY;
       c.setColor(visage::Color(0x16ffffff));
       c.roundedRectangle(10 * k, by * k, (W - 20) * k, 4 * k, 2 * k);
       const float bx = xOf(balance_);
@@ -1194,9 +1257,9 @@ public:
       c.circle(bx - 8 * k, (by + 2) * k - 8 * k, 16 * k);
       c.setColor(glow(0xffdfe6f5, 0.95f, 1.3f));
       c.roundedRectangle(bx - 2 * k, (by - 2) * k, 4 * k, 8 * k, 2 * k);
-      label(c, "L", 2, H - 15, 20, kDim, 9.5f);
-      label(c, "BALANCE", 0, H - 15, W, kFaint, 9.0f, visage::Font::kCenter);
-      label(c, "R", W - 22, H - 15, 20, kDim, 9.5f, visage::Font::kRight);
+      label(c, "L", 2, kCaptionY, 20, kDim, 9.5f);
+      label(c, "BALANCE", 0, kCaptionY, W, kDim, 9.5f, visage::Font::kCenter);
+      label(c, "R", W - 22, kCaptionY, 20, kDim, 9.5f, visage::Font::kRight);
    }
 
 private:
@@ -1229,56 +1292,81 @@ public:
       redraw();
    }
    void draw(visage::Canvas &c) override {
-      const float k = s(), W = width() / k, H = height() / k;
-      bloom_.setBloomSize(12.0f * k * (dpiScale() > 0.0f ? dpiScale() : 1.0f));
-      const float top = 6, bottom = H - 20;
-      // IN is on its own scale, -36..0; the output -48..+6.
-      const auto unit = [](int i, double db) {
-         return i == 0 ? static_cast<float>((std::clamp(db, -36.0, 0.0) + 36.0) / 36.0)
-                       : static_cast<float>((std::clamp(db, -48.0, 6.0) + 48.0) / 54.0);
+      const float k = s(), W = width() / k;
+      bloom_.setBloomSize(10.0f * k * (dpiScale() > 0.0f ? dpiScale() : 1.0f));
+      // The same rows as the stereo view: the title (and the output's held peak, in dB), the bars
+      // in the field's height, their names on the caption row.
+      const double peakDb = std::max(hold_[1], hold_[2]) > 1e-5f ? 20.0 * std::log10(std::max(hold_[1], hold_[2])) : -90.0;
+      label(c, "LEVEL", 0, 0, W, kDim, 12.0f);
+      char t[32];
+      if (peakDb > -60.0)
+         std::snprintf(t, sizeof(t), "%+.1f dB", peakDb);
+      else
+         std::snprintf(t, sizeof(t), "-inf");
+      label(c, t, 0, 2, W, peakDb > 0.0 ? 0xffff5a4a : kFaint, 9.5f, visage::Font::kRight);
+      const float top = kFieldTop, bottom = kFieldTop + kFieldHeight;
+      // IN is the breath, 0 to full, straight; the output is in dB, -48 to +6.
+      const auto unit = [](int i, double v) {
+         if (i == 0)
+            return static_cast<float>(std::clamp(v, 0.0, 1.0));
+         const double db = v > 1e-5 ? 20.0 * std::log10(v) : -90.0;
+         return static_cast<float>((std::clamp(db, -48.0, 6.0) + 48.0) / 54.0);
       };
-      const auto yOf = [&](int i, double db) { return bottom - unit(i, db) * (bottom - top); };
-      for (int db : {0, -12, -24, -36}) {
-         c.setColor(visage::Color(db == 0 ? 0x40ffffff : 0x16ffffff));
-         c.fill(W * 0.36f * k, yOf(1, db) * k, W * 0.64f * k, 1 * k);
-         label(c, db == 0 ? "0" : std::to_string(db), W - 24, yOf(1, db) - 14, 24, kFaint, 8.5f, visage::Font::kRight);
+      const auto yAt = [&](float u) { return bottom - u * (bottom - top); };
+      const auto yDb = [&](double db) { return yAt(static_cast<float>((db + 48.0) / 54.0)); };
+      const float bw = 18, xs[3] = {22, 82, 108};
+      // The output's scale: a line across L and R at each mark, its number to the right.
+      for (int db : {6, 0, -12, -24, -36, -48}) {
+         const float y = yDb(db);
+         c.setColor(visage::Color(db == 0 ? 0x50ffffff : 0x18ffffff));
+         c.fill((xs[1] - bw / 2 - 4) * k, y * k, (xs[2] - xs[1] + bw + 8) * k, 1 * k);
+         label(c, db > 0 ? "+6" : std::to_string(db), xs[2] + bw / 2 + 8, y - 8.5f, 30, db == 0 ? kDim : kFaint, 9.0f);
+      }
+      // IN's: quarters.
+      for (float q : {0.25f, 0.5f, 0.75f, 1.0f}) {
+         c.setColor(visage::Color(0x18ffffff));
+         c.fill((xs[0] + bw / 2 + 3) * k, yAt(q) * k, 4 * k, 1 * k);
       }
       const unsigned colors[3] = {modelColor(model_), 0xffdfe6f5, 0xffdfe6f5};
       const char *names[3] = {"IN", "L", "R"};
-      const float bw = 16, xs[3] = {W * 0.12f, W * 0.46f, W * 0.66f};
       for (int i = 0; i < 3; ++i) {
          const float x = xs[i] - bw / 2;
          c.setColor(visage::Color(0x16ffffff));
-         c.roundedRectangle(x * k, top * k, bw * k, (bottom - top) * k, 4 * k);
-         const double db = level_[i] > 1e-5f ? 20.0 * std::log10(level_[i]) : -90.0;
-         const float u = unit(i, db), y = yOf(i, db);
+         c.roundedRectangle(x * k, top * k, bw * k, (bottom - top) * k, 3 * k);
+         const float u = unit(i, level_[i]), y = yAt(u);
          if (u > 0.0f) {
-            // The glow grows with the level: a wide soft halo, then the bar itself.
-            for (int ring = 3; ring >= 1; --ring) {
-               const float g = ring * (1.5f + 3.5f * u);
-               c.setColor(glow(colors[i], 0.05f * u * (4 - ring)));
-               c.roundedRectangle((x - g) * k, (y - g) * k, (bw + 2 * g) * k, (bottom - y + g) * k, (4 + g) * k);
+            // A soft halo, wider the louder, then the bar.
+            for (int ring = 2; ring >= 1; --ring) {
+               const float g = ring * (1.0f + 2.0f * u);
+               c.setColor(glow(colors[i], 0.06f * u * (3 - ring)));
+               c.roundedRectangle((x - g) * k, (y - g) * k, (bw + 2 * g) * k, (bottom - y + g) * k, (3 + g) * k);
             }
-            c.setColor(visage::Brush::vertical(glow(colors[i], 0.75f + 0.25f * u, 1.0f + 0.35f * u), glow(colors[i], 0.5f)));
-            c.roundedRectangle(x * k, y * k, bw * k, (bottom - y) * k, 4 * k);
-            if (i > 0 && db > 0.0) {
+            c.setColor(visage::Brush::vertical(glow(colors[i], 0.8f + 0.2f * u, 1.0f + 0.35f * u), glow(colors[i], 0.45f)));
+            c.roundedRectangle(x * k, y * k, bw * k, (bottom - y) * k, 3 * k);
+            if (i > 0 && y < yDb(0.0)) {
                c.setColor(glow(0xffff5a4a, 1.0f, 1.6f));
-               c.roundedRectangle(x * k, y * k, bw * k, (yOf(i, 0.0) - y) * k, 3 * k);
+               c.roundedRectangle(x * k, y * k, bw * k, (yDb(0.0) - y) * k, 3 * k);
             }
          }
          // The held peak.
-         const double hdb = hold_[i] > 1e-5f ? 20.0 * std::log10(hold_[i]) : -90.0;
-         if (unit(i, hdb) > 0.0f) {
-            c.setColor(glow(hdb > 0.0 && i > 0 ? 0xffff5a4a : 0xffffffff, 0.9f, 1.4f));
-            c.fill(x * k, (yOf(i, hdb) - 1) * k, bw * k, 2 * k);
+         const float hu = unit(i, hold_[i]);
+         if (hu > 0.0f) {
+            const bool over = i > 0 && yAt(hu) < yDb(0.0);
+            c.setColor(glow(over ? 0xffff5a4a : 0xffffffff, 0.9f, 1.4f));
+            c.fill(x * k, (yAt(hu) - 1) * k, bw * k, 2 * k);
          }
-         if (i > 0) {
-            c.setColor(visage::Color(0xaaffffff));
-            const float ty = yOf(i, masterDb_);
-            c.fill((x - 4) * k, (ty - 0.5f) * k, 3 * k, 1 * k);
-         }
-         label(c, names[i], xs[i] - 20, H - 16, 40, i == 0 ? colors[0] : kDim, 9.5f, visage::Font::kCenter);
+         label(c, names[i], xs[i] - 20, kCaptionY, 40, i == 0 ? colors[0] : kDim, 9.5f, visage::Font::kCenter);
       }
+      // Where Master is set: a small notch on the scale's left, beside L.
+      const float my = yDb(std::clamp(masterDb_, -48.0, 6.0));
+      c.setColor(visage::Color(0xccffffff));
+      visage::Path notch;
+      const float nx = xs[1] - bw / 2 - 3;
+      notch.moveTo(nx * k, my * k);
+      notch.lineTo((nx - 6) * k, (my - 4) * k);
+      notch.lineTo((nx - 6) * k, (my + 4) * k);
+      notch.close();
+      c.fill(notch);
    }
 
 private:
@@ -1758,7 +1846,8 @@ private:
       }
       char t[48];
       std::snprintf(t, sizeof(t), "%s   %.0f%%", ui::noteName(l.note).c_str(), 100.0f * std::min(1.0f, l.breath / 1.3f));
-      label(c, t, sh.cx - 60, sh.cy + sh.radius + 10, 120, kFaint, 10.5f, visage::Font::kCenter);
+      label(c, t, sh.cx - 60, sh.cy + sh.radius + 10, 120, visage::Color(slotColor(l.slot)).withAlpha(0.75f * fade).toARGB(), 10.5f,
+            visage::Font::kCenter);
    }
 
    std::vector<Loop> loops_;
@@ -2240,11 +2329,16 @@ public:
 
       std::vector<BreathLoops::Loop> loops;
       std::vector<float> breaths, pressures;
+      std::vector<int> slots;
+      std::vector<TongueGraph::Mark> tongued;
+      clock_ += dt;
       int loudest = -1;
       for (int i = 0; i < kVoiceCount && i < static_cast<int>(voices_.size()); ++i) {
          const EditorHost::Voice &v = voices_[i];
-         if (v.note < 0)
+         if (v.note < 0) {
+            noteAt_[i] = -1;
             continue;
+         }
          BreathLoops::Loop l{i, v.note, v.hz, v.breath, v.level, v.releasing, std::vector<float>(kLoopSamples)};
          l.strike = v.sources[kSrcStrike];
          l.press = v.pressure;
@@ -2254,7 +2348,21 @@ public:
          if (!v.releasing) {
             breaths.push_back(v.breath);
             pressures.push_back(std::clamp(v.pressure, 0.0f, 1.0f));
+            slots.push_back(i);
          }
+         // When each slot's note was tongued and let go, for the Tongue graph.
+         if (v.note != noteAt_[i]) {
+            noteAt_[i] = v.note;
+            tonguedAt_[i] = clock_;
+            letGoAt_[i] = -1.0;
+         }
+         if (v.releasing && letGoAt_[i] < 0.0)
+            letGoAt_[i] = clock_;
+         if (!v.releasing)
+            letGoAt_[i] = -1.0;
+         const double held = clock_ - tonguedAt_[i];
+         tongued.push_back({i, letGoAt_[i] < 0.0 ? std::min(held, TongueGraph::kHold)
+                                                  : TongueGraph::kHold + (clock_ - letGoAt_[i])});
          if (loudest < 0 || v.level > voices_[loudest].level)
             loudest = i;
          loops.push_back(std::move(l));
@@ -2295,7 +2403,7 @@ public:
          exciterTabs_->setTabHidden(2, model != kAlien);
          if (exciterTabs_->selected() == 0)
             valve_->set(model, host_.paramModulated(kEmbouchure), breaths, host_.paramModulated(kStiffness),
-                        host_.paramModulated(kAperture), host_.paramModulated(kEdge));
+                        host_.paramModulated(kAperture), host_.paramModulated(kEdge), slots);
          else if (exciterTabs_->selected() == 2) {
             // The Alien's words, each voice's syllable lit, and where its vowels are.
             const bool alien = model == kAlien;
@@ -2324,7 +2432,7 @@ public:
             std::vector<float> opens;
             for (float b : breaths)
                opens.push_back(static_cast<float>(std::pow(2.0, amount * 6.0 * (std::clamp(b / full, 0.0, 1.5) - 0.7))));
-            filterGraph_->set(host_.paramModulated(kHybridCutoff), host_.paramModulated(kHybridResonance), amount, opens);
+            filterGraph_->set(host_.paramModulated(kHybridCutoff), host_.paramModulated(kHybridResonance), amount, opens, slots);
          }
          bore_->set(model, hz, std::move(notes), host_.paramModulated(kLoss), host_.paramModulated(kHoleCutoff) / 1300.0,
                     host_.paramModulated(kCone));
@@ -2334,7 +2442,7 @@ public:
          // The Time knob only sets the delay while Sync is Free.
          delayTimeKnob_->setAccent(host_.paramValue(kDelaySync) < 0.5 ? delayAccent_ : kFaint);
          if (voiceTabs_->selected() == 1)
-            curve_->set(host_.paramModulated(kCurve), pressures);
+            curve_->set(host_.paramModulated(kCurve), pressures, slots);
          if (voiceTabs_->selected() == 0) {
             lights_->set(voices_, model, static_cast<int>(host_.paramValue(kVoiceMode) + 0.5));
             // In: the breath blowing (the loudest voice's), or Breath In when nothing plays.
@@ -2363,7 +2471,7 @@ public:
                          model, rate);
          }
          if (playerTabs_->selected() == 0)
-            tongue_->set(host_.paramModulated(kAttack), host_.paramModulated(kKick), host_.paramModulated(kRelease), color);
+            tongue_->set(host_.paramModulated(kAttack), host_.paramModulated(kKick), host_.paramModulated(kRelease), color, tongued);
          if (playerTabs_->selected() == 1)
             vibrato_->set(host_.paramModulated(kVibRate), host_.paramModulated(kVibDepth), host_.paramModulated(kVibPitch),
                           host_.paramModulated(kVibDelay), color);
@@ -3035,11 +3143,11 @@ private:
       tips_.add(mode, "Poly: eight voices. Mono: one, tongued between notes. Legato: one, slurred between notes.");
 
       // VOICE: the voices, where they sit in the stereo field, and the levels.
-      lights_ = &tabs.addToPage(0, add<VoiceLights>({912, 668, 180, 100}, 180.0f));
-      stereo_ = &tabs.addToPage(0, add<StereoView>({1100, 656, 284, 132}, 284.0f));
+      lights_ = &tabs.addToPage(0, add<VoiceLights>({920, 656, 168, 132}, 168.0f));
+      stereo_ = &tabs.addToPage(0, add<StereoView>({1104, 656, 340, 132}, 340.0f));
       tips_.add(*stereo_, "Where each voice is heard, left to right: Spread fans the notes out (low to the left), Pan moves them all. The needle under it is the output's balance.");
-      levels_ = &tabs.addToPage(0, add<LevelView>({1404, 652, 216, 138}, 216.0f));
-      tips_.add(*levels_, "In: the breath coming in (the hardest-blown voice, or Breath In). L and R: the output, with its peak held and a tick at Master. If it turns red, lower Level or Master.");
+      levels_ = &tabs.addToPage(0, add<LevelView>({1460, 656, 160, 132}, 160.0f));
+      tips_.add(*levels_, "In: the breath coming in (the hardest-blown voice, or Breath In). L and R: the output, with its peak held (in dB at the top) and a notch at Master. If it turns red, lower Level or Master.");
 
       // AIR: where the breath comes from and how it's shaped.
       curve_ = &tabs.addToPage(1, add<CurveGraph>({920, 652, 200, 136}, 200.0f));
@@ -3361,6 +3469,9 @@ private:
    ui::Tooltips tips_;
    ui::FramePacer pacer_{60.0f};
    float fpsTime_ = 0.0f, fps_ = 0.0f;
+   // The panel's clock, and when each slot's note was tongued and let go on it (-1: still held).
+   double clock_ = 0.0, tonguedAt_[kVoiceCount] = {}, letGoAt_[kVoiceCount] = {-1, -1, -1, -1, -1, -1, -1, -1};
+   int noteAt_[kVoiceCount] = {-1, -1, -1, -1, -1, -1, -1, -1};
    int frameCount_ = 0;
    unsigned tick_ = 0;
    bool air_ = false;

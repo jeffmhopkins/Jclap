@@ -264,10 +264,12 @@ rises and curls away. **SMOKE / INK** and the palette set its look.
 
 ![The VOICE tab](docs/readme/voice.jpg)
 
+Each sounding note keeps one colour across the panel, by the voice playing it: its light, its partials on the bore, its dot on the air flow, the tongue, the press curve and the hybrid's filter, its place in the stereo field and its loop's name.
+
 **VOICE** shows the eight voices; where each sounding note sits in the stereo field (Spread fans
 them out around Pan, each note in its own colour, with the output's balance under it); and the
 meters, glowing as they rise: the breath coming in, and the output left and right, with the peak
-held, red over 0 dB, and a tick at Master. Along the bottom: **SPREAD** (low notes left, high right, as across a section, or
+held (in dB at the top), red over 0 dB, and a notch at Master. Along the bottom: **SPREAD** (low notes left, high right, as across a section, or
 below zero the other way round), **PAN** (where the notes sit before the spread: map Key, Slide or
 Random onto it to place each note), **UNISON** (up to four copies of every voice, detuned against
 each other) and **U.DETUNE** (how far they spread, in cents), **GLIDE**, **BEND** (the MPE bend
