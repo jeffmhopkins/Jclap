@@ -420,43 +420,39 @@ void dragTests() {
    editor->releaseInput();
 }
 
-// The panel's SEND buttons: one output CC alone, for a MIDI learn.
+// The panel's SEND buttons: one output's value once, on its CC alone, for a MIDI learn.
 void learnTests() {
    jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
    auto *editor = h.object<polar_xy::EditorHost>();
-   // Before anything was sent: a learn doesn't pick up a 0, so 64.
-   editor->sendOutput(1);
-   auto out = h.process();
-   JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 19 && out.midi[0].data2 == 64);
+   const auto send = [&](int which) {
+      editor->sendOutput(which);
+      std::vector<std::pair<int, int>> sent; // CC, value
+      for (int i = 0; i < 4; ++i)
+         for (const auto &m : h.process().midi)
+            sent.push_back({m.data1, m.data2});
+      return sent;
+   };
+   using Sent = std::vector<std::pair<int, int>>;
+   // Before anything was sent: 64.
+   JCLAP_CHECK((send(1) == Sent{{19, 64}}));
 
    // After: the value last sent, on that CC only.
    h.midi(0xB0, 16, 64);
    h.midi(0xB0, 17, 127);
    h.process();
-   editor->sendOutput(0);
-   out = h.process();
-   JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 18 && out.midi[0].data2 == 32);
-   editor->sendOutput(1);
-   out = h.process();
-   JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 19 && out.midi[0].data2 == 127);
-   JCLAP_CHECK(h.process().midi.empty());
+   JCLAP_CHECK((send(0) == Sent{{18, 32}}));
+   JCLAP_CHECK((send(1) == Sent{{19, 127}}));
 
-   // A value last sent at 0 goes out at 64, then back to 0.
+   // A value at 0 goes out at 0.
    h.midi(0xB0, 16, 127);
    h.midi(0xB0, 17, 64);
    h.process();
-   editor->sendOutput(0);
-   out = h.process();
-   JCLAP_CHECK(out.midi.size() == 2 && out.midi[0].data1 == 18 && out.midi[0].data2 == 64 &&
-               out.midi[1].data1 == 18 && out.midi[1].data2 == 0);
+   JCLAP_CHECK((send(0) == Sent{{18, 0}}));
 
-   // Touch: pressed, then released again.
+   // Touch: as it is, released before any.
    h.setParam(15, 20.0);
    h.process();
-   editor->sendOutput(2);
-   out = h.process();
-   JCLAP_CHECK(out.midi.size() == 2 && out.midi[0].data1 == 20 && out.midi[0].data2 == 127 &&
-               out.midi[1].data1 == 20 && out.midi[1].data2 == 0);
+   JCLAP_CHECK((send(2) == Sent{{20, 0}}));
    h.setParam(15, -1.0);
    h.midi(0xB0, 16, 64);
    h.midi(0xB0, 17, 127);
@@ -465,9 +461,7 @@ void learnTests() {
    // At 14 bits, only the MSB: the CC to learn.
    h.setParam(11, 1.0);
    h.process();
-   editor->sendOutput(0);
-   out = h.process();
-   JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 18 && out.midi[0].data2 == 32);
+   JCLAP_CHECK((send(0) == Sent{{18, 32}}));
 }
 
 // 14-bit output: each value goes out as its MSB on the output CC, then its LSB on that CC + 32.

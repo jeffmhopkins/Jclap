@@ -13,6 +13,11 @@ function check(ok, what) {
    }
 }
 
+// The script's version is the plugin's, and the status line shows it.
+var cmake = require('fs').readFileSync(path.join(__dirname, '..', 'CMakeLists.txt'), 'utf8');
+check(cmake.indexOf('jclap_plugin_version(' + px.VERSION + ')') >= 0, 'VERSION matches CMakeLists.txt');
+check(/ v\d+\.\d+\.\d+$/.test(new px.Engine(function () {}).status()), 'status ends with the version');
+
 var def = { angleOffset: 0, clockwise: false, fillSquare: false };
 function polar(x, y, s) { return px.toPolar(px.ccToBipolar(x), px.ccToBipolar(y), s || def); }
 
@@ -118,24 +123,63 @@ d.engine.setParam('outangle', 20);
 m = d.take();
 check(m.length === 2 && m[0][1] === 20 && m[1][1] === 19, 'moved output CCs resend');
 
-// SEND buttons: one CC alone at its last value.
+// SEND buttons: that CC alone, once, at its last value.
+function sent(d) {
+   var all = d.take();
+   for (var i = 0; i < 20; ++i) {
+      d.engine.tick(0.02);
+      all = all.concat(d.take());
+   }
+   return all.map(function (m) { return [m[1], m[2]]; }).join(' ');
+}
 d.engine.learn('radius');
-m = d.take();
-check(m.length === 1 && m[0][1] === 19 && m[0][2] === 127, 'send radius');
-// The angle there is 0, and a learn doesn't pick up a 0: LEARN_VALUE, then back to 0.
+check(sent(d) === '19,127', 'send radius');
 d.engine.learn('angle');
-m = d.take();
-check(m.length === 2 && m[0][1] === 20 && m[0][2] === 64 && m[1][1] === 20 && m[1][2] === 0, 'send angle at 0');
-// Before anything was sent: LEARN_VALUE alone.
+check(sent(d) === '20,0', 'send angle at 0');
+// Before anything was sent: 64.
 d = device();
 d.engine.learn('radius');
-m = d.take();
-check(m.length === 1 && m[0][1] === 19 && m[0][2] === 64, 'send before anything was sent');
-// Touch: pressed, then released again.
+check(sent(d) === '19,64', 'send before anything was sent');
+// Touch: as it is, released before any.
 d.engine.setParam('touchout', 20);
 d.engine.learn('touch');
-m = d.take();
-check(m.length === 2 && m[0][1] === 20 && m[0][2] === 127 && m[1][1] === 20 && m[1][2] === 0, 'send touch');
+check(/touch: sent CC 20 = 0 on ch 1/.test(d.engine.status()), 'status shows the send');
+check(sent(d) === '20,0', 'send touch');
+d.engine.tick(5);
+check(!/sent CC/.test(d.engine.status()), 'and then goes back');
+d.engine.setParam('touchout', -1);
+d.engine.learn('touch');
+check(d.take().length === 0 && /Touch Out/.test(d.engine.status()), 'status says why nothing was sent');
+
+// Typing an Out CC, even the same one, sends its value once there; not while the device loads.
+d = device();
+d.engine.setParam('outangle', 18);
+check(d.take().length === 0, 'no send while loading');
+d.engine.tick(1.5);
+d.send(0xB0, 16, 127, 0xB0, 17, 64);
+d.engine.tick(0.005);
+d.take();
+d.engine.setParam('outangle', 18);
+check(sent(d) === '18,0', 'typed Out CC sends its value once');
+d.engine.setParam('outradius', 19);
+check(sent(d) === '19,127', 'typed Radius Out too');
+d.engine.setParam('outradius', 21);
+check(sent(d) === '18,0 21,127', 'a new Radius Out resends the position once, not twice');
+d.engine.setParam('touchout', 30);
+check(sent(d) === '30,0', 'typed Touch Out sends released');
+
+// The Max glue: the UI thread's messages only queue, and the next tick runs them, so every byte goes
+// out from the scheduler thread.
+(function () {
+   var vm = require('vm'), out = [];
+   var max = { outlet: function (n, v) { if (n === 0) out.push(v); }, Date: Date, Math: Math };
+   vm.createContext(max);
+   vm.runInContext(require('fs').readFileSync(path.join(__dirname, 'polarxy.js'), 'utf8'), max);
+   max.learn('angle');
+   check(out.length === 0, 'glue: a SEND press only queues');
+   max.tick();
+   check(out.length === 3 && out[0] === 0xB0 && out[1] === 18, 'glue: the next tick sends it');
+})();
 
 // 14-bit: MSB then LSB on CC + 32.
 d = device();

@@ -29,6 +29,10 @@ function ccToBipolar(v) {
 var DEAD_ZONE = 0.03;
 var STEPS7 = 127, STEPS14 = 16383;
 
+// This script's version, the plugin's (CMakeLists.txt; a test keeps them the same). The status line
+// ends with it, so it shows which copy of the script Live loaded.
+var VERSION = '0.19.3';
+
 function wrapDegrees(deg) {
    deg = deg % 360;
    if (deg < 0) deg += 360;
@@ -538,6 +542,7 @@ function Engine(emit) {
    this.inX = this.int('inx');
    this.inY = this.int('iny');
    this.applied = this.settings();
+   this.learnText = ''; this.learnTime = 0; // the last SEND, for the status line
 }
 
 Engine.prototype.int = function (name) { return Math.floor(this.p[name] + 0.5); };
@@ -547,9 +552,41 @@ Engine.prototype.setParam = function (name, value) {
    var range = PARAMS[name];
    if (!range || typeof value !== 'number' || !isFinite(value)) return;
    this.convertPending();
+   var was = this.p[name];
    this.p[name] = clamp(value, range[0], range[1]);
    this.applySettings();
+   // Typing an Out CC (even the one already there) sends that output's value once on it. Not while
+   // the device loads, when every control sends its value once.
+   var which = { outangle: 'angle', outradius: 'radius', touchout: 'touch' }[name];
+   // A new angle or radius CC already sent the position there, if there is one.
+   var st = this.channels[this.lastChannel];
+   var resent = which !== 'touch' && this.p[name] !== was && (which === 'angle' ? st.sentAngle : st.sentRadius) >= 0;
+   if (which && this.time >= LOAD_SETTLE && !resent && (which !== 'touch' || this.touchOut() >= 0)) this.sendOnce(which);
 };
+
+// One output's value, once, on its CC alone (a SEND button, or its Out CC typed in), for a MIDI
+// learn: the value last sent on it, 64 before any (touch: as it is, released before any). At 14 bits
+// only the MSB, the CC to learn. When it can't send, the status line says why.
+var LEARN_VALUE = 64;
+Engine.prototype.sendOnce = function (which) {
+   var c = this.lastChannel, st = this.channels[c], cc, value;
+   if (which === 'touch') {
+      cc = this.touchOut();
+      if (cc < 0) return this.learned('touch: set a Touch Out CC first, nothing sent');
+      value = st.sentTouch === 127 ? 127 : 0;
+   } else if (which === 'angle' || which === 'radius') {
+      if (!this.applied.polar) return this.learned(which + ': Polar Out is off, nothing sent');
+      if (this.conflicting()) return this.learned(which + ': Angle and Radius Out are the same CC, nothing sent');
+      cc = this.int(which === 'angle' ? 'outangle' : 'outradius');
+      var sent = which === 'angle' ? st.sentAngle : st.sentRadius;
+      value = sent >= 0 ? sent >> (this.applied.fine ? 7 : 0) : LEARN_VALUE;
+   } else return;
+   this.emit(0xB0 | c, cc, value);
+   this.learned(which + ': sent CC ' + cc + ' = ' + value + ' on ch ' + (c + 1));
+};
+
+// Seconds after the device starts ticking before a typed Out CC counts as typed.
+var LOAD_SETTLE = 1;
 
 Engine.prototype.conflicting = function () {
    return this.int('inx') === this.int('iny') || this.int('outangle') === this.int('outradius');
@@ -821,25 +858,14 @@ Engine.prototype.tick = function (dt) {
    }
 };
 
-// A SEND button: that output CC alone, for a MIDI learn. At 14 bits, only the MSB, the CC to learn.
-// A learn doesn't pick up a CC at 0 (Omnisphere's doesn't), so it never goes out at 0: the angle or
-// radius goes at its last value, or LEARN_VALUE when that's 0 or nothing was sent yet, then back to
-// the 0 it was. Touch goes out pressed (127), then released again unless it's held.
-var LEARN_VALUE = 64;
-Engine.prototype.learn = function (which) {
-   var c = this.lastChannel, st = this.channels[c];
-   var shift = this.applied.fine ? 7 : 0;
-   if (which === 'angle' || which === 'radius') {
-      if (!this.applied.polar) return;
-      var cc = this.int(which === 'angle' ? 'outangle' : 'outradius');
-      var sent = which === 'angle' ? st.sentAngle : st.sentRadius;
-      var value = sent > 0 ? sent >> shift : 0;
-      this.emit(0xB0 | c, cc, value > 0 ? value : LEARN_VALUE);
-      if (value === 0 && sent >= 0) this.pushValue(c, cc, sent);
-   } else if (which === 'touch' && this.touchOut() >= 0) {
-      this.emit(0xB0 | c, this.touchOut(), 127);
-      if (st.sentTouch !== 127) this.emit(0xB0 | c, this.touchOut(), 0);
-   }
+// A SEND button: that output's value once on its CC alone, for a MIDI learn (see sendOnce).
+Engine.prototype.learn = function (which) { this.sendOnce(which); };
+
+// What the last SEND did, shown on the status line for a few seconds, so a press is seen to land.
+var LEARN_SHOWN = 4;
+Engine.prototype.learned = function (text) {
+   this.learnText = text;
+   this.learnTime = this.time;
 };
 
 // Lands every glide (after a reset, say) and forgets what was sent, so the next move sends both.
@@ -854,6 +880,7 @@ Engine.prototype.reset = function () {
 
 // One line for the device: the last channel's input and output, or what stops it converting.
 Engine.prototype.status = function () {
+   if (this.learnText && this.time - this.learnTime < LEARN_SHOWN) return this.learnText;
    if (this.int('inx') === this.int('iny')) return 'X and Y In are the same CC: passing through';
    if (this.int('outangle') === this.int('outradius')) return 'Angle and Radius Out are the same CC: passing through';
    var c = this.lastChannel, st = this.channels[c];
@@ -861,7 +888,7 @@ Engine.prototype.status = function () {
    var shift = this.applied.fine ? 7 : 0;
    text += '  out ' + (!this.applied.polar ? 'off' : st.sentAngle >= 0 ? (st.sentAngle >> shift) + ' / ' + (st.sentRadius >> shift) : '-');
    if (this.fineBlocked()) text += '  (14-bit needs out CCs < 32)';
-   return text;
+   return text + '  v' + VERSION;
 };
 
 // Raw MIDI bytes in, whole messages out: X/Y CCs to the engine, everything else (notes, bends,
@@ -926,13 +953,18 @@ MidiParser.prototype.byte = function (b) {
 if (typeof module !== 'undefined' && module.exports) {
    module.exports = {
       ccToBipolar: ccToBipolar, toPolar: toPolar, Follower: Follower, TouchFilter: TouchFilter, Engine: Engine,
-      MidiParser: MidiParser, PARAMS: PARAMS, STEPS7: STEPS7, STEPS14: STEPS14
+      MidiParser: MidiParser, PARAMS: PARAMS, VERSION: VERSION, STEPS7: STEPS7, STEPS14: STEPS14
    };
 }
 
 // ---- Max glue ----
 // MIDI and ticks are marked immediate so they run in Max's scheduler thread with the MIDI, not
 // deferred to the UI thread, so notes passing through aren't held up.
+//
+// Everything that touches the engine runs in that one thread. The dials, menus and SEND buttons
+// arrive in the UI thread, so they only queue a command, and the next tick (every few ms) runs it.
+// Run from the UI thread, a message's three bytes could go out to [midiout] with the scheduler
+// thread's bytes between them, and come out as the wrong CC or value.
 
 var engine = new Engine(function (status, d1, d2) {
    outlet(0, status);
@@ -941,6 +973,17 @@ var engine = new Engine(function (status, d1, d2) {
 });
 var parser = new MidiParser(engine, function (b) { outlet(0, b); });
 var lastTick = 0, lastStatus = '', statusAge = 0;
+var commands = [], commandsRun = 0; // queued from the UI thread, run in order by tick; never shrunk,
+                                   // so neither thread moves what the other is using
+
+function runCommands() {
+   while (commandsRun < commands.length) {
+      var c = commands[commandsRun++];
+      if (c[0] === 'param') engine.setParam(c[1], c[2]);
+      else if (c[0] === 'learn') engine.learn(c[1]);
+      else if (c[0] === 'reset') engine.reset();
+   }
+}
 
 function msg_int(b) { parser.byte(b); }
 msg_int.immediate = 1;
@@ -954,6 +997,7 @@ function tick() {
    var now = new Date().getTime();
    var dt = lastTick ? clamp((now - lastTick) / 1000, 0.001, 0.05) : 0.005;
    lastTick = now;
+   runCommands();
    engine.tick(dt);
    statusAge += dt;
    if (statusAge >= 0.1) {
@@ -968,9 +1012,9 @@ function tick() {
 tick.immediate = 1;
 
 // `param <name> <value>`, from the device's dials and menus.
-function param(name, value) { engine.setParam(name, value); }
+function param(name, value) { commands.push(['param', name, value]); }
 
 // `learn angle` / `learn radius`, from the SEND buttons.
-function learn(which) { engine.learn(which); }
+function learn(which) { commands.push(['learn', which]); }
 
-function reset() { engine.reset(); }
+function reset() { commands.push(['reset']); }

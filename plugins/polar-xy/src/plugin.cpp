@@ -785,10 +785,9 @@ private:
       convert(out, 0, channel);
    }
 
-   // The panel's SEND buttons: one output CC alone, for a MIDI learn, at 14 bits as the MSB only, the
-   // CC to learn. A learn doesn't pick up a CC at 0 (Omnisphere's doesn't), so it never goes out at 0:
-   // the angle or radius goes at its last value, or kLearnValue when that's 0 or nothing was sent yet,
-   // then back to the 0 it was. Touch goes out pressed (127), then released again unless it's held.
+   // The panel's SEND buttons: one output's value once, on its CC alone, for a MIDI learn: the value
+   // last sent on it, kLearnValue before any (touch: as it is, released before any). At 14 bits only
+   // the MSB, the CC to learn. The same as the Max for Live device's SEND buttons.
    static constexpr int kLearnValue = 64;
    void applyLearn(const clap_output_events_t *out) {
       const uint32_t which = learn_.exchange(0);
@@ -796,21 +795,13 @@ private:
          return;
       const ChannelState &st = channels_[panelChannel_];
       const int shift = applied_.fine ? 7 : 0;
-      auto learnValue = [&](int cc, int sent) {
-         const int value = sent > 0 ? sent >> shift : 0;
-         pushCC(out, 0, panelChannel_, cc, value > 0 ? value : kLearnValue);
-         if (value == 0 && sent >= 0)
-            pushValue(out, 0, panelChannel_, cc, sent);
-      };
-      if ((which & 1u) && applied_.polar)
-         learnValue(intParam(kParamOutAngle), st.sentAngle);
-      if ((which & 2u) && applied_.polar)
-         learnValue(intParam(kParamOutRadius), st.sentRadius);
-      if ((which & 4u) && touchOut() >= 0) {
-         pushCC(out, 0, panelChannel_, touchOut(), 127);
-         if (st.sentTouch != 127)
-            pushCC(out, 0, panelChannel_, touchOut(), 0);
-      }
+      const auto value = [&](int sent) { return sent >= 0 ? sent >> shift : kLearnValue; };
+      if ((which & 1u) && applied_.polar && !conflicting())
+         pushCC(out, 0, panelChannel_, intParam(kParamOutAngle), value(st.sentAngle));
+      if ((which & 2u) && applied_.polar && !conflicting())
+         pushCC(out, 0, panelChannel_, intParam(kParamOutRadius), value(st.sentRadius));
+      if ((which & 4u) && touchOut() >= 0)
+         pushCC(out, 0, panelChannel_, touchOut(), st.sentTouch == 127 ? 127 : 0);
    }
 
    // Returns true if the event was an XY input CC and should not be forwarded.

@@ -251,10 +251,12 @@ controller's X/Y CCs on it are ignored; once you let go, the controller takes ov
 move. Double-click puts it back in the centre. Before any CC has arrived the pad drives channel 1.
 
 To map the outputs with a MIDI learn, press **ANGLE**, **RADIUS** or **TOUCH** under MIDI LEARN: it
-sends that CC alone (at the value last sent on it), so the learn picks it up without the others getting in
-first. Omnisphere's learn ignores a CC at 0, so where that value is 0 (or nothing has gone out yet) it sends 64,
-then the 0 again; TOUCH sends a press (127) and then lets go. At 14-bit it sends only the MSB CC, the
-one to learn. TOUCH needs a Touch Out CC set. The Max for Live device's SEND buttons work the same way.
+sends that CC alone, once, at the value last sent on it (64 before anything was sent; TOUCH as it is,
+released before any), so the learn picks it up without the others getting in first. At 14-bit it sends
+only the MSB CC, the one to learn. TOUCH needs a Touch Out CC set. The Max for Live device's SEND
+buttons work the same way, and so does typing a number into its Angle, Radius or Touch Out and pressing
+Enter, even when the number is the one already there. Its status line shows what each one sent (or why
+it sent nothing) for a few seconds, and ends with the device's version.
 
 The preset bar in the header steps through presets with its arrows, lists them from the name, stars
 favourites, and SAVE stores the current settings as your own preset. The factory bank is a single
