@@ -100,7 +100,8 @@ inline int diceSection(clap_id id) {
    case kHumanize:
    case kGrowl:
    case kFlutter:
-   case kFlutterRate: return kDicePlayer;
+   case kFlutterRate:
+   case kRetongue: return kDicePlayer;
    case kVibRate:
    case kVibDepth:
    case kVibPitch:

@@ -40,7 +40,7 @@ public:
          clap_id dest;
          double amount;
       } routes[] = {{kSrcPress, kBreath, 0.3}, {kSrcSlide, kEmbouchure, 0.6}, {kSrcStrike, kKick, 0.5},
-                    {kSrcVapor, kNoise, 0.3},  {kSrcFold, kEdge, -0.25},     {kSrcLfo1, kFine, 0.1},
+                    {kSrcFray, kNoise, 0.3},  {kSrcFold, kEdge, -0.25},     {kSrcLfo1, kFine, 0.1},
                     {kSrcSwell, kVibDepth, 0.4}};
       int r = 0;
       for (const auto &route : routes) {
@@ -139,7 +139,7 @@ public:
          src[kSrcKnot] = 0.45f;
          src[kSrcFold] = 0.2f;
          src[kSrcRegister] = (kNotes[i] - 43) / 60.0f;
-         src[kSrcVapor] = 0.35f;
+         src[kSrcFray] = 0.35f;
          src[kSrcDraft] = -0.3f;
          src[kSrcSwell] = 0.62f;
          src[kSrcLfo1] = 0.4f;

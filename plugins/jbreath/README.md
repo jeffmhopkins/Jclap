@@ -211,9 +211,15 @@ The tongue's breath envelope. **STYLE** is how the note is tongued: Soft (a gent
 ("ta"), Double (every note tongued, even slurred), Flutter (a rolled R through the note) or Breath
 (no tongue at all). Whatever the style, the note's velocity is how hard it's tongued: a soft touch
 starts gently, with little of the tongue's burst and a slower attack, and a hard one with a crisp
-"ta". **ATTACK** and **RELEASE** shape the breath, and **HUMANIZE** makes every note a little
-different in pitch, breath, attack and vibrato. **FLUTTER** rolls the tongue through the note on
-any style (the Flutter style rolls it at least half way), and **RATE** is how fast.
+"ta". **FORCE** can take that from the finger instead (**Press**: how hard the pressure arrives in
+the note's first few ms), for a controller whose velocity isn't reliable. **ATTACK** and
+**RELEASE** shape the breath, and **HUMANIZE** makes every note a little different in pitch,
+breath, attack and vibrato. **FLUTTER** rolls the tongue through the note on any style (the Flutter
+style rolls it at least half way), and **RATE** is how fast. **RE-TONGUE** tongues a held note
+again when its pressure dips quickly and comes back (a fall to under the dip within 150 ms, and half
+way back within 300 ms more), as hard as it comes back: repeated notes on one key, as a player
+tongues them on one fingering. A slow diminuendo and swell never counts. Turned up, a lighter dip
+does it; at none, never.
 
 ![The VIBRATO tab](docs/readme/vibrato.jpg)
 
@@ -229,11 +235,20 @@ As in JSynth. Touch a source chip, then drag any knob: the ring that appears is 
 moves it, per voice. Touch the chip again to leave MAP. Right-click a knob to unmap it. Hover a chip to see what the source
 is. The sources:
 
-- **The player's hands**, in the header: STRIKE (velocity), PRESS (pressure), GLIDE (pitch bend),
-  SLIDE (CC 74), LIFT (release velocity).
-- **The breath**, under the loops, read off each voice's own sound: LOOP (how hard it blows), KNOT
-  (how bright it is), FOLD (how far past where it overblows), REGISTER (how high in its range),
-  VAPOR (how much breath noise rides on it), DRAFT (a slow wandering draught of its own).
+- **The player's hands**, in the header: STRIKE (velocity), PRESS (pressure), PUSH (how fast the
+  pressure is rising: an accent, falling away once the finger stops pushing), GLIDE (pitch bend,
+  all of it at two semitones whatever the bend range), SHAKE (how much the finger is moving the
+  pitch: its vibrato, or a bend on its way, all of it at a quarter of a semitone), SLIDE (CC 74),
+  LIFT (release velocity, moving only once the note is let go).
+- **The breath**, under the loops, read off each voice's own breath and sound: LOOP (how hard it
+  blows, from the lightest breath that sounds to the instrument's full breath, with its attack and
+  release), KNOT (how bright it is for its note: the share of the sound above its 4th harmonic),
+  FOLD (how far into the top of its breath, from a mezzo forte to full), REGISTER (how high in its
+  range), FRAY (how far the sound is from a steady tone: breath noise, growl, flutter, the attack or
+  a split note, what frays the loop), DRAFT (a slow wandering draught of its own, carried from note
+  to note). Each runs 0 to 1 on every instrument. Knot and Fray hold as a note dies away. Loop,
+  Fold, Knot and Fray come from the breath, so routed onto Breath they feed back: Fold onto Breath
+  holds an overblown note there.
 - **Generators and buses**: two LFOs and the Swell, Key, Random, and four buses.
 
 ![The LFOS tab](docs/readme/lfos.jpg)

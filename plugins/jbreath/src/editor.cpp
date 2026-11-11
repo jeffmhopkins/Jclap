@@ -2132,7 +2132,7 @@ public:
 class Panel : public ui::DesignFrame, public visage::EventTimer, public Mapper {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
-      auto &notice = add<ui::UpdateNotice>({1372, 13, 120, 26});
+      auto &notice = add<ui::UpdateNotice>({176, 13, 200, 26});
       // The name in the header shows this plugin's version on hover.
       tips_.add(add<ui::HoverArea>({8, 6, 164, 40}), "JBreath version " JCLAP_PLUGIN_VERSION);
       auto &presets = add<ui::PresetBar>({416, 11, 340, 30}, factoryPresets(), kPresetFormat, host_);
@@ -2725,7 +2725,11 @@ private:
       tips_.add(tabs.addToPage(0, choiceBox(kTongueType, {378, 796, 130, 26}, 0xfff28c28)),
                 "Soft: a gentle \"da\". Hard: a crisp \"ta\". Double: every note tongued, even slurred. "
                 "Flutter: a rolled R through the note. Breath: no tongue, the air just starts.");
-      const auto cells = ui::row({516, 784, 372, 120}, 5);
+      tabs.addToPage(0, add<ui::Label>({378, 840, 130, 16}, "FORCE", kDim, visage::Font::kLeft, 0.72f));
+      tips_.add(tabs.addToPage(0, choiceBox(kTongueForce, {378, 860, 130, 26}, 0xfff28c28)),
+                "How hard each note is tongued. Strike: its velocity. Press: how hard the finger arrives, its "
+                "pressure a few ms in, for a controller whose velocity isn't reliable.");
+      const auto cells = ui::row({516, 784, 372, 120}, 6);
       const auto player = [&](clap_id id, const char *name, int cell, const char *tip) {
          ui::Knob &k = familyKnob(id, name, cells[cell], tip);
          k.setTextSizes(9.0f, 10.5f, 9.0f);
@@ -2736,6 +2740,8 @@ private:
       player(kHumanize, "HUMANIZE", 2, "No two notes the same: each a little off in pitch, breath, attack and vibrato.");
       player(kFlutter, "FLUTTER", 3, "A flutter tongue, a rolled R through the note, on any style (the Flutter style rolls at least half).");
       player(kFlutterRate, "RATE", 4, "How fast the tongue flutters: slow is a purr, fast a buzz.");
+      player(kRetongue, "RE-TONGUE", 5, "A held note tongued again when its pressure dips quickly and comes back, "
+                                        "as hard as it comes back: off, or from a deep dip to a light one.");
 
       // VIBRATO: where it comes from, and how it moves.
       tabs.addToPage(1, *(vibrato_ = &add<VibratoGraph>({32, 770, 330, 148}, 330.0f)));
@@ -2800,26 +2806,35 @@ private:
          "",
          "STRIKE: how hard the note was struck, its velocity, 0 to 1. Fixed for the note.",
          "PRESS: how hard you press the key while it's held (aftertouch or MPE pressure), 0 to 1.",
-         "GLIDE: the note's pitch bend, -1 to 1 over the bend range (MPE or the wheel).",
+         "GLIDE: the note's pitch bend (MPE or the wheel), -1 to 1 over two semitones down or up, whatever the bend range.",
          "SLIDE: the finger sliding up and down the key (MPE slide, CC 74), 0 to 1.",
          "LIFT: how fast the key was let go, its release velocity, 0 to 1. Moves only after the note ends.",
-         "LOOP: how hard the note is being blown right now, the breath itself, 0 to 1. It's the size of the voice's loop.",
-         "KNOT: how bright the note sounds right now, from pure and round (0) to edgy and full of highs (1).",
-         "FOLD: how far the breath is past the point where the instrument jumps up a register, 0 to 1. "
-         "0 until it overblows.",
+         "LOOP: how hard the note is being blown right now, the breath itself with its attack and release, "
+         "from the lightest breath that sounds (0) to the instrument's full breath (1).",
+         "KNOT: how bright the note sounds right now for its pitch and instrument, from pure and round (0) to edgy "
+         "and full of highs (1). Holds as the note dies away.",
+         "FOLD: how far into the top of its breath the note is blown, towards where it overblows: 0 up to a mezzo "
+         "forte, 1 at full breath. Route it to Breath and an overblown note holds itself there.",
          "REGISTER: how high the note sits in the instrument's range, from its lowest note (0) to its highest (1).",
-         "VAPOR: how much breath noise is riding on the note right now: more with a noisy, hard-blown breath.",
-         "DRAFT: a slow, wandering draught of air of the note's own, -1 to 1, drifting and pulled back to the middle. "
-         "Every voice wanders differently.",
+         "FRAY: how frayed the note's loop is right now, how far its sound is from a steady tone: breath noise, "
+         "a soft breathy note, the attack, growl, flutter or a split note.",
+         "DRAFT: a slow, wandering draught of air, -1 to 1 (mostly within a quarter of the way either side), "
+         "drifting and pulled back to the middle, carried on from note to note. Every voice wanders differently.",
          "SWELL: a contour drawn once over its Time from each note's start (or looped), 0 to 1.",
          "LFO 1: a steady wave, -1 to 1, at its Rate. Note restarts it with each note; Free shares one for all voices.",
          "LFO 2: a steady wave, -1 to 1, at its Rate. Note restarts it with each note; Free shares one for all voices.",
          "KEY: which note was played, -1 to 1: low notes below middle C negative, high notes positive.",
          "RANDOM: a fresh random value for each note, -1 to 1, held for the note."};
-      if (source >= kSrcBus1)
+      if (source == kSrcShake)
+         return "SHAKE: how much the finger is moving the note's pitch right now, its vibrato (or a bend on its way), "
+                "0 to 1, full at a quarter of a semitone either way.";
+      if (source == kSrcPush)
+         return "PUSH: how fast the pressure is rising, pushing into the note, 0 to 1; it falls away once the finger "
+                "stops pushing. An accent, separate from how loud.";
+      if (isBusSource(source))
          return std::string("BUS ") + std::to_string(source - kSrcBus1 + 1) +
                 ": its base Amount with the sources routed onto it mixed in, curved and smoothed, -1 to 1.";
-      return kTips[source];
+      return kTips[std::clamp(source, 0, kSrcBus1 - 1)];
    }
 
    SourceChip &chip(int source, ui::Rect r) {
@@ -2832,10 +2847,10 @@ private:
 
    // The source chips, which turn MAP on: the player's hands in the header, the breath's under the loops.
    void buildMap() {
-      const int hands[] = {kSrcStrike, kSrcPress, kSrcGlide, kSrcSlide, kSrcLift};
-      for (int i = 0; i < 5; ++i)
-         chip(hands[i], {846 + i * 106.0f, 13, 100, 26});
-      const int breath[] = {kSrcLoop, kSrcKnot, kSrcFold, kSrcRegister, kSrcVapor, kSrcDraft};
+      const int hands[] = {kSrcStrike, kSrcPress, kSrcPush, kSrcGlide, kSrcShake, kSrcSlide, kSrcLift};
+      for (int i = 0; i < 7; ++i)
+         chip(hands[i], {808 + i * 98.0f, 13, 92, 26});
+      const int breath[] = {kSrcLoop, kSrcKnot, kSrcFold, kSrcRegister, kSrcFray, kSrcDraft};
       const float widths[] = {84, 84, 84, 112, 92, 92};
       float x = 912;
       for (int i = 0; i < 6; ++i) {

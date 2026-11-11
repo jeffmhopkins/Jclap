@@ -6,6 +6,7 @@
 #include <clap/ext/state.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -122,6 +123,135 @@ double energy(const std::vector<float> &x) {
    for (float v : x)
       e += v * v;
    return e;
+}
+
+// The voice playing `key`'s sources now.
+std::array<float, kModSourceCount> sourcesOf(EditorHost &panel, int key) {
+   std::vector<EditorHost::Voice> v;
+   panel.voices(v);
+   for (const auto &x : v)
+      if (x.note == key && !x.releasing)
+         return x.sources;
+   return {};
+}
+
+// The breath's sources span every instrument the same way, and the hands' read MPE as it's played:
+// Loop runs 0..1 from the lightest breath to full on every instrument, Fold reaches 1 at full
+// breath (the trumpet's too), Knot isn't stuck at full, Fray tells a steady tone from a growl,
+// Glide reads a bend of two semitones as all of it whatever the bend range, Shake reads a finger's
+// vibrato, Push a pressure rising, and a quick dip in a held note's pressure tongues it again.
+void sources() {
+   const auto host = [](jclap::core::TestHost &h) {
+      dry(h);
+      h.setParam(kVibDepth, 0.0);
+      h.setParam(kHumanize, 0.0);
+   };
+   for (int model = 0; model < 6; ++model) {
+      jclap::core::TestHost h(clap_entry, kId);
+      EditorHost &panel = *h.object<EditorHost>();
+      Run run{h};
+      host(h);
+      h.setParam(kModel, model);
+      h.note(CLAP_EVENT_NOTE_ON, 64, 0.6, 1, 1);
+      h.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, 64, 0.06, 1, 1);
+      run.seconds(0.8);
+      const auto soft = sourcesOf(panel, 64);
+      h.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, 64, 1.0, 1, 1);
+      run.seconds(0.8);
+      const auto loud = sourcesOf(panel, 64);
+      int count = 0;
+      std::printf("%s: Loop %.2f..%.2f, Fold %.2f..%.2f, Knot %.2f..%.2f, Fray %.2f..%.2f\n", choiceNames(kModel, count)[model],
+                  soft[kSrcLoop], loud[kSrcLoop], soft[kSrcFold], loud[kSrcFold], soft[kSrcKnot], loud[kSrcKnot],
+                  soft[kSrcFray], loud[kSrcFray]);
+      JCLAP_CHECK(soft[kSrcLoop] < 0.35 && loud[kSrcLoop] > 0.9);
+      JCLAP_CHECK(soft[kSrcFold] < 0.05 && loud[kSrcFold] > 0.8);
+      JCLAP_CHECK(soft[kSrcKnot] < 0.95);
+      JCLAP_CHECK(soft[kSrcFray] >= 0.0f && loud[kSrcFray] <= 1.0f);
+   }
+   {
+      jclap::core::TestHost h(clap_entry, kId);
+      EditorHost &panel = *h.object<EditorHost>();
+      Run run{h};
+      host(h);
+      h.setParam(kModel, 2); // the sax
+      // A steady tone is hardly frayed; a growl is.
+      h.note(CLAP_EVENT_NOTE_ON, 62, 0.6, 1, 1);
+      h.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, 62, 0.6, 1, 1);
+      run.seconds(1.0);
+      const float steady = sourcesOf(panel, 62)[kSrcFray];
+      h.setParam(kGrowl, 1.0);
+      run.seconds(0.8);
+      const float growl = sourcesOf(panel, 62)[kSrcFray];
+      h.setParam(kGrowl, 0.0);
+      std::printf("Fray: steady %.2f, growled %.2f\n", steady, growl);
+      JCLAP_CHECK(steady < 0.2 && growl > steady + 0.2);
+      // Glide: two semitones up is all of it (with MPE's 48-semitone range); Shake: still, nothing.
+      h.noteExpression(CLAP_NOTE_EXPRESSION_TUNING, 62, 2.0, 1, 1);
+      run.seconds(1.0);
+      auto src = sourcesOf(panel, 62);
+      JCLAP_CHECK(src[kSrcGlide] > 0.95f);
+      JCLAP_CHECK(src[kSrcShake] < 0.05f);
+      // A finger's vibrato, a third of a semitone either way at 5.5 Hz.
+      float shake = 0.0f;
+      for (int i = 0; i < 160; ++i) {
+         h.noteExpression(CLAP_NOTE_EXPRESSION_TUNING, 62, 2.0 + 0.33 * std::sin(2.0 * 3.14159265 * 5.5 * i * 0.005), 1, 1);
+         run.seconds(0.005);
+         shake = std::max(shake, sourcesOf(panel, 62)[kSrcShake]);
+      }
+      std::printf("Glide at +2 st: %.2f, Shake with a finger's vibrato: %.2f\n", src[kSrcGlide], shake);
+      JCLAP_CHECK(shake > 0.5f);
+      // Push: none held steady, most of it pressing in.
+      run.seconds(0.6);
+      JCLAP_CHECK(sourcesOf(panel, 62)[kSrcPush] < 0.05f);
+      float push = 0.0f;
+      for (int i = 0; i < 10; ++i) {
+         h.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, 62, 0.4 + 0.06 * i, 1, 1);
+         run.seconds(0.01);
+         push = std::max(push, sourcesOf(panel, 62)[kSrcPush]);
+      }
+      std::printf("Push pressing in: %.2f\n", push);
+      JCLAP_CHECK(push > 0.4f);
+      // Re-tongue: a quick dip and back tongues the note again (its strike becomes how hard it
+      // came back); a slow diminuendo and back doesn't.
+      run.seconds(0.5);
+      const auto dip = [&](double low, double each, int steps) {
+         for (int i = 1; i <= steps; ++i) {
+            h.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, 62, 0.9 + (low - 0.9) * i / steps, 1, 1);
+            run.seconds(each);
+         }
+         for (int i = 1; i <= steps; ++i) {
+            h.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, 62, low + (0.9 - low) * i / steps, 1, 1);
+            run.seconds(each);
+         }
+         run.seconds(0.1);
+         return sourcesOf(panel, 62)[kSrcStrike];
+      };
+      const float slow = dip(0.2, 0.08, 10);
+      const float quick = dip(0.15, 0.006, 5);
+      std::printf("Strike after a slow dip %.2f, after a quick one %.2f\n", slow, quick);
+      JCLAP_CHECK(std::fabs(slow - 0.6f) < 0.01f);
+      JCLAP_CHECK(std::fabs(quick - 0.6f) > 0.05f);
+      h.setParam(kRetongue, 0.0);
+      run.seconds(0.3);
+      const float before = sourcesOf(panel, 62)[kSrcStrike];
+      JCLAP_CHECK_EQ(dip(0.15, 0.006, 5), before);
+      JCLAP_CHECK(run.finite());
+   }
+   {
+      // Tongue Force from the finger: the strike is how hard the pressure arrives, not the velocity.
+      jclap::core::TestHost h(clap_entry, kId);
+      EditorHost &panel = *h.object<EditorHost>();
+      Run run{h};
+      host(h);
+      h.setParam(kTongueForce, 1);
+      h.note(CLAP_EVENT_NOTE_ON, 62, 0.1, 1, 1);
+      h.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, 62, 0.45, 1, 1);
+      run.seconds(0.3);
+      const float strike = sourcesOf(panel, 62)[kSrcStrike];
+      std::printf("Tongue Force Press: strike %.2f from pressure 0.45\n", strike);
+      JCLAP_CHECK(std::fabs(strike - 0.75f) < 0.02f);
+      JCLAP_CHECK(run.rms() > 0.01);
+   }
 }
 
 // Every instrument plays a held note in tune and at a sensible level, at this rate.
@@ -846,6 +976,7 @@ int main() {
    oddRatesStayFinite();
 
    linnStrument();
+   sources();
 
    return jclap::core::testResult();
 }
