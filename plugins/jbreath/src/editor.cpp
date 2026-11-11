@@ -65,6 +65,11 @@ constexpr unsigned kCard = 0xff1a1e25;
 constexpr unsigned kCardBorder = 0xff2a303a;
 constexpr unsigned kWell = 0xff111419;
 constexpr unsigned kPress = 0xffff6fd2;
+// A colour for each voice slot, so a note keeps it while it's held: its partials on the bore and its
+// place in the stereo field are drawn in it.
+constexpr unsigned kSlotColors[kVoiceCount] = {0xffffe066, 0xff6fc8ff, 0xffc58bff, 0xff7fe0a0,
+                                               0xffff7a9c, 0xff5fe0d8, 0xffc8f07a, 0xffe0e6ff};
+
 // The HYBRID tab's subtractive voice.
 constexpr unsigned kSynthColor = 0xffb98bff;
 
@@ -81,6 +86,9 @@ const char *const kModelSubtitles[kModelCount] = {"jet  ·  open pipe", "single 
 visage::Color glow(unsigned argb, float alpha, float hdr = 1.0f) {
    return ui::steady(visage::Color(argb, hdr).withAlpha(alpha));
 }
+
+// The Glow knob (0..1) as a gain on the loops' light: 1 at its default of 50%, up to 4 at full.
+float glowGain(float knob) { return 4.0f * knob * knob; }
 
 std::string text(clap_id id, double value) {
    char buffer[64];
@@ -631,15 +639,29 @@ private:
 // with the partials of the loudest sounding note as they're really coming out.
 class BoreGraph : public Drawn {
 public:
-   explicit BoreGraph(float w) : Drawn(w) {}
+   explicit BoreGraph(float w) : Drawn(w) {
+      bloom_.setBloomSize(8.0f);
+      bloom_.setBloomIntensity(0.8f);
+      setPostEffect(&bloom_);
+   }
 
-   void set(int model, double hz, bool playing, std::vector<float> partials, double loss = 0.04, double cutoff = 1.0,
-            double cone = 0.5) {
+   // A note sounding: its slot (for its colour), its key and pitch, its partials by Goertzel and how
+   // loud it plays against the loudest.
+   struct Note {
+      int slot = 0, note = 60;
+      double hz = 440.0;
+      std::vector<float> partials;
+      float level = 1.0f;
+      bool releasing = false;
+   };
+
+   // `hz` is the note whose resonances are drawn: the loudest one sounding, or a D4 when none is.
+   void set(int model, double hz, std::vector<Note> notes, double loss = 0.04, double cutoff = 1.0, double cone = 0.5) {
       model_ = model;
       cone_ = cone;
       hz_ = hz;
-      playing_ = playing;
-      partials_ = std::move(partials);
+      notes_ = std::move(notes);
+      playing_ = !notes_.empty();
       loss_ = loss;
       cut_ = cutoff;
       redraw();
@@ -648,6 +670,7 @@ public:
    void draw(visage::Canvas &c) override {
       well(c);
       const float k = s(), W = width() / k, H = height() / k;
+      bloom_.setBloomSize(8.0f * k * (dpiScale() > 0.0f ? dpiScale() : 1.0f));
       const float x0 = 12, x1 = W - 12, y0 = 44, y1 = H - 14;
       const unsigned color = modelColor(model_);
       const auto px = [&](double f) {
@@ -662,23 +685,49 @@ public:
       }
       label(c, title(), W - 470, 8, 456, kText, 11.5f, visage::Font::kRight);
       char sub[96];
-      std::snprintf(sub, sizeof(sub), playing_ ? "●  partials of %s as played" : "●  play a note to see its partials (%s shown)",
-                    ui::noteName(static_cast<int>(std::lround(69 + 12 * std::log2(hz_ / 440.0)))).c_str());
+      const int lead = static_cast<int>(std::lround(69 + 12 * std::log2(hz_ / 440.0)));
+      if (notes_.size() > 1)
+         std::snprintf(sub, sizeof(sub), "●  partials of %d notes as played, resonances of %s", static_cast<int>(notes_.size()),
+                       ui::noteName(lead).c_str());
+      else
+         std::snprintf(sub, sizeof(sub), playing_ ? "●  partials of %s as played" : "●  play a note to see its partials (%s shown)",
+                       ui::noteName(lead).c_str());
       label(c, sub, W - 470, 24, 456, kDim, 10.5f, visage::Font::kRight);
 
       // |Z| in dB, the top 36 dB of it.
       constexpr int n = 260;
+      const auto curve = [&](double hz, std::array<double, n + 1> &db) {
+         const double keep = hz_;
+         hz_ = hz;
+         for (int i = 0; i <= n; ++i) {
+            const double f = kLow * std::pow(kHigh / kLow, static_cast<double>(i) / n);
+            db[i] = 20.0 * std::log10(std::abs(impedance(f)) + 1e-9);
+         }
+         hz_ = keep;
+      };
       std::array<double, n + 1> db{};
-      double top = -1e9;
-      for (int i = 0; i <= n; ++i) {
-         const double f = kLow * std::pow(kHigh / kLow, static_cast<double>(i) / n);
-         db[i] = 20.0 * std::log10(std::abs(impedance(f)) + 1e-9);
-         top = std::max(top, db[i]);
-      }
+      curve(hz_, db);
+      const double top = *std::max_element(db.begin(), db.end());
       const auto py = [&](double d) { return static_cast<float>((y1 - (y1 - y0) * std::clamp((d - top + 36) / 36, 0.0, 1.0)) * k); };
+      const auto fAt = [&](int i) { return kLow * std::pow(kHigh / kLow, static_cast<double>(i) / n); };
+      // Each other note's resonances, a thin line in its colour.
+      for (const Note &nt : notes_) {
+         if (std::fabs(nt.hz - hz_) < 0.5)
+            continue;
+         std::array<double, n + 1> other{};
+         curve(nt.hz, other);
+         const double otop = *std::max_element(other.begin(), other.end());
+         visage::Path line;
+         for (int i = 0; i <= n; ++i) {
+            const float y = py(other[i] - otop + top);
+            i == 0 ? line.moveTo(px(fAt(i)), y) : line.lineTo(px(fAt(i)), y);
+         }
+         c.setColor(glow(kSlotColors[nt.slot % kVoiceCount], 0.28f * (nt.releasing ? 0.5f : 1.0f)));
+         c.fill(line.stroke(1.0f * k));
+      }
       visage::Path area, line;
       for (int i = 0; i <= n; ++i) {
-         const double f = kLow * std::pow(kHigh / kLow, static_cast<double>(i) / n);
+         const double f = fAt(i);
          if (i == 0) {
             area.moveTo(px(f), y1 * k);
             line.moveTo(px(f), py(db[i]));
@@ -694,25 +743,73 @@ public:
       c.setColor(glow(color, 0.9f, 1.2f));
       c.fill(line.stroke(1.6f * k));
 
-      // The note's partials: a stem for each harmonic, as tall as it sounds (or, with nothing
-      // playing, where the bore puts it).
-      const double loudest = partials_.empty() ? 0.0 : *std::max_element(partials_.begin(), partials_.end());
-      for (int h = 1; h <= kPartials; ++h) {
-         const double f = hz_ * h;
-         if (f > kHigh * 0.98)
-            break;
-         double level;
-         if (playing_ && loudest > 0.0)
-            level = 20.0 * std::log10(partials_[h - 1] / loudest + 1e-6) + top; // the loudest at the top
-         else
-            level = 20.0 * std::log10(std::abs(impedance(f)) + 1e-9);
-         if (level < top - 36)
-            continue;
-         const float x = px(f), y = py(level);
-         c.setColor(glow(0xffffffff, playing_ ? 0.55f : 0.22f));
-         c.fill(x - 0.75f * k, y, 1.5f * k, y1 * k - y);
-         c.setColor(glow(0xffffffff, playing_ ? 0.95f : 0.4f));
-         c.circle(x - 3 * k, y - 3 * k, 6 * k);
+      // With nothing playing: where the bore puts the shown note's harmonics, faint.
+      if (!playing_) {
+         for (int h = 1; h <= kPartials; ++h) {
+            const double f = hz_ * h;
+            if (f > kHigh * 0.98)
+               break;
+            const double level = 20.0 * std::log10(std::abs(impedance(f)) + 1e-9);
+            if (level < top - 36)
+               continue;
+            const float x = px(f), y = py(level);
+            c.setColor(glow(0xffffffff, 0.22f));
+            c.fill(x - 0.75f * k, y, 1.5f * k, y1 * k - y);
+            c.setColor(glow(0xffffffff, 0.4f));
+            c.circle(x - 3 * k, y - 3 * k, 6 * k);
+         }
+         return;
+      }
+
+      // Each note's partials in its colour: a stem for each harmonic, as tall as it sounds against
+      // the loudest partial of any note, glowing as loud as it is. The quietest note first.
+      double loudest = 0.0;
+      for (const Note &nt : notes_)
+         for (float p : nt.partials)
+            loudest = std::max(loudest, static_cast<double>(p) * nt.level);
+      if (loudest <= 0.0)
+         return;
+      std::vector<const Note *> order;
+      for (const Note &nt : notes_)
+         order.push_back(&nt);
+      std::sort(order.begin(), order.end(), [](const Note *a, const Note *b) { return a->level < b->level; });
+      // The legend: each note in its colour, low to high.
+      std::vector<const Note *> byPitch = order;
+      std::sort(byPitch.begin(), byPitch.end(), [](const Note *a, const Note *b) { return a->note < b->note; });
+      float lx = 14;
+      for (const Note *nt : byPitch) {
+         const unsigned vc = kSlotColors[nt->slot % kVoiceCount];
+         c.setColor(ui::steadyGlow(visage::Color(vc).withAlpha(0.5f), {(lx + 4) * k, 17 * k}, 9 * k));
+         c.circle((lx - 5) * k, 8 * k, 18 * k);
+         c.setColor(glow(vc, nt->releasing ? 0.5f : 1.0f, 1.3f));
+         c.circle(lx * k, 13 * k, 8 * k);
+         label(c, ui::noteName(nt->note), lx + 12, 8, 40, nt->releasing ? kFaint : vc, 11.0f);
+         lx += 52;
+      }
+      for (const Note *nt : order) {
+         const unsigned vc = kSlotColors[nt->slot % kVoiceCount];
+         const float dim = nt->releasing ? 0.45f : 1.0f;
+         for (int h = 1; h <= kPartials && h <= static_cast<int>(nt->partials.size()); ++h) {
+            const double f = nt->hz * h;
+            if (f > kHigh * 0.98)
+               break;
+            const double level = 20.0 * std::log10(nt->partials[h - 1] * nt->level / loudest + 1e-6) + top;
+            if (level < top - 36)
+               continue;
+            const float x = px(f), y = py(level), u = static_cast<float>(std::clamp((level - top + 36) / 36, 0.0, 1.0));
+            // A soft column of light, then the stem, then a bright head.
+            c.setColor(visage::Brush::vertical(glow(vc, 0.22f * u * dim), glow(vc, 0.0f)));
+            c.fill(x - 3.5f * k, y, 7 * k, y1 * k - y);
+            c.setColor(glow(vc, (0.4f + 0.4f * u) * dim, 1.0f + 0.4f * u));
+            c.fill(x - 0.75f * k, y, 1.5f * k, y1 * k - y);
+            const float r = (2.5f + 1.5f * u) * k;
+            c.setColor(ui::steadyGlow(visage::Color(vc).withAlpha(0.6f * u * dim), {x, y}, 3 * r));
+            c.circle(x - 3 * r, y - 3 * r, 6 * r);
+            c.setColor(glow(h == 1 ? 0xffffffff : vc, (0.6f + 0.4f * u) * dim, 1.0f + 0.8f * u));
+            c.circle(x - r, y - r, 2 * r);
+            if (h == 1)
+               label(c, ui::noteName(nt->note), x / k - 20, y / k - 20, 40, vc, 9.5f, visage::Font::kCenter);
+         }
       }
    }
 
@@ -785,7 +882,8 @@ private:
    int model_ = kClarinet;
    double hz_ = 293.66, loss_ = 0.04, cut_ = 1.0, cone_ = 0.5;
    bool playing_ = false;
-   std::vector<float> partials_;
+   std::vector<Note> notes_;
+   visage::BloomPostEffect bloom_;
 };
 
 // The bore's shape, as a row of tags with this instrument's lit.
@@ -1021,31 +1119,173 @@ private:
    int model_ = kClarinet, mode_ = kPoly;
 };
 
-// The instrument's family, in its colour, and what the engine is doing.
-class FamilyBadge : public Drawn {
+// Where the voices sit in the stereo field: the field from left to right, the band Spread fans the
+// notes across (low to the left, high to the right) around Pan, and each voice where it is heard,
+// glowing as loud as it plays. Above it the family and the engine's rate.
+class StereoView : public Drawn {
 public:
-   explicit FamilyBadge(float w) : Drawn(w) {}
-   void set(int model, double rate) {
-      if (model == model_ && rate == rate_)
-         return;
+   struct Dot {
+      int slot = 0, note = 60;
+      float pan = 0.0f, level = 0.0f;
+      bool releasing = false;
+   };
+   explicit StereoView(float w) : Drawn(w) {
+      bloom_.setBloomSize(10.0f);
+      bloom_.setBloomIntensity(0.9f);
+      setPostEffect(&bloom_);
+   }
+   void set(std::vector<Dot> dots, float pan, float spread, float balance, int model, double rate) {
+      dots_ = std::move(dots);
+      pan_ = pan;
+      spread_ = spread;
+      balance_ = balance;
       model_ = model;
       rate_ = rate;
       redraw();
    }
    void draw(visage::Canvas &c) override {
-      const float W = width() / s();
-      label(c, "FAMILY", 0, 0, W, kDim, 10.5f);
-      label(c, kFamilyNames[model_], 0, 16, W, modelColor(model_), 17.0f);
+      const float k = s(), W = width() / k, H = height() / k;
+      bloom_.setBloomSize(10.0f * k * (dpiScale() > 0.0f ? dpiScale() : 1.0f));
+      const unsigned color = modelColor(model_);
+      label(c, kFamilyNames[model_], 0, 0, W, color, 12.0f);
       char t[64];
       const int os = oversamplingFor(rate_);
-      std::snprintf(t, sizeof(t), "VOICES AT %.1f kHz", rate_ * os / 1000.0);
-      label(c, t, 0, 46, W, kDim, 10.5f);
-      label(c, os > 1 ? (std::to_string(os) + "x OVERSAMPLED").c_str() : "NATIVE RATE", 0, 62, W, kFaint, 10.0f);
+      if (os > 1)
+         std::snprintf(t, sizeof(t), "%.1f kHz  ·  %dx", rate_ * os / 1000.0, os);
+      else
+         std::snprintf(t, sizeof(t), "%.1f kHz", rate_ / 1000.0);
+      label(c, t, 0, 2, W, kFaint, 10.0f, visage::Font::kRight);
+      // The field.
+      const float top = 22, fh = H - 52, mid = top + fh / 2;
+      c.setColor(kWell);
+      c.roundedRectangle(0, top * k, width(), fh * k, 6 * k);
+      c.setColor(visage::Color(0x14ffffff));
+      c.roundedRectangleBorder(0, top * k, width(), fh * k, 6 * k, 1 * k);
+      c.setColor(visage::Color(0x18ffffff));
+      c.fill(10 * k, mid * k, (W - 20) * k, 1 * k);
+      c.setColor(visage::Color(0x30ffffff));
+      c.fill((W / 2) * k, (top + 6) * k, 1 * k, (fh - 12) * k);
+      const auto xOf = [&](float p) { return (W / 2 + std::clamp(p, -1.0f, 1.0f) * (W / 2 - 16)) * k; };
+      // Spread's band around Pan.
+      const float l = xOf(pan_ - std::fabs(spread_)), r = xOf(pan_ + std::fabs(spread_));
+      c.setColor(glow(color, 0.12f));
+      c.roundedRectangle(l - 8 * k, (mid - 13) * k, r - l + 16 * k, 26 * k, 13 * k);
+      c.setColor(glow(color, 0.85f, 1.2f));
+      c.fill(xOf(pan_) - 1 * k, (mid - 17) * k, 2 * k, 34 * k);
+      // The voices, quietest first so the loudest is on top.
+      std::vector<Dot> order = dots_;
+      std::sort(order.begin(), order.end(), [](const Dot &a, const Dot &b) { return a.level < b.level; });
+      for (const Dot &d : order) {
+         const unsigned vc = kSlotColors[d.slot % kVoiceCount];
+         const float x = xOf(d.pan), e = std::clamp(d.level, 0.15f, 1.0f) * (d.releasing ? 0.45f : 1.0f);
+         const float halo = (10 + 12 * e) * k;
+         c.setColor(ui::steadyGlow(visage::Color(vc).withAlpha(0.55f * e), {x, mid * k}, halo));
+         c.circle(x - halo, mid * k - halo, 2 * halo);
+         c.setColor(glow(vc, 0.6f + 0.4f * e, 1.0f + 0.8f * e));
+         c.circle(x - 4 * k, (mid - 4) * k, 8 * k);
+         label(c, ui::noteName(d.note), x / k - 20, mid - 30, 40, vc, 9.5f, visage::Font::kCenter);
+      }
+      // The output's balance, from its peaks: a needle under the field.
+      const float by = top + fh + 9;
+      c.setColor(visage::Color(0x16ffffff));
+      c.roundedRectangle(10 * k, by * k, (W - 20) * k, 4 * k, 2 * k);
+      const float bx = xOf(balance_);
+      c.setColor(ui::steadyGlow(visage::Color(0xffdfe6f5).withAlpha(0.5f), {bx, (by + 2) * k}, 8 * k));
+      c.circle(bx - 8 * k, (by + 2) * k - 8 * k, 16 * k);
+      c.setColor(glow(0xffdfe6f5, 0.95f, 1.3f));
+      c.roundedRectangle(bx - 2 * k, (by - 2) * k, 4 * k, 8 * k, 2 * k);
+      label(c, "L", 2, H - 15, 20, kDim, 9.5f);
+      label(c, "BALANCE", 0, H - 15, W, kFaint, 9.0f, visage::Font::kCenter);
+      label(c, "R", W - 22, H - 15, 20, kDim, 9.5f, visage::Font::kRight);
    }
 
 private:
+   visage::BloomPostEffect bloom_;
+   std::vector<Dot> dots_;
+   float pan_ = 0.0f, spread_ = 0.5f, balance_ = 0.0f;
    int model_ = kClarinet;
-   double rate_ = 0.0;
+   double rate_ = 48000.0;
+};
+
+// The levels, live, as JSynth draws them: a bar each for the breath coming in and the output's left
+// and right, on a dB scale, glowing wider and brighter as they rise, red over 0 dB, with a held
+// peak and (on the output) a tick where Master is set.
+class LevelView : public Drawn {
+public:
+   explicit LevelView(float w) : Drawn(w) {
+      bloom_.setBloomSize(10.0f);
+      bloom_.setBloomIntensity(0.45f);
+      setPostEffect(&bloom_);
+   }
+   // Linear levels: the breath (1 = full) and the output's peaks.
+   void set(float in, float left, float right, double masterDb, int model) {
+      const float now[3] = {in, left, right};
+      for (int i = 0; i < 3; ++i) {
+         level_[i] = std::max(now[i], level_[i] * 0.86f);
+         hold_[i] = now[i] >= hold_[i] ? now[i] : hold_[i] * 0.985f;
+      }
+      masterDb_ = masterDb;
+      model_ = model;
+      redraw();
+   }
+   void draw(visage::Canvas &c) override {
+      const float k = s(), W = width() / k, H = height() / k;
+      bloom_.setBloomSize(12.0f * k * (dpiScale() > 0.0f ? dpiScale() : 1.0f));
+      const float top = 6, bottom = H - 20;
+      // IN is on its own scale, -36..0; the output -48..+6.
+      const auto unit = [](int i, double db) {
+         return i == 0 ? static_cast<float>((std::clamp(db, -36.0, 0.0) + 36.0) / 36.0)
+                       : static_cast<float>((std::clamp(db, -48.0, 6.0) + 48.0) / 54.0);
+      };
+      const auto yOf = [&](int i, double db) { return bottom - unit(i, db) * (bottom - top); };
+      for (int db : {0, -12, -24, -36}) {
+         c.setColor(visage::Color(db == 0 ? 0x40ffffff : 0x16ffffff));
+         c.fill(W * 0.36f * k, yOf(1, db) * k, W * 0.64f * k, 1 * k);
+         label(c, db == 0 ? "0" : std::to_string(db), W - 24, yOf(1, db) - 14, 24, kFaint, 8.5f, visage::Font::kRight);
+      }
+      const unsigned colors[3] = {modelColor(model_), 0xffdfe6f5, 0xffdfe6f5};
+      const char *names[3] = {"IN", "L", "R"};
+      const float bw = 16, xs[3] = {W * 0.12f, W * 0.46f, W * 0.66f};
+      for (int i = 0; i < 3; ++i) {
+         const float x = xs[i] - bw / 2;
+         c.setColor(visage::Color(0x16ffffff));
+         c.roundedRectangle(x * k, top * k, bw * k, (bottom - top) * k, 4 * k);
+         const double db = level_[i] > 1e-5f ? 20.0 * std::log10(level_[i]) : -90.0;
+         const float u = unit(i, db), y = yOf(i, db);
+         if (u > 0.0f) {
+            // The glow grows with the level: a wide soft halo, then the bar itself.
+            for (int ring = 3; ring >= 1; --ring) {
+               const float g = ring * (1.5f + 3.5f * u);
+               c.setColor(glow(colors[i], 0.05f * u * (4 - ring)));
+               c.roundedRectangle((x - g) * k, (y - g) * k, (bw + 2 * g) * k, (bottom - y + g) * k, (4 + g) * k);
+            }
+            c.setColor(visage::Brush::vertical(glow(colors[i], 0.75f + 0.25f * u, 1.0f + 0.35f * u), glow(colors[i], 0.5f)));
+            c.roundedRectangle(x * k, y * k, bw * k, (bottom - y) * k, 4 * k);
+            if (i > 0 && db > 0.0) {
+               c.setColor(glow(0xffff5a4a, 1.0f, 1.6f));
+               c.roundedRectangle(x * k, y * k, bw * k, (yOf(i, 0.0) - y) * k, 3 * k);
+            }
+         }
+         // The held peak.
+         const double hdb = hold_[i] > 1e-5f ? 20.0 * std::log10(hold_[i]) : -90.0;
+         if (unit(i, hdb) > 0.0f) {
+            c.setColor(glow(hdb > 0.0 && i > 0 ? 0xffff5a4a : 0xffffffff, 0.9f, 1.4f));
+            c.fill(x * k, (yOf(i, hdb) - 1) * k, bw * k, 2 * k);
+         }
+         if (i > 0) {
+            c.setColor(visage::Color(0xaaffffff));
+            const float ty = yOf(i, masterDb_);
+            c.fill((x - 4) * k, (ty - 0.5f) * k, 3 * k, 1 * k);
+         }
+         label(c, names[i], xs[i] - 20, H - 16, 40, i == 0 ? colors[0] : kDim, 9.5f, visage::Font::kCenter);
+      }
+   }
+
+private:
+   visage::BloomPostEffect bloom_;
+   float level_[3] = {}, hold_[3] = {};
+   double masterDb_ = 0.0;
+   int model_ = kClarinet;
 };
 
 // ------------------------------------------------------------------ the breath loops
@@ -1058,7 +1298,12 @@ bool gSyncSmoke = false;
 
 class BreathLoops : public Drawn {
 public:
-   BreathLoops(float w, float h) : Drawn(w), W_(w), H_(h) { layoutField(w, h); }
+   BreathLoops(float w, float h) : Drawn(w), W_(w), H_(h) {
+      layoutField(w, h);
+      // Real bloom over the loops' HDR line, as JSynth's sky has: it grows with Glow.
+      bloom_.setBloomSize(16.0f);
+      setPostEffect(&bloom_);
+   }
 
    // A line of help along the top (MAP mode's), in its colour.
    std::string hint;
@@ -1068,7 +1313,7 @@ public:
    // fast the smoke rises, how much it curls, how long it hangs, and the loops' line and glow.
    struct Look {
       int ink = 0, palette = 0;
-      float turbulence = 0.42f, rise = 0.55f, swirl = 0.38f, tail = 4.0f, line = 0.4f, glow = 0.5f;
+      float turbulence = 0.42f, rise = 0.55f, swirl = 0.38f, tail = 4.0f, line = 0.4f, glow = 0.5f, smoke = 4.0f / 3.0f;
    };
    Look look;
    // Filling the whole window (the AIR view): the voices sounding are listed in a corner.
@@ -1140,6 +1385,8 @@ public:
    void draw(visage::Canvas &c) override {
       const float k = s(), W = W_, H = H_;
       const Colors pal = colors();
+      bloom_.setBloomSize(16.0f * k * (dpiScale() > 0.0f ? dpiScale() : 1.0f));
+      bloom_.setBloomIntensity(look.ink ? 0.0f : 0.45f * glowGain(look.glow));
       // The vapour paints the whole view, its night-sky ground included, added onto black.
       c.setColor(visage::Color(0xff000000));
       c.roundedRectangle(0, 0, width(), height(), 10 * k);
@@ -1182,6 +1429,7 @@ public:
    }
 
 private:
+   visage::BloomPostEffect bloom_;
 
    struct Place {
       float x = 0.5f, y = 0.5f;
@@ -1388,7 +1636,7 @@ private:
             e.vx = vx / H;
             e.vy = -vy / H;
             e.grip = 4 + 6 * b;
-            e.dye = total * 3.4f * ws[k] / wsum;
+            e.dye = total * 3.4f * look.smoke * ws[k] / wsum;
             std::copy(dye, dye + 4, e.col);
             emitters_.push_back(e);
          }
@@ -1419,7 +1667,7 @@ private:
       job.dyeShort = dyeShort_;
       job.dt = dt;
       job.time = now;
-      job.glow = look.glow / 0.5f;
+      job.glow = glowGain(look.glow);
       job.ink = look.ink != 0;
       job.emitters = emitters_;
       for (const Shape &sh : shapes_) {
@@ -1489,7 +1737,7 @@ private:
       pts.reserve(sh.pts.size());
       for (const visage::Point &q : sh.pts)
          pts.push_back({q.x * k, q.y * k});
-      const float fade = sh.fade, glowAmount = look.glow / 0.5f, width = 0.5f + 1.25f * look.line;
+      const float fade = sh.fade, glowAmount = glowGain(look.glow), width = 0.5f + 1.25f * look.line;
       // The glow is wide and soft, so every other point is enough for it.
       if (!look.ink && glowAmount > 0.01f)
          for (size_t i = 2; i < pts.size(); i += 2) {
@@ -1852,11 +2100,11 @@ public:
       c.setColor(visage::Color(0x26ffffff));
       c.roundedRectangleBorder(0, 0, width(), height(), 8 * k, 1 * k);
       label(c, "VAPOR", 16, 10, 200, kDim, 11.0f);
-      label(c, "LOOPS", 16 + 4 * 92, 10, 200, kDim, 11.0f);
-      label(c, "PLACE", 584, 10, 200, kDim, 11.0f);
-      label(c, "ACROSS", 584, 40, 60, kDim, 10.0f);
-      label(c, "UP", 584, 74, 60, kDim, 10.0f);
-      label(c, "SIZE", 584, 108, 60, kDim, 10.0f);
+      label(c, "LOOPS", 16 + 5 * 92, 10, 200, kDim, 11.0f);
+      label(c, "PLACE", 676, 10, 200, kDim, 11.0f);
+      label(c, "ACROSS", 676, 40, 60, kDim, 10.0f);
+      label(c, "UP", 676, 74, 60, kDim, 10.0f);
+      label(c, "SIZE", 676, 108, 60, kDim, 10.0f);
    }
 };
 
@@ -2020,6 +2268,7 @@ public:
       look.tail = static_cast<float>(host_.paramValue(kTail));
       look.line = static_cast<float>(host_.paramValue(kLine));
       look.glow = static_cast<float>(host_.paramValue(kGlow));
+      look.smoke = static_cast<float>(host_.paramValue(kSmoke));
       loops_->look = look;
       BreathLoops::Placing placing;
       placing.x = static_cast<int>(host_.paramValue(kLoopX) + 0.5);
@@ -2030,14 +2279,17 @@ public:
 
       // The rest of the panel every other frame, and only what's showing.
       if ((tick_++ & 1) == 0 && !air_) {
-         // The loudest voice's partials, by a Goertzel filter at each harmonic over its newest samples.
-         std::vector<float> partials;
+         // Each sounding voice's partials, by a Goertzel filter at each harmonic over its newest
+         // samples; the loudest one's resonances drawn.
+         std::vector<BoreGraph::Note> notes;
          double hz = 440.0 * std::pow(2.0, (62 - 69) / 12.0);
          if (loudest >= 0) {
             hz = voices_[loudest].hz;
-            for (const auto &l : loops)
-               if (l.slot == loudest)
-                  partials = harmonics(l.samples, hz, rate);
+            const float top = std::max(voices_[loudest].level, 1e-6f);
+            for (const auto &l : loops) {
+               const EditorHost::Voice &v = voices_[l.slot];
+               notes.push_back({l.slot, v.note, v.hz, harmonics(l.samples, v.hz, rate), v.level / top, v.releasing});
+            }
          }
          // (The ALIEN tab only while the Alien is the instrument.)
          exciterTabs_->setTabHidden(2, model != kAlien);
@@ -2074,7 +2326,7 @@ public:
                opens.push_back(static_cast<float>(std::pow(2.0, amount * 6.0 * (std::clamp(b / full, 0.0, 1.5) - 0.7))));
             filterGraph_->set(host_.paramModulated(kHybridCutoff), host_.paramModulated(kHybridResonance), amount, opens);
          }
-         bore_->set(model, hz, loudest >= 0, partials, host_.paramModulated(kLoss), host_.paramModulated(kHoleCutoff) / 1300.0,
+         bore_->set(model, hz, std::move(notes), host_.paramModulated(kLoss), host_.paramModulated(kHoleCutoff) / 1300.0,
                     host_.paramModulated(kCone));
          const bool cone = model == kSax || model == kOboe || model == kTrumpet || model == kAlien, brass = model == kTrumpet;
          coneKnob_->setAccent(cone ? color : kFaint);
@@ -2085,17 +2337,30 @@ public:
             curve_->set(host_.paramModulated(kCurve), pressures);
          if (voiceTabs_->selected() == 0) {
             lights_->set(voices_, model, static_cast<int>(host_.paramValue(kVoiceMode) + 0.5));
-            badge_->set(model, rate);
             // In: the breath blowing (the loudest voice's), or Breath In when nothing plays.
             float in = static_cast<float>(host_.paramModulated(kBreathIn));
             for (float b : breaths)
                in = std::max(in, std::min(1.0f, b / 1.3f));
-            inMeter_->setLevel(in);
-            inMeter_->redraw();
-            outMeters_[0]->setLevel(host_.outputPeak(0));
-            outMeters_[1]->setLevel(host_.outputPeak(1));
-            outMeters_[0]->redraw();
-            outMeters_[1]->redraw();
+            const float left = host_.outputPeak(0), right = host_.outputPeak(1);
+            levels_->set(in, left, right, host_.paramValue(kMaster), model);
+            // Each voice where Spread and Pan put it (as the voice works it out).
+            const int panDest = destinationOf(kPan);
+            const double spread = host_.paramModulated(kSpread), pan = host_.paramValue(kPan);
+            std::vector<StereoView::Dot> dots;
+            float loudestLevel = 1e-6f;
+            for (const EditorHost::Voice &v : voices_)
+               loudestLevel = std::max(loudestLevel, v.note >= 0 ? v.level : 0.0f);
+            for (int i = 0; i < static_cast<int>(voices_.size()); ++i) {
+               const EditorHost::Voice &v = voices_[i];
+               if (v.note < 0)
+                  continue;
+               const double at = spread * std::clamp((v.note - 64) / 24.0, -1.0, 1.0) + pan +
+                                 (panDest >= 0 ? 2.0 * v.offsets[panDest] : 0.0);
+               dots.push_back({i, v.note, static_cast<float>(std::clamp(at, -1.0, 1.0)), v.level / loudestLevel, v.releasing});
+            }
+            const float sum = left + right;
+            stereo_->set(std::move(dots), static_cast<float>(pan), static_cast<float>(spread), sum > 1e-4f ? (right - left) / sum : 0.0f,
+                         model, rate);
          }
          if (playerTabs_->selected() == 0)
             tongue_->set(host_.paramModulated(kAttack), host_.paramModulated(kKick), host_.paramModulated(kRelease), color);
@@ -2429,7 +2694,7 @@ private:
                 "A mute in the bell (or over the end of any instrument): straight, cup, harmon, plunger or bucket. "
                 "MUTE AMT sets how far it's in.");
       bore_ = &add<BoreGraph>({32, 452, 848, 158}, 848.0f);
-      tips_.add(*bore_, "The bore's resonances (its input impedance), with the loudest note's partials as it sounds.");
+      tips_.add(*bore_, "The bore's resonances (its input impedance) for the loudest note, and every note's partials as it sounds, each in its own colour.");
       const auto cells = ui::row({32, 618, 848, 100}, 11);
       const auto small = [&](clap_id id, const char *name, int cell, const char *tip) -> ui::Knob & {
          ui::Knob &k = familyKnob(id, name, cells[cell], tip);
@@ -2769,20 +3034,12 @@ private:
       bindings_.bind(mode, kVoiceMode);
       tips_.add(mode, "Poly: eight voices. Mono: one, tongued between notes. Legato: one, slurred between notes.");
 
-      // VOICE: the voices, the family and the meters.
-      lights_ = &tabs.addToPage(0, add<VoiceLights>({920, 668, 260, 100}, 260.0f));
-      badge_ = &tabs.addToPage(0, add<FamilyBadge>({1220, 664, 180, 90}, 180.0f));
-      const char *const meterNames[3] = {"IN", "OUT L", "OUT R"};
-      for (int i = 0; i < 3; ++i) {
-         auto &m = tabs.addToPage(0, add<ui::Meter>({1450 + i * 60.0f, 660, 16, 104}));
-         (i == 0 ? inMeter_ : outMeters_[i - 1]) = &m;
-         if (i > 0)
-            m.setRange(-48.0f, 6.0f);
-         tabs.addToPage(0, add<ui::Label>({1430 + i * 60.0f, 768, 56, 16}, meterNames[i], kDim, visage::Font::kCenter, 0.66f));
-      }
-      inMeter_->setRange(-36.0f, 0.0f);
-      tips_.add(*inMeter_, "The breath coming in: the hardest-blown voice, or Breath In.");
-      tips_.add(*outMeters_[0], "The output level, left and right. If it hits the top, lower Level or Master.");
+      // VOICE: the voices, where they sit in the stereo field, and the levels.
+      lights_ = &tabs.addToPage(0, add<VoiceLights>({912, 668, 180, 100}, 180.0f));
+      stereo_ = &tabs.addToPage(0, add<StereoView>({1100, 656, 284, 132}, 284.0f));
+      tips_.add(*stereo_, "Where each voice is heard, left to right: Spread fans the notes out (low to the left), Pan moves them all. The needle under it is the output's balance.");
+      levels_ = &tabs.addToPage(0, add<LevelView>({1404, 652, 216, 138}, 216.0f));
+      tips_.add(*levels_, "In: the breath coming in (the hardest-blown voice, or Breath In). L and R: the output, with its peak held and a tick at Master. If it turns red, lower Level or Master.");
 
       // AIR: where the breath comes from and how it's shaped.
       curve_ = &tabs.addToPage(1, add<CurveGraph>({920, 652, 200, 136}, 200.0f));
@@ -2866,7 +3123,7 @@ private:
       tips_.add(*look_, "Smoke rises off the loops and glows; ink drops from them and sinks.");
       palette_ = &choiceBox(kPalette, {1076, 76, 110, 24}, 0xff9c98d8);
       tips_.add(*palette_, "The smoke's colours.");
-      airPanel_ = &add<AirBackdrop>({32, 712, 872, 168}, 872.0f);
+      airPanel_ = &add<AirBackdrop>({32, 712, 964, 168}, 964.0f);
       airPanelButton_ = &add<ui::Button>({1286, 76, 96, 24}, "CONTROLS");
       airPanelButton_->setToggle(true);
       airPanelButton_->setAccent(0xff9c98d8);
@@ -2882,21 +3139,22 @@ private:
                                         "What lifts the loops up the window: the breath by default.",
                                         "What sets each loop's size: the breath by default."};
       for (int i = 0; i < 3; ++i) {
-         auto &d = choiceBox(place[i], {680, 748.0f + 34 * i, 120, 24}, 0xffb98bff);
+         auto &d = choiceBox(place[i], {772, 748.0f + 34 * i, 120, 24}, 0xffb98bff);
          tips_.add(d, placeTips[i]);
          airFrames_.push_back(&d);
       }
-      auto &minSize = knob(kLoopSizeMin, "MIN SIZE", 0xffb98bff, {808, 744, 88, 128},
+      auto &minSize = knob(kLoopSizeMin, "MIN SIZE", 0xffb98bff, {900, 744, 88, 128},
                            "The smallest a loop gets, as a share of the largest: its size runs from here to full.");
       airKnobs_.push_back(&minSize);
-      const auto cells = ui::row({40, 744, 552, 128}, 6);
-      const clap_id ids[6] = {kTurbulence, kRise, kSwirl, kTail, kLine, kGlow};
-      const char *const names[6] = {"TURBULENCE", "RISE", "SWIRL", "TAIL", "LINE", "GLOW"};
-      const char *const tips[6] = {"How hard the air curls the smoke.", "How fast warm smoke rises (or ink sinks).",
+      const auto cells = ui::row({40, 744, 644, 128}, 7);
+      const clap_id ids[7] = {kSmoke, kTurbulence, kRise, kSwirl, kTail, kLine, kGlow};
+      const char *const names[7] = {"SMOKE", "TURBULENCE", "RISE", "SWIRL", "TAIL", "LINE", "GLOW"};
+      const char *const tips[7] = {"How much smoke the loops puff out: more fills the air, less leaves thin wisps. It doesn't change how brightly it's lit (that's Glow).",
+                                   "How hard the air curls the smoke.", "How fast warm smoke rises (or ink sinks).",
                                    "How tightly the smoke curls into strands.", "How long smoke hangs before it thins away.",
-                                   "How bold the loops' line is.", "How much the loops and fresh smoke glow."};
-      for (int i = 0; i < 6; ++i) {
-         auto &k = knob(ids[i], names[i], i < 4 ? 0xff7fd3ff : 0xffb98bff, cells[i], tips[i]);
+                                   "How bold the loops' line is.", "How much the loops and fresh smoke glow: 50% is the usual light, full is four times it."};
+      for (int i = 0; i < 7; ++i) {
+         auto &k = knob(ids[i], names[i], i < 5 ? 0xff7fd3ff : 0xffb98bff, cells[i], tips[i]);
          airKnobs_.push_back(&k);
       }
       setAir(false);
@@ -3125,7 +3383,6 @@ private:
    std::vector<ui::Knob *> alienKnobs_;
    ui::Knob *coneKnob_ = nullptr, *brassKnob_ = nullptr, *delayTimeKnob_ = nullptr;
    unsigned delayAccent_ = 0;
-   ui::Meter *inMeter_ = nullptr, *outMeters_[2] = {};
    ui::TabBar *playerTabs_ = nullptr;
    ui::SegmentedSwitch *view_ = nullptr;
    std::vector<SourceChip *> chips_;
@@ -3146,7 +3403,8 @@ private:
    CurveGraph *curve_ = nullptr;
    VoiceLights *lights_ = nullptr;
    BreathLoops *loops_ = nullptr;
-   FamilyBadge *badge_ = nullptr;
+   StereoView *stereo_ = nullptr;
+   LevelView *levels_ = nullptr;
    ui::Label *rangeText_ = nullptr;
    std::vector<ui::Knob *> familyKnobs_;
    ui::PresetBar *presetBar_ = nullptr;

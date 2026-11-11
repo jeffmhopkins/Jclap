@@ -182,7 +182,7 @@ the envelope opens (or, below zero, closes) the lowpass.
 ![The bore](docs/readme/bore.jpg)
 
 The graph is the bore's input impedance, worked out from the same loop the model runs, with the
-partials of the loudest note as it sounds. Every knob changes the curve:
+partials of every note as it sounds, each in its own colour (the resonances drawn are the loudest note's). Every knob changes the curve:
 
 - **TUNE** in cents. **LENGTH**: the tube below the open holes, whose own resonances ring above
   their cutoff, which rings most with the holes below it Closed (nothing lets it out on the way) and
@@ -264,8 +264,10 @@ rises and curls away. **SMOKE / INK** and the palette set its look.
 
 ![The VOICE tab](docs/readme/voice.jpg)
 
-**VOICE** shows the eight voices, the family, and the meters: the breath coming in, and the output
-left and right. Along the bottom: **SPREAD** (low notes left, high right, as across a section, or
+**VOICE** shows the eight voices; where each sounding note sits in the stereo field (Spread fans
+them out around Pan, each note in its own colour, with the output's balance under it); and the
+meters, glowing as they rise: the breath coming in, and the output left and right, with the peak
+held, red over 0 dB, and a tick at Master. Along the bottom: **SPREAD** (low notes left, high right, as across a section, or
 below zero the other way round), **PAN** (where the notes sit before the spread: map Key, Slide or
 Random onto it to place each note), **UNISON** (up to four copies of every voice, detuned against
 each other) and **U.DETUNE** (how far they spread, in cents), **GLIDE**, **BEND** (the MPE bend
@@ -293,9 +295,10 @@ much darker each one gets, and **SPREAD** how far they bounce between left and r
 
 ![The AIR view](docs/readme/air-view.jpg)
 
-**AIR** in the header gives the loops the whole window. **TURBULENCE** (how hard the air curls the
+**AIR** in the header gives the loops the whole window; **CONTROLS** opens the knobs over it.
+**SMOKE** (how much smoke the loops puff out, 133% by default), **TURBULENCE** (how hard the air curls the
 smoke), **RISE** (how fast it rises), **SWIRL** (how tightly it curls into strands) and **TAIL** (how
-long it hangs), then the loops' **LINE** and **GLOW**. **PLACE** says what puts each loop where it
+long it hangs), then the loops' **LINE** and **GLOW** (how brightly the loops and smoke are lit: 50% is the usual light, full four times it). **PLACE** says what puts each loop where it
 is, as JSynth places its creatures: **ACROSS** (Pitch by default), **UP** (Breath) and **SIZE**
 (Breath) can each follow the note's Pitch, Strike, Press, Slide, Breath, a Random place of its own,
 or stay in the Centre, and **MIN SIZE** is the smallest a loop gets (25% of the largest by

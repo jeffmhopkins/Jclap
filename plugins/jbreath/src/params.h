@@ -179,10 +179,14 @@ enum ParamId : clap_id {
    kAlienRough,
    kAlienGrowl,
    kAlienWet,
+   // Added after 0.10.0: how much smoke the AIR view's loops puff out, against 0.10.0's (100%).
+   kSmoke,
    kParamCount
 };
 // The AIR view's look: the panel's own, kept with the project but not with presets.
-inline bool isLookParam(clap_id id) { return (id >= kLook && id <= kGlow) || (id >= kLoopX && id <= kLoopSizeMin); }
+inline bool isLookParam(clap_id id) {
+   return (id >= kLook && id <= kGlow) || (id >= kLoopX && id <= kLoopSizeMin) || id == kSmoke;
+}
 // The routes' params end where the panel's later params begin.
 constexpr clap_id kRouteEnd = kStiffness;
 // Presets cover every param but the look's (isLookParam), which loading one leaves as it is.
@@ -462,6 +466,7 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kAlienRough, "Alien Rough", "Alien", 0.0, 1.0, 0.45, kMod},
       {kAlienGrowl, "Alien Growl", "Alien", 0.0, 1.0, 0.0, kMod},
       {kAlienWet, "Alien Wet", "Alien", 0.0, 1.0, 0.2, kMod},
+      {kSmoke, "Smoke", "View", 0.0, 3.0, 4.0 / 3.0, kLookKnob},
    };
    for (const auto &d : fixed)
       p[d.id] = d;
@@ -637,6 +642,7 @@ inline bool isPercent(clap_id id) {
    case kRoomSize:
    case kRoomDamp:
    case kTurbulence:
+   case kSmoke:
    case kRise:
    case kSwirl:
    case kLine:

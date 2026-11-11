@@ -136,7 +136,7 @@ public:
             }
          }
       makeBloom();
-      const float bk = ink ? 0.0f : std::min(1.5f, glow);
+      const float bk = ink ? 0.0f : std::min(3.0f, glow);
       const float ty = 1.0f / dh_;
       for (int j = 0; j < dh_; ++j) {
          const float vy = (j + 0.5f) * ty;
