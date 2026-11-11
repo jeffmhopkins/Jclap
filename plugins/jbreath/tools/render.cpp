@@ -1,17 +1,28 @@
 // Plays a score through the whole plugin (CLAP notes, pressure, the body, room and limiter) and
-// writes it as a 32-bit float stereo WAV at 48 kHz: for listening to the instruments, and for
-// comparing them with recordings.
+// writes it as a 32-bit float stereo WAV at 48 kHz (or at JBREATH_RENDER_RATE, the host's rate in
+// Hz): for listening to the instruments, and for comparing them with recordings.
 //
 //    jbreath-render SCORE OUT.wav
 //
 // The score is text, one command per line ('#' starts a comment):
 //    preset NAME            load a factory preset (every other param at its default)
 //    param NAME VALUE       set a param by its name, as the panel shows it ("Breath", "Bite")
-//    note T KEY VEL PRESS DUR [BEND]
+//    note T KEY VEL PRESS DUR [LIFT]
 //                           at T seconds, a note on KEY (MIDI) at velocity VEL (0..1), its pressure
-//                           PRESS (0..1, -1 for none), held DUR seconds
+//                           PRESS (0..1, -1 for none), held DUR seconds and let go at release
+//                           velocity LIFT (0..1, default 0.5). Notes play on MPE member channel 2
+//                           (CLAP channel 1), so their bend range is the MPE Bend Range.
 //    press T KEY PRESS      the pressure of the note on KEY from T seconds
 //    swell T KEY P0 P1 SEC  the pressure of the note on KEY ramped from P0 to P1 over SEC seconds
+//    slide T KEY S0 S1 SEC  its slide (CC 74, 0..1) ramped from S0 to S1 over SEC seconds
+//    bend T KEY B0 B1 SEC   its bend, in semitones, ramped from B0 to B1 over SEC seconds
+//    wiggle T KEY SEMI HZ SEC
+//                           a finger's vibrato on its bend: SEMI semitones either way at HZ, for SEC
+//    route N SOURCE DEST AMOUNT
+//                           route N (1..32) from SOURCE (a source's name, "Knot") to DEST (a param's
+//                           name, "Bite") by AMOUNT (-1..1); write a space in a source's name as
+//                           an underscore (Bus_1, LFO_1)
+//    trace FILE.csv         every 10 ms, each sounding voice's sources and output level, to FILE
 //    end T                  stop at T seconds (default: two seconds after the last note ends)
 //    words TEXT             the Alien's typed words (and switches it to TYPED)
 //    say T KEY SEC TEXT     the Alien says TEXT from T seconds: TEXT becomes its typed words and
@@ -26,6 +37,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <sstream>
@@ -43,7 +55,9 @@ namespace {
 
 using namespace jbreath;
 
-constexpr double kRate = 48000.0;
+// The host's rate: 48 kHz, or JBREATH_RENDER_RATE (44100, 96000, 192000...) to hear the plugin
+// as a host at that rate would run it.
+double kRate = 48000.0;
 constexpr uint32_t kBlock = 64;
 
 struct Ev {
@@ -52,6 +66,7 @@ struct Ev {
    int key;
    double a, b;
    int id;
+   int expr = CLAP_NOTE_EXPRESSION_PRESSURE;
 };
 
 bool findParam(const std::string &name, clap_id &id) {
@@ -92,6 +107,8 @@ void writeWav(const char *path, const std::vector<float> &l, const std::vector<f
 } // namespace
 
 int main(int argc, char **argv) {
+   if (const char *r = std::getenv("JBREATH_RENDER_RATE"))
+      kRate = std::clamp(std::atof(r), 22050.0, 384000.0);
    if (argc < 3) {
       std::fprintf(stderr, "usage: jbreath-render SCORE OUT.wav\n");
       return 2;
@@ -104,6 +121,7 @@ int main(int argc, char **argv) {
    jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.jbreath", kRate);
    std::vector<Ev> evs;
    double end = -1.0, last = 0.0;
+   std::string tracePath;
    int nextId = 1;
    std::string line;
    while (std::getline(in, line)) {
@@ -138,12 +156,14 @@ int main(int argc, char **argv) {
          }
          h.setParam(id, std::atof(rest.c_str() + sp + 1));
       } else if (cmd == "note") {
-         double t, vel, press, dur;
+         double t, vel, press, dur, lift = 0.5;
          int key;
          s >> t >> key >> vel >> press >> dur;
+         if (double l; s >> l)
+            lift = l;
          const int id = nextId++;
          evs.push_back({t, 0, key, vel, press, id});
-         evs.push_back({t + dur, 1, key, 0.5, 0, id});
+         evs.push_back({t + dur, 1, key, lift, 0, id});
          last = std::max(last, t + dur);
       } else if (cmd == "press") {
          double t, p;
@@ -156,6 +176,47 @@ int main(int argc, char **argv) {
          s >> t >> key >> p0 >> p1 >> sec;
          for (double u = 0; u <= sec + 1e-9; u += 0.005)
             evs.push_back({t + u, 2, key, p0 + (p1 - p0) * std::min(1.0, u / std::max(sec, 1e-6)), 0, -1});
+      } else if (cmd == "slide" || cmd == "bend") {
+         double t, v0, v1, sec;
+         int key;
+         s >> t >> key >> v0 >> v1 >> sec;
+         const int ex = cmd == "slide" ? CLAP_NOTE_EXPRESSION_BRIGHTNESS : CLAP_NOTE_EXPRESSION_TUNING;
+         for (double u = 0; u <= sec + 1e-9; u += 0.005)
+            evs.push_back({t + u, 2, key, v0 + (v1 - v0) * std::min(1.0, u / std::max(sec, 1e-6)), 0, -1, ex});
+      } else if (cmd == "wiggle") {
+         double t, semi, hz, sec;
+         int key;
+         s >> t >> key >> semi >> hz >> sec;
+         for (double u = 0; u <= sec + 1e-9; u += 0.005)
+            evs.push_back({t + u, 2, key, semi * std::sin(2.0 * 3.14159265358979 * hz * u), 0, -1,
+                           CLAP_NOTE_EXPRESSION_TUNING});
+      } else if (cmd == "route") {
+         int n;
+         std::string src, dst;
+         double amount;
+         s >> n >> src >> std::ws;
+         std::string rest;
+         std::getline(s, rest);
+         const size_t sp = rest.find_last_of(' ');
+         dst = rest.substr(0, sp);
+         amount = std::atof(rest.c_str() + sp + 1);
+         // (A source's name with a space, "Bus 1", is written with an underscore: Bus_1.)
+         std::replace(src.begin(), src.end(), '_', ' ');
+         int si = -1;
+         for (int i = 0; i < kModSourceCount; ++i)
+            if (strcasecmp(kModSourceNames[i], src.c_str()) == 0)
+               si = i;
+         clap_id did;
+         const int di = findParam(dst, did) ? destinationOf(did) : -1;
+         if (n < 1 || n > kRouteCount || si < 0 || di < 0) {
+            std::fprintf(stderr, "bad route: %d %s %s\n", n, src.c_str(), dst.c_str());
+            continue;
+         }
+         h.setParam(routeParam(n - 1, kRouteSource), si);
+         h.setParam(routeParam(n - 1, kRouteDestination), di);
+         h.setParam(routeParam(n - 1, kRouteAmount), amount);
+      } else if (cmd == "trace") {
+         s >> tracePath;
       } else if (cmd == "words") {
          std::string text;
          std::getline(s >> std::ws, text);
@@ -225,6 +286,16 @@ int main(int argc, char **argv) {
    float bl[kBlock], br[kBlock];
    float *bufs[2] = {bl, br};
    size_t next = 0;
+   // (Notes on an MPE member channel, as a controller sends them.)
+   constexpr int16_t kChannel = 1;
+   FILE *trace = tracePath.empty() ? nullptr : std::fopen(tracePath.c_str(), "w");
+   uint32_t nextTrace = 0;
+   if (trace) {
+      std::fprintf(trace, "t,voice,note,released,breath,level");
+      for (int i = 1; i < kModSourceCount; ++i)
+         std::fprintf(trace, ",%s", kModSourceNames[i]);
+      std::fprintf(trace, "\n");
+   }
    for (uint32_t start = 0; start < total; start += kBlock) {
       const uint32_t n = std::min(kBlock, total - start);
       while (next < evs.size() && evs[next].t * kRate < start + n) {
@@ -234,19 +305,35 @@ int main(int argc, char **argv) {
          const int16_t key = static_cast<int16_t>(std::clamp(e.key, 0, 127));
          if (e.kind == 0) {
             keyId[key] = e.id;
-            h.note(CLAP_EVENT_NOTE_ON, key, e.a, e.id, 0, t);
+            h.note(CLAP_EVENT_NOTE_ON, key, e.a, e.id, kChannel, t);
             if (e.b >= 0)
-               h.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, key, e.b, e.id, 0, t);
+               h.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, key, e.b, e.id, kChannel, t);
          } else if (e.kind == 1) {
-            h.note(CLAP_EVENT_NOTE_OFF, key, e.a, e.id, 0, t);
+            h.note(CLAP_EVENT_NOTE_OFF, key, e.a, e.id, kChannel, t);
          } else {
-            h.noteExpression(CLAP_NOTE_EXPRESSION_PRESSURE, key, e.a, keyId[key], 0, t);
+            h.noteExpression(static_cast<clap_note_expression>(e.expr), key, e.a, keyId[key], kChannel, t);
          }
       }
       h.process(n, nullptr, bufs);
+      if (trace && start >= nextTrace) {
+         nextTrace = start + static_cast<uint32_t>(0.01 * kRate);
+         std::vector<EditorHost::Voice> vs;
+         h.object<EditorHost>()->voices(vs);
+         for (size_t v = 0; v < vs.size(); ++v) {
+            if (vs[v].note < 0)
+               continue;
+            std::fprintf(trace, "%.3f,%zu,%d,%d,%.4f,%.4f", start / kRate, v, vs[v].note, vs[v].releasing ? 1 : 0,
+                         vs[v].breath, vs[v].level);
+            for (int i = 1; i < kModSourceCount; ++i)
+               std::fprintf(trace, ",%.4f", vs[v].sources[i]);
+            std::fprintf(trace, "\n");
+         }
+      }
       L.insert(L.end(), bl, bl + n);
       R.insert(R.end(), br, br + n);
    }
+   if (trace)
+      std::fclose(trace);
    writeWav(argv[2], L, R);
    float peak = 0;
    for (size_t i = 0; i < L.size(); ++i)

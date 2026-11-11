@@ -65,6 +65,10 @@ struct VoiceSettings {
    bool alienTyped = false;
    double loss = 0.04, cutoffHz = 1300.0, detune = 0.0, humanize = 0.0, air = 0.0;
    int tongueType = kTongueHard, vibType = kVibBreath;
+   // How readily a quick dip and rise in a held note's pressure tongues it again (0 never), and
+   // where the tongue's force comes from (kTongueForceNames).
+   double retongue = 0.5;
+   int tongueForce = 0;
    // HYBRID: a plain subtractive voice on the same breath: its wave, octave and detune, how loud it
    // is blown against the instrument, and its lowpass, which the breath opens.
    int hybridModel = 2, hybridOctave = 0; // hybridModel is the wave (kHybridWaveNames)
@@ -326,7 +330,7 @@ public:
       pulseLength_ = std::max(1, static_cast<int>(kPulseMs * 0.001 * fs_));
       valveLength_ = std::max(1, static_cast<int>(kValveMs * 0.001 * fs_));
       valveCoef_ = coef(0.6);
-      hpCoef_ = static_cast<float>(1.0 - std::exp(-2.0 * kPi * 2000.0 / fs_));
+      setKnotHz(2000.0);
       reset();
    }
    void setSeed(uint32_t seed) {
@@ -335,6 +339,8 @@ public:
             models_[u][i]->rng.s = (seed ^ (0x2545f491u * u)) * (i + 1 + 7 * u) | 1u;
       air_.s = seed ^ 0x68e31da4u;
       jitter_.s = seed ^ 0x51ed270bu;
+      // (Each voice's draught starts somewhere of its own.)
+      draft_ = 0.4 * jitter_.white();
    }
 
    void configure(const VoiceSettings &s) {
@@ -413,8 +419,12 @@ private:
       kickAge_ = 0;
       pulseAt_ = -1;
       velocity_ = velocity;
+      // (With the tongue's force from the finger, it's known once the pressure has arrived.)
+      forcePending_ = settings_.tongueForce == 1;
       tongue_ = tongueAmount();
       pressureSeen_ = false;
+      pressPeak_ = 0.0;
+      dipped_ = false;
       gain_ = gain;
       // A player never plays two notes quite the same: a little off in pitch, breath, attack and
       // vibrato (Humanize), and each note's own detune.
@@ -564,7 +574,7 @@ public:
       };
       const bool tongued = settings_.tongueType != kTongueBreath;
       puff_ += (target - puff_) * stage(target, puff_, tongued ? puffCoef_ : attackCoef_);
-      if (valveAt_ < 0 && !releasing_ && target > 0.0 && kickAge_ >= 0 &&
+      if (valveAt_ < 0 && !releasing_ && target > 0.0 && kickAge_ >= 0 && !forcePending_ &&
           (!tongued || puff_ >= std::min(0.9 * target, kValveSpeak * speak_) || kickAge_ >= kValveWaitMs * 0.001 * fs_))
          valveAt_ = 0;
       double valve = 1.0;
@@ -662,10 +672,27 @@ public:
          }
       }
       env_ += (std::fabs(y) - env_) * envCoef_;
-      // How knotted the sound is: the share of it above about 2 kHz.
+      // How knotted the sound is: the share of it above about its 4th harmonic (two poles, so a
+      // pure tone has almost none of it).
       hpX_ += (y - hpX_) * hpCoef_;
-      const float hi = y - hpX_;
+      const float hi1 = y - hpX_;
+      hpY_ += (hi1 - hpY_) * hpCoef_;
+      const float hi = hi1 - hpY_;
       hiEnv_ += (std::fabs(hi) - hiEnv_) * envCoef_;
+      // How frayed: what's left of the sound once the sound one period ago is taken from it. A
+      // steady tone leaves next to nothing; breath noise, growl, flutter, a split note or a note
+      // starting leave a lot.
+      // (At five periods a little either side of the note's, so a note a few cents off its pitch,
+      // or wavering with vibrato, still reads as steady: the least of the five.)
+      past_[pastPos_] = y;
+      for (int k = 0; k < kFrayLags; ++k) {
+         const double at = pastPos_ - period_ * (1.0 + kFrayLag * (k - kFrayLags / 2)) + kPast;
+         const int i0 = static_cast<int>(at);
+         const float f = static_cast<float>(at - i0);
+         const float a0 = past_[i0 & (kPast - 1)], a1 = past_[(i0 + 1) & (kPast - 1)];
+         frayEnv_[k] += (std::fabs(y - (a0 + (a1 - a0) * f)) - frayEnv_[k]) * static_cast<float>(envCoef_);
+      }
+      pastPos_ = (pastPos_ + 1) & (kPast - 1);
       return y;
    }
 
@@ -969,6 +996,7 @@ private:
       }
       }
 
+      tongueFromPressure(dt);
       modulate(dt);
 
       // Vibrato grows in after its delay; its rate and depth wander a little.
@@ -1022,6 +1050,8 @@ private:
       const Tuning t = TuningTable::get().at(tuningRow(settings_.model, settings_.tune), sounding, fs_);
       speak_ = t.speak;
       const double hz = 440.0 * std::pow(2.0, (sounding - 69.0) / 12.0 + t.octaves);
+      period_ = std::clamp(fs_ / hz, 2.0, (kPast - 2) / (1.0 + kFrayLag * kFrayLags));
+      setKnotHz(4.0 * hz);
       Model &m = model();
       m.notePitch(hz);
       // A player keeps a note in tune as they blow softer or harder (a flautist rolls the
@@ -1172,6 +1202,68 @@ private:
          return std::sin(2 * kPi * x);
       }
    }
+   void setKnotHz(double hz) {
+      hpCoef_ = static_cast<float>(1.0 - std::exp(-2.0 * kPi * std::clamp(hz, 200.0, 0.4 * fs_) / fs_));
+   }
+
+   // The pressure as the tongue hears it: how fast it's rising (Push), the tongue's force from how
+   // hard the finger arrives (Tongue Force: Press), and a held note tongued again when its pressure
+   // dips quickly and comes back (Re-Tongue), as a player tongues repeated notes on one fingering.
+   void tongueFromPressure(double dt) {
+      const double p = pressure_;
+      const double rate = (p - lastPressure_) / dt;
+      lastPressure_ = p;
+      pushRate_ += (rate - pushRate_) * (1.0 - std::exp(-dt / 0.02));
+      push_ = std::max(std::clamp(pushRate_ / 10.0, 0.0, 1.0), push_ * std::exp(-dt / 0.15));
+      if (forcePending_ && age_ >= kWaitMs * 0.001 * fs_) {
+         // How hard the finger arrived: its pressure a few ms in, full at 0.6. With no pressure the
+         // velocity stays the force.
+         forcePending_ = false;
+         if (p > 0.002) {
+            velocity_ = std::clamp(p / 0.6, 0.05, 1.0);
+            tongue_ = tongueAmount();
+            updateAttack();
+         }
+      }
+      const double sense = live_.retongue;
+      if (sense < 0.01 || releasing_ || settings_.tongueType == kTongueBreath || !pressureSeen_ || kickAge_ < 0) {
+         pressPeak_ = p;
+         dipped_ = false;
+         return;
+      }
+      // The peak the dip is measured from: it follows a rise at once and a fall over about a
+      // second, and holds while a dip is under way. A dip counts if the pressure fell from near its
+      // peak to under the dip in 150 ms, and came back half way in 300 ms more: a slow diminuendo
+      // and swell is just a softer note.
+      if (!dipped_)
+         pressPeak_ = std::max(p, pressPeak_ + (p - pressPeak_) * (1.0 - std::exp(-dt / 1.0)));
+      falling_ = p < 0.9 * pressPeak_ ? falling_ + dt : 0.0;
+      const double dip = 0.15 + 0.5 * sense;
+      if (!dipped_) {
+         if (pressPeak_ > 0.12 && p < dip * pressPeak_ && falling_ < 0.15) {
+            dipped_ = true;
+            dipLow_ = p;
+            dipAge_ = 0.0;
+         }
+         return;
+      }
+      dipLow_ = std::min(dipLow_, p);
+      dipAge_ += dt;
+      if (dipAge_ > 0.3) {
+         dipped_ = false;
+         pressPeak_ = p;
+      } else if (p > dipLow_ + 0.5 * (pressPeak_ - dipLow_)) {
+         // Back up: tongued again, as hard as the finger pushed back in.
+         dipped_ = false;
+         pressPeak_ = p;
+         velocity_ = std::clamp(pushRate_ / 10.0, 0.2, 1.0);
+         kickAge_ = 0;
+         pulseAt_ = -1;
+         tongue_ = tongueAmount();
+         updateAttack();
+      }
+   }
+
    // The Swell: one contour over its time, 0..1.
    double swell(double dt) {
       swellAge_ += dt;
@@ -1220,21 +1312,43 @@ private:
       src[kSrcOff] = 0.0f;
       src[kSrcStrike] = static_cast<float>(velocity_);
       src[kSrcPress] = static_cast<float>(pressure_);
-      src[kSrcGlide] = static_cast<float>(bend_);
+      // (Glide is the bend over two semitones whatever the bend range, or MPE's 48 would leave a
+      // bend of a semitone or two all but nothing.)
+      src[kSrcGlide] = static_cast<float>(std::clamp(bendSemis_ / kGlideSemitones, -1.0, 1.0));
       src[kSrcSlide] = static_cast<float>(timbre_);
       src[kSrcLift] = static_cast<float>(lift_);
-      src[kSrcLoop] = static_cast<float>(std::clamp(breath_, 0.0, 1.0));
-      src[kSrcKnot] = static_cast<float>(std::clamp(3.0 * hiEnv_ / (env_ + 1e-6), 0.0, 1.0));
-      src[kSrcFold] = static_cast<float>(std::clamp((breath_ - info.tuneBreath) / 0.35, 0.0, 1.0));
+      // Loop and Fold over this instrument's own breath: from where the note speaks (the lightest
+      // touch) to its full breath, and from its mezzo forte (or, on an instrument whose full breath
+      // is barely past that, the top 40% of it) to its full breath.
+      const double top = std::max(info.breathOffset + info.breathScale * live_.breath, 1.08 * speak_ + 0.02);
+      const double from = std::min(0.9 * speak_, top - 0.05);
+      src[kSrcLoop] = static_cast<float>(std::clamp((breath_ - from) / (top - from), 0.0, 1.0));
+      const double knee = std::min(static_cast<double>(info.tuneBreath), from + 0.6 * (top - from));
+      src[kSrcFold] = static_cast<float>(std::clamp((breath_ - knee) / std::max(top - knee, 0.02), 0.0, 1.0));
+      // Knot and Fray are read off the sound, so only while there's sound to read: as a note dies
+      // away they hold where they were.
+      if (env_ > kAudible) {
+         src[kSrcKnot] = static_cast<float>(std::clamp((hiEnv_ / env_ - kKnotFrom) / (kKnotTo - kKnotFrom), 0.0, 1.0));
+         const double frayed = *std::min_element(frayEnv_, frayEnv_ + kFrayLags) / env_;
+         src[kSrcFray] = static_cast<float>(std::clamp((frayed - kFrayFrom) / (kFrayTo - kFrayFrom), 0.0, 1.0));
+      }
       const TuningTable &table = TuningTable::get();
       const int row = tuningRow(settings_.model, settings_.tune);
       const double lo = table.lowest(row), hi = std::max(lo + 1.0, static_cast<double>(table.highest(row)));
       src[kSrcRegister] = static_cast<float>(std::clamp((pitchNow_ - lo) / (hi - lo), 0.0, 1.0));
-      src[kSrcVapor] = static_cast<float>(std::clamp(0.5 * live_.noise * std::min(1.0, breath_), 0.0, 1.0));
-      // A draught: a slow random walk pulled back to the middle.
+      // A draught: a slow random walk pulled back to the middle, carried on from note to note,
+      // mostly within a quarter of the way either side.
       draft_ += (-0.4 * draft_) * dt + 0.35 * std::sqrt(dt) * jitter_.white();
       draft_ = std::clamp(draft_, -1.0, 1.0);
       src[kSrcDraft] = static_cast<float>(draft_);
+      // Shake: how far the bend is moving about where it's been for the last tenth of a second or
+      // so, a finger's vibrato (or a bend on its way), full at a quarter of a semitone.
+      shakeMid_ += (bendSemis_ - shakeMid_) * (1.0 - std::exp(-dt / 0.08));
+      shakeEnv_ += (std::fabs(bendSemis_ - shakeMid_) - shakeEnv_) * (1.0 - std::exp(-dt / 0.1));
+      src[kSrcShake] = static_cast<float>(std::clamp(shakeEnv_ / 0.25, 0.0, 1.0));
+      // Push: how fast the pressure is rising, full at all of it in a tenth of a second; it falls
+      // away over about 150 ms once the finger stops pushing.
+      src[kSrcPush] = static_cast<float>(push_);
       src[kSrcSwell] = static_cast<float>(swell(dt));
       src[kSrcLfo1] = static_cast<float>(lfo(0, dt));
       src[kSrcLfo2] = static_cast<float>(lfo(1, dt));
@@ -1250,7 +1364,7 @@ private:
          int inCount[kBusCount] = {};
          for (int i = 0; i < s.routeCount; ++i) {
             const VoiceSettings::Route &r = s.routes[i];
-            if (isBusDest(r.dest) && r.source < kSrcBus1) {
+            if (isBusDest(r.dest) && !isBusSource(r.source)) {
                const int b = r.dest - kFirstBusDest;
                in[b][inCount[b]++] = src[r.source] * r.amount;
             }
@@ -1372,6 +1486,7 @@ private:
       live_.alienWet = at(kDest<kAlienWet>, s.alienWet);
       live_.detune = at(kDest<kDetune>, s.detune);
       live_.air = at(kDest<kAir>, s.air);
+      live_.retongue = at(kDest<kRetongue>, s.retongue);
       applyCharacter();
       if (attack != liveAttack_) {
          liveAttack_ = attack;
@@ -1412,7 +1527,25 @@ private:
    double swellAge_ = 0.0, draft_ = 0.0, random_ = 0.0, bend_ = 0.0, lift_ = 0.0, key_ = 60.0;
    double bus_[kBusCount] = {};
    double pitchMod_ = 0.0, levelMod_ = 1.0, liveAttack_ = -1.0, liveRelease_ = -1.0, liveGlide_ = -1.0;
-   float hpX_ = 0.0f, hiEnv_ = 0.0f, hpCoef_ = 0.1f;
+   float hpX_ = 0.0f, hpY_ = 0.0f, hiEnv_ = 0.0f, hpCoef_ = 0.1f;
+   // The last period or so of the voice's sound, for Fray, and how long a period is.
+   static constexpr int kPast = 16384;
+   float past_[kPast] = {};
+   int pastPos_ = 0;
+   static constexpr int kFrayLags = 5;
+   static constexpr double kFrayLag = 0.006;
+   double period_ = 200.0;
+   float frayEnv_[kFrayLags] = {};
+   // Where Knot and Fray run from 0 to 1: the share of the sound over the 4th harmonic, and of it
+   // left by a period's difference (a steady note's few % to breath noise's lot). Measured on every
+   // instrument from pp to ff (tools/render.cpp's trace).
+   static constexpr double kKnotFrom = 0.05, kKnotTo = 0.6, kFrayFrom = 0.03, kFrayTo = 0.6;
+   static constexpr double kGlideSemitones = 2.0;
+   // Shake's and Push's state, the pressure's peak and dip for re-tonguing, and whether the
+   // tongue's force is still waiting for the finger's pressure.
+   double shakeMid_ = 0.0, shakeEnv_ = 0.0, push_ = 0.0, pushRate_ = 0.0, lastPressure_ = 0.0;
+   double pressPeak_ = 0.0, dipLow_ = 0.0, dipAge_ = 0.0, falling_ = 0.0;
+   bool dipped_ = false, forcePending_ = false;
    Noise jitter_;
    double fs_ = 96000.0;
    bool active_ = false, releasing_ = false, stop_ = false;

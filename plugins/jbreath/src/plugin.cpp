@@ -658,6 +658,8 @@ private:
       vs.humanize = value(kHumanize, s);
       vs.air = value(kAir, s);
       vs.tongueType = choice(kTongueType, *s);
+      vs.retongue = value(kRetongue, s);
+      vs.tongueForce = choice(kTongueForce, *s);
       vs.vibType = choice(kVibType, *s);
       vs.hybridModel = choice(kHybridModel, *s);
       vs.hybridOctave = static_cast<int>(std::lround(value(kHybridOctave, s)));

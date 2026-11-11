@@ -181,6 +181,10 @@ enum ParamId : clap_id {
    kAlienWet,
    // Added after 0.10.0: how much smoke the AIR view's loops puff out, against 0.10.0's (100%).
    kSmoke,
+   // Added after 0.11.0: a held note tongued again by a quick dip and rise in its pressure, and
+   // where the tongue's force comes from (the strike, or how hard the finger arrives).
+   kRetongue,
+   kTongueForce,
    kParamCount
 };
 // The AIR view's look: the panel's own, kept with the project but not with presets.
@@ -201,7 +205,8 @@ constexpr clap_id routeParam(int route, RouteParam p) { return kRouteBase + rout
 constexpr clap_id lfoParam(int lfo, int p) { return (lfo ? kLfo2Rate : kLfo1Rate) + p; }
 
 // What a route can come from. The header's five are the player's hands (MPE), the next six are
-// read off each voice's own breath loop and sound, then the generators and the buses.
+// read off each voice's own breath loop and sound, then the generators and the buses, then two
+// more of the hands, added after 0.10.0 (after the buses, so saved routes keep their sources).
 enum ModSource {
    kSrcOff,
    kSrcStrike,   // the note's velocity
@@ -209,11 +214,11 @@ enum ModSource {
    kSrcGlide,    // its pitch bend, -1..1 over the bend range
    kSrcSlide,    // its slide (CC 74)
    kSrcLift,     // its release velocity
-   kSrcLoop,     // how big its breath loop is: the breath blowing
-   kSrcKnot,     // how knotted: the brightness of its sound
-   kSrcFold,     // how far past where the instrument overblows
+   kSrcLoop,     // how big its breath loop is: the breath blowing, from where it speaks to full
+   kSrcKnot,     // how knotted: the brightness of its sound, for its note and instrument
+   kSrcFold,     // how far into the top of its breath, towards where it overblows
    kSrcRegister, // how high it plays in the instrument's range
-   kSrcVapor,    // how much breath noise rides on it
+   kSrcFray,     // how frayed its loop is: how far its sound is from repeating (was Vapor)
    kSrcDraft,    // a slow draught of air: a wandering -1..1 of its own
    kSrcSwell,
    kSrcLfo1,
@@ -221,20 +226,26 @@ enum ModSource {
    kSrcKey,      // the note, -1..1 around middle C
    kSrcRandom,   // a fresh -1..1 for each note
    kSrcBus1,
-   kModSourceCount = kSrcBus1 + kBusCount
+   kSrcShake = kSrcBus1 + kBusCount, // how much the finger is shaking the pitch: its vibrato
+   kSrcPush,                         // how fast the pressure is rising: pushing into the note
+   kModSourceCount
 };
 inline const char *const kModSourceNames[kModSourceCount] = {
-   "Off", "Strike", "Press", "Glide", "Slide", "Lift", "Loop", "Knot", "Fold", "Register", "Vapor", "Draft",
-   "Swell", "LFO 1", "LFO 2", "Key", "Random", "Bus 1", "Bus 2", "Bus 3", "Bus 4"};
+   "Off", "Strike", "Press", "Glide", "Slide", "Lift", "Loop", "Knot", "Fold", "Register", "Fray", "Draft",
+   "Swell", "LFO 1", "LFO 2", "Key", "Random", "Bus 1", "Bus 2", "Bus 3", "Bus 4", "Shake", "Push"};
 inline const unsigned kModSourceColors[kModSourceCount] = {
    0xff6b7280, 0xfff5d76e, 0xffff5fc8, 0xffa78bfa, 0xff7ee6a0, 0xff6fb3a0, 0xffffb547, 0xff5cc8ff, 0xff9b7bff,
    0xffff7a6b, 0xffc9d3e6, 0xff5fd0b0, 0xff7fd3ff, 0xffffa64d, 0xffffd166, 0xffb0b8c8, 0xffe0e0e0,
-   0xff8fe8a8, 0xff8fe8a8, 0xff8fe8a8, 0xff8fe8a8};
+   0xff8fe8a8, 0xff8fe8a8, 0xff8fe8a8, 0xff8fe8a8, 0xffc792ff, 0xffff8f6b};
+constexpr bool isBusSource(int s) { return s >= kSrcBus1 && s < kSrcBus1 + kBusCount; }
 // Sources that swing both ways (-1..1); the rest run 0..1.
 inline bool bipolarSource(int s) {
    return s == kSrcGlide || s == kSrcDraft || s == kSrcLfo1 || s == kSrcLfo2 || s == kSrcKey || s == kSrcRandom ||
-          s >= kSrcBus1;
+          isBusSource(s);
 }
+// Where the tongue's force comes from: the note's velocity, or how hard the finger arrives on it
+// (its pressure a few ms in), for a controller whose strike is unreliable.
+inline const char *const kTongueForceNames[] = {"Strike", "Press"};
 
 // What a route can move: these params, by index. A bus's Amount knob is where its inputs go.
 inline constexpr clap_id kModDestinations[] = {
@@ -251,7 +262,9 @@ inline constexpr clap_id kModDestinations[] = {
    // Added after Release 27.
    kAlienBreathy, kAlienSpread, kAlienFlip, kAlienFollow,
    // Added after 0.7.0.
-   kAlienRough, kAlienGrowl, kAlienWet};
+   kAlienRough, kAlienGrowl, kAlienWet,
+   // Added after 0.11.0.
+   kRetongue};
 constexpr int kModDestCount = static_cast<int>(sizeof(kModDestinations) / sizeof(kModDestinations[0]));
 constexpr int kFirstBusDest = 31;
 constexpr bool isBusDest(int d) { return d >= kFirstBusDest && d < kFirstBusDest + kBusCount; }
@@ -467,6 +480,8 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kAlienGrowl, "Alien Growl", "Alien", 0.0, 1.0, 0.0, kMod},
       {kAlienWet, "Alien Wet", "Alien", 0.0, 1.0, 0.2, kMod},
       {kSmoke, "Smoke", "View", 0.0, 3.0, 4.0 / 3.0, kLookKnob},
+      {kRetongue, "Re-Tongue", "Articulation", 0.0, 1.0, 0.5, kMod},
+      {kTongueForce, "Tongue Force", "Voice", 0.0, 1.0, 0.0, kGlobalChoice},
    };
    for (const auto &d : fixed)
       p[d.id] = d;
@@ -538,6 +553,9 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kTongueType:
       count = 5;
       return kTongueTypeNames;
+   case kTongueForce:
+      count = 2;
+      return kTongueForceNames;
    case kVibType:
       count = 4;
       return kVibTypeNames;
@@ -622,6 +640,7 @@ inline bool isPercent(clap_id id) {
    case kNoise:
    case kEdge:
    case kKick:
+   case kRetongue:
    case kVibDepth:
    case kSlide:
    case kBreathIn:
