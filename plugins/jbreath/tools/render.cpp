@@ -1,6 +1,6 @@
 // Plays a score through the whole plugin (CLAP notes, pressure, the body, room and limiter) and
-// writes it as a 32-bit float stereo WAV at 48 kHz: for listening to the instruments, and for
-// comparing them with recordings.
+// writes it as a 32-bit float stereo WAV at 48 kHz (or at JBREATH_RENDER_RATE, the host's rate in
+// Hz): for listening to the instruments, and for comparing them with recordings.
 //
 //    jbreath-render SCORE OUT.wav
 //
@@ -37,6 +37,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <sstream>
@@ -54,7 +55,9 @@ namespace {
 
 using namespace jbreath;
 
-constexpr double kRate = 48000.0;
+// The host's rate: 48 kHz, or JBREATH_RENDER_RATE (44100, 96000, 192000...) to hear the plugin
+// as a host at that rate would run it.
+double kRate = 48000.0;
 constexpr uint32_t kBlock = 64;
 
 struct Ev {
@@ -104,6 +107,8 @@ void writeWav(const char *path, const std::vector<float> &l, const std::vector<f
 } // namespace
 
 int main(int argc, char **argv) {
+   if (const char *r = std::getenv("JBREATH_RENDER_RATE"))
+      kRate = std::clamp(std::atof(r), 22050.0, 384000.0);
    if (argc < 3) {
       std::fprintf(stderr, "usage: jbreath-render SCORE OUT.wav\n");
       return 2;
