@@ -342,7 +342,7 @@ table.ctl td.d, table.ctl td.r { font-size: 8.4pt; }
 
   <ol class="steps">
     <li><b class="h">Load it in front of Omnisphere</b>On the Omnisphere track, put <strong>Polar XY</strong> before Omnisphere in the device chain.</li>
-    <li><b class="h">Tell it your controller's CCs</b>Set <strong>X</strong> and <strong>Y</strong> under XY IN to the CCs your controller sends (16 and 17 by default; Chapter 12 lists the defaults for some popular controllers). Move the controller: the dot in the <strong>XY IN</strong> view follows it, and the orb in <strong>POLAR OUT</strong> follows that, with the angle and radius it is sending shown underneath.</li>
+    <li><b class="h">Tell it your controller's CCs</b>Set <strong>X</strong> and <strong>Y</strong> under XY IN to the CCs your controller sends (16 and 17 by default; see <em>Default Control CCs for Select XY Controllers</em> in Chapter 12). Move the controller: the dot in the <strong>XY IN</strong> view follows it, and the orb in <strong>POLAR OUT</strong> follows that, with the angle and radius it is sending shown underneath.</li>
     <li><b class="h">Pick the output CCs</b><strong>ANGLE</strong> and <strong>RADIUS</strong> under POLAR OUT are the CCs that go to Omnisphere (18 and 19 by default). Any CCs your controller and Omnisphere aren't already using will do.</li>
     <li><b class="h">Learn the angle</b>Open Omnisphere's <strong>ORB</strong> page and switch the Orb on. Right-click the Orb, check the menu says the Orb is set for <em>Angle</em> (if it offers <em>Switch to Angle</em>, choose it first), and choose <strong>MIDI CC Learn</strong>. Then press <strong>ANGLE</strong> under MIDI LEARN on Polar XY. It sends the angle CC alone, once, so Omnisphere learns exactly that CC.</li>
     <li><b class="h">Learn the radius</b>Right-click the Orb, choose <strong>Switch to Radius</strong>, right-click again, choose <strong>MIDI CC Learn</strong>, and press <strong>RADIUS</strong> on Polar XY.</li>
@@ -700,71 +700,56 @@ table.ctl td.d, table.ctl td.r { font-size: 8.4pt; }
   <div class="chap-head">
     <div class="num">Chapter 10</div>
     <h1>Using Polar XY with Ableton Live</h1>
-    <p class="lede">In Live, Polar XY is a Max for Live MIDI effect that sits on the same track as Omnisphere 3.</p>
+    <p class="lede">The Max for Live version of Polar XY, which sits on the same track as Omnisphere 3.</p>
     <div class="bar"></div>
   </div>
 
-  <p>Polar XY works best when it can sit on the same track as Omnisphere 3. Live doesn't load CLAPs, and won't put a VST3 in front of an instrument on the same track, so for Live there is a <strong>Max for Live</strong> version: <span class="mono">Polar XY.amxd</span>. It needs Ableton Live Suite, or Live Standard with Max for Live installed.</p>
-  <p>It is the same conversion and motion as the plug-in, with the same settings, each a Live parameter you can automate or map. In place of the plug-in's night-sky views, a status line shows the last channel's X/Y in and angle and radius out.</p>
+  <p>Polar XY works best when it can be placed on the same track as Omnisphere 3. For this purpose, you'll want to use the Max for Live version (requires Ableton Live Suite, or Ableton Live Standard with Max for Live installed).</p>
+  <p>Live doesn't load CLAPs, and won't put a VST3 in front of an instrument on the same track, which is why there is a Max for Live version. It is the same conversion and motion as the plug-in, with the same settings, each a Live parameter you can automate or map.</p>
 
+  <h2>The Polar XY Max for Live device</h2>
+  <p>There are six sections to the Polar XY Max for Live device.</p>
   <div class="note">
     <span class="k">Note</span>
-    <p>This chapter and the next were prepared with Polar XY 0.19.3 and Ableton Live Suite 12.4.16.</p>
+    <p>This portion of the document was prepared using Polar XY version 0.19.3 with Ableton Live Suite version 12.4.16.</p>
   </div>
-
-  <h2>The Max for Live device</h2>
   <figure class="dark">
     <img src="img/m4l-device-on.jpg" alt="">
-    <figcaption><b>Fig. 10.1</b> &nbsp;The Polar XY device in Live, here saved as an <em>Omnisphere Polar XY</em> preset for a pad sending X on CC 12, Y on CC 13 and touch on CC 92.</figcaption>
+    <figcaption><b>Fig. 10.1</b> &nbsp;The Polar XY Max for Live device, saved as an <em>Omnisphere Polar XY</em> preset.</figcaption>
   </figure>
-  <p>The device has six sections, left to right:</p>
-  <table>
-    <thead><tr><th style="width:1.1in">Section</th><th>What it holds</th><th style="width:0.75in">Chapter</th></tr></thead>
-    <tbody>
-      <tr><td class="c">XY IN</td><td>The Cartesian CC data coming from your X/Y controller: <strong>X CC</strong>, <strong>Y CC</strong>, <strong>Touch</strong> (−1 is off) and <strong>Pass</strong> (Off, Raw or Filtered).</td><td>6, 8</td></tr>
-      <tr><td class="c">POLAR OUT</td><td>The CCs carrying the converted polar output sent to Omnisphere: <strong>Angle</strong>, <strong>Radius</strong>, <strong>Touch</strong> (−1 is off), the <strong>OFF / ON</strong> switch in the title, and the three <strong>SEND (MIDI LEARN)</strong> buttons.</td><td>6</td></tr>
-      <tr><td class="c">MAPPING</td><td>How the Cartesian data maps onto Omnisphere's polar coordinates: <strong>Offset</strong>, <strong>Direction</strong> and <strong>Radius</strong> mode.</td><td>6</td></tr>
-      <tr><td class="c">MOTION</td><td>How the Orb responds and moves: <strong>Smooth</strong>, <strong>Inertia</strong>, <strong>Path</strong>, <strong>Inertia mode</strong> and <strong>Resolution</strong>.</td><td>7, 9</td></tr>
-      <tr><td class="c">TOUCH</td><td>Tuning for a jittery X/Y pad: <strong>Filter ms</strong> (0 is off), <strong>Press delay</strong> (−1 is the same as Filter ms), <strong>Jump</strong> and <strong>Agree</strong>.</td><td>8</td></tr>
-      <tr><td class="c">CENTER</td><td>The dead-zone behaviour around the origin: <strong>Center</strong>.</td><td>8</td></tr>
-    </tbody>
-  </table>
+  <ul>
+    <li><strong>XY IN:</strong> The cartesian CC data coming from your X/Y controller (<strong>X CC</strong>, <strong>Y CC</strong>, <strong>Touch</strong> and <strong>Pass</strong>).</li>
+    <li><strong>POLAR OUT:</strong> The CCs containing the converted polar coordinate output sent to Omnisphere (<strong>Angle</strong>, <strong>Radius</strong>, <strong>Touch</strong>, the <strong>OFF / ON</strong> switch, and the <strong>SEND (MIDI LEARN)</strong> buttons).</li>
+    <li><strong>MAPPING:</strong> Adjusts the way the cartesian data is mapped into Omnisphere's polar coordinate system (<strong>Offset</strong>, <strong>Direction</strong>, <strong>Radius</strong>).</li>
+    <li><strong>MOTION:</strong> Settings for tuning the Omnisphere Orb response and movement characteristics (<strong>Smooth</strong>, <strong>Inertia</strong>, <strong>Path</strong>, <strong>Inertia mode</strong>, <strong>Resolution</strong>).</li>
+    <li><strong>TOUCH:</strong> Settings for tuning response to a jittery XY pad (<strong>Filter ms</strong>, <strong>Press delay</strong>, <strong>Jump</strong>, <strong>Agree</strong>).</li>
+    <li><strong>CENTER:</strong> Adjusts dead zone behavior around the origin point (<strong>Center</strong>).</li>
+  </ul>
+  <p class="small muted">Chapters 6 to 9 describe every control in detail. On the device, a Touch value of −1 means off, Filter ms 0 means off, and Press delay −1 means the same as Filter ms.</p>
 
-  <h2>The status line</h2>
-  <p>Along the bottom of the device, the status line shows what Polar XY is doing, and ends with the device's version, so you can see which copy Live loaded.</p>
-  <table>
-    <thead><tr><th style="width:2.5in">It shows</th><th>Meaning</th></tr></thead>
-    <tbody>
-      <tr><td class="c mono" style="font-weight:400">waiting for X/Y CCs</td><td>Nothing has arrived on the X or Y CC yet. Check the X CC and Y CC numbers, and that the controller's MIDI reaches the track.</td></tr>
-      <tr><td class="c mono" style="font-weight:400">ch 1  in 101,91  out 35 / 90  v0.19.3</td><td>The last channel that moved, its X,Y in, and the angle / radius sent. A dash means that value hasn't arrived or been sent yet; <span class="mono">out off</span> means Polar Out is switched off.</td></tr>
-      <tr><td class="c mono" style="font-weight:400">angle: sent CC 18 = 64 on ch 1</td><td>A SEND button (or Enter in an Out box) just sent that CC. Shown for a few seconds.</td></tr>
-      <tr><td class="c mono" style="font-weight:400">(14-bit needs out CCs &lt; 32)</td><td>Resolution is 14-bit but an output CC is 32 or above, so the output stays 7-bit.</td></tr>
-      <tr><td class="c mono" style="font-weight:400">… are the same CC: passing through</td><td>X and Y In, or Angle and Radius Out, are set to the same CC, so nothing is converted.</td></tr>
-    </tbody>
-  </table>
-
-  <h2>Installation and initial setup</h2>
+  <h2>Installation and Initial Setup - Max for Live</h2>
   <figure class="dark">
     <img src="img/live-overview.jpg" alt="">
-    <figcaption><b>Fig. 10.2</b> &nbsp;Polar XY.amxd in Live's browser under <em>Max for Live</em>, and the device on the Omnisphere track.</figcaption>
+    <figcaption><b>Fig. 10.2</b> &nbsp;Polar XY.amxd in Live's library under Max for Live, and the device on a MIDI track.</figcaption>
   </figure>
   <ol class="steps">
-    <li><b class="h">Make a folder for it</b>In your Ableton Live User Library, create a folder for your Max MIDI effects, for example <em>MAX MIDI FX</em>. On a Mac the User Library is at <span class="mono">~/Music/Ableton/User Library/</span>.</li>
-    <li><b class="h">Unzip the device</b>From the <em>Max for Live</em> folder of the release zip, unzip <span class="mono">Polar XY.amxd</span> and <span class="mono">polarxy.js</span> into the new folder. Keep the two files together: the device runs the script beside it.</li>
-    <li><b class="h">Load it</b>Open Ableton Live and choose <em>Max for Live</em> in the browser. <span class="mono">Polar XY.amxd</span> is listed there. Drag it onto an available MIDI track. It loads with the default settings.</li>
-    <li><b class="h">Check Pass and Polar Out</b>Make sure <strong>Pass</strong> under XY IN is <em>Off</em> (the default), so only the angle and radius reach Omnisphere, and that the switch beside <strong>POLAR OUT</strong> reads <em>ON</em>.</li>
-    <li><b class="h">Enter your controller's CCs</b>In the <strong>X CC</strong> and <strong>Y CC</strong> boxes, enter the CC numbers your X/Y pad sends. Chapter 12 lists the defaults for some popular controllers.</li>
-    <li><b class="h">Set the angle CC</b>Click the <strong>Angle</strong> value, type the CC you want for the angle and press <span class="key">Enter</span>.</li>
-    <li><b class="h">Set the radius CC</b>Click the <strong>Radius</strong> value, type the CC you want for the radius and press <span class="key">Enter</span>.</li>
-    <li><b class="h">Leave Touch off</b>For Omnisphere, the <strong>Touch</strong> value under POLAR OUT can be left at −1 (off).</li>
-    <li><b class="h">Set the resolution</b>Under the MOTION heading, set <strong>Resolution</strong> to <em>7-bit</em>.</li>
-    <li><b class="h">Save a preset</b>Click the small disk icon in the upper right of the device's title bar and save the settings as a preset, for example <em>Omnisphere Polar XY</em>.</li>
+    <li>In your Ableton Live user directory, create a folder for your MAX MIDI effects. I called mine <em>MAX MIDI FX</em>. The user directory on a Mac will be found at: <span class="mono">~/Music/Ableton/User Library/</span></li>
+    <li>Unzip the <span class="mono">Polar XY.amxd</span> and <span class="mono">polarxy.js</span> files to the new MAX MIDI FX folder.</li>
+    <li>Open Ableton Live, and if you navigate to <em>Max for Live</em> in the library panel, you should find <span class="mono">Polar XY.amxd</span> listed. Drag that to an available MIDI track.</li>
+    <li>Polar XY is loaded with the default settings.</li>
+    <li>For general usage, make sure <strong>Pass</strong> is set to <em>Off</em>, so the X/Y CCs aren't passed on as well.</li>
+    <li>In the <strong>X CC</strong> and <strong>Y CC</strong> boxes, enter the CC numbers that correspond with your X/Y pad. (See <em>Default Control CCs for Select XY Controllers</em> in Chapter 12.)</li>
+    <li>Click on the <strong>Angle</strong> value in the Polar XY device, enter your desired CC value and press <span class="key">Enter</span>.</li>
+    <li>Click on the <strong>Radius</strong> value in the Polar XY device, enter your desired CC and press <span class="key">Enter</span>.</li>
+    <li>For Omnisphere, the <strong>Touch</strong> value can be left at −1.</li>
+    <li>Under the MOTION heading, set the <strong>Resolution</strong> to <em>7-bit</em>.</li>
+    <li>Save this as a preset by clicking the tiny disk icon in the upper right of the Polar XY interface. I called mine <em>Omnisphere Polar XY</em>.</li>
+    <li>This completes the basic setup for the Max for Live version of Polar XY.</li>
   </ol>
-  <p>That completes the basic setup of the Max for Live version. The next chapter learns the Orb in Omnisphere.</p>
 
   <div class="note">
-    <span class="k">One self-contained file</span>
-    <p>To make the device a single file that doesn't need <span class="mono">polarxy.js</span> beside it, open it in the Max editor (the edit button in its title bar), press <strong>Freeze Device</strong>, and save.</p>
+    <span class="k">The status line</span>
+    <p>The line along the bottom of the device shows the last channel's X/Y in and angle / radius out, followed by the device's version (for example <span class="mono">ch 1  in 101,91  out 35 / 90  v0.19.3</span>). It reads <span class="mono">waiting for X/Y CCs</span> until the X or Y CC arrives, and after a SEND it shows what was sent, such as <span class="mono">angle: sent CC 18 = 64 on ch 1</span>, for a few seconds.</p>
   </div>
 </section>
 
@@ -773,73 +758,69 @@ table.ctl td.d, table.ctl td.r { font-size: 8.4pt; }
   <div class="chap-head">
     <div class="num">Chapter 11</div>
     <h1>Configuring Omnisphere</h1>
-    <p class="lede">Teaching the Orb which CCs to follow. Set up is easy, but tedious, and you only do it once.</p>
+    <p class="lede">MIDI-learning the ORB's Angle and Radius from the Polar XY Max for Live device.</p>
     <div class="bar"></div>
   </div>
 
-  <p>The Max for Live version of Polar XY is a MIDI effect in Ableton Live, so it can be placed on the same MIDI track as Omnisphere 3. Setting the Orb's control CCs means a <strong>MIDI learn</strong>, which can be tricky, because an X/Y controller never sends just one CC. That is why Polar XY has dedicated buttons for the learn: each sends one CC alone.</p>
+  <p>As mentioned earlier, the Max for Live version of Polar XY acts as a MIDI effect in Ableton Live. As such, it can be placed on the same MIDI track as Omnisphere 3. Setting the ORB control CCs requires using a "MIDI learn" procedure, which can make setup tricky because there's never a case when an XY controller is only sending a single MIDI CC. Because of this, Polar XY has three dedicated buttons to assist with the MIDI learn process. Set up is easy, but tedious:</p>
 
-  <h2>Learning the Orb</h2>
   <ol class="steps">
-    <li><b class="h">Start from your Polar XY track</b>Add Polar XY to a MIDI track. The track from <em>Installation and initial setup</em> (Chapter 10) will do.</li>
-    <li><b class="h">Add Omnisphere</b>Add Omnisphere 3 to the same track, after Polar XY, and open its plug-in window.</li>
-    <li><b class="h">Load a patch that uses the Orb</b>For example <em>Clean Air at Last</em> from the <em>Ambient Dreams</em> directory.</li>
-    <li><b class="h">Keep both in view</b>Move the Omnisphere window so it doesn't cover the Polar XY device.</li>
-    <li><b class="h">Switch the Orb on</b>Go to the <strong>ORB</strong> page and click the Orb's power button.</li>
+    <li>Add an instance of Polar XY to a MIDI track. If you still have the track created in the <em>Installation and Initial Setup - Max for Live</em> section, you can use that track.</li>
+    <li>Add an instance of Omnisphere 3 to the same track and open the Omnisphere 3 plugin interface.</li>
+    <li>Load a preset that uses the Orb, for example <em>Clean Air at Last</em> from the <em>Ambient Dreams</em> Directory.</li>
   </ol>
   <figure class="dark">
     <img src="img/omni-orb.jpg" alt="">
-    <figcaption><b>Fig. 11.1</b> &nbsp;Omnisphere 3's ORB page with the Orb switched on, on the <em>Clean Air at Last</em> patch.</figcaption>
+    <figcaption><b>Fig. 11.1</b> &nbsp;Omnisphere 3's ORB panel, on the <em>Clean Air at Last</em> preset.</figcaption>
   </figure>
+  <ol class="steps" start="4" style="counter-reset: s 3">
+    <li>Move the Omnisphere plugin window so that it is not covering the Polar XY Max for Live device.</li>
+    <li>Switch to the ORB panel, and click on the ORB power button to enable it.</li>
+  </ol>
 
   <div class="split" style="grid-template-columns: 2.1in 1fr">
     <figure class="dark">
       <img src="img/omni-menu.jpg" alt="">
-      <figcaption><b>Fig. 11.2</b> &nbsp;The Orb's menu, set for Angle.</figcaption>
+      <figcaption><b>Fig. 11.2</b> &nbsp;The ORB's drop-down menu, targeting Angle.</figcaption>
     </figure>
     <div class="body">
       <ol class="steps" start="6" style="counter-reset: s 5">
-        <li><b class="h">Open the Orb's menu</b>Right-click (or <span class="key">Ctrl</span>-click) the Orb.</li>
-        <li><b class="h">Make sure it targets Angle</b>The first line should read <em>MIDI Learn and Automation for Angle</em>, as shown: that is the parameter to set first. If the menu offers <em>Switch to Angle</em>, click it and open the menu again.</li>
-        <li><b class="h">Start the learn</b>Click <strong>MIDI CC Learn</strong>. The menu closes and a flashing box appears around the Orb.</li>
-        <li><b class="h">Send the angle</b>On the Polar XY device, click <strong>ANGLE</strong> under SEND (MIDI LEARN). The status line confirms what was sent.</li>
-        <li><b class="h">Check it took</b>The blue box around the Orb stops flashing.</li>
+        <li>Right click (or <span class="key">Ctrl</span> + click) on the orb to reveal the drop-down menu for the ORB.</li>
+        <li>As shown, Omnisphere 3 is targeting the Angle parameter, which is the parameter you want to set first. If the option says "Switch to Angle," click it and reopen the panel. If it appears as shown, proceed to step 8.</li>
+        <li>Click on <strong>MIDI CC Learn</strong>. The dropdown will disappear, and a flashing box will appear around the ORB.</li>
+        <li>In the Polar XY M4L device, click the <strong>ANGLE</strong> button under SEND (MIDI LEARN).</li>
+        <li>The blue box around the ORB should stop flashing.</li>
+        <li>To set the Radius, right-click the ORB and select <strong>Switch to Radius</strong>.</li>
+        <li>Right click the ORB again and select <strong>MIDI CC Learn</strong>. The flashing blue box will appear around the ORB.</li>
       </ol>
     </div>
   </div>
-
-  <ol class="steps" start="11" style="counter-reset: s 10">
-    <li><b class="h">Switch to Radius</b>Right-click the Orb and choose <strong>Switch to Radius</strong>.</li>
-    <li><b class="h">Start the learn again</b>Right-click the Orb again and choose <strong>MIDI CC Learn</strong>. The flashing blue box appears around the Orb.</li>
-    <li><b class="h">Send the radius</b>On the Polar XY device, click <strong>RADIUS</strong> under SEND (MIDI LEARN).</li>
-    <li><b class="h">Save</b>Save the Polar XY preset again.</li>
+  <ol class="steps" start="13" style="counter-reset: s 12">
+    <li>In the Polar XY M4L device, click the <strong>RADIUS</strong> button under SEND (MIDI LEARN).</li>
+    <li>Resave the Polar XY preset.</li>
   </ol>
-  <p>You should now be able to move the Orb with your X/Y controller. If it lands rotated or goes round the wrong way, adjust <strong>Offset</strong> and <strong>Direction</strong> in the MAPPING section (Chapter 6).</p>
+  <p>You should now be able to move the ORB using your XY control device.</p>
 
   <div class="split" style="grid-template-columns: 2.6in 1fr">
     <figure class="dark">
       <img src="img/live-browser-preset.jpg" alt="">
-      <figcaption><b>Fig. 11.3</b> &nbsp;A saved preset under Polar XY.amxd.</figcaption>
+      <figcaption><b>Fig. 11.3</b> &nbsp;The saved preset beneath Polar XY.amxd.</figcaption>
     </figure>
     <div class="body">
-      <p>That completes the basic setup of the Polar XY Max for Live device with Omnisphere 3. To avoid repeating it each time you use Polar XY, load the preset you created: it appears beneath <span class="mono">Polar XY.amxd</span> in your Max for Live device listing.</p>
-      <div class="note">
-        <span class="k">Typing a CC sends it too</span>
-        <p>Instead of a SEND button, you can click the Angle or Radius box, type its CC and press <span class="key">Enter</span> during the learn, even if the number is already there. It sends that CC alone, once, just like the button.</p>
-      </div>
+      <p>This completes the basic setup of the Polar XY Max for Live device for use with Omnisphere 3. To avoid having to repeat this procedure each time you use Polar XY, load the preset you've created. It will appear beneath the <span class="mono">Polar XY.amxd</span> device in your Max for Live device listing.</p>
     </div>
   </div>
 
-  <h2>When MIDI learn doesn't work</h2>
-  <p>Sometimes Omnisphere 3 refuses to recognise the data coming from the SEND (MIDI LEARN) buttons. There are two things to try.</p>
-  <p>First, under the MOTION heading in Polar XY, check that <strong>Resolution</strong> is set to <em>7-bit</em>, and try the learn steps above again. In 14-bit mode Polar XY sends its MIDI data differently, and this may confuse Omnisphere 3.</p>
-  <p>If Omnisphere is still stubborn, send the CCs from another source. In Live's browser, under <em>MIDI Effects</em>, find the <strong>CC Control</strong> device and drag it between Polar XY and Omnisphere 3:</p>
+  <h2>When MIDI Learn Doesn't Work</h2>
+  <p>Sometimes, Omnisphere 3 will refuse to recognize the data coming from the SEND (MIDI LEARN) buttons of the Max for Live device. In those instances, there is a handy workaround.</p>
+  <p>First, under the MOTION heading in Polar XY, verify that the <strong>Resolution</strong> is set to <em>7-bit</em> and try the learn functions above again. In 14-bit mode, Polar XY sends the MIDI data differently, and this may confuse Omnisphere 3.</p>
+  <p>If Omnisphere continues to be stubborn, the MIDI CC data can be sent from an alternate source. In the Ableton Live Library, under MIDI Effects, locate the <strong>CC Control</strong> device. Drag this between Polar XY and Omnisphere 3, as shown:</p>
   <figure class="dark">
     <img src="img/live-cc-chain.jpg" alt="">
-    <figcaption><b>Fig. 11.4</b> &nbsp;CC Control between Polar XY and Omnisphere, with <em>Custom B</em> on CC 18 and <em>Custom C</em> on CC 19.</figcaption>
+    <figcaption><b>Fig. 11.4</b> &nbsp;CC Control between Polar XY and Omnisphere 3.</figcaption>
   </figure>
-  <p>Using the drop-down menus under <strong>Custom B</strong> and <strong>Custom C</strong>, choose the CCs you want to control the Orb with: Custom B for the angle and Custom C for the radius. In the example they are set to CC 18 and CC 19. These must match the <strong>Angle</strong> and <strong>Radius</strong> CCs in Polar XY.</p>
-  <p>Now repeat the learn steps above, but instead of the SEND (MIDI LEARN) buttons, move the matching knob on the CC Control device: Custom B for the angle, Custom C for the radius. Once both are learned, you can switch off or remove the CC Control device.</p>
+  <p>Using the drop-down menus for "Custom B" and "Custom C", select the MIDI CCs you wish to use to control the ORB. Use "Custom B" for the Angle, and "Custom C" for the Radius. In this example, they are set to CC 18 and CC 19, respectively.</p>
+  <p>Now, repeat the MIDI Learn steps above, except instead of using the SEND (MIDI LEARN) buttons, move the appropriate knobs in the CC Control device. Once the values are learned, you can turn off or remove the CC Control device.</p>
 </section>
 
 <!-- ================= 12. RECIPES ================= -->
@@ -851,7 +832,7 @@ table.ctl td.d, table.ctl td.r { font-size: 8.4pt; }
     <div class="bar"></div>
   </div>
 
-  <h2>Default CCs for select X/Y controllers</h2>
+  <h2>Default Control CCs for Select XY Controllers</h2>
   <p>These are the CCs each controller sends with its factory settings. Enter the X and Y CCs as Polar XY's <strong>X</strong> and <strong>Y</strong> (<span class="m4l">X CC</span>, <span class="m4l">Y CC</span>), and the touch CC, if there is one, as <strong>TOUCH</strong> under XY IN (<span class="m4l">Touch</span>) for Touch Filter to use (Chapter 8).</p>
   <table class="ctl">
     <thead><tr><th>Controller</th><th>X CC</th><th>Y CC</th><th>Z CC</th><th>Touch CC</th></tr></thead>
@@ -863,15 +844,10 @@ table.ctl td.d, table.ctl td.r { font-size: 8.4pt; }
       <tr><td class="c">Korg nanoPAD 2</td><td class="d">1</td><td class="d">2</td><td class="r">N/A</td><td class="d">16</td></tr>
     </tbody>
   </table>
-  <p class="small muted">Polar XY doesn't use a Z CC. It passes through to Omnisphere untouched, where you can MIDI-learn it to something else.</p>
 
   <div class="note warn">
-    <span class="k">Korg nanoPAD 2</span>
-    <p>The nanoPAD 2's defaults conflict with other default CCs (its X is on CC 1, the mod wheel), so edit them with the Korg Control Editor before you use it with Polar XY.</p>
-  </div>
-  <div class="note">
-    <span class="k">Watch for clashes</span>
-    <p>Pick Angle and Radius Out CCs that your controller doesn't send. The Korg Multi/Poly sends X and Y on 18 and 19, which are Polar XY's default Angle and Radius Out, so move the outputs elsewhere, for example to 22 and 23.</p>
+    <span class="k">Warning</span>
+    <p>Korg nanoPAD 2 defaults will conflict with other default CCs, and should be edited using the Korg Control Editor.</p>
   </div>
 
   <h2 class="pb">Recipes</h2>
