@@ -13,6 +13,11 @@ function check(ok, what) {
    }
 }
 
+// The script's version is the plugin's, and the status line shows it.
+var cmake = require('fs').readFileSync(path.join(__dirname, '..', 'CMakeLists.txt'), 'utf8');
+check(cmake.indexOf('jclap_plugin_version(' + px.VERSION + ')') >= 0, 'VERSION matches CMakeLists.txt');
+check(/ v\d+\.\d+\.\d+$/.test(new px.Engine(function () {}).status()), 'status ends with the version');
+
 var def = { angleOffset: 0, clockwise: false, fillSquare: false };
 function polar(x, y, s) { return px.toPolar(px.ccToBipolar(x), px.ccToBipolar(y), s || def); }
 

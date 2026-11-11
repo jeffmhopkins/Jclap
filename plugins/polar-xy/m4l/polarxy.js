@@ -29,6 +29,10 @@ function ccToBipolar(v) {
 var DEAD_ZONE = 0.03;
 var STEPS7 = 127, STEPS14 = 16383;
 
+// This script's version, the plugin's (CMakeLists.txt; a test keeps them the same). The status line
+// ends with it, so it shows which copy of the script Live loaded.
+var VERSION = '0.19.3';
+
 function wrapDegrees(deg) {
    deg = deg % 360;
    if (deg < 0) deg += 360;
@@ -896,7 +900,7 @@ Engine.prototype.status = function () {
    var shift = this.applied.fine ? 7 : 0;
    text += '  out ' + (!this.applied.polar ? 'off' : st.sentAngle >= 0 ? (st.sentAngle >> shift) + ' / ' + (st.sentRadius >> shift) : '-');
    if (this.fineBlocked()) text += '  (14-bit needs out CCs < 32)';
-   return text;
+   return text + '  v' + VERSION;
 };
 
 // Raw MIDI bytes in, whole messages out: X/Y CCs to the engine, everything else (notes, bends,
@@ -961,7 +965,7 @@ MidiParser.prototype.byte = function (b) {
 if (typeof module !== 'undefined' && module.exports) {
    module.exports = {
       ccToBipolar: ccToBipolar, toPolar: toPolar, Follower: Follower, TouchFilter: TouchFilter, Engine: Engine,
-      MidiParser: MidiParser, PARAMS: PARAMS, STEPS7: STEPS7, STEPS14: STEPS14
+      MidiParser: MidiParser, PARAMS: PARAMS, VERSION: VERSION, STEPS7: STEPS7, STEPS14: STEPS14
    };
 }
 
