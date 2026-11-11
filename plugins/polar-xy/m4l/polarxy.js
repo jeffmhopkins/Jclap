@@ -821,15 +821,25 @@ Engine.prototype.tick = function (dt) {
    }
 };
 
-// A SEND button: that output CC alone at the value last sent on it, for a MIDI learn. At 14 bits,
-// only the MSB, the CC to learn.
+// A SEND button: that output CC alone, for a MIDI learn. At 14 bits, only the MSB, the CC to learn.
+// A learn doesn't pick up a CC at 0 (Omnisphere's doesn't), so it never goes out at 0: the angle or
+// radius goes at its last value, or LEARN_VALUE when that's 0 or nothing was sent yet, then back to
+// the 0 it was. Touch goes out pressed (127), then released again unless it's held.
+var LEARN_VALUE = 64;
 Engine.prototype.learn = function (which) {
    var c = this.lastChannel, st = this.channels[c];
    var shift = this.applied.fine ? 7 : 0;
-   if ((which === 'angle' || which === 'radius') && !this.applied.polar) return;
-   if (which === 'angle') this.emit(0xB0 | c, this.int('outangle'), Math.max(st.sentAngle, 0) >> shift);
-   else if (which === 'radius') this.emit(0xB0 | c, this.int('outradius'), Math.max(st.sentRadius, 0) >> shift);
-   else if (which === 'touch' && this.touchOut() >= 0) this.emit(0xB0 | c, this.touchOut(), Math.max(st.sentTouch, 0));
+   if (which === 'angle' || which === 'radius') {
+      if (!this.applied.polar) return;
+      var cc = this.int(which === 'angle' ? 'outangle' : 'outradius');
+      var sent = which === 'angle' ? st.sentAngle : st.sentRadius;
+      var value = sent > 0 ? sent >> shift : 0;
+      this.emit(0xB0 | c, cc, value > 0 ? value : LEARN_VALUE);
+      if (value === 0 && sent >= 0) this.pushValue(c, cc, sent);
+   } else if (which === 'touch' && this.touchOut() >= 0) {
+      this.emit(0xB0 | c, this.touchOut(), 127);
+      if (st.sentTouch !== 127) this.emit(0xB0 | c, this.touchOut(), 0);
+   }
 };
 
 // Lands every glide (after a reset, say) and forgets what was sent, so the next move sends both.

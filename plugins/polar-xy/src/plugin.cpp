@@ -785,20 +785,32 @@ private:
       convert(out, 0, channel);
    }
 
-   // The panel's SEND buttons: one output CC alone, for a MIDI learn. It goes at the value last sent
-   // on it (0 before any), and at 14 bits as the MSB only, the CC to learn.
+   // The panel's SEND buttons: one output CC alone, for a MIDI learn, at 14 bits as the MSB only, the
+   // CC to learn. A learn doesn't pick up a CC at 0 (Omnisphere's doesn't), so it never goes out at 0:
+   // the angle or radius goes at its last value, or kLearnValue when that's 0 or nothing was sent yet,
+   // then back to the 0 it was. Touch goes out pressed (127), then released again unless it's held.
+   static constexpr int kLearnValue = 64;
    void applyLearn(const clap_output_events_t *out) {
       const uint32_t which = learn_.exchange(0);
       if (which == 0)
          return;
       const ChannelState &st = channels_[panelChannel_];
       const int shift = applied_.fine ? 7 : 0;
+      auto learnValue = [&](int cc, int sent) {
+         const int value = sent > 0 ? sent >> shift : 0;
+         pushCC(out, 0, panelChannel_, cc, value > 0 ? value : kLearnValue);
+         if (value == 0 && sent >= 0)
+            pushValue(out, 0, panelChannel_, cc, sent);
+      };
       if ((which & 1u) && applied_.polar)
-         pushCC(out, 0, panelChannel_, intParam(kParamOutAngle), std::max(st.sentAngle, 0) >> shift);
+         learnValue(intParam(kParamOutAngle), st.sentAngle);
       if ((which & 2u) && applied_.polar)
-         pushCC(out, 0, panelChannel_, intParam(kParamOutRadius), std::max(st.sentRadius, 0) >> shift);
-      if ((which & 4u) && touchOut() >= 0)
-         pushCC(out, 0, panelChannel_, touchOut(), std::max(st.sentTouch, 0));
+         learnValue(intParam(kParamOutRadius), st.sentRadius);
+      if ((which & 4u) && touchOut() >= 0) {
+         pushCC(out, 0, panelChannel_, touchOut(), 127);
+         if (st.sentTouch != 127)
+            pushCC(out, 0, panelChannel_, touchOut(), 0);
+      }
    }
 
    // Returns true if the event was an XY input CC and should not be forwarded.

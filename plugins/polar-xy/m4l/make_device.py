@@ -131,10 +131,14 @@ for i, (which, text) in enumerate((("angle", "ANGLE"), ("radius", "RADIUS"), ("t
               patching_rect=[700 + i * 80, 300, 70, 20], varname=f"Send {which.title()}",
               saved_attribute_attributes=param_attrs(f"Send {which.title()}", f"Send {which.title()}", 2, 0, 1, 0,
                                                      parameter_enum=["off", "on"], parameter_invisible=1))
-    press = newobj("sel 1", 2, 2, ["bang", ""], (700 + i * 80, 330))
+    # A press comes out as a bang or as 1 (never on release, 0), whichever this Live's live.text sends.
+    click = newobj("route bang", 1, 2, ["", ""], (700 + i * 80, 330))
+    press = newobj("sel 1", 2, 2, ["bang", ""], (700 + i * 80, 360))
     msg = box("message", text=f"learn {which}", numinlets=2, numoutlets=1, outlettype=[""],
-              patching_rect=[700 + i * 80, 360, 80, 22])
-    wire(btn, press)
+              patching_rect=[700 + i * 80, 390, 80, 22])
+    wire(btn, click)
+    wire(click, msg)
+    wire(click, press, outlet=1)
     wire(press, msg)
     wire(msg, js)
 
