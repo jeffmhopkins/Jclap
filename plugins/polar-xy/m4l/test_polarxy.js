@@ -122,6 +122,20 @@ check(m.length === 2 && m[0][1] === 20 && m[1][1] === 19, 'moved output CCs rese
 d.engine.learn('radius');
 m = d.take();
 check(m.length === 1 && m[0][1] === 19 && m[0][2] === 127, 'send radius');
+// The angle there is 0, and a learn doesn't pick up a 0: LEARN_VALUE, then back to 0.
+d.engine.learn('angle');
+m = d.take();
+check(m.length === 2 && m[0][1] === 20 && m[0][2] === 64 && m[1][1] === 20 && m[1][2] === 0, 'send angle at 0');
+// Before anything was sent: LEARN_VALUE alone.
+d = device();
+d.engine.learn('radius');
+m = d.take();
+check(m.length === 1 && m[0][1] === 19 && m[0][2] === 64, 'send before anything was sent');
+// Touch: pressed, then released again.
+d.engine.setParam('touchout', 20);
+d.engine.learn('touch');
+m = d.take();
+check(m.length === 2 && m[0][1] === 20 && m[0][2] === 127 && m[1][1] === 20 && m[1][2] === 0, 'send touch');
 
 // 14-bit: MSB then LSB on CC + 32.
 d = device();
