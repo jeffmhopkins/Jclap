@@ -118,24 +118,34 @@ d.engine.setParam('outangle', 20);
 m = d.take();
 check(m.length === 2 && m[0][1] === 20 && m[1][1] === 19, 'moved output CCs resend');
 
-// SEND buttons: one CC alone at its last value.
+// SEND buttons: that CC alone, as a short wiggle from its last value and back, one step a tick.
+function wiggle(d) {
+   var all = d.take();
+   for (var i = 0; i < 20; ++i) {
+      d.engine.tick(0.02);
+      all = all.concat(d.take());
+   }
+   return all.map(function (m) { return [m[1], m[2]]; }).join(' ');
+}
 d.engine.learn('radius');
-m = d.take();
-check(m.length === 1 && m[0][1] === 19 && m[0][2] === 127, 'send radius');
-// The angle there is 0, and a learn doesn't pick up a 0: LEARN_VALUE, then back to 0.
+check(wiggle(d) === '19,125 19,123 19,121 19,119 19,117 19,119 19,121 19,123 19,125 19,127', 'send radius wiggles down from 127 and back');
+// The angle there is 0: up from 0 and back.
 d.engine.learn('angle');
-m = d.take();
-check(m.length === 2 && m[0][1] === 20 && m[0][2] === 64 && m[1][1] === 20 && m[1][2] === 0, 'send angle at 0');
-// Before anything was sent: LEARN_VALUE alone.
+check(wiggle(d) === '20,2 20,4 20,6 20,8 20,10 20,8 20,6 20,4 20,2 20,0', 'send angle wiggles up from 0 and back');
+// Before anything was sent: around 64, and nothing to go back to.
 d = device();
 d.engine.learn('radius');
-m = d.take();
-check(m.length === 1 && m[0][1] === 19 && m[0][2] === 64, 'send before anything was sent');
-// Touch: pressed, then released again.
+check(wiggle(d) === '19,62 19,60 19,58 19,56 19,54 19,56 19,58 19,60 19,62', 'send before anything was sent');
+// Touch: pressed and released twice.
 d.engine.setParam('touchout', 20);
 d.engine.learn('touch');
-m = d.take();
-check(m.length === 2 && m[0][1] === 20 && m[0][2] === 127 && m[1][1] === 20 && m[1][2] === 0, 'send touch');
+check(/SEND touch: wiggling CC 20 on ch 1/.test(d.engine.status()), 'status shows the send');
+check(wiggle(d) === '20,127 20,0 20,127 20,0', 'send touch');
+d.engine.tick(5);
+check(!/SEND/.test(d.engine.status()), 'and then goes back');
+d.engine.setParam('touchout', -1);
+d.engine.learn('touch');
+check(d.take().length === 0 && /Touch Out/.test(d.engine.status()), 'status says why nothing was sent');
 
 // 14-bit: MSB then LSB on CC + 32.
 d = device();

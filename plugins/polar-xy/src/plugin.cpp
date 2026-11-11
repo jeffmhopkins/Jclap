@@ -785,32 +785,81 @@ private:
       convert(out, 0, channel);
    }
 
-   // The panel's SEND buttons: one output CC alone, for a MIDI learn, at 14 bits as the MSB only, the
-   // CC to learn. A learn doesn't pick up a CC at 0 (Omnisphere's doesn't), so it never goes out at 0:
-   // the angle or radius goes at its last value, or kLearnValue when that's 0 or nothing was sent yet,
-   // then back to the 0 it was. Touch goes out pressed (127), then released again unless it's held.
+   // The panel's SEND buttons: one output CC alone, for a MIDI learn. A learn listens for a control
+   // being moved, and Omnisphere's doesn't take a single CC, so the CC goes out as a short wiggle like
+   // a knob turned a little and back: kLearnWiggle steps from where it is (64 before anything was
+   // sent), one every kLearnStep seconds, then the value last sent on it again. At 14 bits the wiggle
+   // is MSBs only, the CC to learn, and the last step is the whole value. Touch goes out pressed and
+   // released twice, then as it is. The same as the Max for Live device's SEND buttons.
    static constexpr int kLearnValue = 64;
+   static constexpr int kLearnWiggle[] = {2, 4, 6, 8, 10, 8, 6, 4, 2};
+   static constexpr double kLearnStep = 0.02;
+   struct Learning {
+      int which = -1; // 0 angle, 1 radius, 2 touch; -1 none under way
+      int channel = 0, cc = 0, step = 0;
+      int steps[sizeof(kLearnWiggle) / sizeof(kLearnWiggle[0])] = {};
+      int count = 0;
+      double next = 0.0;
+   };
+   Learning learning_;
+
    void applyLearn(const clap_output_events_t *out) {
+      // Presses in the same block (rare) go one at a time, angle first; a new press replaces a wiggle
+      // under way.
       const uint32_t which = learn_.exchange(0);
-      if (which == 0)
-         return;
-      const ChannelState &st = channels_[panelChannel_];
-      const int shift = applied_.fine ? 7 : 0;
-      auto learnValue = [&](int cc, int sent) {
-         const int value = sent > 0 ? sent >> shift : 0;
-         pushCC(out, 0, panelChannel_, cc, value > 0 ? value : kLearnValue);
-         if (value == 0 && sent >= 0)
-            pushValue(out, 0, panelChannel_, cc, sent);
-      };
-      if ((which & 1u) && applied_.polar)
-         learnValue(intParam(kParamOutAngle), st.sentAngle);
-      if ((which & 2u) && applied_.polar)
-         learnValue(intParam(kParamOutRadius), st.sentRadius);
-      if ((which & 4u) && touchOut() >= 0) {
-         pushCC(out, 0, panelChannel_, touchOut(), 127);
-         if (st.sentTouch != 127)
-            pushCC(out, 0, panelChannel_, touchOut(), 0);
+      for (int w = 0; w < 3; ++w)
+         if (which & (1u << w)) {
+            startLearn(w);
+            break;
+         }
+      stepLearn(out);
+   }
+
+   void startLearn(int which) {
+      Learning l;
+      l.channel = panelChannel_;
+      const ChannelState &st = channels_[l.channel];
+      if (which < 2) {
+         if (!applied_.polar || conflicting())
+            return;
+         l.cc = intParam(which == 0 ? kParamOutAngle : kParamOutRadius);
+         const int sent = which == 0 ? st.sentAngle : st.sentRadius;
+         const int from = sent >= 0 ? sent >> (applied_.fine ? 7 : 0) : kLearnValue;
+         const int dir = from > 63 ? -1 : 1;
+         for (int w : kLearnWiggle)
+            l.steps[l.count++] = from + dir * w;
+      } else {
+         if (touchOut() < 0)
+            return;
+         l.cc = touchOut();
+         for (int v : {127, 0, 127, 0})
+            l.steps[l.count++] = v;
       }
+      l.which = which;
+      l.next = secondsAt(0);
+      learning_ = l;
+   }
+
+   // Sends the wiggle's next step when it's due, then the value last sent on the CC to end it.
+   void stepLearn(const clap_output_events_t *out) {
+      Learning &l = learning_;
+      if (l.which < 0 || secondsAt(0) < l.next - 1e-9)
+         return;
+      if (l.step < l.count) {
+         pushCC(out, 0, l.channel, l.cc, l.steps[l.step++]);
+         l.next = secondsAt(0) + kLearnStep;
+         return;
+      }
+      const ChannelState &st = channels_[l.channel];
+      if (l.which == 2) {
+         if (st.sentTouch == 127)
+            pushCC(out, 0, l.channel, l.cc, 127);
+      } else {
+         const int sent = l.which == 0 ? st.sentAngle : st.sentRadius;
+         if (sent >= 0 && applied_.polar)
+            pushValue(out, 0, l.channel, l.cc, sent);
+      }
+      l.which = -1;
    }
 
    // Returns true if the event was an XY input CC and should not be forwarded.

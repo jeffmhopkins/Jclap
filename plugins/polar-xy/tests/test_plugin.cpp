@@ -420,54 +420,59 @@ void dragTests() {
    editor->releaseInput();
 }
 
-// The panel's SEND buttons: one output CC alone, for a MIDI learn.
+// The panel's SEND buttons: one output CC alone, for a MIDI learn, as a short wiggle from where it is
+// and back, one step every 20 ms.
 void learnTests() {
    jclap::core::TestHost h(clap_entry, "com.jeffmhopkins.jclap.polar-xy");
    auto *editor = h.object<polar_xy::EditorHost>();
-   // Before anything was sent: a learn doesn't pick up a 0, so 64.
-   editor->sendOutput(1);
-   auto out = h.process();
-   JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 19 && out.midi[0].data2 == 64);
+   const auto wiggle = [&](int which) {
+      editor->sendOutput(which);
+      std::vector<std::pair<int, int>> sent; // CC, value
+      for (int i = 0; i < 40; ++i) // 40 blocks of 1024 frames: about 0.85 s
+         for (const auto &m : h.process(1024).midi)
+            sent.push_back({m.data1, m.data2});
+      return sent;
+   };
+   const auto steps = [](int cc, int from, int dir, int end) {
+      std::vector<std::pair<int, int>> want;
+      for (int w : {2, 4, 6, 8, 10, 8, 6, 4, 2})
+         want.push_back({cc, from + dir * w});
+      if (end >= 0)
+         want.push_back({cc, end});
+      return want;
+   };
+   // Before anything was sent: around 64, with nothing to go back to.
+   JCLAP_CHECK(wiggle(1) == steps(19, 64, -1, -1));
 
-   // After: the value last sent, on that CC only.
+   // After: from the value last sent and back, on that CC only.
    h.midi(0xB0, 16, 64);
    h.midi(0xB0, 17, 127);
    h.process();
-   editor->sendOutput(0);
-   out = h.process();
-   JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 18 && out.midi[0].data2 == 32);
-   editor->sendOutput(1);
-   out = h.process();
-   JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 19 && out.midi[0].data2 == 127);
+   JCLAP_CHECK(wiggle(0) == steps(18, 32, 1, 32));
+   JCLAP_CHECK(wiggle(1) == steps(19, 127, -1, 127));
    JCLAP_CHECK(h.process().midi.empty());
 
-   // A value last sent at 0 goes out at 64, then back to 0.
+   // A value at 0 wiggles up from 0.
    h.midi(0xB0, 16, 127);
    h.midi(0xB0, 17, 64);
    h.process();
-   editor->sendOutput(0);
-   out = h.process();
-   JCLAP_CHECK(out.midi.size() == 2 && out.midi[0].data1 == 18 && out.midi[0].data2 == 64 &&
-               out.midi[1].data1 == 18 && out.midi[1].data2 == 0);
+   JCLAP_CHECK(wiggle(0) == steps(18, 0, 1, 0));
 
-   // Touch: pressed, then released again.
+   // Touch: pressed and released twice.
    h.setParam(15, 20.0);
    h.process();
-   editor->sendOutput(2);
-   out = h.process();
-   JCLAP_CHECK(out.midi.size() == 2 && out.midi[0].data1 == 20 && out.midi[0].data2 == 127 &&
-               out.midi[1].data1 == 20 && out.midi[1].data2 == 0);
+   JCLAP_CHECK((wiggle(2) == std::vector<std::pair<int, int>>{{20, 127}, {20, 0}, {20, 127}, {20, 0}}));
    h.setParam(15, -1.0);
    h.midi(0xB0, 16, 64);
    h.midi(0xB0, 17, 127);
    h.process();
 
-   // At 14 bits, only the MSB: the CC to learn.
+   // At 14 bits, MSBs only, the CC to learn, then the whole value back (MSB and LSB).
    h.setParam(11, 1.0);
    h.process();
-   editor->sendOutput(0);
-   out = h.process();
-   JCLAP_CHECK(out.midi.size() == 1 && out.midi[0].data1 == 18 && out.midi[0].data2 == 32);
+   auto fine = wiggle(0);
+   JCLAP_CHECK(fine.size() == 11 && fine[0] == std::make_pair(18, 34) && fine[9] == std::make_pair(18, 32) &&
+               fine[10].first == 50);
 }
 
 // 14-bit output: each value goes out as its MSB on the output CC, then its LSB on that CC + 32.

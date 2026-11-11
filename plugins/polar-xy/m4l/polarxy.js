@@ -538,6 +538,8 @@ function Engine(emit) {
    this.inX = this.int('inx');
    this.inY = this.int('iny');
    this.applied = this.settings();
+   this.learnText = ''; this.learnTime = 0; // the last SEND, for the status line
+   this.learning = null; // a SEND's wiggle under way
 }
 
 Engine.prototype.int = function (name) { return Math.floor(this.p[name] + 0.5); };
@@ -810,6 +812,7 @@ Engine.prototype.handleCC = function (channel, cc, value) {
 Engine.prototype.tick = function (dt) {
    this.convertPending();
    this.time += dt;
+   if (this.learning && this.time >= this.learning.next - 1e-9) this.learnStep();
    this.releaseTouches();
    var m = this.motionSettings();
    for (var c = 0; c < 16; ++c) {
@@ -821,25 +824,56 @@ Engine.prototype.tick = function (dt) {
    }
 };
 
-// A SEND button: that output CC alone, for a MIDI learn. At 14 bits, only the MSB, the CC to learn.
-// A learn doesn't pick up a CC at 0 (Omnisphere's doesn't), so it never goes out at 0: the angle or
-// radius goes at its last value, or LEARN_VALUE when that's 0 or nothing was sent yet, then back to
-// the 0 it was. Touch goes out pressed (127), then released again unless it's held.
-var LEARN_VALUE = 64;
+// A SEND button: that output CC alone, for a MIDI learn. A learn listens for a control being moved,
+// and Omnisphere's doesn't take a single CC, so the CC goes out as a short wiggle like a knob turned
+// a little and back: LEARN_WIGGLE steps from where it is (64 before anything was sent), one every
+// LEARN_STEP seconds, then the value last sent on it again. At 14 bits the wiggle is MSBs only, the CC
+// to learn, and the last step is the whole value. Touch goes out pressed and released twice, then as
+// it is.
+var LEARN_VALUE = 64, LEARN_WIGGLE = [2, 4, 6, 8, 10, 8, 6, 4, 2], LEARN_STEP = 0.02;
 Engine.prototype.learn = function (which) {
    var c = this.lastChannel, st = this.channels[c];
    var shift = this.applied.fine ? 7 : 0;
+   var cc, steps = [], i;
    if (which === 'angle' || which === 'radius') {
-      if (!this.applied.polar) return;
-      var cc = this.int(which === 'angle' ? 'outangle' : 'outradius');
+      if (!this.applied.polar) return this.learned('SEND ' + which + ': Polar Out is off, nothing sent');
+      if (this.conflicting()) return this.learned('SEND ' + which + ': Angle and Radius Out are the same CC, nothing sent');
+      cc = this.int(which === 'angle' ? 'outangle' : 'outradius');
       var sent = which === 'angle' ? st.sentAngle : st.sentRadius;
-      var value = sent > 0 ? sent >> shift : 0;
-      this.emit(0xB0 | c, cc, value > 0 ? value : LEARN_VALUE);
-      if (value === 0 && sent >= 0) this.pushValue(c, cc, sent);
-   } else if (which === 'touch' && this.touchOut() >= 0) {
-      this.emit(0xB0 | c, this.touchOut(), 127);
-      if (st.sentTouch !== 127) this.emit(0xB0 | c, this.touchOut(), 0);
+      var from = sent >= 0 ? sent >> shift : LEARN_VALUE, dir = from > 63 ? -1 : 1;
+      for (i = 0; i < LEARN_WIGGLE.length; ++i) steps.push(from + dir * LEARN_WIGGLE[i]);
+   } else if (which === 'touch') {
+      cc = this.touchOut();
+      if (cc < 0) return this.learned('SEND touch: set a Touch Out CC first, nothing sent');
+      steps = [127, 0, 127, 0];
+   } else return;
+   this.learning = { which: which, channel: c, cc: cc, steps: steps, next: 0 };
+   this.learnStep();
+   this.learned('SEND ' + which + ': wiggling CC ' + cc + ' on ch ' + (c + 1));
+};
+
+// Sends the wiggle's next step, then the value last sent on the CC to end it.
+Engine.prototype.learnStep = function () {
+   var l = this.learning, st = this.channels[l.channel];
+   if (l.steps.length) {
+      this.emit(0xB0 | l.channel, l.cc, l.steps.shift());
+      l.next = this.time + LEARN_STEP;
+      return;
    }
+   this.learning = null;
+   if (l.which === 'touch') {
+      if (st.sentTouch === 127) this.emit(0xB0 | l.channel, l.cc, 127);
+      return;
+   }
+   var sent = l.which === 'angle' ? st.sentAngle : st.sentRadius;
+   if (sent >= 0 && this.applied.polar) this.pushValue(l.channel, l.cc, sent);
+};
+
+// What the last SEND did, shown on the status line for a few seconds, so a press is seen to land.
+var LEARN_SHOWN = 4;
+Engine.prototype.learned = function (text) {
+   this.learnText = text;
+   this.learnTime = this.time;
 };
 
 // Lands every glide (after a reset, say) and forgets what was sent, so the next move sends both.
@@ -854,6 +888,7 @@ Engine.prototype.reset = function () {
 
 // One line for the device: the last channel's input and output, or what stops it converting.
 Engine.prototype.status = function () {
+   if (this.learnText && this.time - this.learnTime < LEARN_SHOWN) return this.learnText;
    if (this.int('inx') === this.int('iny')) return 'X and Y In are the same CC: passing through';
    if (this.int('outangle') === this.int('outradius')) return 'Angle and Radius Out are the same CC: passing through';
    var c = this.lastChannel, st = this.channels[c];
