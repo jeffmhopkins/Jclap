@@ -123,8 +123,8 @@ d.engine.setParam('outangle', 20);
 m = d.take();
 check(m.length === 2 && m[0][1] === 20 && m[1][1] === 19, 'moved output CCs resend');
 
-// SEND buttons: that CC alone, as a short wiggle from its last value and back, one step a tick.
-function wiggle(d) {
+// SEND buttons: that CC alone, once, at its last value.
+function sent(d) {
    var all = d.take();
    for (var i = 0; i < 20; ++i) {
       d.engine.tick(0.02);
@@ -133,21 +133,20 @@ function wiggle(d) {
    return all.map(function (m) { return [m[1], m[2]]; }).join(' ');
 }
 d.engine.learn('radius');
-check(wiggle(d) === '19,125 19,123 19,121 19,119 19,117 19,119 19,121 19,123 19,125 19,127', 'send radius wiggles down from 127 and back');
-// The angle there is 0: up from 0 and back.
+check(sent(d) === '19,127', 'send radius');
 d.engine.learn('angle');
-check(wiggle(d) === '20,2 20,4 20,6 20,8 20,10 20,8 20,6 20,4 20,2 20,0', 'send angle wiggles up from 0 and back');
-// Before anything was sent: around 64, and nothing to go back to.
+check(sent(d) === '20,0', 'send angle at 0');
+// Before anything was sent: 64.
 d = device();
 d.engine.learn('radius');
-check(wiggle(d) === '19,62 19,60 19,58 19,56 19,54 19,56 19,58 19,60 19,62', 'send before anything was sent');
-// Touch: pressed and released twice.
+check(sent(d) === '19,64', 'send before anything was sent');
+// Touch: as it is, released before any.
 d.engine.setParam('touchout', 20);
 d.engine.learn('touch');
-check(/SEND touch: wiggling CC 20 on ch 1/.test(d.engine.status()), 'status shows the send');
-check(wiggle(d) === '20,127 20,0 20,127 20,0', 'send touch');
+check(/touch: sent CC 20 = 0 on ch 1/.test(d.engine.status()), 'status shows the send');
+check(sent(d) === '20,0', 'send touch');
 d.engine.tick(5);
-check(!/SEND/.test(d.engine.status()), 'and then goes back');
+check(!/sent CC/.test(d.engine.status()), 'and then goes back');
 d.engine.setParam('touchout', -1);
 d.engine.learn('touch');
 check(d.take().length === 0 && /Touch Out/.test(d.engine.status()), 'status says why nothing was sent');
@@ -161,13 +160,13 @@ d.send(0xB0, 16, 127, 0xB0, 17, 64);
 d.engine.tick(0.005);
 d.take();
 d.engine.setParam('outangle', 18);
-check(wiggle(d) === '18,0', 'typed Out CC sends its value once');
+check(sent(d) === '18,0', 'typed Out CC sends its value once');
 d.engine.setParam('outradius', 19);
-check(wiggle(d) === '19,127', 'typed Radius Out too');
+check(sent(d) === '19,127', 'typed Radius Out too');
 d.engine.setParam('outradius', 21);
-check(wiggle(d) === '18,0 21,127', 'a new Radius Out resends the position once, not twice');
+check(sent(d) === '18,0 21,127', 'a new Radius Out resends the position once, not twice');
 d.engine.setParam('touchout', 30);
-check(wiggle(d) === '30,0', 'typed Touch Out sends released');
+check(sent(d) === '30,0', 'typed Touch Out sends released');
 
 // The Max glue: the UI thread's messages only queue, and the next tick runs them, so every byte goes
 // out from the scheduler thread.
