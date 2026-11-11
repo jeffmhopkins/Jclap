@@ -152,6 +152,19 @@ d.engine.setParam('touchout', -1);
 d.engine.learn('touch');
 check(d.take().length === 0 && /Touch Out/.test(d.engine.status()), 'status says why nothing was sent');
 
+// Typing an Out CC, even the same one, sends it like its SEND button; not while the device loads.
+d = device();
+d.engine.setParam('outangle', 18);
+check(d.take().length === 0, 'no send while loading');
+d.engine.tick(1.5);
+d.send(0xB0, 16, 127, 0xB0, 17, 64);
+d.engine.tick(0.005);
+d.take();
+d.engine.setParam('outangle', 18);
+check(wiggle(d).indexOf('18,2 18,4') === 0, 'typed Out CC wiggles');
+d.engine.setParam('touchout', 30);
+check(wiggle(d) === '30,127 30,0 30,127 30,0', 'typed Touch Out wiggles');
+
 // 14-bit: MSB then LSB on CC + 32.
 d = device();
 d.engine.setParam('resolution', 1);

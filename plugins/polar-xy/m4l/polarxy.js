@@ -555,7 +555,14 @@ Engine.prototype.setParam = function (name, value) {
    this.convertPending();
    this.p[name] = clamp(value, range[0], range[1]);
    this.applySettings();
+   // Typing an Out CC (even the one already there) sends it as a SEND button does, for a MIDI learn.
+   // Not while the device loads, when every control sends its value once.
+   var learnFor = { outangle: 'angle', outradius: 'radius', touchout: 'touch' }[name];
+   if (learnFor && this.time >= LOAD_SETTLE && (learnFor !== 'touch' || this.touchOut() >= 0)) this.learn(learnFor);
 };
+
+// Seconds after the device starts ticking before a typed Out CC counts as typed.
+var LOAD_SETTLE = 1;
 
 Engine.prototype.conflicting = function () {
    return this.int('inx') === this.int('iny') || this.int('outangle') === this.int('outradius');
