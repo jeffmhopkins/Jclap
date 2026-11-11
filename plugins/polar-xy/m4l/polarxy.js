@@ -1003,6 +1003,11 @@ if (typeof module !== 'undefined' && module.exports) {
 // ---- Max glue ----
 // MIDI and ticks are marked immediate so they run in Max's scheduler thread with the MIDI, not
 // deferred to the UI thread, so notes passing through aren't held up.
+//
+// Everything that touches the engine runs in that one thread. The dials, menus and SEND buttons
+// arrive in the UI thread, so they only queue a command, and the next tick (every few ms) runs it.
+// Run from the UI thread, a message's three bytes could go out to [midiout] with the scheduler
+// thread's bytes between them, and come out as the wrong CC or value.
 
 var engine = new Engine(function (status, d1, d2) {
    outlet(0, status);
@@ -1011,6 +1016,17 @@ var engine = new Engine(function (status, d1, d2) {
 });
 var parser = new MidiParser(engine, function (b) { outlet(0, b); });
 var lastTick = 0, lastStatus = '', statusAge = 0;
+var commands = [], commandsRun = 0; // queued from the UI thread, run in order by tick; never shrunk,
+                                   // so neither thread moves what the other is using
+
+function runCommands() {
+   while (commandsRun < commands.length) {
+      var c = commands[commandsRun++];
+      if (c[0] === 'param') engine.setParam(c[1], c[2]);
+      else if (c[0] === 'learn') engine.learn(c[1]);
+      else if (c[0] === 'reset') engine.reset();
+   }
+}
 
 function msg_int(b) { parser.byte(b); }
 msg_int.immediate = 1;
@@ -1024,6 +1040,7 @@ function tick() {
    var now = new Date().getTime();
    var dt = lastTick ? clamp((now - lastTick) / 1000, 0.001, 0.05) : 0.005;
    lastTick = now;
+   runCommands();
    engine.tick(dt);
    statusAge += dt;
    if (statusAge >= 0.1) {
@@ -1038,9 +1055,9 @@ function tick() {
 tick.immediate = 1;
 
 // `param <name> <value>`, from the device's dials and menus.
-function param(name, value) { engine.setParam(name, value); }
+function param(name, value) { commands.push(['param', name, value]); }
 
 // `learn angle` / `learn radius`, from the SEND buttons.
-function learn(which) { engine.learn(which); }
+function learn(which) { commands.push(['learn', which]); }
 
-function reset() { engine.reset(); }
+function reset() { commands.push(['reset']); }

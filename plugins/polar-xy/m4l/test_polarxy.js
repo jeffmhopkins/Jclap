@@ -169,6 +169,19 @@ check(wiggle(d) === '18,0 21,127', 'a new Radius Out resends the position once, 
 d.engine.setParam('touchout', 30);
 check(wiggle(d) === '30,0', 'typed Touch Out sends released');
 
+// The Max glue: the UI thread's messages only queue, and the next tick runs them, so every byte goes
+// out from the scheduler thread.
+(function () {
+   var vm = require('vm'), out = [];
+   var max = { outlet: function (n, v) { if (n === 0) out.push(v); }, Date: Date, Math: Math };
+   vm.createContext(max);
+   vm.runInContext(require('fs').readFileSync(path.join(__dirname, 'polarxy.js'), 'utf8'), max);
+   max.learn('angle');
+   check(out.length === 0, 'glue: a SEND press only queues');
+   max.tick();
+   check(out.length === 3 && out[0] === 0xB0 && out[1] === 18, 'glue: the next tick sends it');
+})();
+
 // 14-bit: MSB then LSB on CC + 32.
 d = device();
 d.engine.setParam('resolution', 1);
