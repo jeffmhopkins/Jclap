@@ -147,8 +147,20 @@ Played playSteady(Model &m, int id, double len, double hz, double target = -1.0,
    for (float v : out)
       p.rms += v * v;
    p.rms = std::sqrt(p.rms / out.size());
-   if (std::isfinite(p.rms) && p.rms > 1e-4)
-      p.hz = measureHz(out, hz * 0.7, hz * 1.4);
+   // The pitch (the oboe's read through a lowpass near the fundamental: its fundamental lies under
+   // its harmonics, as a real oboe's, and its top harmonics jitter enough with the breath's noise to
+   // blur the waveform's repeat, though the tone holds its pitch).
+   if (std::isfinite(p.rms) && p.rms > 1e-4) {
+      std::vector<float> low(out);
+      const int passes = id == kOboe ? 4 : 0;
+      const double c = 1.0 - std::exp(-2.0 * kPi * 1.2 * hz / kFs);
+      for (int pass = 0; pass < passes; ++pass) {
+         double s = 0.0;
+         for (float &v : low)
+            v = static_cast<float>(s += c * (v - s));
+      }
+      p.hz = measureHz(low, hz * 0.7, hz * 1.4);
+   }
    return p;
 }
 
