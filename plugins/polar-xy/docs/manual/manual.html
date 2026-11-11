@@ -198,6 +198,8 @@ table.ref td.d { width: 1.1in; white-space: normal; }
 .cover .shot { left: 1.5in; right: 1.5in; top: 4.2in; }
 #overview { width: 5.6in; margin-left: auto; margin-right: auto; }
 .steps[start] { counter-reset: none; }
+table.ctl td.c { width: 2.6in; }
+table.ctl td.d, table.ctl td.r { font-size: 8.4pt; }
 .toc .ch { padding: 3px 0; }
 .toc .sec { padding: 0 0 0 0.36in; font-size: 8pt; line-height: 1.45; }
 .toc-title { margin-bottom: 0.18in; }
@@ -340,7 +342,7 @@ table.ref td.d { width: 1.1in; white-space: normal; }
 
   <ol class="steps">
     <li><b class="h">Load it in front of Omnisphere</b>On the Omnisphere track, put <strong>Polar XY</strong> before Omnisphere in the device chain.</li>
-    <li><b class="h">Tell it your controller's CCs</b>Set <strong>X</strong> and <strong>Y</strong> under XY IN to the CCs your controller sends (16 and 17 by default). Move the controller: the dot in the <strong>XY IN</strong> view follows it, and the orb in <strong>POLAR OUT</strong> follows that, with the angle and radius it is sending shown underneath.</li>
+    <li><b class="h">Tell it your controller's CCs</b>Set <strong>X</strong> and <strong>Y</strong> under XY IN to the CCs your controller sends (16 and 17 by default; Chapter 12 lists the defaults for some popular controllers). Move the controller: the dot in the <strong>XY IN</strong> view follows it, and the orb in <strong>POLAR OUT</strong> follows that, with the angle and radius it is sending shown underneath.</li>
     <li><b class="h">Pick the output CCs</b><strong>ANGLE</strong> and <strong>RADIUS</strong> under POLAR OUT are the CCs that go to Omnisphere (18 and 19 by default). Any CCs your controller and Omnisphere aren't already using will do.</li>
     <li><b class="h">Learn the angle</b>Open Omnisphere's <strong>ORB</strong> page and switch the Orb on. Right-click the Orb, check the menu says the Orb is set for <em>Angle</em> (if it offers <em>Switch to Angle</em>, choose it first), and choose <strong>MIDI CC Learn</strong>. Then press <strong>ANGLE</strong> under MIDI LEARN on Polar XY. It sends the angle CC alone, once, so Omnisphere learns exactly that CC.</li>
     <li><b class="h">Learn the radius</b>Right-click the Orb, choose <strong>Switch to Radius</strong>, right-click again, choose <strong>MIDI CC Learn</strong>, and press <strong>RADIUS</strong> on Polar XY.</li>
@@ -751,7 +753,7 @@ table.ref td.d { width: 1.1in; white-space: normal; }
     <li><b class="h">Unzip the device</b>From the <em>Max for Live</em> folder of the release zip, unzip <span class="mono">Polar XY.amxd</span> and <span class="mono">polarxy.js</span> into the new folder. Keep the two files together: the device runs the script beside it.</li>
     <li><b class="h">Load it</b>Open Ableton Live and choose <em>Max for Live</em> in the browser. <span class="mono">Polar XY.amxd</span> is listed there. Drag it onto an available MIDI track. It loads with the default settings.</li>
     <li><b class="h">Check Pass and Polar Out</b>Make sure <strong>Pass</strong> under XY IN is <em>Off</em> (the default), so only the angle and radius reach Omnisphere, and that the switch beside <strong>POLAR OUT</strong> reads <em>ON</em>.</li>
-    <li><b class="h">Enter your controller's CCs</b>In the <strong>X CC</strong> and <strong>Y CC</strong> boxes, enter the CC numbers your X/Y pad sends.</li>
+    <li><b class="h">Enter your controller's CCs</b>In the <strong>X CC</strong> and <strong>Y CC</strong> boxes, enter the CC numbers your X/Y pad sends. Chapter 12 lists the defaults for some popular controllers.</li>
     <li><b class="h">Set the angle CC</b>Click the <strong>Angle</strong> value, type the CC you want for the angle and press <span class="key">Enter</span>.</li>
     <li><b class="h">Set the radius CC</b>Click the <strong>Radius</strong> value, type the CC you want for the radius and press <span class="key">Enter</span>.</li>
     <li><b class="h">Leave Touch off</b>For Omnisphere, the <strong>Touch</strong> value under POLAR OUT can be left at −1 (off).</li>
@@ -845,10 +847,35 @@ table.ref td.d { width: 1.1in; white-space: normal; }
   <div class="chap-head">
     <div class="num">Chapter 12</div>
     <h1>Setups and Recipes</h1>
-    <p class="lede">Starting points for different controllers and different feels. Load Init first, then set what's listed.</p>
+    <p class="lede">The CCs some popular X/Y controllers send out of the box, then starting points for different feels.</p>
     <div class="bar"></div>
   </div>
 
+  <h2>Default CCs for select X/Y controllers</h2>
+  <p>These are the CCs each controller sends with its factory settings. Enter the X and Y CCs as Polar XY's <strong>X</strong> and <strong>Y</strong> (<span class="m4l">X CC</span>, <span class="m4l">Y CC</span>), and the touch CC, if there is one, as <strong>TOUCH</strong> under XY IN (<span class="m4l">Touch</span>) for Touch Filter to use (Chapter 8).</p>
+  <table class="ctl">
+    <thead><tr><th>Controller</th><th>X CC</th><th>Y CC</th><th>Z CC</th><th>Touch CC</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Ableton Push 3</td><td class="d">74</td><td class="d">75</td><td class="r">N/A</td><td class="d">76</td></tr>
+      <tr><td class="c">Amptone XY MIDI mini <span class="muted">(mode 1)</span></td><td class="d">12</td><td class="d">13</td><td class="r">N/A</td><td class="d">92</td></tr>
+      <tr><td class="c">Korg NTS-3 Kaoss Pad kit <span class="muted">(Total FX)</span></td><td class="d">12</td><td class="d">13</td><td class="d">14</td><td class="d">98</td></tr>
+      <tr><td class="c">Korg Multi/Poly</td><td class="d">18</td><td class="d">19</td><td class="r">N/A</td><td class="d">20</td></tr>
+      <tr><td class="c">Korg nanoPAD 2</td><td class="d">1</td><td class="d">2</td><td class="r">N/A</td><td class="d">16</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">Polar XY doesn't use a Z CC. It passes through to Omnisphere untouched, where you can MIDI-learn it to something else.</p>
+
+  <div class="note warn">
+    <span class="k">Korg nanoPAD 2</span>
+    <p>The nanoPAD 2's defaults conflict with other default CCs (its X is on CC 1, the mod wheel), so edit them with the Korg Control Editor before you use it with Polar XY.</p>
+  </div>
+  <div class="note">
+    <span class="k">Watch for clashes</span>
+    <p>Pick Angle and Radius Out CCs that your controller doesn't send. The Korg Multi/Poly sends X and Y on 18 and 19, which are Polar XY's default Angle and Radius Out, so move the outputs elsewhere, for example to 22 and 23.</p>
+  </div>
+
+  <h2 class="pb">Recipes</h2>
+  <p>Load Init first, then set what's listed.</p>
   <div class="recipes">
     <div class="recipe" style="--rc:#f28c28">
       <h3>Direct steering</h3>
@@ -882,7 +909,7 @@ table.ref td.d { width: 1.1in; white-space: normal; }
     </div>
     <div class="recipe" style="--rc:#8fe8a8">
       <h3>Resistive pad (Geren)</h3>
-      <p>The factory <em>Geren</em> preset, tuned on recordings of an XYMIDI mini. For another resistive pad, load it and set the CCs to your pad's.</p>
+      <p>The factory <em>Geren</em> preset, tuned on recordings of an Amptone XY MIDI mini, with its default CCs. For another resistive pad, load it and set the CCs to your pad's.</p>
       <div class="set">X In 12 · Y In 13 · Touch In 92 · Angle / Radius Out 107 / 108 · Touch Filter 50 ms · Jump Limit 24 · Center 15% · Smoothing 150 ms</div>
       <div class="from">Lift-offs sometimes skitter up to about 50 ms before the touch CC goes off, which is why it holds back 50 ms.</div>
     </div>
