@@ -1101,6 +1101,10 @@ public:
       // The same rows as the stereo view and the levels beside it: a title, the field, a caption.
       label(c, "VOICES", 0, 0, W, kDim, 12.0f);
       const float mid = kFieldTop + kFieldHeight / 2;
+      c.setColor(kWell);
+      c.roundedRectangle(0, kFieldTop * k, width(), kFieldHeight * k, 6 * k);
+      c.setColor(visage::Color(0x14ffffff));
+      c.roundedRectangleBorder(0, kFieldTop * k, width(), kFieldHeight * k, 6 * k, 1 * k);
       for (int i = 0; i < kVoiceCount; ++i) {
          const float cx = (W / 2 - 54 + (i % 4) * 36) * k, cy = (mid - 17 + (i / 4) * 34) * k;
          const bool on = i < static_cast<int>(voices_.size()) && voices_[i].note >= 0;
@@ -1245,10 +1249,10 @@ public:
       label(c, "LEVEL", 0, 0, W, kDim, 12.0f);
       char t[32];
       if (peakDb > -60.0)
-         std::snprintf(t, sizeof(t), "PEAK %+.1f dB", peakDb);
+         std::snprintf(t, sizeof(t), "%+.1f dB", peakDb);
       else
-         std::snprintf(t, sizeof(t), "PEAK  -inf");
-      label(c, t, 0, 2, W, peakDb > 0.0 ? 0xffff5a4a : kFaint, 10.0f, visage::Font::kRight);
+         std::snprintf(t, sizeof(t), "-inf");
+      label(c, t, 0, 2, W, peakDb > 0.0 ? 0xffff5a4a : kFaint, 9.5f, visage::Font::kRight);
       const float top = kFieldTop, bottom = kFieldTop + kFieldHeight;
       // IN is the breath, 0 to full, straight; the output is in dB, -48 to +6.
       const auto unit = [](int i, double v) {
@@ -1259,7 +1263,7 @@ public:
       };
       const auto yAt = [&](float u) { return bottom - u * (bottom - top); };
       const auto yDb = [&](double db) { return yAt(static_cast<float>((db + 48.0) / 54.0)); };
-      const float bw = 14, xs[3] = {12, 84, 108};
+      const float bw = 18, xs[3] = {22, 82, 108};
       // The output's scale: a line across L and R at each mark, its number to the right.
       for (int db : {6, 0, -12, -24, -36, -48}) {
          const float y = yDb(db);
@@ -1305,8 +1309,13 @@ public:
       // Where Master is set: a small notch on the scale's left, beside L.
       const float my = yDb(std::clamp(masterDb_, -48.0, 6.0));
       c.setColor(visage::Color(0xccffffff));
-      c.fill((xs[1] - bw / 2 - 7) * k, (my - 0.75f) * k, 4 * k, 1.5f * k);
-      label(c, "MASTER", 26, my - 8.5f, 44, kFaint, 8.0f, visage::Font::kRight);
+      visage::Path notch;
+      const float nx = xs[1] - bw / 2 - 3;
+      notch.moveTo(nx * k, my * k);
+      notch.lineTo((nx - 6) * k, (my - 4) * k);
+      notch.lineTo((nx - 6) * k, (my + 4) * k);
+      notch.close();
+      c.fill(notch);
    }
 
 private:
@@ -3063,11 +3072,11 @@ private:
       tips_.add(mode, "Poly: eight voices. Mono: one, tongued between notes. Legato: one, slurred between notes.");
 
       // VOICE: the voices, where they sit in the stereo field, and the levels.
-      lights_ = &tabs.addToPage(0, add<VoiceLights>({920, 656, 164, 132}, 164.0f));
-      stereo_ = &tabs.addToPage(0, add<StereoView>({1100, 656, 284, 132}, 284.0f));
+      lights_ = &tabs.addToPage(0, add<VoiceLights>({920, 656, 168, 132}, 168.0f));
+      stereo_ = &tabs.addToPage(0, add<StereoView>({1104, 656, 340, 132}, 340.0f));
       tips_.add(*stereo_, "Where each voice is heard, left to right: Spread fans the notes out (low to the left), Pan moves them all. The needle under it is the output's balance.");
-      levels_ = &tabs.addToPage(0, add<LevelView>({1404, 656, 216, 132}, 216.0f));
-      tips_.add(*levels_, "In: the breath coming in (the hardest-blown voice, or Breath In). L and R: the output, with its peak held and a tick at Master. If it turns red, lower Level or Master.");
+      levels_ = &tabs.addToPage(0, add<LevelView>({1460, 656, 160, 132}, 160.0f));
+      tips_.add(*levels_, "In: the breath coming in (the hardest-blown voice, or Breath In). L and R: the output, with its peak held (in dB at the top) and a notch at Master. If it turns red, lower Level or Master.");
 
       // AIR: where the breath comes from and how it's shaped.
       curve_ = &tabs.addToPage(1, add<CurveGraph>({920, 652, 200, 136}, 200.0f));
