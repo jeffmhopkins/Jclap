@@ -182,7 +182,7 @@ public:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [width height [frames [player-tab [routes [armed [exciter-tab [voice-tab [air [settings... | dice | nopanel]]]]]]]]]\n", argv[0]);
+      std::fprintf(stderr, "usage: %s out.png [width height [frames [player-tab [routes [armed [exciter-tab [voice-tab [air [settings... | dice | panel | nopanel]]]]]]]]]\n", argv[0]);
       return 1;
    }
    if (!std::strcmp(argv[1], "--bench")) {
@@ -211,7 +211,9 @@ int main(int argc, char **argv) {
       if (!std::strcmp(argv[i], "dice"))
          options.dice = true; // the dice card open
       else if (!std::strcmp(argv[i], "nopanel"))
-         host.airPanelHidden = true; // the AIR view's controls tucked away
+         host.airPanelHidden = true; // the AIR view's controls tucked away (as they start)
+      else if (!std::strcmp(argv[i], "panel"))
+         host.airPanelHidden = false; // the AIR view's controls open
       else if (!host.apply(argv[i])) {
          std::fprintf(stderr, "unknown setting: %s\n", argv[i]);
          return 1;

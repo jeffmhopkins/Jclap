@@ -160,7 +160,7 @@ int main() {
    // The sections all belong somewhere, and their names are the panel's.
    JCLAP_CHECK(std::string(kDiceSectionNames[kDiceInstrument]) == "INSTRUMENT");
    for (clap_id id : {kTune, kFine, kLevel, kMaster, kLimiter, kBreathSource, kBreathIn, kCurve, kSlide, kBendRange,
-                      kLook, kGlow, kLoopX, kLoopSizeMin})
+                      kLook, kGlow, kLoopX, kLoopSizeMin, kSmoke})
       JCLAP_CHECK_EQ(diceSection(id), -1);
 
    // Randomize at each complexity, a handful of seeds each, then each patch mutated a few times at
