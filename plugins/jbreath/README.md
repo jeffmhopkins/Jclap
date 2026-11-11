@@ -264,6 +264,8 @@ rises and curls away. **SMOKE / INK** and the palette set its look.
 
 ![The VOICE tab](docs/readme/voice.jpg)
 
+Each sounding note keeps one colour across the panel, by the voice playing it: its light, its partials on the bore, its dot on the air flow, the tongue, the press curve and the hybrid's filter, its place in the stereo field and its loop's name.
+
 **VOICE** shows the eight voices; where each sounding note sits in the stereo field (Spread fans
 them out around Pan, each note in its own colour, with the output's balance under it); and the
 meters, glowing as they rise: the breath coming in, and the output left and right, with the peak
