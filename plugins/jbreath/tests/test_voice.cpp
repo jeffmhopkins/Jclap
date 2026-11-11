@@ -114,11 +114,13 @@ int main() {
       // Soft, middling and hard, every third semitone: it sounds, and in its own register (a tone
       // that jumps to the octave has almost nothing left at the fundamental). A trumpet's bell sends
       // out little of its fundamental, and at forte its 2nd and 3rd harmonics stand well above it.
+      // A sax's low notes have a strong 2nd harmonic too (the Iowa alto's low Db and D, mezzo forte:
+      // 3 and 7 dB over the fundamental), the more so blown hard and on the bigger horns.
       // The Alien is a voice: its throat's resonances lift whichever harmonic they sit on (H2 well
       // above H1 is what an "ah" does on some notes), so for it the register is checked by its
       // pitch instead (more than a quarter-tone off, and it isn't sounding its note).
       {
-         const double octaveRatio = m == kTrumpet ? 6.0 : 3.0;
+         const double octaveRatio = m == kTrumpet || m == kSax ? 6.0 : 3.0;
          int silent = 0, octave = 0;
          double worstRatio = 0.0;
          for (double velocity : {0.3, 0.75, 1.0})

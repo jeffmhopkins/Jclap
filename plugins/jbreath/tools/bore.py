@@ -130,6 +130,126 @@ def trumpet_profile(L, bell_len=0.55, bell_r=0.062, flare=0.7, cyl=0.00583):
     return pts
 
 
+def tmm_holes(profile, holes, nopen, w, cup, vent=None, dl=0.002):
+    """A bore with tone holes, worked backward from the bell. holes: (x, b, t) for each hole (its
+    place, radius and chimney height), from the bell up; the first nopen are open, the rest shut
+    (each a little volume). vent: an open register hole, (x, b, t). Returns Zin, the flow radiated
+    (the bell's and every open hole's together) over the flow in, and Zc at the input."""
+    xs = np.array([p[0] for p in profile])
+    rs = np.array([p[1] for p in profile])
+    f = w / (2 * np.pi)
+    k0 = w / C
+    rb = rs[-1]
+    ka = k0 * rb
+    z = 0.25 * ka ** 2 + 0.61j * ka
+    p = z / (1 + z) * RHO * C / (np.pi * rb * rb)
+    u = np.ones_like(p)
+    rad = u.copy()
+    pts = [(h[0], h[1], h[2], i < nopen) for i, h in enumerate(holes)]
+    if vent:
+        pts.append((vent[0], vent[1], vent[2], True))
+    pts.sort(key=lambda h: -h[0])
+    x = xs[-1]
+    for hx, hb, ht, ho in pts + [(0.0, None, None, None)]:
+        n = max(1, int(round((x - hx) / dl)))
+        e = np.linspace(hx, x, n + 1)
+        for ri in np.interp(0.5 * (e[1:] + e[:-1]), xs, rs)[::-1]:
+            Zc = RHO * C / (np.pi * ri * ri)
+            alpha = 3.0e-5 * np.sqrt(np.maximum(f, 1e-3)) / ri
+            k = k0 + alpha - 1j * alpha
+            c, s = np.cos(k * (x - hx) / n), np.sin(k * (x - hx) / n)
+            p, u = c * p + 1j * Zc * s * u, 1j * s / Zc * p + c * u
+        x = hx
+        if hb is not None:
+            Zh = RHO * C / (np.pi * hb * hb)
+            if ho:  # an open hole: its air's mass, and its radiation
+                uh = p / (1j * Zh * k0 * (ht + 0.75 * hb) + Zh * 0.25 * (k0 * hb) ** 2)
+                rad = rad + uh
+            else:  # a shut one: its chimney's volume under the pad, a compliance
+                uh = p * 1j * k0 * ht / Zh
+            u = u + uh
+    if cup > 0:
+        u = u + 1j * w * cup / (RHO * C * C) * p
+    return p / u, rad / u, RHO * C / (np.pi * rs[0] ** 2)
+
+
+def first_peak(f, Z):
+    m = np.abs(Z)
+    i = int(np.argmax((m[1:-1] > m[:-2]) & (m[1:-1] > m[2:]))) + 1
+    a, b, c = np.log(m[i - 1:i + 2])
+    return f[i] + 0.5 * (a - c) / (a - 2 * b + c) * (f[1] - f[0])
+
+
+def sax_profile(L, r0=0.006, rc=0.040, bell_r=0.065, bell_len=0.12, throat=0.0045, throat_len=0.03):
+    """An alto saxophone's air column: the mouthpiece's throat (a 4.5 mm bore, 3 cm), then from the
+    neck's tip a cone (the neck and body, 6 mm to 40 mm over the bore's length) opening into the
+    bell over its last 12 cm. With the mouthpiece's chamber (SAX_CUP) the throat stands in for the
+    cone's missing apex: these keep the resonances within about 25 cents of harmonic from low Bb to
+    the octave key's C#6 (a chamber alone, matched to the apex at the lowest notes, leaves the top
+    fingerings' second resonance a semitone or more sharp)."""
+    x1 = L - bell_len
+    r1 = r0 + (rc - r0) * (x1 - throat_len) / (L - throat_len)
+    pts = [(0.0, throat), (throat_len, throat), (throat_len + 1e-6, r0), (x1, r1)]
+    for x in np.linspace(x1, L, 20)[1:]:
+        pts.append((x, r1 + (bell_r - r1) * ((x - x1) / bell_len) ** 2.2))
+    return pts
+
+
+SAX_LOW, SAX_CUP, SAX_HOLES, SAX_TAPS = 138.59, 5.5e-6, 19, 256
+
+
+def sax_geometry():
+    """The alto's length and its tone holes, each placed (by bisection) to sound its semitone when it
+    and every hole under it are open; a hole's radius is 0.8 of the bore's there (at least 3.5 mm),
+    its chimney 3 mm and 15% of its radius."""
+    def tune(lo, hi, tgt, z_of):
+        fq = np.linspace(tgt * 0.7, tgt * 1.4, 700)
+        for _ in range(24):
+            x = 0.5 * (lo + hi)
+            if first_peak(fq, z_of(x, 2 * np.pi * fq)) > tgt:
+                lo = x
+            else:
+                hi = x
+        return x
+    L = tune(0.8, 1.4, SAX_LOW, lambda L, w: tmm_holes(sax_profile(L), [], 0, w, SAX_CUP)[0])
+    prof = sax_profile(L)
+    holes = []
+
+    def hole(x):
+        b = max(0.0035, 0.8 * np.interp(x, [p[0] for p in prof], [p[1] for p in prof]))
+        return (x, b, 0.003 + 0.15 * b)
+    for n in range(1, SAX_HOLES + 1):
+        top = holes[-1][0] - 0.01 if holes else L - 0.02
+        x = tune(0.08, top, SAX_LOW * 2 ** (n / 12),
+                 lambda x, w: tmm_holes(prof, holes + [hole(x)], n, w, SAX_CUP)[0])
+        holes.append(hole(x))
+    return prof, holes
+
+
+def sax_vent(n):
+    """The octave key's vent for fingering n: the body's (near the second resonance's pressure node
+    for the lower notes of the second register) or, from written A5 up, the neck's."""
+    return (0.24, 0.0015, 0.005) if n < 12 else (0.11, 0.0015, 0.005)
+
+
+def bake_holes(prof, holes, n, vent, fmax=2400.0, floor_db=-6.0):
+    f = np.linspace(20, 16000, 32000)
+    w = 2 * np.pi * f
+    Z, R, Zc = tmm_holes(prof, holes, n, w, SAX_CUP, vent)
+    poles = peaks(f, Z, fmax, floor_db, Zc)
+    lo = 1 / (1 + (f / 3000) ** 4)
+    s, cz, r0, Zf = fit(f, Z / Zc, poles, [np.ones_like(f)], lo, 1e-8)
+    H = 1j * w * R / 1e4
+    tau = (holes[n - 1][0] if n > 0 else prof[-1][0]) / C
+    start = int(tau * FS_REF) - N_TAPS // 3
+    taps = [np.exp(-1j * w * (start + k) / FS_REF) for k in range(SAX_TAPS)]
+    _, cr, fir, Hf = fit(f, H, poles, taps, 1 / np.abs(H), 1e-6)
+    zerr = np.abs(20 * np.log10(np.abs(Zf) / np.abs(Z / Zc)))[f < 3000].mean()
+    rerr = np.abs(20 * np.log10(np.abs(Hf) / np.abs(H)))[f < 12000].mean()
+    return dict(s=s, cz=cz, cr=cr, r0=float(r0[0]), fir=fir, start=start / FS_REF, zc=Zc,
+                peaks=[p[0] for p in poles], zerr=zerr, rerr=rerr)
+
+
 def ff(v):
     """A float literal for C++ (always with a point or an exponent)."""
     t = f"{v:.6g}"
@@ -150,7 +270,7 @@ def emit(name, fings, comment, out):
             out.write("     {" + ", ".join(ff(v) for v in (sn.real, sn.imag, a.real, a.imag, r.real, r.imag)) + "},\n")
         out.write("    },\n    {")
         out.write(", ".join(ff(t) for t in b['fir']))
-        out.write("}},\n")
+        out.write(f"}}, {len(b['fir'])}}},\n")
     out.write("};\n\n")
 
 
@@ -167,6 +287,16 @@ def main():
         print(f"trumpet valves {v}: {len(fings[-1]['s'])} modes, Z {fings[-1]['zerr']:.2f} dB, rad {fings[-1]['rerr']:.2f} dB",
               file=sys.stderr)
     emit("Trumpet", fings, "Bb trumpet, the open horn then each valve combination a semitone longer (0 to 6).", out)
+    # Alto sax: each fingering from low Bb (written; concert Db3) up, the holes from the bell opening
+    # one by one (0 to 19, to the palm keys' F), then with the octave key from written D5 (4 to 19).
+    prof, holes = sax_geometry()
+    fings = []
+    for oct_, n in [(0, n) for n in range(SAX_HOLES + 1)] + [(1, n) for n in range(4, SAX_HOLES + 1)]:
+        fings.append(bake_holes(prof, holes, n, sax_vent(n) if oct_ else None))
+        b = fings[-1]
+        print(f"sax {'octave ' if oct_ else ''}fingering {n}: {len(b['s'])} modes from {b['peaks'][0]:.1f} Hz, "
+              f"Z {b['zerr']:.2f} dB, rad {b['rerr']:.2f} dB", file=sys.stderr)
+    emit("Sax", fings, "Alto saxophone: fingerings 0 to 19 (written low Bb up a semitone each), then 4 to 19 with the octave key.", out)
     out.write("} // namespace jbreath\n")
 
 
