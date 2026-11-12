@@ -800,7 +800,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">REVERB</td><td class="r">0 – 100%</td><td class="d">15%</td><td>How much room. <span class="mod m">MOD</span></td></tr>
       <tr><td class="c">AIR</td><td class="r">0 – 100%</td><td class="d">0%</td><td>The breath heard around the instrument, not through it. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">LEVEL</td><td class="r">−60 – +12 dB</td><td class="d">0.0 dB</td><td>The patch's level, saved with presets. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
-      <tr><td class="c">MASTER</td><td class="r">−36 – +6 dB</td><td class="d">0.0 dB</td><td>The output's level. The dice never touch it. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">MASTER</td><td class="r">−36 – +6 dB</td><td class="d">0.0 dB</td><td>The output's level, before the limiter, so turning it up can't clip the output. The dice never touch it. <span class="mod m">MOD</span></td></tr>
     </tbody>
   </table>
   <p>The <strong>AIR</strong> tab (where the breath comes from) is described in Chapter 7.</p>
@@ -815,7 +815,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">DAMP</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How fast the highs die. <span class="mod m">MOD</span></td></tr>
       <tr><td class="c">PRE-DELAY</td><td class="r">0 – 100 ms</td><td class="d">12 ms</td><td>Delay before the room answers. <span class="mod m">MOD</span></td></tr>
       <tr><td class="c">TONE</td><td class="r">−12 – +12 dB</td><td class="d">+0.0 dB</td><td>Darkens or brightens the whole output. <span class="mod m">MOD</span></td></tr>
-      <tr><td class="c">LIMITER</td><td class="r">Off, Soft, Hard</td><td class="d">Hard</td><td>Off: nothing. Soft: overs saturate. Hard: a peak limiter holds the output under full scale, so a big chord never clips.</td></tr>
+      <tr><td class="c">LIMITER</td><td class="r">Off, Clip, Limit</td><td class="d">Limit</td><td>The very last stage, after Master. Off: nothing. Clip: overs saturate. Limit: a soft limiter that turns a loud chord down smoothly rather than letting it clip. It starts 5 dB under full scale and holds the loudest of it at −2 dBFS, with a soft knee, a 1 ms attack and a release that slows once it has been limiting a while, so a held chord doesn't pump; a soft clip after it catches the first instant of a loud note, so the output never reaches 0 dBFS. No latency, and anything under its knee passes untouched. (Projects saved with 0.12's Hard get this limiter.)</td></tr>
     </tbody>
   </table>
   <h2>The DELAY tab</h2>
@@ -1058,7 +1058,7 @@ function el(parent, tag, attrs, text) {
   box(240, y3, 80, 'DELAY', 'stereo echo');
   box(340, y3, 80, 'REVERB', 'small room');
   box(440, y3, 90, 'TONE · LEVEL', 'master');
-  box(550, y3, 80, 'LIMITER', 'off · soft · hard');
+  box(550, y3, 80, 'LIMITER', 'off · clip · limit');
   box(650, y3 + 46, 46, 'OUT', null, 'io');
   arrow(`M120,${y3 + H / 2} L138,${y3 + H / 2}`);
   arrow(`M220,${y3 + H / 2} L238,${y3 + H / 2}`);
@@ -1130,7 +1130,7 @@ function el(parent, tag, attrs, text) {
     ]],
     ['Output, Room and Delay', [
       ['Spread', '−100 – +100%', '50%', M], ['Pan', '−100 – +100%', '0%', MT], ['Air', pc(0, 100), '0%', MT], ['Level', '−60 – +12 dB', '0.0 dB', MT],
-      ['Master', '−36 – +6 dB', '0.0 dB', M], ['Limiter', 'Off, Soft, Hard', 'Hard', ''], ['Reverb', 'Off, On', 'On', ''], ['Room', pc(0, 100), '15%', M],
+      ['Master', '−36 – +6 dB', '0.0 dB', M], ['Limiter', 'Off, Clip, Limit', 'Limit', ''], ['Reverb', 'Off, On', 'On', ''], ['Room', pc(0, 100), '15%', M],
       ['Room Size', pc(0, 100), '50%', M], ['Room Decay', '0.2 – 10.0 s', '1.6 s', M], ['Room Damping', pc(0, 100), '50%', M], ['Room Pre-Delay', '0 – 100 ms', '12 ms', M],
       ['Tone', '−12 – +12 dB', '+0.0 dB', M], ['Delay', 'Off, On', 'Off', ''], ['Delay Sync', 'Free, 1/32 – 1/1', 'Free', ''], ['Delay Mix', pc(0, 100), '30%', M],
       ['Delay Time', '10 ms – 2 s', '375 ms', M], ['Delay Feedback', pc(0, 95), '40%', M], ['Delay Tone', pc(0, 100), '72%', M], ['Delay Spread', pc(0, 100), '50%', M],
