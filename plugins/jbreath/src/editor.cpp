@@ -72,11 +72,29 @@ constexpr unsigned kPress = 0xffff6fd2;
 constexpr float kVoiceViewHeight = 132, kFieldTop = 22, kFieldHeight = 80, kStripY = kFieldTop + kFieldHeight + 9,
                 kCaptionY = kVoiceViewHeight - 15;
 
-constexpr unsigned kSlotColors[kVoiceCount] = {0xffffe066, 0xff6fc8ff, 0xffc58bff, 0xff7fe0a0,
-                                               0xffff7a9c, 0xff5fe0d8, 0xffc8f07a, 0xffe0e6ff};
-// A voice slot's colour, or `otherwise` when the mark isn't a voice's.
-inline unsigned slotColor(int slot, unsigned otherwise = 0xffffffff) {
-   return slot >= 0 ? kSlotColors[slot % kVoiceCount] : otherwise;
+// The voices' colour schemes (kColourNames): a colour for each voice slot, so a note keeps one colour
+// across the panel. Neighbouring slots differ most, as the first notes of a chord take the first.
+constexpr unsigned kVoiceSchemes[kColourCount][kVoiceCount] = {
+   // Spectrum: the panel's own, one of each hue.
+   {0xffffe066, 0xff6fc8ff, 0xffc58bff, 0xff7fe0a0, 0xffff7a9c, 0xff5fe0d8, 0xffc8f07a, 0xffe0e6ff},
+   // Neon: saturated, electric.
+   {0xffff3ad6, 0xff2ff0ff, 0xffb4ff2f, 0xffff9a1f, 0xff9a6bff, 0xff2fff9a, 0xffff4f6a, 0xfffff23a},
+   // Sunset: ambers, corals, roses and orchids.
+   {0xffffb347, 0xffff5f8a, 0xffc06bff, 0xffffd56b, 0xffff7a52, 0xffe05ab0, 0xff9b7bff, 0xffffa07a},
+   // Ocean: sky, aqua, cobalt and foam.
+   {0xff5fd4ff, 0xff4fffc8, 0xff6f86ff, 0xffb8ecff, 0xff2fd8b0, 0xff8ab0ff, 0xff9fffe8, 0xff3fa0ff},
+   // Aurora: northern-lights greens and violets.
+   {0xff7fffb0, 0xffb48bff, 0xff4fe0ff, 0xffd8ff6f, 0xffff8bd8, 0xff3fd890, 0xff8f9cff, 0xffe8ff9f},
+   // Pastel: soft and chalky.
+   {0xffffc4d6, 0xffb8dcff, 0xffd7c6ff, 0xffc4f2cc, 0xffffe4a8, 0xffb0eee8, 0xfff2c4ff, 0xffffd2b8},
+   // Fire: gold through orange to red.
+   {0xffffd34f, 0xffff5a2f, 0xffff9a3a, 0xffe83a4a, 0xffffe88f, 0xffff7a5a, 0xffffb86f, 0xffd8304f},
+   // Mono: whites, warm and cool.
+   {0xfffff4e0, 0xffdfe6f5, 0xfff2e6d2, 0xffcfd8ea, 0xffffffff, 0xffe6dccb, 0xffd9e2f2, 0xffeeeeee},
+};
+// A voice slot's colour in a scheme, or `otherwise` when the mark isn't a voice's.
+inline unsigned voiceColour(int scheme, int slot, unsigned otherwise = 0xffffffff) {
+   return slot >= 0 ? kVoiceSchemes[std::clamp(scheme, 0, kColourCount - 1)][slot % kVoiceCount] : otherwise;
 }
 
 // The HYBRID tab's subtractive voice.
@@ -94,6 +112,16 @@ const char *const kModelSubtitles[kModelCount] = {"jet  ·  open pipe", "single 
 
 visage::Color glow(unsigned argb, float alpha, float hdr = 1.0f) {
    return ui::steady(visage::Color(argb, hdr).withAlpha(alpha));
+}
+
+// Two opaque colours mixed, `t` of the way from a to b.
+unsigned mix(unsigned a, unsigned b, float t) {
+   unsigned out = 0xff000000;
+   for (int shift = 0; shift < 24; shift += 8) {
+      const float x = (a >> shift) & 0xff, y = (b >> shift) & 0xff;
+      out |= static_cast<unsigned>(std::lround(x + (y - x) * t)) << shift;
+   }
+   return out;
 }
 
 // The Glow knob (0..1) as a gain on the loops' light: 1 at its default of 50%, up to 4 at full.
@@ -120,9 +148,19 @@ public:
 
    // The width in design units, when the frame is moved to a new size.
    void setDesignWidth(float w) { designWidth_ = w; }
+   // The voices' colour scheme (kColourNames).
+   void setColours(int scheme) {
+      if (scheme != colours_) {
+         colours_ = scheme;
+         redraw();
+      }
+   }
 
 protected:
    float s() const { return width() / designWidth_; }
+   // A voice slot's colour in the panel's scheme, or `otherwise` when the mark isn't a voice's.
+   unsigned slotColor(int slot, unsigned otherwise = 0xffffffff) const { return voiceColour(colours_, slot, otherwise); }
+   int colours_ = 0;
    // A dark rounded well, the backdrop of every graph.
    void well(visage::Canvas &c) {
       const float k = s();
@@ -739,7 +777,7 @@ public:
             const float y = py(other[i] - otop + top);
             i == 0 ? line.moveTo(px(fAt(i)), y) : line.lineTo(px(fAt(i)), y);
          }
-         c.setColor(glow(kSlotColors[nt.slot % kVoiceCount], 0.28f * (nt.releasing ? 0.5f : 1.0f)));
+         c.setColor(glow(slotColor(nt.slot), 0.28f * (nt.releasing ? 0.5f : 1.0f)));
          c.fill(line.stroke(1.0f * k));
       }
       visage::Path area, line;
@@ -795,7 +833,7 @@ public:
       std::sort(byPitch.begin(), byPitch.end(), [](const Note *a, const Note *b) { return a->note < b->note; });
       float lx = 14;
       for (const Note *nt : byPitch) {
-         const unsigned vc = kSlotColors[nt->slot % kVoiceCount];
+         const unsigned vc = slotColor(nt->slot);
          c.setColor(ui::steadyGlow(visage::Color(vc).withAlpha(0.5f), {(lx + 4) * k, 17 * k}, 9 * k));
          c.circle((lx - 5) * k, 8 * k, 18 * k);
          c.setColor(glow(vc, nt->releasing ? 0.5f : 1.0f, 1.3f));
@@ -804,7 +842,7 @@ public:
          lx += 52;
       }
       for (const Note *nt : order) {
-         const unsigned vc = kSlotColors[nt->slot % kVoiceCount];
+         const unsigned vc = slotColor(nt->slot);
          const float dim = nt->releasing ? 0.45f : 1.0f;
          for (int h = 1; h <= kPartials && h <= static_cast<int>(nt->partials.size()); ++h) {
             const double f = nt->hz * h;
@@ -1239,7 +1277,7 @@ public:
       std::vector<Dot> order = dots_;
       std::sort(order.begin(), order.end(), [](const Dot &a, const Dot &b) { return a.level < b.level; });
       for (const Dot &d : order) {
-         const unsigned vc = kSlotColors[d.slot % kVoiceCount];
+         const unsigned vc = slotColor(d.slot);
          const float x = xOf(d.pan), e = std::clamp(d.level, 0.15f, 1.0f) * (d.releasing ? 0.45f : 1.0f);
          const float halo = (10 + 12 * e) * k;
          c.setColor(ui::steadyGlow(visage::Color(vc).withAlpha(0.55f * e), {x, mid * k}, halo));
@@ -1397,10 +1435,10 @@ public:
    std::string hint;
    unsigned hintColor = kPress;
 
-   // The look (the AIR view's knobs): smoke or ink, its palette, how turbulent the air is, how
+   // The look (the AIR view's knobs): smoke or ink, how turbulent the air is, how
    // fast the smoke rises, how much it curls, how long it hangs, and the loops' line and glow.
    struct Look {
-      int ink = 0, palette = 0;
+      int ink = 0;
       float turbulence = 0.42f, rise = 0.55f, swirl = 0.38f, tail = 4.0f, line = 0.4f, glow = 0.5f, smoke = 4.0f / 3.0f;
    };
    Look look;
@@ -1472,7 +1510,6 @@ public:
 
    void draw(visage::Canvas &c) override {
       const float k = s(), W = W_, H = H_;
-      const Colors pal = colors();
       bloom_.setBloomSize(16.0f * k * (dpiScale() > 0.0f ? dpiScale() : 1.0f));
       bloom_.setBloomIntensity(look.ink ? 0.0f : 0.45f * glowGain(look.glow));
       // The vapour paints the whole view, its night-sky ground included, added onto black.
@@ -1513,7 +1550,7 @@ public:
          return;
       }
       for (const Loop &l : loops_)
-         drawLoop(c, l, pal, k);
+         drawLoop(c, l, k);
    }
 
 private:
@@ -1530,26 +1567,6 @@ private:
       int note = 0;
       void clear() { pts.clear(); }
    };
-   // The palette: the warm colour of fresh smoke (or ink), the lavender it cools to, the vapour's blue.
-   struct Colors {
-      unsigned hot, cold, mist, line;
-   };
-   Colors colors() const {
-      switch (look.palette) {
-      case 1: // ember
-         return {0xffff6a2a, 0xff8a4a6a, 0xff5a3a6a, 0xffffe2c8};
-      case 2: // frost
-         return {0xff9fe8ff, 0xff6f8cff, 0xff4a6ad8, 0xfff0fbff};
-      case 3: // moss
-         return {0xff9be07a, 0xff3f8f7a, 0xff2f6a7a, 0xfff0ffe0};
-      case 4: // mono
-         return {0xfff0ece4, 0xff7a7f8a, 0xff5a5f6a, 0xffffffff};
-      default: // dusk: the instrument's own colour, cooling to lavender, over blue vapour
-         return {modelColor(model_), 0xff9c98d8, 0xff5a72d0, 0xfffff4e0};
-      }
-   }
-
-
    // The loop's line: the tone now, a quarter period ago and half a period ago, turned in 3D.
    void trace(const Loop &l, Shape &sh, float W, float H) {
       const Place &p = places_[l.slot];
@@ -1630,36 +1647,17 @@ private:
       return t * t * (3 - 2 * t);
    }
 
-   // A note's smoke colour: a spot on the palette's three-stop ramp, picked by its pitch class round
-   // the circle of fifths, so neighbouring notes never share a colour.
-   void noteColour(int note, float glowOut[3], float dyeOut[4]) const {
-      using Ramp = std::array<std::array<float, 3>, 3>;
-      static constexpr Ramp kFlute = {{{.55f, .86f, 1}, {.36f, .9f, .78f}, {.74f, .64f, 1}}};
-      static constexpr Ramp kClarinet = {{{1, .74f, .3f}, {1, .5f, .16f}, {1, .36f, .34f}}};
-      static constexpr Ramp kSax = {{{1, .8f, .4f}, {1, .56f, .22f}, {.95f, .4f, .52f}}};
-      static constexpr Ramp kOboe = {{{1, .7f, .46f}, {.98f, .48f, .3f}, {.86f, .42f, .62f}}};
-      static constexpr Ramp kTrumpet = {{{1, .6f, .18f}, {1, .32f, .16f}, {.9f, .28f, .52f}}};
-      static constexpr Ramp kEmber = {{{1, .52f, .16f}, {1, .3f, .1f}, {.92f, .2f, .26f}}};
-      static constexpr Ramp kFrost = {{{.6f, .9f, 1}, {.45f, .7f, 1}, {.75f, .66f, 1}}};
-      static constexpr Ramp kMoss = {{{.62f, .95f, .45f}, {.36f, .86f, .58f}, {.8f, .9f, .36f}}};
-      static constexpr Ramp kMono = {{{1, .97f, .92f}, {.92f, .92f, .95f}, {.86f, .88f, .96f}}};
-      static constexpr Ramp kAlien = {{{.62f, 1, .36f}, {.3f, .95f, .7f}, {.72f, .5f, 1}}};
-      static constexpr Ramp kFamilies[6] = {kFlute, kClarinet, kSax, kOboe, kTrumpet, kAlien};
-      const Ramp &st = look.palette == 1   ? kEmber
-                       : look.palette == 2 ? kFrost
-                       : look.palette == 3 ? kMoss
-                       : look.palette == 4 ? kMono
-                                           : kFamilies[std::clamp(model_, 0, 5)];
-      const float t = static_cast<float>((((note * 7) % 12) + 12) % 12) / 11.0f;
-      const float u = t < 0.5f ? t * 2 : (t - 0.5f) * 2;
-      const auto &a = st[t < 0.5f ? 0 : 1], &b = st[t < 0.5f ? 1 : 2];
+   // A voice's smoke colour: its colour in the voices' scheme, as its loop is drawn, so each plume
+   // leaves its loop in the loop's own colour (glow 0..1, and the dye's mix of it).
+   void noteColour(int slot, float glowOut[3], float dyeOut[4]) const {
+      const unsigned c = slotColor(slot);
       float sum = 0;
       for (int i = 0; i < 3; ++i) {
-         glowOut[i] = a[i] + (b[i] - a[i]) * u;
+         glowOut[i] = static_cast<float>((c >> (16 - 8 * i)) & 0xff) / 255.0f;
          sum += glowOut[i];
       }
       for (int i = 0; i < 3; ++i)
-         dyeOut[i] = glowOut[i] / sum;
+         dyeOut[i] = glowOut[i] / std::max(sum, 1e-3f);
       dyeOut[3] = 0;
    }
 
@@ -1701,7 +1699,7 @@ private:
             wsum += ws[k];
          }
          float glow[3], dye[4];
-         noteColour(sh.note, glow, dye);
+         noteColour(slot, glow, dye);
          for (int k = 0; k < per; ++k) {
             const visage::Point p = sh.pts[static_cast<size_t>(at[k])], p2 = sh.pts[static_cast<size_t>(at[k] + 2)];
             float tx = p2.x - p.x, ty = p2.y - p.y;
@@ -1758,7 +1756,8 @@ private:
       job.glow = glowGain(look.glow);
       job.ink = look.ink != 0;
       job.emitters = emitters_;
-      for (const Shape &sh : shapes_) {
+      for (int slot = 0; slot < kVoiceCount; ++slot) {
+         const Shape &sh = shapes_[slot];
          if (sh.pts.size() <= 8)
             continue;
          const float a = std::min(1.0f, sh.breath * 1.6f) * sh.fade;
@@ -1766,7 +1765,7 @@ private:
             continue;
          VaporLight L;
          float dye[4];
-         noteColour(sh.note, L.col, dye);
+         noteColour(slot, L.col, dye);
          L.x = sh.cx / W;
          L.y = 1.0f - sh.cy / H;
          L.r = sh.radius * 1.5f / H;
@@ -1817,7 +1816,7 @@ private:
       c.setBlendMode(visage::BlendMode::Alpha);
    }
 
-   void drawLoop(visage::Canvas &c, const Loop &l, const Colors &pal, float k) {
+   void drawLoop(visage::Canvas &c, const Loop &l, float k) {
       const Shape &sh = shapes_[l.slot];
       if (sh.pts.size() < 2)
          return;
@@ -1826,22 +1825,24 @@ private:
       for (const visage::Point &q : sh.pts)
          pts.push_back({q.x * k, q.y * k});
       const float fade = sh.fade, glowAmount = glowGain(look.glow), width = 0.5f + 1.25f * look.line;
+      // Each loop in its voice's colour: the glow in it, the line its bright core, near white.
+      const unsigned vc = slotColor(l.slot), core = mix(vc, 0xfffff4e0, 0.3f);
       // The glow is wide and soft, so every other point is enough for it.
       if (!look.ink && glowAmount > 0.01f)
          for (size_t i = 2; i < pts.size(); i += 2) {
             // Older parts of the trail fainter.
             const float age = static_cast<float>(i) / pts.size();
-            c.setColor(glow(pal.hot, 0.07f * fade * age * glowAmount));
+            c.setColor(glow(vc, 0.07f * fade * age * glowAmount));
             c.segment(pts[i - 2].x, pts[i - 2].y, pts[i].x, pts[i].y, 10 * k * width, true);
-            c.setColor(glow(pal.hot, 0.16f * fade * age * glowAmount));
+            c.setColor(glow(vc, 0.16f * fade * age * glowAmount));
             c.segment(pts[i - 2].x, pts[i - 2].y, pts[i].x, pts[i].y, 4.5f * k * width, true);
          }
       for (size_t i = 1; i < pts.size(); ++i) {
          const float age = static_cast<float>(i) / pts.size();
          if (look.ink)
-            c.setColor(ui::steady(visage::Color(pal.hot).withAlpha((0.3f + 0.7f * age) * fade)));
+            c.setColor(ui::steady(visage::Color(vc).withAlpha((0.3f + 0.7f * age) * fade)));
          else
-            c.setColor(glow(pal.line, (0.25f + 0.7f * age) * fade, 1.0f + 0.6f * age));
+            c.setColor(glow(core, (0.25f + 0.7f * age) * fade, 1.0f + 0.6f * age));
          c.segment(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y, 1.7f * k * width, true);
       }
       char t[48];
@@ -2369,7 +2370,6 @@ public:
       }
       BreathLoops::Look look;
       look.ink = static_cast<int>(host_.paramValue(kLook) + 0.5);
-      look.palette = static_cast<int>(host_.paramValue(kPalette) + 0.5);
       look.turbulence = static_cast<float>(host_.paramValue(kTurbulence));
       look.rise = static_cast<float>(host_.paramValue(kRise));
       look.swirl = static_cast<float>(host_.paramValue(kSwirl));
@@ -2384,6 +2384,11 @@ public:
       placing.size = static_cast<int>(host_.paramValue(kLoopSize) + 0.5);
       placing.sizeMin = static_cast<float>(host_.paramValue(kLoopSizeMin));
       loops_->placing = placing;
+      // Every view that marks a voice, in the voices' colour scheme.
+      const int colours = std::clamp(static_cast<int>(host_.paramValue(kColours) + 0.5), 0, kColourCount - 1);
+      for (Drawn *d : std::initializer_list<Drawn *>{loops_, valve_, filterGraph_, bore_, curve_, lights_, stereo_, tongue_})
+         if (d)
+            d->setColours(colours);
 
       // The rest of the panel every other frame, and only what's showing.
       if ((tick_++ & 1) == 0 && !air_) {
@@ -3244,8 +3249,8 @@ private:
       look_->setAccent(0xff9c98d8);
       bindings_.bind(*look_, kLook);
       tips_.add(*look_, "Smoke rises off the loops and glows; ink drops from them and sinks.");
-      palette_ = &choiceBox(kPalette, {1076, 76, 110, 24}, 0xff9c98d8);
-      tips_.add(*palette_, "The smoke's colours.");
+      voiceColours_ = &choiceBox(kColours, {1076, 76, 110, 24}, 0xff9c98d8);
+      tips_.add(*voiceColours_, "The voices' colours: each note's loop, its smoke and its marks across the panel, in one colour of this scheme.");
       airPanel_ = &add<AirBackdrop>({32, 712, 964, 168}, 964.0f);
       airPanelButton_ = &add<ui::Button>({1286, 76, 96, 24}, "CONTROLS");
       airPanelButton_->setToggle(true);
@@ -3302,7 +3307,7 @@ private:
       loops_->resize(loops.w, loops.h);
       loops_->full = on;
       move(*look_, {loops.x + 16, loops.y + 12, 140, 24});
-      move(*palette_, {loops.x + 164, loops.y + 12, 110, 24});
+      move(*voiceColours_, {loops.x + 164, loops.y + 12, 110, 24});
       move(*airPanelButton_, {loops.x + 282, loops.y + 12, 96, 24});
       // The breath's chips and the LOOPS / ROUTES switch along the loops' bottom edge.
       const float chipsY = on ? 892.0f : 568.0f;
@@ -3493,7 +3498,7 @@ private:
    std::vector<visage::Frame *> playFrames_;
    std::pair<SourceChip *, ui::Rect> breathChips_[6] = {};
    ui::SegmentedSwitch *playAir_ = nullptr, *look_ = nullptr;
-   ui::Dropdown *palette_ = nullptr;
+   ui::Dropdown *voiceColours_ = nullptr;
    visage::Frame *airPanel_ = nullptr;
    ui::Button *airPanelButton_ = nullptr;
    std::vector<ui::Knob *> airKnobs_;
