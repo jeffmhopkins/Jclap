@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "editor.h"
+#include "output.h"
 #include "params.h"
 #include "presets.h"
 
@@ -846,6 +847,51 @@ int main() {
       o.seconds(2.0);
       JCLAP_CHECK(o.finite());
       JCLAP_CHECK(o.left.back() == 0.0f && o.right.back() == 0.0f);
+   }
+
+   // The limiter: a loud poly chord turned up 6 dB stays under full scale with it on, and spends
+   // next to no time in the soft clip after it (the limiter does the work, not the clip); a quiet
+   // note goes through it untouched.
+   {
+      auto chord = [&](int mode, double master, double velocity, int notes, float &peak, double &clipped) {
+         jclap::core::TestHost ch(clap_entry, kId);
+         Run c{ch};
+         ch.setParam(kVoiceMode, kPoly);
+         ch.setParam(kLimiter, mode);
+         ch.setParam(kMaster, master);
+         const int keys[] = {48, 55, 60, 64, 67, 72, 76, 79};
+         for (int k = 0; k < notes; ++k)
+            ch.note(CLAP_EVENT_NOTE_ON, keys[k], velocity, k + 1);
+         c.seconds(1.5);
+         peak = 0.0f;
+         size_t over = 0, counted = 0;
+         for (size_t i = 0; i < c.left.size(); ++i) {
+            const float a = std::max(std::fabs(c.left[i]), std::fabs(c.right[i]));
+            peak = std::max(peak, a);
+            if (i > static_cast<size_t>(0.1 * c.rate)) {
+               ++counted;
+               over += a > 0.8f;
+            }
+         }
+         clipped = counted ? static_cast<double>(over) / counted : 0.0;
+         return c.left;
+      };
+      float peakOff = 0.0f, peakOn = 0.0f, peakClip = 0.0f;
+      double clipOff = 0.0, clipOn = 0.0, clipClip = 0.0;
+      chord(kLimitOff, 6.0, 1.0, 8, peakOff, clipOff);
+      chord(kLimitClip, 6.0, 1.0, 8, peakClip, clipClip);
+      chord(kLimitOn, 6.0, 1.0, 8, peakOn, clipOn);
+      std::printf("limiter: 8-note chord at +6 dB, peak off %.2f clip %.2f limit %.2f; time over 0.8: off %.1f%% "
+                  "clip %.1f%% limit %.2f%%\n",
+                  peakOff, peakClip, peakOn, 100 * clipOff, 100 * clipClip, 100 * clipOn);
+      JCLAP_CHECK(peakOff > 1.0f);
+      JCLAP_CHECK(peakOn < 0.99f && peakClip <= 1.0f);
+      JCLAP_CHECK(clipOn < 0.01);
+      float qOff = 0.0f, qOn = 0.0f;
+      double unused = 0.0;
+      const auto quietOff = chord(kLimitOff, -12.0, 0.5, 1, qOff, unused);
+      const auto quietOn = chord(kLimitOn, -12.0, 0.5, 1, qOn, unused);
+      JCLAP_CHECK(qOn < 0.5f && quietOff == quietOn);
    }
 
    // Every new control at both ends, on every instrument: still sounding, finite, not too loud, and
