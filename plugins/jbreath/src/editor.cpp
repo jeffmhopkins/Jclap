@@ -3228,10 +3228,10 @@ private:
       tabs.addToPage(2, knob(kRoomPreDelay, "PRE-DELAY", rc, room[3], "The gap before the room answers: a little keeps the notes clear of the reverb."));
       tabs.addToPage(2, knob(kBright, "TONE", kDim, room[4], "The brightness of the whole output, above 1.5 kHz: down tames harsh highs, up adds sparkle."));
       tabs.addToPage(2, add<ui::Label>({1494, 668, 126, 16}, "LIMITER", kDim, visage::Font::kLeft, 0.68f));
-      auto &limiter = tabs.addToPage(2, add<ui::SegmentedSwitch>({1494, 690, 126, 26}, std::vector<std::string>{"OFF", "SOFT", "HARD"}));
+      auto &limiter = tabs.addToPage(2, add<ui::SegmentedSwitch>({1494, 690, 126, 26}, std::vector<std::string>{"OFF", "CLIP", "LIMIT"}));
       limiter.setAccent(0xfff28c28);
       bindings_.bind(limiter, kLimiter);
-      tips_.add(limiter, "Off: nothing. Soft: overs saturate. Hard: a peak limiter holds the output under full scale.");
+      tips_.add(limiter, "Off: nothing. Clip: overs saturate. Limit: a soft limiter turns loud chords down to stay under full scale.");
 
       // DELAY: on or off, synced or free, and its repeats.
       const unsigned dc = 0xff8fe8a8;
@@ -3263,7 +3263,7 @@ private:
       card(kRoom, "REVERB", rc, 7, "How much reverb: shape it, or turn it off, on the REVERB tab.");
       card(kAir, "AIR", kPress, 8, "The breath heard around the instrument, not through it: up for an airy, close-miked sound.");
       card(kLevel, "LEVEL", 0xfff28c28, 9, "Each voice's level, before the room. Down if chords pile up too loud.");
-      card(kMaster, "MASTER", 0xfff28c28, 10, "The output level, after the room and limiter.");
+      card(kMaster, "MASTER", 0xfff28c28, 10, "The output level, after the room and before the limiter, so turning it up can't clip.");
    }
 
    // The AIR view's own controls: the look, and the vapour and loops knobs.

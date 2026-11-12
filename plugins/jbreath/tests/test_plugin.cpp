@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "editor.h"
+#include "output.h"
 #include "params.h"
 #include "presets.h"
 
@@ -848,6 +849,51 @@ int main() {
       JCLAP_CHECK(o.left.back() == 0.0f && o.right.back() == 0.0f);
    }
 
+   // The limiter: a loud poly chord turned up 6 dB stays under full scale with it on, and spends
+   // next to no time in the soft clip after it (the limiter does the work, not the clip); a quiet
+   // note goes through it untouched.
+   {
+      auto chord = [&](int mode, double master, double velocity, int notes, float &peak, double &clipped) {
+         jclap::core::TestHost ch(clap_entry, kId);
+         Run c{ch};
+         ch.setParam(kVoiceMode, kPoly);
+         ch.setParam(kLimiter, mode);
+         ch.setParam(kMaster, master);
+         const int keys[] = {48, 55, 60, 64, 67, 72, 76, 79};
+         for (int k = 0; k < notes; ++k)
+            ch.note(CLAP_EVENT_NOTE_ON, keys[k], velocity, k + 1);
+         c.seconds(1.5);
+         peak = 0.0f;
+         size_t over = 0, counted = 0;
+         for (size_t i = 0; i < c.left.size(); ++i) {
+            const float a = std::max(std::fabs(c.left[i]), std::fabs(c.right[i]));
+            peak = std::max(peak, a);
+            if (i > static_cast<size_t>(0.1 * c.rate)) {
+               ++counted;
+               over += a > 0.8f;
+            }
+         }
+         clipped = counted ? static_cast<double>(over) / counted : 0.0;
+         return c.left;
+      };
+      float peakOff = 0.0f, peakOn = 0.0f, peakClip = 0.0f;
+      double clipOff = 0.0, clipOn = 0.0, clipClip = 0.0;
+      chord(kLimitOff, 6.0, 1.0, 8, peakOff, clipOff);
+      chord(kLimitClip, 6.0, 1.0, 8, peakClip, clipClip);
+      chord(kLimitOn, 6.0, 1.0, 8, peakOn, clipOn);
+      std::printf("limiter: 8-note chord at +6 dB, peak off %.2f clip %.2f limit %.2f; time over 0.8: off %.1f%% "
+                  "clip %.1f%% limit %.2f%%\n",
+                  peakOff, peakClip, peakOn, 100 * clipOff, 100 * clipClip, 100 * clipOn);
+      JCLAP_CHECK(peakOff > 1.0f);
+      JCLAP_CHECK(peakOn < 0.99f && peakClip <= 1.0f);
+      JCLAP_CHECK(clipOn < 0.01);
+      float qOff = 0.0f, qOn = 0.0f;
+      double unused = 0.0;
+      const auto quietOff = chord(kLimitOff, -12.0, 0.5, 1, qOff, unused);
+      const auto quietOn = chord(kLimitOn, -12.0, 0.5, 1, qOn, unused);
+      JCLAP_CHECK(qOn < 0.5f && quietOff == quietOn);
+   }
+
    // Every new control at both ends, on every instrument: still sounding, finite, not too loud, and
    // at the note's pitch (or an octave from it, where a setting overblows it).
    {
@@ -966,6 +1012,51 @@ int main() {
          if ((voice.note == 64 || voice.note == 67) && k < 2)
             chord[k++] = voice.saying;
       JCLAP_CHECK(k == 2 && chord[0] == 3 && chord[1] == 3);
+   }
+
+   // With a Pace, a held note goes on through typed words too (with Pace Free, they keep to a
+   // syllable a note), and the next note picks up after the last syllable it said.
+   {
+      jclap::core::TestHost ah(clap_entry, kId);
+      Run ar{ah};
+      EditorHost &ap = *ah.object<EditorHost>();
+      ah.setParam(kModel, 5);
+      ah.setParam(kAlienSource, 1);
+      ah.setParam(kAlienTalk, 0.5);
+      ap.setLyrics("one two three four five six seven eight nine ten");
+      ar.seconds(0.05);
+      auto sayingNow = [&](int note) {
+         std::vector<EditorHost::Voice> v;
+         ap.voices(v);
+         for (const auto &voice : v)
+            if (voice.note == note)
+               return voice.saying;
+         return -1;
+      };
+      // Free: one held note stays on its syllable.
+      ah.note(CLAP_EVENT_NOTE_ON, 60, 0.8, 60);
+      ar.seconds(3.0);
+      JCLAP_CHECK_EQ(sayingNow(60), 0);
+      ah.note(CLAP_EVENT_NOTE_OFF, 60, 0.0, 60);
+      ar.seconds(0.5);
+      // 1/4 at 120 bpm: a syllable every half second while it's held.
+      ah.setParam(kAlienPace, 3);
+      ah.note(CLAP_EVENT_NOTE_ON, 62, 0.8, 62);
+      ar.seconds(0.2);
+      const int first = sayingNow(62);
+      ar.seconds(1.1);
+      const int later = sayingNow(62);
+      ah.note(CLAP_EVENT_NOTE_OFF, 62, 0.0, 62);
+      ar.seconds(0.5);
+      ah.setParam(kAlienPace, 0);
+      ah.note(CLAP_EVENT_NOTE_ON, 64, 0.8, 64);
+      ar.seconds(0.2);
+      const int next = sayingNow(64);
+      std::printf("Alien paced typed words: %d then %d, next note %d\n", first, later, next);
+      JCLAP_CHECK_EQ(first, 1);
+      JCLAP_CHECK(later >= 2);
+      JCLAP_CHECK_EQ(next, later + 1);
+      JCLAP_CHECK(ar.finite());
    }
 
    // Every instrument, in tune at the common rates (oversampled 2x at 44.1 and 48 kHz, not at 96).

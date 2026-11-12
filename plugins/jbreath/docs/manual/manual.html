@@ -32,7 +32,7 @@
 @page {
   size: 8.5in 11in;
   margin: 0.85in 0.85in 0.8in 0.85in;
-  @bottom-left { content: "JBreath  ·  User Manual  ·  v0.12.1 draft"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
+  @bottom-left { content: "JBreath  ·  User Manual  ·  v0.13.0 draft"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
   @bottom-right { content: counter(page); font: 600 8pt "InterM"; color: #15171d; }
 }
 @page cover { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
@@ -208,7 +208,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
   <div class="shot"><img src="img/panel.jpg" alt=""></div>
   <div class="foot">
-    <div><div class="k">Version</div><div class="v">0.12.1 · Draft</div></div>
+    <div><div class="k">Version</div><div class="v">0.13.0 · Draft</div></div>
     <div><div class="k">Format</div><div class="v">CLAP · MPE · 8 voices</div></div>
     <div><div class="k">Platforms</div><div class="v">macOS · Windows · Linux</div></div>
     <div style="text-align:right"><div class="k">Edition</div><div class="v">November 2026</div></div>
@@ -222,7 +222,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
   <div class="toc-title">Contents</div>
   <div class="toc" id="toc"></div>
-  <div class="note warn"><span class="k">Draft</span><p>This is a working draft written against JBreath 0.12.1.</p></div>
+  <div class="note warn"><span class="k">Draft</span><p>This is a working draft written against JBreath 0.13.0.</p></div>
   <h2 style="margin-top:0.2in">About this manual</h2>
   <p>Chapters 2 and 3 get you installed and playing in a few minutes. Chapter 4 tours the panel, and Chapters 5 to 7 explain how the sound is made, what each instrument is and how you blow it, which is the quickest way to understand what every control does. Chapters 8 to 14 cover every control in the order they sit on the panel, and Chapters 15 and 16 the presets, the dice and some recipes. The appendix lists every parameter with its exact range and default, plus specifications and troubleshooting.</p>
   <p>Throughout the manual, control names are set in <strong>bold</strong> and panel labels as they appear on screen, such as <strong>EMBOUCHURE</strong>. Tags beside a parameter mean:</p>
@@ -720,7 +720,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">BREATHY</td><td class="r">0 – 100%</td><td class="d">25%</td><td>How much air goes through the folds, from clear to a whisper. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">CONSONANT</td><td class="r">0 – 100%</td><td class="d">100%</td><td>How strong the consonants are, from vowels only to every stop, hiss and hum. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">HOLD</td><td class="r">0 – 100%</td><td class="d">20%</td><td>How long a diphthong holds its first vowel. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
-      <tr><td class="c">TALK · PACE</td><td class="r">0 – 100% · Free, 1/16 – 2 Bars</td><td class="d">50% · Free</td><td>Its own words only: how soon a held note goes on to the next syllable, chattering while held. Free (by TALK; under a fifth, never), or a note value at the host's tempo. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">TALK · PACE</td><td class="r">0 – 100% · Free, 1/16 – 2 Bars</td><td class="d">50% · Free</td><td>How soon a held note goes on to the next syllable, chattering while held. Free (by TALK; under a fifth, never), or a note value at the host's tempo. Typed words go on only with a PACE set (on Free, a syllable a note), and the next note picks up where the held one got to. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">VOWELS · CONSONANTS</td><td class="r">each On / Off</td><td class="d">all On</td><td>Which its own words use: A E I O U, and M N, L R, W Y, V Z, B D G, H, F S, P T K.</td></tr>
     </tbody>
   </table>
@@ -799,7 +799,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">REVERB</td><td class="r">0 – 100%</td><td class="d">15%</td><td>How much room. <span class="mod m">MOD</span></td></tr>
       <tr><td class="c">AIR</td><td class="r">0 – 100%</td><td class="d">0%</td><td>The breath heard around the instrument, not through it. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">LEVEL</td><td class="r">−60 – +12 dB</td><td class="d">0.0 dB</td><td>The patch's level, saved with presets. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
-      <tr><td class="c">MASTER</td><td class="r">−36 – +6 dB</td><td class="d">0.0 dB</td><td>The output's level. The dice never touch it. <span class="mod m">MOD</span></td></tr>
+      <tr><td class="c">MASTER</td><td class="r">−36 – +6 dB</td><td class="d">0.0 dB</td><td>The output's level, before the limiter, so turning it up can't clip the output. The dice never touch it. <span class="mod m">MOD</span></td></tr>
     </tbody>
   </table>
   <p>The <strong>AIR</strong> tab (where the breath comes from) is described in Chapter 7.</p>
@@ -814,7 +814,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">DAMP</td><td class="r">0 – 100%</td><td class="d">50%</td><td>How fast the highs die. <span class="mod m">MOD</span></td></tr>
       <tr><td class="c">PRE-DELAY</td><td class="r">0 – 100 ms</td><td class="d">12 ms</td><td>Delay before the room answers. <span class="mod m">MOD</span></td></tr>
       <tr><td class="c">TONE</td><td class="r">−12 – +12 dB</td><td class="d">+0.0 dB</td><td>Darkens or brightens the whole output. <span class="mod m">MOD</span></td></tr>
-      <tr><td class="c">LIMITER</td><td class="r">Off, Soft, Hard</td><td class="d">Hard</td><td>Off: nothing. Soft: overs saturate. Hard: a peak limiter holds the output under full scale, so a big chord never clips.</td></tr>
+      <tr><td class="c">LIMITER</td><td class="r">Off, Clip, Limit</td><td class="d">Limit</td><td>The very last stage, after Master. Off: nothing. Clip: overs saturate. Limit: a soft limiter that turns a loud chord down smoothly rather than letting it clip. It starts 5 dB under full scale and holds the loudest of it at −2 dBFS, with a soft knee, a 1 ms attack and a release that slows once it has been limiting a while, so a held chord doesn't pump; a soft clip after it catches the first instant of a loud note, so the output never reaches 0 dBFS. No latency, and anything under its knee passes untouched. (Projects saved with 0.12's Hard get this limiter.)</td></tr>
     </tbody>
   </table>
   <h2>The DELAY tab</h2>
@@ -962,7 +962,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
 <section class="back">
   <div class="mid">
     <div class="word"><span class="j">J</span>Breath</div>
-    <div class="small">Breathing physical models · v0.12.1 draft</div>
+    <div class="small">Breathing physical models · v0.13.0 draft</div>
   </div>
   <div class="url">github.com/jeffmhopkins/Jclap</div>
 </section>
@@ -1057,7 +1057,7 @@ function el(parent, tag, attrs, text) {
   box(240, y3, 80, 'DELAY', 'stereo echo');
   box(340, y3, 80, 'REVERB', 'small room');
   box(440, y3, 90, 'TONE · LEVEL', 'master');
-  box(550, y3, 80, 'LIMITER', 'off · soft · hard');
+  box(550, y3, 80, 'LIMITER', 'off · clip · limit');
   box(650, y3 + 46, 46, 'OUT', null, 'io');
   arrow(`M120,${y3 + H / 2} L138,${y3 + H / 2}`);
   arrow(`M220,${y3 + H / 2} L238,${y3 + H / 2}`);
@@ -1129,7 +1129,7 @@ function el(parent, tag, attrs, text) {
     ]],
     ['Output, Room and Delay', [
       ['Spread', '−100 – +100%', '50%', M], ['Pan', '−100 – +100%', '0%', MT], ['Air', pc(0, 100), '0%', MT], ['Level', '−60 – +12 dB', '0.0 dB', MT],
-      ['Master', '−36 – +6 dB', '0.0 dB', M], ['Limiter', 'Off, Soft, Hard', 'Hard', ''], ['Reverb', 'Off, On', 'On', ''], ['Room', pc(0, 100), '15%', M],
+      ['Master', '−36 – +6 dB', '0.0 dB', M], ['Limiter', 'Off, Clip, Limit', 'Limit', ''], ['Reverb', 'Off, On', 'On', ''], ['Room', pc(0, 100), '15%', M],
       ['Room Size', pc(0, 100), '50%', M], ['Room Decay', '0.2 – 10.0 s', '1.6 s', M], ['Room Damping', pc(0, 100), '50%', M], ['Room Pre-Delay', '0 – 100 ms', '12 ms', M],
       ['Tone', '−12 – +12 dB', '+0.0 dB', M], ['Delay', 'Off, On', 'Off', ''], ['Delay Sync', 'Free, 1/32 – 1/1', 'Free', ''], ['Delay Mix', pc(0, 100), '30%', M],
       ['Delay Time', '10 ms – 2 s', '375 ms', M], ['Delay Feedback', pc(0, 95), '40%', M], ['Delay Tone', pc(0, 100), '72%', M], ['Delay Spread', pc(0, 100), '50%', M],

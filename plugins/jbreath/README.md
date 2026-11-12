@@ -110,9 +110,10 @@ ALIEN tab:
 - **CONSONANT**: how strong the consonants are, from none (only the vowels) to every stop, hiss and
   hum.
 - **HOLD**: how long a diphthong holds its first vowel, from speech's quick glide to a singer's hold.
-- **TALK** and **PACE**: its own words only: how soon a held note goes on to the next syllable,
-  chattering while it's held: Free (by Talk; under a fifth, never), or a note value from 1/16 to 2
-  bars at the host's tempo.
+- **TALK** and **PACE**: how soon a held note goes on to the next syllable, chattering while it's
+  held: Free (by Talk; under a fifth, never), or a note value from 1/16 to 2 bars at the host's
+  tempo. Typed words go on only with a Pace set (on Free they keep to a syllable a note), and the
+  next note picks up after the last syllable the held one said.
 - **VOWELS** and **CONSONANTS**: which its own words use, each on or off.
 
 The ALIEN tab only shows when the Alien is the instrument.
@@ -299,7 +300,13 @@ range), **TRANSP**, **ROOM**, **AIR** (the breath heard around the instrument, n
 ![The REVERB tab](docs/readme/room.jpg)
 
 **REVERB**: a switch, then a small room (SIZE, DECAY, DAMP, PRE-DELAY), the output's TONE, and the
-**LIMITER**: Off, Soft (overs saturate) or Hard (the default: a peak limiter holds the output under full scale, so a big chord never clips).
+**LIMITER**: Off, Clip (overs saturate) or Limit, the default: a soft limiter, the very last thing
+after MASTER, that turns a loud chord down smoothly rather than letting it clip. It starts to work
+5 dB under full scale and holds the loudest of it at -2 dBFS, with a soft knee, a 1 ms attack and
+a release that slows when it has been limiting a while (so a held chord doesn't pump); a soft clip
+after it catches the first instant of a loud note, so the output never reaches 0 dBFS. It adds no
+latency, and anything quieter than its knee goes through untouched. Projects saved with Hard get
+the new limiter.
 Switched off, the room's tail rings out rather than stopping.
 
 ![The DELAY tab](docs/readme/delay.jpg)
