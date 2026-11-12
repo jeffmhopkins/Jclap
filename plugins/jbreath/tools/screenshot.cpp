@@ -2,7 +2,7 @@
 //    jbreath-screenshot out.png [width height [frames [player-tab [routes [armed-source [exciter-tab
 //       [voice-tab [air [settings...]]]]]]]]]
 // Each setting is preset=Name (a factory preset, underscores for spaces), Param_Name=value, or the
-// word dice, which opens the dice card. A four-note chord is playing, with breath loops drawn from
+// word dice, which opens the dice card; voices=N plays N notes (1 to 8). A four-note chord is playing, with breath loops drawn from
 // synthetic tones in the instrument's colour of sound.
 
 #include <algorithm>
@@ -70,6 +70,10 @@ public:
       if (eq == std::string::npos)
          return false;
       const std::string key = setting.substr(0, eq), value = setting.substr(eq + 1);
+      if (key == "voices") {
+         voiceCount_ = std::clamp(std::atoi(value.c_str()), 1, 8);
+         return true;
+      }
       if (key == "lyrics") {
          lyrics_ = value;
          return true;
@@ -117,13 +121,17 @@ public:
    }
    std::string lyrics_;
 
-   // D3 and A3 held, F#4 swelling, E5 let go and fading.
-   static constexpr int kNotes[4] = {50, 57, 66, 76};
+   // D3 and A3 held, F#4 swelling, E5 let go and fading; with voices=N, up to four more held round
+   // them (B2, C#4, A4, D5).
+   static constexpr int kNotes[8] = {50, 57, 66, 76, 47, 61, 69, 74};
+   int voiceCount_ = 4;
    void voices(std::vector<Voice> &out) const override {
       out.assign(kVoiceCount, Voice{});
-      const float breath[4] = {0.62f, 0.7f, 0.85f, 0.3f}, pressure[4] = {0.5f, 0.62f, 0.85f, 0.2f};
-      const float timbre[4] = {0.5f, 0.42f, 0.66f, 0.5f}, level[4] = {0.08f, 0.1f, 0.14f, 0.03f};
-      for (int i = 0; i < 4; ++i) {
+      const float breath[8] = {0.62f, 0.7f, 0.85f, 0.3f, 0.5f, 0.95f, 0.75f, 1.05f};
+      const float pressure[8] = {0.5f, 0.62f, 0.85f, 0.2f, 0.4f, 0.7f, 0.6f, 0.9f};
+      const float timbre[8] = {0.5f, 0.42f, 0.66f, 0.5f, 0.3f, 0.55f, 0.8f, 0.6f};
+      const float level[8] = {0.08f, 0.1f, 0.14f, 0.03f, 0.07f, 0.11f, 0.09f, 0.12f};
+      for (int i = 0; i < voiceCount_; ++i) {
          const float hz = 440.0f * std::pow(2.0f, (kNotes[i] - 69) / 12.0f);
          out[i] = {kNotes[i], hz, breath[i], pressure[i], timbre[i], level[i]};
          out[i].releasing = i == 3;
@@ -150,13 +158,13 @@ public:
    }
    // A clarinet-like tone (strong odd harmonics, a little even) at each voice's pitch.
    void readVoice(int slot, float *out, size_t count) override {
-      if (slot >= 4) {
+      if (slot >= voiceCount_) {
          for (size_t i = 0; i < count; ++i)
             out[i] = 0.0f;
          return;
       }
       const double hz = 440.0 * std::pow(2.0, (kNotes[slot] - 69) / 12.0);
-      const double amp[4] = {0.3, 0.35, 0.45, 0.15};
+      const double amp[8] = {0.3, 0.35, 0.45, 0.15, 0.28, 0.4, 0.33, 0.42};
       // Harmonics 1..7 for each instrument: a flute's near-sine with its 2nd, the clarinet's odd
       // ones, the sax's and oboe's full rows, the trumpet's bright brass.
       static const double recipes[5][7] = {{1, 0.45, 0.12, 0.05, 0.02, 0, 0},

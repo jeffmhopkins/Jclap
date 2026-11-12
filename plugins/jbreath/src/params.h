@@ -185,11 +185,14 @@ enum ParamId : clap_id {
    // where the tongue's force comes from (the strike, or how hard the finger arrives).
    kRetongue,
    kTongueForce,
+   // Added after 0.12.0: the colour scheme each voice is marked in, across the panel and the AIR
+   // view's loops (kColourNames).
+   kColours,
    kParamCount
 };
 // The AIR view's look: the panel's own, kept with the project but not with presets.
 inline bool isLookParam(clap_id id) {
-   return (id >= kLook && id <= kGlow) || (id >= kLoopX && id <= kLoopSizeMin) || id == kSmoke;
+   return (id >= kLook && id <= kGlow) || (id >= kLoopX && id <= kLoopSizeMin) || id == kSmoke || id == kColours;
 }
 // The routes' params end where the panel's later params begin.
 constexpr clap_id kRouteEnd = kStiffness;
@@ -336,6 +339,9 @@ inline double alienPaceBeats(int pace) {
 }
 inline const char *const kLookNames[] = {"Smoke", "Ink"};
 inline const char *const kPaletteNames[] = {"Dusk", "Ember", "Frost", "Moss", "Mono"};
+// The voices' colour schemes: each gives the eight voice slots a colour (kVoiceSchemes in editor.cpp).
+constexpr int kColourCount = 8;
+inline const char *const kColourNames[] = {"Spectrum", "Neon", "Sunset", "Ocean", "Aurora", "Pastel", "Fire", "Mono"};
 inline const char *const kHybridOctaveNames[] = {"-2 oct", "-1 oct", "0 oct", "+1 oct", "+2 oct"};
 enum BreathSource { kSourceAuto, kSourcePressure, kSourceVelocity, kSourceInput, kSourceMix };
 
@@ -407,7 +413,8 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kMaster, "Master", "Output", -36.0, 6.0, 0.0, kGlobalMod},
       {kLimiter, "Limiter", "Output", 0.0, 2.0, 2.0, kGlobalChoice},
       {kLook, "Look", "View", 0.0, 1.0, 0.0, kLookFlags},
-      {kPalette, "Palette", "View", 0.0, 4.0, 0.0, kLookFlags},
+      // Retired after 0.12.0 (the voices' Colours colour the smoke now); kept so old projects load.
+      {kPalette, "Palette", "View", 0.0, 4.0, 0.0, static_cast<clap_param_info_flags>(kLookFlags | CLAP_PARAM_IS_HIDDEN)},
       {kTurbulence, "Turbulence", "View", 0.0, 1.0, 0.42, kLookKnob},
       {kRise, "Rise", "View", 0.0, 1.0, 0.55, kLookKnob},
       {kSwirl, "Swirl", "View", 0.0, 1.0, 0.38, kLookKnob},
@@ -482,6 +489,7 @@ inline std::array<jclap::core::ParamDef, kParamCount> buildParams() {
       {kSmoke, "Smoke", "View", 0.0, 3.0, 4.0 / 3.0, kLookKnob},
       {kRetongue, "Re-Tongue", "Articulation", 0.0, 1.0, 0.5, kMod},
       {kTongueForce, "Tongue Force", "Voice", 0.0, 1.0, 0.0, kGlobalChoice},
+      {kColours, "Colours", "View", 0.0, kColourCount - 1.0, 0.0, kLookFlags},
    };
    for (const auto &d : fixed)
       p[d.id] = d;
@@ -608,6 +616,9 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kPalette:
       count = 5;
       return kPaletteNames;
+   case kColours:
+      count = kColourCount;
+      return kColourNames;
    default:
       if (id >= kBusBase && id < kRouteBase) {
          switch ((id - kBusBase) % kBusStride) {

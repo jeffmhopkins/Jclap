@@ -272,14 +272,15 @@ lags it, and sends it on as a source of its own.
 
 Each voice as a loop in three dimensions (its sound now, a quarter period ago and half a period
 ago), slowly turning. A steady tone draws a clean closed loop; growl, a split note or breath noise
-fray it. Smoke comes off every loop as it blows, warm in the instrument's colour, cooling as it
-rises and curls away. **SMOKE / INK** and the palette set its look.
+fray it. Smoke comes off every loop as it blows, in the loop's own colour, cooling to blue mist as it
+rises and curls away. **SMOKE / INK** sets its look, and **Colours** the scheme each voice's loop and
+smoke are drawn in.
 
 ### The voice card
 
 ![The VOICE tab](docs/readme/voice.jpg)
 
-Each sounding note keeps one colour across the panel, by the voice playing it: its light, its partials on the bore, its dot on the air flow, the tongue, the press curve and the hybrid's filter, its place in the stereo field and its loop's name.
+Each sounding note keeps one colour across the panel, by the voice playing it: its light, its partials on the bore, its dot on the air flow, the tongue, the press curve and the hybrid's filter, its place in the stereo field, and its loop, its smoke and the loop's name. The **Colours** menu above the loops picks the scheme those colours come from: Spectrum (the default), Neon, Sunset, Ocean, Aurora, Pastel, Fire or Mono.
 
 **VOICE** shows the eight voices; where each sounding note sits in the stereo field (Spread fans
 them out around Pan, each note in its own colour, with the output's balance under it); and the
@@ -321,10 +322,13 @@ is, as JSynth places its creatures: **ACROSS** (Pitch by default), **UP** (Breat
 or stay in the Centre, and **MIN SIZE** is the smallest a loop gets (25% of the largest by
 default). The look is kept with the project, not with presets, so changing preset leaves it alone.
 
-![Ink, in Ember](docs/readme/ink.jpg)
+![Ink, in the Neon scheme](docs/readme/ink.jpg)
 
-**INK** drops dye from the loops that sinks and spreads instead of glowing smoke. Five palettes: Dusk
-(the instrument's own colour), Ember, Frost, Moss and Mono.
+**INK** drops dye from the loops that sinks and spreads instead of glowing smoke. Beside it,
+**Colours** picks the voices' colour scheme: each note's loop glows, and its smoke or ink comes off it,
+in its voice's colour, which also marks that note everywhere else on the panel. Eight schemes:
+Spectrum (the default, one of each hue), Neon, Sunset, Ocean, Aurora, Pastel, Fire and Mono. (It
+replaces 0.12.0's smoke Palette menu.)
 
 ## Breath and MPE
 

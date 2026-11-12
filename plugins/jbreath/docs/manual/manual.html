@@ -32,7 +32,7 @@
 @page {
   size: 8.5in 11in;
   margin: 0.85in 0.85in 0.8in 0.85in;
-  @bottom-left { content: "JBreath  ·  User Manual  ·  v0.12.0 draft"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
+  @bottom-left { content: "JBreath  ·  User Manual  ·  v0.12.1 draft"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
   @bottom-right { content: counter(page); font: 600 8pt "InterM"; color: #15171d; }
 }
 @page cover { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
@@ -208,7 +208,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
   <div class="shot"><img src="img/panel.jpg" alt=""></div>
   <div class="foot">
-    <div><div class="k">Version</div><div class="v">0.12.0 · Draft</div></div>
+    <div><div class="k">Version</div><div class="v">0.12.1 · Draft</div></div>
     <div><div class="k">Format</div><div class="v">CLAP · MPE · 8 voices</div></div>
     <div><div class="k">Platforms</div><div class="v">macOS · Windows · Linux</div></div>
     <div style="text-align:right"><div class="k">Edition</div><div class="v">November 2026</div></div>
@@ -222,7 +222,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
   <div class="toc-title">Contents</div>
   <div class="toc" id="toc"></div>
-  <div class="note warn"><span class="k">Draft</span><p>This is a working draft written against JBreath 0.12.0.</p></div>
+  <div class="note warn"><span class="k">Draft</span><p>This is a working draft written against JBreath 0.12.1.</p></div>
   <h2 style="margin-top:0.2in">About this manual</h2>
   <p>Chapters 2 and 3 get you installed and playing in a few minutes. Chapter 4 tours the panel, and Chapters 5 to 7 explain how the sound is made, what each instrument is and how you blow it, which is the quickest way to understand what every control does. Chapters 8 to 14 cover every control in the order they sit on the panel, and Chapters 15 and 16 the presets, the dice and some recipes. The appendix lists every parameter with its exact range and default, plus specifications and troubleshooting.</p>
   <p>Throughout the manual, control names are set in <strong>bold</strong> and panel labels as they appear on screen, such as <strong>EMBOUCHURE</strong>. Tags beside a parameter mean:</p>
@@ -358,7 +358,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </table>
   <p>Each knob draws its value as an arc. When a route or the host is moving it, an outer ring shows how far, live, in the source's colour (Chapter 11).</p>
   <h2>One colour per note</h2>
-  <p>Each sounding note keeps one colour across the whole panel, by the voice playing it: its loop and its label on the stage, its partials on the bore graph, its dot on the air flow graph, the tongue and press curves, the hybrid's filter, and its place in the stereo field on the VOICE tab. Play a chord and you can follow each note through every card.</p>
+  <p>Each sounding note keeps one colour across the whole panel, by the voice playing it: its loop, its smoke and its label on the stage, its partials on the bore graph, its dot on the air flow graph, the tongue and press curves, the hybrid's filter, and its place in the stereo field on the VOICE tab. Play a chord and you can follow each note through every card. The <strong>Colours</strong> menu above the stage picks the scheme the colours come from (Chapter 13).</p>
   <h2>Panel size</h2>
   <p>The panel is 1648 × 940 at 100%. Right-click any empty part of the panel and choose <strong>UI Size</strong> to scale it. The size you pick is remembered the next time the editor opens. The same menu has <strong>Check for Updates</strong>.</p>
 </section>
@@ -740,8 +740,9 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
   <figure class="dark"><img src="img/loops.jpg" alt=""><figcaption><b>Fig. 13.1</b>&nbsp; <em>Smoke Tenor</em>, four notes. Each loop is labelled with its note and how hard it's blowing.</figcaption></figure>
   <h2>Reading a loop</h2>
-  <p>Each loop plots a voice's sound now against its sound a quarter of a period ago and half a period ago, in three dimensions, slowly turning. A steady tone draws a clean closed loop, its shape the tone's harmonics; growl, flutter, breath noise or a split note fray it. That fraying is what the <strong>FRAY</strong> source measures. Smoke comes off every loop as it blows, warm in the instrument's colour, cooling as it rises and curls away.</p>
-  <p>Above the stage, <strong>SMOKE / INK</strong> picks the look and the menu beside it the palette: <strong>Dusk</strong> (the instrument's own colour), <strong>Ember</strong>, <strong>Frost</strong>, <strong>Moss</strong> or <strong>Mono</strong>. <strong>INK</strong> drops dye from the loops that sinks and spreads instead of glowing smoke.</p>
+  <p>Each loop plots a voice's sound now against its sound a quarter of a period ago and half a period ago, in three dimensions, slowly turning. A steady tone draws a clean closed loop, its shape the tone's harmonics; growl, flutter, breath noise or a split note fray it. That fraying is what the <strong>FRAY</strong> source measures. Smoke comes off every loop as it blows, in the loop's own colour, cooling to blue mist as it rises and curls away.</p>
+  <p>Above the stage, <strong>SMOKE / INK</strong> picks the look. <strong>INK</strong> drops dye from the loops that sinks and spreads instead of glowing smoke.</p>
+  <p>The menu beside it, <strong>Colours</strong>, picks the voices' colour scheme. Each loop glows, and its smoke or ink comes off it, in its voice's colour, and the same colour marks that note everywhere else on the panel. There are eight: <strong>Spectrum</strong> (the default, one of each hue), <strong>Neon</strong>, <strong>Sunset</strong>, <strong>Ocean</strong>, <strong>Aurora</strong>, <strong>Pastel</strong>, <strong>Fire</strong> and <strong>Mono</strong>. It replaces 0.12.0's smoke palette menu.</p>
   <h2>The AIR view</h2>
   <figure class="dark"><img src="img/air-view.jpg" alt=""><figcaption><b>Fig. 13.2</b>&nbsp; The AIR view with its controls open.</figcaption></figure>
   <p><strong>AIR</strong> in the header gives the loops the whole window; <strong>PLAY</strong> brings the panel back. <strong>CONTROLS</strong> opens the look's knobs over the view.</p>
@@ -961,7 +962,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
 <section class="back">
   <div class="mid">
     <div class="word"><span class="j">J</span>Breath</div>
-    <div class="small">Breathing physical models · v0.12.0 draft</div>
+    <div class="small">Breathing physical models · v0.12.1 draft</div>
   </div>
   <div class="url">github.com/jeffmhopkins/Jclap</div>
 </section>
@@ -1148,7 +1149,7 @@ function el(parent, tag, attrs, text) {
       ['Alien Words', 'Alien, Typed', 'Alien', ''], ['Alien Language', '0 – 999', '1', M], ['Alien Rough', pc(0, 100), '45%', MT], ['Alien Growl', pc(0, 100), '0%', MT], ['Alien Wet', pc(0, 100), '20%', MT],
     ]],
     ['View (not automatable, not in presets)', [
-      ['Look', 'Smoke, Ink', 'Smoke', ''], ['Palette', 'Dusk, Ember, Frost, Moss, Mono', 'Dusk', ''], ['Smoke', pc(0, 300), '133%', ''], ['Turbulence', pc(0, 100), '42%', ''],
+      ['Look', 'Smoke, Ink', 'Smoke', ''], ['Colours', 'Spectrum, Neon, Sunset, Ocean, Aurora, Pastel, Fire, Mono', 'Spectrum', ''], ['Smoke', pc(0, 300), '133%', ''], ['Turbulence', pc(0, 100), '42%', ''],
       ['Rise', pc(0, 100), '55%', ''], ['Swirl', pc(0, 100), '38%', ''], ['Tail', '0.5 – 8.0 s', '4.0 s', ''], ['Line', pc(0, 100), '40%', ''], ['Glow', pc(0, 100), '50%', ''],
       ['Loop X · Y · Size', 'Pitch, Strike, Press, Slide, Breath, Random, Centre', 'Pitch · Breath · Breath', ''], ['Loop Size Min', pc(10, 100), '25%', ''],
     ]],

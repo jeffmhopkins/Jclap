@@ -30,7 +30,7 @@ shots=(
    "room     0 0 0 0 2 0   898 606 740  328  Room=35"
    "delay    0 0 0 0 3 0   898 606 740  328  Delay=On Delay_Sync=1/8D Delay_Feedback=55"
    "air-view 0 0 0 0 0 1   0   0   1648 940  preset=Smoke_Tenor panel"
-   "ink      0 0 0 0 0 1   0   0   1648 940  preset=Gutbucket Look=Ink Palette=Ember"
+   "ink      0 0 0 0 0 1   0   0   1648 940  preset=Gutbucket Look=Ink Colours=Neon"
    "dice     0 0 0 0 0 0   406 4   1232 318  preset=Smoke_Tenor dice"
 )
 for line in "${shots[@]}"; do
