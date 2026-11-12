@@ -2243,6 +2243,10 @@ public:
    }
 };
 
+// The loops card's tip, in PLAY (the AIR view shows none, so nothing covers the loops).
+const char *const kLoopsTip = "Each voice as a loop: its sound now, a quarter period ago and half a period ago. "
+                              "A steady tone draws a clean loop; growl and breath fray it. Smoke rises off it as it blows.";
+
 class Panel : public ui::DesignFrame, public visage::EventTimer, public Mapper {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
@@ -2283,8 +2287,7 @@ public:
       for (size_t i = first; i < children().size(); ++i)
          playFrames_.push_back(children()[i]);
       loops_ = &add<BreathLoops>(kLoopsRect, kLoopsRect.w, kLoopsRect.h);
-      tips_.add(*loops_, "Each voice as a loop: its sound now, a quarter period ago and half a period ago. "
-                         "A steady tone draws a clean loop; growl and breath fray it. Smoke rises off it as it blows.");
+      tips_.add(*loops_, kLoopsTip);
       buildMap();
       buildRoutes();
       buildAir();
@@ -3330,6 +3333,8 @@ private:
       move(*loops_, loops);
       loops_->resize(loops.w, loops.h);
       loops_->full = on;
+      // The AIR view is for watching the loops: no tip over them there.
+      tips_.setText(*loops_, on ? "" : kLoopsTip);
       move(*look_, {loops.x + 16, loops.y + 12, 140, 24});
       move(*voiceColours_, {loops.x + 164, loops.y + 12, 110, 24});
       move(*airPanelButton_, {loops.x + 282, loops.y + 12, 96, 24});
