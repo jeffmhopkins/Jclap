@@ -313,7 +313,8 @@ much darker each one gets, and **SPREAD** how far they bounce between left and r
 
 ![The AIR view](docs/readme/air-view.jpg)
 
-**AIR** in the header gives the loops the whole window; **CONTROLS** opens the knobs over it.
+**AIR** in the header gives the loops the whole window, with no tooltip over them (the smaller
+loops card in PLAY keeps its tip); **CONTROLS** opens the knobs over it.
 **SMOKE** (how much smoke the loops puff out, 133% by default), **TURBULENCE** (how hard the air curls the
 smoke), **RISE** (how fast it rises), **SWIRL** (how tightly it curls into strands) and **TAIL** (how
 long it hangs), then the loops' **LINE** and **GLOW** (how brightly the loops and smoke are lit: 50% is the usual light, full four times it). **PLACE** says what puts each loop where it

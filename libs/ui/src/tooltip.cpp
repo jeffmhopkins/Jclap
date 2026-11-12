@@ -69,7 +69,7 @@ void Tooltips::timerCallback() {
 void Tooltips::show(visage::Frame &frame) {
    const std::string *text = textFor(&frame);
    visage::Frame *top = frame.topParentFrame();
-   if (!text || !top || top == &frame)
+   if (!text || text->empty() || !top || top == &frame)
       return;
    if (host_ != top) {
       hide();
