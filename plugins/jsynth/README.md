@@ -28,7 +28,9 @@ each one trails ink across the sky.
 - **MAP** instead of a matrix page: arm a source, drag a knob.
 - **Reverb and delay** on the main output, the same ones as JBreath's, on the FX tab.
 - **Dice:** randomize a playable patch by complexity, or mutate one by an amount, with undo and locks.
-- **83 factory presets** in 8 categories, led by flock-driven drones and textures, with favorites.
+- **116 factory presets** in 12 categories: keys, organs, mallets, plucks, basses, leads, pads, strings and
+  brass, sequences, drums and effects that play straight from a keyboard, then the flock's own showcases. With
+  favorites.
 
 ## Sound
 
@@ -227,21 +229,27 @@ folder). To delete a user preset, load it and pick **Delete** from the name menu
 to make any preset a favorite; **Favorites** sits at the top of the menu and is shared by every
 instance.
 
-The 83 factory presets are level-matched and come in 8 categories. Nearly every one is a sound the
-flock plays: each note's creature moves its own filter, shape, mix and FM as it climbs, turns,
-speeds up and gathers, and looping Shape envelopes reach back into the flock and the depth of its
-routes. Drones and textures run from soft and spacey to heavily modulated industrial noise.
+The 116 factory presets are level-matched and come in 12 categories, laid out the way the big commercial banks
+are. The first eleven are sounds to play: each is voiced from scratch on JSynth's own engine and works from any
+keyboard, with velocity shaping the attack and tone and the mod wheel doing the obvious thing for the sound
+(vibrato on a lead, rotor speed on an organ, tremolo on a piano, brightness on a pad). Press and Slide add to
+that, for MPE controllers. The flock leaves these alone. The last category, **Flock**, keeps the best of the
+sounds the creatures play themselves.
 
 | Category | What's in it |
 |---|---|
-| **Ambient Drones** | Soft, spacey held sounds: each creature's climb, turns and speed move its own note's filter, shape, mix and FM, under long halls |
-| **Dark Drones** | Low, slow and ominous: ladders, growls, stone-room combs and dark choirs that gather, sink and grind as the flock moves |
-| **Textures** | Patterns, grains and particles: Shape envelopes as the amp, each creature setting its own pace and colour |
-| **Industrial** | Heavily modulated machinery: sync grind, hard drive, inharmonic FM, combs and noise, driven and hammered by the flock |
-| **Landscapes** | Both parts at once: two flocks in one sky, hunting, biting, crossfaded by Press or split by velocity or key |
-| **Pads** | The classic pad shapes, flown by the flock |
-| **Keys and Bells** | Played sounds, each note shaded by its creature |
-| **Bass and Leads** | One creature each, playing its own tone |
+| **Keys** | Electric pianos, a clavinet, a felt upright and a harpsichord: velocity sets how hard they bark, and the decay shortens up the keyboard (8) |
+| **Organs** | Tonewheel drawbars with a key click and a rotary speaker the wheel speeds up, pipes in a stone church, a combo organ, and a harmonium Press pumps (5) |
+| **Bells and Mallets** | Struck metal and wood from FM: glockenspiel, marimba, vibraphone, tubular bells, kalimba, steel pan, music box and a crystal bell (8) |
+| **Plucks** | Short sounds for lines and chords, from the classic filter pluck to strings plucked in a comb tuned to the note (8) |
+| **Bass** | Mono basses from a clean sub through analog, ladder, acid, FM, Reese and wobble to a fingered upright (12) |
+| **Leads** | Mono leads that glide, with a vibrato that waits a moment and deepens on the wheel: saw, square, sync, unison, chip, a whistle, a flute and one made for MPE (9) |
+| **Pads** | Held chords: warm analog, string machine, glass, choir, PWM, sweeping, dark, airy, evolving and bright unison (12) |
+| **Strings and Brass** | Ensembles and soloists: strings fast and slow, a cello, synth brass and stabs, soft horns and a trumpet (8) |
+| **Arps and Sequences** | Hold a chord and it plays in time with the host: gates, pulses, octave arpeggios and sample-and-hold (8) |
+| **Percussion** | A kit to play from C2 up: kick, snare, hats, tom, clap, cowbell and rim shot (8) |
+| **FX** | A riser and a downlifter, a laser, wind, surf, a UFO, a siren and thunder (8) |
+| **Flock** | The flock's own showcases, each in the room it was voiced in: drones and textures every note's creature plays, two flocks hunting each other, a bell and a theremin (22) |
 
 ## For developers
 
