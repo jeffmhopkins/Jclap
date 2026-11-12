@@ -110,9 +110,10 @@ ALIEN tab:
 - **CONSONANT**: how strong the consonants are, from none (only the vowels) to every stop, hiss and
   hum.
 - **HOLD**: how long a diphthong holds its first vowel, from speech's quick glide to a singer's hold.
-- **TALK** and **PACE**: its own words only: how soon a held note goes on to the next syllable,
-  chattering while it's held: Free (by Talk; under a fifth, never), or a note value from 1/16 to 2
-  bars at the host's tempo.
+- **TALK** and **PACE**: how soon a held note goes on to the next syllable, chattering while it's
+  held: Free (by Talk; under a fifth, never), or a note value from 1/16 to 2 bars at the host's
+  tempo. Typed words go on only with a Pace set (on Free they keep to a syllable a note), and the
+  next note picks up after the last syllable the held one said.
 - **VOWELS** and **CONSONANTS**: which its own words use, each on or off.
 
 The ALIEN tab only shows when the Alien is the instrument.
