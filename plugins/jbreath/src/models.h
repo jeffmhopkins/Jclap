@@ -668,17 +668,18 @@ public:
       // (The pitch here wanders with the player's drift and vibrato, a few cents either way: the
       // switch to a bigger horn is a quarter tone under each one's bottom note, so a note played
       // on it, the alto's own low C#3 above all, keeps to one horn instead of flipping between two.)
-      // (The horn, and the register, are chosen for the note without the player's bend: a bend
-      // fingers along through the register it started in, chromatically, but never takes the
-      // octave key on or off or changes horn. Re-fingered across the octave key, the reed fell to
-      // the low register for a tenth of a second, an octave down; past the register's last
-      // fingering, the bore is bent with it.)
-      double ha;
-      int f = choose(fingerHz(hz), hz, member_, ha);
+      // (The horn and the fingering are chosen for the note without the player's bend, which the
+      // lips make on the fingering the note was played with, the whole bore bent with it up to
+      // kLipBendMax. Re-fingered across the octave key, the reed fell to the low register for a
+      // tenth of a second, an octave down; fingered along chromatically, a bend stepped, its tone
+      // and level jumping at each semitone.)
+      double hf;
+      int f = choose(fingerHz(hz), fingerHz(hz), member_, hf);
+      const double ha = hz / member_;
       // (Once the note is sounding, the fingering held stays until the note is three quarters of a
       // semitone off it, so a note between two doesn't flip back and forth.)
       if (ticked_ && f != fing_ && member_ == fingMember_ && (fing_ >= 20) == (f >= 20) &&
-          std::fabs(12.0 * std::log2(ha / kLow) - noteOf(fing_)) < 0.75)
+          std::fabs(12.0 * std::log2(hf / kLow) - noteOf(fing_)) < 0.75)
          f = fing_;
       fingMember_ = member_;
       const double want = kLow * std::exp2(noteOf(f) / 12.0);

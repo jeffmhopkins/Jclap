@@ -402,7 +402,8 @@ private:
          breath_ = puff_ = 0.0;
          valveAt_ = -1;
          flutterDepth_ = flutterDip_ = flutterPhase_ = 0.0;
-         pitchNow_ = pitch;
+         pitchNow_ = pitchSm_ = pitch;
+         fingerOff_ = 0.0;
          len_[0] = -1.0;
          levelNow_ = 0.0;
          hybEnv_ = 0.0;
@@ -1045,25 +1046,36 @@ private:
       // Pitch glides to the note (a finger lands in a couple of ms, or the Glide time).
       const double g = 1.0 - std::pow(1.0 - glideCoef_, kControl);
       pitchNow_ += (pitch_ - pitchNow_) * g;
-      const double sounding = pitchNow_ + pitchMod_ + vibCents / 100.0 * vib +
+      // (And through a second, fixed stage of kPitchSmoothSec: a controller's bend arrives in steps a
+      // few ms apart, which one short stage left as a staircase, a buzz under a bend.)
+      pitchSm_ += (pitchNow_ - pitchSm_) * (1.0 - std::exp(-kControl / (kPitchSmoothSec * fs_)));
+      const double sounding = pitchSm_ + pitchMod_ + vibCents / 100.0 * vib +
                               (10.0 * hum * human_[0] + live_.detune * human_[5]) / 100.0;
-      Tuning t = TuningTable::get().at(tuningRow(settings_.model, settings_.tune), sounding, fs_);
-      speak_ = t.speak;
-      const double hz = 440.0 * std::pow(2.0, (sounding - 69.0) / 12.0 + t.octaves);
-      period_ = std::clamp(fs_ / hz, 2.0, (kPast - 2) / (1.0 + kFrayLag * kFrayLags));
-      setKnotHz(4.0 * hz);
+      // (Bent off its fingering's own pitch, the note is tuned as that fingering's, the bore's
+      // correction belonging to the fingering, not the pitch: looked up at the fingering's note as
+      // it was a block ago, and again if notePitch moved it. Its octave stays that one's too: looked
+      // up by the bent pitch, a note at the bottom of a horn, which the table plays an octave up,
+      // flipped octave halfway through a bend.)
+      const int row = tuningRow(settings_.model, settings_.tune);
+      Tuning t = TuningTable::get().at(row, sounding - fingerOff_, fs_);
+      double hz = 440.0 * std::pow(2.0, (sounding - 69.0) / 12.0 + t.octaves);
       Model &m = model();
       // (How far of it the bend takes the note, which the lips bend off the fingering: a sax,
       // trumpet or oboe keeps its fingering through a bend instead of changing it at each semitone.)
       m.lipBend = bendSemis_;
       m.notePitch(hz);
-      // (Bent off its fingering's own pitch, the note is tuned as that fingering's: the bore's
-      // correction belongs to the fingering, not the pitch.)
-      if (const double off = m.tuningOffset(); off != 0.0) {
-         const Tuning f = TuningTable::get().at(tuningRow(settings_.model, settings_.tune), sounding - off, fs_);
-         if (f.octaves == t.octaves)
-            t = f;
+      if (const double off = m.tuningOffset(); off != fingerOff_) {
+         fingerOff_ = off;
+         const Tuning f = TuningTable::get().at(row, sounding - off, fs_);
+         if (f.octaves != t.octaves) {
+            hz = 440.0 * std::pow(2.0, (sounding - 69.0) / 12.0 + f.octaves);
+            m.notePitch(hz);
+         }
+         t = f;
       }
+      period_ = std::clamp(fs_ / hz, 2.0, (kPast - 2) / (1.0 + kFrayLag * kFrayLags));
+      setKnotHz(4.0 * hz);
+      speak_ = t.speak;
       // A player keeps a note in tune as they blow softer or harder (a flautist rolls the
       // headjoint in, a trumpeter lips up): the bore is shortened or lengthened by the model's drift
       // at this breath, measured against the breath its tuning was baked at.
@@ -1564,7 +1576,9 @@ private:
    double breath_ = 0.0, puff_ = 0.0, levelNow_ = 0.0, hold_ = 1.0, speak_ = 0.0;
    bool pressureSeen_ = false;
    double velocity_ = 1.0, pressure_ = 0.0, timbre_ = 0.5, gain_ = 1.0;
-   double pitch_ = 60.0, pitchNow_ = 60.0, emb_ = 0.5;
+   double pitch_ = 60.0, pitchNow_ = 60.0, pitchSm_ = 60.0, emb_ = 0.5;
+   double fingerOff_ = 0.0;  // the model's tuningOffset() a block ago
+   static constexpr double kPitchSmoothSec = 0.006;
    // The breath and tongue of the last few ms, which the later unison copies are blown by.
    static constexpr int kAirLen = 2048;
    int stagger_[kMaxUnison] = {}, airPos_ = 0;
