@@ -1783,37 +1783,61 @@ private:
       runner_->submit(std::move(job));
    }
 
+   // Visage packs every heat map into one shared atlas and samples it bilinearly right out to its
+   // edge texels' outer sides, so the view's outermost pixels pick up half of whatever sits next to
+   // the map in the atlas: the other channels' maps, or stale data in the padding. That showed as
+   // stray red, green and blue dashes along the AIR view's border. So each map carries a ring of
+   // copies of its own edge cells and is drawn a cell larger all round, trimmed to the view: the
+   // view's edge then lands between a cell and its copy, and the atlas next door is never sampled.
    void drawSmoke(visage::Canvas &c, float k) {
       bool ready = false;
+      float cellW = 0, cellH = 0;
       runner_->latest([&](int dw, int dh, const std::vector<float> &red, const std::vector<float> &green, const std::vector<float> &blue) {
          ready = true;
-         if (heat_[0].width() != dw || heat_[0].height() != dh)
+         const int pw = dw + 2, ph = dh + 2;
+         if (heat_[0].width() != pw || heat_[0].height() != ph)
             for (auto &h : heat_)
-               h.setDimensions(dw, dh);
+               h.setDimensions(pw, ph);
          const std::vector<float> *rgb[3] = {&red, &green, &blue};
-      // Into three heat maps (red, green, blue), rows top down, clear of the view's rounded corners.
-      const float cellW = W_ / dw, cellH = H_ / dh, R = 10.0f;
-      for (int j = 0; j < dh; ++j) {
-         const float y = (dh - 1 - j + 0.5f) * cellH;
-         for (int i = 0; i < dw; ++i) {
-            const float x = (i + 0.5f) * cellW;
-            const float qx = std::max(0.0f, std::max(R - x, x - (W_ - R))), qy = std::max(0.0f, std::max(R - y, y - (H_ - R)));
-            const float inside = std::clamp(R + 0.5f * cellW - std::hypot(qx, qy), 0.0f, cellW) / cellW;
-            const size_t n = static_cast<size_t>(j) * dw + i;
-            for (int ch = 0; ch < 3; ++ch)
-               heat_[ch].at(i, dh - 1 - j) = (*rgb[ch])[n] * inside;
+         // Into three heat maps (red, green, blue), rows top down, clear of the view's rounded corners.
+         cellW = W_ / dw;
+         cellH = H_ / dh;
+         const float R = 10.0f;
+         for (int j = 0; j < dh; ++j) {
+            const float y = (dh - 1 - j + 0.5f) * cellH;
+            for (int i = 0; i < dw; ++i) {
+               const float x = (i + 0.5f) * cellW;
+               const float qx = std::max(0.0f, std::max(R - x, x - (W_ - R))), qy = std::max(0.0f, std::max(R - y, y - (H_ - R)));
+               const float inside = std::clamp(R + 0.5f * cellW - std::hypot(qx, qy), 0.0f, cellW) / cellW;
+               const size_t n = static_cast<size_t>(j) * dw + i;
+               for (int ch = 0; ch < 3; ++ch)
+                  heat_[ch].at(i + 1, dh - j) = (*rgb[ch])[n] * inside;
+            }
          }
-      }
+         // The ring: each edge cell copied out one, as a clamp-to-edge texture would sample it.
+         for (auto &h : heat_) {
+            for (int i = 1; i <= dw; ++i) {
+               h.at(i, 0) = h.at(i, 1);
+               h.at(i, ph - 1) = h.at(i, ph - 2);
+            }
+            for (int j = 0; j < ph; ++j) {
+               h.at(0, j) = h.at(1, j);
+               h.at(pw - 1, j) = h.at(pw - 2, j);
+            }
+         }
       });
       if (!ready)
          return;
       static const visage::Color kChannel[3] = {visage::Color(0xffff0000), visage::Color(0xff00ff00), visage::Color(0xff0000ff)};
+      c.saveState();
+      c.trimClampBounds(0.0f, 0.0f, W_ * k, H_ * k);
       c.setBlendMode(visage::BlendMode::Add);
       for (int ch = 0; ch < 3; ++ch) {
          c.setColor(visage::Brush::horizontal(visage::Gradient(visage::Color(0xff000000), kChannel[ch])));
-         c.heatMap(heat_[ch], 0.0f, 0.0f, W_ * k, H_ * k);
+         c.heatMap(heat_[ch], -cellW * k, -cellH * k, (W_ + 2 * cellW) * k, (H_ + 2 * cellH) * k);
       }
       c.setBlendMode(visage::BlendMode::Alpha);
+      c.restoreState();
    }
 
    void drawLoop(visage::Canvas &c, const Loop &l, float k) {
