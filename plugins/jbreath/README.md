@@ -346,7 +346,7 @@ replaces 0.12.0's smoke Palette menu.)
   lips a note, on the fingering it was played with: the trumpet keeps its valves for up to three
   semitones of bend either way, and the sax fingers along chromatically but never takes the octave
   key on or off or changes horn mid-bend, so a bend no longer drops an octave or loses the note at
-  each fingering. Every note costs the same CPU (before 0.12.2 most sax notes, and some trumpet
+  each fingering. Every note costs the same CPU (before 0.13.1 most sax notes, and some trumpet
   notes, cost five to fifteen times the rest). **Slide** (CC 74) moves the
   embouchure, by SLIDE.
 
