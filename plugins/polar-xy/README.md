@@ -15,6 +15,9 @@ there is a VST3 build for hosts without CLAP.
 
 ![Panel](docs/panel.png)
 
+**[Read the user manual (PDF, draft)](docs/PolarXY-User-Manual.pdf)**: installing, a quick start, every control,
+Ableton Live and Max for Live setup, MIDI-learning the Orb in Omnisphere 3, recipes and troubleshooting.
+
 ## Using it in Bitwig
 
 1. Put **Polar XY** on the Omnisphere track, before Omnisphere.
