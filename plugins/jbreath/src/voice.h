@@ -542,6 +542,8 @@ public:
    float breath() const { return static_cast<float>(breath_); }
    // The syllable of its words the Alien is singing, or -1 (and on another instrument).
    int saying() const { return models_[0][settings_.model]->saying(); }
+   // How far through its words the Alien has got (a held note goes on by Talk and Pace).
+   uint32_t sungWord() const { return models_[0][settings_.model]->word(); }
    // The Alien's words, and which of them the next note (or slur) sings: its syllable's place.
    void setBook(const speech::Book *book) {
       for (auto &copy : models_)

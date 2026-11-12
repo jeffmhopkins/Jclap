@@ -32,7 +32,7 @@
 @page {
   size: 8.5in 11in;
   margin: 0.85in 0.85in 0.8in 0.85in;
-  @bottom-left { content: "JBreath  ·  User Manual  ·  v0.13.1 draft"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
+  @bottom-left { content: "JBreath  ·  User Manual  ·  v0.13.3 draft"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
   @bottom-right { content: counter(page); font: 600 8pt "InterM"; color: #15171d; }
 }
 @page cover { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
@@ -208,7 +208,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
   <div class="shot"><img src="img/panel.jpg" alt=""></div>
   <div class="foot">
-    <div><div class="k">Version</div><div class="v">0.13.1 · Draft</div></div>
+    <div><div class="k">Version</div><div class="v">0.13.3 · Draft</div></div>
     <div><div class="k">Format</div><div class="v">CLAP · MPE · 8 voices</div></div>
     <div><div class="k">Platforms</div><div class="v">macOS · Windows · Linux</div></div>
     <div style="text-align:right"><div class="k">Edition</div><div class="v">November 2026</div></div>
@@ -222,7 +222,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
   <div class="toc-title">Contents</div>
   <div class="toc" id="toc"></div>
-  <div class="note warn"><span class="k">Draft</span><p>This is a working draft written against JBreath 0.13.1.</p></div>
+  <div class="note warn"><span class="k">Draft</span><p>This is a working draft written against JBreath 0.13.3.</p></div>
   <h2 style="margin-top:0.2in">About this manual</h2>
   <p>Chapters 2 and 3 get you installed and playing in a few minutes. Chapter 4 tours the panel, and Chapters 5 to 7 explain how the sound is made, what each instrument is and how you blow it, which is the quickest way to understand what every control does. Chapters 8 to 14 cover every control in the order they sit on the panel, and Chapters 15 and 16 the presets, the dice and some recipes. The appendix lists every parameter with its exact range and default, plus specifications and troubleshooting.</p>
   <p>Throughout the manual, control names are set in <strong>bold</strong> and panel labels as they appear on screen, such as <strong>EMBOUCHURE</strong>. Tags beside a parameter mean:</p>
@@ -721,7 +721,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
       <tr><td class="c">BREATHY</td><td class="r">0 – 100%</td><td class="d">25%</td><td>How much air goes through the folds, from clear to a whisper. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">CONSONANT</td><td class="r">0 – 100%</td><td class="d">100%</td><td>How strong the consonants are, from vowels only to every stop, hiss and hum. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">HOLD</td><td class="r">0 – 100%</td><td class="d">20%</td><td>How long a diphthong holds its first vowel. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
-      <tr><td class="c">TALK · PACE</td><td class="r">0 – 100% · Free, 1/16 – 2 Bars</td><td class="d">50% · Free</td><td>Its own words only: how soon a held note goes on to the next syllable, chattering while held. Free (by TALK; under a fifth, never), or a note value at the host's tempo. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
+      <tr><td class="c">TALK · PACE</td><td class="r">0 – 100% · Free, 1/16 – 2 Bars</td><td class="d">50% · Free</td><td>How soon a held note goes on to the next syllable, chattering while held. Free (by TALK; under a fifth, never), or a note value at the host's tempo. Typed words go on only with a PACE set (on Free, a syllable a note), and the next note picks up where the held one got to. <span class="mod m">MOD</span><span class="mod t">ROUTE</span></td></tr>
       <tr><td class="c">VOWELS · CONSONANTS</td><td class="r">each On / Off</td><td class="d">all On</td><td>Which its own words use: A E I O U, and M N, L R, W Y, V Z, B D G, H, F S, P T K.</td></tr>
     </tbody>
   </table>
@@ -963,7 +963,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
 <section class="back">
   <div class="mid">
     <div class="word"><span class="j">J</span>Breath</div>
-    <div class="small">Breathing physical models · v0.13.1 draft</div>
+    <div class="small">Breathing physical models · v0.13.3 draft</div>
   </div>
   <div class="url">github.com/jeffmhopkins/Jclap</div>
 </section>
