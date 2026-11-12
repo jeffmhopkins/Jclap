@@ -1047,13 +1047,23 @@ private:
       pitchNow_ += (pitch_ - pitchNow_) * g;
       const double sounding = pitchNow_ + pitchMod_ + vibCents / 100.0 * vib +
                               (10.0 * hum * human_[0] + live_.detune * human_[5]) / 100.0;
-      const Tuning t = TuningTable::get().at(tuningRow(settings_.model, settings_.tune), sounding, fs_);
+      Tuning t = TuningTable::get().at(tuningRow(settings_.model, settings_.tune), sounding, fs_);
       speak_ = t.speak;
       const double hz = 440.0 * std::pow(2.0, (sounding - 69.0) / 12.0 + t.octaves);
       period_ = std::clamp(fs_ / hz, 2.0, (kPast - 2) / (1.0 + kFrayLag * kFrayLags));
       setKnotHz(4.0 * hz);
       Model &m = model();
+      // (How far of it the bend takes the note, which the lips bend off the fingering: a sax,
+      // trumpet or oboe keeps its fingering through a bend instead of changing it at each semitone.)
+      m.lipBend = bendSemis_;
       m.notePitch(hz);
+      // (Bent off its fingering's own pitch, the note is tuned as that fingering's: the bore's
+      // correction belongs to the fingering, not the pitch.)
+      if (const double off = m.tuningOffset(); off != 0.0) {
+         const Tuning f = TuningTable::get().at(tuningRow(settings_.model, settings_.tune), sounding - off, fs_);
+         if (f.octaves == t.octaves)
+            t = f;
+      }
       // A player keeps a note in tune as they blow softer or harder (a flautist rolls the
       // headjoint in, a trumpeter lips up): the bore is shortened or lengthened by the model's drift
       // at this breath, measured against the breath its tuning was baked at.
@@ -1086,8 +1096,10 @@ private:
             lenStep_[u] = (lu - len_[u]) / kControl;
          }
       }
-      for (int u = 1; u < unison; ++u)
+      for (int u = 1; u < unison; ++u) {
+         models_[u][settings_.model]->lipBend = bendSemis_;
          models_[u][settings_.model]->notePitch(hz);
+      }
       unison_ = unison;
       unisonGain_ = 1.0f / std::sqrt(static_cast<float>(unison));
       if (fresh)

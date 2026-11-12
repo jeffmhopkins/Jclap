@@ -32,7 +32,7 @@
 @page {
   size: 8.5in 11in;
   margin: 0.85in 0.85in 0.8in 0.85in;
-  @bottom-left { content: "JBreath  ·  User Manual  ·  v0.12.1 draft"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
+  @bottom-left { content: "JBreath  ·  User Manual  ·  v0.12.2 draft"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
   @bottom-right { content: counter(page); font: 600 8pt "InterM"; color: #15171d; }
 }
 @page cover { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
@@ -208,7 +208,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
   <div class="shot"><img src="img/panel.jpg" alt=""></div>
   <div class="foot">
-    <div><div class="k">Version</div><div class="v">0.12.1 · Draft</div></div>
+    <div><div class="k">Version</div><div class="v">0.12.2 · Draft</div></div>
     <div><div class="k">Format</div><div class="v">CLAP · MPE · 8 voices</div></div>
     <div><div class="k">Platforms</div><div class="v">macOS · Windows · Linux</div></div>
     <div style="text-align:right"><div class="k">Edition</div><div class="v">November 2026</div></div>
@@ -222,7 +222,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
   <div class="toc-title">Contents</div>
   <div class="toc" id="toc"></div>
-  <div class="note warn"><span class="k">Draft</span><p>This is a working draft written against JBreath 0.12.1.</p></div>
+  <div class="note warn"><span class="k">Draft</span><p>This is a working draft written against JBreath 0.12.2.</p></div>
   <h2 style="margin-top:0.2in">About this manual</h2>
   <p>Chapters 2 and 3 get you installed and playing in a few minutes. Chapter 4 tours the panel, and Chapters 5 to 7 explain how the sound is made, what each instrument is and how you blow it, which is the quickest way to understand what every control does. Chapters 8 to 14 cover every control in the order they sit on the panel, and Chapters 15 and 16 the presets, the dice and some recipes. The appendix lists every parameter with its exact range and default, plus specifications and troubleshooting.</p>
   <p>Throughout the manual, control names are set in <strong>bold</strong> and panel labels as they appear on screen, such as <strong>EMBOUCHURE</strong>. Tags beside a parameter mean:</p>
@@ -408,8 +408,8 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
     <tbody>
       <tr><td class="c">Flute</td><td>An air jet crossing the embouchure hole, split in or out of the pipe by the sound in it.</td><td>Open at both ends: every harmonic.</td><td>The jet takes longer to reach the edge when it's slow, so blowing harder pushes it up a register. Edge noise. Nearly pure when soft, a strong 2nd and then 3rd harmonic as it's blown harder.</td></tr>
       <tr><td class="c">Clarinet</td><td>A single reed: a pressure-controlled valve, solved each sample with the pressure it makes.</td><td>A cylinder closed at the reed: odd harmonics.</td><td>The reed slamming shut at forte; the bell letting the highs out.</td></tr>
-      <tr><td class="c">Sax</td><td>A cane reed: a mass on a spring under the lip, pushed shut by the mouth pressure, beating on the lay at forte.</td><td>A real alto's air column, computed from its shape for each fingering: mouthpiece, conical body, nineteen tone holes, octave vents. Below the alto, the tenor, baritone, bass and contrabass.</td><td>Nearly a pure tone played softly, filling in to a buzzing forte over about 12 dB, as the Iowa alto does. Low notes hold their fundamental under rich harmonics. Growl when it's pushed.</td></tr>
-      <tr><td class="c">Oboe</td><td>A small, stiff double reed.</td><td>A narrow cone, built as two waveguides meeting at the reed (the bore, and a short pipe for the cone's missing tip), so its resonances are the note's harmonics; the cor anglais and lower horns below its range.</td><td>Nasal and reedy, with a formant near 1.8 kHz, fitted to recordings of a real oboe; darker played softly. Light on CPU.</td></tr>
+      <tr><td class="c">Sax</td><td>A cane reed: a mass on a spring under the lip, pushed shut by the mouth pressure, beating on the lay at forte.</td><td>A real alto's air column, computed from its shape for each fingering: mouthpiece, conical body, nineteen tone holes, octave vents. Below the alto, the tenor, baritone and bass (tuned down to the contrabass, it plays the bass sax).</td><td>Nearly a pure tone played softly, filling in to a buzzing forte over about 12 dB, as the Iowa alto does. Low notes hold their fundamental under rich harmonics. Growl when it's pushed.</td></tr>
+      <tr><td class="c">Oboe</td><td>A small, stiff double reed.</td><td>A narrow cone, built as two waveguides meeting at the reed (the bore, and a short pipe for the cone's missing tip), so its resonances are the note's harmonics; the cor anglais and lower horns below its range, down to the contrabassoon.</td><td>Nasal and reedy, with a formant near 1.8 kHz, fitted to recordings of a real oboe; darker played softly. Light on CPU.</td></tr>
       <tr><td class="c">Trumpet</td><td>The lips: a mass on a spring blown open by the mouth pressure.</td><td>A real Bb trumpet's air column for each of its seven valve combinations: mouthpiece, leadpipe, valves, Bessel bell.</td><td>The wave steepening on its way down the horn, towards a shock at forte: the brassy blare. Mellow played softly. Each tongued note scoops up into its pitch as the lips find the resonance.</td></tr>
       <tr><td class="c">Alien</td><td>Vocal folds, a pulse opening and snapping shut each period, or a bowed string.</td><td>A throat, nose and mouth: a formant synthesizer.</td><td>Every note a syllable of its words, typed or its own made-up language (Chapter 12).</td></tr>
     </tbody>
@@ -462,6 +462,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </table>
   <h2>Bend and slide</h2>
   <p><strong>Bend</strong> bends the bore, not a pitch shifter, so a big bend sounds like a player lipping the note. MPE bend moves each note on its own, over <strong>BEND</strong> on the voice card (48 semitones by default, the MPE standard). The manager channel's bend moves every note, and plain MIDI bend on a non-MPE channel moves its notes by ±2 semitones. JBreath also follows the bend range your controller sets with RPN 0, and CLAP tuning expressions.</p>
+  <p>The sax and trumpet bend the way a player lips a note, on the fingering the note was played with. The trumpet keeps its valves for up to three semitones of bend either way. The sax fingers along chromatically through a bend, but never takes the octave key on or off or changes to a bigger horn in the middle of one, so a bend doesn't drop an octave or lose the note at a fingering change. Past three semitones the trumpet changes valves as it goes.</p>
   <p><strong>Slide</strong> (CC 74, or a CLAP brightness expression) moves the embouchure by the SLIDE amount: on reeds, the bite; on brass, the lips' tension; on the Alien, how wide the jaw opens.</p>
   <h2>Tongue force</h2>
   <p>Whatever the tongue style, a note's velocity is how hard it's tongued: a soft touch starts gently, with little of the tongue's burst and a slower attack, and a hard one with a crisp "ta". With <strong>FORCE</strong> on the PLAYER tab set to <strong>Press</strong>, the tongue's force comes instead from how hard the pressure arrives in the note's first few milliseconds. Use it for a controller whose velocity isn't reliable, or a breath controller with no velocity at all.</p>
@@ -962,7 +963,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
 <section class="back">
   <div class="mid">
     <div class="word"><span class="j">J</span>Breath</div>
-    <div class="small">Breathing physical models · v0.12.1 draft</div>
+    <div class="small">Breathing physical models · v0.12.2 draft</div>
   </div>
   <div class="url">github.com/jeffmhopkins/Jclap</div>
 </section>
