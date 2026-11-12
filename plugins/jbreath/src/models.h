@@ -323,6 +323,9 @@ public:
    // The Alien's words, and the syllable it's singing (-1: none, or another instrument).
    virtual void setBook(const speech::Book * /*book*/) {}
    virtual int saying() const { return -1; }
+   // How far through its book it has got: the place of the syllable it last sang (a held note goes on
+   // past the one it started on, by Talk and Pace).
+   virtual uint32_t word() const { return 0; }
    // The note let go: the Alien closes its syllable.
    virtual void letGo() {}
    // Still sounding after the breath has gone (the Alien's closing consonants).
@@ -1537,6 +1540,7 @@ public:
    }
    // The syllable of its book it's singing, or -1.
    int saying() const override { return voice_.active() ? saying_ : -1; }
+   uint32_t word() const override { return word_; }
    void setBook(const speech::Book *book) override { book_ = book; }
    // A note: the syllable at `word` in its book, its consonants as hard as the note was struck.
    void articulate(uint32_t word, double hardness) override {
@@ -1692,9 +1696,9 @@ private:
          a = (h & 0xffff) / 32768.0 - 1.0;
       }
       voice_.start(s, strength * (0.3 + 0.7 * consonants));
-      // When a held note goes on to its next syllable (its own words only): at the Pace's note value
-      // at the host's tempo, or free, every 1.6 s or so at half Talk and 0.8 s at full, each a
-      // little longer or shorter than the last, as speech is.
+      // When a held note goes on to its next syllable: at the Pace's note value at the host's tempo,
+      // or free (its own words only: typed ones keep to a syllable a note), every 1.6 s or so at
+      // half Talk and 0.8 s at full, each a little longer or shorter than the last, as speech is.
       const double talk = std::clamp(static_cast<double>(character.talk), 0.2, 1.0);
       const double r = ((h >> 16) & 0xffff) / 65536.0;
       nextAt_ = character.paceSec > 0.0f ? character.paceSec : (2.4 - 1.6 * talk) * (0.75 + 0.5 * r);
@@ -1709,7 +1713,7 @@ private:
       const double dt = control_ / fs_;
       breathS_ += (breath_ - breathS_) * (1.0 - std::exp(-dt / 0.03));
       held_ += dt;
-      if (!character.typed && !letGo_ && breath_ > 0.06 && character.talk > 0.2f && held_ > nextAt_)
+      if ((!character.typed || character.paceSec > 0.0f) && !letGo_ && breath_ > 0.06 && character.talk > 0.2f && held_ > nextAt_)
          say(++word_, 0.4 + 0.3 * std::min(breathS_, 1.0));
       // The drift: a slow random walk (about a second's memory) for each resonance.
       const double d = std::clamp(static_cast<double>(character.drift), 0.0, 1.0);

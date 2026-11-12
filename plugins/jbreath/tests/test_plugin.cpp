@@ -968,6 +968,51 @@ int main() {
       JCLAP_CHECK(k == 2 && chord[0] == 3 && chord[1] == 3);
    }
 
+   // With a Pace, a held note goes on through typed words too (with Pace Free, they keep to a
+   // syllable a note), and the next note picks up after the last syllable it said.
+   {
+      jclap::core::TestHost ah(clap_entry, kId);
+      Run ar{ah};
+      EditorHost &ap = *ah.object<EditorHost>();
+      ah.setParam(kModel, 5);
+      ah.setParam(kAlienSource, 1);
+      ah.setParam(kAlienTalk, 0.5);
+      ap.setLyrics("one two three four five six seven eight nine ten");
+      ar.seconds(0.05);
+      auto sayingNow = [&](int note) {
+         std::vector<EditorHost::Voice> v;
+         ap.voices(v);
+         for (const auto &voice : v)
+            if (voice.note == note)
+               return voice.saying;
+         return -1;
+      };
+      // Free: one held note stays on its syllable.
+      ah.note(CLAP_EVENT_NOTE_ON, 60, 0.8, 60);
+      ar.seconds(3.0);
+      JCLAP_CHECK_EQ(sayingNow(60), 0);
+      ah.note(CLAP_EVENT_NOTE_OFF, 60, 0.0, 60);
+      ar.seconds(0.5);
+      // 1/4 at 120 bpm: a syllable every half second while it's held.
+      ah.setParam(kAlienPace, 3);
+      ah.note(CLAP_EVENT_NOTE_ON, 62, 0.8, 62);
+      ar.seconds(0.2);
+      const int first = sayingNow(62);
+      ar.seconds(1.1);
+      const int later = sayingNow(62);
+      ah.note(CLAP_EVENT_NOTE_OFF, 62, 0.0, 62);
+      ar.seconds(0.5);
+      ah.setParam(kAlienPace, 0);
+      ah.note(CLAP_EVENT_NOTE_ON, 64, 0.8, 64);
+      ar.seconds(0.2);
+      const int next = sayingNow(64);
+      std::printf("Alien paced typed words: %d then %d, next note %d\n", first, later, next);
+      JCLAP_CHECK_EQ(first, 1);
+      JCLAP_CHECK(later >= 2);
+      JCLAP_CHECK_EQ(next, later + 1);
+      JCLAP_CHECK(ar.finite());
+   }
+
    // Every instrument, in tune at the common rates (oversampled 2x at 44.1 and 48 kHz, not at 96).
    playsInTune(44100.0);
    playsInTune(48000.0);

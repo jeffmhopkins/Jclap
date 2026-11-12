@@ -402,6 +402,7 @@ public:
          playing_ = playing;
       }
       refreshBooks();
+      catchUpWords();
       // The panel may have moved a knob since the last block.
       dirty_ = true;
 
@@ -1276,11 +1277,22 @@ private:
          dirty_ = true;
       }
    }
+   // Typed words go on from wherever a held note got to (by Talk and Pace), so the next note
+   // doesn't say again what it already said. (Its own words don't: they're made up as it goes.)
+   void catchUpWords() {
+      if (book_ != &typed_ || word_ == kNoWord)
+         return;
+      for (const Slot &o : slots_)
+         if (o.voice.isActive() && o.voice.sungWord() - word_ < 4096u)
+            word_ = o.voice.sungWord();
+   }
    // A note's syllable: the next, or a chord's (notes within 30 ms of each other) the same.
    void nextWord(Slot &s) {
       const bool chord = !mono() && word_ != kNoWord && lfoClock_ - wordAt_ < 0.03;
-      if (!chord)
+      if (!chord) {
+         catchUpWords();
          ++word_;
+      }
       wordAt_ = lfoClock_;
       s.voice.setBook(book_);
       s.voice.setWord(word_);
