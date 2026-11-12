@@ -1058,6 +1058,8 @@ private:
       // flipped octave halfway through a bend.)
       const int row = tuningRow(settings_.model, settings_.tune);
       Tuning t = TuningTable::get().at(row, sounding - fingerOff_, fs_);
+      // (How readily it speaks is the pitch's own, as before.)
+      speak_ = fingerOff_ == 0.0 ? t.speak : TuningTable::get().at(row, sounding, fs_).speak;
       double hz = 440.0 * std::pow(2.0, (sounding - 69.0) / 12.0 + t.octaves);
       Model &m = model();
       // (How far of it the bend takes the note, which the lips bend off the fingering: a sax,

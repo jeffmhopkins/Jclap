@@ -688,7 +688,9 @@ public:
       // by the pitch, a note bent towards the next fingering's took on its tuning and level while
       // still on its own, up to a semitone sharp and 15 dB loud where the two differ most.)
       const double sp = 12.0 * std::log2(hz);
-      fingerOff_ = 12.0 * std::log2(ha / want);
+      // (Only the lips' bend: a note past the top fingering, its bore stretched over it, has its
+      // own place in the table, which a whole offset to the fingering's note left silent.)
+      fingerOff_ = 12.0 * std::log2(hz / fingerHz(hz));
       if (!same(sp - fingerOff_, f)) {
          // (Bent onto another horn's notes, the table has none for this fingering on this horn:
          // the nearest pitch it plays on this one, towards the note without the bend.)
