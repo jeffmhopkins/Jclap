@@ -300,7 +300,13 @@ range), **TRANSP**, **ROOM**, **AIR** (the breath heard around the instrument, n
 ![The REVERB tab](docs/readme/room.jpg)
 
 **REVERB**: a switch, then a small room (SIZE, DECAY, DAMP, PRE-DELAY), the output's TONE, and the
-**LIMITER**: Off, Soft (overs saturate) or Hard (the default: a peak limiter holds the output under full scale, so a big chord never clips).
+**LIMITER**: Off, Clip (overs saturate) or Limit, the default: a soft limiter, the very last thing
+after MASTER, that turns a loud chord down smoothly rather than letting it clip. It starts to work
+5 dB under full scale and holds the loudest of it at -2 dBFS, with a soft knee, a 1 ms attack and
+a release that slows when it has been limiting a while (so a held chord doesn't pump); a soft clip
+after it catches the first instant of a loud note, so the output never reaches 0 dBFS. It adds no
+latency, and anything quieter than its knee goes through untouched. Projects saved with Hard get
+the new limiter.
 Switched off, the room's tail rings out rather than stopping.
 
 ![The DELAY tab](docs/readme/delay.jpg)

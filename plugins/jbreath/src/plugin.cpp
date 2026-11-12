@@ -457,9 +457,9 @@ public:
                l += wl;
                r += wr;
             }
-            limiter_.tick(l, r, limiterMode_);
             l *= master_;
             r *= master_;
+            limiter_.tick(l, r, limiterMode_);
             // A fading tail (the body's and room's filters ring on, ever quieter) is cut at -180 dB,
             // so it ends, and never goes subnormal where flush-to-zero is not available.
             if (std::fabs(l) < 1e-9f)
@@ -1192,7 +1192,7 @@ private:
    bool reverbOn_ = true;
    double tempo_ = 120.0;
    Limiter limiter_;
-   int limiterMode_ = kLimitHard;
+   int limiterMode_ = kLimitOn;
    float master_ = 1.0f;
    double spread_ = 0.5;
    uint64_t quietFrames_ = 0;

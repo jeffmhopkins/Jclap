@@ -323,7 +323,7 @@ enum LoopSource { kLoopPitch, kLoopStrike, kLoopPress, kLoopSlide, kLoopBreath, 
 inline const char *const kLoopSourceNames[] = {"Pitch", "Strike", "Press", "Slide", "Breath", "Random", "Centre"};
 inline const char *const kHolesNames[] = {"Closed", "Lattice 3", "Lattice 5", "Lattice 7", "Lattice 9", "Open"};
 inline const char *const kTubeNames[] = {"Grenadilla", "Boxwood", "Maple", "Bamboo", "Brass", "Silver", "Resin", "Glass"};
-inline const char *const kLimiterNames[] = {"Off", "Soft", "Hard"};
+inline const char *const kLimiterNames[] = {"Off", "Clip", "Limit"};
 inline const char *const kOffOnNames[] = {"Off", "On"};
 // How long the Alien's own words are (lyrics.h's AlienLength), and where its words come from.
 inline const char *const kAlienOrderNames[] = {"Short", "Mixed", "Long", "Chant"};

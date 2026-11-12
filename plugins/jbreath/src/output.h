@@ -143,33 +143,89 @@ private:
 using jclap::dsp::Room;
 using jclap::dsp::RoomSettings;
 
-// The last stage: none, the soft clip JBreath always had, or a peak limiter just under full scale
-// (with the soft clip after it for what the limiter is too slow to catch).
-enum LimiterMode { kLimitOff, kLimitSoft, kLimitHard };
+// The last stage, after Master, so nothing can turn the output up past it: none, a soft clip
+// (overs saturate), or a soft limiter. The limiter is stereo-linked and has no lookahead, so no
+// latency. Its gain follows a soft knee 6 dB wide: it starts to turn the sum down 5 dB under full
+// scale and holds the loudest of it at -2 dBFS, with a 1 ms attack and a release that is quick
+// after a short peak and slower once it has been holding the level down a while, so a held chord
+// doesn't pump. What gets past the attack, the first instant of a loud note, is caught by the soft
+// clip after it, so the output never reaches full scale.
+enum LimiterMode { kLimitOff, kLimitClip, kLimitOn };
 class Limiter {
 public:
+   static constexpr float kThresholdDb = -2.0f, kKneeDb = 6.0f;
+
    void prepare(double fs) {
-      release_ = static_cast<float>(std::exp(-1.0 / (0.08 * fs)));
+      attack_ = coef(0.001, fs);
+      fastRelease_ = coef(0.05, fs);
+      slowRelease_ = coef(0.5, fs);
+      settle_ = coef(0.3, fs);
+      holdDecay_ = coef(0.01, fs);
+      holdLength_ = static_cast<int>(0.02 * fs);
       reset();
    }
-   void reset() { env_ = 0.0f; }
+   void reset() {
+      gainDb_ = held_ = hold_ = 0.0f;
+      holdLeft_ = 0;
+   }
    void tick(float &l, float &r, int mode) {
       if (mode == kLimitOff)
          return;
-      if (mode == kLimitHard) {
+      if (mode == kLimitOn) {
+         // The peak, held for 20 ms (a cycle of the lowest note) so the gain doesn't ripple at
+         // the waveform's own rate between its peaks.
          const float peak = std::max(std::fabs(l), std::fabs(r));
-         env_ = peak > env_ ? peak : env_ * release_ + (1 - release_) * peak;
-         const float g = env_ > 0.9f ? 0.9f / env_ : 1.0f;
-         l *= g;
-         r *= g;
+         if (peak >= hold_) {
+            hold_ = peak;
+            holdLeft_ = holdLength_;
+         } else if (holdLeft_ > 0) {
+            --holdLeft_;
+         } else {
+            hold_ = peak + holdDecay_ * (hold_ - peak);
+         }
+         if (hold_ > kKneeStart || gainDb_ < 0.0f) {
+            const float target = targetDb(hold_);
+            if (target < gainDb_) {
+               gainDb_ = target + attack_ * (gainDb_ - target);
+            } else {
+               // The longer it's been limiting, the more slowly it lets go.
+               const float rel = fastRelease_ + held_ * (slowRelease_ - fastRelease_);
+               gainDb_ = target + rel * (gainDb_ - target);
+               if (gainDb_ > -1e-3f)
+                  gainDb_ = 0.0f;
+            }
+            const float limiting = gainDb_ < -1.0f ? 1.0f : 0.0f;
+            held_ = limiting + settle_ * (held_ - limiting);
+            const float g = std::pow(10.0f, gainDb_ / 20.0f);
+            l *= g;
+            r *= g;
+         }
       }
-      l = soft(l);
-      r = soft(r);
+      l = jclap::dsp::softClip(l);
+      r = jclap::dsp::softClip(r);
+   }
+   // The gain it's applying now, in dB (0 when it isn't limiting).
+   float gainDb() const { return gainDb_; }
+
+   // The gain the knee asks for at a peak of `x` (Giannoulis, Massberg and Reiss 2012, with the
+   // ratio infinite): none below the knee, down to the threshold above it, a parabola between.
+   static float targetDb(float x) {
+      if (x <= kKneeStart)
+         return 0.0f;
+      const float over = 20.0f * std::log10(x) - kThresholdDb;
+      if (over >= 0.5f * kKneeDb)
+         return -over;
+      const float k = over + 0.5f * kKneeDb;
+      return -k * k / (2.0f * kKneeDb);
    }
 
 private:
-   static float soft(float x) { return jclap::dsp::softClip(x); }
-   float env_ = 0.0f, release_ = 0.999f;
+   // Where the knee starts: 5 dB under full scale.
+   static constexpr float kKneeStart = 0.5623413f;
+   static float coef(double seconds, double fs) { return static_cast<float>(std::exp(-1.0 / (seconds * fs))); }
+   float gainDb_ = 0.0f, held_ = 0.0f, hold_ = 0.0f;
+   int holdLeft_ = 0, holdLength_ = 960;
+   float holdDecay_ = 0.998f, attack_ = 0.98f, fastRelease_ = 0.9996f, slowRelease_ = 0.99996f, settle_ = 0.9999f;
 };
 
 } // namespace jbreath
