@@ -40,6 +40,14 @@ control rate instead of computing it again each sample. Renders of every factory
 previous version's to float rounding (or, where a reed's motion is sensitive enough to drift in
 phase, to within 0.2 dB in level and spectrum).
 
+From 0.13.7 the sax and trumpet cost less again: their horns' resonances and bell are worked in plain
+real arithmetic the compiler can vectorise, a sax voice costing about a third less (a baritone or bass
+nearly half) and a trumpet voice about a fifth less, and the sax, oboe and flute no longer work out
+per sample the powers and exponentials that only change with the note or a knob. An EQ stage left
+at 0 dB (most of the Body section's at its defaults, and many of the models' own) is now skipped
+outright, giving exactly the same output. The factory bank as a whole runs about a fifth lighter
+than 0.13.6, its renders matching to float rounding.
+
 ### The alien
 
 An alien that sings words, a syllable a note: yours, typed on the ALIEN tab, or words of its own.
