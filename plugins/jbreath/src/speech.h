@@ -279,6 +279,21 @@ class Voice {
  public:
    void setRate(double fs) {
       fs_ = fs;
+      // (The smoothing and filter coefficients that only the rate sets, and those that only the
+      // tension sets, worked out here once rather than every sample.)
+      pK_ = 1.0 - std::exp(-(1.0 / fs_) / 0.04);
+      barK_ = 1.0 - std::exp(-2.0 * kPi * 250.0 / fs_);
+      shelfK_ = std::exp(-2.0 * kPi * 2000.0 / fs_);
+      airK_ = std::exp(-2.0 * kPi * 5000.0 / fs_);
+      {
+         const double cdt = 16.0 * (1.0 / fs_);
+         scoopK_ = std::exp(-cdt / 0.06);
+         fallK_ = std::exp(-cdt / 0.03);
+         shiverK_ = 1.0 - std::exp(-cdt * 2.0 * kPi * 16.0);
+         rattleK_ = 1.0 - std::exp(-cdt * 2.0 * kPi * 35.0);
+      }
+      ampMsAt_ = formantMsAt_ = centsAt_ = -1e300;
+      setTension(tension_, true);
       for (int b = 0; b < kBands; ++b)
          band_[b].clear();
       reset();
@@ -394,7 +409,15 @@ class Voice {
    }
    // The folds' tension (-1..1): lax, open longer and dark (a soft, hooting voice), or pressed,
    // shut most of each period and buzzing.
-   void setTension(double t) { tension_ = std::clamp(t, -1.0, 1.0); }
+   void setTension(double t, bool force = false) {
+      t = std::clamp(t, -1.0, 1.0);
+      if (t == tension_ && !force)
+         return;
+      tension_ = t;
+      // The open quotient's scale and the glottal pulse's tilt, which only the tension moves.
+      oqScale_ = std::exp2(-0.9 * tension_);
+      tilt_ = std::exp(-2.0 * kPi * std::min(20000.0 * std::exp2(4.5 * std::min(tension_, 0.0)), 0.45 * fs_) / fs_);
+   }
    // How long the vowels take to glide in, over their own (1: as speech has it).
    void setGlide(double scale) { glide_ = scale; }
    bool active() const { return sounding_ || seg_ < segs_.size(); }
@@ -408,14 +431,23 @@ class Voice {
       const double dt = 1.0 / fs_;
       // Sources move to their targets quickly (a burst at once), formants at the segment's pace.
       const Segment *s = seg_ < segs_.size() ? &segs_[seg_] : nullptr;
-      const double aK = 1.0 - std::exp(-dt / ((s ? s->ampMs : 6.0) * 0.001));
+      // (Each smoothing coefficient is worked out again only when its time changes.)
+      if (const double ampMs = s ? s->ampMs : 6.0; ampMs != ampMsAt_) {
+         ampMsAt_ = ampMs;
+         aK_ = 1.0 - std::exp(-dt / (ampMs * 0.001));
+      }
+      const double aK = aK_;
       av_ += aK * ((s ? s->av : 0.0) - av_);
       avs_ += aK * ((s ? s->avs : 0.0) - avs_);
       ah_ += aK * ((s ? s->ah : 0.0) - ah_);
       af_ += (s && s->ampMs < 2.0 ? 1.0 : aK) * ((s ? s->af : 0.0) - af_);
       // (A jump is made in a few ms: a resonance moved at once, still ringing, clicks.)
       const double fMs = !s ? 20.0 : s->setF ? kSnapMs : s->formantMs * (s->vowelPart ? glide_ : 1.0);
-      const double fK = 1.0 - std::exp(-dt / (fMs * 0.001 * 0.3));
+      if (fMs != formantMsAt_) {
+         formantMsAt_ = fMs;
+         fK_ = 1.0 - std::exp(-dt / (fMs * 0.001 * 0.3));
+      }
+      const double fK = fK_;
       for (int n = 0; n < kF; ++n) {
          fv_[n] += fK * (ft_[n] - fv_[n]);
          f_[n] += fK * (fv_[n] - f_[n]);
@@ -429,17 +461,17 @@ class Voice {
          // noise at 8 to 25 Hz for each resonance) and the growl's rattle.
          const double cdt = 16.0 * dt;
          wander_ += -wander_ * cdt / 0.06 + std::sqrt(cdt) * 4.0 * noise();
-         scoop_ *= std::exp(-cdt / 0.06);
+         scoop_ *= scoopK_;
          if (falling_)
             fall_ = std::max(fall_ - cdt * 400.0 * rough_, -250.0);
          else
-            fall_ *= std::exp(-cdt / 0.03);
-         const double shK = 1.0 - std::exp(-cdt * 2.0 * kPi * 16.0);
+            fall_ *= fallK_;
+         const double shK = shiverK_;
          for (int n = 0; n < 3; ++n) {
             shiverA_[n] += shK * (noise() * 1.7 - shiverA_[n]);
             shiver_[n] += shK * (shiverA_[n] - shiver_[n]);
          }
-         const double raK = 1.0 - std::exp(-cdt * 2.0 * kPi * 35.0);
+         const double raK = rattleK_;
          rattle_ += raK * (noise() - rattle_);
          double base[kF];
          for (int n = 0; n < kF; ++n)
@@ -484,7 +516,12 @@ class Voice {
       // weaker and longer than the one before (a subharmonic, an octave under), and now and then
       // one hardly opens (a creak).
       const double cents = rough_ * 20.0 * wander_ + scoop_ + fall_;
-      const double hzNow = hz * std::exp2(cents / 1200.0);
+      // (The cents only move every 16 samples.)
+      if (cents != centsAt_) {
+         centsAt_ = cents;
+         centsRatio_ = std::exp2(cents / 1200.0);
+      }
+      const double hzNow = hz * centsRatio_;
       phase_ += hzNow * dt * period_;
       if (phase_ >= 1.0) {
          phase_ -= 1.0;
@@ -495,19 +532,19 @@ class Voice {
          if (growl_ > 0.0 && 0.5 + 0.5 * noise() < 0.12 * growl_)
             shimmer_ *= 0.15;
       }
-      const double oq = std::clamp((0.5 - 0.15 * effort) * std::exp2(-0.9 * tension_), 0.12, 0.9);
+      const double oq = std::clamp((0.5 - 0.15 * effort) * oqScale_, 0.12, 0.9);
       double flow = 0.0;
       const double ph = phase_;
       if (ph < oq) {
          const double x = ph / oq;
          flow = 6.75 * x * x * (1.0 - x) * shimmer_ * (1.0 + 0.6 * growl_ * rattle_);
       }
-      const double tilt = std::exp(-2.0 * kPi * std::min(20000.0 * std::exp2(4.5 * std::min(tension_, 0.0)), 0.45 * fs_) / fs_);
+      const double tilt = tilt_;
       tiltY_ = (1.0 - tilt) * flow + tilt * tiltY_;
       double glot = tiltY_;
       if (extMix > 0.0) {
          // (Each measured over the last 40 ms, while voiced, so the other source comes in as loud.)
-         const double pK = 1.0 - std::exp(-dt / 0.04);
+         const double pK = pK_;
          if (av_ > 0.5) {
             glotPower_ += pK * (glot * glot - glotPower_);
             extPower_ += pK * (ext * ext - extPower_);
@@ -515,7 +552,7 @@ class Voice {
          glot += std::min(extMix, 1.0) * (ext * std::sqrt(glotPower_ / (extPower_ + 1e-12)) - glot);
       }
       // The voice bar (voicing under a closure or a voiced fricative): the pulse's fundamental.
-      const double barK = 1.0 - std::exp(-2.0 * kPi * 250.0 / fs_);
+      const double barK = barK_;
       barY_ += barK * (flow - barY_);
       barY2_ += barK * (barY_ - barY2_);
       const double nz = noise();
@@ -541,7 +578,7 @@ class Voice {
       double radiated = (y - diffPrev_) * radiateGain() * std::min(130.0 / std::max(hz, 20.0), 4.0);
       diffPrev_ = y;
       // A lift over 2 kHz: a real voice's top, which a smooth pulse through the cascade lacks.
-      const double shK = std::exp(-2.0 * kPi * 2000.0 / fs_);
+      const double shK = shelfK_;
       shelfLp_ = shK * shelfLp_ + (1.0 - shK) * radiated;
       radiated += kPresence * (1.0 + 5.0 * twang_) * (radiated - shelfLp_);
 
@@ -555,7 +592,7 @@ class Voice {
       // Air at the very top, which the tract's eight resonances leave out: the breath's own hiss
       // and the folds' edge, highpassed over 5 kHz.
       const double air = nz * (av_ * (0.02 + 0.05 * breath) + ah_ * 0.15);
-      const double hpK = std::exp(-2.0 * kPi * 5000.0 / fs_);
+      const double hpK = airK_;
       airLp_ = hpK * airLp_ + (1.0 - hpK) * air;
       return radiated + fr + (air - airLp_);
    }
@@ -581,7 +618,14 @@ class Voice {
 
    struct Coeffs {
       double a = 1, b = 0, c = 0;
+      // (Set every 16 samples, mostly to where they already were: worked out only when they move.)
+      double hzAt = -1.0, bwAt = -1.0, fsAt = -1.0;
       void set(double hz, double bw, double fs) {
+         if (hz == hzAt && bw == bwAt && fs == fsAt)
+            return;
+         hzAt = hz;
+         bwAt = bw;
+         fsAt = fs;
          const double r = std::exp(-kPi * bw / fs);
          c = -r * r;
          b = 2.0 * r * std::cos(2.0 * kPi * hz / fs);
@@ -1137,6 +1181,11 @@ class Voice {
    double glotPower_ = 0.01, extPower_ = 0.01;
    int control_ = 0;
    double nasal_ = 0.0, twang_ = 0.0, tension_ = 0.0;
+   // What only the rate or the tension sets, and the last smoothing times and cents, with what
+   // they gave (see setRate, setTension and tick).
+   double scoopK_ = 0.0, fallK_ = 0.0, shiverK_ = 0.0, rattleK_ = 0.0;
+   double pK_ = 0.0, barK_ = 0.0, shelfK_ = 0.0, airK_ = 0.0, oqScale_ = 1.0, tilt_ = 0.0;
+   double ampMsAt_ = -1e300, aK_ = 0.0, formantMsAt_ = -1e300, fK_ = 0.0, centsAt_ = -1e300, centsRatio_ = 1.0;
    double rough_ = 0.0, growl_ = 0.0, wet_ = 0.0, wander_ = 0.0, scoop_ = 0.0, fall_ = 0.0, period_ = 1.0, rattle_ = 0.0;
    double shiver_[3] = {}, shiverA_[3] = {};
    bool odd_ = false, falling_ = false;
