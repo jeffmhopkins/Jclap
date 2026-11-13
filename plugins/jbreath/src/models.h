@@ -427,7 +427,7 @@ public:
       const float turb = nlp_.tick(rng.white());
       // The jet's own turbulence goes with the jet: none once the breath stops.
       // (A soft jet is smooth, laminar: its turbulence grows faster than its speed.)
-      const float laminar = std::pow(std::min(1.0f, breath / 0.6f), 1.5f);
+      const float lam = std::clamp(breath / 0.6f, 0.0f, 1.0f), laminar = lam * std::sqrt(lam);
       const float y = jlp_.tick(jet_.read(tau)) + (0.012f * character.noise * std::min(1.0f, 1.5f * U) * laminar + 0.12f * tn) * turb;
       // The jet's flow grows with pressure, not just its speed; Stiffness also firms the jet's gain.
       const float q = 1.2f * U * U * std::tanh(8.0f * (0.5f + character.stiffness) * y + 0.3f);
@@ -456,7 +456,14 @@ public:
                                           (0.6f + 0.8f * character.stiffness) /
                                           (1.0f + 4.0f * std::max(0.0f, character.loss - 0.04f)) * push * push * push *
                                           std::sqrt(push) * reg_);
-      const float off = 1.2f * (0.4f + 1.2f * emb), s0 = std::tanh(off), d0 = 1.0f - s0 * s0;
+      // (The bias depends only on the embouchure, which moves at the control rate.)
+      if (emb != offEmb_) {
+         offEmb_ = emb;
+         off_ = 1.2f * (0.4f + 1.2f * emb);
+         s0_ = std::tanh(off_);
+         d0_ = 1.0f - s0_ * s0_;
+      }
+      const float off = off_, s0 = s0_, d0 = d0_;
       // (Saturated, it still carries more flow at the fundamental, so forte keeps growing a little.)
       const float Dg = std::max(1e-3f, D * grow);
       const float J = a * (std::tanh(Dg * n + off) - s0) / (Dg * d0) * std::sqrt(std::max(1.0f, 0.8f * D));
@@ -469,12 +476,13 @@ public:
       // (It grows faster than the tone with the breath: a soft note is nearly pure, a hard-blown one
       // rushes, as on a real flute.)
       // (and high notes, blown through a smaller, faster jet, are breathier than low ones).
-      const float rush = U * std::min(3.0f, std::pow(breath / 0.67f, 1.5f)) * std::clamp(static_cast<float>(hz_) / 400.0f, 1.0f, 4.0f);
+      const float rush = U * std::min(3.0f, std::max(0.0f, breath / 0.67f) * std::sqrt(std::max(0.0f, breath / 0.67f))) * std::clamp(static_cast<float>(hz_) / 400.0f, 1.0f, 4.0f);
       return dco_.tick(olp2_.tick(olp_.tick(3.0f * rad)) + 0.04f * character.noise * airy * rush * hiss * (0.3f + std::fabs(n)));
    }
 
 private:
    double loopCut(double hz) const { return character.cut(hz * 2.4, 1.5 * hz); }
+   float offEmb_ = -1e9f, off_ = 0.0f, s0_ = 0.0f, d0_ = 1.0f;
    Delay bore_, jet_;
    OnePoleLP lp_, jlp_, nlp_, nhp_;
    Biquad olp_, olp2_;
@@ -839,7 +847,9 @@ public:
       // brighter note. And less on a softer reed, Stiffness under half way, which blown past it
       // would start on an upper resonance.)
       pmB_ += (breath - pmB_) * pmCoef_;
-      breath = static_cast<float>(breath * (1.0 + kAccent * std::clamp((breath - 0.7) / 0.25, 0.0, 1.0) * std::clamp(2.0 * character.stiffness, 0.0, 1.0) * std::exp(-onT_ / kAccentSec)));
+      // (Its exp only while the accent can sound: the note blown hard enough, the reed firm enough.)
+      if (const double acc = kAccent * std::clamp((breath - 0.7) / 0.25, 0.0, 1.0) * std::clamp(2.0 * character.stiffness, 0.0, 1.0); acc > 0.0)
+         breath = static_cast<float>(breath * (1.0 + acc * std::exp(-onT_ / kAccentSec)));
       pmS_ += (breath - pmS_) * pmCoef_;
       ticked_ = true;
       if ((at_++ & 15) == 0)
@@ -860,7 +870,19 @@ public:
       // by the drop across it a sample behind, its resonance damped by the lip (and lower on a
       // bigger family member's reed, though by less than its bore: lower, a baritone's E3 blown hard
       // locked a semitone flat onto a resonance near 1.8 kHz).
-      const double wr = 2.0 * kPi * kReedHz * std::sqrt(stiff) * (0.9 + 0.2 * emb) * std::pow(std::min(1.0, body_), 0.25);
+      // (The bigger horn's factors change only with the note: worked out again when they do.)
+      if (body_ != bodyAt_ || lowNote_ != lowAt_) {
+         bodyAt_ = body_;
+         lowAt_ = lowNote_;
+         const double bd = std::min(1.0, body_);
+         bodyQ_ = std::sqrt(std::sqrt(bd));
+         bodyH_ = 1.0 / std::pow(bd, 1.5 + 0.5 * lowNote_);
+      }
+      if (character.edge != edgeAt_) {
+         edgeAt_ = character.edge;
+         knee_ = 0.08 * std::exp(-1.2 * (character.edge - 1.0));
+      }
+      const double wr = 2.0 * kPi * kReedHz * std::sqrt(stiff) * (0.9 + 0.2 * emb) * bodyQ_;
       double acc = -wr * wr * (x_ + dpPrev_ / pM) - kReedDamp * wr * v_;
       // (Against the lay the cane meets the stiff facing.)
       if (x_ < -1.0)
@@ -898,9 +920,9 @@ public:
       // horn's reed and lay open wider again than its scale on its low notes (with less, a baritone's
       // and tenor's low notes buzzed between two pitches for most of a second; over them, as wide
       // locked the baritone's E3 a semitone flat).
-      const double knee = 0.08 * std::exp(-1.2 * (character.edge - 1.0)), gap = 1.0 + x_;
+      const double knee = knee_, gap = 1.0 + x_;
       const double open = 0.5 * (gap + std::sqrt(gap * gap + knee * knee)) - 0.5 * knee;
-      const double H = open_ * lip * (0.5 + character.aperture) * (1.2 - 0.4 * emb) / std::pow(std::min(1.0, body_), 1.5 + 0.5 * lowNote_);
+      const double H = open_ * lip * (0.5 + character.aperture) * (1.2 - 0.4 * emb) * bodyH_;
       const double a = std::max(0.0, open) * H * kWidth * std::sqrt(2.0 / kRho);
       // u = a sgn(D) sqrt|D|, with D the drop with this sample's flow's own pressure in it.
       const double ph = bore_.history(), zi = bore_.instant(), D0 = pm - ph;
@@ -1077,6 +1099,7 @@ private:
    bool ticked_ = false;
    int fing_ = -1;
    double fingMember_ = 1.0, fingerOff_ = 0.0;
+   double bodyAt_ = -1.0, lowAt_ = -1.0, bodyQ_ = 1.0, bodyH_ = 1.0, edgeAt_ = -1e9, knee_ = 0.08;
    double lowNote_ = 0.0, peakHz_ = 277.0, hz_ = 277.0, member_ = 1.0, scale_ = 1.0, body_ = 1.0, vent_ = 0.0, open_ = 7e-4, eqAt_ = -1.0, toneDb_ = 1e9, toneHz_ = 1.0, liftDb_ = 1e9, liftHz_ = 1.0;
    double regDb_ = 1e9, regHz_ = 1.0, famDb_ = 1e9, famHz_ = 1.0, onT_ = 1.0, lift0_ = 0.0, xShut_ = 0.0, liftSec_ = 0.003;
    double x_ = 0, v_ = 0, dpPrev_ = 0, pmS_ = 0, pmB_ = 0, pmCoef_ = 0.01;
@@ -1195,8 +1218,12 @@ public:
       }
       tnPrev_ = tn;
       pmB_ += (breath - pmB_) * pmCoef_;
-      const double lowF = member_ < 1.0 ? 0.0 : std::clamp(std::log2(330.0 / hz_) / 0.5, 0.0, 1.0);
-      breath = static_cast<float>(breath * (1.0 + kAccentLow * lowF * std::clamp((breath - kAccentFrom) / 0.25, 0.0, 1.0) * std::clamp(2.0 * character.stiffness, 0.0, 1.0) * std::exp(-onT_ / kAccentSec)));
+      // (Its log and exp only while the accent can sound: a low note, blown hard, on a firm reed.)
+      if (const double acc = kAccentLow * std::clamp((breath - kAccentFrom) / 0.25, 0.0, 1.0) * std::clamp(2.0 * character.stiffness, 0.0, 1.0);
+          acc > 0.0 && member_ >= 1.0 && hz_ < 330.0) {
+         const double lowF = std::clamp(std::log2(330.0 / hz_) / 0.5, 0.0, 1.0);
+         breath = static_cast<float>(breath * (1.0 + acc * lowF * std::exp(-onT_ / kAccentSec)));
+      }
       pmS_ += (breath - pmS_) * pmCoef_;
       ticked_ = true;
       if ((at_++ & 15) == 0)
@@ -1232,7 +1259,11 @@ public:
          gate_ = std::min(1.0, gate_ + 1.0 / (liftSec_ * fs_));
       const double zeta = kZeta * lip * (0.5 + character.aperture) * (1.2 - 0.4 * emb) * gate_ * gate_;
       // The tips' curl, over which the slit closes softly (shorter with more bite).
-      const double kn = 0.05 * std::exp(-1.2 * (character.edge - 1.0));
+      if (character.edge != edgeAt_) {
+         edgeAt_ = character.edge;
+         kn_ = 0.05 * std::exp(-1.2 * (character.edge - 1.0));
+      }
+      const double kn = kn_;
       // The bore: the waves back from the holes and from the missing tip (each inverted and
       // lowpassed). The long pipe's round trip is the whole cone's, less the tip's and the filters'
       // delay (by kLpPitch of it: so the Hole Cutoff knob leaves the pitch near where it was).
@@ -1371,6 +1402,7 @@ private:
    double hz_ = 277.0, member_ = 1.0, eqAt_ = -1.0, toneDb_ = 1e9, toneHz_ = 1.0;
    double tipSamples_ = 0.0, outGain_ = 1.0, level_ = 1.0, lpDelay_ = 0.0, refl_ = kRefl;
    double s_ = 0.0, flowPrev_ = 0.0, gate_ = 1.0, liftSec_ = 0.01;
+   double edgeAt_ = -1e9, kn_ = 0.05;
    double onT_ = 1.0, pmS_ = 0.0, pmB_ = 0.0, pmCoef_ = 0.01;
    float tnPrev_ = 0.0f, softGain_ = 1.0f;
    bool shut_ = false;

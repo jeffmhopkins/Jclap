@@ -46,8 +46,8 @@ public:
    static constexpr int kMaxTaps = 768, kHistory = 8192;
 
    void reset() {
-      for (auto &x : x_)
-         x = 0.0;
+      for (int i = 0; i < kBoreModes; ++i)
+         xr_[i] = xi_[i] = 0.0;
       std::fill(std::begin(hist_), std::end(hist_), 0.0f);
       pos_ = 0;
       running_ = false;
@@ -105,43 +105,48 @@ public:
          resample(b, scale);
    }
    // The pressure the past flow leaves at the input this sample (it decays the modes on a step).
+   // (Per sample, in real arithmetic on separate real and imaginary arrays, and only the real part
+   // of each sum, which is all that's used: std::complex's multiply checks every product for NaN,
+   // and the sums' imaginary parts were worked out for nothing.)
    double history() {
-      std::complex<double> a = 0.0;
+      double a = 0.0;
       for (int i = 0; i < n_; ++i) {
-         x_[i] *= z_[i];
-         a += c_[i] * x_[i];
+         const double xr = xr_[i] * zr_[i] - xi_[i] * zi_[i], xi = xr_[i] * zi_[i] + xi_[i] * zr_[i];
+         xr_[i] = xr;
+         xi_[i] = xi;
+         a += cr_[i] * xr - ci_[i] * xi;
       }
-      return zc_ * 2.0 * a.real();
+      return zc_ * 2.0 * a;
    }
    // What each m^3/s of this sample's flow adds to the input's pressure at once.
    double instant() const { return inst_; }
    // This sample's flow, once solved: it rings the modes and starts down the bell.
    void push(double u) {
       for (int i = 0; i < n_; ++i)
-         x_[i] += u;
-      hist_[pos_] = static_cast<float>(u);
+         xr_[i] += u;
+      const float f = static_cast<float>(u);
+      hist_[pos_] = f;
+      // (The oldest kMirror samples are written again past the end, so the bell's taps always read
+      // one unbroken run of the history.)
+      if (pos_ < kMirror)
+         hist_[pos_ + kHistory] = f;
       running_ = true;
       if (morph_ > 0 && --morph_ % kMorphStep == 0)
          blend();
    }
    // The sound radiated this sample (after push()).
    double radiated() {
-      std::complex<double> a = 0.0;
+      double a = 0.0;
       for (int i = 0; i < n_; ++i)
-         a += d_[i] * x_[i];
-      double y = 2.0 * a.real();
-      int j = pos_ - n0_;
-      for (int t = 0; t < taps_; ++t, --j)
-         y += fir_[t] * hist_[j & (kHistory - 1)];
+         a += dr_[i] * xr_[i] - di_[i] * xi_[i];
+      double y = 2.0 * a;
+      y += convolve(firRev_, padded_, n0_);
       // (The bell's wave just resampled, for another fingering or size: the old one fades out under
       // the new over kFadeSec. Swapped at once, the sound stepped, a tick each time.)
       if (fade_ > 0) {
-         double old = 0.0;
-         int k = pos_ - oldN0_;
-         for (int t = 0; t < oldTaps_; ++t, --k)
-            old += oldFir_[t] * hist_[k & (kHistory - 1)];
+         const double old = convolve(oldFirRev_, oldPadded_, oldN0_);
          const double w = static_cast<double>(fade_--) / fadeLen_;
-         y += w * (old - (y - 2.0 * a.real()));
+         y += w * (old - (y - 2.0 * a));
       }
       pos_ = (pos_ + 1) & (kHistory - 1);
       return y;
@@ -149,6 +154,20 @@ public:
    int modes() const { return n_; }
 
 private:
+   // The bell's straight-through wave now: `rev`, its taps reversed and padded to whole kLanes,
+   // against the history oldest first, from `n0` samples back, in kLanes running sums the compiler
+   // keeps in vector registers.
+   float convolve(const float *rev, int padded, int n0) const {
+      const float *h = hist_ + ((pos_ - n0 - padded + 1) & (kHistory - 1));
+      float lane[kLanes] = {};
+      for (int t = 0; t < padded; t += kLanes)
+         for (int k = 0; k < kLanes; ++k)
+            lane[k] += rev[t + k] * h[t + k];
+      float sum = 0.0f;
+      for (int k = 0; k < kLanes; ++k)
+         sum += lane[k];
+      return sum;
+   }
    // The straight-through wave's taps at this rate and scale: each of the table's taps (impulses
    // at kBoreTapRate) moved to its scaled time and spread over the new rate's samples by a
    // windowed sinc, which keeps it band-limited as it was.
@@ -171,19 +190,25 @@ private:
             c_[i] = (from ? (1.0 - w) * fromC_[i] : 0.0) + (to ? w * toC_[i] : 0.0);
             d_[i] = (from ? (1.0 - w) * fromD_[i] : 0.0) + (to ? w * toD_[i] : 0.0);
          }
-         z_[i] = std::exp(s_[i] / fs_);
+         const std::complex<double> z = std::exp(s_[i] / fs_);
+         zr_[i] = z.real();
+         zi_[i] = z.imag();
+         cr_[i] = c_[i].real();
+         ci_[i] = c_[i].imag();
+         dr_[i] = d_[i].real();
+         di_[i] = d_[i].imag();
          inst += 2.0 * c_[i].real();
       }
       for (int i = n; i < n_; ++i)
-         x_[i] = 0.0;
+         xr_[i] = xi_[i] = 0.0;
       n_ = n;
       r0_ = (1.0 - w) * (w < 1.0 ? fromR0_ : 0.0) + w * toR0_;
       inst_ = zc_ * inst;
    }
    void resample(const BoreFingering &b, double scale) {
       if (running_) {
-         std::copy(std::begin(fir_), std::end(fir_), std::begin(oldFir_));
-         oldTaps_ = taps_;
+         std::copy(std::begin(firRev_), std::end(firRev_), std::begin(oldFirRev_));
+         oldPadded_ = padded_;
          oldN0_ = n0_;
          fadeLen_ = std::max(1, static_cast<int>(kFadeSec * fs_));
          fade_ = fadeLen_;
@@ -206,6 +231,10 @@ private:
             fir_[m] += static_cast<float>(b.fir[k] * ratio * sinc * win);
          }
       }
+      padded_ = (taps_ + kLanes - 1) / kLanes * kLanes;
+      std::fill(std::begin(firRev_), std::end(firRev_), 0.0f);
+      for (int t = 0; t < taps_; ++t)
+         firRev_[padded_ - 1 - t] = fir_[t];
    }
 
    static constexpr double kMorphSec = 0.04, kFadeSec = 0.005;
@@ -213,13 +242,17 @@ private:
    const BoreFingering *bore_ = nullptr;
    double fs_ = 0.0, zc_ = 1.0, inst_ = 0.0, firScale_ = 1.0, r0_ = 0.0, fromR0_ = 0.0, toR0_ = 0.0;
    int n_ = 0, n0_ = 1, taps_ = 0, pos_ = 0, fromN_ = 0, toN_ = 0, morph_ = 0, morphLen_ = 1;
-   int fade_ = 0, fadeLen_ = 1, oldTaps_ = 0, oldN0_ = 1;
+   int fade_ = 0, fadeLen_ = 1, oldPadded_ = 0, oldN0_ = 1, padded_ = 0;
    bool running_ = false;
-   std::complex<double> z_[kBoreModes], c_[kBoreModes], d_[kBoreModes], x_[kBoreModes];
+   static constexpr int kLanes = 8, kMirror = kMaxTaps + kLanes;
+   // Each mode's pole, residues and state, their real and imaginary parts apart (see history()).
+   double zr_[kBoreModes] = {}, zi_[kBoreModes] = {}, cr_[kBoreModes] = {}, ci_[kBoreModes] = {};
+   double dr_[kBoreModes] = {}, di_[kBoreModes] = {}, xr_[kBoreModes] = {}, xi_[kBoreModes] = {};
+   std::complex<double> c_[kBoreModes], d_[kBoreModes];
    std::complex<double> s_[kBoreModes], fromS_[kBoreModes], fromC_[kBoreModes], fromD_[kBoreModes];
    std::complex<double> toS_[kBoreModes], toC_[kBoreModes], toD_[kBoreModes];
-   float fir_[kMaxTaps] = {}, oldFir_[kMaxTaps] = {};
-   float hist_[kHistory] = {};
+   float fir_[kMaxTaps] = {}, firRev_[kMaxTaps + kLanes] = {}, oldFirRev_[kMaxTaps + kLanes] = {};
+   float hist_[kHistory + kMirror] = {};
 };
 
 } // namespace jbreath
