@@ -135,10 +135,16 @@ struct Biquad {
    float tick(float x) {
       if (pass_ && z1 == 0.0 && z2 == 0.0)
          return x;
+      return static_cast<float>(tickd(x));
+   }
+   // The same in double: a chain of them rounds to float once, at its end.
+   double tickd(double x) {
+      if (pass_ && z1 == 0.0 && z2 == 0.0)
+         return x;
       const double y = b0 * x + z1;
       z1 = b1 * x - a1 * y + z2;
       z2 = b2 * x - a2 * y;
-      return static_cast<float>(y);
+      return y;
    }
    void peak(double hz, double q, double db, double fs) {
       const double A = std::pow(10, db / 40), w = 2 * kPi * hz / fs, al = std::sin(w) / (2 * q), a0 = 1 + al / A;
@@ -311,7 +317,8 @@ struct Player {
    double scoop(double tauSec, double rate = 1.0) {
       const double t = age - hold;
       age += rate;
-      return t <= 0.0 ? 1.0 : std::exp(-t / (tauSec * fs_));
+      // (Gone, past 40 of its time constants: no exp for the rest of the note.)
+      return t <= 0.0 ? 1.0 : t > 40.0 * tauSec * fs_ ? 0.0 : std::exp(-t / (tauSec * fs_));
    }
    float a[3] = {}, k[3] = {}, z[3] = {}, tongue = 0.0f;
    double age = 0.0, since = 0.0, hold = 700.0, fs_ = 96000.0;
@@ -444,7 +451,7 @@ public:
       const float lam = std::clamp(breath / 0.6f, 0.0f, 1.0f), laminar = lam * std::sqrt(lam);
       const float y = jlp_.tick(jet_.read(tau)) + (0.012f * character.noise * std::min(1.0f, 1.5f * U) * laminar + 0.12f * tn) * turb;
       // The jet's flow grows with pressure, not just its speed; Stiffness also firms the jet's gain.
-      const float q = 1.2f * U * U * std::tanh(8.0f * (0.5f + character.stiffness) * y + 0.3f);
+      const float q = 1.2f * U * U * tanhJet(8.0f * (0.5f + character.stiffness) * y + 0.3f);
       bore_.push(dc_.tick(p - 0.5f * q));
       // What we hear is the jet's flow into and out of the embouchure hole: the jet swung by the
       // sound (y), split by the edge. Blown softly it swings only a little across the edge and its
@@ -474,13 +481,13 @@ public:
       if (emb != offEmb_) {
          offEmb_ = emb;
          off_ = 1.2f * (0.4f + 1.2f * emb);
-         s0_ = std::tanh(off_);
+         s0_ = tanhJet(off_);
          d0_ = 1.0f - s0_ * s0_;
       }
       const float off = off_, s0 = s0_, d0 = d0_;
       // (Saturated, it still carries more flow at the fundamental, so forte keeps growing a little.)
       const float Dg = std::max(1e-3f, D * grow);
-      const float J = a * (std::tanh(Dg * n + off) - s0) / (Dg * d0) * std::sqrt(std::max(1.0f, 0.8f * D));
+      const float J = a * (tanhJet(Dg * n + off) - s0) / (Dg * d0) * std::sqrt(std::max(1.0f, 0.8f * D));
       const float rad = J - rz_ * rawPrev_;
       rawPrev_ = J;
       // The edge's turbulence, band-limited and swelling as the jet sweeps across the edge: more of
@@ -496,6 +503,14 @@ public:
 
 private:
    double loopCut(double hz) const { return character.cut(hz * 2.4, 1.5 * hz); }
+   // tanh, by its [7/6] Pade approximant where the jet mostly works (within 1.4e-7 of it, a couple
+   // of float steps), and the library's beyond: called twice a sample, it was an eighth of the CPU.
+   static float tanhJet(float x) {
+      if (std::fabs(x) >= 2.5f)
+         return std::tanh(x);
+      const float x2 = x * x;
+      return x * (135135.0f + x2 * (17325.0f + x2 * (378.0f + x2))) / (135135.0f + x2 * (62370.0f + x2 * (3150.0f + 28.0f * x2)));
+   }
    float offEmb_ = -1e9f, off_ = 0.0f, s0_ = 0.0f, d0_ = 1.0f;
    Delay bore_, jet_;
    OnePoleLP lp_, jlp_, nlp_, nhp_;
@@ -841,7 +856,8 @@ public:
    float tick(float breath, float emb, double len, float tn) override {
       player_.tongued(tn);
       // (No scoop up to the note: a real alto's tongued notes start on their pitch, Philharmonia.)
-      const double hz = fs_ / len * std::exp2(player_.wander(rng) / 1200.0);
+      // (The wander runs every sample; the pitch it moves is only read by setBore(), every 16.)
+      const float wander = player_.wander(rng);
       // A tongued note from silence: the pressure built up behind the tongue is let go with the
       // reed, an accent that fades over kAccentSec (a real alto's tongued notes reach full level in
       // 10 to 20 ms, a few dB over the note held, Philharmonia).
@@ -862,12 +878,12 @@ public:
       // would start on an upper resonance.)
       pmB_ += (breath - pmB_) * pmCoef_;
       // (Its exp only while the accent can sound: the note blown hard enough, the reed firm enough.)
-      if (const double acc = kAccent * std::clamp((breath - 0.7) / 0.25, 0.0, 1.0) * std::clamp(2.0 * character.stiffness, 0.0, 1.0); acc > 0.0)
+      if (const double acc = kAccent * std::clamp((breath - 0.7) / 0.25, 0.0, 1.0) * std::clamp(2.0 * character.stiffness, 0.0, 1.0); acc > 0.0 && onT_ < 25.0 * kAccentSec)
          breath = static_cast<float>(breath * (1.0 + acc * std::exp(-onT_ / kAccentSec)));
       pmS_ += (breath - pmS_) * pmCoef_;
       ticked_ = true;
       if ((at_++ & 15) == 0)
-         setBore(hz);
+         setBore(fs_ / len * std::exp2(wander / 1200.0));
       // The mouth's pressure, over the pressure that shuts the reed: the breath, its turbulence,
       // the tongue's burst and (with the Growl knob up, blown hard) the throat's rasp.
       const float noise = breathLP_.tick(rng.white());
@@ -945,7 +961,7 @@ public:
       bore_.push(u);
       dpPrev_ = pm - (ph + zi * u);
       const float y = dc_.tick(static_cast<float>(bore_.radiated() * kOut));
-      return fam_.tick(reg_.tick(lift_.tick(tone_.tick(eqLp2_.tick(eqLp1_.tick(eqHs_.tick(eqPk2_.tick(eqPk1_.tick(eqHp_.tick(y)))))))))) * softGain_ * regGain_ * famGain_;
+      return static_cast<float>(fam_.tickd(reg_.tickd(lift_.tickd(tone_.tickd(eqLp2_.tickd(eqLp1_.tickd(eqHs_.tickd(eqPk2_.tickd(eqPk1_.tickd(eqHp_.tickd(y))))))))))) * softGain_ * regGain_ * famGain_;
    }
 
 private:
@@ -1341,7 +1357,7 @@ public:
       const double o = (flow - flowPrev_) * (fs_ / 96000.0);
       flowPrev_ = flow;
       const float y = dc_.tick(static_cast<float>(o * outGain_ * level_));
-      return tone_.tick(eqLp2_.tick(eqLp1_.tick(eqHs_.tick(eqPk2_.tick(eqPk1_.tick(eqHp_.tick(y))))))) * softGain_;
+      return static_cast<float>(tone_.tickd(eqLp2_.tickd(eqLp1_.tickd(eqHs_.tickd(eqPk2_.tickd(eqPk1_.tickd(eqHp_.tickd(y)))))))) * softGain_;
    }
 
 private:
@@ -1637,7 +1653,7 @@ public:
       }
       bore_.push(u);
       dpPrev_ = pm - (ph + zi * u);
-      const double y = dc_.tick(eqLp_.tick(eqPk_.tick(eqHp_.tick(static_cast<float>(bore_.radiated() * kOut)))));
+      const double y = dc_.tick(static_cast<float>(eqLp_.tickd(eqPk_.tickd(eqHp_.tickd(static_cast<float>(bore_.radiated() * kOut))))));
       // Louder pressure travels faster down the horn, so the outgoing wave steepens towards a shock:
       // a read delay that follows the wave. How far it steepens (sigma, the delay's steepest
       // slope: 1 is a shock) grows with the breath, so a trumpet only blares when it's pushed; the

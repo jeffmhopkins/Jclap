@@ -48,6 +48,11 @@ at 0 dB (most of the Body section's at its defaults, and many of the models' own
 outright, giving exactly the same output. The factory bank as a whole runs about a fifth lighter
 than 0.13.6, its renders matching to float rounding.
 
+From 0.13.8 each model's output EQ runs in double from end to end, the flute's jet uses a fast,
+float-accurate tanh, the sax moves its bore's pitch only at the control rate it's read at, and the
+Fray source reads the sound every 4th sample: the flute and sax are about a tenth lighter again, the
+oboe and trumpet a little, with every factory preset's level and spectrum unchanged.
+
 ### The alien
 
 An alien that sings words, a syllable a note: yours, typed on the ALIEN tab, or words of its own.

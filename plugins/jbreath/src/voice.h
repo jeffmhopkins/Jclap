@@ -334,6 +334,7 @@ public:
       gainCoef_ = coef(5.0);
       synthCoef_ = coef(4.0);
       envCoef_ = coef(30.0);
+      fray4Coef_ = static_cast<float>(1.0 - std::pow(1.0 - envCoef_, 4.0));
       pulseLength_ = std::max(1, static_cast<int>(kPulseMs * 0.001 * fs_));
       valveLength_ = std::max(1, static_cast<int>(kValveMs * 0.001 * fs_));
       valveCoef_ = coef(0.6);
@@ -710,12 +711,15 @@ public:
       // or wavering with vibrato, still reads as steady: the least of the five.)
       past_[pastPos_] = y;
       // (Each lag's whole samples back and its fraction are set with the period, in control().)
-      const float envK = static_cast<float>(envCoef_);
-      for (int k = 0; k < kFrayLags; ++k) {
-         const int i0 = pastPos_ + frayAt_[k];
-         const float f = frayFrac_[k];
-         const float a0 = past_[i0 & (kPast - 1)], a1 = past_[(i0 + 1) & (kPast - 1)];
-         frayEnv_[k] += (std::fabs(y - (a0 + (a1 - a0) * f)) - frayEnv_[k]) * envK;
+      // (Read every 4th sample, its follower stepped 4 at a time: a 30 ms level needs no more.)
+      if ((pastPos_ & 3) == 0) {
+         const float envK = fray4Coef_;
+         for (int k = 0; k < kFrayLags; ++k) {
+            const int i0 = pastPos_ + frayAt_[k];
+            const float f = frayFrac_[k];
+            const float a0 = past_[i0 & (kPast - 1)], a1 = past_[(i0 + 1) & (kPast - 1)];
+            frayEnv_[k] += (std::fabs(y - (a0 + (a1 - a0) * f)) - frayEnv_[k]) * envK;
+         }
       }
       pastPos_ = (pastPos_ + 1) & (kPast - 1);
       return y;
@@ -1620,7 +1624,7 @@ private:
    static constexpr int kFrayLags = 5;
    static constexpr double kFrayLag = 0.006;
    double period_ = 200.0;
-   float frayEnv_[kFrayLags] = {};
+   float frayEnv_[kFrayLags] = {}, fray4Coef_ = 0.001f;
    // For each lag: where its sample a period back is, from the newest (whole samples, plus kPast so
    // it's never negative), and the fraction past it.
    int frayAt_[kFrayLags] = {};
