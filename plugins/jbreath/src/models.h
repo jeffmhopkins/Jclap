@@ -90,10 +90,12 @@ public:
       const double t = d - i + 1.0;
       const auto at = [this](int k) { return static_cast<double>(b_[static_cast<size_t>((w_ - k) & mask_)]); };
       const double x0 = at(i - 1 < 1 ? 1 : i - 1), x1 = at(i), x2 = at(i + 1), x3 = at(i + 2);
-      const double c0 = -(t - 1) * (t - 2) * (t - 3) / 6.0;
-      const double c1 = t * (t - 2) * (t - 3) / 2.0;
-      const double c2 = -t * (t - 1) * (t - 3) / 2.0;
-      const double c3 = t * (t - 1) * (t - 2) / 6.0;
+      // (The four Lagrange weights, their shared products taken once.)
+      const double a = t - 1, b = t - 2, c = t - 3, ab = a * b, tc = t * c;
+      const double c0 = -ab * c * (1.0 / 6.0);
+      const double c1 = 0.5 * tc * b;
+      const double c2 = -0.5 * tc * a;
+      const double c3 = t * ab * (1.0 / 6.0);
       return static_cast<float>(c0 * x0 + c1 * x1 + c2 * x2 + c3 * x3);
    }
 
@@ -498,6 +500,8 @@ public:
       bore_.clear();
       lp_ = {};
       lp2_ = {};
+      pitchCut_ = -1.0f;
+      delayHz_ = -1.0;
       notePitch(hz_);
       dc_ = {};
       dc_.setFs(fs_);
@@ -513,16 +517,28 @@ public:
       outLP2_.setHz(3000.0, fs_);
       thru_.clear();
       tx_ = 0.0f;
+      s_ = 0.0;
    }
    double nominal(double hz) const override { return fs_ / (2.0 * hz); }
+   // (Both asked for every control tick, but the note and knobs they follow seldom move: the last
+   // answer is kept until they do.)
    double cutoffDelay(double hz) const override {
+      if (hz == delayHz_ && character.cutoff == delayCut_ && character.loss == delayLoss_)
+         return delay_;
       const double cut = std::max(1300.0, 2.2 * hz);
-      return kCutPitch * 2.0 * (onePoleDelay(hz, character.cut(cut, 2.1 * hz), fs_) - onePoleDelay(hz, cut, fs_)) +
-             character.lossDelay(nominal(hz), kLossA, kLossB);
+      delayHz_ = hz;
+      delayCut_ = character.cutoff;
+      delayLoss_ = character.loss;
+      delay_ = kCutPitch * 2.0 * (onePoleDelay(hz, character.cut(cut, 2.1 * hz), fs_) - onePoleDelay(hz, cut, fs_)) +
+               character.lossDelay(nominal(hz), kLossA, kLossB);
+      return delay_;
    }
    // The bore's loss sits near 1.3 kHz, which only lets the low and middle register speak; it moves
    // up with notes above that, so they play too (as a real clarinet's tone holes leave more bore).
    void notePitch(double hz) override {
+      if (hz == hz_ && character.cutoff == pitchCut_)
+         return;
+      pitchCut_ = character.cutoff;
       hz_ = hz;
       // High notes need a firmer push to speak (a player bites and blows harder up there).
       lift_ = 1.0 + 0.2 * std::clamp(std::log2(hz / 440.0) / 0.8, 0.0, 1.0);
@@ -563,16 +579,55 @@ public:
          const double open = gap >= knee ? gap : (gap + knee) * (gap + knee) / (4 * knee);
          return z * open * (W >= 0 ? 1 : -1) * std::sqrt(std::fabs(W));
       };
-      // u = F(2 back + u): the flow and the pressure it makes, by bisection (F falls as u rises).
-      double lo = -3, hi = 3;
-      for (int it = 0; it < 24; ++it) {
-         const double u = 0.5 * (lo + hi);
-         if (u - F(2 * back + u) > 0)
-            hi = u;
-         else
-            lo = u;
+      // u = F(2 back + u): the flow and the pressure it makes. With W = D - u the drop across the
+      // reed (D its drop before this sample's flow) and s = sgn(W) sqrt|W|, where it's smooth:
+      // h(s) = W + z open(1 - W) s - D = 0, which rises through its root wherever the reed is. A few
+      // Newton steps from the last sample's answer settle it (to far under float's resolution);
+      // where they don't, as the reed snaps shut or open, by bisection, as before.
+      const double D = g - 2.0 * back;
+      const auto h = [z, knee, D](double s, double &dh) {
+         const double a = std::fabs(s), W = s * a, gap = 1.0 - W;
+         double open, dOpen;
+         if (gap >= knee) {
+            open = gap;
+            dOpen = 1.0;
+         } else if (gap > -knee) {
+            open = (gap + knee) * (gap + knee) / (4.0 * knee);
+            dOpen = (gap + knee) / (2.0 * knee);
+         } else {
+            open = dOpen = 0.0;
+         }
+         dh = 2.0 * a + z * (open - 2.0 * s * a * dOpen);
+         return W + z * open * s - D;
+      };
+      double s = s_;
+      bool solved = false;
+      for (int it = 0; it < 4 && !solved; ++it) {
+         double dh;
+         const double v = h(s, dh);
+         if (!(dh > 1e-9))
+            break;
+         const double step = v / dh;
+         s -= step;
+         solved = std::fabs(step) < 1e-9;
       }
-      const double u = 0.5 * (lo + hi);
+      double u;
+      if (solved) {
+         s_ = s;
+         u = D - s * std::fabs(s);
+      } else {
+         double lo = -3, hi = 3;
+         for (int it = 0; it < 24; ++it) {
+            const double uu = 0.5 * (lo + hi);
+            if (uu - F(2 * back + uu) > 0)
+               hi = uu;
+            else
+               lo = uu;
+         }
+         u = 0.5 * (lo + hi);
+         const double W = D - u;
+         s_ = W >= 0.0 ? std::sqrt(W) : -std::sqrt(-W);
+      }
       // Breath noise: the air rushing through the reed's slit is turbulent, and its hiss (a band
       // above a few hundred Hz) rides on the flow into the bore, coloured by it on the way out.
       // (Turbulence in a slit that narrow is strongest around a couple of kHz and falls away above:
@@ -597,6 +652,11 @@ private:
    Biquad thru_;
    DCBlock dc_;
    double hz_ = 294.0, lift_ = 1.0;
+   float pitchCut_ = -1.0f;
+   mutable double delayHz_ = -1.0, delay_ = 0.0;
+   mutable float delayCut_ = -1.0f, delayLoss_ = -1.0f;
+   // The last sample's reed solution, sgn(W) sqrt|W|, where the next one's Newton steps start.
+   double s_ = 0.0;
    float tx_ = 0.0f;
 };
 
@@ -1364,7 +1424,11 @@ public:
       const double fh = fingerHz(hz);
       int fv = 0, fp = 1;
       double best = 1e9;
-      const auto costOf = [fh](int v, int p) { return std::fabs(1200.0 * std::log2(fh / kTrumpetBore[v].peakHz[p])) + 8.0 * v; };
+      // (In cents from each resonance, against a table of their pitches made once: a log for each
+      // of the hundred resonances, every control block, was most of the trumpet's control cost.)
+      static const ResonanceCents cents;
+      const double fc = 1200.0 * std::log2(fh);
+      const auto costOf = [fc](int v, int p) { return std::fabs(fc - cents.at[v][p]) + 8.0 * v; };
       for (int v = 0; v < 7; ++v) {
          const BoreFingering &b = kTrumpetBore[v];
          for (int p = 1; p < b.modes && b.peakHz[p] < 1300.0f; ++p) {
@@ -1441,7 +1505,12 @@ public:
       const double loose = 0.10 + 0.08 * std::clamp((hz_ - 550.0) / 60.0, 0.0, 1.0);
       const double lip = std::max(0.72, lipRatio_ - loose * std::clamp((1000.0 - hz_) / 250.0, 0.0, 1.0) * (pmS_ - 0.25));
       const double wl = 2 * kPi * hz * (lip + 0.1 * (emb - 0.5));
-      const double q = kLipQ * std::exp2(lipStiffness() - 0.5);
+      // (The lips' Q only moves with the Stiffness: worked out again only when it does.)
+      if (character.stiffness != qStiffness_) {
+         qStiffness_ = character.stiffness;
+         lipQ_ = kLipQ * std::exp2(lipStiffness() - 0.5);
+      }
+      const double q = lipQ_;
       const double acc = -wl * wl * x_ - (wl / q) * v_ + dpPrev_ / lipMu_ + 1e-6 * rng.white();
       v_ += acc / fs_;
       // The tongue's release plucks the lips open, so the note starts at once, as hard as tongued
@@ -1531,6 +1600,15 @@ private:
       return st < 0.5f ? 0.5f - 0.5f * (0.5f - st) : st;
    }
 
+   // Each valve combination's resonances in cents (1200 log2 of their Hz).
+   struct ResonanceCents {
+      double at[7][kBoreModes] = {};
+      ResonanceCents() {
+         for (int v = 0; v < 7; ++v)
+            for (int p = 0; p < kTrumpetBore[v].modes; ++p)
+               at[v][p] = 1200.0 * std::log2(static_cast<double>(kTrumpetBore[v].peakHz[p]));
+      }
+   };
    static constexpr double kP0 = 8000.0, kRho = 1.2, kLipQ = 12.0, kLipMu = 3.0, kLipWidth = 0.012,
                            kSoft = 1e-4, kOut = 1000.0, kBellCut = 1500.0, kKick = 5e-3, kPuff = 2e-3, kHardest = 0.4, kScoop = 100.0,
                            kShock0 = 480.0;
@@ -1543,7 +1621,8 @@ private:
    unsigned at_ = 0;
    bool ticked_ = false;
    int fing_ = -1, partial_ = 1;
-   double peakHz_ = 466.0, hz_ = 466.0, lipRatio_ = 0.84, lipMu_ = 3.0, eqAt_ = 1.0;
+   double peakHz_ = 466.0, hz_ = 466.0, lipRatio_ = 0.84, lipMu_ = 3.0, eqAt_ = 1.0, lipQ_ = kLipQ;
+   float qStiffness_ = -1.0f;
    double acMean_ = 0, acEnv_ = 0, acCoef_ = 0.001, envFall_ = 0.9997, closedCoef_ = 0.003;
    double x_ = 0, v_ = 0, dpPrev_ = 0, closed_ = 0, shockD_ = 120, pmS_ = 0, pmCoef_ = 0.001, puff_ = 0, puffAt_ = 0, puffTn_ = 0, kickTn_ = 0;
    float tongue_ = 0.0f;
