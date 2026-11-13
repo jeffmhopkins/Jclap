@@ -32,6 +32,14 @@ without any per-note EQ: it brightens as it's blown harder because its lips clos
 The sax's tone is fitted to the Iowa alto's harmonics across its registers and dynamics, its top falling away past 6 kHz.
 Every instrument's breath noise is a smaller share of the sound the softer it's blown.
 
+From 0.13.5 the same sound costs about a quarter less CPU across the factory bank: the clarinet's reed
+is solved by a few Newton steps from the last sample's answer instead of a 24-step search (a clarinet
+voice costs about a third of what it did), the Alien's voice and the trumpet's fingering no longer
+work out the same exponentials and logs every sample, and every voice keeps what only moves at the
+control rate instead of computing it again each sample. Renders of every factory preset match the
+previous version's to float rounding (or, where a reed's motion is sensitive enough to drift in
+phase, to within 0.2 dB in level and spectrum).
+
 ### The alien
 
 An alien that sings words, a syllable a note: yours, typed on the ALIEN tab, or words of its own.

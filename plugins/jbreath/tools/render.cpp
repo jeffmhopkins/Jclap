@@ -34,6 +34,7 @@
 #include <jclap/core/test_host.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -296,6 +297,8 @@ int main(int argc, char **argv) {
          std::fprintf(trace, ",%s", kModSourceNames[i]);
       std::fprintf(trace, "\n");
    }
+   // (How long the plugin takes to process the whole score, for measuring its CPU.)
+   double processSec = 0.0;
    for (uint32_t start = 0; start < total; start += kBlock) {
       const uint32_t n = std::min(kBlock, total - start);
       while (next < evs.size() && evs[next].t * kRate < start + n) {
@@ -314,7 +317,9 @@ int main(int argc, char **argv) {
             h.noteExpression(static_cast<clap_note_expression>(e.expr), key, e.a, keyId[key], kChannel, t);
          }
       }
+      const auto t0 = std::chrono::steady_clock::now();
       h.process(n, nullptr, bufs);
+      processSec += std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
       if (trace && start >= nextTrace) {
          nextTrace = start + static_cast<uint32_t>(0.01 * kRate);
          std::vector<EditorHost::Voice> vs;
@@ -338,6 +343,7 @@ int main(int argc, char **argv) {
    float peak = 0;
    for (size_t i = 0; i < L.size(); ++i)
       peak = std::max({peak, std::fabs(L[i]), std::fabs(R[i])});
-   std::printf("%s: %.2f s, peak %.3f\n", argv[2], L.size() / kRate, peak);
+   std::printf("%s: %.2f s, peak %.3f, processed in %.1f ms (%.2f%% of real time)\n", argv[2], L.size() / kRate, peak,
+               1000.0 * processSec, 100.0 * processSec / std::max(1e-9, L.size() / kRate));
    return 0;
 }
