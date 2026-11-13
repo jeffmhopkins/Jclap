@@ -129,7 +129,12 @@ struct DCBlock {
 struct Biquad {
    double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0, z1 = 0, z2 = 0;
    void clear() { z1 = z2 = 0; }
+   // Whether the filter passes everything unchanged (a peak or shelf at 0 dB): once its state has
+   // rung out it is skipped, giving exactly what running it would (y = x, its state staying 0).
+   bool flat() const { return b0 == 1.0 && b1 == a1 && b2 == a2; }
    float tick(float x) {
+      if (pass_ && z1 == 0.0 && z2 == 0.0)
+         return x;
       const double y = b0 * x + z1;
       z1 = b1 * x - a1 * y + z2;
       z2 = b2 * x - a2 * y;
@@ -142,6 +147,7 @@ struct Biquad {
       b2 = (1 - al * A) / a0;
       a1 = b1;
       a2 = (1 - al / A) / a0;
+      pass_ = flat();
    }
    // A bandpass whose peak is 0 dB, at hz with bandwidth hz / q.
    void bandpass(double hz, double q, double fs) {
@@ -151,6 +157,7 @@ struct Biquad {
       b2 = -al / a0;
       a1 = -2 * std::cos(w) / a0;
       a2 = (1 - al) / a0;
+      pass_ = flat();
    }
    void highpass(double hz, double q, double fs) {
       const double w = 2 * kPi * hz / fs, al = std::sin(w) / (2 * q), cs = std::cos(w), a0 = 1 + al;
@@ -159,6 +166,7 @@ struct Biquad {
       b2 = b0;
       a1 = -2 * cs / a0;
       a2 = (1 - al) / a0;
+      pass_ = flat();
    }
    void lowpass(double hz, double q, double fs) {
       hz = std::min(hz, 0.45 * fs);
@@ -168,6 +176,7 @@ struct Biquad {
       b2 = b0;
       a1 = -2 * cs / a0;
       a2 = (1 - al) / a0;
+      pass_ = flat();
    }
    void highshelf(double hz, double db, double fs) {
       const double A = std::pow(10, db / 40), w = 2 * kPi * hz / fs, cs = std::cos(w),
@@ -178,6 +187,7 @@ struct Biquad {
       b2 = A * ((A + 1) + (A - 1) * cs - 2 * std::sqrt(A) * al) / a0;
       a1 = 2 * ((A - 1) - (A + 1) * cs) / a0;
       a2 = ((A + 1) - (A - 1) * cs - 2 * std::sqrt(A) * al) / a0;
+      pass_ = flat();
    }
    void lowshelf(double hz, double db, double fs) {
       const double A = std::pow(10, db / 40), w = 2 * kPi * hz / fs, cs = std::cos(w),
@@ -188,7 +198,11 @@ struct Biquad {
       b2 = A * ((A + 1) - (A - 1) * cs - 2 * std::sqrt(A) * al) / a0;
       a1 = -2 * ((A - 1) + (A + 1) * cs) / a0;
       a2 = ((A + 1) + (A - 1) * cs - 2 * std::sqrt(A) * al) / a0;
+      pass_ = flat();
    }
+
+private:
+   bool pass_ = true;
 };
 
 // The player's settings a model reads, beyond breath and embouchure. Each is a multiplier around 1.
