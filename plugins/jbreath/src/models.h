@@ -47,6 +47,8 @@ inline int saxHorn(double tune) {
          best = j;
    return best;
 }
+// The level a row's gains are baked at, against the models' own rows (tools/tune.cpp).
+inline double rowLevel(int row) { return row >= kModelCount ? kSaxHornLevel : 1.0; }
 inline int tuningRow(int model, double tune) {
    const int horn = model == kSax ? saxHorn(tune) : -1;
    return horn < 0 ? model : kModelCount + horn;
@@ -342,6 +344,9 @@ public:
    // How many semitones the note last given to notePitch is off the pitch of the fingering it's
    // played on (bent there by the lips): the voice tunes it as that fingering's note.
    virtual double tuningOffset() const { return 0.0; }
+   // The tuning table's row the note last given to notePitch is played from, `row` being the one
+   // its model and tuning pick: another when the model has kept a horn the row doesn't play there.
+   virtual int tuneRow(int row) const { return row; }
    double fingerHz(double hz) const { return hz * std::exp2(-std::clamp(lipBend, -kLipBendMax, kLipBendMax) / 12.0); }
 
 protected:
@@ -662,6 +667,17 @@ public:
    double nominal(double hz) const override { return fs_ / hz; }
    double cutoffDelay(double) const override { return 0.0; }
    double tuningOffset() const override { return fingerOff_; }
+   // (Slid past the lips' reach on the note's horn, it's that horn's row.)
+   int tuneRow(int row) const override {
+      if (std::fabs(lipBend) <= kLipBendMax)
+         return row;
+      if (member_ == 1.0)
+         return kSax;
+      for (int j = 0; j < kSaxHorns; ++j)
+         if (member_ == kSaxHornSize[j])
+            return kModelCount + j;
+      return row;
+   }
    void notePitch(double hz) override {
       hz_ = hz;
       // Under the alto's low Bb the horn is a bigger one of the family, the alto's bore scaled up:
@@ -676,8 +692,13 @@ public:
       // kLipBendMax. Re-fingered across the octave key, the reed fell to the low register for a
       // tenth of a second, an octave down; fingered along chromatically, a bend stepped, its tone
       // and level jumping at each semitone.)
+      // (The horn and the register, though, are the note's own for the whole of a bend, however
+      // far: slid on past kLipBendMax, the sax fingers along the note's register on its horn, and
+      // past the register's last fingering stretches it. Changing horn or taking the octave key on
+      // or off mid-slide, the reed fell to another resonance, an octave or a fifth away, and
+      // broke up while it found the note again.)
       double hf;
-      int f = choose(fingerHz(hz), fingerHz(hz), member_, hf);
+      int f = choose(hz * std::exp2(-lipBend / 12.0), fingerHz(hz), member_, hf);
       const double ha = hz / member_;
       // (Once the note is sounding, the fingering held stays until the note is three quarters of a
       // semitone off it, so a note between two doesn't flip back and forth.)
@@ -694,7 +715,14 @@ public:
       // (Only the lips' bend: a note past the top fingering, its bore stretched over it, has its
       // own place in the table, which a whole offset to the fingering's note left silent.)
       fingerOff_ = 12.0 * std::log2(hz / fingerHz(hz));
-      if (!same(sp - fingerOff_, f)) {
+      if (std::fabs(lipBend) > kLipBendMax) {
+         // (Slid past the lips' reach, it's tuned from the horn's own row (tuneRow), at the
+         // fingered pitch; slid under the horn's lowest fingering, as that fingering's own note,
+         // stretched.)
+         const double own = 12.0 * std::log2(kLow * member_) + noteOf(f);
+         if (sp - fingerOff_ < own - 0.75)
+            fingerOff_ = sp - own;
+      } else if (!same(sp - fingerOff_, f)) {
          // (Bent onto another horn's notes, the table has none for this fingering on this horn:
          // the nearest pitch it plays on this one, towards the note without the bend.)
          const double fp = 12.0 * std::log2(fingerHz(hz));
@@ -772,7 +800,7 @@ public:
       // by the drop across it a sample behind, its resonance damped by the lip (and lower on a
       // bigger family member's reed, though by less than its bore: lower, a baritone's E3 blown hard
       // locked a semitone flat onto a resonance near 1.8 kHz).
-      const double wr = 2.0 * kPi * kReedHz * std::sqrt(stiff) * (0.9 + 0.2 * emb) * std::pow(std::min(1.0, scale_), 0.25);
+      const double wr = 2.0 * kPi * kReedHz * std::sqrt(stiff) * (0.9 + 0.2 * emb) * std::pow(std::min(1.0, body_), 0.25);
       double acc = -wr * wr * (x_ + dpPrev_ / pM) - kReedDamp * wr * v_;
       // (Against the lay the cane meets the stiff facing.)
       if (x_ < -1.0)
@@ -812,7 +840,7 @@ public:
       // locked the baritone's E3 a semitone flat).
       const double knee = 0.08 * std::exp(-1.2 * (character.edge - 1.0)), gap = 1.0 + x_;
       const double open = 0.5 * (gap + std::sqrt(gap * gap + knee * knee)) - 0.5 * knee;
-      const double H = open_ * lip * (0.5 + character.aperture) * (1.2 - 0.4 * emb) / std::pow(std::min(1.0, scale_), 1.5 + 0.5 * lowNote_);
+      const double H = open_ * lip * (0.5 + character.aperture) * (1.2 - 0.4 * emb) / std::pow(std::min(1.0, body_), 1.5 + 0.5 * lowNote_);
       const double a = std::max(0.0, open) * H * kWidth * std::sqrt(2.0 / kRho);
       // u = a sgn(D) sqrt|D|, with D the drop with this sample's flow's own pressure in it.
       const double ph = bore_.history(), zi = bore_.instant(), D0 = pm - ph;
@@ -827,12 +855,14 @@ public:
 private:
    // A fingering's note, in semitones over the alto's low Bb (with the octave key, the octave up).
    static double noteOf(int f) { return f < 20 ? f : f - 20 + 4 + 12; }
-   // The horn (member) and fingering for a note fingered at fhz and sounding at hz (the same with
-   // no bend), and the note's pitch on that horn (ha).
-   int choose(double fhz, double hz, double &member, double &ha) const {
+   // The horn (member) and fingering for a note played at home (its pitch without the bend) and
+   // fingered at fhz (the same with no bend, or a bend within the lips'), and the fingered pitch on
+   // that horn (ha). The horn and register are home's; the fingering, the nearest fhz in that
+   // register.
+   int choose(double home, double fhz, double &member, double &ha) const {
       member = 1.0;
       for (double s : {0.7492, 0.5, 0.3746, 0.25})
-         if (fhz < kQuarterDown * kLow * member)
+         if (home < kQuarterDown * kLow * member)
             member = s;
       // Tuned down (the Tenor and Baritone presets), the horn is the member nearest the tuning
       // across its whole range, up to an octave over its top fingering: a real baritone's A3 is a
@@ -842,10 +872,10 @@ private:
       // the one asked for, so those notes jumped an octave.)
       if (const int horn = std::min(saxHorn(character.tuneSemis), kSaxHorns - 2); horn >= 0) {
          const double near = kSaxHornSize[horn];
-         if (near < member && fhz < 4.0 * kLow * std::exp2(kTopN / 12.0) * near)
+         if (near < member && home < 4.0 * kLow * std::exp2(kTopN / 12.0) * near)
             member = near;
       }
-      ha = hz / member;
+      ha = fhz / member;
       // The fingering: written low Bb (0) to C#5 (15) in the first register, then the octave key
       // over the fingerings from D4 (4) to the palm keys' F (19). The note is the resonance of the
       // fingering nearest it (its first, or with the octave key its second).
@@ -864,9 +894,13 @@ private:
    }
    void setBore(double hz) {
       scale_ = hz / peakHz_;
+      // (What the bore's size sets in the reed and the tone follows it over kBodySec: at each
+      // fingering a bend crosses, the size jumps by the bend's share of a semitone, and the reed's
+      // opening and resonance jumping with it, the flow through it did too, a click each time.)
+      body_ = ticked_ ? body_ + (scale_ - body_) * (1.0 - std::exp(-16.0 / (kBodySec * fs_))) : scale_;
       // What's heard, as a real alto's in front of it (fitted to the Iowa recordings' harmonics):
       // a broad formant near 290 Hz, a peak near 2.3 kHz and its bright top (falling away past 6 kHz), scaled down with a bigger family member.
-      const double fam = std::min(1.0, scale_);
+      const double fam = std::min(1.0, body_);
       // (The peak near 2.3 kHz, the bright top and its fall come from the mouthpiece and reed, which
       // grow far less with a bigger horn than its bore does: scaled with it, they'd pile into a
       // narrow band near 1.2 kHz on a baritone, a ringing spike over its low notes.)
@@ -963,6 +997,7 @@ private:
                            kQuarterDown = 0.97153;
    static constexpr int kTopN = 15;
    static constexpr double kTopHz = 6500.0;  // the output's 4-pole lowpass
+   static constexpr double kBodySec = 0.015;
    static constexpr double kLowLoss = 0.6;  // the walls' loss on the low notes, of the full
    static constexpr double kVoicing = 10.0;  // and their upper resonances' damping (at 5 the low notes
                                              // blown hard buzzed between two pitches)
@@ -982,7 +1017,7 @@ private:
    bool ticked_ = false;
    int fing_ = -1;
    double fingMember_ = 1.0, fingerOff_ = 0.0;
-   double lowNote_ = 0.0, peakHz_ = 277.0, hz_ = 277.0, member_ = 1.0, scale_ = 1.0, vent_ = 0.0, open_ = 7e-4, eqAt_ = -1.0, toneDb_ = 1e9, toneHz_ = 1.0, liftDb_ = 1e9, liftHz_ = 1.0;
+   double lowNote_ = 0.0, peakHz_ = 277.0, hz_ = 277.0, member_ = 1.0, scale_ = 1.0, body_ = 1.0, vent_ = 0.0, open_ = 7e-4, eqAt_ = -1.0, toneDb_ = 1e9, toneHz_ = 1.0, liftDb_ = 1e9, liftHz_ = 1.0;
    double regDb_ = 1e9, regHz_ = 1.0, famDb_ = 1e9, famHz_ = 1.0, onT_ = 1.0, lift0_ = 0.0, xShut_ = 0.0, liftSec_ = 0.003;
    double x_ = 0, v_ = 0, dpPrev_ = 0, pmS_ = 0, pmB_ = 0, pmCoef_ = 0.01;
    float tongue_ = 0.0f, tnPrev_ = 0.0f, softGain_ = 1.0f, regGain_ = 1.0f, famGain_ = 1.0f;

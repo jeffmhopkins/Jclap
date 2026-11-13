@@ -50,6 +50,8 @@ public:
          x = 0.0;
       std::fill(std::begin(hist_), std::end(hist_), 0.0f);
       pos_ = 0;
+      running_ = false;
+      morph_ = fade_ = 0;
    }
    // The fingering's bore, scaled in frequency by `scale`, at `fs`. Its straight-through wave is
    // only resampled when the scale has moved by more than a couple of percent (a bend or a
@@ -62,11 +64,25 @@ public:
             double toHz = 1500.0, double lowHz = 0.0, double lowDamp = 1.0, double highHz = 0.0,
             double highDamp = 1.0) {
       const bool newBore = &b != bore_ || fs != fs_;
+      // (Another fingering under a sounding note: its resonances move from where they are to the new
+      // fingering's over kMorphSec, as a finger closing a hole changes the air column, instead of
+      // in one sample. Switched at once, the reed lost the note for a few cycles at every fingering
+      // a bend or slur crossed, a crackle and a break in the tone.)
+      if (newBore && running_ && fs == fs_) {
+         for (int i = 0; i < kBoreModes; ++i) {
+            fromS_[i] = i < n_ ? s_[i] : std::complex<double>(0.0);
+            fromC_[i] = i < n_ ? c_[i] : 0.0;
+            fromD_[i] = i < n_ ? d_[i] : 0.0;
+         }
+         fromN_ = n_;
+         fromR0_ = r0_;
+         morphLen_ = std::max(1, static_cast<int>(kMorphSec * fs));
+         morph_ = morphLen_;
+      }
       bore_ = &b;
       fs_ = fs;
-      n_ = b.modes;
-      double inst = b.r0;
-      for (int i = 0; i < n_; ++i) {
+      const int n = b.modes;
+      for (int i = 0; i < n; ++i) {
          const BoreMode &m = b.mode[i];
          double damp = loss;
          if (toHz != cutHz) {
@@ -77,14 +93,14 @@ public:
             damp *= lowDamp;
          if (highHz > 0.0 && m.im * scale > 2.0 * 3.14159265358979 * highHz)
             damp *= highDamp;
-         const std::complex<double> s(m.re * scale * damp, m.im * scale);
-         z_[i] = std::exp(s / fs);
-         c_[i] = std::complex<double>(m.zr, m.zi) * (scale / fs);
-         d_[i] = std::complex<double>(m.rr, m.ri) * (scale / fs);
-         inst += 2.0 * c_[i].real();
+         toS_[i] = std::complex<double>(m.re * scale * damp, m.im * scale);
+         toC_[i] = std::complex<double>(m.zr, m.zi) * (scale / fs);
+         toD_[i] = std::complex<double>(m.rr, m.ri) * (scale / fs);
       }
       zc_ = b.zc;
-      inst_ = zc_ * inst;
+      toN_ = n;
+      toR0_ = b.r0;
+      blend();
       if (newBore || std::fabs(std::log(scale / firScale_)) > 0.02)
          resample(b, scale);
    }
@@ -104,6 +120,9 @@ public:
       for (int i = 0; i < n_; ++i)
          x_[i] += u;
       hist_[pos_] = static_cast<float>(u);
+      running_ = true;
+      if (morph_ > 0 && --morph_ % kMorphStep == 0)
+         blend();
    }
    // The sound radiated this sample (after push()).
    double radiated() {
@@ -114,6 +133,16 @@ public:
       int j = pos_ - n0_;
       for (int t = 0; t < taps_; ++t, --j)
          y += fir_[t] * hist_[j & (kHistory - 1)];
+      // (The bell's wave just resampled, for another fingering or size: the old one fades out under
+      // the new over kFadeSec. Swapped at once, the sound stepped, a tick each time.)
+      if (fade_ > 0) {
+         double old = 0.0;
+         int k = pos_ - oldN0_;
+         for (int t = 0; t < oldTaps_; ++t, --k)
+            old += oldFir_[t] * hist_[k & (kHistory - 1)];
+         const double w = static_cast<double>(fade_--) / fadeLen_;
+         y += w * (old - (y - 2.0 * a.real()));
+      }
       pos_ = (pos_ + 1) & (kHistory - 1);
       return y;
    }
@@ -123,7 +152,42 @@ private:
    // The straight-through wave's taps at this rate and scale: each of the table's taps (impulses
    // at kBoreTapRate) moved to its scaled time and spread over the new rate's samples by a
    // windowed sinc, which keeps it band-limited as it was.
+   // The modes part way from the last fingering's to this one's: the poles moved through the
+   // s-plane (so each stays a decaying resonance), the residues across; a mode only one of them has
+   // fades in or out where it is. Those past the count are cleared, so a fingering with more modes
+   // later doesn't ring one left standing.
+   void blend() {
+      const double w = morph_ > 0 ? 1.0 - static_cast<double>(morph_) / morphLen_ : 1.0;
+      const int n = w < 1.0 ? std::max(fromN_, toN_) : toN_;
+      double inst = (1.0 - w) * (w < 1.0 ? fromR0_ : 0.0) + w * toR0_;
+      for (int i = 0; i < n; ++i) {
+         if (w >= 1.0) {
+            s_[i] = toS_[i];
+            c_[i] = toC_[i];
+            d_[i] = toD_[i];
+         } else {
+            const bool from = i < fromN_, to = i < toN_;
+            s_[i] = from && to ? (1.0 - w) * fromS_[i] + w * toS_[i] : from ? fromS_[i] : toS_[i];
+            c_[i] = (from ? (1.0 - w) * fromC_[i] : 0.0) + (to ? w * toC_[i] : 0.0);
+            d_[i] = (from ? (1.0 - w) * fromD_[i] : 0.0) + (to ? w * toD_[i] : 0.0);
+         }
+         z_[i] = std::exp(s_[i] / fs_);
+         inst += 2.0 * c_[i].real();
+      }
+      for (int i = n; i < n_; ++i)
+         x_[i] = 0.0;
+      n_ = n;
+      r0_ = (1.0 - w) * (w < 1.0 ? fromR0_ : 0.0) + w * toR0_;
+      inst_ = zc_ * inst;
+   }
    void resample(const BoreFingering &b, double scale) {
+      if (running_) {
+         std::copy(std::begin(fir_), std::end(fir_), std::begin(oldFir_));
+         oldTaps_ = taps_;
+         oldN0_ = n0_;
+         fadeLen_ = std::max(1, static_cast<int>(kFadeSec * fs_));
+         fade_ = fadeLen_;
+      }
       firScale_ = scale;
       const double t0 = b.start / scale, span = b.taps / kBoreTapRate / scale;
       // (A lower new rate than the table's would need the sinc widened; voices run at 88.2 kHz or
@@ -144,11 +208,17 @@ private:
       }
    }
 
+   static constexpr double kMorphSec = 0.04, kFadeSec = 0.005;
+   static constexpr int kMorphStep = 8; // samples between the morph's steps
    const BoreFingering *bore_ = nullptr;
-   double fs_ = 0.0, zc_ = 1.0, inst_ = 0.0, firScale_ = 1.0;
-   int n_ = 0, n0_ = 1, taps_ = 0, pos_ = 0;
+   double fs_ = 0.0, zc_ = 1.0, inst_ = 0.0, firScale_ = 1.0, r0_ = 0.0, fromR0_ = 0.0, toR0_ = 0.0;
+   int n_ = 0, n0_ = 1, taps_ = 0, pos_ = 0, fromN_ = 0, toN_ = 0, morph_ = 0, morphLen_ = 1;
+   int fade_ = 0, fadeLen_ = 1, oldTaps_ = 0, oldN0_ = 1;
+   bool running_ = false;
    std::complex<double> z_[kBoreModes], c_[kBoreModes], d_[kBoreModes], x_[kBoreModes];
-   float fir_[kMaxTaps] = {};
+   std::complex<double> s_[kBoreModes], fromS_[kBoreModes], fromC_[kBoreModes], fromD_[kBoreModes];
+   std::complex<double> toS_[kBoreModes], toC_[kBoreModes], toD_[kBoreModes];
+   float fir_[kMaxTaps] = {}, oldFir_[kMaxTaps] = {};
    float hist_[kHistory] = {};
 };
 
