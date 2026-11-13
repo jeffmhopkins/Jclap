@@ -151,11 +151,17 @@ private:
          high_[m] = kTuneFirstNote + hi;
          for (int note = 0; note < 128; ++note) {
             Resolved &r = notes_[m][note];
+            // Under the lowest note the model plays, a note keeps its pitch, tuned as the lowest
+            // (its bore stretched on down). (Played an octave up, a low note or a slide into the
+            // bottom of the range jumped up an octave.) Only a sax's, under the biggest horn's low
+            // A and Ab, where no reed finds a note and it would go silent, goes up an octave.
+            const bool sax = m == kSax || m >= kModelCount;
             int k = note;
-            while (k < low_[m]) {
+            while (sax && k < low_[m] - kSaxStretch) {
                k += 12;
                ++r.octaves;
             }
+            k = std::max(k, low_[m]);
             while (k > high_[m]) {
                k -= 12;
                --r.octaves;
@@ -177,6 +183,7 @@ private:
          }
       }
    }
+   static constexpr int kSaxStretch = 1;  // semitones a sax plays under its lowest tuned note
    Resolved notes_[kTuneRows][128];
    int low_[kTuneRows] = {}, high_[kTuneRows] = {};
 };
@@ -1094,18 +1101,27 @@ private:
       // up by the bent pitch, a note at the bottom of a horn, which the table plays an octave up,
       // flipped octave halfway through a bend.)
       const int row = tuningRow(settings_.model, settings_.tune);
-      Tuning t = TuningTable::get().at(row, sounding - fingerOff_, fs_);
+      Model &m = model();
+      // (A sax slid past the lips' reach keeps its horn (Sax::notePitch), so the note is looked up
+      // in that horn's own row, levelled as this row has it.)
+      const auto tuning = [&](double off) {
+         const int own = m.tuneRow(row);
+         Tuning f = TuningTable::get().at(own, sounding - off, fs_);
+         if (own != row)
+            f.gain *= rowLevel(row) / rowLevel(own);
+         return f;
+      };
+      Tuning t = tuning(fingerOff_);
       // (How readily it speaks is the pitch's own, as before.)
       speak_ = fingerOff_ == 0.0 ? t.speak : TuningTable::get().at(row, sounding, fs_).speak;
       double hz = 440.0 * std::pow(2.0, (sounding - 69.0) / 12.0 + t.octaves);
-      Model &m = model();
       // (How far of it the bend takes the note, which the lips bend off the fingering: a sax,
       // trumpet or oboe keeps its fingering through a bend instead of changing it at each semitone.)
       m.lipBend = bendSemis_;
       m.notePitch(hz);
-      if (const double off = m.tuningOffset(); off != fingerOff_) {
+      if (const double off = m.tuningOffset(); off != fingerOff_ || m.tuneRow(row) != row) {
          fingerOff_ = off;
-         const Tuning f = TuningTable::get().at(row, sounding - off, fs_);
+         const Tuning f = tuning(off);
          if (f.octaves != t.octaves) {
             hz = 440.0 * std::pow(2.0, (sounding - 69.0) / 12.0 + f.octaves);
             m.notePitch(hz);

@@ -143,8 +143,10 @@ it and correcting the length until the pitch was within a cent, at the rates the
 baked into [`src/tuning_table.h`](src/tuning_table.h) along with a gain that levels each note's
 steady tone and the softest breath that sounds it (so the lightest pressure plays). A player keeps
 the note in tune as they blow softer or harder, and so do the voices: each instrument's drift in
-pitch with the breath was measured, and the bore is corrected for it. Notes past an instrument's
-range play an octave (or more) in. The voices run at 88.2 kHz
+pitch with the breath was measured, and the bore is corrected for it. Notes over an instrument's
+range play an octave (or more) down; notes under it keep their pitch, on the bore stretched down (from
+0.13.6: before, they jumped up an octave), except the sax's under A1, where no reed finds a note,
+which go up an octave. The voices run at 88.2 kHz
 or more (2x at 44.1 and 48 kHz) and are decimated once.
 
 ## A tour of the panel
@@ -361,7 +363,10 @@ replaces 0.12.0's smoke Palette menu.)
   expressions, and the manager channel's bend for every note. The sax and trumpet bend as a player
   lips a note, on the fingering it was played with: the trumpet keeps its valves and the sax its
   whole fingering for up to three semitones of bend either way, so a bend glides smoothly instead
-  of stepping at each semitone, dropping an octave or losing the note. Bend messages are smoothed
+  of stepping at each semitone, dropping an octave or losing the note. Past that they change fingering
+  as they go, each change gliding over about 20 ms (the air column and the reed together), so a long
+  slide doesn't crackle or break up at every semitone; a sax keeps the horn and register the note
+  started on through the whole slide instead of jumping to a bigger horn. Bend messages are smoothed
   over a few ms, so a controller's stepped bend doesn't buzz. Every note costs the same CPU (before 0.13.3 most sax notes, and some trumpet
   notes, cost five to fifteen times the rest). **Slide** (CC 74) moves the
   embouchure, by SLIDE.
