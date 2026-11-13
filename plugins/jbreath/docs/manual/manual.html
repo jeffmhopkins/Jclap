@@ -32,7 +32,7 @@
 @page {
   size: 8.5in 11in;
   margin: 0.85in 0.85in 0.8in 0.85in;
-  @bottom-left { content: "JBreath  ·  User Manual  ·  v0.13.3 draft"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
+  @bottom-left { content: "JBreath  ·  User Manual  ·  v0.13.6 draft"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
   @bottom-right { content: counter(page); font: 600 8pt "InterM"; color: #15171d; }
 }
 @page cover { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
@@ -208,7 +208,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
   <div class="shot"><img src="img/panel.jpg" alt=""></div>
   <div class="foot">
-    <div><div class="k">Version</div><div class="v">0.13.3 · Draft</div></div>
+    <div><div class="k">Version</div><div class="v">0.13.6 · Draft</div></div>
     <div><div class="k">Format</div><div class="v">CLAP · MPE · 8 voices</div></div>
     <div><div class="k">Platforms</div><div class="v">macOS · Windows · Linux</div></div>
     <div style="text-align:right"><div class="k">Edition</div><div class="v">November 2026</div></div>
@@ -222,7 +222,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </div>
   <div class="toc-title">Contents</div>
   <div class="toc" id="toc"></div>
-  <div class="note warn"><span class="k">Draft</span><p>This is a working draft written against JBreath 0.13.3.</p></div>
+  <div class="note warn"><span class="k">Draft</span><p>This is a working draft written against JBreath 0.13.6.</p></div>
   <h2 style="margin-top:0.2in">About this manual</h2>
   <p>Chapters 2 and 3 get you installed and playing in a few minutes. Chapter 4 tours the panel, and Chapters 5 to 7 explain how the sound is made, what each instrument is and how you blow it, which is the quickest way to understand what every control does. Chapters 8 to 14 cover every control in the order they sit on the panel, and Chapters 15 and 16 the presets, the dice and some recipes. The appendix lists every parameter with its exact range and default, plus specifications and troubleshooting.</p>
   <p>Throughout the manual, control names are set in <strong>bold</strong> and panel labels as they appear on screen, such as <strong>EMBOUCHURE</strong>. Tags beside a parameter mean:</p>
@@ -389,7 +389,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <p>The exciter is a valve the breath blows through: a reed, the lips, or the air jet over the flute's embouchure hole. How much air it lets through depends on the pressure across it, which depends on the sound already in the bore. The bore is a pair of delay lines carrying the wave down the tube and back, losing a little and reflecting at the bell and the open tone holes. Each trip round the loop, the bore's resonances pull the valve into opening and closing at their frequency, and a note sounds. Nothing in this loop is a waveform or an envelope: soft playing is nearly a pure tone because the valve barely closes, and the buzz at forte is the valve slamming shut.</p>
   <p>That is why changing the bore changes everything: <strong>LOSS</strong> makes notes speak slower and darker because the resonances are weaker, <strong>HOLES</strong> changes which highs escape, and a <strong>MUTE</strong> changes the bell.</p>
   <h2>In tune at any breath</h2>
-  <p>The bore length for each model and note was measured offline, by playing it and correcting the length until the pitch was within a cent, and baked into the plug-in with a gain that levels each note and the softest breath that sounds it. A real player keeps a note in tune as they blow harder; JBreath measures how far each instrument drifts with the breath and corrects the bore for it. Notes past an instrument's range play an octave (or more) in.</p>
+  <p>The bore length for each model and note was measured offline, by playing it and correcting the length until the pitch was within a cent, and baked into the plug-in with a gain that levels each note and the softest breath that sounds it. A real player keeps a note in tune as they blow harder; JBreath measures how far each instrument drifts with the breath and corrects the bore for it. Notes over an instrument's range play an octave (or more) down; notes under it keep their pitch (the sax's, under A1, go up an octave).</p>
   <h2>Sample rate</h2>
   <p>The voices run at 88.2 kHz or more (twice the host's rate at 44.1 and 48 kHz) and are decimated once at the output, which keeps the reeds stable and the highs clean. At 88.2 kHz and above they run at the host's rate.</p>
   <div class="note"><span class="k">The model's own sound first</span><p>The factory preset at the head of each family (<em>Concert Flute</em>, <em>Wooden Reed</em>, <em>Clean Alto</em>, <em>Dusk Oboe</em>, <em>Brass Plume</em>, <em>First Contact</em>) is the model with a player's vibrato and a little room: the sound the instrument was tuned to. Start there before reaching for the extreme settings.</p></div>
@@ -417,7 +417,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   <h2>Measured against real instruments</h2>
   <p>The sax and trumpet are measured against the University of Iowa's recordings of a real alto sax and Bb trumpet at pp, mf and ff, and the sax's low register against UNSW's tenor sax: how their tone darkens and how much quieter they get when played softly, how far a note starts under its pitch, and the slow 1 to 3 cent wander of a real player's pitch. The trumpet's tone through its bell is matched harmonic by harmonic without any per-note EQ: it brightens as it's blown harder because its lips close for more of each cycle. Every instrument's breath noise is a smaller share of the sound the softer it's blown.</p>
   <h2>Ranges</h2>
-  <p>Under the instrument list the panel shows the range the model speaks in, for example <em>Speaks C1 – C8 · past that, an octave in</em> on the clarinet. Notes outside it are played an octave (or more) inside the range rather than failing to sound. Use <strong>TRANSP</strong> on the voice card, or the presets' relatives (<em>Piccolo</em>, <em>Bass Clarinet</em>, <em>Baritone</em>, <em>Cor Anglais</em>) to move the range.</p>
+  <p>Under the instrument list the panel shows the range the model speaks in, for example <em>Speaks C1 – C8 · higher, an octave down</em> on the clarinet. A note under the range keeps its pitch, played on the bore stretched on down, so a low note or a slide into the bottom of the range never jumps up an octave. A note over the range is played an octave (or more) down. The sax is the one exception at the bottom: no sax reed finds a note more than a semitone under the bass sax's low A1, so the notes under that are played an octave up. Use <strong>TRANSP</strong> on the voice card, or the presets' relatives (<em>Piccolo</em>, <em>Bass Clarinet</em>, <em>Baritone</em>, <em>Cor Anglais</em>) to move the range.</p>
   <h2>Changing instrument</h2>
   <p>Choosing an instrument keeps every other setting, so the same breath, bore and player can be heard through each one. Some bore knobs only apply to some instruments (<strong>CONE</strong> to the sax, oboe and trumpet, <strong>BRASS</strong> to the trumpet): they are dimmed on the others. To start an instrument from its natural sound, load the first preset in its family instead.</p>
 </section>
@@ -462,7 +462,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
   </table>
   <h2>Bend and slide</h2>
   <p><strong>Bend</strong> bends the bore, not a pitch shifter, so a big bend sounds like a player lipping the note. MPE bend moves each note on its own, over <strong>BEND</strong> on the voice card (48 semitones by default, the MPE standard). The manager channel's bend moves every note, and plain MIDI bend on a non-MPE channel moves its notes by ±2 semitones. JBreath also follows the bend range your controller sets with RPN 0, and CLAP tuning expressions.</p>
-  <p>The sax and trumpet bend the way a player lips a note, on the fingering the note was played with. The trumpet keeps its valves, and the sax its whole fingering, for up to three semitones of bend either way, so a bend glides smoothly instead of stepping at each semitone, dropping an octave or losing the note. Past three semitones they change fingering as they go. Bend messages are smoothed over a few milliseconds, so a controller that sends its bend in steps doesn't make a bend buzz. A sax note lipped up two semitones is a little quieter, as a real one is.</p>
+  <p>The sax and trumpet bend the way a player lips a note, on the fingering the note was played with. The trumpet keeps its valves, and the sax its whole fingering, for up to three semitones of bend either way, so a bend glides smoothly instead of stepping at each semitone, dropping an octave or losing the note. Past three semitones they change fingering as they go, and each change glides over about 20 milliseconds, the air column and the reed moving to the new fingering together, so a long slide doesn't crackle or break up at every semitone. A sax slid that far keeps the horn and the register the note started on, so a slide from an alto note down past the alto's range stays an alto's sound instead of jumping to the tenor or baritone partway through. Bend messages are smoothed over a few milliseconds, so a controller that sends its bend in steps doesn't make a bend buzz. A sax note lipped up two semitones is a little quieter, as a real one is.</p>
   <p><strong>Slide</strong> (CC 74, or a CLAP brightness expression) moves the embouchure by the SLIDE amount: on reeds, the bite; on brass, the lips' tension; on the Alien, how wide the jaw opens.</p>
   <h2>Tongue force</h2>
   <p>Whatever the tongue style, a note's velocity is how hard it's tongued: a soft touch starts gently, with little of the tongue's burst and a slower attack, and a hard one with a crisp "ta". With <strong>FORCE</strong> on the PLAYER tab set to <strong>Press</strong>, the tongue's force comes instead from how hard the pressure arrives in the note's first few milliseconds. Use it for a controller whose velocity isn't reliable, or a breath controller with no velocity at all.</p>
@@ -963,7 +963,7 @@ figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
 <section class="back">
   <div class="mid">
     <div class="word"><span class="j">J</span>Breath</div>
-    <div class="small">Breathing physical models · v0.13.3 draft</div>
+    <div class="small">Breathing physical models · v0.13.6 draft</div>
   </div>
   <div class="url">github.com/jeffmhopkins/Jclap</div>
 </section>

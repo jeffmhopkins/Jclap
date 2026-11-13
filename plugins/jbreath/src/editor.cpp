@@ -2584,7 +2584,9 @@ private:
    static std::string rangeText(int model) {
       const TuningTable &t = TuningTable::get();
       char s[128];
-      std::snprintf(s, sizeof(s), "SPEAKS %s – %s  ·  PAST THAT, AN OCTAVE IN",
+      // (Under its range a note keeps its pitch, on the bore stretched down; only the sax, whose
+      // reed goes silent a semitone under its lowest, plays the notes under that an octave up.)
+      std::snprintf(s, sizeof(s), model == kSax ? "SPEAKS %s – %s  ·  PAST THAT, AN OCTAVE IN" : "SPEAKS %s – %s  ·  HIGHER, AN OCTAVE DOWN",
                     ui::noteName(std::max(t.lowest(model), 21)).c_str(), ui::noteName(std::min(t.highest(model), 108)).c_str());
       return s;
    }
