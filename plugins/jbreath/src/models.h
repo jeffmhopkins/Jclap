@@ -843,7 +843,10 @@ public:
       vent_ = best > 0 ? 0.75 * peakHz_ : 0.0;
       // The reed stands less open up the range, as a player's lip firms for the higher notes (more
       // steeply above C#4): wide open on the low notes, which keeps them on their fundamental.
-      open_ = kOpen * std::pow(ha / 277.0, ha < 277.0 ? -0.5 : -1.0);
+      // (Closed as 1/f above C#4, the top notes stood so near their threshold that they crept in
+      // over a tenth of a second, their speaking breath up to twice the middle's, and the very top
+      // note barely sounded at the tuning breath: levelled by the table, it came out 14 dB loud.)
+      open_ = kOpen * std::pow(ha / 277.0, ha < 277.0 ? -0.5 : -0.75);
       // (Once the note is playing, the bore follows the length it's played at, which the tuning
       // table has corrected, from the next sample: set here from the uncorrected pitch, it
       // flipped between two sizes every 16 samples, a buzz of sidebands and, each time the
@@ -993,7 +996,11 @@ private:
       // fingering nearest it (its first, or with the octave key its second).
       const bool upper = 12.0 * std::log2(fhz / member / kLow) >= 15.5;
       const double m = 12.0 * std::log2(ha / kLow) - (upper ? 12.0 : 0.0);
-      const int n = std::clamp(static_cast<int>(std::lround(m)), upper ? 4 : 0, upper ? kTopN : 15);
+      // (The baritone's and the bass's palm keys stop short: on their wider bores the vent leaks
+      // the top fingerings' second resonance away, and the notes there spoke late and rough, 5 to 10
+      // times weaker than the note under them, or not at all. Past the last, the bore stretches.)
+      const int top = member < 0.4 ? kTopBass : member < 0.6 ? kTopBari : kTopN;
+      const int n = std::clamp(static_cast<int>(std::lround(m)), upper ? 4 : 0, upper ? top : 15);
       return upper ? 20 + n - 4 : n;
    }
    // Whether the tuning table's note at `semis` (12 log2 of its Hz) is played on the horn now
@@ -1107,7 +1114,7 @@ private:
                            kOpen = 7e-4, kKick = 0.2, kVentDamp = 8.0,
                            kBigVent = 2.5, kBiggerVent = 10.0, kBigPeakDb = 12.0, kBigShelfDb = 5.0,
                            kQuarterDown = 0.97153;
-   static constexpr int kTopN = 15;
+   static constexpr int kTopN = 15, kTopBari = 9, kTopBass = 6;
    static constexpr double kTopHz = 6500.0;  // the output's 4-pole lowpass
    static constexpr double kBodySec = 0.015;
    static constexpr double kLowLoss = 0.6;  // the walls' loss on the low notes, of the full
@@ -1196,7 +1203,6 @@ public:
       eqLp1_.clear();
       eqLp2_.clear();
       tone_.clear();
-      onT_ = 1.0;
       tnPrev_ = 0.0f;
       shut_ = false;
       gate_ = 1.0;
@@ -1233,27 +1239,18 @@ public:
       player_.tongued(tn);
       // (No scoop up to the note: a real oboe's tongued notes start on their pitch, Philharmonia.)
       const double hz = fs_ / len * std::exp2(player_.wander(rng) / 1200.0);
-      // A low note tongued from rest (Bb3 to E4): the pressure built up behind the tongue is let go
-      // with the reed, an accent of kAccentLow that fades over kAccentSec, as a player's low notes
-      // start (a real oboe's notes all reach full level in about a tenth of a second).
-      onT_ += 1.0 / fs_;
+      // (No accent of its own on a tongued note: the voice pushes every note until it speaks, see
+      // BreathVoice::control(). An accent here on Bb3 to E4 alone held those notes 6 dB loud for a
+      // quarter of a second, against the notes either side, which started without one.)
       // (The tongue's burst rises smoothly with the air, so a note's tonguing starts where it
       // passes a small threshold; only from rest: a note tongued over one still sounding starts at
       // once.)
       const bool tongued = tn > 0.02f && tnPrev_ <= 0.02f;
       const bool fromRest = tongued && pmS_ < 0.05;
-      if (fromRest) {
-         onT_ = 0.0;
+      if (fromRest)
          shut_ = true;
-      }
       tnPrev_ = tn;
       pmB_ += (breath - pmB_) * pmCoef_;
-      // (Its log and exp only while the accent can sound: a low note, blown hard, on a firm reed.)
-      if (const double acc = kAccentLow * std::clamp((breath - kAccentFrom) / 0.25, 0.0, 1.0) * std::clamp(2.0 * character.stiffness, 0.0, 1.0);
-          acc > 0.0 && member_ >= 1.0 && hz_ < 330.0) {
-         const double lowF = std::clamp(std::log2(330.0 / hz_) / 0.5, 0.0, 1.0);
-         breath = static_cast<float>(breath * (1.0 + acc * lowF * std::exp(-onT_ / kAccentSec)));
-      }
       pmS_ += (breath - pmS_) * pmCoef_;
       ticked_ = true;
       if ((at_++ & 15) == 0)
@@ -1421,7 +1418,6 @@ private:
    static constexpr double kHpHz = 204, kHpQ = 0.86, kPk1Hz = 924, kPk1Q = 0.30, kPk1Db = 11.0, kPk2Hz = 1827,
                            kPk2Q = 1.07, kPk2Db = 16.9, kHsHz = 1404, kHsDb = 3.2, kTopHz = 4059;
    static constexpr double kSoftAt = 0.7, kSoftDb = -7.2, kSoftHz = 3.00, kSoftGain = 4.0;
-   static constexpr double kAccentSec = 0.1, kAccentFrom = 0.15, kAccentLow = 2.0;
    Delay bore_, tip_;
    OnePoleLP lp1_, lp2_, tipLp_, breathLP_;
    DCBlock dc_;
@@ -1433,7 +1429,7 @@ private:
    double tipSamples_ = 0.0, outGain_ = 1.0, level_ = 1.0, lpDelay_ = 0.0, refl_ = kRefl;
    double s_ = 0.0, flowPrev_ = 0.0, gate_ = 1.0, liftSec_ = 0.01;
    double edgeAt_ = -1e9, kn_ = 0.05;
-   double onT_ = 1.0, pmS_ = 0.0, pmB_ = 0.0, pmCoef_ = 0.01;
+   double pmS_ = 0.0, pmB_ = 0.0, pmCoef_ = 0.01;
    float tnPrev_ = 0.0f, softGain_ = 1.0f;
    bool shut_ = false;
 };

@@ -241,6 +241,17 @@ std::vector<Entry> bake(double fs) {
             std::fprintf(stderr, "%s%s %d: %s %.4f %.2f %.3f\n", modelInfo(id).name, row >= kModelCount ? " (horn)" : "",
                          kFirst + k, e.plays ? "plays" : "-----", e.ratio, e.gain, e.speak);
          }
+         // (A sax's top note, its bore stretched past the top fingering, stands so near its threshold
+         // at the tuning breath that it reads quiet there and was levelled 8 to 12 dB loud once
+         // blown: its level no more than the note's under it.)
+         if (id == kSax) {
+            Entry *r = &table[row * kNotes];
+            int top = kNotes - 1;
+            while (top > 0 && !r[top].plays)
+               --top;
+            if (top > 0 && r[top - 1].plays)
+               r[top].gain = std::min(r[top].gain, r[top - 1].gain);
+         }
       });
    for (auto &w : workers)
       w.join();

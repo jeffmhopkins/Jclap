@@ -157,7 +157,9 @@ private:
             // A and Ab, where no reed finds a note and it would go silent, goes up an octave.
             const bool sax = m == kSax || m >= kModelCount;
             int k = note;
-            while (sax && k < low_[m] - kSaxStretch) {
+            // (G#1, held a semitone under the low A on the bore stretched, came out a third of a
+            // semitone flat and without a steady pitch.)
+            while (sax && k < low_[m]) {
                k += 12;
                ++r.octaves;
             }
@@ -183,7 +185,6 @@ private:
          }
       }
    }
-   static constexpr int kSaxStretch = 1;  // semitones a sax plays under its lowest tuned note
    Resolved notes_[kTuneRows][128];
    int low_[kTuneRows] = {}, high_[kTuneRows] = {};
 };
@@ -334,6 +335,7 @@ public:
       gainCoef_ = coef(5.0);
       synthCoef_ = coef(4.0);
       envCoef_ = coef(30.0);
+      speakCoef_ = coef(3.0);
       fray4Coef_ = static_cast<float>(1.0 - std::pow(1.0 - envCoef_, 4.0));
       pulseLength_ = std::max(1, static_cast<int>(kPulseMs * 0.001 * fs_));
       valveLength_ = std::max(1, static_cast<int>(kValveMs * 0.001 * fs_));
@@ -440,6 +442,9 @@ private:
       stop_ = false;
       age_ = 0;
       kickAge_ = 0;
+      spokenAt_ = -1;
+      sweepAt_ = 1 << 30;
+      speakEnv_ = 0.0;
       pulseAt_ = -1;
       velocity_ = velocity;
       // (With the tongue's force from the finger, it's known once the pressure has arrived.)
@@ -478,6 +483,9 @@ public:
       stop_ = true;
       age_ = 0;
       kickAge_ = -static_cast<int>(0.035 * fs_);
+      spokenAt_ = -1;
+      sweepAt_ = 1 << 30;
+      speakEnv_ = 0.0;
       pulseAt_ = -1;
       velocity_ = velocity;
       tongue_ = tongueAmount();
@@ -497,6 +505,9 @@ public:
       // Double tonguing: every note gets its own light tongue, even slurred.
       if (settings_.tongueType == kTongueDouble) {
          kickAge_ = 0;
+         spokenAt_ = -1;
+         sweepAt_ = 1 << 30;
+         speakEnv_ = 0.0;
          pulseAt_ = -1;
          tongue_ = 0.6f * strike();
       }
@@ -709,6 +720,9 @@ public:
       // starting leave a lot.
       // (At five periods a little either side of the note's, so a note a few cents off its pitch,
       // or wavering with vibrato, still reads as steady: the least of the five.)
+      // How loud the note is over its first few ms, until it has spoken (see control()).
+      if (spokenAt_ < 0 && kickAge_ >= 0)
+         speakEnv_ += (std::fabs(y) - speakEnv_) * speakCoef_;
       past_[pastPos_] = y;
       // (Each lag's whole samples back and its fraction are set with the period, in control().)
       // (Read every 4th sample, its follower stepped 4 at a time: a 30 ms level needs no more.)
@@ -731,6 +745,13 @@ private:
    // the extra breath that starts a soft note and how long it lasts, how long velocity waits for
    // pressure, how quickly a sounding voice fades for the next note, and a level under which a
    // voice is silent enough to restart at once. Each release stage is the Release time over this.
+   // The support's hold on a sax or oboe (see control()): released once the note is up to kSpeakAt
+   // (20 dB under) the level it holds at its breath (which goes as its pressure to kSpeakSlope, the
+   // same up the whole range: the tuning table's gains level it), not before kSpeakMinMs, then eased
+   // over kSettlePeriods of the note (no quicker than kSettleMinMs, no slower than its supportMs()).
+   // A note not spoken by kHoldMs gets the support swept down from the low note's full measure.
+   static constexpr double kSpeakMinMs = 4.0, kSpeakAt = 0.1, kSpeakSlope = 0.65, kHoldMs = 60.0,
+                           kSettlePeriods = 4.0, kSettleMinMs = 8.0, kHeldFloor = 0.8;
    static constexpr double kKickMs = 25.0, kSupportMs = 60.0, kWaitMs = 6.0, kFadeMs = 4.0,
                            kPulseMs = 4.0, kShortestAttackMs = 2.0;
    // The tongue's valve: it lets go once the mouth's pressure is this far past where the note
@@ -843,8 +864,13 @@ private:
    double periodRatio() const { return std::exp2((articulation().middle - pitch_) / 12.0); }
    double supportMs() const { return kSupportMs * std::clamp(periodRatio(), 0.5, 2.5); }
    double supportAmount() const {
-      return articulation().support * std::pow(std::clamp(periodRatio(), 1.0, 2.5), articulation().low);
+      // (A sax's or oboe's is held until the note speaks, and only grows to the low note's while it
+      // hasn't: see control().)
+      if (articulation().hold)
+         return articulation().support;
+      return articulation().support * lowBoost();
    }
+   double lowBoost() const { return std::pow(std::clamp(periodRatio(), 1.0, 2.5), articulation().low); }
 
    // Each tongue's burst of pressure, its noise, and how it eases the attack.
    double kickScale() const {
@@ -901,11 +927,12 @@ private:
    // kick and the support's timing are set for.
    struct Articulation {
       double surge, kick, support, noise, middle, low;
+      bool hold;   // the support held until the note speaks (see control())
    };
    const Articulation &articulation() const {
       static const Articulation table[kModelCount] = {
-         {1.0, 0.6, 0.25, 0.5, 72.0, 0.0}, {0.25, 0.6, 0.1, 1.0, 62.0, 0.0}, {1.0, 1.0, 0.6, 1.0, 61.0, 0.8},
-         {1.0, 0.7, 0.6, 1.0, 69.0, 0.8},  {1.0, 0.4, 0.25, 1.0, 65.0, 0.0},  {0.25, 0.4, 0.3, 0.5, 62.0, 0.5},
+         {1.0, 0.6, 0.25, 0.5, 72.0, 0.0, false}, {0.25, 0.6, 0.1, 1.0, 62.0, 0.0, false}, {1.0, 1.0, 0.6, 1.0, 61.0, 0.8, true},
+         {1.0, 0.7, 0.6, 1.0, 69.0, 0.8, true},  {1.0, 0.4, 0.25, 1.0, 65.0, 0.0, false},  {0.25, 0.4, 0.3, 0.5, 62.0, 0.5, false},
       };
       return table[settings_.model];
    }
@@ -1008,7 +1035,38 @@ private:
       if (stop_ && kickAge_ >= 0)
          stop_ = false;
       kickEnv_ = kickAge_ >= 0 ? std::exp(-kickAge_ / (kKickMs * 0.001 * fs_)) : 0.0;
-      supportEnv_ = kickAge_ >= 0 ? std::exp(-kickAge_ / (supportMs() * 0.001 * fs_)) : 0.0;
+      // On a sax or oboe the extra breath that starts a note is held until the note speaks, then
+      // eased off over a few of its periods, as a player keeps pushing until the reed catches and
+      // then settles: a note near its threshold (a sax's top notes) is pushed until it speaks
+      // instead of creeping in over a tenth of a second, and one that catches at once (a low note
+      // blown softly) isn't pushed on past it into a burst many dB over the note. (Timed by the
+      // period alone, the start of a note changed across the range at the same velocity and
+      // pressure: low notes started with a burst, high ones crept in.) Spoken is kSpeakAt of the
+      // level the note holds at this pressure, against its tuning level. While held, the support
+      // eases as it always did but no lower than kHeldFloor (held at its full measure, a hard
+      // strike on light pressure started with a click).
+      if (kickAge_ < 0) {
+         supportEnv_ = 0.0;
+      } else if (!articulation().hold || kickAge_ >= sweepAt_) {
+         // (Or, on a sax or oboe, a note that hasn't spoken after kHoldMs: the support as it always
+         // was, from the low note's full measure, easing off over its supportMs(), which sweeps the
+         // breath down through wherever the reed catches. Held at one push, a stubborn low note,
+         // its threshold high, could stay silent.)
+         const int from = articulation().hold ? sweepAt_ : 0;
+         supportEnv_ = (articulation().hold ? lowBoost() : 1.0) * std::exp(-(kickAge_ - from) / (supportMs() * 0.001 * fs_));
+      } else {
+         if (spokenAt_ < 0 && kickAge_ >= kSpeakMinMs * 0.001 * fs_) {
+            const double tuned = 0.1 * modelInfo(settings_.model).level * gain_ * levelMod_ * unisonGain_;
+            const double held = tuned * std::pow(std::max(levelNow_, 0.02) / 0.6, kSpeakSlope);
+            if (speakEnv_ > kSpeakAt * held)
+               spokenAt_ = kickAge_;
+            else if (kickAge_ >= kHoldMs * 0.001 * fs_)
+               sweepAt_ = kickAge_;
+         }
+         const double settle = std::clamp(kSettlePeriods * period_, 0.001 * kSettleMinMs * fs_, 0.001 * supportMs() * fs_);
+         const auto heldAt = [this](int age) { return std::max(std::exp(-age / (supportMs() * 0.001 * fs_)), kHeldFloor); };
+         supportEnv_ = spokenAt_ < 0 ? heldAt(kickAge_) : heldAt(spokenAt_) * std::exp(-(kickAge_ - spokenAt_) / settle);
+      }
       supportNow_ = supportAmount();
       tongueDecay_ = ctl_.tongueDecay;
 
@@ -1346,6 +1404,9 @@ private:
          pressPeak_ = p;
          velocity_ = std::clamp(pushRate_ / 10.0, 0.2, 1.0);
          kickAge_ = 0;
+         spokenAt_ = -1;
+         sweepAt_ = 1 << 30;
+         speakEnv_ = 0.0;
          pulseAt_ = -1;
          tongue_ = tongueAmount();
          updateAttack();
@@ -1663,6 +1724,8 @@ private:
       float tongueDecay = 0.9994f;
    } ctl_;
    double fallCoef_ = 0.001, stopCoef_ = 0.01, gainCoef_ = 0.002, envCoef_ = 0.0003;
+   double speakEnv_ = 0.0, speakCoef_ = 0.01;
+   int spokenAt_ = -1, sweepAt_ = 1 << 30;
    double kickEnv_ = 0.0, supportEnv_ = 0.0, supportNow_ = 0.0, vibBreath_ = 1.0, vibRate_ = 5.1, vibAmt_ = 1.0, vibPhase_ = 0.0;
    double env_ = 0.0;
    float tongue_ = 0.0f, tongueDecay_ = 0.9994f;
