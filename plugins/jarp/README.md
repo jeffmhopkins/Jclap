@@ -50,7 +50,7 @@ note name, with a dot beside it.
   alternating play the root and fifth of any chord.
 
 Each row's label shows the note it plays and its MIDI channel. In DEGREE mode a row whose degree
-isn't held shows the note it wanted, as `≈ F3`. Three hairlines along the bottom of each label follow
+isn't held shows the note it wanted, as `wants F3`. Three hairlines along the bottom of each label follow
 that finger live: pressure (blue), slide, CC74 (purple), and bend from the middle (orange).
 
 ## The lanes

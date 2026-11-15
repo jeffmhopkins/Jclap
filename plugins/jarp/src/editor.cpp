@@ -191,7 +191,7 @@ public:
          c.setColor(playing ? kOrange : t.text);
          c.text(ui::noteName(v.key), ui::font(11.5f * s), visage::Font::kLeft, (degree ? 32 : 25) * s, y * s, 40 * s, 20 * s);
          c.setColor(t.dimText);
-         const std::string note = v.target >= 0 ? "\xe2\x89\x88 " + ui::noteName(v.target) : "ch " + std::to_string(v.channel + 1);
+         const std::string note = v.target >= 0 ? "wants " + ui::noteName(v.target) : "ch " + std::to_string(v.channel + 1);
          c.text(note, ui::font(9.5f * s), visage::Font::kLeft, 68 * s, y * s, 50 * s, 20 * s);
          // Hairlines: pressure and slide from the left, bend from the middle.
          const float lx = 7, lw = 115, ly = y + 22;
@@ -604,7 +604,7 @@ public:
       emptyLabel_ = &rowsLabel(680, "EMPTY ROWS");
       empty_ = &choice(kEmptyRows, {773, 89, 99, 22}, {"REST", "WRAP"});
       tips_.add(*empty_, "Rows above the notes held: Rest stays silent; Wrap starts again from the lowest note.");
-      scaleLabel_ = &rowsLabel(680, "SCALE");
+      scaleLabel_ = &rowsLabel(650, "SCALE");
       key_ = &add<ui::Dropdown>({735, 89, 52, 22}, std::vector<std::string>(std::begin(kKeyNames), std::end(kKeyNames)));
       key_->setAccent(kSlate);
       bindings_.bind(*key_, kKey);
