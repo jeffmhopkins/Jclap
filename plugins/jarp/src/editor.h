@@ -3,6 +3,8 @@
 // JArp's panel. Kept behind this small interface so plugin.cpp never includes Visage.
 
 #include <memory>
+#include <utility>
+#include <vector>
 #include <string>
 
 #include <jclap/ui/params.h>
@@ -43,8 +45,8 @@ std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // Draws the panel offscreen at the given pixel size and saves it as a PNG, with the dice card open
 // if `dice`.
-// With pickRow, the note starting on (pickRow, pickStep) is picked, as a right-click on it would.
+// The notes starting on each (row, step) of `picks` are picked, as right- and shift-clicks would.
 bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, bool dice = false,
-                      int pickRow = -1, int pickStep = 0);
+                      const std::vector<std::pair<int, int>> &picks = {});
 
 } // namespace jarp

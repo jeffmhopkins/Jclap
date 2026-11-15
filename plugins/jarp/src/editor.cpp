@@ -97,17 +97,58 @@ const char *ordinal(int row) {
 struct GridScroll {
    int first = 0;
    bool follow = true;
-   // The note picked (right-click) for its own lane values, by slot, row and step; slot -1 for none.
-   int pickSlot = -1, pickRow = 0, pickStep = 0;
+   // The notes picked (right-click, shift-click or a box) for their own lane values, by slot and
+   // each one's row and step; slot -1 for none.
+   int pickSlot = -1;
+   std::vector<std::pair<int, int>> picks;
 
-   // The picked note's index in `p` (the pattern in `slot`), or -1.
-   int picked(const Pattern &p, int slot) const { return pickSlot == slot ? p.noteStarting(pickRow, pickStep) : -1; }
+   // The picked notes' indices in `p` (the pattern in `slot`).
+   std::vector<int> picked(const Pattern &p, int slot) const {
+      std::vector<int> out;
+      if (pickSlot == slot)
+         for (const auto &[row, step] : picks)
+            if (const int i = p.noteStarting(row, step); i >= 0)
+               out.push_back(i);
+      return out;
+   }
+   bool isPicked(const Pattern &p, int slot, int i) const {
+      const auto v = picked(p, slot);
+      return std::find(v.begin(), v.end(), i) != v.end();
+   }
+   // The first picked note starting on `step`, or -1.
+   int pickedOn(const Pattern &p, int slot, int step) const {
+      for (int i : picked(p, slot))
+         if (p.notes[i].step == step)
+            return i;
+      return -1;
+   }
+   bool any(const Pattern &p, int slot) const { return !picked(p, slot).empty(); }
+   // Picks `n` alone, or adds it to (or takes it from) the picked notes.
    void pick(int slot, const Note &n) {
       pickSlot = slot;
-      pickRow = n.row;
-      pickStep = n.step;
+      picks = {{n.row, n.step}};
    }
-   void unpick() { pickSlot = -1; }
+   void toggle(int slot, const Note &n) {
+      if (pickSlot != slot)
+         picks.clear();
+      pickSlot = slot;
+      const std::pair<int, int> k{n.row, n.step};
+      const auto it = std::find(picks.begin(), picks.end(), k);
+      if (it != picks.end())
+         picks.erase(it);
+      else
+         picks.push_back(k);
+   }
+   void pickAll(int slot, const Pattern &p, const std::vector<int> &which) {
+      pickSlot = slot;
+      picks.clear();
+      for (int i : which)
+         picks.push_back({p.notes[i].row, p.notes[i].step});
+   }
+   void unpick() {
+      pickSlot = -1;
+      picks.clear();
+   }
 
    // Brings `first` up to date for a pattern of `len` steps with the playhead on `playStep` (or -1).
    void update(int len, int playStep) {
@@ -163,8 +204,8 @@ public:
 
       // Notes, clipped to the steps in view (a long note may start before them). Each shows its own
       // lane over its step's: softer notes fainter, the octave as a tag, ratchets as splits, a dot
-      // when it has values of its own, and a white edge on the note picked for editing.
-      const int picked = scroll_.picked(p, slotIndex(host_.paramValue(kSlot)));
+      // when it has values of its own, and a white edge on the notes picked for editing.
+      const std::vector<int> picked = scroll_.picked(p, slotIndex(host_.paramValue(kSlot)));
       c.saveState();
       c.trimClampBounds((kGridX - 1) * s, 0, (kBarW + 2) * s, height());
       for (int i = 0; i < p.count; ++i) {
@@ -236,12 +277,22 @@ public:
             c.setColor(alpha(0xffffffff, live ? 0.9f : 0.4f));
             c.circle((x + 3) * s, (y + 3) * s, 4 * s);
          }
-         if (i == picked) {
+         if (std::find(picked.begin(), picked.end(), i) != picked.end()) {
             c.setColor(0xffffffff);
             c.roundedRectangleBorder((x - 2) * s, (y - 2) * s, (w + 4) * s, (kCellH + 4) * s, 4 * s, 1.5f * s);
          }
       }
       c.restoreState();
+
+      // The box being dragged out to pick notes.
+      if (drag_ == Drag::Box) {
+         const float bx = std::min(boxX0_, boxX1_), by = std::min(boxY0_, boxY1_);
+         const float bw = std::abs(boxX1_ - boxX0_), bh = std::abs(boxY1_ - boxY0_);
+         c.setColor(alpha(0xffffffff, 0.08f));
+         c.fill(bx * s, by * s, bw * s, bh * s);
+         c.setColor(alpha(0xffffffff, 0.7f));
+         c.roundedRectangleBorder(bx * s, by * s, bw * s, bh * s, 2 * s, 1.0f * s);
+      }
 
       // The playhead line, moving through the step in time with the transport.
       if (here && f.position >= first && f.position < first + kView) {
@@ -373,29 +424,56 @@ public:
       const int quarter = first * kQuarters + static_cast<int>(std::floor((x - kGridX) / kColumn * kQuarters));
       const int at = p.noteAt(row, std::min(quarter, kMaxLength - 1));
       const int slot = slotIndex(host_.paramValue(kSlot));
-      // Right-click picks a note (or lets it go) for editing its own lane values below.
-      if (e.shouldTriggerPopup()) {
-         if (at >= 0 && at != scroll_.picked(p, slot))
-            scroll_.pick(slot, p.notes[at]);
-         else
+      // Right-click picks a note (or lets it go) for editing its own lane values below; shift-click
+      // (either button) adds it to the picked notes or takes it out. From an empty cell, either drags
+      // out a box that picks the notes it touches.
+      const bool adding = e.isShiftDown();
+      if (e.shouldTriggerPopup() || adding) {
+         if (at >= 0) {
+            const std::vector<int> now = scroll_.picked(p, slot);
+            if (adding)
+               scroll_.toggle(slot, p.notes[at]);
+            else if (now.size() == 1 && now[0] == at)
+               scroll_.unpick();
+            else
+               scroll_.pick(slot, p.notes[at]);
+            redrawAll();
+            return;
+         }
+         if (!adding)
             scroll_.unpick();
+         else if (scroll_.pickSlot != slot)
+            scroll_.unpick();
+         boxBase_ = scroll_.picks;
+         boxX0_ = boxX1_ = x;
+         boxY0_ = boxY1_ = y;
+         drag_ = Drag::Box;
          redrawAll();
          return;
       }
       Pattern next = p;
       if (at >= 0) {
          const Note &n = p.notes[at];
+         // The right edge sets the length; on a short note, only its last third, so it can still move.
          const float right = kGridX + (n.step - first) * kColumn + noteWidth(n.length);
-         if (right - x < 8) {
+         if (right - x < std::min(8.0f, noteWidth(n.length) / 3)) {
             drag_ = Drag::Length;
             note_ = at;
             return;
          }
-         if (at == scroll_.picked(p, slot))
-            scroll_.unpick();
-         next.remove(at);
-         commit(next);
-         redrawAll();
+         // Dragging a note moves it (and the other picked notes with it, if it's picked); a click
+         // without a drag removes it, on the way up.
+         drag_ = Drag::Move;
+         note_ = at;
+         moveBase_ = p;
+         moveX_ = x;
+         moveY_ = y;
+         moved_ = false;
+         moving_ = scroll_.isPicked(p, slot, at) ? scroll_.picked(p, slot) : std::vector<int>{at};
+         movingKeys_.clear();
+         for (int i : moving_)
+            movingKeys_.push_back({p.notes[i].row, p.notes[i].step});
+         basePicks_ = scroll_.picks;
          return;
       }
       // A cell's gap belongs to the cell before it.
@@ -412,9 +490,35 @@ public:
 
    void mouseDrag(const visage::MouseEvent &e) override {
       const float s = ui::designScale(*this);
-      const float x = e.position.x / s;
+      const float x = e.position.x / s, y = e.position.y / s;
       if (drag_ == Drag::Scroll) {
          scrollTo(x);
+         return;
+      }
+      if (drag_ == Drag::Box) {
+         boxX1_ = x;
+         boxY1_ = y;
+         pickBox();
+         redrawAll();
+         return;
+      }
+      if (drag_ == Drag::Move) {
+         if (!moved_ && std::abs(x - moveX_) < 5 && std::abs(y - moveY_) < 5)
+            return;
+         moved_ = true;
+         const int steps = static_cast<int>(std::lround((x - moveX_) / kColumn));
+         const int rows = -static_cast<int>(std::lround((y - moveY_) / kRowPitch));
+         Pattern next = moveBase_;
+         if (!next.move(moving_, rows, steps))
+            return;
+         // The picked notes that moved stay picked where they land.
+         scroll_.picks = basePicks_;
+         for (auto &k : scroll_.picks)
+            if (std::find(movingKeys_.begin(), movingKeys_.end(), k) != movingKeys_.end())
+               k = {k.first + rows, k.second + steps};
+         if (next != host_.pattern())
+            commit(next);
+         redrawAll();
          return;
       }
       if (drag_ == Drag::End) {
@@ -444,8 +548,19 @@ public:
    }
 
    void mouseUp(const visage::MouseEvent &) override {
+      if (drag_ == Drag::Move && !moved_ && note_ >= 0 && note_ < host_.pattern().count) {
+         Pattern next = host_.pattern();
+         const std::pair<int, int> k{next.notes[note_].row, next.notes[note_].step};
+         scroll_.picks.erase(std::remove(scroll_.picks.begin(), scroll_.picks.end(), k), scroll_.picks.end());
+         next.remove(note_);
+         commit(next);
+      }
+      const bool box = drag_ == Drag::Box;
       drag_ = Drag::None;
       note_ = -1;
+      if (box || moved_)
+         redrawAll();
+      moved_ = false;
    }
 
    void mouseMove(const visage::MouseEvent &e) override {
@@ -472,7 +587,29 @@ public:
    std::function<void()> onScroll;
 
 private:
-   enum class Drag { None, Length, End, Scroll };
+   enum class Drag { None, Length, End, Scroll, Move, Box };
+
+   // Picks the notes the box touches, with those picked before it when shift started it.
+   void pickBox() {
+      const Pattern &p = host_.pattern();
+      const int slot = slotIndex(host_.paramValue(kSlot));
+      const float x0 = std::min(boxX0_, boxX1_), x1 = std::max(boxX0_, boxX1_);
+      const float y0 = std::min(boxY0_, boxY1_), y1 = std::max(boxY0_, boxY1_);
+      scroll_.pickSlot = slot;
+      scroll_.picks = boxBase_;
+      for (int i = 0; i < p.count; ++i) {
+         const Note &n = p.notes[i];
+         const float nx = kGridX + (n.step - scroll_.first) * kColumn, ny = rowY(n.row);
+         const float nx1 = std::min(nx + noteWidth(n.length), kGridX + kBarW);
+         if (nx1 < x0 || nx > x1 || ny + kCellH < y0 || ny > y1 || nx1 < kGridX)
+            continue;
+         const std::pair<int, int> k{n.row, n.step};
+         if (std::find(scroll_.picks.begin(), scroll_.picks.end(), k) == scroll_.picks.end())
+            scroll_.picks.push_back(k);
+      }
+      if (scroll_.picks.empty())
+         scroll_.pickSlot = -1;
+   }
 
    static constexpr float kFollowX = 84.0f, kFollowW = 42.0f;
 
@@ -518,6 +655,15 @@ private:
    Drag drag_ = Drag::None;
    int note_ = -1;
    bool hoverBar_ = false;
+   // A move: the pattern before it, where it started, the notes moving and the picks before it.
+   Pattern moveBase_;
+   float moveX_ = 0.0f, moveY_ = 0.0f;
+   bool moved_ = false;
+   std::vector<int> moving_;
+   std::vector<std::pair<int, int>> movingKeys_, basePicks_;
+   // A box: its corners, and the picks it adds to.
+   float boxX0_ = 0.0f, boxY0_ = 0.0f, boxX1_ = 0.0f, boxY1_ = 0.0f;
+   std::vector<std::pair<int, int>> boxBase_;
 };
 
 // The lanes under the grid, a cell per step: Octave, Ratchet (with its P toggle) and Velocity.
@@ -540,18 +686,25 @@ public:
       const Pattern &p = host_.pattern();
       const int len = std::clamp<int>(p.length, 1, kSteps);
       const char *const names[] = {"OCTAVE", "RATCHET", "VELOCITY", "CHANCE"};
-      const int picked = scroll_.picked(p, slotIndex(host_.paramValue(kSlot)));
+      const int slot = slotIndex(host_.paramValue(kSlot));
+      const size_t picks = scroll_.picked(p, slot).size();
       for (int lane = 0; lane < kLanes; ++lane) {
          c.setColor(t.dimText);
          c.text(names[lane], ui::font(10.5f * s), visage::Font::kLeft, 7 * s, kLaneY[lane] * s, 120 * s, kLaneH * s);
       }
-      if (picked >= 0) {
+      if (picks) {
+         char label[16];
+         if (picks == 1)
+            std::snprintf(label, sizeof(label), "NOTE");
+         else
+            std::snprintf(label, sizeof(label), "%zu NOTES", picks);
          c.setColor(0xffffffff);
-         c.text("NOTE", ui::font(8 * s), visage::Font::kLeft, 82 * s, kLaneY[0] * s, 40 * s, kLaneH * s);
+         c.text(label, ui::font(8 * s), visage::Font::kLeft, 74 * s, kLaneY[0] * s, 50 * s, kLaneH * s);
       }
       for (int col = 0; col < kView; ++col) {
          const int step = scroll_.first + col;
-         const bool mine = picked >= 0 && p.notes[picked].step == step;
+         const int picked = scroll_.pickedOn(p, slot, step);
+         const bool mine = picked >= 0;
          const Lane l = mine ? p.laneOf(picked) : p.lanes[step];
          const uint8_t own = mine ? p.notes[picked].own : kOwnAll;
          const float base = step < len ? 1.0f : 0.35f;
@@ -641,9 +794,10 @@ public:
          return;
       }
       if (e.repeatClickCount() >= 2) {
-         // A note hands the value back to its step (on the ratchet, P with it).
+         // The picked notes hand the value back to their steps (on the ratchet, P with it).
          if (note >= 0)
-            p.notes[note].own &= static_cast<uint8_t>(~(lane_ == 1 ? kOwnRatchet | kOwnPressure : bitFor(lane_)));
+            for (int i : pickedNotes(p))
+               p.notes[i].own &= static_cast<uint8_t>(~(lane_ == 1 ? kOwnRatchet | kOwnPressure : bitFor(lane_)));
          else {
             Lane &l = p.lanes[col_];
             if (lane_ == 0)
@@ -718,19 +872,21 @@ private:
    static uint8_t bitFor(int lane) {
       return lane == 0 ? kOwnOctave : lane == 1 ? kOwnRatchet : lane == 2 ? kOwnVelocity : kOwnChance;
    }
-   // The picked note, if it starts on `step`; -1 when the step's own lane is what's edited.
-   int noteFor(const Pattern &p, int step) const {
-      const int i = scroll_.picked(p, slotIndex(host_.paramValue(kSlot)));
-      return i >= 0 && p.notes[i].step == step ? i : -1;
-   }
+   // A picked note starting on `step`; -1 when the step's own lane is what's edited.
+   int noteFor(const Pattern &p, int step) const { return scroll_.pickedOn(p, slotIndex(host_.paramValue(kSlot)), step); }
+   std::vector<int> pickedNotes(const Pattern &p) const { return scroll_.picked(p, slotIndex(host_.paramValue(kSlot))); }
    static Lane laneAt(const Pattern &p, int step, int note) { return note >= 0 ? p.laneOf(note) : p.lanes[step]; }
-   // Writes `l` back: to the step, or to the note as its own value for `bit` (which it then keeps).
-   static void store(Pattern &p, int step, int note, const Lane &l, uint8_t bit) {
+   // Writes `l` back: to the step, or, editing a picked note, to every picked note as its own value
+   // for `bit` (which each then keeps), so one edit sets them all.
+   void store(Pattern &p, int step, int note, const Lane &l, uint8_t bit) const {
       if (note < 0) {
          p.lanes[step] = l;
          return;
       }
-      Note &n = p.notes[note];
+      for (int i : pickedNotes(p))
+         storeNote(p.notes[i], l, bit);
+   }
+   static void storeNote(Note &n, const Lane &l, uint8_t bit) {
       n.own |= bit;
       if (bit & kOwnOctave)
          n.lane.octave = l.octave;
@@ -1075,14 +1231,15 @@ public:
       grid_->onScroll = [this] { lanes_->redraw(); };
       grid_->onEdit = [this](const Pattern &p) { edit(p); };
       tips_.add(*grid_, "Click a cell for a note and drag right to lengthen it; drag a note's right edge to set how "
-                        "long it sounds; click a note to remove it. Right-click a note to give it lane values of its own. Drag "
-                        "the purple bar to set the pattern's length.");
+                        "long it sounds; drag a note to move it; click a note to remove it. Right-click a note to give it lane "
+                        "values of its own; shift-click to pick more, or right-drag a box around them. Dragging a picked note "
+                        "moves them all. Drag the purple bar to set the pattern's length.");
       add<ui::Divider>({27, 445, 846, 1});
       lanes_ = &add<LaneView>({20, 450, 862, 96}, host_, scroll_);
       lanes_->onEdit = [this](const Pattern &p) { edit(p); };
       tips_.add(*lanes_, "Per step, for the notes starting on it: drag up or down, scroll, or double-click to reset. "
-                         "Click P to make that step's ratchet follow pressure. Chance is how often the step plays, in percent. With a note picked (right-click it), its "
-                         "column sets that note's own values; double-click gives one back to the step.");
+                         "Click P to make that step's ratchet follow pressure. Chance is how often the step plays, in percent. With notes picked (right-click them), "
+                         "a picked note's column sets the own values of every picked note; double-click gives one back to the step.");
 
       // Settings.
       add<SettingsCard>({12, 568, 876, 142});
@@ -1183,11 +1340,12 @@ public:
                   visage::Font::kRight, 400 * s, (y - 7) * s, 486 * s, 14 * s);
    }
 
-   // Picks the note starting on (row, step) of the selected slot, as a right-click on it would.
+   // Adds the note starting on (row, step) of the selected slot to the picked notes, as a
+   // shift-click on it would.
    void pickNote(int row, int step) {
       const int i = host_.pattern().noteStarting(row, step);
       if (i >= 0)
-         scroll_.pick(slotIndex(host_.paramValue(kSlot)), host_.pattern().notes[i]);
+         scroll_.toggle(slotIndex(host_.paramValue(kSlot)), host_.pattern().notes[i]);
    }
 
    void showDice(bool open) {
@@ -1465,13 +1623,13 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
                                        ui::WindowOptions{static_cast<int>(kDesignWidth), static_cast<int>(kDesignHeight)});
 }
 
-bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, bool dice, int pickRow,
-                      int pickStep) {
+bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, bool dice,
+                      const std::vector<std::pair<int, int>> &picks) {
    Panel panel(host);
    panel.stopTimer();
    panel.showDice(dice);
-   if (pickRow >= 0)
-      panel.pickNote(pickRow, pickStep);
+   for (const auto &[row, step] : picks)
+      panel.pickNote(row, step);
    panel.setBounds(0, 0, static_cast<float>(width), static_cast<float>(height));
    panel.sync();
    return ui::renderToPng(panel, width, height, pngPath);
