@@ -14,24 +14,41 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.2.0.
+Version 0.3.0.
 
 ![Panel](docs/panel.png)
 
 ## The grid
 
-Eight rows by sixteen steps. Row 1 is at the bottom.
+Eight rows by up to 128 steps, sixteen in view at a time. Row 1 is at the bottom.
 
 - **Click an empty cell** for a one-step note, and drag right while you hold the button to make it
   longer.
 - **Drag a note's right edge** to set how long it sounds, in quarter steps, from a quarter of a step to
   the whole pattern. A note stops at the next note in its row.
 - **Click a note** to remove it.
-- **Drag the purple bar** (or its tab) to set the pattern's length, from 1 to 16 steps. The LENGTH knob
-  is the same setting. Each pattern has its own length.
+- **Drag the purple bar** (or its tab) to set the pattern's length, from 1 to 128 steps. Drag it past
+  the right edge and the grid scrolls on with it. The LENGTH knob is the same setting. Each pattern
+  has its own length.
 
 There is no gate setting: a note's length on the grid is its gate. A note on row 1 drawn across the
 whole pattern holds a pedal under the rest.
+
+### Long patterns
+
+A pattern longer than 16 steps scrolls. A bar under the step numbers shows the whole pattern: the
+lighter part is the 16 steps in view, the ticks are steps where notes start, and the orange line is
+the playhead. Beside it, the steps in view (`17-32 of 48`) and **FOLLOW**.
+
+![A long pattern](docs/long.png)
+
+- With **FOLLOW** lit, the grid turns the page as the playhead moves on, 16 steps at a time.
+- **Drag along the bar** (or the step numbers above it), or scroll the mouse wheel over the grid, to
+  look elsewhere. That turns FOLLOW off; click it to follow again.
+- The lanes under the grid scroll with it.
+
+Notes and lane settings past the pattern's length are kept, dimmed, so shortening a pattern and
+lengthening it again loses nothing.
 
 The column with a frame round it is the step playing. A note playing lights up, and so does its row's
 note name, with a dot beside it.
@@ -98,7 +115,7 @@ scroll on it, to change it; double-click to set it back.
 
 - **RATE**: how long a step is, from 1/32 to 1/4, with triplets.
 - **SWING**: moves every second step later, from 50% (straight) to 75%.
-- **LENGTH**: steps before this pattern loops, 1 to 16. Each pattern has its own.
+- **LENGTH**: steps before this pattern loops, 1 to 128. Each pattern has its own.
 
 **PLAYBACK**
 

@@ -96,7 +96,7 @@ inline Pattern randomizePattern(const Pattern &from, const DiceSettings &d, int 
                      return i;
                return -1;
             }();
-            Note n{0, static_cast<uint8_t>(s), static_cast<uint8_t>(kQuarters)};
+            Note n{0, static_cast<uint8_t>(s), static_cast<uint16_t>(kQuarters)};
             if (at >= 0)
                n.row = from.notes[at].row;
             notes.push_back(n);
@@ -109,7 +109,7 @@ inline Pattern randomizePattern(const Pattern &from, const DiceSettings &d, int 
       if (d.on[kDiceNotes] && n.step < len)
          n.row = static_cast<uint8_t>(rng.range(0, rows - 1));
       if (d.on[kDiceLength] && n.step < len)
-         n.length = static_cast<uint8_t>(dice_detail::rollLength(rng, std::clamp(d.length, 1, 16)));
+         n.length = static_cast<uint16_t>(dice_detail::rollLength(rng, std::clamp(d.length, 1, 16)));
       else if (d.on[kDicePlacement] && n.step < len)
          n.length = kQuarters;
    }
@@ -162,7 +162,7 @@ inline Pattern mutatePattern(const Pattern &from, const DiceSettings &d, int len
       if (d.on[kDiceNotes] && rng.chance(0.3))
          n.row = static_cast<uint8_t>(std::clamp(n.row + (rng.chance(0.5) ? 1 : -1), 0, rows - 1));
       if (d.on[kDiceLength] && rng.chance(0.3))
-         n.length = static_cast<uint8_t>(dice_detail::rollLength(rng, std::clamp(d.length, 1, 16)));
+         n.length = static_cast<uint16_t>(dice_detail::rollLength(rng, std::clamp(d.length, 1, 16)));
    }
    Pattern p = from;
    dice_detail::rebuild(p, notes);

@@ -184,7 +184,7 @@ int main() {
       const double values[13] = {2, 0.5, 12, 1, 1, 1, 0, 0, 0, 0.5, 0, 0.6, 4};
       put(values, sizeof(values));
       std::vector<uint8_t> pattern = {1, 1, 0, 0, 4};
-      for (int k = 0; k < kSteps; ++k)
+      for (int k = 0; k < 16; ++k) // version 1 had 16 steps
          pattern.insert(pattern.end(), {0, 1, 0, 0});
       const uint32_t size = static_cast<uint32_t>(pattern.size());
       put(&size, 4);

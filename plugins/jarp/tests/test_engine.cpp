@@ -474,13 +474,65 @@ int main() {
       JCLAP_CHECK_EQ(back.next(0), 5);
       JCLAP_CHECK_EQ(back.next(5), 0);
       std::vector<uint8_t> v1 = {1, 0};
-      for (int k = 0; k < kSteps; ++k)
+      for (int k = 0; k < 16; ++k) // version 1 had 16 steps
          v1.insert(v1.end(), {0, 1, 0, 0});
       Pattern old;
       old.length = 5;
       JCLAP_CHECK(old.load(v1.data(), v1.size()));
       JCLAP_CHECK_EQ(old.length, 5);
       JCLAP_CHECK_EQ(old.count, 0);
+   }
+
+   // ---- long patterns ----
+   {
+      // Up to 128 steps: a 40-step pattern plays its last step, then loops.
+      Engine e;
+      Pattern p = pattern({{0, 0, 4}, {1, 39, 4}});
+      setPattern(e, p, 40);
+      const auto on = ons(run(e, 41 * kStepSamples - 300, chord({60, 64})));
+      JCLAP_CHECK_EQ(on.size(), 3u);
+      JCLAP_CHECK_EQ(on[1].m.data1, 64);
+      JCLAP_CHECK_EQ(on[1].time, 39 * kStepSamples);
+      JCLAP_CHECK_EQ(on[2].time, 40 * kStepSamples);
+   }
+   {
+      // A long note (more than 255 quarters) and late lanes save and load (version 3); a version 2
+      // pattern, from before, still loads.
+      Pattern p = pattern({{0, 0, 4 * 100}, {2, 127, 4}});
+      p.length = 128;
+      p.lanes[120] = {1, 3, 1, 20};
+      const std::vector<uint8_t> saved = p.save();
+      Pattern q;
+      JCLAP_CHECK(q.load(saved.data(), saved.size()));
+      JCLAP_CHECK(q == p);
+      JCLAP_CHECK_EQ(q.notes[q.noteStarting(0, 0)].length, 400);
+      std::vector<uint8_t> v2 = {2, 12, 1, 3, 4, 8};
+      for (int k = 0; k < 16; ++k)
+         v2.insert(v2.end(), {0, static_cast<uint8_t>(k == 4 ? 2 : 1), 0, 0});
+      Pattern r;
+      JCLAP_CHECK(r.load(v2.data(), v2.size()));
+      JCLAP_CHECK_EQ(r.length, 12);
+      JCLAP_CHECK_EQ(r.count, 1);
+      JCLAP_CHECK_EQ(r.notes[0].step, 4);
+      JCLAP_CHECK_EQ(r.lanes[4].ratchet, 2);
+   }
+   {
+      // Restart Song with a long Loop chain: 32 + 32 steps, entered at step 40, plays the second
+      // pattern's step 9.
+      Engine e;
+      Settings s;
+      s.advance = Advance::Loop;
+      s.restart = Restart::Song;
+      e.setSettings(s);
+      Pattern a = pattern({{0, 8, 4}});
+      Pattern b = pattern({{1, 8, 4}});
+      setPattern(e, a, 32);
+      b.length = 32;
+      e.setPattern(1, b);
+      const auto on = ons(run(e, 41 * kStepSamples - 300, chord({60, 64}, 39 * kStepSamples + 500)));
+      JCLAP_CHECK_EQ(on.size(), 1u);
+      JCLAP_CHECK_EQ(on[0].m.data1, 64);
+      JCLAP_CHECK_EQ(on[0].time, 40 * kStepSamples);
    }
 
    // ---- the saved pattern ----

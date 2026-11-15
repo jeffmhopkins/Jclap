@@ -82,13 +82,35 @@ const char *ordinal(int row) {
    return kNames[std::clamp(row, 0, 7)];
 }
 
+// Which steps the grid and the lanes show: kView of them from `first`. A pattern longer than kView
+// scrolls, following the playhead page by page unless the scroll bar was moved by hand.
+struct GridScroll {
+   int first = 0;
+   bool follow = true;
+
+   // Brings `first` up to date for a pattern of `len` steps with the playhead on `playStep` (or -1).
+   void update(int len, int playStep) {
+      if (len <= kView) {
+         first = 0;
+         return;
+      }
+      if (follow && playStep >= 0)
+         first = playStep / kView * kView;
+      first = std::clamp(first, 0, len - kView);
+   }
+};
+
 // The grid of notes, with the row labels at its left, the step numbers under it and the pattern's
 // end bar.
 class GridView : public visage::Frame {
 public:
-   explicit GridView(EditorHost &host) : host_(host) {}
+   GridView(EditorHost &host, GridScroll &scroll) : host_(host), scroll_(scroll) {}
 
    std::function<void(const Pattern &)> onEdit;
+
+   // The bottom of the step numbers, where the scroll bar runs.
+   static constexpr float kNumbersY = kGridY + 7 * kRowPitch + kCellH + 6;
+   static constexpr float kBarY = kNumbersY + 17, kBarW = kView * kColumn - (kColumn - kCellW);
 
    void draw(visage::Canvas &c) override {
       const float s = ui::designScale(*this);
@@ -101,28 +123,33 @@ public:
       const bool here = f.running && f.slot == slotIndex(host_.paramValue(kSlot));
       const int playStep = here ? std::clamp(static_cast<int>(f.position), 0, len - 1) : -1;
       const int playQuarter = here ? static_cast<int>(f.position * kQuarters) : -1;
+      const int first = scroll_.first;
 
       // The playhead's column, behind the cells.
-      if (playStep >= 0) {
-         const float x = (kGridX + playStep * kColumn - 3) * s;
+      if (playStep >= first && playStep < first + kView) {
+         const float x = (kGridX + (playStep - first) * kColumn - 3) * s;
          c.setColor(0xff4a515c);
          c.roundedRectangleBorder(x, (kGridY - 8) * s, (kCellW + 6) * s, (7 * kRowPitch + kCellH + 16) * s, 5 * s, 1.2f * s);
       }
 
       for (int r = 0; r < kRows; ++r) {
          const float y = rowY(r);
-         for (int col = 0; col < kSteps; ++col) {
-            c.setColor(col < len ? kCell : kCellOff);
+         for (int col = 0; col < kView; ++col) {
+            c.setColor(first + col < len ? kCell : kCellOff);
             c.roundedRectangle((kGridX + col * kColumn) * s, y * s, kCellW * s, kCellH * s, 3 * s);
          }
       }
 
-      // Notes, longest first so short ones stay on top where they cross nothing anyway.
+      // Notes, clipped to the steps in view (a long note may start before them).
+      c.saveState();
+      c.trimClampBounds((kGridX - 1) * s, 0, (kBarW + 2) * s, height());
       for (int i = 0; i < p.count; ++i) {
          const Note &n = p.notes[i];
+         if (n.step >= first + kView || n.step * kQuarters + n.length <= first * kQuarters)
+            continue;
          const Lane &lane = p.lanes[n.step];
          const bool live = n.step < len;
-         const float x = kGridX + n.step * kColumn, y = rowY(n.row);
+         const float x = kGridX + (n.step - first) * kColumn, y = rowY(n.row);
          const int quarters = std::min<int>(n.length, live ? (len - n.step) * kQuarters : n.length);
          const float w = noteWidth(quarters);
          const bool sounding = live && f.running && f.rows[n.row].key >= 0 && playQuarter >= n.step * kQuarters &&
@@ -172,6 +199,7 @@ public:
             c.text(o, ui::font(8.5f * s), visage::Font::kRight, x * s, (y + 1) * s, (w - 4) * s, 11 * s);
          }
       }
+      c.restoreState();
 
       // Row labels: the row (or its degree), the held note it plays, its channel (or, where a degree
       // snapped, the note it wanted), and the finger's pressure, slide and bend as hairlines.
@@ -217,14 +245,46 @@ public:
       }
 
       // Step numbers, the beats brighter.
-      for (int col = 0; col < kSteps; ++col) {
-         c.setColor(col >= len ? alpha(t.dimText, 0.45f) : col % 4 == 0 ? t.text : t.dimText);
-         c.text(std::to_string(col + 1), ui::font(9.5f * s), visage::Font::kCenter, (kGridX + col * kColumn) * s,
-                (kGridY + 7 * kRowPitch + kCellH + 6) * s, kCellW * s, 16 * s);
+      for (int col = 0; col < kView; ++col) {
+         const int step = first + col;
+         c.setColor(step >= len ? alpha(t.dimText, 0.45f) : step % 4 == 0 ? t.text : t.dimText);
+         c.text(std::to_string(step + 1), ui::font(9.5f * s), visage::Font::kCenter, (kGridX + col * kColumn) * s,
+                kNumbersY * s, kCellW * s, 16 * s);
+      }
+
+      // A pattern longer than the grid: a scroll bar under the step numbers, with the steps that
+      // start notes ticked along it and the playhead in orange, and the steps in view and FOLLOW at
+      // its left.
+      if (len > kView) {
+         c.setColor(0xff22262d);
+         c.roundedRectangle(kGridX * s, kBarY * s, kBarW * s, 5 * s, 2.5f * s);
+         c.setColor(0xff4a515c);
+         for (int i = 0; i < p.count; ++i)
+            if (p.notes[i].step < len)
+               c.fill((kGridX + p.notes[i].step * kBarW / len) * s, (kBarY + 1) * s, std::max(1.0f, kBarW / len) * s, 3 * s);
+         c.setColor(alpha(t.text, hoverBar_ || drag_ == Drag::Scroll ? 0.45f : 0.3f));
+         c.roundedRectangle((kGridX + first * kBarW / len) * s, (kBarY - 1) * s, (kView * kBarW / len) * s, 7 * s, 3 * s);
+         if (playStep >= 0) {
+            c.setColor(kOrange);
+            c.fill((kGridX + (f.position * kBarW / len) - 1) * s, (kBarY - 2) * s, 2 * s, 9 * s);
+         }
+         char range[32];
+         std::snprintf(range, sizeof(range), "%d-%d of %d", first + 1, first + kView, len);
+         c.setColor(t.dimText);
+         c.text(range, ui::font(9 * s), visage::Font::kLeft, 7 * s, kNumbersY * s, 80 * s, 16 * s);
+         const float fx = kFollowX, fy = kNumbersY + 1;
+         c.setColor(scroll_.follow ? kSlate : t.button);
+         c.roundedRectangle(fx * s, fy * s, kFollowW * s, 14 * s, 3 * s);
+         c.setColor(t.panelBorder);
+         c.roundedRectangleBorder(fx * s, fy * s, kFollowW * s, 14 * s, 3 * s, 1.0f);
+         c.setColor(scroll_.follow ? kOrange : t.dimText);
+         c.text("FOLLOW", ui::font(8 * s), visage::Font::kCenter, fx * s, fy * s, kFollowW * s, 14 * s);
       }
 
       // The pattern's end: a purple bar with a tab to drag.
-      const float bx = barX(len);
+      if (len < first || len > first + kView)
+         return;
+      const float bx = barX(len - first);
       c.setColor(kPurple);
       c.fill((bx - 1) * s, 14 * s, 2 * s, (kGridY + 7 * kRowPitch + kCellH - 14) * s);
       c.roundedRectangle((bx - 7) * s, 4 * s, 14 * s, 14 * s, 3 * s);
@@ -237,21 +297,36 @@ public:
       const float s = ui::designScale(*this);
       const float x = e.position.x / s, y = e.position.y / s;
       const Pattern &p = host_.pattern();
+      const int first = scroll_.first;
+      // The scroll bar and FOLLOW, for a pattern longer than the grid.
+      if (length() > kView && y >= kNumbersY) {
+         if (x >= kFollowX && x < kFollowX + kFollowW) {
+            scroll_.follow = !scroll_.follow;
+            redrawAll();
+            return;
+         }
+         if (x >= kGridX - 4) {
+            drag_ = Drag::Scroll;
+            scrollTo(x);
+         }
+         return;
+      }
       // The end bar, anywhere along it.
-      if (std::abs(x - barX(length())) < 7 && y < kGridY + 8 * kRowPitch) {
+      if (length() >= first && length() <= first + kView && std::abs(x - barX(length() - first)) < 7 &&
+          y < kGridY + 8 * kRowPitch) {
          drag_ = Drag::End;
          return;
       }
       const int col = static_cast<int>(std::floor((x - kGridX) / kColumn));
       const int row = 7 - static_cast<int>(std::floor((y - kGridY) / kRowPitch));
-      if (col < 0 || col >= kSteps || row < 0 || row >= kRows || y < kGridY)
+      if (col < 0 || col >= kView || row < 0 || row >= kRows || y < kGridY)
          return;
-      const int quarter = static_cast<int>(std::floor((x - kGridX) / kColumn * kQuarters));
+      const int quarter = first * kQuarters + static_cast<int>(std::floor((x - kGridX) / kColumn * kQuarters));
       const int at = p.noteAt(row, std::min(quarter, kMaxLength - 1));
       Pattern next = p;
       if (at >= 0) {
          const Note &n = p.notes[at];
-         const float right = kGridX + n.step * kColumn + noteWidth(n.length);
+         const float right = kGridX + (n.step - first) * kColumn + noteWidth(n.length);
          if (right - x < 8) {
             drag_ = Drag::Length;
             note_ = at;
@@ -262,7 +337,7 @@ public:
          return;
       }
       // A cell's gap belongs to the cell before it.
-      if (!next.add(row, col, kQuarters))
+      if (!next.add(row, first + col, kQuarters))
          return;
       commit(next);
       drag_ = Drag::Length;
@@ -272,8 +347,17 @@ public:
    void mouseDrag(const visage::MouseEvent &e) override {
       const float s = ui::designScale(*this);
       const float x = e.position.x / s;
+      if (drag_ == Drag::Scroll) {
+         scrollTo(x);
+         return;
+      }
       if (drag_ == Drag::End) {
-         const int len = std::clamp(static_cast<int>(std::lround((x - kGridX + 2.5f) / kColumn)), 1, kSteps);
+         // Past the right edge the grid scrolls on, so the end can be dragged out to kSteps.
+         const int len = std::clamp(scroll_.first + static_cast<int>(std::lround((x - kGridX + 2.5f) / kColumn)), 1, kSteps);
+         if (len > scroll_.first + kView || len < scroll_.first) {
+            scroll_.follow = false;
+            scroll_.first = std::clamp(len > scroll_.first ? len - kView : len - 1, 0, kSteps - kView);
+         }
          if (len != length()) {
             Pattern next = host_.pattern();
             next.length = static_cast<uint8_t>(len);
@@ -287,9 +371,9 @@ public:
       if (note_ < 0 || note_ >= next.count)
          return;
       Note &n = next.notes[note_];
-      const float start = kGridX + n.step * kColumn;
+      const float start = kGridX + (n.step - scroll_.first) * kColumn;
       const int quarters = static_cast<int>(std::lround((x - start + 2.5f) / kColumn * kQuarters));
-      n.length = static_cast<uint8_t>(std::clamp(quarters, 1, next.room(n.row, n.step, note_)));
+      n.length = static_cast<uint16_t>(std::clamp(quarters, 1, next.room(n.row, n.step, note_)));
       commit(next);
    }
 
@@ -298,8 +382,45 @@ public:
       note_ = -1;
    }
 
+   void mouseMove(const visage::MouseEvent &e) override {
+      const bool over = length() > kView && e.position.y / ui::designScale(*this) >= kNumbersY;
+      if (over != hoverBar_) {
+         hoverBar_ = over;
+         redraw();
+      }
+   }
+
+   // The wheel, sideways or up and down, scrolls a long pattern.
+   bool mouseWheel(const visage::MouseEvent &e) override {
+      const int len = length();
+      const float d = e.wheel_delta_x != 0.0f ? -e.wheel_delta_x : -e.wheel_delta_y;
+      if (len <= kView || d == 0.0f)
+         return false;
+      scroll_.follow = false;
+      scroll_.first = std::clamp(scroll_.first + (d > 0 ? 2 : -2), 0, len - kView);
+      redrawAll();
+      return true;
+   }
+
+   // Asked to redraw the lanes too when the view moves.
+   std::function<void()> onScroll;
+
 private:
-   enum class Drag { None, Length, End };
+   enum class Drag { None, Length, End, Scroll };
+
+   static constexpr float kFollowX = 84.0f, kFollowW = 42.0f;
+
+   void scrollTo(float x) {
+      const int len = length();
+      scroll_.follow = false;
+      scroll_.first = std::clamp(static_cast<int>(std::lround((x - kGridX) / kBarW * len - kView / 2.0)), 0, len - kView);
+      redrawAll();
+   }
+   void redrawAll() {
+      redraw();
+      if (onScroll)
+         onScroll();
+   }
 
    int length() const { return std::clamp<int>(host_.pattern().length, 1, kSteps); }
    int maxHits() const { return static_cast<int>(std::lround(host_.paramModulated(kMaxHits))); }
@@ -327,15 +448,17 @@ private:
    }
 
    EditorHost &host_;
+   GridScroll &scroll_;
    Drag drag_ = Drag::None;
    int note_ = -1;
+   bool hoverBar_ = false;
 };
 
 // The lanes under the grid, a cell per step: Octave, Ratchet (with its P toggle) and Velocity.
 // Drag a cell up or down (or scroll on it) to change it; double-click sets it back.
 class LaneView : public visage::Frame {
 public:
-   explicit LaneView(EditorHost &host) : host_(host) {}
+   LaneView(EditorHost &host, const GridScroll &scroll) : host_(host), scroll_(scroll) {}
 
    std::function<void(const Pattern &)> onEdit;
 
@@ -352,9 +475,9 @@ public:
          c.setColor(t.dimText);
          c.text(names[lane], ui::font(10.5f * s), visage::Font::kLeft, 7 * s, kLaneY[lane] * s, 120 * s, kLaneH * s);
       }
-      for (int col = 0; col < kSteps; ++col) {
-         const Lane &l = p.lanes[col];
-         const float a = col < len ? 1.0f : 0.35f;
+      for (int col = 0; col < kView; ++col) {
+         const Lane &l = p.lanes[scroll_.first + col];
+         const float a = scroll_.first + col < len ? 1.0f : 0.35f;
          const float x = kGridX + col * kColumn;
          for (int lane = 0; lane < 3; ++lane) {
             const float y = kLaneY[lane];
@@ -401,7 +524,8 @@ public:
    void mouseDown(const visage::MouseEvent &e) override {
       const float s = ui::designScale(*this);
       const float x = e.position.x / s, y = e.position.y / s;
-      col_ = static_cast<int>(std::floor((x - kGridX) / kColumn));
+      const int view = static_cast<int>(std::floor((x - kGridX) / kColumn));
+      col_ = view >= 0 && view < kView ? scroll_.first + view : -1;
       lane_ = -1;
       for (int l = 0; l < 3; ++l)
          if (y >= kLaneY[l] - 4 && y < kLaneY[l] + kLaneH + 4)
@@ -423,7 +547,7 @@ public:
          return;
       }
       // P toggles.
-      if (lane_ == 1 && x - (kGridX + col_ * kColumn) >= 23) {
+      if (lane_ == 1 && x - (kGridX + view * kColumn) >= 23) {
          l.pressure = l.pressure ? 0 : 1;
          commit(p);
          lane_ = -1;
@@ -454,13 +578,14 @@ public:
    bool mouseWheel(const visage::MouseEvent &e) override {
       const float s = ui::designScale(*this);
       const float x = e.position.x / s, y = e.position.y / s;
-      const int col = static_cast<int>(std::floor((x - kGridX) / kColumn));
+      const int view = static_cast<int>(std::floor((x - kGridX) / kColumn));
       int lane = -1;
       for (int l = 0; l < 3; ++l)
          if (y >= kLaneY[l] - 4 && y < kLaneY[l] + kLaneH + 4)
             lane = l;
-      if (col < 0 || col >= kSteps || lane < 0 || e.wheel_delta_y == 0.0f)
+      if (view < 0 || view >= kView || lane < 0 || e.wheel_delta_y == 0.0f)
          return false;
+      const int col = scroll_.first + view;
       const int by = e.wheel_delta_y > 0 ? 1 : -1;
       Pattern p = host_.pattern();
       Lane &l = p.lanes[col];
@@ -482,6 +607,7 @@ private:
    }
 
    EditorHost &host_;
+   const GridScroll &scroll_;
    int col_ = -1, lane_ = -1, start_ = 0;
    float downY_ = 0.0f;
 };
@@ -795,12 +921,13 @@ public:
       tips_.add(*scale_, "The scale Degree rows count up. Where two held notes are equally near a degree, the one in "
                          "the scale wins.");
 
-      grid_ = &add<GridView>({20, 116, 862, 324}, host_);
+      grid_ = &add<GridView>({20, 116, 862, 324}, host_, scroll_);
+      grid_->onScroll = [this] { lanes_->redraw(); };
       grid_->onEdit = [this](const Pattern &p) { edit(p); };
       tips_.add(*grid_, "Click a cell for a note and drag right to lengthen it; drag a note's right edge to set how "
                         "long it sounds; click a note to remove it. Drag the purple bar to set the pattern's length.");
       add<ui::Divider>({27, 445, 846, 1});
-      lanes_ = &add<LaneView>({20, 450, 862, 96}, host_);
+      lanes_ = &add<LaneView>({20, 450, 862, 96}, host_, scroll_);
       lanes_->onEdit = [this](const Pattern &p) { edit(p); };
       tips_.add(*lanes_, "Per step, for the notes starting on it: drag up or down, scroll, or double-click to reset. "
                          "Click P to make that step's ratchet follow pressure.");
@@ -809,7 +936,7 @@ public:
       add<SettingsCard>({12, 568, 876, 142});
       tips_.add(knob(kRate, "RATE", kOrange, 37, 606), "How long each step is.");
       tips_.add(knob(kSwing, "SWING", kOrange, 107, 606), "Moves every second step later: 50% is straight.");
-      length_ = &add<ui::Knob>({177, 606, 76, 88}, ui::ValueRange{1, 16, 8, 1.0, false, true});
+      length_ = &add<ui::Knob>({177, 606, 76, 88}, ui::ValueRange{1, kSteps, 8, 1.0, false, true});
       length_->setLabel("LENGTH");
       length_->setAccent(kOrange);
       length_->setLabelColor(ui::defaultTheme().dimText);
@@ -858,6 +985,12 @@ public:
       scale_->setVisible(degree);
       if (std::lround(length_->value()) != host_.pattern().length)
          length_->setValue(host_.pattern().length);
+      {
+         const jarp::Frame &f = host_.frame();
+         const int len = std::clamp<int>(host_.pattern().length, 1, kSteps);
+         const bool here = f.running && f.slot == slotIndex(host_.paramValue(kSlot));
+         scroll_.update(len, here ? std::clamp(static_cast<int>(f.position), 0, len - 1) : -1);
+      }
       slots_->redraw();
       // Over the grid, the dice card hides what's under it.
       grid_->redraw();
@@ -1055,6 +1188,7 @@ private:
    ui::ParamBindings bindings_;
    ui::Tooltips tips_;
    ui::PresetBar *presets_ = nullptr;
+   GridScroll scroll_;
    GridView *grid_ = nullptr;
    SlotStrip *slots_ = nullptr;
    ui::Knob *length_ = nullptr;
