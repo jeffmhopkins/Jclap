@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.7.0.
+Version 0.8.0.
 
 ![Panel](docs/panel.png)
 
@@ -107,6 +107,18 @@ next step.
   aren't holding plays the held note nearest to it, so JArp never plays a note you didn't hold. Where
   two held notes are equally near, the one in the scale wins, and then the lower. So rows 1 and 5
   alternating play the root and fifth of any chord.
+- **HELD DEGREE**: DEGREE, but a degree you aren't holding stays silent instead of playing the nearest
+  note. It plays when you hold that note in any octave. Hold C and G and a pattern of 1st, 3rd and 5th
+  plays only the C and G; add the E and the 3rd comes in.
+- **SPREAD**: the pattern's rows spread over however many notes you hold. Its bottom row plays your
+  lowest note and its top row (the highest row with a note on it) your highest, and the rows between
+  play the notes nearest their place between. A pattern on rows 1, 2 and 3 plays the bottom, middle
+  and top of the chord, whether you hold 3 notes or 10. With fewer notes held than rows, rows share
+  notes, and a note two rows land on plays once.
+
+A note on a row that nothing held plays (a row above the notes you hold with REST, or a degree you
+aren't holding with HELD DEGREE) shows grey on the grid while you play, and turns orange again when
+you hold enough notes.
 
 Each row's label shows the note it plays and its MIDI channel. In DEGREE mode a row whose degree
 isn't held shows the note it wanted, as `wants F3`. Three hairlines along the bottom of each label follow

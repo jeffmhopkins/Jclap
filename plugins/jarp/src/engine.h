@@ -31,6 +31,11 @@ struct Settings {
    bool latch = false;
    Restart restart = Restart::Note;
    bool degree = false;
+   // Spread: the pattern's rows spread over the notes held, bottom row to the lowest, top row to the
+   // highest, the rows between to the nearest by position.
+   bool spread = false;
+   // In Degree mode, a degree that isn't held stays silent, rather than playing the nearest note.
+   bool strict = false;
    bool wrap = false;
    // With wrap, each time round the held notes goes an octave higher.
    bool octaves = false;
@@ -87,9 +92,19 @@ inline int degreeAbove(int from, int degrees, int key, int scale) {
    return base + 12 * (d / 7) + steps[d % 7];
 }
 
+// The highest row with a note in `p`, or 0 when it has none: the top row Spread spreads to.
+inline int topRow(const Pattern &p) {
+   int top = 0;
+   for (int i = 0; i < p.count; ++i)
+      top = std::max<int>(top, p.notes[i].row);
+   return top;
+}
+
 // Maps the grid's rows onto the held keys (lowest first, `count` of them): `key[r]` is the index of
-// the held key row r plays, or -1, and `target[r]` the pitch Degree mode wanted for it.
-inline void mapRows(const int *held, int count, const Settings &s, int *key, int *target, int *octave = nullptr) {
+// the held key row r plays, or -1, and `target[r]` the pitch Degree mode wanted for it. `top` is
+// the pattern's top row, for Spread.
+inline void mapRows(const int *held, int count, const Settings &s, int *key, int *target, int *octave = nullptr,
+                    int top = kRows - 1) {
    for (int r = 0; r < kRows; ++r) {
       key[r] = -1;
       target[r] = -1;
@@ -98,6 +113,12 @@ inline void mapRows(const int *held, int count, const Settings &s, int *key, int
    }
    if (count <= 0)
       return;
+   if (s.spread) {
+      top = std::clamp(top, 0, kRows - 1);
+      for (int r = 0; r <= top; ++r)
+         key[r] = top ? static_cast<int>(std::lround(r * (count - 1) / static_cast<double>(top))) : 0;
+      return;
+   }
    if (!s.degree) {
       for (int r = 0; r < kRows; ++r) {
          key[r] = r < count ? r : s.wrap ? r % count : -1;
@@ -110,6 +131,15 @@ inline void mapRows(const int *held, int count, const Settings &s, int *key, int
    for (int r = 0; r < kRows; ++r) {
       const int want = r == 0 ? held[0] : degreeAbove(held[0], r, root, scale);
       target[r] = want;
+      if (s.strict) {
+         // Only the degree itself: the nearest held note that is that degree, in any octave.
+         int best = -1;
+         for (int i = 0; i < count; ++i)
+            if (((held[i] - want) % 12 + 12) % 12 == 0 && (best < 0 || std::abs(held[i] - want) < std::abs(held[best] - want)))
+               best = i;
+         key[r] = best;
+         continue;
+      }
       int best = 0;
       for (int i = 1; i < count; ++i) {
          const int d = std::abs(held[i] - want), b = std::abs(held[best] - want);
@@ -384,7 +414,7 @@ public:
       int held[kMaxFingers], slots[kMaxFingers];
       const int n = sortedFingers(held, slots);
       int key[kRows], target[kRows], octave[kRows];
-      mapRows(held, n, settings_, key, target, octave);
+      mapRows(held, n, settings_, key, target, octave, topRow(bank_.slots[playing_]));
       for (int r = 0; r < kRows; ++r) {
          RowView &v = frame.rows[r];
          v = RowView{};
@@ -555,11 +585,18 @@ private:
       if (!n)
          return;
       int key[kRows], target[kRows], octave[kRows];
-      mapRows(held, n, settings_, key, target, octave);
+      mapRows(held, n, settings_, key, target, octave, topRow(pattern_));
+      // In Spread, rows that land on the same held note play it once.
+      bool spreadPlayed[kMaxFingers] = {};
       for (int i = 0; i < pattern_.count; ++i) {
          const Note &note = pattern_.notes[i];
          if (note.step != step || note.row >= kRows || key[note.row] < 0)
             continue;
+         if (settings_.spread) {
+            if (spreadPlayed[key[note.row]])
+               continue;
+            spreadPlayed[key[note.row]] = true;
+         }
          // The step's lane, with any values the note has of its own.
          const Lane lane = pattern_.laneOf(i);
          // Chance: the note plays this time round only if the roll comes in under it.

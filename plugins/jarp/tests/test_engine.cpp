@@ -171,6 +171,57 @@ int main() {
       JCLAP_CHECK_EQ(key[2], 1);
    }
 
+   {
+      // Held Degree: only a degree that's held plays (in any octave), so a C and G held play the 1st
+      // and 5th rows and leave the 3rd and 7th silent; the 8th is C an octave up, so the C plays it.
+      Settings s;
+      s.degree = s.strict = true;
+      const int held[] = {48, 55};
+      int key[kRows], target[kRows];
+      mapRows(held, 2, s, key, target);
+      JCLAP_CHECK_EQ(key[0], 0);
+      JCLAP_CHECK_EQ(key[2], -1);
+      JCLAP_CHECK_EQ(key[4], 1);
+      JCLAP_CHECK_EQ(key[6], -1);
+      JCLAP_CHECK_EQ(key[7], 0);
+      JCLAP_CHECK_EQ(target[2], 52);
+   }
+   {
+      // Spread: a pattern up to row 3 plays bottom, middle and top of any chord, 3 notes or 10.
+      Settings s;
+      s.spread = true;
+      int key[kRows], target[kRows];
+      const int three[] = {48, 52, 55};
+      mapRows(three, 3, s, key, target, nullptr, 2);
+      JCLAP_CHECK_EQ(key[0], 0);
+      JCLAP_CHECK_EQ(key[1], 1);
+      JCLAP_CHECK_EQ(key[2], 2);
+      JCLAP_CHECK_EQ(key[3], -1);
+      const int ten[] = {36, 40, 43, 48, 52, 55, 60, 64, 67, 72};
+      mapRows(ten, 10, s, key, target, nullptr, 2);
+      JCLAP_CHECK_EQ(key[0], 0);
+      JCLAP_CHECK_EQ(key[1], 5);
+      JCLAP_CHECK_EQ(key[2], 9);
+      // Fewer notes than rows: rows share them, and one held note plays every row.
+      const int two[] = {48, 60};
+      mapRows(two, 2, s, key, target, nullptr, 4);
+      JCLAP_CHECK_EQ(key[0], 0);
+      JCLAP_CHECK_EQ(key[1], 0);
+      JCLAP_CHECK_EQ(key[3], 1);
+      JCLAP_CHECK_EQ(key[4], 1);
+      mapRows(two, 1, s, key, target, nullptr, 4);
+      JCLAP_CHECK_EQ(key[2], 0);
+      JCLAP_CHECK_EQ(key[4], 0);
+
+      // Playing: rows 1 to 3 on one step with two notes held play each held note once.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 4}, {1, 0, 4}, {2, 0, 4}}), 2);
+      const auto on = ons(run(e, kStepSamples - 100, chord({60, 67})));
+      JCLAP_CHECK_EQ(static_cast<int>(on.size()), 2);
+   }
+
    // ---- timing ----
    {
       // A 7th chord, rows 1 and 3 alternating: C on step 1, G on step 2, each on its own finger's

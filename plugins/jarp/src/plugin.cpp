@@ -461,7 +461,9 @@ private:
       s.advance = static_cast<Advance>(whole(kAdvance));
       s.latch = whole(kLatch) != 0;
       s.restart = static_cast<Restart>(whole(kRestart));
-      s.degree = whole(kRowsBy) != 0;
+      s.degree = whole(kRowsBy) == 1 || whole(kRowsBy) == 2;
+      s.strict = whole(kRowsBy) == 2;
+      s.spread = whole(kRowsBy) == 3;
       s.wrap = whole(kEmptyRows) != 0;
       s.octaves = whole(kEmptyRows) == 2;
       s.key = whole(kKey);

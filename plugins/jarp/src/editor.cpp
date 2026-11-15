@@ -180,7 +180,8 @@ public:
       const Pattern &p = host_.pattern();
       const jarp::Frame &f = host_.frame();
       const int len = length();
-      const bool degree = std::lround(host_.paramValue(kRowsBy)) != 0;
+      const int rowsBy = static_cast<int>(std::lround(host_.paramValue(kRowsBy)));
+      const bool degree = rowsBy == 1 || rowsBy == 2;
       // The playhead shows on the pattern playing only (another may be selected for editing).
       const bool here = f.running && f.slot == slotIndex(host_.paramValue(kSlot));
       const int playStep = here ? std::clamp(static_cast<int>(f.position), 0, len - 1) : -1;
@@ -208,12 +209,18 @@ public:
       const std::vector<int> picked = scroll_.picked(p, slotIndex(host_.paramValue(kSlot)));
       c.saveState();
       c.trimClampBounds((kGridX - 1) * s, 0, (kBarW + 2) * s, height());
+      bool anyHeld = false;
+      for (int r = 0; r < kRows; ++r)
+         anyHeld = anyHeld || f.rows[r].key >= 0;
       for (int i = 0; i < p.count; ++i) {
          const Note &n = p.notes[i];
          if (n.step >= first + kView || n.step * kQuarters + n.length <= first * kQuarters)
             continue;
          const Lane lane = p.laneOf(i);
          const bool live = n.step < len;
+         // A note on a row no held note plays (too few held, or a degree not held) greys out.
+         const bool muted = anyHeld && f.rows[n.row].key < 0;
+         const unsigned tone = muted ? 0xff5a606b : kOrange;
          const float x = kGridX + (n.step - first) * kColumn, y = rowY(n.row);
          const int quarters = std::min<int>(n.length, live ? (len - n.step) * kQuarters : n.length);
          const float w = noteWidth(quarters);
@@ -223,7 +230,7 @@ public:
          const int base = lane.ratchet;
          const int extra = lane.pressure ? std::max(0, maxHits() - base) : 0;
          if (base <= 1 && !extra) {
-            c.setColor(alpha(sounding ? 0xffffa94d : kOrange, a));
+            c.setColor(alpha(sounding ? (muted ? 0xff6a707b : 0xffffa94d) : tone, a));
             c.roundedRectangle(x * s, y * s, w * s, kCellH * s, 3 * s);
          }
          else {
@@ -231,7 +238,7 @@ public:
             // blue and filled as it does.
             c.setColor(alpha(0xff3b2a1a, a));
             c.roundedRectangle(x * s, y * s, w * s, kCellH * s, 3 * s);
-            c.setColor(alpha(sounding ? 0xffffffff : kOrange, a));
+            c.setColor(alpha(sounding ? 0xffffffff : tone, a));
             c.roundedRectangleBorder(x * s, y * s, w * s, kCellH * s, 3 * s, 1.2f * s);
             const int slots = base + extra;
             const int lit = lane.pressure && f.hits[n.step] ? std::clamp<int>(f.hits[n.step] - base, 0, extra) : 0;
@@ -240,7 +247,7 @@ public:
             for (int h = 0; h < slots; ++h) {
                const float hx = x + pad + h * (each + gap);
                if (h < base) {
-                  c.setColor(alpha(kOrange, a));
+                  c.setColor(alpha(tone, a));
                   c.roundedRectangle(hx * s, (y + pad) * s, each * s, (kCellH - 2 * pad - (extra ? 4 : 0)) * s, 1.5f * s);
                }
                else if (h < base + lit) {
@@ -261,7 +268,7 @@ public:
             char o[8];
             std::snprintf(o, sizeof(o), "%+d", lane.octave);
             tagBacking(c, s, x + w - 17, y + 2, 14, a, base > 1 || extra);
-            c.setColor(alpha(base <= 1 && !extra ? 0xff3b2a1a : kOrange, a));
+            c.setColor(alpha(base <= 1 && !extra ? 0xff3b2a1a : tone, a));
             c.text(o, ui::font(8.5f * s), visage::Font::kRight, x * s, (y + 1) * s, (w - 4) * s, 11 * s);
          }
          // Chance under 100: the percent in the note's lower corner.
@@ -270,7 +277,7 @@ public:
             std::snprintf(pc, sizeof(pc), "%d%%", lane.chance);
             tagBacking(c, s, x + w - (lane.chance < 10 ? 16 : 21), y + kCellH - 11, lane.chance < 10 ? 14 : 19, a,
                        base > 1 || extra);
-            c.setColor(alpha(base <= 1 && !extra ? 0xff3b2a1a : kOrange, a));
+            c.setColor(alpha(base <= 1 && !extra ? 0xff3b2a1a : tone, a));
             c.text(pc, ui::font(8 * s), visage::Font::kRight, x * s, (y + kCellH - 12) * s, (w - 3) * s, 11 * s);
          }
          if (n.own) {
@@ -1209,9 +1216,13 @@ public:
                 "Advance: Off plays the pattern selected. Chord moves to the next pattern with notes each time you "
                 "play a new chord after letting go of every note. Loop moves on each time the pattern ends.");
       rowsLabel(470, "ROWS BY");
-      auto &rowsBy = choice(kRowsBy, {552, 89, 115, 22}, {"PITCH", "DEGREE"});
+      auto &rowsBy = add<ui::Dropdown>({552, 89, 92, 22}, std::vector<std::string>{"PITCH", "DEGREE", "HELD DEGREE", "SPREAD"});
+      rowsBy.setAccent(kSlate);
+      bindings_.bind(rowsBy, kRowsBy);
       tips_.add(rowsBy, "Pitch: row 1 is the lowest note held, row 2 the next up, and so on. Degree: rows count up the "
-                        "scale from the lowest note held; a degree that isn't held plays the nearest note that is.");
+                        "scale from the lowest note held; a degree that isn't held plays the nearest note that is. Held "
+                        "Degree: the same, but a degree that isn't held stays silent. Spread: the pattern's bottom row plays "
+                        "the lowest note held and its top row the highest, the rows between spread over the notes between.");
       emptyLabel_ = &rowsLabel(669, "EMPTY ROWS");
       empty_ = &choice(kEmptyRows, {752, 89, 120, 22}, {"REST", "WRAP", "OCT"});
       tips_.add(*empty_, "Rows above the notes held: Rest stays silent; Wrap starts again from the lowest note; Oct "
@@ -1286,9 +1297,10 @@ public:
    void timerCallback() override { sync(); }
 
    void sync() {
-      const bool degree = std::lround(host_.paramValue(kRowsBy)) != 0;
-      emptyLabel_->setVisible(!degree);
-      empty_->setVisible(!degree);
+      const int rowsBy = static_cast<int>(std::lround(host_.paramValue(kRowsBy)));
+      const bool degree = rowsBy == 1 || rowsBy == 2;
+      emptyLabel_->setVisible(rowsBy == 0);
+      empty_->setVisible(rowsBy == 0);
       scaleLabel_->setVisible(degree);
       key_->setVisible(degree);
       scale_->setVisible(degree);
