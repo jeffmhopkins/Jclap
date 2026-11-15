@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.1.0.
+Version 0.2.0.
 
 ![Panel](docs/panel.png)
 
@@ -28,13 +28,34 @@ Eight rows by sixteen steps. Row 1 is at the bottom.
   the whole pattern. A note stops at the next note in its row.
 - **Click a note** to remove it.
 - **Drag the purple bar** (or its tab) to set the pattern's length, from 1 to 16 steps. The LENGTH knob
-  is the same setting.
+  is the same setting. Each pattern has its own length.
 
 There is no gate setting: a note's length on the grid is its gate. A note on row 1 drawn across the
 whole pattern holds a pedal under the rest.
 
 The column with a frame round it is the step playing. A note playing lights up, and so does its row's
 note name, with a dot beside it.
+
+## Patterns and chains
+
+JArp holds eight patterns, **A** to **H**, in the strip beside the PATTERN title. Click a letter to
+play it and edit it on the grid. A lit letter has notes in it; the one playing has an orange bar under
+it. Right-click a letter to **copy** it, **paste** into it, or **clear** it.
+
+The switch beside the letters says how playing moves along them:
+
+- **OFF**: the pattern selected plays.
+- **CHORD**: each new chord moves to the next pattern. Let go of every note, play again, and the next
+  pattern starts. The first chord plays the one selected.
+- **LOOP**: while you hold, each time a pattern ends the next one starts, so A, B and C play as one
+  long phrase.
+
+Empty patterns are skipped, and after the last pattern with notes it goes round to the first. To chain
+A, B and C, fill those three and leave the rest empty; clear one to drop it from the chain.
+
+Both are host params, so you can automate or modulate them: **Pattern** (A to H) picks the pattern,
+and **Advance** (Off, Chord, Loop) turns chaining on and off. A new Pattern value takes over from the
+next step.
 
 ## Rows
 
@@ -70,7 +91,7 @@ scroll on it, to change it; double-click to set it back.
 
 - **RATE**: how long a step is, from 1/32 to 1/4, with triplets.
 - **SWING**: moves every second step later, from 50% (straight) to 75%.
-- **LENGTH**: steps before the pattern loops, 1 to 16.
+- **LENGTH**: steps before this pattern loops, 1 to 16. Each pattern has its own.
 
 **PLAYBACK**
 
@@ -129,13 +150,13 @@ Untick an item to keep it as it is. The ranges:
 | VELOCITY | ±20 | Velocity lane offsets |
 | PRESSURE | 20% | The share of steps with P lit (unticked to start with) |
 
-Only the steps up to the pattern's length are rolled. The dice only ever change the pattern, never
+The dice roll the pattern on the grid, only up to its length. The dice only ever change the pattern, never
 the held notes, so JArp still plays only notes you hold.
 
 ## Presets
 
-The preset bar steps through the factory bank and then your own. Each factory preset brings its
-pattern with it:
+The preset bar steps through the factory bank and then your own. A preset holds the settings and all
+eight patterns:
 
 | Preset | |
 |---|---|
@@ -147,14 +168,15 @@ pattern with it:
 | Gallop | Triplets, restarting on the bar |
 | Stabs | All four notes at once, with octave jumps |
 | Press Roll | Steps with P lit roll faster the harder you press |
+| Chord Chain | Up, down, then a broken pattern: each new chord plays the next (Advance Chord) |
+| Phrase Loop | A climb, the climb an octave up, then a four-step fill, round and round (Advance Loop) |
 
-**SAVE** names the current settings and writes them as a small text file:
+**SAVE** names the current settings and writes them as a small text file, with the patterns in a
+`.jarppatterns` file beside it:
 
 - macOS: `~/Library/Application Support/JArp/Presets`
 - Windows: `%APPDATA%\JArp\Presets`
 - Linux: `~/.config/JArp/Presets`
-
-A saved preset holds the settings only. The pattern is saved with the project.
 
 Click the **star** beside the name to make the current preset a favorite.
 

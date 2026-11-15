@@ -21,6 +21,8 @@ constexpr int kMaxLength = kSteps * kQuarters;
 constexpr int kMaxNotes = kRows * kSteps;
 constexpr int kMaxRatchet = 8;
 constexpr int kMaxFingers = 16;
+// Pattern slots A-H.
+constexpr int kSlots = 8;
 
 // A note on the grid: its row (0 is row 1, the lowest), the step it starts on, and how long it
 // sounds in quarter steps.
@@ -41,13 +43,15 @@ struct Lane {
 };
 
 struct Pattern {
+   // Steps before it loops, 1..kSteps.
+   uint8_t length = 8;
    uint8_t count = 0;
    std::array<Note, kMaxNotes> notes{};
    std::array<Lane, kSteps> lanes{};
 
    // The same notes (in any order) and lanes.
    bool operator==(const Pattern &o) const {
-      if (count != o.count || lanes != o.lanes)
+      if (length != o.length || count != o.count || lanes != o.lanes)
          return false;
       for (int i = 0; i < count; ++i) {
          const int j = o.noteStarting(notes[i].row, notes[i].step);
@@ -99,13 +103,15 @@ struct Pattern {
       --count;
    }
    void clear() { count = 0; }
+   bool empty() const { return count == 0; }
 
-   // The saved form: a version byte, the note count and each note's three bytes, then each lane's
-   // four bytes.
-   static constexpr uint8_t kVersion = 1;
+   // The saved form: a version byte, the length (from version 2), the note count and each note's
+   // three bytes, then each lane's four bytes. A version 1 pattern keeps the length it had.
+   static constexpr uint8_t kVersion = 2;
    std::vector<uint8_t> save() const {
       std::vector<uint8_t> b;
       b.push_back(kVersion);
+      b.push_back(length);
       b.push_back(count);
       for (int i = 0; i < count; ++i) {
          b.push_back(notes[i].row);
@@ -121,12 +127,21 @@ struct Pattern {
       return b;
    }
    bool load(const uint8_t *data, size_t size) {
-      if (size < 2 || data[0] < 1 || data[0] > kVersion || data[1] > kMaxNotes ||
-          size < 2 + data[1] * 3u + kSteps * 4u)
+      if (size < 2 || data[0] < 1 || data[0] > kVersion)
          return false;
       Pattern p;
-      size_t at = 2;
-      for (int i = 0; i < data[1]; ++i, at += 3)
+      p.length = length;
+      size_t at = 1;
+      if (data[0] >= 2) {
+         p.length = static_cast<uint8_t>(std::clamp<int>(data[1], 1, kSteps));
+         at = 2;
+      }
+      if (size < at + 1)
+         return false;
+      const int n = data[at++];
+      if (n > kMaxNotes || size < at + n * 3u + kSteps * 4u)
+         return false;
+      for (int i = 0; i < n; ++i, at += 3)
          p.add(data[at], data[at + 1], data[at + 2]);
       for (Lane &l : p.lanes) {
          l.octave = static_cast<int8_t>(std::clamp<int>(static_cast<int8_t>(data[at]), -3, 3));
@@ -140,8 +155,58 @@ struct Pattern {
    }
 };
 
-// The panel's edits: the whole pattern, applied at the start of the next block.
+// Every slot, as saved with the project and in a user preset's pattern file: a version byte, the
+// slot count, then each slot's size (two bytes) and its pattern.
+struct Bank {
+   std::array<Pattern, kSlots> slots{};
+
+   bool operator==(const Bank &o) const { return slots == o.slots; }
+
+   static constexpr uint8_t kVersion = 1;
+   std::vector<uint8_t> save() const {
+      std::vector<uint8_t> b{kVersion, static_cast<uint8_t>(kSlots)};
+      for (const Pattern &p : slots) {
+         const std::vector<uint8_t> one = p.save();
+         b.push_back(static_cast<uint8_t>(one.size() & 0xff));
+         b.push_back(static_cast<uint8_t>(one.size() >> 8));
+         b.insert(b.end(), one.begin(), one.end());
+      }
+      return b;
+   }
+   bool load(const uint8_t *data, size_t size) {
+      if (size < 2 || data[0] != kVersion)
+         return false;
+      Bank bank;
+      size_t at = 2;
+      for (int i = 0; i < data[1]; ++i) {
+         if (at + 2 > size)
+            return false;
+         const size_t n = data[at] | data[at + 1] << 8;
+         at += 2;
+         if (at + n > size)
+            return false;
+         if (i < kSlots && !bank.slots[i].load(data + at, n))
+            return false;
+         at += n;
+      }
+      *this = bank;
+      return true;
+   }
+
+   // The next slot after `from` with notes in it, going round; `from` itself if no other has any.
+   int next(int from) const {
+      for (int k = 1; k <= kSlots; ++k) {
+         const int i = (from + k) % kSlots;
+         if (!slots[i].empty())
+            return i;
+      }
+      return from;
+   }
+};
+
+// The panel's edits: one slot's whole pattern, applied at the start of the next block.
 struct Command {
+   int slot = 0;
    Pattern pattern;
 };
 
@@ -161,6 +226,8 @@ struct Frame {
    std::array<RowView, kRows> rows{};
    // The hits each step played last time, for the steps whose ratchet follows pressure.
    std::array<uint8_t, kSteps> hits{};
+   // The slot playing.
+   int8_t slot = 0;
 };
 
 } // namespace jarp

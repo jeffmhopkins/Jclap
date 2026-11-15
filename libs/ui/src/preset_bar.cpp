@@ -323,7 +323,10 @@ void PresetBar::confirmDelete() {
       if (id != kDeleteId)
          return;
       std::error_code ec;
-      std::filesystem::remove(userPresetFolder(format_) / (current + format_.extension), ec);
+      const std::filesystem::path file = userPresetFolder(format_) / (current + format_.extension);
+      std::filesystem::remove(file, ec);
+      if (onDeleted)
+         onDeleted(file);
       favorites_.remove(current);
       rescan();
       redraw();
@@ -360,7 +363,10 @@ void PresetBar::finishSave(bool apply) {
       return;
    const std::string wanted = uniqueName(presetFileName(editor_->text().toUtf8()));
    editor_->setVisible(false);
-   if (apply && writePresetFile(userPresetFolder(format_) / (wanted + format_.extension), format_, params_)) {
+   const std::filesystem::path file = userPresetFolder(format_) / (wanted + format_.extension);
+   if (apply && writePresetFile(file, format_, params_)) {
+      if (onSaved)
+         onSaved(file);
       rename(wanted);
       rescan();
       for (int i = 0; i < static_cast<int>(user_.size()); ++i)

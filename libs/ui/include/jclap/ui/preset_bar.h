@@ -11,6 +11,7 @@
 //
 // It is drawn for a height of about 28 and scales with it.
 
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
@@ -47,6 +48,10 @@ public:
    // and a click on it calls onDice. The die is lit (in the accent) while diceLit says so.
    std::function<void()> onDice;
    std::function<bool()> diceLit;
+   // A plugin that keeps more than its params in a preset (a pattern, say) writes it beside the
+   // preset file in onSaved, and removes it in onDeleted. Both get the preset file's path.
+   std::function<void(const std::filesystem::path &)> onSaved;
+   std::function<void(const std::filesystem::path &)> onDeleted;
 
    void setTheme(const Theme &theme);
    void setAccent(unsigned color);

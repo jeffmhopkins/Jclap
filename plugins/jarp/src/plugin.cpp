@@ -29,10 +29,16 @@ using namespace jarp;
 const char *const kFeatures[] = {CLAP_PLUGIN_FEATURE_NOTE_EFFECT, CLAP_PLUGIN_FEATURE_UTILITY, nullptr};
 
 // State layout: 4-byte magic, uint32 version, uint32 param count, one double per param in kParams
-// order, uint32 pattern size and the pattern (Pattern::save), then uint32 name length and the preset
+// order, uint32 bank size and the bank (Bank::save: every pattern slot), then uint32 name length and the preset
 // name. Params are only ever appended, so a state with fewer values leaves the rest at their defaults.
 constexpr char kStateMagic[4] = {'J', 'A', 'R', 'P'};
-constexpr uint32_t kStateVersion = 1;
+// Version 1 had one pattern, and a Length param where Pattern and Advance are; it still loads, as
+// slot A with that length.
+constexpr uint32_t kStateVersion = 2;
+constexpr int kV1Params = 13;
+// Where each version 1 param went (-1: Length, now the pattern's own).
+constexpr int kFromV1[kV1Params] = {kRate, kSwing, -1, kLatch, kRestart, kRowsBy, kEmptyRows, kKey, kScale,
+                                    kPressVelocity, kCurve, kPressRatchet, kMaxHits};
 
 class JArp final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -43,8 +49,8 @@ public:
          values_[i].store(kParams[i].defaultValue);
          mods_[i].store(0.0);
       }
-      pattern_ = defaultPattern();
-      engine_.setPattern(pattern_);
+      bank_.slots[0] = defaultPattern();
+      engine_.setBank(bank_);
       engine_.setSettings(settings());
       publish();
    }
@@ -63,7 +69,7 @@ public:
       Command stale;
       while (commands_.pop(stale)) {
       }
-      engine_.setPattern(pattern_);
+      engine_.setBank(bank_);
       engine_.setSettings(settings());
       engine_.reset();
       active_.store(true);
@@ -122,19 +128,23 @@ public:
       return frames_.front();
    }
 
-   const Pattern &pattern() const override { return pattern_; }
+   const Pattern &pattern() const override { return bank_.slots[selected()]; }
+   void setPattern(const Pattern &p) override { setSlot(selected(), p); }
+   const Bank &bank() const override { return bank_; }
 
-   void setPattern(const Pattern &p) override {
-      if (p == pattern_)
+   void setSlot(int slot, const Pattern &p) override {
+      if (slot < 0 || slot >= kSlots || p == bank_.slots[slot])
          return;
-      pattern_ = p;
-      if (active_.load())
-         commands_.push({p});
-      else
-         engine_.setPattern(p);
-      // The pattern isn't a param, so the host is told the project changed.
+      bank_.slots[slot] = p;
+      send(slot);
+      // Patterns aren't params, so the host is told the project changed.
       if (auto *state = hostExtension<clap_host_state_t>(CLAP_EXT_STATE))
          state->mark_dirty(host());
+   }
+
+   void setBank(const Bank &b) override {
+      for (int i = 0; i < kSlots; ++i)
+         setSlot(i, b.slots[i]);
    }
 
    std::string presetName() const override { return presetName_; }
@@ -190,7 +200,7 @@ public:
          if (!jclap::core::writeAll(stream, &v, sizeof(v)))
             return false;
       }
-      const std::vector<uint8_t> saved = pattern_.save();
+      const std::vector<uint8_t> saved = bank_.save();
       const uint32_t size = static_cast<uint32_t>(saved.size());
       const uint32_t nameLength = static_cast<uint32_t>(std::min<size_t>(presetName_.size(), 255));
       return jclap::core::writeAll(stream, &size, sizeof(size)) && jclap::core::writeAll(stream, saved.data(), size) &&
@@ -205,22 +215,36 @@ public:
           !jclap::core::readAll(stream, header, sizeof(header)) || header[0] < 1 || header[0] > kStateVersion ||
           header[1] > 4096)
          return false;
+      const bool v1 = header[0] == 1;
       double v[kParamCount];
       for (size_t i = 0; i < kParamCount; ++i)
          v[i] = kParams[i].defaultValue;
+      double oldLength = 8;
       for (uint32_t i = 0; i < header[1]; ++i) {
          double x;
          if (!jclap::core::readAll(stream, &x, sizeof(x)))
             return false;
-         if (i < kParamCount && std::isfinite(x))
-            v[i] = x;
+         if (!std::isfinite(x))
+            continue;
+         const int to = !v1 ? static_cast<int>(i) : i < kV1Params ? kFromV1[i] : static_cast<int>(kParamCount);
+         if (v1 && i == 2)
+            oldLength = x;
+         else if (to >= 0 && to < static_cast<int>(kParamCount))
+            v[to] = x;
       }
       uint32_t size = 0;
       if (!jclap::core::readAll(stream, &size, sizeof(size)) || size > 65536)
          return false;
       std::vector<uint8_t> saved(size);
-      Pattern p;
-      if (!jclap::core::readAll(stream, saved.data(), size) || !p.load(saved.data(), saved.size()))
+      if (!jclap::core::readAll(stream, saved.data(), size))
+         return false;
+      Bank bank;
+      if (v1) {
+         bank.slots[0].length = static_cast<uint8_t>(std::clamp<int>(static_cast<int>(std::lround(oldLength)), 1, kSteps));
+         if (!bank.slots[0].load(saved.data(), saved.size()))
+            return false;
+      }
+      else if (!bank.load(saved.data(), saved.size()))
          return false;
       uint32_t nameLength = 0;
       char name[256];
@@ -232,11 +256,9 @@ public:
 
       for (size_t i = 0; i < kParamCount; ++i)
          values_[i].store(std::clamp(v[i], kParams[i].min, kParams[i].max));
-      pattern_ = p;
-      if (active_.load())
-         commands_.push({p});
-      else
-         engine_.setPattern(p);
+      bank_ = bank;
+      for (int i = 0; i < kSlots; ++i)
+         send(i);
       if (auto *hostParams = hostExtension<clap_host_params_t>(CLAP_EXT_PARAMS))
          hostParams->rescan(host(), CLAP_PARAM_RESCAN_VALUES);
       return true;
@@ -255,7 +277,7 @@ public:
          handleParam(in->get(in, i));
       Command c;
       while (commands_.pop(c))
-         engine_.setPattern(c.pattern);
+         engine_.setPattern(c.slot, c.pattern);
       engine_.setSettings(settings());
 
       Block b;
@@ -292,6 +314,16 @@ public:
    }
 
 private:
+   // Hands a slot to the engine: through the queue while active, directly otherwise.
+   void send(int slot) {
+      if (active_.load())
+         commands_.push({slot, bank_.slots[slot]});
+      else
+         engine_.setPattern(slot, bank_.slots[slot]);
+   }
+
+   int selected() const { return std::clamp(static_cast<int>(std::lround(values_[kSlot].load())), 0, kSlots - 1); }
+
    void flush(const clap_output_events_t *out) {
       for (size_t i = 0; i < out_.count; ++i) {
          const MidiOut &m = out_.items[i];
@@ -410,7 +442,8 @@ private:
       Settings s;
       s.rate = whole(kRate);
       s.swing = value(kSwing);
-      s.length = whole(kLength);
+      s.slot = whole(kSlot);
+      s.advance = static_cast<Advance>(whole(kAdvance));
       s.latch = whole(kLatch) != 0;
       s.restart = static_cast<Restart>(whole(kRestart));
       s.degree = whole(kRowsBy) != 0;
@@ -439,11 +472,11 @@ private:
    double sampleRate_ = 48000.0;
    std::atomic<bool> active_{false};
    OutBuffer out_;
-   jclap::core::SpscQueue<Command, 32> commands_;
+   jclap::core::SpscQueue<Command, 64> commands_;
    jclap::core::TripleBuffer<Frame> frames_;
 
    // Main thread.
-   Pattern pattern_;
+   Bank bank_;
    std::string presetName_ = "Init";
 
    // Last, so the panel closes before the state it reads goes away.

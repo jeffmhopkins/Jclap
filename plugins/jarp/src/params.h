@@ -1,8 +1,9 @@
 #pragma once
 
 // JArp's parameters, shared by the plugin and the panel. Ids are indexes into kParams, so keep them
-// in order; once released, only append so saved projects keep working. The pattern itself (the
-// notes on the grid and the lanes under it) is not a param: it is saved with the project.
+// in order; once released, only append so saved projects keep working. The patterns themselves (the
+// notes on the grid, the lanes under it and each one's length) are not params: they are saved with
+// the project. Which pattern plays, and how the chain advances, are.
 
 #include <jclap/core/helpers.h>
 
@@ -17,7 +18,9 @@ enum ParamId : clap_id {
    // Timing.
    kRate,
    kSwing,
-   kLength,
+   // Patterns: the slot selected, and how playing moves along the slots with notes in them.
+   kSlot,
+   kAdvance,
    // Playback.
    kLatch,
    kRestart,
@@ -42,7 +45,8 @@ constexpr auto kChoice = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED | CLA
 inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kRate, "Rate", "Timing", 0, 5, 2, kChoice},
    {kSwing, "Swing", "Timing", 0.5, 0.75, 0.5, kMod},
-   {kLength, "Length", "Timing", 1, 16, 8, kStep},
+   {kSlot, "Pattern", "Patterns", 0, 7, 0, kChoice},
+   {kAdvance, "Advance", "Patterns", 0, 2, 0, kChoice},
    {kLatch, "Latch", "Playback", 0, 1, 0, kChoice},
    {kRestart, "Restart", "Playback", 0, 2, 1, kChoice},
    {kRowsBy, "Rows By", "Rows", 0, 1, 0, kChoice},
@@ -61,6 +65,8 @@ inline const char *const kRateNames[] = {"1/32", "1/16T", "1/16", "1/8T", "1/8",
 // Each rate's step length in beats (quarter notes).
 inline const double kRateBeats[] = {0.125, 1.0 / 6.0, 0.25, 1.0 / 3.0, 0.5, 1.0};
 inline const char *const kOffOnNames[] = {"Off", "On"};
+inline const char *const kSlotNames[] = {"A", "B", "C", "D", "E", "F", "G", "H"};
+inline const char *const kAdvanceNames[] = {"Off", "Chord", "Loop"};
 inline const char *const kRestartNames[] = {"Free", "Note", "Bar"};
 inline const char *const kRowsByNames[] = {"Pitch", "Degree"};
 inline const char *const kEmptyRowsNames[] = {"Rest", "Wrap"};
@@ -68,10 +74,15 @@ inline const char *const kKeyNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G
 inline const char *const kScaleNames[] = {"Major", "Minor"};
 
 enum class Restart { Free, Note, Bar };
+// How playing moves along the patterns with notes in them: not at all (the selected one plays), to
+// the next with each new chord (after every finger has let go), or each time the pattern ends.
+enum class Advance { Off, Chord, Loop };
 
 inline const char *const *choiceNames(clap_id id, int &count) {
    switch (id) {
    case kRate: count = 6; return kRateNames;
+   case kSlot: count = 8; return kSlotNames;
+   case kAdvance: count = 3; return kAdvanceNames;
    case kLatch: count = 2; return kOffOnNames;
    case kRestart: count = 3; return kRestartNames;
    case kRowsBy: count = 2; return kRowsByNames;
@@ -100,8 +111,6 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    const long whole = std::lround(value);
    if (isPercent(id))
       std::snprintf(out, size, "%.0f%%", value * 100.0);
-   else if (id == kLength)
-      std::snprintf(out, size, whole == 1 ? "%ld step" : "%ld steps", whole);
    else if (id == kCurve) {
       const long amount = std::lround(std::abs(value) * 100.0);
       if (amount == 0)

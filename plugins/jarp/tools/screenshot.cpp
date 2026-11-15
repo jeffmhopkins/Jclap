@@ -25,14 +25,16 @@ public:
          values_[i] = kParams[i].defaultValue;
       for (const auto &[id, v] : findPreset("Pedal Climb").values)
          values_[id] = v;
-      pattern_ = *factoryPattern("Pedal Climb");
+      bank_ = *factoryBank("Pedal Climb");
+      // A second and third pattern, so the chain strip shows some lit.
+      bank_.slots[1] = factoryBank("Root Fifth")->slots[0];
+      bank_.slots[2] = factoryBank("Press Roll")->slots[0];
       Settings s;
       s.rate = static_cast<int>(values_[kRate]);
       s.swing = values_[kSwing];
-      s.length = static_cast<int>(values_[kLength]);
       s.pressVelocity = values_[kPressVelocity];
       engine_.setSettings(s);
-      engine_.setPattern(pattern_);
+      engine_.setBank(bank_);
 
       // A Cmaj7 on channels 2-5, then play on to a little way into step 11.
       OutBuffer out;
@@ -70,8 +72,11 @@ public:
    }
    void endEdit(clap_id) override {}
    const Frame &frame() override { return frame_; }
-   const Pattern &pattern() const override { return pattern_; }
-   void setPattern(const Pattern &p) override { pattern_ = p; }
+   const Pattern &pattern() const override { return bank_.slots[static_cast<int>(values_[kSlot])]; }
+   void setPattern(const Pattern &p) override { bank_.slots[static_cast<int>(values_[kSlot])] = p; }
+   const Bank &bank() const override { return bank_; }
+   void setSlot(int slot, const Pattern &p) override { bank_.slots[slot] = p; }
+   void setBank(const Bank &b) override { bank_ = b; }
    std::string presetName() const override { return "Pedal Climb"; }
    void setPresetName(const std::string &) override {}
 
@@ -84,7 +89,7 @@ private:
    }
 
    double values_[kParamCount];
-   Pattern pattern_;
+   Bank bank_;
    Engine engine_;
    Frame frame_;
 };

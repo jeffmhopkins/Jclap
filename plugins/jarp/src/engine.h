@@ -26,7 +26,8 @@ namespace jarp {
 struct Settings {
    int rate = 2;
    double swing = 0.5; // 0.5 straight .. 0.75
-   int length = 8;
+   int slot = 0;
+   Advance advance = Advance::Off;
    bool latch = false;
    Restart restart = Restart::Note;
    bool degree = false;
@@ -130,15 +131,25 @@ public:
    void setSettings(const Settings &s) {
       const bool dropLatched = settings_.latch && !s.latch;
       settings_ = s;
-      settings_.length = std::clamp(s.length, 1, kSteps);
+      settings_.slot = std::clamp(s.slot, 0, kSlots - 1);
+      // Picking a slot plays it from the next step on.
+      if (settings_.slot != selected_) {
+         selected_ = settings_.slot;
+         playing_ = selected_;
+      }
       settings_.rate = std::clamp(s.rate, 0, 5);
       settings_.maxHits = std::clamp(s.maxHits, 1, kMaxRatchet);
       dropLatched_ = dropLatched_ || dropLatched;
    }
    const Settings &settings() const { return settings_; }
 
-   void setPattern(const Pattern &p) { pattern_ = p; }
-   const Pattern &pattern() const { return pattern_; }
+   void setPattern(int slot, const Pattern &p) {
+      if (slot >= 0 && slot < kSlots)
+         bank_.slots[slot] = p;
+   }
+   void setBank(const Bank &b) { bank_ = b; }
+   const Bank &bank() const { return bank_; }
+   int playing() const { return playing_; }
 
    // Starts a block: works out where the clock is, and if it jumped (the host looped or located, or
    // the rate changed) ends the notes sounding and starts the pattern over from there.
@@ -252,7 +263,17 @@ public:
       if (!wasRunning) {
          origin_ = originAt(clock(t), block_);
          next_ = kUnset;
+         slotStart_ = 0;
          hits_.fill(0);
+         // A new chord moves on to the next pattern with notes in it (Advance Chord); the first
+         // chord plays the one selected.
+         if (settings_.advance == Advance::Off)
+            playing_ = selected_;
+         else if (settings_.advance == Advance::Chord && played_)
+            playing_ = bank_.next(playing_);
+         else if (bank_.slots[playing_].empty())
+            playing_ = bank_.next(playing_);
+         played_ = true;
       }
    }
 
@@ -321,8 +342,9 @@ public:
 
    void fillFrame(Frame &frame) const {
       frame.running = running();
-      const double len = settings_.length;
-      frame.position = frame.running ? std::fmod(std::max(0.0, position_), len) : 0.0;
+      const double len = bank_.slots[playing_].length;
+      frame.position = frame.running ? std::fmod(std::max(0.0, position_ - slotStart_), len) : 0.0;
+      frame.slot = static_cast<int8_t>(playing_);
       int held[kMaxFingers], slots[kMaxFingers];
       const int n = sortedFingers(held, slots);
       int key[kRows], target[kRows];
@@ -437,8 +459,20 @@ private:
 
    // Starts the notes on musical step j (counted from the origin).
    void trigger(int64_t j) {
-      const int len = settings_.length;
-      const int step = static_cast<int>(((j % len) + len) % len);
+      int len = std::clamp<int>(bank_.slots[playing_].length, 1, kSteps);
+      // Each time round, Advance Loop moves on to the next pattern with notes in it.
+      if (settings_.advance == Advance::Loop && j > slotStart_ && (j - slotStart_) % len == 0) {
+         const int next = bank_.next(playing_);
+         if (next != playing_) {
+            playing_ = next;
+            hits_.fill(0);
+         }
+         slotStart_ = j;
+         len = std::clamp<int>(bank_.slots[playing_].length, 1, kSteps);
+      }
+      const int64_t rel = j - slotStart_;
+      const int step = static_cast<int>(((rel % len) + len) % len);
+      const Pattern &pattern_ = bank_.slots[playing_];
       int held[kMaxFingers], slots[kMaxFingers];
       const int n = sortedFingers(held, slots);
       if (!n)
@@ -508,7 +542,10 @@ private:
    }
 
    Settings settings_;
-   Pattern pattern_;
+   Bank bank_;
+   int selected_ = 0, playing_ = 0;
+   bool played_ = false;
+   int64_t slotStart_ = 0;
    std::array<Finger, kMaxFingers> fingers_{};
    std::array<ChannelState, 16> channels_{};
    Sound sounding_[16][128]{};
