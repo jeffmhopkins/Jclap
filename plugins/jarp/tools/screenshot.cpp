@@ -72,8 +72,8 @@ public:
    }
    void endEdit(clap_id) override {}
    const Frame &frame() override { return frame_; }
-   const Pattern &pattern() const override { return bank_.slots[static_cast<int>(values_[kSlot])]; }
-   void setPattern(const Pattern &p) override { bank_.slots[static_cast<int>(values_[kSlot])] = p; }
+   const Pattern &pattern() const override { return bank_.slots[slotIndex(values_[kSlot])]; }
+   void setPattern(const Pattern &p) override { bank_.slots[slotIndex(values_[kSlot])] = p; }
    const Bank &bank() const override { return bank_; }
    void setSlot(int slot, const Pattern &p) override { bank_.slots[slot] = p; }
    void setBank(const Bank &b) override { bank_ = b; }

@@ -96,7 +96,7 @@ public:
       const int len = length();
       const bool degree = std::lround(host_.paramValue(kRowsBy)) != 0;
       // The playhead shows on the pattern playing only (another may be selected for editing).
-      const bool here = f.running && f.slot == std::lround(host_.paramValue(kSlot));
+      const bool here = f.running && f.slot == slotIndex(host_.paramValue(kSlot));
       const int playStep = here ? std::clamp(static_cast<int>(f.position), 0, len - 1) : -1;
       const int playQuarter = here ? static_cast<int>(f.position * kQuarters) : -1;
 
@@ -484,7 +484,7 @@ private:
    float downY_ = 0.0f;
 };
 
-// Patterns A to H in the PATTERN title row: click to select one (the Pattern param), right-click to
+// Patterns 1 to 8 in the PATTERN title row: click to select one (the Pattern param), right-click to
 // copy, paste or clear it. A letter is lit when its pattern has notes; the selected one is slate and
 // the one playing has an orange bar under it.
 class SlotStrip : public visage::Frame {
@@ -496,7 +496,7 @@ public:
    void draw(visage::Canvas &c) override {
       const float s = ui::designScale(*this);
       const ui::Theme &t = ui::defaultTheme();
-      const int selected = static_cast<int>(std::lround(host_.paramValue(kSlot)));
+      const int selected = slotIndex(host_.paramValue(kSlot));
       const jarp::Frame &f = host_.frame();
       for (int i = 0; i < kSlots; ++i) {
          const float x = i * (kTab + kGap);
@@ -507,7 +507,7 @@ public:
          c.roundedRectangleBorder(x * s, 1 * s, kTab * s, 22 * s, 3 * s, 1.0f);
          const bool playing = f.running && f.slot == i;
          c.setColor(i == selected ? t.text : playing ? kOrange : filled ? t.text : alpha(t.dimText, 0.5f));
-         c.text(kSlotNames[i], ui::font(10.5f * s), visage::Font::kCenter, x * s, 1 * s, kTab * s, 22 * s);
+         c.text(std::to_string(i + 1).c_str(), ui::font(10.5f * s), visage::Font::kCenter, x * s, 1 * s, kTab * s, 22 * s);
          if (playing) {
             c.setColor(kOrange);
             c.roundedRectangle((x + 5) * s, 19 * s, (kTab - 10) * s, 2 * s, 1 * s);
@@ -527,7 +527,7 @@ public:
          return;
       }
       host_.beginEdit(kSlot);
-      host_.setParam(kSlot, i);
+      host_.setParam(kSlot, i + 1);
       host_.endEdit(kSlot);
       redraw();
    }
@@ -546,9 +546,9 @@ private:
    }
    void menu(int slot, visage::Point where) {
       visage::PopupMenu m;
-      m.addOption(1, std::string("Copy ") + kSlotNames[slot]);
-      m.addOption(2, std::string("Paste into ") + kSlotNames[slot]).enable(clipboardFull_);
-      m.addOption(3, std::string("Clear ") + kSlotNames[slot]);
+      m.addOption(1, std::string("Copy ") + std::to_string(slot + 1));
+      m.addOption(2, std::string("Paste into ") + std::to_string(slot + 1)).enable(clipboardFull_);
+      m.addOption(3, std::string("Clear ") + std::to_string(slot + 1));
       m.onSelection() += [this, slot](int id) {
          if (id == 1) {
             clipboard_ = host_.bank().slots[slot];
@@ -700,8 +700,8 @@ public:
       // PATTERN: the grid and its lanes, with how rows are picked in its title row.
       add<ui::Section>({12, 76, 876, 478}, "PATTERN");
       slots_ = &add<SlotStrip>({118, 88, 213, 24}, host_);
-      tips_.add(*slots_, "Patterns A to H: click one to play and edit it (the Pattern param, which the host can "
-                         "automate). Lit letters have notes; the orange bar is the one playing. Right-click to copy, "
+      tips_.add(*slots_, "Patterns 1 to 8: click one to play and edit it (the Pattern param, which the host can "
+                         "automate). Lit numbers have notes; the orange bar is the one playing. Right-click to copy, "
                          "paste or clear. Empty patterns are skipped when the chain advances.");
       tips_.add(choice(kAdvance, {340, 89, 128, 22}, {"OFF", "CHORD", "LOOP"}),
                 "Advance: Off plays the pattern selected. Chord moves to the next pattern with notes each time you "

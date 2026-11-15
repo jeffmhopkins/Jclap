@@ -54,7 +54,7 @@ inline Pattern defaultPattern() {
    return makePattern({{1, 1, 4}, {2, 2, 4}, {3, 3, 4}, {4, 4, 4}, {3, 5, 4}, {2, 6, 4}, {1, 7, 4}, {2, 8, 4}});
 }
 
-// A bank with these patterns from slot A on, the rest empty.
+// A bank with these patterns from slot 1 on, the rest empty.
 inline Bank makeBank(std::initializer_list<Pattern> patterns) {
    Bank b;
    int i = 0;
@@ -65,7 +65,7 @@ inline Bank makeBank(std::initializer_list<Pattern> patterns) {
 
 struct FactoryPattern {
    FactoryPattern(const char *n, const Bank &b) : name(n), bank(b) {}
-   // One pattern, in slot A.
+   // One pattern, in slot 1.
    FactoryPattern(const char *n, const Pattern &p) : name(n), bank(makeBank({p})) {}
    const char *name;
    Bank bank;

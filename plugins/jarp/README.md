@@ -38,28 +38,28 @@ note name, with a dot beside it.
 
 ## Patterns and chains
 
-JArp holds eight patterns, **A** to **H**, in the strip beside the PATTERN title. Click a letter to
-play it and edit it on the grid. A lit letter has notes in it; the one playing has an orange bar under
-it. Right-click a letter to **copy** it, **paste** into it, or **clear** it.
+JArp holds eight patterns, **1** to **8**, in the strip beside the PATTERN title. Click a number to
+play it and edit it on the grid. A lit number has notes in it; the one playing has an orange bar under
+it. Right-click a number to **copy** it, **paste** into it, or **clear** it.
 
-The switch beside the letters says how playing moves along them:
+The switch beside the numbers says how playing moves along them:
 
 - **OFF**: the pattern selected plays.
 - **CHORD**: each new chord moves to the next pattern. Let go of every note, play again, and the next
   pattern starts. The first chord plays the one selected.
-- **LOOP**: while you hold, each time a pattern ends the next one starts, so A, B and C play as one
+- **LOOP**: while you hold, each time a pattern ends the next one starts, so 1, 2 and 3 play as one
   long phrase.
 
 Empty patterns are skipped, and after the last pattern with notes it goes round to the first. To chain
-A, B and C, fill those three and leave the rest empty; clear one to drop it from the chain.
+1, 2 and 3, fill those three and leave the rest empty; clear one to drop it from the chain.
 
 With RESTART on **SONG** the chain follows the song too. In LOOP the patterns are laid end to end from
 the start of the song (beginning with the one selected), so where the song is decides which pattern
-plays and which step: come in during the third bar of an A B C chain and you hear the part of the
+plays and which step: come in during the third bar of a 1 2 3 chain and you hear the part of the
 chain that falls there. In CHORD the next pattern picks up at the step the song has reached in it.
 
-Both are host params, so you can automate or modulate them: **Pattern** (A to H) picks the pattern,
-and **Advance** (Off, Chord, Loop) turns chaining on and off. A new Pattern value takes over from the
+Both are host params, so you can automate or modulate them: **Pattern** (1 to 8, the same numbers
+as the strip) picks the pattern, and **Advance** (Off, Chord, Loop) turns chaining on and off. A new Pattern value takes over from the
 next step.
 
 ## Rows

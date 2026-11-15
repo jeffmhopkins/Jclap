@@ -79,7 +79,7 @@ std::vector<In> chord(std::initializer_list<int> keys, int64_t at = 0, int veloc
    return in;
 }
 
-// Sets slot A, with the pattern's length taken from the settings' old LENGTH where a test gives one.
+// Sets slot 1, with the pattern's length taken from the settings' old LENGTH where a test gives one.
 void setPattern(Engine &e, Pattern p, int length = 8) {
    p.length = static_cast<uint8_t>(length);
    e.setPattern(0, p);

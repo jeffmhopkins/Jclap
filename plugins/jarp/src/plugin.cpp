@@ -33,7 +33,7 @@ const char *const kFeatures[] = {CLAP_PLUGIN_FEATURE_NOTE_EFFECT, CLAP_PLUGIN_FE
 // name. Params are only ever appended, so a state with fewer values leaves the rest at their defaults.
 constexpr char kStateMagic[4] = {'J', 'A', 'R', 'P'};
 // Version 1 had one pattern, and a Length param where Pattern and Advance are; it still loads, as
-// slot A with that length.
+// slot 1 with that length.
 constexpr uint32_t kStateVersion = 2;
 constexpr int kV1Params = 13;
 // Where each version 1 param went (-1: Length, now the pattern's own).
@@ -322,7 +322,7 @@ private:
          engine_.setPattern(slot, bank_.slots[slot]);
    }
 
-   int selected() const { return std::clamp(static_cast<int>(std::lround(values_[kSlot].load())), 0, kSlots - 1); }
+   int selected() const { return slotIndex(values_[kSlot].load()); }
 
    void flush(const clap_output_events_t *out) {
       for (size_t i = 0; i < out_.count; ++i) {
@@ -442,7 +442,7 @@ private:
       Settings s;
       s.rate = whole(kRate);
       s.swing = value(kSwing);
-      s.slot = whole(kSlot);
+      s.slot = slotIndex(values_[kSlot].load());
       s.advance = static_cast<Advance>(whole(kAdvance));
       s.latch = whole(kLatch) != 0;
       s.restart = static_cast<Restart>(whole(kRestart));

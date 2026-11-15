@@ -18,7 +18,7 @@ enum ParamId : clap_id {
    // Timing.
    kRate,
    kSwing,
-   // Patterns: the slot selected, and how playing moves along the slots with notes in them.
+   // Patterns: the slot selected (1..8), and how playing moves along the slots with notes in them.
    kSlot,
    kAdvance,
    // Playback.
@@ -45,7 +45,7 @@ constexpr auto kChoice = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED | CLA
 inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kRate, "Rate", "Timing", 0, 5, 2, kChoice},
    {kSwing, "Swing", "Timing", 0.5, 0.75, 0.5, kMod},
-   {kSlot, "Pattern", "Patterns", 0, 7, 0, kChoice},
+   {kSlot, "Pattern", "Patterns", 1, 8, 1, kStep},
    {kAdvance, "Advance", "Patterns", 0, 2, 0, kChoice},
    {kLatch, "Latch", "Playback", 0, 1, 0, kChoice},
    {kRestart, "Restart", "Playback", 0, 2, 1, kChoice},
@@ -65,7 +65,6 @@ inline const char *const kRateNames[] = {"1/32", "1/16T", "1/16", "1/8T", "1/8",
 // Each rate's step length in beats (quarter notes).
 inline const double kRateBeats[] = {0.125, 1.0 / 6.0, 0.25, 1.0 / 3.0, 0.5, 1.0};
 inline const char *const kOffOnNames[] = {"Off", "On"};
-inline const char *const kSlotNames[] = {"A", "B", "C", "D", "E", "F", "G", "H"};
 inline const char *const kAdvanceNames[] = {"Off", "Chord", "Loop"};
 inline const char *const kRestartNames[] = {"Song", "Note", "Bar"};
 inline const char *const kRowsByNames[] = {"Pitch", "Degree"};
@@ -84,7 +83,6 @@ enum class Advance { Off, Chord, Loop };
 inline const char *const *choiceNames(clap_id id, int &count) {
    switch (id) {
    case kRate: count = 6; return kRateNames;
-   case kSlot: count = 8; return kSlotNames;
    case kAdvance: count = 3; return kAdvanceNames;
    case kLatch: count = 2; return kOffOnNames;
    case kRestart: count = 3; return kRestartNames;
@@ -95,6 +93,9 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    default: count = 0; return nullptr;
    }
 }
+
+// The Pattern param's value (1..8, as the panel numbers the slots) as a slot index, 0..7.
+inline int slotIndex(double value) { return std::clamp(static_cast<int>(std::lround(value)) - 1, 0, 7); }
 
 inline int choiceIndex(double value, int count) {
    return std::clamp(static_cast<int>(std::lround(value)), 0, count - 1);

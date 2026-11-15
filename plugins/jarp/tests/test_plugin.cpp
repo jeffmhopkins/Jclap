@@ -172,7 +172,7 @@ int main() {
    }
 
    {
-      // A version 1 state (one pattern, a Length param) loads as slot A with that length, and the
+      // A version 1 state (one pattern, a Length param) loads as slot 1 with that length, and the
       // params after Length land where they are now.
       Buffer old;
       const auto put = [&](const void *p, size_t n) {
@@ -201,7 +201,7 @@ int main() {
       JCLAP_CHECK_EQ(v, 1.0);
       params->get_value(g.plugin(), kAdvance, &v);
       JCLAP_CHECK_EQ(v, 0.0);
-      // Slot A's one note plays, once per 12 steps.
+      // Slot 1's one note plays, once per 12 steps.
       g.setTransport(120.0, 0.0, true);
       g.midi(0x90, 60, 100);
       JCLAP_CHECK_EQ(noteOns(play(g, 400)).size(), 2u); // 102400 samples: steps 0 and 12
@@ -218,8 +218,8 @@ int main() {
       JCLAP_CHECK(!std::strcmp(text, "Linear"));
       formatParam(kCurve, -0.4, text, sizeof(text));
       JCLAP_CHECK(!std::strcmp(text, "Soft 40%"));
-      formatParam(kSlot, 2, text, sizeof(text));
-      JCLAP_CHECK(!std::strcmp(text, "C"));
+      formatParam(kSlot, 3, text, sizeof(text));
+      JCLAP_CHECK(!std::strcmp(text, "3"));
       formatParam(kAdvance, 1, text, sizeof(text));
       JCLAP_CHECK(!std::strcmp(text, "Chord"));
       for (clap_id id = 0; id < kParamCount; ++id) {

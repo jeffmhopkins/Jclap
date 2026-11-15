@@ -21,7 +21,7 @@ constexpr int kMaxLength = kSteps * kQuarters;
 constexpr int kMaxNotes = kRows * kSteps;
 constexpr int kMaxRatchet = 8;
 constexpr int kMaxFingers = 16;
-// Pattern slots A-H.
+// Pattern slots 1-8.
 constexpr int kSlots = 8;
 
 // A note on the grid: its row (0 is row 1, the lowest), the step it starts on, and how long it
