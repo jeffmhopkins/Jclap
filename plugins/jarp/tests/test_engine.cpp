@@ -280,6 +280,43 @@ int main() {
       JCLAP_CHECK_EQ(on[3].time, kStepSamples + 2 * kStepSamples / 3);
    }
    {
+      // A note's own lane values override its step's, for that note only: two notes on one step,
+      // the upper with its own octave, ratchet and velocity, the lower on the step's.
+      Engine e;
+      Settings s;
+      s.pressVelocity = 0.0;
+      e.setSettings(s);
+      Pattern p = pattern({{0, 0, 4}, {1, 0, 4}});
+      p.lanes[0].velocity = -20;
+      Note &n = p.notes[p.noteStarting(1, 0)];
+      n.own = kOwnOctave | kOwnRatchet | kOwnVelocity;
+      n.lane = {1, 2, 0, 10};
+      setPattern(e, p);
+      const auto on = ons(run(e, kStepSamples - 10, chord({60, 64})));
+      JCLAP_CHECK_EQ(on.size(), 3u);
+      int low = 0, high = 0;
+      for (const auto &o : on) {
+         if (o.m.data1 == 60) {
+            ++low;
+            JCLAP_CHECK_EQ(o.m.data2, 80);
+         }
+         else {
+            ++high;
+            JCLAP_CHECK_EQ(o.m.data1, 76);
+            JCLAP_CHECK_EQ(o.m.data2, 110);
+         }
+      }
+      JCLAP_CHECK_EQ(low, 1);
+      JCLAP_CHECK_EQ(high, 2);
+      // Only the bits it owns count: its step's octave still applies to what it doesn't own.
+      Note plain = n;
+      plain.own = kOwnVelocity;
+      const Lane l = plain.over(Lane{-1, 3, 1, 0});
+      JCLAP_CHECK_EQ(l.octave, -1);
+      JCLAP_CHECK_EQ(l.ratchet, 3);
+      JCLAP_CHECK_EQ(l.velocity, 10);
+   }
+   {
       // Pressure: a P step adds hits up to Max Hits as the finger presses, and velocity follows
       // pressure by Pressure to Velocity.
       Engine e;
@@ -557,6 +594,29 @@ int main() {
    }
 
    // ---- the saved pattern ----
+   {
+      // A note's own lane saves and loads (version 4); a version 3 pattern, from before, still loads.
+      Pattern p = pattern({{0, 0, 4}, {2, 3, 8}});
+      Note &n = p.notes[p.noteStarting(2, 3)];
+      n.own = kOwnPressure | kOwnVelocity;
+      n.lane = {0, 1, 1, -30};
+      const std::vector<uint8_t> saved = p.save();
+      Pattern q;
+      JCLAP_CHECK(q.load(saved.data(), saved.size()));
+      JCLAP_CHECK(q == p);
+      const Note &m = q.notes[q.noteStarting(2, 3)];
+      JCLAP_CHECK_EQ(m.own, kOwnPressure | kOwnVelocity);
+      JCLAP_CHECK_EQ(m.lane.velocity, -30);
+      JCLAP_CHECK_EQ(q.notes[q.noteStarting(0, 0)].own, 0);
+      JCLAP_CHECK(!q.load(saved.data(), saved.size() - 6));
+      const std::vector<uint8_t> v3 = {3, 8, 1, 0, 1, 2, 4, 0, 3, 0, 1, 0, 0, 0, 1, 0, 0, 0, 2, 0, 5};
+      Pattern r;
+      JCLAP_CHECK(r.load(v3.data(), v3.size()));
+      JCLAP_CHECK_EQ(r.count, 1);
+      JCLAP_CHECK_EQ(r.notes[0].own, 0);
+      JCLAP_CHECK_EQ(r.lanes[2].ratchet, 2);
+      JCLAP_CHECK_EQ(r.lanes[2].velocity, 5);
+   }
    {
       Pattern p = pattern({{0, 0, 64}, {3, 2, 1}, {7, 15, 4}});
       p.lanes[4] = {-2, 5, 1, -33};

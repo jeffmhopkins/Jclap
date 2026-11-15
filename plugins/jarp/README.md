@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.4.0.
+Version 0.5.0.
 
 ![Panel](docs/panel.png)
 
@@ -27,9 +27,13 @@ Eight rows by up to 128 steps, sixteen in view at a time. Row 1 is at the bottom
 - **Drag a note's right edge** to set how long it sounds, in quarter steps, from a quarter of a step to
   the whole pattern. A note stops at the next note in its row.
 - **Click a note** to remove it.
+- **Right-click a note** to pick it and give it lane values of its own (see [the lanes](#the-lanes)).
 - **Drag the purple bar** (or its tab) to set the pattern's length, from 1 to 128 steps. Drag it past
   the right edge and the grid scrolls on with it. The LENGTH knob is the same setting. Each pattern
   has its own length.
+
+A white line moves through the steps in time with the transport, and the step it is in is outlined.
+A softer note (a lower VELOCITY) draws fainter.
 
 There is no gate setting: a note's length on the grid is its gate. A note on row 1 drawn across the
 whole pattern holds a pedal under the rest.
@@ -111,6 +115,17 @@ scroll on it, to change it; double-click to set it back.
   its hits. Click **P** to make the step's ratchet follow pressure: pressing harder adds hits, up to
   MAX HITS. The note shows the extra hits it could take as blue outlines, filled as the finger presses.
 - **VELOCITY**: an offset from -64 to +64, added to the note's velocity.
+
+### A note's own values
+
+The lanes are per step, so every note starting on a step shares them. To set one note apart, right-click
+it. It gets a white outline, **NOTE** shows beside the lane names, and its step's column in the lanes
+(outlined in white) now edits that note alone. A value you change becomes the note's own; values it
+still takes from the step show dim. Double-click a value to hand it back to the step. A note with
+values of its own shows a white dot in its corner. Right-click it again, or click an empty cell, to
+go back to editing steps.
+
+![A picked note with its own octave, ratchet and velocity](docs/note.png)
 
 ## Settings
 

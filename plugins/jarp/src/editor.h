@@ -43,6 +43,8 @@ std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // Draws the panel offscreen at the given pixel size and saves it as a PNG, with the dice card open
 // if `dice`.
-bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, bool dice = false);
+// With pickRow, the note starting on (pickRow, pickStep) is picked, as a right-click on it would.
+bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, bool dice = false,
+                      int pickRow = -1, int pickStep = 0);
 
 } // namespace jarp
