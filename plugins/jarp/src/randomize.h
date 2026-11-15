@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <memory>
+#include <string>
 #include <vector>
 
 #include "shared.h"
@@ -35,6 +37,8 @@ struct DiceSettings {
    int velocity = 20;
    // Pressure: the share of steps whose ratchet follows pressure, 0..1.
    double pressure = 0.2;
+   // Random preset: the factory category to pick from, 0 for any (1 is the first category).
+   int presetCategory = 0;
 };
 
 class DiceRng {
@@ -96,7 +100,7 @@ inline Pattern randomizePattern(const Pattern &from, const DiceSettings &d, int 
                      return i;
                return -1;
             }();
-            Note n{0, static_cast<uint8_t>(s), static_cast<uint8_t>(kQuarters)};
+            Note n{0, static_cast<uint8_t>(s), static_cast<uint16_t>(kQuarters)};
             if (at >= 0)
                n.row = from.notes[at].row;
             notes.push_back(n);
@@ -109,7 +113,7 @@ inline Pattern randomizePattern(const Pattern &from, const DiceSettings &d, int 
       if (d.on[kDiceNotes] && n.step < len)
          n.row = static_cast<uint8_t>(rng.range(0, rows - 1));
       if (d.on[kDiceLength] && n.step < len)
-         n.length = static_cast<uint8_t>(dice_detail::rollLength(rng, std::clamp(d.length, 1, 16)));
+         n.length = static_cast<uint16_t>(dice_detail::rollLength(rng, std::clamp(d.length, 1, 16)));
       else if (d.on[kDicePlacement] && n.step < len)
          n.length = kQuarters;
    }
@@ -162,7 +166,7 @@ inline Pattern mutatePattern(const Pattern &from, const DiceSettings &d, int len
       if (d.on[kDiceNotes] && rng.chance(0.3))
          n.row = static_cast<uint8_t>(std::clamp(n.row + (rng.chance(0.5) ? 1 : -1), 0, rows - 1));
       if (d.on[kDiceLength] && rng.chance(0.3))
-         n.length = static_cast<uint8_t>(dice_detail::rollLength(rng, std::clamp(d.length, 1, 16)));
+         n.length = static_cast<uint16_t>(dice_detail::rollLength(rng, std::clamp(d.length, 1, 16)));
    }
    Pattern p = from;
    dice_detail::rebuild(p, notes);
@@ -181,11 +185,31 @@ inline Pattern mutatePattern(const Pattern &from, const DiceSettings &d, int len
 }
 
 // What UNDO and REDO step through: each pattern the dice replaced.
+// What a dice step replaced, to undo it: one slot's pattern (RANDOMIZE, MUTATE, a random pattern
+// into the slot), or everything, for a random preset: the params, every slot and the preset's name.
+struct DiceState {
+   struct Whole {
+      std::vector<double> values;
+      Bank bank;
+      std::string name;
+   };
+
+   int slot = 0;
+   Pattern pattern;
+   std::shared_ptr<const Whole> whole;
+
+   DiceState() = default;
+   DiceState(const Pattern &p, int inSlot = 0) : slot(inSlot), pattern(p) {}
+   explicit DiceState(Whole w) : whole(std::make_shared<const Whole>(std::move(w))) {}
+
+   bool operator==(const Pattern &p) const { return !whole && pattern == p; }
+};
+
 class DiceHistory {
 public:
    static constexpr size_t kDepth = 64;
-   // Keeps `before`, the pattern a roll is about to replace; a roll after an UNDO forgets the REDOs.
-   void push(const Pattern &before) {
+   // Keeps `before`, what a dice step is about to replace; a step after an UNDO forgets the REDOs.
+   void push(const DiceState &before) {
       past_.push_back(before);
       if (past_.size() > kDepth)
          past_.erase(past_.begin());
@@ -193,22 +217,25 @@ public:
    }
    bool canUndo() const { return !past_.empty(); }
    bool canRedo() const { return !future_.empty(); }
-   // Steps back from `now`, returning the pattern to show.
-   Pattern undo(const Pattern &now) {
-      Pattern p = past_.back();
+   // What UNDO or REDO would bring back, so the caller can keep the same kind of thing from now.
+   const DiceState &nextUndo() const { return past_.back(); }
+   const DiceState &nextRedo() const { return future_.back(); }
+   // Steps back from `now`, returning what to restore.
+   DiceState undo(const DiceState &now) {
+      DiceState p = past_.back();
       past_.pop_back();
       future_.push_back(now);
       return p;
    }
-   Pattern redo(const Pattern &now) {
-      Pattern p = future_.back();
+   DiceState redo(const DiceState &now) {
+      DiceState p = future_.back();
       future_.pop_back();
       past_.push_back(now);
       return p;
    }
 
 private:
-   std::vector<Pattern> past_, future_;
+   std::vector<DiceState> past_, future_;
 };
 
 } // namespace jarp

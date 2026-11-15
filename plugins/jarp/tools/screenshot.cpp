@@ -1,9 +1,11 @@
 // Renders JArp's panel offscreen to a PNG, for the README and visual checks.
 //
-//    jarp-screenshot out.png [width height] [dice]
+//    jarp-screenshot out.png [width height] [dice] [long]
 //
 // The panel shows the Pedal Climb preset playing a C major 7th held on four MPE channels, each finger
-// pressing a little differently, a few steps into the pattern. With `dice` the dice card is open.
+// pressing a little differently, a few steps into the pattern. With `dice` the dice card is open; with
+// `long` the pattern is 48 steps (Pedal Climb three times over, climbing an octave), playing in its
+// second 16, so the grid scrolls.
 
 #include <cstdio>
 #include <cstdlib>
@@ -20,7 +22,7 @@ using namespace jarp;
 
 class DemoHost : public EditorHost {
 public:
-   DemoHost() {
+   explicit DemoHost(bool longPattern) {
       for (size_t i = 0; i < kParamCount; ++i)
          values_[i] = kParams[i].defaultValue;
       for (const auto &[id, v] : findPreset("Pedal Climb").values)
@@ -29,6 +31,25 @@ public:
       // A second and third pattern, so the chain strip shows some lit.
       bank_.slots[1] = factoryBank("Root Fifth")->slots[0];
       bank_.slots[2] = factoryBank("Press Roll")->slots[0];
+      double until = 10.2;
+      if (longPattern) {
+         const Pattern one = bank_.slots[0];
+         Pattern p;
+         p.length = 48;
+         for (int k = 0; k < 3; ++k) {
+            for (int i = 0; i < one.count; ++i) {
+               const Note &n = one.notes[i];
+               p.add(n.row, n.step + 16 * k, n.row == 0 && n.step == 0 ? kQuarters * 16 : n.length);
+            }
+            for (int st = 0; st < 16; ++st) {
+               p.lanes[16 * k + st] = one.lanes[st];
+               if (k == 2 && st >= 8)
+                  p.lanes[16 * k + st].octave = static_cast<int8_t>(std::min(1, p.lanes[16 * k + st].octave + 1));
+            }
+         }
+         bank_.slots[0] = p;
+         until = 21.4;
+      }
       Settings s;
       s.rate = static_cast<int>(values_[kRate]);
       s.swing = values_[kSwing];
@@ -58,7 +79,7 @@ public:
                engine_.noteOn(0, f + 1, keys[f], 100, out);
             }
          engine_.advance(b.frames, out);
-         if (b.beats >= 10.2 * 0.25)
+         if (b.beats >= until * 0.25)
             break;
       }
       engine_.fillFrame(frame_);
@@ -101,11 +122,14 @@ int main(int argc, char **argv) {
       std::fprintf(stderr, "usage: %s out.png [width height] [dice]\n", argv[0]);
       return 2;
    }
-   const int width = argc > 3 ? std::atoi(argv[2]) : kEditorWidth;
-   const int height = argc > 3 ? std::atoi(argv[3]) : kEditorHeight;
-   bool dice = false;
-   for (int i = 2; i < argc; ++i)
+   const bool sized = argc > 3 && std::atoi(argv[2]) > 0;
+   const int width = sized ? std::atoi(argv[2]) : kEditorWidth;
+   const int height = sized ? std::atoi(argv[3]) : kEditorHeight;
+   bool dice = false, longPattern = false;
+   for (int i = 2; i < argc; ++i) {
       dice = dice || !std::strcmp(argv[i], "dice");
-   DemoHost host;
+      longPattern = longPattern || !std::strcmp(argv[i], "long");
+   }
+   DemoHost host(longPattern);
    return renderScreenshot(host, width, height, argv[1], dice) ? 0 : 1;
 }

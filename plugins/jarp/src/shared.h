@@ -14,7 +14,9 @@
 namespace jarp {
 
 constexpr int kRows = 8;
-constexpr int kSteps = 16;
+// The most steps a pattern can have; the grid shows kView of them at a time and scrolls.
+constexpr int kSteps = 128;
+constexpr int kView = 16;
 // Note lengths are in quarter steps.
 constexpr int kQuarters = 4;
 constexpr int kMaxLength = kSteps * kQuarters;
@@ -27,7 +29,8 @@ constexpr int kSlots = 8;
 // A note on the grid: its row (0 is row 1, the lowest), the step it starts on, and how long it
 // sounds in quarter steps.
 struct Note {
-   uint8_t row = 0, step = 0, length = kQuarters;
+   uint8_t row = 0, step = 0;
+   uint16_t length = kQuarters;
    bool operator==(const Note &o) const { return row == o.row && step == o.step && length == o.length; }
 };
 
@@ -45,7 +48,7 @@ struct Lane {
 struct Pattern {
    // Steps before it loops, 1..kSteps.
    uint8_t length = 8;
-   uint8_t count = 0;
+   uint16_t count = 0;
    std::array<Note, kMaxNotes> notes{};
    std::array<Lane, kSteps> lanes{};
 
@@ -92,7 +95,7 @@ struct Pattern {
           noteAt(row, step * kQuarters) >= 0)
          return false;
       notes[count++] = {static_cast<uint8_t>(row), static_cast<uint8_t>(step),
-                        static_cast<uint8_t>(std::clamp(length, 1, room(row, step)))};
+                        static_cast<uint16_t>(std::clamp(length, 1, room(row, step)))};
       return true;
    }
    void remove(int index) {
@@ -105,20 +108,30 @@ struct Pattern {
    void clear() { count = 0; }
    bool empty() const { return count == 0; }
 
-   // The saved form: a version byte, the length (from version 2), the note count and each note's
-   // three bytes, then each lane's four bytes. A version 1 pattern keeps the length it had.
-   static constexpr uint8_t kVersion = 2;
+   // The saved form: a version byte, the length, the note count (two bytes), each note's row, step
+   // and length (two bytes), then the lane count and each lane's four bytes, up to the last lane
+   // that isn't plain. Versions 1 and 2 (16 steps, one-byte counts and lengths) still load; a
+   // version 1 pattern keeps the length it had.
+   static constexpr uint8_t kVersion = 3;
    std::vector<uint8_t> save() const {
       std::vector<uint8_t> b;
       b.push_back(kVersion);
       b.push_back(length);
-      b.push_back(count);
+      b.push_back(static_cast<uint8_t>(count & 0xff));
+      b.push_back(static_cast<uint8_t>(count >> 8));
       for (int i = 0; i < count; ++i) {
          b.push_back(notes[i].row);
          b.push_back(notes[i].step);
-         b.push_back(notes[i].length);
+         b.push_back(static_cast<uint8_t>(notes[i].length & 0xff));
+         b.push_back(static_cast<uint8_t>(notes[i].length >> 8));
       }
-      for (const Lane &l : lanes) {
+      int lanesUsed = 0;
+      for (int i = 0; i < kSteps; ++i)
+         if (!(lanes[i] == Lane{}))
+            lanesUsed = i + 1;
+      b.push_back(static_cast<uint8_t>(lanesUsed));
+      for (int i = 0; i < lanesUsed; ++i) {
+         const Lane &l = lanes[i];
          b.push_back(static_cast<uint8_t>(l.octave));
          b.push_back(l.ratchet);
          b.push_back(l.pressure);
@@ -129,26 +142,36 @@ struct Pattern {
    bool load(const uint8_t *data, size_t size) {
       if (size < 2 || data[0] < 1 || data[0] > kVersion)
          return false;
+      const int version = data[0];
       Pattern p;
       p.length = length;
       size_t at = 1;
-      if (data[0] >= 2) {
-         p.length = static_cast<uint8_t>(std::clamp<int>(data[1], 1, kSteps));
-         at = 2;
+      if (version >= 2)
+         p.length = static_cast<uint8_t>(std::clamp<int>(data[at++], 1, kSteps));
+      const int wide = version >= 3 ? 2 : 1;
+      if (size < at + wide)
+         return false;
+      const int n = version >= 3 ? data[at] | data[at + 1] << 8 : data[at];
+      at += wide;
+      const size_t noteBytes = 2 + wide;
+      if (n > kMaxNotes || size < at + n * noteBytes)
+         return false;
+      for (int i = 0; i < n; ++i, at += noteBytes)
+         p.add(data[at], data[at + 1], version >= 3 ? data[at + 2] | data[at + 3] << 8 : data[at + 2]);
+      int laneCount = 16;
+      if (version >= 3) {
+         if (size < at + 1)
+            return false;
+         laneCount = std::min<int>(data[at++], kSteps);
       }
-      if (size < at + 1)
+      if (size < at + laneCount * 4u)
          return false;
-      const int n = data[at++];
-      if (n > kMaxNotes || size < at + n * 3u + kSteps * 4u)
-         return false;
-      for (int i = 0; i < n; ++i, at += 3)
-         p.add(data[at], data[at + 1], data[at + 2]);
-      for (Lane &l : p.lanes) {
+      for (int i = 0; i < laneCount; ++i, at += 4) {
+         Lane &l = p.lanes[i];
          l.octave = static_cast<int8_t>(std::clamp<int>(static_cast<int8_t>(data[at]), -3, 3));
          l.ratchet = static_cast<uint8_t>(std::clamp<int>(data[at + 1], 1, kMaxRatchet));
          l.pressure = data[at + 2] ? 1 : 0;
          l.velocity = static_cast<int8_t>(std::clamp<int>(static_cast<int8_t>(data[at + 3]), -64, 64));
-         at += 4;
       }
       *this = p;
       return true;

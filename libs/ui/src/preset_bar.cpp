@@ -219,9 +219,22 @@ void PresetBar::draw(visage::Canvas &c) {
       c.setColor(diceLit && diceLit() ? accent : hover_ == Zone::Dice ? t.text : t.dimText);
       drawDie(c, a + die / 2, h / 2, 13.0f * s);
    }
+   // The name, centred; but where a long category would run into it, centred in the room after it.
+   const std::string shown = current.empty() ? std::string("Untitled") : current;
+   const auto width = [](const visage::Font &f, const std::string &text) {
+      return f.stringWidth(std::u32string(text.begin(), text.end()));
+   };
+   float nameX = a + die, nameW = w - 2 * a - save - star - die;
+   if (i >= 0) {
+      const float catRight = a + die + (onDice ? 4 : 8) * s + width(font(9 * s), at(i).category) + 6 * s;
+      const float nameLeft = nameX + (nameW - width(font(13 * s), shown)) / 2;
+      if (catRight > nameLeft) {
+         nameW -= catRight - nameX;
+         nameX = catRight;
+      }
+   }
    c.setColor(hover_ == Zone::Name ? 0xffffffffu : t.text);
-   c.text(current.empty() ? std::string("Untitled") : current, font(13 * s), visage::Font::kCenter, a + die, 0,
-          w - 2 * a - save - star - die, h);
+   c.text(shown, font(13 * s), visage::Font::kCenter, nameX, 0, nameW, h);
    if (i >= 0) {
       const bool starred = favorites_.contains(at(i).name);
       c.setColor(starred ? accent : hover_ == Zone::Star ? t.text : t.dimText);
