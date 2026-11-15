@@ -32,6 +32,8 @@ struct Settings {
    Restart restart = Restart::Note;
    bool degree = false;
    bool wrap = false;
+   // With wrap, each time round the held notes goes an octave higher.
+   bool octaves = false;
    int key = 0;
    int scale = 0; // 0 major, 1 minor
    double pressVelocity = 0.5, curve = 0.0, pressRatchet = 0.6;
@@ -87,16 +89,21 @@ inline int degreeAbove(int from, int degrees, int key, int scale) {
 
 // Maps the grid's rows onto the held keys (lowest first, `count` of them): `key[r]` is the index of
 // the held key row r plays, or -1, and `target[r]` the pitch Degree mode wanted for it.
-inline void mapRows(const int *held, int count, const Settings &s, int *key, int *target) {
+inline void mapRows(const int *held, int count, const Settings &s, int *key, int *target, int *octave = nullptr) {
    for (int r = 0; r < kRows; ++r) {
       key[r] = -1;
       target[r] = -1;
+      if (octave)
+         octave[r] = 0;
    }
    if (count <= 0)
       return;
    if (!s.degree) {
-      for (int r = 0; r < kRows; ++r)
+      for (int r = 0; r < kRows; ++r) {
          key[r] = r < count ? r : s.wrap ? r % count : -1;
+         if (octave && s.wrap && s.octaves)
+            octave[r] = r / count;
+      }
       return;
    }
    const int scale = std::clamp(s.scale, 0, 1), root = ((s.key % 12) + 12) % 12;
@@ -347,15 +354,15 @@ public:
       frame.slot = static_cast<int8_t>(playing_);
       int held[kMaxFingers], slots[kMaxFingers];
       const int n = sortedFingers(held, slots);
-      int key[kRows], target[kRows];
-      mapRows(held, n, settings_, key, target);
+      int key[kRows], target[kRows], octave[kRows];
+      mapRows(held, n, settings_, key, target, octave);
       for (int r = 0; r < kRows; ++r) {
          RowView &v = frame.rows[r];
          v = RowView{};
          if (key[r] < 0)
             continue;
          const Finger &f = fingers_[slots[key[r]]];
-         v.key = static_cast<int8_t>(f.key);
+         v.key = static_cast<int8_t>(std::min(127, f.key + 12 * octave[r]));
          v.target = target[r] >= 0 && target[r] != f.key ? static_cast<int8_t>(std::clamp(target[r], 0, 127)) : -1;
          v.channel = f.channel;
          v.pressure = static_cast<float>(f.pressure);
@@ -514,8 +521,8 @@ private:
       const int n = sortedFingers(held, slots);
       if (!n)
          return;
-      int key[kRows], target[kRows];
-      mapRows(held, n, settings_, key, target);
+      int key[kRows], target[kRows], octave[kRows];
+      mapRows(held, n, settings_, key, target, octave);
       const Lane &lane = pattern_.lanes[step];
       for (int i = 0; i < pattern_.count; ++i) {
          const Note &note = pattern_.notes[i];
@@ -523,7 +530,7 @@ private:
             continue;
          const int slot = slots[key[note.row]];
          const Finger &f = fingers_[slot];
-         const int pitch = f.key + 12 * lane.octave;
+         const int pitch = f.key + 12 * (lane.octave + octave[note.row]);
          if (pitch < 0 || pitch > 127)
             continue;
          const double length = std::min(note.length / static_cast<double>(kQuarters), static_cast<double>(len - step));

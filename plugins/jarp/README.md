@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.3.0.
+Version 0.4.0.
 
 ![Panel](docs/panel.png)
 
@@ -42,7 +42,8 @@ the playhead. Beside it, the steps in view (`17-32 of 48`) and **FOLLOW**.
 
 ![A long pattern](docs/long.png)
 
-- With **FOLLOW** lit, the grid turns the page as the playhead moves on, 16 steps at a time.
+- With **FOLLOW** lit, the grid follows the playhead: it holds still until the playhead reaches the
+  middle, then scrolls a step at a time to keep it there, until the pattern's end reaches the right edge.
 - **Drag along the bar** (or the step numbers above it), or scroll the mouse wheel over the grid, to
   look elsewhere. That turns FOLLOW off; click it to follow again.
 - The lanes under the grid scroll with it.
@@ -87,7 +88,9 @@ next step.
 
 - **PITCH**: row 1 is the lowest note you hold, row 2 the next up, and so on. Hold a 7th chord and rows
   1 to 4 are its four notes. **EMPTY ROWS** says what rows above the notes you hold do: **REST** stays
-  silent, **WRAP** starts again from the lowest note (with four notes held, row 5 plays row 1's note).
+  silent, **WRAP** starts again from the lowest note (with four notes held, row 5 plays row 1's note),
+  and **OCT** carries on up an octave (with a triad held, rows 4 to 6 are the triad an octave up). OCT
+  makes one shape fit any chord size: rows 1, 4 and 7 are always the root in three octaves.
 - **DEGREE**: rows count up a scale from the lowest note you hold: row 1 is that note, row 3 the 3rd
   above it, row 5 the 5th, and so on. Pick the scale's key and MAJOR or MINOR beside it. A degree you
   aren't holding plays the held note nearest to it, so JArp never plays a note you didn't hold. Where
@@ -190,22 +193,25 @@ The preset bar steps through the factory bank and then your own. A preset holds 
 eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
 instead, right-click the slot's number and use **Load from preset**:
 
-There are 69 factory presets in twelve categories. Most use PITCH rows with WRAP, so a triad plays
-them as well as a 7th chord does. Presets marked (chain) use several patterns: CHORD moves on with
-each new chord, LOOP plays them one after another.
+There are 77 factory presets in twelve categories, each built on how the style is really played.
+Most use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked
+(chain) use several patterns: CHORD moves on with each new chord, LOOP plays them one after another.
+
+The **Grooves** are bass lines. They play the bottom three notes you hold, an octave down, so hold a
+chord in the middle of the keyboard and route JArp into a bass patch.
 
 | Category | Presets |
 |---|---|
-| Basics | Init, Up, Down, Up Down (two octaves), Root Fifth and Broken Thirds (DEGREE rows), Outside In, Wrap Run |
-| Berlin School | Sequencer Pulse, Octave Bounce, Accent Shift (a three-step accent across sixteen), Night Drive (four patterns, LOOP), Long Drive (64 steps) |
-| Grooves | Funk Sixteenths, House Offbeats, Dotted Eighths, Swing Shuffle, Gallop (triplets), Stabs, Two Step (chain, CHORD) |
-| Piano | Alberti Bass, Broken Triplets, Rolled Ballad, Stride, Nocturne Sweep, Piano Verse (three patterns, CHORD) |
-| Guitar Fingerpicking | Travis Picking, Folk Roll, Classical Arpeggio, Banjo Roll, Fingerstyle Song (four patterns, LOOP) |
+| Basics | Init, Up, Down, Up Down, Converge, Pinky Top, Root Fifth and Broken Thirds (DEGREE rows) |
+| Berlin School | Octave Line, Pedal Sequence, Sequencer Bass, Phase Drift (a seven-step accent drifting across the line), Night Drive (four patterns, LOOP), Long Drive (64 steps) |
+| Grooves (bass) | Funk Bass, Slap Pops, House Bass, Rolling House, Disco Octaves, Acid Line, Root Fifth Octave, Tresillo (3+3+2), Dub Bass, Synth Pump, Boogie Shuffle, Gallop (triplets), Two Step (chain, CHORD) |
+| Piano | Alberti Bass, Waltz Spread (3/4), Nocturne, Stride, Pop Eighths, Rolled Ballad, Piano Verse (three patterns, CHORD) |
+| Guitar Fingerpicking | Travis Picking, Classical Arpeggio (p i m a), Banjo Roll, Ballad Picking, Fingerstyle Song (four patterns, LOOP) |
 | Strum and Harp | Down Strum, Up Strum, Strum Pattern (down down up, up down up), Harp Glissando, Harp Cascade, Strum to Harp (chain, CHORD) |
 | Pads and Pedals | Pedal Climb, Slow Top, Swell Layers, Drone and Drift (64 steps), Pedal Story (four patterns, LOOP) |
-| Ratchet and Rhythm | Trap Rolls, Stutter, Machine Gun, Pressure Ratchets, Stutter Build (four patterns, LOOP) |
+| Ratchet and Rhythm | Trap Hats, Stutter, Machine Gun, Pressure Ratchets, Stabs, Stutter Build (four patterns, LOOP) |
 | MPE Expressive | Press Roll, Press to Bloom, Breath Pulse, Pressure Waves, Touch Chain (three patterns, CHORD): press harder for louder notes and more hits |
-| Long Sequences | Four Bar Groove (64 steps), Slow Evolution (32), Sixty Four (64), Odyssey (128), Long Chain (two 32-step patterns, LOOP) |
+| Long Sequences | Four Bar Groove (64 steps), Slow Evolution (32), Odyssey (128), Long Chain (two 32-step patterns, LOOP) |
 | Chains | Chord Chain and Verse Chorus (CHORD), Phrase Loop, Build Up, Call and Response and Eight Bars (LOOP, Eight Bars using all eight slots) |
 | Odd Meters | Five Four, Seven Eight, Nine Eight, Three Over Four, Five Over Four, Odd Chain (7/8 then 5/8, LOOP) |
 

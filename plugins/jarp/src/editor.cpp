@@ -83,7 +83,9 @@ const char *ordinal(int row) {
 }
 
 // Which steps the grid and the lanes show: kView of them from `first`. A pattern longer than kView
-// scrolls, following the playhead page by page unless the scroll bar was moved by hand.
+// scrolls, following the playhead unless the scroll bar was moved by hand: the view holds still until
+// the playhead reaches its middle, then moves a step at a time to keep it there, and stops once the
+// pattern's last step is at the right edge.
 struct GridScroll {
    int first = 0;
    bool follow = true;
@@ -95,7 +97,7 @@ struct GridScroll {
          return;
       }
       if (follow && playStep >= 0)
-         first = playStep / kView * kView;
+         first = playStep - kView / 2;
       first = std::clamp(first, 0, len - kView);
    }
 };
@@ -912,9 +914,10 @@ public:
       auto &rowsBy = choice(kRowsBy, {552, 89, 115, 22}, {"PITCH", "DEGREE"});
       tips_.add(rowsBy, "Pitch: row 1 is the lowest note held, row 2 the next up, and so on. Degree: rows count up the "
                         "scale from the lowest note held; a degree that isn't held plays the nearest note that is.");
-      emptyLabel_ = &rowsLabel(680, "EMPTY ROWS");
-      empty_ = &choice(kEmptyRows, {773, 89, 99, 22}, {"REST", "WRAP"});
-      tips_.add(*empty_, "Rows above the notes held: Rest stays silent; Wrap starts again from the lowest note.");
+      emptyLabel_ = &rowsLabel(669, "EMPTY ROWS");
+      empty_ = &choice(kEmptyRows, {752, 89, 120, 22}, {"REST", "WRAP", "OCT"});
+      tips_.add(*empty_, "Rows above the notes held: Rest stays silent; Wrap starts again from the lowest note; Oct "
+                         "starts again an octave up each time, like an arpeggiator's octave range.");
       scaleLabel_ = &rowsLabel(650, "SCALE");
       key_ = &add<ui::Dropdown>({735, 89, 52, 22}, std::vector<std::string>(std::begin(kKeyNames), std::end(kKeyNames)));
       key_->setAccent(kSlate);

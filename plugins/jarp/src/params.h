@@ -50,7 +50,7 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kLatch, "Latch", "Playback", 0, 1, 0, kChoice},
    {kRestart, "Restart", "Playback", 0, 2, 1, kChoice},
    {kRowsBy, "Rows By", "Rows", 0, 1, 0, kChoice},
-   {kEmptyRows, "Empty Rows", "Rows", 0, 1, 0, kChoice},
+   {kEmptyRows, "Empty Rows", "Rows", 0, 2, 0, kChoice},
    {kKey, "Scale Key", "Rows", 0, 11, 0, kChoice},
    {kScale, "Scale", "Rows", 0, 1, 0, kChoice},
    {kPressVelocity, "Pressure to Velocity", "Pressure", 0, 1, 0.5, kMod},
@@ -68,7 +68,9 @@ inline const char *const kOffOnNames[] = {"Off", "On"};
 inline const char *const kAdvanceNames[] = {"Off", "Chord", "Loop"};
 inline const char *const kRestartNames[] = {"Song", "Note", "Bar"};
 inline const char *const kRowsByNames[] = {"Pitch", "Degree"};
-inline const char *const kEmptyRowsNames[] = {"Rest", "Wrap"};
+// Rows above the notes held: silent, the held notes again, or the held notes again an octave up
+// each time round (as an arpeggiator's octave range).
+inline const char *const kEmptyRowsNames[] = {"Rest", "Wrap", "Octave"};
 inline const char *const kKeyNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 inline const char *const kScaleNames[] = {"Major", "Minor"};
 
@@ -87,7 +89,7 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kLatch: count = 2; return kOffOnNames;
    case kRestart: count = 3; return kRestartNames;
    case kRowsBy: count = 2; return kRowsByNames;
-   case kEmptyRows: count = 2; return kEmptyRowsNames;
+   case kEmptyRows: count = 3; return kEmptyRowsNames;
    case kKey: count = 12; return kKeyNames;
    case kScale: count = 2; return kScaleNames;
    default: count = 0; return nullptr;
