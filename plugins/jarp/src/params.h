@@ -34,6 +34,8 @@ enum ParamId : clap_id {
    kCurve,
    kPressRatchet,
    kMaxHits,
+   // Appended: how far above the lowest note held an octave shift may take a note.
+   kRange,
    kParamCount
 };
 
@@ -57,6 +59,7 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kCurve, "Pressure Curve", "Pressure", -1, 1, 0, kMod},
    {kPressRatchet, "Pressure to Ratchet", "Pressure", 0, 1, 0.6, kMod},
    {kMaxHits, "Max Hits", "Pressure", 1, 8, 4, kStep},
+   {kRange, "Octave Range", "Rows", 0, 3, 1, kChoice},
 };
 
 // ---- choices ----
@@ -72,6 +75,8 @@ inline const char *const kRowsByNames[] = {"Pitch", "Degree", "Held Degree", "Sp
 // Rows above the notes held: silent, the held notes again, or the held notes again an octave up
 // each time round (as an arpeggiator's octave range).
 inline const char *const kEmptyRowsNames[] = {"Rest", "Wrap", "Octave"};
+// Range: 1 to 4 octaves above the lowest note held.
+inline const char *const kRangeNames[] = {"1 Oct", "2 Oct", "3 Oct", "4 Oct"};
 inline const char *const kKeyNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 inline const char *const kScaleNames[] = {"Major", "Minor"};
 
@@ -92,6 +97,7 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kRowsBy: count = 4; return kRowsByNames;
    case kEmptyRows: count = 3; return kEmptyRowsNames;
    case kKey: count = 12; return kKeyNames;
+   case kRange: count = 4; return kRangeNames;
    case kScale: count = 2; return kScaleNames;
    default: count = 0; return nullptr;
    }

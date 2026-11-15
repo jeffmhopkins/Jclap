@@ -1274,6 +1274,12 @@ public:
       heading("LATCH", 270, 606);
       tips_.add(choice(kLatch, {270, 624, 80, 22}, {"OFF", "ON"}),
                 "On: the notes keep playing after you let go, until you play a new chord.");
+      heading("RANGE", 360, 606);
+      auto &range = add<ui::Dropdown>({360, 624, 50, 22}, std::vector<std::string>{"1 OCT", "2 OCT", "3 OCT", "4 OCT"});
+      range.setAccent(kSlate);
+      bindings_.bind(range, kRange);
+      tips_.add(range, "How far above the lowest note you hold a note may be moved up by octaves (by OCT rows or the "
+                       "Octave lane). A note that would go higher drops back down by octaves until it fits.");
       heading("RESTART", 270, 652);
       tips_.add(choice(kRestart, {270, 670, 138, 22}, {"SONG", "NOTE", "BAR"}),
                 "Where the pattern starts: Song locks it to the song position, so a chord played half way through "
