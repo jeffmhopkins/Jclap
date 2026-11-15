@@ -37,6 +37,9 @@ struct Settings {
    // In Degree mode, a degree that isn't held stays silent, rather than playing the nearest note.
    bool strict = false;
    bool wrap = false;
+   // Octaves above the lowest note held an octave shift (OCT rows, the Octave lane) may reach; past
+   // it a shifted note drops back down by octaves (and below as far, it comes back up).
+   int range = 2;
    // With wrap, each time round the held notes goes an octave higher.
    bool octaves = false;
    int key = 0;
@@ -90,6 +93,17 @@ inline int degreeAbove(int from, int degrees, int key, int scale) {
          i = k;
    const int d = i + degrees;
    return base + 12 * (d / 7) + steps[d % 7];
+}
+
+// `key` shifted by `octaves`, folded back by octaves into `range` octaves of `lowest` (the lowest
+// note held). Only the shift folds, so a held note itself always plays as held.
+inline int foldOctaves(int key, int octaves, int lowest, int range) {
+   const int top = lowest + 12 * range, bottom = lowest - 12 * range;
+   while (octaves > 0 && key + 12 * octaves > top)
+      --octaves;
+   while (octaves < 0 && key + 12 * octaves < bottom)
+      ++octaves;
+   return key + 12 * octaves;
 }
 
 // The highest row with a note in `p`, or 0 when it has none: the top row Spread spreads to.
@@ -178,6 +192,7 @@ public:
       }
       settings_.rate = std::clamp(s.rate, 0, 5);
       settings_.maxHits = std::clamp(s.maxHits, 1, kMaxRatchet);
+      settings_.range = std::clamp(s.range, 1, 4);
       dropLatched_ = dropLatched_ || dropLatched;
    }
    const Settings &settings() const { return settings_; }
@@ -421,7 +436,7 @@ public:
          if (key[r] < 0)
             continue;
          const Finger &f = fingers_[slots[key[r]]];
-         v.key = static_cast<int8_t>(std::min(127, f.key + 12 * octave[r]));
+         v.key = static_cast<int8_t>(std::clamp(foldOctaves(f.key, octave[r], held[0], settings_.range), 0, 127));
          v.target = target[r] >= 0 && target[r] != f.key ? static_cast<int8_t>(std::clamp(target[r], 0, 127)) : -1;
          v.channel = f.channel;
          v.pressure = static_cast<float>(f.pressure);
@@ -604,7 +619,7 @@ private:
             continue;
          const int slot = slots[key[note.row]];
          const Finger &f = fingers_[slot];
-         const int pitch = f.key + 12 * (lane.octave + octave[note.row]);
+         const int pitch = foldOctaves(f.key, lane.octave + octave[note.row], held[0], settings_.range);
          if (pitch < 0 || pitch > 127)
             continue;
          const double length = std::min(note.length / static_cast<double>(kQuarters), static_cast<double>(len - step));

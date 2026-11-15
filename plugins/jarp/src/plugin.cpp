@@ -467,6 +467,7 @@ private:
       s.wrap = whole(kEmptyRows) != 0;
       s.octaves = whole(kEmptyRows) == 2;
       s.key = whole(kKey);
+      s.range = whole(kRange) + 1;
       s.scale = whole(kScale);
       s.pressVelocity = value(kPressVelocity);
       s.curve = value(kCurve);

@@ -222,6 +222,35 @@ int main() {
       JCLAP_CHECK_EQ(static_cast<int>(on.size()), 2);
    }
 
+   {
+      // Range: an octave shift may take a note at most `range` octaves above the lowest note held;
+      // past that it drops back by octaves. A held note itself is never moved.
+      JCLAP_CHECK_EQ(foldOctaves(48, 7, 48, 2), 72);
+      JCLAP_CHECK_EQ(foldOctaves(55, 3, 48, 2), 67);
+      JCLAP_CHECK_EQ(foldOctaves(55, 1, 48, 2), 67);
+      JCLAP_CHECK_EQ(foldOctaves(52, 2, 48, 2), 64);
+      JCLAP_CHECK_EQ(foldOctaves(84, 0, 48, 1), 84);
+      JCLAP_CHECK_EQ(foldOctaves(60, -5, 48, 1), 36);
+      JCLAP_CHECK_EQ(foldOctaves(48, 4, 48, 4), 96);
+
+      // Playing: OCT rows with one note held climb an octave a row, and fold back at the range.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.wrap = s.octaves = true;
+      s.range = 2;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 4}, {1, 1, 4}, {2, 2, 4}, {7, 3, 4}}), 4);
+      const auto on = ons(run(e, 4 * kStepSamples - 300, chord({48})));
+      JCLAP_CHECK_EQ(static_cast<int>(on.size()), 4);
+      if (on.size() == 4) {
+         JCLAP_CHECK_EQ(on[0].m.data1, 48);
+         JCLAP_CHECK_EQ(on[1].m.data1, 60);
+         JCLAP_CHECK_EQ(on[2].m.data1, 72);
+         JCLAP_CHECK_EQ(on[3].m.data1, 72);
+      }
+   }
+
    // ---- timing ----
    {
       // A 7th chord, rows 1 and 3 alternating: C on step 1, G on step 2, each on its own finger's

@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.8.0.
+Version 0.9.0.
 
 ![Panel](docs/panel.png)
 
@@ -101,7 +101,7 @@ next step.
   1 to 4 are its four notes. **EMPTY ROWS** says what rows above the notes you hold do: **REST** stays
   silent, **WRAP** starts again from the lowest note (with four notes held, row 5 plays row 1's note),
   and **OCT** carries on up an octave (with a triad held, rows 4 to 6 are the triad an octave up). OCT
-  makes one shape fit any chord size: rows 1, 4 and 7 are always the root in three octaves.
+  makes one shape fit any chord size: rows 1, 4 and 7 are always the root in three octaves. How high OCT can climb is capped by **RANGE** (see Playback).
 - **DEGREE**: rows count up a scale from the lowest note you hold: row 1 is that note, row 3 the 3rd
   above it, row 5 the 5th, and so on. Pick the scale's key and MAJOR or MINOR beside it. A degree you
   aren't holding plays the held note nearest to it, so JArp never plays a note you didn't hold. Where
@@ -174,6 +174,11 @@ of them.
     step falls on the same beat every time round.
   - **NOTE** starts it on the first note you play.
   - **BAR** starts it at the start of the bar the first note falls in.
+- **RANGE**: how far above the lowest note you hold an octave shift may take a note, from 1 to 4
+  octaves (2 to start with). OCT rows climb an octave each time round the held notes, and the
+  Octave lane adds more, so with only one or two notes held a high row could land several octaves
+  up. A note that would go past the range drops back down by octaves until it fits (one shifted
+  down past the range comes back up the same way). The notes you hold always play as held.
 
 With the host stopped, JArp runs on its own clock at the host's tempo, so you can play it without
 pressing play.
