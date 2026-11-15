@@ -455,6 +455,88 @@ int main() {
       JCLAP_CHECK_EQ(on[3].m.data1, 60); // round to A
    }
    {
+      // Advance Chord: a slot picked between chords is the one the next chord plays.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.advance = Advance::Chord;
+      e.setSettings(s);
+      for (int k = 0; k < 3; ++k) {
+         Pattern p = pattern({{static_cast<uint8_t>(k), 0, 4}});
+         p.length = 2;
+         e.setPattern(k, p);
+      }
+      std::vector<In> first = chord({60, 64, 67});
+      for (int key : {60, 64, 67})
+         first.push_back({kStepSamples, In::Off, 0, key, 0});
+      for (In &i : first)
+         if (i.kind == In::Off)
+            i.channel = 1 + (i.key == 64) + 2 * (i.key == 67);
+      run(e, 2 * kStepSamples, first);
+      s.slot = 2;
+      e.setSettings(s);
+      const auto on = ons(run(e, kStepSamples, chord({60, 64, 67}), true, 1.0));
+      JCLAP_CHECK_EQ(on.size(), 1u);
+      if (!on.empty())
+         JCLAP_CHECK_EQ(on[0].m.data1, 67);
+   }
+   {
+      // Advance Loop: a new chord plays the chain from the slot selected, not where it stopped.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.advance = Advance::Loop;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 4}}), 4);
+      Pattern b = pattern({{1, 0, 4}});
+      b.length = 4;
+      e.setPattern(1, b);
+      std::vector<In> in = chord({60, 64});
+      in.push_back({6 * kStepSamples, In::Off, 1, 60, 0});
+      in.push_back({6 * kStepSamples, In::Off, 2, 64, 0});
+      in.push_back({7 * kStepSamples, In::On, 1, 60, 100});
+      in.push_back({7 * kStepSamples, In::On, 2, 64, 100});
+      const auto on = ons(run(e, 8 * kStepSamples - 300, in));
+      JCLAP_CHECK_EQ(on.size(), 3u);
+      if (on.size() == 3) {
+         JCLAP_CHECK_EQ(on[1].m.data1, 64); // the chain moved on to B
+         JCLAP_CHECK_EQ(on[2].m.data1, 60); // and starts again from A
+      }
+   }
+   {
+      // A tempo ramp isn't a jump: with the tempo rising 0.1 BPM a block for a second, a note on
+      // every step plays once per step, not retriggered every block.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      e.setSettings(Settings{});
+      Pattern p;
+      for (int k = 0; k < 8; ++k)
+         p.add(0, k, 4);
+      setPattern(e, p, 8);
+      OutBuffer out;
+      double beats = 0.0, tempo = 120.0;
+      int count = 0;
+      for (int at = 0; at < 48000; at += kBlock) {
+         Block bl;
+         bl.frames = kBlock;
+         bl.sampleRate = 48000.0;
+         bl.hasTransport = bl.playing = true;
+         bl.tempo = tempo;
+         bl.beats = beats;
+         out.clear();
+         e.beginBlock(bl, out);
+         if (at == 0)
+            e.noteOn(0, 1, 60, 100, out);
+         e.advance(kBlock, out);
+         for (size_t k = 0; k < out.count; ++k)
+            count += (out.items[k].status & 0xF0) == 0x90;
+         const double next = tempo + 0.1;
+         beats += kBlock * (tempo + next) / 2.0 / 60.0 / 48000.0;
+         tempo = next;
+      }
+      JCLAP_CHECK(count >= 8 && count <= 11);
+   }
+   {
       // Advance Loop: each time a pattern ends the next starts, at its own length.
       auto eOwner = std::make_unique<Engine>();
       Engine &e = *eOwner;

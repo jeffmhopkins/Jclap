@@ -9,6 +9,7 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <vector>
 
 namespace jarp {
@@ -251,7 +252,9 @@ struct Bank {
    bool load(const uint8_t *data, size_t size) {
       if (size < 2 || data[0] != kVersion)
          return false;
-      Bank bank;
+      // On the heap, as a bank is about 86 KB.
+      auto loaded = std::make_unique<Bank>();
+      Bank &bank = *loaded;
       size_t at = 2;
       for (int i = 0; i < data[1]; ++i) {
          if (at + 2 > size)
@@ -277,12 +280,6 @@ struct Bank {
       }
       return from;
    }
-};
-
-// The panel's edits: one slot's whole pattern, applied at the start of the next block.
-struct Command {
-   int slot = 0;
-   Pattern pattern;
 };
 
 // A grid row as it stands: the held note it plays and that finger's live expression.

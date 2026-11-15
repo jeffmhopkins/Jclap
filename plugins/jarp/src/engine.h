@@ -143,6 +143,8 @@ public:
       if (settings_.slot != selected_) {
          selected_ = settings_.slot;
          playing_ = selected_;
+         // In CHORD, the next chord plays the slot just picked, not the one after it.
+         played_ = false;
       }
       settings_.rate = std::clamp(s.rate, 0, 5);
       settings_.maxHits = std::clamp(s.maxHits, 1, kMaxRatchet);
@@ -154,7 +156,10 @@ public:
       if (slot >= 0 && slot < kSlots)
          bank_.slots[slot] = p;
    }
-   void setBank(const Bank &b) { bank_ = b; }
+   void setBank(const Bank &b) {
+      bank_ = b;
+      played_ = false;
+   }
    const Bank &bank() const { return bank_; }
    int playing() const { return playing_; }
 
@@ -167,16 +172,25 @@ public:
       const bool host = b.hasTransport && b.playing;
       start_ = host ? b.beats / stepBeats : free_;
       cur_ = 0;
+      // A hundredth of a step off is a jump; less is the host's tempo moving within the block (a ramp
+      // reaches the next block a little early or late), which the clock just follows.
       const bool jumped = started_ && (host != wasHost_ || stepBeats != stepBeats_ ||
-                                       std::abs(start_ - expected_) > 1e-6 * std::max(1.0, std::abs(start_)));
+                                       std::abs(start_ - expected_) > kJumpSteps);
+      // Set before originAt, which counts the bar in steps of the new rate.
+      stepBeats_ = stepBeats;
       if (jumped && running()) {
          allOff(0, out);
          origin_ = originAt(start_, b);
          next_ = kUnset;
+         // The step count starts over, so a Loop chain does too (from the slot selected), unless
+         // the song says where it is.
+         slotStart_ = 0;
+         hits_.fill(0);
+         if (settings_.advance == Advance::Loop && settings_.restart != Restart::Song)
+            playing_ = firstWithNotes(selected_);
       }
       started_ = true;
       wasHost_ = host;
-      stepBeats_ = stepBeats;
       block_ = b;
       expected_ = start_ + b.frames * perSample_;
       free_ = expected_;
@@ -274,10 +288,13 @@ public:
          hits_.fill(0);
          // A new chord moves on to the next pattern with notes in it (Advance Chord); the first
          // chord plays the one selected.
+         // A Loop chain plays from the one selected each time, as one phrase.
          if (settings_.advance == Advance::Off)
             playing_ = selected_;
          else if (settings_.advance == Advance::Chord && played_)
             playing_ = bank_.next(playing_);
+         else if (settings_.advance == Advance::Loop)
+            playing_ = firstWithNotes(selected_);
          else if (bank_.slots[playing_].empty())
             playing_ = bank_.next(playing_);
          played_ = true;
@@ -293,6 +310,17 @@ public:
          fingers_[slot].held = false;
       else
          release(slot, t, out);
+   }
+
+   // Lets go of the fingers on (channel, key) whatever Latch says, -1 for any: a host's note
+   // choke, or All Notes Off / All Sound Off.
+   void letGo(uint32_t t, int channel, int key, OutBuffer &out) {
+      advance(t, out);
+      for (int f = 0; f < kMaxFingers; ++f) {
+         const Finger &g = fingers_[f];
+         if (g.used && (channel < 0 || g.channel == (channel & 15)) && (key < 0 || g.key == key))
+            release(f, t, out);
+      }
    }
 
    // Expression from the fingers. A key of -1 means every finger on the channel (MIDI channel
@@ -338,6 +366,7 @@ public:
       started_ = false;
       next_ = kUnset;
       hits_.fill(0);
+      played_ = false;
    }
 
    bool running() const {
@@ -393,6 +422,7 @@ public:
 
 private:
    static constexpr int64_t kUnset = INT64_MIN;
+   static constexpr double kJumpSteps = 0.01;
    static constexpr int kMaxPending = 1024;
 
    struct Finger {
@@ -455,6 +485,9 @@ private:
       default: return now;
       }
    }
+
+   // `from` if it has notes, otherwise the next slot that does.
+   int firstWithNotes(int from) const { return bank_.slots[from].empty() ? bank_.next(from) : from; }
 
    int find(int channel, int key) const {
       for (int f = 0; f < kMaxFingers; ++f)
