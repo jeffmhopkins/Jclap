@@ -701,7 +701,60 @@ int main() {
       JCLAP_CHECK_EQ(on[0].time, 40 * kStepSamples);
    }
 
+   {
+      // Chance: a step at 0% never plays, at 100% always, and at 50% about half the times round. A
+      // note's own chance overrides its step's.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      e.setSettings(Settings{});
+      Pattern p = pattern({{0, 0, 4}, {0, 1, 4}, {0, 2, 4}, {1, 2, 4}});
+      p.lanes[0].chance = 0;
+      p.lanes[2].chance = 50;
+      Note &n = p.notes[p.noteStarting(1, 2)];
+      n.own = kOwnChance;
+      n.lane.chance = 100;
+      setPattern(e, p, 4);
+      const auto on = ons(run(e, 400 * kStepSamples - 300, chord({60, 64})));
+      int first = 0, second = 0, third = 0, upper = 0;
+      for (const auto &o : on) {
+         const int64_t step = (o.time + kStepSamples / 2) / kStepSamples % 4;
+         if (o.m.data1 == 64)
+            ++upper;
+         else if (step == 0)
+            ++first;
+         else if (step == 1)
+            ++second;
+         else if (step == 2)
+            ++third;
+      }
+      JCLAP_CHECK_EQ(first, 0);
+      JCLAP_CHECK_EQ(second, 100);
+      JCLAP_CHECK_EQ(upper, 100);
+      JCLAP_CHECK(third > 30 && third < 70);
+   }
+
    // ---- the saved pattern ----
+   {
+      // Version 5 saves chance, for steps and a note's own; a version 4 pattern loads at 100%.
+      Pattern c = pattern({{0, 0, 4}, {1, 1, 4}});
+      c.lanes[1].chance = 35;
+      c.notes[0].own = kOwnChance;
+      c.notes[0].lane.chance = 60;
+      const std::vector<uint8_t> five = c.save();
+      Pattern d;
+      JCLAP_CHECK(d.load(five.data(), five.size()));
+      JCLAP_CHECK(d == c);
+      JCLAP_CHECK_EQ(d.lanes[1].chance, 35);
+      JCLAP_CHECK_EQ(d.laneOf(d.noteStarting(0, 0)).chance, 60);
+      const std::vector<uint8_t> v4 = {4, 8, 1, 0, 0, 0, 4, 0, 8, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0};
+      Pattern f;
+      JCLAP_CHECK(f.load(v4.data(), v4.size()));
+      JCLAP_CHECK_EQ(f.count, 1);
+      JCLAP_CHECK_EQ(f.notes[0].own, kOwnVelocity);
+      JCLAP_CHECK_EQ(f.notes[0].lane.chance, 100);
+      JCLAP_CHECK_EQ(f.lanes[0].chance, 100);
+      JCLAP_CHECK_EQ(f.lanes[0].ratchet, 1);
+   }
    {
       // A note's own lane saves and loads (version 4); a version 3 pattern, from before, still loads.
       Pattern p = pattern({{0, 0, 4}, {2, 3, 8}});

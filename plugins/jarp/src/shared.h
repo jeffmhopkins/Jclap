@@ -33,13 +33,15 @@ struct Lane {
    uint8_t ratchet = 1; // hits, 1..kMaxRatchet
    uint8_t pressure = 0; // P: pressure adds hits, up to Max Hits
    int8_t velocity = 0; // -64..+64
+   uint8_t chance = 100; // 0..100: the percent of times round the note plays
    bool operator==(const Lane &o) const {
-      return octave == o.octave && ratchet == o.ratchet && pressure == o.pressure && velocity == o.velocity;
+      return octave == o.octave && ratchet == o.ratchet && pressure == o.pressure && velocity == o.velocity &&
+             chance == o.chance;
    }
 };
 
 // Which of a note's own lane values override its step's.
-enum Own : uint8_t { kOwnOctave = 1, kOwnRatchet = 2, kOwnPressure = 4, kOwnVelocity = 8, kOwnAll = 15 };
+enum Own : uint8_t { kOwnOctave = 1, kOwnRatchet = 2, kOwnPressure = 4, kOwnVelocity = 8, kOwnChance = 16, kOwnAll = 31 };
 
 // A note on the grid: its row (0 is row 1, the lowest), the step it starts on, how long it sounds in
 // quarter steps, and any lane values of its own (the bits of `own` say which of `lane` count; the
@@ -54,7 +56,8 @@ struct Note {
              (!(own & kOwnOctave) || lane.octave == o.lane.octave) &&
              (!(own & kOwnRatchet) || lane.ratchet == o.lane.ratchet) &&
              (!(own & kOwnPressure) || lane.pressure == o.lane.pressure) &&
-             (!(own & kOwnVelocity) || lane.velocity == o.lane.velocity);
+             (!(own & kOwnVelocity) || lane.velocity == o.lane.velocity) &&
+             (!(own & kOwnChance) || lane.chance == o.lane.chance);
    }
    // This note's lane: its own values over its step's.
    Lane over(const Lane &step) const {
@@ -67,6 +70,8 @@ struct Note {
          l.pressure = lane.pressure;
       if (own & kOwnVelocity)
          l.velocity = lane.velocity;
+      if (own & kOwnChance)
+         l.chance = lane.chance;
       return l;
    }
 };
@@ -137,11 +142,12 @@ struct Pattern {
    bool empty() const { return count == 0; }
 
    // The saved form: a version byte, the length, the note count (two bytes), each note's row, step,
-   // length (two bytes) and own bits, with its own lane's four bytes after them when it has any,
-   // then the lane count and each lane's four bytes, up to the last lane that isn't plain. Versions
-   // 1 to 3 (no own lanes; 1 and 2 with 16 steps and one-byte counts and lengths) still load; a
-   // version 1 pattern keeps the length it had.
-   static constexpr uint8_t kVersion = 4;
+   // length (two bytes) and own bits, with its own lane's five bytes after them when it has any,
+   // then the lane count and each lane's five bytes (octave, ratchet, pressure, velocity, chance), up
+   // to the last lane that isn't plain. Version 4 (four-byte lanes, no chance) and versions 1 to 3
+   // (no own lanes; 1 and 2 with 16 steps and one-byte counts and lengths) still load; a version 1
+   // pattern keeps the length it had.
+   static constexpr uint8_t kVersion = 5;
    std::vector<uint8_t> save() const {
       std::vector<uint8_t> b;
       b.push_back(kVersion);
@@ -181,6 +187,7 @@ struct Pattern {
       const int n = version >= 3 ? data[at] | data[at + 1] << 8 : data[at];
       at += wide;
       const size_t noteBytes = 2 + wide + (version >= 4 ? 1 : 0);
+      const size_t laneBytes = version >= 5 ? 5 : 4;
       if (n > kMaxNotes)
          return false;
       for (int i = 0; i < n; ++i) {
@@ -188,16 +195,16 @@ struct Pattern {
             return false;
          const int length = version >= 3 ? data[at + 2] | data[at + 3] << 8 : data[at + 2];
          const bool added = p.add(data[at], data[at + 1], length);
-         const uint8_t own = version >= 4 ? data[at + noteBytes - 1] & kOwnAll : 0;
+         const uint8_t own = version >= 4 ? data[at + noteBytes - 1] & (version >= 5 ? kOwnAll : 15) : 0;
          at += noteBytes;
          if (own) {
-            if (size < at + 4)
+            if (size < at + laneBytes)
                return false;
             if (added) {
                p.notes[p.count - 1].own = own;
-               p.notes[p.count - 1].lane = getLane(data + at);
+               p.notes[p.count - 1].lane = getLane(data + at, laneBytes);
             }
-            at += 4;
+            at += laneBytes;
          }
       }
       int laneCount = 16;
@@ -206,10 +213,10 @@ struct Pattern {
             return false;
          laneCount = std::min<int>(data[at++], kSteps);
       }
-      if (size < at + laneCount * 4u)
+      if (size < at + laneCount * laneBytes)
          return false;
-      for (int i = 0; i < laneCount; ++i, at += 4)
-         p.lanes[i] = getLane(data + at);
+      for (int i = 0; i < laneCount; ++i, at += laneBytes)
+         p.lanes[i] = getLane(data + at, laneBytes);
       *this = p;
       return true;
    }
@@ -220,13 +227,15 @@ private:
       b.push_back(l.ratchet);
       b.push_back(l.pressure);
       b.push_back(static_cast<uint8_t>(l.velocity));
+      b.push_back(l.chance);
    }
-   static Lane getLane(const uint8_t *d) {
+   static Lane getLane(const uint8_t *d, size_t bytes) {
       Lane l;
       l.octave = static_cast<int8_t>(std::clamp<int>(static_cast<int8_t>(d[0]), -3, 3));
       l.ratchet = static_cast<uint8_t>(std::clamp<int>(d[1], 1, kMaxRatchet));
       l.pressure = d[2] ? 1 : 0;
       l.velocity = static_cast<int8_t>(std::clamp<int>(static_cast<int8_t>(d[3]), -64, 64));
+      l.chance = bytes >= 5 ? static_cast<uint8_t>(std::min<int>(d[4], 100)) : 100;
       return l;
    }
 };

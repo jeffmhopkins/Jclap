@@ -6,7 +6,7 @@
 // pressing a little differently, a few steps into the pattern. With `dice` the dice card is open; with
 // `long` the pattern is 48 steps (Pedal Climb three times over, climbing an octave), playing in its
 // second 16, so the grid scrolls. With `note` the G on step 2 has lane values of its own (an octave
-// up, three hits, softer) and is picked, so the lanes show its values.
+// up, three hits, softer, a coin toss) and is picked, so the lanes show its values.
 
 #include <cstdio>
 #include <cstdlib>
@@ -32,12 +32,16 @@ public:
       // A second and third pattern, so the chain strip shows some lit.
       bank_.slots[1] = factoryBank("Root Fifth")->slots[0];
       bank_.slots[2] = factoryBank("Press Roll")->slots[0];
+      // A few steps left to chance, so the CHANCE lane and the grid's tags show.
+      bank_.slots[0].lanes[5].chance = 60;
+      bank_.slots[0].lanes[12].chance = 40;
+      bank_.slots[0].lanes[14].chance = 75;
       if (ownNote) {
          Pattern &p = bank_.slots[0];
          const int i = p.noteStarting(kPickRow, kPickStep);
          if (i >= 0) {
-            p.notes[i].own = kOwnOctave | kOwnRatchet | kOwnVelocity;
-            p.notes[i].lane = {1, 3, 0, -24};
+            p.notes[i].own = kOwnOctave | kOwnRatchet | kOwnVelocity | kOwnChance;
+            p.notes[i].lane = {1, 3, 0, -24, 50};
          }
       }
       double until = 10.2;

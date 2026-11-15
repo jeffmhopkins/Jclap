@@ -71,6 +71,14 @@ std::string text(clap_id id, double value) {
 
 visage::Color alpha(unsigned argb, float a) { return visage::Color(argb).withAlpha(a); }
 
+// On a ratcheted note, whose hits are drawn as orange bars, a dark pill behind a tag so it reads.
+void tagBacking(visage::Canvas &c, float s, float x, float y, float w, float a, bool ratcheted) {
+   if (!ratcheted)
+      return;
+   c.setColor(alpha(0xff3b2a1a, a));
+   c.roundedRectangle(x * s, y * s, w * s, 9 * s, 2 * s);
+}
+
 // A note's width for a length in quarter steps: a whole step is a cell, and longer ones span the
 // gaps between cells.
 float noteWidth(int quarters) {
@@ -211,8 +219,18 @@ public:
          if (lane.octave) {
             char o[8];
             std::snprintf(o, sizeof(o), "%+d", lane.octave);
+            tagBacking(c, s, x + w - 17, y + 2, 14, a, base > 1 || extra);
             c.setColor(alpha(base <= 1 && !extra ? 0xff3b2a1a : kOrange, a));
             c.text(o, ui::font(8.5f * s), visage::Font::kRight, x * s, (y + 1) * s, (w - 4) * s, 11 * s);
+         }
+         // Chance under 100: the percent in the note's lower corner.
+         if (lane.chance < 100 && w >= 18) {
+            char pc[8];
+            std::snprintf(pc, sizeof(pc), "%d%%", lane.chance);
+            tagBacking(c, s, x + w - (lane.chance < 10 ? 16 : 21), y + kCellH - 11, lane.chance < 10 ? 14 : 19, a,
+                       base > 1 || extra);
+            c.setColor(alpha(base <= 1 && !extra ? 0xff3b2a1a : kOrange, a));
+            c.text(pc, ui::font(8 * s), visage::Font::kRight, x * s, (y + kCellH - 12) * s, (w - 3) * s, 11 * s);
          }
          if (n.own) {
             c.setColor(alpha(0xffffffff, live ? 0.9f : 0.4f));
@@ -512,17 +530,18 @@ public:
 
    std::function<void(const Pattern &)> onEdit;
 
-   static constexpr float kLaneY[3] = {7.0f, 37.0f, 67.0f};
-   static constexpr float kLaneH = 20.0f;
+   static constexpr int kLanes = 4;
+   static constexpr float kLaneY[kLanes] = {4.0f, 27.0f, 50.0f, 73.0f};
+   static constexpr float kLaneH = 18.0f;
 
    void draw(visage::Canvas &c) override {
       const float s = ui::designScale(*this);
       const ui::Theme &t = ui::defaultTheme();
       const Pattern &p = host_.pattern();
       const int len = std::clamp<int>(p.length, 1, kSteps);
-      const char *const names[] = {"OCTAVE", "RATCHET", "VELOCITY"};
+      const char *const names[] = {"OCTAVE", "RATCHET", "VELOCITY", "CHANCE"};
       const int picked = scroll_.picked(p, slotIndex(host_.paramValue(kSlot)));
-      for (int lane = 0; lane < 3; ++lane) {
+      for (int lane = 0; lane < kLanes; ++lane) {
          c.setColor(t.dimText);
          c.text(names[lane], ui::font(10.5f * s), visage::Font::kLeft, 7 * s, kLaneY[lane] * s, 120 * s, kLaneH * s);
       }
@@ -540,7 +559,7 @@ public:
          auto dim = [&](uint8_t bit) { return own & bit ? base : 0.45f * base; };
          float a = base;
          const float x = kGridX + col * kColumn;
-         for (int lane = 0; lane < 3; ++lane) {
+         for (int lane = 0; lane < kLanes; ++lane) {
             const float y = kLaneY[lane];
             c.setColor(alpha(0xff181b20, a));
             c.roundedRectangle(x * s, y * s, kCellW * s, kLaneH * s, 3 * s);
@@ -558,7 +577,7 @@ public:
          std::snprintf(buf, sizeof(buf), "%d", l.ratchet);
          c.setColor(alpha(l.ratchet > 1 ? kOrange : l.pressure ? t.text : t.dimText, a));
          c.text(buf, ui::font(10 * s), visage::Font::kCenter, x * s, kLaneY[1] * s, 24 * s, kLaneH * s);
-         const float px = x + 25, py = kLaneY[1] + 5;
+         const float px = x + 25, py = kLaneY[1] + 4;
          a = dim(kOwnPressure);
          if (l.pressure) {
             c.setColor(alpha(kBlue, a));
@@ -583,6 +602,18 @@ public:
             c.setColor(alpha(l.velocity > 0 ? kOrange : kBlue, a));
             c.fill(std::min(mid, mid + w) * s, (by - 0.5f) * s, std::abs(w) * s, 2.0f * s);
          }
+         // Chance, in percent, with a bar filled that far.
+         a = dim(kOwnChance);
+         std::snprintf(buf, sizeof(buf), l.chance < 100 ? "%d%%" : "%d", l.chance);
+         c.setColor(alpha(l.chance < 100 ? kOrange : t.dimText, a));
+         c.text(buf, ui::font(10 * s), visage::Font::kCenter, x * s, (kLaneY[3] - 1) * s, kCellW * s, kLaneH * s);
+         const float cy = kLaneY[3] + kLaneH - 4;
+         c.setColor(alpha(0xff3a4049, a));
+         c.fill((x + 5) * s, cy * s, (kCellW - 10) * s, 1.0f * s);
+         if (l.chance < 100) {
+            c.setColor(alpha(kOrange, a));
+            c.fill((x + 5) * s, (cy - 0.5f) * s, (kCellW - 10) * l.chance / 100.0f * s, 2.0f * s);
+         }
       }
    }
 
@@ -592,8 +623,8 @@ public:
       const int view = static_cast<int>(std::floor((x - kGridX) / kColumn));
       col_ = view >= 0 && view < kView ? scroll_.first + view : -1;
       lane_ = -1;
-      for (int l = 0; l < 3; ++l)
-         if (y >= kLaneY[l] - 4 && y < kLaneY[l] + kLaneH + 4)
+      for (int l = 0; l < kLanes; ++l)
+         if (y >= kLaneY[l] - 2 && y < kLaneY[l] + kLaneH + 3)
             lane_ = l;
       if (col_ < 0 || col_ >= kSteps || lane_ < 0)
          return;
@@ -619,15 +650,17 @@ public:
                l.octave = 0;
             else if (lane_ == 1)
                l.ratchet = 1;
-            else
+            else if (lane_ == 2)
                l.velocity = 0;
+            else
+               l.chance = 100;
          }
          commit(p);
          lane_ = -1;
          return;
       }
       const Lane l = laneAt(p, col_, note);
-      start_ = lane_ == 0 ? l.octave : lane_ == 1 ? l.ratchet : l.velocity;
+      start_ = lane_ == 0 ? l.octave : lane_ == 1 ? l.ratchet : lane_ == 2 ? l.velocity : l.chance;
    }
 
    void mouseDrag(const visage::MouseEvent &e) override {
@@ -642,8 +675,10 @@ public:
          l.octave = static_cast<int8_t>(std::clamp(start_ + static_cast<int>(std::lround(dy / 14)), -3, 3));
       else if (lane_ == 1)
          l.ratchet = static_cast<uint8_t>(std::clamp(start_ + static_cast<int>(std::lround(dy / 12)), 1, kMaxRatchet));
-      else
+      else if (lane_ == 2)
          l.velocity = static_cast<int8_t>(std::clamp(start_ + static_cast<int>(std::lround(dy / 2)), -64, 64));
+      else
+         l.chance = static_cast<uint8_t>(std::clamp(start_ + static_cast<int>(std::lround(dy / 1.5f)), 0, 100));
       store(p, col_, note, l, bitFor(lane_));
       if (p != host_.pattern())
          commit(p);
@@ -656,8 +691,8 @@ public:
       const float x = e.position.x / s, y = e.position.y / s;
       const int view = static_cast<int>(std::floor((x - kGridX) / kColumn));
       int lane = -1;
-      for (int l = 0; l < 3; ++l)
-         if (y >= kLaneY[l] - 4 && y < kLaneY[l] + kLaneH + 4)
+      for (int l = 0; l < kLanes; ++l)
+         if (y >= kLaneY[l] - 2 && y < kLaneY[l] + kLaneH + 3)
             lane = l;
       if (view < 0 || view >= kView || lane < 0 || e.wheel_delta_y == 0.0f)
          return false;
@@ -670,15 +705,19 @@ public:
          l.octave = static_cast<int8_t>(std::clamp(l.octave + by, -3, 3));
       else if (lane == 1)
          l.ratchet = static_cast<uint8_t>(std::clamp(l.ratchet + by, 1, kMaxRatchet));
-      else
+      else if (lane == 2)
          l.velocity = static_cast<int8_t>(std::clamp(l.velocity + 4 * by, -64, 64));
+      else
+         l.chance = static_cast<uint8_t>(std::clamp(l.chance + 5 * by, 0, 100));
       store(p, col, note, l, bitFor(lane));
       commit(p);
       return true;
    }
 
 private:
-   static uint8_t bitFor(int lane) { return lane == 0 ? kOwnOctave : lane == 1 ? kOwnRatchet : kOwnVelocity; }
+   static uint8_t bitFor(int lane) {
+      return lane == 0 ? kOwnOctave : lane == 1 ? kOwnRatchet : lane == 2 ? kOwnVelocity : kOwnChance;
+   }
    // The picked note, if it starts on `step`; -1 when the step's own lane is what's edited.
    int noteFor(const Pattern &p, int step) const {
       const int i = scroll_.picked(p, slotIndex(host_.paramValue(kSlot)));
@@ -701,6 +740,8 @@ private:
          n.lane.pressure = l.pressure;
       if (bit & kOwnVelocity)
          n.lane.velocity = l.velocity;
+      if (bit & kOwnChance)
+         n.lane.chance = l.chance;
    }
 
    void commit(const Pattern &p) {
@@ -1040,7 +1081,7 @@ public:
       lanes_ = &add<LaneView>({20, 450, 862, 96}, host_, scroll_);
       lanes_->onEdit = [this](const Pattern &p) { edit(p); };
       tips_.add(*lanes_, "Per step, for the notes starting on it: drag up or down, scroll, or double-click to reset. "
-                         "Click P to make that step's ratchet follow pressure. With a note picked (right-click it), its "
+                         "Click P to make that step's ratchet follow pressure. Chance is how often the step plays, in percent. With a note picked (right-click it), its "
                          "column sets that note's own values; double-click gives one back to the step.");
 
       // Settings.

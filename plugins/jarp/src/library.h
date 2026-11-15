@@ -56,7 +56,8 @@ inline std::vector<std::string> tokens(const std::string &s) {
 // !  (to the pattern's end). A note always stops at the next note in its row.
 //
 // The lanes are lines of numbers that repeat over the pattern, "." for the plain value: oct()
-// octaves, vel() velocity offsets, rat() ratchet hits, prs() 1 where pressure adds hits (P).
+// octaves, vel() velocity offsets, rat() ratchet hits, prs() 1 where pressure adds hits (P), chc()
+// the percent chance a step plays.
 struct Pat {
    Pattern p;
 
@@ -119,6 +120,10 @@ struct Pat {
    Pat &vel(const std::string &s) { return lane(s, [](Lane &l, int v) { l.velocity = static_cast<int8_t>(std::clamp(v, -64, 64)); }); }
    Pat &rat(const std::string &s) { return lane(s, [](Lane &l, int v) { l.ratchet = static_cast<uint8_t>(std::clamp(v, 1, kMaxRatchet)); }); }
    Pat &prs(const std::string &s) { return lane(s, [](Lane &l, int v) { l.pressure = v ? 1 : 0; }); }
+   // Chance in percent.
+   Pat &chc(const std::string &s) {
+      return lane(s, [](Lane &l, int v) { l.chance = static_cast<uint8_t>(std::clamp(v, 0, 100)); });
+   }
 
    operator Pattern() const { return p; }
 
@@ -362,6 +367,10 @@ inline std::vector<Entry> build() {
                 {makePattern({{1, 1, 2}, {2, 1, 2}, {3, 1, 2}, {4, 1, 2}, {1, 4, 1}, {2, 4, 1}, {3, 4, 1}, {4, 4, 1},
                               {1, 7, 2}, {2, 7, 2}, {3, 7, 2}, {4, 7, 2}},
                              {{4, {1, 1, 0, -20}}, {7, {0, 2, 0, 0}}})}}; });
+   add(e, [&] { return Entry{"Ghost Notes", "Ratchet and Rhythm", {octRows, rate(r16), swing(0.56), pressVel(0.3)},
+                {Pat("1 3 2 3 1 3 2 4 1 3 2 3 1 4 2 3")
+                    .vel("14 -24 -8 -24 10 -24 -8 -20")
+                    .chc("100 35 75 30 100 45 70 25")}}; });
    add(e, [&] { return Entry{"Stutter Build", "Ratchet and Rhythm", {octRows, rate(r16), advance(loop)},
                 {Pat("1 3 2 4 1 3 2 4 1 3 2 4 1 3 2 4"),
                  Pat("1 3 2 4 1 3 2 4 1 3 2 4 1 3 2 4").rat("1 1 1 2"),
@@ -390,6 +399,10 @@ inline std::vector<Entry> build() {
                 {Pat(rep("1 . 3s 1s . 2s 4 .", 3) + "1 . 3s 5s . 4s 3s 2s " + rep("2 . 4s 2s . 3s 5 .", 2) +
                      "1 . 3s 1s . 2s 4 . 5s 4s 3s 2s 1s 2s 3s 4s")
                     .vel("12 . -6 2 . -4 8 .")}}; });
+   add(e, [&] { return Entry{"Generative", "Long Sequences", {octRows, rate(r16), pressVel(0.5), swing(0.54)},
+                {Pat("1 5 3 6 2 5 4 8 1 6 3 7 2 5 4 6 1 5 3 8 2 6 4 7 1 5 3 6 2 7 4 8")
+                    .vel("10 -8 0 -6 4 -8 0 -4")
+                    .chc("100 55 70 40 85 50 65 35")}}; });
    add(e, [&] { return Entry{"Slow Evolution", "Long Sequences", {octRows, rate(r16), pressVel(0.5)},
                 {Pat("1 2 3 4 3 2 3 4 1 2 3 5 3 2 3 5 1 3 4 5 4 3 4 6 2 3 5 6 5 3 6 7").vel("10 -6 -2 -6")}}; });
    add(e, [&] { return Entry{"Odyssey", "Long Sequences", {octRows, rate(r16), pressVel(0.3), swing(0.53)},
