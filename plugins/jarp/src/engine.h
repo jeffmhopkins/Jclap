@@ -562,6 +562,9 @@ private:
             continue;
          // The step's lane, with any values the note has of its own.
          const Lane lane = pattern_.laneOf(i);
+         // Chance: the note plays this time round only if the roll comes in under it.
+         if (lane.chance < 100 && roll() % 100 >= lane.chance)
+            continue;
          const int slot = slots[key[note.row]];
          const Finger &f = fingers_[slot];
          const int pitch = f.key + 12 * (lane.octave + octave[note.row]);
@@ -630,6 +633,14 @@ private:
    Pending pending_[kMaxPending];
    int pendingCount_ = 0;
    uint32_t serial_ = 0;
+   uint32_t dice_ = 0x9e3779b9u; // xorshift state for Chance
+
+   uint32_t roll() {
+      dice_ ^= dice_ << 13;
+      dice_ ^= dice_ >> 17;
+      dice_ ^= dice_ << 5;
+      return dice_;
+   }
    std::array<uint8_t, kSteps> hits_{};
 
    // The clock: steps at the block's start and per sample, where the next block should start, and

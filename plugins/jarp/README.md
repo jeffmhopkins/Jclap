@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.5.1.
+Version 0.6.0.
 
 ![Panel](docs/panel.png)
 
@@ -33,7 +33,8 @@ Eight rows by up to 128 steps, sixteen in view at a time. Row 1 is at the bottom
   has its own length.
 
 A white line moves through the steps in time with the transport, and the step it is in is outlined.
-A softer note (a lower VELOCITY) draws fainter.
+A softer note (a lower VELOCITY) draws fainter, and a note left to chance (a CHANCE under 100%) shows
+its percent in its lower corner.
 
 There is no gate setting: a note's length on the grid is its gate. A note on row 1 drawn across the
 whole pattern holds a pedal under the rest.
@@ -115,6 +116,9 @@ scroll on it, to change it; double-click to set it back.
   its hits. Click **P** to make the step's ratchet follow pressure: pressing harder adds hits, up to
   MAX HITS. The note shows the extra hits it could take as blue outlines, filled as the finger presses.
 - **VELOCITY**: an offset from -64 to +64, added to the note's velocity.
+- **CHANCE**: how likely the step's notes are to play each time round, from 0% to 100% (the default).
+  Each note rolls on its own, so at 50% a chord on that step thins out differently every pass, and a
+  ratcheted note plays all its hits or none. A cell under 100% shows in orange with a bar under it.
 
 ### A note's own values
 
@@ -125,7 +129,7 @@ still takes from the step show dim. Double-click a value to hand it back to the 
 values of its own shows a white dot in its corner. Right-click it again, or click an empty cell, to
 go back to editing steps.
 
-![A picked note with its own octave, ratchet and velocity](docs/note.png)
+![A picked note with its own octave, ratchet, velocity and chance](docs/note.png)
 
 ## Settings
 
@@ -209,7 +213,7 @@ The preset bar steps through the factory bank and then your own. A preset holds 
 eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
 instead, right-click the slot's number and use **Load from preset**:
 
-There are 77 factory presets in twelve categories, each built on how the style is really played.
+There are 79 factory presets in twelve categories, each built on how the style is really played.
 Most use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked
 (chain) use several patterns: CHORD moves on with each new chord, LOOP plays them one after another.
 
@@ -225,9 +229,9 @@ chord in the middle of the keyboard and route JArp into a bass patch.
 | Guitar Fingerpicking | Travis Picking, Classical Arpeggio (p i m a), Banjo Roll, Ballad Picking, Fingerstyle Song (four patterns, LOOP) |
 | Strum and Harp | Down Strum, Up Strum, Strum Pattern (down down up, up down up), Harp Glissando, Harp Cascade, Strum to Harp (chain, CHORD) |
 | Pads and Pedals | Pedal Climb, Slow Top, Swell Layers, Drone and Drift (64 steps), Pedal Story (four patterns, LOOP) |
-| Ratchet and Rhythm | Trap Hats, Stutter, Machine Gun, Pressure Ratchets, Stabs, Stutter Build (four patterns, LOOP) |
+| Ratchet and Rhythm | Trap Hats, Stutter, Machine Gun, Pressure Ratchets, Stabs, Ghost Notes (off-beats left to chance), Stutter Build (four patterns, LOOP) |
 | MPE Expressive | Press Roll, Press to Bloom, Breath Pulse, Pressure Waves, Touch Chain (three patterns, CHORD): press harder for louder notes and more hits |
-| Long Sequences | Four Bar Groove (64 steps), Slow Evolution (32), Odyssey (128), Long Chain (two 32-step patterns, LOOP) |
+| Long Sequences | Four Bar Groove (64 steps), Generative (32, every step left to chance), Slow Evolution (32), Odyssey (128), Long Chain (two 32-step patterns, LOOP) |
 | Chains | Chord Chain and Verse Chorus (CHORD), Phrase Loop, Build Up, Call and Response and Eight Bars (LOOP, Eight Bars using all eight slots) |
 | Odd Meters | Five Four, Seven Eight, Nine Eight, Three Over Four, Five Over Four, Odd Chain (7/8 then 5/8, LOOP) |
 
