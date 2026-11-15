@@ -830,6 +830,11 @@ public:
          c.text(kWhat[i], ui::font(9 * s), visage::Font::kLeft, 112 * s, (166 + i * 29) * s, 140 * s, 24 * s);
       }
       c.setColor(t.dimText);
+      c.text("RANDOM PRESET", ui::font(9.5f * s), visage::Font::kLeft, 16 * s, 376 * s, 120 * s, 16 * s);
+      c.text("the whole preset, or one pattern", ui::font(9 * s), visage::Font::kRight, 0, 376 * s, (width() / s - 16) * s, 16 * s);
+      c.setColor(kRule);
+      c.fill(16 * s, 394 * s, (width() / s - 32) * s, 1.0f * s);
+      c.setColor(t.dimText);
       c.text("Unticked items stay as they are. The plain base: one note per step", ui::font(8.5f * s),
              visage::Font::kLeft, 16 * s, (height() / s - 34) * s, (width() / s - 32) * s, 13 * s);
       c.text("on row 1, octave 0, 1 hit, velocity 0. Only held notes are ever used.", ui::font(8.5f * s),
@@ -1078,7 +1083,9 @@ private:
 
    // ---- dice ----
 
-   static constexpr ui::Rect kDiceBox{523, 71, 358, 408};
+   static constexpr ui::Rect kDiceBox{523, 71, 358, 484};
+   // The random preset row, from the card's top.
+   static constexpr float kPresetY = 404;
 
    void buildDice() {
       const ui::Rect b = kDiceBox;
@@ -1155,6 +1162,28 @@ private:
       range(kDicePressure, {0, 1, 0.2, 0.05}, d.pressure,
             [](double v) { return std::to_string(static_cast<int>(std::lround(v * 100))) + "%"; },
             [this](double v) { host_.dice.pressure = v; });
+
+      // A random preset: the whole of it, or one of its patterns into this slot.
+      const float py = b.y + kPresetY;
+      std::vector<std::string> cats{"Any category"};
+      for (const std::string &c : factoryCategories())
+         cats.push_back(c);
+      auto &cat = add<ui::Dropdown>({b.x + 16, py, 150, 26}, cats);
+      cat.setAccent(kOrange);
+      cat.setSelected(std::clamp(host_.dice.presetCategory, 0, static_cast<int>(cats.size()) - 1));
+      cat.onChange = [this](int i) { host_.dice.presetCategory = i; };
+      keep(cat);
+      tips_.add(cat, "Where a random preset comes from: any factory preset, or one category.");
+      auto &all = add<ui::Button>({b.x + 174, py, 80, 26}, "PRESET");
+      all.setAccent(kOrange);
+      all.onClick = [this] { randomPreset(false); };
+      keep(all);
+      tips_.add(all, "Loads a random factory preset: its settings and all its patterns. UNDO brings back what you had.");
+      auto &one = add<ui::Button>({b.x + 260, py, 82, 26}, "INTO SLOT");
+      one.setAccent(kOrange);
+      one.onClick = [this] { randomPreset(true); };
+      keep(one);
+      tips_.add(one, "Puts one random pattern from the factory presets into the selected slot, leaving the rest as it is.");
    }
 
    void roll(bool mutate) {
@@ -1164,16 +1193,89 @@ private:
                                .next();
       const int len = host_.pattern().length;
       const Pattern next = mutate ? mutatePattern(now, host_.dice, len, seed) : randomizePattern(now, host_.dice, len, seed);
-      host_.diceHistory.push(now);
+      host_.diceHistory.push(DiceState(now, selectedSlot()));
       edit(next);
       refreshDice();
+   }
+
+   int selectedSlot() const { return slotIndex(host_.paramValue(kSlot)); }
+
+   // A random factory preset, from the category picked on the card (or any): the whole of it, or one
+   // of its patterns into the selected slot.
+   void randomPreset(bool intoSlot) {
+      const int category = host_.dice.presetCategory;
+      const std::string current = host_.presetName();
+      std::vector<const library::Entry *> pool;
+      for (const library::Entry &e : factoryLibrary())
+         if (category <= 0 || category > static_cast<int>(factoryCategories().size()) ||
+             e.category == factoryCategories()[category - 1])
+            pool.push_back(&e);
+      // Loading the one already loaded would look like nothing happened.
+      if (!intoSlot && pool.size() > 1)
+         pool.erase(std::remove_if(pool.begin(), pool.end(), [&](const library::Entry *e) { return e->name == current; }),
+                    pool.end());
+      if (pool.empty())
+         return;
+      DiceRng rng(static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()) + ++diceSeed_);
+      const library::Entry &pick = *pool[static_cast<size_t>(rng.range(0, static_cast<int>(pool.size()) - 1))];
+      if (intoSlot) {
+         std::vector<const Pattern *> patterns;
+         for (const Pattern &p : pick.patterns)
+            if (!p.empty())
+               patterns.push_back(&p);
+         if (patterns.empty())
+            return;
+         const Pattern &p = *patterns[static_cast<size_t>(rng.range(0, static_cast<int>(patterns.size()) - 1))];
+         host_.diceHistory.push(DiceState(host_.pattern(), selectedSlot()));
+         host_.setSlot(selectedSlot(), p);
+      }
+      else {
+         host_.diceHistory.push(capture(true, 0));
+         presets_->load(pick.name);
+      }
+      grid_->redraw();
+      lanes_->redraw();
+      refreshDice();
+   }
+
+   // Now, as the same kind of thing a history step holds.
+   DiceState capture(bool whole, int slot) const {
+      if (!whole)
+         return DiceState(host_.bank().slots[slot], slot);
+      DiceState::Whole w;
+      for (clap_id id = 0; id < kParamCount; ++id)
+         w.values.push_back(host_.paramValue(id));
+      w.bank = host_.bank();
+      w.name = host_.presetName();
+      return DiceState(std::move(w));
+   }
+
+   void restore(const DiceState &st) {
+      if (st.whole) {
+         for (clap_id id = 0; id < kParamCount && id < st.whole->values.size(); ++id)
+            if (host_.paramValue(id) != st.whole->values[id]) {
+               host_.beginEdit(id);
+               host_.setParam(id, st.whole->values[id]);
+               host_.endEdit(id);
+            }
+         host_.setBank(st.whole->bank);
+         host_.setPresetName(st.whole->name);
+         if (presets_)
+            presets_->redraw();
+      }
+      else
+         host_.setSlot(st.slot, st.pattern);
+      grid_->redraw();
+      lanes_->redraw();
    }
 
    void stepHistory(bool forward) {
       DiceHistory &h = host_.diceHistory;
       if (forward ? !h.canRedo() : !h.canUndo())
          return;
-      edit(forward ? h.redo(host_.pattern()) : h.undo(host_.pattern()));
+      const DiceState &next = forward ? h.nextRedo() : h.nextUndo();
+      const DiceState now = capture(next.whole != nullptr, next.slot);
+      restore(forward ? h.redo(now) : h.undo(now));
       refreshDice();
    }
 

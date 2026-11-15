@@ -163,7 +163,11 @@ Click the die in the preset bar for the dice card.
   velocity offset 0), rolling each ticked item within its range.
 - **MUTATE** nudges the pattern you have, each ticked item by up to its range. Click again to keep
   going.
-- **UNDO** and **REDO** step back and forward through what the dice replaced.
+- **RANDOM PRESET**: pick a category (or any), then **PRESET** loads a random factory preset from it,
+  settings and all its patterns, or **INTO SLOT** puts one random pattern from those presets into the
+  selected slot and leaves everything else as it is.
+- **UNDO** and **REDO** step back and forward through what the dice replaced, a random preset
+  included.
 
 Untick an item to keep it as it is. The ranges:
 
@@ -186,18 +190,24 @@ The preset bar steps through the factory bank and then your own. A preset holds 
 eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
 instead, right-click the slot's number and use **Load from preset**:
 
-| Preset | |
+There are 69 factory presets in twelve categories. Most use PITCH rows with WRAP, so a triad plays
+them as well as a 7th chord does. Presets marked (chain) use several patterns: CHORD moves on with
+each new chord, LOOP plays them one after another.
+
+| Category | Presets |
 |---|---|
-| Init | Up through four notes and back |
-| Root Fifth | The 1st and 5th of whatever you hold, alternating (DEGREE rows) |
-| Broken Thirds | 1 3 2 4 3 5 4 6 up the scale (DEGREE rows) |
-| Wrap Run | Up all eight rows, wrapping round the notes held, an octave up on the way back |
-| Pedal Climb | Row 1 held under the whole pattern, the rest climbing over it, with ratchets and accents |
-| Gallop | Triplets, restarting on the bar |
-| Stabs | All four notes at once, with octave jumps |
-| Press Roll | Steps with P lit roll faster the harder you press |
-| Chord Chain | Up, down, then a broken pattern: each new chord plays the next (Advance Chord) |
-| Phrase Loop | A climb, the climb an octave up, then a four-step fill, round and round (Advance Loop) |
+| Basics | Init, Up, Down, Up Down (two octaves), Root Fifth and Broken Thirds (DEGREE rows), Outside In, Wrap Run |
+| Berlin School | Sequencer Pulse, Octave Bounce, Accent Shift (a three-step accent across sixteen), Night Drive (four patterns, LOOP), Long Drive (64 steps) |
+| Grooves | Funk Sixteenths, House Offbeats, Dotted Eighths, Swing Shuffle, Gallop (triplets), Stabs, Two Step (chain, CHORD) |
+| Piano | Alberti Bass, Broken Triplets, Rolled Ballad, Stride, Nocturne Sweep, Piano Verse (three patterns, CHORD) |
+| Guitar Fingerpicking | Travis Picking, Folk Roll, Classical Arpeggio, Banjo Roll, Fingerstyle Song (four patterns, LOOP) |
+| Strum and Harp | Down Strum, Up Strum, Strum Pattern (down down up, up down up), Harp Glissando, Harp Cascade, Strum to Harp (chain, CHORD) |
+| Pads and Pedals | Pedal Climb, Slow Top, Swell Layers, Drone and Drift (64 steps), Pedal Story (four patterns, LOOP) |
+| Ratchet and Rhythm | Trap Rolls, Stutter, Machine Gun, Pressure Ratchets, Stutter Build (four patterns, LOOP) |
+| MPE Expressive | Press Roll, Press to Bloom, Breath Pulse, Pressure Waves, Touch Chain (three patterns, CHORD): press harder for louder notes and more hits |
+| Long Sequences | Four Bar Groove (64 steps), Slow Evolution (32), Sixty Four (64), Odyssey (128), Long Chain (two 32-step patterns, LOOP) |
+| Chains | Chord Chain and Verse Chorus (CHORD), Phrase Loop, Build Up, Call and Response and Eight Bars (LOOP, Eight Bars using all eight slots) |
+| Odd Meters | Five Four, Seven Eight, Nine Eight, Three Over Four, Five Over Four, Odd Chain (7/8 then 5/8, LOOP) |
 
 **SAVE** names the current settings and writes them as a small text file, with the patterns in a
 `.jarppatterns` file beside it:

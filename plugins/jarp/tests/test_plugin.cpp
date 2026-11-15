@@ -244,7 +244,26 @@ int main() {
          JCLAP_CHECK(bank != nullptr);
          if (bank)
             JCLAP_CHECK(bank->slots[0].count > 0);
+         // A chained preset has more than one pattern to chain.
+         for (const auto &[id, v] : p.values)
+            if (bank && id == kAdvance && std::lround(v) != 0)
+               JCLAP_CHECK(bank->next(0) != 0);
       }
+      JCLAP_CHECK_EQ(factoryCategories().size(), 12u);
+      // The library's step lines: a tie, a chord, a short note, a note held to the end, and lanes
+      // that repeat.
+      const Pattern t = library::Pat("1 _ c . 2s 3!").vel("5 .").oct(". 1");
+      JCLAP_CHECK_EQ(t.length, 6);
+      JCLAP_CHECK_EQ(t.count, 7);
+      JCLAP_CHECK_EQ(t.notes[t.noteStarting(0, 0)].length, 8);
+      JCLAP_CHECK(t.noteStarting(3, 2) >= 0);
+      JCLAP_CHECK_EQ(t.notes[t.noteStarting(1, 4)].length, 2);
+      JCLAP_CHECK_EQ(t.notes[t.noteStarting(2, 5)].length, 4);
+      JCLAP_CHECK_EQ(t.lanes[4].velocity, 5);
+      JCLAP_CHECK_EQ(t.lanes[5].octave, 1);
+      JCLAP_CHECK_EQ(t.lanes[5].velocity, 0);
+      // The chord (c) on step 3 starts its own row 1, after the tied one.
+      JCLAP_CHECK_EQ(t.notes[t.noteStarting(0, 2)].length, 4);
    }
 
    // ---- dice ----
