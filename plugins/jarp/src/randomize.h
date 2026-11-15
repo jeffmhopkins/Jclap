@@ -74,12 +74,16 @@ inline int rollLength(DiceRng &rng, int most) {
    return std::clamp(most, 1, 16);
 }
 
-// Rebuilds `p` from notes as {row, step, length}, latest step first so each fits before the next.
+// Rebuilds `p` from notes, latest step first so each fits before the next.
 inline void rebuild(Pattern &p, std::vector<Note> notes) {
    std::sort(notes.begin(), notes.end(), [](const Note &a, const Note &b) { return a.step > b.step; });
    p.clear();
    for (const Note &n : notes)
-      p.add(n.row, n.step, n.length);
+      if (p.add(n.row, n.step, n.length)) {
+         // A note keeps any lane values of its own.
+         p.notes[p.count - 1].own = n.own;
+         p.notes[p.count - 1].lane = n.lane;
+      }
 }
 
 } // namespace dice_detail

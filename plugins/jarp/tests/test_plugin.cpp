@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "editor.h"
 #include "params.h"
 #include "presets.h"
 #include "randomize.h"
@@ -207,6 +208,39 @@ int main() {
       JCLAP_CHECK_EQ(noteOns(play(g, 400)).size(), 2u); // 102400 samples: steps 0 and 12
    }
 
+   {
+      // Edits from the panel while the host isn't processing are never lost: after a hundred of them
+      // (more than any queue would hold), the last is what plays.
+      TestHost h(clap_entry, kId);
+      auto *editor = h.object<jarp::EditorHost>();
+      JCLAP_CHECK(editor != nullptr);
+      for (int k = 0; k < 100; ++k) {
+         jarp::Pattern p;
+         p.length = 8;
+         p.add(0, k == 99 ? 1 : 2 + k % 6, 4);
+         editor->setSlot(0, p);
+      }
+      h.setTransport(120.0, 0.0, true);
+      h.midi(0x90, 60, 100);
+      const auto on = noteOns(play(h, 25)); // 6400 samples: steps 0 and 1 (6000 per step)
+      JCLAP_CHECK_EQ(on.size(), 1u);
+      if (!on.empty())
+         JCLAP_CHECK_EQ(on[0].time, 6000u);
+   }
+
+   {
+      // All Notes Off (a host's panic) lets go of latched fingers too: nothing plays after it.
+      TestHost h(clap_entry, kId);
+      h.setParam(kLatch, 1);
+      h.setTransport(120.0, 0.0, true);
+      h.midi(0x91, 60, 100);
+      play(h, 2);
+      h.midi(0x81, 60, 0);
+      play(h, 2);
+      h.midi(0xB1, 123, 0);
+      JCLAP_CHECK(noteOns(play(h, 100)).empty());
+   }
+
    // ---- params ----
    {
       char text[64];
@@ -267,6 +301,22 @@ int main() {
    }
 
    // ---- dice ----
+   {
+      // Rebuilding a pattern (as Mutate and Randomize do) keeps each note's own lane values.
+      jarp::Pattern p;
+      p.add(0, 0, 4);
+      p.add(2, 3, 4);
+      p.notes[1].own = jarp::kOwnVelocity;
+      p.notes[1].lane.velocity = -20;
+      std::vector<jarp::Note> notes(p.notes.begin(), p.notes.begin() + p.count);
+      jarp::dice_detail::rebuild(p, notes);
+      const int i = p.noteStarting(2, 3);
+      JCLAP_CHECK(i >= 0);
+      if (i >= 0) {
+         JCLAP_CHECK_EQ(p.notes[i].own, jarp::kOwnVelocity);
+         JCLAP_CHECK_EQ(p.notes[i].lane.velocity, -20);
+      }
+   }
    {
       DiceSettings d;
       Pattern base;

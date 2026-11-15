@@ -5,15 +5,16 @@
 #include <jclap/core/edit_queue.h>
 #include <jclap/core/entry.h>
 #include <jclap/core/helpers.h>
-#include <jclap/core/spsc_queue.h>
 #include <jclap/core/triple_buffer.h>
 #include <jclap/ui/clap_gui.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -65,10 +66,9 @@ public:
 
    bool activate(double sampleRate, uint32_t, uint32_t) override {
       sampleRate_ = sampleRate;
-      // Patterns sent while inactive were applied at once, so the queue only holds stale ones.
-      Command stale;
-      while (commands_.pop(stale)) {
-      }
+      // Patterns sent while inactive were applied at once, so the mailboxes only hold stale ones.
+      for (auto &slot : mail_)
+         slot.update();
       engine_.setBank(bank_);
       engine_.setSettings(settings());
       engine_.reset();
@@ -233,12 +233,14 @@ public:
             v[to] = x;
       }
       uint32_t size = 0;
-      if (!jclap::core::readAll(stream, &size, sizeof(size)) || size > 65536)
+      if (!jclap::core::readAll(stream, &size, sizeof(size)) || size > (1u << 17))
          return false;
       std::vector<uint8_t> saved(size);
       if (!jclap::core::readAll(stream, saved.data(), size))
          return false;
-      Bank bank;
+      // On the heap: a bank is about 86 KB, and a host may load state on a thread with a small stack.
+      auto loaded = std::make_unique<Bank>();
+      Bank &bank = *loaded;
       if (v1) {
          bank.slots[0].length = static_cast<uint8_t>(std::clamp<int>(static_cast<int>(std::lround(oldLength)), 1, kSteps));
          if (!bank.slots[0].load(saved.data(), saved.size()))
@@ -275,17 +277,18 @@ public:
       const uint32_t n = in->size(in);
       for (uint32_t i = 0; i < n; ++i)
          handleParam(in->get(in, i));
-      Command c;
-      while (commands_.pop(c))
-         engine_.setPattern(c.slot, c.pattern);
+      for (int i = 0; i < kSlots; ++i)
+         if (mail_[i].update())
+            engine_.setPattern(i, mail_[i].front());
       engine_.setSettings(settings());
 
       Block b;
       b.frames = proc->frames_count;
       b.sampleRate = sampleRate_;
       if (const clap_event_transport_t *t = proc->transport) {
-         if (t->flags & CLAP_TRANSPORT_HAS_TEMPO)
-            b.tempo = t->tempo;
+         // A tempo no host would send (or not a number) is held to 1-999, so a step can't run away.
+         if (t->flags & CLAP_TRANSPORT_HAS_TEMPO && std::isfinite(t->tempo))
+            b.tempo = std::clamp(t->tempo, 1.0, 999.0);
          if (t->flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE) {
             b.hasTransport = true;
             b.playing = (t->flags & CLAP_TRANSPORT_IS_PLAYING) != 0;
@@ -314,11 +317,12 @@ public:
    }
 
 private:
-   // Hands a slot to the engine: through the queue while active, directly otherwise.
+   // Hands a slot to the engine: through its mailbox while active (the audio thread takes the newest
+   // at its next block, so no edit is ever lost however many come before it runs), directly otherwise.
    void send(int slot) {
-      if (active_.load())
-         commands_.push({slot, bank_.slots[slot]});
-      else
+      mail_[slot].back() = bank_.slots[slot];
+      mail_[slot].publish();
+      if (!active_.load())
          engine_.setPattern(slot, bank_.slots[slot]);
    }
 
@@ -345,6 +349,12 @@ private:
             engine_.noteOn(t, channel, ev->key, std::clamp(static_cast<int>(std::lround(ev->velocity * 127.0)), 1, 127), out_);
          else
             engine_.noteOff(t, channel, ev->key, out_);
+         flush(out);
+         return;
+      }
+      case CLAP_EVENT_NOTE_CHOKE: {
+         auto *ev = reinterpret_cast<const clap_event_note_t *>(h);
+         engine_.letGo(t, ev->channel < 0 ? -1 : ev->channel & 15, ev->key < 0 || ev->key > 127 ? -1 : ev->key, out_);
          flush(out);
          return;
       }
@@ -404,6 +414,11 @@ private:
             engine_.setSlide(channel, -1, d2 / 127.0);
          else if (status == 0xE0)
             engine_.setBend(channel, -1, ((d2 << 7 | d1) - 8192) / 8192.0);
+         // All Sound Off or All Notes Off (a host's panic): every finger lets go, latched or not.
+         else if (status == 0xB0 && (d1 == 120 || d1 == 123)) {
+            engine_.letGo(t, -1, -1, out_);
+            flush(out);
+         }
          out->try_push(out, h);
          return;
       }
@@ -473,7 +488,8 @@ private:
    double sampleRate_ = 48000.0;
    std::atomic<bool> active_{false};
    OutBuffer out_;
-   jclap::core::SpscQueue<Command, 64> commands_;
+   // Each slot's newest pattern from the panel, for the audio thread.
+   std::array<jclap::core::TripleBuffer<Pattern>, kSlots> mail_;
    jclap::core::TripleBuffer<Frame> frames_;
 
    // Main thread.

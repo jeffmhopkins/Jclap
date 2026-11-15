@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.5.0.
+Version 0.5.1.
 
 ![Panel](docs/panel.png)
 
@@ -72,7 +72,7 @@ The switch beside the numbers says how playing moves along them:
 - **CHORD**: each new chord moves to the next pattern. Let go of every note, play again, and the next
   pattern starts. The first chord plays the one selected.
 - **LOOP**: while you hold, each time a pattern ends the next one starts, so 1, 2 and 3 play as one
-  long phrase.
+  long phrase. Each new chord starts the phrase again from the one selected.
 
 Empty patterns are skipped, and after the last pattern with notes it goes round to the first. To chain
 1, 2 and 3, fill those three and leave the rest empty; clear one to drop it from the chain.
@@ -137,7 +137,8 @@ go back to editing steps.
 
 **PLAYBACK**
 
-- **LATCH**: on, the notes keep playing after you let go, until you play a new chord.
+- **LATCH**: on, the notes keep playing after you let go, until you play a new chord. A host's All
+  Notes Off (or a note choke) stops them too.
 - **RESTART**: where the pattern starts.
   - **SONG** locks the pattern to the song position, so it is sequenced in time rather than started
     by your hands: play a chord half way through the pattern and it starts half way through. Each

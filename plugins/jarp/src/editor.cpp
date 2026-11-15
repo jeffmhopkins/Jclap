@@ -600,9 +600,19 @@ public:
       Pattern p = host_.pattern();
       const int note = noteFor(p, col_);
       downY_ = y;
+      // P toggles (each click, so a quick second click toggles it back).
+      if (lane_ == 1 && x - (kGridX + view * kColumn) >= 23) {
+         Lane l = laneAt(p, col_, note);
+         l.pressure = l.pressure ? 0 : 1;
+         store(p, col_, note, l, kOwnPressure);
+         commit(p);
+         lane_ = -1;
+         return;
+      }
       if (e.repeatClickCount() >= 2) {
+         // A note hands the value back to its step (on the ratchet, P with it).
          if (note >= 0)
-            p.notes[note].own &= static_cast<uint8_t>(~bitFor(lane_));
+            p.notes[note].own &= static_cast<uint8_t>(~(lane_ == 1 ? kOwnRatchet | kOwnPressure : bitFor(lane_)));
          else {
             Lane &l = p.lanes[col_];
             if (lane_ == 0)
@@ -612,15 +622,6 @@ public:
             else
                l.velocity = 0;
          }
-         commit(p);
-         lane_ = -1;
-         return;
-      }
-      // P toggles.
-      if (lane_ == 1 && x - (kGridX + view * kColumn) >= 23) {
-         Lane l = laneAt(p, col_, note);
-         l.pressure = l.pressure ? 0 : 1;
-         store(p, col_, note, l, kOwnPressure);
          commit(p);
          lane_ = -1;
          return;
