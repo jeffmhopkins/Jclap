@@ -31,6 +31,9 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -94,8 +97,10 @@ public:
       const jarp::Frame &f = host_.frame();
       const int len = length();
       const bool degree = std::lround(host_.paramValue(kRowsBy)) != 0;
-      const int playStep = f.running ? std::clamp(static_cast<int>(f.position), 0, len - 1) : -1;
-      const int playQuarter = f.running ? static_cast<int>(f.position * kQuarters) : -1;
+      // The playhead shows on the pattern playing only (another may be selected for editing).
+      const bool here = f.running && f.slot == slotIndex(host_.paramValue(kSlot));
+      const int playStep = here ? std::clamp(static_cast<int>(f.position), 0, len - 1) : -1;
+      const int playQuarter = here ? static_cast<int>(f.position * kQuarters) : -1;
 
       // The playhead's column, behind the cells.
       if (playStep >= 0) {
@@ -235,7 +240,6 @@ public:
       // The end bar, anywhere along it.
       if (std::abs(x - barX(length())) < 7 && y < kGridY + 8 * kRowPitch) {
          drag_ = Drag::End;
-         host_.beginEdit(kLength);
          return;
       }
       const int col = static_cast<int>(std::floor((x - kGridX) / kColumn));
@@ -270,8 +274,11 @@ public:
       const float x = e.position.x / s;
       if (drag_ == Drag::End) {
          const int len = std::clamp(static_cast<int>(std::lround((x - kGridX + 2.5f) / kColumn)), 1, kSteps);
-         if (len != length())
-            host_.setParam(kLength, len);
+         if (len != length()) {
+            Pattern next = host_.pattern();
+            next.length = static_cast<uint8_t>(len);
+            commit(next);
+         }
          return;
       }
       if (drag_ != Drag::Length)
@@ -287,8 +294,6 @@ public:
    }
 
    void mouseUp(const visage::MouseEvent &) override {
-      if (drag_ == Drag::End)
-         host_.endEdit(kLength);
       drag_ = Drag::None;
       note_ = -1;
    }
@@ -296,7 +301,7 @@ public:
 private:
    enum class Drag { None, Length, End };
 
-   int length() const { return std::clamp(static_cast<int>(std::lround(host_.paramValue(kLength))), 1, kSteps); }
+   int length() const { return std::clamp<int>(host_.pattern().length, 1, kSteps); }
    int maxHits() const { return static_cast<int>(std::lround(host_.paramModulated(kMaxHits))); }
    static float rowY(int row) { return kGridY + (7 - row) * kRowPitch; }
    static float barX(int len) { return kGridX + len * kColumn - (kColumn - kCellW) / 2; }
@@ -341,7 +346,7 @@ public:
       const float s = ui::designScale(*this);
       const ui::Theme &t = ui::defaultTheme();
       const Pattern &p = host_.pattern();
-      const int len = std::clamp(static_cast<int>(std::lround(host_.paramValue(kLength))), 1, kSteps);
+      const int len = std::clamp<int>(p.length, 1, kSteps);
       const char *const names[] = {"OCTAVE", "RATCHET", "VELOCITY"};
       for (int lane = 0; lane < 3; ++lane) {
          c.setColor(t.dimText);
@@ -481,6 +486,160 @@ private:
    float downY_ = 0.0f;
 };
 
+// A preset's patterns: a factory preset's are compiled in, a user preset's are in the file beside it.
+bool presetBank(const std::string &name, Bank &bank) {
+   if (const Bank *factory = factoryBank(name)) {
+      bank = *factory;
+      return true;
+   }
+   return readBank(patternFile(ui::userPresetFolder(kPresetFormat) / (name + kPresetFormat.extension)), bank);
+}
+
+// Patterns 1 to 8 in the PATTERN title row: click to select one (the Pattern param), right-click to
+// copy, paste or clear it, or load a pattern from a preset into it. A letter is lit when its pattern has notes; the selected one is slate and
+// the one playing has an orange bar under it.
+class SlotStrip : public visage::Frame {
+public:
+   explicit SlotStrip(EditorHost &host) : host_(host) {}
+
+   static constexpr float kTab = 24.0f, kGap = 3.0f;
+
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      const ui::Theme &t = ui::defaultTheme();
+      const int selected = slotIndex(host_.paramValue(kSlot));
+      const jarp::Frame &f = host_.frame();
+      for (int i = 0; i < kSlots; ++i) {
+         const float x = i * (kTab + kGap);
+         const bool filled = !host_.bank().slots[i].empty();
+         c.setColor(i == selected ? kSlate : i == hover_ ? t.buttonHover : t.button);
+         c.roundedRectangle(x * s, 1 * s, kTab * s, 22 * s, 3 * s);
+         c.setColor(t.panelBorder);
+         c.roundedRectangleBorder(x * s, 1 * s, kTab * s, 22 * s, 3 * s, 1.0f);
+         const bool playing = f.running && f.slot == i;
+         c.setColor(i == selected ? t.text : playing ? kOrange : filled ? t.text : alpha(t.dimText, 0.5f));
+         c.text(std::to_string(i + 1).c_str(), ui::font(10.5f * s), visage::Font::kCenter, x * s, 1 * s, kTab * s, 22 * s);
+         if (playing) {
+            c.setColor(kOrange);
+            c.roundedRectangle((x + 5) * s, 19 * s, (kTab - 10) * s, 2 * s, 1 * s);
+         }
+      }
+   }
+
+   void mouseMove(const visage::MouseEvent &e) override { setHover(at(e)); }
+   void mouseExit(const visage::MouseEvent &) override { setHover(-1); }
+
+   void mouseDown(const visage::MouseEvent &e) override {
+      const int i = at(e);
+      if (i < 0)
+         return;
+      if (e.shouldTriggerPopup()) {
+         menu(i, e.position);
+         return;
+      }
+      host_.beginEdit(kSlot);
+      host_.setParam(kSlot, i + 1);
+      host_.endEdit(kSlot);
+      redraw();
+   }
+
+private:
+   int at(const visage::MouseEvent &e) const {
+      const float x = e.position.x / ui::designScale(*this);
+      const int i = static_cast<int>(std::floor(x / (kTab + kGap)));
+      return i >= 0 && i < kSlots && x - i * (kTab + kGap) < kTab ? i : -1;
+   }
+   void setHover(int i) {
+      if (i != hover_) {
+         hover_ = i;
+         redraw();
+      }
+   }
+   void menu(int slot, visage::Point where) {
+      visage::PopupMenu m;
+      m.addOption(1, std::string("Copy ") + std::to_string(slot + 1));
+      m.addOption(2, std::string("Paste into ") + std::to_string(slot + 1)).enable(clipboardFull_);
+      m.addOption(3, std::string("Clear ") + std::to_string(slot + 1));
+      m.addBreak();
+      // Load from preset: every preset with patterns, by category; a preset with more than one
+      // pattern lists each. Only the pattern loads: the other slots and the settings stay.
+      auto sources = std::make_shared<std::vector<Pattern>>();
+      auto addPreset = [&](visage::PopupMenu &into, const std::string &name) {
+         Bank bank;
+         if (!presetBank(name, bank))
+            return;
+         int filled = 0;
+         for (const Pattern &p : bank.slots)
+            filled += !p.empty();
+         if (filled == 0)
+            return;
+         if (filled == 1) {
+            for (const Pattern &p : bank.slots)
+               if (!p.empty()) {
+                  into.addOption(kLoadId + static_cast<int>(sources->size()), name);
+                  sources->push_back(p);
+               }
+            return;
+         }
+         visage::PopupMenu each(name);
+         for (int k = 0; k < kSlots; ++k)
+            if (!bank.slots[k].empty()) {
+               each.addOption(kLoadId + static_cast<int>(sources->size()), "Pattern " + std::to_string(k + 1));
+               sources->push_back(bank.slots[k]);
+            }
+         into.addSubMenu(std::move(each));
+      };
+      visage::PopupMenu load("Load from preset");
+      std::vector<std::string> categories;
+      for (const ui::Preset &p : factoryPresets())
+         if (std::find(categories.begin(), categories.end(), p.category) == categories.end())
+            categories.push_back(p.category);
+      for (const std::string &cat : categories) {
+         visage::PopupMenu group(cat);
+         for (const ui::Preset &p : factoryPresets())
+            if (p.category == cat)
+               addPreset(group, p.name);
+         load.addSubMenu(std::move(group));
+      }
+      visage::PopupMenu user("User");
+      for (const ui::Preset &p : ui::userPresets(kPresetFormat))
+         addPreset(user, p.name);
+      if (user.hasOptions())
+         load.addSubMenu(std::move(user));
+      m.addSubMenu(std::move(load));
+      m.onSelection() += [this, slot, sources](int id) {
+         if (id == 1) {
+            clipboard_ = host_.bank().slots[slot];
+            clipboardFull_ = true;
+         }
+         else if (id == 2 && clipboardFull_)
+            host_.setSlot(slot, clipboard_);
+         else if (id == 3) {
+            Pattern empty;
+            empty.length = host_.bank().slots[slot].length;
+            host_.setSlot(slot, empty);
+         }
+         else if (id >= kLoadId && id - kLoadId < static_cast<int>(sources->size()))
+            host_.setSlot(slot, (*sources)[id - kLoadId]);
+         if (onChange)
+            onChange();
+         redraw();
+      };
+      m.show(this, where);
+   }
+
+public:
+   // After a slot's pattern changes here, so the grid and lanes redraw.
+   std::function<void()> onChange;
+
+private:
+   static constexpr int kLoadId = 100;
+   EditorHost &host_;
+   int hover_ = -1;
+   Pattern clipboard_;
+   bool clipboardFull_ = false;
+};
+
 // The settings card: Timing, Playback and Pressure, each under a grey heading and rule, with thin
 // dividers between them.
 class SettingsCard : public visage::Frame {
@@ -586,17 +745,38 @@ public:
       presets_->setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
       presets_->onLoad = [this](const ui::Preset &p) {
          ui::applyPreset(p, host_, defaultValues());
-         if (const Pattern *pattern = factoryPattern(p.name))
-            edit(*pattern);
+         // A factory preset's patterns are compiled in; a user preset's are in the file beside it.
+         Bank bank;
+         if (!presetBank(p.name, bank))
+            return;
+         host_.setBank(bank);
+         grid_->redraw();
+         lanes_->redraw();
+      };
+      presets_->onSaved = [this](const std::filesystem::path &file) { writeBank(patternFile(file), host_.bank()); };
+      presets_->onDeleted = [](const std::filesystem::path &file) {
+         std::error_code ec;
+         std::filesystem::remove(patternFile(file), ec);
       };
       presets_->onDice = [this] { showDice(!host_.diceOpen); };
       presets_->diceLit = [this] { return host_.diceOpen; };
       tips_.add(*presets_, "Presets: the arrows step through them, the name opens the menu, the star marks a favorite and "
-                           "SAVE keeps the current settings. A factory preset brings its pattern; a saved one keeps the "
-                           "settings, and the pattern stays with the project. The die opens the dice.");
+                           "SAVE keeps the current settings and all eight patterns. The die opens the dice.");
 
       // PATTERN: the grid and its lanes, with how rows are picked in its title row.
       add<ui::Section>({12, 76, 876, 478}, "PATTERN");
+      slots_ = &add<SlotStrip>({118, 88, 213, 24}, host_);
+      slots_->onChange = [this] {
+         grid_->redraw();
+         lanes_->redraw();
+      };
+      tips_.add(*slots_, "Patterns 1 to 8: click one to play and edit it (the Pattern param, which the host can "
+                         "automate). Lit numbers have notes; the orange bar is the one playing. Right-click to copy, "
+                         "paste, clear, or load a pattern from a preset into it. Empty patterns are skipped when the chain "
+                         "advances.");
+      tips_.add(choice(kAdvance, {340, 89, 128, 22}, {"OFF", "CHORD", "LOOP"}),
+                "Advance: Off plays the pattern selected. Chord moves to the next pattern with notes each time you "
+                "play a new chord after letting go of every note. Loop moves on each time the pattern ends.");
       rowsLabel(470, "ROWS BY");
       auto &rowsBy = choice(kRowsBy, {552, 89, 115, 22}, {"PITCH", "DEGREE"});
       tips_.add(rowsBy, "Pitch: row 1 is the lowest note held, row 2 the next up, and so on. Degree: rows count up the "
@@ -629,15 +809,29 @@ public:
       add<SettingsCard>({12, 568, 876, 142});
       tips_.add(knob(kRate, "RATE", kOrange, 37, 606), "How long each step is.");
       tips_.add(knob(kSwing, "SWING", kOrange, 107, 606), "Moves every second step later: 50% is straight.");
-      tips_.add(knob(kLength, "LENGTH", kOrange, 177, 606), "How many steps the pattern plays before it loops. The "
-                                                            "purple bar on the grid is the same.");
+      length_ = &add<ui::Knob>({177, 606, 76, 88}, ui::ValueRange{1, 16, 8, 1.0, false, true});
+      length_->setLabel("LENGTH");
+      length_->setAccent(kOrange);
+      length_->setLabelColor(ui::defaultTheme().dimText);
+      length_->valueText = [](double v) {
+         const int n = static_cast<int>(std::lround(v));
+         return std::to_string(n) + (n == 1 ? " step" : " steps");
+      };
+      length_->onChange = [this](double v) {
+         Pattern p = host_.pattern();
+         p.length = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(v)), 1, kSteps));
+         edit(p);
+      };
+      tips_.add(*length_, "How many steps this pattern plays before it loops; each pattern has its own. The purple bar "
+                          "on the grid is the same.");
       heading("LATCH", 270, 606);
       tips_.add(choice(kLatch, {270, 624, 80, 22}, {"OFF", "ON"}),
                 "On: the notes keep playing after you let go, until you play a new chord.");
       heading("RESTART", 270, 652);
-      tips_.add(choice(kRestart, {270, 670, 138, 22}, {"FREE", "NOTE", "BAR"}),
-                "Where the pattern starts: Free follows the song position; Note starts it with the first note you "
-                "play; Bar starts it at the bar the first note is in.");
+      tips_.add(choice(kRestart, {270, 670, 138, 22}, {"SONG", "NOTE", "BAR"}),
+                "Where the pattern starts: Song locks it to the song position, so a chord played half way through "
+                "the pattern starts half way through it (and a Loop chain plays along the song); Note starts it "
+                "with the first note you play; Bar starts it at the bar the first note is in.");
       tips_.add(knob(kPressVelocity, "VELOCITY", kBlue, 452, 606),
                 "How far each note's velocity follows its finger's pressure instead of how hard the key was struck. The "
                 "Velocity lane's offset is added after.");
@@ -662,6 +856,9 @@ public:
       scaleLabel_->setVisible(degree);
       key_->setVisible(degree);
       scale_->setVisible(degree);
+      if (std::lround(length_->value()) != host_.pattern().length)
+         length_->setValue(host_.pattern().length);
+      slots_->redraw();
       // Over the grid, the dice card hides what's under it.
       grid_->redraw();
       lanes_->redraw();
@@ -832,7 +1029,7 @@ private:
       const uint64_t seed = DiceRng(static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()) +
                                     ++diceSeed_)
                                .next();
-      const int len = static_cast<int>(std::lround(host_.paramValue(kLength)));
+      const int len = host_.pattern().length;
       const Pattern next = mutate ? mutatePattern(now, host_.dice, len, seed) : randomizePattern(now, host_.dice, len, seed);
       host_.diceHistory.push(now);
       edit(next);
@@ -859,6 +1056,8 @@ private:
    ui::Tooltips tips_;
    ui::PresetBar *presets_ = nullptr;
    GridView *grid_ = nullptr;
+   SlotStrip *slots_ = nullptr;
+   ui::Knob *length_ = nullptr;
    LaneView *lanes_ = nullptr;
    ui::Label *emptyLabel_ = nullptr, *scaleLabel_ = nullptr;
    ui::SegmentedSwitch *empty_ = nullptr;

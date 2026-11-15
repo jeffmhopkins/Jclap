@@ -21,9 +21,14 @@ class EditorHost : public jclap::ui::ParamAccess {
 public:
    // The newest view of the fingers and the playhead.
    virtual const Frame &frame() = 0;
-   // The pattern as the panel edits it; a change goes to the audio thread at its next block.
+   // The pattern selected (the Pattern param), as the panel edits it; a change goes to the audio
+   // thread at its next block.
    virtual const Pattern &pattern() const = 0;
    virtual void setPattern(const Pattern &p) = 0;
+   // Every slot, and one slot or all of them replaced (paste, clear, a preset).
+   virtual const Bank &bank() const = 0;
+   virtual void setSlot(int slot, const Pattern &p) = 0;
+   virtual void setBank(const Bank &b) = 0;
    // The name of the preset last loaded or saved, kept with the project.
    virtual std::string presetName() const = 0;
    virtual void setPresetName(const std::string &name) = 0;

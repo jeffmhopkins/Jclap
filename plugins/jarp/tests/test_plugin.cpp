@@ -147,7 +147,7 @@ int main() {
    // ---- state ----
    {
       TestHost h(clap_entry, kId);
-      h.setParam(kLength, 12);
+      h.setParam(kAdvance, 2);
       h.setParam(kRowsBy, 1);
       h.process(64);
       const Buffer saved = save(h);
@@ -155,8 +155,8 @@ int main() {
       JCLAP_CHECK(load(g, saved));
       double v = 0;
       auto *params = static_cast<const clap_plugin_params_t *>(g.plugin()->get_extension(g.plugin(), CLAP_EXT_PARAMS));
-      params->get_value(g.plugin(), kLength, &v);
-      JCLAP_CHECK_EQ(v, 12.0);
+      params->get_value(g.plugin(), kAdvance, &v);
+      JCLAP_CHECK_EQ(v, 2.0);
       params->get_value(g.plugin(), kRowsBy, &v);
       JCLAP_CHECK_EQ(v, 1.0);
       // The same pattern plays from the copy.
@@ -171,6 +171,42 @@ int main() {
       JCLAP_CHECK(!load(g, bad));
    }
 
+   {
+      // A version 1 state (one pattern, a Length param) loads as slot 1 with that length, and the
+      // params after Length land where they are now.
+      Buffer old;
+      const auto put = [&](const void *p, size_t n) {
+         old.data.insert(old.data.end(), static_cast<const char *>(p), static_cast<const char *>(p) + n);
+      };
+      put("JARP", 4);
+      const uint32_t header[2] = {1, 13};
+      put(header, sizeof(header));
+      const double values[13] = {2, 0.5, 12, 1, 1, 1, 0, 0, 0, 0.5, 0, 0.6, 4};
+      put(values, sizeof(values));
+      std::vector<uint8_t> pattern = {1, 1, 0, 0, 4};
+      for (int k = 0; k < kSteps; ++k)
+         pattern.insert(pattern.end(), {0, 1, 0, 0});
+      const uint32_t size = static_cast<uint32_t>(pattern.size());
+      put(&size, 4);
+      put(pattern.data(), size);
+      const uint32_t nameLength = 0;
+      put(&nameLength, 4);
+      TestHost g(clap_entry, kId);
+      JCLAP_CHECK(load(g, old));
+      auto *params = static_cast<const clap_plugin_params_t *>(g.plugin()->get_extension(g.plugin(), CLAP_EXT_PARAMS));
+      double v = -1;
+      params->get_value(g.plugin(), kLatch, &v);
+      JCLAP_CHECK_EQ(v, 1.0);
+      params->get_value(g.plugin(), kRowsBy, &v);
+      JCLAP_CHECK_EQ(v, 1.0);
+      params->get_value(g.plugin(), kAdvance, &v);
+      JCLAP_CHECK_EQ(v, 0.0);
+      // Slot 1's one note plays, once per 12 steps.
+      g.setTransport(120.0, 0.0, true);
+      g.midi(0x90, 60, 100);
+      JCLAP_CHECK_EQ(noteOns(play(g, 400)).size(), 2u); // 102400 samples: steps 0 and 12
+   }
+
    // ---- params ----
    {
       char text[64];
@@ -182,8 +218,10 @@ int main() {
       JCLAP_CHECK(!std::strcmp(text, "Linear"));
       formatParam(kCurve, -0.4, text, sizeof(text));
       JCLAP_CHECK(!std::strcmp(text, "Soft 40%"));
-      formatParam(kLength, 16, text, sizeof(text));
-      JCLAP_CHECK(!std::strcmp(text, "16 steps"));
+      formatParam(kSlot, 3, text, sizeof(text));
+      JCLAP_CHECK(!std::strcmp(text, "3"));
+      formatParam(kAdvance, 1, text, sizeof(text));
+      JCLAP_CHECK(!std::strcmp(text, "Chord"));
       for (clap_id id = 0; id < kParamCount; ++id) {
          // Every value reads back as itself.
          const double values[] = {kParams[id].min, kParams[id].defaultValue, kParams[id].max};
@@ -202,10 +240,10 @@ int main() {
       for (const Preset &p : factoryPresets()) {
          JCLAP_CHECK(names.insert(p.name).second);
          JCLAP_CHECK_EQ(p.values.size(), static_cast<size_t>(kParamCount));
-         const Pattern *pattern = factoryPattern(p.name);
-         JCLAP_CHECK(pattern != nullptr);
-         if (pattern)
-            JCLAP_CHECK(pattern->count > 0);
+         const Bank *bank = factoryBank(p.name);
+         JCLAP_CHECK(bank != nullptr);
+         if (bank)
+            JCLAP_CHECK(bank->slots[0].count > 0);
       }
    }
 
@@ -223,7 +261,7 @@ int main() {
       DiceSettings none;
       for (bool &on : none.on)
          on = false;
-      const Pattern pedal = *factoryPattern("Pedal Climb");
+      const Pattern pedal = factoryBank("Pedal Climb")->slots[0];
       JCLAP_CHECK(randomizePattern(pedal, none, 16, 99) == pedal);
       JCLAP_CHECK(mutatePattern(pedal, none, 16, 99) == pedal);
       // Mutate keeps most of the pattern.

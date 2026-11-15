@@ -79,6 +79,12 @@ std::vector<In> chord(std::initializer_list<int> keys, int64_t at = 0, int veloc
    return in;
 }
 
+// Sets slot 1, with the pattern's length taken from the settings' old LENGTH where a test gives one.
+void setPattern(Engine &e, Pattern p, int length = 8) {
+   p.length = static_cast<uint8_t>(length);
+   e.setPattern(0, p);
+}
+
 Pattern pattern(std::initializer_list<Note> notes) {
    Pattern p;
    for (const Note &n : notes)
@@ -147,7 +153,7 @@ int main() {
       Settings s;
       s.pressVelocity = 0.0;
       e.setSettings(s);
-      e.setPattern(pattern({{0, 0, 4}, {2, 1, 4}, {0, 2, 4}, {2, 3, 4}}));
+      setPattern(e, pattern({{0, 0, 4}, {2, 1, 4}, {0, 2, 4}, {2, 3, 4}}));
       const auto out = run(e, 4 * kStepSamples + 100, chord({60, 64, 67, 70}));
       const auto on = ons(out);
       JCLAP_CHECK_EQ(on.size(), 4u);
@@ -165,9 +171,8 @@ int main() {
       // is a quarter of one.
       Engine e;
       Settings s;
-      s.length = 2;
       e.setSettings(s);
-      e.setPattern(pattern({{0, 0, 1}, {1, 1, 4}}));
+      setPattern(e, pattern({{0, 0, 1}, {1, 1, 4}}), 2);
       const auto out = run(e, 4 * kStepSamples - 10, chord({60, 64}));
       const auto on = ons(out);
       JCLAP_CHECK_EQ(on.size(), 4u);
@@ -179,9 +184,8 @@ int main() {
       // A held bass for the whole pattern sounds once, under the rest.
       Engine e;
       Settings s;
-      s.length = 4;
       e.setSettings(s);
-      e.setPattern(pattern({{0, 0, 16}, {1, 0, 2}, {1, 1, 2}, {1, 2, 2}, {1, 3, 2}}));
+      setPattern(e, pattern({{0, 0, 16}, {1, 0, 2}, {1, 1, 2}, {1, 2, 2}, {1, 3, 2}}), 4);
       const auto out = run(e, 4 * kStepSamples - 10, chord({48, 60}));
       int bass = 0;
       for (const Timed &t : ons(out))
@@ -195,7 +199,7 @@ int main() {
       Settings s;
       s.swing = 0.75;
       e.setSettings(s);
-      e.setPattern(pattern({{0, 0, 4}, {0, 1, 4}, {0, 2, 4}}));
+      setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}, {0, 2, 4}}));
       const auto on = ons(run(e, 3 * kStepSamples, chord({60})));
       JCLAP_CHECK_EQ(on.size(), 3u);
       JCLAP_CHECK_EQ(on[1].time, kStepSamples * 3 / 2);
@@ -204,7 +208,7 @@ int main() {
    {
       // Back-to-back notes on one key: the first ends before the second starts, at the same time.
       Engine e;
-      e.setPattern(pattern({{0, 0, 4}, {0, 1, 4}}));
+      setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}}));
       const auto out = run(e, 2 * kStepSamples - 10, chord({60}));
       JCLAP_CHECK_EQ(out.size(), 3u);
       JCLAP_CHECK(out[0].on());
@@ -216,19 +220,19 @@ int main() {
    {
       // The transport stopped: the arp runs on its own clock.
       Engine e;
-      e.setPattern(pattern({{0, 0, 4}, {0, 1, 4}}));
+      setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}}));
       const auto on = ons(run(e, 2 * kStepSamples, chord({60}), false));
       JCLAP_CHECK_EQ(on.size(), 2u);
       JCLAP_CHECK_EQ(on[1].time, kStepSamples);
    }
    {
-      // Restart Free follows the song position: a chord pressed part way through step 2 waits for
+      // Restart Song follows the song position: a chord pressed part way through step 2 waits for
       // step 3.
       Engine e;
       Settings s;
-      s.restart = Restart::Free;
+      s.restart = Restart::Song;
       e.setSettings(s);
-      e.setPattern(pattern({{0, 0, 4}, {0, 1, 4}, {0, 2, 4}, {0, 3, 4}}));
+      setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}, {0, 2, 4}, {0, 3, 4}}));
       const auto on = ons(run(e, 3 * kStepSamples, chord({60}, kStepSamples + 1000)));
       JCLAP_CHECK_EQ(on.size(), 1u);
       JCLAP_CHECK_EQ(on[0].time, 2 * kStepSamples);
@@ -245,7 +249,7 @@ int main() {
       p.lanes[0].octave = 1;
       p.lanes[0].velocity = -20;
       p.lanes[1].ratchet = 3;
-      e.setPattern(p);
+      setPattern(e, p);
       const auto on = ons(run(e, 2 * kStepSamples - 10, chord({60})));
       JCLAP_CHECK_EQ(on.size(), 4u);
       JCLAP_CHECK_EQ(on[0].m.data1, 72);
@@ -266,7 +270,7 @@ int main() {
       Pattern p = pattern({{0, 0, 4}});
       p.lanes[0].pressure = 1;
       p.lanes[0].velocity = 10;
-      e.setPattern(p);
+      setPattern(e, p);
       std::vector<In> in = {{0, In::Pressure, 1, -1, 0}, {0, In::On, 1, 60, 100}};
       auto on = ons(run(e, kStepSamples - 10, in));
       JCLAP_CHECK_EQ(on.size(), 1u);
@@ -274,7 +278,7 @@ int main() {
 
       Engine hard;
       hard.setSettings(s);
-      hard.setPattern(p);
+      setPattern(hard, p);
       in = {{0, In::Pressure, 1, -1, 127}, {0, In::On, 1, 60, 100}};
       on = ons(run(hard, kStepSamples - 10, in));
       JCLAP_CHECK_EQ(on.size(), 4u);
@@ -295,7 +299,7 @@ int main() {
    {
       // Letting go ends that finger's note at once; the rest play on, rows remapped.
       Engine e;
-      e.setPattern(pattern({{0, 0, 16}, {1, 0, 16}}));
+      setPattern(e, pattern({{0, 0, 16}, {1, 0, 16}}));
       std::vector<In> in = chord({60, 64});
       in.push_back({1000, In::Off, 1, 60, 0});
       const auto out = run(e, kStepSamples, in);
@@ -314,7 +318,7 @@ int main() {
       Settings s;
       s.latch = true;
       e.setSettings(s);
-      e.setPattern(pattern({{0, 0, 4}, {0, 1, 4}, {0, 2, 4}, {0, 3, 4}}));
+      setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}, {0, 2, 4}, {0, 3, 4}}));
       std::vector<In> in = chord({60});
       in.push_back({100, In::Off, 1, 60, 0});
       in.push_back({2 * kStepSamples - 500, In::On, 2, 62, 100});
@@ -331,7 +335,7 @@ int main() {
       Engine e;
       Pattern p = pattern({{0, 0, 4}});
       p.lanes[0].octave = 1;
-      e.setPattern(p);
+      setPattern(e, p);
       run(e, 1000, chord({60, 64}));
       int sounding = 0, key = -1;
       e.forEachSounding(1, 60, [&](int k) {
@@ -340,6 +344,143 @@ int main() {
       });
       JCLAP_CHECK_EQ(sounding, 1);
       JCLAP_CHECK_EQ(key, 72);
+   }
+
+   // ---- chains ----
+   {
+      // Advance Chord: each new chord, after letting go of every note, plays the next pattern with
+      // notes in it, skipping empty ones and going round. The first chord plays the one selected.
+      Engine e;
+      Settings s;
+      s.advance = Advance::Chord;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 4}}), 2);
+      Pattern b = pattern({{1, 0, 4}});
+      b.length = 2;
+      e.setPattern(1, b);
+      Pattern d = pattern({{2, 0, 4}});
+      d.length = 2;
+      e.setPattern(3, d);
+      std::vector<In> in;
+      for (int k = 0; k < 4; ++k) {
+         const int64_t at = k * 2 * kStepSamples;
+         for (int key : {60, 64, 67})
+            in.push_back({at, In::On, 1, key, 100});
+         for (int key : {60, 64, 67})
+            in.push_back({at + kStepSamples, In::Off, 1, key, 0});
+      }
+      const auto on = ons(run(e, 8 * kStepSamples, in));
+      JCLAP_CHECK_EQ(on.size(), 4u);
+      JCLAP_CHECK_EQ(on[0].m.data1, 60); // A: row 1
+      JCLAP_CHECK_EQ(on[1].m.data1, 64); // B: row 2
+      JCLAP_CHECK_EQ(on[2].m.data1, 67); // D: row 3 (C is empty)
+      JCLAP_CHECK_EQ(on[3].m.data1, 60); // round to A
+   }
+   {
+      // Advance Loop: each time a pattern ends the next starts, at its own length.
+      Engine e;
+      Settings s;
+      s.advance = Advance::Loop;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}}), 2);
+      Pattern b = pattern({{1, 0, 4}, {1, 1, 4}, {1, 2, 4}});
+      b.length = 3;
+      e.setPattern(1, b);
+      const auto on = ons(run(e, 7 * kStepSamples - 300, chord({60, 64})));
+      JCLAP_CHECK_EQ(on.size(), 7u);
+      JCLAP_CHECK_EQ(on[1].m.data1, 60);
+      JCLAP_CHECK_EQ(on[2].m.data1, 64);
+      JCLAP_CHECK_EQ(on[2].time, 2 * kStepSamples);
+      JCLAP_CHECK_EQ(on[4].m.data1, 64);
+      JCLAP_CHECK_EQ(on[5].m.data1, 60);
+      JCLAP_CHECK_EQ(on[5].time, 5 * kStepSamples);
+      Frame f;
+      e.fillFrame(f);
+      JCLAP_CHECK_EQ(f.slot, 0);
+   }
+   {
+      // Restart Song with Advance Loop: the chain is sequenced along the song. A (2 steps) then B
+      // (3 steps) make a 5-step cycle, so a chord pressed during step 6 starts at step 7: B's step 1.
+      Engine e;
+      Settings s;
+      s.advance = Advance::Loop;
+      s.restart = Restart::Song;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}}), 2);
+      Pattern b = pattern({{1, 0, 4}, {1, 1, 4}, {1, 2, 4}});
+      b.length = 3;
+      e.setPattern(1, b);
+      const auto on = ons(run(e, 11 * kStepSamples - 300, chord({60, 64}, 6 * kStepSamples + 1000)));
+      JCLAP_CHECK_EQ(on.size(), 4u);
+      JCLAP_CHECK_EQ(on[0].time, 7 * kStepSamples);
+      JCLAP_CHECK_EQ(on[0].m.data1, 64); // B
+      JCLAP_CHECK_EQ(on[2].m.data1, 64); // B's last step
+      JCLAP_CHECK_EQ(on[3].m.data1, 60); // A again at step 10
+      JCLAP_CHECK_EQ(on[3].time, 10 * kStepSamples);
+      Frame f;
+      e.fillFrame(f);
+      JCLAP_CHECK_EQ(f.slot, 0);
+   }
+   {
+      // Restart Song with Advance Chord: the next chord's pattern picks up where the song is in it.
+      Engine e;
+      Settings s;
+      s.advance = Advance::Chord;
+      s.restart = Restart::Song;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}, {0, 2, 4}, {0, 3, 4}}), 4);
+      Pattern b = pattern({{1, 0, 4}, {1, 1, 4}, {1, 2, 4}, {2, 3, 4}});
+      b.length = 4;
+      e.setPattern(1, b);
+      std::vector<In> in = chord({60, 64, 67});
+      int channel = 1;
+      for (int key : {60, 64, 67})
+         in.push_back({2 * kStepSamples - 100, In::Off, channel++, key, 0});
+      for (const In &n : chord({60, 64, 67}, 6 * kStepSamples + 1000))
+         in.push_back(n);
+      const auto on = ons(run(e, 8 * kStepSamples - 300, in));
+      JCLAP_CHECK_EQ(on.size(), 3u);
+      JCLAP_CHECK_EQ(on[2].time, 7 * kStepSamples);
+      JCLAP_CHECK_EQ(on[2].m.data1, 67); // B's step 4 (7 mod 4 = 3), row 3
+   }
+   {
+      // Advance Off: the selected pattern plays, and picking another switches at the next step.
+      Engine e;
+      setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}}), 2);
+      Pattern b = pattern({{1, 0, 4}, {1, 1, 4}});
+      b.length = 2;
+      e.setPattern(1, b);
+      auto on = ons(run(e, 2 * kStepSamples - 10, chord({60, 64})));
+      JCLAP_CHECK_EQ(on.size(), 2u);
+      JCLAP_CHECK_EQ(on[1].m.data1, 60);
+      Settings s;
+      s.slot = 1;
+      e.setSettings(s);
+      Frame f;
+      e.fillFrame(f);
+      JCLAP_CHECK_EQ(f.slot, 1);
+   }
+   {
+      // The bank saves and loads every slot, each with its length; a version 1 pattern keeps the
+      // length it is given.
+      Bank bank;
+      bank.slots[0] = pattern({{0, 0, 4}});
+      bank.slots[5] = pattern({{3, 2, 8}});
+      bank.slots[5].length = 12;
+      const std::vector<uint8_t> saved = bank.save();
+      Bank back;
+      JCLAP_CHECK(back.load(saved.data(), saved.size()));
+      JCLAP_CHECK(back == bank);
+      JCLAP_CHECK_EQ(back.next(0), 5);
+      JCLAP_CHECK_EQ(back.next(5), 0);
+      std::vector<uint8_t> v1 = {1, 0};
+      for (int k = 0; k < kSteps; ++k)
+         v1.insert(v1.end(), {0, 1, 0, 0});
+      Pattern old;
+      old.length = 5;
+      JCLAP_CHECK(old.load(v1.data(), v1.size()));
+      JCLAP_CHECK_EQ(old.length, 5);
+      JCLAP_CHECK_EQ(old.count, 0);
    }
 
    // ---- the saved pattern ----
