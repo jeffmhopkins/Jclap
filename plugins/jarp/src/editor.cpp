@@ -32,6 +32,8 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -484,8 +486,17 @@ private:
    float downY_ = 0.0f;
 };
 
+// A preset's patterns: a factory preset's are compiled in, a user preset's are in the file beside it.
+bool presetBank(const std::string &name, Bank &bank) {
+   if (const Bank *factory = factoryBank(name)) {
+      bank = *factory;
+      return true;
+   }
+   return readBank(patternFile(ui::userPresetFolder(kPresetFormat) / (name + kPresetFormat.extension)), bank);
+}
+
 // Patterns 1 to 8 in the PATTERN title row: click to select one (the Pattern param), right-click to
-// copy, paste or clear it. A letter is lit when its pattern has notes; the selected one is slate and
+// copy, paste or clear it, or load a pattern from a preset into it. A letter is lit when its pattern has notes; the selected one is slate and
 // the one playing has an orange bar under it.
 class SlotStrip : public visage::Frame {
 public:
@@ -549,7 +560,54 @@ private:
       m.addOption(1, std::string("Copy ") + std::to_string(slot + 1));
       m.addOption(2, std::string("Paste into ") + std::to_string(slot + 1)).enable(clipboardFull_);
       m.addOption(3, std::string("Clear ") + std::to_string(slot + 1));
-      m.onSelection() += [this, slot](int id) {
+      m.addBreak();
+      // Load from preset: every preset with patterns, by category; a preset with more than one
+      // pattern lists each. Only the pattern loads: the other slots and the settings stay.
+      auto sources = std::make_shared<std::vector<Pattern>>();
+      auto addPreset = [&](visage::PopupMenu &into, const std::string &name) {
+         Bank bank;
+         if (!presetBank(name, bank))
+            return;
+         int filled = 0;
+         for (const Pattern &p : bank.slots)
+            filled += !p.empty();
+         if (filled == 0)
+            return;
+         if (filled == 1) {
+            for (const Pattern &p : bank.slots)
+               if (!p.empty()) {
+                  into.addOption(kLoadId + static_cast<int>(sources->size()), name);
+                  sources->push_back(p);
+               }
+            return;
+         }
+         visage::PopupMenu each(name);
+         for (int k = 0; k < kSlots; ++k)
+            if (!bank.slots[k].empty()) {
+               each.addOption(kLoadId + static_cast<int>(sources->size()), "Pattern " + std::to_string(k + 1));
+               sources->push_back(bank.slots[k]);
+            }
+         into.addSubMenu(std::move(each));
+      };
+      visage::PopupMenu load("Load from preset");
+      std::vector<std::string> categories;
+      for (const ui::Preset &p : factoryPresets())
+         if (std::find(categories.begin(), categories.end(), p.category) == categories.end())
+            categories.push_back(p.category);
+      for (const std::string &cat : categories) {
+         visage::PopupMenu group(cat);
+         for (const ui::Preset &p : factoryPresets())
+            if (p.category == cat)
+               addPreset(group, p.name);
+         load.addSubMenu(std::move(group));
+      }
+      visage::PopupMenu user("User");
+      for (const ui::Preset &p : ui::userPresets(kPresetFormat))
+         addPreset(user, p.name);
+      if (user.hasOptions())
+         load.addSubMenu(std::move(user));
+      m.addSubMenu(std::move(load));
+      m.onSelection() += [this, slot, sources](int id) {
          if (id == 1) {
             clipboard_ = host_.bank().slots[slot];
             clipboardFull_ = true;
@@ -561,11 +619,21 @@ private:
             empty.length = host_.bank().slots[slot].length;
             host_.setSlot(slot, empty);
          }
+         else if (id >= kLoadId && id - kLoadId < static_cast<int>(sources->size()))
+            host_.setSlot(slot, (*sources)[id - kLoadId]);
+         if (onChange)
+            onChange();
          redraw();
       };
       m.show(this, where);
    }
 
+public:
+   // After a slot's pattern changes here, so the grid and lanes redraw.
+   std::function<void()> onChange;
+
+private:
+   static constexpr int kLoadId = 100;
    EditorHost &host_;
    int hover_ = -1;
    Pattern clipboard_;
@@ -679,9 +747,7 @@ public:
          ui::applyPreset(p, host_, defaultValues());
          // A factory preset's patterns are compiled in; a user preset's are in the file beside it.
          Bank bank;
-         if (const Bank *factory = factoryBank(p.name))
-            bank = *factory;
-         else if (!readBank(patternFile(ui::userPresetFolder(kPresetFormat) / (p.name + kPresetFormat.extension)), bank))
+         if (!presetBank(p.name, bank))
             return;
          host_.setBank(bank);
          grid_->redraw();
@@ -700,9 +766,14 @@ public:
       // PATTERN: the grid and its lanes, with how rows are picked in its title row.
       add<ui::Section>({12, 76, 876, 478}, "PATTERN");
       slots_ = &add<SlotStrip>({118, 88, 213, 24}, host_);
+      slots_->onChange = [this] {
+         grid_->redraw();
+         lanes_->redraw();
+      };
       tips_.add(*slots_, "Patterns 1 to 8: click one to play and edit it (the Pattern param, which the host can "
                          "automate). Lit numbers have notes; the orange bar is the one playing. Right-click to copy, "
-                         "paste or clear. Empty patterns are skipped when the chain advances.");
+                         "paste, clear, or load a pattern from a preset into it. Empty patterns are skipped when the chain "
+                         "advances.");
       tips_.add(choice(kAdvance, {340, 89, 128, 22}, {"OFF", "CHORD", "LOOP"}),
                 "Advance: Off plays the pattern selected. Chord moves to the next pattern with notes each time you "
                 "play a new chord after letting go of every note. Loop moves on each time the pattern ends.");

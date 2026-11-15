@@ -40,7 +40,9 @@ note name, with a dot beside it.
 
 JArp holds eight patterns, **1** to **8**, in the strip beside the PATTERN title. Click a number to
 play it and edit it on the grid. A lit number has notes in it; the one playing has an orange bar under
-it. Right-click a number to **copy** it, **paste** into it, or **clear** it.
+it. Right-click a number to **copy** it, **paste** into it, or **clear** it, or to **load from
+preset**: pick a preset, or one pattern of a preset that has several, and only that pattern loads into
+this slot, leaving the other slots and the settings as they are.
 
 The switch beside the numbers says how playing moves along them:
 
@@ -164,7 +166,8 @@ the held notes, so JArp still plays only notes you hold.
 ## Presets
 
 The preset bar steps through the factory bank and then your own. A preset holds the settings and all
-eight patterns:
+eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
+instead, right-click the slot's number and use **Load from preset**:
 
 | Preset | |
 |---|---|
