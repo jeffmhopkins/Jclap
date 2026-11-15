@@ -410,9 +410,36 @@ private:
 
    double clock(uint32_t sample) const { return start_ + sample * perSample_; }
 
+   // The pattern and its start for musical step j of a Loop chain locked to the song.
+   void songChain(int64_t j) {
+      int chain[kSlots], n = 0, cycle = 0;
+      int s = bank_.slots[selected_].empty() ? bank_.next(selected_) : selected_;
+      for (int k = 0; k < kSlots && !bank_.slots[s].empty(); ++k) {
+         chain[n++] = s;
+         cycle += std::clamp<int>(bank_.slots[s].length, 1, kSteps);
+         s = bank_.next(s);
+         if (s == chain[0])
+            break;
+      }
+      if (!n) {
+         slotStart_ = 0;
+         return;
+      }
+      int64_t at = ((j % cycle) + cycle) % cycle;
+      for (int i = 0; i < n; ++i) {
+         const int len = std::clamp<int>(bank_.slots[chain[i]].length, 1, kSteps);
+         if (at < len || i + 1 == n) {
+            playing_ = chain[i];
+            slotStart_ = j - at;
+            return;
+         }
+         at -= len;
+      }
+   }
+
    double originAt(double now, const Block &b) const {
       switch (settings_.restart) {
-      case Restart::Free: return 0.0;
+      case Restart::Song: return 0.0;
       case Restart::Bar:
          if (b.hasTransport && b.playing && b.hasBar)
             return b.barStart / stepBeats_;
@@ -460,8 +487,18 @@ private:
    // Starts the notes on musical step j (counted from the origin).
    void trigger(int64_t j) {
       int len = std::clamp<int>(bank_.slots[playing_].length, 1, kSteps);
-      // Each time round, Advance Loop moves on to the next pattern with notes in it.
-      if (settings_.advance == Advance::Loop && j > slotStart_ && (j - slotStart_) % len == 0) {
+      // Locked to the song, a Loop chain is a sequence along it: the patterns with notes in them,
+      // from the one selected, one after another from the song's start, so where the song is says
+      // which pattern plays and which step.
+      if (settings_.advance == Advance::Loop && settings_.restart == Restart::Song) {
+         const int was = playing_;
+         songChain(j);
+         if (playing_ != was)
+            hits_.fill(0);
+         len = std::clamp<int>(bank_.slots[playing_].length, 1, kSteps);
+      }
+      // Otherwise, each time round, Advance Loop moves on to the next pattern with notes in it.
+      else if (settings_.advance == Advance::Loop && j > slotStart_ && (j - slotStart_) % len == 0) {
          const int next = bank_.next(playing_);
          if (next != playing_) {
             playing_ = next;

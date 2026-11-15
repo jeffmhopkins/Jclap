@@ -53,6 +53,11 @@ The switch beside the letters says how playing moves along them:
 Empty patterns are skipped, and after the last pattern with notes it goes round to the first. To chain
 A, B and C, fill those three and leave the rest empty; clear one to drop it from the chain.
 
+With RESTART on **SONG** the chain follows the song too. In LOOP the patterns are laid end to end from
+the start of the song (beginning with the one selected), so where the song is decides which pattern
+plays and which step: come in during the third bar of an A B C chain and you hear the part of the
+chain that falls there. In CHORD the next pattern picks up at the step the song has reached in it.
+
 Both are host params, so you can automate or modulate them: **Pattern** (A to H) picks the pattern,
 and **Advance** (Off, Chord, Loop) turns chaining on and off. A new Pattern value takes over from the
 next step.
@@ -96,9 +101,12 @@ scroll on it, to change it; double-click to set it back.
 **PLAYBACK**
 
 - **LATCH**: on, the notes keep playing after you let go, until you play a new chord.
-- **RESTART**: where the pattern starts. **FREE** follows the song position, so the pattern lines up
-  with the bar. **NOTE** starts it on the first note you play. **BAR** starts it at the start of the
-  bar the first note falls in.
+- **RESTART**: where the pattern starts.
+  - **SONG** locks the pattern to the song position, so it is sequenced in time rather than started
+    by your hands: play a chord half way through the pattern and it starts half way through. Each
+    step falls on the same beat every time round.
+  - **NOTE** starts it on the first note you play.
+  - **BAR** starts it at the start of the bar the first note falls in.
 
 With the host stopped, JArp runs on its own clock at the host's tempo, so you can play it without
 pressing play.

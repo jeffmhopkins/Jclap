@@ -67,13 +67,16 @@ inline const double kRateBeats[] = {0.125, 1.0 / 6.0, 0.25, 1.0 / 3.0, 0.5, 1.0}
 inline const char *const kOffOnNames[] = {"Off", "On"};
 inline const char *const kSlotNames[] = {"A", "B", "C", "D", "E", "F", "G", "H"};
 inline const char *const kAdvanceNames[] = {"Off", "Chord", "Loop"};
-inline const char *const kRestartNames[] = {"Free", "Note", "Bar"};
+inline const char *const kRestartNames[] = {"Song", "Note", "Bar"};
 inline const char *const kRowsByNames[] = {"Pitch", "Degree"};
 inline const char *const kEmptyRowsNames[] = {"Rest", "Wrap"};
 inline const char *const kKeyNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 inline const char *const kScaleNames[] = {"Major", "Minor"};
 
-enum class Restart { Free, Note, Bar };
+// Where the pattern starts: locked to the song position (so a chord played half way through a
+// pattern starts half way through it, and a Loop chain is sequenced along the song), on the first
+// note, or on the bar.
+enum class Restart { Song, Note, Bar };
 // How playing moves along the patterns with notes in them: not at all (the selected one plays), to
 // the next with each new chord (after every finger has let go), or each time the pattern ends.
 enum class Advance { Off, Chord, Loop };

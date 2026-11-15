@@ -226,11 +226,11 @@ int main() {
       JCLAP_CHECK_EQ(on[1].time, kStepSamples);
    }
    {
-      // Restart Free follows the song position: a chord pressed part way through step 2 waits for
+      // Restart Song follows the song position: a chord pressed part way through step 2 waits for
       // step 3.
       Engine e;
       Settings s;
-      s.restart = Restart::Free;
+      s.restart = Restart::Song;
       e.setSettings(s);
       setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}, {0, 2, 4}, {0, 3, 4}}));
       const auto on = ons(run(e, 3 * kStepSamples, chord({60}, kStepSamples + 1000)));
@@ -397,6 +397,51 @@ int main() {
       Frame f;
       e.fillFrame(f);
       JCLAP_CHECK_EQ(f.slot, 0);
+   }
+   {
+      // Restart Song with Advance Loop: the chain is sequenced along the song. A (2 steps) then B
+      // (3 steps) make a 5-step cycle, so a chord pressed during step 6 starts at step 7: B's step 1.
+      Engine e;
+      Settings s;
+      s.advance = Advance::Loop;
+      s.restart = Restart::Song;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}}), 2);
+      Pattern b = pattern({{1, 0, 4}, {1, 1, 4}, {1, 2, 4}});
+      b.length = 3;
+      e.setPattern(1, b);
+      const auto on = ons(run(e, 11 * kStepSamples - 300, chord({60, 64}, 6 * kStepSamples + 1000)));
+      JCLAP_CHECK_EQ(on.size(), 4u);
+      JCLAP_CHECK_EQ(on[0].time, 7 * kStepSamples);
+      JCLAP_CHECK_EQ(on[0].m.data1, 64); // B
+      JCLAP_CHECK_EQ(on[2].m.data1, 64); // B's last step
+      JCLAP_CHECK_EQ(on[3].m.data1, 60); // A again at step 10
+      JCLAP_CHECK_EQ(on[3].time, 10 * kStepSamples);
+      Frame f;
+      e.fillFrame(f);
+      JCLAP_CHECK_EQ(f.slot, 0);
+   }
+   {
+      // Restart Song with Advance Chord: the next chord's pattern picks up where the song is in it.
+      Engine e;
+      Settings s;
+      s.advance = Advance::Chord;
+      s.restart = Restart::Song;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}, {0, 2, 4}, {0, 3, 4}}), 4);
+      Pattern b = pattern({{1, 0, 4}, {1, 1, 4}, {1, 2, 4}, {2, 3, 4}});
+      b.length = 4;
+      e.setPattern(1, b);
+      std::vector<In> in = chord({60, 64, 67});
+      int channel = 1;
+      for (int key : {60, 64, 67})
+         in.push_back({2 * kStepSamples - 100, In::Off, channel++, key, 0});
+      for (const In &n : chord({60, 64, 67}, 6 * kStepSamples + 1000))
+         in.push_back(n);
+      const auto on = ons(run(e, 8 * kStepSamples - 300, in));
+      JCLAP_CHECK_EQ(on.size(), 3u);
+      JCLAP_CHECK_EQ(on[2].time, 7 * kStepSamples);
+      JCLAP_CHECK_EQ(on[2].m.data1, 67); // B's step 4 (7 mod 4 = 3), row 3
    }
    {
       // Advance Off: the selected pattern plays, and picking another switches at the next step.

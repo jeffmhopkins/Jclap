@@ -757,9 +757,10 @@ public:
       tips_.add(choice(kLatch, {270, 624, 80, 22}, {"OFF", "ON"}),
                 "On: the notes keep playing after you let go, until you play a new chord.");
       heading("RESTART", 270, 652);
-      tips_.add(choice(kRestart, {270, 670, 138, 22}, {"FREE", "NOTE", "BAR"}),
-                "Where the pattern starts: Free follows the song position; Note starts it with the first note you "
-                "play; Bar starts it at the bar the first note is in.");
+      tips_.add(choice(kRestart, {270, 670, 138, 22}, {"SONG", "NOTE", "BAR"}),
+                "Where the pattern starts: Song locks it to the song position, so a chord played half way through "
+                "the pattern starts half way through it (and a Loop chain plays along the song); Note starts it "
+                "with the first note you play; Bar starts it at the bar the first note is in.");
       tips_.add(knob(kPressVelocity, "VELOCITY", kBlue, 452, 606),
                 "How far each note's velocity follows its finger's pressure instead of how hard the key was struck. The "
                 "Velocity lane's offset is added after.");
