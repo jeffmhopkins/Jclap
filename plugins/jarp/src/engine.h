@@ -523,11 +523,12 @@ private:
          return;
       int key[kRows], target[kRows], octave[kRows];
       mapRows(held, n, settings_, key, target, octave);
-      const Lane &lane = pattern_.lanes[step];
       for (int i = 0; i < pattern_.count; ++i) {
          const Note &note = pattern_.notes[i];
          if (note.step != step || note.row >= kRows || key[note.row] < 0)
             continue;
+         // The step's lane, with any values the note has of its own.
+         const Lane lane = pattern_.laneOf(i);
          const int slot = slots[key[note.row]];
          const Finger &f = fingers_[slot];
          const int pitch = f.key + 12 * (lane.octave + octave[note.row]);

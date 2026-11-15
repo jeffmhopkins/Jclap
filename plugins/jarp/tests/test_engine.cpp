@@ -3,11 +3,15 @@
 
 #include <jclap/core/test_host.h>
 
+#include <memory>
 #include <vector>
 
 #include "engine.h"
 
 using namespace jarp;
+
+// Engines are big (a bank of eight 128-step patterns), so each test keeps its own on the heap:
+// dozens of them in one frame would overflow a 1 MB stack.
 
 namespace {
 
@@ -121,7 +125,8 @@ int main() {
    }
    {
       // Octave rows play: rows 1 to 6 over a triad climb two octaves.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       s.wrap = s.octaves = true;
       e.setSettings(s);
@@ -170,7 +175,8 @@ int main() {
    {
       // A 7th chord, rows 1 and 3 alternating: C on step 1, G on step 2, each on its own finger's
       // channel and key, at the finger's velocity.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       s.pressVelocity = 0.0;
       e.setSettings(s);
@@ -190,7 +196,8 @@ int main() {
    {
       // The pattern loops at its length; a note longer than a step holds, and a quarter-step note
       // is a quarter of one.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       e.setSettings(s);
       setPattern(e, pattern({{0, 0, 1}, {1, 1, 4}}), 2);
@@ -203,7 +210,8 @@ int main() {
    }
    {
       // A held bass for the whole pattern sounds once, under the rest.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       e.setSettings(s);
       setPattern(e, pattern({{0, 0, 16}, {1, 0, 2}, {1, 1, 2}, {1, 2, 2}, {1, 3, 2}}), 4);
@@ -216,7 +224,8 @@ int main() {
    }
    {
       // Swing at 75% puts the second of each pair of steps three quarters of the way through it.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       s.swing = 0.75;
       e.setSettings(s);
@@ -228,7 +237,8 @@ int main() {
    }
    {
       // Back-to-back notes on one key: the first ends before the second starts, at the same time.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}}));
       const auto out = run(e, 2 * kStepSamples - 10, chord({60}));
       JCLAP_CHECK_EQ(out.size(), 3u);
@@ -240,7 +250,8 @@ int main() {
    }
    {
       // The transport stopped: the arp runs on its own clock.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}}));
       const auto on = ons(run(e, 2 * kStepSamples, chord({60}), false));
       JCLAP_CHECK_EQ(on.size(), 2u);
@@ -249,7 +260,8 @@ int main() {
    {
       // Restart Song follows the song position: a chord pressed part way through step 2 waits for
       // step 3.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       s.restart = Restart::Song;
       e.setSettings(s);
@@ -262,7 +274,8 @@ int main() {
    // ---- lanes ----
    {
       // Octave, ratchet and velocity, per step.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       s.pressVelocity = 0.0;
       e.setSettings(s);
@@ -280,9 +293,48 @@ int main() {
       JCLAP_CHECK_EQ(on[3].time, kStepSamples + 2 * kStepSamples / 3);
    }
    {
+      // A note's own lane values override its step's, for that note only: two notes on one step,
+      // the upper with its own octave, ratchet and velocity, the lower on the step's.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.pressVelocity = 0.0;
+      e.setSettings(s);
+      Pattern p = pattern({{0, 0, 4}, {1, 0, 4}});
+      p.lanes[0].velocity = -20;
+      Note &n = p.notes[p.noteStarting(1, 0)];
+      n.own = kOwnOctave | kOwnRatchet | kOwnVelocity;
+      n.lane = {1, 2, 0, 10};
+      setPattern(e, p);
+      const auto on = ons(run(e, kStepSamples - 10, chord({60, 64})));
+      JCLAP_CHECK_EQ(on.size(), 3u);
+      int low = 0, high = 0;
+      for (const auto &o : on) {
+         if (o.m.data1 == 60) {
+            ++low;
+            JCLAP_CHECK_EQ(o.m.data2, 80);
+         }
+         else {
+            ++high;
+            JCLAP_CHECK_EQ(o.m.data1, 76);
+            JCLAP_CHECK_EQ(o.m.data2, 110);
+         }
+      }
+      JCLAP_CHECK_EQ(low, 1);
+      JCLAP_CHECK_EQ(high, 2);
+      // Only the bits it owns count: its step's octave still applies to what it doesn't own.
+      Note plain = n;
+      plain.own = kOwnVelocity;
+      const Lane l = plain.over(Lane{-1, 3, 1, 0});
+      JCLAP_CHECK_EQ(l.octave, -1);
+      JCLAP_CHECK_EQ(l.ratchet, 3);
+      JCLAP_CHECK_EQ(l.velocity, 10);
+   }
+   {
       // Pressure: a P step adds hits up to Max Hits as the finger presses, and velocity follows
       // pressure by Pressure to Velocity.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       s.pressRatchet = 1.0;
       s.maxHits = 4;
@@ -297,7 +349,8 @@ int main() {
       JCLAP_CHECK_EQ(on.size(), 1u);
       JCLAP_CHECK_EQ(on[0].m.data2, 10);
 
-      Engine hard;
+      auto hardOwner = std::make_unique<Engine>();
+      Engine &hard = *hardOwner;
       hard.setSettings(s);
       setPattern(hard, p);
       in = {{0, In::Pressure, 1, -1, 127}, {0, In::On, 1, 60, 100}};
@@ -319,7 +372,8 @@ int main() {
    // ---- fingers ----
    {
       // Letting go ends that finger's note at once; the rest play on, rows remapped.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       setPattern(e, pattern({{0, 0, 16}, {1, 0, 16}}));
       std::vector<In> in = chord({60, 64});
       in.push_back({1000, In::Off, 1, 60, 0});
@@ -335,7 +389,8 @@ int main() {
    }
    {
       // Latch keeps the chord after letting go, until a new one is played.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       s.latch = true;
       e.setSettings(s);
@@ -353,7 +408,8 @@ int main() {
    }
    {
       // Expression goes to every note sounding from its finger.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Pattern p = pattern({{0, 0, 4}});
       p.lanes[0].octave = 1;
       setPattern(e, p);
@@ -371,7 +427,8 @@ int main() {
    {
       // Advance Chord: each new chord, after letting go of every note, plays the next pattern with
       // notes in it, skipping empty ones and going round. The first chord plays the one selected.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       s.advance = Advance::Chord;
       e.setSettings(s);
@@ -399,7 +456,8 @@ int main() {
    }
    {
       // Advance Loop: each time a pattern ends the next starts, at its own length.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       s.advance = Advance::Loop;
       e.setSettings(s);
@@ -422,7 +480,8 @@ int main() {
    {
       // Restart Song with Advance Loop: the chain is sequenced along the song. A (2 steps) then B
       // (3 steps) make a 5-step cycle, so a chord pressed during step 6 starts at step 7: B's step 1.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       s.advance = Advance::Loop;
       s.restart = Restart::Song;
@@ -444,7 +503,8 @@ int main() {
    }
    {
       // Restart Song with Advance Chord: the next chord's pattern picks up where the song is in it.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       s.advance = Advance::Chord;
       s.restart = Restart::Song;
@@ -466,7 +526,8 @@ int main() {
    }
    {
       // Advance Off: the selected pattern plays, and picking another switches at the next step.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}}), 2);
       Pattern b = pattern({{1, 0, 4}, {1, 1, 4}});
       b.length = 2;
@@ -507,7 +568,8 @@ int main() {
    // ---- long patterns ----
    {
       // Up to 128 steps: a 40-step pattern plays its last step, then loops.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Pattern p = pattern({{0, 0, 4}, {1, 39, 4}});
       setPattern(e, p, 40);
       const auto on = ons(run(e, 41 * kStepSamples - 300, chord({60, 64})));
@@ -540,7 +602,8 @@ int main() {
    {
       // Restart Song with a long Loop chain: 32 + 32 steps, entered at step 40, plays the second
       // pattern's step 9.
-      Engine e;
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
       Settings s;
       s.advance = Advance::Loop;
       s.restart = Restart::Song;
@@ -557,6 +620,29 @@ int main() {
    }
 
    // ---- the saved pattern ----
+   {
+      // A note's own lane saves and loads (version 4); a version 3 pattern, from before, still loads.
+      Pattern p = pattern({{0, 0, 4}, {2, 3, 8}});
+      Note &n = p.notes[p.noteStarting(2, 3)];
+      n.own = kOwnPressure | kOwnVelocity;
+      n.lane = {0, 1, 1, -30};
+      const std::vector<uint8_t> saved = p.save();
+      Pattern q;
+      JCLAP_CHECK(q.load(saved.data(), saved.size()));
+      JCLAP_CHECK(q == p);
+      const Note &m = q.notes[q.noteStarting(2, 3)];
+      JCLAP_CHECK_EQ(m.own, kOwnPressure | kOwnVelocity);
+      JCLAP_CHECK_EQ(m.lane.velocity, -30);
+      JCLAP_CHECK_EQ(q.notes[q.noteStarting(0, 0)].own, 0);
+      JCLAP_CHECK(!q.load(saved.data(), saved.size() - 6));
+      const std::vector<uint8_t> v3 = {3, 8, 1, 0, 1, 2, 4, 0, 3, 0, 1, 0, 0, 0, 1, 0, 0, 0, 2, 0, 5};
+      Pattern r;
+      JCLAP_CHECK(r.load(v3.data(), v3.size()));
+      JCLAP_CHECK_EQ(r.count, 1);
+      JCLAP_CHECK_EQ(r.notes[0].own, 0);
+      JCLAP_CHECK_EQ(r.lanes[2].ratchet, 2);
+      JCLAP_CHECK_EQ(r.lanes[2].velocity, 5);
+   }
    {
       Pattern p = pattern({{0, 0, 64}, {3, 2, 1}, {7, 15, 4}});
       p.lanes[4] = {-2, 5, 1, -33};
