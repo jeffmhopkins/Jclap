@@ -448,6 +448,7 @@ private:
       s.restart = static_cast<Restart>(whole(kRestart));
       s.degree = whole(kRowsBy) != 0;
       s.wrap = whole(kEmptyRows) != 0;
+      s.octaves = whole(kEmptyRows) == 2;
       s.key = whole(kKey);
       s.scale = whole(kScale);
       s.pressVelocity = value(kPressVelocity);

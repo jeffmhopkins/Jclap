@@ -110,6 +110,27 @@ int main() {
       mapRows(held, 3, s, key, target);
       JCLAP_CHECK_EQ(key[3], 0);
       JCLAP_CHECK_EQ(key[7], 1);
+      // Octave: the same, an octave up each time round.
+      s.octaves = true;
+      int octave[kRows];
+      mapRows(held, 3, s, key, target, octave);
+      JCLAP_CHECK_EQ(key[3], 0);
+      JCLAP_CHECK_EQ(octave[3], 1);
+      JCLAP_CHECK_EQ(octave[7], 2);
+      JCLAP_CHECK_EQ(octave[2], 0);
+   }
+   {
+      // Octave rows play: rows 1 to 6 over a triad climb two octaves.
+      Engine e;
+      Settings s;
+      s.wrap = s.octaves = true;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 4}, {3, 1, 4}, {5, 2, 4}}), 3);
+      const auto on = ons(run(e, 3 * kStepSamples - 300, chord({48, 52, 55})));
+      JCLAP_CHECK_EQ(on.size(), 3u);
+      JCLAP_CHECK_EQ(on[0].m.data1, 48);
+      JCLAP_CHECK_EQ(on[1].m.data1, 60);
+      JCLAP_CHECK_EQ(on[2].m.data1, 67);
    }
    {
       // Degree: a Cmaj7 in C major gives 1st C, 3rd E, 5th G, 7th B; the 2nd (D) is nearest C and E

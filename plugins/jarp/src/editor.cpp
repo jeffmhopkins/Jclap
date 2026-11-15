@@ -912,9 +912,10 @@ public:
       auto &rowsBy = choice(kRowsBy, {552, 89, 115, 22}, {"PITCH", "DEGREE"});
       tips_.add(rowsBy, "Pitch: row 1 is the lowest note held, row 2 the next up, and so on. Degree: rows count up the "
                         "scale from the lowest note held; a degree that isn't held plays the nearest note that is.");
-      emptyLabel_ = &rowsLabel(680, "EMPTY ROWS");
-      empty_ = &choice(kEmptyRows, {773, 89, 99, 22}, {"REST", "WRAP"});
-      tips_.add(*empty_, "Rows above the notes held: Rest stays silent; Wrap starts again from the lowest note.");
+      emptyLabel_ = &rowsLabel(669, "EMPTY ROWS");
+      empty_ = &choice(kEmptyRows, {752, 89, 120, 22}, {"REST", "WRAP", "OCT"});
+      tips_.add(*empty_, "Rows above the notes held: Rest stays silent; Wrap starts again from the lowest note; Oct "
+                         "starts again an octave up each time, like an arpeggiator's octave range.");
       scaleLabel_ = &rowsLabel(650, "SCALE");
       key_ = &add<ui::Dropdown>({735, 89, 52, 22}, std::vector<std::string>(std::begin(kKeyNames), std::end(kKeyNames)));
       key_->setAccent(kSlate);
