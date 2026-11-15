@@ -733,6 +733,47 @@ int main() {
       JCLAP_CHECK(third > 30 && third < 70);
    }
 
+   // ---- moving notes ----
+   {
+      // One note moves with its length and its own values.
+      Pattern p = pattern({{0, 0, 8}, {2, 3, 4}});
+      p.notes[0].own = kOwnChance;
+      p.notes[0].lane.chance = 40;
+      JCLAP_CHECK(p.move({0}, 1, 2));
+      JCLAP_CHECK_EQ(p.count, 2);
+      const int i = p.noteStarting(1, 2);
+      JCLAP_CHECK(i >= 0);
+      JCLAP_CHECK_EQ(p.notes[i].length, 8);
+      JCLAP_CHECK_EQ(p.notes[i].own, kOwnChance);
+      JCLAP_CHECK_EQ(p.laneOf(i).chance, 40);
+      JCLAP_CHECK_EQ(p.noteStarting(0, 0), -1);
+
+      // Several move together, keeping their shape; one moving onto where another of them was is
+      // fine.
+      Pattern q = pattern({{0, 0, 4}, {0, 1, 4}, {1, 2, 4}});
+      JCLAP_CHECK(q.move({0, 1, 2}, 0, 1));
+      JCLAP_CHECK(q.noteStarting(0, 1) >= 0 && q.noteStarting(0, 2) >= 0 && q.noteStarting(1, 3) >= 0);
+      JCLAP_CHECK_EQ(q.noteStarting(0, 0), -1);
+      JCLAP_CHECK_EQ(q.notes[q.noteStarting(0, 1)].length, 4);
+
+      // Blocked, leaving the pattern as it was: off the grid, past the pattern's length, or onto a
+      // note that stays.
+      const Pattern before = q;
+      JCLAP_CHECK(!q.move({q.noteStarting(1, 3)}, 7, 0));
+      JCLAP_CHECK(!q.move({q.noteStarting(0, 1)}, 0, -2));
+      JCLAP_CHECK(!q.move({q.noteStarting(0, 1)}, 0, 7));
+      JCLAP_CHECK(!q.move({q.noteStarting(1, 3)}, -1, -1));
+      JCLAP_CHECK(q == before);
+
+      // A long note moved in front of another is shortened to fit.
+      Pattern r = pattern({{0, 0, 16}, {1, 4, 4}});
+      JCLAP_CHECK(r.move({r.noteStarting(0, 0)}, 1, 0));
+      JCLAP_CHECK_EQ(r.notes[r.noteStarting(1, 0)].length, 16);
+      Pattern t = pattern({{0, 0, 16}, {1, 3, 4}});
+      JCLAP_CHECK(t.move({t.noteStarting(0, 0)}, 1, 0));
+      JCLAP_CHECK_EQ(t.notes[t.noteStarting(1, 0)].length, 12);
+   }
+
    // ---- the saved pattern ----
    {
       // Version 5 saves chance, for steps and a note's own; a version 4 pattern loads at 100%.

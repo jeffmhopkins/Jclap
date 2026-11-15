@@ -137,6 +137,34 @@ struct Pattern {
       --count;
    }
    void clear() { count = 0; }
+   // Moves the notes `which` (indices) by `rows` and `steps`, keeping their lengths (shortened to fit
+   // before the next note in a row) and their own values. False, with the pattern unchanged, if any
+   // would leave the grid or the pattern's length, or land on a note that stays.
+   bool move(const std::vector<int> &which, int rows, int steps) {
+      Pattern next = *this;
+      std::vector<Note> moved;
+      std::vector<int> order(which);
+      std::sort(order.begin(), order.end(), [](int x, int y) { return x > y; });
+      order.erase(std::unique(order.begin(), order.end()), order.end());
+      for (int i : order) {
+         if (i < 0 || i >= count)
+            return false;
+         moved.push_back(notes[i]);
+         next.remove(i);
+      }
+      // The latest first, so an earlier one is shortened by a later one rather than covering it.
+      std::sort(moved.begin(), moved.end(), [](const Note &x, const Note &y) { return x.step > y.step; });
+      for (const Note &n : moved) {
+         const int row = n.row + rows, step = n.step + steps;
+         if (step >= length || !next.add(row, step, n.length))
+            return false;
+         Note &added = next.notes[next.count - 1];
+         added.own = n.own;
+         added.lane = n.lane;
+      }
+      *this = next;
+      return true;
+   }
    // Note `i`'s lane: its own values over its step's.
    Lane laneOf(int i) const { return notes[i].over(lanes[notes[i].step]); }
    bool empty() const { return count == 0; }

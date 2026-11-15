@@ -1,12 +1,13 @@
 // Renders JArp's panel offscreen to a PNG, for the README and visual checks.
 //
-//    jarp-screenshot out.png [width height] [dice] [long] [note]
+//    jarp-screenshot out.png [width height] [dice] [long] [note] [picks]
 //
 // The panel shows the Pedal Climb preset playing a C major 7th held on four MPE channels, each finger
 // pressing a little differently, a few steps into the pattern. With `dice` the dice card is open; with
 // `long` the pattern is 48 steps (Pedal Climb three times over, climbing an octave), playing in its
 // second 16, so the grid scrolls. With `note` the G on step 2 has lane values of its own (an octave
-// up, three hits, softer, a coin toss) and is picked, so the lanes show its values.
+// up, three hits, softer, a coin toss) and is picked, so the lanes show its values. With `picks` four
+// notes are picked together, each given a chance of its own by one edit.
 
 #include <cstdio>
 #include <cstdlib>
@@ -23,7 +24,7 @@ using namespace jarp;
 
 class DemoHost : public EditorHost {
 public:
-   DemoHost(bool longPattern, bool ownNote) {
+   DemoHost(bool longPattern, bool ownNote, bool picks = false) {
       for (size_t i = 0; i < kParamCount; ++i)
          values_[i] = kParams[i].defaultValue;
       for (const auto &[id, v] : findPreset("Pedal Climb").values)
@@ -43,6 +44,14 @@ public:
             p.notes[i].own = kOwnOctave | kOwnRatchet | kOwnVelocity | kOwnChance;
             p.notes[i].lane = {1, 3, 0, -24, 50};
          }
+      }
+      if (picks) {
+         Pattern &p = bank_.slots[0];
+         for (const auto &[row, step] : kPicks)
+            if (const int i = p.noteStarting(row, step); i >= 0) {
+               p.notes[i].own = kOwnChance;
+               p.notes[i].lane.chance = 50;
+            }
       }
       double until = 10.2;
       if (longPattern) {
@@ -115,6 +124,7 @@ public:
    void setPresetName(const std::string &) override {}
 
    static constexpr int kPickRow = 2, kPickStep = 1;
+   static constexpr std::pair<int, int> kPicks[] = {{3, 2}, {1, 4}, {2, 5}, {3, 6}};
 
 private:
    static const Preset &findPreset(const char *name) {
@@ -140,12 +150,18 @@ int main(int argc, char **argv) {
    const bool sized = argc > 3 && std::atoi(argv[2]) > 0;
    const int width = sized ? std::atoi(argv[2]) : kEditorWidth;
    const int height = sized ? std::atoi(argv[3]) : kEditorHeight;
-   bool dice = false, longPattern = false, ownNote = false;
+   bool dice = false, longPattern = false, ownNote = false, picks = false;
    for (int i = 2; i < argc; ++i) {
       dice = dice || !std::strcmp(argv[i], "dice");
       longPattern = longPattern || !std::strcmp(argv[i], "long");
       ownNote = ownNote || !std::strcmp(argv[i], "note");
+      picks = picks || !std::strcmp(argv[i], "picks");
    }
-   DemoHost host(longPattern, ownNote);
-   return renderScreenshot(host, width, height, argv[1], dice, ownNote ? DemoHost::kPickRow : -1, DemoHost::kPickStep) ? 0 : 1;
+   DemoHost host(longPattern, ownNote, picks);
+   std::vector<std::pair<int, int>> pick;
+   if (ownNote)
+      pick.push_back({DemoHost::kPickRow, DemoHost::kPickStep});
+   if (picks)
+      pick.assign(std::begin(DemoHost::kPicks), std::end(DemoHost::kPicks));
+   return renderScreenshot(host, width, height, argv[1], dice, pick) ? 0 : 1;
 }

@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.6.0.
+Version 0.7.0.
 
 ![Panel](docs/panel.png)
 
@@ -26,8 +26,14 @@ Eight rows by up to 128 steps, sixteen in view at a time. Row 1 is at the bottom
   longer.
 - **Drag a note's right edge** to set how long it sounds, in quarter steps, from a quarter of a step to
   the whole pattern. A note stops at the next note in its row.
-- **Click a note** to remove it.
+- **Drag a note** to move it to another step or row. It keeps its length (shortened if it lands just
+  before another note) and its own lane values. Drag one of several picked notes and they all move
+  together, keeping their shape. A move that would take a note off the grid, past the pattern's end
+  or onto another note stops where it last fit.
+- **Click a note** (without dragging) to remove it.
 - **Right-click a note** to pick it and give it lane values of its own (see [the lanes](#the-lanes)).
+  **Shift-click** notes to pick more of them, or to drop one from the pick. **Right-drag** from an
+  empty cell to draw a box: it picks every note it touches (with shift, it adds them to the pick).
 - **Drag the purple bar** (or its tab) to set the pattern's length, from 1 to 128 steps. Drag it past
   the right edge and the grid scrolls on with it. The LENGTH knob is the same setting. Each pattern
   has its own length.
@@ -130,6 +136,13 @@ values of its own shows a white dot in its corner. Right-click it again, or clic
 go back to editing steps.
 
 ![A picked note with its own octave, ratchet, velocity and chance](docs/note.png)
+
+With several notes picked, the lane names show how many (**4 NOTES**), each picked note's column is
+outlined, and an edit to any of those columns sets that value on every picked note at once: drag one
+CHANCE cell to 50% and all of them are at 50%. Double-click hands that value back to the step for all
+of them.
+
+![Four notes picked together, all set to a 50% chance by one edit](docs/picks.png)
 
 ## Settings
 
