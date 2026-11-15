@@ -83,7 +83,9 @@ const char *ordinal(int row) {
 }
 
 // Which steps the grid and the lanes show: kView of them from `first`. A pattern longer than kView
-// scrolls, following the playhead page by page unless the scroll bar was moved by hand.
+// scrolls, following the playhead unless the scroll bar was moved by hand: the view holds still until
+// the playhead reaches its middle, then moves a step at a time to keep it there, and stops once the
+// pattern's last step is at the right edge.
 struct GridScroll {
    int first = 0;
    bool follow = true;
@@ -95,7 +97,7 @@ struct GridScroll {
          return;
       }
       if (follow && playStep >= 0)
-         first = playStep / kView * kView;
+         first = playStep - kView / 2;
       first = std::clamp(first, 0, len - kView);
    }
 };

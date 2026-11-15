@@ -42,7 +42,8 @@ the playhead. Beside it, the steps in view (`17-32 of 48`) and **FOLLOW**.
 
 ![A long pattern](docs/long.png)
 
-- With **FOLLOW** lit, the grid turns the page as the playhead moves on, 16 steps at a time.
+- With **FOLLOW** lit, the grid follows the playhead: it holds still until the playhead reaches the
+  middle, then scrolls a step at a time to keep it there, until the pattern's end reaches the right edge.
 - **Drag along the bar** (or the step numbers above it), or scroll the mouse wheel over the grid, to
   look elsewhere. That turns FOLLOW off; click it to follow again.
 - The lanes under the grid scroll with it.
