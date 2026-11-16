@@ -4,6 +4,7 @@
 #include <jclap/core/test_host.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <set>
 #include <string>
@@ -191,6 +192,30 @@ int main() {
    }
 
    {
+      // The preset's name and blurb come back with the state; a state from before blurbs gets a
+      // factory preset's own.
+      TestHost h(clap_entry, kId);
+      auto *host = h.object<jarp::EditorHost>();
+      JCLAP_CHECK(host != nullptr);
+      if (host) {
+         JCLAP_CHECK(host->presetBlurb() == factoryBlurb("Init"));
+         host->setPresetName("Funk Bass");
+         host->setPresetBlurb("My own words");
+         Buffer saved = save(h);
+         TestHost g(clap_entry, kId);
+         JCLAP_CHECK(load(g, saved));
+         auto *copy = g.object<jarp::EditorHost>();
+         JCLAP_CHECK(copy && copy->presetName() == "Funk Bass" && copy->presetBlurb() == "My own words");
+         saved.data.resize(saved.data.size() - 4 - std::strlen("My own words"));
+         saved.read = 0;
+         TestHost old(clap_entry, kId);
+         JCLAP_CHECK(load(old, saved));
+         auto *oldHost = old.object<jarp::EditorHost>();
+         JCLAP_CHECK(oldHost && oldHost->presetBlurb() == factoryBlurb("Funk Bass"));
+      }
+   }
+
+   {
       // A version 1 state (one pattern, a Length param) loads as slot 1 with that length, and the
       // params after Length land where they are now.
       Buffer old;
@@ -301,7 +326,34 @@ int main() {
             if (bank && id == kAdvance && std::lround(v) != 0)
                JCLAP_CHECK(bank->next(0) != 0);
       }
-      JCLAP_CHECK_EQ(factoryCategories().size(), 12u);
+      JCLAP_CHECK_EQ(factoryCategories().size(), 27u);
+      // Every factory preset says what it is, in a line that fits the header, and no pattern skips a
+      // row: the rows each uses run on without a gap, and all of a preset's from row 1, so every note
+      // held plays and the voicing gives the shape.
+      for (const library::Entry &e : factoryLibrary()) {
+         JCLAP_CHECK(e.blurb && std::strlen(e.blurb) > 0 && std::strlen(e.blurb) <= 66);
+         bool all[kRows] = {};
+         for (const Pattern &p : e.patterns) {
+            bool used[kRows] = {};
+            for (int i = 0; i < p.count; ++i)
+               used[p.notes[i].row] = all[p.notes[i].row] = true;
+            int lo = kRows, hi = -1;
+            for (int r = 0; r < kRows; ++r)
+               if (used[r])
+                  lo = std::min(lo, r), hi = std::max(hi, r);
+            for (int r = lo; r <= hi; ++r)
+               if (!used[r]) {
+                  std::printf("%s skips row %d\n", e.name, r + 1);
+                  JCLAP_CHECK(used[r]);
+               }
+         }
+         JCLAP_CHECK(all[0]);
+         for (int r = 1; r < kRows; ++r)
+            if (all[r] && !all[r - 1]) {
+               std::printf("%s skips row %d\n", e.name, r);
+               JCLAP_CHECK(all[r - 1]);
+            }
+      }
       // The library's step lines: a tie, a chord, a short note, a note held to the end, and lanes
       // that repeat.
       const Pattern t = library::Pat("1 _ c . 2s 3!").vel("5 .").oct(". 1");

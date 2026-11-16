@@ -195,7 +195,7 @@ struct DiceState {
    struct Whole {
       std::vector<double> values;
       Bank bank;
-      std::string name;
+      std::string name, blurb;
    };
 
    int slot = 0;

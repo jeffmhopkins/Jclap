@@ -28,6 +28,8 @@
 #include <jclap/ui/tooltip.h>
 #include <jclap/ui/update_notice.h>
 
+#include <visage/widgets.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -1036,6 +1038,13 @@ private:
    float downY_ = 0.0f;
 };
 
+// A preset's blurb: a factory preset's is compiled in, a user preset's is in the file beside it.
+std::string presetBlurbOf(const std::string &name) {
+   if (factoryBank(name))
+      return factoryBlurb(name);
+   return readBlurb(blurbFile(ui::userPresetFolder(kPresetFormat) / (name + kPresetFormat.extension)));
+}
+
 // A preset's patterns: a factory preset's are compiled in, a user preset's are in the file beside it.
 bool presetBank(const std::string &name, Bank &bank) {
    if (const Bank *factory = factoryBank(name)) {
@@ -1281,6 +1290,157 @@ public:
    bool on[kDiceItemCount] = {};
 };
 
+// The preset's blurb, in the header between the title and COPY: a line on what the preset is and how
+// to play it, wrapped onto two lines. Click it to write your own; Enter or a click away keeps it,
+// Escape drops it. It steps aside while the update notice has the spot.
+class BlurbView : public visage::Frame {
+public:
+   explicit BlurbView(EditorHost &host) : host_(host) {}
+
+   // Called with the new text once an edit is kept.
+   std::function<void(const std::string &)> onEdited;
+   const ui::UpdateNotice *notice = nullptr;
+
+   static constexpr float kSize = 10.0f, kLine = 13.0f;
+
+   bool hidden() const { return notice && notice->isVisible(); }
+
+   // Redraws when the blurb or the notice changed since the last draw; the panel's timer calls it.
+   void sync() {
+      const std::string now = host_.presetBlurb();
+      if (now != shown_ || hidden() != wasHidden_)
+         redraw();
+   }
+
+   void draw(visage::Canvas &c) override {
+      shown_ = host_.presetBlurb();
+      wasHidden_ = hidden();
+      if (wasHidden_ || editing())
+         return;
+      const float s = ui::designScale(*this);
+      const ui::Theme &t = ui::defaultTheme();
+      if (hover_) {
+         c.setColor(t.buttonHover);
+         c.roundedRectangle(0, 0, width(), height(), 3 * s);
+      }
+      if (shown_.empty()) {
+         if (hover_) {
+            c.setColor(alpha(t.dimText, 0.7f));
+            c.text("Click to describe this preset", ui::font(kSize * s), visage::Font::kLeft, 6 * s, 0, width() - 12 * s,
+                   height());
+         }
+         return;
+      }
+      const std::vector<std::string> lines = wrap(shown_, width() / s - 12);
+      c.setColor(t.dimText);
+      const float top = (height() / s - kLine * lines.size()) / 2;
+      for (size_t i = 0; i < lines.size(); ++i)
+         c.text(lines[i], ui::font(kSize * s), visage::Font::kLeft, 6 * s, (top + kLine * i) * s, width() - 12 * s,
+                kLine * s);
+   }
+
+   void mouseEnter(const visage::MouseEvent &) override { setHover(true); }
+   void mouseExit(const visage::MouseEvent &) override { setHover(false); }
+   void mouseDown(const visage::MouseEvent &) override {
+      if (!hidden() && !editing())
+         startEdit();
+   }
+
+private:
+   bool editing() const { return editor_ && editor_->isVisible(); }
+
+   void setHover(bool on) {
+      if (hover_ != on) {
+         hover_ = on;
+         redraw();
+      }
+   }
+
+   // `text` in at most two lines `room` design units wide, the second cut short with "..." if it runs
+   // over.
+   std::vector<std::string> wrap(const std::string &text, float room) const {
+      const visage::Font f = ui::font(kSize * ui::designScale(*this), dpiScale());
+      const float wrapAt = room * ui::designScale(*this);
+      const auto width = [&](const std::string &w) { return f.stringWidth(visage::String(w).toUtf32()); };
+      std::vector<std::string> lines;
+      std::string current;
+      size_t i = 0;
+      while (i <= text.size()) {
+         const size_t end = std::min(text.find(' ', i), text.size());
+         const std::string word = text.substr(i, end - i);
+         const std::string tried = current.empty() ? word : current + " " + word;
+         if (!current.empty() && width(tried) > wrapAt) {
+            lines.push_back(current);
+            current = word;
+         }
+         else
+            current = tried;
+         i = end + 1;
+      }
+      if (!current.empty())
+         lines.push_back(current);
+      if (lines.size() > 2) {
+         std::string last = lines[1] + "...";
+         while (last.size() > 3 && width(last) > wrapAt)
+            last = last.substr(0, last.size() - 4) + "...";
+         lines.resize(2);
+         lines[1] = last;
+      }
+      return lines;
+   }
+
+   class Editor : public visage::TextEditor {
+   public:
+      std::function<void()> onClickAway;
+      void focusChanged(bool focused, bool clicked) override {
+         visage::TextEditor::focusChanged(focused, clicked);
+         if (!focused && onClickAway)
+            onClickAway();
+      }
+   };
+
+   void startEdit() {
+      if (!editor_) {
+         auto editor = std::make_unique<Editor>();
+         editor->setMaxCharacters(static_cast<int>(kMaxBlurb));
+         editor->setDefaultText("Describe this preset");
+         editor->onEnterKey() += [this] { finishEdit(true); };
+         editor->onEscapeKey() += [this] { finishEdit(false); };
+         editor->onClickAway = [this] { finishEdit(true); };
+         editor_ = std::move(editor);
+         addChild(editor_.get(), false);
+      }
+      const float s = ui::designScale(*this);
+      editor_->setBounds(0, (height() - 24 * s) / 2, width(), 24 * s);
+      editor_->setFont(ui::font(kSize * s));
+      editor_->setText(host_.presetBlurb());
+      editor_->setVisible(true);
+      editor_->requestKeyboardFocus();
+      editor_->selectAll();
+      redraw();
+   }
+
+   void finishEdit(bool keep) {
+      if (!editing())
+         return;
+      std::string text = editor_->text().toUtf8();
+      editor_->setVisible(false);
+      while (!text.empty() && text.back() == ' ')
+         text.pop_back();
+      if (keep && text != host_.presetBlurb()) {
+         host_.setPresetBlurb(text);
+         if (onEdited)
+            onEdited(host_.presetBlurb());
+      }
+      redraw();
+   }
+
+   EditorHost &host_;
+   std::unique_ptr<Editor> editor_;
+   std::string shown_;
+   bool hover_ = false, wasHidden_ = false;
+};
+
 const ui::Theme &switchTheme() {
    static const ui::Theme t = [] {
       ui::Theme theme = ui::defaultTheme();
@@ -1303,7 +1463,18 @@ const ui::Theme &offTheme() {
 class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
-      add<ui::UpdateNotice>({150, 19, 196, 26});
+      blurb_ = &add<BlurbView>({148, 12, 200, 40}, host_);
+      blurb_->notice = &add<ui::UpdateNotice>({150, 19, 196, 26});
+      // An edit to a user preset's blurb goes to its file too; a factory one's stays with the project.
+      blurb_->onEdited = [this](const std::string &text) {
+         const std::string name = host_.presetName();
+         if (name.empty() || factoryBank(name))
+            return;
+         const std::filesystem::path file = ui::userPresetFolder(kPresetFormat) / (name + kPresetFormat.extension);
+         std::error_code ec;
+         if (std::filesystem::exists(file, ec))
+            writeBlurb(blurbFile(file), text);
+      };
       tips_.add(add<ui::HoverArea>({14, 12, 130, 40}), "JArp version " JCLAP_PLUGIN_VERSION);
       presets_ = &add<ui::PresetBar>({546, 18, 336, 28}, factoryPresets(), kPresetFormat, host_);
       presets_->setAccent(kOrange);
@@ -1312,6 +1483,8 @@ public:
       presets_->setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
       presets_->onLoad = [this](const ui::Preset &p) {
          ui::applyPreset(p, host_, defaultValues());
+         host_.setPresetBlurb(presetBlurbOf(p.name));
+         blurb_->redraw();
          // A factory preset's patterns are compiled in; a user preset's are in the file beside it.
          Bank bank;
          if (!presetBank(p.name, bank))
@@ -1320,14 +1493,19 @@ public:
          grid_->redraw();
          lanes_->redraw();
       };
-      presets_->onSaved = [this](const std::filesystem::path &file) { writeBank(patternFile(file), host_.bank()); };
+      presets_->onSaved = [this](const std::filesystem::path &file) {
+         writeBank(patternFile(file), host_.bank());
+         writeBlurb(blurbFile(file), host_.presetBlurb());
+      };
       presets_->onDeleted = [](const std::filesystem::path &file) {
          std::error_code ec;
          std::filesystem::remove(patternFile(file), ec);
+         std::filesystem::remove(blurbFile(file), ec);
       };
       presets_->onDice = [this] { showDice(!host_.diceOpen); };
       presets_->diceLit = [this] { return host_.diceOpen; };
       tips_.add(*presets_, "Step through presets, open the list, favorite, or SAVE. The die opens the dice.");
+      tips_.add(*blurb_, "What this preset is. Click to write your own.");
 
       // PATTERN: the grid and its lanes, with how rows are picked in its title row.
       add<ui::Section>({12, 76, 876, 478}, "PATTERN");
@@ -1408,6 +1586,7 @@ public:
    void timerCallback() override { sync(); }
 
    void sync() {
+      blurb_->sync();
       {
          const jarp::Frame &f = host_.frame();
          scroll_.track(slotIndex(host_.paramValue(kSlot)), f.running ? f.slot : -1);
@@ -1722,6 +1901,7 @@ private:
          w.values.push_back(host_.paramValue(id));
       w.bank = host_.bank();
       w.name = host_.presetName();
+      w.blurb = host_.presetBlurb();
       return DiceState(std::move(w));
    }
 
@@ -1735,6 +1915,8 @@ private:
             }
          host_.setBank(st.whole->bank);
          host_.setPresetName(st.whole->name);
+         host_.setPresetBlurb(st.whole->blurb);
+         blurb_->redraw();
          if (presets_)
             presets_->redraw();
       }
@@ -1765,6 +1947,7 @@ private:
    ui::ParamBindings bindings_;
    ui::Tooltips tips_;
    ui::PresetBar *presets_ = nullptr;
+   BlurbView *blurb_ = nullptr;
    GridScroll scroll_;
 
    const Pattern &shown() const { return host_.bank().slots[static_cast<size_t>(scroll_.view)]; }

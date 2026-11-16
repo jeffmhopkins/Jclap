@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.11.0.
+Version 0.12.0.
 
 ![Panel](docs/panel.png)
 
@@ -268,18 +268,43 @@ The preset bar steps through the factory bank and then your own. A preset holds 
 eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
 instead, right-click the slot's number and use **Load from preset**:
 
-There are 79 factory presets in twelve categories, each built on how the style is really played.
+There are 117 factory presets in 27 categories, each built on how the style is really played.
 Most use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked
 (chain) use several patterns: CHORD moves on with each new chord, LOOP plays them one after another.
 
-The **Grooves** are bass lines. They play the bottom three notes you hold, an octave down, so hold a
-chord in the middle of the keyboard and route JArp into a bass patch.
+No factory pattern skips a note: each walks the notes you hold in turn, from the lowest, with none
+left out. The shape comes from your voicing, so for a root-fifth line hold a root and fifth, and for
+root-third-fifth hold the triad.
+
+The **Grooves** are bass lines, by style. They play the lowest notes you hold an octave down, so hold
+the chord in the middle of the keyboard and route JArp into a bass patch.
+
+The **Drum Kit** presets play a kit from the keys you hold: row 1 is the kick, 2 the snare, 3 the
+closed hat and 4 the open hat, the order the General MIDI drum map puts them in. Hold C1, D1, F#1 and
+A#1 (36, 38, 42, 46) and route JArp into a drum machine or sampler. Empty rows rest, so a drum you
+don't hold stays out; let go of the hat key and the hats drop. The **Percussion** presets are hand
+and mallet figures (clave, cascara, conga, bell, tabla) for any pitched sound, walking the notes held.
 
 | Category | Presets |
 |---|---|
-| Basics | Init, Up, Down, Up Down, Converge, Pinky Top, Root Fifth and Broken Thirds (DEGREE rows) |
+| Basics | Init, Up, Down, Up Down, Converge, Pinky Top, Root Fifth, Broken Thirds (DEGREE rows) |
 | Berlin School | Octave Line, Pedal Sequence, Sequencer Bass, Phase Drift (a seven-step accent drifting across the line), Night Drive (four patterns, LOOP), Long Drive (64 steps) |
-| Grooves (bass) | Funk Bass, Slap Pops, House Bass, Rolling House, Disco Octaves, Acid Line, Root Fifth Octave, Tresillo (3+3+2), Dub Bass, Synth Pump, Boogie Shuffle, Gallop (triplets), Two Step (chain, CHORD) |
+| Grooves: Funk | Funk Bass, Slap Pops, Pocket Sixteenths |
+| Grooves: Soul | Motown Walk, Soul Pocket |
+| Grooves: Disco | Disco Octaves, Disco Walk |
+| Grooves: House | House Bass, Rolling House, Deep Offbeat |
+| Grooves: Techno | Acid Line, Techno Rumble |
+| Grooves: Synth | Synth Pump, Outrun Drive |
+| Grooves: Rock | Root Fifth Octave, Rock Eighths, Gallop (triplets) |
+| Grooves: Blues | Boogie Shuffle, Boogie Walk (hold root, 3rd, 5th, 6th and b7) |
+| Grooves: Jazz | Walking Bass (hold a 7th chord), Two Feel |
+| Grooves: Latin | Tresillo (3+3+2), Bossa Bass, Tumbao |
+| Grooves: Reggae | Dub Bass, One Drop, Steppers |
+| Grooves: Hip Hop | Boom Bap Bass, Sub Slide, Neo Soul |
+| Grooves: Breaks | Two Step (UK garage, chain, CHORD), Jungle Roller (drum and bass) |
+| Grooves: Country | Two Beat, Walk Up |
+| Drum Kit | Four on the Floor, Rock Beat, Rock Song (three bars and a fill, LOOP), Boom Bap Kit, Trap Kit, Funky Break, Drum and Bass Beat, One Drop Kit, Shuffle Kit (triplets) |
+| Percussion | Son Clave, Rumba Clave, Cascara, Conga Tumbao, Bell Six Eight (12/8), Teental (tabla), Shaker, Marimba Ostinato (12 steps against the bar) |
 | Piano | Alberti Bass, Waltz Spread (3/4), Nocturne, Stride, Pop Eighths, Rolled Ballad, Piano Verse (three patterns, CHORD) |
 | Guitar Fingerpicking | Travis Picking, Classical Arpeggio (p i m a), Banjo Roll, Ballad Picking, Fingerstyle Song (four patterns, LOOP) |
 | Strum and Harp | Down Strum, Up Strum, Strum Pattern (down down up, up down up), Harp Glissando, Harp Cascade, Strum to Harp (chain, CHORD) |
@@ -290,8 +315,16 @@ chord in the middle of the keyboard and route JArp into a bass patch.
 | Chains | Chord Chain and Verse Chorus (CHORD), Phrase Loop, Build Up, Call and Response and Eight Bars (LOOP, Eight Bars using all eight slots) |
 | Odd Meters | Five Four, Seven Eight, Nine Eight, Three Over Four, Five Over Four, Odd Chain (7/8 then 5/8, LOOP) |
 
+### Blurbs
+
+Each preset has a one-line blurb, shown in the header between the title and COPY: what the preset is
+and how to play it (for a Drum Kit preset, which keys to hold). Click it to write your own; Enter or a
+click elsewhere keeps it, Escape drops it. The blurb is kept with the project, and **SAVE** keeps it
+with your preset, in a `.jarpnote` text file beside it. Editing the blurb of one of your own presets
+updates that file; a factory preset's own blurb comes back when you load it again.
+
 **SAVE** names the current settings and writes them as a small text file, with the patterns in a
-`.jarppatterns` file beside it:
+`.jarppatterns` file beside it (and its blurb in a `.jarpnote` file):
 
 - macOS: `~/Library/Application Support/JArp/Presets`
 - Windows: `%APPDATA%\JArp\Presets`

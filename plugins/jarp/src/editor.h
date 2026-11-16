@@ -34,6 +34,10 @@ public:
    // The name of the preset last loaded or saved, kept with the project.
    virtual std::string presetName() const = 0;
    virtual void setPresetName(const std::string &name) = 0;
+   // A line on that preset, shown in the header: a factory preset's own, or what the user wrote. Kept
+   // with the project, and beside a user preset's file.
+   virtual std::string presetBlurb() const = 0;
+   virtual void setPresetBlurb(const std::string &blurb) = 0;
 
    // The dice card's settings and history, kept while the panel is closed.
    DiceSettings dice;

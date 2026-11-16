@@ -122,6 +122,8 @@ public:
    void setBank(const Bank &b) override { bank_ = b; }
    std::string presetName() const override { return "Pedal Climb"; }
    void setPresetName(const std::string &) override {}
+   std::string presetBlurb() const override { return factoryBlurb("Pedal Climb"); }
+   void setPresetBlurb(const std::string &) override {}
 
    static constexpr int kPickRow = 2, kPickStep = 1;
    static constexpr std::pair<int, int> kPicks[] = {{3, 2}, {1, 4}, {2, 5}, {3, 6}};
