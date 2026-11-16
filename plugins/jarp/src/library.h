@@ -126,6 +126,19 @@ struct Pat {
       return lane(s, [](Lane &l, int v) { l.chance = static_cast<uint8_t>(std::clamp(v, 0, 100)); });
    }
 
+   // LENGTH by HELD notes: `times` steps for each note held, plus `plus`.
+   Pat &held(int times = 1, int plus = 0) {
+      p.byHeld = 1;
+      p.times = static_cast<uint8_t>(std::clamp(times, 1, kMaxTimes));
+      p.plus = static_cast<int8_t>(std::clamp(plus, -16, 16));
+      return *this;
+   }
+   // BOUNCE: up to the last step and back down.
+   Pat &bounce() {
+      p.bounce = 1;
+      return *this;
+   }
+
    operator Pattern() const { return p; }
 
 private:
@@ -210,12 +223,20 @@ inline std::vector<Entry> build() {
    // through the octaves, so they work for any chord. ----
    add(e, [&] { return Entry{"Init", "Basics", "The starting pattern: up through four held notes and back.", {},
                 {makePattern({{1, 1, 4}, {2, 2, 4}, {3, 3, 4}, {4, 4, 4}, {3, 5, 4}, {2, 6, 4}, {1, 7, 4}, {2, 8, 4}})}}; });
-   add(e, [&] { return Entry{"Up", "Basics", "Every held note from the lowest up, on through the octaves.", {octRows, rate(r16)},
-                {Pat("1 2 3 4 5 6 7 8")}}; });
+   add(e, [&] { return Entry{"Up", "Basics", "Every held note from the lowest up, as many steps as notes held.", {octRows, rate(r16)},
+                {Pat("1 2 3 4 5 6 7 8").held()}}; });
+   add(e, [&] { return Entry{"Up Two Octaves", "Basics", "Up through the held notes, then again an octave higher.", {octRows, rate(r16)},
+                {Pat("1 2 3 4 5 6 7 8").held(2)}}; });
+   add(e, [&] { return Entry{"Up and Over", "Basics", "Up through the held notes, then the root an octave up on top.", {octRows, rate(r16)},
+                {Pat("1 2 3 4 5 6 7 8").held(1, 1)}}; });
    add(e, [&] { return Entry{"Down", "Basics", "The held notes from the top down, starting an octave or so up.", {octRows, rate(r16)},
                 {Pat("8 7 6 5 4 3 2 1")}}; });
    add(e, [&] { return Entry{"Up Down", "Basics", "Up through the held notes and back, without doubling the ends.", {octRows, rate(r16)},
-                {Pat("1 2 3 4 5 6 7 8 7 6 5 4 3 2")}}; });
+                {Pat("1 2 3 4 5 6 7 8").held().bounce()}}; });
+   add(e, [&] { return Entry{"Up Down Two Octaves", "Basics", "Up two octaves of the held notes and back down again.", {octRows, rate(r16)},
+                {Pat("1 2 3 4 5 6 7 8").held(2).bounce()}}; });
+   add(e, [&] { return Entry{"Root Pedal", "Basics", "The root between each other held note, on up the chord.", {octRows, rate(r16)},
+                {Pat("1 2 1 3 1 4 1 5 1 6 1 7 1 8").held(2, -2).vel("8 -2")}}; });
    add(e, [&] { return Entry{"Converge", "Basics", "Lowest, highest, and inward from both ends until they meet.", {octRows, rate(r16)},
                 {Pat("1 8 2 7 3 6 4 5")}}; });
    add(e, [&] { return Entry{"Pinky Top", "Basics", "Each held note in turn under a repeated top note.", {octRows, rate(r16)},
@@ -228,6 +249,8 @@ inline std::vector<Entry> build() {
    // ---- Berlin School: short, driving sixteenths over a root pedal, in 3 + 3 + 2 ----
    add(e, [&] { return Entry{"Octave Line", "Berlin School", "A root pedal under the chord and its octave, in 3+3+2.", {octRows, rate(r16), pressVel(0.2)},
                 {Pat("1s 4s 3s 1s 4s 2s 1s 5s").vel("14 -6 0 10 -6 0 8 -4")}}; });
+   add(e, [&] { return Entry{"Pedal Bounce", "Berlin School", "A root pedal under each held note, up the chord and back.", {octRows, rate(r16), pressVel(0.2)},
+                {Pat("1s 2s 1s 3s 1s 4s 1s 5s 1s 6s 1s 7s 1s 8s").held(2, -2).bounce().vel("12 -4")}}; });
    add(e, [&] { return Entry{"Pedal Sequence", "Berlin School", "The root pedal, then each held note an octave up, climbing.", {octRows, rate(r16), pressVel(0.2)},
                 {Pat("1s 2s 1s 3s 1s 4s 1s 3s 1s 2s 1s 3s 1s 5s 1s 4s").oct(". 1").vel("12 -2 -6 0")}}; });
    add(e, [&] { return Entry{"Sequencer Bass", "Berlin School", "A low, root-heavy sixteenth bass with a run up to finish.", {octRows, rate(r16), pressVel(0.2)},
@@ -528,8 +551,8 @@ inline std::vector<Entry> build() {
                               {5, {0, 1, 0, 10}}, {6, {0, 1, 1, 0}}, {7, {0, 1, 0, -16}}, {8, {0, 2, 0, 0}}})}}; });
    add(e, [&] { return Entry{"Press to Bloom", "MPE Expressive", "Soft when touched lightly, louder and busier as you press.", {octRows, rate(r16), pressVel(1.0), curve(-0.5), pressRat(0.8), maxHits(5)},
                 {Pat("1 3 2 4 3 5 4 6", 6).prs(". 1")}}; });
-   add(e, [&] { return Entry{"Breath Pulse", "MPE Expressive", "A gentle pulse whose loudness follows your pressure.", {octRows, rate(r8), pressVel(1.0), curve(-0.3)},
-                {Pat("1 2 3 4 3 2", 8)}}; });
+   add(e, [&] { return Entry{"Breath Pulse", "MPE Expressive", "Up and back down the held notes, loud as you press.", {octRows, rate(r8), pressVel(1.0), curve(-0.3)},
+                {Pat("1 2 3 4 5 6 7 8", 8).held().bounce()}}; });
    add(e, [&] { return Entry{"Pressure Waves", "MPE Expressive", "Press into a note for waves of ratchets, up to eight hits.", {octRows, rate(r16), pressVel(0.9), pressRat(1.0), maxHits(8)},
                 {Pat(rep("1 3 2 4 5 4 3 2", 4)).prs(". 1")}}; });
    add(e, [&] { return Entry{"Touch Chain", "MPE Expressive", "Three patterns, one per chord, each more pressure-driven.", {octRows, rate(r16), advance(chord), pressVel(1.0), pressRat(0.8), maxHits(6)},

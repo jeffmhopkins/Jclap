@@ -230,6 +230,93 @@ void keepRows() {
    }
 }
 
+// LENGTH by HELD notes and BOUNCE. Its own function, off main's stack (see keepRows).
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+void dynamicLength() {
+   // An Up run over all eight rows, one step each.
+   const auto up = [] {
+      Pattern p = pattern({{0, 0, 4}, {1, 1, 4}, {2, 2, 4}, {3, 3, 4}, {4, 4, 4}, {5, 5, 4}, {6, 6, 4}, {7, 7, 4}});
+      p.length = 8;
+      return p;
+   };
+   const auto keysOf = [](const std::vector<Timed> &on) {
+      std::vector<int> keys;
+      for (const Timed &t : on)
+         keys.push_back(t.m.data1);
+      return keys;
+   };
+   {
+      // HELD x1 +0: three notes held make a three-step pattern, so Up walks just those three.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Pattern p = up();
+      p.byHeld = 1;
+      e.setPattern(0, p);
+      const auto keys = keysOf(ons(run(e, 7 * kStepSamples - 10, chord({60, 64, 67}))));
+      JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 60, 64, 67, 60}));
+   }
+   {
+      // HELD x2 -1 with two held: three steps.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Pattern p = pattern({{0, 0, 4}, {1, 1, 4}, {0, 2, 4}, {1, 3, 4}});
+      p.byHeld = 1;
+      p.times = 2;
+      p.plus = -1;
+      JCLAP_CHECK_EQ(p.stepsFor(2), 3);
+      JCLAP_CHECK_EQ(p.stepsFor(0), 8);
+      e.setPattern(0, p);
+      const auto keys = keysOf(ons(run(e, 6 * kStepSamples - 10, chord({60, 64}))));
+      JCLAP_CHECK(keys == std::vector<int>({60, 64, 60, 60, 64, 60}));
+   }
+   {
+      // BOUNCE over four steps: up and back down, the ends once each time round.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Pattern p = up();
+      p.length = 4;
+      p.bounce = 1;
+      JCLAP_CHECK_EQ(p.cycleFor(0), 6);
+      e.setPattern(0, p);
+      const auto keys = keysOf(ons(run(e, 9 * kStepSamples - 10, chord({60, 64, 67, 71}))));
+      JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 71, 67, 64, 60, 64, 67}));
+      // The playhead runs back down the pattern on the way back.
+      Frame f;
+      run(e, 4 * kStepSamples + kStepSamples / 2, {});
+      e.fillFrame(f);
+      JCLAP_CHECK(f.running);
+      JCLAP_CHECK_EQ(f.held, 4);
+   }
+   {
+      // HELD and BOUNCE together: Up becomes Up Down for whatever chord is held.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Pattern p = up();
+      p.byHeld = 1;
+      p.bounce = 1;
+      e.setPattern(0, p);
+      const auto keys = keysOf(ons(run(e, 8 * kStepSamples - 10, chord({60, 64, 67}))));
+      JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 64, 60, 64, 67, 64}));
+   }
+   {
+      // The saved form keeps HELD, its times and plus, and BOUNCE.
+      Pattern p = up();
+      p.byHeld = 1;
+      p.times = 3;
+      p.plus = -2;
+      p.bounce = 1;
+      Pattern q;
+      const std::vector<uint8_t> b = p.save();
+      JCLAP_CHECK(q.load(b.data(), b.size()));
+      JCLAP_CHECK(q == p);
+      JCLAP_CHECK_EQ(q.plus, -2);
+   }
+}
+
 int main() {
    // ---- rows ----
    {
@@ -620,6 +707,7 @@ int main() {
       JCLAP_CHECK_EQ(on[3].time, 3 * kStepSamples - 500);
    }
    keepRows();
+   dynamicLength();
    {
       // Expression goes to every note sounding from its finger.
       auto eOwner = std::make_unique<Engine>();

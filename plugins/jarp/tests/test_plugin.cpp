@@ -327,6 +327,20 @@ int main() {
                JCLAP_CHECK(bank->next(0) != 0);
       }
       JCLAP_CHECK_EQ(factoryCategories().size(), 27u);
+      // The library uses LENGTH by HELD and BOUNCE: Up Down is the held notes up and back for any
+      // chord, and a held pattern has a step for each row it could reach.
+      {
+         int byHeld = 0, bounce = 0;
+         for (const library::Entry &e : factoryLibrary())
+            for (const Pattern &p : e.patterns) {
+               byHeld += p.byHeld;
+               bounce += p.bounce;
+               if (std::string(e.name) == "Up Down")
+                  JCLAP_CHECK(p.byHeld && p.bounce && p.stepsFor(3) == 3 && p.cycleFor(3) == 4);
+            }
+         JCLAP_CHECK(byHeld >= 5);
+         JCLAP_CHECK(bounce >= 3);
+      }
       // Every factory preset says what it is, in a line that fits the header, and no pattern skips a
       // row: the rows each uses run on without a gap, and all of a preset's from row 1, so every note
       // held plays and the voicing gives the shape.

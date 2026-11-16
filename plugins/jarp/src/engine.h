@@ -482,11 +482,15 @@ public:
 
    void fillFrame(Frame &frame) const {
       frame.running = running();
-      const double len = bank_.slots[playing_].length;
-      frame.position = frame.running ? std::fmod(std::max(0.0, position_ - slotStart_), len) : 0.0;
-      frame.slot = static_cast<int8_t>(playing_);
       int held[kMaxFingers], slots[kMaxFingers];
       const int n = sortedFingers(held, slots);
+      // The playhead in pattern steps: with BOUNCE it runs back down the pattern on the way back.
+      const Pattern &shown = bank_.slots[playing_];
+      const double k = frame.running ? std::fmod(std::max(0.0, position_ - slotStart_), shown.cycleFor(n)) : 0.0;
+      const double whole = std::floor(k);
+      frame.position = shown.stepAt(static_cast<int64_t>(whole), n) + (k - whole);
+      frame.held = n;
+      frame.slot = static_cast<int8_t>(playing_);
       int key[kRows], target[kRows], octave[kRows];
       mapRows(held, n, settings_, key, target, octave, topRow(bank_.slots[playing_]));
       for (int r = 0; r < kRows; ++r) {
@@ -562,7 +566,7 @@ private:
       int s = bank_.slots[selected_].empty() ? bank_.next(selected_) : selected_;
       for (int k = 0; k < kSlots && !bank_.slots[s].empty(); ++k) {
          chain[n++] = s;
-         cycle += std::clamp<int>(bank_.slots[s].length, 1, kSteps);
+         cycle += bank_.slots[s].cycleFor(heldCount());
          s = bank_.next(s);
          if (s == chain[0])
             break;
@@ -573,7 +577,7 @@ private:
       }
       int64_t at = ((j % cycle) + cycle) % cycle;
       for (int i = 0; i < n; ++i) {
-         const int len = std::clamp<int>(bank_.slots[chain[i]].length, 1, kSteps);
+         const int len = bank_.slots[chain[i]].cycleFor(heldCount());
          if (at < len || i + 1 == n) {
             playing_ = chain[i];
             slotStart_ = j - at;
@@ -603,6 +607,14 @@ private:
          if (fingers_[f].used && !fingers_[f].ghost && fingers_[f].channel == channel && fingers_[f].key == key)
             return f;
       return -1;
+   }
+
+   // The notes held (and the places KEEP ROWS keeps), for LENGTH by HELD.
+   int heldCount() const {
+      int n = 0;
+      for (const Finger &f : fingers_)
+         n += f.used ? 1 : 0;
+      return n;
    }
 
    // The fingers by pitch, lowest first: their keys and their slots.
@@ -637,7 +649,9 @@ private:
 
    // Starts the notes on musical step j (counted from the origin).
    void trigger(int64_t j) {
-      int len = std::clamp<int>(bank_.slots[playing_].length, 1, kSteps);
+      // A pattern's cycle: its steps (by STEPS or by the notes held), or up and back with BOUNCE.
+      const int heldNow = heldCount();
+      int len = bank_.slots[playing_].cycleFor(heldNow);
       // Locked to the song, a Loop chain is a sequence along it: the patterns with notes in them,
       // from the one selected, one after another from the song's start, so where the song is says
       // which pattern plays and which step.
@@ -646,7 +660,7 @@ private:
          songChain(j);
          if (playing_ != was)
             hits_.fill(0);
-         len = std::clamp<int>(bank_.slots[playing_].length, 1, kSteps);
+         len = bank_.slots[playing_].cycleFor(heldNow);
       }
       // Otherwise, each time round, Advance Loop moves on to the next pattern with notes in it.
       else if (settings_.advance == Advance::Loop && j > slotStart_ && (j - slotStart_) % len == 0) {
@@ -656,11 +670,12 @@ private:
             hits_.fill(0);
          }
          slotStart_ = j;
-         len = std::clamp<int>(bank_.slots[playing_].length, 1, kSteps);
+         len = bank_.slots[playing_].cycleFor(heldNow);
       }
       const int64_t rel = j - slotStart_;
-      const int step = static_cast<int>(((rel % len) + len) % len);
       const Pattern &pattern_ = bank_.slots[playing_];
+      const int step = pattern_.stepAt(rel, heldNow);
+      const int steps = pattern_.stepsFor(heldNow);
       int held[kMaxFingers], slots[kMaxFingers];
       const int n = sortedFingers(held, slots);
       if (!n)
@@ -691,7 +706,7 @@ private:
          const int pitch = foldOctaves(f.key, lane.octave + octave[note.row], held[0], settings_.range);
          if (pitch < 0 || pitch > 127)
             continue;
-         const double length = std::min(note.length / static_cast<double>(kQuarters), static_cast<double>(len - step));
+         const double length = std::min(note.length / static_cast<double>(kQuarters), static_cast<double>(steps - step));
          const int hits = hitsFor(lane, f.pressure);
          if (lane.pressure)
             hits_[step] = static_cast<uint8_t>(hits);

@@ -471,7 +471,7 @@ public:
          return;
       }
       // The end bar, anywhere along it.
-      if (length() >= first && length() <= first + kView + 1 && std::abs(x - barX(length())) < 7 &&
+      if (!shown().byHeld && length() >= first && length() <= first + kView + 1 && std::abs(x - barX(length())) < 7 &&
           y < kGridY + 8 * kRowPitch) {
          drag_ = Drag::End;
          return;
@@ -770,7 +770,8 @@ private:
          onScroll();
    }
 
-   int length() const { return std::clamp<int>(shown().length, 1, kSteps); }
+   // The steps the pattern plays: its LENGTH, by STEPS or by the notes held now.
+   int length() const { return shown().stepsFor(host_.frame().held); }
    int maxHits() const { return static_cast<int>(std::lround(host_.paramModulated(kMaxHits))); }
    static float rowY(int row) { return kGridY + (7 - row) * kRowPitch; }
    float barX(int len) const { return scroll_.x(len) - (kColumn - kCellW) / 2; }
@@ -837,7 +838,7 @@ public:
       const float s = ui::designScale(*this);
       const ui::Theme &t = ui::defaultTheme();
       const Pattern &p = shown();
-      const int len = std::clamp<int>(p.length, 1, kSteps);
+      const int len = p.stepsFor(host_.frame().held);
       const char *const names[] = {"OCTAVE", "RATCHET", "VELOCITY", "CHANCE"};
       const int slot = scroll_.view;
       const size_t picks = scroll_.picked(p, slot).size();
@@ -1231,8 +1232,13 @@ public:
    }
    // Takes every note out, keeping the length.
    void clear(int slot) {
+      const Pattern &was = host_.bank().slots[static_cast<size_t>(slot)];
       Pattern empty;
-      empty.length = host_.bank().slots[static_cast<size_t>(slot)].length;
+      empty.length = was.length;
+      empty.byHeld = was.byHeld;
+      empty.times = was.times;
+      empty.plus = was.plus;
+      empty.bounce = was.bounce;
       host_.setSlot(slot, empty);
    }
 
@@ -1259,7 +1265,10 @@ public:
          const char *title, *note;
          float x, w;
       };
-      const Group groups[] = {{"TIMING", nullptr, 15, 202}, {"PLAYBACK", nullptr, 258, 232}, {"PRESSURE", "from each finger", 530, 331}};
+      const Group groups[] = {{"TIMING", nullptr, 15, 143},
+                              {"LENGTH", lengthNote.c_str(), 178, 182},
+                              {"PLAYBACK", nullptr, 380, 176},
+                              {"PRESSURE", "from each finger", 576, 285}};
       for (const Group &g : groups) {
          c.setColor(t.dimText);
          c.text(g.title, ui::font(11 * s), visage::Font::kLeft, g.x * s, 8 * s, 120 * s, 20 * s);
@@ -1271,9 +1280,13 @@ public:
          c.fill(g.x * s, 31 * s, g.w * s, 1.0f * s);
       }
       c.setColor(kRule);
-      c.fill(237 * s, 12 * s, 1.0f * s, 116 * s);
-      c.fill(509 * s, 12 * s, 1.0f * s, 116 * s);
+      c.fill(168 * s, 12 * s, 1.0f * s, 116 * s);
+      c.fill(370 * s, 12 * s, 1.0f * s, 116 * s);
+      c.fill(566 * s, 12 * s, 1.0f * s, 116 * s);
    }
+
+   // LENGTH's header note: what the length comes to ("4 held = 4 steps").
+   std::string lengthNote;
 };
 
 // The dice card's face: its title, what each button does, and the ROLL / RANGE list's words. The
@@ -1578,10 +1591,55 @@ public:
       lanes_->onEdit = [this](const Pattern &p) { edit(p); };
 
       // Settings.
-      add<SettingsCard>({12, 568, 876, 142});
-      tips_.add(knob(kRate, "RATE", kOrange, 37, 606), "How long each step is.");
-      tips_.add(knob(kSwing, "SWING", kOrange, 107, 606), "Moves every second step later: 50% is straight.");
-      length_ = &add<ui::Knob>({177, 606, 76, 88}, ui::ValueRange{1, kSteps, 8, 1.0, false, true});
+      settings_ = &add<SettingsCard>({12, 568, 876, 142});
+      tips_.add(knob(kRate, "RATE", kOrange, 30, 606), "How long each step is.");
+      tips_.add(knob(kSwing, "SWING", kOrange, 100, 606), "Moves every second step later: 50% is straight.");
+      // LENGTH, the pattern's own: a number of steps, or so many for each note held, played one way
+      // round or bouncing back.
+      heading("COUNT", 190, 606);
+      byHeld_ = &add<ui::SegmentedSwitch>(ui::Rect{190, 624, 100, 22}, std::vector<std::string>{"STEPS", "HELD"});
+      byHeld_->setTheme(switchTheme());
+      byHeld_->setAccent(kSlate);
+      byHeld_->onChange = [this](int i) {
+         Pattern p = shown();
+         p.byHeld = i ? 1 : 0;
+         edit(p);
+      };
+      tips_.add(*byHeld_, "Steps: a set length. Held: so many steps for each note you hold, plus or minus a few.");
+      heading("DIRECTION", 190, 652);
+      bounce_ = &add<ui::SegmentedSwitch>(ui::Rect{190, 670, 100, 22}, std::vector<std::string>{"ONE WAY", "BOUNCE"});
+      bounce_->setTheme(switchTheme());
+      bounce_->setAccent(kSlate);
+      bounce_->onChange = [this](int i) {
+         Pattern p = shown();
+         p.bounce = i ? 1 : 0;
+         edit(p);
+      };
+      tips_.add(*bounce_, "One way: step 1 to the end, then round again. Bounce: up to the end and back down.");
+      timesLabel_ = &heading("TIMES", 300, 606);
+      times_ = &add<ui::NumberBox>(ui::Rect{300, 624, 72, 22}, ui::ValueRange{1, kMaxTimes, 1, 1.0, false, true});
+      times_->setStepButtons(true);
+      times_->valueText = [](double v) { return "x" + std::to_string(static_cast<int>(std::lround(v))); };
+      times_->onChange = [this](double v) {
+         Pattern p = shown();
+         p.times = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(v)), 1, kMaxTimes));
+         edit(p);
+      };
+      tips_.add(*times_, "Steps for each note held.");
+      plusLabel_ = &heading("PLUS", 300, 652);
+      plus_ = &add<ui::NumberBox>(ui::Rect{300, 670, 72, 22}, ui::ValueRange{-16, 16, 0, 1.0, true, true});
+      plus_->setStepButtons(true);
+      plus_->valueText = [](double v) {
+         const int n = static_cast<int>(std::lround(v));
+         return (n < 0 ? std::string("-") : std::string("+")) + std::to_string(std::abs(n));
+      };
+      plus_->onChange = [this](double v) {
+         Pattern p = shown();
+         p.plus = static_cast<int8_t>(std::clamp(static_cast<int>(std::lround(v)), -16, 16));
+         edit(p);
+      };
+      tips_.add(*plus_, "Steps added to (or taken from) the notes held times TIMES.");
+      length_ = &add<ui::Knob>({297, 606, 76, 88}, ui::ValueRange{1, kSteps, 8, 1.0, false, true});
       length_->setLabel("LENGTH");
       length_->setAccent(kOrange);
       length_->setLabelColor(ui::defaultTheme().dimText);
@@ -1595,23 +1653,23 @@ public:
          edit(p);
       };
       tips_.add(*length_, "Steps before this pattern loops. Same as the purple bar.");
-      heading("LATCH", 270, 606);
-      tips_.add(choice(kLatch, {270, 624, 80, 22}, {"OFF", "ON"}), "Keep playing after you let go, until a new chord.");
-      heading("RANGE", 360, 606);
-      auto &range = add<ui::Dropdown>({360, 624, 50, 22}, std::vector<std::string>{"1 OCT", "2 OCT", "3 OCT", "4 OCT"});
+      heading("LATCH", 392, 606);
+      tips_.add(choice(kLatch, {392, 624, 80, 22}, {"OFF", "ON"}), "Keep playing after you let go, until a new chord.");
+      heading("RANGE", 518, 652);
+      auto &range = add<ui::Dropdown>({518, 670, 50, 22}, std::vector<std::string>{"1 OCT", "2 OCT", "3 OCT", "4 OCT"});
       range.setAccent(kSlate);
       bindings_.bind(range, kRange);
       tips_.add(range, "How far octave shifts may climb before folding back down.");
-      heading("KEEP ROWS", 420, 606);
-      tips_.add(choice(kKeepRows, {420, 624, 80, 22}, {"OFF", "ON"}),
+      heading("KEEP ROWS", 480, 606);
+      tips_.add(choice(kKeepRows, {480, 624, 80, 22}, {"OFF", "ON"}),
                 "Let go of a key and its row rests, holding the others in place, until every key is up.");
-      heading("RESTART", 270, 652);
-      tips_.add(choice(kRestart, {270, 670, 138, 22}, {"SONG", "NOTE", "BAR"}),
+      heading("RESTART", 392, 652);
+      tips_.add(choice(kRestart, {392, 670, 118, 22}, {"SONG", "NOTE", "BAR"}),
                 "Song: locked to the song position. Note: from your first note. Bar: from that bar.");
-      tips_.add(knob(kPressVelocity, "VELOCITY", kBlue, 532, 606), "How much pressure sets each note's velocity.");
-      tips_.add(knob(kCurve, "CURVE", kBlue, 614, 606, true), "Soft: a light touch goes far. Hard: needs a firm press.");
-      tips_.add(knob(kPressRatchet, "RATCHET", kBlue, 696, 606), "How much pressure adds hits on steps with P lit.");
-      tips_.add(knob(kMaxHits, "MAX HITS", kBlue, 778, 606), "The most hits a pressed P step splits into.");
+      tips_.add(knob(kPressVelocity, "VELOCITY", kBlue, 588, 606), "How much pressure sets each note's velocity.");
+      tips_.add(knob(kCurve, "CURVE", kBlue, 660, 606, true), "Soft: a light touch goes far. Hard: needs a firm press.");
+      tips_.add(knob(kPressRatchet, "RATCHET", kBlue, 732, 606), "How much pressure adds hits on steps with P lit.");
+      tips_.add(knob(kMaxHits, "MAX HITS", kBlue, 804, 606), "The most hits a pressed P step splits into.");
 
       buildDice();
       showDice(host_.diceOpen);
@@ -1637,8 +1695,36 @@ public:
       if (std::lround(length_->value()) != shown().length)
          length_->setValue(shown().length);
       {
+         const Pattern &p = shown();
+         const bool held = p.byHeld != 0;
+         byHeld_->setSelected(held ? 1 : 0);
+         bounce_->setSelected(p.bounce ? 1 : 0);
+         length_->setVisible(!held);
+         timesLabel_->setVisible(held);
+         plusLabel_->setVisible(held);
+         times_->setVisible(held);
+         plus_->setVisible(held);
+         if (std::lround(times_->value()) != p.times)
+            times_->setValue(p.times);
+         if (std::lround(plus_->value()) != p.plus)
+            plus_->setValue(p.plus);
+         const int n = host_.frame().held;
+         const int steps = p.stepsFor(n);
+         std::string note;
+         if (!held)
+            note = p.bounce ? std::to_string(steps) + " up and back" : "fixed steps";
+         else if (n > 0)
+            note = std::to_string(n) + " held = " + std::to_string(steps) + (steps == 1 ? " step" : " steps");
+         else
+            note = "for each note held";
+         if (note != settings_->lengthNote) {
+            settings_->lengthNote = note;
+            settings_->redraw();
+         }
+      }
+      {
          const jarp::Frame &f = host_.frame();
-         const int len = std::clamp<int>(shown().length, 1, kSteps);
+         const int len = shown().stepsFor(f.held);
          const bool here = f.running && f.slot == scroll_.view;
          scroll_.update(len, here ? std::clamp(f.position, 0.0, static_cast<double>(len)) : -1.0);
       }
@@ -1710,8 +1796,8 @@ private:
       return add<ui::Label>({x, 89, 80, 22}, name, ui::defaultTheme().dimText, visage::Font::kRight, 0.5f);
    }
 
-   void heading(const char *name, float x, float y) {
-      add<ui::Label>({x, y, 120, 14}, name, ui::defaultTheme().dimText, visage::Font::kLeft, 0.8f);
+   ui::Label &heading(const char *name, float x, float y) {
+      return add<ui::Label>({x, y, 120, 14}, name, ui::defaultTheme().dimText, visage::Font::kLeft, 0.8f);
    }
 
    ui::SegmentedSwitch &choice(clap_id id, ui::Rect r, std::vector<std::string> options) {
@@ -1725,7 +1811,7 @@ private:
    ui::Knob &knob(clap_id id, const char *label, unsigned accent, float x, float y, bool bipolar = false) {
       const auto &p = kParams[id];
       const bool stepped = (p.flags & CLAP_PARAM_IS_STEPPED) != 0;
-      auto &k = add<ui::Knob>({x, y, 76, 88}, ui::ValueRange{p.min, p.max, p.defaultValue, stepped ? 1.0 : 0.0, bipolar, stepped});
+      auto &k = add<ui::Knob>({x, y, 70, 88}, ui::ValueRange{p.min, p.max, p.defaultValue, stepped ? 1.0 : 0.0, bipolar, stepped});
       k.setLabel(label);
       k.setAccent(accent);
       k.setLabelColor(ui::defaultTheme().dimText);
@@ -1990,6 +2076,10 @@ private:
    GridView *grid_ = nullptr;
    SlotStrip *slots_ = nullptr;
    ui::Knob *length_ = nullptr;
+   SettingsCard *settings_ = nullptr;
+   ui::SegmentedSwitch *byHeld_ = nullptr, *bounce_ = nullptr;
+   ui::NumberBox *times_ = nullptr, *plus_ = nullptr;
+   ui::Label *timesLabel_ = nullptr, *plusLabel_ = nullptr;
    LaneView *lanes_ = nullptr;
    ui::Label *emptyLabel_ = nullptr, *scaleLabel_ = nullptr;
    ui::SegmentedSwitch *empty_ = nullptr;

@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.14.0.
+Version 0.15.0.
 
 ![Panel](docs/panel.png)
 
@@ -44,7 +44,8 @@ Eight rows by up to 128 steps, sixteen in view at a time. Row 1 is at the bottom
   removes it.
 - **Drag the purple bar** (or its tab) to set the pattern's length, from 1 to 128 steps. Drag it past
   the right edge and the grid scrolls on with it. The LENGTH knob is the same setting. Each pattern
-  has its own length.
+  has its own length. With LENGTH by HELD notes the bar follows the notes you hold instead (see
+  Settings), and steps past it dim.
 
 A white line moves through the steps in time with the transport, and the step it is in is outlined.
 A softer note (a lower VELOCITY) draws fainter, and a note left to chance (a CHANCE under 100%) shows
@@ -179,7 +180,23 @@ of them.
 
 - **RATE**: how long a step is, from 1/32 to 1/4, with triplets.
 - **SWING**: moves every second step later, from 50% (straight) to 75%.
-- **LENGTH**: steps before this pattern loops, 1 to 128. Each pattern has its own.
+
+**LENGTH**: how many steps the pattern plays, and which way round. Each pattern has its own, and
+the panel's header line says what it comes to ("4 held = 4 steps").
+
+- **COUNT**:
+  - **STEPS**: a set length, 1 to 128 steps, on the LENGTH knob (or the purple bar).
+  - **HELD**: so many steps for each note you hold, **TIMES** 1 to 8, **PLUS** or minus up to 16
+    more, 1 to 128 in all. Hold three notes with x1 +0 and the pattern is three steps long; hold
+    four and it's four. A pattern that walks up its rows then plays exactly the notes you hold,
+    whatever the chord: x2 goes on up an octave (with OCT rows), +1 adds the root an octave up on
+    top. With KEEP ROWS on, a key let go still counts until every key is up. With nothing held the
+    LENGTH knob's steps stand in.
+- **DIRECTION**:
+  - **ONE WAY**: step 1 to the end, then round again.
+  - **BOUNCE**: up to the last step and back down, playing the first and last steps once each time
+    round: four steps play 1 2 3 4 3 2. With HELD, an Up pattern becomes Up Down for any chord. The
+    playhead runs back down the grid on the way back.
 
 **PLAYBACK**
 
@@ -275,7 +292,7 @@ The preset bar steps through the factory bank and then your own. A preset holds 
 eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
 instead, right-click the slot's number and use **Load from preset**:
 
-There are 123 factory presets in 27 categories, each built on how the style is really played.
+There are 128 factory presets in 27 categories, each built on how the style is really played.
 Most use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked
 (chain) use several patterns: CHORD moves on with each new chord, LOOP plays them one after another.
 
@@ -297,10 +314,14 @@ each four-bar phrase. The **Percussion** presets are hand percussion and mallet 
 cascara, conga, bongos, djembe, cajon, darbuka, tambourine, shaker, bell, tabla, marimba) for any
 pitched sound, walking the notes held.
 
+Up, Up Two Octaves, Up and Over, Up Down, Up Down Two Octaves, Root Pedal, Pedal Bounce and Breath
+Pulse set their LENGTH by the notes HELD, so they fit whatever chord you play, and the Up Down ones
+BOUNCE. The grooves, kits and the rest keep a set number of steps, so they stay in time with the bar.
+
 | Category | Presets |
 |---|---|
-| Basics | Init, Up, Down, Up Down, Converge, Pinky Top, Root Fifth, Broken Thirds (DEGREE rows) |
-| Berlin School | Octave Line, Pedal Sequence, Sequencer Bass, Phase Drift (a seven-step accent drifting across the line), Night Drive (four patterns, LOOP), Long Drive (64 steps) |
+| Basics | Init, Up, Up Two Octaves, Up and Over, Down, Up Down, Up Down Two Octaves, Root Pedal, Converge, Pinky Top, Root Fifth, Broken Thirds (DEGREE rows) |
+| Berlin School | Octave Line, Pedal Bounce, Pedal Sequence, Sequencer Bass, Phase Drift (a seven-step accent drifting across the line), Night Drive (four patterns, LOOP), Long Drive (64 steps) |
 | Grooves: Funk | Funk Bass, Slap Pops, Pocket Sixteenths |
 | Grooves: Soul | Motown Walk, Soul Pocket |
 | Grooves: Disco | Disco Octaves, Disco Walk |
