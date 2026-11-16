@@ -29,6 +29,9 @@ struct Settings {
    int slot = 0;
    Advance advance = Advance::Off;
    bool latch = false;
+   // Keep Rows: a finger let go while others still hold keeps its place among the notes (its row
+   // rests), so the rest don't shift down; once every key is up, the places are forgotten.
+   bool keepRows = false;
    Restart restart = Restart::Note;
    bool degree = false;
    // Spread: the pattern's rows spread over the notes held, bottom row to the lowest, top row to the
@@ -210,6 +213,9 @@ public:
       settings_.maxHits = std::clamp(s.maxHits, 1, kMaxRatchet);
       settings_.range = std::clamp(s.range, 1, 4);
       dropLatched_ = dropLatched_ || dropLatched;
+      // Keep Rows turned off: the places kept for keys let go are forgotten.
+      if (!settings_.keepRows)
+         forgetGhosts();
    }
    const Settings &settings() const { return settings_; }
 
@@ -323,6 +329,10 @@ public:
             if (fingers_[f].used)
                release(f, t, out);
       const bool wasRunning = running();
+      // A key let go under Keep Rows and pressed again takes its own place back.
+      for (Finger &g : fingers_)
+         if (g.used && g.ghost && g.key == key)
+            g = Finger{};
       int slot = find(channel, key);
       if (slot < 0)
          for (int f = 0; f < kMaxFingers && slot < 0; ++f)
@@ -373,7 +383,7 @@ public:
       if (settings_.latch || sustain_)
          fingers_[slot].held = false;
       else
-         release(slot, t, out);
+         letGoKeepingRow(slot, t, out);
    }
 
    // The sustain pedal (CC64): while it's down, keys let go stay in the chord and the arp keeps
@@ -384,7 +394,7 @@ public:
       sustain_ = down;
       if (lifted && !settings_.latch)
          for (int f = 0; f < kMaxFingers; ++f)
-            if (fingers_[f].used && !fingers_[f].held)
+            if (fingers_[f].used && !fingers_[f].held && !fingers_[f].ghost)
                release(f, t, out);
    }
    bool sustain() const { return sustain_; }
@@ -462,9 +472,10 @@ public:
       played_ = false;
    }
 
+   // Whether a finger is down (or latched): a place kept by Keep Rows doesn't count.
    bool running() const {
       for (const Finger &f : fingers_)
-         if (f.used)
+         if (f.used && !f.ghost)
             return true;
       return false;
    }
@@ -481,7 +492,7 @@ public:
       for (int r = 0; r < kRows; ++r) {
          RowView &v = frame.rows[r];
          v = RowView{};
-         if (key[r] < 0)
+         if (key[r] < 0 || fingers_[slots[key[r]]].ghost)
             continue;
          const Finger &f = fingers_[slots[key[r]]];
          v.key = static_cast<int8_t>(std::clamp(foldOctaves(f.key, octave[r], held[0], settings_.range), 0, 127));
@@ -519,7 +530,8 @@ private:
    static constexpr int kMaxPending = 1024;
 
    struct Finger {
-      bool used = false, held = false;
+      // A ghost is a finger let go under Keep Rows: it holds its place among the notes, silent.
+      bool used = false, held = false, ghost = false;
       uint8_t channel = 0, key = 0, velocity = 100;
       double pressure = 0.0, slide = 0.0, bend = 0.0;
       Source source[3] = {Source::None, Source::None, Source::None};
@@ -588,7 +600,7 @@ private:
 
    int find(int channel, int key) const {
       for (int f = 0; f < kMaxFingers; ++f)
-         if (fingers_[f].used && fingers_[f].channel == channel && fingers_[f].key == key)
+         if (fingers_[f].used && !fingers_[f].ghost && fingers_[f].channel == channel && fingers_[f].key == key)
             return f;
       return -1;
    }
@@ -673,6 +685,9 @@ private:
             continue;
          const int slot = slots[key[note.row]];
          const Finger &f = fingers_[slot];
+         // A place kept for a key let go (Keep Rows) rests.
+         if (f.ghost)
+            continue;
          const int pitch = foldOctaves(f.key, lane.octave + octave[note.row], held[0], settings_.range);
          if (pitch < 0 || pitch > 127)
             continue;
@@ -740,6 +755,32 @@ private:
                sounding_[ch][k] = {};
             }
       fingers_[slot] = {};
+      // The last key up: the places kept for the others go too.
+      if (!running())
+         forgetGhosts();
+   }
+
+   // A key let go (not latched or sustained): with Keep Rows, while other keys are still down, its
+   // notes end but it keeps its place among the notes, so the rows above it don't shift down.
+   void letGoKeepingRow(int slot, uint32_t t, OutBuffer &out) {
+      bool others = false;
+      for (int f = 0; f < kMaxFingers; ++f)
+         others = others || (f != slot && fingers_[f].used && !fingers_[f].ghost);
+      if (!settings_.keepRows || !others) {
+         release(slot, t, out);
+         return;
+      }
+      const Finger kept = fingers_[slot];
+      release(slot, t, out);
+      fingers_[slot] = kept;
+      fingers_[slot].held = false;
+      fingers_[slot].ghost = true;
+   }
+
+   void forgetGhosts() {
+      for (Finger &f : fingers_)
+         if (f.ghost)
+            f = Finger{};
    }
 
    Settings settings_;

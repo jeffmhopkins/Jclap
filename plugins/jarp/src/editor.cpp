@@ -1226,7 +1226,7 @@ public:
          const char *title, *note;
          float x, w;
       };
-      const Group groups[] = {{"TIMING", nullptr, 15, 202}, {"PLAYBACK", nullptr, 258, 138}, {"PRESSURE", "from each finger", 438, 423}};
+      const Group groups[] = {{"TIMING", nullptr, 15, 202}, {"PLAYBACK", nullptr, 258, 232}, {"PRESSURE", "from each finger", 530, 331}};
       for (const Group &g : groups) {
          c.setColor(t.dimText);
          c.text(g.title, ui::font(11 * s), visage::Font::kLeft, g.x * s, 8 * s, 120 * s, 20 * s);
@@ -1239,7 +1239,7 @@ public:
       }
       c.setColor(kRule);
       c.fill(237 * s, 12 * s, 1.0f * s, 116 * s);
-      c.fill(417 * s, 12 * s, 1.0f * s, 116 * s);
+      c.fill(509 * s, 12 * s, 1.0f * s, 116 * s);
    }
 };
 
@@ -1569,13 +1569,16 @@ public:
       range.setAccent(kSlate);
       bindings_.bind(range, kRange);
       tips_.add(range, "How far octave shifts may climb before folding back down.");
+      heading("KEEP ROWS", 420, 606);
+      tips_.add(choice(kKeepRows, {420, 624, 80, 22}, {"OFF", "ON"}),
+                "Let go of a key and its row rests, holding the others in place, until every key is up.");
       heading("RESTART", 270, 652);
       tips_.add(choice(kRestart, {270, 670, 138, 22}, {"SONG", "NOTE", "BAR"}),
                 "Song: locked to the song position. Note: from your first note. Bar: from that bar.");
-      tips_.add(knob(kPressVelocity, "VELOCITY", kBlue, 452, 606), "How much pressure sets each note's velocity.");
-      tips_.add(knob(kCurve, "CURVE", kBlue, 560, 606, true), "Soft: a light touch goes far. Hard: needs a firm press.");
-      tips_.add(knob(kPressRatchet, "RATCHET", kBlue, 670, 606), "How much pressure adds hits on steps with P lit.");
-      tips_.add(knob(kMaxHits, "MAX HITS", kBlue, 780, 606), "The most hits a pressed P step splits into.");
+      tips_.add(knob(kPressVelocity, "VELOCITY", kBlue, 532, 606), "How much pressure sets each note's velocity.");
+      tips_.add(knob(kCurve, "CURVE", kBlue, 614, 606, true), "Soft: a light touch goes far. Hard: needs a firm press.");
+      tips_.add(knob(kPressRatchet, "RATCHET", kBlue, 696, 606), "How much pressure adds hits on steps with P lit.");
+      tips_.add(knob(kMaxHits, "MAX HITS", kBlue, 778, 606), "The most hits a pressed P step splits into.");
 
       buildDice();
       showDice(host_.diceOpen);

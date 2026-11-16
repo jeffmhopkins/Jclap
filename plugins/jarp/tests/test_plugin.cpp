@@ -348,7 +348,14 @@ int main() {
                }
          }
          JCLAP_CHECK(all[0]);
-         // The Drum Kit presets are four bars: 64 sixteenths, or 48 triplet eighths.
+         // The Drum Kit presets are four bars: 64 sixteenths, or 48 triplet eighths, and keep their
+         // rows, so letting go of one drum's key drops only that drum.
+         if (std::string(e.category) == "Drum Kit") {
+            bool keeps = false;
+            for (const auto &[id, x] : e.params)
+               keeps = keeps || (id == kKeepRows && x == 1);
+            JCLAP_CHECK(keeps);
+         }
          if (std::string(e.category) == "Drum Kit")
             for (const Pattern &p : e.patterns)
                if (!p.empty() && p.length != 64 && p.length != 48) {

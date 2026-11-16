@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.12.0.
+Version 0.13.0.
 
 ![Panel](docs/panel.png)
 
@@ -187,6 +187,12 @@ of them.
 - **Sustain pedal** (CC64): while it's down, keys you let go of stay in the chord and the arp keeps
   playing them; new keys join it. Lifting the pedal lets go of every key no longer held. JArp keeps
   the pedal for itself rather than passing it on, so the arp's own note lengths stay as drawn.
+- **KEEP ROWS**: on, a key you let go of keeps its row until every key is up. Hold C, E and G on
+  rows 1 to 3 and let go of C: row 1 rests while E and G stay on rows 2 and 3 instead of shifting
+  down. Press C again and it takes row 1 back; a different new key is fitted in by pitch as usual.
+  Once every key is up the next chord starts afresh. Made for drums: hold a beat and lift the kick
+  or the hats out of it without the other drums moving rows. Off to start with; the Drum Kit
+  presets turn it on.
 - **RESTART**: where the pattern starts.
   - **SONG** locks the pattern to the song position, so it is sequenced in time rather than started
     by your hands: play a chord half way through the pattern and it starts half way through. Each
@@ -283,7 +289,8 @@ The **Drum Kit** presets play a kit from the keys you hold: row 1 is the kick, 2
 closed hat and 4 the open hat, the order the General MIDI drum map puts them in. Hold MIDI notes 36,
 38, 42 and 46 (C2, D2, F#2 and A#2 as JArp names them, with middle C as C4; a host that calls middle
 C C3 names them C1, D1, F#1 and A#1) and route JArp into a drum machine or sampler. Empty rows rest, so a drum you
-don't hold stays out; let go of the hat key and the hats drop. Each is four bars long, the fourth
+don't hold stays out, and KEEP ROWS is on, so letting go of any drum's key drops just that drum
+while the rest keep their rows: lift the kick for a breakdown and press it again to bring it back. Each is four bars long, the fourth
 with a fill, and starts from the song's first bar (RESTART SONG), so its fill lands at the end of
 each four-bar phrase. The **Percussion** presets are hand percussion and mallet figures (clave,
 cascara, conga, bongos, djembe, cajon, darbuka, tambourine, shaker, bell, tabla, marimba) for any
