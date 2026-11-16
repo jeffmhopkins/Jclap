@@ -28,7 +28,7 @@ struct Timed {
 
 struct In {
    int64_t time;
-   enum Kind { On, Off, Pressure } kind;
+   enum Kind { On, Off, Pressure, Sustain, Bend } kind;
    int channel, key, value;
 };
 
@@ -54,6 +54,12 @@ std::vector<Timed> run(Engine &e, int64_t samples, std::vector<In> in, bool play
                e.noteOn(t, i.channel, i.key, i.value, out);
             else if (i.kind == In::Off)
                e.noteOff(t, i.channel, i.key, out);
+            else if (i.kind == In::Sustain)
+               e.setSustain(t, i.value != 0, out);
+            else if (i.kind == In::Bend) {
+               e.advance(t, out);
+               e.setBend(i.channel, i.key, i.value / 8192.0);
+            }
             else {
                e.advance(t, out);
                e.setPressure(i.channel, -1, i.value / 127.0);
@@ -94,6 +100,86 @@ Pattern pattern(std::initializer_list<Note> notes) {
    for (const Note &n : notes)
       p.add(n.row, n.step, n.length);
    return p;
+}
+
+// Kept out of main, whose frame on MSVC holds every test block's patterns at once.
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+void expressionAndSustain() {
+   {
+      // The sustain pedal keeps keys let go in the chord until it lifts.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      setPattern(e, pattern({{0, 0, 4}, {1, 1, 4}, {0, 2, 4}, {1, 3, 4}, {0, 4, 4}, {1, 5, 4}}));
+      std::vector<In> in = chord({60, 64});
+      in.push_back({50, In::Sustain, 0, 64, 1});
+      in.push_back({100, In::Off, 1, 60, 0});
+      in.push_back({100, In::Off, 2, 64, 0});
+      in.push_back({3 * kStepSamples + 100, In::Sustain, 0, 64, 0});
+      const auto all = run(e, 6 * kStepSamples - 10, in);
+      const auto on = ons(all);
+      JCLAP_CHECK_EQ(on.size(), 4u);
+      if (on.size() == 4u) {
+         JCLAP_CHECK_EQ(on[1].m.data1, 64);
+         JCLAP_CHECK_EQ(on[3].m.data1, 64);
+      }
+      // Lifting it ends the note playing then.
+      bool ended = false;
+      for (const Timed &t : all)
+         ended = ended || ((t.m.status & 0xF0) == 0x80 && t.time == 3 * kStepSamples + 100);
+      JCLAP_CHECK(ended);
+   }
+   {
+      // A finger's bend goes again before each note it starts, so a new note starts bent too.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      setPattern(e, pattern({{0, 0, 4}, {0, 1, 4}}));
+      std::vector<In> in = chord({60});
+      in.push_back({500, In::Bend, 1, -1, 2048});
+      const auto all = run(e, 2 * kStepSamples - 10, in);
+      bool bentFirst = false;
+      for (size_t k = 0; k + 1 < all.size(); ++k)
+         bentFirst = bentFirst || (all[k].m.status == 0xE1 && all[k].m.data1 == 0 && all[k].m.data2 == 80 &&
+                                   all[k + 1].on() && all[k + 1].time == kStepSamples);
+      JCLAP_CHECK(bentFirst);
+   }
+   {
+      // Remapped notes keep their finger's expression: in Spread, rows 3 and 4 both land on E4 (on
+      // channel 2), one of them an octave up, and both start with that finger's bend and take its
+      // poly pressure; C4's channel gets none of it.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings st;
+      st.spread = true;
+      e.setSettings(st);
+      Pattern p = pattern({{0, 0, 4}, {1, 1, 4}, {2, 2, 4}, {3, 3, 4}});
+      p.lanes[3].octave = 1;
+      setPattern(e, p);
+      std::vector<In> in = chord({60, 64});
+      in.push_back({500, In::Bend, 2, -1, 4096});
+      const auto all = run(e, 3 * kStepSamples + 100, in);
+      int bentOn = 0, ons2 = 0, wrong = 0;
+      for (size_t k = 0; k < all.size(); ++k) {
+         if (all[k].m.status == 0xE1)
+            ++wrong;
+         if (all[k].on() && all[k].channel() == 2) {
+            ++ons2;
+            bentOn += k > 0 && all[k - 1].m.status == 0xE2 && all[k - 1].m.data2 == 96;
+         }
+      }
+      JCLAP_CHECK_EQ(ons2, 2);
+      JCLAP_CHECK_EQ(bentOn, 2);
+      JCLAP_CHECK_EQ(wrong, 0);
+      std::vector<int> keys;
+      e.forEachSounding(2, 64, [&](int k) { keys.push_back(k); });
+      JCLAP_CHECK_EQ(keys.size(), 1u);
+      if (!keys.empty())
+         JCLAP_CHECK_EQ(keys[0], 76);
+      e.forEachSounding(1, 60, [&](int) { JCLAP_CHECK(false); });
+   }
 }
 
 } // namespace
@@ -467,6 +553,7 @@ int main() {
       JCLAP_CHECK_EQ(f.rows[0].key, 64);
       JCLAP_CHECK_EQ(f.rows[1].key, -1);
    }
+   expressionAndSustain();
    {
       // Latch keeps the chord after letting go, until a new one is played.
       auto eOwner = std::make_unique<Engine>();

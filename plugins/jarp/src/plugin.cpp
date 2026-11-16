@@ -332,6 +332,28 @@ private:
       for (size_t i = 0; i < out_.count; ++i) {
          const MidiOut &m = out_.items[i];
          jclap::core::pushMidi(out, m.time, m.status, m.data1, m.data2);
+         // A CLAP note expression belongs to the note it was sent to, so each arp note the finger
+         // starts gets the finger's pressure, slide and bend again, or it would start from nothing.
+         if ((m.status & 0xF0) == 0x90 && m.data2 > 0 && m.finger >= 0) {
+            const Carried c = engine_.carried(m.finger);
+            static constexpr clap_note_expression ids[] = {CLAP_NOTE_EXPRESSION_PRESSURE, CLAP_NOTE_EXPRESSION_BRIGHTNESS,
+                                                           CLAP_NOTE_EXPRESSION_TUNING};
+            for (int i = 0; i < 3; ++i)
+               if (c.source[i] == Source::Expression) {
+                  clap_event_note_expression_t ev{};
+                  ev.header.size = sizeof(ev);
+                  ev.header.time = m.time;
+                  ev.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+                  ev.header.type = CLAP_EVENT_NOTE_EXPRESSION;
+                  ev.expression_id = ids[i];
+                  ev.note_id = -1;
+                  ev.port_index = 0;
+                  ev.channel = static_cast<int16_t>(m.status & 0x0F);
+                  ev.key = m.data1;
+                  ev.value = i == 2 ? c.value[i] * 48.0 : c.value[i];
+                  out->try_push(out, &ev.header);
+               }
+         }
       }
       out_.clear();
    }
@@ -369,11 +391,11 @@ private:
             return;
          }
          if (ev->expression_id == CLAP_NOTE_EXPRESSION_PRESSURE)
-            engine_.setPressure(channel, key, std::clamp(ev->value, 0.0, 1.0));
+            engine_.setPressure(channel, key, std::clamp(ev->value, 0.0, 1.0), Source::Expression);
          else if (ev->expression_id == CLAP_NOTE_EXPRESSION_BRIGHTNESS)
-            engine_.setSlide(channel, key, std::clamp(ev->value, 0.0, 1.0));
+            engine_.setSlide(channel, key, std::clamp(ev->value, 0.0, 1.0), Source::Expression);
          else if (ev->expression_id == CLAP_NOTE_EXPRESSION_TUNING)
-            engine_.setBend(channel, key, std::clamp(ev->value / 48.0, -1.0, 1.0));
+            engine_.setBend(channel, key, std::clamp(ev->value / 48.0, -1.0, 1.0), Source::Expression);
          if (key < 0) {
             out->try_push(out, h);
             return;
@@ -402,10 +424,17 @@ private:
          engine_.advance(t, out_);
          flush(out);
          if (status == 0xA0) {
-            engine_.setPressure(channel, d1, d2 / 127.0);
+            engine_.setPressure(channel, d1, d2 / 127.0, Source::Poly);
             engine_.forEachSounding(channel, d1, [&](int k) {
                jclap::core::pushMidi(out, t, ev->data[0], static_cast<uint8_t>(k), static_cast<uint8_t>(d2));
             });
+            return;
+         }
+         // The sustain pedal holds the chord's notes for the arp rather than going on to the synth,
+         // which would only smear the arp's own note lengths.
+         if (status == 0xB0 && d1 == 64) {
+            engine_.setSustain(t, d2 >= 64, out_);
+            flush(out);
             return;
          }
          if (status == 0xD0)

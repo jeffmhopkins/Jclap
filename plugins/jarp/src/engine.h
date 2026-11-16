@@ -58,6 +58,22 @@ struct Block {
 struct MidiOut {
    uint32_t time;
    uint8_t status, data1, data2;
+   // For an arp note-on, the finger it comes from (see Engine::carried); -1 otherwise.
+   int8_t finger = -1;
+};
+
+// Where a finger's pressure, slide or bend came from, so it can be carried onto each new note.
+enum class Source : uint8_t {
+   None,
+   Channel,    // MIDI channel pressure, CC74 or pitch bend: sent again on the channel before each note
+   Poly,       // MIDI poly aftertouch: sent again for each note's key
+   Expression, // a CLAP note expression: sent again to each note after it starts
+};
+
+// One finger's expression, for the notes it plays.
+struct Carried {
+   double value[3] = {0.0, 0.0, 0.0}; // pressure, slide (0..1) and bend (-1..1 of 48 semitones)
+   Source source[3] = {Source::None, Source::None, Source::None};
 };
 
 // What the engine sends in one block, without allocating on the audio thread.
@@ -242,7 +258,7 @@ public:
       if (dropLatched_) {
          dropLatched_ = false;
          for (int f = 0; f < kMaxFingers; ++f)
-            if (fingers_[f].used && !fingers_[f].held)
+            if (fingers_[f].used && !fingers_[f].held && !sustain_)
                release(f, 0, out);
       }
    }
@@ -323,6 +339,8 @@ public:
          f.pressure = channels_[channel].pressure;
          f.slide = channels_[channel].slide;
          f.bend = channels_[channel].bend;
+         for (int i = 0; i < 3; ++i)
+            f.source[i] = channels_[channel].source[i];
       }
       f.held = true;
       f.velocity = static_cast<uint8_t>(std::clamp(velocity, 1, 127));
@@ -351,11 +369,25 @@ public:
       const int slot = find(channel & 15, key & 127);
       if (slot < 0)
          return;
-      if (settings_.latch)
+      // Latched, or with the sustain pedal down, the finger stays in the chord after it lets go.
+      if (settings_.latch || sustain_)
          fingers_[slot].held = false;
       else
          release(slot, t, out);
    }
+
+   // The sustain pedal (CC64): while it's down, keys let go stay in the chord and the arp keeps
+   // playing them; lifting it lets go of them (unless Latch keeps them).
+   void setSustain(uint32_t t, bool down, OutBuffer &out) {
+      advance(t, out);
+      const bool lifted = sustain_ && !down;
+      sustain_ = down;
+      if (lifted && !settings_.latch)
+         for (int f = 0; f < kMaxFingers; ++f)
+            if (fingers_[f].used && !fingers_[f].held)
+               release(f, t, out);
+   }
+   bool sustain() const { return sustain_; }
 
    // Lets go of the fingers on (channel, key) whatever Latch says, -1 for any: a host's note
    // choke, or All Notes Off / All Sound Off.
@@ -370,9 +402,25 @@ public:
 
    // Expression from the fingers. A key of -1 means every finger on the channel (MIDI channel
    // pressure, CC74 and pitch bend), and is remembered for the next note on that channel too.
-   void setPressure(int channel, int key, double v) { expression(channel, key, 0, v); }
-   void setSlide(int channel, int key, double v) { expression(channel, key, 1, v); }
-   void setBend(int channel, int key, double v) { expression(channel, key, 2, v); }
+   // `source` says how it came, so each new arp note can be given it again (a synth starts a new
+   // note's own expression from nothing).
+   void setPressure(int channel, int key, double v, Source source = Source::Channel) { expression(channel, key, 0, v, source); }
+   void setSlide(int channel, int key, double v, Source source = Source::Channel) { expression(channel, key, 1, v, source); }
+   void setBend(int channel, int key, double v, Source source = Source::Channel) { expression(channel, key, 2, v, source); }
+
+   // The expression of finger `finger` (MidiOut::finger), to carry onto a note it starts.
+   Carried carried(int finger) const {
+      Carried c;
+      if (finger < 0 || finger >= kMaxFingers)
+         return c;
+      const Finger &f = fingers_[finger];
+      c.value[0] = f.pressure;
+      c.value[1] = f.slide;
+      c.value[2] = f.bend;
+      for (int i = 0; i < 3; ++i)
+         c.source[i] = f.source[i];
+      return c;
+   }
 
    // Calls f(outKey) for each note sounding from the finger on (channel, key), or from every finger
    // on the channel for key -1: where that finger's expression goes.
@@ -474,9 +522,11 @@ private:
       bool used = false, held = false;
       uint8_t channel = 0, key = 0, velocity = 100;
       double pressure = 0.0, slide = 0.0, bend = 0.0;
+      Source source[3] = {Source::None, Source::None, Source::None};
    };
    struct ChannelState {
       double pressure = 0.0, slide = 0.0, bend = 0.0;
+      Source source[3] = {Source::None, Source::None, Source::None};
    };
    struct Pending {
       double m;
@@ -489,6 +539,8 @@ private:
       uint32_t serial = 0;
       int8_t finger = 0;
    };
+
+   static uint8_t toByte(double v) { return static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(v * 127.0)), 0, 127)); }
 
    double clock(uint32_t sample) const { return start_ + sample * perSample_; }
 
@@ -556,16 +608,18 @@ private:
       return n;
    }
 
-   void expression(int channel, int key, int which, double v) {
+   void expression(int channel, int key, int which, double v, Source source) {
       channel &= 15;
       if (key < 0) {
          double *c[] = {&channels_[channel].pressure, &channels_[channel].slide, &channels_[channel].bend};
          *c[which] = v;
+         channels_[channel].source[which] = source;
       }
       for (Finger &f : fingers_)
          if (f.used && f.channel == channel && (key < 0 || f.key == key)) {
             double *d[] = {&f.pressure, &f.slide, &f.bend};
             *d[which] = v;
+            f.source[which] = source;
          }
    }
 
@@ -645,7 +699,21 @@ private:
       Sound &s = sounding_[e.channel][e.key];
       if (s.serial)
          out.push({t, static_cast<uint8_t>(0x80 | e.channel), e.key, 0});
-      out.push({t, static_cast<uint8_t>(0x90 | e.channel), e.key, e.velocity});
+      // The finger's MIDI expression first, as MPE asks, so the note starts bent, pressed and slid
+      // where the finger is now; a host that turns MIDI into notes starts a new note from it.
+      const Finger &f = fingers_[e.finger];
+      const uint8_t ch = e.channel;
+      if (f.source[2] == Source::Channel) {
+         const int b = std::clamp(static_cast<int>(std::lround(f.bend * 8192.0)) + 8192, 0, 16383);
+         out.push({t, static_cast<uint8_t>(0xE0 | ch), static_cast<uint8_t>(b & 127), static_cast<uint8_t>(b >> 7)});
+      }
+      if (f.source[0] == Source::Channel)
+         out.push({t, static_cast<uint8_t>(0xD0 | ch), toByte(f.pressure), 0});
+      if (f.source[1] == Source::Channel)
+         out.push({t, static_cast<uint8_t>(0xB0 | ch), 74, toByte(f.slide)});
+      out.push({t, static_cast<uint8_t>(0x90 | e.channel), e.key, e.velocity, e.finger});
+      if (f.source[0] == Source::Poly)
+         out.push({t, static_cast<uint8_t>(0xA0 | ch), e.key, toByte(f.pressure)});
       s.serial = e.serial;
       s.finger = e.finger;
    }
@@ -681,6 +749,7 @@ private:
    int64_t slotStart_ = 0;
    std::array<Finger, kMaxFingers> fingers_{};
    std::array<ChannelState, 16> channels_{};
+   bool sustain_ = false;
    Sound sounding_[16][128]{};
    Pending pending_[kMaxPending];
    int pendingCount_ = 0;
