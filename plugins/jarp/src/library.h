@@ -349,10 +349,10 @@ inline std::vector<Entry> build() {
 
    // ---- Drum Kit. Hold the drums' keys and the beat plays them: row 1 the kick, 2 the
    // snare, 3 the closed hat, 4 the open hat, which is the order the General MIDI map puts them in
-   // (C1, D1, F#1, A#1). Empty rows rest, so a drum not held stays out. ----
-   add(e, [&] { return Entry{"Four on the Floor", "Drum Kit", "Hold kick, snare, hats (C1 D1 F#1 A#1): a house beat.", {rate(r16), restart(bar), pressVel(0.2)},
+   // (MIDI 36, 38, 42, 46). Empty rows rest, so a drum not held stays out. ----
+   add(e, [&] { return Entry{"Four on the Floor", "Drum Kit", "Hold kick, snare, hats (C2 D2 F#2 A#2): a house beat.", {rate(r16), restart(bar), pressVel(0.2)},
                 {Pat("1s 3t 4s 3t 1s+2s 3t 4s 3t 1s 3t 4s 3t 1s+2s 3t 4s 3t").vel("12 -10 4 -10")}}; });
-   add(e, [&] { return Entry{"Rock Beat", "Drum Kit", "Hold kick, snare, hats (C1 D1 F#1 A#1): a straight rock beat.", {rate(r16), restart(bar), pressVel(0.2)},
+   add(e, [&] { return Entry{"Rock Beat", "Drum Kit", "Hold kick, snare, hats (C2 D2 F#2 A#2): a straight rock beat.", {rate(r16), restart(bar), pressVel(0.2)},
                 {Pat("1s+3s . 3s . 2s+3s . 3s . 1s+3s . 1s+3s . 2s+3s . 4s .").vel("12 . 0 . 10 . 0 . 8 . 6 . 10 . 4 .")}}; });
    add(e, [&] { return Entry{"Rock Song", "Drum Kit", "Three bars of rock beat, then a snare-roll fill, round again.", {rate(r16), restart(bar), advance(loop), pressVel(0.2)},
                 {Pat("1s+3s . 3s . 2s+3s . 3s . 1s+3s . 1s+3s . 2s+3s . 3s .").vel("12 . 0 . 10 . 0 . 8 . 6 . 10 . 0 ."),
@@ -361,22 +361,22 @@ inline std::vector<Entry> build() {
                  Pat("1s+3s . 3s . 2s+3s . 3s . 2s 2s 2s 2s 2s 2s 1s+4s .")
                      .rat(". . . . . . . . 1 1 2 2 3 4 . .")
                      .vel("12 . 0 . 10 . 0 . -12 -8 -4 0 4 8 14 .")}}; });
-   add(e, [&] { return Entry{"Boom Bap Kit", "Drum Kit", "Hold kick, snare and hat (C1 D1 F#1): a swung, dusty beat.", {rate(r16), swing(0.58), restart(bar), pressVel(0.2)},
+   add(e, [&] { return Entry{"Boom Bap Kit", "Drum Kit", "Hold kick, snare and hat (C2 D2 F#2): a swung, dusty beat.", {rate(r16), swing(0.58), restart(bar), pressVel(0.2)},
                 {Pat("1s+3s . 3s . 2s+3s . 3s 1s 3s . 1s+3s . 2s+3s . 3s 1s")
                      .vel("12 . -4 . 10 . -4 2 -4 . 8 . 10 . -4 0")
                      .chc("100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 60")}}; });
-   add(e, [&] { return Entry{"Trap Kit", "Drum Kit", "Hold kick, snare, hats (C1 D1 F#1 A#1): half-time trap rolls.", {rate(r16), restart(bar), pressVel(0.2)},
+   add(e, [&] { return Entry{"Trap Kit", "Drum Kit", "Hold kick, snare, hats (C2 D2 F#2 A#2): half-time trap rolls.", {rate(r16), restart(bar), pressVel(0.2)},
                 {Pat("1s+3t 3t 3t 3t 3t 3t 3t 1s+3t 2s+3t 3t 1s+3t 3t 3 3t 3 4s")
                      .rat(". . . . . . 2 . . . . . 3 . 4 .")
                      .vel("12 -10 0 -10 4 -10 2 8 12 -10 6 -10 2 -10 4 6")}}; });
-   add(e, [&] { return Entry{"Funky Break", "Drum Kit", "Hold kick, snare and hat (C1 D1 F#1): a break with ghost snares.", {rate(r16), swing(0.54), restart(bar), pressVel(0.2)},
+   add(e, [&] { return Entry{"Funky Break", "Drum Kit", "Hold kick, snare and hat (C2 D2 F#2): a break with ghost snares.", {rate(r16), swing(0.54), restart(bar), pressVel(0.2)},
                 {Pat("1s+3s 3s 1s+3s 3s 2s+3s 3s 3s 2t+3s 3s 2t+3s 1s+3s 3s 2s+3s 3s 1s+3s 2t")
                      .vel("12 -10 8 -10 14 -10 -4 -24 4 -24 8 -10 14 -10 4 -26")}}; });
-   add(e, [&] { return Entry{"Drum and Bass Beat", "Drum Kit", "Hold kick, snare and hat (C1 D1 F#1): two-step DnB; play it fast.", {rate(r16), restart(bar), pressVel(0.2)},
+   add(e, [&] { return Entry{"Drum and Bass Beat", "Drum Kit", "Hold kick, snare and hat (C2 D2 F#2): two-step DnB; play it fast.", {rate(r16), restart(bar), pressVel(0.2)},
                 {Pat("1s+3s . 3s . 2s+3s . 3s . 3s . 1s+3s . 2s+3s . 3s 2t").vel("12 . -4 . 12 . -4 . -2 . 8 . 12 . -4 -20")}}; });
    add(e, [&] { return Entry{"One Drop Kit", "Drum Kit", "Hold kick, snare, hats: reggae, kick and snare together on three.", {rate(r16), swing(0.6), restart(bar), pressVel(0.2)},
                 {Pat("3s . 3s . 3s . 3s . 1s+2s+3s . 3s . 3s . 4s .").vel("0 . -6 . 2 . -6 . 12 . -6 . 2 . 4 .")}}; });
-   add(e, [&] { return Entry{"Shuffle Kit", "Drum Kit", "Hold kick, snare and hat (C1 D1 F#1): a triplet blues shuffle.", {rate(r8T), restart(bar), pressVel(0.2)},
+   add(e, [&] { return Entry{"Shuffle Kit", "Drum Kit", "Hold kick, snare and hat (C2 D2 F#2): a triplet blues shuffle.", {rate(r8T), restart(bar), pressVel(0.2)},
                 {Pat("1s+3s . 3t 2s+3s . 3t 1s+3s . 3t 2s+3s . 3t").vel("12 . -10 10 . -10 8 . -10 10 . -10")}}; });
 
    // ---- Percussion: percussion figures for pitched sounds (a bell, mallet, pluck or

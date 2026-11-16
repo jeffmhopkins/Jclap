@@ -280,8 +280,9 @@ The **Grooves** are bass lines, by style. They play the lowest notes you hold an
 the chord in the middle of the keyboard and route JArp into a bass patch.
 
 The **Drum Kit** presets play a kit from the keys you hold: row 1 is the kick, 2 the snare, 3 the
-closed hat and 4 the open hat, the order the General MIDI drum map puts them in. Hold C1, D1, F#1 and
-A#1 (36, 38, 42, 46) and route JArp into a drum machine or sampler. Empty rows rest, so a drum you
+closed hat and 4 the open hat, the order the General MIDI drum map puts them in. Hold MIDI notes 36,
+38, 42 and 46 (C2, D2, F#2 and A#2 as JArp names them, with middle C as C4; a host that calls middle
+C C3 names them C1, D1, F#1 and A#1) and route JArp into a drum machine or sampler. Empty rows rest, so a drum you
 don't hold stays out; let go of the hat key and the hats drop. The **Percussion** presets are hand
 and mallet figures (clave, cascara, conga, bell, tabla) for any pitched sound, walking the notes held.
 
