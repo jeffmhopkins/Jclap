@@ -18,6 +18,9 @@ Version 0.11.0.
 
 ![Panel](docs/panel.png)
 
+Hover over a control for a one-line tip. The grid and the lanes have none, so nothing pops up while
+you draw.
+
 ## The grid
 
 Eight rows by up to 128 steps, sixteen in view at a time. Row 1 is at the bottom.

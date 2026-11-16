@@ -1327,8 +1327,7 @@ public:
       };
       presets_->onDice = [this] { showDice(!host_.diceOpen); };
       presets_->diceLit = [this] { return host_.diceOpen; };
-      tips_.add(*presets_, "Presets: the arrows step through them, the name opens the menu, the star marks a favorite and "
-                           "SAVE keeps the current settings and all eight patterns. The die opens the dice.");
+      tips_.add(*presets_, "Step through presets, open the list, favorite, or SAVE. The die opens the dice.");
 
       // PATTERN: the grid and its lanes, with how rows are picked in its title row.
       add<ui::Section>({12, 76, 876, 478}, "PATTERN");
@@ -1338,25 +1337,18 @@ public:
          grid_->redraw();
          lanes_->redraw();
       };
-      tips_.add(*slots_, "Patterns 1 to 8: click one to play and edit it (the Pattern param, which the host can "
-                         "automate). Lit numbers have notes; the orange bar is the one playing. Right-click to copy, "
-                         "paste, clear, or load a pattern from a preset into it. Empty patterns are skipped when the chain "
-                         "advances.");
+      tips_.add(*slots_, "Patterns 1 to 8. Click to play and edit; right-click to copy, paste, clear or load.");
       tips_.add(choice(kAdvance, {340, 89, 128, 22}, {"OFF", "CHORD", "LOOP"}),
-                "Advance: Off plays the pattern selected. Chord moves to the next pattern with notes each time you "
-                "play a new chord after letting go of every note. Loop moves on each time the pattern ends.");
+                "Off: one pattern. Chord: next pattern on each new chord. Loop: next when one ends.");
       rowsLabel(470, "ROWS BY");
       auto &rowsBy = add<ui::Dropdown>({552, 89, 92, 22}, std::vector<std::string>{"PITCH", "DEGREE", "HELD DEGREE", "SPREAD"});
       rowsBy.setAccent(kSlate);
       bindings_.bind(rowsBy, kRowsBy);
-      tips_.add(rowsBy, "Pitch: row 1 is the lowest note held, row 2 the next up, and so on. Degree: rows count up the "
-                        "scale from the lowest note held; a degree that isn't held plays the nearest note that is. Held "
-                        "Degree: the same, but a degree that isn't held stays silent. Spread: the pattern's bottom row plays "
-                        "the lowest note held and its top row the highest, the rows between spread over the notes between.");
+      tips_.add(rowsBy, "How rows map to held notes: by pitch, by scale degree, held degrees only, or spread "
+                        "across the chord.");
       emptyLabel_ = &rowsLabel(669, "EMPTY ROWS");
       empty_ = &choice(kEmptyRows, {752, 89, 120, 22}, {"REST", "WRAP", "OCT"});
-      tips_.add(*empty_, "Rows above the notes held: Rest stays silent; Wrap starts again from the lowest note; Oct "
-                         "starts again an octave up each time, like an arpeggiator's octave range.");
+      tips_.add(*empty_, "Rows above the notes held: rest, wrap to the lowest, or wrap an octave up.");
       scaleLabel_ = &rowsLabel(650, "SCALE");
       key_ = &add<ui::Dropdown>({735, 89, 52, 22}, std::vector<std::string>(std::begin(kKeyNames), std::end(kKeyNames)));
       key_->setAccent(kSlate);
@@ -1364,23 +1356,15 @@ public:
       scale_ = &add<ui::Dropdown>({793, 89, 79, 22}, std::vector<std::string>{"MAJOR", "MINOR"});
       scale_->setAccent(kSlate);
       bindings_.bind(*scale_, kScale);
-      tips_.add(*key_, "The scale's key, for Degree rows.");
-      tips_.add(*scale_, "The scale Degree rows count up. Where two held notes are equally near a degree, the one in "
-                         "the scale wins.");
+      tips_.add(*key_, "The key for Degree rows.");
+      tips_.add(*scale_, "The scale Degree rows count up.");
 
       grid_ = &add<GridView>({20, 116, 862, 324}, host_, scroll_);
       grid_->onScroll = [this] { lanes_->redraw(); };
       grid_->onEdit = [this](const Pattern &p) { edit(p); };
-      tips_.add(*grid_, "Press an empty cell and drag to paint notes; press a note and drag to erase them. Drag a note's "
-                        "right edge (lit white) to set how long it sounds. Shift-drag a box (or shift-click) to pick notes, "
-                        "then drag a picked note to move them all; Alt-drag moves one that isn't picked. Right-click a note "
-                        "to give it lane values of its own. Drag the purple bar to set the pattern's length.");
       add<ui::Divider>({27, 445, 846, 1});
       lanes_ = &add<LaneView>({20, 450, 862, 96}, host_, scroll_);
       lanes_->onEdit = [this](const Pattern &p) { edit(p); };
-      tips_.add(*lanes_, "Per step, for the notes starting on it: drag up or down, scroll, or double-click to reset. "
-                         "Click P to make that step's ratchet follow pressure. Chance is how often the step plays, in percent. With notes picked (right-click them), "
-                         "a picked note's column sets the own values of every picked note; double-click gives one back to the step.");
 
       // Settings.
       add<SettingsCard>({12, 568, 876, 142});
@@ -1399,29 +1383,20 @@ public:
          p.length = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(v)), 1, kSteps));
          edit(p);
       };
-      tips_.add(*length_, "How many steps this pattern plays before it loops; each pattern has its own. The purple bar "
-                          "on the grid is the same.");
+      tips_.add(*length_, "Steps before this pattern loops. Same as the purple bar.");
       heading("LATCH", 270, 606);
-      tips_.add(choice(kLatch, {270, 624, 80, 22}, {"OFF", "ON"}),
-                "On: the notes keep playing after you let go, until you play a new chord.");
+      tips_.add(choice(kLatch, {270, 624, 80, 22}, {"OFF", "ON"}), "Keep playing after you let go, until a new chord.");
       heading("RANGE", 360, 606);
       auto &range = add<ui::Dropdown>({360, 624, 50, 22}, std::vector<std::string>{"1 OCT", "2 OCT", "3 OCT", "4 OCT"});
       range.setAccent(kSlate);
       bindings_.bind(range, kRange);
-      tips_.add(range, "How far above the lowest note you hold a note may be moved up by octaves (by OCT rows or the "
-                       "Octave lane). A note that would go higher drops back down by octaves until it fits.");
+      tips_.add(range, "How far octave shifts may climb before folding back down.");
       heading("RESTART", 270, 652);
       tips_.add(choice(kRestart, {270, 670, 138, 22}, {"SONG", "NOTE", "BAR"}),
-                "Where the pattern starts: Song locks it to the song position, so a chord played half way through "
-                "the pattern starts half way through it (and a Loop chain plays along the song); Note starts it "
-                "with the first note you play; Bar starts it at the bar the first note is in.");
-      tips_.add(knob(kPressVelocity, "VELOCITY", kBlue, 452, 606),
-                "How far each note's velocity follows its finger's pressure instead of how hard the key was struck. The "
-                "Velocity lane's offset is added after.");
-      tips_.add(knob(kCurve, "CURVE", kBlue, 560, 606, true),
-                "How pressure maps: Soft reaches high values with a light touch, Hard needs a firm press.");
-      tips_.add(knob(kPressRatchet, "RATCHET", kBlue, 670, 606),
-                "How far pressure adds hits on steps with P lit, from the step's own count up to Max Hits.");
+                "Song: locked to the song position. Note: from your first note. Bar: from that bar.");
+      tips_.add(knob(kPressVelocity, "VELOCITY", kBlue, 452, 606), "How much pressure sets each note's velocity.");
+      tips_.add(knob(kCurve, "CURVE", kBlue, 560, 606, true), "Soft: a light touch goes far. Hard: needs a firm press.");
+      tips_.add(knob(kPressRatchet, "RATCHET", kBlue, 670, 606), "How much pressure adds hits on steps with P lit.");
       tips_.add(knob(kMaxHits, "MAX HITS", kBlue, 780, 606), "The most hits a pressed P step splits into.");
 
       buildDice();
@@ -1559,7 +1534,7 @@ private:
          paste_->setAccent(kOrange);
          paste_->redraw();
       };
-      tips_.add(copy, "Copies the pattern on show, to paste into another slot.");
+      tips_.add(copy, "Copy the pattern on the grid.");
       paste_ = &add<ui::Button>({416, 18, 58, 28}, "PASTE");
       paste_->onClick = [this] {
          if (!slots_->canPaste())
@@ -1568,15 +1543,14 @@ private:
          slots_->paste(scroll_.view);
          slotEdited();
       };
-      tips_.add(*paste_, "Replaces the pattern on show with the one last copied (lit once there is one).");
+      tips_.add(*paste_, "Paste over the pattern on the grid.");
       auto &clear = add<ui::Button>({478, 18, 56, 28}, "CLEAR");
       clear.onClick = [this] {
          host_.diceHistory.push(DiceState(shown(), scroll_.view));
          slots_->clear(scroll_.view);
          slotEdited();
       };
-      tips_.add(clear, "Takes every note out of the pattern on show, keeping its length. The dice card's UNDO brings "
-                       "it back.");
+      tips_.add(clear, "Clear every note from the pattern on the grid.");
    }
 
    void slotEdited() {
@@ -1596,12 +1570,12 @@ private:
       rnd.setAccent(kOrange);
       rnd.onClick = [this] { roll(false); };
       keep(rnd);
-      tips_.add(rnd, "A new pattern from a plain base, each ticked item rolled within its range.");
+      tips_.add(rnd, "A new pattern, each ticked item rolled.");
       auto &mut = add<ui::Button>({b.x + 16, b.y + 92, 150, 33}, "MUTATE");
       mut.setAccent(kOrange);
       mut.onClick = [this] { roll(true); };
       keep(mut);
-      tips_.add(mut, "Nudges the pattern you have, each ticked item by up to its range. Click again to keep going.");
+      tips_.add(mut, "Nudge the pattern you have. Click again to keep going.");
       undo_ = &add<ui::Button>({b.x + b.w - 136, b.y + 14, 58, 22}, "UNDO");
       undo_->onClick = [this] { stepHistory(false); };
       keep(*undo_);
@@ -1625,7 +1599,7 @@ private:
             card_->redraw();
          };
          keep(tick);
-         tips_.add(tick, "Ticked, the dice roll this; unticked, it stays as it is.");
+         tips_.add(tick, "Ticked items change when you roll.");
       }
       const auto range = [&](int i, ui::ValueRange r, double value, std::function<std::string(double)> show,
                              std::function<void(double)> set) {
@@ -1673,17 +1647,17 @@ private:
       cat.setSelected(std::clamp(host_.dice.presetCategory, 0, static_cast<int>(cats.size()) - 1));
       cat.onChange = [this](int i) { host_.dice.presetCategory = i; };
       keep(cat);
-      tips_.add(cat, "Where a random preset comes from: any factory preset, or one category.");
+      tips_.add(cat, "Where a random preset comes from.");
       auto &all = add<ui::Button>({b.x + 174, py, 80, 26}, "PRESET");
       all.setAccent(kOrange);
       all.onClick = [this] { randomPreset(false); };
       keep(all);
-      tips_.add(all, "Loads a random factory preset: its settings and all its patterns. UNDO brings back what you had.");
+      tips_.add(all, "Load a random factory preset. UNDO brings back what you had.");
       auto &one = add<ui::Button>({b.x + 260, py, 82, 26}, "INTO SLOT");
       one.setAccent(kOrange);
       one.onClick = [this] { randomPreset(true); };
       keep(one);
-      tips_.add(one, "Puts one random pattern from the factory presets into the selected slot, leaving the rest as it is.");
+      tips_.add(one, "Put one random factory pattern into this slot.");
    }
 
    void roll(bool mutate) {
