@@ -88,6 +88,8 @@ struct Pattern {
    // BOUNCE: plays up to the last step and back down again (1 2 3 4 3 2 ...), the first and last
    // steps once each time round, rather than looping from the start.
    uint8_t bounce = 0;
+   // REPEAT ENDS, with BOUNCE: the first and last steps play twice at the turns (1 2 3 4 4 3 2 1 ...).
+   uint8_t repeatEnds = 0;
    uint16_t count = 0;
    std::array<Note, kMaxNotes> notes{};
    std::array<Lane, kSteps> lanes{};
@@ -95,7 +97,7 @@ struct Pattern {
    // The same notes (in any order) and lanes.
    bool operator==(const Pattern &o) const {
       if (length != o.length || count != o.count || lanes != o.lanes || byHeld != o.byHeld || times != o.times ||
-          plus != o.plus || bounce != o.bounce)
+          plus != o.plus || bounce != o.bounce || repeatEnds != o.repeatEnds)
          return false;
       for (int i = 0; i < count; ++i) {
          const int j = o.noteStarting(notes[i].row, notes[i].step);
@@ -185,26 +187,32 @@ struct Pattern {
          return std::clamp(held * std::max<int>(times, 1) + plus, 1, kSteps);
       return std::clamp<int>(length, 1, kSteps);
    }
-   // How many musical steps it takes to come round once: its steps, or with BOUNCE up and back.
+   // How many musical steps it takes to come round once: its steps, or with BOUNCE up and back
+   // (the ends twice with REPEAT ENDS).
    int cycleFor(int held) const {
       const int n = stepsFor(held);
+      if (bounce && repeatEnds)
+         return 2 * n;
       return bounce && n > 2 ? 2 * n - 2 : n;
    }
    // The pattern step it plays on musical step `k` of its cycle (any k, wrapped).
    int stepAt(int64_t k, int held) const {
       const int n = stepsFor(held), cycle = cycleFor(held);
       const int at = static_cast<int>(((k % cycle) + cycle) % cycle);
-      return at < n ? at : 2 * n - 2 - at;
+      if (at < n)
+         return at;
+      return bounce && repeatEnds ? 2 * n - 1 - at : 2 * n - 2 - at;
    }
 
    // The saved form: a version byte, the length, the note count (two bytes), each note's row, step,
    // length (two bytes) and own bits, with its own lane's five bytes after them when it has any,
    // then the lane count and each lane's five bytes (octave, ratchet, pressure, velocity, chance), up
    // to the last lane that isn't plain, then (version 6) LENGTH by HELD, its times and plus, and
-   // BOUNCE. Version 5 (no HELD or BOUNCE), version 4 (four-byte lanes, no chance) and versions 1 to 3
-   // (no own lanes; 1 and 2 with 16 steps and one-byte counts and lengths) still load; a version 1
-   // pattern keeps the length it had.
-   static constexpr uint8_t kVersion = 6;
+   // BOUNCE, then (version 7) REPEAT ENDS. Version 6 (no REPEAT ENDS), version 5 (no HELD or
+   // BOUNCE), version 4 (four-byte lanes, no chance) and versions 1 to 3 (no own lanes; 1 and 2
+   // with 16 steps and one-byte counts and lengths) still load; a version 1 pattern keeps the length
+   // it had.
+   static constexpr uint8_t kVersion = 7;
    std::vector<uint8_t> save() const {
       std::vector<uint8_t> b;
       b.push_back(kVersion);
@@ -231,6 +239,7 @@ struct Pattern {
       b.push_back(times);
       b.push_back(static_cast<uint8_t>(plus));
       b.push_back(bounce);
+      b.push_back(repeatEnds);
       return b;
    }
    bool load(const uint8_t *data, size_t size) {
@@ -285,6 +294,12 @@ struct Pattern {
          p.times = static_cast<uint8_t>(std::clamp<int>(data[at + 1], 1, kMaxTimes));
          p.plus = static_cast<int8_t>(std::clamp<int>(static_cast<int8_t>(data[at + 2]), -kSteps, kSteps));
          p.bounce = data[at + 3] ? 1 : 0;
+         at += 4;
+      }
+      if (version >= 7) {
+         if (size < at + 1)
+            return false;
+         p.repeatEnds = data[at] ? 1 : 0;
       }
       *this = p;
       return true;

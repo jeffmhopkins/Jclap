@@ -1239,6 +1239,7 @@ public:
       empty.times = was.times;
       empty.plus = was.plus;
       empty.bounce = was.bounce;
+      empty.repeatEnds = was.repeatEnds;
       host_.setSlot(slot, empty);
    }
 
@@ -1252,6 +1253,52 @@ private:
 
 // The settings card: Timing, Playback and Pressure, each under a grey heading and rule, with thin
 // dividers between them.
+// A small check box with its label, for an on/off that sits under another control. Dimmed while
+// what it qualifies is off (it can still be set).
+class CheckBox : public visage::Frame {
+public:
+   explicit CheckBox(std::string label) : label_(std::move(label)) {}
+
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      const ui::Theme &t = ui::defaultTheme();
+      const float a = active_ ? 1.0f : 0.45f, box = 11, y = (height() / s - box) / 2;
+      if (on_) {
+         c.setColor(alpha(kSlate, a));
+         c.roundedRectangle(0, y * s, box * s, box * s, 2.5f * s);
+         c.setColor(alpha(kOrange, a));
+         c.roundedRectangle(3 * s, (y + 3) * s, (box - 6) * s, (box - 6) * s, 1.5f * s);
+      }
+      c.setColor(alpha(t.dimText, a));
+      c.roundedRectangleBorder(0, y * s, box * s, box * s, 2.5f * s, 1.0f * s);
+      c.setColor(alpha(on_ ? t.text : t.dimText, a));
+      c.text(label_, ui::font(9 * s), visage::Font::kLeft, (box + 5) * s, 0, width() - (box + 5) * s, height());
+   }
+   void mouseDown(const visage::MouseEvent &) override {
+      on_ = !on_;
+      redraw();
+      if (onToggle)
+         onToggle(on_);
+   }
+   void setOn(bool on) {
+      if (on != on_) {
+         on_ = on;
+         redraw();
+      }
+   }
+   void setActive(bool active) {
+      if (active != active_) {
+         active_ = active;
+         redraw();
+      }
+   }
+   std::function<void(bool)> onToggle;
+
+private:
+   std::string label_;
+   bool on_ = false, active_ = true;
+};
+
 class SettingsCard : public visage::Frame {
 public:
    void draw(visage::Canvas &c) override {
@@ -1606,8 +1653,8 @@ public:
          edit(p);
       };
       tips_.add(*byHeld_, "Steps: a set length. Held: so many steps for each note you hold, plus or minus a few.");
-      heading("DIRECTION", 190, 652);
-      bounce_ = &add<ui::SegmentedSwitch>(ui::Rect{190, 670, 100, 22}, std::vector<std::string>{"ONE WAY", "BOUNCE"});
+      heading("DIRECTION", 190, 650);
+      bounce_ = &add<ui::SegmentedSwitch>(ui::Rect{190, 667, 100, 22}, std::vector<std::string>{"ONE WAY", "BOUNCE"});
       bounce_->setTheme(switchTheme());
       bounce_->setAccent(kSlate);
       bounce_->onChange = [this](int i) {
@@ -1616,6 +1663,13 @@ public:
          edit(p);
       };
       tips_.add(*bounce_, "One way: step 1 to the end, then round again. Bounce: up to the end and back down.");
+      repeatEnds_ = &add<CheckBox>(ui::Rect{190, 692, 100, 13}, "REPEAT ENDS");
+      repeatEnds_->onToggle = [this](bool on) {
+         Pattern p = shown();
+         p.repeatEnds = on ? 1 : 0;
+         edit(p);
+      };
+      tips_.add(*repeatEnds_, "With Bounce: the first and last steps play twice at the turns (1 2 3 4 4 3 2 1).");
       timesLabel_ = &heading("TIMES", 300, 606);
       times_ = &add<ui::NumberBox>(ui::Rect{300, 624, 72, 22}, ui::ValueRange{1, kMaxTimes, 1, 1.0, false, true});
       times_->setStepButtons(true);
@@ -1626,8 +1680,8 @@ public:
          edit(p);
       };
       tips_.add(*times_, "Steps for each note held.");
-      plusLabel_ = &heading("PLUS", 300, 652);
-      plus_ = &add<ui::NumberBox>(ui::Rect{300, 670, 72, 22}, ui::ValueRange{-16, 16, 0, 1.0, true, true});
+      plusLabel_ = &heading("PLUS", 300, 650);
+      plus_ = &add<ui::NumberBox>(ui::Rect{300, 667, 72, 22}, ui::ValueRange{-16, 16, 0, 1.0, true, true});
       plus_->setStepButtons(true);
       plus_->valueText = [](double v) {
          const int n = static_cast<int>(std::lround(v));
@@ -1699,6 +1753,8 @@ public:
          const bool held = p.byHeld != 0;
          byHeld_->setSelected(held ? 1 : 0);
          bounce_->setSelected(p.bounce ? 1 : 0);
+         repeatEnds_->setOn(p.repeatEnds != 0);
+         repeatEnds_->setActive(p.bounce != 0);
          length_->setVisible(!held);
          timesLabel_->setVisible(held);
          plusLabel_->setVisible(held);
@@ -2078,6 +2134,7 @@ private:
    ui::Knob *length_ = nullptr;
    SettingsCard *settings_ = nullptr;
    ui::SegmentedSwitch *byHeld_ = nullptr, *bounce_ = nullptr;
+   CheckBox *repeatEnds_ = nullptr;
    ui::NumberBox *times_ = nullptr, *plus_ = nullptr;
    ui::Label *timesLabel_ = nullptr, *plusLabel_ = nullptr;
    LaneView *lanes_ = nullptr;
