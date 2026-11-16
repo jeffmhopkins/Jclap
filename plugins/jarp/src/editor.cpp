@@ -6,9 +6,10 @@
 // Colour carries meaning: orange is notes, timing and the row playing; blue is pressure; purple is
 // only the pattern's end and the slide bar; grey is labels and selected switches.
 //
-// The grid: click an empty cell for a one-step note and drag right to lengthen it as you add it;
-// drag a note's right edge to set how long it sounds (quarter steps, stopping at the next note in
-// the row); click a note to remove it. Drag the purple bar (or its tab) to set the pattern's length.
+// The grid: press an empty cell and drag to paint notes, press a note and drag to erase them; drag
+// a note's lit right edge to set how long it sounds (quarter steps, stopping at the next note in the
+// row); shift-drag a box to pick notes and drag a picked one to move them. Drag the purple bar (or
+// its tab) to set the pattern's length.
 // Each row's label shows the held note it plays, with that finger's pressure, slide and bend as
 // three hairlines along its bottom.
 
@@ -454,24 +455,22 @@ public:
       const int at = p.noteAt(row, std::min(quarter, kMaxLength - 1));
       const int slot = scroll_.view;
       // Right-click picks a note (or lets it go) for editing its own lane values below; shift-click
-      // (either button) adds it to the picked notes or takes it out. From an empty cell, either drags
-      // out a box that picks the notes it touches.
+      // adds it to the picked notes or takes it out. Shift-drag from anywhere, or right-drag from an
+      // empty cell, draws a box that picks the notes it touches; drag a picked note to move them all.
       const bool adding = e.isShiftDown();
       if (e.shouldTriggerPopup() || adding) {
-         if (at >= 0) {
+         if (at >= 0 && !adding) {
             const std::vector<int> now = scroll_.picked(p, slot);
-            if (adding)
-               scroll_.toggle(slot, p.notes[at]);
-            else if (now.size() == 1 && now[0] == at)
+            if (now.size() == 1 && now[0] == at)
                scroll_.unpick();
             else
                scroll_.pick(slot, p.notes[at]);
             redrawAll();
             return;
          }
-         if (!adding)
-            scroll_.unpick();
-         else if (scroll_.pickSlot != slot)
+         if (at >= 0)
+            scroll_.toggle(slot, p.notes[at]);
+         else if (!adding || scroll_.pickSlot != slot)
             scroll_.unpick();
          boxBase_ = scroll_.picks;
          boxX0_ = boxX1_ = x;
@@ -491,8 +490,17 @@ public:
             moved_ = false;
             return;
          }
-         // Dragging a note moves it (and the other picked notes with it, if it's picked); a click
-         // without a drag removes it, on the way up.
+         // Pressing an unpicked note erases it, and every note the mouse passes until it lets go.
+         // A picked note (or any, with Alt/Option held) drags to move instead, the other picked
+         // notes with it; a click on it without a drag removes it, on the way up.
+         if (!scroll_.isPicked(p, slot, at) && !e.isAltDown()) {
+            drag_ = Drag::Erase;
+            lastX_ = x;
+            lastY_ = y;
+            erase(next, at);
+            commit(next);
+            return;
+         }
          drag_ = Drag::Move;
          note_ = at;
          moveBase_ = p;
@@ -511,15 +519,49 @@ public:
          scroll_.unpick();
          redrawAll();
       }
+      // Pressing an empty cell paints: a one-step note there, and in every empty cell the mouse
+      // passes until it lets go.
       if (!next.add(row, first + col, kQuarters))
          return;
       commit(next);
-      // A new note's length follows a drag to the right, but only a deliberate one: a click that
-      // wobbles stays a one-step note.
-      drag_ = Drag::Length;
-      note_ = next.count - 1;
-      pressX_ = x;
-      moved_ = false;
+      drag_ = Drag::Paint;
+      lastX_ = x;
+      lastY_ = y;
+   }
+
+   // Paints or erases along the mouse's path from where it last was, so a quick drag skips no cell.
+   void stroke(float x, float y) {
+      Pattern next = shown();
+      const float dx = x - lastX_, dy = y - lastY_;
+      const int n = std::max(1, static_cast<int>(std::ceil(std::max(std::abs(dx), std::abs(dy)) / 4.0f)));
+      for (int k = 1; k <= n; ++k) {
+         const float px = lastX_ + dx * k / n, py = lastY_ + dy * k / n;
+         const int col = static_cast<int>(std::floor((px - kGridX) / kColumn));
+         const int row = 7 - static_cast<int>(std::floor((py - kGridY) / kRowPitch));
+         if (col < 0 || col >= kView || row < 0 || row >= kRows || py < kGridY)
+            continue;
+         const int step = scroll_.first + col;
+         if (drag_ == Drag::Paint) {
+            if (step < length() && next.noteAt(row, step * kQuarters) < 0)
+               next.add(row, step, kQuarters);
+         }
+         else {
+            const int quarter = scroll_.first * kQuarters + static_cast<int>(std::floor((px - kGridX) / kColumn * kQuarters));
+            if (const int at = next.noteAt(row, std::min(quarter, kMaxLength - 1)); at >= 0)
+               erase(next, at);
+         }
+      }
+      lastX_ = x;
+      lastY_ = y;
+      if (next != shown())
+         commit(next);
+   }
+
+   // Takes note `at` out of `p`, and out of the picks.
+   void erase(Pattern &p, int at) {
+      const std::pair<int, int> k{p.notes[at].row, p.notes[at].step};
+      scroll_.picks.erase(std::remove(scroll_.picks.begin(), scroll_.picks.end(), k), scroll_.picks.end());
+      p.remove(at);
    }
 
    void mouseDrag(const visage::MouseEvent &e) override {
@@ -527,6 +569,10 @@ public:
       const float x = e.position.x / s, y = e.position.y / s;
       if (drag_ == Drag::Scroll) {
          scrollTo(x);
+         return;
+      }
+      if (drag_ == Drag::Paint || drag_ == Drag::Erase) {
+         stroke(x, y);
          return;
       }
       if (drag_ == Drag::Box) {
@@ -657,7 +703,7 @@ public:
    std::function<void()> onScroll;
 
 private:
-   enum class Drag { None, Length, End, Scroll, Move, Box };
+   enum class Drag { None, Length, End, Scroll, Move, Box, Paint, Erase };
 
    // Picks the notes the box touches, with those picked before it when shift started it.
    void pickBox() {
@@ -728,6 +774,8 @@ private:
    // The note whose length handle the mouse is over, lit; where a length drag started.
    int hoverEdge_ = -1;
    float pressX_ = 0.0f;
+   // A paint or erase stroke: where the mouse last was.
+   float lastX_ = 0.0f, lastY_ = 0.0f;
    static constexpr float kEdgeW = 5.0f, kDragSlop = 6.0f;
    // A move: the pattern before it, where it started, the notes moving and the picks before it.
    Pattern moveBase_;
@@ -1323,10 +1371,10 @@ public:
       grid_ = &add<GridView>({20, 116, 862, 324}, host_, scroll_);
       grid_->onScroll = [this] { lanes_->redraw(); };
       grid_->onEdit = [this](const Pattern &p) { edit(p); };
-      tips_.add(*grid_, "Click a cell for a note and drag right to lengthen it; drag a note's right edge to set how "
-                        "long it sounds; drag a note to move it; click a note to remove it. Right-click a note to give it lane "
-                        "values of its own; shift-click to pick more, or right-drag a box around them. Dragging a picked note "
-                        "moves them all. Drag the purple bar to set the pattern's length.");
+      tips_.add(*grid_, "Press an empty cell and drag to paint notes; press a note and drag to erase them. Drag a note's "
+                        "right edge (lit white) to set how long it sounds. Shift-drag a box (or shift-click) to pick notes, "
+                        "then drag a picked note to move them all; Alt-drag moves one that isn't picked. Right-click a note "
+                        "to give it lane values of its own. Drag the purple bar to set the pattern's length.");
       add<ui::Divider>({27, 445, 846, 1});
       lanes_ = &add<LaneView>({20, 450, 862, 96}, host_, scroll_);
       lanes_->onEdit = [this](const Pattern &p) { edit(p); };

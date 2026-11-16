@@ -22,20 +22,23 @@ Version 0.11.0.
 
 Eight rows by up to 128 steps, sixteen in view at a time. Row 1 is at the bottom.
 
-- **Click an empty cell** for a one-step note, and drag right while you hold the button to make it
-  longer. The length only follows a deliberate drag, so a click that wobbles stays a one-step note.
+- **Paint**: press an empty cell for a one-step note, and keep the button down to drag across the
+  grid: every empty cell the mouse passes gets a note too, until you let go.
+- **Erase**: press a note to remove it, and keep the button down to drag: every note the mouse passes
+  is removed too, until you let go.
 - **Drag a note's right edge** to set how long it sounds, in quarter steps, from a quarter of a step to
   the whole pattern. A note stops at the next note in its row. The handle is a narrow strip just
-  inside the edge: it lights white, and the pointer turns to a resize arrow, when you're on it.
-  Anywhere else on the note moves or removes it.
-- **Drag a note** to move it to another step or row. It keeps its length (shortened if it lands just
-  before another note) and its own lane values. Drag one of several picked notes and they all move
-  together, keeping their shape. A move that would take a note off the grid, past the pattern's end
-  or onto another note stops where it last fit.
-- **Click a note** (without dragging) to remove it.
-- **Right-click a note** to pick it and give it lane values of its own (see [the lanes](#the-lanes)).
-  **Shift-click** notes to pick more of them, or to drop one from the pick. **Right-drag** from an
-  empty cell to draw a box: it picks every note it touches (with shift, it adds them to the pick).
+  inside the edge: it lights white, and the pointer turns to a resize arrow, when you're on it. The
+  length only follows a deliberate drag, so a click that wobbles leaves it as it was.
+- **Pick notes** to move them or give them lane values of their own (see [the lanes](#the-lanes)):
+  **shift-drag** from anywhere draws a box that picks every note it touches (adding to what's
+  picked), **shift-click** a note to add it to the pick or drop it, and **right-click** a note to pick
+  just that one. **Right-drag** from an empty cell draws a box too. Picked notes have a white edge.
+- **Drag a picked note** to move every picked note together, keeping their shape and each note's
+  length (shortened if it lands just before another note) and lane values. A move that would take a
+  note off the grid, past the pattern's end or onto another note stops where it last fit. Hold
+  **Alt** (Option on a Mac) to drag a note that isn't picked. Clicking a picked note without dragging
+  removes it.
 - **Drag the purple bar** (or its tab) to set the pattern's length, from 1 to 128 steps. Drag it past
   the right edge and the grid scrolls on with it. The LENGTH knob is the same setting. Each pattern
   has its own length.
