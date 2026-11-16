@@ -133,9 +133,10 @@ struct Pat {
       p.plus = static_cast<int8_t>(std::clamp(plus, -16, 16));
       return *this;
    }
-   // BOUNCE: up to the last step and back down.
-   Pat &bounce() {
+   // BOUNCE: up to the last step and back down; with `repeatEnds` the ends play twice at the turns.
+   Pat &bounce(bool repeatEnds = false) {
       p.bounce = 1;
+      p.repeatEnds = repeatEnds ? 1 : 0;
       return *this;
    }
 
@@ -233,6 +234,8 @@ inline std::vector<Entry> build() {
                 {Pat("8 7 6 5 4 3 2 1")}}; });
    add(e, [&] { return Entry{"Up Down", "Basics", "Up through the held notes and back, without doubling the ends.", {octRows, rate(r16)},
                 {Pat("1 2 3 4 5 6 7 8").held().bounce()}}; });
+   add(e, [&] { return Entry{"Up Down Repeat Ends", "Basics", "Up the held notes and back, top and bottom played twice.", {octRows, rate(r16)},
+                {Pat("1 2 3 4 5 6 7 8").held().bounce(true)}}; });
    add(e, [&] { return Entry{"Up Down Two Octaves", "Basics", "Up two octaves of the held notes and back down again.", {octRows, rate(r16)},
                 {Pat("1 2 3 4 5 6 7 8").held(2).bounce()}}; });
    add(e, [&] { return Entry{"Root Pedal", "Basics", "The root between each other held note, on up the chord.", {octRows, rate(r16)},

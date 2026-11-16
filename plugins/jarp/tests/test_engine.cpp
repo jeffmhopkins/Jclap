@@ -303,12 +303,30 @@ void dynamicLength() {
       JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 64, 60, 64, 67, 64}));
    }
    {
+      // REPEAT ENDS: with BOUNCE the first and last steps play twice at the turns.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Pattern p = up();
+      p.byHeld = 1;
+      p.bounce = 1;
+      p.repeatEnds = 1;
+      JCLAP_CHECK_EQ(p.cycleFor(3), 6);
+      e.setPattern(0, p);
+      const auto keys = keysOf(ons(run(e, 8 * kStepSamples - 10, chord({60, 64, 67}))));
+      JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 67, 64, 60, 60, 64}));
+      // Without BOUNCE it does nothing.
+      p.bounce = 0;
+      JCLAP_CHECK_EQ(p.cycleFor(3), 3);
+      JCLAP_CHECK_EQ(p.stepAt(4, 3), 1);
+   }
+   {
       // The saved form keeps HELD, its times and plus, and BOUNCE.
       Pattern p = up();
       p.byHeld = 1;
       p.times = 3;
       p.plus = -2;
       p.bounce = 1;
+      p.repeatEnds = 1;
       Pattern q;
       const std::vector<uint8_t> b = p.save();
       JCLAP_CHECK(q.load(b.data(), b.size()));

@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.15.0.
+Version 0.16.0.
 
 ![Panel](docs/panel.png)
 
@@ -197,6 +197,8 @@ the panel's header line says what it comes to ("4 held = 4 steps").
   - **BOUNCE**: up to the last step and back down, playing the first and last steps once each time
     round: four steps play 1 2 3 4 3 2. With HELD, an Up pattern becomes Up Down for any chord. The
     playhead runs back down the grid on the way back.
+  - **REPEAT ENDS** (the box under them): with BOUNCE, the first and last steps play twice at the
+    turns instead, 1 2 3 4 4 3 2 1, so four held notes fill eight steps. Dimmed when ONE WAY.
 
 **PLAYBACK**
 
@@ -292,7 +294,7 @@ The preset bar steps through the factory bank and then your own. A preset holds 
 eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
 instead, right-click the slot's number and use **Load from preset**:
 
-There are 128 factory presets in 27 categories, each built on how the style is really played.
+There are 129 factory presets in 27 categories, each built on how the style is really played.
 Most use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked
 (chain) use several patterns: CHORD moves on with each new chord, LOOP plays them one after another.
 
@@ -314,13 +316,13 @@ each four-bar phrase. The **Percussion** presets are hand percussion and mallet 
 cascara, conga, bongos, djembe, cajon, darbuka, tambourine, shaker, bell, tabla, marimba) for any
 pitched sound, walking the notes held.
 
-Up, Up Two Octaves, Up and Over, Up Down, Up Down Two Octaves, Root Pedal, Pedal Bounce and Breath
-Pulse set their LENGTH by the notes HELD, so they fit whatever chord you play, and the Up Down ones
-BOUNCE. The grooves, kits and the rest keep a set number of steps, so they stay in time with the bar.
+Up, Up Two Octaves, Up and Over, Up Down, Up Down Repeat Ends, Up Down Two Octaves, Root Pedal, Pedal
+Bounce and Breath Pulse set their LENGTH by the notes HELD, so they fit whatever chord you play, and
+the Up Down ones BOUNCE (Up Down Repeat Ends playing its ends twice). The grooves, kits and the rest keep a set number of steps, so they stay in time with the bar.
 
 | Category | Presets |
 |---|---|
-| Basics | Init, Up, Up Two Octaves, Up and Over, Down, Up Down, Up Down Two Octaves, Root Pedal, Converge, Pinky Top, Root Fifth, Broken Thirds (DEGREE rows) |
+| Basics | Init, Up, Up Two Octaves, Up and Over, Down, Up Down, Up Down Repeat Ends, Up Down Two Octaves, Root Pedal, Converge, Pinky Top, Root Fifth, Broken Thirds (DEGREE rows) |
 | Berlin School | Octave Line, Pedal Bounce, Pedal Sequence, Sequencer Bass, Phase Drift (a seven-step accent drifting across the line), Night Drive (four patterns, LOOP), Long Drive (64 steps) |
 | Grooves: Funk | Funk Bass, Slap Pops, Pocket Sixteenths |
 | Grooves: Soul | Motown Walk, Soul Pocket |
