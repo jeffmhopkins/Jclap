@@ -95,10 +95,13 @@ const char *ordinal(int row) {
 
 // Which steps the grid and the lanes show: kView of them from `first`. A pattern longer than kView
 // scrolls, following the playhead unless the scroll bar was moved by hand: the view holds still until
-// the playhead reaches its middle, then moves a step at a time to keep it there, and stops once the
-// pattern's last step is at the right edge.
+// the playhead reaches its middle, then glides with it to keep it there, and stops once the pattern's
+// last step is at the right edge.
 struct GridScroll {
+   // The view starts `frac` of a column past step `first`: following the playhead, it glides rather
+   // than jumping a step at a time. Scrolled by hand, it lands on a whole step (frac 0).
    int first = 0;
+   float frac = 0.0f;
    bool follow = true;
    // The notes picked (right-click, shift-click or a box) for their own lane values, by slot and
    // each one's row and step; slot -1 for none.
@@ -168,16 +171,34 @@ struct GridScroll {
       picks.clear();
    }
 
-   // Brings `first` up to date for a pattern of `len` steps with the playhead on `playStep` (or -1).
-   void update(int len, int playStep) {
+   // Brings the view up to date for a pattern of `len` steps with the playhead at `position` (in
+   // steps, or below 0 when not playing here).
+   void update(int len, double position) {
       if (len <= kView) {
          first = 0;
+         frac = 0.0f;
          return;
       }
-      if (follow && playStep >= 0)
-         first = playStep - kView / 2;
-      first = std::clamp(first, 0, len - kView);
+      if (follow && position >= 0.0) {
+         const double start = std::clamp(position - kView / 2.0, 0.0, static_cast<double>(len - kView));
+         first = static_cast<int>(std::floor(start));
+         frac = static_cast<float>(start - first);
+      }
+      if (first >= len - kView || first < 0) {
+         first = std::clamp(first, 0, len - kView);
+         frac = 0.0f;
+      }
    }
+   // Scrolls by hand to `step`, a whole step.
+   void scrollTo(int step, int len) {
+      first = std::clamp(step, 0, std::max(0, len - kView));
+      frac = 0.0f;
+   }
+   // Where on the grid a step (or part of one) starts, and the column (counted from `first`) under x.
+   float x(double step) const { return kGridX + static_cast<float>(step - first - frac) * kColumn; }
+   float column(float x) const { return (x - kGridX) / kColumn + frac; }
+   // Whether x is over the grid's columns.
+   static bool over(float x) { return x >= kGridX && x < kGridX + kView * kColumn - (kColumn - kCellW); }
 };
 
 // The grid of notes, with the row labels at its left, the step numbers under it and the pattern's
@@ -208,20 +229,23 @@ public:
       const int playQuarter = here ? static_cast<int>(f.position * kQuarters) : -1;
       const int first = scroll_.first;
 
-      // The playhead's column, behind the cells.
-      if (playStep >= first && playStep < first + kView) {
-         const float x = (kGridX + (playStep - first) * kColumn - 3) * s;
+      // The cells and the playhead's column behind them, clipped to the grid as the view glides.
+      c.saveState();
+      c.trimClampBounds((kGridX - 4) * s, 0, (kBarW + 8) * s, height());
+      if (playStep >= first && playStep <= first + kView) {
+         const float x = (scroll_.x(playStep) - 3) * s;
          c.setColor(0xff4a515c);
          c.roundedRectangleBorder(x, (kGridY - 8) * s, (kCellW + 6) * s, (7 * kRowPitch + kCellH + 16) * s, 5 * s, 1.2f * s);
       }
 
       for (int r = 0; r < kRows; ++r) {
          const float y = rowY(r);
-         for (int col = 0; col < kView; ++col) {
+         for (int col = 0; col <= kView; ++col) {
             c.setColor(first + col < len ? kCell : kCellOff);
-            c.roundedRectangle((kGridX + col * kColumn) * s, y * s, kCellW * s, kCellH * s, 3 * s);
+            c.roundedRectangle(scroll_.x(first + col) * s, y * s, kCellW * s, kCellH * s, 3 * s);
          }
       }
+      c.restoreState();
 
       // Notes, clipped to the steps in view (a long note may start before them). Each shows its own
       // lane over its step's: softer notes fainter, the octave as a tag, ratchets as splits, a dot
@@ -234,14 +258,14 @@ public:
          anyHeld = anyHeld || f.rows[r].key >= 0;
       for (int i = 0; i < p.count; ++i) {
          const Note &n = p.notes[i];
-         if (n.step >= first + kView || n.step * kQuarters + n.length <= first * kQuarters)
+         if (n.step > first + kView || n.step * kQuarters + n.length <= first * kQuarters)
             continue;
          const Lane lane = p.laneOf(i);
          const bool live = n.step < len;
          // A note on a row no held note plays (too few held, or a degree not held) greys out.
          const bool muted = anyHeld && f.rows[n.row].key < 0;
          const unsigned tone = muted ? 0xff5a606b : kOrange;
-         const float x = kGridX + (n.step - first) * kColumn, y = rowY(n.row);
+         const float x = scroll_.x(n.step), y = rowY(n.row);
          const int quarters = std::min<int>(n.length, live ? (len - n.step) * kQuarters : n.length);
          const float w = noteWidth(quarters);
          const bool sounding = live && f.running && f.rows[n.row].key >= 0 && playQuarter >= n.step * kQuarters &&
@@ -327,8 +351,8 @@ public:
       }
 
       // The playhead line, moving through the step in time with the transport.
-      if (here && f.position >= first && f.position < first + kView) {
-         const float px = kGridX + static_cast<float>(f.position - first) * kColumn;
+      if (here && f.position >= first + scroll_.frac && f.position < first + scroll_.frac + kView) {
+         const float px = scroll_.x(f.position);
          c.setColor(alpha(0xffffffff, 0.85f));
          c.fill((px - 0.75f) * s, (kGridY - 8) * s, 1.5f * s, (7 * kRowPitch + kCellH + 16) * s);
       }
@@ -377,12 +401,15 @@ public:
       }
 
       // Step numbers, the beats brighter.
-      for (int col = 0; col < kView; ++col) {
+      c.saveState();
+      c.trimClampBounds((kGridX - 2) * s, 0, (kBarW + 4) * s, height());
+      for (int col = 0; col <= kView; ++col) {
          const int step = first + col;
          c.setColor(step >= len ? alpha(t.dimText, 0.45f) : step % 4 == 0 ? t.text : t.dimText);
-         c.text(std::to_string(step + 1), ui::font(9.5f * s), visage::Font::kCenter, (kGridX + col * kColumn) * s,
+         c.text(std::to_string(step + 1), ui::font(9.5f * s), visage::Font::kCenter, scroll_.x(step) * s,
                 kNumbersY * s, kCellW * s, 16 * s);
       }
+      c.restoreState();
 
       // A pattern longer than the grid: a scroll bar under the step numbers, with the steps that
       // start notes ticked along it and the playhead in orange, and the steps in view and FOLLOW at
@@ -395,7 +422,7 @@ public:
             if (p.notes[i].step < len)
                c.fill((kGridX + p.notes[i].step * kBarW / len) * s, (kBarY + 1) * s, std::max(1.0f, kBarW / len) * s, 3 * s);
          c.setColor(alpha(t.text, hoverBar_ || drag_ == Drag::Scroll ? 0.45f : 0.3f));
-         c.roundedRectangle((kGridX + first * kBarW / len) * s, (kBarY - 1) * s, (kView * kBarW / len) * s, 7 * s, 3 * s);
+         c.roundedRectangle((kGridX + (first + scroll_.frac) * kBarW / len) * s, (kBarY - 1) * s, (kView * kBarW / len) * s, 7 * s, 3 * s);
          if (playStep >= 0) {
             c.setColor(kOrange);
             c.fill((kGridX + (f.position * kBarW / len) - 1) * s, (kBarY - 2) * s, 2 * s, 9 * s);
@@ -414,9 +441,9 @@ public:
       }
 
       // The pattern's end: a purple bar with a tab to drag.
-      if (len < first || len > first + kView)
+      if (len < first + scroll_.frac || len > first + scroll_.frac + kView)
          return;
-      const float bx = barX(len - first);
+      const float bx = barX(len);
       c.setColor(kPurple);
       c.fill((bx - 1) * s, 14 * s, 2 * s, (kGridY + 7 * kRowPitch + kCellH - 14) * s);
       c.roundedRectangle((bx - 7) * s, 4 * s, 14 * s, 14 * s, 3 * s);
@@ -444,16 +471,16 @@ public:
          return;
       }
       // The end bar, anywhere along it.
-      if (length() >= first && length() <= first + kView && std::abs(x - barX(length() - first)) < 7 &&
+      if (length() >= first && length() <= first + kView + 1 && std::abs(x - barX(length())) < 7 &&
           y < kGridY + 8 * kRowPitch) {
          drag_ = Drag::End;
          return;
       }
-      const int col = static_cast<int>(std::floor((x - kGridX) / kColumn));
+      const int col = static_cast<int>(std::floor(scroll_.column(x)));
       const int row = 7 - static_cast<int>(std::floor((y - kGridY) / kRowPitch));
-      if (col < 0 || col >= kView || row < 0 || row >= kRows || y < kGridY)
+      if (!GridScroll::over(x) || col < 0 || col > kView || row < 0 || row >= kRows || y < kGridY)
          return;
-      const int quarter = first * kQuarters + static_cast<int>(std::floor((x - kGridX) / kColumn * kQuarters));
+      const int quarter = first * kQuarters + static_cast<int>(std::floor(scroll_.column(x) * kQuarters));
       const int at = p.noteAt(row, std::min(quarter, kMaxLength - 1));
       const int slot = scroll_.view;
       // Right-click picks a note (or lets it go) for editing its own lane values below; shift-click
@@ -538,9 +565,9 @@ public:
       const int n = std::max(1, static_cast<int>(std::ceil(std::max(std::abs(dx), std::abs(dy)) / 4.0f)));
       for (int k = 1; k <= n; ++k) {
          const float px = lastX_ + dx * k / n, py = lastY_ + dy * k / n;
-         const int col = static_cast<int>(std::floor((px - kGridX) / kColumn));
+         const int col = static_cast<int>(std::floor(scroll_.column(px)));
          const int row = 7 - static_cast<int>(std::floor((py - kGridY) / kRowPitch));
-         if (col < 0 || col >= kView || row < 0 || row >= kRows || py < kGridY)
+         if (!GridScroll::over(px) || col < 0 || col > kView || row < 0 || row >= kRows || py < kGridY)
             continue;
          const int step = scroll_.first + col;
          if (drag_ == Drag::Paint) {
@@ -548,7 +575,7 @@ public:
                next.add(row, step, kQuarters);
          }
          else {
-            const int quarter = scroll_.first * kQuarters + static_cast<int>(std::floor((px - kGridX) / kColumn * kQuarters));
+            const int quarter = scroll_.first * kQuarters + static_cast<int>(std::floor(scroll_.column(px) * kQuarters));
             if (const int at = next.noteAt(row, std::min(quarter, kMaxLength - 1)); at >= 0)
                erase(next, at);
          }
@@ -605,10 +632,10 @@ public:
       }
       if (drag_ == Drag::End) {
          // Past the right edge the grid scrolls on, so the end can be dragged out to kSteps.
-         const int len = std::clamp(scroll_.first + static_cast<int>(std::lround((x - kGridX + 2.5f) / kColumn)), 1, kSteps);
+         const int len = std::clamp(scroll_.first + static_cast<int>(std::lround(scroll_.column(x + 2.5f))), 1, kSteps);
          if (len > scroll_.first + kView || len < scroll_.first) {
             scroll_.follow = false;
-            scroll_.first = std::clamp(len > scroll_.first ? len - kView : len - 1, 0, kSteps - kView);
+            scroll_.scrollTo(len > scroll_.first ? len - kView : len - 1, kSteps);
          }
          if (len != length()) {
             Pattern next = shown();
@@ -626,7 +653,7 @@ public:
       if (note_ < 0 || note_ >= next.count)
          return;
       Note &n = next.notes[note_];
-      const float start = kGridX + (n.step - scroll_.first) * kColumn;
+      const float start = scroll_.x(n.step);
       const int quarters = static_cast<int>(std::lround((x - start + 2.5f) / kColumn * kQuarters));
       n.length = static_cast<uint16_t>(std::clamp(quarters, 1, next.room(n.row, n.step, note_)));
       commit(next);
@@ -679,9 +706,9 @@ public:
          return -1;
       for (int i = 0; i < p.count; ++i) {
          const Note &n = p.notes[i];
-         if (n.row != row || n.step >= first + kView)
+         if (n.row != row || n.step > first + kView)
             continue;
-         const float right = kGridX + (n.step - first) * kColumn + noteWidth(n.length);
+         const float right = scroll_.x(n.step) + noteWidth(n.length);
          const float zone = std::min(kEdgeW, noteWidth(n.length) / 4);
          if (x <= right + 1 && x >= right - zone && right <= kGridX + kBarW + 1)
             return i;
@@ -696,7 +723,7 @@ public:
       if (len <= kView || d == 0.0f)
          return false;
       scroll_.follow = false;
-      scroll_.first = std::clamp(scroll_.first + (d > 0 ? 2 : -2), 0, len - kView);
+      scroll_.scrollTo(scroll_.first + (d > 0 ? 2 : -2), len);
       redrawAll();
       return true;
    }
@@ -717,7 +744,7 @@ private:
       scroll_.picks = boxBase_;
       for (int i = 0; i < p.count; ++i) {
          const Note &n = p.notes[i];
-         const float nx = kGridX + (n.step - scroll_.first) * kColumn, ny = rowY(n.row);
+         const float nx = scroll_.x(n.step), ny = rowY(n.row);
          const float nx1 = std::min(nx + noteWidth(n.length), kGridX + kBarW);
          if (nx1 < x0 || nx > x1 || ny + kCellH < y0 || ny > y1 || nx1 < kGridX)
             continue;
@@ -734,7 +761,7 @@ private:
    void scrollTo(float x) {
       const int len = length();
       scroll_.follow = false;
-      scroll_.first = std::clamp(static_cast<int>(std::lround((x - kGridX) / kBarW * len - kView / 2.0)), 0, len - kView);
+      scroll_.scrollTo(static_cast<int>(std::lround((x - kGridX) / kBarW * len - kView / 2.0)), len);
       redrawAll();
    }
    void redrawAll() {
@@ -746,7 +773,7 @@ private:
    int length() const { return std::clamp<int>(shown().length, 1, kSteps); }
    int maxHits() const { return static_cast<int>(std::lround(host_.paramModulated(kMaxHits))); }
    static float rowY(int row) { return kGridY + (7 - row) * kRowPitch; }
-   static float barX(int len) { return kGridX + len * kColumn - (kColumn - kCellW) / 2; }
+   float barX(int len) const { return scroll_.x(len) - (kColumn - kCellW) / 2; }
 
    static bool rowPlaying(const Pattern &p, const jarp::Frame &f, int row, int len, int playQuarter) {
       if (!f.running)
@@ -827,7 +854,10 @@ public:
          c.setColor(0xffffffff);
          c.text(label, ui::font(8 * s), visage::Font::kLeft, 74 * s, kLaneY[0] * s, 50 * s, kLaneH * s);
       }
-      for (int col = 0; col < kView; ++col) {
+      // Clipped to the grid's columns as the view glides.
+      c.saveState();
+      c.trimClampBounds((kGridX - 2) * s, 0, (kView * kColumn - (kColumn - kCellW) + 4) * s, height());
+      for (int col = 0; col <= kView && scroll_.first + col < kSteps; ++col) {
          const int step = scroll_.first + col;
          const int picked = scroll_.pickedOn(p, slot, step);
          const bool mine = picked >= 0;
@@ -837,7 +867,7 @@ public:
          // A picked note's value taken from the step shows dim.
          auto dim = [&](uint8_t bit) { return own & bit ? base : 0.45f * base; };
          float a = base;
-         const float x = kGridX + col * kColumn;
+         const float x = scroll_.x(step);
          for (int lane = 0; lane < kLanes; ++lane) {
             const float y = kLaneY[lane];
             c.setColor(alpha(0xff181b20, a));
@@ -894,13 +924,14 @@ public:
             c.fill((x + 5) * s, (cy - 0.5f) * s, (kCellW - 10) * l.chance / 100.0f * s, 2.0f * s);
          }
       }
+      c.restoreState();
    }
 
    void mouseDown(const visage::MouseEvent &e) override {
       const float s = ui::designScale(*this);
       const float x = e.position.x / s, y = e.position.y / s;
-      const int view = static_cast<int>(std::floor((x - kGridX) / kColumn));
-      col_ = view >= 0 && view < kView ? scroll_.first + view : -1;
+      const int view = static_cast<int>(std::floor(scroll_.column(x)));
+      col_ = GridScroll::over(x) && view >= 0 && view <= kView ? scroll_.first + view : -1;
       lane_ = -1;
       for (int l = 0; l < kLanes; ++l)
          if (y >= kLaneY[l] - 2 && y < kLaneY[l] + kLaneH + 3)
@@ -911,7 +942,7 @@ public:
       const int note = noteFor(p, col_);
       downY_ = y;
       // P toggles (each click, so a quick second click toggles it back).
-      if (lane_ == 1 && x - (kGridX + view * kColumn) >= 23) {
+      if (lane_ == 1 && x - scroll_.x(col_) >= 23) {
          Lane l = laneAt(p, col_, note);
          l.pressure = l.pressure ? 0 : 1;
          store(p, col_, note, l, kOwnPressure);
@@ -969,14 +1000,16 @@ public:
    bool mouseWheel(const visage::MouseEvent &e) override {
       const float s = ui::designScale(*this);
       const float x = e.position.x / s, y = e.position.y / s;
-      const int view = static_cast<int>(std::floor((x - kGridX) / kColumn));
+      const int view = static_cast<int>(std::floor(scroll_.column(x)));
       int lane = -1;
       for (int l = 0; l < kLanes; ++l)
          if (y >= kLaneY[l] - 2 && y < kLaneY[l] + kLaneH + 3)
             lane = l;
-      if (view < 0 || view >= kView || lane < 0 || e.wheel_delta_y == 0.0f)
+      if (!GridScroll::over(x) || view < 0 || view > kView || lane < 0 || e.wheel_delta_y == 0.0f)
          return false;
       const int col = scroll_.first + view;
+      if (col >= kSteps)
+         return false;
       const int by = e.wheel_delta_y > 0 ? 1 : -1;
       Pattern p = shown();
       const int note = noteFor(p, col);
@@ -1607,7 +1640,7 @@ public:
          const jarp::Frame &f = host_.frame();
          const int len = std::clamp<int>(shown().length, 1, kSteps);
          const bool here = f.running && f.slot == scroll_.view;
-         scroll_.update(len, here ? std::clamp(static_cast<int>(f.position), 0, len - 1) : -1);
+         scroll_.update(len, here ? std::clamp(f.position, 0.0, static_cast<double>(len)) : -1.0);
       }
       slots_->redraw();
       // Over the grid, the dice card hides what's under it.

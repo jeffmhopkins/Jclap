@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.13.0.
+Version 0.14.0.
 
 ![Panel](docs/panel.png)
 
@@ -62,7 +62,8 @@ the playhead. Beside it, the steps in view (`17-32 of 48`) and **FOLLOW**.
 ![A long pattern](docs/long.png)
 
 - With **FOLLOW** lit, the grid follows the playhead: it holds still until the playhead reaches the
-  middle, then scrolls a step at a time to keep it there, until the pattern's end reaches the right edge.
+  middle, then glides along with it, smoothly with the transport rather than a step at a time, until
+  the pattern's end reaches the right edge.
 - **Drag along the bar** (or the step numbers above it), or scroll the mouse wheel over the grid, to
   look elsewhere. That turns FOLLOW off; click it to follow again.
 - The lanes under the grid scroll with it.
