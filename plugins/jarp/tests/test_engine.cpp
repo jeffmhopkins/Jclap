@@ -184,6 +184,52 @@ void expressionAndSustain() {
 
 } // namespace
 
+// Its own function, kept out of main(): MSVC gives each of main's Pattern temporaries (about 11 KB)
+// its own stack slot, and main is already near Windows' 1 MB stack.
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+void keepRows() {
+   for (const bool keep : {false, true}) {
+      // Keep Rows: with C E G held on rows 1-3, letting go of C leaves E and G where they are (row 1
+      // rests) instead of shifting them down; C pressed again takes row 1 back; and once every key
+      // is up, the next chord starts afresh.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.keepRows = keep;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 2}, {1, 1, 2}, {2, 2, 2}}), 3);
+      std::vector<In> in = chord({60, 64, 67});
+      in.push_back({3 * kStepSamples + 3000, In::Off, 1, 60, 0});
+      in.push_back({6 * kStepSamples + 3000, In::On, 4, 60, 100});
+      for (int ch = 2; ch <= 4; ++ch)
+         in.push_back({9 * kStepSamples + 3000, In::Off, ch, ch == 4 ? 60 : ch == 2 ? 64 : 67, 0});
+      in.push_back({10 * kStepSamples, In::On, 5, 62, 100});
+      in.push_back({10 * kStepSamples, In::On, 6, 65, 100});
+      in.push_back({10 * kStepSamples, In::On, 7, 69, 100});
+      const auto on = ons(run(e, 13 * kStepSamples - 10, in));
+      std::vector<int> keys;
+      for (const Timed &t : on)
+         keys.push_back(t.m.data1);
+      std::vector<uint32_t> steps;
+      for (const Timed &t : on)
+         steps.push_back(t.time / kStepSamples);
+      if (keep) {
+         // C goes up after step 3: step 6 (row 1) rests while E and G stay on steps 4 and 5; C
+         // pressed again takes row 1 back on step 9; after all keys are up the new chord starts afresh.
+         JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 60, 64, 67, 64, 67, 60, 62, 65, 69}));
+         JCLAP_CHECK(steps == std::vector<uint32_t>({0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12}));
+      } else {
+         // Without it, E and G move down to rows 1 and 2 once C is up, and row 3 rests.
+         JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 60, 67, 64, 64, 67, 60, 62, 65, 69}));
+         JCLAP_CHECK(steps == std::vector<uint32_t>({0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12}));
+      }
+   }
+}
+
 int main() {
    // ---- rows ----
    {
@@ -573,42 +619,7 @@ int main() {
       JCLAP_CHECK_EQ(on[2].time, 2 * kStepSamples - 500);
       JCLAP_CHECK_EQ(on[3].time, 3 * kStepSamples - 500);
    }
-   for (const bool keep : {false, true}) {
-      // Keep Rows: with C E G held on rows 1-3, letting go of C leaves E and G where they are (row 1
-      // rests) instead of shifting them down; C pressed again takes row 1 back; and once every key
-      // is up, the next chord starts afresh.
-      auto eOwner = std::make_unique<Engine>();
-      Engine &e = *eOwner;
-      Settings s;
-      s.keepRows = keep;
-      e.setSettings(s);
-      setPattern(e, pattern({{0, 0, 2}, {1, 1, 2}, {2, 2, 2}}), 3);
-      std::vector<In> in = chord({60, 64, 67});
-      in.push_back({3 * kStepSamples + 3000, In::Off, 1, 60, 0});
-      in.push_back({6 * kStepSamples + 3000, In::On, 4, 60, 100});
-      for (int ch = 2; ch <= 4; ++ch)
-         in.push_back({9 * kStepSamples + 3000, In::Off, ch, ch == 4 ? 60 : ch == 2 ? 64 : 67, 0});
-      in.push_back({10 * kStepSamples, In::On, 5, 62, 100});
-      in.push_back({10 * kStepSamples, In::On, 6, 65, 100});
-      in.push_back({10 * kStepSamples, In::On, 7, 69, 100});
-      const auto on = ons(run(e, 13 * kStepSamples - 10, in));
-      std::vector<int> keys;
-      for (const Timed &t : on)
-         keys.push_back(t.m.data1);
-      std::vector<uint32_t> steps;
-      for (const Timed &t : on)
-         steps.push_back(t.time / kStepSamples);
-      if (keep) {
-         // C goes up after step 3: step 6 (row 1) rests while E and G stay on steps 4 and 5; C
-         // pressed again takes row 1 back on step 9; after all keys are up the new chord starts afresh.
-         JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 60, 64, 67, 64, 67, 60, 62, 65, 69}));
-         JCLAP_CHECK(steps == std::vector<uint32_t>({0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12}));
-      } else {
-         // Without it, E and G move down to rows 1 and 2 once C is up, and row 3 rests.
-         JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 60, 67, 64, 64, 67, 60, 62, 65, 69}));
-         JCLAP_CHECK(steps == std::vector<uint32_t>({0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12}));
-      }
-   }
+   keepRows();
    {
       // Expression goes to every note sounding from its finger.
       auto eOwner = std::make_unique<Engine>();
