@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.10.0.
+Version 0.11.0.
 
 ![Panel](docs/panel.png)
 
@@ -23,9 +23,11 @@ Version 0.10.0.
 Eight rows by up to 128 steps, sixteen in view at a time. Row 1 is at the bottom.
 
 - **Click an empty cell** for a one-step note, and drag right while you hold the button to make it
-  longer.
+  longer. The length only follows a deliberate drag, so a click that wobbles stays a one-step note.
 - **Drag a note's right edge** to set how long it sounds, in quarter steps, from a quarter of a step to
-  the whole pattern. A note stops at the next note in its row.
+  the whole pattern. A note stops at the next note in its row. The handle is a narrow strip just
+  inside the edge: it lights white, and the pointer turns to a resize arrow, when you're on it.
+  Anywhere else on the note moves or removes it.
 - **Drag a note** to move it to another step or row. It keeps its length (shortened if it lands just
   before another note) and its own lane values. Drag one of several picked notes and they all move
   together, keeping their shape. A move that would take a note off the grid, past the pattern's end
@@ -69,7 +71,10 @@ note name, with a dot beside it.
 
 JArp holds eight patterns, **1** to **8**, in the strip beside the PATTERN title. Click a number to
 play it and edit it on the grid. A lit number has notes in it; the one playing has an orange bar under
-it. Right-click a number to **copy** it, **paste** into it, or **clear** it, or to **load from
+it. **COPY**, **PASTE** and **CLEAR** in the header act on the pattern on the grid: copy one, show
+another and paste over it, or clear out every note (keeping its length). PASTE lights once something
+is copied, and the dice card's UNDO takes back a paste or a clear. Right-click a number to **copy** it,
+**paste** into it, or **clear** it the same way, or to **load from
 preset**: pick a preset, or one pattern of a preset that has several, and only that pattern loads into
 this slot, leaving the other slots and the settings as they are.
 

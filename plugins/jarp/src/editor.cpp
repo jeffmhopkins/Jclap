@@ -281,6 +281,11 @@ public:
                c.fill((x + pad) * s, (y + kCellH - pad - 1.5f) * s, (w - 2 * pad) * s, 1.5f * s);
             }
          }
+         // The length handle, lit under the mouse and while dragging it.
+         if (i == hoverEdge_ || (drag_ == Drag::Length && note_ == i && moved_)) {
+            c.setColor(0xffffffff);
+            c.roundedRectangle((x + w - 3) * s, (y + 3) * s, 2 * s, (kCellH - 6) * s, 1 * s);
+         }
          if (lane.octave) {
             char o[8];
             std::snprintf(o, sizeof(o), "%+d", lane.octave);
@@ -478,11 +483,12 @@ public:
       Pattern next = p;
       if (at >= 0) {
          const Note &n = p.notes[at];
-         // The right edge sets the length; on a short note, only its last third, so it can still move.
-         const float right = kGridX + (n.step - first) * kColumn + noteWidth(n.length);
-         if (right - x < std::min(8.0f, noteWidth(n.length) / 3)) {
+         // The lit right edge sets the length, once dragged a little.
+         if (edgeAt(x, y) == at) {
             drag_ = Drag::Length;
             note_ = at;
+            pressX_ = x;
+            moved_ = false;
             return;
          }
          // Dragging a note moves it (and the other picked notes with it, if it's picked); a click
@@ -508,8 +514,12 @@ public:
       if (!next.add(row, first + col, kQuarters))
          return;
       commit(next);
+      // A new note's length follows a drag to the right, but only a deliberate one: a click that
+      // wobbles stays a one-step note.
       drag_ = Drag::Length;
       note_ = next.count - 1;
+      pressX_ = x;
+      moved_ = false;
    }
 
    void mouseDrag(const visage::MouseEvent &e) override {
@@ -561,6 +571,9 @@ public:
       }
       if (drag_ != Drag::Length)
          return;
+      if (!moved_ && std::abs(x - pressX_) < kDragSlop)
+         return;
+      moved_ = true;
       Pattern next = shown();
       if (note_ < 0 || note_ >= next.count)
          return;
@@ -588,11 +601,44 @@ public:
    }
 
    void mouseMove(const visage::MouseEvent &e) override {
-      const bool over = length() > kView && e.position.y / ui::designScale(*this) >= kNumbersY;
-      if (over != hoverBar_) {
+      const float s = ui::designScale(*this);
+      const bool over = length() > kView && e.position.y / s >= kNumbersY;
+      const int edge = edgeAt(e.position.x / s, e.position.y / s);
+      if (over != hoverBar_ || edge != hoverEdge_) {
          hoverBar_ = over;
+         hoverEdge_ = edge;
+         setCursorStyle(edge >= 0 ? visage::MouseCursor::HorizontalResize : visage::MouseCursor::Arrow);
          redraw();
       }
+   }
+
+   void mouseExit(const visage::MouseEvent &) override {
+      if (hoverEdge_ >= 0 || hoverBar_) {
+         hoverEdge_ = -1;
+         hoverBar_ = false;
+         setCursorStyle(visage::MouseCursor::Arrow);
+         redraw();
+      }
+   }
+
+   // The note whose right edge (its length handle) is under (x, y), or -1. The handle is a narrow
+   // strip inside the edge; a short note keeps most of itself for moving.
+   int edgeAt(float x, float y) const {
+      const Pattern &p = shown();
+      const int first = scroll_.first;
+      const int row = 7 - static_cast<int>(std::floor((y - kGridY) / kRowPitch));
+      if (row < 0 || row >= kRows || y < kGridY)
+         return -1;
+      for (int i = 0; i < p.count; ++i) {
+         const Note &n = p.notes[i];
+         if (n.row != row || n.step >= first + kView)
+            continue;
+         const float right = kGridX + (n.step - first) * kColumn + noteWidth(n.length);
+         const float zone = std::min(kEdgeW, noteWidth(n.length) / 4);
+         if (x <= right + 1 && x >= right - zone && right <= kGridX + kBarW + 1)
+            return i;
+      }
+      return -1;
    }
 
    // The wheel, sideways or up and down, scrolls a long pattern.
@@ -679,6 +725,10 @@ private:
    Drag drag_ = Drag::None;
    int note_ = -1;
    bool hoverBar_ = false;
+   // The note whose length handle the mouse is over, lit; where a length drag started.
+   int hoverEdge_ = -1;
+   float pressX_ = 0.0f;
+   static constexpr float kEdgeW = 5.0f, kDragSlop = 6.0f;
    // A move: the pattern before it, where it started, the notes moving and the picks before it.
    Pattern moveBase_;
    float moveX_ = 0.0f, moveY_ = 0.0f;
@@ -1060,17 +1110,12 @@ private:
          load.addSubMenu(std::move(user));
       m.addSubMenu(std::move(load));
       m.onSelection() += [this, slot, sources](int id) {
-         if (id == 1) {
-            clipboard_ = host_.bank().slots[slot];
-            clipboardFull_ = true;
-         }
-         else if (id == 2 && clipboardFull_)
-            host_.setSlot(slot, clipboard_);
-         else if (id == 3) {
-            Pattern empty;
-            empty.length = host_.bank().slots[slot].length;
-            host_.setSlot(slot, empty);
-         }
+         if (id == 1)
+            copy(slot);
+         else if (id == 2)
+            paste(slot);
+         else if (id == 3)
+            clear(slot);
          else if (id >= kLoadId && id - kLoadId < static_cast<int>(sources->size()))
             host_.setSlot(slot, (*sources)[id - kLoadId]);
          if (onChange)
@@ -1083,6 +1128,23 @@ private:
 public:
    // After a slot's pattern changes here, so the grid and lanes redraw.
    std::function<void()> onChange;
+
+   // The clipboard the menu and the panel's COPY, PASTE and CLEAR buttons share.
+   void copy(int slot) {
+      clipboard_ = host_.bank().slots[static_cast<size_t>(slot)];
+      clipboardFull_ = true;
+   }
+   bool canPaste() const { return clipboardFull_; }
+   void paste(int slot) {
+      if (clipboardFull_)
+         host_.setSlot(slot, clipboard_);
+   }
+   // Takes every note out, keeping the length.
+   void clear(int slot) {
+      Pattern empty;
+      empty.length = host_.bank().slots[static_cast<size_t>(slot)].length;
+      host_.setSlot(slot, empty);
+   }
 
 private:
    static constexpr int kLoadId = 100;
@@ -1223,6 +1285,7 @@ public:
       // PATTERN: the grid and its lanes, with how rows are picked in its title row.
       add<ui::Section>({12, 76, 876, 478}, "PATTERN");
       slots_ = &add<SlotStrip>({118, 88, 213, 24}, host_);
+      buildClipboard();
       slots_->onChange = [this] {
          grid_->redraw();
          lanes_->redraw();
@@ -1440,6 +1503,42 @@ private:
    // The random preset row, from the card's top.
    static constexpr float kPresetY = 404;
 
+   // COPY, PASTE and CLEAR for the pattern on show, in the header.
+   void buildClipboard() {
+      auto &copy = add<ui::Button>({356, 18, 56, 28}, "COPY");
+      copy.onClick = [this] {
+         slots_->copy(scroll_.view);
+         paste_->setAccent(kOrange);
+         paste_->redraw();
+      };
+      tips_.add(copy, "Copies the pattern on show, to paste into another slot.");
+      paste_ = &add<ui::Button>({416, 18, 58, 28}, "PASTE");
+      paste_->onClick = [this] {
+         if (!slots_->canPaste())
+            return;
+         host_.diceHistory.push(DiceState(shown(), scroll_.view));
+         slots_->paste(scroll_.view);
+         slotEdited();
+      };
+      tips_.add(*paste_, "Replaces the pattern on show with the one last copied (lit once there is one).");
+      auto &clear = add<ui::Button>({478, 18, 56, 28}, "CLEAR");
+      clear.onClick = [this] {
+         host_.diceHistory.push(DiceState(shown(), scroll_.view));
+         slots_->clear(scroll_.view);
+         slotEdited();
+      };
+      tips_.add(clear, "Takes every note out of the pattern on show, keeping its length. The dice card's UNDO brings "
+                       "it back.");
+   }
+
+   void slotEdited() {
+      scroll_.unpick();
+      slots_->redraw();
+      grid_->redraw();
+      lanes_->redraw();
+      refreshDice();
+   }
+
    void buildDice() {
       const ui::Rect b = kDiceBox;
       card_ = &add<DiceCard>(b);
@@ -1656,6 +1755,7 @@ private:
    ui::Dropdown *key_ = nullptr, *scale_ = nullptr;
    DiceCard *card_ = nullptr;
    ui::Button *undo_ = nullptr, *redo_ = nullptr;
+   ui::Button *paste_ = nullptr;
    std::vector<visage::Frame *> dice_;
    uint64_t diceSeed_ = 0;
 };
