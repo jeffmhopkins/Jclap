@@ -348,6 +348,13 @@ int main() {
                }
          }
          JCLAP_CHECK(all[0]);
+         // The Drum Kit presets are four bars: 64 sixteenths, or 48 triplet eighths.
+         if (std::string(e.category) == "Drum Kit")
+            for (const Pattern &p : e.patterns)
+               if (!p.empty() && p.length != 64 && p.length != 48) {
+                  std::printf("%s is %d steps\n", e.name, p.length);
+                  JCLAP_CHECK(false);
+               }
          for (int r = 1; r < kRows; ++r)
             if (all[r] && !all[r - 1]) {
                std::printf("%s skips row %d\n", e.name, r);

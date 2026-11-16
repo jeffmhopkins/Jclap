@@ -268,7 +268,7 @@ The preset bar steps through the factory bank and then your own. A preset holds 
 eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
 instead, right-click the slot's number and use **Load from preset**:
 
-There are 117 factory presets in 27 categories, each built on how the style is really played.
+There are 123 factory presets in 27 categories, each built on how the style is really played.
 Most use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked
 (chain) use several patterns: CHORD moves on with each new chord, LOOP plays them one after another.
 
@@ -283,8 +283,11 @@ The **Drum Kit** presets play a kit from the keys you hold: row 1 is the kick, 2
 closed hat and 4 the open hat, the order the General MIDI drum map puts them in. Hold MIDI notes 36,
 38, 42 and 46 (C2, D2, F#2 and A#2 as JArp names them, with middle C as C4; a host that calls middle
 C C3 names them C1, D1, F#1 and A#1) and route JArp into a drum machine or sampler. Empty rows rest, so a drum you
-don't hold stays out; let go of the hat key and the hats drop. The **Percussion** presets are hand
-and mallet figures (clave, cascara, conga, bell, tabla) for any pitched sound, walking the notes held.
+don't hold stays out; let go of the hat key and the hats drop. Each is four bars long, the fourth
+with a fill, and starts from the song's first bar (RESTART SONG), so its fill lands at the end of
+each four-bar phrase. The **Percussion** presets are hand percussion and mallet figures (clave,
+cascara, conga, bongos, djembe, cajon, darbuka, tambourine, shaker, bell, tabla, marimba) for any
+pitched sound, walking the notes held.
 
 | Category | Presets |
 |---|---|
@@ -304,8 +307,8 @@ and mallet figures (clave, cascara, conga, bell, tabla) for any pitched sound, w
 | Grooves: Hip Hop | Boom Bap Bass, Sub Slide, Neo Soul |
 | Grooves: Breaks | Two Step (UK garage, chain, CHORD), Jungle Roller (drum and bass) |
 | Grooves: Country | Two Beat, Walk Up |
-| Drum Kit | Four on the Floor, Rock Beat, Rock Song (three bars and a fill, LOOP), Boom Bap Kit, Trap Kit, Funky Break, Drum and Bass Beat, One Drop Kit, Shuffle Kit (triplets) |
-| Percussion | Son Clave, Rumba Clave, Cascara, Conga Tumbao, Bell Six Eight (12/8), Teental (tabla), Shaker, Marimba Ostinato (12 steps against the bar) |
+| Drum Kit (four bars each) | Four on the Floor, Rock Beat, Rock Song (a snare-roll fill), Boom Bap Kit, Trap Kit, Funky Break, Drum and Bass Beat, One Drop Kit, Shuffle Kit (triplets) |
+| Percussion | Son Clave, Rumba Clave, Cascara, Conga Tumbao, Bell Six Eight (12/8), Teental (tabla), Shaker, Tambourine, Shaker Shuffle (triplets), Cajon, Djembe, Bongo Martillo, Maqsum (darbuka), Marimba Ostinato (12 steps against the bar) |
 | Piano | Alberti Bass, Waltz Spread (3/4), Nocturne, Stride, Pop Eighths, Rolled Ballad, Piano Verse (three patterns, CHORD) |
 | Guitar Fingerpicking | Travis Picking, Classical Arpeggio (p i m a), Banjo Roll, Ballad Picking, Fingerstyle Song (four patterns, LOOP) |
 | Strum and Harp | Down Strum, Up Strum, Strum Pattern (down down up, up down up), Harp Glissando, Harp Cascade, Strum to Harp (chain, CHORD) |
