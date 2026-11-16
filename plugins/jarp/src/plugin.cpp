@@ -149,6 +149,8 @@ public:
 
    std::string presetName() const override { return presetName_; }
    void setPresetName(const std::string &name) override { presetName_ = name; }
+   std::string presetBlurb() const override { return presetBlurb_; }
+   void setPresetBlurb(const std::string &blurb) override { presetBlurb_ = blurb.substr(0, kMaxBlurb); }
 
    // ---- params ----
 
@@ -203,9 +205,13 @@ public:
       const std::vector<uint8_t> saved = bank_.save();
       const uint32_t size = static_cast<uint32_t>(saved.size());
       const uint32_t nameLength = static_cast<uint32_t>(std::min<size_t>(presetName_.size(), 255));
+      // The blurb comes last, so a JArp from before it reads the rest and stops there.
+      const uint32_t blurbLength = static_cast<uint32_t>(std::min(presetBlurb_.size(), kMaxBlurb));
       return jclap::core::writeAll(stream, &size, sizeof(size)) && jclap::core::writeAll(stream, saved.data(), size) &&
              jclap::core::writeAll(stream, &nameLength, sizeof(nameLength)) &&
-             jclap::core::writeAll(stream, presetName_.data(), nameLength);
+             jclap::core::writeAll(stream, presetName_.data(), nameLength) &&
+             jclap::core::writeAll(stream, &blurbLength, sizeof(blurbLength)) &&
+             jclap::core::writeAll(stream, presetBlurb_.data(), blurbLength);
    }
 
    bool stateLoad(const clap_istream_t *stream) override {
@@ -255,6 +261,14 @@ public:
          presetName_.assign(name, nameLength);
       else
          presetName_.clear();
+      // State saved before blurbs has none: a factory preset's comes from the library.
+      uint32_t blurbLength = 0;
+      char blurb[kMaxBlurb];
+      if (jclap::core::readAll(stream, &blurbLength, sizeof(blurbLength)) && blurbLength <= kMaxBlurb &&
+          jclap::core::readAll(stream, blurb, blurbLength))
+         presetBlurb_.assign(blurb, blurbLength);
+      else
+         presetBlurb_ = factoryBlurb(presetName_);
 
       for (size_t i = 0; i < kParamCount; ++i)
          values_[i].store(std::clamp(v[i], kParams[i].min, kParams[i].max));
@@ -527,6 +541,7 @@ private:
    // Main thread.
    Bank bank_;
    std::string presetName_ = "Init";
+   std::string presetBlurb_ = factoryBlurb("Init");
 
    // Last, so the panel closes before the state it reads goes away.
    jclap::ui::ClapGui gui_;

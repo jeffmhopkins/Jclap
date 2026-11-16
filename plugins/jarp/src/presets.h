@@ -78,6 +78,43 @@ inline const Bank *factoryBank(const std::string &name) {
    return nullptr;
 }
 
+// A factory preset's line on what it is and how to play it, or "" for a name that isn't one.
+inline std::string factoryBlurb(const std::string &name) {
+   for (const library::Entry &e : factoryLibrary())
+      if (name == e.name)
+         return e.blurb;
+   return {};
+}
+
+// The most a blurb keeps: a sentence, two short lines in the header.
+constexpr size_t kMaxBlurb = 160;
+
+// Where a user preset keeps its blurb: beside the preset file, as plain text.
+inline std::filesystem::path blurbFile(std::filesystem::path presetFile) {
+   return presetFile.replace_extension(".jarpnote");
+}
+inline bool writeBlurb(const std::filesystem::path &file, const std::string &blurb) {
+   std::error_code ec;
+   if (blurb.empty())
+      return std::filesystem::remove(file, ec), true;
+   std::ofstream out(file, std::ios::binary);
+   out << blurb.substr(0, kMaxBlurb);
+   return out.good();
+}
+inline std::string readBlurb(const std::filesystem::path &file) {
+   std::ifstream in(file, std::ios::binary);
+   if (!in)
+      return {};
+   std::string s((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+   s = s.substr(0, kMaxBlurb);
+   // One line: a newline in a file edited by hand reads as a space.
+   std::replace(s.begin(), s.end(), '\n', ' ');
+   std::replace(s.begin(), s.end(), '\r', ' ');
+   while (!s.empty() && s.back() == ' ')
+      s.pop_back();
+   return s;
+}
+
 // Where a user preset keeps its patterns: beside the preset file, as a Bank.
 inline std::filesystem::path patternFile(std::filesystem::path presetFile) {
    return presetFile.replace_extension(".jarppatterns");
