@@ -327,6 +327,20 @@ int main() {
                JCLAP_CHECK(bank->next(0) != 0);
       }
       JCLAP_CHECK_EQ(factoryCategories().size(), 27u);
+      // The library uses LENGTH by HELD and BOUNCE: Up Down is the held notes up and back for any
+      // chord, and a held pattern has a step for each row it could reach.
+      {
+         int byHeld = 0, bounce = 0;
+         for (const library::Entry &e : factoryLibrary())
+            for (const Pattern &p : e.patterns) {
+               byHeld += p.byHeld;
+               bounce += p.bounce;
+               if (std::string(e.name) == "Up Down")
+                  JCLAP_CHECK(p.byHeld && p.bounce && p.stepsFor(3) == 3 && p.cycleFor(3) == 4);
+            }
+         JCLAP_CHECK(byHeld >= 5);
+         JCLAP_CHECK(bounce >= 3);
+      }
       // Every factory preset says what it is, in a line that fits the header, and no pattern skips a
       // row: the rows each uses run on without a gap, and all of a preset's from row 1, so every note
       // held plays and the voicing gives the shape.
@@ -348,7 +362,14 @@ int main() {
                }
          }
          JCLAP_CHECK(all[0]);
-         // The Drum Kit presets are four bars: 64 sixteenths, or 48 triplet eighths.
+         // The Drum Kit presets are four bars: 64 sixteenths, or 48 triplet eighths, and keep their
+         // rows, so letting go of one drum's key drops only that drum.
+         if (std::string(e.category) == "Drum Kit") {
+            bool keeps = false;
+            for (const auto &[id, x] : e.params)
+               keeps = keeps || (id == kKeepRows && x == 1);
+            JCLAP_CHECK(keeps);
+         }
          if (std::string(e.category) == "Drum Kit")
             for (const Pattern &p : e.patterns)
                if (!p.empty() && p.length != 64 && p.length != 48) {

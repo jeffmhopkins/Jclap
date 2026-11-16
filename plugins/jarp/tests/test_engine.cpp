@@ -184,8 +184,150 @@ void expressionAndSustain() {
 
 } // namespace
 
-int main() {
-   // ---- rows ----
+// Its own function, kept out of main(): MSVC gives each of main's Pattern temporaries (about 11 KB)
+// its own stack slot, and main is already near Windows' 1 MB stack.
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+void keepRows() {
+   for (const bool keep : {false, true}) {
+      // Keep Rows: with C E G held on rows 1-3, letting go of C leaves E and G where they are (row 1
+      // rests) instead of shifting them down; C pressed again takes row 1 back; and once every key
+      // is up, the next chord starts afresh.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.keepRows = keep;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 2}, {1, 1, 2}, {2, 2, 2}}), 3);
+      std::vector<In> in = chord({60, 64, 67});
+      in.push_back({3 * kStepSamples + 3000, In::Off, 1, 60, 0});
+      in.push_back({6 * kStepSamples + 3000, In::On, 4, 60, 100});
+      for (int ch = 2; ch <= 4; ++ch)
+         in.push_back({9 * kStepSamples + 3000, In::Off, ch, ch == 4 ? 60 : ch == 2 ? 64 : 67, 0});
+      in.push_back({10 * kStepSamples, In::On, 5, 62, 100});
+      in.push_back({10 * kStepSamples, In::On, 6, 65, 100});
+      in.push_back({10 * kStepSamples, In::On, 7, 69, 100});
+      const auto on = ons(run(e, 13 * kStepSamples - 10, in));
+      std::vector<int> keys;
+      for (const Timed &t : on)
+         keys.push_back(t.m.data1);
+      std::vector<uint32_t> steps;
+      for (const Timed &t : on)
+         steps.push_back(t.time / kStepSamples);
+      if (keep) {
+         // C goes up after step 3: step 6 (row 1) rests while E and G stay on steps 4 and 5; C
+         // pressed again takes row 1 back on step 9; after all keys are up the new chord starts afresh.
+         JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 60, 64, 67, 64, 67, 60, 62, 65, 69}));
+         JCLAP_CHECK(steps == std::vector<uint32_t>({0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12}));
+      } else {
+         // Without it, E and G move down to rows 1 and 2 once C is up, and row 3 rests.
+         JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 60, 67, 64, 64, 67, 60, 62, 65, 69}));
+         JCLAP_CHECK(steps == std::vector<uint32_t>({0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12}));
+      }
+   }
+}
+
+// LENGTH by HELD notes and BOUNCE. Its own function, off main's stack (see keepRows).
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+void dynamicLength() {
+   // An Up run over all eight rows, one step each.
+   const auto up = [] {
+      Pattern p = pattern({{0, 0, 4}, {1, 1, 4}, {2, 2, 4}, {3, 3, 4}, {4, 4, 4}, {5, 5, 4}, {6, 6, 4}, {7, 7, 4}});
+      p.length = 8;
+      return p;
+   };
+   const auto keysOf = [](const std::vector<Timed> &on) {
+      std::vector<int> keys;
+      for (const Timed &t : on)
+         keys.push_back(t.m.data1);
+      return keys;
+   };
+   {
+      // HELD x1 +0: three notes held make a three-step pattern, so Up walks just those three.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Pattern p = up();
+      p.byHeld = 1;
+      e.setPattern(0, p);
+      const auto keys = keysOf(ons(run(e, 7 * kStepSamples - 10, chord({60, 64, 67}))));
+      JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 60, 64, 67, 60}));
+   }
+   {
+      // HELD x2 -1 with two held: three steps.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Pattern p = pattern({{0, 0, 4}, {1, 1, 4}, {0, 2, 4}, {1, 3, 4}});
+      p.byHeld = 1;
+      p.times = 2;
+      p.plus = -1;
+      JCLAP_CHECK_EQ(p.stepsFor(2), 3);
+      JCLAP_CHECK_EQ(p.stepsFor(0), 8);
+      e.setPattern(0, p);
+      const auto keys = keysOf(ons(run(e, 6 * kStepSamples - 10, chord({60, 64}))));
+      JCLAP_CHECK(keys == std::vector<int>({60, 64, 60, 60, 64, 60}));
+   }
+   {
+      // BOUNCE over four steps: up and back down, the ends once each time round.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Pattern p = up();
+      p.length = 4;
+      p.bounce = 1;
+      JCLAP_CHECK_EQ(p.cycleFor(0), 6);
+      e.setPattern(0, p);
+      const auto keys = keysOf(ons(run(e, 9 * kStepSamples - 10, chord({60, 64, 67, 71}))));
+      JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 71, 67, 64, 60, 64, 67}));
+      // The playhead runs back down the pattern on the way back.
+      Frame f;
+      run(e, 4 * kStepSamples + kStepSamples / 2, {});
+      e.fillFrame(f);
+      JCLAP_CHECK(f.running);
+      JCLAP_CHECK_EQ(f.held, 4);
+   }
+   {
+      // HELD and BOUNCE together: Up becomes Up Down for whatever chord is held.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Pattern p = up();
+      p.byHeld = 1;
+      p.bounce = 1;
+      e.setPattern(0, p);
+      const auto keys = keysOf(ons(run(e, 8 * kStepSamples - 10, chord({60, 64, 67}))));
+      JCLAP_CHECK(keys == std::vector<int>({60, 64, 67, 64, 60, 64, 67, 64}));
+   }
+   {
+      // The saved form keeps HELD, its times and plus, and BOUNCE.
+      Pattern p = up();
+      p.byHeld = 1;
+      p.times = 3;
+      p.plus = -2;
+      p.bounce = 1;
+      Pattern q;
+      const std::vector<uint8_t> b = p.save();
+      JCLAP_CHECK(q.load(b.data(), b.size()));
+      JCLAP_CHECK(q == p);
+      JCLAP_CHECK_EQ(q.plus, -2);
+   }
+}
+
+// Each group of tests in a function of its own, called one after another: MSVC gives every Pattern
+// temporary (about 11 KB) in a function its own stack slot, so one main() holding every block came
+// close to Windows' 1 MB stack, and any helper called on top of it went over.
+#if defined(_MSC_VER)
+#define JARP_TEST_NOINLINE __declspec(noinline)
+#else
+#define JARP_TEST_NOINLINE __attribute__((noinline))
+#endif
+
+// rows.
+JARP_TEST_NOINLINE void rowsTests() {
    {
       // Pitch: row 1 is the lowest held note; beyond the notes held, Rest leaves a row empty and
       // Wrap starts again from the bottom.
@@ -336,8 +478,10 @@ int main() {
          JCLAP_CHECK_EQ(on[3].m.data1, 72);
       }
    }
+}
 
-   // ---- timing ----
+// timing.
+JARP_TEST_NOINLINE void timingTests() {
    {
       // A 7th chord, rows 1 and 3 alternating: C on step 1, G on step 2, each on its own finger's
       // channel and key, at the finger's velocity.
@@ -436,8 +580,10 @@ int main() {
       JCLAP_CHECK_EQ(on.size(), 1u);
       JCLAP_CHECK_EQ(on[0].time, 2 * kStepSamples);
    }
+}
 
-   // ---- lanes ----
+// lanes.
+JARP_TEST_NOINLINE void lanesTests() {
    {
       // Octave, ratchet and velocity, per step.
       auto eOwner = std::make_unique<Engine>();
@@ -534,8 +680,10 @@ int main() {
       JCLAP_CHECK(curvePressure(0.3, 1.0) < curvePressure(0.3, 0.0));
       JCLAP_CHECK_EQ(curvePressure(1.0, 1.0), 1.0);
    }
+}
 
-   // ---- fingers ----
+// fingers.
+JARP_TEST_NOINLINE void fingersTests() {
    {
       // Letting go ends that finger's note at once; the rest play on, rows remapped.
       auto eOwner = std::make_unique<Engine>();
@@ -573,6 +721,8 @@ int main() {
       JCLAP_CHECK_EQ(on[2].time, 2 * kStepSamples - 500);
       JCLAP_CHECK_EQ(on[3].time, 3 * kStepSamples - 500);
    }
+   keepRows();
+   dynamicLength();
    {
       // Expression goes to every note sounding from its finger.
       auto eOwner = std::make_unique<Engine>();
@@ -589,8 +739,10 @@ int main() {
       JCLAP_CHECK_EQ(sounding, 1);
       JCLAP_CHECK_EQ(key, 72);
    }
+}
 
-   // ---- chains ----
+// chains.
+JARP_TEST_NOINLINE void chainsTests() {
    {
       // Advance Chord: each new chord, after letting go of every note, plays the next pattern with
       // notes in it, skipping empty ones and going round. The first chord plays the one selected.
@@ -703,6 +855,10 @@ int main() {
       }
       JCLAP_CHECK(count >= 8 && count <= 11);
    }
+}
+
+// chains, continued.
+JARP_TEST_NOINLINE void moreChainsTests() {
    {
       // Advance Loop: each time a pattern ends the next starts, at its own length.
       auto eOwner = std::make_unique<Engine>();
@@ -794,12 +950,14 @@ int main() {
    {
       // The bank saves and loads every slot, each with its length; a version 1 pattern keeps the
       // length it is given.
-      Bank bank;
+      auto bankOwner = std::make_unique<Bank>();
+      Bank &bank = *bankOwner;
       bank.slots[0] = pattern({{0, 0, 4}});
       bank.slots[5] = pattern({{3, 2, 8}});
       bank.slots[5].length = 12;
       const std::vector<uint8_t> saved = bank.save();
-      Bank back;
+      auto backOwner = std::make_unique<Bank>();
+      Bank &back = *backOwner;
       JCLAP_CHECK(back.load(saved.data(), saved.size()));
       JCLAP_CHECK(back == bank);
       JCLAP_CHECK_EQ(back.next(0), 5);
@@ -813,8 +971,10 @@ int main() {
       JCLAP_CHECK_EQ(old.length, 5);
       JCLAP_CHECK_EQ(old.count, 0);
    }
+}
 
-   // ---- long patterns ----
+// long patterns.
+JARP_TEST_NOINLINE void longPatternsTests() {
    {
       // Up to 128 steps: a 40-step pattern plays its last step, then loops.
       auto eOwner = std::make_unique<Engine>();
@@ -899,8 +1059,10 @@ int main() {
       JCLAP_CHECK_EQ(upper, 100);
       JCLAP_CHECK(third > 30 && third < 70);
    }
+}
 
-   // ---- moving notes ----
+// moving notes.
+JARP_TEST_NOINLINE void movingNotesTests() {
    {
       // One note moves with its length and its own values.
       Pattern p = pattern({{0, 0, 8}, {2, 3, 4}});
@@ -940,8 +1102,10 @@ int main() {
       JCLAP_CHECK(t.move({t.noteStarting(0, 0)}, 1, 0));
       JCLAP_CHECK_EQ(t.notes[t.noteStarting(1, 0)].length, 12);
    }
+}
 
-   // ---- the saved pattern ----
+// the saved pattern.
+JARP_TEST_NOINLINE void theSavedPatternTests() {
    {
       // Version 5 saves chance, for steps and a note's own; a version 4 pattern loads at 100%.
       Pattern c = pattern({{0, 0, 4}, {1, 1, 4}});
@@ -1000,6 +1164,17 @@ int main() {
       JCLAP_CHECK_EQ(r.notes[1].length, 16);
       JCLAP_CHECK(!r.add(0, 2, 4));
    }
+}
 
+int main() {
+   rowsTests();
+   timingTests();
+   lanesTests();
+   fingersTests();
+   chainsTests();
+   moreChainsTests();
+   longPatternsTests();
+   movingNotesTests();
+   theSavedPatternTests();
    return jclap::core::testResult();
 }

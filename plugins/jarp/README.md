@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.12.0.
+Version 0.15.0.
 
 ![Panel](docs/panel.png)
 
@@ -44,7 +44,8 @@ Eight rows by up to 128 steps, sixteen in view at a time. Row 1 is at the bottom
   removes it.
 - **Drag the purple bar** (or its tab) to set the pattern's length, from 1 to 128 steps. Drag it past
   the right edge and the grid scrolls on with it. The LENGTH knob is the same setting. Each pattern
-  has its own length.
+  has its own length. With LENGTH by HELD notes the bar follows the notes you hold instead (see
+  Settings), and steps past it dim.
 
 A white line moves through the steps in time with the transport, and the step it is in is outlined.
 A softer note (a lower VELOCITY) draws fainter, and a note left to chance (a CHANCE under 100%) shows
@@ -62,7 +63,8 @@ the playhead. Beside it, the steps in view (`17-32 of 48`) and **FOLLOW**.
 ![A long pattern](docs/long.png)
 
 - With **FOLLOW** lit, the grid follows the playhead: it holds still until the playhead reaches the
-  middle, then scrolls a step at a time to keep it there, until the pattern's end reaches the right edge.
+  middle, then glides along with it, smoothly with the transport rather than a step at a time, until
+  the pattern's end reaches the right edge.
 - **Drag along the bar** (or the step numbers above it), or scroll the mouse wheel over the grid, to
   look elsewhere. That turns FOLLOW off; click it to follow again.
 - The lanes under the grid scroll with it.
@@ -178,7 +180,23 @@ of them.
 
 - **RATE**: how long a step is, from 1/32 to 1/4, with triplets.
 - **SWING**: moves every second step later, from 50% (straight) to 75%.
-- **LENGTH**: steps before this pattern loops, 1 to 128. Each pattern has its own.
+
+**LENGTH**: how many steps the pattern plays, and which way round. Each pattern has its own, and
+the panel's header line says what it comes to ("4 held = 4 steps").
+
+- **COUNT**:
+  - **STEPS**: a set length, 1 to 128 steps, on the LENGTH knob (or the purple bar).
+  - **HELD**: so many steps for each note you hold, **TIMES** 1 to 8, **PLUS** or minus up to 16
+    more, 1 to 128 in all. Hold three notes with x1 +0 and the pattern is three steps long; hold
+    four and it's four. A pattern that walks up its rows then plays exactly the notes you hold,
+    whatever the chord: x2 goes on up an octave (with OCT rows), +1 adds the root an octave up on
+    top. With KEEP ROWS on, a key let go still counts until every key is up. With nothing held the
+    LENGTH knob's steps stand in.
+- **DIRECTION**:
+  - **ONE WAY**: step 1 to the end, then round again.
+  - **BOUNCE**: up to the last step and back down, playing the first and last steps once each time
+    round: four steps play 1 2 3 4 3 2. With HELD, an Up pattern becomes Up Down for any chord. The
+    playhead runs back down the grid on the way back.
 
 **PLAYBACK**
 
@@ -187,6 +205,12 @@ of them.
 - **Sustain pedal** (CC64): while it's down, keys you let go of stay in the chord and the arp keeps
   playing them; new keys join it. Lifting the pedal lets go of every key no longer held. JArp keeps
   the pedal for itself rather than passing it on, so the arp's own note lengths stay as drawn.
+- **KEEP ROWS**: on, a key you let go of keeps its row until every key is up. Hold C, E and G on
+  rows 1 to 3 and let go of C: row 1 rests while E and G stay on rows 2 and 3 instead of shifting
+  down. Press C again and it takes row 1 back; a different new key is fitted in by pitch as usual.
+  Once every key is up the next chord starts afresh. Made for drums: hold a beat and lift the kick
+  or the hats out of it without the other drums moving rows. Off to start with; the Drum Kit
+  presets turn it on.
 - **RESTART**: where the pattern starts.
   - **SONG** locks the pattern to the song position, so it is sequenced in time rather than started
     by your hands: play a chord half way through the pattern and it starts half way through. Each
@@ -268,7 +292,7 @@ The preset bar steps through the factory bank and then your own. A preset holds 
 eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
 instead, right-click the slot's number and use **Load from preset**:
 
-There are 123 factory presets in 27 categories, each built on how the style is really played.
+There are 128 factory presets in 27 categories, each built on how the style is really played.
 Most use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked
 (chain) use several patterns: CHORD moves on with each new chord, LOOP plays them one after another.
 
@@ -283,16 +307,21 @@ The **Drum Kit** presets play a kit from the keys you hold: row 1 is the kick, 2
 closed hat and 4 the open hat, the order the General MIDI drum map puts them in. Hold MIDI notes 36,
 38, 42 and 46 (C2, D2, F#2 and A#2 as JArp names them, with middle C as C4; a host that calls middle
 C C3 names them C1, D1, F#1 and A#1) and route JArp into a drum machine or sampler. Empty rows rest, so a drum you
-don't hold stays out; let go of the hat key and the hats drop. Each is four bars long, the fourth
+don't hold stays out, and KEEP ROWS is on, so letting go of any drum's key drops just that drum
+while the rest keep their rows: lift the kick for a breakdown and press it again to bring it back. Each is four bars long, the fourth
 with a fill, and starts from the song's first bar (RESTART SONG), so its fill lands at the end of
 each four-bar phrase. The **Percussion** presets are hand percussion and mallet figures (clave,
 cascara, conga, bongos, djembe, cajon, darbuka, tambourine, shaker, bell, tabla, marimba) for any
 pitched sound, walking the notes held.
 
+Up, Up Two Octaves, Up and Over, Up Down, Up Down Two Octaves, Root Pedal, Pedal Bounce and Breath
+Pulse set their LENGTH by the notes HELD, so they fit whatever chord you play, and the Up Down ones
+BOUNCE. The grooves, kits and the rest keep a set number of steps, so they stay in time with the bar.
+
 | Category | Presets |
 |---|---|
-| Basics | Init, Up, Down, Up Down, Converge, Pinky Top, Root Fifth, Broken Thirds (DEGREE rows) |
-| Berlin School | Octave Line, Pedal Sequence, Sequencer Bass, Phase Drift (a seven-step accent drifting across the line), Night Drive (four patterns, LOOP), Long Drive (64 steps) |
+| Basics | Init, Up, Up Two Octaves, Up and Over, Down, Up Down, Up Down Two Octaves, Root Pedal, Converge, Pinky Top, Root Fifth, Broken Thirds (DEGREE rows) |
+| Berlin School | Octave Line, Pedal Bounce, Pedal Sequence, Sequencer Bass, Phase Drift (a seven-step accent drifting across the line), Night Drive (four patterns, LOOP), Long Drive (64 steps) |
 | Grooves: Funk | Funk Bass, Slap Pops, Pocket Sixteenths |
 | Grooves: Soul | Motown Walk, Soul Pocket |
 | Grooves: Disco | Disco Octaves, Disco Walk |

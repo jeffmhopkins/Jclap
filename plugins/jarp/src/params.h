@@ -36,6 +36,8 @@ enum ParamId : clap_id {
    kMaxHits,
    // Appended: how far above the lowest note held an octave shift may take a note.
    kRange,
+   // Appended: a note let go keeps its row (resting) until every key is up.
+   kKeepRows,
    kParamCount
 };
 
@@ -60,6 +62,7 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kPressRatchet, "Pressure to Ratchet", "Pressure", 0, 1, 0.6, kMod},
    {kMaxHits, "Max Hits", "Pressure", 1, 8, 4, kStep},
    {kRange, "Octave Range", "Rows", 0, 3, 1, kChoice},
+   {kKeepRows, "Keep Rows", "Rows", 0, 1, 0, kChoice},
 };
 
 // ---- choices ----
@@ -93,6 +96,7 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kRate: count = 6; return kRateNames;
    case kAdvance: count = 3; return kAdvanceNames;
    case kLatch: count = 2; return kOffOnNames;
+   case kKeepRows: count = 2; return kOffOnNames;
    case kRestart: count = 3; return kRestartNames;
    case kRowsBy: count = 4; return kRowsByNames;
    case kEmptyRows: count = 3; return kEmptyRowsNames;
