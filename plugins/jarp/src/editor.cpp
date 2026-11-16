@@ -6,9 +6,10 @@
 // Colour carries meaning: orange is notes, timing and the row playing; blue is pressure; purple is
 // only the pattern's end and the slide bar; grey is labels and selected switches.
 //
-// The grid: click an empty cell for a one-step note and drag right to lengthen it as you add it;
-// drag a note's right edge to set how long it sounds (quarter steps, stopping at the next note in
-// the row); click a note to remove it. Drag the purple bar (or its tab) to set the pattern's length.
+// The grid: press an empty cell and drag to paint notes, press a note and drag to erase them; drag
+// a note's lit right edge to set how long it sounds (quarter steps, stopping at the next note in the
+// row); shift-drag a box to pick notes and drag a picked one to move them. Drag the purple bar (or
+// its tab) to set the pattern's length.
 // Each row's label shows the held note it plays, with that finger's pressure, slide and bend as
 // three hairlines along its bottom.
 
@@ -281,6 +282,11 @@ public:
                c.fill((x + pad) * s, (y + kCellH - pad - 1.5f) * s, (w - 2 * pad) * s, 1.5f * s);
             }
          }
+         // The length handle, lit under the mouse and while dragging it.
+         if (i == hoverEdge_ || (drag_ == Drag::Length && note_ == i && moved_)) {
+            c.setColor(0xffffffff);
+            c.roundedRectangle((x + w - 3) * s, (y + 3) * s, 2 * s, (kCellH - 6) * s, 1 * s);
+         }
          if (lane.octave) {
             char o[8];
             std::snprintf(o, sizeof(o), "%+d", lane.octave);
@@ -449,24 +455,22 @@ public:
       const int at = p.noteAt(row, std::min(quarter, kMaxLength - 1));
       const int slot = scroll_.view;
       // Right-click picks a note (or lets it go) for editing its own lane values below; shift-click
-      // (either button) adds it to the picked notes or takes it out. From an empty cell, either drags
-      // out a box that picks the notes it touches.
+      // adds it to the picked notes or takes it out. Shift-drag from anywhere, or right-drag from an
+      // empty cell, draws a box that picks the notes it touches; drag a picked note to move them all.
       const bool adding = e.isShiftDown();
       if (e.shouldTriggerPopup() || adding) {
-         if (at >= 0) {
+         if (at >= 0 && !adding) {
             const std::vector<int> now = scroll_.picked(p, slot);
-            if (adding)
-               scroll_.toggle(slot, p.notes[at]);
-            else if (now.size() == 1 && now[0] == at)
+            if (now.size() == 1 && now[0] == at)
                scroll_.unpick();
             else
                scroll_.pick(slot, p.notes[at]);
             redrawAll();
             return;
          }
-         if (!adding)
-            scroll_.unpick();
-         else if (scroll_.pickSlot != slot)
+         if (at >= 0)
+            scroll_.toggle(slot, p.notes[at]);
+         else if (!adding || scroll_.pickSlot != slot)
             scroll_.unpick();
          boxBase_ = scroll_.picks;
          boxX0_ = boxX1_ = x;
@@ -478,15 +482,25 @@ public:
       Pattern next = p;
       if (at >= 0) {
          const Note &n = p.notes[at];
-         // The right edge sets the length; on a short note, only its last third, so it can still move.
-         const float right = kGridX + (n.step - first) * kColumn + noteWidth(n.length);
-         if (right - x < std::min(8.0f, noteWidth(n.length) / 3)) {
+         // The lit right edge sets the length, once dragged a little.
+         if (edgeAt(x, y) == at) {
             drag_ = Drag::Length;
             note_ = at;
+            pressX_ = x;
+            moved_ = false;
             return;
          }
-         // Dragging a note moves it (and the other picked notes with it, if it's picked); a click
-         // without a drag removes it, on the way up.
+         // Pressing an unpicked note erases it, and every note the mouse passes until it lets go.
+         // A picked note (or any, with Alt/Option held) drags to move instead, the other picked
+         // notes with it; a click on it without a drag removes it, on the way up.
+         if (!scroll_.isPicked(p, slot, at) && !e.isAltDown()) {
+            drag_ = Drag::Erase;
+            lastX_ = x;
+            lastY_ = y;
+            erase(next, at);
+            commit(next);
+            return;
+         }
          drag_ = Drag::Move;
          note_ = at;
          moveBase_ = p;
@@ -505,11 +519,49 @@ public:
          scroll_.unpick();
          redrawAll();
       }
+      // Pressing an empty cell paints: a one-step note there, and in every empty cell the mouse
+      // passes until it lets go.
       if (!next.add(row, first + col, kQuarters))
          return;
       commit(next);
-      drag_ = Drag::Length;
-      note_ = next.count - 1;
+      drag_ = Drag::Paint;
+      lastX_ = x;
+      lastY_ = y;
+   }
+
+   // Paints or erases along the mouse's path from where it last was, so a quick drag skips no cell.
+   void stroke(float x, float y) {
+      Pattern next = shown();
+      const float dx = x - lastX_, dy = y - lastY_;
+      const int n = std::max(1, static_cast<int>(std::ceil(std::max(std::abs(dx), std::abs(dy)) / 4.0f)));
+      for (int k = 1; k <= n; ++k) {
+         const float px = lastX_ + dx * k / n, py = lastY_ + dy * k / n;
+         const int col = static_cast<int>(std::floor((px - kGridX) / kColumn));
+         const int row = 7 - static_cast<int>(std::floor((py - kGridY) / kRowPitch));
+         if (col < 0 || col >= kView || row < 0 || row >= kRows || py < kGridY)
+            continue;
+         const int step = scroll_.first + col;
+         if (drag_ == Drag::Paint) {
+            if (step < length() && next.noteAt(row, step * kQuarters) < 0)
+               next.add(row, step, kQuarters);
+         }
+         else {
+            const int quarter = scroll_.first * kQuarters + static_cast<int>(std::floor((px - kGridX) / kColumn * kQuarters));
+            if (const int at = next.noteAt(row, std::min(quarter, kMaxLength - 1)); at >= 0)
+               erase(next, at);
+         }
+      }
+      lastX_ = x;
+      lastY_ = y;
+      if (next != shown())
+         commit(next);
+   }
+
+   // Takes note `at` out of `p`, and out of the picks.
+   void erase(Pattern &p, int at) {
+      const std::pair<int, int> k{p.notes[at].row, p.notes[at].step};
+      scroll_.picks.erase(std::remove(scroll_.picks.begin(), scroll_.picks.end(), k), scroll_.picks.end());
+      p.remove(at);
    }
 
    void mouseDrag(const visage::MouseEvent &e) override {
@@ -517,6 +569,10 @@ public:
       const float x = e.position.x / s, y = e.position.y / s;
       if (drag_ == Drag::Scroll) {
          scrollTo(x);
+         return;
+      }
+      if (drag_ == Drag::Paint || drag_ == Drag::Erase) {
+         stroke(x, y);
          return;
       }
       if (drag_ == Drag::Box) {
@@ -561,6 +617,9 @@ public:
       }
       if (drag_ != Drag::Length)
          return;
+      if (!moved_ && std::abs(x - pressX_) < kDragSlop)
+         return;
+      moved_ = true;
       Pattern next = shown();
       if (note_ < 0 || note_ >= next.count)
          return;
@@ -588,11 +647,44 @@ public:
    }
 
    void mouseMove(const visage::MouseEvent &e) override {
-      const bool over = length() > kView && e.position.y / ui::designScale(*this) >= kNumbersY;
-      if (over != hoverBar_) {
+      const float s = ui::designScale(*this);
+      const bool over = length() > kView && e.position.y / s >= kNumbersY;
+      const int edge = edgeAt(e.position.x / s, e.position.y / s);
+      if (over != hoverBar_ || edge != hoverEdge_) {
          hoverBar_ = over;
+         hoverEdge_ = edge;
+         setCursorStyle(edge >= 0 ? visage::MouseCursor::HorizontalResize : visage::MouseCursor::Arrow);
          redraw();
       }
+   }
+
+   void mouseExit(const visage::MouseEvent &) override {
+      if (hoverEdge_ >= 0 || hoverBar_) {
+         hoverEdge_ = -1;
+         hoverBar_ = false;
+         setCursorStyle(visage::MouseCursor::Arrow);
+         redraw();
+      }
+   }
+
+   // The note whose right edge (its length handle) is under (x, y), or -1. The handle is a narrow
+   // strip inside the edge; a short note keeps most of itself for moving.
+   int edgeAt(float x, float y) const {
+      const Pattern &p = shown();
+      const int first = scroll_.first;
+      const int row = 7 - static_cast<int>(std::floor((y - kGridY) / kRowPitch));
+      if (row < 0 || row >= kRows || y < kGridY)
+         return -1;
+      for (int i = 0; i < p.count; ++i) {
+         const Note &n = p.notes[i];
+         if (n.row != row || n.step >= first + kView)
+            continue;
+         const float right = kGridX + (n.step - first) * kColumn + noteWidth(n.length);
+         const float zone = std::min(kEdgeW, noteWidth(n.length) / 4);
+         if (x <= right + 1 && x >= right - zone && right <= kGridX + kBarW + 1)
+            return i;
+      }
+      return -1;
    }
 
    // The wheel, sideways or up and down, scrolls a long pattern.
@@ -611,7 +703,7 @@ public:
    std::function<void()> onScroll;
 
 private:
-   enum class Drag { None, Length, End, Scroll, Move, Box };
+   enum class Drag { None, Length, End, Scroll, Move, Box, Paint, Erase };
 
    // Picks the notes the box touches, with those picked before it when shift started it.
    void pickBox() {
@@ -679,6 +771,12 @@ private:
    Drag drag_ = Drag::None;
    int note_ = -1;
    bool hoverBar_ = false;
+   // The note whose length handle the mouse is over, lit; where a length drag started.
+   int hoverEdge_ = -1;
+   float pressX_ = 0.0f;
+   // A paint or erase stroke: where the mouse last was.
+   float lastX_ = 0.0f, lastY_ = 0.0f;
+   static constexpr float kEdgeW = 5.0f, kDragSlop = 6.0f;
    // A move: the pattern before it, where it started, the notes moving and the picks before it.
    Pattern moveBase_;
    float moveX_ = 0.0f, moveY_ = 0.0f;
@@ -1060,17 +1158,12 @@ private:
          load.addSubMenu(std::move(user));
       m.addSubMenu(std::move(load));
       m.onSelection() += [this, slot, sources](int id) {
-         if (id == 1) {
-            clipboard_ = host_.bank().slots[slot];
-            clipboardFull_ = true;
-         }
-         else if (id == 2 && clipboardFull_)
-            host_.setSlot(slot, clipboard_);
-         else if (id == 3) {
-            Pattern empty;
-            empty.length = host_.bank().slots[slot].length;
-            host_.setSlot(slot, empty);
-         }
+         if (id == 1)
+            copy(slot);
+         else if (id == 2)
+            paste(slot);
+         else if (id == 3)
+            clear(slot);
          else if (id >= kLoadId && id - kLoadId < static_cast<int>(sources->size()))
             host_.setSlot(slot, (*sources)[id - kLoadId]);
          if (onChange)
@@ -1083,6 +1176,23 @@ private:
 public:
    // After a slot's pattern changes here, so the grid and lanes redraw.
    std::function<void()> onChange;
+
+   // The clipboard the menu and the panel's COPY, PASTE and CLEAR buttons share.
+   void copy(int slot) {
+      clipboard_ = host_.bank().slots[static_cast<size_t>(slot)];
+      clipboardFull_ = true;
+   }
+   bool canPaste() const { return clipboardFull_; }
+   void paste(int slot) {
+      if (clipboardFull_)
+         host_.setSlot(slot, clipboard_);
+   }
+   // Takes every note out, keeping the length.
+   void clear(int slot) {
+      Pattern empty;
+      empty.length = host_.bank().slots[static_cast<size_t>(slot)].length;
+      host_.setSlot(slot, empty);
+   }
 
 private:
    static constexpr int kLoadId = 100;
@@ -1217,35 +1327,28 @@ public:
       };
       presets_->onDice = [this] { showDice(!host_.diceOpen); };
       presets_->diceLit = [this] { return host_.diceOpen; };
-      tips_.add(*presets_, "Presets: the arrows step through them, the name opens the menu, the star marks a favorite and "
-                           "SAVE keeps the current settings and all eight patterns. The die opens the dice.");
+      tips_.add(*presets_, "Step through presets, open the list, favorite, or SAVE. The die opens the dice.");
 
       // PATTERN: the grid and its lanes, with how rows are picked in its title row.
       add<ui::Section>({12, 76, 876, 478}, "PATTERN");
       slots_ = &add<SlotStrip>({118, 88, 213, 24}, host_);
+      buildClipboard();
       slots_->onChange = [this] {
          grid_->redraw();
          lanes_->redraw();
       };
-      tips_.add(*slots_, "Patterns 1 to 8: click one to play and edit it (the Pattern param, which the host can "
-                         "automate). Lit numbers have notes; the orange bar is the one playing. Right-click to copy, "
-                         "paste, clear, or load a pattern from a preset into it. Empty patterns are skipped when the chain "
-                         "advances.");
+      tips_.add(*slots_, "Patterns 1 to 8. Click to play and edit; right-click to copy, paste, clear or load.");
       tips_.add(choice(kAdvance, {340, 89, 128, 22}, {"OFF", "CHORD", "LOOP"}),
-                "Advance: Off plays the pattern selected. Chord moves to the next pattern with notes each time you "
-                "play a new chord after letting go of every note. Loop moves on each time the pattern ends.");
+                "Off: one pattern. Chord: next pattern on each new chord. Loop: next when one ends.");
       rowsLabel(470, "ROWS BY");
       auto &rowsBy = add<ui::Dropdown>({552, 89, 92, 22}, std::vector<std::string>{"PITCH", "DEGREE", "HELD DEGREE", "SPREAD"});
       rowsBy.setAccent(kSlate);
       bindings_.bind(rowsBy, kRowsBy);
-      tips_.add(rowsBy, "Pitch: row 1 is the lowest note held, row 2 the next up, and so on. Degree: rows count up the "
-                        "scale from the lowest note held; a degree that isn't held plays the nearest note that is. Held "
-                        "Degree: the same, but a degree that isn't held stays silent. Spread: the pattern's bottom row plays "
-                        "the lowest note held and its top row the highest, the rows between spread over the notes between.");
+      tips_.add(rowsBy, "How rows map to held notes: by pitch, by scale degree, held degrees only, or spread "
+                        "across the chord.");
       emptyLabel_ = &rowsLabel(669, "EMPTY ROWS");
       empty_ = &choice(kEmptyRows, {752, 89, 120, 22}, {"REST", "WRAP", "OCT"});
-      tips_.add(*empty_, "Rows above the notes held: Rest stays silent; Wrap starts again from the lowest note; Oct "
-                         "starts again an octave up each time, like an arpeggiator's octave range.");
+      tips_.add(*empty_, "Rows above the notes held: rest, wrap to the lowest, or wrap an octave up.");
       scaleLabel_ = &rowsLabel(650, "SCALE");
       key_ = &add<ui::Dropdown>({735, 89, 52, 22}, std::vector<std::string>(std::begin(kKeyNames), std::end(kKeyNames)));
       key_->setAccent(kSlate);
@@ -1253,23 +1356,15 @@ public:
       scale_ = &add<ui::Dropdown>({793, 89, 79, 22}, std::vector<std::string>{"MAJOR", "MINOR"});
       scale_->setAccent(kSlate);
       bindings_.bind(*scale_, kScale);
-      tips_.add(*key_, "The scale's key, for Degree rows.");
-      tips_.add(*scale_, "The scale Degree rows count up. Where two held notes are equally near a degree, the one in "
-                         "the scale wins.");
+      tips_.add(*key_, "The key for Degree rows.");
+      tips_.add(*scale_, "The scale Degree rows count up.");
 
       grid_ = &add<GridView>({20, 116, 862, 324}, host_, scroll_);
       grid_->onScroll = [this] { lanes_->redraw(); };
       grid_->onEdit = [this](const Pattern &p) { edit(p); };
-      tips_.add(*grid_, "Click a cell for a note and drag right to lengthen it; drag a note's right edge to set how "
-                        "long it sounds; drag a note to move it; click a note to remove it. Right-click a note to give it lane "
-                        "values of its own; shift-click to pick more, or right-drag a box around them. Dragging a picked note "
-                        "moves them all. Drag the purple bar to set the pattern's length.");
       add<ui::Divider>({27, 445, 846, 1});
       lanes_ = &add<LaneView>({20, 450, 862, 96}, host_, scroll_);
       lanes_->onEdit = [this](const Pattern &p) { edit(p); };
-      tips_.add(*lanes_, "Per step, for the notes starting on it: drag up or down, scroll, or double-click to reset. "
-                         "Click P to make that step's ratchet follow pressure. Chance is how often the step plays, in percent. With notes picked (right-click them), "
-                         "a picked note's column sets the own values of every picked note; double-click gives one back to the step.");
 
       // Settings.
       add<SettingsCard>({12, 568, 876, 142});
@@ -1288,29 +1383,20 @@ public:
          p.length = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(v)), 1, kSteps));
          edit(p);
       };
-      tips_.add(*length_, "How many steps this pattern plays before it loops; each pattern has its own. The purple bar "
-                          "on the grid is the same.");
+      tips_.add(*length_, "Steps before this pattern loops. Same as the purple bar.");
       heading("LATCH", 270, 606);
-      tips_.add(choice(kLatch, {270, 624, 80, 22}, {"OFF", "ON"}),
-                "On: the notes keep playing after you let go, until you play a new chord.");
+      tips_.add(choice(kLatch, {270, 624, 80, 22}, {"OFF", "ON"}), "Keep playing after you let go, until a new chord.");
       heading("RANGE", 360, 606);
       auto &range = add<ui::Dropdown>({360, 624, 50, 22}, std::vector<std::string>{"1 OCT", "2 OCT", "3 OCT", "4 OCT"});
       range.setAccent(kSlate);
       bindings_.bind(range, kRange);
-      tips_.add(range, "How far above the lowest note you hold a note may be moved up by octaves (by OCT rows or the "
-                       "Octave lane). A note that would go higher drops back down by octaves until it fits.");
+      tips_.add(range, "How far octave shifts may climb before folding back down.");
       heading("RESTART", 270, 652);
       tips_.add(choice(kRestart, {270, 670, 138, 22}, {"SONG", "NOTE", "BAR"}),
-                "Where the pattern starts: Song locks it to the song position, so a chord played half way through "
-                "the pattern starts half way through it (and a Loop chain plays along the song); Note starts it "
-                "with the first note you play; Bar starts it at the bar the first note is in.");
-      tips_.add(knob(kPressVelocity, "VELOCITY", kBlue, 452, 606),
-                "How far each note's velocity follows its finger's pressure instead of how hard the key was struck. The "
-                "Velocity lane's offset is added after.");
-      tips_.add(knob(kCurve, "CURVE", kBlue, 560, 606, true),
-                "How pressure maps: Soft reaches high values with a light touch, Hard needs a firm press.");
-      tips_.add(knob(kPressRatchet, "RATCHET", kBlue, 670, 606),
-                "How far pressure adds hits on steps with P lit, from the step's own count up to Max Hits.");
+                "Song: locked to the song position. Note: from your first note. Bar: from that bar.");
+      tips_.add(knob(kPressVelocity, "VELOCITY", kBlue, 452, 606), "How much pressure sets each note's velocity.");
+      tips_.add(knob(kCurve, "CURVE", kBlue, 560, 606, true), "Soft: a light touch goes far. Hard: needs a firm press.");
+      tips_.add(knob(kPressRatchet, "RATCHET", kBlue, 670, 606), "How much pressure adds hits on steps with P lit.");
       tips_.add(knob(kMaxHits, "MAX HITS", kBlue, 780, 606), "The most hits a pressed P step splits into.");
 
       buildDice();
@@ -1440,6 +1526,41 @@ private:
    // The random preset row, from the card's top.
    static constexpr float kPresetY = 404;
 
+   // COPY, PASTE and CLEAR for the pattern on show, in the header.
+   void buildClipboard() {
+      auto &copy = add<ui::Button>({356, 18, 56, 28}, "COPY");
+      copy.onClick = [this] {
+         slots_->copy(scroll_.view);
+         paste_->setAccent(kOrange);
+         paste_->redraw();
+      };
+      tips_.add(copy, "Copy the pattern on the grid.");
+      paste_ = &add<ui::Button>({416, 18, 58, 28}, "PASTE");
+      paste_->onClick = [this] {
+         if (!slots_->canPaste())
+            return;
+         host_.diceHistory.push(DiceState(shown(), scroll_.view));
+         slots_->paste(scroll_.view);
+         slotEdited();
+      };
+      tips_.add(*paste_, "Paste over the pattern on the grid.");
+      auto &clear = add<ui::Button>({478, 18, 56, 28}, "CLEAR");
+      clear.onClick = [this] {
+         host_.diceHistory.push(DiceState(shown(), scroll_.view));
+         slots_->clear(scroll_.view);
+         slotEdited();
+      };
+      tips_.add(clear, "Clear every note from the pattern on the grid.");
+   }
+
+   void slotEdited() {
+      scroll_.unpick();
+      slots_->redraw();
+      grid_->redraw();
+      lanes_->redraw();
+      refreshDice();
+   }
+
    void buildDice() {
       const ui::Rect b = kDiceBox;
       card_ = &add<DiceCard>(b);
@@ -1449,12 +1570,12 @@ private:
       rnd.setAccent(kOrange);
       rnd.onClick = [this] { roll(false); };
       keep(rnd);
-      tips_.add(rnd, "A new pattern from a plain base, each ticked item rolled within its range.");
+      tips_.add(rnd, "A new pattern, each ticked item rolled.");
       auto &mut = add<ui::Button>({b.x + 16, b.y + 92, 150, 33}, "MUTATE");
       mut.setAccent(kOrange);
       mut.onClick = [this] { roll(true); };
       keep(mut);
-      tips_.add(mut, "Nudges the pattern you have, each ticked item by up to its range. Click again to keep going.");
+      tips_.add(mut, "Nudge the pattern you have. Click again to keep going.");
       undo_ = &add<ui::Button>({b.x + b.w - 136, b.y + 14, 58, 22}, "UNDO");
       undo_->onClick = [this] { stepHistory(false); };
       keep(*undo_);
@@ -1478,7 +1599,7 @@ private:
             card_->redraw();
          };
          keep(tick);
-         tips_.add(tick, "Ticked, the dice roll this; unticked, it stays as it is.");
+         tips_.add(tick, "Ticked items change when you roll.");
       }
       const auto range = [&](int i, ui::ValueRange r, double value, std::function<std::string(double)> show,
                              std::function<void(double)> set) {
@@ -1526,17 +1647,17 @@ private:
       cat.setSelected(std::clamp(host_.dice.presetCategory, 0, static_cast<int>(cats.size()) - 1));
       cat.onChange = [this](int i) { host_.dice.presetCategory = i; };
       keep(cat);
-      tips_.add(cat, "Where a random preset comes from: any factory preset, or one category.");
+      tips_.add(cat, "Where a random preset comes from.");
       auto &all = add<ui::Button>({b.x + 174, py, 80, 26}, "PRESET");
       all.setAccent(kOrange);
       all.onClick = [this] { randomPreset(false); };
       keep(all);
-      tips_.add(all, "Loads a random factory preset: its settings and all its patterns. UNDO brings back what you had.");
+      tips_.add(all, "Load a random factory preset. UNDO brings back what you had.");
       auto &one = add<ui::Button>({b.x + 260, py, 82, 26}, "INTO SLOT");
       one.setAccent(kOrange);
       one.onClick = [this] { randomPreset(true); };
       keep(one);
-      tips_.add(one, "Puts one random pattern from the factory presets into the selected slot, leaving the rest as it is.");
+      tips_.add(one, "Put one random factory pattern into this slot.");
    }
 
    void roll(bool mutate) {
@@ -1656,6 +1777,7 @@ private:
    ui::Dropdown *key_ = nullptr, *scale_ = nullptr;
    DiceCard *card_ = nullptr;
    ui::Button *undo_ = nullptr, *redo_ = nullptr;
+   ui::Button *paste_ = nullptr;
    std::vector<visage::Frame *> dice_;
    uint64_t diceSeed_ = 0;
 };
