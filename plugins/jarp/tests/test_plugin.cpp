@@ -122,6 +122,24 @@ int main() {
       JCLAP_CHECK(ended);
    }
    {
+      // A held key's CLAP tuning goes to each new arp note it starts, not just the one sounding.
+      TestHost h(clap_entry, kId);
+      h.setTransport(120.0, 0.0, true);
+      h.note(CLAP_EVENT_NOTE_ON, 60, 0.8, 1, 0);
+      h.process(256);
+      h.noteExpression(CLAP_NOTE_EXPRESSION_TUNING, 60, 2.0, 1, 0);
+      h.process(256);
+      int carried = 0; // The default pattern comes back to a lone key a few steps on.
+      for (int k = 0; k < 400; ++k) {
+         const auto out = h.process(256);
+         for (const auto &m : noteOns(out.midi))
+            for (const auto &x : out.expressions)
+               carried += x.expression_id == CLAP_NOTE_EXPRESSION_TUNING && x.key == m.data1 && x.header.time == m.time &&
+                          std::abs(x.value - 2.0) < 1e-9;
+      }
+      JCLAP_CHECK(carried >= 1);
+   }
+   {
       // CLAP notes and note expressions: pressure for a held key goes to the arp note playing from
       // it, an octave up on a +1 step.
       TestHost h(clap_entry, kId);

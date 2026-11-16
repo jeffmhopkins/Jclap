@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.9.0.
+Version 0.10.0.
 
 ![Panel](docs/panel.png)
 
@@ -83,6 +83,11 @@ The switch beside the numbers says how playing moves along them:
 
 Empty patterns are skipped, and after the last pattern with notes it goes round to the first. To chain
 1, 2 and 3, fill those three and leave the rest empty; clear one to drop it from the chain.
+
+While a chain plays, the grid and lanes follow it: when CHORD or LOOP moves on, the pattern now
+playing is the one shown, and edits go to it. Click a number in the strip to show and edit that one;
+the grid stays on it until the chain moves on again, and goes back to the selected pattern when
+playing stops.
 
 With RESTART on **SONG** the chain follows the song too. In LOOP the patterns are laid end to end from
 the start of the song (beginning with the one selected), so where the song is decides which pattern
@@ -168,6 +173,9 @@ of them.
 
 - **LATCH**: on, the notes keep playing after you let go, until you play a new chord. A host's All
   Notes Off (or a note choke) stops them too.
+- **Sustain pedal** (CC64): while it's down, keys you let go of stay in the chord and the arp keeps
+  playing them; new keys join it. Lifting the pedal lets go of every key no longer held. JArp keeps
+  the pedal for itself rather than passing it on, so the arp's own note lengths stay as drawn.
 - **RESTART**: where the pattern starts.
   - **SONG** locks the pattern to the song position, so it is sequenced in time rather than started
     by your hands: play a chord half way through the pattern and it starts half way through. Each
@@ -202,6 +210,12 @@ an MPE synth plays it with that finger's expression:
 - Channel pressure, CC74 and pitch bend pass straight through on their channel.
 - Poly aftertouch and CLAP note expressions (pressure, brightness, tuning) are sent on to every arp
   note playing from that finger.
+- Each new arp note starts where its finger is now: its bend, pressure and slide are sent again with
+  the note (MIDI ones just before it, as MPE asks; poly aftertouch and CLAP note expressions just
+  after), so a bend held across retriggers stays bent rather than snapping back.
+- This follows the finger, however the rows map onto it: in SPREAD or HELD DEGREE, an OCT row, the
+  Octave lane, a WRAP octave or a RANGE fold, every note a finger plays takes that finger's expression,
+  and no other finger's.
 - Letting go of a finger ends its notes at once (unless LATCH is on).
 
 The notes you hold don't pass through: only the arp's notes do.
