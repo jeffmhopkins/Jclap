@@ -1,7 +1,8 @@
 // Renders JArp's panel offscreen to a PNG, for the README and visual checks.
 //
 //    jarp-screenshot out.png [width height] [dice] [long] [note] [picks] [preset=NAME] [rows=N]
-//                    [held] [bounce] [repeatends] [advance=N] [keys=K,K,...]
+//                    [held] [bounce] [repeatends] [advance=N] [repeat=N] [then=N] [oneshot]
+//                    [passsustain] [keys=K,K,...]
 //
 // The panel shows the Pedal Climb preset playing a C major 7th held on four MPE channels, each finger
 // pressing a little differently, a few steps into the pattern. With `dice` the dice card is open; with
@@ -10,7 +11,9 @@
 // up, three hits, softer, a coin toss) and is picked, so the lanes show its values. With `picks` four
 // notes are picked together, each given a chance of its own by one edit. For the manual: `preset=NAME`
 // shows another factory preset, `rows=N` sets ROWS BY (0 Pitch, 1 Degree, 2 Held Degree, 3 Spread),
-// `held`, `bounce` and `repeatends` set the pattern's LENGTH box, `advance=N` the chain switch, and
+// `held`, `bounce` and `repeatends` set the pattern's LENGTH box, `advance=N` the chain switch,
+// `repeat=N` and `then=N` (0 Next, 1 Random) the CHAIN card, `oneshot` and `passsustain` the PLAY
+// card's boxes, and
 // `keys=` the MIDI keys held (one finger each, channels 2 up).
 
 #include <cmath>
@@ -32,7 +35,8 @@ using namespace jarp;
 // The manual's extras: another preset, ROWS BY, the LENGTH box and the chain switch.
 struct Extras {
    std::string preset = "Pedal Climb";
-   int rowsBy = -1, advance = -1;
+   int rowsBy = -1, advance = -1, repeat = -1, then = -1;
+   bool oneShot = false, passSustain = false;
    std::vector<int> keys = {48, 52, 55, 59};
    bool held = false, bounce = false, repeatEnds = false;
 };
@@ -60,6 +64,14 @@ public:
          values_[kRowsBy] = x.rowsBy;
       if (x.advance >= 0)
          values_[kAdvance] = x.advance;
+      if (x.repeat >= 0)
+         values_[kRepeat] = x.repeat;
+      if (x.then >= 0)
+         values_[kOrder] = x.then;
+      if (x.oneShot)
+         values_[kOneShot] = 1;
+      if (x.passSustain)
+         values_[kPassSustain] = 1;
       if (x.held)
          bank_.slots[0].byHeld = 1;
       if (x.bounce)
@@ -117,6 +129,9 @@ public:
       s.scale = whole(kScale);
       s.range = whole(kRange) + 1;
       s.keepRows = whole(kKeepRows) != 0;
+      s.repeat = whole(kRepeat);
+      s.order = static_cast<Order>(whole(kOrder));
+      s.oneShot = whole(kOneShot) != 0;
       s.pressVelocity = values_[kPressVelocity];
       s.curve = values_[kCurve];
       s.pressRatchet = values_[kPressRatchet];
@@ -215,9 +230,15 @@ int main(int argc, char **argv) {
                ++k;
          }
       }
+      else if (!std::strncmp(argv[i], "repeat=", 7))
+         x.repeat = std::atoi(argv[i] + 7);
+      else if (!std::strncmp(argv[i], "then=", 5))
+         x.then = std::atoi(argv[i] + 5);
       else if (!std::strncmp(argv[i], "advance=", 8))
          x.advance = std::atoi(argv[i] + 8);
       x.held = x.held || !std::strcmp(argv[i], "held");
+      x.oneShot = x.oneShot || !std::strcmp(argv[i], "oneshot");
+      x.passSustain = x.passSustain || !std::strcmp(argv[i], "passsustain");
       x.bounce = x.bounce || !std::strcmp(argv[i], "bounce");
       x.repeatEnds = x.repeatEnds || !std::strcmp(argv[i], "repeatends");
       dice = dice || !std::strcmp(argv[i], "dice");

@@ -9,6 +9,9 @@ const fs = require('fs');
   const p = await b.newPage();
   const toc = tocFile ? fs.readFileSync(tocFile, 'utf8') : '{}';
   await p.addInitScript(`window.TOC_PAGES = ${toc};`);
+  // JArp's version, from its CMakeLists.txt, for the cover, the footer and the download name.
+  const cm = fs.readFileSync(__dirname + '/../../CMakeLists.txt', 'utf8').match(/jclap_plugin_version\(([^)]+)\)/);
+  await p.addInitScript(`window.JARP_VERSION = ${JSON.stringify(cm ? cm[1] : '')};`);
   await p.goto('file://' + __dirname + '/manual.html', { waitUntil: 'networkidle' });
   await p.evaluate(() => document.fonts.ready);
   if (mode === 'marker') {

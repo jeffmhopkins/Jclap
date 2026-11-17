@@ -135,7 +135,7 @@ next step.
   1 to 4 are its four notes. **EMPTY ROWS** says what rows above the notes you hold do: **REST** stays
   silent, **WRAP** starts again from the lowest note (with four notes held, row 5 plays row 1's note),
   and **OCT** carries on up an octave (with a triad held, rows 4 to 6 are the triad an octave up). OCT
-  makes one shape fit any chord size: rows 1, 4 and 7 are always the root in three octaves. How high OCT can climb is capped by **RANGE** (see Playback).
+  makes one shape fit any chord size: rows 1, 4 and 7 are always the root in three octaves. How high OCT can climb is capped by **RANGE** (in the PLAY card; see Settings).
 - **DEGREE**: rows count up a scale from the lowest note you hold: row 1 is that note, row 3 the 3rd
   above it, row 5 the 5th, and so on. Pick the scale's key and MAJOR or MINOR beside it. A degree you
   aren't holding plays the held note nearest to it, so JArp never plays a note you didn't hold. Where

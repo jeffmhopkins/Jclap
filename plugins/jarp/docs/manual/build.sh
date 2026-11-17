@@ -6,7 +6,7 @@
 # Inter is fetched into fonts/ on the first run. The first pass prints hidden markers to find the
 # page each heading lands on; the second fills those pages into the contents.
 #
-# The panel images in img/ are crops of 1800 x 1486 renders from jarp-screenshot (2x the design
+# The panel images in img/ are crops of 1800 x 1502 renders from jarp-screenshot (2x the design
 # size), made by shots.sh.
 set -euo pipefail
 cd "$(dirname "$0")"
