@@ -11,8 +11,9 @@
 // Rows are the held notes from the lowest (Rows By PITCH), or scale degrees (DEGREE). Most presets
 // here are PITCH with Empty Rows OCT: row n is the nth note held counting on up through the octaves,
 // so a shape works for a triad or a 7th chord alike. No pattern skips a row: each walks the notes
-// held in turn, and the voicing you hold gives the chord its shape. The Grooves are bass lines by
-// style, an octave down; the Drum Kit presets play a kit's kick, snare and hats from the keys held.
+// held in turn, and the voicing you hold gives the chord its shape. The Bass presets are bass lines by
+// genre, an octave down, from two or three held notes (library_bass.h); the Drum Kit presets play a
+// kit's kick, snare and hats from the keys held.
 
 #include <algorithm>
 #include <cctype>
@@ -211,6 +212,8 @@ constexpr double song = 0, note = 1, bar = 2;
 // temporaries their own room in one frame, more than a host's thread has.
 template <typename F> JARP_NOINLINE void add(std::vector<Entry> &e, F make) { e.push_back(make()); }
 
+// The bass grooves, in library_bass.h.
+inline void addBass(std::vector<Entry> &e);
 // The Berlin School presets, in library_berlin.h.
 inline void addBerlin(std::vector<Entry> &e);
 // The piano presets (library_piano.h, included at the end of this file).
@@ -268,107 +271,8 @@ inline std::vector<Entry> build() {
    // library_berlin.h) ----
    addBerlin(e);
 
-   // ---- Grooves: bass lines by style, an octave down. Row 1 is the lowest note held, row 2 the next
-   // and so on, with nothing skipped: hold a root and fifth for a root-fifth line, a triad for
-   // root-third-fifth. Put a bass patch after it. ----
-   add(e, [&] { return Entry{"Funk Bass", "Grooves: Funk", "Sixteenth funk with ghosted pickups and an octave pop.", {rate(r16), swing(0.56), pressVel(0.3)},
-                {Pat("1 . 1t 1s . 1t 2s 1 . 1s 3s . 1 1t 1s 2s")
-                    .oct("-1 . -1 -1 . -1 0 -1 . -1 -1 . -1 -1 0 -1")
-                    .vel("16 . -26 4 . -26 12 8 . 0 -4 . 12 -26 14 -4")}}; });
-   add(e, [&] { return Entry{"Slap Pops", "Grooves: Funk", "Thumb slaps on the root, octave pops, the next note as a grace.", {rate(r16), swing(0.54), pressVel(0.3)},
-                {Pat("1s . 1t 1s . 1s 1t . 1s 1t . 1s . 1s 2t 1s")
-                    .oct("-1 . -1 0 . -1 -1 . -1 -1 . 0 . -1 -1 0")
-                    .vel("14 . -26 20 . 4 -26 . 10 -26 . 20 . 4 -20 18")}}; });
-   add(e, [&] { return Entry{"Pocket Sixteenths", "Grooves: Funk", "A laid-back pocket that walks up the chord into the next bar.", {rate(r16), swing(0.56), pressVel(0.3)},
-                {Pat("1 . . 1t 2s . 1s . 1 . 3s 2t . 1s 2s 3s")
-                    .oct("-1 . . -1 -1 . 0 . -1 . -1 -1 . -1 -1 -1")
-                    .vel("14 . . -24 6 . 10 . 10 . 4 -24 . 6 2 8")}}; });
-
-   add(e, [&] { return Entry{"Motown Walk", "Grooves: Soul", "A busy eighth-note walk up the chord and back down.", {octRows, rate(r8), pressVel(0.3)},
-                {Pat("1 1s 2 3 4 3 2s 3").oct("-1").vel("12 -6 4 0 8 0 -4 2")}}; });
-   add(e, [&] { return Entry{"Soul Pocket", "Grooves: Soul", "Long roots with a lazy push to the next note, behind the beat.", {rate(r16), swing(0.58), pressVel(0.3)},
-                {Pat("1 _ . 1s . . 2 . 3 _ . 2s . 1s . 2t").oct("-1").vel("12 . . -4 . . 6 . 8 . . 0 . 4 . -20")}}; });
-
-   add(e, [&] { return Entry{"Disco Octaves", "Grooves: Disco", "Octave-jumping eighths on the root, a step up to finish.", {rate(r8), pressVel(0.3)},
-                {Pat("1s 1s 1s 1s 1s 1s 2s 2s").oct("-1 0").vel("12 4")}}; });
-   add(e, [&] { return Entry{"Disco Walk", "Grooves: Disco", "Octave eighths walking through three held notes, two bars.", {rate(r8), pressVel(0.3)},
-                {Pat("1s 1s 1s 1s 2s 2s 2s 2s 3s 3s 3s 3s 2s 2s 2s 2s").oct("-1 0").vel("12 4")}}; });
-
-   add(e, [&] { return Entry{"House Bass", "Grooves: House", "Off-beat bass between the kicks, a step up at the end.", {rate(r16), pressVel(0.3)},
-                {Pat(". . 1s . . . 1s . . . 1s . . . 2s .").oct("-1").vel(". . 12 . . . 8 . . . 12 . . . 6 .")}}; });
-   add(e, [&] { return Entry{"Rolling House", "Grooves: House", "A rolling sixteenth line that fills the gaps between kicks.", {rate(r16), pressVel(0.3)},
-                {Pat("1s . 1t 1s 1s . 1t 1s 1s . 1t 1s 2s . 2t 1s")
-                    .oct("-1 . -1 -1 0 . -1 -1 -1 . -1 -1 -1 . -1 0")
-                    .vel("12 . -20 4 10 . -20 4 12 . -20 4 8 . -20 10")}}; });
-   add(e, [&] { return Entry{"Deep Offbeat", "Grooves: House", "Deep house: long offbeat notes stepping up the chord.", {rate(r16), swing(0.54), pressVel(0.3)},
-                {Pat(". . 1 _ . . 2 _ . . 1 _ . . 3 2s").oct("-1").vel(". . 10 . . . 6 . . . 10 . . . 4 0")}}; });
-
-   add(e, [&] { return Entry{"Acid Line", "Grooves: Techno", "Squelchy sixteenths with octave jumps; add a resonant filter.", {rate(r16), pressVel(0.2)},
-                {Pat("1s 1s 3 _ 1t 2s . 1s 1s 3s . 2s 1 _ 3s 1t")
-                    .oct("-1 0 0 . -1 -1 . -1 0 -1 . 0 -1 . 0 -1")
-                    .vel("14 -6 18 . -10 4 . 12 -6 6 . 18 10 . 8 -12")}}; });
-   add(e, [&] { return Entry{"Techno Rumble", "Grooves: Techno", "A low rumble around the kick, leaving every beat for it.", {rate(r16), pressVel(0.2)},
-                {Pat(". 1t 1s 1t . 1t 1s 1t . 1t 1s 1t . 1t 2s 3t").oct("-1").vel(". -10 4 -10")}}; });
-
-   add(e, [&] { return Entry{"Synth Pump", "Grooves: Synth", "Driving sixteenths on the root, stepping up at the bar's end.", {rate(r16), pressVel(0.2)},
-                {Pat("1s 1s 1s 1s 1s 1s 1s 1s 1s 1s 1s 1s 2s 2s 1s 1s").oct("-1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 0 -1").vel("12 -10 0 -10")}}; });
-   add(e, [&] { return Entry{"Outrun Drive", "Grooves: Synth", "Octave-bouncing sixteenths that climb through the chord.", {rate(r16), pressVel(0.2)},
-                {Pat("1s 1s 1s 1s 1s 1s 1s 1s 2s 2s 2s 2s 3s 3s 2s 2s").oct("-1 0").vel("10 -6")}}; });
-
-   add(e, [&] { return Entry{"Root Fifth Octave", "Grooves: Rock", "Hold a root and fifth: root, fifth and octave in rock eighths.", {rate(r8), pressVel(0.3)},
-                {Pat("1 2 1 2 1 2 1 2").oct("-1 -1 0 -1 -1 -1 0 -1").vel("12 -4 6 -4")}}; });
-   add(e, [&] { return Entry{"Rock Eighths", "Grooves: Rock", "Straight root eighths with a two-note turn into each bar.", {rate(r8), pressVel(0.3)},
-                {Pat("1 1 1 1 1 1 2 3 1 1 1 1 1 1 3 2").oct("-1").vel("12 0 4 0")}}; });
-   add(e, [&] { return Entry{"Gallop", "Grooves: Rock", "A metal triplet gallop on the root, a jump to finish.", {rate(r16T), restart(bar), pressVel(0.3)},
-                {Pat("1 1s 1s 1 1s 1s 1 1s 1s 2 2s 1s").oct("-1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 0").vel("16 -8 -8 10 -8 -8 14 -8 -8 10 -4 8")}}; });
-
-   add(e, [&] { return Entry{"Boogie Shuffle", "Grooves: Blues", "A shuffled walk through the low three notes you hold.", {rate(r8), swing(0.66), pressVel(0.3)},
-                {Pat("1 2 3 1 3 2 1 3").oct("-1 -1 -1 0 -1 -1 -1 -1").vel("10 -4 4 -4")}}; });
-   add(e, [&] { return Entry{"Boogie Walk", "Grooves: Blues", "Hold root, 3rd, 5th, 6th and b7 for the boogie-woogie walk.", {octRows, rate(r8), swing(0.66), pressVel(0.3)},
-                {Pat("1 2 3 4 5 4 3 2").oct("-1").vel("10 -4 4 -4")}}; });
-
-   add(e, [&] { return Entry{"Walking Bass", "Grooves: Jazz", "Hold a 7th chord: swung quarters walk up it and back.", {octRows, rate(r8), swing(0.62), pressVel(0.3)},
-                {Pat("1 _ 2 _ 3 _ 4 _ 5 _ 4 _ 3 _ 2 1t").oct("-1").vel("8 . 2 . 6 . 2 . 8 . 2 . 6 . 0 -24")}}; });
-   add(e, [&] { return Entry{"Two Feel", "Grooves: Jazz", "Half notes on the low notes held, for a ballad or the head.", {octRows, rate(r8), swing(0.62), pressVel(0.3)},
-                {Pat("1 _ _ _ 2 _ _ 3t 1 _ _ _ 3 _ 2 _").oct("-1").vel("8 . . . 4 . . -20 8 . . . 4 . 2 .")}}; });
-
-   add(e, [&] { return Entry{"Tresillo", "Grooves: Latin", "The 3+3+2 tresillo on the root, answered by the next note.", {rate(r16), pressVel(0.3)},
-                {Pat("1 _ _ 1 _ _ 1 _ 2 . . 2s 1 . 1s .")
-                    .oct("-1 . . -1 . . -1 . -1 . . -1 -1 . 0 .")
-                    .vel("14 . . 8 . . 10 . 4 . . -6 8 . 12 .")}}; });
-   add(e, [&] { return Entry{"Bossa Bass", "Grooves: Latin", "Hold root and fifth: a dotted root, then the fifth, bossa style.", {rate(r8), pressVel(0.3)},
-                {Pat("1 _ _ 2 2 _ _ _").oct("-1").vel("10 . . -6 4 . . .")}}; });
-   add(e, [&] { return Entry{"Tumbao", "Grooves: Latin", "Afro-Cuban tumbao: notes on the and of two and on four.", {rate(r8), pressVel(0.3)},
-                {Pat(". . . 1 _ _ 2 _ . . . 2 _ _ 3 _").oct("-1").vel(". . . 10 . . 6 . . . . 8 . . 6 .")}}; });
-
-   add(e, [&] { return Entry{"Dub Bass", "Grooves: Reggae", "Heavy, spacious dub: a long root, then short steps.", {rate(r8), swing(0.55), pressVel(0.3)},
-                {Pat("1l _ . 3 1 _ . 2").oct("-1").vel("10 . . 4 8 . . 0")}}; });
-   add(e, [&] { return Entry{"One Drop", "Grooves: Reggae", "Leaves beat one empty and sings through the chord.", {rate(r8), swing(0.56), pressVel(0.3)},
-                {Pat(". . 1 _ 2 . 3 2 . . 1 _ 3 . 2 1").oct("-1").vel(". . 10 . 4 . 6 0 . . 10 . 6 . 2 0")}}; });
-   add(e, [&] { return Entry{"Steppers", "Grooves: Reggae", "Busy roots-reggae eighths on the root, pushing on four.", {rate(r8), pressVel(0.3)},
-                {Pat("1 1 2 1 1 1 2 3").oct("-1").vel("12 -4 4 -4")}}; });
-
-   add(e, [&] { return Entry{"Boom Bap Bass", "Grooves: Hip Hop", "Swung hip hop: a long root, a pickup and a step up.", {rate(r16), swing(0.58), pressVel(0.3)},
-                {Pat("1 _ _ . . . . 1s . . 2 _ . . 1s .").oct("-1").vel("12 . . . . . . 4 . . 8 . . . 0 .")}}; });
-   add(e, [&] { return Entry{"Sub Slide", "Grooves: Hip Hop", "Long trap-style sub notes; give the synth glide for slides.", {rate(r16), pressVel(0.3)},
-                {Pat("1 _ _ _ _ _ 1s . . . 2 _ _ . 1t 1t").oct("-1").vel("12 . . . . . 4 . . . 8 . . . -10 -6")}}; });
-   add(e, [&] { return Entry{"Neo Soul", "Grooves: Hip Hop", "Loose bass wandering up an extended chord and back.", {octRows, rate(r16), swing(0.6), pressVel(0.3)},
-                {Pat("1 _ . 2s . 3 _ . 4 . 3s . 2 . 1s 2t").oct("-1").vel("10 . . -4 . 6 . . 8 . -2 . 4 . 0 -20")}}; });
-
-   add(e, [&] { return Entry{"Two Step", "Grooves: Breaks", "UK garage two-step, a new figure with each chord.", {rate(r16), swing(0.58), advance(chord), pressVel(0.3)},
-                {Pat("1 . 1t 2s . 1s . 1s 1 . 2s . 1t 1s 2 .")
-                     .oct("-1 . -1 -1 . -1 . 0 -1 . -1 . -1 -1 -1 .")
-                     .vel("14 . -24 6 . 4 . 12 12 . 4 . -24 6 8 ."),
-                 Pat("1s 1s . 3s 1s . 3s 1s . 1s 2s 3s 1s . 3s 2s")
-                     .oct("-1 0 . -1 0 . -1 -1 . -1 -1 -1 0 . -1 -1")
-                     .vel("14 6 . 4 12 . 2 8 . 6 2 4 12 . 4 0")}}; });
-   add(e, [&] { return Entry{"Jungle Roller", "Grooves: Breaks", "Long rolling sub notes that leave room for the breaks.", {rate(r16), pressVel(0.3)},
-                {Pat("1 _ _ _ _ _ . . . . 1 _ 2 _ 3s .").oct("-1").vel("12 . . . . . . . . . 6 . 8 . 4 .")}}; });
-
-   add(e, [&] { return Entry{"Two Beat", "Grooves: Country", "Root and next note on the beats, walking up at the end.", {rate(r8), pressVel(0.3)},
-                {Pat("1 . 2 . 1 . 2 . 1 . 2 . 1 2 3 .").oct("-1").vel("10 . 2 . 8 . 2 . 10 . 2 . 6 2 4 .")}}; });
-   add(e, [&] { return Entry{"Walk Up", "Grooves: Country", "Root and next note, then a walk up the chord to the change.", {octRows, rate(r8), pressVel(0.3)},
-                {Pat("1 . 2 . 1 . 2 . 1 . 2 . 2 3 4 5").oct("-1").vel("10 . 2 . 8 . 2 . 10 . 2 . 2 4 6 8")}}; });
+   // ---- Bass: bass lines by genre, a few of each, from two or three held notes (library_bass.h) ----
+   addBass(e);
 
    // ---- Drum Kit. Hold the drums' keys and the beat plays them: row 1 the kick, 2 the
    // snare, 3 the closed hat, 4 the open hat, which is the order the General MIDI map puts them in
@@ -624,5 +528,6 @@ inline std::vector<Entry> build() {
 
 } // namespace jarp
 
+#include "library_bass.h"
 #include "library_berlin.h"
 #include "library_piano.h"

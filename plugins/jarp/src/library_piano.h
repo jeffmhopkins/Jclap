@@ -129,7 +129,7 @@ inline void addPiano(std::vector<Entry> &e) {
                 {Pat("1v+2+3+4 . . 2+3+4s . 2+3+4s . . 3vv . 2+3+4 _ . . 2+3+4s .")
                     .vel("10 . . 2 . 4 . . 8 . 6 . . . 2 .")
                     .chc("100 . . 100 . 70 . . 100 . 100 . . . 60 .")}}; });
-   add(e, [&] { return Entry{"Jazz Waltz", "Piano: Jazz", "A swung 3/4: the root, then the chord pushed onto the and of one.", {octRows, rate(r8), swing(0.62), pressVel(0.5)},
+   add(e, [&] { return Entry{"Jazz Waltz Comp", "Piano: Jazz", "A swung 3/4: the root, then the chord pushed onto the and of one.", {octRows, rate(r8), swing(0.62), pressVel(0.5)},
                 {Pat("1v . 2+3+4 _ . 2+3+4s 3vv . 2+3+4 _ . 2+3+4s").vel("10 . 4 . . -2 8 . 4 . . -2")}}; });
 }
 
