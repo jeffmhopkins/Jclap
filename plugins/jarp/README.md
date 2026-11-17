@@ -294,7 +294,7 @@ The preset bar steps through the factory bank and then your own. A preset holds 
 eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
 instead, right-click the slot's number and use **Load from preset**:
 
-There are 166 factory presets in 33 categories, each built on how the style is really played.
+There are 180 factory presets in 34 categories, each built on how the style is really played.
 Most use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked
 (chain) use several patterns: CHORD moves on with each new chord, LOOP plays them one after another.
 
@@ -307,7 +307,10 @@ short sixteenths over a pedal, leaping octaves, accented in 3+3+2, galloping, dr
 bar and changing slowly over many bars. A sequencer of the time played one line and a key
 transposed it, so these take few notes: each says in its line whether to hold one note, a root and
 fifth, or a triad, and plays only those (rows 1 to 3 at most), getting its octaves from the Octave
-lane. Move your hand to transpose the sequence. There are seven kinds, several of each: **Pulse**
+lane. Move your hand to transpose the sequence. Some ask for a voicing other than a triad (a root,
+2nd and 5th, or a root, minor 3rd and 4th) for a modal colour. There are eight kinds, several of
+each: **Melodic** (hand-written lines in an irregular order, with gaps and notes that drop out),
+**Pulse**
 (one note or two, the octave doing the work), **Sequences** (a triad over sixteen steps),
 **Gallop** (an eighth and two sixteenths, and triplets), **Phasing** (loops of 7, 12, 13, 14 and 15
 steps that turn over the bar), **Bass** (an octave down), **Ratchets** (rolls of repeated hits) and
@@ -335,6 +338,7 @@ the Up Down ones BOUNCE (Up Down Repeat Ends playing its ends twice). The groove
 | Category | Presets |
 |---|---|
 | Basics | Init, Up, Up Two Octaves, Up and Over, Down, Up Down, Up Down Repeat Ends, Up Down Two Octaves, Root Pedal, Converge, Pinky Top, Root Fifth, Broken Thirds (DEGREE rows) |
+| Berlin School: Melodic | Lament, Distant Lights (hold a root, 2nd and 5th), Cold Water (root, minor 3rd and 4th), Falling Star, Midnight Ostinato (12 steps), Velvet Pulse (root, 5th and flat 7th), Rainfall (chance), Hymn (eighths), Tidal (root and fifth), Searchlight (root, 4th and 5th), Broken Signal (chance), Wandering (24 steps), Echo Answer, Story Sequence (four patterns, LOOP) |
 | Berlin School: Pulse | Octave Pulse, Steady Pulse, Chugging Eighths, Three Octave Pulse, Heartbeat (hold one note); Fifth Pulse, Pedal Fifth (hold a root and fifth) |
 | Berlin School: Sequences | Octave Line, Pedal Sequence, Pedal Bounce (HELD, BOUNCE), Dark Ostinato, Rising Triad, Falling Triad, Wave, Skipping Stone (hold a triad) |
 | Berlin School: Gallop | Octave Gallop, Fifth Gallop, Triad Gallop, Reverse Gallop, Triplet Sequence, Triplet Pedal |

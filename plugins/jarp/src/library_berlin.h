@@ -2,7 +2,8 @@
 
 // JArp's Berlin School presets: the sequencer ostinatos of 1970s German electronic music, short
 // staccato sixteenths over a pedal, leaping octaves, accented in 3 + 3 + 2, galloping, drifting
-// against the bar, and slowly changing over many bars.
+// against the bar, and slowly changing over many bars. The Melodic ones come first: hand-written
+// lines in an irregular order, with gaps and notes that drop out, as the sequences were really set.
 //
 // They take few notes. A sequencer of the time played one line and a key transposed it, so each
 // pattern here uses only rows 1 to 3 (or 1 to 2, or row 1 alone) and gets its octaves from the
@@ -34,6 +35,59 @@ inline void addBerlin(std::vector<Entry> &e) {
    const auto maxHits = [](double x) { return std::pair<clap_id, double>{kMaxHits, x}; };
    // A sequencer's short gate: half a step.
    constexpr int sh = 2;
+
+   // ---- Melodic: hand-written lines, the order irregular, with gaps and dropped notes. Each takes
+   // three notes, a triad or the voicing its line names, across three octaves. ----
+   add(e, [&] { return Entry{"Lament", "Berlin School: Melodic", "Hold a minor triad: a sad two-bar line with gaps, low to high.", {octRows, rate(r16), pressVel(0.2)},
+                {Pat("1 1 3 1 2 . 3 1 1 1 3 2 3 . 1 3 1 1 3 1 2 3 1 . 2 1 3 1 2 . . 3", sh)
+                    .oct("-1 0 -1 0 0 . -1 0 -1 0 -1 0 0 . 0 -1 -1 0 -1 0 0 0 1 . 0 0 -1 0 0 . . -1")
+                    .vel("14 -6 2 -8 8 . 0 -4 12 -8 4 6 10 . -2 -6 14 -6 2 -8 6 4 16 . 2 -6 0 -8 4 . . -2")
+                    .chc("100 100 100 75 100 100 100 85 100 100 100 100 100 100 100 70")}}; });
+   add(e, [&] { return Entry{"Distant Lights", "Berlin School: Melodic", "Hold a root, 2nd and 5th: a bright line reaching up, with gaps.", {octRows, rate(r16), pressVel(0.2)},
+                {Pat("1 3 2 . 1 3 . 3 1 3 2 3 1 2 3 . 1 3 2 . 1 3 2 1 3 . 1 2 3 . 1 .", sh)
+                    .oct("0 0 1 . 1 0 . 0 0 0 1 0 1 1 1 . 0 0 1 . 1 0 0 0 -1 . 0 0 0 . 0 .")
+                    .vel("12 -6 8 . 10 -4 . -8 12 -6 4 -4 8 2 14 . 12 -6 8 . 10 -4 0 -6 6 . -2 0 8 . 4 .")}}; });
+   add(e, [&] { return Entry{"Cold Water", "Berlin School: Melodic", "Hold a root, minor 3rd and 4th: a modal line circling the root.", {octRows, rate(r16), pressVel(0.2)},
+                {Pat("1 1 2 1 3 . 2 3 1 3 2 . 3 2 1 . 1 1 2 1 3 . 2 3 2 1 3 1 2 . 1 2", sh)
+                    .oct("-1 0 0 0 0 . 0 0 1 0 0 . 0 0 0 . -1 0 0 0 0 . 0 0 1 1 0 1 0 . 0 0")
+                    .vel("14 -8 0 -6 8 . -2 2 12 -4 -6 . 6 -2 -8 . 14 -8 0 -6 8 . -2 2 14 6 -4 2 0 . -6 4")}}; });
+   add(e, [&] { return Entry{"Falling Star", "Berlin School: Melodic", "Hold a triad: a line tumbling down, two long notes, then gaps.", {octRows, rate(r16), pressVel(0.2)},
+                {Pat("3 2 1 3 2 1 . 2 1 3 2 . 3 2 1 3 1:4 _ 3 1 2 3 1:4 _ 3 2 1 . 3 . 1 .", sh)
+                    .oct("1 1 1 0 1 1 . 0 1 0 0 . 0 0 0 -1 0 . -1 0 0 0 1 . 0 0 0 . -1 . -1 .")
+                    .vel("14 2 6 -4 8 0 . -6 10 -2 -6 . 4 -4 -8 2 12 . -6 -2 2 6 14 . 0 -4 -8 . 4 . 8 .")}}; });
+   add(e, [&] { return Entry{"Midnight Ostinato", "Berlin School: Melodic", "Hold a triad: twelve uneven steps with gaps, turning over the bar.", {octRows, rate(r16), pressVel(0.2), restart(bar)},
+                {Pat("1 1 3 . 2 1 3 1 . 1 3 2", sh).oct("-1 0 0 . 1 0 0 -1 . 0 -1 0").vel("14 -6 4 . 10 -8 0 8 . -4 2 6")}}; });
+   add(e, [&] { return Entry{"Velvet Pulse", "Berlin School: Melodic", "Hold a root, 5th and flat 7th: a dark pulse, a note now and then.", {octRows, rate(r16), pressVel(0.2)},
+                {Pat("1 1 3 . 2 1 3 2 1 . 3 1 2 3 1 3", sh).oct("-1 0 0 . 0 0 0 1 -1 . 0 0 0 0 1 0")
+                    .vel("14 -6 2 . 6 -8 0 10 12 . -2 -6 4 0 12 -4").chc("100 100 80 100 100 65 100 100 100 100 70 100 100 85 100 60")}}; });
+   add(e, [&] { return Entry{"Rainfall", "Berlin School: Melodic", "Hold a triad: a falling line, notes dropping out at random.", {octRows, rate(r16), pressVel(0.2)},
+                {Pat("1 3 2 1 3 2 1 3 2 3 1 2 3 1 2 3", sh).oct("0 0 1 1 0 0 1 1 1 0 1 0 0 0 0 -1")
+                    .vel("12 -4 6 10 -6 -2 8 14 4 -6 10 -2 0 -8 -4 6").chc("100 60 85 70 100 55 80 65 100 70 50 85 100 60 75 90")}}; });
+   add(e, [&] { return Entry{"Hymn", "Berlin School: Melodic", "Hold a triad: a slow, sung line in held notes over two bars.", {octRows, rate(r8), pressVel(0.2)},
+                {Pat("1:4 3:4 2:4 1:4 3 2 1:4 3 2:4 1 3:4 1 2 3 1:4 .", sh).oct("0 0 1 1 0 0 1 0 0 0 -1 0 0 0 1 .")
+                    .vel("12 2 8 10 -6 -4 12 -2 6 -6 4 -8 0 4 10 .")}}; });
+   add(e, [&] { return Entry{"Tidal", "Berlin School: Melodic", "Hold a root and fifth: octaves ebbing and flowing, with gaps.", {octRows, rate(r16), pressVel(0.2)},
+                {Pat("1 1 2 . 1 2 . 2 1 2 . 2 1 2 1 .", sh).oct("-1 0 0 . 1 0 . -1 0 1 . 0 0 -1 -1 .").vel("14 -6 4 . 10 -2 . 6 -4 8 . -2 2 -6 10 .")}}; });
+   add(e, [&] { return Entry{"Searchlight", "Berlin School: Melodic", "Hold a root, 4th and 5th: a line sweeping up and back, open.", {octRows, rate(r16), pressVel(0.2)},
+                {Pat("1 2 3 2 . 2 1 3 1 2 3 1 3 . 1 3 1 2 3 2 . 2 1 3 2 1 3 2 . 1 3 .", sh)
+                    .oct("0 0 0 1 . 0 1 0 0 0 0 1 1 . 1 0 0 0 0 1 . 0 1 0 1 1 0 0 . 0 -1 .")
+                    .vel("12 -6 0 8 . -4 10 -2 12 -6 0 6 14 . 4 -4 12 -6 0 8 . -4 10 -2 8 12 -2 -6 . 0 4 .")}}; });
+   add(e, [&] { return Entry{"Broken Signal", "Berlin School: Melodic", "Hold a triad: more gaps than notes, some coming and going.", {octRows, rate(r16), pressVel(0.2)},
+                {Pat("1 . 3 1 . 2 . 1 1 . . 3 2 . 1 .", sh).oct("-1 . -1 0 . 0 . 0 -1 . . 0 0 . 1 .")
+                    .vel("14 . 2 8 . 4 . -4 12 . . 6 0 . 10 .").chc("100 100 80 100 100 70 100 60 100 100 100 75 100 100 85 100")}}; });
+   add(e, [&] { return Entry{"Wandering", "Berlin School: Melodic", "Hold a triad: 24 steps wandering over the bar, gaps between.", {octRows, rate(r16), pressVel(0.2), restart(bar)},
+                {Pat("1 1 2 . 3 1 . 2 3 1 . 3 2 3 1 . 2 3 . 1 2 . 1 3", sh)
+                    .oct("-1 0 0 . 0 0 . 0 0 1 . 0 1 0 1 . 0 0 . 0 0 . 0 -1")
+                    .vel("14 -6 2 . 8 -4 . 0 6 12 . -2 8 -6 10 . 2 -4 . 6 -2 . 4 -6")}}; });
+   add(e, [&] { return Entry{"Echo Answer", "Berlin School: Melodic", "Hold a triad: a low phrase, then its answer up high.", {octRows, rate(r16), pressVel(0.2)},
+                {Pat("1 3 1 2 . 1 3 . 1 3 1 2 3 . . . 1 3 2 1 . 2 3 . 1 3 2 3 2 . . .", sh)
+                    .oct("-1 -1 0 0 . 0 -1 . -1 -1 0 0 0 . . . 1 0 1 1 . 1 0 . 1 0 1 1 1 . . .")
+                    .vel("14 -4 6 0 . 8 -6 . 12 -4 6 2 10 . . . 10 -6 4 8 . 2 -8 . 8 -6 2 6 0 . . .")}}; });
+   add(e, [&] { return Entry{"Story Sequence", "Berlin School: Melodic", "Hold a triad: one line over four bars, bar 3 pedalling on the 3rd.", {octRows, rate(r16), advance(loop), pressVel(0.2)},
+                {Pat("1 1 3 1 2 . 3 2 1 1 3 1 2 3 . 1", sh).oct("-1 0 -1 0 0 . -1 0 -1 0 -1 0 0 0 . 0").vel("14 -6 2 -8 8 . 0 4 12 -6 2 -4 6 10 . -2"),
+                 Pat("1 1 3 1 2 . 3 2 1 1 3 1 2 3 1 3", sh).oct("-1 0 -1 0 0 . -1 0 -1 0 -1 0 0 0 1 0").vel("14 -6 2 -8 8 . 0 4 12 -6 2 -4 6 2 14 -2"),
+                 Pat("2 2 1 2 3 . 1 3 2 2 1 2 3 1 . 2", sh).oct("-1 0 0 0 0 . 0 0 -1 0 0 0 0 1 . 0").vel("14 -6 2 -8 8 . 0 4 12 -6 2 -4 6 12 . -2"),
+                 Pat("1 1 3 1 2 . 3 2 1 1 3 1 3 2 1 .", sh).oct("-1 0 -1 0 0 . -1 0 -1 0 -1 0 0 0 0 .").vel("14 -6 2 -8 8 . 0 4 12 -6 2 -4 10 4 -2 .")}}; });
 
    // ---- Pulse: one note or two, the octave doing the work ----
    add(e, [&] { return Entry{"Octave Pulse", "Berlin School: Pulse", "Hold one note: sixteenths leaping an octave in 3+3+2.", {octRows, rate(r16), pressVel(0.2)},
