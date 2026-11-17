@@ -28,6 +28,13 @@ struct Settings {
    double swing = 0.5; // 0.5 straight .. 0.75
    int slot = 0;
    Advance advance = Advance::Off;
+   // Chords (Advance Chord) or times round (Advance Loop) each pattern plays before the chain moves
+   // on, and where it moves: the next pattern with notes in it, or another picked at random.
+   int repeat = 1;
+   Order order = Order::Next;
+   // One Shot: each new chord plays the pattern once through (with REPEAT, that many times; with
+   // Advance Loop, the chain once through), then the arp waits, silent, for the next chord.
+   bool oneShot = false;
    bool latch = false;
    // Keep Rows: a finger let go while others still hold keeps its place among the notes (its row
    // rests), so the rest don't shift down; once every key is up, the places are forgotten.
@@ -208,10 +215,12 @@ public:
          playing_ = selected_;
          // In CHORD, the next chord plays the slot just picked, not the one after it.
          played_ = false;
+         round_ = 0;
       }
       settings_.rate = std::clamp(s.rate, 0, 5);
       settings_.maxHits = std::clamp(s.maxHits, 1, kMaxRatchet);
       settings_.range = std::clamp(s.range, 1, 4);
+      settings_.repeat = std::clamp(s.repeat, 1, kMaxRepeat);
       dropLatched_ = dropLatched_ || dropLatched;
       // Keep Rows turned off: the places kept for keys let go are forgotten.
       if (!settings_.keepRows)
@@ -226,6 +235,7 @@ public:
    void setBank(const Bank &b) {
       bank_ = b;
       played_ = false;
+      round_ = 0;
    }
    const Bank &bank() const { return bank_; }
    int playing() const { return playing_; }
@@ -253,7 +263,9 @@ public:
          // the song says where it is.
          slotStart_ = 0;
          hits_.fill(0);
-         if (settings_.advance == Advance::Loop && settings_.restart != Restart::Song)
+         round_ = 0;
+         shotFrom_ = kUnset;
+         if (settings_.advance == Advance::Loop && !songChained())
             playing_ = firstWithNotes(selected_);
       }
       started_ = true;
@@ -361,16 +373,26 @@ public:
          hits_.fill(0);
          // A new chord moves on to the next pattern with notes in it (Advance Chord); the first
          // chord plays the one selected.
+         // With REPEAT, it moves on only every so many chords.
          // A Loop chain plays from the one selected each time, as one phrase.
          if (settings_.advance == Advance::Off)
             playing_ = selected_;
-         else if (settings_.advance == Advance::Chord && played_)
-            playing_ = bank_.next(playing_);
-         else if (settings_.advance == Advance::Loop)
+         else if (settings_.advance == Advance::Chord && played_) {
+            if (endOfRepeats())
+               playing_ = moveOn(playing_);
+         }
+         else if (settings_.advance == Advance::Loop) {
             playing_ = firstWithNotes(selected_);
+            round_ = 0;
+         }
          else if (bank_.slots[playing_].empty())
             playing_ = bank_.next(playing_);
          played_ = true;
+         // One Shot: so many times round, then silence until the next chord.
+         shotLeft_ = settings_.advance == Advance::Loop ? chainLength() * settings_.repeat
+                     : settings_.advance == Advance::Off ? settings_.repeat : 1;
+         shotFrom_ = kUnset;
+         shotDone_ = false;
       }
    }
 
@@ -560,13 +582,54 @@ private:
 
    double clock(uint32_t sample) const { return start_ + sample * perSample_; }
 
-   // The pattern and its start for musical step j of a Loop chain locked to the song.
+   // The patterns with notes in them, which a Loop chain plays through.
+   int chainLength() const {
+      int n = 0;
+      for (const Pattern &p : bank_.slots)
+         n += p.empty() ? 0 : 1;
+      return std::max(1, n);
+   }
+
+   // A Loop chain locked to the song: Restart Song, moving to the next pattern (a random one can't
+   // be worked out from where the song is, so it counts from the chord like Restart Note does).
+   bool songChained() const {
+      return settings_.advance == Advance::Loop && settings_.restart == Restart::Song && settings_.order == Order::Next;
+   }
+
+   // Counts one more chord or time round on the pattern playing: true when it has played REPEAT
+   // times, and the chain moves on.
+   bool endOfRepeats() {
+      if (++round_ < settings_.repeat)
+         return false;
+      round_ = 0;
+      return true;
+   }
+
+   // The pattern the chain moves on to from `from`: the next with notes in it, or (THEN Random) one
+   // of the others with notes in it, picked at random; `from` again when there is no other.
+   int moveOn(int from) {
+      if (settings_.order == Order::Next)
+         return bank_.next(from);
+      int others[kSlots], n = 0;
+      for (int i = 0; i < kSlots; ++i)
+         if (i != from && !bank_.slots[i].empty())
+            others[n++] = i;
+      if (!n)
+         return bank_.next(from);
+      pick_ ^= pick_ << 13;
+      pick_ ^= pick_ >> 17;
+      pick_ ^= pick_ << 5;
+      return others[pick_ % static_cast<uint32_t>(n)];
+   }
+
+   // The pattern and its start for musical step j of a Loop chain locked to the song. Each pattern
+   // holds its place for REPEAT times round.
    void songChain(int64_t j) {
       int chain[kSlots], n = 0, cycle = 0;
       int s = bank_.slots[selected_].empty() ? bank_.next(selected_) : selected_;
       for (int k = 0; k < kSlots && !bank_.slots[s].empty(); ++k) {
          chain[n++] = s;
-         cycle += bank_.slots[s].cycleFor(heldCount());
+         cycle += bank_.slots[s].cycleFor(heldCount()) * settings_.repeat;
          s = bank_.next(s);
          if (s == chain[0])
             break;
@@ -577,7 +640,7 @@ private:
       }
       int64_t at = ((j % cycle) + cycle) % cycle;
       for (int i = 0; i < n; ++i) {
-         const int len = bank_.slots[chain[i]].cycleFor(heldCount());
+         const int len = bank_.slots[chain[i]].cycleFor(heldCount()) * settings_.repeat;
          if (at < len || i + 1 == n) {
             playing_ = chain[i];
             slotStart_ = j - at;
@@ -655,16 +718,17 @@ private:
       // Locked to the song, a Loop chain is a sequence along it: the patterns with notes in them,
       // from the one selected, one after another from the song's start, so where the song is says
       // which pattern plays and which step.
-      if (settings_.advance == Advance::Loop && settings_.restart == Restart::Song) {
+      if (songChained()) {
          const int was = playing_;
          songChain(j);
          if (playing_ != was)
             hits_.fill(0);
          len = bank_.slots[playing_].cycleFor(heldNow);
       }
-      // Otherwise, each time round, Advance Loop moves on to the next pattern with notes in it.
+      // Otherwise, every REPEAT times round, Advance Loop moves on to the next pattern with notes in
+      // it, or a random one.
       else if (settings_.advance == Advance::Loop && j > slotStart_ && (j - slotStart_) % len == 0) {
-         const int next = bank_.next(playing_);
+         const int next = endOfRepeats() ? moveOn(playing_) : playing_;
          if (next != playing_) {
             playing_ = next;
             hits_.fill(0);
@@ -673,6 +737,17 @@ private:
          len = bank_.slots[playing_].cycleFor(heldNow);
       }
       const int64_t rel = j - slotStart_;
+      // One Shot: each time the pattern comes round to its start again (after the chord's first
+      // step) is one time round; when they're used up, the arp goes quiet until the next chord.
+      if (settings_.oneShot && !shotDone_) {
+         const int one = bank_.slots[playing_].cycleFor(heldNow);
+         if (shotFrom_ == kUnset)
+            shotFrom_ = j;
+         else if (j > shotFrom_ && ((rel % one) + one) % one == 0 && --shotLeft_ <= 0)
+            shotDone_ = true;
+      }
+      if (settings_.oneShot && shotDone_)
+         return;
       const Pattern &pattern_ = bank_.slots[playing_];
       const int step = pattern_.stepAt(rel, heldNow);
       const int steps = pattern_.stepsFor(heldNow);
@@ -802,6 +877,12 @@ private:
    Bank bank_;
    int selected_ = 0, playing_ = 0;
    bool played_ = false;
+   // Chords or times round the pattern playing has had towards REPEAT.
+   int round_ = 0;
+   // One Shot: times round left for this chord, the step it started on, and whether it's done.
+   int shotLeft_ = 1;
+   int64_t shotFrom_ = kUnset;
+   bool shotDone_ = false;
    int64_t slotStart_ = 0;
    std::array<Finger, kMaxFingers> fingers_{};
    std::array<ChannelState, 16> channels_{};
@@ -811,6 +892,7 @@ private:
    int pendingCount_ = 0;
    uint32_t serial_ = 0;
    uint32_t dice_ = 0x9e3779b9u; // xorshift state for Chance
+   uint32_t pick_ = 0x2545f491u; // and for THEN Random, so it doesn't change what Chance rolls
 
    uint32_t roll() {
       dice_ ^= dice_ << 13;

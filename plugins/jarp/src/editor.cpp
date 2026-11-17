@@ -1,6 +1,6 @@
 // JArp's panel, in Polar XY's plain style: a title bar with the presets and the dice, the PATTERN
 // card (the grid of eight rows by sixteen steps, with the Octave, Ratchet and Velocity lanes under
-// it) and the settings card (Timing, Playback, Pressure), all on a 900 x 743 design grid scaled to
+// it) and the settings card (Timing, Playback, Pressure), all on a 900 x 799 design grid scaled to
 // the window.
 //
 // Colour carries meaning: orange is notes, timing and the row playing; blue is pressure; purple is
@@ -1327,9 +1327,10 @@ public:
          c.fill(g.x * s, 31 * s, g.w * s, 1.0f * s);
       }
       c.setColor(kRule);
-      c.fill(168 * s, 12 * s, 1.0f * s, 116 * s);
-      c.fill(370 * s, 12 * s, 1.0f * s, 116 * s);
-      c.fill(566 * s, 12 * s, 1.0f * s, 116 * s);
+      const float rule = height() / s - 26;
+      c.fill(168 * s, 12 * s, 1.0f * s, rule * s);
+      c.fill(370 * s, 12 * s, 1.0f * s, rule * s);
+      c.fill(566 * s, 12 * s, 1.0f * s, rule * s);
    }
 
    // LENGTH's header note: what the length comes to ("4 held = 4 steps").
@@ -1638,7 +1639,7 @@ public:
       lanes_->onEdit = [this](const Pattern &p) { edit(p); };
 
       // Settings.
-      settings_ = &add<SettingsCard>({12, 568, 876, 142});
+      settings_ = &add<SettingsCard>({12, 568, 876, 198});
       tips_.add(knob(kRate, "RATE", kOrange, 30, 606), "How long each step is.");
       tips_.add(knob(kSwing, "SWING", kOrange, 100, 606), "Moves every second step later: 50% is straight.");
       // LENGTH, the pattern's own: a number of steps, or so many for each note held, played one way
@@ -1720,6 +1721,30 @@ public:
       heading("RESTART", 392, 652);
       tips_.add(choice(kRestart, {392, 670, 118, 22}, {"SONG", "NOTE", "BAR"}),
                 "Song: locked to the song position. Note: from your first note. Bar: from that bar.");
+      oneShot_ = &add<CheckBox>(ui::Rect{392, 694, 100, 13}, "ONE SHOT");
+      oneShot_->onToggle = [this](bool on) {
+         host_.beginEdit(kOneShot);
+         host_.setParam(kOneShot, on ? 1.0 : 0.0);
+         host_.endEdit(kOneShot);
+      };
+      tips_.add(*oneShot_, "Play the pattern once (the chain once with Loop), then wait for a new chord.");
+      passSustain_ = &add<CheckBox>(ui::Rect{480, 694, 90, 13}, "PASS SUSTAIN");
+      passSustain_->onToggle = [this](bool on) {
+         host_.beginEdit(kPassSustain);
+         host_.setParam(kPassSustain, on ? 1.0 : 0.0);
+         host_.endEdit(kPassSustain);
+      };
+      tips_.add(*passSustain_, "Off: the pedal holds the chord for the arp. On: it goes on to the synth instead.");
+      // How the chain moves on: after so many chords or times round, to the next pattern or a random one.
+      heading("REPEAT", 392, 712);
+      repeat_ = &add<ui::NumberBox>(ui::Rect{392, 729, 80, 22}, ui::ValueRange{1, kMaxRepeat, 1, 1.0, false, true});
+      repeat_->setStepButtons(true);
+      repeat_->valueText = [](double v) { return "x" + std::to_string(static_cast<int>(std::lround(v))); };
+      bindings_.bind(*repeat_, kRepeat);
+      tips_.add(*repeat_, "Times round (Loop) or chords (Chord) each pattern plays before the chain moves on.");
+      thenLabel_ = &heading("THEN", 480, 712);
+      then_ = &choice(kOrder, {480, 729, 86, 22}, {"NEXT", "RANDOM"});
+      tips_.add(*then_, "Next: on to the next pattern. Random: to any other pattern with notes in it.");
       tips_.add(knob(kPressVelocity, "VELOCITY", kBlue, 588, 606), "How much pressure sets each note's velocity.");
       tips_.add(knob(kCurve, "CURVE", kBlue, 660, 606, true), "Soft: a light touch goes far. Hard: needs a firm press.");
       tips_.add(knob(kPressRatchet, "RATCHET", kBlue, 732, 606), "How much pressure adds hits on steps with P lit.");
@@ -1755,6 +1780,8 @@ public:
          bounce_->setSelected(p.bounce ? 1 : 0);
          repeatEnds_->setOn(p.repeatEnds != 0);
          repeatEnds_->setActive(p.bounce != 0);
+         oneShot_->setOn(std::lround(host_.paramValue(kOneShot)) != 0);
+         passSustain_->setOn(std::lround(host_.paramValue(kPassSustain)) != 0);
          length_->setVisible(!held);
          timesLabel_->setVisible(held);
          plusLabel_->setVisible(held);
@@ -1808,7 +1835,7 @@ public:
       canvas.text("Arp", ui::font(28 * s), visage::Font::kLeft, 72 * s, 12 * s, 80 * s, 40 * s);
 
       // The legend for the rows' hairlines, and what they are.
-      const float y = 725;
+      const float y = 781;
       const struct {
          unsigned colour;
          const char *name;
@@ -2134,7 +2161,10 @@ private:
    ui::Knob *length_ = nullptr;
    SettingsCard *settings_ = nullptr;
    ui::SegmentedSwitch *byHeld_ = nullptr, *bounce_ = nullptr;
-   CheckBox *repeatEnds_ = nullptr;
+   CheckBox *repeatEnds_ = nullptr, *oneShot_ = nullptr, *passSustain_ = nullptr;
+   ui::NumberBox *repeat_ = nullptr;
+   ui::Label *thenLabel_ = nullptr;
+   ui::SegmentedSwitch *then_ = nullptr;
    ui::NumberBox *times_ = nullptr, *plus_ = nullptr;
    ui::Label *timesLabel_ = nullptr, *plusLabel_ = nullptr;
    LaneView *lanes_ = nullptr;

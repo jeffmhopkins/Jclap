@@ -3,7 +3,9 @@
 
 #include <jclap/core/test_host.h>
 
+#include <algorithm>
 #include <memory>
+#include <set>
 #include <vector>
 
 #include "engine.h"
@@ -1184,6 +1186,164 @@ JARP_TEST_NOINLINE void theSavedPatternTests() {
    }
 }
 
+// REPEAT, THEN Random and ONE SHOT.
+JARP_TEST_NOINLINE void repeatAndOneShotTests() {
+   // Patterns of one note on step 0 in row `row`, `length` steps long.
+   const auto one = [](int row, int length) {
+      Pattern p = pattern({{static_cast<uint8_t>(row), 0, 4}});
+      p.length = static_cast<uint8_t>(length);
+      return p;
+   };
+   const auto keys = [](const std::vector<Timed> &on) {
+      std::vector<int> k;
+      for (const Timed &t : on)
+         k.push_back(t.m.data1);
+      return k;
+   };
+   {
+      // Advance Loop, REPEAT 2: each pattern plays twice before the next.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.advance = Advance::Loop;
+      s.repeat = 2;
+      e.setSettings(s);
+      e.setPattern(0, one(0, 2));
+      e.setPattern(1, one(1, 2));
+      const auto on = ons(run(e, 10 * kStepSamples - 300, chord({60, 64})));
+      JCLAP_CHECK(keys(on) == (std::vector<int>{60, 60, 64, 64, 60}));
+   }
+   {
+      // Advance Chord, REPEAT 2: each pattern plays for two chords before the next.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.advance = Advance::Chord;
+      s.repeat = 2;
+      e.setSettings(s);
+      e.setPattern(0, one(0, 2));
+      e.setPattern(1, one(1, 2));
+      std::vector<In> in;
+      for (int k = 0; k < 5; ++k) {
+         const int64_t at = k * 2 * kStepSamples;
+         for (const In &n : chord({60, 64}, at))
+            in.push_back(n);
+         in.push_back({at + kStepSamples, In::Off, 1, 60, 0});
+         in.push_back({at + kStepSamples, In::Off, 2, 64, 0});
+      }
+      const auto on = ons(run(e, 10 * kStepSamples, in));
+      JCLAP_CHECK(keys(on) == (std::vector<int>{60, 60, 64, 64, 60}));
+   }
+   {
+      // Restart Song, Advance Loop, REPEAT 2: A (2 steps) twice then B (3 steps) twice is a 10-step
+      // cycle along the song.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.advance = Advance::Loop;
+      s.restart = Restart::Song;
+      s.repeat = 2;
+      e.setSettings(s);
+      e.setPattern(0, one(0, 2));
+      e.setPattern(1, one(1, 3));
+      const auto on = ons(run(e, 13 * kStepSamples - 300, chord({60, 64})));
+      JCLAP_CHECK(keys(on) == (std::vector<int>{60, 60, 64, 64, 60, 60}));
+      if (on.size() == 6) {
+         JCLAP_CHECK_EQ(on[3].time, 7 * kStepSamples);
+         JCLAP_CHECK_EQ(on[4].time, 10 * kStepSamples);
+      }
+   }
+   {
+      // THEN Random: each time round moves to another pattern with notes in it, never the same one
+      // twice running, and in time every one plays, in no fixed order.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.advance = Advance::Loop;
+      s.order = Order::Random;
+      e.setSettings(s);
+      for (int k = 0; k < 4; ++k)
+         e.setPattern(k * 2, one(k, 1)); // slots 1, 3, 5 and 7, with the others empty
+      const auto k = keys(ons(run(e, 60 * kStepSamples - 300, chord({60, 64, 67, 72}))));
+      JCLAP_CHECK_EQ(k.size(), 60u);
+      std::set<int> seen(k.begin(), k.end());
+      JCLAP_CHECK_EQ(seen.size(), 4u);
+      bool inOrder = true;
+      const int order[] = {60, 64, 67, 72};
+      for (size_t i = 1; i < k.size(); ++i) {
+         JCLAP_CHECK(k[i] != k[i - 1]);
+         const int was = static_cast<int>(std::find(order, order + 4, k[i - 1]) - order);
+         inOrder = inOrder && k[i] == order[(was + 1) % 4];
+      }
+      JCLAP_CHECK(!inOrder);
+   }
+   {
+      // THEN Random with REPEAT 3: each pick plays three times round.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.advance = Advance::Loop;
+      s.order = Order::Random;
+      s.repeat = 3;
+      e.setSettings(s);
+      for (int k = 0; k < 3; ++k)
+         e.setPattern(k, one(k, 1));
+      const auto k = keys(ons(run(e, 30 * kStepSamples - 300, chord({60, 64, 67}))));
+      JCLAP_CHECK_EQ(k.size(), 30u);
+      for (size_t i = 0; i + 2 < k.size(); i += 3) {
+         JCLAP_CHECK(k[i] == k[i + 1] && k[i] == k[i + 2]);
+         if (i)
+            JCLAP_CHECK(k[i] != k[i - 1]);
+      }
+   }
+   {
+      // ONE SHOT: the pattern plays once through, then nothing until a new chord, which plays it
+      // once again.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.oneShot = true;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 4}, {1, 1, 4}, {0, 2, 4}, {1, 3, 4}}), 4);
+      std::vector<In> in = chord({60, 64});
+      in.push_back({8 * kStepSamples, In::Off, 1, 60, 0});
+      in.push_back({8 * kStepSamples, In::Off, 2, 64, 0});
+      for (const In &n : chord({60, 64}, 9 * kStepSamples))
+         in.push_back(n);
+      const auto on = ons(run(e, 20 * kStepSamples, in));
+      JCLAP_CHECK_EQ(on.size(), 8u);
+      if (on.size() == 8) {
+         JCLAP_CHECK_EQ(on[3].time, 3 * kStepSamples);
+         JCLAP_CHECK_EQ(on[4].time, 9 * kStepSamples);
+      }
+   }
+   {
+      // ONE SHOT with REPEAT 2 and Advance Off: twice through, then quiet.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.oneShot = true;
+      s.repeat = 2;
+      e.setSettings(s);
+      setPattern(e, pattern({{0, 0, 4}}), 3);
+      JCLAP_CHECK_EQ(ons(run(e, 12 * kStepSamples, chord({60}))).size(), 2u);
+   }
+   {
+      // ONE SHOT with Advance Loop: the chain once through (each pattern REPEAT times), then quiet.
+      auto eOwner = std::make_unique<Engine>();
+      Engine &e = *eOwner;
+      Settings s;
+      s.oneShot = true;
+      s.advance = Advance::Loop;
+      s.repeat = 2;
+      e.setSettings(s);
+      e.setPattern(0, one(0, 2));
+      e.setPattern(1, one(1, 2));
+      const auto on = ons(run(e, 16 * kStepSamples, chord({60, 64})));
+      JCLAP_CHECK(keys(on) == (std::vector<int>{60, 60, 64, 64}));
+   }
+}
+
 int main() {
    rowsTests();
    timingTests();
@@ -1194,5 +1354,6 @@ int main() {
    longPatternsTests();
    movingNotesTests();
    theSavedPatternTests();
+   repeatAndOneShotTests();
    return jclap::core::testResult();
 }
