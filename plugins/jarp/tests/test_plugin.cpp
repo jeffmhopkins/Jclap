@@ -164,6 +164,33 @@ int main() {
       JCLAP_CHECK(noteOns(play(h, 50)).size() >= 2);
    }
 
+   // ---- sustain pedal ----
+   {
+      // Held by the arp (the default), the pedal doesn't reach the synth and keeps a let-go key
+      // playing; with PASS SUSTAIN on it goes straight through and the arp ignores it.
+      const auto pedals = [](const std::vector<jclap::core::TestMidi> &midi) {
+         int n = 0;
+         for (const auto &m : midi)
+            n += (m.status & 0xF0) == 0xB0 && m.data1 == 64;
+         return n;
+      };
+      for (int pass = 0; pass < 2; ++pass) {
+         TestHost h(clap_entry, kId);
+         h.setParam(kPassSustain, pass);
+         h.setTransport(120.0, 0.0, true);
+         h.midi(0x90, 60, 100);
+         h.midi(0xB0, 64, 127);
+         auto first = play(h, 4);
+         h.midi(0x80, 60, 0);
+         auto later = play(h, 200);
+         JCLAP_CHECK_EQ(pedals(first), pass);
+         if (pass)
+            JCLAP_CHECK(noteOns(later).empty());
+         else
+            JCLAP_CHECK(!noteOns(later).empty());
+      }
+   }
+
    // ---- state ----
    {
       TestHost h(clap_entry, kId);

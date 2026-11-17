@@ -38,6 +38,14 @@ enum ParamId : clap_id {
    kRange,
    // Appended: a note let go keeps its row (resting) until every key is up.
    kKeepRows,
+   // Appended: how many times round (or chords, with Advance Chord) a pattern plays before the chain
+   // moves on, and whether it moves to the next pattern or one picked at random.
+   kRepeat,
+   kOrder,
+   // Appended: the arp plays once through, then waits silent for a new chord.
+   kOneShot,
+   // Appended: the sustain pedal (CC64) held by the arp, or passed on to the synth untouched.
+   kPassSustain,
    kParamCount
 };
 
@@ -45,6 +53,8 @@ constexpr auto kAuto = CLAP_PARAM_IS_AUTOMATABLE;
 constexpr auto kMod = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_MODULATABLE;
 constexpr auto kStep = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED;
 constexpr auto kChoice = CLAP_PARAM_IS_AUTOMATABLE | CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_ENUM;
+// The most times a pattern can repeat before the chain moves on.
+constexpr int kMaxRepeat = 16;
 
 inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kRate, "Rate", "Timing", 0, 5, 2, kChoice},
@@ -63,6 +73,10 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kMaxHits, "Max Hits", "Pressure", 1, 8, 4, kStep},
    {kRange, "Octave Range", "Rows", 0, 3, 1, kChoice},
    {kKeepRows, "Keep Rows", "Rows", 0, 1, 0, kChoice},
+   {kRepeat, "Repeat", "Patterns", 1, kMaxRepeat, 1, kStep},
+   {kOrder, "Then", "Patterns", 0, 1, 0, kChoice},
+   {kOneShot, "One Shot", "Playback", 0, 1, 0, kChoice},
+   {kPassSustain, "Pass Sustain", "Playback", 0, 1, 0, kChoice},
 };
 
 // ---- choices ----
@@ -72,6 +86,9 @@ inline const char *const kRateNames[] = {"1/32", "1/16T", "1/16", "1/8T", "1/8",
 inline const double kRateBeats[] = {0.125, 1.0 / 6.0, 0.25, 1.0 / 3.0, 0.5, 1.0};
 inline const char *const kOffOnNames[] = {"Off", "On"};
 inline const char *const kAdvanceNames[] = {"Off", "Chord", "Loop"};
+// Where the chain goes once a pattern has played REPEAT times: the next pattern with notes in it, or
+// one of the others picked at random.
+inline const char *const kOrderNames[] = {"Next", "Random"};
 inline const char *const kRestartNames[] = {"Song", "Note", "Bar"};
 // Pitch, Degree, Degree with only the degrees held playing (Held Degree), and Spread.
 inline const char *const kRowsByNames[] = {"Pitch", "Degree", "Held Degree", "Spread"};
@@ -88,8 +105,10 @@ inline const char *const kScaleNames[] = {"Major", "Minor"};
 // note, or on the bar.
 enum class Restart { Song, Note, Bar };
 // How playing moves along the patterns with notes in them: not at all (the selected one plays), to
-// the next with each new chord (after every finger has let go), or each time the pattern ends.
+// the next with each new chord (after every finger has let go), or each time the pattern ends. REPEAT
+// holds each pattern for so many chords or times round first, and THEN says where it goes.
 enum class Advance { Off, Chord, Loop };
+enum class Order { Next, Random };
 
 inline const char *const *choiceNames(clap_id id, int &count) {
    switch (id) {
@@ -97,6 +116,9 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kAdvance: count = 3; return kAdvanceNames;
    case kLatch: count = 2; return kOffOnNames;
    case kKeepRows: count = 2; return kOffOnNames;
+   case kOrder: count = 2; return kOrderNames;
+   case kOneShot: count = 2; return kOffOnNames;
+   case kPassSustain: count = 2; return kOffOnNames;
    case kRestart: count = 3; return kRestartNames;
    case kRowsBy: count = 4; return kRowsByNames;
    case kEmptyRows: count = 3; return kEmptyRowsNames;
