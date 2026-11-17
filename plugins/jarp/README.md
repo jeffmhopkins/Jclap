@@ -16,6 +16,10 @@ instrument.
 
 Version 0.20.0.
 
+**[User manual (PDF)](docs/JArp-User-Manual.pdf)**: every control, how rows find their notes, length
+and direction, MPE, chains, the dice, the full preset list with each preset's blurb, recipes and a
+settings reference.
+
 ![Panel](docs/panel.png)
 
 Hover over a control for a one-line tip. The grid and the lanes have none, so nothing pops up while
@@ -131,7 +135,7 @@ next step.
   1 to 4 are its four notes. **EMPTY ROWS** says what rows above the notes you hold do: **REST** stays
   silent, **WRAP** starts again from the lowest note (with four notes held, row 5 plays row 1's note),
   and **OCT** carries on up an octave (with a triad held, rows 4 to 6 are the triad an octave up). OCT
-  makes one shape fit any chord size: rows 1, 4 and 7 are always the root in three octaves. How high OCT can climb is capped by **RANGE** (see Playback).
+  makes one shape fit any chord size: rows 1, 4 and 7 are always the root in three octaves. How high OCT can climb is capped by **RANGE** (in the PLAY card; see Settings).
 - **DEGREE**: rows count up a scale from the lowest note you hold: row 1 is that note, row 3 the 3rd
   above it, row 5 the 5th, and so on. Pick the scale's key and MAJOR or MINOR beside it. A degree you
   aren't holding plays the held note nearest to it, so JArp never plays a note you didn't hold. Where
@@ -468,3 +472,8 @@ Click the **star** beside the name to make the current preset a favorite.
 
 Built with the rest of the repo; see the [top-level README](../../README.md). The engine is plain C++
 in `src/engine.h`, tested on its own in `tests/test_engine.cpp`; the dice are in `src/randomize.h`.
+
+The manual's source is `docs/manual/manual.html`. `docs/manual/shots.sh path/to/jarp-screenshot`
+renders its panel pictures (build with `-DJCLAP_BUILD_TOOLS=ON`), `docs/manual/presets.sh`
+regenerates its preset list from `src/library.h` (run it whenever a preset or blurb changes), and
+`docs/manual/build.sh` builds the PDF.

@@ -11,10 +11,12 @@ the same pull request. The docs are part of the change, not a follow-up.
   pictures too (`plugins/<name>/docs/readme/make.sh`, where the plugin has one) and update
   `docs/panel.png`.
 - **Manual.** A plugin with a manual has `plugins/<name>/docs/manual/` (source `manual.html`, built
-  by `build.sh` into `plugins/<name>/docs/<Name>-User-Manual.pdf`). Today that is JSynth and JVerb;
-  JBreath and Polar XY are getting one. When such a plugin changes, update `manual.html` (and its
+  by `build.sh` into `plugins/<name>/docs/<Name>-User-Manual.pdf`). Today that is JSynth, JVerb,
+  JBreath, Polar XY and JArp. When such a plugin changes, update `manual.html` (and its
   `img/` crops if the panel changed), then run `build.sh` and commit the rebuilt PDF with it. Never
   commit a `manual.html` change without the rebuilt PDF.
+  JArp's preset list is generated: after changing a preset or blurb, run
+  `plugins/jarp/docs/manual/presets.sh`, then `build.sh`.
 - **Top-level README.** If a plugin gains or loses a manual, or its one-line description changes,
   update its row in the root `README.md`.
 
