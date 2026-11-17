@@ -326,7 +326,7 @@ int main() {
             if (bank && id == kAdvance && std::lround(v) != 0)
                JCLAP_CHECK(bank->next(0) != 0);
       }
-      JCLAP_CHECK_EQ(factoryCategories().size(), 27u);
+      JCLAP_CHECK_EQ(factoryCategories().size(), 34u);
       // The library uses LENGTH by HELD and BOUNCE: Up Down is the held notes up and back for any
       // chord, and a held pattern has a step for each row it could reach.
       {

@@ -201,6 +201,16 @@ constexpr double song = 0, note = 1, bar = 2;
 // temporaries their own room in one frame, more than a host's thread has.
 template <typename F> JARP_NOINLINE void add(std::vector<Entry> &e, F make) { e.push_back(make()); }
 
+} // namespace library
+
+} // namespace jarp
+
+#include "library_guitar.h"
+
+namespace jarp {
+
+namespace library {
+
 inline std::vector<Entry> build() {
    using namespace v;
    const auto rate = [](double r) { return std::pair<clap_id, double>{kRate, r}; };
@@ -466,20 +476,8 @@ inline std::vector<Entry> build() {
                  Pat("1 2 3 4 5 . . . . . . . . . . .", 60).vel("8 2 0 2 6"),
                  Pat("1+2+3+4 . 2+3+4s . 2+3+4s . 2+3+4s . 1+2+3+4 . 2+3+4s . 2+3+4s . 2+3+4s .").vel("12 . -8 . 0 . -8 .")}}; });
 
-   // ---- Guitar Fingerpicking: the low rows are the thumb's bass, the rows above the fingers ----
-   add(e, [&] { return Entry{"Travis Picking", "Guitar Fingerpicking", "An alternating thumb on the low notes, fingers on the top.", {octRows, rate(r8), swing(0.54), pressVel(0.4)},
-                {Pat("1+4 3 2 4 1 3 2 4", 8).oct(". . -1 . . . -1 .").vel("10 -6 4 -4 6 -6 4 -4")}}; });
-   add(e, [&] { return Entry{"Classical Arpeggio", "Guitar Fingerpicking", "Thumb then three fingers, p i m a, up and back.", {octRows, rate(r8T), pressVel(0.6)},
-                {Pat("1 2 3 4 3 2", 10).vel("10 -6 -2 6 -2 -6")}}; });
-   add(e, [&] { return Entry{"Banjo Roll", "Guitar Fingerpicking", "A bright forward roll, in 3+3+2 sixteenths.", {octRows, rate(r16), pressVel(0.3)},
-                {Pat("1s 2s 3s 1s 2s 3s 1s 4s").vel("12 -6 -2 10 -6 -2 8 -4")}}; });
-   add(e, [&] { return Entry{"Ballad Picking", "Guitar Fingerpicking", "Thumb on the low two notes, fingers rising through the rest.", {octRows, rate(r16), pressVel(0.5)},
-                {Pat("1 3 4 5 2 3 4 5", 8).vel("10 -6 -2 2 6 -6 -2 2")}}; });
-   add(e, [&] { return Entry{"Fingerstyle Song", "Guitar Fingerpicking", "Four picking patterns, a bar each, looping.", {octRows, rate(r8), swing(0.54), advance(loop), pressVel(0.4)},
-                {Pat("1+4 3 2 4 1 3 2 4", 8).oct(". . -1 . . . -1 .").vel("10 -6 4 -4"),
-                 Pat("1+4 3 2 4 1 3 2+5 4", 8).oct(". . -1 . . . . .").vel("10 -6 4 -4"),
-                 Pat("1+4 3 2 4 1 3 2 5", 8).oct(". . -1 . . . -1 .").vel("10 -6 4 -4"),
-                 Pat("1 2 3 4 5 4 3 2", 6).vel("10 -6 -2 6 -2 -6 4 0")}}; });
+   // ---- Fingerpicking: guitar and banjo picking by style (library_guitar.h) ----
+   addGuitar(e);
 
    // ---- Strum and Harp: at 1/32, a strum spreads like a hand across strings ----
    add(e, [&] { return Entry{"Down Strum", "Strum and Harp", "One down strum across six held notes per bar.", {octRows, rate(r32), pressVel(0.6)},

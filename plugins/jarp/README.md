@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.16.0.
+Version 0.17.0.
 
 ![Panel](docs/panel.png)
 
@@ -294,7 +294,7 @@ The preset bar steps through the factory bank and then your own. A preset holds 
 eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
 instead, right-click the slot's number and use **Load from preset**:
 
-There are 129 factory presets in 27 categories, each built on how the style is really played.
+There are 157 factory presets in 34 categories, each built on how the style is really played.
 Most use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked
 (chain) use several patterns: CHORD moves on with each new chord, LOOP plays them one after another.
 
@@ -304,6 +304,14 @@ root-third-fifth hold the triad.
 
 The **Grooves** are bass lines, by style. They play the lowest notes you hold an octave down, so hold
 the chord in the middle of the keyboard and route JArp into a bass patch.
+
+The **Fingerpicking** presets are guitar and banjo picking by style: Travis, Folk, Ballad,
+Classical, Banjo, Blues, Bossa and Celtic, several variations each. Their rows are laid out like a
+guitar's strings: hold a triad low (C3, E3 and G3) and rows 1 to 5 are the open C chord's C3, E3,
+G3, C4 and E4, row 6 the G4 above. The thumb plays rows 1 to 3 (and, with the Octave lane at -1, the
+low G under them), the fingers rows 3 to 6. Every one needs only two or three notes held: hold a
+triad for the full chord, or just a root and fifth for an open fifth sound. Bossa sounds best with a
+7th chord.
 
 The **Drum Kit** presets play a kit from the keys you hold: row 1 is the kick, 2 the snare, 3 the
 closed hat and 4 the open hat, the order the General MIDI drum map puts them in. Hold MIDI notes 36,
@@ -341,7 +349,14 @@ the Up Down ones BOUNCE (Up Down Repeat Ends playing its ends twice). The groove
 | Drum Kit (four bars each) | Four on the Floor, Rock Beat, Rock Song (a snare-roll fill), Boom Bap Kit, Trap Kit, Funky Break, Drum and Bass Beat, One Drop Kit, Shuffle Kit (triplets) |
 | Percussion | Son Clave, Rumba Clave, Cascara, Conga Tumbao, Bell Six Eight (12/8), Teental (tabla), Shaker, Tambourine, Shaker Shuffle (triplets), Cajon, Djembe, Bongo Martillo, Maqsum (darbuka), Marimba Ostinato (12 steps against the bar) |
 | Piano | Alberti Bass, Waltz Spread (3/4), Nocturne, Stride, Pop Eighths, Rolled Ballad, Piano Verse (three patterns, CHORD) |
-| Guitar Fingerpicking | Travis Picking, Classical Arpeggio (p i m a), Banjo Roll, Ballad Picking, Fingerstyle Song (four patterns, LOOP) |
+| Fingerpicking: Travis | Travis Picking, Travis Pinch, Travis Syncopated (two bars), Travis Half Time, Fingerstyle Song (four patterns, LOOP) |
+| Fingerpicking: Folk | Thumb Brush (boom-chick), Folk Pinch, Six Eight Folk (6/8), Waltz Picking (3/4) |
+| Fingerpicking: Ballad | Ballad Picking, Pop Ballad, Ballad Sixteenths, Slow Arpeggio |
+| Fingerpicking: Classical | Classical Arpeggio (p i m a), P I M A, Giuliani Arpeggio (sextuplets), Tremolo (p a m i), Romance Triplets (3/4) |
+| Fingerpicking: Banjo | Banjo Roll (forward roll), Backward Roll, Forward Reverse Roll, Alternating Thumb Roll, Clawhammer |
+| Fingerpicking: Blues | Monotonic Thumb (shuffle), Delta Shuffle (triplets), Piedmont Blues (two bars) |
+| Fingerpicking: Bossa | Bossa Picking, Bossa Two Bar, Bossa Arpeggio |
+| Fingerpicking: Celtic | Celtic Jig (6/8), Celtic Cascade, Celtic Air (3/4), Drone Picking (6/8) |
 | Strum and Harp | Down Strum, Up Strum, Strum Pattern (down down up, up down up), Harp Glissando, Harp Cascade, Strum to Harp (chain, CHORD) |
 | Pads and Pedals | Pedal Climb, Slow Top, Swell Layers, Drone and Drift (64 steps), Pedal Story (four patterns, LOOP) |
 | Ratchet and Rhythm | Trap Hats, Stutter, Machine Gun, Pressure Ratchets, Stabs, Ghost Notes (off-beats left to chance), Stutter Build (four patterns, LOOP) |
