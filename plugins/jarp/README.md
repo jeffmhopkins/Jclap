@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.18.0.
+Version 0.19.0.
 
 ![Panel](docs/panel.png)
 
@@ -320,7 +320,7 @@ The preset bar steps through the factory bank and then your own. A preset holds 
 eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
 instead, right-click the slot's number and use **Load from preset**:
 
-There are 241 factory presets in 44 categories, each built on how the style is really played.
+There are 273 factory presets in 52 categories, each built on how the style is really played.
 Most use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked
 (chain) use several patterns: CHORD moves on with each new chord, LOOP plays them one after another.
 
@@ -364,6 +364,14 @@ each four-bar phrase. The **Percussion** presets are hand percussion and mallet 
 cascara, conga, bongos, djembe, cajon, darbuka, tambourine, shaker, bell, tabla, marimba) for any
 pitched sound, walking the notes held.
 
+The **Piano** presets are accompaniment, by style, played the way a pianist's hands would under a
+song: the bass low, the chord in the middle. Hold a plain triad in the middle of the keyboard and
+each plays it: row 1 the root, row 2 the third, row 3 the fifth, with the left hand's bass taken from
+those same keys an octave or two down. None asks for more keys than it plays: Murky Bass and Shuffle
+Octaves play only the root, so one key will do. Jazz and Gospel and Soul add the 7th as a fourth
+note: hold a 7th chord, or just the triad and the root an octave up stands in. Every piano preset
+uses OCT rows, so holding fewer notes than it uses never leaves a gap.
+
 Up, Up Two Octaves, Up and Over, Up Down, Up Down Repeat Ends, Up Down Two Octaves, Root Pedal, Pedal
 Bounce and Breath Pulse set their LENGTH by the notes HELD, so they fit whatever chord you play, and
 the Up Down ones BOUNCE (Up Down Repeat Ends playing its ends twice). The bass lines, kits and the rest keep a set number of steps, so they stay in time with the bar.
@@ -405,7 +413,15 @@ the Up Down ones BOUNCE (Up Down Repeat Ends playing its ends twice). The bass l
 | Bass: Dancehall | Dembow, Dancehall Riddim, Moombahton |
 | Drum Kit (four bars each) | Four on the Floor, Rock Beat, Rock Song (a snare-roll fill), Boom Bap Kit, Trap Kit, Funky Break, Drum and Bass Beat, One Drop Kit, Shuffle Kit (triplets) |
 | Percussion | Son Clave, Rumba Clave, Cascara, Conga Tumbao, Bell Six Eight (12/8), Teental (tabla), Shaker, Tambourine, Shaker Shuffle (triplets), Cajon, Djembe, Bongo Martillo, Maqsum (darbuka), Marimba Ostinato (12 steps against the bar) |
-| Piano | Alberti Bass, Waltz Spread (3/4), Nocturne, Stride, Pop Eighths, Rolled Ballad, Piano Verse (three patterns, CHORD) |
+| Piano: Classical | Alberti Bass, Alberti Eighths, Alberti Wide, Murky Bass (broken octaves), Wide Arpeggio, Triplet Arpeggio, Nocturne (triplets) |
+| Piano: Waltz | Waltz (oom-pah-pah), Alternating Waltz, Waltz Spread, Waltz Arpeggio (all 3/4) |
+| Piano: Pop | Pop Eighths, Pop Pushes (3+3+2), Pop Sixteenths, Rock Pound, Piano Verse (three patterns, CHORD) |
+| Piano: Ballad | Rolled Ballad, Ballad Arpeggio, Ballad Sixteenths, Ballad Pulse |
+| Piano: Stride and Ragtime | Ragtime, Stride, Stride Walk, Stride Tenths |
+| Piano: Blues and Boogie | Shuffle Octaves, Rocking Boogie, Triad Boogie, Shuffle Comp, Slow Blues Triplets (12/8) |
+| Piano: Gospel and Soul | Gospel Comp, Gospel Shout, Soul Ballad (12/8), Neo Soul Comp (hold a 7th chord) |
+| Piano: Latin | Montuno, Bossa Comp, Habanera |
+| Piano: Jazz | Charleston Comp, Jazz Comp, Jazz Waltz Comp (hold a 7th chord) |
 | Guitar Fingerpicking | Travis Picking, Classical Arpeggio (p i m a), Banjo Roll, Ballad Picking, Fingerstyle Song (four patterns, LOOP) |
 | Strum and Harp | Down Strum, Up Strum, Strum Pattern (down down up, up down up), Harp Glissando, Harp Cascade, Strum to Harp (chain, CHORD) |
 | Pads and Pedals | Pedal Climb, Slow Top, Swell Layers, Drone and Drift (64 steps), Pedal Story (four patterns, LOOP) |
