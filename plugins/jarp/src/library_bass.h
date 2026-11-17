@@ -68,7 +68,7 @@ inline void addBass(std::vector<Entry> &e) {
                 {bass(rep("1:3", 12) + "2:3 2:3 2:3 2:3").vel("10 2 6 2")}}; });
    add(e, [&] { return Entry{"Metal Chug", "Bass: Metal and Punk", "Hold root and fifth: palm-muted chugs in syncopated sixteenths.", with({rate(r16)}),
                 {bass("1t 1t . 1t 1t . 1t . 1t 1t . 1t 1s 1s 2 .").vel("14 -4 . 8 -4 . 10 . 14 -4 . 8 6 6 10 .")}}; });
-   add(e, [&] { return Entry{"Reverse Gallop", "Bass: Metal and Punk", "Hold root and fifth: two sixteenths and an eighth, driving on.", with({rate(r16)}),
+   add(e, [&] { return Entry{"Metal Gallop", "Bass: Metal and Punk", "Hold root and fifth: two sixteenths and an eighth, driving on.", with({rate(r16)}),
                 {bass(rep("1s 1s 1 _", 3) + "2s 2s 1^ _").vel("12 -4 8 .")}}; });
    add(e, [&] { return Entry{"Thrash Pick", "Bass: Metal and Punk", "Hold root and fifth: nonstop sixteenths, accented in threes.", with({rate(r16)}),
                 {bass(rep("1s", 12) + "2s 2s 1s^ 1s").vel("14 -8 -4 10 -8 -4 12 -8 -4 10 -8 -4 12 -2 8 -4")}}; });
