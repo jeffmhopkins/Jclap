@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.16.0.
+Version 0.18.0.
 
 **[User manual (PDF)](docs/JArp-User-Manual.pdf)**: every control, how rows find their notes, length
 and direction, MPE, chains, the dice, the full preset list with each preset's blurb, recipes and a
@@ -298,7 +298,7 @@ The preset bar steps through the factory bank and then your own. A preset holds 
 eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
 instead, right-click the slot's number and use **Load from preset**:
 
-There are 129 factory presets in 27 categories, each built on how the style is really played.
+There are 241 factory presets in 44 categories, each built on how the style is really played.
 Most use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked
 (chain) use several patterns: CHORD moves on with each new chord, LOOP plays them one after another.
 
@@ -306,8 +306,30 @@ No factory pattern skips a note: each walks the notes you hold in turn, from the
 left out. The shape comes from your voicing, so for a root-fifth line hold a root and fifth, and for
 root-third-fifth hold the triad.
 
-The **Grooves** are bass lines, by style. They play the lowest notes you hold an octave down, so hold
-the chord in the middle of the keyboard and route JArp into a bass patch.
+The **Berlin School** presets are sequencer ostinatos in the style of 1970s German electronic music:
+short sixteenths over a pedal, leaping octaves, accented in 3+3+2, galloping, drifting against the
+bar and changing slowly over many bars. A sequencer of the time played one line and a key
+transposed it, so these take few notes: each says in its line whether to hold one note, a root and
+fifth, or a triad, and plays only those (rows 1 to 3 at most), getting its octaves from the Octave
+lane. Move your hand to transpose the sequence. Some ask for a voicing other than a triad (a root,
+2nd and 5th, or a root, minor 3rd and 4th) for a modal colour. There are eight kinds, several of
+each: **Melodic** (hand-written lines in an irregular order, with gaps and notes that drop out),
+**Pulse**
+(one note or two, the octave doing the work), **Sequences** (a triad over sixteen steps),
+**Gallop** (an eighth and two sixteenths, and triplets), **Phasing** (loops of 7, 12, 13, 14 and 15
+steps that turn over the bar), **Bass** (an octave down), **Ratchets** (rolls of repeated hits) and
+**Evolving** (chains, chance steps and long patterns that change over many bars). Put a plucky
+synth with a short decay after them, and sweep its filter.
+
+The **Bass** presets are bass lines by genre, 95 of them in 24 genres from rock to amapiano, with
+three to five variations of each. Each plays from just the notes a bass line needs, never a big
+chord: most want only a **root and fifth** (Funk wants the **root and b7**), and the ones that walk a
+chord want a **triad** (the blues shuffle wants the **root, 5th and 6th**). The blurb says which,
+and the table marks each one that isn't a root and fifth. Hold the notes in the middle of the
+keyboard and route JArp into a bass patch: the line plays an octave down, with the octave pops, the
+fifth below the root and the jumps written in its Octave lane rather than asked of your hand. No
+pattern goes past row 3 or skips a row, and EMPTY ROWS is OCT, so holding one note fewer still
+plays: a root alone gives a root-and-octave line.
 
 The **Drum Kit** presets play a kit from the keys you hold: row 1 is the kick, 2 the snare, 3 the
 closed hat and 4 the open hat, the order the General MIDI drum map puts them in. Hold MIDI notes 36,
@@ -322,26 +344,43 @@ pitched sound, walking the notes held.
 
 Up, Up Two Octaves, Up and Over, Up Down, Up Down Repeat Ends, Up Down Two Octaves, Root Pedal, Pedal
 Bounce and Breath Pulse set their LENGTH by the notes HELD, so they fit whatever chord you play, and
-the Up Down ones BOUNCE (Up Down Repeat Ends playing its ends twice). The grooves, kits and the rest keep a set number of steps, so they stay in time with the bar.
+the Up Down ones BOUNCE (Up Down Repeat Ends playing its ends twice). The bass lines, kits and the rest keep a set number of steps, so they stay in time with the bar.
 
 | Category | Presets |
 |---|---|
 | Basics | Init, Up, Up Two Octaves, Up and Over, Down, Up Down, Up Down Repeat Ends, Up Down Two Octaves, Root Pedal, Converge, Pinky Top, Root Fifth, Broken Thirds (DEGREE rows) |
-| Berlin School | Octave Line, Pedal Bounce, Pedal Sequence, Sequencer Bass, Phase Drift (a seven-step accent drifting across the line), Night Drive (four patterns, LOOP), Long Drive (64 steps) |
-| Grooves: Funk | Funk Bass, Slap Pops, Pocket Sixteenths |
-| Grooves: Soul | Motown Walk, Soul Pocket |
-| Grooves: Disco | Disco Octaves, Disco Walk |
-| Grooves: House | House Bass, Rolling House, Deep Offbeat |
-| Grooves: Techno | Acid Line, Techno Rumble |
-| Grooves: Synth | Synth Pump, Outrun Drive |
-| Grooves: Rock | Root Fifth Octave, Rock Eighths, Gallop (triplets) |
-| Grooves: Blues | Boogie Shuffle, Boogie Walk (hold root, 3rd, 5th, 6th and b7) |
-| Grooves: Jazz | Walking Bass (hold a 7th chord), Two Feel |
-| Grooves: Latin | Tresillo (3+3+2), Bossa Bass, Tumbao |
-| Grooves: Reggae | Dub Bass, One Drop, Steppers |
-| Grooves: Hip Hop | Boom Bap Bass, Sub Slide, Neo Soul |
-| Grooves: Breaks | Two Step (UK garage, chain, CHORD), Jungle Roller (drum and bass) |
-| Grooves: Country | Two Beat, Walk Up |
+| Berlin School: Melodic | Lament, Distant Lights (hold a root, 2nd and 5th), Cold Water (root, minor 3rd and 4th), Falling Star, Midnight Ostinato (12 steps), Velvet Pulse (root, 5th and flat 7th), Rainfall (chance), Hymn (eighths), Tidal (root and fifth), Searchlight (root, 4th and 5th), Broken Signal (chance), Wandering (24 steps), Echo Answer, Story Sequence (four patterns, LOOP) |
+| Berlin School: Pulse | Octave Pulse, Steady Pulse, Chugging Eighths, Three Octave Pulse, Heartbeat (hold one note); Fifth Pulse, Pedal Fifth (hold a root and fifth) |
+| Berlin School: Sequences | Octave Line, Pedal Sequence, Pedal Bounce (HELD, BOUNCE), Dark Ostinato, Rising Triad, Falling Triad, Wave, Skipping Stone (hold a triad) |
+| Berlin School: Gallop | Octave Gallop, Fifth Gallop, Triad Gallop, Reverse Gallop, Triplet Sequence, Triplet Pedal |
+| Berlin School: Phasing | Phase Drift (14 steps), Seven Step, Twelve Over Sixteen, Thirteen, Fifteen, Interlock (a pulse in fours, a figure in threes) |
+| Berlin School: Bass | Sequencer Bass, Low Pulse, Rolling Bass, Descending Bass, Bass Gallop, Eighth Bass |
+| Berlin School: Ratchets | Ratchet Pulse, Ratchet Sequence, Pressure Rolls (press for rolls), Roll Up (32 steps) |
+| Berlin School: Evolving | Night Drive (four patterns, LOOP), Long Drive (64 steps), Ghost Steps (chance), Slow Build (LOOP), Shifting Sequence (LOOP), Drift Chain (16, 12 and 14 steps, LOOP), Accent Walk (80 steps) |
+| Bass: Rock | Root Fifth Octave, Rock Eighths, Dotted Drive, Gallop (triplets) |
+| Bass: Metal and Punk | Punk Eighths, Metal Chug, Metal Gallop, Thrash Pick |
+| Bass: Blues | Boogie Shuffle (root, 5th, 6th), Boogie Walk (triad), Texas Shuffle, Slow Blues (12/8) |
+| Bass: Country | Two Beat, Train Beat, Walk Up (triad), Bluegrass Run (triad) |
+| Bass: Jazz | Walking Bass (triad), Two Feel, Jazz Ballad, Jazz Waltz (triad) |
+| Bass: Soul | Motown Walk (triad), Soul Pocket (triad), Stax Push, Soul Sixteenths (triad) |
+| Bass: Funk | Funk Bass (root, b7), Slap Pops (root, b7), Pocket Sixteenths (triad), On the One (root, b7) |
+| Bass: Disco | Disco Octaves, Disco Walk (triad), Disco Sixteenths, Philly Strut |
+| Bass: House | House Bass, Rolling House, Deep Offbeat (triad), Chicago Jack |
+| Bass: Techno | Acid Line, Techno Rumble, Minimal Stabs, Hypnotic Three |
+| Bass: Trance | Rolling Trance, Psy Roll, Octave Roll, Triplet Roll |
+| Bass: Drum and Bass | Jungle Roller, Reese Hold, Neuro Stabs, Liquid Walk (triad) |
+| Bass: Dubstep | Half Time Sub, Wobble, Riddim, Drop Stabs |
+| Bass: UK Garage | Two Step (triad, chain, CHORD), Speed Garage, Bassline House, Garage Skip |
+| Bass: Hip Hop | Boom Bap Bass, Sub Slide, Trap Bounce, G Funk, Lo-Fi Drift |
+| Bass: R&B | Neo Soul (triad), Slow Jam (triad), Gospel Climb (triad), Quiet Storm |
+| Bass: Reggae | Dub Bass (triad), One Drop (triad), Steppers (triad), Rockers |
+| Bass: Ska | Ska Walk (triad), Rocksteady, Two Tone |
+| Bass: Latin | Tresillo, Tumbao, Cha Cha, Cumbia |
+| Bass: Brazil | Bossa Bass, Bossa Walk (triad), Samba Surdo, Baiao |
+| Bass: Afro | Afrobeat, Highlife (triad), Afro House, Log Drum |
+| Bass: Pop | Pop Pump, Pop Ballad, Pop Push, Syncopated Pop |
+| Bass: Synth | Synth Pump, Outrun Drive (triad), Italo Gallop, Synth Funk |
+| Bass: Dancehall | Dembow, Dancehall Riddim, Moombahton |
 | Drum Kit (four bars each) | Four on the Floor, Rock Beat, Rock Song (a snare-roll fill), Boom Bap Kit, Trap Kit, Funky Break, Drum and Bass Beat, One Drop Kit, Shuffle Kit (triplets) |
 | Percussion | Son Clave, Rumba Clave, Cascara, Conga Tumbao, Bell Six Eight (12/8), Teental (tabla), Shaker, Tambourine, Shaker Shuffle (triplets), Cajon, Djembe, Bongo Martillo, Maqsum (darbuka), Marimba Ostinato (12 steps against the bar) |
 | Piano | Alberti Bass, Waltz Spread (3/4), Nocturne, Stride, Pop Eighths, Rolled Ballad, Piano Verse (three patterns, CHORD) |
