@@ -445,10 +445,15 @@ private:
             return;
          }
          // The sustain pedal holds the chord's notes for the arp rather than going on to the synth,
-         // which would only smear the arp's own note lengths.
+         // which would only smear the arp's own note lengths. With PASS SUSTAIN on, it goes on to the
+         // synth instead and the arp ignores it (a pedal the arp was holding is let up first).
          if (status == 0xB0 && d1 == 64) {
-            engine_.setSustain(t, d2 >= 64, out_);
+            const bool pass = std::lround(values_[kPassSustain].load()) != 0;
+            if (!pass || engine_.sustain())
+               engine_.setSustain(t, !pass && d2 >= 64, out_);
             flush(out);
+            if (pass)
+               out->try_push(out, h);
             return;
          }
          if (status == 0xD0)
@@ -512,6 +517,9 @@ private:
       s.key = whole(kKey);
       s.range = whole(kRange) + 1;
       s.keepRows = whole(kKeepRows) != 0;
+      s.repeat = whole(kRepeat);
+      s.order = static_cast<Order>(whole(kOrder));
+      s.oneShot = whole(kOneShot) != 0;
       s.scale = whole(kScale);
       s.pressVelocity = value(kPressVelocity);
       s.curve = value(kCurve);

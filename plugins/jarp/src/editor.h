@@ -16,7 +16,7 @@
 namespace jarp {
 
 constexpr int kEditorWidth = 900;
-constexpr int kEditorHeight = 743;
+constexpr int kEditorHeight = 751;
 
 // What the panel needs from the plugin, on the main thread.
 class EditorHost : public jclap::ui::ParamAccess {
