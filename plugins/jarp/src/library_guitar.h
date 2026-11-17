@@ -67,7 +67,7 @@ inline void addGuitar(std::vector<Entry> &e) {
    // ---- Fingerpicking: Ballad ----
    add(e, [&] { return Entry{"Ballad Picking", "Fingerpicking: Ballad", "Thumb on the low two notes, fingers rising through the rest.", {octRows, rate(r16), pressVel(0.5)},
                 {Pat("1 3 4 5 2 3 4 5", 8).vel("10 -6 -2 2 6 -6 -2 2")}}; });
-   add(e, [&] { return Entry{"Pop Ballad", "Fingerpicking: Ballad", "Thumb and pinch, then the fingers rolling between. Hold a triad.", {octRows, rate(r16), pressVel(0.5)},
+   add(e, [&] { return Entry{"Pop Ballad Picking", "Fingerpicking: Ballad", "Thumb and pinch, then the fingers rolling between. Hold a triad.", {octRows, rate(r16), pressVel(0.5)},
                 {Pat("1+5 . 3 4 . 3 5 4 2+5 . 3 4 . 3 5 4", 12).vel("12 . -6 -2 . -6 2 -4 10 . -6 -2 . -6 2 -4")}}; });
    add(e, [&] { return Entry{"Ballad Sixteenths", "Fingerpicking: Ballad", "Up the strings and back in sixteenths, the thumb alternating.", {octRows, rate(r16), pressVel(0.5)},
                 {Pat("1 3 4 5 6 5 4 3 2 3 4 5 6 5 4 3", 10).vel("12 -6 -2 0 6 0 -2 -6 10 -6 -2 0 6 0 -2 -6")}}; });
