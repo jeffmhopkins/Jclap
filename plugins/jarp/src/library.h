@@ -55,7 +55,9 @@ inline std::vector<std::string> tokens(const std::string &s) {
 //    1+3      rows 1 and 3 together;  c  is rows 1 to 4
 //
 // and a row may end in  s  (half a step),  t  (a quarter),  l  (two steps),  :N  (N quarter steps) or
-// !  (to the pattern's end). A note always stops at the next note in its row.
+// !  (to the pattern's end), and in  v  (an octave down, the note's own value) or  ^  (an octave up),
+// as many as wanted:  1vv:8  is row 1 two octaves down for two steps. A note always stops at the next
+// note in its row.
 //
 // The lanes are lines of numbers that repeat over the pattern, "." for the plain value: oct()
 // octaves, vel() velocity offsets, rat() ratchet hits, prs() 1 where pressure adds hits (P), chc()
@@ -65,7 +67,7 @@ struct Pat {
 
    explicit Pat(const std::string &steps, int gate = kQuarters) {
       struct Start {
-         int row, step, quarters;
+         int row, step, quarters, octave = 0;
       };
       const std::vector<std::string> t = tokens(steps);
       const int len = std::clamp(static_cast<int>(t.size()), 1, kSteps);
@@ -85,6 +87,10 @@ struct Pat {
          last.clear();
          std::stringstream parts(tok);
          for (std::string part; std::getline(parts, part, '+');) {
+            // The note's own octave: each v down one, each ^ up one.
+            int octave = 0;
+            for (size_t k; (k = part.find_first_of("v^")) != std::string::npos; part.erase(k, 1))
+               octave += part[k] == 'v' ? -1 : 1;
             if (part.empty())
                continue;
             int q = gate;
@@ -107,7 +113,7 @@ struct Pat {
             }
             else if (std::isdigit(static_cast<unsigned char>(part[0]))) {
                last.push_back(notes.size());
-               notes.push_back({std::clamp(part[0] - '1', 0, kRows - 1), i, q});
+               notes.push_back({std::clamp(part[0] - '1', 0, kRows - 1), i, q, octave});
             }
          }
       }
@@ -115,7 +121,11 @@ struct Pat {
       // Latest first, so each note sees the next in its row and stops there.
       std::stable_sort(notes.begin(), notes.end(), [](const Start &a, const Start &b) { return a.step > b.step; });
       for (const Start &n : notes)
-         p.add(n.row, n.step, n.quarters);
+         if (p.add(n.row, n.step, n.quarters) && n.octave) {
+            Note &added = p.notes[p.count - 1];
+            added.own |= kOwnOctave;
+            added.lane.octave = static_cast<int8_t>(std::clamp(n.octave, -3, 3));
+         }
    }
 
    Pat &oct(const std::string &s) { return lane(s, [](Lane &l, int v) { l.octave = static_cast<int8_t>(std::clamp(v, -3, 3)); }); }
@@ -206,6 +216,8 @@ template <typename F> JARP_NOINLINE void add(std::vector<Entry> &e, F make) { e.
 inline void addBass(std::vector<Entry> &e);
 // The Berlin School presets, in library_berlin.h.
 inline void addBerlin(std::vector<Entry> &e);
+// The piano presets (library_piano.h, included at the end of this file).
+inline void addPiano(std::vector<Entry> &e);
 
 inline std::vector<Entry> build() {
    using namespace v;
@@ -337,23 +349,8 @@ inline std::vector<Entry> build() {
    add(e, [&] { return Entry{"Marimba Ostinato", "Percussion", "An interlocking twelve-step mallet figure drifting on the bar.", {octRows, rate(r16), restart(song), pressVel(0.4)},
                 {Pat("1s 2s 3s 1s 2s 4s 1s 3s 2s 4s 3s 5s").vel("10 -6 0 6 -6 2 8 -4 0 4 -4 6")}}; });
 
-   // ---- Piano: accompaniment figures ----
-   add(e, [&] { return Entry{"Alberti Bass", "Piano", "Low, high, middle, high: the classical left hand.", {octRows, rate(r16)},
-                {Pat("1 3 2 3 1 3 2 3").vel("10 -8 -2 -8")}}; });
-   add(e, [&] { return Entry{"Waltz Spread", "Piano", "Up and back down the chord in a bar of 3/4.", {octRows, rate(r8), pressVel(0.6)},
-                {Pat("1 2 3 4 3 2", 8).vel("10 -4 0 4 0 -4")}}; });
-   add(e, [&] { return Entry{"Nocturne", "Piano", "Triplets sweeping up the chord and back, a romantic left hand.", {octRows, rate(r8T), pressVel(0.7)},
-                {Pat("1 2 3 4 5 4 3 2 1 2 3 4", 10).vel("10 -6 -2 4 6 2 -2 -6")}}; });
-   add(e, [&] { return Entry{"Stride", "Piano", "Bass note, chord, bass note, chord, swung.", {octRows, rate(r8), swing(0.6), pressVel(0.4)},
-                {Pat("1 2+3+4s 3 2+3+4s 1 2+3+4s 3 2+3+4s").oct("-1 . -1 . -1 . -1 .").vel("10 -6 6 -6")}}; });
-   add(e, [&] { return Entry{"Pop Eighths", "Piano", "Steady chord eighths, the full chord on each beat.", {octRows, rate(r8), pressVel(0.4)},
-                {Pat("1+2+3+4 2+3+4s 2+3+4s 2+3+4s 1+2+3+4 2+3+4s 2+3+4s 2+3+4s").vel("12 -8 0 -8")}}; });
-   add(e, [&] { return Entry{"Rolled Ballad", "Piano", "A slow roll up the chord, left to ring.", {octRows, rate(r16), pressVel(0.7)},
-                {Pat("1 2 3 4 5 . . . . . . . . . . .", 60).vel("8 2 0 2 6")}}; });
-   add(e, [&] { return Entry{"Piano Verse", "Piano", "Alberti, a rolled chord and chord eighths, one per chord.", {octRows, rate(r16), advance(chord), pressVel(0.5)},
-                {Pat("1 3 2 3 1 3 2 3 1 3 2 3 1 4 3 4").vel("10 -8 -2 -8"),
-                 Pat("1 2 3 4 5 . . . . . . . . . . .", 60).vel("8 2 0 2 6"),
-                 Pat("1+2+3+4 . 2+3+4s . 2+3+4s . 2+3+4s . 1+2+3+4 . 2+3+4s . 2+3+4s . 2+3+4s .").vel("12 . -8 . 0 . -8 .")}}; });
+   // ---- Piano: accompaniment by style, in library_piano.h ----
+   addPiano(e);
 
    // ---- Guitar Fingerpicking: the low rows are the thumb's bass, the rows above the fingers ----
    add(e, [&] { return Entry{"Travis Picking", "Guitar Fingerpicking", "An alternating thumb on the low notes, fingers on the top.", {octRows, rate(r8), swing(0.54), pressVel(0.4)},
@@ -533,3 +530,4 @@ inline std::vector<Entry> build() {
 
 #include "library_bass.h"
 #include "library_berlin.h"
+#include "library_piano.h"
