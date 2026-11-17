@@ -1,6 +1,6 @@
 // JArp's panel, in Polar XY's plain style: a title bar with the presets and the dice, the PATTERN
 // card (the grid of eight rows by sixteen steps, with the Octave, Ratchet and Velocity lanes under
-// it) and the settings card (Timing, Playback, Pressure), all on a 900 x 743 design grid scaled to
+// it) and the settings card (Timing, Playback, Pressure), all on a 900 x 751 design grid scaled to
 // the window.
 //
 // Colour carries meaning: orange is notes, timing and the row playing; blue is pressure; purple is
@@ -1299,41 +1299,107 @@ private:
    bool on_ = false, active_ = true;
 };
 
+// The strip under the pattern, from y kStripTop: five cards side by side, each with its title and,
+// on the right, a note, over a rule. The controls are the panel's, laid over them.
+constexpr float kStripTop = 566.0f, kStripH = 150.0f;
+
 class SettingsCard : public visage::Frame {
 public:
+   struct Card {
+      const char *title;
+      float x, w; // in the panel's coordinates
+   };
+   static constexpr Card kCards[5] = {{"TIMING", 12, 136},
+                                      {"LENGTH", 156, 186},
+                                      {"PLAY", 350, 212},
+                                      {"CHAIN", 570, 108},
+                                      {"PRESSURE", 686, 202}};
+
    void draw(visage::Canvas &c) override {
       const float s = ui::designScale(*this);
       const ui::Theme &t = ui::defaultTheme();
-      c.setColor(t.panel);
-      c.roundedRectangle(0, 0, width(), height(), 6 * s);
-      c.setColor(t.panelBorder);
-      c.roundedRectangleBorder(0, 0, width(), height(), 6 * s, 1.0f);
-      struct Group {
-         const char *title, *note;
-         float x, w;
-      };
-      const Group groups[] = {{"TIMING", nullptr, 15, 143},
-                              {"LENGTH", lengthNote.c_str(), 178, 182},
-                              {"PLAYBACK", nullptr, 380, 176},
-                              {"PRESSURE", "from each finger", 576, 285}};
-      for (const Group &g : groups) {
-         c.setColor(t.dimText);
-         c.text(g.title, ui::font(11 * s), visage::Font::kLeft, g.x * s, 8 * s, 120 * s, 20 * s);
-         if (g.note) {
-            c.setColor(alpha(t.dimText, 0.8f));
-            c.text(g.note, ui::font(9.5f * s), visage::Font::kLeft, (g.x + 66) * s, 8 * s, 160 * s, 20 * s);
+      const std::string notes[5] = {"", lengthNote, "and the keys you hold", "", ""};
+      for (int i = 0; i < 5; ++i) {
+         const Card &k = kCards[i];
+         const float x = k.x - kCards[0].x;
+         c.setColor(t.panel);
+         c.roundedRectangle(x * s, 0, k.w * s, height(), 6 * s);
+         c.setColor(t.panelBorder);
+         c.roundedRectangleBorder(x * s, 0, k.w * s, height(), 6 * s, 1.0f);
+         c.setColor(0xffc3c7cd);
+         c.text(k.title, ui::font(11 * s), visage::Font::kLeft, (x + 12) * s, 8 * s, (k.w - 24) * s, 16 * s);
+         if (!notes[i].empty()) {
+            c.setColor(alpha(t.dimText, 0.75f));
+            c.text(notes[i], ui::font(9 * s), visage::Font::kRight, (x + 12) * s, 8 * s, (k.w - 24) * s, 16 * s);
          }
          c.setColor(kRule);
-         c.fill(g.x * s, 31 * s, g.w * s, 1.0f * s);
+         c.fill((x + 12) * s, 28 * s, (k.w - 24) * s, 1.0f * s);
       }
-      c.setColor(kRule);
-      c.fill(168 * s, 12 * s, 1.0f * s, 116 * s);
-      c.fill(370 * s, 12 * s, 1.0f * s, 116 * s);
-      c.fill(566 * s, 12 * s, 1.0f * s, 116 * s);
    }
 
    // LENGTH's header note: what the length comes to ("4 held = 4 steps").
    std::string lengthNote;
+};
+
+// A vertical slider for the PRESSURE card: its label at the top, the track down the middle filling
+// from the bottom (from the middle when bipolar, with a detent mark there), ticks beside it for a
+// stepped value, and the value at the bottom.
+class VSlider : public ui::ValueControl {
+public:
+   explicit VSlider(ui::ValueRange range) : ValueControl(range) {}
+
+   // In design points, from the frame's top: the track's ends, and the value's line.
+   static constexpr float kTrackTop = 18, kTrackBottom = 82, kValueY = 89;
+
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      const ui::Theme &t = *theme_;
+      const float w = width() / s, cx = w / 2, th = kTrackBottom - kTrackTop;
+      c.setColor(t.dimText);
+      c.text(label_, ui::font(8 * s), visage::Font::kCenter, -2 * s, 0, (w + 4) * s, 14 * s);
+      const auto y = [&](double v) { return kTrackBottom - fraction(v) * th; };
+      c.setColor(t.track);
+      c.roundedRectangle((cx - 2) * s, kTrackTop * s, 4 * s, th * s, 2 * s);
+      const float vy = y(value()), from = range().bipolar ? kTrackTop + th / 2 : kTrackBottom;
+      c.setColor(accent());
+      c.roundedRectangle((cx - 2) * s, std::min(vy, from) * s, 4 * s, std::max(1.0f, std::abs(from - vy)) * s, 2 * s);
+      const float my = y(modulatedValue());
+      if (std::abs(my - vy) > 0.5f) {
+         c.setColor(t.modulation);
+         c.fill((cx + 3) * s, std::min(my, vy) * s, 1.5f * s, std::abs(my - vy) * s);
+      }
+      if (range().stepped && range().max > range().min) {
+         const int steps = static_cast<int>(std::lround(range().max - range().min)) + 1;
+         c.setColor(0xff4a515c);
+         for (int i = 0; i < steps; ++i) {
+            const float ty = kTrackBottom - i * th / (steps - 1);
+            c.fill((cx + 6) * s, (ty - 0.5f) * s, 4 * s, 1 * s);
+            c.fill((cx - 10) * s, (ty - 0.5f) * s, 4 * s, 1 * s);
+         }
+      }
+      if (range().bipolar) {
+         c.setColor(t.dimText);
+         c.fill((cx + 6) * s, (from - 0.5f) * s, 5 * s, 1 * s);
+         c.fill((cx - 11) * s, (from - 0.5f) * s, 5 * s, 1 * s);
+      }
+      // The thumb: a small raised cap with a line across it.
+      const float tx = cx - 10, ty = vy - 5;
+      c.setColor(t.shadow);
+      c.roundedRectangle(tx * s, (ty + 1) * s, 20 * s, 10 * s, 3 * s);
+      c.setColor(visage::Brush::linear(visage::Color(t.knobLight), visage::Color(t.knobDark), visage::Point(0, ty * s),
+                                       visage::Point(0, (ty + 10) * s)));
+      c.roundedRectangle(tx * s, ty * s, 20 * s, 10 * s, 3 * s);
+      c.setColor(t.knobEdge);
+      c.roundedRectangleBorder(tx * s, ty * s, 20 * s, 10 * s, 3 * s, 1.0f);
+      c.setColor(0xffe6e8eb);
+      c.roundedRectangle((tx + 5) * s, (ty + 4.25f) * s, 10 * s, 1.5f * s, 0.75f * s);
+      c.setColor(t.text);
+      c.text(text(), ui::font(10 * s), visage::Font::kCenter, -6 * s, kValueY * s, (w + 12) * s, 14 * s);
+   }
+
+protected:
+   float dragDistance(visage::Point from, visage::Point to) const override { return from.y - to.y; }
+   float dragLength() const override { return 120.0f * ui::designScale(*this); }
 };
 
 // The dice card's face: its title, what each button does, and the ROLL / RANGE list's words. The
@@ -1637,93 +1703,140 @@ public:
       lanes_ = &add<LaneView>({20, 450, 862, 96}, host_, scroll_);
       lanes_->onEdit = [this](const Pattern &p) { edit(p); };
 
-      // Settings.
-      settings_ = &add<SettingsCard>({12, 568, 876, 142});
-      tips_.add(knob(kRate, "RATE", kOrange, 30, 606), "How long each step is.");
-      tips_.add(knob(kSwing, "SWING", kOrange, 100, 606), "Moves every second step later: 50% is straight.");
+      // The strip under the pattern: five cards on one baseline grid. Every card has a title row
+      // (a rule at 28), two control rows (labels at 36 and 82, controls at 52 and 98) and a small
+      // third row at 125 for check boxes, captions and readouts.
+      settings_ = &add<SettingsCard>({12, kStripTop, 876, kStripH});
+      const auto row = [](float y) { return kStripTop + y; };
+      constexpr float R1L = 36, R1 = 52, R2L = 82, R2 = 98, R3 = 125;
+
+      // TIMING.
+      {
+         const float x = SettingsCard::kCards[0].x + 12;
+         tips_.add(stripKnob(kRate, "RATE", x, 56), "How long each step is.");
+         tips_.add(stripKnob(kSwing, "SWING", x + 56, 56), "Moves every second step later: 50% is straight.");
+      }
+
       // LENGTH, the pattern's own: a number of steps, or so many for each note held, played one way
       // round or bouncing back.
-      heading("COUNT", 190, 606);
-      byHeld_ = &add<ui::SegmentedSwitch>(ui::Rect{190, 624, 100, 22}, std::vector<std::string>{"STEPS", "HELD"});
-      byHeld_->setTheme(switchTheme());
-      byHeld_->setAccent(kSlate);
-      byHeld_->onChange = [this](int i) {
-         Pattern p = shown();
-         p.byHeld = i ? 1 : 0;
-         edit(p);
-      };
-      tips_.add(*byHeld_, "Steps: a set length. Held: so many steps for each note you hold, plus or minus a few.");
-      heading("DIRECTION", 190, 650);
-      bounce_ = &add<ui::SegmentedSwitch>(ui::Rect{190, 667, 100, 22}, std::vector<std::string>{"ONE WAY", "BOUNCE"});
-      bounce_->setTheme(switchTheme());
-      bounce_->setAccent(kSlate);
-      bounce_->onChange = [this](int i) {
-         Pattern p = shown();
-         p.bounce = i ? 1 : 0;
-         edit(p);
-      };
-      tips_.add(*bounce_, "One way: step 1 to the end, then round again. Bounce: up to the end and back down.");
-      repeatEnds_ = &add<CheckBox>(ui::Rect{190, 692, 100, 13}, "REPEAT ENDS");
-      repeatEnds_->onToggle = [this](bool on) {
-         Pattern p = shown();
-         p.repeatEnds = on ? 1 : 0;
-         edit(p);
-      };
-      tips_.add(*repeatEnds_, "With Bounce: the first and last steps play twice at the turns (1 2 3 4 4 3 2 1).");
-      timesLabel_ = &heading("TIMES", 300, 606);
-      times_ = &add<ui::NumberBox>(ui::Rect{300, 624, 72, 22}, ui::ValueRange{1, kMaxTimes, 1, 1.0, false, true});
-      times_->setStepButtons(true);
-      times_->valueText = [](double v) { return "x" + std::to_string(static_cast<int>(std::lround(v))); };
-      times_->onChange = [this](double v) {
-         Pattern p = shown();
-         p.times = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(v)), 1, kMaxTimes));
-         edit(p);
-      };
-      tips_.add(*times_, "Steps for each note held.");
-      plusLabel_ = &heading("PLUS", 300, 650);
-      plus_ = &add<ui::NumberBox>(ui::Rect{300, 667, 72, 22}, ui::ValueRange{-16, 16, 0, 1.0, true, true});
-      plus_->setStepButtons(true);
-      plus_->valueText = [](double v) {
-         const int n = static_cast<int>(std::lround(v));
-         return (n < 0 ? std::string("-") : std::string("+")) + std::to_string(std::abs(n));
-      };
-      plus_->onChange = [this](double v) {
-         Pattern p = shown();
-         p.plus = static_cast<int8_t>(std::clamp(static_cast<int>(std::lround(v)), -16, 16));
-         edit(p);
-      };
-      tips_.add(*plus_, "Steps added to (or taken from) the notes held times TIMES.");
-      length_ = &add<ui::Knob>({297, 606, 76, 88}, ui::ValueRange{1, kSteps, 8, 1.0, false, true});
-      length_->setLabel("LENGTH");
-      length_->setAccent(kOrange);
-      length_->setLabelColor(ui::defaultTheme().dimText);
-      length_->valueText = [](double v) {
-         const int n = static_cast<int>(std::lround(v));
-         return std::to_string(n) + (n == 1 ? " step" : " steps");
-      };
-      length_->onChange = [this](double v) {
-         Pattern p = shown();
-         p.length = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(v)), 1, kSteps));
-         edit(p);
-      };
-      tips_.add(*length_, "Steps before this pattern loops. Same as the purple bar.");
-      heading("LATCH", 392, 606);
-      tips_.add(choice(kLatch, {392, 624, 80, 22}, {"OFF", "ON"}), "Keep playing after you let go, until a new chord.");
-      heading("RANGE", 518, 652);
-      auto &range = add<ui::Dropdown>({518, 670, 50, 22}, std::vector<std::string>{"1 OCT", "2 OCT", "3 OCT", "4 OCT"});
-      range.setAccent(kSlate);
-      bindings_.bind(range, kRange);
-      tips_.add(range, "How far octave shifts may climb before folding back down.");
-      heading("KEEP ROWS", 480, 606);
-      tips_.add(choice(kKeepRows, {480, 624, 80, 22}, {"OFF", "ON"}),
-                "Let go of a key and its row rests, holding the others in place, until every key is up.");
-      heading("RESTART", 392, 652);
-      tips_.add(choice(kRestart, {392, 670, 118, 22}, {"SONG", "NOTE", "BAR"}),
-                "Song: locked to the song position. Note: from your first note. Bar: from that bar.");
-      tips_.add(knob(kPressVelocity, "VELOCITY", kBlue, 588, 606), "How much pressure sets each note's velocity.");
-      tips_.add(knob(kCurve, "CURVE", kBlue, 660, 606, true), "Soft: a light touch goes far. Hard: needs a firm press.");
-      tips_.add(knob(kPressRatchet, "RATCHET", kBlue, 732, 606), "How much pressure adds hits on steps with P lit.");
-      tips_.add(knob(kMaxHits, "MAX HITS", kBlue, 804, 606), "The most hits a pressed P step splits into.");
+      {
+         const float x = SettingsCard::kCards[1].x + 12, k = x + 104;
+         label("COUNT", x, row(R1L));
+         byHeld_ = &add<ui::SegmentedSwitch>(ui::Rect{x, row(R1), 96, 22}, std::vector<std::string>{"STEPS", "HELD"});
+         byHeld_->setTheme(switchTheme());
+         byHeld_->setAccent(kSlate);
+         byHeld_->onChange = [this](int i) {
+            Pattern p = shown();
+            p.byHeld = i ? 1 : 0;
+            edit(p);
+         };
+         tips_.add(*byHeld_, "Steps: a set length. Held: so many steps for each note you hold, plus or minus a few.");
+         label("DIRECTION", x, row(R2L));
+         bounce_ = &add<ui::SegmentedSwitch>(ui::Rect{x, row(R2), 96, 22}, std::vector<std::string>{"ONE WAY", "BOUNCE"});
+         bounce_->setTheme(switchTheme());
+         bounce_->setAccent(kSlate);
+         bounce_->onChange = [this](int i) {
+            Pattern p = shown();
+            p.bounce = i ? 1 : 0;
+            edit(p);
+         };
+         tips_.add(*bounce_, "One way: step 1 to the end, then round again. Bounce: up to the end and back down.");
+         repeatEnds_ = &add<CheckBox>(ui::Rect{x, row(R3) + 0.5f, 96, 13}, "REPEAT ENDS");
+         repeatEnds_->onToggle = [this](bool on) {
+            Pattern p = shown();
+            p.repeatEnds = on ? 1 : 0;
+            edit(p);
+         };
+         tips_.add(*repeatEnds_, "With Bounce: the first and last steps play twice at the turns (1 2 3 4 4 3 2 1).");
+         timesLabel_ = &label("TIMES", k, row(R1L));
+         times_ = &add<ui::NumberBox>(ui::Rect{k, row(R1), 58, 22}, ui::ValueRange{1, kMaxTimes, 1, 1.0, false, true});
+         times_->setStepButtons(true);
+         times_->valueText = [](double v) { return "x" + std::to_string(static_cast<int>(std::lround(v))); };
+         times_->onChange = [this](double v) {
+            Pattern p = shown();
+            p.times = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(v)), 1, kMaxTimes));
+            edit(p);
+         };
+         tips_.add(*times_, "Steps for each note held.");
+         plusLabel_ = &label("PLUS", k, row(R2L));
+         plus_ = &add<ui::NumberBox>(ui::Rect{k, row(R2), 58, 22}, ui::ValueRange{-16, 16, 0, 1.0, true, true});
+         plus_->setStepButtons(true);
+         plus_->valueText = [](double v) {
+            const int n = static_cast<int>(std::lround(v));
+            return (n < 0 ? std::string("-") : std::string("+")) + std::to_string(std::abs(n));
+         };
+         plus_->onChange = [this](double v) {
+            Pattern p = shown();
+            p.plus = static_cast<int8_t>(std::clamp(static_cast<int>(std::lround(v)), -16, 16));
+            edit(p);
+         };
+         tips_.add(*plus_, "Steps added to (or taken from) the notes held times TIMES.");
+         lengthLabel_ = &label("LENGTH", k, row(R1L), 58, visage::Font::kCenter);
+         length_ = &add<ui::Knob>(knobRect(k, 58), ui::ValueRange{1, kSteps, 8, 1.0, false, true});
+         length_->setLabel("");
+         length_->setAccent(kOrange);
+         length_->valueText = [](double v) {
+            const int n = static_cast<int>(std::lround(v));
+            return std::to_string(n) + (n == 1 ? " step" : " steps");
+         };
+         length_->onChange = [this](double v) {
+            Pattern p = shown();
+            p.length = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(v)), 1, kSteps));
+            edit(p);
+         };
+         tips_.add(*length_, "Steps before this pattern loops. Same as the purple bar.");
+      }
+
+      // PLAY, and the keys you hold: two columns.
+      {
+         const float x = SettingsCard::kCards[2].x + 12, c2 = x + 112;
+         label("LATCH", x, row(R1L));
+         tips_.add(choice(kLatch, {x, row(R1), 104, 22}, {"OFF", "ON"}), "Keep playing after you let go, until a new chord.");
+         label("RESTART", x, row(R2L));
+         tips_.add(choice(kRestart, {x, row(R2), 104, 22}, {"SONG", "NOTE", "BAR"}),
+                   "Song: locked to the song position. Note: from your first note. Bar: from that bar.");
+         oneShot_ = &add<CheckBox>(ui::Rect{x, row(R3) + 0.5f, 100, 13}, "ONE SHOT");
+         oneShot_->onToggle = [this](bool on) { setSwitch(kOneShot, on); };
+         tips_.add(*oneShot_, "Play the pattern once (the chain once with Loop), then wait for a new chord.");
+         label("KEEP ROWS", c2, row(R1L));
+         tips_.add(choice(kKeepRows, {c2, row(R1), 76, 22}, {"OFF", "ON"}),
+                   "Let go of a key and its row rests, holding the others in place, until every key is up.");
+         label("RANGE", c2, row(R2L));
+         auto &range = add<ui::Dropdown>({c2, row(R2), 76, 22}, std::vector<std::string>{"1 OCT", "2 OCT", "3 OCT", "4 OCT"});
+         range.setAccent(kSlate);
+         bindings_.bind(range, kRange);
+         tips_.add(range, "How far octave shifts may climb before folding back down.");
+         passSustain_ = &add<CheckBox>(ui::Rect{c2, row(R3) + 0.5f, 80, 13}, "PASS SUSTAIN");
+         passSustain_->onToggle = [this](bool on) { setSwitch(kPassSustain, on); };
+         tips_.add(*passSustain_, "Off: the pedal holds the chord for the arp. On: it goes on to the synth instead.");
+      }
+
+      // CHAIN: how CHORD or LOOP moves on, after so many chords or times round, to the next pattern
+      // or a random one. Dimmed while the pattern row's switch is OFF.
+      {
+         const float x = SettingsCard::kCards[3].x + 12;
+         repeatLabel_ = &label("REPEAT", x, row(R1L));
+         repeat_ = &add<ui::NumberBox>(ui::Rect{x, row(R1), 84, 22}, ui::ValueRange{1, kMaxRepeat, 1, 1.0, false, true});
+         repeat_->setStepButtons(true);
+         repeat_->valueText = [](double v) { return "x" + std::to_string(static_cast<int>(std::lround(v))); };
+         bindings_.bind(*repeat_, kRepeat);
+         tips_.add(*repeat_, "Times round (Loop) or chords (Chord) each pattern plays before the chain moves on.");
+         thenLabel_ = &label("THEN", x, row(R2L));
+         then_ = &choice(kOrder, {x, row(R2), 84, 22}, {"NEXT", "RANDOM"});
+         tips_.add(*then_, "Next: on to the next pattern. Random: to any other pattern with notes in it.");
+         chainNote_ = &add<ui::Label>({x, row(R3), 96, 14}, "with CHORD or LOOP", (ui::defaultTheme().dimText & 0x00ffffffu) | 0x99000000u,
+                                      visage::Font::kLeft, 0.61f);
+      }
+
+      // PRESSURE, from each finger: four sliders.
+      {
+         const auto &card = SettingsCard::kCards[4];
+         const float x = card.x + 12, w = (card.w - 24) / 4;
+         tips_.add(slider(kPressVelocity, "VELOCITY", x, w), "How much pressure sets each note's velocity.");
+         tips_.add(slider(kCurve, "CURVE", x + w, w), "Soft: a light touch goes far. Hard: needs a firm press.");
+         tips_.add(slider(kPressRatchet, "RATCHET", x + 2 * w, w), "How much pressure adds hits on steps with P lit.");
+         tips_.add(slider(kMaxHits, "MAX HITS", x + 3 * w, w), "The most hits a pressed P step splits into.");
+      }
 
       buildDice();
       showDice(host_.diceOpen);
@@ -1755,7 +1868,15 @@ public:
          bounce_->setSelected(p.bounce ? 1 : 0);
          repeatEnds_->setOn(p.repeatEnds != 0);
          repeatEnds_->setActive(p.bounce != 0);
+         oneShot_->setOn(std::lround(host_.paramValue(kOneShot)) != 0);
+         passSustain_->setOn(std::lround(host_.paramValue(kPassSustain)) != 0);
+         // CHAIN only does something with CHORD or LOOP.
+         const float chain = std::lround(host_.paramValue(kAdvance)) != 0 ? 1.0f : 0.42f;
+         for (visage::Frame *f : {static_cast<visage::Frame *>(repeat_), static_cast<visage::Frame *>(then_),
+                                  static_cast<visage::Frame *>(repeatLabel_), static_cast<visage::Frame *>(thenLabel_)})
+            f->setAlphaTransparency(chain);
          length_->setVisible(!held);
+         lengthLabel_->setVisible(!held);
          timesLabel_->setVisible(held);
          plusLabel_->setVisible(held);
          times_->setVisible(held);
@@ -1808,7 +1929,7 @@ public:
       canvas.text("Arp", ui::font(28 * s), visage::Font::kLeft, 72 * s, 12 * s, 80 * s, 40 * s);
 
       // The legend for the rows' hairlines, and what they are.
-      const float y = 725;
+      const float y = 733;
       const struct {
          unsigned colour;
          const char *name;
@@ -1850,6 +1971,51 @@ private:
 
    ui::Label &rowsLabel(float x, const char *name) {
       return add<ui::Label>({x, 89, 80, 22}, name, ui::defaultTheme().dimText, visage::Font::kRight, 0.5f);
+   }
+
+   // A control's label in the strip: 9.5 points, dim.
+   ui::Label &label(const char *name, float x, float y, float w = 120,
+                    visage::Font::Justification justify = visage::Font::kLeft) {
+      return add<ui::Label>({x, y, w, 14}, name, ui::defaultTheme().dimText, justify, 0.68f);
+   }
+
+   // A knob in the strip, `w` wide: its label on the first label line, its value on the third row.
+   static ui::Rect knobRect(float x, float w) {
+      const float d = std::min(w * 0.7f, 48.0f), top = kStripTop + 125 - (18 + d + 2 + 3);
+      return {x, top, w, 100};
+   }
+   ui::Knob &stripKnob(clap_id id, const char *name, float x, float w) {
+      label(name, x, kStripTop + 36, w, visage::Font::kCenter);
+      const auto &p = kParams[id];
+      const bool stepped = (p.flags & CLAP_PARAM_IS_STEPPED) != 0;
+      auto &k = add<ui::Knob>(knobRect(x, w), ui::ValueRange{p.min, p.max, p.defaultValue, stepped ? 1.0 : 0.0, false, stepped});
+      k.setLabel("");
+      k.setAccent(kOrange);
+      k.valueText = [id](double v) { return text(id, v); };
+      k.parseText = [id](const std::string &t, double &v) { return parseParam(id, t.c_str(), v); };
+      bindings_.bind(k, id);
+      return k;
+   }
+
+   // A PRESSURE slider, `w` wide, from the first label line to the third row.
+   VSlider &slider(clap_id id, const char *name, float x, float w) {
+      const auto &p = kParams[id];
+      const bool stepped = (p.flags & CLAP_PARAM_IS_STEPPED) != 0;
+      auto &v = add<VSlider>(ui::Rect{x, kStripTop + 36, w, 103},
+                             ui::ValueRange{p.min, p.max, p.defaultValue, stepped ? 1.0 : 0.0, id == kCurve, stepped});
+      v.setLabel(name);
+      v.setAccent(kBlue);
+      v.valueText = [id](double x) { return text(id, x); };
+      v.parseText = [id](const std::string &t, double &x) { return parseParam(id, t.c_str(), x); };
+      bindings_.bind(v, id);
+      return v;
+   }
+
+   // An Off/On param from a check box, as one gesture.
+   void setSwitch(clap_id id, bool on) {
+      host_.beginEdit(id);
+      host_.setParam(id, on ? 1.0 : 0.0);
+      host_.endEdit(id);
    }
 
    ui::Label &heading(const char *name, float x, float y) {
@@ -2134,7 +2300,10 @@ private:
    ui::Knob *length_ = nullptr;
    SettingsCard *settings_ = nullptr;
    ui::SegmentedSwitch *byHeld_ = nullptr, *bounce_ = nullptr;
-   CheckBox *repeatEnds_ = nullptr;
+   CheckBox *repeatEnds_ = nullptr, *oneShot_ = nullptr, *passSustain_ = nullptr;
+   ui::NumberBox *repeat_ = nullptr;
+   ui::Label *thenLabel_ = nullptr, *repeatLabel_ = nullptr, *chainNote_ = nullptr, *lengthLabel_ = nullptr;
+   ui::SegmentedSwitch *then_ = nullptr;
    ui::NumberBox *times_ = nullptr, *plus_ = nullptr;
    ui::Label *timesLabel_ = nullptr, *plusLabel_ = nullptr;
    LaneView *lanes_ = nullptr;

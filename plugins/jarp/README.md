@@ -94,6 +94,14 @@ The switch beside the numbers says how playing moves along them:
 - **LOOP**: while you hold, each time a pattern ends the next one starts, so 1, 2 and 3 play as one
   long phrase. Each new chord starts the phrase again from the one selected.
 
+In the CHAIN card under the pattern, **REPEAT** and **THEN** say when and where the chain moves on:
+
+- **REPEAT** (x1 to x16): how many times each pattern plays before the chain moves on. In LOOP that's
+  times round: at x2, 1 1 2 2 3 3. In CHORD it's chords: at x2, each pattern plays for two chords.
+- **THEN**: where it goes after that. **NEXT** moves to the next pattern with notes in it. **RANDOM**
+  picks one of the other patterns with notes in it, never the one that just played, so with 1, 2, 3
+  and 4 filled and REPEAT x2 you might hear 1 1 3 3 2 2 4 4 1 1 ...
+
 Empty patterns are skipped, and after the last pattern with notes it goes round to the first. To chain
 1, 2 and 3, fill those three and leave the rest empty; clear one to drop it from the chain.
 
@@ -105,10 +113,14 @@ playing stops.
 With RESTART on **SONG** the chain follows the song too. In LOOP the patterns are laid end to end from
 the start of the song (beginning with the one selected), so where the song is decides which pattern
 plays and which step: come in during the third bar of a 1 2 3 chain and you hear the part of the
-chain that falls there. In CHORD the next pattern picks up at the step the song has reached in it.
+chain that falls there, with each pattern taking up REPEAT times its length. In CHORD the next
+pattern picks up at the step the song has reached in it. A random chain can't be worked out from
+where the song is, so in LOOP with THEN on RANDOM the patterns change each time one ends, counted
+from your chord, as with NOTE.
 
 Both are host params, so you can automate or modulate them: **Pattern** (1 to 8, the same numbers
-as the strip) picks the pattern, and **Advance** (Off, Chord, Loop) turns chaining on and off. A new Pattern value takes over from the
+as the strip) picks the pattern, **Advance** (Off, Chord, Loop) turns chaining on and off, **Repeat**
+(1 to 16) and **Then** (Next, Random) are REPEAT and THEN. A new Pattern value takes over from the
 next step.
 
 ## Rows
@@ -176,6 +188,8 @@ of them.
 
 ## Settings
 
+Under the pattern, the settings sit in five cards: TIMING, LENGTH, PLAY, CHAIN and PRESSURE.
+
 **TIMING**
 
 - **RATE**: how long a step is, from 1/32 to 1/4, with triplets.
@@ -200,13 +214,21 @@ the panel's header line says what it comes to ("4 held = 4 steps").
   - **REPEAT ENDS** (the box under them): with BOUNCE, the first and last steps play twice at the
     turns instead, 1 2 3 4 4 3 2 1, so four held notes fill eight steps. Dimmed when ONE WAY.
 
-**PLAYBACK**
+**PLAY**, and the keys you hold: LATCH, RESTART and ONE SHOT on the left, KEEP ROWS, RANGE and
+PASS SUSTAIN on the right.
 
 - **LATCH**: on, the notes keep playing after you let go, until you play a new chord. A host's All
   Notes Off (or a note choke) stops them too.
 - **Sustain pedal** (CC64): while it's down, keys you let go of stay in the chord and the arp keeps
   playing them; new keys join it. Lifting the pedal lets go of every key no longer held. JArp keeps
   the pedal for itself rather than passing it on, so the arp's own note lengths stay as drawn.
+- **PASS SUSTAIN** (the box under RANGE, in PLAY): on, the pedal goes straight on to the synth instead and
+  JArp ignores it, so the synth's own sustain rings the arp's notes on. Off to start with.
+- **ONE SHOT** (the box under RESTART, in PLAY): on, each new chord plays the pattern once through and then
+  the arp stops until you play a new chord (let go of every key, or with LATCH, just play again).
+  With REPEAT the pattern plays that many times first, and with LOOP the whole chain plays once
+  through (each pattern REPEAT times). With RESTART on SONG or BAR the pattern starts where the
+  song is, so a chord played half way through plays to the pattern's end. Off to start with.
 - **KEEP ROWS**: on, a key you let go of keeps its row until every key is up. Hold C, E and G on
   rows 1 to 3 and let go of C: row 1 rests while E and G stay on rows 2 and 3 instead of shifting
   down. Press C again and it takes row 1 back; a different new key is fitted in by pitch as usual.
@@ -225,15 +247,19 @@ the panel's header line says what it comes to ("4 held = 4 steps").
   up. A note that would go past the range drops back down by octaves until it fits (one shifted
   down past the range comes back up the same way). The notes you hold always play as held.
 
+**CHAIN**: **REPEAT** and **THEN**, how CHORD and LOOP move along the patterns (see
+[Patterns and chains](#patterns-and-chains)). They're dimmed while the switch beside the pattern
+numbers is OFF.
+
 With the host stopped, JArp runs on its own clock at the host's tempo, so you can play it without
 pressing play.
 
-**PRESSURE**, from each finger:
+**PRESSURE**, from each finger, on four sliders:
 
 - **VELOCITY**: how far each note's velocity follows its finger's pressure, rather than how hard the
   key was struck. At 0 it's the strike velocity alone. The Velocity lane's offset is added after.
 - **CURVE**: how pressure maps. SOFT reaches high values with a light touch, LINEAR is as played, HARD
-  needs a firm press. It shapes both Velocity and Ratchet.
+  needs a firm press. It shapes both Velocity and Ratchet. The mark half way up the slider is LINEAR.
 - **RATCHET**: how far pressure adds hits on steps with P lit, from the step's own count up to MAX HITS.
 - **MAX HITS**: the most hits a pressed P step splits into, 1 to 8.
 
