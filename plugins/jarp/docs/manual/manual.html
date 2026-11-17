@@ -1,0 +1,1134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JArp User Manual</title>
+<style>
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Regular.ttf"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Italic.ttf"); font-weight: 400; font-style: italic; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Medium.ttf"); font-weight: 500; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-SemiBold.ttf"); font-weight: 600; font-style: normal; }
+@font-face { font-family: "InterM"; src: url("fonts/Inter-Bold.ttf"); font-weight: 700; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Light.ttf"); font-weight: 300; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Regular.ttf"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-Medium.ttf"); font-weight: 500; font-style: normal; }
+@font-face { font-family: "InterDisplayM"; src: url("fonts/InterDisplay-SemiBold.ttf"); font-weight: 600; font-style: normal; }
+:root {
+  --ink: #15171d;
+  --ink-2: #3b3f4a;
+  --ink-3: #6d7280;
+  --rule: #e3e4e8;
+  --wash: #f5f5f7;
+  --night: #070910;
+  --orange: #f28c28;
+  --orange-ink: #c4650f;
+  --space: #ffb05a;  --space-ink: #b86a14;
+  --loop: #ff6fd2;   --loop-ink: #b8338f;
+  --drive: #ee6f5c;  --drive-ink: #c0412d;
+  --echo: #8fe8a8;   --echo-ink: #23864a;
+  --io: #6fe0ff;     --io-ink: #1489ad;
+  --rhea: #a98bff;   --luna: #ff8a7a;
+}
+@page {
+  size: 8.5in 11in;
+  margin: 0.85in 0.85in 0.8in 0.85in;
+  @bottom-left { content: "JArp  ·  User Manual  ·  v0.16.0  ·  Draft"; font: 500 7.5pt "InterM"; color: #8a8e99; letter-spacing: 0.04em; }
+  @bottom-right { content: counter(page); font: 600 8pt "InterM"; color: #15171d; }
+}
+@page cover { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+@page plain { @bottom-left { content: none; } @bottom-right { content: none; } }
+@page back { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  margin: 0; font-family: "InterM", sans-serif; font-size: 9.6pt; line-height: 1.55; color: var(--ink);
+  font-feature-settings: "cv11", "ss01", "tnum" 0; hyphens: manual;
+}
+p { margin: 0 0 0.75em; orphans: 3; widows: 3; }
+strong { font-weight: 600; }
+em { font-style: italic; }
+code, .mono { font-family: "JetBrains Mono", monospace; font-size: 0.86em; }
+code { background: var(--wash); border-radius: 3px; padding: 0.05em 0.3em; }
+a { color: inherit; text-decoration: none; }
+
+/* ---------- cover ---------- */
+.cover {
+  page: cover; width: 8.5in; height: 11in; background: var(--night); color: #fff; position: relative; overflow: hidden;
+  break-after: page;
+}
+.cover .stars { position: absolute; inset: 0; }
+.cover .top { position: absolute; left: 0.85in; right: 0.85in; top: 0.8in; display: flex; justify-content: space-between; align-items: center; }
+.cover .brand { font: 600 8pt "InterM"; letter-spacing: 0.28em; color: #9aa0ad; text-transform: uppercase; }
+.cover .title { position: absolute; left: 0.85in; top: 1.9in; }
+.cover .word { font: 300 92pt/0.9 "InterDisplayM"; letter-spacing: -0.035em; }
+.cover .word .j { color: var(--orange); font-weight: 400; }
+.cover .sub { margin-top: 0.22in; font: 400 15pt "InterDisplayM"; color: #c9ccd4; letter-spacing: 0.01em; }
+.cover .sub b { color: #fff; font-weight: 500; }
+.cover .shot { position: absolute; left: 0.85in; right: 0.85in; top: 4.45in; }
+.cover .shot img { width: 100%; display: block; border-radius: 10px; box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 30px 80px rgba(255,111,210,0.18), 0 10px 40px rgba(111,224,255,0.12); }
+.cover .foot { position: absolute; left: 0.85in; right: 0.85in; bottom: 0.75in; display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid rgba(255,255,255,0.14); padding-top: 0.16in; }
+.cover .foot .k { font: 600 7pt "InterM"; letter-spacing: 0.22em; text-transform: uppercase; color: #7d8391; }
+.cover .foot .v { font: 500 10pt "InterM"; color: #e8e9ee; margin-top: 3px; }
+
+/* ---------- front matter ---------- */
+.front { page: plain; break-after: page; }
+.toc-title { font: 300 30pt/1 "InterDisplayM"; letter-spacing: -0.02em; margin: 0 0 0.25in; }
+.toc { columns: 2; column-gap: 0.4in; }
+.toc .grp { break-inside: avoid; }
+.toc .ch { display: flex; align-items: baseline; padding: 4px 0 4px; border-bottom: 1px solid var(--rule); }
+.toc .ch .n { width: 0.36in; font: 600 9pt "JetBrains Mono"; color: var(--orange-ink); }
+.toc .ch .t { flex: 1; font: 600 10.5pt "InterM"; }
+.toc .ch .p { font: 500 9.5pt "InterM"; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.toc .sec { display: flex; align-items: baseline; padding: 1px 0 1px 0.36in; font-size: 8.4pt; color: var(--ink-2); }
+.toc .sec .t { flex: 1; }
+.toc .sec .p { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.toc .grp { padding-bottom: 3px; }
+
+/* ---------- chapters ---------- */
+.chapter { break-before: page; }
+.chap-head { position: relative; margin: 0 0 0.32in; padding-top: 0.05in; }
+.chap-head .num { font: 600 8pt "JetBrains Mono"; letter-spacing: 0.18em; color: var(--accent, var(--orange-ink)); text-transform: uppercase; }
+.chap-head h1 { font: 300 32pt/1.02 "InterDisplayM"; letter-spacing: -0.025em; margin: 0.08in 0 0.12in; color: var(--ink); }
+.chap-head .lede { font: 400 12pt/1.5 "InterDisplayM"; color: var(--ink-2); max-width: 5.6in; margin: 0; }
+.chap-head .bar { height: 3px; width: 0.9in; background: var(--accent-bg, var(--orange)); margin-top: 0.22in; border-radius: 2px; }
+
+h2 { break-inside: avoid; font: 600 13.5pt/1.25 "InterDisplayM"; letter-spacing: -0.005em; margin: 0.32in 0 0.1in; break-after: avoid; }
+h2 .tag { font: 600 7pt "JetBrains Mono"; letter-spacing: 0.14em; color: var(--accent, var(--orange-ink)); display: block; margin-bottom: 3px; text-transform: uppercase; }
+h3 { font: 600 10.2pt/1.3 "InterM"; margin: 0.2in 0 0.06in; break-after: avoid; }
+h4 { font: 600 7.5pt "InterM"; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0.16in 0 0.06in; break-after: avoid; }
+ul, ol { margin: 0 0 0.8em; padding-left: 1.15em; }
+li { margin: 0 0 0.3em; }
+li::marker { color: var(--ink-3); }
+
+/* ---------- tables ---------- */
+table { width: 100%; border-collapse: collapse; margin: 0.06in 0 0.18in; font-size: 8.5pt; line-height: 1.42; }
+thead th { text-align: left; font: 600 6.8pt "InterM"; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3); border-bottom: 1.2px solid var(--ink); padding: 0 8px 5px 0; }
+tbody td { border-bottom: 1px solid var(--rule); padding: 5px 8px 5px 0; vertical-align: top; }
+tbody tr { break-inside: avoid; }
+td.c { font-weight: 600; white-space: nowrap; }
+td.r, td.d { font-family: "JetBrains Mono", monospace; font-size: 7.6pt; color: var(--ink-2); white-space: nowrap; }
+td.d { color: var(--ink); }
+table.params td.c { width: 1.05in; }
+table.params td.r { width: 1.3in; white-space: normal; }
+table.params td.d { width: 0.7in; white-space: normal; }
+table.compact td.c { width: 0.95in; }
+table.compact td.r { width: 1.05in; white-space: normal; line-height: 1.5; }
+table.compact .dflt { color: var(--ink); font-weight: 600; }
+.mod { display: inline-block; font: 600 6pt "InterM"; letter-spacing: 0.08em; padding: 0 4px; border-radius: 3px; margin-left: 4px; vertical-align: 1px; border: 1px solid currentColor; }
+.mod.m { color: #7b7f8b; }
+.mod.t { color: var(--loop-ink); }
+
+/* ---------- figures ---------- */
+figure { margin: 0.12in 0 0.22in; break-inside: avoid; }
+figure img { display: block; width: 100%; border-radius: 6px; }
+figure.dark img { box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 6px 22px rgba(10,12,20,0.18); }
+figcaption { font-size: 7.8pt; color: var(--ink-3); margin-top: 7px; line-height: 1.45; }
+figcaption b { color: var(--ink); font-weight: 600; letter-spacing: 0.02em; }
+
+.split { break-inside: avoid; display: grid; grid-template-columns: 1.72in 1fr; gap: 0.3in; align-items: start; margin-top: 0.1in; }
+.split figure { margin: 0; }
+.split figure img { border-radius: 8px; }
+.split .body > :first-child { margin-top: 0; }
+
+/* ---------- callouts ---------- */
+.note { border-left: 3px solid var(--accent-bg, var(--orange)); background: var(--wash); padding: 9px 13px 9px 13px; margin: 0.12in 0 0.2in; border-radius: 0 6px 6px 0; break-inside: avoid; font-size: 8.9pt; }
+.note .k { font: 700 6.6pt "InterM"; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent, var(--orange-ink)); display: block; margin-bottom: 2px; }
+.note p:last-child { margin-bottom: 0; }
+.note.warn { border-left-color: #d64545; }
+.note.warn .k { color: #b53030; }
+
+.cols2 { break-inside: avoid; display: grid; grid-template-columns: 1fr 1fr; gap: 0.28in; }
+.cols2 > div > :first-child { margin-top: 0; }
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 8.8pt; margin: 0 0 0.15in; }
+.kv dt { font-weight: 600; white-space: nowrap; }
+.kv dd { margin: 0; color: var(--ink-2); }
+
+/* numbered callouts legend */
+.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 0.28in; margin-top: 0.12in; font-size: 8.6pt; }
+.legend div { display: flex; gap: 9px; align-items: baseline; break-inside: avoid; }
+.dot { flex: none; display: inline-flex; width: 17px; height: 17px; border-radius: 50%; background: var(--orange); color: #fff; font: 700 7.5pt/17px "InterM"; justify-content: center; position: relative; top: -1px; }
+.legend b { font-weight: 600; }
+.anno { position: relative; }
+.anno svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* steps */
+.steps { counter-reset: s; list-style: none; padding: 0; margin: 0.08in 0 0.2in; }
+.steps > li { counter-increment: s; position: relative; padding: 0 0 0.13in 0.48in; margin: 0; break-inside: avoid; }
+.steps > li::before { content: counter(s, decimal-leading-zero); position: absolute; left: 0; top: -1px; font: 600 11pt "JetBrains Mono"; color: var(--orange-ink); }
+.steps > li b.h { display: block; font-weight: 600; font-size: 10pt; margin-bottom: 1px; }
+
+/* recipe cards */
+.recipes { display: grid; grid-template-columns: 1fr 1fr; gap: 0.16in; margin-top: 0.12in; }
+.recipe { border: 1px solid var(--rule); border-radius: 8px; padding: 11px 13px 9px; break-inside: avoid; position: relative; overflow: hidden; }
+.recipe::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: var(--rc, var(--orange)); }
+.recipe h3 { margin: 0 0 3px; font-size: 9.8pt; }
+.recipe p { font-size: 8.5pt; color: var(--ink-2); margin-bottom: 6px; }
+.recipe .set { font: 400 7.3pt/1.6 "JetBrains Mono"; color: var(--ink); background: var(--wash); border-radius: 5px; padding: 6px 8px; }
+.recipe .from { font-size: 7.4pt; color: var(--ink-3); margin-top: 5px; }
+
+.pill { display: inline-block; font: 600 6.6pt "InterM"; letter-spacing: 0.1em; text-transform: uppercase; padding: 1px 6px; border-radius: 10px; color: #fff; vertical-align: 1px; }
+.key { display: inline-block; font: 600 7.4pt "InterM"; border: 1px solid #c9ccd3; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: #fff; line-height: 1.5; }
+
+.swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+
+.specs td.c { width: 1.7in; }
+
+.back { page: back; width: 8.5in; height: 11in; background: var(--night); color: #fff; position: relative; break-before: page; }
+.back .mid { position: absolute; left: 0; right: 0; top: 4.4in; text-align: center; }
+.back .word { font: 300 40pt "InterDisplayM"; letter-spacing: -0.03em; }
+.back .word .j { color: var(--orange); font-weight: 400; }
+.back .small { font: 500 8pt "InterM"; letter-spacing: 0.22em; text-transform: uppercase; color: #7d8391; margin-top: 10px; }
+.back .url { position: absolute; bottom: 0.8in; left: 0; right: 0; text-align: center; font: 400 8.5pt "JetBrains Mono"; color: #9aa0ad; }
+
+.avoid { break-inside: avoid; }
+.pb { break-before: page; }
+.muted { color: var(--ink-3); }
+.small { font-size: 8.4pt; }
+/* ---------- JArp additions ---------- */
+:root { --purple: #b69cf0; --purple-ink: #7a52c7; --blue: #6fb8ff; --blue-ink: #2f7cc4; }
+.cover .word { font-size: 96pt; }
+.cover .shot { left: 1.15in; right: 1.15in; top: 3.9in; }
+.cover .shot img { box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 30px 80px rgba(242,140,40,0.20), 0 10px 40px rgba(182,156,240,0.14); }
+#overview { width: 100%; }
+.steps[start] { counter-reset: none; }
+.toc .ch { padding: 3px 0; }
+.toc .sec { padding: 0 0 0 0.36in; font-size: 8pt; line-height: 1.45; }
+.toc-title { margin-bottom: 0.18in; }
+table.params td.c { width: 1.15in; white-space: normal; }
+table.ref td.c { width: 1.7in; }
+table.ref td.r { width: 2.1in; white-space: normal; }
+table.ref td.d { width: 0.9in; white-space: normal; }
+/* row maps: which note each row plays */
+table.rowmap { font-size: 8.2pt; }
+table.rowmap th, table.rowmap td { text-align: center; padding-left: 4px; padding-right: 4px; }
+table.rowmap td:first-child, table.rowmap th:first-child { text-align: left; }
+table.rowmap td.n { font-family: "JetBrains Mono", monospace; font-size: 7.8pt; }
+table.rowmap td.x { color: #b0b4bd; }
+table.rowmap td.up { color: var(--orange-ink); font-weight: 600; }
+table.rowmap td.fold { color: var(--purple-ink); font-weight: 600; }
+/* step sequences */
+.seq { display: inline-flex; flex-wrap: wrap; gap: 3px; vertical-align: middle; }
+.seq i { font-style: normal; display: inline-block; min-width: 17px; height: 17px; line-height: 17px; text-align: center; border-radius: 3px; background: #fde3c6; color: #7a3d05; font: 600 7.6pt/17px "JetBrains Mono", monospace; }
+.seq i.b { background: #e6dcfb; color: #4b2a8f; }
+.seq i.r { background: #ffd0c8; color: #8f2a1a; }
+.seq i.sep { background: none; min-width: 6px; color: var(--ink-3); }
+figure.dark { max-width: 5.9in; margin-left: auto; margin-right: auto; }
+#overview { max-width: 5.7in; }
+.legend { gap: 4px 0.28in; font-size: 8.3pt; }
+.toc .sec { font-size: 7.6pt; line-height: 1.38; }
+.toc .ch .t { font-size: 10pt; }
+</style>
+</head>
+<body>
+
+<!-- ================= COVER ================= -->
+<section class="cover">
+  <svg class="stars" viewBox="0 0 816 1056" preserveAspectRatio="none" id="stars"></svg>
+  <div class="top">
+    <svg width="34" height="34" viewBox="0 0 34 34">
+      <circle cx="17" cy="17" r="14" fill="none" stroke="#f28c28" stroke-width="2.2"/>
+      <circle cx="11.5" cy="19.5" r="2.6" fill="#f28c28"/>
+      <circle cx="17" cy="14" r="2.6" fill="#f28c28"/>
+      <circle cx="22.5" cy="19.5" r="2.6" fill="#f28c28"/>
+    </svg>
+    <div class="brand">JClap &nbsp;·&nbsp; MPE Note Effect &nbsp;·&nbsp; CLAP</div>
+  </div>
+  <div class="title">
+    <div class="word"><span class="j">J</span>Arp</div>
+    <div class="sub"><b>Hold a chord. The grid plays it.</b> &nbsp;User Manual</div>
+  </div>
+  <div class="shot"><img src="img/panel.jpg" alt=""></div>
+  <div class="foot">
+    <div><div class="k">Version</div><div class="v">0.16.0</div></div>
+    <div><div class="k">Format</div><div class="v">CLAP note effect</div></div>
+    <div><div class="k">Platforms</div><div class="v">macOS · Windows · Linux</div></div>
+    <div style="text-align:right"><div class="k">Edition</div><div class="v">Draft · November 2026</div></div>
+  </div>
+</section>
+
+<!-- ================= CONTENTS ================= -->
+<section class="front">
+  <div class="chap-head" style="margin-bottom:0.25in">
+    <div class="num">Contents</div>
+  </div>
+  <div class="toc-title">Contents</div>
+  <div class="toc" id="toc"></div>
+  <h2 style="margin-top:0.3in">About this manual</h2>
+  <p>Chapters 2 to 4 get you installed, playing and around the panel. Chapter 5 explains the one idea everything hangs on, and Chapters 6 to 13 cover each part in the order of the JArp walkthrough video, so the two can be used together. Chapter 14 lists every factory preset. Panel labels are set in <strong>bold</strong>, such as <strong>ROWS BY</strong>; rows count from the bottom of the grid, and middle C is C4, as JArp names it.</p>
+</section>
+
+<!-- ================= 1. WELCOME ================= -->
+<section class="chapter" data-ch="01" data-title="Welcome to JArp">
+  <div class="chap-head">
+    <div class="num">Chapter 01</div>
+    <h1>Welcome to JArp</h1>
+    <p class="lede">An arpeggiator you draw. Hold a chord, and a grid plays it, one finger's expression at a time.</p>
+    <div class="bar"></div>
+  </div>
+
+  <p>Most arpeggiators give you a list of modes: up, down, up and down, random. JArp gives you a grid. Each <strong>row</strong> is one of the notes you hold, and each <strong>column</strong> is a step in time. Light a cell and that row's note plays on that step, for as long as the cell is drawn. Draw a staircase and you have an up arpeggio; draw a long bar along the bottom row and you have a pedal note under it. Change the chord and the same shape plays the new notes.</p>
+  <p>Because a row is a <em>held note</em> rather than a fixed pitch, one drawn pattern fits every chord you play. And because the grid is just notes and steps, the same idea covers far more than arpeggios: bass lines, fingerpicking, piano accompaniment, sequencer lines and drum beats, where each key you hold is a drum.</p>
+  <p>JArp is made for MPE controllers such as the LinnStrument, though any MIDI keyboard works. Every note it plays goes out on the channel and key of the finger it came from, so the synth after it still hears that finger's pressure, slide and bend. Pressing harder can play louder, or add ratchet hits to a step.</p>
+
+  <h2>At a glance</h2>
+  <div class="cols2">
+    <div>
+      <ul>
+        <li><strong>Eight rows by up to 128 steps</strong>, drawn with the mouse: paint, erase, set each note's length, pick notes and move them together.</li>
+        <li><strong>Four lanes</strong> under the grid: octave, ratchet, velocity and chance, per step, or per note for notes you pick.</li>
+        <li><strong>Four ways to map rows to notes</strong>: by pitch (with rows above the chord resting, wrapping or climbing octaves), by scale degree, by only the degrees you hold, or spread across the chord.</li>
+        <li><strong>Length by steps or by notes held</strong>, one way or bouncing, so an up pattern becomes up-and-down for any chord.</li>
+      </ul>
+    </div>
+    <div>
+      <ul>
+        <li><strong>Eight patterns</strong>, played one at a time or chained, each chord moving on or one long looping phrase.</li>
+        <li><strong>MPE throughout</strong>: pressure to velocity and ratchet, and every finger's expression carried onto every note it plays.</li>
+        <li><strong>Latch, sustain pedal and Keep Rows</strong> for playing live, and Restart by song, note or bar.</li>
+        <li><strong>Dice</strong> to randomize or mutate, and <strong><span class="n-presets">129</span> factory presets</strong> in <span class="n-cats">27</span> categories, each with a one-line note on how to play it.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note">
+    <span class="k">Only the notes you hold</span>
+    <p>JArp never invents a pitch. Every note it plays is one of the keys you hold, moved by octaves at most. The dice, the presets and every row mapping keep to that, so it can't play a wrong note against your chord.</p>
+  </div>
+</section>
+
+<!-- ================= 2. INSTALLATION ================= -->
+<section class="chapter" data-ch="02" data-title="Installation">
+  <div class="chap-head">
+    <div class="num">Chapter 02</div>
+    <h1>Installation</h1>
+    <p class="lede">JArp ships in the JClap bundle as a CLAP note effect.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2>Requirements</h2>
+  <div class="kv">
+    <dt>Host</dt><dd>A host that loads CLAP note effects, such as Bitwig Studio or REAPER. JArp has no VST3 or Max for Live version.</dd>
+    <dt>Controller</dt><dd>Any MIDI keyboard. An MPE controller (LinnStrument, Seaboard, Osmose and others) adds pressure, slide and bend per note.</dd>
+    <dt>macOS</dt><dd>Universal binary: macOS 10.15 or later on Intel, 11 or later on Apple Silicon.</dd>
+    <dt>Windows</dt><dd>64-bit Windows.</dd>
+    <dt>Linux</dt><dd>64-bit, X11.</dd>
+  </div>
+
+  <h2>Installing on a Mac</h2>
+  <p>The quickest way installs every JClap plug-in from the latest release. Quit your music app, open <strong>Terminal</strong>, paste this line and press <span class="key">Return</span>, and reopen the app once it says <em>Done</em>:</p>
+  <p class="mono" style="font-size:7.6pt; background:var(--wash); padding:8px 10px; border-radius:5px; word-break:break-all">curl -fsSL https://raw.githubusercontent.com/jeffmhopkins/Jclap/main/install-macos.sh | bash</p>
+  <div class="note warn">
+    <span class="k">macOS: don't download with a browser</span>
+    <p>The plug-ins are signed but not notarized, so macOS quarantines plug-ins downloaded through a web browser, and some hosts (Bitwig among them) silently skip them. Use the line above. If you already downloaded the zip, clear the flag once after copying:</p>
+    <p class="mono" style="font-size:7.2pt; background:#fff; padding:7px 9px; border-radius:4px; word-break:break-all">xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/*.clap</p>
+  </div>
+
+  <h2>Installing on Windows and Linux</h2>
+  <p>Download <span class="mono">jclap-Windows.zip</span> or <span class="mono">jclap-Linux.zip</span> from <span class="mono">github.com/jeffmhopkins/Jclap/releases/latest</span> (or <span class="mono">jclap-JArp-0.16.0.zip</span> for JArp alone), copy <span class="mono">JArp.clap</span> into <span class="mono">C:\Program Files\Common Files\CLAP</span> or <span class="mono">~/.clap</span>, and restart your host. JArp appears as a note effect.</p>
+
+  <h2>Where it goes</h2>
+  <p>JArp works on notes, so it goes on the <strong>instrument track, before the instrument</strong>: before an MPE synth (such as JSynth or JBreath, in the same bundle) to hear each finger's expression, or before any synth, drum machine or sampler. The notes you hold don't pass through, only the arp's notes; other MIDI passes straight through.</p>
+</section>
+
+<!-- ================= 3. QUICK START ================= -->
+<section class="chapter" data-ch="03" data-title="Quick Start">
+  <div class="chap-head">
+    <div class="num">Chapter 03</div>
+    <h1>Quick Start</h1>
+    <p class="lede">From an empty slot to a pattern of your own in seven steps.</p>
+    <div class="bar"></div>
+  </div>
+
+  <ol class="steps">
+    <li><b class="h">Load it before a synth</b>On an instrument track, put <strong>JArp</strong> before the synth in the device chain. A plain pluck or keys sound is easiest to hear.</li>
+    <li><b class="h">Hold a chord</b>Hold a C major 7th. JArp starts on its <strong>Init</strong> pattern, walking up the four notes and back down, in sixteenths. You don't need to press play: with the transport stopped, JArp keeps its own time at the host's tempo.</li>
+    <li><b class="h">Change the chord</b>Hold A minor, then F. The rows' labels on the left change to the notes you hold, and the same shape plays them.</li>
+    <li><b class="h">Try a preset</b>Click the arrows in the preset bar, or the preset's name for the menu. Try <strong>Pedal Climb</strong> (Pads and Pedals), then <strong>Travis Picking</strong> or <strong>Funk Bass</strong>. The line beside the logo says how each one wants to be played.</li>
+    <li><b class="h">Draw</b>Click an empty cell to add a note; click a note to remove it. Drag a note's right edge to make it longer. Drag the purple bar at the top right to change how many steps the pattern has.</li>
+    <li><b class="h">Make it fit any chord</b>Under <strong>LENGTH</strong>, set <strong>COUNT</strong> to <strong>HELD</strong> and <strong>DIRECTION</strong> to <strong>BOUNCE</strong>. A staircase up the rows now plays up and down exactly the notes you hold, however many.</li>
+    <li><b class="h">Keep it</b>Click <strong>SAVE</strong> in the preset bar and give it a name. The settings and all eight patterns are also saved with your project.</li>
+  </ol>
+
+  <div class="note">
+    <span class="k">Tip</span>
+    <p>Hover over a control for a one-line tip. The grid and the lanes have none, so nothing pops up while you draw.</p>
+  </div>
+</section>
+
+<!-- ================= 4. PANEL ================= -->
+<section class="chapter" data-ch="04" data-title="The Panel">
+  <div class="chap-head">
+    <div class="num">Chapter 04</div>
+    <h1>The Panel</h1>
+    <p class="lede">The grid in the middle, how rows find their notes across its top, the lanes under it, and the settings along the bottom.</p>
+    <div class="bar"></div>
+  </div>
+
+  <figure class="dark anno" id="overview">
+    <img src="img/panel.jpg" alt="">
+    <svg viewBox="0 0 900 743">
+      <g font-family="InterM" font-weight="700" font-size="14" text-anchor="middle"></g>
+    </svg>
+  </figure>
+
+  <div class="legend">
+    <div><span class="dot">1</span><span><b>Blurb.</b> What the preset is and how to play it. Click to write your own.</span></div>
+    <div><span class="dot">2</span><span><b>COPY, PASTE, CLEAR.</b> Act on the pattern on the grid (Chapter 12).</span></div>
+    <div><span class="dot">3</span><span><b>Preset bar.</b> Arrows, the dice, the category and name, the star, <b>SAVE</b>.</span></div>
+    <div><span class="dot">4</span><span><b>Pattern strip.</b> The eight patterns. Lit numbers have notes; the orange bar marks the one playing.</span></div>
+    <div><span class="dot">5</span><span><b>Chain switch.</b> OFF, CHORD or LOOP (Chapter 12).</span></div>
+    <div><span class="dot">6</span><span><b>ROWS BY</b> and <b>EMPTY ROWS</b> (or <b>SCALE</b>). Which note each row plays (Chapter 8).</span></div>
+    <div><span class="dot">7</span><span><b>Row labels.</b> Each row's note and channel, with its finger's pressure, slide and bend.</span></div>
+    <div><span class="dot">8</span><span><b>The grid.</b> Rows by steps, with the playhead (Chapter 6).</span></div>
+    <div><span class="dot">9</span><span><b>Length bar.</b> Drag it to set the pattern's length.</span></div>
+    <div><span class="dot">10</span><span><b>Lanes.</b> Octave, ratchet, velocity and chance for each step (Chapter 7).</span></div>
+    <div><span class="dot">11</span><span><b>TIMING</b> and <b>LENGTH</b>. Rate and swing; how many steps, which way (Chapters 9, 10).</span></div>
+    <div><span class="dot">12</span><span><b>PLAYBACK</b> and <b>PRESSURE</b>. Latch, Keep Rows, Restart, Range; what pressure does (Chapters 10, 11).</span></div>
+  </div>
+
+  <h2>Reading the grid</h2>
+  <p>A white line moves through the steps in time with the transport, and the column it is in has a frame round it. A note playing lights up, and so does its row's note name, with a dot beside it. A softer note (a lower Velocity) draws fainter, a note left to chance shows its percent in its lower corner, a note with an Octave shift shows it in its upper corner, and a ratcheted note shows its hits. Steps past the pattern's length are dimmed.</p>
+  <p>Each row's label shows the note it is playing and the MIDI channel it goes out on. Three hairlines along the bottom of each label follow that row's finger live: pressure in blue, slide (CC74) in purple, and bend from the middle in orange. The key along the bottom of the panel is a reminder.</p>
+
+  <h2>Working with the controls</h2>
+  <p>Every setting except the patterns themselves is a host parameter, so it can be automated. Knobs work the same everywhere on the panel:</p>
+  <table>
+    <thead><tr><th>Action</th><th>On a knob</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Drag up / down</td><td>Change the value. A popup shows the value while you drag.</td></tr>
+      <tr><td class="c"><span class="key">Shift</span> + drag</td><td>Fine adjustment.</td></tr>
+      <tr><td class="c">Scroll wheel</td><td>Step the value up or down.</td></tr>
+      <tr><td class="c">Double-click</td><td>Back to the default.</td></tr>
+      <tr><td class="c">Right-click</td><td>Menu with <em>Reset to default</em> and <em>Enter value…</em> to type an exact number.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Panel size</h2>
+  <p>The panel is 900 × 743 at 100%. Right-click any empty part of the panel and choose <em>UI Size</em> to scale it to 75%, 100%, 125%, 150% or 200%. The same menu has <em>Check for Updates</em>: when a release has a newer JArp, the header says so once per session.</p>
+</section>
+
+<!-- ================= 5. HOW IT THINKS ================= -->
+<section class="chapter" data-ch="05" data-title="How JArp Thinks">
+  <div class="chap-head">
+    <div class="num">Chapter 05</div>
+    <h1>How JArp Thinks</h1>
+    <p class="lede">Rows are the notes you hold. Columns are steps in time. A lit cell plays its row's note for as long as it is drawn.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2>Rows and steps</h2>
+  <p>Hold a C major 7th, C3 E3 G3 B3. With <strong>ROWS BY</strong> on <strong>PITCH</strong> (the default), row 1 at the bottom of the grid plays your lowest note, C3; row 2 the next one up, E3; row 3 G3; row 4 B3. The steps run left to right at the <strong>RATE</strong>, a sixteenth each by default. On each step, every lit cell plays its row's note.</p>
+
+  <figure>
+    <svg viewBox="0 0 704 236" width="100%" font-family="InterM" font-size="9">
+      <defs>
+        <marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#15171d"/></marker>
+      </defs>
+      <!-- keyboard -->
+      <g transform="translate(20,40)">
+        <text x="0" y="-14" font-weight="600" fill="#15171d" letter-spacing="0.08em">YOU HOLD</text>
+        <g id="kb"></g>
+      </g>
+      <path d="M232,110 L282,110" stroke="#15171d" stroke-width="1.2" marker-end="url(#ah)"/>
+      <!-- grid -->
+      <g transform="translate(300,20)">
+        <text x="0" y="6" font-weight="600" fill="#15171d" letter-spacing="0.08em">THE GRID PLAYS</text>
+        <g id="minigrid"></g>
+      </g>
+    </svg>
+    <figcaption><b>Fig. 5.1</b> &nbsp;Four held notes become rows 1 to 4, lowest at the bottom. Row 1 drawn across the whole pattern is a pedal note under the rest; the cells above it play the other notes in turn. Hold a different chord, and the same shape plays the new notes.</figcaption>
+  </figure>
+
+  <h2>A note's length is its gate</h2>
+  <p>There is no gate setting. A note drawn across one step sounds for one step; drawn across four, it sounds for four; drawn across a quarter of a step, it is a short pluck. A note stops at the next note in its row. Draw row 1 across the whole pattern and it holds a pedal under everything else.</p>
+
+  <h2>The same shape for every chord</h2>
+  <p>Since a row means "the second note you hold" rather than "E3", a pattern is a shape, and any chord fills it. That is why one preset works for C major, A minor and an F major 7th alike. What happens when the chord has fewer notes than the pattern has rows is up to <strong>EMPTY ROWS</strong>, and whether rows count notes or scale steps is up to <strong>ROWS BY</strong> (Chapter 8). How many steps play can follow the chord too (Chapter 9).</p>
+
+  <h2>Each finger is its own voice</h2>
+  <p>Every note JArp plays goes out on the channel and key of the finger it comes from, moved by the step's octave. On an MPE controller each finger has its own channel, so the synth after JArp hears that finger's pressure, slide and bend on every note the arp plays from it (Chapter 11). On an ordinary keyboard everything shares one channel, and JArp works just the same.</p>
+
+  <h2>Timing</h2>
+  <p>With the transport running, JArp follows the song position and tempo. With it stopped, JArp runs on its own clock at the host's tempo, so you can play it without pressing play. Where a pattern starts is up to <strong>RESTART</strong> (Chapter 10).</p>
+</section>
+
+<!-- ================= 6. DRAWING ================= -->
+<section class="chapter" data-ch="06" data-title="Drawing on the Grid" style="--accent: #c4650f;">
+  <div class="chap-head">
+    <div class="num">Chapter 06</div>
+    <h1>Drawing on the Grid</h1>
+    <p class="lede">Eight rows by up to 128 steps, sixteen in view at a time. Row 1 is at the bottom.</p>
+    <div class="bar"></div>
+  </div>
+
+  <figure class="dark"><img src="img/grid.jpg" alt=""><figcaption><b>Fig. 6.1</b> &nbsp;Pedal Climb on a C major 7th: row 1 held across the pattern, the rest climbing over it. Two steps are ratcheted, three are left to chance, and the playhead is on step 11.</figcaption></figure>
+
+  <h2>Paint, erase and length</h2>
+  <table class="params">
+    <thead><tr><th>Action</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Click an empty cell</td><td>Adds a one-step note. Keep the button down and drag: every empty cell the mouse passes gets a note too, until you let go.</td></tr>
+      <tr><td class="c">Click a note</td><td>Removes it. Keep the button down and drag: every note the mouse passes is removed too.</td></tr>
+      <tr><td class="c">Drag a note's right edge</td><td>Sets how long it sounds, in quarter steps, from a quarter of a step to the whole pattern. The handle is a narrow strip just inside the edge: it lights white, and the pointer turns to a resize arrow, when you're on it. The length only follows a deliberate drag, so a click that wobbles leaves it as it was.</td></tr>
+      <tr><td class="c">Drag the purple bar</td><td>Sets the pattern's length, from 1 to 128 steps. The <strong>LENGTH</strong> knob is the same setting. Each pattern has its own length.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Picking and moving notes</h2>
+  <p>Picking notes lets you move or edit several at once. Picked notes have a white edge.</p>
+  <table class="params">
+    <thead><tr><th>Action</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c"><span class="key">Shift</span> + drag</td><td>Draws a box from anywhere that picks every note it touches, adding to what's picked.</td></tr>
+      <tr><td class="c"><span class="key">Shift</span> + click a note</td><td>Adds it to the pick, or drops it.</td></tr>
+      <tr><td class="c">Right-click a note</td><td>Picks just that one. Right-drag from an empty cell draws a box too.</td></tr>
+      <tr><td class="c">Drag a picked note</td><td>Moves every picked note together, keeping their shape, each note's length and its lane values. A move that would take a note off the grid, past the pattern's end or onto another note stops where it last fit. A note that lands just before another is shortened to fit.</td></tr>
+      <tr><td class="c"><span class="key">Alt</span> + drag a note</td><td>Moves a note that isn't picked (<span class="key">Option</span> on a Mac).</td></tr>
+      <tr><td class="c">Click a picked note</td><td>Without dragging, removes it, as any click on a note does.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Long patterns</h2>
+  <p>A pattern longer than 16 steps scrolls. Drag the purple bar past the right edge and the grid scrolls on with it. A bar under the step numbers shows the whole pattern: the lighter part is the 16 steps in view, the ticks are steps where notes start, and the orange line is the playhead. Beside it are the steps in view (<em>17-32 of 48</em>) and <strong>FOLLOW</strong>.</p>
+  <figure class="dark"><img src="img/long.jpg" alt=""><figcaption><b>Fig. 6.2</b> &nbsp;A 48-step pattern, playing in its second 16. The overview bar under the step numbers shows the whole pattern.</figcaption></figure>
+  <ul>
+    <li>With <strong>FOLLOW</strong> lit, the grid follows the playhead: it holds still until the playhead reaches the middle, then glides along with it, smoothly with the transport, until the pattern's end reaches the right edge.</li>
+    <li>Drag along the overview bar (or the step numbers above it), or scroll the mouse wheel over the grid, to look elsewhere. That turns FOLLOW off; click it to follow again.</li>
+    <li>The lanes under the grid scroll with it.</li>
+  </ul>
+  <p>Notes and lane settings past the pattern's length are kept, dimmed, so shortening a pattern and lengthening it again loses nothing.</p>
+</section>
+
+<!-- ================= 7. LANES ================= -->
+<section class="chapter" data-ch="07" data-title="The Lanes" style="--accent: #c4650f;">
+  <div class="chap-head">
+    <div class="num">Chapter 07</div>
+    <h1>The Lanes</h1>
+    <p class="lede">Four rows of numbers under the grid, one cell per step, for the notes that start on that step.</p>
+    <div class="bar"></div>
+  </div>
+
+  <p>Drag a lane cell up or down, or scroll on it, to change it. Double-click it to set it back.</p>
+  <table class="params">
+    <thead><tr><th>Lane</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">OCTAVE</td><td class="r">−3 to +3 oct</td><td class="d">0</td><td>Moves the step's notes up or down by octaves, for leaps and bass drops. A note shows its octave in its corner. <strong>RANGE</strong> still applies (Chapter 8).</td></tr>
+      <tr><td class="c">RATCHET</td><td class="r">1 to 8 hits</td><td class="d">1</td><td>Splits each note into equal hits across its length, for rolls and trap hats. The note on the grid shows its hits. The small <strong>P</strong> beside the number makes the step's ratchet follow pressure (Chapter 11).</td></tr>
+      <tr><td class="c">VELOCITY</td><td class="r">−64 to +64</td><td class="d">0</td><td>Added to the note's velocity, for accents. Softer notes draw fainter.</td></tr>
+      <tr><td class="c">CHANCE</td><td class="r">0 to 100%</td><td class="d">100%</td><td>How likely the step's notes are to play each time round, so a loop never repeats exactly. Each note rolls on its own, so at 50% a chord on that step thins out differently every pass. A ratcheted note plays all its hits or none. A cell under 100% shows in orange with a bar under it.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>A note's own values</h2>
+  <p>The lanes are per step, so every note starting on a step shares them. To set one note apart, right-click it. It gets a white outline, <strong>NOTE</strong> shows beside the lane names, and its step's column in the lanes (outlined in white) now edits that note alone. A value you change becomes the note's own; values it still takes from the step show dim. Double-click a value to hand it back to the step. A note with values of its own shows a white dot in its corner. Right-click it again, or click an empty cell, to go back to editing steps.</p>
+  <figure class="dark"><img src="img/note.jpg" alt=""><figcaption><b>Fig. 7.1</b> &nbsp;The G on step 2, picked, with its own octave, ratchet, velocity and chance. Its column in the lanes edits that note alone.</figcaption></figure>
+
+  <h2>Several notes at once</h2>
+  <p>With several notes picked, the lane names show how many (<strong>4 NOTES</strong>), each picked note's column is outlined, and an edit to any of those columns sets that value on every picked note at once: drag one CHANCE cell to 50% and all of them are at 50%. Double-click hands that value back to the step for all of them.</p>
+  <figure class="dark"><img src="img/picks.jpg" alt=""><figcaption><b>Fig. 7.2</b> &nbsp;Four notes picked together, all set to a 50% chance by one edit.</figcaption></figure>
+</section>
+
+<!-- ================= 8. ROWS ================= -->
+<section class="chapter" data-ch="08" data-title="Which Note Each Row Plays" style="--accent: var(--purple-ink); --accent-bg: var(--purple);">
+  <div class="chap-head">
+    <div class="num">Chapter 08</div>
+    <h1>Which Note Each Row Plays</h1>
+    <p class="lede"><strong>ROWS BY</strong> decides how the notes you hold are laid out on the rows. It is the setting that most changes what a pattern means.</p>
+    <div class="bar"></div>
+  </div>
+
+  <table class="params">
+    <thead><tr><th>ROWS BY</th><th>A row is…</th></tr></thead>
+    <tbody>
+      <tr><td class="c">PITCH</td><td>The nth note you hold, counting up from the lowest. The default, and what most presets use.</td></tr>
+      <tr><td class="c">DEGREE</td><td>A step of a scale counted up from your lowest note. A degree you aren't holding plays the nearest note you are.</td></tr>
+      <tr><td class="c">HELD DEGREE</td><td>As DEGREE, but a degree you aren't holding stays silent.</td></tr>
+      <tr><td class="c">SPREAD</td><td>A place between your lowest and highest note, however many notes you hold.</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="tag">ROWS BY</span>PITCH and EMPTY ROWS</h2>
+  <p>In PITCH, row 1 is the lowest note you hold, row 2 the next up, and so on: hold a 7th chord and rows 1 to 4 are its four notes. A triad fills three rows, so what should rows 4 and up play? That is <strong>EMPTY ROWS</strong>, beside ROWS BY:</p>
+  <table class="params">
+    <thead><tr><th>EMPTY ROWS</th><th>Rows above the notes you hold</th></tr></thead>
+    <tbody>
+      <tr><td class="c">REST</td><td>Stay silent. The default.</td></tr>
+      <tr><td class="c">WRAP</td><td>Go round your notes again: with three held, row 4 plays row 1's note.</td></tr>
+      <tr><td class="c">OCT</td><td>Go round again an octave higher each time: rows 1 to 3 are your triad, rows 4 to 6 the triad an octave up. OCT makes one shape fit any chord size: rows 1, 4 and 7 are always the root in three octaves with a triad, and with a 7th chord the octave starts on row 5 instead.</td></tr>
+    </tbody>
+  </table>
+
+  <table class="rowmap">
+    <thead><tr><th>Holding C3 E3 G3</th><th>Row 1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th></tr></thead>
+    <tbody>
+      <tr><td class="c">REST</td><td class="n">C3</td><td class="n">E3</td><td class="n">G3</td><td class="n x">–</td><td class="n x">–</td><td class="n x">–</td><td class="n x">–</td><td class="n x">–</td></tr>
+      <tr><td class="c">WRAP</td><td class="n">C3</td><td class="n">E3</td><td class="n">G3</td><td class="n">C3</td><td class="n">E3</td><td class="n">G3</td><td class="n">C3</td><td class="n">E3</td></tr>
+      <tr><td class="c">OCT (Range 4 Oct)</td><td class="n">C3</td><td class="n">E3</td><td class="n">G3</td><td class="n up">C4</td><td class="n up">E4</td><td class="n up">G4</td><td class="n up">C5</td><td class="n up">E5</td></tr>
+      <tr><td class="c">OCT (Range 2 Oct)</td><td class="n">C3</td><td class="n">E3</td><td class="n">G3</td><td class="n up">C4</td><td class="n up">E4</td><td class="n up">G4</td><td class="n up">C5</td><td class="n fold">E4</td></tr>
+    </tbody>
+  </table>
+
+  <figure class="dark"><img src="img/rows-oct.jpg" alt=""><figcaption><b>Fig. 8.1</b> &nbsp;EMPTY ROWS on OCT, holding F major 7th (F2 A2 C3 E3): rows 5 to 8 are the same four notes an octave up. The labels on the left are the row map.</figcaption></figure>
+  <p>A note on a row that nothing held plays (a row above your notes with REST, or a degree you aren't holding with HELD DEGREE) shows grey on the grid while you play, and turns orange again when you hold enough notes.</p>
+
+  <h2><span class="tag">PLAYBACK</span>RANGE: how high octaves climb</h2>
+  <p>Hold a single note with OCT rows and every row is that note, an octave higher than the last: row 8 would be seven octaves up. <strong>RANGE</strong>, under PLAYBACK, keeps the arp in one register so it doesn't climb out of your mix. It caps how far above your lowest held note an octave shift may take a note, from 1 to 4 octaves (2 to start with). OCT rows and the Octave lane both obey it.</p>
+  <p>A note that would go past the range drops back down by octaves until it fits; one shifted down past the range comes back up the same way. Holding C3 at 2 octaves, nothing goes above C5, so in the table above row 8, which wanted E5, folds back to E4. At 1 octave the staircase climbs and then turns back on itself; at 4 there's room to climb. The keys you actually hold are never moved, however far apart they are.</p>
+
+  <h2><span class="tag">ROWS BY</span>DEGREE: rows are scale steps</h2>
+  <p>In DEGREE, rows count up a scale from the lowest note you hold. Pick the scale's key and <strong>MAJOR</strong> or <strong>MINOR</strong> in <strong>SCALE</strong>, which takes EMPTY ROWS' place. Row 1 is your lowest note, row 3 the 3rd above it, row 5 the 5th, and so on, with the rows labelled 1st to 8th.</p>
+  <p>A degree you aren't holding plays the held note nearest to it, so DEGREE only ever plays notes from your chord. Where two held notes are equally near, the one in the scale wins, and then the lower. So rows 1, 3 and 5 play the triad of whatever chord you hold in the key: C, then A minor, then F. And rows 1 and 5 alternating play the root and fifth of any chord.</p>
+  <figure class="dark"><img src="img/degree.jpg" alt=""><figcaption><b>Fig. 8.2</b> &nbsp;DEGREE in C major, holding only C3 and G3. Each row's label says which note it plays, and a degree you aren't holding says what it wanted: the 3rd <em>wants E3</em>, so the nearest held note, G3, stands in.</figcaption></figure>
+
+  <h2><span class="tag">ROWS BY</span>HELD DEGREE: only what you hold</h2>
+  <p>HELD DEGREE is DEGREE, except a degree you aren't holding stays silent instead of playing the nearest note. It plays when you hold that note in any octave, right where you hold it. Hold C and G, and a pattern of 1st, 3rd and 5th plays only the C and G; add the E and the 3rd comes in. Use it to bring parts in and out with your hand.</p>
+  <figure class="dark"><img src="img/held-deg.jpg" alt=""><figcaption><b>Fig. 8.3</b> &nbsp;The same pattern and hand in HELD DEGREE: the 2nd, 3rd and 4th have nothing to play, and their notes go grey until you hold them.</figcaption></figure>
+
+  <h2><span class="tag">ROWS BY</span>SPREAD: stretch over the chord</h2>
+  <p>In SPREAD, the pattern's rows spread over however many notes you hold. Its bottom row plays your lowest note and its top row (the highest row with a note on it) your highest, and the rows between play the notes nearest their place between. A pattern on rows 1, 2 and 3 plays the bottom, middle and top of the chord, whether you hold 3 notes or 10, two hands wide. Same pattern, much wider sound.</p>
+  <p>With fewer notes held than rows, rows share notes, and a note two rows land on plays once.</p>
+  <figure class="dark"><img src="img/spread.jpg" alt=""><figcaption><b>Fig. 8.4</b> &nbsp;SPREAD with seven notes held over two octaves: the four rows of the pattern take the lowest, the highest and two notes between.</figcaption></figure>
+</section>
+
+<!-- ================= 9. LENGTH ================= -->
+<section class="chapter" data-ch="09" data-title="Length and Direction" style="--accent: var(--purple-ink); --accent-bg: var(--purple);">
+  <div class="chap-head">
+    <div class="num">Chapter 09</div>
+    <h1>Length and Direction</h1>
+    <p class="lede">How many steps the pattern plays, and which way round. Each of the eight patterns has its own.</p>
+    <div class="bar"></div>
+  </div>
+
+  <div class="split" style="grid-template-columns: 2.1in 1fr">
+    <figure class="dark"><img src="img/length-box.jpg" alt=""></figure>
+    <div class="body">
+      <p>The <strong>LENGTH</strong> box at the bottom of the panel sets the pattern's length and direction. The line beside its title says what it comes to, such as <em>4 held = 4 steps</em> or <em>fixed steps</em>.</p>
+      <p>These are part of the pattern, not host parameters: they are saved with the pattern, copied with it, and loaded with it from a preset.</p>
+    </div>
+  </div>
+
+  <h2><span class="tag">LENGTH</span>COUNT: STEPS or HELD</h2>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">COUNT</td><td class="r">Steps, Held</td><td class="d">Steps</td><td><em>STEPS</em> plays a set length. <em>HELD</em> plays so many steps for each note you hold.</td></tr>
+      <tr><td class="c">LENGTH</td><td class="r">1–128 steps</td><td class="d">per pattern</td><td>With STEPS, the pattern's length: the same setting as the purple bar. With HELD, it stands in while nothing is held.</td></tr>
+      <tr><td class="c">TIMES</td><td class="r">×1 – ×8</td><td class="d">×1</td><td>With HELD: steps for each note held.</td></tr>
+      <tr><td class="c">PLUS</td><td class="r">−16 – +16</td><td class="d">+0</td><td>With HELD: steps added (or taken away), 1 to 128 in all.</td></tr>
+    </tbody>
+  </table>
+  <p>With STEPS, eight steps over a triad with OCT rows climbs on up through the octaves. Switch to HELD and you get one step for each note you hold: a pattern that walks up its rows then plays exactly your chord, whatever the chord. Add a note and the pattern grows to fit. <strong>×2</strong> gives two steps per note, so with OCT rows the second pass is your chord an octave up. <strong>+1</strong> adds a step: up the chord, landing on the root an octave higher.</p>
+  <figure class="dark"><img src="img/held.jpg" alt=""><figcaption><b>Fig. 9.1</b> &nbsp;Pedal Climb with COUNT on HELD: four notes held, so four steps play and the rest dim. The purple bar follows the notes you hold.</figcaption></figure>
+  <p>With KEEP ROWS on (Chapter 10), a key let go still counts until every key is up.</p>
+
+  <h2><span class="tag">LENGTH</span>DIRECTION, BOUNCE and REPEAT ENDS</h2>
+  <table class="params">
+    <thead><tr><th>Setting</th><th>Four steps play</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">ONE WAY</td><td style="width:2.2in"><span class="seq"><i>1</i><i>2</i><i>3</i><i>4</i><i class="sep">·</i><i>1</i><i>2</i><i>3</i><i>4</i></span></td><td>Step 1 to the end, then round again. The default.</td></tr>
+      <tr><td class="c">BOUNCE</td><td><span class="seq"><i>1</i><i>2</i><i>3</i><i>4</i><i class="b">3</i><i class="b">2</i><i class="sep">·</i><i>1</i><i>2</i></span></td><td>Up to the last step and back down. The first and last steps play once each time round, so the turns don't stutter. The playhead runs back down the grid on the way back.</td></tr>
+      <tr><td class="c">BOUNCE + REPEAT ENDS</td><td><span class="seq"><i>1</i><i>2</i><i>3</i><i>4</i><i class="r">4</i><i class="b">3</i><i class="b">2</i><i class="r">1</i></span></td><td>The first and last steps play twice at the turns. <strong>REPEAT ENDS</strong> is the box under DIRECTION, dimmed when ONE WAY.</td></tr>
+    </tbody>
+  </table>
+  <p>With HELD, a simple up pattern becomes up-and-down for any chord. REPEAT ENDS is the one to reach for when the bounce has to stay in time with the bar: a 16-step bounce takes 30 steps round, but with REPEAT ENDS it takes 32, two bars of sixteenths. Four held notes fill eight steps.</p>
+
+  <div class="note">
+    <span class="k">Which presets follow the chord</span>
+    <p>Up, Up Two Octaves, Up and Over, Up Down, Up Down Repeat Ends, Up Down Two Octaves, Root Pedal, Pedal Bounce and Breath Pulse set their LENGTH by the notes HELD, so they fit whatever chord you play, and the Up Down ones BOUNCE. The grooves, kits and the rest keep a set number of steps, so they stay in time with the bar.</p>
+  </div>
+</section>
+
+<!-- ================= 10. PLAYING LIVE ================= -->
+<section class="chapter" data-ch="10" data-title="Playing It Live" style="--accent: #1489ad; --accent-bg: #6fe0ff;">
+  <div class="chap-head">
+    <div class="num">Chapter 10</div>
+    <h1>Playing It Live</h1>
+    <p class="lede">What happens when you let go, when the pattern starts, and how fast it runs.</p>
+    <div class="bar"></div>
+  </div>
+
+  <figure class="dark"><img src="img/settings.jpg" alt=""><figcaption><b>Fig. 10.1</b> &nbsp;The settings along the bottom of the panel: TIMING, LENGTH, PLAYBACK and PRESSURE.</figcaption></figure>
+
+  <h2><span class="tag">PLAYBACK</span>Latch and the sustain pedal</h2>
+  <p><strong>LATCH</strong> on keeps the notes playing after you let go, until you play a new chord. A host's All Notes Off (or a note choke) stops them too.</p>
+  <p>The <strong>sustain pedal</strong> (CC64) works the way it does on a piano: while it's down, keys you let go of stay in the chord and the arp keeps playing them; new keys join it. Lifting the pedal lets go of every key no longer held. JArp keeps the pedal for itself rather than passing it on, so the arp's own note lengths stay as drawn.</p>
+
+  <h2><span class="tag">PLAYBACK</span>Keep Rows</h2>
+  <p>Normally rows follow the notes you hold, so letting go of one moves the notes above it down a row. <strong>KEEP ROWS</strong> on lets a key you let go of keep its row, resting, until every key is up. Hold C, E and G on rows 1 to 3 and let go of C: row 1 rests while E and G stay on rows 2 and 3 instead of shifting down. Press C again and it takes row 1 back; a different new key is fitted in by pitch as usual. Once every key is up, the next chord starts afresh.</p>
+  <p>It is made for drums. Hold a beat and lift the kick: its row rests while the snare and hats stay on their rows. Without Keep Rows everything shifts down, and the snare drops onto the kick's row. It is off to start with; the Drum Kit presets turn it on.</p>
+  <figure class="dark"><img src="img/drums.jpg" alt=""><figcaption><b>Fig. 10.2</b> &nbsp;Four on the Floor, a Drum Kit preset, holding C2 D2 F#2 A#2: kick, snare, closed hat and open hat on rows 1 to 4.</figcaption></figure>
+
+  <h2><span class="tag">PLAYBACK</span>Restart</h2>
+  <p><strong>RESTART</strong> says where the pattern starts from step one.</p>
+  <table class="params">
+    <thead><tr><th>Setting</th><th>The pattern starts…</th></tr></thead>
+    <tbody>
+      <tr><td class="c">SONG</td><td>Locked to the song position, so it is sequenced in time rather than started by your hands: play a chord halfway through the pattern and it starts halfway through. Each step falls on the same beat every time round. For parts that sit in a track.</td></tr>
+      <tr><td class="c">NOTE</td><td>On the first note you play. The default, for playing live.</td></tr>
+      <tr><td class="c">BAR</td><td>At the start of the bar the first note falls in.</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="tag">TIMING</span>Rate and Swing</h2>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">RATE</td><td class="r">1/32, 1/16T, 1/16, 1/8T, 1/8, 1/4</td><td class="d">1/16</td><td>How long a step is. The T rates are triplets.</td></tr>
+      <tr><td class="c">SWING</td><td class="r">50–75%</td><td class="d">50%</td><td>Pushes every second step later. 50% is straight; around 66% is a triplet shuffle.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= 11. PRESSURE AND MPE ================= -->
+<section class="chapter" data-ch="11" data-title="Pressure and MPE" style="--accent: var(--blue-ink); --accent-bg: var(--blue);">
+  <div class="chap-head">
+    <div class="num">Chapter 11</div>
+    <h1>Pressure and MPE</h1>
+    <p class="lede">Press harder to play louder, or to add hits. Every finger's expression follows the notes it plays.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2><span class="tag">PRESSURE</span>From each finger</h2>
+  <p>The <strong>PRESSURE</strong> box sets what each finger's pressure does to the notes it plays. The pressure is read when each note starts.</p>
+  <table class="params">
+    <thead><tr><th>Control</th><th>Range</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="c">VELOCITY</td><td class="r">0–100%</td><td class="d">50%</td><td>How far each note's velocity follows its finger's pressure, rather than how hard the key was struck. At 0 it's the strike velocity alone. The Velocity lane's offset is added after.</td></tr>
+      <tr><td class="c">CURVE</td><td class="r">Soft 100% – Linear – Hard 100%</td><td class="d">Linear</td><td>How pressure maps. Soft reaches high values with a light touch, Linear is as played, Hard needs a firm press. It shapes both Velocity and Ratchet.</td></tr>
+      <tr><td class="c">RATCHET</td><td class="r">0–100%</td><td class="d">60%</td><td>How far pressure adds hits on steps with <strong>P</strong> lit, from the step's own count up to MAX HITS.</td></tr>
+      <tr><td class="c">MAX HITS</td><td class="r">1–8</td><td class="d">4</td><td>The most hits a pressed P step splits into.</td></tr>
+    </tbody>
+  </table>
+  <p>To make a step's ratchet follow pressure, click the small <strong>P</strong> in its RATCHET lane cell. The note then shows the extra hits it could take as blue outlines, filled as the finger presses. Great for rolls you play by feel.</p>
+
+  <h2>Every finger on its own channel</h2>
+  <p>Each arp note plays on the channel and key of the finger it comes from (plus the step's octave), shown as <em>ch</em> beside each row. So an MPE synth (set to MPE, with your controller's bend range) plays it with that finger's expression:</p>
+  <ul>
+    <li>Channel pressure, CC74 and pitch bend pass straight through on their channel.</li>
+    <li>Poly aftertouch and CLAP note expressions (pressure, brightness, tuning) are sent on to every arp note playing from that finger.</li>
+    <li>Each new arp note starts where its finger is now: its bend, pressure and slide are sent again with the note (MIDI ones just before it, as MPE asks; poly aftertouch and CLAP note expressions just after), so a bend held across retriggers stays bent rather than snapping back.</li>
+    <li>This follows the finger however the rows map onto it: in SPREAD or HELD DEGREE, an OCT row, the Octave lane, a WRAP octave or a RANGE fold, every note a finger plays takes that finger's expression, and no other finger's.</li>
+    <li>Letting go of a finger ends its notes at once, unless LATCH is on.</li>
+  </ul>
+</section>
+
+<!-- ================= 12. PATTERNS AND CHAINS ================= -->
+<section class="chapter" data-ch="12" data-title="Patterns and Chains" style="--accent: #c4650f;">
+  <div class="chap-head">
+    <div class="num">Chapter 12</div>
+    <h1>Patterns and Chains</h1>
+    <p class="lede">Eight patterns, played one at a time, one per chord, or one after another as a long phrase.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2><span class="tag">PATTERN</span>Eight patterns</h2>
+  <p>JArp holds eight patterns, <strong>1</strong> to <strong>8</strong>, in the strip beside the PATTERN title. Click a number to play it and edit it on the grid. A lit number has notes in it; the one playing has an orange bar under it. Each pattern keeps its own notes, lanes, length and direction.</p>
+  <ul>
+    <li><strong>COPY</strong>, <strong>PASTE</strong> and <strong>CLEAR</strong> in the header act on the pattern on the grid: copy one, show another and paste over it (handy for making a variation), or clear out every note, keeping its length. PASTE lights once something is copied, and the dice card's <strong>UNDO</strong> takes back a paste or a clear.</li>
+    <li><strong>Right-click a number</strong> to copy, paste into or clear that slot the same way, or to <strong>load from preset</strong>: pick a preset, or one pattern of a preset that has several, and only that pattern loads into this slot, leaving the other slots and the settings as they are.</li>
+  </ul>
+
+  <h2><span class="tag">PATTERN</span>Chains</h2>
+  <p>The switch beside the numbers says how playing moves along them:</p>
+  <table class="params">
+    <thead><tr><th>Setting</th><th>What plays</th></tr></thead>
+    <tbody>
+      <tr><td class="c">OFF</td><td>The pattern selected.</td></tr>
+      <tr><td class="c">CHORD</td><td>Each new chord moves to the next pattern. Let go of every note, play again, and the next pattern starts; the first chord plays the one selected. So a chord progression gets a different figure on every chord.</td></tr>
+      <tr><td class="c">LOOP</td><td>While you hold, each time a pattern ends the next one starts, so 1, 2 and 3 play as one long phrase. Each new chord starts the phrase again from the one selected.</td></tr>
+    </tbody>
+  </table>
+  <p>Empty patterns are skipped, and after the last pattern with notes it goes round to the first. To chain 1, 2 and 3, fill those three and leave the rest empty; clear one to drop it from the chain.</p>
+  <p>While a chain plays, the grid and lanes follow it: when CHORD or LOOP moves on, the pattern now playing is the one shown, and edits go to it. Click a number to show and edit that one; the grid stays on it until the chain moves on again, and goes back to the selected pattern when playing stops.</p>
+  <p>With RESTART on <strong>SONG</strong>, the chain follows the song too. In LOOP the patterns are laid end to end from the start of the song (beginning with the one selected), so where the song is decides which pattern plays and which step: come in during the third bar of a 1-2-3 chain and you hear the part of the chain that falls there. In CHORD the next pattern picks up at the step the song has reached in it.</p>
+  <p>Both are host parameters, so you can automate or modulate them: <strong>Pattern</strong> (1 to 8, as the strip numbers them) picks the pattern, and <strong>Advance</strong> (Off, Chord, Loop) turns chaining on and off. A new Pattern value takes over from the next step.</p>
+</section>
+
+<!-- ================= 13. DICE ================= -->
+<section class="chapter" data-ch="13" data-title="Dice" style="--accent: #c4650f;">
+  <div class="chap-head">
+    <div class="num">Chapter 13</div>
+    <h1>Dice</h1>
+    <p class="lede">New ideas without leaving your chord. Click the die in the preset bar for the dice card.</p>
+    <div class="bar"></div>
+  </div>
+
+  <div class="split" style="grid-template-columns: 2.35in 1fr">
+    <figure class="dark"><img src="img/dice.jpg" alt=""></figure>
+    <div class="body">
+      <ul>
+        <li><strong>RANDOMIZE</strong> builds a new pattern from a plain base (one note per step on row 1, octave 0, one hit, velocity offset 0), rolling each ticked item within its range.</li>
+        <li><strong>MUTATE</strong> nudges the pattern you have, each ticked item by up to its range. Click again to keep going.</li>
+        <li><strong>RANDOM PRESET</strong>: pick a category (or any), then <strong>PRESET</strong> loads a random factory preset from it, settings and all its patterns, or <strong>INTO SLOT</strong> puts one random pattern from those presets into the selected slot and leaves everything else as it is.</li>
+        <li><strong>UNDO</strong> and <strong>REDO</strong> step back and forward through what the dice replaced, a random preset, a paste or a clear included.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>What rolls</h2>
+  <p>Untick an item to keep it as it is: untick OCTAVE, say, and Mutate leaves the octaves alone. Each item's range is in the box at its right.</p>
+  <table class="params">
+    <thead><tr><th>Item</th><th>Range</th><th>Default</th><th>What it rolls</th></tr></thead>
+    <tbody>
+      <tr><td class="c">PLACEMENT</td><td class="r">0–100%</td><td class="d">25%</td><td>The share of steps left empty (Randomize) or flipped between a note and a rest (Mutate).</td></tr>
+      <tr><td class="c">NOTES</td><td class="r">rows 1–1 to 1–8</td><td class="d">rows 1–3</td><td>Which rows notes land on.</td></tr>
+      <tr><td class="c">LENGTH</td><td class="r">¼ to 4 steps</td><td class="d">¼ to 2</td><td>Note lengths.</td></tr>
+      <tr><td class="c">OCTAVE</td><td class="r">0 to ±3 oct</td><td class="d">±1 oct</td><td>Octave lane values.</td></tr>
+      <tr><td class="c">RATCHET</td><td class="r">up to 1–8</td><td class="d">up to 3</td><td>Ratchet lane counts.</td></tr>
+      <tr><td class="c">VELOCITY</td><td class="r">0 to ±64</td><td class="d">±20</td><td>Velocity lane offsets.</td></tr>
+      <tr><td class="c">PRESSURE</td><td class="r">0–100%</td><td class="d">20%</td><td>The share of steps with P lit. Unticked to start with.</td></tr>
+    </tbody>
+  </table>
+  <p>The dice roll the pattern on the grid, only up to its length. They only ever change the pattern, never the held notes, so JArp still plays only notes you hold.</p>
+</section>
+
+<!-- ================= 14. PRESETS ================= -->
+<section class="chapter" data-ch="14" data-title="Factory Presets">
+  <div class="chap-head">
+    <div class="num">Chapter 14</div>
+    <h1>Factory Presets</h1>
+    <p class="lede"><span class="n-presets">129</span> presets in <span class="n-cats">27</span> categories, each built on how the style is really played.</p>
+    <div class="bar"></div>
+  </div>
+
+  <h2>Using presets</h2>
+  <p>The preset bar steps through the factory bank and then your own with its arrows; scrolling over it does too, and clicking the name opens the menu by category. A preset holds the settings and all eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot instead, right-click the slot's number and use <strong>Load from preset</strong> (Chapter 12). The <strong>star</strong> beside the name makes the current preset a favorite.</p>
+  <p>Most presets use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked <em>(chain)</em> use several patterns: CHORD moves on with each new chord, LOOP plays them one after another. No factory pattern skips a note: each walks the notes you hold in turn, from the lowest, with none left out. The shape comes from your voicing, so for a root-fifth line hold a root and fifth, and for root-third-fifth hold the triad.</p>
+  <ul>
+    <li><strong>The Grooves</strong> are bass lines, by style. They play the lowest notes you hold an octave down, so hold the chord in the middle of the keyboard and route JArp into a bass patch.</li>
+    <li><strong>The Drum Kit</strong> presets play a kit from the keys you hold: row 1 is the kick, 2 the snare, 3 the closed hat and 4 the open hat, the order the General MIDI drum map puts them in. Hold MIDI notes 36, 38, 42 and 46 (C2, D2, F#2 and A#2 as JArp names them; a host that calls middle C C3 names them C1, D1, F#1 and A#1) and route JArp into a drum machine or sampler. Empty rows rest, so a drum you don't hold stays out, and KEEP ROWS is on, so lifting any drum's key drops just that drum. Each is four bars long, the fourth with a fill, and starts from the song's first bar (RESTART SONG), so its fill lands at the end of each four-bar phrase.</li>
+    <li><strong>The Percussion</strong> presets are hand percussion and mallet figures for any pitched sound, walking the notes held.</li>
+  </ul>
+
+  <h2>Blurbs</h2>
+  <p>Each preset has a one-line blurb, shown in the header beside the logo: what the preset is and how to play it (for a Drum Kit preset, which keys to hold). Click it to write your own; <span class="key">Enter</span> or a click elsewhere keeps it, <span class="key">Esc</span> drops it. The blurb is kept with the project, and <strong>SAVE</strong> keeps it with your preset. A factory preset's own blurb comes back when you load it again. The lists below are those blurbs.</p>
+
+  <h2>The factory bank</h2>
+  <div id="presets"></div>
+
+  <h2>Your presets</h2>
+  <p><strong>SAVE</strong> names the current settings and writes them as a small text file, with the patterns in a <span class="mono">.jarppatterns</span> file beside it and the blurb in a <span class="mono">.jarpnote</span> file. Copy all three between machines together.</p>
+  <table class="specs">
+    <tbody>
+      <tr><td class="c">macOS</td><td class="r">~/Library/Application Support/JArp/Presets</td></tr>
+      <tr><td class="c">Windows</td><td class="r">%APPDATA%\JArp\Presets</td></tr>
+      <tr><td class="c">Linux</td><td class="r">~/.config/JArp/Presets</td></tr>
+    </tbody>
+  </table>
+
+</section>
+
+<!-- ================= 15. RECIPES ================= -->
+<section class="chapter" data-ch="15" data-title="Recipes">
+  <div class="chap-head">
+    <div class="num">Chapter 15</div>
+    <h1>Recipes</h1>
+    <p class="lede">Starting points to draw from. Each starts from an empty pattern: load <strong>Init</strong> and click <strong>CLEAR</strong>.</p>
+    <div class="bar"></div>
+  </div>
+
+  <div class="recipes">
+    <div class="recipe">
+      <h3>Up and down any chord</h3>
+      <p>The classic arpeggio, fitted to every chord you play.</p>
+      <div class="set">Draw rows 1 2 3 4 5 6 7 8 as a staircase<br>ROWS BY PITCH · EMPTY ROWS OCT<br>COUNT HELD ×1 · DIRECTION BOUNCE</div>
+      <div class="from">Like the <em>Up Down</em> preset.</div>
+    </div>
+    <div class="recipe" style="--rc: var(--purple)">
+      <h3>Pedal under a climb</h3>
+      <p>A held root with the chord climbing over it.</p>
+      <div class="set">Row 1 across all 16 steps<br>Rows 2 3 4 5 on steps 2 4 6 8, again on 10 12 14 16<br>EMPTY ROWS OCT · RANGE 2 OCT</div>
+      <div class="from">Like <em>Pedal Climb</em>.</div>
+    </div>
+    <div class="recipe" style="--rc: #6fe0ff">
+      <h3>Root and fifth bass</h3>
+      <p>A bass line that finds the fifth of any chord.</p>
+      <div class="set">ROWS BY DEGREE, your key<br>Row 1 on steps 1 4 7 · row 5 on steps 3 11<br>OCTAVE lane −1 on every step</div>
+      <div class="from">Rows 1 and 5 alternate root and fifth.</div>
+    </div>
+    <div class="recipe" style="--rc: #ee6f5c">
+      <h3>A beat from four keys</h3>
+      <p>Drums you can lift out one at a time.</p>
+      <div class="set">Row 1 (kick) 1 5 9 13 · row 2 (snare) 5 13<br>Row 3 (hat) every step · CHANCE 70% on the off-beats<br>KEEP ROWS ON · RESTART SONG</div>
+      <div class="from">Hold C2 D2 F#2 A#2. See <em>Four on the Floor</em>.</div>
+    </div>
+    <div class="recipe" style="--rc: var(--blue)">
+      <h3>Rolls by feel</h3>
+      <p>Press harder for more hits.</p>
+      <div class="set">Notes on every other step · P lit on each<br>PRESSURE RATCHET 80% · MAX HITS 6<br>CURVE Soft 40%</div>
+      <div class="from">Like <em>Press Roll</em>, on an MPE controller.</div>
+    </div>
+    <div class="recipe" style="--rc: #8fe8a8">
+      <h3>A part that never repeats</h3>
+      <p>Generative movement over a held chord.</p>
+      <div class="set">32 steps · notes across rows 1–6<br>CHANCE 50–80% on most steps<br>MUTATE with only PLACEMENT ticked, now and then</div>
+      <div class="from">Like <em>Generative</em>.</div>
+    </div>
+    <div class="recipe" style="--rc: #c4650f">
+      <h3>Verse and chorus</h3>
+      <p>A different figure for each section, by hand.</p>
+      <div class="set">Pattern 1 a sparse figure · pattern 2 a busy one<br>Chain switch CHORD<br>Automate <em>Pattern</em> to jump between them</div>
+      <div class="from">See <em>Verse Chorus</em> in Chains.</div>
+    </div>
+    <div class="recipe" style="--rc: #a98bff">
+      <h3>Bring parts in with your hand</h3>
+      <p>The hand you hold decides which lines play.</p>
+      <div class="set">ROWS BY HELD DEGREE<br>Row 1 a bass pulse · row 3 a counter line<br>Row 5 a high figure</div>
+      <div class="from">Hold the root alone, then add the 3rd and 5th.</div>
+    </div>
+  </div>
+
+  <h2>Tips</h2>
+  <ul>
+    <li><strong>Voicing is the melody.</strong> With PITCH rows, the same pattern sounds different on an open voicing and a close one. Spread the chord to hear it open up.</li>
+    <li><strong>Copy, then vary.</strong> Copy a pattern into the next slot, change a few cells, and chain them with LOOP for an A-B phrase.</li>
+    <li><strong>Lock to the song for parts, Note for jamming.</strong> RESTART SONG keeps a sequenced part on the beat however late you come in; NOTE starts from your hands.</li>
+    <li><strong>Keep the register.</strong> If OCT rows or the Octave lane climb too high, lower RANGE rather than redrawing.</li>
+  </ul>
+</section>
+
+<!-- ================= APPENDIX A ================= -->
+<section class="chapter" data-ch="A" data-title="Appendix: Settings Reference">
+  <div class="chap-head">
+    <div class="num">Appendix A</div>
+    <h1>Settings Reference</h1>
+    <p class="lede">Every parameter JArp exposes to the host, then the settings each pattern keeps for itself.</p>
+    <div class="bar"></div>
+  </div>
+  <h2>Host parameters</h2>
+  <table class="params ref">
+    <thead><tr><th>Parameter</th><th>Panel</th><th>Range</th><th>Default</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Rate</td><td>TIMING · RATE</td><td class="r">1/32, 1/16T, 1/16, 1/8T, 1/8, 1/4</td><td class="d">1/16</td></tr>
+      <tr><td class="c">Swing</td><td>TIMING · SWING</td><td class="r">50–75%</td><td class="d">50%</td></tr>
+      <tr><td class="c">Pattern</td><td>PATTERN · 1 to 8</td><td class="r">1–8</td><td class="d">1</td></tr>
+      <tr><td class="c">Advance</td><td>PATTERN · OFF / CHORD / LOOP</td><td class="r">Off, Chord, Loop</td><td class="d">Off</td></tr>
+      <tr><td class="c">Latch</td><td>PLAYBACK · LATCH</td><td class="r">Off, On</td><td class="d">Off</td></tr>
+      <tr><td class="c">Restart</td><td>PLAYBACK · RESTART</td><td class="r">Song, Note, Bar</td><td class="d">Note</td></tr>
+      <tr><td class="c">Rows By</td><td>ROWS BY</td><td class="r">Pitch, Degree, Held Degree, Spread</td><td class="d">Pitch</td></tr>
+      <tr><td class="c">Empty Rows</td><td>EMPTY ROWS</td><td class="r">Rest, Wrap, Octave</td><td class="d">Rest</td></tr>
+      <tr><td class="c">Scale Key</td><td>SCALE (key)</td><td class="r">C to B</td><td class="d">C</td></tr>
+      <tr><td class="c">Scale</td><td>SCALE (major or minor)</td><td class="r">Major, Minor</td><td class="d">Major</td></tr>
+      <tr><td class="c">Octave Range</td><td>PLAYBACK · RANGE</td><td class="r">1, 2, 3, 4 Oct</td><td class="d">2 Oct</td></tr>
+      <tr><td class="c">Keep Rows</td><td>PLAYBACK · KEEP ROWS</td><td class="r">Off, On</td><td class="d">Off</td></tr>
+      <tr><td class="c">Pressure to Velocity</td><td>PRESSURE · VELOCITY</td><td class="r">0–100%</td><td class="d">50%</td></tr>
+      <tr><td class="c">Pressure Curve</td><td>PRESSURE · CURVE</td><td class="r">Soft 100% – Linear – Hard 100%</td><td class="d">Linear</td></tr>
+      <tr><td class="c">Pressure to Ratchet</td><td>PRESSURE · RATCHET</td><td class="r">0–100%</td><td class="d">60%</td></tr>
+      <tr><td class="c">Max Hits</td><td>PRESSURE · MAX HITS</td><td class="r">1–8</td><td class="d">4</td></tr>
+    </tbody>
+  </table>
+  <p class="muted small">Swing, Pressure to Velocity, Pressure Curve and Pressure to Ratchet can also be modulated, in hosts that support CLAP modulation.</p>
+
+  <h2>Kept with each pattern</h2>
+  <table class="params ref">
+    <thead><tr><th>Setting</th><th>Where</th><th>Range</th><th>Default</th></tr></thead>
+    <tbody>
+      <tr><td class="c">Notes</td><td>The grid</td><td class="r">8 rows × 128 steps, ¼ step to the whole pattern long</td><td class="d">–</td></tr>
+      <tr><td class="c">Length</td><td>Purple bar, LENGTH knob</td><td class="r">1–128 steps</td><td class="d">8 (Init)</td></tr>
+      <tr><td class="c">Count</td><td>LENGTH · COUNT</td><td class="r">Steps, Held</td><td class="d">Steps</td></tr>
+      <tr><td class="c">Times</td><td>LENGTH · TIMES</td><td class="r">×1 – ×8</td><td class="d">×1</td></tr>
+      <tr><td class="c">Plus</td><td>LENGTH · PLUS</td><td class="r">−16 – +16</td><td class="d">+0</td></tr>
+      <tr><td class="c">Direction</td><td>LENGTH · DIRECTION</td><td class="r">One Way, Bounce</td><td class="d">One Way</td></tr>
+      <tr><td class="c">Repeat Ends</td><td>LENGTH · REPEAT ENDS</td><td class="r">Off, On</td><td class="d">Off</td></tr>
+      <tr><td class="c">Octave lane</td><td>OCTAVE, per step or note</td><td class="r">−3 to +3</td><td class="d">0</td></tr>
+      <tr><td class="c">Ratchet lane</td><td>RATCHET, per step or note</td><td class="r">1–8 hits, P on or off</td><td class="d">1, off</td></tr>
+      <tr><td class="c">Velocity lane</td><td>VELOCITY, per step or note</td><td class="r">−64 to +64</td><td class="d">0</td></tr>
+      <tr><td class="c">Chance lane</td><td>CHANCE, per step or note</td><td class="r">0–100%</td><td class="d">100%</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= APPENDIX B ================= -->
+<section class="chapter" data-ch="B" data-title="Appendix: Specifications">
+  <div class="chap-head">
+    <div class="num">Appendix B</div>
+    <h1>Specifications</h1>
+    <div class="bar"></div>
+  </div>
+  <table class="specs">
+    <tbody>
+      <tr><td class="c">Format</td><td>CLAP 1.2 note effect (features: note-effect, utility). Note ports in and out, MIDI and CLAP note dialects.</td></tr>
+      <tr><td class="c">Platforms</td><td>macOS universal (10.15+ Intel, 11+ Apple Silicon), Windows (64-bit), Linux (64-bit).</td></tr>
+      <tr><td class="c">Patterns</td><td>8, each up to 128 steps by 8 rows, notes in quarter steps.</td></tr>
+      <tr><td class="c">Rates</td><td>1/32, 1/16 triplet, 1/16, 1/8 triplet, 1/8, 1/4; swing 50–75%.</td></tr>
+      <tr><td class="c">MPE</td><td>Each note on its finger's channel. Channel pressure, CC74 and pitch bend pass through; poly aftertouch and CLAP note expressions follow every note from a finger.</td></tr>
+      <tr><td class="c">Clock</td><td>Song position and tempo when the transport runs; its own clock at the host's tempo when stopped.</td></tr>
+      <tr><td class="c">Parameters</td><td>16, all automatable. The patterns are saved with the project.</td></tr>
+      <tr><td class="c">Presets</td><td><span class="n-presets">129</span> factory presets in <span class="n-cats">27</span> categories. User presets are text files with <span class="mono">.jarppatterns</span> and <span class="mono">.jarpnote</span> files beside them.</td></tr>
+      <tr><td class="c">Panel</td><td>900 × 743 at 100%; 75%, 100%, 125%, 150% and 200%.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 style="margin-top:0.4in">Troubleshooting</h2>
+  <table>
+    <thead><tr><th style="width:2.1in">Symptom</th><th>What to check</th></tr></thead>
+    <tbody>
+      <tr><td class="c" style="white-space:normal">JArp doesn't appear in my host (macOS)</td><td>The download is probably quarantined. See the warning in Chapter 2, then rescan plug-ins.</td></tr>
+      <tr><td class="c" style="white-space:normal">JArp doesn't appear in Ableton Live</td><td>Live doesn't load CLAP plug-ins. Use a CLAP host such as Bitwig Studio or REAPER.</td></tr>
+      <tr><td class="c" style="white-space:normal">Nothing plays when I hold a chord</td><td>Check that JArp is before the instrument on the same track, and that the pattern has notes (its number is lit). With COUNT on HELD and a short chord, only the first steps play.</td></tr>
+      <tr><td class="c" style="white-space:normal">Some notes on the grid don't play</td><td>Notes that show grey are on rows nothing held plays: rows above your chord with EMPTY ROWS on REST, or degrees you aren't holding in HELD DEGREE. Hold more notes, or switch to WRAP or OCT. A note with CHANCE under 100% skips some passes.</td></tr>
+      <tr><td class="c" style="white-space:normal">The arp climbs too high, or wraps back down</td><td>That is RANGE folding notes into its octaves. Raise it to climb further, or lower it to stay in one register.</td></tr>
+      <tr><td class="c" style="white-space:normal">Notes keep playing after I let go</td><td>LATCH is on, or the sustain pedal is down.</td></tr>
+      <tr><td class="c" style="white-space:normal">The pattern starts in the middle</td><td>RESTART is on SONG, which locks it to the song position. Use NOTE to start from your first note.</td></tr>
+      <tr><td class="c" style="white-space:normal">Drums move to the wrong row when I lift one</td><td>Turn on KEEP ROWS.</td></tr>
+      <tr><td class="c" style="white-space:normal">Pressure does nothing</td><td>Your controller must send per-note pressure (MPE or poly aftertouch). Check PRESSURE · VELOCITY is up, and that P is lit on the steps that should ratchet.</td></tr>
+      <tr><td class="c" style="white-space:normal">The synth ignores slide and bend</td><td>Put the synth in MPE mode. Without it, every finger's channel sounds the same.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Glossary</h2>
+  <div class="kv">
+    <dt>Step</dt><dd>One column of the grid: one RATE long.</dd>
+    <dt>Row</dt><dd>One line of the grid, which plays one of the notes you hold.</dd>
+    <dt>Gate</dt><dd>How long a note sounds. In JArp, the length of the note drawn.</dd>
+    <dt>Ratchet</dt><dd>A note split into several quick, even hits.</dd>
+    <dt>Degree</dt><dd>A step of a scale counted from its root: the 3rd, the 5th.</dd>
+    <dt>Latch</dt><dd>Keeping the arp playing after the keys are let go.</dd>
+    <dt>MPE</dt><dd>MIDI Polyphonic Expression: each finger on its own channel, so pressure, slide and bend are per note.</dd>
+    <dt>Pedal note</dt><dd>A note held under changing harmony, usually the lowest.</dd>
+  </div>
+</section>
+
+<section class="back">
+  <div class="mid">
+    <svg width="48" height="48" viewBox="0 0 34 34">
+      <circle cx="17" cy="17" r="14" fill="none" stroke="#f28c28" stroke-width="2"/>
+      <circle cx="11.5" cy="19.5" r="2.6" fill="#f28c28"/>
+      <circle cx="17" cy="14" r="2.6" fill="#f28c28"/>
+      <circle cx="22.5" cy="19.5" r="2.6" fill="#f28c28"/>
+    </svg>
+    <div class="word"><span class="j">J</span>Arp</div>
+    <div class="small">Hold a chord. The grid plays it · v0.16.0</div>
+  </div>
+  <div class="url">github.com/jeffmhopkins/Jclap</div>
+</section>
+
+<script src="presets.js"></script>
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+function el(parent, tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  parent.appendChild(e);
+  return e;
+}
+
+// ----- cover: stars and a grid of glowing steps climbing away -----
+(function () {
+  const s = document.getElementById('stars');
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 240; i++) {
+    const r = rnd() < 0.92 ? 0.4 + rnd() * 0.7 : 1.2 + rnd() * 0.8;
+    el(s, 'circle', { cx: rnd() * 816, cy: rnd() * 1056, r, fill: '#fff', opacity: (0.15 + rnd() * 0.6).toFixed(2) });
+  }
+  const x0 = 470, y0 = 300, cw = 20, ch = 16;
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 14; c++)
+      el(s, 'rect', { x: x0 + c * cw, y: y0 - r * ch, width: cw - 4, height: ch - 4, rx: 2, fill: '#b69cf0', opacity: 0.06 });
+  const pat = [0, 1, 2, 3, 4, 3, 2, 1, 2, 3, 4, 5, 6, 7];
+  pat.forEach((r, c) => {
+    el(s, 'rect', { x: x0 + c * cw, y: y0 - r * ch, width: cw - 4, height: ch - 4, rx: 2, fill: '#f28c28', opacity: (0.35 + c / 22).toFixed(2) });
+  });
+  el(s, 'rect', { x: x0, y: y0, width: 14 * cw - 4, height: ch - 4, rx: 2, fill: '#ffb05a', opacity: 0.35 });
+  el(s, 'line', { x1: x0 + 9.5 * cw, y1: y0 - 7.6 * ch, x2: x0 + 9.5 * cw, y2: y0 + ch, stroke: '#fff', 'stroke-width': 1, opacity: 0.55 });
+})();
+
+// ----- Fig. 5.1: a keyboard and a mini grid -----
+(function () {
+  const kb = document.getElementById('kb');
+  const white = ['C', 'D', 'E', 'F', 'G', 'A', 'B', 'C'];
+  const held = { 0: 'C3', 2: 'E3', 4: 'G3', 6: 'B3' };
+  const cols = { 0: '#f28c28', 2: '#ffb05a', 4: '#c4650f', 6: '#e08a3c' };
+  const W = 24, H = 120;
+  white.forEach((n, i) => {
+    el(kb, 'rect', { x: i * W, y: 0, width: W - 1, height: H, rx: 2, fill: held[i] ? cols[i] : '#fff', stroke: '#c9ccd3' });
+    if (held[i]) el(kb, 'text', { x: i * W + W / 2, y: H + 14, 'text-anchor': 'middle', 'font-weight': 600, fill: '#15171d' }, held[i]);
+  });
+  [0, 1, 3, 4, 5].forEach(i => el(kb, 'rect', { x: i * W + W * 0.66, y: 0, width: W * 0.66, height: H * 0.6, rx: 1.5, fill: '#15171d' }));
+  const g = document.getElementById('minigrid');
+  const cw = 22, chh = 22, ox = 50, oy = 18;
+  const names = ['C3', 'E3', 'G3', 'B3'];
+  for (let r = 0; r < 6; r++) {
+    const y = oy + (5 - r) * chh;
+    el(g, 'text', { x: 0, y: y + 15, fill: r < 4 ? '#15171d' : '#b0b4bd', 'font-weight': 600 }, (r + 1) + (r < 4 ? '  ' + names[r] : '  –'));
+    for (let c = 0; c < 16; c++) el(g, 'rect', { x: ox + c * cw, y, width: cw - 3, height: chh - 3, rx: 2.5, fill: '#eceef2' });
+  }
+  const notes = [[0, 0, 16], [2, 1, 2], [3, 2, 1], [1, 4, 2], [2, 6, 1], [3, 7, 2], [1, 9, 1], [2, 10, 3], [3, 13, 1], [2, 14, 1], [3, 15, 1]];
+  notes.forEach(([r, c, len]) => el(g, 'rect', { x: ox + c * cw, y: oy + (5 - r) * chh, width: len * cw - 3, height: chh - 3, rx: 2.5, fill: r ? '#f28c28' : '#ffb05a' }));
+  el(g, 'line', { x1: ox + 10.4 * cw, y1: oy - 4, x2: ox + 10.4 * cw, y2: oy + 6 * chh + 1, stroke: '#15171d', 'stroke-width': 1.2 });
+  for (let c = 0; c < 16; c++) el(g, 'text', { x: ox + c * cw + (cw - 3) / 2, y: oy + 6 * chh + 12, 'text-anchor': 'middle', fill: '#6d7280', 'font-size': 7.5 }, c + 1);
+  el(g, 'text', { x: ox + 8 * cw, y: oy + 6 * chh + 26, 'text-anchor': 'middle', fill: '#6d7280' }, 'steps →');
+})();
+
+// ----- overview callouts (on the 900 x 743 panel) -----
+(function () {
+  const g = document.querySelector('#overview svg g');
+  const pts = [
+    [1, 140, 30], [2, 345, 31], [3, 545, 52], [4, 225, 124], [5, 404, 124], [6, 570, 124],
+    [7, 30, 255], [8, 200, 255], [9, 852, 126], [10, 14, 448], [11, 320, 586], [12, 850, 586],
+  ];
+  for (const [n, x, y] of pts) {
+    el(g, 'circle', { cx: x, cy: y, r: 12, fill: '#f28c28', stroke: '#fff', 'stroke-width': 2.2 });
+    el(g, 'text', { x, y: y + 5, fill: '#fff' }, String(n));
+  }
+})();
+
+// ----- factory presets -----
+(function () {
+  const P = window.PRESETS || [];
+  const D = {
+    'Basics': 'The arpeggiator classics, most of them sized by the notes you hold.',
+    'Berlin School': 'Sequencer lines in the style of the 1970s Berlin electronic scene: pedals, octave lines and slow drifts.',
+    'Drum Kit': 'Hold C2 D2 F#2 A#2 (kick, snare, closed hat, open hat). Four bars, the fourth with a fill, locked to the song.',
+    'Percussion': 'Hand percussion and mallet figures for any pitched sound.',
+    'Piano': 'Left-hand and two-hand accompaniment figures.',
+    'Guitar Fingerpicking': 'Picking patterns: the thumb on the low notes, the fingers above.',
+    'Strum and Harp': 'Strums down and up, and harp sweeps.',
+    'Pads and Pedals': 'Slow pedals and climbs for pads and keys.',
+    'Ratchet and Rhythm': 'Ratchets, stabs and ghost notes.',
+    'MPE Expressive': 'Press harder for louder notes and more hits.',
+    'Long Sequences': 'Patterns of 32 to 128 steps.',
+    'Chains': 'Several patterns, moved along by CHORD or LOOP.',
+    'Odd Meters': 'Patterns in fives, sevens and nines, and polyrhythms against the bar.',
+  };
+  const host = document.getElementById('presets');
+  let html = '', groove = false;
+  P.forEach(([cat, list]) => {
+    const isGroove = cat.startsWith('Grooves');
+    if (isGroove && !groove) {
+      html += `<p class="muted small" style="margin:0.2in 0 4px"><strong style="color:#15171d">Grooves.</strong> Bass lines by style. They play your lowest notes an octave down: hold the chord in the middle of the keyboard.</p>`;
+      groove = true;
+    }
+    html += `<h3 style="margin-top:${isGroove ? '0.1in' : '0.2in'}"><span class="swatch" style="background:${isGroove ? '#b69cf0' : '#f28c28'}"></span>${cat} <span class="muted" style="font-weight:400;font-size:8pt">· ${list.length}</span></h3>`;
+    if (D[cat]) html += `<p class="muted small" style="margin-bottom:4px">${D[cat]}</p>`;
+    html += '<table style="margin-top:2px"><tbody>' + list.map(([n, d, k]) => `<tr><td class="c" style="width:1.55in">${n}${k > 1 ? ` <span class="mod m" style="color:#7a52c7">${k} PATTERNS</span>` : ''}</td><td>${d}</td></tr>`).join('') + '</tbody></table>';
+  });
+  host.innerHTML = html;
+  const count = P.reduce((n, [, list]) => n + list.length, 0);
+  document.querySelectorAll('.n-presets').forEach(e => (e.textContent = count));
+  document.querySelectorAll('.n-cats').forEach(e => (e.textContent = P.length));
+})();
+
+// ----- table of contents -----
+(function () {
+  const toc = document.getElementById('toc');
+  const pages = window.TOC_PAGES || {};
+  let html = '';
+  document.querySelectorAll('section.chapter').forEach(sec => {
+    const n = sec.dataset.ch, t = sec.dataset.title;
+    html += `<div class="grp"><div class="ch"><span class="n">${n}</span><span class="t">${t}</span><span class="p">${pages[t] || ''}</span></div>`;
+    sec.querySelectorAll('h2').forEach(h => {
+      const tt = h.childNodes[h.childNodes.length - 1].textContent.trim();
+      html += `<div class="sec"><span class="t">${tt}</span><span class="p">${pages[t + '/' + tt] || ''}</span></div>`;
+    });
+    html += '</div>';
+  });
+  toc.innerHTML = html;
+})();
+</script>
+</body>
+</html>
