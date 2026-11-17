@@ -218,6 +218,8 @@ inline void addBass(std::vector<Entry> &e);
 inline void addBerlin(std::vector<Entry> &e);
 // The piano presets (library_piano.h, included at the end of this file).
 inline void addPiano(std::vector<Entry> &e);
+// The fingerpicking presets, in library_guitar.h.
+inline void addGuitar(std::vector<Entry> &e);
 
 inline std::vector<Entry> build() {
    using namespace v;
@@ -352,20 +354,8 @@ inline std::vector<Entry> build() {
    // ---- Piano: accompaniment by style, in library_piano.h ----
    addPiano(e);
 
-   // ---- Guitar Fingerpicking: the low rows are the thumb's bass, the rows above the fingers ----
-   add(e, [&] { return Entry{"Travis Picking", "Guitar Fingerpicking", "An alternating thumb on the low notes, fingers on the top.", {octRows, rate(r8), swing(0.54), pressVel(0.4)},
-                {Pat("1+4 3 2 4 1 3 2 4", 8).oct(". . -1 . . . -1 .").vel("10 -6 4 -4 6 -6 4 -4")}}; });
-   add(e, [&] { return Entry{"Classical Arpeggio", "Guitar Fingerpicking", "Thumb then three fingers, p i m a, up and back.", {octRows, rate(r8T), pressVel(0.6)},
-                {Pat("1 2 3 4 3 2", 10).vel("10 -6 -2 6 -2 -6")}}; });
-   add(e, [&] { return Entry{"Banjo Roll", "Guitar Fingerpicking", "A bright forward roll, in 3+3+2 sixteenths.", {octRows, rate(r16), pressVel(0.3)},
-                {Pat("1s 2s 3s 1s 2s 3s 1s 4s").vel("12 -6 -2 10 -6 -2 8 -4")}}; });
-   add(e, [&] { return Entry{"Ballad Picking", "Guitar Fingerpicking", "Thumb on the low two notes, fingers rising through the rest.", {octRows, rate(r16), pressVel(0.5)},
-                {Pat("1 3 4 5 2 3 4 5", 8).vel("10 -6 -2 2 6 -6 -2 2")}}; });
-   add(e, [&] { return Entry{"Fingerstyle Song", "Guitar Fingerpicking", "Four picking patterns, a bar each, looping.", {octRows, rate(r8), swing(0.54), advance(loop), pressVel(0.4)},
-                {Pat("1+4 3 2 4 1 3 2 4", 8).oct(". . -1 . . . -1 .").vel("10 -6 4 -4"),
-                 Pat("1+4 3 2 4 1 3 2+5 4", 8).oct(". . -1 . . . . .").vel("10 -6 4 -4"),
-                 Pat("1+4 3 2 4 1 3 2 5", 8).oct(". . -1 . . . -1 .").vel("10 -6 4 -4"),
-                 Pat("1 2 3 4 5 4 3 2", 6).vel("10 -6 -2 6 -2 -6 4 0")}}; });
+   // ---- Fingerpicking: guitar and banjo picking by style (library_guitar.h) ----
+   addGuitar(e);
 
    // ---- Strum and Harp: at 1/32, a strum spreads like a hand across strings ----
    add(e, [&] { return Entry{"Down Strum", "Strum and Harp", "One down strum across six held notes per bar.", {octRows, rate(r32), pressVel(0.6)},
@@ -531,3 +521,4 @@ inline std::vector<Entry> build() {
 #include "library_bass.h"
 #include "library_berlin.h"
 #include "library_piano.h"
+#include "library_guitar.h"

@@ -316,12 +316,54 @@ window.PRESETS = [
     ["Jazz Comp", "Two bars of swung comping, the pushes left partly to chance.", 1],
     ["Jazz Waltz Comp", "A swung 3/4: the root, then the chord pushed onto the and of one.", 1],
   ]],
-  ["Guitar Fingerpicking", [
+  ["Fingerpicking: Travis", [
     ["Travis Picking", "An alternating thumb on the low notes, fingers on the top.", 1],
-    ["Classical Arpeggio", "Thumb then three fingers, p i m a, up and back.", 1],
-    ["Banjo Roll", "A bright forward roll, in 3+3+2 sixteenths.", 1],
-    ["Ballad Picking", "Thumb on the low two notes, fingers rising through the rest.", 1],
+    ["Travis Pinch", "Thumb root, 3rd, low 5th, 3rd; a pinch on one. Hold a triad.", 1],
+    ["Travis Syncopated", "Travis with the top notes pushed ahead of the beat, two bars.", 1],
+    ["Travis Half Time", "The thumb on the beats, fingers in sixteenths around it.", 1],
     ["Fingerstyle Song", "Four picking patterns, a bar each, looping.", 4],
+  ]],
+  ["Fingerpicking: Folk", [
+    ["Thumb Brush", "Boom-chick: the thumb's bass, then a finger brush. Hold a triad.", 1],
+    ["Folk Pinch", "A pinch, then the fingers rock in between. Hold a triad.", 1],
+    ["Six Eight Folk", "Up and back over the strings in 6/8, two bars.", 1],
+    ["Waltz Picking", "3/4: a bass note, then two finger pinches, two bars.", 1],
+  ]],
+  ["Fingerpicking: Ballad", [
+    ["Ballad Picking", "Thumb on the low two notes, fingers rising through the rest.", 1],
+    ["Pop Ballad Picking", "Thumb and pinch, then the fingers rolling between. Hold a triad.", 1],
+    ["Picked Sixteenths", "Up the strings and back in sixteenths, the thumb alternating.", 1],
+    ["Slow Arpeggio", "Eighths left to ring, the top moving up. Hold a triad.", 1],
+  ]],
+  ["Fingerpicking: Classical", [
+    ["Classical Arpeggio", "Thumb then three fingers, p i m a, up and back.", 1],
+    ["P I M A", "p i m a in sixteenths, the thumb walking the bass. Hold a triad.", 1],
+    ["Giuliani Arpeggio", "p i m a m i in sextuplets, a study-style flow. Hold a triad.", 1],
+    ["Tremolo", "p a m i: a bass note, then the top string three times.", 1],
+    ["Romance Triplets", "3/4 in triplets, a melody on top of i m a. Hold a triad.", 1],
+  ]],
+  ["Fingerpicking: Banjo", [
+    ["Banjo Roll", "A bright forward roll, in 3+3+2 sixteenths.", 1],
+    ["Backward Roll", "Middle, index, thumb, from the top string down, two bars.", 1],
+    ["Forward Reverse Roll", "Up the strings to the drone and back down again.", 1],
+    ["Alternating Thumb Roll", "Thumb, index, thumb, middle, the thumb swapping strings.", 1],
+    ["Clawhammer", "Bum-ditty: a melody note, a brush down, the thumb's drone.", 1],
+  ]],
+  ["Fingerpicking: Blues", [
+    ["Monotonic Thumb", "A steady muted thumb on the root, the fingers riffing on top.", 1],
+    ["Delta Shuffle", "Shuffle triplets: thumb on the beat, a double stop after.", 1],
+    ["Piedmont Blues", "Ragtime alternating bass under a syncopated top, two bars.", 1],
+  ]],
+  ["Fingerpicking: Bossa", [
+    ["Bossa Picking", "Root and low fifth under the chord's bossa rhythm.", 1],
+    ["Bossa Two Bar", "The bossa rhythm, answered by a second bar that turns it round.", 1],
+    ["Bossa Arpeggio", "The chord picked note by note over the root and low fifth.", 1],
+  ]],
+  ["Fingerpicking: Celtic", [
+    ["Celtic Jig", "A 6/8 jig across the strings, two bars. Hold a triad.", 1],
+    ["Celtic Cascade", "Low and high strings in turn, ringing over each other.", 1],
+    ["Celtic Air", "A slow 3/4, every string left to ring, harp-like.", 1],
+    ["Drone Picking", "The root as a drone on each beat of 6/8, a tune around it.", 1],
   ]],
   ["Strum and Harp", [
     ["Down Strum", "One down strum across six held notes per bar.", 1],
