@@ -211,6 +211,8 @@ constexpr double song = 0, note = 1, bar = 2;
 // temporaries their own room in one frame, more than a host's thread has.
 template <typename F> JARP_NOINLINE void add(std::vector<Entry> &e, F make) { e.push_back(make()); }
 
+// The Berlin School presets, in library_berlin.h.
+inline void addBerlin(std::vector<Entry> &e);
 // The piano presets (library_piano.h, included at the end of this file).
 inline void addPiano(std::vector<Entry> &e);
 
@@ -262,27 +264,9 @@ inline std::vector<Entry> build() {
    add(e, [&] { return Entry{"Broken Thirds", "Basics", "Scale steps in broken thirds from the root (DEGREE rows).", {degree, rate(r16)},
                 {makePattern({{1, 1, 4}, {3, 2, 4}, {2, 3, 4}, {4, 4, 4}, {3, 5, 4}, {5, 6, 4}, {4, 7, 4}, {6, 8, 4}})}}; });
 
-   // ---- Berlin School: short, driving sixteenths over a root pedal, in 3 + 3 + 2 ----
-   add(e, [&] { return Entry{"Octave Line", "Berlin School", "A root pedal under the chord and its octave, in 3+3+2.", {octRows, rate(r16), pressVel(0.2)},
-                {Pat("1s 4s 3s 1s 4s 2s 1s 5s").vel("14 -6 0 10 -6 0 8 -4")}}; });
-   add(e, [&] { return Entry{"Pedal Bounce", "Berlin School", "A root pedal under each held note, up the chord and back.", {octRows, rate(r16), pressVel(0.2)},
-                {Pat("1s 2s 1s 3s 1s 4s 1s 5s 1s 6s 1s 7s 1s 8s").held(2, -2).bounce().vel("12 -4")}}; });
-   add(e, [&] { return Entry{"Pedal Sequence", "Berlin School", "The root pedal, then each held note an octave up, climbing.", {octRows, rate(r16), pressVel(0.2)},
-                {Pat("1s 2s 1s 3s 1s 4s 1s 3s 1s 2s 1s 3s 1s 5s 1s 4s").oct(". 1").vel("12 -2 -6 0")}}; });
-   add(e, [&] { return Entry{"Sequencer Bass", "Berlin School", "A low, root-heavy sixteenth bass with a run up to finish.", {octRows, rate(r16), pressVel(0.2)},
-                {Pat("1s 1s 4s 1s 1s 3s 1s 4s 1s 1s 4s 1s 2s 3s 4s 5s").oct("-1").vel("14 -8 6 -8")}}; });
-   add(e, [&] { return Entry{"Phase Drift", "Berlin School", "Fourteen steps against the bar, a seven-step accent drifting.", {octRows, rate(r16), pressVel(0.2), restart(bar)},
-                {Pat("1s 2s 3s 2s 4s 2s 3s 2s 1s 2s 3s 4s 3s 2s").vel("12 -6 0 -6 4 -6 0")}}; });
-   add(e, [&] { return Entry{"Night Drive", "Berlin School", "Four sequencer lines, a bar each, looping one after another.", {octRows, rate(r16), advance(loop), pressVel(0.2)},
-                {Pat("1s 1s 3s 1s 1s 2s 1s 3s 1s 1s 3s 1s 1s 2s 1s 4s").vel("14 -8 6 -8"),
-                 Pat("1s 4s 3s 1s 4s 2s 1s 5s 1s 4s 3s 1s 4s 2s 1s 5s").vel("14 -6 0 10 -6 0 8 -4"),
-                 Pat("1s 2s 1s 3s 1s 4s 1s 3s 1s 2s 1s 3s 1s 5s 1s 4s").oct(". 1").vel("12 -2 -6 0"),
-                 Pat("1s 2s 3s 4s 5s 6s 7s 8s 7s 6s 5s 4s 3s 2s 1s 2s").vel("12 -4 0 -4")}}; });
-   add(e, [&] { return Entry{"Long Drive", "Berlin School", "Four bars of driving sequence that lifts an octave in the third.", {octRows, rate(r16), pressVel(0.2)},
-                {Pat(rep("1s 1s 3s 1s 1s 2s 1s 3s", 2) + rep("1s 4s 3s 1s 4s 2s 1s 5s", 2) + rep("1s 1s 3s 1s 1s 2s 1s 3s", 2) +
-                     "1s 2s 1s 3s 1s 4s 1s 5s 6s 5s 4s 3s 2s 3s 4s 5s")
-                    .oct(rep(".", 32) + rep("1", 16) + rep(".", 16))
-                    .vel("14 -8 6 -8")}}; });
+   // ---- Berlin School: sequencer ostinatos by kind, each taking one, two or three notes held (see
+   // library_berlin.h) ----
+   addBerlin(e);
 
    // ---- Grooves: bass lines by style, an octave down. Row 1 is the lowest note held, row 2 the next
    // and so on, with nothing skipped: hold a root and fifth for a root-fifth line, a triad for
@@ -640,4 +624,5 @@ inline std::vector<Entry> build() {
 
 } // namespace jarp
 
+#include "library_berlin.h"
 #include "library_piano.h"
