@@ -326,7 +326,7 @@ int main() {
             if (bank && id == kAdvance && std::lround(v) != 0)
                JCLAP_CHECK(bank->next(0) != 0);
       }
-      JCLAP_CHECK_EQ(factoryCategories().size(), 27u);
+      JCLAP_CHECK_EQ(factoryCategories().size(), 35u);
       // The library uses LENGTH by HELD and BOUNCE: Up Down is the held notes up and back for any
       // chord, and a held pattern has a step for each row it could reach.
       {
@@ -396,6 +396,35 @@ int main() {
       JCLAP_CHECK_EQ(t.lanes[5].velocity, 0);
       // The chord (c) on step 3 starts its own row 1, after the tied one.
       JCLAP_CHECK_EQ(t.notes[t.noteStarting(0, 2)].length, 4);
+      // A note's own octave: v down, ^ up, as many as wanted, with a length after.
+      const Pattern o = library::Pat("1vv:8 . 2^s+3");
+      JCLAP_CHECK_EQ(o.count, 3);
+      const Note &low = o.notes[o.noteStarting(0, 0)];
+      JCLAP_CHECK(low.own == kOwnOctave && low.lane.octave == -2 && low.length == 8);
+      const Note &high = o.notes[o.noteStarting(1, 2)];
+      JCLAP_CHECK(high.own == kOwnOctave && high.lane.octave == 1 && high.length == 2);
+      JCLAP_CHECK_EQ(o.notes[o.noteStarting(2, 2)].own, 0);
+      // The piano presets ask for no more keys than they play: a triad's three rows, and a 7th's
+      // fourth only in Jazz and Gospel and Soul. All use OCT rows, so holding fewer still fills.
+      int pianos = 0;
+      for (const library::Entry &e : factoryLibrary()) {
+         const std::string category = e.category;
+         if (category.rfind("Piano: ", 0) != 0)
+            continue;
+         ++pianos;
+         const bool sevenths = category == "Piano: Jazz" || category == "Piano: Gospel and Soul";
+         bool oct = false;
+         for (const auto &[id, x] : e.params)
+            oct = oct || (id == kEmptyRows && x == 2);
+         JCLAP_CHECK(oct);
+         for (const Pattern &p : e.patterns)
+            for (int i = 0; i < p.count; ++i)
+               if (p.notes[i].row >= (sevenths ? 4 : 3)) {
+                  std::printf("%s plays row %d\n", e.name, p.notes[i].row + 1);
+                  JCLAP_CHECK(false);
+               }
+      }
+      JCLAP_CHECK(pianos >= 30);
    }
 
    // ---- dice ----
