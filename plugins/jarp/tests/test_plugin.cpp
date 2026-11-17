@@ -326,7 +326,7 @@ int main() {
             if (bank && id == kAdvance && std::lround(v) != 0)
                JCLAP_CHECK(bank->next(0) != 0);
       }
-      JCLAP_CHECK_EQ(factoryCategories().size(), 27u);
+      JCLAP_CHECK_EQ(factoryCategories().size(), 37u);
       // The library uses LENGTH by HELD and BOUNCE: Up Down is the held notes up and back for any
       // chord, and a held pattern has a step for each row it could reach.
       {
@@ -381,6 +381,38 @@ int main() {
                std::printf("%s skips row %d\n", e.name, r);
                JCLAP_CHECK(all[r - 1]);
             }
+      }
+      // The bass grooves play from two held notes, or three where the line walks a chord: no row past
+      // the third, and the blurb says what to hold (a triad, or the 1-5-6 shuffle, for three).
+      {
+         int bass = 0;
+         for (const library::Entry &e : factoryLibrary()) {
+            if (std::string(e.category).rfind("Bass: ", 0) != 0)
+               continue;
+            ++bass;
+            int top = 0;
+            for (const Pattern &p : e.patterns)
+               for (int i = 0; i < p.count; ++i)
+                  top = std::max(top, p.notes[i].row + 1);
+            const std::string blurb = e.blurb;
+            const bool three = blurb.rfind("Hold a triad:", 0) == 0 || blurb.rfind("Hold root, 5th and 6th:", 0) == 0;
+            const bool two = blurb.rfind("Hold root and fifth:", 0) == 0 || blurb.rfind("Hold root and b7:", 0) == 0;
+            if (top > 3 || (three && top != 3) || (two && top != 2) || (!two && !three)) {
+               std::printf("%s plays %d rows: %s\n", e.name, top, e.blurb);
+               JCLAP_CHECK(false);
+            }
+         }
+         JCLAP_CHECK(bass >= 80);
+      }
+      // A bass line's ^ is an octave up from its register and v an octave down, in the Octave lane.
+      {
+         const Pattern b = library::bass("1 2^ 2v 1s^");
+         JCLAP_CHECK_EQ(b.length, 4);
+         JCLAP_CHECK_EQ(b.lanes[0].octave, -1);
+         JCLAP_CHECK_EQ(b.lanes[1].octave, 0);
+         JCLAP_CHECK_EQ(b.lanes[2].octave, -2);
+         JCLAP_CHECK_EQ(b.lanes[3].octave, 0);
+         JCLAP_CHECK_EQ(b.notes[b.noteStarting(0, 3)].length, 2);
       }
       // The library's step lines: a tie, a chord, a short note, a note held to the end, and lanes
       // that repeat.
