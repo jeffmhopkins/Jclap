@@ -326,7 +326,7 @@ int main() {
             if (bank && id == kAdvance && std::lround(v) != 0)
                JCLAP_CHECK(bank->next(0) != 0);
       }
-      JCLAP_CHECK_EQ(factoryCategories().size(), 27u);
+      JCLAP_CHECK_EQ(factoryCategories().size(), 33u);
       // The library uses LENGTH by HELD and BOUNCE: Up Down is the held notes up and back for any
       // chord, and a held pattern has a step for each row it could reach.
       {
@@ -370,6 +370,16 @@ int main() {
                keeps = keeps || (id == kKeepRows && x == 1);
             JCLAP_CHECK(keeps);
          }
+         // The Berlin School presets take one, two or three notes held: a fixed-length pattern uses
+         // rows 1 to 3 at most, its octaves coming from the Octave lane.
+         if (std::string(e.category).rfind("Berlin School", 0) == 0)
+            for (const Pattern &p : e.patterns)
+               for (int i = 0; i < p.count; ++i)
+                  if (!p.byHeld && p.notes[i].row > 2) {
+                     std::printf("%s needs more than three notes held\n", e.name);
+                     JCLAP_CHECK(false);
+                     break;
+                  }
          if (std::string(e.category) == "Drum Kit")
             for (const Pattern &p : e.patterns)
                if (!p.empty() && p.length != 64 && p.length != 48) {
