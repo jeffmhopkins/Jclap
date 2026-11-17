@@ -823,6 +823,7 @@ figure.dark { max-width: 5.9in; margin-left: auto; margin-right: auto; }
   <ul>
     <li><strong>The Berlin School</strong> presets are sequencer ostinatos in the style of 1970s German electronic music: sixteenths over a pedal, leaping octaves, gallops, and loops that drift against the bar. A sequencer of the time played one line and a key transposed it, so these take few notes: each blurb says whether to hold one note, a root and fifth, or a triad, and the octaves come from the Octave lane. Move your hand to transpose the sequence, and put a plucky synth with a short decay after them.</li>
     <li><strong>The Bass</strong> presets are bass lines by genre, from rock to amapiano. Each plays from just the notes a bass line needs: most want only a root and fifth (Funk wants the root and b7), and the ones that walk a chord want a triad. The blurb says which. Hold the notes in the middle of the keyboard and route JArp into a bass patch: the line plays an octave down, with its octave pops and jumps written into the Octave lane. EMPTY ROWS is OCT, so holding one note fewer still plays.</li>
+    <li><strong>The Piano</strong> presets are accompaniment by style, played the way a pianist's hands would: the bass low, the chord in the middle. Hold a plain triad in the middle of the keyboard: row 1 is the root, row 2 the third, row 3 the fifth, with the left hand's bass taken from those same keys an octave or two down. Jazz and Gospel and Soul add the 7th as a fourth note; hold a 7th chord, or just the triad and the root an octave up stands in. All use OCT rows, so holding fewer notes never leaves a gap.</li>
     <li><strong>The Drum Kit</strong> presets play a kit from the keys you hold: row 1 is the kick, 2 the snare, 3 the closed hat and 4 the open hat, the order the General MIDI drum map puts them in. Hold MIDI notes 36, 38, 42 and 46 (C2, D2, F#2 and A#2 as JArp names them; a host that calls middle C C3 names them C1, D1, F#1 and A#1) and route JArp into a drum machine or sampler. Empty rows rest, so a drum you don't hold stays out, and KEEP ROWS is on, so lifting any drum's key drops just that drum. Each is four bars long, the fourth with a fill, and starts from the song's first bar (RESTART SONG), so its fill lands at the end of each four-bar phrase.</li>
     <li><strong>The Percussion</strong> presets are hand percussion and mallet figures for any pitched sound, walking the notes held.</li>
   </ul>
@@ -1128,7 +1129,6 @@ function el(parent, tag, attrs, text) {
     'Berlin School': 'Sequencer lines in the style of the 1970s Berlin electronic scene: pedals, octave lines and slow drifts.',
     'Drum Kit': 'Hold C2 D2 F#2 A#2 (kick, snare, closed hat, open hat). Four bars, the fourth with a fill, locked to the song.',
     'Percussion': 'Hand percussion and mallet figures for any pitched sound.',
-    'Piano': 'Left-hand and two-hand accompaniment figures.',
     'Guitar Fingerpicking': 'Picking patterns: the thumb on the low notes, the fingers above.',
     'Strum and Harp': 'Strums down and up, and harp sweeps.',
     'Pads and Pedals': 'Slow pedals and climbs for pads and keys.',
@@ -1142,6 +1142,7 @@ function el(parent, tag, attrs, text) {
   const F = {
     'Berlin School': 'Sequencer ostinatos after 1970s German electronic music. Each blurb says whether to hold one note, a root and fifth, or a triad.',
     'Bass': 'Bass lines by genre, an octave down. Most want a root and fifth; the blurb says when a line wants something else.',
+    'Piano': 'Accompaniment by style, the bass low and the chord in the middle. Hold a triad in the middle of the keyboard; Jazz and Gospel and Soul add the 7th.',
   };
   const host = document.getElementById('presets');
   let html = '', family = '';
