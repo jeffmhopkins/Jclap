@@ -94,7 +94,7 @@ The switch beside the numbers says how playing moves along them:
 - **LOOP**: while you hold, each time a pattern ends the next one starts, so 1, 2 and 3 play as one
   long phrase. Each new chord starts the phrase again from the one selected.
 
-Under PLAYBACK, **REPEAT** and **THEN** say when and where the chain moves on:
+In the CHAIN card under the pattern, **REPEAT** and **THEN** say when and where the chain moves on:
 
 - **REPEAT** (x1 to x16): how many times each pattern plays before the chain moves on. In LOOP that's
   times round: at x2, 1 1 2 2 3 3. In CHORD it's chords: at x2, each pattern plays for two chords.
@@ -188,6 +188,8 @@ of them.
 
 ## Settings
 
+Under the pattern, the settings sit in five cards: TIMING, LENGTH, PLAY, CHAIN and PRESSURE.
+
 **TIMING**
 
 - **RATE**: how long a step is, from 1/32 to 1/4, with triplets.
@@ -212,16 +214,17 @@ the panel's header line says what it comes to ("4 held = 4 steps").
   - **REPEAT ENDS** (the box under them): with BOUNCE, the first and last steps play twice at the
     turns instead, 1 2 3 4 4 3 2 1, so four held notes fill eight steps. Dimmed when ONE WAY.
 
-**PLAYBACK**
+**PLAY**, and the keys you hold: LATCH, RESTART and ONE SHOT on the left, KEEP ROWS, RANGE and
+PASS SUSTAIN on the right.
 
 - **LATCH**: on, the notes keep playing after you let go, until you play a new chord. A host's All
   Notes Off (or a note choke) stops them too.
 - **Sustain pedal** (CC64): while it's down, keys you let go of stay in the chord and the arp keeps
   playing them; new keys join it. Lifting the pedal lets go of every key no longer held. JArp keeps
   the pedal for itself rather than passing it on, so the arp's own note lengths stay as drawn.
-- **PASS SUSTAIN** (the box under RANGE): on, the pedal goes straight on to the synth instead and
+- **PASS SUSTAIN** (the box under RANGE, in PLAY): on, the pedal goes straight on to the synth instead and
   JArp ignores it, so the synth's own sustain rings the arp's notes on. Off to start with.
-- **ONE SHOT** (the box under RESTART): on, each new chord plays the pattern once through and then
+- **ONE SHOT** (the box under RESTART, in PLAY): on, each new chord plays the pattern once through and then
   the arp stops until you play a new chord (let go of every key, or with LATCH, just play again).
   With REPEAT the pattern plays that many times first, and with LOOP the whole chain plays once
   through (each pattern REPEAT times). With RESTART on SONG or BAR the pattern starts where the
@@ -244,15 +247,19 @@ the panel's header line says what it comes to ("4 held = 4 steps").
   up. A note that would go past the range drops back down by octaves until it fits (one shifted
   down past the range comes back up the same way). The notes you hold always play as held.
 
+**CHAIN**: **REPEAT** and **THEN**, how CHORD and LOOP move along the patterns (see
+[Patterns and chains](#patterns-and-chains)). They're dimmed while the switch beside the pattern
+numbers is OFF.
+
 With the host stopped, JArp runs on its own clock at the host's tempo, so you can play it without
 pressing play.
 
-**PRESSURE**, from each finger:
+**PRESSURE**, from each finger, on four sliders:
 
 - **VELOCITY**: how far each note's velocity follows its finger's pressure, rather than how hard the
   key was struck. At 0 it's the strike velocity alone. The Velocity lane's offset is added after.
 - **CURVE**: how pressure maps. SOFT reaches high values with a light touch, LINEAR is as played, HARD
-  needs a firm press. It shapes both Velocity and Ratchet.
+  needs a firm press. It shapes both Velocity and Ratchet. The mark half way up the slider is LINEAR.
 - **RATCHET**: how far pressure adds hits on steps with P lit, from the step's own count up to MAX HITS.
 - **MAX HITS**: the most hits a pressed P step splits into, 1 to 8.
 
