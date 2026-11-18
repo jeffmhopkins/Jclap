@@ -11,7 +11,10 @@ set(AMALGAMATE_SOURCES OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(miniz
    GIT_REPOSITORY https://github.com/richgel999/miniz.git
    GIT_TAG 3.0.2)
+# miniz 3.0.2 asks for CMake 2.8; CMake 4 refuses that unless told the policies it may assume.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 FetchContent_MakeAvailable(miniz)
+unset(CMAKE_POLICY_VERSION_MINIMUM)
 
 # The generator: tokenizer, ONNX Runtime (loaded at run time, never linked), Stable Audio Open Small,
 # and the downloads. No Visage, so the tests can use it without a panel.
