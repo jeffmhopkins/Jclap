@@ -162,7 +162,7 @@ struct PanelNote {
 };
 
 constexpr char kStateMagic[4] = {'J', 'K', 'I', 'T'};
-constexpr uint32_t kStateVersion = 1;
+constexpr uint32_t kStateVersion = 2; // 2 adds the engine; 1 still loads
 
 class JKit final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -375,33 +375,37 @@ public:
    std::vector<Variant> &variants() override { return variants_; }
    std::vector<Recent> &recent() override { return recent_; }
 
+   gen::Engine engineChoice() const { return gen::engineAt(gen_.engine); }
+
    EngineStatus engine() override {
       gen::Studio &s = studio();
-      const gen::Studio::Status st = s.status();
+      const gen::Engine which = engineChoice();
+      const gen::Studio::Status st = s.status(which);
       EngineStatus e;
       e.state = static_cast<EngineStatus::State>(st.state);
       e.received = st.received;
       e.total = st.total;
       e.error = st.error;
-      e.downloadBytes = gen::Studio::downloadBytes();
+      e.downloadBytes = gen::Studio::downloadBytes(which);
       // Walking the folder is cheap but not free: once a second is plenty.
       const auto now = std::chrono::steady_clock::now();
-      if (now - diskCheckedAt_ > std::chrono::seconds(1) || st.state != lastState_) {
-         diskBytes_ = gen::Studio::diskBytes();
+      if (now - diskCheckedAt_ > std::chrono::seconds(1) || st.state != lastState_ || which != lastEngine_) {
+         diskBytes_ = gen::Studio::diskBytes(which);
          diskCheckedAt_ = now;
          lastState_ = st.state;
+         lastEngine_ = which;
       }
       e.diskBytes = diskBytes_;
-      e.folder = gen::Studio::modelFolder().u8string();
+      e.folder = gen::Studio::modelFolder(which).u8string();
       return e;
    }
-   void installEngine() override { studio().install(); }
+   void installEngine() override { studio().install(engineChoice()); }
    void removeEngine() override {
       if (job_) {
          studio().drop(job_);
          job_ = 0;
       }
-      studio().remove();
+      studio().remove(engineChoice());
       diskCheckedAt_ = {};
    }
    void cancelEngine() override {
@@ -416,6 +420,7 @@ public:
       if (job_)
          return;
       gen::Request r;
+      r.engine = engineChoice();
       r.prompt = gen_.prompt;
       if (r.prompt.empty()) {
          gen_.prompt = randomPrompt(static_cast<Role>(gen_.role), gen_.strange, std::random_device{}());
@@ -446,6 +451,7 @@ public:
       }
       jobPrompt_ = r.prompt;
       job_ = studio().submit(r);
+      jobEngine_ = r.engine;
       jobStarted_ = std::chrono::steady_clock::now();
    }
 
@@ -456,7 +462,7 @@ public:
          return 0.0;
       gen::Studio &s = **studio_;
       const auto state = s.jobState(job_);
-      if (state == gen::Studio::JobState::Running && s.status().state == gen::Studio::State::Ready)
+      if (state == gen::Studio::JobState::Running && s.status(jobEngine_).state == gen::Studio::State::Ready)
          return s.jobProgress(job_);
       return -1.0;
    }
@@ -539,6 +545,7 @@ public:
       w.u32(gen_.seed);
       w.u8(gen_.seedLocked ? 1 : 0);
       w.u32(static_cast<uint32_t>(gen_.variants));
+      w.u32(static_cast<uint32_t>(gen_.engine));
       w.f64(treatment_.start);
       w.f64(treatment_.end);
       w.f64(treatment_.fadeMs);
@@ -579,7 +586,8 @@ public:
       if (bytes.size() < 12 || std::memcmp(bytes.data(), kStateMagic, 4))
          return false;
       Reader r(bytes.data() + 4, bytes.size() - 4);
-      if (r.u32() != kStateVersion)
+      const uint32_t version = r.u32();
+      if (version < 1 || version > kStateVersion)
          return false;
       const uint32_t count = r.u32();
       std::vector<double> v(kParamCount);
@@ -604,6 +612,7 @@ public:
       g.seed = r.u32();
       g.seedLocked = r.u8() != 0;
       g.variants = static_cast<int>(r.u32());
+      g.engine = version >= 2 ? std::clamp(static_cast<int>(r.u32()), 0, gen::kEngineCount - 1) : 0;
       Treatment t;
       t.start = r.f64();
       t.end = r.f64();
@@ -1093,6 +1102,7 @@ private:
    uint64_t diskBytes_ = 0;
    std::chrono::steady_clock::time_point diskCheckedAt_{};
    gen::Studio::State lastState_ = gen::Studio::State::Missing;
+   gen::Engine lastEngine_ = gen::Engine::SaoSmall, jobEngine_ = gen::Engine::SaoSmall;
 
    // Last, so the panel closes before the state it reads goes away.
    jclap::ui::ClapGui gui_;

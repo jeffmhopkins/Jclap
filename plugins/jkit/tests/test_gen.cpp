@@ -1,17 +1,24 @@
 // The generator's parts that need no model: hashing, the tokenizer, the sampler's schedule and
-// noise, the random prompts, and the studio's bookkeeping. With JKIT_TEST_MODEL set to a folder
-// holding the model files and JKIT_TEST_ORT to ONNX Runtime's library, it also generates a sound.
+// noise, the random prompts, the studio's bookkeeping, and ORB's renderer and planner grammar. With
+// JKIT_TEST_MODEL set to a folder holding the model files and JKIT_TEST_ORT to ONNX Runtime's library,
+// it also generates a sound; with JKIT_TEST_ORB set to a folder holding planner.safetensors, it plans
+// and plays one with ORB.
 
 #include <jclap/core/test_host.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <set>
 #include <thread>
 
 #include "gen/fetch.h"
+#include "gen/orb/planner.h"
+#include "gen/orb/render.h"
+#include "gen/orb_engine.h"
 #include "gen/ort.h"
 #include "gen/sao.h"
 #include "gen/sha256.h"
@@ -128,22 +135,49 @@ void testStudio() {
    setenv("JKIT_FOLDER", dir.c_str(), 1);
 #endif
    JCLAP_CHECK(Studio::folder() == dir);
-   JCLAP_CHECK(Studio::downloadBytes() > 2000000000ull && Studio::downloadBytes() < 2500000000ull);
-   JCLAP_CHECK_EQ(Studio::diskBytes(), 0u);
+   const Engine sao = Engine::SaoSmall, orb = Engine::Orb;
+   JCLAP_CHECK(Studio::downloadBytes(sao) > 2000000000ull && Studio::downloadBytes(sao) < 2500000000ull);
+   JCLAP_CHECK_EQ(Studio::downloadBytes(orb), 20795318u);
+   JCLAP_CHECK(Studio::modelFolder(sao) != Studio::modelFolder(orb));
+   JCLAP_CHECK_EQ(Studio::diskBytes(sao), 0u);
+   JCLAP_CHECK_EQ(Studio::diskBytes(orb), 0u);
    {
       Studio::Handle a, b; // two instances share one studio
       JCLAP_CHECK(&*a == &*b);
-      JCLAP_CHECK(a->status().state == Studio::State::Missing);
-      // Files on disk count; removing deletes them.
-      std::filesystem::create_directories(Studio::modelFolder());
-      std::ofstream(Studio::modelFolder() / "partial.part") << std::string(1000, 'x');
-      JCLAP_CHECK_EQ(Studio::diskBytes(), 1000u);
-      a->remove();
-      for (int i = 0; i < 200 && std::filesystem::exists(Studio::modelFolder()); ++i)
+      JCLAP_CHECK(a->status(sao).state == Studio::State::Missing);
+      JCLAP_CHECK(a->status(orb).state == Studio::State::Missing);
+      // Files on disk count, each engine its own; removing one deletes only its files.
+      std::filesystem::create_directories(Studio::modelFolder(sao));
+      std::ofstream(Studio::modelFolder(sao) / "partial.part") << std::string(1000, 'x');
+      std::filesystem::create_directories(Studio::modelFolder(orb));
+      std::ofstream(Studio::modelFolder(orb) / "partial.part") << std::string(300, 'x');
+      JCLAP_CHECK_EQ(Studio::diskBytes(sao), 1000u);
+      JCLAP_CHECK_EQ(Studio::diskBytes(orb), 300u);
+      a->remove(sao);
+      for (int i = 0; i < 200 && std::filesystem::exists(Studio::modelFolder(sao)); ++i)
          std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      JCLAP_CHECK(!std::filesystem::exists(Studio::modelFolder()));
-      JCLAP_CHECK_EQ(Studio::diskBytes(), 0u);
-      JCLAP_CHECK(a->status().state == Studio::State::Missing);
+      JCLAP_CHECK(!std::filesystem::exists(Studio::modelFolder(sao)));
+      JCLAP_CHECK_EQ(Studio::diskBytes(sao), 0u);
+      JCLAP_CHECK_EQ(Studio::diskBytes(orb), 300u);
+      JCLAP_CHECK(a->status(sao).state == Studio::State::Missing);
+      a->remove(orb);
+      for (int i = 0; i < 200 && std::filesystem::exists(Studio::modelFolder(orb)); ++i)
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      JCLAP_CHECK_EQ(Studio::diskBytes(orb), 0u);
+      // A job for an engine that isn't downloaded fails (and asks for the download).
+      Request r;
+      r.engine = orb;
+      const int job = a->submit(r);
+      std::vector<Sound> got;
+      std::string error;
+      bool done = false;
+      for (int i = 0; i < 500 && !done; ++i) {
+         a->cancel(); // stop the download it starts: the test has no network to spare
+         done = a->take(job, got, error);
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+      JCLAP_CHECK(done);
+      JCLAP_CHECK(!error.empty());
    }
    std::filesystem::remove_all(dir, ec);
    JCLAP_CHECK(!runtimePackagePath().empty());
@@ -179,6 +213,177 @@ void testGenerate() {
    std::printf("generated %zu sounds\n", out.size());
 }
 
+// ORB's renderer against numbers from the original Python (orb 0.4.x, numpy 2): one event each.
+void testOrbRender() {
+   using namespace jkit::orb;
+   JCLAP_CHECK_EQ(roleNames().size(), 47u);
+   int rendered = 0;
+   for (int r = 0; r < 47; ++r)
+      rendered += roleRendered(r) ? 1 : 0;
+   JCLAP_CHECK_EQ(rendered, 27);
+   JCLAP_CHECK(!roleRendered(roleIndex("thunder")));
+   struct Gold {
+      const char *role;
+      int seed;
+      double dur;
+      size_t n;
+      double energy, a, b;
+   };
+   const Gold gold[] = {
+      {"impact", 3, 0.5, 83999, 165.65059211271887, -0.029628231314558259, 6.9866826112229837e-05},
+      {"glass_break", 4, 1.0, 119999, 57.496618523974696, -0.037742769109628767, -0.0010416014181510564},
+      {"gunshot", 5, 1.0, 263999, 39.031864567525872, -0.0085650138115130718, -0.00016226512055388562},
+      {"church_bell", 2, 1.5, 311999, 92.873927363237101, 0.019682722355746002, -0.00099715536077203053},
+      {"whoosh", 9, 0.8, 98399, 114.85246065386615, -0.0024367485726295175, -0.0060200321594987786},
+   };
+   const double apex[] = {0.0, 0.0, 0.0, 0.0, 0.05};
+   for (size_t g = 0; g < std::size(gold); ++g) {
+      Event ev;
+      ev.role = roleIndex(gold[g].role);
+      ev.dur = gold[g].dur;
+      ev.apex = apex[g] * ev.dur;
+      Vec l, r;
+      renderEvent(ev, gold[g].seed, true, l, r);
+      JCLAP_CHECK_EQ(l.size(), gold[g].n);
+      if (l.size() != gold[g].n)
+         continue;
+      double e = 0;
+      for (double x : l)
+         e += x * x;
+      JCLAP_CHECK(std::fabs(e - gold[g].energy) < 1e-6 * gold[g].energy);
+      JCLAP_CHECK(std::fabs(l[gold[g].n / 7] - gold[g].a) < 1e-7);
+      JCLAP_CHECK(std::fabs(r[gold[g].n / 3] - gold[g].b) < 1e-7);
+   }
+   // Every role this port renders makes a finite, audible sound for a few seeds.
+   for (int role = 0; role < 47; ++role) {
+      if (!roleRendered(role))
+         continue;
+      for (int seed : {1, 2, 3}) {
+         Spec spec;
+         spec.duration = 0.6;
+         spec.events.push_back({role, 0.0, 0.6, -6.0, 0.0, seed});
+         Vec l, r;
+         renderSpec(spec, l, r);
+         double peak = 0;
+         bool finite = true;
+         for (size_t i = 0; i < l.size(); ++i) {
+            finite = finite && std::isfinite(l[i]) && std::isfinite(r[i]);
+            peak = std::max({peak, std::fabs(l[i]), std::fabs(r[i])});
+         }
+         JCLAP_CHECK(finite);
+         JCLAP_CHECK(peak > 0.85 && peak < 0.9); // normalised to 0.89
+         JCLAP_CHECK_EQ(l.size(), 28800u);
+      }
+   }
+}
+
+void testOrbPlan() {
+   using namespace jkit::orb;
+   // The grammar: a fixed length spells its digits, no bed, only the given roles.
+   PlanOptions o;
+   o.durationCs = 1234;
+   o.roles = {roleIndex("bell"), roleIndex("knock")};
+   Grammar g(o);
+   const auto one = [&](int expect) {
+      const std::vector<int> a = g.allowed();
+      JCLAP_CHECK(a.size() == 1 && a[0] == expect);
+      g.advance(expect);
+   };
+   one(tok::SPEC);
+   one(tok::DUR);
+   for (int d : {0, 1, 2, 3, 4})
+      one(tok::DIGIT + d);
+   one(tok::TEX);
+   one(tok::NOBED);
+   one(tok::MOOD);
+   JCLAP_CHECK_EQ(g.allowed().size(), 10u);
+   g.advance(tok::MOODVAL);
+   one(tok::EVENTS);
+   one(tok::EVENT); // no bed: at least one event
+   JCLAP_CHECK(g.allowed() == (std::vector<int>{tok::ROLEVAL + roleIndex("bell"), tok::ROLEVAL + roleIndex("knock")}));
+   g.advance(tok::ROLEVAL + roleIndex("knock"));
+   one(tok::T);
+   // t <= 12.32 s: the first digit can be 0 or 1.
+   JCLAP_CHECK_EQ(g.allowed().size(), 2u);
+
+   // Decoding a hand-written plan, then fitting it to a pad.
+   std::vector<int> ids = {tok::SPEC, tok::DUR};
+   for (int d : {0, 0, 2, 0, 0})
+      ids.push_back(tok::DIGIT + d);
+   ids.insert(ids.end(), {tok::TEX, tok::NOBED, tok::MOOD, tok::MOODVAL, tok::EVENTS});
+   const auto event = [&](int role, int tCs, int dCs) {
+      ids.insert(ids.end(), {tok::EVENT, tok::ROLEVAL + role, tok::T});
+      for (int div : {1000, 100, 10, 1})
+         ids.push_back(tok::DIGIT + tCs / div % 10);
+      ids.push_back(tok::D);
+      for (int div : {1000, 100, 10, 1})
+         ids.push_back(tok::DIGIT + dCs / div % 10);
+      ids.insert(ids.end(), {tok::G, tok::GAIN + 12, tok::P, tok::PAN + 4, tok::S, tok::HEX + 1, tok::HEX + 15});
+   };
+   event(roleIndex("impact"), 10, 70);
+   event(roleIndex("bell"), 50, 150);
+   ids.insert(ids.end(), {tok::END_EVENTS, tok::END_SPEC, tok::EOS});
+   Spec spec;
+   JCLAP_CHECK(Planner::decode(ids, spec));
+   JCLAP_CHECK_EQ(spec.events.size(), 2u);
+   JCLAP_CHECK(std::fabs(spec.duration - 2.0) < 1e-9);
+   JCLAP_CHECK(std::fabs(spec.events[1].t - 0.5) < 1e-9 && std::fabs(spec.events[1].dur - 1.5) < 1e-9);
+   JCLAP_CHECK(spec.events[0].gainDb == -6.0 && spec.events[0].pan == 0.0 && spec.events[0].seed == 31);
+   ids.pop_back();
+   ids.pop_back();
+   JCLAP_CHECK(!Planner::decode(ids, spec));
+
+   Spec planned;
+   planned.duration = 2.0;
+   planned.events = {{roleIndex("impact"), 0.1, 0.7}, {roleIndex("bell"), 0.5, 1.5}};
+   Spec fitted = OrbEngine::fit(planned, 0.3);
+   JCLAP_CHECK(std::fabs(fitted.duration - 0.3) < 1e-9);
+   JCLAP_CHECK_EQ(fitted.events.size(), 1u); // the bell would start after the end
+   JCLAP_CHECK(fitted.events[0].t == 0.0);
+   fitted = OrbEngine::fit(planned, 5.0);
+   JCLAP_CHECK(std::fabs(fitted.duration - 1.9) < 1e-9);
+   JCLAP_CHECK_EQ(fitted.events.size(), 2u);
+   JCLAP_CHECK(std::fabs(fitted.events[1].t - 0.4) < 1e-9);
+
+   // Each variant's seed changes the sound; the same seed makes the same one.
+   const Sound a = OrbEngine::render(fitted, 7), b = OrbEngine::render(fitted, 7), c = OrbEngine::render(fitted, 8);
+   JCLAP_CHECK(a.left == b.left);
+   JCLAP_CHECK(a.left != c.left);
+   JCLAP_CHECK_EQ(a.left.size(), static_cast<size_t>(std::llround(1.9 * 48000 * 441.0 / 480.0)));
+
+   // Resampling keeps a tone's pitch: 1 kHz at 48 kHz is 44.1 samples a cycle at 44.1 kHz.
+   std::vector<double> sine(48000);
+   for (size_t i = 0; i < sine.size(); ++i)
+      sine[i] = std::sin(2.0 * 3.141592653589793 * 1000.0 * static_cast<double>(i) / 48000.0);
+   const std::vector<float> s = resample48To441(sine);
+   JCLAP_CHECK_EQ(s.size(), 44100u);
+   double err = 0;
+   for (size_t i = 2000; i < 42000; ++i)
+      err = std::max(err, std::fabs(s[i] - std::sin(2.0 * 3.141592653589793 * 1000.0 * static_cast<double>(i) / 44100.0)));
+   JCLAP_CHECK(err < 1e-3);
+
+   // With the weights at hand (not in CI): a prompt becomes a plan and a sound.
+   const char *weights = std::getenv("JKIT_TEST_ORB");
+   if (!weights)
+      return;
+   OrbEngine engine;
+   std::string error;
+   JCLAP_CHECK(engine.load(weights, error));
+   Request r;
+   r.engine = Engine::Orb;
+   r.prompt = "a deep punchy kick drum";
+   r.seconds = 1.0;
+   r.variants = 3;
+   std::vector<Sound> out;
+   std::atomic<bool> cancel{false};
+   JCLAP_CHECK(engine.generate(r, out, [](double) {}, cancel, error));
+   JCLAP_CHECK_EQ(out.size(), 3u);
+   Spec kick;
+   JCLAP_CHECK(engine.plan(r.prompt, 1.0, kick, error));
+   JCLAP_CHECK(!kick.events.empty() && kick.events[0].role == roleIndex("punch"));
+   std::printf("ORB planned %zu events for the kick\n", kick.events.size());
+}
+
 } // namespace
 
 int main() {
@@ -188,5 +393,7 @@ int main() {
    testPrompts();
    testStudio();
    testGenerate();
+   testOrbRender();
+   testOrbPlan();
    return jclap::core::testResult();
 }

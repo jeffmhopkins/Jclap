@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "gen/engines.h"
 #include "gen/ort.h"
 #include "gen/tokenizer.h"
 
@@ -47,13 +48,14 @@ private:
 };
 
 struct Request {
+   Engine engine = Engine::SaoSmall;
    std::string prompt;
    double seconds = 1.0;
    int steps = 8;
    double guidance = 1.0;
    // The first variant's seed; variant k uses seed + k.
    uint32_t seed = 1;
-   int variants = 1;
+   int variants = 1;  // (ORB: same plan, each sound its own seed)
    // How far apart the variants are: 0 starts every variant from the first one's noise (they differ
    // only in the noise added along the way), 1 gives each its own (as if generated one at a time).
    double variety = 1.0;

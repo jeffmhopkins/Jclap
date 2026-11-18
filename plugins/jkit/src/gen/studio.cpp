@@ -37,6 +37,37 @@ const ModelFile kModelFiles[] = {
    {"dit.onnx", 1364171978, "8e9c8b14baac4a26159d5ecf3d365ef5a097f321541f9548d62d136354a23d8b"},
 };
 
+// ORB's planner (Apache-2.0), pinned to one revision.
+constexpr const char *kOrbRepo =
+   "https://huggingface.co/marcosmaceo/orb-planner/resolve/a86264977fff764e7fa2bd3eee534e3baa177ec5/";
+const ModelFile kOrbFiles[] = {
+   {"config.json", 318, "2d64dc76f3ab7ea9b83190f82d26ef95d3a2bbedc6cf43bae79ef954751eb753"},
+   {"planner.safetensors", 20795000, "b14a6d1939f5b0407d9c9d97b9c4468546b0fb5f30a7fb91175f55d69432015d"},
+};
+
+struct Files {
+   const char *repo;
+   const ModelFile *begin, *end;
+   bool runtime; // needs ONNX Runtime
+};
+Files filesOf(Engine e) {
+   if (e == Engine::Orb)
+      return {kOrbRepo, std::begin(kOrbFiles), std::end(kOrbFiles), false};
+   return {kModelRepo, std::begin(kModelFiles), std::end(kModelFiles), true};
+}
+
+uint64_t folderBytes(const std::filesystem::path &dir) {
+   uint64_t total = 0;
+   std::error_code ec;
+   if (!std::filesystem::is_directory(dir, ec))
+      return 0;
+   for (auto it = std::filesystem::recursive_directory_iterator(dir, ec);
+        !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec))
+      if (it->is_regular_file(ec))
+         total += it->file_size(ec);
+   return total;
+}
+
 std::filesystem::path runtimeFolder() { return Studio::folder() / "runtime" / (std::string("onnxruntime-") + kRuntimeVersion); }
 std::filesystem::path runtimeLibrary() { return runtimeFolder() / runtimeFileName(); }
 
@@ -98,56 +129,67 @@ std::filesystem::path Studio::folder() {
    return jclap::ui::userFolder("JClap");
 }
 
-std::filesystem::path Studio::modelFolder() { return folder() / "models" / "stable-audio-open-small"; }
+std::filesystem::path Studio::modelFolder(Engine engine) {
+   return folder() / "models" / (engine == Engine::Orb ? "orb-planner" : "stable-audio-open-small");
+}
 
-uint64_t Studio::downloadBytes() {
-   uint64_t total = kRuntimePackage.size;
-   for (const ModelFile &f : kModelFiles)
-      total += f.size;
+uint64_t Studio::downloadBytes(Engine engine) {
+   const Files f = filesOf(engine);
+   uint64_t total = f.runtime ? kRuntimePackage.size : 0;
+   for (const ModelFile *m = f.begin; m != f.end; ++m)
+      total += m->size;
    return total;
 }
 
-uint64_t Studio::diskBytes() {
-   uint64_t total = 0;
-   std::error_code ec;
-   for (const std::filesystem::path &dir : {modelFolder(), folder() / "runtime"}) {
-      if (!std::filesystem::is_directory(dir, ec))
-         continue;
-      for (auto it = std::filesystem::recursive_directory_iterator(dir, ec);
-           !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec))
-         if (it->is_regular_file(ec))
-            total += it->file_size(ec);
-   }
+uint64_t Studio::diskBytes(Engine engine) {
+   uint64_t total = folderBytes(modelFolder(engine));
+   if (filesOf(engine).runtime)
+      total += folderBytes(folder() / "runtime");
    return total;
 }
 
-void Studio::remove() {
-   cancel_.store(true);
+void Studio::remove(Engine engine) {
    {
       std::lock_guard<std::mutex> lock(mutex_);
-      wantRemove_ = true;
-      wantInstall_ = wantLoad_ = false;
+      // Stop whatever runs now only if it is this engine's (a download, a load or a job).
+      const State st = status_[engineIndex(engine)].state;
+      const auto running = jobs_.find(runningJob_);
+      if (st == State::Downloading || st == State::Loading ||
+          (running != jobs_.end() && running->second.request.engine == engine))
+         cancel_.store(true);
+      wantRemove_[engineIndex(engine)] = true;
+      wantInstall_[engineIndex(engine)] = wantLoad_[engineIndex(engine)] = false;
    }
    wake_.notify_all();
 }
 
-void Studio::removeNow() {
-   model_.unload();
+void Studio::removeNow(Engine engine) {
+   const int e = engineIndex(engine);
    std::error_code ec;
-   std::filesystem::remove_all(modelFolder(), ec);
-   // The runtime stays loaded until the last JKit closes (a library can't safely be unloaded while
-   // its sessions may linger), but its file goes (on Windows a loaded DLL can't be deleted, so it goes next time).
-   std::filesystem::remove_all(folder() / "runtime", ec);
-   std::lock_guard<std::mutex> lock(mutex_);
-   for (int id : queue_) {
-      jobs_[id].state = JobState::Failed;
-      jobs_[id].error = "the model was removed";
+   if (engine == Engine::Orb) {
+      orb_.unload();
+   } else {
+      sao_.unload();
+      // The runtime stays loaded until the last JKit closes (a library can't safely be unloaded while
+      // its sessions may linger), but its file goes (on Windows a loaded DLL can't be deleted, so it goes next time).
+      std::filesystem::remove_all(folder() / "runtime", ec);
    }
-   queue_.clear();
-   status_.state = State::Missing;
-   status_.error.clear();
-   status_.received = status_.total = 0;
-   received_.store(0);
+   std::filesystem::remove_all(modelFolder(engine), ec);
+   std::lock_guard<std::mutex> lock(mutex_);
+   for (auto it = queue_.begin(); it != queue_.end();) {
+      Job &job = jobs_[*it];
+      if (job.request.engine == engine) {
+         job.state = JobState::Failed;
+         job.error = "the model was removed";
+         it = queue_.erase(it);
+      } else {
+         ++it;
+      }
+   }
+   status_[e].state = State::Missing;
+   status_[e].error.clear();
+   status_[e].received = status_[e].total = 0;
+   received_[e].store(0);
 }
 
 std::mutex &Studio::instanceMutex() {
@@ -180,7 +222,8 @@ Studio::Handle::~Handle() {
 }
 
 Studio::Studio() {
-   status_.state = installedOnDisk() ? State::Installed : State::Missing;
+   for (int e = 0; e < kEngineCount; ++e)
+      status_[e].state = installedOnDisk(engineAt(e)) ? State::Installed : State::Missing;
    thread_ = std::thread([this] { run(); });
 }
 
@@ -195,45 +238,48 @@ Studio::~Studio() {
       thread_.join();
 }
 
-bool Studio::installedOnDisk() const {
+bool Studio::installedOnDisk(Engine engine) {
+   const Files f = filesOf(engine);
    std::error_code ec;
-   if (!std::filesystem::is_regular_file(runtimeLibrary(), ec))
+   if (f.runtime && !std::filesystem::is_regular_file(runtimeLibrary(), ec))
       return false;
-   for (const ModelFile &f : kModelFiles)
-      if (!hasFile(modelFolder() / f.name, f.size))
+   for (const ModelFile *m = f.begin; m != f.end; ++m)
+      if (!hasFile(modelFolder(engine) / m->name, m->size))
          return false;
    return true;
 }
 
-Studio::Status Studio::status() const {
+Studio::Status Studio::status(Engine engine) const {
    std::lock_guard<std::mutex> lock(mutex_);
-   Status s = status_;
-   s.received = received_.load();
+   Status s = status_[engineIndex(engine)];
+   s.received = received_[engineIndex(engine)].load();
    return s;
 }
 
-void Studio::setState(State s, const std::string &error) {
+void Studio::setState(Engine engine, State s, const std::string &error) {
    std::lock_guard<std::mutex> lock(mutex_);
-   status_.state = s;
-   status_.error = error;
+   status_[engineIndex(engine)].state = s;
+   status_[engineIndex(engine)].error = error;
 }
 
-void Studio::install() {
+void Studio::install(Engine engine) {
    {
       std::lock_guard<std::mutex> lock(mutex_);
-      if (status_.state != State::Missing && status_.state != State::Failed)
+      const State st = status_[engineIndex(engine)].state;
+      if (st != State::Missing && st != State::Failed)
          return;
-      wantInstall_ = true;
+      wantInstall_[engineIndex(engine)] = true;
    }
    wake_.notify_all();
 }
 
-void Studio::warmUp() {
+void Studio::warmUp(Engine engine) {
    {
       std::lock_guard<std::mutex> lock(mutex_);
-      wantLoad_ = true;
-      if (status_.state == State::Missing || status_.state == State::Failed)
-         wantInstall_ = true;
+      const int e = engineIndex(engine);
+      wantLoad_[e] = true;
+      if (status_[e].state == State::Missing || status_[e].state == State::Failed)
+         wantInstall_[e] = true;
    }
    wake_.notify_all();
 }
@@ -247,8 +293,9 @@ int Studio::submit(const Request &request) {
       id = nextJob_++;
       jobs_[id].request = request;
       queue_.push_back(id);
-      if (status_.state == State::Missing || status_.state == State::Failed)
-         wantInstall_ = true;
+      const int e = engineIndex(request.engine);
+      if (status_[e].state == State::Missing || status_[e].state == State::Failed)
+         wantInstall_[e] = true;
    }
    wake_.notify_all();
    return id;
@@ -288,117 +335,139 @@ void Studio::drop(int job) {
    jobs_.erase(job);
 }
 
-bool Studio::installNow(std::string &error) {
+bool Studio::installNow(Engine engine, std::string &error) {
+   const int e = engineIndex(engine);
    cancel_.store(false);
-   received_.store(0);
+   received_[e].store(0);
    {
       std::lock_guard<std::mutex> lock(mutex_);
-      status_.state = State::Downloading;
-      status_.total = downloadBytes();
-      status_.error.clear();
+      status_[e].state = State::Downloading;
+      status_[e].total = downloadBytes(engine);
+      status_[e].error.clear();
    }
+   const Files files = filesOf(engine);
    uint64_t done = 0;
-   const auto progress = [&](uint64_t got) { received_.store(done + got); };
-   // The runtime: the package, then its one library for this system.
-   if (!std::filesystem::exists(runtimeLibrary())) {
-      const std::string entry = runtimePackagePath();
-      if (entry.empty()) {
-         error = "ONNX Runtime has no build for this system";
-         return false;
+   const auto progress = [&](uint64_t got) { received_[e].store(done + got); };
+   if (files.runtime) {
+      // The runtime: the package, then its one library for this system.
+      if (!std::filesystem::exists(runtimeLibrary())) {
+         const std::string entry = runtimePackagePath();
+         if (entry.empty()) {
+            error = "ONNX Runtime has no build for this system";
+            return false;
+         }
+         Download d = kRuntimePackage;
+         d.file = runtimeFolder() / "onnxruntime.nupkg";
+         if (!fetch(d, progress, cancel_, error))
+            return false;
+         const bool ok = unzipOne(d.file, entry, runtimeLibrary(), error);
+         std::error_code ec;
+         std::filesystem::remove(d.file, ec);
+         if (!ok)
+            return false;
       }
-      Download d = kRuntimePackage;
-      d.file = runtimeFolder() / "onnxruntime.nupkg";
-      if (!fetch(d, progress, cancel_, error))
-         return false;
-      const bool ok = unzipOne(d.file, entry, runtimeLibrary(), error);
-      std::error_code ec;
-      std::filesystem::remove(d.file, ec);
-      if (!ok)
-         return false;
+      done += kRuntimePackage.size;
+      received_[e].store(done);
    }
-   done += kRuntimePackage.size;
-   received_.store(done);
-   for (const ModelFile &f : kModelFiles) {
-      const std::filesystem::path file = modelFolder() / f.name;
-      if (!hasFile(file, f.size)) {
-         Download d{std::string(kModelRepo) + f.name, file, f.size, f.sha256};
+   for (const ModelFile *f = files.begin; f != files.end; ++f) {
+      const std::filesystem::path file = modelFolder(engine) / f->name;
+      if (!hasFile(file, f->size)) {
+         Download d{std::string(files.repo) + f->name, file, f->size, f->sha256};
          if (!fetch(d, progress, cancel_, error))
             return false;
       }
-      done += f.size;
-      received_.store(done);
+      done += f->size;
+      received_[e].store(done);
    }
    return true;
 }
 
-bool Studio::loadNow(std::string &error) {
-   if (model_.loaded())
+bool Studio::loaded(Engine engine) const { return engine == Engine::Orb ? orb_.loaded() : sao_.loaded(); }
+
+bool Studio::loadNow(Engine engine, std::string &error) {
+   if (loaded(engine))
       return true;
-   setState(State::Loading);
+   setState(engine, State::Loading);
+   if (engine == Engine::Orb)
+      return orb_.load(modelFolder(engine), error);
    if (!runtime_.loaded() && !runtime_.load(runtimeLibrary(), error))
       return false;
    {
       std::lock_guard<std::mutex> lock(mutex_);
-      status_.runtimeVersion = runtime_.version();
+      status_[engineIndex(engine)].runtimeVersion = runtime_.version();
    }
    // Leave a core for the audio and the host.
    const int threads = std::max(1, static_cast<int>(std::thread::hardware_concurrency()) - 1);
-   return model_.load(runtime_, modelFolder(), threads, error);
+   return sao_.load(runtime_, modelFolder(engine), threads, error);
 }
 
 void Studio::run() {
    for (;;) {
-      bool install = false, load = false;
+      int install = -1, load = -1, remove = -1;
       int job = 0;
       {
          std::unique_lock<std::mutex> lock(mutex_);
-         wake_.wait(lock, [&] { return quit_ || wantInstall_ || wantLoad_ || wantRemove_ || !queue_.empty(); });
+         const auto pending = [&](const bool (&want)[kEngineCount]) {
+            for (int e = 0; e < kEngineCount; ++e)
+               if (want[e])
+                  return e;
+            return -1;
+         };
+         wake_.wait(lock, [&] {
+            return quit_ || pending(wantInstall_) >= 0 || pending(wantLoad_) >= 0 || pending(wantRemove_) >= 0 ||
+                   !queue_.empty();
+         });
          if (quit_)
             return;
-         if (wantRemove_) {
-            wantRemove_ = false;
-            lock.unlock();
-            removeNow();
-            continue;
-         }
-         install = wantInstall_;
-         load = wantLoad_;
-         wantInstall_ = wantLoad_ = false;
-         if (!install && !load && !queue_.empty()) {
+         // Removing first, then downloads, then loads, then jobs.
+         if ((remove = pending(wantRemove_)) >= 0) {
+            wantRemove_[remove] = false;
+         } else if ((install = pending(wantInstall_)) >= 0) {
+            wantInstall_[install] = false;
+         } else if ((load = pending(wantLoad_)) >= 0) {
+            wantLoad_[load] = false;
+         } else {
             job = queue_.front();
             queue_.pop_front();
             jobs_[job].state = JobState::Running;
             runningJob_ = job;
          }
       }
+      if (remove >= 0) {
+         removeNow(engineAt(remove));
+         continue;
+      }
       std::string error;
-      if (install) {
-         if (installNow(error))
-            setState(State::Installed);
+      if (install >= 0) {
+         const Engine engine = engineAt(install);
+         if (installNow(engine, error))
+            setState(engine, State::Installed);
          else
-            setState(error == "cancelled" ? State::Missing : State::Failed, error);
+            setState(engine, error == "cancelled" ? State::Missing : State::Failed, error);
          continue;
       }
       // Loading needs the files; a job that comes before them fails at once.
-      const auto ready = [&]() -> bool {
+      const auto ready = [&](Engine engine) -> bool {
+         const int e = engineIndex(engine);
          {
             std::lock_guard<std::mutex> lock(mutex_);
-            if (status_.state == State::Missing || status_.state == State::Failed || status_.state == State::Downloading) {
-               if (status_.state != State::Failed || !installedOnDisk()) {
-                  error = status_.state == State::Downloading ? "still downloading" : "the model isn't downloaded";
+            const State st = status_[e].state;
+            if (st == State::Missing || st == State::Failed || st == State::Downloading) {
+               if (st != State::Failed || !installedOnDisk(engine)) {
+                  error = st == State::Downloading ? "still downloading" : "the model isn't downloaded";
                   return false;
                }
             }
          }
-         if (loadNow(error)) {
-            setState(State::Ready);
+         if (loadNow(engine, error)) {
+            setState(engine, State::Ready);
             return true;
          }
-         setState(State::Failed, error);
+         setState(engine, State::Failed, error);
          return false;
       };
-      if (load) {
-         ready();
+      if (load >= 0) {
+         ready(engineAt(load));
          continue;
       }
       if (!job)
@@ -415,17 +484,16 @@ void Studio::run() {
          request = it->second.request;
       }
       std::vector<Sound> sounds;
-      bool ok = ready();
+      bool ok = ready(request.engine);
+      const auto progress = [&](double p) {
+         std::lock_guard<std::mutex> lock(mutex_);
+         const auto it = jobs_.find(job);
+         if (it != jobs_.end())
+            it->second.progress = p;
+      };
       if (ok)
-         ok = model_.generate(
-            request, sounds,
-            [&](double p) {
-               std::lock_guard<std::mutex> lock(mutex_);
-               const auto it = jobs_.find(job);
-               if (it != jobs_.end())
-                  it->second.progress = p;
-            },
-            cancel_, error);
+         ok = request.engine == Engine::Orb ? orb_.generate(request, sounds, progress, cancel_, error)
+                                            : sao_.generate(request, sounds, progress, cancel_, error);
       std::lock_guard<std::mutex> lock(mutex_);
       runningJob_ = 0;
       const auto it = jobs_.find(job);
