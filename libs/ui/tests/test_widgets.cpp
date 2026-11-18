@@ -496,6 +496,24 @@ void presetFilesRoundTrip() {
       JCLAP_CHECK_EQ(v, id == 1 ? 6.0 : id == 0 ? 0.5 : 1.0);
 }
 
+void presetFoldersByFamily() {
+   // "Family: Style" categories share a folder, in the order they come; plain ones are their own.
+   const auto folders = ui::presetFolders({"Basics", "Bass: Rock", "Drums", "Bass: Funk", "Bass: Rock"});
+   JCLAP_CHECK_EQ(folders.size(), 3u);
+   JCLAP_CHECK(folders[0].name == "Basics" && folders[0].categories == std::vector<std::string>{"Basics"});
+   JCLAP_CHECK(folders[1].name == "Bass" &&
+               folders[1].categories == (std::vector<std::string>{"Bass: Rock", "Bass: Funk"}));
+   JCLAP_CHECK(folders[2].name == "Drums");
+   JCLAP_CHECK(ui::categoryFamily("Berlin School: Pulse") == "Berlin School");
+   JCLAP_CHECK(ui::categoryStyle("Berlin School: Pulse") == "Pulse");
+   JCLAP_CHECK(ui::categoryFamily("Odd Meters") == "Odd Meters" && ui::categoryStyle("Odd Meters") == "Odd Meters");
+   // A separator with nothing on one side isn't a family.
+   JCLAP_CHECK(ui::categoryFamily("Bass: ") == "Bass: " && ui::categoryStyle("Bass: ") == "Bass: ");
+   JCLAP_CHECK(ui::categoryFamily(": Rock") == ": Rock");
+   const std::vector<ui::Preset> bank = {{"A", "X", {}}, {"B", "Y: 1", {}}, {"C", "X", {}}};
+   JCLAP_CHECK(ui::presetCategories(bank) == (std::vector<std::string>{"X", "Y: 1"}));
+}
+
 void updateChecks() {
    namespace up = ui::updates;
    JCLAP_CHECK(up::isNewer("0.10.3", "0.10.2"));
@@ -749,6 +767,7 @@ int main() {
    stopsSnap();
    noteRollLanes();
    presetFilesRoundTrip();
+   presetFoldersByFamily();
    updateChecks();
    presetFavoritesShared();
    framePacing();

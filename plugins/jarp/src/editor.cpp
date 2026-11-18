@@ -38,6 +38,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "params.h"
@@ -1079,6 +1080,53 @@ std::string presetBlurbOf(const std::string &name) {
    return readBlurb(blurbFile(ui::userPresetFolder(kPresetFormat) / (name + kPresetFormat.extension)));
 }
 
+// Where the dice's random preset comes from: any factory preset, a whole family of categories
+// ("All Bass"), or one category. A plain category is listed loose; a family's go in its submenu,
+// "All <family>" first.
+struct DiceSource {
+   std::string label;
+   std::string family;   // set for "All <family>"
+   std::string category; // set for one category
+   bool holds(const std::string &c) const {
+      if (!category.empty())
+         return c == category;
+      if (!family.empty())
+         return ui::categoryFamily(c) == family;
+      return true;
+   }
+};
+
+const std::vector<DiceSource> &diceSources() {
+   static const std::vector<DiceSource> sources = [] {
+      std::vector<DiceSource> s{{"Any category", "", ""}};
+      for (const ui::PresetFolder &f : ui::presetFolders(factoryCategories())) {
+         const bool family = !(f.categories.size() == 1 && f.categories.front() == f.name);
+         if (family)
+            s.push_back({"All " + f.name, f.name, ""});
+         for (const std::string &c : f.categories)
+            s.push_back({c, "", c});
+      }
+      return s;
+   }();
+   return sources;
+}
+
+// The dice source menu's groups, in the order of diceSources(): a loose (unnamed) group for "Any
+// category" and each plain category, a named one for each family.
+std::vector<std::pair<std::string, int>> diceSourceGroups() {
+   std::vector<std::pair<std::string, int>> groups{{"", 1}};
+   for (const ui::PresetFolder &f : ui::presetFolders(factoryCategories())) {
+      const bool family = !(f.categories.size() == 1 && f.categories.front() == f.name);
+      if (family)
+         groups.push_back({f.name, 1 + static_cast<int>(f.categories.size())});
+      else if (!groups.back().first.empty())
+         groups.push_back({"", 1});
+      else
+         ++groups.back().second;
+   }
+   return groups;
+}
+
 // A preset's patterns: a factory preset's are compiled in, a user preset's are in the file beside it.
 bool presetBank(const std::string &name, Bank &bank) {
    if (const Bank *factory = factoryBank(name)) {
@@ -1183,17 +1231,12 @@ private:
          into.addSubMenu(std::move(each));
       };
       visage::PopupMenu load("Load from preset");
-      std::vector<std::string> categories;
-      for (const ui::Preset &p : factoryPresets())
-         if (std::find(categories.begin(), categories.end(), p.category) == categories.end())
-            categories.push_back(p.category);
-      for (const std::string &cat : categories) {
-         visage::PopupMenu group(cat);
+      ui::addPresetFolders(load, factoryCategories(), [&](const std::string &cat, visage::PopupMenu &into) {
          for (const ui::Preset &p : factoryPresets())
             if (p.category == cat)
-               addPreset(group, p.name);
-         load.addSubMenu(std::move(group));
-      }
+               addPreset(into, p.name);
+         return false;
+      });
       visage::PopupMenu user("User");
       for (const ui::Preset &p : ui::userPresets(kPresetFormat))
          addPreset(user, p.name);
@@ -1953,6 +1996,12 @@ public:
          scroll_.toggle(scroll_.view, shown().notes[i]);
    }
 
+   // Opens the preset menu, with the submenus `open` names open in turn (for screenshots).
+   void showPresetMenu(const std::vector<std::string> &open) {
+      if (presets_)
+         presets_->showMenu(open);
+   }
+
    void showDice(bool open) {
       host_.diceOpen = open;
       for (visage::Frame *f : dice_)
@@ -2162,10 +2211,11 @@ private:
 
       // A random preset: the whole of it, or one of its patterns into this slot.
       const float py = b.y + kPresetY;
-      std::vector<std::string> cats{"Any category"};
-      for (const std::string &c : factoryCategories())
-         cats.push_back(c);
+      std::vector<std::string> cats;
+      for (const DiceSource &src : diceSources())
+         cats.push_back(src.label);
       auto &cat = add<ui::Dropdown>({b.x + 16, py, 150, 26}, cats);
+      cat.setGroups(diceSourceGroups());
       cat.setAccent(kOrange);
       cat.setSelected(std::clamp(host_.dice.presetCategory, 0, static_cast<int>(cats.size()) - 1));
       cat.onChange = [this](int i) { host_.dice.presetCategory = i; };
@@ -2201,12 +2251,13 @@ private:
    // A random factory preset, from the category picked on the card (or any): the whole of it, or one
    // of its patterns into the selected slot.
    void randomPreset(bool intoSlot) {
-      const int category = host_.dice.presetCategory;
+      const std::vector<DiceSource> &sources = diceSources();
+      const DiceSource &from = sources[static_cast<size_t>(
+         std::clamp(host_.dice.presetCategory, 0, static_cast<int>(sources.size()) - 1))];
       const std::string current = host_.presetName();
       std::vector<const library::Entry *> pool;
       for (const library::Entry &e : factoryLibrary())
-         if (category <= 0 || category > static_cast<int>(factoryCategories().size()) ||
-             e.category == factoryCategories()[category - 1])
+         if (from.holds(e.category))
             pool.push_back(&e);
       // Loading the one already loaded would look like nothing happened.
       if (!intoSlot && pool.size() > 1)
@@ -2325,7 +2376,7 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
 }
 
 bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, bool dice,
-                      const std::vector<std::pair<int, int>> &picks) {
+                      const std::vector<std::pair<int, int>> &picks, const std::vector<std::string> &menu) {
    Panel panel(host);
    panel.stopTimer();
    panel.showDice(dice);
@@ -2333,6 +2384,15 @@ bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPa
       panel.pickNote(row, step);
    panel.setBounds(0, 0, static_cast<float>(width), static_cast<float>(height));
    panel.sync();
+   if (!menu.empty()) {
+      std::vector<std::string> open;
+      for (const std::string &m : menu)
+         if (!m.empty())
+            open.push_back(m);
+      panel.showPresetMenu(open);
+      // The menu fades in from when it opens: wait it out, so it draws whole.
+      std::this_thread::sleep_for(std::chrono::milliseconds(400));
+   }
    return ui::renderToPng(panel, width, height, pngPath);
 }
 

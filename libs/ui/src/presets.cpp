@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <string_view>
 
 namespace jclap::ui {
 
@@ -20,6 +21,48 @@ void completePresets(std::vector<Preset> &presets, const std::vector<double> &de
          if (!given[id])
             preset.values.push_back({id, defaults[id]});
    }
+}
+
+namespace {
+// Where a "Family: Style" category splits: the separator's position, or npos for a category
+// without a family (no separator, or nothing on one side of it).
+constexpr std::string_view kFamilySeparator = ": ";
+size_t familySplit(const std::string &category) {
+   const size_t at = category.find(kFamilySeparator);
+   return at == 0 || at == std::string::npos || at + kFamilySeparator.size() >= category.size() ? std::string::npos
+                                                                                               : at;
+}
+} // namespace
+
+std::string categoryFamily(const std::string &category) {
+   const size_t at = familySplit(category);
+   return at == std::string::npos ? category : category.substr(0, at);
+}
+
+std::string categoryStyle(const std::string &category) {
+   const size_t at = familySplit(category);
+   return at == std::string::npos ? category : category.substr(at + kFamilySeparator.size());
+}
+
+std::vector<PresetFolder> presetFolders(const std::vector<std::string> &categories) {
+   std::vector<PresetFolder> folders;
+   for (const std::string &category : categories) {
+      const std::string family = categoryFamily(category);
+      auto it = std::find_if(folders.begin(), folders.end(), [&](const PresetFolder &f) { return f.name == family; });
+      if (it == folders.end())
+         folders.push_back({family, {category}});
+      else if (std::find(it->categories.begin(), it->categories.end(), category) == it->categories.end())
+         it->categories.push_back(category);
+   }
+   return folders;
+}
+
+std::vector<std::string> presetCategories(const std::vector<Preset> &presets) {
+   std::vector<std::string> categories;
+   for (const Preset &p : presets)
+      if (std::find(categories.begin(), categories.end(), p.category) == categories.end())
+         categories.push_back(p.category);
+   return categories;
 }
 
 std::filesystem::path userFolder(const std::string &name) {

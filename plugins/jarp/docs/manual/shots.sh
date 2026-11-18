@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Renders the manual's panel pictures into img/: jarp-screenshot at twice the design size
+# Renders the manual's panel pictures into img/ (and the preset menu's into ../menu.png too): jarp-screenshot at twice the design size
 # (1800 x 1502), each set up to show one part of JArp off, cropped to that part and saved as JPEG.
 #    docs/manual/shots.sh path/to/jarp-screenshot
 # Build the tool with -DJCLAP_BUILD_TOOLS=ON. Needs Python 3 with Pillow.
@@ -40,4 +40,16 @@ src, out, x, y, w, h = sys.argv[1], sys.argv[2], *map(int, sys.argv[3:])
 Image.open(src).convert("RGB").crop((2 * x, 2 * y, 2 * (x + w), 2 * (y + h))).save(out, quality=86, optimize=True)
 PY
 done
+
+# The preset menu open on Bass > Funk. A popup menu draws at the window's own scale rather than the
+# panel's, so this one renders at the design size (900 x 751) and is cropped there. It is the
+# README's docs/menu.png too.
+"$tool" "$tmp/menu.png" 900 751 "menu=Bass/Funk"
+python3 - "$tmp/menu.png" img/menu.jpg ../menu.png <<'PY'
+import sys
+from PIL import Image
+crop = Image.open(sys.argv[1]).convert("RGB").crop((216, 40, 756, 680))
+crop.save(sys.argv[2], quality=90, optimize=True)
+crop.save(sys.argv[3], optimize=True)
+PY
 echo "wrote $(pwd)/img"

@@ -50,7 +50,10 @@ std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 // Draws the panel offscreen at the given pixel size and saves it as a PNG, with the dice card open
 // if `dice`.
 // The notes starting on each (row, step) of `picks` are picked, as right- and shift-clicks would.
+// With `menu` the preset menu is open, with the submenus it names open in turn ({} leaves it shut;
+// {""} opens just the menu).
 bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, bool dice = false,
-                      const std::vector<std::pair<int, int>> &picks = {});
+                      const std::vector<std::pair<int, int>> &picks = {},
+                      const std::vector<std::string> &menu = {});
 
 } // namespace jarp

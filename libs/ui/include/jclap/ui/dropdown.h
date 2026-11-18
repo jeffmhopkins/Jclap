@@ -22,7 +22,8 @@ public:
    const std::vector<std::string> &options() const { return options_; }
 
    // Opens the options in submenus instead of one list: each group's name and how many options
-   // it holds, in order. Empty goes back to one list.
+   // it holds, in order. A group with no name lists its options loose in the menu, between the
+   // submenus. Empty goes back to one list.
    void setGroups(std::vector<std::pair<std::string, int>> groups) { groups_ = std::move(groups); }
 
    int selected() const { return selected_; }
