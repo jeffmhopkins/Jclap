@@ -47,6 +47,28 @@ struct PresetFormat {
 // loading one sets the whole sound and nothing from the previous preset carries over.
 void completePresets(std::vector<Preset> &presets, const std::vector<double> &defaults);
 
+// How a bank's categories file into folders in a preset menu. A category named "Family: Style"
+// goes in a Family folder as Style, so a large bank shows a handful of families rather than one
+// long list; any other category is a folder of its own. Folders, and the styles in each, keep the
+// order the categories come in.
+//
+//    presetFolders({"Basics", "Bass: Rock", "Bass: Funk"})
+//       -> {"Basics", {"Basics"}}, {"Bass", {"Bass: Rock", "Bass: Funk"}}
+struct PresetFolder {
+   std::string name;
+   // The full category names it holds. A plain category's folder holds just itself.
+   std::vector<std::string> categories;
+};
+std::vector<PresetFolder> presetFolders(const std::vector<std::string> &categories);
+
+// A category's family ("Bass" for "Bass: Funk") and its style within it ("Funk"). A category
+// without a family is its own family and style.
+std::string categoryFamily(const std::string &category);
+std::string categoryStyle(const std::string &category);
+
+// The categories of a bank, each once, in the order they first come.
+std::vector<std::string> presetCategories(const std::vector<Preset> &presets);
+
 // A folder of the user's own settings for `name`: %APPDATA%\<name> on Windows,
 // ~/Library/Application Support/<name> on macOS, and ~/.config/<name> (or under $XDG_CONFIG_HOME)
 // on Linux. It may not exist yet.

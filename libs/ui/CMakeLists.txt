@@ -5,7 +5,8 @@
 # it (each marked "jclap:"): a press mid-drag keeps the drag, Linux follows only CLAP's set_size and
 # set_scale and takes the desktop's scale rather than the monitor's physical DPI, Windows
 # leaves the host's window alone, and a popup menu closes on a click outside it (the box that
-# opened it included) or Escape. The patch's hash is in the command so a cached checkout is
+# opened it included) or Escape, and a submenu that had to open leftward keeps its submenus
+# leftward too. The patch's hash is in the command so a cached checkout is
 # re-patched when the patch changes.
 file(SHA256 ${CMAKE_CURRENT_SOURCE_DIR}/patches/visage.patch _visage_patch_hash)
 FetchContent_Declare(visage

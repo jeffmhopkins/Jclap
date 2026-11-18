@@ -14,7 +14,7 @@ note on that step for as long as the cell is drawn. Every note goes out on the f
 key, so the synth after it still hears that finger's pressure, slide and bend. Put it before any MPE
 instrument.
 
-Version 0.20.0.
+Version 0.21.0.
 
 **[User manual (PDF)](docs/JArp-User-Manual.pdf)**: every control, how rows find their notes, length
 and direction, MPE, chains, the dice, the full preset list with each preset's blurb, recipes and a
@@ -297,7 +297,8 @@ Click the die in the preset bar for the dice card.
   velocity offset 0), rolling each ticked item within its range.
 - **MUTATE** nudges the pattern you have, each ticked item by up to its range. Click again to keep
   going.
-- **RANDOM PRESET**: pick a category (or any), then **PRESET** loads a random factory preset from it,
+- **RANDOM PRESET**: pick a category, a whole family (**All Bass**, say) or any, then **PRESET** loads
+  a random factory preset from it,
   settings and all its patterns, or **INTO SLOT** puts one random pattern from those presets into the
   selected slot and leaves everything else as it is.
 - **UNDO** and **REDO** step back and forward through what the dice replaced, a random preset
@@ -320,11 +321,16 @@ the held notes, so JArp still plays only notes you hold.
 
 ## Presets
 
-The preset bar steps through the factory bank and then your own. A preset holds the settings and all
-eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
-instead, right-click the slot's number and use **Load from preset**:
+The preset bar steps through the factory bank and then your own. Click the name for the menu: the
+categories are filed in folders by family, so it opens on a short list (Basics, Berlin School, Bass,
+Drum Kit, Percussion, Piano, Fingerpicking and the rest) and **Bass** opens on its 24 genres, each
+holding its presets. Favorites sit at the top, your own presets under **User**. A preset holds the
+settings and all eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot
+instead, right-click the slot's number and use **Load from preset**, whose menu is filed the same way.
 
-There are 301 factory presets in 59 categories, each built on how the style is really played.
+![The preset menu open on Bass, then Funk](docs/menu.png)
+
+There are 301 factory presets in 59 categories, filed in 14 folders, each built on how the style is really played.
 Most use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked
 (chain) use several patterns: CHORD moves on with each new chord, LOOP plays them one after another.
 

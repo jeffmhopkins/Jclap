@@ -23,6 +23,32 @@ public:
          onClickAway();
    }
 };
+// Opens the named submenus of the menu `from` just showed, one level at a time, as hovering on
+// each would. For screenshots: a real menu opens them as the mouse moves.
+void openSubMenus(visage::Frame &from, const std::vector<std::string> &names) {
+   visage::Frame *top = from.topParentFrame();
+   visage::PopupMenuFrame *frame = nullptr;
+   for (visage::Frame *child : top->children())
+      if (auto *f = dynamic_cast<visage::PopupMenuFrame *>(child))
+         frame = f;
+   if (!frame)
+      return;
+   std::vector<visage::PopupList *> lists;
+   for (visage::Frame *child : frame->children())
+      if (auto *l = dynamic_cast<visage::PopupList *>(child))
+         lists.push_back(l);
+   for (size_t level = 0; level < names.size() && level < lists.size(); ++level) {
+      visage::PopupList &list = *lists[level];
+      int index = -1;
+      for (int i = 0; i < list.numOptions() && index < 0; ++i)
+         if (list.option(i).name().toUtf8() == names[level])
+            index = i;
+      if (index < 0)
+         return;
+      frame->moveHover({list.width() / 2, static_cast<float>(list.yForIndex(index) + 2)}, &list);
+      frame->timerCallback();
+   }
+}
 } // namespace
 
 void drawStar(visage::Canvas &canvas, float cx, float cy, float radius, bool filled) {
@@ -50,6 +76,28 @@ void drawDie(visage::Canvas &canvas, float cx, float cy, float size) {
    const float spots[5][2] = {{near, near}, {far, near}, {0.5f * size, 0.5f * size}, {near, far}, {far, far}};
    for (const auto &spot : spots)
       canvas.circle(x + spot[0] - pip / 2, y + spot[1] - pip / 2, pip);
+}
+
+void addPresetFolders(visage::PopupMenu &menu, const std::vector<std::string> &categories,
+                      const std::function<bool(const std::string &category, visage::PopupMenu &into)> &fill) {
+   for (const PresetFolder &folder : presetFolders(categories)) {
+      visage::PopupMenu sub(folder.name);
+      bool holds = false;
+      // A plain category's presets go straight in its folder; a family's styles each get their own.
+      if (folder.categories.size() == 1 && folder.categories.front() == folder.name)
+         holds = fill(folder.name, sub);
+      else
+         for (const std::string &category : folder.categories) {
+            visage::PopupMenu style(categoryStyle(category));
+            const bool here = fill(category, style);
+            if (!style.options().empty()) {
+               holds = holds || here;
+               sub.addSubMenu(std::move(style.select(here)));
+            }
+         }
+      if (!sub.options().empty())
+         menu.addSubMenu(std::move(sub.select(holds)));
+   }
 }
 
 void applyPreset(const Preset &preset, ParamAccess &params, const std::vector<double> &defaults) {
@@ -273,7 +321,7 @@ bool PresetBar::mouseWheel(const visage::MouseEvent &e) {
    return true;
 }
 
-void PresetBar::showMenu() {
+void PresetBar::showMenu(const std::vector<std::string> &open) {
    rescan();
    visage::PopupMenu menu;
    const std::string current = name();
@@ -286,17 +334,15 @@ void PresetBar::showMenu() {
       favorites.addOption(-2, "(click the star to add one)").enable(false);
    menu.addSubMenu(std::move(favorites));
    menu.addBreak();
-   std::vector<std::string> categories;
-   for (const Preset &p : factory_)
-      if (std::find(categories.begin(), categories.end(), p.category) == categories.end())
-         categories.push_back(p.category);
-   for (const std::string &cat : categories) {
-      visage::PopupMenu sub(cat);
+   addPresetFolders(menu, presetCategories(factory_), [&](const std::string &cat, visage::PopupMenu &into) {
+      bool holds = false;
       for (int i = 0; i < static_cast<int>(factory_.size()); ++i)
-         if (factory_[i].category == cat)
-            sub.addOption(i, factory_[i].name).select(factory_[i].name == current);
-      menu.addSubMenu(std::move(sub));
-   }
+         if (factory_[i].category == cat) {
+            into.addOption(i, factory_[i].name).select(factory_[i].name == current);
+            holds = holds || factory_[i].name == current;
+         }
+      return holds;
+   });
    visage::PopupMenu user("User");
    for (int i = 0; i < static_cast<int>(user_.size()); ++i)
       user.addOption(kUserBase + i, user_[i].name).select(user_[i].name == current);
@@ -324,6 +370,8 @@ void PresetBar::showMenu() {
          loadIndex(id);
    };
    menu.show(this, {kArrow * height() / 28.0f, height()});
+   if (!open.empty())
+      openSubMenus(*this, open);
 }
 
 // Deleting a preset can't be undone, so the menu asks once more before the file goes.

@@ -19,7 +19,7 @@ index 6095bc2..93bc52a 100644
      temporary_frame_ = mouse_down_frame_;
      while (temporary_frame_ && !temporary_frame_->acceptsKeystrokes())
 diff --git a/visage_ui/popup_menu.cpp b/visage_ui/popup_menu.cpp
-index 787a926..8d3f08c 100644
+index 787a926..1106211 100644
 --- a/visage_ui/popup_menu.cpp
 +++ b/visage_ui/popup_menu.cpp
 @@ -224,7 +224,10 @@ namespace visage {
@@ -73,7 +73,19 @@ index 787a926..8d3f08c 100644
  
      redraw();
    }
-@@ -414,8 +435,7 @@ namespace visage {
+@@ -373,7 +394,10 @@ namespace visage {
+       int right = x + w;
+       if (bottom > height())
+         y = height() - h;
+-      if (right > width())
++      // jclap: once a submenu has had to open to the left, the ones under it open to the left too
++      // (while they fit), rather than back over the lists before them.
++      bool leftward = source_index > 0 && lists_[source_index].x() < lists_[source_index - 1].x();
++      if (right > width() || (leftward && lists_[source_index].x() - w >= 0))
+         x = lists_[source_index].x() - w;
+ 
+       lists_[source_index + 1].setBounds(x, y, w, h);
+@@ -414,8 +438,7 @@ namespace visage {
      if (isRunning())
        return;
  

@@ -345,7 +345,7 @@ figure.dark { max-width: 5.9in; margin-left: auto; margin-right: auto; }
     <li><b class="h">Load it before a synth</b>On an instrument track, put <strong>JArp</strong> before the synth in the device chain. A plain pluck or keys sound is easiest to hear.</li>
     <li><b class="h">Hold a chord</b>Hold a C major 7th. JArp starts on its <strong>Init</strong> pattern, walking up the four notes and back down, in sixteenths. You don't need to press play: with the transport stopped, JArp keeps its own time at the host's tempo.</li>
     <li><b class="h">Change the chord</b>Hold A minor, then F. The rows' labels on the left change to the notes you hold, and the same shape plays them.</li>
-    <li><b class="h">Try a preset</b>Click the arrows in the preset bar, or the preset's name for the menu. Try <strong>Pedal Climb</strong> (Pads and Pedals), then <strong>Travis Picking</strong> or <strong>Funk Bass</strong>. The line beside the logo says how each one wants to be played.</li>
+    <li><b class="h">Try a preset</b>Click the arrows in the preset bar, or the preset's name for the menu. Try <strong>Pedal Climb</strong> (Pads and Pedals), then <strong>Travis Picking</strong> (Fingerpicking, then Travis) or <strong>Funk Bass</strong> (Bass, then Funk). The line beside the logo says how each one wants to be played.</li>
     <li><b class="h">Draw</b>Click an empty cell to add a note; click a note to remove it. Drag a note's right edge to make it longer. Drag the purple bar at the top right to change how many steps the pattern has.</li>
     <li><b class="h">Make it fit any chord</b>Under <strong>LENGTH</strong>, set <strong>COUNT</strong> to <strong>HELD</strong> and <strong>DIRECTION</strong> to <strong>BOUNCE</strong>. A staircase up the rows now plays up and down exactly the notes you hold, however many.</li>
     <li><b class="h">Keep it</b>Click <strong>SAVE</strong> in the preset bar and give it a name. The settings and all eight patterns are also saved with your project.</li>
@@ -785,7 +785,7 @@ figure.dark { max-width: 5.9in; margin-left: auto; margin-right: auto; }
       <ul>
         <li><strong>RANDOMIZE</strong> builds a new pattern from a plain base (one note per step on row 1, octave 0, one hit, velocity offset 0), rolling each ticked item within its range.</li>
         <li><strong>MUTATE</strong> nudges the pattern you have, each ticked item by up to its range. Click again to keep going.</li>
-        <li><strong>RANDOM PRESET</strong>: pick a category (or any), then <strong>PRESET</strong> loads a random factory preset from it, settings and all its patterns, or <strong>INTO SLOT</strong> puts one random pattern from those presets into the selected slot and leaves everything else as it is.</li>
+        <li><strong>RANDOM PRESET</strong>: pick a category, a whole family (<em>All Bass</em>, say) or any, then <strong>PRESET</strong> loads a random factory preset from it, settings and all its patterns, or <strong>INTO SLOT</strong> puts one random pattern from those presets into the selected slot and leaves everything else as it is.</li>
         <li><strong>UNDO</strong> and <strong>REDO</strong> step back and forward through what the dice replaced, a random preset, a paste or a clear included.</li>
       </ul>
     </div>
@@ -818,7 +818,13 @@ figure.dark { max-width: 5.9in; margin-left: auto; margin-right: auto; }
   </div>
 
   <h2>Using presets</h2>
-  <p>The preset bar steps through the factory bank and then your own with its arrows; scrolling over it does too, and clicking the name opens the menu by category. A preset holds the settings and all eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot instead, right-click the slot's number and use <strong>Load from preset</strong> (Chapter 12). The <strong>star</strong> beside the name makes the current preset a favorite.</p>
+  <div class="split" style="grid-template-columns: 2.4in 1fr; margin-bottom: 0.14in">
+    <figure class="dark"><img src="img/menu.jpg" alt=""><figcaption><b>Fig. 14.1</b> &nbsp;The preset menu, open on Bass, then Funk.</figcaption></figure>
+    <div class="body">
+      <p>The preset bar steps through the factory bank and then your own with its arrows; scrolling over it does too. Click the name for the menu. Its categories are filed in folders by family, so it opens on a short list: Basics, Berlin School, Bass, Drum Kit, Percussion, Piano, Fingerpicking and the rest. A family's folder holds a folder for each of its styles (<strong>Bass</strong> holds 24 genres, from Rock to Dancehall), and each style holds its presets. <strong>Favorites</strong> sit at the top and your own presets under <strong>User</strong>.</p>
+      <p>A preset holds the settings and all eight patterns, and loading one from the bar replaces them all. To load one pattern into one slot instead, right-click the slot's number and use <strong>Load from preset</strong> (Chapter 12), whose menu is filed the same way. The <strong>star</strong> beside the name makes the current preset a favorite.</p>
+    </div>
+  </div>
   <p>Most presets use PITCH rows with OCT, so a triad and a 7th chord both play them in shape. Presets marked <em>(chain)</em> use several patterns: CHORD moves on with each new chord, LOOP plays them one after another. No factory pattern skips a note: each walks the notes you hold in turn, from the lowest, with none left out. The shape comes from your voicing, so for a root-fifth line hold a root and fifth, and for root-third-fifth hold the triad.</p>
   <ul>
     <li><strong>The Berlin School</strong> presets are sequencer ostinatos in the style of 1970s German electronic music: sixteenths over a pedal, leaping octaves, gallops, and loops that drift against the bar. A sequencer of the time played one line and a key transposed it, so these take few notes: each blurb says whether to hold one note, a root and fifth, or a triad, and the octaves come from the Octave lane. Move your hand to transpose the sequence, and put a plucky synth with a short decay after them.</li>

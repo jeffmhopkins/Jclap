@@ -108,6 +108,12 @@ void Dropdown::openMenu() {
    else {
       int i = 0;
       for (const auto &[name, count] : groups_) {
+         // An unnamed group's options sit in the menu itself, between the named submenus.
+         if (name.empty()) {
+            for (int n = 0; n < count && i < static_cast<int>(options_.size()); ++n, ++i)
+               menu.addOption(i, options_[i]).select(i == selected_);
+            continue;
+         }
          visage::PopupMenu group(name);
          bool holds = false;
          for (int n = 0; n < count && i < static_cast<int>(options_.size()); ++n, ++i) {

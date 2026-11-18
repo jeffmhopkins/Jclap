@@ -1,7 +1,8 @@
 #pragma once
 
 // A preset browser for a panel's header: arrows (or the wheel) step through every preset, the name
-// opens a menu of them by category, and SAVE names the current settings and writes them to the
+// opens a menu of them by category (a "Family: Style" category filed in a Family folder; see
+// presetFolders()), and SAVE names the current settings and writes them to the
 // user's preset folder. The factory bank comes first, then the user's presets under "User". The star
 // beside the name marks the current preset a favorite, and the menu lists favorites first.
 //
@@ -70,6 +71,10 @@ public:
    bool toggleFavorite();
    const PresetFavorites &favorites() const { return favorites_; }
 
+   // Opens the preset menu, as a click on the name does. For a screenshot, `open` names submenus
+   // to open in turn ("Bass", "Funk"), as hovering would.
+   void showMenu(const std::vector<std::string> &open = {});
+
    void draw(visage::Canvas &canvas) override;
    void mouseMove(const visage::MouseEvent &e) override;
    void mouseExit(const visage::MouseEvent &e) override;
@@ -85,7 +90,6 @@ private:
    void rename(const std::string &name);
    int indexOf(const std::string &name) const;
    void loadIndex(int index);
-   void showMenu();
    void confirmDelete();
    void startSave();
    void finishSave(bool apply);
@@ -111,6 +115,13 @@ void drawStar(visage::Canvas &canvas, float cx, float cy, float radius, bool fil
 // A die showing five, `size` across and centred on (cx, cy), in the canvas's current color. A plugin
 // with dice draws it at the left of its preset bar, opposite the star, to open its dice card.
 void drawDie(visage::Canvas &canvas, float cx, float cy, float size);
+
+// Adds a submenu to `menu` for each folder of `categories` (see presetFolders()): a family's folder
+// holds a submenu per style, a plain category's holds its presets. `fill` adds a category's presets
+// to the submenu it is given and says whether the current preset is among them, which marks that
+// submenu and its folder. A category `fill` adds nothing to is left out.
+void addPresetFolders(visage::PopupMenu &menu, const std::vector<std::string> &categories,
+                      const std::function<bool(const std::string &category, visage::PopupMenu &into)> &fill);
 
 // Applies `preset` through `params`, one gesture per param that changes. Params the preset leaves
 // out go to `defaults` (one per id) when it is given.

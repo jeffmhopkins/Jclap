@@ -2,7 +2,7 @@
 //
 //    jarp-screenshot out.png [width height] [dice] [long] [note] [picks] [preset=NAME] [rows=N]
 //                    [held] [bounce] [repeatends] [advance=N] [repeat=N] [then=N] [oneshot]
-//                    [passsustain] [keys=K,K,...]
+//                    [passsustain] [keys=K,K,...] [menu=FOLDER/SUB/...]
 //
 // The panel shows the Pedal Climb preset playing a C major 7th held on four MPE channels, each finger
 // pressing a little differently, a few steps into the pattern. With `dice` the dice card is open; with
@@ -14,7 +14,8 @@
 // `held`, `bounce` and `repeatends` set the pattern's LENGTH box, `advance=N` the chain switch,
 // `repeat=N` and `then=N` (0 Next, 1 Random) the CHAIN card, `oneshot` and `passsustain` the PLAY
 // card's boxes, and
-// `keys=` the MIDI keys held (one finger each, channels 2 up).
+// `keys=` the MIDI keys held (one finger each, channels 2 up). `menu=` opens the preset menu with
+// the submenus it names open in turn (`menu=Bass/Funk`; `menu=/` opens just the menu).
 
 #include <cmath>
 #include <cstdio>
@@ -214,6 +215,7 @@ int main(int argc, char **argv) {
    const int width = sized ? std::atoi(argv[2]) : kEditorWidth;
    const int height = sized ? std::atoi(argv[3]) : kEditorHeight;
    bool dice = false, longPattern = false, ownNote = false, picks = false;
+   std::vector<std::string> menu;
    Extras x;
    for (int i = 2; i < argc; ++i) {
       if (!std::strncmp(argv[i], "preset=", 7))
@@ -228,6 +230,16 @@ int main(int argc, char **argv) {
                ++k;
             if (*k)
                ++k;
+         }
+      }
+      else if (!std::strncmp(argv[i], "menu=", 5)) {
+         menu = {""};
+         for (const char *m = argv[i] + 5; *m;) {
+            const char *end = std::strchr(m, '/');
+            const std::string part = end ? std::string(m, end) : std::string(m);
+            if (!part.empty())
+               menu.push_back(part);
+            m = end ? end + 1 : m + part.size();
          }
       }
       else if (!std::strncmp(argv[i], "repeat=", 7))
@@ -252,5 +264,5 @@ int main(int argc, char **argv) {
       pick.push_back({DemoHost::kPickRow, DemoHost::kPickStep});
    if (picks)
       pick.assign(std::begin(DemoHost::kPicks), std::end(DemoHost::kPicks));
-   return renderScreenshot(host, width, height, argv[1], dice, pick) ? 0 : 1;
+   return renderScreenshot(host, width, height, argv[1], dice, pick, menu) ? 0 : 1;
 }
