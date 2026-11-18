@@ -53,6 +53,7 @@ add_subdirectory(plugins/monolith)
 add_subdirectory(plugins/jtunnel)
 add_subdirectory(plugins/jbreath)
 add_subdirectory(plugins/jarp)
+add_subdirectory(plugins/jkit)
 
 # The starting point for new plugins (cmake/NewPlugin.cmake copies it). Built into build/template,
 # not build/clap, so it is checked in CI but never shipped.
