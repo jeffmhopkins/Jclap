@@ -244,7 +244,7 @@ pad that many close [variations](#variations-several-sounds-on-one-pad), a
 different one each hit; more variations take longer. **FILL n EMPTY PADS** makes sounds only for
 the pads with none; **REPLACE ALL 16 PADS** makes all of them, replacing what's there. Each sound gets
 the SELECTED panel's NORMALIZE, TRIM SILENCE, REVERSE and fades, plays from its start to its end, and
-is named for its pad. A drum kit's closed, pedal and open hats go in choke group 1 (unless they're
+is named for its pad. A drum kit's closed, pedal and open hats go in key group 1 (unless they're
 already in one), so a closed hat cuts the open one off. The backbone comes first (kick and snare, or
 cajon), so you can play along as it fills. GENERATE shows which pad it's on ("KIT 3 OF 16 · Closed
 Hat") and stops it when clicked, keeping the pads made so far. A whole kit takes about a minute with
@@ -302,7 +302,7 @@ curve, and the speed its pitch plays it at. **VARIATIONS** opens its [variations
 | Start, End | 0 to 100% | the part of the sound that plays (shown as times into it) |
 | Attack | 0 to 200 ms | fades it in |
 | Velocity | 0 to 100% | how much the note's velocity changes its level: the level follows velocity to the power 3 x this, so at 33% a half-velocity hit is 6 dB down, at 60% 11 dB, at 100% 18 dB; 0% ignores velocity |
-| Choke | None, 1 to 4 | pads in one group cut each other off, like a closed hat stopping an open one |
+| Key Group | None, 1 to 4 | pads in one group cut each other off, like a closed hat stopping an open one (called Choke before 0.7; automation and saved kits carry over) |
 | Play | One shot, Gate | one shot plays the whole sound; Gate stops it (over 30 ms) when the note ends |
 | Rev | on, off | plays it backwards |
 
@@ -408,7 +408,7 @@ factory kits: every kit is yours. Kits and projects saved before 0.7 open with o
 JKit builds with the rest of JClap (see the [top-level README](../../README.md)). Its tests:
 
 - `jkit-tests`: the kit through a test host (playing, pitch, start and end, decay, velocity, gate,
-  reverse, PAD TONE's points (a low pass, its envelope and velocity, a bell), moving 0.3's EQ onto points, drive, choke, sends, volume, boom, state, swapping
+  reverse, PAD TONE's points (a low pass, its envelope and velocity, a bell), moving 0.3's EQ onto points, drive, key groups, sends, volume, boom, state, swapping
   pads, trimming and fading in and out).
 - `jkit-gen-tests`: the generator without the models (hashing, the tokenizer, the sampler's schedule
   and noise, the random prompts, each engine's download folder and REMOVE, ORB's renderer against

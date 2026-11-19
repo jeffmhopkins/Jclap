@@ -2001,7 +2001,7 @@ public:
          const std::string unit = takesNow() > 1 ? " pads, " : " sounds, ";
          note = "Empty pads: " + std::to_string(emptyCount()) + unit + take(emptyCount()) +
                 ".  All pads: 16" + unit + take(16) + "." +
-                (layout == kDrumKitLayout ? " The hats share choke group 1." : "");
+                (layout == kDrumKitLayout ? " The hats share key group 1." : "");
       }
       c.text(note, ui::font(8.5f * s), visage::Font::kLeft, x, y, w, 14 * s);
 
@@ -3663,7 +3663,7 @@ private:
       choke_ = &onPage<ui::Dropdown>(P, {392, 226, 66, 20}, std::vector<std::string>(kChokeNames, kChokeNames + kChokeCount));
       choke_->setAccent(kOrange);
       choke_->onChange = [this](int i) { setPad(kChoke, i); };
-      tips_.add(*choke_, "Pads in the same group cut each other off, like a closed hat stopping an open one.");
+      tips_.add(*choke_, "KEY GROUP: pads in the same group cut each other off, like a closed hat stopping an open one.");
       play_ = &onPage<ui::SegmentedSwitch>(P, {466, 226, 92, 20}, std::vector<std::string>{"ONE SHOT", "GATE"});
       play_->setAccent(kOrange);
       play_->onChange = [this](int i) { setPad(kPlayMode, i); };
@@ -3949,7 +3949,7 @@ private:
                                  : "note " + ui::noteName(kFirstNote + pad) + " \xC2\xB7 nothing on it yet";
       if (host_.padSounds(pad).count() < 2)
          c.text(line, ui::font(8.5f * s), visage::Font::kLeft, 392 * s, 110 * s, 214 * s, 12 * s);
-      drawLabel(c, s, "CHOKE", 392, 212);
+      drawLabel(c, s, "KEY GROUP", 392, 212);
       drawLabel(c, s, "PLAY", 466, 212);
       drawCard(c, s, 380, 260, 560, 248, "PAD TONE", "double-click to add a point \xC2\xB7 right-click to remove");
       drawLabel(c, s, "POINT " + std::to_string(point_ + 1), 392, 428);
