@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 #include <cstring>
 #include <vector>
 
@@ -248,6 +249,62 @@ void testPlaying() {
    run(h, 20);
 }
 
+// A pad with several takes plays one a hit, each with its own trims, level, tune and cuts.
+void testTakes() {
+   jclap::core::TestHost h(clap_entry, kId);
+   auto *host = h.object<EditorHost>();
+   const auto hit = [&](float velocity = 1.0f) {
+      h.note(CLAP_EVENT_NOTE_ON, 36, velocity);
+      return run(h, 80);
+   };
+   // CYCLE between a 0.1 s and a 0.3 s take: the hits alternate.
+   PadSounds p;
+   p.mode = kTakeCycle;
+   p.takes.push_back(Take{tone(0.1)});
+   p.takes.push_back(Take{tone(0.3)});
+   host->setPadSounds(0, p);
+   JCLAP_CHECK_EQ(host->padSounds(0).count(), 2);
+   const size_t a = lastSound(hit()), b = lastSound(hit()), c = lastSound(hit());
+   JCLAP_CHECK(a > 4000 && a < 6500 && b > 13500 && b < 16500 && c > 4000 && c < 6500);
+   JCLAP_CHECK_EQ(host->padTake(0), 0);
+   // The take editor plays the one it asks for.
+   host->playPadTake(0, 1);
+   JCLAP_CHECK(lastSound(run(h, 80)) > 13500);
+
+   // One take, then its own end, tune, level, low cut and fade in, each against the plain one.
+   host->setPadSounds(0, PadSounds::of(tone(0.3)));
+   const std::vector<float> plain = hit();
+   const size_t full = lastSound(plain);
+   const auto with = [&](auto change) {
+      Take k{tone(0.3)};
+      change(k);
+      PadSounds one;
+      one.takes.push_back(k);
+      host->setPadSounds(0, one);
+      return hit();
+   };
+   JCLAP_CHECK(lastSound(with([](Take &k) { k.end = 0.5; })) < full * 0.6);
+   JCLAP_CHECK(lastSound(with([](Take &k) { k.tune = 12.0; })) < full * 0.6);
+   JCLAP_CHECK(peak(with([](Take &k) { k.levelDb = -12.0; })) < peak(plain) * 0.3f);
+   JCLAP_CHECK(peak(with([](Take &k) { k.lowCutHz = 3000.0; })) < peak(plain) * 0.2f);
+   JCLAP_CHECK(peak(with([](Take &k) { k.highCutHz = 20000.0; k.lowCutHz = 20.0; })) > peak(plain) * 0.95f);
+   JCLAP_CHECK(peak(with([](Take &k) { k.fadeInMs = 100.0; }), 0, 480) < peak(plain, 0, 480) * 0.3f);
+   // The pad's own START is inside the take's: a take starting halfway with the pad's START at
+   // half plays the last quarter.
+   h.setParam(padParam(0, kStart), 0.5);
+   JCLAP_CHECK(lastSound(with([](Take &k) { k.start = 0.5; })) < full * 0.35);
+   h.setParam(padParam(0, kStart), 0.0);
+
+   // More than kMaxTakes are dropped; addPadTake stops there.
+   host->setPadSample(0, nullptr);
+   for (int i = 0; i < kMaxTakes + 2; ++i)
+      host->addPadTake(0, tone(0.1));
+   JCLAP_CHECK_EQ(host->padSounds(0).count(), kMaxTakes);
+   // Swapping pads takes their takes along.
+   host->swapPads(0, 7);
+   JCLAP_CHECK(host->padSounds(0).empty() && host->padSounds(7).count() == kMaxTakes);
+}
+
 void testChokeAndSends() {
    jclap::core::TestHost h(clap_entry, kId);
    auto *host = h.object<EditorHost>();
@@ -305,10 +362,21 @@ void testState() {
       jclap::core::TestHost h(clap_entry, kId);
       auto *host = h.object<EditorHost>();
       host->setPadSample(5, tone(0.3, kHat));
+      Take second{tone(0.2, kHat)};
+      second.tune = 3.0;
+      second.lowCutHz = 500.0;
+      host->addPadTake(5, second.sample);
+      PadSounds five = host->padSounds(5);
+      five.takes[1] = second;
+      five.mode = kTakeVelocity;
+      host->setPadSounds(5, five);
       host->setParam(padParam(5, kPitch), -5.0);
       host->setParam(kBoom, 0.4);
       host->gen().prompt = "a saved prompt";
       host->gen().role = kClap;
+      host->gen().kitMode = true;
+      host->gen().kitLayout = 2;
+      host->gen().kitTakes = 4;
       host->setKitName("My Kit");
       auto *st = static_cast<const clap_plugin_state_t *>(h.plugin()->get_extension(h.plugin(), CLAP_EXT_STATE));
       JCLAP_CHECK(st->save(h.plugin(), &state.out));
@@ -319,6 +387,9 @@ void testState() {
    JCLAP_CHECK(st->load(h.plugin(), &state.in));
    const SamplePtr s = host->padSample(5);
    JCLAP_CHECK(s && s->frames() == static_cast<size_t>(0.3 * kSampleRate) && s->role == kHat && s->seed == 7);
+   const PadSounds five = host->padSounds(5);
+   JCLAP_CHECK(five.count() == 2 && five.mode == kTakeVelocity && five.takes[1].tune == 3.0 &&
+               five.takes[1].lowCutHz == 500.0 && five.takes[1].sample->frames() == static_cast<size_t>(0.2 * kSampleRate));
    if (s) {
       const SamplePtr t = tone(0.3);
       float err = 0;
@@ -330,6 +401,7 @@ void testState() {
    JCLAP_CHECK_EQ(h.paramValue(padParam(5, kPitch)), -5.0);
    JCLAP_CHECK_EQ(h.paramValue(kBoom), 0.4);
    JCLAP_CHECK(host->gen().prompt == "a saved prompt" && host->gen().role == kClap);
+   JCLAP_CHECK(host->gen().kitMode && host->gen().kitLayout == 2 && host->gen().kitTakes == 4);
    JCLAP_CHECK(host->kitName() == "My Kit");
    // A truncated state is refused.
    Buffer bad;
@@ -391,14 +463,81 @@ void testTreatment() {
    out = treat(s, t);
    JCLAP_CHECK(out.left.front() == s.left.back() && out.left.back() == s.left.front());
 
-   // A kit's sounds survive writing and reading.
-   SamplePtr pads[16];
-   pads[3] = tone(0.1, kSnare);
+   // A kit's sounds survive writing and reading, every take with its settings.
+   PadSounds pads[16];
+   pads[3] = PadSounds::of(tone(0.1, kSnare));
+   pads[5].mode = kTakeCycle;
+   for (int i = 0; i < 3; ++i) {
+      Take k{tone(0.1 + 0.05 * i, kHat)};
+      k.start = 0.1 * i;
+      k.end = 0.9;
+      k.fadeInMs = 5 + i;
+      k.fadeOutMs = 30;
+      k.levelDb = -3.0 * i;
+      k.tune = i - 1.0;
+      k.lowCutHz = 200;
+      k.highCutHz = 8000;
+      pads[5].takes.push_back(k);
+   }
    const std::string bytes = writeKit(pads);
-   SamplePtr back[16];
+   PadSounds back[16];
    JCLAP_CHECK(readKit(bytes, back));
-   JCLAP_CHECK(back[3] && back[3]->frames() == pads[3]->frames() && back[3]->role == kSnare && !back[0]);
+   JCLAP_CHECK(back[3].count() == 1 && back[3].first()->frames() == pads[3].first()->frames() &&
+               back[3].first()->role == kSnare && back[0].empty());
+   JCLAP_CHECK(back[5].count() == 3 && back[5].mode == kTakeCycle);
+   for (int i = 0; i < 3; ++i) {
+      const Take &a = pads[5].takes[i], &b = back[5].takes[i];
+      JCLAP_CHECK(b.sample->frames() == a.sample->frames() && b.start == a.start && b.end == a.end &&
+                  b.fadeInMs == a.fadeInMs && b.fadeOutMs == a.fadeOutMs && b.levelDb == a.levelDb &&
+                  b.tune == a.tune && b.lowCutHz == a.lowCutHz && b.highCutHz == a.highCutHz);
+   }
    JCLAP_CHECK(!readKit(bytes.substr(0, bytes.size() - 10), back));
+   // Kits saved before takes ("JKS1": a 0 or 1 and one sample a pad) still read, as one take each.
+   {
+      Writer w;
+      w.bytes = "JKS1";
+      for (int i = 0; i < 16; ++i) {
+         w.u8(i == 2 ? 1 : 0);
+         if (i == 2)
+            w.sample(*tone(0.2, kKick));
+      }
+      PadSounds old[16];
+      JCLAP_CHECK(readKit(w.bytes, old));
+      JCLAP_CHECK(old[2].count() == 1 && old[2].first()->role == kKick && old[2].takes[0].end == 1.0 &&
+                  old[2].mode == kTakeRandom && old[0].empty());
+   }
+   // Settings out of range are brought into it.
+   Take wild{tone(0.1, kHat)};
+   wild.start = 0.9;
+   wild.end = 0.2;
+   wild.levelDb = 99;
+   wild.tune = std::nan("");
+   const Take tame = wild.clamped();
+   JCLAP_CHECK(tame.start == 0.2 && tame.end == 0.9 && tame.levelDb == 12.0 && tame.tune == 0.0);
+
+   // Which take a hit plays.
+   PadSounds four;
+   for (int i = 0; i < 4; ++i)
+      four.takes.push_back(Take{tone(0.1, kSnare)});
+   // RANDOM: never the same one twice running, and every take comes up.
+   std::set<int> seen;
+   int last = -1;
+   for (uint32_t r = 1; r < 200; ++r) {
+      const int k = pickTake(four, last, 1.0f, r * 2654435761u);
+      JCLAP_CHECK(k >= 0 && k < 4 && k != last);
+      seen.insert(k);
+      last = k;
+   }
+   JCLAP_CHECK_EQ(static_cast<int>(seen.size()), 4);
+   // CYCLE: in order, round and round.
+   four.mode = kTakeCycle;
+   JCLAP_CHECK(pickTake(four, -1, 1.0f, 7) == 0 && pickTake(four, 0, 1.0f, 7) == 1 && pickTake(four, 3, 1.0f, 7) == 0);
+   // VELOCITY: soft to hard.
+   four.mode = kTakeVelocity;
+   JCLAP_CHECK(pickTake(four, -1, 0.1f, 7) == 0 && pickTake(four, -1, 0.4f, 7) == 1 &&
+               pickTake(four, -1, 0.6f, 7) == 2 && pickTake(four, -1, 1.0f, 7) == 3);
+   // One take is always take 0.
+   JCLAP_CHECK(pickTake(PadSounds::of(tone(0.1, kSnare)), 0, 0.5f, 99) == 0);
 }
 
 } // namespace
@@ -406,6 +545,7 @@ void testTreatment() {
 int main() {
    testParamText();
    testPlaying();
+   testTakes();
    testChokeAndSends();
    testMaster();
    testState();

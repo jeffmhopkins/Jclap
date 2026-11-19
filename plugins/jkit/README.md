@@ -2,11 +2,11 @@
 
 # JKit
 
-A 16-pad drum kit whose sounds an AI model makes from your words, inside the plugin, with a choice of engines. Type what you want (or roll the dice for a prompt, from plain studio drums to things no drum machine has), pick from the variants, trim and fade the one you like, and put it on a pad, or make a whole kit in one style at once. Then play the kit: each pad with its own pitch, start and end, envelope, drive, a points EQ with filters, and sends, into a shared reverb and delay and a master EQ, width and BOOM.
+A 16-pad drum kit whose sounds an AI model makes from your words, inside the plugin, with a choice of engines. Type what you want (or roll the dice for a prompt, from plain studio drums to things no drum machine has), pick from the variants, trim and fade the one you like, and put it on a pad (or several on one, as variations it picks between each hit), or make a whole kit in one style at once: drums, hand percussion, effects or animals. Then play the kit: each pad with its own pitch, start and end, envelope, drive, a points EQ with filters, and sends, into a shared reverb and delay and a master EQ, width and BOOM.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![pads: 16](https://img.shields.io/badge/pads-16-blue)](#the-kit-tab) [![engines: Stable Audio Open Small, ORB, Stable Audio Open 1.0](https://img.shields.io/badge/engines-SAO%20Small%20%7C%20ORB%20%7C%20SAO%201.0-blue)](#the-engines) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
-Version 0.5.0 · Powered by Stability AI · ORB by Marcos Maceo
+Version 0.7.0 · Powered by Stability AI · ORB by Marcos Maceo
 
 </div>
 
@@ -84,8 +84,8 @@ by hash.
 | **In all** | **4.89 GB** | **about 4.78 GB** |
 
 It samples with DPM-Solver++ (2M), and wants more steps than Small: **STEPS** runs 10 to 100 (50 by
-default) and **GUIDANCE** 1 to 12 (7 by default); choosing it in the engine picker sets both to its
-defaults. It only computes the length you ask for, so short sounds are quicker: on a 4-core laptop a
+default) and has **PROMPT STRENGTH** (its guidance) 1 to 12 (7 by default); choosing it in the engine
+picker sets both to its defaults. It only computes the length you ask for, so short sounds are quicker: on a 4-core laptop a
 1.5 s sound at 50 steps takes about 30 s, and each variant takes as long again. The GENERATE hint
 says how long to expect. It takes about 5 GB of memory once loaded.
 
@@ -109,7 +109,7 @@ ORB was trained on short sound-effect captions and has no drum models, so it doe
 words for one of the sounds above ("a heavy door slams", "glass shattering", "a deep punch", "church
 bell toll"). Drum names land on whatever is nearest: "kick drum" gives a click, "snare" a bell,
 "hi-hat" an impact. It plans its own length; JKit starts the sound at its first hit and cuts it at
-LENGTH if it's longer. STEPS, GUIDANCE and VARIETY don't apply.
+LENGTH if it's longer. STEPS, PROMPT STRENGTH and VARIETY don't apply.
 
 **VARIANTS**: the first is ORB's own plan, played as ORB plays it. Each of the others draws a plan
 of its own from the planner (so it may pick another sound, add a second hit, or change the timing
@@ -138,7 +138,10 @@ punches...), not drums.
 **PROMPT**: what the sound should be, in plain words: "dusty lo-fi snare, tape saturation, short
 room tail". Under it:
 
-- **ROLE**: Kick, Snare, Hat, Clap, Tom, Perc or FX. It picks the random prompt's words, the pad's
+- **SOUND / KIT**: what GENERATE makes. **SOUND** makes one sound in variants, as described here;
+  **KIT** makes a sound for every pad at once (see [A whole kit at once](#a-whole-kit-at-once)), and
+  turns the pills into kinds of kit.
+- **ROLE** (SOUND): Kick, Snare, Hat, Clap, Tom, Perc or FX. It picks the random prompt's words, the pad's
   colour and the sound's name on the pad. With ORB the chips are the kinds of sound ORB can make
   instead, each in a drum role's place: BOOM (impacts, explosions, heartbeats, sub drops; a kick's
   pad), HIT (punches, gunshots, door slams, knocks; a snare's), CLICK (clicks, pops, camera shutters,
@@ -152,8 +155,9 @@ room tail". Under it:
   tokens Stable Audio reads. With ORB it
   writes plain sound-effect captions for the kind, the way ORB was trained to read them ("a wine
   glass shattering, up close").
-- **GENERIC - STRANGE**: how strange the random prompts get. At the left they're studio drum
-  sounds ("tight 909 kick, light compression, Detroit techno"); halfway, a familiar sound with an odd
+- **GENERIC - STRANGE**: how strange the random prompts get. At the far left they're just the
+  sound, with at most one word of character ("909 kick", "punchy acoustic kick"); a little further
+  in, dressed up studio drum sounds ("tight 909 kick, light compression, Detroit techno"); halfway, a familiar sound with an odd
   twist ("snare made of a filing cabinet slammed shut, plate reverb"); at the right, objects, places
   and processes ("a glass of ice dropped on marble, granular smear, played backwards"). With ORB
   it's **ONE SOUND - LAYERED** instead: one sound at the left, a few in a row at the right, which ORB
@@ -161,44 +165,92 @@ room tail". Under it:
 - **LENGTH**: how long the sound is, 0.1 to 11.8 s.
 - **STEPS** (Stable Audio): diffusion steps, 4 to 16 for Small (tuned for 8) or 10 to 100 for 1.0
   (50 by default).
-- **GUIDANCE** (Stable Audio): how hard it follows the words, 1 to 7 for Small (tuned for 1) or 1
-  to 12 for 1.0 (7 by default). Above 1 each step runs twice, so it takes twice as long.
-- **VARIETY** (Stable Audio): how different the variants are from each other. Low makes takes of
+- **PROMPT STRENGTH** (Stable Audio Open 1.0 only; it was GUIDANCE before 0.6): how hard it pulls
+  toward the words, 1 to 12 (7 by default, its sweet spot). Higher gets harsher and stranger, with
+  more harmonics and stray tails, rather than closer to the prompt. Above 1 each step runs twice, so
+  it takes twice as long. Small has no such knob: it was distilled to make its sound in 8 steps at a
+  guidance of 1, and more only over-pushes every step, so it always runs at 1.
+- **VARIETY** (Stable Audio): how different the variants are from each other. Low makes versions of
   one sound; high makes each its own.
 - **VARIANTS**: how many sounds each GENERATE makes: 1, 2, 4 or 8. Every GENERATE starts from a
   new random seed, and each variant from its own, so pressing it again always brings new sounds
   (there's no SEED control). Each sound still shows its seed, and VARY works from it.
 - **GENERATE** shows its progress, and how long the last run took.
-- **WHOLE KIT** makes a sound for every pad at once (see [A whole kit at once](#a-whole-kit-at-once)).
 - **RECENT**: your last prompts. Click one to load it with its role.
 
 ### A whole kit at once
 
-**WHOLE KIT**, beside GENERATE, opens a card for making the whole kit in one go. The prompt is the
-kit's style ("dusty lo-fi boom bap, tape saturation"): describe a style, not one sound, as each pad
-asks for its own sound in it ("closed hi-hat, dusty lo-fi boom bap, tape saturation"). With no prompt
-typed, the kit gets a random style, the same for every pad.
+Set the menu under PROMPT to **KIT** to make a sound for every pad in one go. The pills become the
+kind of kit, and the PROMPT is its style, typed or rolled:
 
-The pads are laid out like a General MIDI drum kit from C1 (note 36), so a drum part written for
-any GM kit plays the right sounds:
+- **DRUM KIT**: a General MIDI drum kit (below).
+- **PERCUSSION**: hand drums from around the world, one stroke each: cajon, djembe, congas, bongos,
+  darbuka, tabla, frame drum, palmas and shaker.
+- **FX**: bleeps, bloops, zaps, glitches, risers and hits.
+- **ANIMALS**: a different animal on each pad, from a bullfrog to a wolf.
 
-| Note | Pad | Note | Pad | Note | Pad | Note | Pad |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 36 | Kick | 40 | Snare 2 | 44 | Pedal Hat | 48 | Shaker |
-| 37 | Rim | 41 | Low Tom | 45 | High Tom | 49 | Crash |
-| 38 | Snare | 42 | Closed Hat | 46 | Open Hat | 50 | Kick 2 |
-| 39 | Clap | 43 | Mid Tom | 47 | Perc | 51 | FX |
+Describe a style, not one sound: each pad asks for its own sound in it ("closed hi-hat, dusty lo-fi
+boom bap, tape saturation"; "conga slap, one hand stroke, Afro-Cuban rumba percussion"). A style
+of one or two words goes in front instead: "909" makes "909 kick drum", "909 snare drum". **The
+dice** writes a random style for the kind of kit ("West African djembe ensemble percussion, warm
+natural room"; "retro 8-bit video game sound effects, bitcrushed"; "farm animals, close up field
+recording"), and you can edit it. With no prompt typed, the kit gets a random style, the same for
+every pad.
 
-**FILL n EMPTY PADS** makes sounds only for the pads with none; **REPLACE ALL 16 PADS** makes all of
-them, replacing what's there. Each sound gets the SELECTED panel's NORMALIZE, TRIM SILENCE, REVERSE
-and fades, plays from its start to its end, and is named for its pad. The closed, pedal and open hats
-go in choke group 1 (unless they're already in one), so a closed hat cuts the open one off. The kick
-and snare come first, then the hats, so you can play along as it fills. GENERATE shows which pad it's
-on ("KIT 3 OF 16 · Closed Hat"), and **STOP** (WHOLE KIT's button meanwhile) stops it, keeping the
-pads made so far. It uses the engine's STEPS and GUIDANCE: a whole kit takes about a minute with
-Small and about 8 with 1.0. ORB makes sound effects, not drums, so the kit needs Small or 1.0.
+**GENERIC - STRANGE** works in KIT too, on both the style and every pad's prompt:
 
-![GENERATE KIT's card](docs/panel-whole-kit.png)
+| Slider | The dice's style | A pad's prompt |
+| --- | --- | --- |
+| GENERIC (far left) | one plain word: "909", "flamenco", "8-bit", "farm" | "909 kick drum" |
+| Middle | a style and a treatment: "electro, air boost" | "kick drum, electro, air boost" |
+| Toward STRANGE | an odd material and process on top: "creaky electro, air boost, in a cathedral" | each pad its own twist: "gelatinous kick drum, made of a basketball bounced in a parking garage, creaky electro, ..., with a reverse reverb swell" |
+| STRANGE (far right) | one more process | about thirty words, every pad different: "melting kick drum, like a bowling ball dropped on a stage, ..., recorded in a cave, pitched up an octave" |
+
+Each pad keeps its own sound in its prompt, so a strange kit still has a kick on the kick note. The
+slider changes the words the model is given, the same way it does in SOUND; the model itself runs
+the same. LENGTH, VARIETY and VARIANTS don't apply in KIT (each pad has its own length); STEPS and
+PROMPT STRENGTH (on 1.0) do.
+
+![KIT, set to PERCUSSION](docs/panel-kit-mode.png)
+
+Each kit puts its low sounds where a drum kit's kicks are and its sharp ones where the snares and hats
+are, so a drum part still makes sense on any of them:
+
+| Note | Drum kit | Percussion | FX | Animals |
+| --- | --- | --- | --- | --- |
+| 36 | Kick | Cajon Bass | Sub Boom | Bullfrog |
+| 37 | Rim | Djembe Slap | Blip | Woodpecker |
+| 38 | Snare | Cajon Slap | Zap | Dog |
+| 39 | Clap | Palmas | Glitch | Duck |
+| 40 | Snare 2 | Djembe Bass | Noise Hit | Cat |
+| 41 | Low Tom | Low Conga | Bloop | Cow |
+| 42 | Closed Hat | Shaker | Tick | Cricket |
+| 43 | Mid Tom | High Conga | Boing | Goat |
+| 44 | Pedal Hat | Conga Slap | Chirp | Bird |
+| 45 | High Tom | Low Bongo | Pew | Sheep |
+| 46 | Open Hat | High Bongo | Sweep | Rattlesnake |
+| 47 | Perc | Djembe Tone | Coin | Monkey |
+| 48 | Shaker | Darbuka Dum | Wub | Horse |
+| 49 | Crash | Darbuka Tek | Riser | Elephant |
+| 50 | Kick 2 | Tabla | Impact | Lion |
+| 51 | FX | Frame Drum | Reverse | Wolf |
+
+The drum kit follows General MIDI from C1 (note 36), so a drum part written for any GM kit plays the
+right sounds.
+
+**GENERATE** (GENERATE DRUM KIT, GENERATE PERCUSSION KIT...) opens a card with the style and the
+sixteen pads, which have sounds, and how long it will take. **VARIATIONS PER PAD** (1, 2 or 4) gives each
+pad that many close [variations](#variations-several-sounds-on-one-pad), a
+different one each hit; more variations take longer. **FILL n EMPTY PADS** makes sounds only for
+the pads with none; **REPLACE ALL 16 PADS** makes all of them, replacing what's there. Each sound gets
+the SELECTED panel's NORMALIZE, TRIM SILENCE, REVERSE and fades, plays from its start to its end, and
+is named for its pad. A drum kit's closed, pedal and open hats go in key group 1 (unless they're
+already in one), so a closed hat cuts the open one off. The backbone comes first (kick and snare, or
+cajon), so you can play along as it fills. GENERATE shows which pad it's on ("KIT 3 OF 16 · Closed
+Hat") and stops it when clicked, keeping the pads made so far. A whole kit takes about a minute with
+Small and about 8 with 1.0. KIT needs Stable Audio: ORB makes its own set of sounds.
+
+![GENERATE's kit card](docs/panel-whole-kit.png)
 
 **VARIANTS**: what came back, each with its seed and length. Click one to select and hear it. Its
 star keeps it through the next GENERATE (unstarred ones make way for the new ones).
@@ -218,7 +270,9 @@ normalizing), with a playhead; **AUDITION** (or a click on the waveform) plays i
 the pad: trimmed, faded, normalized and reversed if set.
 
 **SEND TO PAD** picks the pad (laid out as on the Kit tab), and **ADD TO KIT** puts the treated
-sound on it, with its prompt, role and seed. The next empty pad becomes the next target.
+sound on it in place of what's there, with its prompt, role and seed. The next empty pad becomes the
+next target. **ADD AS VARIATION** keeps the pad's sound and adds this one beside it as another
+[variation](#variations-several-sounds-on-one-pad), and stays on the pad so you can add more.
 
 ![The Generate tab on first run, while the model downloads](docs/panel-first-run.png)
 
@@ -227,13 +281,17 @@ sound on it, with its prompt, role and seed. The next empty pad becomes the next
 **PADS**: sixteen pads, pad 1 bottom left on MIDI note 36 (C2), up to pad 16 on 51. Each shows its
 name, role, waveform with a playhead while it sounds, note, and its reverb (purple) and delay (blue)
 sends. Click a pad to play and select it (higher on the pad is louder), drag one onto another to
-swap them (sound and settings), right-click to play, regenerate or clear it. Playing a pad over
+swap them (sound and settings), right-click to play, open its variations, regenerate or clear it. A pad
+with more than one variation shows how many (x4), and its waveform is the one it played last. Playing a pad over
 MIDI selects it too, so its controls follow what you play. An empty pad's
 + GENERATE opens the Generate tab aimed at it.
 
-**PAD n**: the selected pad. Its waveform has the START and END handles, the decay drawn as a blue
-curve, and the speed its pitch plays it at. **REGENERATE IN TAB** opens the Generate tab with its
-prompt and role.
+**PAD n**: the selected pad. With more than one [variation](#variations-several-sounds-on-one-pad),
+tabs over its waveform (1 2 3 4 +) pick which one it shows; clicking a tab plays it, **+** adds the
+Generate tab's selected sound as another, right-click a tab to move or remove it, and the last tab
+(RANDOM, CYCLE, VELOCITY) says how a hit picks one: click it to change. Its waveform has the START and END handles, the decay drawn as a blue
+curve, and the speed its pitch plays it at. **VARIATIONS** opens its [variations](#variations-several-sounds-on-one-pad).
+**REGENERATE IN TAB** opens the Generate tab with its prompt and role.
 
 | Control | Range | What it does |
 |---|---|---|
@@ -244,7 +302,7 @@ prompt and role.
 | Start, End | 0 to 100% | the part of the sound that plays (shown as times into it) |
 | Attack | 0 to 200 ms | fades it in |
 | Velocity | 0 to 100% | how much the note's velocity changes its level: the level follows velocity to the power 3 x this, so at 33% a half-velocity hit is 6 dB down, at 60% 11 dB, at 100% 18 dB; 0% ignores velocity |
-| Choke | None, 1 to 4 | pads in one group cut each other off, like a closed hat stopping an open one |
+| Key Group | None, 1 to 4 | pads in one group cut each other off, like a closed hat stopping an open one (called Choke before 0.7; automation and saved kits carry over) |
 | Play | One shot, Gate | one shot plays the whole sound; Gate stops it (over 30 ms) when the note ends |
 | Rev | on, off | plays it backwards |
 
@@ -290,16 +348,46 @@ Everything under the darker band acts on the whole kit.
   200%), **BOOM** (low-end punch: the lows under 110 Hz driven into a soft clip and added back, so
   the hit thumps without the tail booming) and **VOLUME**.
 
+### Variations: several sounds on one pad
+
+A pad can hold up to 8 variations of its sound, and plays one of them each hit, so a part played on it
+doesn't sound like the same sample over and over. **VARIATIONS** on the pad's card (or Variations... on its
+right-click menu) opens them, a row each:
+
+- **PLAYS** picks how a hit chooses: **RANDOM** a different variation every hit, never the same one twice
+  running; **CYCLE** the variations in order, round and round; **VELOCITY** soft hits the first variation,
+  hard ones the last, split evenly.
+- **The waveform**: drag the white lines for the part of the variation that plays, and the blue dots
+  along the top for its fade in and fade out. A click elsewhere on it plays the variation.
+- **LEVEL** (-24 to +12 dB), **TUNE** (-12 to +12 semitones), **LOW CUT** and **HIGH CUT** (12
+  dB/octave, 20 Hz to 20 kHz, off at the ends): drag a value up or down; double-click puts it back.
+- **COPY** adds a copy of that variation right after it, nudged a little so it isn't a repeat: tune
+  within a fifth of a semitone, level within 1.5 dB, the start a few ms later, and now and then a
+  slightly darker top. It's instant.
+- **VARY** asks the model (the Generate tab's engine) for two close relatives of that variation's
+  sound, from its own prompt and seed, as the Generate tab's VARY does, and adds them right after
+  it. It takes as long as generating two sounds.
+- **▲** moves a variation up (the order matters for CYCLE and VELOCITY), **✕** removes it.
+- **+ ADD n VARIANTS AS VARIATIONS** brings the Generate tab's variants in, the starred ones if any are
+  starred, normalized and with their silence trimmed.
+
+Each variation's own settings come first; the pad's controls then apply to whichever variation plays, its
+START and END within the variation's part. Make variations with ADD AS VARIATION in the Generate tab (VARY
+first, for close ones), with VARIATIONS PER PAD when generating a whole kit, or from here.
+
+![A pad's variations](docs/panel-variations.png)
+
 ## Kits and projects
 
-A project keeps everything: the sounds on the pads (as 16-bit, 44.1 kHz stereo), every setting, and
+A project keeps everything: the sounds on the pads and all their variations with each variation's settings
+(as 16-bit, 44.1 kHz stereo), every setting, and
 the Generate tab's engine, prompt, settings and recent prompts. Projects saved with JKit 0.1 open
 with Stable Audio Open Small selected. The variants aren't kept: put the ones you
 want on a pad.
 
 The kit browser at the top right saves a kit, with its sounds, to your JClap presets folder
 (`JKit/Presets`, a `.jkit` file with a `.jkitsounds` file beside it) and loads it back. JKit has no
-factory kits: every kit is yours.
+factory kits: every kit is yours. Kits and projects saved before 0.7 open with one variation on each pad.
 
 ## Licences
 
@@ -326,7 +414,7 @@ factory kits: every kit is yours.
 JKit builds with the rest of JClap (see the [top-level README](../../README.md)). Its tests:
 
 - `jkit-tests`: the kit through a test host (playing, pitch, start and end, decay, velocity, gate,
-  reverse, PAD TONE's points (a low pass, its envelope and velocity, a bell), moving 0.3's EQ onto points, drive, choke, sends, volume, boom, state, swapping
+  reverse, PAD TONE's points (a low pass, its envelope and velocity, a bell), moving 0.3's EQ onto points, drive, key groups, sends, volume, boom, state, swapping
   pads, trimming and fading in and out).
 - `jkit-gen-tests`: the generator without the models (hashing, the tokenizer, the sampler's schedule
   and noise, the random prompts, each engine's download folder and REMOVE, ORB's renderer against
@@ -336,5 +424,6 @@ JKit builds with the rest of JClap (see the [top-level README](../../README.md))
   `JKIT_TEST_ORT`), it generates one with 1.0; with `JKIT_TEST_ORB` set to a folder holding ORB's
   `planner.safetensors`, it plans and plays a kick.
 - `jkit-screenshot-test`, `jkit-screenshot-kit-test`, `jkit-screenshot-first-run-test`,
-  `jkit-screenshot-orb-test`, `jkit-screenshot-engines-test`, `jkit-screenshot-kit-dialog-test`: the panel
-  pictures above.
+  `jkit-screenshot-orb-test`, `jkit-screenshot-engines-test`, `jkit-screenshot-kit-mode-test`, `jkit-screenshot-kit-dialog-test`,
+  `jkit-screenshot-variations-test`: the
+  panel pictures above.

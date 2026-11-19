@@ -199,7 +199,7 @@ inline std::vector<jclap::core::ParamDef> makeParams() {
       {"End", 0.0, 1.0, 1.0, kMod},
       {"Attack", 0.0, 1.0, 0.0, kMod},
       {"Velocity", 0.0, 1.0, 0.6, kMod},
-      {"Choke", 0.0, kChokeCount - 1, 0.0, kChoice},
+      {"Key Group", 0.0, kChokeCount - 1, 0.0, kChoice},
       {"Play", 0.0, kPlayModeCount - 1, 0.0, kChoice},
       {"Reverse", 0.0, 1.0, 0.0, kAuto | CLAP_PARAM_IS_STEPPED},
       {"Low Cut", 0.0, 1.0, 0.0, kMod},

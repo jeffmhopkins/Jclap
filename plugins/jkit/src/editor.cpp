@@ -344,17 +344,17 @@ class ChipRow : public visage::Frame {
 public:
    // Each chip's width in design units, squeezed to fit the row if the names are long.
    float chipWidth(int i) const {
-      float total = 5.0f * (kRoleCount - 1);
-      for (int k = 0; k < kRoleCount; ++k)
+      float total = 5.0f * (count - 1);
+      for (int k = 0; k < count; ++k)
          total += naturalWidth(k);
       const float room = width() / ui::designScale(*this);
-      return naturalWidth(i) * (total > room && room > 0 ? (room - 5.0f * (kRoleCount - 1)) / (total - 5.0f * (kRoleCount - 1)) : 1.0f);
+      return naturalWidth(i) * (total > room && room > 0 ? (room - 5.0f * (count - 1)) / (total - 5.0f * (count - 1)) : 1.0f);
    }
    void draw(visage::Canvas &c) override {
       const float s = ui::designScale(*this);
       const ui::Theme &t = ui::defaultTheme();
       float x = 0;
-      for (int i = 0; i < kRoleCount; ++i) {
+      for (int i = 0; i < count; ++i) {
          const float w = chipWidth(i);
          c.setColor(i == selected ? kSlate : t.button);
          c.roundedRectangle(x * s, 0, w * s, height(), height() / 2);
@@ -371,7 +371,7 @@ public:
    void mouseDown(const visage::MouseEvent &e) override {
       const float s = ui::designScale(*this);
       float x = 0;
-      for (int i = 0; i < kRoleCount; ++i) {
+      for (int i = 0; i < count; ++i) {
          const float w = chipWidth(i);
          if (e.position.x >= x * s && e.position.x < (x + w) * s) {
             selected = i;
@@ -384,8 +384,9 @@ public:
       }
    }
    int selected = 0;
-   // The chips' names: the kit's roles, or ORB's kinds in their places.
+   // The chips' names: the kit's roles, ORB's kinds in their places, or (KIT) the kinds of kit.
    const char *const *names = kRoleNames;
+   int count = kRoleCount;
    std::function<void(int)> onChange;
 
 private:
@@ -832,7 +833,10 @@ public:
       const ui::Theme &t = ui::defaultTheme();
       for (int i = 0; i < kPads; ++i) {
          const visage::Bounds b = cell(i);
-         const SamplePtr p = host_.padSample(i);
+         // With takes, the one that played last (its waveform changes hit to hit).
+         const PadSounds sounds = host_.padSounds(i);
+         const int shown = host_.padTake(i);
+         const SamplePtr p = shown >= 0 && shown < sounds.count() ? sounds.takes[static_cast<size_t>(shown)].sample : sounds.first();
          const bool sel = i == host_.selectedPad, target = dragging_ && i == hover_ && i != dragFrom_;
          const std::string note = ui::noteName(kFirstNote + i);
          if (!p) {
@@ -870,8 +874,8 @@ public:
             c.circle(b.x() - 0.5f * s, b.y() + 2.5f * s, 18 * s);
          }
          c.setColor(sel ? t.text : kTitle);
-         c.text(ellipsis(p->name, 14), ui::font(9.5f * s), visage::Font::kLeft, b.x() + 15 * s, b.y() + 5 * s,
-                b.width() - 20 * s, 13 * s);
+         c.text(ellipsis(p->name, sounds.count() > 1 ? 10 : 14), ui::font(9.5f * s), visage::Font::kLeft, b.x() + 15 * s,
+                b.y() + 5 * s, b.width() - (sounds.count() > 1 ? 46 : 20) * s, 13 * s);
          const float wx = b.x() + 6 * s, wy = b.y() + 22 * s, ww = b.width() - 12 * s, wh = b.height() - 42 * s;
          caches_[i].get(p, 30);
          drawWave(c, caches_[i].peaks, wx, wy, ww, wh, sel ? kOrange : 0xff5f6670);
@@ -882,6 +886,14 @@ public:
          }
          c.setColor(t.dimText);
          c.text(note, ui::font(8 * s), visage::Font::kLeft, b.x() + 6 * s, b.bottom() - 16 * s, 30 * s, 12 * s);
+         // How many takes, when more than one.
+         if (sounds.count() > 1) {
+            const float tx = b.right() - 27 * s, ty = b.y() + 5 * s;
+            c.setColor(sel ? 0xff4a3520 : 0xff343a44);
+            c.roundedRectangle(tx, ty, 22 * s, 12 * s, 3 * s);
+            c.setColor(sel ? kOrange : t.text);
+            c.text("x" + std::to_string(sounds.count()), ui::font(7.5f * s), visage::Font::kCenter, tx, ty, 22 * s, 12 * s);
+         }
          // The sends.
          const float bw = 18 * s, bx = b.right() - 6 * s - 2 * bw - 3 * s, by = b.bottom() - 10 * s;
          const double rv = host_.paramValue(padParam(i, kReverbSend)), dl = host_.paramValue(padParam(i, kDelaySend));
@@ -955,9 +967,113 @@ private:
 
 // The selected pad's sound: its waveform with the Start and End handles (dragging them sets the
 // params), the decay as a dashed curve from the start, the playhead, and the speed Pitch gives it.
+// The selected pad's variations as tabs over its waveform: 1 2 3 4 +, and how a hit picks one.
+// A tab shows that variation in the waveform; + adds the Generate tab's selected variant (or opens
+// the VARIATIONS window when there's none); right-click a tab to play, move or remove it.
+class VariationTabs : public visage::Frame {
+public:
+   explicit VariationTabs(EditorHost &host) : host_(host) {}
+   int selected = 0;
+   std::function<void(int)> onSelect;
+   std::function<void()> onAdd;
+   std::function<void(int, visage::Point)> onMenu;
+
+   visage::Bounds tab(int i) const {
+      const float s = ui::designScale(*this);
+      return {i * 24 * s, 0, 22 * s, height()};
+   }
+   visage::Bounds modeBox() const {
+      const float s = ui::designScale(*this);
+      return {width() - 70 * s, 0, 70 * s, height()};
+   }
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      const ui::Theme &t = ui::defaultTheme();
+      const PadSounds p = host_.padSounds(host_.selectedPad);
+      if (p.count() < 2)
+         return; // one sound: the card shows its seed and prompt here
+      const int playing = host_.padPosition(host_.selectedPad) >= 0 ? host_.padTake(host_.selectedPad) : -1;
+      for (int i = 0; i <= p.count() && i < kMaxTakes; ++i) {
+         const visage::Bounds r = tab(i);
+         const bool plus = i == p.count(), on = i == selected;
+         c.setColor(on ? kOrange : hover_ == i ? 0xff3a404a : kWell);
+         c.roundedRectangle(r.x(), r.y(), r.width(), r.height(), 3 * s);
+         c.setColor(on ? 0xff1a1d22 : plus ? t.dimText : t.text);
+         c.text(plus ? "+" : std::to_string(i + 1), ui::font(9 * s), visage::Font::kCenter, r.x(), r.y(), r.width(), r.height());
+         if (!plus && i == playing) {
+            c.setColor(on ? 0xff1a1d22 : kOrange);
+            c.fill(r.x() + 6 * s, r.bottom() - 2.5f * s, r.width() - 12 * s, 1.5f * s);
+         }
+      }
+      const visage::Bounds m = modeBox();
+      c.setColor(hover_ == 100 ? 0xff3a404a : kWell);
+      c.roundedRectangle(m.x(), m.y(), m.width(), m.height(), 3 * s);
+      c.setColor(t.dimText);
+      c.text(kTakeModeNames[std::clamp(p.mode, 0, kTakeModeCount - 1)], ui::font(8.5f * s), visage::Font::kCenter, m.x(), m.y(),
+             m.width(), m.height());
+   }
+   int at(visage::Point q) const {
+      const int n = host_.padSounds(host_.selectedPad).count();
+      if (n < 2)
+         return -1;
+      if (modeBox().contains(q))
+         return 100;
+      for (int i = 0; i <= n && i < kMaxTakes; ++i)
+         if (tab(i).contains(q))
+            return i;
+      return -1;
+   }
+   void mouseMove(const visage::MouseEvent &e) override {
+      const int h = at(e.position);
+      if (h != hover_) {
+         hover_ = h;
+         redraw();
+      }
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = -1;
+      redraw();
+   }
+   void mouseDown(const visage::MouseEvent &e) override {
+      const int i = at(e.position);
+      if (i < 0)
+         return;
+      PadSounds p = host_.padSounds(host_.selectedPad);
+      if (i == 100) {
+         // RANDOM, CYCLE, VELOCITY, round.
+         p.mode = (p.mode + 1) % kTakeModeCount;
+         host_.setPadSounds(host_.selectedPad, p);
+      } else if (i == p.count()) {
+         if (onAdd)
+            onAdd();
+      } else if (e.shouldTriggerPopup()) {
+         if (onMenu)
+            onMenu(i, e.position);
+      } else {
+         if (onSelect)
+            onSelect(i);
+         host_.playPadTake(host_.selectedPad, i);
+      }
+      redraw();
+   }
+
+private:
+   EditorHost &host_;
+   int hover_ = -1;
+};
+
 class PadWave : public visage::Frame {
 public:
    explicit PadWave(EditorHost &host) : host_(host) {}
+   std::function<int()> shownVariation; // the variation tab picked (0 the first)
+   int shown() const {
+      const int n = host_.padSounds(host_.selectedPad).count();
+      return std::clamp(shownVariation ? shownVariation() : 0, 0, std::max(0, n - 1));
+   }
+   SamplePtr shownSample() const {
+      const PadSounds p = host_.padSounds(host_.selectedPad);
+      return p.empty() ? nullptr : p.takes[static_cast<size_t>(shown())].sample;
+   }
    float xOf(double f) const {
       const float s = ui::designScale(*this);
       return 6 * s + static_cast<float>(f) * (width() - 12 * s);
@@ -973,7 +1089,7 @@ public:
       c.roundedRectangle(0, 0, width(), height(), 4 * s);
       c.setColor(kRule);
       c.roundedRectangleBorder(0, 0, width(), height(), 4 * s, 1.0f);
-      const SamplePtr p = host_.padSample(pad);
+      const SamplePtr p = shownSample();
       if (!p) {
          c.setColor(kFaint);
          c.text("Empty pad", ui::font(10 * s), visage::Font::kCenter, 0, 0, width(), height());
@@ -1014,8 +1130,9 @@ public:
          c.fill(x - 1 * s, 1 * s, 2 * s, height() - 2 * s);
          c.roundedRectangle(i ? x - 8 * s : x - 1 * s, 1 * s, 9 * s, 9 * s, 3 * s);
       }
+      // The playhead, when the variation shown is the one playing.
       const float pos = host_.padPosition(pad);
-      if (pos >= 0) {
+      if (pos >= 0 && host_.padTake(pad) == shown()) {
          c.setColor(0xd8ffffff);
          c.fill(xOf(pos), 1 * s, 1.5f * s, height() - 2 * s);
       }
@@ -1036,7 +1153,11 @@ public:
       drag_ = std::fabs(e.position.x - xa) <= std::fabs(e.position.x - xz) ? kStart : kEnd;
       if (std::min(std::fabs(e.position.x - xa), std::fabs(e.position.x - xz)) > 14 * s) {
          drag_ = -1;
-         host_.playPad(pad, 0.9f);
+         // The variation shown, so a click hears what's drawn.
+         if (host_.padSounds(pad).count() > 1)
+            host_.playPadTake(pad, shown());
+         else
+            host_.playPad(pad, 0.9f);
          playing_ = true;
          return;
       }
@@ -1696,12 +1817,20 @@ public:
       }
    }
    std::function<void()> onClick;
+   void setEnabled(bool on) {
+      if (on != enabled_) {
+         enabled_ = on;
+         redraw();
+      }
+   }
    void draw(visage::Canvas &c) override {
       const float s = ui::designScale(*this);
-      c.setColor(hover_ ? 0xff3a2a1a : 0xff2b2118);
+      c.setColor(!enabled_ ? kWell : hover_ ? 0xff3a2a1a : 0xff2b2118);
       c.roundedRectangle(0, 0, width(), height(), 6 * s);
-      c.setColor(kOrange);
+      c.setColor(enabled_ ? kOrange : ui::defaultTheme().panelBorder);
       c.roundedRectangleBorder(0, 0, width(), height(), 6 * s, 1.2f * s);
+      if (!enabled_)
+         c.setColor(ui::defaultTheme().dimText);
       c.text(text_, ui::font(10.5f * s), visage::Font::kCenter, 0, 0, width(), height());
    }
    void mouseEnter(const visage::MouseEvent &) override {
@@ -1713,13 +1842,13 @@ public:
       redraw();
    }
    void mouseDown(const visage::MouseEvent &) override {
-      if (onClick)
+      if (enabled_ && onClick)
          onClick();
    }
 
 private:
    std::string text_;
-   bool hover_ = false;
+   bool hover_ = false, enabled_ = true;
 };
 
 // GENERATE KIT's card: the style it will use, the sixteen pads it fills (a General MIDI kit), how
@@ -1727,10 +1856,22 @@ private:
 class KitDialog : public visage::Frame {
 public:
    std::function<std::string()> style;  // the prompt, as the kit's style ("" for a random one)
+   std::function<double()> strange;     // the GENERIC - STRANGE slider
    std::function<bool(int)> padFilled; // whether a pad has a sound
    std::function<int()> engine;
    std::function<double()> secondsPerSound; // the last run's, or a guess
    std::function<void(bool emptyOnly)> onStart;
+   std::function<int()> takes;          // takes per pad: 1, 2 or 4
+   std::function<void(int)> setTakes;
+   int layout = kDrumKitLayout; // the kind of kit (PROMPT's pills, in KIT)
+   static constexpr int kTakeChoices[3] = {1, 2, 4};
+   int takesNow() const { return takes ? takes() : 1; }
+   // TAKES PER PAD's three choices.
+   visage::Bounds takesBox(int i) const {
+      const float s = ui::designScale(*this);
+      const visage::Bounds b = card();
+      return {b.x() + (20 + 112 + i * 40) * s, b.y() + 233 * s, 34 * s, 20 * s};
+   }
 
    void open() {
       hover_ = -1;
@@ -1741,7 +1882,7 @@ public:
 
    visage::Bounds card() const {
       const float s = ui::designScale(*this);
-      const float w = 600 * s, h = 330 * s;
+      const float w = 600 * s, h = 360 * s;
       return {(width() - w) / 2, (height() - h) / 2, w, h};
    }
    // 0 empty pads only, 1 all pads.
@@ -1773,8 +1914,13 @@ public:
       c.setColor(kTitle);
       c.text("GENERATE A WHOLE KIT", ui::font(12 * s), visage::Font::kLeft, x, b.y() + 16 * s, 300 * s, 18 * s);
       c.setColor(t.dimText);
-      c.text("A sound for every pad, laid out like a General MIDI drum kit, all in one style.", ui::font(9 * s),
-             visage::Font::kLeft, x, b.y() + 34 * s, w, 14 * s);
+      static const char *const kAbout[kKitLayoutCount] = {
+         "A sound for every pad, laid out like a General MIDI drum kit, all in one style.",
+         "A sound for every pad: hand drums from around the world, one stroke each, all in one style.",
+         "A sound for every pad: bleeps, bloops, zaps, glitches and hits, all in one style.",
+         "A sound for every pad: a different animal on each, all in one style."};
+      c.text(kAbout[std::clamp(layout, 0, kKitLayoutCount - 1)],
+             ui::font(9 * s), visage::Font::kLeft, x, b.y() + 34 * s, w, 14 * s);
       const float xx = b.right() - 26 * s, xy = b.y() + 18 * s;
       c.segment(xx, xy, xx + 9 * s, xy + 9 * s, 1.4f * s, true);
       c.segment(xx + 9 * s, xy, xx, xy + 9 * s, 1.4f * s, true);
@@ -1785,14 +1931,20 @@ public:
       c.setColor(t.dimText);
       c.text("STYLE", ui::font(8 * s), visage::Font::kLeft, x, y, 60 * s, 14 * s);
       c.setColor(st.empty() ? t.dimText : t.text);
-      c.text(st.empty() ? "None typed: the kit gets a random style. Type one in PROMPT to choose it."
-                        : "\"" + (st.size() > 90 ? st.substr(0, 87) + "..." : st) + "\"",
+      c.text(st.empty() ? "None typed: the kit gets a random style. Type one in PROMPT, or roll its dice."
+                        : "\"" + (st.size() > 80 ? st.substr(0, 77) + "..." : st) + "\"",
              ui::font(9.5f * s), visage::Font::kLeft, x + 50 * s, y, w - 50 * s, 14 * s);
 
       c.setColor(t.dimText);
-      c.text("Each pad asks for its own sound in this style: \"closed hi-hat, " +
-                 (st.empty() ? std::string("...") : (st.size() > 40 ? st.substr(0, 37) + "..." : st)) +
-                 "\". Describe a style, not one sound.",
+      // An example pad's prompt as GENERIC would ask it; toward STRANGE each pad gets its own twist.
+      const int examplePad = layout == kHandPercussionLayout ? 8 : layout == kDrumKitLayout ? 6 : 2;
+      std::string example = st.empty() ? std::string(kitSlot(examplePad, layout).sound) + ", ..."
+                                        : kitPrompt(examplePad, st, layout);
+      if (example.size() > 44)
+         example = example.substr(0, 41) + "...";
+      const bool twisted = (strange ? strange() : 0.0) >= 0.35;
+      c.text("Each pad asks for its own sound: \"" + example + "\"" +
+                 (twisted ? ", with a strange twist each." : ". Describe a style, not one sound."),
              ui::font(8.5f * s), visage::Font::kLeft, x + 50 * s, y + 16 * s, w - 50 * s, 13 * s);
 
       // The pads, four by four, bottom row first like the KIT tab.
@@ -1806,29 +1958,50 @@ public:
          c.roundedRectangle(px, py, gw, gh, 4 * s);
          c.setColor(filled ? t.panelBorder : 0xff3a4250);
          c.roundedRectangleBorder(px, py, gw, gh, 4 * s, 1.0f);
-         c.setColor(roleColour(kitSlot(p).role));
+         c.setColor(roleColour(kitSlot(p, layout).role));
          c.circle(px + 8 * s, py + gh / 2 - 2.5f * s, 5 * s);
          c.setColor(t.text);
-         c.text(kitSlot(p).name, ui::font(9 * s), visage::Font::kLeft, px + 18 * s, py, gw - 60 * s, gh);
+         c.text(kitSlot(p, layout).name, ui::font(9 * s), visage::Font::kLeft, px + 18 * s, py, gw - 60 * s, gh);
          c.setColor(t.dimText);
          c.text(filled ? "has a sound" : "empty", ui::font(7.5f * s), visage::Font::kRight, px, py, gw - 8 * s, gh);
       }
       y += 4 * (gh + 6 * s) + 4 * s;
 
+      // Takes per pad: close variations of each pad's sound, one played each hit.
+      c.setColor(t.dimText);
+      c.text("VARIATIONS PER PAD", ui::font(8 * s), visage::Font::kLeft, x, takesBox(0).y(), 112 * s, takesBox(0).height());
+      for (int i = 0; i < 3; ++i) {
+         const visage::Bounds r = takesBox(i);
+         const bool on = takesNow() == kTakeChoices[i];
+         c.setColor(on ? kOrange : hover_ == 10 + i ? 0xff3a404a : kWell);
+         c.roundedRectangle(r.x(), r.y(), r.width(), r.height(), 4 * s);
+         c.setColor(on ? 0xff1a1d22 : t.text);
+         c.text(std::to_string(kTakeChoices[i]), ui::font(9.5f * s), visage::Font::kCenter, r.x(), r.y(), r.width(), r.height());
+      }
+      c.setColor(t.dimText);
+      c.text(takesNow() > 1 ? "each pad gets " + std::to_string(takesNow()) + " close variations, a different one each hit"
+                            : std::string("one sound a pad; 2 or 4 give each pad variations, a different one each hit"),
+             ui::font(8.5f * s), visage::Font::kLeft, takesBox(2).right() + 12 * s, takesBox(0).y(), 340 * s,
+             takesBox(0).height());
+      y += 30 * s;
+
       // How long, or why not.
       c.setColor(usable() ? t.dimText : kOrange);
       std::string note;
       if (!usable()) {
-         note = "ORB makes sound effects, not drums. Pick Stable Audio Open Small or 1.0 in ENGINE first.";
+         note = "WHOLE KIT uses Stable Audio. Pick Stable Audio Open Small or 1.0 in ENGINE first.";
       } else {
-         const double per = secondsPerSound ? secondsPerSound() : 5.0;
+         // More takes cost more: a variant on top takes most of what the first one does.
+         const double per = (secondsPerSound ? secondsPerSound() : 5.0) * (1.0 + 0.8 * (takesNow() - 1));
          const auto take = [&](int n) {
             const double sec = n * per;
             return sec < 90 ? "about " + std::to_string(std::max(1, static_cast<int>(sec / 10 + 0.5)) * 10) + " s"
                             : "about " + std::to_string(static_cast<int>(sec / 60 + 0.5)) + " min";
          };
-         note = "Empty pads: " + std::to_string(emptyCount()) + " sounds, " + take(emptyCount()) +
-                ".  All pads: 16 sounds, " + take(16) + ". The hats share choke group 1.";
+         const std::string unit = takesNow() > 1 ? " pads, " : " sounds, ";
+         note = "Empty pads: " + std::to_string(emptyCount()) + unit + take(emptyCount()) +
+                ".  All pads: 16" + unit + take(16) + "." +
+                (layout == kDrumKitLayout ? " The hats share key group 1." : "");
       }
       c.text(note, ui::font(8.5f * s), visage::Font::kLeft, x, y, w, 14 * s);
 
@@ -1851,13 +2024,23 @@ public:
    }
 
    void mouseMove(const visage::MouseEvent &e) override {
-      const int h = button(0).contains(e.position) ? 0 : button(1).contains(e.position) ? 1 : -1;
+      int h = button(0).contains(e.position) ? 0 : button(1).contains(e.position) ? 1 : -1;
+      for (int i = 0; i < 3; ++i)
+         if (takesBox(i).contains(e.position))
+            h = 10 + i;
       if (h != hover_) {
          hover_ = h;
          redraw();
       }
    }
    void mouseDown(const visage::MouseEvent &e) override {
+      for (int i = 0; i < 3; ++i)
+         if (takesBox(i).contains(e.position)) {
+            if (setTakes)
+               setTakes(kTakeChoices[i]);
+            redraw();
+            return;
+         }
       for (int i = 0; i < 2; ++i)
          if (button(i).contains(e.position)) {
             if (usable() && (i == 1 || emptyCount() > 0)) {
@@ -1874,6 +2057,548 @@ public:
 
 private:
    int hover_ = -1;
+};
+
+// TAKES: a pad's takes, one row each, over the panel. Each hit plays one take, picked as the mode
+// says; each take has its own region and fades (drag them on its waveform), level, tune and cuts
+// (drag a value up or down; double-click puts it back). The pad's own controls apply on top.
+class TakeEditor : public visage::Frame {
+public:
+   explicit TakeEditor(EditorHost &host) : host_(host) {}
+   int pad = 0;
+
+   void open(int forPad) {
+      pad = forPad;
+      hover_ = {};
+      drag_ = {};
+      setVisible(true);
+      redraw();
+   }
+   void close() { setVisible(false); }
+
+   // The value columns, after the waveform.
+   enum Column { kLevelCol, kTuneCol, kLowCol, kHighCol, kColumns };
+
+   visage::Bounds card() const {
+      const float s = ui::designScale(*this);
+      const float w = 860 * s, h = 470 * s;
+      return {(width() - w) / 2, (height() - h) / 2, w, h};
+   }
+   float sc() const { return ui::designScale(*this); }
+   float rowY(int i) const { return card().y() + (122 + i * 36) * sc(); }
+   float rowH() const { return 32 * sc(); }
+   float left() const { return card().x() + 20 * sc(); }
+   visage::Bounds playBox(int i) const { return {left(), rowY(i) + 6 * sc(), 20 * sc(), 20 * sc()}; }
+   visage::Bounds waveBox(int i) const { return {left() + 58 * sc(), rowY(i) + 2 * sc(), 300 * sc(), rowH() - 4 * sc()}; }
+   visage::Bounds valueBox(int i, int col) const {
+      return {left() + (372 + col * 70) * sc(), rowY(i) + 6 * sc(), 64 * sc(), 20 * sc()};
+   }
+   visage::Bounds upBox(int i) const { return {left() + 656 * sc(), rowY(i) + 6 * sc(), 20 * sc(), 20 * sc()}; }
+   visage::Bounds copyBox(int i) const { return {left() + 682 * sc(), rowY(i) + 6 * sc(), 50 * sc(), 20 * sc()}; }
+   visage::Bounds varyBox(int i) const { return {left() + 736 * sc(), rowY(i) + 6 * sc(), 50 * sc(), 20 * sc()}; }
+   visage::Bounds removeBox(int i) const { return {left() + 796 * sc(), rowY(i) + 6 * sc(), 20 * sc(), 20 * sc()}; }
+   visage::Bounds modeBox(int m) const {
+      return {left() + (60 + m * 88) * sc(), card().y() + 62 * sc(), 84 * sc(), 22 * sc()};
+   }
+   visage::Bounds addBox() const {
+      const visage::Bounds b = card();
+      return {b.x() + 20 * sc(), b.bottom() - 52 * sc(), 300 * sc(), 32 * sc()};
+   }
+   visage::Bounds doneBox() const {
+      const visage::Bounds b = card();
+      return {b.right() - 140 * sc(), b.bottom() - 52 * sc(), 120 * sc(), 32 * sc()};
+   }
+   visage::Bounds closeBox() const {
+      const visage::Bounds b = card();
+      return {b.right() - 36 * sc(), b.y() + 10 * sc(), 26 * sc(), 26 * sc()};
+   }
+
+   // Every take's waveform is drawn on one time scale, so the longest fills its box and a shorter
+   // one is shorter: the box's width, times its length over the longest's.
+   float span(const Take &k, float full) const {
+      double longest = 0.0;
+      for (const Take &o : host_.padSounds(pad).takes)
+         longest = std::max(longest, o.sample ? o.sample->seconds() : 0.0);
+      const double secs = k.sample ? k.sample->seconds() : 0.0;
+      return longest > 0.0 ? full * static_cast<float>(std::max(0.08, secs / longest)) : full;
+   }
+
+   // The variants ADD would bring: the starred ones, or all of them when none is starred.
+   std::vector<SamplePtr> variantsToAdd() const {
+      std::vector<SamplePtr> all, starred;
+      for (const Variant &v : host_.variants())
+         if (v.sample) {
+            all.push_back(v.sample);
+            if (v.starred)
+               starred.push_back(v.sample);
+         }
+      return starred.empty() ? all : starred;
+   }
+   int addCount() const {
+      const int room = kMaxTakes - host_.padSounds(pad).count();
+      return std::max(0, std::min(room, static_cast<int>(variantsToAdd().size())));
+   }
+   bool anyStarred() const {
+      for (const Variant &v : host_.variants())
+         if (v.sample && v.starred)
+            return true;
+      return false;
+   }
+
+   static std::string valueText(const Take &t, int col) {
+      char b[24];
+      switch (col) {
+         case kLevelCol:
+            std::snprintf(b, sizeof(b), "%+.1f dB", t.levelDb);
+            break;
+         case kTuneCol:
+            std::snprintf(b, sizeof(b), "%+.1f st", t.tune);
+            break;
+         case kLowCol:
+            if (t.lowCutHz <= 20.5)
+               return "off";
+            std::snprintf(b, sizeof(b), t.lowCutHz < 1000 ? "%.0f Hz" : "%.1f k", t.lowCutHz < 1000 ? t.lowCutHz : t.lowCutHz / 1000);
+            break;
+         default:
+            if (t.highCutHz >= 19999)
+               return "off";
+            std::snprintf(b, sizeof(b), t.highCutHz < 1000 ? "%.0f Hz" : "%.1f k", t.highCutHz < 1000 ? t.highCutHz : t.highCutHz / 1000);
+            break;
+      }
+      return b;
+   }
+
+   void draw(visage::Canvas &c) override {
+      const float s = sc();
+      const ui::Theme &t = ui::defaultTheme();
+      c.setColor(0xb0000000);
+      c.fill(0, 0, width(), height());
+      const visage::Bounds b = card();
+      c.setColor(t.panel);
+      c.roundedRectangle(b.x(), b.y(), b.width(), b.height(), 8 * s);
+      c.setColor(t.panelBorder);
+      c.roundedRectangleBorder(b.x(), b.y(), b.width(), b.height(), 8 * s, 1.0f);
+      const PadSounds p = host_.padSounds(pad);
+      const float x = left(), w = b.width() - 40 * s;
+      c.setColor(kTitle);
+      const std::string name = p.first() ? p.first()->name : std::string("Empty");
+      c.text("PAD " + std::to_string(pad + 1) + " \xC2\xB7 " + ellipsis(name, 24) + " \xC2\xB7 VARIATIONS", ui::font(12 * s),
+             visage::Font::kLeft, x, b.y() + 16 * s, 400 * s, 18 * s);
+      c.setColor(t.dimText);
+      c.text("Each hit plays one variation. Its own trims, level, tune and cuts come first; the pad's controls apply on top.",
+             ui::font(9 * s), visage::Font::kLeft, x, b.y() + 34 * s, w, 14 * s);
+      const visage::Bounds xb = closeBox();
+      const float cx = xb.x() + 8.5f * s, cy = xb.y() + 8.5f * s;
+      c.setColor(hover_.part == kClose ? t.text : t.dimText);
+      c.segment(cx, cy, cx + 9 * s, cy + 9 * s, 1.4f * s, true);
+      c.segment(cx + 9 * s, cy, cx, cy + 9 * s, 1.4f * s, true);
+
+      // How a hit picks one.
+      c.setColor(t.dimText);
+      c.text("PLAYS", ui::font(8.5f * s), visage::Font::kLeft, x, b.y() + 62 * s, 60 * s, 22 * s);
+      for (int m = 0; m < kTakeModeCount; ++m) {
+         const visage::Bounds r = modeBox(m);
+         const bool on = p.mode == m;
+         c.setColor(on ? kOrange : hover_.part == kMode && hover_.index == m ? 0xff3a404a : kWell);
+         c.roundedRectangle(r.x(), r.y(), r.width(), r.height(), 4 * s);
+         c.setColor(on ? 0xff1a1d22 : t.text);
+         c.text(kTakeModeNames[m], ui::font(9 * s), visage::Font::kCenter, r.x(), r.y(), r.width(), r.height());
+      }
+      static const char *const kModeAbout[kTakeModeCount] = {
+         "a different variation every hit, never the same twice running",
+         "the variations in order, round and round",
+         "soft hits play the first variation, hard ones the last"};
+      c.setColor(t.dimText);
+      c.text(kModeAbout[std::clamp(p.mode, 0, kTakeModeCount - 1)], ui::font(9 * s), visage::Font::kLeft,
+             modeBox(2).right() + 14 * s, b.y() + 62 * s, 300 * s, 22 * s);
+
+      // Column heads.
+      const float hy = b.y() + 102 * s;
+      c.setColor(t.dimText);
+      c.text("#", ui::font(8 * s), visage::Font::kLeft, x, hy, 60 * s, 14 * s);
+      c.text("EACH VARIATION'S SOUND, REGION AND FADES  (drag the handles)", ui::font(8 * s), visage::Font::kLeft, waveBox(0).x(), hy, 300 * s, 14 * s);
+      static const char *const kHeads[kColumns] = {"LEVEL", "TUNE", "LOW CUT", "HIGH CUT"};
+      for (int col = 0; col < kColumns; ++col) {
+         const visage::Bounds v = valueBox(0, col);
+         c.text(kHeads[col], ui::font(8 * s), visage::Font::kCenter, v.x(), hy, v.width(), 14 * s);
+      }
+      c.text("MAKE ANOTHER", ui::font(8 * s), visage::Font::kCenter, copyBox(0).x(), hy, varyBox(0).right() - copyBox(0).x(), 14 * s);
+
+      const int playing = host_.padTake(pad);
+      const float pos = host_.padPosition(pad);
+      for (int i = 0; i < kMaxTakes; ++i) {
+         const float ry = rowY(i);
+         if (i >= p.count()) {
+            c.setColor(0xff22262c);
+            c.roundedRectangle(x, ry, w, rowH(), 4 * s);
+            if (i == p.count()) {
+               c.setColor(kFaint);
+               c.text(p.empty() ? "No sound on this pad yet." : "More: COPY or VARY one above, add the Generate tab's variants below, or ADD AS VARIATION there.",
+                      ui::font(9 * s), visage::Font::kLeft, x + 12 * s, ry, w, rowH());
+            }
+            continue;
+         }
+         const Take &k = p.takes[static_cast<size_t>(i)];
+         const bool lit = i == playing && pos >= 0.0f;
+         c.setColor(lit ? 0xff2c2620 : kCell);
+         c.roundedRectangle(x, ry, w, rowH(), 4 * s);
+         if (lit) {
+            c.setColor(alpha(kOrange, 0.6f));
+            c.roundedRectangleBorder(x, ry, w, rowH(), 4 * s, 1.0f);
+         }
+         // Play.
+         const visage::Bounds pb = playBox(i);
+         c.setColor(hover_.part == kPlay && hover_.index == i ? kOrange : 0xff8a919c);
+         c.triangle(pb.x() + 6 * s, pb.y() + 4 * s, pb.x() + 6 * s, pb.bottom() - 4 * s, pb.right() - 4 * s, pb.y() + pb.height() / 2);
+         c.setColor(t.text);
+         c.text(std::to_string(i + 1), ui::font(10 * s), visage::Font::kLeft, pb.right() + 10 * s, ry, 20 * s, rowH());
+         // The waveform, its region and fades, and which sound it is.
+         const visage::Bounds wb = waveBox(i);
+         c.setColor(kWell);
+         c.roundedRectangle(wb.x(), wb.y(), wb.width(), wb.height(), 3 * s);
+         if (k.sample) {
+            char info[48];
+            std::snprintf(info, sizeof(info), "seed %u \xC2\xB7 %.2f s", static_cast<unsigned>(k.sample->seed), k.sample->seconds());
+            c.setColor(alpha(t.dimText, 0.8f));
+            c.text(info, ui::font(7.5f * s), visage::Font::kRight, wb.x(), wb.bottom() - 11 * s, wb.width() - 4 * s, 10 * s);
+         }
+         if (static_cast<size_t>(i) >= caches_.size())
+            caches_.resize(kMaxTakes);
+         const float ww = span(k, wb.width());
+         drawWave(c, caches_[static_cast<size_t>(i)].get(k.sample, std::max(12, static_cast<int>(90 * ww / wb.width()))),
+                  wb.x() + 2 * s, wb.y() + 2 * s, ww - 4 * s, wb.height() - 4 * s, lit ? kOrange : 0xff9aa2ad, k.start, k.end);
+         const double secs = k.sample ? k.sample->seconds() : 1.0;
+         const float xa = wb.x() + ww * static_cast<float>(k.start), xz = wb.x() + ww * static_cast<float>(k.end);
+         const float fi = static_cast<float>(std::min(k.end - k.start, k.fadeInMs * 0.001 / secs)) * ww;
+         const float fo = static_cast<float>(std::min(k.end - k.start, k.fadeOutMs * 0.001 / secs)) * ww;
+         c.setColor(kBlue);
+         if (fi > 0.5f)
+            c.segment(xa, wb.bottom() - 2 * s, xa + fi, wb.y() + 2 * s, 1.2f * s, true);
+         if (fo > 0.5f)
+            c.segment(xz - fo, wb.y() + 2 * s, xz, wb.bottom() - 2 * s, 1.2f * s, true);
+         c.circle(xa + fi - 3 * s, wb.y() - 1 * s, 6 * s);
+         c.circle(xz - fo - 3 * s, wb.y() - 1 * s, 6 * s);
+         c.setColor(kWhite);
+         c.fill(xa - 0.75f * s, wb.y(), 1.5f * s, wb.height());
+         c.fill(xz - 0.75f * s, wb.y(), 1.5f * s, wb.height());
+         if (lit) {
+            c.setColor(0xe6ffffff);
+            c.fill(wb.x() + ww * pos, wb.y(), 1.5f * s, wb.height());
+         }
+         // The values.
+         for (int col = 0; col < kColumns; ++col) {
+            const visage::Bounds v = valueBox(i, col);
+            const bool hot = (hover_.part == kValue || drag_.part == kValue) && hover_.index == i && hover_.col == col;
+            c.setColor(hot ? 0xff343a44 : kWell);
+            c.roundedRectangle(v.x(), v.y(), v.width(), v.height(), 3 * s);
+            const bool off = (col == kLowCol && k.lowCutHz <= 20.5) || (col == kHighCol && k.highCutHz >= 19999) ||
+                             (col == kLevelCol && std::fabs(k.levelDb) < 0.05) || (col == kTuneCol && std::fabs(k.tune) < 0.05);
+            c.setColor(off ? t.dimText : t.text);
+            c.text(valueText(k, col), ui::font(9 * s), visage::Font::kCenter, v.x(), v.y(), v.width(), v.height());
+         }
+         // Move up and remove.
+         if (i > 0) {
+            const visage::Bounds u = upBox(i);
+            c.setColor(hover_.part == kUp && hover_.index == i ? t.text : t.dimText);
+            c.triangle(u.x() + 5 * s, u.bottom() - 6 * s, u.right() - 5 * s, u.bottom() - 6 * s, u.x() + u.width() / 2, u.y() + 6 * s);
+         }
+         // COPY and VARY: a nudged copy now, or close relatives from the model.
+         const bool full = p.count() >= kMaxTakes;
+         for (int b2 = 0; b2 < 2; ++b2) {
+            const visage::Bounds r = b2 ? varyBox(i) : copyBox(i);
+            const bool busy = b2 && varyingRow == i;
+            const bool on = !full && (b2 == 0 || (canVary && canVary(i)));
+            const bool hot = on && hover_.part == (b2 ? kVary : kCopy) && hover_.index == i;
+            c.setColor(busy ? 0xff3a2a1a : hot ? 0xff343a44 : kWell);
+            c.roundedRectangle(r.x(), r.y(), r.width(), r.height(), 3 * s);
+            c.setColor(busy ? kOrange : on ? t.text : alpha(t.dimText, 0.5f));
+            c.text(busy ? "..." : b2 ? "VARY" : "COPY", ui::font(8.5f * s), visage::Font::kCenter, r.x(), r.y(), r.width(), r.height());
+         }
+         const visage::Bounds rb = removeBox(i);
+         c.setColor(hover_.part == kRemove && hover_.index == i ? kOrange : t.dimText);
+         const float rx = rb.x() + 6 * s, ryy = rb.y() + 6 * s;
+         c.segment(rx, ryy, rx + 8 * s, ryy + 8 * s, 1.3f * s, true);
+         c.segment(rx + 8 * s, ryy, rx, ryy + 8 * s, 1.3f * s, true);
+      }
+
+      // Add from the variants, and done.
+      const visage::Bounds ab = addBox();
+      const int n = addCount();
+      c.setColor(n > 0 ? (hover_.part == kAdd ? 0xff3a2a1a : 0xff2b2118) : kWell);
+      c.roundedRectangle(ab.x(), ab.y(), ab.width(), ab.height(), 6 * s);
+      c.setColor(n > 0 ? kOrange : t.panelBorder);
+      c.roundedRectangleBorder(ab.x(), ab.y(), ab.width(), ab.height(), 6 * s, 1.2f * s);
+      c.setColor(n > 0 ? kOrange : t.dimText);
+      const std::string addLabel = n > 0 ? "+ ADD " + std::to_string(n) + (anyStarred() ? " STARRED" : "") +
+                                              (n == 1 ? " VARIANT AS A VARIATION" : " VARIANTS AS VARIATIONS")
+                                         : p.count() >= kMaxTakes ? std::string("8 VARIATIONS: THE MOST A PAD HOLDS")
+                                                                  : std::string("NO VARIANTS TO ADD");
+      c.text(addLabel, ui::font(10 * s), visage::Font::kCenter, ab.x(), ab.y(), ab.width(), ab.height());
+      c.setColor(t.dimText);
+      c.text(std::to_string(p.count()) + " of " + std::to_string(kMaxTakes) + " variations", ui::font(9 * s),
+             visage::Font::kLeft, ab.right() + 14 * s, ab.y(), 120 * s, ab.height());
+      const visage::Bounds db = doneBox();
+      c.setColor(hover_.part == kDone ? 0xfff59a3e : kOrange);
+      c.roundedRectangle(db.x(), db.y(), db.width(), db.height(), 6 * s);
+      c.setColor(0xff1a1d22);
+      c.text("DONE", ui::font(10.5f * s), visage::Font::kCenter, db.x(), db.y(), db.width(), db.height());
+   }
+
+   void mouseMove(const visage::MouseEvent &e) override {
+      const Hit h = hit(e.position);
+      if (h.part != hover_.part || h.index != hover_.index || h.col != hover_.col) {
+         hover_ = h;
+         redraw();
+      }
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = {};
+      redraw();
+   }
+
+   void mouseDown(const visage::MouseEvent &e) override {
+      const Hit h = hit(e.position);
+      PadSounds p = host_.padSounds(pad);
+      drag_ = {};
+      switch (h.part) {
+         case kClose:
+         case kDone:
+            close();
+            return;
+         case kOutside:
+            close();
+            return;
+         case kMode:
+            p.mode = h.index;
+            host_.setPadSounds(pad, p);
+            break;
+         case kPlay:
+            host_.playPadTake(pad, h.index);
+            break;
+         case kUp:
+            if (h.index > 0 && h.index < p.count()) {
+               std::swap(p.takes[static_cast<size_t>(h.index)], p.takes[static_cast<size_t>(h.index - 1)]);
+               host_.setPadSounds(pad, p);
+            }
+            break;
+         case kRemove:
+            if (h.index < p.count()) {
+               p.takes.erase(p.takes.begin() + h.index);
+               host_.setPadSounds(pad, p);
+               if (onChanged)
+                  onChanged();
+            }
+            break;
+         case kCopy:
+            if (h.index < p.count() && p.count() < kMaxTakes) {
+               p.takes.insert(p.takes.begin() + h.index + 1, nudged(p.takes[static_cast<size_t>(h.index)]));
+               host_.setPadSounds(pad, p);
+               host_.playPadTake(pad, h.index + 1);
+               if (onChanged)
+                  onChanged();
+            }
+            break;
+         case kVary:
+            if (h.index < p.count() && p.count() < kMaxTakes && canVary && canVary(h.index) && onVary)
+               onVary(pad, h.index);
+            break;
+         case kAdd:
+            // Normalized and with their silence trimmed, as ADD TO KIT does by default; each take's
+            // own trims and fades are set here after.
+            for (const SamplePtr &v : variantsToAdd())
+               if (p.count() < kMaxTakes)
+                  p.takes.push_back(Take{std::make_shared<Sample>(treat(*v, Treatment{}))});
+            host_.setPadSounds(pad, p);
+            if (onChanged)
+               onChanged();
+            break;
+         case kValue:
+            if (h.index < p.count()) {
+               if (e.repeatClickCount() >= 2) {
+                  Take &k = p.takes[static_cast<size_t>(h.index)];
+                  const Take d;
+                  if (h.col == kLevelCol)
+                     k.levelDb = d.levelDb;
+                  else if (h.col == kTuneCol)
+                     k.tune = d.tune;
+                  else if (h.col == kLowCol)
+                     k.lowCutHz = d.lowCutHz;
+                  else
+                     k.highCutHz = d.highCutHz;
+                  host_.setPadSounds(pad, p);
+               } else {
+                  drag_ = h;
+                  dragFrom_ = p.takes[static_cast<size_t>(h.index)];
+                  dragY_ = e.position.y;
+               }
+            }
+            break;
+         case kWave:
+            if (h.index < p.count()) {
+               drag_ = h;
+               dragFrom_ = p.takes[static_cast<size_t>(h.index)];
+               drag_.col = nearestHandle(h.index, dragFrom_, e.position.x, e.position.y);
+               if (drag_.col < 0) {
+                  drag_ = {};
+                  host_.playPadTake(pad, h.index);
+               }
+            }
+            break;
+         default:
+            break;
+      }
+      redraw();
+   }
+
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (drag_.part == kNone)
+         return;
+      PadSounds p = host_.padSounds(pad);
+      if (drag_.index >= p.count())
+         return;
+      Take k = dragFrom_;
+      if (drag_.part == kValue) {
+         const double dy = (dragY_ - e.position.y) / sc(); // up is more
+         switch (drag_.col) {
+            case kLevelCol:
+               k.levelDb = std::round((dragFrom_.levelDb + dy * 0.1) * 10) / 10;
+               break;
+            case kTuneCol:
+               k.tune = std::round((dragFrom_.tune + dy * 0.05) * 10) / 10;
+               break;
+            case kLowCol:
+               k.lowCutHz = dragFrom_.lowCutHz * std::pow(2.0, dy / 20.0);
+               break;
+            default:
+               k.highCutHz = dragFrom_.highCutHz * std::pow(2.0, dy / 20.0);
+               break;
+         }
+      } else {
+         const visage::Bounds wb = waveBox(drag_.index);
+         const double f = std::clamp(static_cast<double>((e.position.x - wb.x()) / span(k, wb.width())), 0.0, 1.0);
+         const double secs = k.sample ? k.sample->seconds() : 1.0;
+         switch (drag_.col) {
+            case 0: // start
+               k.start = std::min(f, k.end - 0.01);
+               break;
+            case 1: // end
+               k.end = std::max(f, k.start + 0.01);
+               break;
+            case 2: // fade in: how far past the start
+               k.fadeInMs = std::max(0.0, (f - k.start) * secs * 1000.0);
+               break;
+            default: // fade out: how far before the end
+               k.fadeOutMs = std::max(0.0, (k.end - f) * secs * 1000.0);
+               break;
+         }
+      }
+      p.takes[static_cast<size_t>(drag_.index)] = k;
+      host_.setPadSounds(pad, p);
+      redraw();
+   }
+   void mouseUp(const visage::MouseEvent &) override {
+      if (drag_.part != kNone && onChanged)
+         onChanged();
+      drag_ = {};
+   }
+
+   std::function<void()> onChanged; // the takes changed: the panel redraws the pad
+   // VARY: whether a row's sound can be varied now (it has a prompt and nothing is generating),
+   // and starting it; `varyingRow` is the row being varied (-1 for none).
+   std::function<bool(int)> canVary;
+   std::function<void(int pad, int index)> onVary;
+   int varyingRow = -1;
+
+   // COPY: the same sound with small random nudges, so it's a variation and not a repeat: tune
+   // within a fifth of a semitone, level within 1.5 dB, the start a few ms on, and now and then a
+   // slightly darker top.
+   static Take nudged(const Take &k) {
+      std::random_device rd;
+      std::mt19937 g(rd());
+      std::uniform_real_distribution<double> u(-1.0, 1.0);
+      Take c = k;
+      c.tune = std::round((k.tune + 0.2 * u(g)) * 100) / 100;
+      c.levelDb = std::round((k.levelDb + 1.5 * u(g)) * 10) / 10;
+      const double secs = k.sample ? std::max(0.01, k.sample->seconds()) : 1.0;
+      c.start = std::clamp(k.start + std::fabs(u(g)) * 0.004 / secs, 0.0, std::max(0.0, k.end - 0.01));
+      if (u(g) > 0.3 && k.highCutHz >= 19999)
+         c.highCutHz = std::round(9000 + 6000 * std::fabs(u(g)));
+      return c.clamped();
+   }
+
+private:
+   enum Part { kNone, kOutside, kClose, kDone, kMode, kPlay, kWave, kValue, kUp, kRemove, kAdd, kCopy, kVary };
+   struct Hit {
+      Part part = kNone;
+      int index = -1;
+      int col = -1;
+   };
+
+   Hit hit(visage::Point q) const {
+      if (!card().contains(q))
+         return {kOutside};
+      if (closeBox().contains(q))
+         return {kClose};
+      if (doneBox().contains(q))
+         return {kDone};
+      if (addBox().contains(q))
+         return {kAdd};
+      for (int m = 0; m < kTakeModeCount; ++m)
+         if (modeBox(m).contains(q))
+            return {kMode, m};
+      const int n = host_.padSounds(pad).count();
+      for (int i = 0; i < n; ++i) {
+         if (playBox(i).contains(q))
+            return {kPlay, i};
+         visage::Bounds wb = waveBox(i);
+         wb = {wb.x() - 6 * sc(), wb.y() - 8 * sc(), wb.width() + 12 * sc(), wb.height() + 10 * sc()};
+         if (wb.contains(q))
+            return {kWave, i};
+         for (int col = 0; col < kColumns; ++col)
+            if (valueBox(i, col).contains(q))
+               return {kValue, i, col};
+         if (i > 0 && upBox(i).contains(q))
+            return {kUp, i};
+         if (copyBox(i).contains(q))
+            return {kCopy, i};
+         if (varyBox(i).contains(q))
+            return {kVary, i};
+         if (removeBox(i).contains(q))
+            return {kRemove, i};
+      }
+      return {};
+   }
+
+   // 0 start, 1 end, 2 fade in, 3 fade out, or -1 when none is near (a click plays it).
+   int nearestHandle(int i, const Take &k, float px, float py) const {
+      const visage::Bounds wb = waveBox(i);
+      const double secs = k.sample ? k.sample->seconds() : 1.0;
+      const float ww = span(k, wb.width());
+      const float xa = wb.x() + ww * static_cast<float>(k.start), xz = wb.x() + ww * static_cast<float>(k.end);
+      const float fi = xa + static_cast<float>(std::min(k.end - k.start, k.fadeInMs * 0.001 / secs)) * ww;
+      const float fo = xz - static_cast<float>(std::min(k.end - k.start, k.fadeOutMs * 0.001 / secs)) * ww;
+      // The fade handles sit along the top; the region's ends are the full-height lines.
+      const bool top = py < wb.y() + wb.height() * 0.35f;
+      const float xs[4] = {xa, xz, fi, fo};
+      int best = -1;
+      float bestD = 10 * sc();
+      for (int h = 0; h < 4; ++h) {
+         if ((h >= 2) != top)
+            continue;
+         const float d = std::fabs(px - xs[h]);
+         if (d < bestD) {
+            bestD = d;
+            best = h;
+         }
+      }
+      return best;
+   }
+
+   EditorHost &host_;
+   Hit hover_, drag_;
+   Take dragFrom_;
+   float dragY_ = 0;
+   std::vector<WaveCache> caches_ = std::vector<WaveCache>(kMaxTakes);
 };
 
 // OUTPUT's picture: every pad where its pan puts it (higher for brighter roles), glowing while it
@@ -2007,6 +2732,7 @@ public:
       enginePicker_->setVisible(false);
       kitDialog_ = &add<KitDialog>({0, 0, kDesignWidth, kDesignHeight});
       kitDialog_->style = [this] { return trimmed(host_.gen().prompt); };
+      kitDialog_->strange = [this] { return host_.gen().strange; };
       kitDialog_->padFilled = [this](int p) { return host_.padSample(p) != nullptr; };
       kitDialog_->engine = [this] { return host_.gen().engine; };
       kitDialog_->secondsPerSound = [this] {
@@ -2017,8 +2743,21 @@ public:
          return host_.gen().engine == 2 ? 30.0 : 4.0;
       };
       kitDialog_->onStart = [this](bool emptyOnly) { startKit(emptyOnly); };
+      kitDialog_->takes = [this] { return host_.gen().kitTakes; };
+      kitDialog_->setTakes = [this](int n) { host_.gen().kitTakes = n; };
+
       kitDialog_->setOnTop(true);
       kitDialog_->setVisible(false);
+      takeEditor_ = &add<TakeEditor>({0, 0, kDesignWidth, kDesignHeight}, host_);
+      takeEditor_->onChanged = [this] { redraw(); };
+      takeEditor_->canVary = [this](int i) {
+         const PadSounds p = host_.padSounds(takeEditor_->pad);
+         return !host_.generating() && varyPad_ < 0 && kitQueue_.empty() && !orb() && i < p.count() &&
+                p.takes[static_cast<size_t>(i)].sample && !p.takes[static_cast<size_t>(i)].sample->prompt.empty();
+      };
+      takeEditor_->onVary = [this](int pad, int i) { varyVariation(pad, i); };
+      takeEditor_->setOnTop(true);
+      takeEditor_->setVisible(false);
       tabs_->select(host_.page);
       refresh();
       startTimer(33);
@@ -2029,7 +2768,11 @@ public:
       host_.page = page;
    }
    void openEnginePicker() { enginePicker_->open(); }
-   void openKitDialog() { kitDialog_->open(); }
+   void openKitDialog() {
+      kitDialog_->layout = host_.gen().kitLayout;
+      kitDialog_->open();
+   }
+   void openTakes(int pad) { takeEditor_->open(pad); }
 
    // ---- the timer ----
 
@@ -2053,16 +2796,36 @@ public:
          lastError_ = error;
          kitQueue_.clear();
       }
+      if (varyPad_ >= 0) {
+         // VARY in VARIATIONS: the first one back is the sound itself; the rest join the pad.
+         if (std::vector<SamplePtr> sounds = host_.takeKitSounds(); !sounds.empty()) {
+            PadSounds p = host_.padSounds(varyPad_);
+            int at = std::min(varyIndex_ + 1, p.count());
+            for (size_t k = 1; k < sounds.size() && p.count() < kMaxTakes; ++k) {
+               auto s = std::make_shared<Sample>(treat(*sounds[k], Treatment{}));
+               p.takes.insert(p.takes.begin() + at++, Take{std::move(s)});
+            }
+            host_.setPadSounds(varyPad_, p);
+            host_.playPadTake(varyPad_, std::min(varyIndex_ + 1, p.count() - 1));
+            varyPad_ = -1;
+            takeEditor_->varyingRow = -1;
+         } else if (!host_.generating()) {
+            varyPad_ = -1; // stopped or failed
+            takeEditor_->varyingRow = -1;
+         }
+      }
       if (!kitQueue_.empty()) {
-         if (SamplePtr sound = host_.takeKitSound()) {
-            lastRunSounds_ = 1;
-            placeKitSound(kitQueue_.front(), sound);
+         if (std::vector<SamplePtr> sounds = host_.takeKitSounds(); !sounds.empty()) {
+            lastRunSounds_ = static_cast<int>(sounds.size());
+            placeKitSound(kitQueue_.front(), sounds);
             kitQueue_.erase(kitQueue_.begin());
             nextKitSound();
          } else if (!host_.generating()) {
             kitQueue_.clear(); // stopped
          }
       }
+      if (takeEditor_->isVisible())
+         takeEditor_->redraw();
       refresh();
    }
 
@@ -2125,15 +2888,15 @@ private:
          std::ifstream in(soundsFile(file), std::ios::binary);
          std::stringstream bytes;
          bytes << in.rdbuf();
-         SamplePtr pads[kPads];
+         PadSounds pads[kPads];
          if (readKit(bytes.str(), pads))
             for (int i = 0; i < kPads; ++i)
-               host_.setPadSample(i, pads[i]);
+               host_.setPadSounds(i, pads[i]);
       };
       presets_->onSaved = [this](const std::filesystem::path &file) {
-         SamplePtr pads[kPads];
+         PadSounds pads[kPads];
          for (int i = 0; i < kPads; ++i)
-            pads[i] = host_.padSample(i);
+            pads[i] = host_.padSounds(i);
          std::ofstream out(soundsFile(file), std::ios::binary);
          const std::string bytes = writeKit(pads);
          out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
@@ -2191,7 +2954,22 @@ private:
       prompt_ = &onPage<PromptBox>(P, {24, 220, 348, 62});
       prompt_->onChange = [this](const std::string &t) { host_.gen().prompt = t; };
       roles_ = &onPage<ChipRow>(P, {24, 306, 316, 20});
-      roles_->onChange = [this](int r) { host_.gen().role = r; };
+      roles_->onChange = [this](int r) {
+         if (host_.gen().kitMode)
+            host_.gen().kitLayout = r;
+         else
+            host_.gen().role = r;
+      };
+      // SOUND or KIT: what GENERATE makes, and what the pills and the dice are for.
+      mode_ = &onPage<ui::Dropdown>(P, {24, 284, 74, 18}, std::vector<std::string>{"SOUND", "KIT"});
+      mode_->setAccent(kOrange);
+      mode_->onChange = [this](int i) {
+         host_.gen().kitMode = i == 1;
+         syncEngine();
+         redraw();
+      };
+      tips_.add(*mode_, "SOUND makes one sound in variants. KIT makes a sound for every pad, as a drum kit, "
+                        "percussion, effects or animals.");
       tips_.add(*roles_, "What the sound is for: the random prompt, the pad's colour and its name.");
       dice_ = &onPage<IconButton>(P, {346, 306, 26, 20}, IconButton::Icon::Dice);
       dice_->onClick = [this] { randomPrompt(); };
@@ -2208,18 +2986,18 @@ private:
                         [](double v) { return std::to_string(static_cast<int>(std::lround(v))); },
                         [this](double v) { host_.gen().steps = static_cast<int>(std::lround(v)); });
       tips_.add(*steps_, "Diffusion steps. Small is tuned for 8, 1.0 for about 50; more is slower.");
-      guidance_ = &genKnob({24 + 2 * kw, ky, kw, 80}, "GUIDANCE", ui::ValueRange{1, 7, 1, 0.1},
+      guidance_ = &genKnob({24 + 2 * kw, ky, kw, 80}, "PROMPT STRENGTH", ui::ValueRange{1, 12, 7, 0.1},
                            [](double v) {
                               char b[16];
                               std::snprintf(b, sizeof(b), "%.1f", v);
                               return std::string(b);
                            },
                            [this](double v) { host_.gen().guidance = v; });
-      tips_.add(*guidance_, "How hard it follows the words. Small is tuned for 1, 1.0 for 7; above 1 takes twice as long.");
+      tips_.add(*guidance_, "Prompt strength (1.0 only): how hard it pulls toward the words. 7 is its sweet spot; higher gets harsher and stranger, and above 1 takes twice as long.");
       variety_ = &genKnob({24 + 3 * kw, ky, kw, 80}, "VARIETY", ui::ValueRange{0, 1, 1, 0.01},
                           [](double v) { return std::to_string(static_cast<int>(std::lround(v * 100))) + "%"; },
                           [this](double v) { host_.gen().variety = v; });
-      tips_.add(*variety_, "How different the variants are from each other: low makes takes of one sound.");
+      tips_.add(*variety_, "How different the variants are from each other: low makes versions of one sound.");
 
       const float sy = 446;
       count_ = &onPage<ui::SegmentedSwitch>(P, {24, sy + 16, 348, 22}, std::vector<std::string>{"1", "2", "4", "8"});
@@ -2227,16 +3005,16 @@ private:
       count_->onChange = [this](int i) { host_.gen().variants = 1 << i; };
       tips_.add(*count_, "How many sounds each GENERATE makes. Every GENERATE starts from new random seeds.");
 
-      generate_ = &onPage<GoButton>(P, {24, 496, 252, 40}, "GENERATE");
-      generate_->onClick = [this] { generate(-1); };
-      wholeKit_ = &onPage<OutlineButton>(P, {282, 496, 90, 40}, "WHOLE KIT");
-      wholeKit_->onClick = [this] {
+      generate_ = &onPage<GoButton>(P, {24, 496, 348, 40}, "GENERATE");
+      generate_->onClick = [this] {
          if (!kitQueue_.empty())
             stopKit();
-         else if (!host_.generating())
-            kitDialog_->open();
+         else if (host_.gen().kitMode) {
+            if (!host_.generating() && !orb())
+               openKitDialog();
+         } else
+            generate(-1);
       };
-      tips_.add(*wholeKit_, "Make a sound for every pad at once, in the style of the prompt.");
 
       recentArea_ = &onPage<ui::HoverArea>(P, {24, 588, 348, 56});
       recentArea_->onMouseDown() += [this](const visage::MouseEvent &e) {
@@ -2293,8 +3071,11 @@ private:
       picker_ = &onPage<PadPicker>(P, {404, 528, 260, 88}, host_);
       picker_->onPick = [this](int) { redraw(); };
       tips_.add(*picker_, "The pad it goes on. Pad 1 is bottom left, on MIDI note 36.");
-      addToKit_ = &onPage<GoButton>(P, {674, 594, 382, 30}, "ADD TO KIT");
+      addToKit_ = &onPage<GoButton>(P, {674, 594, 228, 30}, "ADD TO KIT");
       addToKit_->onClick = [this] { addToKit(); };
+      addTake_ = &onPage<OutlineButton>(P, {910, 594, 146, 30}, "ADD AS VARIATION");
+      addTake_->onClick = [this] { addToKit(true); };
+      tips_.add(*addTake_, "Keep the pad's sound and add this one beside it as another variation: each hit plays one of them.");
    }
 
    ui::Knob &genKnob(ui::Rect r, const char *label, ui::ValueRange range, std::function<std::string(double)> textOf,
@@ -2309,6 +3090,11 @@ private:
 
    void randomPrompt() {
       GenSettings &g = host_.gen();
+      if (g.kitMode) {
+         g.prompt = randomKitStyle(std::random_device{}(), g.kitLayout, g.strange);
+         prompt_->setText(g.prompt);
+         return;
+      }
       g.prompt = orb() ? jkit::randomOrbPrompt(static_cast<Role>(g.role), g.strange, std::random_device{}())
                        : jkit::randomPrompt(static_cast<Role>(g.role), g.strange, std::random_device{}(), g.engine == 2);
       prompt_->setText(g.prompt);
@@ -2323,15 +3109,19 @@ private:
    void startKit(bool emptyOnly) {
       if (host_.generating() || orb())
          return;
+      kitLayout_ = kitDialog_->layout;
       kitStyle_ = trimmed(host_.gen().prompt);
+      kitStrange_ = host_.gen().strange;
+      kitTakes_ = host_.gen().kitTakes;
+      kitSeed_ = std::random_device{}();
       if (kitStyle_.empty())
-         kitStyle_ = randomKitStyle(std::random_device{}());
+         kitStyle_ = randomKitStyle(std::random_device{}(), kitLayout_, host_.gen().strange);
       kitQueue_.clear();
-      // The kick and snare first, so you hear the kit take shape.
-      static const int kOrder[kKitSlots] = {0, 2, 6, 10, 3, 1, 4, 8, 13, 5, 7, 9, 11, 12, 14, 15};
-      for (int p : kOrder)
-         if (!emptyOnly || !host_.padSample(p))
-            kitQueue_.push_back(p);
+      // The backbone first (kick and snare, or cajon), so you hear the kit take shape.
+      const int *order = kitOrder(kitLayout_);
+      for (int i = 0; i < kKitSlots; ++i)
+         if (!emptyOnly || !host_.padSample(order[i]))
+            kitQueue_.push_back(order[i]);
       kitTotal_ = static_cast<int>(kitQueue_.size());
       if (kitQueue_.empty())
          return;
@@ -2344,19 +3134,25 @@ private:
    void nextKitSound() {
       if (kitQueue_.empty())
          return;
-      const KitSlot &slot = kitSlot(kitQueue_.front());
-      host_.generateOne(kitPrompt(kitQueue_.front(), kitStyle_), slot.role, slot.seconds, slot.name);
+      const KitSlot &slot = kitSlot(kitQueue_.front(), kitLayout_);
+      host_.generateOne(kitPrompt(kitQueue_.front(), kitStyle_, kitLayout_, kitStrange_, kitSeed_), slot.role, slot.seconds,
+                        slot.name, kitTakes_);
    }
    void stopKit() {
       kitQueue_.clear();
       host_.cancelEngine();
    }
-   // A kit sound onto its pad: treated (NORMALIZE, TRIM SILENCE...), played start to end, and the
-   // hats in their choke group.
-   void placeKitSound(int pad, const SamplePtr &sound) {
-      auto s = std::make_shared<Sample>(treat(*sound, host_.treatment()));
-      s->name = uniqueName(sound->name, pad);
-      host_.setPadSample(pad, s);
+   // A kit pad's sounds onto it, as its takes: treated (NORMALIZE, TRIM SILENCE...), played start to
+   // end, and the hats in their choke group.
+   void placeKitSound(int pad, const std::vector<SamplePtr> &sounds) {
+      PadSounds p;
+      const std::string name = uniqueName(sounds.front()->name, pad);
+      for (const SamplePtr &sound : sounds) {
+         auto s = std::make_shared<Sample>(treat(*sound, host_.treatment()));
+         s->name = name;
+         p.takes.push_back(Take{std::move(s)});
+      }
+      host_.setPadSounds(pad, std::move(p));
       const auto set = [this](clap_id id, double v) {
          host_.beginEdit(id);
          host_.setParam(id, v);
@@ -2364,7 +3160,7 @@ private:
       };
       set(padParam(pad, kStart), 0.0);
       set(padParam(pad, kEnd), 1.0);
-      const int choke = kitSlot(pad).choke;
+      const int choke = kitSlot(pad, kitLayout_).choke;
       if (choke > 0 && host_.paramValue(padParam(pad, kChoke)) < 0.5)
          set(padParam(pad, kChoke), choke);
    }
@@ -2419,14 +3215,27 @@ private:
       }
    }
 
-   void addToKit() {
+   // ADD TO KIT puts the sound on the pad in place of what's there; ADD AS TAKE (`asTake`) adds it
+   // beside the pad's takes, or puts it there as the first when the pad is empty.
+   void addToKit(bool asTake = false) {
       SamplePtr t = treated();
       if (!t)
          return;
+      const int pad = host_.targetPad;
+      if (asTake && host_.padSample(pad)) {
+         if (host_.addPadTake(pad, t)) {
+            host_.selectedPad = pad;
+            added_ = pad;
+            addedAt_ = 0;
+            addedTake_ = true;
+         }
+         redraw();
+         return;
+      }
+      addedTake_ = false;
       auto s = std::make_shared<Sample>(*t);
       s->name = uniqueName(s->name.empty() ? kRoleNames[std::clamp(s->role, 0, kRoleCount - 1)] : s->name,
                            host_.targetPad);
-      const int pad = host_.targetPad;
       host_.setPadSample(pad, s);
       // A new sound plays from its start to its end.
       for (PadParam f : {kStart, kEnd}) {
@@ -2438,14 +3247,47 @@ private:
       host_.selectedPad = pad;
       added_ = pad;
       addedAt_ = 0;
-      // The next empty pad is the next target.
-      for (int k = 1; k < kPads; ++k) {
+      // The next empty pad is the next target (ADD AS TAKE stays on this one, for more takes).
+      for (int k = 1; k < kPads && !asTake; ++k) {
          const int p = (pad + k) % kPads;
          if (!host_.padSample(p)) {
             host_.targetPad = p;
             break;
          }
       }
+      redraw();
+   }
+
+   // VARY on a variation: two close relatives of its sound from the model (the pad's engine, steps
+   // and strength), added after it. Uses the sound's own prompt, role, length and seed.
+   void varyVariation(int pad, int i) {
+      const PadSounds p = host_.padSounds(pad);
+      if (i < 0 || i >= p.count() || !p.takes[static_cast<size_t>(i)].sample || host_.generating())
+         return;
+      const SamplePtr &src = p.takes[static_cast<size_t>(i)].sample;
+      const EngineStatus e = host_.engine();
+      if (e.state == EngineStatus::State::Missing || e.state == EngineStatus::State::Failed)
+         host_.installEngine();
+      varyPad_ = pad;
+      varyIndex_ = i;
+      takeEditor_->varyingRow = i;
+      const int room = kMaxTakes - p.count();
+      host_.generateOne(src->prompt, src->role, std::max(0.2, src->seconds()), src->name, std::min(2, room),
+                        src->seed ? src->seed : 1);
+   }
+
+   // The Kit tab's + tab: the Generate tab's selected variant, treated, as one more variation of the
+   // selected pad; with none to add, the VARIATIONS window.
+   void addVariationHere() {
+      const int pad = host_.selectedPad;
+      SamplePtr t = treated();
+      if (!t || !host_.addPadTake(pad, t)) {
+         openTakes(pad);
+         return;
+      }
+      variationTab_ = host_.padSounds(pad).count() - 1;
+      variationTabs_->selected = variationTab_;
+      host_.playPadTake(pad, variationTab_);
       redraw();
    }
 
@@ -2495,30 +3337,48 @@ private:
       engine_->setSelected(host_.gen().engine);
       const bool open1 = host_.gen().engine == 2;
       steps_->setRange(open1 ? ui::ValueRange{10, 100, 50, 1, false, true} : ui::ValueRange{4, 16, 8, 1, false, true});
-      guidance_->setRange(open1 ? ui::ValueRange{1, 12, 7, 0.1} : ui::ValueRange{1, 7, 1, 0.1});
       steps_->setValue(host_.gen().steps);
       guidance_->setValue(host_.gen().guidance);
       steps_->setVisible(!orb());
-      guidance_->setVisible(!orb());
+      // Small always runs at guidance 1, the only setting it was tuned for: the knob is 1.0's.
+      guidance_->setVisible(open1);
       variety_->setVisible(!orb());
       // ORB makes sound effects, not drums: its chips are the kinds of sound it has, and its slider
       // goes from one sound to a few in a row.
-      roles_->names = orb() ? kOrbKindNames : kRoleNames;
+      const GenSettings &gs = host_.gen();
+      mode_->setSelected(gs.kitMode ? 1 : 0);
+      roles_->names = gs.kitMode ? kKitLayoutNames : orb() ? kOrbKindNames : kRoleNames;
+      roles_->count = gs.kitMode ? kKitLayoutCount : kRoleCount;
+      roles_->selected = gs.kitMode ? gs.kitLayout : gs.role;
       roles_->redraw();
+      // KIT: each pad has its own length, and there are no variants. The slider stays: it says how
+      // plain or strange the kit's style and each pad's prompt are.
+      length_->setVisible(!gs.kitMode);
+      count_->setVisible(!gs.kitMode);
+      if (gs.kitMode)
+         variety_->setVisible(false);
+      // The knobs that show sit side by side from the left, with no gap for a hidden one.
+      {
+         const float kw = 348.0f / 4, ky = 360;
+         int col = 0;
+         for (ui::Knob *k : {length_, steps_, guidance_, variety_})
+            if (k->isVisible())
+               move(*k, {24 + kw * col++, ky, kw, 80});
+      }
       strange_->setLabels(orb() ? "ONE SOUND" : "GENERIC", orb() ? "LAYERED" : "STRANGE");
       tips_.setText(*roles_, orb() ? "The kind of sound ORB can make, for the random prompt, the pad's colour and its name."
                                    : "What the sound is for: the random prompt, the pad's colour and its name.");
       tips_.setText(*dice_, orb() ? "A random prompt for this kind of sound, worded the way ORB reads them."
                                   : "A random prompt for this role. The slider below says how strange.");
-      tips_.setText(*strange_, orb() ? "How many sounds a random prompt asks ORB for: one at the left, a few in a row at the right."
-                                     : "How strange a random prompt gets: studio drums at the left, objects and places at the right.");
+      tips_.setText(*strange_, orb()          ? "How many sounds a random prompt asks ORB for: one at the left, a few in a row at the right."
+                               : gs.kitMode ? "How plain or strange the kit is: \"909 kick drum\" at the left, each pad its own odd object and process at the right."
+                                            : "How strange a random prompt gets: just the sound at the left, objects and places at the right.");
    }
 
    void syncGenerate() {
       const GenSettings &g = host_.gen();
       syncEngine();
       prompt_->setText(g.prompt);
-      roles_->selected = g.role;
       roles_->redraw();
       strange_->setValue(g.strange);
       length_->setValue(g.seconds);
@@ -2547,20 +3407,26 @@ private:
       const bool busy = host_.generating();
       const double p = busy ? host_.generateProgress() : -3.0;
       const bool kit = !kitQueue_.empty();
-      wholeKit_->setText(kit ? "STOP" : "WHOLE KIT");
       if (busy && kit)
          generate_->setLabel(p < 0 ? std::string(status_.state == EngineStatus::State::Downloading ? "WAITING FOR THE DOWNLOAD"
                                                                                                   : "LOADING THE MODEL")
                                    : "KIT " + std::to_string(kitTotal_ - static_cast<int>(kitQueue_.size()) + 1) + " OF " +
-                                         std::to_string(kitTotal_) + " \xC2\xB7 " + kitSlot(kitQueue_.front()).name + " " +
-                                         std::to_string(static_cast<int>(p * 100)) + "%");
+                                         std::to_string(kitTotal_) + " \xC2\xB7 " + kitSlot(kitQueue_.front(), kitLayout_).name + " " +
+                                         std::to_string(static_cast<int>(p * 100)) + "% \xC2\xB7 STOP");
       else if (busy)
          generate_->setLabel(p < 0 ? (status_.state == EngineStatus::State::Downloading ? "WAITING FOR THE DOWNLOAD"
                                                                                          : "LOADING THE MODEL")
                                    : "GENERATING " + std::to_string(static_cast<int>(p * 100)) + "%");
+      else if (host_.gen().kitMode)
+      {
+         static const char *const kLabels[kKitLayoutCount] = {"GENERATE DRUM KIT", "GENERATE PERCUSSION KIT",
+                                                              "GENERATE FX KIT", "GENERATE ANIMAL KIT"};
+         generate_->setLabel(kLabels[std::clamp(host_.gen().kitLayout, 0, kKitLayoutCount - 1)]);
+      }
       else
          generate_->setLabel(host_.gen().variants > 1 ? "GENERATE " + std::to_string(host_.gen().variants)
                                                        : std::string("GENERATE"));
+      generate_->setEnabled(!(host_.gen().kitMode && orb() && !busy));
       generate_->setProgress(busy ? std::max(-1.0, p) : -3.0);
       // The engine's button.
       std::string action;
@@ -2581,6 +3447,7 @@ private:
       engineAction_->setText(action);
       const bool haveSound = trim_->sample != nullptr;
       addToKit_->setEnabled(haveSound);
+      addTake_->setEnabled(haveSound && host_.padSounds(host_.targetPad).count() < kMaxTakes);
       vary_->setVisible(true);
       const float pos = host_.auditionPosition();
       const auto &vars = host_.variants();
@@ -2663,7 +3530,7 @@ private:
 
       // PROMPT
       drawCard(c, s, 12, 182, 372, 466, "PROMPT", "what the sound should be");
-      drawLabel(c, s, "ROLE", 24, 290);
+
       c.setColor(kRule);
       c.fill(24 * s, 354 * s, 348 * s, 1.0f * s);
       if (orb()) {
@@ -2673,9 +3540,27 @@ private:
          c.text("try \"door slam\", \"glass\", \"metal clang\".", ui::font(9 * s), visage::Font::kLeft, x * s, 392 * s, 250 * s, 14 * s);
          c.text("Each variant draws its own plan.", ui::font(9 * s), visage::Font::kLeft, x * s, 412 * s, 250 * s, 14 * s);
       }
-      drawLabel(c, s, "VARIANTS", 24, 446);
+      const bool kitMode = host_.gen().kitMode;
+      if (kitMode) {
+         c.setColor(t.dimText);
+         c.text("Every pad gets its own sound and length, in the style of the prompt.", ui::font(9 * s),
+                visage::Font::kLeft, 24 * s, 446 * s, 348 * s, 14 * s);
+         if (!orb())
+            c.text("GENERIC asks plainly (\"909 kick drum\"); STRANGE twists every pad.",
+                   ui::font(9 * s), visage::Font::kLeft, 24 * s, 462 * s, 348 * s, 14 * s);
+         else {
+            c.setColor(kOrange);
+            c.text("KIT uses Stable Audio: pick Small or 1.0 in ENGINE.", ui::font(9 * s), visage::Font::kLeft,
+                   24 * s, 446 * s, 348 * s, 14 * s);
+         }
+      } else
+         drawLabel(c, s, "VARIANTS", 24, 446);
       std::string hint;
-      if (host_.generating())
+      if (kitMode && !kitQueue_.empty())
+         hint = "making the kit: the pads fill as each sound is done";
+      else if (kitMode)
+         hint = "GENERATE asks: fill the empty pads, or replace all 16";
+      else if (host_.generating())
          hint = "about " + std::to_string(std::max(1, static_cast<int>(std::lround(estimate())))) + " s on this computer";
       else if (host_.lastRunSeconds() > 0)
          hint = "last run: " + std::to_string(host_.variants().size()) + " sounds in " + secondsText(host_.lastRunSeconds());
@@ -2753,13 +3638,16 @@ private:
       c.setColor(t.text);
       c.text(padTitle, ui::font(11 * s), visage::Font::kLeft, 674 * s, 528 * s, 380 * s, 14 * s);
       c.setColor(alpha(t.dimText, 0.75f));
-      c.text(p ? "replaces its sound; the prompt and seed go with it"
+      const int padTakes = host_.padSounds(pad).count();
+      c.text(p ? (padTakes > 1 ? "has " + std::to_string(padTakes) + " variations: ADD TO KIT replaces them all, ADD AS VARIATION adds one"
+                               : std::string("ADD TO KIT replaces its sound; ADD AS VARIATION keeps it and adds this one"))
                : "on MIDI note " + std::to_string(kFirstNote + pad) + " (" + ui::noteName(kFirstNote + pad) + ")",
              ui::font(8.5f * s), visage::Font::kLeft, 674 * s, 544 * s, 380 * s, 12 * s);
       if (added_ >= 0 && addedAt_ < 60) {
          ++addedAt_;
          c.setColor(kGreen);
-         c.text("Added to pad " + std::to_string(added_ + 1), ui::font(9 * s), visage::Font::kLeft, 674 * s,
+         c.text((addedTake_ ? "Added as variation " + std::to_string(host_.padSounds(added_).count()) + " of pad "
+                            : std::string("Added to pad ")) + std::to_string(added_ + 1), ui::font(9 * s), visage::Font::kLeft, 674 * s,
                 566 * s, 380 * s, 12 * s);
       }
    }
@@ -2795,6 +3683,7 @@ private:
          visage::PopupMenu menu;
          const bool has = host_.padSample(i) != nullptr;
          menu.addOption(1, "Play");
+         menu.addOption(4, "Variations...");
          menu.addOption(2, "Regenerate in the Generate tab");
          menu.addBreak();
          menu.addOption(3, "Clear pad");
@@ -2805,6 +3694,8 @@ private:
                regenerate(i);
             else if (id == 3)
                host_.setPadSample(i, nullptr);
+            else if (id == 4)
+               openTakes(i);
             redraw();
          };
          (void)has;
@@ -2812,17 +3703,63 @@ private:
       };
       tips_.add(*pads_, "Click a pad to play and select it; drag it onto another to swap them. Right-click for more.");
 
+      takes_ = &onPage<ui::Button>(P, {770, 81, 130, 19}, "VARIATIONS");
+      takes_->setAccent(kOrange);
+      takes_->onClick = [this] { openTakes(host_.selectedPad); };
+      tips_.add(*takes_, "This pad's variations: one plays each hit (random, in turn, or by velocity), each with its own "
+                         "trims, fades, level, tune and cuts.");
       regen_ = &onPage<ui::Button>(P, {906, 81, 150, 19}, "REGENERATE IN TAB");
       regen_->setAccent(kOrange);
       regen_->onClick = [this] { regenerate(host_.selectedPad); };
-      tips_.add(*regen_, "Open the Generate tab with this pad's prompt and role, ready to make another take.");
+      tips_.add(*regen_, "Open the Generate tab with this pad's prompt and role, ready to make another one.");
       wave_ = &onPage<PadWave>(P, {392, 128, 214, 78}, host_);
+      wave_->shownVariation = [this] { return variationTab_; };
+      variationTabs_ = &onPage<VariationTabs>(P, {392, 107, 214, 16}, host_);
+      variationTabs_->onSelect = [this](int i) {
+         variationTab_ = i;
+         variationTabs_->selected = i;
+         redraw();
+      };
+      variationTabs_->onAdd = [this] { addVariationHere(); };
+      variationTabs_->onMenu = [this](int i, visage::Point) {
+         visage::PopupMenu menu;
+         menu.addOption(1, "Play");
+         if (i > 0)
+            menu.addOption(2, "Move left");
+         menu.addOption(3, "Edit in VARIATIONS...");
+         menu.addBreak();
+         menu.addOption(4, "Remove");
+         menu.onSelection() = [this, i](int id) {
+            const int pad = host_.selectedPad;
+            PadSounds p = host_.padSounds(pad);
+            if (i >= p.count())
+               return;
+            if (id == 1)
+               host_.playPadTake(pad, i);
+            else if (id == 2 && i > 0) {
+               std::swap(p.takes[static_cast<size_t>(i)], p.takes[static_cast<size_t>(i - 1)]);
+               host_.setPadSounds(pad, p);
+               variationTab_ = i - 1;
+            } else if (id == 3)
+               openTakes(pad);
+            else if (id == 4) {
+               p.takes.erase(p.takes.begin() + i);
+               host_.setPadSounds(pad, p);
+               variationTab_ = std::min(variationTab_, std::max(0, p.count() - 1));
+            }
+            variationTabs_->selected = variationTab_;
+            redraw();
+         };
+         menu.show(variationTabs_);
+      };
+      tips_.add(*variationTabs_, "This pad's variations: click one to see and hear it, + to add the Generate tab's selected "
+                                 "sound, right-click to move or remove it. The last tab says how a hit picks one.");
       tips_.add(*wave_, "Drag the handles to set where it starts and ends. The blue curve is its decay.");
 
       choke_ = &onPage<ui::Dropdown>(P, {392, 226, 66, 20}, std::vector<std::string>(kChokeNames, kChokeNames + kChokeCount));
       choke_->setAccent(kOrange);
       choke_->onChange = [this](int i) { setPad(kChoke, i); };
-      tips_.add(*choke_, "Pads in the same group cut each other off, like a closed hat stopping an open one.");
+      tips_.add(*choke_, "KEY GROUP: pads in the same group cut each other off, like a closed hat stopping an open one.");
       play_ = &onPage<ui::SegmentedSwitch>(P, {466, 226, 92, 20}, std::vector<std::string>{"ONE SHOT", "GATE"});
       play_->setAccent(kOrange);
       play_->onChange = [this](int i) { setPad(kPlayMode, i); };
@@ -3064,6 +4001,17 @@ private:
       pointType_->setSelected(static_cast<int>(host_.paramValue(padParam(p, pointParam(point_, kPointType))) + 0.5));
       play_->setSelected(static_cast<int>(host_.paramValue(padParam(p, kPlayMode)) + 0.5));
       rev_->setOn(host_.paramValue(padParam(p, kReverse)) >= 0.5);
+      const int takes = host_.padSounds(p).count();
+      if (p != variationPad_ || variationTab_ >= std::max(1, takes)) {
+         variationPad_ = p;
+         variationTab_ = 0;
+      }
+      variationTabs_->selected = variationTab_;
+      variationTabs_->redraw();
+      if (takes != takesShown_) {
+         takesShown_ = takes;
+         takes_->setText(takes > 1 ? "VARIATIONS \xC2\xB7 " + std::to_string(takes) : std::string("VARIATIONS"));
+      }
    }
 
    void refreshKit() {
@@ -3095,8 +4043,9 @@ private:
       const std::string line = p ? "seed " + std::to_string(p->seed) + " \xC2\xB7 \xE2\x80\x9C" + ellipsis(p->prompt, 34) +
                                       "\xE2\x80\x9D"
                                  : "note " + ui::noteName(kFirstNote + pad) + " \xC2\xB7 nothing on it yet";
-      c.text(line, ui::font(8.5f * s), visage::Font::kLeft, 392 * s, 110 * s, 214 * s, 12 * s);
-      drawLabel(c, s, "CHOKE", 392, 212);
+      if (host_.padSounds(pad).count() < 2)
+         c.text(line, ui::font(8.5f * s), visage::Font::kLeft, 392 * s, 110 * s, 214 * s, 12 * s);
+      drawLabel(c, s, "KEY GROUP", 392, 212);
       drawLabel(c, s, "PLAY", 466, 212);
       drawCard(c, s, 380, 260, 560, 248, "PAD TONE", "double-click to add a point \xC2\xB7 right-click to remove");
       drawLabel(c, s, "POINT " + std::to_string(point_ + 1), 392, 428);
@@ -3135,11 +4084,16 @@ private:
    ui::Button *engineHelp_ = nullptr;
    EnginePicker *enginePicker_ = nullptr;
    KitDialog *kitDialog_ = nullptr;
-   OutlineButton *wholeKit_ = nullptr;
+   TakeEditor *takeEditor_ = nullptr;
+   ui::Dropdown *mode_ = nullptr;
    // GENERATE KIT: the pads still to make, how many in all, and the style.
    std::vector<int> kitQueue_;
    int kitTotal_ = 0;
    std::string kitStyle_;
+   double kitStrange_ = 0.3;
+   int kitTakes_ = 1;
+   uint64_t kitSeed_ = 0;
+   int kitLayout_ = kDrumKitLayout;
    int lastRunSounds_ = 0;
    std::function<void(int)> pickEngine_;
    ui::Button *engineAction_ = nullptr;
@@ -3150,6 +4104,7 @@ private:
    ui::Knob *length_ = nullptr, *steps_ = nullptr, *guidance_ = nullptr, *variety_ = nullptr;
    ui::SegmentedSwitch *count_ = nullptr;
    GoButton *generate_ = nullptr, *addToKit_ = nullptr;
+   OutlineButton *addTake_ = nullptr;
    ui::HoverArea *recentArea_ = nullptr;
    VariantGrid *variantsView_ = nullptr;
    TrimView *trim_ = nullptr;
@@ -3163,10 +4118,15 @@ private:
    uint32_t padHits_ = 0;
    bool synced_ = false, confirmRemove_ = false;
    int added_ = -1, addedAt_ = 0;
+   bool addedTake_ = false;
 
    // Kit
    PadGrid *pads_ = nullptr;
-   ui::Button *regen_ = nullptr;
+   ui::Button *regen_ = nullptr, *takes_ = nullptr;
+   VariationTabs *variationTabs_ = nullptr;
+   int variationTab_ = 0, variationPad_ = -1;
+   int varyPad_ = -1, varyIndex_ = 0; // VARY in VARIATIONS, while it runs
+   int takesShown_ = -1;
    PadWave *wave_ = nullptr;
    ui::Dropdown *choke_ = nullptr, *pointType_ = nullptr;
    ToneView *tone_ = nullptr;
@@ -3193,6 +4153,8 @@ bool renderScreenshot(EditorHost &host, int page, int width, int height, const c
       panel.openEnginePicker();
    else if (overlay == 2)
       panel.openKitDialog();
+   else if (overlay == 3)
+      panel.openTakes(host.selectedPad);
    panel.setBounds(0, 0, static_cast<float>(width), static_cast<float>(height));
    panel.timerCallback();
    panel.timerCallback();
