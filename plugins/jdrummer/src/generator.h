@@ -520,8 +520,12 @@ inline void shapeEnergy(Pattern &p, int kit, double e, int section, Rng &rng, un
    }
    for (int pad = 0; pad < kPads; ++pad)
       if (p.uses(pad) && pad != keepLane && e < threshold(kit, pad, before))
-         for (int s = 0; s < kMaxSteps; ++s)
+         for (int s = 0; s < kMaxSteps; ++s) {
+            // An open hat that goes closes: the hat line keeps its hit.
+            if (kit == kDrumKit && pad == OH && p.at(OH, s).on() && before.uses(CH) && !p.at(CH, s).on())
+               p.at(CH, s) = p.at(OH, s);
             p.at(pad, s) = Hit{};
+         }
    // A break drops the kick.
    if (section == kBreak && kit == kDrumKit)
       for (int pad : {K, K2})
@@ -559,7 +563,15 @@ inline void shapeEnergy(Pattern &p, int kit, double e, int section, Rng &rng, un
          Hit &h = p.at(pad, s);
          if (!h.on())
             continue;
-         if (e < 0.75 && h.vel < 80 && !onBeat(s, beat) && !timelineHit(sv, pad, h) && rng.chance((0.75 - e) * 1.2)) {
+         // A kit's hats keep their line (a hole in the hats sounds like a mistake): a quiet one
+         // plays its eighths, a louder one all of it.
+         if (kit == kDrumKit && padRole(kit, pad) == kHat && pad != OH) {
+            if (e < 0.4 && s % 2 == 1 && beat == 4 && p.uses(pad) && h.vel < 80) {
+               h = Hit{};
+               continue;
+            }
+         } else if (e < 0.75 && h.vel < 80 && !onBeat(s, beat) && !timelineHit(sv, pad, h) &&
+                    rng.chance((0.75 - e) * 1.2)) {
             h = Hit{};
             continue;
          }
@@ -628,7 +640,7 @@ inline void applyWeird(Pattern &p, int kit, double w, Rng &rng, unsigned trad = 
             continue;
          if (!onBeat(s, beat) && rng.chance(w * 0.25))
             h.chance = static_cast<uint8_t>(rng.range(40, 90));
-         if (padRole(kit, pad) == kHat && rng.chance(w * 0.18))
+         if (padRole(kit, pad) == kHat && w > 0.3 && rng.chance((w - 0.3) * 0.25))
             h.ratchet = static_cast<uint8_t>(rng.range(2, kMaxRatchet));
       }
    }
@@ -636,7 +648,7 @@ inline void applyWeird(Pattern &p, int kit, double w, Rng &rng, unsigned trad = 
    // the drums of its own tradition.
    std::vector<int> pool;
    if (v.drums())
-      pool = {FX, RIM, SH};
+      pool = w > 0.4 ? std::vector<int>{FX, RIM, SH} : std::vector<int>{RIM, SH};
    else
       for (int pad = 0; pad < kPads; ++pad) {
          // Never a stray bell or clave (they are the time), nor a darbuka in a tabla groove.
@@ -711,7 +723,7 @@ inline void applyPlayer(Pattern &p, int kit, const Player &pl, double e, Rng &rn
          const Role role = padRole(kit, pad);
          double nudge = drift * std::sin(6.283185307179586 * s / std::max(1, n) + phase) +
                         (rng.uniform() * 2.0 - 1.0) * pl.loose * 4.0;
-         if (v.drums() ? role == kSnare : pad == v.snare)
+         if ((v.drums() ? role == kSnare : pad == v.snare) && h.vel >= kSoft)
             nudge += pl.backbeatFeel + (pl.loose > 0.0 ? rng.range(-2, 2) : 0);
          if (role == kHat && !(v.drums() && pad == RD))
             nudge += pl.hatFeel;
@@ -1508,8 +1520,9 @@ inline Section makeSection(const Recipe &r, int section, uint32_t seed) {
    const int ticks = patternTicks(meter);
    s.meter = static_cast<uint16_t>(ticks % kTicksPerBar == 0 ? kTicksPerBar : ticks);
    // A live drummer moves to the ride for a chorus.
+   // (Not a groove whose hat opens: funk and disco keep their hats.)
    if (kit == kDrumKit && g.family == kFamilies[3] && section == kChorus && base.uses(CH) && !base.uses(RD) &&
-       rng.chance(0.6))
+       !base.uses(OH) && rng.chance(0.6))
       for (int st = 0; st < base.steps; ++st) {
          base.at(RD, st) = base.at(CH, st);
          base.at(CH, st) = Hit{};

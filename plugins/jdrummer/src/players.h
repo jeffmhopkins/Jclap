@@ -27,7 +27,7 @@ constexpr int kPercussionists = 6;
 
 inline const Player kDrummerList[kDrummers] = {
    {"Session Pro", "tight, tasteful, fills at phrase ends", "pop, rock, R&B", 0.2, 0.5, 0.4, 0.5, 2, 0},
-   {"Pocket Funk", "ghost notes everywhere, hats lay back", "funk, soul, hip-hop", 0.55, 0.7, 0.9, 0.4, 6, 5},
+   {"Pocket Funk", "ghost notes everywhere, hats lay back", "funk, soul, hip-hop", 0.4, 0.7, 0.9, 0.4, 5, 3},
    {"Stadium Rock", "big accents, crashes, tom fills", "rock, metal, punk", 0.3, 0.6, 0.2, 0.9, 0, -2},
    {"Brushes Jazz", "loose and swung, ride and comping", "jazz, bossa, lounge", 0.75, 0.55, 0.6, 0.5, 4, 3},
    {"Break Chopper", "chopped breaks, rolls, shuffled hats", "breaks, DnB, jungle", 0.45, 0.9, 0.55, 0.7, -2, 0},

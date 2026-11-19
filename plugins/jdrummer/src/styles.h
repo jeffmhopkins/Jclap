@@ -301,8 +301,10 @@ inline const std::vector<Genre> &genres() {
         {"Ballad", "Ballad", 72, 0, kSparse},
         {"Tom Groove", "Tribal", 105, 4, 0},
         {"Surf", "Surf", 150, 3, kToms}}},
-      {"Funk", kFamilies[3], kDrumKit, 0.54, kFillSnare, 1, 0,
-       {{{{K, "X..x..x...X..x.."}, {SN, "....X..g.g..X..g"}, {CH, "xoxoxoxoxoxoxoxo"}}},
+      {"Funk", kFamilies[3], kDrumKit, 0.52, kFillSnare, 1, 0,
+       // 0 the pocket: the one hit hard, the kick answering round it, ghosts leading into the backbeat
+       // and out of it, the hats leaning on the quarters and opening on the and of 4
+       {{{{K, "X..x..x...X..x.."}, {SN, "..g.X..g.g.gX..g"}, {CH, "XoxoXoxoXoxoXo.o"}, {OH, "..............x."}}},
         {{{K, "X.x....x..x....."}, {SN, "....X.g..g.gX..."}, {CH, "x.x.x.x.x.x.x.x."}, {OH, "..............x."}}},
         {{{K, "X....x....X.x..."}, {SN, "....X..g.g.gX..g"}, {RD, "x..x..x...x.x..."}, {CH, "x.x.x.x.x.x.x.x."}}},
         // 3 second line: the New Orleans street beat, the bass drum on 1, the and of 2 and 4, the snare

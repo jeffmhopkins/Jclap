@@ -93,14 +93,15 @@ dhol's Bhangra chaal. Their twists, stray hits and mutations stay on that tradit
 - **ENERGY** (chill to peak time) is how hard the whole song goes: which instruments play, how many
   hits, how loud. Each section's own energy rides on it: a quiet verse thins its soft hits and drops
   the open hats and percussion; a chorus plays louder, leans on the beats, fills its hats in and opens
-  the hat into the next bar (a live drummer may move to the ride). Hand drums fill in their soft
+  the hat into the next bar (a live drummer may move to the ride, unless the groove opens its hat, as
+  funk and disco do). A quiet section's hats play their eighths; the hat line never gets holes. Hand drums fill in their soft
   strokes instead. Above 50 ENERGY lifts every section towards full, the chorus still above the pre.
   On the hand kits the timeline (the clave and the bells, the tabla's theka, the darbuka's doum and
   tek) stays whole at any energy, through WEIRD, the twists and VARY. A Cuban song keeps its clave:
   a section that borrows another groove only takes one with the same clave (3-2 or 2-3, son or rumba).
 - **WEIRD** (by the book to out there) moves hits off the grid (in 12/8, off the eighths only by
-  whole eighths), leaves some to chance, rolls them,
-  brings in stray sounds and odd lengths.
+  whole eighths), leaves some to chance, and from about a third of the way rolls the hats and brings in
+  FX hits; further out, stray sounds and odd lengths.
 
 Each section's **fill** is its genre's: round the toms, a snare roll, a hat roll, a chopped break
 (hip-hop and lo-fi), a build or the band dropping out (the drummer adds nothing in the silence), congas from the highest down (toms on a kit), an FX sweep, the djembe call, a darbuka
