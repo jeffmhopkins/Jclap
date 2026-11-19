@@ -6,13 +6,15 @@ A 16-pad drum kit whose sounds an AI model makes from your words, inside the plu
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![pads: 16](https://img.shields.io/badge/pads-16-blue)](#the-kit-tab) [![engines: Stable Audio Open Small, ORB, Stable Audio Open 1.0](https://img.shields.io/badge/engines-SAO%20Small%20%7C%20ORB%20%7C%20SAO%201.0-blue)](#the-engines) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
-Version 0.3.1 · Powered by Stability AI · ORB by Marcos Maceo
+Version 0.4.0 · Powered by Stability AI · ORB by Marcos Maceo
 
 </div>
 
+![JKit's Kit tab](docs/panel-kit.png)
+
 ![JKit's Generate tab](docs/panel.png)
 
-![JKit's Kit tab](docs/panel-kit.png)
+JKit opens on the **KIT** tab; **GENERATE** is next to it.
 
 ## The engines
 
@@ -152,11 +154,19 @@ room tail". Under it:
 **VARIANTS**: what came back, each with its seed and length. Click one to select and hear it. Its
 star keeps it through the next GENERATE (unstarred ones make way for the new ones).
 
-**SELECTED**: the selected variant. Drag the white handles to trim its start and end, and pull the
-top of the region down from the end handle for a fade out. **NORMALIZE** brings its peak to just
-under full scale, **TRIM SILENCE** cuts the silence before it starts and after it dies away,
+**SELECTED**: the selected variant. Drag the white handles to trim its start and end. For a fade,
+grab the top of the waveform and drag toward the middle: in the right half that pulls a fade out
+back from the end handle, in the left half a fade in forward from the start handle (each up to 2 s,
+shown as a dashed blue curve whose top you can drag again). Scroll on the waveform to zoom in
+around the pointer (up to 64x), scroll sideways or hold shift to move along it, or use the **−**
+and **+** buttons; a bar along the bottom shows where you are. **NORMALIZE** brings its peak to
+just under full scale, **TRIM SILENCE** cuts the silence before it starts and after it dies away,
 **REVERSE** turns it round. **VARY** makes more sounds like it (the same prompt, from noise close
-to its seed). **AUDITION** plays it as it will go on the pad.
+to its seed).
+
+Two ways to hear it: **PLAY** plays the whole sound as it was generated (no trim, fades or
+normalizing), with a playhead; **AUDITION** (or a click on the waveform) plays it as it will go on
+the pad: trimmed, faded, normalized and reversed if set.
 
 **SEND TO PAD** picks the pad (laid out as on the Kit tab), and **ADD TO KIT** puts the treated
 sound on it, with its prompt, role and seed. The next empty pad becomes the next target.
@@ -168,7 +178,8 @@ sound on it, with its prompt, role and seed. The next empty pad becomes the next
 **PADS**: sixteen pads, pad 1 bottom left on MIDI note 36 (C2), up to pad 16 on 51. Each shows its
 name, role, waveform with a playhead while it sounds, note, and its reverb (purple) and delay (blue)
 sends. Click a pad to play and select it (higher on the pad is louder), drag one onto another to
-swap them (sound and settings), right-click to play, regenerate or clear it. An empty pad's
+swap them (sound and settings), right-click to play, regenerate or clear it. Playing a pad over
+MIDI selects it too, so its controls follow what you play. An empty pad's
 + GENERATE opens the Generate tab aimed at it.
 
 **PAD n**: the selected pad. Its waveform has the START and END handles, the decay drawn as a blue
@@ -183,7 +194,7 @@ prompt, role and seed.
 | Decay | 10 ms to 10 s, or Full | fades it out from the start; Full lets it play out |
 | Start, End | 0 to 100% | the part of the sound that plays (shown as times into it) |
 | Attack | 0 to 200 ms | fades it in |
-| Velocity | 0 to 100% | how much the note's velocity changes its level |
+| Velocity | 0 to 100% | how much the note's velocity changes its level: the level follows velocity to the power 3 x this, so at 33% a half-velocity hit is 6 dB down, at 60% 11 dB, at 100% 18 dB; 0% ignores velocity |
 | Choke | None, 1 to 4 | pads in one group cut each other off, like a closed hat stopping an open one |
 | Play | One shot, Gate | one shot plays the whole sound; Gate stops it (over 30 ms) when the note ends |
 | Rev | on, off | plays it backwards |

@@ -162,7 +162,7 @@ struct PanelNote {
 };
 
 constexpr char kStateMagic[4] = {'J', 'K', 'I', 'T'};
-constexpr uint32_t kStateVersion = 2; // 2 adds the engine; 1 still loads
+constexpr uint32_t kStateVersion = 3; // 2 adds the engine, 3 the fade in; 1 and 2 still load
 
 class JKit final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -362,6 +362,8 @@ public:
    }
    float padPosition(int pad) const override { return pad >= 0 && pad < kPads ? positions_[pad].load() : -1.0f; }
    float padLevel(int pad) const override { return pad >= 0 && pad < kPads ? levels_[pad].load() : 0.0f; }
+   uint32_t padHits() const override { return padHits_.load(); }
+   int lastHitPad() const override { return lastHitPad_.load(); }
    void meters(float &kit, float &fx, float &out) override {
       kit = kitPeak_.exchange(0.0f);
       fx = fxPeak_.exchange(0.0f);
@@ -551,6 +553,7 @@ public:
       w.f64(treatment_.fadeMs);
       w.u8(static_cast<uint8_t>((treatment_.normalize ? 1 : 0) | (treatment_.trimSilence ? 2 : 0) |
                                 (treatment_.reverse ? 4 : 0)));
+      w.f64(treatment_.fadeInMs);
       w.u32(static_cast<uint32_t>(recent_.size()));
       for (const Recent &r : recent_) {
          w.str(r.prompt);
@@ -621,6 +624,7 @@ public:
       t.normalize = flags & 1;
       t.trimSilence = flags & 2;
       t.reverse = flags & 4;
+      t.fadeInMs = version >= 3 ? r.f64() : 0.0;
       std::vector<Recent> recent;
       const uint32_t recentCount = r.u32();
       for (uint32_t i = 0; i < recentCount && r.ok() && i < 64; ++i) {
@@ -656,9 +660,12 @@ public:
       t.start = finite(t.start, 0.0, 1.0, 0.0);
       t.end = finite(t.end, 0.0, 1.0, 1.0);
       t.fadeMs = finite(t.fadeMs, 0.0, 2000.0, 0.0);
+      t.fadeInMs = finite(t.fadeInMs, 0.0, 2000.0, 0.0);
       treatment_ = t;
       recent_ = std::move(recent);
       page = std::clamp(pageRead, 0, 1);
+      if (version < 3)
+         page = 1 - page; // the tabs were Generate, Kit
       selectedPad = std::clamp(selected, 0, kPads - 1);
       targetPad = std::clamp(target, 0, kPads - 1);
       SamplePtr old[kPads];
@@ -916,6 +923,8 @@ private:
             if (p != pad && static_cast<int>(padValue(p, kChoke) + 0.5) == group)
                fadeOut(p, 5.0);
       fadeOut(pad, 4.0);
+      lastHitPad_.store(pad);
+      padHits_.fetch_add(1);
       if (!s || !s->frames())
          return;
       Voice v;
@@ -935,7 +944,9 @@ private:
       const double decay = padValue(pad, kDecay);
       v.decayMul = decayFull(decay) ? 1.0 : std::pow(0.001, 1.0 / (decayMs(decay) * 0.001 * sampleRate_));
       const double sens = padValue(pad, kVelocity);
-      v.gain = static_cast<float>((1.0 - sens) + sens * velocity * velocity);
+      // Velocity sets the level on a power curve: at 1/3 a half-velocity hit is 6 dB down, at the
+      // most 18 dB.
+      v.gain = static_cast<float>(std::pow(static_cast<double>(velocity), 3.0 * sens));
       voices_[pad] = v;
    }
 
@@ -1084,6 +1095,8 @@ private:
    // For the panel.
    jclap::core::SpscQueue<PanelNote> panelNotes_;
    std::atomic<float> positions_[kPads], levels_[kPads];
+   std::atomic<uint32_t> padHits_{0};
+   std::atomic<int> lastHitPad_{0};
    std::atomic<float> previewPos_{-1.0f};
    std::atomic<float> kitPeak_{0.0f}, fxPeak_{0.0f}, outPeak_{0.0f};
 

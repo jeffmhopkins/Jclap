@@ -109,6 +109,7 @@ public:
       treatment_.start = 0.02;
       treatment_.end = 0.8;
       treatment_.fadeMs = 120;
+      treatment_.fadeInMs = 40;
    }
 
    double paramValue(clap_id id) const override { return id < kParamCount ? values_[id] : 0.0; }
@@ -127,6 +128,8 @@ public:
    // Pads 5 and 6 (the clap and the closed hat) are sounding.
    float padPosition(int pad) const override { return pad == 4 ? 0.42f : pad == 5 ? 0.18f : -1.0f; }
    float padLevel(int pad) const override { return pad == 4 ? 0.8f : pad == 5 ? 0.5f : 0.0f; }
+   uint32_t padHits() const override { return 0; }
+   int lastHitPad() const override { return 0; }
    void meters(float &kit, float &fx, float &out) override {
       kit = 0.5f;
       fx = 0.12f;
@@ -186,5 +189,6 @@ int main(int argc, char **argv) {
    const int width = argc > 4 ? std::atoi(argv[3]) : kEditorWidth;
    const int height = argc > 4 ? std::atoi(argv[4]) : kEditorHeight;
    DemoHost host(page == 2, page == 3);
-   return renderScreenshot(host, page >= 2 ? 0 : page, width, height, argv[1]) ? 0 : 1;
+   // Page 1 is the Kit tab (the panel's page 0); 0, 2 and 3 the Generate tab (its page 1).
+   return renderScreenshot(host, page == 1 ? 0 : 1, width, height, argv[1]) ? 0 : 1;
 }

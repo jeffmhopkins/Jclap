@@ -65,6 +65,7 @@ inline float peakOf(const Sample &s) {
 struct Treatment {
    double start = 0.0, end = 1.0; // fractions of the sound
    double fadeMs = 0.0;           // a fade out at the end
+   double fadeInMs = 0.0;         // a fade in at the start
    bool normalize = true;         // peak to -0.3 dBFS
    bool trimSilence = true;       // cut the silence at the start and the tail under -60 dB
    bool reverse = false;
@@ -103,8 +104,16 @@ inline Sample treat(const Sample &src, const Treatment &t) {
    out.left.assign(src.left.begin() + static_cast<long>(a), src.left.begin() + static_cast<long>(z));
    out.right.assign(src.right.begin() + static_cast<long>(a), src.right.begin() + static_cast<long>(z));
    const size_t m = out.frames();
-   // A 1 ms fade in where it was cut into, so it never starts with a click.
-   if (a > 0) {
+   // The fade in: the asked-for one (a quarter sine), or 1 ms where it was cut into, so it never
+   // starts with a click.
+   if (t.fadeInMs >= 1.0) {
+      const size_t f = std::min(m, static_cast<size_t>(t.fadeInMs * 0.001 * kSampleRate));
+      for (size_t i = 0; i < f; ++i) {
+         const float g = static_cast<float>(std::sin(static_cast<double>(i) / static_cast<double>(f) * 1.5707963267948966));
+         out.left[i] *= g;
+         out.right[i] *= g;
+      }
+   } else if (a > 0) {
       const size_t f = std::min(m, static_cast<size_t>(0.001 * kSampleRate));
       for (size_t i = 0; i < f; ++i) {
          const float g = static_cast<float>(i) / static_cast<float>(f);

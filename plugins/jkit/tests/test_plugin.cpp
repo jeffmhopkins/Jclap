@@ -306,6 +306,17 @@ void testTreatment() {
    t.fadeMs = 20;
    out = treat(s, t);
    JCLAP_CHECK(std::fabs(out.left.back()) < 1e-3f);
+   // A fade in starts at zero and rises over its length.
+   t.fadeInMs = 20;
+   out = treat(s, t);
+   const size_t in = static_cast<size_t>(0.02 * kSampleRate);
+   JCLAP_CHECK(out.left.front() == 0.0f);
+   float early = 0.0f, late = 0.0f;
+   for (size_t i = 0; i < in / 8; ++i)
+      early = std::max(early, std::fabs(out.left[i]));
+   for (size_t i = in; i < in + in / 8; ++i)
+      late = std::max(late, std::fabs(out.left[i]));
+   JCLAP_CHECK(early < 0.3f * late);
    // Reverse.
    t = Treatment{};
    t.normalize = t.trimSilence = false;

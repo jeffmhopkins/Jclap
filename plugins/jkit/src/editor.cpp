@@ -126,18 +126,22 @@ std::string agoText(int64_t when) {
 std::string ellipsis(const std::string &s, size_t n) { return s.size() <= n ? s : s.substr(0, n - 1) + "\xE2\x80\xA6"; }
 
 // A mirrored bar waveform from overview peaks, with the bars outside [from, to] dimmed.
+// `view0` and `view1` are the part of the sound the peaks cover (when zoomed in), and `top` the
+// level that fills the height (0: the loudest peak shown).
 void drawWave(visage::Canvas &c, const std::vector<float> &peaks, float x, float y, float w, float h, unsigned colour,
-              double from = 0.0, double to = 1.0) {
+              double from = 0.0, double to = 1.0, double view0 = 0.0, double view1 = 1.0, float top = 0.0f) {
    const size_t n = peaks.size();
    if (!n)
       return;
    const float bw = w / n, mid = y + h / 2;
    // Peaks are scaled so the loudest fills the height: quiet sounds still read.
-   float top = 1e-4f;
-   for (float p : peaks)
-      top = std::max(top, p);
+   if (top <= 0.0f) {
+      top = 1e-4f;
+      for (float p : peaks)
+         top = std::max(top, p);
+   }
    for (size_t i = 0; i < n; ++i) {
-      const double t = (i + 0.5) / n;
+      const double t = view0 + (view1 - view0) * (i + 0.5) / n;
       const float a = std::max(0.5f, peaks[i] / top * (h / 2 - 1));
       c.setColor(t < from || t > to ? alpha(colour, 0.25f) : colour);
       c.fill(x + i * bw, mid - a, std::max(0.8f, bw - 0.8f), 2 * a);
@@ -543,21 +547,42 @@ private:
    std::vector<WaveCache> caches_;
 };
 
-// The selected variant, with its start and end handles and the fade before the end (drag the blue
-// curve's top sideways to set it). The parts that will be cut are dimmed.
+// The selected variant, with its start and end handles, the fade in after the start and the fade out
+// before the end (grab the top of the sound in either half and drag toward the middle; then drag the
+// blue curve's top sideways). The parts that will be cut are dimmed. The mouse wheel zooms in around
+// the pointer; a sideways scroll (or shift and the wheel) moves along the zoomed sound.
 class TrimView : public visage::Frame {
 public:
    explicit TrimView(EditorHost &host) : host_(host) {}
    SamplePtr sample;
    float playhead = -1.0f;
+   static constexpr double kMaxZoom = 64.0;
+
+   double zoom() const { return 1.0 / (view1_ - view0_); }
+   // Zooms to `z` times, keeping the fraction `at` of the sound where it is on screen.
+   void setZoom(double z, double at) {
+      z = std::clamp(z, 1.0, kMaxZoom);
+      const double span = 1.0 / z, rel = (at - view0_) / (view1_ - view0_);
+      double a = at - rel * span;
+      a = std::clamp(a, 0.0, 1.0 - span);
+      view0_ = a;
+      view1_ = a + span;
+      redraw();
+   }
+   void zoomBy(double factor) { setZoom(zoom() * factor, 0.5 * (view0_ + view1_)); }
+   void resetZoom() {
+      view0_ = 0.0;
+      view1_ = 1.0;
+      redraw();
+   }
 
    float xOf(double f) const {
       const float s = ui::designScale(*this);
-      return 6 * s + static_cast<float>(f) * (width() - 12 * s);
+      return 6 * s + static_cast<float>((f - view0_) / (view1_ - view0_)) * (width() - 12 * s);
    }
    double fOf(float x) const {
       const float s = ui::designScale(*this);
-      return std::clamp((x - 6 * s) / (width() - 12 * s), 0.0f, 1.0f);
+      return std::clamp(view0_ + (x - 6 * s) / (width() - 12 * s) * (view1_ - view0_), 0.0, 1.0);
    }
 
    void draw(visage::Canvas &c) override {
@@ -571,26 +596,51 @@ public:
          c.text("Nothing generated yet", ui::font(10 * s), visage::Font::kCenter, 0, 0, width(), height());
          return;
       }
+      if (sample.get() != zoomed_) { // a new sound starts zoomed out
+         zoomed_ = sample.get();
+         view0_ = 0.0;
+         view1_ = 1.0;
+      }
       const Treatment &t = host_.treatment();
       const int bins = std::max(16, static_cast<int>((width() - 12 * s) / (3.4f * s)));
-      drawWave(c, cache_.get(sample, bins), 6 * s, 6 * s, width() - 12 * s, height() - 12 * s, kOrange, t.start, t.end);
-      // The fade: a dashed quarter cosine down to the end handle.
+      if (peaksOf_ != sample.get() || peakBins_ != bins || peakView0_ != view0_ || peakView1_ != view1_) {
+         peaksOf_ = sample.get();
+         peakBins_ = bins;
+         peakView0_ = view0_;
+         peakView1_ = view1_;
+         peaks_ = overview(*sample, bins, view0_, view1_);
+         top_ = std::max(1e-4f, peakOf(*sample));
+      }
+      drawWave(c, peaks_, 6 * s, 6 * s, width() - 12 * s, height() - 12 * s, kOrange, t.start, t.end, view0_, view1_,
+               top_);
       const double secs = sample->seconds();
-      const float xe = xOf(t.end);
-      if (t.fadeMs > 0.5 && secs > 0) {
-         const float xf = xOf(std::max(t.start, t.end - t.fadeMs / 1000.0 / secs));
+      const float xs = xOf(t.start), xe = xOf(t.end);
+      const auto curve = [&](float x0, float x1, bool rising) {
          c.setColor(kBlue);
          const int steps = 24;
          for (int i = 0; i < steps; i += 2) {
             const float a = static_cast<float>(i) / steps, b = static_cast<float>(i + 1) / steps;
-            const auto y = [&](float u) { return 4 * s + (height() - 8 * s) * (1.0f - std::cos(u * 1.5707963f)); };
-            c.segment(xf + (xe - xf) * a, y(a), xf + (xe - xf) * b, y(b), 1.3f * s, true);
+            const auto y = [&](float u) {
+               return 4 * s + (height() - 8 * s) * (rising ? 1.0f - std::sin(u * 1.5707963f) : 1.0f - std::cos(u * 1.5707963f));
+            };
+            c.segment(x0 + (x1 - x0) * a, y(a), x0 + (x1 - x0) * b, y(b), 1.3f * s, true);
          }
+      };
+      // The fade in: a dashed quarter sine up from the start handle.
+      if (t.fadeInMs > 0.5 && secs > 0) {
+         const float xf = xOf(std::min(t.end, t.start + t.fadeInMs / 1000.0 / secs));
+         curve(xs, xf, true);
+         c.circle(xf - 3 * s, 4 * s - 3 * s, 6 * s);
+      }
+      // The fade out: a dashed quarter cosine down to the end handle.
+      if (t.fadeMs > 0.5 && secs > 0) {
+         const float xf = xOf(std::max(t.start, t.end - t.fadeMs / 1000.0 / secs));
+         curve(xf, xe, false);
          c.circle(xf - 3 * s, 4 * s - 3 * s, 6 * s);
       }
       // The handles.
       for (int i = 0; i < 2; ++i) {
-         const float x = xOf(i ? t.end : t.start);
+         const float x = i ? xe : xs;
          c.setColor(kWhite);
          c.fill(x - 1 * s, 2 * s, 2 * s, height() - 4 * s);
          c.roundedRectangle(i ? x - 9 * s : x - 1 * s, 2 * s, 10 * s, 10 * s, 3 * s);
@@ -598,6 +648,15 @@ public:
       if (playhead >= 0) {
          c.setColor(0xd8ffffff);
          c.fill(xOf(playhead), 2 * s, 1.5f * s, height() - 4 * s);
+      }
+      // Where the view is, when zoomed in: a bar along the bottom.
+      if (view1_ - view0_ < 0.999) {
+         const float w = width() - 12 * s;
+         c.setColor(alpha(kWhite, 0.12f));
+         c.roundedRectangle(6 * s, height() - 5 * s, w, 3 * s, 1.5f * s);
+         c.setColor(alpha(kWhite, 0.55f));
+         c.roundedRectangle(6 * s + static_cast<float>(view0_) * w, height() - 5 * s,
+                            std::max(4 * s, static_cast<float>(view1_ - view0_) * w), 3 * s, 1.5f * s);
       }
    }
 
@@ -607,17 +666,21 @@ public:
       const Treatment &t = host_.treatment();
       const float s = ui::designScale(*this);
       const float xs = xOf(t.start), xe = xOf(t.end);
-      const double secs = sample->seconds();
-      const float xf = xOf(std::max(t.start, t.end - t.fadeMs / 1000.0 / std::max(1e-3, secs)));
+      const double secs = std::max(1e-3, sample->seconds());
+      const float xfo = xOf(std::max(t.start, t.end - t.fadeMs / 1000.0 / secs));
+      const float xfi = xOf(std::min(t.end, t.start + t.fadeInMs / 1000.0 / secs));
+      const bool top = e.position.y < 16 * s;
       drag_ = 0;
-      if (e.position.y < 16 * s && std::fabs(e.position.x - xf) < 8 * s && t.fadeMs > 0.5)
+      if (top && std::fabs(e.position.x - xfo) < 8 * s && t.fadeMs > 0.5)
          drag_ = 3;
+      else if (top && std::fabs(e.position.x - xfi) < 8 * s && t.fadeInMs > 0.5)
+         drag_ = 4;
       else if (std::fabs(e.position.x - xs) < 8 * s)
          drag_ = 1;
       else if (std::fabs(e.position.x - xe) < 8 * s)
          drag_ = 2;
-      else if (e.position.y < 16 * s && e.position.x < xe && e.position.x > xs)
-         drag_ = 3; // grab the top to pull a fade out of the end
+      else if (top && e.position.x < xe && e.position.x > xs)
+         drag_ = e.position.x > 0.5f * (xs + xe) ? 3 : 4; // grab the top to pull a fade out of either end
       else if (onClick)
          onClick(fOf(e.position.x));
    }
@@ -626,26 +689,57 @@ public:
          return;
       Treatment &t = host_.treatment();
       const double f = fOf(e.position.x);
-      const double minGap = 0.01 / std::max(1e-3, sample->seconds());
+      const double secs = std::max(1e-3, sample->seconds());
+      const double minGap = 0.01 / secs;
       if (drag_ == 1)
          t.start = std::min(f, t.end - minGap);
       else if (drag_ == 2)
          t.end = std::max(f, t.start + minGap);
+      else if (drag_ == 3)
+         t.fadeMs = std::clamp((t.end - std::max(f, t.start)) * secs * 1000.0, 0.0, 2000.0);
       else
-         t.fadeMs = std::clamp((t.end - std::max(f, t.start)) * sample->seconds() * 1000.0, 0.0, 2000.0);
+         t.fadeInMs = std::clamp((std::min(f, t.end) - t.start) * secs * 1000.0, 0.0, 2000.0);
       redraw();
       if (onEdit)
          onEdit();
    }
    void mouseUp(const visage::MouseEvent &) override { drag_ = 0; }
 
+   bool mouseWheel(const visage::MouseEvent &e) override {
+      if (!sample)
+         return false;
+      const float s = ui::designScale(*this);
+      const float dx = e.precise_wheel_delta_x, dy = e.precise_wheel_delta_y;
+      const bool sideways = e.isShiftDown() || std::fabs(dx) > std::fabs(dy);
+      if (sideways) {
+         const float d = e.isShiftDown() && dx == 0.0f ? dy : dx;
+         const double span = view1_ - view0_;
+         const double a = std::clamp(view0_ - d * span / std::max(1.0f, (width() - 12 * s) / s) * 2.0, 0.0, 1.0 - span);
+         view0_ = a;
+         view1_ = a + span;
+         redraw();
+      } else if (dy != 0.0f) {
+         setZoom(zoom() * std::exp2(dy * 0.05), fOf(e.position.x));
+      } else {
+         return false;
+      }
+      if (onEdit)
+         onEdit();
+      return true;
+   }
+
    std::function<void()> onEdit;
    std::function<void(double)> onClick;
 
 private:
    EditorHost &host_;
-   WaveCache cache_;
    int drag_ = 0;
+   double view0_ = 0.0, view1_ = 1.0;
+   const Sample *zoomed_ = nullptr, *peaksOf_ = nullptr;
+   int peakBins_ = 0;
+   double peakView0_ = -1.0, peakView1_ = -1.0;
+   std::vector<float> peaks_;
+   float top_ = 1.0f;
 };
 
 // The 4 x 4 pads as a small picker, laid out like the Kit tab (pad 1 bottom left).
@@ -1142,12 +1236,12 @@ const std::vector<ui::Preset> &noFactoryKits() {
 
 class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
-   enum Page { kGeneratePage, kKitPage };
+   enum Page { kKitPage, kGeneratePage }; // as the tabs, and host_.page
 
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       tips_.maxWidth = 260.0f;
       tips_.add(add<ui::HoverArea>({14, 12, 130, 40}), "JKit version " JCLAP_PLUGIN_VERSION);
-      tabs_ = &add<ui::TabBar>({150, 18, 220, 28}, std::vector<std::string>{"GENERATE", "KIT"});
+      tabs_ = &add<ui::TabBar>({150, 18, 220, 28}, std::vector<std::string>{"KIT", "GENERATE"});
       tabs_->setAccent(kOrange);
       tabs_->onChange = [this](int p) {
          host_.page = p;
@@ -1170,6 +1264,16 @@ public:
    // ---- the timer ----
 
    void timerCallback() override {
+      // A pad played (over MIDI or here) becomes the Kit tab's selected pad.
+      const uint32_t hits = host_.padHits();
+      if (hits != padHits_) {
+         padHits_ = hits;
+         const int pad = host_.lastHitPad();
+         if (pad >= 0 && pad < kPads && pad != host_.selectedPad) {
+            host_.selectedPad = pad;
+            redraw();
+         }
+      }
       std::string error;
       if (host_.pollGeneration(error)) {
          lastError_.clear();
@@ -1367,7 +1471,9 @@ private:
       // SELECTED
       trim_ = &onPage<TrimView>(P, {404, 358, 652, 96}, host_);
       trim_->onClick = [this](double) { auditionSelected(); };
-      tips_.add(*trim_, "Drag the white handles to trim, and pull the top of the end down into a fade. Click to hear it.");
+      trim_->onEdit = [this] { redraw(); };
+      tips_.add(*trim_, "Drag the white handles to trim. Grab the top near either end and drag inward for a fade. "
+                        "Scroll to zoom in. Click to audition.");
       normalize_ = &onPage<CheckBox>(P, {404, 480, 90, 16}, "NORMALIZE");
       normalize_->onToggle = [this](bool on) { host_.treatment().normalize = on; };
       trimSilence_ = &onPage<CheckBox>(P, {494, 480, 102, 16}, "TRIM SILENCE");
@@ -1376,9 +1482,24 @@ private:
       reverse_->onToggle = [this](bool on) { host_.treatment().reverse = on; };
       tips_.add(*normalize_, "Bring its peak up to just under full scale.");
       tips_.add(*trimSilence_, "Cut the silence before it starts and after it fades out.");
-      vary_ = &onPage<ui::Button>(P, {884, 475, 84, 22}, "VARY");
+      zoomOut_ = &onPage<ui::Button>(P, {690, 475, 22, 22}, "\xE2\x88\x92");
+      zoomOut_->onClick = [this] {
+         trim_->zoomBy(0.5);
+         redraw();
+      };
+      tips_.add(*zoomOut_, "Zoom out of the waveform (or scroll on it).");
+      zoomIn_ = &onPage<ui::Button>(P, {714, 475, 22, 22}, "+");
+      zoomIn_->onClick = [this] {
+         trim_->zoomBy(2.0);
+         redraw();
+      };
+      tips_.add(*zoomIn_, "Zoom into the waveform (or scroll on it). Scroll sideways to move along it.");
+      vary_ = &onPage<ui::Button>(P, {796, 475, 84, 22}, "VARY");
       vary_->onClick = [this] { generate(host_.selectedVariant); };
       tips_.add(*vary_, "More sounds like this one: same prompt, noise close to its seed.");
+      playButton_ = &onPage<ui::Button>(P, {884, 475, 84, 22}, "PLAY");
+      playButton_->onClick = [this] { selectVariant(host_.selectedVariant, true); };
+      tips_.add(*playButton_, "Play the whole sound as it was generated, with no trim, fades or normalizing.");
       auditionButton_ = &onPage<ui::Button>(P, {972, 475, 84, 22}, "AUDITION");
       auditionButton_->onClick = [this] { auditionSelected(); };
       tips_.add(*auditionButton_, "Hear it as it will go on the pad: trimmed, faded and normalized.");
@@ -1438,6 +1559,7 @@ private:
          t.start = 0.0;
          t.end = 1.0;
          t.fadeMs = 0.0;
+         t.fadeInMs = 0.0;
       }
       trim_->sample = v[static_cast<size_t>(i)].sample;
       if (play) {
@@ -1749,8 +1871,20 @@ private:
          c.text("END " + secondsText(tr.end * secs), ui::font(8.5f * s), visage::Font::kRight, 936 * s, 458 * s,
                 120 * s, 12 * s);
          c.setColor(kBlue);
-         c.text(tr.fadeMs > 0.5 ? "FADE " + std::to_string(static_cast<int>(tr.fadeMs)) + " ms" : "pull the top for a fade",
-                ui::font(8.5f * s), visage::Font::kCenter, 404 * s, 458 * s, 652 * s, 12 * s);
+         std::string fades;
+         if (tr.fadeInMs > 0.5)
+            fades = "FADE IN " + std::to_string(static_cast<int>(tr.fadeInMs)) + " ms";
+         if (tr.fadeMs > 0.5)
+            fades += (fades.empty() ? "" : " \xC2\xB7 ") + std::string("FADE OUT ") + std::to_string(static_cast<int>(tr.fadeMs)) + " ms";
+         if (fades.empty())
+            fades = "pull the top near either end for a fade";
+         c.text(fades, ui::font(8.5f * s), visage::Font::kCenter, 404 * s, 458 * s, 652 * s, 12 * s);
+         c.setColor(t.dimText);
+         const double z = trim_->zoom();
+         c.text("ZOOM " + (z < 9.95 ? std::to_string(static_cast<int>(z * 10 + 0.5) / 10) + "." +
+                                          std::to_string(static_cast<int>(z * 10 + 0.5) % 10)
+                                    : std::to_string(static_cast<int>(z + 0.5))) + "x",
+                ui::font(8.5f * s), visage::Font::kLeft, 742 * s, 475 * s, 50 * s, 22 * s);
       }
       c.setColor(kRule);
       c.fill(404 * s, 504 * s, 652 * s, 1.0f * s);
@@ -2076,11 +2210,13 @@ private:
    VariantGrid *variantsView_ = nullptr;
    TrimView *trim_ = nullptr;
    CheckBox *normalize_ = nullptr, *trimSilence_ = nullptr, *reverse_ = nullptr;
-   ui::Button *vary_ = nullptr, *auditionButton_ = nullptr;
+   ui::Button *vary_ = nullptr, *auditionButton_ = nullptr, *playButton_ = nullptr, *zoomIn_ = nullptr,
+              *zoomOut_ = nullptr;
    PadPicker *picker_ = nullptr;
    EngineStatus status_;
    std::string lastError_;
    SamplePtr auditioned_;
+   uint32_t padHits_ = 0;
    bool synced_ = false, confirmRemove_ = false;
    int added_ = -1, addedAt_ = 0;
 
