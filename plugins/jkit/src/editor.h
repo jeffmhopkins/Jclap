@@ -96,6 +96,11 @@ public:
    virtual double generateProgress() const = 0;
    // Picks up a finished generation; true when the variants changed. The panel calls it on its timer.
    virtual bool pollGeneration(std::string &error) = 0;
+   // GENERATE KIT: starts one sound for one pad, with gen()'s engine, steps and guidance but this
+   // prompt and length, and no variants. pollGeneration() leaves the variants alone for it and
+   // takeKitSound() hands the sound over (named and with the role and prompt), once.
+   virtual void generateOne(const std::string &prompt, int role, double seconds, const std::string &name) = 0;
+   virtual SamplePtr takeKitSound() = 0;
    // Seconds the last generation took.
    virtual double lastRunSeconds() const = 0;
    // Plays a sound by itself, as the pads would at no pitch, or stops it (null).
@@ -117,8 +122,8 @@ public:
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // Draws the panel offscreen at the given pixel size, showing tab `page`, and saves it as a PNG.
-bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath,
-                      bool enginePicker = false);
+// `overlay` 1 opens the engine picker over it, 2 GENERATE KIT's card.
+bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath, int overlay = 0);
 
 // A kit file's sounds sit beside it, with this extension in place of the preset's.
 constexpr const char *kKitSoundsExtension = ".jkitsounds";

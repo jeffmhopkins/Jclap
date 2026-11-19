@@ -154,6 +154,8 @@ public:
    GenSettings &gen() override { return gen_; }
    Treatment &treatment() override { return treatment_; }
    std::vector<Variant> &variants() override { return variants_; }
+   void generateOne(const std::string &, int, double, const std::string &) override {}
+   SamplePtr takeKitSound() override { return nullptr; }
    std::vector<Recent> &recent() override { return recent_; }
    EngineStatus engineStatus(int engine) override {
       const int was = gen_.engine;
@@ -216,7 +218,7 @@ int main(int argc, char **argv) {
    const int width = argc > 4 ? std::atoi(argv[3]) : kEditorWidth;
    const int height = argc > 4 ? std::atoi(argv[4]) : kEditorHeight;
    DemoHost host(page == 2, page == 3);
-   // Page 1 is the Kit tab (the panel's page 0); 0, 2, 3 and 4 the Generate tab (its page 1), and 4
-   // with the engine picker open.
-   return renderScreenshot(host, page == 1 ? 0 : 1, width, height, argv[1], page == 4) ? 0 : 1;
+   // Page 1 is the Kit tab (the panel's page 0); 0, 2, 3, 4 and 5 the Generate tab (its page 1), 4
+   // with the engine picker open and 5 with GENERATE KIT's card.
+   return renderScreenshot(host, page == 1 ? 0 : 1, width, height, argv[1], page == 4 ? 1 : page == 5 ? 2 : 0) ? 0 : 1;
 }

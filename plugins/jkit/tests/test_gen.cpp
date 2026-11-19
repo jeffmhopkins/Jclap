@@ -25,6 +25,7 @@
 #include "gen/sha256.h"
 #include "gen/studio.h"
 #include "gen/tokenizer.h"
+#include "kitgen.h"
 #include "prompts.h"
 
 using namespace jkit;
@@ -163,6 +164,26 @@ void testPrompts() {
       JCLAP_CHECK(joined1 > 60);
       JCLAP_CHECK(seen.size() >= 14);
    }
+}
+
+void testKitSlots() {
+   // A General MIDI kit from note 36: kick 36, snare 38, closed hat 42, open hat 46, crash 49.
+   JCLAP_CHECK(std::string(kitSlot(0).name) == "Kick" && kitSlot(0).role == kKick);
+   JCLAP_CHECK(std::string(kitSlot(2).name) == "Snare" && kitSlot(2).role == kSnare);
+   JCLAP_CHECK(std::string(kitSlot(6).name) == "Closed Hat" && kitSlot(6).choke == 1);
+   JCLAP_CHECK(std::string(kitSlot(8).name) == "Pedal Hat" && kitSlot(8).choke == 1);
+   JCLAP_CHECK(std::string(kitSlot(10).name) == "Open Hat" && kitSlot(10).choke == 1);
+   JCLAP_CHECK(std::string(kitSlot(13).name) == "Crash");
+   std::set<std::string> names;
+   for (int p = 0; p < kKitSlots; ++p) {
+      names.insert(kitSlot(p).name);
+      JCLAP_CHECK(kitSlot(p).seconds > 0.1 && kitSlot(p).seconds <= 11.8);
+   }
+   JCLAP_CHECK_EQ(static_cast<int>(names.size()), kKitSlots);
+   // The pad's sound first, then the style; no style, just the sound.
+   JCLAP_CHECK(kitPrompt(6, "dusty boom bap") == "closed hi-hat, dusty boom bap");
+   JCLAP_CHECK(kitPrompt(0, "") == "kick drum");
+   JCLAP_CHECK(randomKitStyle(7) == randomKitStyle(7) && !randomKitStyle(7).empty());
 }
 
 void testStudio() {
@@ -523,6 +544,7 @@ int main() {
    testTokenizer();
    testSampler();
    testPrompts();
+   testKitSlots();
    testStudio();
    testGenerate();
    testSigmas();

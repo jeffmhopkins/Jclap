@@ -46,6 +46,7 @@
 #include <string>
 #include <vector>
 
+#include "kitgen.h"
 #include "prompts.h"
 
 namespace jkit {
@@ -1684,6 +1685,197 @@ private:
    int hover_ = -1;
 };
 
+// A big outlined button beside GENERATE: WHOLE KIT, or STOP while a kit is being made.
+class OutlineButton : public visage::Frame {
+public:
+   explicit OutlineButton(std::string text) : text_(std::move(text)) {}
+   void setText(const std::string &t) {
+      if (t != text_) {
+         text_ = t;
+         redraw();
+      }
+   }
+   std::function<void()> onClick;
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      c.setColor(hover_ ? 0xff3a2a1a : 0xff2b2118);
+      c.roundedRectangle(0, 0, width(), height(), 6 * s);
+      c.setColor(kOrange);
+      c.roundedRectangleBorder(0, 0, width(), height(), 6 * s, 1.2f * s);
+      c.text(text_, ui::font(10.5f * s), visage::Font::kCenter, 0, 0, width(), height());
+   }
+   void mouseEnter(const visage::MouseEvent &) override {
+      hover_ = true;
+      redraw();
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = false;
+      redraw();
+   }
+   void mouseDown(const visage::MouseEvent &) override {
+      if (onClick)
+         onClick();
+   }
+
+private:
+   std::string text_;
+   bool hover_ = false;
+};
+
+// GENERATE KIT's card: the style it will use, the sixteen pads it fills (a General MIDI kit), how
+// long it takes, and the choice of filling only the empty pads or all of them.
+class KitDialog : public visage::Frame {
+public:
+   std::function<std::string()> style;  // the prompt, as the kit's style ("" for a random one)
+   std::function<bool(int)> padFilled; // whether a pad has a sound
+   std::function<int()> engine;
+   std::function<double()> secondsPerSound; // the last run's, or a guess
+   std::function<void(bool emptyOnly)> onStart;
+
+   void open() {
+      hover_ = -1;
+      setVisible(true);
+      redraw();
+   }
+   void close() { setVisible(false); }
+
+   visage::Bounds card() const {
+      const float s = ui::designScale(*this);
+      const float w = 600 * s, h = 330 * s;
+      return {(width() - w) / 2, (height() - h) / 2, w, h};
+   }
+   // 0 empty pads only, 1 all pads.
+   visage::Bounds button(int i) const {
+      const float s = ui::designScale(*this);
+      const visage::Bounds b = card();
+      const float w = (b.width() - 40 * s - 12 * s) / 2;
+      return {b.x() + 20 * s + i * (w + 12 * s), b.bottom() - 60 * s, w, 40 * s};
+   }
+   int emptyCount() const {
+      int n = 0;
+      for (int p = 0; p < kKitSlots; ++p)
+         n += padFilled && padFilled(p) ? 0 : 1;
+      return n;
+   }
+   bool usable() const { return !engine || engine() != 1; }
+
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      const ui::Theme &t = ui::defaultTheme();
+      c.setColor(0xb0000000);
+      c.fill(0, 0, width(), height());
+      const visage::Bounds b = card();
+      c.setColor(t.panel);
+      c.roundedRectangle(b.x(), b.y(), b.width(), b.height(), 8 * s);
+      c.setColor(t.panelBorder);
+      c.roundedRectangleBorder(b.x(), b.y(), b.width(), b.height(), 8 * s, 1.0f);
+      const float x = b.x() + 20 * s, w = b.width() - 40 * s;
+      c.setColor(kTitle);
+      c.text("GENERATE A WHOLE KIT", ui::font(12 * s), visage::Font::kLeft, x, b.y() + 16 * s, 300 * s, 18 * s);
+      c.setColor(t.dimText);
+      c.text("A sound for every pad, laid out like a General MIDI drum kit, all in one style.", ui::font(9 * s),
+             visage::Font::kLeft, x, b.y() + 34 * s, w, 14 * s);
+      const float xx = b.right() - 26 * s, xy = b.y() + 18 * s;
+      c.segment(xx, xy, xx + 9 * s, xy + 9 * s, 1.4f * s, true);
+      c.segment(xx + 9 * s, xy, xx, xy + 9 * s, 1.4f * s, true);
+
+      // The style.
+      float y = b.y() + 60 * s;
+      const std::string st = style ? style() : std::string();
+      c.setColor(t.dimText);
+      c.text("STYLE", ui::font(8 * s), visage::Font::kLeft, x, y, 60 * s, 14 * s);
+      c.setColor(st.empty() ? t.dimText : t.text);
+      c.text(st.empty() ? "None typed: the kit gets a random style. Type one in PROMPT to choose it."
+                        : "\"" + (st.size() > 90 ? st.substr(0, 87) + "..." : st) + "\"",
+             ui::font(9.5f * s), visage::Font::kLeft, x + 50 * s, y, w - 50 * s, 14 * s);
+
+      c.setColor(t.dimText);
+      c.text("Each pad asks for its own sound in this style: \"closed hi-hat, " +
+                 (st.empty() ? std::string("...") : (st.size() > 40 ? st.substr(0, 37) + "..." : st)) +
+                 "\". Describe a style, not one sound.",
+             ui::font(8.5f * s), visage::Font::kLeft, x + 50 * s, y + 16 * s, w - 50 * s, 13 * s);
+
+      // The pads, four by four, bottom row first like the KIT tab.
+      y += 40 * s;
+      const float gw = (w - 3 * 8 * s) / 4, gh = 26 * s;
+      for (int p = 0; p < kKitSlots; ++p) {
+         const int row = 3 - p / 4, col = p % 4;
+         const float px = x + col * (gw + 8 * s), py = y + row * (gh + 6 * s);
+         const bool filled = padFilled && padFilled(p);
+         c.setColor(kWell);
+         c.roundedRectangle(px, py, gw, gh, 4 * s);
+         c.setColor(filled ? t.panelBorder : 0xff3a4250);
+         c.roundedRectangleBorder(px, py, gw, gh, 4 * s, 1.0f);
+         c.setColor(roleColour(kitSlot(p).role));
+         c.circle(px + 8 * s, py + gh / 2 - 2.5f * s, 5 * s);
+         c.setColor(t.text);
+         c.text(kitSlot(p).name, ui::font(9 * s), visage::Font::kLeft, px + 18 * s, py, gw - 60 * s, gh);
+         c.setColor(t.dimText);
+         c.text(filled ? "has a sound" : "empty", ui::font(7.5f * s), visage::Font::kRight, px, py, gw - 8 * s, gh);
+      }
+      y += 4 * (gh + 6 * s) + 4 * s;
+
+      // How long, or why not.
+      c.setColor(usable() ? t.dimText : kOrange);
+      std::string note;
+      if (!usable()) {
+         note = "ORB makes sound effects, not drums. Pick Stable Audio Open Small or 1.0 in ENGINE first.";
+      } else {
+         const double per = secondsPerSound ? secondsPerSound() : 5.0;
+         const auto take = [&](int n) {
+            const double sec = n * per;
+            return sec < 90 ? "about " + std::to_string(std::max(1, static_cast<int>(sec / 10 + 0.5)) * 10) + " s"
+                            : "about " + std::to_string(static_cast<int>(sec / 60 + 0.5)) + " min";
+         };
+         note = "Empty pads: " + std::to_string(emptyCount()) + " sounds, " + take(emptyCount()) +
+                ".  All pads: 16 sounds, " + take(16) + ". The hats share choke group 1.";
+      }
+      c.text(note, ui::font(8.5f * s), visage::Font::kLeft, x, y, w, 14 * s);
+
+      // The two buttons.
+      for (int i = 0; i < 2; ++i) {
+         const visage::Bounds r = button(i);
+         const bool on = usable() && (i == 1 || emptyCount() > 0), hot = on && hover_ == i;
+         // FILL is the orange one; REPLACE is outlined, as it takes sounds off pads.
+         c.setColor(!on ? kWell : i == 0 ? (hot ? 0xfff59a3e : kOrange) : (hot ? 0xff3a2a1a : 0xff2b2118));
+         c.roundedRectangle(r.x(), r.y(), r.width(), r.height(), 6 * s);
+         if (i == 1) {
+            c.setColor(on ? kOrange : t.panelBorder);
+            c.roundedRectangleBorder(r.x(), r.y(), r.width(), r.height(), 6 * s, 1.2f * s);
+         }
+         c.setColor(!on ? t.dimText : i == 0 ? 0xff1a1d22 : kOrange);
+         const std::string label = i == 0 ? "FILL " + std::to_string(emptyCount()) + " EMPTY PADS"
+                                          : std::string("REPLACE ALL 16 PADS");
+         c.text(label, ui::font(10.5f * s), visage::Font::kCenter, r.x(), r.y(), r.width(), r.height());
+      }
+   }
+
+   void mouseMove(const visage::MouseEvent &e) override {
+      const int h = button(0).contains(e.position) ? 0 : button(1).contains(e.position) ? 1 : -1;
+      if (h != hover_) {
+         hover_ = h;
+         redraw();
+      }
+   }
+   void mouseDown(const visage::MouseEvent &e) override {
+      for (int i = 0; i < 2; ++i)
+         if (button(i).contains(e.position)) {
+            if (usable() && (i == 1 || emptyCount() > 0)) {
+               close();
+               if (onStart)
+                  onStart(i == 0);
+            }
+            return;
+         }
+      if (!card().contains(e.position) ||
+          (e.position.x > card().right() - 40 * ui::designScale(*this) && e.position.y < card().y() + 40 * ui::designScale(*this)))
+         close();
+   }
+
+private:
+   int hover_ = -1;
+};
+
 // OUTPUT's picture: every pad where its pan puts it (higher for brighter roles), glowing while it
 // sounds, between the width brackets; and the KIT, FX and OUT level bars.
 class OutputView : public visage::Frame {
@@ -1813,6 +2005,20 @@ public:
       enginePicker_->onPick = [this](int e) { pickEngine_(e); };
       enginePicker_->setOnTop(true);
       enginePicker_->setVisible(false);
+      kitDialog_ = &add<KitDialog>({0, 0, kDesignWidth, kDesignHeight});
+      kitDialog_->style = [this] { return trimmed(host_.gen().prompt); };
+      kitDialog_->padFilled = [this](int p) { return host_.padSample(p) != nullptr; };
+      kitDialog_->engine = [this] { return host_.gen().engine; };
+      kitDialog_->secondsPerSound = [this] {
+         // The last run's time per sound if there was one, or what each engine takes.
+         const double last = host_.lastRunSeconds();
+         if (last > 0.5 && lastRunSounds_ > 0)
+            return last / lastRunSounds_;
+         return host_.gen().engine == 2 ? 30.0 : 4.0;
+      };
+      kitDialog_->onStart = [this](bool emptyOnly) { startKit(emptyOnly); };
+      kitDialog_->setOnTop(true);
+      kitDialog_->setVisible(false);
       tabs_->select(host_.page);
       refresh();
       startTimer(33);
@@ -1823,6 +2029,7 @@ public:
       host_.page = page;
    }
    void openEnginePicker() { enginePicker_->open(); }
+   void openKitDialog() { kitDialog_->open(); }
 
    // ---- the timer ----
 
@@ -1840,9 +2047,22 @@ public:
       std::string error;
       if (host_.pollGeneration(error)) {
          lastError_.clear();
+         lastRunSounds_ = std::max(1, host_.gen().variants);
          selectVariant(host_.selectedVariant, true);
-      } else if (!error.empty())
+      } else if (!error.empty()) {
          lastError_ = error;
+         kitQueue_.clear();
+      }
+      if (!kitQueue_.empty()) {
+         if (SamplePtr sound = host_.takeKitSound()) {
+            lastRunSounds_ = 1;
+            placeKitSound(kitQueue_.front(), sound);
+            kitQueue_.erase(kitQueue_.begin());
+            nextKitSound();
+         } else if (!host_.generating()) {
+            kitQueue_.clear(); // stopped
+         }
+      }
       refresh();
    }
 
@@ -2007,8 +2227,16 @@ private:
       count_->onChange = [this](int i) { host_.gen().variants = 1 << i; };
       tips_.add(*count_, "How many sounds each GENERATE makes. Every GENERATE starts from new random seeds.");
 
-      generate_ = &onPage<GoButton>(P, {24, 496, 348, 40}, "GENERATE");
+      generate_ = &onPage<GoButton>(P, {24, 496, 252, 40}, "GENERATE");
       generate_->onClick = [this] { generate(-1); };
+      wholeKit_ = &onPage<OutlineButton>(P, {282, 496, 90, 40}, "WHOLE KIT");
+      wholeKit_->onClick = [this] {
+         if (!kitQueue_.empty())
+            stopKit();
+         else if (!host_.generating())
+            kitDialog_->open();
+      };
+      tips_.add(*wholeKit_, "Make a sound for every pad at once, in the style of the prompt.");
 
       recentArea_ = &onPage<ui::HoverArea>(P, {24, 588, 348, 56});
       recentArea_->onMouseDown() += [this](const visage::MouseEvent &e) {
@@ -2084,6 +2312,61 @@ private:
       g.prompt = orb() ? jkit::randomOrbPrompt(static_cast<Role>(g.role), g.strange, std::random_device{}())
                        : jkit::randomPrompt(static_cast<Role>(g.role), g.strange, std::random_device{}(), g.engine == 2);
       prompt_->setText(g.prompt);
+   }
+
+   static std::string trimmed(const std::string &t) {
+      const size_t a = t.find_first_not_of(" \t\n\r"), b = t.find_last_not_of(" \t\n\r");
+      return a == std::string::npos ? std::string() : t.substr(a, b - a + 1);
+   }
+
+   // GENERATE KIT: one sound for each pad (or each empty one), in the prompt's style.
+   void startKit(bool emptyOnly) {
+      if (host_.generating() || orb())
+         return;
+      kitStyle_ = trimmed(host_.gen().prompt);
+      if (kitStyle_.empty())
+         kitStyle_ = randomKitStyle(std::random_device{}());
+      kitQueue_.clear();
+      // The kick and snare first, so you hear the kit take shape.
+      static const int kOrder[kKitSlots] = {0, 2, 6, 10, 3, 1, 4, 8, 13, 5, 7, 9, 11, 12, 14, 15};
+      for (int p : kOrder)
+         if (!emptyOnly || !host_.padSample(p))
+            kitQueue_.push_back(p);
+      kitTotal_ = static_cast<int>(kitQueue_.size());
+      if (kitQueue_.empty())
+         return;
+      const EngineStatus e = host_.engine();
+      if (e.state == EngineStatus::State::Missing || e.state == EngineStatus::State::Failed)
+         host_.installEngine();
+      lastError_.clear();
+      nextKitSound();
+   }
+   void nextKitSound() {
+      if (kitQueue_.empty())
+         return;
+      const KitSlot &slot = kitSlot(kitQueue_.front());
+      host_.generateOne(kitPrompt(kitQueue_.front(), kitStyle_), slot.role, slot.seconds, slot.name);
+   }
+   void stopKit() {
+      kitQueue_.clear();
+      host_.cancelEngine();
+   }
+   // A kit sound onto its pad: treated (NORMALIZE, TRIM SILENCE...), played start to end, and the
+   // hats in their choke group.
+   void placeKitSound(int pad, const SamplePtr &sound) {
+      auto s = std::make_shared<Sample>(treat(*sound, host_.treatment()));
+      s->name = uniqueName(sound->name, pad);
+      host_.setPadSample(pad, s);
+      const auto set = [this](clap_id id, double v) {
+         host_.beginEdit(id);
+         host_.setParam(id, v);
+         host_.endEdit(id);
+      };
+      set(padParam(pad, kStart), 0.0);
+      set(padParam(pad, kEnd), 1.0);
+      const int choke = kitSlot(pad).choke;
+      if (choke > 0 && host_.paramValue(padParam(pad, kChoke)) < 0.5)
+         set(padParam(pad, kChoke), choke);
    }
 
    void generate(int around) {
@@ -2263,7 +2546,15 @@ private:
             status_ = host_.engine();
       const bool busy = host_.generating();
       const double p = busy ? host_.generateProgress() : -3.0;
-      if (busy)
+      const bool kit = !kitQueue_.empty();
+      wholeKit_->setText(kit ? "STOP" : "WHOLE KIT");
+      if (busy && kit)
+         generate_->setLabel(p < 0 ? std::string(status_.state == EngineStatus::State::Downloading ? "WAITING FOR THE DOWNLOAD"
+                                                                                                  : "LOADING THE MODEL")
+                                   : "KIT " + std::to_string(kitTotal_ - static_cast<int>(kitQueue_.size()) + 1) + " OF " +
+                                         std::to_string(kitTotal_) + " \xC2\xB7 " + kitSlot(kitQueue_.front()).name + " " +
+                                         std::to_string(static_cast<int>(p * 100)) + "%");
+      else if (busy)
          generate_->setLabel(p < 0 ? (status_.state == EngineStatus::State::Downloading ? "WAITING FOR THE DOWNLOAD"
                                                                                          : "LOADING THE MODEL")
                                    : "GENERATING " + std::to_string(static_cast<int>(p * 100)) + "%");
@@ -2843,6 +3134,13 @@ private:
    ui::Dropdown *engine_ = nullptr;
    ui::Button *engineHelp_ = nullptr;
    EnginePicker *enginePicker_ = nullptr;
+   KitDialog *kitDialog_ = nullptr;
+   OutlineButton *wholeKit_ = nullptr;
+   // GENERATE KIT: the pads still to make, how many in all, and the style.
+   std::vector<int> kitQueue_;
+   int kitTotal_ = 0;
+   std::string kitStyle_;
+   int lastRunSounds_ = 0;
    std::function<void(int)> pickEngine_;
    ui::Button *engineAction_ = nullptr;
    PromptBox *prompt_ = nullptr;
@@ -2887,12 +3185,14 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
                                        ui::WindowOptions{static_cast<int>(kDesignWidth), static_cast<int>(kDesignHeight)});
 }
 
-bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath, bool enginePicker) {
+bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath, int overlay) {
    Panel panel(host);
    panel.stopTimer();
    panel.showPage(page);
-   if (enginePicker)
+   if (overlay == 1)
       panel.openEnginePicker();
+   else if (overlay == 2)
+      panel.openKitDialog();
    panel.setBounds(0, 0, static_cast<float>(width), static_cast<float>(height));
    panel.timerCallback();
    panel.timerCallback();
