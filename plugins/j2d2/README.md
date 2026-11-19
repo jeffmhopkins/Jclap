@@ -2,14 +2,14 @@
 
 # J2D2
 
-An MPE droid synth. Every note can speak in droid phrases (fast collages of chirps, sweeps, step runs,
-trills and buzzes), hum a slowly moving, layered drone, or do both at once. One ribbon takes it from
-pure droid to pure drone. A personality pad sets the mood, and pressure and slide move each note's mood
+An MPE droid synth. Every note can speak a droid syllable (a chirp, a sweep, a step run, a trill, a
+buzz) or a whole phrase of them, hum a slowly moving, layered drone, or do both at once. One ribbon
+takes it from pure droid to pure drone. A personality pad sets the mood, and pressure and slide move each note's mood
 on their own.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![MPE](https://img.shields.io/badge/MPE-yes-blue)](#playing-it) [![voices: 8](https://img.shields.io/badge/voices-8-blue)](#master) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
-Version 0.1.0
+Version 0.2.0
 
 </div>
 
@@ -71,23 +71,32 @@ back to the point you set.
 - **SYLLABLES** sets how often each kind is spoken: 0 never, 100% as often as the mood picks it,
   200% twice as often.
 - **PLAY** sets how the droid voice answers your playing:
+  - **SYLLABLE** or **PHRASE** (the switch at the top): what one key press speaks. SYLLABLE plays
+    one sound of a kind the mood and SYLLABLES pick, so every press is one deliberate sound. PHRASE
+    plays a run of them, ending in the mood's question, sigh or squeal.
+  - **LENGTH** (30 ms to 4 s): how long a syllable lasts, or the most a phrase can run. A syllable is
+    stretched or squeezed to it; a phrase fits its ending inside it, and under 0.4 s has none.
+  - Letting go of a key cuts its droid voice within a few milliseconds, whatever is left of the
+    syllable or phrase. A press starts speaking at once.
   - **VELOCITY** and **PRESSURE**: how far each opens the voice's filter (from 2.2 kHz up to about
     12 kHz) and pushes its drive. Velocity also sets the level.
-  - **TALK**: how often a held note speaks again. At 0 it speaks once per note.
+  - **TALK**: how often a held note speaks again (another syllable or phrase). At 0 it speaks once
+    per note.
   - **POP**: how many bleeps a second full pressure pops through a held drone (see below).
   - **REGISTER** and **KEY TRACK**: where the droid's voice sits, and how far the key you play moves
     it.
 
 ## The DROID ⟷ DRONE ribbon
 
-The ribbon runs from **CHATTER** through **SING** and **HUM** to **CHOIR**. Drag it anywhere.
+The ribbon runs from **CHATTER** through **SING** and **HUM** to **CHOIR**. Drag it anywhere. It is
+an equal-power crossfade between the two halves:
 
-- **All the way left (DROID):** every note speaks a phrase, and there's no drone.
-- **In between:** each new note speaks a phrase over its own drone, and the drone fades in toward the
-  middle. Leaning into a held note pops bleeps through it, as many a second as POP at full pressure
-  (they rise with the square of the pressure). Notes played over the drone each fire a burst.
-- **All the way right (DRONE):** every held note hums its own line, and only pressure brings the droid
-  through.
+- **All the way left (DROID):** only the droid voice, no drone.
+- **In the middle (50%):** an even mix of droid and drone.
+- **In between:** each new note speaks over its own drone. Leaning into a held note pops bleeps
+  through it, as many a second as POP at full pressure (they rise with the square of the pressure).
+- **All the way right (DRONE):** only the drone. Every held note hums its own line, and the droid is
+  silent.
 
 The ribbon's six lines are jagged at the droid end and settle into calm held lines at the drone end.
 They have the same brightness end to end, a little brighter around the thumb, with a soft glow
@@ -176,14 +185,17 @@ message, with ±48 semitone note bends) and plain MIDI with channel or poly afte
 | Blend | Hangar Bay, Night Watch, Workshop, Distress Call: a drone underneath, with pressure popping bleeps through |
 | Drone | Choir of Circuits, Reactor Hum, Deep Space, Rust Bells, Thermal Drift, Glass Partials: tuned and warm through to METAL-heavy and atonal |
 
-The header shows a line about each one. SAVE keeps your own in the J2D2 preset folder.
+The header shows a line about each one. Every preset starts on SYLLABLE with a 250 ms LENGTH; switch
+to PHRASE for the chatter. SAVE keeps your own in the J2D2 preset folder.
 
 ## Building
 
 J2D2 builds with the rest of JClap (see the [top-level README](../../README.md)). Its tests and tools:
 
 - `j2d2-tests`: the engine and the plugin through a test host. It checks that mood shapes the
-  phrases (excited is faster and climbs, sad is slower and sinks), that each drone layer sounds at
+  phrases (excited is faster and climbs, sad is slower and sinks), that the droid voice starts at
+  once and stops within 10 ms of the note-off, that one press speaks one syllable LENGTH long and a
+  phrase never runs past LENGTH, that each drone layer sounds at
   about the same level, ATONAL's bounds, pure droid and pure drone, pressure popping bleeps through a
   drone, every preset's level, MPE over MIDI, param text and state.
 - `j2d2-screenshot-test`, `j2d2-screenshot-drones-test`: the panel pictures above.

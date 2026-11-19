@@ -83,6 +83,9 @@ enum ParamId : clap_id {
    kWidth,
    kPoly,
    kVoices,
+   // Added in 0.2.0.
+   kLength,
+   kPerKey,
    kParamCount
 };
 
@@ -181,11 +184,15 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kWidth, "Width", "Master", 0.0, 2.0, 1.0, kMod},
    {kPoly, "Poly", "Master", 0.0, 1.0, 0.0, kChoice},
    {kVoices, "Voices", "Master", 1.0, kMaxVoices, kMaxVoices, kStepped},
+   {kLength, "Length", "Voice", 0.03, 4.0, 0.25, kMod},
+   {kPerKey, "Per Key", "Voice", 0.0, 1.0, 0.0, kChoice},
 };
 
 // Choice names, in value order.
 inline const char *const kTuningNames[] = {"Just", "Equal"};
 inline const char *const kPolyNames[] = {"Poly", "Mono"};
+// What one key press speaks: one syllable, or a whole phrase.
+inline const char *const kPerKeyNames[] = {"Syllable", "Phrase"};
 inline const char *const kDestNames[] = {"None",    "Droid/Drone", "Energy", "Feeling",         "Tone",
                                          "Partials", "Air",        "Metal",  "Sub",             "Partials Atonal",
                                          "Metal Atonal", "Cutoff", "Evolve", "Drift",           "Pan"};
@@ -196,7 +203,7 @@ inline const char *const kLayerNames[] = {"Tone", "Partials", "Air", "Metal", "S
 inline bool isDest(clap_id id) { return id == kEnv1Dest || id == kEnv2Dest || id == kLfo1Dest || id == kLfo2Dest; }
 inline bool isShape(clap_id id) { return id == kLfo1Shape || id == kLfo2Shape; }
 inline bool isSeconds(clap_id id) {
-   return (id >= kAttack && id <= kRelease && id != kSustain) ||
+   return id == kLength || (id >= kAttack && id <= kRelease && id != kSustain) ||
           (id >= kEnv1Attack && id <= kEnv1Release && id != kEnv1Sustain) ||
           (id >= kEnv2Attack && id <= kEnv2Release && id != kEnv2Sustain);
 }
@@ -209,6 +216,10 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    if (id == kPoly) {
       count = 2;
       return kPolyNames;
+   }
+   if (id == kPerKey) {
+      count = 2;
+      return kPerKeyNames;
    }
    if (isDest(id)) {
       count = kDestCount;
