@@ -1,4 +1,5 @@
 // Renders the panel to a PNG without a host or a model: jkit-screenshot out.png [page [width height]]
+// (page 0 Generate, 1 Kit, 2 Generate on first run, 3 Generate with ORB, 4 the engine picker)
 // Page 0 is Generate, 1 is Kit, 2 is Generate on first run, while the model downloads, 3 is Generate with ORB. The sounds are made up here (decaying noise and sines), so the
 // pictures are the same on every machine.
 
@@ -150,6 +151,18 @@ public:
    Treatment &treatment() override { return treatment_; }
    std::vector<Variant> &variants() override { return variants_; }
    std::vector<Recent> &recent() override { return recent_; }
+   EngineStatus engineStatus(int engine) override {
+      const int was = gen_.engine;
+      gen_.engine = engine;
+      EngineStatus e = this->engine();
+      gen_.engine = was;
+      if (engine == 2) {
+         e.state = EngineStatus::State::Missing;
+         e.downloadBytes = 4893000000ull;
+         e.diskBytes = 0;
+      }
+      return e;
+   }
    EngineStatus engine() override {
       EngineStatus e;
       if (gen_.engine == 1) {
@@ -199,6 +212,7 @@ int main(int argc, char **argv) {
    const int width = argc > 4 ? std::atoi(argv[3]) : kEditorWidth;
    const int height = argc > 4 ? std::atoi(argv[4]) : kEditorHeight;
    DemoHost host(page == 2, page == 3);
-   // Page 1 is the Kit tab (the panel's page 0); 0, 2 and 3 the Generate tab (its page 1).
-   return renderScreenshot(host, page == 1 ? 0 : 1, width, height, argv[1]) ? 0 : 1;
+   // Page 1 is the Kit tab (the panel's page 0); 0, 2, 3 and 4 the Generate tab (its page 1), and 4
+   // with the engine picker open.
+   return renderScreenshot(host, page == 1 ? 0 : 1, width, height, argv[1], page == 4) ? 0 : 1;
 }

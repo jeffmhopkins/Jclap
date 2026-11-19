@@ -1480,6 +1480,225 @@ private:
    int drag_ = -1, hover_ = -1;
 };
 
+// The ENGINE button: the selected engine's name and a chevron, like a dropdown, that opens the
+// engine picker.
+class EngineButton : public visage::Frame {
+public:
+   std::function<std::string()> name;
+   std::function<void()> onClick;
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      const ui::Theme &t = ui::defaultTheme();
+      c.setColor(hover_ ? 0xff2b3038 : t.button);
+      c.roundedRectangle(0, 0, width(), height(), 3 * s);
+      c.setColor(hover_ ? kOrange : t.panelBorder);
+      c.roundedRectangleBorder(0, 0, width(), height(), 3 * s, 1.0f);
+      c.setColor(t.text);
+      c.text(name ? name() : "", ui::font(9.5f * s), visage::Font::kLeft, 8 * s, 0, width() - 26 * s, height());
+      const float cx = width() - 12 * s, cy = height() / 2;
+      c.setColor(kOrange);
+      c.segment(cx - 3.5f * s, cy - 1.5f * s, cx, cy + 2 * s, 1.3f * s, true);
+      c.segment(cx, cy + 2 * s, cx + 3.5f * s, cy - 1.5f * s, 1.3f * s, true);
+   }
+   void mouseEnter(const visage::MouseEvent &) override {
+      hover_ = true;
+      redraw();
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = false;
+      redraw();
+   }
+   void mouseDown(const visage::MouseEvent &) override {
+      if (onClick)
+         onClick();
+   }
+
+private:
+   bool hover_ = false;
+};
+
+// The engine picker: a card over the whole panel with one panel per engine, saying what it's for,
+// with examples, how fast it is, and its size and whether it's downloaded. Click one to use it;
+// click outside (or the X) to close.
+class EnginePicker : public visage::Frame {
+public:
+   struct Info {
+      const char *name, *badge, *forWhat, *examples, *speed;
+   };
+   static const Info &info(int engine) {
+      static const Info infos[3] = {
+         {"Stable Audio Open Small", "BEST FOR DRUMS",
+          "Real drum sounds: kicks, snares, hats, claps, toms and percussion, in any style you can describe, "
+          "plus odd textures and FX.",
+          "\"tight 909 kick\", \"dusty snare, room tail\"",
+          "Quick: a few seconds a sound"},
+         {"ORB", "SOUND EFFECTS",
+          "Not drums: door slams, glass shattering, metal clangs, knocks, punches, gunshots, bells, water, "
+          "whooshes and risers, made by physical models.",
+          "\"a heavy door slams\", \"glass shattering\"",
+          "Instant, and a tiny download"},
+         {"Stable Audio Open 1.0", "RICHEST",
+          "The full model: richer and more detailed than Small, and follows long prompts better. For "
+          "complex hits, layered textures and FX.",
+          "\"deep layered cinematic boom with metal debris\"",
+          "Slow: about 30 s a sound"},
+      };
+      return infos[std::clamp(engine, 0, 2)];
+   }
+   // The order the cards go in: drums first.
+   static constexpr int kOrder[3] = {0, 2, 1};
+
+   std::function<int()> current;
+   std::function<EngineStatus(int)> status;
+   std::function<void(int)> onPick;
+
+   void open() {
+      for (int e = 0; e < 3; ++e)
+         status_[e] = status ? status(e) : EngineStatus{};
+      hover_ = -1;
+      setVisible(true);
+      redraw();
+   }
+   void close() { setVisible(false); }
+
+   visage::Bounds card() const {
+      const float s = ui::designScale(*this);
+      const float w = 780 * s, h = 290 * s;
+      return {(width() - w) / 2, (height() - h) / 2, w, h};
+   }
+   visage::Bounds tile(int i) const {
+      const float s = ui::designScale(*this);
+      const visage::Bounds b = card();
+      const float g = 12 * s, w = (b.width() - 2 * 20 * s - 2 * g) / 3;
+      return {b.x() + 20 * s + i * (w + g), b.y() + 56 * s, w, b.height() - 76 * s};
+   }
+
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      const ui::Theme &t = ui::defaultTheme();
+      c.setColor(0xb0000000);
+      c.fill(0, 0, width(), height());
+      const visage::Bounds b = card();
+      c.setColor(t.panel);
+      c.roundedRectangle(b.x(), b.y(), b.width(), b.height(), 8 * s);
+      c.setColor(t.panelBorder);
+      c.roundedRectangleBorder(b.x(), b.y(), b.width(), b.height(), 8 * s, 1.0f);
+      c.setColor(kTitle);
+      c.text("CHOOSE AN ENGINE", ui::font(12 * s), visage::Font::kLeft, b.x() + 20 * s, b.y() + 16 * s, 300 * s, 18 * s);
+      c.setColor(t.dimText);
+      c.text("Each runs inside JKit on your computer, and downloads the first time you use it.", ui::font(9 * s),
+             visage::Font::kLeft, b.x() + 20 * s, b.y() + 34 * s, 500 * s, 14 * s);
+      // The X.
+      const float xx = b.right() - 26 * s, xy = b.y() + 18 * s;
+      c.setColor(t.dimText);
+      c.segment(xx, xy, xx + 9 * s, xy + 9 * s, 1.4f * s, true);
+      c.segment(xx + 9 * s, xy, xx, xy + 9 * s, 1.4f * s, true);
+      const int cur = current ? current() : 0;
+      for (int i = 0; i < 3; ++i) {
+         const int e = kOrder[i];
+         const Info &in = info(e);
+         const visage::Bounds r = tile(i);
+         const bool on = e == cur, hot = i == hover_;
+         c.setColor(hot ? 0xff252a32 : kWell);
+         c.roundedRectangle(r.x(), r.y(), r.width(), r.height(), 6 * s);
+         c.setColor(on ? kOrange : hot ? 0xff59606b : t.panelBorder);
+         c.roundedRectangleBorder(r.x(), r.y(), r.width(), r.height(), 6 * s, on ? 1.6f * s : 1.0f);
+         const float x = r.x() + 14 * s, w = r.width() - 28 * s;
+         float y = r.y() + 14 * s;
+         // The badge.
+         const unsigned badge = e == 0 ? kOrange : e == 1 ? kBlue : kPurple;
+         const float bw = (std::strlen(in.badge) * 6.2f + 14) * s;
+         c.setColor(alpha(badge, 0.18f));
+         c.roundedRectangle(x, y, bw, 16 * s, 8 * s);
+         c.setColor(badge);
+         c.text(in.badge, ui::font(7.5f * s), visage::Font::kCenter, x, y, bw, 16 * s);
+         if (on) {
+            c.setColor(kOrange);
+            c.text("IN USE", ui::font(7.5f * s), visage::Font::kRight, x, y, w, 16 * s);
+         }
+         y += 24 * s;
+         c.setColor(t.text);
+         c.text(in.name, ui::font(12 * s), visage::Font::kLeft, x, y, w, 18 * s);
+         y += 26 * s;
+         c.setColor(kTitle);
+         for (const std::string &l : wrap(in.forWhat, 9 * s, w)) {
+            c.text(l, ui::font(9 * s), visage::Font::kLeft, x, y, w, 14 * s);
+            y += 14 * s;
+         }
+         y += 10 * s;
+         c.setColor(t.dimText);
+         c.text("Try:", ui::font(8.5f * s), visage::Font::kLeft, x, y, w, 13 * s);
+         y += 14 * s;
+         for (const std::string &l : wrap(in.examples, 8.5f * s, w)) {
+            c.text(l, ui::font(8.5f * s), visage::Font::kLeft, x, y, w, 13 * s);
+            y += 13 * s;
+         }
+         // The bottom lines: speed, then size and state.
+         const EngineStatus &st = status_[e];
+         const bool there = st.state == EngineStatus::State::Installed || st.state == EngineStatus::State::Ready ||
+                            st.state == EngineStatus::State::Loading;
+         std::string size = there ? "Downloaded \xC2\xB7 " + bytesText(st.diskBytes) + " on disk"
+                                  : st.state == EngineStatus::State::Downloading ? "Downloading..."
+                                                                                 : bytesText(st.downloadBytes) + " download";
+         c.setColor(kRule);
+         c.fill(x, r.bottom() - 46 * s, w, 1.0f);
+         c.setColor(t.text);
+         c.text(in.speed, ui::font(8.5f * s), visage::Font::kLeft, x, r.bottom() - 40 * s, w, 14 * s);
+         c.setColor(there ? kGreen : t.dimText);
+         c.text(size, ui::font(8.5f * s), visage::Font::kLeft, x, r.bottom() - 24 * s, w, 14 * s);
+      }
+   }
+
+   // `text` broken into lines no wider than w, at spaces.
+   std::vector<std::string> wrap(const std::string &text, float size, float w) const {
+      const visage::Font f = ui::font(size, dpiScale());
+      const auto width = [&](const std::string &str) { return f.stringWidth(visage::String(str).toUtf32()); };
+      std::vector<std::string> lines;
+      std::string current;
+      size_t i = 0;
+      while (i <= text.size()) {
+         const size_t end = std::min(text.find(' ', i), text.size());
+         const std::string word = text.substr(i, end - i);
+         const std::string tried = current.empty() ? word : current + " " + word;
+         if (!current.empty() && width(tried) > w) {
+            lines.push_back(current);
+            current = word;
+         } else {
+            current = tried;
+         }
+         i = end + 1;
+      }
+      if (!current.empty())
+         lines.push_back(current);
+      return lines;
+   }
+
+   int tileAt(visage::Point p) const {
+      for (int i = 0; i < 3; ++i)
+         if (tile(i).contains(p))
+            return i;
+      return -1;
+   }
+   void mouseMove(const visage::MouseEvent &e) override {
+      const int h = tileAt(e.position);
+      if (h != hover_) {
+         hover_ = h;
+         redraw();
+      }
+   }
+   void mouseDown(const visage::MouseEvent &e) override {
+      const int i = tileAt(e.position);
+      if (i >= 0 && onPick)
+         onPick(kOrder[i]);
+      if (i >= 0 || !card().contains(e.position) || e.position.x > card().right() - 40 * ui::designScale(*this))
+         close();
+   }
+
+private:
+   EngineStatus status_[3];
+   int hover_ = -1;
+};
+
 // OUTPUT's picture: every pad where its pan puts it (higher for brighter roles), glowing while it
 // sounds, between the width brackets; and the KIT, FX and OUT level bars.
 class OutputView : public visage::Frame {
@@ -1602,6 +1821,13 @@ public:
       buildPresets();
       buildGenerate();
       buildKit();
+      // Over everything, shown by the ENGINE button.
+      enginePicker_ = &add<EnginePicker>({0, 0, kDesignWidth, kDesignHeight});
+      enginePicker_->current = [this] { return host_.gen().engine; };
+      enginePicker_->status = [this](int e) { return host_.engineStatus(e); };
+      enginePicker_->onPick = [this](int e) { pickEngine_(e); };
+      enginePicker_->setOnTop(true);
+      enginePicker_->setVisible(false);
       tabs_->select(host_.page);
       refresh();
       startTimer(33);
@@ -1611,6 +1837,7 @@ public:
       tabs_->select(page);
       host_.page = page;
    }
+   void openEnginePicker() { enginePicker_->open(); }
 
    // ---- the timer ----
 
@@ -1718,10 +1945,10 @@ private:
    void buildGenerate() {
       const Page P = kGeneratePage;
       // MODEL
-      engine_ = &onPage<ui::Dropdown>(P, {24, 128, 188, 22},
-                                      std::vector<std::string>{"Stable Audio Open Small", "ORB", "Stable Audio Open 1.0"});
-      engine_->setAccent(kOrange);
-      engine_->onChange = [this](int i) {
+      engine_ = &onPage<EngineButton>(P, {24, 128, 188, 22});
+      engine_->name = [this] { return EnginePicker::info(host_.gen().engine).name; };
+      engine_->onClick = [this] { enginePicker_->open(); };
+      pickEngine_ = [this](int i) {
          GenSettings &g = host_.gen();
          if (g.engine != i) {
             // Each Stable Audio wants its own steps and guidance: start from what it's tuned for.
@@ -1741,9 +1968,7 @@ private:
          syncEngine();
          redraw();
       };
-      tips_.add(*engine_, "The engine that makes the sounds, inside JKit on your CPU. Stable Audio Open Small: "
-                          "neural and quick, 2.2 GB. ORB: plans the sound and plays it with physical models, 20.8 MB. "
-                          "Stable Audio Open 1.0: the full model, slower and richer, 4.8 GB.");
+      tips_.add(*engine_, "The engine that makes the sounds. Click to see what each one is for and choose.");
       engineAction_ = &onPage<ui::Button>(P, {310, 128, 62, 22}, "DOWNLOAD");
       engineAction_->setAccent(kOrange);
       engineAction_->onClick = [this] { engineAction(); };
@@ -1990,7 +2215,7 @@ private:
 
    // ORB plans the sound and plays it: it has no diffusion steps, guidance or variety.
    void syncEngine() {
-      engine_->setSelected(host_.gen().engine);
+      engine_->redraw();
       const bool open1 = host_.gen().engine == 2;
       steps_->setRange(open1 ? ui::ValueRange{10, 100, 50, 1, false, true} : ui::ValueRange{4, 16, 8, 1, false, true});
       guidance_->setRange(open1 ? ui::ValueRange{1, 12, 7, 0.1} : ui::ValueRange{1, 7, 1, 0.1});
@@ -2610,7 +2835,9 @@ private:
    ui::PresetBar *presets_ = nullptr;
 
    // Generate
-   ui::Dropdown *engine_ = nullptr;
+   EngineButton *engine_ = nullptr;
+   EnginePicker *enginePicker_ = nullptr;
+   std::function<void(int)> pickEngine_;
    ui::Button *engineAction_ = nullptr;
    PromptBox *prompt_ = nullptr;
    ChipRow *roles_ = nullptr;
@@ -2653,10 +2880,12 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
                                        ui::WindowOptions{static_cast<int>(kDesignWidth), static_cast<int>(kDesignHeight)});
 }
 
-bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath) {
+bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath, bool enginePicker) {
    Panel panel(host);
    panel.stopTimer();
    panel.showPage(page);
+   if (enginePicker)
+      panel.openEnginePicker();
    panel.setBounds(0, 0, static_cast<float>(width), static_cast<float>(height));
    panel.timerCallback();
    panel.timerCallback();

@@ -405,6 +405,19 @@ public:
       e.folder = gen::Studio::modelFolder(which).u8string();
       return e;
    }
+   EngineStatus engineStatus(int engine) override {
+      const gen::Engine which = gen::engineAt(engine);
+      const gen::Studio::Status st = studio().status(which);
+      EngineStatus e;
+      e.state = static_cast<EngineStatus::State>(st.state);
+      e.received = st.received;
+      e.total = st.total;
+      e.error = st.error;
+      e.downloadBytes = gen::Studio::downloadBytes(which);
+      e.diskBytes = gen::Studio::diskBytes(which);
+      e.folder = gen::Studio::modelFolder(which).u8string();
+      return e;
+   }
    void installEngine() override { studio().install(engineChoice()); }
    void removeEngine() override {
       if (job_) {

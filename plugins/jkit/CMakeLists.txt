@@ -65,4 +65,6 @@ if(JCLAP_BUILD_TOOLS)
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-first-run.png ARGS 2)
    jclap_add_screenshot_test(jkit-screenshot-orb-test TOOL jkit-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-orb.png ARGS 3)
+   jclap_add_screenshot_test(jkit-screenshot-engines-test TOOL jkit-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-engines.png ARGS 4)
 endif()

@@ -83,6 +83,9 @@ public:
    virtual std::vector<Variant> &variants() = 0;
    virtual std::vector<Recent> &recent() = 0;
    virtual EngineStatus engine() = 0;
+   // Any engine's state, size and disk use (0 Stable Audio Open Small, 1 ORB, 2 Stable Audio Open 1.0),
+   // for the engine picker. Walks its folder: call it when the picker opens, not every frame.
+   virtual EngineStatus engineStatus(int engine) = 0;
    virtual void installEngine() = 0;
    virtual void removeEngine() = 0;
    virtual void cancelEngine() = 0;
@@ -114,7 +117,8 @@ public:
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // Draws the panel offscreen at the given pixel size, showing tab `page`, and saves it as a PNG.
-bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath);
+bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath,
+                      bool enginePicker = false);
 
 // A kit file's sounds sit beside it, with this extension in place of the preset's.
 constexpr const char *kKitSoundsExtension = ".jkitsounds";

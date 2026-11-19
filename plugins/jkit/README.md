@@ -18,7 +18,7 @@ JKit opens on the **KIT** tab; **GENERATE** is next to it.
 
 ## The engines
 
-JKit makes its sounds with an engine you pick in the ENGINE menu. Each runs inside the plugin on your
+JKit makes its sounds with an engine you pick with the ENGINE button. Each runs inside the plugin on your
 computer's CPU: nothing is sent anywhere, and there's no helper app and no Python. No engine comes
 with the plugin. Each downloads the first time you GENERATE with it (or press DOWNLOAD), and each
 can be removed on its own:
@@ -84,7 +84,7 @@ by hash.
 | **In all** | **4.89 GB** | **about 4.78 GB** |
 
 It samples with DPM-Solver++ (2M), and wants more steps than Small: **STEPS** runs 10 to 100 (50 by
-default) and **GUIDANCE** 1 to 12 (7 by default); choosing it in the ENGINE menu sets both to its
+default) and **GUIDANCE** 1 to 12 (7 by default); choosing it in the engine picker sets both to its
 defaults. It only computes the length you ask for, so short sounds are quicker: on a 4-core laptop a
 1.5 s sound at 50 steps takes about 30 s, and each variant takes as long again. The GENERATE hint
 says how long to expect. It takes about 5 GB of memory once loaded.
@@ -123,9 +123,17 @@ ORB renders at 48 kHz; JKit resamples to 44.1 kHz like every other sound.
 
 ## The Generate tab
 
-**MODEL**: the ENGINE menu (Stable Audio Open Small, ORB or Stable Audio Open 1.0), whether the engine is downloaded,
+**MODEL**: the ENGINE button opens the engine picker (below), then whether the engine is downloaded,
 downloading, loading or loaded, and its download size or size on disk, with DOWNLOAD, CANCEL or
 REMOVE.
+
+The engine picker shows the three engines side by side, each with what it's for, prompts to try, how
+fast it is, and its download size (or that it's downloaded). Click one to use it. **Stable Audio Open
+Small** is the default and the one for real drum sounds; **Stable Audio Open 1.0** is richer and
+slower, for detailed prompts; **ORB** is for sound effects (door slams, glass, metal, knocks,
+punches...), not drums.
+
+![The engine picker](docs/panel-engines.png)
 
 **PROMPT**: what the sound should be, in plain words: "dusty lo-fi snare, tape saturation, short
 room tail". Under it:
@@ -287,4 +295,4 @@ JKit builds with the rest of JClap (see the [top-level README](../../README.md))
   `JKIT_TEST_ORT`), it generates one with 1.0; with `JKIT_TEST_ORB` set to a folder holding ORB's
   `planner.safetensors`, it plans and plays a kick.
 - `jkit-screenshot-test`, `jkit-screenshot-kit-test`, `jkit-screenshot-first-run-test`,
-  `jkit-screenshot-orb-test`: the panel pictures above.
+  `jkit-screenshot-orb-test`, `jkit-screenshot-engines-test`: the panel pictures above.
