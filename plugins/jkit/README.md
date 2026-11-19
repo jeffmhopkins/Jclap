@@ -2,11 +2,11 @@
 
 # JKit
 
-A 16-pad drum kit whose sounds an AI model makes from your words, inside the plugin, with a choice of engines. Type what you want (or roll the dice for a prompt, from plain studio drums to things no drum machine has), pick from the variants, trim and fade the one you like, and put it on a pad (or several on one, as variations it picks between each hit), or make a whole kit in one style at once: drums, hand percussion, effects or animals. Then play the kit: each pad with its own pitch, start and end, envelope, drive, a points EQ with filters, and sends, into a shared reverb and delay and a master EQ, width and BOOM.
+A 16-pad drum kit whose sounds an AI model makes from your words, inside the plugin, with a choice of engines. Type what you want (or roll the dice for a prompt, from plain studio drums to things no drum machine has), pick from the variants, trim and fade the one you like, and put it on a pad (or several on one, as variations it picks between each hit), or make a whole kit in one style at once: drums, hand percussion, Afro-Latin percussion, effects or animals. Then play the kit: each pad with its own pitch, start and end, envelope, drive, a points EQ with filters, and sends, into a shared reverb and delay and a master EQ, width and BOOM.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![pads: 16](https://img.shields.io/badge/pads-16-blue)](#the-kit-tab) [![engines: Stable Audio Open Small, ORB, Stable Audio Open 1.0](https://img.shields.io/badge/engines-SAO%20Small%20%7C%20ORB%20%7C%20SAO%201.0-blue)](#the-engines) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
-Version 0.7.0 · Powered by Stability AI · ORB by Marcos Maceo
+Version 0.8.0 · Powered by Stability AI · ORB by Marcos Maceo
 
 </div>
 
@@ -188,6 +188,10 @@ kind of kit, and the PROMPT is its style, typed or rolled:
   darbuka, tabla, frame drum, palmas and shaker.
 - **FX**: bleeps, bloops, zaps, glitches, risers and hits.
 - **ANIMALS**: a different animal on each pad, from a bullfrog to a wolf.
+- **AFRO-LATIN**: a second percussion kit with what PERCUSSION has no room for: the three dunun
+  drums (dundunba, sangban, kenkeni) and bell of a djembe ensemble, and the clave, campana and guiro
+  of salsa, with the congas, bongos and djembe they play against. JDrummer's Afro-Cuban and West
+  African genres play on it.
 
 Describe a style, not one sound: each pad asks for its own sound in it ("closed hi-hat, dusty lo-fi
 boom bap, tape saturation"; "conga slap, one hand stroke, Afro-Cuban rumba percussion"). A style
@@ -216,27 +220,28 @@ PROMPT STRENGTH (on 1.0) do.
 Each kit puts its low sounds where a drum kit's kicks are and its sharp ones where the snares and hats
 are, so a drum part still makes sense on any of them:
 
-| Note | Drum kit | Percussion | FX | Animals |
-| --- | --- | --- | --- | --- |
-| 36 | Kick | Cajon Bass | Sub Boom | Bullfrog |
-| 37 | Rim | Djembe Slap | Blip | Woodpecker |
-| 38 | Snare | Cajon Slap | Zap | Dog |
-| 39 | Clap | Palmas | Glitch | Duck |
-| 40 | Snare 2 | Djembe Bass | Noise Hit | Cat |
-| 41 | Low Tom | Low Conga | Bloop | Cow |
-| 42 | Closed Hat | Shaker | Tick | Cricket |
-| 43 | Mid Tom | High Conga | Boing | Goat |
-| 44 | Pedal Hat | Conga Slap | Chirp | Bird |
-| 45 | High Tom | Low Bongo | Pew | Sheep |
-| 46 | Open Hat | High Bongo | Sweep | Rattlesnake |
-| 47 | Perc | Djembe Tone | Coin | Monkey |
-| 48 | Shaker | Darbuka Dum | Wub | Horse |
-| 49 | Crash | Darbuka Tek | Riser | Elephant |
-| 50 | Kick 2 | Tabla | Impact | Lion |
-| 51 | FX | Frame Drum | Reverse | Wolf |
+| Note | Drum kit | Percussion | FX | Animals | Afro-Latin |
+| --- | --- | --- | --- | --- | --- |
+| 36 | Kick | Cajon Bass | Sub Boom | Bullfrog | Dundunba |
+| 37 | Rim | Djembe Slap | Blip | Woodpecker | Clave |
+| 38 | Snare | Cajon Slap | Zap | Dog | Conga Slap |
+| 39 | Clap | Palmas | Glitch | Duck | Kenkeni |
+| 40 | Snare 2 | Djembe Bass | Noise Hit | Cat | Djembe Bass |
+| 41 | Low Tom | Low Conga | Bloop | Cow | Tumba |
+| 42 | Closed Hat | Shaker | Tick | Cricket | Shekere |
+| 43 | Mid Tom | High Conga | Boing | Goat | Conga |
+| 44 | Pedal Hat | Conga Slap | Chirp | Bird | Guiro |
+| 45 | High Tom | Low Bongo | Pew | Sheep | Low Bongo |
+| 46 | Open Hat | High Bongo | Sweep | Rattlesnake | Campana |
+| 47 | Ride | Djembe Tone | Coin | Monkey | High Bongo |
+| 48 | Shaker | Darbuka Dum | Wub | Horse | Sangban |
+| 49 | Crash | Darbuka Tek | Riser | Elephant | Bell |
+| 50 | Kick 2 | Tabla | Impact | Lion | Djembe Slap |
+| 51 | FX | Frame Drum | Reverse | Wolf | Djembe Tone |
 
 The drum kit follows General MIDI from C1 (note 36), so a drum part written for any GM kit plays the
-right sounds.
+right kick, snares, hats, toms and crash. Its ride is on 47 (GM puts the ride on 51, which here is
+FX), where JDrummer plays it.
 
 **GENERATE** (GENERATE DRUM KIT, GENERATE PERCUSSION KIT...) opens a card with the style and the
 sixteen pads, which have sounds, and how long it will take. **VARIATIONS PER PAD** (1, 2 or 4) gives each

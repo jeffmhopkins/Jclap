@@ -95,10 +95,12 @@ std::string upper(std::string s) {
 
 std::string pct(double v) { return std::to_string(static_cast<int>(std::lround(v * 100.0))); }
 
-// The kit a pattern's pads are named and coloured by: the percussion part is always the
-// Percussion kit; the rest follow KIT.
+// The kit a pattern's pads are named and coloured by: the percussion part is on the kit the song's
+// percussion was written for (Afro-Latin or Percussion); the rest follow KIT.
 int kitOf(const EditorHost &h, bool perc) {
-   return perc ? kPercussionKit : std::clamp(static_cast<int>(std::lround(h.paramValue(kKit))), 0, kKitCount - 1);
+   if (perc)
+      return h.song().percKit;
+   return std::clamp(static_cast<int>(std::lround(h.paramValue(kKit))), 0, kKitCount - 1);
 }
 
 void drawCard(visage::Canvas &c, float s, float x, float y, float w, float h, const std::string &title,
@@ -690,6 +692,15 @@ public:
       return var < kVariations ? sec.vars[static_cast<size_t>(var)] : var == kVariations ? sec.fill : sec.perc;
    }
    Pattern &pick(Song &song) { return pick(song, host_.editSection, host_.editVar); }
+   // An edit to the percussion part: it plays as edited, its own variations and fill set aside.
+   static void edited(Song &song, int section, int var) {
+      if (var != kVariations + 1)
+         return;
+      Section &sec = song.sections[static_cast<size_t>(section)];
+      for (Pattern &p : sec.percVars)
+         p.clear();
+      sec.percFill.clear();
+   }
 
    std::vector<int> lanes() {
       const uint16_t added = host_.editVar == 5 ? 0 : host_.added;
@@ -926,6 +937,7 @@ public:
    }
 
    void commit() {
+      edited(work_, host_.editSection, host_.editVar);
       host_.setSong(work_);
       redraw();
       if (onChange)
@@ -1791,10 +1803,10 @@ private:
       host_.litter.clear();
       host_.tags.clear();
       std::vector<int> used;
-      const int kit = genreAt(whole(kGenre)).kit;
+      const Genre &g = genreAt(whole(kGenre));
       for (int i = 0; i < 5; ++i) {
          std::string tag;
-         host_.litter.push_back(mutate(sec.vars[0], kit, param(kMutation), rng, tag, &used));
+         host_.litter.push_back(mutate(sec.vars[0], g.kit, param(kMutation), rng, tag, &used, g.tradition));
          host_.tags.push_back(tag);
       }
       if (mutate_)
@@ -2016,6 +2028,7 @@ private:
       steps_->onChange = [this](double v) {
          Song s = host_.song();
          EditGrid::pick(s, host_.editSection, host_.editVar).steps = static_cast<uint8_t>(std::lround(v));
+         EditGrid::edited(s, host_.editSection, host_.editVar);
          host_.setSong(s);
          redraw();
       };
@@ -2025,6 +2038,7 @@ private:
       rate_->onChange = [this](int i) {
          Song s = host_.song();
          EditGrid::pick(s, host_.editSection, host_.editVar).rate = static_cast<uint8_t>(i);
+         EditGrid::edited(s, host_.editSection, host_.editVar);
          host_.setSong(s);
          redraw();
       };
@@ -2035,7 +2049,11 @@ private:
          Pattern &p = EditGrid::pick(s, host_.editSection, host_.editVar);
          Rng rng(rng_());
          std::string tag;
-         p = mutate(p, host_.editVar == 5 ? kPercussionKit : genreAt(whole(kGenre)).kit, param(kMutation), rng, tag);
+         const bool perc = host_.editVar == kVariations + 1;
+         const int who = std::max(0, whole(kPercussionist) - 1);
+         p = mutate(p, perc ? static_cast<int>(s.percKit) : genreAt(whole(kGenre)).kit, param(kMutation), rng, tag, nullptr,
+                    perc ? percussionistTradition(who) : genreAt(whole(kGenre)).tradition);
+         EditGrid::edited(s, host_.editSection, host_.editVar);
          host_.setSong(s);
          diceTag_ = tag;
          redraw();
@@ -2074,6 +2092,7 @@ private:
             h.ratchet = static_cast<uint8_t>(id - 10);
          else if (id >= 100)
             h.chance = static_cast<uint8_t>(id - 100);
+         EditGrid::edited(s, host_.editSection, host_.editVar);
          host_.setSong(s);
          grid_->redraw();
       };
@@ -2142,7 +2161,11 @@ private:
       };
       tips_.add(knob({648, 298, 66, 84}, kVary, "VARY"), "Each bar may take another variation, and hits come and go.");
       tips_.add(knob({716, 298, 66, 84}, kGhosts, "GHOSTS"), "Soft snare hits around the beat.");
-      tips_.add(knob({784, 298, 66, 84}, kSwing, "SWING"), "Every second sixteenth late.");
+      tips_.add(knob({784, 298, 66, 84}, kSwing, "SWING"), "Every second sixteenth late (or eighth: SWING IN).");
+      auto &feel = onPage<ui::SegmentedSwitch>(kPlayPage, {862, 362, 112, 20}, std::vector<std::string>{"16THS", "8THS"});
+      feel.setAccent(kOrange);
+      bindings_.bind(feel, kSwingFeel);
+      tips_.add(feel, "What SWING swings: the sixteenths, or the eighths (a shuffle; the sixteenths move with them).");
       auto &dice = onPage<ui::SegmentedSwitch>(kPlayPage, {652, 408, 322, 20},
                                                std::vector<std::string>{"NEVER", "1", "2", "4 BARS", "8"});
       dice.setAccent(kOrange);
@@ -2210,6 +2233,7 @@ private:
       label(c, s, "SAME DICE EVERY", 652, 392, 200, 0, visage::Font::kLeft, 9.5f);
       label(c, s, "AUTO FILLS", 652, 432, 200, 0, visage::Font::kLeft, 9.5f);
       label(c, s, "PLAY", 862, 298, 112, 0, visage::Font::kLeft, 9.5f);
+      label(c, s, "SWING IN", 862, 344, 112, 0, visage::Font::kLeft, 9.5f);
       drawCard(c, s, 12, 478, 476, 128, "TRANSPORT", frame_.hostPlaying ? "host playing" : "host stopped");
       label(c, s, "SYNC", 290, 512, 100, 0, visage::Font::kLeft, 9.5f);
       label(c, s, "TEMPO WHEN FREE", 290, 558, 160, 0, visage::Font::kLeft, 9.5f);

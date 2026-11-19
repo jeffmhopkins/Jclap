@@ -3,7 +3,8 @@
 // GENERATE KIT: one style for the whole kit, and a sound for each pad, as a drum kit, hand
 // percussion, effects or animals. A drum kit's pads follow General MIDI from note 36 (C1), so a drum part written for
 // any GM kit plays the right sounds: kick on 36, snare on 38, closed hat on 42, open hat on 46, crash
-// on 49. The three hats share choke group 1, so a closed or pedal hat cuts the open one off. Hand
+// on 49, and a ride on 47 (GM puts it on 51, JKit's FX pad). The three hats share choke group 1, so a
+// closed or pedal hat cuts the open one off. Hand
 // percussion puts its low strokes where the kicks are and its slaps where the snares are.
 //
 // Each pad's prompt is its sound, then the style: "closed hi-hat, dusty lo-fi boom bap, tape
@@ -29,8 +30,13 @@ struct KitSlot {
 constexpr int kKitSlots = 16;
 
 // What the sixteen pads are: a drum kit, or hand percussion from around the world.
-enum KitLayout : int { kDrumKitLayout, kHandPercussionLayout, kFxLayout, kAnimalLayout, kKitLayoutCount };
-inline const char *const kKitLayoutNames[kKitLayoutCount] = {"Drum kit", "Percussion", "FX", "Animals"};
+// Afro-Latin is a second percussion kit for the parts the first has no room for: the dunun drums
+// and bell of a djembe ensemble, and the clave, campana and guiro of salsa, with the congas, bongos
+// and djembe they play against.
+enum KitLayout : int { kDrumKitLayout, kHandPercussionLayout, kFxLayout, kAnimalLayout, kAfroLatinLayout,
+                       kKitLayoutCount };
+inline const char *const kKitLayoutNames[kKitLayoutCount] = {"Drum kit", "Percussion", "FX", "Animals",
+                                                             "Afro-Latin"};
 
 inline const KitSlot &kitSlot(int pad, int layout = kDrumKitLayout) {
    static const KitSlot kDrums[kKitSlots] = {
@@ -45,7 +51,7 @@ inline const KitSlot &kitSlot(int pad, int layout = kDrumKitLayout) {
       {"Pedal Hat", kHat, "pedal hi-hat chick", 0.3, 1}, // 44
       {"High Tom", kTom, "high tom", 0.9, 0},           // 45
       {"Open Hat", kHat, "open hi-hat", 1.0, 1},        // 46
-      {"Perc", kPerc, "conga hit", 0.6, 0},             // 47
+      {"Ride", kHat, "ride cymbal", 2.0, 0},            // 47
       {"Shaker", kPerc, "shaker", 0.5, 0},              // 48
       {"Crash", kHat, "crash cymbal", 2.5, 0},          // 49
       {"Kick 2", kKick, "deep sub kick", 1.0, 0},       // 50
@@ -112,7 +118,28 @@ inline const KitSlot &kitSlot(int pad, int layout = kDrumKitLayout) {
       {"Lion", kKick, "lion roar", 2.0, 0},                      // 50
       {"Wolf", kFx, "wolf howl", 2.5, 0},                        // 51
    };
+   // Afro-Latin: the low drums (dundunba, djembe bass) where the kicks are, the slaps where the
+   // snares are, the open tones where the toms are, and the bells, clave and scrapers between.
+   static const KitSlot kAfroLatin[kKitSlots] = {
+      {"Dundunba", kKick, "dundunba, low dunun drum, one stick stroke", 0.9, 0},            // 36
+      {"Clave", kPerc, "wooden claves, one click", 0.3, 0},                                 // 37
+      {"Conga Slap", kSnare, "conga slap, one hand stroke", 0.5, 0},                        // 38
+      {"Kenkeni", kTom, "kenkeni, small high dunun drum, one stick stroke", 0.5, 0},        // 39
+      {"Djembe Bass", kKick, "djembe bass tone, one hand stroke", 0.8, 0},                  // 40
+      {"Tumba", kTom, "tumba, low conga open tone, one hand stroke", 0.8, 0},               // 41
+      {"Shekere", kHat, "shekere gourd shaker, one shake", 0.4, 0},                         // 42
+      {"Conga", kTom, "conga open tone, one hand stroke", 0.7, 0},                          // 43
+      {"Guiro", kHat, "guiro scrape, one short stroke", 0.4, 0},                            // 44
+      {"Low Bongo", kTom, "low bongo hembra, one finger stroke", 0.5, 0},                   // 45
+      {"Campana", kPerc, "campana, mambo cowbell, one stick hit", 0.5, 0},                  // 46
+      {"High Bongo", kPerc, "high bongo macho, one finger stroke", 0.4, 0},                 // 47
+      {"Sangban", kTom, "sangban, middle dunun drum, one stick stroke", 0.7, 0},            // 48
+      {"Bell", kPerc, "iron bell, dunun bell or agogo, one stick hit", 0.6, 0},             // 49
+      {"Djembe Slap", kPerc, "djembe slap, one hand stroke", 0.5, 0},                       // 50
+      {"Djembe Tone", kTom, "djembe open tone, one hand stroke", 0.7, 0},                   // 51
+   };
    const KitSlot *table = layout == kHandPercussionLayout ? kHands
+                          : layout == kAfroLatinLayout    ? kAfroLatin
                           : layout == kFxLayout           ? kEffects
                           : layout == kAnimalLayout       ? kAnimals
                                                           : kDrums;
@@ -135,6 +162,14 @@ inline const prompts::List &percussionRecordings() {
       "warm natural room", "dry close miked", "outdoor village recording", "big wooden hall",
       "crisp studio recording", "lo-fi sampled from vinyl", "live on a street corner", "intimate, soft hands",
       "bright and punchy", "dark and earthy", "with a short room tail", "tape saturated"};
+   return k;
+}
+
+inline const prompts::List &afroLatinStyles() {
+   static const prompts::List k = {
+      "Afro-Cuban salsa", "Afro-Cuban rumba", "Cuban son", "mambo big band", "Latin jazz", "cha-cha-cha",
+      "Guinean djembe ensemble", "Malian djembe", "Senegalese sabar", "West African village", "Afro-Cuban bata",
+      "salsa dura", "timba", "Afro house"};
    return k;
 }
 
@@ -173,6 +208,10 @@ inline const prompts::List &plainKitStyles(int layout) {
    static const prompts::List kFx = {"8-bit", "sci-fi", "retro", "cartoon", "arcade",
                                      "synth", "glitch", "robot", "analog", "chiptune"};
    static const prompts::List kAnimals = {"farm", "jungle", "forest", "zoo", "pet", "barnyard", "wild", "savanna"};
+   static const prompts::List kAfroLatin = {"salsa", "Afro-Cuban", "Guinean", "Malian", "rumba", "son",
+                                            "mambo", "djembe", "Cuban", "Senegalese"};
+   if (layout == kAfroLatinLayout)
+      return kAfroLatin;
    return layout == kHandPercussionLayout ? kHands : layout == kFxLayout ? kFx : layout == kAnimalLayout ? kAnimals : kDrums;
 }
 
@@ -186,7 +225,9 @@ inline std::string randomKitStyle(uint64_t seed, int layout = kDrumKitLayout, do
    if (strange < 0.2)
       return rng.pick(plainKitStyles(layout));
    std::string style;
-   if (layout == kHandPercussionLayout)
+   if (layout == kAfroLatinLayout)
+      style = std::string(rng.pick(afroLatinStyles())) + " percussion, " + rng.pick(percussionRecordings());
+   else if (layout == kHandPercussionLayout)
       style = std::string(rng.pick(percussionStyles())) + " percussion, " + rng.pick(percussionRecordings());
    else if (layout == kFxLayout)
       style = std::string(rng.pick(fxStyles())) + " sound effects, " + rng.pick(fxTreatments());
@@ -211,6 +252,9 @@ inline const int *kitOrder(int layout) {
    static const int kDrums[kKitSlots] = {0, 2, 6, 10, 3, 1, 4, 8, 13, 5, 7, 9, 11, 12, 14, 15};
    static const int kHands[kKitSlots] = {0, 2, 6, 5, 7, 8, 10, 9, 4, 11, 1, 12, 13, 14, 15, 3};
    static const int kOthers[kKitSlots] = {0, 2, 6, 3, 1, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+   static const int kAfroLatin[kKitSlots] = {0, 5, 7, 2, 1, 10, 12, 3, 13, 4, 15, 14, 9, 11, 6, 8};
+   if (layout == kAfroLatinLayout)
+      return kAfroLatin;
    return layout == kHandPercussionLayout ? kHands : layout == kDrumKitLayout ? kDrums : kOthers;
 }
 

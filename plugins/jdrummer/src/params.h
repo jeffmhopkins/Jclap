@@ -79,7 +79,9 @@ enum ParamId : clap_id {
    kHeldOnly,
    kPassNotes,
    kLearnNote, // one per action, for the CUSTOM map
-   kParamCount = kLearnNote + kActionCount
+   // Added in 0.2.0.
+   kSwingFeel = kLearnNote + kActionCount, // what SWING swings: sixteenths or eighths
+   kParamCount
 };
 
 constexpr auto kSaved = 0u; // kept with presets and the project, not automated
@@ -139,6 +141,7 @@ inline const jclap::core::ParamDef *makeParams() {
       p[kLearnNote + i] = {static_cast<clap_id>(kLearnNote + i), learnNames[i], "Notes", 0, 127,
                            static_cast<double>(12 + kActionKey[i]), kSavedStep};
    }
+   p[kSwingFeel] = {kSwingFeel, "Swing Feel", "Life", 0, 1, 0, kChoice};
    return p;
 }
 
@@ -157,6 +160,7 @@ inline const char *const kAutoFillNames[] = {"Off", "Every 4", "Every 8", "Every
 inline const int kAutoFillBars[] = {0, 4, 8, 16};
 inline const char *const kSyncNames[] = {"Auto", "Host", "Free"};
 inline const char *const kNoteMapNames[] = {"Keyboard", "Custom"};
+inline const char *const kSwingFeelNames[] = {"16ths", "8ths"};
 
 inline const char *const *genreNames() {
    static const char *names[kGenreMax + 1];
@@ -202,6 +206,7 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kPlay: case kFillInto: case kVelEnergy: case kHeldOnly: case kPassNotes: count = 2; return kOffOnNames;
    case kKit: count = kKitCount; return kKitNames;
    case kNoteMap: count = 2; return kNoteMapNames;
+   case kSwingFeel: count = 2; return kSwingFeelNames;
    default: count = 0; return nullptr;
    }
 }

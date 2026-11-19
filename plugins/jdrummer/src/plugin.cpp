@@ -412,10 +412,12 @@ private:
       s.sameDiceBars = kSameDiceBars[choiceIndex(value(kSameDice), 5)];
       s.autoFillBars = kAutoFillBars[choiceIndex(value(kAutoFill), 4)];
       s.swing = value(kSwing);
+      s.swingFeel = whole(kSwingFeel);
       s.sync = whole(kSync);
       s.play = whole(kPlay) != 0;
       s.freeTempo = value(kFreeTempo);
       s.kit = whole(kKit);
+      s.crashAfterFill = genreAt(whole(kGenre)).family != kFamilies[2]; // hip-hop doesn't crash out of a fill
       s.channel = whole(kChannel) - 1;
       s.percChannel = whole(kPercChannel) - 1;
       s.noteMap = whole(kNoteMap);
