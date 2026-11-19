@@ -505,7 +505,8 @@ public:
       for (size_t i = dropFirst_ ? 1 : 0; i < sounds.size(); ++i) {
          auto s = std::make_shared<Sample>();
          s->role = jobRole_;
-         s->name = kRoleNames[std::clamp(jobRole_, 0, kRoleCount - 1)];
+         // ORB's sounds are named for its kind of sound (Boom, Glass...), the rest for the role.
+         s->name = (jobEngine_ == gen::Engine::Orb ? kOrbKindNames : kRoleNames)[std::clamp(jobRole_, 0, kRoleCount - 1)];
          s->prompt = jobPrompt_;
          s->seed = sounds[i].seed;
          s->left = std::move(sounds[i].left);

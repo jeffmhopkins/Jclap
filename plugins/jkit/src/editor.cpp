@@ -341,7 +341,14 @@ private:
 // The role chips: one is on.
 class ChipRow : public visage::Frame {
 public:
-   static float chipWidth(int i) { return std::string(kRoleNames[i]).size() * 6.6f + 18.0f; }
+   // Each chip's width in design units, squeezed to fit the row if the names are long.
+   float chipWidth(int i) const {
+      float total = 5.0f * (kRoleCount - 1);
+      for (int k = 0; k < kRoleCount; ++k)
+         total += naturalWidth(k);
+      const float room = width() / ui::designScale(*this);
+      return naturalWidth(i) * (total > room && room > 0 ? (room - 5.0f * (kRoleCount - 1)) / (total - 5.0f * (kRoleCount - 1)) : 1.0f);
+   }
    void draw(visage::Canvas &c) override {
       const float s = ui::designScale(*this);
       const ui::Theme &t = ui::defaultTheme();
@@ -352,7 +359,7 @@ public:
          c.roundedRectangle(x * s, 0, w * s, height(), height() / 2);
          c.setColor(t.panelBorder);
          c.roundedRectangleBorder(x * s, 0, w * s, height(), height() / 2, 1.0f);
-         std::string name = kRoleNames[i];
+         std::string name = names[i];
          for (char &ch : name)
             ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
          c.setColor(i == selected ? t.text : t.dimText);
@@ -376,7 +383,12 @@ public:
       }
    }
    int selected = 0;
+   // The chips' names: the kit's roles, or ORB's kinds in their places.
+   const char *const *names = kRoleNames;
    std::function<void(int)> onChange;
+
+private:
+   float naturalWidth(int i) const { return std::string(names[i]).size() * 6.6f + 18.0f; }
 };
 
 // A plain horizontal slider with a word at each end: GENERIC ... STRANGE.
@@ -399,6 +411,14 @@ public:
       c.circle(x0 + (x1 - x0) * f - 6 * s, cy - 6 * s, 12 * s);
       c.setColor(t.panel);
       c.circle(x0 + (x1 - x0) * f - 2.5f * s, cy - 2.5f * s, 5 * s);
+   }
+
+   void setLabels(std::string left, std::string right) {
+      if (left == left_ && right == right_)
+         return;
+      left_ = std::move(left);
+      right_ = std::move(right);
+      redraw();
    }
 
 protected:
@@ -1981,9 +2001,9 @@ private:
       roles_ = &onPage<ChipRow>(P, {24, 306, 316, 20});
       roles_->onChange = [this](int r) { host_.gen().role = r; };
       tips_.add(*roles_, "What the sound is for: the random prompt, the pad's colour and its name.");
-      auto &dice = onPage<IconButton>(P, {346, 306, 26, 20}, IconButton::Icon::Dice);
-      dice.onClick = [this] { randomPrompt(); };
-      tips_.add(dice, "A random prompt for this role. The slider below says how strange.");
+      dice_ = &onPage<IconButton>(P, {346, 306, 26, 20}, IconButton::Icon::Dice);
+      dice_->onClick = [this] { randomPrompt(); };
+      tips_.add(*dice_, "A random prompt for this role. The slider below says how strange.");
       strange_ = &onPage<EndsSlider>(P, {24, 332, 348, 16}, "GENERIC", "STRANGE");
       strange_->onChange = [this](double v) { host_.gen().strange = v; };
       tips_.add(*strange_, "How strange a random prompt gets: studio drums at the left, objects and places at the right.");
@@ -2089,7 +2109,8 @@ private:
 
    void randomPrompt() {
       GenSettings &g = host_.gen();
-      g.prompt = jkit::randomPrompt(static_cast<Role>(g.role), g.strange, std::random_device{}());
+      g.prompt = orb() ? jkit::randomOrbPrompt(static_cast<Role>(g.role), g.strange, std::random_device{}())
+                       : jkit::randomPrompt(static_cast<Role>(g.role), g.strange, std::random_device{}());
       prompt_->setText(g.prompt);
    }
 
@@ -2148,7 +2169,8 @@ private:
       if (!t)
          return;
       auto s = std::make_shared<Sample>(*t);
-      s->name = uniqueName(kRoleNames[std::clamp(s->role, 0, kRoleCount - 1)], host_.targetPad);
+      s->name = uniqueName(s->name.empty() ? kRoleNames[std::clamp(s->role, 0, kRoleCount - 1)] : s->name,
+                           host_.targetPad);
       const int pad = host_.targetPad;
       host_.setPadSample(pad, s);
       // A new sound plays from its start to its end.
@@ -2224,6 +2246,17 @@ private:
       steps_->setVisible(!orb());
       guidance_->setVisible(!orb());
       variety_->setVisible(!orb());
+      // ORB makes sound effects, not drums: its chips are the kinds of sound it has, and its slider
+      // goes from one sound to a few in a row.
+      roles_->names = orb() ? kOrbKindNames : kRoleNames;
+      roles_->redraw();
+      strange_->setLabels(orb() ? "ONE SOUND" : "GENERIC", orb() ? "LAYERED" : "STRANGE");
+      tips_.setText(*roles_, orb() ? "The kind of sound ORB can make, for the random prompt, the pad's colour and its name."
+                                   : "What the sound is for: the random prompt, the pad's colour and its name.");
+      tips_.setText(*dice_, orb() ? "A random prompt for this kind of sound, worded the way ORB reads them."
+                                  : "A random prompt for this role. The slider below says how strange.");
+      tips_.setText(*strange_, orb() ? "How many sounds a random prompt asks ORB for: one at the left, a few in a row at the right."
+                                     : "How strange a random prompt gets: studio drums at the left, objects and places at the right.");
    }
 
    void syncGenerate() {
@@ -2842,6 +2875,7 @@ private:
    PromptBox *prompt_ = nullptr;
    ChipRow *roles_ = nullptr;
    EndsSlider *strange_ = nullptr;
+   IconButton *dice_ = nullptr;
    ui::Knob *length_ = nullptr, *steps_ = nullptr, *guidance_ = nullptr, *variety_ = nullptr;
    ui::SegmentedSwitch *count_ = nullptr;
    GoButton *generate_ = nullptr, *addToKit_ = nullptr;

@@ -103,11 +103,15 @@ public:
       selectedVariant = 1;
       gen_.prompt = "dusty lo-fi snare, tape saturation, short room tail, 90s boom bap";
       gen_.role = kSnare;
+      if (orb) {
+         gen_.prompt = "a heavy door slams shut, then glass shattering";
+         gen_.strange = 0.6;
+      }
       gen_.seed = 40217;
       gen_.seconds = 1.2;
       gen_.variety = 0.35;
       for (int i = 0; i < 4; ++i)
-         variants_.push_back({fake("Snare", kSnare, 40217 + i, 0.8 + 0.07 * i, 170 + 20 * i, 0.55 + 0.05 * i, 7 + i), i == 1});
+         variants_.push_back({fake(orb ? "Hit" : "Snare", kSnare, 40217 + i, 0.8 + 0.07 * i, 170 + 20 * i, 0.55 + 0.05 * i, 7 + i), i == 1});
       const int64_t now = static_cast<int64_t>(std::time(nullptr));
       recent_ = {{"909 kick, long boom, slight click", kKick, 11, now - 120},
                  {"crushed shaker loop hit, 8-bit", kHat, 12, now - 360},

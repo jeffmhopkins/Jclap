@@ -122,6 +122,36 @@ void testPrompts() {
    }
    JCLAP_CHECK_EQ(odd0, 0);
    JCLAP_CHECK(odd1 > 120);
+   // Since 0.4 the bank is twice the size it was.
+   for (int r = 0; r < kRoleCount; ++r) {
+      const auto &w = prompts::roleWords(static_cast<Role>(r));
+      JCLAP_CHECK(w.sounds.size() >= 56 && w.traits.size() >= 56 && w.oddities.size() >= 30);
+   }
+   JCLAP_CHECK(prompts::treatments().size() >= 70 && prompts::styles().size() >= 85 &&
+               prompts::oddTreatments().size() >= 80);
+
+   // ORB's prompts: each kind's own sounds, more of them in a row the further right.
+   for (int r = 0; r < kRoleCount; ++r) {
+      std::set<std::string> seen;
+      int joined0 = 0, joined1 = 0;
+      for (uint64_t seed = 0; seed < 100; ++seed) {
+         const std::string a = randomOrbPrompt(static_cast<Role>(r), 0.0, seed);
+         const std::string b = randomOrbPrompt(static_cast<Role>(r), 1.0, seed);
+         JCLAP_CHECK(a == randomOrbPrompt(static_cast<Role>(r), 0.0, seed));
+         JCLAP_CHECK(!a.empty() && b.size() < 200);
+         bool own = false;
+         for (const char *o : prompts::orbSounds(static_cast<Role>(r)))
+            own = own || a.rfind(o, 0) == 0;
+         JCLAP_CHECK(own);
+         joined0 += a.find(", then ") != std::string::npos || a.find(" followed by ") != std::string::npos;
+         joined1 += b.find(", then ") != std::string::npos || b.find(" followed by ") != std::string::npos ||
+                    b.find(" and ") != std::string::npos;
+         seen.insert(a);
+      }
+      JCLAP_CHECK_EQ(joined0, 0);
+      JCLAP_CHECK(joined1 > 60);
+      JCLAP_CHECK(seen.size() >= 14);
+   }
 }
 
 void testStudio() {

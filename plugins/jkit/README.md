@@ -139,13 +139,22 @@ punches...), not drums.
 room tail". Under it:
 
 - **ROLE**: Kick, Snare, Hat, Clap, Tom, Perc or FX. It picks the random prompt's words, the pad's
-  colour and the sound's name on the pad.
+  colour and the sound's name on the pad. With ORB the chips are the kinds of sound ORB can make
+  instead, each in a drum role's place: BOOM (impacts, explosions, heartbeats, sub drops; a kick's
+  pad), HIT (punches, gunshots, door slams, knocks; a snare's), CLICK (clicks, pops, camera shutters,
+  glitches; a hat's), GLASS (glass breaking, corks, cans; a clap's), WATER (drops and splashes; a
+  tom's), METAL (clangs, bells, church bells, swords, coins; a perc's) and SWEEP (whooshes, risers,
+  swells, noise sweeps; an FX's). ORB's sounds are named for their kind: Boom, Glass...
 - **The dice** beside the roles writes a random prompt for the role, from a bank of several hundred
-  sounds, characters, treatments, spaces and styles per role.
+  sounds, characters, treatments, spaces and styles per role (twice as many since 0.4). With ORB it
+  writes plain sound-effect captions for the kind, the way ORB was trained to read them ("a wine
+  glass shattering, up close").
 - **GENERIC - STRANGE**: how strange the random prompts get. At the left they're studio drum
   sounds ("tight 909 kick, light compression, Detroit techno"); halfway, a familiar sound with an odd
   twist ("snare made of a filing cabinet slammed shut, plate reverb"); at the right, objects, places
-  and processes ("a glass of ice dropped on marble, granular smear, played backwards").
+  and processes ("a glass of ice dropped on marble, granular smear, played backwards"). With ORB
+  it's **ONE SOUND - LAYERED** instead: one sound at the left, a few in a row at the right, which ORB
+  plans as one ("a heavy door slams shut, then glass shattering").
 - **LENGTH**: how long the sound is, 0.1 to 11.8 s.
 - **STEPS** (Stable Audio): diffusion steps, 4 to 16 for Small (tuned for 8) or 10 to 100 for 1.0
   (50 by default).
