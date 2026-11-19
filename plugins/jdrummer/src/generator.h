@@ -39,7 +39,11 @@ struct Rng {
    }
    double uniform() { return static_cast<double>(next() >> 11) * (1.0 / 9007199254740992.0); }
    bool chance(double p) { return uniform() < p; }
-   int range(int lo, int hi) { return lo + static_cast<int>(next() % static_cast<uint64_t>(hi - lo + 1)); }
+   int range(int lo, int hi) {
+      if (hi <= lo)
+         return lo;
+      return lo + static_cast<int>(next() % static_cast<uint64_t>(hi - lo + 1));
+   }
 };
 
 inline uint32_t mix(uint32_t a, uint32_t b) {
@@ -171,7 +175,7 @@ inline Voices voicesFor(int kit, unsigned trad = kTradAny) {
       if (trad == kTradIndian) {
          v.kick = FRAME_DRUM, v.snare = TABLA, v.tone = TABLA, v.hat = TABLA;
          v.perc = TABLA, v.shaker = SHAKER, v.toms = {TABLA, DARBUKA_TEK, FRAME_DRUM};
-      } else if (trad & kTradMiddleEastern) {
+      } else if (trad != kTradAny && (trad & kTradMiddleEastern) && !(trad & (kTradCuban | kTradBrazilian | kTradFlamenco))) {
          v.kick = DARBUKA_DUM, v.snare = DARBUKA_TEK, v.tone = DARBUKA_TEK, v.hat = DARBUKA_TEK;
          v.perc = DARBUKA_TEK, v.shaker = -1, v.toms = {DARBUKA_TEK, FRAME_DRUM, DARBUKA_DUM};
       } else {
@@ -186,6 +190,24 @@ inline Voices voicesFor(int kit, unsigned trad = kTradAny) {
    }
    return v;
 }
+
+// Steps between a pattern's grid points: 2 in 12/8 written in 1/16T, where the odd steps are
+// sextuplets between the eighths and nothing the generator adds goes there.
+inline int gridOf(const Pattern &p) { return p.rate == kRate16T ? 2 : 1; }
+inline int onGrid(const Pattern &p, int s) { return s - s % gridOf(p); }
+
+// A hand tradition's timeline, the pads the rhythm is known by: the clave and the bells, the tabla
+// and its bayan, the darbuka's doum and tek. Thinning, twists and WEIRD leave them be.
+inline bool timeline(const Voices &v, int pad) {
+   if (!v.hands() || v.trad == kTradAny)
+      return false;
+   if (v.kit == kAfroLatinKit)
+      return pad == CLAVE || pad == CAMPANA || pad == BELL;
+   return ((v.trad & kTradIndian) && (pad == TABLA || pad == FRAME_DRUM)) ||
+          ((v.trad & kTradMiddleEastern) && (pad == DARBUKA_DUM || pad == DARBUKA_TEK));
+}
+// A timeline hit that holds the time (its ghosted ornaments can still go).
+inline bool timelineHit(const Voices &v, int pad, const Hit &h) { return timeline(v, pad) && h.vel > kGhost + 10; }
 
 // The pad a pattern's backbeat is on: the snare, else the clap; on the hand kits the slap.
 inline int backbeatPad(const Pattern &p, const Voices &v) {
@@ -203,6 +225,17 @@ inline int ghostPad(const Pattern &p, const Voices &v) {
    if (v.hands())
       return p.uses(v.tone) ? v.tone : v.snare;
    return backbeatPad(p, v);
+}
+
+// A kick on every beat: the one thing four-on-the-floor never moves.
+inline bool fourOnFloor(const Pattern &p, int kick) {
+   const int b = stepsPerBeat(p);
+   if (p.steps < 2 * b)
+      return false;
+   for (int s = 0; s < p.steps; s += b)
+      if (!p.at(kick, s).on())
+         return false;
+   return true;
 }
 
 // The busiest of a pattern's lanes with one of these roles, or -1.
@@ -240,6 +273,20 @@ inline void applyMods(Pattern &p, unsigned mods, int kit, Rng &rng, unsigned tra
    const Voices v = voicesFor(kit, trad);
    const int n = p.steps;
    const int beat = stepsPerBeat(p);
+   // Sparser first, so it doesn't take away what the other twists add.
+   if (mods & kSparse) {
+      int removed = 0;
+      for (int pass = 0; pass < 2 && !removed; ++pass)
+         for (int pad = 0; pad < kPads; ++pad)
+            for (int s = 0; s < n; ++s) {
+               Hit &h = p.at(pad, s);
+               if (h.on() && (h.vel < kAccent || pass) && !onBeat(s, beat) && !timelineHit(v, pad, h) &&
+                   (pass || rng.chance(0.35))) {
+                  h = Hit{};
+                  ++removed;
+               }
+            }
+   }
    if (mods & kBusyHats) {
       const int h = hatLane(p, v);
       int added = 0;
@@ -249,9 +296,16 @@ inline void applyMods(Pattern &p, unsigned mods, int kit, Rng &rng, unsigned tra
             ++added;
          }
       // Already in sixteenths: rolls instead.
-      if (!added)
-         for (int k = 0; k < 2; ++k)
-            p.at(h, rng.range(n / 2, n - 1)).ratchet = 2;
+      if (!added) {
+         int rolled = 0;
+         for (int k = 0; k < 32 && rolled < 2; ++k) {
+            Hit &x = p.at(h, rng.range(n / 2, n - 1));
+            if (x.on() && x.ratchet == 1) {
+               x.ratchet = 2;
+               ++rolled;
+            }
+         }
+      }
    }
    if (mods & kOpenHats && v.openHat >= 0) {
       bool changed = false;
@@ -269,7 +323,7 @@ inline void applyMods(Pattern &p, unsigned mods, int kit, Rng &rng, unsigned tra
       const int sh = v.shaker;
       if (p.uses(sh)) {
          // A shaker already plays: it fills in, and leans on the off-beats.
-         for (int s = 0; s < n; ++s) {
+         for (int s = 0; s < n; s += gridOf(p)) {
             Hit &h = p.at(sh, s);
             if (s % beat == beat / 2)
                h.vel = static_cast<uint8_t>(std::max<int>(h.vel, kNormal + 8));
@@ -317,9 +371,11 @@ inline void applyMods(Pattern &p, unsigned mods, int kit, Rng &rng, unsigned tra
    }
    if (mods & kDoubleKick) {
       int added = 0;
-      const int spots[5] = {n - 1, 7, 10, 3, 13};
+      // Pickups, never a sixteenth either side of a kick (bar the one, which the last step leads to).
+      const int spots[5] = {n - 1, 7, 10, 3, 11};
+      auto lonely = [&](int s) { return s == n - 1 || (!p.at(v.kick, s - 1).on() && !p.at(v.kick, (s + 1) % n).on()); };
       for (int s : spots)
-         if (s > 0 && s < n && !p.at(v.kick, s).on() && rng.chance(0.7)) {
+         if (s > 0 && s < n && !p.at(v.kick, s).on() && lonely(s) && rng.chance(0.7)) {
             p.at(v.kick, s).vel = kSoft;
             ++added;
          }
@@ -352,7 +408,7 @@ inline void applyMods(Pattern &p, unsigned mods, int kit, Rng &rng, unsigned tra
       const int from = p.uses(SN) ? SN : p.uses(CL) ? CL : -1;
       if (from >= 0) {
          for (int s = 0; s < n; ++s)
-            if (p.at(from, s).vel >= (from == SN ? 1 : kNormal)) {
+            if (p.at(from, s).vel >= (from == SN ? 1 : kSoft)) {
                p.at(RIM, s) = p.at(from, s);
                p.at(from, s) = Hit{};
             }
@@ -367,7 +423,7 @@ inline void applyMods(Pattern &p, unsigned mods, int kit, Rng &rng, unsigned tra
       } else if (p.uses(CL)) {
          // A clap alone: a snare goes under it.
          for (int s = 0; s < n; ++s)
-            if (p.at(CL, s).vel >= kNormal)
+            if (p.at(CL, s).vel >= kSoft)
                p.at(SN, s).vel = kNormal - 10;
       } else
          for (int s = beat; s < n; s += 2 * beat)
@@ -382,6 +438,9 @@ inline void applyMods(Pattern &p, unsigned mods, int kit, Rng &rng, unsigned tra
       auto pull = [&](int s, int dir) {
          const int to = s + dir;
          if (to < 1 || to >= n || p.at(v.kick, to).on() || std::find(kicks.begin(), kicks.end(), to) != kicks.end())
+            return false;
+         // Not up against another kick.
+         if ((to + dir < n && to + dir >= 0 && p.at(v.kick, to + dir).on()) || (to + dir == n && p.at(v.kick, 0).on()))
             return false;
          p.at(v.kick, to) = p.at(v.kick, s);
          p.at(v.kick, s) = Hit{};
@@ -410,28 +469,22 @@ inline void applyMods(Pattern &p, unsigned mods, int kit, Rng &rng, unsigned tra
          ++rolled;
       }
    }
-   if (mods & kSparse) {
-      int removed = 0;
-      for (int pass = 0; pass < 2 && !removed; ++pass)
-         for (int pad = 0; pad < kPads; ++pad)
-            for (int s = 0; s < n; ++s) {
-               Hit &h = p.at(pad, s);
-               if (h.on() && (h.vel < kAccent || pass) && !onBeat(s, beat) && (pass || rng.chance(0.35))) {
-                  h = Hit{};
-                  ++removed;
-               }
-            }
-   }
 }
 
 // ---- energy ----
 
 // The energy (0..1) a lane comes in at. On a kit the hats come first and the perc last; on the hand
 // kits the drums and the bell or clave come first, the shakers and scrapers later.
-inline double threshold(int kit, int pad) {
+inline double threshold(int kit, int pad, const Pattern &p) {
    if (kit == kDrumKit) {
-      if (pad == OH)
-         return 0.55;
+      // An open hat on the off-beats is the groove's hat (house's, disco's): it comes in early.
+      if (pad == OH) {
+         const int beat = stepsPerBeat(p);
+         int off = 0;
+         for (int s = beat / 2; s < p.steps; s += beat)
+            off += p.at(OH, s).on();
+         return off * beat >= p.steps * 3 / 4 ? 0.15 : 0.55;
+      }
       if (pad == SH)
          return 0.35;
       if (pad == CR)
@@ -447,13 +500,26 @@ inline double threshold(int kit, int pad) {
    return byRole[padRole(kit, pad)];
 }
 
-inline void shapeEnergy(Pattern &p, int kit, double e, int section, Rng &rng, unsigned trad = kTradAny) {
+inline void shapeEnergy(Pattern &p, int kit, double e, int section, Rng &rng, unsigned trad = kTradAny,
+                        bool fillIn = true) {
    const int n = p.steps;
    const int beat = stepsPerBeat(p);
    // Lanes the energy is too low for drop out, unless it would leave the pattern empty.
    Pattern before = p;
+   // The percussionist (section -1) keeps its busiest lane at any energy: a shaker player's shaker.
+   int keepLane = -1;
+   if (section < 0) {
+      int most = 0;
+      for (int pad = 0; pad < kPads; ++pad) {
+         int c = 0;
+         for (int s = 0; s < n; ++s)
+            c += p.at(pad, s).on();
+         if (c > most)
+            most = c, keepLane = pad;
+      }
+   }
    for (int pad = 0; pad < kPads; ++pad)
-      if (p.uses(pad) && e < threshold(kit, pad))
+      if (p.uses(pad) && pad != keepLane && e < threshold(kit, pad, before))
          for (int s = 0; s < kMaxSteps; ++s)
             p.at(pad, s) = Hit{};
    // A break drops the kick.
@@ -466,14 +532,18 @@ inline void shapeEnergy(Pattern &p, int kit, double e, int section, Rng &rng, un
    // Very low energy thins to anchors: only the beats under 0.2, only the half notes of the
    // lowest lane under 0.1, nothing at all at 0.
    if (e < 0.2) {
-      int anchor = -1;
+      // The lowest sound: the kick (or the hand drum's bass), else the first lane there is.
+      const int low = voicesFor(kit, trad).kick;
+      int anchor = low >= 0 && p.uses(low) ? low : -1;
       for (int pad = 0; pad < kPads && anchor < 0; ++pad)
          if (p.uses(pad))
             anchor = pad;
+      const Voices tv = voicesFor(kit, trad);
       for (int pad = 0; pad < kPads; ++pad)
          for (int s = 0; s < kMaxSteps; ++s) {
             Hit &h = p.at(pad, s);
-            const bool keep = e >= 0.1 ? onBeat(s, beat) || h.vel >= kAccent
+            // The clave or the theka stays whole while anything plays.
+            const bool keep = e >= 0.1 ? onBeat(s, beat) || h.vel >= kAccent || timelineHit(tv, pad, h)
                                        : e > 0.02 && pad == anchor && s % (2 * beat) == 0;
             if (!keep)
                h = Hit{};
@@ -481,14 +551,15 @@ inline void shapeEnergy(Pattern &p, int kit, double e, int section, Rng &rng, un
       if (p.empty() && e > 0.02 && anchor >= 0)
          p.at(anchor, 0).vel = kSoft;
    }
-   // Below 0.75 the soft hits thin out, more the lower it goes; the louder the section, the louder
-   // every hit, and from 0.7 the beats are leaned on.
+   // Below 0.75 the soft hits thin out, more the lower it goes (not the timeline's); the louder the
+   // section, the louder every hit, and from 0.7 the beats are leaned on.
+   const Voices sv = voicesFor(kit, trad);
    for (int pad = 0; pad < kPads; ++pad)
       for (int s = 0; s < n; ++s) {
          Hit &h = p.at(pad, s);
          if (!h.on())
             continue;
-         if (e < 0.75 && h.vel < 80 && !onBeat(s, beat) && rng.chance((0.75 - e) * 1.2)) {
+         if (e < 0.75 && h.vel < 80 && !onBeat(s, beat) && !timelineHit(sv, pad, h) && rng.chance((0.75 - e) * 1.2)) {
             h = Hit{};
             continue;
          }
@@ -508,19 +579,23 @@ inline void shapeEnergy(Pattern &p, int kit, double e, int section, Rng &rng, un
    // High energy: the hats fill in (on a hand kit the shaker or scraper, and the drum's soft strokes
    // between its others: a conga's heel and toe, a darbuka's ka, the tabla's dayan, never its bayan)
    // and the kick gets pickups.
-   if (e > 0.75) {
+   if (e > 0.75 && fillIn) {
       const bool hands = kit == kPercussionKit || kit == kAfroLatinKit;
       const Voices v = voicesFor(kit, trad);
-      const int fillIn = !hands ? -1 : trad & (kTradIndian | kTradMiddleEastern) ? v.snare : busiestLane(p, kit, kTom, kTom);
+      // (West African: the djembe's tones, never a dunun.)
+      const int fillIn = !hands                                          ? -1
+                         : trad & (kTradIndian | kTradMiddleEastern)     ? v.snare
+                         : trad == kTradWestAfrican                      ? v.tone
+                                                                         : busiestLane(p, kit, kTom, kTom);
       const int lanes[2] = {kit == kDrumKit ? (p.uses(CH) || !p.uses(RD) ? CH : RD) : busiestLane(p, kit, kHat, kHat),
                             fillIn};
       for (int h : lanes)
          if (h >= 0 && p.uses(h))
-            for (int s = 0; s < n; s += h == lanes[1] ? 2 : 1)
+            for (int s = 0; s < n; s += (h == lanes[1] ? 2 : 1) * gridOf(p))
                if (!p.at(h, s).on() && !(kit == kDrumKit && p.at(OH, s).on()) && rng.chance((e - 0.75) * 3.0))
                   p.at(h, s).vel = kGhost + 12;
    }
-   if (e > 0.7 && kit == kDrumKit && rng.chance(e - 0.6) && n >= 16 && p.uses(K) && !p.at(K, n - 2).on())
+   if (e > 0.7 && kit == kDrumKit && rng.chance(e - 0.6) && n >= 16 && p.at(K, 0).on() && !p.at(K, n - 2).on())
       p.at(K, n - 2).vel = kSoft;
 }
 
@@ -536,10 +611,13 @@ inline void applyWeird(Pattern &p, int kit, double w, Rng &rng, unsigned trad = 
       if (!p.uses(pad))
          continue;
       // A hit pulled a step off the grid.
+      if (timeline(v, pad))
+         continue;
       if (rng.chance(w * 0.7)) {
          const int s = rng.range(1, n - 1);
-         const int to = std::clamp(s + (rng.chance(0.5) ? 1 : -1), 0, n - 1);
-         if (p.at(pad, s).on() && !p.at(pad, to).on() && !(pad == v.kick && s == 0)) {
+         const int to = std::clamp(s + (rng.chance(0.5) ? gridOf(p) : -gridOf(p)), 0, n - 1);
+         const bool anchored = pad == v.kick && (s == 0 || (onBeat(s, beat) && fourOnFloor(p, v.kick)));
+         if (p.at(pad, s).on() && !p.at(pad, to).on() && !anchored) {
             p.at(pad, to) = p.at(pad, s);
             p.at(pad, s) = Hit{};
          }
@@ -560,13 +638,17 @@ inline void applyWeird(Pattern &p, int kit, double w, Rng &rng, unsigned trad = 
    if (v.drums())
       pool = {FX, RIM, SH};
    else
-      for (int pad = 0; pad < kPads; ++pad)
-         if (!p.uses(pad) && (!v.hands() || v.allows(pad)))
+      for (int pad = 0; pad < kPads; ++pad) {
+         // Never a stray bell or clave (they are the time), nor a darbuka in a tabla groove.
+         const bool foreign = v.hands() && v.trad == kTradIndian && (pad == DARBUKA_DUM || pad == DARBUKA_TEK) &&
+                              !p.uses(DARBUKA_DUM) && !p.uses(DARBUKA_TEK);
+         if (!p.uses(pad) && (!v.hands() || v.allows(pad)) && !timelinePad(kit, pad) && !foreign)
             pool.push_back(pad);
+      }
    const int strays = static_cast<int>(w * 3.0 + rng.uniform());
    for (int k = 0; k < strays && !pool.empty(); ++k) {
       const int pad = pool[static_cast<size_t>(rng.range(0, static_cast<int>(pool.size()) - 1))];
-      const int s = rng.range(0, n - 1);
+      const int s = onGrid(p, rng.range(0, n - 1));
       if (!p.at(pad, s).on()) {
          p.at(pad, s).vel = static_cast<uint8_t>(rng.range(50, 100));
          p.at(pad, s).chance = static_cast<uint8_t>(rng.range(50, 100));
@@ -579,17 +661,22 @@ inline void applyWeird(Pattern &p, int kit, double w, Rng &rng, unsigned trad = 
 
 // ---- the player ----
 
-inline void applyPlayer(Pattern &p, int kit, const Player &pl, double e, Rng &rng, unsigned trad = kTradAny) {
+// Hits the player adds go only before step `addBefore` (a fill's silence stays silent).
+inline void applyPlayer(Pattern &p, int kit, const Player &pl, double e, Rng &rng, unsigned trad = kTradAny,
+                        int addBefore = kMaxSteps) {
    const Voices v = voicesFor(kit, trad);
    const int n = p.steps;
+   const int addTo = std::clamp(addBefore, 0, n);
    // Ghost notes round the backbeat, or among a hand drum's tones (not in a section kept sparse).
    if (kit != kFxKit && kit != kAnimalKit && e >= 0.2) {
       const int sn = ghostPad(p, v);
       if (p.uses(sn)) {
          const int count = static_cast<int>(std::lround(pl.ghosts * 4.0 * (0.5 + e)));
          for (int k = 0; k < count; ++k) {
+            const int g = gridOf(p);
             const int s = rng.range(0, n - 1);
-            if (s % 2 && !p.at(sn, s).on() && !p.at(sn, s ^ 1).on())
+            if (s % (2 * g) == g && s < addTo && !p.at(sn, s).on() && !p.at(sn, s - g).on() &&
+                !p.at(sn, (s + g) % n).on())
                p.at(sn, s).vel = static_cast<uint8_t>(rng.range(28, 46));
          }
       }
@@ -607,8 +694,8 @@ inline void applyPlayer(Pattern &p, int kit, const Player &pl, double e, Rng &rn
             vel = kGhost;
          } else
             pad = v.kick;
-         const int s = rng.range(0, n - 1);
-         if (p.uses(pad) && !p.at(pad, s).on())
+         const int s = onGrid(p, rng.range(0, n - 1));
+         if (s < addTo && p.uses(pad) && !p.at(pad, s).on())
             p.at(pad, s).vel = vel;
       }
    }
@@ -624,9 +711,9 @@ inline void applyPlayer(Pattern &p, int kit, const Player &pl, double e, Rng &rn
          const Role role = padRole(kit, pad);
          double nudge = drift * std::sin(6.283185307179586 * s / std::max(1, n) + phase) +
                         (rng.uniform() * 2.0 - 1.0) * pl.loose * 4.0;
-         if (v.drums() && role == kSnare)
+         if (v.drums() ? role == kSnare : pad == v.snare)
             nudge += pl.backbeatFeel + (pl.loose > 0.0 ? rng.range(-2, 2) : 0);
-         if (v.drums() && role == kHat)
+         if (role == kHat && !(v.drums() && pad == RD))
             nudge += pl.hatFeel;
          h.nudge = static_cast<int8_t>(std::clamp(static_cast<int>(std::lround(h.nudge + nudge)), -kMaxNudge, kMaxNudge));
          const int jitter = static_cast<int>(std::lround((rng.uniform() * 2.0 - 1.0) * pl.loose * 10.0));
@@ -655,12 +742,15 @@ inline Pattern makeFill(const Pattern &base, int kit, FillKind kind, double fill
    int len = std::min(bar, beats * beat);
    if (kind == kFillDjembe || kind == kFillTihai)
       len = bar; // a call, or three phrases, take the bar
-   const int from = n - len;
+   const int from = (n - len) / beat * beat; // on a beat, in any meter
    const int shape = rng.range(0, 3);
    // Clear under the fill.
    for (int pad = 0; pad < kPads; ++pad) {
       const Role r = padRole(kit, pad);
       bool keep = isKickPad(kit, pad) && kind != kFillDrop;
+      // A hat roll or a chop keeps the backbeat (a trap bar's only clap is on 3).
+      if ((kind == kFillHats || kind == kFillChop) && v.drums() && r == kSnare)
+         keep = true;
       if (v.hands())
          keep = r == kPerc || r == kHat;
       if (!keep)
@@ -744,7 +834,28 @@ inline Pattern makeFill(const Pattern &base, int kit, FillKind kind, double fill
          if (s >= n - beat && rng.chance(0.6))
             f.at(h, s).ratchet = static_cast<uint8_t>(rng.range(2, 4));
       }
-      hit(v.drums() ? backbeatPad(base, v) : v.snare, std::max(from, n - beat), kAccent);
+      const int bb = v.drums() ? backbeatPad(base, v) : v.snare;
+      bool any = false;
+      for (int s = from; s < n; ++s)
+         any |= f.at(bb, s).on();
+      if (!any)
+         hit(bb, std::max(from, n - beat), kAccent);
+      break;
+   }
+   case kFillChop: {
+      // The producer's fill: the kick and the hats drop out for the last beat (the backbeat plays
+      // on), a kick picks up into the one, sometimes a stutter on the snare.
+      const int cut = std::max(0, n - beat);
+      for (int s = cut; s < n; ++s)
+         for (int pad = 0; pad < kPads; ++pad)
+            if (padRole(kit, pad) != kSnare)
+               f.at(pad, s) = Hit{};
+      hit(v.kick, n - 1, kNormal);
+      if (shape % 2 && v.drums()) {
+         const int sn = backbeatPad(base, v);
+         hit(sn, n - 2, kSoft);
+         f.at(sn, n - 2).ratchet = 2;
+      }
       break;
    }
    case kFillDrop: {
@@ -753,9 +864,10 @@ inline Pattern makeFill(const Pattern &base, int kit, FillKind kind, double fill
          for (int s = from; s < n; ++s)
             for (int pad = 0; pad < kPads; ++pad)
                f.at(pad, s) = Hit{};
-         hit(v.drums() ? (base.uses(CL) ? CL : SN) : v.snare, n - std::max(1, beat / 2), kAccent);
+         hit(v.drums() ? (base.uses(SN) && !base.uses(CL) ? SN : CL) : v.snare, n - std::max(1, beat / 2), kAccent);
       } else {
-         const int cl = v.drums() ? (base.uses(CL) ? CL : SN) : v.snare;
+         // On the clap, unless the groove plays a snare and no clap.
+         const int cl = v.drums() ? (base.uses(SN) && !base.uses(CL) ? SN : CL) : v.snare;
          for (int s = from; s < n; ++s)
             if (s % 2 == 0 || s >= n - beat)
                hit(cl, s, ramp(s));
@@ -771,10 +883,10 @@ inline Pattern makeFill(const Pattern &base, int kit, FillKind kind, double fill
       break;
    }
    case kFillDjembe: {
-      // The djembe call: flammed slaps on the bell's shape (12/8) or a call in eighths (4/4), the
-      // ensemble answering on the one.
-      static const int call8[7] = {0, 2, 4, 6, 7, 10, 12}; // in sixteenths, 4/4
-      static const int call12[6] = {0, 2, 4, 5, 7, 9};      // in 12/8 eighths
+      // The djembe call, as taught: S s . s . s . s S . S . S in 4/4, T f . T t . T t . T t in 12/8,
+      // flammed on its first slap, the ensemble answering on the one.
+      static const int call8[7] = {0, 3, 5, 7, 8, 10, 12}; // in sixteenths, 4/4
+      static const int call12[7] = {0, 2, 3, 5, 6, 8, 9};   // in 12/8 eighths
       if (beat == 6)
          for (int x : call12)
             hit(v.snare, from + 2 * x, kAccent);
@@ -787,13 +899,15 @@ inline Pattern makeFill(const Pattern &base, int kit, FillKind kind, double fill
    }
    case kFillDarbuka: {
       // A tek roll, rolled into twos as it builds, landing on a doum on the last beat.
+      hit(v.kick, from, kAccent);
+      hit(v.kick, std::max(from, n - beat), kAccent);
       for (int s = from; s < n; ++s) {
+         if (f.at(v.kick, s).on())
+            continue; // a doum is not also a tek
          hit(v.snare, s, ramp(s));
          if (rng.chance(0.3 + fills * 0.4))
             f.at(v.snare, s).ratchet = 2;
       }
-      hit(v.kick, from, kAccent);
-      hit(v.kick, std::max(from, n - beat), kAccent);
       break;
    }
    case kFillTihai: {
@@ -807,6 +921,10 @@ inline Pattern makeFill(const Pattern &base, int kit, FillKind kind, double fill
          span = 2 * (k * d + d) + (k - 1) * d;
       }
       const int start = n - span;
+      // The theka plays on until the tihai starts.
+      for (int pad = 0; pad < kPads; ++pad)
+         for (int s = from; s < start; ++s)
+            f.at(pad, s) = base.at(pad, s);
       for (int rep = 0; rep < 3; ++rep)
          for (int i = 0; i < k; ++i) {
             const int s = start + rep * (k * d + d) + i * d;
@@ -862,8 +980,10 @@ inline const std::vector<Mutation> &mutations() {
           return added > 0;
        },
        kOnKits},
-      {"kick moves off the 1",
+      {"a kick moves",
        [](Pattern &p, const Voices &v, Rng &r) {
+          if (fourOnFloor(p, v.kick))
+             return false;
           std::vector<int> hits;
           for (int s = 0; s < p.steps; ++s)
              if (p.at(v.kick, s).on())
@@ -909,7 +1029,7 @@ inline const std::vector<Mutation> &mutations() {
        [](Pattern &p, const Voices &v, Rng &) {
           const int sn = backbeatPad(p, v);
           const int beat = stepsPerBeat(p);
-          if (p.steps != 4 * beat || !p.at(sn, beat).on() || !p.at(sn, 3 * beat).on())
+          if (p.steps != 4 * beat || !p.at(sn, beat).on() || !p.at(sn, 3 * beat).on() || fourOnFloor(p, v.kick))
              return false;
           p.at(sn, beat) = Hit{};
           p.at(sn, 3 * beat) = Hit{};
@@ -919,7 +1039,8 @@ inline const std::vector<Mutation> &mutations() {
        kOnKits},
       {"toms come in",
        [](Pattern &p, const Voices &v, Rng &r) {
-          if (!v.drums())
+          // Not into a club groove that has no toms.
+          if (!v.drums() || (fourOnFloor(p, v.kick) && !p.uses(HT) && !p.uses(MT) && !p.uses(LT)))
              return false;
           const int toms[3] = {HT, MT, LT};
           for (int k = 0; k < 3; ++k) {
@@ -946,7 +1067,7 @@ inline const std::vector<Mutation> &mutations() {
        kOnKits},
       {"busier kick",
        [](Pattern &p, const Voices &v, Rng &r) {
-          if (!p.uses(v.kick))
+          if (p.steps < 2 || !p.uses(v.kick))
              return false;
           int added = 0;
           for (int k = 0; k < 4 && added < 2; ++k) {
@@ -966,7 +1087,7 @@ inline const std::vector<Mutation> &mutations() {
              const int pad = r.range(0, kPads - 1), s = r.range(0, p.steps - 1);
              Hit &h = p.at(pad, s);
              // On hand drums the bell and the clave are the time: they stay.
-             if (v.hands() && padRole(v.kit, pad) == kPerc)
+             if (v.hands() && (padRole(v.kit, pad) == kPerc || timelineHit(v, pad, h)))
                 continue;
              if (h.on() && !onBeat(s, stepsPerBeat(p)) && h.vel < kAccent) {
                 h = Hit{};
@@ -1014,8 +1135,10 @@ inline const std::vector<Mutation> &mutations() {
           const int sh = v.shaker;
           if (sh < 0 || p.uses(sh) || (v.hands() && !v.allows(sh)))
              return false;
-          for (int s = 0; s < p.steps; ++s)
-             p.at(sh, s).vel = static_cast<uint8_t>(s % 2 ? kSoft : kGhost);
+          // On the grid's eighths in 12/8 (louder on the beat's off-eighths), its sixteenths in 4/4.
+          const int g = gridOf(p);
+          for (int s = 0; s < p.steps; s += g)
+             p.at(sh, s).vel = static_cast<uint8_t>(g == 2 ? (s % 6 ? kGhost : kSoft) : s % 2 ? kSoft : kGhost);
           return true;
        }},
       {"double-time hats",
@@ -1082,6 +1205,8 @@ inline const std::vector<Mutation> &mutations() {
       // Hand drums: what a hand drummer changes from one time round to the next.
       {"open tones move",
        [](Pattern &p, const Voices &v, Rng &r) {
+          if (timeline(v, v.tone))
+             return false; // a bol or a tek stays on its matra
           std::vector<int> tones;
           for (int s = 1; s < p.steps; ++s)
              if (p.at(v.tone, s).vel >= kNormal)
@@ -1089,7 +1214,8 @@ inline const std::vector<Mutation> &mutations() {
           if (tones.empty())
              return false;
           const int s = tones[static_cast<size_t>(r.range(0, static_cast<int>(tones.size()) - 1))];
-          const int to = std::clamp(s + (r.chance(0.5) ? 1 : -1), 1, p.steps - 1);
+          const int g = gridOf(p);
+          const int to = std::clamp(s + (r.chance(0.5) ? g : -g), 1, p.steps - 1);
           if (p.at(v.tone, to).on())
              return false;
           p.at(v.tone, to) = p.at(v.tone, s);
@@ -1101,8 +1227,9 @@ inline const std::vector<Mutation> &mutations() {
        [](Pattern &p, const Voices &v, Rng &r) {
           int added = 0;
           for (int k = 0; k < 8 && added < 2; ++k) {
-             const int s = r.range(p.steps / 2, p.steps - 1);
-             if (!onBeat(s, stepsPerBeat(p)) && !p.at(v.snare, s).on() && !p.at(v.tone, s).on()) {
+             const int s = onGrid(p, r.range(p.steps / 2, p.steps - 1));
+             if (!onBeat(s, stepsPerBeat(p)) && !p.at(v.snare, s).on() && !p.at(v.tone, s).on() &&
+                 !timeline(v, v.snare)) {
                 p.at(v.snare, s).vel = static_cast<uint8_t>(r.range(85, 110));
                 ++added;
              }
@@ -1112,6 +1239,9 @@ inline const std::vector<Mutation> &mutations() {
        kOnHands},
       {"bass on the beats only",
        [](Pattern &p, const Voices &v, Rng &) {
+          // Not where the bass is the rhythm's own (Saidi's two doums, the tabla's bayan).
+          if (timeline(v, v.kick))
+             return false;
           bool any = false;
           for (int s = 1; s < p.steps; ++s)
              if (p.at(v.kick, s).on() && !onBeat(s, stepsPerBeat(p))) {
@@ -1124,7 +1254,7 @@ inline const std::vector<Mutation> &mutations() {
       {"roll into the one",
        [](Pattern &p, const Voices &v, Rng &r) {
           const int pad = p.uses(v.tone) ? v.tone : v.snare;
-          const int s = p.steps - 1 - r.range(0, 1);
+          const int s = onGrid(p, p.steps - 1 - r.range(0, 1) * gridOf(p));
           p.at(pad, s).vel = static_cast<uint8_t>(std::max<int>(p.at(pad, s).vel, kNormal));
           p.at(pad, s).ratchet = static_cast<uint8_t>(r.range(2, 3));
           return true;
@@ -1185,12 +1315,16 @@ inline const Style &styleOf(const Recipe &r) {
 
 // The energy a section of a recipe is made with, 0..1.
 // ENERGY scales the arc (at 50 each section plays as set), so a section set to 0 stays silent.
+// Above 50 it moves each section towards full by a share of its headroom, so the chorus stays
+// above the pre however hard it is pushed.
 inline double sectionEnergy(const Recipe &r, int section) {
-   return std::clamp(r.sections[static_cast<size_t>(section)] * (0.5 + r.energy), 0.0, 1.0);
+   const double arc = r.sections[static_cast<size_t>(section)];
+   if (r.energy <= 0.5 || arc <= 0.0)
+      return std::clamp(arc * (0.5 + r.energy), 0.0, 1.0);
+   return std::clamp(arc + (1.0 - arc) * (r.energy - 0.5) * 1.2, 0.0, 1.0);
 }
 
-// A bar's length in ticks.
-inline int patternTicks(const Pattern &p) { return p.steps * kRateTicks[std::min<int>(p.rate, kRate32)]; }
+// A groove's length in ticks.
 inline int patternTicks(const Groove &g) {
    int steps = 1;
    for (const Lane &l : g.lanes)
@@ -1230,6 +1364,21 @@ inline Pattern onKit(const Pattern &q, int fromKit, int toKit, unsigned trad) {
    return out;
 }
 
+// A Cuban groove borrowed into a song keeps its clave: one with another clave (2-3 against 3-2, or
+// rumba against son) would cross it. A groove without a clave goes with any.
+inline bool sameClave(const Groove &a, const Groove &b, unsigned trad) {
+   if (trad != kTradCuban)
+      return true;
+   const auto clave = [](const Groove &g) -> std::string {
+      for (const Lane &l : g.lanes)
+         if (l.pad == CLAVE && l.hits)
+            return l.hits;
+      return {};
+   };
+   const std::string ca = clave(a), cb = clave(b);
+   return ca.empty() || cb.empty() || ca == cb;
+}
+
 // The base groove of a section: the style's, sometimes its genre's other grooves for variety.
 inline Pattern baseGroove(const Recipe &r, int section, Rng &rng) {
    const Genre &g = genreAt(r.genre);
@@ -1246,7 +1395,7 @@ inline Pattern baseGroove(const Recipe &r, int section, Rng &rng) {
          // A hand genre keeps its cycle (a taal, a clave, a bell) whole: only a groove as long.
          const bool fits = g.tradition != kTradAny ? patternTicks(o) == patternTicks(mine)
                                                   : sameMeter(patternTicks(o), patternTicks(mine));
-         if (i != own && o.rate == mine.rate && fits)
+         if (i != own && o.rate == mine.rate && fits && sameClave(o, mine, g.tradition))
             others.push_back(i);
       }
       if (!others.empty())
@@ -1267,15 +1416,39 @@ inline Pattern baseGroove(const Recipe &r, int section, Rng &rng) {
 
 // The percussionist's groove for a section: one of its own that fits the drummer's meter (the same
 // step and a bar that fits whole), else one of its grooves laid over the drummer's bar.
-inline Pattern percussionPart(int who, const Pattern &drums, Rng &rng) {
+inline Pattern percussionPart(int who, const Pattern &drums, Rng &rng, unsigned trad = kTradAny) {
    const auto &grooves = percussionGrooves(who);
    const int ticks = patternTicks(drums);
    std::vector<int> best, fits;
+   // Over a genre of its own tradition it plays that tradition's grooves (the tabla over a taal,
+   // not the darbuka), when it has one.
+   const int kit = percussionistKit(who);
+   const auto ofTrad = [&](const Groove &gr) {
+      // The Percussion kit's darbuka and tabla serve either tradition: a groove led by the darbuka
+      // is Middle Eastern, one without it Indian.
+      bool darbuka = false;
+      for (const Lane &l : gr.lanes)
+         darbuka = darbuka || (kit == kPercussionKit && (l.pad == DARBUKA_DUM || l.pad == DARBUKA_TEK));
+      if (kit == kPercussionKit && trad == kTradIndian)
+         return !darbuka;
+      if (kit == kPercussionKit && trad == kTradMiddleEastern)
+         return darbuka;
+      for (const Lane &l : gr.lanes)
+         if (!(padTradition(kit, l.pad) & trad))
+            return false;
+      return true;
+   };
+   bool any = false;
+   for (const Groove &gr : grooves)
+      any = any || ofTrad(gr);
+   // Only a groove on the drummer's grid: sixteenths under a 12/8 drummer would fight it (straight
+   // eighths and sixteenths go together). The same step and bar first, else one whose cycle fits.
+   const auto triplet = [](int rate) { return rate == kRate16T; };
    for (int i = 0; i < static_cast<int>(grooves.size()); ++i) {
       const Groove &gr = grooves[static_cast<size_t>(i)];
-      if (!sameMeter(patternTicks(gr), ticks))
+      if (triplet(gr.rate) != triplet(drums.rate) || !sameMeter(patternTicks(gr), ticks) || (any && !ofTrad(gr)))
          continue;
-      (gr.rate == drums.rate ? best : fits).push_back(i);
+      (gr.rate == drums.rate && patternTicks(gr) == ticks ? best : fits).push_back(i);
    }
    const std::vector<int> &pick = !best.empty() ? best : fits;
    if (!pick.empty()) {
@@ -1284,21 +1457,33 @@ inline Pattern percussionPart(int who, const Pattern &drums, Rng &rng) {
       return p;
    }
    // Nothing in this meter (a 5/4, a 7/8 the percussionist has no groove for): a groove at the
-   // drummer's step, repeated to the drummer's length.
+   // drummer's step, cut or carried on to the drummer's length (past its end from its second beat,
+   // so the one isn't heard twice in a bar).
    int gi = 0;
    for (int i = 0; i < static_cast<int>(grooves.size()); ++i)
-      if (grooves[static_cast<size_t>(i)].rate == drums.rate) {
+      if (triplet(grooves[static_cast<size_t>(i)].rate) == triplet(drums.rate)) {
          gi = i;
          break;
       }
    const Pattern src = fromGroove(grooves[static_cast<size_t>(gi)]);
    Pattern p;
-   p.rate = drums.rate;
-   p.steps = drums.steps;
+   p.rate = src.rate;
+   p.steps = static_cast<uint8_t>(std::clamp(ticks / kRateTicks[std::min<int>(src.rate, kRate32)], 1, kMaxSteps));
+   p.clear();
+   const int len = std::max<int>(1, src.steps), beat = std::min(stepsPerBeat(src), len - 1);
    for (int pad = 0; pad < kPads; ++pad)
       for (int s = 0; s < p.steps; ++s)
-         p.at(pad, s) = src.at(pad, s % std::max<int>(1, src.steps));
+         p.at(pad, s) = src.at(pad, s < len ? s : beat + (s - len) % std::max(1, len - beat));
    return p;
+}
+
+// Where a fill starts: the first step it changes.
+inline int fillStart(const Pattern &base, const Pattern &fill) {
+   for (int st = 0; st < fill.steps; ++st)
+      for (int pad = 0; pad < kPads; ++pad)
+         if (fill.at(pad, st) != base.at(pad, st))
+            return st;
+   return fill.steps;
 }
 
 inline Section makeSection(const Recipe &r, int section, uint32_t seed) {
@@ -1319,38 +1504,75 @@ inline Section makeSection(const Recipe &r, int section, uint32_t seed) {
 
    Pattern base = baseGroove(r, section, rng);
    const Pattern meter = base; // its length before WEIRD, for the percussionist
+   // The bar: 4/4 unless the groove is in another meter (a groove of two 4/4 bars is still 4/4).
+   const int ticks = patternTicks(meter);
+   s.meter = static_cast<uint16_t>(ticks % kTicksPerBar == 0 ? kTicksPerBar : ticks);
    // A live drummer moves to the ride for a chorus.
    if (kit == kDrumKit && g.family == kFamilies[3] && section == kChorus && base.uses(CH) && !base.uses(RD) &&
        rng.chance(0.6))
       for (int st = 0; st < base.steps; ++st) {
          base.at(RD, st) = base.at(CH, st);
          base.at(CH, st) = Hit{};
+         // The foot keeps the hat on 2 and 4.
+         if (st % (2 * stepsPerBeat(base)) == stepsPerBeat(base) && !base.at(PH, st).on())
+            base.at(PH, st).vel = kSoft;
       }
-   shapeEnergy(base, kit, e, section, rng, trad);
+   // A sparse or half-time style stays spacious at full tilt.
+   const unsigned mods = styleOf(r).mods;
+   shapeEnergy(base, kit, e, section, rng, trad, !(mods & (kSparse | kHalfTime)));
    applyWeird(base, kit, sparse ? 0.0 : r.weird, rng, trad);
    Pattern played = base;
    applyPlayer(played, kit, pl, e, rng, trad);
    s.vars[0] = played;
    // Variations: small mutations of the groove, the last a little further (and on a live kit, the
    // toms in it).
+   // A lane the section's energy took out stays out of its variations.
+   const auto keepOut = [&](Pattern &m, const Pattern &from, int k) {
+      for (int pad = 0; pad < kPads; ++pad)
+         if (!from.uses(pad) && m.uses(pad) && e < threshold(k, pad, m))
+            for (int st = 0; st < kMaxSteps; ++st)
+               m.at(pad, st) = Hit{};
+   };
    for (int v = 1; v < kVariations; ++v) {
       std::string tag;
       Pattern m = sparse ? base : mutate(base, kit, 0.15 + 0.2 * v + r.weird * 0.3, rng, tag, nullptr, trad);
-      if (!sparse && live && v == kVariations - 1)
+      if (!sparse && live && v == kVariations - 1 && kit == kDrumKit && e >= threshold(kit, HT, base))
          applyMutation(m, "toms come in", kit, rng, trad);
+      keepOut(m, base, kit);
       applyPlayer(m, kit, pl, e, rng, trad);
       s.vars[static_cast<size_t>(v)] = m;
    }
    Pattern fill = sparse ? base : makeFill(base, kit, g.fill, pl.fills, e, rng, trad);
-   applyPlayer(fill, kit, pl, e, rng, trad);
+   applyPlayer(fill, kit, pl, e, rng, trad, fillStart(base, fill));
    s.fill = fill;
+   // Swung in eighths, a sixteenth grid is a triplet one: the step before each beat would land on a
+   // sextuplet, so whatever the twists, the player or a fill put there moves back a step (or goes).
+   if (mods & kSwing8)
+      for (Pattern *p : {&s.vars[0], &s.vars[1], &s.vars[2], &s.vars[3], &s.fill})
+         if (p->rate == kRate16)
+            for (int pad = 0; pad < kPads; ++pad) {
+               // The hats' soft fill-in stays on the eighths.
+               if (padRole(kit, pad) == kHat)
+                  for (int st = 1; st < p->steps; st += 2)
+                     if (p->at(pad, st).on() && p->at(pad, st).vel < 60)
+                        p->at(pad, st) = Hit{};
+               for (int st = 3; st < p->steps; st += 4) {
+                  if (!p->at(pad, st).on())
+                     continue;
+                  if (!p->at(pad, st - 1).on())
+                     p->at(pad, st - 1) = p->at(pad, st);
+                  p->at(pad, st) = Hit{};
+               }
+            }
 
    if (r.percussionist > 0) {
       const int who = std::clamp(r.percussionist - 1, 0, kPercussionists - 1);
       const int pk = percussionistKit(who);
-      const unsigned pt = percussionistTradition(who);
+      unsigned pt = percussionistTradition(who);
+      if (trad != kTradAny && (pt & trad))
+         pt &= trad; // its own tradition's side, over a hand genre
       const Player &pp = kPercussionistList[who];
-      Pattern perc = percussionPart(who, meter, rng);
+      Pattern perc = percussionPart(who, meter, rng, pt);
       shapeEnergy(perc, pk, e, -1, rng, pt);
       applyWeird(perc, pk, sparse ? 0.0 : r.weird * 0.5, rng, pt);
       Pattern p0 = perc;
@@ -1359,11 +1581,12 @@ inline Section makeSection(const Recipe &r, int section, uint32_t seed) {
       for (int v = 1; v < kVariations; ++v) {
          std::string tag;
          Pattern m = sparse ? perc : mutate(perc, pk, 0.15 + 0.2 * v + r.weird * 0.3, rng, tag, nullptr, pt);
+         keepOut(m, perc, pk);
          applyPlayer(m, pk, pp, e, rng, pt);
          s.percVars[static_cast<size_t>(v - 1)] = m;
       }
       Pattern pf = sparse ? perc : makeFill(perc, pk, percussionistFill(who), pp.fills, e, rng, pt);
-      applyPlayer(pf, pk, pp, e, rng, pt);
+      applyPlayer(pf, pk, pp, e, rng, pt, fillStart(perc, pf));
       s.percFill = pf;
    }
    return s;
@@ -1377,6 +1600,8 @@ inline void generateSong(const Recipe &r, Song &song) {
          continue;
       s = makeSection(r, i, mix(r.seed, static_cast<uint32_t>(i)));
    }
+   if (r.percussionist > 0)
+      song.percKit = static_cast<uint8_t>(percussionistKit(r.percussionist - 1));
 }
 
 // Rolls one section again with a new seed, keeping its lock.
@@ -1385,6 +1610,8 @@ inline void rollSection(const Recipe &r, Song &song, int section, uint32_t seed)
    const uint8_t locked = s.locked;
    s = makeSection(r, section, seed);
    s.locked = locked;
+   if (r.percussionist > 0)
+      song.percKit = static_cast<uint8_t>(percussionistKit(r.percussionist - 1));
 }
 
 // Puts a mutated child in as a section's main groove, and breeds its other variations and its fill
@@ -1393,12 +1620,25 @@ inline void adoptChild(const Recipe &r, Section &s, const Pattern &child, uint32
    Rng rng(seed);
    const Genre &g = genreAt(r.genre);
    const Player &pl = kDrummerList[std::clamp(r.player, 0, kDrummers - 1)];
+   const double e = s.energy / 100.0;
    s.vars[0] = child;
+   // A sparse section stays as it is; the rest are bred from the child and played (timing reset
+   // first, so a feel doesn't build up across generations).
+   Pattern straight = child;
+   for (int pad = 0; pad < kPads; ++pad)
+      for (int st = 0; st < kMaxSteps; ++st)
+         straight.at(pad, st).nudge = 0;
    for (int v = 1; v < kVariations; ++v) {
       std::string tag;
-      s.vars[static_cast<size_t>(v)] = mutate(child, g.kit, 0.15 + 0.2 * v, rng, tag, nullptr, g.tradition);
+      Pattern m = e < 0.2 ? child : mutate(straight, g.kit, 0.15 + 0.2 * v, rng, tag, nullptr, g.tradition);
+      if (e >= 0.2)
+         applyPlayer(m, g.kit, pl, e, rng, g.tradition);
+      s.vars[static_cast<size_t>(v)] = m;
    }
-   s.fill = makeFill(child, g.kit, g.fill, pl.fills, s.energy / 100.0, rng, g.tradition);
+   Pattern fill = e < 0.2 ? child : makeFill(straight, g.kit, g.fill, pl.fills, e, rng, g.tradition);
+   if (e >= 0.2)
+      applyPlayer(fill, g.kit, pl, e, rng, g.tradition, fillStart(straight, fill));
+   s.fill = fill;
    ++s.generation;
 }
 

@@ -101,6 +101,15 @@ inline bool isHatPad(int kit, int pad) {
    return kit == kDrumKit ? pad == CH || pad == PH || pad == OH : padRole(kit, pad) == kHat;
 }
 inline bool isKickPad(int kit, int pad) { return kit == kDrumKit ? pad == K || pad == K2 : padRole(kit, pad) == kKick; }
+// A hand kit's timeline: the clave and the bells, the tabla, the darbuka's doum. The rhythm is
+// known by these, so nothing that varies the playing drops them.
+inline bool timelinePad(int kit, int pad) {
+   if (kit == kAfroLatinKit)
+      return pad == CLAVE || pad == CAMPANA || pad == BELL;
+   if (kit == kPercussionKit)
+      return pad == TABLA || pad == DARBUKA_DUM;
+   return false;
+}
 
 // The musical traditions a hand-percussion pad belongs to. A hand genre only ever borrows a stray hit
 // or a mutation from pads of its own tradition, so a salsa never grows a tabla.

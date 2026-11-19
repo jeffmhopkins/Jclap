@@ -32,7 +32,8 @@ Percussion kit (Middle Eastern, Indian), so set JKit's KIT to match.
 
 A percussionist plays a second part on its own channel (**11** by default, PERC in OUTPUT): send that
 to a second JKit set to the percussionist's kit, AFRO-LATIN for the Conguero and the Djembe Circle,
-PERCUSSION for the others. Notes JDrummer doesn't use as section notes pass straight through
+PERCUSSION for the others. The song remembers which kit its percussion was written for, so a song
+saved by 0.1.0 keeps playing the Percussion kit until you roll it again. Notes JDrummer doesn't use as section notes pass straight through
 to JKit, so you can still play pads by hand (untick *Pass other notes to JKit* to stop that).
 
 ## GENERATE
@@ -85,21 +86,28 @@ dhol's Bhangra chaal. Their twists, stray hits and mutations stay on that tradit
   Chopper and Machine (on the grid, no humanize).
 - **The percussionist** chip adds a second part on its own channel: Conguero, Djembe Circle, Bateria,
   Hand Drummer, Tabla & Darbuka, or Shaker & Tamb. Click it to pick one; × drops it. The
-  percussionist plays a groove in the drummer's meter (in 3/4, 7/8 or 12/8 when the drummer is), to
-  the section's energy, with three variations that come in with the drummer's and a fill of its own
+  percussionist plays a groove in the drummer's meter (in 3/4, 5/4, 7/8, 9/8 or 12/8 when the drummer
+  is) and in the genre's own tradition (the tabla over a taal, the darbuka over a maqsum), to
+  the section's energy (a shaker player keeps the shaker even in a quiet intro), with three variations that come in with the drummer's and a fill of its own
   (the conguero's congas, the djembe call, a darbuka roll, a cajon break) when the drummer fills.
 - **ENERGY** (chill to peak time) is how hard the whole song goes: which instruments play, how many
   hits, how loud. Each section's own energy rides on it: a quiet verse thins its soft hits and drops
   the open hats and percussion; a chorus plays louder, leans on the beats, fills its hats in and opens
   the hat into the next bar (a live drummer may move to the ride). Hand drums fill in their soft
-  strokes instead.
-- **WEIRD** (by the book to out there) moves hits off the grid, leaves some to chance, rolls them,
+  strokes instead. Above 50 ENERGY lifts every section towards full, the chorus still above the pre.
+  On the hand kits the timeline (the clave and the bells, the tabla's theka, the darbuka's doum and
+  tek) stays whole at any energy, through WEIRD, the twists and VARY. A Cuban song keeps its clave:
+  a section that borrows another groove only takes one with the same clave (3-2 or 2-3, son or rumba).
+- **WEIRD** (by the book to out there) moves hits off the grid (in 12/8, off the eighths only by
+  whole eighths), leaves some to chance, rolls them,
   brings in stray sounds and odd lengths.
 
-Each section's **fill** is its genre's: round the toms, a snare roll, a hat roll, a build or the band
-dropping out, congas from the highest down (toms on a kit), an FX sweep, the djembe call, a darbuka
+Each section's **fill** is its genre's: round the toms, a snare roll, a hat roll, a chopped break
+(hip-hop and lo-fi), a build or the band dropping out (the drummer adds nothing in the silence), congas from the highest down (toms on a kit), an FX sweep, the djembe call, a darbuka
 roll landing on a doum, a tihai (a phrase three times, landing on the next bar's one) or a cajon break,
-in one of a few shapes, one to four beats long by the drummer and the energy. Drummers play with a
+in one of a few shapes, one to four beats long by the drummer and the energy. A fill plays the last
+bar of its pattern, so a two-bar groove's fill comes in whichever bar it falls on. Odd meters keep
+their own bar: a 7/8 section's bars are 7/8 long, and its fills, crashes and switches land on them. Drummers play with a
 slow push and pull across the bar and a lighter hand on the sixteenths between eighths; the Machine
 stays on the grid.
 - **ROLL SONG** makes the song again from a new seed. Locked sections stay as they are.
@@ -113,8 +121,9 @@ The seven sections, each as wide as its bars, with its groove. For each:
 
 - **Click it** to mutate it in the card below.
 - **Drag its energy** (the dot and number under its groove) up or down. Energy runs from 100
-  down to 0. Under 20 a section keeps only its anchors (kick and backbeat on the beat, no ghosts, no
-  stray hits, no crash); under 10 only the lowest sound on the half notes; at 0 it is silent. So a
+  down to 0. Under 20 a section keeps only its anchors (what's left of the groove on the beats; the
+  snare comes in from 28, so below that the kick and hats keep time; no ghosts, no stray hits, no
+  crash); under 10 only the kick (or the hand drum's bass) on the half notes; at 0 it is silent. So a
   section can be as sparse as you want, down to a single kick or a bar of nothing before the drop.
 - **The die** rolls just that section again.
 - **The lock** keeps it from ROLL SONG.
@@ -122,7 +131,7 @@ The seven sections, each as wide as its bars, with its groove. For each:
 ### MUTATE
 
 The selected section's groove now, and five children made from it, each tagged with what changed
-("more ghost snares", "kick moves off the 1", "lays back further", "half-time feel", "toms come in",
+("more ghost snares", "a kick moves", "lays back further", "half-time feel", "toms come in",
 "hats left to chance", "perc answers", "flams on the backbeat" and ten more; on hand drums "open tones
 move", "slap answers", "bass on the beats only", "roll into the one" and the ones that suit them). Click a child to put it
 in the song: the section's other variations and fill are made again from it, and its generation goes
@@ -173,8 +182,9 @@ The pattern playing, lane by lane, with the playhead.
 
 What makes each pass a little different:
 
-- **VARY**: each bar may take another variation, and hits come and go.
-- **GHOSTS**: soft snare hits around the beat.
+- **VARY**: each bar may take another variation, and hits come and go (never the kick and backbeat
+  on the beats, nor a hand kit's timeline).
+- **GHOSTS**: soft snare hits around the beat (on the drum kit, in sixteenths).
 - **SWING**: how late the swung notes are (50% is straight).
 - **SWING IN**: 16THS swings every second sixteenth; 8THS swings the off-beat eighths, the sixteenths
   either side moving with them, for a shuffle or a jazz ride (at 67% the eighths are triplets).
@@ -197,7 +207,8 @@ the section.
 
 **KIT** (the kit JKit has loaded), **CHANNEL** (default 10) and **PERC** (the percussionist's channel,
 default 11), and JKit's 16 pads as JKit lays them out (pad 1 bottom left), each lighting as it plays.
-On the drum kit a crash (pad 14) comes in on the one when a big section starts and after a fill.
+On the drum kit a crash (pad 14) comes in on the one when a big section starts and after a fill
+(not in hip-hop, which comes out of a fill without one), as hard as the section is.
 
 ## Section notes
 

@@ -33,7 +33,7 @@ struct Settings {
    bool play = false;
    double freeTempo = 120.0;
    int kit = kDrumKit;
-   int percKit = kPercussionKit; // the kit the percussionist plays
+   bool crashAfterFill = true;   // a crash on the one after a fill (not in hip-hop)
    int channel = 9, percChannel = 10; // 0-based
    int noteMap = 0, noteOctave = 0, noteChannel = 0;
    bool fillInto = true, velEnergy = false, heldOnly = false, passNotes = true;
@@ -84,6 +84,8 @@ public:
          pendingVar_ = std::clamp(s.variation, 0, kVariations - 1);
       if (s.play && !settings_.play)
          stopped_ = false;
+      if (!s.velEnergy)
+         energy_ = 1.0;
       settings_ = s;
    }
    const Settings &settings() const { return settings_; }
@@ -96,7 +98,8 @@ public:
       variation_ = std::clamp(settings_.variation, 0, kVariations - 1);
       pending_ = -1;
       pendingVar_ = -1;
-      fill_ = fillPending_ = false;
+      fill_ = fillPending_ = fillPlayed_ = crashNow_ = false;
+      energy_ = 1.0;
       stopped_ = false;
       for (auto &k : held_)
          k = 0;
@@ -205,16 +208,19 @@ public:
          const int64_t t = static_cast<int64_t>(std::ceil(b0 * kTicksPerBeat - 1e-6));
          nextTick_ = t;
          if (!running_ || following != followingBefore_) {
-            // From the top of the section, at the bar the playhead is in.
+            // From the top of the section, at the bar the playhead is in (a fill left playing at a
+            // stop doesn't carry over).
             const int64_t bar = static_cast<int64_t>(std::floor(b0 / kBeatsPerBar));
             anchor_ = bar * kTicksPerBar;
+            fill_ = fillPending_ = fillPlayed_ = crashNow_ = false;
             barStarted_ = false;
             sectionStarted_ = true;
             absoluteBar_ = 0;
             salt_ = mix(salt_, 0x5eed);
          } else {
-            const int64_t bar = static_cast<int64_t>(std::floor(b0 / kBeatsPerBar));
-            anchor_ = bar * kTicksPerBar;
+            // A jump: back to the start of this section's bar the playhead is in.
+            const int64_t len = barLen();
+            anchor_ = t - (((t - anchor_) % len) + len) % len;
          }
       }
       running_ = true;
@@ -243,8 +249,8 @@ public:
       f.hostPlaying = hostPlaying_;
       f.tempo = tempo_;
       const int64_t since = std::max<int64_t>(0, lastTick_ - anchor_);
-      f.bar = static_cast<int>(since / kTicksPerBar);
-      f.beat = static_cast<int>((since % kTicksPerBar) / kTicksPerBeat);
+      f.bar = static_cast<int>(since / barLen());
+      f.beat = static_cast<int>((since % barLen()) / beatLen());
       f.section = section_;
       f.variation = barVar_;
       f.fill = fill_;
@@ -330,13 +336,21 @@ private:
       }
    }
 
+   // The playing section's bar in ticks (192 in 4/4, 168 in 7/8), and its beat: a quarter, or an
+   // eighth when the bar isn't whole quarters.
+   int64_t barLen() const {
+      const int m = song_.sections[static_cast<size_t>(std::clamp(section_, 0, kSections - 1))].meter;
+      return m > 0 ? m : kTicksPerBar;
+   }
+   int64_t beatLen() const { return barLen() % kTicksPerBeat ? kTicksPerBeat / 2 : kTicksPerBeat; }
+
    // Whether a switch queued now takes effect at tick t (on a beat).
    bool switchesAt(int64_t t) const {
       const int64_t rel = t - anchor_;
-      if (rel % kTicksPerBeat)
+      if (rel % beatLen())
          return false;
-      const int64_t bar = rel / kTicksPerBar;
-      const bool onBar = rel % kTicksPerBar == 0;
+      const int64_t bar = rel / barLen();
+      const bool onBar = rel % barLen() == 0;
       switch (settings_.switchAt) {
       case 0: return true;
       case 1: return onBar;
@@ -359,7 +373,7 @@ private:
       lastTick_ = t;
       const int64_t rel0 = t - anchor_;
       // A beat: a queued switch, a fill starting.
-      if (rel0 % kTicksPerBeat == 0 && rel0 > 0) {
+      if (rel0 % beatLen() == 0 && rel0 > 0) {
          if (pending_ >= 0 && switchesAt(t)) {
             section_ = pending_;
             pending_ = -1;
@@ -373,20 +387,20 @@ private:
          } else if (fillPending_) {
             fill_ = true;
             fillPending_ = false;
-         } else if (settings_.fillInto && pending_ >= 0 && settings_.switchAt != 0 && rel0 % kTicksPerBar != 0) {
+         } else if (settings_.fillInto && pending_ >= 0 && settings_.switchAt != 0 && rel0 % barLen() != 0) {
             // The fill leads into a switch that lands at the end of this bar.
-            if (switchesAt(t - rel0 % kTicksPerBar + kTicksPerBar))
+            if (switchesAt(t - rel0 % barLen() + barLen()))
                fill_ = true;
          }
       }
       const int64_t rel = t - anchor_;
       const Section &sec = song_.sections[static_cast<size_t>(section_)];
       // A bar: the song moves on, the fill ends, this bar's variation and dice.
-      if (rel % kTicksPerBar == 0) {
+      if (rel % barLen() == 0) {
          // A fill just ended: the next bar comes in on a crash.
          const bool afterFill = fillPlayed_;
          fillPlayed_ = false;
-         int bar = static_cast<int>(rel / kTicksPerBar);
+         int bar = static_cast<int>(rel / barLen());
          if (bar > 0 && fillPending_) {
             fill_ = true;
             fillPending_ = false;
@@ -418,11 +432,11 @@ private:
             fill_ = true;
          if (settings_.song && settings_.fillInto && pending_ < 0 && bar + 1 == now.bars)
             fill_ = true;
-         if (settings_.fillInto && pending_ >= 0 && switchesAt(t + kTicksPerBar) && settings_.switchAt != 0)
+         if (settings_.fillInto && pending_ >= 0 && switchesAt(t + barLen()) && settings_.switchAt != 0)
             fill_ = true;
          if (now.fill.empty())
             fill_ = false;
-         crashNow_ = afterFill && !fill_ && now.energy >= 35;
+         crashNow_ = afterFill && !fill_ && now.energy >= 35 && settings_.crashAfterFill;
       }
       const Section &s = song_.sections[static_cast<size_t>(section_)];
       const int64_t r = t - anchor_;
@@ -430,7 +444,8 @@ private:
       if (sectionStarted_ || crashNow_) {
          if ((s.crash || crashNow_) && settings_.kit == kDrumKit && !muteHats_ &&
              !(settings_.muted >> CR & 1) && !(settings_.soloed && !(settings_.soloed >> CR & 1)))
-            schedule(t, 0.0, settings_.channel, CR, 110, 0.25, false);
+            schedule(t, 0.0, settings_.channel, CR,
+                     static_cast<int>((80 + 0.4 * s.energy) * energy_), 0.25, false);
          sectionStarted_ = false;
          crashNow_ = false;
       }
@@ -439,7 +454,12 @@ private:
       const Pattern &p = fill_ ? s.fill : main;
       if (fill_)
          fillPlayed_ = true;
-      playLayer(p, r, t, settings_.channel, false);
+      // A fill is written at the end of its pattern: its last bar plays, whatever bar it falls in.
+      const auto fillAt = [&](const Pattern &f) {
+         const int64_t len = std::max(1, patternTicks(f)), bar = barLen();
+         return (len - bar % len) % len + r % bar;
+      };
+      playLayer(p, fill_ ? fillAt(p) : r, t, settings_.channel, false);
       if (!s.perc.empty()) {
          // The percussionist plays its variation with the drummer's, and its fill with the drummer's.
          const Pattern *pp = &s.perc;
@@ -447,7 +467,7 @@ private:
             pp = &s.percFill;
          else if (!fill_ && bv > 0 && !s.percVars[static_cast<size_t>(bv - 1)].empty())
             pp = &s.percVars[static_cast<size_t>(bv - 1)];
-         playLayer(*pp, r, t, settings_.percChannel, true);
+         playLayer(*pp, pp == &s.percFill ? fillAt(*pp) : r, t, settings_.percChannel, true);
       }
    }
 
@@ -481,10 +501,11 @@ private:
          steps_ = steps;
       }
       const double swing = swingTicks(p, step, stepTicks);
-      const int kit = perc ? settings_.percKit : settings_.kit;
+      const int kit = perc ? song_.percKit : settings_.kit;
       const double stepBeats = static_cast<double>(stepTicks) / kTicksPerBeat;
       const double vary = hold_ ? 0.0 : settings_.vary;
-      const int ghostPad = p.uses(SN) ? SN : p.uses(CL) ? CL : -1;
+      // GHOSTS go on the kit's snare or clap; the hand kits and the FX and animal kits have none.
+      const int ghostPad = settings_.kit != kDrumKit ? -1 : p.uses(SN) ? SN : p.uses(CL) ? CL : -1;
       const int bar = diceBar_ * 4 + (perc ? 2 : 0);
       for (int pad = 0; pad < kPads; ++pad) {
          if (!perc && ((muteHats_ && isHatPad(kit, pad)) || (muteKick_ && isKickPad(kit, pad))))
@@ -494,7 +515,8 @@ private:
          const Hit &h = p.at(pad, step);
          if (!h.on()) {
             // GHOSTS: soft snare hits around the beat.
-            if (!perc && pad == ghostPad && settings_.ghosts > 0.0 && step % 2 == 1 && settings_.kit != kFxKit &&
+            if (!perc && pad == ghostPad && settings_.ghosts > 0.0 && step % 2 == 1 && p.rate == kRate16 &&
+                !(settings_.swingFeel == 1 && step % 4 == 3) &&
                 !p.at(pad, (step + 1) % steps).on() && !p.at(pad, (step + steps - 1) % steps).on() &&
                 dice(bar, step, pad, 1) < settings_.ghosts * 0.45)
                schedule(t, swing, channel, pad, 22 + static_cast<int>(dice(bar, step, pad, 2) * 20), stepBeats, perc);
@@ -506,7 +528,11 @@ private:
          }
          if (h.chance < 100 && dice(bar, step, pad, 4) * 100.0 >= h.chance)
             continue;
-         const bool anchorHit = step % 4 == 0 && (isKickPad(kit, pad) || padRole(kit, pad) == kSnare);
+         // The beats' kick and backbeat, and on a hand kit its timeline (clave, bell, tabla, doum),
+         // are never dropped.
+         const bool anchorHit = (step % std::max(1, kTicksPerBeat / stepTicks) == 0 &&
+                                 (isKickPad(kit, pad) || padRole(kit, pad) == kSnare)) ||
+                                timelinePad(kit, pad);
          if (vary > 0.0 && !anchorHit && h.vel < kAccent && dice(bar, step, pad, 5) < vary * 0.22)
             continue;
          double vel = h.vel * energy_;

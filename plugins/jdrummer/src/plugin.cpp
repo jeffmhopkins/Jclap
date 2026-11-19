@@ -417,7 +417,7 @@ private:
       s.play = whole(kPlay) != 0;
       s.freeTempo = value(kFreeTempo);
       s.kit = whole(kKit);
-      s.percKit = percussionistKit(std::max(0, whole(kPercussionist) - 1));
+      s.crashAfterFill = genreAt(whole(kGenre)).family != kFamilies[2]; // hip-hop doesn't crash out of a fill
       s.channel = whole(kChannel) - 1;
       s.percChannel = whole(kPercChannel) - 1;
       s.noteMap = whole(kNoteMap);

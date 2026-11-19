@@ -34,15 +34,17 @@ enum Mod : unsigned {
    kShakerLine = 1 << 11, // a shaker in sixteenths
    kBroken = 1 << 12,     // kicks pulled off the grid
    kRatchetHats = 1 << 13, // rolls on the hats
-   kSwing8 = 1 << 14       // swung in eighths, not sixteenths (a shuffle, a triplet feel)
+   kSwing8 = 1 << 14,      // swung in eighths, not sixteenths (a shuffle, a triplet feel)
+   kStraight = 1 << 15     // barely swung, whatever its genre's swing
 };
 
 // The kind of fill a genre plays at a phrase's end.
 //    TOMS round the kit, SNARE a roll, HATS a hat roll, DROP a build or the band falling out, HANDS
 //    congas (toms on a kit), FX sweeps; DJEMBE the djembe's call, DARBUKA a roll that lands on a doum,
 //    TIHAI a phrase played three times that lands on the next bar's one, CAJON a cajon break.
+//    CHOP a producer's fill: the kick and hats drop for the last beat, the backbeat stays.
 enum FillKind { kFillToms, kFillSnare, kFillHats, kFillDrop, kFillHands, kFillFx, kFillDjembe, kFillDarbuka,
-                kFillTihai, kFillCajon };
+                kFillTihai, kFillCajon, kFillChop };
 
 struct Lane {
    int pad;
@@ -87,17 +89,17 @@ inline const std::vector<Genre> &genres() {
    static const std::vector<Genre> g = {
       // ---- Four on the Floor ----
       {"House", kFamilies[0], kDrumKit, 0.5, kFillDrop, 5, 0,
-       {{{{K, "X...X...X...X..."}, {CL, "....X.......X..."}, {OH, "..x...x...x...x."}, {CH, "o.o.o.o.o.o.o.o."},
+       {{{{K, "X...X...X...X..."}, {CL, "....X.......X..."}, {OH, "..x...x...x...x."}, {CH, "o...o...o...o..."},
           {SH, "gogogogogogogogo"}}},
         {{{K, "X...X...X...X..."}, {CL, "....x.......x..."}, {CH, "..o...o...o.o.o."}, {SH, "gxgogxgogxgogxgo"},
           {RIM, "......x.......x."}}},
-        {{{K, "X...X...X...X..x"}, {CL, "....X.......X..."}, {CH, "xoxoxoxoxoxoxoxo"}, {OH, "..x...x...x...x."},
+        {{{K, "X...X...X...X..x"}, {CL, "....X.......X..."}, {CH, "xx.xxx.xxx.xxx.x"}, {OH, "..x...x...x...x."},
           {RIM, "x..x..x...x..x.."}}},
         {{{K, "X...X...X...X..."}, {SN, "....x.......x..g"}, {CH, "x.xox.xox.xox.xo"}, {OH, "..x.......x....."},
           {RIM, "...x..x....x..x."}}},
         // 4 piano anthem: snare and clap together, open hats lifting every off-beat, a ride on top
         {{{K, "X...X...X...X..."}, {SN, "....X.......X..."}, {CL, "....X.......X..."}, {OH, "..X...X...X...X."},
-          {CH, "x.o.x.o.x.o.x.o."}, {RD, "x.x.x.x.x.x.x.x."}}},
+          {CH, "x...x...x...x..."}, {RD, "x.x.x.x.x.x.x.x."}}},
         // 5 rolling shaker: the shaker carries the groove, accented, over a soft rim
         {{{K, "X...X...X...X..."}, {SH, "oxXxoxXxoxXxoxXx"}, {CL, "....x.......x..."}, {RIM, "..o..o....o..o.."},
           {OH, "..........x....."}}}},
@@ -105,11 +107,11 @@ inline const std::vector<Genre> &genres() {
         {"Deep Shuffle", "Deep", 120, 1, kShuffle},
         {"Warehouse Jack", "Jackin", 126, 2, 0},
         {"Garage Swing", "NY garage", 122, 3, kShuffle},
-        {"Afro Tribal", "Afro house", 122, 1, kRollingPerc | kToms},
+        {"Afro Tribal", "Afro house", 122, 1, kRollingPerc | kToms | kShuffle},
         {"Piano Anthem", "Italo", 125, 4, 0},
         {"Filter Disco", "French", 124, 0, kBusyHats},
         {"Rolling Shaker", "Deep", 118, 5, 0},
-        {"Tech Stab", "Tech house", 126, 2, kSparse},
+        {"Tech Stab", "Tech house", 126, 2, kSparse | kShuffle},
         {"Lo-fi Kitchen", "Lo-fi house", 115, 1, kShuffle | kGhosty},
         {"Acid Pulse", "Acid", 127, 0, kRatchetHats},
         {"Sunday Soul", "Soulful", 121, 3, kShakerLine | kGhosty}}},
@@ -117,7 +119,8 @@ inline const std::vector<Genre> &genres() {
        {{{{K, "X...X...X...X..."}, {CH, "..x...x...x...x."}, {RIM, "...x.....x....x."}, {CL, "....o.......o..."},
           {SH, ".o.o.o.o.o.o.o.o"}}},
         {{{K, "X...X...X...X..."}, {K2, "..o...o...o...o."}, {CH, "o.x.o.x.o.x.o.x."}, {RIM, "......x..x......"}}},
-        {{{K, "X...X...X...X..."}, {RIM, "x..x..x..x..x.x."}, {OH, "..x...x...x...x."}, {CL, "............x..."}}},
+        {{{K, "X...X...X...X..."}, {RIM, "x..x..x..x..x.x."}, {OH, "..x...x...x...x."}, {CL, "............x..."},
+          {CH, "oo.ooo.ooo.ooo.o"}}},
         {{{K, "X.....x...X....."}, {SN, "....x.......x..."}, {CH, "x.xxx.xxx.xxx.xx"}, {RIM, "..x....x..x....x"}}}},
        {{"Berlin Driver", "Berlin", 132, 0, 0},
         {"Detroit Pulse", "Detroit", 128, 0, kShakerLine | kClapStack},
@@ -132,17 +135,17 @@ inline const std::vector<Genre> &genres() {
       {"Disco", kFamilies[0], kDrumKit, 0.5, kFillToms, 0, 6,
        {{{{K, "X...X...X...X..."}, {SN, "....X.......X..."}, {OH, "..X...X...X...X."}, {CH, "xo.oxo.oxo.oxo.o"},
           {SH, "gxgxgxgxgxgxgxgx"}}},
-        {{{K, "X...X...X...X..."}, {SN, "....X.......X..g"}, {CH, "x.x.x.x.x.x.x.x."}, {OH, "......x.......x."},
-          {MT, "..........x....."}}},
+        {{{K, "X...X...X...X..."}, {SN, "....X.......X..g"}, {CH, "x.x.x...x.x.x..."}, {OH, "......x.......x."},
+          {MT, "..........?....."}}},
         {{{K, "X...X...X...X..."}, {CL, "....X.......X..."}, {OH, "..x...x...x...x."}, {RIM, "x..x..x.x..x..x."},
           {SH, "gogogogogogogogo"}}}},
        {{"Studio Floor", "Classic", 118, 0, 0},
         {"Philly Strings", "Philly", 112, 1, kGhosty},
         {"Nu Disco", "Nu disco", 120, 2, 0},
-        {"Italo Night", "Italo", 122, 2, kBusyHats},
+        {"Italo Night", "Italo", 120, 0, kBusyHats},
         {"Funky Disco", "Funk", 114, 1, kGhosty | kShakerLine},
-        {"Boogie", "Boogie", 110, 1, kShuffle | kSwing8},
-        {"Hi-NRG", "Hi-NRG", 128, 0, kBusyHats | kDoubleKick},
+        {"Boogie", "Boogie", 110, 1, kShuffle},
+        {"Hi-NRG", "Hi-NRG", 130, 1, kBusyHats | kOpenHats},
         {"Space Disco", "Cosmic", 116, 2, kToms}}},
       {"Trance", kFamilies[0], kDrumKit, 0.5, kFillSnare, 5, 0,
        {{{{K, "X...X...X...X..."}, {CL, "....X.......X..."}, {OH, "..x...x...x...x."}, {CH, "oo.ooo.ooo.ooo.o"}}},
@@ -151,9 +154,9 @@ inline const std::vector<Genre> &genres() {
           {CL, "....x.......x..."}}}},
        {{"Uplifting", "Uplifting", 138, 2, 0},
         {"Progressive", "Prog", 132, 0, kSparse},
-        {"Psytrance", "Psy", 145, 1, 0},
+        {"Psytrance", "Psy", 145, 0, kBusyHats},
         {"Goa", "Goa", 142, 1, kRatchetHats},
-        {"Hard Trance", "Hard", 145, 0, kDoubleKick},
+        {"Hard Trance", "Hard", 145, 0, kOpenHats | kBusyHats},
         {"Balearic", "Balearic", 126, 2, kShakerLine | kSparse},
         {"Tech Trance", "Tech", 136, 1, kBusyHats}}},
       {"Minimal", kFamilies[0], kDrumKit, 0.5, kFillHats, 5, 0,
@@ -161,14 +164,14 @@ inline const std::vector<Genre> &genres() {
         {{{K, "X...X...X...X..."}, {CL, "............x..."}, {SH, "g.g.gog.g.g.gog."}, {RIM, "..x.....x..x...."}}},
         {{{K, "X..xX...X..xX..."}, {RIM, "x...x.x...x.x..x"}, {CH, "..o.o.o...o.o.o."}}},
         // 3 swing tool: a shuffled hat and a clap that drags, the off-beat hats swung in eighths
-        {{{K, "X...X...X...X..."}, {CH, "..x...x...x...x."}, {PH, "x.o.x.o.x.o.x.o."}, {CL, "....x.......x..g"},
+        {{{K, "X...X...X...X..."}, {CH, "..x...x...x...x."}, {PH, "x...x...x...x..."}, {CL, "....x.......x..g"},
           {RIM, ".......x.......x"}}}},
        {{"Click Tool", "Minimal", 125, 0, 0},
         {"Microhouse", "Micro", 124, 2, kGhosty},
         {"Romanian", "Rominimal", 126, 2, kShuffle | kRollingPerc},
         {"Glitchy Minimal", "Glitch", 122, 1, kRatchetHats},
         {"Deep Minimal", "Deep", 120, 1, kSparse},
-        {"Swing Tool", "Swing", 124, 3, kShuffle | kSwing8}}},
+        {"Swing Tool", "Swing", 124, 3, kShuffle}}},
 
       // ---- Breaks ----
       {"Breakbeat", kFamilies[1], kDrumKit, 0.5, kFillSnare, 4, 0,
@@ -189,7 +192,7 @@ inline const std::vector<Genre> &genres() {
         {{{K, "X.........X..x.."}, {SN, "....X..g....X..g"}, {CH, "xoxoxoxoxoxoxoxo"}}},
         {{{K, "X......x..X....."}, {SN, "....X.......X..."}, {OH, "..x.......x....."}, {CH, "x.x.x.x.x.x.x.x."},
           {RIM, "......x.......x."}}},
-        {{{K, "X.........X.x..."}, {SN, "....X.......X..."}, {CH, "x.x.x.x.x.x.x.x."}, {FX, "...........x...."}}}},
+        {{{K, "X......x...x...."}, {SN, "....X.......X..."}, {CH, "x.x.x.x.x.x.x.x."}, {FX, "...........x...."}}}},
        {{"Two Step", "Two step", 174, 0, 0},
         {"Liquid", "Liquid", 172, 2, kGhosty},
         {"Rollers", "Roller", 174, 1, 0},
@@ -197,8 +200,8 @@ inline const std::vector<Genre> &genres() {
         {"Jump Up", "Jump up", 175, 0, kDoubleKick},
         {"Halftime DnB", "Halftime", 170, 0, kHalfTime},
         {"Atmospheric", "Atmos", 170, 2, kSparse | kShakerLine},
-        {"Techstep", "Techstep", 172, 3, kRimShot}}},
-      {"Jungle", kFamilies[1], kDrumKit, 0.5, kFillSnare, 4, 0,
+        {"Techstep", "Techstep", 172, 3, kClapStack}}},
+      {"Jungle", kFamilies[1], kDrumKit, 0.54, kFillSnare, 4, 0,
        {{{{K, "X.x.......X.......x.......X....."},
           {SN, "....X..g.g..X..g....X..g.g..X..."},
           {CH, "x.x.x.x.x.x.x.x.x.x.x.x.x.x.x.x."},
@@ -210,18 +213,18 @@ inline const std::vector<Genre> &genres() {
         {"Darkside", "Dark", 168, 1, 0},
         {"Intelligent", "Atmos", 162, 0, kShakerLine | kSparse},
         {"Jungle Roll", "Roll", 170, 1, kRatchetHats},
-        {"Old Skool", "Old skool", 158, 2, kGhosty}}},
-      {"UK Garage", kFamilies[1], kDrumKit, 0.66, kFillSnare, 1, 0,
-       {{{{K, "X.........X....."}, {SN, "....X.......X..."}, {CH, "..x...x...x...x."}, {SH, "gogogogogogogogo"},
+        {"Old Skool", "Old skool", 160, 0, kGhosty}}},
+      {"UK Garage", kFamilies[1], kDrumKit, 0.62, kFillSnare, 1, 0,
+       {{{{K, "X.........X....."}, {SN, "....X.......X..."}, {CH, "..xx..x...xx..x."}, {SH, "gogogogogogogogo"},
           {RIM, "...x.....x......"}}},
-        {{{K, "X...X...X...X..."}, {SN, "....X.......X..."}, {CH, "x.xox.xox.xox.xo"}, {OH, "..x.......x....."}}},
+        {{{K, "X...X...X...X..."}, {SN, "....X.......X..."}, {CH, "x.xox...x.xox..."}, {OH, "..x.......x....."}}},
         {{{K, "X.....x..x......"}, {CL, "....X.......X..."}, {CH, "xoxoxoxoxoxoxoxo"}, {RIM, "......x.......x."}}}},
        {{"Two Step", "2-step", 132, 0, 0},
         {"Speed Garage", "Speed", 135, 1, kOpenHats},
         {"Four Four Garage", "4x4", 130, 1, 0},
-        {"Bassline", "Bassline", 138, 1, kDoubleKick},
+        {"Bassline", "Bassline", 138, 1, kOpenHats | kSparse},
         {"Future Garage", "Future", 130, 0, kSparse | kGhosty},
-        {"Grime", "Grime", 140, 2, kHalfTime | kSparse},
+        {"Grime", "Grime", 140, 2, kHalfTime | kSparse | kStraight},
         {"Shuffled", "Shuffle", 132, 0, kShuffle | kRollingPerc}}},
       {"Electro", kFamilies[1], kDrumKit, 0.5, kFillToms, 5, 0,
        {{{{K, "X......x..X....."}, {CL, "....X.......X..."}, {CH, "x.x.x.x.x.x.x.x."}, {RIM, "......x.......x."}}},
@@ -232,14 +235,15 @@ inline const std::vector<Genre> &genres() {
         {"Robot", "Robo", 124, 1, kRatchetHats}}},
 
       // ---- Hip-Hop ----
-      {"Boom Bap", kFamilies[2], kDrumKit, 0.58, kFillSnare, 1, 0,
-       {{{{K, "X.........X.x..."}, {SN, "....X.......X..."}, {CH, "x.x.x.x.x.x.x.x."}}},
+      {"Boom Bap", kFamilies[2], kDrumKit, 0.58, kFillChop, 1, 0,
+       {{{{K, "X.........X..x.."}, {SN, "....X.......X..."}, {CH, "x.x.x.x.x.x.x.x."}}},
         {{{K, "X......x..X....."}, {SN, "....X.......X..."}, {CH, "x.x.x.x.x.x.x.xx"}, {OH, "..............x."}}},
-        {{{K, "X.x.......X..x.."}, {SN, "....X..g....X..."}, {CH, "xox.xox.xox.xox."}}}},
+        // 2 the Funky Drummer's kick, with its open hats on the and of 2 and the e of 4
+        {{{K, "X.x.......X..x.."}, {SN, "....X..g....X..."}, {CH, "xxxxxxx.xxxxx.xx"}, {OH, ".......x.....x.."}}}},
        {{"Golden Era", "90s", 92, 0, 0},
         {"Dusty", "Dusty", 88, 1, kGhosty},
         {"East Coast", "East", 94, 2, 0},
-        {"Jazzy", "Jazz hop", 86, 0, kShuffle | kSwing8 | kRimShot},
+        {"Jazzy", "Jazz hop", 86, 0, kShuffle | kRimShot},
         {"Hard Knock", "Hard", 95, 1, kClapStack},
         {"Head Nod", "Nod", 90, 2, kShakerLine},
         {"Underground", "Under", 84, 0, kSparse},
@@ -253,12 +257,12 @@ inline const std::vector<Genre> &genres() {
         {"Rage", "Rage", 150, 2, kRatchetHats},
         {"Cloud", "Cloud", 130, 0, kSparse | kShakerLine},
         {"Hard Trap", "Hard", 145, 1, kDoubleKick},
-        {"Melodic Trap", "Melodic", 138, 0, kOpenHats},
-        {"Phonk", "Phonk", 135, 2, kRollingPerc},
+        {"Melodic Trap", "Melodic", 138, 1, kSparse},
+        {"Phonk", "Phonk", 135, 2, kShuffle},
         {"Plugg", "Plugg", 145, 0, kSparse}}},
-      {"Lo-fi", kFamilies[2], kDrumKit, 0.6, kFillSnare, 1, 0,
+      {"Lo-fi", kFamilies[2], kDrumKit, 0.6, kFillChop, 1, 0,
        {{{{K, "X......x..X....."}, {SN, "....X.......X..."}, {CH, "x.xox.xox.xox.xo"}}},
-        {{{K, "X.........x.x..."}, {RIM, "....x.......x..."}, {SH, "x.x.x.x.x.x.x.x."}}},
+        {{{K, "X.........x..x.."}, {RIM, "....x.......x..."}, {SH, "x.x.x.x.x.x.x.x."}}},
         {{{K, "X..x......X..x.."}, {SN, "....X.......X..."}, {CH, "x.x.x.x.x.x.x.x."}, {OH, "......x........."},
           {RD, "x.......x......."}}}},
        {{"Study Beat", "Chill", 80, 0, 0},
@@ -268,8 +272,11 @@ inline const std::vector<Genre> &genres() {
         {"Bedroom", "Bedroom", 78, 1, kSparse},
         {"Sunset Loop", "Sunset", 86, 2, kShakerLine}}},
       {"Drill", kFamilies[2], kDrumKit, 0.54, kFillHats, 5, 0,
-       {{{{K, "X.....x...x....."}, {SN, "........X..x...."}, {CH, "x..x..x.x2.x..x."}}},
-        {{{K, "X.......x.x....."}, {SN, "........X.....x."}, {CH, "x.x.x.xx3.x.x.x."}, {RIM, "...x......x....."}}}},
+       // 0 UK drill: two bars, the snare on 3 then pushed to 4, the 808 under the kick
+       {{{{K, "X.....x...x.....X.......x.x....."}, {K2, "X.....x...x.....X.......x.x....."},
+          {SN, "........X..x...........g....X..."}, {CH, "x..x..x.x2.x..x.x..x..x.x2.x..x."}}},
+        {{{K, "X......x..x....."}, {K2, "X......x..x....."}, {SN, "........X.....x."}, {CH, "x.x.x.xx3.x.x.x."},
+          {RIM, "...x......x....."}}}},
        {{"UK Drill", "UK", 142, 0, 0},
         {"NY Drill", "NY", 140, 1, 0},
         {"Sliding Drill", "Slide", 144, 0, kRatchetHats},
@@ -281,16 +288,18 @@ inline const std::vector<Genre> &genres() {
        {{{{K, "X.......X.X....."}, {SN, "....X.......X..."}, {CH, "x.x.x.x.x.x.x.x."}}},
         {{{K, "X.x.....X.x....."}, {SN, "....X.......X..."}, {OH, "x.x.x.x.x.x.x.x."}}},
         {{{K, "X...X...X...X..."}, {SN, "....X.......X..."}, {CH, "XoxoXoxoXoxoXoxo"}}},
-        {{{K, "X...X...X...X..."}, {SN, "..X...X...X...X."}, {CH, "x.x.x.x.x.x.x.x."}}}},
+        {{{K, "X...X...X...X..."}, {SN, "..X...X...X...X."}, {CH, "x.x.x.x.x.x.x.x."}}},
+        // 4 a tom groove: the floor tom carries it instead of the hats
+        {{{K, "X.......X......."}, {SN, "....X.......X..."}, {LT, "X.xxX.xxX.xxX.xx"}, {MT, "..........x....."}}}},
        {{"Straight Eight", "Classic", 110, 0, 0},
         {"Arena", "Arena", 120, 1, kClapStack},
         {"Indie Floor", "Indie", 124, 2, 0},
         {"Punk", "Punk", 170, 3, 0},
         {"Garage Rock", "Garage", 130, 1, kGhosty},
-        {"Grunge", "Grunge", 100, 0, kOpenHats},
+        {"Grunge", "Grunge", 100, 1, 0},
         {"Pop Rock", "Pop", 116, 0, kShakerLine},
         {"Ballad", "Ballad", 72, 0, kSparse},
-        {"Tom Groove", "Tribal", 105, 0, kToms},
+        {"Tom Groove", "Tribal", 105, 4, 0},
         {"Surf", "Surf", 150, 3, kToms}}},
       {"Funk", kFamilies[3], kDrumKit, 0.54, kFillSnare, 1, 0,
        {{{{K, "X..x..x...X..x.."}, {SN, "....X..g.g..X..g"}, {CH, "xoxoxoxoxoxoxoxo"}}},
@@ -298,24 +307,26 @@ inline const std::vector<Genre> &genres() {
         {{{K, "X....x....X.x..."}, {SN, "....X..g.g.gX..g"}, {RD, "x..x..x...x.x..."}, {CH, "x.x.x.x.x.x.x.x."}}},
         // 3 second line: the New Orleans street beat, the bass drum on 1, the and of 2 and 4, the snare
         // rolling through
-        {{{K, "X.....x.X.....x."}, {SN, "x.gx..x.g.xgX.g."}, {RD, "x...x...x...x..."}, {CH, "....x.......x..."}}},
+        {{{K, "X.....x.X.....x."}, {SN, "xgx...x.g.x.X.x."}, {RD, "x...x...x...x..."}, {PH, "....x.......x..."}}},
         // 4 go-go: the pocket, the cowbell (on the ride's bell) and the open hat on the and of 4
         {{{K, "X.....x...X....."}, {SN, "....X..g....X..."}, {CH, "x.x.x.x.x.x.x..."}, {OH, "..............x."},
-          {RD, "x..x..x...x.x..."}}}},
+          {RD, "x..x..x...x.x..."}}},
+        // 5 linear: every sixteenth played once, by one limb
+        {{{K, "X..x..x...x....."}, {SN, "....X..g....X..g"}, {CH, ".xx..x..xx.x.xx."}}}},
        {{"Tight Pocket", "Pocket", 100, 0, 0},
         {"Second Line", "New Orleans", 96, 3, kSwing8},
         {"Go-Go", "Go-go", 95, 4, kShuffle},
         {"Soul Strut", "Strut", 104, 1, 0},
         {"Space Funk", "P-funk", 98, 0, kClapStack},
-        {"Linear", "Linear", 102, 1, kBroken},
+        {"Linear", "Linear", 102, 5, 0},
         {"Disco Funk", "Disco", 112, 0, kOpenHats},
         {"Slow Jam", "Slow", 88, 1, kSparse | kGhosty}}},
-      {"Soul & R&B", kFamilies[3], kDrumKit, 0.56, kFillToms, 0, 6,
+      {"Soul & R&B", kFamilies[3], kDrumKit, 0.56, kFillToms, 1, 6,
        {{{{K, "X.......X......."}, {SN, "....X.......X..."}, {CL, "....X.......X..."}, {SH, "x.x.x.x.x.x.x.x."}}},
         {{{K, "X......x..x....."}, {SN, "....X.......X..g"}, {CH, "x.xox.xox.xox.xo"}, {RIM, "...g......g....."}}},
         {{{K, "X..x......X..x.."}, {CL, "....X.......X..."}, {CH, "x.x.x.x.x.x.x.x."}, {SH, "gogogogogogogogo"}}},
         // 3 Motown: the snare and the tambourine (on the shaker) on all four beats
-        {{{K, "X.......X.x....."}, {SN, "x...X...x...X..."}, {SH, "X.o.X.o.X.o.X.o."}, {CH, "x.x.x.x.x.x.x.x."}}}},
+        {{{K, "X.......X.x....."}, {SN, "x...X...x...X..."}, {SH, "o.o.X.o.o.o.X.o."}, {CH, "x.x.x.x.x.x.x.x."}}}},
        {{"Motown Stomp", "Motown", 104, 3, 0},
         {"Neo Soul", "Neo", 86, 1, kShuffle},
         {"Slow Jam 90s", "90s", 90, 2, 0},
@@ -327,32 +338,38 @@ inline const std::vector<Genre> &genres() {
        {{{{K, "X.X.X.X.X.X.X.X."}, {SN, "....X.......X..."}, {CH, "x.x.x.x.x.x.x.x."}}},
         {{{K, "X...X...X...X..."}, {SN, "..X...X...X...X."}, {CH, "x.x.x.x.x.x.x.x."}}},
         {{{K, "X.x.X.x.X.x.X.x."}, {SN, ".x.x.x.x.x.x.x.x"}, {CH, "x.x.x.x.x.x.x.x."}}},
-        {{{K, "X..xX.....X.XX.."}, {SN, "....X.......X..."}, {RD, "X...x...X...x..."}}}},
-       {{"Double Kick", "Classic", 160, 0, 0},
+        {{{K, "X..xX.....X.XX.."}, {SN, "....X.......X..."}, {RD, "X...x...X...x..."}}},
+        // 4 double kick: sixteenths on the two bass drums under a backbeat
+        {{{K, "XxXxXxXxXxXxXxXx"}, {SN, "....X.......X..."}, {RD, "X...X...X...X..."}}},
+        // 5 doom: slow and half-time, room between every hit
+        {{{K, "X.........X....."}, {SN, "........X......."}, {RD, "X...x...X...x..."}}}},
+       {{"Double Kick", "Classic", 160, 4, 0},
         {"Thrash", "Thrash", 190, 1, 0},
         {"Blast", "Blast", 200, 2, 0},
         {"Groove Metal", "Groove", 110, 3, 0},
         {"Djent", "Djent", 120, 3, kBroken},
-        {"Doom", "Doom", 70, 0, kHalfTime | kSparse},
-        {"Metalcore", "Core", 170, 0, kOpenHats}}},
+        {"Doom", "Doom", 70, 5, 0},
+        {"Metalcore", "Core", 170, 4, kHalfTime}}},
       {"Jazz", kFamilies[3], kDrumKit, 0.66, kFillSnare, 3, 0,
        {{{{RD, "x...x.x.x...x.x."}, {PH, "....x.......x..."}, {SN, "......g.....g.g."}, {K, "g...g...g...g..."}}},
-        {{{SH, "xoxoxoxoxoxoxoxo"}, {PH, "....x.......x..."}, {K, "g.......g......."}}},
+        // 1 brushes: the snare carries the right hand's pattern, a sweep (on the shaker) each half bar
+        {{{SN, "o...o.o.o...o.o."}, {SH, "x.......x......."}, {PH, "....x.......x..."}, {K, "g.......g......."}}},
         {{{K, "X..x..x...x....."}, {SN, "....X..g.g..X..."}, {CH, "xoxoxoxoxoxoxoxo"}, {RD, "x..............."}}},
         // 3 cool jazz: the ride, the hat on 2 and 4, a cross-stick on 4, the bass drum feathered
-        {{{RD, "x...x.x.x...x.x."}, {PH, "....x.......x..."}, {RIM, "............x..."}, {K, "g...g...g...g..."}}}},
+        {{{RD, "x...x.x.x...x.x."}, {PH, "....x.......x..."}, {RIM, "............x..."}, {K, "g...g...g...g..."}}},
+        // 4 fusion: a sixteenth ride over a linear kick and snare
+        {{{RD, "x.xxx.xxx.xxx.xx"}, {K, "X.....x...X....."}, {SN, "....X..g.g..X..g"}}}},
        {{"Medium Swing", "Swing", 140, 0, kSwing8},
         {"Brushes Ballad", "Ballad", 70, 1, kSwing8},
         {"Up Tempo", "Bebop", 220, 0, kSparse | kSwing8},
-        {"Fusion", "Fusion", 110, 2, 0},
+        {"Fusion", "Fusion", 110, 4, kStraight},
         {"Cool Jazz", "Cool", 120, 3, kSwing8},
         {"Hard Bop", "Hard bop", 170, 0, kGhosty | kSwing8},
-        {"Acid Jazz", "Acid jazz", 104, 2, kShakerLine}}},
+        {"Acid Jazz", "Acid jazz", 104, 2, kShakerLine | kStraight}}},
 
       // ---- Latin & Afro ----
-      {"Afrobeat", kFamilies[4], kDrumKit, 0.52, kFillToms, 1, 2,
-       {{{{K, "X.....x...X....."}, {SN, "....x..g..x...g."}, {CH, "x.xxx.xxx.xxx.xx"}, {RD, "X.x.xx.x.x.xx.x."},
-          {SH, "gogogogogogogogo"}}},
+      {"Afrobeat", kFamilies[4], kDrumKit, 0.52, kFillToms, 1, 1,
+       {{{{K, "X.....x...X....."}, {SN, "....x..g..x...g."}, {CH, "x.xxx.xxx.xxx.xx"}, {SH, "gogogogogogogogo"}}},
         {{{K, "X..x....X.x....."}, {SN, "....X.......X..g"}, {OH, "..x...x...x...x."}, {RD, "x.x..x.x.x..x.x."}}},
         {{{K, "X..x..x...x..x.."}, {CL, "....X.......X..."}, {SH, "xoxoxoxoxoxoxoxo"}, {RIM, "..x..x....x..x.."}}},
         // 3 highlife: the bell pattern on the ride's bell, a rim backbeat, the hats in eighths
@@ -373,16 +390,21 @@ inline const std::vector<Genre> &genres() {
         {"Bacardi", "Bacardi", 115, 1, kDoubleKick},
         {"Quantum", "Quantum", 113, 0, kRatchetHats}}},
       {"Samba", kFamilies[4], kDrumKit, 0.5, kFillHands, 0, 3,
-       {{{{K, "x..Xx..Xx..Xx..X"}, {SH, "XoxoXoxoXoxoXoxo"}, {RIM, "x.xx.x.xx.x.x.x."}, {CL, "..x...x...x...x."}}},
-        {{{K, "X..xX..xX..xX..x"}, {SN, "....X.......X..."}, {CH, "xoxoxoxoxoxoxoxo"}, {RIM, "x..x..x...x..x.."}}}},
+       // The surdo's kick: a muted beat one, the open tone on two, the pickup soft.
+       {{{{K, "o..xX..xo..xX..x"}, {SH, "XoxoXoxoXoxoXoxo"}, {RIM, "x.xx.x.xx.x.x.x."}, {CL, "..x...x...x...x."}}},
+        {{{K, "o..xX..xo..xX..x"}, {SN, "....X.......X..."}, {CH, "xoxoxoxoxoxoxoxo"}, {RIM, "x.xx.x.xx.x.x.x."}}},
+        // 2 partido alto: the cross-stick's figure from the e of 1
+        {{{K, "o..xX..xo..xX..x"}, {RIM, ".x..x..x.x..x.x."}, {CH, "x.x.x.x.x.x.x.x."}}}},
        {{"Batucada", "Carnival", 104, 0, 0},
         {"Samba Funk", "Funk", 100, 1, 0},
-        {"Partido Alto", "Partido", 96, 1, kGhosty},
+        {"Partido Alto", "Partido", 96, 2, 0},
         {"Samba Reggae", "Reggae", 100, 0, kSparse},
         {"Pagode", "Pagode", 92, 1, kShakerLine}}},
-      {"Bossa Nova", kFamilies[4], kDrumKit, 0.5, kFillSnare, 3, 1,
-       {{{{K, "X..xX..xX..xX..x"}, {RIM, "x..x..x...x..x.."}, {CH, "xoxoxoxoxoxoxoxo"}}},
-        {{{K, "X.......X......."}, {RIM, "..x..x...x..x..."}, {SH, "xoxoxoxoxoxoxoxo"}}}},
+      // Written in eighths over two bars: the kick on 1, the and of 2, 3 and the and of 4, feathered;
+      // the cross-stick's bossa clave (1, the and of 2, 4 | 2, the and of 3).
+      {"Bossa Nova", kFamilies[4], kDrumKit, 0.5, kFillHats, 3, 1,
+       {{{{K, "o..oo..oo..oo..o"}, {RIM, "x..x..x...x..x.."}, {CH, "xoxoxoxoxoxoxoxo"}}, kRate8},
+        {{{K, "o...o...o...o..."}, {RIM, "..x..x..x..x..x."}, {SH, "xoxoxoxoxoxoxoxo"}}, kRate8}},
        {{"Classic Bossa", "Bossa", 130, 0, 0},
         {"Brushes Bossa", "Brushes", 120, 1, kSparse},
         {"Samba Jazz", "Samba jazz", 150, 0, kGhosty},
@@ -390,32 +412,41 @@ inline const std::vector<Genre> &genres() {
       {"Reggaeton", kFamilies[4], kDrumKit, 0.5, kFillSnare, 5, 0,
        {{{{K, "X...X...X...X..."}, {SN, "...X..X....X..X."}, {CH, "x.x.x.x.x.x.x.x."}}},
         {{{K, "X...X...X...X..."}, {SN, "...x..x....x..x."}, {CL, "...X..X....X..X."}, {OH, "..x...x...x...x."}}},
-        {{{K, "X..xX...X..xX..."}, {SN, "...X..X....X..X."}, {RIM, "x..x..x...x..x.."}}}},
+        {{{K, "X..xX...X..xX..."}, {SN, "...X..X....X..X."}, {RIM, "x..x..x...x..x.."}}},
+        // 3 Latin trap: half-time, the clap on 3, the 808, the dembow left in the rim
+        {{{K, "X.........X....."}, {K2, "X.........X..x.."}, {CL, "........X......."}, {RIM, "...o..o....o..o."},
+          {CH, "x.x.x.x.x.x.x.x."}}}},
        {{"Dembow", "Classic", 95, 0, 0},
         {"Perreo", "Perreo", 98, 2, 0},
         {"Moombahton", "Moomba", 108, 1, 0},
         {"Dancehall Dembow", "Dance", 100, 0, kRollingPerc},
-        {"Latin Trap", "Trap", 90, 1, kRatchetHats | kHalfTime},
+        {"Latin Trap", "Trap", 140, 3, kRatchetHats},
         {"Romantic", "Romantic", 90, 0, kSparse}}},
 
       // ---- Reggae & Dub ----
-      {"Reggae", kFamilies[5], kDrumKit, 0.6, kFillToms, 0, 0,
+      {"Reggae", kFamilies[5], kDrumKit, 0.5, kFillToms, 0, 0,
        {{{{K, "........X......."}, {RIM, "........X......."}, {CH, "x.x.x.x.x.x.x.x."}}},
+        // 1 steppers: the kick on every beat, the snare on 3
         {{{K, "X...X...X...X..."}, {SN, "........X......."}, {CH, "x.x.x.x.x.x.x.x."}, {OH, "..x...x...x...x."}}},
-        {{{K, "X...X...X...X..."}, {RIM, "....x.......x..."}, {CH, "xoxoxoxoxoxoxoxo"}}},
+        // 2 ska: the backbeat on 2 and 4 under off-beat hats
+        {{{K, "X...X...X...X..."}, {RIM, "....X.......X..."}, {OH, "..x...x...x...x."}, {CH, "x...x...x...x..."}}},
         // 3 rocksteady: the kick on 1 and 3, the snare on 2 and 4, the hats swung in eighths
-        {{{K, "X.......X......."}, {SN, "....X.......X..."}, {CH, "x.x.x.x.x.x.x.x."}, {RIM, "..x.......x....."}}}},
+        {{{K, "X.......X......."}, {SN, "....X.......X..."}, {CH, "x.x.x.x.x.x.x.x."}, {RIM, "..x.......x....."}}},
+        // 4 rockers: the kick on 1 and 3, the accent still on 3
+        {{{K, "X.......X......."}, {RIM, "........X......."}, {CH, "x.x.x.x.x.x.x.x."}, {OH, "..x.......x....."}}},
+        // 5 dancehall: straight, a busy kick under a backbeat
+        {{{K, "X..x..x.X..x..x."}, {SN, "....X.......X..."}, {CH, "x.x.x.x.x.x.x.x."}}}},
        {{"One Drop", "One drop", 75, 0, kSwing8},
-        {"Rockers", "Rockers", 80, 1, 0},
-        {"Steppers", "Steppers", 82, 2, 0},
+        {"Rockers", "Rockers", 80, 4, kShuffle},
+        {"Steppers", "Steppers", 82, 1, kShuffle},
         {"Roots", "Roots", 72, 0, kGhosty | kToms | kSwing8},
         {"Lovers Rock", "Lovers", 76, 0, kShakerLine | kSwing8},
-        {"Ska", "Ska", 150, 1, kOpenHats | kSwing8},
+        {"Ska", "Ska", 150, 2, kSwing8},
         {"Rocksteady", "Rocksteady", 100, 3, kShuffle | kSwing8},
-        {"Dancehall", "Dancehall", 96, 2, kRollingPerc}}},
+        {"Dancehall", "Dancehall", 96, 5, kRollingPerc}}},
       {"Dub", kFamilies[5], kDrumKit, 0.6, kFillFx, 0, 0,
-       {{{{K, "........X......."}, {RIM, "........X......."}, {CH, "x.x.x.x.x.x.x.x."}, {FX, "..............x."}}},
-        {{{K, "X...X...X...X..."}, {SN, "........X......."}, {CH, ".x.x.x.x.x.x.x.x"}, {OH, "......x.......x."}}}},
+       {{{{K, "........X......."}, {RIM, "........X......."}, {CH, "..x...x...x...x."}, {FX, "..............x."}}},
+        {{{K, "X...X...X...X..."}, {SN, "........X......."}, {CH, "x.x.x...x.x.x..."}, {OH, "......x.......x."}}}},
        {{"Dub Plate", "Roots", 72, 0, kSwing8},
         {"Steppers Dub", "Steppers", 78, 1, 0},
         {"Dubwise", "Dubwise", 70, 0, kSparse | kSwing8},
@@ -428,20 +459,20 @@ inline const std::vector<Genre> &genres() {
         {{{CLAVE, "X.....x.....x.......x...x......."}, {CONGA, "g.g...g.g.g.x.x.g.g...g.g.g.x.x."}, {AL_CONGA_SLAP, "....X...............X..........."}, {CAMPANA, "X...x.x.X...x.x.X...x.x.X...x.x."}}},
         // 1 martillo: the bongo's eighths with the open hembra on 4, guiro
         {{{AL_HIGH_BONGO, "x.o.x.o.x.o...o.x.o.x.o.x.o...o."}, {AL_LOW_BONGO, "............X...............X..."}, {GUIRO, "X.xxx.xxX.xxx.xxX.xxx.xxX.xxx.xx"}}},
-        // 2 guaguanco: rumba clave 3-2, the palitos, conga and tumba answering
-        {{{CLAVE, "X.....x.......x.....x...x......."}, {BELL, "x.x.xx.x.xx.x.x.x.x.xx.x.xx.x.x."}, {CONGA, "......x.x.....X.......x.x......."}, {TUMBA, "..........x...............x...Xx"}, {AL_CONGA_SLAP, "....X.......g.......X.......g..."}}},
+        // 2 guaguanco: rumba clave 3-2, the palitos (cascara 3-2), conga and tumba answering
+        {{{CLAVE, "X.....x.......x.....x...x......."}, {BELL, "x...x.x...x...x.x...x...x.x...x."}, {CONGA, "......x.x.....X.......x.x......."}, {TUMBA, "..........x...............x...Xx"}, {AL_CONGA_SLAP, "....X.......g.......X.......g..."}}},
         // 3 cha-cha: cowbell on the beats, guiro long-short-short, the tumbao's cha-cha on 4, clave 2-3
         {{{CAMPANA, "X...x...X...x...X...x...X...x..."}, {GUIRO, "X.xxx.xxX.xxx.xxX.xxx.xxX.xxx.xx"}, {CONGA, "g.g...g.g.g.x.x.g.g...g.g.g.x.x."}, {AL_CONGA_SLAP, "....X...............X..........."}, {CLAVE, "....x...x.......x.....x.....x..."}}},
         // 4 mambo: the mambo bell (cascara 2-3) on the campana, clave 2-3, a driving tumbao
-        {{{CAMPANA, "X...x.x...x...x.X...x...x.x...x."}, {CLAVE, "....x...x.......x.....x.....x..."}, {CONGA, "g.g...g.g.g.x.x.g.g...g.g.g.x.x."}, {AL_CONGA_SLAP, "....X...............X..........."}, {TUMBA, "...............x...............x"}}},
+        {{{CAMPANA, "X...x...x.x...x.X...x.x...x...x."}, {CLAVE, "....x...x.......x.....x.....x..."}, {CONGA, "g.g...g.g.g.x.x.g.g...g.g.g.x.x."}, {AL_CONGA_SLAP, "....X...............X..........."}, {TUMBA, "...............x...............x"}}},
         // 5 Latin house: congas over a shekere in sixteenths
         {{{CONGA, "x..x..x...x.x..."}, {TUMBA, ".......x......X."}, {AL_CONGA_SLAP, "....X........X.."}, {SHEKERE, "xoxoxoxoxoxoxoxo"}}},
         // 6 son: clave 2-3, martillo, the tumba's two open tones, guiro
-        {{{CLAVE, "....x...x.......x.....x.....x..."}, {AL_HIGH_BONGO, "x.o.x.o.x.o...o.x.o.x.o.x.o...o."}, {AL_LOW_BONGO, "............X...............X..."}, {TUMBA, "............x.x.............x.x."}, {GUIRO, "X.xx..xxX.xx..xxX.xx..xxX.xx..xx"}}}},
+        {{{CLAVE, "....x...x.......x.....x.....x..."}, {AL_HIGH_BONGO, "x.o.x.o.x.o...o.x.o.x.o.x.o...o."}, {AL_LOW_BONGO, "............X...............X..."}, {TUMBA, "............x.x.............x.x."}, {GUIRO, "X.xxX.xxX.xxX.xxX.xxX.xxX.xxX.xx"}}}},
        {{"Tumbao", "Salsa", 180, 0, 0},
         {"Martillo", "Bongo", 160, 1, 0},
-        {"Guaguanco", "Rumba", 190, 2, 0},
-        {"Son Clave", "Son", 150, 6, 0},
+        {"Guaguanco", "Rumba", 115, 2, 0},
+        {"Son Clave", "Son", 110, 6, 0},
         {"Cha-cha", "Cha-cha", 118, 3, 0},
         {"Mambo", "Mambo", 200, 4, 0},
         {"Latin House Hands", "House", 124, 5, kShakerLine}},
@@ -449,20 +480,22 @@ inline const std::vector<Genre> &genres() {
       {"West African", kFamilies[6], kAfroLatinKit, 0.5, kFillDjembe, 0, 0,
        {// 0 djembe circle: the first djembe accompaniment over the three dunun and their bell
         {{{AL_DJEMBE_BASS, "X.......X......."}, {AL_DJEMBE_TONE, "..xx......xx...."}, {AL_DJEMBE_SLAP, "....X.x.....X.x."}, {KENKENI, "..x...x...x...x."}, {BELL, "x.x.x.x.x.x.x.x."}, {SANGBAN, "X.....x.X.....x."}, {DUNDUNBA, "X.........x....."}}},
-        // 1 kuku: bass on 1 and 3, tones after, slaps on 2-and and 4-and
-        {{{AL_DJEMBE_BASS, "X.......X......."}, {AL_DJEMBE_TONE, "..xx......xx...."}, {AL_DJEMBE_SLAP, "......X.......X."}, {KENKENI, "x.x.x.x.x.x.x.x."}, {SANGBAN, "X..x..x...x.x..."}, {DUNDUNBA, "X.....x...x....."}, {BELL, "x...x...x...x..."}}},
-        // 2 djole: a busier slap figure over the sangban
-        {{{AL_DJEMBE_BASS, "X.......X......."}, {AL_DJEMBE_TONE, "..xx......xx...."}, {AL_DJEMBE_SLAP, "....X.xx....X.xx"}, {SANGBAN, "x.x...x.x.x...x."}, {DUNDUNBA, "X.....x.x.....x."}, {BELL, "x.x.x.x.x.x.x.x."}}},
-        // 3 soli (12/8): djembe, kenkeni on the dotted beats, the standard bell
-        {{{AL_DJEMBE_BASS, "X...........X..........."}, {AL_DJEMBE_TONE, "....x.x.........x.x....."}, {AL_DJEMBE_SLAP, "........X...........X..."}, {KENKENI, "x...o...o...x...o...o..."}, {BELL, "x...x...x.x...x...x...x."}, {SANGBAN, "......x.....X.........x."}, {DUNDUNBA, "X...............x.x....."}}, kRate16T},
-        // 4 dununba (12/8): the dundunba leads, the bell on the four dotted beats
-        {{{DUNDUNBA, "X...x.......X...x......."}, {SANGBAN, "......x...........x.X..."}, {KENKENI, "x...x...x...x...x...x..."}, {BELL, "x.....x.....x.....x....."}, {AL_DJEMBE_BASS, "X...........X..........."}, {AL_DJEMBE_SLAP, "........X.x.........X.x."}}, kRate16T},
-        // 5 lamban (12/8, fast)
-        {{{AL_DJEMBE_SLAP, "....X...........X......."}, {AL_DJEMBE_TONE, "........x.x.........x.x."}, {AL_DJEMBE_BASS, "X...........X..........."}, {KENKENI, "..x.x...x.x...x.x...x.x."}, {BELL, "x...x...x.x...x...x...x."}, {SANGBAN, "x.......x...x.......x..."}}, kRate16T}},
+        // The dunun parts after the Djembe-L transcriptions of Mamady Keita's teaching.
+        // 1 kuku: bass on 1 and 3, tones after, slaps on 2-and and 4-and; the kenkeni's pairs, the
+        // sangban open and muted under its bell, the dundunba's pickups
+        {{{AL_DJEMBE_BASS, "X.......X......."}, {AL_DJEMBE_TONE, "..xx......xx...."}, {AL_DJEMBE_SLAP, "......X.......X."}, {KENKENI, "xx..xx..xx..xx.."}, {SANGBAN, "X..o..x.X..o..x."}, {DUNDUNBA, "...x........x.x."}, {BELL, "x.xx.xx.x.xx.xx."}}},
+        // 2 djole: bass on every beat, tone pairs, slap pairs; the sangban open on 2 and 4
+        {{{AL_DJEMBE_BASS, "X...X...X...X..."}, {AL_DJEMBE_TONE, "..xx......xx...."}, {AL_DJEMBE_SLAP, "......xx......xx"}, {SANGBAN, "o...X...o...X..."}, {KENKENI, "..xx..xx..xx..xx"}, {DUNDUNBA, "X.......x.x....."}, {BELL, "x.x.x.x.x.x.x.x."}}},
+        // 3 soli (12/8): the djembe's slap-tone accompaniment, the sangban's bell
+        {{{AL_DJEMBE_SLAP, "X.....x.....X.....x....."}, {AL_DJEMBE_TONE, "....x...........x......."}, {KENKENI, "........x.x.........x.x."}, {BELL, "x...x.x...x.x...x.x...x."}, {SANGBAN, "X.......o...o.....X....."}, {DUNDUNBA, "X...x...........x.x...x."}}, kRate16T},
+        // 4 dununba (12/8, Mamady's dunungbe): the dundunba's pairs lead
+        {{{DUNDUNBA, "..x.x...............x.x."}, {SANGBAN, "......x...........x.X..."}, {KENKENI, "....x...x.x.....x...x.x."}, {BELL, "x.....x.....x.....x....."}, {AL_DJEMBE_TONE, "....x...........x......."}, {AL_DJEMBE_SLAP, "X.....x.....X.....x....."}}, kRate16T},
+        // 5 lamban: in 4/4, the kenkeni's pairs, the sangban's opens, the dunun's three
+        {{{AL_DJEMBE_BASS, "X.......X......."}, {AL_DJEMBE_TONE, "..xx......xx...."}, {AL_DJEMBE_SLAP, "....X.x.....X.x."}, {KENKENI, "xx..xx..xx..xx.."}, {SANGBAN, "X..xx.x.X..xx.x."}, {DUNDUNBA, "X.x.x...X.x.x..."}, {BELL, "x.x.x.x.x.x.x.x."}}}},
        {{"Djembe Circle", "Circle", 110, 0, 0},
         {"Kuku", "Kuku", 124, 1, 0},
         {"Dununba", "Dununba", 104, 4, 0},
-        {"Lamban", "Lamban", 138, 5, 0},
+        {"Lamban", "Lamban", 120, 5, kShuffle},
         {"Soli", "Soli", 116, 3, 0},
         {"Djole", "Djole", 128, 2, 0},
         {"Village Night", "Night", 96, 3, kSparse}},
@@ -476,10 +509,10 @@ inline const std::vector<Genre> &genres() {
         {{{DARBUKA_DUM, "X.X.....X......."}, {DARBUKA_TEK, "....g.x...g.x.g."}, {FRAME_DRUM, "o.......o......."}}},
         // 3 malfuf (2/4): D . . T . . T .
         {{{DARBUKA_DUM, "X.......X......."}, {DARBUKA_TEK, "...x..x....x..x."}}},
-        // 4 ayoub (2/4): D . D T
-        {{{DARBUKA_DUM, "X...x...X...x..."}, {DARBUKA_TEK, "..g...x...g...x."}}},
-        // 5 chiftetelli (8/4): D . . T . T . . D . D . T . . .
-        {{{DARBUKA_DUM, "X...............X...x..........."}, {DARBUKA_TEK, "..g...x...x...g.........x...g..."}, {FRAME_DRUM, "o...............o..............."}}},
+        // 4 ayoub (2/4): D . . k D . T . (the ka just before the second doum: the gallop)
+        {{{DARBUKA_DUM, "X...x...X...x..."}, {DARBUKA_TEK, "...g..x....g..x."}}},
+        // 5 chiftetelli (8/4): D . . . . . T . . . . . T . . . D . . . D . . . T . . . (3+3+2)
+        {{{DARBUKA_DUM, "X...............X...x..........."}, {DARBUKA_TEK, "..g...x.....x.g.........x...g..."}, {FRAME_DRUM, "o...............o..............."}}},
         // 6 masmoudi kabir (8/4): D D . T D . T .
         {{{DARBUKA_DUM, "X...X...........X..............."}, {DARBUKA_TEK, "........g...x.......g...x...g..."}, {FRAME_DRUM, "o...............o..............."}}}},
        {{"Maqsum", "Maqsum", 100, 0, 0},
@@ -493,7 +526,7 @@ inline const std::vector<Genre> &genres() {
        kTradMiddleEastern},
       {"Indian", kFamilies[6], kPercussionKit, 0.5, kFillTihai, 0, 0,
        {// 0 teentaal (16 matras, an eighth each): dha dhin dhin dha | dha dhin dhin dha | dha tin tin ta | ta dhin dhin dha; no bayan in the khali
-        {{{TABLA, "X.x.x.x.x.x.x.x.x.o.o.o.o.x.x.x."}, {FRAME_DRUM, "X.x.x.x.x.x.x.x...........x.x.x."}}},
+        {{{TABLA, "X.x.x.x.x.x.x.x.x.o.o.o.o.x.x.x."}, {FRAME_DRUM, "X.x.x.x.x.x.x.x.x.........x.x.x."}}},
         // 1 keherwa (8 matras): dha ge na ti | na ka dhi na
         {{{TABLA, "X...x.x.x...x.x."}, {FRAME_DRUM, "X.x.......g.x..."}}},
         // 2 dadra (6 matras): dha dhin na | dha tin na
@@ -501,13 +534,15 @@ inline const std::vector<Genre> &genres() {
         // 3 bhangra chaal: the dhol's bass (on the darbuka doum) on the beats, its stick (tek) on the swung offbeats
         {{{DARBUKA_DUM, "X.....x.....X.....x...o."}, {DARBUKA_TEK, "..g.x...g.x...g.x...g..."}}, kRate16T},
         // 4 filmi: a dholak keherwa with a shaker
-        {{{FRAME_DRUM, "X.....x.X.....x."}, {TABLA, "..o.x..o..o.x..o"}, {SHAKER, "o.o.o.o.o.o.o.o."}}}},
+        {{{FRAME_DRUM, "X.....x.X.....x."}, {TABLA, "..o.x..o..o.x..o"}, {SHAKER, "o.o.o.o.o.o.o.o."}}},
+        // 5 a slow keherwa for an alap's close: the tabla on the matras, the bayan on the sam
+        {{{TABLA, "X...x...x...o..."}, {FRAME_DRUM, "X.......g......."}}}},
        {{"Teentaal", "Teentaal", 95, 0, 0},
         {"Keherwa", "Keherwa", 100, 1, 0},
         {"Dadra", "Dadra", 90, 2, 0},
         {"Bhangra", "Bhangra", 100, 3, 0},
         {"Filmi", "Filmi", 105, 4, 0},
-        {"Raga Night", "Raga", 70, 0, kSparse}},
+        {"Raga Night", "Raga", 70, 5, 0}},
        kTradIndian},
 
       // ---- FX & Odd ----
@@ -536,9 +571,9 @@ inline const std::vector<Genre> &genres() {
         {"Safari", "Safari", 105, 1, kRollingPerc | kGhosty}}},
       {"Odd Meters", kFamilies[7], kDrumKit, 0.5, kFillToms, 0, 0,
        {{{{K, "X.....X.X....."}, {SN, "....X.......X."}, {CH, "x.x.x.x.x.x.x."}}},
-        {{{K, "X.......X...X......."}, {SN, "....X.......X...X..."}, {CH, "x.x.x.x.x.x.x.x.x.x."}}},
+        {{{K, "X.......X...X......."}, {SN, "....X...........X..."}, {CH, "x.x.x.x.x.x.x.x.x.x."}}},
         {{{K, "X..........."}, {SN, "....x...x..."}, {CH, "x.x.x.x.x.x."}}},
-        {{{K, "X...X...X...X....."}, {SN, "........X.....X..."}, {CH, "x.x.x.x.x.x.x.x.x."}}}},
+        {{{K, "X.......X.......x."}, {SN, "....X.......X....."}, {CH, "x.x.x.x.x.x.x.x.x."}}}},
        {{"Seven Eight", "7/8", 120, 0, 0},
         {"Five Four", "5/4", 110, 1, 0},
         {"Waltz", "3/4", 90, 2, 0},
@@ -552,8 +587,8 @@ inline const std::vector<Genre> &genres() {
        {{"Dubstep", "Dubstep", 140, 1, 0},
         {"Halftime Roller", "DnB", 170, 0, 0},
         {"Future Bass", "Future", 150, 2, kOpenHats},
-        {"Downtempo", "Downtempo", 90, 0, kShakerLine},
-        {"Trip Hop", "Trip hop", 88, 2, kGhosty | kSparse},
+        {"Downtempo", "Downtempo", 180, 0, kShakerLine},
+        {"Trip Hop", "Trip hop", 176, 2, kGhosty | kSparse},
         {"Riddim", "Riddim", 140, 1, kRatchetHats},
         {"Chillstep", "Chill", 140, 0, kSparse}}},
    };

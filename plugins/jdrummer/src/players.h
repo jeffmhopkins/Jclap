@@ -50,7 +50,8 @@ inline const Player kPercussionistList[kPercussionists] = {
 inline int percussionistKit(int who) { return who == 0 || who == 1 ? kAfroLatinKit : kPercussionKit; }
 inline unsigned percussionistTradition(int who) {
    static const unsigned t[kPercussionists] = {kTradCuban, kTradWestAfrican, kTradBrazilian, kTradFlamenco,
-                                               kTradMiddleEastern | kTradIndian, kTradAny};
+                                               kTradMiddleEastern | kTradIndian,
+                                               kTradCuban | kTradBrazilian | kTradFlamenco};
    return t[who < 0 ? 0 : who >= kPercussionists ? kPercussionists - 1 : who];
 }
 inline FillKind percussionistFill(int who) {
@@ -72,25 +73,38 @@ inline const std::vector<Groove> &percussionGrooves(int percussionist) {
          {KENKENI, "x.x.x.x.x.x.x.x."}}},
        {{{AL_DJEMBE_BASS, "X...........X..........."}, {AL_DJEMBE_TONE, "....x.x.........x.x....."}, {AL_DJEMBE_SLAP, "........X.x.........X.x."}}, kRate16T}},
       // Bateria: the surdo (on the cajon bass) on 2 and 4, the ganza and the tamborim (on the bongo).
-      {{{{CAJON_BASS, "....X.......X..."}, {SHAKER, "XoxoXoxoXoxoXoxo"}, {HIGH_BONGO, "x.xx.x.xx.x.x.x."},
-         {PALMAS, "..x...x...x...x."}}},
-       {{{CAJON_BASS, "X..xX..xX..xX..x"}, {SHAKER, "xoxoxoxoxoxoxoxo"}, {HIGH_BONGO, "x..x..x...x..x.."}}}},
+      {{{{CAJON_BASS, "....X.......X..."}, {SHAKER, "XoxoXoxoXoxoXoxo"}, {HIGH_BONGO, "XxxxXxxxXxxxXxxx"}}},
+       {{{CAJON_BASS, "o..xX..xo..xX..x"}, {SHAKER, "xoxoxoxoxoxoxoxo"}, {HIGH_BONGO, "x.xx.x.xx.x.x.x."}}},
+       // 12/8: the surdo on beats 2 and 4, the ganza in triplets, the tamborim on the bell's figure
+       {{{CAJON_BASS, "......X...........X....."}, {SHAKER, "XooXooXooXooXooXooXooXoo"},
+         {HIGH_BONGO, "x.x.x.x.x...x.x.x.x...x."}}, kRate16T}},
       // Hand Drummer: the cajon, the frame drum and palmas, in 4/4, 3/4 and 12/8.
       {{{{CAJON_BASS, "X......X..X....."}, {CAJON_SLAP, "....X.......X..."}, {FRAME_DRUM, "..g...g...g...g."},
          {SHAKER, "x.x.x.x.x.x.x.x."}}},
        {{{CAJON_BASS, "X.....x...X....."}, {CAJON_SLAP, "....X..g....X..g"}, {PALMAS, "..x...x...x...x."}}},
        {{{CAJON_BASS, "X..........."}, {CAJON_SLAP, "....x...x..."}, {SHAKER, "o.o.o.o.o.o."}}},
+       {{{CAJON_BASS, "X.......X....."}, {CAJON_SLAP, "....x.......x."}}},           // 7/8
+       {{{CAJON_BASS, "X.......X........."}, {CAJON_SLAP, "....x.......x....."}}},   // 9/8
+       {{{CAJON_BASS, "X...........X......."}, {CAJON_SLAP, "....x...........x..."}}}, // 5/4
        {{{CAJON_BASS, "X...........X..........."}, {CAJON_SLAP, "..g.g.X.g.g...g.g.X.g.g."}}, kRate16T}},
       // Tabla & Darbuka: maqsum on the darbuka, keherwa on the tabla, dadra in 3/4 and a 7/8.
       {{{{DARBUKA_DUM, "X.......X......."}, {DARBUKA_TEK, "..x...x...g.x.g."}, {TABLA, "x..x..x.x..x..x."}}},
        {{{TABLA, "X...x.x.x...x.x."}, {FRAME_DRUM, "X.x.......g.x..."}}},
        {{{TABLA, "X.x.x.x.x.x."}, {FRAME_DRUM, "X.x...x....."}}},
-       {{{DARBUKA_DUM, "X............."}, {DARBUKA_TEK, "......x...x..."}, {TABLA, "..g.g...g...g."}}}},
+       {{{DARBUKA_DUM, "X.......X....."}, {DARBUKA_TEK, "....x.......x."}, {TABLA, "..g...g...g..."}}},
+       // 9/8 karsilama (2+2+2+3) and a 5/4
+       {{{DARBUKA_DUM, "X.......X........."}, {DARBUKA_TEK, "....x.......x.x..."}, {TABLA, "..g...g...g......."}}},
+       {{{DARBUKA_DUM, "X...........X......."}, {DARBUKA_TEK, "....x...x.......x..."}, {TABLA, "..g...g...g...g...g."}}},
+       // 12/8: a 6/8 on the darbuka, the tabla's soft strokes between
+       {{{DARBUKA_DUM, "X...........X..........."}, {DARBUKA_TEK, "......x...x.......x...x."},
+         {TABLA, "..g.g.....g...g.g.....g."}}, kRate16T}},
       // Shaker & Tamb: the top layer, in sixteenths, in 3/4 and in 12/8.
       {{{{SHAKER, "oXoxoXoxoXoxoXox"}, {FRAME_DRUM, "X.......X......."}, {PALMAS, "....x.......x..."}}},
        {{{SHAKER, "xoxoxoxoxoxoxoxo"}, {HIGH_BONGO, "..x...x...x...x."}}},
        {{{SHAKER, "Xoxoxoxoxoxo"}}},
-       {{{SHAKER, "X.o.o.X.o.o.X.o.o.X.o.o."}}, kRate16T}},
+       {{{SHAKER, "X.o.o.X.o.o.X.o.o.X.o.o."}}, kRate16T},
+       {{{SHAKER, "XoxoXoxoXoxoXoxoXo"}}},   // 9/8
+       {{{SHAKER, "XoxoXoxoXoxoXoxoXoxo"}}}}, // 5/4
    };
    return g[percussionist < 0 ? 0 : percussionist >= kPercussionists ? kPercussionists - 1 : percussionist];
 }

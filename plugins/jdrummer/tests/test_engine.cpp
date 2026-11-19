@@ -404,7 +404,7 @@ void testStylesDiffer() {
    for (int gi = 0; gi < genreCount(); ++gi) {
       const Genre &g = genreAt(gi);
       for (const Style &st : g.styles) {
-         const unsigned mods = st.mods & ~(kShuffle | kSwing8);
+         const unsigned mods = st.mods & ~(kShuffle | kSwing8 | kStraight);
          if (!mods)
             continue;
          for (uint32_t seed = 1; seed <= 40; ++seed) {
@@ -474,9 +474,10 @@ void testReferenceGrooves() {
    const Genre &india = genreAt(genreIndex("Indian"));
    JCLAP_CHECK_EQ(laneLength(india.grooves[0].lanes[0].hits), 32); // teentaal: 16 matras
    JCLAP_CHECK_EQ(laneLength(india.grooves[2].lanes[0].hits), 12); // dadra: 6 matras
-   // Teentaal's khali: no bayan (the frame drum) in matras 9 to 12.
+   // Teentaal's khali: the bayan (the frame drum) on matra 9's dha, then none in matras 10 to 13.
    for (int st : stepsOf(india.grooves[0], FRAME_DRUM))
-      JCLAP_CHECK(st < 16 || st >= 26);
+      JCLAP_CHECK(st < 18 || st >= 26);
+   JCLAP_CHECK(!stepsOf(india.grooves[0], FRAME_DRUM).empty() && stepsOf(india.grooves[0], FRAME_DRUM)[8] == 16);
    const Genre &wa = genreAt(genreIndex("West African"));
    JCLAP_CHECK_EQ(wa.kit, kAfroLatinKit);
    int twelve = 0;
@@ -489,7 +490,7 @@ void testReferenceGrooves() {
          if (!bell.empty() && bell.size() == 7)
             JCLAP_CHECK(bell == (std::vector<int>{0, 4, 8, 10, 14, 18, 22}));
       }
-   JCLAP_CHECK(twelve >= 3);
+   JCLAP_CHECK(twelve >= 2); // soli and dununba (lamban is 4/4)
    // A 12/8 groove makes a 12/8 song.
    Recipe r;
    r.genre = genreIndex("West African");
@@ -656,7 +657,17 @@ void testOldSongLoads() {
       const Section &x = a->sections[static_cast<size_t>(i)], &y = b->sections[static_cast<size_t>(i)];
       JCLAP_CHECK(x.vars == y.vars && x.fill == y.fill && x.perc == y.perc);
       JCLAP_CHECK(y.percVars[0] == y.perc && y.percFill == y.perc);
+      JCLAP_CHECK_EQ(y.meter, kTicksPerBar);
    }
+   // Version 1 wrote every percussion part on the Percussion kit, the conguero's too.
+   JCLAP_CHECK_EQ(a->percKit, kAfroLatinKit);
+   JCLAP_CHECK_EQ(b->percKit, kPercussionKit);
+   // And version 2 keeps the kit and the meter.
+   a->sections[kVerse].meter = 168;
+   auto c = std::make_unique<Song>();
+   const std::vector<uint8_t> v2 = a->save();
+   JCLAP_CHECK(c->load(v2.data(), v2.size()));
+   JCLAP_CHECK(*c == *a);
 }
 
 // Swung in eighths: the off-beat eighth lands at SWING of the beat, the sixteenths either side move
@@ -729,6 +740,159 @@ void testPercussionFill() {
    JCLAP_CHECK_EQ(fill, 1);
 }
 
+// A fill written at the end of a two-bar pattern plays its last bar whatever bar it falls in, and a
+// fill cut off by a stop doesn't come back on the restart.
+void testFillOnLongPattern() {
+   Song s;
+   for (Section &sec : s.sections) {
+      sec.vars[0].steps = 32;
+      sec.vars[0].at(K, 0).vel = 100;
+      sec.fill = sec.vars[0];
+      sec.fill.at(SN, 28).vel = 100; // bar 2's beat 4
+   }
+   Settings st = plain();
+   st.autoFillBars = 1; // every bar, so the even bars too
+   auto e = engineWith(s, st);
+   JCLAP_CHECK_EQ(countOn(run(*e, 96000 * 4), SN), 4);
+   // Stopped during a fill, then started again: the first bar is the groove.
+   Song one = oneHitSong();
+   st.autoFillBars = 2;
+   auto e2 = engineWith(one, st);
+   run(*e2, 96000 + 48000); // half way into bar 2's fill
+   Block b;
+   b.frames = kBlock;
+   b.sampleRate = 48000.0;
+   b.tempo = 120.0;
+   b.hasTransport = true;
+   b.playing = false;
+   auto out = std::make_unique<OutBuffer>();
+   e2->process(b, *out);
+   JCLAP_CHECK_EQ(countOn(run(*e2, 96000, true, 40.0), SN), 0);
+}
+
+// A 7/8 section's bars are 7/8 long: the fill ends and the crash lands on its bar lines.
+void testOddMeter() {
+   Song s;
+   for (Section &sec : s.sections) {
+      sec.meter = 168;
+      sec.vars[0].steps = 14;
+      sec.vars[0].at(K, 0).vel = 100;
+      sec.fill = sec.vars[0];
+      sec.fill.at(SN, 12).vel = 100;
+   }
+   Settings st = plain();
+   st.autoFillBars = 2;
+   auto e = engineWith(s, st);
+   const auto out = run(*e, 84000 * 4);
+   const int64_t bar = 84000; // 3.5 beats at 120
+   int crashes = 0, kicks = 0, snares = 0;
+   for (const Timed &t : out) {
+      if (!t.on())
+         continue;
+      if (t.pad() == CR) {
+         ++crashes;
+         JCLAP_CHECK(t.time % bar <= 2);
+      }
+      if (t.pad() == K) {
+         ++kicks;
+         JCLAP_CHECK(t.time % bar <= 2);
+      }
+      if (t.pad() == SN) {
+         ++snares;
+         JCLAP_CHECK(t.time % bar >= 72000 - 2 && t.time % bar <= 72000 + 2);
+      }
+   }
+   JCLAP_CHECK_EQ(kicks, 5); // the fifth bar's one is in the last block
+   JCLAP_CHECK_EQ(snares, 2);
+   JCLAP_CHECK_EQ(crashes, 2); // out of each fill
+   // The generator writes the meter: 7/8 for a 7/8 groove, 4/4 for a two-bar one.
+   Recipe r;
+   r.genre = genreIndex("Odd Meters");
+   for (int i = 0; i < static_cast<int>(genreAt(r.genre).styles.size()); ++i) {
+      r.style = i;
+      const Section sec = makeSection(r, kVerse, 7);
+      const int ticks = patternTicks(fromGroove(genreAt(r.genre).grooves[static_cast<size_t>(styleOf(r).groove)]));
+      JCLAP_CHECK_EQ(static_cast<int>(sec.meter), ticks % kTicksPerBar == 0 ? kTicksPerBar : ticks);
+   }
+   r.genre = genreIndex("Afro-Cuban");
+   r.style = 0;
+   JCLAP_CHECK_EQ(static_cast<int>(makeSection(r, kVerse, 7).meter), kTicksPerBar);
+}
+
+// The fixes the generator review asked for, each as it was found.
+void testGeneratorEdges() {
+   // A shaker player's voices aren't the darbuka's.
+   const Voices v = voicesFor(kPercussionKit, kTradAny);
+   JCLAP_CHECK(v.kick != DARBUKA_DUM && v.shaker == SHAKER);
+   JCLAP_CHECK(percussionistTradition(5) != kTradAny);
+   // One-step and two-step patterns go through every twist without a crash.
+   for (int steps : {1, 2})
+      for (int kit : {kDrumKit, kPercussionKit, kAfroLatinKit}) {
+         Pattern p;
+         p.steps = static_cast<uint8_t>(steps);
+         p.at(voicesFor(kit).kick, 0).vel = 100;
+         for (int k = 0; k < 40; ++k) {
+            Rng rng(static_cast<uint64_t>(k + 1));
+            std::string tag;
+            (void)mutate(p, kit, 1.0, rng, tag);
+         }
+      }
+   // Every percussionist plays in 12/8 under a 12/8 drummer.
+   Pattern twelve;
+   twelve.rate = kRate16T;
+   twelve.steps = 24;
+   for (int who = 0; who < kPercussionists; ++who) {
+      Rng rng(3);
+      JCLAP_CHECK_EQ(percussionPart(who, twelve, rng).rate, kRate16T);
+   }
+   // The tabla player plays the tabla over a taal.
+   Recipe r;
+   r.genre = genreIndex("Indian");
+   r.percussionist = 5;
+   for (uint32_t seed = 1; seed < 6; ++seed) {
+      const Section sec = makeSection(r, kChorus, seed);
+      JCLAP_CHECK(!sec.perc.uses(DARBUKA_TEK));
+   }
+   // A higher ENERGY keeps the chorus above the pre.
+   Recipe hot;
+   hot.energy = 1.0;
+   JCLAP_CHECK(sectionEnergy(hot, kChorus) > sectionEnergy(hot, kPre));
+   // A quiet section's variations don't bring back what its energy took out.
+   Recipe rock;
+   rock.genre = genreIndex("Rock");
+   for (uint32_t seed = 1; seed < 8; ++seed) {
+      const Section sec = makeSection(rock, kIntro, seed);
+      for (const Pattern &p : sec.vars)
+         for (int t : {HT, MT, LT})
+            JCLAP_CHECK(sectionEnergy(rock, kIntro) >= threshold(kDrumKit, t, p) || !p.uses(t));
+   }
+}
+
+// VARY never drops the kick on a beat, in 12/8 too; with VELOCITY SETS ENERGY off, the velocity a
+// section note was played at no longer matters.
+void testVaryAndEnergy() {
+   Song s;
+   for (Section &sec : s.sections) {
+      sec.vars[0].rate = kRate16T;
+      sec.vars[0].steps = 24;
+      for (int st = 0; st < 24; st += 6)
+         sec.vars[0].at(K, st).vel = 100;
+   }
+   Settings st = plain();
+   st.vary = 1.0;
+   auto e = engineWith(s, st);
+   JCLAP_CHECK_EQ(countOn(run(*e, 96000 * 8), K), 32);
+   st.vary = 0.0;
+   st.velEnergy = true;
+   auto e2 = engineWith(oneHitSong(), st);
+   e2->noteOn(0, st.noteFor(kVerse), 1); // a soft section note
+   st.velEnergy = false;
+   e2->setSettings(st);
+   for (const Timed &t : run(*e2, 96000))
+      if (t.on() && t.pad() == K)
+         JCLAP_CHECK_EQ(static_cast<int>(t.m.data2), 100);
+}
+
 } // namespace
 
 int main() {
@@ -758,5 +922,9 @@ int main() {
    testEighthSwing();
    testCrashAfterFill();
    testPercussionFill();
+   testFillOnLongPattern();
+   testOddMeter();
+   testGeneratorEdges();
+   testVaryAndEnergy();
    return jclap::core::testResult();
 }

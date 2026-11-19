@@ -101,6 +101,9 @@ struct Pattern {
    bool operator!=(const Pattern &o) const { return !(*this == o); }
 };
 
+// A pattern's length in ticks.
+inline int patternTicks(const Pattern &p) { return p.steps * kRateTicks[std::min<int>(p.rate, kRate32)]; }
+
 struct Section {
    std::array<Pattern, kVariations> vars{};
    Pattern fill;
@@ -110,6 +113,8 @@ struct Section {
    std::array<Pattern, kVariations - 1> percVars{};
    Pattern percFill;
    uint8_t bars = 8;
+   // Its bar, in ticks: 192 for 4/4, the groove's length in another meter (168 for 7/8, 240 for 5/4).
+   uint16_t meter = kTicksPerBar;
    uint8_t energy = 50; // 0..100, as made
    // A crash on the first beat whenever the section starts.
    uint8_t crash = 0;
@@ -120,7 +125,7 @@ struct Section {
 
    bool operator==(const Section &o) const {
       return vars == o.vars && fill == o.fill && perc == o.perc && percVars == o.percVars && percFill == o.percFill &&
-             bars == o.bars && energy == o.energy &&
+             bars == o.bars && meter == o.meter && energy == o.energy &&
              crash == o.crash && locked == o.locked && seed == o.seed && generation == o.generation;
    }
    bool operator!=(const Section &o) const { return !(*this == o); }
@@ -128,7 +133,9 @@ struct Section {
 
 struct Song {
    std::array<Section, kSections> sections{};
-   bool operator==(const Song &o) const { return sections == o.sections; }
+   // The kit the percussion parts are written for (the second JKit's): Afro-Latin or Percussion.
+   uint8_t percKit = 1; // kPercussionKit
+   bool operator==(const Song &o) const { return sections == o.sections && percKit == o.percKit; }
    bool operator!=(const Song &o) const { return !(*this == o); }
 
    int totalBars() const {
@@ -139,7 +146,8 @@ struct Song {
    }
 
    // Saved as bytes: a version, then each section's fields and its patterns (four variations, the
-   // fill, the percussion part; from version 2 the percussion's variations and fill too), each
+   // fill, the percussion part; from version 2 the percussion's variations and fill, the section's
+   // meter, and after the sections the percussion kit), each
    // pattern as its steps, rate and every hit (4 bytes) of its 16 x 32 grid.
    static constexpr uint32_t kVersion = 2;
 
@@ -178,7 +186,10 @@ struct Song {
          for (const Pattern &p : s.percVars)
             pattern(p);
          pattern(s.percFill);
+         u8(static_cast<uint8_t>(s.meter & 0xff));
+         u8(static_cast<uint8_t>(s.meter >> 8));
       }
+      u8(percKit);
       return out;
    }
 
@@ -230,6 +241,9 @@ struct Song {
             for (Pattern &p : s.percVars)
                pattern(p);
             pattern(s.percFill);
+            const int lo = u8(), hi = u8();
+            const int m = lo | hi << 8;
+            s.meter = static_cast<uint16_t>(m >= kTicksPerBeat / 2 && m <= kMaxSteps * kTicksPerBeat ? m : kTicksPerBar);
          } else {
             // Saved before the percussion had variations: each is the main part.
             for (Pattern &p : s.percVars)
@@ -237,6 +251,8 @@ struct Song {
             s.percFill = s.perc;
          }
       }
+      // Version 1 wrote every percussion part on the Percussion kit.
+      loaded.percKit = version >= 2 ? static_cast<uint8_t>(u8() == 4 ? 4 : 1) : 1;
       if (!ok)
          return false;
       *this = loaded;

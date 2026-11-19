@@ -95,11 +95,11 @@ std::string upper(std::string s) {
 
 std::string pct(double v) { return std::to_string(static_cast<int>(std::lround(v * 100.0))); }
 
-// The kit a pattern's pads are named and coloured by: the percussion part is the percussionist's
-// kit (Afro-Latin or Percussion); the rest follow KIT.
+// The kit a pattern's pads are named and coloured by: the percussion part is on the kit the song's
+// percussion was written for (Afro-Latin or Percussion); the rest follow KIT.
 int kitOf(const EditorHost &h, bool perc) {
    if (perc)
-      return percussionistKit(std::max(0, static_cast<int>(std::lround(h.paramValue(kPercussionist))) - 1));
+      return h.song().percKit;
    return std::clamp(static_cast<int>(std::lround(h.paramValue(kKit))), 0, kKitCount - 1);
 }
 
@@ -2051,7 +2051,7 @@ private:
          std::string tag;
          const bool perc = host_.editVar == kVariations + 1;
          const int who = std::max(0, whole(kPercussionist) - 1);
-         p = mutate(p, perc ? percussionistKit(who) : genreAt(whole(kGenre)).kit, param(kMutation), rng, tag, nullptr,
+         p = mutate(p, perc ? static_cast<int>(s.percKit) : genreAt(whole(kGenre)).kit, param(kMutation), rng, tag, nullptr,
                     perc ? percussionistTradition(who) : genreAt(whole(kGenre)).tradition);
          EditGrid::edited(s, host_.editSection, host_.editVar);
          host_.setSong(s);
