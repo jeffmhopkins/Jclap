@@ -528,11 +528,9 @@ private:
          }
          if (h.chance < 100 && dice(bar, step, pad, 4) * 100.0 >= h.chance)
             continue;
-         // The beats' kick and backbeat, and on a hand kit its timeline (clave, bell, tabla, doum),
-         // are never dropped.
-         const bool anchorHit = (step % std::max(1, kTicksPerBeat / stepTicks) == 0 &&
-                                 (isKickPad(kit, pad) || padRole(kit, pad) == kSnare)) ||
-                                timelinePad(kit, pad);
+         // Nothing on a beat is dropped (a missing hat or snare on the beat sounds like a mistake),
+         // nor a hand kit's timeline (clave, bell, tabla, doum).
+         const bool anchorHit = step % std::max(1, kTicksPerBeat / stepTicks) == 0 || timelinePad(kit, pad);
          if (vary > 0.0 && !anchorHit && h.vel < kAccent && dice(bar, step, pad, 5) < vary * 0.22)
             continue;
          double vel = h.vel * energy_;

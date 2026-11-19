@@ -17,6 +17,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -1279,8 +1280,9 @@ inline const std::vector<Mutation> &mutations() {
 // A child of `parent`: one twist (two or three as `amount` grows), and the tag that says how it
 // differs. Ops already used for this litter (`used`) are avoided, so five children differ. On the
 // hand kits only the hand drummers' twists, kept to the tradition's own drums.
+// `inSong`: a section's own variation, which keeps the groove's feel (no half time mid-verse).
 inline Pattern mutate(const Pattern &parent, int kit, double amount, Rng &rng, std::string &tag,
-                      std::vector<int> *used = nullptr, unsigned trad = kTradAny) {
+                      std::vector<int> *used = nullptr, unsigned trad = kTradAny, bool inSong = false) {
    const auto &ops = mutations();
    const Voices v = voicesFor(kit, trad);
    const unsigned where = v.hands() ? kOnHands : kOnKits;
@@ -1293,6 +1295,8 @@ inline Pattern mutate(const Pattern &parent, int kit, double amount, Rng &rng, s
       if (!(ops[static_cast<size_t>(i)].where & where))
          continue;
       if (used && applied == 0 && std::find(used->begin(), used->end(), i) != used->end())
+         continue;
+      if (inSong && !std::strcmp(ops[static_cast<size_t>(i)].tag, "half-time feel"))
          continue;
       if (!ops[static_cast<size_t>(i)].apply(child, v, rng))
          continue;
@@ -1548,7 +1552,7 @@ inline Section makeSection(const Recipe &r, int section, uint32_t seed) {
    };
    for (int v = 1; v < kVariations; ++v) {
       std::string tag;
-      Pattern m = sparse ? base : mutate(base, kit, 0.15 + 0.2 * v + r.weird * 0.3, rng, tag, nullptr, trad);
+      Pattern m = sparse ? base : mutate(base, kit, 0.15 + 0.2 * v + r.weird * 0.3, rng, tag, nullptr, trad, true);
       if (!sparse && live && v == kVariations - 1 && kit == kDrumKit && e >= threshold(kit, HT, base))
          applyMutation(m, "toms come in", kit, rng, trad);
       keepOut(m, base, kit);
@@ -1643,7 +1647,7 @@ inline void adoptChild(const Recipe &r, Section &s, const Pattern &child, uint32
          straight.at(pad, st).nudge = 0;
    for (int v = 1; v < kVariations; ++v) {
       std::string tag;
-      Pattern m = e < 0.2 ? child : mutate(straight, g.kit, 0.15 + 0.2 * v, rng, tag, nullptr, g.tradition);
+      Pattern m = e < 0.2 ? child : mutate(straight, g.kit, 0.15 + 0.2 * v, rng, tag, nullptr, g.tradition, true);
       if (e >= 0.2)
          applyPlayer(m, g.kit, pl, e, rng, g.tradition);
       s.vars[static_cast<size_t>(v)] = m;
