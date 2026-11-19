@@ -361,6 +361,12 @@ right-click menu) opens them, a row each:
   along the top for its fade in and fade out. A click elsewhere on it plays the variation.
 - **LEVEL** (-24 to +12 dB), **TUNE** (-12 to +12 semitones), **LOW CUT** and **HIGH CUT** (12
   dB/octave, 20 Hz to 20 kHz, off at the ends): drag a value up or down; double-click puts it back.
+- **COPY** adds a copy of that variation right after it, nudged a little so it isn't a repeat: tune
+  within a fifth of a semitone, level within 1.5 dB, the start a few ms later, and now and then a
+  slightly darker top. It's instant.
+- **VARY** asks the model (the Generate tab's engine) for two close relatives of that variation's
+  sound, from its own prompt and seed, as the Generate tab's VARY does, and adds them right after
+  it. It takes as long as generating two sounds.
 - **▲** moves a variation up (the order matters for CYCLE and VELOCITY), **✕** removes it.
 - **+ ADD n VARIANTS AS VARIATIONS** brings the Generate tab's variants in, the starred ones if any are
   starred, normalized and with their silence trimmed.

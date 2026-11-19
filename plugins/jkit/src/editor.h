@@ -122,7 +122,10 @@ public:
    // prompt and length: `takes` close variations of one sound (1 for just the one). pollGeneration()
    // leaves the variants alone for it and takeKitSounds() hands them over (named and with the role
    // and prompt), once; empty until they're done.
-   virtual void generateOne(const std::string &prompt, int role, double seconds, const std::string &name, int takes = 1) = 0;
+   // `nearSeed` (not 0) makes them close relatives of the sound that seed made, as VARY does: the
+   // first one handed over is then that sound again.
+   virtual void generateOne(const std::string &prompt, int role, double seconds, const std::string &name, int takes = 1,
+                            uint32_t nearSeed = 0) = 0;
    virtual std::vector<SamplePtr> takeKitSounds() = 0;
    // Seconds the last generation took.
    virtual double lastRunSeconds() const = 0;

@@ -2081,7 +2081,7 @@ public:
 
    visage::Bounds card() const {
       const float s = ui::designScale(*this);
-      const float w = 760 * s, h = 470 * s;
+      const float w = 860 * s, h = 470 * s;
       return {(width() - w) / 2, (height() - h) / 2, w, h};
    }
    float sc() const { return ui::designScale(*this); }
@@ -2094,7 +2094,9 @@ public:
       return {left() + (372 + col * 70) * sc(), rowY(i) + 6 * sc(), 64 * sc(), 20 * sc()};
    }
    visage::Bounds upBox(int i) const { return {left() + 656 * sc(), rowY(i) + 6 * sc(), 20 * sc(), 20 * sc()}; }
-   visage::Bounds removeBox(int i) const { return {left() + 680 * sc(), rowY(i) + 6 * sc(), 20 * sc(), 20 * sc()}; }
+   visage::Bounds copyBox(int i) const { return {left() + 682 * sc(), rowY(i) + 6 * sc(), 50 * sc(), 20 * sc()}; }
+   visage::Bounds varyBox(int i) const { return {left() + 736 * sc(), rowY(i) + 6 * sc(), 50 * sc(), 20 * sc()}; }
+   visage::Bounds removeBox(int i) const { return {left() + 796 * sc(), rowY(i) + 6 * sc(), 20 * sc(), 20 * sc()}; }
    visage::Bounds modeBox(int m) const {
       return {left() + (60 + m * 88) * sc(), card().y() + 62 * sc(), 84 * sc(), 22 * sc()};
    }
@@ -2220,6 +2222,7 @@ public:
          const visage::Bounds v = valueBox(0, col);
          c.text(kHeads[col], ui::font(8 * s), visage::Font::kCenter, v.x(), hy, v.width(), 14 * s);
       }
+      c.text("MAKE ANOTHER", ui::font(8 * s), visage::Font::kCenter, copyBox(0).x(), hy, varyBox(0).right() - copyBox(0).x(), 14 * s);
 
       const int playing = host_.padTake(pad);
       const float pos = host_.padPosition(pad);
@@ -2230,7 +2233,7 @@ public:
             c.roundedRectangle(x, ry, w, rowH(), 4 * s);
             if (i == p.count()) {
                c.setColor(kFaint);
-               c.text(p.empty() ? "No sound on this pad yet." : "Add variations from the Generate tab's variants, below, or with ADD AS VARIATION there.",
+               c.text(p.empty() ? "No sound on this pad yet." : "More: COPY or VARY one above, add the Generate tab's variants below, or ADD AS VARIATION there.",
                       ui::font(9 * s), visage::Font::kLeft, x + 12 * s, ry, w, rowH());
             }
             continue;
@@ -2298,6 +2301,18 @@ public:
             const visage::Bounds u = upBox(i);
             c.setColor(hover_.part == kUp && hover_.index == i ? t.text : t.dimText);
             c.triangle(u.x() + 5 * s, u.bottom() - 6 * s, u.right() - 5 * s, u.bottom() - 6 * s, u.x() + u.width() / 2, u.y() + 6 * s);
+         }
+         // COPY and VARY: a nudged copy now, or close relatives from the model.
+         const bool full = p.count() >= kMaxTakes;
+         for (int b2 = 0; b2 < 2; ++b2) {
+            const visage::Bounds r = b2 ? varyBox(i) : copyBox(i);
+            const bool busy = b2 && varyingRow == i;
+            const bool on = !full && (b2 == 0 || (canVary && canVary(i)));
+            const bool hot = on && hover_.part == (b2 ? kVary : kCopy) && hover_.index == i;
+            c.setColor(busy ? 0xff3a2a1a : hot ? 0xff343a44 : kWell);
+            c.roundedRectangle(r.x(), r.y(), r.width(), r.height(), 3 * s);
+            c.setColor(busy ? kOrange : on ? t.text : alpha(t.dimText, 0.5f));
+            c.text(busy ? "..." : b2 ? "VARY" : "COPY", ui::font(8.5f * s), visage::Font::kCenter, r.x(), r.y(), r.width(), r.height());
          }
          const visage::Bounds rb = removeBox(i);
          c.setColor(hover_.part == kRemove && hover_.index == i ? kOrange : t.dimText);
@@ -2373,6 +2388,19 @@ public:
                if (onChanged)
                   onChanged();
             }
+            break;
+         case kCopy:
+            if (h.index < p.count() && p.count() < kMaxTakes) {
+               p.takes.insert(p.takes.begin() + h.index + 1, nudged(p.takes[static_cast<size_t>(h.index)]));
+               host_.setPadSounds(pad, p);
+               host_.playPadTake(pad, h.index + 1);
+               if (onChanged)
+                  onChanged();
+            }
+            break;
+         case kVary:
+            if (h.index < p.count() && p.count() < kMaxTakes && canVary && canVary(h.index) && onVary)
+               onVary(pad, h.index);
             break;
          case kAdd:
             // Normalized and with their silence trimmed, as ADD TO KIT does by default; each take's
@@ -2475,9 +2503,31 @@ public:
    }
 
    std::function<void()> onChanged; // the takes changed: the panel redraws the pad
+   // VARY: whether a row's sound can be varied now (it has a prompt and nothing is generating),
+   // and starting it; `varyingRow` is the row being varied (-1 for none).
+   std::function<bool(int)> canVary;
+   std::function<void(int pad, int index)> onVary;
+   int varyingRow = -1;
+
+   // COPY: the same sound with small random nudges, so it's a variation and not a repeat: tune
+   // within a fifth of a semitone, level within 1.5 dB, the start a few ms on, and now and then a
+   // slightly darker top.
+   static Take nudged(const Take &k) {
+      std::random_device rd;
+      std::mt19937 g(rd());
+      std::uniform_real_distribution<double> u(-1.0, 1.0);
+      Take c = k;
+      c.tune = std::round((k.tune + 0.2 * u(g)) * 100) / 100;
+      c.levelDb = std::round((k.levelDb + 1.5 * u(g)) * 10) / 10;
+      const double secs = k.sample ? std::max(0.01, k.sample->seconds()) : 1.0;
+      c.start = std::clamp(k.start + std::fabs(u(g)) * 0.004 / secs, 0.0, std::max(0.0, k.end - 0.01));
+      if (u(g) > 0.3 && k.highCutHz >= 19999)
+         c.highCutHz = std::round(9000 + 6000 * std::fabs(u(g)));
+      return c.clamped();
+   }
 
 private:
-   enum Part { kNone, kOutside, kClose, kDone, kMode, kPlay, kWave, kValue, kUp, kRemove, kAdd };
+   enum Part { kNone, kOutside, kClose, kDone, kMode, kPlay, kWave, kValue, kUp, kRemove, kAdd, kCopy, kVary };
    struct Hit {
       Part part = kNone;
       int index = -1;
@@ -2509,6 +2559,10 @@ private:
                return {kValue, i, col};
          if (i > 0 && upBox(i).contains(q))
             return {kUp, i};
+         if (copyBox(i).contains(q))
+            return {kCopy, i};
+         if (varyBox(i).contains(q))
+            return {kVary, i};
          if (removeBox(i).contains(q))
             return {kRemove, i};
       }
@@ -2696,6 +2750,12 @@ public:
       kitDialog_->setVisible(false);
       takeEditor_ = &add<TakeEditor>({0, 0, kDesignWidth, kDesignHeight}, host_);
       takeEditor_->onChanged = [this] { redraw(); };
+      takeEditor_->canVary = [this](int i) {
+         const PadSounds p = host_.padSounds(takeEditor_->pad);
+         return !host_.generating() && varyPad_ < 0 && kitQueue_.empty() && !orb() && i < p.count() &&
+                p.takes[static_cast<size_t>(i)].sample && !p.takes[static_cast<size_t>(i)].sample->prompt.empty();
+      };
+      takeEditor_->onVary = [this](int pad, int i) { varyVariation(pad, i); };
       takeEditor_->setOnTop(true);
       takeEditor_->setVisible(false);
       tabs_->select(host_.page);
@@ -2735,6 +2795,24 @@ public:
       } else if (!error.empty()) {
          lastError_ = error;
          kitQueue_.clear();
+      }
+      if (varyPad_ >= 0) {
+         // VARY in VARIATIONS: the first one back is the sound itself; the rest join the pad.
+         if (std::vector<SamplePtr> sounds = host_.takeKitSounds(); !sounds.empty()) {
+            PadSounds p = host_.padSounds(varyPad_);
+            int at = std::min(varyIndex_ + 1, p.count());
+            for (size_t k = 1; k < sounds.size() && p.count() < kMaxTakes; ++k) {
+               auto s = std::make_shared<Sample>(treat(*sounds[k], Treatment{}));
+               p.takes.insert(p.takes.begin() + at++, Take{std::move(s)});
+            }
+            host_.setPadSounds(varyPad_, p);
+            host_.playPadTake(varyPad_, std::min(varyIndex_ + 1, p.count() - 1));
+            varyPad_ = -1;
+            takeEditor_->varyingRow = -1;
+         } else if (!host_.generating()) {
+            varyPad_ = -1; // stopped or failed
+            takeEditor_->varyingRow = -1;
+         }
       }
       if (!kitQueue_.empty()) {
          if (std::vector<SamplePtr> sounds = host_.takeKitSounds(); !sounds.empty()) {
@@ -3178,6 +3256,24 @@ private:
          }
       }
       redraw();
+   }
+
+   // VARY on a variation: two close relatives of its sound from the model (the pad's engine, steps
+   // and strength), added after it. Uses the sound's own prompt, role, length and seed.
+   void varyVariation(int pad, int i) {
+      const PadSounds p = host_.padSounds(pad);
+      if (i < 0 || i >= p.count() || !p.takes[static_cast<size_t>(i)].sample || host_.generating())
+         return;
+      const SamplePtr &src = p.takes[static_cast<size_t>(i)].sample;
+      const EngineStatus e = host_.engine();
+      if (e.state == EngineStatus::State::Missing || e.state == EngineStatus::State::Failed)
+         host_.installEngine();
+      varyPad_ = pad;
+      varyIndex_ = i;
+      takeEditor_->varyingRow = i;
+      const int room = kMaxTakes - p.count();
+      host_.generateOne(src->prompt, src->role, std::max(0.2, src->seconds()), src->name, std::min(2, room),
+                        src->seed ? src->seed : 1);
    }
 
    // The Kit tab's + tab: the Generate tab's selected variant, treated, as one more variation of the
@@ -4029,6 +4125,7 @@ private:
    ui::Button *regen_ = nullptr, *takes_ = nullptr;
    VariationTabs *variationTabs_ = nullptr;
    int variationTab_ = 0, variationPad_ = -1;
+   int varyPad_ = -1, varyIndex_ = 0; // VARY in VARIATIONS, while it runs
    int takesShown_ = -1;
    PadWave *wave_ = nullptr;
    ui::Dropdown *choke_ = nullptr, *pointType_ = nullptr;

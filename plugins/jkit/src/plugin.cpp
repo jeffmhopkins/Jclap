@@ -515,7 +515,8 @@ public:
       jobStarted_ = std::chrono::steady_clock::now();
    }
 
-   void generateOne(const std::string &prompt, int role, double seconds, const std::string &name, int takes) override {
+   void generateOne(const std::string &prompt, int role, double seconds, const std::string &name, int takes,
+                    uint32_t nearSeed) override {
       if (job_)
          return;
       gen::Request r;
@@ -528,6 +529,12 @@ public:
       r.variants = std::clamp(takes, 1, kMaxTakes);
       r.variety = r.variants > 1 ? 0.3 : 0.0;
       r.seed = 1 + std::random_device{}() % 99999;
+      if (nearSeed) {
+         // As VARY: from noise close to that sound's, the first being the sound itself.
+         r.seed = nearSeed;
+         r.variety = 0.35;
+         r.variants = std::clamp(takes + 1, 2, 8);
+      }
       jobRole_ = std::clamp(role, 0, kRoleCount - 1);
       jobPrompt_ = prompt;
       jobName_ = name;

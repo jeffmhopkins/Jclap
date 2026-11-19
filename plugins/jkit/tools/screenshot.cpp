@@ -171,7 +171,7 @@ public:
    GenSettings &gen() override { return gen_; }
    Treatment &treatment() override { return treatment_; }
    std::vector<Variant> &variants() override { return variants_; }
-   void generateOne(const std::string &, int, double, const std::string &, int) override {}
+   void generateOne(const std::string &, int, double, const std::string &, int, uint32_t) override {}
    std::vector<SamplePtr> takeKitSounds() override { return {}; }
    std::vector<Recent> &recent() override { return recent_; }
    EngineStatus engineStatus(int engine) override {
