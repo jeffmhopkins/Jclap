@@ -2,7 +2,7 @@
 
 # JKit
 
-A 16-pad drum kit whose sounds an AI model makes from your words, inside the plugin, with a choice of engines. Type what you want (or roll the dice for a prompt, from plain studio drums to things no drum machine has), pick from the variants, trim and fade the one you like, and put it on a pad. Then play the kit: each pad with its own pitch, start and end, envelope, EQ and sends, into a shared reverb and delay and a master EQ, width and BOOM.
+A 16-pad drum kit whose sounds an AI model makes from your words, inside the plugin, with a choice of engines. Type what you want (or roll the dice for a prompt, from plain studio drums to things no drum machine has), pick from the variants, trim and fade the one you like, and put it on a pad. Then play the kit: each pad with its own pitch, start and end, envelope, filter, drive, EQ and sends, into a shared reverb and delay and a master EQ, width and BOOM.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![pads: 16](https://img.shields.io/badge/pads-16-blue)](#the-kit-tab) [![engines: Stable Audio Open Small, ORB, Stable Audio Open 1.0](https://img.shields.io/badge/engines-SAO%20Small%20%7C%20ORB%20%7C%20SAO%201.0-blue)](#the-engines) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
@@ -199,8 +199,26 @@ prompt, role and seed.
 | Play | One shot, Gate | one shot plays the whole sound; Gate stops it (over 30 ms) when the note ends |
 | Rev | on, off | plays it backwards |
 
-**PAD EQ**: LOW CUT (off, or 20 Hz to 2 kHz), LOW (a shelf at 120 Hz), MID (a bell from 200 Hz to
-8 kHz, at MID FREQ) and HIGH (a shelf at 7 kHz), each ±15 dB, drawn as a curve.
+**PAD TONE**: the pad's filter, drive and EQ, in that order, drawn together as one curve (the
+filter's own part in blue). Drag a dot on the curve to move its band: sideways sets the frequency, up
+and down the gain (for the blue filter dot, the resonance).
+
+| Control | Range | What it does |
+|---|---|---|
+| Filter | Off, LP 12, LP 24, HP 12, HP 24, BP | a resonant low pass, high pass or band pass, 12 or 24 dB an octave |
+| Cutoff | 20 Hz to 20 kHz | where the filter cuts |
+| Reso | 0 to 100% | a peak at the cutoff, up to just short of ringing |
+| Env | -6 to +6 octaves | how far each hit moves the cutoff, falling back over ENV DECAY: up for a bright snap that closes, down for one that opens |
+| Env Decay | 5 ms to 2 s | how quickly the envelope falls back |
+| Vel > Filt | -4 to +4 octaves | velocity on the cutoff: the setting is how far a hit at velocity 0 sits from a full one, so above 0 soft hits are darker, below 0 brighter |
+| Drive | 0 to 100% | a soft clip, up to 24 dB into it, kept at about the same loudness |
+| Low Cut | off, 20 Hz to 2 kHz | cuts the lows, 12 dB an octave |
+| Low, Low Freq | ±15 dB, 40 to 400 Hz | a low shelf and its corner |
+| Mid, Mid Freq, Mid Q | ±15 dB, 200 Hz to 8 kHz, Q 0.3 to 8 | a bell: its gain, centre and width (high Q is narrow) |
+| High, High Freq | ±15 dB, 2 to 16 kHz | a high shelf and its corner |
+
+The filter's envelope starts again at every hit. Pads keep the shelves at 120 Hz and 7 kHz and the
+mid's Q at 0.9 until you change them, as before 0.4.
 
 **SENDS**: how much of the pad goes to the reverb and the delay, after its level and pan.
 
@@ -253,7 +271,8 @@ factory kits: every kit is yours.
 JKit builds with the rest of JClap (see the [top-level README](../../README.md)). Its tests:
 
 - `jkit-tests`: the kit through a test host (playing, pitch, start and end, decay, velocity, gate,
-  reverse, choke, sends, volume, boom, state, swapping pads, trimming and fading).
+  reverse, the filter, its envelope and velocity, drive, choke, sends, volume, boom, state, swapping
+  pads, trimming and fading in and out).
 - `jkit-gen-tests`: the generator without the models (hashing, the tokenizer, the sampler's schedule
   and noise, the random prompts, each engine's download folder and REMOVE, ORB's renderer against
   numbers from the original, its planner's grammar, fitting a plan to a pad, and resampling). With

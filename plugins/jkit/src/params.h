@@ -4,9 +4,11 @@
 // are indexes into params(), so keep them in order; once released, only append (new master params
 // would go after the pads, new pad params in a new block of sixteen after that).
 //
-// Pad p's param f has id kPadBase + p * kPadParamCount + f (padParam(p, f)). Knobs whose sound
-// follows a curve (times, frequencies) are stored 0..1 and mapped here, so the knob moves evenly
-// through the musical range: decayMs(), attackMs(), lowCutHz(), midFreqHz().
+// Pad p's first 18 params (Level to Delay Send, JKit 0.1) have ids kPadBase + p * 18 + f; the tone
+// params added in 0.5 (the filter, drive and the EQ's frequencies) come in a second block of sixteen
+// after them. padParam(p, f) and padField() hide the split. Knobs whose sound follows a curve (times,
+// frequencies) are stored 0..1 and mapped here, so the knob moves evenly through the musical range:
+// decayMs(), attackMs(), lowCutHz(), midFreqHz(), cutoffHz() and so on.
 
 #include <jclap/core/helpers.h>
 
@@ -64,18 +66,39 @@ enum PadParam : clap_id {
    kHigh,
    kReverbSend,
    kDelaySend,
+   // The second block (0.5): the filter, drive and the EQ's frequencies.
+   kFilterType,
+   kCutoff,
+   kResonance,
+   kFilterEnv,
+   kFilterDecay,
+   kVelFilter,
+   kDrive,
+   kLowFreq,
+   kMidQ,
+   kHighFreq,
    kPadParamCount
 };
 
-constexpr clap_id kParamCount = kPadBase + kPads * kPadParamCount;
+constexpr clap_id kPadBlock1 = kFilterType, kPadBlock2 = kPadParamCount - kFilterType;
+constexpr clap_id kPadBase2 = kPadBase + kPads * kPadBlock1;
+constexpr clap_id kParamCount = kPadBase2 + kPads * kPadBlock2;
 
-constexpr clap_id padParam(int pad, PadParam f) { return kPadBase + static_cast<clap_id>(pad) * kPadParamCount + f; }
+constexpr clap_id padParam(int pad, PadParam f) {
+   return f < kPadBlock1 ? kPadBase + static_cast<clap_id>(pad) * kPadBlock1 + f
+                         : kPadBase2 + static_cast<clap_id>(pad) * kPadBlock2 + (f - kPadBlock1);
+}
 // Which pad and field an id is; false for a master param.
 inline bool padField(clap_id id, int &pad, PadParam &field) {
    if (id < kPadBase || id >= kParamCount)
       return false;
-   pad = static_cast<int>((id - kPadBase) / kPadParamCount);
-   field = static_cast<PadParam>((id - kPadBase) % kPadParamCount);
+   if (id < kPadBase2) {
+      pad = static_cast<int>((id - kPadBase) / kPadBlock1);
+      field = static_cast<PadParam>((id - kPadBase) % kPadBlock1);
+   } else {
+      pad = static_cast<int>((id - kPadBase2) / kPadBlock2);
+      field = static_cast<PadParam>(kPadBlock1 + (id - kPadBase2) % kPadBlock2);
+   }
    return true;
 }
 
@@ -92,6 +115,8 @@ inline const char *const kChokeNames[] = {"None", "1", "2", "3", "4"};
 constexpr int kChokeCount = 5;
 inline const char *const kPlayModeNames[] = {"One shot", "Gate"};
 constexpr int kPlayModeCount = 2;
+inline const char *const kFilterTypeNames[] = {"Off", "LP 12", "LP 24", "HP 12", "HP 24", "BP"};
+constexpr int kFilterTypeCount = 6;
 
 // ---- the curves ----
 
@@ -109,6 +134,22 @@ inline double lowCutValue(double hz) { return std::clamp(std::log(hz / 20.0) / s
 // The mid band's centre: 200 Hz to 8 kHz.
 inline double midFreqHz(double v) { return 200.0 * std::pow(40.0, std::clamp(v, 0.0, 1.0)); }
 inline double midFreqValue(double hz) { return std::clamp(std::log(hz / 200.0) / std::log(40.0), 0.0, 1.0); }
+// The filter's cutoff: 20 Hz to 20 kHz.
+inline double cutoffHz(double v) { return 20.0 * std::pow(1000.0, std::clamp(v, 0.0, 1.0)); }
+inline double cutoffValue(double hz) { return std::clamp(std::log(hz / 20.0) / std::log(1000.0), 0.0, 1.0); }
+// The filter envelope's decay: 5 ms to 2 s.
+inline double filterDecayMs(double v) { return 5.0 * std::pow(400.0, std::clamp(v, 0.0, 1.0)); }
+inline double filterDecayValue(double ms) { return std::clamp(std::log(ms / 5.0) / std::log(400.0), 0.0, 1.0); }
+// How far the envelope and velocity move the cutoff, at full: octaves.
+constexpr double kFilterEnvOctaves = 6.0, kVelFilterOctaves = 4.0;
+// The low shelf's corner: 40 to 400 Hz; the high shelf's: 2 to 16 kHz.
+inline double lowFreqHz(double v) { return 40.0 * std::pow(10.0, std::clamp(v, 0.0, 1.0)); }
+inline double lowFreqValue(double hz) { return std::clamp(std::log(hz / 40.0) / std::log(10.0), 0.0, 1.0); }
+inline double highFreqHz(double v) { return 2000.0 * std::pow(8.0, std::clamp(v, 0.0, 1.0)); }
+inline double highFreqValue(double hz) { return std::clamp(std::log(hz / 2000.0) / std::log(8.0), 0.0, 1.0); }
+// The mid band's Q: 0.3 (wide) to 8 (narrow).
+inline double midQ(double v) { return 0.3 * std::pow(8.0 / 0.3, std::clamp(v, 0.0, 1.0)); }
+inline double midQValue(double q) { return std::clamp(std::log(q / 0.3) / std::log(8.0 / 0.3), 0.0, 1.0); }
 
 // ---- the table ----
 
@@ -161,15 +202,27 @@ inline std::vector<jclap::core::ParamDef> makeParams() {
       {"High", -15.0, 15.0, 0.0, kMod},
       {"Reverb Send", 0.0, 1.0, 0.0, kMod},
       {"Delay Send", 0.0, 1.0, 0.0, kMod},
+      {"Filter", 0.0, kFilterTypeCount - 1, 0.0, kChoice},
+      {"Cutoff", 0.0, 1.0, 1.0, kMod},
+      {"Resonance", 0.0, 1.0, 0.0, kMod},
+      {"Filter Env", -1.0, 1.0, 0.0, kMod},
+      {"Filter Decay", 0.0, 1.0, filterDecayValue(200.0), kMod},
+      {"Velocity to Filter", -1.0, 1.0, 0.0, kMod},
+      {"Drive", 0.0, 1.0, 0.0, kMod},
+      {"Low Freq", 0.0, 1.0, lowFreqValue(120.0), kMod},
+      {"Mid Q", 0.0, 1.0, midQValue(0.9), kMod},
+      {"High Freq", 0.0, 1.0, highFreqValue(7000.0), kMod},
    };
-   for (int pad = 0; pad < kPads; ++pad) {
-      const char *module = keep("Pad " + std::to_string(pad + 1));
-      for (int f = 0; f < static_cast<int>(kPadParamCount); ++f) {
-         const Field &d = fields[f];
-         p.push_back({padParam(pad, static_cast<PadParam>(f)), keep(std::string(module) + " " + d.name), module, d.min,
-                      d.max, d.def, d.flags});
+   // Both blocks in id order: every pad's first block, then every pad's second.
+   for (const auto &[first, last] : {std::pair<int, int>{0, kPadBlock1}, {kPadBlock1, kPadParamCount}})
+      for (int pad = 0; pad < kPads; ++pad) {
+         const char *module = keep("Pad " + std::to_string(pad + 1));
+         for (int f = first; f < last; ++f) {
+            const Field &d = fields[f];
+            p.push_back({padParam(pad, static_cast<PadParam>(f)), keep(std::string(module) + " " + d.name), module,
+                         d.min, d.max, d.def, d.flags});
+         }
       }
-   }
    return p;
 }
 } // namespace detail
@@ -184,15 +237,18 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    int pad;
    PadParam f;
    if (padField(id, pad, f)) {
-      count = f == kChoke ? kChokeCount : f == kPlayMode ? kPlayModeCount : 0;
-      return f == kChoke ? kChokeNames : f == kPlayMode ? kPlayModeNames : nullptr;
+      count = f == kChoke ? kChokeCount : f == kPlayMode ? kPlayModeCount : f == kFilterType ? kFilterTypeCount : 0;
+      return f == kChoke ? kChokeNames : f == kPlayMode ? kPlayModeNames : f == kFilterType ? kFilterTypeNames : nullptr;
    }
    count = id == kReverbType ? kReverbTypeCount : id == kDelaySync ? kDelaySyncChoices : 0;
    return id == kReverbType ? kReverbTypeNames : id == kDelaySync ? delaySyncNames() : nullptr;
 }
 
 // What kind of value an id holds, for formatting.
-enum class Unit { Db, Pan, Semitones, Decay, Attack, Percent, LowCut, Hz, Seconds, OnOff, Choice };
+enum class Unit {
+   Db, Pan, Semitones, Decay, Attack, Percent, LowCut, Hz, Seconds, OnOff, Choice,
+   Cutoff, Octaves, FilterDecay, LowFreq, HighFreq, Q
+};
 inline Unit unitOf(clap_id id) {
    int pad;
    PadParam f;
@@ -219,9 +275,23 @@ inline Unit unitOf(clap_id id) {
          return Unit::OnOff;
       case kChoke:
       case kPlayMode:
+      case kFilterType:
          return Unit::Choice;
+      case kCutoff:
+         return Unit::Cutoff;
+      case kFilterEnv:
+      case kVelFilter:
+         return Unit::Octaves;
+      case kFilterDecay:
+         return Unit::FilterDecay;
+      case kLowFreq:
+         return Unit::LowFreq;
+      case kHighFreq:
+         return Unit::HighFreq;
+      case kMidQ:
+         return Unit::Q;
       default:
-         return Unit::Percent; // start, end, velocity, sends
+         return Unit::Percent; // start, end, velocity, sends, resonance, drive
       }
    }
    switch (id) {
@@ -242,6 +312,13 @@ inline Unit unitOf(clap_id id) {
    default:
       return Unit::Percent; // size, feedback, tone, width, boom
    }
+}
+
+// The octaves a pad's Filter Env or Velocity to Filter moves the cutoff at full.
+inline double filterOctaves(clap_id id) {
+   int pad;
+   PadParam f;
+   return padField(id, pad, f) && f == kVelFilter ? kVelFilterOctaves : kFilterEnvOctaves;
 }
 
 inline void formatHz(double hz, char *out, size_t size) {
@@ -313,6 +390,34 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case Unit::Seconds:
       std::snprintf(out, size, "%.1f s", value);
       break;
+   case Unit::Cutoff:
+      formatHz(cutoffHz(value), out, size);
+      break;
+   case Unit::LowFreq:
+      formatHz(lowFreqHz(value), out, size);
+      break;
+   case Unit::HighFreq:
+      formatHz(highFreqHz(value), out, size);
+      break;
+   case Unit::Octaves: {
+      const double o = std::round(value * (filterOctaves(id)) * 10.0) / 10.0;
+      if (std::fabs(o) < 0.05)
+         std::snprintf(out, size, "0 oct");
+      else
+         std::snprintf(out, size, "%+.1f oct", o);
+      break;
+   }
+   case Unit::FilterDecay: {
+      const double ms = filterDecayMs(value);
+      if (ms >= 1000.0)
+         std::snprintf(out, size, "%.2f s", ms / 1000.0);
+      else
+         std::snprintf(out, size, "%.0f ms", ms);
+      break;
+   }
+   case Unit::Q:
+      std::snprintf(out, size, "Q %.2f", midQ(value));
+      break;
    case Unit::Percent:
       std::snprintf(out, size, "%.0f%%", value * 100.0);
       break;
@@ -352,6 +457,14 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
       value = 0.0;
       return true;
    }
+   if (unit == Unit::Q && (text[0] == 'Q' || text[0] == 'q')) {
+      ++text;
+      double q = 0.0;
+      if (!jclap::core::parseNumber(text, q, nullptr))
+         return false;
+      value = midQValue(q);
+      return true;
+   }
    if (unit == Unit::Db && !std::strncmp(text, "-inf", 4)) {
       value = -60.0;
       return true;
@@ -380,11 +493,27 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
       value = attackValue(v);
       return true;
    case Unit::LowCut:
-   case Unit::Hz: {
+   case Unit::Hz:
+   case Unit::Cutoff:
+   case Unit::LowFreq:
+   case Unit::HighFreq: {
       const double hz = (*end == 'k' || *end == 'K') ? v * 1000.0 : v;
-      value = unit == Unit::LowCut ? lowCutValue(hz) : midFreqValue(hz);
+      value = unit == Unit::LowCut   ? lowCutValue(hz)
+              : unit == Unit::Hz     ? midFreqValue(hz)
+              : unit == Unit::Cutoff ? cutoffValue(hz)
+              : unit == Unit::LowFreq ? lowFreqValue(hz)
+                                      : highFreqValue(hz);
       return true;
    }
+   case Unit::Octaves:
+      value = std::clamp(v / filterOctaves(id), -1.0, 1.0);
+      return true;
+   case Unit::Q:
+      value = midQValue(v);
+      return true;
+   case Unit::FilterDecay:
+      value = filterDecayValue(*end == 's' ? v * 1000.0 : v);
+      return true;
    default:
       value = v;
       return true;

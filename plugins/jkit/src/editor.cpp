@@ -1051,16 +1051,39 @@ private:
    bool playing_ = false;
 };
 
-// An EQ's response: low cut, low shelf, mid bell, high shelf (and the master's fixed cuts), on a log
-// axis from 20 Hz to 20 kHz, with a dot on each band.
+// An EQ's response: low cut, low shelf, mid bell, high shelf (and the master's fixed cuts), and a
+// pad's filter, on a log axis from 20 Hz to 20 kHz, with a dot on each band. With `onDrag`, the dots
+// can be dragged: sideways sets a band's frequency, up and down its gain (the filter's: resonance).
 class EqView : public visage::Frame {
 public:
    struct Bands {
-      double lowCut = 0, low = 0, mid = 0, midHz = 1000, high = 0, highCut = 0;
+      double lowCut = 0, low = 0, lowHz = 120, mid = 0, midHz = 1000, midQ = 0.9, high = 0, highHz = 7000,
+             highCut = 0;
+      int filter = 0; // kFilterTypeNames: 0 off
+      double cutoff = 20000, resonance = 0;
    };
+   enum Dot { kNone = -1, kLowCutDot, kLowDot, kMidDot, kHighDot, kCutoffDot };
    std::function<Bands()> bands;
-   unsigned colour = kOrange;
+   // A dot dragged to (frequency, dB): begins, moves, ends.
+   std::function<void(int dot)> onDragStart, onDragEnd;
+   std::function<void(int dot, double hz, double db)> onDrag;
+   unsigned colour = kOrange, filterColour = kBlue;
    bool labels = true;
+
+   static double filterResponse(const Bands &b, double f) {
+      if (b.filter <= 0)
+         return 0.0;
+      const int order = b.filter == 2 || b.filter == 4 ? 4 : 2;
+      const double x = f / b.cutoff;
+      // The resonance's peak at the cutoff, up to about 24 dB.
+      const double peak = 24.0 * b.resonance * b.resonance * std::exp(-std::pow(std::log2(x) * 3.0, 2));
+      if (b.filter <= 2)
+         return -10 * std::log10(1 + std::pow(x, 2 * order)) + peak;
+      if (b.filter <= 4)
+         return -10 * std::log10(1 + std::pow(1 / x, 2 * order)) + peak;
+      const double q = 0.7 * std::pow(30.0, b.resonance);
+      return -10 * std::log10(1 + q * q * std::pow(x - 1 / x, 2)) + peak * 0.5;
+   }
 
    static double response(const Bands &b, double f) {
       double d = 0;
@@ -1069,10 +1092,54 @@ public:
          d -= 10 * std::log10(1 + std::pow(b.lowCut / f, 4));
       if (b.highCut > 0)
          d -= 10 * std::log10(1 + std::pow(f / b.highCut, 4));
-      d += b.low * (1 - sig(std::log2(f / 120.0) * 2.2));
-      d += b.high * sig(std::log2(f / 7000.0) * 2.2);
-      d += b.mid * std::exp(-std::pow(std::log2(f / b.midHz), 2) / (2 * 0.8 * 0.8));
+      d += b.low * (1 - sig(std::log2(f / b.lowHz) * 2.2));
+      d += b.high * sig(std::log2(f / b.highHz) * 2.2);
+      const double width = 0.72 / std::max(0.1, b.midQ); // octaves, about the bell's
+      d += b.mid * std::exp(-std::pow(std::log2(f / b.midHz), 2) / (2 * width * width));
+      d += filterResponse(b, f);
       return std::clamp(d, -18.0, 18.0);
+   }
+
+   float fx(double f) const { return static_cast<float>(std::log10(f / 20.0) / 3.0) * width(); }
+   double fOf(float x) const { return 20.0 * std::pow(10.0, 3.0 * std::clamp(x / width(), 0.0f, 1.0f)); }
+   float dbY(double d) const {
+      const float s = ui::designScale(*this);
+      return height() / 2 - static_cast<float>(d / 18.0) * (height() / 2 - 4 * s);
+   }
+   double dbOf(float y) const {
+      const float s = ui::designScale(*this);
+      return std::clamp((height() / 2 - y) / (height() / 2 - 4 * s) * 18.0, -18.0, 18.0);
+   }
+   // Where each dot sits.
+   bool dotAt(const Bands &b, int dot, float &x, float &y) const {
+      switch (dot) {
+      case kLowCutDot:
+         if (b.lowCut <= 0)
+            return false;
+         x = fx(b.lowCut);
+         y = dbY(response(b, b.lowCut));
+         return true;
+      case kLowDot:
+         x = fx(b.lowHz);
+         y = dbY(response(b, b.lowHz));
+         return true;
+      case kMidDot:
+         x = fx(b.midHz);
+         y = dbY(response(b, b.midHz));
+         return true;
+      case kHighDot:
+         x = fx(b.highHz);
+         y = dbY(response(b, b.highHz));
+         return true;
+      case kCutoffDot:
+         if (b.filter <= 0)
+            return false;
+         x = fx(b.cutoff);
+         y = dbY(std::clamp(response(b, b.cutoff), -17.0, 17.0));
+         return true;
+      default:
+         return false;
+      }
    }
 
    void draw(visage::Canvas &c) override {
@@ -1082,8 +1149,6 @@ public:
       c.roundedRectangle(0, 0, w, h, 4 * s);
       c.setColor(kRule);
       c.roundedRectangleBorder(0, 0, w, h, 4 * s, 1.0f);
-      const auto fx = [&](double f) { return static_cast<float>(std::log10(f / 20.0) / 3.0) * w; };
-      const auto dbY = [&](double d) { return h / 2 - static_cast<float>(d / 18.0) * (h / 2 - 4 * s); };
       c.setColor(0xff262b33);
       for (double f : {50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0})
          c.fill(fx(f), 1, 1.0f, h - 2);
@@ -1099,6 +1164,18 @@ public:
       }
       const Bands b = bands ? bands() : Bands{};
       const int n = std::max(40, static_cast<int>(w / (2 * s)));
+      // The filter alone, faint, so its part of the curve reads.
+      if (b.filter > 0) {
+         float px = 0, py = dbY(std::clamp(filterResponse(b, 20.0), -18.0, 18.0));
+         c.setColor(alpha(filterColour, 0.6f));
+         for (int i = 1; i <= n; ++i) {
+            const double f = 20.0 * std::pow(10.0, 3.0 * i / n);
+            const float x = static_cast<float>(i) / n * w, y = dbY(std::clamp(filterResponse(b, f), -18.0, 18.0));
+            c.segment(px, py, x, y, 1.0f * s, true);
+            px = x;
+            py = y;
+         }
+      }
       float px = 0, py = dbY(response(b, 20.0));
       for (int i = 1; i <= n; ++i) {
          const double f = 20.0 * std::pow(10.0, 3.0 * i / n);
@@ -1112,21 +1189,76 @@ public:
          px = x;
          py = y;
       }
-      const auto dot = [&](double f) {
-         if (f <= 0)
-            return;
-         const float x = fx(f), y = dbY(response(b, f));
+      for (int dot = kLowCutDot; dot <= kCutoffDot; ++dot) {
+         float x, y;
+         if (!dotAt(b, dot, x, y))
+            continue;
+         const bool on = dot == drag_ || dot == hover_;
+         const float r = (on ? 4.2f : 3.2f) * s;
          c.setColor(0xff15181d);
+         c.circle(x - r, y - r, 2 * r);
+         c.setColor(dot == kCutoffDot ? filterColour : colour);
+         c.ring(x - r, y - r, 2 * r, 1.4f * s);
+      }
+      if (b.highCut > 0) {
+         c.setColor(0xff15181d);
+         const float x = fx(b.highCut), y = dbY(response(b, b.highCut));
          c.circle(x - 3.2f * s, y - 3.2f * s, 6.4f * s);
          c.setColor(colour);
          c.ring(x - 3.2f * s, y - 3.2f * s, 6.4f * s, 1.4f * s);
-      };
-      dot(b.lowCut);
-      dot(120.0);
-      dot(b.midHz);
-      dot(7000.0);
-      dot(b.highCut);
+      }
    }
+
+   int dotNear(float px, float py) const {
+      if (!onDrag)
+         return kNone;
+      const float s = ui::designScale(*this);
+      const Bands b = bands ? bands() : Bands{};
+      int best = kNone;
+      float bestD = 10 * s;
+      for (int dot = kLowCutDot; dot <= kCutoffDot; ++dot) {
+         float x, y;
+         if (!dotAt(b, dot, x, y))
+            continue;
+         const float d = std::hypot(px - x, py - y);
+         if (d < bestD) {
+            bestD = d;
+            best = dot;
+         }
+      }
+      return best;
+   }
+   void mouseMove(const visage::MouseEvent &e) override {
+      const int h = dotNear(e.position.x, e.position.y);
+      if (h != hover_) {
+         hover_ = h;
+         redraw();
+      }
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = kNone;
+      redraw();
+   }
+   void mouseDown(const visage::MouseEvent &e) override {
+      drag_ = dotNear(e.position.x, e.position.y);
+      if (drag_ != kNone && onDragStart)
+         onDragStart(drag_);
+   }
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (drag_ == kNone || !onDrag)
+         return;
+      onDrag(drag_, fOf(e.position.x), dbOf(e.position.y));
+      redraw();
+   }
+   void mouseUp(const visage::MouseEvent &) override {
+      if (drag_ != kNone && onDragEnd)
+         onDragEnd(drag_);
+      drag_ = kNone;
+      redraw();
+   }
+
+private:
+   int drag_ = kNone, hover_ = kNone;
 };
 
 // OUTPUT's picture: every pad where its pan puts it (higher for brighter roles), glowing while it
@@ -1980,23 +2112,80 @@ private:
          padKnob(top[i], topNames[i], {kx + i * kw, 108, kw, 70}, kOrange);
          padKnob(bottom[i], bottomNames[i], {kx + i * kw, 176, kw, 70}, kOrange);
       }
-      // PAD EQ
-      eq_ = &onPage<EqView>(P, {392, 298, 536, 126});
+      // PAD TONE: the filter, drive and EQ, drawn together.
+      eq_ = &onPage<EqView>(P, {392, 290, 536, 80});
       eq_->bands = [this] {
          const int p = host_.selectedPad;
+         const auto v = [&](PadParam f) { return host_.paramModulated(padParam(p, f)); };
          EqView::Bands b;
-         const double cut = host_.paramModulated(padParam(p, kLowCut));
-         b.lowCut = lowCutOff(cut) ? 0 : lowCutHz(cut);
-         b.low = host_.paramModulated(padParam(p, kLow));
-         b.mid = host_.paramModulated(padParam(p, kMid));
-         b.midHz = midFreqHz(host_.paramModulated(padParam(p, kMidFreq)));
-         b.high = host_.paramModulated(padParam(p, kHigh));
+         b.lowCut = lowCutOff(v(kLowCut)) ? 0 : lowCutHz(v(kLowCut));
+         b.low = v(kLow);
+         b.lowHz = lowFreqHz(v(kLowFreq));
+         b.mid = v(kMid);
+         b.midHz = midFreqHz(v(kMidFreq));
+         b.midQ = midQ(v(kMidQ));
+         b.high = v(kHigh);
+         b.highHz = highFreqHz(v(kHighFreq));
+         b.filter = static_cast<int>(v(kFilterType) + 0.5);
+         b.cutoff = cutoffHz(v(kCutoff));
+         b.resonance = v(kResonance);
          return b;
       };
-      const PadParam eqs[5] = {kLowCut, kLow, kMid, kMidFreq, kHigh};
-      const char *eqNames[5] = {"LOW CUT", "LOW", "MID", "MID FREQ", "HIGH"};
-      for (int i = 0; i < 5; ++i)
-         padKnob(eqs[i], eqNames[i], {392 + i * 536.0f / 5, 430, 536.0f / 5, 66}, kOrange);
+      // Each dot moves its band's two params.
+      const auto dotParams = [](int dot, PadParam &x, PadParam &y) {
+         switch (dot) {
+         case EqView::kLowCutDot: x = kLowCut, y = kLowCut; break;
+         case EqView::kLowDot: x = kLowFreq, y = kLow; break;
+         case EqView::kMidDot: x = kMidFreq, y = kMid; break;
+         case EqView::kHighDot: x = kHighFreq, y = kHigh; break;
+         default: x = kCutoff, y = kResonance; break;
+         }
+      };
+      eq_->onDragStart = [this, dotParams](int dot) {
+         PadParam x, y;
+         dotParams(dot, x, y);
+         host_.beginEdit(padParam(host_.selectedPad, x));
+         if (y != x)
+            host_.beginEdit(padParam(host_.selectedPad, y));
+      };
+      eq_->onDragEnd = [this, dotParams](int dot) {
+         PadParam x, y;
+         dotParams(dot, x, y);
+         host_.endEdit(padParam(host_.selectedPad, x));
+         if (y != x)
+            host_.endEdit(padParam(host_.selectedPad, y));
+      };
+      eq_->onDrag = [this, dotParams](int dot, double hz, double db) {
+         PadParam x, y;
+         dotParams(dot, x, y);
+         const int p = host_.selectedPad;
+         const double vx = x == kLowCut    ? lowCutValue(hz)
+                           : x == kLowFreq ? lowFreqValue(hz)
+                           : x == kMidFreq ? midFreqValue(hz)
+                           : x == kHighFreq ? highFreqValue(hz)
+                                            : cutoffValue(hz);
+         host_.setParam(padParam(p, x), vx);
+         if (y == kResonance)
+            host_.setParam(padParam(p, y), std::clamp(db / 18.0, 0.0, 1.0));
+         else if (y != x)
+            host_.setParam(padParam(p, y), std::clamp(db, -15.0, 15.0));
+         redraw();
+      };
+      tips_.add(*eq_, "Drag a dot: sideways sets its frequency, up and down its gain (the blue filter dot: its resonance).");
+      filter_ = &onPage<ui::Dropdown>(P, {392, 396, 70, 20},
+                                      std::vector<std::string>(kFilterTypeNames, kFilterTypeNames + kFilterTypeCount));
+      filter_->setAccent(kBlue);
+      filter_->onChange = [this](int i) { setPad(kFilterType, i); };
+      tips_.add(*filter_, "The pad's filter: low pass (12 or 24 dB an octave), high pass, or band pass.");
+      const PadParam filterKnobs[6] = {kCutoff, kResonance, kFilterEnv, kFilterDecay, kVelFilter, kDrive};
+      const char *filterNames[6] = {"CUTOFF", "RESO", "ENV", "ENV DECAY", "VEL > FILT", "DRIVE"};
+      const float fx0 = 468, fw = (928.0f - fx0) / 6;
+      for (int i = 0; i < 6; ++i)
+         padKnob(filterKnobs[i], filterNames[i], {fx0 + i * fw, 374, fw, 62}, i == 5 ? kOrange : kBlue);
+      const PadParam eqs[8] = {kLowCut, kLow, kLowFreq, kMid, kMidFreq, kMidQ, kHigh, kHighFreq};
+      const char *eqNames[8] = {"LOW CUT", "LOW", "LOW FREQ", "MID", "MID FREQ", "MID Q", "HIGH", "HIGH FREQ"};
+      for (int i = 0; i < 8; ++i)
+         padKnob(eqs[i], eqNames[i], {392 + i * 536.0f / 8, 440, 536.0f / 8, 62}, kOrange);
       // SENDS
       padKnob(kReverbSend, "REVERB", {960, 296, 96, 76}, kPurple);
       padKnob(kDelaySend, "DELAY", {960, 418, 96, 76}, kBlue);
@@ -2075,7 +2264,8 @@ private:
       const clap_id first = padParam(0, f);
       const auto &d = param(first);
       const bool stepped = (d.flags & CLAP_PARAM_IS_STEPPED) != 0;
-      const bool bipolar = f == kPan || f == kPitch || f == kLow || f == kMid || f == kHigh;
+      const bool bipolar = f == kPan || f == kPitch || f == kLow || f == kMid || f == kHigh || f == kFilterEnv ||
+                           f == kVelFilter;
       auto &k = onPage<ui::Knob>(kKitPage, r,
                                  ui::ValueRange{d.min, d.max, d.defaultValue, f == kPitch ? 0.1 : 0.0, bipolar, stepped});
       k.setLabel(label);
@@ -2128,6 +2318,7 @@ private:
          k->setValue(host_.paramValue(id), host_.paramModulated(id));
       }
       choke_->setSelected(static_cast<int>(host_.paramValue(padParam(p, kChoke)) + 0.5));
+      filter_->setSelected(static_cast<int>(host_.paramValue(padParam(p, kFilterType)) + 0.5));
       play_->setSelected(static_cast<int>(host_.paramValue(padParam(p, kPlayMode)) + 0.5));
       rev_->setOn(host_.paramValue(padParam(p, kReverse)) >= 0.5);
    }
@@ -2164,7 +2355,8 @@ private:
       c.text(line, ui::font(8.5f * s), visage::Font::kLeft, 392 * s, 110 * s, 214 * s, 12 * s);
       drawLabel(c, s, "CHOKE", 392, 212);
       drawLabel(c, s, "PLAY", 466, 212);
-      drawCard(c, s, 380, 260, 560, 248, "PAD EQ");
+      drawCard(c, s, 380, 260, 560, 248, "PAD TONE", "filter \xC2\xB7 drive \xC2\xB7 EQ");
+      drawLabel(c, s, "FILTER", 392, 381);
       drawCard(c, s, 948, 260, 120, 248, "SENDS");
 
       // The master band: everything under it acts on the whole kit.
@@ -2224,7 +2416,7 @@ private:
    PadGrid *pads_ = nullptr;
    ui::Button *regen_ = nullptr;
    PadWave *wave_ = nullptr;
-   ui::Dropdown *choke_ = nullptr;
+   ui::Dropdown *choke_ = nullptr, *filter_ = nullptr;
    ui::SegmentedSwitch *play_ = nullptr;
    CheckBox *rev_ = nullptr;
    EqView *eq_ = nullptr, *masterEq_ = nullptr;

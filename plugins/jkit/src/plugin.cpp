@@ -14,6 +14,7 @@
 #include <jclap/core/entry.h>
 #include <jclap/core/helpers.h>
 #include <jclap/core/spsc_queue.h>
+#include <jclap/dsp/filter.h>
 #include <jclap/dsp/reverb.h>
 #include <jclap/dsp/stereo_delay.h>
 #include <jclap/ui/clap_gui.h>
@@ -107,17 +108,19 @@ struct Biquad {
 struct Eq {
    Biquad cut, low, mid, high, top;
    double key[5] = {-1, -1, -1, -1, -1};
-   // Recomputes only what changed.
-   void set(double fs, double cutHz, double lowDb, double midDb, double midHz, double highDb, double topHz) {
-      const double k[5] = {cutHz + fs * 1e-9, lowDb, midDb * 1e4 + midHz, highDb, topHz};
+   // Recomputes only what changed. The shelves' corners and the mid's Q default to the master's.
+   void set(double fs, double cutHz, double lowDb, double midDb, double midHz, double highDb, double topHz,
+            double lowHz = 120.0, double q = 0.9, double highHz = 7000.0) {
+      const double k[5] = {cutHz + fs * 1e-9, lowDb * 1e5 + lowHz, (midDb * 1e4 + midHz) * 100.0 + q,
+                           highDb * 1e6 + highHz, topHz};
       if (k[0] != key[0])
          cutHz > 0 ? cut.highPass(fs, cutHz) : cut.setFlat();
       if (k[1] != key[1])
-         low.shelf(fs, 120.0, lowDb, false);
+         low.shelf(fs, lowHz, lowDb, false);
       if (k[2] != key[2])
-         mid.peak(fs, midHz, midDb, 0.9);
+         mid.peak(fs, midHz, midDb, q);
       if (k[3] != key[3])
-         high.shelf(fs, 7000.0, highDb, true);
+         high.shelf(fs, highHz, highDb, true);
       if (k[4] != key[4])
          topHz > 0 ? top.lowPass(fs, topHz) : top.setFlat();
       std::copy(k, k + 5, key);
@@ -152,6 +155,7 @@ struct Voice {
    double releaseMul = 1.0;
    double fade = 1.0, fadeStep = 0.0; // the de-click fade, toward 0 when fading
    float gain = 1.0f;         // velocity
+   float velocity = 1.0f;
    bool on() const { return sample != nullptr; }
 };
 
@@ -201,6 +205,8 @@ public:
       }
       masterEq_.invalidate();
       masterEq_.reset();
+      for (PadTone &t : tone_)
+         t.type = 0; // set up again at the new rate
       boomLp_.lowPass(sampleRate, 110.0);
       boomLp_.reset();
       silence();
@@ -947,7 +953,12 @@ private:
       // Velocity sets the level on a power curve: at 1/3 a half-velocity hit is 6 dB down, at the
       // most 18 dB.
       v.gain = static_cast<float>(std::pow(static_cast<double>(velocity), 3.0 * sens));
+      v.velocity = velocity;
       voices_[pad] = v;
+      // The filter envelope starts again with every hit, at the hit's velocity.
+      PadTone &tone = tone_[pad];
+      tone.env = 1.0;
+      tone.velocity = velocity;
    }
 
    void stopPadVoice(int pad) {
@@ -1027,10 +1038,12 @@ private:
          pl[i] = l;
          pr[i] = r;
       }
+      filterPad(pad, n, pl, pr);
       Eq &eq = padEq_[pad];
       const double cut = padValue(pad, kLowCut);
       eq.set(sampleRate_, lowCutOff(cut) ? 0.0 : lowCutHz(cut), padValue(pad, kLow), padValue(pad, kMid),
-             midFreqHz(padValue(pad, kMidFreq)), padValue(pad, kHigh), 0.0);
+             midFreqHz(padValue(pad, kMidFreq)), padValue(pad, kHigh), 0.0, lowFreqHz(padValue(pad, kLowFreq)),
+             midQ(padValue(pad, kMidQ)), highFreqHz(padValue(pad, kHighFreq)));
       const float level = dbToGain(padValue(pad, kLevel));
       const double angle = (padValue(pad, kPan) + 1.0) * 0.25 * kPi;
       const float gl = level * static_cast<float>(std::cos(angle) * std::sqrt(2.0)),
@@ -1054,6 +1067,57 @@ private:
       positions_[pad].store(shown.on() ? static_cast<float>(shown.pos / static_cast<double>(shown.sample->frames()))
                                        : -1.0f);
       levels_[pad].store(std::min(1.0f, peak));
+   }
+
+   // The pad's filter (its cutoff moved by the envelope and the hit's velocity) and drive, in place.
+   void filterPad(int pad, uint32_t n, float *pl, float *pr) {
+      PadTone &t = tone_[pad];
+      const int type = static_cast<int>(padValue(pad, kFilterType) + 0.5);
+      const double drive = padValue(pad, kDrive);
+      if (type > 0) {
+         using F = jclap::dsp::Filter;
+         const F::Mode mode = type <= 2 ? F::Mode::LowPass : type <= 4 ? F::Mode::HighPass : F::Mode::BandPass;
+         const F::Slope slope = type == 2 || type == 4 ? F::Slope::Db24 : F::Slope::Db12;
+         if (t.type != type) {
+            for (F *f : {&t.left, &t.right}) {
+               f->reset();
+               f->setSampleRate(sampleRate_);
+            }
+            t.type = type;
+         }
+         const double res = padValue(pad, kResonance);
+         const double base = std::log2(cutoffHz(padValue(pad, kCutoff)));
+         const double envOct = padValue(pad, kFilterEnv) * kFilterEnvOctaves;
+         // Velocity to Filter: at +100% a hit at velocity 0 is 4 octaves darker than a full one.
+         const double velOct = padValue(pad, kVelFilter) * kVelFilterOctaves * (static_cast<double>(t.velocity) - 1.0);
+         const double envMul = std::pow(0.001, 1.0 / (filterDecayMs(padValue(pad, kFilterDecay)) * 0.001 * sampleRate_));
+         for (F *f : {&t.left, &t.right}) {
+            f->setMode(mode);
+            f->setSlope(slope);
+            f->setResonance(res);
+         }
+         for (uint32_t i = 0; i < n; ++i) {
+            if ((i & 7) == 0) {
+               const double hz = std::exp2(std::clamp(base + envOct * t.env + velOct, 3.3, 14.3));
+               t.left.setCutoff(hz);
+               t.right.setCutoff(hz);
+            }
+            t.env *= envMul;
+            pl[i] = t.left.process(pl[i]);
+            pr[i] = t.right.process(pr[i]);
+         }
+      } else {
+         t.type = 0;
+      }
+      if (drive > 0.001) {
+         // A soft clip, up to 24 dB into it, brought back to about the same loudness.
+         const float in = static_cast<float>(std::pow(10.0, drive * 24.0 / 20.0));
+         const float out = 1.0f / std::tanh(in) * static_cast<float>(1.0 - 0.3 * drive);
+         for (uint32_t i = 0; i < n; ++i) {
+            pl[i] = std::tanh(pl[i] * in) * out;
+            pr[i] = std::tanh(pr[i] * in) * out;
+         }
+      }
    }
 
    void renderPreview(uint32_t n, float *kl, float *kr) {
@@ -1086,6 +1150,13 @@ private:
    SamplePtr preview_;
    Voice voices_[kPads], fading_[kPads], previewVoice_;
    Eq padEq_[kPads], masterEq_;
+   struct PadTone {
+      jclap::dsp::Filter left, right;
+      int type = 0;      // the filter type it was set up for, 0 when off
+      double env = 0.0;  // the filter envelope, 1 at a hit
+      float velocity = 1.0f;
+   };
+   PadTone tone_[kPads];
    Biquad boomLp_;
    jclap::dsp::Room room_;
    jclap::dsp::StereoDelay delay_;

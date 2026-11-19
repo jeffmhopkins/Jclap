@@ -78,6 +78,13 @@ public:
       values_[padParam(2, kEnd)] = 0.76;
       values_[padParam(2, kLowCut)] = lowCutValue(90);
       values_[padParam(2, kLow)] = -3.0;
+      values_[padParam(2, kFilterType)] = 2.0;
+      values_[padParam(2, kCutoff)] = cutoffValue(6000);
+      values_[padParam(2, kResonance)] = 0.35;
+      values_[padParam(2, kFilterEnv)] = 0.25;
+      values_[padParam(2, kFilterDecay)] = filterDecayValue(120);
+      values_[padParam(2, kVelFilter)] = 0.4;
+      values_[padParam(2, kDrive)] = 0.2;
       values_[padParam(2, kMid)] = 4.0;
       values_[padParam(2, kMidFreq)] = midFreqValue(2400);
       values_[padParam(2, kHigh)] = 2.5;

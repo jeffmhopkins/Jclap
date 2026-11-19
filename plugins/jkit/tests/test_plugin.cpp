@@ -179,6 +179,40 @@ void testPlaying() {
    JCLAP_CHECK(peak(rev, 0, 1000) < peak(rev, 8000, 9600));
    h.setParam(padParam(0, kReverse), 0.0);
    run(h, 20);
+
+   // The filter: a 24 dB low pass at 50 Hz all but silences the 220 Hz tone.
+   h.setParam(padParam(0, kVelocity), 0.0);
+   h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);
+   const float open = peak(run(h, 60));
+   h.setParam(padParam(0, kFilterType), 2.0);
+   h.setParam(padParam(0, kCutoff), cutoffValue(50.0));
+   h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);
+   const float closed = peak(run(h, 60));
+   JCLAP_CHECK(closed < open * 0.3f);
+   // The envelope opens it at the hit.
+   h.setParam(padParam(0, kFilterEnv), 1.0);
+   h.setParam(padParam(0, kFilterDecay), filterDecayValue(1000.0));
+   h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);
+   JCLAP_CHECK(peak(run(h, 60)) > closed * 2.0f);
+   h.setParam(padParam(0, kFilterEnv), 0.0);
+   // Velocity to Filter: at 1 kHz, a soft hit closes it below the tone (with the level ignoring velocity).
+   h.setParam(padParam(0, kCutoff), cutoffValue(1000.0));
+   h.setParam(padParam(0, kVelFilter), 1.0);
+   h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);
+   const float hard = peak(run(h, 60));
+   h.note(CLAP_EVENT_NOTE_ON, 36, 0.1);
+   const float gentle = peak(run(h, 60));
+   JCLAP_CHECK(gentle < hard * 0.5f && hard > open * 0.8f);
+   h.setParam(padParam(0, kVelFilter), 0.0);
+   h.setParam(padParam(0, kFilterType), 0.0);
+   // Drive keeps it near its level, but squarer: the peak stays put while the average rises.
+   h.setParam(padParam(0, kDrive), 1.0);
+   h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);
+   const std::vector<float> driven = run(h, 60);
+   JCLAP_CHECK(peak(driven) > open * 0.4f && peak(driven) < open * 1.5f);
+   h.setParam(padParam(0, kDrive), 0.0);
+   h.setParam(padParam(0, kVelocity), 0.6);
+   run(h, 20);
 }
 
 void testChokeAndSends() {
