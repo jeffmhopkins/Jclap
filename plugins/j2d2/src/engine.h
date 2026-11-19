@@ -16,8 +16,10 @@
 //          resonators at the note's harmonics), METAL (bell modes) and SUB (an octave under the
 //          lowest note). ATONAL moves PARTIALS and METAL from pure to a bounded inharmonic far end.
 //
-// Between the two ends both sound: phrases on new notes, and pressure on a held note pops bleeps
-// through the drone. The droid half goes through a small "speaker" (band-limited and gently
+// The DROID <-> DRONE ribbon is an equal-power crossfade: droid only at the left end, an even mix
+// in the middle, drone only at the right. Between the ends both sound: phrases on new notes, and
+// pressure on a held note pops bleeps through the drone. Letting go of a key cuts its droid voice
+// within a few milliseconds. The droid half goes through a small "speaker" (band-limited and gently
 // clipped); then everything goes through a room and the master.
 //
 // The numbers here come from the sketch engine in the project files (j2d2_atoms.py and
@@ -224,19 +226,67 @@ public:
       wait_ = 0;
       left_ = 0;
       tailDone_ = true;
+      fade_ = 1.0;
+      fadeStep_ = 0.0;
+      cap_ = elapsed_ = 0;
    }
    void seed(uint64_t s) { rng_.seed(s); }
 
-   // Starts a phrase `seconds` long in `mood`, with the register offset in semitones.
+   // The key was let go: whatever is playing fades out over a few milliseconds (no click), and the
+   // rest of the phrase is dropped.
+   void stop() {
+      if (busy() && fadeStep_ == 0.0)
+         fadeStep_ = 1.0 / std::max(1.0, kStopSeconds * sr_);
+   }
+   bool stopping() const { return fadeStep_ > 0.0; }
+
+   // Starts a phrase `seconds` long in `mood`, with the register offset in semitones. It never runs
+   // past `seconds`: the ending (a question, sigh or squeal) is fitted inside it, and a short phrase
+   // (under 0.4 s) has no ending, so a short LENGTH gives one or two crisp sounds.
    void phrase(const Mood &mood, double seconds, double reg, const double *mix) {
       mood_ = mood;
       reg_ = reg;
       mix_ = mix;
       inPhrase_ = true;
-      tailDone_ = false;
-      left_ = static_cast<int>(seconds * sr_);
+      const bool ending = seconds >= 0.4 && mood.tail != Mood::kNoTail;
+      tailDone_ = !ending;
+      const double tailSeconds = !ending                      ? 0.0
+                                 : mood.tail == Mood::kFall  ? 0.7 * std::sqrt(mood.tempo)
+                                 : mood.tail == Mood::kBurst ? 0.12
+                                                             : 0.28 * mood.tempo;
+      left_ = static_cast<int>(std::max(0.0, seconds - tailSeconds) * sr_);
+      cap_ = static_cast<int>(seconds * sr_);
+      elapsed_ = 0;
       wait_ = 0;
       prev_ = -1;
+      fade_ = 1.0;
+      fadeStep_ = 0.0;
+   }
+   // One syllable, about `seconds` long: a kind picked by the mood and the SYLLABLES mix, stretched
+   // or squeezed to the length. What one key press speaks when PER KEY is SYLLABLE.
+   void syllable(const Mood &mood, double seconds, double reg, const double *mix) {
+      // Each kind's natural length at tempo 1 (the middle of its range in make()).
+      static const double kNatural[kSyllableCount] = {0.19, 0.22, 0.30, 0.42, 0.11, 0.105, 0.25, 0.65};
+      // (Steps divide the length among their steps instead.)
+      mood_ = mood;
+      reg_ = reg;
+      mix_ = mix;
+      reset();
+      double w[kSyllableCount], sum = 0;
+      for (int k = 0; k < kSyllableCount; ++k)
+         sum += (w[k] = mood_.weights[k] * (mix_ ? mix_[k] : 1.0));
+      if (sum <= 1e-9)
+         return;
+      double x = rng_.uni() * sum;
+      int k = 0;
+      for (; k < kSyllableCount - 1 && x >= w[k]; ++k)
+         x -= w[k];
+      stretch_ = seconds / (kNatural[k] * mood_.tempo);
+      target_ = seconds;
+      make(k);
+      stretch_ = 1.0;
+      target_ = 0.0;
+      ev_.amp = rng_.range(0.85, 1.0);
    }
    // One sound now, unless one is already playing (pressure popping bleeps through a drone).
    bool pop(const Mood &mood, double reg, int kind) {
@@ -244,6 +294,9 @@ public:
          return false;
       mood_ = mood;
       reg_ = reg;
+      fade_ = 1.0;
+      fadeStep_ = 0.0;
+      cap_ = 0;
       make(kind);
       return true;
    }
@@ -252,6 +305,23 @@ public:
    double pitch() const { return ev_.shown; }
 
    float tick() {
+      if (cap_ > 0 && ++elapsed_ >= cap_)
+         stop();
+      if (fadeStep_ > 0.0) {
+         fade_ -= fadeStep_;
+         if (fade_ <= 0.0) {
+            reset();
+            return 0.0f;
+         }
+         return static_cast<float>(fade_ * fade_) * play();
+      }
+      return play();
+   }
+
+private:
+   static constexpr double kStopSeconds = 0.008;
+
+   float play() {
       if (!ev_.active()) {
          if (!inPhrase_)
             return 0.0f;
@@ -285,8 +355,9 @@ public:
       return g > 1.05 ? static_cast<float>(std::tanh(g * y) / std::tanh(g)) : y;
    }
 
-private:
-   double D(double a, double b) { return rng_.range(a, b) * mood_.tempo; }
+   // A duration in [a, b] seconds at the mood's tempo; the middle, stretched, when a syllable has a
+   // set length.
+   double D(double a, double b) { return target_ > 0.0 ? 0.5 * (a + b) * mood_.tempo * stretch_ : rng_.range(a, b) * mood_.tempo; }
    double note() { return std::clamp(mood_.centre + reg_ + rng_.normal() * mood_.spread, 60.0, 112.0); }
    int timbre(double bias = 0.0) { return rng_.chance(mood_.bright + bias) ? kBright : kSoft; }
    bool up() { return rng_.chance(mood_.up); }
@@ -361,7 +432,7 @@ private:
       case kSteps: {
          const int k = rng_.integer(3, 9);
          const bool two = rng_.chance(0.45);
-         const double len = D(0.03, 0.11);
+         const double len = target_ > 0.0 ? target_ / k : D(0.03, 0.11);
          begin(kEvSteps, len * k);
          ev_.steps = k;
          ev_.stepLen = std::max(1, static_cast<int>(len * sr_));
@@ -591,6 +662,8 @@ private:
    const double *mix_ = nullptr;
    double reg_ = 0.0;
    bool inPhrase_ = false, tailDone_ = true;
+   double fade_ = 1.0, fadeStep_ = 0.0, stretch_ = 1.0, target_ = 0.0;
+   int cap_ = 0, elapsed_ = 0;
    int wait_ = 0, left_ = 0, prev_ = -1;
 };
 
@@ -1089,13 +1162,12 @@ public:
       } else {
          v.drone.setPitch(pitchHz(v, s));
       }
-      // Every new note speaks, unless the morph is all the way to drone: longer and harsher the
-      // harder it is played.
+      // Every new note speaks (a syllable or a phrase, LENGTH long), unless the ribbon is all the
+      // way to drone.
       const double morph = std::clamp(s[kMorph] + modOf(v, kDestMorph, s), 0.0, 1.0);
       if (morph < 0.98) {
          const Mood mood = moodFor(energyOf(v, s), feelingOf(v, s));
-         const double seconds = rng_.range(0.8, 1.6) * (0.6 + 0.6 * v.velocity) * (1.0 - 0.5 * morph);
-         v.speaker.phrase(mood, seconds, registerOf(v, s), mix_);
+         speak(v, mood, s[kLength] * rng_.range(0.9, 1.1), s);
       }
       return slot;
    }
@@ -1253,6 +1325,14 @@ private:
       double breathPh = 0, breathRate = 0.08;
    };
 
+   // A key speaks: one syllable or a whole phrase, by PER KEY.
+   void speak(Voice &v, const Mood &mood, double seconds, const Settings &s) {
+      if (s[kPerKey] >= 0.5)
+         v.speaker.phrase(mood, seconds, registerOf(v, s), mix_);
+      else
+         v.speaker.syllable(mood, seconds, registerOf(v, s), mix_);
+   }
+
    static bool matches(const Voice &v, int key, int channel, int32_t noteId) {
       if (noteId >= 0 && v.noteId >= 0)
          return v.noteId == noteId;
@@ -1325,9 +1405,10 @@ private:
          v.droidLp.setCutoff(2200.0 * std::pow(2.0, 2.4 * vel + 2.6 * pr));
          v.droidDrive = 1.0 + 5.0 * std::pow(std::max(vel, pr), 1.5);
          // Over a drone the droid steps back a little, so the two sit together.
-         const double droneMix = smooth01(morph * 2.0);
-         v.droidLevel = (0.35 + 0.65 * (s[kVelResponse] > 0 ? v.velocity : 1.0)) * (1.0 - 0.35 * droneMix);
-         // The drone half, by the morph: none at 0, full from the middle on, breathing.
+         // The ribbon is an equal-power crossfade: droid only at 0, an even mix at 0.5, drone only at 1.
+         const double droneMix = std::sin(morph * kPi / 2), droidMix = std::cos(morph * kPi / 2);
+         v.droidLevel = (0.35 + 0.65 * (s[kVelResponse] > 0 ? v.velocity : 1.0)) * droidMix;
+         // The drone half, by the ribbon, breathing.
          v.breathPh += v.breathRate * dt;
          const double breath = 1.0 + s[kBreath] * 0.35 * std::sin(kTwoPi * v.breathPh);
          // An eased attack (quadratic) and release (^1.5), as in the sketch.
@@ -1353,7 +1434,7 @@ private:
          if (v.held && !v.speaker.busy() && morph < 0.98 && s[kTalk] > 0.0) {
             const double rate = s[kTalk] * 0.9 * std::pow(1.0 - morph, 1.5) / std::max(0.3, moodFor(e, f).tempo);
             if (rng_.chance(rate * dt))
-               v.speaker.phrase(moodFor(e, f), rng_.range(0.6, 1.4), registerOf(v, s), mix_);
+               speak(v, moodFor(e, f), s[kLength] * rng_.range(0.6, 1.1), s);
          }
          // Pressure on a held drone pops bleeps through: POP a second at full press, as press^2.
          if (morph > 0.02 && v.held && s[kPop] > 0.0 && v.pressure > 0.02 && !v.speaker.busy()) {
@@ -1364,6 +1445,8 @@ private:
          }
          v.droidMeter *= 0.97;
          // Done once both halves are quiet.
+         if (!v.held)
+            v.speaker.stop();
          if (v.amp.idle() && !v.speaker.busy() && !v.held) {
             v.active = false;
             v.droneGainNow = 0.0;

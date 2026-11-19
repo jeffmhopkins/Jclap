@@ -160,6 +160,67 @@ int main() {
       JCLAP_CHECK(v.active && v.event == kEvNone && v.drone > 0.3);
    }
 
+   // The droid voice follows the key: it speaks at once on the note-on and is silent within 10 ms
+   // of the note-off, however much of its phrase was left.
+   {
+      Settings s = defaults();
+      s.v[kMorph] = 0.0;
+      s.v[kSpaceMix] = 0.0;
+      Engine e;
+      e.prepare(48000.0);
+      e.seed(4);
+      auto peakOf = [&](int frames) {
+         std::vector<float> l(frames), r(frames);
+         e.process(l.data(), r.data(), frames, s);
+         double p = 0;
+         for (int i = 0; i < frames; ++i)
+            p = std::max(p, static_cast<double>(std::max(std::fabs(l[i]), std::fabs(r[i]))));
+         return p;
+      };
+      e.noteOn(60, -1, -1, 0.9, s);
+      const double onset = peakOf(480); // the first 10 ms
+      peakOf(4320);
+      JCLAP_CHECK(e.view(0).event != kEvNone || e.view(0).active);
+      e.noteOff(60, -1, -1);
+      peakOf(480);
+      const double after = peakOf(4800);
+      std::printf("droid: %.3f peak in the first 10 ms, %.6f from 10 ms after the note-off\n", onset, after);
+      JCLAP_CHECK(onset > 0.01);
+      JCLAP_CHECK(after < 1e-4);
+   }
+
+   // PER KEY SYLLABLE: one press speaks one syllable, LENGTH long; PHRASE speaks several, and never
+   // runs past LENGTH.
+   for (double perKey : {0.0, 1.0}) {
+      for (double length : {0.08, 0.5, 1.5}) {
+         Settings s = defaults();
+         s.v[kMorph] = 0.0;
+         s.v[kTalk] = 0.0;
+         s.v[kPerKey] = perKey;
+         s.v[kLength] = length;
+         Engine e;
+         e.prepare(48000.0);
+         e.seed(11);
+         e.noteOn(60, -1, -1, 0.9, s);
+         std::vector<float> l(48), r(48);
+         int sounds = 0, last = kEvNone, lastLoud = 0;
+         for (int b = 0; b < 4000; ++b) {
+            e.process(l.data(), r.data(), 48, s);
+            const int k = e.view(0).event;
+            sounds += k != kEvNone && last == kEvNone;
+            if (k != kEvNone)
+               lastLoud = b + 1;
+            last = k;
+         }
+         const double heard = lastLoud * 48 / 48000.0;
+         std::printf("%s %.2f s: %d sounds over %.2f s\n", perKey > 0.5 ? "phrase" : "syllable", length, sounds, heard);
+         if (perKey < 0.5)
+            JCLAP_CHECK(sounds == 1 && heard > 0.6 * length && heard < 1.5 * length + 0.01);
+         else
+            JCLAP_CHECK(heard < 1.1 * length + 0.01 && (length < 1.0 || sounds > 2));
+      }
+   }
+
    // Pressure on a held drone pops bleeps through; with no pressure, none come.
    {
       for (double press : {0.0, 1.0}) {

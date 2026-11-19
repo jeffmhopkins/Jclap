@@ -1008,12 +1008,14 @@ private:
 
       // Play: how the droid voice answers the keys.
       onPage<ui::Section>(kVoicePage, {366, 410, 258, 254}, "PLAY");
-      knob(kVoicePage, {376, 440, 78, 92}, kVelResponse, "VELOCITY", "How far velocity opens the filter and drives the droid.");
-      knob(kVoicePage, {456, 440, 78, 92}, kPressResponse, "PRESSURE", "How far pressure opens the filter and drives it while it talks.");
-      knob(kVoicePage, {536, 440, 78, 92}, kTalk, "TALK", "How often a held note talks again. 0 speaks once per note.");
-      knob(kVoicePage, {376, 552, 78, 92}, kPop, "POP", "Bleeps a second that full pressure on a held drone pops through.");
+      bindings_.bind(onPage<ui::SegmentedSwitch>(kVoicePage, {470, 414, 146, 20}, namesOf(kPerKey)), kPerKey);
+      knob(kVoicePage, {372, 440, 62, 92}, kVelResponse, "VELOCITY", "How far velocity opens the filter and drives the droid.");
+      knob(kVoicePage, {434, 440, 62, 92}, kPressResponse, "PRESSURE", "How far pressure opens the filter and drives it while it talks.");
+      knob(kVoicePage, {496, 440, 62, 92}, kLength, "LENGTH", "How long a key's syllable lasts, or its phrase at most. Letting go of the key cuts it.");
+      knob(kVoicePage, {558, 440, 62, 92}, kTalk, "TALK", "How often a held note talks again. 0 speaks once per note.");
+      knob(kVoicePage, {372, 552, 78, 92}, kPop, "POP", "Bleeps a second that full pressure on a held drone pops through.");
       knob(kVoicePage, {456, 552, 78, 92}, kRegister, "REGISTER", "Moves the droid's voice up or down.", true);
-      knob(kVoicePage, {536, 552, 78, 92}, kKeyTrack, "KEY TRACK", "How far the key you play moves the droid's register.");
+      knob(kVoicePage, {540, 552, 78, 92}, kKeyTrack, "KEY TRACK", "How far the key you play moves the droid's register.");
    }
 
    std::string spectrumLine() {

@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.1.0)
+jclap_plugin_version(0.2.0)
 
 jclap_add_plugin(j2d2
    OUTPUT_NAME "J2D2"
