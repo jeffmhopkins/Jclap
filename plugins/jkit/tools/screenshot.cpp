@@ -76,18 +76,21 @@ public:
       values_[padParam(2, kDecay)] = decayValue(640);
       values_[padParam(2, kStart)] = 0.04;
       values_[padParam(2, kEnd)] = 0.76;
-      values_[padParam(2, kLowCut)] = lowCutValue(90);
-      values_[padParam(2, kLow)] = -3.0;
-      values_[padParam(2, kFilterType)] = 2.0;
-      values_[padParam(2, kCutoff)] = cutoffValue(6000);
-      values_[padParam(2, kResonance)] = 0.35;
+      // PAD TONE: a high pass, a resonant low pass, a bell and a low shelf.
+      const auto point = [&](int i, int type, double hz, double db, double q) {
+         values_[padParam(2, pointParam(i, kPointType))] = type;
+         values_[padParam(2, pointParam(i, kPointFreq))] = toneHzValue(hz);
+         values_[padParam(2, pointParam(i, kPointGain))] = db;
+         values_[padParam(2, pointParam(i, kPointQ))] = toneQValue(q);
+      };
+      point(0, kToneHp12, 90, 0, 0.7071);
+      point(1, kToneLp24, 9000, 0, 1.6);
+      point(2, kToneBell, 2400, 4.0, 1.2);
+      point(3, kToneLowShelf, 160, -3.0, 0.7071);
       values_[padParam(2, kFilterEnv)] = 0.25;
       values_[padParam(2, kFilterDecay)] = filterDecayValue(120);
       values_[padParam(2, kVelFilter)] = 0.4;
       values_[padParam(2, kDrive)] = 0.2;
-      values_[padParam(2, kMid)] = 4.0;
-      values_[padParam(2, kMidFreq)] = midFreqValue(2400);
-      values_[padParam(2, kHigh)] = 2.5;
       values_[kMasterLow] = 2.0;
       values_[kMasterMid] = -2.5;
       values_[kMasterMidFreq] = midFreqValue(400);

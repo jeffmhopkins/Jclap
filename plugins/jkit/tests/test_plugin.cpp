@@ -101,6 +101,25 @@ void testParamText() {
    }
    JCLAP_CHECK(h.paramText(padParam(0, kDecay), 1.0) == "Full");
    JCLAP_CHECK(h.paramText(padParam(0, kLowCut), 0.0) == "Off");
+   JCLAP_CHECK(h.paramText(padParam(0, pointParam(2, kPointType)), kToneBell) == "Bell");
+
+   // A 0.3 project's EQ moves onto points: the low cut onto the high pass, then a low shelf, a bell
+   // and a high shelf in the free points, and the old params back to their defaults.
+   std::vector<double> v(kParamCount);
+   for (clap_id id = 0; id < kParamCount; ++id)
+      v[id] = param(id).defaultValue;
+   v[padParam(5, kLowCut)] = lowCutValue(80.0);
+   v[padParam(5, kMid)] = 4.0;
+   v[padParam(5, kMidFreq)] = midFreqValue(2000.0);
+   v[padParam(5, kHigh)] = -3.0;
+   migrateLegacyEq(5, [&](clap_id id) { return v[id]; }, [&](clap_id id, double x) { v[id] = x; });
+   const auto pt = [&](int i, PointField f) { return v[padParam(5, pointParam(i, f))]; };
+   JCLAP_CHECK(pt(0, kPointType) == kToneHp12 && std::fabs(toneHz(pt(0, kPointFreq)) - 80.0) < 0.5);
+   JCLAP_CHECK(pt(2, kPointType) == kToneBell && pt(2, kPointGain) == 4.0);
+   JCLAP_CHECK(std::fabs(toneHz(pt(2, kPointFreq)) - 2000.0) < 5.0);
+   JCLAP_CHECK(pt(3, kPointType) == kToneHighShelf && pt(3, kPointGain) == -3.0);
+   JCLAP_CHECK(pt(4, kPointType) == kToneOff);
+   JCLAP_CHECK(v[padParam(5, kLowCut)] == 0.0 && v[padParam(5, kMid)] == 0.0 && v[padParam(5, kHigh)] == 0.0);
    JCLAP_CHECK(h.paramText(kVolume, -60.0) == "-inf dB");
 }
 
@@ -180,12 +199,14 @@ void testPlaying() {
    h.setParam(padParam(0, kReverse), 0.0);
    run(h, 20);
 
-   // The filter: a 24 dB low pass at 50 Hz all but silences the 220 Hz tone.
+   // PAD TONE: point 2 (a low pass at 20 kHz by default) as a 24 dB low pass at 50 Hz all but
+   // silences the 220 Hz tone.
    h.setParam(padParam(0, kVelocity), 0.0);
    h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);
    const float open = peak(run(h, 60));
-   h.setParam(padParam(0, kFilterType), 2.0);
-   h.setParam(padParam(0, kCutoff), cutoffValue(50.0));
+   const auto set = [&](int i, PointField f, double v) { h.setParam(padParam(0, pointParam(i, f)), v); };
+   set(1, kPointType, kToneLp24);
+   set(1, kPointFreq, toneHzValue(50.0));
    h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);
    const float closed = peak(run(h, 60));
    JCLAP_CHECK(closed < open * 0.3f);
@@ -196,7 +217,7 @@ void testPlaying() {
    JCLAP_CHECK(peak(run(h, 60)) > closed * 2.0f);
    h.setParam(padParam(0, kFilterEnv), 0.0);
    // Velocity to Filter: at 1 kHz, a soft hit closes it below the tone (with the level ignoring velocity).
-   h.setParam(padParam(0, kCutoff), cutoffValue(1000.0));
+   set(1, kPointFreq, toneHzValue(1000.0));
    h.setParam(padParam(0, kVelFilter), 1.0);
    h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);
    const float hard = peak(run(h, 60));
@@ -204,7 +225,19 @@ void testPlaying() {
    const float gentle = peak(run(h, 60));
    JCLAP_CHECK(gentle < hard * 0.5f && hard > open * 0.8f);
    h.setParam(padParam(0, kVelFilter), 0.0);
-   h.setParam(padParam(0, kFilterType), 0.0);
+   set(1, kPointType, kToneLp12);
+   set(1, kPointFreq, toneHzValue(20000.0));
+   // An added bell at the tone's pitch: +12 dB makes it about 4 times as loud.
+   set(3, kPointType, kToneBell);
+   set(3, kPointFreq, toneHzValue(220.0));
+   set(3, kPointGain, 12.0);
+   h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);
+   const float boosted = peak(run(h, 60));
+   JCLAP_CHECK(boosted > open * 3.0f && boosted < open * 5.0f);
+   set(3, kPointType, kToneOff);
+   // The default points leave it as it was.
+   h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);
+   JCLAP_CHECK(std::fabs(peak(run(h, 60)) - open) < open * 0.05f);
    // Drive keeps it near its level, but squarer: the peak stays put while the average rises.
    h.setParam(padParam(0, kDrive), 1.0);
    h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);

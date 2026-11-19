@@ -1261,6 +1261,225 @@ private:
    int drag_ = kNone, hover_ = kNone;
 };
 
+// PAD TONE's graph: the selected pad's points and their summed curve, 20 Hz to 20 kHz and ±18 dB.
+// Double-click to add a point (a bell, where you click), drag a point to move it (sideways its
+// frequency; up and down its gain, or for a filter its resonance), scroll on it to change its Q, and
+// right-click it to remove it. The selected point is orange; the others white, numbered.
+class ToneView : public visage::Frame {
+public:
+   std::function<TonePoint(int)> point;     // the selected pad's point i
+   std::function<int()> selected;           // which point the strip below shows
+   std::function<void(int)> onSelect;       // a point clicked (or added)
+   std::function<void(int, const TonePoint &)> onChange; // a point dragged, scrolled, added or removed
+   std::function<void(int)> onBegin, onEnd; // around a drag
+
+   static constexpr double kFs = 48000.0;
+
+   float fx(double f) const { return static_cast<float>(std::log10(f / 20.0) / 3.0) * width(); }
+   double fOf(float x) const { return 20.0 * std::pow(10.0, 3.0 * std::clamp(x / width(), 0.0f, 1.0f)); }
+   float dbY(double d) const {
+      const float s = ui::designScale(*this);
+      return height() / 2 - static_cast<float>(d / kToneMaxDb) * (height() / 2 - 6 * s);
+   }
+   double dbOf(float y) const {
+      const float s = ui::designScale(*this);
+      return std::clamp((height() / 2 - y) / (height() / 2 - 6 * s) * kToneMaxDb, -kToneMaxDb, kToneMaxDb);
+   }
+   // Where a point's dot sits: at its gain, or for a filter at its resonance's peak.
+   float dotY(const TonePoint &p) const {
+      if (toneHasGain(p.type))
+         return dbY(p.db);
+      if (p.type == kToneNotch || p.type == kToneBandPass)
+         return dbY(0);
+      return dbY(std::clamp(20.0 * std::log10(p.q / 0.7071), -kToneMaxDb, kToneMaxDb));
+   }
+
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      const float w = width(), h = height();
+      c.setColor(kWell);
+      c.roundedRectangle(0, 0, w, h, 4 * s);
+      c.setColor(kRule);
+      c.roundedRectangleBorder(0, 0, w, h, 4 * s, 1.0f);
+      c.setColor(0xff262b33);
+      for (double f : {50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0})
+         c.fill(fx(f), 1, 1.0f, h - 2);
+      c.setColor(0xff22262d);
+      for (double d : {-12.0, -6.0, 6.0, 12.0})
+         c.fill(1, dbY(d), w - 2, 1.0f);
+      c.setColor(0xff343a44);
+      c.fill(1, dbY(0), w - 2, 1.0f);
+      c.setColor(kFaint);
+      for (const auto &[f, l] : {std::pair<double, const char *>{100.0, "100"}, {1000.0, "1k"}, {10000.0, "10k"}})
+         c.text(l, ui::font(7.5f * s), visage::Font::kLeft, fx(f) + 3 * s, h - 13 * s, 30 * s, 10 * s);
+      if (!point)
+         return;
+      TonePoint pts[kTonePoints];
+      ToneCoef k[kTonePoints][2];
+      int n[kTonePoints];
+      for (int i = 0; i < kTonePoints; ++i) {
+         pts[i] = point(i);
+         n[i] = toneDesign(pts[i].type, kFs, pts[i].hz, pts[i].db, pts[i].q, k[i]);
+      }
+      const int sel = selected ? selected() : -1;
+      const int steps = std::max(60, static_cast<int>(w / (2 * s)));
+      const auto curve = [&](int only, unsigned colour, float thick, bool fill) {
+         float px = 0, py = 0;
+         for (int i = 0; i <= steps; ++i) {
+            const double f = 20.0 * std::pow(10.0, 3.0 * i / steps);
+            double d = 0;
+            for (int j = 0; j < kTonePoints; ++j)
+               if (only < 0 || j == only)
+                  d += toneDb(k[j], n[j], kFs, f);
+            const float x = static_cast<float>(i) / steps * w, y = dbY(std::clamp(d, -kToneMaxDb - 2, kToneMaxDb + 2));
+            if (i > 0) {
+               if (fill) {
+                  c.setColor(alpha(colour, 0.13f));
+                  const float y0 = dbY(0);
+                  c.fill(px, std::min(y, y0), x - px + 0.5f, std::fabs(y - y0));
+               }
+               c.setColor(colour);
+               c.segment(px, py, x, y, thick, true);
+            }
+            px = x;
+            py = y;
+         }
+      };
+      // The selected point's own curve, faint, then the sum.
+      if (sel >= 0 && sel < kTonePoints && pts[sel].type != kToneOff)
+         curve(sel, alpha(kWhite, 0.35f), 1.0f * s, false);
+      curve(-1, kOrange, 1.6f * s, true);
+      for (int i = 0; i < kTonePoints; ++i) {
+         if (pts[i].type == kToneOff)
+            continue;
+         const float x = std::clamp(fx(pts[i].hz), 7 * s, w - 7 * s), y = std::clamp(dotY(pts[i]), 7 * s, h - 7 * s);
+         const float r = (i == hover_ || i == drag_ ? 7.5f : 6.5f) * s;
+         c.setColor(i == sel ? kOrange : kWhite);
+         c.circle(x - r, y - r, 2 * r);
+         c.setColor(0xff15181d);
+         c.text(std::to_string(i + 1), ui::font(8.5f * s), visage::Font::kCenter, x - r, y - r, 2 * r, 2 * r);
+      }
+   }
+
+   int pointAt(float px, float py) const {
+      if (!point)
+         return -1;
+      const float s = ui::designScale(*this);
+      int best = -1;
+      float bestD = 11 * s;
+      for (int i = 0; i < kTonePoints; ++i) {
+         const TonePoint p = point(i);
+         if (p.type == kToneOff)
+            continue;
+         const float x = std::clamp(fx(p.hz), 7 * s, width() - 7 * s), y = std::clamp(dotY(p), 7 * s, height() - 7 * s);
+         const float d = std::hypot(px - x, py - y);
+         if (d < bestD) {
+            bestD = d;
+            best = i;
+         }
+      }
+      return best;
+   }
+
+   void mouseMove(const visage::MouseEvent &e) override {
+      const int h = pointAt(e.position.x, e.position.y);
+      if (h != hover_) {
+         hover_ = h;
+         redraw();
+      }
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = -1;
+      redraw();
+   }
+   void mouseDown(const visage::MouseEvent &e) override {
+      const int i = pointAt(e.position.x, e.position.y);
+      if (e.shouldTriggerPopup()) {
+         if (i >= 0 && onChange) { // remove it
+            TonePoint p = point(i);
+            p.type = kToneOff;
+            onChange(i, p);
+         }
+         return;
+      }
+      if (i < 0) {
+         if (e.repeatClickCount() >= 2)
+            addAt(e.position.x, e.position.y);
+         return;
+      }
+      if (onSelect)
+         onSelect(i);
+      drag_ = i;
+      if (onBegin)
+         onBegin(i);
+      redraw();
+   }
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (drag_ < 0 || !onChange)
+         return;
+      TonePoint p = point(drag_);
+      p.hz = fOf(e.position.x);
+      const double d = dbOf(e.position.y);
+      if (toneHasGain(p.type))
+         p.db = d;
+      else if (p.type != kToneNotch && p.type != kToneBandPass)
+         p.q = std::clamp(0.7071 * std::pow(10.0, d / 20.0), 0.1, 18.0);
+      onChange(drag_, p);
+      redraw();
+   }
+   void mouseUp(const visage::MouseEvent &) override {
+      if (drag_ >= 0 && onEnd)
+         onEnd(drag_);
+      drag_ = -1;
+      redraw();
+   }
+   bool mouseWheel(const visage::MouseEvent &e) override {
+      int i = pointAt(e.position.x, e.position.y);
+      if (i < 0)
+         i = selected ? selected() : -1;
+      if (i < 0 || !onChange || e.precise_wheel_delta_y == 0.0f)
+         return false;
+      TonePoint p = point(i);
+      if (p.type == kToneOff)
+         return false;
+      if (onBegin)
+         onBegin(i);
+      p.q = std::clamp(p.q * std::exp2(e.precise_wheel_delta_y * 0.1), 0.1, 18.0);
+      onChange(i, p);
+      if (onEnd)
+         onEnd(i);
+      redraw();
+      return true;
+   }
+
+   // Adds a bell at (x, y) in the first unused point.
+   void addAt(float x, float y) {
+      if (!point || !onChange)
+         return;
+      for (int i = 0; i < kTonePoints; ++i) {
+         TonePoint p = point(i);
+         if (p.type != kToneOff)
+            continue;
+         p.type = kToneBell;
+         p.hz = fOf(x);
+         p.db = dbOf(y);
+         p.q = 0.7071;
+         if (onBegin)
+            onBegin(i);
+         onChange(i, p);
+         if (onEnd)
+            onEnd(i);
+         if (onSelect)
+            onSelect(i);
+         redraw();
+         return;
+      }
+   }
+
+private:
+   int drag_ = -1, hover_ = -1;
+};
+
 // OUTPUT's picture: every pad where its pan puts it (higher for brighter roles), glowing while it
 // sounds, between the width brackets; and the KIT, FX and OUT level bars.
 class OutputView : public visage::Frame {
@@ -1461,6 +1680,15 @@ private:
       presets_->setCurrentName = [this](const std::string &n) { host_.setKitName(n); };
       presets_->onLoad = [this](const ui::Preset &p) {
          ui::applyPreset(p, host_, defaultValues());
+         // Kits saved before 0.4 have their EQ in the old params: move it onto points.
+         for (int pad = 0; pad < kPads; ++pad)
+            migrateLegacyEq(
+               pad, [this](clap_id id) { return host_.paramValue(id); },
+               [this](clap_id id, double v) {
+                  host_.beginEdit(id);
+                  host_.setParam(id, v);
+                  host_.endEdit(id);
+               });
          const std::filesystem::path file = ui::userPresetFolder(kKitFormat) / (p.name + kKitFormat.extension);
          std::ifstream in(soundsFile(file), std::ios::binary);
          std::stringstream bytes;
@@ -1557,28 +1785,10 @@ private:
       tips_.add(*variety_, "How different the variants are from each other: low makes takes of one sound.");
 
       const float sy = 446;
-      seed_ = &onPage<ui::NumberBox>(P, {24, sy + 16, 116, 22}, ui::ValueRange{1, 99999, 1, 1, false, true});
-      seed_->setStepButtons(true);
-      seed_->setAccent(kOrange);
-      seed_->onChange = [this](double v) { host_.gen().seed = static_cast<uint32_t>(std::lround(v)); };
-      tips_.add(*seed_, "Where the randomness starts. The same seed and prompt make the same sound.");
-      auto &seedDice = onPage<IconButton>(P, {144, sy + 16, 26, 22}, IconButton::Icon::Dice);
-      seedDice.onClick = [this] {
-         host_.gen().seed = 1 + std::random_device{}() % 99999;
-         seed_->setValue(host_.gen().seed);
-      };
-      tips_.add(seedDice, "A new seed.");
-      lock_ = &onPage<IconButton>(P, {174, sy + 16, 26, 22}, IconButton::Icon::Lock);
-      lock_->onClick = [this] {
-         host_.gen().seedLocked = !host_.gen().seedLocked;
-         lock_->lit = host_.gen().seedLocked;
-         lock_->redraw();
-      };
-      tips_.add(*lock_, "Keep this seed. Unlocked, each GENERATE picks a new one.");
-      count_ = &onPage<ui::SegmentedSwitch>(P, {216, sy + 16, 156, 22}, std::vector<std::string>{"1", "2", "4", "8"});
+      count_ = &onPage<ui::SegmentedSwitch>(P, {24, sy + 16, 348, 22}, std::vector<std::string>{"1", "2", "4", "8"});
       count_->setAccent(kOrange);
       count_->onChange = [this](int i) { host_.gen().variants = 1 << i; };
-      tips_.add(*count_, "How many sounds each GENERATE makes, from neighbouring seeds.");
+      tips_.add(*count_, "How many sounds each GENERATE makes. Every GENERATE starts from new random seeds.");
 
       generate_ = &onPage<GoButton>(P, {24, 496, 348, 40}, "GENERATE");
       generate_->onClick = [this] { generate(-1); };
@@ -1590,11 +1800,10 @@ private:
          if (i >= 0 && i < static_cast<int>(r.size()) && i < 3) {
             host_.gen().prompt = r[static_cast<size_t>(i)].prompt;
             host_.gen().role = r[static_cast<size_t>(i)].role;
-            host_.gen().seed = r[static_cast<size_t>(i)].seed;
             syncGenerate();
          }
       };
-      tips_.add(*recentArea_, "Your last prompts. Click one to load it, with its role and seed.");
+      tips_.add(*recentArea_, "Your last prompts. Click one to load it, with its role.");
 
       // VARIANTS
       variantsView_ = &onPage<VariantGrid>(P, {404, 114, 652, 186}, host_);
@@ -1803,9 +2012,6 @@ private:
       steps_->setValue(g.steps);
       guidance_->setValue(g.guidance);
       variety_->setValue(g.variety);
-      seed_->setValue(g.seed);
-      lock_->lit = g.seedLocked;
-      lock_->redraw();
       int idx = 0;
       while ((1 << idx) < g.variants && idx < 3)
          ++idx;
@@ -1946,8 +2152,7 @@ private:
          c.text("try \"door slam\", \"glass\", \"metal clang\".", ui::font(9 * s), visage::Font::kLeft, x * s, 392 * s, 250 * s, 14 * s);
          c.text("Each variant draws its own plan.", ui::font(9 * s), visage::Font::kLeft, x * s, 412 * s, 250 * s, 14 * s);
       }
-      drawLabel(c, s, "SEED", 24, 446);
-      drawLabel(c, s, "VARIANTS", 216, 446);
+      drawLabel(c, s, "VARIANTS", 24, 446);
       std::string hint;
       if (host_.generating())
          hint = "about " + std::to_string(std::max(1, static_cast<int>(std::lround(estimate())))) + " s on this computer";
@@ -1956,7 +2161,7 @@ private:
       else if (e.state == EngineStatus::State::Missing)
          hint = "The first GENERATE downloads the model (" + bytesText(e.downloadBytes) + ")";
       else
-         hint = "Each sound is new: same prompt and seed, same sound";
+         hint = "Every GENERATE makes new sounds, each from its own random seed";
       c.setColor(t.dimText);
       c.text(hint, ui::font(9 * s), visage::Font::kCenter, 24 * s, 542 * s, 348 * s, 14 * s);
       c.setColor(kRule);
@@ -2089,7 +2294,7 @@ private:
       regen_ = &onPage<ui::Button>(P, {906, 81, 150, 19}, "REGENERATE IN TAB");
       regen_->setAccent(kOrange);
       regen_->onClick = [this] { regenerate(host_.selectedPad); };
-      tips_.add(*regen_, "Open the Generate tab with this pad's prompt, role and seed, ready to make another take.");
+      tips_.add(*regen_, "Open the Generate tab with this pad's prompt and role, ready to make another take.");
       wave_ = &onPage<PadWave>(P, {392, 128, 214, 78}, host_);
       tips_.add(*wave_, "Drag the handles to set where it starts and ends. The blue curve is its decay.");
 
@@ -2112,80 +2317,72 @@ private:
          padKnob(top[i], topNames[i], {kx + i * kw, 108, kw, 70}, kOrange);
          padKnob(bottom[i], bottomNames[i], {kx + i * kw, 176, kw, 70}, kOrange);
       }
-      // PAD TONE: the filter, drive and EQ, drawn together.
-      eq_ = &onPage<EqView>(P, {392, 290, 536, 80});
-      eq_->bands = [this] {
-         const int p = host_.selectedPad;
-         const auto v = [&](PadParam f) { return host_.paramModulated(padParam(p, f)); };
-         EqView::Bands b;
-         b.lowCut = lowCutOff(v(kLowCut)) ? 0 : lowCutHz(v(kLowCut));
-         b.low = v(kLow);
-         b.lowHz = lowFreqHz(v(kLowFreq));
-         b.mid = v(kMid);
-         b.midHz = midFreqHz(v(kMidFreq));
-         b.midQ = midQ(v(kMidQ));
-         b.high = v(kHigh);
-         b.highHz = highFreqHz(v(kHighFreq));
-         b.filter = static_cast<int>(v(kFilterType) + 0.5);
-         b.cutoff = cutoffHz(v(kCutoff));
-         b.resonance = v(kResonance);
-         return b;
-      };
-      // Each dot moves its band's two params.
-      const auto dotParams = [](int dot, PadParam &x, PadParam &y) {
-         switch (dot) {
-         case EqView::kLowCutDot: x = kLowCut, y = kLowCut; break;
-         case EqView::kLowDot: x = kLowFreq, y = kLow; break;
-         case EqView::kMidDot: x = kMidFreq, y = kMid; break;
-         case EqView::kHighDot: x = kHighFreq, y = kHigh; break;
-         default: x = kCutoff, y = kResonance; break;
-         }
-      };
-      eq_->onDragStart = [this, dotParams](int dot) {
-         PadParam x, y;
-         dotParams(dot, x, y);
-         host_.beginEdit(padParam(host_.selectedPad, x));
-         if (y != x)
-            host_.beginEdit(padParam(host_.selectedPad, y));
-      };
-      eq_->onDragEnd = [this, dotParams](int dot) {
-         PadParam x, y;
-         dotParams(dot, x, y);
-         host_.endEdit(padParam(host_.selectedPad, x));
-         if (y != x)
-            host_.endEdit(padParam(host_.selectedPad, y));
-      };
-      eq_->onDrag = [this, dotParams](int dot, double hz, double db) {
-         PadParam x, y;
-         dotParams(dot, x, y);
-         const int p = host_.selectedPad;
-         const double vx = x == kLowCut    ? lowCutValue(hz)
-                           : x == kLowFreq ? lowFreqValue(hz)
-                           : x == kMidFreq ? midFreqValue(hz)
-                           : x == kHighFreq ? highFreqValue(hz)
-                                            : cutoffValue(hz);
-         host_.setParam(padParam(p, x), vx);
-         if (y == kResonance)
-            host_.setParam(padParam(p, y), std::clamp(db / 18.0, 0.0, 1.0));
-         else if (y != x)
-            host_.setParam(padParam(p, y), std::clamp(db, -15.0, 15.0));
+      // PAD TONE: the points on the graph, the selected one's settings, and the envelope, velocity
+      // and drive.
+      tone_ = &onPage<ToneView>(P, {392, 288, 536, 126});
+      tone_->point = [this](int i) { return tonePoint(host_.selectedPad, i); };
+      tone_->selected = [this] { return point_; };
+      tone_->onSelect = [this](int i) {
+         point_ = i;
          redraw();
       };
-      tips_.add(*eq_, "Drag a dot: sideways sets its frequency, up and down its gain (the blue filter dot: its resonance).");
-      filter_ = &onPage<ui::Dropdown>(P, {392, 396, 70, 20},
-                                      std::vector<std::string>(kFilterTypeNames, kFilterTypeNames + kFilterTypeCount));
-      filter_->setAccent(kBlue);
-      filter_->onChange = [this](int i) { setPad(kFilterType, i); };
-      tips_.add(*filter_, "The pad's filter: low pass (12 or 24 dB an octave), high pass, or band pass.");
-      const PadParam filterKnobs[6] = {kCutoff, kResonance, kFilterEnv, kFilterDecay, kVelFilter, kDrive};
-      const char *filterNames[6] = {"CUTOFF", "RESO", "ENV", "ENV DECAY", "VEL > FILT", "DRIVE"};
-      const float fx0 = 468, fw = (928.0f - fx0) / 6;
-      for (int i = 0; i < 6; ++i)
-         padKnob(filterKnobs[i], filterNames[i], {fx0 + i * fw, 374, fw, 62}, i == 5 ? kOrange : kBlue);
-      const PadParam eqs[8] = {kLowCut, kLow, kLowFreq, kMid, kMidFreq, kMidQ, kHigh, kHighFreq};
-      const char *eqNames[8] = {"LOW CUT", "LOW", "LOW FREQ", "MID", "MID FREQ", "MID Q", "HIGH", "HIGH FREQ"};
-      for (int i = 0; i < 8; ++i)
-         padKnob(eqs[i], eqNames[i], {392 + i * 536.0f / 8, 440, 536.0f / 8, 62}, kOrange);
+      tone_->onBegin = [this](int i) {
+         for (PointField f : {kPointType, kPointFreq, kPointGain, kPointQ})
+            host_.beginEdit(padParam(host_.selectedPad, pointParam(i, f)));
+      };
+      tone_->onEnd = [this](int i) {
+         for (PointField f : {kPointType, kPointFreq, kPointGain, kPointQ})
+            host_.endEdit(padParam(host_.selectedPad, pointParam(i, f)));
+      };
+      tone_->onChange = [this](int i, const TonePoint &pt) {
+         const int pad = host_.selectedPad;
+         const TonePoint was = tonePoint(pad, i);
+         const auto set = [&](PointField f, double v) {
+            const clap_id id = padParam(pad, pointParam(i, f));
+            if (host_.paramValue(id) != v)
+               host_.setParam(id, v);
+         };
+         // A right-click removes it, outside a drag: give the host a whole gesture.
+         const bool removing = pt.type == kToneOff && was.type != kToneOff;
+         if (removing)
+            host_.beginEdit(padParam(pad, pointParam(i, kPointType)));
+         set(kPointType, pt.type);
+         set(kPointFreq, toneHzValue(pt.hz));
+         set(kPointGain, pt.db);
+         set(kPointQ, toneQValue(pt.q));
+         if (removing) {
+            host_.endEdit(padParam(pad, pointParam(i, kPointType)));
+            if (point_ == i)
+               point_ = firstPoint(pad);
+         }
+         redraw();
+      };
+      tips_.add(*tone_, "Double-click to add a point. Drag a point to move it, scroll on it to change its width, "
+                        "right-click it to remove it.");
+      pointType_ = &onPage<ui::Dropdown>(P, {392, 446, 96, 20},
+                                         std::vector<std::string>(kToneTypeNames, kToneTypeNames + kToneTypeCount));
+      pointType_->setAccent(kOrange);
+      pointType_->onChange = [this](int type) {
+         const clap_id id = padParam(host_.selectedPad, pointParam(point_, kPointType));
+         host_.beginEdit(id);
+         host_.setParam(id, type);
+         host_.endEdit(id);
+         redraw();
+      };
+      tips_.add(*pointType_, "What the selected point does: a bell, a shelf, a low or high pass (12 or 24 dB an "
+                             "octave), a notch or a band pass. Off removes it.");
+      const float kx0 = 500, kw0 = (928.0f - kx0) / 7;
+      const char *pointNames[3] = {"FREQ", "GAIN", "Q"};
+      const PointField pointFields[3] = {kPointFreq, kPointGain, kPointQ};
+      for (int i = 0; i < 3; ++i) {
+         const PointField pf = pointFields[i];
+         padKnobFor([this, pf] { return pointParam(point_, pf); }, pointNames[i], {kx0 + i * kw0, 434, kw0, 66},
+                    kOrange, pf == kPointGain);
+      }
+      const PadParam modKnobs[4] = {kFilterEnv, kFilterDecay, kVelFilter, kDrive};
+      const char *modNames[4] = {"ENV", "ENV DECAY", "VEL > FILT", "DRIVE"};
+      for (int i = 0; i < 4; ++i)
+         padKnob(modKnobs[i], modNames[i], {kx0 + (3 + i) * kw0, 434, kw0, 66}, i == 3 ? kOrange : kBlue);
       // SENDS
       padKnob(kReverbSend, "REVERB", {960, 296, 96, 76}, kPurple);
       padKnob(kDelaySend, "DELAY", {960, 418, 96, 76}, kBlue);
@@ -2246,7 +2443,6 @@ private:
          GenSettings &g = host_.gen();
          g.prompt = p->prompt;
          g.role = p->role;
-         g.seed = p->seed;
          synced_ = false;
       }
       showPage(kGeneratePage);
@@ -2261,26 +2457,48 @@ private:
 
    // A knob for the selected pad: it follows the selection, so it isn't bound to one param.
    ui::Knob &padKnob(PadParam f, const char *label, ui::Rect r, unsigned colour) {
-      const clap_id first = padParam(0, f);
-      const auto &d = param(first);
+      const bool bipolar = f == kPan || f == kPitch || f == kFilterEnv || f == kVelFilter;
+      return padKnobFor([f] { return f; }, label, r, colour, bipolar);
+   }
+   // The same, for a field that also follows something else (the selected point). Fields it may be
+   // share one range.
+   ui::Knob &padKnobFor(std::function<PadParam()> field, const char *label, ui::Rect r, unsigned colour, bool bipolar) {
+      const PadParam f0 = field();
+      const auto &d = param(padParam(0, f0));
       const bool stepped = (d.flags & CLAP_PARAM_IS_STEPPED) != 0;
-      const bool bipolar = f == kPan || f == kPitch || f == kLow || f == kMid || f == kHigh || f == kFilterEnv ||
-                           f == kVelFilter;
       auto &k = onPage<ui::Knob>(kKitPage, r,
-                                 ui::ValueRange{d.min, d.max, d.defaultValue, f == kPitch ? 0.1 : 0.0, bipolar, stepped});
+                                 ui::ValueRange{d.min, d.max, d.defaultValue, f0 == kPitch ? 0.1 : 0.0, bipolar, stepped});
       k.setLabel(label);
       k.setAccent(colour);
-      k.valueText = [this, f](double v) { return padText(f, v); };
-      k.parseText = [f](const std::string &t, double &v) { return parseParam(padParam(0, f), t.c_str(), v); };
-      k.onBeginEdit = [this, f] { host_.beginEdit(padParam(host_.selectedPad, f)); };
-      k.onChange = [this, f](double v) {
-         host_.setParam(padParam(host_.selectedPad, f), v);
+      k.valueText = [this, field](double v) { return padText(field(), v); };
+      k.parseText = [field](const std::string &t, double &v) { return parseParam(padParam(0, field()), t.c_str(), v); };
+      k.onBeginEdit = [this, field] { host_.beginEdit(padParam(host_.selectedPad, field())); };
+      k.onChange = [this, field](double v) {
+         host_.setParam(padParam(host_.selectedPad, field()), v);
          redraw();
       };
-      k.onEndEdit = [this, f] { host_.endEdit(padParam(host_.selectedPad, f)); };
-      k.modulatedSource = [this, f] { return host_.paramModulated(padParam(host_.selectedPad, f)); };
-      padKnobs_.push_back({&k, f});
+      k.onEndEdit = [this, field] { host_.endEdit(padParam(host_.selectedPad, field())); };
+      k.modulatedSource = [this, field] { return host_.paramModulated(padParam(host_.selectedPad, field())); };
+      padKnobs_.push_back({&k, field});
       return k;
+   }
+
+   // A pad's point i, from its params (modulated, as it sounds).
+   TonePoint tonePoint(int pad, int i) const {
+      const auto v = [&](PointField f) { return host_.paramModulated(padParam(pad, pointParam(i, f))); };
+      TonePoint p;
+      p.type = std::clamp(static_cast<int>(v(kPointType) + 0.5), 0, kToneTypeCount - 1);
+      p.hz = toneHz(v(kPointFreq));
+      p.db = v(kPointGain);
+      p.q = toneQ(v(kPointQ));
+      return p;
+   }
+   // The first point in use, or 0.
+   int firstPoint(int pad) const {
+      for (int i = 0; i < kTonePoints; ++i)
+         if (tonePoint(pad, i).type != kToneOff)
+            return i;
+      return 0;
    }
 
    // Start and End read as times into the selected pad's sound; the rest as the host shows them.
@@ -2313,12 +2531,16 @@ private:
 
    void syncPad() {
       const int p = host_.selectedPad;
-      for (auto &[k, f] : padKnobs_) {
-         const clap_id id = padParam(p, f);
+      if (p != tonePad_) { // a new pad: show its first point
+         tonePad_ = p;
+         point_ = firstPoint(p);
+      }
+      for (auto &[k, field] : padKnobs_) {
+         const clap_id id = padParam(p, field());
          k->setValue(host_.paramValue(id), host_.paramModulated(id));
       }
       choke_->setSelected(static_cast<int>(host_.paramValue(padParam(p, kChoke)) + 0.5));
-      filter_->setSelected(static_cast<int>(host_.paramValue(padParam(p, kFilterType)) + 0.5));
+      pointType_->setSelected(static_cast<int>(host_.paramValue(padParam(p, pointParam(point_, kPointType))) + 0.5));
       play_->setSelected(static_cast<int>(host_.paramValue(padParam(p, kPlayMode)) + 0.5));
       rev_->setOn(host_.paramValue(padParam(p, kReverse)) >= 0.5);
    }
@@ -2330,7 +2552,7 @@ private:
       output_->update(kit, fx, out);
       pads_->redraw();
       wave_->redraw();
-      eq_->redraw();
+      tone_->redraw();
       masterEq_->redraw();
       redraw();
    }
@@ -2355,8 +2577,8 @@ private:
       c.text(line, ui::font(8.5f * s), visage::Font::kLeft, 392 * s, 110 * s, 214 * s, 12 * s);
       drawLabel(c, s, "CHOKE", 392, 212);
       drawLabel(c, s, "PLAY", 466, 212);
-      drawCard(c, s, 380, 260, 560, 248, "PAD TONE", "filter \xC2\xB7 drive \xC2\xB7 EQ");
-      drawLabel(c, s, "FILTER", 392, 381);
+      drawCard(c, s, 380, 260, 560, 248, "PAD TONE", "double-click to add a point \xC2\xB7 right-click to remove");
+      drawLabel(c, s, "POINT " + std::to_string(point_ + 1), 392, 428);
       drawCard(c, s, 948, 260, 120, 248, "SENDS");
 
       // The master band: everything under it acts on the whole kit.
@@ -2394,8 +2616,6 @@ private:
    ChipRow *roles_ = nullptr;
    EndsSlider *strange_ = nullptr;
    ui::Knob *length_ = nullptr, *steps_ = nullptr, *guidance_ = nullptr, *variety_ = nullptr;
-   ui::NumberBox *seed_ = nullptr;
-   IconButton *lock_ = nullptr;
    ui::SegmentedSwitch *count_ = nullptr;
    GoButton *generate_ = nullptr, *addToKit_ = nullptr;
    ui::HoverArea *recentArea_ = nullptr;
@@ -2416,12 +2636,14 @@ private:
    PadGrid *pads_ = nullptr;
    ui::Button *regen_ = nullptr;
    PadWave *wave_ = nullptr;
-   ui::Dropdown *choke_ = nullptr, *filter_ = nullptr;
+   ui::Dropdown *choke_ = nullptr, *pointType_ = nullptr;
+   ToneView *tone_ = nullptr;
+   int point_ = 0, tonePad_ = -1;
    ui::SegmentedSwitch *play_ = nullptr;
    CheckBox *rev_ = nullptr;
-   EqView *eq_ = nullptr, *masterEq_ = nullptr;
+   EqView *masterEq_ = nullptr;
    OutputView *output_ = nullptr;
-   std::vector<std::pair<ui::Knob *, PadParam>> padKnobs_;
+   std::vector<std::pair<ui::Knob *, std::function<PadParam()>>> padKnobs_;
 };
 
 } // namespace
