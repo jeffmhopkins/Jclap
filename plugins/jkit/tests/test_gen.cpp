@@ -138,6 +138,9 @@ void testStudio() {
    const Engine sao = Engine::SaoSmall, orb = Engine::Orb;
    JCLAP_CHECK(Studio::downloadBytes(sao) > 2000000000ull && Studio::downloadBytes(sao) < 2500000000ull);
    JCLAP_CHECK_EQ(Studio::downloadBytes(orb), 20795318u);
+   // 1.0: its files and the runtime (not there yet in the test folder).
+   JCLAP_CHECK(Studio::downloadBytes(Engine::SaoOpen1) > 4800000000ull && Studio::downloadBytes(Engine::SaoOpen1) < 4950000000ull);
+   JCLAP_CHECK(Studio::modelFolder(Engine::SaoOpen1) != Studio::modelFolder(sao));
    JCLAP_CHECK(Studio::modelFolder(sao) != Studio::modelFolder(orb));
    JCLAP_CHECK_EQ(Studio::diskBytes(sao), 0u);
    JCLAP_CHECK_EQ(Studio::diskBytes(orb), 0u);
@@ -160,6 +163,19 @@ void testStudio() {
       JCLAP_CHECK_EQ(Studio::diskBytes(sao), 0u);
       JCLAP_CHECK_EQ(Studio::diskBytes(orb), 300u);
       JCLAP_CHECK(a->status(sao).state == Studio::State::Missing);
+      // The runtime goes with the last Stable Audio: removing Small keeps it while 1.0 is there.
+      std::filesystem::create_directories(Studio::modelFolder(Engine::SaoOpen1));
+      std::filesystem::create_directories(Studio::folder() / "runtime");
+      std::ofstream(Studio::folder() / "runtime" / "lib.bin") << std::string(50, 'x');
+      a->remove(sao);
+      for (int i = 0; i < 200 && a->status(sao).state != Studio::State::Missing; ++i)
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      JCLAP_CHECK(std::filesystem::exists(Studio::folder() / "runtime"));
+      a->remove(Engine::SaoOpen1);
+      for (int i = 0; i < 200 && std::filesystem::exists(Studio::folder() / "runtime"); ++i)
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      JCLAP_CHECK(!std::filesystem::exists(Studio::folder() / "runtime"));
       a->remove(orb);
       for (int i = 0; i < 200 && std::filesystem::exists(Studio::modelFolder(orb)); ++i)
          std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -211,6 +227,52 @@ void testGenerate() {
       JCLAP_CHECK(s.left.size() >= 44100);
    }
    std::printf("generated %zu sounds\n", out.size());
+}
+
+// 1.0's noise levels: k-diffusion's polyexponential schedule from 500 to 0.3, then 0.
+void testSigmas() {
+   const std::vector<double> s = StableAudio::sigmas(50);
+   JCLAP_CHECK_EQ(s.size(), 51u);
+   JCLAP_CHECK(std::fabs(s[0] - 500.0) < 1e-9);
+   JCLAP_CHECK(std::fabs(s[49] - 0.3) < 1e-12);
+   JCLAP_CHECK(s[50] == 0.0);
+   for (size_t i = 1; i < 50; ++i)
+      JCLAP_CHECK(s[i] < s[i - 1] && std::fabs(std::log(s[i - 1] / s[i]) - std::log(500.0 / 0.3) / 49) < 1e-9);
+}
+
+// Only with 1.0 at hand (not in CI): JKIT_TEST_SAO1 is its folder. Writes the sound's raw floats to
+// JKIT_TEST_SAO1_OUT if set, for comparing against the Python sampler.
+void testGenerateOpen1() {
+   const char *model = std::getenv("JKIT_TEST_SAO1"), *ort = std::getenv("JKIT_TEST_ORT");
+   if (!model || !ort)
+      return;
+   Runtime runtime;
+   std::string error;
+   JCLAP_CHECK(runtime.load(ort, error));
+   StableAudio sao(StableAudio::Model::Open1);
+   JCLAP_CHECK(sao.load(runtime, model, 4, error));
+   Request r;
+   r.engine = Engine::SaoOpen1;
+   r.prompt = "a deep punchy kick drum";
+   r.seconds = 1.5;
+   r.steps = 50;
+   r.guidance = 7.0;
+   r.seed = 1;
+   std::vector<Sound> out;
+   std::atomic<bool> cancel{false};
+   const auto t0 = std::chrono::steady_clock::now();
+   JCLAP_CHECK(sao.generate(r, out, {}, cancel, error));
+   std::printf("1.0: %s in %.1f s\n", error.c_str(),
+               std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+   JCLAP_CHECK_EQ(out.size(), 1u);
+   if (out.empty())
+      return;
+   JCLAP_CHECK_EQ(out[0].left.size(), 66150u);
+   if (const char *file = std::getenv("JKIT_TEST_SAO1_OUT")) {
+      std::ofstream f(file, std::ios::binary);
+      f.write(reinterpret_cast<const char *>(out[0].left.data()), static_cast<std::streamsize>(out[0].left.size() * 4));
+      f.write(reinterpret_cast<const char *>(out[0].right.data()), static_cast<std::streamsize>(out[0].right.size() * 4));
+   }
 }
 
 // ORB's renderer against numbers from the original Python (orb 0.4.x, numpy 2): one event each.
@@ -393,6 +455,8 @@ int main() {
    testPrompts();
    testStudio();
    testGenerate();
+   testSigmas();
+   testGenerateOpen1();
    testOrbRender();
    testOrbPlan();
    return jclap::core::testResult();
