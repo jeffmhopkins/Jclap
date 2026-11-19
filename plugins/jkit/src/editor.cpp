@@ -1728,6 +1728,7 @@ private:
 class KitDialog : public visage::Frame {
 public:
    std::function<std::string()> style;  // the prompt, as the kit's style ("" for a random one)
+   std::function<double()> strange;     // the GENERIC - STRANGE slider
    std::function<bool(int)> padFilled; // whether a pad has a sound
    std::function<int()> engine;
    std::function<double()> secondsPerSound; // the last run's, or a guess
@@ -1797,13 +1798,15 @@ public:
              ui::font(9.5f * s), visage::Font::kLeft, x + 50 * s, y, w - 50 * s, 14 * s);
 
       c.setColor(t.dimText);
-      c.text(std::string("Each pad asks for its own sound in this style: \"") +
-                 (layout == kHandPercussionLayout ? "conga slap, "
-                  : layout == kFxLayout           ? "laser zap, "
-                  : layout == kAnimalLayout       ? "dog bark, "
-                                                  : "closed hi-hat, ") +
-                 (st.empty() ? std::string("...") : (st.size() > 28 ? st.substr(0, 25) + "..." : st)) +
-                 "\". Describe a style, not one sound.",
+      // An example pad's prompt as GENERIC would ask it; toward STRANGE each pad gets its own twist.
+      const int examplePad = layout == kHandPercussionLayout ? 8 : layout == kDrumKitLayout ? 6 : 2;
+      std::string example = st.empty() ? std::string(kitSlot(examplePad, layout).sound) + ", ..."
+                                        : kitPrompt(examplePad, st, layout);
+      if (example.size() > 44)
+         example = example.substr(0, 41) + "...";
+      const bool twisted = (strange ? strange() : 0.0) >= 0.35;
+      c.text("Each pad asks for its own sound: \"" + example + "\"" +
+                 (twisted ? ", with a strange twist each." : ". Describe a style, not one sound."),
              ui::font(8.5f * s), visage::Font::kLeft, x + 50 * s, y + 16 * s, w - 50 * s, 13 * s);
 
       // The pads, four by four, bottom row first like the KIT tab.
@@ -2019,6 +2022,7 @@ public:
       enginePicker_->setVisible(false);
       kitDialog_ = &add<KitDialog>({0, 0, kDesignWidth, kDesignHeight});
       kitDialog_->style = [this] { return trimmed(host_.gen().prompt); };
+      kitDialog_->strange = [this] { return host_.gen().strange; };
       kitDialog_->padFilled = [this](int p) { return host_.padSample(p) != nullptr; };
       kitDialog_->engine = [this] { return host_.gen().engine; };
       kitDialog_->secondsPerSound = [this] {
@@ -2341,7 +2345,7 @@ private:
    void randomPrompt() {
       GenSettings &g = host_.gen();
       if (g.kitMode) {
-         g.prompt = randomKitStyle(std::random_device{}(), g.kitLayout);
+         g.prompt = randomKitStyle(std::random_device{}(), g.kitLayout, g.strange);
          prompt_->setText(g.prompt);
          return;
       }
@@ -2361,8 +2365,10 @@ private:
          return;
       kitLayout_ = kitDialog_->layout;
       kitStyle_ = trimmed(host_.gen().prompt);
+      kitStrange_ = host_.gen().strange;
+      kitSeed_ = std::random_device{}();
       if (kitStyle_.empty())
-         kitStyle_ = randomKitStyle(std::random_device{}(), kitLayout_);
+         kitStyle_ = randomKitStyle(std::random_device{}(), kitLayout_, host_.gen().strange);
       kitQueue_.clear();
       // The backbone first (kick and snare, or cajon), so you hear the kit take shape.
       const int *order = kitOrder(kitLayout_);
@@ -2382,7 +2388,7 @@ private:
       if (kitQueue_.empty())
          return;
       const KitSlot &slot = kitSlot(kitQueue_.front(), kitLayout_);
-      host_.generateOne(kitPrompt(kitQueue_.front(), kitStyle_, kitLayout_), slot.role, slot.seconds, slot.name);
+      host_.generateOne(kitPrompt(kitQueue_.front(), kitStyle_, kitLayout_, kitStrange_, kitSeed_), slot.role, slot.seconds, slot.name);
    }
    void stopKit() {
       kitQueue_.clear();
@@ -2546,8 +2552,8 @@ private:
       roles_->count = gs.kitMode ? kKitLayoutCount : kRoleCount;
       roles_->selected = gs.kitMode ? gs.kitLayout : gs.role;
       roles_->redraw();
-      // KIT: each pad has its own length, and there are no variants or strangeness.
-      strange_->setVisible(!gs.kitMode);
+      // KIT: each pad has its own length, and there are no variants. The slider stays: it says how
+      // plain or strange the kit's style and each pad's prompt are.
       length_->setVisible(!gs.kitMode);
       count_->setVisible(!gs.kitMode);
       if (gs.kitMode)
@@ -2557,8 +2563,9 @@ private:
                                    : "What the sound is for: the random prompt, the pad's colour and its name.");
       tips_.setText(*dice_, orb() ? "A random prompt for this kind of sound, worded the way ORB reads them."
                                   : "A random prompt for this role. The slider below says how strange.");
-      tips_.setText(*strange_, orb() ? "How many sounds a random prompt asks ORB for: one at the left, a few in a row at the right."
-                                     : "How strange a random prompt gets: studio drums at the left, objects and places at the right.");
+      tips_.setText(*strange_, orb()          ? "How many sounds a random prompt asks ORB for: one at the left, a few in a row at the right."
+                               : gs.kitMode ? "How plain or strange the kit is: \"909 kick drum\" at the left, each pad its own odd object and process at the right."
+                                            : "How strange a random prompt gets: just the sound at the left, objects and places at the right.");
    }
 
    void syncGenerate() {
@@ -2729,10 +2736,10 @@ private:
       if (kitMode) {
          c.setColor(t.dimText);
          c.text("Every pad gets its own sound and length, in the style of the prompt.", ui::font(9 * s),
-                visage::Font::kLeft, 24 * s, 333 * s, 348 * s, 14 * s);
+                visage::Font::kLeft, 24 * s, 446 * s, 348 * s, 14 * s);
          if (!orb())
-            c.text("Each pad asks for its sound: \"" + std::string(kitSlot(2, host_.gen().kitLayout).sound) + ", <prompt>\".",
-                   ui::font(9 * s), visage::Font::kLeft, 24 * s, 446 * s, 348 * s, 14 * s);
+            c.text("GENERIC asks plainly (\"909 kick drum\"); STRANGE twists every pad.",
+                   ui::font(9 * s), visage::Font::kLeft, 24 * s, 462 * s, 348 * s, 14 * s);
          else {
             c.setColor(kOrange);
             c.text("KIT uses Stable Audio: pick Small or 1.0 in ENGINE.", ui::font(9 * s), visage::Font::kLeft,
@@ -3210,6 +3217,8 @@ private:
    std::vector<int> kitQueue_;
    int kitTotal_ = 0;
    std::string kitStyle_;
+   double kitStrange_ = 0.3;
+   uint64_t kitSeed_ = 0;
    int kitLayout_ = kDrumKitLayout;
    int lastRunSounds_ = 0;
    std::function<void(int)> pickEngine_;

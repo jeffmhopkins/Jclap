@@ -10,6 +10,7 @@
 // saturation". With no style typed, the kit gets one random style and treatment, the same for every
 // pad, so the kit hangs together.
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 
@@ -162,17 +163,47 @@ inline const prompts::List &animalRecordings() {
    return k;
 }
 
-// A style for a kit with none typed, or from the card's dice: for a drum kit, a style of music and a
-// treatment; for the others, their own kind of style and how it was recorded.
-inline std::string randomKitStyle(uint64_t seed, int layout = kDrumKitLayout) {
+// Plain one or two word styles for the GENERIC end of the slider: "909" makes "909 kick drum".
+inline const prompts::List &plainKitStyles(int layout) {
+   static const prompts::List kDrums = {"808", "909", "707", "acoustic", "LinnDrum", "vintage", "rock", "jazz",
+                                        "hip hop", "techno", "house", "trap", "lo-fi", "funk", "breakbeat",
+                                        "electro", "disco", "metal", "SP-1200", "analog"};
+   static const prompts::List kHands = {"Afro-Cuban", "West African", "Middle Eastern", "Indian", "Brazilian",
+                                        "flamenco", "Latin", "Turkish", "Egyptian", "Caribbean"};
+   static const prompts::List kFx = {"8-bit", "sci-fi", "retro", "cartoon", "arcade",
+                                     "synth", "glitch", "robot", "analog", "chiptune"};
+   static const prompts::List kAnimals = {"farm", "jungle", "forest", "zoo", "pet", "barnyard", "wild", "savanna"};
+   return layout == kHandPercussionLayout ? kHands : layout == kFxLayout ? kFx : layout == kAnimalLayout ? kAnimals : kDrums;
+}
+
+// A style for a kit with none typed, or from the dice: for a drum kit, a style of music and a
+// treatment; for the others, their own kind of style and how it was recorded. `strange` is the
+// GENERIC - STRANGE slider: at the left one plain word ("909"), in the middle a style and a
+// treatment, and to the right odd materials and processes on top.
+inline std::string randomKitStyle(uint64_t seed, int layout = kDrumKitLayout, double strange = 0.3) {
    prompts::Rng rng(seed * 2654435761u + 99u + static_cast<uint64_t>(layout) * 7u);
+   strange = strange < 0 ? 0 : strange > 1 ? 1 : strange;
+   if (strange < 0.2)
+      return rng.pick(plainKitStyles(layout));
+   std::string style;
    if (layout == kHandPercussionLayout)
-      return std::string(rng.pick(percussionStyles())) + " percussion, " + rng.pick(percussionRecordings());
-   if (layout == kFxLayout)
-      return std::string(rng.pick(fxStyles())) + " sound effects, " + rng.pick(fxTreatments());
-   if (layout == kAnimalLayout)
-      return std::string(rng.pick(animalStyles())) + ", " + rng.pick(animalRecordings());
-   return std::string(rng.pick(prompts::styles())) + ", " + rng.pick(prompts::treatments());
+      style = std::string(rng.pick(percussionStyles())) + " percussion, " + rng.pick(percussionRecordings());
+   else if (layout == kFxLayout)
+      style = std::string(rng.pick(fxStyles())) + " sound effects, " + rng.pick(fxTreatments());
+   else if (layout == kAnimalLayout)
+      style = std::string(rng.pick(animalStyles())) + ", " + rng.pick(animalRecordings());
+   else
+      style = std::string(rng.pick(prompts::styles())) + ", " + rng.pick(prompts::treatments());
+   if (strange >= 0.55) {
+      style = std::string(rng.pick(prompts::oddTraits())) + " " + style;
+      style += std::string(", ") + rng.pick(prompts::oddTreatments());
+   }
+   if (strange >= 0.85) {
+      const std::string more = rng.pick(prompts::oddTreatments());
+      if (style.find(more) == std::string::npos)
+         style += ", " + more;
+   }
+   return style;
 }
 
 // The order WHOLE KIT makes the pads in: the backbone first, so you can play along as it fills.
@@ -183,11 +214,37 @@ inline const int *kitOrder(int layout) {
    return layout == kHandPercussionLayout ? kHands : layout == kDrumKitLayout ? kDrums : kOthers;
 }
 
-// The prompt for a pad of a kit in `style`.
-inline std::string kitPrompt(int pad, const std::string &style, int layout = kDrumKitLayout) {
-   std::string p = kitSlot(pad, layout).sound;
-   if (!style.empty())
+// The prompt for a pad of a kit in `style`. A short style (one or two words, no comma) goes in front,
+// "909 kick drum"; a longer one after, "closed hi-hat, dusty lo-fi boom bap, tape saturation".
+// `strange` (the slider) gives each pad its own odd twist as it rises: a strange material, what it's
+// made of, and strange processes, so at the right a pad reads "glassy kick drum, made of a door
+// slammed in a cathedral, techno, granular smear, recorded in a cave". The pad's own sound always
+// stays in, so it still fits its note. Same arguments, same prompt.
+inline std::string kitPrompt(int pad, const std::string &style, int layout = kDrumKitLayout, double strange = 0,
+                             uint64_t seed = 0) {
+   using namespace prompts;
+   strange = strange < 0 ? 0 : strange > 1 ? 1 : strange;
+   const KitSlot &slot = kitSlot(pad, layout);
+   Rng rng(seed * 6364136223846793005u + static_cast<uint64_t>(pad) * 1442695040888963407u +
+           static_cast<uint64_t>(layout) * 31u + static_cast<uint64_t>(strange * 1000.0));
+   std::string sound = slot.sound;
+   if (strange >= 0.35 && rng.chance(strange))
+      sound = std::string(rng.pick(oddTraits())) + " " + sound;
+   const bool shortStyle = !style.empty() && style.find(',') == std::string::npos &&
+                           std::count(style.begin(), style.end(), ' ') <= 1;
+   std::string p = shortStyle ? style + " " + sound : sound;
+   if (strange >= 0.5 && rng.chance(strange * 1.2 - 0.3)) {
+      static const char *const kMadeOf[] = {"made of", "made from", "sampled from", "like"};
+      p += std::string(", ") + kMadeOf[rng.next() % 4] + " " + rng.pick(roleWords(slot.role).oddities);
+   }
+   if (!style.empty() && !shortStyle)
       p += ", " + style;
+   const int odd = strange < 0.45 ? 0 : strange < 0.85 ? 1 : 2;
+   for (int i = 0; i < odd; ++i) {
+      const std::string t = rng.pick(oddTreatments());
+      if (p.find(t) == std::string::npos)
+         p += ", " + t;
+   }
    return p;
 }
 

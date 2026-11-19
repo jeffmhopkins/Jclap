@@ -123,6 +123,12 @@ void testPrompts() {
       }
    }
    JCLAP_CHECK_EQ(odd0, 0);
+   // GENERIC is just the sound, with at most one word of character: "punchy 909 kick".
+   for (int r = 0; r < kRoleCount; ++r)
+      for (uint64_t seed = 0; seed < 50; ++seed) {
+         const std::string p = randomPrompt(static_cast<Role>(r), 0.0, seed);
+         JCLAP_CHECK(p.find(',') == std::string::npos && std::count(p.begin(), p.end(), ' ') <= 6);
+      }
    JCLAP_CHECK(odd1 > 120);
    // Since 0.4 the bank is twice the size it was.
    for (int r = 0; r < kRoleCount; ++r) {
@@ -184,6 +190,38 @@ void testKitSlots() {
    JCLAP_CHECK(kitPrompt(6, "dusty boom bap") == "closed hi-hat, dusty boom bap");
    JCLAP_CHECK(kitPrompt(0, "") == "kick drum");
    JCLAP_CHECK(randomKitStyle(7) == randomKitStyle(7) && !randomKitStyle(7).empty());
+   // A short style goes in front: "909 kick drum".
+   JCLAP_CHECK(kitPrompt(0, "909") == "909 kick drum");
+   JCLAP_CHECK(kitPrompt(6, "lo-fi hip hop") == "closed hi-hat, lo-fi hip hop");
+
+   // The GENERIC - STRANGE slider: one plain word of style at the left, and plain pads; toward the
+   // right a longer style and each pad its own twist, with its sound always in it.
+   for (int layout = 0; layout < kKitLayoutCount; ++layout)
+      for (uint64_t seed = 0; seed < 30; ++seed) {
+         const std::string plain = randomKitStyle(seed, layout, 0.0);
+         JCLAP_CHECK(plain.find(',') == std::string::npos && std::count(plain.begin(), plain.end(), ' ') <= 1);
+         const std::string odd = randomKitStyle(seed, layout, 1.0);
+         JCLAP_CHECK(odd.size() > plain.size() && std::count(odd.begin(), odd.end(), ',') >= 2);
+         JCLAP_CHECK(randomKitStyle(seed, layout, 1.0) == odd);
+         for (int p = 0; p < kKitSlots; ++p) {
+            const std::string sound = kitSlot(p, layout).sound;
+            const std::string a = kitPrompt(p, plain, layout, 0.0, seed), b = kitPrompt(p, odd, layout, 1.0, seed);
+            JCLAP_CHECK(a == plain + " " + sound);
+            JCLAP_CHECK(b.find(sound) != std::string::npos && b.size() > a.size() + 20);
+            JCLAP_CHECK(std::count(b.begin(), b.end(), ' ') < 50);
+            JCLAP_CHECK(b == kitPrompt(p, odd, layout, 1.0, seed));
+         }
+      }
+   // Each pad gets its own twist: at STRANGE a kit's sixteen prompts all differ beyond their sound.
+   {
+      std::set<std::string> tails;
+      for (int p = 0; p < kKitSlots; ++p) {
+         const std::string b = kitPrompt(p, "techno", kDrumKitLayout, 1.0, 5);
+         const std::string sound = kitSlot(p).sound;
+         tails.insert(b.substr(b.find(sound) + sound.size()));
+      }
+      JCLAP_CHECK(tails.size() >= 12);
+   }
 
    // Hand percussion: its own sixteen, low strokes where the kicks are, no choke groups.
    std::set<std::string> hands;
@@ -194,7 +232,7 @@ void testKitSlots() {
    }
    JCLAP_CHECK_EQ(static_cast<int>(hands.size()), kKitSlots);
    JCLAP_CHECK(kitSlot(0, kHandPercussionLayout).role == kKick && kitSlot(2, kHandPercussionLayout).role == kSnare);
-   JCLAP_CHECK(kitPrompt(8, "flamenco", kHandPercussionLayout) == "conga slap, one hand stroke, flamenco");
+   JCLAP_CHECK(kitPrompt(8, "flamenco", kHandPercussionLayout) == "flamenco conga slap, one hand stroke");
    const std::string hs = randomKitStyle(3, kHandPercussionLayout);
    JCLAP_CHECK(hs.find(" percussion, ") != std::string::npos);
    // Each order makes every pad once.

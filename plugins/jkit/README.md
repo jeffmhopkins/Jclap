@@ -155,8 +155,9 @@ room tail". Under it:
   tokens Stable Audio reads. With ORB it
   writes plain sound-effect captions for the kind, the way ORB was trained to read them ("a wine
   glass shattering, up close").
-- **GENERIC - STRANGE**: how strange the random prompts get. At the left they're studio drum
-  sounds ("tight 909 kick, light compression, Detroit techno"); halfway, a familiar sound with an odd
+- **GENERIC - STRANGE**: how strange the random prompts get. At the far left they're just the
+  sound, with at most one word of character ("909 kick", "punchy acoustic kick"); a little further
+  in, dressed up studio drum sounds ("tight 909 kick, light compression, Detroit techno"); halfway, a familiar sound with an odd
   twist ("snare made of a filing cabinet slammed shut, plate reverb"); at the right, objects, places
   and processes ("a glass of ice dropped on marble, granular smear, played backwards"). With ORB
   it's **ONE SOUND - LAYERED** instead: one sound at the left, a few in a row at the right, which ORB
@@ -186,12 +187,26 @@ kind of kit, and the PROMPT is its style, typed or rolled:
 - **ANIMALS**: a different animal on each pad, from a bullfrog to a wolf.
 
 Describe a style, not one sound: each pad asks for its own sound in it ("closed hi-hat, dusty lo-fi
-boom bap, tape saturation"; "conga slap, one hand stroke, Afro-Cuban rumba percussion"). **The
+boom bap, tape saturation"; "conga slap, one hand stroke, Afro-Cuban rumba percussion"). A style
+of one or two words goes in front instead: "909" makes "909 kick drum", "909 snare drum". **The
 dice** writes a random style for the kind of kit ("West African djembe ensemble percussion, warm
 natural room"; "retro 8-bit video game sound effects, bitcrushed"; "farm animals, close up field
 recording"), and you can edit it. With no prompt typed, the kit gets a random style, the same for
-every pad. STRANGE, LENGTH, VARIETY and VARIANTS don't apply (each pad has its own length);
-STEPS and GUIDANCE do.
+every pad.
+
+**GENERIC - STRANGE** works in KIT too, on both the style and every pad's prompt:
+
+| Slider | The dice's style | A pad's prompt |
+| --- | --- | --- |
+| GENERIC (far left) | one plain word: "909", "flamenco", "8-bit", "farm" | "909 kick drum" |
+| Middle | a style and a treatment: "electro, air boost" | "kick drum, electro, air boost" |
+| Toward STRANGE | an odd material and process on top: "creaky electro, air boost, in a cathedral" | each pad its own twist: "gelatinous kick drum, made of a basketball bounced in a parking garage, creaky electro, ..., with a reverse reverb swell" |
+| STRANGE (far right) | one more process | about thirty words, every pad different: "melting kick drum, like a bowling ball dropped on a stage, ..., recorded in a cave, pitched up an octave" |
+
+Each pad keeps its own sound in its prompt, so a strange kit still has a kick on the kick note. The
+slider changes the words the model is given, the same way it does in SOUND; the model itself runs
+the same. LENGTH, VARIETY and VARIANTS don't apply in KIT (each pad has its own length); STEPS and
+GUIDANCE do.
 
 ![KIT, set to PERCUSSION](docs/panel-kit-mode.png)
 

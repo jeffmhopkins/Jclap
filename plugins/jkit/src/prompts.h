@@ -1,13 +1,15 @@
 #pragma once
 
 // The dice beside the prompt: a random prompt for a role, put together from a large bank of words.
-// The STRANGE slider runs from plain studio drum sounds (0) to objects, places and processes no
-// drum machine has (1). Halfway mixes both: a familiar sound with one odd twist.
+// The STRANGE slider runs from the bare sound (0, "909 kick") through dressed up studio drum sounds
+// to objects, places and processes no drum machine has (1). Halfway mixes both: a familiar sound
+// with one odd twist.
 //
 // A prompt reads the way the model was trained to read them: the sound first, then its character,
 // then how it was recorded or treated, comma separated, e.g.
 //
-//    "dusty lo-fi snare, tape saturation, short room tail, 90s boom bap"     (strange 0)
+//    "punchy 909 kick"                                                       (strange 0)
+//    "dusty lo-fi snare, tape saturation, short room tail, 90s boom bap"     (strange 0.25)
 //    "snare made of a slammed filing cabinet, gated, plate reverb"           (strange 0.5)
 //    "a glass of ice dropped on marble, granular smear, played backwards"    (strange 1)
 //
@@ -285,6 +287,9 @@ inline bool contains(const std::vector<std::string> &v, const std::string &s) {
 
 } // namespace prompts
 
+// Below this on the slider, a random prompt is only the sound itself.
+constexpr double kGenericEnd = 0.15;
+
 // A random prompt for `role`; `strange` 0..1 is the slider. `detailed` (for Stable Audio Open 1.0)
 // adds a layer or the recording, or both. Same arguments, same prompt.
 inline std::string randomPrompt(Role role, double strange, uint64_t seed, bool detailed = false) {
@@ -292,6 +297,19 @@ inline std::string randomPrompt(Role role, double strange, uint64_t seed, bool d
    strange = strange < 0 ? 0 : strange > 1 ? 1 : strange;
    Rng rng(seed * 7919u + static_cast<uint64_t>(role) * 104729u + static_cast<uint64_t>(strange * 1000.0));
    const RoleWords &w = roleWords(role);
+
+   // The GENERIC end: just the sound, now and then with one word of character, "909 kick" or "punchy
+   // 909 kick". 1.0 adds how it was recorded.
+   if (strange < kGenericEnd) {
+      std::string p = rng.pick(w.sounds);
+      if (rng.chance(0.6))
+         p = std::string(rng.pick(w.traits)) + " " + p;
+      if (detailed)
+         p += std::string(", ") + rng.pick(recordings());
+      return p;
+   }
+   // The rest of the slider runs from a dressed up studio sound to the strangest.
+   strange = (strange - kGenericEnd) / (1.0 - kGenericEnd);
 
    // The sound: the role's plain one, or (more often the stranger it is) an odd object.
    std::string head;
