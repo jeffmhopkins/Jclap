@@ -1502,41 +1502,6 @@ private:
 
 // The ENGINE button: the selected engine's name and a chevron, like a dropdown, that opens the
 // engine picker.
-class EngineButton : public visage::Frame {
-public:
-   std::function<std::string()> name;
-   std::function<void()> onClick;
-   void draw(visage::Canvas &c) override {
-      const float s = ui::designScale(*this);
-      const ui::Theme &t = ui::defaultTheme();
-      c.setColor(hover_ ? 0xff2b3038 : t.button);
-      c.roundedRectangle(0, 0, width(), height(), 3 * s);
-      c.setColor(hover_ ? kOrange : t.panelBorder);
-      c.roundedRectangleBorder(0, 0, width(), height(), 3 * s, 1.0f);
-      c.setColor(t.text);
-      c.text(name ? name() : "", ui::font(9.5f * s), visage::Font::kLeft, 8 * s, 0, width() - 26 * s, height());
-      const float cx = width() - 12 * s, cy = height() / 2;
-      c.setColor(kOrange);
-      c.segment(cx - 3.5f * s, cy - 1.5f * s, cx, cy + 2 * s, 1.3f * s, true);
-      c.segment(cx, cy + 2 * s, cx + 3.5f * s, cy - 1.5f * s, 1.3f * s, true);
-   }
-   void mouseEnter(const visage::MouseEvent &) override {
-      hover_ = true;
-      redraw();
-   }
-   void mouseExit(const visage::MouseEvent &) override {
-      hover_ = false;
-      redraw();
-   }
-   void mouseDown(const visage::MouseEvent &) override {
-      if (onClick)
-         onClick();
-   }
-
-private:
-   bool hover_ = false;
-};
-
 // The engine picker: a card over the whole panel with one panel per engine, saying what it's for,
 // with examples, how fast it is, and its size and whether it's downloaded. Click one to use it;
 // click outside (or the X) to close.
@@ -1965,9 +1930,16 @@ private:
    void buildGenerate() {
       const Page P = kGeneratePage;
       // MODEL
-      engine_ = &onPage<EngineButton>(P, {24, 128, 188, 22});
-      engine_->name = [this] { return EnginePicker::info(host_.gen().engine).name; };
-      engine_->onClick = [this] { enginePicker_->open(); };
+      std::vector<std::string> engineNames;
+      for (int i = 0; i < 3; ++i) // Small, ORB, 1.0: the engine index order
+         engineNames.push_back(EnginePicker::info(i).name);
+      engine_ = &onPage<ui::Dropdown>(P, {24, 128, 160, 22}, engineNames);
+      engine_->setAccent(kOrange);
+      engine_->onChange = [this](int i) { pickEngine_(i); };
+      // "?" opens the engine picker: what each engine is for, side by side.
+      engineHelp_ = &onPage<ui::Button>(P, {188, 128, 24, 22}, "?");
+      engineHelp_->onClick = [this] { enginePicker_->open(); };
+      tips_.add(*engineHelp_, "What each engine is for, side by side. Pick one there too.");
       pickEngine_ = [this](int i) {
          GenSettings &g = host_.gen();
          if (g.engine != i) {
@@ -1988,7 +1960,7 @@ private:
          syncEngine();
          redraw();
       };
-      tips_.add(*engine_, "The engine that makes the sounds. Click to see what each one is for and choose.");
+      tips_.add(*engine_, "The engine that makes the sounds. ? says what each one is for.");
       engineAction_ = &onPage<ui::Button>(P, {310, 128, 62, 22}, "DOWNLOAD");
       engineAction_->setAccent(kOrange);
       engineAction_->onClick = [this] { engineAction(); };
@@ -2237,7 +2209,7 @@ private:
 
    // ORB plans the sound and plays it: it has no diffusion steps, guidance or variety.
    void syncEngine() {
-      engine_->redraw();
+      engine_->setSelected(host_.gen().engine);
       const bool open1 = host_.gen().engine == 2;
       steps_->setRange(open1 ? ui::ValueRange{10, 100, 50, 1, false, true} : ui::ValueRange{4, 16, 8, 1, false, true});
       guidance_->setRange(open1 ? ui::ValueRange{1, 12, 7, 0.1} : ui::ValueRange{1, 7, 1, 0.1});
@@ -2868,7 +2840,8 @@ private:
    ui::PresetBar *presets_ = nullptr;
 
    // Generate
-   EngineButton *engine_ = nullptr;
+   ui::Dropdown *engine_ = nullptr;
+   ui::Button *engineHelp_ = nullptr;
    EnginePicker *enginePicker_ = nullptr;
    std::function<void(int)> pickEngine_;
    ui::Button *engineAction_ = nullptr;

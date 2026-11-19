@@ -18,7 +18,7 @@ JKit opens on the **KIT** tab; **GENERATE** is next to it.
 
 ## The engines
 
-JKit makes its sounds with an engine you pick with the ENGINE button. Each runs inside the plugin on your
+JKit makes its sounds with an engine you pick in the ENGINE menu. Each runs inside the plugin on your
 computer's CPU: nothing is sent anywhere, and there's no helper app and no Python. No engine comes
 with the plugin. Each downloads the first time you GENERATE with it (or press DOWNLOAD), and each
 can be removed on its own:
@@ -123,12 +123,12 @@ ORB renders at 48 kHz; JKit resamples to 44.1 kHz like every other sound.
 
 ## The Generate tab
 
-**MODEL**: the ENGINE button opens the engine picker (below), then whether the engine is downloaded,
+**MODEL**: the ENGINE menu and its **?** button, which opens the engine picker (below), then whether the engine is downloaded,
 downloading, loading or loaded, and its download size or size on disk, with DOWNLOAD, CANCEL or
 REMOVE.
 
 The engine picker shows the three engines side by side, each with what it's for, prompts to try, how
-fast it is, and its download size (or that it's downloaded). Click one to use it. **Stable Audio Open
+fast it is, and its download size (or that it's downloaded). Click one to use it, or click outside it to close it. **Stable Audio Open
 Small** is the default and the one for real drum sounds; **Stable Audio Open 1.0** is richer and
 slower, for detailed prompts; **ORB** is for sound effects (door slams, glass, metal, knocks,
 punches...), not drums.
