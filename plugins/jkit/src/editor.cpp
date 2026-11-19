@@ -1731,6 +1731,8 @@ public:
    std::function<int()> engine;
    std::function<double()> secondsPerSound; // the last run's, or a guess
    std::function<void(bool emptyOnly)> onStart;
+   std::function<void()> onDice; // a random style for this kind of kit, into PROMPT
+   int layout = kDrumKitLayout;  // DRUM KIT or PERCUSSION
 
    void open() {
       hover_ = -1;
@@ -1741,7 +1743,7 @@ public:
 
    visage::Bounds card() const {
       const float s = ui::designScale(*this);
-      const float w = 600 * s, h = 330 * s;
+      const float w = 600 * s, h = 358 * s;
       return {(width() - w) / 2, (height() - h) / 2, w, h};
    }
    // 0 empty pads only, 1 all pads.
@@ -1750,6 +1752,17 @@ public:
       const visage::Bounds b = card();
       const float w = (b.width() - 40 * s - 12 * s) / 2;
       return {b.x() + 20 * s + i * (w + 12 * s), b.bottom() - 60 * s, w, 40 * s};
+   }
+   // The kind of kit's pills, and the dice beside the style.
+   visage::Bounds pill(int i) const {
+      const float s = ui::designScale(*this);
+      const visage::Bounds b = card();
+      return {b.x() + 70 * s + i * 112 * s, b.y() + 58 * s, 106 * s, 20 * s};
+   }
+   visage::Bounds dice() const {
+      const float s = ui::designScale(*this);
+      const visage::Bounds b = card();
+      return {b.right() - 46 * s, b.y() + 86 * s, 26 * s, 20 * s};
    }
    int emptyCount() const {
       int n = 0;
@@ -1773,25 +1786,59 @@ public:
       c.setColor(kTitle);
       c.text("GENERATE A WHOLE KIT", ui::font(12 * s), visage::Font::kLeft, x, b.y() + 16 * s, 300 * s, 18 * s);
       c.setColor(t.dimText);
-      c.text("A sound for every pad, laid out like a General MIDI drum kit, all in one style.", ui::font(9 * s),
-             visage::Font::kLeft, x, b.y() + 34 * s, w, 14 * s);
+      static const char *const kAbout[kKitLayoutCount] = {
+         "A sound for every pad, laid out like a General MIDI drum kit, all in one style.",
+         "A sound for every pad: hand drums from around the world, one stroke each, all in one style.",
+         "A sound for every pad: bleeps, bloops, zaps, glitches and hits, all in one style.",
+         "A sound for every pad: a different animal on each, all in one style."};
+      c.text(kAbout[std::clamp(layout, 0, kKitLayoutCount - 1)],
+             ui::font(9 * s), visage::Font::kLeft, x, b.y() + 34 * s, w, 14 * s);
       const float xx = b.right() - 26 * s, xy = b.y() + 18 * s;
       c.segment(xx, xy, xx + 9 * s, xy + 9 * s, 1.4f * s, true);
       c.segment(xx + 9 * s, xy, xx, xy + 9 * s, 1.4f * s, true);
 
+      // The kind of kit.
+      c.setColor(t.dimText);
+      c.text("KIT", ui::font(8 * s), visage::Font::kLeft, x, b.y() + 58 * s, 50 * s, 20 * s);
+      static const char *const kPills[kKitLayoutCount] = {"DRUM KIT", "PERCUSSION", "FX", "ANIMALS"};
+      for (int i = 0; i < kKitLayoutCount; ++i) {
+         const visage::Bounds r = pill(i);
+         const bool on = i == layout;
+         c.setColor(on ? kSlate : t.button);
+         c.roundedRectangle(r.x(), r.y(), r.width(), r.height(), r.height() / 2);
+         c.setColor(on ? kOrange : t.panelBorder);
+         c.roundedRectangleBorder(r.x(), r.y(), r.width(), r.height(), r.height() / 2, 1.0f);
+         c.setColor(on ? t.text : t.dimText);
+         c.text(kPills[i], ui::font(9 * s), visage::Font::kCenter, r.x(), r.y(), r.width(), r.height());
+      }
+      // The dice: a random style for this kind of kit.
+      {
+         const visage::Bounds r = dice();
+         c.setColor(hover_ == 2 ? t.buttonHover : t.button);
+         c.roundedRectangle(r.x(), r.y(), r.width(), r.height(), 4 * s);
+         c.setColor(t.panelBorder);
+         c.roundedRectangleBorder(r.x(), r.y(), r.width(), r.height(), 4 * s, 1.0f);
+         c.setColor(kOrange);
+         ui::drawDie(c, r.x() + r.width() / 2, r.y() + r.height() / 2, 13 * s);
+      }
+
       // The style.
-      float y = b.y() + 60 * s;
+      float y = b.y() + 88 * s;
       const std::string st = style ? style() : std::string();
       c.setColor(t.dimText);
       c.text("STYLE", ui::font(8 * s), visage::Font::kLeft, x, y, 60 * s, 14 * s);
       c.setColor(st.empty() ? t.dimText : t.text);
-      c.text(st.empty() ? "None typed: the kit gets a random style. Type one in PROMPT to choose it."
-                        : "\"" + (st.size() > 90 ? st.substr(0, 87) + "..." : st) + "\"",
-             ui::font(9.5f * s), visage::Font::kLeft, x + 50 * s, y, w - 50 * s, 14 * s);
+      c.text(st.empty() ? "None typed: the kit gets a random style. Type one in PROMPT, or roll the dice."
+                        : "\"" + (st.size() > 80 ? st.substr(0, 77) + "..." : st) + "\"",
+             ui::font(9.5f * s), visage::Font::kLeft, x + 50 * s, y, w - 86 * s, 14 * s);
 
       c.setColor(t.dimText);
-      c.text("Each pad asks for its own sound in this style: \"closed hi-hat, " +
-                 (st.empty() ? std::string("...") : (st.size() > 40 ? st.substr(0, 37) + "..." : st)) +
+      c.text(std::string("Each pad asks for its own sound in this style: \"") +
+                 (layout == kHandPercussionLayout ? "conga slap, "
+                  : layout == kFxLayout           ? "laser zap, "
+                  : layout == kAnimalLayout       ? "dog bark, "
+                                                  : "closed hi-hat, ") +
+                 (st.empty() ? std::string("...") : (st.size() > 28 ? st.substr(0, 25) + "..." : st)) +
                  "\". Describe a style, not one sound.",
              ui::font(8.5f * s), visage::Font::kLeft, x + 50 * s, y + 16 * s, w - 50 * s, 13 * s);
 
@@ -1806,10 +1853,10 @@ public:
          c.roundedRectangle(px, py, gw, gh, 4 * s);
          c.setColor(filled ? t.panelBorder : 0xff3a4250);
          c.roundedRectangleBorder(px, py, gw, gh, 4 * s, 1.0f);
-         c.setColor(roleColour(kitSlot(p).role));
+         c.setColor(roleColour(kitSlot(p, layout).role));
          c.circle(px + 8 * s, py + gh / 2 - 2.5f * s, 5 * s);
          c.setColor(t.text);
-         c.text(kitSlot(p).name, ui::font(9 * s), visage::Font::kLeft, px + 18 * s, py, gw - 60 * s, gh);
+         c.text(kitSlot(p, layout).name, ui::font(9 * s), visage::Font::kLeft, px + 18 * s, py, gw - 60 * s, gh);
          c.setColor(t.dimText);
          c.text(filled ? "has a sound" : "empty", ui::font(7.5f * s), visage::Font::kRight, px, py, gw - 8 * s, gh);
       }
@@ -1819,7 +1866,7 @@ public:
       c.setColor(usable() ? t.dimText : kOrange);
       std::string note;
       if (!usable()) {
-         note = "ORB makes sound effects, not drums. Pick Stable Audio Open Small or 1.0 in ENGINE first.";
+         note = "WHOLE KIT uses Stable Audio. Pick Stable Audio Open Small or 1.0 in ENGINE first.";
       } else {
          const double per = secondsPerSound ? secondsPerSound() : 5.0;
          const auto take = [&](int n) {
@@ -1828,7 +1875,8 @@ public:
                             : "about " + std::to_string(static_cast<int>(sec / 60 + 0.5)) + " min";
          };
          note = "Empty pads: " + std::to_string(emptyCount()) + " sounds, " + take(emptyCount()) +
-                ".  All pads: 16 sounds, " + take(16) + ". The hats share choke group 1.";
+                ".  All pads: 16 sounds, " + take(16) + "." +
+                (layout == kDrumKitLayout ? " The hats share choke group 1." : "");
       }
       c.text(note, ui::font(8.5f * s), visage::Font::kLeft, x, y, w, 14 * s);
 
@@ -1851,13 +1899,25 @@ public:
    }
 
    void mouseMove(const visage::MouseEvent &e) override {
-      const int h = button(0).contains(e.position) ? 0 : button(1).contains(e.position) ? 1 : -1;
+      const int h = button(0).contains(e.position) ? 0 : button(1).contains(e.position) ? 1 : dice().contains(e.position) ? 2 : -1;
       if (h != hover_) {
          hover_ = h;
          redraw();
       }
    }
    void mouseDown(const visage::MouseEvent &e) override {
+      for (int i = 0; i < kKitLayoutCount; ++i)
+         if (pill(i).contains(e.position)) {
+            layout = i;
+            redraw();
+            return;
+         }
+      if (dice().contains(e.position)) {
+         if (onDice)
+            onDice();
+         redraw();
+         return;
+      }
       for (int i = 0; i < 2; ++i)
          if (button(i).contains(e.position)) {
             if (usable() && (i == 1 || emptyCount() > 0)) {
@@ -2017,6 +2077,10 @@ public:
          return host_.gen().engine == 2 ? 30.0 : 4.0;
       };
       kitDialog_->onStart = [this](bool emptyOnly) { startKit(emptyOnly); };
+      kitDialog_->onDice = [this] {
+         host_.gen().prompt = randomKitStyle(std::random_device{}(), kitDialog_->layout);
+         prompt_->setText(host_.gen().prompt);
+      };
       kitDialog_->setOnTop(true);
       kitDialog_->setVisible(false);
       tabs_->select(host_.page);
@@ -2029,7 +2093,10 @@ public:
       host_.page = page;
    }
    void openEnginePicker() { enginePicker_->open(); }
-   void openKitDialog() { kitDialog_->open(); }
+   void openKitDialog(int layout = kDrumKitLayout) {
+      kitDialog_->layout = layout;
+      kitDialog_->open();
+   }
 
    // ---- the timer ----
 
@@ -2323,15 +2390,16 @@ private:
    void startKit(bool emptyOnly) {
       if (host_.generating() || orb())
          return;
+      kitLayout_ = kitDialog_->layout;
       kitStyle_ = trimmed(host_.gen().prompt);
       if (kitStyle_.empty())
-         kitStyle_ = randomKitStyle(std::random_device{}());
+         kitStyle_ = randomKitStyle(std::random_device{}(), kitLayout_);
       kitQueue_.clear();
-      // The kick and snare first, so you hear the kit take shape.
-      static const int kOrder[kKitSlots] = {0, 2, 6, 10, 3, 1, 4, 8, 13, 5, 7, 9, 11, 12, 14, 15};
-      for (int p : kOrder)
-         if (!emptyOnly || !host_.padSample(p))
-            kitQueue_.push_back(p);
+      // The backbone first (kick and snare, or cajon), so you hear the kit take shape.
+      const int *order = kitOrder(kitLayout_);
+      for (int i = 0; i < kKitSlots; ++i)
+         if (!emptyOnly || !host_.padSample(order[i]))
+            kitQueue_.push_back(order[i]);
       kitTotal_ = static_cast<int>(kitQueue_.size());
       if (kitQueue_.empty())
          return;
@@ -2344,8 +2412,8 @@ private:
    void nextKitSound() {
       if (kitQueue_.empty())
          return;
-      const KitSlot &slot = kitSlot(kitQueue_.front());
-      host_.generateOne(kitPrompt(kitQueue_.front(), kitStyle_), slot.role, slot.seconds, slot.name);
+      const KitSlot &slot = kitSlot(kitQueue_.front(), kitLayout_);
+      host_.generateOne(kitPrompt(kitQueue_.front(), kitStyle_, kitLayout_), slot.role, slot.seconds, slot.name);
    }
    void stopKit() {
       kitQueue_.clear();
@@ -2364,7 +2432,7 @@ private:
       };
       set(padParam(pad, kStart), 0.0);
       set(padParam(pad, kEnd), 1.0);
-      const int choke = kitSlot(pad).choke;
+      const int choke = kitSlot(pad, kitLayout_).choke;
       if (choke > 0 && host_.paramValue(padParam(pad, kChoke)) < 0.5)
          set(padParam(pad, kChoke), choke);
    }
@@ -2552,7 +2620,7 @@ private:
          generate_->setLabel(p < 0 ? std::string(status_.state == EngineStatus::State::Downloading ? "WAITING FOR THE DOWNLOAD"
                                                                                                   : "LOADING THE MODEL")
                                    : "KIT " + std::to_string(kitTotal_ - static_cast<int>(kitQueue_.size()) + 1) + " OF " +
-                                         std::to_string(kitTotal_) + " \xC2\xB7 " + kitSlot(kitQueue_.front()).name + " " +
+                                         std::to_string(kitTotal_) + " \xC2\xB7 " + kitSlot(kitQueue_.front(), kitLayout_).name + " " +
                                          std::to_string(static_cast<int>(p * 100)) + "%");
       else if (busy)
          generate_->setLabel(p < 0 ? (status_.state == EngineStatus::State::Downloading ? "WAITING FOR THE DOWNLOAD"
@@ -3140,6 +3208,7 @@ private:
    std::vector<int> kitQueue_;
    int kitTotal_ = 0;
    std::string kitStyle_;
+   int kitLayout_ = kDrumKitLayout;
    int lastRunSounds_ = 0;
    std::function<void(int)> pickEngine_;
    ui::Button *engineAction_ = nullptr;
@@ -3191,8 +3260,8 @@ bool renderScreenshot(EditorHost &host, int page, int width, int height, const c
    panel.showPage(page);
    if (overlay == 1)
       panel.openEnginePicker();
-   else if (overlay == 2)
-      panel.openKitDialog();
+   else if (overlay == 2 || overlay == 3)
+      panel.openKitDialog(overlay == 3 ? kHandPercussionLayout : kDrumKitLayout);
    panel.setBounds(0, 0, static_cast<float>(width), static_cast<float>(height));
    panel.timerCallback();
    panel.timerCallback();

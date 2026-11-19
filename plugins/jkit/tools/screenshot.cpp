@@ -218,7 +218,9 @@ int main(int argc, char **argv) {
    const int width = argc > 4 ? std::atoi(argv[3]) : kEditorWidth;
    const int height = argc > 4 ? std::atoi(argv[4]) : kEditorHeight;
    DemoHost host(page == 2, page == 3);
-   // Page 1 is the Kit tab (the panel's page 0); 0, 2, 3, 4 and 5 the Generate tab (its page 1), 4
-   // with the engine picker open and 5 with GENERATE KIT's card.
-   return renderScreenshot(host, page == 1 ? 0 : 1, width, height, argv[1], page == 4 ? 1 : page == 5 ? 2 : 0) ? 0 : 1;
+   if (page == 6)
+      host.gen().prompt = "Afro-Cuban rumba percussion, warm natural room";
+   // Page 1 is the Kit tab (the panel's page 0); 0 and 2 to 6 the Generate tab (its page 1), 4 with
+   // the engine picker open, 5 with GENERATE KIT's card and 6 with that card set to percussion.
+   return renderScreenshot(host, page == 1 ? 0 : 1, width, height, argv[1], page == 4 ? 1 : page == 5 ? 2 : page == 6 ? 3 : 0) ? 0 : 1;
 }

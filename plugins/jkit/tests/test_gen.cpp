@@ -184,6 +184,25 @@ void testKitSlots() {
    JCLAP_CHECK(kitPrompt(6, "dusty boom bap") == "closed hi-hat, dusty boom bap");
    JCLAP_CHECK(kitPrompt(0, "") == "kick drum");
    JCLAP_CHECK(randomKitStyle(7) == randomKitStyle(7) && !randomKitStyle(7).empty());
+
+   // Hand percussion: its own sixteen, low strokes where the kicks are, no choke groups.
+   std::set<std::string> hands;
+   for (int p = 0; p < kKitSlots; ++p) {
+      const KitSlot &k = kitSlot(p, kHandPercussionLayout);
+      hands.insert(k.name);
+      JCLAP_CHECK_EQ(k.choke, 0);
+   }
+   JCLAP_CHECK_EQ(static_cast<int>(hands.size()), kKitSlots);
+   JCLAP_CHECK(kitSlot(0, kHandPercussionLayout).role == kKick && kitSlot(2, kHandPercussionLayout).role == kSnare);
+   JCLAP_CHECK(kitPrompt(8, "flamenco", kHandPercussionLayout) == "conga slap, one hand stroke, flamenco");
+   const std::string hs = randomKitStyle(3, kHandPercussionLayout);
+   JCLAP_CHECK(hs.find(" percussion, ") != std::string::npos);
+   // Each order makes every pad once.
+   for (int layout = 0; layout < kKitLayoutCount; ++layout) {
+      std::set<int> seen(kitOrder(layout), kitOrder(layout) + kKitSlots);
+      JCLAP_CHECK_EQ(static_cast<int>(seen.size()), kKitSlots);
+      JCLAP_CHECK(*seen.begin() == 0 && *seen.rbegin() == kKitSlots - 1);
+   }
 }
 
 void testStudio() {

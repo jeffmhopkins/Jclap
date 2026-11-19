@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.5.0)
+jclap_plugin_version(0.6.0)
 
 # miniz unpacks ONNX Runtime's library from Microsoft's NuGet package (a zip) on first use.
 include(FetchContent)
@@ -69,4 +69,6 @@ if(JCLAP_BUILD_TOOLS)
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-engines.png ARGS 4)
    jclap_add_screenshot_test(jkit-screenshot-kit-dialog-test TOOL jkit-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-whole-kit.png ARGS 5)
+   jclap_add_screenshot_test(jkit-screenshot-kit-percussion-test TOOL jkit-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-whole-kit-percussion.png ARGS 6)
 endif()
