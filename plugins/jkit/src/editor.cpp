@@ -833,7 +833,10 @@ public:
       const ui::Theme &t = ui::defaultTheme();
       for (int i = 0; i < kPads; ++i) {
          const visage::Bounds b = cell(i);
-         const SamplePtr p = host_.padSample(i);
+         // With takes, the one that played last (its waveform changes hit to hit).
+         const PadSounds sounds = host_.padSounds(i);
+         const int shown = host_.padTake(i);
+         const SamplePtr p = shown >= 0 && shown < sounds.count() ? sounds.takes[static_cast<size_t>(shown)].sample : sounds.first();
          const bool sel = i == host_.selectedPad, target = dragging_ && i == hover_ && i != dragFrom_;
          const std::string note = ui::noteName(kFirstNote + i);
          if (!p) {
@@ -871,8 +874,8 @@ public:
             c.circle(b.x() - 0.5f * s, b.y() + 2.5f * s, 18 * s);
          }
          c.setColor(sel ? t.text : kTitle);
-         c.text(ellipsis(p->name, 14), ui::font(9.5f * s), visage::Font::kLeft, b.x() + 15 * s, b.y() + 5 * s,
-                b.width() - 20 * s, 13 * s);
+         c.text(ellipsis(p->name, sounds.count() > 1 ? 10 : 14), ui::font(9.5f * s), visage::Font::kLeft, b.x() + 15 * s,
+                b.y() + 5 * s, b.width() - (sounds.count() > 1 ? 46 : 20) * s, 13 * s);
          const float wx = b.x() + 6 * s, wy = b.y() + 22 * s, ww = b.width() - 12 * s, wh = b.height() - 42 * s;
          caches_[i].get(p, 30);
          drawWave(c, caches_[i].peaks, wx, wy, ww, wh, sel ? kOrange : 0xff5f6670);
@@ -883,6 +886,14 @@ public:
          }
          c.setColor(t.dimText);
          c.text(note, ui::font(8 * s), visage::Font::kLeft, b.x() + 6 * s, b.bottom() - 16 * s, 30 * s, 12 * s);
+         // How many takes, when more than one.
+         if (sounds.count() > 1) {
+            const float tx = b.right() - 27 * s, ty = b.y() + 5 * s;
+            c.setColor(sel ? 0xff4a3520 : 0xff343a44);
+            c.roundedRectangle(tx, ty, 22 * s, 12 * s, 3 * s);
+            c.setColor(sel ? kOrange : t.text);
+            c.text("x" + std::to_string(sounds.count()), ui::font(7.5f * s), visage::Font::kCenter, tx, ty, 22 * s, 12 * s);
+         }
          // The sends.
          const float bw = 18 * s, bx = b.right() - 6 * s - 2 * bw - 3 * s, by = b.bottom() - 10 * s;
          const double rv = host_.paramValue(padParam(i, kReverbSend)), dl = host_.paramValue(padParam(i, kDelaySend));
@@ -1697,12 +1708,20 @@ public:
       }
    }
    std::function<void()> onClick;
+   void setEnabled(bool on) {
+      if (on != enabled_) {
+         enabled_ = on;
+         redraw();
+      }
+   }
    void draw(visage::Canvas &c) override {
       const float s = ui::designScale(*this);
-      c.setColor(hover_ ? 0xff3a2a1a : 0xff2b2118);
+      c.setColor(!enabled_ ? kWell : hover_ ? 0xff3a2a1a : 0xff2b2118);
       c.roundedRectangle(0, 0, width(), height(), 6 * s);
-      c.setColor(kOrange);
+      c.setColor(enabled_ ? kOrange : ui::defaultTheme().panelBorder);
       c.roundedRectangleBorder(0, 0, width(), height(), 6 * s, 1.2f * s);
+      if (!enabled_)
+         c.setColor(ui::defaultTheme().dimText);
       c.text(text_, ui::font(10.5f * s), visage::Font::kCenter, 0, 0, width(), height());
    }
    void mouseEnter(const visage::MouseEvent &) override {
@@ -1714,13 +1733,13 @@ public:
       redraw();
    }
    void mouseDown(const visage::MouseEvent &) override {
-      if (onClick)
+      if (enabled_ && onClick)
          onClick();
    }
 
 private:
    std::string text_;
-   bool hover_ = false;
+   bool hover_ = false, enabled_ = true;
 };
 
 // GENERATE KIT's card: the style it will use, the sixteen pads it fills (a General MIDI kit), how
@@ -1733,7 +1752,17 @@ public:
    std::function<int()> engine;
    std::function<double()> secondsPerSound; // the last run's, or a guess
    std::function<void(bool emptyOnly)> onStart;
+   std::function<int()> takes;          // takes per pad: 1, 2 or 4
+   std::function<void(int)> setTakes;
    int layout = kDrumKitLayout; // the kind of kit (PROMPT's pills, in KIT)
+   static constexpr int kTakeChoices[3] = {1, 2, 4};
+   int takesNow() const { return takes ? takes() : 1; }
+   // TAKES PER PAD's three choices.
+   visage::Bounds takesBox(int i) const {
+      const float s = ui::designScale(*this);
+      const visage::Bounds b = card();
+      return {b.x() + (20 + 96 + i * 40) * s, b.y() + 233 * s, 34 * s, 20 * s};
+   }
 
    void open() {
       hover_ = -1;
@@ -1744,7 +1773,7 @@ public:
 
    visage::Bounds card() const {
       const float s = ui::designScale(*this);
-      const float w = 600 * s, h = 330 * s;
+      const float w = 600 * s, h = 360 * s;
       return {(width() - w) / 2, (height() - h) / 2, w, h};
    }
    // 0 empty pads only, 1 all pads.
@@ -1829,20 +1858,40 @@ public:
       }
       y += 4 * (gh + 6 * s) + 4 * s;
 
+      // Takes per pad: close variations of each pad's sound, one played each hit.
+      c.setColor(t.dimText);
+      c.text("TAKES PER PAD", ui::font(8 * s), visage::Font::kLeft, x, takesBox(0).y(), 96 * s, takesBox(0).height());
+      for (int i = 0; i < 3; ++i) {
+         const visage::Bounds r = takesBox(i);
+         const bool on = takesNow() == kTakeChoices[i];
+         c.setColor(on ? kOrange : hover_ == 10 + i ? 0xff3a404a : kWell);
+         c.roundedRectangle(r.x(), r.y(), r.width(), r.height(), 4 * s);
+         c.setColor(on ? 0xff1a1d22 : t.text);
+         c.text(std::to_string(kTakeChoices[i]), ui::font(9.5f * s), visage::Font::kCenter, r.x(), r.y(), r.width(), r.height());
+      }
+      c.setColor(t.dimText);
+      c.text(takesNow() > 1 ? "each pad gets " + std::to_string(takesNow()) + " close variations, a different one each hit"
+                            : std::string("one sound a pad; 2 or 4 give each pad variations, a different one each hit"),
+             ui::font(8.5f * s), visage::Font::kLeft, takesBox(2).right() + 12 * s, takesBox(0).y(), 340 * s,
+             takesBox(0).height());
+      y += 30 * s;
+
       // How long, or why not.
       c.setColor(usable() ? t.dimText : kOrange);
       std::string note;
       if (!usable()) {
          note = "WHOLE KIT uses Stable Audio. Pick Stable Audio Open Small or 1.0 in ENGINE first.";
       } else {
-         const double per = secondsPerSound ? secondsPerSound() : 5.0;
+         // More takes cost more: a variant on top takes most of what the first one does.
+         const double per = (secondsPerSound ? secondsPerSound() : 5.0) * (1.0 + 0.8 * (takesNow() - 1));
          const auto take = [&](int n) {
             const double sec = n * per;
             return sec < 90 ? "about " + std::to_string(std::max(1, static_cast<int>(sec / 10 + 0.5)) * 10) + " s"
                             : "about " + std::to_string(static_cast<int>(sec / 60 + 0.5)) + " min";
          };
-         note = "Empty pads: " + std::to_string(emptyCount()) + " sounds, " + take(emptyCount()) +
-                ".  All pads: 16 sounds, " + take(16) + "." +
+         const std::string unit = takesNow() > 1 ? " pads, " : " sounds, ";
+         note = "Empty pads: " + std::to_string(emptyCount()) + unit + take(emptyCount()) +
+                ".  All pads: 16" + unit + take(16) + "." +
                 (layout == kDrumKitLayout ? " The hats share choke group 1." : "");
       }
       c.text(note, ui::font(8.5f * s), visage::Font::kLeft, x, y, w, 14 * s);
@@ -1866,13 +1915,23 @@ public:
    }
 
    void mouseMove(const visage::MouseEvent &e) override {
-      const int h = button(0).contains(e.position) ? 0 : button(1).contains(e.position) ? 1 : -1;
+      int h = button(0).contains(e.position) ? 0 : button(1).contains(e.position) ? 1 : -1;
+      for (int i = 0; i < 3; ++i)
+         if (takesBox(i).contains(e.position))
+            h = 10 + i;
       if (h != hover_) {
          hover_ = h;
          redraw();
       }
    }
    void mouseDown(const visage::MouseEvent &e) override {
+      for (int i = 0; i < 3; ++i)
+         if (takesBox(i).contains(e.position)) {
+            if (setTakes)
+               setTakes(kTakeChoices[i]);
+            redraw();
+            return;
+         }
       for (int i = 0; i < 2; ++i)
          if (button(i).contains(e.position)) {
             if (usable() && (i == 1 || emptyCount() > 0)) {
@@ -1889,6 +1948,476 @@ public:
 
 private:
    int hover_ = -1;
+};
+
+// TAKES: a pad's takes, one row each, over the panel. Each hit plays one take, picked as the mode
+// says; each take has its own region and fades (drag them on its waveform), level, tune and cuts
+// (drag a value up or down; double-click puts it back). The pad's own controls apply on top.
+class TakeEditor : public visage::Frame {
+public:
+   explicit TakeEditor(EditorHost &host) : host_(host) {}
+   int pad = 0;
+
+   void open(int forPad) {
+      pad = forPad;
+      hover_ = {};
+      drag_ = {};
+      setVisible(true);
+      redraw();
+   }
+   void close() { setVisible(false); }
+
+   // The value columns, after the waveform.
+   enum Column { kLevelCol, kTuneCol, kLowCol, kHighCol, kColumns };
+
+   visage::Bounds card() const {
+      const float s = ui::designScale(*this);
+      const float w = 760 * s, h = 470 * s;
+      return {(width() - w) / 2, (height() - h) / 2, w, h};
+   }
+   float sc() const { return ui::designScale(*this); }
+   float rowY(int i) const { return card().y() + (122 + i * 36) * sc(); }
+   float rowH() const { return 32 * sc(); }
+   float left() const { return card().x() + 20 * sc(); }
+   visage::Bounds playBox(int i) const { return {left(), rowY(i) + 6 * sc(), 20 * sc(), 20 * sc()}; }
+   visage::Bounds waveBox(int i) const { return {left() + 58 * sc(), rowY(i) + 2 * sc(), 300 * sc(), rowH() - 4 * sc()}; }
+   visage::Bounds valueBox(int i, int col) const {
+      return {left() + (372 + col * 70) * sc(), rowY(i) + 6 * sc(), 64 * sc(), 20 * sc()};
+   }
+   visage::Bounds upBox(int i) const { return {left() + 656 * sc(), rowY(i) + 6 * sc(), 20 * sc(), 20 * sc()}; }
+   visage::Bounds removeBox(int i) const { return {left() + 680 * sc(), rowY(i) + 6 * sc(), 20 * sc(), 20 * sc()}; }
+   visage::Bounds modeBox(int m) const {
+      return {left() + (60 + m * 88) * sc(), card().y() + 62 * sc(), 84 * sc(), 22 * sc()};
+   }
+   visage::Bounds addBox() const {
+      const visage::Bounds b = card();
+      return {b.x() + 20 * sc(), b.bottom() - 52 * sc(), 300 * sc(), 32 * sc()};
+   }
+   visage::Bounds doneBox() const {
+      const visage::Bounds b = card();
+      return {b.right() - 140 * sc(), b.bottom() - 52 * sc(), 120 * sc(), 32 * sc()};
+   }
+   visage::Bounds closeBox() const {
+      const visage::Bounds b = card();
+      return {b.right() - 36 * sc(), b.y() + 10 * sc(), 26 * sc(), 26 * sc()};
+   }
+
+   // The variants ADD would bring: the starred ones, or all of them when none is starred.
+   std::vector<SamplePtr> variantsToAdd() const {
+      std::vector<SamplePtr> all, starred;
+      for (const Variant &v : host_.variants())
+         if (v.sample) {
+            all.push_back(v.sample);
+            if (v.starred)
+               starred.push_back(v.sample);
+         }
+      return starred.empty() ? all : starred;
+   }
+   int addCount() const {
+      const int room = kMaxTakes - host_.padSounds(pad).count();
+      return std::max(0, std::min(room, static_cast<int>(variantsToAdd().size())));
+   }
+   bool anyStarred() const {
+      for (const Variant &v : host_.variants())
+         if (v.sample && v.starred)
+            return true;
+      return false;
+   }
+
+   static std::string valueText(const Take &t, int col) {
+      char b[24];
+      switch (col) {
+         case kLevelCol:
+            std::snprintf(b, sizeof(b), "%+.1f dB", t.levelDb);
+            break;
+         case kTuneCol:
+            std::snprintf(b, sizeof(b), "%+.1f st", t.tune);
+            break;
+         case kLowCol:
+            if (t.lowCutHz <= 20.5)
+               return "off";
+            std::snprintf(b, sizeof(b), t.lowCutHz < 1000 ? "%.0f Hz" : "%.1f k", t.lowCutHz < 1000 ? t.lowCutHz : t.lowCutHz / 1000);
+            break;
+         default:
+            if (t.highCutHz >= 19999)
+               return "off";
+            std::snprintf(b, sizeof(b), t.highCutHz < 1000 ? "%.0f Hz" : "%.1f k", t.highCutHz < 1000 ? t.highCutHz : t.highCutHz / 1000);
+            break;
+      }
+      return b;
+   }
+
+   void draw(visage::Canvas &c) override {
+      const float s = sc();
+      const ui::Theme &t = ui::defaultTheme();
+      c.setColor(0xb0000000);
+      c.fill(0, 0, width(), height());
+      const visage::Bounds b = card();
+      c.setColor(t.panel);
+      c.roundedRectangle(b.x(), b.y(), b.width(), b.height(), 8 * s);
+      c.setColor(t.panelBorder);
+      c.roundedRectangleBorder(b.x(), b.y(), b.width(), b.height(), 8 * s, 1.0f);
+      const PadSounds p = host_.padSounds(pad);
+      const float x = left(), w = b.width() - 40 * s;
+      c.setColor(kTitle);
+      const std::string name = p.first() ? p.first()->name : std::string("Empty");
+      c.text("PAD " + std::to_string(pad + 1) + " \xC2\xB7 " + ellipsis(name, 24) + " \xC2\xB7 TAKES", ui::font(12 * s),
+             visage::Font::kLeft, x, b.y() + 16 * s, 400 * s, 18 * s);
+      c.setColor(t.dimText);
+      c.text("Each hit plays one take. Its own trims, level, tune and cuts come first; the pad's controls apply on top.",
+             ui::font(9 * s), visage::Font::kLeft, x, b.y() + 34 * s, w, 14 * s);
+      const visage::Bounds xb = closeBox();
+      const float cx = xb.x() + 8.5f * s, cy = xb.y() + 8.5f * s;
+      c.setColor(hover_.part == kClose ? t.text : t.dimText);
+      c.segment(cx, cy, cx + 9 * s, cy + 9 * s, 1.4f * s, true);
+      c.segment(cx + 9 * s, cy, cx, cy + 9 * s, 1.4f * s, true);
+
+      // How a hit picks one.
+      c.setColor(t.dimText);
+      c.text("PLAYS", ui::font(8.5f * s), visage::Font::kLeft, x, b.y() + 62 * s, 60 * s, 22 * s);
+      for (int m = 0; m < kTakeModeCount; ++m) {
+         const visage::Bounds r = modeBox(m);
+         const bool on = p.mode == m;
+         c.setColor(on ? kOrange : hover_.part == kMode && hover_.index == m ? 0xff3a404a : kWell);
+         c.roundedRectangle(r.x(), r.y(), r.width(), r.height(), 4 * s);
+         c.setColor(on ? 0xff1a1d22 : t.text);
+         c.text(kTakeModeNames[m], ui::font(9 * s), visage::Font::kCenter, r.x(), r.y(), r.width(), r.height());
+      }
+      static const char *const kModeAbout[kTakeModeCount] = {
+         "a different take every hit, never the same twice running",
+         "the takes in order, round and round",
+         "soft hits play the first take, hard ones the last"};
+      c.setColor(t.dimText);
+      c.text(kModeAbout[std::clamp(p.mode, 0, kTakeModeCount - 1)], ui::font(9 * s), visage::Font::kLeft,
+             modeBox(2).right() + 14 * s, b.y() + 62 * s, 300 * s, 22 * s);
+
+      // Column heads.
+      const float hy = b.y() + 102 * s;
+      c.setColor(t.dimText);
+      c.text("TAKE", ui::font(8 * s), visage::Font::kLeft, x, hy, 60 * s, 14 * s);
+      c.text("REGION AND FADES  (drag the handles)", ui::font(8 * s), visage::Font::kLeft, waveBox(0).x(), hy, 300 * s, 14 * s);
+      static const char *const kHeads[kColumns] = {"LEVEL", "TUNE", "LOW CUT", "HIGH CUT"};
+      for (int col = 0; col < kColumns; ++col) {
+         const visage::Bounds v = valueBox(0, col);
+         c.text(kHeads[col], ui::font(8 * s), visage::Font::kCenter, v.x(), hy, v.width(), 14 * s);
+      }
+
+      const int playing = host_.padTake(pad);
+      const float pos = host_.padPosition(pad);
+      for (int i = 0; i < kMaxTakes; ++i) {
+         const float ry = rowY(i);
+         if (i >= p.count()) {
+            c.setColor(0xff22262c);
+            c.roundedRectangle(x, ry, w, rowH(), 4 * s);
+            if (i == p.count()) {
+               c.setColor(kFaint);
+               c.text(p.empty() ? "No sound on this pad yet." : "Add takes from the Generate tab's variants, below, or with ADD AS TAKE there.",
+                      ui::font(9 * s), visage::Font::kLeft, x + 12 * s, ry, w, rowH());
+            }
+            continue;
+         }
+         const Take &k = p.takes[static_cast<size_t>(i)];
+         const bool lit = i == playing && pos >= 0.0f;
+         c.setColor(lit ? 0xff2c2620 : kCell);
+         c.roundedRectangle(x, ry, w, rowH(), 4 * s);
+         if (lit) {
+            c.setColor(alpha(kOrange, 0.6f));
+            c.roundedRectangleBorder(x, ry, w, rowH(), 4 * s, 1.0f);
+         }
+         // Play.
+         const visage::Bounds pb = playBox(i);
+         c.setColor(hover_.part == kPlay && hover_.index == i ? kOrange : 0xff8a919c);
+         c.triangle(pb.x() + 6 * s, pb.y() + 4 * s, pb.x() + 6 * s, pb.bottom() - 4 * s, pb.right() - 4 * s, pb.y() + pb.height() / 2);
+         c.setColor(t.text);
+         c.text(std::to_string(i + 1), ui::font(10 * s), visage::Font::kLeft, pb.right() + 10 * s, ry, 20 * s, rowH());
+         // The waveform, its region and fades.
+         const visage::Bounds wb = waveBox(i);
+         c.setColor(kWell);
+         c.roundedRectangle(wb.x(), wb.y(), wb.width(), wb.height(), 3 * s);
+         if (static_cast<size_t>(i) >= caches_.size())
+            caches_.resize(kMaxTakes);
+         drawWave(c, caches_[static_cast<size_t>(i)].get(k.sample, 90), wb.x() + 2 * s, wb.y() + 2 * s, wb.width() - 4 * s,
+                  wb.height() - 4 * s, lit ? kOrange : 0xff9aa2ad, k.start, k.end);
+         const double secs = k.sample ? k.sample->seconds() : 1.0;
+         const float xa = wb.x() + wb.width() * static_cast<float>(k.start), xz = wb.x() + wb.width() * static_cast<float>(k.end);
+         const float fi = static_cast<float>(std::min(k.end - k.start, k.fadeInMs * 0.001 / secs)) * wb.width();
+         const float fo = static_cast<float>(std::min(k.end - k.start, k.fadeOutMs * 0.001 / secs)) * wb.width();
+         c.setColor(kBlue);
+         if (fi > 0.5f)
+            c.segment(xa, wb.bottom() - 2 * s, xa + fi, wb.y() + 2 * s, 1.2f * s, true);
+         if (fo > 0.5f)
+            c.segment(xz - fo, wb.y() + 2 * s, xz, wb.bottom() - 2 * s, 1.2f * s, true);
+         c.circle(xa + fi - 3 * s, wb.y() - 1 * s, 6 * s);
+         c.circle(xz - fo - 3 * s, wb.y() - 1 * s, 6 * s);
+         c.setColor(kWhite);
+         c.fill(xa - 0.75f * s, wb.y(), 1.5f * s, wb.height());
+         c.fill(xz - 0.75f * s, wb.y(), 1.5f * s, wb.height());
+         if (lit) {
+            c.setColor(0xe6ffffff);
+            c.fill(wb.x() + wb.width() * pos, wb.y(), 1.5f * s, wb.height());
+         }
+         // The values.
+         for (int col = 0; col < kColumns; ++col) {
+            const visage::Bounds v = valueBox(i, col);
+            const bool hot = (hover_.part == kValue || drag_.part == kValue) && hover_.index == i && hover_.col == col;
+            c.setColor(hot ? 0xff343a44 : kWell);
+            c.roundedRectangle(v.x(), v.y(), v.width(), v.height(), 3 * s);
+            const bool off = (col == kLowCol && k.lowCutHz <= 20.5) || (col == kHighCol && k.highCutHz >= 19999) ||
+                             (col == kLevelCol && std::fabs(k.levelDb) < 0.05) || (col == kTuneCol && std::fabs(k.tune) < 0.05);
+            c.setColor(off ? t.dimText : t.text);
+            c.text(valueText(k, col), ui::font(9 * s), visage::Font::kCenter, v.x(), v.y(), v.width(), v.height());
+         }
+         // Move up and remove.
+         if (i > 0) {
+            const visage::Bounds u = upBox(i);
+            c.setColor(hover_.part == kUp && hover_.index == i ? t.text : t.dimText);
+            c.triangle(u.x() + 5 * s, u.bottom() - 6 * s, u.right() - 5 * s, u.bottom() - 6 * s, u.x() + u.width() / 2, u.y() + 6 * s);
+         }
+         const visage::Bounds rb = removeBox(i);
+         c.setColor(hover_.part == kRemove && hover_.index == i ? kOrange : t.dimText);
+         const float rx = rb.x() + 6 * s, ryy = rb.y() + 6 * s;
+         c.segment(rx, ryy, rx + 8 * s, ryy + 8 * s, 1.3f * s, true);
+         c.segment(rx + 8 * s, ryy, rx, ryy + 8 * s, 1.3f * s, true);
+      }
+
+      // Add from the variants, and done.
+      const visage::Bounds ab = addBox();
+      const int n = addCount();
+      c.setColor(n > 0 ? (hover_.part == kAdd ? 0xff3a2a1a : 0xff2b2118) : kWell);
+      c.roundedRectangle(ab.x(), ab.y(), ab.width(), ab.height(), 6 * s);
+      c.setColor(n > 0 ? kOrange : t.panelBorder);
+      c.roundedRectangleBorder(ab.x(), ab.y(), ab.width(), ab.height(), 6 * s, 1.2f * s);
+      c.setColor(n > 0 ? kOrange : t.dimText);
+      const std::string addLabel = n > 0 ? "+ ADD " + std::to_string(n) + (anyStarred() ? " STARRED" : "") +
+                                              (n == 1 ? " VARIANT AS A TAKE" : " VARIANTS AS TAKES")
+                                         : p.count() >= kMaxTakes ? std::string("8 TAKES: THE MOST A PAD HOLDS")
+                                                                  : std::string("NO VARIANTS TO ADD");
+      c.text(addLabel, ui::font(10 * s), visage::Font::kCenter, ab.x(), ab.y(), ab.width(), ab.height());
+      c.setColor(t.dimText);
+      c.text(std::to_string(p.count()) + " of " + std::to_string(kMaxTakes) + " takes", ui::font(9 * s),
+             visage::Font::kLeft, ab.right() + 14 * s, ab.y(), 120 * s, ab.height());
+      const visage::Bounds db = doneBox();
+      c.setColor(hover_.part == kDone ? 0xfff59a3e : kOrange);
+      c.roundedRectangle(db.x(), db.y(), db.width(), db.height(), 6 * s);
+      c.setColor(0xff1a1d22);
+      c.text("DONE", ui::font(10.5f * s), visage::Font::kCenter, db.x(), db.y(), db.width(), db.height());
+   }
+
+   void mouseMove(const visage::MouseEvent &e) override {
+      const Hit h = hit(e.position);
+      if (h.part != hover_.part || h.index != hover_.index || h.col != hover_.col) {
+         hover_ = h;
+         redraw();
+      }
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = {};
+      redraw();
+   }
+
+   void mouseDown(const visage::MouseEvent &e) override {
+      const Hit h = hit(e.position);
+      PadSounds p = host_.padSounds(pad);
+      drag_ = {};
+      switch (h.part) {
+         case kClose:
+         case kDone:
+            close();
+            return;
+         case kOutside:
+            close();
+            return;
+         case kMode:
+            p.mode = h.index;
+            host_.setPadSounds(pad, p);
+            break;
+         case kPlay:
+            host_.playPadTake(pad, h.index);
+            break;
+         case kUp:
+            if (h.index > 0 && h.index < p.count()) {
+               std::swap(p.takes[static_cast<size_t>(h.index)], p.takes[static_cast<size_t>(h.index - 1)]);
+               host_.setPadSounds(pad, p);
+            }
+            break;
+         case kRemove:
+            if (h.index < p.count()) {
+               p.takes.erase(p.takes.begin() + h.index);
+               host_.setPadSounds(pad, p);
+               if (onChanged)
+                  onChanged();
+            }
+            break;
+         case kAdd:
+            // Normalized and with their silence trimmed, as ADD TO KIT does by default; each take's
+            // own trims and fades are set here after.
+            for (const SamplePtr &v : variantsToAdd())
+               if (p.count() < kMaxTakes)
+                  p.takes.push_back(Take{std::make_shared<Sample>(treat(*v, Treatment{}))});
+            host_.setPadSounds(pad, p);
+            if (onChanged)
+               onChanged();
+            break;
+         case kValue:
+            if (h.index < p.count()) {
+               if (e.repeatClickCount() >= 2) {
+                  Take &k = p.takes[static_cast<size_t>(h.index)];
+                  const Take d;
+                  if (h.col == kLevelCol)
+                     k.levelDb = d.levelDb;
+                  else if (h.col == kTuneCol)
+                     k.tune = d.tune;
+                  else if (h.col == kLowCol)
+                     k.lowCutHz = d.lowCutHz;
+                  else
+                     k.highCutHz = d.highCutHz;
+                  host_.setPadSounds(pad, p);
+               } else {
+                  drag_ = h;
+                  dragFrom_ = p.takes[static_cast<size_t>(h.index)];
+                  dragY_ = e.position.y;
+               }
+            }
+            break;
+         case kWave:
+            if (h.index < p.count()) {
+               drag_ = h;
+               dragFrom_ = p.takes[static_cast<size_t>(h.index)];
+               drag_.col = nearestHandle(h.index, dragFrom_, e.position.x, e.position.y);
+               if (drag_.col < 0) {
+                  drag_ = {};
+                  host_.playPadTake(pad, h.index);
+               }
+            }
+            break;
+         default:
+            break;
+      }
+      redraw();
+   }
+
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (drag_.part == kNone)
+         return;
+      PadSounds p = host_.padSounds(pad);
+      if (drag_.index >= p.count())
+         return;
+      Take k = dragFrom_;
+      if (drag_.part == kValue) {
+         const double dy = (dragY_ - e.position.y) / sc(); // up is more
+         switch (drag_.col) {
+            case kLevelCol:
+               k.levelDb = std::round((dragFrom_.levelDb + dy * 0.1) * 10) / 10;
+               break;
+            case kTuneCol:
+               k.tune = std::round((dragFrom_.tune + dy * 0.05) * 10) / 10;
+               break;
+            case kLowCol:
+               k.lowCutHz = dragFrom_.lowCutHz * std::pow(2.0, dy / 20.0);
+               break;
+            default:
+               k.highCutHz = dragFrom_.highCutHz * std::pow(2.0, dy / 20.0);
+               break;
+         }
+      } else {
+         const visage::Bounds wb = waveBox(drag_.index);
+         const double f = std::clamp(static_cast<double>((e.position.x - wb.x()) / wb.width()), 0.0, 1.0);
+         const double secs = k.sample ? k.sample->seconds() : 1.0;
+         switch (drag_.col) {
+            case 0: // start
+               k.start = std::min(f, k.end - 0.01);
+               break;
+            case 1: // end
+               k.end = std::max(f, k.start + 0.01);
+               break;
+            case 2: // fade in: how far past the start
+               k.fadeInMs = std::max(0.0, (f - k.start) * secs * 1000.0);
+               break;
+            default: // fade out: how far before the end
+               k.fadeOutMs = std::max(0.0, (k.end - f) * secs * 1000.0);
+               break;
+         }
+      }
+      p.takes[static_cast<size_t>(drag_.index)] = k;
+      host_.setPadSounds(pad, p);
+      redraw();
+   }
+   void mouseUp(const visage::MouseEvent &) override {
+      if (drag_.part != kNone && onChanged)
+         onChanged();
+      drag_ = {};
+   }
+
+   std::function<void()> onChanged; // the takes changed: the panel redraws the pad
+
+private:
+   enum Part { kNone, kOutside, kClose, kDone, kMode, kPlay, kWave, kValue, kUp, kRemove, kAdd };
+   struct Hit {
+      Part part = kNone;
+      int index = -1;
+      int col = -1;
+   };
+
+   Hit hit(visage::Point q) const {
+      if (!card().contains(q))
+         return {kOutside};
+      if (closeBox().contains(q))
+         return {kClose};
+      if (doneBox().contains(q))
+         return {kDone};
+      if (addBox().contains(q))
+         return {kAdd};
+      for (int m = 0; m < kTakeModeCount; ++m)
+         if (modeBox(m).contains(q))
+            return {kMode, m};
+      const int n = host_.padSounds(pad).count();
+      for (int i = 0; i < n; ++i) {
+         if (playBox(i).contains(q))
+            return {kPlay, i};
+         visage::Bounds wb = waveBox(i);
+         wb = {wb.x() - 6 * sc(), wb.y() - 8 * sc(), wb.width() + 12 * sc(), wb.height() + 10 * sc()};
+         if (wb.contains(q))
+            return {kWave, i};
+         for (int col = 0; col < kColumns; ++col)
+            if (valueBox(i, col).contains(q))
+               return {kValue, i, col};
+         if (i > 0 && upBox(i).contains(q))
+            return {kUp, i};
+         if (removeBox(i).contains(q))
+            return {kRemove, i};
+      }
+      return {};
+   }
+
+   // 0 start, 1 end, 2 fade in, 3 fade out, or -1 when none is near (a click plays it).
+   int nearestHandle(int i, const Take &k, float px, float py) const {
+      const visage::Bounds wb = waveBox(i);
+      const double secs = k.sample ? k.sample->seconds() : 1.0;
+      const float xa = wb.x() + wb.width() * static_cast<float>(k.start), xz = wb.x() + wb.width() * static_cast<float>(k.end);
+      const float fi = xa + static_cast<float>(std::min(k.end - k.start, k.fadeInMs * 0.001 / secs)) * wb.width();
+      const float fo = xz - static_cast<float>(std::min(k.end - k.start, k.fadeOutMs * 0.001 / secs)) * wb.width();
+      // The fade handles sit along the top; the region's ends are the full-height lines.
+      const bool top = py < wb.y() + wb.height() * 0.35f;
+      const float xs[4] = {xa, xz, fi, fo};
+      int best = -1;
+      float bestD = 10 * sc();
+      for (int h = 0; h < 4; ++h) {
+         if ((h >= 2) != top)
+            continue;
+         const float d = std::fabs(px - xs[h]);
+         if (d < bestD) {
+            bestD = d;
+            best = h;
+         }
+      }
+      return best;
+   }
+
+   EditorHost &host_;
+   Hit hover_, drag_;
+   Take dragFrom_;
+   float dragY_ = 0;
+   std::vector<WaveCache> caches_ = std::vector<WaveCache>(kMaxTakes);
 };
 
 // OUTPUT's picture: every pad where its pan puts it (higher for brighter roles), glowing while it
@@ -2033,9 +2562,15 @@ public:
          return host_.gen().engine == 2 ? 30.0 : 4.0;
       };
       kitDialog_->onStart = [this](bool emptyOnly) { startKit(emptyOnly); };
+      kitDialog_->takes = [this] { return host_.gen().kitTakes; };
+      kitDialog_->setTakes = [this](int n) { host_.gen().kitTakes = n; };
 
       kitDialog_->setOnTop(true);
       kitDialog_->setVisible(false);
+      takeEditor_ = &add<TakeEditor>({0, 0, kDesignWidth, kDesignHeight}, host_);
+      takeEditor_->onChanged = [this] { redraw(); };
+      takeEditor_->setOnTop(true);
+      takeEditor_->setVisible(false);
       tabs_->select(host_.page);
       refresh();
       startTimer(33);
@@ -2050,6 +2585,7 @@ public:
       kitDialog_->layout = host_.gen().kitLayout;
       kitDialog_->open();
    }
+   void openTakes(int pad) { takeEditor_->open(pad); }
 
    // ---- the timer ----
 
@@ -2074,15 +2610,17 @@ public:
          kitQueue_.clear();
       }
       if (!kitQueue_.empty()) {
-         if (SamplePtr sound = host_.takeKitSound()) {
-            lastRunSounds_ = 1;
-            placeKitSound(kitQueue_.front(), sound);
+         if (std::vector<SamplePtr> sounds = host_.takeKitSounds(); !sounds.empty()) {
+            lastRunSounds_ = static_cast<int>(sounds.size());
+            placeKitSound(kitQueue_.front(), sounds);
             kitQueue_.erase(kitQueue_.begin());
             nextKitSound();
          } else if (!host_.generating()) {
             kitQueue_.clear(); // stopped
          }
       }
+      if (takeEditor_->isVisible())
+         takeEditor_->redraw();
       refresh();
    }
 
@@ -2145,15 +2683,15 @@ private:
          std::ifstream in(soundsFile(file), std::ios::binary);
          std::stringstream bytes;
          bytes << in.rdbuf();
-         SamplePtr pads[kPads];
+         PadSounds pads[kPads];
          if (readKit(bytes.str(), pads))
             for (int i = 0; i < kPads; ++i)
-               host_.setPadSample(i, pads[i]);
+               host_.setPadSounds(i, pads[i]);
       };
       presets_->onSaved = [this](const std::filesystem::path &file) {
-         SamplePtr pads[kPads];
+         PadSounds pads[kPads];
          for (int i = 0; i < kPads; ++i)
-            pads[i] = host_.padSample(i);
+            pads[i] = host_.padSounds(i);
          std::ofstream out(soundsFile(file), std::ios::binary);
          const std::string bytes = writeKit(pads);
          out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
@@ -2328,8 +2866,11 @@ private:
       picker_ = &onPage<PadPicker>(P, {404, 528, 260, 88}, host_);
       picker_->onPick = [this](int) { redraw(); };
       tips_.add(*picker_, "The pad it goes on. Pad 1 is bottom left, on MIDI note 36.");
-      addToKit_ = &onPage<GoButton>(P, {674, 594, 382, 30}, "ADD TO KIT");
+      addToKit_ = &onPage<GoButton>(P, {674, 594, 228, 30}, "ADD TO KIT");
       addToKit_->onClick = [this] { addToKit(); };
+      addTake_ = &onPage<OutlineButton>(P, {910, 594, 146, 30}, "ADD AS TAKE");
+      addTake_->onClick = [this] { addToKit(true); };
+      tips_.add(*addTake_, "Keep the pad's sound and add this one beside it as another take: each hit plays one of them.");
    }
 
    ui::Knob &genKnob(ui::Rect r, const char *label, ui::ValueRange range, std::function<std::string(double)> textOf,
@@ -2366,6 +2907,7 @@ private:
       kitLayout_ = kitDialog_->layout;
       kitStyle_ = trimmed(host_.gen().prompt);
       kitStrange_ = host_.gen().strange;
+      kitTakes_ = host_.gen().kitTakes;
       kitSeed_ = std::random_device{}();
       if (kitStyle_.empty())
          kitStyle_ = randomKitStyle(std::random_device{}(), kitLayout_, host_.gen().strange);
@@ -2388,18 +2930,24 @@ private:
       if (kitQueue_.empty())
          return;
       const KitSlot &slot = kitSlot(kitQueue_.front(), kitLayout_);
-      host_.generateOne(kitPrompt(kitQueue_.front(), kitStyle_, kitLayout_, kitStrange_, kitSeed_), slot.role, slot.seconds, slot.name);
+      host_.generateOne(kitPrompt(kitQueue_.front(), kitStyle_, kitLayout_, kitStrange_, kitSeed_), slot.role, slot.seconds,
+                        slot.name, kitTakes_);
    }
    void stopKit() {
       kitQueue_.clear();
       host_.cancelEngine();
    }
-   // A kit sound onto its pad: treated (NORMALIZE, TRIM SILENCE...), played start to end, and the
-   // hats in their choke group.
-   void placeKitSound(int pad, const SamplePtr &sound) {
-      auto s = std::make_shared<Sample>(treat(*sound, host_.treatment()));
-      s->name = uniqueName(sound->name, pad);
-      host_.setPadSample(pad, s);
+   // A kit pad's sounds onto it, as its takes: treated (NORMALIZE, TRIM SILENCE...), played start to
+   // end, and the hats in their choke group.
+   void placeKitSound(int pad, const std::vector<SamplePtr> &sounds) {
+      PadSounds p;
+      const std::string name = uniqueName(sounds.front()->name, pad);
+      for (const SamplePtr &sound : sounds) {
+         auto s = std::make_shared<Sample>(treat(*sound, host_.treatment()));
+         s->name = name;
+         p.takes.push_back(Take{std::move(s)});
+      }
+      host_.setPadSounds(pad, std::move(p));
       const auto set = [this](clap_id id, double v) {
          host_.beginEdit(id);
          host_.setParam(id, v);
@@ -2462,14 +3010,27 @@ private:
       }
    }
 
-   void addToKit() {
+   // ADD TO KIT puts the sound on the pad in place of what's there; ADD AS TAKE (`asTake`) adds it
+   // beside the pad's takes, or puts it there as the first when the pad is empty.
+   void addToKit(bool asTake = false) {
       SamplePtr t = treated();
       if (!t)
          return;
+      const int pad = host_.targetPad;
+      if (asTake && host_.padSample(pad)) {
+         if (host_.addPadTake(pad, t)) {
+            host_.selectedPad = pad;
+            added_ = pad;
+            addedAt_ = 0;
+            addedTake_ = true;
+         }
+         redraw();
+         return;
+      }
+      addedTake_ = false;
       auto s = std::make_shared<Sample>(*t);
       s->name = uniqueName(s->name.empty() ? kRoleNames[std::clamp(s->role, 0, kRoleCount - 1)] : s->name,
                            host_.targetPad);
-      const int pad = host_.targetPad;
       host_.setPadSample(pad, s);
       // A new sound plays from its start to its end.
       for (PadParam f : {kStart, kEnd}) {
@@ -2481,8 +3042,8 @@ private:
       host_.selectedPad = pad;
       added_ = pad;
       addedAt_ = 0;
-      // The next empty pad is the next target.
-      for (int k = 1; k < kPads; ++k) {
+      // The next empty pad is the next target (ADD AS TAKE stays on this one, for more takes).
+      for (int k = 1; k < kPads && !asTake; ++k) {
          const int p = (pad + k) % kPads;
          if (!host_.padSample(p)) {
             host_.targetPad = p;
@@ -2648,6 +3209,7 @@ private:
       engineAction_->setText(action);
       const bool haveSound = trim_->sample != nullptr;
       addToKit_->setEnabled(haveSound);
+      addTake_->setEnabled(haveSound && host_.padSounds(host_.targetPad).count() < kMaxTakes);
       vary_->setVisible(true);
       const float pos = host_.auditionPosition();
       const auto &vars = host_.variants();
@@ -2838,13 +3400,16 @@ private:
       c.setColor(t.text);
       c.text(padTitle, ui::font(11 * s), visage::Font::kLeft, 674 * s, 528 * s, 380 * s, 14 * s);
       c.setColor(alpha(t.dimText, 0.75f));
-      c.text(p ? "replaces its sound; the prompt and seed go with it"
+      const int padTakes = host_.padSounds(pad).count();
+      c.text(p ? (padTakes > 1 ? "has " + std::to_string(padTakes) + " takes: ADD TO KIT replaces them all, ADD AS TAKE adds one"
+                               : std::string("ADD TO KIT replaces its sound; ADD AS TAKE keeps it and adds this one"))
                : "on MIDI note " + std::to_string(kFirstNote + pad) + " (" + ui::noteName(kFirstNote + pad) + ")",
              ui::font(8.5f * s), visage::Font::kLeft, 674 * s, 544 * s, 380 * s, 12 * s);
       if (added_ >= 0 && addedAt_ < 60) {
          ++addedAt_;
          c.setColor(kGreen);
-         c.text("Added to pad " + std::to_string(added_ + 1), ui::font(9 * s), visage::Font::kLeft, 674 * s,
+         c.text((addedTake_ ? "Added as take " + std::to_string(host_.padSounds(added_).count()) + " of pad "
+                            : std::string("Added to pad ")) + std::to_string(added_ + 1), ui::font(9 * s), visage::Font::kLeft, 674 * s,
                 566 * s, 380 * s, 12 * s);
       }
    }
@@ -2880,6 +3445,7 @@ private:
          visage::PopupMenu menu;
          const bool has = host_.padSample(i) != nullptr;
          menu.addOption(1, "Play");
+         menu.addOption(4, "Takes...");
          menu.addOption(2, "Regenerate in the Generate tab");
          menu.addBreak();
          menu.addOption(3, "Clear pad");
@@ -2890,6 +3456,8 @@ private:
                regenerate(i);
             else if (id == 3)
                host_.setPadSample(i, nullptr);
+            else if (id == 4)
+               openTakes(i);
             redraw();
          };
          (void)has;
@@ -2897,6 +3465,11 @@ private:
       };
       tips_.add(*pads_, "Click a pad to play and select it; drag it onto another to swap them. Right-click for more.");
 
+      takes_ = &onPage<ui::Button>(P, {800, 81, 100, 19}, "TAKES");
+      takes_->setAccent(kOrange);
+      takes_->onClick = [this] { openTakes(host_.selectedPad); };
+      tips_.add(*takes_, "This pad's takes: one plays each hit (random, in turn, or by velocity), each with its own "
+                         "trims, fades, level, tune and cuts.");
       regen_ = &onPage<ui::Button>(P, {906, 81, 150, 19}, "REGENERATE IN TAB");
       regen_->setAccent(kOrange);
       regen_->onClick = [this] { regenerate(host_.selectedPad); };
@@ -3149,6 +3722,11 @@ private:
       pointType_->setSelected(static_cast<int>(host_.paramValue(padParam(p, pointParam(point_, kPointType))) + 0.5));
       play_->setSelected(static_cast<int>(host_.paramValue(padParam(p, kPlayMode)) + 0.5));
       rev_->setOn(host_.paramValue(padParam(p, kReverse)) >= 0.5);
+      const int takes = host_.padSounds(p).count();
+      if (takes != takesShown_) {
+         takesShown_ = takes;
+         takes_->setText(takes > 1 ? "TAKES \xC2\xB7 " + std::to_string(takes) : std::string("TAKES"));
+      }
    }
 
    void refreshKit() {
@@ -3220,12 +3798,14 @@ private:
    ui::Button *engineHelp_ = nullptr;
    EnginePicker *enginePicker_ = nullptr;
    KitDialog *kitDialog_ = nullptr;
+   TakeEditor *takeEditor_ = nullptr;
    ui::Dropdown *mode_ = nullptr;
    // GENERATE KIT: the pads still to make, how many in all, and the style.
    std::vector<int> kitQueue_;
    int kitTotal_ = 0;
    std::string kitStyle_;
    double kitStrange_ = 0.3;
+   int kitTakes_ = 1;
    uint64_t kitSeed_ = 0;
    int kitLayout_ = kDrumKitLayout;
    int lastRunSounds_ = 0;
@@ -3238,6 +3818,7 @@ private:
    ui::Knob *length_ = nullptr, *steps_ = nullptr, *guidance_ = nullptr, *variety_ = nullptr;
    ui::SegmentedSwitch *count_ = nullptr;
    GoButton *generate_ = nullptr, *addToKit_ = nullptr;
+   OutlineButton *addTake_ = nullptr;
    ui::HoverArea *recentArea_ = nullptr;
    VariantGrid *variantsView_ = nullptr;
    TrimView *trim_ = nullptr;
@@ -3251,10 +3832,12 @@ private:
    uint32_t padHits_ = 0;
    bool synced_ = false, confirmRemove_ = false;
    int added_ = -1, addedAt_ = 0;
+   bool addedTake_ = false;
 
    // Kit
    PadGrid *pads_ = nullptr;
-   ui::Button *regen_ = nullptr;
+   ui::Button *regen_ = nullptr, *takes_ = nullptr;
+   int takesShown_ = -1;
    PadWave *wave_ = nullptr;
    ui::Dropdown *choke_ = nullptr, *pointType_ = nullptr;
    ToneView *tone_ = nullptr;
@@ -3281,6 +3864,8 @@ bool renderScreenshot(EditorHost &host, int page, int width, int height, const c
       panel.openEnginePicker();
    else if (overlay == 2)
       panel.openKitDialog();
+   else if (overlay == 3)
+      panel.openTakes(host.selectedPad);
    panel.setBounds(0, 0, static_cast<float>(width), static_cast<float>(height));
    panel.timerCallback();
    panel.timerCallback();

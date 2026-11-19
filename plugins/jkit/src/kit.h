@@ -34,6 +34,77 @@ struct Sample {
 };
 using SamplePtr = std::shared_ptr<const Sample>;
 
+// A pad holds one or more takes of its sound (up to kMaxTakes) and picks one each time it plays.
+// Each take has its own trims, level, tune and cuts; the pad's own params (its START and END
+// among them, inside the take's) apply on top to whichever take plays.
+constexpr int kMaxTakes = 8;
+enum TakeMode : int { kTakeRandom, kTakeCycle, kTakeVelocity, kTakeModeCount };
+inline const char *const kTakeModeNames[kTakeModeCount] = {"RANDOM", "CYCLE", "VELOCITY"};
+
+struct Take {
+   SamplePtr sample;
+   double start = 0.0, end = 1.0;      // fractions of the sample
+   double fadeInMs = 0.0, fadeOutMs = 0.0;
+   double levelDb = 0.0;               // -24 to +12
+   double tune = 0.0;                  // semitones, -12 to +12
+   double lowCutHz = 20.0;             // 20 is off
+   double highCutHz = 20000.0;         // 20000 is off
+
+   // The same take, with every setting in its range (a file can say anything).
+   Take clamped() const {
+      Take t = *this;
+      const auto fin = [](double x, double lo, double hi, double d) { return std::isfinite(x) ? std::clamp(x, lo, hi) : d; };
+      t.start = fin(start, 0.0, 1.0, 0.0);
+      t.end = fin(end, 0.0, 1.0, 1.0);
+      if (t.end < t.start)
+         std::swap(t.start, t.end);
+      t.fadeInMs = fin(fadeInMs, 0.0, 2000.0, 0.0);
+      t.fadeOutMs = fin(fadeOutMs, 0.0, 2000.0, 0.0);
+      t.levelDb = fin(levelDb, -24.0, 12.0, 0.0);
+      t.tune = fin(tune, -12.0, 12.0, 0.0);
+      t.lowCutHz = fin(lowCutHz, 20.0, 20000.0, 20.0);
+      t.highCutHz = fin(highCutHz, 20.0, 20000.0, 20000.0);
+      return t;
+   }
+};
+
+struct PadSounds {
+   std::vector<Take> takes;
+   int mode = kTakeRandom;
+
+   bool empty() const { return takes.empty(); }
+   int count() const { return static_cast<int>(takes.size()); }
+   // The first take's sound: what the pad shows.
+   SamplePtr first() const { return takes.empty() ? nullptr : takes.front().sample; }
+   static PadSounds of(SamplePtr s) {
+      PadSounds p;
+      if (s)
+         p.takes.push_back(Take{std::move(s)});
+      return p;
+   }
+};
+
+// Which take a hit plays. RANDOM never plays the same one twice in a row (with two or more);
+// CYCLE goes in order; VELOCITY splits 0..1 evenly, the first take the softest. `last` is the take
+// played before (or -1), `random` any 32-bit number.
+inline int pickTake(const PadSounds &p, int last, float velocity, uint32_t random) {
+   const int n = p.count();
+   if (n <= 1)
+      return 0;
+   switch (p.mode) {
+      case kTakeCycle:
+         return last < 0 ? 0 : (last + 1) % n;
+      case kTakeVelocity:
+         return std::clamp(static_cast<int>(std::clamp(velocity, 0.0f, 1.0f) * static_cast<float>(n)), 0, n - 1);
+      default: {
+         if (last < 0 || last >= n)
+            return static_cast<int>(random % static_cast<uint32_t>(n));
+         const int k = static_cast<int>(random % static_cast<uint32_t>(n - 1));
+         return k >= last ? k + 1 : k;
+      }
+   }
+}
+
 // The loudest absolute value in each of `bins` slices of [from, to) (fractions of the sample), for
 // drawing a waveform.
 inline std::vector<float> overview(const Sample &s, int bins, double from = 0.0, double to = 1.0) {
@@ -245,29 +316,61 @@ private:
    bool ok_ = true;
 };
 
-// A kit's sounds: "JKS1", then for each pad a 0 (empty) or 1 and its sample.
-inline std::string writeKit(const SamplePtr (&pads)[16]) {
+// A kit's sounds: "JKS2", then for each pad its number of takes (0 for empty) and its mode, and
+// each take's sample and settings. "JKS1" (before 0.7: a 0 or 1 and one sample a pad) still reads.
+inline std::string writeKit(const PadSounds (&pads)[16]) {
    Writer w;
-   w.bytes = "JKS1";
-   for (const SamplePtr &s : pads) {
-      w.u8(s ? 1 : 0);
-      if (s)
-         w.sample(*s);
+   w.bytes = "JKS2";
+   for (const PadSounds &p : pads) {
+      int n = 0;
+      for (const Take &t : p.takes)
+         n += t.sample && n < kMaxTakes ? 1 : 0;
+      w.u8(static_cast<uint8_t>(n));
+      w.u8(static_cast<uint8_t>(p.mode));
+      int written = 0;
+      for (const Take &t : p.takes) {
+         if (!t.sample || written >= kMaxTakes)
+            continue;
+         ++written;
+         w.sample(*t.sample);
+         for (double x : {t.start, t.end, t.fadeInMs, t.fadeOutMs, t.levelDb, t.tune, t.lowCutHz, t.highCutHz})
+            w.f64(x);
+      }
    }
    return w.bytes;
 }
 
-inline bool readKit(const std::string &bytes, SamplePtr (&pads)[16]) {
-   if (bytes.size() < 4 || bytes.compare(0, 4, "JKS1") != 0)
+inline bool readKit(const std::string &bytes, PadSounds (&pads)[16]) {
+   if (bytes.size() < 4)
+      return false;
+   const bool v1 = bytes.compare(0, 4, "JKS1") == 0;
+   if (!v1 && bytes.compare(0, 4, "JKS2") != 0)
       return false;
    Reader r(bytes.data() + 4, bytes.size() - 4);
-   SamplePtr read[16];
-   for (SamplePtr &s : read) {
-      if (r.u8()) {
+   PadSounds read[16];
+   for (PadSounds &p : read) {
+      const int n = r.u8();
+      if (!v1)
+         p.mode = std::clamp(static_cast<int>(r.u8()), 0, kTakeModeCount - 1);
+      if (n > (v1 ? 1 : kMaxTakes))
+         return false;
+      for (int i = 0; i < n; ++i) {
          auto sample = std::make_shared<Sample>();
          if (!r.sample(*sample))
             return false;
-         s = std::move(sample);
+         Take t;
+         t.sample = std::move(sample);
+         if (!v1) {
+            t.start = r.f64();
+            t.end = r.f64();
+            t.fadeInMs = r.f64();
+            t.fadeOutMs = r.f64();
+            t.levelDb = r.f64();
+            t.tune = r.f64();
+            t.lowCutHz = r.f64();
+            t.highCutHz = r.f64();
+         }
+         p.takes.push_back(t.clamped());
       }
       if (!r.ok())
          return false;

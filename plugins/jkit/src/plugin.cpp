@@ -28,6 +28,7 @@
 #include <memory>
 #include <mutex>
 #include <random>
+#include <utility>
 
 #include "editor.h"
 #include "gen/studio.h"
@@ -154,8 +155,30 @@ struct Voice {
    bool released = false;
    double releaseMul = 1.0;
    double fade = 1.0, fadeStep = 0.0; // the de-click fade, toward 0 when fading
-   float gain = 1.0f;         // velocity
+   float gain = 1.0f;         // velocity, times the take's level
    float velocity = 1.0f;
+   double tuneMul = 1.0;      // the take's tune, as a speed
+   // The take's fades, in sample frames from the region's ends.
+   double fadeIn = 0.0, fadeOut = 0.0;
+   // The take's low and high cuts: 12 dB/octave state-variable filters (off when g is 0).
+   struct Cut {
+      double g = 0.0, k = 1.4142135623730951, a1 = 0, a2 = 0, a3 = 0;
+      double ic1[2] = {0, 0}, ic2[2] = {0, 0};
+      void set(double hz, double rate) {
+         g = std::tan(3.141592653589793 * std::min(hz, rate * 0.45) / rate);
+         a1 = 1.0 / (1.0 + g * (g + k));
+         a2 = g * a1;
+         a3 = g * a2;
+      }
+      // Returns the low pass; `high` gets the high pass.
+      double run(int ch, double x, double &high) {
+         const double v3 = x - ic2[ch], v1 = a1 * ic1[ch] + a2 * v3, v2 = ic2[ch] + a2 * ic1[ch] + a3 * v3;
+         ic1[ch] = 2 * v1 - ic1[ch];
+         ic2[ch] = 2 * v2 - ic2[ch];
+         high = x - k * v1 - v2;
+         return v2;
+      }
+   } lowCut, highCut;
    bool on() const { return sample != nullptr; }
 };
 
@@ -163,10 +186,11 @@ struct PanelNote {
    int8_t pad;
    bool on;
    float velocity;
+   int8_t take = -1; // a take to play, or -1 to pick as a hit does
 };
 
 constexpr char kStateMagic[4] = {'J', 'K', 'I', 'T'};
-constexpr uint32_t kStateVersion = 4; // 2 adds the engine, 3 the fade in, 4 SOUND/KIT; older ones still load
+constexpr uint32_t kStateVersion = 5; // 2 adds the engine, 3 the fade in, 4 SOUND/KIT, 5 takes (in the sounds); older ones still load
 
 class JKit final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -177,6 +201,8 @@ public:
          values_[i].store(param(i).defaultValue);
          mods_[i].store(0.0);
       }
+      for (auto &t : shownTake_)
+         t.store(-1);
       std::random_device rd;
       gen_.seed = 1 + rd() % 99999;
       gen_.prompt = randomPrompt(static_cast<Role>(gen_.role), gen_.strange, rd());
@@ -312,21 +338,28 @@ public:
 
    // ---- EditorHost: the kit ----
 
-   SamplePtr padSample(int pad) const override {
+   PadSounds padSounds(int pad) const override {
       std::lock_guard<std::mutex> lock(kitMutex_);
-      return pad >= 0 && pad < kPads ? pads_[pad] : nullptr;
+      return pad >= 0 && pad < kPads ? pads_[pad] : PadSounds{};
    }
 
-   void setPadSample(int pad, SamplePtr sample) override {
+   void setPadSounds(int pad, PadSounds sounds) override {
       if (pad < 0 || pad >= kPads)
          return;
-      SamplePtr old;
+      // No empty takes, no more than kMaxTakes, every setting in range.
+      PadSounds clean;
+      clean.mode = std::clamp(sounds.mode, 0, kTakeModeCount - 1);
+      for (const Take &t : sounds.takes)
+         if (t.sample && clean.count() < kMaxTakes)
+            clean.takes.push_back(t.clamped());
+      PadSounds old;
       {
          std::lock_guard<std::mutex> lock(kitMutex_);
          old = std::move(pads_[pad]);
-         pads_[pad] = std::move(sample);
+         pads_[pad] = std::move(clean);
          voices_[pad] = Voice{};
          fading_[pad] = Voice{};
+         lastTake_[pad] = -1;
       }
       positions_[pad].store(-1.0f);
       markDirty();
@@ -338,6 +371,7 @@ public:
       {
          std::lock_guard<std::mutex> lock(kitMutex_);
          std::swap(pads_[a], pads_[b]);
+         std::swap(lastTake_[a], lastTake_[b]);
          for (int p : {a, b}) {
             voices_[p] = Voice{};
             fading_[p] = Voice{};
@@ -361,9 +395,14 @@ public:
       if (active_.load() && pad >= 0 && pad < kPads)
          panelNotes_.push({static_cast<int8_t>(pad), true, std::clamp(velocity, 0.01f, 1.0f)});
    }
+   void playPadTake(int pad, int take) override {
+      if (active_.load() && pad >= 0 && pad < kPads && take >= 0 && take < kMaxTakes)
+         panelNotes_.push({static_cast<int8_t>(pad), true, 1.0f, static_cast<int8_t>(take)});
+   }
+   int padTake(int pad) const override { return pad >= 0 && pad < kPads ? shownTake_[pad].load() : -1; }
    void stopPad(int pad) override {
       if (active_.load() && pad >= 0 && pad < kPads)
-         panelNotes_.push({static_cast<int8_t>(pad), false, 0.0f});
+         panelNotes_.push({static_cast<int8_t>(pad), false, 0.0f, -1});
    }
    float padPosition(int pad) const override { return pad >= 0 && pad < kPads ? positions_[pad].load() : -1.0f; }
    float padLevel(int pad) const override { return pad >= 0 && pad < kPads ? levels_[pad].load() : 0.0f; }
@@ -476,7 +515,7 @@ public:
       jobStarted_ = std::chrono::steady_clock::now();
    }
 
-   void generateOne(const std::string &prompt, int role, double seconds, const std::string &name) override {
+   void generateOne(const std::string &prompt, int role, double seconds, const std::string &name, int takes) override {
       if (job_)
          return;
       gen::Request r;
@@ -485,20 +524,21 @@ public:
       r.seconds = std::clamp(seconds, 0.1, gen::kMaxSeconds);
       r.steps = std::clamp(gen_.steps, 1, 100);
       r.guidance = gen::guidanceFor(r.engine, gen_.guidance);
-      r.variants = 1;
-      r.variety = 0.0;
+      // Takes are close variations of one sound, as a low VARIETY makes them.
+      r.variants = std::clamp(takes, 1, kMaxTakes);
+      r.variety = r.variants > 1 ? 0.3 : 0.0;
       r.seed = 1 + std::random_device{}() % 99999;
       jobRole_ = std::clamp(role, 0, kRoleCount - 1);
       jobPrompt_ = prompt;
       jobName_ = name;
       kitJob_ = true;
-      kitSound_.reset();
+      kitSounds_.clear();
       job_ = studio().submit(r);
       jobEngine_ = r.engine;
       jobStarted_ = std::chrono::steady_clock::now();
    }
 
-   SamplePtr takeKitSound() override { return std::move(kitSound_); }
+   std::vector<SamplePtr> takeKitSounds() override { return std::exchange(kitSounds_, {}); }
 
    bool generating() const override { return job_ != 0; }
 
@@ -521,18 +561,20 @@ public:
       job_ = 0;
       lastRun_ = std::chrono::duration<double>(std::chrono::steady_clock::now() - jobStarted_).count();
       if (kitJob_) {
-         // A kit pad's sound: it goes to takeKitSound(), not the variants.
+         // A kit pad's sounds: they go to takeKitSounds(), not the variants.
          kitJob_ = false;
          if (!error.empty() || sounds.empty())
             return false;
-         auto s = std::make_shared<Sample>();
-         s->role = jobRole_;
-         s->name = jobName_;
-         s->prompt = jobPrompt_;
-         s->seed = sounds[0].seed;
-         s->left = std::move(sounds[0].left);
-         s->right = std::move(sounds[0].right);
-         kitSound_ = std::move(s);
+         for (gen::Sound &sound : sounds) {
+            auto s = std::make_shared<Sample>();
+            s->role = jobRole_;
+            s->name = jobName_;
+            s->prompt = jobPrompt_;
+            s->seed = sound.seed;
+            s->left = std::move(sound.left);
+            s->right = std::move(sound.right);
+            kitSounds_.push_back(std::move(s));
+         }
          return false;
       }
       if (!error.empty() || sounds.empty())
@@ -615,6 +657,7 @@ public:
       w.f64(treatment_.fadeInMs);
       w.u8(gen_.kitMode ? 1 : 0);
       w.u32(static_cast<uint32_t>(gen_.kitLayout));
+      w.u32(static_cast<uint32_t>(gen_.kitTakes));
       w.u32(static_cast<uint32_t>(recent_.size()));
       for (const Recent &r : recent_) {
          w.str(r.prompt);
@@ -626,7 +669,7 @@ public:
       w.u32(static_cast<uint32_t>(selectedPad));
       w.u32(static_cast<uint32_t>(targetPad));
       // The sounds.
-      SamplePtr pads[kPads];
+      PadSounds pads[kPads];
       {
          std::lock_guard<std::mutex> lock(kitMutex_);
          for (int i = 0; i < kPads; ++i)
@@ -690,6 +733,10 @@ public:
          g.kitMode = r.u8() != 0;
          g.kitLayout = std::clamp(static_cast<int>(r.u32()), 0, kKitLayoutCount - 1);
       }
+      if (version >= 5) {
+         const int k = static_cast<int>(r.u32());
+         g.kitTakes = k == 2 || k == 4 ? k : 1;
+      }
       std::vector<Recent> recent;
       const uint32_t recentCount = r.u32();
       for (uint32_t i = 0; i < recentCount && r.ok() && i < 64; ++i) {
@@ -705,7 +752,7 @@ public:
       if (!r.ok())
          return false;
       const size_t used = bytes.size() - 4 - r.left();
-      SamplePtr pads[kPads];
+      PadSounds pads[kPads];
       if (!readKit(bytes.substr(4 + used), pads))
          return false;
 
@@ -737,12 +784,13 @@ public:
          page = 1 - page; // the tabs were Generate, Kit
       selectedPad = std::clamp(selected, 0, kPads - 1);
       targetPad = std::clamp(target, 0, kPads - 1);
-      SamplePtr old[kPads];
+      PadSounds old[kPads];
       {
          std::lock_guard<std::mutex> lock(kitMutex_);
          for (int i = 0; i < kPads; ++i) {
             old[i] = std::move(pads_[i]);
             pads_[i] = std::move(pads[i]);
+            lastTake_[i] = -1;
             voices_[i] = Voice{};
             fading_[i] = Voice{};
          }
@@ -768,7 +816,7 @@ public:
          return CLAP_PROCESS_CONTINUE;
       PanelNote p;
       while (panelNotes_.pop(p))
-         p.on ? startPad(p.pad, p.velocity) : stopPadVoice(p.pad);
+         p.on ? startPad(p.pad, p.velocity, p.take) : stopPadVoice(p.pad);
 
       if (proc->transport && (proc->transport->flags & CLAP_TRANSPORT_HAS_TEMPO) && proc->transport->tempo > 0)
          tempo_ = proc->transport->tempo;
@@ -981,10 +1029,25 @@ private:
             fadeOut(p, 5.0);
    }
 
-   void startPad(int pad, float velocity) {
+   void startPad(int pad, float velocity, int takeAsked = -1) {
       if (pad < 0 || pad >= kPads)
          return;
-      const Sample *s = pads_[pad].get();
+      // Which take: the one asked for (the take editor), or as the pad's mode picks.
+      const PadSounds &sounds = pads_[pad];
+      int ti = -1;
+      if (!sounds.empty()) {
+         if (takeAsked >= 0 && takeAsked < sounds.count())
+            ti = takeAsked;
+         else {
+            takeRandom_ ^= takeRandom_ << 13;
+            takeRandom_ ^= takeRandom_ >> 17;
+            takeRandom_ ^= takeRandom_ << 5;
+            ti = pickTake(sounds, lastTake_[pad], velocity, takeRandom_);
+            lastTake_[pad] = ti;
+         }
+      }
+      const Take *take = ti >= 0 ? &sounds.takes[static_cast<size_t>(ti)] : nullptr;
+      const Sample *s = take ? take->sample.get() : nullptr;
       // The choke group: starting this pad cuts the others in it (an open hat by a closed one).
       const int group = static_cast<int>(padValue(pad, kChoke) + 0.5);
       if (group > 0)
@@ -996,10 +1059,14 @@ private:
       padHits_.fetch_add(1);
       if (!s || !s->frames())
          return;
+      shownTake_[pad].store(ti);
       Voice v;
       v.sample = s;
+      // The take's region, then the pad's START and END inside it.
       const double frames = static_cast<double>(s->frames());
-      double a = padValue(pad, kStart) * frames, z = padValue(pad, kEnd) * frames;
+      const double ta = take->start * frames, tz = std::max(ta + 2.0, take->end * frames);
+      double a = ta + padValue(pad, kStart) * (tz - ta), z = ta + padValue(pad, kEnd) * (tz - ta);
+      z = std::min(z, frames);
       if (z < a + 2)
          z = std::min(frames, a + 2);
       v.from = a;
@@ -1015,8 +1082,15 @@ private:
       const double sens = padValue(pad, kVelocity);
       // Velocity sets the level on a power curve: at 1/3 a half-velocity hit is 6 dB down, at the
       // most 18 dB.
-      v.gain = static_cast<float>(std::pow(static_cast<double>(velocity), 3.0 * sens));
+      v.gain = static_cast<float>(std::pow(static_cast<double>(velocity), 3.0 * sens) * std::pow(10.0, take->levelDb / 20.0));
       v.velocity = velocity;
+      v.tuneMul = std::pow(2.0, take->tune / 12.0);
+      v.fadeIn = take->fadeInMs * 0.001 * kSampleRate;
+      v.fadeOut = take->fadeOutMs * 0.001 * kSampleRate;
+      if (take->lowCutHz > 20.5)
+         v.lowCut.set(take->lowCutHz, sampleRate_);
+      if (take->highCutHz < 19999.0)
+         v.highCut.set(take->highCutHz, sampleRate_);
       voices_[pad] = v;
       // The filter envelope starts again with every hit, at the hit's velocity.
       PadTone &tone = tone_[pad];
@@ -1068,10 +1142,28 @@ private:
       if (v.fadeStep > 0.0)
          v.fade -= v.fadeStep;
       const double endFade = std::min(1.0, edge / (0.0015 * kSampleRate));
-      const float g = static_cast<float>(v.env * std::max(0.0, v.fade) * endFade) * v.gain;
+      // The take's own fades, by where in its region it is (so they hold reversed too).
+      double takeFade = 1.0;
+      if (v.fadeIn >= 1.0)
+         takeFade *= std::sin(std::min(1.0, (v.pos - v.from) / v.fadeIn) * 1.5707963267948966);
+      if (v.fadeOut >= 1.0)
+         takeFade *= std::sin(std::min(1.0, std::max(0.0, v.to - v.pos) / v.fadeOut) * 1.5707963267948966);
+      const float g = static_cast<float>(v.env * std::max(0.0, v.fade) * endFade * takeFade) * v.gain;
       l = hermite(s.left) * g;
       r = hermite(s.right) * g;
-      v.pos += v.reverse ? -step : step;
+      if (v.lowCut.g > 0.0 || v.highCut.g > 0.0) {
+         double x[2] = {l, r};
+         for (int ch = 0; ch < 2; ++ch) {
+            double high = x[ch];
+            if (v.lowCut.g > 0.0)
+               v.lowCut.run(ch, x[ch], high), x[ch] = high;
+            if (v.highCut.g > 0.0)
+               x[ch] = v.highCut.run(ch, x[ch], high);
+         }
+         l = static_cast<float>(x[0]);
+         r = static_cast<float>(x[1]);
+      }
+      v.pos += (v.reverse ? -step : step) * v.tuneMul;
       if (v.env < 1e-5 && !v.attacking) {
          v = Voice{};
          return false;
@@ -1207,7 +1299,10 @@ private:
 
    // The kit, under kitMutex_ (the audio thread holds it for a whole block).
    mutable std::mutex kitMutex_;
-   SamplePtr pads_[kPads];
+   PadSounds pads_[kPads];
+   int lastTake_[kPads] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+   uint32_t takeRandom_ = 0x2545F491u; // xorshift, for RANDOM takes
+   std::atomic<int> shownTake_[kPads];
    SamplePtr preview_;
    Voice voices_[kPads], fading_[kPads], previewVoice_;
    Eq masterEq_;
@@ -1268,7 +1363,7 @@ private:
    // GENERATE KIT's one-pad job, and its sound once it's done.
    bool kitJob_ = false;
    std::string jobName_;
-   SamplePtr kitSound_;
+   std::vector<SamplePtr> kitSounds_;
    std::string jobPrompt_;
    bool dropFirst_ = false;
    std::chrono::steady_clock::time_point jobStarted_;

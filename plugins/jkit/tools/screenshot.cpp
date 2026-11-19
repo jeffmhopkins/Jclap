@@ -62,7 +62,20 @@ public:
                           {"Shaker", kPerc, 0.25, 7000, 0.95, 18}, {"Conga", kPerc, 0.4, 260, 0.15, 12},
                           {"Vinyl Riser", kFx, 2.0, 300, 0.7, 0.8}, {"Zap", kFx, 0.3, 1200, 0.2, 14}};
       for (int i = 0; i < 14; ++i)
-         pads_[i] = fake(pads[i].name, pads[i].role, 40100 + i * 7, pads[i].secs, pads[i].hz, pads[i].noise, pads[i].decay);
+         pads_[i] = PadSounds::of(fake(pads[i].name, pads[i].role, 40100 + i * 7, pads[i].secs, pads[i].hz, pads[i].noise, pads[i].decay));
+      // The snare has four takes, RANDOM, each trimmed and tuned a little differently.
+      for (int k = 1; k < 4; ++k) {
+         Take t{fake("Snare", kSnare, 40114 + k, 0.45 + 0.06 * k, 180 + 15 * k, 0.55 + 0.08 * k, 8 + k)};
+         t.start = 0.01 * k;
+         t.end = 1.0 - 0.07 * k;
+         t.fadeInMs = k == 2 ? 6 : 0;
+         t.fadeOutMs = 40.0 * k;
+         t.levelDb = k == 3 ? -2.5 : 0.0;
+         t.tune = k == 1 ? -1.0 : k == 3 ? 0.5 : 0.0;
+         t.lowCutHz = k == 2 ? 140 : 20;
+         t.highCutHz = k == 3 ? 7500 : 20000;
+         pads_[2].takes.push_back(t);
+      }
       const double sends[14][2] = {{.05, 0}, {0, 0}, {.35, .2}, {.2, 0}, {.45, .3}, {.05, .1}, {.15, .25},
                                    {.3, 0},  {.25, 0}, {.25, 0}, {.1, .35}, {.2, .1}, {.6, .5}, {.15, .4}};
       const double pans[14] = {0, 0, 0.05, -0.25, 0.15, 0.45, 0.5, -0.55, -0.4, 0.35, 0.7, -0.6, -0.2, 0.6};
@@ -135,8 +148,10 @@ public:
    }
    void endEdit(clap_id) override {}
 
-   SamplePtr padSample(int pad) const override { return pad >= 0 && pad < kPads ? pads_[pad] : nullptr; }
-   void setPadSample(int pad, SamplePtr s) override { pads_[pad] = std::move(s); }
+   PadSounds padSounds(int pad) const override { return pad >= 0 && pad < kPads ? pads_[pad] : PadSounds{}; }
+   void setPadSounds(int pad, PadSounds p) override { pads_[pad] = std::move(p); }
+   void playPadTake(int, int) override {}
+   int padTake(int pad) const override { return pad == 2 ? 1 : -1; }
    void swapPads(int, int) override {}
    void playPad(int, float) override {}
    void stopPad(int) override {}
@@ -154,8 +169,8 @@ public:
    GenSettings &gen() override { return gen_; }
    Treatment &treatment() override { return treatment_; }
    std::vector<Variant> &variants() override { return variants_; }
-   void generateOne(const std::string &, int, double, const std::string &) override {}
-   SamplePtr takeKitSound() override { return nullptr; }
+   void generateOne(const std::string &, int, double, const std::string &, int) override {}
+   std::vector<SamplePtr> takeKitSounds() override { return {}; }
    std::vector<Recent> &recent() override { return recent_; }
    EngineStatus engineStatus(int engine) override {
       const int was = gen_.engine;
@@ -200,7 +215,7 @@ public:
 
 private:
    std::vector<double> values_ = std::vector<double>(kParamCount);
-   SamplePtr pads_[kPads];
+   PadSounds pads_[kPads];
    GenSettings gen_;
    Treatment treatment_;
    std::vector<Variant> variants_;
@@ -223,6 +238,7 @@ int main(int argc, char **argv) {
       host.gen().kitMode = true;
       host.gen().kitLayout = 1;
       host.gen().prompt = "Afro-Cuban rumba percussion, warm natural room";
+      host.gen().kitTakes = 2;
    }
    if (page == 7) {
       // Stable Audio Open 1.0: its own steps and PROMPT STRENGTH.
@@ -231,6 +247,7 @@ int main(int argc, char **argv) {
       host.gen().guidance = 7.0;
    }
    // Page 1 is the Kit tab (the panel's page 0); 0 and 2 to 6 the Generate tab (its page 1), 4 with
-   // the engine picker open, 5 in KIT (percussion), 6 with GENERATE's kit card open and 7 on 1.0.
-   return renderScreenshot(host, page == 1 ? 0 : 1, width, height, argv[1], page == 4 ? 1 : page == 6 ? 2 : 0) ? 0 : 1;
+   // the engine picker open, 5 in KIT (percussion), 6 with GENERATE's kit card open, 7 on 1.0, and 8 the Kit tab with the snare's TAKES open.
+   return renderScreenshot(host, page == 1 || page == 8 ? 0 : 1, width, height, argv[1],
+                           page == 4 ? 1 : page == 6 ? 2 : page == 8 ? 3 : 0) ? 0 : 1;
 }

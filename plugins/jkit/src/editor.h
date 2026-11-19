@@ -36,6 +36,7 @@ struct GenSettings {
    // the kind of kit (kitgen.h's KitLayout).
    bool kitMode = false;
    int kitLayout = 0;
+   int kitTakes = 1; // GENERATE KIT: takes for each pad, 1, 2 or 4
 };
 
 struct Recent {
@@ -63,9 +64,26 @@ struct EngineStatus {
 class EditorHost : public jclap::ui::ParamAccess {
 public:
    // ---- the kit ----
-   virtual SamplePtr padSample(int pad) const = 0;
-   // Puts a sound on a pad (null empties it).
-   virtual void setPadSample(int pad, SamplePtr sample) = 0;
+   // A pad's takes and how it picks one.
+   virtual PadSounds padSounds(int pad) const = 0;
+   virtual void setPadSounds(int pad, PadSounds sounds) = 0;
+   // Its first take's sound, what the pad shows (null when empty).
+   SamplePtr padSample(int pad) const { return padSounds(pad).first(); }
+   // Puts one sound on a pad in place of all its takes (null empties it).
+   void setPadSample(int pad, SamplePtr sample) { setPadSounds(pad, PadSounds::of(std::move(sample))); }
+   // Adds a sound to a pad as one more take; false when it has kMaxTakes already.
+   bool addPadTake(int pad, SamplePtr sample) {
+      PadSounds p = padSounds(pad);
+      if (!sample || p.count() >= kMaxTakes)
+         return false;
+      p.takes.push_back(Take{std::move(sample)});
+      setPadSounds(pad, std::move(p));
+      return true;
+   }
+   // Plays one take of a pad as its note would (its trims and the pad's params), for the take editor.
+   virtual void playPadTake(int pad, int take) = 0;
+   // The take a pad played last (-1 before any).
+   virtual int padTake(int pad) const = 0;
    // Swaps two pads: their sounds and every pad param.
    virtual void swapPads(int a, int b) = 0;
    // Plays a pad as its note would, or stops it.
@@ -100,11 +118,12 @@ public:
    virtual double generateProgress() const = 0;
    // Picks up a finished generation; true when the variants changed. The panel calls it on its timer.
    virtual bool pollGeneration(std::string &error) = 0;
-   // GENERATE KIT: starts one sound for one pad, with gen()'s engine, steps and guidance but this
-   // prompt and length, and no variants. pollGeneration() leaves the variants alone for it and
-   // takeKitSound() hands the sound over (named and with the role and prompt), once.
-   virtual void generateOne(const std::string &prompt, int role, double seconds, const std::string &name) = 0;
-   virtual SamplePtr takeKitSound() = 0;
+   // GENERATE KIT: starts the sounds for one pad, with gen()'s engine, steps and guidance but this
+   // prompt and length: `takes` close variations of one sound (1 for just the one). pollGeneration()
+   // leaves the variants alone for it and takeKitSounds() hands them over (named and with the role
+   // and prompt), once; empty until they're done.
+   virtual void generateOne(const std::string &prompt, int role, double seconds, const std::string &name, int takes = 1) = 0;
+   virtual std::vector<SamplePtr> takeKitSounds() = 0;
    // Seconds the last generation took.
    virtual double lastRunSeconds() const = 0;
    // Plays a sound by itself, as the pads would at no pitch, or stops it (null).

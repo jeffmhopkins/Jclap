@@ -2,11 +2,11 @@
 
 # JKit
 
-A 16-pad drum kit whose sounds an AI model makes from your words, inside the plugin, with a choice of engines. Type what you want (or roll the dice for a prompt, from plain studio drums to things no drum machine has), pick from the variants, trim and fade the one you like, and put it on a pad, or make a whole kit in one style at once: drums, hand percussion, effects or animals. Then play the kit: each pad with its own pitch, start and end, envelope, drive, a points EQ with filters, and sends, into a shared reverb and delay and a master EQ, width and BOOM.
+A 16-pad drum kit whose sounds an AI model makes from your words, inside the plugin, with a choice of engines. Type what you want (or roll the dice for a prompt, from plain studio drums to things no drum machine has), pick from the variants, trim and fade the one you like, and put it on a pad (or several on one, as takes it picks between each hit), or make a whole kit in one style at once: drums, hand percussion, effects or animals. Then play the kit: each pad with its own pitch, start and end, envelope, drive, a points EQ with filters, and sends, into a shared reverb and delay and a master EQ, width and BOOM.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![pads: 16](https://img.shields.io/badge/pads-16-blue)](#the-kit-tab) [![engines: Stable Audio Open Small, ORB, Stable Audio Open 1.0](https://img.shields.io/badge/engines-SAO%20Small%20%7C%20ORB%20%7C%20SAO%201.0-blue)](#the-engines) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
-Version 0.6.0 · Powered by Stability AI · ORB by Marcos Maceo
+Version 0.7.0 · Powered by Stability AI · ORB by Marcos Maceo
 
 </div>
 
@@ -239,7 +239,9 @@ The drum kit follows General MIDI from C1 (note 36), so a drum part written for 
 right sounds.
 
 **GENERATE** (GENERATE DRUM KIT, GENERATE PERCUSSION KIT...) opens a card with the style and the
-sixteen pads, which have sounds, and how long it will take. **FILL n EMPTY PADS** makes sounds only for
+sixteen pads, which have sounds, and how long it will take. **TAKES PER PAD** (1, 2 or 4) gives each
+pad that many close variations of its sound as [takes](#takes-several-sounds-on-one-pad), a
+different one each hit; more takes take longer. **FILL n EMPTY PADS** makes sounds only for
 the pads with none; **REPLACE ALL 16 PADS** makes all of them, replacing what's there. Each sound gets
 the SELECTED panel's NORMALIZE, TRIM SILENCE, REVERSE and fades, plays from its start to its end, and
 is named for its pad. A drum kit's closed, pedal and open hats go in choke group 1 (unless they're
@@ -268,7 +270,9 @@ normalizing), with a playhead; **AUDITION** (or a click on the waveform) plays i
 the pad: trimmed, faded, normalized and reversed if set.
 
 **SEND TO PAD** picks the pad (laid out as on the Kit tab), and **ADD TO KIT** puts the treated
-sound on it, with its prompt, role and seed. The next empty pad becomes the next target.
+sound on it in place of what's there, with its prompt, role and seed. The next empty pad becomes the
+next target. **ADD AS TAKE** keeps the pad's sound and adds this one beside it as another
+[take](#takes-several-sounds-on-one-pad), and stays on the pad so you can add more.
 
 ![The Generate tab on first run, while the model downloads](docs/panel-first-run.png)
 
@@ -277,13 +281,14 @@ sound on it, with its prompt, role and seed. The next empty pad becomes the next
 **PADS**: sixteen pads, pad 1 bottom left on MIDI note 36 (C2), up to pad 16 on 51. Each shows its
 name, role, waveform with a playhead while it sounds, note, and its reverb (purple) and delay (blue)
 sends. Click a pad to play and select it (higher on the pad is louder), drag one onto another to
-swap them (sound and settings), right-click to play, regenerate or clear it. Playing a pad over
+swap them (sound and settings), right-click to play, open its takes, regenerate or clear it. A pad
+with more than one take shows how many (x4), and its waveform is the take it played last. Playing a pad over
 MIDI selects it too, so its controls follow what you play. An empty pad's
 + GENERATE opens the Generate tab aimed at it.
 
 **PAD n**: the selected pad. Its waveform has the START and END handles, the decay drawn as a blue
-curve, and the speed its pitch plays it at. **REGENERATE IN TAB** opens the Generate tab with its
-prompt and role.
+curve, and the speed its pitch plays it at. **TAKES** opens its [takes](#takes-several-sounds-on-one-pad).
+**REGENERATE IN TAB** opens the Generate tab with its prompt and role.
 
 | Control | Range | What it does |
 |---|---|---|
@@ -340,16 +345,40 @@ Everything under the darker band acts on the whole kit.
   200%), **BOOM** (low-end punch: the lows under 110 Hz driven into a soft clip and added back, so
   the hit thumps without the tail booming) and **VOLUME**.
 
+### Takes: several sounds on one pad
+
+A pad can hold up to 8 takes of its sound, and plays one of them each hit, so a part played on it
+doesn't sound like the same sample over and over. **TAKES** on the pad's card (or Takes... on its
+right-click menu) opens them, a row each:
+
+- **PLAYS** picks how a hit chooses: **RANDOM** a different take every hit, never the same one twice
+  running; **CYCLE** the takes in order, round and round; **VELOCITY** soft hits the first take,
+  hard ones the last, split evenly.
+- **The waveform**: drag the white lines for the part of the take that plays, and the blue dots
+  along the top for its fade in and fade out. A click elsewhere on it plays the take.
+- **LEVEL** (-24 to +12 dB), **TUNE** (-12 to +12 semitones), **LOW CUT** and **HIGH CUT** (12
+  dB/octave, 20 Hz to 20 kHz, off at the ends): drag a value up or down; double-click puts it back.
+- **▲** moves a take up (the order matters for CYCLE and VELOCITY), **✕** removes it.
+- **+ ADD n VARIANTS AS TAKES** brings the Generate tab's variants in, the starred ones if any are
+  starred, normalized and with their silence trimmed.
+
+Each take's own settings come first; the pad's controls then apply to whichever take plays, its
+START and END within the take's part. Make takes with ADD AS TAKE in the Generate tab (VARY
+first, for close variations), with TAKES PER PAD when generating a whole kit, or from here.
+
+![A pad's takes](docs/panel-takes.png)
+
 ## Kits and projects
 
-A project keeps everything: the sounds on the pads (as 16-bit, 44.1 kHz stereo), every setting, and
+A project keeps everything: the sounds on the pads and all their takes with each take's settings
+(as 16-bit, 44.1 kHz stereo), every setting, and
 the Generate tab's engine, prompt, settings and recent prompts. Projects saved with JKit 0.1 open
 with Stable Audio Open Small selected. The variants aren't kept: put the ones you
 want on a pad.
 
 The kit browser at the top right saves a kit, with its sounds, to your JClap presets folder
 (`JKit/Presets`, a `.jkit` file with a `.jkitsounds` file beside it) and loads it back. JKit has no
-factory kits: every kit is yours.
+factory kits: every kit is yours. Kits and projects saved before 0.7 open with one take on each pad.
 
 ## Licences
 
@@ -386,5 +415,6 @@ JKit builds with the rest of JClap (see the [top-level README](../../README.md))
   `JKIT_TEST_ORT`), it generates one with 1.0; with `JKIT_TEST_ORB` set to a folder holding ORB's
   `planner.safetensors`, it plans and plays a kick.
 - `jkit-screenshot-test`, `jkit-screenshot-kit-test`, `jkit-screenshot-first-run-test`,
-  `jkit-screenshot-orb-test`, `jkit-screenshot-engines-test`, `jkit-screenshot-kit-mode-test`, `jkit-screenshot-kit-dialog-test`: the
+  `jkit-screenshot-orb-test`, `jkit-screenshot-engines-test`, `jkit-screenshot-kit-mode-test`, `jkit-screenshot-kit-dialog-test`,
+  `jkit-screenshot-takes-test`: the
   panel pictures above.
