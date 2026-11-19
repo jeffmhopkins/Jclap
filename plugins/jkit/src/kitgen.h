@@ -3,7 +3,8 @@
 // GENERATE KIT: one style for the whole kit, and a sound for each pad, as a drum kit, hand
 // percussion, effects or animals. A drum kit's pads follow General MIDI from note 36 (C1), so a drum part written for
 // any GM kit plays the right sounds: kick on 36, snare on 38, closed hat on 42, open hat on 46, crash
-// on 49. The three hats share choke group 1, so a closed or pedal hat cuts the open one off. Hand
+// on 49, and a ride on 47 (GM puts it on 51, JKit's FX pad). The three hats share choke group 1, so a
+// closed or pedal hat cuts the open one off. Hand
 // percussion puts its low strokes where the kicks are and its slaps where the snares are.
 //
 // Each pad's prompt is its sound, then the style: "closed hi-hat, dusty lo-fi boom bap, tape
@@ -50,7 +51,7 @@ inline const KitSlot &kitSlot(int pad, int layout = kDrumKitLayout) {
       {"Pedal Hat", kHat, "pedal hi-hat chick", 0.3, 1}, // 44
       {"High Tom", kTom, "high tom", 0.9, 0},           // 45
       {"Open Hat", kHat, "open hi-hat", 1.0, 1},        // 46
-      {"Perc", kPerc, "conga hit", 0.6, 0},             // 47
+      {"Ride", kHat, "ride cymbal", 2.0, 0},            // 47
       {"Shaker", kPerc, "shaker", 0.5, 0},              // 48
       {"Crash", kHat, "crash cymbal", 2.5, 0},          // 49
       {"Kick 2", kKick, "deep sub kick", 1.0, 0},       // 50

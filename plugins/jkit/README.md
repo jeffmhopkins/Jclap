@@ -233,14 +233,15 @@ are, so a drum part still makes sense on any of them:
 | 44 | Pedal Hat | Conga Slap | Chirp | Bird | Guiro |
 | 45 | High Tom | Low Bongo | Pew | Sheep | Low Bongo |
 | 46 | Open Hat | High Bongo | Sweep | Rattlesnake | Campana |
-| 47 | Perc | Djembe Tone | Coin | Monkey | High Bongo |
+| 47 | Ride | Djembe Tone | Coin | Monkey | High Bongo |
 | 48 | Shaker | Darbuka Dum | Wub | Horse | Sangban |
 | 49 | Crash | Darbuka Tek | Riser | Elephant | Bell |
 | 50 | Kick 2 | Tabla | Impact | Lion | Djembe Slap |
 | 51 | FX | Frame Drum | Reverse | Wolf | Djembe Tone |
 
 The drum kit follows General MIDI from C1 (note 36), so a drum part written for any GM kit plays the
-right sounds.
+right kick, snares, hats, toms and crash. Its ride is on 47 (GM puts the ride on 51, which here is
+FX), where JDrummer plays it.
 
 **GENERATE** (GENERATE DRUM KIT, GENERATE PERCUSSION KIT...) opens a card with the style and the
 sixteen pads, which have sounds, and how long it will take. **VARIATIONS PER PAD** (1, 2 or 4) gives each
