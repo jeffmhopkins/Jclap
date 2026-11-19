@@ -449,7 +449,7 @@ public:
       }
       r.seconds = std::clamp(gen_.seconds, 0.1, gen::kMaxSeconds);
       r.steps = std::clamp(gen_.steps, 1, 100);
-      r.guidance = std::clamp(gen_.guidance, 1.0, 12.0);
+      r.guidance = gen::guidanceFor(r.engine, gen_.guidance);
       r.variants = std::clamp(gen_.variants, 1, 8);
       r.variety = std::clamp(gen_.variety, 0.0, 1.0);
       dropFirst_ = false;
@@ -484,7 +484,7 @@ public:
       r.prompt = prompt;
       r.seconds = std::clamp(seconds, 0.1, gen::kMaxSeconds);
       r.steps = std::clamp(gen_.steps, 1, 100);
-      r.guidance = std::clamp(gen_.guidance, 1.0, 12.0);
+      r.guidance = gen::guidanceFor(r.engine, gen_.guidance);
       r.variants = 1;
       r.variety = 0.0;
       r.seed = 1 + std::random_device{}() % 99999;

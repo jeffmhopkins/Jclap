@@ -84,8 +84,8 @@ by hash.
 | **In all** | **4.89 GB** | **about 4.78 GB** |
 
 It samples with DPM-Solver++ (2M), and wants more steps than Small: **STEPS** runs 10 to 100 (50 by
-default) and **GUIDANCE** 1 to 12 (7 by default); choosing it in the engine picker sets both to its
-defaults. It only computes the length you ask for, so short sounds are quicker: on a 4-core laptop a
+default) and has **PROMPT STRENGTH** (its guidance) 1 to 12 (7 by default); choosing it in the engine
+picker sets both to its defaults. It only computes the length you ask for, so short sounds are quicker: on a 4-core laptop a
 1.5 s sound at 50 steps takes about 30 s, and each variant takes as long again. The GENERATE hint
 says how long to expect. It takes about 5 GB of memory once loaded.
 
@@ -109,7 +109,7 @@ ORB was trained on short sound-effect captions and has no drum models, so it doe
 words for one of the sounds above ("a heavy door slams", "glass shattering", "a deep punch", "church
 bell toll"). Drum names land on whatever is nearest: "kick drum" gives a click, "snare" a bell,
 "hi-hat" an impact. It plans its own length; JKit starts the sound at its first hit and cuts it at
-LENGTH if it's longer. STEPS, GUIDANCE and VARIETY don't apply.
+LENGTH if it's longer. STEPS, PROMPT STRENGTH and VARIETY don't apply.
 
 **VARIANTS**: the first is ORB's own plan, played as ORB plays it. Each of the others draws a plan
 of its own from the planner (so it may pick another sound, add a second hit, or change the timing
@@ -165,8 +165,11 @@ room tail". Under it:
 - **LENGTH**: how long the sound is, 0.1 to 11.8 s.
 - **STEPS** (Stable Audio): diffusion steps, 4 to 16 for Small (tuned for 8) or 10 to 100 for 1.0
   (50 by default).
-- **GUIDANCE** (Stable Audio): how hard it follows the words, 1 to 7 for Small (tuned for 1) or 1
-  to 12 for 1.0 (7 by default). Above 1 each step runs twice, so it takes twice as long.
+- **PROMPT STRENGTH** (Stable Audio Open 1.0 only; it was GUIDANCE before 0.6): how hard it pulls
+  toward the words, 1 to 12 (7 by default, its sweet spot). Higher gets harsher and stranger, with
+  more harmonics and stray tails, rather than closer to the prompt. Above 1 each step runs twice, so
+  it takes twice as long. Small has no such knob: it was distilled to make its sound in 8 steps at a
+  guidance of 1, and more only over-pushes every step, so it always runs at 1.
 - **VARIETY** (Stable Audio): how different the variants are from each other. Low makes takes of
   one sound; high makes each its own.
 - **VARIANTS**: how many sounds each GENERATE makes: 1, 2, 4 or 8. Every GENERATE starts from a
@@ -206,7 +209,7 @@ every pad.
 Each pad keeps its own sound in its prompt, so a strange kit still has a kick on the kick note. The
 slider changes the words the model is given, the same way it does in SOUND; the model itself runs
 the same. LENGTH, VARIETY and VARIANTS don't apply in KIT (each pad has its own length); STEPS and
-GUIDANCE do.
+PROMPT STRENGTH (on 1.0) do.
 
 ![KIT, set to PERCUSSION](docs/panel-kit-mode.png)
 

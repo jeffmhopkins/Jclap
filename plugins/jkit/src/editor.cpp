@@ -2243,14 +2243,14 @@ private:
                         [](double v) { return std::to_string(static_cast<int>(std::lround(v))); },
                         [this](double v) { host_.gen().steps = static_cast<int>(std::lround(v)); });
       tips_.add(*steps_, "Diffusion steps. Small is tuned for 8, 1.0 for about 50; more is slower.");
-      guidance_ = &genKnob({24 + 2 * kw, ky, kw, 80}, "GUIDANCE", ui::ValueRange{1, 7, 1, 0.1},
+      guidance_ = &genKnob({24 + 2 * kw, ky, kw, 80}, "PROMPT STRENGTH", ui::ValueRange{1, 12, 7, 0.1},
                            [](double v) {
                               char b[16];
                               std::snprintf(b, sizeof(b), "%.1f", v);
                               return std::string(b);
                            },
                            [this](double v) { host_.gen().guidance = v; });
-      tips_.add(*guidance_, "How hard it follows the words. Small is tuned for 1, 1.0 for 7; above 1 takes twice as long.");
+      tips_.add(*guidance_, "Prompt strength (1.0 only): how hard it pulls toward the words. 7 is its sweet spot; higher gets harsher and stranger, and above 1 takes twice as long.");
       variety_ = &genKnob({24 + 3 * kw, ky, kw, 80}, "VARIETY", ui::ValueRange{0, 1, 1, 0.01},
                           [](double v) { return std::to_string(static_cast<int>(std::lround(v * 100))) + "%"; },
                           [this](double v) { host_.gen().variety = v; });
@@ -2538,11 +2538,11 @@ private:
       engine_->setSelected(host_.gen().engine);
       const bool open1 = host_.gen().engine == 2;
       steps_->setRange(open1 ? ui::ValueRange{10, 100, 50, 1, false, true} : ui::ValueRange{4, 16, 8, 1, false, true});
-      guidance_->setRange(open1 ? ui::ValueRange{1, 12, 7, 0.1} : ui::ValueRange{1, 7, 1, 0.1});
       steps_->setValue(host_.gen().steps);
       guidance_->setValue(host_.gen().guidance);
       steps_->setVisible(!orb());
-      guidance_->setVisible(!orb());
+      // Small always runs at guidance 1, the only setting it was tuned for: the knob is 1.0's.
+      guidance_->setVisible(open1);
       variety_->setVisible(!orb());
       // ORB makes sound effects, not drums: its chips are the kinds of sound it has, and its slider
       // goes from one sound to a few in a row.
@@ -2558,6 +2558,14 @@ private:
       count_->setVisible(!gs.kitMode);
       if (gs.kitMode)
          variety_->setVisible(false);
+      // The knobs that show sit side by side from the left, with no gap for a hidden one.
+      {
+         const float kw = 348.0f / 4, ky = 360;
+         int col = 0;
+         for (ui::Knob *k : {length_, steps_, guidance_, variety_})
+            if (k->isVisible())
+               move(*k, {24 + kw * col++, ky, kw, 80});
+      }
       strange_->setLabels(orb() ? "ONE SOUND" : "GENERIC", orb() ? "LAYERED" : "STRANGE");
       tips_.setText(*roles_, orb() ? "The kind of sound ORB can make, for the random prompt, the pad's colour and its name."
                                    : "What the sound is for: the random prompt, the pad's colour and its name.");

@@ -224,7 +224,13 @@ int main(int argc, char **argv) {
       host.gen().kitLayout = 1;
       host.gen().prompt = "Afro-Cuban rumba percussion, warm natural room";
    }
+   if (page == 7) {
+      // Stable Audio Open 1.0: its own steps and PROMPT STRENGTH.
+      host.gen().engine = 2;
+      host.gen().steps = 50;
+      host.gen().guidance = 7.0;
+   }
    // Page 1 is the Kit tab (the panel's page 0); 0 and 2 to 6 the Generate tab (its page 1), 4 with
-   // the engine picker open, 5 in KIT (percussion) and 6 with GENERATE's kit card open.
+   // the engine picker open, 5 in KIT (percussion), 6 with GENERATE's kit card open and 7 on 1.0.
    return renderScreenshot(host, page == 1 ? 0 : 1, width, height, argv[1], page == 4 ? 1 : page == 6 ? 2 : 0) ? 0 : 1;
 }

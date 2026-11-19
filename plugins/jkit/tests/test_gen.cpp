@@ -16,6 +16,7 @@
 #include <set>
 #include <thread>
 
+#include "gen/engines.h"
 #include "gen/fetch.h"
 #include "gen/orb/planner.h"
 #include "gen/orb/render.h"
@@ -170,6 +171,15 @@ void testPrompts() {
       JCLAP_CHECK(joined1 > 60);
       JCLAP_CHECK(seen.size() >= 14);
    }
+}
+
+void testGuidance() {
+   // Small runs at the guidance it was distilled for, whatever the knob says; 1.0 takes the knob.
+   JCLAP_CHECK_EQ(gen::guidanceFor(gen::Engine::SaoSmall, 7.0), 1.0);
+   JCLAP_CHECK_EQ(gen::guidanceFor(gen::Engine::SaoSmall, 1.0), 1.0);
+   JCLAP_CHECK_EQ(gen::guidanceFor(gen::Engine::SaoOpen1, 7.0), 7.0);
+   JCLAP_CHECK_EQ(gen::guidanceFor(gen::Engine::SaoOpen1, 30.0), 12.0);
+   JCLAP_CHECK_EQ(gen::guidanceFor(gen::Engine::SaoOpen1, 0.0), 1.0);
 }
 
 void testKitSlots() {
@@ -602,6 +612,7 @@ int main() {
    testSampler();
    testPrompts();
    testKitSlots();
+   testGuidance();
    testStudio();
    testGenerate();
    testSigmas();
