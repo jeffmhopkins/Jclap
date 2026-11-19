@@ -438,6 +438,7 @@ public:
    void generate(int around) override {
       if (job_)
          return;
+      kitJob_ = false;
       gen::Request r;
       r.engine = engineChoice();
       r.prompt = gen_.prompt;
@@ -474,6 +475,30 @@ public:
       jobStarted_ = std::chrono::steady_clock::now();
    }
 
+   void generateOne(const std::string &prompt, int role, double seconds, const std::string &name) override {
+      if (job_)
+         return;
+      gen::Request r;
+      r.engine = engineChoice();
+      r.prompt = prompt;
+      r.seconds = std::clamp(seconds, 0.1, gen::kMaxSeconds);
+      r.steps = std::clamp(gen_.steps, 1, 100);
+      r.guidance = std::clamp(gen_.guidance, 1.0, 12.0);
+      r.variants = 1;
+      r.variety = 0.0;
+      r.seed = 1 + std::random_device{}() % 99999;
+      jobRole_ = std::clamp(role, 0, kRoleCount - 1);
+      jobPrompt_ = prompt;
+      jobName_ = name;
+      kitJob_ = true;
+      kitSound_.reset();
+      job_ = studio().submit(r);
+      jobEngine_ = r.engine;
+      jobStarted_ = std::chrono::steady_clock::now();
+   }
+
+   SamplePtr takeKitSound() override { return std::move(kitSound_); }
+
    bool generating() const override { return job_ != 0; }
 
    double generateProgress() const override {
@@ -494,6 +519,21 @@ public:
          return false;
       job_ = 0;
       lastRun_ = std::chrono::duration<double>(std::chrono::steady_clock::now() - jobStarted_).count();
+      if (kitJob_) {
+         // A kit pad's sound: it goes to takeKitSound(), not the variants.
+         kitJob_ = false;
+         if (!error.empty() || sounds.empty())
+            return false;
+         auto s = std::make_shared<Sample>();
+         s->role = jobRole_;
+         s->name = jobName_;
+         s->prompt = jobPrompt_;
+         s->seed = sounds[0].seed;
+         s->left = std::move(sounds[0].left);
+         s->right = std::move(sounds[0].right);
+         kitSound_ = std::move(s);
+         return false;
+      }
       if (!error.empty() || sounds.empty())
          return false;
       // Starred variants stay; the rest make way for the new ones.
@@ -1218,6 +1258,10 @@ private:
    std::string kitName_;
    std::unique_ptr<gen::Studio::Handle> studio_;
    int job_ = 0, jobRole_ = kPerc;
+   // GENERATE KIT's one-pad job, and its sound once it's done.
+   bool kitJob_ = false;
+   std::string jobName_;
+   SamplePtr kitSound_;
    std::string jobPrompt_;
    bool dropFirst_ = false;
    std::chrono::steady_clock::time_point jobStarted_;

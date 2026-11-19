@@ -2,11 +2,11 @@
 
 # JKit
 
-A 16-pad drum kit whose sounds an AI model makes from your words, inside the plugin, with a choice of engines. Type what you want (or roll the dice for a prompt, from plain studio drums to things no drum machine has), pick from the variants, trim and fade the one you like, and put it on a pad. Then play the kit: each pad with its own pitch, start and end, envelope, drive, a points EQ with filters, and sends, into a shared reverb and delay and a master EQ, width and BOOM.
+A 16-pad drum kit whose sounds an AI model makes from your words, inside the plugin, with a choice of engines. Type what you want (or roll the dice for a prompt, from plain studio drums to things no drum machine has), pick from the variants, trim and fade the one you like, and put it on a pad, or make a whole kit in one style at once. Then play the kit: each pad with its own pitch, start and end, envelope, drive, a points EQ with filters, and sends, into a shared reverb and delay and a master EQ, width and BOOM.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![pads: 16](https://img.shields.io/badge/pads-16-blue)](#the-kit-tab) [![engines: Stable Audio Open Small, ORB, Stable Audio Open 1.0](https://img.shields.io/badge/engines-SAO%20Small%20%7C%20ORB%20%7C%20SAO%201.0-blue)](#the-engines) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
-Version 0.4.0 · Powered by Stability AI · ORB by Marcos Maceo
+Version 0.5.0 · Powered by Stability AI · ORB by Marcos Maceo
 
 </div>
 
@@ -169,7 +169,36 @@ room tail". Under it:
   new random seed, and each variant from its own, so pressing it again always brings new sounds
   (there's no SEED control). Each sound still shows its seed, and VARY works from it.
 - **GENERATE** shows its progress, and how long the last run took.
+- **WHOLE KIT** makes a sound for every pad at once (see [A whole kit at once](#a-whole-kit-at-once)).
 - **RECENT**: your last prompts. Click one to load it with its role.
+
+### A whole kit at once
+
+**WHOLE KIT**, beside GENERATE, opens a card for making the whole kit in one go. The prompt is the
+kit's style ("dusty lo-fi boom bap, tape saturation"): describe a style, not one sound, as each pad
+asks for its own sound in it ("closed hi-hat, dusty lo-fi boom bap, tape saturation"). With no prompt
+typed, the kit gets a random style, the same for every pad.
+
+The pads are laid out like a General MIDI drum kit from C1 (note 36), so a drum part written for
+any GM kit plays the right sounds:
+
+| Note | Pad | Note | Pad | Note | Pad | Note | Pad |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 36 | Kick | 40 | Snare 2 | 44 | Pedal Hat | 48 | Shaker |
+| 37 | Rim | 41 | Low Tom | 45 | High Tom | 49 | Crash |
+| 38 | Snare | 42 | Closed Hat | 46 | Open Hat | 50 | Kick 2 |
+| 39 | Clap | 43 | Mid Tom | 47 | Perc | 51 | FX |
+
+**FILL n EMPTY PADS** makes sounds only for the pads with none; **REPLACE ALL 16 PADS** makes all of
+them, replacing what's there. Each sound gets the SELECTED panel's NORMALIZE, TRIM SILENCE, REVERSE
+and fades, plays from its start to its end, and is named for its pad. The closed, pedal and open hats
+go in choke group 1 (unless they're already in one), so a closed hat cuts the open one off. The kick
+and snare come first, then the hats, so you can play along as it fills. GENERATE shows which pad it's
+on ("KIT 3 OF 16 · Closed Hat"), and **STOP** (WHOLE KIT's button meanwhile) stops it, keeping the
+pads made so far. It uses the engine's STEPS and GUIDANCE: a whole kit takes about a minute with
+Small and about 8 with 1.0. ORB makes sound effects, not drums, so the kit needs Small or 1.0.
+
+![GENERATE KIT's card](docs/panel-whole-kit.png)
 
 **VARIANTS**: what came back, each with its seed and length. Click one to select and hear it. Its
 star keeps it through the next GENERATE (unstarred ones make way for the new ones).
@@ -307,4 +336,5 @@ JKit builds with the rest of JClap (see the [top-level README](../../README.md))
   `JKIT_TEST_ORT`), it generates one with 1.0; with `JKIT_TEST_ORB` set to a folder holding ORB's
   `planner.safetensors`, it plans and plays a kick.
 - `jkit-screenshot-test`, `jkit-screenshot-kit-test`, `jkit-screenshot-first-run-test`,
-  `jkit-screenshot-orb-test`, `jkit-screenshot-engines-test`: the panel pictures above.
+  `jkit-screenshot-orb-test`, `jkit-screenshot-engines-test`, `jkit-screenshot-kit-dialog-test`: the panel
+  pictures above.
