@@ -1,20 +1,21 @@
 #pragma once
 
-// The generator, shared by every JKit in the process: it downloads ONNX Runtime and the model the
-// first time they're wanted, loads the model once (2 GB of memory, so never once per instance), and
-// works through generation jobs one at a time on its own thread, so neither the audio nor the panel
-// ever waits on it.
+// The generator, shared by every JKit in the process: it downloads each engine the first time it's
+// wanted, loads it once (Stable Audio takes 2 GB of memory, so never once per instance), and works
+// through generation jobs one at a time on its own thread, so neither the audio nor the panel ever
+// waits on it. Each engine downloads, loads and is removed on its own.
 //
 // Files go in the user's JClap folder (~/Library/Application Support/JClap on macOS, %APPDATA%\JClap
 // on Windows, ~/.config/JClap on Linux):
 //
 //    runtime/onnxruntime-1.22.0/   the ONNX Runtime library, from Microsoft's NuGet package
 //    models/stable-audio-open-small/   tokenizer.json, cond.onnx, dit.onnx, dec.onnx, LICENSE, NOTICE
+//    models/orb-planner/               planner.safetensors, config.json (ORB needs no runtime)
 //
 // Every download is pinned to a SHA-256, checked as it comes in.
 //
 //    Studio::Handle studio;                 // one per plugin instance; the last one out stops it
-//    studio->install();                     // when the user asks for the model
+//    studio->install(Engine::Orb);          // when the user asks for an engine
 //    const int job = studio->submit(req);   // later
 //    if (studio->take(job, sounds, error)) ...
 
@@ -30,6 +31,7 @@
 #include <thread>
 #include <vector>
 
+#include "gen/orb_engine.h"
 #include "gen/sao.h"
 
 namespace jkit::gen {
@@ -70,25 +72,25 @@ public:
       Studio *studio_;
    };
 
-   Status status() const;
-   // Total download size, for the button that starts it.
-   static uint64_t downloadBytes();
+   Status status(Engine engine) const;
+   // An engine's whole download, for the button that starts it.
+   static uint64_t downloadBytes(Engine engine);
    // The folder of the user's JClap files.
    static std::filesystem::path folder();
-   static std::filesystem::path modelFolder();
+   static std::filesystem::path modelFolder(Engine engine);
 
-   // Bytes the model and runtime take on disk now (whatever has been downloaded so far).
-   static uint64_t diskBytes();
+   // Bytes an engine takes on disk now (whatever has been downloaded so far, with its runtime).
+   static uint64_t diskBytes(Engine engine);
 
-   // Starts downloading whatever is missing (no-op if installed or already downloading).
-   void install();
-   // Unloads the model and deletes its files and the runtime, freeing the disk space. Stops a
-   // download or a generation first; queued jobs fail.
-   void remove();
+   // Starts downloading whatever the engine is missing (no-op if installed or already downloading).
+   void install(Engine engine);
+   // Unloads the engine and deletes its files (and its runtime), freeing the disk space. Stops its
+   // download or a generation first; its queued jobs fail.
+   void remove(Engine engine);
    // Stops a download, or the job running now.
    void cancel();
-   // Loads the model now, so the first generation doesn't wait for it. Installs it first if needed.
-   void warmUp();
+   // Loads the engine now, so the first generation doesn't wait for it. Installs it first if needed.
+   void warmUp(Engine engine);
 
    // Queues a generation; returns its job id. It installs and loads the model first if it must.
    int submit(const Request &request);
@@ -116,25 +118,28 @@ private:
    };
 
    void run();
-   bool installNow(std::string &error);
-   bool loadNow(std::string &error);
-   void removeNow();
-   bool installedOnDisk() const;
-   void setState(State s, const std::string &error = {});
+   bool installNow(Engine engine, std::string &error);
+   bool loadNow(Engine engine, std::string &error);
+   bool loaded(Engine engine) const;
+   void removeNow(Engine engine);
+   static bool installedOnDisk(Engine engine);
+   void setState(Engine engine, State s, const std::string &error = {});
 
    mutable std::mutex mutex_;
    std::condition_variable wake_;
    std::thread thread_;
-   bool quit_ = false, wantInstall_ = false, wantLoad_ = false, wantRemove_ = false;
-   Status status_;
+   bool quit_ = false;
+   bool wantInstall_[kEngineCount] = {}, wantLoad_[kEngineCount] = {}, wantRemove_[kEngineCount] = {};
+   Status status_[kEngineCount];
    std::atomic<bool> cancel_{false};
-   std::atomic<uint64_t> received_{0};
+   std::atomic<uint64_t> received_[kEngineCount] = {};
    int nextJob_ = 1, runningJob_ = 0;
    std::deque<int> queue_;
    std::map<int, Job> jobs_;
 
    Runtime runtime_;
-   StableAudio model_;
+   StableAudio sao_;
+   OrbEngine orb_;
 };
 
 } // namespace jkit::gen

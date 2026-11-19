@@ -1,5 +1,5 @@
 // Renders the panel to a PNG without a host or a model: jkit-screenshot out.png [page [width height]]
-// Page 0 is Generate, 1 is Kit, 2 is Generate on first run, while the model downloads. The sounds are made up here (decaying noise and sines), so the
+// Page 0 is Generate, 1 is Kit, 2 is Generate on first run, while the model downloads, 3 is Generate with ORB. The sounds are made up here (decaying noise and sines), so the
 // pictures are the same on every machine.
 
 #include <cmath>
@@ -44,7 +44,8 @@ public:
    // First run: the model downloading, nothing generated yet.
    bool firstRun = false;
 
-   DemoHost(bool first) : firstRun(first) {
+   DemoHost(bool first, bool orb = false) : firstRun(first) {
+      gen_.engine = orb ? 1 : 0;
       for (clap_id i = 0; i < kParamCount; ++i)
          values_[i] = param(i).defaultValue;
       struct P {
@@ -138,6 +139,12 @@ public:
    std::vector<Recent> &recent() override { return recent_; }
    EngineStatus engine() override {
       EngineStatus e;
+      if (gen_.engine == 1) {
+         e.state = EngineStatus::State::Ready;
+         e.downloadBytes = e.diskBytes = 20795318ull;
+         e.folder = "~/Library/Application Support/JClap/models/orb-planner";
+         return e;
+      }
       e.state = firstRun ? EngineStatus::State::Downloading : EngineStatus::State::Ready;
       e.received = 1053000000ull;
       e.total = 2239099934ull;
@@ -178,6 +185,6 @@ int main(int argc, char **argv) {
    const int page = argc > 2 ? std::atoi(argv[2]) : 0;
    const int width = argc > 4 ? std::atoi(argv[3]) : kEditorWidth;
    const int height = argc > 4 ? std::atoi(argv[4]) : kEditorHeight;
-   DemoHost host(page == 2);
-   return renderScreenshot(host, page == 2 ? 0 : page, width, height, argv[1]) ? 0 : 1;
+   DemoHost host(page == 2, page == 3);
+   return renderScreenshot(host, page >= 2 ? 0 : page, width, height, argv[1]) ? 0 : 1;
 }

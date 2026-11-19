@@ -21,6 +21,7 @@ constexpr int kEditorWidth = 1080, kEditorHeight = 660;
 // The Generate tab's settings. They're kept with the plugin's state, not as params: nothing about
 // them changes the sound a host plays.
 struct GenSettings {
+   int engine = 0; // gen::Engine: 0 Stable Audio Open Small, 1 ORB
    std::string prompt;
    int role = kSnare;
    double seconds = 1.0;  // LENGTH

@@ -1254,13 +1254,23 @@ private:
    void buildGenerate() {
       const Page P = kGeneratePage;
       // MODEL
-      engine_ = &onPage<ui::Dropdown>(P, {24, 128, 188, 22}, std::vector<std::string>{"Stable Audio Open Small"});
+      engine_ = &onPage<ui::Dropdown>(P, {24, 128, 188, 22},
+                                      std::vector<std::string>{"Stable Audio Open Small", "ORB"});
       engine_->setAccent(kOrange);
-      tips_.add(*engine_, "The model that makes the sounds. It runs inside JKit, on your computer's CPU.");
+      engine_->onChange = [this](int i) {
+         host_.gen().engine = i;
+         confirmRemove_ = false;
+         lastError_.clear();
+         syncEngine();
+         redraw();
+      };
+      tips_.add(*engine_, "The engine that makes the sounds, inside JKit on your CPU. Stable Audio Open Small: "
+                          "neural, 2.2 GB. ORB: plans the sound and plays it with physical models, 20.8 MB.");
       engineAction_ = &onPage<ui::Button>(P, {310, 128, 62, 22}, "DOWNLOAD");
       engineAction_->setAccent(kOrange);
       engineAction_->onClick = [this] { engineAction(); };
-      tips_.add(*engineAction_, "Download the model, stop a download, or remove the model to free its disk space.");
+      tips_.add(*engineAction_, "Download this engine, stop a download, or remove it to free its disk space. "
+                                "Each engine downloads and is removed on its own.");
 
       // PROMPT
       prompt_ = &onPage<PromptBox>(P, {24, 220, 348, 62});
@@ -1499,8 +1509,19 @@ private:
       }
    }
 
+   bool orb() const { return host_.gen().engine == 1; }
+
+   // ORB plans the sound and plays it: it has no diffusion steps, guidance or variety.
+   void syncEngine() {
+      engine_->setSelected(host_.gen().engine);
+      steps_->setVisible(!orb());
+      guidance_->setVisible(!orb());
+      variety_->setVisible(!orb());
+   }
+
    void syncGenerate() {
       const GenSettings &g = host_.gen();
+      syncEngine();
       prompt_->setText(g.prompt);
       roles_->selected = g.role;
       roles_->redraw();
@@ -1578,7 +1599,7 @@ private:
       const ui::Theme &t = ui::defaultTheme();
       const EngineStatus &e = status_;
       // MODEL
-      std::string note = "Powered by Stability AI";
+      std::string note = orb() ? "ORB by Marcos Maceo \xC2\xB7 Apache-2.0" : "Powered by Stability AI";
       if (e.state == EngineStatus::State::Downloading)
          note = std::to_string(e.total ? static_cast<int>(100.0 * e.received / e.total) : 0) + "% \xC2\xB7 " +
                 bytesText(e.received) + " of " + bytesText(e.total);
@@ -1629,9 +1650,11 @@ private:
       } else if (e.state == EngineStatus::State::Failed && !e.error.empty()) {
          sizes = ellipsis(e.error, 70);
       } else if (e.diskBytes > 0) {
-         sizes = bytesText(e.diskBytes) + " on disk \xC2\xB7 up to 11.8 s, 44.1 kHz stereo \xC2\xB7 REMOVE frees it";
+         sizes = bytesText(e.diskBytes) + " on disk \xC2\xB7 " + (orb() ? "27 one-shot models" : "up to 11.8 s, 44.1 kHz stereo") +
+                 " \xC2\xB7 REMOVE frees it";
       } else {
-         sizes = bytesText(e.downloadBytes) + " download \xC2\xB7 nothing on disk yet \xC2\xB7 up to 11.8 s, 44.1 kHz";
+         sizes = bytesText(e.downloadBytes) + " download \xC2\xB7 nothing on disk yet \xC2\xB7 " +
+                 (orb() ? "27 one-shot models" : "up to 11.8 s, 44.1 kHz");
       }
       if (!lastError_.empty() && e.state != EngineStatus::State::Downloading)
          sizes = ellipsis(lastError_, 70);
@@ -1643,6 +1666,13 @@ private:
       drawLabel(c, s, "ROLE", 24, 290);
       c.setColor(kRule);
       c.fill(24 * s, 354 * s, 348 * s, 1.0f * s);
+      if (orb()) {
+         c.setColor(t.dimText);
+         const float x = 24 + 348.0f / 4 + 8;
+         c.text("ORB plans the sound from your words,", ui::font(9 * s), visage::Font::kLeft, x * s, 378 * s, 250 * s, 14 * s);
+         c.text("then plays it with physical models.", ui::font(9 * s), visage::Font::kLeft, x * s, 392 * s, 250 * s, 14 * s);
+         c.text("Variants play the same plan, new seeds.", ui::font(9 * s), visage::Font::kLeft, x * s, 412 * s, 250 * s, 14 * s);
+      }
       drawLabel(c, s, "SEED", 24, 446);
       drawLabel(c, s, "VARIANTS", 216, 446);
       std::string hint;
@@ -1726,7 +1756,7 @@ private:
    // A rough guess at a generation's time from the last one.
    double estimate() const {
       const double last = host_.lastRunSeconds();
-      return last > 0 ? last : 2.0 + 2.5 * host_.gen().variants;
+      return last > 0 ? last : orb() ? 0.5 + 0.4 * host_.gen().variants : 2.0 + 2.5 * host_.gen().variants;
    }
 
    // ---- Kit ----

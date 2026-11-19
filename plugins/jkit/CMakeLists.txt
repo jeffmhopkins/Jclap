@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.1.0)
+jclap_plugin_version(0.2.0)
 
 # miniz unpacks ONNX Runtime's library from Microsoft's NuGet package (a zip) on first use.
 include(FetchContent)
@@ -16,11 +16,18 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 FetchContent_MakeAvailable(miniz)
 unset(CMAKE_POLICY_VERSION_MINIMUM)
 
+# pocketfft (BSD-3, numpy's own FFT), header-only, for ORB's renderer.
+FetchContent_Declare(pocketfft
+   GIT_REPOSITORY https://github.com/mreineck/pocketfft.git
+   GIT_TAG 4d865cba24359b05b37da4e75aee24498c3b78e7)
+FetchContent_MakeAvailable(pocketfft) # no CMakeLists.txt: this only fetches it
+
 # The generator: tokenizer, ONNX Runtime (loaded at run time, never linked), Stable Audio Open Small,
-# and the downloads. No Visage, so the tests can use it without a panel.
+# ORB (its planner and renderer), and the downloads. No Visage, so the tests can use it without a panel.
 add_library(jkit_gen STATIC
-   src/gen/tokenizer.cpp src/gen/ort.cpp src/gen/sao.cpp src/gen/fetch.cpp src/gen/studio.cpp)
-target_include_directories(jkit_gen PUBLIC src PRIVATE third_party/onnxruntime)
+   src/gen/tokenizer.cpp src/gen/ort.cpp src/gen/sao.cpp src/gen/fetch.cpp src/gen/studio.cpp
+   src/gen/orb/dsp.cpp src/gen/orb/render.cpp src/gen/orb/planner.cpp src/gen/orb_engine.cpp)
+target_include_directories(jkit_gen PUBLIC src PRIVATE third_party/onnxruntime ${pocketfft_SOURCE_DIR})
 target_compile_features(jkit_gen PUBLIC cxx_std_17)
 target_link_libraries(jkit_gen PUBLIC jclap::ui PRIVATE miniz)
 if(WIN32)
@@ -56,4 +63,6 @@ if(JCLAP_BUILD_TOOLS)
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-kit.png ARGS 1)
    jclap_add_screenshot_test(jkit-screenshot-first-run-test TOOL jkit-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-first-run.png ARGS 2)
+   jclap_add_screenshot_test(jkit-screenshot-orb-test TOOL jkit-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-orb.png ARGS 3)
 endif()
