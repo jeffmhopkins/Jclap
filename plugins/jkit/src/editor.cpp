@@ -2082,7 +2082,7 @@ private:
    void randomPrompt() {
       GenSettings &g = host_.gen();
       g.prompt = orb() ? jkit::randomOrbPrompt(static_cast<Role>(g.role), g.strange, std::random_device{}())
-                       : jkit::randomPrompt(static_cast<Role>(g.role), g.strange, std::random_device{}());
+                       : jkit::randomPrompt(static_cast<Role>(g.role), g.strange, std::random_device{}(), g.engine == 2);
       prompt_->setText(g.prompt);
    }
 

@@ -1,3 +1,4 @@
+#include <algorithm>
 // The generator's parts that need no model: hashing, the tokenizer, the sampler's schedule and
 // noise, the random prompts, the studio's bookkeeping, and ORB's renderer and planner grammar. With
 // JKIT_TEST_MODEL set to a folder holding the model files and JKIT_TEST_ORT to ONNX Runtime's library,
@@ -129,6 +130,16 @@ void testPrompts() {
    }
    JCLAP_CHECK(prompts::treatments().size() >= 70 && prompts::styles().size() >= 85 &&
                prompts::oddTreatments().size() >= 80);
+
+   // 1.0's prompts start as Small's and add to them, and still fit its 64 tokens with room to spare.
+   for (int r = 0; r < kRoleCount; ++r)
+      for (double strange : {0.0, 0.5, 1.0})
+         for (uint64_t seed = 0; seed < 100; ++seed) {
+            const std::string plain = randomPrompt(static_cast<Role>(r), strange, seed);
+            const std::string rich = randomPrompt(static_cast<Role>(r), strange, seed, true);
+            JCLAP_CHECK(rich.rfind(plain, 0) == 0 && rich.size() > plain.size());
+            JCLAP_CHECK(std::count(rich.begin(), rich.end(), ' ') < 40);
+         }
 
    // ORB's prompts: each kind's own sounds, more of them in a row the further right.
    for (int r = 0; r < kRoleCount; ++r) {

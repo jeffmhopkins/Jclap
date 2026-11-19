@@ -146,7 +146,10 @@ room tail". Under it:
   tom's), METAL (clangs, bells, church bells, swords, coins; a perc's) and SWEEP (whooshes, risers,
   swells, noise sweeps; an FX's). ORB's sounds are named for their kind: Boom, Glass...
 - **The dice** beside the roles writes a random prompt for the role, from a bank of several hundred
-  sounds, characters, treatments, spaces and styles per role (twice as many since 0.4). With ORB it
+  sounds, characters, treatments, spaces and styles per role (twice as many since 0.4). With
+  Stable Audio Open 1.0, which makes good use of a longer prompt, it adds a layer ("with a click on
+  the attack") or the recording ("close miked"), or both; every prompt stays well inside the 64
+  tokens Stable Audio reads. With ORB it
   writes plain sound-effect captions for the kind, the way ORB was trained to read them ("a wine
   glass shattering, up close").
 - **GENERIC - STRANGE**: how strange the random prompts get. At the left they're studio drum

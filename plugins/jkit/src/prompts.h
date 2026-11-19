@@ -239,6 +239,25 @@ inline const List &oddTreatments() {
    return k;
 }
 
+// Stable Audio Open 1.0 makes good use of a longer prompt: its dice adds one or two of these, the
+// layers and the recording, to what Small would get.
+inline const List &layers() {
+   static const List k = {"layered with a sub thump", "with a noise burst on top", "with a click on the attack",
+                          "with a short metallic ring", "with a body of low mids", "with a breathy tail",
+                          "with a hint of room noise", "with a pitched tone underneath", "with a crisp transient",
+                          "with a soft shaker layer", "with a tape hiss bed", "with a long reverb tail behind it",
+                          "doubled an octave down", "with a snap on top", "with a rattle in the tail",
+                          "with a wooden knock in the attack", "with a grainy texture", "with a quiet echo"};
+   return k;
+}
+inline const List &recordings() {
+   static const List k = {"close miked", "room miked", "overhead miked", "recorded with a ribbon mic",
+                          "recorded with a condenser mic", "recorded with a dynamic mic", "stereo pair",
+                          "recorded at 24-bit", "high fidelity", "isolated one-shot", "single hit",
+                          "clean recording", "professionally mixed", "sample pack quality", "warm analog chain"};
+   return k;
+}
+
 // splitmix64: small, and the same on every system.
 class Rng {
 public:
@@ -266,8 +285,9 @@ inline bool contains(const std::vector<std::string> &v, const std::string &s) {
 
 } // namespace prompts
 
-// A random prompt for `role`; `strange` 0..1 is the slider. Same arguments, same prompt.
-inline std::string randomPrompt(Role role, double strange, uint64_t seed) {
+// A random prompt for `role`; `strange` 0..1 is the slider. `detailed` (for Stable Audio Open 1.0)
+// adds a layer or the recording, or both. Same arguments, same prompt.
+inline std::string randomPrompt(Role role, double strange, uint64_t seed, bool detailed = false) {
    using namespace prompts;
    strange = strange < 0 ? 0 : strange > 1 ? 1 : strange;
    Rng rng(seed * 7919u + static_cast<uint64_t>(role) * 104729u + static_cast<uint64_t>(strange * 1000.0));
@@ -324,6 +344,23 @@ inline std::string randomPrompt(Role role, double strange, uint64_t seed) {
       add(spaces());
    if (rng.chance(0.65 - 0.5 * strange))
       add(styles());
+   const size_t before = parts.size();
+   if (detailed) {
+      // A layer, the recording, or both; and a space if it had none.
+      const bool layer = rng.chance(0.7), recording = !layer || rng.chance(0.6);
+      if (layer)
+         add(layers());
+      if (recording)
+         add(recordings());
+      bool spaced = false;
+      for (const char *sp : spaces())
+         spaced = spaced || contains(parts, sp);
+      if (!spaced && rng.chance(0.6))
+         add(spaces());
+      // Always at least one more than Small's (a pick can repeat what's there).
+      for (int tries = 0; tries < 8 && parts.size() == before; ++tries)
+         add(layers());
+   }
 
    std::string out;
    for (size_t i = 0; i < parts.size(); ++i)
