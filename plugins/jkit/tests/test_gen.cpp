@@ -196,6 +196,22 @@ void testKitSlots() {
       JCLAP_CHECK(kitSlot(p).seconds > 0.1 && kitSlot(p).seconds <= 11.8);
    }
    JCLAP_CHECK_EQ(static_cast<int>(names.size()), kKitSlots);
+   // Every layout names its sixteen pads apart, and WHOLE KIT makes each pad once.
+   for (int layout = 0; layout < kKitLayoutCount; ++layout) {
+      std::set<std::string> each;
+      std::set<int> order;
+      for (int p = 0; p < kKitSlots; ++p) {
+         each.insert(kitSlot(p, layout).name);
+         order.insert(kitOrder(layout)[p]);
+      }
+      JCLAP_CHECK_EQ(static_cast<int>(each.size()), kKitSlots);
+      JCLAP_CHECK_EQ(static_cast<int>(order.size()), kKitSlots);
+   }
+   // Afro-Latin: the dunun and bell, clave, campana and guiro the Percussion kit has no room for.
+   JCLAP_CHECK(std::string(kitSlot(0, kAfroLatinLayout).name) == "Dundunba");
+   JCLAP_CHECK(std::string(kitSlot(1, kAfroLatinLayout).name) == "Clave");
+   JCLAP_CHECK(std::string(kitSlot(10, kAfroLatinLayout).name) == "Campana");
+   JCLAP_CHECK(std::string(kitSlot(13, kAfroLatinLayout).name) == "Bell");
    // The pad's sound first, then the style; no style, just the sound.
    JCLAP_CHECK(kitPrompt(6, "dusty boom bap") == "closed hi-hat, dusty boom bap");
    JCLAP_CHECK(kitPrompt(0, "") == "kick drum");

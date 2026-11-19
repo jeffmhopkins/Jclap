@@ -1918,7 +1918,8 @@ public:
          "A sound for every pad, laid out like a General MIDI drum kit, all in one style.",
          "A sound for every pad: hand drums from around the world, one stroke each, all in one style.",
          "A sound for every pad: bleeps, bloops, zaps, glitches and hits, all in one style.",
-         "A sound for every pad: a different animal on each, all in one style."};
+         "A sound for every pad: a different animal on each, all in one style.",
+         "A sound for every pad: dunun, bell, clave, campana and guiro with congas, bongos and djembe."};
       c.text(kAbout[std::clamp(layout, 0, kKitLayoutCount - 1)],
              ui::font(9 * s), visage::Font::kLeft, x, b.y() + 34 * s, w, 14 * s);
       const float xx = b.right() - 26 * s, xy = b.y() + 18 * s;
@@ -1937,7 +1938,8 @@ public:
 
       c.setColor(t.dimText);
       // An example pad's prompt as GENERIC would ask it; toward STRANGE each pad gets its own twist.
-      const int examplePad = layout == kHandPercussionLayout ? 8 : layout == kDrumKitLayout ? 6 : 2;
+      const int examplePad = layout == kHandPercussionLayout ? 8 : layout == kAfroLatinLayout ? 10
+                             : layout == kDrumKitLayout ? 6 : 2;
       std::string example = st.empty() ? std::string(kitSlot(examplePad, layout).sound) + ", ..."
                                         : kitPrompt(examplePad, st, layout);
       if (example.size() > 44)
@@ -3420,7 +3422,8 @@ private:
       else if (host_.gen().kitMode)
       {
          static const char *const kLabels[kKitLayoutCount] = {"GENERATE DRUM KIT", "GENERATE PERCUSSION KIT",
-                                                              "GENERATE FX KIT", "GENERATE ANIMAL KIT"};
+                                                              "GENERATE FX KIT", "GENERATE ANIMAL KIT",
+                                                              "GENERATE AFRO-LATIN KIT"};
          generate_->setLabel(kLabels[std::clamp(host_.gen().kitLayout, 0, kKitLayoutCount - 1)]);
       }
       else
