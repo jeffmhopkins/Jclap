@@ -45,6 +45,20 @@ const ModelFile kOrbFiles[] = {
    {"planner.safetensors", 20795000, "b14a6d1939f5b0407d9c9d97b9c4468546b0fb5f30a7fb91175f55d69432015d"},
 };
 
+// Stable Audio Open 1.0 as ONNX (Stability AI Community License), converted for JKit and pinned to
+// one revision.
+constexpr const char *kOpen1Repo =
+   "https://huggingface.co/jeffmhopkins/stable-audio-open-1.0-onnx/resolve/ead3d731cebddf940f5794a0b5b45ebdf760b5df/";
+const ModelFile kOpen1Files[] = {
+   {"LICENSE", 11852, "d6f6b1a4dce5c852bd6d7d9482d002baf0ccdb71e662250b73be9eec8764ee8d"},
+   {"NOTICE", 701, "c92a2eb76b4691d1a28b3e993edb4941b917f567e4641ffe7274ba12cdef3241"},
+   {"tokenizer.json", 1389353, "d2acde0d8d71dd30a711834b07781b9c89feaac33fd332f60507699282740066"},
+   {"cond.onnx", 221436492, "1c690af1ce5cfd01bbb054e140d96e2a86031e0d3b3b4e3eb639ca20a1bd0733"},
+   {"dec.onnx", 312495876, "78b0c4efa929d5365d1ef4ee84be360843b4cfaf930babd7fa03294cc707cc77"},
+   {"dit.onnx", 2347731, "d2bc08f45fedcb975356081000e46369576de29054595efcc801d7ce4f30c3bd"},
+   {"dit.onnx.data", 4227319808ull, "be8e092af2da14b768b78ae4f5b059372c620268d10f4c9d632e687e6fd69a49"},
+};
+
 struct Files {
    const char *repo;
    const ModelFile *begin, *end;
@@ -53,6 +67,8 @@ struct Files {
 Files filesOf(Engine e) {
    if (e == Engine::Orb)
       return {kOrbRepo, std::begin(kOrbFiles), std::end(kOrbFiles), false};
+   if (e == Engine::SaoOpen1)
+      return {kOpen1Repo, std::begin(kOpen1Files), std::end(kOpen1Files), true};
    return {kModelRepo, std::begin(kModelFiles), std::end(kModelFiles), true};
 }
 
@@ -130,12 +146,17 @@ std::filesystem::path Studio::folder() {
 }
 
 std::filesystem::path Studio::modelFolder(Engine engine) {
-   return folder() / "models" / (engine == Engine::Orb ? "orb-planner" : "stable-audio-open-small");
+   const char *name = engine == Engine::Orb        ? "orb-planner"
+                      : engine == Engine::SaoOpen1 ? "stable-audio-open-1.0"
+                                                   : "stable-audio-open-small";
+   return folder() / "models" / name;
 }
 
 uint64_t Studio::downloadBytes(Engine engine) {
    const Files f = filesOf(engine);
-   uint64_t total = f.runtime ? kRuntimePackage.size : 0;
+   // The runtime only if it isn't there already (the other Stable Audio may have fetched it).
+   std::error_code ec;
+   uint64_t total = f.runtime && !std::filesystem::is_regular_file(runtimeLibrary(), ec) ? kRuntimePackage.size : 0;
    for (const ModelFile *m = f.begin; m != f.end; ++m)
       total += m->size;
    return total;
@@ -166,15 +187,25 @@ void Studio::remove(Engine engine) {
 void Studio::removeNow(Engine engine) {
    const int e = engineIndex(engine);
    std::error_code ec;
-   if (engine == Engine::Orb) {
+   if (engine == Engine::Orb)
       orb_.unload();
-   } else {
+   else if (engine == Engine::SaoOpen1)
+      sao1_.unload();
+   else
       sao_.unload();
-      // The runtime stays loaded until the last JKit closes (a library can't safely be unloaded while
-      // its sessions may linger), but its file goes (on Windows a loaded DLL can't be deleted, so it goes next time).
-      std::filesystem::remove_all(folder() / "runtime", ec);
-   }
    std::filesystem::remove_all(modelFolder(engine), ec);
+   // The runtime goes with the last engine that uses it. It stays loaded until the last JKit closes (a
+   // library can't safely be unloaded while its sessions may linger), but its file goes (on Windows a
+   // loaded DLL can't be deleted, so it goes next time).
+   if (usesRuntime(engine)) {
+      bool needed = false;
+      for (int other = 0; other < kEngineCount; ++other)
+         if (engineAt(other) != engine && usesRuntime(engineAt(other)) &&
+             std::filesystem::exists(modelFolder(engineAt(other)), ec))
+            needed = true;
+      if (!needed)
+         std::filesystem::remove_all(folder() / "runtime", ec);
+   }
    std::lock_guard<std::mutex> lock(mutex_);
    for (auto it = queue_.begin(); it != queue_.end();) {
       Job &job = jobs_[*it];
@@ -342,7 +373,7 @@ bool Studio::installNow(Engine engine, std::string &error) {
    {
       std::lock_guard<std::mutex> lock(mutex_);
       status_[e].state = State::Downloading;
-      status_[e].total = downloadBytes(engine);
+      status_[e].total = downloadBytes(engine); // before anything arrives: with the runtime if it's missing
       status_[e].error.clear();
    }
    const Files files = filesOf(engine);
@@ -365,9 +396,9 @@ bool Studio::installNow(Engine engine, std::string &error) {
          std::filesystem::remove(d.file, ec);
          if (!ok)
             return false;
+         done += kRuntimePackage.size; // (counted in the total only when it had to come)
+         received_[e].store(done);
       }
-      done += kRuntimePackage.size;
-      received_[e].store(done);
    }
    for (const ModelFile *f = files.begin; f != files.end; ++f) {
       const std::filesystem::path file = modelFolder(engine) / f->name;
@@ -382,7 +413,9 @@ bool Studio::installNow(Engine engine, std::string &error) {
    return true;
 }
 
-bool Studio::loaded(Engine engine) const { return engine == Engine::Orb ? orb_.loaded() : sao_.loaded(); }
+bool Studio::loaded(Engine engine) const {
+   return engine == Engine::Orb ? orb_.loaded() : engine == Engine::SaoOpen1 ? sao1_.loaded() : sao_.loaded();
+}
 
 bool Studio::loadNow(Engine engine, std::string &error) {
    if (loaded(engine))
@@ -398,7 +431,7 @@ bool Studio::loadNow(Engine engine, std::string &error) {
    }
    // Leave a core for the audio and the host.
    const int threads = std::max(1, static_cast<int>(std::thread::hardware_concurrency()) - 1);
-   return sao_.load(runtime_, modelFolder(engine), threads, error);
+   return (engine == Engine::SaoOpen1 ? sao1_ : sao_).load(runtime_, modelFolder(engine), threads, error);
 }
 
 void Studio::run() {
@@ -492,8 +525,9 @@ void Studio::run() {
             it->second.progress = p;
       };
       if (ok)
-         ok = request.engine == Engine::Orb ? orb_.generate(request, sounds, progress, cancel_, error)
-                                            : sao_.generate(request, sounds, progress, cancel_, error);
+         ok = request.engine == Engine::Orb        ? orb_.generate(request, sounds, progress, cancel_, error)
+              : request.engine == Engine::SaoOpen1 ? sao1_.generate(request, sounds, progress, cancel_, error)
+                                                   : sao_.generate(request, sounds, progress, cancel_, error);
       std::lock_guard<std::mutex> lock(mutex_);
       runningJob_ = 0;
       const auto it = jobs_.find(job);

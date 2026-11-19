@@ -9,10 +9,11 @@ namespace jkit::gen {
 namespace {
 
 constexpr int kChannels = 64;     // latent channels
-constexpr int kLatents = 256;     // latent frames: the graph's fixed length, 11.9 s
-constexpr int kTokens = 64;       // the text encoder's fixed length
+constexpr int kLatents = 256;     // Small's latent frames: its graph's fixed length, 11.9 s
 constexpr int kEmbed = 768;       // T5 base's width
 constexpr int kDownsample = 2048; // audio samples per latent frame
+// 1.0's noise levels, as stable-audio-tools samples it.
+constexpr double kSigmaMax = 500.0, kSigmaMin = 0.3;
 
 } // namespace
 
@@ -41,6 +42,17 @@ float Noise::normal() {
 const std::vector<std::string> &StableAudio::files() {
    static const std::vector<std::string> f = {"tokenizer.json", "cond.onnx", "dit.onnx", "dec.onnx"};
    return f;
+}
+
+std::vector<double> StableAudio::sigmas(int steps) {
+   // k-diffusion's get_sigmas_polyexponential with rho 1, then a 0.
+   steps = std::max(1, steps);
+   std::vector<double> s(static_cast<size_t>(steps) + 1, 0.0);
+   for (int i = 0; i < steps; ++i) {
+      const double ramp = steps == 1 ? 1.0 : 1.0 - static_cast<double>(i) / (steps - 1);
+      s[static_cast<size_t>(i)] = std::exp(ramp * (std::log(kSigmaMax) - std::log(kSigmaMin)) + std::log(kSigmaMin));
+   }
+   return s;
 }
 
 std::vector<float> StableAudio::schedule(int steps) {
@@ -81,9 +93,11 @@ bool StableAudio::generate(const Request &request, std::vector<Sound> &out, cons
       return false;
    }
    const double seconds = std::clamp(request.seconds, 0.1, kMaxSeconds);
-   const int steps = std::clamp(request.steps, 1, 50);
+   const int steps = std::clamp(request.steps, 1, 100);
    const int variants = std::clamp(request.variants, 1, 16);
    const bool guided = request.guidance > 1.001;
+   const bool open1 = model_ == Model::Open1;
+   const int kTokens = open1 ? 128 : 64; // the text encoder's fixed length
 
    // The prompt and length, once for every variant.
    std::vector<int64_t> ids = tokenizer_.encode(request.prompt, kTokens);
@@ -99,13 +113,19 @@ bool StableAudio::generate(const Request &request, std::vector<Sound> &out, cons
       return false;
    std::vector<float> cross = cond[0].f, global = cond[1].f;
    const int64_t crossLen = cond[0].shape.size() > 1 ? cond[0].shape[1] : kTokens + 1;
-   // Without the prompt, for guidance: the text part of the cross condition zeroed, the length kept.
+   // Without the prompt, for guidance: Small zeroes the text part of the cross condition and keeps
+   // the length; 1.0 zeroes all of it, as stable-audio-tools does.
    std::vector<float> crossNull = cross;
-   std::fill(crossNull.begin(), crossNull.begin() + std::min<size_t>(crossNull.size(), static_cast<size_t>(kTokens) * kEmbed),
+   std::fill(crossNull.begin(),
+             open1 ? crossNull.end()
+                   : crossNull.begin() + std::min<size_t>(crossNull.size(), static_cast<size_t>(kTokens) * kEmbed),
              0.0f);
 
    const std::vector<float> t = schedule(steps);
-   const size_t latentSize = static_cast<size_t>(kChannels) * kLatents;
+   // Small's graph has a fixed length; 1.0's takes just the frames the sound needs.
+   const int needed = static_cast<int>(std::ceil(seconds * kSampleRate / kDownsample)) + 1;
+   const int latents = open1 ? needed : kLatents;
+   const size_t latentSize = static_cast<size_t>(kChannels) * latents;
    std::vector<float> first(latentSize);
    Noise(request.seed).fill(first);
    const double angle = std::clamp(request.variety, 0.0, 1.0) * 1.5707963267948966;
@@ -122,14 +142,22 @@ bool StableAudio::generate(const Request &request, std::vector<Sound> &out, cons
       if (v > 0)
          for (size_t k = 0; k < latentSize; ++k)
             x[k] = keep * first[k] + own * x[k];
-      // Its own noise for the steps, after the starting noise.
       int done = 0;
-      for (int s = 0; s < steps; ++s) {
+      if (open1) {
+         if (!sampleOpen1(request, x, steps, guided, cross, crossNull, global, crossLen, latents, cancel, error,
+                          [&] {
+                             if (progress)
+                                progress((v + (++done) / static_cast<double>(evals + 1)) * perVariant);
+                          }))
+            return false;
+      }
+      // Its own noise for the steps, after the starting noise.
+      for (int s = 0; s < (open1 ? 0 : steps); ++s) {
          if (cancel.load()) {
             error = "cancelled";
             return false;
          }
-         std::vector<Tensor> in = {Tensor::floats("x", {1, kChannels, kLatents}, x),
+         std::vector<Tensor> in = {Tensor::floats("x", {1, kChannels, latents}, x),
                                    Tensor::floats("t", {1}, {t[static_cast<size_t>(s)]}),
                                    Tensor::floats("cross", {1, crossLen, kEmbed}, cross),
                                    Tensor::floats("global", {1, kEmbed}, global)};
@@ -161,10 +189,10 @@ bool StableAudio::generate(const Request &request, std::vector<Sound> &out, cons
          return false;
       }
       // Decode only the frames the length needs (the decoder takes any length).
-      const int frames = std::min(kLatents, static_cast<int>(std::ceil(seconds * kSampleRate / kDownsample)) + 1);
+      const int frames = std::min(latents, needed);
       std::vector<float> z(static_cast<size_t>(kChannels) * frames);
       for (int c = 0; c < kChannels; ++c)
-         std::copy_n(x.begin() + static_cast<ptrdiff_t>(c) * kLatents, frames, z.begin() + static_cast<ptrdiff_t>(c) * frames);
+         std::copy_n(x.begin() + static_cast<ptrdiff_t>(c) * latents, frames, z.begin() + static_cast<ptrdiff_t>(c) * frames);
       std::vector<Tensor> decIn = {Tensor::floats("z", {1, kChannels, frames}, z)};
       std::vector<Tensor> audio;
       if (!dec_.run(decIn, {"audio"}, audio, error))
@@ -180,6 +208,70 @@ bool StableAudio::generate(const Request &request, std::vector<Sound> &out, cons
       out.push_back(std::move(sound));
       if (progress)
          progress((v + 1) * perVariant);
+   }
+   return true;
+}
+
+bool StableAudio::sampleOpen1(const Request &request, std::vector<float> &x, int steps, bool guided,
+                              const std::vector<float> &cross, const std::vector<float> &crossNull,
+                              const std::vector<float> &global, int64_t crossLen, int latents,
+                              const std::atomic<bool> &cancel, std::string &error, const std::function<void()> &tick) {
+   // DPM-Solver++(2M) (k-diffusion's sample_dpmpp_2m) on the v-objective model, with its scalings.
+   const std::vector<double> sig = sigmas(steps);
+   const size_t n = x.size();
+   for (float &v : x) // the starting noise at the first level
+      v = static_cast<float>(v * sig[0]);
+   const int64_t globalLen = static_cast<int64_t>(global.size());
+   std::vector<double> denoised(n), old(n);
+   bool haveOld = false;
+   std::vector<float> scaled(n);
+   for (int i = 0; i < steps; ++i) {
+      if (cancel.load()) {
+         error = "cancelled";
+         return false;
+      }
+      const double s = sig[static_cast<size_t>(i)], next = sig[static_cast<size_t>(i) + 1];
+      const double cIn = 1.0 / std::sqrt(s * s + 1.0), cSkip = 1.0 / (s * s + 1.0), cOut = -s / std::sqrt(s * s + 1.0);
+      for (size_t k = 0; k < n; ++k)
+         scaled[k] = static_cast<float>(x[k] * cIn);
+      std::vector<Tensor> in = {Tensor::floats("x", {1, kChannels, latents}, scaled),
+                                Tensor::floats("t", {1}, {static_cast<float>(std::atan(s) * 2.0 / 3.14159265358979323846)}),
+                                Tensor::floats("cross", {1, crossLen, kEmbed}, cross),
+                                Tensor::floats("global", {1, globalLen}, global)};
+      std::vector<Tensor> res;
+      if (!dit_.run(in, {"v"}, res, error))
+         return false;
+      std::vector<float> vel = std::move(res[0].f);
+      tick();
+      if (guided) {
+         in[2].f = crossNull;
+         if (!dit_.run(in, {"v"}, res, error))
+            return false;
+         const float g = static_cast<float>(request.guidance);
+         for (size_t k = 0; k < n; ++k)
+            vel[k] = res[0].f[k] + g * (vel[k] - res[0].f[k]);
+         tick();
+      }
+      for (size_t k = 0; k < n; ++k)
+         denoised[k] = x[k] * cSkip + vel[k] * cOut;
+      if (next == 0.0) {
+         for (size_t k = 0; k < n; ++k)
+            x[k] = static_cast<float>(denoised[k]);
+      } else {
+         const double t = -std::log(s), tNext = -std::log(next), h = tNext - t;
+         const double ratio = next / s, em = -std::expm1(-h);
+         if (!haveOld) {
+            for (size_t k = 0; k < n; ++k)
+               x[k] = static_cast<float>(ratio * x[k] + em * denoised[k]);
+         } else {
+            const double r = (t + std::log(sig[static_cast<size_t>(i) - 1])) / h;
+            const double a = 1.0 + 1.0 / (2.0 * r), b = 1.0 / (2.0 * r);
+            for (size_t k = 0; k < n; ++k)
+               x[k] = static_cast<float>(ratio * x[k] + em * (a * denoised[k] - b * old[k]));
+         }
+      }
+      old.swap(denoised);
+      haveOld = true;
    }
    return true;
 }

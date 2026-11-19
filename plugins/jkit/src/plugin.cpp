@@ -427,7 +427,7 @@ public:
          r.prompt = gen_.prompt;
       }
       r.seconds = std::clamp(gen_.seconds, 0.1, gen::kMaxSeconds);
-      r.steps = std::clamp(gen_.steps, 1, 50);
+      r.steps = std::clamp(gen_.steps, 1, 100);
       r.guidance = std::clamp(gen_.guidance, 1.0, 12.0);
       r.variants = std::clamp(gen_.variants, 1, 8);
       r.variety = std::clamp(gen_.variety, 0.0, 1.0);
@@ -647,7 +647,7 @@ public:
          return std::isfinite(x) ? std::clamp(x, lo, hi) : fallback;
       };
       g.seconds = finite(g.seconds, 0.1, gen::kMaxSeconds, 1.0);
-      g.steps = std::clamp(g.steps, 1, 50);
+      g.steps = std::clamp(g.steps, 1, 100);
       g.guidance = finite(g.guidance, 1.0, 12.0, 1.0);
       g.variety = finite(g.variety, 0.0, 1.0, 1.0);
       g.strange = finite(g.strange, 0.0, 1.0, 0.3);

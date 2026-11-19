@@ -1,6 +1,6 @@
 #pragma once
 
-// Stable Audio Open Small, run with ONNX Runtime: text in, up to 11.9 s of 44.1 kHz stereo out.
+// Stable Audio Open, Small or 1.0, run with ONNX Runtime: text in, up to 11.9 s of 44.1 kHz stereo out.
 //
 // The model comes as three graphs (an ONNX export of the original weights):
 //
@@ -9,7 +9,9 @@
 //           -> dit.onnx         the diffusion transformer, run once per step (ping-pong sampling)
 //           -> dec.onnx         the autoencoder's decoder: latents to audio
 //
-// It is the distilled model: 8 ping-pong steps at a guidance of 1 is what it is tuned for. Guidance
+// Small is the distilled model: 8 ping-pong steps at a guidance of 1 is what it is tuned for.
+// 1.0 is the full model (a 1.06 B-parameter transformer, v-objective): it wants about 50 DPM-Solver++
+// steps at a guidance of 7, and its graphs take any length, so a short sound costs less. Guidance
 // above 1 runs each step twice (with and without the prompt) and pushes away from the prompt-less
 // sound; it costs twice the time.
 
@@ -68,6 +70,9 @@ struct Sound {
 
 class StableAudio {
 public:
+   enum class Model { Small, Open1 };
+   explicit StableAudio(Model model = Model::Small) : model_(model) {}
+
    // The files it needs, in the model folder.
    static const std::vector<std::string> &files();
 
@@ -88,8 +93,14 @@ public:
 
    // The ping-pong schedule for `steps` steps: steps + 1 times from 1 down to 0.
    static std::vector<float> schedule(int steps);
+   // 1.0's noise levels for `steps` steps: log-linear from 500 to 0.3, then 0 (steps + 1 of them).
+   static std::vector<double> sigmas(int steps);
 
 private:
+   bool sampleOpen1(const Request &request, std::vector<float> &x, int steps, bool guided, const std::vector<float> &cross,
+                    const std::vector<float> &crossNull, const std::vector<float> &global, int64_t crossLen, int latents,
+                    const std::atomic<bool> &cancel, std::string &error, const std::function<void()> &tick);
+   Model model_;
    Tokenizer tokenizer_;
    Session cond_, dit_, dec_;
 };
