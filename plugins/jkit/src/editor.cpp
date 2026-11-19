@@ -1255,17 +1255,31 @@ private:
       const Page P = kGeneratePage;
       // MODEL
       engine_ = &onPage<ui::Dropdown>(P, {24, 128, 188, 22},
-                                      std::vector<std::string>{"Stable Audio Open Small", "ORB"});
+                                      std::vector<std::string>{"Stable Audio Open Small", "ORB", "Stable Audio Open 1.0"});
       engine_->setAccent(kOrange);
       engine_->onChange = [this](int i) {
-         host_.gen().engine = i;
+         GenSettings &g = host_.gen();
+         if (g.engine != i) {
+            // Each Stable Audio wants its own steps and guidance: start from what it's tuned for.
+            if (i == 0) {
+               g.steps = 8;
+               g.guidance = 1.0;
+            } else if (i == 2) {
+               g.steps = 50;
+               g.guidance = 7.0;
+            }
+         }
+         g.engine = i;
+         steps_->setValue(g.steps);
+         guidance_->setValue(g.guidance);
          confirmRemove_ = false;
          lastError_.clear();
          syncEngine();
          redraw();
       };
       tips_.add(*engine_, "The engine that makes the sounds, inside JKit on your CPU. Stable Audio Open Small: "
-                          "neural, 2.2 GB. ORB: plans the sound and plays it with physical models, 20.8 MB.");
+                          "neural and quick, 2.2 GB. ORB: plans the sound and plays it with physical models, 20.8 MB. "
+                          "Stable Audio Open 1.0: the full model, slower and richer, 4.8 GB.");
       engineAction_ = &onPage<ui::Button>(P, {310, 128, 62, 22}, "DOWNLOAD");
       engineAction_->setAccent(kOrange);
       engineAction_->onClick = [this] { engineAction(); };
@@ -1292,7 +1306,7 @@ private:
       steps_ = &genKnob({24 + kw, ky, kw, 80}, "STEPS", ui::ValueRange{4, 16, 8, 1, false, true},
                         [](double v) { return std::to_string(static_cast<int>(std::lround(v))); },
                         [this](double v) { host_.gen().steps = static_cast<int>(std::lround(v)); });
-      tips_.add(*steps_, "Diffusion steps. The model is tuned for 8; more is slower and rarely better.");
+      tips_.add(*steps_, "Diffusion steps. Small is tuned for 8, 1.0 for about 50; more is slower.");
       guidance_ = &genKnob({24 + 2 * kw, ky, kw, 80}, "GUIDANCE", ui::ValueRange{1, 7, 1, 0.1},
                            [](double v) {
                               char b[16];
@@ -1300,7 +1314,7 @@ private:
                               return std::string(b);
                            },
                            [this](double v) { host_.gen().guidance = v; });
-      tips_.add(*guidance_, "How hard it follows the words. 1 is what the model is tuned for; above 1 takes twice as long.");
+      tips_.add(*guidance_, "How hard it follows the words. Small is tuned for 1, 1.0 for 7; above 1 takes twice as long.");
       variety_ = &genKnob({24 + 3 * kw, ky, kw, 80}, "VARIETY", ui::ValueRange{0, 1, 1, 0.01},
                           [](double v) { return std::to_string(static_cast<int>(std::lround(v * 100))) + "%"; },
                           [this](double v) { host_.gen().variety = v; });
@@ -1514,6 +1528,11 @@ private:
    // ORB plans the sound and plays it: it has no diffusion steps, guidance or variety.
    void syncEngine() {
       engine_->setSelected(host_.gen().engine);
+      const bool open1 = host_.gen().engine == 2;
+      steps_->setRange(open1 ? ui::ValueRange{10, 100, 50, 1, false, true} : ui::ValueRange{4, 16, 8, 1, false, true});
+      guidance_->setRange(open1 ? ui::ValueRange{1, 12, 7, 0.1} : ui::ValueRange{1, 7, 1, 0.1});
+      steps_->setValue(host_.gen().steps);
+      guidance_->setValue(host_.gen().guidance);
       steps_->setVisible(!orb());
       guidance_->setVisible(!orb());
       variety_->setVisible(!orb());
@@ -1756,7 +1775,14 @@ private:
    // A rough guess at a generation's time from the last one.
    double estimate() const {
       const double last = host_.lastRunSeconds();
-      return last > 0 ? last : orb() ? 0.5 + 0.4 * host_.gen().variants : 2.0 + 2.5 * host_.gen().variants;
+      const GenSettings &g = host_.gen();
+      if (last > 0)
+         return last;
+      if (orb())
+         return 0.5 + 0.4 * g.variants;
+      if (g.engine == 2) // 1.0: about 0.3 s a step on 4 cores for a short sound, twice with guidance
+         return 5.0 + 0.3 * g.steps * (g.guidance > 1.001 ? 2 : 1) * std::max(1.0, g.seconds / 1.5) * g.variants;
+      return 2.0 + 2.5 * g.variants;
    }
 
    // ---- Kit ----

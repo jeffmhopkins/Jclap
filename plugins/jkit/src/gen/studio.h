@@ -10,7 +10,10 @@
 //
 //    runtime/onnxruntime-1.22.0/   the ONNX Runtime library, from Microsoft's NuGet package
 //    models/stable-audio-open-small/   tokenizer.json, cond.onnx, dit.onnx, dec.onnx, LICENSE, NOTICE
+//    models/stable-audio-open-1.0/     tokenizer.json, cond.onnx, dit.onnx (+ .data), dec.onnx, LICENSE, NOTICE
 //    models/orb-planner/               planner.safetensors, config.json (ORB needs no runtime)
+//
+// Both Stable Audios share the runtime: it downloads with the first and goes with the last.
 //
 // Every download is pinned to a SHA-256, checked as it comes in.
 //
@@ -138,7 +141,7 @@ private:
    std::map<int, Job> jobs_;
 
    Runtime runtime_;
-   StableAudio sao_;
+   StableAudio sao_{StableAudio::Model::Small}, sao1_{StableAudio::Model::Open1};
    OrbEngine orb_;
 };
 
