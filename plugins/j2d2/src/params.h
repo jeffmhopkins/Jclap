@@ -231,7 +231,7 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
       return;
    }
    if (isSeconds(id)) {
-      if (value < 1.0)
+      if (value < 0.9995)
          std::snprintf(out, size, "%.0f ms", value * 1000.0);
       else
          std::snprintf(out, size, "%.2f s", value);
@@ -249,7 +249,9 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
       break;
    case kLfo1Rate:
    case kLfo2Rate:
-      if (value < 1.0)
+      // Slow rates read as a period. The switch sits below 1 Hz so the shortest period shown is
+      // "1.1 s", which parses back to a rate that still shows as a period.
+      if (value < 0.95)
          std::snprintf(out, size, "%.1f s", 1.0 / value);
       else
          std::snprintf(out, size, "%.2f Hz", value);
