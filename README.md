@@ -38,6 +38,10 @@ and plugins that need a panel get one from the shared GUI library.
 <td align="center" valign="top"><a href="plugins/jkit"><img src="plugins/jkit/docs/panel.png" width="360" alt="JKit panel"></a><br><b>JKit</b></td>
 <td align="center" valign="top"><a href="plugins/jkit"><img src="plugins/jkit/docs/panel-kit.png" width="360" alt="JKit's Kit tab"></a><br><b>JKit (Kit tab)</b></td>
 </tr>
+<tr>
+<td align="center" valign="top"><a href="plugins/j2d2"><img src="plugins/j2d2/docs/panel.png" width="366" alt="J2D2 panel"></a><br><b>J2D2</b></td>
+<td align="center" valign="top"><a href="plugins/j2d2"><img src="plugins/j2d2/docs/panel-drones.png" width="366" alt="J2D2's DRONES page"></a><br><b>J2D2 (DRONES page)</b></td>
+</tr>
 </table>
 
 Panels are shown at one-third size. They are the screenshot-test references, so they always match the current build.
@@ -52,6 +56,7 @@ Panels are shown at one-third size. They are the screenshot-test references, so 
 | [JBreath](plugins/jbreath) | Instrument | Eight-voice MPE wind instrument from physical models (flute, clarinet, sax, oboe, trumpet), each a waveguide blown by a model of the player, with a hybrid second instrument, JSynth-style MAP modulation, a stereo room, and every voice drawn as a loop of its own breath trailing smoke ([manual](plugins/jbreath/docs/JBreath-User-Manual.pdf)) |
 | [JArp](plugins/jarp) | Note effect | MPE arpeggiator for controllers like the LinnStrument: held notes play by pitch, scale degree (or only the degrees held) or spread across the chord through eight patterns of up to 128 steps, chained per chord or as a loop and repeated in order or at random, with notes drawn, dragged and picked together, per-step and per-note octave, ratchet, velocity and chance, length by steps or by the notes held, one way or bouncing, pressure-driven ratchets and velocity, each finger's expression carried onto every note it plays, one-shot playing, the sustain pedal, dice and presets from Berlin School sequences to bass lines in 24 genres and piano accompaniment ([manual](plugins/jarp/docs/JArp-User-Manual.pdf)) |
 | [JKit](plugins/jkit) | Instrument | 16-pad drum kit whose sounds AI makes from your words, inside the plugin, with a choice of engines (Stable Audio Open Small, or ORB's planner and physical models), each downloaded and removable on its own: random prompts from plain to strange, variants, trim and fade, then per-pad pitch, start and end, EQ and sends, master EQ, reverb, delay, width and boom |
+| [J2D2](plugins/j2d2) | Instrument | MPE droid synth: every note speaks in droid phrases built from eight measured kinds of sound and shaped by a personality pad, hums a five-layer drone (tone, partials, air, metal, sub) that drifts from in tune to atonal, or both, with pressure popping bleeps through a held drone, two envelopes, two shape LFOs and a room |
 | [Basic Synth](plugins/basic-synth) | Instrument | Eight-voice MPE synth: dual detunable oscillators, key-tracking filter, VCA, two looping envelopes and an LFO |
 | [JTunnel](plugins/jtunnel) | Audio effect | Sends a track's audio and MIDI over the network to other JTunnels (found by name over mDNS), or plays what one sends, with Opus or PCM, a drift-following buffer for Wi-Fi, and redundancy against loss |
 | [Polar XY](plugins/polar-xy) | Note effect | Turns two XY CCs into angle/radius CCs for Omnisphere's Orb ([manual](plugins/polar-xy/docs/PolarXY-User-Manual.pdf)) |
