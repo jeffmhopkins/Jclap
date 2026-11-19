@@ -135,8 +135,8 @@ The selected section's groove now, and five children made from it, each tagged w
 ("more ghost snares", "a kick moves", "lays back further", "half-time feel", "toms come in",
 "hats left to chance", "perc answers", "flams on the backbeat" and ten more; on hand drums "open tones
 move", "slap answers", "bass on the beats only", "roll into the one" and the ones that suit them). Click a child to put it
-in the song: the section's other variations and fill are made again from it, and its generation goes
-up. **< back to gen N** goes back one. **MUTATION** sets how far the children stray; **NEW LITTER**
+in the song: the section's other variations and fill are made again from it (a section's own
+variations keep its feel: they never go half-time), and its generation goes up. **< back to gen N** goes back one. **MUTATION** sets how far the children stray; **NEW LITTER**
 makes five more.
 
 ## EDIT
@@ -183,8 +183,8 @@ The pattern playing, lane by lane, with the playhead.
 
 What makes each pass a little different:
 
-- **VARY**: each bar may take another variation, and hits come and go (never the kick and backbeat
-  on the beats, nor a hand kit's timeline).
+- **VARY**: each bar may take another variation, and hits come and go (never anything on a beat, nor
+  a hand kit's timeline).
 - **GHOSTS**: soft snare hits around the beat (on the drum kit, in sixteenths).
 - **SWING**: how late the swung notes are (50% is straight).
 - **SWING IN**: 16THS swings every second sixteenth; 8THS swings the off-beat eighths, the sixteenths
