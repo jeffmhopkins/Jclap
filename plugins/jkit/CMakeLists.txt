@@ -71,6 +71,6 @@ if(JCLAP_BUILD_TOOLS)
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-kit-mode.png ARGS 5)
    jclap_add_screenshot_test(jkit-screenshot-kit-dialog-test TOOL jkit-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-whole-kit.png ARGS 6)
-   jclap_add_screenshot_test(jkit-screenshot-takes-test TOOL jkit-screenshot
-      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-takes.png ARGS 8)
+   jclap_add_screenshot_test(jkit-screenshot-variations-test TOOL jkit-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-variations.png ARGS 8)
 endif()

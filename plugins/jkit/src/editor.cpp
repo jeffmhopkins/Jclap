@@ -967,9 +967,113 @@ private:
 
 // The selected pad's sound: its waveform with the Start and End handles (dragging them sets the
 // params), the decay as a dashed curve from the start, the playhead, and the speed Pitch gives it.
+// The selected pad's variations as tabs over its waveform: 1 2 3 4 +, and how a hit picks one.
+// A tab shows that variation in the waveform; + adds the Generate tab's selected variant (or opens
+// the VARIATIONS window when there's none); right-click a tab to play, move or remove it.
+class VariationTabs : public visage::Frame {
+public:
+   explicit VariationTabs(EditorHost &host) : host_(host) {}
+   int selected = 0;
+   std::function<void(int)> onSelect;
+   std::function<void()> onAdd;
+   std::function<void(int, visage::Point)> onMenu;
+
+   visage::Bounds tab(int i) const {
+      const float s = ui::designScale(*this);
+      return {i * 24 * s, 0, 22 * s, height()};
+   }
+   visage::Bounds modeBox() const {
+      const float s = ui::designScale(*this);
+      return {width() - 70 * s, 0, 70 * s, height()};
+   }
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      const ui::Theme &t = ui::defaultTheme();
+      const PadSounds p = host_.padSounds(host_.selectedPad);
+      if (p.count() < 2)
+         return; // one sound: the card shows its seed and prompt here
+      const int playing = host_.padPosition(host_.selectedPad) >= 0 ? host_.padTake(host_.selectedPad) : -1;
+      for (int i = 0; i <= p.count() && i < kMaxTakes; ++i) {
+         const visage::Bounds r = tab(i);
+         const bool plus = i == p.count(), on = i == selected;
+         c.setColor(on ? kOrange : hover_ == i ? 0xff3a404a : kWell);
+         c.roundedRectangle(r.x(), r.y(), r.width(), r.height(), 3 * s);
+         c.setColor(on ? 0xff1a1d22 : plus ? t.dimText : t.text);
+         c.text(plus ? "+" : std::to_string(i + 1), ui::font(9 * s), visage::Font::kCenter, r.x(), r.y(), r.width(), r.height());
+         if (!plus && i == playing) {
+            c.setColor(on ? 0xff1a1d22 : kOrange);
+            c.fill(r.x() + 6 * s, r.bottom() - 2.5f * s, r.width() - 12 * s, 1.5f * s);
+         }
+      }
+      const visage::Bounds m = modeBox();
+      c.setColor(hover_ == 100 ? 0xff3a404a : kWell);
+      c.roundedRectangle(m.x(), m.y(), m.width(), m.height(), 3 * s);
+      c.setColor(t.dimText);
+      c.text(kTakeModeNames[std::clamp(p.mode, 0, kTakeModeCount - 1)], ui::font(8.5f * s), visage::Font::kCenter, m.x(), m.y(),
+             m.width(), m.height());
+   }
+   int at(visage::Point q) const {
+      const int n = host_.padSounds(host_.selectedPad).count();
+      if (n < 2)
+         return -1;
+      if (modeBox().contains(q))
+         return 100;
+      for (int i = 0; i <= n && i < kMaxTakes; ++i)
+         if (tab(i).contains(q))
+            return i;
+      return -1;
+   }
+   void mouseMove(const visage::MouseEvent &e) override {
+      const int h = at(e.position);
+      if (h != hover_) {
+         hover_ = h;
+         redraw();
+      }
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = -1;
+      redraw();
+   }
+   void mouseDown(const visage::MouseEvent &e) override {
+      const int i = at(e.position);
+      if (i < 0)
+         return;
+      PadSounds p = host_.padSounds(host_.selectedPad);
+      if (i == 100) {
+         // RANDOM, CYCLE, VELOCITY, round.
+         p.mode = (p.mode + 1) % kTakeModeCount;
+         host_.setPadSounds(host_.selectedPad, p);
+      } else if (i == p.count()) {
+         if (onAdd)
+            onAdd();
+      } else if (e.shouldTriggerPopup()) {
+         if (onMenu)
+            onMenu(i, e.position);
+      } else {
+         if (onSelect)
+            onSelect(i);
+         host_.playPadTake(host_.selectedPad, i);
+      }
+      redraw();
+   }
+
+private:
+   EditorHost &host_;
+   int hover_ = -1;
+};
+
 class PadWave : public visage::Frame {
 public:
    explicit PadWave(EditorHost &host) : host_(host) {}
+   std::function<int()> shownVariation; // the variation tab picked (0 the first)
+   int shown() const {
+      const int n = host_.padSounds(host_.selectedPad).count();
+      return std::clamp(shownVariation ? shownVariation() : 0, 0, std::max(0, n - 1));
+   }
+   SamplePtr shownSample() const {
+      const PadSounds p = host_.padSounds(host_.selectedPad);
+      return p.empty() ? nullptr : p.takes[static_cast<size_t>(shown())].sample;
+   }
    float xOf(double f) const {
       const float s = ui::designScale(*this);
       return 6 * s + static_cast<float>(f) * (width() - 12 * s);
@@ -985,7 +1089,7 @@ public:
       c.roundedRectangle(0, 0, width(), height(), 4 * s);
       c.setColor(kRule);
       c.roundedRectangleBorder(0, 0, width(), height(), 4 * s, 1.0f);
-      const SamplePtr p = host_.padSample(pad);
+      const SamplePtr p = shownSample();
       if (!p) {
          c.setColor(kFaint);
          c.text("Empty pad", ui::font(10 * s), visage::Font::kCenter, 0, 0, width(), height());
@@ -1026,8 +1130,9 @@ public:
          c.fill(x - 1 * s, 1 * s, 2 * s, height() - 2 * s);
          c.roundedRectangle(i ? x - 8 * s : x - 1 * s, 1 * s, 9 * s, 9 * s, 3 * s);
       }
+      // The playhead, when the variation shown is the one playing.
       const float pos = host_.padPosition(pad);
-      if (pos >= 0) {
+      if (pos >= 0 && host_.padTake(pad) == shown()) {
          c.setColor(0xd8ffffff);
          c.fill(xOf(pos), 1 * s, 1.5f * s, height() - 2 * s);
       }
@@ -1048,7 +1153,11 @@ public:
       drag_ = std::fabs(e.position.x - xa) <= std::fabs(e.position.x - xz) ? kStart : kEnd;
       if (std::min(std::fabs(e.position.x - xa), std::fabs(e.position.x - xz)) > 14 * s) {
          drag_ = -1;
-         host_.playPad(pad, 0.9f);
+         // The variation shown, so a click hears what's drawn.
+         if (host_.padSounds(pad).count() > 1)
+            host_.playPadTake(pad, shown());
+         else
+            host_.playPad(pad, 0.9f);
          playing_ = true;
          return;
       }
@@ -1761,7 +1870,7 @@ public:
    visage::Bounds takesBox(int i) const {
       const float s = ui::designScale(*this);
       const visage::Bounds b = card();
-      return {b.x() + (20 + 96 + i * 40) * s, b.y() + 233 * s, 34 * s, 20 * s};
+      return {b.x() + (20 + 112 + i * 40) * s, b.y() + 233 * s, 34 * s, 20 * s};
    }
 
    void open() {
@@ -1860,7 +1969,7 @@ public:
 
       // Takes per pad: close variations of each pad's sound, one played each hit.
       c.setColor(t.dimText);
-      c.text("TAKES PER PAD", ui::font(8 * s), visage::Font::kLeft, x, takesBox(0).y(), 96 * s, takesBox(0).height());
+      c.text("VARIATIONS PER PAD", ui::font(8 * s), visage::Font::kLeft, x, takesBox(0).y(), 112 * s, takesBox(0).height());
       for (int i = 0; i < 3; ++i) {
          const visage::Bounds r = takesBox(i);
          const bool on = takesNow() == kTakeChoices[i];
@@ -2002,6 +2111,16 @@ public:
       return {b.right() - 36 * sc(), b.y() + 10 * sc(), 26 * sc(), 26 * sc()};
    }
 
+   // Every take's waveform is drawn on one time scale, so the longest fills its box and a shorter
+   // one is shorter: the box's width, times its length over the longest's.
+   float span(const Take &k, float full) const {
+      double longest = 0.0;
+      for (const Take &o : host_.padSounds(pad).takes)
+         longest = std::max(longest, o.sample ? o.sample->seconds() : 0.0);
+      const double secs = k.sample ? k.sample->seconds() : 0.0;
+      return longest > 0.0 ? full * static_cast<float>(std::max(0.08, secs / longest)) : full;
+   }
+
    // The variants ADD would bring: the starred ones, or all of them when none is starred.
    std::vector<SamplePtr> variantsToAdd() const {
       std::vector<SamplePtr> all, starred;
@@ -2061,10 +2180,10 @@ public:
       const float x = left(), w = b.width() - 40 * s;
       c.setColor(kTitle);
       const std::string name = p.first() ? p.first()->name : std::string("Empty");
-      c.text("PAD " + std::to_string(pad + 1) + " \xC2\xB7 " + ellipsis(name, 24) + " \xC2\xB7 TAKES", ui::font(12 * s),
+      c.text("PAD " + std::to_string(pad + 1) + " \xC2\xB7 " + ellipsis(name, 24) + " \xC2\xB7 VARIATIONS", ui::font(12 * s),
              visage::Font::kLeft, x, b.y() + 16 * s, 400 * s, 18 * s);
       c.setColor(t.dimText);
-      c.text("Each hit plays one take. Its own trims, level, tune and cuts come first; the pad's controls apply on top.",
+      c.text("Each hit plays one variation. Its own trims, level, tune and cuts come first; the pad's controls apply on top.",
              ui::font(9 * s), visage::Font::kLeft, x, b.y() + 34 * s, w, 14 * s);
       const visage::Bounds xb = closeBox();
       const float cx = xb.x() + 8.5f * s, cy = xb.y() + 8.5f * s;
@@ -2084,9 +2203,9 @@ public:
          c.text(kTakeModeNames[m], ui::font(9 * s), visage::Font::kCenter, r.x(), r.y(), r.width(), r.height());
       }
       static const char *const kModeAbout[kTakeModeCount] = {
-         "a different take every hit, never the same twice running",
-         "the takes in order, round and round",
-         "soft hits play the first take, hard ones the last"};
+         "a different variation every hit, never the same twice running",
+         "the variations in order, round and round",
+         "soft hits play the first variation, hard ones the last"};
       c.setColor(t.dimText);
       c.text(kModeAbout[std::clamp(p.mode, 0, kTakeModeCount - 1)], ui::font(9 * s), visage::Font::kLeft,
              modeBox(2).right() + 14 * s, b.y() + 62 * s, 300 * s, 22 * s);
@@ -2094,8 +2213,8 @@ public:
       // Column heads.
       const float hy = b.y() + 102 * s;
       c.setColor(t.dimText);
-      c.text("TAKE", ui::font(8 * s), visage::Font::kLeft, x, hy, 60 * s, 14 * s);
-      c.text("REGION AND FADES  (drag the handles)", ui::font(8 * s), visage::Font::kLeft, waveBox(0).x(), hy, 300 * s, 14 * s);
+      c.text("#", ui::font(8 * s), visage::Font::kLeft, x, hy, 60 * s, 14 * s);
+      c.text("EACH VARIATION'S SOUND, REGION AND FADES  (drag the handles)", ui::font(8 * s), visage::Font::kLeft, waveBox(0).x(), hy, 300 * s, 14 * s);
       static const char *const kHeads[kColumns] = {"LEVEL", "TUNE", "LOW CUT", "HIGH CUT"};
       for (int col = 0; col < kColumns; ++col) {
          const visage::Bounds v = valueBox(0, col);
@@ -2111,7 +2230,7 @@ public:
             c.roundedRectangle(x, ry, w, rowH(), 4 * s);
             if (i == p.count()) {
                c.setColor(kFaint);
-               c.text(p.empty() ? "No sound on this pad yet." : "Add takes from the Generate tab's variants, below, or with ADD AS TAKE there.",
+               c.text(p.empty() ? "No sound on this pad yet." : "Add variations from the Generate tab's variants, below, or with ADD AS VARIATION there.",
                       ui::font(9 * s), visage::Font::kLeft, x + 12 * s, ry, w, rowH());
             }
             continue;
@@ -2130,18 +2249,25 @@ public:
          c.triangle(pb.x() + 6 * s, pb.y() + 4 * s, pb.x() + 6 * s, pb.bottom() - 4 * s, pb.right() - 4 * s, pb.y() + pb.height() / 2);
          c.setColor(t.text);
          c.text(std::to_string(i + 1), ui::font(10 * s), visage::Font::kLeft, pb.right() + 10 * s, ry, 20 * s, rowH());
-         // The waveform, its region and fades.
+         // The waveform, its region and fades, and which sound it is.
          const visage::Bounds wb = waveBox(i);
          c.setColor(kWell);
          c.roundedRectangle(wb.x(), wb.y(), wb.width(), wb.height(), 3 * s);
+         if (k.sample) {
+            char info[48];
+            std::snprintf(info, sizeof(info), "seed %u \xC2\xB7 %.2f s", static_cast<unsigned>(k.sample->seed), k.sample->seconds());
+            c.setColor(alpha(t.dimText, 0.8f));
+            c.text(info, ui::font(7.5f * s), visage::Font::kRight, wb.x(), wb.bottom() - 11 * s, wb.width() - 4 * s, 10 * s);
+         }
          if (static_cast<size_t>(i) >= caches_.size())
             caches_.resize(kMaxTakes);
-         drawWave(c, caches_[static_cast<size_t>(i)].get(k.sample, 90), wb.x() + 2 * s, wb.y() + 2 * s, wb.width() - 4 * s,
-                  wb.height() - 4 * s, lit ? kOrange : 0xff9aa2ad, k.start, k.end);
+         const float ww = span(k, wb.width());
+         drawWave(c, caches_[static_cast<size_t>(i)].get(k.sample, std::max(12, static_cast<int>(90 * ww / wb.width()))),
+                  wb.x() + 2 * s, wb.y() + 2 * s, ww - 4 * s, wb.height() - 4 * s, lit ? kOrange : 0xff9aa2ad, k.start, k.end);
          const double secs = k.sample ? k.sample->seconds() : 1.0;
-         const float xa = wb.x() + wb.width() * static_cast<float>(k.start), xz = wb.x() + wb.width() * static_cast<float>(k.end);
-         const float fi = static_cast<float>(std::min(k.end - k.start, k.fadeInMs * 0.001 / secs)) * wb.width();
-         const float fo = static_cast<float>(std::min(k.end - k.start, k.fadeOutMs * 0.001 / secs)) * wb.width();
+         const float xa = wb.x() + ww * static_cast<float>(k.start), xz = wb.x() + ww * static_cast<float>(k.end);
+         const float fi = static_cast<float>(std::min(k.end - k.start, k.fadeInMs * 0.001 / secs)) * ww;
+         const float fo = static_cast<float>(std::min(k.end - k.start, k.fadeOutMs * 0.001 / secs)) * ww;
          c.setColor(kBlue);
          if (fi > 0.5f)
             c.segment(xa, wb.bottom() - 2 * s, xa + fi, wb.y() + 2 * s, 1.2f * s, true);
@@ -2154,7 +2280,7 @@ public:
          c.fill(xz - 0.75f * s, wb.y(), 1.5f * s, wb.height());
          if (lit) {
             c.setColor(0xe6ffffff);
-            c.fill(wb.x() + wb.width() * pos, wb.y(), 1.5f * s, wb.height());
+            c.fill(wb.x() + ww * pos, wb.y(), 1.5f * s, wb.height());
          }
          // The values.
          for (int col = 0; col < kColumns; ++col) {
@@ -2189,12 +2315,12 @@ public:
       c.roundedRectangleBorder(ab.x(), ab.y(), ab.width(), ab.height(), 6 * s, 1.2f * s);
       c.setColor(n > 0 ? kOrange : t.dimText);
       const std::string addLabel = n > 0 ? "+ ADD " + std::to_string(n) + (anyStarred() ? " STARRED" : "") +
-                                              (n == 1 ? " VARIANT AS A TAKE" : " VARIANTS AS TAKES")
-                                         : p.count() >= kMaxTakes ? std::string("8 TAKES: THE MOST A PAD HOLDS")
+                                              (n == 1 ? " VARIANT AS A VARIATION" : " VARIANTS AS VARIATIONS")
+                                         : p.count() >= kMaxTakes ? std::string("8 VARIATIONS: THE MOST A PAD HOLDS")
                                                                   : std::string("NO VARIANTS TO ADD");
       c.text(addLabel, ui::font(10 * s), visage::Font::kCenter, ab.x(), ab.y(), ab.width(), ab.height());
       c.setColor(t.dimText);
-      c.text(std::to_string(p.count()) + " of " + std::to_string(kMaxTakes) + " takes", ui::font(9 * s),
+      c.text(std::to_string(p.count()) + " of " + std::to_string(kMaxTakes) + " variations", ui::font(9 * s),
              visage::Font::kLeft, ab.right() + 14 * s, ab.y(), 120 * s, ab.height());
       const visage::Bounds db = doneBox();
       c.setColor(hover_.part == kDone ? 0xfff59a3e : kOrange);
@@ -2321,7 +2447,7 @@ public:
          }
       } else {
          const visage::Bounds wb = waveBox(drag_.index);
-         const double f = std::clamp(static_cast<double>((e.position.x - wb.x()) / wb.width()), 0.0, 1.0);
+         const double f = std::clamp(static_cast<double>((e.position.x - wb.x()) / span(k, wb.width())), 0.0, 1.0);
          const double secs = k.sample ? k.sample->seconds() : 1.0;
          switch (drag_.col) {
             case 0: // start
@@ -2393,9 +2519,10 @@ private:
    int nearestHandle(int i, const Take &k, float px, float py) const {
       const visage::Bounds wb = waveBox(i);
       const double secs = k.sample ? k.sample->seconds() : 1.0;
-      const float xa = wb.x() + wb.width() * static_cast<float>(k.start), xz = wb.x() + wb.width() * static_cast<float>(k.end);
-      const float fi = xa + static_cast<float>(std::min(k.end - k.start, k.fadeInMs * 0.001 / secs)) * wb.width();
-      const float fo = xz - static_cast<float>(std::min(k.end - k.start, k.fadeOutMs * 0.001 / secs)) * wb.width();
+      const float ww = span(k, wb.width());
+      const float xa = wb.x() + ww * static_cast<float>(k.start), xz = wb.x() + ww * static_cast<float>(k.end);
+      const float fi = xa + static_cast<float>(std::min(k.end - k.start, k.fadeInMs * 0.001 / secs)) * ww;
+      const float fo = xz - static_cast<float>(std::min(k.end - k.start, k.fadeOutMs * 0.001 / secs)) * ww;
       // The fade handles sit along the top; the region's ends are the full-height lines.
       const bool top = py < wb.y() + wb.height() * 0.35f;
       const float xs[4] = {xa, xz, fi, fo};
@@ -2792,7 +2919,7 @@ private:
       variety_ = &genKnob({24 + 3 * kw, ky, kw, 80}, "VARIETY", ui::ValueRange{0, 1, 1, 0.01},
                           [](double v) { return std::to_string(static_cast<int>(std::lround(v * 100))) + "%"; },
                           [this](double v) { host_.gen().variety = v; });
-      tips_.add(*variety_, "How different the variants are from each other: low makes takes of one sound.");
+      tips_.add(*variety_, "How different the variants are from each other: low makes versions of one sound.");
 
       const float sy = 446;
       count_ = &onPage<ui::SegmentedSwitch>(P, {24, sy + 16, 348, 22}, std::vector<std::string>{"1", "2", "4", "8"});
@@ -2868,9 +2995,9 @@ private:
       tips_.add(*picker_, "The pad it goes on. Pad 1 is bottom left, on MIDI note 36.");
       addToKit_ = &onPage<GoButton>(P, {674, 594, 228, 30}, "ADD TO KIT");
       addToKit_->onClick = [this] { addToKit(); };
-      addTake_ = &onPage<OutlineButton>(P, {910, 594, 146, 30}, "ADD AS TAKE");
+      addTake_ = &onPage<OutlineButton>(P, {910, 594, 146, 30}, "ADD AS VARIATION");
       addTake_->onClick = [this] { addToKit(true); };
-      tips_.add(*addTake_, "Keep the pad's sound and add this one beside it as another take: each hit plays one of them.");
+      tips_.add(*addTake_, "Keep the pad's sound and add this one beside it as another variation: each hit plays one of them.");
    }
 
    ui::Knob &genKnob(ui::Rect r, const char *label, ui::ValueRange range, std::function<std::string(double)> textOf,
@@ -3050,6 +3177,21 @@ private:
             break;
          }
       }
+      redraw();
+   }
+
+   // The Kit tab's + tab: the Generate tab's selected variant, treated, as one more variation of the
+   // selected pad; with none to add, the VARIATIONS window.
+   void addVariationHere() {
+      const int pad = host_.selectedPad;
+      SamplePtr t = treated();
+      if (!t || !host_.addPadTake(pad, t)) {
+         openTakes(pad);
+         return;
+      }
+      variationTab_ = host_.padSounds(pad).count() - 1;
+      variationTabs_->selected = variationTab_;
+      host_.playPadTake(pad, variationTab_);
       redraw();
    }
 
@@ -3401,14 +3543,14 @@ private:
       c.text(padTitle, ui::font(11 * s), visage::Font::kLeft, 674 * s, 528 * s, 380 * s, 14 * s);
       c.setColor(alpha(t.dimText, 0.75f));
       const int padTakes = host_.padSounds(pad).count();
-      c.text(p ? (padTakes > 1 ? "has " + std::to_string(padTakes) + " takes: ADD TO KIT replaces them all, ADD AS TAKE adds one"
-                               : std::string("ADD TO KIT replaces its sound; ADD AS TAKE keeps it and adds this one"))
+      c.text(p ? (padTakes > 1 ? "has " + std::to_string(padTakes) + " variations: ADD TO KIT replaces them all, ADD AS VARIATION adds one"
+                               : std::string("ADD TO KIT replaces its sound; ADD AS VARIATION keeps it and adds this one"))
                : "on MIDI note " + std::to_string(kFirstNote + pad) + " (" + ui::noteName(kFirstNote + pad) + ")",
              ui::font(8.5f * s), visage::Font::kLeft, 674 * s, 544 * s, 380 * s, 12 * s);
       if (added_ >= 0 && addedAt_ < 60) {
          ++addedAt_;
          c.setColor(kGreen);
-         c.text((addedTake_ ? "Added as take " + std::to_string(host_.padSounds(added_).count()) + " of pad "
+         c.text((addedTake_ ? "Added as variation " + std::to_string(host_.padSounds(added_).count()) + " of pad "
                             : std::string("Added to pad ")) + std::to_string(added_ + 1), ui::font(9 * s), visage::Font::kLeft, 674 * s,
                 566 * s, 380 * s, 12 * s);
       }
@@ -3445,7 +3587,7 @@ private:
          visage::PopupMenu menu;
          const bool has = host_.padSample(i) != nullptr;
          menu.addOption(1, "Play");
-         menu.addOption(4, "Takes...");
+         menu.addOption(4, "Variations...");
          menu.addOption(2, "Regenerate in the Generate tab");
          menu.addBreak();
          menu.addOption(3, "Clear pad");
@@ -3465,16 +3607,57 @@ private:
       };
       tips_.add(*pads_, "Click a pad to play and select it; drag it onto another to swap them. Right-click for more.");
 
-      takes_ = &onPage<ui::Button>(P, {800, 81, 100, 19}, "TAKES");
+      takes_ = &onPage<ui::Button>(P, {770, 81, 130, 19}, "VARIATIONS");
       takes_->setAccent(kOrange);
       takes_->onClick = [this] { openTakes(host_.selectedPad); };
-      tips_.add(*takes_, "This pad's takes: one plays each hit (random, in turn, or by velocity), each with its own "
+      tips_.add(*takes_, "This pad's variations: one plays each hit (random, in turn, or by velocity), each with its own "
                          "trims, fades, level, tune and cuts.");
       regen_ = &onPage<ui::Button>(P, {906, 81, 150, 19}, "REGENERATE IN TAB");
       regen_->setAccent(kOrange);
       regen_->onClick = [this] { regenerate(host_.selectedPad); };
-      tips_.add(*regen_, "Open the Generate tab with this pad's prompt and role, ready to make another take.");
+      tips_.add(*regen_, "Open the Generate tab with this pad's prompt and role, ready to make another one.");
       wave_ = &onPage<PadWave>(P, {392, 128, 214, 78}, host_);
+      wave_->shownVariation = [this] { return variationTab_; };
+      variationTabs_ = &onPage<VariationTabs>(P, {392, 107, 214, 16}, host_);
+      variationTabs_->onSelect = [this](int i) {
+         variationTab_ = i;
+         variationTabs_->selected = i;
+         redraw();
+      };
+      variationTabs_->onAdd = [this] { addVariationHere(); };
+      variationTabs_->onMenu = [this](int i, visage::Point) {
+         visage::PopupMenu menu;
+         menu.addOption(1, "Play");
+         if (i > 0)
+            menu.addOption(2, "Move left");
+         menu.addOption(3, "Edit in VARIATIONS...");
+         menu.addBreak();
+         menu.addOption(4, "Remove");
+         menu.onSelection() = [this, i](int id) {
+            const int pad = host_.selectedPad;
+            PadSounds p = host_.padSounds(pad);
+            if (i >= p.count())
+               return;
+            if (id == 1)
+               host_.playPadTake(pad, i);
+            else if (id == 2 && i > 0) {
+               std::swap(p.takes[static_cast<size_t>(i)], p.takes[static_cast<size_t>(i - 1)]);
+               host_.setPadSounds(pad, p);
+               variationTab_ = i - 1;
+            } else if (id == 3)
+               openTakes(pad);
+            else if (id == 4) {
+               p.takes.erase(p.takes.begin() + i);
+               host_.setPadSounds(pad, p);
+               variationTab_ = std::min(variationTab_, std::max(0, p.count() - 1));
+            }
+            variationTabs_->selected = variationTab_;
+            redraw();
+         };
+         menu.show(variationTabs_);
+      };
+      tips_.add(*variationTabs_, "This pad's variations: click one to see and hear it, + to add the Generate tab's selected "
+                                 "sound, right-click to move or remove it. The last tab says how a hit picks one.");
       tips_.add(*wave_, "Drag the handles to set where it starts and ends. The blue curve is its decay.");
 
       choke_ = &onPage<ui::Dropdown>(P, {392, 226, 66, 20}, std::vector<std::string>(kChokeNames, kChokeNames + kChokeCount));
@@ -3723,9 +3906,15 @@ private:
       play_->setSelected(static_cast<int>(host_.paramValue(padParam(p, kPlayMode)) + 0.5));
       rev_->setOn(host_.paramValue(padParam(p, kReverse)) >= 0.5);
       const int takes = host_.padSounds(p).count();
+      if (p != variationPad_ || variationTab_ >= std::max(1, takes)) {
+         variationPad_ = p;
+         variationTab_ = 0;
+      }
+      variationTabs_->selected = variationTab_;
+      variationTabs_->redraw();
       if (takes != takesShown_) {
          takesShown_ = takes;
-         takes_->setText(takes > 1 ? "TAKES \xC2\xB7 " + std::to_string(takes) : std::string("TAKES"));
+         takes_->setText(takes > 1 ? "VARIATIONS \xC2\xB7 " + std::to_string(takes) : std::string("VARIATIONS"));
       }
    }
 
@@ -3758,7 +3947,8 @@ private:
       const std::string line = p ? "seed " + std::to_string(p->seed) + " \xC2\xB7 \xE2\x80\x9C" + ellipsis(p->prompt, 34) +
                                       "\xE2\x80\x9D"
                                  : "note " + ui::noteName(kFirstNote + pad) + " \xC2\xB7 nothing on it yet";
-      c.text(line, ui::font(8.5f * s), visage::Font::kLeft, 392 * s, 110 * s, 214 * s, 12 * s);
+      if (host_.padSounds(pad).count() < 2)
+         c.text(line, ui::font(8.5f * s), visage::Font::kLeft, 392 * s, 110 * s, 214 * s, 12 * s);
       drawLabel(c, s, "CHOKE", 392, 212);
       drawLabel(c, s, "PLAY", 466, 212);
       drawCard(c, s, 380, 260, 560, 248, "PAD TONE", "double-click to add a point \xC2\xB7 right-click to remove");
@@ -3837,6 +4027,8 @@ private:
    // Kit
    PadGrid *pads_ = nullptr;
    ui::Button *regen_ = nullptr, *takes_ = nullptr;
+   VariationTabs *variationTabs_ = nullptr;
+   int variationTab_ = 0, variationPad_ = -1;
    int takesShown_ = -1;
    PadWave *wave_ = nullptr;
    ui::Dropdown *choke_ = nullptr, *pointType_ = nullptr;

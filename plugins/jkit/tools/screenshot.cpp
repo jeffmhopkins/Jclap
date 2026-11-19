@@ -63,9 +63,11 @@ public:
                           {"Vinyl Riser", kFx, 2.0, 300, 0.7, 0.8}, {"Zap", kFx, 0.3, 1200, 0.2, 14}};
       for (int i = 0; i < 14; ++i)
          pads_[i] = PadSounds::of(fake(pads[i].name, pads[i].role, 40100 + i * 7, pads[i].secs, pads[i].hz, pads[i].noise, pads[i].decay));
-      // The snare has four takes, RANDOM, each trimmed and tuned a little differently.
+      // The snare has four takes, RANDOM: four different snares (as from four variants), some
+      // trimmed, faded, tuned or cut.
+      const double secs[4] = {0, 0.75, 0.32, 0.6}, decays[4] = {0, 4.5, 18, 7}, noises[4] = {0, 0.75, 0.4, 0.9};
       for (int k = 1; k < 4; ++k) {
-         Take t{fake("Snare", kSnare, 40114 + k, 0.45 + 0.06 * k, 180 + 15 * k, 0.55 + 0.08 * k, 8 + k)};
+         Take t{fake("Snare", kSnare, 40114 + k * 3, secs[k], 170 + 25 * k, noises[k], decays[k])};
          t.start = 0.01 * k;
          t.end = 1.0 - 0.07 * k;
          t.fadeInMs = k == 2 ? 6 : 0;
