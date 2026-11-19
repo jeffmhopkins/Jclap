@@ -32,6 +32,10 @@ struct GenSettings {
    uint32_t seed = 1;
    bool seedLocked = false;
    int variants = 4; // 1, 2, 4 or 8
+   // SOUND or KIT: one sound (GENERATE makes variants) or a whole kit (GENERATE fills the pads), and
+   // the kind of kit (kitgen.h's KitLayout).
+   bool kitMode = false;
+   int kitLayout = 0;
 };
 
 struct Recent {
@@ -122,7 +126,7 @@ public:
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // Draws the panel offscreen at the given pixel size, showing tab `page`, and saves it as a PNG.
-// `overlay` 1 opens the engine picker over it, 2 GENERATE KIT's card, 3 that card set to percussion.
+// `overlay` 1 opens the engine picker over it, 2 the kit card (GENERATE in KIT).
 bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath, int overlay = 0);
 
 // A kit file's sounds sit beside it, with this extension in place of the preset's.

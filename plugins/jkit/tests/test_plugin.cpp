@@ -309,6 +309,8 @@ void testState() {
       host->setParam(kBoom, 0.4);
       host->gen().prompt = "a saved prompt";
       host->gen().role = kClap;
+      host->gen().kitMode = true;
+      host->gen().kitLayout = 2;
       host->setKitName("My Kit");
       auto *st = static_cast<const clap_plugin_state_t *>(h.plugin()->get_extension(h.plugin(), CLAP_EXT_STATE));
       JCLAP_CHECK(st->save(h.plugin(), &state.out));
@@ -330,6 +332,7 @@ void testState() {
    JCLAP_CHECK_EQ(h.paramValue(padParam(5, kPitch)), -5.0);
    JCLAP_CHECK_EQ(h.paramValue(kBoom), 0.4);
    JCLAP_CHECK(host->gen().prompt == "a saved prompt" && host->gen().role == kClap);
+   JCLAP_CHECK(host->gen().kitMode && host->gen().kitLayout == 2);
    JCLAP_CHECK(host->kitName() == "My Kit");
    // A truncated state is refused.
    Buffer bad;

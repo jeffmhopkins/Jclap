@@ -33,6 +33,7 @@
 #include "gen/studio.h"
 #include "kit.h"
 #include "params.h"
+#include "kitgen.h"
 #include "prompts.h"
 
 namespace {
@@ -165,7 +166,7 @@ struct PanelNote {
 };
 
 constexpr char kStateMagic[4] = {'J', 'K', 'I', 'T'};
-constexpr uint32_t kStateVersion = 3; // 2 adds the engine, 3 the fade in; 1 and 2 still load
+constexpr uint32_t kStateVersion = 4; // 2 adds the engine, 3 the fade in, 4 SOUND/KIT; older ones still load
 
 class JKit final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -612,6 +613,8 @@ public:
       w.u8(static_cast<uint8_t>((treatment_.normalize ? 1 : 0) | (treatment_.trimSilence ? 2 : 0) |
                                 (treatment_.reverse ? 4 : 0)));
       w.f64(treatment_.fadeInMs);
+      w.u8(gen_.kitMode ? 1 : 0);
+      w.u32(static_cast<uint32_t>(gen_.kitLayout));
       w.u32(static_cast<uint32_t>(recent_.size()));
       for (const Recent &r : recent_) {
          w.str(r.prompt);
@@ -683,6 +686,10 @@ public:
       t.trimSilence = flags & 2;
       t.reverse = flags & 4;
       t.fadeInMs = version >= 3 ? r.f64() : 0.0;
+      if (version >= 4) {
+         g.kitMode = r.u8() != 0;
+         g.kitLayout = std::clamp(static_cast<int>(r.u32()), 0, kKitLayoutCount - 1);
+      }
       std::vector<Recent> recent;
       const uint32_t recentCount = r.u32();
       for (uint32_t i = 0; i < recentCount && r.ok() && i < 64; ++i) {

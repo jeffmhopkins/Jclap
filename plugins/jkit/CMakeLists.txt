@@ -67,8 +67,8 @@ if(JCLAP_BUILD_TOOLS)
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-orb.png ARGS 3)
    jclap_add_screenshot_test(jkit-screenshot-engines-test TOOL jkit-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-engines.png ARGS 4)
+   jclap_add_screenshot_test(jkit-screenshot-kit-mode-test TOOL jkit-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-kit-mode.png ARGS 5)
    jclap_add_screenshot_test(jkit-screenshot-kit-dialog-test TOOL jkit-screenshot
-      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-whole-kit.png ARGS 5)
-   jclap_add_screenshot_test(jkit-screenshot-kit-percussion-test TOOL jkit-screenshot
-      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-whole-kit-percussion.png ARGS 6)
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-whole-kit.png ARGS 6)
 endif()
