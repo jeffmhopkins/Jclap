@@ -35,6 +35,10 @@ struct PlanOptions {
    bool noBed = true;
    // Roles the planner may pick; empty means every role.
    std::vector<int> roles;
+   // 0 decodes greedily, as ORB does. Above 0, each token is drawn at this temperature (from the
+   // grammar's choices, with `sampleSeed`), so the same caption gives a different plan.
+   double temperature = 0.0;
+   uint64_t sampleSeed = 0;
 };
 
 // The constrained-decoding mask (spec_tokenizer.SpecGrammar), with the kit's extra masks.

@@ -1688,9 +1688,9 @@ private:
       if (orb()) {
          c.setColor(t.dimText);
          const float x = 24 + 348.0f / 4 + 8;
-         c.text("ORB plans the sound from your words,", ui::font(9 * s), visage::Font::kLeft, x * s, 378 * s, 250 * s, 14 * s);
-         c.text("then plays it with physical models.", ui::font(9 * s), visage::Font::kLeft, x * s, 392 * s, 250 * s, 14 * s);
-         c.text("Variants play the same plan, new seeds.", ui::font(9 * s), visage::Font::kLeft, x * s, 412 * s, 250 * s, 14 * s);
+         c.text("ORB knows sound effects, not drum names:", ui::font(9 * s), visage::Font::kLeft, x * s, 378 * s, 250 * s, 14 * s);
+         c.text("try \"door slam\", \"glass\", \"metal clang\".", ui::font(9 * s), visage::Font::kLeft, x * s, 392 * s, 250 * s, 14 * s);
+         c.text("Each variant draws its own plan.", ui::font(9 * s), visage::Font::kLeft, x * s, 412 * s, 250 * s, 14 * s);
       }
       drawLabel(c, s, "SEED", 24, 446);
       drawLabel(c, s, "VARIANTS", 216, 446);

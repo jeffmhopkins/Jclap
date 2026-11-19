@@ -424,6 +424,21 @@ void testOrbPlan() {
       err = std::max(err, std::fabs(s[i] - std::sin(2.0 * 3.141592653589793 * 1000.0 * static_cast<double>(i) / 44100.0)));
    JCLAP_CHECK(err < 1e-3);
 
+   // The other variants' pitch and decay: a bell (parametric) and a door (played faster or slower)
+   // come out different from the plain take, and the plain take is unchanged by asking twice.
+   for (const char *name : {"bell", "door_slam"}) {
+      Spec one;
+      one.duration = 1.0;
+      SpecEvent ev;
+      ev.role = roleIndex(name);
+      ev.dur = 0.8;
+      one.events.push_back(ev);
+      const Sound plain = OrbEngine::render(one, 7), again = OrbEngine::render(one, 7);
+      const Sound varied = OrbEngine::render(one, 7, true);
+      JCLAP_CHECK(plain.left == again.left);
+      JCLAP_CHECK(plain.left.size() == varied.left.size() && plain.left != varied.left);
+   }
+
    // With the weights at hand (not in CI): a prompt becomes a plan and a sound.
    const char *weights = std::getenv("JKIT_TEST_ORB");
    if (!weights)
@@ -440,6 +455,20 @@ void testOrbPlan() {
    std::atomic<bool> cancel{false};
    JCLAP_CHECK(engine.generate(r, out, [](double) {}, cancel, error));
    JCLAP_CHECK_EQ(out.size(), 3u);
+   for (size_t a = 0; a < out.size(); ++a)
+      for (size_t b = a + 1; b < out.size(); ++b)
+         JCLAP_CHECK(out[a].left != out[b].left);
+   // A sampled plan is still a plan, and differs between seeds somewhere in a few tries.
+   std::set<std::vector<int>> plans;
+   for (uint64_t seed = 1; seed <= 6; ++seed) {
+      Spec sampled;
+      JCLAP_CHECK(engine.plan("metal clang", 1.5, sampled, error, nullptr, 0.8, seed));
+      std::vector<int> roles;
+      for (const SpecEvent &e : sampled.events)
+         roles.push_back(e.role);
+      plans.insert(roles);
+   }
+   JCLAP_CHECK(plans.size() > 1);
    Spec kick;
    JCLAP_CHECK(engine.plan(r.prompt, 1.0, kick, error));
    JCLAP_CHECK(!kick.events.empty() && kick.events[0].role == roleIndex("punch"));

@@ -6,7 +6,7 @@ A 16-pad drum kit whose sounds an AI model makes from your words, inside the plu
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![pads: 16](https://img.shields.io/badge/pads-16-blue)](#the-kit-tab) [![engines: Stable Audio Open Small, ORB, Stable Audio Open 1.0](https://img.shields.io/badge/engines-SAO%20Small%20%7C%20ORB%20%7C%20SAO%201.0-blue)](#the-engines) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
-Version 0.3.0 · Powered by Stability AI · ORB by Marcos Maceo
+Version 0.3.1 · Powered by Stability AI · ORB by Marcos Maceo
 
 </div>
 
@@ -103,12 +103,17 @@ click, camera shutter, cork pop, coin drop, metal clang, heartbeat, can opening,
 gunshot and church bell. Its scenes (birdsong, rain, traffic, a siren, applause...) aren't drum
 sounds and are left out, as is ORB's texture bed: the plan is always dry.
 
-ORB was trained on short sound-effect captions, so it does best with plain words for one of those
-sounds ("a heavy door slams", "glass shattering", "a deep punch", "church bell toll"). It plans its
-own length; JKit starts the sound at its first hit and cuts it at LENGTH if it's longer. STEPS,
-GUIDANCE and VARIETY don't apply. **VARIANTS** play the same plan with a new seed each: every model
-has a few kinds (a door in a small, medium or large room, a glass that shatters or bounces...), so
-they're takes of one idea. The SEED makes them repeat exactly.
+ORB was trained on short sound-effect captions and has no drum models, so it does best with plain
+words for one of the sounds above ("a heavy door slams", "glass shattering", "a deep punch", "church
+bell toll"). Drum names land on whatever is nearest: "kick drum" gives a click, "snare" a bell,
+"hi-hat" an impact. It plans its own length; JKit starts the sound at its first hit and cuts it at
+LENGTH if it's longer. STEPS, GUIDANCE and VARIETY don't apply.
+
+**VARIANTS**: the first is ORB's own plan, played as ORB plays it. Each of the others draws a plan
+of its own from the planner (so it may pick another sound, add a second hit, or change the timing
+and levels, while staying on the prompt), plays every sound up to 4 semitones higher or lower with a
+decay 0.7 to 1.4 times as long, and picks the model's kind by its seed (a door in a small, medium or
+large room, a glass that shatters or bounces...). The SEED makes them repeat exactly.
 
 ORB renders at 48 kHz; JKit resamples to 44.1 kHz like every other sound.
 
