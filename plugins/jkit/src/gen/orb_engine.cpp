@@ -5,6 +5,11 @@
 
 namespace jkit::gen {
 
+namespace {
+// How freely the other variants' plans are drawn: low enough that they stay on the prompt.
+constexpr double kVariantTemperature = 0.8;
+} // namespace
+
 std::vector<float> resample48To441(const std::vector<double> &x) {
    const size_t n = x.size();
    if (n == 0)
@@ -46,13 +51,15 @@ orb::Spec OrbEngine::fit(const orb::Spec &planned, double seconds) {
 }
 
 bool OrbEngine::plan(const std::string &prompt, double seconds, orb::Spec &spec, std::string &error,
-                     const std::atomic<bool> *cancel) const {
+                     const std::atomic<bool> *cancel, double temperature, uint64_t sampleSeed) const {
    if (!planner_.loaded()) {
       error = "the planner isn't loaded";
       return false;
    }
    orb::PlanOptions options;
    options.noBed = true;
+   options.temperature = temperature;
+   options.sampleSeed = sampleSeed;
    for (int r = 0; r < static_cast<int>(orb::roleNames().size()); ++r)
       if (orb::roleRendered(r))
          options.roles.push_back(r);
@@ -70,7 +77,7 @@ bool OrbEngine::plan(const std::string &prompt, double seconds, orb::Spec &spec,
    return true;
 }
 
-Sound OrbEngine::render(const orb::Spec &spec, uint32_t seed) {
+Sound OrbEngine::render(const orb::Spec &spec, uint32_t seed, bool vary) {
    orb::Spec s = spec;
    // Every event its own seed from the sound's, 1..255 (ORB's seeds are a byte; 0 means "by position").
    uint64_t h = (static_cast<uint64_t>(seed) + 1) * 0x9E3779B97F4A7C15ull;
@@ -79,6 +86,12 @@ Sound OrbEngine::render(const orb::Spec &spec, uint32_t seed) {
       h *= 0xBF58476D1CE4E5B9ull;
       h ^= h >> 32;
       e.seed = 1 + static_cast<int>(h % 255);
+      if (vary) {
+         const double u = static_cast<double>((h >> 8) & 0xFFFF) / 65535.0;
+         const double w = static_cast<double>((h >> 24) & 0xFFFF) / 65535.0;
+         e.pitch = std::exp2((u * 8.0 - 4.0) / 12.0);
+         e.decay = 0.7 * std::exp2(w); // 0.7 to 1.4
+      }
    }
    orb::Vec l, r;
    orb::renderSpec(s, l, r);
@@ -92,19 +105,30 @@ Sound OrbEngine::render(const orb::Spec &spec, uint32_t seed) {
 bool OrbEngine::generate(const Request &request, std::vector<Sound> &out, const std::function<void(double)> &progress,
                          const std::atomic<bool> &cancel, std::string &error) {
    out.clear();
-   orb::Spec spec;
-   if (!plan(request.prompt, request.seconds, spec, error, &cancel))
+   orb::Spec greedy;
+   if (!plan(request.prompt, request.seconds, greedy, error, &cancel))
       return false;
    const int variants = std::max(1, request.variants);
-   progress(0.2);
    for (int k = 0; k < variants; ++k) {
       if (cancel.load()) {
          error = "cancelled";
          out.clear();
          return false;
       }
-      out.push_back(render(spec, request.seed + static_cast<uint32_t>(k)));
-      progress(0.2 + 0.8 * (k + 1) / variants);
+      const uint32_t seed = request.seed + static_cast<uint32_t>(k);
+      orb::Spec spec = greedy;
+      std::string ignored;
+      // A sampled plan that fails (or is cancelled) falls back to ORB's own.
+      if (k > 0 && !plan(request.prompt, request.seconds, spec, ignored, &cancel, kVariantTemperature,
+                         (static_cast<uint64_t>(seed) << 32) ^ 0x6A6B6974ull))
+         spec = greedy;
+      out.push_back(render(spec, seed, k > 0));
+      progress(static_cast<double>(k + 1) / variants);
+   }
+   if (cancel.load()) {
+      error = "cancelled";
+      out.clear();
+      return false;
    }
    return true;
 }

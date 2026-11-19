@@ -71,6 +71,9 @@ public:
    // is now, 0..1.
    virtual float padPosition(int pad) const = 0;
    virtual float padLevel(int pad) const = 0;
+   // How many pads have been played so far (over MIDI or from the panel), and which was the last.
+   virtual uint32_t padHits() const = 0;
+   virtual int lastHitPad() const = 0;
    // The loudest dry kit, FX return and output samples since the last call, for the OUTPUT bars.
    virtual void meters(float &kit, float &fx, float &out) = 0;
 
@@ -80,6 +83,9 @@ public:
    virtual std::vector<Variant> &variants() = 0;
    virtual std::vector<Recent> &recent() = 0;
    virtual EngineStatus engine() = 0;
+   // Any engine's state, size and disk use (0 Stable Audio Open Small, 1 ORB, 2 Stable Audio Open 1.0),
+   // for the engine picker. Walks its folder: call it when the picker opens, not every frame.
+   virtual EngineStatus engineStatus(int engine) = 0;
    virtual void installEngine() = 0;
    virtual void removeEngine() = 0;
    virtual void cancelEngine() = 0;
@@ -102,7 +108,7 @@ public:
    virtual void setKitName(const std::string &name) = 0;
 
    // What the panel was showing, so it opens the same way again.
-   int page = 0;           // 0 Generate, 1 Kit
+   int page = 0;           // 0 Kit, 1 Generate
    int selectedPad = 0;    // the Kit tab's
    int targetPad = 0;      // SEND TO PAD's
    int selectedVariant = 0;
@@ -111,7 +117,8 @@ public:
 std::unique_ptr<jclap::ui::Window> createEditor(EditorHost &host);
 
 // Draws the panel offscreen at the given pixel size, showing tab `page`, and saves it as a PNG.
-bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath);
+bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath,
+                      bool enginePicker = false);
 
 // A kit file's sounds sit beside it, with this extension in place of the preset's.
 constexpr const char *kKitSoundsExtension = ".jkitsounds";

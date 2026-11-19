@@ -126,18 +126,22 @@ std::string agoText(int64_t when) {
 std::string ellipsis(const std::string &s, size_t n) { return s.size() <= n ? s : s.substr(0, n - 1) + "\xE2\x80\xA6"; }
 
 // A mirrored bar waveform from overview peaks, with the bars outside [from, to] dimmed.
+// `view0` and `view1` are the part of the sound the peaks cover (when zoomed in), and `top` the
+// level that fills the height (0: the loudest peak shown).
 void drawWave(visage::Canvas &c, const std::vector<float> &peaks, float x, float y, float w, float h, unsigned colour,
-              double from = 0.0, double to = 1.0) {
+              double from = 0.0, double to = 1.0, double view0 = 0.0, double view1 = 1.0, float top = 0.0f) {
    const size_t n = peaks.size();
    if (!n)
       return;
    const float bw = w / n, mid = y + h / 2;
    // Peaks are scaled so the loudest fills the height: quiet sounds still read.
-   float top = 1e-4f;
-   for (float p : peaks)
-      top = std::max(top, p);
+   if (top <= 0.0f) {
+      top = 1e-4f;
+      for (float p : peaks)
+         top = std::max(top, p);
+   }
    for (size_t i = 0; i < n; ++i) {
-      const double t = (i + 0.5) / n;
+      const double t = view0 + (view1 - view0) * (i + 0.5) / n;
       const float a = std::max(0.5f, peaks[i] / top * (h / 2 - 1));
       c.setColor(t < from || t > to ? alpha(colour, 0.25f) : colour);
       c.fill(x + i * bw, mid - a, std::max(0.8f, bw - 0.8f), 2 * a);
@@ -337,7 +341,14 @@ private:
 // The role chips: one is on.
 class ChipRow : public visage::Frame {
 public:
-   static float chipWidth(int i) { return std::string(kRoleNames[i]).size() * 6.6f + 18.0f; }
+   // Each chip's width in design units, squeezed to fit the row if the names are long.
+   float chipWidth(int i) const {
+      float total = 5.0f * (kRoleCount - 1);
+      for (int k = 0; k < kRoleCount; ++k)
+         total += naturalWidth(k);
+      const float room = width() / ui::designScale(*this);
+      return naturalWidth(i) * (total > room && room > 0 ? (room - 5.0f * (kRoleCount - 1)) / (total - 5.0f * (kRoleCount - 1)) : 1.0f);
+   }
    void draw(visage::Canvas &c) override {
       const float s = ui::designScale(*this);
       const ui::Theme &t = ui::defaultTheme();
@@ -348,7 +359,7 @@ public:
          c.roundedRectangle(x * s, 0, w * s, height(), height() / 2);
          c.setColor(t.panelBorder);
          c.roundedRectangleBorder(x * s, 0, w * s, height(), height() / 2, 1.0f);
-         std::string name = kRoleNames[i];
+         std::string name = names[i];
          for (char &ch : name)
             ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
          c.setColor(i == selected ? t.text : t.dimText);
@@ -372,7 +383,12 @@ public:
       }
    }
    int selected = 0;
+   // The chips' names: the kit's roles, or ORB's kinds in their places.
+   const char *const *names = kRoleNames;
    std::function<void(int)> onChange;
+
+private:
+   float naturalWidth(int i) const { return std::string(names[i]).size() * 6.6f + 18.0f; }
 };
 
 // A plain horizontal slider with a word at each end: GENERIC ... STRANGE.
@@ -395,6 +411,14 @@ public:
       c.circle(x0 + (x1 - x0) * f - 6 * s, cy - 6 * s, 12 * s);
       c.setColor(t.panel);
       c.circle(x0 + (x1 - x0) * f - 2.5f * s, cy - 2.5f * s, 5 * s);
+   }
+
+   void setLabels(std::string left, std::string right) {
+      if (left == left_ && right == right_)
+         return;
+      left_ = std::move(left);
+      right_ = std::move(right);
+      redraw();
    }
 
 protected:
@@ -543,21 +567,42 @@ private:
    std::vector<WaveCache> caches_;
 };
 
-// The selected variant, with its start and end handles and the fade before the end (drag the blue
-// curve's top sideways to set it). The parts that will be cut are dimmed.
+// The selected variant, with its start and end handles, the fade in after the start and the fade out
+// before the end (grab the top of the sound in either half and drag toward the middle; then drag the
+// blue curve's top sideways). The parts that will be cut are dimmed. The mouse wheel zooms in around
+// the pointer; a sideways scroll (or shift and the wheel) moves along the zoomed sound.
 class TrimView : public visage::Frame {
 public:
    explicit TrimView(EditorHost &host) : host_(host) {}
    SamplePtr sample;
    float playhead = -1.0f;
+   static constexpr double kMaxZoom = 64.0;
+
+   double zoom() const { return 1.0 / (view1_ - view0_); }
+   // Zooms to `z` times, keeping the fraction `at` of the sound where it is on screen.
+   void setZoom(double z, double at) {
+      z = std::clamp(z, 1.0, kMaxZoom);
+      const double span = 1.0 / z, rel = (at - view0_) / (view1_ - view0_);
+      double a = at - rel * span;
+      a = std::clamp(a, 0.0, 1.0 - span);
+      view0_ = a;
+      view1_ = a + span;
+      redraw();
+   }
+   void zoomBy(double factor) { setZoom(zoom() * factor, 0.5 * (view0_ + view1_)); }
+   void resetZoom() {
+      view0_ = 0.0;
+      view1_ = 1.0;
+      redraw();
+   }
 
    float xOf(double f) const {
       const float s = ui::designScale(*this);
-      return 6 * s + static_cast<float>(f) * (width() - 12 * s);
+      return 6 * s + static_cast<float>((f - view0_) / (view1_ - view0_)) * (width() - 12 * s);
    }
    double fOf(float x) const {
       const float s = ui::designScale(*this);
-      return std::clamp((x - 6 * s) / (width() - 12 * s), 0.0f, 1.0f);
+      return std::clamp(view0_ + (x - 6 * s) / (width() - 12 * s) * (view1_ - view0_), 0.0, 1.0);
    }
 
    void draw(visage::Canvas &c) override {
@@ -571,26 +616,51 @@ public:
          c.text("Nothing generated yet", ui::font(10 * s), visage::Font::kCenter, 0, 0, width(), height());
          return;
       }
+      if (sample.get() != zoomed_) { // a new sound starts zoomed out
+         zoomed_ = sample.get();
+         view0_ = 0.0;
+         view1_ = 1.0;
+      }
       const Treatment &t = host_.treatment();
       const int bins = std::max(16, static_cast<int>((width() - 12 * s) / (3.4f * s)));
-      drawWave(c, cache_.get(sample, bins), 6 * s, 6 * s, width() - 12 * s, height() - 12 * s, kOrange, t.start, t.end);
-      // The fade: a dashed quarter cosine down to the end handle.
+      if (peaksOf_ != sample.get() || peakBins_ != bins || peakView0_ != view0_ || peakView1_ != view1_) {
+         peaksOf_ = sample.get();
+         peakBins_ = bins;
+         peakView0_ = view0_;
+         peakView1_ = view1_;
+         peaks_ = overview(*sample, bins, view0_, view1_);
+         top_ = std::max(1e-4f, peakOf(*sample));
+      }
+      drawWave(c, peaks_, 6 * s, 6 * s, width() - 12 * s, height() - 12 * s, kOrange, t.start, t.end, view0_, view1_,
+               top_);
       const double secs = sample->seconds();
-      const float xe = xOf(t.end);
-      if (t.fadeMs > 0.5 && secs > 0) {
-         const float xf = xOf(std::max(t.start, t.end - t.fadeMs / 1000.0 / secs));
+      const float xs = xOf(t.start), xe = xOf(t.end);
+      const auto curve = [&](float x0, float x1, bool rising) {
          c.setColor(kBlue);
          const int steps = 24;
          for (int i = 0; i < steps; i += 2) {
             const float a = static_cast<float>(i) / steps, b = static_cast<float>(i + 1) / steps;
-            const auto y = [&](float u) { return 4 * s + (height() - 8 * s) * (1.0f - std::cos(u * 1.5707963f)); };
-            c.segment(xf + (xe - xf) * a, y(a), xf + (xe - xf) * b, y(b), 1.3f * s, true);
+            const auto y = [&](float u) {
+               return 4 * s + (height() - 8 * s) * (rising ? 1.0f - std::sin(u * 1.5707963f) : 1.0f - std::cos(u * 1.5707963f));
+            };
+            c.segment(x0 + (x1 - x0) * a, y(a), x0 + (x1 - x0) * b, y(b), 1.3f * s, true);
          }
+      };
+      // The fade in: a dashed quarter sine up from the start handle.
+      if (t.fadeInMs > 0.5 && secs > 0) {
+         const float xf = xOf(std::min(t.end, t.start + t.fadeInMs / 1000.0 / secs));
+         curve(xs, xf, true);
+         c.circle(xf - 3 * s, 4 * s - 3 * s, 6 * s);
+      }
+      // The fade out: a dashed quarter cosine down to the end handle.
+      if (t.fadeMs > 0.5 && secs > 0) {
+         const float xf = xOf(std::max(t.start, t.end - t.fadeMs / 1000.0 / secs));
+         curve(xf, xe, false);
          c.circle(xf - 3 * s, 4 * s - 3 * s, 6 * s);
       }
       // The handles.
       for (int i = 0; i < 2; ++i) {
-         const float x = xOf(i ? t.end : t.start);
+         const float x = i ? xe : xs;
          c.setColor(kWhite);
          c.fill(x - 1 * s, 2 * s, 2 * s, height() - 4 * s);
          c.roundedRectangle(i ? x - 9 * s : x - 1 * s, 2 * s, 10 * s, 10 * s, 3 * s);
@@ -598,6 +668,15 @@ public:
       if (playhead >= 0) {
          c.setColor(0xd8ffffff);
          c.fill(xOf(playhead), 2 * s, 1.5f * s, height() - 4 * s);
+      }
+      // Where the view is, when zoomed in: a bar along the bottom.
+      if (view1_ - view0_ < 0.999) {
+         const float w = width() - 12 * s;
+         c.setColor(alpha(kWhite, 0.12f));
+         c.roundedRectangle(6 * s, height() - 5 * s, w, 3 * s, 1.5f * s);
+         c.setColor(alpha(kWhite, 0.55f));
+         c.roundedRectangle(6 * s + static_cast<float>(view0_) * w, height() - 5 * s,
+                            std::max(4 * s, static_cast<float>(view1_ - view0_) * w), 3 * s, 1.5f * s);
       }
    }
 
@@ -607,17 +686,21 @@ public:
       const Treatment &t = host_.treatment();
       const float s = ui::designScale(*this);
       const float xs = xOf(t.start), xe = xOf(t.end);
-      const double secs = sample->seconds();
-      const float xf = xOf(std::max(t.start, t.end - t.fadeMs / 1000.0 / std::max(1e-3, secs)));
+      const double secs = std::max(1e-3, sample->seconds());
+      const float xfo = xOf(std::max(t.start, t.end - t.fadeMs / 1000.0 / secs));
+      const float xfi = xOf(std::min(t.end, t.start + t.fadeInMs / 1000.0 / secs));
+      const bool top = e.position.y < 16 * s;
       drag_ = 0;
-      if (e.position.y < 16 * s && std::fabs(e.position.x - xf) < 8 * s && t.fadeMs > 0.5)
+      if (top && std::fabs(e.position.x - xfo) < 8 * s && t.fadeMs > 0.5)
          drag_ = 3;
+      else if (top && std::fabs(e.position.x - xfi) < 8 * s && t.fadeInMs > 0.5)
+         drag_ = 4;
       else if (std::fabs(e.position.x - xs) < 8 * s)
          drag_ = 1;
       else if (std::fabs(e.position.x - xe) < 8 * s)
          drag_ = 2;
-      else if (e.position.y < 16 * s && e.position.x < xe && e.position.x > xs)
-         drag_ = 3; // grab the top to pull a fade out of the end
+      else if (top && e.position.x < xe && e.position.x > xs)
+         drag_ = e.position.x > 0.5f * (xs + xe) ? 3 : 4; // grab the top to pull a fade out of either end
       else if (onClick)
          onClick(fOf(e.position.x));
    }
@@ -626,26 +709,57 @@ public:
          return;
       Treatment &t = host_.treatment();
       const double f = fOf(e.position.x);
-      const double minGap = 0.01 / std::max(1e-3, sample->seconds());
+      const double secs = std::max(1e-3, sample->seconds());
+      const double minGap = 0.01 / secs;
       if (drag_ == 1)
          t.start = std::min(f, t.end - minGap);
       else if (drag_ == 2)
          t.end = std::max(f, t.start + minGap);
+      else if (drag_ == 3)
+         t.fadeMs = std::clamp((t.end - std::max(f, t.start)) * secs * 1000.0, 0.0, 2000.0);
       else
-         t.fadeMs = std::clamp((t.end - std::max(f, t.start)) * sample->seconds() * 1000.0, 0.0, 2000.0);
+         t.fadeInMs = std::clamp((std::min(f, t.end) - t.start) * secs * 1000.0, 0.0, 2000.0);
       redraw();
       if (onEdit)
          onEdit();
    }
    void mouseUp(const visage::MouseEvent &) override { drag_ = 0; }
 
+   bool mouseWheel(const visage::MouseEvent &e) override {
+      if (!sample)
+         return false;
+      const float s = ui::designScale(*this);
+      const float dx = e.precise_wheel_delta_x, dy = e.precise_wheel_delta_y;
+      const bool sideways = e.isShiftDown() || std::fabs(dx) > std::fabs(dy);
+      if (sideways) {
+         const float d = e.isShiftDown() && dx == 0.0f ? dy : dx;
+         const double span = view1_ - view0_;
+         const double a = std::clamp(view0_ - d * span / std::max(1.0f, (width() - 12 * s) / s) * 2.0, 0.0, 1.0 - span);
+         view0_ = a;
+         view1_ = a + span;
+         redraw();
+      } else if (dy != 0.0f) {
+         setZoom(zoom() * std::exp2(dy * 0.05), fOf(e.position.x));
+      } else {
+         return false;
+      }
+      if (onEdit)
+         onEdit();
+      return true;
+   }
+
    std::function<void()> onEdit;
    std::function<void(double)> onClick;
 
 private:
    EditorHost &host_;
-   WaveCache cache_;
    int drag_ = 0;
+   double view0_ = 0.0, view1_ = 1.0;
+   const Sample *zoomed_ = nullptr, *peaksOf_ = nullptr;
+   int peakBins_ = 0;
+   double peakView0_ = -1.0, peakView1_ = -1.0;
+   std::vector<float> peaks_;
+   float top_ = 1.0f;
 };
 
 // The 4 x 4 pads as a small picker, laid out like the Kit tab (pad 1 bottom left).
@@ -957,16 +1071,39 @@ private:
    bool playing_ = false;
 };
 
-// An EQ's response: low cut, low shelf, mid bell, high shelf (and the master's fixed cuts), on a log
-// axis from 20 Hz to 20 kHz, with a dot on each band.
+// An EQ's response: low cut, low shelf, mid bell, high shelf (and the master's fixed cuts), and a
+// pad's filter, on a log axis from 20 Hz to 20 kHz, with a dot on each band. With `onDrag`, the dots
+// can be dragged: sideways sets a band's frequency, up and down its gain (the filter's: resonance).
 class EqView : public visage::Frame {
 public:
    struct Bands {
-      double lowCut = 0, low = 0, mid = 0, midHz = 1000, high = 0, highCut = 0;
+      double lowCut = 0, low = 0, lowHz = 120, mid = 0, midHz = 1000, midQ = 0.9, high = 0, highHz = 7000,
+             highCut = 0;
+      int filter = 0; // kFilterTypeNames: 0 off
+      double cutoff = 20000, resonance = 0;
    };
+   enum Dot { kNone = -1, kLowCutDot, kLowDot, kMidDot, kHighDot, kCutoffDot };
    std::function<Bands()> bands;
-   unsigned colour = kOrange;
+   // A dot dragged to (frequency, dB): begins, moves, ends.
+   std::function<void(int dot)> onDragStart, onDragEnd;
+   std::function<void(int dot, double hz, double db)> onDrag;
+   unsigned colour = kOrange, filterColour = kBlue;
    bool labels = true;
+
+   static double filterResponse(const Bands &b, double f) {
+      if (b.filter <= 0)
+         return 0.0;
+      const int order = b.filter == 2 || b.filter == 4 ? 4 : 2;
+      const double x = f / b.cutoff;
+      // The resonance's peak at the cutoff, up to about 24 dB.
+      const double peak = 24.0 * b.resonance * b.resonance * std::exp(-std::pow(std::log2(x) * 3.0, 2));
+      if (b.filter <= 2)
+         return -10 * std::log10(1 + std::pow(x, 2 * order)) + peak;
+      if (b.filter <= 4)
+         return -10 * std::log10(1 + std::pow(1 / x, 2 * order)) + peak;
+      const double q = 0.7 * std::pow(30.0, b.resonance);
+      return -10 * std::log10(1 + q * q * std::pow(x - 1 / x, 2)) + peak * 0.5;
+   }
 
    static double response(const Bands &b, double f) {
       double d = 0;
@@ -975,10 +1112,54 @@ public:
          d -= 10 * std::log10(1 + std::pow(b.lowCut / f, 4));
       if (b.highCut > 0)
          d -= 10 * std::log10(1 + std::pow(f / b.highCut, 4));
-      d += b.low * (1 - sig(std::log2(f / 120.0) * 2.2));
-      d += b.high * sig(std::log2(f / 7000.0) * 2.2);
-      d += b.mid * std::exp(-std::pow(std::log2(f / b.midHz), 2) / (2 * 0.8 * 0.8));
+      d += b.low * (1 - sig(std::log2(f / b.lowHz) * 2.2));
+      d += b.high * sig(std::log2(f / b.highHz) * 2.2);
+      const double width = 0.72 / std::max(0.1, b.midQ); // octaves, about the bell's
+      d += b.mid * std::exp(-std::pow(std::log2(f / b.midHz), 2) / (2 * width * width));
+      d += filterResponse(b, f);
       return std::clamp(d, -18.0, 18.0);
+   }
+
+   float fx(double f) const { return static_cast<float>(std::log10(f / 20.0) / 3.0) * width(); }
+   double fOf(float x) const { return 20.0 * std::pow(10.0, 3.0 * std::clamp(x / width(), 0.0f, 1.0f)); }
+   float dbY(double d) const {
+      const float s = ui::designScale(*this);
+      return height() / 2 - static_cast<float>(d / 18.0) * (height() / 2 - 4 * s);
+   }
+   double dbOf(float y) const {
+      const float s = ui::designScale(*this);
+      return std::clamp((height() / 2 - y) / (height() / 2 - 4 * s) * 18.0, -18.0, 18.0);
+   }
+   // Where each dot sits.
+   bool dotAt(const Bands &b, int dot, float &x, float &y) const {
+      switch (dot) {
+      case kLowCutDot:
+         if (b.lowCut <= 0)
+            return false;
+         x = fx(b.lowCut);
+         y = dbY(response(b, b.lowCut));
+         return true;
+      case kLowDot:
+         x = fx(b.lowHz);
+         y = dbY(response(b, b.lowHz));
+         return true;
+      case kMidDot:
+         x = fx(b.midHz);
+         y = dbY(response(b, b.midHz));
+         return true;
+      case kHighDot:
+         x = fx(b.highHz);
+         y = dbY(response(b, b.highHz));
+         return true;
+      case kCutoffDot:
+         if (b.filter <= 0)
+            return false;
+         x = fx(b.cutoff);
+         y = dbY(std::clamp(response(b, b.cutoff), -17.0, 17.0));
+         return true;
+      default:
+         return false;
+      }
    }
 
    void draw(visage::Canvas &c) override {
@@ -988,8 +1169,6 @@ public:
       c.roundedRectangle(0, 0, w, h, 4 * s);
       c.setColor(kRule);
       c.roundedRectangleBorder(0, 0, w, h, 4 * s, 1.0f);
-      const auto fx = [&](double f) { return static_cast<float>(std::log10(f / 20.0) / 3.0) * w; };
-      const auto dbY = [&](double d) { return h / 2 - static_cast<float>(d / 18.0) * (h / 2 - 4 * s); };
       c.setColor(0xff262b33);
       for (double f : {50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0})
          c.fill(fx(f), 1, 1.0f, h - 2);
@@ -1005,6 +1184,18 @@ public:
       }
       const Bands b = bands ? bands() : Bands{};
       const int n = std::max(40, static_cast<int>(w / (2 * s)));
+      // The filter alone, faint, so its part of the curve reads.
+      if (b.filter > 0) {
+         float px = 0, py = dbY(std::clamp(filterResponse(b, 20.0), -18.0, 18.0));
+         c.setColor(alpha(filterColour, 0.6f));
+         for (int i = 1; i <= n; ++i) {
+            const double f = 20.0 * std::pow(10.0, 3.0 * i / n);
+            const float x = static_cast<float>(i) / n * w, y = dbY(std::clamp(filterResponse(b, f), -18.0, 18.0));
+            c.segment(px, py, x, y, 1.0f * s, true);
+            px = x;
+            py = y;
+         }
+      }
       float px = 0, py = dbY(response(b, 20.0));
       for (int i = 1; i <= n; ++i) {
          const double f = 20.0 * std::pow(10.0, 3.0 * i / n);
@@ -1018,21 +1209,479 @@ public:
          px = x;
          py = y;
       }
-      const auto dot = [&](double f) {
-         if (f <= 0)
-            return;
-         const float x = fx(f), y = dbY(response(b, f));
+      for (int dot = kLowCutDot; dot <= kCutoffDot; ++dot) {
+         float x, y;
+         if (!dotAt(b, dot, x, y))
+            continue;
+         const bool on = dot == drag_ || dot == hover_;
+         const float r = (on ? 4.2f : 3.2f) * s;
          c.setColor(0xff15181d);
+         c.circle(x - r, y - r, 2 * r);
+         c.setColor(dot == kCutoffDot ? filterColour : colour);
+         c.ring(x - r, y - r, 2 * r, 1.4f * s);
+      }
+      if (b.highCut > 0) {
+         c.setColor(0xff15181d);
+         const float x = fx(b.highCut), y = dbY(response(b, b.highCut));
          c.circle(x - 3.2f * s, y - 3.2f * s, 6.4f * s);
          c.setColor(colour);
          c.ring(x - 3.2f * s, y - 3.2f * s, 6.4f * s, 1.4f * s);
-      };
-      dot(b.lowCut);
-      dot(120.0);
-      dot(b.midHz);
-      dot(7000.0);
-      dot(b.highCut);
+      }
    }
+
+   int dotNear(float px, float py) const {
+      if (!onDrag)
+         return kNone;
+      const float s = ui::designScale(*this);
+      const Bands b = bands ? bands() : Bands{};
+      int best = kNone;
+      float bestD = 10 * s;
+      for (int dot = kLowCutDot; dot <= kCutoffDot; ++dot) {
+         float x, y;
+         if (!dotAt(b, dot, x, y))
+            continue;
+         const float d = std::hypot(px - x, py - y);
+         if (d < bestD) {
+            bestD = d;
+            best = dot;
+         }
+      }
+      return best;
+   }
+   void mouseMove(const visage::MouseEvent &e) override {
+      const int h = dotNear(e.position.x, e.position.y);
+      if (h != hover_) {
+         hover_ = h;
+         redraw();
+      }
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = kNone;
+      redraw();
+   }
+   void mouseDown(const visage::MouseEvent &e) override {
+      drag_ = dotNear(e.position.x, e.position.y);
+      if (drag_ != kNone && onDragStart)
+         onDragStart(drag_);
+   }
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (drag_ == kNone || !onDrag)
+         return;
+      onDrag(drag_, fOf(e.position.x), dbOf(e.position.y));
+      redraw();
+   }
+   void mouseUp(const visage::MouseEvent &) override {
+      if (drag_ != kNone && onDragEnd)
+         onDragEnd(drag_);
+      drag_ = kNone;
+      redraw();
+   }
+
+private:
+   int drag_ = kNone, hover_ = kNone;
+};
+
+// PAD TONE's graph: the selected pad's points and their summed curve, 20 Hz to 20 kHz and ±18 dB.
+// Double-click to add a point (a bell, where you click), drag a point to move it (sideways its
+// frequency; up and down its gain, or for a filter its resonance), scroll on it to change its Q, and
+// right-click it to remove it. The selected point is orange; the others white, numbered.
+class ToneView : public visage::Frame {
+public:
+   std::function<TonePoint(int)> point;     // the selected pad's point i
+   std::function<int()> selected;           // which point the strip below shows
+   std::function<void(int)> onSelect;       // a point clicked (or added)
+   std::function<void(int, const TonePoint &)> onChange; // a point dragged, scrolled, added or removed
+   std::function<void(int)> onBegin, onEnd; // around a drag
+
+   static constexpr double kFs = 48000.0;
+
+   float fx(double f) const { return static_cast<float>(std::log10(f / 20.0) / 3.0) * width(); }
+   double fOf(float x) const { return 20.0 * std::pow(10.0, 3.0 * std::clamp(x / width(), 0.0f, 1.0f)); }
+   float dbY(double d) const {
+      const float s = ui::designScale(*this);
+      return height() / 2 - static_cast<float>(d / kToneMaxDb) * (height() / 2 - 6 * s);
+   }
+   double dbOf(float y) const {
+      const float s = ui::designScale(*this);
+      return std::clamp((height() / 2 - y) / (height() / 2 - 6 * s) * kToneMaxDb, -kToneMaxDb, kToneMaxDb);
+   }
+   // Where a point's dot sits: at its gain, or for a filter at its resonance's peak.
+   float dotY(const TonePoint &p) const {
+      if (toneHasGain(p.type))
+         return dbY(p.db);
+      if (p.type == kToneNotch || p.type == kToneBandPass)
+         return dbY(0);
+      return dbY(std::clamp(20.0 * std::log10(p.q / 0.7071), -kToneMaxDb, kToneMaxDb));
+   }
+
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      const float w = width(), h = height();
+      c.setColor(kWell);
+      c.roundedRectangle(0, 0, w, h, 4 * s);
+      c.setColor(kRule);
+      c.roundedRectangleBorder(0, 0, w, h, 4 * s, 1.0f);
+      c.setColor(0xff262b33);
+      for (double f : {50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0})
+         c.fill(fx(f), 1, 1.0f, h - 2);
+      c.setColor(0xff22262d);
+      for (double d : {-12.0, -6.0, 6.0, 12.0})
+         c.fill(1, dbY(d), w - 2, 1.0f);
+      c.setColor(0xff343a44);
+      c.fill(1, dbY(0), w - 2, 1.0f);
+      c.setColor(kFaint);
+      for (const auto &[f, l] : {std::pair<double, const char *>{100.0, "100"}, {1000.0, "1k"}, {10000.0, "10k"}})
+         c.text(l, ui::font(7.5f * s), visage::Font::kLeft, fx(f) + 3 * s, h - 13 * s, 30 * s, 10 * s);
+      if (!point)
+         return;
+      TonePoint pts[kTonePoints];
+      ToneCoef k[kTonePoints][2];
+      int n[kTonePoints];
+      for (int i = 0; i < kTonePoints; ++i) {
+         pts[i] = point(i);
+         n[i] = toneDesign(pts[i].type, kFs, pts[i].hz, pts[i].db, pts[i].q, k[i]);
+      }
+      const int sel = selected ? selected() : -1;
+      const int steps = std::max(60, static_cast<int>(w / (2 * s)));
+      const auto curve = [&](int only, unsigned colour, float thick, bool fill) {
+         float px = 0, py = 0;
+         for (int i = 0; i <= steps; ++i) {
+            const double f = 20.0 * std::pow(10.0, 3.0 * i / steps);
+            double d = 0;
+            for (int j = 0; j < kTonePoints; ++j)
+               if (only < 0 || j == only)
+                  d += toneDb(k[j], n[j], kFs, f);
+            const float x = static_cast<float>(i) / steps * w, y = dbY(std::clamp(d, -kToneMaxDb - 2, kToneMaxDb + 2));
+            if (i > 0) {
+               if (fill) {
+                  c.setColor(alpha(colour, 0.13f));
+                  const float y0 = dbY(0);
+                  c.fill(px, std::min(y, y0), x - px + 0.5f, std::fabs(y - y0));
+               }
+               c.setColor(colour);
+               c.segment(px, py, x, y, thick, true);
+            }
+            px = x;
+            py = y;
+         }
+      };
+      // The selected point's own curve, faint, then the sum.
+      if (sel >= 0 && sel < kTonePoints && pts[sel].type != kToneOff)
+         curve(sel, alpha(kWhite, 0.35f), 1.0f * s, false);
+      curve(-1, kOrange, 1.6f * s, true);
+      for (int i = 0; i < kTonePoints; ++i) {
+         if (pts[i].type == kToneOff)
+            continue;
+         const float x = std::clamp(fx(pts[i].hz), 7 * s, w - 7 * s), y = std::clamp(dotY(pts[i]), 7 * s, h - 7 * s);
+         const float r = (i == hover_ || i == drag_ ? 7.5f : 6.5f) * s;
+         c.setColor(i == sel ? kOrange : kWhite);
+         c.circle(x - r, y - r, 2 * r);
+         c.setColor(0xff15181d);
+         c.text(std::to_string(i + 1), ui::font(8.5f * s), visage::Font::kCenter, x - r, y - r, 2 * r, 2 * r);
+      }
+   }
+
+   int pointAt(float px, float py) const {
+      if (!point)
+         return -1;
+      const float s = ui::designScale(*this);
+      int best = -1;
+      float bestD = 11 * s;
+      for (int i = 0; i < kTonePoints; ++i) {
+         const TonePoint p = point(i);
+         if (p.type == kToneOff)
+            continue;
+         const float x = std::clamp(fx(p.hz), 7 * s, width() - 7 * s), y = std::clamp(dotY(p), 7 * s, height() - 7 * s);
+         const float d = std::hypot(px - x, py - y);
+         if (d < bestD) {
+            bestD = d;
+            best = i;
+         }
+      }
+      return best;
+   }
+
+   void mouseMove(const visage::MouseEvent &e) override {
+      const int h = pointAt(e.position.x, e.position.y);
+      if (h != hover_) {
+         hover_ = h;
+         redraw();
+      }
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = -1;
+      redraw();
+   }
+   void mouseDown(const visage::MouseEvent &e) override {
+      const int i = pointAt(e.position.x, e.position.y);
+      if (e.shouldTriggerPopup()) {
+         if (i >= 0 && onChange) { // remove it
+            TonePoint p = point(i);
+            p.type = kToneOff;
+            onChange(i, p);
+         }
+         return;
+      }
+      if (i < 0) {
+         if (e.repeatClickCount() >= 2)
+            addAt(e.position.x, e.position.y);
+         return;
+      }
+      if (onSelect)
+         onSelect(i);
+      drag_ = i;
+      if (onBegin)
+         onBegin(i);
+      redraw();
+   }
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (drag_ < 0 || !onChange)
+         return;
+      TonePoint p = point(drag_);
+      p.hz = fOf(e.position.x);
+      const double d = dbOf(e.position.y);
+      if (toneHasGain(p.type))
+         p.db = d;
+      else if (p.type != kToneNotch && p.type != kToneBandPass)
+         p.q = std::clamp(0.7071 * std::pow(10.0, d / 20.0), 0.1, 18.0);
+      onChange(drag_, p);
+      redraw();
+   }
+   void mouseUp(const visage::MouseEvent &) override {
+      if (drag_ >= 0 && onEnd)
+         onEnd(drag_);
+      drag_ = -1;
+      redraw();
+   }
+   bool mouseWheel(const visage::MouseEvent &e) override {
+      int i = pointAt(e.position.x, e.position.y);
+      if (i < 0)
+         i = selected ? selected() : -1;
+      if (i < 0 || !onChange || e.precise_wheel_delta_y == 0.0f)
+         return false;
+      TonePoint p = point(i);
+      if (p.type == kToneOff)
+         return false;
+      if (onBegin)
+         onBegin(i);
+      p.q = std::clamp(p.q * std::exp2(e.precise_wheel_delta_y * 0.1), 0.1, 18.0);
+      onChange(i, p);
+      if (onEnd)
+         onEnd(i);
+      redraw();
+      return true;
+   }
+
+   // Adds a bell at (x, y) in the first unused point.
+   void addAt(float x, float y) {
+      if (!point || !onChange)
+         return;
+      for (int i = 0; i < kTonePoints; ++i) {
+         TonePoint p = point(i);
+         if (p.type != kToneOff)
+            continue;
+         p.type = kToneBell;
+         p.hz = fOf(x);
+         p.db = dbOf(y);
+         p.q = 0.7071;
+         if (onBegin)
+            onBegin(i);
+         onChange(i, p);
+         if (onEnd)
+            onEnd(i);
+         if (onSelect)
+            onSelect(i);
+         redraw();
+         return;
+      }
+   }
+
+private:
+   int drag_ = -1, hover_ = -1;
+};
+
+// The ENGINE button: the selected engine's name and a chevron, like a dropdown, that opens the
+// engine picker.
+// The engine picker: a card over the whole panel with one panel per engine, saying what it's for,
+// with examples, how fast it is, and its size and whether it's downloaded. Click one to use it;
+// click outside (or the X) to close.
+class EnginePicker : public visage::Frame {
+public:
+   struct Info {
+      const char *name, *badge, *forWhat, *examples, *speed;
+   };
+   static const Info &info(int engine) {
+      static const Info infos[3] = {
+         {"Stable Audio Open Small", "BEST FOR DRUMS",
+          "Real drum sounds: kicks, snares, hats, claps, toms and percussion, in any style you can describe, "
+          "plus odd textures and FX.",
+          "\"tight 909 kick\", \"dusty snare, room tail\"",
+          "Quick: a few seconds a sound"},
+         {"ORB", "SOUND EFFECTS",
+          "Not drums: door slams, glass shattering, metal clangs, knocks, punches, gunshots, bells, water, "
+          "whooshes and risers, made by physical models.",
+          "\"a heavy door slams\", \"glass shattering\"",
+          "Instant, and a tiny download"},
+         {"Stable Audio Open 1.0", "RICHEST",
+          "The full model: richer and more detailed than Small, and follows long prompts better. For "
+          "complex hits, layered textures and FX.",
+          "\"deep layered cinematic boom with metal debris\"",
+          "Slow: about 30 s a sound"},
+      };
+      return infos[std::clamp(engine, 0, 2)];
+   }
+   // The order the cards go in: drums first.
+   static constexpr int kOrder[3] = {0, 2, 1};
+
+   std::function<int()> current;
+   std::function<EngineStatus(int)> status;
+   std::function<void(int)> onPick;
+
+   void open() {
+      for (int e = 0; e < 3; ++e)
+         status_[e] = status ? status(e) : EngineStatus{};
+      hover_ = -1;
+      setVisible(true);
+      redraw();
+   }
+   void close() { setVisible(false); }
+
+   visage::Bounds card() const {
+      const float s = ui::designScale(*this);
+      const float w = 780 * s, h = 290 * s;
+      return {(width() - w) / 2, (height() - h) / 2, w, h};
+   }
+   visage::Bounds tile(int i) const {
+      const float s = ui::designScale(*this);
+      const visage::Bounds b = card();
+      const float g = 12 * s, w = (b.width() - 2 * 20 * s - 2 * g) / 3;
+      return {b.x() + 20 * s + i * (w + g), b.y() + 56 * s, w, b.height() - 76 * s};
+   }
+
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      const ui::Theme &t = ui::defaultTheme();
+      c.setColor(0xb0000000);
+      c.fill(0, 0, width(), height());
+      const visage::Bounds b = card();
+      c.setColor(t.panel);
+      c.roundedRectangle(b.x(), b.y(), b.width(), b.height(), 8 * s);
+      c.setColor(t.panelBorder);
+      c.roundedRectangleBorder(b.x(), b.y(), b.width(), b.height(), 8 * s, 1.0f);
+      c.setColor(kTitle);
+      c.text("CHOOSE AN ENGINE", ui::font(12 * s), visage::Font::kLeft, b.x() + 20 * s, b.y() + 16 * s, 300 * s, 18 * s);
+      c.setColor(t.dimText);
+      c.text("Each runs inside JKit on your computer, and downloads the first time you use it.", ui::font(9 * s),
+             visage::Font::kLeft, b.x() + 20 * s, b.y() + 34 * s, 500 * s, 14 * s);
+      // The X.
+      const float xx = b.right() - 26 * s, xy = b.y() + 18 * s;
+      c.setColor(t.dimText);
+      c.segment(xx, xy, xx + 9 * s, xy + 9 * s, 1.4f * s, true);
+      c.segment(xx + 9 * s, xy, xx, xy + 9 * s, 1.4f * s, true);
+      const int cur = current ? current() : 0;
+      for (int i = 0; i < 3; ++i) {
+         const int e = kOrder[i];
+         const Info &in = info(e);
+         const visage::Bounds r = tile(i);
+         const bool on = e == cur, hot = i == hover_;
+         c.setColor(hot ? 0xff252a32 : kWell);
+         c.roundedRectangle(r.x(), r.y(), r.width(), r.height(), 6 * s);
+         c.setColor(on ? kOrange : hot ? 0xff59606b : t.panelBorder);
+         c.roundedRectangleBorder(r.x(), r.y(), r.width(), r.height(), 6 * s, on ? 1.6f * s : 1.0f);
+         const float x = r.x() + 14 * s, w = r.width() - 28 * s;
+         float y = r.y() + 14 * s;
+         // The badge.
+         const unsigned badge = e == 0 ? kOrange : e == 1 ? kBlue : kPurple;
+         const float bw = (std::strlen(in.badge) * 6.2f + 14) * s;
+         c.setColor(alpha(badge, 0.18f));
+         c.roundedRectangle(x, y, bw, 16 * s, 8 * s);
+         c.setColor(badge);
+         c.text(in.badge, ui::font(7.5f * s), visage::Font::kCenter, x, y, bw, 16 * s);
+         if (on) {
+            c.setColor(kOrange);
+            c.text("IN USE", ui::font(7.5f * s), visage::Font::kRight, x, y, w, 16 * s);
+         }
+         y += 24 * s;
+         c.setColor(t.text);
+         c.text(in.name, ui::font(12 * s), visage::Font::kLeft, x, y, w, 18 * s);
+         y += 26 * s;
+         c.setColor(kTitle);
+         for (const std::string &l : wrap(in.forWhat, 9 * s, w)) {
+            c.text(l, ui::font(9 * s), visage::Font::kLeft, x, y, w, 14 * s);
+            y += 14 * s;
+         }
+         y += 10 * s;
+         c.setColor(t.dimText);
+         c.text("Try:", ui::font(8.5f * s), visage::Font::kLeft, x, y, w, 13 * s);
+         y += 14 * s;
+         for (const std::string &l : wrap(in.examples, 8.5f * s, w)) {
+            c.text(l, ui::font(8.5f * s), visage::Font::kLeft, x, y, w, 13 * s);
+            y += 13 * s;
+         }
+         // The bottom lines: speed, then size and state.
+         const EngineStatus &st = status_[e];
+         const bool there = st.state == EngineStatus::State::Installed || st.state == EngineStatus::State::Ready ||
+                            st.state == EngineStatus::State::Loading;
+         std::string size = there ? "Downloaded \xC2\xB7 " + bytesText(st.diskBytes) + " on disk"
+                                  : st.state == EngineStatus::State::Downloading ? "Downloading..."
+                                                                                 : bytesText(st.downloadBytes) + " download";
+         c.setColor(kRule);
+         c.fill(x, r.bottom() - 46 * s, w, 1.0f);
+         c.setColor(t.text);
+         c.text(in.speed, ui::font(8.5f * s), visage::Font::kLeft, x, r.bottom() - 40 * s, w, 14 * s);
+         c.setColor(there ? kGreen : t.dimText);
+         c.text(size, ui::font(8.5f * s), visage::Font::kLeft, x, r.bottom() - 24 * s, w, 14 * s);
+      }
+   }
+
+   // `text` broken into lines no wider than w, at spaces.
+   std::vector<std::string> wrap(const std::string &text, float size, float w) const {
+      const visage::Font f = ui::font(size, dpiScale());
+      const auto width = [&](const std::string &str) { return f.stringWidth(visage::String(str).toUtf32()); };
+      std::vector<std::string> lines;
+      std::string current;
+      size_t i = 0;
+      while (i <= text.size()) {
+         const size_t end = std::min(text.find(' ', i), text.size());
+         const std::string word = text.substr(i, end - i);
+         const std::string tried = current.empty() ? word : current + " " + word;
+         if (!current.empty() && width(tried) > w) {
+            lines.push_back(current);
+            current = word;
+         } else {
+            current = tried;
+         }
+         i = end + 1;
+      }
+      if (!current.empty())
+         lines.push_back(current);
+      return lines;
+   }
+
+   int tileAt(visage::Point p) const {
+      for (int i = 0; i < 3; ++i)
+         if (tile(i).contains(p))
+            return i;
+      return -1;
+   }
+   void mouseMove(const visage::MouseEvent &e) override {
+      const int h = tileAt(e.position);
+      if (h != hover_) {
+         hover_ = h;
+         redraw();
+      }
+   }
+   void mouseDown(const visage::MouseEvent &e) override {
+      const int i = tileAt(e.position);
+      if (i >= 0 && onPick)
+         onPick(kOrder[i]);
+      if (i >= 0 || !card().contains(e.position) || e.position.x > card().right() - 40 * ui::designScale(*this))
+         close();
+   }
+
+private:
+   EngineStatus status_[3];
+   int hover_ = -1;
 };
 
 // OUTPUT's picture: every pad where its pan puts it (higher for brighter roles), glowing while it
@@ -1142,12 +1791,12 @@ const std::vector<ui::Preset> &noFactoryKits() {
 
 class Panel : public ui::DesignFrame, public visage::EventTimer {
 public:
-   enum Page { kGeneratePage, kKitPage };
+   enum Page { kKitPage, kGeneratePage }; // as the tabs, and host_.page
 
    explicit Panel(EditorHost &host) : DesignFrame(kDesignWidth, kDesignHeight), host_(host), bindings_(host) {
       tips_.maxWidth = 260.0f;
       tips_.add(add<ui::HoverArea>({14, 12, 130, 40}), "JKit version " JCLAP_PLUGIN_VERSION);
-      tabs_ = &add<ui::TabBar>({150, 18, 220, 28}, std::vector<std::string>{"GENERATE", "KIT"});
+      tabs_ = &add<ui::TabBar>({150, 18, 220, 28}, std::vector<std::string>{"KIT", "GENERATE"});
       tabs_->setAccent(kOrange);
       tabs_->onChange = [this](int p) {
          host_.page = p;
@@ -1157,6 +1806,13 @@ public:
       buildPresets();
       buildGenerate();
       buildKit();
+      // Over everything, shown by the ENGINE button.
+      enginePicker_ = &add<EnginePicker>({0, 0, kDesignWidth, kDesignHeight});
+      enginePicker_->current = [this] { return host_.gen().engine; };
+      enginePicker_->status = [this](int e) { return host_.engineStatus(e); };
+      enginePicker_->onPick = [this](int e) { pickEngine_(e); };
+      enginePicker_->setOnTop(true);
+      enginePicker_->setVisible(false);
       tabs_->select(host_.page);
       refresh();
       startTimer(33);
@@ -1166,10 +1822,21 @@ public:
       tabs_->select(page);
       host_.page = page;
    }
+   void openEnginePicker() { enginePicker_->open(); }
 
    // ---- the timer ----
 
    void timerCallback() override {
+      // A pad played (over MIDI or here) becomes the Kit tab's selected pad.
+      const uint32_t hits = host_.padHits();
+      if (hits != padHits_) {
+         padHits_ = hits;
+         const int pad = host_.lastHitPad();
+         if (pad >= 0 && pad < kPads && pad != host_.selectedPad) {
+            host_.selectedPad = pad;
+            redraw();
+         }
+      }
       std::string error;
       if (host_.pollGeneration(error)) {
          lastError_.clear();
@@ -1225,6 +1892,15 @@ private:
       presets_->setCurrentName = [this](const std::string &n) { host_.setKitName(n); };
       presets_->onLoad = [this](const ui::Preset &p) {
          ui::applyPreset(p, host_, defaultValues());
+         // Kits saved before 0.4 have their EQ in the old params: move it onto points.
+         for (int pad = 0; pad < kPads; ++pad)
+            migrateLegacyEq(
+               pad, [this](clap_id id) { return host_.paramValue(id); },
+               [this](clap_id id, double v) {
+                  host_.beginEdit(id);
+                  host_.setParam(id, v);
+                  host_.endEdit(id);
+               });
          const std::filesystem::path file = ui::userPresetFolder(kKitFormat) / (p.name + kKitFormat.extension);
          std::ifstream in(soundsFile(file), std::ios::binary);
          std::stringstream bytes;
@@ -1254,10 +1930,17 @@ private:
    void buildGenerate() {
       const Page P = kGeneratePage;
       // MODEL
-      engine_ = &onPage<ui::Dropdown>(P, {24, 128, 188, 22},
-                                      std::vector<std::string>{"Stable Audio Open Small", "ORB", "Stable Audio Open 1.0"});
+      std::vector<std::string> engineNames;
+      for (int i = 0; i < 3; ++i) // Small, ORB, 1.0: the engine index order
+         engineNames.push_back(EnginePicker::info(i).name);
+      engine_ = &onPage<ui::Dropdown>(P, {24, 128, 160, 22}, engineNames);
       engine_->setAccent(kOrange);
-      engine_->onChange = [this](int i) {
+      engine_->onChange = [this](int i) { pickEngine_(i); };
+      // "?" opens the engine picker: what each engine is for, side by side.
+      engineHelp_ = &onPage<ui::Button>(P, {188, 128, 24, 22}, "?");
+      engineHelp_->onClick = [this] { enginePicker_->open(); };
+      tips_.add(*engineHelp_, "What each engine is for, side by side. Pick one there too.");
+      pickEngine_ = [this](int i) {
          GenSettings &g = host_.gen();
          if (g.engine != i) {
             // Each Stable Audio wants its own steps and guidance: start from what it's tuned for.
@@ -1277,9 +1960,7 @@ private:
          syncEngine();
          redraw();
       };
-      tips_.add(*engine_, "The engine that makes the sounds, inside JKit on your CPU. Stable Audio Open Small: "
-                          "neural and quick, 2.2 GB. ORB: plans the sound and plays it with physical models, 20.8 MB. "
-                          "Stable Audio Open 1.0: the full model, slower and richer, 4.8 GB.");
+      tips_.add(*engine_, "The engine that makes the sounds. ? says what each one is for.");
       engineAction_ = &onPage<ui::Button>(P, {310, 128, 62, 22}, "DOWNLOAD");
       engineAction_->setAccent(kOrange);
       engineAction_->onClick = [this] { engineAction(); };
@@ -1292,9 +1973,9 @@ private:
       roles_ = &onPage<ChipRow>(P, {24, 306, 316, 20});
       roles_->onChange = [this](int r) { host_.gen().role = r; };
       tips_.add(*roles_, "What the sound is for: the random prompt, the pad's colour and its name.");
-      auto &dice = onPage<IconButton>(P, {346, 306, 26, 20}, IconButton::Icon::Dice);
-      dice.onClick = [this] { randomPrompt(); };
-      tips_.add(dice, "A random prompt for this role. The slider below says how strange.");
+      dice_ = &onPage<IconButton>(P, {346, 306, 26, 20}, IconButton::Icon::Dice);
+      dice_->onClick = [this] { randomPrompt(); };
+      tips_.add(*dice_, "A random prompt for this role. The slider below says how strange.");
       strange_ = &onPage<EndsSlider>(P, {24, 332, 348, 16}, "GENERIC", "STRANGE");
       strange_->onChange = [this](double v) { host_.gen().strange = v; };
       tips_.add(*strange_, "How strange a random prompt gets: studio drums at the left, objects and places at the right.");
@@ -1321,28 +2002,10 @@ private:
       tips_.add(*variety_, "How different the variants are from each other: low makes takes of one sound.");
 
       const float sy = 446;
-      seed_ = &onPage<ui::NumberBox>(P, {24, sy + 16, 116, 22}, ui::ValueRange{1, 99999, 1, 1, false, true});
-      seed_->setStepButtons(true);
-      seed_->setAccent(kOrange);
-      seed_->onChange = [this](double v) { host_.gen().seed = static_cast<uint32_t>(std::lround(v)); };
-      tips_.add(*seed_, "Where the randomness starts. The same seed and prompt make the same sound.");
-      auto &seedDice = onPage<IconButton>(P, {144, sy + 16, 26, 22}, IconButton::Icon::Dice);
-      seedDice.onClick = [this] {
-         host_.gen().seed = 1 + std::random_device{}() % 99999;
-         seed_->setValue(host_.gen().seed);
-      };
-      tips_.add(seedDice, "A new seed.");
-      lock_ = &onPage<IconButton>(P, {174, sy + 16, 26, 22}, IconButton::Icon::Lock);
-      lock_->onClick = [this] {
-         host_.gen().seedLocked = !host_.gen().seedLocked;
-         lock_->lit = host_.gen().seedLocked;
-         lock_->redraw();
-      };
-      tips_.add(*lock_, "Keep this seed. Unlocked, each GENERATE picks a new one.");
-      count_ = &onPage<ui::SegmentedSwitch>(P, {216, sy + 16, 156, 22}, std::vector<std::string>{"1", "2", "4", "8"});
+      count_ = &onPage<ui::SegmentedSwitch>(P, {24, sy + 16, 348, 22}, std::vector<std::string>{"1", "2", "4", "8"});
       count_->setAccent(kOrange);
       count_->onChange = [this](int i) { host_.gen().variants = 1 << i; };
-      tips_.add(*count_, "How many sounds each GENERATE makes, from neighbouring seeds.");
+      tips_.add(*count_, "How many sounds each GENERATE makes. Every GENERATE starts from new random seeds.");
 
       generate_ = &onPage<GoButton>(P, {24, 496, 348, 40}, "GENERATE");
       generate_->onClick = [this] { generate(-1); };
@@ -1354,11 +2017,10 @@ private:
          if (i >= 0 && i < static_cast<int>(r.size()) && i < 3) {
             host_.gen().prompt = r[static_cast<size_t>(i)].prompt;
             host_.gen().role = r[static_cast<size_t>(i)].role;
-            host_.gen().seed = r[static_cast<size_t>(i)].seed;
             syncGenerate();
          }
       };
-      tips_.add(*recentArea_, "Your last prompts. Click one to load it, with its role and seed.");
+      tips_.add(*recentArea_, "Your last prompts. Click one to load it, with its role.");
 
       // VARIANTS
       variantsView_ = &onPage<VariantGrid>(P, {404, 114, 652, 186}, host_);
@@ -1367,7 +2029,9 @@ private:
       // SELECTED
       trim_ = &onPage<TrimView>(P, {404, 358, 652, 96}, host_);
       trim_->onClick = [this](double) { auditionSelected(); };
-      tips_.add(*trim_, "Drag the white handles to trim, and pull the top of the end down into a fade. Click to hear it.");
+      trim_->onEdit = [this] { redraw(); };
+      tips_.add(*trim_, "Drag the white handles to trim. Grab the top near either end and drag inward for a fade. "
+                        "Scroll to zoom in. Click to audition.");
       normalize_ = &onPage<CheckBox>(P, {404, 480, 90, 16}, "NORMALIZE");
       normalize_->onToggle = [this](bool on) { host_.treatment().normalize = on; };
       trimSilence_ = &onPage<CheckBox>(P, {494, 480, 102, 16}, "TRIM SILENCE");
@@ -1376,9 +2040,24 @@ private:
       reverse_->onToggle = [this](bool on) { host_.treatment().reverse = on; };
       tips_.add(*normalize_, "Bring its peak up to just under full scale.");
       tips_.add(*trimSilence_, "Cut the silence before it starts and after it fades out.");
-      vary_ = &onPage<ui::Button>(P, {884, 475, 84, 22}, "VARY");
+      zoomOut_ = &onPage<ui::Button>(P, {690, 475, 22, 22}, "\xE2\x88\x92");
+      zoomOut_->onClick = [this] {
+         trim_->zoomBy(0.5);
+         redraw();
+      };
+      tips_.add(*zoomOut_, "Zoom out of the waveform (or scroll on it).");
+      zoomIn_ = &onPage<ui::Button>(P, {714, 475, 22, 22}, "+");
+      zoomIn_->onClick = [this] {
+         trim_->zoomBy(2.0);
+         redraw();
+      };
+      tips_.add(*zoomIn_, "Zoom into the waveform (or scroll on it). Scroll sideways to move along it.");
+      vary_ = &onPage<ui::Button>(P, {796, 475, 84, 22}, "VARY");
       vary_->onClick = [this] { generate(host_.selectedVariant); };
       tips_.add(*vary_, "More sounds like this one: same prompt, noise close to its seed.");
+      playButton_ = &onPage<ui::Button>(P, {884, 475, 84, 22}, "PLAY");
+      playButton_->onClick = [this] { selectVariant(host_.selectedVariant, true); };
+      tips_.add(*playButton_, "Play the whole sound as it was generated, with no trim, fades or normalizing.");
       auditionButton_ = &onPage<ui::Button>(P, {972, 475, 84, 22}, "AUDITION");
       auditionButton_->onClick = [this] { auditionSelected(); };
       tips_.add(*auditionButton_, "Hear it as it will go on the pad: trimmed, faded and normalized.");
@@ -1402,7 +2081,8 @@ private:
 
    void randomPrompt() {
       GenSettings &g = host_.gen();
-      g.prompt = jkit::randomPrompt(static_cast<Role>(g.role), g.strange, std::random_device{}());
+      g.prompt = orb() ? jkit::randomOrbPrompt(static_cast<Role>(g.role), g.strange, std::random_device{}())
+                       : jkit::randomPrompt(static_cast<Role>(g.role), g.strange, std::random_device{}(), g.engine == 2);
       prompt_->setText(g.prompt);
    }
 
@@ -1438,6 +2118,7 @@ private:
          t.start = 0.0;
          t.end = 1.0;
          t.fadeMs = 0.0;
+         t.fadeInMs = 0.0;
       }
       trim_->sample = v[static_cast<size_t>(i)].sample;
       if (play) {
@@ -1460,7 +2141,8 @@ private:
       if (!t)
          return;
       auto s = std::make_shared<Sample>(*t);
-      s->name = uniqueName(kRoleNames[std::clamp(s->role, 0, kRoleCount - 1)], host_.targetPad);
+      s->name = uniqueName(s->name.empty() ? kRoleNames[std::clamp(s->role, 0, kRoleCount - 1)] : s->name,
+                           host_.targetPad);
       const int pad = host_.targetPad;
       host_.setPadSample(pad, s);
       // A new sound plays from its start to its end.
@@ -1536,6 +2218,17 @@ private:
       steps_->setVisible(!orb());
       guidance_->setVisible(!orb());
       variety_->setVisible(!orb());
+      // ORB makes sound effects, not drums: its chips are the kinds of sound it has, and its slider
+      // goes from one sound to a few in a row.
+      roles_->names = orb() ? kOrbKindNames : kRoleNames;
+      roles_->redraw();
+      strange_->setLabels(orb() ? "ONE SOUND" : "GENERIC", orb() ? "LAYERED" : "STRANGE");
+      tips_.setText(*roles_, orb() ? "The kind of sound ORB can make, for the random prompt, the pad's colour and its name."
+                                   : "What the sound is for: the random prompt, the pad's colour and its name.");
+      tips_.setText(*dice_, orb() ? "A random prompt for this kind of sound, worded the way ORB reads them."
+                                  : "A random prompt for this role. The slider below says how strange.");
+      tips_.setText(*strange_, orb() ? "How many sounds a random prompt asks ORB for: one at the left, a few in a row at the right."
+                                     : "How strange a random prompt gets: studio drums at the left, objects and places at the right.");
    }
 
    void syncGenerate() {
@@ -1549,9 +2242,6 @@ private:
       steps_->setValue(g.steps);
       guidance_->setValue(g.guidance);
       variety_->setValue(g.variety);
-      seed_->setValue(g.seed);
-      lock_->lit = g.seedLocked;
-      lock_->redraw();
       int idx = 0;
       while ((1 << idx) < g.variants && idx < 3)
          ++idx;
@@ -1688,12 +2378,11 @@ private:
       if (orb()) {
          c.setColor(t.dimText);
          const float x = 24 + 348.0f / 4 + 8;
-         c.text("ORB plans the sound from your words,", ui::font(9 * s), visage::Font::kLeft, x * s, 378 * s, 250 * s, 14 * s);
-         c.text("then plays it with physical models.", ui::font(9 * s), visage::Font::kLeft, x * s, 392 * s, 250 * s, 14 * s);
-         c.text("Variants play the same plan, new seeds.", ui::font(9 * s), visage::Font::kLeft, x * s, 412 * s, 250 * s, 14 * s);
+         c.text("ORB knows sound effects, not drum names:", ui::font(9 * s), visage::Font::kLeft, x * s, 378 * s, 250 * s, 14 * s);
+         c.text("try \"door slam\", \"glass\", \"metal clang\".", ui::font(9 * s), visage::Font::kLeft, x * s, 392 * s, 250 * s, 14 * s);
+         c.text("Each variant draws its own plan.", ui::font(9 * s), visage::Font::kLeft, x * s, 412 * s, 250 * s, 14 * s);
       }
-      drawLabel(c, s, "SEED", 24, 446);
-      drawLabel(c, s, "VARIANTS", 216, 446);
+      drawLabel(c, s, "VARIANTS", 24, 446);
       std::string hint;
       if (host_.generating())
          hint = "about " + std::to_string(std::max(1, static_cast<int>(std::lround(estimate())))) + " s on this computer";
@@ -1702,7 +2391,7 @@ private:
       else if (e.state == EngineStatus::State::Missing)
          hint = "The first GENERATE downloads the model (" + bytesText(e.downloadBytes) + ")";
       else
-         hint = "Each sound is new: same prompt and seed, same sound";
+         hint = "Every GENERATE makes new sounds, each from its own random seed";
       c.setColor(t.dimText);
       c.text(hint, ui::font(9 * s), visage::Font::kCenter, 24 * s, 542 * s, 348 * s, 14 * s);
       c.setColor(kRule);
@@ -1749,8 +2438,20 @@ private:
          c.text("END " + secondsText(tr.end * secs), ui::font(8.5f * s), visage::Font::kRight, 936 * s, 458 * s,
                 120 * s, 12 * s);
          c.setColor(kBlue);
-         c.text(tr.fadeMs > 0.5 ? "FADE " + std::to_string(static_cast<int>(tr.fadeMs)) + " ms" : "pull the top for a fade",
-                ui::font(8.5f * s), visage::Font::kCenter, 404 * s, 458 * s, 652 * s, 12 * s);
+         std::string fades;
+         if (tr.fadeInMs > 0.5)
+            fades = "FADE IN " + std::to_string(static_cast<int>(tr.fadeInMs)) + " ms";
+         if (tr.fadeMs > 0.5)
+            fades += (fades.empty() ? "" : " \xC2\xB7 ") + std::string("FADE OUT ") + std::to_string(static_cast<int>(tr.fadeMs)) + " ms";
+         if (fades.empty())
+            fades = "pull the top near either end for a fade";
+         c.text(fades, ui::font(8.5f * s), visage::Font::kCenter, 404 * s, 458 * s, 652 * s, 12 * s);
+         c.setColor(t.dimText);
+         const double z = trim_->zoom();
+         c.text("ZOOM " + (z < 9.95 ? std::to_string(static_cast<int>(z * 10 + 0.5) / 10) + "." +
+                                          std::to_string(static_cast<int>(z * 10 + 0.5) % 10)
+                                    : std::to_string(static_cast<int>(z + 0.5))) + "x",
+                ui::font(8.5f * s), visage::Font::kLeft, 742 * s, 475 * s, 50 * s, 22 * s);
       }
       c.setColor(kRule);
       c.fill(404 * s, 504 * s, 652 * s, 1.0f * s);
@@ -1823,7 +2524,7 @@ private:
       regen_ = &onPage<ui::Button>(P, {906, 81, 150, 19}, "REGENERATE IN TAB");
       regen_->setAccent(kOrange);
       regen_->onClick = [this] { regenerate(host_.selectedPad); };
-      tips_.add(*regen_, "Open the Generate tab with this pad's prompt, role and seed, ready to make another take.");
+      tips_.add(*regen_, "Open the Generate tab with this pad's prompt and role, ready to make another take.");
       wave_ = &onPage<PadWave>(P, {392, 128, 214, 78}, host_);
       tips_.add(*wave_, "Drag the handles to set where it starts and ends. The blue curve is its decay.");
 
@@ -1846,23 +2547,72 @@ private:
          padKnob(top[i], topNames[i], {kx + i * kw, 108, kw, 70}, kOrange);
          padKnob(bottom[i], bottomNames[i], {kx + i * kw, 176, kw, 70}, kOrange);
       }
-      // PAD EQ
-      eq_ = &onPage<EqView>(P, {392, 298, 536, 126});
-      eq_->bands = [this] {
-         const int p = host_.selectedPad;
-         EqView::Bands b;
-         const double cut = host_.paramModulated(padParam(p, kLowCut));
-         b.lowCut = lowCutOff(cut) ? 0 : lowCutHz(cut);
-         b.low = host_.paramModulated(padParam(p, kLow));
-         b.mid = host_.paramModulated(padParam(p, kMid));
-         b.midHz = midFreqHz(host_.paramModulated(padParam(p, kMidFreq)));
-         b.high = host_.paramModulated(padParam(p, kHigh));
-         return b;
+      // PAD TONE: the points on the graph, the selected one's settings, and the envelope, velocity
+      // and drive.
+      tone_ = &onPage<ToneView>(P, {392, 288, 536, 126});
+      tone_->point = [this](int i) { return tonePoint(host_.selectedPad, i); };
+      tone_->selected = [this] { return point_; };
+      tone_->onSelect = [this](int i) {
+         point_ = i;
+         redraw();
       };
-      const PadParam eqs[5] = {kLowCut, kLow, kMid, kMidFreq, kHigh};
-      const char *eqNames[5] = {"LOW CUT", "LOW", "MID", "MID FREQ", "HIGH"};
-      for (int i = 0; i < 5; ++i)
-         padKnob(eqs[i], eqNames[i], {392 + i * 536.0f / 5, 430, 536.0f / 5, 66}, kOrange);
+      tone_->onBegin = [this](int i) {
+         for (PointField f : {kPointType, kPointFreq, kPointGain, kPointQ})
+            host_.beginEdit(padParam(host_.selectedPad, pointParam(i, f)));
+      };
+      tone_->onEnd = [this](int i) {
+         for (PointField f : {kPointType, kPointFreq, kPointGain, kPointQ})
+            host_.endEdit(padParam(host_.selectedPad, pointParam(i, f)));
+      };
+      tone_->onChange = [this](int i, const TonePoint &pt) {
+         const int pad = host_.selectedPad;
+         const TonePoint was = tonePoint(pad, i);
+         const auto set = [&](PointField f, double v) {
+            const clap_id id = padParam(pad, pointParam(i, f));
+            if (host_.paramValue(id) != v)
+               host_.setParam(id, v);
+         };
+         // A right-click removes it, outside a drag: give the host a whole gesture.
+         const bool removing = pt.type == kToneOff && was.type != kToneOff;
+         if (removing)
+            host_.beginEdit(padParam(pad, pointParam(i, kPointType)));
+         set(kPointType, pt.type);
+         set(kPointFreq, toneHzValue(pt.hz));
+         set(kPointGain, pt.db);
+         set(kPointQ, toneQValue(pt.q));
+         if (removing) {
+            host_.endEdit(padParam(pad, pointParam(i, kPointType)));
+            if (point_ == i)
+               point_ = firstPoint(pad);
+         }
+         redraw();
+      };
+      tips_.add(*tone_, "Double-click to add a point. Drag a point to move it, scroll on it to change its width, "
+                        "right-click it to remove it.");
+      pointType_ = &onPage<ui::Dropdown>(P, {392, 446, 96, 20},
+                                         std::vector<std::string>(kToneTypeNames, kToneTypeNames + kToneTypeCount));
+      pointType_->setAccent(kOrange);
+      pointType_->onChange = [this](int type) {
+         const clap_id id = padParam(host_.selectedPad, pointParam(point_, kPointType));
+         host_.beginEdit(id);
+         host_.setParam(id, type);
+         host_.endEdit(id);
+         redraw();
+      };
+      tips_.add(*pointType_, "What the selected point does: a bell, a shelf, a low or high pass (12 or 24 dB an "
+                             "octave), a notch or a band pass. Off removes it.");
+      const float kx0 = 500, kw0 = (928.0f - kx0) / 7;
+      const char *pointNames[3] = {"FREQ", "GAIN", "Q"};
+      const PointField pointFields[3] = {kPointFreq, kPointGain, kPointQ};
+      for (int i = 0; i < 3; ++i) {
+         const PointField pf = pointFields[i];
+         padKnobFor([this, pf] { return pointParam(point_, pf); }, pointNames[i], {kx0 + i * kw0, 434, kw0, 66},
+                    kOrange, pf == kPointGain);
+      }
+      const PadParam modKnobs[4] = {kFilterEnv, kFilterDecay, kVelFilter, kDrive};
+      const char *modNames[4] = {"ENV", "ENV DECAY", "VEL > FILT", "DRIVE"};
+      for (int i = 0; i < 4; ++i)
+         padKnob(modKnobs[i], modNames[i], {kx0 + (3 + i) * kw0, 434, kw0, 66}, i == 3 ? kOrange : kBlue);
       // SENDS
       padKnob(kReverbSend, "REVERB", {960, 296, 96, 76}, kPurple);
       padKnob(kDelaySend, "DELAY", {960, 418, 96, 76}, kBlue);
@@ -1923,7 +2673,6 @@ private:
          GenSettings &g = host_.gen();
          g.prompt = p->prompt;
          g.role = p->role;
-         g.seed = p->seed;
          synced_ = false;
       }
       showPage(kGeneratePage);
@@ -1938,25 +2687,48 @@ private:
 
    // A knob for the selected pad: it follows the selection, so it isn't bound to one param.
    ui::Knob &padKnob(PadParam f, const char *label, ui::Rect r, unsigned colour) {
-      const clap_id first = padParam(0, f);
-      const auto &d = param(first);
+      const bool bipolar = f == kPan || f == kPitch || f == kFilterEnv || f == kVelFilter;
+      return padKnobFor([f] { return f; }, label, r, colour, bipolar);
+   }
+   // The same, for a field that also follows something else (the selected point). Fields it may be
+   // share one range.
+   ui::Knob &padKnobFor(std::function<PadParam()> field, const char *label, ui::Rect r, unsigned colour, bool bipolar) {
+      const PadParam f0 = field();
+      const auto &d = param(padParam(0, f0));
       const bool stepped = (d.flags & CLAP_PARAM_IS_STEPPED) != 0;
-      const bool bipolar = f == kPan || f == kPitch || f == kLow || f == kMid || f == kHigh;
       auto &k = onPage<ui::Knob>(kKitPage, r,
-                                 ui::ValueRange{d.min, d.max, d.defaultValue, f == kPitch ? 0.1 : 0.0, bipolar, stepped});
+                                 ui::ValueRange{d.min, d.max, d.defaultValue, f0 == kPitch ? 0.1 : 0.0, bipolar, stepped});
       k.setLabel(label);
       k.setAccent(colour);
-      k.valueText = [this, f](double v) { return padText(f, v); };
-      k.parseText = [f](const std::string &t, double &v) { return parseParam(padParam(0, f), t.c_str(), v); };
-      k.onBeginEdit = [this, f] { host_.beginEdit(padParam(host_.selectedPad, f)); };
-      k.onChange = [this, f](double v) {
-         host_.setParam(padParam(host_.selectedPad, f), v);
+      k.valueText = [this, field](double v) { return padText(field(), v); };
+      k.parseText = [field](const std::string &t, double &v) { return parseParam(padParam(0, field()), t.c_str(), v); };
+      k.onBeginEdit = [this, field] { host_.beginEdit(padParam(host_.selectedPad, field())); };
+      k.onChange = [this, field](double v) {
+         host_.setParam(padParam(host_.selectedPad, field()), v);
          redraw();
       };
-      k.onEndEdit = [this, f] { host_.endEdit(padParam(host_.selectedPad, f)); };
-      k.modulatedSource = [this, f] { return host_.paramModulated(padParam(host_.selectedPad, f)); };
-      padKnobs_.push_back({&k, f});
+      k.onEndEdit = [this, field] { host_.endEdit(padParam(host_.selectedPad, field())); };
+      k.modulatedSource = [this, field] { return host_.paramModulated(padParam(host_.selectedPad, field())); };
+      padKnobs_.push_back({&k, field});
       return k;
+   }
+
+   // A pad's point i, from its params (modulated, as it sounds).
+   TonePoint tonePoint(int pad, int i) const {
+      const auto v = [&](PointField f) { return host_.paramModulated(padParam(pad, pointParam(i, f))); };
+      TonePoint p;
+      p.type = std::clamp(static_cast<int>(v(kPointType) + 0.5), 0, kToneTypeCount - 1);
+      p.hz = toneHz(v(kPointFreq));
+      p.db = v(kPointGain);
+      p.q = toneQ(v(kPointQ));
+      return p;
+   }
+   // The first point in use, or 0.
+   int firstPoint(int pad) const {
+      for (int i = 0; i < kTonePoints; ++i)
+         if (tonePoint(pad, i).type != kToneOff)
+            return i;
+      return 0;
    }
 
    // Start and End read as times into the selected pad's sound; the rest as the host shows them.
@@ -1989,11 +2761,16 @@ private:
 
    void syncPad() {
       const int p = host_.selectedPad;
-      for (auto &[k, f] : padKnobs_) {
-         const clap_id id = padParam(p, f);
+      if (p != tonePad_) { // a new pad: show its first point
+         tonePad_ = p;
+         point_ = firstPoint(p);
+      }
+      for (auto &[k, field] : padKnobs_) {
+         const clap_id id = padParam(p, field());
          k->setValue(host_.paramValue(id), host_.paramModulated(id));
       }
       choke_->setSelected(static_cast<int>(host_.paramValue(padParam(p, kChoke)) + 0.5));
+      pointType_->setSelected(static_cast<int>(host_.paramValue(padParam(p, pointParam(point_, kPointType))) + 0.5));
       play_->setSelected(static_cast<int>(host_.paramValue(padParam(p, kPlayMode)) + 0.5));
       rev_->setOn(host_.paramValue(padParam(p, kReverse)) >= 0.5);
    }
@@ -2005,7 +2782,7 @@ private:
       output_->update(kit, fx, out);
       pads_->redraw();
       wave_->redraw();
-      eq_->redraw();
+      tone_->redraw();
       masterEq_->redraw();
       redraw();
    }
@@ -2030,7 +2807,8 @@ private:
       c.text(line, ui::font(8.5f * s), visage::Font::kLeft, 392 * s, 110 * s, 214 * s, 12 * s);
       drawLabel(c, s, "CHOKE", 392, 212);
       drawLabel(c, s, "PLAY", 466, 212);
-      drawCard(c, s, 380, 260, 560, 248, "PAD EQ");
+      drawCard(c, s, 380, 260, 560, 248, "PAD TONE", "double-click to add a point \xC2\xB7 right-click to remove");
+      drawLabel(c, s, "POINT " + std::to_string(point_ + 1), 392, 428);
       drawCard(c, s, 948, 260, 120, 248, "SENDS");
 
       // The master band: everything under it acts on the whole kit.
@@ -2063,24 +2841,28 @@ private:
 
    // Generate
    ui::Dropdown *engine_ = nullptr;
+   ui::Button *engineHelp_ = nullptr;
+   EnginePicker *enginePicker_ = nullptr;
+   std::function<void(int)> pickEngine_;
    ui::Button *engineAction_ = nullptr;
    PromptBox *prompt_ = nullptr;
    ChipRow *roles_ = nullptr;
    EndsSlider *strange_ = nullptr;
+   IconButton *dice_ = nullptr;
    ui::Knob *length_ = nullptr, *steps_ = nullptr, *guidance_ = nullptr, *variety_ = nullptr;
-   ui::NumberBox *seed_ = nullptr;
-   IconButton *lock_ = nullptr;
    ui::SegmentedSwitch *count_ = nullptr;
    GoButton *generate_ = nullptr, *addToKit_ = nullptr;
    ui::HoverArea *recentArea_ = nullptr;
    VariantGrid *variantsView_ = nullptr;
    TrimView *trim_ = nullptr;
    CheckBox *normalize_ = nullptr, *trimSilence_ = nullptr, *reverse_ = nullptr;
-   ui::Button *vary_ = nullptr, *auditionButton_ = nullptr;
+   ui::Button *vary_ = nullptr, *auditionButton_ = nullptr, *playButton_ = nullptr, *zoomIn_ = nullptr,
+              *zoomOut_ = nullptr;
    PadPicker *picker_ = nullptr;
    EngineStatus status_;
    std::string lastError_;
    SamplePtr auditioned_;
+   uint32_t padHits_ = 0;
    bool synced_ = false, confirmRemove_ = false;
    int added_ = -1, addedAt_ = 0;
 
@@ -2088,12 +2870,14 @@ private:
    PadGrid *pads_ = nullptr;
    ui::Button *regen_ = nullptr;
    PadWave *wave_ = nullptr;
-   ui::Dropdown *choke_ = nullptr;
+   ui::Dropdown *choke_ = nullptr, *pointType_ = nullptr;
+   ToneView *tone_ = nullptr;
+   int point_ = 0, tonePad_ = -1;
    ui::SegmentedSwitch *play_ = nullptr;
    CheckBox *rev_ = nullptr;
-   EqView *eq_ = nullptr, *masterEq_ = nullptr;
+   EqView *masterEq_ = nullptr;
    OutputView *output_ = nullptr;
-   std::vector<std::pair<ui::Knob *, PadParam>> padKnobs_;
+   std::vector<std::pair<ui::Knob *, std::function<PadParam()>>> padKnobs_;
 };
 
 } // namespace
@@ -2103,10 +2887,12 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
                                        ui::WindowOptions{static_cast<int>(kDesignWidth), static_cast<int>(kDesignHeight)});
 }
 
-bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath) {
+bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath, bool enginePicker) {
    Panel panel(host);
    panel.stopTimer();
    panel.showPage(page);
+   if (enginePicker)
+      panel.openEnginePicker();
    panel.setBounds(0, 0, static_cast<float>(width), static_cast<float>(height));
    panel.timerCallback();
    panel.timerCallback();

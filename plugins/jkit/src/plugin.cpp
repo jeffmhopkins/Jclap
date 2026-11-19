@@ -107,17 +107,19 @@ struct Biquad {
 struct Eq {
    Biquad cut, low, mid, high, top;
    double key[5] = {-1, -1, -1, -1, -1};
-   // Recomputes only what changed.
-   void set(double fs, double cutHz, double lowDb, double midDb, double midHz, double highDb, double topHz) {
-      const double k[5] = {cutHz + fs * 1e-9, lowDb, midDb * 1e4 + midHz, highDb, topHz};
+   // Recomputes only what changed. The shelves' corners and the mid's Q default to the master's.
+   void set(double fs, double cutHz, double lowDb, double midDb, double midHz, double highDb, double topHz,
+            double lowHz = 120.0, double q = 0.9, double highHz = 7000.0) {
+      const double k[5] = {cutHz + fs * 1e-9, lowDb * 1e5 + lowHz, (midDb * 1e4 + midHz) * 100.0 + q,
+                           highDb * 1e6 + highHz, topHz};
       if (k[0] != key[0])
          cutHz > 0 ? cut.highPass(fs, cutHz) : cut.setFlat();
       if (k[1] != key[1])
-         low.shelf(fs, 120.0, lowDb, false);
+         low.shelf(fs, lowHz, lowDb, false);
       if (k[2] != key[2])
-         mid.peak(fs, midHz, midDb, 0.9);
+         mid.peak(fs, midHz, midDb, q);
       if (k[3] != key[3])
-         high.shelf(fs, 7000.0, highDb, true);
+         high.shelf(fs, highHz, highDb, true);
       if (k[4] != key[4])
          topHz > 0 ? top.lowPass(fs, topHz) : top.setFlat();
       std::copy(k, k + 5, key);
@@ -152,6 +154,7 @@ struct Voice {
    double releaseMul = 1.0;
    double fade = 1.0, fadeStep = 0.0; // the de-click fade, toward 0 when fading
    float gain = 1.0f;         // velocity
+   float velocity = 1.0f;
    bool on() const { return sample != nullptr; }
 };
 
@@ -162,7 +165,7 @@ struct PanelNote {
 };
 
 constexpr char kStateMagic[4] = {'J', 'K', 'I', 'T'};
-constexpr uint32_t kStateVersion = 2; // 2 adds the engine; 1 still loads
+constexpr uint32_t kStateVersion = 3; // 2 adds the engine, 3 the fade in; 1 and 2 still load
 
 class JKit final : public jclap::core::Plugin, public EditorHost {
 public:
@@ -195,12 +198,13 @@ public:
       sampleRate_ = sampleRate;
       room_.prepare(sampleRate);
       delay_.prepare(sampleRate);
-      for (Eq &eq : padEq_) {
-         eq.invalidate();
-         eq.reset();
-      }
       masterEq_.invalidate();
       masterEq_.reset();
+      for (PadTone &t : tone_)
+         for (PadTone::Point &pt : t.points) {
+            pt.type = -1; // set up again at the new rate
+            pt.reset();
+         }
       boomLp_.lowPass(sampleRate, 110.0);
       boomLp_.reset();
       silence();
@@ -362,6 +366,8 @@ public:
    }
    float padPosition(int pad) const override { return pad >= 0 && pad < kPads ? positions_[pad].load() : -1.0f; }
    float padLevel(int pad) const override { return pad >= 0 && pad < kPads ? levels_[pad].load() : 0.0f; }
+   uint32_t padHits() const override { return padHits_.load(); }
+   int lastHitPad() const override { return lastHitPad_.load(); }
    void meters(float &kit, float &fx, float &out) override {
       kit = kitPeak_.exchange(0.0f);
       fx = fxPeak_.exchange(0.0f);
@@ -396,6 +402,19 @@ public:
          lastEngine_ = which;
       }
       e.diskBytes = diskBytes_;
+      e.folder = gen::Studio::modelFolder(which).u8string();
+      return e;
+   }
+   EngineStatus engineStatus(int engine) override {
+      const gen::Engine which = gen::engineAt(engine);
+      const gen::Studio::Status st = studio().status(which);
+      EngineStatus e;
+      e.state = static_cast<EngineStatus::State>(st.state);
+      e.received = st.received;
+      e.total = st.total;
+      e.error = st.error;
+      e.downloadBytes = gen::Studio::downloadBytes(which);
+      e.diskBytes = gen::Studio::diskBytes(which);
       e.folder = gen::Studio::modelFolder(which).u8string();
       return e;
    }
@@ -443,8 +462,8 @@ public:
          dropFirst_ = true;
          jobRole_ = s->role;
       } else {
-         if (!gen_.seedLocked)
-            gen_.seed = 1 + std::random_device{}() % 99999;
+         // A new random seed every time (there's no SEED control since 0.4); the variants follow from it.
+         gen_.seed = 1 + std::random_device{}() % 99999;
          r.seed = gen_.seed;
          jobRole_ = gen_.role;
          remember(r.prompt, gen_.role, r.seed);
@@ -486,7 +505,8 @@ public:
       for (size_t i = dropFirst_ ? 1 : 0; i < sounds.size(); ++i) {
          auto s = std::make_shared<Sample>();
          s->role = jobRole_;
-         s->name = kRoleNames[std::clamp(jobRole_, 0, kRoleCount - 1)];
+         // ORB's sounds are named for its kind of sound (Boom, Glass...), the rest for the role.
+         s->name = (jobEngine_ == gen::Engine::Orb ? kOrbKindNames : kRoleNames)[std::clamp(jobRole_, 0, kRoleCount - 1)];
          s->prompt = jobPrompt_;
          s->seed = sounds[i].seed;
          s->left = std::move(sounds[i].left);
@@ -551,6 +571,7 @@ public:
       w.f64(treatment_.fadeMs);
       w.u8(static_cast<uint8_t>((treatment_.normalize ? 1 : 0) | (treatment_.trimSilence ? 2 : 0) |
                                 (treatment_.reverse ? 4 : 0)));
+      w.f64(treatment_.fadeInMs);
       w.u32(static_cast<uint32_t>(recent_.size()));
       for (const Recent &r : recent_) {
          w.str(r.prompt);
@@ -621,6 +642,7 @@ public:
       t.normalize = flags & 1;
       t.trimSilence = flags & 2;
       t.reverse = flags & 4;
+      t.fadeInMs = version >= 3 ? r.f64() : 0.0;
       std::vector<Recent> recent;
       const uint32_t recentCount = r.u32();
       for (uint32_t i = 0; i < recentCount && r.ok() && i < 64; ++i) {
@@ -642,6 +664,10 @@ public:
 
       for (clap_id i = 0; i < kParamCount; ++i)
          values_[i].store(std::clamp(v[i], param(i).min, param(i).max));
+      // Projects from before 0.4 have their EQ in the old params: move it onto points.
+      for (int pad = 0; pad < kPads; ++pad)
+         migrateLegacyEq(
+            pad, [this](clap_id id) { return values_[id].load(); }, [this](clap_id id, double x) { values_[id].store(x); });
       kitName_ = name;
       auto finite = [](double x, double lo, double hi, double fallback) {
          return std::isfinite(x) ? std::clamp(x, lo, hi) : fallback;
@@ -656,9 +682,12 @@ public:
       t.start = finite(t.start, 0.0, 1.0, 0.0);
       t.end = finite(t.end, 0.0, 1.0, 1.0);
       t.fadeMs = finite(t.fadeMs, 0.0, 2000.0, 0.0);
+      t.fadeInMs = finite(t.fadeInMs, 0.0, 2000.0, 0.0);
       treatment_ = t;
       recent_ = std::move(recent);
       page = std::clamp(pageRead, 0, 1);
+      if (version < 3)
+         page = 1 - page; // the tabs were Generate, Kit
       selectedPad = std::clamp(selected, 0, kPads - 1);
       targetPad = std::clamp(target, 0, kPads - 1);
       SamplePtr old[kPads];
@@ -916,6 +945,8 @@ private:
             if (p != pad && static_cast<int>(padValue(p, kChoke) + 0.5) == group)
                fadeOut(p, 5.0);
       fadeOut(pad, 4.0);
+      lastHitPad_.store(pad);
+      padHits_.fetch_add(1);
       if (!s || !s->frames())
          return;
       Voice v;
@@ -935,8 +966,15 @@ private:
       const double decay = padValue(pad, kDecay);
       v.decayMul = decayFull(decay) ? 1.0 : std::pow(0.001, 1.0 / (decayMs(decay) * 0.001 * sampleRate_));
       const double sens = padValue(pad, kVelocity);
-      v.gain = static_cast<float>((1.0 - sens) + sens * velocity * velocity);
+      // Velocity sets the level on a power curve: at 1/3 a half-velocity hit is 6 dB down, at the
+      // most 18 dB.
+      v.gain = static_cast<float>(std::pow(static_cast<double>(velocity), 3.0 * sens));
+      v.velocity = velocity;
       voices_[pad] = v;
+      // The filter envelope starts again with every hit, at the hit's velocity.
+      PadTone &tone = tone_[pad];
+      tone.env = 1.0;
+      tone.velocity = velocity;
    }
 
    void stopPadVoice(int pad) {
@@ -1016,10 +1054,7 @@ private:
          pl[i] = l;
          pr[i] = r;
       }
-      Eq &eq = padEq_[pad];
-      const double cut = padValue(pad, kLowCut);
-      eq.set(sampleRate_, lowCutOff(cut) ? 0.0 : lowCutHz(cut), padValue(pad, kLow), padValue(pad, kMid),
-             midFreqHz(padValue(pad, kMidFreq)), padValue(pad, kHigh), 0.0);
+      tonePad(pad, n, pl, pr);
       const float level = dbToGain(padValue(pad, kLevel));
       const double angle = (padValue(pad, kPan) + 1.0) * 0.25 * kPi;
       const float gl = level * static_cast<float>(std::cos(angle) * std::sqrt(2.0)),
@@ -1028,7 +1063,6 @@ private:
       float peak = 0.0f;
       for (uint32_t i = 0; i < n; ++i) {
          float l = pl[i], r = pr[i];
-         eq.tick(l, r);
          l *= gl;
          r *= gr;
          kl[i] += l;
@@ -1043,6 +1077,61 @@ private:
       positions_[pad].store(shown.on() ? static_cast<float>(shown.pos / static_cast<double>(shown.sample->frames()))
                                        : -1.0f);
       levels_[pad].store(std::min(1.0f, peak));
+   }
+
+   // The pad's drive, then its tone points (the filters among them moved by the envelope and the
+   // hit's velocity), in place.
+   void tonePad(int pad, uint32_t n, float *pl, float *pr) {
+      PadTone &t = tone_[pad];
+      const double drive = padValue(pad, kDrive);
+      if (drive > 0.001) {
+         // A soft clip, up to 24 dB into it, brought back to about the same loudness.
+         const float in = static_cast<float>(std::pow(10.0, drive * 24.0 / 20.0));
+         const float out = 1.0f / std::tanh(in) * static_cast<float>(1.0 - 0.3 * drive);
+         for (uint32_t i = 0; i < n; ++i) {
+            pl[i] = std::tanh(pl[i] * in) * out;
+            pr[i] = std::tanh(pr[i] * in) * out;
+         }
+      }
+      const double envOct = padValue(pad, kFilterEnv) * kFilterEnvOctaves;
+      // Velocity to Filter: at +100% a hit at velocity 0 is 4 octaves lower than a full one.
+      const double velOct = padValue(pad, kVelFilter) * kVelFilterOctaves * (static_cast<double>(t.velocity) - 1.0);
+      const double envMul = std::pow(0.001, 1.0 / (filterDecayMs(padValue(pad, kFilterDecay)) * 0.001 * sampleRate_));
+      const bool moving = std::fabs(envOct) > 1e-6 && t.env > 1e-4;
+      for (int i = 0; i < kTonePoints; ++i) {
+         PadTone::Point &pt = t.points[i];
+         const int type = static_cast<int>(padValue(pad, pointParam(i, kPointType)) + 0.5);
+         if (type != pt.type) {
+            pt.type = type;
+            pt.reset();
+            pt.key[0] = -1.0;
+         }
+         if (type == kToneOff)
+            continue;
+         const double hz = toneHz(padValue(pad, pointParam(i, kPointFreq)));
+         const double db = padValue(pad, pointParam(i, kPointGain)), q = toneQ(padValue(pad, pointParam(i, kPointQ)));
+         const bool mod = toneIsFilter(type);
+         const double shift = mod ? velOct : 0.0;
+         if (mod && moving) {
+            // The envelope moves it: new coefficients every 16 samples.
+            double env = t.env;
+            for (uint32_t j = 0; j < n; j += 16) {
+               pt.n = toneDesign(type, sampleRate_, hz * std::exp2(shift + envOct * env), db, q, pt.k);
+               const uint32_t e = std::min(n, j + 16);
+               pt.run(pl + j, pr + j, e - j);
+               env *= std::pow(envMul, static_cast<double>(e - j));
+            }
+            pt.key[0] = -1.0;
+         } else {
+            const double key[4] = {hz * std::exp2(shift), db, q, sampleRate_};
+            if (!std::equal(key, key + 4, pt.key)) {
+               pt.n = toneDesign(type, sampleRate_, key[0], db, q, pt.k);
+               std::copy(key, key + 4, pt.key);
+            }
+            pt.run(pl, pr, n);
+         }
+      }
+      t.env *= std::pow(envMul, static_cast<double>(n));
    }
 
    void renderPreview(uint32_t n, float *kl, float *kr) {
@@ -1074,7 +1163,39 @@ private:
    SamplePtr pads_[kPads];
    SamplePtr preview_;
    Voice voices_[kPads], fading_[kPads], previewVoice_;
-   Eq padEq_[kPads], masterEq_;
+   Eq masterEq_;
+   struct PadTone {
+      struct Point {
+         int type = -1;
+         ToneCoef k[2];
+         int n = 0;
+         double z[2][2][2] = {}; // stage, channel, state
+         double key[4] = {-1, -1, -1, -1};
+         void reset() { std::fill(&z[0][0][0], &z[0][0][0] + 8, 0.0); }
+         void run(float *l, float *r, uint32_t count) {
+            for (int s = 0; s < n; ++s) {
+               const ToneCoef &c = k[s];
+               for (int ch = 0; ch < 2; ++ch) {
+                  float *x = ch ? r : l;
+                  double z0 = z[s][ch][0], z1 = z[s][ch][1];
+                  for (uint32_t i = 0; i < count; ++i) {
+                     // Transposed direct form II.
+                     const double in = x[i], y = c.b0 * in + z0;
+                     z0 = c.b1 * in - c.a1 * y + z1;
+                     z1 = c.b2 * in - c.a2 * y;
+                     x[i] = static_cast<float>(y);
+                  }
+                  z[s][ch][0] = std::fabs(z0) < 1e-20 ? 0.0 : z0;
+                  z[s][ch][1] = std::fabs(z1) < 1e-20 ? 0.0 : z1;
+               }
+            }
+         }
+      };
+      Point points[kTonePoints];
+      double env = 0.0;  // the filter envelope, 1 at a hit
+      float velocity = 1.0f;
+   };
+   PadTone tone_[kPads];
    Biquad boomLp_;
    jclap::dsp::Room room_;
    jclap::dsp::StereoDelay delay_;
@@ -1084,6 +1205,8 @@ private:
    // For the panel.
    jclap::core::SpscQueue<PanelNote> panelNotes_;
    std::atomic<float> positions_[kPads], levels_[kPads];
+   std::atomic<uint32_t> padHits_{0};
+   std::atomic<int> lastHitPad_{0};
    std::atomic<float> previewPos_{-1.0f};
    std::atomic<float> kitPeak_{0.0f}, fxPeak_{0.0f}, outPeak_{0.0f};
 

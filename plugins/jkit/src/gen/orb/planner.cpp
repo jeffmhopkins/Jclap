@@ -365,6 +365,7 @@ std::vector<int> Planner::planIds(const std::string &caption, const PlanOptions 
    cache.v.resize(static_cast<size_t>(layers_));
    std::vector<float> logits;
    std::vector<int> allowed = grammar.allowed();
+   uint64_t state = options.sampleSeed;
    int pos = 0;
    for (size_t i = 0; i < prompt.size(); ++i, ++pos)
       step(prompt[i], pos, cache, i + 1 == prompt.size() && allowed.size() > 1 ? &logits : nullptr);
@@ -372,7 +373,28 @@ std::vector<int> Planner::planIds(const std::string &caption, const PlanOptions 
       if (cancel && cancel->load())
          break;
       int token = allowed.front();
-      if (allowed.size() > 1) {
+      if (allowed.size() > 1 && options.temperature > 0.0) {
+         float top = -INFINITY;
+         for (int a : allowed)
+            top = std::max(top, logits[static_cast<size_t>(a)]);
+         std::vector<double> w(allowed.size());
+         double sum = 0.0;
+         for (size_t i = 0; i < allowed.size(); ++i)
+            sum += w[i] = std::exp((logits[static_cast<size_t>(allowed[i])] - top) / options.temperature);
+         // splitmix64, one draw per token
+         state += 0x9E3779B97F4A7C15ull;
+         uint64_t z = state;
+         z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+         z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+         z ^= z >> 31;
+         double pick = static_cast<double>(z >> 11) * 0x1.0p-53 * sum;
+         token = allowed.back();
+         for (size_t i = 0; i < allowed.size(); ++i)
+            if ((pick -= w[i]) < 0.0) {
+               token = allowed[i];
+               break;
+            }
+      } else if (allowed.size() > 1) {
          float best = -INFINITY;
          for (int a : allowed) // the first of equal maxima, as np.argmax over the sorted ids
             if (logits[static_cast<size_t>(a)] > best) {

@@ -2,17 +2,19 @@
 
 # JKit
 
-A 16-pad drum kit whose sounds an AI model makes from your words, inside the plugin, with a choice of engines. Type what you want (or roll the dice for a prompt, from plain studio drums to things no drum machine has), pick from the variants, trim and fade the one you like, and put it on a pad. Then play the kit: each pad with its own pitch, start and end, envelope, EQ and sends, into a shared reverb and delay and a master EQ, width and BOOM.
+A 16-pad drum kit whose sounds an AI model makes from your words, inside the plugin, with a choice of engines. Type what you want (or roll the dice for a prompt, from plain studio drums to things no drum machine has), pick from the variants, trim and fade the one you like, and put it on a pad. Then play the kit: each pad with its own pitch, start and end, envelope, drive, a points EQ with filters, and sends, into a shared reverb and delay and a master EQ, width and BOOM.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![pads: 16](https://img.shields.io/badge/pads-16-blue)](#the-kit-tab) [![engines: Stable Audio Open Small, ORB, Stable Audio Open 1.0](https://img.shields.io/badge/engines-SAO%20Small%20%7C%20ORB%20%7C%20SAO%201.0-blue)](#the-engines) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
-Version 0.3.0 · Powered by Stability AI · ORB by Marcos Maceo
+Version 0.4.0 · Powered by Stability AI · ORB by Marcos Maceo
 
 </div>
 
+![JKit's Kit tab](docs/panel-kit.png)
+
 ![JKit's Generate tab](docs/panel.png)
 
-![JKit's Kit tab](docs/panel-kit.png)
+JKit opens on the **KIT** tab; **GENERATE** is next to it.
 
 ## The engines
 
@@ -82,7 +84,7 @@ by hash.
 | **In all** | **4.89 GB** | **about 4.78 GB** |
 
 It samples with DPM-Solver++ (2M), and wants more steps than Small: **STEPS** runs 10 to 100 (50 by
-default) and **GUIDANCE** 1 to 12 (7 by default); choosing it in the ENGINE menu sets both to its
+default) and **GUIDANCE** 1 to 12 (7 by default); choosing it in the engine picker sets both to its
 defaults. It only computes the length you ask for, so short sounds are quicker: on a 4-core laptop a
 1.5 s sound at 50 steps takes about 30 s, and each variant takes as long again. The GENERATE hint
 says how long to expect. It takes about 5 GB of memory once loaded.
@@ -103,12 +105,17 @@ click, camera shutter, cork pop, coin drop, metal clang, heartbeat, can opening,
 gunshot and church bell. Its scenes (birdsong, rain, traffic, a siren, applause...) aren't drum
 sounds and are left out, as is ORB's texture bed: the plan is always dry.
 
-ORB was trained on short sound-effect captions, so it does best with plain words for one of those
-sounds ("a heavy door slams", "glass shattering", "a deep punch", "church bell toll"). It plans its
-own length; JKit starts the sound at its first hit and cuts it at LENGTH if it's longer. STEPS,
-GUIDANCE and VARIETY don't apply. **VARIANTS** play the same plan with a new seed each: every model
-has a few kinds (a door in a small, medium or large room, a glass that shatters or bounces...), so
-they're takes of one idea. The SEED makes them repeat exactly.
+ORB was trained on short sound-effect captions and has no drum models, so it does best with plain
+words for one of the sounds above ("a heavy door slams", "glass shattering", "a deep punch", "church
+bell toll"). Drum names land on whatever is nearest: "kick drum" gives a click, "snare" a bell,
+"hi-hat" an impact. It plans its own length; JKit starts the sound at its first hit and cuts it at
+LENGTH if it's longer. STEPS, GUIDANCE and VARIETY don't apply.
+
+**VARIANTS**: the first is ORB's own plan, played as ORB plays it. Each of the others draws a plan
+of its own from the planner (so it may pick another sound, add a second hit, or change the timing
+and levels, while staying on the prompt), plays every sound up to 4 semitones higher or lower with a
+decay 0.7 to 1.4 times as long, and picks the model's kind by its seed (a door in a small, medium or
+large room, a glass that shatters or bounces...).
 
 ORB renders at 48 kHz; JKit resamples to 44.1 kHz like every other sound.
 
@@ -116,21 +123,41 @@ ORB renders at 48 kHz; JKit resamples to 44.1 kHz like every other sound.
 
 ## The Generate tab
 
-**MODEL**: the ENGINE menu (Stable Audio Open Small, ORB or Stable Audio Open 1.0), whether the engine is downloaded,
+**MODEL**: the ENGINE menu and its **?** button, which opens the engine picker (below), then whether the engine is downloaded,
 downloading, loading or loaded, and its download size or size on disk, with DOWNLOAD, CANCEL or
 REMOVE.
+
+The engine picker shows the three engines side by side, each with what it's for, prompts to try, how
+fast it is, and its download size (or that it's downloaded). Click one to use it, or click outside it to close it. **Stable Audio Open
+Small** is the default and the one for real drum sounds; **Stable Audio Open 1.0** is richer and
+slower, for detailed prompts; **ORB** is for sound effects (door slams, glass, metal, knocks,
+punches...), not drums.
+
+![The engine picker](docs/panel-engines.png)
 
 **PROMPT**: what the sound should be, in plain words: "dusty lo-fi snare, tape saturation, short
 room tail". Under it:
 
 - **ROLE**: Kick, Snare, Hat, Clap, Tom, Perc or FX. It picks the random prompt's words, the pad's
-  colour and the sound's name on the pad.
+  colour and the sound's name on the pad. With ORB the chips are the kinds of sound ORB can make
+  instead, each in a drum role's place: BOOM (impacts, explosions, heartbeats, sub drops; a kick's
+  pad), HIT (punches, gunshots, door slams, knocks; a snare's), CLICK (clicks, pops, camera shutters,
+  glitches; a hat's), GLASS (glass breaking, corks, cans; a clap's), WATER (drops and splashes; a
+  tom's), METAL (clangs, bells, church bells, swords, coins; a perc's) and SWEEP (whooshes, risers,
+  swells, noise sweeps; an FX's). ORB's sounds are named for their kind: Boom, Glass...
 - **The dice** beside the roles writes a random prompt for the role, from a bank of several hundred
-  sounds, characters, treatments, spaces and styles per role.
+  sounds, characters, treatments, spaces and styles per role (twice as many since 0.4). With
+  Stable Audio Open 1.0, which makes good use of a longer prompt, it adds a layer ("with a click on
+  the attack") or the recording ("close miked"), or both; every prompt stays well inside the 64
+  tokens Stable Audio reads. With ORB it
+  writes plain sound-effect captions for the kind, the way ORB was trained to read them ("a wine
+  glass shattering, up close").
 - **GENERIC - STRANGE**: how strange the random prompts get. At the left they're studio drum
   sounds ("tight 909 kick, light compression, Detroit techno"); halfway, a familiar sound with an odd
   twist ("snare made of a filing cabinet slammed shut, plate reverb"); at the right, objects, places
-  and processes ("a glass of ice dropped on marble, granular smear, played backwards").
+  and processes ("a glass of ice dropped on marble, granular smear, played backwards"). With ORB
+  it's **ONE SOUND - LAYERED** instead: one sound at the left, a few in a row at the right, which ORB
+  plans as one ("a heavy door slams shut, then glass shattering").
 - **LENGTH**: how long the sound is, 0.1 to 11.8 s.
 - **STEPS** (Stable Audio): diffusion steps, 4 to 16 for Small (tuned for 8) or 10 to 100 for 1.0
   (50 by default).
@@ -138,20 +165,28 @@ room tail". Under it:
   to 12 for 1.0 (7 by default). Above 1 each step runs twice, so it takes twice as long.
 - **VARIETY** (Stable Audio): how different the variants are from each other. Low makes takes of
   one sound; high makes each its own.
-- **SEED**: where the randomness starts. The same prompt, seed and settings make the same sound on
-  every computer. The die picks a new seed; the lock keeps it (unlocked, each GENERATE picks a new one).
-- **VARIANTS**: how many sounds each GENERATE makes: 1, 2, 4 or 8.
+- **VARIANTS**: how many sounds each GENERATE makes: 1, 2, 4 or 8. Every GENERATE starts from a
+  new random seed, and each variant from its own, so pressing it again always brings new sounds
+  (there's no SEED control). Each sound still shows its seed, and VARY works from it.
 - **GENERATE** shows its progress, and how long the last run took.
-- **RECENT**: your last prompts. Click one to load it with its role and seed.
+- **RECENT**: your last prompts. Click one to load it with its role.
 
 **VARIANTS**: what came back, each with its seed and length. Click one to select and hear it. Its
 star keeps it through the next GENERATE (unstarred ones make way for the new ones).
 
-**SELECTED**: the selected variant. Drag the white handles to trim its start and end, and pull the
-top of the region down from the end handle for a fade out. **NORMALIZE** brings its peak to just
-under full scale, **TRIM SILENCE** cuts the silence before it starts and after it dies away,
+**SELECTED**: the selected variant. Drag the white handles to trim its start and end. For a fade,
+grab the top of the waveform and drag toward the middle: in the right half that pulls a fade out
+back from the end handle, in the left half a fade in forward from the start handle (each up to 2 s,
+shown as a dashed blue curve whose top you can drag again). Scroll on the waveform to zoom in
+around the pointer (up to 64x), scroll sideways or hold shift to move along it, or use the **−**
+and **+** buttons; a bar along the bottom shows where you are. **NORMALIZE** brings its peak to
+just under full scale, **TRIM SILENCE** cuts the silence before it starts and after it dies away,
 **REVERSE** turns it round. **VARY** makes more sounds like it (the same prompt, from noise close
-to its seed). **AUDITION** plays it as it will go on the pad.
+to its seed).
+
+Two ways to hear it: **PLAY** plays the whole sound as it was generated (no trim, fades or
+normalizing), with a playhead; **AUDITION** (or a click on the waveform) plays it as it will go on
+the pad: trimmed, faded, normalized and reversed if set.
 
 **SEND TO PAD** picks the pad (laid out as on the Kit tab), and **ADD TO KIT** puts the treated
 sound on it, with its prompt, role and seed. The next empty pad becomes the next target.
@@ -163,12 +198,13 @@ sound on it, with its prompt, role and seed. The next empty pad becomes the next
 **PADS**: sixteen pads, pad 1 bottom left on MIDI note 36 (C2), up to pad 16 on 51. Each shows its
 name, role, waveform with a playhead while it sounds, note, and its reverb (purple) and delay (blue)
 sends. Click a pad to play and select it (higher on the pad is louder), drag one onto another to
-swap them (sound and settings), right-click to play, regenerate or clear it. An empty pad's
+swap them (sound and settings), right-click to play, regenerate or clear it. Playing a pad over
+MIDI selects it too, so its controls follow what you play. An empty pad's
 + GENERATE opens the Generate tab aimed at it.
 
 **PAD n**: the selected pad. Its waveform has the START and END handles, the decay drawn as a blue
 curve, and the speed its pitch plays it at. **REGENERATE IN TAB** opens the Generate tab with its
-prompt, role and seed.
+prompt and role.
 
 | Control | Range | What it does |
 |---|---|---|
@@ -178,13 +214,37 @@ prompt, role and seed.
 | Decay | 10 ms to 10 s, or Full | fades it out from the start; Full lets it play out |
 | Start, End | 0 to 100% | the part of the sound that plays (shown as times into it) |
 | Attack | 0 to 200 ms | fades it in |
-| Velocity | 0 to 100% | how much the note's velocity changes its level |
+| Velocity | 0 to 100% | how much the note's velocity changes its level: the level follows velocity to the power 3 x this, so at 33% a half-velocity hit is 6 dB down, at 60% 11 dB, at 100% 18 dB; 0% ignores velocity |
 | Choke | None, 1 to 4 | pads in one group cut each other off, like a closed hat stopping an open one |
 | Play | One shot, Gate | one shot plays the whole sound; Gate stops it (over 30 ms) when the note ends |
 | Rev | on, off | plays it backwards |
 
-**PAD EQ**: LOW CUT (off, or 20 Hz to 2 kHz), LOW (a shelf at 120 Hz), MID (a bell from 200 Hz to
-8 kHz, at MID FREQ) and HIGH (a shelf at 7 kHz), each ±15 dB, drawn as a curve.
+**PAD TONE**: the pad's tone as points on a curve, like a plug-in EQ. Each of up to six points is
+one kind of filter, at its own frequency, gain and Q, and the curve is all of them together.
+
+- **Double-click** the graph to add a point (a bell, where you clicked). **Drag** a point: sideways
+  sets its frequency, up and down its gain (for a low or high pass, its resonance). **Scroll** on a
+  point to make it wider or narrower (its Q). **Right-click** a point to remove it.
+- Click a point to select it (it turns orange); the strip under the graph shows it: **POINT n**'s
+  kind, **FREQ** (20 Hz to 20 kHz), **GAIN** (±18 dB, for bells and shelves) and **Q** (0.1 to 18).
+- The kinds: **Bell**, **Low shelf**, **High shelf**, **LP 12** and **LP 24** (low pass, 12 or 24 dB
+  an octave), **HP 12** and **HP 24**, **Notch** and **Band pass**. **Off** removes the point.
+- A new pad has two points: a high pass at 20 Hz and a low pass at 20 kHz, which leave the sound
+  alone until you move them (at the ends of the range, with no resonance, they're bypassed).
+
+Beside them, acting on every low pass, high pass and band pass point:
+
+| Control | Range | What it does |
+|---|---|---|
+| Env | -6 to +6 octaves | how far each hit moves their frequency, falling back over ENV DECAY: up for a bright snap that closes, down for one that opens |
+| Env Decay | 5 ms to 2 s | how quickly the envelope falls back |
+| Vel > Filt | -4 to +4 octaves | velocity on their frequency: the setting is how far a hit at velocity 0 sits from a full one, so above 0 soft hits are darker, below 0 brighter |
+| Drive | 0 to 100% | a soft clip before the points, up to 24 dB into it, kept at about the same loudness |
+
+Projects from JKit 0.3 and earlier had a fixed EQ (low cut, low and high shelves, a mid bell): it
+comes back as points that sound the same (the low cut as the high pass, the others in free points).
+The old EQ params are still there for old automation to load, but hidden, and they no longer change
+the sound.
 
 **SENDS**: how much of the pad goes to the reverb and the delay, after its level and pan.
 
@@ -237,7 +297,8 @@ factory kits: every kit is yours.
 JKit builds with the rest of JClap (see the [top-level README](../../README.md)). Its tests:
 
 - `jkit-tests`: the kit through a test host (playing, pitch, start and end, decay, velocity, gate,
-  reverse, choke, sends, volume, boom, state, swapping pads, trimming and fading).
+  reverse, PAD TONE's points (a low pass, its envelope and velocity, a bell), moving 0.3's EQ onto points, drive, choke, sends, volume, boom, state, swapping
+  pads, trimming and fading in and out).
 - `jkit-gen-tests`: the generator without the models (hashing, the tokenizer, the sampler's schedule
   and noise, the random prompts, each engine's download folder and REMOVE, ORB's renderer against
   numbers from the original, its planner's grammar, fitting a plan to a pad, and resampling). With
@@ -246,4 +307,4 @@ JKit builds with the rest of JClap (see the [top-level README](../../README.md))
   `JKIT_TEST_ORT`), it generates one with 1.0; with `JKIT_TEST_ORB` set to a folder holding ORB's
   `planner.safetensors`, it plans and plays a kick.
 - `jkit-screenshot-test`, `jkit-screenshot-kit-test`, `jkit-screenshot-first-run-test`,
-  `jkit-screenshot-orb-test`: the panel pictures above.
+  `jkit-screenshot-orb-test`, `jkit-screenshot-engines-test`: the panel pictures above.

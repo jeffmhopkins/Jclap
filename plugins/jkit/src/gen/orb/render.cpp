@@ -1506,6 +1506,21 @@ bool roleRendered(int role) {
           (roles()[static_cast<size_t>(role)].event || roles()[static_cast<size_t>(role)].foley);
 }
 
+// Plays `x` at `speed` times the rate (linear interpolation; speed is near 1, so it doesn't alias).
+Vec varispeed(const Vec &x, double speed) {
+   if (x.empty() || speed <= 0.0)
+      return x;
+   const size_t n = static_cast<size_t>(static_cast<double>(x.size() - 1) / speed) + 1;
+   Vec y(n);
+   for (size_t i = 0; i < n; ++i) {
+      const double at = static_cast<double>(i) * speed;
+      const size_t k = std::min(static_cast<size_t>(at), x.size() - 1);
+      const double f = at - static_cast<double>(k);
+      y[i] = k + 1 < x.size() ? x[k] + (x[k + 1] - x[k]) * f : x[k];
+   }
+   return y;
+}
+
 void renderEvent(const Event &ev, int seed, bool tail, Vec &outL, Vec &outR) {
    const Role &role = roles()[static_cast<size_t>(ev.role)];
    const int64_t idx = ev.role;
@@ -1514,7 +1529,17 @@ void renderEvent(const Event &ev, int seed, bool tail, Vec &outL, Vec &outR) {
    Params p = role.params;
    if (role.foley) {
       renderFoley(ev, rng, p, seed, tail, outL, outR);
+      if (ev.pitch != 1.0) { // the models aren't parametric: play it faster or slower
+         outL = varispeed(outL, ev.pitch);
+         outR = varispeed(outR, ev.pitch);
+      }
       return;
+   }
+   for (auto &[key, value] : p) {
+      if (key == "f0" || key == "f_start" || key == "f_peak" || key == "f_end" || key == "body_f")
+         value *= ev.pitch;
+      else if (key == "t60")
+         value *= ev.decay;
    }
    const auto prep = [&](Generator &g, bool align) {
       Vec m = role.event(ev, g, p);
@@ -1571,6 +1596,8 @@ void renderSpec(const Spec &spec, Vec &outL, Vec &outR) {
       ev.gainDb = se.gainDb;
       ev.pan = se.pan;
       ev.seed = se.seed;
+      ev.pitch = se.pitch;
+      ev.decay = se.decay;
       const int seed = ev.seed ? ev.seed : 200 + i;
       Vec l, r;
       renderEvent(ev, seed, true, l, r);

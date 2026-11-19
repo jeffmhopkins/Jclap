@@ -1,3 +1,4 @@
+#include <algorithm>
 // The generator's parts that need no model: hashing, the tokenizer, the sampler's schedule and
 // noise, the random prompts, the studio's bookkeeping, and ORB's renderer and planner grammar. With
 // JKIT_TEST_MODEL set to a folder holding the model files and JKIT_TEST_ORT to ONNX Runtime's library,
@@ -122,6 +123,46 @@ void testPrompts() {
    }
    JCLAP_CHECK_EQ(odd0, 0);
    JCLAP_CHECK(odd1 > 120);
+   // Since 0.4 the bank is twice the size it was.
+   for (int r = 0; r < kRoleCount; ++r) {
+      const auto &w = prompts::roleWords(static_cast<Role>(r));
+      JCLAP_CHECK(w.sounds.size() >= 56 && w.traits.size() >= 56 && w.oddities.size() >= 30);
+   }
+   JCLAP_CHECK(prompts::treatments().size() >= 70 && prompts::styles().size() >= 85 &&
+               prompts::oddTreatments().size() >= 80);
+
+   // 1.0's prompts start as Small's and add to them, and still fit its 64 tokens with room to spare.
+   for (int r = 0; r < kRoleCount; ++r)
+      for (double strange : {0.0, 0.5, 1.0})
+         for (uint64_t seed = 0; seed < 100; ++seed) {
+            const std::string plain = randomPrompt(static_cast<Role>(r), strange, seed);
+            const std::string rich = randomPrompt(static_cast<Role>(r), strange, seed, true);
+            JCLAP_CHECK(rich.rfind(plain, 0) == 0 && rich.size() > plain.size());
+            JCLAP_CHECK(std::count(rich.begin(), rich.end(), ' ') < 40);
+         }
+
+   // ORB's prompts: each kind's own sounds, more of them in a row the further right.
+   for (int r = 0; r < kRoleCount; ++r) {
+      std::set<std::string> seen;
+      int joined0 = 0, joined1 = 0;
+      for (uint64_t seed = 0; seed < 100; ++seed) {
+         const std::string a = randomOrbPrompt(static_cast<Role>(r), 0.0, seed);
+         const std::string b = randomOrbPrompt(static_cast<Role>(r), 1.0, seed);
+         JCLAP_CHECK(a == randomOrbPrompt(static_cast<Role>(r), 0.0, seed));
+         JCLAP_CHECK(!a.empty() && b.size() < 200);
+         bool own = false;
+         for (const char *o : prompts::orbSounds(static_cast<Role>(r)))
+            own = own || a.rfind(o, 0) == 0;
+         JCLAP_CHECK(own);
+         joined0 += a.find(", then ") != std::string::npos || a.find(" followed by ") != std::string::npos;
+         joined1 += b.find(", then ") != std::string::npos || b.find(" followed by ") != std::string::npos ||
+                    b.find(" and ") != std::string::npos;
+         seen.insert(a);
+      }
+      JCLAP_CHECK_EQ(joined0, 0);
+      JCLAP_CHECK(joined1 > 60);
+      JCLAP_CHECK(seen.size() >= 14);
+   }
 }
 
 void testStudio() {
@@ -424,6 +465,21 @@ void testOrbPlan() {
       err = std::max(err, std::fabs(s[i] - std::sin(2.0 * 3.141592653589793 * 1000.0 * static_cast<double>(i) / 44100.0)));
    JCLAP_CHECK(err < 1e-3);
 
+   // The other variants' pitch and decay: a bell (parametric) and a door (played faster or slower)
+   // come out different from the plain take, and the plain take is unchanged by asking twice.
+   for (const char *name : {"bell", "door_slam"}) {
+      Spec one;
+      one.duration = 1.0;
+      SpecEvent ev;
+      ev.role = roleIndex(name);
+      ev.dur = 0.8;
+      one.events.push_back(ev);
+      const Sound plain = OrbEngine::render(one, 7), again = OrbEngine::render(one, 7);
+      const Sound varied = OrbEngine::render(one, 7, true);
+      JCLAP_CHECK(plain.left == again.left);
+      JCLAP_CHECK(plain.left.size() == varied.left.size() && plain.left != varied.left);
+   }
+
    // With the weights at hand (not in CI): a prompt becomes a plan and a sound.
    const char *weights = std::getenv("JKIT_TEST_ORB");
    if (!weights)
@@ -440,6 +496,20 @@ void testOrbPlan() {
    std::atomic<bool> cancel{false};
    JCLAP_CHECK(engine.generate(r, out, [](double) {}, cancel, error));
    JCLAP_CHECK_EQ(out.size(), 3u);
+   for (size_t a = 0; a < out.size(); ++a)
+      for (size_t b = a + 1; b < out.size(); ++b)
+         JCLAP_CHECK(out[a].left != out[b].left);
+   // A sampled plan is still a plan, and differs between seeds somewhere in a few tries.
+   std::set<std::vector<int>> plans;
+   for (uint64_t seed = 1; seed <= 6; ++seed) {
+      Spec sampled;
+      JCLAP_CHECK(engine.plan("metal clang", 1.5, sampled, error, nullptr, 0.8, seed));
+      std::vector<int> roles;
+      for (const SpecEvent &e : sampled.events)
+         roles.push_back(e.role);
+      plans.insert(roles);
+   }
+   JCLAP_CHECK(plans.size() > 1);
    Spec kick;
    JCLAP_CHECK(engine.plan(r.prompt, 1.0, kick, error));
    JCLAP_CHECK(!kick.events.empty() && kick.events[0].role == roleIndex("punch"));

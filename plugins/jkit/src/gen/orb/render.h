@@ -24,6 +24,8 @@ struct Event {
    double apex = 0.0; // t + the role's apex fraction of dur
    double gainDb = -6.0, pan = 0.0;
    int seed = 0;
+   // The kit's variations (not ORB's): the sound's pitch and its decay time, as factors.
+   double pitch = 1.0, decay = 1.0;
 };
 
 // One event as stereo (left, right) at 48 kHz, with its reverb tail when `tail`
@@ -35,6 +37,7 @@ struct SpecEvent {
    int role = 0;
    double t = 0.0, dur = 0.5, gainDb = -6.0, pan = 0.0;
    int seed = 0; // 0..255
+   double pitch = 1.0, decay = 1.0; // as Event's
 };
 struct Spec {
    double duration = 1.0;

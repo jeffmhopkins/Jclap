@@ -1,4 +1,5 @@
 // Renders the panel to a PNG without a host or a model: jkit-screenshot out.png [page [width height]]
+// (page 0 Generate, 1 Kit, 2 Generate on first run, 3 Generate with ORB, 4 the engine picker)
 // Page 0 is Generate, 1 is Kit, 2 is Generate on first run, while the model downloads, 3 is Generate with ORB. The sounds are made up here (decaying noise and sines), so the
 // pictures are the same on every machine.
 
@@ -76,11 +77,21 @@ public:
       values_[padParam(2, kDecay)] = decayValue(640);
       values_[padParam(2, kStart)] = 0.04;
       values_[padParam(2, kEnd)] = 0.76;
-      values_[padParam(2, kLowCut)] = lowCutValue(90);
-      values_[padParam(2, kLow)] = -3.0;
-      values_[padParam(2, kMid)] = 4.0;
-      values_[padParam(2, kMidFreq)] = midFreqValue(2400);
-      values_[padParam(2, kHigh)] = 2.5;
+      // PAD TONE: a high pass, a resonant low pass, a bell and a low shelf.
+      const auto point = [&](int i, int type, double hz, double db, double q) {
+         values_[padParam(2, pointParam(i, kPointType))] = type;
+         values_[padParam(2, pointParam(i, kPointFreq))] = toneHzValue(hz);
+         values_[padParam(2, pointParam(i, kPointGain))] = db;
+         values_[padParam(2, pointParam(i, kPointQ))] = toneQValue(q);
+      };
+      point(0, kToneHp12, 90, 0, 0.7071);
+      point(1, kToneLp24, 9000, 0, 1.6);
+      point(2, kToneBell, 2400, 4.0, 1.2);
+      point(3, kToneLowShelf, 160, -3.0, 0.7071);
+      values_[padParam(2, kFilterEnv)] = 0.25;
+      values_[padParam(2, kFilterDecay)] = filterDecayValue(120);
+      values_[padParam(2, kVelFilter)] = 0.4;
+      values_[padParam(2, kDrive)] = 0.2;
       values_[kMasterLow] = 2.0;
       values_[kMasterMid] = -2.5;
       values_[kMasterMidFreq] = midFreqValue(400);
@@ -92,11 +103,15 @@ public:
       selectedVariant = 1;
       gen_.prompt = "dusty lo-fi snare, tape saturation, short room tail, 90s boom bap";
       gen_.role = kSnare;
+      if (orb) {
+         gen_.prompt = "a heavy door slams shut, then glass shattering";
+         gen_.strange = 0.6;
+      }
       gen_.seed = 40217;
       gen_.seconds = 1.2;
       gen_.variety = 0.35;
       for (int i = 0; i < 4; ++i)
-         variants_.push_back({fake("Snare", kSnare, 40217 + i, 0.8 + 0.07 * i, 170 + 20 * i, 0.55 + 0.05 * i, 7 + i), i == 1});
+         variants_.push_back({fake(orb ? "Hit" : "Snare", kSnare, 40217 + i, 0.8 + 0.07 * i, 170 + 20 * i, 0.55 + 0.05 * i, 7 + i), i == 1});
       const int64_t now = static_cast<int64_t>(std::time(nullptr));
       recent_ = {{"909 kick, long boom, slight click", kKick, 11, now - 120},
                  {"crushed shaker loop hit, 8-bit", kHat, 12, now - 360},
@@ -109,6 +124,7 @@ public:
       treatment_.start = 0.02;
       treatment_.end = 0.8;
       treatment_.fadeMs = 120;
+      treatment_.fadeInMs = 40;
    }
 
    double paramValue(clap_id id) const override { return id < kParamCount ? values_[id] : 0.0; }
@@ -127,6 +143,8 @@ public:
    // Pads 5 and 6 (the clap and the closed hat) are sounding.
    float padPosition(int pad) const override { return pad == 4 ? 0.42f : pad == 5 ? 0.18f : -1.0f; }
    float padLevel(int pad) const override { return pad == 4 ? 0.8f : pad == 5 ? 0.5f : 0.0f; }
+   uint32_t padHits() const override { return 0; }
+   int lastHitPad() const override { return 0; }
    void meters(float &kit, float &fx, float &out) override {
       kit = 0.5f;
       fx = 0.12f;
@@ -137,6 +155,18 @@ public:
    Treatment &treatment() override { return treatment_; }
    std::vector<Variant> &variants() override { return variants_; }
    std::vector<Recent> &recent() override { return recent_; }
+   EngineStatus engineStatus(int engine) override {
+      const int was = gen_.engine;
+      gen_.engine = engine;
+      EngineStatus e = this->engine();
+      gen_.engine = was;
+      if (engine == 2) {
+         e.state = EngineStatus::State::Missing;
+         e.downloadBytes = 4893000000ull;
+         e.diskBytes = 0;
+      }
+      return e;
+   }
    EngineStatus engine() override {
       EngineStatus e;
       if (gen_.engine == 1) {
@@ -186,5 +216,7 @@ int main(int argc, char **argv) {
    const int width = argc > 4 ? std::atoi(argv[3]) : kEditorWidth;
    const int height = argc > 4 ? std::atoi(argv[4]) : kEditorHeight;
    DemoHost host(page == 2, page == 3);
-   return renderScreenshot(host, page >= 2 ? 0 : page, width, height, argv[1]) ? 0 : 1;
+   // Page 1 is the Kit tab (the panel's page 0); 0, 2, 3 and 4 the Generate tab (its page 1), and 4
+   // with the engine picker open.
+   return renderScreenshot(host, page == 1 ? 0 : 1, width, height, argv[1], page == 4) ? 0 : 1;
 }
