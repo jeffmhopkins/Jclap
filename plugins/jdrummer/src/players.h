@@ -3,7 +3,8 @@
 // The players: who plays the song. A player doesn't change what the groove is, only how it is
 // played: how loose the timing and dynamics are, how busy, how many ghost notes, how big the fills,
 // and where the backbeat sits against the grid. Drummers play the kit; a percussionist plays its own
-// part on a second channel, for a second JKit set to the Percussion kit.
+// part on a second channel, for a second JKit set to the percussionist's kit (Afro-Latin or
+// Percussion).
 
 #include <vector>
 
@@ -43,25 +44,53 @@ inline const Player kPercussionistList[kPercussionists] = {
    {"Shaker & Tamb", "the top layer over any drummer", "any groove", 0.5, 0.9, 0.3, 0.1, 0, 2},
 };
 
-// Each percussionist's own grooves, on the Percussion kit's pads.
+// The kit each percussionist plays (a second JKit set to it), the tradition its own twists stay in,
+// and the fill it plays. The conguero and the djembe player play JKit's Afro-Latin kit, the rest its
+// Percussion kit.
+inline int percussionistKit(int who) { return who == 0 || who == 1 ? kAfroLatinKit : kPercussionKit; }
+inline unsigned percussionistTradition(int who) {
+   static const unsigned t[kPercussionists] = {kTradCuban, kTradWestAfrican, kTradBrazilian, kTradFlamenco,
+                                               kTradMiddleEastern | kTradIndian, kTradAny};
+   return t[who < 0 ? 0 : who >= kPercussionists ? kPercussionists - 1 : who];
+}
+inline FillKind percussionistFill(int who) {
+   static const FillKind f[kPercussionists] = {kFillHands, kFillDjembe, kFillHands, kFillCajon, kFillDarbuka, kFillHats};
+   return f[who < 0 ? 0 : who >= kPercussionists ? kPercussionists - 1 : who];
+}
+
+// Each percussionist's own grooves, on its kit's pads: in 4/4, and in 3/4, 7/8 or 12/8 for songs in
+// those meters (the generator picks one that fits the drummer's).
 inline const std::vector<Groove> &percussionGrooves(int percussionist) {
    static const std::vector<Groove> g[kPercussionists] = {
-      {{{{HIGH_CONGA, "..x...x...x....."}, {CONGA_SLAP, "....X.......X..."}, {LOW_CONGA, "......x.......x."},
-         {LOW_BONGO, "xoxoxoxoxoxoxoxo"}}},
-       {{{LOW_CONGA, "......x.x.....x."}, {HIGH_CONGA, "x.x...x...x.x..."}, {CONGA_SLAP, "...X.......X...."},
-         {PALMAS, "x..x...x..x.x..."}}}},
-      {{{{DJEMBE_BASS, "X.....X...X....."}, {DJEMBE_TONE, "..x.x...x.x.x..."}, {DJEMBE_SLAP, "....X..X....X..X"}}},
-       {{{DJEMBE_BASS, "X.......X..x...."}, {DJEMBE_TONE, "x.x..x.x.x..x.x."}, {DJEMBE_SLAP, "...X......X...X."}}}},
+      // Conguero: the tumbao on conga and tumba, the bongo's martillo, a 12/8 bembe under a bell.
+      {{{{CONGA, "g.g...g.g.g.x..."}, {AL_CONGA_SLAP, "....X..........."}, {TUMBA, "..............x."}}},
+       {{{AL_HIGH_BONGO, "x.o.x.o.x.o...o."}, {AL_LOW_BONGO, "............X..."}, {CONGA, "............x.x."}}},
+       {{{CONGA, "o.......x.x.o.......x.x."}, {AL_CONGA_SLAP, "....X...........X......."}, {BELL, "x...x...x.x...x...x...x."}}, kRate16T}},
+      // Djembe Circle: the djembe's accompaniments, with the kenkeni, and one in 12/8.
+      {{{{AL_DJEMBE_BASS, "X.......X......."}, {AL_DJEMBE_TONE, "..xx......xx...."}, {AL_DJEMBE_SLAP, "....X.x.....X.x."}}},
+       {{{AL_DJEMBE_BASS, "X.......X......."}, {AL_DJEMBE_TONE, "..xx......xx...."}, {AL_DJEMBE_SLAP, "......X.......X."},
+         {KENKENI, "x.x.x.x.x.x.x.x."}}},
+       {{{AL_DJEMBE_BASS, "X...........X..........."}, {AL_DJEMBE_TONE, "....x.x.........x.x....."}, {AL_DJEMBE_SLAP, "........X.x.........X.x."}}, kRate16T}},
+      // Bateria: the surdo (on the cajon bass) on 2 and 4, the ganza and the tamborim (on the bongo).
       {{{{CAJON_BASS, "....X.......X..."}, {SHAKER, "XoxoXoxoXoxoXoxo"}, {HIGH_BONGO, "x.xx.x.xx.x.x.x."},
          {PALMAS, "..x...x...x...x."}}},
        {{{CAJON_BASS, "X..xX..xX..xX..x"}, {SHAKER, "xoxoxoxoxoxoxoxo"}, {HIGH_BONGO, "x..x..x...x..x.."}}}},
+      // Hand Drummer: the cajon, the frame drum and palmas, in 4/4, 3/4 and 12/8.
       {{{{CAJON_BASS, "X......X..X....."}, {CAJON_SLAP, "....X.......X..."}, {FRAME_DRUM, "..g...g...g...g."},
          {SHAKER, "x.x.x.x.x.x.x.x."}}},
-       {{{CAJON_BASS, "X.....x...X....."}, {CAJON_SLAP, "....X..g....X..g"}, {PALMAS, "..x...x...x...x."}}}},
-      {{{{DARBUKA_DUM, "X.....X...X....."}, {DARBUKA_TEK, "..x.x..x.xx.x.xx"}, {TABLA, "x..x..x.x..x..x."}}},
-       {{{DARBUKA_DUM, "X.......X......."}, {DARBUKA_TEK, "..x...x.....x..."}, {TABLA, "XoxoXoxoXoxoXoxo"}}}},
+       {{{CAJON_BASS, "X.....x...X....."}, {CAJON_SLAP, "....X..g....X..g"}, {PALMAS, "..x...x...x...x."}}},
+       {{{CAJON_BASS, "X..........."}, {CAJON_SLAP, "....x...x..."}, {SHAKER, "o.o.o.o.o.o."}}},
+       {{{CAJON_BASS, "X...........X..........."}, {CAJON_SLAP, "..g.g.X.g.g...g.g.X.g.g."}}, kRate16T}},
+      // Tabla & Darbuka: maqsum on the darbuka, keherwa on the tabla, dadra in 3/4 and a 7/8.
+      {{{{DARBUKA_DUM, "X.......X......."}, {DARBUKA_TEK, "..x...x...g.x.g."}, {TABLA, "x..x..x.x..x..x."}}},
+       {{{TABLA, "X...x.x.x...x.x."}, {FRAME_DRUM, "X.x.......g.x..."}}},
+       {{{TABLA, "X.x.x.x.x.x."}, {FRAME_DRUM, "X.x...x....."}}},
+       {{{DARBUKA_DUM, "X............."}, {DARBUKA_TEK, "......x...x..."}, {TABLA, "..g.g...g...g."}}}},
+      // Shaker & Tamb: the top layer, in sixteenths, in 3/4 and in 12/8.
       {{{{SHAKER, "oXoxoXoxoXoxoXox"}, {FRAME_DRUM, "X.......X......."}, {PALMAS, "....x.......x..."}}},
-       {{{SHAKER, "xoxoxoxoxoxoxoxo"}, {HIGH_BONGO, "..x...x...x...x."}}}},
+       {{{SHAKER, "xoxoxoxoxoxoxoxo"}, {HIGH_BONGO, "..x...x...x...x."}}},
+       {{{SHAKER, "Xoxoxoxoxoxo"}}},
+       {{{SHAKER, "X.o.o.X.o.o.X.o.o.X.o.o."}}, kRate16T}},
    };
    return g[percussionist < 0 ? 0 : percussionist >= kPercussionists ? kPercussionists - 1 : percussionist];
 }

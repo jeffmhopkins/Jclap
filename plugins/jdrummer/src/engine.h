@@ -28,10 +28,12 @@ struct Settings {
    double vary = 0.2, ghosts = 0.0;
    int sameDiceBars = 4, autoFillBars = 8;
    double swing = 0.5;
+   int swingFeel = 0; // 0 swings the sixteenths, 1 the eighths
    int sync = 0;
    bool play = false;
    double freeTempo = 120.0;
    int kit = kDrumKit;
+   int percKit = kPercussionKit; // the kit the percussionist plays
    int channel = 9, percChannel = 10; // 0-based
    int noteMap = 0, noteOctave = 0, noteChannel = 0;
    bool fillInto = true, velEnergy = false, heldOnly = false, passNotes = true;
@@ -381,6 +383,9 @@ private:
       const Section &sec = song_.sections[static_cast<size_t>(section_)];
       // A bar: the song moves on, the fill ends, this bar's variation and dice.
       if (rel % kTicksPerBar == 0) {
+         // A fill just ended: the next bar comes in on a crash.
+         const bool afterFill = fillPlayed_;
+         fillPlayed_ = false;
          int bar = static_cast<int>(rel / kTicksPerBar);
          if (bar > 0 && fillPending_) {
             fill_ = true;
@@ -417,21 +422,52 @@ private:
             fill_ = true;
          if (now.fill.empty())
             fill_ = false;
+         crashNow_ = afterFill && !fill_ && now.energy >= 35;
       }
       const Section &s = song_.sections[static_cast<size_t>(section_)];
       const int64_t r = t - anchor_;
-      if (sectionStarted_) {
-         sectionStarted_ = false;
-         if (s.crash && settings_.kit == kDrumKit && !muteHats_)
+      // A crash on the one: when a section that has one starts, and after a fill.
+      if (sectionStarted_ || crashNow_) {
+         if ((s.crash || crashNow_) && settings_.kit == kDrumKit && !muteHats_ &&
+             !(settings_.muted >> CR & 1) && !(settings_.soloed && !(settings_.soloed >> CR & 1)))
             schedule(t, 0.0, settings_.channel, CR, 110, 0.25, false);
+         sectionStarted_ = false;
+         crashNow_ = false;
       }
-      const Pattern &main = s.vars[static_cast<size_t>(std::clamp(barVar_, 0, kVariations - 1))].empty()
-                               ? s.vars[0]
-                               : s.vars[static_cast<size_t>(std::clamp(barVar_, 0, kVariations - 1))];
+      const int bv = std::clamp(barVar_, 0, kVariations - 1);
+      const Pattern &main = s.vars[static_cast<size_t>(bv)].empty() ? s.vars[0] : s.vars[static_cast<size_t>(bv)];
       const Pattern &p = fill_ ? s.fill : main;
+      if (fill_)
+         fillPlayed_ = true;
       playLayer(p, r, t, settings_.channel, false);
-      if (!s.perc.empty())
-         playLayer(s.perc, r, t, settings_.percChannel, true);
+      if (!s.perc.empty()) {
+         // The percussionist plays its variation with the drummer's, and its fill with the drummer's.
+         const Pattern *pp = &s.perc;
+         if (fill_ && !s.percFill.empty())
+            pp = &s.percFill;
+         else if (!fill_ && bv > 0 && !s.percVars[static_cast<size_t>(bv - 1)].empty())
+            pp = &s.percVars[static_cast<size_t>(bv - 1)];
+         playLayer(*pp, r, t, settings_.percChannel, true);
+      }
+   }
+
+   // How late a step is swung, in ticks. Sixteenths: every second one late. Eighths: the off-beat
+   // eighth late, the sixteenths either side of it moved with it, so a sixteenth grid swings like a
+   // shuffle (at 67% the eighths are triplets).
+   double swingTicks(const Pattern &p, int step, int stepTicks) const {
+      const double sw = settings_.swing;
+      if (p.rate == kRate8)
+         return step % 2 == 1 ? (sw - 0.5) * 2.0 * stepTicks : 0.0;
+      if (p.rate != kRate16)
+         return 0.0;
+      if (settings_.swingFeel == 0)
+         return step % 2 == 1 ? (sw - 0.5) * 2.0 * stepTicks : 0.0;
+      switch (step % 4) {
+      case 1: return (sw / 2.0 - 0.25) * kTicksPerBeat;
+      case 2: return (sw - 0.5) * kTicksPerBeat;
+      case 3: return ((1.0 + sw) / 2.0 - 0.75) * kTicksPerBeat;
+      default: return 0.0;
+      }
    }
 
    void playLayer(const Pattern &p, int64_t rel, int64_t t, int channel, bool perc) {
@@ -444,16 +480,14 @@ private:
          step_ = step;
          steps_ = steps;
       }
-      // Swing: every second sixteenth (or eighth) is late.
-      double swing = 0.0;
-      if ((p.rate == kRate16 || p.rate == kRate8) && step % 2 == 1)
-         swing = (settings_.swing - 0.5) * 2.0 * stepTicks;
+      const double swing = swingTicks(p, step, stepTicks);
+      const int kit = perc ? settings_.percKit : settings_.kit;
       const double stepBeats = static_cast<double>(stepTicks) / kTicksPerBeat;
       const double vary = hold_ ? 0.0 : settings_.vary;
       const int ghostPad = p.uses(SN) ? SN : p.uses(CL) ? CL : -1;
       const int bar = diceBar_ * 4 + (perc ? 2 : 0);
       for (int pad = 0; pad < kPads; ++pad) {
-         if (!perc && ((muteHats_ && isHatPad(pad)) || (muteKick_ && isKickPad(pad))))
+         if (!perc && ((muteHats_ && isHatPad(kit, pad)) || (muteKick_ && isKickPad(kit, pad))))
             continue;
          if (!perc && ((settings_.muted >> pad & 1) || (settings_.soloed && !(settings_.soloed >> pad & 1))))
             continue;
@@ -465,14 +499,14 @@ private:
                 dice(bar, step, pad, 1) < settings_.ghosts * 0.45)
                schedule(t, swing, channel, pad, 22 + static_cast<int>(dice(bar, step, pad, 2) * 20), stepBeats, perc);
             // VARY: a hat now and then where there was none.
-            else if (vary > 0.0 && isHatPad(pad) && p.uses(pad) && step % 2 == 1 &&
+            else if (vary > 0.0 && isHatPad(kit, pad) && p.uses(pad) && step % 2 == 1 &&
                      dice(bar, step, pad, 3) < vary * 0.1)
                schedule(t, swing, channel, pad, 45, stepBeats, perc);
             continue;
          }
          if (h.chance < 100 && dice(bar, step, pad, 4) * 100.0 >= h.chance)
             continue;
-         const bool anchorHit = step % 4 == 0 && (isKickPad(pad) || pad == SN || pad == CL);
+         const bool anchorHit = step % 4 == 0 && (isKickPad(kit, pad) || padRole(kit, pad) == kSnare);
          if (vary > 0.0 && !anchorHit && h.vel < kAccent && dice(bar, step, pad, 5) < vary * 0.22)
             continue;
          double vel = h.vel * energy_;
@@ -564,6 +598,7 @@ private:
    uint32_t salt_ = 0x1234;
    int section_ = 0, variation_ = 0, barVar_ = 0, pending_ = -1, pendingVar_ = -1;
    bool restart_ = false, fill_ = false, fillPending_ = false, sectionStarted_ = false, barStarted_ = false;
+   bool fillPlayed_ = false, crashNow_ = false;
    int diceBar_ = 0;
    int step_ = -1, steps_ = 16;
    double energy_ = 1.0;

@@ -3,8 +3,8 @@
 // The song JDrummer plays, and what the audio thread and the panel pass each other.
 //
 // A song is seven sections (intro, verse, pre, chorus, bridge, break, outro). Each section has four
-// variations of its groove, a fill, a percussion part for the percussionist, how many bars it runs
-// and how much energy it was made with. A pattern is a grid of hits: up to 32 steps on each of JKit's
+// variations of its groove, a fill, the percussionist's part (with its own variations and fill), how
+// many bars it runs and how much energy it was made with. A pattern is a grid of hits: up to 32 steps on each of JKit's
 // 16 pads. The panel owns the song and sends the whole of it whenever it changes; the audio thread
 // publishes a Frame every block for the panel to draw. Neither side waits for the other.
 
@@ -104,8 +104,11 @@ struct Pattern {
 struct Section {
    std::array<Pattern, kVariations> vars{};
    Pattern fill;
-   // The percussionist's part (on the Percussion kit's pads), empty without one.
+   // The percussionist's part (on its kit's pads), empty without one: its main groove, three
+   // variations that play when the drummer's do, and its fill.
    Pattern perc;
+   std::array<Pattern, kVariations - 1> percVars{};
+   Pattern percFill;
    uint8_t bars = 8;
    uint8_t energy = 50; // 0..100, as made
    // A crash on the first beat whenever the section starts.
@@ -116,7 +119,8 @@ struct Section {
    uint16_t generation = 0;
 
    bool operator==(const Section &o) const {
-      return vars == o.vars && fill == o.fill && perc == o.perc && bars == o.bars && energy == o.energy &&
+      return vars == o.vars && fill == o.fill && perc == o.perc && percVars == o.percVars && percFill == o.percFill &&
+             bars == o.bars && energy == o.energy &&
              crash == o.crash && locked == o.locked && seed == o.seed && generation == o.generation;
    }
    bool operator!=(const Section &o) const { return !(*this == o); }
@@ -134,9 +138,10 @@ struct Song {
       return n;
    }
 
-   // Saved as bytes: a version, then each section's fields and its six patterns, each pattern as its
-   // steps, rate and every hit (4 bytes) of its 16 x 32 grid.
-   static constexpr uint32_t kVersion = 1;
+   // Saved as bytes: a version, then each section's fields and its patterns (four variations, the
+   // fill, the percussion part; from version 2 the percussion's variations and fill too), each
+   // pattern as its steps, rate and every hit (4 bytes) of its 16 x 32 grid.
+   static constexpr uint32_t kVersion = 2;
 
    std::vector<uint8_t> save() const {
       std::vector<uint8_t> out;
@@ -170,6 +175,9 @@ struct Song {
             pattern(p);
          pattern(s.fill);
          pattern(s.perc);
+         for (const Pattern &p : s.percVars)
+            pattern(p);
+         pattern(s.percFill);
       }
       return out;
    }
@@ -218,6 +226,16 @@ struct Song {
             pattern(p);
          pattern(s.fill);
          pattern(s.perc);
+         if (version >= 2) {
+            for (Pattern &p : s.percVars)
+               pattern(p);
+            pattern(s.percFill);
+         } else {
+            // Saved before the percussion had variations: each is the main part.
+            for (Pattern &p : s.percVars)
+               p = s.perc;
+            s.percFill = s.perc;
+         }
       }
       if (!ok)
          return false;

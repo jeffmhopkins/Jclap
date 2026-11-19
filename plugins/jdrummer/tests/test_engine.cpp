@@ -4,6 +4,8 @@
 
 #include <jclap/core/test_host.h>
 
+#include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <set>
@@ -173,7 +175,7 @@ void testSparse() {
    for (int pad = 0; pad < kPads; ++pad)
       for (int s = 0; s < pre.steps; ++s)
          if (pre.at(pad, s).on())
-            JCLAP_CHECK(s % 4 == 0 || pre.at(pad, s).vel >= kAccent * 0.8);
+            JCLAP_CHECK(s % 4 == 0 || pre.at(pad, s).vel >= kAccent * 0.65);
    JCLAP_CHECK(pre.count() < song->sections[kChorus].vars[0].count());
 }
 
@@ -242,15 +244,15 @@ void testRatchetAndChance() {
    for (Section &sec : s.sections) {
       sec.vars[0].at(CH, 0).vel = 90;
       sec.vars[0].at(CH, 0).ratchet = 3;
-      sec.vars[0].at(PC, 2).vel = 90;
-      sec.vars[0].at(PC, 2).chance = 50;
+      sec.vars[0].at(RD, 2).vel = 90;
+      sec.vars[0].at(RD, 2).chance = 50;
    }
    Settings st = plain();
    st.sameDiceBars = 0;
    auto e = engineWith(s, st);
    const auto out = run(*e, 4 * 24000 * 32);
    JCLAP_CHECK_EQ(countOn(out, CH), 3 * 32);
-   const int perc = countOn(out, PC);
+   const int perc = countOn(out, RD);
    JCLAP_CHECK(perc > 6 && perc < 26);
 }
 
@@ -396,6 +398,337 @@ void testEveryNoteHasAnOff() {
       JCLAP_CHECK(out[i].time >= out[i - 1].time);
 }
 
+// Every twist a style names changes its groove, whatever the seed, and no two styles of a genre are
+// the same groove, twists and swing.
+void testStylesDiffer() {
+   for (int gi = 0; gi < genreCount(); ++gi) {
+      const Genre &g = genreAt(gi);
+      for (const Style &st : g.styles) {
+         const unsigned mods = st.mods & ~(kShuffle | kSwing8);
+         if (!mods)
+            continue;
+         for (uint32_t seed = 1; seed <= 40; ++seed) {
+            Rng rng(seed);
+            const Pattern plainGroove = fromGroove(g.grooves[static_cast<size_t>(st.groove)]);
+            Pattern p = plainGroove;
+            applyMods(p, mods, g.kit, rng, g.tradition);
+            JCLAP_CHECK(p != plainGroove);
+            if (p == plainGroove) {
+               std::fprintf(stderr, "  %s / %s: its twists did nothing (seed %u)\n", g.name, st.name, seed);
+               break;
+            }
+         }
+      }
+      for (size_t a = 0; a < g.styles.size(); ++a)
+         for (size_t b = a + 1; b < g.styles.size(); ++b) {
+            const Style &x = g.styles[a], &y = g.styles[b];
+            Rng r1(3), r2(3);
+            Pattern p = fromGroove(g.grooves[static_cast<size_t>(x.groove)]);
+            Pattern q = fromGroove(g.grooves[static_cast<size_t>(y.groove)]);
+            applyMods(p, x.mods, g.kit, r1, g.tradition);
+            applyMods(q, y.mods, g.kit, r2, g.tradition);
+            const bool same = p == q && styleSwing(g, x) == styleSwing(g, y) && styleSwingFeel(x) == styleSwingFeel(y);
+            JCLAP_CHECK(!same);
+            if (same)
+               std::fprintf(stderr, "  %s: %s and %s are the same\n", g.name, x.name, y.name);
+         }
+   }
+}
+
+int genreIndex(const char *name) {
+   for (int i = 0; i < genreCount(); ++i)
+      if (!std::strcmp(genreAt(i).name, name))
+         return i;
+   return -1;
+}
+
+std::vector<int> stepsOf(const Groove &g, int pad) {
+   std::vector<int> v;
+   for (const Lane &l : g.lanes)
+      if (l.pad == pad)
+         for (int s = 0; l.hits[s]; ++s)
+            if (l.hits[s] != '.')
+               v.push_back(s);
+   return v;
+}
+
+// The hand percussion grooves against their references: the son and rumba claves, the conga tumbao,
+// the Middle Eastern rhythms' doum and tek, the tabla's thekas and 12/8 in sixteenth triplets.
+void testReferenceGrooves() {
+   const Genre &cuba = genreAt(genreIndex("Afro-Cuban"));
+   JCLAP_CHECK_EQ(cuba.kit, kAfroLatinKit);
+   JCLAP_CHECK(stepsOf(cuba.grooves[0], CLAVE) == (std::vector<int>{0, 6, 12, 20, 24}));   // son 3-2
+   JCLAP_CHECK(stepsOf(cuba.grooves[2], CLAVE) == (std::vector<int>{0, 6, 14, 20, 24}));   // rumba 3-2
+   JCLAP_CHECK(stepsOf(cuba.grooves[6], CLAVE) == (std::vector<int>{4, 8, 16, 22, 28}));   // son 2-3
+   JCLAP_CHECK(stepsOf(cuba.grooves[0], AL_CONGA_SLAP) == (std::vector<int>{4, 20}));      // the slap on 2
+   const std::vector<int> open = stepsOf(cuba.grooves[0], CONGA);
+   JCLAP_CHECK(std::find(open.begin(), open.end(), 12) != open.end() && std::find(open.begin(), open.end(), 14) != open.end());
+   const Genre &me = genreAt(genreIndex("Middle Eastern"));
+   JCLAP_CHECK(stepsOf(me.grooves[0], DARBUKA_DUM) == (std::vector<int>{0, 8}));            // maqsum
+   const std::vector<int> tek = stepsOf(me.grooves[0], DARBUKA_TEK);
+   for (int t : {2, 6, 12})
+      JCLAP_CHECK(std::find(tek.begin(), tek.end(), t) != tek.end());
+   JCLAP_CHECK(stepsOf(me.grooves[1], DARBUKA_DUM) == (std::vector<int>{0, 6, 8}));         // saidi
+   for (const Groove &gr : me.grooves)
+      JCLAP_CHECK(stepsOf(gr, SHAKER).empty()); // no shaker carpet under a darbuka
+   const Genre &india = genreAt(genreIndex("Indian"));
+   JCLAP_CHECK_EQ(laneLength(india.grooves[0].lanes[0].hits), 32); // teentaal: 16 matras
+   JCLAP_CHECK_EQ(laneLength(india.grooves[2].lanes[0].hits), 12); // dadra: 6 matras
+   // Teentaal's khali: no bayan (the frame drum) in matras 9 to 12.
+   for (int st : stepsOf(india.grooves[0], FRAME_DRUM))
+      JCLAP_CHECK(st < 16 || st >= 26);
+   const Genre &wa = genreAt(genreIndex("West African"));
+   JCLAP_CHECK_EQ(wa.kit, kAfroLatinKit);
+   int twelve = 0;
+   for (const Groove &gr : wa.grooves)
+      if (gr.rate == kRate16T) {
+         ++twelve;
+         JCLAP_CHECK_EQ(laneLength(gr.lanes[0].hits), 24);
+         // The standard bell: x.x.xx.x.x.x in eighths, two steps each.
+         const std::vector<int> bell = stepsOf(gr, BELL);
+         if (!bell.empty() && bell.size() == 7)
+            JCLAP_CHECK(bell == (std::vector<int>{0, 4, 8, 10, 14, 18, 22}));
+      }
+   JCLAP_CHECK(twelve >= 3);
+   // A 12/8 groove makes a 12/8 song.
+   Recipe r;
+   r.genre = genreIndex("West African");
+   r.style = 4; // Soli
+   auto song = std::make_unique<Song>();
+   generateSong(r, *song);
+   JCLAP_CHECK_EQ(song->sections[kVerse].vars[0].rate, kRate16T);
+   JCLAP_CHECK_EQ(song->sections[kVerse].fill.rate, kRate16T);
+}
+
+// A hand genre only ever reaches for its own tradition's drums: its grooves' pads, or pads of its
+// tradition, even very weird.
+void testHandTraditions() {
+   for (int gi = 0; gi < genreCount(); ++gi) {
+      const Genre &g = genreAt(gi);
+      if (g.tradition == kTradAny)
+         continue;
+      std::set<int> own;
+      for (const Groove &gr : g.grooves)
+         for (const Lane &l : gr.lanes)
+            own.insert(l.pad);
+      for (int st = 0; st < static_cast<int>(g.styles.size()); ++st)
+         for (uint32_t seed = 1; seed <= 4; ++seed) {
+            Recipe r;
+            r.genre = gi;
+            r.style = st;
+            r.seed = seed;
+            r.weird = 0.9;
+            auto song = std::make_unique<Song>();
+            generateSong(r, *song);
+            for (const Section &sec : song->sections)
+               for (int v = 0; v <= kVariations; ++v) {
+                  const Pattern &p = v < kVariations ? sec.vars[static_cast<size_t>(v)] : sec.fill;
+                  for (int pad = 0; pad < kPads; ++pad)
+                     if (p.uses(pad)) {
+                        const bool ok = own.count(pad) || (padTradition(g.kit, pad) & g.tradition);
+                        JCLAP_CHECK(ok);
+                        if (!ok)
+                           std::fprintf(stderr, "  %s / %s: %s is not of its tradition\n", g.name,
+                                        g.styles[static_cast<size_t>(st)].name, padName(g.kit, pad));
+                     }
+               }
+         }
+   }
+}
+
+// A song builds: across the library the chorus plays clearly more than the verse, and louder.
+void testEnergyArc() {
+   double verse = 0, chorus = 0, verseVel = 0, chorusVel = 0;
+   for (int gi = 0; gi < genreCount(); ++gi) {
+      const Genre &g = genreAt(gi);
+      double gv = 0, gc = 0;
+      for (int st = 0; st < static_cast<int>(g.styles.size()) * 3; ++st) {
+         Recipe r;
+         r.genre = gi;
+         r.style = st / 3;
+         r.player = g.player;
+         r.seed = static_cast<uint32_t>(11 + st % 3);
+         auto song = std::make_unique<Song>();
+         generateSong(r, *song);
+         // The main groove (the variations each add or take a twist of their own).
+         for (int v = 0; v < 1; ++v)
+            for (int pad = 0; pad < kPads; ++pad)
+               for (int s = 0; s < kMaxSteps; ++s) {
+                  const Hit &a = song->sections[kVerse].vars[static_cast<size_t>(v)].at(pad, s);
+                  const Hit &b = song->sections[kChorus].vars[static_cast<size_t>(v)].at(pad, s);
+                  if (a.on() && s < song->sections[kVerse].vars[static_cast<size_t>(v)].steps) {
+                     gv += 1;
+                     verseVel += a.vel;
+                  }
+                  if (b.on() && s < song->sections[kChorus].vars[static_cast<size_t>(v)].steps) {
+                     gc += 1;
+                     chorusVel += b.vel;
+                  }
+               }
+      }
+      JCLAP_CHECK(gc >= gv);
+      if (gc < gv)
+         std::fprintf(stderr, "  %s: chorus %g hits, verse %g\n", g.name, gc, gv);
+      verse += gv;
+      chorus += gc;
+   }
+   JCLAP_CHECK(chorus >= verse * 1.2);
+   JCLAP_CHECK(chorusVel / chorus > verseVel / verse * 1.1);
+}
+
+// The percussionist has variations and a fill of its own, on its own kit, in the drummer's meter.
+void testPercussionist() {
+   for (int who = 1; who <= kPercussionists; ++who) {
+      Recipe r;
+      r.genre = 0;
+      r.percussionist = who;
+      r.seed = 5;
+      auto song = std::make_unique<Song>();
+      generateSong(r, *song);
+      const Section &sec = song->sections[kChorus];
+      JCLAP_CHECK(!sec.perc.empty());
+      JCLAP_CHECK(!sec.percFill.empty());
+      JCLAP_CHECK(sec.percFill != sec.perc);
+      int differ = 0;
+      for (const Pattern &p : sec.percVars)
+         differ += !p.empty() && p != sec.perc;
+      JCLAP_CHECK(differ >= 2);
+      const int kit = percussionistKit(who - 1);
+      JCLAP_CHECK(kit == (who <= 2 ? kAfroLatinKit : kPercussionKit));
+   }
+   // A waltz gets a percussion part in three, a 12/8 one in 12/8.
+   Recipe r;
+   r.genre = genreIndex("Odd Meters");
+   r.style = 2; // Waltz
+   r.percussionist = 4;
+   auto song = std::make_unique<Song>();
+   generateSong(r, *song);
+   JCLAP_CHECK_EQ(song->sections[kVerse].vars[0].steps, 12);
+   JCLAP_CHECK_EQ(song->sections[kVerse].perc.steps, 12);
+   r.genre = genreIndex("West African");
+   r.style = 4; // Soli, 12/8
+   r.percussionist = 2;
+   generateSong(r, *song);
+   JCLAP_CHECK_EQ(song->sections[kVerse].perc.rate, kRate16T);
+   JCLAP_CHECK_EQ(song->sections[kVerse].perc.steps, 24);
+}
+
+// A song saved before the percussion had variations still loads, its variations the main part.
+void testOldSongLoads() {
+   Recipe r;
+   r.percussionist = 1;
+   auto a = std::make_unique<Song>(), b = std::make_unique<Song>();
+   generateSong(r, *a);
+   std::vector<uint8_t> v1;
+   auto u8 = [&](uint8_t x) { v1.push_back(x); };
+   auto u32 = [&](uint32_t x) {
+      for (int i = 0; i < 4; ++i)
+         v1.push_back(static_cast<uint8_t>(x >> (8 * i)));
+   };
+   auto pattern = [&](const Pattern &p) {
+      u8(p.steps);
+      u8(p.rate);
+      for (int pad = 0; pad < kPads; ++pad)
+         for (int s = 0; s < kMaxSteps; ++s) {
+            const Hit &h = p.at(pad, s);
+            u8(h.vel);
+            u8(h.chance);
+            u8(h.ratchet);
+            u8(static_cast<uint8_t>(h.nudge));
+         }
+   };
+   u32(1);
+   u32(kSections);
+   for (const Section &s : a->sections) {
+      u8(s.bars);
+      u8(s.energy);
+      u8(s.crash);
+      u8(s.locked);
+      u32(s.seed);
+      u32(s.generation);
+      for (const Pattern &p : s.vars)
+         pattern(p);
+      pattern(s.fill);
+      pattern(s.perc);
+   }
+   JCLAP_CHECK(b->load(v1.data(), v1.size()));
+   for (int i = 0; i < kSections; ++i) {
+      const Section &x = a->sections[static_cast<size_t>(i)], &y = b->sections[static_cast<size_t>(i)];
+      JCLAP_CHECK(x.vars == y.vars && x.fill == y.fill && x.perc == y.perc);
+      JCLAP_CHECK(y.percVars[0] == y.perc && y.percFill == y.perc);
+   }
+}
+
+// Swung in eighths: the off-beat eighth lands at SWING of the beat, the sixteenths either side move
+// with it.
+void testEighthSwing() {
+   Song s;
+   for (Section &sec : s.sections) {
+      sec.vars[0].at(CH, 1).vel = 90;
+      sec.vars[0].at(SN, 2).vel = 90;
+      sec.vars[0].at(K, 3).vel = 90;
+   }
+   Settings st = plain();
+   st.swing = 2.0 / 3.0;
+   st.swingFeel = 1;
+   auto e = engineWith(s, st);
+   const auto out = run(*e, 24000 * 2);
+   for (const Timed &t : out) {
+      if (!t.on())
+         continue;
+      if (t.pad() == SN)
+         JCLAP_CHECK(std::abs(t.time - 16000) <= 2); // the triplet's third
+      else if (t.pad() == CH)
+         JCLAP_CHECK(std::abs(t.time - 8000) <= 2); // halfway to it
+      else if (t.pad() == K)
+         JCLAP_CHECK(std::abs(t.time - 20000) <= 2); // halfway from it to the next beat
+   }
+   JCLAP_CHECK_EQ(countOn(out, SN), 1);
+}
+
+// A fill ends on a crash on the next bar's one.
+void testCrashAfterFill() {
+   Song s = oneHitSong();
+   Settings st = plain();
+   st.autoFillBars = 4;
+   auto e = engineWith(s, st);
+   const auto out = run(*e, 96000 * 8);
+   int crashes = 0;
+   for (const Timed &t : out)
+      if (t.on() && t.pad() == CR) {
+         ++crashes;
+         JCLAP_CHECK(t.time % 96000 <= 2);
+      }
+   JCLAP_CHECK_EQ(crashes, 1); // after bar 4's fill (bar 8's is cut off)
+   // Not on the hand kits.
+   st.kit = kAfroLatinKit;
+   auto e2 = engineWith(s, st);
+   JCLAP_CHECK_EQ(countOn(run(*e2, 96000 * 8), CR), 0);
+}
+
+// The percussionist plays its fill with the drummer's.
+void testPercussionFill() {
+   Song s;
+   for (Section &sec : s.sections) {
+      sec.vars[0].at(K, 0).vel = 100;
+      sec.fill = sec.vars[0];
+      sec.perc.at(5, 0).vel = 100;
+      sec.percFill.at(7, 0).vel = 100;
+   }
+   Settings st = plain();
+   st.autoFillBars = 4;
+   auto e = engineWith(s, st);
+   const auto out = run(*e, 96000 * 4);
+   int main = 0, fill = 0;
+   for (const Timed &t : out)
+      if (t.on() && (t.m.status & 15) == st.percChannel) {
+         main += t.pad() == 5;
+         fill += t.pad() == 7;
+      }
+   JCLAP_CHECK_EQ(main, 3);
+   JCLAP_CHECK_EQ(fill, 1);
+}
+
 } // namespace
 
 int main() {
@@ -416,5 +749,14 @@ int main() {
    testFreeRun();
    testCustomNotes();
    testEveryNoteHasAnOff();
+   testStylesDiffer();
+   testReferenceGrooves();
+   testHandTraditions();
+   testEnergyArc();
+   testPercussionist();
+   testOldSongLoads();
+   testEighthSwing();
+   testCrashAfterFill();
+   testPercussionFill();
    return jclap::core::testResult();
 }

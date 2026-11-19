@@ -16,10 +16,15 @@
 
 namespace jdrummer {
 
-// A style's swing: its genre's, more with SHUFFLE.
+// A style's swing: its genre's, more with SHUFFLE; swung in eighths with SWING8 (a straight genre
+// shuffled in eighths swings to a triplet feel).
 inline double styleSwing(const Genre &g, const Style &s) {
-   return std::min(0.75, g.swing + (s.mods & kShuffle ? 0.08 : 0.0));
+   double sw = g.swing + (s.mods & kShuffle ? 0.08 : 0.0);
+   if (s.mods & kSwing8)
+      sw = std::max(sw, 0.62);
+   return std::min(0.75, sw);
 }
+inline int styleSwingFeel(const Style &s) { return s.mods & kSwing8 ? 1 : 0; }
 
 // The params a style sets when it is picked, on the panel or as a preset.
 inline std::vector<std::pair<clap_id, double>> styleValues(int genre, int style) {
@@ -28,6 +33,7 @@ inline std::vector<std::pair<clap_id, double>> styleValues(int genre, int style)
    return {{kGenre, genre},
            {kStyle, style},
            {kSwing, styleSwing(g, s)},
+           {kSwingFeel, styleSwingFeel(s)},
            {kFreeTempo, s.bpm},
            {kPlayer, g.player},
            {kPercussionist, g.percussionist},
