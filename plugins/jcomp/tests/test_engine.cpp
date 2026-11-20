@@ -1998,11 +1998,15 @@ int main() {
             const Section &out = song->sections[kOutro];
             JCLAP_CHECK(!out.ending.empty());
             int last = -1;
+            // (Salsa's and Latin jazz's last chord comes on the and of 4, pushed.)
+            const bool latin = std::string(genreAt(g).name) == "Salsa" || std::string(genreAt(g).name) == "Latin Jazz";
             for (int k = 0; k < out.ending.steps; ++k)
                if (out.ending.at(k).on()) {
-                  JCLAP_CHECK(!out.ending.at(k).push);
+                  JCLAP_CHECK(!out.ending.at(k).push || (latin && k == 14 && out.ending.steps == 32));
                   last = k;
                }
+            if (latin && out.ending.rate == kRate16 && out.ending.steps == 32)
+               JCLAP_CHECK(last == 14 && out.ending.at(14).push);
             JCLAP_CHECK(last >= 0 && out.ending.at(last).art == kArtRing);
             JCLAP_CHECK(out.ending.rate == out.takes[0].rate);
             for (const Section &sec : song->sections) {
@@ -2744,7 +2748,13 @@ int main() {
                      for (int s = 0; s < sec.fill.steps; ++s)
                         if (sec.fill.at(s).on() && !leftHand(sec.fill.at(s).part))
                            last = s;
-                     JCLAP_CHECK(last >= 0 && sec.fill.at(last).push);
+                     // (pushed when it's off the beat; funk's fill is a pickup, its next One struck)
+                     JCLAP_CHECK(last >= 0);
+                     if (last >= 0 && std::string(genreAt(g).name) != "Funk")
+                        JCLAP_CHECK(onBeat(sec.fill, last) || sec.fill.at(last).push ||
+                                    genreAt(g).family == kFamilies[6]); // an ambient drift's fill pushes nothing
+                     if (last >= 0 && std::string(genreAt(g).name) == "Funk")
+                        JCLAP_CHECK(!sec.fill.at(last).push);
                   }
                   for (const Pattern &t : sec.takes)
                      for (int s = 0; s < t.steps; ++s)

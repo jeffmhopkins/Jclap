@@ -1825,7 +1825,7 @@ public:
          now = pv.hits.front().chord;
          v = pv.hits.front().voicing;
       }
-      label(c, s, now.none() ? "N.C." : chordName(now, key, scale()), 0, 4, 140, kWhite, visage::Font::kLeft, 30);
+      label(c, s, now.none() ? "N.C." : chordName(now, key, scale(), &f.next), 0, 4, 140, kWhite, visage::Font::kLeft, 30);
       if (!f.next.none() && f.next != now)
          label(c, s, "then " + chordName(f.next, key, scale()), 0, 52, 140, kTitle, visage::Font::kLeft, 9.5f);
       if (!f.held.none() && std::lround(host_.paramValue(kChordsFrom)) > 0)
@@ -2921,7 +2921,9 @@ private:
       const Chord ch = moved(sec.chords[static_cast<size_t>(slot)], transpose());
       std::string title = std::string(kSectionCaps[host_.chordSection]) + " \xC2\xB7 BAR " + std::to_string(bar + 1);
       drawCard(c, s, 640, 208, 348, 400, title, split ? (slot % 2 ? "the second half" : "the first half") : "the whole bar");
-      label(c, s, chordName(ch, key(), scaleNow()), 652, 230, 170, kWhite, visage::Font::kLeft, 34);
+      const Chord chNext = moved(slot % 2 == 0 && split ? sec.chords[static_cast<size_t>(slot + 1)] : sec.chordAt(bar + 1, false),
+                                 transpose());
+      label(c, s, chordName(ch, key(), scaleNow(), &chNext), 652, 230, 170, kWhite, visage::Font::kLeft, 34);
       label(c, s, "BAND HIT", 824, 232, 152, 0, visage::Font::kLeft, 9);
       mark_->setSelected(sec.marks[static_cast<size_t>(slot)]);
       label(c, s, roman(ch, key()) + " \xC2\xB7 " + qualityWords(ch.quality), 652, 276, 320, 0, visage::Font::kLeft, 9.5f);

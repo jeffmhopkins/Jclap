@@ -1,5 +1,5 @@
 // JComp: a CLAP note effect that comps chords for a polyphonic instrument (an e-piano, keys, organ,
-// guitar or synth), the way JDrummer drums: a song made by its generator from 24 genres, played in
+// guitar or synth), the way JDrummer drums: a song made by its generator from 25 genres, played in
 // sections, in time with the host or on its own. The chords come from each section's progression, or
 // from chords held on the keyboard; each is voiced and led from the one before. The engine
 // (engine.h) plays the song; the generator (generator.h) makes it; this file wires them to the
@@ -597,7 +597,7 @@ const clap_plugin_descriptor_t JComp::descriptor = {
    "",
    "",
    JCLAP_PLUGIN_VERSION,
-   "A comping generator for keys, organ and guitar: 24 genres, voice leading, passing runs, sections and mutations",
+   "A comping generator for keys, organ and guitar: 25 genres, voice leading, passing runs, sections and mutations",
    kFeatures,
 };
 

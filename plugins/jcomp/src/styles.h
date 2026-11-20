@@ -162,9 +162,9 @@ inline const std::vector<Genre> &genres() {
        // The backbeat on 2 and 4 (Motown's and Memphis's guitar and keys); pumping eighths; the
        // gospel 3-3-2 push.
        // The 60s R&B piano's pushed offbeats and its answer (MMA's R&B groove: the piano's and the organ's
-       // parts, both played on piano here).
+       // parts, both played on piano here, each bar with its own chords: no bar left to one upbeat).
        {{"....X.......X...", 0.3}, {"x-x-X-x-x-x-X-x-", 0.6}, {"x--x--x-x--x--x-", 0.8},
-        {"..x.....x.x...x.|..............x.", 0.5}, {"....x.x.......x.|x.x.x...x...x...", 0.65}},
+        {"..x.x.x.x.x...x.|x.x.x...x...x.x.", 0.5}, {"....x.x.......x.|x.x.x...x...x...", 0.65}},
        {{"x-x-X-x-x-x-xxxx", 0.7}},
        {{kMajor, {"C|C7|F|Fm", "C|Am|F|G", "F|G|F|G", "C|F|C|F", "Dm7|G7|C|C", "C|C7|F Fm|C"}}},
        {{"Memphis Backbeat", "Backbeat", 96, kPlain, 0, 0b001, -1, kDrop2, 4, 55, 76, 64},
@@ -289,7 +289,7 @@ inline const std::vector<Genre> &genres() {
         {"Held Comp", "Held", 132, 0, 0, 0b11010000},
         {"Jazz Waltz", "Waltz", 150, kWaltz, 1, 0}},
        "2, 19, 20, 21, 54, 55, 57, 61, 62", true},
-      {"Bossa Nova", kFamilies[2], kJazzComper, 0.5, 0,
+      {"Bossa Nova", kFamilies[2], kJazzComper, 0.5, 1,
        // Brazilian music writes bossa in 2/4 in sixteenths, so at a 4/4 tempo each 2/4 bar is a 4/4
        // bar in eighths. The batida: the thumb on the 2/4 beats (1 and 3 here), the fingers on both
        // eighths of the first beat and the second sixteenth of the second (1, 2 and the and of 3
@@ -367,7 +367,7 @@ inline const std::vector<Genre> &genres() {
         {"xxxXxxxxxXxx|xxxXxxxxxXxx|xxxXxxxxxXxx|x..x..x..x..", 0.8}, {"x..xx...x..xx...|x..x.......xx...", 0.7}},
        {{"x-x-x-x-x.x.xxxx", 0.8}},
        // I-bVII-IV-I (Mixolydian), bVI-bVII-I, the minor i-bVI-bIII-bVII.
-       {{kMixolydian, {"C|Bb|F|C", "C|Bb|F|C", "F|G|F|G", "Ab|Bb|C|C", "F|G|F|G", "Bb|F|C|C"}},
+       {{kMixolydian, {"C|Bb|F|C", "C|Bb|F|C", "F|G|F|G", "Ab|Bb|C|C", "Ab|Bb|F|F", "Bb|F|C|C"}},
         {kMinor, {"Cm|Ab|Eb|Bb", "Cm|Ab|Eb|Bb", "Ab|Bb", "Cm|Ab|Eb|Bb", "Fm|Ab|Bb|Bb", "Ab|Bb|Cm|Cm"}},
         // The 50s: I-vi-IV-V (the doo-wop changes), I-vi-ii-V, the IV-I and II7-V7 of a rock'n'roll bridge.
         {kMajor, {"C|Am|F|G", "C|Am|F|G7", "F|F|C|C", "C|Am|Dm7|G7", "F|F|C|C|D7|D7|G7|G7", "C|Am|F G7|C"}}},
