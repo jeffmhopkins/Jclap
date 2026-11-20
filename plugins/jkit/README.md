@@ -6,7 +6,7 @@ A 16-pad drum kit whose sounds an AI model makes from your words, inside the plu
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![pads: 16](https://img.shields.io/badge/pads-16-blue)](#the-kit-tab) [![engines: Stable Audio Open Small, ORB, Stable Audio Open 1.0](https://img.shields.io/badge/engines-SAO%20Small%20%7C%20ORB%20%7C%20SAO%201.0-blue)](#the-engines) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
-Version 0.8.1 · Powered by Stability AI · ORB by Marcos Maceo
+Version 0.9.0 · Powered by Stability AI · ORB by Marcos Maceo
 
 </div>
 
@@ -250,7 +250,9 @@ different one each hit; more variations take longer. **FILL n EMPTY PADS** makes
 the pads with none; **REPLACE ALL 16 PADS** makes all of them, replacing what's there. Each sound gets
 the SELECTED panel's NORMALIZE, TRIM SILENCE, REVERSE and fades, plays from its start to its end, and
 is named for its pad. A drum kit's closed, pedal and open hats go in key group 1 (unless they're
-already in one), so a closed hat cuts the open one off. The backbone comes first (kick and snare, or
+already in one), so a closed hat cuts the open one off. A kit made for all 16 pads (REPLACE ALL 16
+PADS, or FILL on an empty kit) sits in a room: the reverb is set to Room and the kit's reverb
+[SEND](#the-master-band) to 30%. The backbone comes first (kick and snare, or
 cajon), so you can play along as it fills. GENERATE shows which pad it's on ("KIT 3 OF 16 · Closed
 Hat") and stops it when clicked, keeping the pads made so far. A whole kit takes about a minute with
 Small and about 8 with 1.0. KIT needs Stable Audio: ORB makes its own set of sounds.
@@ -289,7 +291,8 @@ sends. The selected pad has the orange box; every pad that's sounding turns its 
 it plays, so with several hits going at once you can follow each one's playhead. Click a pad to play and select it (higher on the pad is louder), drag one onto another to
 swap them (sound and settings), right-click to play, open its variations, regenerate or clear it. A pad
 with more than one variation shows how many (x4), and its waveform is the one it played last. Playing a pad over
-MIDI selects it too, so its controls follow what you play. An empty pad's
+MIDI selects it too, so its controls follow what you play, until you click a pad: the one you
+clicked stays selected while notes play, until you go to the Generate tab and back. An empty pad's
 + GENERATE opens the Generate tab aimed at it.
 
 **PAD n**: the selected pad. With more than one [variation](#variations-several-sounds-on-one-pad),
@@ -339,16 +342,18 @@ comes back as points that sound the same (the low cut as the high pass, the othe
 The old EQ params are still there for old automation to load, but hidden, and they no longer change
 the sound.
 
-**SENDS**: how much of the pad goes to the reverb and the delay, after its level and pan.
+**SENDS**: how much of the pad goes to the reverb and the delay, after its level and pan, on top of
+the whole kit's SEND in the master band.
 
 ### The master band
 
 Everything under the darker band acts on the whole kit.
 
 - **MASTER EQ**: LOW, MID (at MID FREQ) and HIGH, ±15 dB, with fixed cuts at 30 Hz and 18 kHz.
-- **REVERB**: Room, Hall, Plate (bright) or Dark; SIZE, DECAY (0.2 to 8 s) and RETURN (its level).
-- **DELAY**: a note value at the host's tempo (1/32 to 1/1, with dotted and triplet), FEEDBACK, TONE
-  (darker repeats to the left) and RETURN.
+- **REVERB**: Room, Hall, Plate (bright) or Dark; **SEND** (how much of the whole kit goes to it, on
+  top of each pad's own send), SIZE, DECAY (0.2 to 8 s) and RETURN (its level).
+- **DELAY**: a note value at the host's tempo (1/32 to 1/1, with dotted and triplet); **SEND** (the
+  whole kit, as for the reverb), FEEDBACK, TONE (darker repeats to the left) and RETURN.
 - **OUTPUT**: the stereo field, with every pad where its pan puts it, glowing while it plays, between
   the WIDTH brackets; the levels of the dry kit, the effects and the output; and **WIDTH** (0 to
   200%), **BOOM** (low-end punch: the lows under 110 Hz driven into a soft clip and added back, so

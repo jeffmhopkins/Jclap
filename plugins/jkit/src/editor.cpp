@@ -2721,6 +2721,11 @@ public:
       tabs_->setAccent(kOrange);
       tabs_->onChange = [this](int p) {
          host_.page = p;
+         // Picking a tab shows all its frames: put the Generate tab's hidden knobs back out of sight.
+         if (p == kGeneratePage)
+            syncEngine();
+         // A pad clicked on the Kit tab stays selected while notes play, until you leave the tab.
+         padPinned_ = false;
          redraw();
       };
       add<ui::UpdateNotice>({382, 21, 140, 22});
@@ -2781,12 +2786,13 @@ public:
    // ---- the timer ----
 
    void timerCallback() override {
-      // A pad played (over MIDI or here) becomes the Kit tab's selected pad.
+      // A pad played (over MIDI or here) becomes the Kit tab's selected pad, unless you clicked one
+      // since you came to the tab: that one stays.
       const uint32_t hits = host_.padHits();
       if (hits != padHits_) {
          padHits_ = hits;
          const int pad = host_.lastHitPad();
-         if (pad >= 0 && pad < kPads && pad != host_.selectedPad) {
+         if (!padPinned_ && pad >= 0 && pad < kPads && pad != host_.selectedPad) {
             host_.selectedPad = pad;
             redraw();
          }
@@ -3129,6 +3135,13 @@ private:
       kitTotal_ = static_cast<int>(kitQueue_.size());
       if (kitQueue_.empty())
          return;
+      // A whole new kit sits in a room: the Room reverb, with 30% of the kit sent to it.
+      if (kitTotal_ == kKitSlots)
+         for (const auto &[id, v] : {std::pair<clap_id, double>{kReverbType, 0.0}, {kKitReverbSend, 0.3}}) {
+            host_.beginEdit(id);
+            host_.setParam(id, v);
+            host_.endEdit(id);
+         }
       const EngineStatus e = host_.engine();
       if (e.state == EngineStatus::State::Missing || e.state == EngineStatus::State::Failed)
          host_.installEngine();
@@ -3338,37 +3351,44 @@ private:
 
    // ORB plans the sound and plays it: it has no diffusion steps, guidance or variety.
    void syncEngine() {
+      if (!length_)
+         return; // still being built
       engine_->setSelected(host_.gen().engine);
       const bool open1 = host_.gen().engine == 2;
       steps_->setRange(open1 ? ui::ValueRange{10, 100, 50, 1, false, true} : ui::ValueRange{4, 16, 8, 1, false, true});
       steps_->setValue(host_.gen().steps);
       guidance_->setValue(host_.gen().guidance);
-      steps_->setVisible(!orb());
-      // Small always runs at guidance 1, the only setting it was tuned for: the knob is 1.0's.
-      guidance_->setVisible(open1);
-      variety_->setVisible(!orb());
+      // What shows on the Generate tab. Only shown while that tab is: the tab bar shows every frame
+      // of a page when it's picked, so picking Generate calls this again to hide what shouldn't show.
+      const GenSettings &gs = host_.gen();
+      const bool here = tabs_->selected() == kGeneratePage;
+      // Small always runs at guidance 1, the only setting it was tuned for: the knob is 1.0's. KIT:
+      // each pad has its own length, and there are no variants or variety. The slider stays: it says
+      // how plain or strange the kit's style and each pad's prompt are.
+      const bool wantLength = !gs.kitMode, wantSteps = !orb(), wantGuidance = open1,
+                 wantVariety = !orb() && !gs.kitMode;
+      length_->setVisible(here && wantLength);
+      steps_->setVisible(here && wantSteps);
+      guidance_->setVisible(here && wantGuidance);
+      variety_->setVisible(here && wantVariety);
+      count_->setVisible(here && !gs.kitMode);
+      // The knobs that show sit side by side from the left, with no gap for a hidden one.
+      {
+         const float kw = 348.0f / 4, ky = 360;
+         int col = 0;
+         const std::pair<ui::Knob *, bool> knobs[] = {
+            {length_, wantLength}, {steps_, wantSteps}, {guidance_, wantGuidance}, {variety_, wantVariety}};
+         for (const auto &[k, want] : knobs)
+            if (want)
+               move(*k, {24 + kw * col++, ky, kw, 80});
+      }
       // ORB makes sound effects, not drums: its chips are the kinds of sound it has, and its slider
       // goes from one sound to a few in a row.
-      const GenSettings &gs = host_.gen();
       mode_->setSelected(gs.kitMode ? 1 : 0);
       roles_->names = gs.kitMode ? kKitLayoutNames : orb() ? kOrbKindNames : kRoleNames;
       roles_->count = gs.kitMode ? kKitLayoutCount : kRoleCount;
       roles_->selected = gs.kitMode ? gs.kitLayout : gs.role;
       roles_->redraw();
-      // KIT: each pad has its own length, and there are no variants. The slider stays: it says how
-      // plain or strange the kit's style and each pad's prompt are.
-      length_->setVisible(!gs.kitMode);
-      count_->setVisible(!gs.kitMode);
-      if (gs.kitMode)
-         variety_->setVisible(false);
-      // The knobs that show sit side by side from the left, with no gap for a hidden one.
-      {
-         const float kw = 348.0f / 4, ky = 360;
-         int col = 0;
-         for (ui::Knob *k : {length_, steps_, guidance_, variety_})
-            if (k->isVisible())
-               move(*k, {24 + kw * col++, ky, kw, 80});
-      }
       strange_->setLabels(orb() ? "ONE SOUND" : "GENERIC", orb() ? "LAYERED" : "STRANGE");
       tips_.setText(*roles_, orb() ? "The kind of sound ORB can make, for the random prompt, the pad's colour and its name."
                                    : "What the sound is for: the random prompt, the pad's colour and its name.");
@@ -3677,6 +3697,7 @@ private:
       pads_ = &onPage<PadGrid>(P, {24, 114, 336, 394}, host_);
       pads_->onSelect = [this](int i) {
          host_.selectedPad = i;
+         padPinned_ = true;
          syncPad();
          redraw();
       };
@@ -3851,8 +3872,8 @@ private:
       padKnob(kDelaySend, "DELAY", {960, 418, 96, 76}, kBlue);
 
       // The master band.
-      const float ky = 566, kh = 72, kwm = 48;
-      masterEq_ = &onPage<EqView>(P, {24, 570, 100, 68});
+      const float ky = 566, kh = 72, kwm = 48, kwf = 46;
+      masterEq_ = &onPage<EqView>(P, {24, 570, 76, 68});
       masterEq_->colour = kWhite;
       masterEq_->labels = false;
       masterEq_->bands = [this] {
@@ -3868,30 +3889,37 @@ private:
       const clap_id meq[4] = {kMasterLow, kMasterMid, kMasterMidFreq, kMasterHigh};
       const char *meqNames[4] = {"LOW", "MID", "MID FREQ", "HIGH"};
       for (int i = 0; i < 4; ++i)
-         masterKnob(meq[i], meqNames[i], {134 + i * kwm, ky, kwm, kh}, kWhite);
+         masterKnob(meq[i], meqNames[i], {106 + i * kwf, ky, kwf, kh}, kWhite);
       // Reverb and delay, one card.
-      auto &revType = onPage<ui::Dropdown>(P, {442, 538, 60, 18},
+      auto &revType = onPage<ui::Dropdown>(P, {446, 538, 60, 18},
                                            std::vector<std::string>(kReverbTypeNames, kReverbTypeNames + kReverbTypeCount));
       revType.setAccent(kPurple);
       bindings_.bind(revType, kReverbType);
       tips_.add(revType, "The reverb's character: Room, Hall, Plate (bright) or Dark.");
-      const clap_id rev[3] = {kReverbSize, kReverbDecay, kReverbReturn};
-      const char *revNames[3] = {"SIZE", "DECAY", "RETURN"};
-      for (int i = 0; i < 3; ++i)
-         masterKnob(rev[i], revNames[i], {358 + i * kwm, ky, kwm, kh}, kPurple);
+      // SEND is the whole kit's send, on top of each pad's own (PAD > SENDS).
+      const clap_id rev[4] = {kKitReverbSend, kReverbSize, kReverbDecay, kReverbReturn};
+      const char *revNames[4] = {"SEND", "SIZE", "DECAY", "RETURN"};
+      for (int i = 0; i < 4; ++i) {
+         auto &k = masterKnob(rev[i], revNames[i], {322 + i * kwf, ky, kwf, kh}, kPurple);
+         if (i == 0)
+            tips_.add(k, "The whole kit into the reverb, on top of each pad's own REVERB send.");
+      }
       std::vector<std::string> sync;
       for (int i = 0; i < kDelaySyncChoices; ++i)
          sync.emplace_back(delaySyncNames()[i]);
-      auto &dlySync = onPage<ui::Dropdown>(P, {611, 538, 60, 18}, sync);
+      auto &dlySync = onPage<ui::Dropdown>(P, {642, 538, 60, 18}, sync);
       dlySync.setAccent(kBlue);
       bindings_.bind(dlySync, kDelaySync);
       tips_.add(dlySync, "The delay's time, as a note value at the host's tempo.");
-      const clap_id dly[3] = {kDelayFeedback, kDelayTone, kDelayReturn};
-      const char *dlyNames[3] = {"FEEDBACK", "TONE", "RETURN"};
-      for (int i = 0; i < 3; ++i)
-         masterKnob(dly[i], dlyNames[i], {527 + i * kwm, ky, kwm, kh}, kBlue);
+      const clap_id dly[4] = {kKitDelaySend, kDelayFeedback, kDelayTone, kDelayReturn};
+      const char *dlyNames[4] = {"SEND", "FEEDBACK", "TONE", "RETURN"};
+      for (int i = 0; i < 4; ++i) {
+         auto &k = masterKnob(dly[i], dlyNames[i], {518 + i * kwf, ky, kwf, kh}, kBlue);
+         if (i == 0)
+            tips_.add(k, "The whole kit into the delay, on top of each pad's own DELAY send.");
+      }
       // OUTPUT
-      output_ = &onPage<OutputView>(P, {691, 568, 211, 74}, host_);
+      output_ = &onPage<OutputView>(P, {730, 568, 172, 74}, host_);
       tips_.add(*output_, "Each pad where its pan puts it, lit while it plays; then the dry kit, the effects and the output.");
       masterKnob(kWidth, "WIDTH", {912, ky, kwm, kh}, kWhite);
       auto &boom = masterKnob(kBoom, "BOOM", {912 + kwm, ky, kwm, kh}, kOrange);
@@ -4061,21 +4089,21 @@ private:
       c.fill(0, kMasterTop * s, width(), height() - kMasterTop * s);
       c.setColor(t.panelBorder);
       c.fill(0, kMasterTop * s, width(), 1.0f);
-      drawCard(c, s, 12, 532, 326, 116, "MASTER EQ", "cuts 30 Hz \xC2\xB7 18 kHz");
+      drawCard(c, s, 12, 532, 290, 116, "MASTER EQ", "cuts 30 Hz \xC2\xB7 18 kHz");
       // Reverb and delay share a card, each half with its own coloured title.
-      drawCard(c, s, 346, 532, 325, 116, "");
+      drawCard(c, s, 310, 532, 400, 116, "");
       c.setColor(t.panel);
-      c.fill(358 * s, 559 * s, 302 * s, 3 * s);
+      c.fill(322 * s, 559 * s, 380 * s, 3 * s);
       for (int h = 0; h < 2; ++h) {
-         const float hx = h ? 527 : 358;
+         const float hx = h ? 518 : 322;
          c.setColor(h ? kBlue : kPurple);
          c.text(h ? "DELAY" : "REVERB", ui::font(11 * s), visage::Font::kLeft, hx * s, 540 * s, 80 * s, 16 * s);
          c.setColor(kRule);
-         c.fill(hx * s, 560 * s, 144 * s, 1.0f * s);
+         c.fill(hx * s, 560 * s, 184 * s, 1.0f * s);
       }
       c.setColor(kRule);
-      c.fill(508 * s, 542 * s, 1.0f * s, 96 * s);
-      drawCard(c, s, 679, 532, 389, 116, "OUTPUT");
+      c.fill(512 * s, 542 * s, 1.0f * s, 96 * s);
+      drawCard(c, s, 718, 532, 350, 116, "OUTPUT");
    }
 
    EditorHost &host_;
@@ -4122,6 +4150,8 @@ private:
    SamplePtr auditioned_;
    uint32_t padHits_ = 0;
    bool synced_ = false, confirmRemove_ = false;
+   // A pad clicked on the Kit tab: notes don't move the selection off it until the tab changes.
+   bool padPinned_ = false;
    int added_ = -1, addedAt_ = 0;
    bool addedTake_ = false;
 
@@ -4153,6 +4183,11 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
 bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath, int overlay) {
    Panel panel(host);
    panel.stopTimer();
+   // Shown once, then by way of the other tab, as clicks on the tabs would: picking a tab shows
+   // every frame on it, so this catches one left showing that the page hides.
+   panel.showPage(page);
+   panel.timerCallback();
+   panel.showPage(page == 0 ? 1 : 0);
    panel.showPage(page);
    if (overlay == 1)
       panel.openEnginePicker();
