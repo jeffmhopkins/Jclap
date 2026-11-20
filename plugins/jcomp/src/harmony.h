@@ -781,14 +781,28 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       Ints tones;
       for (size_t i = 0; i < q.tones.size() && tones.size() < 3; ++i)
          tones.push_back(q.tones[i]);
-      // A seventh chord at three notes under the octave keeps its seventh in place of the fifth (A9 is
-      // heard as a dominant, not an A triad).
+      // A seventh chord at three notes under the octave keeps its seventh in place of a perfect fifth
+      // (A9 is heard as a dominant, not an A triad). An altered fifth (m7b5's b5, 7#5's #5) is the
+      // chord, so the seventh goes in place of the root instead: the bass has it.
       if (q.seventh && n - 1 <= 3 && tones.size() >= 3)
          for (int i : {10, 11, 9})
             if (std::find(q.tones.begin(), q.tones.end(), i) != q.tones.end() && tones[2] % 12 != i % 12) {
-               tones[2] = i;
+               tones[tones[2] == 7 ? 2 : 0] = i;
                break;
             }
+      // An altered colour (b9, #9, #11) names the chord too: it goes in place of the root at three
+      // notes (the montuno's b9 over the bass's root), else in place of a perfect fifth.
+      for (int alt : {13, 15, 18})
+         if (std::find(q.tones.begin(), q.tones.end(), alt) != q.tones.end()) {
+            for (int want : {n - 1 <= 3 ? 0 : 7, 7, 0}) {
+               auto it = std::find(tones.begin(), tones.end(), want);
+               if (it != tones.end()) {
+                  *it = alt;
+                  break;
+               }
+            }
+            break;
+         }
       for (int i : {10, 11, 9})
          if (static_cast<int>(tones.size()) < n - 1 && q.seventh &&
              std::find(q.tones.begin(), q.tones.end(), i) != q.tones.end() &&

@@ -1007,8 +1007,12 @@ inline const std::vector<Mutation> &mutations() {
           for (int s = 0; s < bar; ++s)
              p.at(bar + s) = p.at(s);
           for (int s = bar + bar / 2; s < bar * 2; ++s)
-             if (!onBeat(p, s) && addable(p, s, fine) && rng.chance(0.4))
+             if (!onBeat(p, s) && addable(p, s, fine) && rng.chance(0.4)) {
+                // a line or left-hand note stays as written: only the chord's hits answer
+                if (p.at(s).on() && (p.at(s).part == kPartLine || leftHand(p.at(s).part)))
+                   continue;
                 p.at(s) = p.at(s).on() ? Hit{} : hitOf('x');
+             }
        }},
       {"left hand", [](Pattern &p, Rng &) {
           for (int s = 0; s < p.steps; s += strongSteps(p))
@@ -1050,7 +1054,8 @@ inline bool mutationFits(const char *tag, unsigned mods, const Pattern &parent) 
    if (offbeatTake(parent) && (is("push it") || is("shift") || is("let it ring")))
       return false;
    // A line (the Afrobeat tenor's ostinato) plays as written: nothing taken out, moved or ghosted.
-   if (hasLine(parent) && (is("sparser") || is("shift") || is("ghosts") || is("chop it") || is("busier") || is("push it")))
+   if (hasLine(parent) && (is("sparser") || is("shift") || is("ghosts") || is("chop it") || is("busier") || is("push it") ||
+                           is("answer")))
       return false;
    return true;
 }
@@ -1518,6 +1523,17 @@ inline void completeSong(const Recipe &r, Song &song, const std::vector<uint8_t>
    if (saved.size() < 4)
       return;
    const uint32_t version = saved[0] | saved[1] << 8 | saved[2] << 16 | static_cast<uint32_t>(saved[3]) << 24;
+   // A 6/8 song saved before 0.7.0 (a version below 4) was written on the 3/4 grid: the same ticks, so
+   // it moves to the 6/8 rate (two dotted-quarter beats) as it is.
+   if (version < 4 && styleOf(r).mods & kSixEight)
+      for (Section &s : song.sections) {
+         for (Pattern &p : s.takes)
+            if (p.rate == kRate34)
+               p.rate = kRate68;
+         for (Pattern *p : {&s.fill, &s.fillDown, &s.ending})
+            if (p->rate == kRate34)
+               p->rate = kRate68;
+      }
    if (version >= 3)
       return;
    for (int i = 0; i < kSections; ++i) {

@@ -1136,6 +1136,18 @@ private:
          const int mark = markAt(secRel, from);
          if (mark != kMarkNone) {
             if (secRel == from) {
+               // The take pushed into this chord (struck in the half beat before, with the mark): that
+               // push was the band hit, it isn't struck again on the beat.
+               for (size_t i = strikes_; i-- > 0;)
+                  if (strike_[i].t < t) {
+                     if (strike_[i].t >= t - kTicksPerBeat / 2 && chordPart(strike_[i].h.part) &&
+                         strike_[i].c == chordAt(secRel)) {
+                        pushTarget_ = -1;
+                        ++hits_;
+                        return;
+                     }
+                     break;
+                  }
                strikeMark(mark, p, step, steps, t, secRel);
                return;
             }
@@ -1253,6 +1265,15 @@ private:
       if (c.none() && !target) {
          miss(p, prel, t, secRel);
          return;
+      }
+      // A hit pushed or anticipated into a chord with a band hit on it is that band hit.
+      if (!target && !ending_ && chordRel > secRel && chordPart(h.part)) {
+         int64_t from = 0;
+         const int mark = markAt(chordRel, from);
+         if (mark != kMarkNone && from == chordRel) {
+            strikeMark(mark, p, step, steps, t, secRel, chordRel);
+            return;
+         }
       }
       Voicing v;
       if (target && c == runChord_) {
@@ -1396,15 +1417,18 @@ private:
       return sec.marks[static_cast<size_t>(b * 2 + (second ? 1 : 0))];
    }
    // A band hit struck: accented, held to the next chord, or a short shot.
-   void strikeMark(int mark, const Pattern &p, int step, int steps, int64_t t, int64_t secRel) {
+   // `chordRel`: the chord's start, when the hit is pushed ahead of it (else `secRel`).
+   void strikeMark(int mark, const Pattern &p, int step, int steps, int64_t t, int64_t secRel, int64_t chordRel = -1) {
       const int stepTicks = p.stepTicks();
       const double stepBeats = static_cast<double>(stepTicks) / kTicksPerBeat;
-      const Chord c = chordAt(secRel);
+      if (chordRel < 0)
+         chordRel = secRel;
+      const Chord c = chordAt(chordRel);
       if (c.none())
          return;
-      int64_t end = nextChange(secRel);
+      int64_t end = nextChange(chordRel);
       if (end < 0)
-         end = secRel + barTicks();
+         end = chordRel + barTicks();
       Hit h;
       h.vel = kAccent;
       h.art = mark == kMarkHold ? kArtRing : mark == kMarkShot ? kArtChop : kArtAsWritten;
