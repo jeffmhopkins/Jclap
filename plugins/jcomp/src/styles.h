@@ -164,7 +164,7 @@ inline const std::vector<Genre> &genres() {
        {{"....X.......X...", 0.3}, {"x-x-X-x-x-x-X-x-", 0.6}, {"x--x--x-x--x--x-", 0.8},
         {"..x.....x.x...x.|..............x.", 0.5}, {"....x.x.......x.|x.x.x...x...x...", 0.65}},
        {{"x-x-X-x-x-x-xxxx", 0.7}},
-       {{kMajor, {"C|C7|F|Fm", "C|Am|F|G", "F|G|F|G", "C|F|C|F", "Dm7|G7|C|C", "C|C7|F|Fm"}}},
+       {{kMajor, {"C|C7|F|Fm", "C|Am|F|G", "F|G|F|G", "C|F|C|F", "Dm7|G7|C|C", "C|C7|F Fm|C"}}},
        {{"Memphis Backbeat", "Backbeat", 96, kPlain, 0, 0b001, -1, kDrop2, 4, 55, 76, 64},
         {"Pumping Eighths", "Eighths", 112, 0, 0, 0b010, kPopPianist},
         {"Gospel Push", "Push", 104, kRunsIn, 0, 0b100},
@@ -177,8 +177,8 @@ inline const std::vector<Genre> &genres() {
        // left hand rocking root and fifth on the beats, the right hand's chords on the swung ands.
        {{"....X.......X...", 0.3}, {"x...X...x...X...", 0.55}, {"x.x.x.x.x.x.x.x.", 0.75}, {"b.x.f.X.b.x.f.X.", 0.85}},
        {{"x.x.x.x.x.x.xxxx", 0.8}},
-       // I-vi-ii-V, I-IV-I-V, IV-V-I; the last chorus up a semitone, its V7 leading in.
-       {{kMajor, {"C|Am|Dm7|G7", "C|Am|Dm|G", "C|F|C|G", "F|G|C|C", "F|F|G|G", "Ab7|Db|Gb Ab|Db"}}},
+       // I-vi-ii-V, I-IV-I-V, IV-V-I; the outro turns round home (I-vi-ii-V-I).
+       {{kMajor, {"C|Am|Dm7|G7", "C|Am|Dm|G", "C|F|C|G", "F|G|C|C", "F|F|G|G", "C|Am|Dm7 G7|C"}}},
        {{"Backbeat Piano", "Backbeat", 120, kLeftHand, 0, 0b0011},
         {"Straight Eighths", "Eighths", 128, kLeftHand, 0, 0b0100},
         {"Boogie Figure", "Boogie", 116, 0, 0, 0b1000, -1, -1, 0, 0, 0, 0, 0.62, 1}},
@@ -188,7 +188,7 @@ inline const std::vector<Genre> &genres() {
        // sixteenths, muted and ringing, on three-string inversions.
        {{"..x...x...x...x.", 0.4}, {"x..x..x...x..x..", 0.6}, {"gxgxgXgxgxgxgXgx", 0.9}},
        {{"gxgxgXgxgxgxgxxX", 0.9}},
-       {{kDorian, {"Cm7|F13", "Cm7|F13|Cm7|F13", "Cm7|F7sus", "Cm7|F7sus|Cm7|F7sus", "Ebmaj7|Dm7|Cm7|Bb", "Cm7|F13|Cm7|F13"}}},
+       {{kDorian, {"Cm7|F13", "Cm7|F13|Cm7|F13", "Cm7|F7sus", "Cm7|F7sus|Cm7|F7sus", "Ebmaj7|Dm7|Cm7|Bb", "Cm7|F13|Cm7|Cm7"}}},
        {{"Chic Chucking", "Chucking", 116, kBusy, 0, 0b100},
         {"Offbeat Lift", "Lift", 122, kShorts, 0, 0b001},
         {"Rhodes Figure", "Rhodes", 112, kRich, 0, 0b010, kPocketKeys}},
@@ -201,7 +201,7 @@ inline const std::vector<Genre> &genres() {
        // A Dorian m9 vamp; IVmaj7-iii7-vi7 and ii7-V7sus in the relative major; m9s planed. Read as
        // minor: the vamp's Dorian IV13 is then a borrowed colour, and the relative major's iii keeps
        // its own 9th out.
-       {{kMinor, {"Cm9|Dbm9 Cm9", "Cm9|F13|Cm9|F13", "Fm9|Bb13sus", "Abmaj7|Gm7|Cm7|Fm7 Bb13sus", "Abmaj9|Abmaj9|Fm9|Bb13sus", "Cm9|Dbm9 Cm9"}}},
+       {{kMinor, {"Cm9|Dbm9 Cm9", "Cm9|F13|Cm9|F13", "Fm9|Bb13sus", "Abmaj7|Gm7|Cm7|Fm7 Bb13sus", "Abmaj9|Abmaj9|Fm9|Bb13sus", "Cm9|Dbm9 Cm9|Cm9|Cm9"}}},
        {{"Behind The Beat", "Lazy", 84, kLongs | kRich, 0, 0b001},
         {"Breathing Chords", "Breath", 76, kRich, 0, 0b010},
         {"Dilla Push", "Push", 90, kPushes | kRich, 0, 0b100}},
@@ -210,7 +210,7 @@ inline const std::vector<Genre> &genres() {
        {{"x--------.x-----", 0.35}, {"x..x..x.....x...", 0.6}, {"x.x...x.x...x.x.", 0.8}},
        {{"x..x..x...x.xxxx", 0.7}},
        // IVmaj7-iii7-vi7; bVImaj7-bVII-I; ii7-V7sus-Imaj9.
-       {{kMajor, {"Fmaj7|Em7|Am7|Am7", "Fmaj7|Em7|Am7|Am7", "Abmaj7|Bb|C|C", "Dm7|G13sus|Cmaj9|Cmaj9", "Abmaj7|Bb|Fmaj7|G13sus", "Fmaj7|Em7|Am7|Am7"}}},
+       {{kMajor, {"Fmaj7|Em7|Am7|Am7", "Fmaj7|Em7|Am7|Am7", "Abmaj7|Bb|C|C", "Dm7|G13sus|Cmaj9|Cmaj9", "Abmaj7|Bb|Fmaj7|G13sus", "Fmaj7|Em7|Dm7 G13sus|Cmaj9"}}},
        {{"Slow Jam", "Slow Jam", 68, kLongs | kRich, 0, 0b001, kPadPlayer},
         {"New Jack Swing", "NJS", 100, kShorts, 0, 0b110, kPocketKeys, -1, 0, 0, 0, 0, 0.64},
         {"Quiet Storm", "Storm", 78, kRich, 0, 0b011}},
@@ -219,7 +219,7 @@ inline const std::vector<Genre> &genres() {
        {{"x---------x-----", 0.35}, {"x-----.x--------", 0.5}, {"x..x..x...x.....", 0.7}},
        {{"x..x..x...x.x.xx", 0.6}},
        {{kMajor, {"Fmaj7 Em7|Am7|Dm7 G7|Cmaj7", "Fmaj7 Em7|Am7|Dm7 G7|Cmaj7", "Dm7|G7", "Fmaj7 Em7|Am7|Dm7 G7|Cmaj9", "Dm9|G13|Em7|Am9", "Fmaj7 Em7|Am7|Dm7 G7|Cmaj7"}},
-        {kMinor, {"Cm9|Fm9", "Cm9|Fm9", "Abmaj7|G7#9", "Cm9|Fm9|Bb13|Ebmaj7", "Abmaj7|Abmaj7|G7#9|G7#9", "Cm9|Fm9"}}},
+        {kMinor, {"Cm9|Fm9", "Cm9|Fm9", "Abmaj7|G7#9", "Cm9|Fm9|Bb13|Ebmaj7", "Abmaj7|Abmaj7|G7#9|G7#9", "Cm9|Fm9|Cm9|Cm9"}}},
        {{"Study Loop", "Loop", 80, kLongs | kRich, 0, 0b001},
         {"Rainy Chop", "Chop", 74, kRich, 1, 0b100},
         {"Dusty Push", "Push", 86, kPushes | kRich, 0, 0b010}},
@@ -330,7 +330,7 @@ inline const std::vector<Genre> &genres() {
         {"x.......x...x...|x...x...x.......|x.........x...x.|....x.....x...x.", 0.55}, {"x.3.5.x.x.3.5.x.", 0.6}},
        {{"x...x...x.x.x.xx", 0.6}},
        // The i-IV7 vamp ("Oye Como Va"); a minor ii-V.
-       {{kDorian, {"Cm7|F9", "Cm7|F9", "Ab7|G7", "Cm7|F9|Cm7|F9", "Dm7b5|G7b9|Cm7|Cm7", "Cm7|F9"}}},
+       {{kDorian, {"Cm7|F9", "Cm7|F9", "Ab7|G7", "Cm7|F9|Cm7|F9", "Dm7b5|G7b9|Cm7|Cm7", "Cm7|F9|Cm7|Cm7"}}},
        {{"Cha-Cha", "Cha-Cha", 118, kFixed, 0, 0b1001},
         {"Latin Jazz Guajeo", "Guajeo", 190, kPushes | kRich | kFixed, 0, 0b010, kMontuno},
         {"Bolero", "Bolero", 80, kRich, 0, 0b110000},
@@ -381,8 +381,8 @@ inline const std::vector<Genre> &genres() {
         {"x...x...x...x...|x...x...x...x...|....x...x...x...|x...x...x...x...", 0.5},
         {"x-----x-----", 0.35, 3}, {"X.x.x.X.x.x.", 0.6, 3}, {"b.x.x.f.x.x.", 0.5, 3}},
        {{"x-------x.x.x.xx", 0.5}, {"xxxXxxxxxXXX", 0.6}},
-       // I-V/7-vi-IV over a falling bass; I-iii-IV-V; IV-V-iii-vi-ii-V-I; the last chorus up.
-       {{kMajor, {"C|G/B|Am|F", "C|G/B|Am|F", "C|Em|F|G", "F|G|Em|Am|Dm|G|C|C", "Ab|Bb|C|C", "Gb|Ab|Fm|Bbm|Ebm|Ab|Db|Db"}}},
+       // I-V/7-vi-IV over a falling bass; I-iii-IV-V; IV-V-iii-vi-ii-V-I; the last chorus again, ending home.
+       {{kMajor, {"C|G/B|Am|F", "C|G/B|Am|F", "C|Em|F|G", "F|G|Em|Am|Dm|G|C|C", "Ab|Bb|C|C", "F|G|Em|Am|Dm|G|C|C"}}},
        {{"Half Notes", "Halves", 72, kLongs, 0, 0b001, kPopPianist},
         {"Broken Chords", "Arpeggio", 68, kLongs, 0, 0b010},
         {"12/8 Ballad", "12/8", 64, kTriplet},
@@ -416,8 +416,8 @@ inline const std::vector<Genre> &genres() {
        {{"X...............", 0.2}, {"..X...X...X...X.", 0.55}, {"x..x..x...x..x..", 0.75}, {"x..x..x.x..x..x.|x..x..x...x..x..", 0.9}},
        {{"x..x..x...x.xxxx", 0.8}},
        // i-bVII-bVI-bVII; the major lift I-iii-IV, IV-V-vi; i-iv in the breakdown.
-       {{kMinor, {"Cm|Fm", "Cm|Bb|Ab|Bb", "Ab|Bb|Ab|Bb", "Cm|Bb|Ab|Bb", "Cm|Fm|Cm|Fm", "Cm|Fm"}},
-        {kMajor, {"C|Em|F|F", "C|Em|F|F", "F|G|Am|Am", "F|G|Am|Am", "Am|Dm|Am|Dm", "C|Em|F|F"}}},
+       {{kMinor, {"Cm|Fm", "Cm|Bb|Ab|Bb", "Ab|Bb|Ab|Bb", "Cm|Bb|Ab|Bb", "Cm|Fm|Cm|Fm", "Cm|Fm|Cm|Cm"}},
+        {kMajor, {"C|Em|F|F", "C|Em|F|F", "F|G|Am|Am", "F|G|Am|Am", "Am|Dm|Am|Dm", "C|Em|F|C"}}},
        {{"Piano Riff", "M1 Piano", 124, kPushes, 0, 0b1100},
         {"Offbeat Stabs", "Offbeat", 126, kShorts, 0, 0b0010},
         {"Major Lift", "Lift", 122, kPushes, 1, 0b0100}},
@@ -428,7 +428,7 @@ inline const std::vector<Genre> &genres() {
        {{"x---------------", 0.35}, {"..x...x...x..x..", 0.6}, {"...x..x...x..x..", 0.75}},
        {{"..x...x...x.xxx.", 0.6}},
        // i9-iv9; i(add9)-bVI7-bVII(add9) (the "Can You Feel It" changes); m9 planed a step.
-       {{kMinor, {"Cm9|Fm9", "Cm9|Fm9|Cm9|Fm9", "Ab7|Bbadd9", "Cmadd9|Ab7|Bbadd9|Bbadd9", "Dm9|Dm9|Cm9|Cm9", "Cm9|Fm9"}}},
+       {{kMinor, {"Cm9|Fm9", "Cm9|Fm9|Cm9|Fm9", "Ab7|Bbadd9", "Cmadd9|Ab7|Bbadd9|Bbadd9", "Dm9|Dm9|Cm9|Cm9", "Cm9|Fm9|Cm9|Cm9"}}},
        {{"Held Like Strings", "Strings", 118, kLongs | kRich, 0, 0b001, kPadPlayer},
         {"Chicago Stabs", "Stabs", 122, kRich | kShorts, 0, 0b010},
         {"Jersey Push", "Push", 124, kRich | kPushes, 0, 0b100}},
@@ -442,8 +442,8 @@ inline const std::vector<Genre> &genres() {
        // also keeps a light swing).
        {{"....x.......x...", 0.4}, {"..x...x...x...x.", 0.6}, {"..b.x.b...b.x.b.", 0.75}, {"....x.x.....x.x.", 0.85}},
        {{"....x..x..x.x.xx", 0.6}},
-       {{kMajor, {"C|F", "C|F|C|F", "Am|F|G|G", "C|G|Am|F", "Am|G|Am|G", "C|F"}},
-        {kMinor, {"Cm|Fm", "Cm|Fm|Cm|Fm", "Ab|Bb", "Cm|Bb|Cm|Bb", "Fm|Bb|Cm|Cm", "Cm|Fm"}}},
+       {{kMajor, {"C|F", "C|F|C|F", "Am|F|G|G", "C|G|Am|F", "Am|G|Am|G", "C|F|C|C"}},
+        {kMinor, {"Cm|Fm", "Cm|Fm|Cm|Fm", "Ab|Bb", "Cm|Bb|Cm|Bb", "Fm|Bb|Cm|Cm", "Cm|Fm|Cm|Cm"}}},
        {{"One Drop Skank", "One Drop", 74, kShorts, 0, 0b0001},
         {"Organ Bubble", "Bubble", 72, kShorts | kPlain, 0, 0b0100, kChurchOrgan, kClose, 4, 55, 76, 64},
         {"Rockers", "Rockers", 80, kShorts, 1, 0b1001}},

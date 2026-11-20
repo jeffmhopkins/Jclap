@@ -321,6 +321,9 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
    Chord best;
    double bestScore = -1e9;
    bool bestRootless = false;
+   // Root, 3rd and 7th over the lowest note (C E Bb) is that note's dominant shell, the most common
+   // way to hold one, never the rootless voicing of the chord a tritone away (Gb7#11).
+   const bool bassShell = (held >> ((bassPc + 4) % 12) & 1) && (held >> ((bassPc + 10) % 12) & 1);
    for (int root = 0; root < 12; ++root) {
       // A rootless voicing needs four notes to be named by its missing root, or a dominant's
       // tritone (its 3rd and 7th) and a colour: the left hand's rootless voicings.
@@ -334,7 +337,7 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
          for (int i : qu.tones)
             want |= 1u << ((root + i) % 12);
          double score = 0;
-         const bool overBass = slash && root != bassPc && bassCount == 1 && !(want & bassBit) &&
+         const bool overBass = slash && !bassShell && root != bassPc && bassCount == 1 && !(want & bassBit) &&
                                (want & ~bassBit) == (held & ~bassBit);
          for (int pc = 0; pc < 12; ++pc) {
             const bool h = held >> pc & 1, w = want >> pc & 1;
@@ -361,7 +364,8 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
          // its own, is that dominant (G13 from F A B E, not an Fmaj7#11 with an avoid note).
          const bool dom = std::find(qu.tones.begin(), qu.tones.end(), 4) != qu.tones.end() &&
                           std::find(qu.tones.begin(), qu.tones.end(), 10) != qu.tones.end();
-         if (rootless && tritone && dom && (held & ~want) == 0)
+         const bool rootlessDom = rootless && tritone && dom && !bassShell;
+         if (rootlessDom && (held & ~want) == 0)
             score += 2.5;
          // Simpler names first: fewer tones break ties.
          score -= 0.05 * static_cast<double>(qu.tones.size());
@@ -369,7 +373,7 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
             bestScore = score;
             best.root = static_cast<int8_t>(root);
             best.quality = static_cast<uint8_t>(q);
-            bestRootless = rootless && tritone && dom;
+            bestRootless = rootlessDom;
          }
       }
    }

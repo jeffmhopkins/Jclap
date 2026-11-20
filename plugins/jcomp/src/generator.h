@@ -1268,6 +1268,10 @@ inline Section makeSection(const Recipe &r, int section, uint32_t seed) {
    if (bars % s.progBars)
       bars = (bars / s.progBars + 1) * s.progBars;
    s.bars = static_cast<uint8_t>(std::clamp(bars, 1, kMaxBars));
+   // The song's last bar holds its home chord: no approach chord (WEIRD's) into a section that
+   // never comes.
+   if (section == kOutro)
+      s.split = static_cast<uint16_t>(s.split & ~(1u << ((s.bars - 1) % std::max<int>(1, s.progBars))));
    Pattern p = baseRhythm(r, section, rng);
    // A genre that takes every anticipation (swing) does in every style, not only those that push.
    const unsigned pushAll = genreAt(r.genre).pushAll && !(st.mods & kFixed) ? kPushes : 0u;

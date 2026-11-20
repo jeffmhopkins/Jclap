@@ -2217,5 +2217,32 @@ int main() {
 
       }
    }
+   // ---- the sixth review's fixes (0.7.0) ----
+   {
+      // D1: root, 3rd and 7th over the lowest note is that note's dominant, not its tritone sub.
+      JCLAP_CHECK(chordName(nameChord(Ints{48, 52, 58}), 0) == "C7");
+      JCLAP_CHECK(chordName(nameChord(Ints{48, 58, 64}), 0) == "C7");
+      JCLAP_CHECK(chordName(nameChord(Ints{40, 44, 50}), 4) == "E7");
+      JCLAP_CHECK(chordName(nameChord(Ints{48, 52, 58, 61}), 0) == "C7b9");
+      JCLAP_CHECK(chordName(nameChord(Ints{53, 57, 59, 64}), 7) == "G13");
+      JCLAP_CHECK(chordName(nameChord(Ints{59, 65}), 7) == "G7");
+   }
+   {
+      // A1, A2, A3, A9, C04, E9: every style's song ends on its home chord, in the song's key, the
+      // last bar whole (no approach chord), at any WEIRD.
+      for (int g = 0; g < genreCount(); ++g)
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st)
+            for (uint32_t seed = 1; seed <= 6; ++seed)
+               for (double weird : {-1.0, 1.0}) {
+                  Recipe r = recipeOf(g, st, seed);
+                  if (weird >= 0)
+                     r.weird = weird;
+                  Song song;
+                  generateSong(r, song);
+                  const Section &o = song.sections[kOutro];
+                  JCLAP_CHECK_EQ(static_cast<int>(o.chordAt(o.bars - 1, false).root), static_cast<int>(song.key));
+                  JCLAP_CHECK_EQ(static_cast<int>(o.chordAt(o.bars - 1, true).root), static_cast<int>(song.key));
+               }
+   }
    return jclap::core::testResult();
 }
