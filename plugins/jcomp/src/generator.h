@@ -447,9 +447,9 @@ inline bool thinnedBy(const Pattern &p, int step, double density, double dice, b
          return false;
       bool firstHalf = true;
       for (int s = from; s < step; ++s)
-         if (p.at(s).on() && !leftHand(p.at(s).part) && s - from >= perBar / 2)
+         if (p.at(s).on() && !leftHand(p.at(s).part) && s - from >= halfBar(p))
             firstHalf = false;
-      if (firstHalf && step - from >= perBar / 2 && secondHalfChanges)
+      if (firstHalf && step - from >= halfBar(p) && secondHalfChanges)
          return false;
    }
    const bool onBeat = step % perBeat == 0;
@@ -551,9 +551,9 @@ inline std::vector<const Rhythm *> rhythmsFor(const Genre &g, const Style &st, b
       for (const Rhythm &r : list)
          if (rhythmRate(r) == rate)
             out.push_back(&r);
-   if (out.empty() && rate != kRate34)
+   if (out.empty() && rate != kRate34 && rate != kRate68)
       for (const Rhythm &r : list)
-         if (rhythmRate(r) != kRate34)
+         if (rhythmRate(r) != kRate34 && rhythmRate(r) != kRate68)
             out.push_back(&r);
    return out;
 }
@@ -1027,7 +1027,7 @@ inline Pattern baseRhythm(const Recipe &r, int section, Rng &rng) {
    const double e = sectionEnergy(r, section);
    const auto list = rhythmsFor(g, st);
    const Rhythm *rh = pickRhythm(list, e, rng);
-   Pattern p = rh ? fromRhythm(*rh) : st.mods & kWaltz ? fromRhythm("x-----------", kRate34) : fromRhythm("x...............");
+   Pattern p = rh ? fromRhythm(*rh) : st.mods & kWaltz ? fromRhythm("x-----------", styleRate(st.mods)) : fromRhythm("x...............");
    // Interlocking parts: the style's other rhythms woven into the steps this one leaves empty.
    if (st.mods & kInterlock)
       for (const Rhythm *o : list) {
@@ -1045,10 +1045,10 @@ inline Pattern baseRhythm(const Recipe &r, int section, Rng &rng) {
    if (r.genre2 >= 0 && r.genre2 != r.genre && r.blend > 0.0 && !(st.mods & kFixed)) {
       const Genre &g2 = genreAt(r.genre2);
       Style st2 = styleAt(g2, 0);
-      st2.mods = st.mods & (kTriplet | kWaltz);
+      st2.mods = st.mods & (kTriplet | kWaltz | kSixEight);
       st2.rhythms = 0;
       // Only from the same number of beats a bar: a 4/4 rhythm doesn't go into a waltz.
-      if (const Rhythm *r2 = pickRhythm(rhythmsFor(g2, st2), e, rng); r2 && (rhythmRate(*r2) == kRate34) == (p.rate == kRate34))
+      if (const Rhythm *r2 = pickRhythm(rhythmsFor(g2, st2), e, rng); r2 && (rhythmRate(*r2) == p.rate || (!p.inThree() && rhythmRate(*r2) != kRate34 && rhythmRate(*r2) != kRate68)))
          blendInto(p, fromRhythm(*r2), r.blend * 0.6, rng);
    }
    return p;
@@ -1178,6 +1178,8 @@ inline const char *downText(const Genre &g, const Pattern &base, unsigned mods) 
       return off ? "...x-----..." : mods & kLongs ? "x--------..." : "X-----......";
    if (base.rate == kRate34)
       return off ? "....x---...." : mods & kLongs ? "x--------..." : "X-------....";
+   if (base.rate == kRate68) // on the dotted quarters
+      return off ? "..x-----...." : mods & kLongs ? "x---------.." : "X-----......";
    if (off)
       return "....x-------....";
    if (mods & kLongs)
@@ -1196,6 +1198,8 @@ inline const char *endingText(const Genre &g, const Pattern &base, unsigned mods
       return mods & kLongs ? "X-----------|------------" : "x..x..x..x..|X-----------";
    if (base.rate == kRate34)
       return mods & kLongs ? "X-----------|------------" : "x...x...x...|X-----------";
+   if (base.rate == kRate68) // 1 and 4, then the last chord held
+      return mods & kLongs ? "X-----------|------------" : "x.....x.....|X-----------";
    if (mods & kLongs)
       return "X---------------|----------------";
    if (off)
@@ -1227,7 +1231,7 @@ inline Pattern figure(const char *text, uint8_t rate, double e) {
 inline Pattern makeFillDown(const Recipe &r, int section, const Pattern &base, double e) {
    const Genre &g = genreAt(r.genre);
    const Style &st = styleOf(r);
-   const char *text = section == kIntro ? (base.rate == kRate8T ? "X-----......" : base.rate == kRate34 ? "X-------...." : "X-------........")
+   const char *text = section == kIntro ? (base.rate == kRate8T ? "X-----......" : base.rate == kRate34 ? "X-------...." : base.rate == kRate68 ? "X---------.." : "X-------........")
                                         : downText(g, base, st.mods);
    if (section == kIntro && keepsOff(base, 0))
       text = downText(g, base, 0);

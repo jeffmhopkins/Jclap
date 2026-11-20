@@ -1981,7 +1981,7 @@ int main() {
                ++waltzes;
                for (const Section &sec : song->sections)
                   for (const Pattern &t : sec.takes)
-                     JCLAP_CHECK(t.rate == kRate34 && t.stepsPerBar() == 12);
+                     JCLAP_CHECK(t.rate == styleRate(genreAt(g).styles[static_cast<size_t>(st)].mods) && t.inThree() && t.stepsPerBar() == 12);
             }
          }
       JCLAP_CHECK_EQ(waltzes, 3);
@@ -1989,6 +1989,7 @@ int main() {
       // are the triplet grid.
       JCLAP_CHECK_EQ(static_cast<int>(fromRhythm("x.....x...x...x.|x.........x.....|x.........x...x.|..........x...x.").steps), 64);
       JCLAP_CHECK(fromRhythm(Rhythm{"x-------x---", 0.35, 3}).rate == kRate34);
+      JCLAP_CHECK(fromRhythm(Rhythm{"x-----x-----", 0.35, 6}).rate == kRate68);
       {
          const Pattern t = fromRhythm("xxxXxxxxxXxx|xxxXxxxxxXxx|xxxXxxxxxXxx|x..x..x..x..");
          JCLAP_CHECK(t.rate == kRate8T && t.steps == 48);
@@ -2261,6 +2262,58 @@ int main() {
          JCLAP_CHECK(startingAt(all, fifthAt) == std::set<int>{7});           // C's fifth
          JCLAP_CHECK(startingAt(all, 96000 + fifthAt) == std::set<int>{0});   // F's fifth
       }
+   }
+   {
+      // C02, C03, D2: 6/8 is two dotted-quarter beats. Its ending and fill down land on eighths 1
+      // and 4, and DENSITY drops the weak eighths before the second beat.
+      int sixEights = 0;
+      for (int g = 0; g < genreCount(); ++g)
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st) {
+            if (!(genreAt(g).styles[static_cast<size_t>(st)].mods & kSixEight))
+               continue;
+            ++sixEights;
+            for (uint32_t seed = 1; seed <= 8; ++seed) {
+               Song song;
+               generateSong(recipeOf(g, st, seed), song);
+               const Pattern &end = song.sections[kOutro].ending;
+               JCLAP_CHECK(end.rate == kRate68);
+               for (int k = 0; k < end.steps; ++k)
+                  if (end.at(k).on())
+                     JCLAP_CHECK(k % 6 == 0);
+               for (const Section &sec : song.sections)
+                  for (int k = 0; k < sec.fillDown.steps; ++k)
+                     if (sec.fillDown.at(k).on() && !leftHand(sec.fillDown.at(k).part))
+                        JCLAP_CHECK(k < 6);
+            }
+         }
+      JCLAP_CHECK_EQ(sixEights, 1);
+      const Pattern six = fromRhythm("X.x.x.X.x.x.", kRate68);
+      JCLAP_CHECK_EQ(six.perBeat(), 6);
+      JCLAP_CHECK_EQ(strongSteps(six), 6);
+      for (double density : {0.1, 0.2, 0.3, 0.4})
+         for (double d : {0.0, 0.5, 1.0})
+            if (!thinnedBy(six, 4, density, d, false) || !thinnedBy(six, 8, density, d, false))
+               JCLAP_CHECK(!thinnedBy(six, 6, density, d, false));
+   }
+   {
+      // B05, D3, E10: in 3/4 a bar's second chord comes in on beat 3, not on the and of 2.
+      auto song = songOf("x.x.x.x.x.x.x.x.", {{"C", "G"}});
+      song->beats = 3;
+      for (Section &sec : song->sections) {
+         for (Pattern &t : sec.takes)
+            t = fromRhythm("x...x...x...", kRate34);
+         sec.fill = sec.takes[0];
+      }
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      e.setSettings(plain());
+      e.reset();
+      const auto all = runWith(e, 24000 * 6, 0.0, [](int64_t, Block &) {});
+      JCLAP_CHECK(startingAt(all, 24000).count(0));  // beat 2: still C
+      JCLAP_CHECK(!startingAt(all, 24000).count(11));
+      JCLAP_CHECK(startingAt(all, 48000).count(7));  // beat 3: G
+      JCLAP_CHECK(startingAt(all, 48000).count(11));
    }
    return jclap::core::testResult();
 }

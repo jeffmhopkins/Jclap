@@ -472,6 +472,17 @@ public:
    // A bar: four beats, or three in a waltz.
    int beats() const { return song_.beats == 3 ? 3 : 4; }
    int64_t barTicks() const { return static_cast<int64_t>(kTicksPerBeat) * beats(); }
+   // Where a bar's second chord comes in: half way, but on beat 3 in a waltz (6/8's half bar is
+   // its second beat).
+   int64_t halfTicks() const {
+      const bool sixEight = song_.sections[static_cast<size_t>(std::clamp(section_, 0, kSections - 1))].takes[0].rate == kRate68;
+      return beats() == 3 && !sixEight ? 2 * kTicksPerBeat : barTicks() / 2;
+   }
+   // The start of the next chord slot (a bar's first or second half) after `rel`.
+   int64_t nextSlot(int64_t rel) const {
+      const int64_t bar = rel - ((rel % barTicks()) + barTicks()) % barTicks();
+      return rel - bar < halfTicks() ? bar + halfTicks() : bar + barTicks();
+   }
    const Voicing &lastVoicing() const { return last_; }
    Chord heldChord() const { return heldNow_ ? heldChord_ : latched_; }
 
@@ -733,7 +744,7 @@ private:
       }
       const Section &sec = song_.sections[static_cast<size_t>(si)];
       const int bar = static_cast<int>(rel / barTicks());
-      const bool half = (rel % barTicks()) >= barTicks() / 2;
+      const bool half = (rel % barTicks()) >= halfTicks();
       Chord c = sec.chordAt(bar, half);
       if (!c.none()) {
          c.root = static_cast<int8_t>((c.root + transpose()) % 12);
@@ -768,10 +779,9 @@ private:
    int64_t nextChange(int64_t rel) const {
       if (!fromProgression())
          return -1;
-      const int64_t half = barTicks() / 2;
       const Chord now = progressionChord(rel);
       const int64_t end = static_cast<int64_t>(song_.sections[static_cast<size_t>(section_)].bars) * barTicks();
-      for (int64_t at = rel - rel % half + half, k = 0; k < 8; ++k, at += half) {
+      for (int64_t at = nextSlot(rel), k = 0; k < 8; ++k, at = nextSlot(at)) {
          if (at >= end && ((settings_.song && pending_ < 0) || pending_ >= 0))
             return at;
          if (pending_ >= 0 && switchesAt(anchor_ + at))
@@ -796,8 +806,7 @@ private:
    }
    // Whether the progression changes chord at `rel`.
    bool changesAt(int64_t rel) const {
-      const int64_t half = barTicks() / 2;
-      if (!fromProgression() || rel % half)
+      if (!fromProgression() || (rel % barTicks() != 0 && rel % barTicks() != halfTicks()))
          return false;
       if (rel == 0)
          return !sameHarmony(progressionChord(0), lastChord_);
@@ -956,9 +965,10 @@ private:
       if (fill_ && (fillDown_ ? s.fillDown : s.fill).empty())
          fill_ = false; // a fill cleared in EDIT: the take plays on
       const Pattern &p = current();
-      nextChord_ = progressionChord(r - r % (barTicks() / 2) + barTicks() / 2);
+      int64_t slot = nextSlot(r);
+      nextChord_ = progressionChord(slot);
       for (int k = 0; k < 4 && nextChord_ == progressionChord(r); ++k)
-         nextChord_ = progressionChord(r - r % (barTicks() / 2) + (k + 2) * (barTicks() / 2));
+         nextChord_ = progressionChord(slot = nextSlot(slot));
       if (settings_.pad)
          padAt(t, false);
       if (settings_.rhythmFrom == 1)
@@ -1024,7 +1034,9 @@ private:
    }
    double swingTicks(const Pattern &p, int step, int stepTicks) const {
       const double sw = swingNow();
-      if (p.rate == kRate8T)
+      // A triplet grid swings already; 6/8's eighths are its own lilt, not swung (its second beat,
+      // eighth 4, stays on time).
+      if (p.rate == kRate8T || p.rate == kRate68)
          return 0.0;
       if (settings_.swingFeel == 0)
          return step % 2 == 1 ? (sw - 0.5) * 2.0 * stepTicks : 0.0;
@@ -1302,7 +1314,7 @@ private:
       if (!fromProgression() || pending_ >= 0)
          return kMarkNone;
       const Section &sec = song_.sections[static_cast<size_t>(section_)];
-      const int64_t bar = rel / barTicks(), half = barTicks() / 2;
+      const int64_t bar = rel / barTicks(), half = halfTicks();
       const int pb = std::max<int>(1, sec.progBars);
       const int b = static_cast<int>(bar % pb);
       const bool second = rel % barTicks() >= half && (sec.split >> b & 1);
@@ -1346,7 +1358,7 @@ private:
    bool thinned(const Pattern &p, int step) const {
       if (settings_.density >= 0.5 || !p.at(step).on())
          return false;
-      return thinnedBy(p, step, settings_.density, dice(diceBar_, step, 20), changesAt(barRel_ + barTicks() / 2),
+      return thinnedBy(p, step, settings_.density, dice(diceBar_, step, 20), changesAt(barRel_ + halfTicks()),
                        settings_.fixed);
    }
 

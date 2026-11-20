@@ -53,7 +53,8 @@ enum Mod : unsigned {
    kFixed = 1 << 13,
    kInterlock = 1 << 14, // two of its rhythms at once, interlocking (a tenor line over the chord chops)
    kSlip = 1 << 15,      // Cramer's slip note: a whole step slid into a chord tone, in place of runs
-   kWaltz = 1 << 16,     // three beats a bar (3/4, or 6/8 counted in eighths): the genre's three-beat rhythms
+   kWaltz = 1 << 16,     // three beats a bar (3/4): the genre's three-beat rhythms
+   kSixEight = 1 << 17,  // with kWaltz: the same bar in 6/8, two dotted-quarter beats (its six-beat rhythms)
 };
 
 // The progression a section is played over: its role in the song. The break plays the verse's.
@@ -66,7 +67,7 @@ inline int roleOf(int section) {
 struct Rhythm {
    const char *hits;
    double energy; // the energy it suits, 0..1
-   int beats = 4; // a bar's beats: 4, or 3 (twelve sixteenths a bar)
+   int beats = 4; // a bar's beats: 4, 3 (twelve sixteenths a bar) or 6 (6/8: the same bar, in two dotted quarters)
 };
 
 struct ProgSet {
@@ -122,8 +123,8 @@ inline bool rhythmTriplet(const char *hits) {
    return rhythmSteps(hits) % 12 == 0 && rhythmSteps(hits) % 16 != 0;
 }
 // The grid a rhythm is on, and the one a style plays on.
-inline uint8_t rhythmRate(const Rhythm &r) { return r.beats == 3 ? kRate34 : rhythmTriplet(r.hits) ? kRate8T : kRate16; }
-inline uint8_t styleRate(unsigned mods) { return mods & kWaltz ? kRate34 : mods & kTriplet ? kRate8T : kRate16; }
+inline uint8_t rhythmRate(const Rhythm &r) { return r.beats == 6 ? kRate68 : r.beats == 3 ? kRate34 : rhythmTriplet(r.hits) ? kRate8T : kRate16; }
+inline uint8_t styleRate(unsigned mods) { return mods & kSixEight ? kRate68 : mods & kWaltz ? kRate34 : mods & kTriplet ? kRate8T : kRate16; }
 // A style's swing: its own, or its genre's (more with kShuffle); and whether it swings eighths.
 inline double styleSwingOf(const Genre &g, const Style &s) {
    const double sw = s.swing > 0.0 ? s.swing : g.swing + (s.mods & kShuffle ? 0.08 : 0.0);
@@ -374,12 +375,12 @@ inline const std::vector<Genre> &genres() {
        // (the doo-wop and soul ballad), and quiet on the beats.
        // MMA's: the quarter-note block pulse, the ballad figure (1, the and of 2, 3 held), the right
        // hand's arpeggio up the chord and back, the four-bar phrase whose third bar drops its one; in
-       // 6/8 (three beats of two eighths here): the dotted quarters, the six eighths leaning on 1 and 4,
+       // 6/8 (the same twelve sixteenths, in two dotted quarters): the dotted quarters, the six eighths leaning on 1 and 4,
        // the left hand rocking under them.
        {{"x-------x-------", 0.35}, {"x.f.b.f.x.f.b.f.", 0.65}, {"xxxXxxxxxXxx", 0.6}, {"x--x--x--x--", 0.35},
         {"x...x...x...x...", 0.5}, {"x.....x.x-------|x...x...x-------", 0.55}, {"1...3.5.8...5.3.|1.....5.8...5.3.", 0.45},
         {"x...x...x...x...|x...x...x...x...|....x...x...x...|x...x...x...x...", 0.5},
-        {"x-----x-----", 0.35, 3}, {"X.x.x.X.x.x.", 0.6, 3}, {"b.x.x.f.x.x.", 0.5, 3}},
+        {"x-----x-----", 0.35, 6}, {"X.x.x.X.x.x.", 0.6, 6}, {"b.x.x.f.x.x.", 0.5, 6}},
        {{"x-------x.x.x.xx", 0.5}, {"xxxXxxxxxXXX", 0.6}},
        // I-V/7-vi-IV over a falling bass; I-iii-IV-V; IV-V-iii-vi-ii-V-I; the last chorus again, ending home.
        {{kMajor, {"C|G/B|Am|F", "C|G/B|Am|F", "C|Em|F|G", "F|G|Em|Am|Dm|G|C|C", "Ab|Bb|C|C", "F|G|Em|Am|Dm|G|C|C"}}},
@@ -388,7 +389,7 @@ inline const std::vector<Genre> &genres() {
         {"12/8 Ballad", "12/8", 64, kTriplet},
         {"Ballad Block", "Block", 76, 0, 0, 0b10110000},
         {"Right-Hand Arpeggio", "RH Arp", 70, 0, 0, 0b1000000},
-        {"6/8 Ballad", "6/8", 84, kWaltz, 0, 0}},
+        {"6/8 Ballad", "6/8", 84, kWaltz | kSixEight, 0, 0}},
        "1, 61, 62"},
       {"Country", kFamilies[3], kPopPianist, 0.53, 1,
        // Boom-chick (the bass on 1 and 3, the root then the fifth, the chord on 2 and 4); Cramer's
