@@ -211,7 +211,7 @@ struct PlacedHit {
 struct Preview {
    std::vector<RollNote> notes;
    std::vector<PlacedHit> hits;
-   int steps = 16, perBar = 16, bars = 1;
+   int steps = 16, perBar = 16, bars = 1, perBeat = 4;
 };
 
 // Plays a take through over a section's progression for `bars` bars, as the engine would (without
@@ -253,13 +253,15 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
                 int scale, bool runs = true) {
    Preview out;
    out.perBar = p.stepsPerBar();
+   out.perBeat = p.perBeat();
    out.bars = std::max(1, bars);
    out.steps = out.perBar * out.bars;
-   const int stepTicks = kRateTicks[std::min<int>(p.rate, kRate8T)];
+   const int stepTicks = p.stepTicks();
+   const int64_t barTicks = static_cast<int64_t>(p.stepsPerBar()) * stepTicks;
    Voicing prev;
    Chord prevChord;
    const int n = std::max<int>(1, p.steps);
-   const int perBeat = p.rate == kRate8T ? 3 : 4;
+   const int perBeat = p.perBeat();
    const bool fine = fineGrid(p);
    const bool offbeat = offbeatTake(p);
    int octaveStep = 0;
@@ -268,7 +270,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
    int lastRunBar = -100;
    const auto chordAtView = [&](int view) {
       const int64_t tick = static_cast<int64_t>(view) * stepTicks;
-      return moved(sec.chordAt(static_cast<int>(tick / kTicksPerBar), tick % kTicksPerBar >= kTicksPerBar / 2), transpose);
+      return moved(sec.chordAt(static_cast<int>(tick / barTicks), tick % barTicks >= barTicks / 2), transpose);
    };
    for (int v = 0; v < out.steps; ++v) {
       Hit h = p.at(v % n);
@@ -289,8 +291,8 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          continue; // DENSITY below the middle drops the weakest hits; each bar's first stays
       }
       const int64_t tick = static_cast<int64_t>(v) * stepTicks + (h.push ? kTicksPerBeat / 2 : 0);
-      const int bar = static_cast<int>(tick / kTicksPerBar);
-      const bool half = tick % kTicksPerBar >= kTicksPerBar / 2;
+      const int bar = static_cast<int>(tick / barTicks);
+      const bool half = tick % barTicks >= barTicks / 2;
       const Chord c = moved(sec.chordAt(bar, half), transpose);
       if (c.none())
          continue;
@@ -450,7 +452,7 @@ void drawRoll(visage::Canvas &c, float s, const Preview &pv, float x, float y, f
    const float rh = std::max(minRow, (h - 2 * pad) / std::max(1, hi - lo + 1));
    auto rowY = [&](int key) { return y + pad + (hi - key) * (h - 2 * pad - rh) / std::max(1, hi - lo); };
    if (beats) {
-      const int perBeat = pv.perBar / 4;
+      const int perBeat = pv.perBeat;
       for (int st = perBeat; st < pv.steps; st += perBeat) {
          c.setColor(st % pv.perBar == 0 ? 0xff2a3039 : 0xff20242b);
          c.fill((x + pad + st * cw) * s, (y + 2) * s, (st % pv.perBar == 0 ? 1.0f : 0.6f) * s, (h - 4) * s);
@@ -1288,10 +1290,9 @@ public:
             label(c, s, "C" + std::to_string(k / 12 - 1), 2, y + rh / 2 - 6, 30, 0xff5d636cu, visage::Font::kLeft, 7);
       }
       Preview shown = pv;
-      const int playing = frame && frame->running && frame->section == host_.editSection &&
-                                (host_.editTake == 4) == frame->fill && (host_.editTake == 4 || frame->take == host_.editTake)
-                             ? frame->step
-                             : -1;
+      const int shownTake = frame ? (frame->ending ? 6 : frame->fillDown ? 5 : frame->fill ? 4 : frame->take) : -1;
+      const int playing =
+          frame && frame->running && frame->section == host_.editSection && shownTake == host_.editTake ? frame->step : -1;
       drawRoll(c, s, shown, kKeysW, gy, w - kKeysW, gh, playing, true, host_.editStep, lo, hi, rh);
       // Legend.
       const char *names[4] = {"top voice", "inner voices", "bottom", "passing run"};
@@ -1351,7 +1352,13 @@ public:
    Pattern &pick(Song &song) const { return pick(song, host_.editSection, host_.editTake); }
    static Pattern &pick(Song &song, int section, int take) {
       Section &sec = song.sections[static_cast<size_t>(section)];
-      return take >= kTakes ? sec.fill : sec.takes[static_cast<size_t>(take)];
+      Pattern &p = patternOf(sec, take);
+      // An empty fill down or ending written on the song's grid: a bar (two for an ending).
+      if (p.empty() && p.rate != sec.takes[0].rate) {
+         p.rate = sec.takes[0].rate;
+         p.steps = static_cast<uint8_t>(p.stepsPerBar() * (take == 6 ? 2 : 1));
+      }
+      return p;
    }
    const Pattern &pattern() const { return pick(const_cast<Song &>(host_.song())); }
 
@@ -1588,8 +1595,8 @@ public:
          label(c, s, kSectionCaps[i], x + 10, 13, w - 20, playing ? kOrange : kWhite, visage::Font::kLeft, 11);
          label(c, s, noteText(st.noteFor(i)), x + 10, 14.5f, w - 20, 0, visage::Font::kRight, 8);
          drawBarChips(c, s, barNames(sec, key, transpose(), std::min<int>(4, sec.progBars), scale()), x + 7, 32, w - 14, 13, kTitle);
-         const int show = playing ? (f.fill ? -1 : f.take) : 0;
-         const Pattern &p = show < 0 ? sec.fill : sec.takes[static_cast<size_t>(std::max(0, show))];
+         const int show = playing ? (f.ending ? 6 : f.fillDown ? 5 : f.fill ? 4 : f.take) : 0;
+         const Pattern &p = patternOf(sec, show);
          const Preview pv = preview(sec, p, viewBars(sec, p), vs(), transpose(), key, scale(), host_.paramValue(kRuns) > 0.0);
          drawRoll(c, s, pv, x + 7, 50, w - 14, 52, playing && f.running ? f.step : -1);
          c.setColor(ui::defaultTheme().track);
@@ -1646,7 +1653,7 @@ public:
       const PlayFrame &f = frame ? *frame : PlayFrame{};
       const int key = static_cast<int>(std::lround(host_.paramValue(kKey)));
       const Section &sec = host_.song().sections[static_cast<size_t>(std::clamp(f.section, 0, kSections - 1))];
-      const Pattern &p = f.fill ? sec.fill : sec.takes[static_cast<size_t>(std::clamp(f.take, 0, kTakes - 1))];
+      const Pattern &p = patternOf(sec, f.ending ? 6 : f.fillDown ? 5 : f.fill ? 4 : std::clamp(f.take, 0, kTakes - 1));
       Chord now = f.chord;
       Voicing v;
       for (int i = 0; i < f.voices && i < kMaxVoices; ++i)
@@ -1983,6 +1990,7 @@ public:
                16, 32, 560, 0, visage::Font::kLeft, 9);
          drawCustom(c, s);
       }
+      label(c, s, "MORE: HOW THE SONG ENDS AND STARTS, THE SWING, A PAD", 16, 264, 600, kFaint, visage::Font::kLeft, 8);
    }
    void mouseDown(const visage::MouseEvent &e) override {
       const float s = ui::designScale(*this);
@@ -2306,7 +2314,7 @@ private:
       Song s = host_.song();
       Section &sec = s.sections[static_cast<size_t>(host_.mutateSection)];
       host_.parents.push_back(sec.takes[0]);
-      adoptChild(recipe(), sec, host_.litter[static_cast<size_t>(child)], rng_());
+      adoptChild(recipe(), sec, host_.litter[static_cast<size_t>(child)], rng_(), host_.mutateSection);
       host_.setSong(s);
       breed();
       redraw();
@@ -2316,7 +2324,7 @@ private:
          return;
       Song s = host_.song();
       Section &sec = s.sections[static_cast<size_t>(host_.mutateSection)];
-      adoptChild(recipe(), sec, host_.parents.back(), rng_());
+      adoptChild(recipe(), sec, host_.parents.back(), rng_(), host_.mutateSection);
       sec.generation = static_cast<uint16_t>(std::max(0, sec.generation - 2));
       host_.parents.pop_back();
       host_.setSong(s);
@@ -2589,6 +2597,12 @@ private:
       lasts_->setAccent(kOrange);
       lasts_->onChange = [this](int i) { setSplit(host_.chordSection, host_.chordSlot / 2, i == 1); };
       tips_.add(*lasts_, "The bar's chord lasts the whole bar, or the bar splits in two halves with a chord each.");
+      mark_ = &onPage<ui::SegmentedSwitch>(kChordsPage, {824, 248, 152, 18},
+                                           std::vector<std::string>{"COMP", "ACC", "HOLD", "SHOT"});
+      mark_->setAccent(kOrange);
+      mark_->onChange = [this](int i) { setMark(i); };
+      tips_.add(*mark_, "A band hit on this chord: COMP as the take plays it; ACCENT its first stroke; HOLD struck once and "
+                        "held to the next chord; SHOT struck once, short. The take rests under a hold or a shot.");
       voicing_ = &onPage<ChordVoicing>(kChordsPage, {652, 498, 324, 46});
       instead_ = &onPage<Chips>(kChordsPage, {652, 566, 324, 22});
       instead_->colour = kPurple;
@@ -2626,6 +2640,19 @@ private:
       sec.chords[static_cast<size_t>(slot)] = ch;
       if (!(sec.split >> bar & 1))
          sec.chords[static_cast<size_t>(bar * 2 + 1)] = ch;
+      host_.setSong(s);
+      redraw();
+   }
+
+   void setMark(int mark) {
+      Song s = host_.song();
+      Section &sec = s.sections[static_cast<size_t>(host_.chordSection)];
+      const int slot = std::clamp(host_.chordSlot, 0, kSlots - 1);
+      const int bar = slot / 2;
+      const bool split = sec.split >> bar & 1;
+      sec.marks[static_cast<size_t>(split ? slot : bar * 2)] = static_cast<uint8_t>(std::clamp(mark, 0, 3));
+      if (!split)
+         sec.marks[static_cast<size_t>(bar * 2 + 1)] = kMarkNone;
       host_.setSong(s);
       redraw();
    }
@@ -2718,7 +2745,9 @@ private:
       const Chord ch = moved(sec.chords[static_cast<size_t>(slot)], transpose());
       std::string title = std::string(kSectionCaps[host_.chordSection]) + " \xC2\xB7 BAR " + std::to_string(bar + 1);
       drawCard(c, s, 640, 208, 348, 400, title, split ? (slot % 2 ? "the second half" : "the first half") : "the whole bar");
-      label(c, s, chordName(ch, key(), scaleNow()), 652, 230, 320, kWhite, visage::Font::kLeft, 34);
+      label(c, s, chordName(ch, key(), scaleNow()), 652, 230, 170, kWhite, visage::Font::kLeft, 34);
+      label(c, s, "BAND HIT", 824, 232, 152, 0, visage::Font::kLeft, 9);
+      mark_->setSelected(sec.marks[static_cast<size_t>(slot)]);
       label(c, s, roman(ch, key()) + " \xC2\xB7 " + qualityWords(ch.quality), 652, 276, 320, 0, visage::Font::kLeft, 9.5f);
       label(c, s, "ROOT", 652, 300, 60, 0, visage::Font::kLeft, 9.5f);
       label(c, s, "CHORD", 652, 370, 60, 0, visage::Font::kLeft, 9.5f);
@@ -2780,21 +2809,23 @@ private:
       std::vector<std::string> sections;
       for (const char *n : kSectionCaps)
          sections.push_back(n);
-      editSection_ = &onPage<ui::SegmentedSwitch>(kEditPage, {80, 80, 436, 24}, sections);
+      editSection_ = &onPage<ui::SegmentedSwitch>(kEditPage, {74, 80, 404, 24}, sections);
       editSection_->setAccent(kOrange);
       editSection_->onChange = [this](int i) {
          host_.editSection = i;
          host_.editStep = -1;
          redraw();
       };
-      editTake_ = &onPage<ui::SegmentedSwitch>(kEditPage, {572, 80, 200, 24}, std::vector<std::string>{"1", "2", "3", "4", "FILL"});
+      editTake_ = &onPage<ui::SegmentedSwitch>(kEditPage, {522, 80, 256, 24},
+                                               std::vector<std::string>{"1", "2", "3", "4", "FILL", "DOWN", "END"});
       editTake_->setAccent(kOrange);
       editTake_->onChange = [this](int i) {
          host_.editTake = i;
          host_.editStep = -1;
          redraw();
       };
-      tips_.add(*editTake_, "The section's four takes, and its fill.");
+      tips_.add(*editTake_, "The section's four takes, its fill, its fill DOWN into a quieter section (the intro's: its "
+                            "held chord setting up the verse) and the song's ENDING (the outro's).");
       auto &dice = onPage<FlatButton>(kEditPage, {786, 80, 202, 24}, "MUTATE THIS TAKE", 9.5f);
       dice.dice = true;
       dice.onClick = [this](const visage::MouseEvent &) {
@@ -2939,17 +2970,22 @@ private:
 
    void drawEdit(visage::Canvas &c, float s) {
       label(c, s, "SECTION", 14, 84, 60, 0, visage::Font::kLeft, 10);
-      label(c, s, "TAKE", 530, 84, 40, 0, visage::Font::kLeft, 10);
+      label(c, s, "TAKE", 486, 84, 36, 0, visage::Font::kLeft, 10);
       editSection_->setSelected(host_.editSection);
       editTake_->setSelected(host_.editTake);
       const Section &sec = host_.song().sections[static_cast<size_t>(host_.editSection)];
       const Pattern &p = TakeRoll::pick(const_cast<Song &>(host_.song()), host_.editSection, host_.editTake);
       const int bars = viewBars(sec, p);
+      static const char *const extra[3] = {"FILL", "FILL DOWN", "ENDING"};
       std::string title = std::string(kSectionCaps[host_.editSection]) + " \xC2\xB7 " +
-                          (host_.editTake >= kTakes ? std::string("FILL") : "TAKE " + std::to_string(host_.editTake + 1));
+                          (host_.editTake >= kTakes ? std::string(extra[std::min(2, host_.editTake - kTakes)])
+                                                    : "TAKE " + std::to_string(host_.editTake + 1));
       char note[160];
-      std::snprintf(note, sizeof(note), "%d bar%s%s \xC2\xB7 drag a hit to move it, its chord follows the bar",
-                    p.bars(), p.bars() == 1 ? "" : "s", bars > p.bars() ? ", played round" : "");
+      if (host_.editTake == 6 && host_.editSection != kOutro)
+         std::snprintf(note, sizeof(note), "only the outro's ending plays: the song's last bars, in SONG");
+      else
+         std::snprintf(note, sizeof(note), "%d bar%s%s \xC2\xB7 drag a hit to move it, its chord follows the bar",
+                       p.bars(), p.bars() == 1 ? "" : "s", bars > p.bars() ? ", played round" : "");
       drawCard(c, s, 12, 112, 700, 334, title, diceTag_.empty() ? note : "mutated: " + diceTag_);
       drawCard(c, s, 12, 454, 700, 154, "");
       drawCard(c, s, 720, 112, 268, 288, "VOICING", "all sections");
@@ -2966,7 +3002,7 @@ private:
          voiceChecks_[i]->on = whole(boxes[i]) != 0;
       // The hit picked.
       const bool has = host_.editStep >= 0 && host_.editStep < p.steps && p.at(host_.editStep).on();
-      const int perBar = p.stepsPerBar(), perBeat = perBar / 4;
+      const int perBar = p.stepsPerBar(), perBeat = p.perBeat();
       std::string hitTitle = "THE HIT";
       Chord hitChord;
       Voicing hitVoicing;
@@ -3019,16 +3055,18 @@ private:
          host_.request(a);
       };
       tips_.add(*tiles_, "Click a section to switch to it (at SWITCH AT), a number for that take, FILL for a fill.");
-      auto &songMode = onPage<ui::SegmentedSwitch>(kPlayPage, {300, 84, 112, 20}, std::vector<std::string>{"LOOP", "SONG"});
+      auto &songMode = onPage<ui::SegmentedSwitch>(kPlayPage, {300, 84, 168, 20},
+                                                   std::vector<std::string>{"LOOP", "SONG", "REPEAT"});
       songMode.setAccent(kOrange);
       bindings_.bind(songMode, kSongMode);
-      tips_.add(songMode, "LOOP stays in a section; SONG plays each for its bars, then the next.");
-      auto &switchAt = onPage<ui::Dropdown>(kPlayPage, {520, 84, 112, 20}, namesOf(kSwitchAt));
+      tips_.add(songMode, "LOOP stays in a section; SONG plays each for its bars, then the next, and ends with the "
+                          "outro's ending; REPEAT plays the song round and round.");
+      auto &switchAt = onPage<ui::Dropdown>(kPlayPage, {554, 84, 112, 20}, namesOf(kSwitchAt));
       bindings_.bind(switchAt, kSwitchAt);
-      auto &by = onPage<ui::Dropdown>(kPlayPage, {666, 84, 120, 20}, namesOf(kSwitchBy));
+      auto &by = onPage<ui::Dropdown>(kPlayPage, {700, 84, 120, 20}, namesOf(kSwitchBy));
       bindings_.bind(by, kSwitchBy);
       tips_.add(by, "What switches sections: a note, the Section parameter (and a click here), or both.");
-      notesButton_ = &onPage<FlatButton>(kPlayPage, {870, 82, 104, 24}, "NOTES", 9.5f);
+      notesButton_ = &onPage<FlatButton>(kPlayPage, {870, 82, 104, 24}, "NOTES & MORE", 9);
       notesButton_->onClick = [this](const visage::MouseEvent &) {
          host_.notesOpen = !host_.notesOpen;
          showOverlays();
@@ -3148,14 +3186,17 @@ private:
    void drawPlay(visage::Canvas &c, float s) {
       drawCard(c, s, 12, 76, 976, 188, "SECTIONS");
       label(c, s, "PLAY", 260, 87, 36, 0, visage::Font::kRight, 9.5f);
-      label(c, s, "SWITCH AT", 440, 87, 76, 0, visage::Font::kRight, 9.5f);
-      label(c, s, "BY", 636, 87, 26, 0, visage::Font::kRight, 9.5f);
+      label(c, s, "SWITCH AT", 474, 87, 76, 0, visage::Font::kRight, 9.5f);
+      label(c, s, "BY", 670, 87, 26, 0, visage::Font::kRight, 9.5f);
       char note[128];
       const int sec = std::clamp(frame_.section, 0, kSections - 1);
       const Section &sx = host_.song().sections[static_cast<size_t>(sec)];
-      std::snprintf(note, sizeof(note), "%s, %s \xC2\xB7 bar %d of %d", kSectionNames[sec],
-                    frame_.fill ? "fill" : ("take " + std::to_string(frame_.take + 1)).c_str(),
-                    frame_.bar % std::max<int>(1, sx.bars) + 1, static_cast<int>(sx.bars));
+      if (frame_.ended)
+         std::snprintf(note, sizeof(note), "the song has ended \xC2\xB7 pick a section to play on");
+      else
+         std::snprintf(note, sizeof(note), "%s, %s \xC2\xB7 bar %d of %d", kSectionNames[sec],
+                       frame_.ending ? "ending" : frame_.fillDown ? "fill down" : frame_.fill ? "fill" : ("take " + std::to_string(frame_.take + 1)).c_str(),
+                       frame_.bar % std::max<int>(1, sx.bars) + 1, static_cast<int>(sx.bars));
       drawCard(c, s, 12, 272, 620, 198, "NOW PLAYING", note);
       drawCard(c, s, 640, 272, 348, 198, "FEEL", "how a player would touch it");
       {
@@ -3220,7 +3261,7 @@ private:
       browser_->setOnTop(true);
       browser_->setVisible(false);
 
-      const ui::Rect nr{348, 110, 640, 290};
+      const ui::Rect nr{348, 110, 640, 330};
       notes_ = &add<NotesOverlay>(nr, host_);
       notes_->setOnTop(true);
       notes_->onLearn = [this](int a) {
@@ -3252,27 +3293,34 @@ private:
             setParam(static_cast<clap_id>(kLearnNote + a), 12 + kActionKey[a]);
          notes_->redraw();
       };
-      const clap_id boxes[4] = {kFillInto, kVelEnergy, kHeldOnly, kPassNotes};
-      const char *names[4] = {"Fill into the new section", "Velocity sets energy", "Play only while a chord is held",
-                              "Pass other notes through"};
-      for (int i = 0; i < 4; ++i) {
-         auto &b = add<CheckBox>({nr.x + 300 + (i % 2) * 168, nr.y + 228 + (i / 2) * 22, 166, 18}, names[i]);
-         const clap_id id = boxes[i];
+      const char *names[kChecks] = {"Fill into the new section", "Velocity sets energy", "Play only while a chord is held",
+                                    "Pass other notes through", "Intro sets up the verse", "Swing eases when fast",
+                                    "Pad layer, on channel"};
+      for (int i = 0; i < kChecks; ++i) {
+         const ui::Rect r = i < 4   ? ui::Rect{nr.x + 300 + (i % 2) * 168, nr.y + 228 + (i / 2) * 22, 166, 18}
+                            : i < 6 ? ui::Rect{nr.x + 300 + (i % 2) * 168, nr.y + 284, 166, 18}
+                                    : ui::Rect{nr.x + 16, nr.y + 284, 150, 18};
+         auto &b = add<CheckBox>(r, names[i]);
+         const clap_id id = kCheckIds[i];
          b.onToggle = [this, id](bool on) { setParam(id, on ? 1.0 : 0.0); };
          checks_[i] = &b;
       }
+      padChannel_ = &add<ui::NumberBox>({nr.x + 170, nr.y + 283, 74, 20}, rangeOf(kPadChannel, 1.0));
+      padChannel_->setStepButtons(true);
+      padChannel_->valueText = [](double v) { return "CH " + std::to_string(static_cast<int>(std::lround(v))); };
+      bindings_.bind(*padChannel_, kPadChannel);
       notesControls(false);
    }
 
    void notesControls(bool show) {
       for (visage::Frame *f : {static_cast<visage::Frame *>(map_), static_cast<visage::Frame *>(octave_),
-                               static_cast<visage::Frame *>(noteChannel_), static_cast<visage::Frame *>(reset_)}) {
+                               static_cast<visage::Frame *>(noteChannel_), static_cast<visage::Frame *>(reset_),
+                               static_cast<visage::Frame *>(padChannel_)}) {
          f->setOnTop(true);
          f->setVisible(show);
       }
-      const clap_id boxes[4] = {kFillInto, kVelEnergy, kHeldOnly, kPassNotes};
-      for (int i = 0; i < 4; ++i) {
-         checks_[i]->on = whole(boxes[i]) != 0;
+      for (int i = 0; i < kChecks; ++i) {
+         checks_[i]->on = whole(kCheckIds[i]) != 0;
          checks_[i]->setOnTop(true);
          checks_[i]->setVisible(show);
       }
@@ -3328,7 +3376,12 @@ private:
    ui::SegmentedSwitch *map_ = nullptr;
    ui::NumberBox *octave_ = nullptr, *noteChannel_ = nullptr;
    FlatButton *reset_ = nullptr;
-   CheckBox *checks_[4] = {};
+   ui::NumberBox *padChannel_ = nullptr;
+   static constexpr int kChecks = 7;
+   static constexpr clap_id kCheckIds[kChecks] = {kFillInto, kVelEnergy, kHeldOnly, kPassNotes, kIntroSetup, kSwingEase, kPadLayer};
+   CheckBox *checks_[kChecks] = {};
+   // CHORDS: the band hit on the chord picked.
+   ui::SegmentedSwitch *mark_ = nullptr;
 };
 
 } // namespace

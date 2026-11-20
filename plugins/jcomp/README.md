@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.5.0.
+Version 0.6.0.
 
 ![Panel](docs/panel.png)
 
@@ -32,7 +32,9 @@ up are chord keys: what you hold there can become the chords it plays (see CHORD
 C3 are section notes (C0 to F1 on the keyboard map) or, for RHYTHM FROM THE BASS, the bass line on its
 own channel. Other notes are dropped unless *Pass other notes through* is ticked.
 
-JComp counts in 4/4 from the host's beat 0: its bars are the host's bars when the host is in 4/4.
+JComp counts in 4/4 from the host's beat 0: its bars are the host's bars when the host is in 4/4. A
+three-beat style (Jazz Waltz, Country Waltz, 6/8 Ballad) counts in bars of three beats instead: set the
+host to 3/4 (or 6/8) from its bar 1.
 While the host counts in (pre-roll) it waits for the first bar. A host loop plays the same notes on
 every pass, the first included: the song follows the host's bars, so a loop or a seek lands where the
 song is at that bar, and the player starts afresh there (its voicing, runs and left hand), so the
@@ -49,8 +51,8 @@ out the same way (the seven sections on the white keys from C0), so one MIDI cli
 
 ### GENRE
 
-24 genres in seven families, 72 named styles among them, and every style is also a factory preset. The
-twelve tiles are the common ones, each drawn as its style plays; **ALL 24** opens the browser with
+25 genres in seven families, 87 named styles among them, and every style is also a factory preset. The
+twelve tiles are the common ones, each drawn as its style plays; **ALL 25** opens the browser with
 every genre, its styles, their tempos and progressions, and the sources each genre was written from.
 
 | Family | Genres |
@@ -60,7 +62,7 @@ every genre, its styles, their tempos and progressions, and the sources each gen
 | Jazz & Latin | Swing Jazz, Bossa Nova, Salsa (two-bar clave rhythms), Latin Jazz |
 | Pop & Rock | Pop, Rock, Piano Ballad, Country |
 | Dance | House, Deep House |
-| Caribbean & Africa | Reggae, Ska, Afrobeat, Highlife |
+| Caribbean & Africa | Reggae, Ska, Afrobeat, Highlife, Calypso |
 | Ambient | Ambient (long held chords) |
 
 ![Browser](docs/panel-browser.png)
@@ -71,7 +73,25 @@ alone, a left hand, richer or plainer chords, shuffle, half time, triplets). Shi
 to **blend** its rhythms in; the small purple slider sets how much. A rhythm on the other grid comes
 across beat by beat (a straight eighth onto the shuffle's third triplet). A fixed figure (Freddie
 Green's four, the batida, the montunos and guajeos, the cha-cha) is the style itself and takes no
-blend.
+blend, and a three-beat style blends only another genre's three-beat rhythms.
+
+Some rhythms are four-bar phrases whose last bar turns the phrase round (MMA's 8-beat, doo-wop,
+spiritual and blues grooves, its samba and bolero), so bar 4 differs from bars 1 to 3.
+
+New in 0.6.0, from comparing JComp with three open-source accompaniment programs (MMA, Impro-Visor
+and JJazzLab):
+
+| Genre | New styles and rhythms |
+|---|---|
+| Swing Jazz | **Jazz Waltz** (3/4: MMA's piano, Impro-Visor's half and quarter, the "2 and 3" comp, MMA's guitar); **Held Comp** (a chord held from 1 and the and of 3, as MMA's basic swing piano); Freddie Green's four plays in two at low energy (the head in two, the solos in four); Garland gains MMA's 1, 2, and of 3, 4 |
+| Piano Ballad | **Ballad Block** (quarters, the 1, and-of-2, 3 ballad figure, a four-bar phrase); **Right-Hand Arpeggio** (the chord broken up and back); **6/8 Ballad** (six eighths leaning on 1 and 4, dotted quarters, the left hand rocking) |
+| Country | **Country Waltz** (oom-pah-pah, the bass on 1 alternating root and fifth); **Western Swing** (four on the guitar, pickups in the fourth bar) |
+| Bossa Nova | **Samba** (MMA's four bars of piano, Impro-Visor's offbeat eighths) |
+| Latin Jazz | **Bolero** (the tresillo ballad); **Mambo** (the broken chord: the chord, then single inner notes) |
+| Rock | **Rock'n'Roll Triplets** (pounding triplets, quarters in the fourth bar); **Fifties Pump** (the dotted pickups) |
+| Soul | **Sixties R&B** (the pushed piano offbeats and the organ's answer) |
+| Calypso | **Calypso Strum** and **Calypso Piano** (1, the and of 2, 4) |
+| Pop, Rock, Gospel, Blues | four-bar phrases in Dotted Pulse, Quarter Pound, Praise Walk-Up and Chicago Shuffle; Slow Blues gains its quarters with a pickup into 4 |
 
 ### HOW IT PLAYS
 
@@ -168,11 +188,18 @@ a sus, a 7#9 or the ii before it; for a major chord the relative minor or the ii
 the relative major or the IV7; the V of the next chord, the dominant a half step above it, or a passing
 diminished; or the chord richer or plainer). Click one to use it.
 
+**BAND HIT** writes a hit over the chord, as a chart does (JJazzLab's chord interpretations): **COMP**
+plays the take as it is; **ACC** strikes the chord's first stroke accented and the take plays on;
+**HOLD** strikes it once and holds it to the next chord, the take resting meanwhile; **SHOT** strikes it
+once, short, and rests to the next chord. A band hit plays only over the section's own progression,
+not over a chord held on the keys, nor in the song's ending.
+
 ## EDIT
 
 ![Edit](docs/panel-edit.png)
 
-One section's take (1 to 4) or its fill on a piano roll, voiced as it will play over the section's
+One section's take (1 to 4), its FILL, its fill DOWN (the intro's: the held chord setting up the
+verse) or the song's ENDING (the outro's; only the outro's plays) on a piano roll, voiced as it will play over the section's
 chords (the chord lane is on top): the top voice orange with the line it sings dotted, the inner
 voices blue, the bottom purple, a passing run yellow. Click an empty step to add a hit, click a hit to
 pick it, drag it sideways to move it (its chord follows the bar), double-click to take it away. Under
@@ -256,8 +283,19 @@ is struck where it comes, as the bar's first chord is played.
 A tile per section: its note, its chords, its take with the playhead, its energy, and its four takes
 and fill. Click a tile to switch to it, a number for that take, FILL for a fill. The section coming
 next is outlined with **NEXT**. **LOOP** stays in a section; **SONG** plays each for its bars, then
-the next (following the host, the song starts at the host's bar 1 with the Section parameter's
-section, so starting the host again, or jumping, finds the section that bar is in). **SWITCH AT** the
+the next, through to the outro, and ends: the outro's last bar or two are its **ending** (four, then
+the last chord rung out, as MMA's endings; the style's own where it has one: SwingEnd's four then 1
+and 3, the cha-cha cell, the R&B ending's 1, 3 and 4), and then JComp rests until you pick a section or
+start again. **REPEAT** plays the song round and round, the outro's fill leading back into the intro
+(SONG's behaviour before 0.6.0). Following the host, the song starts at the host's bar 1 with the
+Section parameter's section, so starting the host again, or jumping, finds the section that bar is
+in (past the song's end, in SONG, nothing plays).
+
+A fill into a quieter section (the next section's energy lower than this one's, a chorus into a
+break or the outro) is the **fill down**: a held stab with the next downbeat left clear and nothing
+anticipated (MMA's SwingFill and SonFill, a Yamaha arranger's fill from B down to A). A fill into a
+louder or equal one is the build-up fill. With *Intro sets up the verse* (on by default) the intro's
+last bar going into the verse is a held chord setting up the band, not a fill. **SWITCH AT** the
 next beat, bar (the default), 2 bars, 4 bars or the section's end. At the next beat the new section
 comes in mid-bar, its bars still on the host's bar lines. A two-bar take (a clave rhythm, a two-bar
 riff) keeps its phase to the host's bars, so a section starting on an odd bar, a jump or a loop never
@@ -288,6 +326,9 @@ to the next chord actually played.
 ### FEEL
 
 - **TIMING**: how far behind (or ahead of) the beat the chords sit, in ms.
+- *Swing eases when fast* (in NOTES & MORE, on by default): above 160 BPM the swing relaxes toward
+  straight, to a quarter of SWING at 280 BPM and over, as players' long-short ratio falls with the tempo
+  (JJazzLab's swing follows the tempo too). At 160 BPM and below SWING plays as set.
 - **VELOCITY**: how much each chord's loudness varies. **TOP VOICE**: the top note this much louder, so
   the line sings. **LENGTHS**: how much lengths vary. **SWING**: every second sixteenth (or eighth)
   late.
@@ -331,14 +372,21 @@ blur.
 
 *Play only while a chord is held* holds for the bass coming in too.
 
+*Pad layer, on channel* (in NOTES & MORE, off by default, channel 3): the chord sounding held as a pad
+on its own channel under the comp, a four-note close voicing round middle C struck at each change of
+chord and held to the next (MMA's "Sus" grooves). Route that channel to a pad or strings. It follows
+the chords wherever they come from, rests while the comp rests (PLAY ONLY WHILE HELD, the song's end),
+and holds through a change of colour only (C7 to C9). Give it its own channel: on JComp's own a key
+both play would be shared.
+
 The keyboard shows the notes going out (top orange, bottom purple, inner blue) and what you hold
 (green).
 
-## Section notes
+## Section notes and more
 
 ![Section notes](docs/panel-notes.png)
 
-Play a note to switch section. With the **KEYBOARD MAP** the white keys from C are the seven sections
+**NOTES & MORE** on PLAY. Play a note to switch section. With the **KEYBOARD MAP** the white keys from C are the seven sections
 then NEXT, PREV, RESTART and STOP, and the black keys FILL, TAKE 1 to 4, RUNS OFF and HOLD CHORD.
 **OCT** sets the octave (C0 by default, well below the chord keys) and the channel box which channel
 they come on (ANY by default). **CUSTOM** gives each of the 18 jobs its own note: press **LEARN** and
@@ -353,6 +401,9 @@ play any note. **RESET ALL** puts them back as the keyboard map has them.
   share one voice.
 
 RUNS OFF and HOLD CHORD (stay on this chord) last as long as you hold the note.
+
+Below them: *Intro sets up the verse* and *Swing eases when fast* (see PLAY), and the *Pad layer* with
+its channel (see OUTPUT).
 
 ## Presets
 
@@ -488,8 +539,16 @@ WEIRD borrows a sus rather than a dominant. On the plugin side host loops play i
 first pass, a late start keeps its downbeat, FOLLOW ONE survives a one-bar loop, the rolls show what
 plays, and PARAM_MOD reaches only the modulatable controls.
 
-**Left out for now.** Jazz Waltz (it needs 3/4, which JComp's 4/4 grid can't play), a "+ GUITAR"
-second player layered over the first, and recording a part played in to a take.
+**The comparison (0.6.0).** Set beside MMA, Impro-Visor and JJazzLab
+([docs/sources.md](docs/sources.md), Part I, review F), JComp gained what they have and it lacked: the
+song now ends (an ending in the outro's last bars, its last chord rung, no push into an intro that
+never comes), fills go down as well as up, the intro sets up the verse with a held chord, swing eases
+at fast tempos, chords can carry band hits (accent, hold, shot), a pad layer can hold the chords on a
+second channel, rhythms can be four-bar phrases, and there is 3/4 and 6/8 (Jazz Waltz, Country Waltz,
+6/8 Ballad), with fifteen new styles in all, a Calypso genre among them.
+
+**Left out for now.** A "+ GUITAR" second player layered over the first, and recording a part played
+in to a take.
 
 ## Building
 
