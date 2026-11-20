@@ -841,6 +841,16 @@ public:
 
       for (int pad = 0; pad < kPads; ++pad)
          renderPad(pad, n, kl, kr, rl, rr, dl, dr);
+      // The kit sends: the whole kit (after each pad's level and pan) into the reverb and the delay,
+      // on top of what each pad sends. The generate page's preview (next) stays dry.
+      const float krs = static_cast<float>(value(kKitReverbSend)), kds = static_cast<float>(value(kKitDelaySend));
+      if (krs > 0.0f || kds > 0.0f)
+         for (uint32_t i = 0; i < n; ++i) {
+            rl[i] += kl[i] * krs;
+            rr[i] += kr[i] * krs;
+            dl[i] += kl[i] * kds;
+            dr[i] += kr[i] * kds;
+         }
       renderPreview(n, kl, kr);
 
       // The returns, then the master: EQ, width, boom, volume.

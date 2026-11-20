@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "editor.h"
 #include "params.h"
 
 extern "C" const clap_plugin_entry_t clap_entry;
@@ -152,6 +153,41 @@ int main() {
       const Midi x = play(a, 300), y = play(c, 300);
       JCLAP_CHECK(!x.empty());
       JCLAP_CHECK(same(x, y));
+   }
+
+   // ---- previewing a child ----
+   {
+      // A song on preview plays in place of the song, isn't saved, and ends at the next setSong.
+      TestHost h(clap_entry, kId);
+      auto *host = dynamic_cast<EditorHost *>(jclap::core::Plugin::from(h.plugin()));
+      JCLAP_CHECK(host != nullptr);
+      const Song kept = host->song();
+      Song other = kept;
+      for (Section &sec : other.sections)
+         for (Pattern &p : sec.vars)
+            p = Pattern{};
+      host->previewSong(&other);
+      host->previewChild = 2;
+      h.setTransport(120.0, 0.0, true);
+      JCLAP_CHECK(noteOns(play(h, 200)).empty());
+      JCLAP_CHECK(host->song() == kept);
+      Buffer b;
+      const clap_ostream_t out = b.out();
+      JCLAP_CHECK(stateOf(h)->save(h.plugin(), &out));
+      TestHost c(clap_entry, kId);
+      b.read = 0;
+      const clap_istream_t in = b.in();
+      JCLAP_CHECK(stateOf(c)->load(c.plugin(), &in));
+      JCLAP_CHECK(dynamic_cast<EditorHost *>(jclap::core::Plugin::from(c.plugin()))->song() == kept);
+      // Letting it go plays the song again; so does any setSong, even of the same song.
+      host->previewSong(nullptr);
+      JCLAP_CHECK_EQ(host->previewChild, -1);
+      JCLAP_CHECK(!noteOns(play(h, 200)).empty());
+      host->previewSong(&other);
+      play(h, 4);
+      host->setSong(kept);
+      JCLAP_CHECK_EQ(host->previewChild, -1);
+      JCLAP_CHECK(!noteOns(play(h, 200)).empty());
    }
 
    // ---- param text ----
