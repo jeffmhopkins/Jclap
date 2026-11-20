@@ -2611,5 +2611,25 @@ int main() {
          JCLAP_CHECK(nine);
       }
    }
+   {
+      // D7: BLEND brings in another genre's rhythm, not its melody line or a left hand.
+      for (int g = 0; g < genreCount(); g += 3)
+         for (int g2 : {0, 15, 12}) {
+            Recipe r = recipeOf(g, 0, 7);
+            r.genre2 = g2;
+            r.blend = 1.0;
+            Song song;
+            generateSong(r, song);
+            Recipe plainR = recipeOf(g, 0, 7);
+            Song own;
+            generateSong(plainR, own);
+            for (int i = 0; i < kSections; ++i) {
+               const Pattern &t = song.sections[static_cast<size_t>(i)].takes[0];
+               const Pattern &o = own.sections[static_cast<size_t>(i)].takes[0];
+               if (!hasLine(o))
+                  JCLAP_CHECK(!hasLine(t));
+            }
+         }
+   }
    return jclap::core::testResult();
 }

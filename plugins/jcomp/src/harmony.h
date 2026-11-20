@@ -444,8 +444,11 @@ inline Ints pickTones(const Chord &c, int n) {
    // The fifth goes before the root in a seventh chord of four notes when there is a colour tone
    // (3, 7, 9, 5: the classic rootless voicing); pickTones already orders it so.
    const int base = static_cast<int>(t.size());
+   // (Over a major seventh the doubled note is the 9th, not the root a half step over the 7th.)
+   const bool maj7 = std::find(q.tones.begin(), q.tones.end(), 11) != q.tones.end();
+   const bool has9 = std::find(t.begin(), t.end(), 14) != t.end();
    for (int k = 0; static_cast<int>(t.size()) < n; ++k)
-      t.push_back(k % 2 == 0 ? 12 : (q.tones.size() > 2 ? q.tones[2] : 7) + 12 * (1 + k / 2));
+      t.push_back(k % 2 == 0 ? (maj7 && !has9 && k == 0 ? 14 : 12) : (q.tones.size() > 2 ? q.tones[2] : 7) + 12 * (1 + k / 2));
    (void)base;
    return t;
 }
@@ -459,7 +462,8 @@ inline Ints upperTones(const Chord &c, int n) {
    for (int i : q.priority)
       if (i % 12 != 0 && static_cast<int>(t.size()) < n)
          t.push_back(i);
-   for (int extra : {7, 12, 19})
+   const bool maj7 = std::find(q.tones.begin(), q.tones.end(), 11) != q.tones.end();
+   for (int extra : {7, maj7 ? 14 : 12, 19})
       if (static_cast<int>(t.size()) < n && std::find(t.begin(), t.end(), extra) == t.end() &&
           !((extra == 7 || extra == 19) && std::find(q.tones.begin(), q.tones.end(), 18) != q.tones.end()) &&
           !((extra == 7 || extra == 19) && std::find(q.tones.begin(), q.tones.end(), 7) == q.tones.end() && q.tones.size() > 2 &&
@@ -1055,6 +1059,10 @@ inline double clashes(const Voicing &v, const Chord &c) {
          const int lo = v.notes[static_cast<size_t>(i)], hi = v.notes[static_cast<size_t>(j)];
          if (hi - lo >= 13 && (hi - lo) % 12 == 1 && !(has(13) && iv(lo) == 0))
             k += 9.0;
+         // A major seventh with the root a half step (or a minor 9th) over it: the rub the
+         // voicing texts rule out (Pease & Pullig; Levine).
+         if (has(11) && iv(lo) == 11 && iv(hi) == 0)
+            k += hi - lo == 1 ? 24.0 : 20.0;
       }
    if (has(15) && has(4)) {
       int third = -1, sharp9 = -1;

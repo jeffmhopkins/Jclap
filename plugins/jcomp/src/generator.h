@@ -621,9 +621,20 @@ inline void blendInto(Pattern &a, const Pattern &b0, double amount, Rng &rng) {
    const Pattern b = onGrid(b0, a.rate);
    if (b.steps == 0)
       return;
+   // Its rhythm only: the other genre's onsets as this one's chords (not its melody line, nor a left
+   // hand this take hasn't got), never a rest over this take's hit, nor a chord over its left hand.
+   const bool leftHandA = hasLeftHand(a);
    for (int s = 0; s < a.steps; ++s)
-      if (rng.chance(amount))
-         a.at(s) = b.at(s % b.steps);
+      if (rng.chance(amount)) {
+         Hit h = b.at(s % b.steps);
+         if (!h.on() || (a.at(s).on() && leftHand(a.at(s).part)))
+            continue;
+         if (h.part == kPartLine || (leftHand(h.part) && !leftHandA)) {
+            h.part = kPartChord;
+            h.degree = 0;
+         }
+         a.at(s) = h;
+      }
 }
 
 // The next hit after step s (wrapping), or -1.
