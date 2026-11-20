@@ -1612,6 +1612,60 @@ MMA groove lines [61] and Impro-Visor style rules [62]; JJazzLab [63] is cited f
 - **F15 cells.** The mambo's broken chord, the 60s R&B piano and organ, the slow blues' quarters with
   a pickup, and Western swing's four with its fourth-bar pickups.
 
+## Part J. The sixth review (2026-11-20)
+
+A sixth cold pass by five reviewers (the groove styles; jazz, Latin and the three-beat styles; pop,
+dance, world and ambient; the generator and voicing; the engine and plugin in real time) reproduced
+every finding with `jcomp-dump` or a probe program. It found 71 problems (1 critical, 20 high, 26
+medium, 24 low); these were fixed in 0.7.0, each with a test where a test could hold it.
+
+- **Endings.** Eleven genres' outros ended on a IV, a iv or a ii-V (Soul on iv, Latin Jazz on the
+  V, House, Deep House, Reggae, Lo-fi and Disco on the IV or its minor, Motown a semitone up), so the
+  song's last rung chord wasn't the tonic. A final cadence ends on I (Kostka and Payne, *Tonal
+  Harmony*, the authentic and plagal cadences); every outro now comes home in its last bar, the
+  Piano Ballad's last chorus in its own key, and WEIRD's approach chord never splits the last bar.
+  Endings are tested for every genre and style, seeds 1 to 6, WEIRD 0.2 and 1.
+- **Meter.** 6/8 shared the 3/4 grid, so its fills, endings and DENSITY treated eighths 3 and 5 as
+  beats and swing delayed the second eighth of each dotted-quarter beat; it has its own grid now
+  (twelve sixteenths, two dotted-quarter beats). A 3/4 split bar changed chord on the and of 2; it
+  changes on beat 3 (2 + 1, as waltz charts write it), in the engine and the rolls. A style picked
+  while playing that changes the meter re-finds the host's bars.
+- **Harmony.** A held shell over a bass (C7b9 as Bbdim/C) took the slash bonus; a maj7 under its
+  root rubbed in close voicings (the cost of a half step and a minor ninth under the root went up,
+  and a maj7 doubles its 9th, not its root); 4THS dropped an add9's 9th. The new 7#5 quality gives
+  the jazz waltz "Someday My Prince Will Come"'s I-III7+5-IV-VI7+5-ii-V. Bolero has its own minor
+  progressions (the bolero's i-iv-V and its relative-major bridge); Rock gains the I-vi-IV-V and
+  fifties set for its 50s styles. Cb is spelled in Gb and its modes (Gb major has Cb in its
+  signature). ROOTLESS still adds the 9th to iii (now said in the README).
+- **Rhythm.** The engine struck a fixed figure again at every change and a waltz's bar line on the
+  one the bass owns; a pushed chord was struck again on the beat it anticipated (it now ties over,
+  as a pianist's push does); phrases kept host phase, so a four-bar phrase's turnaround fell on the
+  wrong bar after a switch (only clave figures keep host phase now); the pad cut at 16 bars, took a
+  push a beat late and stayed on after it was switched off; auto fills ignored a 12-bar section's
+  form. ENERGY at the bottom took the offbeat-with-bass left hand's downbeat; mutation and WEIRD could
+  drop the chord on the beat a take is built on; BLEND copied another genre's line notes and left
+  hands. Samba is at 200 BPM (MMA's double tempo), Mambo is a fixed figure on the clave, Western
+  Swing accents 2 and 4 on the guitar, Sixties R&B is the piano player, the Right-Hand Arpeggio
+  breaks up and back. DENSITY in swing added a pulse of chords on the beats (Levine: comp with
+  space [2]); it adds offbeat stabs only. Freddie Green's four [19] played in two through the verse,
+  each stroke 50 ms; it plays four, each most of a beat, and in two only at the lowest energy.
+- **Fills and endings.** At low energy a fill could lose its anticipation; "push it" pushed the left
+  hand and "shift" carried a push onto a beat; fills dipped 20 velocity under the groove's accents
+  and fills down hit at full velocity (both now held to the groove's level); the boom-chick ending
+  dropped the alternating bass; the bossa's ending was a bar of block quarters (it carries the batida
+  into the last chord). Seen and left: the salsa ending is the cha-cha cell on both clave directions.
+- **The plugin.** An ended song kept playing chords from the bass, stayed silent when SONG mode
+  turned to LOOP or REPEAT, and couldn't replay the outro; a queued section silenced this one's band
+  hits; a one-bar outro never rang its last chord; a seek into the ending played the take to the bar
+  line; ACC could be softer than the take's accents; CHORDS edits left band hits on the wrong chords;
+  the rolls ignored band hits and the EDIT roll wrote the song from inside its draw; a click on a
+  tile in SONG mode moved where the song starts; ENERGY and BLEND remade the chords. Projects saved
+  before 0.6.0 had turned from LOOP to SONG (which ends) and gained swing easing; old songs lacked
+  fills down and endings; a damaged song could load a chord quality past the table or a pattern off
+  its meter. All fixed. Seen and left: the host's time signature and bar start are not read (the
+  README asks for 3/4 from bar 1), and the intro's setup takes the fill's place, so it needs *Fill
+  into the new section* (now said in the README).
+
 ## Bibliography
 
 1. de Clercq, Trevor, and David Temperley. "A corpus analysis of rock harmony." *Popular Music* 30/1
