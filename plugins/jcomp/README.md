@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.2.2.
+Version 0.3.0.
 
 ![Panel](docs/panel.png)
 
@@ -31,6 +31,10 @@ clav, a guitar or a pad). It sends its chords on **channel 1** (CHANNEL in OUTPU
 up are chord keys: what you hold there can become the chords it plays (see CHORDS FROM). Notes below
 C3 are section notes (C0 to F1 on the keyboard map) or, for RHYTHM FROM THE BASS, the bass line on its
 own channel. Other notes are dropped unless *Pass other notes through* is ticked.
+
+JComp counts in 4/4 from the host's beat 0: its bars are the host's bars when the host is in 4/4.
+While the host counts in (pre-roll) it waits for the first bar. A host loop plays the loop's first
+chord on every pass.
 
 To play with JDrummer, put both on the same transport: JDrummer's section notes and JComp's are laid
 out the same way (the seven sections on the white keys from C0), so one MIDI clip can switch both.
@@ -79,7 +83,7 @@ voicings sit, onsets, timing, runs).
 | Pop Pianist | Piano | eighth-note pulse, open triads |
 | Rhythm Guitar | Guitar | sixteenth scratch, three-note grips |
 | Skank Guitar | Guitar | off-beat chops, short and high, the off-beats strummed up |
-| Strummer | Guitar | down-up strums across six strings |
+| Strummer | Guitar | down-up strums of a guitar grip (the bass, its fifth and octave, the chord above) |
 | Montuno | Piano | Latin piano figures in octaves (a close chord with its bottom note doubled on top) |
 | House Stabs | Synth | one chord shape, rhythmic and on the grid |
 | Pad Player | Pad | whole bars and slow swells |
@@ -127,8 +131,12 @@ JComp voices whatever is written.
 - **BOTH** (the default): the progression plays; a held chord takes over until you let go, and the
   progression picks up where it is.
 
-**A NEW CHORD STARTS** at once, or on the next sixteenth, beat (the default) or bar. *Latch* keeps the
-last chord after you let go. *Lowest held note is the bass* makes slash chords (C/E). **VOICE WHAT I
+**A NEW CHORD STARTS** at once, or on the next sixteenth, beat (the default) or bar. A chord played a
+moment early still takes the beat it was meant for, and one played up to about 80 ms late takes it
+too: if that beat's chord has already sounded, the new chord comes in where it was played. A chord is
+named when a key goes down; letting keys go doesn't change it. *Latch* keeps the last chord after you
+let go (a quick tap included). A host's note-off for every key, a choke, or All Notes Off lets go of
+what's held. *Lowest held note is the bass* makes slash chords (C/E). **VOICE WHAT I
 HOLD**: voice it JComp's way, play it as you hold it, or voice it under your top note.
 
 ### PROGRESSION
@@ -167,8 +175,12 @@ How every chord is voiced, for all sections:
   7th, the root below), 4THS (quartal, always holding the chord's root so the changes are heard),
   SPREAD (two hands: on keys the left hand's low note sounds with the chords on beats 1 and 3 and on
   a change of chord, and the chops and backbeats between are the right hand alone), ROOTLESS
-  (Levine's A and B forms, the root left to the bass) or OCTAVES (a close chord with its bottom note
-  doubled on top, the montuno's right hand).
+  (Levine's A and B forms, the root left to the bass), OCTAVES (a close chord with its bottom note
+  doubled on top, the montuno's right hand: hit by hit its octave line moves through the chord, 5, 3,
+  1, 3, rather than repeating one block) or GRIP (a guitar's: the bass string, its fifth and octave,
+  then the chord's third and colour close above; with three notes, the power chord). A slash chord
+  (C/E) keeps its bass at the bottom in every shape but OCTAVES. On an organ or a pad the low note of
+  SPREAD stays in every chord; on keys it is held from one 1 or 3 to the next.
 - **CENTER**: where the voicings sit. **LEAD**: how much each chord is led from the one before (the
   least total movement) rather than placed at the center. **TOP MOVE**: the most the top voice should
   move, in semitones. **SPREAD**: the widest a voicing may be.
@@ -194,10 +206,19 @@ Its chord, the notes it plays and how far its top moved from the hit before, and
 - **LENGTH**: AS IS, CHOP, HALF, RING (to the next chord) or TOP (only the top note rings).
 - *Run into it*: a three-step passing run in the key and scale (bent to the chord it leads into)
   leads into this hit when the chord changes here.
-- *Anticipate*: the hit plays the next chord early (a push, an eighth ahead).
-- What of the chord it plays: CHORD, TOP (the top note alone), TOP 2, BASS (the left hand's root), or
-  5TH (the fifth the bass alternates with: boom-chick's beat 3, the bossa thumb's second note). A left
-  hand's notes are held to its next note and don't cut the chord above them, nor the chord them.
+- *Anticipate*: the hit plays the next chord early (a push, an eighth ahead). A hit an eighth before
+  a change of chord, with nothing after it until the change, anticipates it anyway (the and of 2
+  into a ii-V's V), except in an offbeat take, where an upbeat chop is the old chord's.
+
+Nothing rings over a change of chord: RING, LENGTH, a left-hand note and a top note ringing all stop
+at the next change. A change the take has no hit for (two chords in a bar, the second between hits)
+is struck where it comes, as the bar's first chord is played.
+- What of the chord it plays: CHORD, TOP (the top note alone), TOP 2, BASS (the left hand's root),
+  5TH (the fifth the bass alternates with: boom-chick's beat 3, the bossa thumb's second note), or LINE
+  (one note of a line: the degree of the chord the style wrote, as in the Superstition clav riff, the
+  Afrobeat tenor line and the palm-wine finger; the root for a hit set to LINE here). A left hand's
+  notes are held to its next note and don't cut the chord above them, nor the chord them; a key both
+  hands play is let go only by the note that struck it last.
 - **RE-VOICE**: the next best voicing for this hit, round to JComp's own again. **+ MUTATE HIT** changes
   one thing about it.
 
@@ -210,8 +231,12 @@ Its chord, the notes it plays and how far its top moved from the hit before, and
 A tile per section: its note, its chords, its take with the playhead, its energy, and its four takes
 and fill. Click a tile to switch to it, a number for that take, FILL for a fill. The section coming
 next is outlined with **NEXT**. **LOOP** stays in a section; **SONG** plays each for its bars, then
-the next. **SWITCH AT** the next beat, bar (the default), 2 bars, 4 bars or the section's end. **BY** a
-note, the Section parameter, or both.
+the next (following the host, the song starts at the host's bar 1 with the Section parameter's
+section, so starting the host again, or jumping, finds the section that bar is in). **SWITCH AT** the
+next beat, bar (the default), 2 bars, 4 bars or the section's end. At the next beat the new section
+comes in mid-bar, its bars still on the host's bar lines. A two-bar take (a clave rhythm, a two-bar
+riff) keeps its phase to the host's bars, so a section starting on an odd bar, a jump or a loop never
+turns the clave round. **BY** a note, the Section parameter, or both.
 
 ### NOW PLAYING
 
@@ -222,7 +247,9 @@ playhead. Beside it, two knobs that change the whole part as it plays:
   then off-beats, then the lesser beats; each bar's first hit always stays). Above it, softer repeats of
   the chord sounding fill the gaps, eighths first, then sixteenths (only in a rhythm that already
   plays sixteenths, so a montuno, a bossa or a Charleston stays on eighths), never under a chord still
-  held. The middle plays the take as written, and the same setting always gives the same pattern.
+  held, and never on a beat in an offbeat style (a skank, an offbeat stab). A figure played as written
+  (the batida, the montunos and guajeos, Freddie Green's four, the cha-cha) gets nothing added. The
+  middle plays the take as written, and the same setting always gives the same pattern.
 - **LENGTH**: every chord shorter, down to a staccato chop, or longer, up to legato (held to the next
   chord). The middle plays the lengths as written.
 
@@ -285,8 +312,11 @@ play any note. **RESET ALL** puts them back as the keyboard map has them.
 
 - *Fill into the new section*: a switch plays a fill in the bar before it.
 - *Velocity sets energy*: how hard you play a section's note sets how hard it plays.
-- *Play only while a chord is held*: JComp plays while you hold a chord, and stops when you let go.
-- *Pass other notes through*: notes JComp doesn't use go on to the instrument.
+- *Play only while a chord is held*: JComp plays while you hold a chord (on the chord keys, whatever
+  CHORDS FROM is), and stops when you let go.
+- *Pass other notes through*: notes JComp doesn't use go on to the instrument. Send them on another
+  channel than JComp's: on its own channel a passed note and a chord's note on the same key would
+  share one voice.
 
 RUNS OFF and HOLD CHORD (stay on this chord) last as long as you hold the note.
 
@@ -295,7 +325,13 @@ RUNS OFF and HOLD CHORD (stay on this chord) last as long as you hold the note.
 Every style is a factory preset, filed by family and genre in the preset menu, so loading one makes
 its song from the style's own seed. A saved preset keeps the song itself (in a `.jcompsong` file
 beside the preset), with every chord change, mutation and edit. The die in the preset bar rolls the
-song again.
+song again. A preset is the sound and the song: loading one leaves how JComp is wired into the project
+as it is (CHANNEL, RHYTHM FROM, BASS and FOLLOW, the section notes' map, octave, channel and learned
+notes, the chord keys and CHORDS FROM, *Play only while held*, *Pass other notes through*, the
+transport, and the section and take playing). A new JComp starts as the Pocket Stabs preset.
+
+Genre, Style, Seed, Energy, Weird and the other recipe parameters aren't automatable, but if the host
+sets one (a generic parameter view, a host preset) the song is made again from it.
 
 Parameters for the host only (not on the panel): **Voices** (3 to 5 notes a chord), **Vary** (how
 often a bar swaps to another take, a soft off-beat hit drops out, or a hit's velocity wanders), **Section**, **Take** and **Play**.
@@ -377,6 +413,18 @@ both now strums up on the triplet grid's offbeats, an offbeat style at low energ
 offbeat rather than gaining a chord on the one, chords are spelled by degree (Ab, Bb, Eb in C, not
 G#, A#, D#), and passing runs bend to chromatic chords.
 
+**The third review (0.3.0).** A third cold pass played every style through the engine and probed the
+plugin through CLAP ([docs/sources.md](docs/sources.md), Part G). The engine now plays every change of
+chord (a chord between two hits used to be skipped, and the one before rang over it), keeps two-bar
+takes and the clave in phase with the host's bars, pairs every note's on and off so the hands don't
+cut each other, keeps DENSITY off fixed figures and off the beats of offbeat styles, and allocates
+nothing on the audio thread. The Superstition riff, the Afrobeat tenor line and the palm-wine finger
+now move (a new LINE part), the Strummer plays guitar grips and Rock power chords (a new GRIP shape),
+Nashville Slip plays Cramer's slip note, the 12/8 ballad plays ballad triplets, the Two-Step is a
+two-step, Gospel's Shout plays its vamp, Slow Blues has a chord on the one in most sections, and runs move by step on the take's
+grid. Motown's "Gorilla Piano" is now **Straight Eighths**. Host loops, keyboard chords played on the
+beat, LATCH, channel changes, presets and the pre-roll behave.
+
 **Left out for now.** Jazz Waltz (it needs 3/4, which JComp's 4/4 grid can't play), a "+ GUITAR"
 second player layered over the first, and recording a part played in to a take.
 
@@ -384,8 +432,10 @@ second player layered over the first, and recording a part played in to a take.
 
 Built with the rest of JClap (see the [root README](../../README.md)). `jcomp-engine-tests` checks the
 harmony, voicings (every quality, root and shape inside the window and the low interval limits), the
-library, the generator and the engine; `jcomp-tests` drives the plugin through CLAP; `jcomp-screenshot`
-renders these pictures:
+library, the generator and the engine; `jcomp-tests` drives the plugin through CLAP (and checks that
+`process()` allocates nothing); `jcomp-dump` prints any style's song and the MIDI the engine plays for
+it, bar by bar, for review (`jcomp-dump [genre] [style] [seed] [weird] [energy] [density] [length]
+[sections] [takes] [human]`); `jcomp-screenshot` renders these pictures:
 
     jcomp-screenshot out.png [generate|chords|edit|play] [width height] [players] [browser] [notes] [custom]
                      [density=0..1] [length=0..1]

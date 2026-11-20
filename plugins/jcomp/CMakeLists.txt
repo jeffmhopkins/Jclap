@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.2.2)
+jclap_plugin_version(0.3.0)
 
 jclap_add_plugin(jcomp
    OUTPUT_NAME "JComp"
@@ -30,3 +30,8 @@ if(JCLAP_BUILD_TOOLS)
    jclap_add_screenshot_test(jcomp-screenshot-play-test TOOL jcomp-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-play.png ARGS play)
 endif()
+
+# Prints every style's sections and the MIDI the engine plays for them, as text, for review.
+add_executable(jcomp-dump EXCLUDE_FROM_ALL tools/dump.cpp)
+target_include_directories(jcomp-dump PRIVATE src)
+target_link_libraries(jcomp-dump PRIVATE jclap::core)

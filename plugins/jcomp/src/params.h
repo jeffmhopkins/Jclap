@@ -130,19 +130,36 @@ constexpr auto kSavedStep = CLAP_PARAM_IS_STEPPED;
 
 inline int genreMax() { return genreCount() - 1; }
 
+// The params the song is made from (changing one remakes it).
+inline bool isRecipeParam(clap_id id) { return id <= kSectionEnergy + kSections - 1 && id != kMutation; }
+
+// The params a preset leaves alone: how JComp is wired into the project (channels, the notes it
+// listens to, the chord keys), the transport, and where it is in the song.
+inline bool isSetupParam(clap_id id) {
+   switch (id) {
+   case kChordsFrom: case kChordSplit: case kHeldOnly:
+   case kSection: case kTake: case kSwitchBy: case kSync: case kPlay: case kFreeTempo:
+   case kChannel: case kRhythmFrom: case kBassChannel: case kFollow:
+   case kNoteMap: case kNoteOctave: case kNoteChannel: case kPassNotes:
+      return true;
+   default:
+      return id >= kLearnNote && id < kParamCount;
+   }
+}
+
 inline const jclap::core::ParamDef *makeParams() {
    static jclap::core::ParamDef p[kParamCount];
    static char energyNames[kSections][32];
    static char learnNames[kActionCount][32];
    const double gmax = genreMax();
    p[kGenre] = {kGenre, "Genre", "Generate", 0, gmax, 0, kSavedChoice};
-   p[kStyle] = {kStyle, "Style", "Generate", 0, 15, 0, kSavedStep};
+   p[kStyle] = {kStyle, "Style", "Generate", 0, 3, 0, kSavedStep}; // the most styles a genre has, less one
    p[kBlendGenre] = {kBlendGenre, "Blend Genre", "Generate", 0, gmax + 1, 0, kSavedChoice};
    p[kBlend] = {kBlend, "Blend", "Generate", 0, 1, 0.25, kSaved};
    p[kPlayer] = {kPlayer, "Player", "Generate", 0, kPlayers - 1, 0, kSavedChoice};
    p[kEnergy] = {kEnergy, "Energy", "Generate", 0, 1, 0.5, kSaved};
    p[kWeird] = {kWeird, "Weird", "Generate", 0, 1, 0.2, kSaved};
-   p[kSeed] = {kSeed, "Seed", "Generate", 0, 99999, 1, kSavedStep};
+   p[kSeed] = {kSeed, "Seed", "Generate", 0, 99999, 71423, kSavedStep}; // the Pocket Stabs preset's
    p[kMutation] = {kMutation, "Mutation", "Generate", 0, 1, 0.4, kSaved};
    for (int i = 0; i < kSections; ++i) {
       std::snprintf(energyNames[i], sizeof(energyNames[i]), "%s Energy", kSectionNames[i]);

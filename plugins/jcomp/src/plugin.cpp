@@ -1,5 +1,5 @@
 // JComp: a CLAP note effect that comps chords for a polyphonic instrument (an e-piano, keys, organ,
-// guitar or synth), the way JComp drums: a song made by its generator from 23 genres, played in
+// guitar or synth), the way JDrummer drums: a song made by its generator from 24 genres, played in
 // sections, in time with the host or on its own. The chords come from each section's progression, or
 // from chords held on the keyboard; each is voiced and led from the one before. The engine
 // (engine.h) plays the song; the generator (generator.h) makes it; this file wires them to the
@@ -80,6 +80,15 @@ public:
    }
 
    void reset() override { engine_->reset(); }
+
+   // A recipe param the host changed: the song it names.
+   void onMainThread() override {
+      if (!remake_.exchange(false))
+         return;
+      Song s = *song_;
+      generateSong(recipeFrom([this](clap_id id) { return values_[id].load(); }), s);
+      setSong(s);
+   }
 
    const void *extension(const char *id) override {
       if (!std::strcmp(id, CLAP_EXT_AUDIO_PORTS))
@@ -317,16 +326,29 @@ public:
             b.tempo = std::clamp(t->tempo, 1.0, 999.0);
          if (t->flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE) {
             b.hasTransport = true;
-            b.playing = (t->flags & CLAP_TRANSPORT_IS_PLAYING) != 0;
+            // The count-in isn't the song: JComp starts at the bar the host starts on.
+            b.playing = (t->flags & CLAP_TRANSPORT_IS_PLAYING) && !(t->flags & CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL);
             b.beats = static_cast<double>(t->song_pos_beats) / CLAP_BEATTIME_FACTOR;
+            if (t->flags & CLAP_TRANSPORT_IS_LOOP_ACTIVE) {
+               b.loopActive = true;
+               b.loopStart = static_cast<double>(t->loop_start_beats) / CLAP_BEATTIME_FACTOR;
+               b.loopEnd = static_cast<double>(t->loop_end_beats) / CLAP_BEATTIME_FACTOR;
+            }
          }
       }
       engine_->process(b, out_);
-      // Everything out in time order.
-      std::stable_sort(out_.items.begin(), out_.items.begin() + static_cast<long>(out_.count),
-                       [](const MidiOut &a, const MidiOut &c) { return a.time < c.time; });
+      // Everything out in time order, keeping the order of events at the same time (an off before the
+      // on that strikes the key again). An insertion sort: stable, and it allocates nothing.
+      for (size_t i = 1; i < out_.count; ++i) {
+         const MidiOut m = out_.items[i];
+         size_t j = i;
+         for (; j > 0 && out_.items[j - 1].time > m.time; --j)
+            out_.items[j] = out_.items[j - 1];
+         out_.items[j] = m;
+      }
       for (size_t i = 0; i < out_.count; ++i)
-         jclap::core::pushMidi(out, out_.items[i].time, out_.items[i].status, out_.items[i].data1, out_.items[i].data2);
+         jclap::core::pushMidi(out, std::min(out_.items[i].time, proc->frames_count ? proc->frames_count - 1 : 0),
+                               out_.items[i].status, out_.items[i].data1, out_.items[i].data2);
       out_.clear();
 
       publish();
@@ -345,9 +367,15 @@ private:
    void handleEvent(const clap_event_header_t *h, const clap_output_events_t *) {
       const bool pass = std::lround(values_[kPassNotes].load()) != 0;
       switch (h->type) {
+      case CLAP_EVENT_NOTE_CHOKE:
       case CLAP_EVENT_NOTE_ON:
       case CLAP_EVENT_NOTE_OFF: {
          auto *ev = reinterpret_cast<const clap_event_note_t *>(h);
+         // A note-off or choke for every key: the chord keys and section notes held are let go.
+         if (h->type != CLAP_EVENT_NOTE_ON && ev->key < 0) {
+            engine_->releaseAll();
+            return;
+         }
          if (ev->key < 0 || ev->key > 127)
             return;
          const int channel = ev->channel < 0 ? 0 : ev->channel & 15;
@@ -371,6 +399,9 @@ private:
                out_.push(h->time, ev->data[0], ev->data[1], ev->data[2]);
             return;
          }
+         // All Sound Off and All Notes Off let go of what's held too.
+         if (status == 0xB0 && (d1 == 120 || d1 == 123))
+            engine_->releaseAll();
          if (pass)
             out_.push(h->time, ev->data[0], ev->data[1], ev->data[2]);
          return;
@@ -385,8 +416,16 @@ private:
          return false;
       if (h->type == CLAP_EVENT_PARAM_VALUE) {
          auto *ev = reinterpret_cast<const clap_event_param_value_t *>(h);
-         if (ev->param_id < kParamCount && std::isfinite(ev->value))
-            values_[ev->param_id].store(std::clamp(ev->value, kParams[ev->param_id].min, kParams[ev->param_id].max));
+         if (ev->param_id < kParamCount && std::isfinite(ev->value)) {
+            const double v = std::clamp(ev->value, kParams[ev->param_id].min, kParams[ev->param_id].max);
+            // A recipe param set by the host (not the panel, which remakes the song itself): the song
+            // is remade from it on the main thread.
+            if (isRecipeParam(ev->param_id) && v != values_[ev->param_id].load()) {
+               remake_.store(true);
+               host()->request_callback(host());
+            }
+            values_[ev->param_id].store(v);
+         }
          return true;
       }
       if (h->type == CLAP_EVENT_PARAM_MOD) {
@@ -454,6 +493,7 @@ private:
       s.passNotes = whole(kPassNotes) != 0;
       for (int a = 0; a < kActionCount; ++a)
          s.learn[static_cast<size_t>(a)] = whole(static_cast<clap_id>(kLearnNote + a));
+      applyRecipe(s, recipeFrom([this](clap_id id) { return value(id); }));
       return s;
    }
 
@@ -478,6 +518,7 @@ private:
    std::atomic<uint32_t> requestWrite_{0};
    uint32_t requestRead_ = 0;
    std::atomic<bool> learnArmed_{false};
+   std::atomic<bool> remake_{false};
    std::atomic<int> learned_{-1};
    bool learning_ = false;
 
@@ -497,7 +538,7 @@ const clap_plugin_descriptor_t JComp::descriptor = {
    "",
    "",
    JCLAP_PLUGIN_VERSION,
-   "A comping generator for keys, organ and guitar: 23 genres, voice leading, passing runs, sections and mutations",
+   "A comping generator for keys, organ and guitar: 24 genres, voice leading, passing runs, sections and mutations",
    kFeatures,
 };
 
