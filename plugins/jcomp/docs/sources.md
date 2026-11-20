@@ -1525,6 +1525,57 @@ and ambient; the generator and voicing; the plugin and real time) reproduced eve
 - **Seen and left.** In the "chords on the clave strokes" figure a new chord arrives on its bar's
   second stroke (beat 2), as written; the reviewer's case for moving it rested on judgement alone.
 
+## Part I. The fifth review (2026-11-20)
+
+A fifth cold pass by six reviewers (funk, soul, church and blues; jazz and Latin; pop, dance, world
+and ambient; the generator and voicing; the plugin in real time; and a comparison of the rhythm
+library with three open-source accompaniment programs [61][62][63]) reproduced every finding with
+`jcomp-dump` or a probe program. It found 75 problems (15 high); these were fixed, each with a test
+where a test could hold it. The comparison's 15 gaps (endings, drop fills, phrases, tempo-aware
+swing, new feels, 3/4 and 6/8) are built next.
+
+- **Passing runs.** A run restruck the top note already sounding, shrank to one note, wiped out the
+  hits in its span (accents and the left hand's bass included), broke into fixed figures and, after
+  the first section, stopped for good (AT MOST counted the section's bars). A run now walks from the
+  note sounding (starting a sixth away at most when there's no room), is 2 to 4 notes, never lies
+  over a written chord or another change, never plays in a figure played as written, and AT MOST
+  counts the host's bars. A sus chord's run passes through its third.
+- **Chords on the keys.** A legato change named both chords together; a change waited for the take's
+  next hit (a bar late over a pad); LATCH did nothing in BOTH; letting one key go renamed the chord.
+  The keys pressed together now name the chord, it is struck at its moment, BOTH latches to the
+  progression's next change, and a release never renames. A tritone reads as a dominant's shell and
+  a rootless voicing as its dominant (Levine's left-hand forms [2][57]); a triad over a foreign bass
+  is a slash chord (F/G, not Fadd9/G).
+- **Voicing.** A colour change (C7 to C9) threw the voicing an octave; SAME SHAPE ignored the knobs;
+  GRIP was silent for many slash, diminished and augmented chords and made grips no hand can (it now
+  checks a fingering on six strings in standard tuning and prefers the open position); 4THS fell
+  back to SPREAD for triads and zigzagged (53% of moves past TOP MOVE, now 15%); SPREAD's left hand
+  sat two octaves under the right; DOUBLE IN THE MIDDLE put the doubled note on top in up to two
+  thirds of triads; ROOTLESS at five voices clustered the root over the major seventh; three-voice
+  chops clustered an m9; DROP 2 lost a slash bass below FLOOR; a 6/9 over a bass didn't parse; sharp
+  minor keys spelled the leading tone as the next letter (F for E#).
+- **Idiom.** The bossa thumb played the old fifth over a chord arriving on beat 3, as did every
+  alternating bass at a mid-bar change [59][60]; a plain dominant into a minor chord had a natural 9th
+  and 13th; Freddie Green's four had no accents on 2 and 4 [19]; DENSITY and WEIRD stripped the
+  batida, the guajeo and the Afrobeat tenor line; the Clav Riff got chord chops; the chicken scratch
+  lost its motor; the Rhythm Guitar strummed every stroke down; Neo-Soul's progressions were tagged
+  Dorian; the Rockers skank changed figure between sections; the held-chord styles re-struck mid-bar;
+  the one drop gained chops before its skank; a boom-chick's strum kept the thumb's fifth string
+  (Carter and Travis leave the bass strings to the thumb); fills came from another instrument (the
+  Boom-Chick in Nashville Slip, chords in the tenor line); VARY dropped normal hits in quiet sections;
+  the organ bubble's left hand rang for a beat (Berklee's "Bubblin'" [64]); the pumps had no backbeat;
+  Cramer's slip came on 60% of strokes and into notes already sounding; the Broken Chords left hand put
+  the fifth under the root; Ambient's WEIRD added chromatic dominant 9ths. All fixed.
+- **The plugin.** A host loop's first pass voiced, ran and strummed differently from the rest; a
+  start a few ms after the bar lost its downbeat; FOLLOW ONE went silent in a one-bar loop; PLAY ONLY
+  WHILE HELD ignored the bass coming in; BOTH struck the first chord twice; cuts after a jump clamped
+  to the old position; PARAM_MOD reached PLAY and CHANNEL; the rolls threw other dice than the
+  engine and drew runs that never played; a fill cleared in EDIT played silence. All fixed.
+- **Seen and left.** A held chord pressed exactly on a block boundary can sound the old chord's first
+  notes for a millisecond or two before the new one (the strike has already gone out); BLEND has no
+  effect on a fixed figure, by design (now said in the README); the NOW PLAYING card turns to the
+  next section about 80 ms early, with the clock's lookahead.
+
 ---
 
 ## Bibliography
@@ -1694,3 +1745,9 @@ and ambient; the generator and voicing; the plugin and real time) reproduced eve
 59. Wikipedia, "Alternate bass," https://en.wikipedia.org/wiki/Alternate_bass
 60. jazzguitar.be, "Blue Bossa chords and rhythm pattern" (the thumb on root and fifth, beats 1 and 3),
     https://www.jazzguitar.be/blog/blue-bossa-chords/
+61. MMA, Musical MIDI Accompaniment, version 25.05.0, its standard groove library (`lib/stdlib`),
+    https://www.mellowood.ca/mma/
+62. Impro-Visor, its style files (`styles/*.sty`), https://github.com/Impro-Visor/Impro-Visor
+63. JJazzLab user guide (Yamaha styles, chord symbol interpretation, jjSwing),
+    https://jjazzlab.gitbook.io/user-guide
+64. "Bubblin'", *Berklee Today*, Spring 2015 (the reggae organ's left hand on the upbeats)

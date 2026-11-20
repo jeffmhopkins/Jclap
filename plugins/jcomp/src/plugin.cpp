@@ -472,7 +472,9 @@ private:
       }
       if (h->type == CLAP_EVENT_PARAM_MOD) {
          auto *ev = reinterpret_cast<const clap_event_param_mod_t *>(h);
-         if (ev->param_id < kParamCount && std::isfinite(ev->amount))
+         // Only the parameters declared modulatable take it (a stray mod can't turn PLAY on).
+         if (ev->param_id < kParamCount && (kParams[ev->param_id].flags & CLAP_PARAM_IS_MODULATABLE) &&
+             std::isfinite(ev->amount))
             mods_[ev->param_id].store(ev->amount);
          return true;
       }

@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.4.0.
+Version 0.5.0.
 
 ![Panel](docs/panel.png)
 
@@ -33,9 +33,11 @@ C3 are section notes (C0 to F1 on the keyboard map) or, for RHYTHM FROM THE BASS
 own channel. Other notes are dropped unless *Pass other notes through* is ticked.
 
 JComp counts in 4/4 from the host's beat 0: its bars are the host's bars when the host is in 4/4.
-While the host counts in (pre-roll) it waits for the first bar. A host loop plays the same chords on
+While the host counts in (pre-roll) it waits for the first bar. A host loop plays the same notes on
 every pass, the first included: the song follows the host's bars, so a loop or a seek lands where the
-song is at that bar. DENSITY's fills, VARY and the chance hits roll the same way on every playback, so
+song is at that bar, and the player starts afresh there (its voicing, runs and left hand), so the
+first pass is the pass you'll hear every time. A start or a loop that lands a little past a bar line
+(up to about 80 ms, a host's block) still plays that bar's first chord, a little late. DENSITY's fills, VARY and the chance hits roll the same way on every playback, so
 a render is the same every time.
 
 To play with JDrummer, put both on the same transport: JDrummer's section notes and JComp's are laid
@@ -66,7 +68,10 @@ every genre, its styles, their tempos and progressions, and the sources each gen
 The **STYLE** box picks the genre's style: a rhythm family, a set of progressions (one per kind of
 section), a tempo, a scale and its own twists (pushes, a busier or sparser hand, runs in, the top note
 alone, a left hand, richer or plainer chords, shuffle, half time, triplets). Shift-click another tile
-to **blend** its rhythms in; the small purple slider sets how much.
+to **blend** its rhythms in; the small purple slider sets how much. A rhythm on the other grid comes
+across beat by beat (a straight eighth onto the shuffle's third triplet). A fixed figure (Freddie
+Green's four, the batida, the montunos and guajeos, the cha-cha) is the style itself and takes no
+blend.
 
 ### HOW IT PLAYS
 
@@ -83,7 +88,7 @@ voicings sit, onsets, timing, runs).
 | Neo-Soul Keys | E-piano | lazy, behind the beat, rich and open |
 | Jazz Comper | Piano | rootless voicings (Levine's A and B: 3-5-7-9 and 7-9-3-5, the 13th for a dominant's 5th), sparse pushes |
 | Pop Pianist | Piano | eighth-note pulse, open triads |
-| Rhythm Guitar | Guitar | sixteenth scratch, three-note grips |
+| Rhythm Guitar | Guitar | sixteenth scratch, strummed both ways, three-note grips |
 | Skank Guitar | Guitar | off-beat chops, short and high, the off-beats strummed up |
 | Strummer | Guitar | down-up strums of a guitar grip (the bass, its fifth and octave, the chord above) |
 | Montuno | Piano | Latin piano figures in octaves (a close chord with its bottom note doubled on top) |
@@ -130,16 +135,19 @@ JComp voices whatever is written.
 - **PROGRESSION**: each section plays its own progression.
 - **HELD NOTES**: hold a chord on the chord keys (C3 up, set by the note box) and JComp comps it in the
   section's rhythm. It names what you hold (E G# B D is E7; add F# and it is E9), so it voices it its
-  own way.
+  own way. A tritone is a dominant's shell (B F is G7), a dominant's rootless voicing is that
+  dominant (F A B E is G13), and a triad over a bass outside it is a slash chord (G F A C is F/G).
 - **BOTH** (the default): the progression plays; a held chord takes over until you let go, and the
-  progression picks up where it is.
+  progression picks up where it is (with *Latch*, at the progression's next change).
 
 **A NEW CHORD STARTS** at once, or on the next sixteenth, beat (the default) or bar. A chord played a
 moment early still takes the beat it was meant for (At Once included), and one played up to about
 80 ms late takes it too: if that beat's chord has already sounded, the new chord comes in where it
-was played. A hit the take had while no chord was held yet plays when the first chord comes in. A chord is
-named when a key goes down; letting keys go doesn't change it. *Latch* keeps the last chord after you
-let go (a quick tap included). A host's note-off for every key, a choke, or All Notes Off lets go of
+was played. A new chord is struck at its moment even when the take has no hit there (a pad holding
+the bar), and a hit the take had while no chord was held yet plays when the first chord comes in. A
+chord is named when a key goes down: played legato, the keys pressed together (within about 60 ms)
+are the new chord, not the old keys still held with them; letting keys go never changes it. *Latch*
+keeps the last chord after you let go (a quick tap included). A host's note-off for every key, a choke, or All Notes Off lets go of
 what's held. *Lowest held note is the bass* makes slash chords (C/E). **VOICE WHAT I
 HOLD**: voice it JComp's way, play it as you hold it, or voice it under your top note.
 
@@ -186,23 +194,30 @@ How every chord is voiced, for all sections:
   1, 3, rather than repeating one block) or GRIP (a guitar's: the bass string, its fifth and octave,
   then the chord's third and colour close above; with three notes, the power chord; in a take with a
   bass of its own, a boom-chick or the palm-wine thumb, the strum leaves the bass strings to the
-  thumb). A slash chord
-  (C/E) keeps its bass at the bottom in CLOSE, DROP 2, DROP 2+4, SHELL, SPREAD and GRIP; ROOTLESS,
-  4THS and OCTAVES leave it to the bass player. On an organ or a pad the low note of
-  SPREAD stays in every chord; on keys it is held from one 1 or 3 to the next.
+  thumb's two strings, the root's and the fifth's). A grip is one a hand can make on six strings in
+  standard tuning, low on the neck, so a chord that comes round again is the same grip. A slash chord
+  (C/E) keeps its bass at the bottom in CLOSE, DROP 2, DROP 2+4, SHELL, SPREAD, 4THS and GRIP;
+  ROOTLESS and OCTAVES leave it to the bass player. On an organ or a pad the low note of SPREAD stays
+  in every chord; on keys it is held from one 1 or 3 to the next. 4THS stacks fewer fourths for a
+  chord with fewer tones (a triad, a sus, an add9) rather than leaving the shape. ROOTLESS at five
+  voices adds the 11th of a minor chord or the 13th of a major one, never the root over a major
+  seventh. Three voices (a guitar's chop) avoid a half-step cluster when a plainer three will do.
 - **CENTER**: where the voicings sit. **LEAD**: how much each chord is led from the one before (the
   least total movement) rather than placed at the center. **TOP MOVE**: the most the top voice should
-  move, in semitones. **SPREAD**: the widest a voicing may be.
+  move, in semitones. **SPREAD**: the widest the upper part may be (a left hand's low note in SHELL,
+  SPREAD and GRIP sits under it, best within a tenth; 4THS and DROP 2+4 are as wide as their
+  shapes).
 - **LOWEST** and **HIGHEST**: the window every voicing stays inside (at least an octave), so how wide
   the chords can spread. **OFFSET** slides the whole window, and CENTER with it, up to an octave either
   way. Voice leading stays bounded by the window wherever it is: each chord is still led from the one
   before by the least movement that fits, so automating OFFSET moves the voicings smoothly rather than
-  in jumps. A window too narrow for a chord gets fewer voices or a tighter shape. Only a low bass
+  in jumps. A window too narrow for a chord gets a voice fewer, and only then a wider window. Only a low bass
   note goes under the window (SHELL's, SPREAD's and GRIP's root, 4THS' root under the fourths, a slash
   chord's bass), and never under FLOOR. **FLOOR**: nothing goes under this note, the bass part included. The keyboard under the knobs
   shows the window as it sounds (click near either end to move it), the floor in green.
-- *Double a note in the middle, not on top*, *No half-step rubs below C4*, *Same shape for repeated
-  chords*.
+- *Double a note in the middle, not on top* (a voicing with its top note doubled below is the last
+  choice), *No half-step rubs below C4*, *Same shape for repeated chords* (while the shape, voices
+  and window still allow it). A chord that only changes colour (C7 to C9) stays where it is.
 
 Every voicing keeps to **low interval limits**: the lowest note an interval can sit on before it turns
 to mud (a minor second no lower than E3, a minor third no lower than C3, a major third, fourth or
@@ -265,8 +280,9 @@ playhead. Beside it, two knobs that change the whole part as it plays:
 - **LENGTH**: every chord shorter, down to a staccato chop, or longer, up to legato (held to the next
   chord). The middle plays the lengths as written.
 
-The rolls on GENERATE and PLAY draw the part with DENSITY and LENGTH as set; EDIT shows the take as
-written, the hits you edit. Thinned hits don't cut a long chord short: at full LENGTH a chord holds
+The rolls on GENERATE and PLAY draw the part with DENSITY, LENGTH and RUNS as set, with the engine's
+own dice: the hits, fills and runs the first pass plays (SAME DICE off, later bars differ). EDIT
+shows the take as written, the hits you edit. Thinned hits don't cut a long chord short: at full LENGTH a chord holds
 to the next chord actually played.
 
 ### FEEL
@@ -289,10 +305,14 @@ host; **FREE** only runs on its own.
 
 ### PASSING RUNS
 
-Single notes into a chord change, 2 to 4 steps of the key's scale landing on the new chord. The scale
-bends to the chord it leads into: a note of that chord from outside the key (a borrowed Abmaj7's Ab,
-a D7's F#, a chord of the last chorus's key change) joins it, and the scale notes a half step either
-side that the chord doesn't hold drop out.
+Single notes into a chord change, 2 to 4 steps of a scale landing on the new chord. The scale is the
+key's while the chord is in it; a chord from outside the key (a borrowed Abmaj7, a D7, a chord of the
+last chorus's key change) brings its own scale (Ab major's for the Abmaj7, D Mixolydian's for the
+D7), and a sus chord's run passes through the third it suspends. A run walks from the top note
+sounding to the new chord's, never striking the note already sounding; with no room between them it
+starts further off, a sixth at most. It never takes the place of a written chord (only rests and
+soft hits lie under it), never runs over another change, never runs in a figure played as written,
+and AT MOST counts the host's bars, so a new section doesn't wait on the last one's run.
 **AMOUNT** is how many of the chances are taken; **AT MOST** every bar, every 2 bars or every 4.
 **LANDS ON** the new chord's top note, or any note of it. *Half step from below* ends the run a
 semitone under its target; *Shorten the chord before* cuts the chord before the run so it doesn't
@@ -307,7 +327,9 @@ blur.
   **FOLLOW**ing all its notes, the strong ones (accented, on the beat, or a leap), or one a bar. Put a
   bass line (or JDrummer's kick, or your own left hand) on that channel and JComp comps with it.
 - **BOTH**: the takes, and a chord on the bass notes FOLLOW picks where the take isn't already
-  playing one.
+  playing one (struck once, the first beat after a start included).
+
+*Play only while a chord is held* holds for the bass coming in too.
 
 The keyboard shows the notes going out (top orange, bottom purple, inner blue) and what you hold
 (green).
@@ -447,6 +469,24 @@ alone; 4THS gives each chord its own stack with its seventh; chords are spelled 
 keys included. On the plugin side the first chord played on the keys takes its beat, host loops repeat
 exactly, PLAY ONLY WHILE HELD stops when you let go, renders are reproducible, and a preset brings its
 tempo.
+
+**The fifth review (0.5.0).** Six cold passes (funk, soul, church and blues; jazz and Latin; pop,
+dance, world and ambient; the generator and voicing; the plugin in real time; and a comparison with
+MMA, Impro-Visor and JJazzLab) reproduced every finding with `jcomp-dump` or a probe
+([docs/sources.md](docs/sources.md), Part I). Passing runs are now 2 to 4 notes that walk from the
+note sounding, never over a written chord or a fixed figure, and keep coming after the first
+section. A chord played on the keys is struck at its moment, a legato change names the new chord,
+LATCH works in BOTH, and releasing a key never renames. The alternating bass plays the new chord's
+root at a mid-bar change; Freddie Green's four accents 2 and 4; the bossa thumb and the montuno keep
+their figures through DENSITY and WEIRD; a plain dominant into a minor chord takes its b9; tritone
+subs are spelled flat. The voicing: a colour change doesn't jump, SAME SHAPE follows the knobs, GRIP
+is never silent and makes real guitar grips, 4THS barely moves, slash chords keep their bass at the
+bottom, and the held-note naming reads shells and rootless voicings. Fills are the style's own
+instrument, the held-chord styles hold whole bars, the one drop gains no chops, the organ bubble's
+left hand is short, the pumps lean on the backbeat, Cramer's slip is an ornament again, and Ambient's
+WEIRD borrows a sus rather than a dominant. On the plugin side host loops play identically from the
+first pass, a late start keeps its downbeat, FOLLOW ONE survives a one-bar loop, the rolls show what
+plays, and PARAM_MOD reaches only the modulatable controls.
 
 **Left out for now.** Jazz Waltz (it needs 3/4, which JComp's 4/4 grid can't play), a "+ GUITAR"
 second player layered over the first, and recording a part played in to a take.

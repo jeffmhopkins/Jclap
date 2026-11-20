@@ -244,9 +244,11 @@ int main() {
             JCLAP_CHECK(std::abs(v.top() - prev.top()) <= vs.topMove + 2);
          prev = v;
       }
-      // A passing run steps from one note to the next in the scale.
+      // A passing run steps through the scale between the notes, never re-striking the one it leaves.
       const Ints r = passingRun(67, 72, 3, 0, kMajor, false);
-      JCLAP_CHECK_EQ(static_cast<int>(r.size()), 3);
+      JCLAP_CHECK_EQ(static_cast<int>(r.size()), 2);
+      for (int x : r)
+         JCLAP_CHECK(x > 67 && x < 72);
    }
 
    // ---- the library ----
@@ -1146,22 +1148,28 @@ int main() {
       JCLAP_CHECK(tops.size() >= 2);
    }
    {
-      // The slip note: a grace note a whole step under an inner note of the chord, just before it.
+      // The slip note: a grace note a whole step under an inner note of the chord, just before it,
+      // now and then on a new chord, never on a chord struck again.
       auto engine = std::make_unique<Engine>();
       Engine &e = *engine;
-      e.setSong(*songOf("X...X...X...X...", {{"C", nullptr}}));
+      e.setSong(*songOf("X...X...X...X...", {{"C", "F"}, {"G", "Am"}}));
       Settings s = plain();
       s.slip = true;
       e.setSettings(s);
       e.reset();
-      const std::vector<Timed> out = run(e, 24000 * 8);
-      int slips = 0;
+      const std::vector<Timed> out = run(e, 24000 * 64);
+      int slips = 0, onRepeat = 0;
       for (const Timed &t : out)
          if (t.on() && t.time % 12000 > 10000) {
             for (const Timed &u : out)
-               slips += u.on() && u.m.data1 == t.m.data1 + 2 && u.time > t.time && u.time - t.time < 2400;
+               if (u.on() && u.m.data1 == t.m.data1 + 2 && u.time > t.time && u.time - t.time < 2400) {
+                  ++slips;
+                  onRepeat += (u.time + 2400) / 24000 % 2 == 1; // beats 2 and 4 repeat the chord
+               }
          }
       JCLAP_CHECK(slips >= 4);
+      JCLAP_CHECK(slips <= 20);
+      JCLAP_CHECK_EQ(onRepeat, 0);
    }
    {
       // Nothing allocated while playing: held chords, runs, the bass coming in.
@@ -1440,7 +1448,8 @@ int main() {
                }
          }
       }
-      // A quiet section is soft, not loud: velocity rises with energy.
+      // A quiet section is soft, not loud: velocity rises with energy (the loudest chord's: a quiet
+      // motor keeps its ghosted strokes, which pull the mean down).
       for (int g = 0; g < genreCount(); g += 3) {
          double before = 0.0;
          for (double e : {0.05, 0.12, 0.3, 0.6, 0.9}) {
@@ -1448,14 +1457,10 @@ int main() {
             r.sections[kVerse] = e;
             r.energy = 0.5;
             Section sec = makeSection(r, kVerse, 99);
-            double sum = 0.0;
-            int n = 0;
+            double mean = 0.0;
             for (int s = 0; s < sec.takes[0].steps; ++s)
-               if (sec.takes[0].at(s).on() && !leftHand(sec.takes[0].at(s).part)) {
-                  sum += sec.takes[0].at(s).vel;
-                  ++n;
-               }
-            const double mean = n ? sum / n : 0.0;
+               if (sec.takes[0].at(s).on() && !leftHand(sec.takes[0].at(s).part))
+                  mean = std::max(mean, static_cast<double>(sec.takes[0].at(s).vel));
             JCLAP_CHECK(mean >= before - 6.0);
             before = mean;
          }
@@ -1737,6 +1742,171 @@ int main() {
          }
          JCLAP_CHECK(chords > 4);
       }
+   }
+   // ---- round 5 ----
+   {
+      // Held notes: a tritone is a dominant's shell, a rootless voicing its dominant, a triad over a
+      // foreign bass a slash chord; a 6/9 over a bass parses.
+      JCLAP_CHECK(chordName(nameChord(Ints{59, 65}), 0) == "G7");
+      JCLAP_CHECK(chordName(nameChord(Ints{53, 57, 59, 64}), 0) == "G13");
+      JCLAP_CHECK(chordName(nameChord(Ints{47, 50, 53, 57}), 0) == "Bm7b5");
+      JCLAP_CHECK(chordName(nameChord(Ints{43, 53, 57, 60}, true), 0) == "F/G");
+      Chord six;
+      JCLAP_CHECK(parseChord("C6/9/E", six) && six.bass == 4 && chordName(six, 0) == "C6/9/E");
+      // F# minor's leading tone is E#.
+      JCLAP_CHECK(std::string(pitchName(5, 6, kMinor)) == "E#");
+   }
+   {
+      // A grip comes back to the same open chord, whatever came between; and every grip is one a
+      // hand can make.
+      VoiceSettings vs;
+      vs.shape = kGrip;
+      vs.voices = 5;
+      vs.lo = 40;
+      vs.hi = 76;
+      vs.center = 58;
+      vs.floor = 40;
+      Voicing prev, firstE;
+      Chord pc;
+      for (const char *name : {"E", "A", "E", "B7", "E", "A", "E"}) {
+         const Chord c = chord(name);
+         const Voicing v = voice(c, prev.empty() ? nullptr : &prev, vs, -1, pc.none() ? nullptr : &pc);
+         JCLAP_CHECK(gripFrets(v) >= 0.0);
+         if (std::string(name) == "E") {
+            if (firstE.empty())
+               firstE = v;
+            JCLAP_CHECK(v == firstE);
+         }
+         prev = v;
+         pc = c;
+      }
+      // 4THS keeps a triad and a sus in fourths (no fall back to SPREAD), its bass under a slash chord.
+      VoiceSettings q;
+      q.shape = kQuartal;
+      q.voices = 5;
+      const Voicing d = voice(chord("Dsus"), nullptr, q);
+      for (int i = 1; i < d.count; ++i)
+         JCLAP_CHECK(d.notes[static_cast<size_t>(i)] - d.notes[static_cast<size_t>(i - 1)] >= 4);
+      // ROOTLESS at five voices never puts the root a half step over the major seventh.
+      VoiceSettings r;
+      r.shape = kRootless;
+      r.voices = 5;
+      const Voicing m = voice(chord("Cmaj7"), nullptr, r);
+      for (int i = 0; i < m.count; ++i)
+         JCLAP_CHECK(m.notes[static_cast<size_t>(i)] % 12 != 0);
+      // Three voices: no half-step cluster where a plainer three will do.
+      VoiceSettings three;
+      three.voices = 3;
+      const Voicing e9 = voice(chord("Em9"), nullptr, three);
+      for (int i = 1; i < e9.count; ++i)
+         JCLAP_CHECK(e9.notes[static_cast<size_t>(i)] - e9.notes[static_cast<size_t>(i - 1)] != 1);
+   }
+   {
+      // A fill is the take's own instrument: a line fills with its line, a take with no left hand
+      // gets no thumb, and the one drop gains no chops before its skank.
+      for (int g = 0; g < genreCount(); ++g)
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st) {
+            auto song = std::make_unique<Song>();
+            generateSong(recipeOf(g, st, 3), *song);
+            for (const Section &sec : song->sections) {
+               const Pattern &t = sec.takes[0];
+               if (hasLine(t))
+                  JCLAP_CHECK(hasLine(sec.fill));
+               if (!hasLeftHand(t))
+                  JCLAP_CHECK(!hasLeftHand(sec.fill));
+            }
+         }
+   }
+   {
+      // PLAY ONLY WHILE HELD holds for the bass coming in too.
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x...x...x...x...", {{"C", nullptr}}));
+      Settings s = plain();
+      s.heldOnly = true;
+      s.rhythmFrom = 1;
+      e.setSettings(s);
+      e.reset();
+      auto out = std::make_unique<OutBuffer>();
+      int ons = 0;
+      for (int64_t at = 0; at < 24000 * 8; at += kBlock) {
+         if (at % 24000 == 0)
+            e.noteOn(s.bassChannel, 36, 100, 0);
+         Block b;
+         b.frames = kBlock;
+         b.tempo = 120.0;
+         b.hasTransport = b.playing = true;
+         b.beats = at / 24000.0;
+         out->clear();
+         e.process(b, *out);
+         for (size_t i = 0; i < out->count; ++i)
+            ons += (out->items[i].status & 0xF0) == 0x90 && out->items[i].data2 > 0;
+      }
+      JCLAP_CHECK_EQ(ons, 0);
+   }
+   {
+      // A start a few ms past the bar line still plays the downbeat; a host loop's first pass plays
+      // what the later ones do, note for note.
+      for (double startAt : {0.03, 0.06}) {
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*songOf("x...x...x...x...", {{"C", nullptr}}));
+         e.setSettings(plain());
+         e.reset();
+         auto out = std::make_unique<OutBuffer>();
+         Block b;
+         b.frames = kBlock;
+         b.tempo = 180.0;
+         b.hasTransport = b.playing = true;
+         b.beats = startAt;
+         e.process(b, *out);
+         int ons = 0;
+         for (size_t i = 0; i < out->count; ++i)
+            ons += (out->items[i].status & 0xF0) == 0x90 && out->items[i].data2 > 0 && out->items[i].time == 0;
+         JCLAP_CHECK(ons >= 3);
+      }
+      const Recipe rec = recipeOf(0, 0, 5);
+      auto song = std::make_unique<Song>();
+      generateSong(rec, *song);
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = settingsFor(rec);
+      s.runs = 0.6;
+      applyRecipe(s, rec);
+      e.setSettings(s);
+      e.reset();
+      auto out = std::make_unique<OutBuffer>();
+      std::vector<std::vector<std::pair<int, int>>> passes(1);
+      double beats = 0.0;
+      for (int blk = 0; blk < 6000 && passes.size() < 4; ++blk) {
+         Block b;
+         b.frames = kBlock;
+         b.tempo = 120.0;
+         b.hasTransport = b.playing = true;
+         b.beats = beats;
+         b.loopActive = true;
+         b.loopStart = 0.0;
+         b.loopEnd = 16.0;
+         out->clear();
+         e.process(b, *out);
+         for (size_t i = 0; i < out->count; ++i)
+            if ((out->items[i].status & 0xF0) == 0x90 && out->items[i].data2 > 0)
+               passes.back().push_back({static_cast<int>(std::lround((beats * 24000.0 + out->items[i].time) / 48.0)),
+                                        out->items[i].data1});
+         beats += kBlock / 24000.0;
+         if (beats >= 16.0) {
+            beats -= 16.0;
+            passes.emplace_back();
+         }
+      }
+      JCLAP_CHECK(passes.size() >= 3);
+      // The same notes, each within a millisecond or two (the clock's rounding).
+      JCLAP_CHECK_EQ(passes[0].size(), passes[1].size());
+      int differ = 0;
+      for (size_t i = 0; i < std::min(passes[0].size(), passes[1].size()); ++i)
+         differ += passes[0][i].second != passes[1][i].second || std::abs(passes[0][i].first - passes[1][i].first) > 2;
+      JCLAP_CHECK_EQ(differ, 0);
    }
    return jclap::core::testResult();
 }
