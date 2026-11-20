@@ -622,8 +622,13 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       // m9 isn't left at three.)
       const bool fewer = static_cast<int>(q.tones.size()) < n;
       for (int size = n; size >= 3 && (out.empty() || (fewer && size >= n - 2)); --size)
-      for (int strict = 3, found = static_cast<int>(out.size()); strict >= 0 && static_cast<int>(out.size()) == found; --strict)
-         for (int odd = 0; odd < 2 && static_cast<int>(out.size()) == found; ++odd)
+      // A level less strict comes in while there are fewer than three stacks to choose from (one
+      // stack a chord leaves the top leaping from chord to chord), down to the stacks that still hold
+      // the seventh; the last level (no seventh) only where nothing else fits.
+      for (int strict = 3, found = static_cast<int>(out.size());
+           strict >= 0 && (static_cast<int>(out.size()) == found || (strict >= 1 && static_cast<int>(out.size()) < found + 3));
+           --strict)
+         for (int odd = 0; odd < 2 && static_cast<int>(out.size()) < found + 3; ++odd)
             for (int b = vs.lo - 12; b <= vs.hi; ++b) {
                if (!(allowed >> (((b % 12) + 12) % 12) & 1))
                   continue;
@@ -916,6 +921,10 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       VoiceSettings ds = vs;
       if (shape == kDrop24)
          ds.maxSpan = vs.maxSpan + 12;
+      // DOUBLE is a rule on the voicing, not on how it was built: (D F# A)+D and (F# A D)+D are the
+      // same notes. A doubled top is kept only where nothing else fits.
+      Voicings doubledTop;
+      const size_t had = out.size();
       for (auto st : detail::closeStacks(distinct, vs.lo, vs.hi)) {
          if (shape == kDrop2 && st.size() >= 3)
             st[st.size() - 2] -= 12;
@@ -933,7 +942,7 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                   if (((x % 12) + 12) % 12 != dpc)
                      continue;
                   for (int d : {x + 12, x - 12}) {
-                     if (std::find(g.begin(), g.end(), d) != g.end() || (vs.doubleMiddle && d > g.back()))
+                     if (std::find(g.begin(), g.end(), d) != g.end())
                         continue;
                      Stack v = g;
                      v.push_back(d);
@@ -943,9 +952,19 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                }
             grown = next;
          }
-         for (const auto &v : grown)
-            detail::addCandidate(out, v, ds, -1);
+         for (const auto &v : grown) {
+            bool topTwice = false;
+            for (size_t i = 0; i + 1 < v.size(); ++i)
+               topTwice = topTwice || ((v[i] - v.back()) % 12 + 12) % 12 == 0;
+            if (vs.doubleMiddle && !doubles.empty() && topTwice)
+               detail::addCandidate(doubledTop, v, ds, -1);
+            else
+               detail::addCandidate(out, v, ds, -1);
+         }
       }
+      if (out.size() == had)
+         for (const Voicing &v : doubledTop)
+            out.push_back(v);
       // A slash chord keeps its bass at the bottom: the voicings that have it there, else each with
       // the bass note added under it.
       if (c.bass >= 0 && c.bass != c.root && !out.empty()) {
