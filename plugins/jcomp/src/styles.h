@@ -69,6 +69,8 @@ struct Style {
    int progSet = 0;     // which of the genre's progression sets
    unsigned rhythms = 0; // which of the genre's rhythms (bits), 0 all
    int player = -1;     // -1 the genre's
+   // A voicing the style needs whatever the player (Freddie Green's low shells): -1 the player's.
+   int shape = -1, voices = 0, lo = 0, hi = 0, center = 0;
 };
 
 struct Genre {
@@ -109,9 +111,10 @@ inline const std::vector<Genre> &genres() {
       // ---- Funk & Soul ----
       {"Funk", kFamilies[0], kPocketKeys, 0.53, 0,
        // Stabs on the one; the offbeat clav counter-part; the "Superstition" clav riff (eighths, the
-       // b7 a sixteenth early, the resolution on the last sixteenth: Hein); the chicken-scratch motor
+       // b7 a sixteenth early, the resolution on the last sixteenth; in bar two the b7 falls on beat
+       // four: Hein); the chicken-scratch motor
        // (Stewart: muted, "occasional chords are allowed to ring out").
-       {{"X.....x...x.X...", 0.35}, {"..x..x.x..x..x.x", 0.55}, {"u.t.u.t.u.tu...X", 0.7}, {"X.gxg.x.gXg.x.gx", 0.9}},
+       {{"X.....x...x.X...", 0.35}, {"..x..x.x..x..x.x", 0.55}, {"u.t.u.t.u.tu...X|u.t.u.t.u.t.u..X", 0.7}, {"X.gxg.x.gXg.x.gx", 0.9}},
        {{"X.gxg.x.gXg.xxxx", 0.8}},
        // Brown's static dominant vamp, the bridge a step up ("take it to the bridge"); Fela's Dorian i7.
        {{kMixolydian, {"C7#9|C7#9", "C9|C9|C9|C9", "F9|F9|C9|C9", "C9|F9|C9|F9", "D9|D9|D9|D9", "C9|C9|C7#9|C7#9"}},
@@ -132,16 +135,17 @@ inline const std::vector<Genre> &genres() {
         {"Gospel Push", "Push", 104, kRunsIn, 0, 0b100}},
        "1, 23"},
       {"Motown", kFamilies[0], kPopPianist, 0.5, 0,
-       // The backbeat ("never blew a backbeat": Van Dyke on Messina), quarter-note chords, the
+       // The backbeat ("never blew a backbeat": Van Dyke on Messina), quarter-note chords leaning on 2
+       // and 4 with Benjamin's quarter-note snare, the
        // eighth-note pump with left-hand bass notes, and Hunter's bluesy boogie figure.
-       {{"....X.......X...", 0.3}, {"X...x...X...x...", 0.55}, {"x.x.x.x.x.x.x.x.", 0.75}, {"x..x..x.x..x..x.", 0.85}},
+       {{"....X.......X...", 0.3}, {"x...X...x...X...", 0.55}, {"x.x.x.x.x.x.x.x.", 0.75}, {"x..x..x.x..x..x.", 0.85}},
        {{"x.x.x.x.x.x.xxxx", 0.8}},
        // I-vi-ii-V, I-IV-I-V, IV-V-I; the last chorus up a semitone.
        {{kMajor, {"C|Am|Dm7|G7", "C|Am|Dm|G", "C|F|C|G", "F|G|C|C", "F|F|G|G", "Gb|Ab|Db|Db"}}},
        {{"Backbeat Piano", "Backbeat", 120, kLeftHand, 0, 0b0011},
         {"Gorilla Piano", "Gorilla", 128, kLeftHand, 0, 0b0100},
         {"Boogie Figure", "Boogie", 116, 0, 0, 0b1000}},
-       "23"},
+       "23, 52"},
       {"Disco", kFamilies[0], kRhythmGuitar, 0.5, 0,
        // Offbeat eighths over four on the floor; the 3-3-2 Rhodes figure; Rodgers' "chucking":
        // sixteenths, muted and ringing, on three-string inversions.
@@ -184,15 +188,17 @@ inline const std::vector<Genre> &genres() {
 
       // ---- Church & Blues ----
       {"Gospel", kFamilies[1], kChurchOrgan, 0.56, 0,
-       // A ballad comp with pickups before 3 and 1; the uptempo shout; the 12/8 shout ballad.
-       {{"x---x-x-----x-x-", 0.4}, {"x.xX.xx.x.xX.xx.", 0.85}, {"X.xx.xX.xx.x", 0.6}},
+       // A ballad comp with pickups before 3 and 1; the uptempo comp; the 12/8 shout ballad; the shout
+       // (praise break): very fast and swung, the left hand on the beats, the chords on the swung
+       // upbeats with the claps, the upbeats of 2 and 4 hardest.
+       {{"x---x-x-----x-x-", 0.4}, {"x.xX.xx.x.xX.xx.", 0.85}, {"X.xx.xX.xx.x", 0.6}, {"b.xb.Xb.xb.X", 0.9}},
        {{"x.xX.xx.x.xXxxxx", 0.85}, {"X.xx.xX.xxxx", 0.7}},
        // I-vi-ii-V; the walk-up IV-#IVo7-I/5-VI7-ii-V; ii-V vamps; I-I7/3-IV-iv-I.
        {{kMajor, {"C|Am7|Dm7|G7", "C|Am7|Dm7|G7", "F F#dim7|C/G A7|Dm7 G7|C", "F F#dim7|C/G A7|Dm7|G7", "Dm7|G7|Dm7|G7", "C C7/E|F Fm|C|C"}}},
        {{"Sunday Ballad", "Ballad", 66, kTriplet | kRunsIn | kRich},
-        {"Shout", "Shout", 132, kRunsIn, 0, 0b010},
+        {"Shout", "Shout", 160, kTriplet | kRunsIn, 0, 0b1000},
         {"Praise Walk-Up", "Walk-Up", 84, kRunsIn | kLeftHand, 0, 0b001, kPopPianist}},
-       "31, 32, 44"},
+       "31, 32, 44, 53"},
       {"Blues", kFamilies[1], kPopPianist, 0.5, 0,
        // On the triplet grid: backbeat chords, the Chicago lift, the long-short shuffle pulse.
        {{"...x.....x..", 0.3}, {"x..x.xx..x.x", 0.6}, {"x.xx.xx.xx.x", 0.85}},
@@ -207,43 +213,49 @@ inline const std::vector<Genre> &genres() {
 
       // ---- Jazz & Latin ----
       {"Swing Jazz", kFamilies[2], kJazzComper, 0.64, 1,
-       // The Charleston and its reverse; Garland's offbeats, an eighth ahead of the next beat;
+       // The Charleston (1, the and of 2) and its reverse (the and of 1, 3); Garland's offbeats, an eighth ahead of the next beat;
        // Freddie Green's four to the bar, one or two notes.
-       {{"x.....x.........", 0.35}, {"..x.......x.....", 0.45}, {"......x.......x.", 0.6}, {"x...x...x...x...", 0.8}},
+       {{"x.....x.........", 0.35}, {"..x.....x.......", 0.45}, {"......x.......x.", 0.6}, {"x...x...x...x...", 0.8}},
        {{"x.....x...x...x.", 0.6}},
        // Rhythm changes' A; iii-VI7-ii-V; the III7-VI7-II7-V7 bridge.
        {{kMajor, {"Em7 A7|Dm7 G7|Em7 A7|Dm7 G7", "C Am7|Dm7 G7|C Am7|Dm7 G7", "Dm7|G7|Cmaj7|Cmaj7", "Dm7 G7|Cmaj7|Dm7 G7|Cmaj7 A7", "E7|E7|A7|A7|D7|D7|G7|G7", "Em7 A7|Dm7 G7|Cmaj7|Cmaj7"}}},
        {{"Charleston Comp", "Charleston", 160, kSparse, 0, 0b0011},
         {"Garland Pushes", "Garland", 140, kPushes, 0, 0b0100},
-        {"Four To The Bar", "Freddie", 180, kPlain | kShorts, 0, 0b1000, kRhythmGuitar}},
-       "2, 19, 20, 21"},
-      {"Bossa Nova", kFamilies[2], kRhythmGuitar, 0.5, 0,
-       // The batida: the thumb on the beats, the fingers on both eighths of 1 and the second
-       // sixteenth of 2 (Garcia, via Wikipedia); the 3-3-4-3-3 cycle; the two-bar pattern tied
-       // across the barline.
-       {{"x.x.bx..x.x.bx..", 0.6}, {"x..x..x...x..x..", 0.7}, {"..x..x.x..x..x..|x..x..x..x..x...", 0.8}},
-       {{"x.x.bx..x.x.xx.x", 0.6}},
+        {"Four To The Bar", "Freddie", 180, kPlain | kShorts, 0, 0b1000, kRhythmGuitar, kShell, 3, 40, 64, 52}},
+       "2, 19, 20, 21, 54, 55"},
+      {"Bossa Nova", kFamilies[2], kJazzComper, 0.5, 0,
+       // Brazilian music writes bossa in 2/4 in sixteenths, so at a 4/4 tempo each 2/4 bar is a 4/4
+       // bar in eighths. The batida: the thumb on the 2/4 beats (1 and 3 here), the fingers on both
+       // eighths of the first beat and the second sixteenth of the second (1, 2 and the and of 3
+       // here: Garcia, via Wikipedia); the 3-3-4-3-3 cycle in eighths over two bars; the same cycle
+       // with the thumb under it.
+       {{"x...x...b.x.....", 0.6}, {"x.....x.....x...|....x.....x.....", 0.7}, {"x.....x.b...x...|b...x...b.x.....", 0.8}},
+       {{"x...x...b.x...x.", 0.6}},
        // Imaj7-II7(#11) and the "Ipanema" turn (Imaj7-II7-ii7-bII7); ii-V chains for the bridge.
        {{kMajor, {"Cmaj7|Cmaj7|C6/9|C6/9", "Cmaj7|Cmaj7|D7#11|D7#11|Dm7|Db7#11|Cmaj7|Db7#11", "Dm7|G7|Cmaj7|Cmaj7", "Cmaj7|D7#11|Dm7|Db7#11", "Em7|A7b9|Dm7|G7|Fm7|Bb7|Cmaj7|Cmaj7", "Cmaj7|Cmaj7|C6/9|C6/9"}}},
        {{"Batida", "Batida", 130, 0, 0, 0b001},
         {"Two-Bar Bossa", "Two Bar", 138, kPushes, 0, 0b100},
-        {"Quiet Bossa", "Quiet", 120, kSparse | kRich, 0, 0b011, kJazzComper}},
+        {"Quiet Bossa", "Quiet", 120, kSparse | kRich, 0, 0b011}},
        "11, 12"},
       {"Salsa", kFamilies[2], kMontuno, 0.5, 0,
-       // Chords on the clave's strokes; the montuno on the 2-3 onbeat/offbeat motif (begins on the
-       // downbeat) and on 3-2 (the three-side all offbeats, from a pickup): Peñalosa via Moore.
-       {{"x.....x.....x...|....x...x.......", 0.35}, {"x.x..x.x..x..x.x|..x..x.x..x..x.x", 0.8}, {".x.x..x..x.x..x.|x..x..x.x..x..x.", 0.8}},
-       {{"..x..x.x..x.xxxx", 0.8}},
+       // A clave bar is a 4/4 bar in eighths (the clave's strokes on 1, the and of 2, 4 | 2, 3). Chords
+       // on the 3-2 clave's strokes; the montuno on the 2-3 onbeat/offbeat motif (the two-side 1, 2,
+       // the ands of 2, 3 and 4; the three-side all offbeats) and on 3-2 (the bars swapped, the and
+       // of 4 the pickup): Moore's examples via Wikipedia's Guajeo, read note by note from its MIDI;
+       // chords on the 2-3 clave's strokes.
+       {{"x.....x.....x...|....x...x.......", 0.35}, {"x...x.x...x...x.|..x...x...x...x.", 0.8}, {"..x...x...x...x.|x...x.x...x...x.", 0.8},
+        {"....x...x.......|x.....x.....x...", 0.35}},
+       {{"x...x.x...x.x.x.", 0.8}},
        // The son montuno I-IV-V-IV; ii-V-I-IV; a minor i-iv-V7. Changes anticipated on the "and" of 4.
        {{kMajor, {"C|F|G7|F", "C|F|G7|F", "Dm7|G7|C|C", "Dm7|G7|C|F", "Am|Dm|E7|E7", "C|F|G7|C"}},
         {kMinor, {"Cm|Fm|G7|G7", "Cm|Fm|G7|Fm", "Ab|G7", "Cm|Fm|G7|Cm", "Fm|Bb7|Eb|G7", "Cm|Fm|G7|Cm"}}},
-       {{"Montuno 2-3", "2-3", 180, kPushes, 0, 0b011},
+       {{"Montuno 2-3", "2-3", 180, kPushes, 0, 0b1010},
         {"Montuno 3-2", "3-2", 180, kPushes, 0, 0b101},
-        {"Minor Montuno", "Minor", 170, kPushes, 1, 0b011}},
+        {"Minor Montuno", "Minor", 170, kPushes, 1, 0b1010}},
        "2, 7, 8, 9, 10"},
       {"Latin Jazz", kFamilies[2], kJazzComper, 0.5, 0,
        // The chachachá's quarters; the guajeos (as salsa).
-       {{"x...x...x...x...", 0.5}, {"x.x..x.x..x..x.x|..x..x.x..x..x.x", 0.8}, {".x.x..x..x.x..x.|x..x..x.x..x..x.", 0.8}},
+       {{"x...x...x...x...", 0.5}, {"x...x.x...x...x.|..x...x...x...x.", 0.8}, {"..x...x...x...x.|x...x.x...x...x.", 0.8}},
        {{"x...x...x.x.x.xx", 0.6}},
        // The i-IV7 vamp ("Oye Como Va"); a minor ii-V.
        {{kDorian, {"Cm7|F9", "Cm7|F9", "Ab7|G7", "Cm7|F9|Cm7|F9", "Dm7b5|G7b9|Cm7|Cm7", "Cm7|F9"}}},
@@ -321,19 +333,21 @@ inline const std::vector<Genre> &genres() {
 
       // ---- Caribbean & Africa ----
       {"Reggae", kFamilies[5], kSkankGuitar, 0.5, 0,
-       // The skank on 2 and 4 (or every offbeat, counted double); the organ bubble (low notes a
-       // sixteenth either side of the chop); the double chop.
-       {{"....x.......x...", 0.4}, {"..x...x...x...x.", 0.6}, {".b.bx...b.b.x...", 0.75}, {"....x..x....x..x", 0.85}},
+       // The skank on 2 and 4 (or every offbeat, counted double); the organ bubble (the left hand's
+       // low single notes on the upbeats, the right hand's chop on 2 and 4: Jenson, Berklee); the
+       // double chop.
+       {{"....x.......x...", 0.4}, {"..x...x...x...x.", 0.6}, {"..b.x.b...b.x.b.", 0.75}, {"....x..x....x..x", 0.85}},
        {{"....x..x..x.x.xx", 0.6}},
        {{kMajor, {"C|F", "C|F|C|F", "Am|F|G|G", "C|G|Am|F", "Am|G|Am|G", "C|F"}},
         {kMinor, {"Cm|Fm", "Cm|Fm|Cm|Fm", "Ab|Bb", "Cm|Bb|Cm|Bb", "Fm|Bb|Cm|Cm", "Cm|Fm"}}},
        {{"One Drop Skank", "One Drop", 74, kShorts, 0, 0b0001},
         {"Organ Bubble", "Bubble", 72, kShorts, 0, 0b0100, kChurchOrgan},
         {"Rockers", "Rockers", 80, kShorts, 1, 0b1010}},
-       "35, 42"},
+       "35, 42, 51"},
       {"Ska", kFamilies[5], kSkankGuitar, 0.5, 0,
-       // The offbeat chop that named it (Britannica); the doubled upstroke; early ska's shuffle.
-       {{"..x...x...x...x.", 0.6}, {"..x.x.x.x.x.x.x.", 0.85}, {"..x..x..x..x", 0.6}},
+       // The offbeat chop that named it (Britannica); the offbeat doubled a sixteenth later; early ska's
+       // shuffle.
+       {{"..x...x...x...x.", 0.6}, {"..xx..xx..xx..xx", 0.85}, {"..x..x..x..x", 0.6}},
        {{"..x...x...x.x.xx", 0.7}, {"..x..x..xxxx", 0.7}},
        {{kMajor, {"C|F|G|G", "C|Am|F|G", "F|G", "C|F|G|C", "Dm7|G7|Cmaj7|Cmaj7", "C|F|G|C"}}},
        {{"Upstroke", "Upstroke", 132, kShorts, 0, 0b011},
@@ -352,7 +366,7 @@ inline const std::vector<Genre> &genres() {
         {"Chord Chop", "Chop", 118, kShorts, 0, 0b100},
         {"Interlock", "Interlock", 104, 0, 0, 0b111}},
        "13, 14"},
-      {"Highlife", kFamilies[5], kRhythmGuitar, 0.52, 0,
+      {"Highlife", kFamilies[5], kStrummer, 0.52, 0,
        // Palm-wine two-finger interlock (the thumb on eighths, a finger on sixteenths between: the
        // Koo Nimo article); the dance-band 3-3-2; the guitar on the 12/8 bell.
        {{"b.x.btbtb.x.btbt", 0.75}, {"x..x..x.x..x..x.", 0.6}, {"x.x.xx.x.x.x", 0.7}},
@@ -360,7 +374,7 @@ inline const std::vector<Genre> &genres() {
        // Dagomba patterns "emphasize two chords, the tonic major and the dominant seventh".
        {{kMajor, {"C|G7", "C|G7|C|G7", "F|G7", "C|F|C|G7", "F|C|G7|C", "C|G7|C|C"}}},
        {{"Palm-Wine", "Palm-Wine", 108, 0, 0, 0b001},
-        {"Dance Band", "Dance Band", 120, 0, 0, 0b010, kStrummer},
+        {"Dance Band", "Dance Band", 120, 0, 0, 0b010},
         {"Bell Twelve", "12/8", 112, kTriplet}},
        "7, 26, 27, 28"},
 

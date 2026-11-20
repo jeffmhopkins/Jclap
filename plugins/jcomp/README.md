@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.2.0.
+Version 0.2.1.
 
 ![Panel](docs/panel.png)
 
@@ -75,10 +75,10 @@ voicings sit, onsets, timing, runs).
 | Clav Chopper | Clav | busy sixteenth chops, muted and percussive |
 | Church Organ | Organ | held chords, walk-ups into the changes |
 | Neo-Soul Keys | E-piano | lazy, behind the beat, rich and open |
-| Jazz Comper | Piano | shells and rootless voicings, sparse pushes |
+| Jazz Comper | Piano | shells and rootless voicings (close, Levine's A and B), sparse pushes |
 | Pop Pianist | Piano | eighth-note pulse, open triads |
 | Rhythm Guitar | Guitar | sixteenth scratch, three-note grips |
-| Skank Guitar | Guitar | off-beat chops, short and high |
+| Skank Guitar | Guitar | off-beat chops, short and high, the off-beats strummed up |
 | Strummer | Guitar | down-up strums across six strings |
 | Montuno | Piano | Latin piano figures in octaves |
 | House Stabs | Synth | one chord shape, rhythmic and on the grid |
@@ -302,16 +302,16 @@ from.
 |---|---|
 | Funk | Hein on "Superstition" [5]; the Funkscribe multitracks [6]; Stewart, "Make It Funky" [13] |
 | Soul | de Clercq & Temperley's rock corpus [1]; the Funk Brothers [23] |
-| Motown | the Funk Brothers (Hunter and Van Dyke, the backbeat piano) [23] |
+| Motown | the Funk Brothers (Hunter and Van Dyke, the backbeat piano) [23]; Benjamin's quarter-note snare [52] |
 | Disco | Nile Rodgers interviews (chucking, three-string inversions) [40] |
 | Neo-Soul | Danielsen on D'Angelo's "Left and Right" [15] |
 | 90s R&B | none found: written from the idiom |
 | Lo-fi | Danielsen [15]; Winston & Saywood, *IASPM Journal* [17] |
-| Gospel | Hal Leonard's gospel keyboard guides [31][32]; Smallwood's vamps [44] |
+| Gospel | Hal Leonard's gospel keyboard guides [31][32]; Smallwood's vamps [44]; shout music's tempo and upbeats [53] |
 | Blues | none found: the standard 12-bar form, from the idiom |
-| Swing Jazz | Levine, *The Jazz Piano Book* [2]; Freddie Green [19][20]; Red Garland [21] |
-| Bossa Nova | the batida, after Garcia and others [11][12] |
-| Salsa | Levine [2]; the guajeo after Peñalosa, Moore and Mauleón [7][8][9][10] |
+| Swing Jazz | Levine, *The Jazz Piano Book* [2]; Freddie Green [19][20][55]; Red Garland [21]; the reverse Charleston [54] |
+| Bossa Nova | the batida, after Garcia and others [11][12], written in eighths (Brazil's 2/4 read at a 4/4 tempo) |
+| Salsa | Levine [2]; the guajeo after Peñalosa, Moore and Mauleón [7][8][9][10], read note by note from Moore's examples |
 | Latin Jazz | Levine [2]; guajeo [7]; Moore [10] |
 | Pop | de Clercq & Temperley [1] (the progressions' frequencies) |
 | Rock | de Clercq & Temperley [1] |
@@ -319,7 +319,7 @@ from.
 | Country | Floyd Cramer's slip-note [18]; Hal Leonard's country piano guide [33] |
 | House | MusicRadar on 90s house piano [36]; the Korg M1 [37] |
 | Deep House | Roland and Hooktheory on Mr. Fingers' "Can You Feel It" [24][25] |
-| Reggae | Berklee's reggae keyboard guide [35]; Dubmatix on the organ bubble [42] |
+| Reggae | Berklee's reggae keyboard guide [35]; Dubmatix on the organ bubble [42]; Jenson's "Bubblin'" [51] |
 | Ska | Britannica [22] |
 | Afrobeat | Stewart's interlock tables [13]; Veal [14] |
 | Highlife | guajeo [7]; Braddock [26]; Koo Nimo [27]; Music in Africa [28] |
@@ -341,6 +341,15 @@ Veal, Braddock, the Hal Leonard guides). Ambient rests on search snippets about 
 progressions are derived from what those describe (open, ambiguous, sus and add9) rather than taken
 from any recording. The styles are original patterns in each idiom's manner, not
 transcriptions of any recording.
+
+**The independent review (0.2.1).** A second pass checked every genre, style and player against
+sources read directly ([docs/sources.md](docs/sources.md), Part E). It rewrote the salsa and Latin
+jazz montunos in eighths from Moore's guajeo examples (they had been in sixteenths), wrote the bossa
+batida in eighths (it had been playing twice as fast), put the reverse Charleston on the and of 1 and
+beat 3, voiced Four To The Bar in Freddie Green's low shells, moved the gospel Shout to 160 BPM on the
+swung triplet grid, put the organ bubble's left hand on the upbeats, leaned Motown's quarter notes on 2
+and 4, and gave bossa and highlife players that don't scratch. 90s R&B, House, Country's slip note
+and the palm-wine interlock remain unconfirmed.
 
 **Left out for now.** Jazz Waltz (it needs 3/4, which JComp's 4/4 grid can't play), a "+ GUITAR"
 second player layered over the first, and recording a part played in to a take.
