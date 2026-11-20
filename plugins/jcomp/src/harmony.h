@@ -69,6 +69,9 @@ inline const std::vector<Quality> &qualities() {
       {"maj7#11", {0, 4, 7, 11, 18}, {4, 11, 18, 7, 0}, true},
       {"madd9", {0, 3, 7, 14}, {3, 14, 0, 7}, false},
       {"13sus", {0, 5, 7, 10, 14, 21}, {5, 10, 21, 14, 0, 7}, true},
+      // The augmented dominant (a chart's 7+5: the waltz's III7 and VI7), its #5 the b13 a minor
+      // target's dominant leans on.
+      {"7#5", {0, 4, 8, 10}, {4, 10, 8, 0}, true},
    };
    return q;
 }
@@ -79,7 +82,7 @@ inline const Quality &qualityOf(const Chord &c) {
 // Quality indexes the generator and tests name.
 enum QualityId {
    kMaj, kMin, kDom7, kMaj7, kMin7, kDom9, kMin9, kMaj9, kDom13, kSharp9, kFlat9, kSix, kMin6, kSixNine, kSus,
-   kSus7, kDim, kDim7, kHalfDim, kAug, kAdd9, kMin11, kEleven, kMinMaj7, kSharp11, kMaj7Sharp11, kMinAdd9, kSus13
+   kSus7, kDim, kDim7, kHalfDim, kAug, kAdd9, kMin11, kEleven, kMinMaj7, kSharp11, kMaj7Sharp11, kMinAdd9, kSus13, kSharp5
 };
 
 // ---- keys and scales ----

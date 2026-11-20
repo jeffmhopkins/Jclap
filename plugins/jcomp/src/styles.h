@@ -279,8 +279,8 @@ inline const std::vector<Genre> &genres() {
        {{"x.....x...x...x.", 0.6}},
        // Rhythm changes' A; iii-VI7-ii-V; the III7-VI7-II7-V7 bridge.
        {{kMajor, {"Em7 A7|Dm7 G7|Em7 A7|Dm7 G7", "C6 Am7|Dm7 G7|C6 Am7|Dm7 G7", "Dm7|G7|Cmaj7|Cmaj7", "Dm7 G7|Cmaj7|Dm7 G7|Cmaj7 A7", "E7|E7|A7|A7|D7|D7|G7|G7", "Em7 A7|Dm7 G7|Cmaj7|Cmaj7"}},
-        // A waltz's: a chord a bar ("Someday My Prince Will Come"'s I-III7-IV-VI7-ii-VI7-ii-V).
-        {kMajor, {"Dm7|G7|Cmaj7|Cmaj7", "Cmaj7|E7|Fmaj7|A7|Dm7|A7|Dm7|G7", "Em7|A7|Dm7|G7", "Cmaj7|Am7|Dm7|G7|Em7|A7|Dm7|G7", "Fmaj7|Fm7|Em7|A7|D7|D7|Dm7|G7", "Dm7|G7|Cmaj7|Cmaj7"}}},
+        // A waltz's: a chord a bar ("Someday My Prince Will Come"'s I-III7+5-IV-VI7+5-ii-VI7+5-ii-V).
+        {kMajor, {"Dm7|G7|Cmaj7|Cmaj7", "Cmaj7|E7#5|Fmaj7|A7#5|Dm7|A7#5|Dm7|G7", "Em7|A7|Dm7|G7", "Cmaj7|Am7|Dm7|G7|Em7|A7|Dm7|G7", "Fmaj7|Fm7|Em7|A7|D7|D7|Dm7|G7", "Dm7|G7|Cmaj7|Cmaj7"}}},
        {{"Charleston Comp", "Charleston", 160, kSparse, 0, 0b0011},
         {"Garland Pushes", "Garland", 140, kPushes, 0, 0b100000100},
         {"Four To The Bar", "Freddie", 180, kPlain | kShorts | kFixed, 0, 0b101000, kRhythmGuitar, kShell, 3, 40, 64, 52},
@@ -293,7 +293,8 @@ inline const std::vector<Genre> &genres() {
        // eighths of the first beat and the second sixteenth of the second (1, 2 and the and of 3
        // here: Garcia, via Wikipedia); the 3-3-4-3-3 cycle in eighths over two bars; the same cycle
        // with the thumb under it.
-       // Samba: MMA's four bars of piano, and Impro-Visor's offbeat eighths.
+       // Samba: MMA's four bars of piano, and Impro-Visor's offbeat eighths (in 2/2: a 2/4 samba at
+       // 100 is 200 here, MMA's "double the tempo").
        {{"x...x...f.x.....", 0.6}, {"x.....x.....x...|....x.....x.....", 0.7}, {"x.....x.f...x...|b...x...f.x.....", 0.8},
         {"x.....x.x...x...|..x.....x...x...|x.....x...x...x.|..x.x.......x...", 0.75}, {"..x...x...x...x.", 0.55}},
        {{"x...x...f.x...x.", 0.6}},
@@ -303,7 +304,7 @@ inline const std::vector<Genre> &genres() {
        {{"Batida", "Batida", 130, kFixed, 0, 0b001, -1, kSpread, 4, 50, 74, 62},
         {"Two-Bar Bossa", "Two Bar", 138, kFixed, 0, 0b100, -1, kSpread, 4, 50, 74, 62},
         {"Quiet Bossa", "Quiet", 120, kSparse | kRich | kFixed, 0, 0b011, -1, kSpread, 4, 50, 74, 62},
-        {"Samba", "Samba", 100, kPushes, 0, 0b11000}},
+        {"Samba", "Samba", 200, kPushes, 0, 0b11000}},
        "11, 12, 60, 61, 62"},
       {"Salsa", kFamilies[2], kMontuno, 0.5, 0,
        // A clave bar is a 4/4 bar in eighths (the clave's strokes on 1, the and of 2, 4 | 2, 3). Chords
@@ -330,12 +331,15 @@ inline const std::vector<Genre> &genres() {
         {"x...x...x...x.x.", 0.65}, {"x-----x-----x...", 0.4},
         {"x.......x...x...|x...x...x.......|x.........x...x.|....x.....x...x.", 0.55}, {"x.3.5.x.x.3.5.x.", 0.6}},
        {{"x...x...x.x.x.xx", 0.6}},
-       // The i-IV7 vamp ("Oye Como Va"); a minor ii-V.
-       {{kDorian, {"Cm7|F9", "Cm7|F9", "Ab7|G7", "Cm7|F9|Cm7|F9", "Dm7b5|G7b9|Cm7|Cm7", "Cm7|F9|Cm7|Cm7"}}},
+       // The i-IV7 vamp ("Oye Como Va"); a minor ii-V. The mambo plays the 2-3 guajeo (in clave, as
+       // MMA's mambo plays its broken chord over Clave2 Clave3), the broken chord when quiet.
+       {{kDorian, {"Cm7|F9", "Cm7|F9", "Ab7|G7", "Cm7|F9|Cm7|F9", "Dm7b5|G7b9|Cm7|Cm7", "Cm7|F9|Cm7|Cm7"}},
+        // The bolero's song form: a minor i-iv-V7-i with its secondary dominants ("Besame Mucho").
+        {kMinor, {"Fm7|G7|Cm|Cm", "Cm|Fm7|G7|Cm|C7|Fm7|D7|G7", "Ab7|G7", "Fm7|Bb7|Ebmaj7|Abmaj7|Dm7b5|G7b9|Cm|Cm", "Ebmaj7|Abmaj7|Dm7b5|G7b9", "Fm7|G7b9|Cm|Cm"}}},
        {{"Cha-Cha", "Cha-Cha", 118, kFixed, 0, 0b1001},
         {"Latin Jazz Guajeo", "Guajeo", 190, kPushes | kRich | kFixed, 0, 0b010, kMontuno},
-        {"Bolero", "Bolero", 80, kRich, 0, 0b110000},
-        {"Mambo", "Mambo", 180, kPushes, 0, 0b1000001}},
+        {"Bolero", "Bolero", 80, kRich, 1, 0b110000},
+        {"Mambo", "Mambo", 180, kPushes | kFixed, 0, 0b1000010}},
        "2, 7, 10, 56, 61, 62", true},
 
       // ---- Pop & Rock ----

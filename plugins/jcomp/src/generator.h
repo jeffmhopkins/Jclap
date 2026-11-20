@@ -170,7 +170,7 @@ inline Chord richer(Chord c, Rng &rng, const Chord *next = nullptr, int key = -1
 }
 inline Chord plainer(Chord c) {
    switch (c.quality) {
-   case kDom9: case kDom13: case kSharp9: case kFlat9: case kEleven: case kSharp11: c.quality = kDom7; break;
+   case kDom9: case kDom13: case kSharp9: case kFlat9: case kEleven: case kSharp11: case kSharp5: c.quality = kDom7; break;
    case kMin9: case kMin11: c.quality = kMin7; break;
    case kMaj9: case kMaj7Sharp11: c.quality = kMaj7; break;
    case kSixNine: c.quality = kSix; break;
@@ -183,7 +183,7 @@ inline Chord plainer(Chord c) {
 }
 inline bool dominant(const Chord &c) {
    switch (c.quality) {
-   case kDom7: case kDom9: case kDom13: case kSharp9: case kFlat9: case kEleven: case kSharp11: return true;
+   case kDom7: case kDom9: case kDom13: case kSharp9: case kFlat9: case kEleven: case kSharp11: case kSharp5: return true;
    default: return false;
    }
 }

@@ -3054,7 +3054,9 @@ private:
       tiles_ = &onPage<SectionTiles>(kPlayPage, {26, 108, 948, 150}, host_);
       wire(*tiles_);
       tiles_->onAction = [this](int a) {
-         if (a <= kActOutro && whole(kSwitchBy) != 1)
+         // In SONG the Section param is where the song starts: a click goes to the section (as a
+         // section note) without moving the song's start, unless the notes are switched off.
+         if (a <= kActOutro && whole(kSwitchBy) != 1 && (whole(kSongMode) == 0 || whole(kSwitchBy) == 2))
             setParam(kSection, a);
          else if (a >= kActTake1 && a <= kActTake4 && whole(kSwitchBy) != 1)
             setParam(kTake, a - kActTake1);
