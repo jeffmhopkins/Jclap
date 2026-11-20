@@ -6,6 +6,7 @@
 #include <jclap/core/test_host.h>
 
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -242,6 +243,66 @@ int main() {
          if (t.on() && !times.insert(t.time / 200).second)
             ++together;
       JCLAP_CHECK(together > 6);
+   }
+   {
+      // DENSITY thins or fills the take, LENGTH shortens or lengthens every chord, and LOWEST,
+      // HIGHEST and OFFSET bound the voicings as the window moves.
+      Song song;
+      generateSong(recipeOf(0, 0, 42), song);
+      struct Stats {
+         int ons = 0, lo = 127, hi = 0;
+         double meanLen = 0;
+      };
+      auto play = [&](double density, double length, int offset, int lowest = 50, int highest = 76) {
+         std::vector<double> v = defaultValues();
+         v[kRangeLow] = lowest;
+         v[kRangeHigh] = highest;
+         v[kOffset] = offset;
+         Engine e;
+         e.setSong(song);
+         Settings s = settingsFor(Recipe{});
+         s.voicing = voiceSettings([&](clap_id id) { return v[id]; });
+         s.density = density;
+         s.length = length;
+         s.lengths = 0;
+         s.runs = 0;
+         s.key = song.key;
+         e.setSettings(s);
+         e.reset();
+         const std::vector<Timed> out = run(e, 48000 * 8);
+         Stats st;
+         std::map<int, int64_t> started;
+         double total = 0;
+         int ended = 0;
+         for (const Timed &t : out) {
+            if (t.on()) {
+               ++st.ons;
+               st.lo = std::min<int>(st.lo, t.m.data1);
+               st.hi = std::max<int>(st.hi, t.m.data1);
+               started[t.m.data1] = t.time;
+            } else if (t.off() && started.count(t.m.data1)) {
+               total += static_cast<double>(t.time - started[t.m.data1]);
+               ++ended;
+               started.erase(t.m.data1);
+            }
+         }
+         st.meanLen = ended ? total / ended : 0;
+         return st;
+      };
+      const Stats mid = play(0.5, 0.5, 0), thin = play(0.0, 0.5, 0), busy = play(1.0, 0.5, 0);
+      JCLAP_CHECK(thin.ons < mid.ons);
+      JCLAP_CHECK(thin.ons > 0); // the downbeats stay
+      JCLAP_CHECK(busy.ons > mid.ons);
+      const Stats shortNotes = play(0.5, 0.0, 0), longNotes = play(0.5, 1.0, 0);
+      JCLAP_CHECK(shortNotes.meanLen < mid.meanLen * 0.6);
+      JCLAP_CHECK(longNotes.meanLen > mid.meanLen);
+      // The window, and the window moved: every note inside it.
+      for (int offset : {-12, -5, 0, 7, 12}) {
+         const Stats w = play(0.5, 0.5, offset, 55, 72);
+         JCLAP_CHECK(w.ons > 0);
+         JCLAP_CHECK(w.lo >= 55 + offset);
+         JCLAP_CHECK(w.hi <= 72 + offset);
+      }
    }
    {
       // Held notes: E G# B D held above the split, with CHORDS FROM held notes, play an E7.

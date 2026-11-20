@@ -1395,9 +1395,10 @@ public:
    explicit RangeKeys(EditorHost &host) : host_(host) {}
    void draw(visage::Canvas &c) override {
       const float s = ui::designScale(*this);
-      const int lo = static_cast<int>(std::lround(host_.paramValue(kRangeLow)));
-      const int hi = static_cast<int>(std::lround(host_.paramValue(kRangeHigh)));
-      const int floor = static_cast<int>(std::lround(host_.paramValue(kFloor)));
+      const int off = static_cast<int>(std::lround(host_.paramValue(kOffset)));
+      const int lo = static_cast<int>(std::lround(host_.paramValue(kRangeLow))) + off;
+      const int hi = static_cast<int>(std::lround(host_.paramValue(kRangeHigh))) + off;
+      const int floor = std::min(lo, static_cast<int>(std::lround(host_.paramValue(kFloor))));
       std::map<int, unsigned> lit;
       lit[floor] = kGreen;
       drawKeys(c, s, 0, 0, width() / s, height() / s, kLo, kHi, lit, false, lo, hi);
@@ -1405,7 +1406,9 @@ public:
    void mouseDown(const visage::MouseEvent &e) override {
       const float s = ui::designScale(*this);
       const float f = e.position.x / s / (width() / s);
-      const int key = kLo + static_cast<int>(f * (kHi - kLo + 1));
+      // The window as it sounds is LOWEST and HIGHEST moved by OFFSET; a click sets them before it.
+      const int off = static_cast<int>(std::lround(host_.paramValue(kOffset)));
+      const int key = kLo + static_cast<int>(f * (kHi - kLo + 1)) - off;
       const int lo = static_cast<int>(std::lround(host_.paramValue(kRangeLow)));
       const int hi = static_cast<int>(std::lround(host_.paramValue(kRangeHigh)));
       const clap_id id = std::abs(key - lo) < std::abs(key - hi) ? kRangeLow : kRangeHigh;
@@ -2697,20 +2700,30 @@ private:
          k.onChange = [this, id, old = k.onChange](double v) {
             if (old)
                old(v);
-            if (id == kCenter || id == kLead || id == kTopMove || id == kMaxSpan)
+            if (id == kCenter || id == kLead || id == kTopMove || id == kMaxSpan || id == kRangeLow || id == kRangeHigh ||
+                id == kOffset || id == kFloor)
                redraw();
          };
          return k;
       };
-      tips_.add(knob(kEditPage, {vx - 4, 186, 62, 78}, kCenter, "CENTER", kOrange), "Where the voicings sit: their middle is "
-                                                                                    "pulled to this note.");
-      tips_.add(knob(kEditPage, {vx + 58, 186, 62, 78}, kLead, "LEAD", kOrange),
+      tips_.add(knob(kEditPage, {vx - 2, 164, 58, 70}, kCenter, "CENTER", kOrange), "Where the voicings sit: their middle is "
+                                                                                    "pulled to this note (OFFSET moves it too).");
+      tips_.add(knob(kEditPage, {vx + 60, 164, 58, 70}, kLead, "LEAD", kOrange),
                 "How much each chord is led from the one before (the least movement) rather than placed in the middle.");
-      tips_.add(knob(kEditPage, {vx + 120, 186, 62, 78}, kTopMove, "TOP MOVE", kOrange),
+      tips_.add(knob(kEditPage, {vx + 122, 164, 58, 70}, kTopMove, "TOP MOVE", kOrange),
                 "The most the top voice should move from chord to chord, in semitones.");
-      tips_.add(knob(kEditPage, {vx + 182, 186, 62, 78}, kMaxSpan, "SPREAD", kOrange), "The widest a voicing may be, bottom to "
+      tips_.add(knob(kEditPage, {vx + 184, 164, 58, 70}, kMaxSpan, "SPREAD", kOrange), "The widest a voicing may be, bottom to "
                                                                                        "top.");
-      range_ = &onPage<RangeKeys>(kEditPage, {vx, 290, 240, 24}, host_);
+      tips_.add(knob(kEditPage, {vx - 2, 236, 58, 70}, kRangeLow, "LOWEST", kBlue),
+                "The lowest note a voicing may use. With HIGHEST it sets the window chords are led inside.");
+      tips_.add(knob(kEditPage, {vx + 60, 236, 58, 70}, kRangeHigh, "HIGHEST", kBlue),
+                "The highest note a voicing may use (the window is at least an octave).");
+      tips_.add(knob(kEditPage, {vx + 122, 236, 58, 70}, kOffset, "OFFSET", kBlue),
+                "Slides the whole window (and CENTER) up or down, up to an octave. Automate it and the voicings follow, "
+                "still led from chord to chord.");
+      tips_.add(knob(kEditPage, {vx + 184, 236, 58, 70}, kFloor, "FLOOR", kBlue), "Nothing goes under this note, even the "
+                                                                                    "bass part.");
+      range_ = &onPage<RangeKeys>(kEditPage, {vx, 324, 240, 18}, host_);
       range_->onSet = [this](clap_id id, double v) {
          setParam(id, v);
          redraw();
@@ -2720,7 +2733,7 @@ private:
       const char *names[3] = {"Double a note in the middle, not on top", "No half-step rubs below C4",
                               "Same shape for repeated chords"};
       for (int i = 0; i < 3; ++i) {
-         auto &b = onPage<CheckBox>(kEditPage, {vx, 324 + i * 18.0f, 240, 16}, names[i]);
+         auto &b = onPage<CheckBox>(kEditPage, {vx, 348 + i * 16.0f, 240, 15}, names[i]);
          const clap_id id = boxes[i];
          b.onToggle = [this, id](bool on) {
             setParam(id, on ? 1.0 : 0.0);
@@ -2793,10 +2806,12 @@ private:
       drawCard(c, s, 720, 112, 268, 288, "VOICING", "all sections");
       const int shape = std::clamp(whole(kShape), 0, kShapeCount - 1);
       shape1_->setSelected(shape);
-      label(c, s, "RANGE", 734, 272, 60, 0, visage::Font::kLeft, 9.5f);
-      label(c, s, noteText(whole(kRangeLow)) + " \xE2\x80\x93 " + noteText(whole(kRangeHigh)) + " \xC2\xB7 nothing under " +
-                     noteText(whole(kFloor)),
-            734, 272, 240, 0, visage::Font::kRight, 8.5f);
+      {
+         const VoiceSettings v = vs();
+         label(c, s, "WINDOW", 734, 309, 60, 0, visage::Font::kLeft, 9.5f);
+         label(c, s, noteText(v.lo) + " \xE2\x80\x93 " + noteText(v.hi) + " \xC2\xB7 nothing under " + noteText(v.floor),
+               734, 309, 240, 0, visage::Font::kRight, 8.5f);
+      }
       const clap_id boxes[3] = {kDoubleMiddle, kNoRubs, kSameShape};
       for (int i = 0; i < 3; ++i)
          voiceChecks_[i]->on = whole(boxes[i]) != 0;
@@ -2870,7 +2885,7 @@ private:
          redraw();
       };
 
-      now_ = &onPage<NowPlaying>(kPlayPage, {26, 298, 592, 162}, host_);
+      now_ = &onPage<NowPlaying>(kPlayPage, {26, 298, 456, 162}, host_);
       wire(*now_);
 
       auto knob = [this](ui::Rect r, clap_id id, const char *name, unsigned accent) -> ui::Knob & {
@@ -2885,6 +2900,12 @@ private:
          bindings_.bind(k, id);
          return k;
       };
+      tips_.add(knob({492, 300, 64, 80}, kDensity, "DENSITY", kOrange),
+                "Fewer or more chords: below the middle the weakest hits drop out (a bar's downbeat stays), above it "
+                "softer repeats of the chord fill the gaps, eighths first. The middle plays the take as written.");
+      tips_.add(knob({558, 300, 64, 80}, kLength, "LENGTH", kOrange),
+                "Every chord shorter (down to a chop) or longer (up to legato, held to the next). The middle is as "
+                "written.");
       tips_.add(knob({650, 292, 64, 80}, kTiming, "TIMING", kPurple), "How far behind (or ahead of) the beat the chords sit.");
       tips_.add(knob({716, 292, 64, 80}, kVelocityVar, "VELOCITY", kPurple), "How much each chord's loudness varies.");
       tips_.add(knob({782, 292, 64, 80}, kTopVoice, "TOP VOICE", kPurple), "The top note this much louder, so the line "
@@ -2987,6 +3008,13 @@ private:
                     frame_.bar % std::max<int>(1, sx.bars) + 1, static_cast<int>(sx.bars));
       drawCard(c, s, 12, 272, 620, 198, "NOW PLAYING", note);
       drawCard(c, s, 640, 272, 348, 198, "FEEL", "how a player would touch it");
+      {
+         auto words = [](double v, const char *low, const char *high) {
+            return std::abs(v - 0.5) < 0.03 ? std::string("as written") : std::string(v < 0.5 ? low : high);
+         };
+         label(c, s, words(param(kDensity), "thinner", "busier"), 492, 384, 64, 0, visage::Font::kCenter, 8.5f);
+         label(c, s, words(param(kLength), "shorter", "longer"), 558, 384, 64, 0, visage::Font::kCenter, 8.5f);
+      }
       label(c, s, "CHORD NOTES START", 654, 376, 200, 0, visage::Font::kLeft, 9);
       static const char *const onsetWords[4] = {"TOGETHER: every note within 2 ms; the chord as a whole sits off the grid.",
                                                 "ROLLED: bottom to top, about 14 ms a note.",

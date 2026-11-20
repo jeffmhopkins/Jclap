@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.1.0.
+Version 0.2.0.
 
 ![Panel](docs/panel.png)
 
@@ -166,8 +166,13 @@ How every chord is voiced, for all sections:
 - **CENTER**: where the voicings sit. **LEAD**: how much each chord is led from the one before (the
   least total movement) rather than placed at the center. **TOP MOVE**: the most the top voice should
   move, in semitones. **SPREAD**: the widest a voicing may be.
-- **RANGE**: the window voicings stay in (click near either end to move it), and the floor (green)
-  nothing goes under.
+- **LOWEST** and **HIGHEST**: the window every voicing stays inside (at least an octave), so how wide
+  the chords can spread. **OFFSET** slides the whole window, and CENTER with it, up to an octave either
+  way. Voice leading stays bounded by the window wherever it is: each chord is still led from the one
+  before by the least movement that fits, so automating OFFSET moves the voicings smoothly rather than
+  in jumps. A window too narrow for a chord gets fewer voices or a tighter shape, never a note outside
+  it. **FLOOR**: nothing goes under this note, the bass part included. The keyboard under the knobs
+  shows the window as it sounds (click near either end to move it), the floor in green.
 - *Double a note in the middle, not on top*, *No half-step rubs below C4*, *Same shape for repeated
   chords*.
 
@@ -203,7 +208,14 @@ note, the Section parameter, or both.
 ### NOW PLAYING
 
 The chord sounding, big, the chord after it, its notes and its shape, and the take on a roll with the
-playhead.
+playhead. Beside it, two knobs that change the whole part as it plays:
+
+- **DENSITY**: fewer or more chords. Below the middle the weakest hits drop out first (soft off-beats,
+  then off-beats, then the lesser beats; a bar's downbeat always stays). Above it, softer repeats of
+  the chord sounding fill the gaps, eighths first, then sixteenths. The middle plays the take as
+  written, and the same setting always gives the same pattern.
+- **LENGTH**: every chord shorter, down to a staccato chop, or longer, up to legato (held to the next
+  chord). The middle plays the lengths as written.
 
 ### FEEL
 
