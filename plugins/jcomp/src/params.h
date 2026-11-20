@@ -356,6 +356,8 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
       value = 0;
       return true;
    }
+   if (!std::strncmp(text, "\xC2\xB1", 2)) // VELOCITY and LENGTHS read "±8", "±25%"
+      text += 2;
    if (id == kNoteOctave && !std::strncmp(text, "Octave", 6))
       text += 6;
    if (isNote(id)) {

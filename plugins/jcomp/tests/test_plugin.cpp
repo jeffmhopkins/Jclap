@@ -162,6 +162,15 @@ int main() {
       double v = 0;
       JCLAP_CHECK(h.textToValue(kChordSplit, "C4", v));
       JCLAP_CHECK_EQ(static_cast<int>(v), 60);
+      // Every param's text reads back as its value.
+      for (clap_id id = 0; id < kParamCount; ++id)
+         for (int k = 0; k <= 8; ++k) {
+            const double x = kParams[id].min + (kParams[id].max - kParams[id].min) * k / 8.0;
+            const std::string t = h.paramText(id, x);
+            double back = -1e9;
+            JCLAP_CHECK(h.textToValue(id, t.c_str(), back));
+            JCLAP_CHECK(h.paramText(id, back) == t);
+         }
    }
 
    return jclap::core::testResult();
