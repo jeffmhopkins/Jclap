@@ -13,7 +13,9 @@
 #include <jclap/ui/clap_gui.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
+#include <bitset>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -376,6 +378,34 @@ private:
          engine_->setSong(*song_);
    }
 
+   // A note coming in: JComp's (a chord key, a section note, the bass) or passed through. A note passed
+   // on is let go downstream whatever the settings are by its note-off (PASS turned off, RHYTHM FROM
+   // or NOTES FROM moved while it was held), so nothing hangs on the instrument after JComp.
+   void note(uint32_t time, bool on, int channel, int key, int vel, bool pass) {
+      auto &passed = passed_[static_cast<size_t>(channel)];
+      if (!on && passed.test(static_cast<size_t>(key))) {
+         passed.reset(static_cast<size_t>(key));
+         out_.push(time, static_cast<uint8_t>(0x80 | channel), static_cast<uint8_t>(key), 0);
+         return;
+      }
+      const bool used = on ? engine_->noteOn(channel, key, vel, time) : engine_->noteOff(channel, key, time);
+      if (used || !pass)
+         return;
+      out_.push(time, static_cast<uint8_t>((on ? 0x90 : 0x80) | channel), static_cast<uint8_t>(key),
+                static_cast<uint8_t>(on ? vel : 0));
+      if (on)
+         passed.set(static_cast<size_t>(key));
+   }
+   // Every note passed on and still held, let go (a note-off for all keys, All Notes Off).
+   void releasePassed(uint32_t time) {
+      for (int ch = 0; ch < 16; ++ch)
+         for (int k = 0; k < 128; ++k)
+            if (passed_[static_cast<size_t>(ch)].test(static_cast<size_t>(k))) {
+               passed_[static_cast<size_t>(ch)].reset(static_cast<size_t>(k));
+               out_.push(time, static_cast<uint8_t>(0x80 | ch), static_cast<uint8_t>(k), 0);
+            }
+   }
+
    void handleEvent(const clap_event_header_t *h, const clap_output_events_t *) {
       const bool pass = std::lround(values_[kPassNotes].load()) != 0;
       switch (h->type) {
@@ -386,6 +416,7 @@ private:
          // A note-off or choke for every key: the chord keys and section notes held are let go.
          if (h->type != CLAP_EVENT_NOTE_ON && ev->key < 0) {
             engine_->releaseAll();
+            releasePassed(h->time);
             return;
          }
          if (ev->key < 0 || ev->key > 127)
@@ -393,11 +424,7 @@ private:
          const int channel = ev->channel < 0 ? 0 : ev->channel & 15;
          const bool on = h->type == CLAP_EVENT_NOTE_ON && ev->velocity > 0.0;
          const int vel = std::clamp(static_cast<int>(std::lround(ev->velocity * 127.0)), 1, 127);
-         const uint32_t at = h->time;
-         const bool used = on ? engine_->noteOn(channel, ev->key, vel, at) : engine_->noteOff(channel, ev->key, at);
-         if (!used && pass)
-            out_.push(h->time, static_cast<uint8_t>((on ? 0x90 : 0x80) | channel), static_cast<uint8_t>(ev->key),
-                      static_cast<uint8_t>(on ? vel : 0));
+         note(h->time, on, channel, ev->key, vel, pass);
          return;
       }
       case CLAP_EVENT_MIDI: {
@@ -406,14 +433,14 @@ private:
          const int d1 = ev->data[1] & 0x7F, d2 = ev->data[2] & 0x7F;
          if (status == 0x90 || status == 0x80) {
             const bool on = status == 0x90 && d2 > 0;
-            const bool used = on ? engine_->noteOn(channel, d1, d2, h->time) : engine_->noteOff(channel, d1, h->time);
-            if (!used && pass)
-               out_.push(h->time, ev->data[0], ev->data[1], ev->data[2]);
+            note(h->time, on, channel, d1, std::max(1, d2), pass);
             return;
          }
          // All Sound Off and All Notes Off let go of what's held too.
-         if (status == 0xB0 && (d1 == 120 || d1 == 123))
+         if (status == 0xB0 && (d1 == 120 || d1 == 123)) {
             engine_->releaseAll();
+            releasePassed(h->time);
+         }
          if (pass)
             out_.push(h->time, ev->data[0], ev->data[1], ev->data[2]);
          return;
@@ -534,6 +561,7 @@ private:
    uint32_t requestRead_ = 0;
    std::atomic<bool> learnArmed_{false};
    std::atomic<bool> remake_{false};
+   std::array<std::bitset<128>, 16> passed_{}; // notes passed on and not yet let go (audio thread)
    std::atomic<uint32_t> remakeSections_{0};
    std::atomic<int> learned_{-1};
    bool learning_ = false;

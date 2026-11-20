@@ -86,16 +86,22 @@ enum QualityId {
 
 inline const char *const kSharpNames[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 inline const char *const kFlatNames[12] = {"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"};
-// Keys written with flats (F, Bb, Eb, Ab, Db, Gb as majors).
-inline bool flatKey(int key) { return key == 5 || key == 10 || key == 3 || key == 8 || key == 1 || key == 6; }
+enum Scale { kMajor, kMinor, kDorian, kMixolydian, kBlues, kScaleCount };
+// Keys written with flats (F, Bb, Eb, Ab, Db, Gb as majors). A mode is written as its relative
+// major is (F# minor with A's sharps, G minor with Bb's flats, D Mixolydian with G's sharp).
+inline bool flatKey(int key, int scale = kMajor) {
+   static const int toMajor[kScaleCount] = {0, 3, 10, 5, 0};
+   key = (((key + toMajor[std::clamp(scale, 0, kScaleCount - 1)]) % 12) + 12) % 12;
+   return key == 5 || key == 10 || key == 3 || key == 8 || key == 1 || key == 6;
+}
 // A note's name in a key, spelled by its degree: the key's own notes by their letters (G# in E, Bb
 // in F), and the chromatic ones as the flat third, sixth, seventh and second and the sharp fourth
 // (Eb, Ab, Bb, Db and F# in C), as the borrowed and secondary chords are written. A spelling that
 // would need a double accidental or an E#, B#, Cb or Fb falls back to the key's sharps or flats.
-inline const char *pitchName(int pc, int key = 0) {
+inline const char *pitchName(int pc, int key = 0, int scale = kMajor) {
    pc = ((pc % 12) + 12) % 12;
    key = ((key % 12) + 12) % 12;
-   const char *const *names = flatKey(key) ? kFlatNames : kSharpNames;
+   const char *const *names = flatKey(key, scale) ? kFlatNames : kSharpNames;
    static const int letterPc[7] = {0, 2, 4, 5, 7, 9, 11}; // C D E F G A B
    static const int stepOf[12] = {0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6}; // the degree's letter, from the key's
    static const char *const spelled[7][3] = {{"Cb", "C", "C#"}, {"Db", "D", "D#"}, {"Eb", "E", "E#"}, {"Fb", "F", "F#"},
@@ -116,7 +122,6 @@ inline const char *pitchName(int pc, int key = 0) {
    return n;
 }
 
-enum Scale { kMajor, kMinor, kDorian, kMixolydian, kBlues, kScaleCount };
 inline const char *const kScaleNames[kScaleCount] = {"Major", "Minor", "Dorian", "Mixolydian", "Blues"};
 // The scales' steps, as constant tables (no static to build on the audio thread); -1 ends one.
 inline constexpr int kScaleSteps[kScaleCount][8] = {
@@ -134,9 +139,9 @@ inline bool inScale(int pc, int key, int scale) {
 
 // The flat fifth of a key, spelled as one (Bb in E, Gb in C): the root of a tritone sub, or of a
 // major chord a tritone away, which is written flat; a diminished chord there is the sharp fourth.
-inline const char *flatFifthName(int key) {
+inline const char *flatFifthName(int key, int scale = kMajor) {
    key = ((key % 12) + 12) % 12;
-   const char *const *names = flatKey(key) ? kFlatNames : kSharpNames;
+   const char *const *names = flatKey(key, scale) ? kFlatNames : kSharpNames;
    static const char *const flats[7] = {"Cb", "Db", "Eb", "Fb", "Gb", "Ab", "Bb"};
    static const char *const naturals[7] = {"C", "D", "E", "F", "G", "A", "B"};
    static const int letterPc[7] = {0, 2, 4, 5, 7, 9, 11};
@@ -150,13 +155,27 @@ inline const char *flatFifthName(int key) {
    return names[pc];
 }
 
-inline std::string chordName(const Chord &c, int key = 0) {
+// A chord's name in a key (and its scale, for the key's sharps or flats). `next`, the chord after it:
+// a dominant a half step above it is its flat II (Eb9 into D, Db9 into C), spelled as one.
+inline std::string chordName(const Chord &c, int key = 0, int scale = kMajor, const Chord *next = nullptr) {
    if (c.none())
       return "N.C.";
    const bool flatFifth = ((c.root - key) % 12 + 12) % 12 == 6 && c.quality != 16 && c.quality != 17 && c.quality != 18;
-   std::string n = std::string(flatFifth ? flatFifthName(key) : pitchName(c.root, key)) + qualityOf(c).suffix;
+   std::string root = flatFifth ? flatFifthName(key, scale) : pitchName(c.root, key, scale);
+   if (next && !next->none() && (c.root - next->root + 12) % 12 == 1 && (c.quality == 2 || c.quality == 5)) {
+      // As the next chord's flat second: its letter and one up, flattened.
+      const std::string to = pitchName(next->root, key, scale);
+      static const char letters[] = "CDEFGAB";
+      const char *at = std::strchr(letters, to[0]);
+      if (at && to.size() == 1) {
+         const char up = letters[(at - letters + 1) % 7];
+         if (up != 'C' && up != 'F')
+            root = std::string(1, up) + "b";
+      }
+   }
+   std::string n = root + qualityOf(c).suffix;
    if (c.bass >= 0 && c.bass != c.root)
-      n += std::string("/") + pitchName(c.bass, key);
+      n += std::string("/") + pitchName(c.bass, key, scale);
    return n;
 }
 
@@ -480,7 +499,7 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                guide.push_back(i);
       } else
          guide = {q.tones[1], q.tones[2]};
-      for (int b = vs.floor; b < vs.floor + 12; ++b) {
+      for (int b = vs.floor; b < std::max(vs.floor + 12, vs.lo); ++b) { // up to the window, wherever it is
          if (b % 12 != bassPc)
             continue;
          for (const auto &st : detail::closeStacks(pcsOf(guide), b + 3, b + 26)) {
@@ -556,7 +575,16 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       // structure of the guide and colour tones.
       // Over its own root the upper part leaves the root out (the bass has it); over a slash bass
       // it is the chord.
-      const Ints upper = bassPc == c.root ? upperTones(c, std::max(3, n - 1)) : pickTones(c, std::max(3, n - 1));
+      Ints upper = bassPc == c.root ? upperTones(c, std::max(3, n - 1)) : pickTones(c, std::max(3, n - 1));
+      // Over a slash bass the root stays among them (the I of a I/5 is the arrival), in place of the
+      // fifth, else of the last colour.
+      if (bassPc != c.root && std::none_of(upper.begin(), upper.end(), [](int i) { return i % 12 == 0; })) {
+         auto fifth = std::find_if(upper.begin(), upper.end(), [](int i) { return i % 12 == 7; });
+         if (fifth != upper.end())
+            *fifth = 0;
+         else if (upper.size() > 2)
+            upper.back() = 0;
+      }
       for (int b = vs.floor; b < vs.floor + 12; ++b) {
          if (b % 12 != bassPc)
             continue;
@@ -609,8 +637,18 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       break;
    }
    case kOctaves: {
-      // A close chord of n-1 notes, its bottom note doubled an octave up on top.
-      const Ints tones = pickTones(c, std::max(2, n - 1));
+      // A close chord of n-1 notes, its bottom note doubled an octave up on top: the triad (root,
+      // third, fifth, so the line can move through all three), with a seventh inside for four.
+      Ints tones;
+      for (size_t i = 0; i < q.tones.size() && tones.size() < 3; ++i)
+         tones.push_back(q.tones[i]);
+      for (int i : {10, 11, 9})
+         if (static_cast<int>(tones.size()) < n - 1 && q.seventh &&
+             std::find(q.tones.begin(), q.tones.end(), i) != q.tones.end() &&
+             std::find(tones.begin(), tones.end(), i) == tones.end())
+            tones.push_back(i);
+      if (tones.size() < 2)
+         tones = pickTones(c, std::max(2, n - 1));
       Ints pcs = pcsOf(tones);
       std::sort(pcs.begin(), pcs.end());
       pcs.erase(std::unique(pcs.begin(), pcs.end()), pcs.end());
@@ -646,7 +684,7 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
          for (int i : {6, 8})
             if (std::find(q.tones.begin(), q.tones.end(), i) != q.tones.end())
                fifthIv = i;
-      for (int b = vs.floor; b < vs.floor + 24; ++b) {
+      for (int b = vs.floor; b < std::max(vs.floor + 24, vs.lo); ++b) {
          if (b % 12 != bassPc || (!slash && b < lowIntervalLimit(fifthIv) - 2))
             continue;
          if (slash) {
@@ -820,6 +858,36 @@ inline double cost(const Voicing &v, const Voicing *prev, const VoiceSettings &v
    return c;
 }
 
+// What a voicing costs for the chord it voices: a minor ninth between two of its notes (a major
+// seventh under the root an octave up, a 9th under the b3), which turns the colour into a cluster,
+// except the b9 over the root a 7b9 is made of; and a 7#9's #9 under its 3rd (the Hendrix chord has
+// it on top).
+inline double clashes(const Voicing &v, const Chord &c) {
+   const Quality &q = qualityOf(c);
+   const auto has = [&](int i) { return std::find(q.tones.begin(), q.tones.end(), i) != q.tones.end(); };
+   const auto iv = [&](int n) { return ((n - c.root) % 12 + 12) % 12; };
+   double k = 0.0;
+   for (int i = 0; i < v.count; ++i)
+      for (int j = i + 1; j < v.count; ++j) {
+         const int lo = v.notes[static_cast<size_t>(i)], hi = v.notes[static_cast<size_t>(j)];
+         if (hi - lo >= 13 && (hi - lo) % 12 == 1 && !(has(13) && iv(lo) == 0))
+            k += 9.0;
+      }
+   if (has(15) && has(4)) {
+      int third = -1, sharp9 = -1;
+      for (int i = 0; i < v.count; ++i) {
+         const int n = v.notes[static_cast<size_t>(i)];
+         if (iv(n) == 4)
+            third = std::max(third, n);
+         if (iv(n) == 3)
+            sharp9 = std::max(sharp9, n);
+      }
+      if (third >= 0 && sharp9 >= 0 && sharp9 < third)
+         k += 9.0;
+   }
+   return k;
+}
+
 // The voicings of a chord after `prev`, best first.
 inline Voicings rankShapes(const Chord &c, const Voicing *prev, const VoiceSettings &vs) {
    Voicings all = candidates(c, vs);
@@ -838,7 +906,7 @@ inline Voicings rankShapes(const Chord &c, const Voicing *prev, const VoiceSetti
    // By cost, ties kept in order (an insertion sort: no allocation).
    FixedVec<double, 256> costs;
    for (const Voicing &v : all)
-      costs.push_back(cost(v, prev, vs));
+      costs.push_back(cost(v, prev, vs) + clashes(v, c));
    for (size_t i = 1; i < all.size(); ++i) {
       const Voicing v = all[i];
       const double k = costs[i];

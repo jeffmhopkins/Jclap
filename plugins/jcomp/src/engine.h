@@ -342,6 +342,11 @@ public:
       running_ = true;
       followingBefore_ = following;
       const double b1 = b0 + perFrame * b.frames;
+      if (releasePending_) {
+         releasePending_ = false;
+         if (!heldNow_)
+            silenceFrom(b0 + releaseFrame_ * perFrame);
+      }
       // A chord played on the keys around a change it was meant for.
       if (heldFresh_) {
          heldFresh_ = false;
@@ -524,6 +529,11 @@ private:
             notes.push_back(k);
       if (notes.empty()) {
          heldNow_ = false;
+         // PLAY ONLY WHILE HELD stops when the chord is let go: what sounds and what's queued.
+         if (settings_.heldOnly && running_) {
+            releasePending_ = true;
+            releaseFrame_ = frame;
+         }
          if (!settings_.latch) {
             latched_ = Chord{};
             heldPending_ = false;
@@ -965,8 +975,12 @@ private:
       k.step = step;
       k.triplet = p.rate == kRate8T;
       k.fine = fine;
+      // An organ holds its bass under the chords, unless the take has a left hand of its own to play
+      // it (the shout's bass on the beats, the chords on the upbeats).
+      const bool leftHandTake = hasLeftHand(p);
       k.dropBass = !strong && !target && settings_.voicing.shape == kSpread && settings_.onsets < 2 &&
-                   !settings_.sustainBass && (c == lastChord_ || c == bassChord_) && h.part == kPartChord;
+                   (!settings_.sustainBass || leftHandTake) && (c == lastChord_ || c == bassChord_) &&
+                   h.part == kPartChord;
       const int toStrong = perBeat * 2 - step % (perBeat * 2);
       k.holdBeats = toStrong * stepBeats;
       const int64_t after = nextChange(chordRel);
@@ -1110,10 +1124,25 @@ private:
          const int third = std::find(q.begin(), q.end(), 3) != q.end() ? 3 : 4;
          const int want[4] = {7, third, 0, third};
          const int degree = want[octaveStep_++ % 4];
+         // The line arches about the window's middle (not walking off from the last voicing, which
+         // ratchets it up through a bar of triads): of the voicings with that degree on the bottom,
+         // the one nearest the centre.
          const Voicings r = rankShapes(c, prev, settings_.voicing);
+         const Voicing *best = nullptr;
+         double bestD = 1e9;
          for (const Voicing &v : r)
-            if (v.count > 1 && ((v.notes[0] - c.root) % 12 + 12) % 12 == degree)
-               return v;
+            if (v.count > 1 && ((v.notes[0] - c.root) % 12 + 12) % 12 == degree) {
+               double mean = 0.0;
+               for (int i = 0; i < v.count; ++i)
+                  mean += v.notes[static_cast<size_t>(i)];
+               const double d = std::abs(mean / v.count - settings_.voicing.center);
+               if (d < bestD - 1e-9) {
+                  bestD = d;
+                  best = &v;
+               }
+            }
+         if (best)
+            return *best;
          if (!r.empty())
             return r[0];
       }
@@ -1271,7 +1300,10 @@ private:
          len *= 0.15 + 0.85 * settings_.length / 0.5;
       else if (settings_.length > 0.5 && gapBeats * 0.97 > len)
          len += (gapBeats * 0.97 - len) * (settings_.length - 0.5) / 0.5;
-      len *= 1.0 + (dice(diceBar_, k.step, 12) * 2.0 - 1.0) * settings_.lengths;
+      // LENGTHS varies it: a chord meant to ring only longer (the next chord cuts it), never leaving a
+      // hole in a held part.
+      const double vary = (dice(diceBar_, k.step, 12) * 2.0 - 1.0) * settings_.lengths;
+      len *= 1.0 + (h.art == kArtRing || h.art == kArtTopRings ? std::abs(vary) : vary);
       const double shortest = 0.05 * tempo_ / 60.0;
       len = std::max(len, shortest);
       // Nothing rings over the next change of chord: the change is played on time, by itself.
@@ -1457,6 +1489,25 @@ private:
       }
    }
 
+   // Nothing sounds from `beat` on: notes queued to start after it are dropped (with their offs), and
+   // the ones sounding end there.
+   void silenceFrom(double beat) {
+      size_t keep = 0;
+      for (size_t i = 0; i < queueLen_; ++i) {
+         const Event &e = queue_[i];
+         bool late = false;
+         for (size_t j = 0; j < queueLen_; ++j)
+            if (queue_[j].id == e.id && (queue_[j].status & 0xF0) == 0x90) {
+               late = queue_[j].beat > beat;
+               break;
+            }
+         if (!late)
+            queue_[keep++] = e;
+      }
+      queueLen_ = keep;
+      cutFrom(beat);
+   }
+
    void push(const Event &e) {
       if (queueLen_ < kQueue)
          queue_[queueLen_++] = e;
@@ -1545,7 +1596,8 @@ private:
    FixedVec<int, 32> heldNotes_;
    Chord heldChord_, latched_, pendingHeld_;
    bool heldNow_ = false, heldPending_ = false, heldFresh_ = false;
-   uint32_t heldFrame_ = 0;
+   uint32_t heldFrame_ = 0, releaseFrame_ = 0;
+   bool releasePending_ = false;
    // The last few chords struck, to play again with a held chord that came a moment late.
    std::array<Strike, kStrikes> strike_{};
    size_t strikes_ = 0;

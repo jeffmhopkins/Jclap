@@ -821,13 +821,14 @@ private:
 };
 
 // The bars of a progression as chips: a bar's chord, or its two (as "G9 · A9").
-std::vector<std::string> barNames(const Section &sec, int key, int transpose, int bars) {
+std::vector<std::string> barNames(const Section &sec, int key, int transpose, int bars, int scale = kMajor) {
    std::vector<std::string> out;
    for (int b = 0; b < bars; ++b) {
       const Chord a = moved(sec.chordAt(b, false), transpose), z = moved(sec.chordAt(b, true), transpose);
-      std::string n = chordName(a, key);
+      const Chord next = moved(sec.chordAt(b + 1, false), transpose);
+      std::string n = chordName(a, key, scale, z != a ? &z : &next);
       if (z != a)
-         n += " \xC2\xB7 " + chordName(z, key);
+         n += " \xC2\xB7 " + chordName(z, key, scale, &next);
       out.push_back(n);
    }
    return out;
@@ -892,7 +893,7 @@ public:
          c.roundedRectangleBorder(x * s, 0, w * s, h * s, 5 * s, sel ? 1.5f * s : 1.0f);
          label(c, s, kSectionCaps[i], x + 8, 5, w - 16, sel ? kOrange : kWhite, visage::Font::kLeft, 10.5f);
          label(c, s, std::to_string(sec.bars) + " bars", x + 8, 6, w - 16, 0, visage::Font::kRight, 8.5f);
-         drawBarChips(c, s, barNames(sec, key, transpose(), std::min<int>(4, sec.progBars)), x + 6, 23, w - 12, 14);
+         drawBarChips(c, s, barNames(sec, key, transpose(), std::min<int>(4, sec.progBars), scale()), x + 6, 23, w - 12, 14);
          const bool playing = f.running && f.section == i;
          const Pattern &p = sec.takes[0];
          const int bars = viewBars(sec, p);
@@ -1112,8 +1113,9 @@ public:
                c.setColor(on ? kOrange : t.panelBorder);
                c.roundedRectangleBorder((hx + 2) * s, (y + 4) * s, (hw - 4) * s, (h - 8) * s, 3 * s, on ? 1.4f * s : 1.0f);
                const Chord ch = moved(sec.chords[static_cast<size_t>(slot)], tr);
+               const Chord after = moved(sec.chordAt(half == 0 && split ? b : b + 1, half == 0 && split), tr);
                const float size = hw < 44 ? 8.5f : hw < 70 ? 10.0f : 12.0f;
-               label(c, s, chordName(ch, key), hx, y + 8, hw, kWhite, visage::Font::kCenter, size);
+               label(c, s, chordName(ch, key, scale(), &after), hx, y + 8, hw, kWhite, visage::Font::kCenter, size);
                label(c, s, roman(ch, key), hx, y + h - 19, hw, 0, visage::Font::kCenter, 7.5f);
             }
          }
@@ -1191,7 +1193,7 @@ public:
       const int bars = viewBars(sec, p);
       const Preview pv = preview(sec, p, bars, vs(), transpose(), key, scale());
       // Chords on top.
-      drawBarChips(c, s, barNames(sec, key, transpose(), bars), kKeysW, 0, w - kKeysW, 16, kWhite,
+      drawBarChips(c, s, barNames(sec, key, transpose(), bars, scale()), kKeysW, 0, w - kKeysW, 16, kWhite,
                    host_.editStep >= 0 ? host_.editStep / p.stepsPerBar() % bars : -1);
       // The range shown: the take's notes, or the voicing window.
       int lo = 127, hi = 0;
@@ -1521,7 +1523,7 @@ public:
          }
          label(c, s, kSectionCaps[i], x + 10, 13, w - 20, playing ? kOrange : kWhite, visage::Font::kLeft, 11);
          label(c, s, noteText(st.noteFor(i)), x + 10, 14.5f, w - 20, 0, visage::Font::kRight, 8);
-         drawBarChips(c, s, barNames(sec, key, transpose(), std::min<int>(4, sec.progBars)), x + 7, 32, w - 14, 13, kTitle);
+         drawBarChips(c, s, barNames(sec, key, transpose(), std::min<int>(4, sec.progBars), scale()), x + 7, 32, w - 14, 13, kTitle);
          const int show = playing ? (f.fill ? -1 : f.take) : 0;
          const Pattern &p = show < 0 ? sec.fill : sec.takes[static_cast<size_t>(std::max(0, show))];
          const Preview pv = preview(sec, p, viewBars(sec, p), vs(), transpose(), key, scale());
@@ -1590,11 +1592,11 @@ public:
          now = pv.hits.front().chord;
          v = pv.hits.front().voicing;
       }
-      label(c, s, now.none() ? "N.C." : chordName(now, key), 0, 4, 140, kWhite, visage::Font::kLeft, 30);
+      label(c, s, now.none() ? "N.C." : chordName(now, key, scale()), 0, 4, 140, kWhite, visage::Font::kLeft, 30);
       if (!f.next.none() && f.next != now)
-         label(c, s, "then " + chordName(f.next, key), 0, 52, 140, kTitle, visage::Font::kLeft, 9.5f);
+         label(c, s, "then " + chordName(f.next, key, scale()), 0, 52, 140, kTitle, visage::Font::kLeft, 9.5f);
       if (!f.held.none() && std::lround(host_.paramValue(kChordsFrom)) > 0)
-         label(c, s, "held: " + chordName(f.held, key), 0, 68, 140, kGreen, visage::Font::kLeft, 9.5f);
+         label(c, s, "held: " + chordName(f.held, key, scale()), 0, 68, 140, kGreen, visage::Font::kLeft, 9.5f);
       label(c, s, notesText(v), 0, 96, 140, kOrange, visage::Font::kLeft, 10);
       label(c, s, std::string(kShapeNames[std::clamp(static_cast<int>(std::lround(host_.paramValue(kShape))), 0, kShapeCount - 1)]) +
                      (v.count ? " \xC2\xB7 top " + noteText(v.top()) : ""),
@@ -2651,7 +2653,7 @@ private:
       const Chord ch = moved(sec.chords[static_cast<size_t>(slot)], transpose());
       std::string title = std::string(kSectionCaps[host_.chordSection]) + " \xC2\xB7 BAR " + std::to_string(bar + 1);
       drawCard(c, s, 640, 208, 348, 400, title, split ? (slot % 2 ? "the second half" : "the first half") : "the whole bar");
-      label(c, s, chordName(ch, key()), 652, 230, 320, kWhite, visage::Font::kLeft, 34);
+      label(c, s, chordName(ch, key(), scaleNow()), 652, 230, 320, kWhite, visage::Font::kLeft, 34);
       label(c, s, roman(ch, key()) + " \xC2\xB7 " + qualityWords(ch.quality), 652, 276, 320, 0, visage::Font::kLeft, 9.5f);
       label(c, s, "ROOT", 652, 300, 60, 0, visage::Font::kLeft, 9.5f);
       label(c, s, "CHORD", 652, 370, 60, 0, visage::Font::kLeft, 9.5f);
@@ -2665,9 +2667,9 @@ private:
          if (kQualityChips[i] == ch.quality)
             qualities_->selected = i;
       // Bass: the root, or any note.
-      std::vector<std::string> basses{std::string(ch.none() ? "-" : pitchName(ch.root, key())) + " (root)"};
+      std::vector<std::string> basses{std::string(ch.none() ? "-" : pitchName(ch.root, key(), scaleNow())) + " (root)"};
       for (int i = 0; i < 12; ++i)
-         basses.push_back(pitchName(i, key()));
+         basses.push_back(pitchName(i, key(), scaleNow()));
       if (basses != bass_->options())
          bass_->setOptions(basses);
       bass_->setSelected(ch.bass < 0 ? 0 : ch.bass + 1);
@@ -2701,7 +2703,7 @@ private:
          if (insteadChords_.size() >= 4)
             break;
          insteadChords_.push_back(alt);
-         instead_->items.push_back(chordName(alt, key()));
+         instead_->items.push_back(chordName(alt, key(), scaleNow()));
       }
       (void)before;
       label(c, s, "Hold a chord to hear it; chords you hold show in PLAY.", 12, 618, 976, 0, visage::Font::kRight, 8.5f);
@@ -2916,14 +2918,14 @@ private:
                hitChord = pl.chord;
                hitVoicing = pl.voicing;
                if (!pl.before.none())
-                  led = "led from " + chordName(pl.before, key());
+                  led = "led from " + chordName(pl.before, key(), scaleNow());
                if (pl.fromTop >= 0 && !pl.voicing.empty()) {
                   const int d = pl.voicing.top() - pl.fromTop;
                   led += ", top " + std::string(d >= 0 ? "+" : "") + std::to_string(d);
                }
             }
       }
-      drawCard(c, s, 720, 408, 268, 200, hitTitle, has ? chordName(hitChord, key()) : "click a hit");
+      drawCard(c, s, 720, 408, 268, 200, hitTitle, has ? chordName(hitChord, key(), scaleNow()) : "click a hit");
       hitKeys_->v = hitVoicing;
       hitKeys_->note = led;
       const Hit h = has ? p.at(host_.editStep) : Hit{};

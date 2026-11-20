@@ -152,7 +152,7 @@ inline const std::vector<Genre> &genres() {
        {{"....X.......X...", 0.3}, {"x-x-X-x-x-x-X-x-", 0.6}, {"x--x--x-x--x--x-", 0.8}},
        {{"x-x-X-x-x-x-xxxx", 0.7}},
        {{kMajor, {"C|C7|F|Fm", "C|Am|F|G", "F|G|F|G", "C|F|C|F", "Dm7|G7|C|C", "C|C7|F|Fm"}}},
-       {{"Memphis Backbeat", "Backbeat", 96, kPlain, 0, 0b001},
+       {{"Memphis Backbeat", "Backbeat", 96, kPlain, 0, 0b001, -1, kDrop2, 4, 55, 76, 64},
         {"Pumping Eighths", "Eighths", 112, 0, 0, 0b010, kPopPianist},
         {"Gospel Push", "Push", 104, kRunsIn, 0, 0b100}},
        "1, 23"},
