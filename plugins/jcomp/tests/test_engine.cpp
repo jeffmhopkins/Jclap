@@ -296,6 +296,9 @@ int main() {
       const Stats shortNotes = play(0.5, 0.0, 0), longNotes = play(0.5, 1.0, 0);
       JCLAP_CHECK(shortNotes.meanLen < mid.meanLen * 0.6);
       JCLAP_CHECK(longNotes.meanLen > mid.meanLen);
+      // Thinned and legato: each chord held across the hits that dropped out, to the next one played.
+      const Stats sparseLong = play(0.0, 1.0, 0);
+      JCLAP_CHECK(sparseLong.meanLen > longNotes.meanLen);
       // The window, and the window moved: every note inside it.
       for (int offset : {-12, -5, 0, 7, 12}) {
          const Stats w = play(0.5, 0.5, offset, 55, 72);

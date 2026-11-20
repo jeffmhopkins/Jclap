@@ -217,6 +217,36 @@ struct Preview {
 // Plays a take through over a section's progression for `bars` bars, as the engine would (without
 // the dice): each hit's chord, its voicing led from the one before, its part and length, and a run
 // into a hit that asks for one on a change of chord.
+// DENSITY and LENGTH as the panel last read them, so every roll draws the part as it will sound.
+struct LiveFeel {
+   double density = 0.5, length = 0.5;
+};
+LiveFeel gFeel;
+
+// The dice the rolls use for DENSITY: the engine's own roll differently, but the same weights decide.
+void readFeel(const EditorHost &host) {
+   gFeel.density = host.paramValue(kDensity);
+   gFeel.length = host.paramValue(kLength);
+}
+
+double rollDice(int step, int what) { return (mix(static_cast<uint32_t>(step) * 7919u, static_cast<uint32_t>(what)) >> 8) * (1.0 / 16777216.0); }
+
+// The roll's DENSITY thinning, by the engine's weights.
+bool thinnedInRoll(const Pattern &p, int step) {
+   if (gFeel.density >= 0.5 || !p.at(step).on())
+      return false;
+   const int perBeat = p.rate == kRate8T ? 3 : 4;
+   bool first = true;
+   for (int k = step - step % (perBeat * 4); k < step && first; ++k)
+      first = !p.at(k).on();
+   if (first)
+      return false;
+   const bool onBeat = step % perBeat == 0;
+   const bool onEighth = p.rate == kRate8T ? step % 3 != 1 : step % 2 == 0;
+   const double weight = (onBeat ? 0.7 : onEighth ? 0.45 : 0.2) + 0.25 * p.at(step).vel / 127.0;
+   return weight + 0.15 * rollDice(step, 20) < (0.5 - gFeel.density) * 2.0 * 1.1;
+}
+
 Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSettings &vs, int transpose, int key,
                 int scale, bool runs = true) {
    Preview out;
@@ -227,10 +257,23 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
    Voicing prev;
    Chord prevChord;
    const int n = std::max<int>(1, p.steps);
+   const int perBeat = p.rate == kRate8T ? 3 : 4;
    for (int v = 0; v < out.steps; ++v) {
-      const Hit &h = p.at(v % n);
-      if (!h.on())
-         continue;
+      Hit h = p.at(v % n);
+      const bool onBeat = v % perBeat == 0;
+      const bool onEighth = p.rate == kRate8T ? v % 3 != 1 : v % 2 == 0;
+      if (!h.on()) {
+         // DENSITY above the middle fills gaps with softer repeats of the chord sounding.
+         const double more = (gFeel.density - 0.5) * 2.0;
+         const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
+         if (more <= 0.0 || prevChord.none() || rollDice(v, 21) >= chance)
+            continue;
+         h.vel = static_cast<uint8_t>(onBeat ? kSoft : kGhost + (onEighth ? 10 : 0));
+         h.len = 1;
+         h.art = more > 0.85 ? kArtAsWritten : kArtChop;
+      } else if (thinnedInRoll(p, v % n)) {
+         continue; // DENSITY below the middle drops the weakest hits; each bar's first stays
+      }
       const int64_t tick = static_cast<int64_t>(v) * stepTicks + (h.push ? kTicksPerBeat / 2 : 0);
       const int bar = static_cast<int>(tick / kTicksPerBar);
       const bool half = tick % kTicksPerBar >= kTicksPerBar / 2;
@@ -253,7 +296,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       }
       // The gap to the next hit, for RING.
       int gap = 1;
-      while (gap < n && !p.at((v + gap) % n).on())
+      while (gap < n && (!p.at((v + gap) % n).on() || thinnedInRoll(p, (v + gap) % n)))
          ++gap;
       float len = static_cast<float>(h.len) * 0.92f;
       switch (h.art) {
@@ -262,6 +305,10 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       case kArtRing: case kArtTopRings: len = gap * 0.97f; break;
       default: break;
       }
+      if (gFeel.length < 0.5)
+         len *= static_cast<float>(0.15 + 0.85 * gFeel.length / 0.5);
+      else if (gFeel.length > 0.5 && gap * 0.97f > len)
+         len += (gap * 0.97f - len) * static_cast<float>((gFeel.length - 0.5) / 0.5);
       Voicing played = vc;
       if (h.part == kPartTop) {
          played.notes[0] = static_cast<uint8_t>(vc.top());
@@ -658,7 +705,11 @@ const Preview &genrePreview(int g) {
    vs.hi = p.hi;
    vs.center = p.center;
    Pattern pat = sec.takes[0];
-   return cache[g] = preview(sec, pat, 2, vs, 0, r.key, kMajor, false);
+   const LiveFeel feel = gFeel;
+   gFeel = LiveFeel{}; // the tiles show each style as written
+   cache[g] = preview(sec, pat, 2, vs, 0, r.key, kMajor, false);
+   gFeel = feel;
+   return cache[g];
 }
 
 class GenreTiles : public visage::Frame {
@@ -815,6 +866,7 @@ public:
    }
 
    void draw(visage::Canvas &c) override {
+      readFeel(host_);
       const float s = ui::designScale(*this);
       const float h = height() / s;
       const PlayFrame &f = frame ? *frame : PlayFrame{};
@@ -937,6 +989,7 @@ class MutateRow : public visage::Frame {
 public:
    explicit MutateRow(EditorHost &host) : host_(host) {}
    void draw(visage::Canvas &c) override {
+      readFeel(host_);
       const float s = ui::designScale(*this);
       const float h = height() / s;
       const Section &sec = host_.song().sections[static_cast<size_t>(host_.mutateSection)];
@@ -1118,6 +1171,7 @@ class TakeRoll : public visage::Frame {
 public:
    explicit TakeRoll(EditorHost &host) : host_(host) {}
    void draw(visage::Canvas &c) override {
+      gFeel = LiveFeel{}; // EDIT shows the take as written
       const float s = ui::designScale(*this);
       const float w = width() / s, h = height() / s;
       const Song &song = host_.song();
@@ -1430,6 +1484,7 @@ class SectionTiles : public visage::Frame {
 public:
    explicit SectionTiles(EditorHost &host) : host_(host) {}
    void draw(visage::Canvas &c) override {
+      readFeel(host_);
       const float s = ui::designScale(*this);
       const float h = height() / s, w = tileW();
       const PlayFrame &f = frame ? *frame : PlayFrame{};
@@ -1510,6 +1565,7 @@ class NowPlaying : public visage::Frame {
 public:
    explicit NowPlaying(EditorHost &host) : host_(host) {}
    void draw(visage::Canvas &c) override {
+      readFeel(host_);
       const float s = ui::designScale(*this);
       const PlayFrame &f = frame ? *frame : PlayFrame{};
       const int key = static_cast<int>(std::lround(host_.paramValue(kKey)));
@@ -2063,6 +2119,10 @@ public:
    }
 
    void draw(visage::Canvas &c) override {
+      if (host_.page == kEditPage)
+         gFeel = LiveFeel{}; // EDIT shows the take as written
+      else
+         readFeel(host_);
       const ui::Theme &t = ui::defaultTheme();
       const float s = scale();
       c.setColor(t.background);
@@ -2901,7 +2961,7 @@ private:
          return k;
       };
       tips_.add(knob({492, 300, 64, 80}, kDensity, "DENSITY", kOrange),
-                "Fewer or more chords: below the middle the weakest hits drop out (a bar's downbeat stays), above it "
+                "Fewer or more chords: below the middle the weakest hits drop out (each bar's first hit stays), above it "
                 "softer repeats of the chord fill the gaps, eighths first. The middle plays the take as written.");
       tips_.add(knob({558, 300, 64, 80}, kLength, "LENGTH", kOrange),
                 "Every chord shorter (down to a chop) or longer (up to legato, held to the next). The middle is as "

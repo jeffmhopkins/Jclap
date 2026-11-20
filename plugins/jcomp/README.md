@@ -211,11 +211,15 @@ The chord sounding, big, the chord after it, its notes and its shape, and the ta
 playhead. Beside it, two knobs that change the whole part as it plays:
 
 - **DENSITY**: fewer or more chords. Below the middle the weakest hits drop out first (soft off-beats,
-  then off-beats, then the lesser beats; a bar's downbeat always stays). Above it, softer repeats of
+  then off-beats, then the lesser beats; each bar's first hit always stays). Above it, softer repeats of
   the chord sounding fill the gaps, eighths first, then sixteenths. The middle plays the take as
   written, and the same setting always gives the same pattern.
 - **LENGTH**: every chord shorter, down to a staccato chop, or longer, up to legato (held to the next
   chord). The middle plays the lengths as written.
+
+The rolls on GENERATE and PLAY draw the part with DENSITY and LENGTH as set; EDIT shows the take as
+written, the hits you edit. Thinned hits don't cut a long chord short: at full LENGTH a chord holds
+to the next chord actually played.
 
 ### FEEL
 
@@ -344,3 +348,4 @@ library, the generator and the engine; `jcomp-tests` drives the plugin through C
 renders these pictures:
 
     jcomp-screenshot out.png [generate|chords|edit|play] [width height] [players] [browser] [notes] [custom]
+                     [density=0..1] [length=0..1]
