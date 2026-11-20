@@ -738,7 +738,7 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       const bool dom = third == 4 && seventh == 10;
       int colour = has(15) ? 15 : has(13) ? 13 : 14;              // the altered 9th, or the 9th
       // The 13th on a dominant; the b13 with an altered ninth (Levine's 3-b13-7-b9 for the V of a minor ii-V).
-      int fifth = dom ? (has(15) || has(13) ? 8 : 9) : (has(6) ? 6 : has(8) ? 8 : 7);
+      int fifth = dom ? (has(8) || has(15) || has(13) ? 8 : 9) : (has(6) ? 6 : has(8) ? 8 : 7); // a 7#5 keeps its #5
       if (has(18))
          fifth = 18;                                                // the #11 in its place
       if (seventh == 9)

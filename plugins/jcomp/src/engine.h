@@ -367,10 +367,19 @@ public:
             fill_ = fillPending_ = fillDown_ = ending_ = ended_ = false;
             absoluteBar_ = 0;
             salt_ = kDiceSalt; // the same dice every time it plays: a render comes out the same
+            // Running free, SONG starts the song from its first section, as the host's bar 1 does.
+            if (settings_.song && !following) {
+               section_ = std::clamp(settings_.section, 0, kSections - 1);
+               pending_ = -1;
+            }
          } else {
-            // A jump: the section keeps its bars on the bar lines.
+            // A jump: the section keeps its bars on the bar lines. The fill of the bar it left is
+            // left behind with it (the bar landed on finds its own at its bar line).
             const int64_t len = barTicks();
             anchor_ = t - (((t - anchor_) % len) + len) % len;
+            fill_ = fillDown_ = false;
+            if (!settings_.song)
+               ending_ = false;
          }
          // Following the host, a looped section lies on the host's timeline (its bar 1 on a multiple
          // of its length from the host's bar 1), so a host bar plays the same chord every pass of a
@@ -560,7 +569,7 @@ private:
 
    bool switchesAt(int64_t t) const {
       const int64_t rel = t - anchor_;
-      if (rel % kTicksPerBeat)
+      if (rel % beatUnit())
          return false;
       const int64_t bar = rel / barTicks();
       const bool onBar = rel % barTicks() == 0;
@@ -594,7 +603,7 @@ private:
       // A song that ends runs from its first section to the outro; one on repeat goes round them all.
       for (int k = settings_.songEnds ? first : 0; k < kSections; ++k)
          total += std::max<int>(1, song_.sections[static_cast<size_t>(k)].bars);
-      ended_ = ending_ = false;
+      ended_ = ending_ = fill_ = fillDown_ = false;
       if (settings_.songEnds && bar >= total) {
          // Past the end: the song is over until the host comes back into it.
          ended_ = true;
@@ -733,7 +742,7 @@ private:
 
    // The next point (relative to the anchor) after `cur` where a queued section takes over.
    int64_t nextSwitch(int64_t cur) const {
-      const int64_t step = settings_.switchAt == 0 ? kTicksPerBeat : barTicks();
+      const int64_t step = settings_.switchAt == 0 ? beatUnit() : barTicks();
       const int64_t from = (cur / step + 1) * step;
       for (int k = 0; k < 256; ++k)
          if (switchesAt(anchor_ + from + k * step))
@@ -884,7 +893,7 @@ private:
          }
       }
       const int64_t rel0 = t - anchor_;
-      if (rel0 % kTicksPerBeat == 0 && rel0 > 0) {
+      if (rel0 % beatUnit() == 0 && rel0 > 0) {
          if (pending_ >= 0 && switchesAt(t)) {
             section_ = pending_;
             pending_ = -1;
@@ -1146,7 +1155,9 @@ private:
       const bool onBeat = step % perBeat == 0;
       const bool onEighth = p.rate == kRate8T ? step % 3 != 1 : step % 2 == 0;
       const bool fine = fineGrid(p);
-      const bool offbeat = offbeatTake(p);
+      // The ending (its last chord on the one) keeps the section's offbeat character: a skank's
+      // ending doesn't strike the change on beat 1, a backbeat's doesn't gain beats 1 and 3.
+      const bool offbeat = offbeatTake(ending_ ? song_.sections[static_cast<size_t>(section_)].takes[0] : p);
       const double stepBeats = static_cast<double>(stepTicks) / kTicksPerBeat;
       // A change of chord the take has no hit for (two chords in a bar, the second between hits):
       // the chord is struck where it comes, as the take's first hit of the bar is played.
@@ -1529,11 +1540,12 @@ private:
             run = best;
          }
          const int late = len - static_cast<int>(run.size()); // a shorter run starts later, still into the hit
-         // It doesn't take the place of a written chord: only rests and soft hits under it.
+         // It doesn't take the place of a written chord: only rests and soft hits under it (judged
+         // as written, whatever the energy scaled them to), and never a hit on a strong beat.
          bool clear = true;
          for (int k = late * stride; k < span; ++k) {
             const Hit &o = p.at((step + k) % steps);
-            if (o.on() && !leftHand(o.part) && o.vel >= kNormal)
+            if (o.on() && (((step + k) % steps) % strongSteps(p) == 0 || (!leftHand(o.part) && o.vel > kSoft + 8)))
                clear = false;
          }
          if (!clear)
@@ -1670,8 +1682,10 @@ private:
       len = std::max(len, shortest);
       // A pushed chord is tied over the beat it anticipates (that beat's hit, if the same chord,
       // lengthens it from there).
-      if (h.push && h.part == kPartChord)
-         len = std::max(len, static_cast<double>((k.t / kTicksPerBeat + 1) * kTicksPerBeat) / kTicksPerBeat - at + 0.05);
+      // Not in a figure played as written (a guajeo's two-side strikes its one); LENGTH shortens it
+      // as it does every chord.
+      if (h.push && h.part == kPartChord && !settings_.fixed && settings_.length >= 0.5)
+         len = std::max(len, static_cast<double>(pushTargetOf(k.t)) / kTicksPerBeat - at + 0.05);
       // Nothing rings over the next change of chord: the change is played on time, by itself.
       const double cap = k.capBeat < 0.0 ? 1e9 : k.capBeat + settings_.timing * ms - 0.01;
       cutFrom(at - 0.003, hand);
@@ -1720,8 +1734,8 @@ private:
          note(on, key, static_cast<int>(std::lround(vv)), l, noteHand);
       }
       k.lastId = nextId_;
-      if (h.push && h.part == kPartChord && k.lastId >= k.firstId) {
-         pushTarget_ = (k.t / kTicksPerBeat + 1) * kTicksPerBeat;
+      if (h.push && h.part == kPartChord && k.lastId >= k.firstId && !settings_.fixed) {
+         pushTarget_ = pushTargetOf(k.t);
          pushChord_ = c;
          pushFirst_ = k.firstId;
          pushLast_ = k.lastId;
@@ -2001,6 +2015,16 @@ private:
    Chord lastChord_, nextChord_, bassChord_;
    // The last pushed chord: the beat it anticipates (-1 none), and its notes.
    int64_t pushTarget_ = -1;
+   // The beat a chord pushed at `t` anticipates: the next quarter, or dotted quarter in 6/8.
+   int64_t pushTargetOf(int64_t t) const {
+      const int64_t unit = beatUnit();
+      const int64_t rel = t - anchor_;
+      return anchor_ + rel - (((rel % unit) + unit) % unit) + unit;
+   }
+   // A beat: a quarter, or 6/8's dotted quarter.
+   int64_t beatUnit() const {
+      return song_.sections[static_cast<size_t>(section_)].takes[0].rate == kRate68 ? 72 : kTicksPerBeat;
+   }
    int64_t padAhead_ = -1; // the pad holds a pushed chord until this tick
    Chord pushChord_;
    uint32_t pushFirst_ = 0, pushLast_ = 0;

@@ -367,7 +367,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
             bool clear = true;
             for (int k = late * stride; k < span; ++k) {
                const Hit &o = p.at((start + k) % n);
-               clear = clear && !(o.on() && !leftHand(o.part) && o.vel >= kNormal);
+               clear = clear && !(o.on() && (((start + k) % n) % strongSteps(p) == 0 || (!leftHand(o.part) && o.vel > kSoft + 8)));
             }
             if (!clear)
                continue;

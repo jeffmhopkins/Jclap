@@ -442,9 +442,22 @@ inline bool thinnedBy(const Pattern &p, int step, double density, double dice, b
       chords = chords || (p.at(s).on() && !leftHand(p.at(s).part));
    if (!chords && firstInBar(p, step, perBar))
       return false;
+   // A muted ghost (a chucking motor's) isn't the bar's chord: the first sounding chord is kept, and
+   // the ghosts go before any chord that rings.
+   const auto sounding = [&](int s) { return p.at(s).on() && !leftHand(p.at(s).part) && p.at(s).vel > kGhost + 8; }; // a ghost, as scaled by energy
+   bool anySounding = false;
+   for (int s = from; s < from + perBar && s < p.steps; ++s)
+      anySounding = anySounding || sounding(s);
    if (!leftHand(h.part)) {
-      if (firstChord(p, step))
+      if (!anySounding && firstChord(p, step))
          return false;
+      if (anySounding && sounding(step)) {
+         bool earlier = false;
+         for (int s = from; s < step; ++s)
+            earlier = earlier || (sounding(s) && p.at(s).chance >= 100);
+         if (!earlier)
+            return false;
+      }
       bool firstHalf = true;
       for (int s = from; s < step; ++s)
          if (p.at(s).on() && !leftHand(p.at(s).part) && s - from >= halfBar(p))
@@ -468,6 +481,8 @@ inline bool thinnedBy(const Pattern &p, int step, double density, double dice, b
    weight = (weight - 0.25) / 0.85;
    if (leftHand(h.part) && chords && !offbeatBass)
       weight -= 0.2;
+   if (!leftHand(h.part) && h.vel <= kGhost + 8 && anySounding)
+      weight -= 0.6;
    return weight < std::sqrt((0.5 - density) * 2.0);
 }
 
@@ -1229,6 +1244,29 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
       for (int s = 0; s < bar; ++s)
          if (f.at(s).on() && !leftHand(f.at(s).part))
             f.at(s).vel = kAccent;
+   else if (same) {
+      // Any other fill that came out as the groove (a skank's, an offbeat stab's: moved onto the
+      // eighths and kept off the beats) still leads into the next section: its last two chops
+      // accented, and a pickup after the last (the triplet before the bar line, or a sixteenth
+      // later), or else the last chop pushed into the next chord.
+      int last = -1, prev = -1;
+      for (int s = 0; s < bar; ++s)
+         if (f.at(s).on() && !leftHand(f.at(s).part)) {
+            prev = last;
+            last = s;
+         }
+      for (int s : {prev, last})
+         if (s >= 0)
+            f.at(s).vel = kAccent;
+      const int pick = f.rate == kRate8T ? bar - 1 : last + 1;
+      if (last >= 0 && (f.rate == kRate8T || fine) && pick > last && pick < bar && !f.at(pick).on()) {
+         f.at(pick) = f.at(last);
+         f.at(pick).vel = kNormal;
+         f.at(pick).push = 1;
+         f.at(last).push = 0;
+      } else if (last >= 0 && !onBeat(f, last))
+         f.at(last).push = 1;
+   }
    // A fill leads into the next section: never under the groove's own accents. Its first and last
    // chords come up to the take's loudest.
    int peak = 0, fPeak = 0, first = -1, lastHit = -1;
@@ -1382,8 +1420,11 @@ inline Section makeSection(const Recipe &r, int section, uint32_t seed) {
       s.split = static_cast<uint16_t>(s.split & ~(1u << ((s.bars - 1) % std::max<int>(1, s.progBars))));
    Pattern p = baseRhythm(r, section, rng);
    // A genre that takes every anticipation (swing) does in every style, not only those that push.
-   const unsigned pushAll = genreAt(r.genre).pushAll && !(st.mods & kFixed) ? kPushes : 0u;
-   applyMods(p, st.mods | pushAll, rng, pushAll ? 1.0 : 0.75);
+   // A fixed figure gains no pushes it lacks (the cha-cha), but takes every one it has (a montuno's
+   // and of 4 always anticipates: the old chord an eighth before the change is wrong).
+   const bool all = genreAt(r.genre).pushAll;
+   const unsigned pushAll = all && !(st.mods & kFixed) ? kPushes : 0u;
+   applyMods(p, st.mods | pushAll, rng, all ? 1.0 : 0.75);
    const Pattern written = p;
    shapeEnergy(p, e, rng, st.mods & kFixed, st.mods);
    applyWeird(p, r.weird, rng, st.mods);
@@ -1455,6 +1496,13 @@ inline void generateSong(const Recipe &r, Song &song, bool keepChords = false) {
       }
       Section made = makeSection(r, i, mix(r.seed, static_cast<uint32_t>(i)));
       if (keepChords && !s.chords[0].none()) {
+         // Moved to the song's key as a locked section's are (KEY may have moved since).
+         for (Chord &c : s.chords)
+            if (!c.none()) {
+               c.root = static_cast<int8_t>((c.root + move) % 12);
+               if (c.bass >= 0)
+                  c.bass = static_cast<int8_t>((c.bass + move) % 12);
+            }
          made.chords = s.chords;
          made.split = s.split;
          made.marks = s.marks;
