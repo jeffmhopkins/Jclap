@@ -6,7 +6,7 @@ A 16-pad drum kit whose sounds an AI model makes from your words, inside the plu
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![pads: 16](https://img.shields.io/badge/pads-16-blue)](#the-kit-tab) [![engines: Stable Audio Open Small, ORB, Stable Audio Open 1.0](https://img.shields.io/badge/engines-SAO%20Small%20%7C%20ORB%20%7C%20SAO%201.0-blue)](#the-engines) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
-Version 0.8.0 · Powered by Stability AI · ORB by Marcos Maceo
+Version 0.8.1 · Powered by Stability AI · ORB by Marcos Maceo
 
 </div>
 
@@ -285,7 +285,8 @@ next target. **ADD AS VARIATION** keeps the pad's sound and adds this one beside
 
 **PADS**: sixteen pads, pad 1 bottom left on MIDI note 36 (C2), up to pad 16 on 51. Each shows its
 name, role, waveform with a playhead while it sounds, note, and its reverb (purple) and delay (blue)
-sends. Click a pad to play and select it (higher on the pad is louder), drag one onto another to
+sends. The selected pad has the orange box; every pad that's sounding turns its waveform orange while
+it plays, so with several hits going at once you can follow each one's playhead. Click a pad to play and select it (higher on the pad is louder), drag one onto another to
 swap them (sound and settings), right-click to play, open its variations, regenerate or clear it. A pad
 with more than one variation shows how many (x4), and its waveform is the one it played last. Playing a pad over
 MIDI selects it too, so its controls follow what you play. An empty pad's

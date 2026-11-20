@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.8.0)
+jclap_plugin_version(0.8.1)
 
 # miniz unpacks ONNX Runtime's library from Microsoft's NuGet package (a zip) on first use.
 include(FetchContent)

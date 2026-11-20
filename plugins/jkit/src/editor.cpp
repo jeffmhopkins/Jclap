@@ -811,7 +811,7 @@ private:
 
 // ---- the Kit tab ----
 
-// The 16 pads: name, role dot, waveform with the live playhead, note, and the reverb and delay sends
+// The 16 pads: name, role dot, waveform (orange while it sounds) with the live playhead, note, and the reverb and delay sends
 // as two small bars. Click to select and play; drag onto another pad to swap them; right-click for
 // more. An empty pad offers to generate a sound for it.
 class PadGrid : public visage::Frame {
@@ -878,8 +878,10 @@ public:
                 b.y() + 5 * s, b.width() - (sounds.count() > 1 ? 46 : 20) * s, 13 * s);
          const float wx = b.x() + 6 * s, wy = b.y() + 22 * s, ww = b.width() - 12 * s, wh = b.height() - 42 * s;
          caches_[i].get(p, 30);
-         drawWave(c, caches_[i].peaks, wx, wy, ww, wh, sel ? kOrange : 0xff5f6670);
+         // The waveform is orange on the selected pad and on every pad that's sounding, so several
+         // hits at once each show their own playhead in orange; only the selected pad gets the box.
          const float pos = host_.padPosition(i);
+         drawWave(c, caches_[i].peaks, wx, wy, ww, wh, sel || pos >= 0.0f ? kOrange : 0xff5f6670);
          if (pos >= 0.0f) {
             c.setColor(0xe6ffffff);
             c.fill(wx + ww * pos, wy - 2 * s, 1.5f * s, wh + 4 * s);
