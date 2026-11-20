@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.2.1.
+Version 0.2.2.
 
 ![Panel](docs/panel.png)
 
@@ -75,12 +75,12 @@ voicings sit, onsets, timing, runs).
 | Clav Chopper | Clav | busy sixteenth chops, muted and percussive |
 | Church Organ | Organ | held chords, walk-ups into the changes |
 | Neo-Soul Keys | E-piano | lazy, behind the beat, rich and open |
-| Jazz Comper | Piano | shells and rootless voicings (close, Levine's A and B), sparse pushes |
+| Jazz Comper | Piano | rootless voicings (Levine's A and B: 3-5-7-9 and 7-9-3-5, the 13th for a dominant's 5th), sparse pushes |
 | Pop Pianist | Piano | eighth-note pulse, open triads |
 | Rhythm Guitar | Guitar | sixteenth scratch, three-note grips |
 | Skank Guitar | Guitar | off-beat chops, short and high, the off-beats strummed up |
 | Strummer | Guitar | down-up strums across six strings |
-| Montuno | Piano | Latin piano figures in octaves |
+| Montuno | Piano | Latin piano figures in octaves (a close chord with its bottom note doubled on top) |
 | House Stabs | Synth | one chord shape, rhythmic and on the grid |
 | Pad Player | Pad | whole bars and slow swells |
 | Ambient Drifter | Pad | long held chords, wide (quartal), open and barely moving, rolled in |
@@ -164,7 +164,11 @@ drag a bar, double-click for its default. **MUTATE THIS TAKE** mutates it once.
 How every chord is voiced, for all sections:
 
 - **Shape**: CLOSE, DROP 2 (the second voice from the top down an octave), DROP 2+4, SHELL (3rd and
-  7th, the root below), 4THS (quartal) or SPREAD (two hands).
+  7th, the root below), 4THS (quartal, always holding the chord's root so the changes are heard),
+  SPREAD (two hands: on keys the left hand's low note sounds with the chords on beats 1 and 3 and on
+  a change of chord, and the chops and backbeats between are the right hand alone), ROOTLESS
+  (Levine's A and B forms, the root left to the bass) or OCTAVES (a close chord with its bottom note
+  doubled on top, the montuno's right hand).
 - **CENTER**: where the voicings sit. **LEAD**: how much each chord is led from the one before (the
   least total movement) rather than placed at the center. **TOP MOVE**: the most the top voice should
   move, in semitones. **SPREAD**: the widest a voicing may be.
@@ -188,10 +192,12 @@ the sources below).
 Its chord, the notes it plays and how far its top moved from the hit before, and:
 
 - **LENGTH**: AS IS, CHOP, HALF, RING (to the next chord) or TOP (only the top note rings).
-- *Run into it*: a three-step passing run in the key and scale leads into this hit when the chord
-  changes here.
+- *Run into it*: a three-step passing run in the key and scale (bent to the chord it leads into)
+  leads into this hit when the chord changes here.
 - *Anticipate*: the hit plays the next chord early (a push, an eighth ahead).
-- What of the chord it plays: CHORD, TOP (the top note alone), TOP 2, or BASS.
+- What of the chord it plays: CHORD, TOP (the top note alone), TOP 2, BASS (the left hand's root), or
+  5TH (the fifth the bass alternates with: boom-chick's beat 3, the bossa thumb's second note). A left
+  hand's notes are held to its next note and don't cut the chord above them, nor the chord them.
 - **RE-VOICE**: the next best voicing for this hit, round to JComp's own again. **+ MUTATE HIT** changes
   one thing about it.
 
@@ -214,8 +220,9 @@ playhead. Beside it, two knobs that change the whole part as it plays:
 
 - **DENSITY**: fewer or more chords. Below the middle the weakest hits drop out first (soft off-beats,
   then off-beats, then the lesser beats; each bar's first hit always stays). Above it, softer repeats of
-  the chord sounding fill the gaps, eighths first, then sixteenths. The middle plays the take as
-  written, and the same setting always gives the same pattern.
+  the chord sounding fill the gaps, eighths first, then sixteenths (only in a rhythm that already
+  plays sixteenths, so a montuno, a bossa or a Charleston stays on eighths), never under a chord still
+  held. The middle plays the take as written, and the same setting always gives the same pattern.
 - **LENGTH**: every chord shorter, down to a staccato chop, or longer, up to legato (held to the next
   chord). The middle plays the lengths as written.
 
@@ -243,7 +250,10 @@ host; **FREE** only runs on its own.
 
 ### PASSING RUNS
 
-Single notes into a chord change, 2 to 4 steps of the key's scale landing on the new chord.
+Single notes into a chord change, 2 to 4 steps of the key's scale landing on the new chord. The scale
+bends to the chord it leads into: a note of that chord from outside the key (a borrowed Abmaj7's Ab,
+a D7's F#, a chord of the last chorus's key change) joins it, and the scale notes a half step either
+side that the chord doesn't hold drop out.
 **AMOUNT** is how many of the chances are taken; **AT MOST** every bar, every 2 bars or every 4.
 **LANDS ON** the new chord's top note, or any note of it. *Half step from below* ends the run a
 semitone under its target; *Shorten the chord before* cuts the chord before the run so it doesn't
@@ -309,14 +319,14 @@ from.
 | Lo-fi | Danielsen [15]; Winston & Saywood, *IASPM Journal* [17] |
 | Gospel | Hal Leonard's gospel keyboard guides [31][32]; Smallwood's vamps [44]; shout music's tempo and upbeats [53] |
 | Blues | none found: the standard 12-bar form, from the idiom |
-| Swing Jazz | Levine, *The Jazz Piano Book* [2]; Freddie Green [19][20][55]; Red Garland [21]; the reverse Charleston [54] |
-| Bossa Nova | the batida, after Garcia and others [11][12], written in eighths (Brazil's 2/4 read at a 4/4 tempo) |
-| Salsa | Levine [2]; the guajeo after Peñalosa, Moore and Mauleón [7][8][9][10], read note by note from Moore's examples |
-| Latin Jazz | Levine [2]; guajeo [7]; Moore [10] |
+| Swing Jazz | Levine, *The Jazz Piano Book* [2] and his rootless A and B forms [57]; Freddie Green [19][20][55]; Red Garland [21]; the reverse Charleston [54] |
+| Bossa Nova | the batida, after Garcia and others [11][12], written in eighths (Brazil's 2/4 read at a 4/4 tempo); the thumb's root and fifth [60] |
+| Salsa | Levine [2]; the guajeo after Peñalosa, Moore and Mauleón [7][8][9][10], read note by note from Moore's examples; montunos in octaves and in clave [56][58] |
+| Latin Jazz | Levine [2]; guajeo [7]; Moore [10]; one clave direction [56] |
 | Pop | de Clercq & Temperley [1] (the progressions' frequencies) |
 | Rock | de Clercq & Temperley [1] |
 | Piano Ballad | de Clercq & Temperley [1] |
-| Country | Floyd Cramer's slip-note [18]; Hal Leonard's country piano guide [33] |
+| Country | Floyd Cramer's slip-note [18]; Hal Leonard's country piano guide [33]; the alternating bass [59] |
 | House | MusicRadar on 90s house piano [36]; the Korg M1 [37] |
 | Deep House | Roland and Hooktheory on Mr. Fingers' "Can You Feel It" [24][25] |
 | Reggae | Berklee's reggae keyboard guide [35]; Dubmatix on the organ bubble [42]; Jenson's "Bubblin'" [51] |
@@ -350,6 +360,22 @@ beat 3, voiced Four To The Bar in Freddie Green's low shells, moved the gospel S
 swung triplet grid, put the organ bubble's left hand on the upbeats, leaned Motown's quarter notes on 2
 and 4, and gave bossa and highlife players that don't scratch. 90s R&B, House, Country's slip note
 and the palm-wine interlock remain unconfirmed.
+
+**The second review (0.2.2).** Another cold pass generated every style and checked what it really
+plays against sources ([docs/sources.md](docs/sources.md), Part F). Busy players, mutations, WEIRD
+and DENSITY had been adding sixteenths to eighth-note idioms (montunos, the batida, Freddie Green's
+four): anything added now stays on the rhythm's own grid. The Latin Jazz guajeo had been flipping
+between 2-3 and 3-2 from one section to the next (crossed clave), and the "answer" mutation could
+copy a clave rhythm's first bar over its second: both fixed. The montuno styles now play the guajeo
+in the verse, Pocket Stabs plays its stabs on the one, and Charleston and the bossa cycle keep every
+hit under SPARSE. Jazz Comper voices rootless (it had been playing root-position triads and
+sevenths), Montuno plays octaves, fourths keep the root (Ambient had sounded one stack of fourths for
+every chord), and a two-handed voicing no longer doubles the bass on every chop. The left hand gets a
+fifth: boom-chick's bass alternates root and fifth, the bossa thumb plays root then fifth under the
+guitar's voicing, and the ballad's broken chords are root-fifth eighths under a held chord. Strum
+both now strums up on the triplet grid's offbeats, an offbeat style at low energy keeps its first
+offbeat rather than gaining a chord on the one, chords are spelled by degree (Ab, Bb, Eb in C, not
+G#, A#, D#), and passing runs bend to chromatic chords.
 
 **Left out for now.** Jazz Waltz (it needs 3/4, which JComp's 4/4 grid can't play), a "+ GUITAR"
 second player layered over the first, and recording a part played in to a take.

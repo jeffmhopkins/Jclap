@@ -1382,6 +1382,58 @@ doc ranks them; these are the corrections to this document and to `styles.h`.
   riffs, Country's slip note (it needs a whole-tone grace note the engine doesn't play yet), the
   chachachá ponchando grid, and the palm-wine interlock.
 
+
+## Part F. The second review (2026-11-20)
+
+A second cold pass, made without reading Part E first, generated every style (all seven sections,
+all four takes) and played it through the engine, then checked what came out against sources.
+
+- **Eighth-note idioms got sixteenths.** A player busier than 0.7 ghosted the sixteenth after a hit,
+  and the "ghosts", "shift", "busier" and "answer" mutations, WEIRD's strays and DENSITY's fill all
+  used sixteenths, whatever the style. So the Montuno player put sixteenth chops back into the
+  guajeos Part E had just moved to eighths [7], and the Rhythm Guitar put them into Freddie Green's
+  four to the bar [55]. A rhythm with no sixteenth in it now only gains eighths.
+- **Crossed clave.** Latin Jazz Guajeo picked its 2-3 or its 3-2 guajeo afresh for each section (both
+  at the same energy), so the montuno changed clave direction at random section boundaries. Playing
+  against the clave's direction is *cruzado* [56]; a direction change needs an odd-bar phrase, and
+  JComp's sections are all even. The style is now 2-3, as montunos usually are [56]. The "answer"
+  mutation, which copied a take's first bar over its second, now leaves two-bar rhythms alone.
+- **Montunos in the verse.** The clave-strokes rhythms sat at energy 0.35 and the guajeos at 0.8, so
+  three verses in four of Montuno 2-3 played clave strokes, not a montuno. They are now 0.2 and 0.6.
+  Pocket Stabs likewise played the offbeat clav counter-part three sections in four; it now plays its
+  stabs on the one.
+- **SPARSE broke two-hit rhythms.** It dropped the and of 2 from the Charleston (leaving whole notes
+  on the one) and points of the bossa 3-3-4-3-3 cycle. It now only thins bars of four hits or more.
+- **Jazz Comper wasn't rootless.** Close voicing took the root before the ninth, and the swing
+  progressions were mostly sevenths and triads, so the comper played C-E-G-C and D-F-A-C. Levine's A
+  and B forms are 3-5-7-9 and 7-9-3-5, with the 13th for a dominant's fifth [2][57]. A new Rootless
+  shape voices them, and the swing I chord is written C6.
+- **Montuno octaves.** The Montuno player ("figures in octaves") voiced close four-note chords.
+  Montunos are commonly played in octaves with chord tones between [58]: a new Octaves shape.
+- **Fourths didn't change.** The quartal shape accepted any stack of chord tones and tensions, so in
+  a diatonic progression one stack (A-D-G-C-E) fit every chord and voice leading kept it: Ambient's
+  Cadd9, Fmaj9, Am9 and Fmaj7 all sounded the same. A stack of fourths must now hold the root.
+- **Two hands doubled the bass on every chop.** SPREAD put the left hand's low note in every chord,
+  so a backbeat, an organ bubble's chop, boom-chick's "chick" and the shout's upbeat chords all had a
+  bass note under them, on top of the take's own left hand. On keys the low note now sounds on beats
+  1 and 3 and on a change of chord.
+- **The left hand.** A bass note was a sixteenth long and the next chord cut it. The left hand now
+  holds to its next note and the hands don't cut each other. A new part, the fifth, gives boom-chick
+  its alternating bass [59] and the bossa thumb root then fifth on the 2/4 beats [60]; the bossa styles
+  voice the guitar's thumb under a three-note chord, so the thumb on 1 sounds (Jazz Comper's close
+  voicing had left it out). The ballad's "broken chords" (written as root, fifth, octave, tenth but
+  played as bass, top note, chord, top note) are now root-fifth eighths under a held chord.
+- **Smaller things.** Strum both read the triplet grid as sixteenths (Shuffle Ska's offbeat chops
+  went up, down, down, up); an offbeat style at very low energy was turned into a chord on the one;
+  pushes on the triplet grid sat on the middle triplet; DENSITY could re-strike under a held chord;
+  chords were spelled with sharps in flat contexts (G#, A#, D# for Ab, Bb, Eb in C minor); and passing
+  runs used the key's scale over chromatic chords (an A natural into Abmaj7 in the C Dorian sets, C
+  major runs over the Db of the last chorus's key change).
+- **Seen and left.** The Afrobeat tenor line repeats the chord's top note rather than a melodic riff;
+  palm-wine highlife is strummed by Strummer rather than picked; Rodgers' "chucking" grid (accents only
+  on the e and a) is unconfirmed. Comparing with Part E afterwards: the two passes overlap only on
+  Freddie Green and the montunos, where this pass found the engine undoing Part E's grid fixes.
+
 ---
 
 ## Bibliography
@@ -1540,3 +1592,14 @@ doc ranks them; these are the corrections to this document and to `styles.h`.
 55. freddiegreen.org: Pettersen, "Notable quotes supporting the one note chord"
     https://www.freddiegreen.org/technique/mp_quotes.html ; Berens [20] (search snippets: voicings on
     strings 6-4-3, often only one note clearly sounding).
+56. Piano With Jonny, "Piano montunos: the complete guide" (2-3 montunos; *cruzado*),
+    https://pianowithjonny.com/piano-lessons/piano-montunos-the-complete-guide/ ; Soundbrenner, "Clave"
+    (direction doesn't change within a tune), https://www.soundbrenner.com/blogs/articles/clave
+57. Rootless voicing handout after Levine, *The Jazz Theory Book* (A: 3-5-7-9, B: 7-9-3-5, the 13th for
+    the 5th on a dominant), https://www.cs.hmc.edu/courses/2002/fall/mus84/rootless.pdf
+58. MusicRadar, "Afro-Cuban piano tips: how to master the montuno" (octaves in the right hand),
+    https://www.musicradar.com/how-to/afro-cuban-piano-tips-how-to-master-the-montuno ; Keyboard,
+    "Afro-Cuban Piano: Master the Montuno", https://www.keyboardmag.com/lessons/afro-cuban-piano-master-the-montuno
+59. Wikipedia, "Alternate bass," https://en.wikipedia.org/wiki/Alternate_bass
+60. jazzguitar.be, "Blue Bossa chords and rhythm pattern" (the thumb on root and fifth, beats 1 and 3),
+    https://www.jazzguitar.be/blog/blue-bossa-chords/

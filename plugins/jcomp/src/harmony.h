@@ -83,7 +83,33 @@ inline const char *const kSharpNames[12] = {"C", "C#", "D", "D#", "E", "F", "F#"
 inline const char *const kFlatNames[12] = {"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"};
 // Keys written with flats (F, Bb, Eb, Ab, Db, Gb as majors).
 inline bool flatKey(int key) { return key == 5 || key == 10 || key == 3 || key == 8 || key == 1 || key == 6; }
-inline const char *pitchName(int pc, int key = 0) { return (flatKey(key) ? kFlatNames : kSharpNames)[((pc % 12) + 12) % 12]; }
+// A note's name in a key, spelled by its degree: the key's own notes by their letters (G# in E, Bb
+// in F), and the chromatic ones as the flat third, sixth, seventh and second and the sharp fourth
+// (Eb, Ab, Bb, Db and F# in C), as the borrowed and secondary chords are written. A spelling that
+// would need a double accidental or an E#, B#, Cb or Fb falls back to the key's sharps or flats.
+inline const char *pitchName(int pc, int key = 0) {
+   pc = ((pc % 12) + 12) % 12;
+   key = ((key % 12) + 12) % 12;
+   const char *const *names = flatKey(key) ? kFlatNames : kSharpNames;
+   static const int letterPc[7] = {0, 2, 4, 5, 7, 9, 11}; // C D E F G A B
+   static const int stepOf[12] = {0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6}; // the degree's letter, from the key's
+   static const char *const spelled[7][3] = {{"Cb", "C", "C#"}, {"Db", "D", "D#"}, {"Eb", "E", "E#"}, {"Fb", "F", "F#"},
+                                             {"Gb", "G", "G#"}, {"Ab", "A", "A#"}, {"Bb", "B", "B#"}};
+   const char keyLetter = names[key][0];
+   const int keyStep = static_cast<int>(std::strchr("CDEFGAB", keyLetter) - "CDEFGAB");
+   const int letter = (keyStep + stepOf[(pc - key + 12) % 12]) % 7;
+   int acc = pc - letterPc[letter];
+   if (acc > 6)
+      acc -= 12;
+   if (acc < -6)
+      acc += 12;
+   if (acc < -1 || acc > 1)
+      return names[pc];
+   const char *n = spelled[letter][acc + 1];
+   if (!std::strcmp(n, "E#") || !std::strcmp(n, "B#") || !std::strcmp(n, "Cb") || !std::strcmp(n, "Fb"))
+      return names[pc];
+   return n;
+}
 
 enum Scale { kMajor, kMinor, kDorian, kMixolydian, kBlues, kScaleCount };
 inline const char *const kScaleNames[kScaleCount] = {"Major", "Minor", "Dorian", "Mixolydian", "Blues"};
@@ -258,8 +284,12 @@ inline Chord nameChord(const std::vector<int> &notes, bool slash = true) {
 
 // ---- voicing ----
 
-enum Shape { kClose, kDrop2, kDrop24, kShell, kQuartal, kSpread, kShapeCount };
-inline const char *const kShapeNames[kShapeCount] = {"Close", "Drop 2", "Drop 2+4", "Shell", "Quartal", "Spread"};
+// Rootless: Levine's A and B voicings (3-5-7-9 and 7-9-3-5, the 13th for the 5th on a dominant), the
+// root left to the bass. Octaves: a close chord with its bottom note doubled on top (the montuno's
+// right hand).
+enum Shape { kClose, kDrop2, kDrop24, kShell, kQuartal, kSpread, kRootless, kOctaves, kShapeCount };
+inline const char *const kShapeNames[kShapeCount] = {"Close", "Drop 2", "Drop 2+4", "Shell", "Quartal", "Spread",
+                                                     "Rootless", "Octaves"};
 
 struct VoiceSettings {
    int shape = kDrop2;
@@ -320,7 +350,7 @@ namespace detail {
 
 inline void addCandidate(std::vector<Voicing> &out, std::vector<int> v, const VoiceSettings &vs, int bassNote) {
    std::sort(v.begin(), v.end());
-   if (v.empty())
+   if (v.empty() || v.size() > static_cast<size_t>(kMaxVoices))
       return;
    const int span = v.back() - v.front();
    const int lowest = bassNote >= 0 ? v[1 % v.size()] : v.front();
@@ -424,9 +454,14 @@ inline std::vector<Voicing> candidates(const Chord &c, const VoiceSettings &vs, 
             std::vector<int> v{b};
             for (int k = 1; k < n; ++k)
                v.push_back(v.back() + (k == n - 1 && n >= 4 ? last : 5));
-            bool ok = true;
-            for (int x : v)
+            bool ok = true, root = false;
+            for (int x : v) {
                ok = ok && (allowed >> (((x % 12) + 12) % 12) & 1);
+               root = root || ((x - bassPc) % 12 + 12) % 12 == 0;
+            }
+            // And its root (or bass) among them: without it every chord of a diatonic progression
+            // finds the same stack of fourths, and the changes are never heard.
+            ok = ok && root;
             // It must say what the chord is: the third (or the sus fourth) among its notes.
             bool third = false;
             for (int x : v) {
@@ -455,6 +490,51 @@ inline std::vector<Voicing> candidates(const Chord &c, const VoiceSettings &vs, 
             v.insert(v.end(), st.begin(), st.end());
             detail::addCandidate(out, v, vs, b);
          }
+      }
+      break;
+   }
+   case kRootless: {
+      // Levine's A and B forms: the third, fifth (the 13th on a dominant), seventh and ninth stacked
+      // close from the third or from the seventh. A chord without a seventh is voiced close.
+      std::vector<int> iv;
+      const std::vector<int> &t = q.tones;
+      const auto has = [&](int i) { return std::find(t.begin(), t.end(), i) != t.end(); };
+      const int third = has(4) ? 4 : has(3) ? 3 : has(5) ? 5 : -1;
+      const int seventh = has(10) ? 10 : has(11) ? 11 : has(9) ? 9 : -1;
+      if (!q.seventh || third < 0 || seventh < 0 || c.quality == kDim7 || c.quality == kHalfDim)
+         return candidates(c, vs, kClose);
+      const bool dom = third == 4 && seventh == 10;
+      int colour = has(15) ? 15 : has(13) ? 13 : 14;              // the altered 9th, or the 9th
+      int fifth = dom ? (has(15) || has(13) ? 7 : 9) : (has(6) ? 6 : has(8) ? 8 : 7); // the 13th on a dominant
+      if (has(18))
+         fifth = 18;                                                // the #11 in its place
+      if (seventh == 9)
+         colour = 14, fifth = 7;                                    // a sixth chord: 3-5-6-9
+      iv = {third, fifth, seventh, colour};
+      if (n == 3)
+         iv = {third, seventh, colour};
+      if (n == 5)
+         iv.push_back(has(21) ? 21 : has(17) ? 17 : 0);
+      std::vector<int> pcs = pcsOf(iv);
+      const int low3 = (c.root + third) % 12, low7 = (c.root + seventh) % 12;
+      for (const auto &st : detail::closeStacks(pcs, vs.lo, vs.hi)) {
+         const int bottom = ((st.front() % 12) + 12) % 12;
+         if (bottom == low3 || bottom == low7)
+            detail::addCandidate(out, st, vs, -1);
+      }
+      break;
+   }
+   case kOctaves: {
+      // A close chord of n-1 notes, its bottom note doubled an octave up on top.
+      const std::vector<int> tones = pickTones(c, std::max(2, n - 1));
+      std::vector<int> pcs = pcsOf(tones);
+      std::sort(pcs.begin(), pcs.end());
+      pcs.erase(std::unique(pcs.begin(), pcs.end()), pcs.end());
+      for (auto st : detail::closeStacks(pcs, vs.lo, vs.hi)) {
+         if (st.back() - st.front() >= 12)
+            continue;
+         st.push_back(st.front() + 12);
+         detail::addCandidate(out, st, vs, -1);
       }
       break;
    }
@@ -609,21 +689,56 @@ inline Voicing voiceUnder(const Chord &c, int topNote, const Voicing *prev, cons
    return r.empty() ? Voicing{} : r.front();
 }
 
+// The bass note a left hand plays under a chord: its bass (or root) at or above `floor`, or with
+// `fifth` the note it alternates with (the fifth, the flat fifth of a diminished chord; the root
+// under a slash chord), the nearer of the two above and below that root.
+inline int bassNote(const Chord &c, int floor, bool fifth = false) {
+   const int pc = c.bass >= 0 ? c.bass : c.root;
+   int n = std::max(0, floor);
+   while (n % 12 != ((pc % 12) + 12) % 12)
+      ++n;
+   if (!fifth)
+      return n;
+   const std::vector<int> &t = qualityOf(c).tones;
+   const int iv = t.size() > 2 && t[2] >= 6 && t[2] <= 8 ? t[2] : 7;
+   const int alt = c.bass >= 0 && c.bass != c.root ? (c.root - pc + 12) % 12 : iv;
+   const int up = n + alt;
+   return up <= floor + 12 ? up : up - 12;
+}
+
 // ---- passing runs ----
 
 // A run of `length` single notes into `target`: stepping through the key's scale from the side the
 // line comes from (below when it rises to the target, above when it falls), and with `halfStep` the
 // last note a half step under the target when it comes from below.
-inline std::vector<int> passingRun(int from, int target, int length, int key, int scale, bool halfStep) {
+//
+// The run walks the key's scale bent to the chord it leads into: a chord tone from outside the key (the
+// Ab of a borrowed Abmaj7, the F# of a D7, a chord of a key change) joins the scale, and the scale's
+// notes a half step either side of it that the chord doesn't hold drop out, so a run into a
+// chromatic chord doesn't rub against it.
+inline std::vector<int> passingRun(int from, int target, int length, int key, int scale, bool halfStep,
+                                   const std::vector<int> &chordPcs = {}) {
    std::vector<int> run;
    if (length <= 0)
       return run;
+   unsigned allowed = 0, chord = 0;
+   for (int pc = 0; pc < 12; ++pc)
+      if (inScale(pc, key, scale))
+         allowed |= 1u << pc;
+   for (int pc : chordPcs)
+      chord |= 1u << (((pc % 12) + 12) % 12);
+   for (int pc = 0; pc < 12; ++pc)
+      if ((chord >> pc & 1) && !(allowed >> pc & 1))
+         for (int nb : {(pc + 1) % 12, (pc + 11) % 12})
+            if (!(chord >> nb & 1))
+               allowed &= ~(1u << nb);
+   allowed |= chord;
    const bool up = from < 0 || from <= target;
    int n = target;
    for (int k = 0; k < length; ++k) {
       do
          n += up ? -1 : 1;
-      while (!inScale(n, key, scale) && std::abs(n - target) < 12);
+      while (!(allowed >> (((n % 12) + 12) % 12) & 1) && std::abs(n - target) < 12);
       run.insert(run.begin(), n);
    }
    if (up && halfStep)

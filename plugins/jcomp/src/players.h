@@ -41,9 +41,9 @@ inline const Player kPlayerList[kPlayers] = {
     kSpread, 4, 48, 79, 64, 0, 0.45, 0.75, 0.55, 0.9, 0.35, 4},
    {"Neo-Soul Keys", "lazy, behind the beat, rich and open", "neo-soul, R&B, lo-fi", kEPiano, kKeys,
     kDrop24, 5, 48, 79, 62, 1, 0.4, 0.95, 0.3, 0.75, 0.55, 18},
-   // Levine's rootless left-hand voicings (A: 3-5-7-9, B: 7-9-3-5) sit inside an octave: close.
-   {"Jazz Comper", "shells and rootless voicings, sparse pushes", "swing, bossa, Latin jazz", kPiano, kKeys,
-    kClose, 4, 50, 72, 60, 0, 0.35, 0.85, 0.2, 0.35, 0.5, 4},
+   // Levine's rootless left-hand voicings (A: 3-5-7-9, B: 7-9-3-5, the 13th for the 5th on a dominant).
+   {"Jazz Comper", "rootless voicings, sparse pushes", "swing, bossa, Latin jazz", kPiano, kKeys,
+    kRootless, 4, 50, 72, 60, 0, 0.35, 0.85, 0.2, 0.35, 0.5, 4},
    {"Pop Pianist", "eighth-note pulse, open triads", "pop, ballad, rock", kPiano, kKeys,
     kSpread, 4, 48, 76, 62, 0, 0.5, 0.25, 0.15, 0.6, 0.25, 0},
    {"Rhythm Guitar", "sixteenth scratch, three-note grips", "funk, disco, afrobeat", kGuitar, kGuitarKind,
@@ -53,8 +53,9 @@ inline const Player kPlayerList[kPlayers] = {
     kClose, 3, 57, 79, 67, 3, 0.4, 0.2, 0.0, 0.05, 0.2, 0},
    {"Strummer", "down-up strums across six strings", "rock, country, pop", kGuitar, kGuitarKind,
     kSpread, 5, 40, 76, 58, 3, 0.65, 0.2, 0.05, 0.5, 0.3, 0},
+   // The montuno's right hand: octaves with chord tones between (C-E-G-C).
    {"Montuno", "Latin piano figures in octaves", "salsa, Latin", kPiano, kKeys,
-    kClose, 4, 55, 84, 68, 0, 0.8, 0.3, 0.0, 0.15, 0.15, 0},
+    kOctaves, 4, 55, 84, 68, 0, 0.8, 0.3, 0.0, 0.15, 0.15, 0},
    {"House Stabs", "one chord shape, rhythmic and on the grid", "house, deep house, disco", kSynth, kKeys,
     kClose, 4, 52, 76, 63, 0, 0.6, 0.65, 0.0, 0.2, 0.0, 0},
    {"Pad Player", "whole bars and slow swells", "ballad, ambient, intros", kPad, kKeys,

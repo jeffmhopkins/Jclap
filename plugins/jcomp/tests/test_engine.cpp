@@ -250,6 +250,12 @@ int main() {
       // HIGHEST and OFFSET bound the voicings as the window moves.
       Song song;
       generateSong(recipeOf(0, 0, 42), song);
+      // The window bounds the chords; a left hand's bass notes sit under it, on the bass floor.
+      for (Section &sec : song.sections)
+         for (Pattern &p : sec.takes)
+            for (Hit &h : p.hits)
+               if (leftHand(h.part))
+                  h = Hit{};
       struct Stats {
          int ons = 0, lo = 127, hi = 0;
          double meanLen = 0;
@@ -336,7 +342,7 @@ int main() {
          const Rhythm &batida = genreAt(genreNamed("Bossa Nova")).rhythms[0];
          int thumbs = 0;
          for (const char *c = batida.hits; *c; ++c)
-            thumbs += *c == 'b';
+            thumbs += *c == 'b' || *c == 'f';
          JCLAP_CHECK(thumbs + 1 == 2); // the thumb on 1 sounds with the chord
       }
       // The reverse Charleston: the and of 1 and beat 3.
@@ -448,6 +454,229 @@ int main() {
       JCLAP_CHECK_EQ(f.section, static_cast<int>(kBridge));
       // A note under the split that isn't a section's passes on.
       JCLAP_CHECK(!e.noteOn(0, 40, 100));
+   }
+
+   {
+      // The second review's corrections.
+      auto genreNamed = [](const char *name) {
+         for (int i = 0; i < genreCount(); ++i)
+            if (std::string(genreAt(i).name) == name)
+               return i;
+         return -1;
+      };
+      auto styleNamed = [](int g, const char *name) {
+         for (size_t i = 0; i < genreAt(g).styles.size(); ++i)
+            if (std::string(genreAt(g).styles[i].name) == name)
+               return static_cast<int>(i);
+         return -1;
+      };
+      // Rootless voicings (Levine's A and B): no root, the third or seventh at the bottom.
+      {
+         VoiceSettings vs;
+         vs.shape = kRootless;
+         vs.voices = 4;
+         vs.lo = 50;
+         vs.hi = 72;
+         vs.center = 60;
+         for (const char *name : {"Dm7", "G7", "Cmaj7", "Am7", "C6", "Bb7"}) {
+            const Chord c = chord(name);
+            const Voicing v = voice(c, nullptr, vs);
+            JCLAP_CHECK_EQ(v.count, 4);
+            bool root = false;
+            for (int i = 0; i < v.count; ++i)
+               root = root || v.notes[static_cast<size_t>(i)] % 12 == c.root;
+            JCLAP_CHECK(!root);
+            const int low = (v.bottom() - c.root + 12) % 12;
+            const bool sixth = c.quality == kSix;
+            JCLAP_CHECK(low == 3 || low == 4 || low == 10 || low == 11 || (sixth && low == 9));
+         }
+         // A dominant's 13th stands for its fifth: G7 is B-E-F-A or F-A-B-E.
+         const Voicing g7 = voice(chord("G7"), nullptr, vs);
+         bool thirteenth = false;
+         for (int i = 0; i < g7.count; ++i)
+            thirteenth = thirteenth || g7.notes[static_cast<size_t>(i)] % 12 == 4;
+         JCLAP_CHECK(thirteenth);
+      }
+      // Octaves: the montuno's right hand, its bottom note doubled on top.
+      {
+         VoiceSettings vs;
+         vs.shape = kOctaves;
+         vs.voices = 4;
+         vs.lo = 55;
+         vs.hi = 84;
+         vs.center = 68;
+         for (const char *name : {"C", "F", "G7", "Cm7"}) {
+            const Voicing v = voice(chord(name), nullptr, vs);
+            JCLAP_CHECK_EQ(v.count, 4);
+            JCLAP_CHECK_EQ(v.top() - v.bottom(), 12);
+         }
+      }
+      // Fourths hold the chord's root, so a diatonic progression's changes are heard.
+      {
+         VoiceSettings vs;
+         vs.shape = kQuartal;
+         vs.voices = 5;
+         vs.lo = 43;
+         vs.hi = 86;
+         vs.center = 62;
+         const Voicing a = voice(chord("Cadd9"), nullptr, vs);
+         const Voicing b = voice(chord("Fmaj9"), &a, vs);
+         JCLAP_CHECK(!(a == b));
+         for (const auto &[v, root] : {std::pair<Voicing, int>{a, 0}, {b, 5}}) {
+            bool has = false;
+            for (int i = 0; i < v.count; ++i)
+               has = has || v.notes[static_cast<size_t>(i)] % 12 == root;
+            JCLAP_CHECK(has);
+         }
+      }
+      // Eighth-note idioms stay on eighths: no busy player's ghost, mutation or stray adds a
+      // sixteenth to a montuno, a bossa, or Freddie Green's four.
+      for (const auto &[gn, sn] : {std::pair<const char *, const char *>{"Salsa", "Montuno 2-3"}, {"Salsa", "Montuno 3-2"},
+                                   {"Latin Jazz", "Latin Jazz Guajeo"}, {"Bossa Nova", "Batida"},
+                                   {"Bossa Nova", "Two-Bar Bossa"}, {"Swing Jazz", "Four To The Bar"},
+                                   {"Swing Jazz", "Charleston Comp"}}) {
+         const int g = genreNamed(gn), st = styleNamed(g, sn);
+         JCLAP_CHECK(g >= 0 && st >= 0);
+         for (uint32_t seed = 1; seed <= 12; ++seed) {
+            Recipe r = recipeOf(g, st, seed);
+            r.weird = 0.6;
+            Song song;
+            generateSong(r, song);
+            for (const Section &sec : song.sections)
+               for (const Pattern *p : {&sec.takes[0], &sec.takes[1], &sec.takes[2], &sec.takes[3]})
+                  for (int s = 0; s < p->steps; ++s)
+                     if (p->at(s).on())
+                        JCLAP_CHECK(s % 2 == 0);
+         }
+      }
+      // The Latin Jazz guajeo keeps one clave direction (2-3) in every section: its first bar starts on
+      // the one, its second off it.
+      {
+         const int g = genreNamed("Latin Jazz"), st = styleNamed(g, "Latin Jazz Guajeo");
+         for (uint32_t seed = 1; seed <= 12; ++seed) {
+            Song song;
+            generateSong(recipeOf(g, st, seed), song);
+            for (int i = kVerse; i <= kBridge; ++i) {
+               const Pattern &p = song.sections[static_cast<size_t>(i)].takes[0];
+               JCLAP_CHECK(p.steps == 32);
+               JCLAP_CHECK(!p.at(16).on() || p.at(16).part != kPartChord);
+            }
+         }
+      }
+      // The montuno styles play the guajeo in the verse, not only the clave strokes.
+      {
+         const int g = genreNamed("Salsa"), st = styleNamed(g, "Montuno 2-3");
+         int guajeo = 0;
+         for (uint32_t seed = 1; seed <= 20; ++seed) {
+            Song song;
+            generateSong(recipeOf(g, st, seed), song);
+            const Pattern &p = song.sections[kVerse].takes[0];
+            guajeo += p.count() >= 8;
+         }
+         JCLAP_CHECK(guajeo >= 14);
+      }
+      // Spelled by degree: the flat side for borrowed chords, the key's own letters otherwise.
+      JCLAP_CHECK(std::string(pitchName(8, 0)) == "Ab");
+      JCLAP_CHECK(std::string(pitchName(10, 0)) == "Bb");
+      JCLAP_CHECK(std::string(pitchName(3, 0)) == "Eb");
+      JCLAP_CHECK(std::string(pitchName(6, 0)) == "F#");
+      JCLAP_CHECK(std::string(pitchName(8, 4)) == "G#");
+      JCLAP_CHECK(std::string(pitchName(1, 0)) == "Db");
+      JCLAP_CHECK(chordName(chord("Abmaj7"), 0) == "Abmaj7");
+      // A run into a chord from outside the key bends to it: into Abmaj7 in C Dorian, no A natural.
+      for (int len = 2; len <= 4; ++len)
+         for (int from : {60, 72}) {
+            const std::vector<int> run = passingRun(from, 67, len, 0, kDorian, false, chordTones(chord("Abmaj7")));
+            for (int n : run)
+               JCLAP_CHECK(n % 12 != 9);
+         }
+      // Country boom-chick: the root on 1, the fifth on 3, and the chord on 2 and 4 without the
+      // left hand's low note under it.
+      {
+         const int g = genreNamed("Country"), st = styleNamed(g, "Boom-Chick");
+         Song song;
+         const Recipe r = recipeOf(g, st, 3);
+         generateSong(r, song);
+         Engine e;
+         e.setSong(song);
+         std::vector<double> v = defaultValues();
+         for (const auto &[id, x] : styleValues(g, st))
+            v[id] = x;
+         Settings s = settingsFor(r);
+         s.voicing = voiceSettings([&](clap_id id) { return v[id]; });
+         s.section = kVerse;
+         s.runs = 0.0;
+         s.vary = 0.0;
+         s.loose = 0.0;
+         e.setSettings(s);
+         e.reset();
+         const std::vector<Timed> out = run(e, 24000 * 16);
+         std::map<int, std::vector<int>> beats;
+         for (const Timed &t : out)
+            if (t.on()) {
+               const int beat = static_cast<int>((t.time + 1200) / 24000);
+               if (std::abs(t.time - beat * 24000) < 1200)
+                  beats[beat].push_back(t.m.data1);
+            }
+         std::set<int> ones, threes;
+         int chords = 0;
+         for (const auto &[beat, notes] : beats) {
+            const int low = *std::min_element(notes.begin(), notes.end());
+            if (beat % 2 == 1) {
+               ++chords;
+               JCLAP_CHECK(low >= 52);
+            } else if (notes.size() == 1)
+               (beat % 4 == 0 ? ones : threes).insert(low);
+         }
+         JCLAP_CHECK(chords >= 4);
+         JCLAP_CHECK(!ones.empty() && !threes.empty());
+         bool alternates = false;
+         for (int a : ones)
+            for (int b : threes)
+               alternates = alternates || a != b;
+         JCLAP_CHECK(alternates);
+      }
+      // A strum both ways on the triplet grid: the offbeat triplet strums up (highest note first).
+      {
+         const int g = genreNamed("Ska"), st = styleNamed(g, "Shuffle Ska");
+         Song song;
+         const Recipe r = recipeOf(g, st, 5);
+         generateSong(r, song);
+         Engine e;
+         e.setSong(song);
+         std::vector<double> v = defaultValues();
+         for (const auto &[id, x] : styleValues(g, st))
+            v[id] = x;
+         Settings s = settingsFor(r);
+         s.voicing = voiceSettings([&](clap_id id) { return v[id]; });
+         s.onsets = 3;
+         s.section = kVerse;
+         s.runs = 0.0;
+         s.vary = 0.0;
+         e.setSettings(s);
+         e.reset();
+         const std::vector<Timed> out = run(e, 24000 * 8);
+         // Group the note-ons into strums (within 40 ms) and check each goes high to low.
+         int strums = 0, upStrums = 0;
+         for (size_t i = 0; i < out.size();) {
+            if (!out[i].on()) {
+               ++i;
+               continue;
+            }
+            std::vector<const Timed *> g2;
+            size_t j = i;
+            for (; j < out.size() && out[j].time - out[i].time < 1920; ++j)
+               if (out[j].on())
+                  g2.push_back(&out[j]);
+            if (g2.size() >= 3) {
+               ++strums;
+               upStrums += g2.front()->m.data1 > g2.back()->m.data1;
+            }
+            i = j;
+         }
+         JCLAP_CHECK(strums >= 6);
+         JCLAP_CHECK(upStrums * 4 >= strums * 3);
+      }
    }
 
    return jclap::core::testResult();
