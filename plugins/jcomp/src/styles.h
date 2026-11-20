@@ -85,8 +85,8 @@ struct Genre {
 };
 
 inline const char *const kFamilies[] = {"Funk & Soul", "Church & Blues", "Jazz & Latin", "Pop & Rock", "Dance",
-                                        "Caribbean & Africa"};
-constexpr int kFamilyCount = 6;
+                                        "Caribbean & Africa", "Ambient"};
+constexpr int kFamilyCount = 7;
 
 // The steps a rhythm has (a '|' isn't one), and whether it is on the triplet grid.
 inline int rhythmSteps(const char *hits) {
@@ -100,7 +100,8 @@ inline bool rhythmTriplet(const char *hits) { return rhythmSteps(hits) % 12 == 0
 // The players, by index into players.h's list.
 enum : int {
    kPocketKeys, kClavChopper, kChurchOrgan, kNeoSoulKeys, kJazzComper, kPopPianist,
-   kRhythmGuitar, kSkankGuitar, kStrummer, kMontuno, kHouseStabs, kPadPlayer
+   kRhythmGuitar, kSkankGuitar, kStrummer, kMontuno, kHouseStabs, kPadPlayer,
+   kAmbientDrifter
 };
 
 inline const std::vector<Genre> &genres() {
@@ -362,6 +363,27 @@ inline const std::vector<Genre> &genres() {
         {"Dance Band", "Dance Band", 120, 0, 0, 0b010, kStrummer},
         {"Bell Twelve", "12/8", 112, kTriplet}},
        "7, 26, 27, 28"},
+
+      // ---- Ambient ----
+      {"Ambient", kFamilies[6], kAmbientDrifter, 0.5, 0,
+       // Long chords: a bar held, two bars held, a slow half-note swell, a chord re-struck late in
+       // the bar like a loop coming round again (Eno's tape loops of unequal length drift in and
+       // out of phase: Music for Airports).
+       {{"x---------------|----------------", 0.2}, {"x---------------", 0.4}, {"o-------x-------", 0.55},
+        {"x---------o-----", 0.65}},
+       {{"x-------o---o---", 0.5}},
+       // Ambiguous, slow harmony: sus and add9 chords that leave the third out or blur it, a key
+       // that sits between a minor and its relative major ("1/2": an add9 with no third, at home in
+       // either Ab major or F minor), and borrowed major sevenths.
+       // Each chord lasts two bars, so a two-bar hold sounds it whole.
+       {{kMajor, {"Csus|Csus|Cadd9|Cadd9", "Cadd9|Cadd9|Fmaj7|Fmaj7|Am9|Am9|Fmaj7|Fmaj7", "Dm9|Dm9|Gsus|Gsus",
+                  "Fmaj7|Fmaj7|Cadd9|Cadd9|Am9|Am9|G7sus|G7sus", "Abmaj7|Abmaj7|Fmaj7|Fmaj7", "Fmaj7|Fmaj7|Cadd9|Cadd9"}},
+        {kMinor, {"Cm9|Cm9|Cm9|Cm9", "Cm9|Cm9|Abmaj7|Abmaj7|Ebmaj7|Ebmaj7|Bbsus|Bbsus", "Abmaj7|Abmaj7|Bbsus|Bbsus",
+                  "Abmaj7|Abmaj7|Ebmaj7|Ebmaj7|Cm9|Cm9|Bbsus|Bbsus", "Fm9|Fm9|Abmaj7|Abmaj7", "Abmaj7|Abmaj7|Cm9|Cm9"}}},
+       {{"Long Tones", "Tones", 70, kLongs | kRich, 0, 0b0011},
+        {"Mirror Drift", "Drift", 64, kLongs | kRich, 1, 0b0001},
+        {"Slow Swells", "Swells", 76, kLongs, 1, 0b0110}},
+       "47, 48, 49, 50"},
    };
    return g;
 }

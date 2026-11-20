@@ -1277,6 +1277,42 @@ The alternative is **Organ Trio / Soul Jazz**, but I found no sources for it thi
 
 ---
 
+### B25. Ambient (added after the first release, at Jeff's request)
+
+**Rhythms** (derived)
+
+| ID | Pattern | Description |
+|---|---|---|
+| AM1 | `x---------------\|----------------` | one chord held two bars |
+| AM2 | `x---------------` | one chord a bar, held |
+| AM3 | `o-------x-------` | slow half-note swell, the second stronger |
+| AM4 | `x---------o-----` | re-struck late in the bar, like a loop coming round again |
+
+- Eno's ambient music must be "as ignorable as it is interesting"; unlike conventional background
+  music it keeps "doubt and uncertainty" [47]. Hence few attacks and long holds.
+- *Music for Airports* "1/2" is built from eight short piano tape loops of unequal length that drift
+  in and out of alignment, so the music keeps changing without a set structure [48][49]. The late
+  re-strike (AM4) and the two-bar hold (AM1) imitate that unevenness on a fixed grid (derived).
+- Harold Budd's "soft pedal" playing on *Ambient 2: The Plateaux of Mirror* (1980): slow and
+  sustained [50].
+
+**Voicings**
+
+- Open and wide: quartal stacks and spread voicings over about two octaves, rolled slightly
+  (derived from [48]: the chord in "1/2" is an arpeggiated F, C, G).
+- Thirds left out or blurred: sus and add9 chords. "1/2"'s chord is read as F(add9) with no third,
+  "ambiguous", fitting "equally well into Ab major and F minor" [49].
+
+**Harmony** (derived; unverified as any specific recording's changes)
+
+- Major set: Csus, Cadd9, Fmaj7, Am9, Dm9, Gsus, G7sus, with a borrowed Abmaj7 in the bridge.
+- Minor set, sitting between C minor and its relative Eb major as [49] describes: Cm9, Abmaj7,
+  Ebmaj7, Bbsus, Fm9.
+
+**Feel:** no swing, 64-76 BPM, no runs, chords held to the next.
+
+**Archetype:** the "ambient drifter": long chords, barely moving.
+
 ## Part C. Section-by-section guidance (all genres)
 
 These defaults are (unverified, practice-derived) unless noted.
@@ -1441,3 +1477,19 @@ These defaults are (unverified, practice-derived) unless noted.
 46. Scribd copy of an academic article on early West African highlife (palm-wine patterns
     "mainline", "dagomba", "fireman"). https://www.scribd.com/document/465261286/931273 (search
     snippet; author not identified).
+47. Eno, Brian. Liner notes, *Ambient 1: Music for Airports* (Polydor/EG, 1978), dated September
+    1978; reprinted as "Ambient Music Defined", Synthtopia, 2008.
+    https://www.synthtopia.com/content/2008/10/28/ambient-music-defined/ (search snippet: "as
+    ignorable as it is interesting").
+48. Reverb Machine. "How Brian Eno Created Ambient 1: Music for Airports."
+    https://reverbmachine.com/blog/deconstructing-brian-eno-music-for-airports/ ; and Open Culture,
+    "Deconstructing Brian Eno's Music for Airports" (2019)
+    https://www.openculture.com/2019/07/deconstructing-brian-enos-music-for-airports.html (search
+    snippets: eight piano loops of different lengths; they disagree on whether one is an arpeggio or a
+    glissando chord).
+49. MusicRadar. "A music professor breaks down Brian Eno's Ambient 1: Music for Airports."
+    https://www.musicradar.com/artists/the-album-was-played-in-laguardia-airport-for-a-brief-period-in-1980-but-travellers-said-it-induced-unease-and-sounded-like-funeral-music-a-music-professor-breaks-down-brian-enos-ambient-1-music-for-airports
+    (search snippet: F(add9) with no third, fitting Ab major or F minor; uncorroborated elsewhere).
+50. Wikipedia. "Harold Budd" and "Ambient 2: The Plateaux of Mirror."
+    https://en.wikipedia.org/wiki/Harold_Budd (search snippet: the "soft pedal" style, slow and
+    sustained).

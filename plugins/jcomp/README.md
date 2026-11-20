@@ -41,8 +41,8 @@ out the same way (the seven sections on the white keys from C0), so one MIDI cli
 
 ### GENRE
 
-23 genres in six families, 69 named styles among them, and every style is also a factory preset. The
-twelve tiles are the common ones, each drawn as its style plays; **ALL 23** opens the browser with
+24 genres in seven families, 72 named styles among them, and every style is also a factory preset. The
+twelve tiles are the common ones, each drawn as its style plays; **ALL 24** opens the browser with
 every genre, its styles, their tempos and progressions, and the sources each genre was written from.
 
 | Family | Genres |
@@ -53,6 +53,7 @@ every genre, its styles, their tempos and progressions, and the sources each gen
 | Pop & Rock | Pop, Rock, Piano Ballad, Country |
 | Dance | House, Deep House |
 | Caribbean & Africa | Reggae, Ska, Afrobeat, Highlife |
+| Ambient | Ambient (long held chords) |
 
 ![Browser](docs/panel-browser.png)
 
@@ -82,6 +83,7 @@ voicings sit, onsets, timing, runs).
 | Montuno | Piano | Latin piano figures in octaves |
 | House Stabs | Synth | one chord shape, rhythmic and on the grid |
 | Pad Player | Pad | whole bars and slow swells |
+| Ambient Drifter | Pad | long held chords, wide (quartal), open and barely moving, rolled in |
 
 ![Players](docs/panel-players.png)
 
@@ -321,6 +323,7 @@ from.
 | Ska | Britannica [22] |
 | Afrobeat | Stewart's interlock tables [13]; Veal [14] |
 | Highlife | guajeo [7]; Braddock [26]; Koo Nimo [27]; Music in Africa [28] |
+| Ambient | Eno's *Music for Airports* liner notes [47]; analyses of its "1/2" and its tape loops [48][49]; Harold Budd's "soft pedal" playing [50] |
 
 The voicing rules draw on low interval limits (Hoffmann [3]; Pease & Pullig [4]), Levine's rootless
 and shell voicings [2], and big-band voicing practice (Rogers [41]). Voice leading follows the least
@@ -334,7 +337,9 @@ The 90s R&B, Lo-fi, Gospel, Disco keys, House piano, Country, Motown keyboard rh
 bubble's exact grid and Highlife transcriptions are thin: many of their rhythm grids are marked
 *unverified* in the notes, a well-informed default from the idiom that should be checked by ear
 against the named recordings. Several books were cited through secondary pages only (Mauleón, Garcia,
-Veal, Braddock, the Hal Leonard guides). The styles are original patterns in each idiom's manner, not
+Veal, Braddock, the Hal Leonard guides). Ambient rests on search snippets about Eno's and Budd's records; its
+progressions are derived from what those describe (open, ambiguous, sus and add9) rather than taken
+from any recording. The styles are original patterns in each idiom's manner, not
 transcriptions of any recording.
 
 **Left out for now.** Jazz Waltz (it needs 3/4, which JComp's 4/4 grid can't play), a "+ GUITAR"

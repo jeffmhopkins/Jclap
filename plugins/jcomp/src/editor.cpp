@@ -1,7 +1,7 @@
 // JComp's panel, on a 1000 x 640 design grid scaled to the window, in JDrummer's style: a title bar
 // with the four tabs, a small transport and the preset browser, and cards under it.
 //
-//    GENERATE   GENRE (twelve tiles, the style, the browser of all 23), HOW IT PLAYS (the player,
+//    GENERATE   GENRE (twelve tiles, the style, the browser of every genre), HOW IT PLAYS (the player,
 //               ENERGY, WEIRD, ROLL SONG), THE SONG (seven sections with their chords, each its own
 //               dice, lock and energy), MUTATE (the section's take now and five children)
 //    CHORDS     KEY and scale, where the chords come from (the progression, held notes or both), each
@@ -1727,21 +1727,19 @@ public:
          drawPlayerIcon(c, s, x + 22, y + 22, p.kind, kOrange);
          label(c, s, p.name, x + 42, y + 8, 160, on ? kOrange : kWhite, visage::Font::kLeft, 11.5f);
          label(c, s, upper(kInstrumentNames[p.instrument]), x + 42, y + 9, kCardW - 62, kBlue, visage::Font::kRight, 7.5f);
-         label(c, s, p.blurb, x + 42, y + 26, kCardW - 60, kTitle, visage::Font::kLeft, 9);
-         label(c, s, p.genres, x + 42, y + 40, kCardW - 60, 0, visage::Font::kLeft, 8.5f);
+         label(c, s, p.blurb, x + 42, y + 24, kCardW - 60, kTitle, visage::Font::kLeft, 9);
+         label(c, s, p.genres, x + 42, y + 37, kCardW - 60, 0, visage::Font::kLeft, 8.5f);
          const char *traits[4] = {"BUSY", "RICH", "RUNS", "RING"};
          const double v[4] = {p.busy, p.rich, p.runs, p.ring};
          const float tw = (kCardW - 32) / 4;
          for (int k = 0; k < 4; ++k) {
             const float tx = x + 10 + k * tw;
-            label(c, s, traits[k], tx, y + 58, tw, 0, visage::Font::kLeft, 7.5f);
+            label(c, s, traits[k], tx, y + 51, tw, 0, visage::Font::kLeft, 7.5f);
             c.setColor(ui::defaultTheme().track);
-            c.roundedRectangle(tx * s, (y + 74) * s, (tw - 10) * s, 2.5f * s, 1 * s);
+            c.roundedRectangle(tx * s, (y + 66) * s, (tw - 10) * s, 2.5f * s, 1 * s);
             c.setColor(kOrange);
-            c.roundedRectangle(tx * s, (y + 74) * s, std::max(2.0f, static_cast<float>((tw - 10) * v[k])) * s, 2.5f * s, 1 * s);
+            c.roundedRectangle(tx * s, (y + 66) * s, std::max(2.0f, static_cast<float>((tw - 10) * v[k])) * s, 2.5f * s, 1 * s);
          }
-         if (on)
-            label(c, s, "on now", x + 10, y + kCardH - 24, kCardW - 28, kOrange, visage::Font::kRight, 8);
       }
    }
    void mouseDown(const visage::MouseEvent &e) override {
@@ -1755,14 +1753,14 @@ public:
       if (x < 0 || y < 0)
          return;
       const int col = static_cast<int>(x / kCardW), row = static_cast<int>(y / kCardH);
-      if (col > 2 || row > 3)
+      if (col > 2 || row * 3 + col >= kPlayers)
          return;
       if (onPick)
          onPick(row * 3 + col);
    }
    std::function<void(int)> onPick;
    std::function<void()> onClose;
-   static constexpr float kX = 20, kY = 100, kWBox = 960, kHBox = 476, kCardW = 310, kCardH = 106;
+   static constexpr float kX = 20, kY = 76, kWBox = 960, kHBox = 500, kCardW = 310, kCardH = 90;
 
 private:
    EditorHost &host_;
@@ -1868,7 +1866,7 @@ private:
       std::vector<Item> out;
       for (int col = 0; col < 3; ++col) {
          float y = kY + 44;
-         for (int fam = col * 2; fam < col * 2 + 2; ++fam) {
+         for (int fam = col * 2; fam < (col == 2 ? kFamilyCount : col * 2 + 2); ++fam) {
             const float x = kX + 18 + col * 146;
             out.push_back({x, y, fam, -1});
             y += 15;
@@ -2306,7 +2304,7 @@ private:
       style_->setAccent(kOrange);
       style_->onChange = [this](int i) { pickStyle(whole(kGenre), i); };
       tips_.add(*style_, "The genre's styles. Each is a rhythm, a progression set, a tempo and its twists.");
-      auto &all = onPage<FlatButton>(kGeneratePage, {410, 83, 76, 19}, "ALL 23 \xE2\x96\xB8", 8.5f);
+      auto &all = onPage<FlatButton>(kGeneratePage, {410, 83, 76, 19}, "ALL " + std::to_string(genreCount()) + " \xE2\x96\xB8", 8.5f);
       all.textColour = kOrange;
       all.onClick = [this](const visage::MouseEvent &) {
          host_.browserOpen = true;

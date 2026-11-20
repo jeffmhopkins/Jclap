@@ -6,6 +6,7 @@
 #include <jclap/core/test_host.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <map>
 #include <memory>
 #include <set>
@@ -305,6 +306,48 @@ int main() {
          JCLAP_CHECK(w.ons > 0);
          JCLAP_CHECK(w.lo >= 55 + offset);
          JCLAP_CHECK(w.hi <= 72 + offset);
+      }
+   }
+   {
+      // Ambient: long chords, and few of them.
+      int g = -1;
+      for (int i = 0; i < genreCount(); ++i)
+         if (std::string(genreAt(i).name) == "Ambient")
+            g = i;
+      JCLAP_CHECK(g >= 0);
+      for (int st = 0; g >= 0 && st < static_cast<int>(genreAt(g).styles.size()); ++st) {
+         Song song;
+         const Recipe r = recipeOf(g, st, 7);
+         generateSong(r, song);
+         std::vector<double> v = defaultValues();
+         for (const auto &[id, x] : styleValues(g, st))
+            v[id] = x;
+         Engine e;
+         e.setSong(song);
+         Settings s = settingsFor(r);
+         s.voicing = voiceSettings([&](clap_id id) { return v[id]; });
+         s.key = song.key;
+         s.runs = 0;
+         e.setSettings(s);
+         e.reset();
+         const std::vector<Timed> out = run(e, 48000 * 16); // 8 bars at 120
+         std::map<int, int64_t> started;
+         double total = 0;
+         int ended = 0, starts = 0;
+         for (const Timed &t : out) {
+            if (t.on()) {
+               started[t.m.data1] = t.time;
+               ++starts;
+            } else if (t.off() && started.count(t.m.data1)) {
+               total += static_cast<double>(t.time - started[t.m.data1]);
+               ++ended;
+               started.erase(t.m.data1);
+            }
+         }
+         JCLAP_CHECK(starts > 0);
+         // The held styles average over half a bar a chord; the swells (half notes) over a beat and a half.
+         JCLAP_CHECK(ended > 0 && total / ended > (st < 2 ? 2.5 : 1.5) * 24000.0);
+         JCLAP_CHECK(starts <= 8 * 3 * 5); // at most three chords of five notes a bar
       }
    }
    {
