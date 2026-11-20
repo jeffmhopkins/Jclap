@@ -151,6 +151,7 @@ public:
       heldNotes_.clear();
       last_ = Voicing{};
       lastChord_ = bassChord_ = Chord{};
+      lastBass_ = -1;
       bassQueue_ = 0;
       runTick_ = -1;
       strikes_ = 0;
@@ -976,9 +977,12 @@ private:
       // An organ holds its bass under the chords, unless the take has a left hand of its own to play
       // it (the shout's bass on the beats, the chords on the upbeats).
       const bool leftHandTake = hasLeftHand(p);
-      k.dropBass = !strong && !target && settings_.voicing.shape == kSpread && settings_.onsets < 2 &&
-                   (!settings_.sustainBass || leftHandTake) && (c == lastChord_ || c == bassChord_) &&
-                   h.part == kPartChord;
+      // A guitar's grip in a take with a bass of its own (boom-chick, the palm-wine thumb) strums the
+      // chord without its bass string: the thumb has it.
+      k.dropBass = !target && h.part == kPartChord &&
+                   ((!strong && settings_.voicing.shape == kSpread && settings_.onsets < 2 &&
+                     (!settings_.sustainBass || leftHandTake) && (c == lastChord_ || c == bassChord_)) ||
+                    (settings_.voicing.shape == kGrip && leftHandTake));
       const int toStrong = perBeat * 2 - step % (perBeat * 2);
       k.holdBeats = toStrong * stepBeats;
       const int64_t after = nextChange(chordRel);
@@ -1201,6 +1205,7 @@ private:
       } else if (leftHand(h.part)) {
          v.notes[0] = static_cast<uint8_t>(bassNote(c, settings_.voicing.floor, h.part == kPartFifth));
          v.count = 1;
+         lastBass_ = v.notes[0];
       }
       if (hand == 1)
          bassChord_ = c; // the left hand has sounded this chord's bass
@@ -1213,9 +1218,15 @@ private:
          last_ = v;
          lastChord_ = c;
          if (k.dropBass && v.count > 2) {
-            for (int i = 1; i < v.count; ++i)
-               v.notes[static_cast<size_t>(i - 1)] = v.notes[static_cast<size_t>(i)];
-            --v.count;
+            // The bass string goes; a guitar's strum also leaves out the strings the thumb has just
+            // played (the chick after the alternate bass's fifth).
+            int drop = 1;
+            if (settings_.voicing.shape == kGrip)
+               while (drop < v.count - 2 && v.notes[static_cast<size_t>(drop)] <= lastBass_)
+                  ++drop;
+            for (int i = drop; i < v.count; ++i)
+               v.notes[static_cast<size_t>(i - drop)] = v.notes[static_cast<size_t>(i)];
+            v.count -= drop;
          } else if (settings_.voicing.shape == kSpread && v.count > 2 && hand == 0)
             holdLow = true;
       }
@@ -1537,6 +1548,7 @@ private:
    // Chords and voicing.
    Voicing last_;
    Chord lastChord_, nextChord_, bassChord_;
+   int lastBass_ = -1; // the left hand's last note
    int octaveStep_ = 0;
    std::array<uint8_t, 128> keys_{};
    FixedVec<int, 32> heldNotes_;

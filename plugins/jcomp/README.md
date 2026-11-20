@@ -184,7 +184,9 @@ How every chord is voiced, for all sections:
   (Levine's A and B forms, the root left to the bass), OCTAVES (a close chord with its bottom note
   doubled on top, the montuno's right hand: hit by hit its octave line moves through the chord, 5, 3,
   1, 3, rather than repeating one block) or GRIP (a guitar's: the bass string, its fifth and octave,
-  then the chord's third and colour close above; with three notes, the power chord). A slash chord
+  then the chord's third and colour close above; with three notes, the power chord; in a take with a
+  bass of its own, a boom-chick or the palm-wine thumb, the strum leaves the bass strings to the
+  thumb). A slash chord
   (C/E) keeps its bass at the bottom in CLOSE, DROP 2, DROP 2+4, SHELL, SPREAD and GRIP; ROOTLESS,
   4THS and OCTAVES leave it to the bass player. On an organ or a pad the low note of
   SPREAD stays in every chord; on keys it is held from one 1 or 3 to the next.

@@ -1700,6 +1700,43 @@ int main() {
          }
          JCLAP_CHECK(takes[0] == takes[1]);
       }
+      // A guitar's boom-chick and palm-wine strum leave the bass string to the thumb.
+      for (const auto &[gn, sn] : {std::pair<const char *, const char *>{"Country", "Two-Step"}, {"Highlife", "Palm-Wine"}}) {
+         const int g = genreNamed(gn), st = styleNamed(g, sn);
+         JCLAP_CHECK(g >= 0 && st >= 0);
+         if (g < 0 || st < 0)
+            continue;
+         const Recipe r = recipeOf(g, st, 1);
+         auto song = made(r);
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         std::vector<double> sv = defaultValues();
+         for (const auto &[id, x] : styleValues(g, st))
+            sv[id] = x;
+         Settings s = settingsFor(r);
+         s.voicing = voiceSettings([&](clap_id id) { return sv[id]; });
+         applyRecipe(s, r);
+         s.section = kVerse;
+         s.key = song->key;
+         e.setSettings(s);
+         e.reset();
+         const auto out = runWith(e, 24000 * 16, 0.0, [](int64_t, Block &) {});
+         std::map<int64_t, std::vector<int>> at;
+         for (const Timed &t : out)
+            if (t.on())
+               at[t.time / 960].push_back(t.m.data1);
+         int bass = -1, chords = 0;
+         for (const auto &[k, ns] : at) {
+            if (ns.size() == 1) {
+               bass = ns[0];
+            } else if (ns.size() >= 3 && bass >= 0) {
+               ++chords;
+               JCLAP_CHECK(*std::min_element(ns.begin(), ns.end()) != bass);
+            }
+         }
+         JCLAP_CHECK(chords > 4);
+      }
    }
    return jclap::core::testResult();
 }

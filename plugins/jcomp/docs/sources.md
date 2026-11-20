@@ -1515,7 +1515,8 @@ and ambient; the generator and voicing; the plugin and real time) reproduced eve
   were misnamed; runs used the key's scale over chromatic chords and leapt over the leading tone. 4THS
   gave a diatonic progression one stack and dropped sevenths: stacks may now hold one tritone or third
   (Bb E A D over C7) or sit on a low root. Funk's 7#9 had its #9 below the 3rd; SPREAD added a fifth to
-  diminished and #11 chords; GRIP dropped the #9, b9 and #11.
+  diminished and #11 chords; GRIP dropped the #9, b9 and #11, and its strum restruck the bass string
+  of a boom-chick or palm-wine thumb (the chick is "all the notes in the chord except the bass note").
 - **The plugin.** The first chord played on the keys skipped its beat, At Once played the old chord
   on a beat pressed just before it, a host loop played different chords on its first pass, PLAY ONLY
   WHILE HELD kept playing after you let go, passed-through notes could hang when the routing changed,
