@@ -493,7 +493,9 @@ private:
       s.take = whole(kTake);
       s.switchAt = whole(kSwitchAt);
       s.switchBy = whole(kSwitchBy);
-      s.song = whole(kSongMode) == 1;
+      s.song = whole(kSongMode) >= 1;
+      s.songEnds = whole(kSongMode) == 1;
+      s.introSetup = whole(kIntroSetup) != 0;
       s.sameDiceBars = kSameDiceBars[choiceIndex(value(kSameDice), 5)];
       s.autoFillBars = kAutoFillBars[choiceIndex(value(kAutoFill), 4)];
       s.sync = whole(kSync);
@@ -501,6 +503,7 @@ private:
       s.freeTempo = value(kFreeTempo);
       s.swing = value(kSwing);
       s.swingFeel = whole(kSwingFeel);
+      s.swingEase = whole(kSwingEase) != 0;
       s.key = whole(kKey);
       s.scale = whole(kScale);
       s.chordsFrom = whole(kChordsFrom);
@@ -535,6 +538,8 @@ private:
       s.velEnergy = whole(kVelEnergy) != 0;
       s.heldOnly = whole(kHeldOnly) != 0;
       s.passNotes = whole(kPassNotes) != 0;
+      s.pad = whole(kPadLayer) != 0;
+      s.padChannel = whole(kPadChannel) - 1;
       for (int a = 0; a < kActionCount; ++a)
          s.learn[static_cast<size_t>(a)] = whole(static_cast<clap_id>(kLearnNote + a));
       applyRecipe(s, recipeFrom([this](clap_id id) { return value(id); }));

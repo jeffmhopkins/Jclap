@@ -146,12 +146,13 @@ struct Hit {
    bool operator!=(const Hit &o) const { return !(*this == o); }
 };
 
-// Step lengths: sixteenths, or eighth triplets (12/8 and the shuffle: three to a beat, twelve a bar).
-enum Rate : uint8_t { kRate16, kRate8T };
-inline const char *const kRateNames[] = {"1/16", "1/8T"};
-inline const int kRateTicks[] = {12, 16};
+// Step lengths: sixteenths, eighth triplets (12/8 and the shuffle: three to a beat, twelve a bar), or
+// sixteenths in a bar of three beats (3/4, and 6/8 counted in its eighths: twelve a bar).
+enum Rate : uint8_t { kRate16, kRate8T, kRate34 };
+inline const char *const kRateNames[] = {"1/16", "1/8T", "1/16 in 3"};
+inline const int kRateTicks[] = {12, 16, 12};
 constexpr int kTicksPerBeat = 48;
-constexpr int kBeatsPerBar = 4;
+constexpr int kBeatsPerBar = 4; // a 4/4 bar's (a song in 3/4 has three: Song::beats)
 constexpr int kTicksPerBar = kTicksPerBeat * kBeatsPerBar;
 
 struct Pattern {
@@ -168,14 +169,19 @@ struct Pattern {
       return n;
    }
    bool empty() const { return count() == 0; }
-   int stepsPerBar() const { return rate == kRate8T ? 12 : 16; }
+   int stepsPerBar() const { return rate == kRate16 ? 16 : 12; }
+   int perBeat() const { return rate == kRate8T ? 3 : 4; }
+   int beats() const { return rate == kRate34 ? 3 : 4; }
+   int stepTicks() const { return kRateTicks[std::min<int>(rate, kRate34)]; }
    int bars() const { return std::max(1, (steps + stepsPerBar() - 1) / stepsPerBar()); }
    void clear() { hits.fill(Hit{}); }
    bool operator==(const Pattern &o) const { return steps == o.steps && rate == o.rate && hits == o.hits; }
    bool operator!=(const Pattern &o) const { return !(*this == o); }
 };
 
-inline int patternTicks(const Pattern &p) { return p.steps * kRateTicks[std::min<int>(p.rate, kRate8T)]; }
+inline int patternTicks(const Pattern &p) { return p.steps * p.stepTicks(); }
+// A bar's strong beats, where a left hand plays and a take's anchors fall: 1 and 3 in four, 1 in three.
+inline int strongSteps(const Pattern &p) { return p.rate == kRate34 ? 12 : p.perBeat() * 2; }
 
 // A chord: a root (0 = C), a quality (an index into harmony.h's kQualities) and a bass note for a
 // slash chord (-1 the root). A root of -1 is no chord (N.C.): the comp rests.
@@ -188,13 +194,23 @@ struct Chord {
    bool operator!=(const Chord &o) const { return !(*this == o); }
 };
 
+// A band hit on a chord (written over it in a chart): the take plays on with the chord's first
+// stroke accented, or the chord is struck once and held to the next (hold), or struck once and cut
+// short (a shot), the take resting meanwhile.
+enum Mark : uint8_t { kMarkNone, kMarkAccent, kMarkHold, kMarkShot };
+inline const char *const kMarkNames[] = {"Comp", "Accent", "Hold", "Shot"};
+
 struct Section {
    std::array<Pattern, kTakes> takes{};
    Pattern fill;
+   // A fill down into a quieter section (or the intro's held chord setting up the verse), and the
+   // song's ending (the outro's, its last bar or two): empty where there is none.
+   Pattern fillDown, ending;
    // The progression: two slots a bar (the bar's first and second half). A second half with
    // `split` off for that bar holds the first half's chord.
    std::array<Chord, kSlots> chords{};
    uint16_t split = 0; // bit b: bar b changes chord half way
+   std::array<uint8_t, kSlots> marks{}; // a band hit on each chord (Mark), by slot
    uint8_t progBars = 4;
    uint8_t bars = 8;
    uint8_t energy = 50; // 0..100, as made
@@ -209,7 +225,8 @@ struct Section {
       return chords[static_cast<size_t>(b * 2 + (second ? 1 : 0))];
    }
    bool operator==(const Section &o) const {
-      return takes == o.takes && fill == o.fill && chords == o.chords && split == o.split && progBars == o.progBars &&
+      return takes == o.takes && fill == o.fill && fillDown == o.fillDown && ending == o.ending && chords == o.chords &&
+             split == o.split && marks == o.marks && progBars == o.progBars &&
              bars == o.bars && energy == o.energy && locked == o.locked && seed == o.seed && generation == o.generation;
    }
    bool operator!=(const Section &o) const { return !(*this == o); }
@@ -218,7 +235,8 @@ struct Section {
 struct Song {
    std::array<Section, kSections> sections{};
    uint8_t key = 4; // E
-   bool operator==(const Song &o) const { return sections == o.sections && key == o.key; }
+   uint8_t beats = 4; // a bar's beats: 4, or 3 (a waltz, a 6/8)
+   bool operator==(const Song &o) const { return sections == o.sections && key == o.key && beats == o.beats; }
    bool operator!=(const Song &o) const { return !(*this == o); }
 
    int totalBars() const {
@@ -230,7 +248,9 @@ struct Song {
 
    // Saved as bytes: a version, the key, then each section's fields, its chords and its patterns
    // (four takes and the fill), each pattern as its steps, rate and every hit (10 bytes; 9 before version 2) of its grid.
-   static constexpr uint32_t kVersion = 2; // 2: a hit's line degree
+   // Version 3 adds the bar's beats after the key, and after each section's fill its fill down, its
+   // ending and its chords' band hits.
+   static constexpr uint32_t kVersion = 3; // 2: a hit's line degree; 3: 3/4, fills down, endings, band hits
 
    std::vector<uint8_t> save() const {
       std::vector<uint8_t> out;
@@ -258,6 +278,7 @@ struct Song {
       u32(kVersion);
       u32(kSections);
       u8(key);
+      u8(beats);
       for (const Section &s : sections) {
          u8(s.bars);
          u8(s.energy);
@@ -274,6 +295,10 @@ struct Song {
          for (const Pattern &p : s.takes)
             pattern(p);
          pattern(s.fill);
+         pattern(s.fillDown);
+         pattern(s.ending);
+         for (uint8_t m : s.marks)
+            u8(m);
       }
       return out;
    }
@@ -297,7 +322,7 @@ struct Song {
       uint32_t version = 0;
       auto pattern = [&](Pattern &p) {
          p.steps = static_cast<uint8_t>(std::clamp<int>(u8(), 1, kMaxSteps));
-         p.rate = static_cast<uint8_t>(std::min<int>(u8(), kRate8T));
+         p.rate = static_cast<uint8_t>(std::min<int>(u8(), version >= 3 ? kRate34 : kRate8T));
          for (Hit &h : p.hits) {
             h.vel = static_cast<uint8_t>(std::min<int>(u8(), 127));
             h.len = static_cast<uint8_t>(std::clamp<int>(u8(), 1, kMaxSteps));
@@ -317,6 +342,7 @@ struct Song {
          return false;
       Song loaded;
       loaded.key = static_cast<uint8_t>(u8() % 12);
+      loaded.beats = version >= 3 ? (u8() == 3 ? 3 : 4) : 4;
       for (Section &s : loaded.sections) {
          s.bars = static_cast<uint8_t>(std::clamp<int>(u8(), 1, kMaxBars));
          s.energy = static_cast<uint8_t>(std::min<int>(u8(), 100));
@@ -335,6 +361,12 @@ struct Song {
          for (Pattern &p : s.takes)
             pattern(p);
          pattern(s.fill);
+         if (version >= 3) {
+            pattern(s.fillDown);
+            pattern(s.ending);
+            for (uint8_t &m : s.marks)
+               m = static_cast<uint8_t>(std::min<int>(u8(), kMarkShot));
+         }
       }
       if (!ok)
          return false;
@@ -342,6 +374,13 @@ struct Song {
       return true;
    }
 };
+
+// The pattern a section's take number names in EDIT: a take (0..3), the fill (4), the fill down (5)
+// or the ending (6).
+inline Pattern &patternOf(Section &s, int take) {
+   return take == 6 ? s.ending : take == 5 ? s.fillDown : take >= kTakes ? s.fill : s.takes[static_cast<size_t>(std::max(0, take))];
+}
+inline const Pattern &patternOf(const Section &s, int take) { return patternOf(const_cast<Section &>(s), take); }
 
 // What the panel shows of the engine, published every block.
 struct Frame {
@@ -354,6 +393,9 @@ struct Frame {
    int section = kChorus;
    int take = 0;
    bool fill = false;
+   bool fillDown = false;              // the fill playing is the fill down
+   bool ending = false, ended = false; // the song's ending playing; the song over
+   int beats = 4;                      // a bar's beats
    int queued = -1;
    int queuedTake = -1;
    int step = -1; // the step playing in the pattern playing, and its length

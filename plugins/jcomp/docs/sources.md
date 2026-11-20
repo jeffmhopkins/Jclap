@@ -1532,7 +1532,7 @@ and ambient; the generator and voicing; the plugin in real time; and a compariso
 library with three open-source accompaniment programs [61][62][63]) reproduced every finding with
 `jcomp-dump` or a probe program. It found 75 problems (15 high); these were fixed, each with a test
 where a test could hold it. The comparison's 15 gaps (endings, drop fills, phrases, tempo-aware
-swing, new feels, 3/4 and 6/8) are built next.
+swing, new feels, 3/4 and 6/8) were built in 0.6.0 (below).
 
 - **Passing runs.** A run restruck the top note already sounding, shrank to one note, wiped out the
   hits in its span (accents and the left hand's bass included), broke into fixed figures and, after
@@ -1577,6 +1577,40 @@ swing, new feels, 3/4 and 6/8) are built next.
   next section about 80 ms early, with the clock's lookahead.
 
 ---
+
+### The comparison built (0.6.0)
+
+Each of the comparison's fifteen gaps, as built. The step texts are the review's conversions of the
+MMA groove lines [61] and Impro-Visor style rules [62]; JJazzLab [63] is cited from its user guide.
+
+- **F1 endings.** SONG now ends: the outro's last bar or two play an ending (MMA's `…End` grooves:
+  SwingEnd `x...x...x...x...|X.......x-------`, the cha-cha's `x...x...x...x.x.|X---------------`, the
+  R&B ending `x.......x...x...|X-------........`; a held style's whole two bars held; otherwise four, then
+  the last chord held), its last chord rung, nothing anticipated. Then JComp rests. The old wrap into
+  the intro is SONG's REPEAT.
+- **F2 3/4 and 6/8.** A bar of three beats (twelve sixteenths), a song's own meter saved with it:
+  Jazz Waltz (MMA's jazzwaltz piano and guitar, Impro-Visor's waltz `X2 X4`, the "2 and 3" comp),
+  Country Waltz (oom-pah-pah) and 6/8 Ballad (six eighths leaning on 1 and 4, written in 3/4's
+  sixteenths). Their progressions are a chord a bar.
+- **F3 fills down.** Each section has a fill down as well as its fill: a held stab with the next
+  downbeat clear (MMA's SwingFill `x-------x-------`, SonFill `x.......x.......`, else
+  `X-------........`), played into a quieter section; the Yamaha fills JJazzLab describes are chosen by
+  where they go.
+- **F4 four-bar phrases.** MMA's 8-beat (`P1 P2 P3 P4`), doo-wop and spiritual (`C13 / / C1234`), ballad
+  (`C1234 / C234 C1234`) and blues (`C13 / / C1234`) phrases, the fourth bar turning the phrase round.
+- **F5 tempo-aware swing.** Above 160 BPM the swing relaxes:
+  `0.5 + (swing - 0.5) * clamp((320 - bpm) / 160, 0.25, 1)` (our constants; JJazzLab's jjSwing adjusts
+  its swing to the tempo, and Friberg and Sundström measured the long-short ratio falling with tempo).
+- **F6 to F11 new feels.** Ballad quarters, the ballad figure and the right hand's arpeggio
+  (pianoballad.mma); swing's held comps and the guitar's two-feel (swing.mma, swing.sty); samba
+  (samba.mma, samba.sty); rock'n'roll triplets and the 50s pickups (rock-128.mma, 50srock.mma); the
+  bolero (rhumba.sty, rhumba.mma); Calypso (calypso.mma).
+- **F12 the intro's setup.** The intro's last bar into the verse is a held chord (`X-------........`),
+  as MMA's intros end, unless *Intro sets up the verse* is off.
+- **F13 band hits.** A chord can be marked accent, hold or shot (JJazzLab's chord interpretations).
+- **F14 the pad layer.** The chords held on a second channel (MMA's `…Sus` grooves), off by default.
+- **F15 cells.** The mambo's broken chord, the 60s R&B piano and organ, the slow blues' quarters with
+  a pickup, and Western swing's four with its fourth-bar pickups.
 
 ## Bibliography
 

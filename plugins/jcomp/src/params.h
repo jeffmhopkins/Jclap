@@ -117,7 +117,12 @@ enum ParamId : clap_id {
    kHeldOnly,
    kPassNotes,
    kLearnNote, // one per action, for the CUSTOM map
-   kParamCount = kLearnNote + kActionCount
+   // Added in 0.6.0.
+   kIntroSetup = kLearnNote + kActionCount,
+   kSwingEase,
+   kPadLayer,
+   kPadChannel,
+   kParamCount
 };
 
 constexpr auto kSaved = 0u; // kept with presets and the project, not automated
@@ -141,9 +146,10 @@ inline bool isSetupParam(clap_id id) {
    case kSection: case kTake: case kSwitchBy: case kSync: case kPlay:
    case kChannel: case kRhythmFrom: case kBassChannel: case kFollow:
    case kNoteMap: case kNoteOctave: case kNoteChannel: case kPassNotes:
+   case kPadLayer: case kPadChannel:
       return true;
    default:
-      return id >= kLearnNote && id < kParamCount;
+      return id >= kLearnNote && id < kLearnNote + kActionCount;
    }
 }
 
@@ -153,7 +159,7 @@ inline const jclap::core::ParamDef *makeParams() {
    static char learnNames[kActionCount][32];
    const double gmax = genreMax();
    p[kGenre] = {kGenre, "Genre", "Generate", 0, gmax, 0, kSavedChoice};
-   p[kStyle] = {kStyle, "Style", "Generate", 0, 3, 0, kSavedStep}; // the most styles a genre has, less one
+   p[kStyle] = {kStyle, "Style", "Generate", 0, 5, 0, kSavedStep}; // the most styles a genre has, less one
    p[kBlendGenre] = {kBlendGenre, "Blend Genre", "Generate", 0, gmax + 1, 0, kSavedChoice};
    p[kBlend] = {kBlend, "Blend", "Generate", 0, 1, 0.25, kSaved};
    p[kPlayer] = {kPlayer, "Player", "Generate", 0, kPlayers - 1, 0, kSavedChoice};
@@ -191,7 +197,7 @@ inline const jclap::core::ParamDef *makeParams() {
    p[kTake] = {kTake, "Take", "Play", 0, kTakes - 1, 0, kChoice};
    p[kSwitchAt] = {kSwitchAt, "Switch At", "Play", 0, 4, 1, kChoice};
    p[kSwitchBy] = {kSwitchBy, "Switch By", "Play", 0, 2, 0, kChoice};
-   p[kSongMode] = {kSongMode, "Song Mode", "Play", 0, 1, 0, kChoice};
+   p[kSongMode] = {kSongMode, "Song Mode", "Play", 0, 2, 0, kChoice};
    p[kSameDice] = {kSameDice, "Same Dice Every", "Play", 0, 4, 3, kChoice};
    p[kAutoFill] = {kAutoFill, "Auto Fills", "Play", 0, 3, 2, kChoice};
    p[kSync] = {kSync, "Sync", "Transport", 0, 2, 0, kChoice};
@@ -228,6 +234,10 @@ inline const jclap::core::ParamDef *makeParams() {
       p[kLearnNote + i] = {static_cast<clap_id>(kLearnNote + i), learnNames[i], "Notes", 0, 127,
                            static_cast<double>(12 + kActionKey[i]), kSavedStep};
    }
+   p[kIntroSetup] = {kIntroSetup, "Intro Sets Up The Verse", "Play", 0, 1, 1, kChoice};
+   p[kSwingEase] = {kSwingEase, "Swing Eases When Fast", "Feel", 0, 1, 1, kChoice};
+   p[kPadLayer] = {kPadLayer, "Pad Layer", "Output", 0, 1, 0, kChoice};
+   p[kPadChannel] = {kPadChannel, "Pad Channel", "Output", 1, 16, 3, kStep};
    return p;
 }
 
@@ -239,7 +249,7 @@ inline const char *const kOffOnNames[] = {"Off", "On"};
 inline const char *const kTakeNames[] = {"1", "2", "3", "4"};
 inline const char *const kSwitchAtNames[] = {"Next Beat", "Next Bar", "Next 2 Bars", "Next 4 Bars", "Section End"};
 inline const char *const kSwitchByNames[] = {"Note + Param", "Note", "Param"};
-inline const char *const kSongModeNames[] = {"Loop Section", "Play Song"};
+inline const char *const kSongModeNames[] = {"Loop Section", "Play Song", "Song On Repeat"};
 inline const char *const kSameDiceNames[] = {"Never", "1 Bar", "2 Bars", "4 Bars", "8 Bars"};
 inline const int kSameDiceBars[] = {0, 1, 2, 4, 8};
 inline const char *const kAutoFillNames[] = {"Off", "Every 4", "Every 8", "Every 16"};
@@ -296,7 +306,7 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kTake: count = 4; return kTakeNames;
    case kSwitchAt: count = 5; return kSwitchAtNames;
    case kSwitchBy: count = 3; return kSwitchByNames;
-   case kSongMode: count = 2; return kSongModeNames;
+   case kSongMode: count = 3; return kSongModeNames;
    case kSameDice: count = 5; return kSameDiceNames;
    case kAutoFill: count = 4; return kAutoFillNames;
    case kSync: count = 3; return kSyncNames;
@@ -308,7 +318,8 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    case kFollow: count = 3; return kFollowNames;
    case kNoteMap: count = 2; return kNoteMapNames;
    case kPlay: case kLatch: case kSlashBass: case kDoubleMiddle: case kNoRubs: case kSameShape: case kRunHalfStep:
-   case kRunShorten: case kFillInto: case kVelEnergy: case kHeldOnly: case kPassNotes:
+   case kRunShorten: case kFillInto: case kVelEnergy: case kHeldOnly: case kPassNotes: case kIntroSetup: case kSwingEase:
+   case kPadLayer:
       count = 2;
       return kOffOnNames;
    default: count = 0; return nullptr;

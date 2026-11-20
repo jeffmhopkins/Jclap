@@ -1908,5 +1908,314 @@ int main() {
          differ += passes[0][i].second != passes[1][i].second || std::abs(passes[0][i].first - passes[1][i].first) > 2;
       JCLAP_CHECK_EQ(differ, 0);
    }
+   // ---- the comparison with MMA, Impro-Visor and JJazzLab (0.6.0) ----
+   {
+      const auto genreNamed = [](const char *name) {
+         for (int i = 0; i < genreCount(); ++i)
+            if (std::string(genreAt(i).name) == name)
+               return i;
+         return -1;
+      };
+      const auto styleNamed = [](int g, const char *name) {
+         const Genre &gen = genreAt(g);
+         for (size_t i = 0; i < gen.styles.size(); ++i)
+            if (std::string(gen.styles[i].name) == name)
+               return static_cast<int>(i);
+         return -1;
+      };
+      const auto made = [](const Recipe &r) {
+         auto s = std::make_unique<Song>();
+         generateSong(r, *s);
+         return s;
+      };
+      // Runs an engine at `bpm` from the host's beat 0, for `beats` beats.
+      const auto runAt = [](Engine &e, double bpm, double beats) {
+         std::vector<std::pair<double, MidiOut>> all; // (beat, event)
+         auto out = std::make_unique<OutBuffer>();
+         const double perFrame = bpm / 60.0 / 48000.0;
+         for (double at = 0.0; at < beats; at += kBlock * perFrame) {
+            Block b;
+            b.frames = kBlock;
+            b.sampleRate = 48000.0;
+            b.tempo = bpm;
+            b.hasTransport = b.playing = true;
+            b.beats = at;
+            out->clear();
+            e.process(b, *out);
+            for (size_t i = 0; i < out->count; ++i)
+               all.push_back({at + out->items[i].time * perFrame, out->items[i]});
+         }
+         return all;
+      };
+      const auto isOn = [](const MidiOut &m) { return (m.status & 0xF0) == 0x90 && m.data2 > 0; };
+
+      // Every style's song: the outro has an ending, nothing in it anticipated, its last chord rung;
+      // every section's fill down is quieter than its fill and leaves the next downbeat clear; a
+      // three-beat style's song is in three, every take on the three-beat grid.
+      int waltzes = 0;
+      for (int g = 0; g < genreCount(); ++g)
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st) {
+            auto song = made(recipeOf(g, st, 31));
+            const Section &out = song->sections[kOutro];
+            JCLAP_CHECK(!out.ending.empty());
+            int last = -1;
+            for (int k = 0; k < out.ending.steps; ++k)
+               if (out.ending.at(k).on()) {
+                  JCLAP_CHECK(!out.ending.at(k).push);
+                  last = k;
+               }
+            JCLAP_CHECK(last >= 0 && out.ending.at(last).art == kArtRing);
+            JCLAP_CHECK(out.ending.rate == out.takes[0].rate);
+            for (const Section &sec : song->sections) {
+               const Pattern &d = sec.fillDown;
+               JCLAP_CHECK(!d.empty() && d.rate == sec.takes[0].rate);
+               JCLAP_CHECK(d.count() <= std::max(2, sec.fill.count()));
+               for (int k = d.stepsPerBar() - d.perBeat(); k < d.steps; ++k)
+                  JCLAP_CHECK(!d.at(k).on());
+               for (int k = 0; k < d.steps; ++k)
+                  JCLAP_CHECK(!d.at(k).push);
+            }
+            const bool waltz = genreAt(g).styles[static_cast<size_t>(st)].mods & kWaltz;
+            JCLAP_CHECK_EQ(static_cast<int>(song->beats), waltz ? 3 : 4);
+            if (waltz) {
+               ++waltzes;
+               for (const Section &sec : song->sections)
+                  for (const Pattern &t : sec.takes)
+                     JCLAP_CHECK(t.rate == kRate34 && t.stepsPerBar() == 12);
+            }
+         }
+      JCLAP_CHECK_EQ(waltzes, 3);
+      // Four-bar rhythms read whole; a three-beat rhythm isn't the triplet grid; four bars of triplets
+      // are the triplet grid.
+      JCLAP_CHECK_EQ(static_cast<int>(fromRhythm("x.....x...x...x.|x.........x.....|x.........x...x.|..........x...x.").steps), 64);
+      JCLAP_CHECK(fromRhythm(Rhythm{"x-------x---", 0.35, 3}).rate == kRate34);
+      {
+         const Pattern t = fromRhythm("xxxXxxxxxXxx|xxxXxxxxxXxx|xxxXxxxxxXxx|x..x..x..x..");
+         JCLAP_CHECK(t.rate == kRate8T && t.steps == 48);
+      }
+      // ANSWER leaves a four-bar phrase as it is.
+      {
+         Pattern p = fromRhythm("x.......x.......|x.......x.......|x.......x.......|x...x...x...x...");
+         const Pattern before = p;
+         Rng rng(5);
+         applyMutation(p, "answer", rng);
+         JCLAP_CHECK(p == before);
+      }
+      // Freddie Green's four: in two at a low energy, in four at a high one.
+      {
+         const int g = genreNamed("Swing Jazz");
+         const Style &fg = styleAt(genreAt(g), styleNamed(g, "Four To The Bar"));
+         const auto list = rhythmsFor(genreAt(g), fg);
+         int two = 0, four = 0;
+         for (uint32_t k = 1; k <= 40; ++k) {
+            Rng a(k), b(k + 100);
+            two += fromRhythm(*pickRhythm(list, 0.3, a)).count() == 4;   // two a bar, two bars
+            four += fromRhythm(*pickRhythm(list, 0.9, b)).count() == 8; // four a bar
+         }
+         JCLAP_CHECK(two >= 30);
+         JCLAP_CHECK(four >= 30);
+      }
+      // The right hand's arpeggio is single line notes on 1, 2, its and, 3, 4 and its and.
+      {
+         const Pattern p = fromRhythm("1...3.5.8...5.3.|1.....5.8...5.3.");
+         for (int k : {0, 4, 6, 8, 12, 14})
+            JCLAP_CHECK(p.at(k).on() && p.at(k).part == kPartLine);
+      }
+      // The song saves and loads with its meter, fills down, ending and band hits; an older song loads
+      // in four.
+      {
+         auto song = made(recipeOf(genreNamed("Swing Jazz"), styleNamed(genreNamed("Swing Jazz"), "Jazz Waltz"), 3));
+         song->sections[kVerse].marks[2] = kMarkHold;
+         song->sections[kVerse].marks[5] = kMarkShot;
+         const std::vector<uint8_t> data = song->save();
+         auto back = std::make_unique<Song>();
+         JCLAP_CHECK(back->load(data.data(), data.size()));
+         JCLAP_CHECK(*back == *song);
+         JCLAP_CHECK_EQ(static_cast<int>(back->beats), 3);
+      }
+
+      // SONG ends: from the outro, its ending plays, then nothing (the intro's chord never comes);
+      // on repeat it goes round to the intro.
+      for (bool ends : {true, false}) {
+         auto song = made(recipeOf(0, 0, 9));
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = settingsFor(Recipe{});
+         s.key = song->key;
+         s.song = true;
+         s.songEnds = ends;
+         s.section = kOutro;
+         s.autoFillBars = 0;
+         e.setSettings(s);
+         e.reset();
+         const double outroBeats = song->sections[kOutro].bars * 4.0;
+         const auto all = runAt(e, 120.0, outroBeats + 8.0);
+         int after = 0, inEnding = 0;
+         for (const auto &[beat, m] : all)
+            if (isOn(m)) {
+               after += beat >= outroBeats + 0.1;
+               inEnding += beat >= outroBeats - 8.0 && beat < outroBeats;
+            }
+         JCLAP_CHECK(inEnding > 0);
+         if (ends) {
+            JCLAP_CHECK_EQ(after, 0);
+            Frame f;
+            e.fillFrame(f);
+            JCLAP_CHECK(f.ended);
+         } else
+            JCLAP_CHECK(after > 0);
+      }
+      // The fill into a quieter section is the fill down; INTRO SETS UP plays the intro's last bar as
+      // one held chord.
+      {
+         auto song = songOf("x.x.x.x.x.x.x.x.", {{"C", nullptr}, {"F", nullptr}});
+         for (Section &sec : song->sections) {
+            sec.bars = 2;
+            sec.fillDown = fromRhythm("X-------........");
+            sec.fillDown.steps = 16;
+         }
+         song->sections[kIntro].energy = 30;
+         song->sections[kVerse].energy = 60;
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = settingsFor(Recipe{});
+         s.song = true;
+         s.section = kIntro;
+         s.autoFillBars = 0;
+         s.onsets = 0;
+         s.runs = 0;
+         e.setSettings(s);
+         e.reset();
+         const auto all = runAt(e, 120.0, 8.0);
+         std::set<int> strikes; // in the intro's last bar, by sixteenth
+         for (const auto &[beat, m] : all)
+            if (isOn(m) && beat >= 4.0 - 0.05 && beat < 8.0 - 0.05)
+               strikes.insert(static_cast<int>(std::lround(beat * 4.0)));
+         JCLAP_CHECK_EQ(static_cast<int>(strikes.size()), 1);
+      }
+      // SWING EASES WHEN FAST: at 280 BPM a 64% swing's and of 1 comes before 56% of the beat; at 120
+      // the full swing.
+      for (double bpm : {120.0, 280.0}) {
+         auto song = songOf("x.x.x.x.x.x.x.x.", {{"C", nullptr}});
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = settingsFor(Recipe{});
+         s.swing = 0.64;
+         s.swingFeel = 1;
+         s.loose = 0;
+         s.vary = 0;
+         s.runs = 0;
+         s.onsets = 0;
+         s.autoFillBars = 0;
+         e.setSettings(s);
+         e.reset();
+         const auto all = runAt(e, bpm, 8.0);
+         double worst = bpm > 200 ? 0.0 : 1.0;
+         for (const auto &[beat, m] : all) {
+            const double f = beat - std::floor(beat);
+            if (isOn(m) && f > 0.3 && f < 0.8)
+               worst = bpm > 200 ? std::max(worst, f) : std::min(worst, f);
+         }
+         if (bpm > 200)
+            JCLAP_CHECK(worst > 0.5 && worst < 0.56);
+         else
+            JCLAP_CHECK(worst > 0.62);
+      }
+      // A waltz: a bar is three beats (the next downbeat three beats on, nothing on beat 4).
+      {
+         auto song = songOf("x.x.x.x.x.x.x.x.", {{"C", nullptr}, {"F", nullptr}});
+         song->beats = 3;
+         for (Section &sec : song->sections) {
+            for (Pattern &t : sec.takes)
+               t = fromRhythm("x...........", kRate34);
+            sec.fill = sec.takes[0];
+         }
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = settingsFor(Recipe{});
+         s.autoFillBars = 0;
+         s.runs = 0;
+         s.density = 0.5;
+         e.setSettings(s);
+         e.reset();
+         const auto all = runAt(e, 120.0, 12.0);
+         std::set<int> beatsOn;
+         for (const auto &[beat, m] : all)
+            if (isOn(m) && beat < 11.9)
+               beatsOn.insert(static_cast<int>(std::lround(beat)));
+         JCLAP_CHECK(beatsOn == (std::set<int>{0, 3, 6, 9}));
+
+      }
+      // Band hits: a held chord strikes once for its bar, a shot once and short; the take plays on
+      // round them.
+      for (int mark : {kMarkHold, kMarkShot, kMarkAccent}) {
+         auto song = songOf("x.x.x.x.x.x.x.x.", {{"C", nullptr}, {"F", nullptr}});
+         for (Section &sec : song->sections)
+            sec.marks[0] = static_cast<uint8_t>(mark);
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = settingsFor(Recipe{});
+         s.autoFillBars = 0;
+         s.runs = 0;
+         s.onsets = 0;
+         s.vary = 0;
+         e.setSettings(s);
+         e.reset();
+         const auto all = runAt(e, 120.0, 8.0);
+         std::set<int> bar1, bar2;
+         double longest = 0.0;
+         std::map<int, double> started;
+         for (const auto &[beat, m] : all) {
+            if (isOn(m)) {
+               if (beat < 7.95)
+                  (beat < 3.95 ? bar1 : bar2).insert(static_cast<int>(std::lround(beat * 4.0)));
+               if (beat < 0.1)
+                  started[m.data1] = beat;
+            } else if (started.count(m.data1)) {
+               longest = std::max(longest, beat - started[m.data1]);
+               started.erase(m.data1);
+            }
+         }
+         JCLAP_CHECK_EQ(static_cast<int>(bar2.size()), 8);
+         if (mark == kMarkAccent)
+            JCLAP_CHECK_EQ(static_cast<int>(bar1.size()), 8);
+         else
+            JCLAP_CHECK_EQ(static_cast<int>(bar1.size()), 1);
+         if (mark == kMarkHold)
+            JCLAP_CHECK(longest > 3.0);
+         if (mark == kMarkShot)
+            JCLAP_CHECK(longest < 0.3);
+      }
+      // The pad layer: the chord held on its own channel, struck again only when it changes.
+      {
+         auto song = songOf("x...x...x...x...", {{"C", nullptr}, {"F", nullptr}});
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = settingsFor(Recipe{});
+         s.autoFillBars = 0;
+         s.pad = true;
+         s.padChannel = 5;
+         s.key = song->key;
+         e.setSettings(s);
+         e.reset();
+         const auto all = runAt(e, 120.0, 16.0);
+         int padOns = 0;
+         std::set<int> padPcs;
+         for (const auto &[beat, m] : all)
+            if (isOn(m) && (m.status & 15) == 5) {
+               ++padOns;
+               padPcs.insert(m.data1 % 12);
+            }
+         JCLAP_CHECK(padOns >= 12 && padOns <= 20); // four chords of four notes
+         JCLAP_CHECK(padPcs.count(0) && padPcs.count(5));
+
+      }
+   }
    return jclap::core::testResult();
 }

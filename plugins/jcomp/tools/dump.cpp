@@ -72,7 +72,7 @@ std::string grid(const Pattern &p) {
          extra += buf;
       }
    }
-   return s + (p.rate == kRate8T ? "  (8T)" : "") + extra;
+   return s + (p.rate == kRate8T ? "  (8T)" : p.rate == kRate34 ? "  (3/4)" : "") + extra;
 }
 
 } // namespace
@@ -136,6 +136,9 @@ int main(int argc, char **argv) {
             for (int t = 0; t < std::clamp(takes, 1, kTakes); ++t)
                std::printf("   take %d: %s\n", t, grid(S.takes[static_cast<size_t>(t)]).c_str());
             std::printf("   fill  : %s\n", grid(S.fill).c_str());
+            std::printf("   down  : %s\n", grid(S.fillDown).c_str());
+            if (!S.ending.empty())
+               std::printf("   ending: %s\n", grid(S.ending).c_str());
 
             // The engine, playing this section (take 0) with the host for its bars at the style's tempo.
             Engine e;
@@ -173,7 +176,8 @@ int main(int argc, char **argv) {
             const double sr = 48000.0;
             const double spb = sr * 60.0 / tempo;
             const int bars = S.bars;
-            const int64_t total = static_cast<int64_t>(spb * 4 * bars) + 2;
+            const int beats = song.beats;
+            const int64_t total = static_cast<int64_t>(spb * beats * bars) + 2;
             auto out = std::make_unique<OutBuffer>();
             struct On {
                double beat;
@@ -233,7 +237,7 @@ int main(int argc, char **argv) {
                   line += buf;
                }
                const double beat = notes[i].first.beat + 0.02;
-               const int bar = static_cast<int>(beat / 4);
+               const int bar = static_cast<int>(beat / beats);
                if (bar != lastBar) {
                   const Chord &c = S.chordAt(bar, false);
                   std::printf("   bar %d (%s%s%s)\n", bar + 1, chordName(c, song.key).c_str(),
@@ -241,7 +245,7 @@ int main(int argc, char **argv) {
                               (S.split >> (bar % std::max<int>(1, S.progBars)) & 1) ? chordName(S.chordAt(bar, true), song.key).c_str() : "");
                   lastBar = bar;
                }
-               std::printf("     %6.3f%s\n", std::fmod(beat, 4.0) + 0.98, line.c_str());
+               std::printf("     %6.3f%s\n", std::fmod(beat, static_cast<double>(beats)) + 0.98, line.c_str());
                i = j;
             }
          }

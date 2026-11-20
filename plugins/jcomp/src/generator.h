@@ -346,7 +346,7 @@ inline Hit hitOf(char ch) {
 // Whether a pattern plays a chord on any beat (an offbeat style, a skank or a one drop, doesn't,
 // and nothing should put one there).
 inline bool chordOnBeat(const Pattern &p) {
-   const int beat = p.rate == kRate8T ? 3 : 4;
+   const int beat = p.perBeat();
    for (int s = 0; s < p.steps; s += beat)
       if (p.at(s).on() && !leftHand(p.at(s).part))
          return true;
@@ -356,14 +356,14 @@ inline bool chordOnBeat(const Pattern &p) {
 // take (a skank on the ands) has none, or beat 1 or 3 where a take keeps them empty (the one drop's
 // skank on 2 and 4, the organ bubble).
 inline bool keepsOff(const Pattern &p, int s) {
-   const int beat = p.rate == kRate8T ? 3 : 4;
+   const int beat = p.perBeat();
    if (s % beat)
       return false;
    if (!chordOnBeat(p))
       return true;
-   if (s % (beat * 2))
+   if (s % strongSteps(p))
       return false;
-   for (int k = 0; k < p.steps; k += beat * 2)
+   for (int k = 0; k < p.steps; k += strongSteps(p))
       if (p.at(k).on() && !leftHand(p.at(k).part))
          return false;
    return true;
@@ -371,7 +371,7 @@ inline bool keepsOff(const Pattern &p, int s) {
 // An offbeat take: its chords keep off beats 1 and 3 (a skank on the ands, the one drop's on 2
 // and 4, the organ bubble), so nothing is added there.
 inline bool offbeatTake(const Pattern &p) {
-   const int strong = (p.rate == kRate8T ? 3 : 4) * 2;
+   const int strong = strongSteps(p);
    bool any = false;
    for (int s = 0; s < p.steps; ++s) {
       const Hit &h = p.at(s);
@@ -394,7 +394,7 @@ inline bool firstInBar(const Pattern &p, int step, int perBar) {
 
 // Whether a chord hit is the first of its bar sure to play (a chance hit before it may not).
 inline bool firstChord(const Pattern &p, int step) {
-   const int perBar = p.rate == kRate8T ? 12 : 16;
+   const int perBar = p.stepsPerBar();
    if (!p.at(step).on() || leftHand(p.at(step).part))
       return false;
    for (int s = step - step % perBar; s < step; ++s)
@@ -426,8 +426,8 @@ inline bool thinnedBy(const Pattern &p, int step, double density, double dice, b
                       bool fixed = false) {
    if (density >= 0.5 || !p.at(step).on() || p.at(step).part == kPartLine)
       return false;
-   const int perBeat = p.rate == kRate8T ? 3 : 4;
-   const int perBar = perBeat * 4;
+   const int perBeat = p.perBeat();
+   const int perBar = p.stepsPerBar();
    if (fixed && (leftHand(p.at(step).part) || p.steps > perBar))
       return false;
    // An offbeat take with a left hand (the Shout: bass on the beats, chords between) keeps its bass
@@ -463,10 +463,11 @@ inline bool thinnedBy(const Pattern &p, int step, double density, double dice, b
 }
 
 
-// A rhythm as a pattern. One bar is played twice, so a take is at least two bars.
-inline Pattern fromRhythm(const char *text) {
+// A rhythm as a pattern, on its grid (by default as its steps say: twelve a bar the triplet grid).
+// One bar is played twice, so a take is at least two bars.
+inline Pattern fromRhythm(const char *text, int rate = -1) {
    Pattern p;
-   p.rate = rhythmTriplet(text) ? kRate8T : kRate16;
+   p.rate = static_cast<uint8_t>(rate >= 0 ? rate : rhythmTriplet(text) ? kRate8T : kRate16);
    int n = 0;
    int last = -1;
    for (const char *c = text; *c && n < kMaxSteps; ++c) {
@@ -491,7 +492,8 @@ inline Pattern fromRhythm(const char *text) {
    return p;
 }
 
-inline int perBeat(const Pattern &p) { return p.rate == kRate8T ? 3 : 4; }
+inline Pattern fromRhythm(const Rhythm &r) { return fromRhythm(r.hits, rhythmRate(r)); }
+inline int perBeat(const Pattern &p) { return p.perBeat(); }
 inline bool onBeat(const Pattern &p, int s) { return s % perBeat(p) == 0; }
 inline bool onEighth(const Pattern &p, int s) { return p.rate == kRate8T ? s % 3 != 1 : s % 2 == 0; }
 
@@ -532,12 +534,14 @@ inline int hitsInBar(const Pattern &p, int bar, bool chordsOnly = false) {
 }
 
 // The rhythms a style may use (its mask, on its grid).
+// A three-beat style uses only three-beat rhythms; a four-beat one may borrow the other four-beat grid's
+// when its own has none.
 inline std::vector<const Rhythm *> rhythmsFor(const Genre &g, const Style &st, bool fills = false) {
    std::vector<const Rhythm *> out;
-   const bool triplet = st.mods & kTriplet;
+   const uint8_t rate = styleRate(st.mods);
    const auto &list = fills ? g.fills : g.rhythms;
    for (size_t i = 0; i < list.size(); ++i) {
-      if (rhythmTriplet(list[i].hits) != triplet)
+      if (rhythmRate(list[i]) != rate)
          continue;
       if (!fills && st.rhythms && !(st.rhythms >> i & 1))
          continue;
@@ -545,11 +549,12 @@ inline std::vector<const Rhythm *> rhythmsFor(const Genre &g, const Style &st, b
    }
    if (out.empty() && !fills)
       for (const Rhythm &r : list)
-         if (rhythmTriplet(r.hits) == triplet)
+         if (rhythmRate(r) == rate)
             out.push_back(&r);
-   if (out.empty())
+   if (out.empty() && rate != kRate34)
       for (const Rhythm &r : list)
-         out.push_back(&r);
+         if (rhythmRate(r) != kRate34)
+            out.push_back(&r);
    return out;
 }
 
@@ -633,8 +638,9 @@ inline void applyMods(Pattern &p, unsigned mods, Rng &rng, double pushChance = 0
       const int inBar = s % bar;
       // An anticipation is a hit an eighth or less before beat one or three: the and of 2 and of 4
       // (or the last sixteenth of either), or the last triplet of beats 2 and 4.
-      const bool pushAt = p.rate == kRate8T ? (inBar == bar - 1 || inBar == bar / 2 - 1)
-                                            : (inBar == bar - 1 || inBar == bar - 2 || inBar == bar / 2 - 1 || inBar == bar / 2 - 2);
+      const bool pushAt = p.rate == kRate8T    ? (inBar == bar - 1 || inBar == bar / 2 - 1)
+                          : p.rate == kRate34 ? (inBar == bar - 1 || inBar == bar - 2)
+                                              : (inBar == bar - 1 || inBar == bar - 2 || inBar == bar / 2 - 1 || inBar == bar / 2 - 2);
       if (mods & kPushes && h.on() && !onBeat(p, s) && pushAt && !leftHand(h.part))
          h.push = rng.chance(pushChance) ? 1 : 0;
       // Fewer hits, but never the rhythm's shape: only a bar of four or more chords loses one, down to
@@ -660,7 +666,7 @@ inline void applyMods(Pattern &p, unsigned mods, Rng &rng, double pushChance = 0
          if (p.at(s).on() && p.at(s).art != kArtChop)
             p.at(s).art = kArtRing;
    if (mods & kLeftHand) {
-      for (int s = 0; s < p.steps; s += beat * 2) {
+      for (int s = 0; s < p.steps; s += strongSteps(p)) {
          if (!p.at(s).on()) {
             p.at(s) = hitOf('b');
          } else {
@@ -927,8 +933,8 @@ inline const std::vector<Mutation> &mutations() {
           // over two bars (a clave's two sides, the bossa cycle) already answers itself: copying its
           // first bar over the second would cross the clave.
           const int bar = p.stepsPerBar();
-          if (p.steps < bar * 2)
-             return;
+          if (p.steps != bar * 2)
+             return; // one bar, or a four-bar phrase that already turns itself round
           for (int s = 0; s < bar; ++s)
              if (p.at(bar + s).on() != p.at(s).on())
                 return;
@@ -940,8 +946,7 @@ inline const std::vector<Mutation> &mutations() {
                 p.at(s) = p.at(s).on() ? Hit{} : hitOf('x');
        }},
       {"left hand", [](Pattern &p, Rng &) {
-          const int beat = perBeat(p);
-          for (int s = 0; s < p.steps; s += beat * 2)
+          for (int s = 0; s < p.steps; s += strongSteps(p))
              if (!p.at(s).on())
                 p.at(s) = hitOf('b');
        }},
@@ -1022,13 +1027,13 @@ inline Pattern baseRhythm(const Recipe &r, int section, Rng &rng) {
    const double e = sectionEnergy(r, section);
    const auto list = rhythmsFor(g, st);
    const Rhythm *rh = pickRhythm(list, e, rng);
-   Pattern p = rh ? fromRhythm(rh->hits) : fromRhythm("x...............");
+   Pattern p = rh ? fromRhythm(*rh) : st.mods & kWaltz ? fromRhythm("x-----------", kRate34) : fromRhythm("x...............");
    // Interlocking parts: the style's other rhythms woven into the steps this one leaves empty.
    if (st.mods & kInterlock)
       for (const Rhythm *o : list) {
          if (o == rh)
             continue;
-         const Pattern q = fromRhythm(o->hits);
+         const Pattern q = fromRhythm(*o);
          if (q.rate != p.rate)
             continue;
          for (int s = 0; s < p.steps; ++s)
@@ -1040,10 +1045,11 @@ inline Pattern baseRhythm(const Recipe &r, int section, Rng &rng) {
    if (r.genre2 >= 0 && r.genre2 != r.genre && r.blend > 0.0 && !(st.mods & kFixed)) {
       const Genre &g2 = genreAt(r.genre2);
       Style st2 = styleAt(g2, 0);
-      st2.mods = st.mods & kTriplet;
+      st2.mods = st.mods & (kTriplet | kWaltz);
       st2.rhythms = 0;
-      if (const Rhythm *r2 = pickRhythm(rhythmsFor(g2, st2), e, rng))
-         blendInto(p, fromRhythm(r2->hits), r.blend * 0.6, rng);
+      // Only from the same number of beats a bar: a 4/4 rhythm doesn't go into a waltz.
+      if (const Rhythm *r2 = pickRhythm(rhythmsFor(g2, st2), e, rng); r2 && (rhythmRate(*r2) == kRate34) == (p.rate == kRate34))
+         blendInto(p, fromRhythm(*r2), r.blend * 0.6, rng);
    }
    return p;
 }
@@ -1102,10 +1108,10 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
    // left hand, and a line (the tenor line, a riff) fills from its own take.
    const bool genreFill = (st.player < 0 || st.player == g.player) && !hasLine(base);
    const Rhythm *rh = genreFill ? pickRhythm(fills, e, rng) : nullptr;
-   if (rh && (rhythmTriplet(rh->hits) != (base.rate == kRate8T) || (hasLeftHand(fromRhythm(rh->hits)) && !hasLeftHand(base))))
+   if (rh && (rhythmRate(*rh) != base.rate || (hasLeftHand(fromRhythm(*rh)) && !hasLeftHand(base))))
       rh = nullptr;
    if (rh)
-      f = fromRhythm(rh->hits);
+      f = fromRhythm(*rh);
    else {
       f = base;
       const int bar = f.stepsPerBar();
@@ -1133,8 +1139,9 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
    if ((st.mods & kPushes) || g.pushAll)
       for (int s = 0; s < bar; ++s) {
          Hit &h = f.at(s);
-         const bool at = f.rate == kRate8T ? (s == bar - 1 || s == bar / 2 - 1)
-                                           : (s == bar - 1 || s == bar - 2 || s == bar / 2 - 1 || s == bar / 2 - 2);
+         const bool at = f.rate == kRate8T    ? (s == bar - 1 || s == bar / 2 - 1)
+                         : f.rate == kRate34 ? (s == bar - 1 || s == bar - 2)
+                                             : (s == bar - 1 || s == bar - 2 || s == bar / 2 - 1 || s == bar / 2 - 2);
          if (at && h.on() && !onBeat(f, s) && !leftHand(h.part))
             h.push = 1;
       }
@@ -1163,6 +1170,92 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
    return f;
 }
 
+// A figure written for a fill down or an ending, on the take's grid: a section's own (a genre's), or
+// the generic one.
+inline const char *downText(const Genre &g, const Pattern &base, unsigned mods) {
+   const bool off = keepsOff(base, 0);
+   if (base.rate == kRate8T)
+      return off ? "...x-----..." : mods & kLongs ? "x--------..." : "X-----......";
+   if (base.rate == kRate34)
+      return off ? "....x---...." : mods & kLongs ? "x--------..." : "X-------....";
+   if (off)
+      return "....x-------....";
+   if (mods & kLongs)
+      return "x-----------....";
+   const std::string n = g.name;
+   // MMA's SwingFill (two half notes); its SonFill (1 and 3) for the montuno genres.
+   if (n == "Swing Jazz")
+      return "x-------x-------";
+   if (n == "Salsa" || n == "Latin Jazz")
+      return "x.......x.......";
+   return "X-------........";
+}
+inline const char *endingText(const Genre &g, const Pattern &base, unsigned mods) {
+   const bool off = keepsOff(base, 0);
+   if (base.rate == kRate8T)
+      return mods & kLongs ? "X-----------|------------" : "x..x..x..x..|X-----------";
+   if (base.rate == kRate34)
+      return mods & kLongs ? "X-----------|------------" : "x...x...x...|X-----------";
+   if (mods & kLongs)
+      return "X---------------|----------------";
+   if (off)
+      return "....x.......x...|X---------------";
+   const std::string n = g.name;
+   if (n == "Swing Jazz") // SwingEnd: four, then 1 and 3
+      return "x...x...x...x...|X.......x-------";
+   if (n == "Salsa" || n == "Latin Jazz") // the cha-cha cell, then the last chord held
+      return "x...x...x...x.x.|X---------------";
+   if (g.family == kFamilies[0]) // MMA's R&B ending: 1, 3 and 4, then the one held two beats
+      return "x.......x...x...|X-------........";
+   return "x...x...x...x...|X---------------";
+}
+// Scaled to an energy, as a take's velocities are; nothing pushed.
+inline Pattern figure(const char *text, uint8_t rate, double e) {
+   Pattern f = fromRhythm(text, rate);
+   const double scale = 0.82 + 0.3 * e;
+   for (int s = 0; s < f.steps; ++s) {
+      Hit &h = f.at(s);
+      h.push = 0;
+      if (h.on())
+         h.vel = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lround(h.vel * scale)), 20, 127));
+   }
+   return f;
+}
+// The fill down, into a quieter section: a held stab with the next downbeat left clear (MMA's
+// SwingFill, SonFill; a Yamaha arranger's fill from B down to A). No anticipation: the next section
+// comes in on its one. The intro's is the held chord setting up the verse.
+inline Pattern makeFillDown(const Recipe &r, int section, const Pattern &base, double e) {
+   const Genre &g = genreAt(r.genre);
+   const Style &st = styleOf(r);
+   const char *text = section == kIntro ? (base.rate == kRate8T ? "X-----......" : base.rate == kRate34 ? "X-------...." : "X-------........")
+                                        : downText(g, base, st.mods);
+   if (section == kIntro && keepsOff(base, 0))
+      text = downText(g, base, 0);
+   Pattern f = figure(text, base.rate, std::max(0.35, e));
+   f.steps = static_cast<uint8_t>(f.stepsPerBar());
+   for (int s = f.steps; s < kMaxSteps; ++s)
+      f.at(s) = Hit{};
+   // A left hand keeps its downbeat under a chord that leaves it (boom-chick's bass on the one).
+   if (hasLeftHand(base) && !f.at(0).on()) {
+      f.at(0) = hitOf('b');
+      f.at(0).art = kArtRing;
+   }
+   return f;
+}
+// The song's ending (the outro's last bar or two): the last chord rung out, nothing anticipated.
+inline Pattern makeEnding(const Recipe &r, const Pattern &base, double e) {
+   const Genre &g = genreAt(r.genre);
+   const Style &st = styleOf(r);
+   Pattern f = figure(endingText(g, base, st.mods), base.rate, std::max(0.35, e));
+   for (int s = f.steps - 1; s >= 0; --s)
+      if (f.at(s).on()) {
+         f.at(s).art = kArtRing;
+         f.at(s).vel = std::max<uint8_t>(f.at(s).vel, kNormal);
+         break;
+      }
+   return f;
+}
+
 inline Section makeSection(const Recipe &r, int section, uint32_t seed) {
    Section s;
    s.seed = seed;
@@ -1188,14 +1281,22 @@ inline Section makeSection(const Recipe &r, int section, uint32_t seed) {
       s.takes[static_cast<size_t>(t)] = mutate(p, 0.15 + 0.15 * t + r.weird * 0.3, rng, tag, st.mods);
    }
    s.fill = makeFill(r, p, e, rng);
+   s.fillDown = makeFillDown(r, section, p, e);
+   if (section == kOutro)
+      s.ending = makeEnding(r, p, e);
    return s;
 }
+
+inline int beatsOf(const Recipe &r) { return styleOf(r).mods & kWaltz ? 3 : 4; }
 
 inline void generateSong(const Recipe &r, Song &song) {
    const int key = ((r.key % 12) + 12) % 12;
    // A locked section keeps its chords, moved to the new key with the rest of the song.
    const int move = (key - song.key + 12) % 12;
    song.key = static_cast<uint8_t>(key);
+   // A new meter: even a locked section's rhythm is made again (its chords stay).
+   const bool meter = song.beats != beatsOf(r);
+   song.beats = static_cast<uint8_t>(beatsOf(r));
    for (int i = 0; i < kSections; ++i) {
       Section &s = song.sections[static_cast<size_t>(i)];
       if (s.locked) {
@@ -1205,6 +1306,17 @@ inline void generateSong(const Recipe &r, Song &song) {
                if (c.bass >= 0)
                   c.bass = static_cast<int8_t>((c.bass + move) % 12);
             }
+         if (meter) {
+            Section made = makeSection(r, i, s.seed);
+            made.chords = s.chords;
+            made.split = s.split;
+            made.marks = s.marks;
+            made.progBars = s.progBars;
+            made.bars = s.bars;
+            made.locked = s.locked;
+            made.generation = static_cast<uint16_t>(s.generation + 1);
+            s = made;
+         }
          continue;
       }
       s = makeSection(r, i, mix(r.seed, static_cast<uint32_t>(i)));
@@ -1224,6 +1336,7 @@ inline void rollSection(const Recipe &r, Song &song, int section, uint32_t seed,
    if (keepChords || old.locked) {
       s.chords = old.chords;
       s.split = old.split;
+      s.marks = old.marks;
       s.progBars = old.progBars;
       s.bars = old.bars;
    }
@@ -1231,7 +1344,7 @@ inline void rollSection(const Recipe &r, Song &song, int section, uint32_t seed,
 }
 
 // A mutated child taken as the section's main take; the other takes bred from it again.
-inline void adoptChild(const Recipe &r, Section &s, const Pattern &child, uint32_t seed) {
+inline void adoptChild(const Recipe &r, Section &s, const Pattern &child, uint32_t seed, int section = -1) {
    Rng rng(seed);
    s.takes[0] = child;
    for (int t = 1; t < kTakes; ++t) {
@@ -1239,6 +1352,12 @@ inline void adoptChild(const Recipe &r, Section &s, const Pattern &child, uint32
       s.takes[static_cast<size_t>(t)] = mutate(child, 0.15 + 0.15 * t + r.weird * 0.3, rng, tag, styleOf(r).mods);
    }
    s.fill = makeFill(r, child, s.energy / 100.0, rng);
+   // The fill down and the ending made again from the new take (an offbeat take's are its own).
+   if (section >= 0) {
+      s.fillDown = makeFillDown(r, section, child, s.energy / 100.0);
+      if (section == kOutro)
+         s.ending = makeEnding(r, child, s.energy / 100.0);
+   }
    s.generation = static_cast<uint16_t>(s.generation + 1);
 }
 

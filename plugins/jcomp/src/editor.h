@@ -39,7 +39,7 @@ public:
    int mutateSection = kChorus;
    int chordSection = kChorus, chordSlot = 0; // the chord picked in CHORDS (a slot: bar * 2 + half)
    int editSection = kChorus;
-   int editTake = 0;       // 0..3, 4 the fill
+   int editTake = 0;       // 0..3, 4 the fill, 5 the fill down, 6 the ending
    int editStep = -1;      // the hit picked in EDIT
    bool playersOpen = false, browserOpen = false, notesOpen = false;
    int learnAction = -1;   // the action waiting for a note in CUSTOM
