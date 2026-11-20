@@ -29,6 +29,22 @@
 
 namespace jcomp {
 
+// Whether two chords are the same harmony (root, bass, third, fifth and dominant 7th): a 9th
+// turning into a 7th is a change of colour the chord sounding can carry on through, not a change
+// to play; I turning into I7 (the IV's applied dominant, its b7 the note that leads on) is.
+inline bool sameHarmony(const Chord &a, const Chord &b) {
+   if (a.none() || b.none())
+      return a.none() == b.none();
+   if (a.root != b.root || a.bass != b.bass)
+      return false;
+   const auto &x = qualityOf(a).tones, &y = qualityOf(b).tones;
+   for (int i : {3, 4, 5, 6, 8, 10})
+      if ((std::find(x.begin(), x.end(), i) != x.end()) != (std::find(y.begin(), y.end(), i) != y.end()))
+         return false;
+   return true;
+}
+
+
 // A small seeded random stream (splitmix64).
 struct Rng {
    uint64_t s;
