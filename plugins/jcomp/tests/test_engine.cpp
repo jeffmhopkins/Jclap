@@ -16,6 +16,35 @@
 #include "engine.h"
 #include "recipe.h"
 
+#include <cstdlib>
+#include <new>
+
+namespace {
+extern bool gCount;
+extern int gAllocs;
+} // namespace
+
+void *operator new(std::size_t n) {
+   if (gCount)
+      ++gAllocs;
+   if (void *p = std::malloc(n ? n : 1))
+      return p;
+   throw std::bad_alloc();
+}
+void *operator new(std::size_t n, const std::nothrow_t &) noexcept {
+   if (gCount)
+      ++gAllocs;
+   return std::malloc(n ? n : 1);
+}
+void *operator new[](std::size_t n) { return operator new(n); }
+void *operator new[](std::size_t n, const std::nothrow_t &t) noexcept { return operator new(n, t); }
+void operator delete(void *p) noexcept { std::free(p); }
+void operator delete(void *p, std::size_t) noexcept { std::free(p); }
+void operator delete(void *p, const std::nothrow_t &) noexcept { std::free(p); }
+void operator delete[](void *p) noexcept { std::free(p); }
+void operator delete[](void *p, std::size_t) noexcept { std::free(p); }
+void operator delete[](void *p, const std::nothrow_t &) noexcept { std::free(p); }
+
 using namespace jcomp;
 
 namespace {
@@ -61,6 +90,86 @@ std::vector<Timed> run(Engine &e, int64_t samples, std::vector<int> hold = {}, i
    return all;
 }
 
+// Counts the allocations made while `gCount` is on (the audio thread must make none).
+bool gCount = false;
+int gAllocs = 0;
+
+// A song of one section (all seven alike): `rhythm` for every take and the fill, and the chords two
+// a bar ("" for a bar's second half holds its first).
+// (On the heap: the tests' frames would outgrow a 1 MB stack.)
+std::unique_ptr<Song> songOf(const char *rhythm, std::vector<std::pair<const char *, const char *>> bars) {
+   auto result = std::make_unique<Song>();
+   Song &song = *result;
+   song.key = 0;
+   for (Section &sec : song.sections) {
+      for (Pattern &t : sec.takes)
+         t = fromRhythm(rhythm);
+      sec.fill = fromRhythm(rhythm);
+      sec.progBars = static_cast<uint8_t>(bars.size());
+      sec.bars = 8;
+      sec.split = 0;
+      for (size_t b = 0; b < bars.size(); ++b) {
+         sec.chords[b * 2] = chord(bars[b].first);
+         const bool second = bars[b].second && *bars[b].second;
+         sec.chords[b * 2 + 1] = chord(second ? bars[b].second : bars[b].first);
+         if (second)
+            sec.split = static_cast<uint16_t>(sec.split | (1u << b));
+      }
+   }
+   return result;
+}
+
+// Plain settings: on the grid, nothing left to chance.
+Settings plain() {
+   Settings s;
+   s.key = 0;
+   s.scale = kMajor;
+   s.chordsFrom = 0;
+   s.timing = 0;
+   s.velocityVar = 0;
+   s.lengths = 0;
+   s.vary = 0;
+   s.loose = 0;
+   s.runs = 0;
+   s.autoFillBars = 0;
+   s.section = 0;
+   return s;
+}
+
+// Runs the engine from beat `from` at 120 BPM with a playing host, calling `each(at, block)` before
+// every block (to play notes in, or change the block: a loop).
+template <typename Each>
+std::vector<Timed> runWith(Engine &e, int64_t samples, double from, Each each) {
+   std::vector<Timed> all;
+   auto out = std::make_unique<OutBuffer>();
+   double beats = from;
+   for (int64_t at = 0; at < samples; at += kBlock) {
+      Block b;
+      b.frames = kBlock;
+      b.tempo = 120.0;
+      b.hasTransport = b.playing = true;
+      b.beats = beats;
+      each(at, b);
+      out->clear();
+      gCount = true;
+      e.process(b, *out);
+      gCount = false;
+      for (size_t i = 0; i < out->count; ++i)
+         all.push_back({at + out->items[i].time, out->items[i]});
+      beats = b.beats + kBlock / 24000.0;
+   }
+   return all;
+}
+
+// The pitch classes of the notes starting within 30 ms of `sample`.
+std::set<int> startingAt(const std::vector<Timed> &out, int64_t sample) {
+   std::set<int> pcs;
+   for (const Timed &t : out)
+      if (t.on() && std::abs(t.time - sample) < 1440)
+         pcs.insert(t.m.data1 % 12);
+   return pcs;
+}
+
 Settings settingsFor(const Recipe &) {
    std::vector<double> v = defaultValues();
    Settings s;
@@ -95,7 +204,7 @@ int main() {
       JCLAP_CHECK(chordName(c, 5) == "Bbmaj7/D");
       JCLAP_CHECK(!parseChord("H7", c));
       // A chord named from its notes.
-      JCLAP_CHECK(chordName(nameChord({52, 56, 59, 62}), 4) == "E7");
+      JCLAP_CHECK(chordName(nameChord(Ints{52, 56, 59, 62}), 4) == "E7");
    }
 
    // ---- voicings ----
@@ -136,7 +245,7 @@ int main() {
          prev = v;
       }
       // A passing run steps from one note to the next in the scale.
-      const std::vector<int> r = passingRun(67, 72, 3, 0, kMajor, false);
+      const Ints r = passingRun(67, 72, 3, 0, kMajor, false);
       JCLAP_CHECK_EQ(static_cast<int>(r.size()), 3);
    }
 
@@ -161,7 +270,8 @@ int main() {
             }
          // Every style makes a song that plays: every section has chords and a take with hits.
          for (int st = 0; st < static_cast<int>(gen.styles.size()); ++st, ++styles) {
-            Song song;
+            auto songPtr = std::make_unique<Song>();
+            Song &song = *songPtr;
             generateSong(recipeOf(g, st, 99), song);
             for (int sec = 0; sec < kSections; ++sec) {
                const Section &s = song.sections[static_cast<size_t>(sec)];
@@ -217,10 +327,12 @@ int main() {
    // ---- the engine ----
    {
       // With the host: chords out, each note with its off, in the window, on channel 1.
-      Song song;
+      auto songPtr = std::make_unique<Song>();
+      Song &song = *songPtr;
       const Recipe r = recipeOf(0, 0, 42);
       generateSong(r, song);
-      Engine e;
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
       e.setSong(song);
       Settings s = settingsFor(r);
       s.key = song.key;
@@ -248,7 +360,8 @@ int main() {
    {
       // DENSITY thins or fills the take, LENGTH shortens or lengthens every chord, and LOWEST,
       // HIGHEST and OFFSET bound the voicings as the window moves.
-      Song song;
+      auto songPtr = std::make_unique<Song>();
+      Song &song = *songPtr;
       generateSong(recipeOf(0, 0, 42), song);
       // The window bounds the chords; a left hand's bass notes sit under it, on the bass floor.
       for (Section &sec : song.sections)
@@ -265,7 +378,8 @@ int main() {
          v[kRangeLow] = lowest;
          v[kRangeHigh] = highest;
          v[kOffset] = offset;
-         Engine e;
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
          e.setSong(song);
          Settings s = settingsFor(Recipe{});
          s.voicing = voiceSettings([&](clap_id id) { return v[id]; });
@@ -376,13 +490,15 @@ int main() {
             g = i;
       JCLAP_CHECK(g >= 0);
       for (int st = 0; g >= 0 && st < static_cast<int>(genreAt(g).styles.size()); ++st) {
-         Song song;
+         auto songPtr = std::make_unique<Song>();
+         Song &song = *songPtr;
          const Recipe r = recipeOf(g, st, 7);
          generateSong(r, song);
          std::vector<double> v = defaultValues();
          for (const auto &[id, x] : styleValues(g, st))
             v[id] = x;
-         Engine e;
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
          e.setSong(song);
          Settings s = settingsFor(r);
          s.voicing = voiceSettings([&](clap_id id) { return v[id]; });
@@ -412,9 +528,11 @@ int main() {
    }
    {
       // Held notes: E G# B D held above the split, with CHORDS FROM held notes, play an E7.
-      Song song;
+      auto songPtr = std::make_unique<Song>();
+      Song &song = *songPtr;
       generateSong(recipeOf(0, 0, 42), song);
-      Engine e;
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
       e.setSong(song);
       Settings s = settingsFor(Recipe{});
       s.chordsFrom = 1;
@@ -439,9 +557,11 @@ int main() {
    }
    {
       // A section note (the bridge is the keyboard map's G0) is taken and queues the bridge.
-      Song song;
+      auto songPtr = std::make_unique<Song>();
+      Song &song = *songPtr;
       generateSong(recipeOf(0, 0, 42), song);
-      Engine e;
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
       e.setSong(song);
       Settings s = settingsFor(Recipe{});
       e.setSettings(s);
@@ -540,7 +660,8 @@ int main() {
          for (uint32_t seed = 1; seed <= 12; ++seed) {
             Recipe r = recipeOf(g, st, seed);
             r.weird = 0.6;
-            Song song;
+            auto songPtr = std::make_unique<Song>();
+            Song &song = *songPtr;
             generateSong(r, song);
             for (const Section &sec : song.sections)
                for (const Pattern *p : {&sec.takes[0], &sec.takes[1], &sec.takes[2], &sec.takes[3]})
@@ -554,7 +675,8 @@ int main() {
       {
          const int g = genreNamed("Latin Jazz"), st = styleNamed(g, "Latin Jazz Guajeo");
          for (uint32_t seed = 1; seed <= 12; ++seed) {
-            Song song;
+            auto songPtr = std::make_unique<Song>();
+            Song &song = *songPtr;
             generateSong(recipeOf(g, st, seed), song);
             for (int i = kVerse; i <= kBridge; ++i) {
                const Pattern &p = song.sections[static_cast<size_t>(i)].takes[0];
@@ -568,7 +690,8 @@ int main() {
          const int g = genreNamed("Salsa"), st = styleNamed(g, "Montuno 2-3");
          int guajeo = 0;
          for (uint32_t seed = 1; seed <= 20; ++seed) {
-            Song song;
+            auto songPtr = std::make_unique<Song>();
+            Song &song = *songPtr;
             generateSong(recipeOf(g, st, seed), song);
             const Pattern &p = song.sections[kVerse].takes[0];
             guajeo += p.count() >= 8;
@@ -586,7 +709,7 @@ int main() {
       // A run into a chord from outside the key bends to it: into Abmaj7 in C Dorian, no A natural.
       for (int len = 2; len <= 4; ++len)
          for (int from : {60, 72}) {
-            const std::vector<int> run = passingRun(from, 67, len, 0, kDorian, false, chordTones(chord("Abmaj7")));
+            const Ints run = passingRun(from, 67, len, 0, kDorian, false, chordTones(chord("Abmaj7")));
             for (int n : run)
                JCLAP_CHECK(n % 12 != 9);
          }
@@ -594,10 +717,12 @@ int main() {
       // left hand's low note under it.
       {
          const int g = genreNamed("Country"), st = styleNamed(g, "Boom-Chick");
-         Song song;
+         auto songPtr = std::make_unique<Song>();
+         Song &song = *songPtr;
          const Recipe r = recipeOf(g, st, 3);
          generateSong(r, song);
-         Engine e;
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
          e.setSong(song);
          std::vector<double> v = defaultValues();
          for (const auto &[id, x] : styleValues(g, st))
@@ -639,10 +764,12 @@ int main() {
       // A strum both ways on the triplet grid: the offbeat triplet strums up (highest note first).
       {
          const int g = genreNamed("Ska"), st = styleNamed(g, "Shuffle Ska");
-         Song song;
+         auto songPtr = std::make_unique<Song>();
+         Song &song = *songPtr;
          const Recipe r = recipeOf(g, st, 5);
          generateSong(r, song);
-         Engine e;
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
          e.setSong(song);
          std::vector<double> v = defaultValues();
          for (const auto &[id, x] : styleValues(g, st))
@@ -677,6 +804,390 @@ int main() {
          JCLAP_CHECK(strums >= 6);
          JCLAP_CHECK(upStrums * 4 >= strums * 3);
       }
+   }
+
+   // ---- the third review's fixes ----
+   {
+      // A chord that changes between hits still sounds, on time, and the chord before doesn't ring
+      // over it: C held through the bar, G from beat 3 with no hit of its own.
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x---------------", {{"C", "G"}}));
+      e.setSettings(plain());
+      e.reset();
+      const std::vector<Timed> out = runWith(e, 24000 * 8, 0.0, [](int64_t, Block &) {});
+      const std::set<int> at3 = startingAt(out, 48000);
+      JCLAP_CHECK(at3.count(11) && at3.count(2) && !at3.count(4));
+      // Every note of the C chord (its E) is off by the change.
+      std::map<int, int64_t> on;
+      for (const Timed &t : out) {
+         if (t.time >= 96000)
+            break;
+         if (t.on())
+            on[t.m.data1] = t.time;
+         else if (t.off() && t.m.data1 % 12 == 4 && on.count(t.m.data1) && on[t.m.data1] < 1000)
+            JCLAP_CHECK(t.time <= 48000);
+      }
+   }
+   {
+      // A hit an eighth before the change, with nothing after it until then, anticipates it.
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x.....x.........", {{"C", "G"}}));
+      e.setSettings(plain());
+      e.reset();
+      const std::vector<Timed> out = runWith(e, 24000 * 4, 0.0, [](int64_t, Block &) {});
+      const std::set<int> pushed = startingAt(out, 36000);
+      JCLAP_CHECK(pushed.count(11) && !pushed.count(4));
+   }
+   {
+      // Notes come in pairs (an on, then its off, per channel and key) and none is cut to a blip by
+      // the other hand: every style, with its feel.
+      for (int g = 0; g < genreCount(); ++g)
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st) {
+            auto songPtr = std::make_unique<Song>();
+            Song &song = *songPtr;
+            const Recipe r = recipeOf(g, st, 11);
+            generateSong(r, song);
+            std::vector<double> v = defaultValues();
+            for (const auto &[id, x] : styleValues(g, st))
+               v[id] = x;
+            auto engine = std::make_unique<Engine>();
+            Engine &e = *engine;
+            e.setSong(song);
+            Settings s = settingsFor(r);
+            s.voicing = voiceSettings([&](clap_id id) { return v[id]; });
+            s.key = song.key;
+            s.swing = v[kSwing];
+            s.timing = v[kTiming];
+            s.onsets = static_cast<int>(v[kOnsets]);
+            s.runs = v[kRuns];
+            applyRecipe(s, r);
+            e.setSettings(s);
+            e.reset();
+            const std::vector<Timed> out = run(e, 24000 * 16);
+            std::map<int, int64_t> sounding;
+            int blips = 0, unpaired = 0;
+            for (const Timed &t : out) {
+               const int k = (t.m.status & 15) * 128 + t.m.data1;
+               if (t.on()) {
+                  unpaired += sounding.count(k) > 0;
+                  sounding[k] = t.time;
+               } else if (t.off() && sounding.count(k)) {
+                  blips += t.time - sounding[k] < 1200; // 25 ms
+                  sounding.erase(k);
+               }
+            }
+            if (blips || unpaired)
+               std::printf("%s / %s: %d blips, %d unpaired\n", genreAt(g).name, genreAt(g).styles[static_cast<size_t>(st)].name,
+                           blips, unpaired);
+            JCLAP_CHECK_EQ(unpaired, 0);
+            JCLAP_CHECK_EQ(blips, 0);
+         }
+   }
+   {
+      // A two-bar take keeps its phase to the host's bars: started on bar 2 it plays its second bar.
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x...............|..x.............", {{"C", nullptr}}));
+      e.setSettings(plain());
+      e.reset();
+      const std::vector<Timed> out = runWith(e, 24000 * 4, 4.0, [](int64_t, Block &) {});
+      JCLAP_CHECK(startingAt(out, 0).empty());
+      JCLAP_CHECK(!startingAt(out, 12000).empty());
+   }
+   {
+      // DENSITY adds nothing to a figure played as written, nor a chord on the beat to an offbeat take.
+      const auto count = [](const char *rhythm, bool fixed, double density, bool beats) {
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*songOf(rhythm, {{"C", nullptr}}));
+         Settings s = plain();
+         s.fixed = fixed;
+         s.density = density;
+         e.setSettings(s);
+         e.reset();
+         int n = 0;
+         for (const Timed &t : run(e, 24000 * 8))
+            if (t.on())
+               n += !beats || (t.time % 24000 < 600 || t.time % 24000 > 23400);
+         return n;
+      };
+      JCLAP_CHECK_EQ(count("x..x..x...x..x..", true, 1.0, false), count("x..x..x...x..x..", true, 0.5, false));
+      JCLAP_CHECK(count("x..x..x...x..x..", false, 1.0, false) > count("x..x..x...x..x..", false, 0.5, false));
+      JCLAP_CHECK_EQ(count("..x...x...x...x.", false, 1.0, true), 0);
+   }
+   {
+      // The guitar's grip: the bass, its fifth and its octave, the chord above (a power chord with
+      // three notes); and a slash chord keeps its bass at the bottom in every shape.
+      VoiceSettings vs;
+      vs.shape = kGrip;
+      vs.voices = 3;
+      vs.lo = 40;
+      vs.hi = 64;
+      vs.floor = 40;
+      const Voicing g = voice(chord("E"), nullptr, vs);
+      JCLAP_CHECK(g.count == 3 && g.notes[0] % 12 == 4 && g.notes[1] - g.notes[0] == 7 && g.notes[2] - g.notes[0] == 12);
+      vs.voices = 5;
+      const Voicing g5 = voice(chord("E"), nullptr, vs);
+      JCLAP_CHECK(g5.count >= 4 && g5.notes[1] - g5.notes[0] == 7);
+      for (int shape : {kClose, kDrop2, kDrop24, kQuartal, kGrip}) {
+         VoiceSettings w;
+         w.shape = shape;
+         const Voicing v = voice(chord("C/E"), nullptr, w);
+         JCLAP_CHECK(!v.empty() && v.notes[0] % 12 == 4);
+      }
+   }
+   {
+      // A passing run moves by step (three semitones at most) from its first note to the chord.
+      for (int from = 55; from < 80; from += 3)
+         for (int target : {60, 64, 67, 71})
+            for (int len = 2; len <= 4; ++len)
+               for (bool half : {false, true}) {
+                  const Ints r = passingRun(from, target, len, 0, kMajor, half, chordTones(chord("C")));
+                  for (size_t k = 1; k < r.size(); ++k)
+                     JCLAP_CHECK(std::abs(r[k] - r[k - 1]) <= 3 || std::abs(from - target) > 3 * len + 3);
+               }
+   }
+   {
+      // LATCH keeps the chord as its keys are let go one at a time, and after.
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x...x...x...x...", {{"F", nullptr}}));
+      Settings s = plain();
+      s.chordsFrom = 1;
+      s.changeAt = 0;
+      e.setSettings(s);
+      e.reset();
+      for (int k : {60, 64, 67})
+         e.noteOn(0, k, 100);
+      JCLAP_CHECK(chordName(e.heldChord(), 0) == "C");
+      e.noteOff(0, 67);
+      e.noteOff(0, 64);
+      JCLAP_CHECK(chordName(e.heldChord(), 0) == "C");
+      e.noteOff(0, 60);
+      JCLAP_CHECK(chordName(e.heldChord(), 0) == "C");
+      // A note-off for every key (or All Notes Off) lets go of what's held: without LATCH, no chord.
+      s.latch = false;
+      e.setSettings(s);
+      for (int k : {62, 65, 69})
+         e.noteOn(0, k, 100);
+      JCLAP_CHECK(chordName(e.heldChord(), 0) == "Dm");
+      e.releaseAll();
+      JCLAP_CHECK(e.heldChord().none());
+   }
+   {
+      // A chord played on the keys on the beat, a moment late or early, takes that beat.
+      for (int64_t late : {-480, 0, 240, 1200}) {
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*songOf("x...x...x...x...", {{"C", nullptr}}));
+         Settings s = plain();
+         s.chordsFrom = 1;
+         s.changeAt = 2;
+         e.setSettings(s);
+         e.reset();
+         const int64_t when = 48000 + late;
+         bool first = false, second = false;
+         const std::vector<Timed> out = runWith(e, 24000 * 4, 0.0, [&](int64_t at, Block &) {
+            if (!first) {
+               for (int k : {60, 64, 67})
+                  e.noteOn(0, k, 100, 0);
+               first = true;
+            }
+            if (!second && at + static_cast<int64_t>(kBlock) > when) {
+               for (int k : {60, 64, 67})
+                  e.noteOff(0, k, 0);
+               for (int k : {65, 69, 72})
+                  e.noteOn(0, k, 100, static_cast<uint32_t>(std::max<int64_t>(0, when - at)));
+               second = true;
+            }
+         });
+         const std::set<int> at3 = startingAt(out, 48000);
+         // On time or early: the beat plays the new chord. A moment late: the new chord comes in
+         // where it was played, and the old one lets go.
+         JCLAP_CHECK(at3.count(5));
+         if (late <= 0)
+            JCLAP_CHECK(!at3.count(4));
+         std::map<int, int64_t> on;
+         for (const Timed &t : out)
+            if (t.on())
+               on[t.m.data1] = t.time;
+            else if (t.off() && t.m.data1 == 64 && on.count(64) && on[64] < 48000 + 1440 && on[64] > 48000 - 1440)
+               JCLAP_CHECK(t.time <= std::max<int64_t>(48000, when) + 300);
+      }
+   }
+   {
+      // PLAY ONLY WHILE A CHORD IS HELD works with the progression's chords too.
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x...x...x...x...", {{"C", nullptr}}));
+      Settings s = plain();
+      s.heldOnly = true;
+      e.setSettings(s);
+      e.reset();
+      JCLAP_CHECK(run(e, 24000 * 2).empty());
+      JCLAP_CHECK(!run(e, 24000 * 2, {72}).empty());
+   }
+   {
+      // A host loop: every pass starts with its downbeat chord, held its length.
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x---............", {{"C", nullptr}}));
+      e.setSettings(plain());
+      e.reset();
+      const std::vector<Timed> out = runWith(e, 24000 * 16, 0.0, [](int64_t, Block &b) {
+         b.loopActive = true;
+         b.loopStart = 0.0;
+         b.loopEnd = 4.0;
+         if (b.beats >= 4.0 - 1e-9)
+            b.beats -= 4.0;
+      });
+      for (int pass = 0; pass < 4; ++pass) {
+         JCLAP_CHECK_EQ(static_cast<int>(startingAt(out, pass * 96000).size()), 3); // C, E, G
+         std::map<int, int64_t> on;
+         for (const Timed &t : out) {
+            if (t.time < pass * 96000 || t.time >= (pass + 1) * 96000)
+               continue;
+            if (t.on())
+               on[t.m.data1] = t.time;
+            else if (t.off() && on.count(t.m.data1) && on[t.m.data1] - pass * 96000 < 1440)
+               JCLAP_CHECK(t.time - on[t.m.data1] > 18000);
+         }
+      }
+   }
+   {
+      // Notes let go on the channel they were played on, when CHANNEL changes while they sound.
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x---------------", {{"C", nullptr}}));
+      Settings s = plain();
+      e.setSettings(s);
+      e.reset();
+      std::vector<Timed> out = runWith(e, 24000 * 8, 0.0, [&](int64_t at, Block &) {
+         if (at == 24064) {
+            s.channel = 4;
+            e.setSettings(s);
+         }
+      });
+      std::map<int, int> sounding;
+      for (const Timed &t : out) {
+         const int k = (t.m.status & 15) * 128 + t.m.data1;
+         sounding[k] += t.on() ? 1 : t.off() ? -1 : 0;
+      }
+      for (const auto &[k, n] : sounding)
+         JCLAP_CHECK(n == 0 || n == 1); // the last chord may still sound
+      bool five = false;
+      for (const Timed &t : out)
+         five = five || (t.on() && (t.m.status & 15) == 4);
+      JCLAP_CHECK(five);
+   }
+   {
+      // SWITCH AT Next Beat keeps the bar line: the new section's first bar is the bar it comes in.
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      auto songPtr = songOf("x...............", {{"C", nullptr}});
+      Song &song = *songPtr;
+      for (Pattern &t : song.sections[kVerse].takes)
+         t = fromRhythm("x.......x.......");
+      for (int b = 0; b < 2; ++b)
+         song.sections[kVerse].chords[static_cast<size_t>(b)] = chord("A");
+      e.setSong(song);
+      Settings s = plain();
+      s.switchAt = 0;
+      e.setSettings(s);
+      e.reset();
+      const std::vector<Timed> out = runWith(e, 24000 * 12, 0.0, [&](int64_t at, Block &) {
+         if (at == 120064)
+            e.request(kVerse);
+      });
+      int verse = 0;
+      for (const Timed &t : out)
+         if (t.on() && t.m.data1 % 12 == 1) { // the A chord's C#
+            ++verse;
+            JCLAP_CHECK(t.time % 48000 < 1440 || t.time % 48000 > 48000 - 1440);
+         }
+      JCLAP_CHECK(verse >= 2);
+   }
+   {
+      // A line: one note a hit, the degree of the chord it names.
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("1...5...8...3...", {{"C", nullptr}}));
+      e.setSettings(plain());
+      e.reset();
+      std::vector<int> notes;
+      for (const Timed &t : run(e, 24000 * 4))
+         if (t.on())
+            notes.push_back(t.m.data1);
+      JCLAP_CHECK(notes.size() >= 4);
+      if (notes.size() >= 4) {
+         JCLAP_CHECK(notes[0] % 12 == 0 && notes[1] - notes[0] == 7 && notes[2] - notes[0] == 12 && notes[3] - notes[0] == 4);
+      }
+   }
+   {
+      // OCTAVES moves its octave line through the chord, not one block repeated.
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x.x.x.x.x.x.x.x.", {{"C", nullptr}}));
+      Settings s = plain();
+      s.voicing.shape = kOctaves;
+      s.voicing.voices = 4;
+      e.setSettings(s);
+      e.reset();
+      std::set<int> tops;
+      int64_t lastAt = -10000;
+      for (const Timed &t : run(e, 24000 * 4))
+         if (t.on()) {
+            if (t.time - lastAt > 1000)
+               tops.insert(t.m.data1 % 12);
+            lastAt = t.time;
+         }
+      JCLAP_CHECK(tops.size() >= 2);
+   }
+   {
+      // The slip note: a grace note a whole step under an inner note of the chord, just before it.
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("X...X...X...X...", {{"C", nullptr}}));
+      Settings s = plain();
+      s.slip = true;
+      e.setSettings(s);
+      e.reset();
+      const std::vector<Timed> out = run(e, 24000 * 8);
+      int slips = 0;
+      for (const Timed &t : out)
+         if (t.on() && t.time % 12000 > 10000) {
+            for (const Timed &u : out)
+               slips += u.on() && u.m.data1 == t.m.data1 + 2 && u.time > t.time && u.time - t.time < 2400;
+         }
+      JCLAP_CHECK(slips >= 4);
+   }
+   {
+      // Nothing allocated while playing: held chords, runs, the bass coming in.
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      auto songPtr = std::make_unique<Song>();
+      Song &song = *songPtr;
+      generateSong(recipeOf(0, 0, 3), song);
+      e.setSong(song);
+      Settings s = settingsFor(Recipe{});
+      s.chordsFrom = 2;
+      s.runs = 1.0;
+      s.density = 0.9;
+      e.setSettings(s);
+      e.reset();
+      gAllocs = 0;
+      runWith(e, 24000 * 16, 0.0, [&](int64_t at, Block &) {
+         gCount = true;
+         if (at % (24000 * 2) < kBlock) {
+            const bool on = (at / (24000 * 2)) % 2 == 0;
+            for (int k : {62, 65, 69, 72})
+               on ? (void)e.noteOn(0, k, 100, 3) : (void)e.noteOff(0, k, 3);
+         }
+         gCount = false;
+      });
+      JCLAP_CHECK_EQ(gAllocs, 0);
    }
 
    return jclap::core::testResult();

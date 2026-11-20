@@ -8,9 +8,37 @@
 #include <string>
 #include <vector>
 
+#include <cstdlib>
+#include <new>
+
+#include "editor.h"
 #include "params.h"
 
 extern "C" const clap_plugin_entry_t clap_entry;
+
+// Counts the allocations made while `gCount` is on: process() must make none.
+static bool gCount = false;
+static int gAllocs = 0;
+void *operator new(std::size_t n) {
+   if (gCount)
+      ++gAllocs;
+   if (void *p = std::malloc(n ? n : 1))
+      return p;
+   throw std::bad_alloc();
+}
+void *operator new(std::size_t n, const std::nothrow_t &) noexcept {
+   if (gCount)
+      ++gAllocs;
+   return std::malloc(n ? n : 1);
+}
+void *operator new[](std::size_t n) { return operator new(n); }
+void *operator new[](std::size_t n, const std::nothrow_t &t) noexcept { return operator new(n, t); }
+void operator delete(void *p) noexcept { std::free(p); }
+void operator delete(void *p, std::size_t) noexcept { std::free(p); }
+void operator delete(void *p, const std::nothrow_t &) noexcept { std::free(p); }
+void operator delete[](void *p) noexcept { std::free(p); }
+void operator delete[](void *p, std::size_t) noexcept { std::free(p); }
+void operator delete[](void *p, const std::nothrow_t &) noexcept { std::free(p); }
 
 using namespace jcomp;
 
@@ -133,11 +161,21 @@ int main() {
 
    // ---- state ----
    {
-      // A genre, a style and a seed saved and loaded play the same song.
+      // The song itself is saved and loaded, edits and all: an edited chord and hit come back.
       TestHost a(clap_entry, kId);
       a.setParam(kGenre, 7.0);
       a.setParam(kStyle, 1.0);
       a.setParam(kSeed, 777.0);
+      a.process(256);
+      a.plugin()->on_main_thread(a.plugin());
+      auto *host = a.object<EditorHost>();
+      JCLAP_CHECK(host != nullptr);
+      Song edited = host->song();
+      for (Section &sec : edited.sections) {
+         sec.chords[0] = chord("F#m7");
+         sec.takes[0].at(3) = hitOf('X');
+      }
+      host->setSong(edited);
       a.process(256);
       Buffer b;
       const clap_ostream_t out = b.out();
@@ -146,11 +184,113 @@ int main() {
       b.read = 0;
       const clap_istream_t in = b.in();
       JCLAP_CHECK(stateOf(c)->load(c.plugin(), &in));
+      JCLAP_CHECK(c.object<EditorHost>()->song() == edited);
+      // The same recipe without the edits: another song.
+      TestHost d(clap_entry, kId);
+      d.setParam(kGenre, 7.0);
+      d.setParam(kStyle, 1.0);
+      d.setParam(kSeed, 777.0);
+      d.process(256);
+      d.plugin()->on_main_thread(d.plugin());
       a.setTransport(90.0, 0.0, true);
       c.setTransport(90.0, 0.0, true);
-      const Midi x = play(a, 400), y = play(c, 400);
+      d.setTransport(90.0, 0.0, true);
+      const Midi x = play(a, 400), y = play(c, 400), z = play(d, 400);
       JCLAP_CHECK(!x.empty());
       JCLAP_CHECK(same(x, y));
+      JCLAP_CHECK(!same(x, z));
+   }
+   {
+      // A recipe param set by the host remakes the song: the genre it names plays.
+      TestHost a(clap_entry, kId);
+      const Song before = a.object<EditorHost>()->song();
+      a.setParam(kGenre, 7.0);
+      a.process(256);
+      a.plugin()->on_main_thread(a.plugin());
+      JCLAP_CHECK(!(a.object<EditorHost>()->song() == before));
+      // The panel's own changes (the same value again) don't.
+      const Song now = a.object<EditorHost>()->song();
+      a.setParam(kGenre, 7.0);
+      a.process(256);
+      a.plugin()->on_main_thread(a.plugin());
+      JCLAP_CHECK(a.object<EditorHost>()->song() == now);
+   }
+
+   // ---- real time ----
+   {
+      // Nothing allocated in process(): the comp, chord keys, section notes, passed notes, the bass.
+      TestHost h(clap_entry, kId);
+      h.setParam(kPassNotes, 1.0);
+      h.setParam(kRuns, 1.0);
+      h.setParam(kDensity, 0.9);
+      h.setParam(kRhythmFrom, 2.0);
+      h.process(256);
+      struct Out {
+         int count = 0;
+         static bool push(const clap_output_events_t *l, const clap_event_header_t *) {
+            ++static_cast<Out *>(l->ctx)->count;
+            return true;
+         }
+      } sink;
+      const clap_output_events_t outEvents{&sink, Out::push};
+      struct In {
+         clap_event_midi_t ev[8];
+         uint32_t n = 0;
+         static uint32_t size(const clap_input_events_t *l) { return static_cast<const In *>(l->ctx)->n; }
+         static const clap_event_header_t *get(const clap_input_events_t *l, uint32_t i) {
+            return &static_cast<const In *>(l->ctx)->ev[i].header;
+         }
+         void midi(uint32_t time, uint8_t a, uint8_t b, uint8_t c) {
+            clap_event_midi_t &e = ev[n++];
+            e = clap_event_midi_t{};
+            e.header = {sizeof(e), time, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_MIDI, 0};
+            e.data[0] = a;
+            e.data[1] = b;
+            e.data[2] = c;
+         }
+      } events;
+      const clap_input_events_t inEvents{&events, In::size, In::get};
+      static float bufs[4][256];
+      float *ins[2] = {bufs[0], bufs[1]}, *outs[2] = {bufs[2], bufs[3]};
+      clap_audio_buffer_t inBuf{}, outBuf{};
+      inBuf.data32 = ins;
+      inBuf.channel_count = 2;
+      outBuf.data32 = outs;
+      outBuf.channel_count = 2;
+      clap_event_transport_t transport{};
+      transport.header = {sizeof(transport), 0, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_TRANSPORT, 0};
+      transport.flags = CLAP_TRANSPORT_HAS_TEMPO | CLAP_TRANSPORT_HAS_BEATS_TIMELINE | CLAP_TRANSPORT_IS_PLAYING;
+      transport.tempo = 120.0;
+      clap_process_t proc{};
+      proc.frames_count = 256;
+      proc.steady_time = -1;
+      proc.transport = &transport;
+      proc.audio_inputs = &inBuf;
+      proc.audio_outputs = &outBuf;
+      proc.audio_inputs_count = proc.audio_outputs_count = 1;
+      proc.in_events = &inEvents;
+      proc.out_events = &outEvents;
+      gAllocs = 0;
+      for (int k = 0; k < 800; ++k) {
+         events.n = 0;
+         if (k % 40 == 0)
+            for (uint8_t n : {62, 65, 69, 72})
+               events.midi(5, k % 80 ? 0x80 : 0x90, n, 100);
+         if (k % 25 == 0) {
+            events.midi(9, 0x91, 40, 100); // the bass, on channel 2
+            events.midi(10, 0x90, 30, 90); // passed on
+         }
+         if (k % 25 == 5) {
+            events.midi(1, 0x81, 40, 0);
+            events.midi(2, 0x80, 30, 0);
+         }
+         transport.song_pos_beats = static_cast<clap_beattime>(std::llround(k * 256 / 24000.0 * CLAP_BEATTIME_FACTOR));
+         gCount = true;
+         h.plugin()->process(h.plugin(), &proc);
+         gCount = false;
+      }
+      JCLAP_CHECK(sink.count > 100);
+      JCLAP_CHECK_EQ(gAllocs, 0);
    }
 
    // ---- param text ----

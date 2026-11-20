@@ -16,11 +16,8 @@
 
 namespace jcomp {
 
-// A style's swing: its genre's, more with SHUFFLE.
-inline double styleSwing(const Genre &g, const Style &s) {
-   double sw = g.swing + (s.mods & kShuffle ? 0.08 : 0.0);
-   return std::clamp(sw, 0.5, 0.7);
-}
+// A style's swing: its own, or its genre's, more with SHUFFLE.
+inline double styleSwing(const Genre &g, const Style &s) { return styleSwingOf(g, s); }
 
 // The player a style is played by: its own, or its genre's.
 inline int stylePlayer(const Genre &g, const Style &s) { return s.player >= 0 ? s.player : g.player; }
@@ -37,7 +34,7 @@ inline std::vector<std::pair<clap_id, double>> styleValues(int genre, int style)
    return {{kGenre, genre},
            {kStyle, std::clamp(style, 0, static_cast<int>(g.styles.size()) - 1)},
            {kSwing, styleSwing(g, s)},
-           {kSwingFeel, g.swingFeel},
+           {kSwingFeel, styleSwingFeelOf(g, s)},
            {kFreeTempo, s.bpm},
            {kPlayer, stylePlayer(g, s)},
            {kScale, ps.scale},
@@ -48,7 +45,8 @@ inline std::vector<std::pair<clap_id, double>> styleValues(int genre, int style)
            {kCenter, own ? s.center : p.center},
            {kOnsets, p.onsets},
            {kTiming, p.laidBack},
-           {kRuns, std::min(1.0, p.runs + (s.mods & kRunsIn ? 0.3 : 0.0))}};
+           // A fixed figure has no runs; a slip-note style always slips some.
+           {kRuns, s.mods & kFixed ? 0.0 : s.mods & kSlip ? std::max(0.5, p.runs) : std::min(1.0, p.runs + (s.mods & kRunsIn ? 0.3 : 0.0))}};
 }
 
 // What picking a player sets: how it voices and feels.

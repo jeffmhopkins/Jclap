@@ -16,9 +16,83 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <initializer_list>
 #include <vector>
 
 namespace jcomp {
+
+// A vector of at most N, kept in place: what the audio thread uses where it would otherwise grow a
+// std::vector (voicing a chord, naming held keys, a passing run), so it never allocates. Past N it
+// drops what doesn't fit.
+template <typename T, size_t N>
+struct FixedVec {
+   std::array<T, N> items{};
+   size_t n = 0;
+   FixedVec() = default;
+   FixedVec(std::initializer_list<T> list) {
+      for (const T &x : list)
+         push_back(x);
+   }
+   template <typename It>
+   FixedVec(It first, It last) {
+      for (; first != last; ++first)
+         push_back(*first);
+   }
+   T *begin() { return items.data(); }
+   T *end() { return items.data() + n; }
+   const T *begin() const { return items.data(); }
+   const T *end() const { return items.data() + n; }
+   size_t size() const { return n; }
+   bool empty() const { return n == 0; }
+   bool full() const { return n >= N; }
+   void clear() { n = 0; }
+   T &operator[](size_t i) { return items[i]; }
+   const T &operator[](size_t i) const { return items[i]; }
+   T &front() { return items[0]; }
+   const T &front() const { return items[0]; }
+   T &back() { return items[n - 1]; }
+   const T &back() const { return items[n - 1]; }
+   void push_back(const T &x) {
+      if (n < N)
+         items[n++] = x;
+   }
+   void pop_back() {
+      if (n)
+         --n;
+   }
+   T *insert(T *pos, const T &x) {
+      const size_t at = static_cast<size_t>(pos - begin());
+      if (n >= N)
+         return pos;
+      for (size_t i = n; i > at; --i)
+         items[i] = items[i - 1];
+      items[at] = x;
+      ++n;
+      return begin() + at;
+   }
+   template <typename It>
+   void insert(T *pos, It first, It last) {
+      size_t at = static_cast<size_t>(pos - begin());
+      for (; first != last; ++first)
+         insert(begin() + at++, *first);
+   }
+   T *erase(T *first, T *last) {
+      const size_t a = static_cast<size_t>(first - begin()), b = static_cast<size_t>(last - begin());
+      for (size_t i = b; i < n; ++i)
+         items[a + i - b] = items[i];
+      n -= b - a;
+      return begin() + a;
+   }
+   T *erase(T *pos) { return erase(pos, pos + 1); }
+   bool operator==(const FixedVec &o) const {
+      if (n != o.n)
+         return false;
+      for (size_t i = 0; i < n; ++i)
+         if (!(items[i] == o.items[i]))
+            return false;
+      return true;
+   }
+};
 
 constexpr int kSections = 7;
 constexpr int kTakes = 4;
@@ -45,8 +119,8 @@ enum Articulation : uint8_t { kArtAsWritten, kArtChop, kArtHalf, kArtRing, kArtT
 inline const char *const kArtNames[] = {"As written", "Chop", "Half", "Ring", "Top rings"};
 // Which of the chord a hit plays: all of it, the top note, the top two, or a bass note (a pianist's
 // left hand, a guitarist's thumb): the root, or the fifth the bass alternates with.
-enum Part : uint8_t { kPartChord, kPartTop, kPartUpper, kPartBass, kPartFifth };
-inline const char *const kPartNames[] = {"Chord", "Top note", "Top two", "Bass", "Bass 5th"};
+enum Part : uint8_t { kPartChord, kPartTop, kPartUpper, kPartBass, kPartFifth, kPartLine };
+inline const char *const kPartNames[] = {"Chord", "Top note", "Top two", "Bass", "Bass 5th", "Line"};
 inline bool leftHand(uint8_t part) { return part == kPartBass || part == kPartFifth; }
 
 // One chord stab on one step. A velocity of 0 is no hit.
@@ -60,10 +134,12 @@ struct Hit {
    uint8_t run = 0;      // a passing run leads into it, when the chord changes here
    uint8_t push = 0;     // an anticipation: it plays the chord that comes an eighth later
    int8_t voicing = -1;  // -1 led by the engine, else the n-th shape (see harmony.h rankShapes)
+   uint8_t degree = 1;   // a line note's degree of the chord, 1..9 (kPartLine)
    bool on() const { return vel > 0; }
    bool operator==(const Hit &o) const {
       return vel == o.vel && (!vel || (len == o.len && chance == o.chance && nudge == o.nudge && art == o.art &&
-                                       part == o.part && run == o.run && push == o.push && voicing == o.voicing));
+                                       part == o.part && run == o.run && push == o.push && voicing == o.voicing &&
+                                       degree == o.degree));
    }
    bool operator!=(const Hit &o) const { return !(*this == o); }
 };
@@ -151,8 +227,8 @@ struct Song {
    }
 
    // Saved as bytes: a version, the key, then each section's fields, its chords and its patterns
-   // (four takes and the fill), each pattern as its steps, rate and every hit (9 bytes) of its grid.
-   static constexpr uint32_t kVersion = 1;
+   // (four takes and the fill), each pattern as its steps, rate and every hit (10 bytes; 9 before version 2) of its grid.
+   static constexpr uint32_t kVersion = 2; // 2: a hit's line degree
 
    std::vector<uint8_t> save() const {
       std::vector<uint8_t> out;
@@ -174,6 +250,7 @@ struct Song {
             u8(h.run);
             u8(h.push);
             u8(static_cast<uint8_t>(h.voicing));
+            u8(h.degree);
          }
       };
       u32(kVersion);
@@ -215,6 +292,7 @@ struct Song {
             v |= static_cast<uint32_t>(u8()) << (8 * i);
          return v;
       };
+      uint32_t version = 0;
       auto pattern = [&](Pattern &p) {
          p.steps = static_cast<uint8_t>(std::clamp<int>(u8(), 1, kMaxSteps));
          p.rate = static_cast<uint8_t>(std::min<int>(u8(), kRate8T));
@@ -224,13 +302,14 @@ struct Song {
             h.chance = static_cast<uint8_t>(std::min<int>(u8(), 100));
             h.nudge = static_cast<int8_t>(std::clamp<int>(static_cast<int8_t>(u8()), -kMaxNudge, kMaxNudge));
             h.art = static_cast<uint8_t>(std::min<int>(u8(), kArtTopRings));
-            h.part = static_cast<uint8_t>(std::min<int>(u8(), kPartFifth));
+            h.part = static_cast<uint8_t>(std::min<int>(u8(), kPartLine));
             h.run = u8() ? 1 : 0;
             h.push = u8() ? 1 : 0;
             h.voicing = static_cast<int8_t>(std::clamp<int>(static_cast<int8_t>(u8()), -1, 7));
+            h.degree = version >= 2 ? static_cast<uint8_t>(std::clamp<int>(u8(), 1, 9)) : 1;
          }
       };
-      const uint32_t version = u32();
+      version = u32();
       const uint32_t count = u32();
       if (!ok || version < 1 || version > kVersion || count != kSections)
          return false;

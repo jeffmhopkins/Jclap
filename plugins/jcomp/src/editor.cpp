@@ -291,7 +291,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       pl.fromTop = prev.empty() ? -1 : prev.top();
       // A run into a change.
       if (runs && h.run && !prev.empty() && c != prevChord && v >= 3) {
-         const std::vector<int> r = passingRun(prev.top(), vc.top(), 3, key, scale, true, chordTones(c));
+         const Ints r = passingRun(prev.top(), vc.top(), 3, key, scale, true, chordTones(c));
          for (size_t k = 0; k < r.size(); ++k)
             out.notes.push_back({static_cast<float>(v - 3 + static_cast<int>(k)), 0.85f, r[k], kRunNote, 0.6f});
       }
@@ -309,7 +309,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       float len = static_cast<float>(h.len) * 0.92f;
       switch (h.art) {
       case kArtChop: len = 0.45f; break;
-      case kArtHalf: len = h.len * 0.5f; break;
+      case kArtHalf: len = std::max<float>(h.len, static_cast<float>(gap)) * 0.5f; break;
       case kArtRing: case kArtTopRings: len = gap * 0.97f; break;
       default: break;
       }
@@ -325,6 +325,11 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          played.notes[0] = vc.notes[static_cast<size_t>(vc.count - 2)];
          played.notes[1] = vc.notes[static_cast<size_t>(vc.count - 1)];
          played.count = 2;
+      } else if (h.part == kPartLine) {
+         const int low = vs.center - 6;
+         const int root = low + ((c.root - low) % 12 + 12) % 12;
+         played.notes[0] = static_cast<uint8_t>(std::clamp(root + lineInterval(c, h.degree, key, scale), 0, 127));
+         played.count = 1;
       } else if (leftHand(h.part)) {
          played.notes[0] = static_cast<uint8_t>(bassNote(c, vs.floor, h.part == kPartFifth));
          played.count = 1;
@@ -334,7 +339,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          const uint8_t kind = leftHand(h.part) ? kBottomNote : top ? kTopNote : i == 0 ? kBottomNote : kInnerNote;
          float l = len;
          if (h.art == kArtTopRings && !top)
-            l = std::min(len, h.len * 0.5f);
+            l = std::min(len, std::max<float>(h.len, gap * 0.5f));
          out.notes.push_back({static_cast<float>(v), std::max(0.35f, l), played.notes[static_cast<size_t>(i)], kind,
                               h.vel / 127.0f});
       }
@@ -2224,7 +2229,7 @@ private:
       host_.tags.clear();
       for (int i = 0; i < 5; ++i) {
          std::string tag;
-         host_.litter.push_back(mutate(sec.takes[0], param(kMutation), rng, tag));
+         host_.litter.push_back(mutate(sec.takes[0], param(kMutation), rng, tag, styleOf(recipe()).mods));
          host_.tags.push_back(tag);
       }
       if (mutate_)
@@ -2261,7 +2266,17 @@ private:
       presets_->currentName = [this] { return host_.presetName(); };
       presets_->setCurrentName = [this](const std::string &n) { host_.setPresetName(n); };
       presets_->onLoad = [this](const ui::Preset &p) {
-         ui::applyPreset(p, host_, defaults());
+         // A preset is the sound and the song: the routing, the transport and the notes set up for
+         // this project stay as they are.
+         ui::Preset sound = p;
+         std::vector<double> d = defaults();
+         sound.values.erase(std::remove_if(sound.values.begin(), sound.values.end(),
+                                           [](const auto &v) { return isSetupParam(v.first); }),
+                            sound.values.end());
+         for (clap_id id = 0; id < d.size(); ++id)
+            if (isSetupParam(id))
+               d[id] = host_.paramValue(id);
+         ui::applyPreset(sound, host_, d);
          Song song;
          const std::filesystem::path file = ui::userPresetFolder(kPresetFormat) / (p.name + kPresetFormat.extension);
          if (readSong(songFile(file), song))
@@ -2719,7 +2734,7 @@ private:
          Pattern &p = TakeRoll::pick(s, host_.editSection, host_.editTake);
          Rng rng(rng_());
          std::string tag;
-         p = mutate(p, param(kMutation), rng, tag);
+         p = mutate(p, param(kMutation), rng, tag, styleOf(recipe()).mods);
          host_.setSong(s);
          diceTag_ = tag;
          redraw();
@@ -2741,7 +2756,7 @@ private:
 
       const float vx = 734;
       shape1_ = &onPage<ui::SegmentedSwitch>(kEditPage, {vx, 140, 240, 22},
-                                             std::vector<std::string>{"CLOSE", "DRP2", "2+4", "SHELL", "4THS", "SPRD", "RTLS", "8VES"});
+                                             std::vector<std::string>{"CLS", "DR2", "2+4", "SHL", "4TH", "SPR", "RTL", "8VE", "GRIP"});
       shape1_->setAccent(kOrange);
       shape1_->onChange = [this](int i) {
          setParam(kShape, i);
@@ -2749,7 +2764,8 @@ private:
       };
       tips_.add(*shape1_, "The voicing's shape: close, drop 2 (the second voice from the top down an octave), drop 2+4, "
                           "shells (3rd and 7th), fourths, spread over two hands, rootless (Levine's A and B forms), "
-                          "or octaves (a close chord with its bottom note doubled on top).");
+                          "octaves (a close chord with its bottom note doubled on top), or a guitar's grip (the "
+                          "bass, its fifth and octave, the chord above; the power chord).");
       auto knob = [this](Page page, ui::Rect r, clap_id id, const char *name, unsigned accent) -> ui::Knob & {
          auto &k = onPage<ui::Knob>(page, r, rangeOf(id));
          k.setLabel(name);
@@ -2816,11 +2832,12 @@ private:
       runIn_->onToggle = [this](bool on) { editHit([&](Hit &h) { h.run = on; }); };
       push_ = &onPage<CheckBox>(kEditPage, {vx, 538, 240, 16}, "Anticipate: plays the next chord early");
       push_->onToggle = [this](bool on) { editHit([&](Hit &h) { h.push = on; }); };
-      part_ = &onPage<ui::SegmentedSwitch>(kEditPage, {vx, 558, 240, 18}, std::vector<std::string>{"CHORD", "TOP", "TOP 2", "BASS", "5TH"});
+      part_ = &onPage<ui::SegmentedSwitch>(kEditPage, {vx, 558, 240, 18}, std::vector<std::string>{"CHORD", "TOP", "TOP 2", "BASS", "5TH", "LINE"});
       part_->setAccent(kOrange);
       part_->onChange = [this](int i) { editHit([&](Hit &h) { h.part = static_cast<uint8_t>(i); }); };
-      tips_.add(*part_, "What of the chord the hit plays: all of it, the top note, the top two, the bass note, or the fifth "
-                       "the bass alternates with.");
+      tips_.add(*part_, "What of the chord the hit plays: all of it, the top note, the top two, the bass note, the fifth "
+                       "the bass alternates with, or one note of a line (the degree of the chord the style wrote, the "
+                       "root if none).");
       auto &revoice = onPage<FlatButton>(kEditPage, {vx, 582, 117, 20}, "RE-VOICE \xE2\x96\xB8", 9);
       revoice.onClick = [this](const visage::MouseEvent &) {
          editHit([&](Hit &h) { h.voicing = static_cast<int8_t>(h.voicing >= 4 ? -1 : h.voicing + 1); });
@@ -2929,8 +2946,9 @@ private:
             setParam(kSection, a);
          else if (a >= kActTake1 && a <= kActTake4 && whole(kSwitchBy) != 1)
             setParam(kTake, a - kActTake1);
-         if (a == kActFill || whole(kSwitchBy) == 1)
-            host_.request(a);
+         // Played as a section note too: a click on the section the param already holds (the song
+         // having moved on from it) still goes there.
+         host_.request(a);
       };
       tips_.add(*tiles_, "Click a section to switch to it (at SWITCH AT), a number for that take, FILL for a fill.");
       auto &songMode = onPage<ui::SegmentedSwitch>(kPlayPage, {300, 84, 112, 20}, std::vector<std::string>{"LOOP", "SONG"});

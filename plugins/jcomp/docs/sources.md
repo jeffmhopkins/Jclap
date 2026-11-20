@@ -1434,6 +1434,59 @@ all four takes) and played it through the engine, then checked what came out aga
   on the e and a) is unconfirmed. Comparing with Part E afterwards: the two passes overlap only on
   Freddie Green and the montunos, where this pass found the engine undoing Part E's grid fixes.
 
+## Part G. The third review (2026-11-20)
+
+A third cold pass, by five reviewers who didn't read Parts E and F first, generated every style and
+dumped what the engine actually played (a new tool, `jcomp-dump`, prints each section's chords, takes
+and MIDI bar by bar), then probed the plugin through CLAP. It found 107 problems; these were fixed.
+
+- **Chords that never sounded.** A chord that changed between two hits (the V of a ii-V in a
+  Charleston bar, the second chord of any split bar under a held rhythm) was never played, and the
+  chord before rang over the change (a boom-chick's last "chick" sounding B7 over the E). Nothing now
+  rings over a change; a hit an eighth before a change with nothing after it anticipates it, as the
+  and of 2 does in swing comping [2][54]; and a change with no hit at all is struck where it comes.
+- **Clave turned round.** Two-bar takes counted their bars from where the section started, so a
+  section starting on an odd bar (SWITCH AT Next Bar, a transport start, a host loop) played 3-2 for
+  2-3, and the one-bar fill always landed on the three-side. Takes now keep their phase to the host's
+  bars, and a figure played as written fills with itself [56].
+- **Hands cutting each other.** A note-off from one hand ended the same key struck since by the
+  other, so the left hand's step-behind note and the ballad's bass on 3 lasted a few milliseconds.
+  Every note's on and off are now paired.
+- **DENSITY against the idiom.** Above the middle it filled montunos, the batida and Freddie Green's
+  four [55] with straight eighths, and put chords on the downbeats of offbeat styles (one drop, ska,
+  offbeat house). Fixed figures now get nothing added, and offbeat styles nothing on the beat.
+- **Riffs that didn't move.** The Superstition clav riff was one repeated note (Hein [5] has a
+  moving sixteenth line, now written as degrees of the chord, on the Dorian set); the Afrobeat tenor
+  line [13][14] and the palm-wine finger and thumb [26][27] likewise. A new LINE part plays one degree
+  of the chord per hit. The montuno's octave line now moves through the chord [58].
+- **Guitars that weren't guitars.** The Strummer voiced four piano notes with a hole in the middle,
+  and Rock had no power chord. A new GRIP shape voices the guitar's bass string, fifth and octave
+  with the chord above, and Rock's Quarter Pound and Minor Rock play power chords.
+- **Floyd Cramer's slip.** Nashville Slip played scalar sixteenth runs. It now plays the slip note: a
+  grace note a whole step under an inner chord tone, slid into it [18].
+- **Styles that contradicted their names.** The 12/8 ballad was a shuffle; the Two-Step a rock
+  syncopation; Gospel's Sunday Ballad played the shout pattern at 66 BPM, and the Shout used the
+  ballad's ii-V walk-up rather than a I-vi-IV-I vamp [53]; Slow Blues never played on the one;
+  Motown's "Gorilla Piano" named no sourced practice (now Straight Eighths) and its Boogie Figure
+  wasn't swung; Deep House's i9-iv9 is Aeolian, not Dorian [24][25]; reggae's double chop sat on 2 and
+  its "a" [35][51]. Disco's IV is a 13th, after Rodgers [40].
+- **Harmony.** WEIRD's tritone sub replaced blues and funk tonic I7s and kept slash basses; it now
+  only replaces a dominant that resolves down a fifth. Secondary dominants into minor chords get a b9;
+  iii chords no longer get a 9th outside the key; a sus becomes 13sus only when it resolves.
+- **Voicing.** Low-interval mud and low half-step rubs were only costs, so a voicing could still
+  choose them; they are now limits [3][4]. Rootless 7b9 uses the b13 [57]. A slash chord keeps its bass
+  at the bottom. On an organ or a pad the spread voicing's low note stays.
+- **Runs.** A half-step landing could leap a fourth before its target; runs ran in sixteenths in
+  eighth-note styles, could swallow the V chord, and could be flagged on a bass note. Runs now move by
+  step, on the take's grid, never over another chord, and only into a chord.
+- **The plugin.** A host loop could drop its first downbeat; keyboard chords played on time were
+  taken a beat late; LATCH lost quick taps and turned a chord let go key by key into its last key;
+  changing CHANNEL left notes stuck; loading a preset reset the routing; the audio thread allocated;
+  SWITCH AT Next Beat moved the bar line for good; the pre-roll played; the host setting a recipe
+  param didn't remake the song. All fixed, each with a test.
+- **Seen and left.** Disco's chucking grid (judgement), the broken-chord left hand's shape, smaller
+  naming points, and the reach of the progressions in some genres.
+
 ---
 
 ## Bibliography
