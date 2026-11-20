@@ -627,8 +627,12 @@ inline Pattern onGrid(const Pattern &b, uint8_t rate) {
          continue;
       const int sub = s % from, beat = s / from;
       const int t = beat * to + (from == 4 ? k16to12[sub] : k12to16[sub]);
-      if (t < out.steps && (!out.at(t).on() || b.at(s).vel > out.at(t).vel))
+      if (t < out.steps && (!out.at(t).on() || b.at(s).vel > out.at(t).vel)) {
          out.at(t) = b.at(s);
+         // Its length in this grid's steps (a held quarter is three triplets, or four sixteenths).
+         out.at(t).len = static_cast<uint8_t>(std::clamp<int>(static_cast<int>(std::lround(b.at(s).len * double(to) / from)), 1,
+                                                               std::max(1, out.steps - t)));
+      }
    }
    return out;
 }
@@ -642,8 +646,8 @@ inline void blendInto(Pattern &a, const Pattern &b0, double amount, Rng &rng) {
    for (int s = 0; s < a.steps; ++s)
       if (rng.chance(amount)) {
          Hit h = b.at(s % b.steps);
-         if (!h.on() || (a.at(s).on() && leftHand(a.at(s).part)))
-            continue;
+         if (!h.on() || (a.at(s).on() && (leftHand(a.at(s).part) || a.at(s).part == kPartLine)))
+            continue; // never over a left hand's note or a riff's
          if (h.part == kPartLine || (leftHand(h.part) && !leftHandA)) {
             h.part = kPartChord;
             h.degree = 0;
@@ -1115,6 +1119,16 @@ inline Pattern baseRhythm(const Recipe &r, int section, Rng &rng) {
    return p;
 }
 
+// A take's last bar, as a pattern of its own (its first bar when it has one).
+inline Pattern lastBar(const Pattern &p) {
+   Pattern f = p;
+   const int bar = p.stepsPerBar();
+   const int from = p.steps > bar ? (p.steps / bar - 1) * bar : 0;
+   for (int s = 0; s < kMaxSteps; ++s)
+      f.at(s) = s < bar && s + from < p.steps ? p.at(s + from) : Hit{};
+   f.steps = static_cast<uint8_t>(std::min<int>(p.steps, bar));
+   return f;
+}
 inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng) {
    const Genre &g = genreAt(r.genre);
    const Style &st = styleOf(r);
@@ -1137,7 +1151,7 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
    // A held-chord style's fill holds too: its own bar, rung, swelling into the next with a chord
    // pushed on the last eighth (a pad doesn't chop eighths for a fill).
    if (st.mods & kLongs) {
-      Pattern f = base;
+      Pattern f = lastBar(base);
       f.steps = static_cast<uint8_t>(f.stepsPerBar());
       for (int s = f.steps; s < kMaxSteps; ++s)
          f.at(s) = Hit{};
@@ -1175,7 +1189,7 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
    if (rh)
       f = fromRhythm(*rh);
    else {
-      f = base;
+      f = lastBar(base); // the bar it takes the place of: a two-bar riff's answer, not its start
       const int bar = f.stepsPerBar();
       if (!hasLine(base))
          for (int s = bar - perBeat(f); s < bar; ++s)
@@ -1288,8 +1302,28 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
 
 // A figure written for a fill down or an ending, on the take's grid: a section's own (a genre's), or
 // the generic one.
+// Where a take's chords fall: only on the ands (a ska chop, a house stab), or only on 2 and 4 (a
+// backbeat, a one drop's skank). An ending or a fill down stays there.
+inline bool chordsOnly(const Pattern &p, bool ands) {
+   const int beat = p.perBeat(), bar = p.stepsPerBar();
+   const int and_ = p.rate == kRate8T ? 2 : beat / 2;
+   int n = 0;
+   for (int s = 0; s < p.steps; ++s) {
+      const Hit &h = p.at(s);
+      if (!h.on() || leftHand(h.part))
+         continue;
+      ++n;
+      const int in = s % bar;
+      if (ands ? in % beat != and_ : (in != beat && in != 3 * beat))
+         return false;
+   }
+   return n > 0;
+}
 inline const char *downText(const Genre &g, const Pattern &base, unsigned mods) {
-   const bool off = keepsOff(base, 0);
+   const bool ands = base.stepsPerBar() >= 12 && base.rate != kRate34 && base.rate != kRate68 && chordsOnly(base, true);
+   const bool off = !ands && (keepsOff(base, 0) || (base.rate == kRate16 && chordsOnly(base, false)));
+   if (ands)
+      return base.rate == kRate8T ? "..x-----...." : "..x-----........"; // the and of 1, held
    if (base.rate == kRate8T)
       return off ? "...x-----..." : mods & kLongs ? "x--------..." : "x-----......";
    if (base.rate == kRate34)
@@ -1309,9 +1343,12 @@ inline const char *downText(const Genre &g, const Pattern &base, unsigned mods) 
    return "x-------........";
 }
 inline const char *endingText(const Genre &g, const Pattern &base, unsigned mods) {
-   const bool off = keepsOff(base, 0);
+   const bool ands = base.rate != kRate34 && base.rate != kRate68 && chordsOnly(base, true);
+   const bool off = !ands && (keepsOff(base, 0) || (base.rate == kRate16 && chordsOnly(base, false)));
+   if (ands && !(mods & kLongs)) // the chops on the ands, then the last chord held
+      return base.rate == kRate8T ? "..x..x..x..x|X-----------" : "..x...x...x...x.|X---------------";
    if (base.rate == kRate8T)
-      return mods & kLongs ? "X-----------|------------" : "x..x..x..x..|X-----------";
+      return mods & kLongs ? "X-----------|------------" : off ? "...x.....x..|X-----------" : "x..x..x..x..|X-----------";
    if (base.rate == kRate34)
       return mods & kLongs ? "X-----------|------------" : "x...x...x...|X-----------";
    if (base.rate == kRate68) // 1 and 4, then the last chord held
@@ -1379,12 +1416,12 @@ inline Pattern makeEnding(const Recipe &r, const Pattern &base, double e) {
    const Style &st = styleOf(r);
    Pattern f = figure(endingText(g, base, st.mods), base.rate, std::max(0.35, e));
    // A bossa carries its batida into the held chord, not a bar of block quarters: the figure's own
-   // bar (a two-bar cycle's second, so the last chord comes where its first would).
+   // bar: the cycle's first, which falls on the outro's second-last bar (an even bar of an even
+   // section), so the cycle isn't broken by two second bars in a row.
    if ((st.mods & kFixed) && std::string(g.name) == "Bossa Nova" && base.rate == kRate16 && f.steps > f.stepsPerBar()) {
       const int bar = f.stepsPerBar();
-      const int from = base.steps > bar ? bar : 0;
       for (int s = 0; s < bar; ++s) {
-         f.at(s) = s + from < base.steps ? base.at(s + from) : Hit{};
+         f.at(s) = s < base.steps ? base.at(s) : Hit{};
          f.at(s).push = 0;
       }
    }

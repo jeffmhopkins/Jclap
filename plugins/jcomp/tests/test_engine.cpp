@@ -2041,19 +2041,16 @@ int main() {
          applyMutation(p, "answer", rng);
          JCLAP_CHECK(p == before);
       }
-      // Freddie Green's four: in two at a low energy, in four at a high one.
+      // Freddie Green's four: four to the bar at every energy (B05), quieter when the section is.
       {
          const int g = genreNamed("Swing Jazz");
          const Style &fg = styleAt(genreAt(g), styleNamed(g, "Four To The Bar"));
          const auto list = rhythmsFor(genreAt(g), fg);
-         int two = 0, four = 0;
-         for (uint32_t k = 1; k <= 40; ++k) {
-            Rng a(k), b(k + 100);
-            two += fromRhythm(*pickRhythm(list, 0.3, a)).count() == 4;   // two a bar, two bars
-            four += fromRhythm(*pickRhythm(list, 0.9, b)).count() == 8; // four a bar
-         }
-         JCLAP_CHECK(two >= 30);
-         JCLAP_CHECK(four >= 30);
+         for (uint32_t k = 1; k <= 40; ++k)
+            for (double e : {0.1, 0.3, 0.9}) {
+               Rng a(k);
+               JCLAP_CHECK_EQ(fromRhythm(*pickRhythm(list, e, a)).count(), 8); // four a bar
+            }
       }
       // The right hand's arpeggio is single line notes on 1, 2, its and, 3, 4 and its and.
       {
@@ -2715,9 +2712,10 @@ int main() {
          generateSong(recipeOf(g, st, 1), *song);
          const Pattern &end = song->sections[kOutro].ending;
          const Pattern &take = song->sections[kOutro].takes[0];
-         const int bar = end.stepsPerBar(), from = take.steps > bar ? bar : 0;
+         // B06: the cycle's first bar, where the outro's second-last bar falls.
+         const int bar = end.stepsPerBar();
          for (int s = 0; s < bar; ++s)
-            JCLAP_CHECK_EQ(end.at(s).on(), take.at(s + from).on());
+            JCLAP_CHECK_EQ(end.at(s).on(), take.at(s).on());
       }
       // B13: a fill down settles: never louder than the groove it leaves.
       // C12: a fill (up) is never quieter than the groove's own accents.

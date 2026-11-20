@@ -236,7 +236,7 @@ inline const std::vector<Genre> &genres() {
        {{"x---x-x-----x-x-", 0.4}, {"x.xX.xx.x.xX.xx.", 0.85}, {"X.xx.xX.xx.x", 0.6}, {"b.xb.Xb.xb.X", 0.9},
         {"x--x--x--x--", 0.35}, {"X.xX.xx.xX.x", 0.85},
         // The spiritual's four-bar phrase: halves, the fourth bar in quarters turning it round.
-        {"x.......x.......|x.......x.......|x.......x.......|x...x...x...x...", 0.45}},
+        {"x-------x-------|x-------x-------|x-------x-------|x---x---x---x---", 0.45}},
        {{"x.xX.xx.x.xXxxxx", 0.85}, {"X.xx.xX.xxxx", 0.7}},
        // I-vi-ii-V; the walk-up IV-#IVo7-I/5-VI7-ii-V; ii-V vamps; I-I7/3-IV-iv-I.
        // The shout's own vamp: I-vi-IV-I, the blues shuffle's harmony sped up (PianoGroove).
@@ -244,7 +244,7 @@ inline const std::vector<Genre> &genres() {
         {kMajor, {"C|Am|F|C", "C|Am|F|C", "F|C|F|G7", "C|Am|F|C", "Am|F|Am|G", "C|Am|F|C"}}},
        {{"Sunday Ballad", "Ballad", 66, kTriplet | kRunsIn | kRich, 0, 0b110100},
         {"Shout", "Shout", 160, kTriplet | kRunsIn, 1, 0b1000},
-        {"Praise Walk-Up", "Walk-Up", 84, kRunsIn | kLeftHand | kRich, 0, 0b1000001, kPopPianist}},
+        {"Praise Walk-Up", "Walk-Up", 84, kRunsIn | kLeftHand | kRich, 0, 0b1000011, kPopPianist}},
        "31, 32, 44, 53, 61"},
       {"Blues", kFamilies[1], kPopPianist, 0.5, 0,
        // On the triplet grid: backbeat chords, the Chicago lift, the long-short shuffle pulse (2 and
@@ -253,7 +253,7 @@ inline const std::vector<Genre> &genres() {
        // The four-bar phrase, its fourth bar in quarters (the turnaround), and the slow blues' quarters
        // with a pickup into 4 (MMA).
        {{"...x.....x..", 0.3}, {"x..X.xx..X.x", 0.6}, {"x.xX.xx.xX.x", 0.85}, {"x..X.....X..", 0.45}, {"X.xX.xX.xX.x", 0.75},
-        {"x.....x.....|x.....x.....|x.....x.....|x..x..x..x..", 0.4}, {"x..x..x..x..|x..x....xx..", 0.55}},
+        {"x-----x-----|x-----x-----|x-----x-----|x--x--x--x--", 0.4}, {"x--x--x--x--|x--x----xx--", 0.55}},
        {{"x.xx.xx.xxxx", 0.8}},
        // The 12-bar and its quick change; the I-I7/3-IV-#IVo7-I/5-V7 turnaround.
        {{kBlues, {"C7 C7/E|F7 F#dim7|C7/G|G7", "C7|C7|C7|C7|F7|F7|C7|C7|G7|F7|C7|G7", "C7 C7/E|F7 F#dim7|C7/G|G7", "C7|C7|C7|C7|F7|F7|C7|C7|G7|F7|C7|G7", "F7|F7|C7|C7", "C7 C7/E|F7 F#dim7|C7/G G7|C7"}},
@@ -268,8 +268,8 @@ inline const std::vector<Genre> &genres() {
        // The Charleston (1, the and of 2) and its reverse (the and of 1, 3); Garland's offbeats, an eighth ahead of the next beat;
        // Freddie Green's four to the bar, one or two notes, 2 and 4 leaned on.
        // Held comps (MMA's basic swing piano: 1 held, then the and of 3 held over the bar; Impro-Visor's
-       // chord held to the and of 4); Freddie Green's four, each stroke most of a beat long ("chunk"), and
-       // its two-feel only at the lowest energy (the head in two, the solos in four); MMA's
+       // chord held to the and of 4); Freddie Green's four, each stroke most of a beat long ("chunk"), four
+       // to the bar throughout (the two-feel is the bass's, not his); MMA's
        // LongSS2 (1, 2, the and of 3, 4).
        {{"x.....x.........", 0.35}, {"..x.....x.......", 0.45}, {"......x.......x.", 0.6}, {"x--.X--.x--.X--.", 0.8},
         {"x-------..x-----|x---------------", 0.3}, {"x--.....x--.....", 0.1}, {"x-------------..", 0.25},
@@ -285,7 +285,7 @@ inline const std::vector<Genre> &genres() {
         {kMajor, {"Dm7|G7|Cmaj7|Cmaj7", "Cmaj7|E7#5|Fmaj7|A7#5|Dm7|A7#5|Dm7|G7", "Em7|A7|Dm7|G7", "Cmaj7|Am7|Dm7|G7|Em7|A7|Dm7|G7", "Fmaj7|Fm7|Em7|A7|D7|D7|Dm7|G7", "Dm7|G7|Cmaj7|Cmaj7"}}},
        {{"Charleston Comp", "Charleston", 160, kSparse, 0, 0b0011},
         {"Garland Pushes", "Garland", 140, kPushes, 0, 0b100000100},
-        {"Four To The Bar", "Freddie", 180, kPlain | kShorts | kFixed, 0, 0b101000, kRhythmGuitar, kShell, 3, 40, 64, 52},
+        {"Four To The Bar", "Freddie", 180, kPlain | kShorts | kFixed, 0, 0b001000, kRhythmGuitar, kShell, 3, 40, 64, 52},
         {"Held Comp", "Held", 132, 0, 0, 0b11010000},
         {"Jazz Waltz", "Waltz", 150, kWaltz, 1, 0}},
        "2, 19, 20, 21, 54, 55, 57, 61, 62", true},
@@ -363,7 +363,7 @@ inline const std::vector<Genre> &genres() {
        // MMA's four-bar half-note phrase, its last bar in quarters; the 50s piano's pounding triplets and
        // its dotted pickups (MMA), played over the 50s changes.
        {{"X---------------", 0.25}, {"X---X---X---X---", 0.6}, {"x-o-X-o-x-o-X-o-", 0.75}, {"X..x..x.X..x..x.", 0.85},
-        {"x.......x.......|x.......x.......|x.......x.......|x...x...x...x...", 0.5},
+        {"x---....x---....|x---....x---....|x---....x---....|x---x---x---x---", 0.5},
         {"xxxXxxxxxXxx|xxxXxxxxxXxx|xxxXxxxxxXxx|x..x..x..x..", 0.8}, {"x..xx...x..xx...|x..x.......xx...", 0.7}},
        {{"x-x-x-x-x.x.xxxx", 0.8}},
        // I-bVII-IV-I (Mixolydian), bVI-bVII-I, the minor i-bVI-bIII-bVII.
@@ -388,7 +388,7 @@ inline const std::vector<Genre> &genres() {
        // the left hand rocking under them.
        {{"x-------x-------", 0.35}, {"x.f.b.f.x.f.b.f.", 0.65}, {"xxxXxxxxxXxx", 0.6}, {"x--x--x--x--", 0.35},
         {"x...x...x...x...", 0.5}, {"x.....x.x-------|x...x...x-------", 0.55}, {"b...3.5.8...5.3.|b.....5.8...5.3.", 0.45},
-        {"x...x...x...x...|x...x...x...x...|....x...x...x...|x...x...x...x...", 0.5},
+        {"x---x---x---x---|x---x---x---x---|....x---x---x---|x---x---x---x---", 0.5},
         {"x-----x-----", 0.35, 6}, {"X.x.x.X.x.x.", 0.6, 6}, {"b.x.x.f.x.x.", 0.5, 6}},
        {{"x-------x.x.x.xx", 0.5}, {"xxxXxxxxxXXX", 0.6}},
        // I-V/7-vi-IV over a falling bass; I-iii-IV-V; IV-V-iii-vi-ii-V-I; the last chorus again, ending home.
