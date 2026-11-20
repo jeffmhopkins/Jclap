@@ -1529,8 +1529,15 @@ private:
       }
       if (hand == 1)
          bassChord_ = c; // the left hand has sounded this chord's bass
-      else if (h.part == kPartChord && c != bassChord_)
-         bassChord_ = Chord{};
+      else if (h.part == kPartChord) {
+         // A chord whose lowest note is its bass (a spread voicing's left hand) has sounded the root:
+         // the alternating bass's fifth comes next, not the root again.
+         const int bassPc = ((c.bass >= 0 ? c.bass : c.root) % 12 + 12) % 12;
+         if (v.count > 0 && v.notes[0] % 12 == bassPc)
+            bassChord_ = c;
+         else if (c != bassChord_)
+            bassChord_ = Chord{};
+      }
       // A two-handed voicing's low note, struck with the chord on 1 and 3: held to the next of them
       // (or the change), by the left hand, so the right hand's chops don't lift it.
       bool holdLow = false;

@@ -2244,5 +2244,23 @@ int main() {
                   JCLAP_CHECK_EQ(static_cast<int>(o.chordAt(o.bars - 1, true).root), static_cast<int>(song.key));
                }
    }
+   {
+      // C01, B02: a spread chord's low note is the left hand's root, so the alternating bass's next
+      // note is the fifth (1-5-8-5), not the root again.
+      for (const char *rhythm : {"x.f.b.f.x.f.b.f.", "x.......f.......", "x.f.X..........."}) {
+         auto song = songOf(rhythm, {{"C", nullptr}, {"F", nullptr}});
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = plain();
+         s.voicing.shape = kSpread;
+         e.setSettings(s);
+         e.reset();
+         const auto all = runWith(e, 24000 * 8, 0.0, [](int64_t, Block &) {});
+         const int64_t fifthAt = rhythm[2] == 'f' ? 12000 : 48000;
+         JCLAP_CHECK(startingAt(all, fifthAt) == std::set<int>{7});           // C's fifth
+         JCLAP_CHECK(startingAt(all, 96000 + fifthAt) == std::set<int>{0});   // F's fifth
+      }
+   }
    return jclap::core::testResult();
 }
