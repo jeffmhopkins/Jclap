@@ -1666,6 +1666,56 @@ medium, 24 low); these were fixed in 0.7.0, each with a test where a test could 
   README asks for 3/4 from bar 1), and the intro's setup takes the fill's place, so it needs *Fill
   into the new section* (now said in the README).
 
+## Part K. The seventh review (2026-11-20)
+
+A seventh cold pass, split as the sixth, reproduced every finding with `jcomp-dump` or a probe
+program. It found 55 problems (3 critical, 7 high, 22 medium, 23 low); these were fixed in 0.8.0,
+each with a test where a test could hold it.
+
+- **Harmony and voicing.** ROOTLESS gave a 7#5 a natural fifth beside its #5 (the A and B forms put
+  the dominant's alteration where its fifth would go [2][57]); it keeps the #5. A new key left the
+  chords that ENERGY or BLEND keep in the old key (a locked section's moved); they move now. SPREAD
+  found its bass within one octave and a sixth's gap, so many majors had two voicings and the top
+  leapt a fourth in Motown; two octaves and a fifth's gap give it room (top jumps over a fourth went
+  to about 1%). OCTAVES dropped a m7b5's b5 and every b9, #9 and #11 (a montuno's right hand plays the
+  b9 against the bass's root [7]); it keeps them. 4THS stopped at its first strictness level, often
+  one stack a chord; it takes the next while there are fewer than three, keeping the seventh. A
+  triad's double was rejected or kept by how the stack was built; DOUBLE is now a rule on the result.
+  WEIRD's tritone sub of a 7#5 kept the #5 (the old #5 is the sub's 9th, Levine [2] ch. 6) and was
+  spelled sharp in the panel's NOW PLAYING and chord card and in the dump (Ab13 into G, not G#13);
+  WEIRD gave the slow blues ambient sus chords. Rock's Mixolydian bridge repeated the pre (now
+  bVI-bVII-IV).
+- **Rhythm.** DENSITY's thinning kept a bar's first hit even when it was a ghost, dropping the bar's
+  chord; it keeps the first sounding chord. A pushAll genre pushed its fixed figures; a fixed figure
+  tied pushes over (a guajeo strikes its two-side as written). A run cleared a beat or an accented
+  chord under it. The offbeat test read the take, not the ending, while the ending played. Freddie
+  Green's four went to two at low energy; Green kept four [19] (Four To The Bar plays four
+  throughout). The 60s R&B piano's second bar was one upbeat; it plays the piano's and the organ's
+  part as one two-bar rhythm. Bossa's swing feel was on sixteenths its grid doesn't have. Western
+  Swing's four gained fill-in chops at high energy; a four to the bar takes none. Added hits from
+  mutations and WEIRD came in at full level in a quiet take; they sit at or under its own. The
+  answer bar deleted line and thumb notes ("without variation", Veal via [14]).
+- **Fills and endings.** A skank's or offbeat stab's fill that came out as its groove led nowhere;
+  its last two chops are accented with a pickup. A kLongs fill and a fill's fallback took the take's
+  first bar, not its last. The offbeat styles ended on block beats; they end on their offbeats, then
+  the held chord. The bossa's ending copied the cycle's second bar; it copies the first. A held
+  style's intro set-up was a stab; it holds. Ambient's fills pushed every section join; they don't.
+  Funk's fills tied over the next section's One; they are pickups. A fill left with one downbeat chord
+  no longer carries a push. Salsa's ending now puts its last chord on the and of 4 (a cierre's
+  anticipated last hit), held.
+- **The engine and plugin.** A jump left a fill playing in the bar it landed on (and the ending,
+  outside SONG); SONG running free started from the intro, not the Section parameter; a band hit on a
+  chord the take pushed into struck it twice an eighth apart (it goes on the push). Switching in 6/8
+  counted quarter beats. Host automation of ENERGY or BLEND threw away chord edits that the panel's
+  ENERGY keeps; a host loop's dice changed every pass with SAME DICE off (a bar's dice are the host
+  bar's now). A 6/8 song saved by 0.6.0 stayed on the 3/4 grid (it moves to 6/8 on load; songs are
+  saved as version 4). The rolls missed the anticipation, the tie over a push, the change struck where
+  the take has no hit and a hit's chance, put the playhead on the take's own bars, and drew the
+  ending over the outro's first bars with band hits it doesn't play; a probe now finds the same
+  onsets in the roll and the engine for all 87 styles. The EDIT roll hid hits under a HOLD. The
+  descriptor said 24 genres. Nashville Slip's runs were forced to at least 0.5 though its slip
+  replaces them (it now has the player's runs).
+
 ## Bibliography
 
 1. de Clercq, Trevor, and David Temperley. "A corpus analysis of rock harmony." *Popular Music* 30/1

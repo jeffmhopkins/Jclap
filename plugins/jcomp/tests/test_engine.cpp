@@ -2952,5 +2952,179 @@ int main() {
       generateSong(r, song);
       JCLAP_CHECK(chordName(song.sections[kVerse].chords[0], 4) != "F#m7");
    }
+
+   // ---- the seventh review's fixes (0.8.0) ----
+   {
+      // B01, D01: a rootless 7#5 keeps its #5 (no natural fifth); D06: OCTAVES keeps an altered fifth
+      // and an altered ninth.
+      VoiceSettings q;
+      q.shape = kRootless;
+      q.voices = 4;
+      q.lo = 48;
+      q.hi = 76;
+      q.center = 62;
+      for (const Voicing &v : candidates(chord("C7#5"), q)) {
+         bool sharp5 = false;
+         for (int i = 0; i < v.count; ++i) {
+            JCLAP_CHECK(v.notes[static_cast<size_t>(i)] % 12 != 7);
+            sharp5 = sharp5 || v.notes[static_cast<size_t>(i)] % 12 == 8;
+         }
+         JCLAP_CHECK(sharp5);
+      }
+      q.shape = kOctaves;
+      for (int voices : {4, 5}) {
+         q.voices = voices;
+         for (const auto &[name, pc] : std::vector<std::pair<const char *, int>>{{"Cm7b5", 6}, {"C7b9", 1}, {"C7#9", 3}, {"C7#5", 8}}) {
+            const Voicing v = voice(chord(name), nullptr, q);
+            JCLAP_CHECK(!v.empty());
+            bool has = false;
+            for (int i = 0; i < v.count; ++i)
+               has = has || v.notes[static_cast<size_t>(i)] % 12 == pc;
+            JCLAP_CHECK(has);
+         }
+      }
+   }
+   {
+      // E02: a new key moves the chords kept (ENERGY or BLEND after a key change), as it moves a
+      // locked section's.
+      Recipe r = recipeOf(0, 0, 9);
+      Song song;
+      generateSong(r, song);
+      song.sections[kVerse].chords[0] = chord("F#m7");
+      r.key = (r.key + 2) % 12;
+      generateSong(r, song, true);
+      JCLAP_CHECK(song.sections[kVerse].chords[0] == chord("G#m7"));
+   }
+   {
+      // E01: a jump back out of a fill plays the take where it lands, not the rest of the fill.
+      auto song = songOf("x...............", {{"C", nullptr}, {"F", nullptr}});
+      for (Section &sec : song->sections)
+         sec.fill = fromRhythm("x.x.x.x.x.x.x.x.");
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.autoFillBars = 4;
+      e.setSettings(s);
+      e.reset();
+      bool jumped = false;
+      int64_t jumpAt = -1;
+      const auto all = runWith(e, 24000 * 24, 0.0, [&](int64_t at, Block &b) {
+         if (!jumped && b.beats >= 13.0) {
+            jumped = true;
+            jumpAt = at;
+            b.beats = 0.0;
+         }
+      });
+      JCLAP_CHECK(jumped);
+      std::set<int64_t> onsets;
+      for (const Timed &t : all)
+         if (t.on() && t.time >= jumpAt && t.time < jumpAt + 24000 * 7 / 2) // bar 1, its downbeat
+            onsets.insert((t.time - jumpAt) / 2400);
+      JCLAP_CHECK_EQ(static_cast<int>(onsets.size()), 1);
+   }
+   {
+      // B03: a figure played as written isn't tied over: its next downbeat is struck. E08: a band hit
+      // on a chord the take pushes into is that push, held: not struck again on the beat.
+      for (bool fixed : {true, false}) {
+         auto song = songOf("x.............x.", {{"C", nullptr}, {"F", nullptr}});
+         for (Section &sec : song->sections) {
+            for (Pattern &t : sec.takes)
+               t.at(14).push = 1;
+            sec.marks[2] = fixed ? kMarkNone : kMarkHold;
+         }
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = plain();
+         s.fixed = fixed;
+         s.section = kVerse;
+         e.setSettings(s);
+         e.reset();
+         const auto all = runWith(e, 24000 * 8, 0.0, [](int64_t, Block &) {});
+         JCLAP_CHECK(startingAt(all, 84000) == (std::set<int>{0, 5, 9}));
+         if (fixed)
+            JCLAP_CHECK(!startingAt(all, 96000).empty());
+         else
+            JCLAP_CHECK(startingAt(all, 96000).empty());
+      }
+   }
+   {
+      // E10: a 6/8 song saved before 0.8.0 on the 3/4 grid loads on the 6/8 one.
+      for (int g = 0; g < genreCount(); ++g)
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st) {
+            if (!(genreAt(g).styles[static_cast<size_t>(st)].mods & kSixEight))
+               continue;
+            const Recipe r = recipeOf(g, st, 5);
+            Song song;
+            generateSong(r, song);
+            for (Section &sec : song.sections) {
+               for (Pattern &t : sec.takes)
+                  t.rate = kRate34;
+               sec.fill.rate = sec.fillDown.rate = sec.ending.rate = kRate34;
+            }
+            completeSong(r, song, std::vector<uint8_t>{3, 0, 0, 0});
+            for (const Section &sec : song.sections) {
+               for (const Pattern &t : sec.takes)
+                  JCLAP_CHECK(t.rate == kRate68);
+               JCLAP_CHECK(sec.fill.rate == kRate68 && sec.ending.rate == kRate68);
+            }
+         }
+   }
+   {
+      // D07: the answer leaves a line's notes and a left hand's as written. D10: a hit a mutation adds
+      // is no louder than the take's own.
+      const Pattern line = fromRhythm("1.3.45..54.3.41.|1.3.45..54.3.41.");
+      const Pattern palm = fromRhythm("b.x.f3b5f...b3f5|b.x.f3b5f...b3f5");
+      for (uint32_t seed = 1; seed <= 60; ++seed)
+         for (const Pattern *base : {&line, &palm}) {
+            Pattern p = *base;
+            Rng rng(seed);
+            applyMutation(p, "answer", rng);
+            for (int k = 0; k < base->steps; ++k)
+               if (base->at(k).on() && (base->at(k).part == kPartLine || leftHand(base->at(k).part)))
+                  JCLAP_CHECK(p.at(k) == base->at(k));
+         }
+      JCLAP_CHECK(!mutationFits("answer", 0, line));
+      for (const char *tag : {"busier", "push it", "answer", "ghosts", "shift"})
+         for (uint32_t seed = 1; seed <= 30; ++seed) {
+            Pattern p = fromRhythm("x.......x.......|x.......x.......");
+            for (int k = 0; k < p.steps; ++k)
+               if (p.at(k).on())
+                  p.at(k).vel = 41;
+            Rng rng(seed);
+            applyMutation(p, tag, rng);
+            for (int k = 0; k < p.steps; ++k)
+               if (p.at(k).on())
+                  JCLAP_CHECK(p.at(k).vel <= 41);
+         }
+   }
+   {
+      // A06: WEIRD gives the blues no suspended approach chords; C06: an ambient fill pushes nothing;
+      // A09: funk's fill is a pickup, not pushed over the next One.
+      for (int g = 0; g < genreCount(); ++g) {
+         const std::string name = genreAt(g).name;
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st)
+            for (uint32_t seed = 1; seed <= 12; ++seed) {
+               Recipe r = recipeOf(g, st, seed);
+               r.weird = 1.0;
+               Song song;
+               generateSong(r, song);
+               for (const Section &sec : song.sections) {
+                  if (name == "Blues")
+                     for (int k = 0; k < sec.progBars * 2; ++k)
+                        JCLAP_CHECK(sec.chords[static_cast<size_t>(k)].quality != kSus);
+                  if (name == "Ambient" || name == "Funk")
+                     for (int k = 0; k < sec.fill.steps; ++k)
+                        JCLAP_CHECK(!sec.fill.at(k).push);
+               }
+            }
+      }
+   }
+   {
+      // A10: a tritone sub falling a half step is spelled flat (Ab13 to G in E minor, not G#13).
+      const Chord to = chord("Gmaj9");
+      JCLAP_CHECK(chordName(chord("Ab13"), 4, kMinor, &to) == "Ab13");
+   }
    return jclap::core::testResult();
 }

@@ -223,6 +223,7 @@ struct LiveFeel {
    int same = 4;       // SAME DICE's bars
    int every = 1;      // RUNS AT MOST every so many bars
    bool fixed = false; // the style's figure is played as written
+   bool live = false;  // read from the panel (else EDIT's take as written: every hit, none added)
 };
 LiveFeel gFeel;
 
@@ -234,6 +235,7 @@ void readFeel(const EditorHost &host) {
    gFeel.same = kSameDiceBars[choiceIndex(host.paramValue(kSameDice), 5)];
    gFeel.every = kRunEveryBars[choiceIndex(host.paramValue(kRunEvery), 3)];
    gFeel.fixed = (styleOf(recipeFrom([&](clap_id id) { return host.paramValue(id); })).mods & kFixed) != 0;
+   gFeel.live = true;
 }
 
 // The engine's own dice, for the bar of the view a step is in: the roll draws the hits the first
@@ -307,7 +309,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       // A change where the take strikes nothing (nor within an eighth) sounds where it comes, as the
       // engine plays it: with the bar's first chord's feel.
       const bool slotEdge = vt % barTicks == 0 || vt % barTicks == halfBar;
-      if (mark == kMarkNone && slotEdge && v > 0 && !(h.on() && !leftHand(h.part)) && !prevChord.none() &&
+      if (gFeel.live && mark == kMarkNone && slotEdge && v > 0 && !(h.on() && !leftHand(h.part)) && !prevChord.none() &&
           !sameHarmony(chordAtView(v), prevChord)) {
          int toNext = out.steps + n;
          for (int k = 1; k < out.steps + n; ++k)
@@ -363,7 +365,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          h.art = more > 0.85 ? kArtAsWritten : kArtChop;
       } else if (!struck && thinnedInRoll(sec, p, v % n, v)) {
          continue; // DENSITY below the middle drops the weakest hits; each bar's first stays
-      } else if (!struck && h.chance < 100 && rollDice(p, v, 4) * 100.0 >= h.chance) {
+      } else if (!struck && gFeel.live && h.chance < 100 && rollDice(p, v, 4) * 100.0 >= h.chance) {
          continue; // a hit's chance, with the engine's dice for the first pass
       }
       int64_t tick = static_cast<int64_t>(v) * stepTicks + (h.push ? kTicksPerBeat / 2 : 0);
