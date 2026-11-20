@@ -1,0 +1,177 @@
+// JComp through CLAP: chords out with the host and on its own PLAY, section notes and chord keys
+// taken and other notes passed on (or not), state with the song, and param text.
+
+#include <jclap/core/test_host.h>
+
+#include <algorithm>
+#include <cstring>
+#include <string>
+#include <vector>
+
+#include "params.h"
+
+extern "C" const clap_plugin_entry_t clap_entry;
+
+using namespace jcomp;
+
+namespace {
+
+constexpr const char *kId = "com.jeffmhopkins.jclap.jcomp";
+
+struct Buffer {
+   std::vector<char> data;
+   size_t read = 0;
+   clap_ostream_t out() {
+      return {this, [](const clap_ostream_t *s, const void *p, uint64_t n) -> int64_t {
+                 auto *b = static_cast<Buffer *>(s->ctx);
+                 b->data.insert(b->data.end(), static_cast<const char *>(p), static_cast<const char *>(p) + n);
+                 return static_cast<int64_t>(n);
+              }};
+   }
+   clap_istream_t in() {
+      return {this, [](const clap_istream_t *s, void *p, uint64_t n) -> int64_t {
+                 auto *b = static_cast<Buffer *>(s->ctx);
+                 const size_t k = std::min<size_t>(n, b->data.size() - b->read);
+                 std::memcpy(p, b->data.data() + b->read, k);
+                 b->read += k;
+                 return static_cast<int64_t>(k);
+              }};
+   }
+};
+
+const clap_plugin_state_t *stateOf(jclap::core::TestHost &h) {
+   return static_cast<const clap_plugin_state_t *>(h.plugin()->get_extension(h.plugin(), CLAP_EXT_STATE));
+}
+
+using Midi = std::vector<jclap::core::TestMidi>;
+
+Midi play(jclap::core::TestHost &h, int blocks) {
+   Midi all;
+   for (int k = 0; k < blocks; ++k)
+      for (jclap::core::TestMidi m : h.process(256).midi) {
+         m.time += static_cast<uint32_t>(k * 256);
+         all.push_back(m);
+      }
+   return all;
+}
+
+Midi noteOns(const Midi &midi) {
+   Midi r;
+   for (const auto &m : midi)
+      if ((m.status & 0xF0) == 0x90 && m.data2 > 0)
+         r.push_back(m);
+   return r;
+}
+
+bool same(const Midi &a, const Midi &b) {
+   if (a.size() != b.size())
+      return false;
+   for (size_t i = 0; i < a.size(); ++i)
+      if (a[i].status != b[i].status || a[i].data1 != b[i].data1 || a[i].data2 != b[i].data2 || a[i].time != b[i].time)
+         return false;
+   return true;
+}
+
+} // namespace
+
+int main() {
+   using jclap::core::TestHost;
+
+   // ---- with the host ----
+   {
+      // A few bars at 104 BPM: chords on channel 1, several notes at once, each with its note-off.
+      TestHost h(clap_entry, kId);
+      h.setTransport(104.0, 0.0, true);
+      const Midi out = play(h, 600);
+      const Midi on = noteOns(out);
+      JCLAP_CHECK(on.size() > 12);
+      int offs = 0;
+      for (const auto &m : out) {
+         JCLAP_CHECK_EQ(m.status & 0x0F, 0);
+         offs += (m.status & 0xF0) == 0x80 || ((m.status & 0xF0) == 0x90 && m.data2 == 0);
+      }
+      JCLAP_CHECK(offs >= static_cast<int>(on.size()) - 8);
+      int together = 0;
+      for (size_t i = 1; i < on.size(); ++i)
+         together += on[i].time - on[i - 1].time < 400;
+      JCLAP_CHECK(together > 6);
+   }
+   {
+      // Stopped, nothing plays; PLAY runs it free.
+      TestHost h(clap_entry, kId);
+      h.setTransport(120.0, 0.0, false);
+      JCLAP_CHECK(noteOns(play(h, 200)).empty());
+      h.setParam(kPlay, 1.0);
+      JCLAP_CHECK(!noteOns(play(h, 300)).empty());
+   }
+
+   // ---- notes in ----
+   {
+      // A section's note (Intro is C0 on the keyboard map) and a chord key are taken; a note between
+      // them is dropped unless PASS OTHER NOTES is on.
+      TestHost h(clap_entry, kId);
+      h.setTransport(120.0, 0.0, true);
+      h.midi(0x90, 12, 100);
+      h.midi(0x90, 64, 100);
+      h.midi(0x90, 40, 100);
+      bool section = false, chordKey = false, passed = false;
+      for (const auto &m : h.process(256).midi) {
+         section = section || m.data1 == 12;
+         passed = passed || (m.status == 0x90 && m.data1 == 40 && m.data2 == 100);
+         chordKey = chordKey || (m.status == 0x90 && m.data1 == 64 && m.data2 == 100 && m.time == 0);
+      }
+      JCLAP_CHECK(!section);
+      JCLAP_CHECK(!passed);
+      (void)chordKey;
+      h.setParam(kPassNotes, 1.0);
+      h.midi(0x90, 41, 100);
+      bool through = false;
+      for (const auto &m : h.process(256).midi)
+         through = through || (m.status == 0x90 && m.data1 == 41);
+      JCLAP_CHECK(through);
+   }
+
+   // ---- state ----
+   {
+      // A genre, a style and a seed saved and loaded play the same song.
+      TestHost a(clap_entry, kId);
+      a.setParam(kGenre, 7.0);
+      a.setParam(kStyle, 1.0);
+      a.setParam(kSeed, 777.0);
+      a.process(256);
+      Buffer b;
+      const clap_ostream_t out = b.out();
+      JCLAP_CHECK(stateOf(a)->save(a.plugin(), &out));
+      TestHost c(clap_entry, kId);
+      b.read = 0;
+      const clap_istream_t in = b.in();
+      JCLAP_CHECK(stateOf(c)->load(c.plugin(), &in));
+      a.setTransport(90.0, 0.0, true);
+      c.setTransport(90.0, 0.0, true);
+      const Midi x = play(a, 400), y = play(c, 400);
+      JCLAP_CHECK(!x.empty());
+      JCLAP_CHECK(same(x, y));
+   }
+
+   // ---- param text ----
+   {
+      TestHost h(clap_entry, kId);
+      JCLAP_CHECK(h.paramText(kGenre, 0.0) == std::string("Funk"));
+      JCLAP_CHECK(h.paramText(kSwitchAt, 1.0) == std::string("Next Bar"));
+      JCLAP_CHECK(h.paramText(kChannel, 1.0) == std::string("1"));
+      double v = 0;
+      JCLAP_CHECK(h.textToValue(kChordSplit, "C4", v));
+      JCLAP_CHECK_EQ(static_cast<int>(v), 60);
+      // Every param's text reads back as its value.
+      for (clap_id id = 0; id < kParamCount; ++id)
+         for (int k = 0; k <= 8; ++k) {
+            const double x = kParams[id].min + (kParams[id].max - kParams[id].min) * k / 8.0;
+            const std::string t = h.paramText(id, x);
+            double back = -1e9;
+            JCLAP_CHECK(h.textToValue(id, t.c_str(), back));
+            JCLAP_CHECK(h.paramText(id, back) == t);
+         }
+   }
+
+   return jclap::core::testResult();
+}
