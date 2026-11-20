@@ -800,10 +800,11 @@ inline Pattern makeFill(const Pattern &base, int kit, FillKind kind, double fill
          case 2: // groups of three across the beat
             hit(drums[i % 3 == 0 ? 0 : i % 3], s, static_cast<uint8_t>(i % 3 == 0 ? ramp(s) : ramp(s) - 14));
             break;
-         case 3: // eighths, snare and floor tom, flammed
+         case 3: // eighths, snare and floor tom, each with a soft pickup now and then
             if (s % 2 == 0) {
                hit(drums[(i / 2) % 2 ? 3 : 0], s, ramp(s));
-               f.at(drums[(i / 2) % 2 ? 3 : 0], s).ratchet = static_cast<uint8_t>(rng.chance(fills) ? 2 : 1);
+               if (s > from && rng.chance(fills))
+                  hit(drums[(i / 2) % 2 ? 3 : 0], s - 1, kGhost + 8);
             }
             break;
          default: // down the drums, high to low
@@ -897,7 +898,7 @@ inline Pattern makeFill(const Pattern &base, int kit, FillKind kind, double fill
    }
    case kFillDjembe: {
       // The djembe call, as taught: S s . s . s . s S . S . S in 4/4, T f . T t . T t . T t in 12/8,
-      // flammed on its first slap, the ensemble answering on the one.
+      // the ensemble answering on the one.
       static const int call8[7] = {0, 3, 5, 7, 8, 10, 12}; // in sixteenths, 4/4
       static const int call12[7] = {0, 2, 3, 5, 6, 8, 9};   // in 12/8 eighths
       if (beat == 6)
@@ -907,7 +908,6 @@ inline Pattern makeFill(const Pattern &base, int kit, FillKind kind, double fill
          for (int x : call8)
             if (from + x < n)
                hit(v.snare, from + x, kAccent);
-      f.at(v.snare, from).ratchet = 2;
       break;
    }
    case kFillDarbuka: {
@@ -1203,13 +1203,15 @@ inline const std::vector<Mutation> &mutations() {
           return added > 0;
        },
        kOnKits},
-      {"flams on the backbeat",
+      // A soft grace note the step before each backbeat hit. (Not a ratchet: its second hit comes
+      // after the backbeat, which sounds like a double, not a drag.)
+      {"drags into the backbeat",
        [](Pattern &p, const Voices &v, Rng &) {
           const int sn = backbeatPad(p, v);
           bool any = false;
-          for (int s = 0; s < p.steps; ++s)
-             if (p.at(sn, s).vel >= kNormal && p.at(sn, s).ratchet == 1) {
-                p.at(sn, s).ratchet = 2;
+          for (int s = 1; s < p.steps; ++s)
+             if (p.at(sn, s).vel >= kNormal && !p.at(sn, s - 1).on()) {
+                p.at(sn, s - 1).vel = kGhost + 8;
                 any = true;
              }
           return any;
