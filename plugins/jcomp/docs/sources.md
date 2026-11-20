@@ -1487,6 +1487,43 @@ and MIDI bar by bar), then probed the plugin through CLAP. It found 107 problems
 - **Seen and left.** Disco's chucking grid (judgement), the broken-chord left hand's shape, smaller
   naming points, and the reach of the progressions in some genres.
 
+## Part H. The fourth review (2026-11-20)
+
+A fourth cold pass by five reviewers (funk, soul, church and blues; jazz and Latin; pop, dance, world
+and ambient; the generator and voicing; the plugin and real time) reproduced every finding with
+`jcomp-dump` or a probe program. It found 78 problems (3 critical); these were fixed.
+
+- **Changes that came from the wrong place.** In SONG mode a push or a run at a section's end played
+  the section's own first chord rather than the next section's; a run into a chord played on the keys
+  landed on the progression's chord and kept its voicing. Both now go to the chord coming. A run no
+  longer replaces the only strike of a chord, and one cut short doesn't switch runs off.
+- **DENSITY.** Below the middle it did nothing until about 0.25, then stripped every chord from a bar
+  that began with a bass note, a change's only strike and a line style's line. It now thins across
+  its whole travel and keeps the bar's first chord, the chord of a change and the line; VARY doesn't
+  drop that first chord either. Above the middle it no longer puts chords on the one of a skank.
+- **Energy.** A section's energy below 0.15 played its loudest chords as a dry stab; it now plays the
+  take softly and lets it ring. Dragging a section's energy no longer re-rolls its chords.
+- **Held-chord styles.** Pads, ballads and strings got chops, stab fills and ghosts from the
+  mutations, WEIRD and the genre's guitar fill; they now hold, and their fill swells into the next bar.
+- **Idiom.** The shuffle's left-hand fifth sat on the middle triplet; Chicken Scratch and Clav Riff
+  rarely played their figures; a montuno chorus could play the sparse clave figure, and BLEND wrote
+  another genre's steps into fixed figures; the Shout restruck the bass on every upbeat; the organ
+  bubble's left hand sounded on 2 and 4; swing fills didn't anticipate; reggae's and country's swing
+  did nothing. All fixed, with the montuno's octave line moving as a guajeo's does [58].
+- **Harmony and voicing.** WEIRD tritone-subbed the tonic; its approach chords ignored PLAIN; a V triad
+  was enriched to 6/9; minor and sharp keys were spelled in the wrong key (D#m for Ebm); held notes
+  were misnamed; runs used the key's scale over chromatic chords and leapt over the leading tone. 4THS
+  gave a diatonic progression one stack and dropped sevenths: stacks may now hold one tritone or third
+  (Bb E A D over C7) or sit on a low root. Funk's 7#9 had its #9 below the 3rd; SPREAD added a fifth to
+  diminished and #11 chords; GRIP dropped the #9, b9 and #11.
+- **The plugin.** The first chord played on the keys skipped its beat, At Once played the old chord
+  on a beat pressed just before it, a host loop played different chords on its first pass, PLAY ONLY
+  WHILE HELD kept playing after you let go, passed-through notes could hang when the routing changed,
+  the dice changed on every playback start (renders differed), the panel's playhead ran 80 ms ahead,
+  and a preset loaded from the menu didn't set its tempo. All fixed, each with a test.
+- **Seen and left.** In the "chords on the clave strokes" figure a new chord arrives on its bar's
+  second stroke (beat 2), as written; the reviewer's case for moving it rested on judgement alone.
+
 ---
 
 ## Bibliography
