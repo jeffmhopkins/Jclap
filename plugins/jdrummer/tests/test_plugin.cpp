@@ -109,6 +109,32 @@ int main() {
       JCLAP_CHECK(noteOns(play(h, 200)).empty());
    }
 
+   {
+      // The host always wins: PLAY started while it was stopped runs free, follows it once it starts,
+      // and stops (PLAY going off, and the host told) when it stops.
+      TestHost h(clap_entry, kId);
+      h.setTransport(120.0, 0.0, false);
+      h.setParam(kPlay, 1.0);
+      JCLAP_CHECK(!noteOns(play(h, 100)).empty());
+      h.setTransport(120.0, 0.0, true);
+      JCLAP_CHECK(!noteOns(play(h, 100)).empty());
+      h.setTransport(120.0, 8.0, false);
+      bool told = false;
+      for (const auto &v : h.process(256).paramValues)
+         told = told || (v.param_id == kPlay && v.value == 0.0);
+      JCLAP_CHECK(told);
+      JCLAP_CHECK_EQ(h.paramValue(kPlay), 0.0);
+      JCLAP_CHECK(noteOns(play(h, 200)).empty());
+      // FREE ignores the host, its stop included.
+      h.setParam(kSync, 2.0);
+      h.setParam(kPlay, 1.0);
+      h.setTransport(120.0, 0.0, true);
+      play(h, 20);
+      h.setTransport(120.0, 4.0, false);
+      JCLAP_CHECK(!noteOns(play(h, 200)).empty());
+      JCLAP_CHECK_EQ(h.paramValue(kPlay), 1.0);
+   }
+
    // ---- notes in ----
    {
       // A section's note (Intro is C0 on the keyboard map) is taken; any other note goes on to JKit.

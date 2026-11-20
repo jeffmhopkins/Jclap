@@ -1639,7 +1639,7 @@ public:
         rng_(static_cast<uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count())) {
       tips_.maxWidth = 260.0f;
       tips_.add(add<ui::HoverArea>({14, 12, 180, 40}), "JDrummer version " JCLAP_PLUGIN_VERSION);
-      tabs_ = &add<ui::TabBar>({214, 18, 330, 30}, std::vector<std::string>{"GENERATE", "EDIT", "PLAY"});
+      tabs_ = &add<ui::TabBar>({214, 18, 270, 30}, std::vector<std::string>{"GENERATE", "EDIT", "PLAY"});
       tabs_->setAccent(kOrange);
       tabs_->onChange = [this](int p) {
          if (p == host_.page)
@@ -1649,7 +1649,7 @@ public:
          closeOverlays();
          redraw();
       };
-      header_ = &add<HeaderTransport>({564, 18, 92, 28});
+      header_ = &add<HeaderTransport>({500, 18, 92, 28});
       header_->onPlay = [this] { togglePlay(); };
       tips_.add(*header_, "PLAY runs JDrummer on its own while the host is stopped.");
       add<ui::UpdateNotice>({214, 50, 140, 12});
@@ -1768,7 +1768,23 @@ private:
    int whole(clap_id id) const { return static_cast<int>(std::lround(host_.paramValue(id))); }
    Recipe recipe() const { return recipeFrom([this](clap_id id) { return host_.paramValue(id); }); }
 
-   void togglePlay() { setParam(kPlay, whole(kPlay) ? 0.0 : 1.0); }
+   // The play button stops what's playing and starts what isn't. While the host plays, that is a
+   // STOP until the host stops or starts again (or the button is clicked again); while it's stopped,
+   // PLAY, which the host's next stop or start overrides.
+   void togglePlay() {
+      const PlayFrame &f = host_.frame();
+      if (f.hostPlaying && whole(kSync) != 2) {
+         host_.request(f.running ? kActStop : kActRestart);
+         return;
+      }
+      if (f.running) {
+         setParam(kPlay, 0.0);
+         return;
+      }
+      setParam(kPlay, 1.0);
+      if (f.stopped)
+         host_.request(kActRestart);
+   }
 
    // ---- making songs ----
 
@@ -1840,9 +1856,10 @@ private:
       }
       if (!previewing_) {
          const PlayFrame &f = host_.frame();
-         previewStarted_ = !f.running && whole(kSync) != 1;
+         const bool hostRuns = f.hostPlaying && whole(kSync) != 2;
+         previewStarted_ = !f.running && (hostRuns || whole(kSync) != 1);
          previewReturn_ = f.running && f.section != host_.mutateSection ? f.section : -1;
-         if (previewStarted_)
+         if (previewStarted_ && !hostRuns)
             setParam(kPlay, 1.0);
          if (!f.running || f.section != host_.mutateSection)
             host_.request(host_.mutateSection);
@@ -1871,8 +1888,12 @@ private:
       if (host_.previewChild >= 0)
          host_.previewSong(nullptr);
       host_.previewChild = -1;
-      if (previewStarted_)
-         setParam(kPlay, 0.0);
+      if (previewStarted_) {
+         if (host_.frame().hostPlaying && whole(kSync) != 2)
+            host_.request(kActStop);
+         else
+            setParam(kPlay, 0.0);
+      }
       else if (previewReturn_ >= 0)
          host_.request(previewReturn_);
       previewStarted_ = false;
@@ -1897,7 +1918,7 @@ private:
    // ---- header ----
 
    void buildPresets() {
-      presets_ = &add<ui::PresetBar>({664, 18, 322, 28}, factoryPresets(), kPresetFormat, host_);
+      presets_ = &add<ui::PresetBar>({604, 18, 382, 28}, factoryPresets(), kPresetFormat, host_);
       presets_->setAccent(kOrange);
       presets_->defaults = defaults();
       presets_->currentName = [this] { return host_.presetName(); };
@@ -1926,6 +1947,11 @@ private:
          std::filesystem::remove(songFile(file), ec);
       };
       presets_->onDice = [this] { rollSong(); };
+      // "Hand Percussion: Afro-Cuban" shows as "Afro-Cuban": the menu still files it by family.
+      presets_->categoryLabel = [](const ui::Preset &p) {
+         const size_t colon = p.category.find(": ");
+         return colon == std::string::npos ? p.category : p.category.substr(colon + 2);
+      };
       tips_.add(*presets_, "Every style is a preset, filed by family and genre. The die rolls the song again.");
    }
 

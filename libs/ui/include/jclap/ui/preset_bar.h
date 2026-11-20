@@ -49,6 +49,9 @@ public:
    // and a click on it calls onDice. The die is lit (in the accent) while diceLit says so.
    std::function<void()> onDice;
    std::function<bool()> diceLit;
+   // What the bar shows at the name's left; the preset's category when unset. A plugin whose
+   // categories are long ("Hand Percussion: Afro-Cuban") shows a shorter one, to leave the name room.
+   std::function<std::string(const Preset &)> categoryLabel;
    // A plugin that keeps more than its params in a preset (a pattern, say) writes it beside the
    // preset file in onSaved, and removes it in onDeleted. Both get the preset file's path.
    std::function<void(const std::filesystem::path &)> onSaved;
