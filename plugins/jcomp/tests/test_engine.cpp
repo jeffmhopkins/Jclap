@@ -2481,5 +2481,31 @@ int main() {
          JCLAP_CHECK(!startingAt(three, 24000LL * (3 * bar + 2)).empty());
       }
    }
+   {
+      // A6: a pushed chord is tied over the beat it anticipates, not struck again on it, and rings
+      // through it.
+      auto song = songOf("x.....x.......x.", {{"C", nullptr}, {"F", nullptr}});
+      for (Section &sec : song->sections)
+         for (Pattern &t : sec.takes)
+            t.at(14).push = t.at(30).push = 1;
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      e.setSettings(plain());
+      e.reset();
+      const auto all = runWith(e, 24000LL * 8, 0.0, [](int64_t, Block &) {});
+      JCLAP_CHECK(startingAt(all, 84000).count(5));   // F pushed on the and of 4
+      JCLAP_CHECK(startingAt(all, 96000).empty());    // not struck again on 1
+      bool ringing = false;
+      std::map<int, int64_t> on;
+      for (const Timed &t : all) {
+         if (t.on())
+            on[t.m.data1] = t.time;
+         else if (t.off() && on.count(t.m.data1) && on[t.m.data1] < 90000 && on[t.m.data1] > 80000)
+            ringing = ringing || t.time > 100000;
+      }
+      JCLAP_CHECK(ringing);
+      JCLAP_CHECK(!startingAt(all, 96000 + 36000).empty()); // bar 2's own hit on beat 2.5 plays
+   }
    return jclap::core::testResult();
 }

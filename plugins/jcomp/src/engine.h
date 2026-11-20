@@ -792,15 +792,16 @@ private:
       }
       return -1;
    }
-   // Whether two chords are the same harmony (root, bass and third): a 9th turning into a 7th is a
-   // change of colour the chord sounding can carry on through, not a change to play.
+   // Whether two chords are the same harmony (root, bass, third, fifth and dominant 7th): a 9th
+   // turning into a 7th is a change of colour the chord sounding can carry on through, not a change
+   // to play; I turning into I7 (the IV's applied dominant, its b7 the note that leads on) is.
    static bool sameHarmony(const Chord &a, const Chord &b) {
       if (a.none() || b.none())
          return a.none() == b.none();
       if (a.root != b.root || a.bass != b.bass)
          return false;
       const auto &x = qualityOf(a).tones, &y = qualityOf(b).tones;
-      for (int i : {3, 4, 5, 6, 8})
+      for (int i : {3, 4, 5, 6, 8, 10})
          if ((std::find(x.begin(), x.end(), i) != x.end()) != (std::find(y.begin(), y.end(), i) != y.end()))
             return false;
       return true;
@@ -1250,6 +1251,23 @@ private:
       k.holdBeats = toStrong * stepBeats;
       const int64_t after = nextChange(chordRel);
       k.capBeat = after < 0 ? -1.0 : static_cast<double>(anchor_ + after) / kTicksPerBeat;
+      // A pushed chord is tied over to the beat it anticipates: that beat's own hit of the same
+      // chord isn't struck again, the pushed chord rings on through it instead.
+      if (!target && h.part == kPartChord && !h.push && t == pushTarget_ && c == pushChord_) {
+         pushTarget_ = -1;
+         const double from = static_cast<double>(t) / kTicksPerBeat;
+         double until = from + (h.art == kArtRing || h.art == kArtTopRings ? k.gapBeats * 0.97 : k.lenBeats * 0.92);
+         if (k.capBeat >= 0.0)
+            until = std::min(until, k.capBeat - 0.01);
+         for (size_t i = 0; i < queueLen_; ++i) {
+            Event &e = queue_[i];
+            if ((e.status & 0xF0) == 0x80 && e.id >= pushFirst_ && e.id <= pushLast_)
+               e.beat = std::max(e.beat, until);
+         }
+         ++hits_;
+         return;
+      }
+      pushTarget_ = -1;
       playChord(k, !target);
    }
 
@@ -1608,6 +1626,10 @@ private:
       len *= 1.0 + (h.art == kArtRing || h.art == kArtTopRings ? std::abs(vary) : vary);
       const double shortest = 0.05 * tempo_ / 60.0;
       len = std::max(len, shortest);
+      // A pushed chord is tied over the beat it anticipates (that beat's hit, if the same chord,
+      // lengthens it from there).
+      if (h.push && h.part == kPartChord)
+         len = std::max(len, static_cast<double>((k.t / kTicksPerBeat + 1) * kTicksPerBeat) / kTicksPerBeat - at + 0.05);
       // Nothing rings over the next change of chord: the change is played on time, by itself.
       const double cap = k.capBeat < 0.0 ? 1e9 : k.capBeat + settings_.timing * ms - 0.01;
       cutFrom(at - 0.003, hand);
@@ -1656,6 +1678,12 @@ private:
          note(on, key, static_cast<int>(std::lround(vv)), l, noteHand);
       }
       k.lastId = nextId_;
+      if (h.push && h.part == kPartChord && k.lastId >= k.firstId) {
+         pushTarget_ = (k.t / kTicksPerBeat + 1) * kTicksPerBeat;
+         pushChord_ = c;
+         pushFirst_ = k.firstId;
+         pushLast_ = k.lastId;
+      }
       if (keep && k.lastId >= k.firstId) {
          if (strikes_ == kStrikes) {
             for (size_t i = 1; i < kStrikes; ++i)
@@ -1927,6 +1955,10 @@ private:
    // Chords and voicing.
    Voicing last_;
    Chord lastChord_, nextChord_, bassChord_;
+   // The last pushed chord: the beat it anticipates (-1 none), and its notes.
+   int64_t pushTarget_ = -1;
+   Chord pushChord_;
+   uint32_t pushFirst_ = 0, pushLast_ = 0;
    int lastBass_ = -1; // the left hand's last note
    Chord padChord_;    // the pad layer's chord, and its notes
    Voicing pad_, padLast_;
