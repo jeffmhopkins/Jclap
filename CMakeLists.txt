@@ -56,6 +56,7 @@ add_subdirectory(plugins/jarp)
 add_subdirectory(plugins/jkit)
 add_subdirectory(plugins/j2d2)
 add_subdirectory(plugins/jdrummer)
+add_subdirectory(plugins/jcomp)
 
 # The starting point for new plugins (cmake/NewPlugin.cmake copies it). Built into build/template,
 # not build/clap, so it is checked in CI but never shipped.
