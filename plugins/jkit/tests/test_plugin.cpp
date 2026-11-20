@@ -335,6 +335,20 @@ void testChokeAndSends() {
    h.setParam(kDelayReturn, 0.0);
    h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);
    JCLAP_CHECK(lastSound(run(h, 200)) > 30000);
+   h.setParam(padParam(0, kDelaySend), 0.0);
+   run(h, 1200);
+
+   // The kit sends: the whole kit into the reverb and the delay, with the pad's own sends at 0.
+   h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);
+   const size_t dry = lastSound(run(h, 200));
+   run(h, 600);
+   for (clap_id kitSend : {kKitReverbSend, kKitDelaySend}) {
+      h.setParam(kitSend, 1.0);
+      h.note(CLAP_EVENT_NOTE_ON, 36, 1.0);
+      JCLAP_CHECK(lastSound(run(h, 200)) > std::max<size_t>(dry, 30000));
+      h.setParam(kitSend, 0.0);
+      run(h, 1200);
+   }
 }
 
 void testMaster() {

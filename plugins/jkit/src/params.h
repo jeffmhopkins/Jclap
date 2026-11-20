@@ -93,7 +93,10 @@ constexpr bool legacyEq(PadParam f) { return f >= kLowCut && f <= kHigh; }
 
 constexpr clap_id kPadBlock1 = kPointBase, kPadBlock2 = kPadParamCount - kPointBase;
 constexpr clap_id kPadBase2 = kPadBase + kPads * kPadBlock1;
-constexpr clap_id kParamCount = kPadBase2 + kPads * kPadBlock2;
+constexpr clap_id kPadsEnd = kPadBase2 + kPads * kPadBlock2;
+// Master params added after the pads (0.9): the whole kit's sends into the reverb and the delay, on
+// top of each pad's own.
+enum : clap_id { kKitReverbSend = kPadsEnd, kKitDelaySend, kParamCount };
 
 constexpr clap_id padParam(int pad, PadParam f) {
    return f < kPadBlock1 ? kPadBase + static_cast<clap_id>(pad) * kPadBlock1 + f
@@ -101,7 +104,7 @@ constexpr clap_id padParam(int pad, PadParam f) {
 }
 // Which pad and field an id is; false for a master param.
 inline bool padField(clap_id id, int &pad, PadParam &field) {
-   if (id < kPadBase || id >= kParamCount)
+   if (id < kPadBase || id >= kPadsEnd)
       return false;
    if (id < kPadBase2) {
       pad = static_cast<int>((id - kPadBase) / kPadBlock1);
@@ -235,6 +238,8 @@ inline std::vector<jclap::core::ParamDef> makeParams() {
                          d.min, d.max, d.def, d.flags});
          }
       }
+   p.push_back({kKitReverbSend, "Kit Reverb Send", "Reverb", 0.0, 1.0, 0.0, kMod});
+   p.push_back({kKitDelaySend, "Kit Delay Send", "Delay", 0.0, 1.0, 0.0, kMod});
    return p;
 }
 } // namespace detail
