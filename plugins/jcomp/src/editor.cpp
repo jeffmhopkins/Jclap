@@ -219,22 +219,34 @@ struct Preview {
 // into a hit that asks for one on a change of chord.
 // DENSITY and LENGTH as the panel last read them, so every roll draws the part as it will sound.
 struct LiveFeel {
-   double density = 0.5, length = 0.5;
+   double density = 0.5, length = 0.5, runs = 0.25;
+   int same = 4;       // SAME DICE's bars
+   int every = 1;      // RUNS AT MOST every so many bars
+   bool fixed = false; // the style's figure is played as written
 };
 LiveFeel gFeel;
 
-// The dice the rolls use for DENSITY: the engine's own roll differently, but the same weights decide.
 void readFeel(const EditorHost &host) {
    gFeel.density = host.paramValue(kDensity);
    gFeel.length = host.paramValue(kLength);
+   gFeel.runs = host.paramValue(kRuns);
+   gFeel.same = kSameDiceBars[choiceIndex(host.paramValue(kSameDice), 5)];
+   gFeel.every = kRunEveryBars[choiceIndex(host.paramValue(kRunEvery), 3)];
+   gFeel.fixed = (styleOf(recipeFrom([&](clap_id id) { return host.paramValue(id); })).mods & kFixed) != 0;
 }
 
-double rollDice(int step, int what) { return (mix(static_cast<uint32_t>(step) * 7919u, static_cast<uint32_t>(what)) >> 8) * (1.0 / 16777216.0); }
+// The engine's own dice, for the bar of the view a step is in: the roll draws the hits the first
+// pass plays.
+double rollDice(const Pattern &p, int view, int what) {
+   const int bar = view / std::max(1, p.stepsPerBar());
+   return diceFor(kDiceSalt, diceBarOf(bar, gFeel.same), view % std::max<int>(1, p.steps), what);
+}
 
 // The roll's DENSITY thinning, by the engine's weights.
 bool thinnedInRoll(const Section &sec, const Pattern &p, int step, int view) {
    const int bar = view / std::max(1, p.stepsPerBar());
-   return thinnedBy(p, step, gFeel.density, rollDice(step, 20), sec.chordAt(bar, true) != sec.chordAt(bar, false));
+   return thinnedBy(p, step, gFeel.density, rollDice(p, view, 20), sec.chordAt(bar, true) != sec.chordAt(bar, false),
+                    gFeel.fixed);
 }
 
 Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSettings &vs, int transpose, int key,
@@ -253,6 +265,11 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
    int octaveStep = 0;
    // Runs on the take's grid, as the engine plays them: sixteenths where it plays them, else eighths.
    const int stride = fine || p.rate == kRate8T ? 1 : 2;
+   int lastRunBar = -100;
+   const auto chordAtView = [&](int view) {
+      const int64_t tick = static_cast<int64_t>(view) * stepTicks;
+      return moved(sec.chordAt(static_cast<int>(tick / kTicksPerBar), tick % kTicksPerBar >= kTicksPerBar / 2), transpose);
+   };
    for (int v = 0; v < out.steps; ++v) {
       Hit h = p.at(v % n);
       const bool onBeat = v % perBeat == 0;
@@ -261,8 +278,9 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          // DENSITY above the middle fills gaps with softer repeats of the chord sounding.
          const double more = (gFeel.density - 0.5) * 2.0;
          const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
-         if (more <= 0.0 || prevChord.none() || heldOver(p, v % n) || (!onEighth && !fine) || (offbeat && onBeat) ||
-             rollDice(v, 21) >= chance)
+         if (more <= 0.0 || gFeel.fixed || hasLine(p) || prevChord.none() || heldOver(p, v % n) || (!onEighth && !fine) ||
+             (offbeat && onBeat) ||
+             rollDice(p, v, 21) >= chance)
             continue;
          h.vel = static_cast<uint8_t>(onBeat ? kSoft : kGhost + (onEighth ? 10 : 0));
          h.len = 1;
@@ -288,13 +306,60 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       pl.chord = c;
       pl.before = prevChord;
       pl.fromTop = prev.empty() ? -1 : prev.top();
-      // A run into a change.
-      if (runs && h.run && !prev.empty() && c != prevChord && v >= 3 * stride) {
-         const Ints r = passingRun(prev.top(), vc.top(), 3, key, scale, true, c, prevChord);
-         const int n = static_cast<int>(r.size());
-         for (int k = 0; k < n; ++k)
-            out.notes.push_back({static_cast<float>(v - (n - k) * stride), 0.85f * stride, r[static_cast<size_t>(k)], kRunNote, 0.6f});
-      }
+      // A run into a change, as the engine finds it: from the step it would start on (four, three
+      // or two notes ahead), over the chord before held to the change, where its dice and AT MOST
+      // EVERY allow, never over a written chord; the soft hits under it give way.
+      if (runs && gFeel.runs > 0.0 && !gFeel.fixed && h.run && h.part == kPartChord && !prev.empty() && c != prevChord)
+         for (int len : {4, 3, 2}) {
+            const int span = len * stride, start = v - span;
+            if (start < 1 || (stride == 2 && start % 2))
+               continue;
+            const int sbar = start / out.perBar;
+            if (lastRunBar > -100 && sbar - lastRunBar < gFeel.every)
+               break;
+            bool held = chordAtView(start - 1) == prevChord;
+            for (int k = 0; k < span && held; ++k)
+               held = chordAtView(start + k) == prevChord;
+            if (!held)
+               continue;
+            if (diceFor(kDiceSalt, diceBarOf(sbar, gFeel.same) + sbar * 7, start % n, 9) >= std::min(1.0, gFeel.runs * 1.6))
+               continue;
+            const int top = prev.top(), land = vc.top();
+            Ints r = passingRun(top, land, len, key, scale, true, c, prevChord);
+            if (r.size() < 2) {
+               Ints best;
+               for (int other : {land - 12, land + 12}) {
+                  const Ints o = passingRun(other, land, len, key, scale, true, c, prevChord);
+                  if (o.size() >= 2 && o.front() != top && (best.empty() || std::abs(o.front() - top) < std::abs(best.front() - top)))
+                     best = o;
+               }
+               if (best.empty() || std::abs(best.front() - top) > 9)
+                  continue;
+               r = best;
+            }
+            const int late = len - static_cast<int>(r.size());
+            bool clear = true;
+            for (int k = late * stride; k < span; ++k) {
+               const Hit &o = p.at((start + k) % n);
+               clear = clear && !(o.on() && !leftHand(o.part) && o.vel >= kNormal);
+            }
+            if (!clear)
+               continue;
+            const int from = start + late * stride;
+            const auto under = [&](float at) {
+               const int view = static_cast<int>(at);
+               return view >= from && view < v && !leftHand(p.at(view % n).part);
+            };
+            out.notes.erase(std::remove_if(out.notes.begin(), out.notes.end(), [&](const RollNote &x) { return under(x.start); }),
+                            out.notes.end());
+            out.hits.erase(std::remove_if(out.hits.begin(), out.hits.end(),
+                                          [&](const PlacedHit &x) { return under(static_cast<float>(x.view)); }),
+                           out.hits.end());
+            for (size_t k = 0; k < r.size(); ++k)
+               out.notes.push_back({static_cast<float>(from + static_cast<int>(k) * stride), 0.85f * stride, r[k], kRunNote, 0.6f});
+            lastRunBar = sbar;
+            break;
+         }
       // The gap to the next hit of the same hand, for RING; a left-hand note as written holds to the
       // next, two beats at most.
       const bool left = leftHand(h.part);
@@ -331,7 +396,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          played.notes[0] = static_cast<uint8_t>(std::clamp(root + lineInterval(c, h.degree, key, scale), 0, 127));
          played.count = 1;
       } else if (leftHand(h.part)) {
-         played.notes[0] = static_cast<uint8_t>(bassNote(c, vs.floor, h.part == kPartFifth));
+         played.notes[0] = static_cast<uint8_t>(bassNote(c, vs.floor, h.part == kPartFifth, vs.shape == kGrip));
          played.count = 1;
       }
       for (int i = 0; i < played.count; ++i) {

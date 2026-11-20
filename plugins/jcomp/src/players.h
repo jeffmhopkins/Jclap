@@ -47,7 +47,7 @@ inline const Player kPlayerList[kPlayers] = {
    {"Pop Pianist", "eighth-note pulse, open triads", "pop, ballad, rock", kPiano, kKeys,
     kSpread, 4, 48, 76, 62, 0, 0.5, 0.25, 0.15, 0.6, 0.25, 0},
    {"Rhythm Guitar", "sixteenth scratch, three-note grips", "funk, disco, afrobeat", kGuitar, kGuitarKind,
-    kClose, 3, 55, 76, 66, 2, 0.85, 0.5, 0.05, 0.15, 0.3, 0},
+    kClose, 3, 55, 76, 66, 3, 0.85, 0.5, 0.05, 0.15, 0.3, 0},
    // Strummed both ways: the off-beat chops are upstrokes (ska's), the 2 and 4 skanks down.
    {"Skank Guitar", "off-beat chops, short and high", "reggae, ska", kGuitar, kGuitarKind,
     kClose, 3, 57, 79, 67, 3, 0.4, 0.2, 0.0, 0.05, 0.2, 0},
