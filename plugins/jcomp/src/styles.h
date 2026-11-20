@@ -161,7 +161,8 @@ inline const std::vector<Genre> &genres() {
       {"Soul", kFamilies[0], kChurchOrgan, 0.54, 0,
        // The backbeat on 2 and 4 (Motown's and Memphis's guitar and keys); pumping eighths; the
        // gospel 3-3-2 push.
-       // The 60s R&B piano's pushed offbeats and the organ's answer (MMA's R&B groove).
+       // The 60s R&B piano's pushed offbeats and its answer (MMA's R&B groove: the piano's and the organ's
+       // parts, both played on piano here).
        {{"....X.......X...", 0.3}, {"x-x-X-x-x-x-X-x-", 0.6}, {"x--x--x-x--x--x-", 0.8},
         {"..x.....x.x...x.|..............x.", 0.5}, {"....x.x.......x.|x.x.x...x...x...", 0.65}},
        {{"x-x-X-x-x-x-xxxx", 0.7}},
@@ -169,7 +170,7 @@ inline const std::vector<Genre> &genres() {
        {{"Memphis Backbeat", "Backbeat", 96, kPlain, 0, 0b001, -1, kDrop2, 4, 55, 76, 64},
         {"Pumping Eighths", "Eighths", 112, 0, 0, 0b010, kPopPianist},
         {"Gospel Push", "Push", 104, kRunsIn, 0, 0b100},
-        {"Sixties R&B", "60s R&B", 108, 0, 0, 0b11000}},
+        {"Sixties R&B", "60s R&B", 108, 0, 0, 0b11000, kPopPianist}},
        "1, 23, 61"},
       {"Motown", kFamilies[0], kPopPianist, 0.5, 0,
        // The backbeat ("never blew a backbeat": Van Dyke on Messina), quarter-note chords leaning on 2
@@ -358,20 +359,23 @@ inline const std::vector<Genre> &genres() {
         {"Pad Intro", "Pad", 96, kLongs, 0, 0b0001, kPadPlayer}},
        "1, 61"},
       {"Rock", kFamilies[3], kStrummer, 0.5, 0,
-       // The doo-wop four-bar phrase; the 50s piano's pounding triplets and its dotted pickups (MMA).
+       // MMA's four-bar half-note phrase, its last bar in quarters; the 50s piano's pounding triplets and
+       // its dotted pickups (MMA), played over the 50s changes.
        {{"X---------------", 0.25}, {"X---X---X---X---", 0.6}, {"x-o-X-o-x-o-X-o-", 0.75}, {"X..x..x.X..x..x.", 0.85},
         {"x.......x.......|x.......x.......|x.......x.......|x...x...x...x...", 0.5},
         {"xxxXxxxxxXxx|xxxXxxxxxXxx|xxxXxxxxxXxx|x..x..x..x..", 0.8}, {"x..xx...x..xx...|x..x.......xx...", 0.7}},
        {{"x-x-x-x-x.x.xxxx", 0.8}},
        // I-bVII-IV-I (Mixolydian), bVI-bVII-I, the minor i-bVI-bIII-bVII.
        {{kMixolydian, {"C|Bb|F|C", "C|Bb|F|C", "F|G|F|G", "Ab|Bb|C|C", "F|G|F|G", "Bb|F|C|C"}},
-        {kMinor, {"Cm|Ab|Eb|Bb", "Cm|Ab|Eb|Bb", "Ab|Bb", "Cm|Ab|Eb|Bb", "Fm|Ab|Bb|Bb", "Ab|Bb|Cm|Cm"}}},
+        {kMinor, {"Cm|Ab|Eb|Bb", "Cm|Ab|Eb|Bb", "Ab|Bb", "Cm|Ab|Eb|Bb", "Fm|Ab|Bb|Bb", "Ab|Bb|Cm|Cm"}},
+        // The 50s: I-vi-IV-V (the doo-wop changes), I-vi-ii-V, the IV-I and II7-V7 of a rock'n'roll bridge.
+        {kMajor, {"C|Am|F|G", "C|Am|F|G7", "F|F|C|C", "C|Am|Dm7|G7", "F|F|C|C|D7|D7|G7|G7", "C|Am|F G7|C"}}},
        // The rock guitar's power chord (root, fifth, octave): Walser.
        {{"Eighth Pump", "Pump", 128, kPlain, 0, 0b0100, kPopPianist},
         {"Quarter Pound", "Pound", 140, kPlain, 0, 0b10011, -1, kGrip, 3, 40, 64, 50},
         {"Minor Rock", "Minor", 116, kPlain, 1, 0b1101, -1, kGrip, 3, 40, 64, 50},
-        {"Rock'n'Roll Triplets", "Triplets", 140, kTriplet | kLeftHand | kPlain, 0, 0, kPopPianist},
-        {"Fifties Pump", "Fifties", 150, kLeftHand | kPlain, 0, 0b1000000, kPopPianist}},
+        {"Rock'n'Roll Triplets", "Triplets", 140, kTriplet | kLeftHand | kPlain, 2, 0, kPopPianist},
+        {"Fifties Pump", "Fifties", 150, kLeftHand | kPlain, 2, 0b1000000, kPopPianist}},
        "1, 61"},
       {"Piano Ballad", kFamilies[3], kPopPianist, 0.5, 0,
        // Half notes; broken eighths (the left hand's root, fifth, root, fifth under the right hand's
@@ -382,7 +386,7 @@ inline const std::vector<Genre> &genres() {
        // 6/8 (the same twelve sixteenths, in two dotted quarters): the dotted quarters, the six eighths leaning on 1 and 4,
        // the left hand rocking under them.
        {{"x-------x-------", 0.35}, {"x.f.b.f.x.f.b.f.", 0.65}, {"xxxXxxxxxXxx", 0.6}, {"x--x--x--x--", 0.35},
-        {"x...x...x...x...", 0.5}, {"x.....x.x-------|x...x...x-------", 0.55}, {"1...3.5.8...5.3.|1.....5.8...5.3.", 0.45},
+        {"x...x...x...x...", 0.5}, {"x.....x.x-------|x...x...x-------", 0.55}, {"b...3.5.8...5.3.|b.....5.8...5.3.", 0.45},
         {"x...x...x...x...|x...x...x...x...|....x...x...x...|x...x...x...x...", 0.5},
         {"x-----x-----", 0.35, 6}, {"X.x.x.X.x.x.", 0.6, 6}, {"b.x.x.f.x.x.", 0.5, 6}},
        {{"x-------x.x.x.xx", 0.5}, {"xxxXxxxxxXXX", 0.6}},
@@ -402,7 +406,7 @@ inline const std::vector<Genre> &genres() {
        // Western swing's four on the guitar, the fourth bar with its pickups (MMA); the country waltz's
        // oom-pah-pah, the bass on 1 (root, then fifth) and the chord on 2 and 3, and its busier strum.
        {{"b...x...f...x...", 0.45}, {"x---x-x-x---x-x-", 0.6}, {"b...x-x.f...x-x.", 0.8},
-        {"x...x...x...x...|x...x...x...x...|x...x...x...x...|x.g.x...x.g.x...", 0.6},
+        {"x...X...x...X...|x...X...x...X...|x...X...x...X...|x.g.X...x.g.X...", 0.6},
         {"b...x...x...|f...x...x...", 0.5, 3}, {"b...x.x.x...|f...x.x.x...", 0.75, 3}},
        {{"b...x...f.x.xxxx", 0.6}},
        // I-IV-I-V; I-II7-V7-I; I-I7-IV-iv-I. A waltz's: a chord a bar.
@@ -411,7 +415,7 @@ inline const std::vector<Genre> &genres() {
        {{"Boom-Chick", "Boom-Chick", 112, kShorts, 0, 0b001},
         {"Nashville Slip", "Slip", 84, kSlip, 0, 0b010},
         {"Two-Step", "Two-Step", 132, 0, 0, 0b100, kStrummer},
-        {"Western Swing", "Western", 168, kShorts, 0, 0b1000, kRhythmGuitar, -1, 0, 0, 0, 0, 0.6, 1},
+        {"Western Swing", "Western", 168, 0, 0, 0b1000, kRhythmGuitar, kShell, 3, 45, 67, 55, 0.6, 1},
         {"Country Waltz", "Waltz", 104, kWaltz, 1, 0}},
        "18, 33, 59, 61"},
 
