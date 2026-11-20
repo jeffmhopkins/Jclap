@@ -608,7 +608,10 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       // A chord with fewer tones than voices (a triad, a sus, an add9) stacks fewer fourths rather
       // than leaving the shape; one a note or two short is always a choice too (the sparse set of
       // stacks otherwise leaves the top leaping from chord to chord).
-      for (int size = n; size >= 3 && (out.empty() || size >= n - 2); --size)
+      // (A chord with as many tones as voices gets a stack its own size where one exists: a five-note
+      // m9 isn't left at three.)
+      const bool fewer = static_cast<int>(q.tones.size()) < n;
+      for (int size = n; size >= 3 && (out.empty() || (fewer && size >= n - 2)); --size)
       for (int strict = 3, found = static_cast<int>(out.size()); strict >= 0 && static_cast<int>(out.size()) == found; --strict)
          for (int odd = 0; odd < 2 && static_cast<int>(out.size()) == found; ++odd)
             for (int b = vs.lo - 12; b <= vs.hi; ++b) {
@@ -646,6 +649,18 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                      detail::addCandidate(out, v, qs, strict == 1 ? v.front() : -1);
                }
             }
+      // An add9's or a 9th chord's 9th is its colour: the stacks that hold it, where any do.
+      if (hasIv(14)) {
+         Voicings nine;
+         for (const Voicing &v : out)
+            for (int i = 0; i < v.count; ++i)
+               if (((v.notes[static_cast<size_t>(i)] - c.root) % 12 + 12) % 12 == 2) {
+                  nine.push_back(v);
+                  break;
+               }
+         if (!nine.empty())
+            out = nine;
+      }
       // Over a slash bass, the bass is at the bottom: the stacks with it there, else each with the
       // bass added under it.
       if (bassPc != c.root && !out.empty()) {

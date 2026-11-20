@@ -2595,5 +2595,21 @@ int main() {
             padAtPush.insert(t.m.data1 % 12);
       JCLAP_CHECK(padAtPush.count(5) && padAtPush.count(9));
    }
+   {
+      // C10, D4: 4THS keeps an add9's and a maj9's 9th (Eno's "1/2" chord is an add9).
+      std::vector<double> amb = defaultValues();
+      for (const auto &[id, x] : styleValues(23, 0))
+         amb[id] = x;
+      VoiceSettings vs = voiceSettings([&](clap_id id) { return amb[id]; });
+      JCLAP_CHECK_EQ(static_cast<int>(vs.shape), static_cast<int>(kQuartal));
+      for (const char *name : {"Eadd9", "Cadd9", "Amaj9", "Fmaj9", "Dadd9"}) {
+         const Chord c = chord(name);
+         const Voicing v = voice(c, nullptr, vs, -1, nullptr);
+         bool nine = false;
+         for (int k = 0; k < v.count; ++k)
+            nine = nine || ((v.notes[static_cast<size_t>(k)] - c.root) % 12 + 12) % 12 == 2;
+         JCLAP_CHECK(nine);
+      }
+   }
    return jclap::core::testResult();
 }
