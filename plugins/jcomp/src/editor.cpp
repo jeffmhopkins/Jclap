@@ -2263,9 +2263,10 @@ private:
       if (host_.previous.size() > 16)
          host_.previous.erase(host_.previous.begin());
    }
-   void regenerate() {
+   // `keepChords`: ENERGY and BLEND remake the rhythms only, the chords (and their edits) kept.
+   void regenerate(bool keepChords = false) {
       Song s = host_.song();
-      generateSong(recipe(), s);
+      generateSong(recipe(), s, keepChords);
       host_.setSong(s);
       host_.parents.clear();
       breed();
@@ -2399,7 +2400,7 @@ private:
       tiles12_->onBlend = [this](int g) {
          setParam(kBlendGenre, whole(kBlendGenre) - 1 == g || g == whole(kGenre) ? 0 : g + 1);
          remember();
-         regenerate();
+         regenerate(true);
       };
       tips_.add(*tiles12_, "Click a genre to hear it. Shift-click another to blend its rhythms in (BLEND sets how much).");
       style_ = &onPage<ui::Dropdown>(kGeneratePage, {90, 83, 150, 19});
@@ -2413,7 +2414,7 @@ private:
          showOverlays();
       };
       blend_ = &onPage<ParamSlider>(kGeneratePage, {490, 89, 40, 8}, host_, kBlend, "", "", "", kPurple);
-      blend_->onDone = [this] { regenerate(); };
+      blend_->onDone = [this] { regenerate(true); };
       tips_.add(*blend_, "How much of the blended genre's rhythm comes in.");
 
       player_ = &onPage<PlayerButton>(kGeneratePage, {564, 104, 230, 28}, host_);
@@ -2424,7 +2425,7 @@ private:
       tips_.add(*player_, "Who plays: the instrument it voices for and how it touches the chords. Picking one sets the "
                           "voicing and feel to suit.");
       energy_ = &onPage<ParamSlider>(kGeneratePage, {564, 142, 250, 44}, host_, kEnergy, "ENERGY", "laid back", "driving", kOrange);
-      energy_->onDone = [this] { regenerate(); };
+      energy_->onDone = [this] { regenerate(true); };
       tips_.add(*energy_, "How hard the whole song goes. Each section's own energy (in THE SONG) rides on it.");
       weird_ = &onPage<ParamSlider>(kGeneratePage, {564, 194, 250, 44}, host_, kWeird, "WEIRD", "triads, as written",
                                     "extended, reharmonised", kPurple);

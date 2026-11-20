@@ -1367,7 +1367,9 @@ inline void completeSong(const Recipe &r, Song &song, const std::vector<uint8_t>
 
 inline int beatsOf(const Recipe &r) { return styleOf(r).mods & kWaltz ? 3 : 4; }
 
-inline void generateSong(const Recipe &r, Song &song) {
+// With `keepChords` (a new ENERGY or BLEND: rhythm only), every section keeps its chords as edited,
+// their band hits and its length; its rhythm is made again.
+inline void generateSong(const Recipe &r, Song &song, bool keepChords = false) {
    const int key = ((r.key % 12) + 12) % 12;
    // A locked section keeps its chords, moved to the new key with the rest of the song.
    const int move = (key - song.key + 12) % 12;
@@ -1397,7 +1399,15 @@ inline void generateSong(const Recipe &r, Song &song) {
          }
          continue;
       }
-      s = makeSection(r, i, mix(r.seed, static_cast<uint32_t>(i)));
+      Section made = makeSection(r, i, mix(r.seed, static_cast<uint32_t>(i)));
+      if (keepChords && !s.chords[0].none()) {
+         made.chords = s.chords;
+         made.split = s.split;
+         made.marks = s.marks;
+         made.progBars = s.progBars;
+         made.bars = s.bars;
+      }
+      s = made;
    }
 }
 

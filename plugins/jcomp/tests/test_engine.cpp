@@ -2631,5 +2631,19 @@ int main() {
             }
          }
    }
+   {
+      // D8: a new ENERGY or BLEND keeps the chords as edited and their band hits.
+      Recipe r = recipeOf(0, 0, 9);
+      Song song;
+      generateSong(r, song);
+      song.sections[kVerse].chords[0] = chord("F#m7");
+      song.sections[kVerse].marks[0] = kMarkHold;
+      r.energy = 0.9;
+      generateSong(r, song, true);
+      JCLAP_CHECK(chordName(song.sections[kVerse].chords[0], 4) == "F#m7");
+      JCLAP_CHECK_EQ(static_cast<int>(song.sections[kVerse].marks[0]), static_cast<int>(kMarkHold));
+      generateSong(r, song);
+      JCLAP_CHECK(chordName(song.sections[kVerse].chords[0], 4) != "F#m7");
+   }
    return jclap::core::testResult();
 }
