@@ -2344,6 +2344,14 @@ private:
          // A preset is the sound and the song: the routing, the transport and the notes set up for
          // this project stay as they are.
          ui::Preset sound = p;
+         // A preset from before 0.6.0 (no SWING EASES WHEN FAST): its Song Mode 1 went round and
+         // round, and its swing didn't ease.
+         if (std::none_of(sound.values.begin(), sound.values.end(), [](const auto &v) { return v.first == kSwingEase; })) {
+            for (auto &v : sound.values)
+               if (v.first == kSongMode && std::lround(v.second) == 1)
+                  v.second = 2;
+            sound.values.push_back({kSwingEase, 0.0});
+         }
          std::vector<double> d = defaults();
          sound.values.erase(std::remove_if(sound.values.begin(), sound.values.end(),
                                            [](const auto &v) { return isSetupParam(v.first); }),
@@ -2354,7 +2362,7 @@ private:
          ui::applyPreset(sound, host_, d);
          Song song;
          const std::filesystem::path file = ui::userPresetFolder(kPresetFormat) / (p.name + kPresetFormat.extension);
-         if (readSong(songFile(file), song))
+         if (readSong(songFile(file), song, recipe()))
             host_.setSong(song);
          else {
             Song s;

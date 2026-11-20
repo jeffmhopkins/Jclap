@@ -188,6 +188,45 @@ Recipe recipeOf(int genre, int style, uint32_t seed) {
    return recipeFrom([&](clap_id id) { return v[id]; });
 }
 
+// A song in the version-2 layout (before 0.6.0: no meter, fills down, ending or band hits).
+std::vector<uint8_t> saveV2(const Song &s) {
+   std::vector<uint8_t> out;
+   auto u8 = [&](uint8_t v) { out.push_back(v); };
+   auto u32 = [&](uint32_t v) {
+      for (int i = 0; i < 4; ++i)
+         out.push_back(static_cast<uint8_t>(v >> (8 * i)));
+   };
+   auto pat = [&](const Pattern &p) {
+      u8(p.steps);
+      u8(p.rate);
+      for (const Hit &h : p.hits)
+         for (uint8_t b : {h.vel, h.len, h.chance, static_cast<uint8_t>(h.nudge), h.art, h.part, h.run, h.push,
+                           static_cast<uint8_t>(h.voicing), h.degree})
+            u8(b);
+   };
+   u32(2);
+   u32(kSections);
+   u8(s.key);
+   for (const Section &x : s.sections) {
+      u8(x.bars);
+      u8(x.energy);
+      u8(x.locked);
+      u8(x.progBars);
+      u32(x.split);
+      u32(x.seed);
+      u32(x.generation);
+      for (const Chord &c : x.chords) {
+         u8(static_cast<uint8_t>(c.root));
+         u8(c.quality);
+         u8(static_cast<uint8_t>(c.bass));
+      }
+      for (const Pattern &p : x.takes)
+         pat(p);
+      pat(x.fill);
+   }
+   return out;
+}
+
 } // namespace
 
 int main() {
@@ -2314,6 +2353,133 @@ int main() {
       JCLAP_CHECK(!startingAt(all, 24000).count(11));
       JCLAP_CHECK(startingAt(all, 48000).count(7));  // beat 3: G
       JCLAP_CHECK(startingAt(all, 48000).count(11));
+   }
+   {
+      // D6: a song saved before 0.6.0 gets its fills down and its ending when it loads.
+      const Recipe r = recipeOf(0, 0, 5);
+      Song made;
+      generateSong(r, made);
+      const std::vector<uint8_t> old = saveV2(made);
+      Song loaded;
+      JCLAP_CHECK(loaded.load(old.data(), old.size()));
+      JCLAP_CHECK(loaded.sections[kOutro].ending.empty());
+      completeSong(r, loaded, old);
+      JCLAP_CHECK(!loaded.sections[kOutro].ending.empty());
+      for (const Section &sec : loaded.sections)
+         JCLAP_CHECK(!sec.fillDown.empty());
+      // A version-3 song is left as it was saved (a fill down cleared in EDIT stays cleared).
+      Song cleared = made;
+      cleared.sections[kVerse].fillDown = Pattern{};
+      const std::vector<uint8_t> now = cleared.save();
+      Song back;
+      JCLAP_CHECK(back.load(now.data(), now.size()));
+      completeSong(r, back, now);
+      JCLAP_CHECK(back.sections[kVerse].fillDown.empty());
+   }
+   {
+      // E3, E4: the pad holds a one-chord vamp as long as it lasts, and lets go when switched off.
+      auto song = songOf("x...x...x...x...", {{"C", nullptr}});
+      for (bool off : {false, true}) {
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = plain();
+         s.pad = true;
+         s.padChannel = 5;
+         e.setSettings(s);
+         e.reset();
+         const auto all = runWith(e, 24000LL * 160, 0.0, [&](int64_t at, Block &) {
+            if (off && at >= 24000LL * 8 && e.settings().pad) {
+               Settings t = e.settings();
+               t.pad = false;
+               e.setSettings(t);
+            }
+         });
+         // Each pad note's span (on to off, or on to the end).
+         std::vector<std::pair<int64_t, int64_t>> spans;
+         std::map<int, int64_t> started;
+         double lastPad = -1.0;
+         for (const Timed &t : all) {
+            if ((t.m.status & 15) != 5)
+               continue;
+            if (t.on())
+               started[t.m.data1] = t.time;
+            else if (started.count(t.m.data1)) {
+               spans.push_back({started[t.m.data1], t.time});
+               started.erase(t.m.data1);
+            }
+            lastPad = static_cast<double>(t.time) / 24000.0;
+         }
+         for (const auto &[k, from] : started)
+            spans.push_back({from, INT64_MAX});
+         bool everyBar = true;
+         for (int bar = 1; bar < 40; ++bar) {
+            const int64_t at = bar * 4 * 24000LL + 100;
+            everyBar = everyBar && std::any_of(spans.begin(), spans.end(), [&](const auto &sp) { return sp.first <= at && sp.second > at; });
+         }
+         if (!off)
+            JCLAP_CHECK(everyBar);
+         else
+            JCLAP_CHECK(lastPad >= 0.0 && lastPad < 8.5);
+      }
+   }
+   {
+      // A5, E7, B11: a four-bar phrase counts from its section's start, not the host's bar, after a
+      // switch on an odd bar: the turnaround bar of quarters is the section's fourth.
+      auto song = songOf("x...............", {{"C", nullptr}, {"F", nullptr}, {"G", nullptr}, {"C", nullptr}});
+      for (Pattern &t : song->sections[kChorus].takes)
+         t = fromRhythm("x...............|x...............|x...............|x...x...x...x...");
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.section = kVerse;
+      e.setSettings(s);
+      e.reset();
+      const auto all = runWith(e, 24000LL * 28, 0.0, [&](int64_t at, Block &) {
+         if (at >= 24000LL * 5 && e.settings().section != kChorus) {
+            Settings t = e.settings();
+            t.section = kChorus;
+            e.setSettings(t);
+         }
+      });
+      // The chorus starts at beat 8 (the next bar); its fourth bar is beats 20 to 24.
+      JCLAP_CHECK(!startingAt(all, 24000LL * 21).empty());
+      JCLAP_CHECK(!startingAt(all, 24000LL * 23).empty());
+      JCLAP_CHECK(startingAt(all, 24000LL * 9).empty());
+      JCLAP_CHECK(startingAt(all, 24000LL * 13).empty());
+   }
+   {
+      // B03: a clave figure played as written gets no chord on its 2-side's one at a change.
+      auto song = songOf("....x...x.......|x.....x.....x...", {{"C", nullptr}, {"F", nullptr}});
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.fixed = true;
+      e.setSettings(s);
+      e.reset();
+      const auto all = runWith(e, 24000LL * 16, 0.0, [](int64_t, Block &) {});
+      JCLAP_CHECK(startingAt(all, 24000LL * 8).empty());   // bar 3, the 2-side, over C
+      JCLAP_CHECK(!startingAt(all, 24000LL * 9).empty());  // its beat 2
+      // B04: a waltz comp on beat 3 leaves the bar line's one to the bass at every change.
+      auto waltz = songOf("x.x.x.x.x.x.x.x.", {{"C", nullptr}, {"F", nullptr}, {"G", nullptr}});
+      waltz->beats = 3;
+      for (Section &sec : waltz->sections) {
+         for (Pattern &t : sec.takes)
+            t = fromRhythm("........x...|........x...", kRate34);
+         sec.fill = sec.takes[0];
+      }
+      auto engine2 = std::make_unique<Engine>();
+      Engine &w = *engine2;
+      w.setSong(*waltz);
+      w.setSettings(plain());
+      w.reset();
+      const auto three = runWith(w, 24000LL * 12, 0.0, [](int64_t, Block &) {});
+      for (int bar = 1; bar < 4; ++bar) {
+         JCLAP_CHECK(startingAt(three, 24000LL * 3 * bar).empty());
+         JCLAP_CHECK(!startingAt(three, 24000LL * (3 * bar + 2)).empty());
+      }
    }
    return jclap::core::testResult();
 }

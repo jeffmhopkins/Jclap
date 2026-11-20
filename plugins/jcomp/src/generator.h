@@ -1295,6 +1295,24 @@ inline Section makeSection(const Recipe &r, int section, uint32_t seed) {
    return s;
 }
 
+// A song saved before 0.6.0 (a version below 3) has no fills down and no ending: they're made for it
+// from its takes, as a new song's are.
+inline void completeSong(const Recipe &r, Song &song, const std::vector<uint8_t> &saved) {
+   if (saved.size() < 4)
+      return;
+   const uint32_t version = saved[0] | saved[1] << 8 | saved[2] << 16 | static_cast<uint32_t>(saved[3]) << 24;
+   if (version >= 3)
+      return;
+   for (int i = 0; i < kSections; ++i) {
+      Section &s = song.sections[static_cast<size_t>(i)];
+      const double e = s.energy / 100.0;
+      if (s.fillDown.empty())
+         s.fillDown = makeFillDown(r, i, s.takes[0], e);
+      if (i == kOutro && s.ending.empty())
+         s.ending = makeEnding(r, s.takes[0], e);
+   }
+}
+
 inline int beatsOf(const Recipe &r) { return styleOf(r).mods & kWaltz ? 3 : 4; }
 
 inline void generateSong(const Recipe &r, Song &song) {

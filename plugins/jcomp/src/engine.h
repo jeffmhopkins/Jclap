@@ -488,6 +488,7 @@ public:
 
    // How far ahead of the host the clock runs, in seconds.
    static constexpr double kLookahead = 0.08;
+   static constexpr double kHeld = 1e6; // beats: a pad note's length, ended only by the next change (or a stop)
 
 private:
    // ---- section notes ----
@@ -969,8 +970,8 @@ private:
       nextChord_ = progressionChord(slot);
       for (int k = 0; k < 4 && nextChord_ == progressionChord(r); ++k)
          nextChord_ = progressionChord(slot = nextSlot(slot));
-      if (settings_.pad)
-         padAt(t, false);
+      if (settings_.pad || !pad_.empty())
+         padAt(t, false); // (switched off: lets the pad go)
       if (settings_.rhythmFrom == 1)
          return;
       playStep(p, patternPos(p, t, r), t, r);
@@ -1008,19 +1009,22 @@ private:
       const double e = song_.sections[static_cast<size_t>(section_)].energy / 100.0;
       const int vel = static_cast<int>(std::lround((52.0 + 26.0 * e) * energy_));
       for (int i = 0; i < pad_.count; ++i)
-         note(at, pad_.notes[static_cast<size_t>(i)], vel, 64.0, 3, settings_.padChannel);
+         note(at, pad_.notes[static_cast<size_t>(i)], vel, kHeld, 3, settings_.padChannel); // to the next change
    }
 
-   // Where in a pattern the tick `t` falls. A take of two bars (a clave, a two-bar riff) keeps its
-   // phase to the host's bars, so a section starting on an odd bar, a jump or a loop doesn't turn
-   // the clave round. A fill plays its last bar into the next, unless it's the take's own figure
-   // (a fixed figure's fill), which keeps the clave's side too.
+   // Where in a pattern the tick `t` falls. A take of two or four bars (a phrase: the spiritual's
+   // turnaround bar, an answer bar) counts from the section's start, as its progression does. A fixed
+   // figure (a clave's) keeps its phase to the host's bars instead, so a section starting on an odd
+   // bar, a jump or a loop doesn't turn the clave round. A fill plays its last bar into the next,
+   // unless it's the take's own figure (a fixed figure's fill), which keeps the clave's side too.
    int64_t patternPos(const Pattern &p, int64_t t, int64_t r) const {
       const int64_t len = std::max(1, patternTicks(p));
       if (ending_)
          return std::clamp<int64_t>(r - endFrom_, 0, len - 1);
-      if (!fill_ || (settings_.fixed && !fillDown_))
+      if (settings_.fixed && (!fill_ || !fillDown_))
          return ((t % len) + len) % len;
+      if (!fill_)
+         return ((r % len) + len) % len;
       return (len - barTicks() % len) % len + r % barTicks();
    }
 
@@ -1126,8 +1130,12 @@ private:
          // Unless the take strikes within an eighth (a hit that soon carries it), the change sounds
          // where it comes: a turnaround's passing chord on beat 3 isn't left to the take's beat 4.
          const int toNext = change < 0 ? steps : static_cast<int>((change - secRel) / stepTicks) - 1;
-         // (Not in an offbeat take, which leaves its beats empty: its next chop brings the change.)
-         const int toChange = offbeat ? toNext : std::min(toNext, std::max(1, perBeat / 2));
+         // (Not in an offbeat take, which leaves its beats empty: its next chop brings the change; nor
+         // in a figure played as written, a clave's 2-side leaving its one empty; nor at a waltz's
+         // bar line, whose one is the bass's: the comp's beat 2 or 3 brings the chord.)
+         int toChange = offbeat || (settings_.fixed && !heldChange) ? toNext : std::min(toNext, std::max(1, perBeat / 2));
+         if (p.rate == kRate34 && secRel % barTicks() == 0 && !heldChange)
+            toChange = std::min(toNext, p.stepsPerBar() - 1);
          if (!chordHitIn(p, step, 1, std::max(0, toChange)) && !sameHarmony(chordAt(secRel), lastChord_))
             strikeChange(p, step, steps, t, secRel, stepBeats, perBeat, fine);
       }
