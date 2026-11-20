@@ -122,6 +122,8 @@ inline const char *const kArtNames[] = {"As written", "Chop", "Half", "Ring", "T
 enum Part : uint8_t { kPartChord, kPartTop, kPartUpper, kPartBass, kPartFifth, kPartLine };
 inline const char *const kPartNames[] = {"Chord", "Top note", "Top two", "Bass", "Bass 5th", "Line"};
 inline bool leftHand(uint8_t part) { return part == kPartBass || part == kPartFifth; }
+// A hit that sounds the chord (all of it, its top or its upper two), not a left hand's note or a line's.
+inline bool chordPart(uint8_t part) { return part == kPartChord || part == kPartUpper || part == kPartTop; }
 
 // One chord stab on one step. A velocity of 0 is no hit.
 struct Hit {

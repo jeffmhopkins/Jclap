@@ -138,7 +138,7 @@ inline bool isRecipeParam(clap_id id) { return id <= kSectionEnergy + kSections 
 inline bool isSetupParam(clap_id id) {
    switch (id) {
    case kChordsFrom: case kChordSplit: case kHeldOnly:
-   case kSection: case kTake: case kSwitchBy: case kSync: case kPlay: case kFreeTempo:
+   case kSection: case kTake: case kSwitchBy: case kSync: case kPlay:
    case kChannel: case kRhythmFrom: case kBassChannel: case kFollow:
    case kNoteMap: case kNoteOctave: case kNoteChannel: case kPassNotes:
       return true;

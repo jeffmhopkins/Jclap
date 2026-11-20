@@ -141,10 +141,10 @@ inline const std::vector<Genre> &genres() {
        // Brown's static dominant vamp, the bridge a step up ("take it to the bridge"); Fela's Dorian i7.
        {{kMixolydian, {"C7#9|C7#9", "C9|C9|C9|C9", "F9|F9|C9|C9", "C9|F9|C9|F9", "D9|D9|D9|D9", "C9|C9|C7#9|C7#9"}},
         {kDorian, {"Cm9|Cm9", "Cm9|F9|Cm9|F9", "F9|F9|F9|F9", "Cm9|Cm9|F9|F9", "Dm9|Dm9|G9|G9", "Cm9|Cm9|Cm9|Cm9"}}},
-       {{"Pocket Stabs", "Pocket", 100, kPushes, 0, 0b0001},
-        {"Clav Riff", "Clav", 100, kTopLine, 1, 0b0110, kClavChopper},
+       {{"Pocket Stabs", "Pocket", 100, 0, 0, 0b0001},
+        {"Clav Riff", "Clav", 100, kTopLine, 1, 0b0100, kClavChopper},
         {"Dorian Groove", "Dorian", 108, kRich, 1},
-        {"Chicken Scratch", "Scratch", 112, kBusy | kShorts, 0, 0b1001, kRhythmGuitar}},
+        {"Chicken Scratch", "Scratch", 112, kBusy | kShorts, 0, 0b1000, kRhythmGuitar}},
        "5, 6, 13"},
       {"Soul", kFamilies[0], kChurchOrgan, 0.54, 0,
        // The backbeat on 2 and 4 (Motown's and Memphis's guitar and keys); pumping eighths; the
@@ -152,7 +152,7 @@ inline const std::vector<Genre> &genres() {
        {{"....X.......X...", 0.3}, {"x-x-X-x-x-x-X-x-", 0.6}, {"x--x--x-x--x--x-", 0.8}},
        {{"x-x-X-x-x-x-xxxx", 0.7}},
        {{kMajor, {"C|C7|F|Fm", "C|Am|F|G", "F|G|F|G", "C|F|C|F", "Dm7|G7|C|C", "C|C7|F|Fm"}}},
-       {{"Memphis Backbeat", "Backbeat", 96, kPlain, 0, 0b001},
+       {{"Memphis Backbeat", "Backbeat", 96, kPlain, 0, 0b001, -1, kDrop2, 4, 55, 76, 64},
         {"Pumping Eighths", "Eighths", 112, 0, 0, 0b010, kPopPianist},
         {"Gospel Push", "Push", 104, kRunsIn, 0, 0b100}},
        "1, 23"},
@@ -326,11 +326,11 @@ inline const std::vector<Genre> &genres() {
        {{"x-------x.x.x.xx", 0.5}, {"xxxXxxxxxXXX", 0.6}},
        // I-V/7-vi-IV over a falling bass; I-iii-IV-V; IV-V-iii-vi-ii-V-I; the last chorus up.
        {{kMajor, {"C|G/B|Am|F", "C|G/B|Am|F", "C|Em|F|G", "F|G|Em|Am|Dm|G|C|C", "Ab|Bb|C|C", "Gb|Ab|Fm|Bbm|Ebm|Ab|Db|Db"}}},
-       {{"Half Notes", "Halves", 72, kLongs, 0, 0b001, kPadPlayer},
+       {{"Half Notes", "Halves", 72, kLongs, 0, 0b001, kPopPianist},
         {"Broken Chords", "Arpeggio", 68, kLongs, 0, 0b010},
         {"12/8 Ballad", "12/8", 64, kTriplet}},
        "1"},
-      {"Country", kFamilies[3], kPopPianist, 0.53, 0,
+      {"Country", kFamilies[3], kPopPianist, 0.53, 1,
        // Boom-chick (the bass on 1 and 3, the root then the fifth, the chord on 2 and 4); Cramer's
        // Nashville sound, its slip notes into the chords; the two-step's two-beat: the bass string on
        // 1 and 3 (root, then fifth), a down-up strum on 2.
@@ -368,7 +368,7 @@ inline const std::vector<Genre> &genres() {
        "24, 25"},
 
       // ---- Caribbean & Africa ----
-      {"Reggae", kFamilies[5], kSkankGuitar, 0.54, 0,
+      {"Reggae", kFamilies[5], kSkankGuitar, 0.54, 1,
        // The skank on 2 and 4 (or every offbeat, counted double); the organ bubble (the left hand's
        // low single notes on the upbeats, the right hand's chop on 2 and 4: Jenson, Berklee); the
        // double chop: the skank on 2 and 4 and a strum on its and (Guitar World's Marley lesson, which
@@ -378,7 +378,7 @@ inline const std::vector<Genre> &genres() {
        {{kMajor, {"C|F", "C|F|C|F", "Am|F|G|G", "C|G|Am|F", "Am|G|Am|G", "C|F"}},
         {kMinor, {"Cm|Fm", "Cm|Fm|Cm|Fm", "Ab|Bb", "Cm|Bb|Cm|Bb", "Fm|Bb|Cm|Cm", "Cm|Fm"}}},
        {{"One Drop Skank", "One Drop", 74, kShorts, 0, 0b0001},
-        {"Organ Bubble", "Bubble", 72, kShorts | kPlain, 0, 0b0100, kChurchOrgan},
+        {"Organ Bubble", "Bubble", 72, kShorts | kPlain, 0, 0b0100, kChurchOrgan, kClose, 4, 55, 76, 64},
         {"Rockers", "Rockers", 80, kShorts, 1, 0b1010}},
        "35, 42, 51"},
       {"Ska", kFamilies[5], kSkankGuitar, 0.5, 0,

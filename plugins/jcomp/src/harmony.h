@@ -86,16 +86,22 @@ enum QualityId {
 
 inline const char *const kSharpNames[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 inline const char *const kFlatNames[12] = {"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"};
-// Keys written with flats (F, Bb, Eb, Ab, Db, Gb as majors).
-inline bool flatKey(int key) { return key == 5 || key == 10 || key == 3 || key == 8 || key == 1 || key == 6; }
+enum Scale { kMajor, kMinor, kDorian, kMixolydian, kBlues, kScaleCount };
+// Keys written with flats (F, Bb, Eb, Ab, Db, Gb as majors). A mode is written as its relative
+// major is (F# minor with A's sharps, G minor with Bb's flats, D Mixolydian with G's sharp).
+inline bool flatKey(int key, int scale = kMajor) {
+   static const int toMajor[kScaleCount] = {0, 3, 10, 5, 0};
+   key = (((key + toMajor[std::clamp(scale, 0, kScaleCount - 1)]) % 12) + 12) % 12;
+   return key == 5 || key == 10 || key == 3 || key == 8 || key == 1 || key == 6;
+}
 // A note's name in a key, spelled by its degree: the key's own notes by their letters (G# in E, Bb
 // in F), and the chromatic ones as the flat third, sixth, seventh and second and the sharp fourth
 // (Eb, Ab, Bb, Db and F# in C), as the borrowed and secondary chords are written. A spelling that
 // would need a double accidental or an E#, B#, Cb or Fb falls back to the key's sharps or flats.
-inline const char *pitchName(int pc, int key = 0) {
+inline const char *pitchName(int pc, int key = 0, int scale = kMajor) {
    pc = ((pc % 12) + 12) % 12;
    key = ((key % 12) + 12) % 12;
-   const char *const *names = flatKey(key) ? kFlatNames : kSharpNames;
+   const char *const *names = flatKey(key, scale) ? kFlatNames : kSharpNames;
    static const int letterPc[7] = {0, 2, 4, 5, 7, 9, 11}; // C D E F G A B
    static const int stepOf[12] = {0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6}; // the degree's letter, from the key's
    static const char *const spelled[7][3] = {{"Cb", "C", "C#"}, {"Db", "D", "D#"}, {"Eb", "E", "E#"}, {"Fb", "F", "F#"},
@@ -116,17 +122,14 @@ inline const char *pitchName(int pc, int key = 0) {
    return n;
 }
 
-enum Scale { kMajor, kMinor, kDorian, kMixolydian, kBlues, kScaleCount };
 inline const char *const kScaleNames[kScaleCount] = {"Major", "Minor", "Dorian", "Mixolydian", "Blues"};
-inline const std::vector<int> &scaleSteps(int scale) {
-   static const std::vector<int> s[kScaleCount] = {
-      {0, 2, 4, 5, 7, 9, 11}, {0, 2, 3, 5, 7, 8, 10}, {0, 2, 3, 5, 7, 9, 10}, {0, 2, 4, 5, 7, 9, 10},
-      {0, 3, 5, 6, 7, 10}};
-   return s[std::clamp(scale, 0, kScaleCount - 1)];
-}
+// The scales' steps, as constant tables (no static to build on the audio thread); -1 ends one.
+inline constexpr int kScaleSteps[kScaleCount][8] = {
+   {0, 2, 4, 5, 7, 9, 11, -1}, {0, 2, 3, 5, 7, 8, 10, -1}, {0, 2, 3, 5, 7, 9, 10, -1}, {0, 2, 4, 5, 7, 9, 10, -1},
+   {0, 3, 5, 6, 7, 10, -1, -1}};
 inline bool inScale(int pc, int key, int scale) {
    const int d = ((pc - key) % 12 + 12) % 12;
-   for (int s : scaleSteps(scale))
+   for (int s : kScaleSteps[std::clamp(scale, 0, kScaleCount - 1)])
       if (s == d)
          return true;
    return false;
@@ -136,9 +139,9 @@ inline bool inScale(int pc, int key, int scale) {
 
 // The flat fifth of a key, spelled as one (Bb in E, Gb in C): the root of a tritone sub, or of a
 // major chord a tritone away, which is written flat; a diminished chord there is the sharp fourth.
-inline const char *flatFifthName(int key) {
+inline const char *flatFifthName(int key, int scale = kMajor) {
    key = ((key % 12) + 12) % 12;
-   const char *const *names = flatKey(key) ? kFlatNames : kSharpNames;
+   const char *const *names = flatKey(key, scale) ? kFlatNames : kSharpNames;
    static const char *const flats[7] = {"Cb", "Db", "Eb", "Fb", "Gb", "Ab", "Bb"};
    static const char *const naturals[7] = {"C", "D", "E", "F", "G", "A", "B"};
    static const int letterPc[7] = {0, 2, 4, 5, 7, 9, 11};
@@ -152,13 +155,27 @@ inline const char *flatFifthName(int key) {
    return names[pc];
 }
 
-inline std::string chordName(const Chord &c, int key = 0) {
+// A chord's name in a key (and its scale, for the key's sharps or flats). `next`, the chord after it:
+// a dominant a half step above it is its flat II (Eb9 into D, Db9 into C), spelled as one.
+inline std::string chordName(const Chord &c, int key = 0, int scale = kMajor, const Chord *next = nullptr) {
    if (c.none())
       return "N.C.";
    const bool flatFifth = ((c.root - key) % 12 + 12) % 12 == 6 && c.quality != 16 && c.quality != 17 && c.quality != 18;
-   std::string n = std::string(flatFifth ? flatFifthName(key) : pitchName(c.root, key)) + qualityOf(c).suffix;
+   std::string root = flatFifth ? flatFifthName(key, scale) : pitchName(c.root, key, scale);
+   if (next && !next->none() && (c.root - next->root + 12) % 12 == 1 && (c.quality == 2 || c.quality == 5)) {
+      // As the next chord's flat second: its letter and one up, flattened.
+      const std::string to = pitchName(next->root, key, scale);
+      static const char letters[] = "CDEFGAB";
+      const char *at = std::strchr(letters, to[0]);
+      if (at && to.size() == 1) {
+         const char up = letters[(at - letters + 1) % 7];
+         if (up != 'C' && up != 'F')
+            root = std::string(1, up) + "b";
+      }
+   }
+   std::string n = root + qualityOf(c).suffix;
    if (c.bass >= 0 && c.bass != c.root)
-      n += std::string("/") + pitchName(c.bass, key);
+      n += std::string("/") + pitchName(c.bass, key, scale);
    return n;
 }
 
@@ -266,6 +283,15 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
                c.quality = kMin;
             else if (iv == 5) // a fourth: the upper note's chord, over its fifth
                c.root = static_cast<int8_t>(pc);
+            else if (iv == 8) // a minor sixth: the upper note's major chord, over its third (C/E)
+               c.root = static_cast<int8_t>(pc);
+            else if (iv == 9) { // a major sixth: the upper note's minor chord, over its third (Am/C)
+               c.root = static_cast<int8_t>(pc);
+               c.quality = kMin;
+            } else if (iv == 10) // a seventh over the low note: its 7th chord (a shell)
+               c.quality = kDom7;
+            else if (iv == 11)
+               c.quality = kMaj7;
          }
       c.bass = static_cast<int8_t>(slash && c.root != bassPc ? bassPc : -1);
       return c;
@@ -294,6 +320,10 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
          }
          if (root == bassPc)
             score += 0.75;
+         // A chord that is exactly what's held beats a richer one it would have to add a note to
+         // (Cm/Eb, not an Eb6 with a Bb nobody played).
+         if (want == held)
+            score += 0.5;
          // Simpler names first: fewer tones break ties.
          score -= 0.05 * static_cast<double>(qu.tones.size());
          if (score > bestScore) {
@@ -384,7 +414,8 @@ inline Ints upperTones(const Chord &c, int n) {
          t.push_back(i);
    for (int extra : {7, 12, 19})
       if (static_cast<int>(t.size()) < n && std::find(t.begin(), t.end(), extra) == t.end() &&
-          !(extra == 7 && std::find(q.tones.begin(), q.tones.end(), 7) == q.tones.end() && q.tones.size() > 2 &&
+          !((extra == 7 || extra == 19) && std::find(q.tones.begin(), q.tones.end(), 18) != q.tones.end()) &&
+          !((extra == 7 || extra == 19) && std::find(q.tones.begin(), q.tones.end(), 7) == q.tones.end() && q.tones.size() > 2 &&
             (q.tones[2] == 6 || q.tones[2] == 8)))
          t.push_back(extra);
    return t;
@@ -469,7 +500,7 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                guide.push_back(i);
       } else
          guide = {q.tones[1], q.tones[2]};
-      for (int b = vs.floor; b < vs.floor + 12; ++b) {
+      for (int b = vs.floor; b < std::max(vs.floor + 12, vs.lo); ++b) { // up to the window, wherever it is
          if (b % 12 != bassPc)
             continue;
          for (const auto &st : detail::closeStacks(pcsOf(guide), b + 3, b + 26)) {
@@ -484,43 +515,76 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
    }
    case kQuartal: {
       // Fourths stacked on a chord tone or colour tone (with a major third on top, "So What"), kept
-      // when every note is the chord's or one of its tensions.
-      unsigned allowed = 0;
+      // when every note is the chord's or one of its tensions, and the stack says what the chord is:
+      // its root, its third (or sus fourth), its seventh (or sixth) and an altered tone where it has
+      // one. Without them every chord of a diatonic progression finds the same stack and the changes
+      // are never heard. A stack that can't hold them all lets the altered tone go, then the seventh.
+      unsigned own = 0, allowed = 0;
       for (int i : q.tones)
-         allowed |= 1u << ((c.root + i) % 12);
-      for (int t : {2, 9}) // the 9th and 13th sit well in fourths over most chords
-         if (q.seventh || q.tones.size() > 3)
-            allowed |= 1u << ((c.root + t) % 12);
-      if (q.tones.size() > 1 && q.tones[1] == 3)
+         own |= 1u << ((c.root + i) % 12);
+      allowed = own;
+      const auto hasIv = [&](int i) { return std::find(q.tones.begin(), q.tones.end(), i) != q.tones.end(); };
+      const bool altered9 = hasIv(13) || hasIv(15), altered5 = hasIv(8) || hasIv(6) || hasIv(18);
+      // The 9th and 13th sit well in fourths over a chord with a seventh, but not against its b9/#9,
+      // nor the 13th against a b13 or a diminished fifth.
+      if ((q.seventh || q.tones.size() > 3) && !altered9)
+         allowed |= 1u << ((c.root + 2) % 12);
+      if (q.seventh && !altered5 && !hasIv(9))
+         allowed |= 1u << ((c.root + 9) % 12);
+      if (q.tones.size() > 1 && q.tones[1] == 3 && !altered5)
          allowed |= 1u << ((c.root + 5) % 12); // the 11th over a minor chord
-      // A stack of fourths is as wide as it is tall: five notes span 19 or 20 semitones, whatever SPREAD.
+      int seventh = -1;
+      for (int i : {10, 11, 9})
+         if (q.seventh && seventh < 0 && hasIv(i))
+            seventh = i;
+      int alt = -1;
+      for (int i : {13, 15, 18, 8})
+         if (alt < 0 && hasIv(i) && !(i == 8 && !hasIv(4)))
+            alt = i % 12;
+      // A stack of fourths is as wide as it is tall: five notes span 19 to 21 semitones, whatever SPREAD.
       VoiceSettings qs = vs;
-      qs.maxSpan = std::max(vs.maxSpan, 5 * (n - 1));
-      for (int b = vs.lo - 12; b <= vs.hi; ++b) {
-         if (!(allowed >> (((b % 12) + 12) % 12) & 1))
-            continue;
-         for (int last : {5, 4}) {
-            Stack v{b};
-            for (int k = 1; k < n; ++k)
-               v.push_back(v.back() + (k == n - 1 && n >= 4 ? last : 5));
-            bool ok = true, root = false;
-            for (int x : v) {
-               ok = ok && (allowed >> (((x % 12) + 12) % 12) & 1);
-               root = root || ((x - bassPc) % 12 + 12) % 12 == 0;
+      qs.maxSpan = std::max(vs.maxSpan, 5 * (n - 1) + 1);
+      // Pure fourths first; then one of them a tritone (Bb E A D over C7) or a major third (the
+      // "So What" top, or lower down). Where no stack holds root, third and seventh together, the
+      // root (or slash bass) goes under a stack of the rest (the left hand's root under the right
+      // hand's fourths); only then does the seventh go.
+      for (int strict = 3; strict >= 0 && out.empty(); --strict)
+         for (int odd = 0; odd < 2 && out.empty(); ++odd)
+            for (int b = vs.lo - 12; b <= vs.hi; ++b) {
+               if (!(allowed >> (((b % 12) + 12) % 12) & 1))
+                  continue;
+               const int m = strict == 1 ? n - 1 : n;
+               for (int ex = 0; ex < (odd ? 2 * (m - 1) : 1); ++ex) {
+                  Stack v{b};
+                  for (int k = 1; k < m; ++k)
+                     v.push_back(v.back() + (odd && k - 1 == ex / 2 ? (ex % 2 ? 6 : 4) : 5));
+                  bool ok = m >= 2, root = false, third = false, sev = seventh < 0 || strict < 1,
+                       al = alt < 0 || strict < 3;
+                  for (int x : v) {
+                     ok = ok && (allowed >> (((x % 12) + 12) % 12) & 1);
+                     const int iv = ((x - c.root) % 12 + 12) % 12;
+                     root = root || iv == 0 || ((x - bassPc) % 12 + 12) % 12 == 0;
+                     third = third || iv == 3 || iv == 4 || (iv == 5 && q.tones[1] == 5);
+                     sev = sev || iv == seventh;
+                     al = al || iv == alt;
+                  }
+                  if (strict == 1) {
+                     if (root)
+                        continue; // the plain stacks had this one
+                     int low = b - 3;
+                     while (((low - bassPc) % 12 + 12) % 12)
+                        --low;
+                     if (low < vs.floor)
+                        low += 12;
+                     if (low >= b)
+                        continue;
+                     v.insert(v.begin(), low);
+                     root = true;
+                  }
+                  if (ok && root && third && sev && al)
+                     detail::addCandidate(out, v, qs, strict == 1 ? v.front() : -1);
+               }
             }
-            // And its root (or bass) among them: without it every chord of a diatonic progression
-            // finds the same stack of fourths, and the changes are never heard.
-            ok = ok && root;
-            // It must say what the chord is: the third (or the sus fourth) among its notes.
-            bool third = false;
-            for (int x : v) {
-               const int iv = ((x - c.root) % 12 + 12) % 12;
-               third = third || iv == 3 || iv == 4 || (iv == 5 && q.tones[1] == 5);
-            }
-            if (ok && third)
-               detail::addCandidate(out, v, qs, -1);
-         }
-      }
       if (out.empty())
          return candidates(c, vs, kSpread);
       break;
@@ -530,7 +594,16 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       // structure of the guide and colour tones.
       // Over its own root the upper part leaves the root out (the bass has it); over a slash bass
       // it is the chord.
-      const Ints upper = bassPc == c.root ? upperTones(c, std::max(3, n - 1)) : pickTones(c, std::max(3, n - 1));
+      Ints upper = bassPc == c.root ? upperTones(c, std::max(3, n - 1)) : pickTones(c, std::max(3, n - 1));
+      // Over a slash bass the root stays among them (the I of a I/5 is the arrival), in place of the
+      // fifth, else of the last colour.
+      if (bassPc != c.root && std::none_of(upper.begin(), upper.end(), [](int i) { return i % 12 == 0; })) {
+         auto fifth = std::find_if(upper.begin(), upper.end(), [](int i) { return i % 12 == 7; });
+         if (fifth != upper.end())
+            *fifth = 0;
+         else if (upper.size() > 2)
+            upper.back() = 0;
+      }
       for (int b = vs.floor; b < vs.floor + 12; ++b) {
          if (b % 12 != bassPc)
             continue;
@@ -583,8 +656,18 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       break;
    }
    case kOctaves: {
-      // A close chord of n-1 notes, its bottom note doubled an octave up on top.
-      const Ints tones = pickTones(c, std::max(2, n - 1));
+      // A close chord of n-1 notes, its bottom note doubled an octave up on top: the triad (root,
+      // third, fifth, so the line can move through all three), with a seventh inside for four.
+      Ints tones;
+      for (size_t i = 0; i < q.tones.size() && tones.size() < 3; ++i)
+         tones.push_back(q.tones[i]);
+      for (int i : {10, 11, 9})
+         if (static_cast<int>(tones.size()) < n - 1 && q.seventh &&
+             std::find(q.tones.begin(), q.tones.end(), i) != q.tones.end() &&
+             std::find(tones.begin(), tones.end(), i) == tones.end())
+            tones.push_back(i);
+      if (tones.size() < 2)
+         tones = pickTones(c, std::max(2, n - 1));
       Ints pcs = pcsOf(tones);
       std::sort(pcs.begin(), pcs.end());
       pcs.erase(std::unique(pcs.begin(), pcs.end()), pcs.end());
@@ -614,13 +697,18 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       for (int extra : {7, 12})
          if (static_cast<int>(upper.size()) < n - 3)
             upper.push_back(extra);
+      // The tones that say what the chord is, beyond its root and fifth.
+      Ints colour;
+      for (int i : q.priority)
+         if (i % 12 != 0 && i != 7 && (i == q.tones[1] || q.seventh || q.tones.size() > 3))
+            colour.push_back(i);
       const bool slash = bassPc != c.root;
       int fifthIv = 7; // the chord's fifth (a diminished or augmented one, if that's what it has)
       if (std::find(q.tones.begin(), q.tones.end(), 7) == q.tones.end())
          for (int i : {6, 8})
             if (std::find(q.tones.begin(), q.tones.end(), i) != q.tones.end())
                fifthIv = i;
-      for (int b = vs.floor; b < vs.floor + 24; ++b) {
+      for (int b = vs.floor; b < std::max(vs.floor + 24, vs.lo); ++b) {
          if (b % 12 != bassPc || (!slash && b < lowIntervalLimit(fifthIv) - 2))
             continue;
          if (slash) {
@@ -630,6 +718,20 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                Stack v{b};
                v.insert(v.end(), st.begin(), st.end());
                detail::addCandidate(out, v, vs, b);
+            }
+            continue;
+         }
+         // A chord whose colour won't fit over the fifth and octave (a 7th at four strings, a 7#9, a
+         // 13th) is gripped as a guitarist does: the root, then the third, seventh and colour close
+         // above, the fifth and octave dropped (E G# D G, the Hendrix chord).
+         if (n >= 4 && (q.seventh || q.tones.size() > 3) && static_cast<int>(colour.size()) > n - 3) {
+            Ints tones(colour.begin(), colour.begin() + std::min<int>(n - 1, static_cast<int>(colour.size())));
+            for (const auto &st : detail::closeStacks(pcsOf(tones), b + 3, b + 20)) {
+               if (st.front() <= b + 2 || st.front() > b + 10)
+                  continue;
+               Stack w{b};
+               w.insert(w.end(), st.begin(), st.end());
+               detail::addCandidate(out, w, vs, b);
             }
             continue;
          }
@@ -794,6 +896,36 @@ inline double cost(const Voicing &v, const Voicing *prev, const VoiceSettings &v
    return c;
 }
 
+// What a voicing costs for the chord it voices: a minor ninth between two of its notes (a major
+// seventh under the root an octave up, a 9th under the b3), which turns the colour into a cluster,
+// except the b9 over the root a 7b9 is made of; and a 7#9's #9 under its 3rd (the Hendrix chord has
+// it on top).
+inline double clashes(const Voicing &v, const Chord &c) {
+   const Quality &q = qualityOf(c);
+   const auto has = [&](int i) { return std::find(q.tones.begin(), q.tones.end(), i) != q.tones.end(); };
+   const auto iv = [&](int n) { return ((n - c.root) % 12 + 12) % 12; };
+   double k = 0.0;
+   for (int i = 0; i < v.count; ++i)
+      for (int j = i + 1; j < v.count; ++j) {
+         const int lo = v.notes[static_cast<size_t>(i)], hi = v.notes[static_cast<size_t>(j)];
+         if (hi - lo >= 13 && (hi - lo) % 12 == 1 && !(has(13) && iv(lo) == 0))
+            k += 9.0;
+      }
+   if (has(15) && has(4)) {
+      int third = -1, sharp9 = -1;
+      for (int i = 0; i < v.count; ++i) {
+         const int n = v.notes[static_cast<size_t>(i)];
+         if (iv(n) == 4)
+            third = std::max(third, n);
+         if (iv(n) == 3)
+            sharp9 = std::max(sharp9, n);
+      }
+      if (third >= 0 && sharp9 >= 0 && sharp9 < third)
+         k += 9.0;
+   }
+   return k;
+}
+
 // The voicings of a chord after `prev`, best first.
 inline Voicings rankShapes(const Chord &c, const Voicing *prev, const VoiceSettings &vs) {
    Voicings all = candidates(c, vs);
@@ -812,7 +944,7 @@ inline Voicings rankShapes(const Chord &c, const Voicing *prev, const VoiceSetti
    // By cost, ties kept in order (an insertion sort: no allocation).
    FixedVec<double, 256> costs;
    for (const Voicing &v : all)
-      costs.push_back(cost(v, prev, vs));
+      costs.push_back(cost(v, prev, vs) + clashes(v, c));
    for (size_t i = 1; i < all.size(); ++i) {
       const Voicing v = all[i];
       const double k = costs[i];
@@ -839,7 +971,49 @@ inline Voicing voice(const Chord &c, const Voicing *prev, const VoiceSettings &v
    const Voicings r = rankShapes(c, prev, vs);
    if (r.empty())
       return Voicing{};
+   // A new chord is heard as one: not the very notes of the chord before (a ii11 into a V13sus can
+   // share every pitch), when another voicing will do.
+   if (pick < 0 && prevChord && *prevChord != c && prev && r.size() > 1) {
+      const auto same = [](const Voicing &a, const Voicing &b) {
+         if (a.count != b.count)
+            return false;
+         for (int i = 0; i < a.count; ++i)
+            if (a.notes[static_cast<size_t>(i)] != b.notes[static_cast<size_t>(i)])
+               return false;
+         return true;
+      };
+      if (same(r[0], *prev))
+         return r[1];
+   }
    return r[static_cast<size_t>(std::clamp(pick, 0, static_cast<int>(r.size()) - 1))];
+}
+
+// The OCTAVES shape's line, as a montuno's thumbs move it through a chord: the `step`-th stroke on
+// it has the fifth, third, root, third (the chord's own: a sus fourth, a diminished fifth) at the
+// bottom, doubled on top. It arches about the window's middle, not walking off from the last
+// voicing (which ratchets it up through a bar of triads).
+inline Voicing octaveLine(const Chord &c, const Voicing *prev, const VoiceSettings &vs, int step) {
+   const auto &q = qualityOf(c).tones;
+   const int third = q.size() > 1 ? q[1] % 12 : 4, fifth = q.size() > 2 ? q[2] % 12 : 7;
+   const int want[4] = {fifth, third, 0, third};
+   const int degree = want[((step % 4) + 4) % 4];
+   const Voicings r = rankShapes(c, prev, vs);
+   const Voicing *best = nullptr;
+   double bestD = 1e9;
+   for (const Voicing &v : r)
+      if (v.count > 1 && ((v.notes[0] - c.root) % 12 + 12) % 12 == degree) {
+         double mean = 0.0;
+         for (int i = 0; i < v.count; ++i)
+            mean += v.notes[static_cast<size_t>(i)];
+         const double d = std::abs(mean / v.count - vs.center);
+         if (d < bestD - 1e-9) {
+            bestD = d;
+            best = &v;
+         }
+      }
+   if (best)
+      return *best;
+   return r.empty() ? Voicing{} : r[0];
 }
 
 // A voicing that keeps a given top note (MY TOP NOTE): the best with that note on top, else the
@@ -877,41 +1051,88 @@ inline int bassNote(const Chord &c, int floor, bool fifth = false) {
 
 // ---- passing runs ----
 
-// A run of `length` single notes into `target`: stepping through a scale from the side the line
-// comes from (below when it rises to the target, above when it falls), and with `halfStep` its last
-// note a half step under the target when it comes from below, the scale walked down from there (so
-// the line is all steps: B C C# into D, never a leap before the half step).
+// A chord's own scale, as a mask of pitch classes: the scale a player runs over it when it isn't
+// the key's. Its tones, and between them the usual steps: the 9th (b9 if the chord has it), the 11th
+// (#11 with one), the 13th (b13 on a minor chord where the key has it, or with a b9), and a seventh
+// for a chord without one (the key's, else b7). Diminished chords run the whole-half scale,
+// half-diminished the locrian with a natural 9th, augmented the whole-tone scale.
+inline unsigned chordScale(const Chord &c, int key, int scale) {
+   if (c.none())
+      return 0;
+   unsigned t = 0;
+   for (int i : qualityOf(c).tones)
+      t |= 1u << (i % 12);
+   const auto has = [&](int i) { return (t >> i & 1) != 0; };
+   const auto key_ = [&](int i) { return inScale(c.root + i, key, scale); };
+   unsigned m = 0;
+   const auto add = [&](int i) { m |= 1u << (i % 12); };
+   if (has(3) && has(6) && !has(10)) {
+      for (int i : {0, 2, 3, 5, 6, 8, 9, 11})
+         add(i);
+   } else if (has(3) && has(6)) {
+      for (int i : {0, 2, 3, 5, 6, 8, 10})
+         add(i);
+   } else if (has(4) && has(8) && !has(7)) {
+      for (int i : {0, 2, 4, 6, 8, 10})
+         add(i);
+   } else {
+      add(0);
+      add(has(1) ? 1 : 2);
+      if (has(3) && has(4))
+         add(3); // a #9
+      if (has(4))
+         add(4);
+      else if (has(3))
+         add(3);
+      add(has(6) ? 6 : 5);
+      add(7);
+      const bool minor = has(3) && !has(4);
+      add(has(9) ? 9 : (has(1) || (minor && key_(8) && !key_(9))) ? 8 : 9);
+      add(has(10) ? 10 : has(11) ? 11 : key_(11) ? 11 : 10);
+   }
+   unsigned pcs = t; // the chord's own tones, whatever the scale says
+   for (int i = 0; i < 12; ++i)
+      if (m >> i & 1)
+         pcs |= 1u << i;
+   unsigned out = 0;
+   for (int i = 0; i < 12; ++i)
+      if (pcs >> i & 1)
+         out |= 1u << ((c.root + i) % 12);
+   return out;
+}
+
+// A passing run of `length` notes into `target` (a MIDI note), from the line's last note `from`
+// (-1 for none), each a scale step from the next and all between the two, so it carries the line on
+// from where it is (a run never jumps away first). Fewer notes when the gap holds fewer; with
+// `halfStep` its last note is a half step under the target when it comes from below.
 //
-// The scale is the key's while the chord it leads into is in the key. A chord from outside it (the
-// Ab of a borrowed Abmaj7, the C of a borrowed iv, the F# of a D7, a chord of a key change) gets its
-// own: its tones, with a whole step over each where the gap to the next tone leaves room, so a run
-// into Am in E walks B C D E, not the key's D#.
-inline Ints passingRun(int from, int target, int length, int key, int scale, bool halfStep, const Ints &chordPcs = {}) {
+// The scale is the key's while both chords are in it. Over a chord from outside the key (the one
+// left, a passing diminished chord or a chord of a key change) it's that chord's own scale, with the
+// tones of the chord it leads to; into a chord from outside the key, the chord's own scale (a
+// secondary dominant's mixolydian, a borrowed Abmaj7's lydian-less major), so a run into D7 in C
+// walks E F# G, never G#, and a run into Am in E walks B C D, not the key's D#.
+inline Ints passingRun(int from, int target, int length, int key, int scale, bool halfStep, const Chord &to = Chord{},
+                       const Chord &leaving = Chord{}) {
    Ints run;
    if (length <= 0)
       return run;
-   unsigned allowed = 0, chord = 0;
+   unsigned keyMask = 0;
    for (int pc = 0; pc < 12; ++pc)
       if (inScale(pc, key, scale))
+         keyMask |= 1u << pc;
+   const auto inKey = [&](const Chord &c) {
+      for (int pc : chordTones(c))
+         if (!(keyMask >> pc & 1))
+            return false;
+      return true;
+   };
+   unsigned allowed = keyMask;
+   if (!leaving.none() && !inKey(leaving)) {
+      allowed = chordScale(leaving, key, scale);
+      for (int pc : chordTones(to))
          allowed |= 1u << pc;
-   bool outside = false;
-   for (int pc : chordPcs) {
-      const int p = ((pc % 12) + 12) % 12;
-      chord |= 1u << p;
-      outside = outside || !(allowed >> p & 1);
-   }
-   if (outside) {
-      Ints t;
-      for (int pc = 0; pc < 12; ++pc)
-         if (chord >> pc & 1)
-            t.push_back(pc);
-      allowed = chord;
-      for (size_t k = 0; k < t.size(); ++k) {
-         const int a = t[k], b = t[(k + 1) % t.size()];
-         const int gap = ((b - a) % 12 + 12) % 12;
-         if (gap >= 3 || (t.size() == 1))
-            allowed |= 1u << ((a + 2) % 12);
-      }
+   } else if (!to.none() && !inKey(to)) {
+      allowed = chordScale(to, key, scale);
    }
    const auto ok = [&](int n) { return (allowed >> (((n % 12) + 12) % 12) & 1) != 0; };
    const bool up = from < 0 || from <= target;
@@ -928,6 +1149,14 @@ inline Ints passingRun(int from, int target, int length, int key, int scale, boo
          n += up ? -1 : 1;
       while (!ok(n) && std::abs(n - start) < 3);
       run.insert(run.begin(), n);
+   }
+   // All between the line's note and the target.
+   if (from >= 0) {
+      Ints kept;
+      for (int x : run)
+         if (up ? (x >= from && x < target) : (x <= from && x > target))
+            kept.push_back(x);
+      run = kept;
    }
    return run;
 }

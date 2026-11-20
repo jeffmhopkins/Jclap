@@ -709,7 +709,7 @@ int main() {
       // A run into a chord from outside the key bends to it: into Abmaj7 in C Dorian, no A natural.
       for (int len = 2; len <= 4; ++len)
          for (int from : {60, 72}) {
-            const Ints run = passingRun(from, 67, len, 0, kDorian, false, chordTones(chord("Abmaj7")));
+            const Ints run = passingRun(from, 67, len, 0, kDorian, false, chord("Abmaj7"));
             for (int n : run)
                JCLAP_CHECK(n % 12 != 9);
          }
@@ -944,7 +944,7 @@ int main() {
          for (int target : {60, 64, 67, 71})
             for (int len = 2; len <= 4; ++len)
                for (bool half : {false, true}) {
-                  const Ints r = passingRun(from, target, len, 0, kMajor, half, chordTones(chord("C")));
+                  const Ints r = passingRun(from, target, len, 0, kMajor, half, chord("C"));
                   for (size_t k = 1; k < r.size(); ++k)
                      JCLAP_CHECK(std::abs(r[k] - r[k - 1]) <= 3 || std::abs(from - target) > 3 * len + 3);
                }
@@ -1190,5 +1190,553 @@ int main() {
       JCLAP_CHECK_EQ(gAllocs, 0);
    }
 
+   // ---- the fourth review's corrections ----
+   {
+      auto genreNamed = [](const char *name) {
+         for (int i = 0; i < genreCount(); ++i)
+            if (std::string(genreAt(i).name) == name)
+               return i;
+         return -1;
+      };
+      auto styleNamed = [](int g, const char *name) {
+         const Genre &gen = genreAt(g);
+         for (size_t i = 0; i < gen.styles.size(); ++i)
+            if (std::string(gen.styles[i].name) == name)
+               return static_cast<int>(i);
+         return -1;
+      };
+      const auto made = [](const Recipe &r) {
+         auto s = std::make_unique<Song>();
+         generateSong(r, *s);
+         return s;
+      };
+      // SONG mode: a push at a section's end plays the next section's chord, and a run into it lands
+      // on that chord, which then keeps sounding as itself.
+      {
+         auto song = songOf("x.............x.", {{"C", nullptr}});
+         Section &next = song->sections[1];
+         for (int b = 0; b < 4; ++b)
+            next.chords[static_cast<size_t>(b * 2)] = next.chords[static_cast<size_t>(b * 2 + 1)] = chord("F");
+         next.progBars = 1;
+         for (Pattern &t : song->sections[0].takes)
+            for (int k = 14; k < t.steps; k += 16)
+               t.at(k).push = 1;
+         song->sections[0].fill = song->sections[0].takes[0];
+         song->sections[0].bars = 2;
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = plain();
+         s.song = true;
+         s.fillInto = false;
+         e.setSettings(s);
+         e.reset();
+         const auto out = runWith(e, 24000 * 12, 0.0, [](int64_t, Block &) {});
+         // The and of 4 of the verse's last bar (beat 7.5).
+         const std::set<int> push = startingAt(out, 24000 * 7 + 12000);
+         JCLAP_CHECK(push.count(9) == 1 && push.count(4) == 0);
+      }
+      {
+         auto song = songOf("x...x...x...x...", {{"C", nullptr}, {"F", nullptr}});
+         Section &next = song->sections[1];
+         for (int b = 0; b < 2; ++b)
+            next.chords[static_cast<size_t>(b * 2)] = next.chords[static_cast<size_t>(b * 2 + 1)] = chord("Ab");
+         for (Pattern &t : next.takes)
+            t.at(0).run = 1;
+         for (Pattern &t : song->sections[0].takes)
+            t.at(0).run = 1;
+         song->sections[0].bars = 2;
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = plain();
+         s.song = true;
+         s.fillInto = false;
+         s.runs = 1.0;
+         s.runEveryBars = 1;
+         e.setSettings(s);
+         e.reset();
+         const auto out = runWith(e, 24000 * 16, 0.0, [](int64_t, Block &) {});
+         for (int beat = 8; beat < 16; ++beat)
+            for (int pc : startingAt(out, 24000 * beat))
+               JCLAP_CHECK(pc == 8 || pc == 0 || pc == 3);
+      }
+      // A run doesn't take the place of a chord: in a bar split C | G with the G's only hit on the
+      // and of 3, the G is struck.
+      {
+         auto song = songOf("x.........x.....", {{"C", "G"}, {"Am", nullptr}});
+         for (Section &sec : song->sections)
+            for (Pattern &t : sec.takes)
+               t.at(0).run = 1;
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = plain();
+         s.runs = 1.0;
+         s.runEveryBars = 1;
+         e.setSettings(s);
+         e.reset();
+         const auto out = runWith(e, 24000 * 8, 0.0, [](int64_t, Block &) {});
+         const std::set<int> g = startingAt(out, 24000 * 2 + 12000);
+         JCLAP_CHECK(g.count(7) == 1 && g.count(11) == 1);
+      }
+      // 4THS: different chords, different stacks; a seventh chord's seventh in it; no natural 9th
+      // against a b9.
+      {
+         VoiceSettings q;
+         q.shape = kQuartal;
+         q.voices = 5;
+         q.lo = 52;
+         q.hi = 84;
+         q.center = 66;
+         for (const char *name : {"C7", "Cmaj7", "Cm7", "B7sus", "C7#9", "Fmaj7"}) {
+            const Chord c = chord(name);
+            const Voicing v = voice(c, nullptr, q);
+            JCLAP_CHECK(!v.empty());
+            const auto &t = qualityOf(c).tones;
+            int seventh = -1;
+            for (int i : {10, 11})
+               if (std::find(t.begin(), t.end(), i) != t.end())
+                  seventh = (c.root + i) % 12;
+            bool has = seventh < 0;
+            for (int i = 0; i < v.count; ++i)
+               has = has || v.notes[static_cast<size_t>(i)] % 12 == seventh;
+            JCLAP_CHECK(has);
+         }
+         const Voicing b9 = voice(chord("C7b9"), nullptr, q);
+         for (int i = 0; i < b9.count; ++i)
+            JCLAP_CHECK(b9.notes[static_cast<size_t>(i)] % 12 != 2);
+         Voicing prev;
+         Chord prevChord;
+         std::vector<std::vector<int>> seen;
+         for (const char *name : {"Eadd9", "C#m9", "B7sus", "Amaj9"}) {
+            const Chord c = chord(name);
+            const Voicing v = voice(c, prev.empty() ? nullptr : &prev, q, -1, prevChord.none() ? nullptr : &prevChord);
+            std::vector<int> notes(v.notes.begin(), v.notes.begin() + v.count);
+            JCLAP_CHECK(std::find(seen.begin(), seen.end(), notes) == seen.end());
+            seen.push_back(notes);
+            prev = v;
+            prevChord = c;
+         }
+      }
+      // DENSITY: every bar keeps a chord at 0, and the knob thins steadily.
+      for (int g = 0; g < genreCount(); ++g)
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st) {
+            const Recipe r = recipeOf(g, st, 5);
+            auto song = made(r);
+            auto engine = std::make_unique<Engine>();
+            Engine &e = *engine;
+            e.setSong(*song);
+            std::vector<double> sv = defaultValues();
+            for (const auto &[id, x] : styleValues(g, st))
+               sv[id] = x;
+            Settings s = settingsFor(r);
+            s.voicing = voiceSettings([&](clap_id id) { return sv[id]; });
+            applyRecipe(s, r);
+            s.section = kVerse;
+            s.density = 0.0;
+            s.autoFillBars = 0;
+            s.key = song->key;
+            e.setSettings(s);
+            e.reset();
+            const auto out = runWith(e, 24000 * 16, 0.0, [](int64_t, Block &) {});
+            // A line style (one note at a time) keeps its line; a chord held over two bars has
+            // nothing new in the second.
+            const bool line = hasLine(song->sections[kVerse].takes[0]);
+            bool before = false;
+            for (int bar = 0; bar < 4; ++bar) {
+               std::map<int64_t, int> at;
+               for (const Timed &t : out)
+                  if (t.on() && t.time >= bar * 96000 - 2400 && t.time < (bar + 1) * 96000 - 2400)
+                     ++at[t.time / 960];
+               int most = 0;
+               for (const auto &[k, n] : at)
+                  most = std::max(most, n);
+               if (line && at.size() >= 3)
+                  most = 2;
+               if (at.empty() && before)
+                  most = 2;
+               before = !at.empty();
+               if (most < 2) {
+                  std::printf("no chord: %s / %s bar %d:", genreAt(g).name, genreAt(g).styles[st].name, bar + 1);
+                  for (const Timed &t : out)
+                     if (t.on() && t.time >= bar * 96000 && t.time < (bar + 1) * 96000)
+                        std::printf(" %lld:%d", static_cast<long long>(t.time), t.m.data1);
+                  std::printf("\n");
+               }
+               JCLAP_CHECK(most >= 2);
+            }
+         }
+      {
+         const int g = genreNamed("Funk"), st = styleNamed(g, "Pocket Stabs");
+         const Recipe r = recipeOf(g, st, 1);
+         auto song = made(r);
+         int last = 1 << 30;
+         for (double d : {0.5, 0.3, 0.1}) {
+            auto engine = std::make_unique<Engine>();
+            Engine &e = *engine;
+            e.setSong(*song);
+            Settings s = settingsFor(r);
+            s.section = kVerse;
+            s.density = d;
+            s.autoFillBars = 0;
+            s.vary = 0;
+            e.setSettings(s);
+            e.reset();
+            const auto out = runWith(e, 24000 * 32, 0.0, [](int64_t, Block &) {});
+            int ons = 0;
+            for (const Timed &t : out)
+               ons += t.on();
+            JCLAP_CHECK(ons < last);
+            last = ons;
+         }
+      }
+      // A montuno chorus plays the guajeo, not the sparse strokes on the clave.
+      {
+         const int g = genreNamed("Salsa");
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st)
+            for (uint32_t seed = 1; seed <= 30; ++seed) {
+               const Recipe r = recipeOf(g, st, seed);
+               auto song = made(r);
+               JCLAP_CHECK(song->sections[kChorus].takes[0].count() >= 8);
+            }
+      }
+      // BLEND leaves a fixed figure alone.
+      {
+         const int g = genreNamed("Salsa"), st = styleNamed(g, "Montuno 2-3");
+         Recipe r = recipeOf(g, st, 3);
+         auto plainSong = made(r);
+         r.genre2 = genreNamed("Funk");
+         r.blend = 1.0;
+         auto blended = made(r);
+         for (int i = 0; i < kSections; ++i)
+            for (int s = 0; s < plainSong->sections[i].takes[0].steps; ++s)
+               JCLAP_CHECK(plainSong->sections[i].takes[0].at(s).on() == blended->sections[i].takes[0].at(s).on());
+      }
+      // The one drop keeps 1 and 3 empty at DENSITY 1.
+      {
+         const int g = genreNamed("Reggae");
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st) {
+            const Recipe r = recipeOf(g, st, 5);
+            auto song = made(r);
+            if (!offbeatTake(song->sections[kVerse].takes[0]))
+               continue;
+            auto engine = std::make_unique<Engine>();
+            Engine &e = *engine;
+            e.setSong(*song);
+            Settings s = settingsFor(r);
+            applyRecipe(s, r);
+            s.section = kVerse;
+            s.density = 1.0;
+            s.vary = 0;
+            s.autoFillBars = 0;
+            e.setSettings(s);
+            e.reset();
+            const auto out = runWith(e, 24000 * 16, 0.0, [](int64_t, Block &) {});
+            for (const Timed &t : out)
+               if (t.on() && t.m.data1 >= 52) {
+                  const int64_t inBar = t.time % 96000;
+                  JCLAP_CHECK(std::abs(inBar) > 800 && std::abs(inBar - 48000) > 800 && 96000 - inBar > 800);
+               }
+         }
+      }
+      // A quiet section is soft, not loud: velocity rises with energy.
+      for (int g = 0; g < genreCount(); g += 3) {
+         double before = 0.0;
+         for (double e : {0.05, 0.12, 0.3, 0.6, 0.9}) {
+            Recipe r = recipeOf(g, 0, 7);
+            r.sections[kVerse] = e;
+            r.energy = 0.5;
+            Section sec = makeSection(r, kVerse, 99);
+            double sum = 0.0;
+            int n = 0;
+            for (int s = 0; s < sec.takes[0].steps; ++s)
+               if (sec.takes[0].at(s).on() && !leftHand(sec.takes[0].at(s).part)) {
+                  sum += sec.takes[0].at(s).vel;
+                  ++n;
+               }
+            const double mean = n ? sum / n : 0.0;
+            JCLAP_CHECK(mean >= before - 6.0);
+            before = mean;
+         }
+      }
+      // A held-chord style's fill holds: from its downbeat, nothing chopped.
+      for (int g = 0; g < genreCount(); ++g)
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st) {
+            if (!(genreAt(g).styles[st].mods & kLongs))
+               continue;
+            const Recipe r = recipeOf(g, st, 2);
+            auto song = made(r);
+            for (const Section &sec : song->sections) {
+               if (sec.fill.empty())
+                  continue;
+               JCLAP_CHECK(sec.fill.at(0).on());
+               for (int s = 0; s < sec.fill.steps; ++s)
+                  JCLAP_CHECK(!sec.fill.at(s).on() || sec.fill.at(s).art != kArtChop);
+            }
+            for (const Section &sec : song->sections)
+               for (const Pattern &t : sec.takes)
+                  for (int s = 0; s < t.steps; ++s)
+                     JCLAP_CHECK(!t.at(s).on() || (t.at(s).art != kArtChop && t.at(s).art != kArtHalf));
+         }
+      // WEIRD never tritone-subs the tonic.
+      for (const char *name : {"Funk", "Blues"}) {
+         const int g = genreNamed(name);
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st)
+            for (uint32_t seed = 1; seed <= 20; ++seed) {
+               Recipe r = recipeOf(g, st, seed);
+               r.weird = 0.0;
+               auto written = made(r);
+               r.weird = 1.0;
+               auto song = made(r);
+               for (int i = 0; i < kSections; ++i)
+                  for (int b = 0; b < song->sections[i].progBars; ++b)
+                     if (written->sections[i].chordAt(b, false).root == written->key)
+                        JCLAP_CHECK(song->sections[i].chordAt(b, false).root == song->key);
+            }
+      }
+      // SPREAD adds no perfect fifth to a diminished or augmented triad.
+      {
+         VoiceSettings sp;
+         sp.shape = kSpread;
+         sp.voices = 5;
+         for (const char *name : {"Cdim", "Caug"}) {
+            const Voicing v = voice(chord(name), nullptr, sp);
+            for (int i = 0; i < v.count; ++i)
+               JCLAP_CHECK(v.notes[static_cast<size_t>(i)] % 12 != 7);
+         }
+      }
+      // Held notes named as held: inversions, sus, sixths.
+      {
+         JCLAP_CHECK(chordName(nameChord(Ints{51, 55, 60}, true), 0) == "Cm/Eb");
+         JCLAP_CHECK(chordName(nameChord(Ints{55, 60, 65}, true), 0) == "Csus/G");
+         JCLAP_CHECK(chordName(nameChord(Ints{52, 60}, true), 0) == "C/E");
+         JCLAP_CHECK(chordName(nameChord(Ints{48, 57}, true), 0) == "Am/C");
+         JCLAP_CHECK(chordName(nameChord(Ints{48, 58}, true), 0) == "C7");
+      }
+      // A section's energy changed: its rhythm made again, its chords (edits too) kept, in the song's key.
+      {
+         const Recipe r = recipeOf(genreNamed("Pop"), 0, 4);
+         auto song = made(r);
+         song->sections[kVerse].chords[0] = chord("F#m7b5");
+         rollSection(r, *song, kVerse, 77, true);
+         JCLAP_CHECK(chordName(song->sections[kVerse].chords[0], 0) == "F#m7b5");
+         Recipe moved = r;
+         moved.key = (r.key + 3) % 12;
+         auto fresh = made(r);
+         rollSection(moved, *fresh, kChorus, fresh->sections[kChorus].seed);
+         auto again = made(r);
+         JCLAP_CHECK(fresh->sections[kChorus].chords == again->sections[kChorus].chords);
+      }
+      // Spelled in the key's own accidentals: F# minor with sharps, a half-step approach as a flat II.
+      {
+         const Chord fsm = chord("F#m");
+         JCLAP_CHECK(chordName(fsm, 6, kMinor) == "F#m");
+         JCLAP_CHECK(chordName(chord("C#m"), 1, kMinor) == "C#m");
+         const Chord d = chord("D");
+         JCLAP_CHECK(chordName(chord("D#9"), 4, kMajor, &d) == "Eb9");
+         JCLAP_CHECK(roman(chord("Bb7"), 4) == "bV7");
+      }
+      // A run into D7 in C walks its own scale: no G#, no step bigger than a whole tone.
+      for (int from = 60; from <= 72; ++from)
+         for (int len = 1; len <= 4; ++len) {
+            const Ints r = passingRun(from, 69, len, 0, kMajor, false, chord("D7"), chord("C"));
+            for (size_t k = 0; k < r.size(); ++k) {
+               JCLAP_CHECK(r[k] % 12 != 8);
+               JCLAP_CHECK(k == 0 || std::abs(r[k] - r[k - 1]) <= 2);
+               JCLAP_CHECK(r[k] >= std::min(from, 69) && r[k] <= std::max(from, 69));
+            }
+         }
+      // A shuffle never plays its middle triplet.
+      for (int g = 0; g < genreCount(); ++g)
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st) {
+            if (!(genreAt(g).styles[st].mods & kTriplet) || !(genreAt(g).styles[st].mods & kLeftHand))
+               continue;
+            for (uint32_t seed = 1; seed <= 10; ++seed) {
+               auto song = made(recipeOf(g, st, seed));
+               for (const Section &sec : song->sections)
+                  for (int s = 0; s < sec.takes[0].steps; ++s)
+                     if (sec.takes[0].at(s).on() && sec.takes[0].at(s).part == kPartFifth)
+                        JCLAP_CHECK(s % 3 != 1);
+            }
+         }
+      // The Hendrix chord: the #9 over the 3rd.
+      {
+         VoiceSettings v;
+         v.shape = kClose;
+         v.voices = 4;
+         v.lo = 50;
+         v.hi = 76;
+         v.center = 62;
+         const Voicing h = voice(chord("E7#9"), nullptr, v);
+         int third = -1, nine = -1;
+         for (int i = 0; i < h.count; ++i) {
+            const int n = h.notes[static_cast<size_t>(i)];
+            if (n % 12 == 8)
+               third = std::max(third, n);
+            if (n % 12 == 7)
+               nine = std::max(nine, n);
+         }
+         JCLAP_CHECK(third >= 0 && nine > third);
+      }
+      // A chord played on the keys a moment before the beat takes that beat, the first one too, and
+      // AT ONCE plays it there rather than the old one.
+      for (int mode = 0; mode < 3; ++mode) {
+         auto song = songOf("x...x...x...x...", {{"C", nullptr}});
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = plain();
+         s.chordsFrom = mode == 0 ? 1 : 2;
+         s.heldOnly = mode == 1;
+         s.changeAt = mode == 2 ? 0 : 2;
+         e.setSettings(s);
+         e.reset();
+         const int64_t press = 24000 * 8 - 720; // 30 ms early
+         const auto out = runWith(e, 24000 * 10, 0.0, [&](int64_t at, Block &) {
+            if (press >= at && press < at + kBlock)
+               for (int k : {64, 67, 71})
+                  e.noteOn(0, k, 100, static_cast<uint32_t>(press - at));
+         });
+         const std::set<int> beat = startingAt(out, 24000 * 8);
+         JCLAP_CHECK(beat.count(4) == 1 && beat.count(11) == 1 && beat.count(0) == 0);
+      }
+      // A host loop plays the same chords on every pass, the first included.
+      {
+         auto song = songOf("x...............", {{"C", nullptr}, {"F", nullptr}, {"G", nullptr}, {"Am", nullptr}});
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         e.setSettings(plain());
+         e.reset();
+         std::vector<std::set<int>> passes;
+         auto out = std::make_unique<OutBuffer>();
+         double beats = 0.0;
+         std::set<int> cur;
+         for (int blk = 0; blk < 3000; ++blk) {
+            Block b;
+            b.frames = kBlock;
+            b.tempo = 120.0;
+            b.hasTransport = b.playing = true;
+            b.beats = beats;
+            b.loopActive = true;
+            b.loopStart = 8.0;
+            b.loopEnd = 12.0;
+            out->clear();
+            e.process(b, *out);
+            for (size_t i = 0; i < out->count; ++i) {
+               // Where the note falls on the host's timeline, the loop's wrap included.
+               double at = beats + out->items[i].time / 24000.0;
+               if (at >= 12.0)
+                  at -= 4.0;
+               if ((out->items[i].status & 0xF0) == 0x90 && out->items[i].data2 > 0 && at >= 7.95 && at < 8.05)
+                  cur.insert(out->items[i].data1 % 12);
+            }
+            beats += kBlock / 24000.0;
+            if (beats >= 12.0) {
+               beats = 8.0 + (beats - 12.0);
+               passes.push_back(cur);
+               cur.clear();
+            }
+         }
+         JCLAP_CHECK(passes.size() >= 3);
+         for (const auto &p : passes)
+            JCLAP_CHECK(p == passes.front());
+      }
+      // PLAY ONLY WHILE HELD stops when the chord is let go.
+      {
+         auto song = songOf("x---------------", {{"C", nullptr}});
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = plain();
+         s.heldOnly = true;
+         s.chordsFrom = 0;
+         e.setSettings(s);
+         e.reset();
+         const int64_t up = 24000 * 6;
+         std::map<int, int> sounding;
+         const auto out = runWith(e, 24000 * 10, 0.0, [&](int64_t at, Block &) {
+            if (at == 0)
+               for (int k : {60, 64, 67})
+                  e.noteOn(0, k, 100, 0);
+            if (up >= at && up < at + kBlock)
+               for (int k : {60, 64, 67})
+                  e.noteOff(0, k, static_cast<uint32_t>(up - at));
+         });
+         int on = 0;
+         for (const Timed &t : out) {
+            if (t.time > up + 2400)
+               break;
+            on += t.on() ? 1 : t.off() ? -1 : 0;
+         }
+         JCLAP_CHECK_EQ(on, 0);
+      }
+      // The same setting plays the same every time it starts.
+      {
+         const Recipe r = recipeOf(genreNamed("Funk"), 0, 1);
+         auto song = made(r);
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = settingsFor(r);
+         s.density = 0.8;
+         e.setSettings(s);
+         std::vector<std::vector<int>> takes;
+         for (int pass = 0; pass < 2; ++pass) {
+            e.reset();
+            const auto out = runWith(e, 24000 * 8, 0.0, [](int64_t, Block &) {});
+            std::vector<int> notes;
+            for (const Timed &t : out)
+               if (t.on())
+                  notes.push_back(static_cast<int>(t.time / 64) * 128 + t.m.data1);
+            takes.push_back(notes);
+            Block stop;
+            stop.frames = kBlock;
+            stop.hasTransport = true;
+            stop.playing = false;
+            auto o = std::make_unique<OutBuffer>();
+            e.process(stop, *o);
+         }
+         JCLAP_CHECK(takes[0] == takes[1]);
+      }
+      // A guitar's boom-chick and palm-wine strum leave the bass string to the thumb.
+      for (const auto &[gn, sn] : {std::pair<const char *, const char *>{"Country", "Two-Step"}, {"Highlife", "Palm-Wine"}}) {
+         const int g = genreNamed(gn), st = styleNamed(g, sn);
+         JCLAP_CHECK(g >= 0 && st >= 0);
+         if (g < 0 || st < 0)
+            continue;
+         const Recipe r = recipeOf(g, st, 1);
+         auto song = made(r);
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         std::vector<double> sv = defaultValues();
+         for (const auto &[id, x] : styleValues(g, st))
+            sv[id] = x;
+         Settings s = settingsFor(r);
+         s.voicing = voiceSettings([&](clap_id id) { return sv[id]; });
+         applyRecipe(s, r);
+         s.section = kVerse;
+         s.key = song->key;
+         e.setSettings(s);
+         e.reset();
+         const auto out = runWith(e, 24000 * 16, 0.0, [](int64_t, Block &) {});
+         std::map<int64_t, std::vector<int>> at;
+         for (const Timed &t : out)
+            if (t.on())
+               at[t.time / 960].push_back(t.m.data1);
+         int bass = -1, chords = 0;
+         for (const auto &[k, ns] : at) {
+            if (ns.size() == 1) {
+               bass = ns[0];
+            } else if (ns.size() >= 3 && bass >= 0) {
+               ++chords;
+               JCLAP_CHECK(*std::min_element(ns.begin(), ns.end()) != bass);
+            }
+         }
+         JCLAP_CHECK(chords > 4);
+      }
+   }
    return jclap::core::testResult();
 }
