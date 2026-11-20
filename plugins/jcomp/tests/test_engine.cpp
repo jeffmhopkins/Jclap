@@ -96,8 +96,10 @@ int gAllocs = 0;
 
 // A song of one section (all seven alike): `rhythm` for every take and the fill, and the chords two
 // a bar ("" for a bar's second half holds its first).
-Song songOf(const char *rhythm, std::vector<std::pair<const char *, const char *>> bars) {
-   Song song;
+// (On the heap: the tests' frames would outgrow a 1 MB stack.)
+std::unique_ptr<Song> songOf(const char *rhythm, std::vector<std::pair<const char *, const char *>> bars) {
+   auto result = std::make_unique<Song>();
+   Song &song = *result;
    song.key = 0;
    for (Section &sec : song.sections) {
       for (Pattern &t : sec.takes)
@@ -114,7 +116,7 @@ Song songOf(const char *rhythm, std::vector<std::pair<const char *, const char *
             sec.split = static_cast<uint16_t>(sec.split | (1u << b));
       }
    }
-   return song;
+   return result;
 }
 
 // Plain settings: on the grid, nothing left to chance.
@@ -268,7 +270,8 @@ int main() {
             }
          // Every style makes a song that plays: every section has chords and a take with hits.
          for (int st = 0; st < static_cast<int>(gen.styles.size()); ++st, ++styles) {
-            Song song;
+            auto songPtr = std::make_unique<Song>();
+            Song &song = *songPtr;
             generateSong(recipeOf(g, st, 99), song);
             for (int sec = 0; sec < kSections; ++sec) {
                const Section &s = song.sections[static_cast<size_t>(sec)];
@@ -324,10 +327,12 @@ int main() {
    // ---- the engine ----
    {
       // With the host: chords out, each note with its off, in the window, on channel 1.
-      Song song;
+      auto songPtr = std::make_unique<Song>();
+      Song &song = *songPtr;
       const Recipe r = recipeOf(0, 0, 42);
       generateSong(r, song);
-      Engine e;
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
       e.setSong(song);
       Settings s = settingsFor(r);
       s.key = song.key;
@@ -355,7 +360,8 @@ int main() {
    {
       // DENSITY thins or fills the take, LENGTH shortens or lengthens every chord, and LOWEST,
       // HIGHEST and OFFSET bound the voicings as the window moves.
-      Song song;
+      auto songPtr = std::make_unique<Song>();
+      Song &song = *songPtr;
       generateSong(recipeOf(0, 0, 42), song);
       // The window bounds the chords; a left hand's bass notes sit under it, on the bass floor.
       for (Section &sec : song.sections)
@@ -372,7 +378,8 @@ int main() {
          v[kRangeLow] = lowest;
          v[kRangeHigh] = highest;
          v[kOffset] = offset;
-         Engine e;
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
          e.setSong(song);
          Settings s = settingsFor(Recipe{});
          s.voicing = voiceSettings([&](clap_id id) { return v[id]; });
@@ -483,13 +490,15 @@ int main() {
             g = i;
       JCLAP_CHECK(g >= 0);
       for (int st = 0; g >= 0 && st < static_cast<int>(genreAt(g).styles.size()); ++st) {
-         Song song;
+         auto songPtr = std::make_unique<Song>();
+         Song &song = *songPtr;
          const Recipe r = recipeOf(g, st, 7);
          generateSong(r, song);
          std::vector<double> v = defaultValues();
          for (const auto &[id, x] : styleValues(g, st))
             v[id] = x;
-         Engine e;
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
          e.setSong(song);
          Settings s = settingsFor(r);
          s.voicing = voiceSettings([&](clap_id id) { return v[id]; });
@@ -519,9 +528,11 @@ int main() {
    }
    {
       // Held notes: E G# B D held above the split, with CHORDS FROM held notes, play an E7.
-      Song song;
+      auto songPtr = std::make_unique<Song>();
+      Song &song = *songPtr;
       generateSong(recipeOf(0, 0, 42), song);
-      Engine e;
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
       e.setSong(song);
       Settings s = settingsFor(Recipe{});
       s.chordsFrom = 1;
@@ -546,9 +557,11 @@ int main() {
    }
    {
       // A section note (the bridge is the keyboard map's G0) is taken and queues the bridge.
-      Song song;
+      auto songPtr = std::make_unique<Song>();
+      Song &song = *songPtr;
       generateSong(recipeOf(0, 0, 42), song);
-      Engine e;
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
       e.setSong(song);
       Settings s = settingsFor(Recipe{});
       e.setSettings(s);
@@ -647,7 +660,8 @@ int main() {
          for (uint32_t seed = 1; seed <= 12; ++seed) {
             Recipe r = recipeOf(g, st, seed);
             r.weird = 0.6;
-            Song song;
+            auto songPtr = std::make_unique<Song>();
+            Song &song = *songPtr;
             generateSong(r, song);
             for (const Section &sec : song.sections)
                for (const Pattern *p : {&sec.takes[0], &sec.takes[1], &sec.takes[2], &sec.takes[3]})
@@ -661,7 +675,8 @@ int main() {
       {
          const int g = genreNamed("Latin Jazz"), st = styleNamed(g, "Latin Jazz Guajeo");
          for (uint32_t seed = 1; seed <= 12; ++seed) {
-            Song song;
+            auto songPtr = std::make_unique<Song>();
+            Song &song = *songPtr;
             generateSong(recipeOf(g, st, seed), song);
             for (int i = kVerse; i <= kBridge; ++i) {
                const Pattern &p = song.sections[static_cast<size_t>(i)].takes[0];
@@ -675,7 +690,8 @@ int main() {
          const int g = genreNamed("Salsa"), st = styleNamed(g, "Montuno 2-3");
          int guajeo = 0;
          for (uint32_t seed = 1; seed <= 20; ++seed) {
-            Song song;
+            auto songPtr = std::make_unique<Song>();
+            Song &song = *songPtr;
             generateSong(recipeOf(g, st, seed), song);
             const Pattern &p = song.sections[kVerse].takes[0];
             guajeo += p.count() >= 8;
@@ -701,10 +717,12 @@ int main() {
       // left hand's low note under it.
       {
          const int g = genreNamed("Country"), st = styleNamed(g, "Boom-Chick");
-         Song song;
+         auto songPtr = std::make_unique<Song>();
+         Song &song = *songPtr;
          const Recipe r = recipeOf(g, st, 3);
          generateSong(r, song);
-         Engine e;
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
          e.setSong(song);
          std::vector<double> v = defaultValues();
          for (const auto &[id, x] : styleValues(g, st))
@@ -746,10 +764,12 @@ int main() {
       // A strum both ways on the triplet grid: the offbeat triplet strums up (highest note first).
       {
          const int g = genreNamed("Ska"), st = styleNamed(g, "Shuffle Ska");
-         Song song;
+         auto songPtr = std::make_unique<Song>();
+         Song &song = *songPtr;
          const Recipe r = recipeOf(g, st, 5);
          generateSong(r, song);
-         Engine e;
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
          e.setSong(song);
          std::vector<double> v = defaultValues();
          for (const auto &[id, x] : styleValues(g, st))
@@ -790,8 +810,9 @@ int main() {
    {
       // A chord that changes between hits still sounds, on time, and the chord before doesn't ring
       // over it: C held through the bar, G from beat 3 with no hit of its own.
-      Engine e;
-      e.setSong(songOf("x---------------", {{"C", "G"}}));
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x---------------", {{"C", "G"}}));
       e.setSettings(plain());
       e.reset();
       const std::vector<Timed> out = runWith(e, 24000 * 8, 0.0, [](int64_t, Block &) {});
@@ -810,8 +831,9 @@ int main() {
    }
    {
       // A hit an eighth before the change, with nothing after it until then, anticipates it.
-      Engine e;
-      e.setSong(songOf("x.....x.........", {{"C", "G"}}));
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x.....x.........", {{"C", "G"}}));
       e.setSettings(plain());
       e.reset();
       const std::vector<Timed> out = runWith(e, 24000 * 4, 0.0, [](int64_t, Block &) {});
@@ -823,13 +845,15 @@ int main() {
       // the other hand: every style, with its feel.
       for (int g = 0; g < genreCount(); ++g)
          for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st) {
-            Song song;
+            auto songPtr = std::make_unique<Song>();
+            Song &song = *songPtr;
             const Recipe r = recipeOf(g, st, 11);
             generateSong(r, song);
             std::vector<double> v = defaultValues();
             for (const auto &[id, x] : styleValues(g, st))
                v[id] = x;
-            Engine e;
+            auto engine = std::make_unique<Engine>();
+            Engine &e = *engine;
             e.setSong(song);
             Settings s = settingsFor(r);
             s.voicing = voiceSettings([&](clap_id id) { return v[id]; });
@@ -863,8 +887,9 @@ int main() {
    }
    {
       // A two-bar take keeps its phase to the host's bars: started on bar 2 it plays its second bar.
-      Engine e;
-      e.setSong(songOf("x...............|..x.............", {{"C", nullptr}}));
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x...............|..x.............", {{"C", nullptr}}));
       e.setSettings(plain());
       e.reset();
       const std::vector<Timed> out = runWith(e, 24000 * 4, 4.0, [](int64_t, Block &) {});
@@ -874,8 +899,9 @@ int main() {
    {
       // DENSITY adds nothing to a figure played as written, nor a chord on the beat to an offbeat take.
       const auto count = [](const char *rhythm, bool fixed, double density, bool beats) {
-         Engine e;
-         e.setSong(songOf(rhythm, {{"C", nullptr}}));
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*songOf(rhythm, {{"C", nullptr}}));
          Settings s = plain();
          s.fixed = fixed;
          s.density = density;
@@ -925,8 +951,9 @@ int main() {
    }
    {
       // LATCH keeps the chord as its keys are let go one at a time, and after.
-      Engine e;
-      e.setSong(songOf("x...x...x...x...", {{"F", nullptr}}));
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x...x...x...x...", {{"F", nullptr}}));
       Settings s = plain();
       s.chordsFrom = 1;
       s.changeAt = 0;
@@ -952,8 +979,9 @@ int main() {
    {
       // A chord played on the keys on the beat, a moment late or early, takes that beat.
       for (int64_t late : {-480, 0, 240, 1200}) {
-         Engine e;
-         e.setSong(songOf("x...x...x...x...", {{"C", nullptr}}));
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*songOf("x...x...x...x...", {{"C", nullptr}}));
          Settings s = plain();
          s.chordsFrom = 1;
          s.changeAt = 2;
@@ -991,8 +1019,9 @@ int main() {
    }
    {
       // PLAY ONLY WHILE A CHORD IS HELD works with the progression's chords too.
-      Engine e;
-      e.setSong(songOf("x...x...x...x...", {{"C", nullptr}}));
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x...x...x...x...", {{"C", nullptr}}));
       Settings s = plain();
       s.heldOnly = true;
       e.setSettings(s);
@@ -1002,8 +1031,9 @@ int main() {
    }
    {
       // A host loop: every pass starts with its downbeat chord, held its length.
-      Engine e;
-      e.setSong(songOf("x---............", {{"C", nullptr}}));
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x---............", {{"C", nullptr}}));
       e.setSettings(plain());
       e.reset();
       const std::vector<Timed> out = runWith(e, 24000 * 16, 0.0, [](int64_t, Block &b) {
@@ -1028,8 +1058,9 @@ int main() {
    }
    {
       // Notes let go on the channel they were played on, when CHANNEL changes while they sound.
-      Engine e;
-      e.setSong(songOf("x---------------", {{"C", nullptr}}));
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x---------------", {{"C", nullptr}}));
       Settings s = plain();
       e.setSettings(s);
       e.reset();
@@ -1053,8 +1084,10 @@ int main() {
    }
    {
       // SWITCH AT Next Beat keeps the bar line: the new section's first bar is the bar it comes in.
-      Engine e;
-      Song song = songOf("x...............", {{"C", nullptr}});
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      auto songPtr = songOf("x...............", {{"C", nullptr}});
+      Song &song = *songPtr;
       for (Pattern &t : song.sections[kVerse].takes)
          t = fromRhythm("x.......x.......");
       for (int b = 0; b < 2; ++b)
@@ -1078,8 +1111,9 @@ int main() {
    }
    {
       // A line: one note a hit, the degree of the chord it names.
-      Engine e;
-      e.setSong(songOf("1...5...8...3...", {{"C", nullptr}}));
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("1...5...8...3...", {{"C", nullptr}}));
       e.setSettings(plain());
       e.reset();
       std::vector<int> notes;
@@ -1093,8 +1127,9 @@ int main() {
    }
    {
       // OCTAVES moves its octave line through the chord, not one block repeated.
-      Engine e;
-      e.setSong(songOf("x.x.x.x.x.x.x.x.", {{"C", nullptr}}));
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("x.x.x.x.x.x.x.x.", {{"C", nullptr}}));
       Settings s = plain();
       s.voicing.shape = kOctaves;
       s.voicing.voices = 4;
@@ -1112,8 +1147,9 @@ int main() {
    }
    {
       // The slip note: a grace note a whole step under an inner note of the chord, just before it.
-      Engine e;
-      e.setSong(songOf("X...X...X...X...", {{"C", nullptr}}));
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*songOf("X...X...X...X...", {{"C", nullptr}}));
       Settings s = plain();
       s.slip = true;
       e.setSettings(s);
@@ -1129,8 +1165,10 @@ int main() {
    }
    {
       // Nothing allocated while playing: held chords, runs, the bass coming in.
-      Engine e;
-      Song song;
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      auto songPtr = std::make_unique<Song>();
+      Song &song = *songPtr;
       generateSong(recipeOf(0, 0, 3), song);
       e.setSong(song);
       Settings s = settingsFor(Recipe{});
