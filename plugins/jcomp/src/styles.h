@@ -142,9 +142,9 @@ inline const std::vector<Genre> &genres() {
        {{kMixolydian, {"C7#9|C7#9", "C9|C9|C9|C9", "F9|F9|C9|C9", "C9|F9|C9|F9", "D9|D9|D9|D9", "C9|C9|C7#9|C7#9"}},
         {kDorian, {"Cm9|Cm9", "Cm9|F9|Cm9|F9", "F9|F9|F9|F9", "Cm9|Cm9|F9|F9", "Dm9|Dm9|G9|G9", "Cm9|Cm9|Cm9|Cm9"}}},
        {{"Pocket Stabs", "Pocket", 100, kPushes, 0, 0b0001},
-        {"Clav Riff", "Clav", 100, kTopLine, 1, 0b0110, kClavChopper},
+        {"Clav Riff", "Clav", 100, kTopLine, 1, 0b0100, kClavChopper},
         {"Dorian Groove", "Dorian", 108, kRich, 1},
-        {"Chicken Scratch", "Scratch", 112, kBusy | kShorts, 0, 0b1001, kRhythmGuitar}},
+        {"Chicken Scratch", "Scratch", 112, kBusy | kShorts, 0, 0b1000, kRhythmGuitar}},
        "5, 6, 13"},
       {"Soul", kFamilies[0], kChurchOrgan, 0.54, 0,
        // The backbeat on 2 and 4 (Motown's and Memphis's guitar and keys); pumping eighths; the

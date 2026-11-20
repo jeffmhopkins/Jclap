@@ -291,9 +291,10 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       pl.fromTop = prev.empty() ? -1 : prev.top();
       // A run into a change.
       if (runs && h.run && !prev.empty() && c != prevChord && v >= 3) {
-         const Ints r = passingRun(prev.top(), vc.top(), 3, key, scale, true, chordTones(c));
-         for (size_t k = 0; k < r.size(); ++k)
-            out.notes.push_back({static_cast<float>(v - 3 + static_cast<int>(k)), 0.85f, r[k], kRunNote, 0.6f});
+         const Ints r = passingRun(prev.top(), vc.top(), 3, key, scale, true, c, prevChord);
+         const int n = static_cast<int>(r.size());
+         for (int k = 0; k < n; ++k)
+            out.notes.push_back({static_cast<float>(v - n + k), 0.85f, r[static_cast<size_t>(k)], kRunNote, 0.6f});
       }
       // The gap to the next hit of the same hand, for RING; a left-hand note as written holds to the
       // next, two beats at most.
@@ -2380,7 +2381,7 @@ private:
       };
       song_->onEnergy = [this](int i) {
          Song s = host_.song();
-         rollSection(recipe(), s, i, s.sections[static_cast<size_t>(i)].seed);
+         rollSection(recipe(), s, i, s.sections[static_cast<size_t>(i)].seed, true);
          host_.setSong(s);
          if (i == host_.mutateSection)
             breed();

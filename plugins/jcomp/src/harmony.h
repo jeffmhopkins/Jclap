@@ -118,15 +118,13 @@ inline const char *pitchName(int pc, int key = 0) {
 
 enum Scale { kMajor, kMinor, kDorian, kMixolydian, kBlues, kScaleCount };
 inline const char *const kScaleNames[kScaleCount] = {"Major", "Minor", "Dorian", "Mixolydian", "Blues"};
-inline const std::vector<int> &scaleSteps(int scale) {
-   static const std::vector<int> s[kScaleCount] = {
-      {0, 2, 4, 5, 7, 9, 11}, {0, 2, 3, 5, 7, 8, 10}, {0, 2, 3, 5, 7, 9, 10}, {0, 2, 4, 5, 7, 9, 10},
-      {0, 3, 5, 6, 7, 10}};
-   return s[std::clamp(scale, 0, kScaleCount - 1)];
-}
+// The scales' steps, as constant tables (no static to build on the audio thread); -1 ends one.
+inline constexpr int kScaleSteps[kScaleCount][8] = {
+   {0, 2, 4, 5, 7, 9, 11, -1}, {0, 2, 3, 5, 7, 8, 10, -1}, {0, 2, 3, 5, 7, 9, 10, -1}, {0, 2, 4, 5, 7, 9, 10, -1},
+   {0, 3, 5, 6, 7, 10, -1, -1}};
 inline bool inScale(int pc, int key, int scale) {
    const int d = ((pc - key) % 12 + 12) % 12;
-   for (int s : scaleSteps(scale))
+   for (int s : kScaleSteps[std::clamp(scale, 0, kScaleCount - 1)])
       if (s == d)
          return true;
    return false;
@@ -266,6 +264,15 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
                c.quality = kMin;
             else if (iv == 5) // a fourth: the upper note's chord, over its fifth
                c.root = static_cast<int8_t>(pc);
+            else if (iv == 8) // a minor sixth: the upper note's major chord, over its third (C/E)
+               c.root = static_cast<int8_t>(pc);
+            else if (iv == 9) { // a major sixth: the upper note's minor chord, over its third (Am/C)
+               c.root = static_cast<int8_t>(pc);
+               c.quality = kMin;
+            } else if (iv == 10) // a seventh over the low note: its 7th chord (a shell)
+               c.quality = kDom7;
+            else if (iv == 11)
+               c.quality = kMaj7;
          }
       c.bass = static_cast<int8_t>(slash && c.root != bassPc ? bassPc : -1);
       return c;
@@ -294,6 +301,10 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
          }
          if (root == bassPc)
             score += 0.75;
+         // A chord that is exactly what's held beats a richer one it would have to add a note to
+         // (Cm/Eb, not an Eb6 with a Bb nobody played).
+         if (want == held)
+            score += 0.5;
          // Simpler names first: fewer tones break ties.
          score -= 0.05 * static_cast<double>(qu.tones.size());
          if (score > bestScore) {
@@ -384,7 +395,7 @@ inline Ints upperTones(const Chord &c, int n) {
          t.push_back(i);
    for (int extra : {7, 12, 19})
       if (static_cast<int>(t.size()) < n && std::find(t.begin(), t.end(), extra) == t.end() &&
-          !(extra == 7 && std::find(q.tones.begin(), q.tones.end(), 7) == q.tones.end() && q.tones.size() > 2 &&
+          !((extra == 7 || extra == 19) && std::find(q.tones.begin(), q.tones.end(), 7) == q.tones.end() && q.tones.size() > 2 &&
             (q.tones[2] == 6 || q.tones[2] == 8)))
          t.push_back(extra);
    return t;
@@ -484,41 +495,56 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
    }
    case kQuartal: {
       // Fourths stacked on a chord tone or colour tone (with a major third on top, "So What"), kept
-      // when every note is the chord's or one of its tensions.
-      unsigned allowed = 0;
+      // when every note is the chord's or one of its tensions, and the stack says what the chord is:
+      // its root, its third (or sus fourth), its seventh (or sixth) and an altered tone where it has
+      // one. Without them every chord of a diatonic progression finds the same stack and the changes
+      // are never heard. A stack that can't hold them all lets the altered tone go, then the seventh.
+      unsigned own = 0, allowed = 0;
       for (int i : q.tones)
-         allowed |= 1u << ((c.root + i) % 12);
-      for (int t : {2, 9}) // the 9th and 13th sit well in fourths over most chords
-         if (q.seventh || q.tones.size() > 3)
-            allowed |= 1u << ((c.root + t) % 12);
-      if (q.tones.size() > 1 && q.tones[1] == 3)
+         own |= 1u << ((c.root + i) % 12);
+      allowed = own;
+      const auto hasIv = [&](int i) { return std::find(q.tones.begin(), q.tones.end(), i) != q.tones.end(); };
+      const bool altered9 = hasIv(13) || hasIv(15), altered5 = hasIv(8) || hasIv(6) || hasIv(18);
+      // The 9th and 13th sit well in fourths over a chord with a seventh, but not against its b9/#9,
+      // nor the 13th against a b13 or a diminished fifth.
+      if ((q.seventh || q.tones.size() > 3) && !altered9)
+         allowed |= 1u << ((c.root + 2) % 12);
+      if (q.seventh && !altered5 && !hasIv(9))
+         allowed |= 1u << ((c.root + 9) % 12);
+      if (q.tones.size() > 1 && q.tones[1] == 3 && !altered5)
          allowed |= 1u << ((c.root + 5) % 12); // the 11th over a minor chord
+      int seventh = -1;
+      for (int i : {10, 11, 9})
+         if (q.seventh && seventh < 0 && hasIv(i))
+            seventh = i;
+      int alt = -1;
+      for (int i : {13, 15, 18, 8})
+         if (alt < 0 && hasIv(i) && !(i == 8 && !hasIv(4)))
+            alt = i % 12;
       // A stack of fourths is as wide as it is tall: five notes span 19 or 20 semitones, whatever SPREAD.
       VoiceSettings qs = vs;
       qs.maxSpan = std::max(vs.maxSpan, 5 * (n - 1));
-      for (int b = vs.lo - 12; b <= vs.hi; ++b) {
-         if (!(allowed >> (((b % 12) + 12) % 12) & 1))
-            continue;
-         for (int last : {5, 4}) {
-            Stack v{b};
-            for (int k = 1; k < n; ++k)
-               v.push_back(v.back() + (k == n - 1 && n >= 4 ? last : 5));
-            bool ok = true, root = false;
-            for (int x : v) {
-               ok = ok && (allowed >> (((x % 12) + 12) % 12) & 1);
-               root = root || ((x - bassPc) % 12 + 12) % 12 == 0;
+      for (int strict = 2; strict >= 0 && out.empty(); --strict) {
+         for (int b = vs.lo - 12; b <= vs.hi; ++b) {
+            if (!(allowed >> (((b % 12) + 12) % 12) & 1))
+               continue;
+            for (int last : {5, 4}) {
+               Stack v{b};
+               for (int k = 1; k < n; ++k)
+                  v.push_back(v.back() + (k == n - 1 && n >= 4 ? last : 5));
+               bool ok = true, root = false, third = false, sev = seventh < 0 || strict < 1,
+                    al = alt < 0 || strict < 2;
+               for (int x : v) {
+                  ok = ok && (allowed >> (((x % 12) + 12) % 12) & 1);
+                  const int iv = ((x - c.root) % 12 + 12) % 12;
+                  root = root || iv == 0 || ((x - bassPc) % 12 + 12) % 12 == 0;
+                  third = third || iv == 3 || iv == 4 || (iv == 5 && q.tones[1] == 5);
+                  sev = sev || iv == seventh;
+                  al = al || iv == alt;
+               }
+               if (ok && root && third && sev && al)
+                  detail::addCandidate(out, v, qs, -1);
             }
-            // And its root (or bass) among them: without it every chord of a diatonic progression
-            // finds the same stack of fourths, and the changes are never heard.
-            ok = ok && root;
-            // It must say what the chord is: the third (or the sus fourth) among its notes.
-            bool third = false;
-            for (int x : v) {
-               const int iv = ((x - c.root) % 12 + 12) % 12;
-               third = third || iv == 3 || iv == 4 || (iv == 5 && q.tones[1] == 5);
-            }
-            if (ok && third)
-               detail::addCandidate(out, v, qs, -1);
          }
       }
       if (out.empty())
@@ -877,41 +903,88 @@ inline int bassNote(const Chord &c, int floor, bool fifth = false) {
 
 // ---- passing runs ----
 
-// A run of `length` single notes into `target`: stepping through a scale from the side the line
-// comes from (below when it rises to the target, above when it falls), and with `halfStep` its last
-// note a half step under the target when it comes from below, the scale walked down from there (so
-// the line is all steps: B C C# into D, never a leap before the half step).
+// A chord's own scale, as a mask of pitch classes: the scale a player runs over it when it isn't
+// the key's. Its tones, and between them the usual steps: the 9th (b9 if the chord has it), the 11th
+// (#11 with one), the 13th (b13 on a minor chord where the key has it, or with a b9), and a seventh
+// for a chord without one (the key's, else b7). Diminished chords run the whole-half scale,
+// half-diminished the locrian with a natural 9th, augmented the whole-tone scale.
+inline unsigned chordScale(const Chord &c, int key, int scale) {
+   if (c.none())
+      return 0;
+   unsigned t = 0;
+   for (int i : qualityOf(c).tones)
+      t |= 1u << (i % 12);
+   const auto has = [&](int i) { return (t >> i & 1) != 0; };
+   const auto key_ = [&](int i) { return inScale(c.root + i, key, scale); };
+   unsigned m = 0;
+   const auto add = [&](int i) { m |= 1u << (i % 12); };
+   if (has(3) && has(6) && !has(10)) {
+      for (int i : {0, 2, 3, 5, 6, 8, 9, 11})
+         add(i);
+   } else if (has(3) && has(6)) {
+      for (int i : {0, 2, 3, 5, 6, 8, 10})
+         add(i);
+   } else if (has(4) && has(8) && !has(7)) {
+      for (int i : {0, 2, 4, 6, 8, 10})
+         add(i);
+   } else {
+      add(0);
+      add(has(1) ? 1 : 2);
+      if (has(3) && has(4))
+         add(3); // a #9
+      if (has(4))
+         add(4);
+      else if (has(3))
+         add(3);
+      add(has(6) ? 6 : 5);
+      add(7);
+      const bool minor = has(3) && !has(4);
+      add(has(9) ? 9 : (has(1) || (minor && key_(8) && !key_(9))) ? 8 : 9);
+      add(has(10) ? 10 : has(11) ? 11 : key_(11) ? 11 : 10);
+   }
+   unsigned pcs = t; // the chord's own tones, whatever the scale says
+   for (int i = 0; i < 12; ++i)
+      if (m >> i & 1)
+         pcs |= 1u << i;
+   unsigned out = 0;
+   for (int i = 0; i < 12; ++i)
+      if (pcs >> i & 1)
+         out |= 1u << ((c.root + i) % 12);
+   return out;
+}
+
+// A passing run of `length` notes into `target` (a MIDI note), from the line's last note `from`
+// (-1 for none), each a scale step from the next and all between the two, so it carries the line on
+// from where it is (a run never jumps away first). Fewer notes when the gap holds fewer; with
+// `halfStep` its last note is a half step under the target when it comes from below.
 //
-// The scale is the key's while the chord it leads into is in the key. A chord from outside it (the
-// Ab of a borrowed Abmaj7, the C of a borrowed iv, the F# of a D7, a chord of a key change) gets its
-// own: its tones, with a whole step over each where the gap to the next tone leaves room, so a run
-// into Am in E walks B C D E, not the key's D#.
-inline Ints passingRun(int from, int target, int length, int key, int scale, bool halfStep, const Ints &chordPcs = {}) {
+// The scale is the key's while both chords are in it. Over a chord from outside the key (the one
+// left, a passing diminished chord or a chord of a key change) it's that chord's own scale, with the
+// tones of the chord it leads to; into a chord from outside the key, the chord's own scale (a
+// secondary dominant's mixolydian, a borrowed Abmaj7's lydian-less major), so a run into D7 in C
+// walks E F# G, never G#, and a run into Am in E walks B C D, not the key's D#.
+inline Ints passingRun(int from, int target, int length, int key, int scale, bool halfStep, const Chord &to = Chord{},
+                       const Chord &leaving = Chord{}) {
    Ints run;
    if (length <= 0)
       return run;
-   unsigned allowed = 0, chord = 0;
+   unsigned keyMask = 0;
    for (int pc = 0; pc < 12; ++pc)
       if (inScale(pc, key, scale))
+         keyMask |= 1u << pc;
+   const auto inKey = [&](const Chord &c) {
+      for (int pc : chordTones(c))
+         if (!(keyMask >> pc & 1))
+            return false;
+      return true;
+   };
+   unsigned allowed = keyMask;
+   if (!leaving.none() && !inKey(leaving)) {
+      allowed = chordScale(leaving, key, scale);
+      for (int pc : chordTones(to))
          allowed |= 1u << pc;
-   bool outside = false;
-   for (int pc : chordPcs) {
-      const int p = ((pc % 12) + 12) % 12;
-      chord |= 1u << p;
-      outside = outside || !(allowed >> p & 1);
-   }
-   if (outside) {
-      Ints t;
-      for (int pc = 0; pc < 12; ++pc)
-         if (chord >> pc & 1)
-            t.push_back(pc);
-      allowed = chord;
-      for (size_t k = 0; k < t.size(); ++k) {
-         const int a = t[k], b = t[(k + 1) % t.size()];
-         const int gap = ((b - a) % 12 + 12) % 12;
-         if (gap >= 3 || (t.size() == 1))
-            allowed |= 1u << ((a + 2) % 12);
-      }
+   } else if (!to.none() && !inKey(to)) {
+      allowed = chordScale(to, key, scale);
    }
    const auto ok = [&](int n) { return (allowed >> (((n % 12) + 12) % 12) & 1) != 0; };
    const bool up = from < 0 || from <= target;
@@ -928,6 +1001,14 @@ inline Ints passingRun(int from, int target, int length, int key, int scale, boo
          n += up ? -1 : 1;
       while (!ok(n) && std::abs(n - start) < 3);
       run.insert(run.begin(), n);
+   }
+   // All between the line's note and the target.
+   if (from >= 0) {
+      Ints kept;
+      for (int x : run)
+         if (up ? (x >= from && x < target) : (x <= from && x > target))
+            kept.push_back(x);
+      run = kept;
    }
    return run;
 }

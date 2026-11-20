@@ -83,10 +83,19 @@ public:
 
    // A recipe param the host changed: the song it names.
    void onMainThread() override {
-      if (!remake_.exchange(false))
+      const bool all = remake_.exchange(false);
+      const uint32_t sections = remakeSections_.exchange(0);
+      if (!all && !sections)
          return;
       Song s = *song_;
-      generateSong(recipeFrom([this](clap_id id) { return values_[id].load(); }), s);
+      const Recipe r = recipeFrom([this](clap_id id) { return values_[id].load(); });
+      if (all)
+         generateSong(r, s);
+      else
+         // A section's energy: that section's rhythm made again, its chords (and their edits) kept.
+         for (int i = 0; i < kSections; ++i)
+            if (sections >> i & 1)
+               rollSection(r, s, i, s.sections[static_cast<size_t>(i)].seed, true);
       setSong(s);
    }
 
@@ -260,6 +269,9 @@ public:
          presetName_.clear();
       for (size_t i = 0; i < kParamCount; ++i)
          values_[i].store(std::clamp(v[i], kParams[i].min, kParams[i].max));
+      // The loaded song is the one: a host's recipe change from before the load doesn't remake it.
+      remake_.store(false);
+      remakeSections_.store(0);
       *song_ = *loaded;
       send();
       if (!active_.load()) {
@@ -421,7 +433,10 @@ private:
             // A recipe param set by the host (not the panel, which remakes the song itself): the song
             // is remade from it on the main thread.
             if (isRecipeParam(ev->param_id) && v != values_[ev->param_id].load()) {
-               remake_.store(true);
+               if (ev->param_id >= kSectionEnergy && ev->param_id < kSectionEnergy + kSections)
+                  remakeSections_.fetch_or(1u << (ev->param_id - kSectionEnergy));
+               else
+                  remake_.store(true);
                host()->request_callback(host());
             }
             values_[ev->param_id].store(v);
@@ -519,6 +534,7 @@ private:
    uint32_t requestRead_ = 0;
    std::atomic<bool> learnArmed_{false};
    std::atomic<bool> remake_{false};
+   std::atomic<uint32_t> remakeSections_{0};
    std::atomic<int> learned_{-1};
    bool learning_ = false;
 

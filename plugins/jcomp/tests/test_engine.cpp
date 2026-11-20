@@ -709,7 +709,7 @@ int main() {
       // A run into a chord from outside the key bends to it: into Abmaj7 in C Dorian, no A natural.
       for (int len = 2; len <= 4; ++len)
          for (int from : {60, 72}) {
-            const Ints run = passingRun(from, 67, len, 0, kDorian, false, chordTones(chord("Abmaj7")));
+            const Ints run = passingRun(from, 67, len, 0, kDorian, false, chord("Abmaj7"));
             for (int n : run)
                JCLAP_CHECK(n % 12 != 9);
          }
@@ -944,7 +944,7 @@ int main() {
          for (int target : {60, 64, 67, 71})
             for (int len = 2; len <= 4; ++len)
                for (bool half : {false, true}) {
-                  const Ints r = passingRun(from, target, len, 0, kMajor, half, chordTones(chord("C")));
+                  const Ints r = passingRun(from, target, len, 0, kMajor, half, chord("C"));
                   for (size_t k = 1; k < r.size(); ++k)
                      JCLAP_CHECK(std::abs(r[k] - r[k - 1]) <= 3 || std::abs(from - target) > 3 * len + 3);
                }
