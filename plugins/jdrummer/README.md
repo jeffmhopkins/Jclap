@@ -15,7 +15,7 @@ variations, a fill and its own energy. Mutate any section until it sits right, e
 switch sections live by click, by note or by automation. It plays with the host's transport, or on
 its own PLAY while the host is stopped.
 
-Version 0.2.2.
+Version 0.2.3.
 
 ![Panel](docs/panel.png)
 
@@ -204,6 +204,11 @@ What makes each pass a little different:
 - **PLAY** runs JDrummer on its own.
 - **SYNC**: AUTO (default) follows the host while it plays and runs free on PLAY while it's stopped;
   HOST only follows the host; FREE ignores the host.
+
+The host always wins (unless SYNC is FREE): when it starts, JDrummer plays along, and when it stops,
+JDrummer stops too and PLAY turns off. In between, the play button beside the tempo does as you click:
+while the host plays, a click stops JDrummer and the next starts it again; while the host is stopped,
+a click runs it free until you stop it or the host starts or stops.
 - **TEMPO WHEN FREE**: 40 to 300 BPM.
 
 The readout shows whether it's following the host or running free, the tempo, and the bar and beat in
@@ -241,7 +246,8 @@ MUTE HATS, MUTE KICK and HOLD (stay in this section) last as long as you hold th
 
 Every style is a factory preset, filed by family and genre in the preset menu, so loading one makes
 its song from the style's own seed. A saved preset keeps the song itself (in a `.jdrummersong` file
-beside the preset), with every mutation and edit. The die in the preset bar rolls the song again.
+beside the preset), with every mutation and edit. The preset bar shows the genre at the name's left
+(the menu files it under its family too). The die in the preset bar rolls the song again.
 
 ## Building
 

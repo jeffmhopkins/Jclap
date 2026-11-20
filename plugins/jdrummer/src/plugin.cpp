@@ -336,6 +336,16 @@ public:
          }
       }
       engine_->process(b, out_);
+      // The host stopped and took PLAY with it: the param goes off too, and the host hears of it.
+      if (engine_->takeHostStopped() && values_[kPlay].load() != 0.0) {
+         values_[kPlay].store(0.0);
+         clap_event_param_value_t ev{};
+         ev.header = {sizeof(ev), 0, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE, 0};
+         ev.param_id = kPlay;
+         ev.note_id = ev.port_index = ev.channel = ev.key = -1;
+         ev.value = 0.0;
+         out->try_push(out, &ev.header);
+      }
       // Everything out in time order.
       std::stable_sort(out_.items.begin(), out_.items.begin() + static_cast<long>(out_.count),
                        [](const MidiOut &a, const MidiOut &c) { return a.time < c.time; });

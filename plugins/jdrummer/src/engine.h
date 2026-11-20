@@ -163,6 +163,18 @@ public:
    // Plays a block: all of it, after any notes in it have been taken.
    void process(const Block &b, OutBuffer &out) {
       const bool hostRunning = b.hasTransport && b.playing;
+      // The host always wins: its start picks up a stopped JDrummer, and its stop stops PLAY too
+      // (unless SYNC is FREE). Between the two, PLAY and STOP do as clicked.
+      if (hostRunning && !hostWasRunning_)
+         stopped_ = false;
+      if (!hostRunning && hostWasRunning_ && settings_.sync != 2) {
+         stopped_ = false;
+         if (settings_.play) {
+            settings_.play = false;
+            hostStopped_ = true;
+         }
+      }
+      hostWasRunning_ = hostRunning;
       bool following = false, run = false;
       double tempo = b.tempo;
       switch (settings_.sync) {
@@ -177,9 +189,6 @@ public:
             tempo = settings_.freeTempo;
          }
       }
-      if (hostRunning && !hostWasRunning_)
-         stopped_ = false;
-      hostWasRunning_ = hostRunning;
       if (stopped_)
          run = false;
       tempo_ = std::clamp(tempo, 1.0, 999.0);
@@ -264,6 +273,13 @@ public:
       f.muteKick = muteKick_;
       f.hold = hold_;
       f.stopped = stopped_;
+   }
+
+   // True once after the host's stop turned PLAY off, so the plugin can turn its param off too.
+   bool takeHostStopped() {
+      const bool r = hostStopped_;
+      hostStopped_ = false;
+      return r;
    }
 
    int section() const { return section_; }
@@ -616,7 +632,7 @@ private:
    size_t queueLen_ = 0;
 
    bool running_ = false, following_ = false, followingBefore_ = false, hostPlaying_ = false;
-   bool hostWasRunning_ = false;
+   bool hostWasRunning_ = false, hostStopped_ = false;
    double tempo_ = 120.0, freeBeat_ = 0.0, expected_ = -1.0;
    int64_t nextTick_ = 0, anchor_ = 0, lastTick_ = 0, absoluteBar_ = 0;
    uint32_t salt_ = 0x1234;

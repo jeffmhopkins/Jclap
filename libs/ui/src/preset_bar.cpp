@@ -262,6 +262,7 @@ void PresetBar::draw(visage::Canvas &c) {
       return;
    const std::string current = name();
    const int i = indexOf(current);
+   const std::string category = i < 0 ? std::string() : categoryLabel ? categoryLabel(at(i)) : at(i).category;
    const float star = kStar * s, die = onDice ? kDie * s : 0.0f;
    if (onDice) {
       c.setColor(diceLit && diceLit() ? accent : hover_ == Zone::Dice ? t.text : t.dimText);
@@ -274,7 +275,7 @@ void PresetBar::draw(visage::Canvas &c) {
    };
    float nameX = a + die, nameW = w - 2 * a - save - star - die;
    if (i >= 0) {
-      const float catRight = a + die + (onDice ? 4 : 8) * s + width(font(9 * s), at(i).category) + 6 * s;
+      const float catRight = a + die + (onDice ? 4 : 8) * s + width(font(9 * s), category) + 6 * s;
       const float nameLeft = nameX + (nameW - width(font(13 * s), shown)) / 2;
       if (catRight > nameLeft) {
          nameW -= catRight - nameX;
@@ -290,7 +291,7 @@ void PresetBar::draw(visage::Canvas &c) {
    }
    if (i >= 0) {
       c.setColor(t.dimText);
-      c.text(at(i).category, font(9 * s), visage::Font::kLeft, a + die + (onDice ? 4 : 8) * s, 0, 80 * s, h);
+      c.text(category, font(9 * s), visage::Font::kLeft, a + die + (onDice ? 4 : 8) * s, 0, 80 * s, h);
    }
 }
 
