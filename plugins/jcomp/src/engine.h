@@ -366,6 +366,7 @@ public:
             anchor_ = bar * barTicks();
             fill_ = fillPending_ = fillDown_ = ending_ = ended_ = false;
             absoluteBar_ = 0;
+            startBar_ = bar;
             salt_ = kDiceSalt; // the same dice every time it plays: a render comes out the same
             // Running free, SONG starts the song from its first section, as the host's bar 1 does.
             if (settings_.song && !following) {
@@ -380,6 +381,15 @@ public:
             fill_ = fillDown_ = false;
             if (!settings_.song)
                ending_ = false;
+            // Following the host, a bar's dice are the host bar's: a loop's every pass, SAME DICE
+            // or not, plays as the first did.
+            if (following) {
+               const int64_t len2 = barTicks();
+               const int64_t hb = static_cast<int64_t>(std::floor(static_cast<double>(nextTick_) / len2));
+               absoluteBar_ = hb - startBar_ + (nextTick_ % len2 == 0 ? 0 : 1);
+               if (settings_.sameDiceBars == 0 && nextTick_ % len2 != 0)
+                  diceBar_ = static_cast<int>(absoluteBar_);
+            }
          }
          // Following the host, a looped section lies on the host's timeline (its bar 1 on a multiple
          // of its length from the host's bar 1), so a host bar plays the same chord every pass of a
@@ -1999,6 +2009,7 @@ private:
    bool hostWasRunning_ = false;
    double tempo_ = 120.0, freeBeat_ = 0.0, expected_ = -1.0;
    int64_t nextTick_ = 0, anchor_ = 0, lastTick_ = 0, absoluteBar_ = 0;
+   int64_t startBar_ = 0; // the host bar playing started on
    uint32_t salt_ = kDiceSalt;
    int section_ = 0, take_ = 0, barTake_ = 0, pending_ = -1, pendingTake_ = -1;
    bool fill_ = false, fillPending_ = false;

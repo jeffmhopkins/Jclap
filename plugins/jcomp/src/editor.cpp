@@ -1403,8 +1403,9 @@ public:
       const Pattern &p = pattern();
       const int key = static_cast<int>(std::lround(host_.paramValue(kKey)));
       const int bars = viewBars(sec, p, host_.editTake);
+      // (EDIT draws the take as written: the band hits don't hide its hits.)
       const Preview pv = preview(sec, p, bars, vs(), transpose(), key, scale(), host_.paramValue(kRuns) > 0.0,
-                                 firstBarOf(sec, host_.editTake), host_.editTake != 6);
+                                 firstBarOf(sec, host_.editTake), false);
       // Chords on top.
       drawBarChips(c, s, barNames(sec, key, transpose(), bars, scale(), firstBarOf(sec, host_.editTake)), kKeysW, 0, w - kKeysW, 16, kWhite,
                    host_.editStep >= 0 ? host_.editStep / p.stepsPerBar() % bars : -1);
@@ -3192,7 +3193,7 @@ private:
             hitTitle += perBeat == 4 ? (host_.editStep % perBeat == 2 ? " &" : host_.editStep % perBeat == 1 ? " e" : " a")
                                      : (host_.editStep % perBeat == 1 ? " trip" : " let");
          const Preview pv = preview(sec, p, bars, vs(), transpose(), key(), scaleNow(), host_.paramValue(kRuns) > 0.0,
-                                    firstBarOf(sec, host_.editTake), host_.editTake != 6);
+                                    firstBarOf(sec, host_.editTake), false);
          for (const PlacedHit &pl : pv.hits)
             if (pl.view == host_.editStep) {
                hitChord = pl.chord;

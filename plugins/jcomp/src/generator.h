@@ -833,7 +833,19 @@ inline void shapeEnergy(Pattern &p, double e, Rng &rng, bool fixed = false, unsi
    // Up high it fills in: soft chords on empty eighths the rhythm allows (not where a chord is held,
    // nor in an offbeat take, whose chops keep their places, nor in a held-chord style, a line or a
    // left hand's).
-   if (e > 0.7 && !(mods & kLongs) && !hasLine(p) && !hasLeftHand(p) && !offbeatTake(p)) {
+   // Nor in a four to the bar (a rhythm guitar's chunk on every beat, its pickups written in).
+   int beatHits = 0, offHits = 0;
+   bool everyBeat = p.steps > 0;
+   for (int s = 0; s < p.steps; ++s) {
+      const bool chordHit = p.at(s).on() && !leftHand(p.at(s).part);
+      if (onBeat(p, s)) {
+         beatHits += chordHit;
+         everyBeat = everyBeat && (chordHit || s >= p.stepsPerBar());
+      } else
+         offHits += chordHit;
+   }
+   const bool four = everyBeat && offHits * 4 <= beatHits;
+   if (e > 0.7 && !four && !(mods & kLongs) && !hasLine(p) && !hasLeftHand(p) && !offbeatTake(p)) {
       const bool fine = fineGrid(p);
       for (int s = 0; s < p.steps; ++s)
          if (!p.at(s).on() && onEighth(p, s) && addable(p, s, fine) && !keepsOff(p, s) && !heldOver(p, s) &&
