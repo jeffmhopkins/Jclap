@@ -262,7 +262,21 @@ inline void makeChords(const Recipe &r, int section, Section &s, Rng &rng) {
          Chord &c = s.chords[static_cast<size_t>(b * 2 + half)];
          if (c.none() || (half == 1 && !(s.split >> b & 1)))
             continue;
-         const Chord next = after(written, b, half);
+         // Coloured against the next different chord: a dominant held two bars into a minor chord
+         // still takes the b9 (the slot after its first bar is itself).
+         Chord next = after(written, b, half);
+         {
+            int nb = b, nh = half;
+            for (int k = 0; k < 2 * kMaxProgBars && next == written.chords[static_cast<size_t>(b * 2 + half)]; ++k) {
+               if (nh == 0 && (written.split >> nb & 1))
+                  nh = 1;
+               else {
+                  nb = (nb + 1) % written.progBars;
+                  nh = 0;
+               }
+               next = after(written, nb, nh);
+            }
+         }
          // A chord held on from the slot before (a two-bar chord) keeps the colour it was given.
          const int prevSlot = half ? b * 2 : (b > 0 ? (s.split >> (b - 1) & 1 ? b * 2 - 1 : b * 2 - 2) : -1);
          if (prevSlot >= 0 && written.chords[static_cast<size_t>(prevSlot)] == written.chords[static_cast<size_t>(b * 2 + half)]) {
@@ -755,8 +769,10 @@ inline void shapeEnergy(Pattern &p, double e, Rng &rng, bool fixed = false, unsi
          Hit &h = p.at(s);
          if (!h.on())
             continue;
-         if (offbeatBass && leftHand(h.part) && s % bar == 0)
+         if (offbeatBass && leftHand(h.part) && s % bar == 0) {
+            h.vel = std::min<uint8_t>(h.vel, static_cast<uint8_t>(quiet + 6)); // kept, but as quiet
             continue;
+         }
          if (!isFirst(s)) {
             h = Hit{};
             continue;
@@ -1048,10 +1064,17 @@ inline void keepBeatChord(const Pattern &before, Pattern &p) {
    if (!chordOnBeat(before) || chordOnBeat(p) || before.steps != p.steps || before.rate != p.rate)
       return;
    const int bar = p.stepsPerBar(), beat = p.perBeat();
+   // At the take's level, not as written: a quiet section's chord comes back as quiet as the rest.
+   int loudest = 0;
+   for (int s = 0; s < p.steps; ++s)
+      if (p.at(s).on())
+         loudest = std::max<int>(loudest, p.at(s).vel);
    for (int from = 0; from < p.steps; from += bar)
       for (int s = from; s < from + bar && s < p.steps; s += beat)
          if (before.at(s).on() && !leftHand(before.at(s).part)) {
             p.at(s) = before.at(s);
+            if (loudest > 0)
+               p.at(s).vel = static_cast<uint8_t>(std::min<int>(p.at(s).vel, loudest));
             break;
          }
 }
@@ -1388,10 +1411,14 @@ inline Pattern makeFillDown(const Recipe &r, int section, const Pattern &base, d
                                         : downText(g, base, st.mods);
    if (section == kIntro && keepsOff(base, 0))
       text = downText(g, base, 0);
+   // A held style's set-up holds to the bar's last eighth, at its own level (a pad doesn't stab).
+   if (section == kIntro && (st.mods & kLongs) && !keepsOff(base, 0))
+      text = base.rate == kRate8T ? "x---------.." : base.rate == kRate34 ? "x---------.." : base.rate == kRate68 ? "x---------.." : "x-------------..";
    Pattern f = figure(text, base.rate, std::max(0.35, e));
    // Settling into the quieter section: never above the groove it leaves, not the loudest stab of
-   // the song (MMA's fills sit at the groove's volume).
-   if (section != kIntro) {
+   // the song (MMA's fills sit at the groove's volume). The intro's set-up is no louder than the
+   // intro either.
+   {
       int peak = 0;
       for (int s = 0; s < base.steps; ++s)
          if (base.at(s).on() && !leftHand(base.at(s).part))
@@ -1405,8 +1432,12 @@ inline Pattern makeFillDown(const Recipe &r, int section, const Pattern &base, d
       f.at(s) = Hit{};
    // A left hand keeps its downbeat under a chord that leaves it (boom-chick's bass on the one).
    if (hasLeftHand(base) && !f.at(0).on()) {
-      f.at(0) = hitOf('b');
+      f.at(0) = base.at(0).on() && leftHand(base.at(0).part) ? base.at(0) : hitOf('b');
       f.at(0).art = kArtRing;
+      f.at(0).push = 0;
+      for (int s = 0; s < base.steps; ++s) // no louder than the groove's own bass
+         if (base.at(s).on() && leftHand(base.at(s).part))
+            f.at(0).vel = std::min(f.at(0).vel, base.at(s).vel);
    }
    return f;
 }
@@ -1425,13 +1456,15 @@ inline Pattern makeEnding(const Recipe &r, const Pattern &base, double e) {
          f.at(s).push = 0;
       }
    }
-   // The left hand plays on to the last chord (a boom-chick tag keeps its bass alternating).
-   if (hasLeftHand(base) && f.steps > f.stepsPerBar())
+   // The left hand plays on to the last chord (a boom-chick tag keeps its bass alternating), but
+   // not under an ending held from its first bar (the held chord is the end).
+   if (hasLeftHand(base) && f.steps > f.stepsPerBar() && !(st.mods & kLongs))
       for (int s = 0; s < f.stepsPerBar(); ++s)
          if (!f.at(s).on() && s < base.steps && base.at(s).on() && leftHand(base.at(s).part))
             f.at(s) = base.at(s);
+   // The last chord rings (a left hand's note after it doesn't take its place).
    for (int s = f.steps - 1; s >= 0; --s)
-      if (f.at(s).on()) {
+      if (f.at(s).on() && !leftHand(f.at(s).part)) {
          f.at(s).art = kArtRing;
          f.at(s).vel = std::max<uint8_t>(f.at(s).vel, kNormal);
          break;

@@ -712,11 +712,14 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
          else if (upper.size() > 2)
             upper.back() = 0;
       }
-      for (int b = vs.floor; b < vs.floor + 12; ++b) {
-         if (b % 12 != bassPc)
+      // The bass in either of its low octaves (never under FLOOR, and low: under the window's
+      // bottom fifth), at least a fifth under the right hand: every root gets a choice of voicings,
+      // so the top voice can lead whatever the key.
+      for (int b = vs.floor; b < vs.floor + 24; ++b) {
+         if (b % 12 != bassPc || (b >= vs.floor + 12 && b >= vs.lo + 7))
             continue;
          for (const auto &st : detail::closeStacks(pcsOf(upper), vs.lo, vs.hi)) {
-            if (st.front() < b + 9)
+            if (st.front() < b + 7)
                continue;
             Stack v{b};
             v.insert(v.end(), st.begin(), st.end());
