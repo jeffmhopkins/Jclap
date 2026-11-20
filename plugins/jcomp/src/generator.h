@@ -452,6 +452,15 @@ inline bool thinnedBy(const Pattern &p, int step, double density, double dice, b
       if (firstHalf && step - from >= halfBar(p) && secondHalfChanges)
          return false;
    }
+   // A bass that alternates with the chords (boom-chick, oom-pah-pah: no chord on 1 or 3) is the
+   // rhythm's backbone: its notes on the strong beats stay, the chicks go first.
+   if (leftHand(h.part) && step % strongSteps(p) == 0) {
+      bool chordOnStrong = false;
+      for (int s = 0; s < p.steps && !chordOnStrong; s += strongSteps(p))
+         chordOnStrong = p.at(s).on() && !leftHand(p.at(s).part);
+      if (!chordOnStrong)
+         return false;
+   }
    const bool onBeat = step % perBeat == 0;
    const bool onEighth = p.rate == kRate8T ? step % 3 != 1 : step % 2 == 0;
    double weight = (onBeat ? 0.7 : onEighth ? 0.45 : 0.2) + 0.25 * h.vel / 127.0 + (h.vel >= kAccent ? 0.15 : 0.0) +

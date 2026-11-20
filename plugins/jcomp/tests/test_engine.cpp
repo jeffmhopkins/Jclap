@@ -2564,5 +2564,36 @@ int main() {
             fills.insert(static_cast<int>(t.time / 96000) + 1);
       JCLAP_CHECK(fills == (std::set<int>{8, 12, 20, 24}));
    }
+   {
+      // C07: DENSITY keeps a boom-chick's (and a waltz's) alternating bass and drops chicks first.
+      const Pattern boom = fromRhythm("b...x...f...x...");
+      const Pattern oom = fromRhythm("b...x...x...|f...x...x...", kRate34);
+      for (double density : {0.05, 0.2, 0.35, 0.45})
+         for (double d : {0.0, 0.5, 1.0}) {
+            JCLAP_CHECK(!thinnedBy(boom, 0, density, d, false));
+            JCLAP_CHECK(!thinnedBy(boom, 8, density, d, false));
+            JCLAP_CHECK(!thinnedBy(oom, 0, density, d, false));
+            JCLAP_CHECK(!thinnedBy(oom, 12, density, d, false));
+         }
+      // C08, A14: the pad takes a pushed chord with the comp, not on the beat after it.
+      auto song = songOf("x.....x.......x.", {{"C", nullptr}, {"F", nullptr}});
+      for (Section &sec : song->sections)
+         for (Pattern &t : sec.takes)
+            t.at(14).push = t.at(30).push = 1;
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.pad = true;
+      s.padChannel = 5;
+      e.setSettings(s);
+      e.reset();
+      const auto all = runWith(e, 24000LL * 8, 0.0, [](int64_t, Block &) {});
+      std::set<int> padAtPush;
+      for (const Timed &t : all)
+         if (t.on() && (t.m.status & 15) == 5 && std::abs(t.time - 84000) < 1440)
+            padAtPush.insert(t.m.data1 % 12);
+      JCLAP_CHECK(padAtPush.count(5) && padAtPush.count(9));
+   }
    return jclap::core::testResult();
 }

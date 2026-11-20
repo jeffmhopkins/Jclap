@@ -156,6 +156,7 @@ public:
       pending_ = pendingTake_ = -1;
       fill_ = fillPending_ = fillDown_ = ending_ = ended_ = false;
       padChord_ = Chord{};
+      padAhead_ = -1;
       pad_ = Voicing{};
       energy_ = 1.0;
       stopped_ = false;
@@ -349,6 +350,7 @@ public:
          lastEmitted_ = b0;
          freshClock_ = true;
          padChord_ = Chord{};
+         padAhead_ = -1;
          pad_ = Voicing{};
          if (start) {
             const int64_t bar = static_cast<int64_t>(std::floor(b0 / beats()));
@@ -983,13 +985,18 @@ private:
 
    // The pad layer: the chord up held on its own channel, a new one at each change (and nothing
    // while the comp is silent: before a chord is held, or at the song's end).
-   void padAt(int64_t t, bool off) {
-      if (t % 12 != 0 && !off)
+   // `ahead`: the chord the comp has just pushed (anticipated), taken by the pad with it and held
+   // to its change (`until`).
+   void padAt(int64_t t, bool off, const Chord *ahead = nullptr, int64_t until = -1, double offset = 0.0) {
+      if (t % 12 != 0 && !off && !ahead)
          return;
-      const double at = static_cast<double>(t) / kTicksPerBeat + settings_.timing * tempo_ / 60000.0;
+      if (!off && !ahead && t < padAhead_)
+         return; // holding a pushed chord until its change comes
+      padAhead_ = ahead ? until : -1;
+      const double at = static_cast<double>(t) / kTicksPerBeat + offset + settings_.timing * tempo_ / 60000.0;
       Chord c;
       if (!off && settings_.pad && !(settings_.heldOnly && !heldNow_))
-         c = chordAt(t - anchor_);
+         c = ahead ? *ahead : chordAt(t - anchor_);
       if (c == padChord_ && c.none() == pad_.empty())
          return;
       if (!pad_.empty() && sameHarmony(c, padChord_) && !c.none()) {
@@ -1271,6 +1278,9 @@ private:
          return;
       }
       pushTarget_ = -1;
+      // The pad moves with the comp's anticipation, not half a beat behind it.
+      if (settings_.pad && chordRel != secRel && !target && chordPart(h.part))
+         padAt(t, false, &c, anchor_ + chordRel, k.offset);
       playChord(k, !target);
    }
 
@@ -1960,6 +1970,7 @@ private:
    Chord lastChord_, nextChord_, bassChord_;
    // The last pushed chord: the beat it anticipates (-1 none), and its notes.
    int64_t pushTarget_ = -1;
+   int64_t padAhead_ = -1; // the pad holds a pushed chord until this tick
    Chord pushChord_;
    uint32_t pushFirst_ = 0, pushLast_ = 0;
    int lastBass_ = -1; // the left hand's last note
