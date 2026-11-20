@@ -131,7 +131,7 @@ public:
       heldNow_ = false;
       heldPending_ = false;
       last_ = Voicing{};
-      lastChord_ = Chord{};
+      lastChord_ = bassChord_ = Chord{};
       bassQueue_ = 0;
       runTick_ = -1;
    }
@@ -600,10 +600,13 @@ private:
             runTick_ = -1;
             return;
          }
-         // DENSITY above the middle fills the gaps: eighths first, then sixteenths, as softer
-         // repeats of the chord sounding.
+         // DENSITY above the middle fills the gaps: eighths first, then sixteenths (only in a rhythm
+         // that already plays sixteenths), as softer repeats of the chord sounding. A step a written
+         // chord still holds isn't a gap.
          const double more = (settings_.density - 0.5) * 2.0;
-         if (more <= 0.0 || lastChord_.none() || last_.empty())
+         if (more <= 0.0 || lastChord_.none() || last_.empty() || heldOver(p, step))
+            return;
+         if (!onEighth && !fineGrid(p))
             return;
          const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
          if (dice(diceBar_, step, 21) >= chance)
@@ -622,10 +625,21 @@ private:
             return;
       }
       const double stepBeats = static_cast<double>(stepTicks) / kTicksPerBeat;
-      // How long, in steps, until the next hit (for RING and the run's room).
+      // How long, in steps, until the next hit of the same hand (for RING and the run's room): the
+      // left hand's notes and the chords above them sound on their own.
+      const bool left = leftHand(h.part);
       int gap = 1;
-      while (gap < steps && (!p.at((step + gap) % steps).on() || thinned(p, (step + gap) % steps)))
+      while (gap < steps) {
+         const int n = (step + gap) % steps;
+         if (p.at(n).on() && !thinned(p, n) && leftHand(p.at(n).part) == left)
+            break;
          ++gap;
+      }
+      // A left-hand note as written is held to the next one, two beats at most.
+      if (left && h.art == kArtAsWritten && h.len <= 1) {
+         h.art = kArtRing;
+         gap = std::min(gap, 2 * perBeat);
+      }
       const Chord c = chordAt(secRel + (h.push ? kTicksPerBeat / 2 : 0));
       Voicing v;
       if (target) {
@@ -637,8 +651,15 @@ private:
       double vel = h.vel * energy_;
       if (settings_.vary > 0.0)
          vel += (dice(diceBar_, step, 6) * 2.0 - 1.0) * settings_.vary * 10.0;
-      playChord(t, swing + h.nudge * tempo_ / 60000.0, c, v, h, vel, h.len * stepBeats, gap * stepBeats, step);
+      // A two-handed voicing on keys: the left hand's low note sounds with the chords on beats 1 and 3
+      // and on a change of chord; the chops and backbeats between are the right hand alone.
+      const bool strong = step % (perBeat * 2) == 0;
+      const bool dropBass = !strong && !target && settings_.voicing.shape == kSpread && settings_.onsets < 2 &&
+                            (c == lastChord_ || c == bassChord_) && h.part == kPartChord;
+      playChord(t, swing + h.nudge * tempo_ / 60000.0, c, v, h, vel, h.len * stepBeats, gap * stepBeats, step,
+                p.rate == kRate8T, dropBass);
    }
+
 
    // Whether DENSITY below the middle drops this hit: the weakest first (soft, off the beat), never a
    // bar's first.
@@ -708,12 +729,12 @@ private:
             }
          }
          const std::vector<int> run = passingRun(last_.top(), land, len, (settings_.key + 0) % 12, settings_.scale,
-                                                 settings_.runHalfStep);
+                                                 settings_.runHalfStep, chordTones(c));
          const double stepBeats = static_cast<double>(stepTicks) / kTicksPerBeat;
          const double lay = settings_.timing * tempo_ / 60000.0;
          const double start = static_cast<double>(t) / kTicksPerBeat + lay;
          if (settings_.runShorten)
-            cutFrom(start - 0.004);
+            cutFrom(start - 0.004, 0);
          for (size_t k = 0; k < run.size(); ++k) {
             const double at2 = start + k * stepBeats + swingTicks(p, (step + static_cast<int>(k)) % steps, stepTicks) / kTicksPerBeat;
             const int vel = static_cast<int>((62 + 10 * k) * energy_);
@@ -727,9 +748,10 @@ private:
 
    // Plays a chord: its notes started together, rolled or strummed; its length by articulation.
    void playChord(int64_t t, double offsetBeats, const Chord &c, Voicing v, const Hit &h, double vel, double lenBeats,
-                  double gapBeats, int step) {
+                  double gapBeats, int step, bool triplet = false, bool dropBass = false) {
       if (c.none() || v.empty())
          return;
+      const int hand = leftHand(h.part) ? 1 : 0;
       // The part of the chord the hit plays.
       if (h.part == kPartTop) {
          v.notes[0] = static_cast<uint8_t>(v.top());
@@ -738,17 +760,22 @@ private:
          v.notes[0] = v.notes[static_cast<size_t>(v.count - 2)];
          v.notes[1] = v.notes[static_cast<size_t>(v.count - 1)];
          v.count = 2;
-      } else if (h.part == kPartBass) {
-         const int pc = c.bass >= 0 ? c.bass : c.root;
-         int n = settings_.voicing.floor;
-         while (n % 12 != pc)
-            ++n;
-         v.notes[0] = static_cast<uint8_t>(n);
+      } else if (leftHand(h.part)) {
+         v.notes[0] = static_cast<uint8_t>(bassNote(c, settings_.voicing.floor, h.part == kPartFifth));
          v.count = 1;
       }
+      if (hand == 1)
+         bassChord_ = c; // the left hand has sounded this chord's bass
+      else if (h.part == kPartChord && c != bassChord_)
+         bassChord_ = Chord{};
       if (h.part == kPartChord) {
          last_ = v;
          lastChord_ = c;
+         if (dropBass && v.count > 2) {
+            for (int i = 1; i < v.count; ++i)
+               v.notes[static_cast<size_t>(i - 1)] = v.notes[static_cast<size_t>(i)];
+            --v.count;
+         }
       }
       ++hits_;
       const double ms = tempo_ / 60000.0; // a millisecond, in beats
@@ -770,9 +797,10 @@ private:
          len += (gapBeats * 0.97 - len) * (settings_.length - 0.5) / 0.5;
       len *= 1.0 + (dice(diceBar_, step, 12) * 2.0 - 1.0) * settings_.lengths;
       len = std::max(len, 0.05 * tempo_ / 60.0);
-      cutFrom(at - 0.003);
+      cutFrom(at - 0.003, hand);
       const int n = v.count;
-      const bool up = settings_.onsets == 3 && (step % 4) >= 2; // strum both: the off-beats strum up
+      // Strum both ways: the off-beats strum up (the and and the a of a beat, or a triplet's later two).
+      const bool up = settings_.onsets == 3 && (triplet ? step % 3 != 0 : (step % 4) >= 2);
       for (int i = 0; i < n; ++i) {
          const int idx = up ? n - 1 - i : i;
          const int key = v.notes[static_cast<size_t>(idx)];
@@ -789,7 +817,7 @@ private:
          double l = len;
          if (h.art == kArtTopRings && idx != n - 1)
             l = std::min(len, lenBeats * 0.5);
-         note(on, key, static_cast<int>(std::lround(vv)), l);
+         note(on, key, static_cast<int>(std::lround(vv)), l, hand);
       }
    }
 
@@ -841,22 +869,25 @@ private:
    struct Event {
       double beat;
       uint8_t status, d1, d2;
+      uint8_t hand = 0; // 0 the chords (right hand), 1 the left hand's bass notes
    };
 
-   void note(double at, int key, int vel, double lenBeats) {
+   void note(double at, int key, int vel, double lenBeats, int hand = 0) {
       key = std::clamp(key, 0, 127);
       const uint8_t ch = static_cast<uint8_t>(settings_.channel & 15);
-      push({at, static_cast<uint8_t>(0x90 | ch), static_cast<uint8_t>(key), static_cast<uint8_t>(std::clamp(vel, 1, 127))});
-      push({at + std::max(0.02, lenBeats), static_cast<uint8_t>(0x80 | ch), static_cast<uint8_t>(key), 0});
+      const uint8_t hd = static_cast<uint8_t>(hand);
+      push({at, static_cast<uint8_t>(0x90 | ch), static_cast<uint8_t>(key), static_cast<uint8_t>(std::clamp(vel, 1, 127)), hd});
+      push({at + std::max(0.02, lenBeats), static_cast<uint8_t>(0x80 | ch), static_cast<uint8_t>(key), 0, hd});
       if (settings_.rhythmFrom != 1)
          lastOwnBeat_ = at;
    }
 
-   // Lets go of every note still sounding at `beat` (a comp lifts its hands for the next chord).
-   void cutFrom(double beat) {
+   // Lets go of every note still sounding at `beat` (a comp lifts its hands for the next chord): with
+   // `hand`, only that hand's (a bass note doesn't lift the chord above it, nor a chord the bass).
+   void cutFrom(double beat, int hand = -1) {
       for (size_t i = 0; i < queueLen_; ++i) {
          Event &off = queue_[i];
-         if ((off.status & 0xF0) != 0x80 || off.beat <= beat)
+         if ((off.status & 0xF0) != 0x80 || off.beat <= beat || (hand >= 0 && off.hand != hand))
             continue;
          // Only a note already started by then.
          bool startedBefore = false;
@@ -943,7 +974,7 @@ private:
 
    // Chords and voicing.
    Voicing last_;
-   Chord lastChord_, nextChord_;
+   Chord lastChord_, nextChord_, bassChord_;
    std::array<uint8_t, 128> keys_{};
    std::vector<int> heldNotes_;
    Chord heldChord_, latched_, pendingHeld_;

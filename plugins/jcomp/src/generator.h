@@ -255,6 +255,7 @@ inline Hit hitOf(char ch) {
    case 't': h.vel = kNormal; h.part = kPartTop; break;
    case 'u': h.vel = kNormal; h.part = kPartUpper; break;
    case 'b': h.vel = kNormal - 6; h.part = kPartBass; break;
+   case 'f': h.vel = kNormal - 8; h.part = kPartFifth; break;
    default: break;
    }
    return h;
@@ -291,6 +292,42 @@ inline Pattern fromRhythm(const char *text) {
 inline int perBeat(const Pattern &p) { return p.rate == kRate8T ? 3 : 4; }
 inline bool onBeat(const Pattern &p, int s) { return s % perBeat(p) == 0; }
 inline bool onEighth(const Pattern &p, int s) { return p.rate == kRate8T ? s % 3 != 1 : s % 2 == 0; }
+
+// Whether a rhythm lives on the fine grid: sixteenths (or the middle of a triplet) as well as eighths.
+// A montuno, a bossa batida, a Charleston or a shuffle doesn't, and nothing added to it (a busy
+// player's ghosts, a mutation, WEIRD's strays, DENSITY) should be either.
+inline bool fineGrid(const Pattern &p) {
+   for (int s = 0; s < p.steps; ++s)
+      if (p.at(s).on() && !onEighth(p, s))
+         return true;
+   return false;
+}
+// A step a hit may be added on: any, on the fine grid; else only an eighth.
+inline bool addable(const Pattern &p, int s, bool fine) { return fine || onEighth(p, s); }
+// The bar's first hit (what thinning keeps: an offbeat style's first chop, not a chord on the one).
+inline int firstHit(const Pattern &p, int bar) {
+   const int n = p.stepsPerBar();
+   for (int s = bar * n; s < std::min<int>(p.steps, (bar + 1) * n); ++s)
+      if (p.at(s).on())
+         return s;
+   return -1;
+}
+// Whether a written hit before `step` is still holding over it (its length reaches it).
+inline bool heldOver(const Pattern &p, int step) {
+   for (int k = 1; k < p.steps && k <= 16; ++k) {
+      const Hit &h = p.at((step - k + p.steps) % p.steps);
+      if (h.on())
+         return h.len > k;
+   }
+   return false;
+}
+inline int hitsInBar(const Pattern &p, int bar) {
+   const int n = p.stepsPerBar();
+   int k = 0;
+   for (int s = bar * n; s < std::min<int>(p.steps, (bar + 1) * n); ++s)
+      k += p.at(s).on();
+   return k;
+}
 
 // The rhythms a style may use (its mask, on its grid).
 inline std::vector<const Rhythm *> rhythmsFor(const Genre &g, const Style &st, bool fills = false) {
@@ -358,12 +395,19 @@ inline int gapAfter(const Pattern &p, int s) {
 inline void applyMods(Pattern &p, unsigned mods, Rng &rng) {
    const int bar = p.stepsPerBar();
    const int beat = perBeat(p);
+   const bool fine = fineGrid(p);
    for (int s = 0; s < p.steps; ++s) {
       Hit &h = p.at(s);
       const int inBar = s % bar;
-      if (mods & kPushes && h.on() && !onBeat(p, s) && (inBar == bar - 1 || inBar == bar - 2 || inBar == bar / 2 - 2))
+      // An anticipation is a hit an eighth or less before beat one or three: the and of 2 and of 4
+      // (or their last sixteenth), or the last triplet of beats 2 and 4.
+      const bool pushAt = p.rate == kRate8T ? (inBar == bar - 1 || inBar == bar / 2 - 1)
+                                            : (inBar == bar - 1 || inBar == bar - 2 || inBar == bar / 2 - 2);
+      if (mods & kPushes && h.on() && !onBeat(p, s) && pushAt)
          h.push = rng.chance(0.75) ? 1 : 0;
-      if (mods & kSparse && h.on() && !onBeat(p, s) && h.vel < kAccent && rng.chance(0.45))
+      // Fewer hits, but never the rhythm's shape: only a bar of four or more loses one, down to three
+      // (a Charleston, a clave bar or a bossa cycle keeps every hit).
+      if (mods & kSparse && h.on() && !onBeat(p, s) && h.vel < kAccent && hitsInBar(p, s / bar) > 3 && rng.chance(0.45))
          h = Hit{};
       if (mods & kHalfTime && h.on() && (s / beat) % 2 == 1 && rng.chance(0.7))
          h = Hit{};
@@ -374,7 +418,7 @@ inline void applyMods(Pattern &p, unsigned mods, Rng &rng) {
    }
    if (mods & kBusy)
       for (int s = 0; s < p.steps; ++s)
-         if (!p.at(s).on() && !onBeat(p, s) && rng.chance(0.4)) {
+         if (!p.at(s).on() && !onBeat(p, s) && addable(p, s, fine) && rng.chance(0.4)) {
             Hit g = hitOf('g');
             p.at(s) = g;
          }
@@ -403,21 +447,35 @@ inline void shapeEnergy(Pattern &p, double e, Rng &rng) {
       return;
    }
    const int bar = p.stepsPerBar();
+   // The anchors are each bar's first hit (the one, or an offbeat style's first chop) and the accents.
+   std::array<int, kMaxSteps / 12 + 1> first{};
+   for (int b = 0; b < p.bars(); ++b)
+      first[static_cast<size_t>(b)] = firstHit(p, b);
+   const auto isFirst = [&](int s) { return first[static_cast<size_t>(s / bar)] == s; };
    if (e < 0.15) {
-      for (int s = 0; s < p.steps; ++s)
-         if (s % bar != 0)
-            p.at(s) = Hit{};
-      for (int s = 0; s < p.steps; s += bar) {
-         p.at(s) = hitOf('X');
-         p.at(s).art = kArtRing;
+      // Only the anchors: each bar's first hit, rung (one stab on the one, or the first skank).
+      for (int s = 0; s < p.steps; ++s) {
+         Hit &h = p.at(s);
+         if (!h.on())
+            continue;
+         if (!isFirst(s)) {
+            h = Hit{};
+            continue;
+         }
+         if (h.part == kPartChord) {
+            h.vel = kAccent;
+            h.art = kArtRing;
+         }
       }
+      if (p.empty())
+         p.at(0) = hitOf('X');
       return;
    }
    for (int s = 0; s < p.steps; ++s) {
       Hit &h = p.at(s);
       if (!h.on())
          continue;
-      const bool anchor = s % bar == 0 || h.vel >= kAccent;
+      const bool anchor = isFirst(s) || h.vel >= kAccent;
       if (!anchor && e < 0.4 && rng.chance((0.4 - e) * 1.6))
          h = Hit{};
       else if (h.vel == kGhost && e < 0.5 && rng.chance(0.5))
@@ -437,6 +495,7 @@ inline void shapeEnergy(Pattern &p, double e, Rng &rng) {
 inline void applyWeird(Pattern &p, double w, Rng &rng) {
    if (w <= 0.0)
       return;
+   const bool fine = fineGrid(p);
    for (int s = 0; s < p.steps; ++s) {
       Hit &h = p.at(s);
       if (h.on()) {
@@ -446,7 +505,7 @@ inline void applyWeird(Pattern &p, double w, Rng &rng) {
             h.nudge = static_cast<int8_t>(std::clamp(rng.range(-12, 12) * w * 1.5, -double(kMaxNudge), double(kMaxNudge)));
          if (rng.chance(w * 0.15))
             h.art = static_cast<uint8_t>(rng.range(kArtChop, kArtTopRings));
-      } else if (!onBeat(p, s) && rng.chance(w * w * 0.12)) {
+      } else if (!onBeat(p, s) && addable(p, s, fine) && rng.chance(w * w * 0.12)) {
          h = hitOf(rng.chance(0.5) ? 'o' : 'g');
          h.chance = static_cast<uint8_t>(rng.range(50, 85));
       }
@@ -456,10 +515,14 @@ inline void applyWeird(Pattern &p, double w, Rng &rng) {
 // The player: busy or sparse, rung or chopped, runs into the changes.
 inline void applyPlayer(Pattern &p, const Player &pl, unsigned mods, Rng &rng) {
    const int bar = p.stepsPerBar();
+   // A busy player's ghosted sixteenths only go where the style already plays sixteenths: none in a
+   // montuno, a Freddie Green four, a bossa or a shuffle.
+   const bool fine = fineGrid(p);
+   const Pattern before = p;
    for (int s = 0; s < p.steps; ++s) {
       Hit &h = p.at(s);
       if (!h.on()) {
-         if (pl.busy > 0.7 && !onEighth(p, s) && s > 0 && p.at(s - 1).on() && rng.chance((pl.busy - 0.7) * 1.2))
+         if (pl.busy > 0.7 && fine && !onEighth(p, s) && s > 0 && p.at(s - 1).on() && rng.chance((pl.busy - 0.7) * 1.2))
             h = hitOf('g');
          continue;
       }
@@ -476,8 +539,10 @@ inline void applyPlayer(Pattern &p, const Player &pl, unsigned mods, Rng &rng) {
          h.run = rng.chance(std::min(1.0, runs + 0.15)) ? 1 : 0;
       }
    }
-   if (p.empty())
-      p.at(0) = hitOf('x');
+   if (p.empty()) {
+      const int s = std::max(0, firstHit(before, 0));
+      p.at(s) = before.at(s).on() ? before.at(s) : hitOf('x');
+   }
 }
 
 // ---- mutations ----
@@ -490,9 +555,10 @@ struct Mutation {
 inline const std::vector<Mutation> &mutations() {
    static const std::vector<Mutation> list = {
       {"busier", [](Pattern &p, Rng &rng) {
+          const bool fine = fineGrid(p);
           for (int k = 0; k < 3; ++k) {
              const int s = rng.range(0, p.steps - 1);
-             if (!p.at(s).on())
+             if (!p.at(s).on() && addable(p, s, fine))
                 p.at(s) = hitOf(rng.chance(0.6) ? 'o' : 'x');
           }
        }},
@@ -526,9 +592,16 @@ inline const std::vector<Mutation> &mutations() {
                 p.at(s).art = rng.chance(0.3) ? kArtTopRings : kArtRing;
        }},
       {"shift", [](Pattern &p, Rng &rng) {
+          // A hit moved to the next step either way: a sixteenth, or an eighth in an eighth-note rhythm.
+          const bool fine = fineGrid(p);
           for (int k = 0; k < 4; ++k) {
              const int s = rng.range(1, p.steps - 2);
-             const int to = s + (rng.chance(0.5) ? 1 : -1);
+             const int dir = rng.chance(0.5) ? 1 : -1;
+             int to = s + dir;
+             while (to > 0 && to < p.steps - 1 && !addable(p, to, fine))
+                to += dir;
+             if (to <= 0 || to >= p.steps || !addable(p, to, fine))
+                continue;
              if (p.at(s).on() && !p.at(to).on() && s % p.stepsPerBar() != 0) {
                 p.at(to) = p.at(s);
                 p.at(s) = Hit{};
@@ -537,8 +610,11 @@ inline const std::vector<Mutation> &mutations() {
           }
        }},
       {"ghosts", [](Pattern &p, Rng &rng) {
+          // Ghosted chops between the hits: on the sixteenths, or the offbeat eighths of an
+          // eighth-note rhythm.
+          const bool fine = fineGrid(p);
           for (int s = 0; s < p.steps; ++s)
-             if (!p.at(s).on() && !onEighth(p, s) && rng.chance(0.3))
+             if (!p.at(s).on() && (fine ? !onEighth(p, s) : onEighth(p, s) && !onBeat(p, s)) && rng.chance(fine ? 0.3 : 0.15))
                 p.at(s) = hitOf('g');
        }},
       {"top line", [](Pattern &p, Rng &rng) {
@@ -563,14 +639,20 @@ inline const std::vector<Mutation> &mutations() {
                 p.at(s).run = 1;
        }},
       {"answer", [](Pattern &p, Rng &rng) {
-          // the second bar answers the first: the same, with its ending changed
+          // the second bar answers the first: the same, with its ending changed. A rhythm written
+          // over two bars (a clave's two sides, the bossa cycle) already answers itself: copying its
+          // first bar over the second would cross the clave.
           const int bar = p.stepsPerBar();
           if (p.steps < bar * 2)
              return;
           for (int s = 0; s < bar; ++s)
+             if (p.at(bar + s).on() != p.at(s).on())
+                return;
+          const bool fine = fineGrid(p);
+          for (int s = 0; s < bar; ++s)
              p.at(bar + s) = p.at(s);
           for (int s = bar + bar / 2; s < bar * 2; ++s)
-             if (!onBeat(p, s) && rng.chance(0.4))
+             if (!onBeat(p, s) && addable(p, s, fine) && rng.chance(0.4))
                 p.at(s) = p.at(s).on() ? Hit{} : hitOf('x');
        }},
       {"left hand", [](Pattern &p, Rng &) {

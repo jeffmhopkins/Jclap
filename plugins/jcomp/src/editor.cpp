@@ -258,6 +258,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
    Chord prevChord;
    const int n = std::max<int>(1, p.steps);
    const int perBeat = p.rate == kRate8T ? 3 : 4;
+   const bool fine = fineGrid(p);
    for (int v = 0; v < out.steps; ++v) {
       Hit h = p.at(v % n);
       const bool onBeat = v % perBeat == 0;
@@ -266,7 +267,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          // DENSITY above the middle fills gaps with softer repeats of the chord sounding.
          const double more = (gFeel.density - 0.5) * 2.0;
          const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
-         if (more <= 0.0 || prevChord.none() || rollDice(v, 21) >= chance)
+         if (more <= 0.0 || prevChord.none() || heldOver(p, v % n) || (!onEighth && !fine) || rollDice(v, 21) >= chance)
             continue;
          h.vel = static_cast<uint8_t>(onBeat ? kSoft : kGhost + (onEighth ? 10 : 0));
          h.len = 1;
@@ -290,14 +291,21 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       pl.fromTop = prev.empty() ? -1 : prev.top();
       // A run into a change.
       if (runs && h.run && !prev.empty() && c != prevChord && v >= 3) {
-         const std::vector<int> r = passingRun(prev.top(), vc.top(), 3, key, scale, true);
+         const std::vector<int> r = passingRun(prev.top(), vc.top(), 3, key, scale, true, chordTones(c));
          for (size_t k = 0; k < r.size(); ++k)
             out.notes.push_back({static_cast<float>(v - 3 + static_cast<int>(k)), 0.85f, r[k], kRunNote, 0.6f});
       }
-      // The gap to the next hit, for RING.
+      // The gap to the next hit of the same hand, for RING; a left-hand note as written holds to the
+      // next, two beats at most.
+      const bool left = leftHand(h.part);
       int gap = 1;
-      while (gap < n && (!p.at((v + gap) % n).on() || thinnedInRoll(p, (v + gap) % n)))
+      while (gap < n && (!p.at((v + gap) % n).on() || thinnedInRoll(p, (v + gap) % n) ||
+                         leftHand(p.at((v + gap) % n).part) != left))
          ++gap;
+      if (left && h.art == kArtAsWritten && h.len <= 1) {
+         h.art = kArtRing;
+         gap = std::min(gap, 2 * perBeat);
+      }
       float len = static_cast<float>(h.len) * 0.92f;
       switch (h.art) {
       case kArtChop: len = 0.45f; break;
@@ -317,17 +325,13 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          played.notes[0] = vc.notes[static_cast<size_t>(vc.count - 2)];
          played.notes[1] = vc.notes[static_cast<size_t>(vc.count - 1)];
          played.count = 2;
-      } else if (h.part == kPartBass) {
-         int b = vs.floor;
-         const int pc = c.bass >= 0 ? c.bass : c.root;
-         while (b % 12 != pc)
-            ++b;
-         played.notes[0] = static_cast<uint8_t>(b);
+      } else if (leftHand(h.part)) {
+         played.notes[0] = static_cast<uint8_t>(bassNote(c, vs.floor, h.part == kPartFifth));
          played.count = 1;
       }
       for (int i = 0; i < played.count; ++i) {
-         const bool top = i == played.count - 1 && h.part != kPartBass;
-         const uint8_t kind = h.part == kPartBass ? kBottomNote : top ? kTopNote : i == 0 ? kBottomNote : kInnerNote;
+         const bool top = i == played.count - 1 && !leftHand(h.part);
+         const uint8_t kind = leftHand(h.part) ? kBottomNote : top ? kTopNote : i == 0 ? kBottomNote : kInnerNote;
          float l = len;
          if (h.art == kArtTopRings && !top)
             l = std::min(len, h.len * 0.5f);
@@ -2737,14 +2741,15 @@ private:
 
       const float vx = 734;
       shape1_ = &onPage<ui::SegmentedSwitch>(kEditPage, {vx, 140, 240, 22},
-                                             std::vector<std::string>{"CLOSE", "DROP2", "2+4", "SHELL", "4THS", "SPREAD"});
+                                             std::vector<std::string>{"CLOSE", "DRP2", "2+4", "SHELL", "4THS", "SPRD", "RTLS", "8VES"});
       shape1_->setAccent(kOrange);
       shape1_->onChange = [this](int i) {
          setParam(kShape, i);
          redraw();
       };
       tips_.add(*shape1_, "The voicing's shape: close, drop 2 (the second voice from the top down an octave), drop 2+4, "
-                          "shells (3rd and 7th), fourths, or spread over two hands.");
+                          "shells (3rd and 7th), fourths, spread over two hands, rootless (Levine's A and B forms), "
+                          "or octaves (a close chord with its bottom note doubled on top).");
       auto knob = [this](Page page, ui::Rect r, clap_id id, const char *name, unsigned accent) -> ui::Knob & {
          auto &k = onPage<ui::Knob>(page, r, rangeOf(id));
          k.setLabel(name);
@@ -2811,10 +2816,11 @@ private:
       runIn_->onToggle = [this](bool on) { editHit([&](Hit &h) { h.run = on; }); };
       push_ = &onPage<CheckBox>(kEditPage, {vx, 538, 240, 16}, "Anticipate: plays the next chord early");
       push_->onToggle = [this](bool on) { editHit([&](Hit &h) { h.push = on; }); };
-      part_ = &onPage<ui::SegmentedSwitch>(kEditPage, {vx, 558, 240, 18}, std::vector<std::string>{"CHORD", "TOP", "TOP 2", "BASS"});
+      part_ = &onPage<ui::SegmentedSwitch>(kEditPage, {vx, 558, 240, 18}, std::vector<std::string>{"CHORD", "TOP", "TOP 2", "BASS", "5TH"});
       part_->setAccent(kOrange);
       part_->onChange = [this](int i) { editHit([&](Hit &h) { h.part = static_cast<uint8_t>(i); }); };
-      tips_.add(*part_, "What of the chord the hit plays: all of it, the top note, the top two, or the bass note.");
+      tips_.add(*part_, "What of the chord the hit plays: all of it, the top note, the top two, the bass note, or the fifth "
+                       "the bass alternates with.");
       auto &revoice = onPage<FlatButton>(kEditPage, {vx, 582, 117, 20}, "RE-VOICE \xE2\x96\xB8", 9);
       revoice.onClick = [this](const visage::MouseEvent &) {
          editHit([&](Hit &h) { h.voicing = static_cast<int8_t>(h.voicing >= 4 ? -1 : h.voicing + 1); });

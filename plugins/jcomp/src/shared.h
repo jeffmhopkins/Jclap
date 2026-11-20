@@ -43,10 +43,11 @@ inline const int kSectionBars[kSections] = {4, 8, 4, 8, 8, 4, 8};
 // chord, or with the lower notes let go so only the top keeps singing.
 enum Articulation : uint8_t { kArtAsWritten, kArtChop, kArtHalf, kArtRing, kArtTopRings };
 inline const char *const kArtNames[] = {"As written", "Chop", "Half", "Ring", "Top rings"};
-// Which of the chord a hit plays: all of it, the top note, the top two, or the bottom (a pianist's
-// left hand, a guitarist's bass string).
-enum Part : uint8_t { kPartChord, kPartTop, kPartUpper, kPartBass };
-inline const char *const kPartNames[] = {"Chord", "Top note", "Top two", "Bass"};
+// Which of the chord a hit plays: all of it, the top note, the top two, or a bass note (a pianist's
+// left hand, a guitarist's thumb): the root, or the fifth the bass alternates with.
+enum Part : uint8_t { kPartChord, kPartTop, kPartUpper, kPartBass, kPartFifth };
+inline const char *const kPartNames[] = {"Chord", "Top note", "Top two", "Bass", "Bass 5th"};
+inline bool leftHand(uint8_t part) { return part == kPartBass || part == kPartFifth; }
 
 // One chord stab on one step. A velocity of 0 is no hit.
 struct Hit {
@@ -223,7 +224,7 @@ struct Song {
             h.chance = static_cast<uint8_t>(std::min<int>(u8(), 100));
             h.nudge = static_cast<int8_t>(std::clamp<int>(static_cast<int8_t>(u8()), -kMaxNudge, kMaxNudge));
             h.art = static_cast<uint8_t>(std::min<int>(u8(), kArtTopRings));
-            h.part = static_cast<uint8_t>(std::min<int>(u8(), kPartBass));
+            h.part = static_cast<uint8_t>(std::min<int>(u8(), kPartFifth));
             h.run = u8() ? 1 : 0;
             h.push = u8() ? 1 : 0;
             h.voicing = static_cast<int8_t>(std::clamp<int>(static_cast<int8_t>(u8()), -1, 7));
