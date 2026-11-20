@@ -15,7 +15,7 @@ variations, a fill and its own energy. Mutate any section until it sits right, e
 switch sections live by click, by note or by automation. It plays with the host's transport, or on
 its own PLAY while the host is stopped.
 
-Version 0.2.0.
+Version 0.2.1.
 
 ![Panel](docs/panel.png)
 
@@ -133,7 +133,7 @@ The seven sections, each as wide as its bars, with its groove. For each:
 
 The selected section's groove now, and five children made from it, each tagged with what changed
 ("more ghost snares", "a kick moves", "lays back further", "half-time feel", "toms come in",
-"hats left to chance", "perc answers", "flams on the backbeat" and ten more; on hand drums "open tones
+"hats left to chance", "perc answers", "drags into the backbeat" and ten more; on hand drums "open tones
 move", "slap answers", "bass on the beats only", "roll into the one" and the ones that suit them). Click a child to put it
 in the song: the section's other variations and fill are made again from it (a section's own
 variations keep its feel: they never go half-time), and its generation goes up. **< back to gen N** goes back one. **MUTATION** sets how far the children stray; **NEW LITTER**
