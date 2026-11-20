@@ -2541,6 +2541,112 @@ int main() {
       }
    }
    {
+      // E5, E11: a song that has ended stays quiet, the bass coming in too, until SONG stops ending
+      // it (REPEAT, LOOP): then it plays again.
+      for (bool rhythmFromBass : {false, true})
+         for (int change : {0, 1, 2}) {
+            auto song = songOf("x...x...x...x...", {{"C", nullptr}, {"F", nullptr}});
+            for (Section &sec : song->sections)
+               sec.bars = 2;
+            auto engine = std::make_unique<Engine>();
+            Engine &e = *engine;
+            e.setSong(*song);
+            Settings s = plain();
+            s.song = true;
+            s.songEnds = true;
+            s.section = kOutro;
+            s.rhythmFrom = rhythmFromBass ? 1 : 0;
+            e.setSettings(s);
+            e.reset();
+            const int64_t end = 24000LL * 8, swap = 24000LL * 12;
+            const auto all = runWith(e, 24000LL * 24, 0.0, [&](int64_t at, Block &) {
+               if (rhythmFromBass && at % 24000 < kBlock)
+                  e.noteOn(s.bassChannel, 36, 100, 0);
+               if (rhythmFromBass && (at + 12000) % 24000 < kBlock)
+                  e.noteOff(s.bassChannel, 36, 0);
+               if (at <= swap && at + kBlock > swap && change) {
+                  Settings n = s;
+                  if (change == 1)
+                     n.songEnds = false;
+                  else
+                     n.song = false;
+                  e.setSettings(n);
+               }
+            });
+            int quiet = 0, again = 0;
+            for (const Timed &t : all)
+               if (t.on()) {
+                  quiet += t.time > end + 1440 && t.time < swap;
+                  again += t.time >= swap && t.time < swap + 24000LL * 8;
+               }
+            JCLAP_CHECK_EQ(quiet, 0);
+            if (change)
+               JCLAP_CHECK(again > 0);
+            else
+               JCLAP_CHECK_EQ(again, 0);
+         }
+   }
+   {
+      // E6: a waltz picked while playing keeps its bars on the host's 3/4 bar lines, though the
+      // last section came in on a bar that isn't one.
+      auto four = songOf("x...............", {{"C", nullptr}});
+      auto three = songOf("x...............", {{"C", nullptr}});
+      three->beats = 3;
+      for (Section &sec : three->sections) {
+         for (Pattern &t : sec.takes)
+            t = fromRhythm("x...........", kRate34);
+         sec.fill = fromRhythm("x...........", kRate34);
+      }
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*four);
+      Settings s = plain();
+      e.setSettings(s);
+      e.reset();
+      const auto all = runWith(e, 24000LL * 30, 0.0, [&](int64_t at, Block &) {
+         if (at <= 24000LL * 5 && at + kBlock > 24000LL * 5) {
+            Settings n = s;
+            n.section = kChorus;
+            e.setSettings(n);
+         }
+         if (at <= 24000LL * 13 && at + kBlock > 24000LL * 13)
+            e.setSong(*three);
+      });
+      int strikes = 0;
+      for (const Timed &t : all)
+         if (t.on() && t.time > 24000LL * 14) {
+            ++strikes;
+            const int64_t beat = (t.time + 1440) / 24000;
+            JCLAP_CHECK_EQ(static_cast<int>(beat % 3), 0);
+         }
+      JCLAP_CHECK(strikes > 0);
+   }
+   {
+      // E8: a section queued for the section's end leaves this section's band hits to play.
+      auto song = songOf("x.x.x.x.x.x.x.x.", {{"C", nullptr}, {"F", nullptr}});
+      for (Section &sec : song->sections)
+         sec.marks[2] = kMarkHold;
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.switchAt = 4;
+      e.setSettings(s);
+      e.reset();
+      const auto all = runWith(e, 24000LL * 8, 0.0, [&](int64_t at, Block &) {
+         if (at <= 24000LL && at + kBlock > 24000LL) {
+            Settings n = s;
+            n.section = kChorus;
+            e.setSettings(n);
+         }
+      });
+      int bar2 = 0;
+      for (const Timed &t : all)
+         bar2 += t.on() && t.time >= 24000LL * 4 - 1440 && t.time < 24000LL * 8 - 1440 &&
+                 std::abs(t.time - 24000LL * 4) > 1440;
+      JCLAP_CHECK_EQ(bar2, 0);
+   }
+   {
       // A12: auto fills follow a looping 12-bar section's form: its 8th and 12th bars, then the
       // 20th and 24th, not every 8th bar of the host.
       auto song = songOf("x...x...x...x...", {{"C", nullptr}});

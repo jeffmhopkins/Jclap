@@ -130,7 +130,12 @@ struct OutBuffer {
 
 class Engine {
 public:
-   void setSong(const Song &s) { song_ = s; }
+   void setSong(const Song &s) {
+      // A new meter (a waltz picked while playing): the bars are found again from the host's.
+      if (s.beats != song_.beats)
+         expected_ = -1e9;
+      song_ = s;
+   }
    const Song &song() const { return song_; }
 
    void setSettings(const Settings &s) {
@@ -140,6 +145,10 @@ public:
          pendingTake_ = std::clamp(s.take, 0, kTakes - 1);
       if (s.play && !settings_.play)
          stopped_ = false;
+      // A song that has ended plays again when SONG stops ending it (LOOP, REPEAT): its section
+      // from the next switch point.
+      if (ended_ && pending_ < 0 && ((settings_.song && !s.song) || (settings_.songEnds && !s.songEnds)))
+         pending_ = section_;
       if (!s.velEnergy)
          energy_ = 1.0;
       settings_ = s;
@@ -536,6 +545,8 @@ private:
    int target() const { return pending_ >= 0 ? pending_ : section_; }
 
    void queueSection(int s, bool restart) {
+      if (ended_)
+         restart = true; // the song over: the section asked for plays again, even the outro
       if (s == section_ && !restart && running_) {
          pending_ = -1;
          return;
@@ -1350,7 +1361,8 @@ private:
    // The band hit (Mark) on the chord sounding at `rel`, and where that chord starts (`from`). Only
    // over the section's own progression.
    int markAt(int64_t rel, int64_t &from) const {
-      if (!fromProgression() || pending_ >= 0)
+      // Not past a queued section's switch, where the chords are the coming section's.
+      if (!fromProgression() || (pending_ >= 0 && rel >= nextSwitch(std::max<int64_t>(0, lastTick_ - anchor_))))
          return kMarkNone;
       const Section &sec = song_.sections[static_cast<size_t>(section_)];
       const int64_t bar = rel / barTicks(), half = halfTicks();
@@ -1757,6 +1769,8 @@ private:
             cutFrom(beat);
          return;
       }
+      if (ended_ && pending_ < 0)
+         return; // the song is over
       ++bassHits_;
       const double inBar = std::fmod(beat - static_cast<double>(anchor_) / kTicksPerBeat, beats());
       const double fromBeat = std::abs(inBar - std::round(inBar));
