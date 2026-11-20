@@ -309,6 +309,60 @@ int main() {
       }
    }
    {
+      // The review's corrections (docs/sources.md, Part E).
+      auto genreNamed = [](const char *name) {
+         for (int i = 0; i < genreCount(); ++i)
+            if (std::string(genreAt(i).name) == name)
+               return i;
+         return -1;
+      };
+      // Guajeos and the bossa move in eighths: no hit on a sixteenth between them.
+      for (const char *name : {"Salsa", "Latin Jazz", "Bossa Nova"}) {
+         const int g = genreNamed(name);
+         JCLAP_CHECK(g >= 0);
+         for (const Rhythm &rh : genreAt(g).rhythms) {
+            int step = 0;
+            for (const char *c = rh.hits; *c; ++c) {
+               if (*c == '|')
+                  continue;
+               if (*c != '.' && *c != '-')
+                  JCLAP_CHECK(step % 2 == 0);
+               ++step;
+            }
+         }
+      }
+      // The batida's thumb: twice a bar, on 1 and 3, not on every beat.
+      {
+         const Rhythm &batida = genreAt(genreNamed("Bossa Nova")).rhythms[0];
+         int thumbs = 0;
+         for (const char *c = batida.hits; *c; ++c)
+            thumbs += *c == 'b';
+         JCLAP_CHECK(thumbs + 1 == 2); // the thumb on 1 sounds with the chord
+      }
+      // The reverse Charleston: the and of 1 and beat 3.
+      {
+         bool found = false;
+         for (const Rhythm &rh : genreAt(genreNamed("Swing Jazz")).rhythms)
+            found = found || std::string(rh.hits) == "..x.....x.......";
+         JCLAP_CHECK(found);
+      }
+      // Four To The Bar voices Freddie Green's low shells, whatever the player's grips.
+      {
+         const int g = genreNamed("Swing Jazz");
+         int st = -1;
+         for (size_t i = 0; i < genreAt(g).styles.size(); ++i)
+            if (std::string(genreAt(g).styles[i].name) == "Four To The Bar")
+               st = static_cast<int>(i);
+         JCLAP_CHECK(st >= 0);
+         std::map<clap_id, double> vals;
+         for (const auto &[id, x] : styleValues(g, st))
+            vals[id] = x;
+         JCLAP_CHECK_EQ(static_cast<int>(vals[kShape]), static_cast<int>(kShell));
+         JCLAP_CHECK(vals[kRangeLow] <= 45);
+         JCLAP_CHECK(vals[kRangeHigh] <= 64);
+      }
+   }
+   {
       // Ambient: long chords, and few of them.
       int g = -1;
       for (int i = 0; i < genreCount(); ++i)

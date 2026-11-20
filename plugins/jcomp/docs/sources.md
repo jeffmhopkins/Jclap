@@ -288,7 +288,7 @@ guitars, like they were drums" (quoted in [13]).
 
 | ID | Pattern | Description |
 |---|---|---|
-| M1 | `X...x...X...x...` | Four-on-the-floor quarter-note piano chords, accents on 1 and 3 or even (unverified) |
+| M1 | `x...X...x...X...` | Quarter-note piano chords leaning on the backbeat, with Benny Benjamin's quarter-note snare [52] (corrected in the review, Part E) |
 | M2 | `....X.......X...` | Guitar/piano backbeat on 2 and 4, the defining Motown backbeat role [23] |
 | M3 | `x.x.x.x.x.x.x.x.` | Eighth-note piano pump, left hand on roots ("aggressive ... bass notes" [23]) |
 | M4 | `x..x..x.x..x..x.` | Hunter-era bluesy boogie-influenced figure (unverified) |
@@ -451,7 +451,8 @@ type [40]).
 | ID | Pattern | Description |
 |---|---|---|
 | G1 (12-grid, 12/8) | `X.xx.xX.xx.x` | Slow 12/8 "shout ballad" chords on triplets (unverified) |
-| G2 | `x.xX.xx.x.xX.xx.` | Uptempo "shout" offbeat pattern (unverified) |
+| G2 | `x.xX.xx.x.xX.xx.` | Uptempo offbeat comp (unverified) |
+| G4 (12-grid) | `b.xb.Xb.xb.X` | The shout (praise break): left hand on the beats, chords on the swung upbeats, 150-190 BPM [53] (added in the review, Part E) |
 | G3 | `x---x-x-----x-x-` | Ballad comp with passing-chord pickups on the 8ths before beats 3 and 1 (unverified) |
 
 - **G2** is a 16th grid: chords on the "and"s and 16ths, with accents on 2 and 4. Tempo 120-140 BPM.
@@ -597,9 +598,9 @@ Grid: 12-grid (triplet swing).
 
 | ID | Pattern | Description |
 |---|---|---|
-| BN1 | `X.x..x..X.x..x..` | Batida, the one-bar version |
-| BN2 | `x..x..x...x..x..|x..x..x...x..x..` | "Bossa clave" 3-3-4-3-3 treble attacks over a two-bar cycle |
-| BN3 | `..x..x.x..x..x..|x..x..x..x..x...` | Two-bar pattern with the syncopation tied across the barline |
+| BN1 | `x...x...b.x.....` | Batida: one 2/4 bar read as one 4/4 bar in eighths (corrected in the review, Part E) |
+| BN2 | `x.....x.....x...|....x.....x.....` | "Bossa clave" 3-3-4-3-3 in eighths over two bars (corrected in the review, Part E) |
+| BN3 | `x.....x.b...x...|b...x...b.x.....` | BN2 with the thumb on 1 and 3 (the review's replacement for an unverified two-bar grid, Part E) |
 
 - **BN1** is written with fingers and thumb as separate parts.
   - Combined attacks use the 16-grid per 2/4 bar written twice: the thumb plays on each beat (pos 1,
@@ -1008,7 +1009,7 @@ Section suggestions (unverified, but consistent with [1]):
 |---|---|---|
 | RG1 | `....x.......x...` | Skank: short chord on beats 2 and 4 (in half-time feel: the offbeat) |
 | RG2 | `..x...x...x...x.` | Skank in a "double-time" count: chord on every 8th offbeat |
-| RG3 | `.x.x.x.x.x.x.x.x` | Organ bubble, combined (two layers, see below) |
+| RG3 | `..b.x.b...b.x.b.` | Organ bubble: left-hand low notes on the upbeats, right-hand chop on 2 and 4 [51] (corrected in the review, Part E) |
 | RG4 | `....x..x....x..x` | Skank with a 16th "double chop" (unverified) |
 
 - **RG1 and RG2**: the right-hand chop doubles the guitar on 2 and 4 (Berklee keyboard guide,
@@ -1056,7 +1057,7 @@ Section suggestions (unverified, but consistent with [1]):
 | ID | Pattern | Description |
 |---|---|---|
 | SK1 | `..x...x...x...x.` | Offbeat 8th chop on every "and" |
-| SK2 | `..x.x.x.x.x.x.x.` | Shuffled offbeat with doubled upstroke (unverified) |
+| SK2 | `..xx..xx..xx..xx` | Offbeat chop doubled a sixteenth later (derived; the old grid hit beats 2-4 too, Part E) |
 | SK3 (12-grid shuffle) | `..x..x..x..x` | Offbeat chop on the swung "and"s (unverified) |
 
 - **SK1**: Britannica says the R&B boogie-woogie piano vamp "was simulated by a guitar chop on the
@@ -1098,8 +1099,8 @@ Grid: 32 chars, two bars. The clave direction must be a parameter.
 
 | ID | Pattern | Description |
 |---|---|---|
-| SL1 | `x.x..x.x..x..x.x|..x..x.x..x..x.x` | 2-3 onbeat/offbeat montuno |
-| SL2 | `.x.x..x..x.x..x.|x..x..x.x..x..x.` | 3-2 offbeat/onbeat |
+| SL1 | `x...x.x...x...x.|..x...x...x...x.` | 2-3 onbeat/offbeat montuno, in eighths (corrected in the review from [7]'s MIDI, Part E) |
+| SL2 | `..x...x...x...x.|x...x.x...x...x.` | 3-2 offbeat/onbeat, in eighths (corrected in the review from [7]'s MIDI, Part E) |
 | SL3 | `x.xx.x.x.xx..x.x|...` | Chachachá "ponchando" (left for the developer to transcribe) |
 
 - **SL1 (2-3).** Per Peñalosa's "offbeat/onbeat motif" (via Moore [7][9][10]), in 2-3 "the figure
@@ -1290,7 +1291,7 @@ The alternative is **Organ Trio / Soul Jazz**, but I found no sources for it thi
 
 - Eno's ambient music must be "as ignorable as it is interesting"; unlike conventional background
   music it keeps "doubt and uncertainty" [47]. Hence few attacks and long holds.
-- *Music for Airports* "1/2" is built from eight short piano tape loops of unequal length that drift
+- *Music for Airports* "1/2" layers piano tape loops (Robert Wyatt) with "2/1"'s voice loops; the loops are of unequal length and drift
   in and out of alignment, so the music keeps changing without a set structure [48][49]. The late
   re-strike (AM4) and the two-bar hold (AM1) imitate that unevenness on a fixed grid (derived).
 - Harold Budd's "soft pedal" playing on *Ambient 2: The Plateaux of Mirror* (1980): slow and
@@ -1347,6 +1348,39 @@ These defaults are (unverified, practice-derived) unless noted.
 - **Not read** (behind paywalls or unavailable this session): Mauleón *Salsa Guidebook*; Garcia *Bim
   Bom*; Veal *Fela*; Braddock 2020 dissertation; Danielsen 2010 chapter; Hal Leonard method books;
   Pease & Pullig full LIL table (only the m2/M2 mention was located in the OCR).
+
+## Part E. The independent review (2026-11-20)
+
+A second pass checked every genre, style and player against sources read directly. The findings
+doc ranks them; these are the corrections to this document and to `styles.h`.
+
+- **Salsa and Latin Jazz guajeos (SL1, SL2) were in the wrong subdivision.** JComp's clave grid puts
+  the clave on 1, the and of 2, 4 | 2, 3, so a two-bar clave cycle is two 4/4 bars of eighths. The
+  old grids used sixteenth positions. Wikipedia's Guajeo article ships Moore's 3-2 offbeat/onbeat
+  guajeo as MIDI [7]: read note by note it is three-side `.x.x.x.x`, two-side `x.xx.x.x` (eighths),
+  the two-side's and of 4 the pickup. 2-3 swaps the bars ("the attack-point sequence of the two
+  measures is reversed" [7]). The clave-motif example (3-2: cinquillo `x.xx.xx.`, then `x.x.x...`)
+  was read the same way. A 2-3 clave-strokes rhythm was added for the 2-3 styles.
+- **Bossa (BN1-BN3) ran twice as fast.** [11] writes the batida in 2/4 in sixteenths. Brazilian 2/4
+  is read as 4/4 in eighths at the tempos quoted in BPM (120-145), so each 2/4 bar is a 4/4 bar here,
+  each sixteenth two steps. JDrummer's review made the same correction.
+- **Reverse Charleston.** The table above was right (the and of 1, beat 3); `styles.h` had the and of
+  3. Confirmed by [21] and Piano With Jonny [54].
+- **Freddie Green.** Four To The Bar now voices low shells (root, 3rd, 7th, E2 to E4) rather than the
+  Rhythm Guitar's mid-register grips: strings 6-4-3, often one note sounding [55].
+- **Organ bubble (RG3).** Jenson puts the left hand's single low notes on the upbeats and the right
+  hand's chop on 2 and 4 [51]. The sixteenth-either-side grid from the Stretta snippet is dropped.
+- **Gospel shout (G4).** Shout music is "very fast" with "hand claps on the upbeat of each beat";
+  genre guides give 150-190 BPM, swung [53]. The Shout style moves to 160 BPM on the triplet grid.
+- **Motown (M1).** The quarter-note piano now leans on 2 and 4, with the quarter-note snare [52].
+- **Ambient (B25).** "1/2" is piano loops (Wyatt) with the voice loops of "2/1" [48]; the earlier
+  text called it eight piano loops.
+- **Players.** Jazz Comper voices close (Levine's A/B rootless voicings sit inside an octave [2]).
+  Skank Guitar strums both ways, so offbeat chops are upstrokes. Bossa is played by Jazz Comper and
+  Highlife by Strummer: the Rhythm Guitar's scratch ghosts don't belong in either.
+- **Still unconfirmed** after this pass: 90s R&B (many slow jams are 12/8; not settled), House's M1
+  riffs, Country's slip note (it needs a whole-tone grace note the engine doesn't play yet), the
+  chachachá ponchando grid, and the palm-wine interlock.
 
 ---
 
@@ -1493,3 +1527,16 @@ These defaults are (unverified, practice-derived) unless noted.
 50. Wikipedia. "Harold Budd" and "Ambient 2: The Plateaux of Mirror."
     https://en.wikipedia.org/wiki/Harold_Budd (search snippet: the "soft pedal" style, slow and
     sustained).
+51. Jenson, Matt. "The Woodshed: Bubblin'." *Berklee Today*, Spring 2015.
+    https://www.berklee.edu/berklee-today/spring-2015/The-Woodshed-Bubblin (read: the bubble's
+    upbeats in the left hand, the chop on 2 and 4; the notated examples are images).
+52. Soundbrenner. "Motown groove" (rhythm library). https://www.soundbrenner.com/blogs/articles/motown-groove
+    (search snippet: Benjamin's quarter notes on the snare).
+53. Wikipedia. "Shout (Black gospel music)." https://en.wikipedia.org/wiki/Shout_(Black_gospel_music)
+    (search snippet: "very fast tempo, chromatic basslines and piano/organ chords ... hand claps on the
+    upbeat"); PianoGroove, "Holy Shout Music Tutorial"; genre guides giving 150-190 BPM.
+54. Piano With Jonny. "Jazz piano comping guide." https://pianowithjonny.com/piano-lessons/jazz-piano-comping-guide-beginner-to-pro/
+    (search snippet: the reverse Charleston on the and of 1 and beat 3).
+55. freddiegreen.org: Pettersen, "Notable quotes supporting the one note chord"
+    https://www.freddiegreen.org/technique/mp_quotes.html ; Berens [20] (search snippets: voicings on
+    strings 6-4-3, often only one note clearly sounding).

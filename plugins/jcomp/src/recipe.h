@@ -33,6 +33,7 @@ inline std::vector<std::pair<clap_id, double>> styleValues(int genre, int style)
    const Style &s = styleAt(g, style);
    const Player &p = kPlayerList[stylePlayer(g, s)];
    const ProgSet &ps = g.progs[static_cast<size_t>(std::clamp(s.progSet, 0, static_cast<int>(g.progs.size()) - 1))];
+   const bool own = s.shape >= 0; // a voicing the style needs, whatever the player
    return {{kGenre, genre},
            {kStyle, std::clamp(style, 0, static_cast<int>(g.styles.size()) - 1)},
            {kSwing, styleSwing(g, s)},
@@ -40,11 +41,11 @@ inline std::vector<std::pair<clap_id, double>> styleValues(int genre, int style)
            {kFreeTempo, s.bpm},
            {kPlayer, stylePlayer(g, s)},
            {kScale, ps.scale},
-           {kShape, p.shape},
-           {kVoices, p.voices},
-           {kRangeLow, p.lo},
-           {kRangeHigh, p.hi},
-           {kCenter, p.center},
+           {kShape, own ? s.shape : p.shape},
+           {kVoices, own ? s.voices : p.voices},
+           {kRangeLow, own ? s.lo : p.lo},
+           {kRangeHigh, own ? s.hi : p.hi},
+           {kCenter, own ? s.center : p.center},
            {kOnsets, p.onsets},
            {kTiming, p.laidBack},
            {kRuns, std::min(1.0, p.runs + (s.mods & kRunsIn ? 0.3 : 0.0))}};

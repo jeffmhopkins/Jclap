@@ -41,14 +41,16 @@ inline const Player kPlayerList[kPlayers] = {
     kSpread, 4, 48, 79, 64, 0, 0.45, 0.75, 0.55, 0.9, 0.35, 4},
    {"Neo-Soul Keys", "lazy, behind the beat, rich and open", "neo-soul, R&B, lo-fi", kEPiano, kKeys,
     kDrop24, 5, 48, 79, 62, 1, 0.4, 0.95, 0.3, 0.75, 0.55, 18},
+   // Levine's rootless left-hand voicings (A: 3-5-7-9, B: 7-9-3-5) sit inside an octave: close.
    {"Jazz Comper", "shells and rootless voicings, sparse pushes", "swing, bossa, Latin jazz", kPiano, kKeys,
-    kDrop2, 4, 50, 72, 60, 0, 0.35, 0.85, 0.2, 0.35, 0.5, 4},
+    kClose, 4, 50, 72, 60, 0, 0.35, 0.85, 0.2, 0.35, 0.5, 4},
    {"Pop Pianist", "eighth-note pulse, open triads", "pop, ballad, rock", kPiano, kKeys,
     kSpread, 4, 48, 76, 62, 0, 0.5, 0.25, 0.15, 0.6, 0.25, 0},
    {"Rhythm Guitar", "sixteenth scratch, three-note grips", "funk, disco, afrobeat", kGuitar, kGuitarKind,
     kClose, 3, 55, 76, 66, 2, 0.85, 0.5, 0.05, 0.15, 0.3, 0},
+   // Strummed both ways: the off-beat chops are upstrokes (ska's), the 2 and 4 skanks down.
    {"Skank Guitar", "off-beat chops, short and high", "reggae, ska", kGuitar, kGuitarKind,
-    kClose, 3, 57, 79, 67, 2, 0.4, 0.2, 0.0, 0.05, 0.2, 0},
+    kClose, 3, 57, 79, 67, 3, 0.4, 0.2, 0.0, 0.05, 0.2, 0},
    {"Strummer", "down-up strums across six strings", "rock, country, pop", kGuitar, kGuitarKind,
     kSpread, 5, 40, 76, 58, 3, 0.65, 0.2, 0.05, 0.5, 0.3, 0},
    {"Montuno", "Latin piano figures in octaves", "salsa, Latin", kPiano, kKeys,
