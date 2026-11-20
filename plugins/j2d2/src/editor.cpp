@@ -887,9 +887,10 @@ public:
       startTimer(33);
    }
 
-   void showPage(int page, int modPage = 0) {
+   void showPage(int page, int modPage = 0, int spacePage = 0) {
       tabs_->select(page);
       modTabs_->select(modPage);
+      spaceTabs_->select(spacePage);
       tabs_->onChange(page);
    }
 
@@ -1009,13 +1010,22 @@ private:
       // Play: how the droid voice answers the keys.
       onPage<ui::Section>(kVoicePage, {366, 410, 258, 254}, "PLAY");
       bindings_.bind(onPage<ui::SegmentedSwitch>(kVoicePage, {470, 414, 146, 20}, namesOf(kPerKey)), kPerKey);
-      knob(kVoicePage, {372, 440, 62, 92}, kVelResponse, "VELOCITY", "How far velocity opens the filter and drives the droid.");
-      knob(kVoicePage, {434, 440, 62, 92}, kPressResponse, "PRESSURE", "How far pressure opens the filter and drives it while it talks.");
-      knob(kVoicePage, {496, 440, 62, 92}, kLength, "LENGTH", "How long a key's syllable lasts, or its phrase at most. Letting go of the key cuts it.");
-      knob(kVoicePage, {558, 440, 62, 92}, kTalk, "TALK", "How often a held note talks again. 0 speaks once per note.");
-      knob(kVoicePage, {372, 552, 78, 92}, kPop, "POP", "Bleeps a second that full pressure on a held drone pops through.");
-      knob(kVoicePage, {456, 552, 78, 92}, kRegister, "REGISTER", "Moves the droid's voice up or down.", true);
-      knob(kVoicePage, {540, 552, 78, 92}, kKeyTrack, "KEY TRACK", "How far the key you play moves the droid's register.");
+      // Three rows: how the keys play it, how long and how often it speaks, and its voice.
+      const float cx[4] = {372, 434, 496, 558};
+      const float ry[3] = {438, 512, 586};
+      knob(kVoicePage, {cx[0], ry[0], 62, 72}, kVelResponse, "VELOCITY", "How far velocity opens the filter and drives the droid.");
+      knob(kVoicePage, {cx[1], ry[0], 62, 72}, kPressResponse, "PRESSURE", "How far pressure opens the filter and drives it while it talks.");
+      knob(kVoicePage, {cx[2], ry[0], 62, 72}, kSpeakAbove, "SPEAK ABOVE",
+           "Over a drone, the velocity a note needs to speak: softer notes only hum. Rises with the ribbon, full from the middle.");
+      knob(kVoicePage, {cx[3], ry[0], 62, 72}, kPop, "POP", "Bleeps a second that full pressure on a held drone pops through.");
+      knob(kVoicePage, {cx[0], ry[1], 62, 72}, kLength, "LENGTH", "How long a key's syllable lasts, or its phrase at most. Letting go of the key cuts it.");
+      knob(kVoicePage, {cx[1], ry[1], 62, 72}, kTalk, "TALK", "How often a held note talks again. 0 speaks once per note.");
+      knob(kVoicePage, {cx[2], ry[1], 62, 72}, kRegister, "REGISTER", "Moves the droid's voice up or down.", true);
+      knob(kVoicePage, {cx[3], ry[1], 62, 72}, kKeyTrack, "KEY TRACK", "How far the key you play moves the droid's register.");
+      knob(kVoicePage, {cx[0], ry[2], 62, 72}, kDegrade, "DEGRADE",
+           "An old, broken droid: lower sample rate and bits, a tired motor's wow, dropouts, hiss and crackle, a smaller, harsher speaker.");
+      onPage<ui::Label>(kVoicePage, {440, 606, 176, 14}, "an old, broken droid:", 0xff6c727b, visage::Font::kLeft);
+      onPage<ui::Label>(kVoicePage, {440, 622, 176, 14}, "lo-fi, wow, dropouts, crackle", 0xff6c727b, visage::Font::kLeft);
    }
 
    std::string spectrumLine() {
@@ -1165,11 +1175,30 @@ private:
       tips_.add(ribbon, "DROID <-> DRONE: from every note speaking a phrase, through phrases over a drone, to every held note humming. Drag.");
 
       // Space.
+      // Space: JBreath's reverb and delay, a tab each. The delay comes before the reverb.
       add<ui::Section>({634, 410, 234, 254}, "SPACE");
-      knobAll({642, 440, 74, 92}, kSpaceSize, "SIZE", "From a closet to a hall.");
-      knobAll({716, 440, 74, 92}, kSpaceMix, "MIX", "How much of the room you hear.");
-      knobAll({790, 440, 74, 92}, kSpaceDamp, "DAMP", "Darkens the room's tail.");
-      knobAll({679, 552, 74, 92}, kWidth, "WIDTH", "The stereo width of everything.");
+      spaceTabs_ = &add<ui::TabBar>({724, 414, 136, 22}, std::vector<std::string>{"REVERB", "DELAY"});
+      spaceTabs_->addToPage(0, knobAll({642, 440, 74, 92}, kSpaceSize, "SIZE", "How big the room is: small is close and boxy, large a wide hall."));
+      spaceTabs_->addToPage(0, knobAll({716, 440, 74, 92}, kSpaceDecay, "DECAY", "How long the room rings after the sound."));
+      spaceTabs_->addToPage(0, knobAll({790, 440, 74, 92}, kSpaceDamp, "DAMP", "How fast the room's highs die away: up is dark and warm."));
+      spaceTabs_->addToPage(0, knobAll({642, 552, 74, 92}, kSpaceMix, "MIX", "How much of the room you hear. At 0 the reverb is off."));
+      spaceTabs_->addToPage(0, knobAll({716, 552, 74, 92}, kSpacePreDelay, "PRE-DELAY", "The gap before the room answers."));
+      spaceTabs_->addToPage(0, knobAll({790, 552, 74, 92}, kWidth, "WIDTH", "The stereo width of everything."));
+      spaceTabs_->addToPage(1, knobAll({642, 440, 74, 92}, kDelayMix, "MIX", "How loud the repeats are under the dry sound."));
+      spaceTabs_->addToPage(1, knobAll({716, 440, 74, 92}, kDelayTime, "TIME", "The time between repeats, 10 ms to 2 s, when SYNC is Free."));
+      spaceTabs_->addToPage(1, knobAll({790, 440, 74, 92}, kDelayFeedback, "FEEDBACK", "How much of each repeat comes back: how many repeats."));
+      spaceTabs_->addToPage(1, knobAll({642, 552, 74, 92}, kDelayTone, "TONE", "How bright the repeats stay: lower, each is darker than the last."));
+      spaceTabs_->addToPage(1, knobAll({716, 552, 74, 92}, kDelaySpread, "SPREAD", "Straight down each side, or bouncing between left and right."));
+      auto &delayOn = add<ui::SegmentedSwitch>({794, 558, 66, 24}, namesOf(kDelayOn));
+      bindings_.bind(delayOn, kDelayOn);
+      tips_.add(delayOn, "The delay on or off. Turned off, its repeats fade out.");
+      spaceTabs_->addToPage(1, delayOn);
+      spaceTabs_->addToPage(1, add<ui::Label>({794, 594, 66, 14}, "SYNC", 0xff6c727b, visage::Font::kLeft));
+      auto &sync = add<ui::Dropdown>({794, 610, 66, 24}, namesOf(kDelaySync));
+      bindings_.bind(sync, kDelaySync);
+      tips_.add(sync, "Free: the TIME knob. A note value: the delay follows the host's tempo.");
+      spaceTabs_->addToPage(1, sync);
+      spaceTabs_->select(0);
 
       // Master.
       add<ui::Section>({878, 410, 206, 254}, "MASTER");
@@ -1195,7 +1224,7 @@ private:
    ui::Tooltips tips_;
    Clock clock_;
    int page_ = kVoicePage;
-   ui::TabBar *tabs_ = nullptr, *modTabs_ = nullptr;
+   ui::TabBar *tabs_ = nullptr, *modTabs_ = nullptr, *spaceTabs_ = nullptr;
    ui::PresetBar *presets_ = nullptr;
    Spectrum *spectrum_ = nullptr;
    MoodOverlay *moods_ = nullptr;
@@ -1216,8 +1245,9 @@ std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
 // page: 0 VOICE, 1 DRONES (AMP), 2 DRONES (ENVELOPES), 3 DRONES (SHAPE LFOS).
 bool renderScreenshot(EditorHost &host, int page, int width, int height, const char *pngPath) {
    Panel panel(host);
-   const int main = page == 0 ? kVoicePage : kDronePage;
-   panel.showPage(main, page == 0 ? 0 : page - 1);
+   // Page 4 is the VOICE page with SPACE on its DELAY tab.
+   const int main = page == 0 || page == 4 ? kVoicePage : kDronePage;
+   panel.showPage(main, main == kVoicePage ? 0 : page - 1, page == 4 ? 1 : 0);
    panel.demo(main);
    panel.timerCallback();
    return ui::renderToPng(panel, width, height, pngPath);

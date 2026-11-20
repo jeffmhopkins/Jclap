@@ -47,6 +47,8 @@ inline std::vector<std::pair<clap_id, double>> drone(double tone, double partial
            {kAttack, attack},
            {kRelease, release},
            {kSpaceSize, size},
+           {kSpaceDecay, 0.6 + 6.0 * size * size},
+           {kSpacePreDelay, 8.0 + 30.0 * size},
            {kSpaceMix, mix}};
 }
 

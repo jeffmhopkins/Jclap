@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <iterator>
 #include <limits>
 #include <vector>
 
@@ -219,6 +220,144 @@ int main() {
          else
             JCLAP_CHECK(heard < 1.1 * length + 0.01 && (length < 1.0 || sounds > 2));
       }
+   }
+
+   // At the ribbon's middle, a soft note only hums and a hard one speaks too (SPEAK ABOVE).
+   for (double vel : {0.3, 0.9}) {
+      Settings s = defaults();
+      s.v[kMorph] = 0.5;
+      s.v[kTalk] = 0.0;
+      s.v[kPop] = 0.0;
+      Engine e;
+      e.prepare(48000.0);
+      e.seed(6);
+      e.noteOn(55, -1, -1, vel, s);
+      std::vector<float> l(480), r(480);
+      int heard = 0;
+      for (int b = 0; b < 100; ++b) {
+         e.process(l.data(), r.data(), 480, s);
+         heard += e.view(0).event != kEvNone;
+      }
+      std::printf("ribbon 50%%, velocity %.1f: droid in %d of 100 blocks\n", vel, heard);
+      JCLAP_CHECK(vel < 0.5 ? heard == 0 : heard > 0);
+   }
+
+   // Pitch bend moves the droid: +12 semitones puts a syllable an octave up.
+   {
+      double mean[2] = {0, 0};
+      for (int k = 0; k < 2; ++k) {
+         Settings s = defaults();
+         s.v[kLength] = 0.4;
+         Engine e;
+         e.prepare(48000.0);
+         e.seed(8);
+         e.noteOn(60, -1, -1, 0.9, s);
+         e.bend(60, -1, -1, k ? 12.0 : 0.0);
+         std::vector<float> l(48), r(48);
+         int n = 0;
+         for (int b = 0; b < 300; ++b) {
+            e.process(l.data(), r.data(), 48, s);
+            const VoiceView v = e.view(0);
+            if (v.event != kEvNone && b > 20) {
+               mean[k] += v.eventPitch;
+               ++n;
+            }
+         }
+         mean[k] /= std::max(1, n);
+      }
+      std::printf("droid pitch %.1f, bent +12: %.1f\n", mean[0], mean[1]);
+      JCLAP_CHECK(std::fabs(mean[1] - mean[0] - 12.0) < 1.0);
+   }
+
+   // The SUB moving to a new lowest note, and back, doesn't click: a sine-only drone keeps a smooth
+   // waveform (its worst second difference stays tiny) through a lower note, its release and a steal.
+   {
+      Settings s = defaults();
+      for (int k = 0; k < kLayerCount; ++k)
+         s.v[kLayer0 + k] = k == kLayerSub ? 0.5 : 0.0;
+      s.v[kEnv1Amount] = s.v[kEnv2Amount] = s.v[kLfo1Amount] = s.v[kLfo2Amount] = 0.0;
+      s.v[kBreath] = 0.0;
+      s.v[kMorph] = 1.0;
+      s.v[kSpaceMix] = 0.0;
+      s.v[kMasterLevel] = -12.0;
+      s.v[kVoices] = 2;
+      s.v[kAttack] = 0.3;
+      s.v[kRelease] = 0.6;
+      s.v[kSustain] = 0.6;
+      Engine e;
+      e.prepare(48000.0);
+      e.seed(2);
+      struct Ev {
+         int t, key;
+         bool on;
+      };
+      const Ev evs[] = {{0, 48, true},     {48000, 43, true},   {96000, 43, false}, {120000, 55, true},
+                        {144000, 60, true}, {170000, 48, false}, {190000, 55, false}, {200000, 60, false}};
+      std::vector<float> l(64), r(64);
+      double worst = 0, prev[2] = {0, 0};
+      size_t k = 0;
+      for (int t = 0; t < 48000 * 6; t += 64) {
+         for (; k < std::size(evs) && evs[k].t <= t; ++k)
+            evs[k].on ? (void)e.noteOn(evs[k].key, -1, -1, 0.8, s) : e.noteOff(evs[k].key, -1, -1);
+         e.process(l.data(), r.data(), 64, s);
+         for (int i = 0; i < 64; ++i) {
+            worst = std::max(worst, std::fabs(l[i] - 2 * prev[0] + prev[1]));
+            prev[1] = prev[0];
+            prev[0] = l[i];
+         }
+      }
+      std::printf("sub-only drone: worst second difference %.2e\n", worst);
+      JCLAP_CHECK(worst < 2e-4);
+   }
+
+   // DEGRADE still speaks, and changes the sound; SPACE's delay repeats a short sound after it ends.
+   {
+      double rms[2] = {0, 0};
+      for (int k = 0; k < 2; ++k) {
+         Settings s = defaults();
+         s.v[kDegrade] = k ? 1.0 : 0.0;
+         s.v[kSpaceMix] = 0.0;
+         Engine e;
+         e.prepare(48000.0);
+         e.seed(12);
+         e.noteOn(60, -1, -1, 0.9, s);
+         std::vector<float> l(4800), r(4800);
+         double sum = 0;
+         bool finite = true;
+         for (int b = 0; b < 5; ++b) {
+            e.process(l.data(), r.data(), 4800, s);
+            for (float x : l) {
+               finite = finite && std::isfinite(x);
+               sum += x * x;
+            }
+         }
+         rms[k] = std::sqrt(sum / 24000);
+         JCLAP_CHECK(finite);
+      }
+      std::printf("degrade 0: rms %.3f, degrade 1: rms %.3f\n", rms[0], rms[1]);
+      JCLAP_CHECK(rms[1] > 0.2 * rms[0] && rms[0] > 0.01);
+
+      Settings s = defaults();
+      s.v[kLength] = 0.05;
+      s.v[kSpaceMix] = 0.0;
+      s.v[kDelayOn] = 1.0;
+      s.v[kDelayMix] = 0.8;
+      s.v[kDelayFeedback] = 0.3;
+      s.v[kDelayTime] = std::log(300.0 / 10.0) / std::log(200.0); // 300 ms
+      Engine e;
+      e.prepare(48000.0);
+      e.seed(13);
+      e.noteOn(60, -1, -1, 0.9, s);
+      std::vector<float> l(4800), r(4800);
+      double echo = 0;
+      for (int b = 0; b < 8; ++b) {
+         e.process(l.data(), r.data(), 4800, s);
+         if (b >= 3 && b < 5) // 0.3 to 0.5 s: the first repeat, after the 50 ms syllable is over
+            for (float x : l)
+               echo = std::max(echo, static_cast<double>(std::fabs(x)));
+      }
+      std::printf("delay: first repeat peak %.3f\n", echo);
+      JCLAP_CHECK(echo > 0.02);
    }
 
    // Pressure on a held drone pops bleeps through; with no pressure, none come.

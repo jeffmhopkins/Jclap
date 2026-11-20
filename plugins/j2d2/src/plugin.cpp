@@ -258,6 +258,11 @@ public:
       else
          right = left; // mono out: both halves add into the one channel
 
+      // The host's tempo, for a synced delay.
+      if (const clap_event_transport_t *t = proc->transport)
+         if (t->flags & CLAP_TRANSPORT_HAS_TEMPO)
+            engine_.setTempo(t->tempo);
+
       // Events are sample accurate: render up to each one, then apply it.
       const clap_input_events_t *in = proc->in_events;
       const uint32_t eventCount = in->size(in);
