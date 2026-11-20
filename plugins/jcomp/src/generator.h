@@ -692,7 +692,7 @@ inline void applyMods(Pattern &p, unsigned mods, Rng &rng, double pushChance = 0
          } else {
             // the left hand an eighth behind the chord: the fifth, under the root the chord already
             // has (on the shuffle's third triplet, never its middle one, and never a sixteenth)
-            const int e = beat == 2 ? 1 : 2;
+            const int e = 2;
             if (p.at(s).part == kPartChord && s % bar == 0 && s + e < p.steps && !p.at(s + e).on() && rng.chance(0.3)) {
                p.at(s + e) = hitOf('f');
                p.at(s + e).vel = kSoft;
@@ -888,6 +888,9 @@ inline const std::vector<Mutation> &mutations() {
           const int bar = p.stepsPerBar();
           for (int b = 0; b < p.steps / bar; ++b) {
              const int s = b * bar + bar - (p.rate == kRate8T ? 1 : 2);
+             // Chords only: a left hand's note or a line's stays as it is.
+             if (p.at(s).on() && (leftHand(p.at(s).part) || p.at(s).part == kPartLine))
+                continue;
              if (rng.chance(0.7)) {
                 if (!p.at(s).on())
                    p.at(s) = hitOf('x');
@@ -920,6 +923,8 @@ inline const std::vector<Mutation> &mutations() {
              if (p.at(s).on() && !p.at(to).on() && s % p.stepsPerBar() != 0) {
                 p.at(to) = p.at(s);
                 p.at(s) = Hit{};
+                if (onBeat(p, to))
+                   p.at(to).push = 0; // a beat isn't anticipated
                 return;
              }
           }
@@ -1128,7 +1133,8 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
          if (f.at(s).on() && !leftHand(f.at(s).part))
             f.at(s).art = kArtRing;
       const int last = bar - (f.rate == kRate8T ? 1 : 2);
-      if (!f.at(last).on() && !f.at(last - 1).on()) {
+      const auto chordOn = [&](int s) { return f.at(s).on() && !leftHand(f.at(s).part); };
+      if (!chordOn(last) && !chordOn(last - 1)) {
          f.at(last) = hitOf('x');
          f.at(last).art = kArtRing;
       }
@@ -1197,17 +1203,23 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
             f.at(s) = base.at(s);
    // The fill's last hit anticipates the next section's chord (not in an offbeat take, where an
    // upbeat chop is the chord it's on).
+   int pushed = -1;
    if (!keepsOff(base, 0))
       for (int s = bar - 1; s >= 0; --s)
          if (f.at(s).on() && !leftHand(f.at(s).part)) {
             f.at(s).push = 1;
+            pushed = s;
             break;
          }
    if (st.mods & kShorts)
       for (int s = 0; s < bar; ++s)
          if (f.at(s).on() && f.at(s).len <= 1 && !leftHand(f.at(s).part))
             f.at(s).art = kArtChop;
+   const Hit lead = pushed >= 0 ? f.at(pushed) : Hit{};
    shapeEnergy(f, std::max(0.35, e), rng, false, st.mods);
+   // The anticipation into the next section stays, whatever the energy took out.
+   if (pushed >= 0 && !f.at(pushed).on())
+      f.at(pushed) = lead;
    // An offbeat figure over a left hand whose fill came out as its groove (the shout: its fill's
    // beat chords give way to the bass) hits every offbeat hard: the praise break's push into the next.
    bool same = true;
@@ -1217,6 +1229,22 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
       for (int s = 0; s < bar; ++s)
          if (f.at(s).on() && !leftHand(f.at(s).part))
             f.at(s).vel = kAccent;
+   // A fill leads into the next section: never under the groove's own accents. Its first and last
+   // chords come up to the take's loudest.
+   int peak = 0, fPeak = 0, first = -1, lastHit = -1;
+   for (int s = 0; s < base.steps; ++s)
+      if (base.at(s).on() && !leftHand(base.at(s).part))
+         peak = std::max<int>(peak, base.at(s).vel);
+   for (int s = 0; s < bar; ++s)
+      if (f.at(s).on() && !leftHand(f.at(s).part)) {
+         fPeak = std::max<int>(fPeak, f.at(s).vel);
+         if (first < 0)
+            first = s;
+         lastHit = s;
+      }
+   if (first >= 0 && fPeak < peak)
+      for (int s : {first, lastHit})
+         f.at(s).vel = static_cast<uint8_t>(std::max<int>(f.at(s).vel, peak));
    return f;
 }
 
@@ -1225,11 +1253,11 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
 inline const char *downText(const Genre &g, const Pattern &base, unsigned mods) {
    const bool off = keepsOff(base, 0);
    if (base.rate == kRate8T)
-      return off ? "...x-----..." : mods & kLongs ? "x--------..." : "X-----......";
+      return off ? "...x-----..." : mods & kLongs ? "x--------..." : "x-----......";
    if (base.rate == kRate34)
-      return off ? "....x---...." : mods & kLongs ? "x--------..." : "X-------....";
+      return off ? "....x---...." : mods & kLongs ? "x--------..." : "x-------....";
    if (base.rate == kRate68) // on the dotted quarters
-      return off ? "..x-----...." : mods & kLongs ? "x---------.." : "X-----......";
+      return off ? "..x-----...." : mods & kLongs ? "x---------.." : "x-----......";
    if (off)
       return "....x-------....";
    if (mods & kLongs)
@@ -1240,7 +1268,7 @@ inline const char *downText(const Genre &g, const Pattern &base, unsigned mods) 
       return "x-------x-------";
    if (n == "Salsa" || n == "Latin Jazz")
       return "x.......x.......";
-   return "X-------........";
+   return "x-------........";
 }
 inline const char *endingText(const Genre &g, const Pattern &base, unsigned mods) {
    const bool off = keepsOff(base, 0);
@@ -1286,6 +1314,17 @@ inline Pattern makeFillDown(const Recipe &r, int section, const Pattern &base, d
    if (section == kIntro && keepsOff(base, 0))
       text = downText(g, base, 0);
    Pattern f = figure(text, base.rate, std::max(0.35, e));
+   // Settling into the quieter section: never above the groove it leaves, not the loudest stab of
+   // the song (MMA's fills sit at the groove's volume).
+   if (section != kIntro) {
+      int peak = 0;
+      for (int s = 0; s < base.steps; ++s)
+         if (base.at(s).on() && !leftHand(base.at(s).part))
+            peak = std::max<int>(peak, base.at(s).vel);
+      for (int s = 0; s < f.steps; ++s)
+         if (f.at(s).on() && peak > 0)
+            f.at(s).vel = static_cast<uint8_t>(std::min<int>(f.at(s).vel, peak));
+   }
    f.steps = static_cast<uint8_t>(f.stepsPerBar());
    for (int s = f.steps; s < kMaxSteps; ++s)
       f.at(s) = Hit{};
@@ -1301,6 +1340,21 @@ inline Pattern makeEnding(const Recipe &r, const Pattern &base, double e) {
    const Genre &g = genreAt(r.genre);
    const Style &st = styleOf(r);
    Pattern f = figure(endingText(g, base, st.mods), base.rate, std::max(0.35, e));
+   // A bossa carries its batida into the held chord, not a bar of block quarters: the figure's own
+   // bar (a two-bar cycle's second, so the last chord comes where its first would).
+   if ((st.mods & kFixed) && std::string(g.name) == "Bossa Nova" && base.rate == kRate16 && f.steps > f.stepsPerBar()) {
+      const int bar = f.stepsPerBar();
+      const int from = base.steps > bar ? bar : 0;
+      for (int s = 0; s < bar; ++s) {
+         f.at(s) = s + from < base.steps ? base.at(s + from) : Hit{};
+         f.at(s).push = 0;
+      }
+   }
+   // The left hand plays on to the last chord (a boom-chick tag keeps its bass alternating).
+   if (hasLeftHand(base) && f.steps > f.stepsPerBar())
+      for (int s = 0; s < f.stepsPerBar(); ++s)
+         if (!f.at(s).on() && s < base.steps && base.at(s).on() && leftHand(base.at(s).part))
+            f.at(s) = base.at(s);
    for (int s = f.steps - 1; s >= 0; --s)
       if (f.at(s).on()) {
          f.at(s).art = kArtRing;

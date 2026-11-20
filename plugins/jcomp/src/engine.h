@@ -615,6 +615,13 @@ private:
       section_ = s;
       pending_ = -1;
       anchor_ = (bar - into) * barTicks();
+      // Into the ending's bars: the ending, from here (not the take until the next bar line).
+      const Section &now = song_.sections[static_cast<size_t>(s)];
+      if (settings_.songEnds && !holdChord_ && songNext() < 0 && !now.ending.empty() &&
+          into >= now.bars - std::min<int>(now.ending.bars(), now.bars)) {
+         ending_ = true;
+         endFrom_ = static_cast<int64_t>(now.bars - now.ending.bars()) * barTicks();
+      }
    }
 
    // ---- held chords ----
@@ -970,8 +977,10 @@ private:
          if (settings_.song && settings_.songEnds && !holdChord_ && pending_ < 0 && songNext() < 0 && !now.ending.empty()) {
             const int endBars = std::min<int>(now.ending.bars(), now.bars);
             if (bar >= now.bars - endBars) {
+               // An outro shorter than its ending plays the ending's last bars, the last chord
+               // rung out.
                if (!ending_)
-                  endFrom_ = static_cast<int64_t>(now.bars - endBars) * barTicks();
+                  endFrom_ = static_cast<int64_t>(now.bars - now.ending.bars()) * barTicks();
                ending_ = true;
                fill_ = false;
             }
@@ -1177,6 +1186,9 @@ private:
          if (!onEighth && !fine)
             return;
          if (offbeat && onBeat)
+            return;
+         // A swing comper fills with offbeat stabs, not a pulse of chords on the beats.
+         if (onBeat && settings_.swing > 0.55)
             return;
          const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
          if (dice(diceBar_, step, 21) >= chance)
@@ -1392,7 +1404,12 @@ private:
       k.c = c;
       k.v = voicingFor(c, -1, true);
       k.h = h;
-      k.vel = std::min(127.0, (kAccent + 8) * energy_);
+      // Above the take's own accents in the bar, whatever the section's level.
+      int loudest = 0;
+      for (int k2 = step - step % p.stepsPerBar(), e2 = std::min<int>(p.steps, k2 + p.stepsPerBar()); k2 < e2; ++k2)
+         if (p.at(k2).on() && !leftHand(p.at(k2).part))
+            loudest = std::max<int>(loudest, p.at(k2).vel);
+      k.vel = std::min(127.0, std::max(kAccent + 8, loudest + 10) * energy_);
       k.lenBeats = h.len * stepBeats;
       k.gapBeats = std::max<double>(1.0, static_cast<double>(end - secRel) / stepTicks) * stepBeats;
       k.step = step;

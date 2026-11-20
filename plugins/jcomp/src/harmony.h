@@ -100,8 +100,8 @@ inline bool flatKey(int key, int scale = kMajor) {
 // A note's name in a key, spelled by its degree: the key's own notes by their letters (G# in E, Bb
 // in F), and the chromatic ones as the flat third, sixth, seventh and second and the sharp fourth
 // (Eb, Ab, Bb, Db and F# in C), as the borrowed and secondary chords are written. A spelling that
-// would need a double accidental, a Cb or Fb, or an E# or B# (but as a sharp key's leading tone)
-// falls back to the key's sharps or flats.
+// would need a double accidental, a Cb (but in Gb's signature) or Fb, or an E# or B# (but as a sharp
+// key's leading tone) falls back to the key's sharps or flats.
 inline const char *pitchName(int pc, int key = 0, int scale = kMajor) {
    pc = ((pc % 12) + 12) % 12;
    key = ((key % 12) + 12) % 12;
@@ -125,6 +125,12 @@ inline const char *pitchName(int pc, int key = 0, int scale = kMajor) {
    const bool leading = (pc - key + 12) % 12 == 11 && names == kSharpNames;
    if ((!std::strcmp(n, "E#") || !std::strcmp(n, "B#")) && !leading)
       return names[pc];
+   // Cb only where the key signature has it: Gb major's six flats (and its modes: Eb minor, Ab
+   // Dorian, Db Mixolydian), whose IV is Cb.
+   static const int toMajor[kScaleCount] = {0, 3, 10, 5, 0};
+   const int major = (key + toMajor[std::clamp(scale, 0, kScaleCount - 1)]) % 12;
+   if (!std::strcmp(n, "Cb") && major == 6 && pc == 11 && scale != kBlues)
+      return n;
    if (!std::strcmp(n, "Cb") || !std::strcmp(n, "Fb"))
       return names[pc];
    return n;

@@ -2647,6 +2647,199 @@ int main() {
       JCLAP_CHECK_EQ(bar2, 0);
    }
    {
+      // The sixth review's smaller fixes.
+      const auto named = [](const char *genre, const char *style) {
+         for (int g = 0; g < genreCount(); ++g)
+            if (std::string(genreAt(g).name) == genre)
+               for (size_t i = 0; i < genreAt(g).styles.size(); ++i)
+                  if (std::string(genreAt(g).styles[i].name) == style)
+                     return std::make_pair(g, static_cast<int>(i));
+         return std::make_pair(-1, -1);
+      };
+      const auto peak = [](const Pattern &p, int from, int to) {
+         int v = 0;
+         for (int s = from; s < std::min<int>(to, p.steps); ++s)
+            if (p.at(s).on() && !leftHand(p.at(s).part))
+               v = std::max<int>(v, p.at(s).vel);
+         return v;
+      };
+      // B09: DENSITY in swing adds offbeat stabs, never chords on the beats.
+      {
+         auto song = songOf("x.....x.........", {{"C", nullptr}});
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = plain();
+         s.density = 1.0;
+         s.swing = 0.64;
+         e.setSettings(s);
+         e.reset();
+         const auto all = runWith(e, 24000LL * 16, 0.0, [](int64_t, Block &) {});
+         int onBeats = 0, added = 0;
+         for (const Timed &t : all)
+            if (t.on()) {
+               const int64_t beat = (t.time + 1440) / 24000;
+               const bool near = std::abs(t.time - beat * 24000) < 1440;
+               onBeats += near && beat % 4 != 0;
+               added += !near;
+            }
+         JCLAP_CHECK_EQ(onBeats, 0);
+         JCLAP_CHECK(added > 0);
+      }
+      // B10: Freddie Green's four in the verse, each stroke most of a beat.
+      {
+         const auto [g, st] = named("Swing Jazz", "Four To The Bar");
+         JCLAP_CHECK(g >= 0);
+         int fours = 0;
+         for (uint32_t seed = 1; seed <= 6; ++seed) {
+            Recipe r = recipeOf(g, st, seed);
+            r.weird = 0.0;
+            auto song = std::make_unique<Song>();
+            generateSong(r, *song);
+            const Pattern &p = song->sections[kVerse].takes[0];
+            int hits = 0;
+            for (int s = 0; s < p.stepsPerBar(); ++s)
+               if (p.at(s).on() && !leftHand(p.at(s).part)) {
+                  ++hits;
+                  JCLAP_CHECK(p.at(s).len >= 3 && p.at(s).art != kArtChop);
+               }
+            fours += hits == 4;
+         }
+         JCLAP_CHECK(fours >= 4);
+      }
+      // B12: a bossa carries its batida into the last chord.
+      {
+         const auto [g, st] = named("Bossa Nova", "Batida");
+         JCLAP_CHECK(g >= 0);
+         auto song = std::make_unique<Song>();
+         generateSong(recipeOf(g, st, 1), *song);
+         const Pattern &end = song->sections[kOutro].ending;
+         const Pattern &take = song->sections[kOutro].takes[0];
+         const int bar = end.stepsPerBar(), from = take.steps > bar ? bar : 0;
+         for (int s = 0; s < bar; ++s)
+            JCLAP_CHECK_EQ(end.at(s).on(), take.at(s + from).on());
+      }
+      // B13: a fill down settles: never louder than the groove it leaves.
+      // C12: a fill (up) is never quieter than the groove's own accents.
+      // C11: a boom-chick's ending keeps its alternating bass.
+      // D9: a fill's last chord anticipates the next section at any energy.
+      // D10: "push it" and "shift" leave the left hand unpushed and no push on a beat.
+      for (int g = 0; g < genreCount(); ++g)
+         for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st)
+            for (double energy : {0.0, 0.5}) {
+               Recipe r = recipeOf(g, st, 3);
+               r.energy = energy;
+               r.weird = 0.6;
+               auto song = std::make_unique<Song>();
+               generateSong(r, *song);
+               const unsigned mods = genreAt(g).styles[static_cast<size_t>(st)].mods;
+               for (int si = 0; si < kSections; ++si) {
+                  const Section &sec = song->sections[static_cast<size_t>(si)];
+                  const Pattern &take = sec.takes[0];
+                  const int bar = take.stepsPerBar();
+                  if (si != kIntro && !sec.fillDown.empty())
+                     JCLAP_CHECK(peak(sec.fillDown, 0, bar) <= peak(take, 0, take.steps));
+                  if (!(mods & (kFixed | kLongs)) && !sec.fill.empty())
+                     JCLAP_CHECK(peak(sec.fill, 0, bar) >= peak(take, 0, take.steps));
+                  if (!(mods & kFixed) && !keepsOff(take, 0) && !sec.fill.empty()) {
+                     int last = -1;
+                     for (int s = 0; s < sec.fill.steps; ++s)
+                        if (sec.fill.at(s).on() && !leftHand(sec.fill.at(s).part))
+                           last = s;
+                     JCLAP_CHECK(last >= 0 && sec.fill.at(last).push);
+                  }
+                  for (const Pattern &t : sec.takes)
+                     for (int s = 0; s < t.steps; ++s)
+                        if (t.at(s).on() && t.at(s).push)
+                           JCLAP_CHECK(!leftHand(t.at(s).part) && !onBeat(t, s));
+               }
+            }
+      for (const char *style : {"Boom-Chick", "Two-Step"}) {
+         const auto [g, st] = named("Country", style);
+         JCLAP_CHECK(g >= 0);
+         auto song = std::make_unique<Song>();
+         generateSong(recipeOf(g, st, 1), *song);
+         const Pattern &end = song->sections[kOutro].ending;
+         bool bass = false;
+         for (int s = 1; s < end.stepsPerBar(); ++s)
+            bass = bass || (end.at(s).on() && leftHand(end.at(s).part));
+         JCLAP_CHECK(bass);
+      }
+      // D13: Gb's signature has Cb (its IV), and its modes'.
+      JCLAP_CHECK(std::string(pitchName(11, 6, kMajor)) == "Cb");
+      JCLAP_CHECK(std::string(pitchName(11, 3, kMinor)) == "Cb");
+      JCLAP_CHECK(std::string(pitchName(11, 8, kDorian)) == "Cb");
+      JCLAP_CHECK(std::string(pitchName(11, 1, kMixolydian)) == "Cb");
+      JCLAP_CHECK(std::string(pitchName(11, 1, kMajor)) == "B");
+      JCLAP_CHECK(std::string(pitchName(4, 6, kMajor)) == "E");
+      {
+         Chord c;
+         JCLAP_CHECK(parseChord("Cb", c));
+         JCLAP_CHECK_EQ(static_cast<int>(c.root), 11);
+      }
+      // D14: a damaged song's quality is held to the table; a pattern off the song's meter is refused.
+      JCLAP_CHECK_EQ(kQualityLimit, qualityCount());
+      {
+         auto song = songOf("x...x...x...x...", {{"C", nullptr}});
+         std::vector<uint8_t> data = song->save();
+         // The first section's first chord's quality: after the header (version, count, key, beats)
+         // and the section's bars, energy, locked, progBars, split, seed and generation.
+         const size_t at = 4 + 4 + 1 + 1 + 4 + 4 + 4 + 4 + 1;
+         JCLAP_CHECK_EQ(static_cast<int>(data[at]), static_cast<int>(song->sections[0].chords[0].quality));
+         data[at] = 200;
+         auto back = std::make_unique<Song>();
+         JCLAP_CHECK(back->load(data.data(), data.size()));
+         JCLAP_CHECK(back->sections[0].chords[0].quality < qualityCount());
+         data = song->save();
+         data[9] = 3; // a waltz's bars, its patterns in sixteenths
+         JCLAP_CHECK(!back->load(data.data(), data.size()));
+      }
+      // E14: ACC is louder than the take's own accents.
+      {
+         auto song = songOf("X...x...x...x...", {{"C", nullptr}, {"F", nullptr}});
+         for (Section &sec : song->sections)
+            sec.marks[2] = kMarkAccent;
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         e.setSettings(plain());
+         e.reset();
+         const auto all = runWith(e, 24000LL * 8, 0.0, [](int64_t, Block &) {});
+         int bar1 = 0, bar2 = 0;
+         for (const Timed &t : all)
+            if (t.on()) {
+               if (std::abs(t.time) < 1440)
+                  bar1 = std::max<int>(bar1, t.m.data2);
+               if (std::abs(t.time - 96000) < 1440)
+                  bar2 = std::max<int>(bar2, t.m.data2);
+            }
+         JCLAP_CHECK(bar2 > bar1);
+      }
+      // E16: a one-bar outro still ends on its last chord rung out.
+      {
+         auto song = songOf("x...x...x...x...", {{"C", nullptr}});
+         for (Section &sec : song->sections) {
+            sec.bars = 1;
+            sec.ending = fromRhythm("x...x...x...x...|X---------------");
+         }
+         auto engine = std::make_unique<Engine>();
+         Engine &e = *engine;
+         e.setSong(*song);
+         Settings s = plain();
+         s.song = true;
+         s.songEnds = true;
+         s.section = kOutro;
+         e.setSettings(s);
+         e.reset();
+         const auto all = runWith(e, 24000LL * 8, 0.0, [](int64_t, Block &) {});
+         std::set<int64_t> strikes;
+         for (const Timed &t : all)
+            if (t.on())
+               strikes.insert((t.time + 1440) / 6000);
+         JCLAP_CHECK(strikes == (std::set<int64_t>{0}));
+      }
+   }
+   {
       // A12: auto fills follow a looping 12-bar section's form: its 8th and 12th bars, then the
       // 20th and 24th, not every 8th bar of the host.
       auto song = songOf("x...x...x...x...", {{"C", nullptr}});

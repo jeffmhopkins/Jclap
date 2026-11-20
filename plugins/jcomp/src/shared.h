@@ -96,6 +96,8 @@ struct FixedVec {
 
 constexpr int kSections = 7;
 constexpr int kTakes = 4;
+// How many chord qualities there are (harmony.h's table; a test holds the two together).
+constexpr int kQualityLimit = 29;
 constexpr int kMaxSteps = 64;   // four bars of sixteenths
 constexpr int kMaxProgBars = 12; // a progression loops after up to twelve bars (a 12-bar blues)
 constexpr int kSlots = kMaxProgBars * 2;
@@ -360,7 +362,7 @@ struct Song {
          for (Chord &c : s.chords) {
             const int r = static_cast<int8_t>(u8());
             c.root = static_cast<int8_t>(r < 0 || r > 11 ? -1 : r);
-            c.quality = u8();
+            c.quality = static_cast<uint8_t>(std::min<int>(u8(), kQualityLimit - 1));
             const int b = static_cast<int8_t>(u8());
             c.bass = static_cast<int8_t>(b < 0 || b > 11 ? -1 : b);
          }
@@ -373,6 +375,16 @@ struct Song {
             for (uint8_t &m : s.marks)
                m = static_cast<uint8_t>(std::min<int>(u8(), kMarkShot));
          }
+         // Every pattern written is on the song's meter: a 16-step grid in a waltz's bars is damage.
+         auto meter = [&](const Pattern &p) {
+            if (!p.empty() && p.inThree() != (loaded.beats == 3))
+               ok = false;
+         };
+         for (const Pattern &p : s.takes)
+            meter(p);
+         meter(s.fill);
+         meter(s.fillDown);
+         meter(s.ending);
       }
       if (!ok)
          return false;

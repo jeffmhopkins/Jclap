@@ -219,7 +219,7 @@ struct Preview {
 // into a hit that asks for one on a change of chord.
 // DENSITY and LENGTH as the panel last read them, so every roll draws the part as it will sound.
 struct LiveFeel {
-   double density = 0.5, length = 0.5, runs = 0.25;
+   double density = 0.5, length = 0.5, runs = 0.25, swing = 0.5;
    int same = 4;       // SAME DICE's bars
    int every = 1;      // RUNS AT MOST every so many bars
    bool fixed = false; // the style's figure is played as written
@@ -230,6 +230,7 @@ void readFeel(const EditorHost &host) {
    gFeel.density = host.paramValue(kDensity);
    gFeel.length = host.paramValue(kLength);
    gFeel.runs = host.paramValue(kRuns);
+   gFeel.swing = host.paramValue(kSwing);
    gFeel.same = kSameDiceBars[choiceIndex(host.paramValue(kSameDice), 5)];
    gFeel.every = kRunEveryBars[choiceIndex(host.paramValue(kRunEvery), 3)];
    gFeel.fixed = (styleOf(recipeFrom([&](clap_id id) { return host.paramValue(id); })).mods & kFixed) != 0;
@@ -268,31 +269,54 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
    // Runs on the take's grid, as the engine plays them: sixteenths where it plays them, else eighths.
    const int stride = fine || p.rate == kRate8T ? 1 : 2;
    int lastRunBar = -100;
+   // A bar's second chord: half way, but on beat 3 in a waltz (as the engine's halfTicks()).
+   const int64_t halfBar = p.rate == kRate34 ? 2 * kTicksPerBeat : barTicks / 2;
    const auto chordAtView = [&](int view) {
       const int64_t tick = static_cast<int64_t>(view) * stepTicks;
-      return moved(sec.chordAt(static_cast<int>(tick / barTicks), tick % barTicks >= barTicks / 2), transpose);
+      return moved(sec.chordAt(static_cast<int>(tick / barTicks), tick % barTicks >= halfBar), transpose);
    };
    for (int v = 0; v < out.steps; ++v) {
       Hit h = p.at(v % n);
       const bool onBeat = v % perBeat == 0;
       const bool onEighth = p.rate == kRate8T ? v % 3 != 1 : v % 2 == 0;
-      if (!h.on()) {
+      // A band hit on the chord's slot, as the engine plays it: ACC its first hit louder, HOLD one
+      // chord rung to the next change and SHOT one short, the take resting under both.
+      const int64_t vt = static_cast<int64_t>(v) * stepTicks;
+      const int vbar = static_cast<int>(vt / barTicks);
+      const int pb = std::max<int>(1, sec.progBars);
+      const bool secondSlot = vt % barTicks >= halfBar && (sec.split >> (vbar % pb) & 1);
+      const int mark = sec.marks[static_cast<size_t>((vbar % pb) * 2 + (secondSlot ? 1 : 0))];
+      const int64_t slotStart = static_cast<int64_t>(vbar) * barTicks + (secondSlot ? halfBar : 0);
+      const int64_t slotEnd = !secondSlot && (sec.split >> (vbar % pb) & 1) ? slotStart + halfBar
+                                                                             : static_cast<int64_t>(vbar + 1) * barTicks;
+      bool struck = false;
+      if (mark != kMarkNone && vt == slotStart) {
+         const int written = h.on() && !leftHand(h.part) ? h.vel : 0;
+         if (mark != kMarkAccent || !written)
+            h = hitOf('x');
+         h.push = 0;
+         h.vel = static_cast<uint8_t>(std::min(127, std::max(kAccent + 8, written + 10)));
+         h.art = mark == kMarkHold ? kArtRing : mark == kMarkShot ? kArtChop : kArtAsWritten;
+         struck = true;
+      } else if (mark == kMarkHold || mark == kMarkShot)
+         continue;
+      if (!struck && !h.on()) {
          // DENSITY above the middle fills gaps with softer repeats of the chord sounding.
          const double more = (gFeel.density - 0.5) * 2.0;
          const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
          if (more <= 0.0 || gFeel.fixed || hasLine(p) || prevChord.none() || heldOver(p, v % n) || (!onEighth && !fine) ||
-             (offbeat && onBeat) ||
+             (offbeat && onBeat) || (onBeat && gFeel.swing > 0.55) ||
              rollDice(p, v, 21) >= chance)
             continue;
          h.vel = static_cast<uint8_t>(onBeat ? kSoft : kGhost + (onEighth ? 10 : 0));
          h.len = 1;
          h.art = more > 0.85 ? kArtAsWritten : kArtChop;
-      } else if (thinnedInRoll(sec, p, v % n, v)) {
+      } else if (!struck && thinnedInRoll(sec, p, v % n, v)) {
          continue; // DENSITY below the middle drops the weakest hits; each bar's first stays
       }
       const int64_t tick = static_cast<int64_t>(v) * stepTicks + (h.push ? kTicksPerBeat / 2 : 0);
       const int bar = static_cast<int>(tick / barTicks);
-      const bool half = tick % barTicks >= barTicks / 2;
+      const bool half = tick % barTicks >= halfBar;
       const Chord c = moved(sec.chordAt(bar, half), transpose);
       if (c.none())
          continue;
@@ -373,6 +397,8 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          h.art = kArtRing;
          gap = std::min(gap, 2 * perBeat);
       }
+      if (struck && mark == kMarkHold)
+         gap = std::max(1, static_cast<int>((slotEnd - slotStart) / stepTicks));
       float len = static_cast<float>(h.len) * 0.92f;
       switch (h.art) {
       case kArtChop: len = 0.45f; break;
@@ -1360,7 +1386,17 @@ public:
       }
       return p;
    }
-   const Pattern &pattern() const { return pick(const_cast<Song &>(host_.song())); }
+   // What a draw shows: the pattern on the song's grid, without writing the song (only an edit does).
+   static Pattern shown(const Song &song, int section, int take) {
+      Pattern p = patternOf(song.sections[static_cast<size_t>(section)], take);
+      const Section &sec = song.sections[static_cast<size_t>(section)];
+      if (p.empty() && p.rate != sec.takes[0].rate) {
+         p.rate = sec.takes[0].rate;
+         p.steps = static_cast<uint8_t>(p.stepsPerBar() * (take == 6 ? 2 : 1));
+      }
+      return p;
+   }
+   Pattern pattern() const { return shown(host_.song(), host_.editSection, host_.editTake); }
 
    const PlayFrame *frame = nullptr;
    std::function<void()> onChange, onPick;
@@ -1402,7 +1438,7 @@ public:
       const float w = width() / s;
       const Song &song = host_.song();
       const Section &sec = song.sections[static_cast<size_t>(host_.editSection)];
-      const Pattern &p = TakeRoll::pick(const_cast<Song &>(song), host_.editSection, host_.editTake);
+      const Pattern &p = TakeRoll::shown(song, host_.editSection, host_.editTake);
       const int steps = viewBars(sec, p) * p.stepsPerBar();
       const float gx = kLabelW, cw = (w - gx - 6) / steps;
       const char *names[4] = {"VELOCITY", "LENGTH", "CHANCE", "NUDGE"};
@@ -1480,7 +1516,7 @@ private:
       const float s = ui::designScale(*this);
       const Song &song = host_.song();
       const Section &sec = song.sections[static_cast<size_t>(host_.editSection)];
-      const Pattern &p = TakeRoll::pick(const_cast<Song &>(song), host_.editSection, host_.editTake);
+      const Pattern &p = TakeRoll::shown(song, host_.editSection, host_.editTake);
       const int steps = viewBars(sec, p) * p.stepsPerBar();
       const float cw = (width() / s - kLabelW - 6) / steps;
       const int v = static_cast<int>((e.position.x / s - kLabelW - 3) / cw);
@@ -2698,6 +2734,8 @@ private:
             for (int b = was; b < id; ++b) {
                sec.chords[static_cast<size_t>(b * 2)] = sec.chords[static_cast<size_t>((b % was) * 2)];
                sec.chords[static_cast<size_t>(b * 2 + 1)] = sec.chords[static_cast<size_t>((b % was) * 2 + 1)];
+               sec.marks[static_cast<size_t>(b * 2)] = sec.marks[static_cast<size_t>((b % was) * 2)];
+               sec.marks[static_cast<size_t>(b * 2 + 1)] = sec.marks[static_cast<size_t>((b % was) * 2 + 1)];
                if (sec.split >> (b % was) & 1)
                   sec.split = static_cast<uint16_t>(sec.split | (1u << b));
             }
@@ -2709,11 +2747,13 @@ private:
             sec.chords = from.chords;
             sec.split = from.split;
             sec.progBars = from.progBars;
+            sec.marks = from.marks; // the band hits go with the chords they were written on
          } else if (id == 200) {
             Rng rng(sec.seed);
             Recipe r = recipe();
             r.key = s.key;
             makeChords(r, section, sec, rng);
+            sec.marks = {}; // written on chords that are gone
          }
          host_.chordSlot = std::min(host_.chordSlot, sec.progBars * 2 - 1);
          host_.setSong(s);
@@ -2983,7 +3023,7 @@ private:
       editSection_->setSelected(host_.editSection);
       editTake_->setSelected(host_.editTake);
       const Section &sec = host_.song().sections[static_cast<size_t>(host_.editSection)];
-      const Pattern &p = TakeRoll::pick(const_cast<Song &>(host_.song()), host_.editSection, host_.editTake);
+      const Pattern &p = TakeRoll::shown(host_.song(), host_.editSection, host_.editTake);
       const int bars = viewBars(sec, p);
       static const char *const extra[3] = {"FILL", "FILL DOWN", "ENDING"};
       std::string title = std::string(kSectionCaps[host_.editSection]) + " \xC2\xB7 " +

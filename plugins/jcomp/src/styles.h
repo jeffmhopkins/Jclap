@@ -268,10 +268,11 @@ inline const std::vector<Genre> &genres() {
        // The Charleston (1, the and of 2) and its reverse (the and of 1, 3); Garland's offbeats, an eighth ahead of the next beat;
        // Freddie Green's four to the bar, one or two notes, 2 and 4 leaned on.
        // Held comps (MMA's basic swing piano: 1 held, then the and of 3 held over the bar; Impro-Visor's
-       // chord held to the and of 4); the guitar's two-feel (the head in two, the solos in four); MMA's
+       // chord held to the and of 4); Freddie Green's four, each stroke most of a beat long ("chunk"), and
+       // its two-feel only at the lowest energy (the head in two, the solos in four); MMA's
        // LongSS2 (1, 2, the and of 3, 4).
-       {{"x.....x.........", 0.35}, {"..x.....x.......", 0.45}, {"......x.......x.", 0.6}, {"x...X...x...X...", 0.8},
-        {"x-------..x-----|x---------------", 0.3}, {"x.......x.......", 0.4}, {"x-------------..", 0.25},
+       {{"x.....x.........", 0.35}, {"..x.....x.......", 0.45}, {"......x.......x.", 0.6}, {"x--.X--.x--.X--.", 0.8},
+        {"x-------..x-----|x---------------", 0.3}, {"x--.....x--.....", 0.1}, {"x-------------..", 0.25},
         {"x-------....o---", 0.4}, {"x...x.....x.x...", 0.55},
         // The jazz waltz, in three: MMA's piano (1, its and, 2, 3), Impro-Visor's half and quarter,
         // the "2 and 3" comp that leaves the one to the bass, MMA's guitar.
