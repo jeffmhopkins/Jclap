@@ -70,6 +70,7 @@ enum ParamId : clap_id {
    kMaxSpan,
    kRangeLow,
    kRangeHigh,
+   kOffset,
    kFloor,
    kDoubleMiddle,
    kNoRubs,
@@ -92,6 +93,8 @@ enum ParamId : clap_id {
    kVelocityVar,
    kTopVoice,
    kLengths,
+   kLength,
+   kDensity,
    kOnsets,
    kVary,
    // Passing runs.
@@ -160,8 +163,9 @@ inline const jclap::core::ParamDef *makeParams() {
    p[kLead] = {kLead, "Lead", "Voicing", 0, 1, 0.85, kMod};
    p[kTopMove] = {kTopMove, "Top Move", "Voicing", 1, 12, 4, kStep};
    p[kMaxSpan] = {kMaxSpan, "Spread", "Voicing", 7, 30, 17, kStep};
-   p[kRangeLow] = {kRangeLow, "Range Low", "Voicing", 36, 72, 50, kStep};
-   p[kRangeHigh] = {kRangeHigh, "Range High", "Voicing", 60, 96, 76, kStep};
+   p[kRangeLow] = {kRangeLow, "Lowest", "Voicing", 36, 72, 50, kStep};
+   p[kRangeHigh] = {kRangeHigh, "Highest", "Voicing", 60, 96, 76, kStep};
+   p[kOffset] = {kOffset, "Offset", "Voicing", -12, 12, 0, kStep};
    p[kFloor] = {kFloor, "Bass Floor", "Voicing", 28, 60, 43, kStep};
    p[kDoubleMiddle] = {kDoubleMiddle, "Double In The Middle", "Voicing", 0, 1, 1, kChoice};
    p[kNoRubs] = {kNoRubs, "No Low Rubs", "Voicing", 0, 1, 1, kChoice};
@@ -182,6 +186,8 @@ inline const jclap::core::ParamDef *makeParams() {
    p[kVelocityVar] = {kVelocityVar, "Velocity", "Feel", 0, 24, 8, kMod};
    p[kTopVoice] = {kTopVoice, "Top Voice", "Feel", 0, 24, 6, kMod};
    p[kLengths] = {kLengths, "Lengths", "Feel", 0, 0.6, 0.25, kMod};
+   p[kLength] = {kLength, "Length", "Feel", 0, 1, 0.5, kMod};
+   p[kDensity] = {kDensity, "Density", "Feel", 0, 1, 0.5, kMod};
    p[kOnsets] = {kOnsets, "Chord Notes Start", "Feel", 0, 3, 0, kChoice};
    p[kVary] = {kVary, "Vary", "Feel", 0, 1, 0.2, kMod};
    p[kRuns] = {kRuns, "Runs", "Runs", 0, 1, 0.25, kMod};
@@ -303,7 +309,7 @@ inline std::string noteText(int note) {
 }
 
 inline bool isPercent(clap_id id) {
-   return id == kBlend || id == kEnergy || id == kWeird || id == kMutation || id == kVary || id == kLead || id == kRuns ||
+   return id == kBlend || id == kEnergy || id == kWeird || id == kMutation || id == kVary || id == kLead || id == kLength || id == kDensity || id == kRuns ||
           id == kSwing || (id >= kSectionEnergy && id < kSectionEnergy + kSections);
 }
 inline bool isNote(clap_id id) {
@@ -332,6 +338,8 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
       std::snprintf(out, size, "+%ld", whole);
    else if (id == kLengths)
       std::snprintf(out, size, "\xC2\xB1%.0f%%", value * 100.0);
+   else if (id == kOffset)
+      std::snprintf(out, size, "%+ld st", whole);
    else if (id == kTopMove || id == kMaxSpan)
       std::snprintf(out, size, "%ld st", whole);
    else if (id == kNoteChannel && whole == 0)

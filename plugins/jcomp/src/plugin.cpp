@@ -431,6 +431,8 @@ private:
       s.velocityVar = value(kVelocityVar);
       s.topVoice = value(kTopVoice);
       s.lengths = value(kLengths);
+      s.length = value(kLength);
+      s.density = value(kDensity);
       s.onsets = whole(kOnsets);
       s.vary = value(kVary);
       s.loose = kPlayerList[std::clamp(whole(kPlayer), 0, kPlayers - 1)].loose;

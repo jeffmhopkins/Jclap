@@ -1,6 +1,7 @@
 // Renders JComp's panel offscreen to a PNG, for the README and visual checks.
 //
 //    jcomp-screenshot out.png [generate|chords|edit|play] [width height] [players] [browser] [notes] [custom]
+//                     [density=0..1] [length=0..1]
 //
 // The panel shows the Funk "Pocket Stabs" song, playing the chorus a few steps in, following the
 // host. `players`, `browser` and `notes` open those overlays; `custom` shows the notes card's CUSTOM
@@ -88,7 +89,7 @@ public:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [generate|chords|edit|play] [width height] [players] [browser] [notes] [custom]\n",
+      std::fprintf(stderr, "usage: %s out.png [generate|chords|edit|play] [width height] [players] [browser] [notes] [custom] [density=0..1] [length=0..1]\n",
                    argv[0]);
       return 2;
    }
@@ -115,7 +116,11 @@ int main(int argc, char **argv) {
          host.values_[kNoteMap] = 1;
          host.values_[kLearnNote + kActChorus] = 60;
          host.learnAction = kActFill;
-      } else if (!a.empty() && a[0] >= '0' && a[0] <= '9')
+      } else if (!a.compare(0, 8, "density="))
+         host.values_[kDensity] = std::atof(a.c_str() + 8);
+      else if (!a.compare(0, 7, "length="))
+         host.values_[kLength] = std::atof(a.c_str() + 7);
+      else if (!a.empty() && a[0] >= '0' && a[0] <= '9')
          (numbers++ == 0 ? width : height) = std::atoi(a.c_str());
    }
    if (!renderScreenshot(host, page, width, height, argv[1])) {

@@ -1,7 +1,7 @@
 // JComp's panel, on a 1000 x 640 design grid scaled to the window, in JDrummer's style: a title bar
 // with the four tabs, a small transport and the preset browser, and cards under it.
 //
-//    GENERATE   GENRE (twelve tiles, the style, the browser of all 23), HOW IT PLAYS (the player,
+//    GENERATE   GENRE (twelve tiles, the style, the browser of every genre), HOW IT PLAYS (the player,
 //               ENERGY, WEIRD, ROLL SONG), THE SONG (seven sections with their chords, each its own
 //               dice, lock and energy), MUTATE (the section's take now and five children)
 //    CHORDS     KEY and scale, where the chords come from (the progression, held notes or both), each
@@ -217,6 +217,36 @@ struct Preview {
 // Plays a take through over a section's progression for `bars` bars, as the engine would (without
 // the dice): each hit's chord, its voicing led from the one before, its part and length, and a run
 // into a hit that asks for one on a change of chord.
+// DENSITY and LENGTH as the panel last read them, so every roll draws the part as it will sound.
+struct LiveFeel {
+   double density = 0.5, length = 0.5;
+};
+LiveFeel gFeel;
+
+// The dice the rolls use for DENSITY: the engine's own roll differently, but the same weights decide.
+void readFeel(const EditorHost &host) {
+   gFeel.density = host.paramValue(kDensity);
+   gFeel.length = host.paramValue(kLength);
+}
+
+double rollDice(int step, int what) { return (mix(static_cast<uint32_t>(step) * 7919u, static_cast<uint32_t>(what)) >> 8) * (1.0 / 16777216.0); }
+
+// The roll's DENSITY thinning, by the engine's weights.
+bool thinnedInRoll(const Pattern &p, int step) {
+   if (gFeel.density >= 0.5 || !p.at(step).on())
+      return false;
+   const int perBeat = p.rate == kRate8T ? 3 : 4;
+   bool first = true;
+   for (int k = step - step % (perBeat * 4); k < step && first; ++k)
+      first = !p.at(k).on();
+   if (first)
+      return false;
+   const bool onBeat = step % perBeat == 0;
+   const bool onEighth = p.rate == kRate8T ? step % 3 != 1 : step % 2 == 0;
+   const double weight = (onBeat ? 0.7 : onEighth ? 0.45 : 0.2) + 0.25 * p.at(step).vel / 127.0;
+   return weight + 0.15 * rollDice(step, 20) < (0.5 - gFeel.density) * 2.0 * 1.1;
+}
+
 Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSettings &vs, int transpose, int key,
                 int scale, bool runs = true) {
    Preview out;
@@ -227,10 +257,23 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
    Voicing prev;
    Chord prevChord;
    const int n = std::max<int>(1, p.steps);
+   const int perBeat = p.rate == kRate8T ? 3 : 4;
    for (int v = 0; v < out.steps; ++v) {
-      const Hit &h = p.at(v % n);
-      if (!h.on())
-         continue;
+      Hit h = p.at(v % n);
+      const bool onBeat = v % perBeat == 0;
+      const bool onEighth = p.rate == kRate8T ? v % 3 != 1 : v % 2 == 0;
+      if (!h.on()) {
+         // DENSITY above the middle fills gaps with softer repeats of the chord sounding.
+         const double more = (gFeel.density - 0.5) * 2.0;
+         const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
+         if (more <= 0.0 || prevChord.none() || rollDice(v, 21) >= chance)
+            continue;
+         h.vel = static_cast<uint8_t>(onBeat ? kSoft : kGhost + (onEighth ? 10 : 0));
+         h.len = 1;
+         h.art = more > 0.85 ? kArtAsWritten : kArtChop;
+      } else if (thinnedInRoll(p, v % n)) {
+         continue; // DENSITY below the middle drops the weakest hits; each bar's first stays
+      }
       const int64_t tick = static_cast<int64_t>(v) * stepTicks + (h.push ? kTicksPerBeat / 2 : 0);
       const int bar = static_cast<int>(tick / kTicksPerBar);
       const bool half = tick % kTicksPerBar >= kTicksPerBar / 2;
@@ -253,7 +296,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       }
       // The gap to the next hit, for RING.
       int gap = 1;
-      while (gap < n && !p.at((v + gap) % n).on())
+      while (gap < n && (!p.at((v + gap) % n).on() || thinnedInRoll(p, (v + gap) % n)))
          ++gap;
       float len = static_cast<float>(h.len) * 0.92f;
       switch (h.art) {
@@ -262,6 +305,10 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       case kArtRing: case kArtTopRings: len = gap * 0.97f; break;
       default: break;
       }
+      if (gFeel.length < 0.5)
+         len *= static_cast<float>(0.15 + 0.85 * gFeel.length / 0.5);
+      else if (gFeel.length > 0.5 && gap * 0.97f > len)
+         len += (gap * 0.97f - len) * static_cast<float>((gFeel.length - 0.5) / 0.5);
       Voicing played = vc;
       if (h.part == kPartTop) {
          played.notes[0] = static_cast<uint8_t>(vc.top());
@@ -658,7 +705,11 @@ const Preview &genrePreview(int g) {
    vs.hi = p.hi;
    vs.center = p.center;
    Pattern pat = sec.takes[0];
-   return cache[g] = preview(sec, pat, 2, vs, 0, r.key, kMajor, false);
+   const LiveFeel feel = gFeel;
+   gFeel = LiveFeel{}; // the tiles show each style as written
+   cache[g] = preview(sec, pat, 2, vs, 0, r.key, kMajor, false);
+   gFeel = feel;
+   return cache[g];
 }
 
 class GenreTiles : public visage::Frame {
@@ -815,6 +866,7 @@ public:
    }
 
    void draw(visage::Canvas &c) override {
+      readFeel(host_);
       const float s = ui::designScale(*this);
       const float h = height() / s;
       const PlayFrame &f = frame ? *frame : PlayFrame{};
@@ -937,6 +989,7 @@ class MutateRow : public visage::Frame {
 public:
    explicit MutateRow(EditorHost &host) : host_(host) {}
    void draw(visage::Canvas &c) override {
+      readFeel(host_);
       const float s = ui::designScale(*this);
       const float h = height() / s;
       const Section &sec = host_.song().sections[static_cast<size_t>(host_.mutateSection)];
@@ -1118,6 +1171,7 @@ class TakeRoll : public visage::Frame {
 public:
    explicit TakeRoll(EditorHost &host) : host_(host) {}
    void draw(visage::Canvas &c) override {
+      gFeel = LiveFeel{}; // EDIT shows the take as written
       const float s = ui::designScale(*this);
       const float w = width() / s, h = height() / s;
       const Song &song = host_.song();
@@ -1395,9 +1449,10 @@ public:
    explicit RangeKeys(EditorHost &host) : host_(host) {}
    void draw(visage::Canvas &c) override {
       const float s = ui::designScale(*this);
-      const int lo = static_cast<int>(std::lround(host_.paramValue(kRangeLow)));
-      const int hi = static_cast<int>(std::lround(host_.paramValue(kRangeHigh)));
-      const int floor = static_cast<int>(std::lround(host_.paramValue(kFloor)));
+      const int off = static_cast<int>(std::lround(host_.paramValue(kOffset)));
+      const int lo = static_cast<int>(std::lround(host_.paramValue(kRangeLow))) + off;
+      const int hi = static_cast<int>(std::lround(host_.paramValue(kRangeHigh))) + off;
+      const int floor = std::min(lo, static_cast<int>(std::lround(host_.paramValue(kFloor))));
       std::map<int, unsigned> lit;
       lit[floor] = kGreen;
       drawKeys(c, s, 0, 0, width() / s, height() / s, kLo, kHi, lit, false, lo, hi);
@@ -1405,7 +1460,9 @@ public:
    void mouseDown(const visage::MouseEvent &e) override {
       const float s = ui::designScale(*this);
       const float f = e.position.x / s / (width() / s);
-      const int key = kLo + static_cast<int>(f * (kHi - kLo + 1));
+      // The window as it sounds is LOWEST and HIGHEST moved by OFFSET; a click sets them before it.
+      const int off = static_cast<int>(std::lround(host_.paramValue(kOffset)));
+      const int key = kLo + static_cast<int>(f * (kHi - kLo + 1)) - off;
       const int lo = static_cast<int>(std::lround(host_.paramValue(kRangeLow)));
       const int hi = static_cast<int>(std::lround(host_.paramValue(kRangeHigh)));
       const clap_id id = std::abs(key - lo) < std::abs(key - hi) ? kRangeLow : kRangeHigh;
@@ -1427,6 +1484,7 @@ class SectionTiles : public visage::Frame {
 public:
    explicit SectionTiles(EditorHost &host) : host_(host) {}
    void draw(visage::Canvas &c) override {
+      readFeel(host_);
       const float s = ui::designScale(*this);
       const float h = height() / s, w = tileW();
       const PlayFrame &f = frame ? *frame : PlayFrame{};
@@ -1507,6 +1565,7 @@ class NowPlaying : public visage::Frame {
 public:
    explicit NowPlaying(EditorHost &host) : host_(host) {}
    void draw(visage::Canvas &c) override {
+      readFeel(host_);
       const float s = ui::designScale(*this);
       const PlayFrame &f = frame ? *frame : PlayFrame{};
       const int key = static_cast<int>(std::lround(host_.paramValue(kKey)));
@@ -1668,21 +1727,19 @@ public:
          drawPlayerIcon(c, s, x + 22, y + 22, p.kind, kOrange);
          label(c, s, p.name, x + 42, y + 8, 160, on ? kOrange : kWhite, visage::Font::kLeft, 11.5f);
          label(c, s, upper(kInstrumentNames[p.instrument]), x + 42, y + 9, kCardW - 62, kBlue, visage::Font::kRight, 7.5f);
-         label(c, s, p.blurb, x + 42, y + 26, kCardW - 60, kTitle, visage::Font::kLeft, 9);
-         label(c, s, p.genres, x + 42, y + 40, kCardW - 60, 0, visage::Font::kLeft, 8.5f);
+         label(c, s, p.blurb, x + 42, y + 24, kCardW - 60, kTitle, visage::Font::kLeft, 9);
+         label(c, s, p.genres, x + 42, y + 37, kCardW - 60, 0, visage::Font::kLeft, 8.5f);
          const char *traits[4] = {"BUSY", "RICH", "RUNS", "RING"};
          const double v[4] = {p.busy, p.rich, p.runs, p.ring};
          const float tw = (kCardW - 32) / 4;
          for (int k = 0; k < 4; ++k) {
             const float tx = x + 10 + k * tw;
-            label(c, s, traits[k], tx, y + 58, tw, 0, visage::Font::kLeft, 7.5f);
+            label(c, s, traits[k], tx, y + 51, tw, 0, visage::Font::kLeft, 7.5f);
             c.setColor(ui::defaultTheme().track);
-            c.roundedRectangle(tx * s, (y + 74) * s, (tw - 10) * s, 2.5f * s, 1 * s);
+            c.roundedRectangle(tx * s, (y + 66) * s, (tw - 10) * s, 2.5f * s, 1 * s);
             c.setColor(kOrange);
-            c.roundedRectangle(tx * s, (y + 74) * s, std::max(2.0f, static_cast<float>((tw - 10) * v[k])) * s, 2.5f * s, 1 * s);
+            c.roundedRectangle(tx * s, (y + 66) * s, std::max(2.0f, static_cast<float>((tw - 10) * v[k])) * s, 2.5f * s, 1 * s);
          }
-         if (on)
-            label(c, s, "on now", x + 10, y + kCardH - 24, kCardW - 28, kOrange, visage::Font::kRight, 8);
       }
    }
    void mouseDown(const visage::MouseEvent &e) override {
@@ -1696,14 +1753,14 @@ public:
       if (x < 0 || y < 0)
          return;
       const int col = static_cast<int>(x / kCardW), row = static_cast<int>(y / kCardH);
-      if (col > 2 || row > 3)
+      if (col > 2 || row * 3 + col >= kPlayers)
          return;
       if (onPick)
          onPick(row * 3 + col);
    }
    std::function<void(int)> onPick;
    std::function<void()> onClose;
-   static constexpr float kX = 20, kY = 100, kWBox = 960, kHBox = 476, kCardW = 310, kCardH = 106;
+   static constexpr float kX = 20, kY = 76, kWBox = 960, kHBox = 500, kCardW = 310, kCardH = 90;
 
 private:
    EditorHost &host_;
@@ -1809,7 +1866,7 @@ private:
       std::vector<Item> out;
       for (int col = 0; col < 3; ++col) {
          float y = kY + 44;
-         for (int fam = col * 2; fam < col * 2 + 2; ++fam) {
+         for (int fam = col * 2; fam < (col == 2 ? kFamilyCount : col * 2 + 2); ++fam) {
             const float x = kX + 18 + col * 146;
             out.push_back({x, y, fam, -1});
             y += 15;
@@ -2060,6 +2117,10 @@ public:
    }
 
    void draw(visage::Canvas &c) override {
+      if (host_.page == kEditPage)
+         gFeel = LiveFeel{}; // EDIT shows the take as written
+      else
+         readFeel(host_);
       const ui::Theme &t = ui::defaultTheme();
       const float s = scale();
       c.setColor(t.background);
@@ -2243,7 +2304,7 @@ private:
       style_->setAccent(kOrange);
       style_->onChange = [this](int i) { pickStyle(whole(kGenre), i); };
       tips_.add(*style_, "The genre's styles. Each is a rhythm, a progression set, a tempo and its twists.");
-      auto &all = onPage<FlatButton>(kGeneratePage, {410, 83, 76, 19}, "ALL 23 \xE2\x96\xB8", 8.5f);
+      auto &all = onPage<FlatButton>(kGeneratePage, {410, 83, 76, 19}, "ALL " + std::to_string(genreCount()) + " \xE2\x96\xB8", 8.5f);
       all.textColour = kOrange;
       all.onClick = [this](const visage::MouseEvent &) {
          host_.browserOpen = true;
@@ -2697,20 +2758,30 @@ private:
          k.onChange = [this, id, old = k.onChange](double v) {
             if (old)
                old(v);
-            if (id == kCenter || id == kLead || id == kTopMove || id == kMaxSpan)
+            if (id == kCenter || id == kLead || id == kTopMove || id == kMaxSpan || id == kRangeLow || id == kRangeHigh ||
+                id == kOffset || id == kFloor)
                redraw();
          };
          return k;
       };
-      tips_.add(knob(kEditPage, {vx - 4, 186, 62, 78}, kCenter, "CENTER", kOrange), "Where the voicings sit: their middle is "
-                                                                                    "pulled to this note.");
-      tips_.add(knob(kEditPage, {vx + 58, 186, 62, 78}, kLead, "LEAD", kOrange),
+      tips_.add(knob(kEditPage, {vx - 2, 164, 58, 70}, kCenter, "CENTER", kOrange), "Where the voicings sit: their middle is "
+                                                                                    "pulled to this note (OFFSET moves it too).");
+      tips_.add(knob(kEditPage, {vx + 60, 164, 58, 70}, kLead, "LEAD", kOrange),
                 "How much each chord is led from the one before (the least movement) rather than placed in the middle.");
-      tips_.add(knob(kEditPage, {vx + 120, 186, 62, 78}, kTopMove, "TOP MOVE", kOrange),
+      tips_.add(knob(kEditPage, {vx + 122, 164, 58, 70}, kTopMove, "TOP MOVE", kOrange),
                 "The most the top voice should move from chord to chord, in semitones.");
-      tips_.add(knob(kEditPage, {vx + 182, 186, 62, 78}, kMaxSpan, "SPREAD", kOrange), "The widest a voicing may be, bottom to "
+      tips_.add(knob(kEditPage, {vx + 184, 164, 58, 70}, kMaxSpan, "SPREAD", kOrange), "The widest a voicing may be, bottom to "
                                                                                        "top.");
-      range_ = &onPage<RangeKeys>(kEditPage, {vx, 290, 240, 24}, host_);
+      tips_.add(knob(kEditPage, {vx - 2, 236, 58, 70}, kRangeLow, "LOWEST", kBlue),
+                "The lowest note a voicing may use. With HIGHEST it sets the window chords are led inside.");
+      tips_.add(knob(kEditPage, {vx + 60, 236, 58, 70}, kRangeHigh, "HIGHEST", kBlue),
+                "The highest note a voicing may use (the window is at least an octave).");
+      tips_.add(knob(kEditPage, {vx + 122, 236, 58, 70}, kOffset, "OFFSET", kBlue),
+                "Slides the whole window (and CENTER) up or down, up to an octave. Automate it and the voicings follow, "
+                "still led from chord to chord.");
+      tips_.add(knob(kEditPage, {vx + 184, 236, 58, 70}, kFloor, "FLOOR", kBlue), "Nothing goes under this note, even the "
+                                                                                    "bass part.");
+      range_ = &onPage<RangeKeys>(kEditPage, {vx, 324, 240, 18}, host_);
       range_->onSet = [this](clap_id id, double v) {
          setParam(id, v);
          redraw();
@@ -2720,7 +2791,7 @@ private:
       const char *names[3] = {"Double a note in the middle, not on top", "No half-step rubs below C4",
                               "Same shape for repeated chords"};
       for (int i = 0; i < 3; ++i) {
-         auto &b = onPage<CheckBox>(kEditPage, {vx, 324 + i * 18.0f, 240, 16}, names[i]);
+         auto &b = onPage<CheckBox>(kEditPage, {vx, 348 + i * 16.0f, 240, 15}, names[i]);
          const clap_id id = boxes[i];
          b.onToggle = [this, id](bool on) {
             setParam(id, on ? 1.0 : 0.0);
@@ -2793,10 +2864,12 @@ private:
       drawCard(c, s, 720, 112, 268, 288, "VOICING", "all sections");
       const int shape = std::clamp(whole(kShape), 0, kShapeCount - 1);
       shape1_->setSelected(shape);
-      label(c, s, "RANGE", 734, 272, 60, 0, visage::Font::kLeft, 9.5f);
-      label(c, s, noteText(whole(kRangeLow)) + " \xE2\x80\x93 " + noteText(whole(kRangeHigh)) + " \xC2\xB7 nothing under " +
-                     noteText(whole(kFloor)),
-            734, 272, 240, 0, visage::Font::kRight, 8.5f);
+      {
+         const VoiceSettings v = vs();
+         label(c, s, "WINDOW", 734, 309, 60, 0, visage::Font::kLeft, 9.5f);
+         label(c, s, noteText(v.lo) + " \xE2\x80\x93 " + noteText(v.hi) + " \xC2\xB7 nothing under " + noteText(v.floor),
+               734, 309, 240, 0, visage::Font::kRight, 8.5f);
+      }
       const clap_id boxes[3] = {kDoubleMiddle, kNoRubs, kSameShape};
       for (int i = 0; i < 3; ++i)
          voiceChecks_[i]->on = whole(boxes[i]) != 0;
@@ -2870,7 +2943,7 @@ private:
          redraw();
       };
 
-      now_ = &onPage<NowPlaying>(kPlayPage, {26, 298, 592, 162}, host_);
+      now_ = &onPage<NowPlaying>(kPlayPage, {26, 298, 456, 162}, host_);
       wire(*now_);
 
       auto knob = [this](ui::Rect r, clap_id id, const char *name, unsigned accent) -> ui::Knob & {
@@ -2885,6 +2958,12 @@ private:
          bindings_.bind(k, id);
          return k;
       };
+      tips_.add(knob({492, 300, 64, 80}, kDensity, "DENSITY", kOrange),
+                "Fewer or more chords: below the middle the weakest hits drop out (each bar's first hit stays), above it "
+                "softer repeats of the chord fill the gaps, eighths first. The middle plays the take as written.");
+      tips_.add(knob({558, 300, 64, 80}, kLength, "LENGTH", kOrange),
+                "Every chord shorter (down to a chop) or longer (up to legato, held to the next). The middle is as "
+                "written.");
       tips_.add(knob({650, 292, 64, 80}, kTiming, "TIMING", kPurple), "How far behind (or ahead of) the beat the chords sit.");
       tips_.add(knob({716, 292, 64, 80}, kVelocityVar, "VELOCITY", kPurple), "How much each chord's loudness varies.");
       tips_.add(knob({782, 292, 64, 80}, kTopVoice, "TOP VOICE", kPurple), "The top note this much louder, so the line "
@@ -2987,6 +3066,13 @@ private:
                     frame_.bar % std::max<int>(1, sx.bars) + 1, static_cast<int>(sx.bars));
       drawCard(c, s, 12, 272, 620, 198, "NOW PLAYING", note);
       drawCard(c, s, 640, 272, 348, 198, "FEEL", "how a player would touch it");
+      {
+         auto words = [](double v, const char *low, const char *high) {
+            return std::abs(v - 0.5) < 0.03 ? std::string("as written") : std::string(v < 0.5 ? low : high);
+         };
+         label(c, s, words(param(kDensity), "thinner", "busier"), 492, 384, 64, 0, visage::Font::kCenter, 8.5f);
+         label(c, s, words(param(kLength), "shorter", "longer"), 558, 384, 64, 0, visage::Font::kCenter, 8.5f);
+      }
       label(c, s, "CHORD NOTES START", 654, 376, 200, 0, visage::Font::kLeft, 9);
       static const char *const onsetWords[4] = {"TOGETHER: every note within 2 ms; the chord as a whole sits off the grid.",
                                                 "ROLLED: bottom to top, about 14 ms a note.",

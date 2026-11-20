@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.1.0.
+Version 0.2.0.
 
 ![Panel](docs/panel.png)
 
@@ -41,8 +41,8 @@ out the same way (the seven sections on the white keys from C0), so one MIDI cli
 
 ### GENRE
 
-23 genres in six families, 69 named styles among them, and every style is also a factory preset. The
-twelve tiles are the common ones, each drawn as its style plays; **ALL 23** opens the browser with
+24 genres in seven families, 72 named styles among them, and every style is also a factory preset. The
+twelve tiles are the common ones, each drawn as its style plays; **ALL 24** opens the browser with
 every genre, its styles, their tempos and progressions, and the sources each genre was written from.
 
 | Family | Genres |
@@ -53,6 +53,7 @@ every genre, its styles, their tempos and progressions, and the sources each gen
 | Pop & Rock | Pop, Rock, Piano Ballad, Country |
 | Dance | House, Deep House |
 | Caribbean & Africa | Reggae, Ska, Afrobeat, Highlife |
+| Ambient | Ambient (long held chords) |
 
 ![Browser](docs/panel-browser.png)
 
@@ -82,6 +83,7 @@ voicings sit, onsets, timing, runs).
 | Montuno | Piano | Latin piano figures in octaves |
 | House Stabs | Synth | one chord shape, rhythmic and on the grid |
 | Pad Player | Pad | whole bars and slow swells |
+| Ambient Drifter | Pad | long held chords, wide (quartal), open and barely moving, rolled in |
 
 ![Players](docs/panel-players.png)
 
@@ -166,8 +168,13 @@ How every chord is voiced, for all sections:
 - **CENTER**: where the voicings sit. **LEAD**: how much each chord is led from the one before (the
   least total movement) rather than placed at the center. **TOP MOVE**: the most the top voice should
   move, in semitones. **SPREAD**: the widest a voicing may be.
-- **RANGE**: the window voicings stay in (click near either end to move it), and the floor (green)
-  nothing goes under.
+- **LOWEST** and **HIGHEST**: the window every voicing stays inside (at least an octave), so how wide
+  the chords can spread. **OFFSET** slides the whole window, and CENTER with it, up to an octave either
+  way. Voice leading stays bounded by the window wherever it is: each chord is still led from the one
+  before by the least movement that fits, so automating OFFSET moves the voicings smoothly rather than
+  in jumps. A window too narrow for a chord gets fewer voices or a tighter shape, never a note outside
+  it. **FLOOR**: nothing goes under this note, the bass part included. The keyboard under the knobs
+  shows the window as it sounds (click near either end to move it), the floor in green.
 - *Double a note in the middle, not on top*, *No half-step rubs below C4*, *Same shape for repeated
   chords*.
 
@@ -203,7 +210,18 @@ note, the Section parameter, or both.
 ### NOW PLAYING
 
 The chord sounding, big, the chord after it, its notes and its shape, and the take on a roll with the
-playhead.
+playhead. Beside it, two knobs that change the whole part as it plays:
+
+- **DENSITY**: fewer or more chords. Below the middle the weakest hits drop out first (soft off-beats,
+  then off-beats, then the lesser beats; each bar's first hit always stays). Above it, softer repeats of
+  the chord sounding fill the gaps, eighths first, then sixteenths. The middle plays the take as
+  written, and the same setting always gives the same pattern.
+- **LENGTH**: every chord shorter, down to a staccato chop, or longer, up to legato (held to the next
+  chord). The middle plays the lengths as written.
+
+The rolls on GENERATE and PLAY draw the part with DENSITY and LENGTH as set; EDIT shows the take as
+written, the hits you edit. Thinned hits don't cut a long chord short: at full LENGTH a chord holds
+to the next chord actually played.
 
 ### FEEL
 
@@ -305,6 +323,7 @@ from.
 | Ska | Britannica [22] |
 | Afrobeat | Stewart's interlock tables [13]; Veal [14] |
 | Highlife | guajeo [7]; Braddock [26]; Koo Nimo [27]; Music in Africa [28] |
+| Ambient | Eno's *Music for Airports* liner notes [47]; analyses of its "1/2" and its tape loops [48][49]; Harold Budd's "soft pedal" playing [50] |
 
 The voicing rules draw on low interval limits (Hoffmann [3]; Pease & Pullig [4]), Levine's rootless
 and shell voicings [2], and big-band voicing practice (Rogers [41]). Voice leading follows the least
@@ -318,7 +337,9 @@ The 90s R&B, Lo-fi, Gospel, Disco keys, House piano, Country, Motown keyboard rh
 bubble's exact grid and Highlife transcriptions are thin: many of their rhythm grids are marked
 *unverified* in the notes, a well-informed default from the idiom that should be checked by ear
 against the named recordings. Several books were cited through secondary pages only (Mauleón, Garcia,
-Veal, Braddock, the Hal Leonard guides). The styles are original patterns in each idiom's manner, not
+Veal, Braddock, the Hal Leonard guides). Ambient rests on search snippets about Eno's and Budd's records; its
+progressions are derived from what those describe (open, ambiguous, sus and add9) rather than taken
+from any recording. The styles are original patterns in each idiom's manner, not
 transcriptions of any recording.
 
 **Left out for now.** Jazz Waltz (it needs 3/4, which JComp's 4/4 grid can't play), a "+ GUITAR"
@@ -332,3 +353,4 @@ library, the generator and the engine; `jcomp-tests` drives the plugin through C
 renders these pictures:
 
     jcomp-screenshot out.png [generate|chords|edit|play] [width height] [players] [browser] [notes] [custom]
+                     [density=0..1] [length=0..1]

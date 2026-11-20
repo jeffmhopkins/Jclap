@@ -90,10 +90,12 @@ VoiceSettings voiceSettings(Get value) {
    VoiceSettings v;
    v.shape = std::clamp(whole(kShape), 0, kShapeCount - 1);
    v.voices = std::clamp(whole(kVoices), 3, 5);
-   v.lo = whole(kRangeLow);
-   v.hi = std::max(v.lo + 12, whole(kRangeHigh));
-   v.center = std::clamp(whole(kCenter), v.lo, v.hi);
-   v.floor = whole(kFloor);
+   // LOWEST and HIGHEST set the window (at least an octave), OFFSET slides it and its center.
+   const int offset = whole(kOffset);
+   v.lo = std::clamp(whole(kRangeLow) + offset, 24, 96);
+   v.hi = std::clamp(std::max(whole(kRangeLow) + 12, whole(kRangeHigh)) + offset, v.lo + 12, 108);
+   v.center = std::clamp(whole(kCenter) + offset, v.lo, v.hi);
+   v.floor = std::min(whole(kFloor), v.lo);
    v.topMove = whole(kTopMove);
    v.maxSpan = whole(kMaxSpan);
    v.lead = value(kLead);

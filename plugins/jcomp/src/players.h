@@ -30,7 +30,7 @@ struct Player {
    int laidBack;
 };
 
-constexpr int kPlayers = 12;
+constexpr int kPlayers = 13;
 
 inline const Player kPlayerList[kPlayers] = {
    {"Pocket Keys", "tight stabs on the bass, 9ths and 13ths", "funk, soul, disco", kEPiano, kKeys,
@@ -57,6 +57,10 @@ inline const Player kPlayerList[kPlayers] = {
     kClose, 4, 52, 76, 63, 0, 0.6, 0.65, 0.0, 0.2, 0.0, 0},
    {"Pad Player", "whole bars and slow swells", "ballad, ambient, intros", kPad, kKeys,
     kDrop24, 5, 45, 79, 60, 1, 0.05, 0.7, 0.0, 1.0, 0.2, 0},
+   // Eno's ambient (Music for Airports' liner notes keep "doubt and uncertainty"; its "1/2" an
+   // add9 chord with no third) and Budd's "soft pedal" piano: slow, sustained, open and ambiguous.
+   {"Ambient Drifter", "long held chords, wide, open and barely moving", "ambient, film, intros", kPad, kKeys,
+    kQuartal, 5, 43, 86, 62, 1, 0.0, 0.8, 0.0, 1.0, 0.45, 0},
 };
 
 } // namespace jcomp

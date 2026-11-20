@@ -49,6 +49,8 @@ struct Settings {
    double velocityVar = 8.0;
    double topVoice = 6.0;
    double lengths = 0.25;
+   double length = 0.5;  // LENGTH: down to chops, as written at the middle, up to legato
+   double density = 0.5; // DENSITY: thinned below the middle, filled in above
    int onsets = 0;
    double vary = 0.2;
    double loose = 0.3;      // the player's: how far each chord wanders off the grid
@@ -587,25 +589,42 @@ private:
          lookForRun(p, step, steps, stepTicks, t, secRel, bar);
       if (runTick_ >= 0 && t < runTick_)
          return; // the run has these steps
-      const Hit &h = p.at(step);
+      const Hit &written = p.at(step);
       const bool target = runTick_ == t;
+      const int perBeat = p.rate == kRate8T ? 3 : 4;
+      const bool onBeat = step % perBeat == 0;
+      const bool onEighth = p.rate == kRate8T ? step % 3 != 1 : step % 2 == 0;
+      Hit h = written;
       if (!h.on()) {
-         if (target)
+         if (target) {
             runTick_ = -1;
+            return;
+         }
+         // DENSITY above the middle fills the gaps: eighths first, then sixteenths, as softer
+         // repeats of the chord sounding.
+         const double more = (settings_.density - 0.5) * 2.0;
+         if (more <= 0.0 || lastChord_.none() || last_.empty())
+            return;
+         const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
+         if (dice(diceBar_, step, 21) >= chance)
+            return;
+         h.vel = static_cast<uint8_t>(onBeat ? kSoft : kGhost + (onEighth ? 10 : 0));
+         h.len = 1;
+         h.art = more > 0.85 ? kArtAsWritten : kArtChop;
+      } else if (!target && thinned(p, step)) {
          return;
       }
       if (!target) {
          if (h.chance < 100 && dice(diceBar_, step, 4) * 100.0 >= h.chance)
             return;
          // VARY drops a soft hit now and then (never one on a beat).
-         const bool onBeat = step % (p.rate == kRate8T ? 3 : 4) == 0;
          if (settings_.vary > 0.0 && !onBeat && h.vel < kNormal && dice(diceBar_, step, 5) < settings_.vary * 0.25)
             return;
       }
       const double stepBeats = static_cast<double>(stepTicks) / kTicksPerBeat;
       // How long, in steps, until the next hit (for RING and the run's room).
       int gap = 1;
-      while (gap < steps && !p.at((step + gap) % steps).on())
+      while (gap < steps && (!p.at((step + gap) % steps).on() || thinned(p, (step + gap) % steps)))
          ++gap;
       const Chord c = chordAt(secRel + (h.push ? kTicksPerBeat / 2 : 0));
       Voicing v;
@@ -619,6 +638,28 @@ private:
       if (settings_.vary > 0.0)
          vel += (dice(diceBar_, step, 6) * 2.0 - 1.0) * settings_.vary * 10.0;
       playChord(t, swing + h.nudge * tempo_ / 60000.0, c, v, h, vel, h.len * stepBeats, gap * stepBeats, step);
+   }
+
+   // Whether DENSITY below the middle drops this hit: the weakest first (soft, off the beat), never a
+   // bar's first.
+   bool thinned(const Pattern &p, int step) const {
+      if (settings_.density >= 0.5 || !p.at(step).on())
+         return false;
+      const int perBeat = p.rate == kRate8T ? 3 : 4;
+      if (firstInBar(p, step, perBeat * 4))
+         return false;
+      const bool onBeat = step % perBeat == 0;
+      const bool onEighth = p.rate == kRate8T ? step % 3 != 1 : step % 2 == 0;
+      const double weight = (onBeat ? 0.7 : onEighth ? 0.45 : 0.2) + 0.25 * p.at(step).vel / 127.0;
+      return weight + 0.15 * dice(diceBar_, step, 20) < (0.5 - settings_.density) * 2.0 * 1.1;
+   }
+
+   // Whether `step` is the first hit of its bar in the take (what DENSITY never thins).
+   static bool firstInBar(const Pattern &p, int step, int perBar) {
+      for (int s = step - step % perBar; s < step; ++s)
+         if (p.at(s).on())
+            return false;
+      return true;
    }
 
    Voicing voicingFor(const Chord &c, int pick) {
@@ -722,6 +763,11 @@ private:
       case kArtTopRings: len = gapBeats * 0.97; break;
       default: break;
       }
+      // LENGTH: shorter toward a chop, longer toward the next chord.
+      if (settings_.length < 0.5)
+         len *= 0.15 + 0.85 * settings_.length / 0.5;
+      else if (settings_.length > 0.5 && gapBeats * 0.97 > len)
+         len += (gapBeats * 0.97 - len) * (settings_.length - 0.5) / 0.5;
       len *= 1.0 + (dice(diceBar_, step, 12) * 2.0 - 1.0) * settings_.lengths;
       len = std::max(len, 0.05 * tempo_ / 60.0);
       cutFrom(at - 0.003);
