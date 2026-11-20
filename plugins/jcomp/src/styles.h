@@ -53,7 +53,8 @@ enum Mod : unsigned {
    kFixed = 1 << 13,
    kInterlock = 1 << 14, // two of its rhythms at once, interlocking (a tenor line over the chord chops)
    kSlip = 1 << 15,      // Cramer's slip note: a whole step slid into a chord tone, in place of runs
-   kWaltz = 1 << 16,     // three beats a bar (3/4, or 6/8 counted in eighths): the genre's three-beat rhythms
+   kWaltz = 1 << 16,     // three beats a bar (3/4): the genre's three-beat rhythms
+   kSixEight = 1 << 17,  // with kWaltz: the same bar in 6/8, two dotted-quarter beats (its six-beat rhythms)
 };
 
 // The progression a section is played over: its role in the song. The break plays the verse's.
@@ -66,7 +67,7 @@ inline int roleOf(int section) {
 struct Rhythm {
    const char *hits;
    double energy; // the energy it suits, 0..1
-   int beats = 4; // a bar's beats: 4, or 3 (twelve sixteenths a bar)
+   int beats = 4; // a bar's beats: 4, 3 (twelve sixteenths a bar) or 6 (6/8: the same bar, in two dotted quarters)
 };
 
 struct ProgSet {
@@ -122,8 +123,8 @@ inline bool rhythmTriplet(const char *hits) {
    return rhythmSteps(hits) % 12 == 0 && rhythmSteps(hits) % 16 != 0;
 }
 // The grid a rhythm is on, and the one a style plays on.
-inline uint8_t rhythmRate(const Rhythm &r) { return r.beats == 3 ? kRate34 : rhythmTriplet(r.hits) ? kRate8T : kRate16; }
-inline uint8_t styleRate(unsigned mods) { return mods & kWaltz ? kRate34 : mods & kTriplet ? kRate8T : kRate16; }
+inline uint8_t rhythmRate(const Rhythm &r) { return r.beats == 6 ? kRate68 : r.beats == 3 ? kRate34 : rhythmTriplet(r.hits) ? kRate8T : kRate16; }
+inline uint8_t styleRate(unsigned mods) { return mods & kSixEight ? kRate68 : mods & kWaltz ? kRate34 : mods & kTriplet ? kRate8T : kRate16; }
 // A style's swing: its own, or its genre's (more with kShuffle); and whether it swings eighths.
 inline double styleSwingOf(const Genre &g, const Style &s) {
    const double sw = s.swing > 0.0 ? s.swing : g.swing + (s.mods & kShuffle ? 0.08 : 0.0);
@@ -160,15 +161,16 @@ inline const std::vector<Genre> &genres() {
       {"Soul", kFamilies[0], kChurchOrgan, 0.54, 0,
        // The backbeat on 2 and 4 (Motown's and Memphis's guitar and keys); pumping eighths; the
        // gospel 3-3-2 push.
-       // The 60s R&B piano's pushed offbeats and the organ's answer (MMA's R&B groove).
+       // The 60s R&B piano's pushed offbeats and its answer (MMA's R&B groove: the piano's and the organ's
+       // parts, both played on piano here).
        {{"....X.......X...", 0.3}, {"x-x-X-x-x-x-X-x-", 0.6}, {"x--x--x-x--x--x-", 0.8},
         {"..x.....x.x...x.|..............x.", 0.5}, {"....x.x.......x.|x.x.x...x...x...", 0.65}},
        {{"x-x-X-x-x-x-xxxx", 0.7}},
-       {{kMajor, {"C|C7|F|Fm", "C|Am|F|G", "F|G|F|G", "C|F|C|F", "Dm7|G7|C|C", "C|C7|F|Fm"}}},
+       {{kMajor, {"C|C7|F|Fm", "C|Am|F|G", "F|G|F|G", "C|F|C|F", "Dm7|G7|C|C", "C|C7|F Fm|C"}}},
        {{"Memphis Backbeat", "Backbeat", 96, kPlain, 0, 0b001, -1, kDrop2, 4, 55, 76, 64},
         {"Pumping Eighths", "Eighths", 112, 0, 0, 0b010, kPopPianist},
         {"Gospel Push", "Push", 104, kRunsIn, 0, 0b100},
-        {"Sixties R&B", "60s R&B", 108, 0, 0, 0b11000}},
+        {"Sixties R&B", "60s R&B", 108, 0, 0, 0b11000, kPopPianist}},
        "1, 23, 61"},
       {"Motown", kFamilies[0], kPopPianist, 0.5, 0,
        // The backbeat ("never blew a backbeat": Van Dyke on Messina), quarter-note chords leaning on 2
@@ -177,8 +179,8 @@ inline const std::vector<Genre> &genres() {
        // left hand rocking root and fifth on the beats, the right hand's chords on the swung ands.
        {{"....X.......X...", 0.3}, {"x...X...x...X...", 0.55}, {"x.x.x.x.x.x.x.x.", 0.75}, {"b.x.f.X.b.x.f.X.", 0.85}},
        {{"x.x.x.x.x.x.xxxx", 0.8}},
-       // I-vi-ii-V, I-IV-I-V, IV-V-I; the last chorus up a semitone, its V7 leading in.
-       {{kMajor, {"C|Am|Dm7|G7", "C|Am|Dm|G", "C|F|C|G", "F|G|C|C", "F|F|G|G", "Ab7|Db|Gb Ab|Db"}}},
+       // I-vi-ii-V, I-IV-I-V, IV-V-I; the outro turns round home (I-vi-ii-V-I).
+       {{kMajor, {"C|Am|Dm7|G7", "C|Am|Dm|G", "C|F|C|G", "F|G|C|C", "F|F|G|G", "C|Am|Dm7 G7|C"}}},
        {{"Backbeat Piano", "Backbeat", 120, kLeftHand, 0, 0b0011},
         {"Straight Eighths", "Eighths", 128, kLeftHand, 0, 0b0100},
         {"Boogie Figure", "Boogie", 116, 0, 0, 0b1000, -1, -1, 0, 0, 0, 0, 0.62, 1}},
@@ -188,7 +190,7 @@ inline const std::vector<Genre> &genres() {
        // sixteenths, muted and ringing, on three-string inversions.
        {{"..x...x...x...x.", 0.4}, {"x..x..x...x..x..", 0.6}, {"gxgxgXgxgxgxgXgx", 0.9}},
        {{"gxgxgXgxgxgxgxxX", 0.9}},
-       {{kDorian, {"Cm7|F13", "Cm7|F13|Cm7|F13", "Cm7|F7sus", "Cm7|F7sus|Cm7|F7sus", "Ebmaj7|Dm7|Cm7|Bb", "Cm7|F13|Cm7|F13"}}},
+       {{kDorian, {"Cm7|F13", "Cm7|F13|Cm7|F13", "Cm7|F7sus", "Cm7|F7sus|Cm7|F7sus", "Ebmaj7|Dm7|Cm7|Bb", "Cm7|F13|Cm7|Cm7"}}},
        {{"Chic Chucking", "Chucking", 116, kBusy, 0, 0b100},
         {"Offbeat Lift", "Lift", 122, kShorts, 0, 0b001},
         {"Rhodes Figure", "Rhodes", 112, kRich, 0, 0b010, kPocketKeys}},
@@ -201,7 +203,7 @@ inline const std::vector<Genre> &genres() {
        // A Dorian m9 vamp; IVmaj7-iii7-vi7 and ii7-V7sus in the relative major; m9s planed. Read as
        // minor: the vamp's Dorian IV13 is then a borrowed colour, and the relative major's iii keeps
        // its own 9th out.
-       {{kMinor, {"Cm9|Dbm9 Cm9", "Cm9|F13|Cm9|F13", "Fm9|Bb13sus", "Abmaj7|Gm7|Cm7|Fm7 Bb13sus", "Abmaj9|Abmaj9|Fm9|Bb13sus", "Cm9|Dbm9 Cm9"}}},
+       {{kMinor, {"Cm9|Dbm9 Cm9", "Cm9|F13|Cm9|F13", "Fm9|Bb13sus", "Abmaj7|Gm7|Cm7|Fm7 Bb13sus", "Abmaj9|Abmaj9|Fm9|Bb13sus", "Cm9|Dbm9 Cm9|Cm9|Cm9"}}},
        {{"Behind The Beat", "Lazy", 84, kLongs | kRich, 0, 0b001},
         {"Breathing Chords", "Breath", 76, kRich, 0, 0b010},
         {"Dilla Push", "Push", 90, kPushes | kRich, 0, 0b100}},
@@ -210,7 +212,7 @@ inline const std::vector<Genre> &genres() {
        {{"x--------.x-----", 0.35}, {"x..x..x.....x...", 0.6}, {"x.x...x.x...x.x.", 0.8}},
        {{"x..x..x...x.xxxx", 0.7}},
        // IVmaj7-iii7-vi7; bVImaj7-bVII-I; ii7-V7sus-Imaj9.
-       {{kMajor, {"Fmaj7|Em7|Am7|Am7", "Fmaj7|Em7|Am7|Am7", "Abmaj7|Bb|C|C", "Dm7|G13sus|Cmaj9|Cmaj9", "Abmaj7|Bb|Fmaj7|G13sus", "Fmaj7|Em7|Am7|Am7"}}},
+       {{kMajor, {"Fmaj7|Em7|Am7|Am7", "Fmaj7|Em7|Am7|Am7", "Abmaj7|Bb|C|C", "Dm7|G13sus|Cmaj9|Cmaj9", "Abmaj7|Bb|Fmaj7|G13sus", "Fmaj7|Em7|Dm7 G13sus|Cmaj9"}}},
        {{"Slow Jam", "Slow Jam", 68, kLongs | kRich, 0, 0b001, kPadPlayer},
         {"New Jack Swing", "NJS", 100, kShorts, 0, 0b110, kPocketKeys, -1, 0, 0, 0, 0, 0.64},
         {"Quiet Storm", "Storm", 78, kRich, 0, 0b011}},
@@ -219,7 +221,7 @@ inline const std::vector<Genre> &genres() {
        {{"x---------x-----", 0.35}, {"x-----.x--------", 0.5}, {"x..x..x...x.....", 0.7}},
        {{"x..x..x...x.x.xx", 0.6}},
        {{kMajor, {"Fmaj7 Em7|Am7|Dm7 G7|Cmaj7", "Fmaj7 Em7|Am7|Dm7 G7|Cmaj7", "Dm7|G7", "Fmaj7 Em7|Am7|Dm7 G7|Cmaj9", "Dm9|G13|Em7|Am9", "Fmaj7 Em7|Am7|Dm7 G7|Cmaj7"}},
-        {kMinor, {"Cm9|Fm9", "Cm9|Fm9", "Abmaj7|G7#9", "Cm9|Fm9|Bb13|Ebmaj7", "Abmaj7|Abmaj7|G7#9|G7#9", "Cm9|Fm9"}}},
+        {kMinor, {"Cm9|Fm9", "Cm9|Fm9", "Abmaj7|G7#9", "Cm9|Fm9|Bb13|Ebmaj7", "Abmaj7|Abmaj7|G7#9|G7#9", "Cm9|Fm9|Cm9|Cm9"}}},
        {{"Study Loop", "Loop", 80, kLongs | kRich, 0, 0b001},
         {"Rainy Chop", "Chop", 74, kRich, 1, 0b100},
         {"Dusty Push", "Push", 86, kPushes | kRich, 0, 0b010}},
@@ -266,10 +268,11 @@ inline const std::vector<Genre> &genres() {
        // The Charleston (1, the and of 2) and its reverse (the and of 1, 3); Garland's offbeats, an eighth ahead of the next beat;
        // Freddie Green's four to the bar, one or two notes, 2 and 4 leaned on.
        // Held comps (MMA's basic swing piano: 1 held, then the and of 3 held over the bar; Impro-Visor's
-       // chord held to the and of 4); the guitar's two-feel (the head in two, the solos in four); MMA's
+       // chord held to the and of 4); Freddie Green's four, each stroke most of a beat long ("chunk"), and
+       // its two-feel only at the lowest energy (the head in two, the solos in four); MMA's
        // LongSS2 (1, 2, the and of 3, 4).
-       {{"x.....x.........", 0.35}, {"..x.....x.......", 0.45}, {"......x.......x.", 0.6}, {"x...X...x...X...", 0.8},
-        {"x-------..x-----|x---------------", 0.3}, {"x.......x.......", 0.4}, {"x-------------..", 0.25},
+       {{"x.....x.........", 0.35}, {"..x.....x.......", 0.45}, {"......x.......x.", 0.6}, {"x--.X--.x--.X--.", 0.8},
+        {"x-------..x-----|x---------------", 0.3}, {"x--.....x--.....", 0.1}, {"x-------------..", 0.25},
         {"x-------....o---", 0.4}, {"x...x.....x.x...", 0.55},
         // The jazz waltz, in three: MMA's piano (1, its and, 2, 3), Impro-Visor's half and quarter,
         // the "2 and 3" comp that leaves the one to the bass, MMA's guitar.
@@ -278,8 +281,8 @@ inline const std::vector<Genre> &genres() {
        {{"x.....x...x...x.", 0.6}},
        // Rhythm changes' A; iii-VI7-ii-V; the III7-VI7-II7-V7 bridge.
        {{kMajor, {"Em7 A7|Dm7 G7|Em7 A7|Dm7 G7", "C6 Am7|Dm7 G7|C6 Am7|Dm7 G7", "Dm7|G7|Cmaj7|Cmaj7", "Dm7 G7|Cmaj7|Dm7 G7|Cmaj7 A7", "E7|E7|A7|A7|D7|D7|G7|G7", "Em7 A7|Dm7 G7|Cmaj7|Cmaj7"}},
-        // A waltz's: a chord a bar ("Someday My Prince Will Come"'s I-III7-IV-VI7-ii-VI7-ii-V).
-        {kMajor, {"Dm7|G7|Cmaj7|Cmaj7", "Cmaj7|E7|Fmaj7|A7|Dm7|A7|Dm7|G7", "Em7|A7|Dm7|G7", "Cmaj7|Am7|Dm7|G7|Em7|A7|Dm7|G7", "Fmaj7|Fm7|Em7|A7|D7|D7|Dm7|G7", "Dm7|G7|Cmaj7|Cmaj7"}}},
+        // A waltz's: a chord a bar ("Someday My Prince Will Come"'s I-III7+5-IV-VI7+5-ii-VI7+5-ii-V).
+        {kMajor, {"Dm7|G7|Cmaj7|Cmaj7", "Cmaj7|E7#5|Fmaj7|A7#5|Dm7|A7#5|Dm7|G7", "Em7|A7|Dm7|G7", "Cmaj7|Am7|Dm7|G7|Em7|A7|Dm7|G7", "Fmaj7|Fm7|Em7|A7|D7|D7|Dm7|G7", "Dm7|G7|Cmaj7|Cmaj7"}}},
        {{"Charleston Comp", "Charleston", 160, kSparse, 0, 0b0011},
         {"Garland Pushes", "Garland", 140, kPushes, 0, 0b100000100},
         {"Four To The Bar", "Freddie", 180, kPlain | kShorts | kFixed, 0, 0b101000, kRhythmGuitar, kShell, 3, 40, 64, 52},
@@ -292,7 +295,8 @@ inline const std::vector<Genre> &genres() {
        // eighths of the first beat and the second sixteenth of the second (1, 2 and the and of 3
        // here: Garcia, via Wikipedia); the 3-3-4-3-3 cycle in eighths over two bars; the same cycle
        // with the thumb under it.
-       // Samba: MMA's four bars of piano, and Impro-Visor's offbeat eighths.
+       // Samba: MMA's four bars of piano, and Impro-Visor's offbeat eighths (in 2/2: a 2/4 samba at
+       // 100 is 200 here, MMA's "double the tempo").
        {{"x...x...f.x.....", 0.6}, {"x.....x.....x...|....x.....x.....", 0.7}, {"x.....x.f...x...|b...x...f.x.....", 0.8},
         {"x.....x.x...x...|..x.....x...x...|x.....x...x...x.|..x.x.......x...", 0.75}, {"..x...x...x...x.", 0.55}},
        {{"x...x...f.x...x.", 0.6}},
@@ -302,7 +306,7 @@ inline const std::vector<Genre> &genres() {
        {{"Batida", "Batida", 130, kFixed, 0, 0b001, -1, kSpread, 4, 50, 74, 62},
         {"Two-Bar Bossa", "Two Bar", 138, kFixed, 0, 0b100, -1, kSpread, 4, 50, 74, 62},
         {"Quiet Bossa", "Quiet", 120, kSparse | kRich | kFixed, 0, 0b011, -1, kSpread, 4, 50, 74, 62},
-        {"Samba", "Samba", 100, kPushes, 0, 0b11000}},
+        {"Samba", "Samba", 200, kPushes, 0, 0b11000}},
        "11, 12, 60, 61, 62"},
       {"Salsa", kFamilies[2], kMontuno, 0.5, 0,
        // A clave bar is a 4/4 bar in eighths (the clave's strokes on 1, the and of 2, 4 | 2, 3). Chords
@@ -329,12 +333,15 @@ inline const std::vector<Genre> &genres() {
         {"x...x...x...x.x.", 0.65}, {"x-----x-----x...", 0.4},
         {"x.......x...x...|x...x...x.......|x.........x...x.|....x.....x...x.", 0.55}, {"x.3.5.x.x.3.5.x.", 0.6}},
        {{"x...x...x.x.x.xx", 0.6}},
-       // The i-IV7 vamp ("Oye Como Va"); a minor ii-V.
-       {{kDorian, {"Cm7|F9", "Cm7|F9", "Ab7|G7", "Cm7|F9|Cm7|F9", "Dm7b5|G7b9|Cm7|Cm7", "Cm7|F9"}}},
+       // The i-IV7 vamp ("Oye Como Va"); a minor ii-V. The mambo plays the 2-3 guajeo (in clave, as
+       // MMA's mambo plays its broken chord over Clave2 Clave3), the broken chord when quiet.
+       {{kDorian, {"Cm7|F9", "Cm7|F9", "Ab7|G7", "Cm7|F9|Cm7|F9", "Dm7b5|G7b9|Cm7|Cm7", "Cm7|F9|Cm7|Cm7"}},
+        // The bolero's song form: a minor i-iv-V7-i with its secondary dominants ("Besame Mucho").
+        {kMinor, {"Fm7|G7|Cm|Cm", "Cm|Fm7|G7|Cm|C7|Fm7|D7|G7", "Ab7|G7", "Fm7|Bb7|Ebmaj7|Abmaj7|Dm7b5|G7b9|Cm|Cm", "Ebmaj7|Abmaj7|Dm7b5|G7b9", "Fm7|G7b9|Cm|Cm"}}},
        {{"Cha-Cha", "Cha-Cha", 118, kFixed, 0, 0b1001},
         {"Latin Jazz Guajeo", "Guajeo", 190, kPushes | kRich | kFixed, 0, 0b010, kMontuno},
-        {"Bolero", "Bolero", 80, kRich, 0, 0b110000},
-        {"Mambo", "Mambo", 180, kPushes, 0, 0b1000001}},
+        {"Bolero", "Bolero", 80, kRich, 1, 0b110000},
+        {"Mambo", "Mambo", 180, kPushes | kFixed, 0, 0b1000010}},
        "2, 7, 10, 56, 61, 62", true},
 
       // ---- Pop & Rock ----
@@ -353,20 +360,23 @@ inline const std::vector<Genre> &genres() {
         {"Pad Intro", "Pad", 96, kLongs, 0, 0b0001, kPadPlayer}},
        "1, 61"},
       {"Rock", kFamilies[3], kStrummer, 0.5, 0,
-       // The doo-wop four-bar phrase; the 50s piano's pounding triplets and its dotted pickups (MMA).
+       // MMA's four-bar half-note phrase, its last bar in quarters; the 50s piano's pounding triplets and
+       // its dotted pickups (MMA), played over the 50s changes.
        {{"X---------------", 0.25}, {"X---X---X---X---", 0.6}, {"x-o-X-o-x-o-X-o-", 0.75}, {"X..x..x.X..x..x.", 0.85},
         {"x.......x.......|x.......x.......|x.......x.......|x...x...x...x...", 0.5},
         {"xxxXxxxxxXxx|xxxXxxxxxXxx|xxxXxxxxxXxx|x..x..x..x..", 0.8}, {"x..xx...x..xx...|x..x.......xx...", 0.7}},
        {{"x-x-x-x-x.x.xxxx", 0.8}},
        // I-bVII-IV-I (Mixolydian), bVI-bVII-I, the minor i-bVI-bIII-bVII.
        {{kMixolydian, {"C|Bb|F|C", "C|Bb|F|C", "F|G|F|G", "Ab|Bb|C|C", "F|G|F|G", "Bb|F|C|C"}},
-        {kMinor, {"Cm|Ab|Eb|Bb", "Cm|Ab|Eb|Bb", "Ab|Bb", "Cm|Ab|Eb|Bb", "Fm|Ab|Bb|Bb", "Ab|Bb|Cm|Cm"}}},
+        {kMinor, {"Cm|Ab|Eb|Bb", "Cm|Ab|Eb|Bb", "Ab|Bb", "Cm|Ab|Eb|Bb", "Fm|Ab|Bb|Bb", "Ab|Bb|Cm|Cm"}},
+        // The 50s: I-vi-IV-V (the doo-wop changes), I-vi-ii-V, the IV-I and II7-V7 of a rock'n'roll bridge.
+        {kMajor, {"C|Am|F|G", "C|Am|F|G7", "F|F|C|C", "C|Am|Dm7|G7", "F|F|C|C|D7|D7|G7|G7", "C|Am|F G7|C"}}},
        // The rock guitar's power chord (root, fifth, octave): Walser.
        {{"Eighth Pump", "Pump", 128, kPlain, 0, 0b0100, kPopPianist},
         {"Quarter Pound", "Pound", 140, kPlain, 0, 0b10011, -1, kGrip, 3, 40, 64, 50},
         {"Minor Rock", "Minor", 116, kPlain, 1, 0b1101, -1, kGrip, 3, 40, 64, 50},
-        {"Rock'n'Roll Triplets", "Triplets", 140, kTriplet | kLeftHand | kPlain, 0, 0, kPopPianist},
-        {"Fifties Pump", "Fifties", 150, kLeftHand | kPlain, 0, 0b1000000, kPopPianist}},
+        {"Rock'n'Roll Triplets", "Triplets", 140, kTriplet | kLeftHand | kPlain, 2, 0, kPopPianist},
+        {"Fifties Pump", "Fifties", 150, kLeftHand | kPlain, 2, 0b1000000, kPopPianist}},
        "1, 61"},
       {"Piano Ballad", kFamilies[3], kPopPianist, 0.5, 0,
        // Half notes; broken eighths (the left hand's root, fifth, root, fifth under the right hand's
@@ -374,21 +384,21 @@ inline const std::vector<Genre> &genres() {
        // (the doo-wop and soul ballad), and quiet on the beats.
        // MMA's: the quarter-note block pulse, the ballad figure (1, the and of 2, 3 held), the right
        // hand's arpeggio up the chord and back, the four-bar phrase whose third bar drops its one; in
-       // 6/8 (three beats of two eighths here): the dotted quarters, the six eighths leaning on 1 and 4,
+       // 6/8 (the same twelve sixteenths, in two dotted quarters): the dotted quarters, the six eighths leaning on 1 and 4,
        // the left hand rocking under them.
        {{"x-------x-------", 0.35}, {"x.f.b.f.x.f.b.f.", 0.65}, {"xxxXxxxxxXxx", 0.6}, {"x--x--x--x--", 0.35},
-        {"x...x...x...x...", 0.5}, {"x.....x.x-------|x...x...x-------", 0.55}, {"1...3.5.8...5.3.|1.....5.8...5.3.", 0.45},
+        {"x...x...x...x...", 0.5}, {"x.....x.x-------|x...x...x-------", 0.55}, {"b...3.5.8...5.3.|b.....5.8...5.3.", 0.45},
         {"x...x...x...x...|x...x...x...x...|....x...x...x...|x...x...x...x...", 0.5},
-        {"x-----x-----", 0.35, 3}, {"X.x.x.X.x.x.", 0.6, 3}, {"b.x.x.f.x.x.", 0.5, 3}},
+        {"x-----x-----", 0.35, 6}, {"X.x.x.X.x.x.", 0.6, 6}, {"b.x.x.f.x.x.", 0.5, 6}},
        {{"x-------x.x.x.xx", 0.5}, {"xxxXxxxxxXXX", 0.6}},
-       // I-V/7-vi-IV over a falling bass; I-iii-IV-V; IV-V-iii-vi-ii-V-I; the last chorus up.
-       {{kMajor, {"C|G/B|Am|F", "C|G/B|Am|F", "C|Em|F|G", "F|G|Em|Am|Dm|G|C|C", "Ab|Bb|C|C", "Gb|Ab|Fm|Bbm|Ebm|Ab|Db|Db"}}},
+       // I-V/7-vi-IV over a falling bass; I-iii-IV-V; IV-V-iii-vi-ii-V-I; the last chorus again, ending home.
+       {{kMajor, {"C|G/B|Am|F", "C|G/B|Am|F", "C|Em|F|G", "F|G|Em|Am|Dm|G|C|C", "Ab|Bb|C|C", "F|G|Em|Am|Dm|G|C|C"}}},
        {{"Half Notes", "Halves", 72, kLongs, 0, 0b001, kPopPianist},
         {"Broken Chords", "Arpeggio", 68, kLongs, 0, 0b010},
         {"12/8 Ballad", "12/8", 64, kTriplet},
         {"Ballad Block", "Block", 76, 0, 0, 0b10110000},
         {"Right-Hand Arpeggio", "RH Arp", 70, 0, 0, 0b1000000},
-        {"6/8 Ballad", "6/8", 84, kWaltz, 0, 0}},
+        {"6/8 Ballad", "6/8", 84, kWaltz | kSixEight, 0, 0}},
        "1, 61, 62"},
       {"Country", kFamilies[3], kPopPianist, 0.53, 1,
        // Boom-chick (the bass on 1 and 3, the root then the fifth, the chord on 2 and 4); Cramer's
@@ -397,7 +407,7 @@ inline const std::vector<Genre> &genres() {
        // Western swing's four on the guitar, the fourth bar with its pickups (MMA); the country waltz's
        // oom-pah-pah, the bass on 1 (root, then fifth) and the chord on 2 and 3, and its busier strum.
        {{"b...x...f...x...", 0.45}, {"x---x-x-x---x-x-", 0.6}, {"b...x-x.f...x-x.", 0.8},
-        {"x...x...x...x...|x...x...x...x...|x...x...x...x...|x.g.x...x.g.x...", 0.6},
+        {"x...X...x...X...|x...X...x...X...|x...X...x...X...|x.g.X...x.g.X...", 0.6},
         {"b...x...x...|f...x...x...", 0.5, 3}, {"b...x.x.x...|f...x.x.x...", 0.75, 3}},
        {{"b...x...f.x.xxxx", 0.6}},
        // I-IV-I-V; I-II7-V7-I; I-I7-IV-iv-I. A waltz's: a chord a bar.
@@ -406,7 +416,7 @@ inline const std::vector<Genre> &genres() {
        {{"Boom-Chick", "Boom-Chick", 112, kShorts, 0, 0b001},
         {"Nashville Slip", "Slip", 84, kSlip, 0, 0b010},
         {"Two-Step", "Two-Step", 132, 0, 0, 0b100, kStrummer},
-        {"Western Swing", "Western", 168, kShorts, 0, 0b1000, kRhythmGuitar, -1, 0, 0, 0, 0, 0.6, 1},
+        {"Western Swing", "Western", 168, 0, 0, 0b1000, kRhythmGuitar, kShell, 3, 45, 67, 55, 0.6, 1},
         {"Country Waltz", "Waltz", 104, kWaltz, 1, 0}},
        "18, 33, 59, 61"},
 
@@ -416,8 +426,8 @@ inline const std::vector<Genre> &genres() {
        {{"X...............", 0.2}, {"..X...X...X...X.", 0.55}, {"x..x..x...x..x..", 0.75}, {"x..x..x.x..x..x.|x..x..x...x..x..", 0.9}},
        {{"x..x..x...x.xxxx", 0.8}},
        // i-bVII-bVI-bVII; the major lift I-iii-IV, IV-V-vi; i-iv in the breakdown.
-       {{kMinor, {"Cm|Fm", "Cm|Bb|Ab|Bb", "Ab|Bb|Ab|Bb", "Cm|Bb|Ab|Bb", "Cm|Fm|Cm|Fm", "Cm|Fm"}},
-        {kMajor, {"C|Em|F|F", "C|Em|F|F", "F|G|Am|Am", "F|G|Am|Am", "Am|Dm|Am|Dm", "C|Em|F|F"}}},
+       {{kMinor, {"Cm|Fm", "Cm|Bb|Ab|Bb", "Ab|Bb|Ab|Bb", "Cm|Bb|Ab|Bb", "Cm|Fm|Cm|Fm", "Cm|Fm|Cm|Cm"}},
+        {kMajor, {"C|Em|F|F", "C|Em|F|F", "F|G|Am|Am", "F|G|Am|Am", "Am|Dm|Am|Dm", "C|Em|F|C"}}},
        {{"Piano Riff", "M1 Piano", 124, kPushes, 0, 0b1100},
         {"Offbeat Stabs", "Offbeat", 126, kShorts, 0, 0b0010},
         {"Major Lift", "Lift", 122, kPushes, 1, 0b0100}},
@@ -428,7 +438,7 @@ inline const std::vector<Genre> &genres() {
        {{"x---------------", 0.35}, {"..x...x...x..x..", 0.6}, {"...x..x...x..x..", 0.75}},
        {{"..x...x...x.xxx.", 0.6}},
        // i9-iv9; i(add9)-bVI7-bVII(add9) (the "Can You Feel It" changes); m9 planed a step.
-       {{kMinor, {"Cm9|Fm9", "Cm9|Fm9|Cm9|Fm9", "Ab7|Bbadd9", "Cmadd9|Ab7|Bbadd9|Bbadd9", "Dm9|Dm9|Cm9|Cm9", "Cm9|Fm9"}}},
+       {{kMinor, {"Cm9|Fm9", "Cm9|Fm9|Cm9|Fm9", "Ab7|Bbadd9", "Cmadd9|Ab7|Bbadd9|Bbadd9", "Dm9|Dm9|Cm9|Cm9", "Cm9|Fm9|Cm9|Cm9"}}},
        {{"Held Like Strings", "Strings", 118, kLongs | kRich, 0, 0b001, kPadPlayer},
         {"Chicago Stabs", "Stabs", 122, kRich | kShorts, 0, 0b010},
         {"Jersey Push", "Push", 124, kRich | kPushes, 0, 0b100}},
@@ -442,8 +452,8 @@ inline const std::vector<Genre> &genres() {
        // also keeps a light swing).
        {{"....x.......x...", 0.4}, {"..x...x...x...x.", 0.6}, {"..b.x.b...b.x.b.", 0.75}, {"....x.x.....x.x.", 0.85}},
        {{"....x..x..x.x.xx", 0.6}},
-       {{kMajor, {"C|F", "C|F|C|F", "Am|F|G|G", "C|G|Am|F", "Am|G|Am|G", "C|F"}},
-        {kMinor, {"Cm|Fm", "Cm|Fm|Cm|Fm", "Ab|Bb", "Cm|Bb|Cm|Bb", "Fm|Bb|Cm|Cm", "Cm|Fm"}}},
+       {{kMajor, {"C|F", "C|F|C|F", "Am|F|G|G", "C|G|Am|F", "Am|G|Am|G", "C|F|C|C"}},
+        {kMinor, {"Cm|Fm", "Cm|Fm|Cm|Fm", "Ab|Bb", "Cm|Bb|Cm|Bb", "Fm|Bb|Cm|Cm", "Cm|Fm|Cm|Cm"}}},
        {{"One Drop Skank", "One Drop", 74, kShorts, 0, 0b0001},
         {"Organ Bubble", "Bubble", 72, kShorts | kPlain, 0, 0b0100, kChurchOrgan, kClose, 4, 55, 76, 64},
         {"Rockers", "Rockers", 80, kShorts, 1, 0b1001}},

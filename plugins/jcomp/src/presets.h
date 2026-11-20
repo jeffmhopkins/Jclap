@@ -62,12 +62,15 @@ inline bool writeSong(const std::filesystem::path &file, const Song &song) {
    out.write(reinterpret_cast<const char *>(data.data()), static_cast<std::streamsize>(data.size()));
    return out.good();
 }
-inline bool readSong(const std::filesystem::path &file, Song &song) {
+inline bool readSong(const std::filesystem::path &file, Song &song, const Recipe &r) {
    std::ifstream in(file, std::ios::binary);
    if (!in)
       return false;
    const std::vector<uint8_t> data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-   return song.load(data.data(), data.size());
+   if (!song.load(data.data(), data.size()))
+      return false;
+   completeSong(r, song, data);
+   return true;
 }
 
 } // namespace jcomp

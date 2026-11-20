@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.6.0.
+Version 0.7.0.
 
 ![Panel](docs/panel.png)
 
@@ -130,7 +130,8 @@ voicings sit, onsets, timing, runs).
 
 The seven sections side by side, each as wide as its bars, with its chords, its take as it will be
 voiced, and its energy (drag it up or down; low energy plays the take softly and lets its chords
-ring, and dragging keeps the section's chords). The
+ring, and dragging keeps the section's chords; so do the blend slider and a shift-clicked blend tile,
+which remake only the rhythms, while WEIRD remakes the chords too). The
 die rolls just that section; the lock keeps it from ROLL SONG. Click a section to mutate it below.
 
 ### MUTATE
@@ -174,13 +175,17 @@ HOLD**: voice it JComp's way, play it as you hold it, or voice it under your top
 ### PROGRESSION
 
 A row per section, a box per bar (two chords in a split bar), with the Roman numerals under each.
-A progression is a loop: a four-bar progression in an eight-bar section plays twice. Click a chord to
-change it on the right; **...** sets the row's length (1, 2, 4, 8 or 12 bars), copies another
-section's chords, or goes back to the style's progression.
+A progression is a loop: a four-bar progression in an eight-bar section plays twice. A split bar's
+second chord comes half way through the bar, on beat 3 in a 3/4 bar (2 + 1 beats) and on the second
+dotted quarter in 6/8. Click a chord to change it on the right; **...** sets the row's length (1, 2,
+4, 8 or 12 bars, the band hits copied with the chords into the new bars), copies another section's
+chords (and their band hits), or goes back to the style's progression (its band hits cleared).
+Every song ends on its home chord: the outro's progression comes back to the tonic in its last
+bar.
 
 ### The chord picked
 
-Its **ROOT** and **CHORD** (major, minor, 7, 9, 13, 7#9, 7b9, m7, m9, maj7, maj9, 6/9, 7sus, dim7),
+Its **ROOT** and **CHORD** (major, minor, 7, 9, 13, 7#9, 7b9, 7#5, m7, m9, maj7, maj9, 6/9, 7sus, dim7),
 its **BASS** (the root, or any note for a slash chord), and whether it **LASTS** the bar or half of it
 (a split bar has a chord in each half). Under them, the chord on a keyboard as JComp will voice it, led
 from the chord before it, and **TRY INSTEAD**: chords that could stand in (for a dominant its tritone sub,
@@ -189,10 +194,11 @@ the relative major or the IV7; the V of the next chord, the dominant a half step
 diminished; or the chord richer or plainer). Click one to use it.
 
 **BAND HIT** writes a hit over the chord, as a chart does (JJazzLab's chord interpretations): **COMP**
-plays the take as it is; **ACC** strikes the chord's first stroke accented and the take plays on;
+plays the take as it is; **ACC** strikes the chord's first stroke above the bar's own accents and the take plays on;
 **HOLD** strikes it once and holds it to the next chord, the take resting meanwhile; **SHOT** strikes it
 once, short, and rests to the next chord. A band hit plays only over the section's own progression,
-not over a chord held on the keys, nor in the song's ending.
+not over a chord held on the keys, nor in the song's ending; a section queued to come in leaves this
+one's band hits playing up to the switch. The rolls draw the band hits as they play.
 
 ## EDIT
 
@@ -224,7 +230,8 @@ How every chord is voiced, for all sections:
   thumb's two strings, the root's and the fifth's). A grip is one a hand can make on six strings in
   standard tuning, low on the neck, so a chord that comes round again is the same grip. A slash chord
   (C/E) keeps its bass at the bottom in CLOSE, DROP 2, DROP 2+4, SHELL, SPREAD, 4THS and GRIP;
-  ROOTLESS and OCTAVES leave it to the bass player. On an organ or a pad the low note of SPREAD stays
+  ROOTLESS and OCTAVES leave it to the bass player. ROOTLESS adds the 9th to every minor seventh, the
+  iii chord's included, as most pianists play it, though the 9th is outside the key there. On an organ or a pad the low note of SPREAD stays
   in every chord; on keys it is held from one 1 or 3 to the next. 4THS stacks fewer fourths for a
   chord with fewer tones (a triad, a sus, an add9) rather than leaving the shape. ROOTLESS at five
   voices adds the 11th of a minor chord or the 13th of a major one, never the root over a major
@@ -242,11 +249,12 @@ How every chord is voiced, for all sections:
   note goes under the window (SHELL's, SPREAD's and GRIP's root, 4THS' root under the fourths, a slash
   chord's bass), and never under FLOOR. **FLOOR**: nothing goes under this note, the bass part included. The keyboard under the knobs
   shows the window as it sounds (click near either end to move it), the floor in green.
-- *Double a note in the middle, not on top* (a voicing with its top note doubled below is the last
-  choice), *No half-step rubs below C4*, *Same shape for repeated chords* (while the shape, voices
+- *Double a note in the middle, not on top* (a voicing with its top note doubled below costs a
+  little, so smooth voice leading can still win over it), *No half-step rubs below C4*, *Same shape for repeated chords* (while the shape, voices
   and window still allow it). A chord that only changes colour (C7 to C9) stays where it is.
 
-Every voicing keeps to **low interval limits**: the lowest note an interval can sit on before it turns
+Every voicing but a guitar's shells and grips (whose low strings ring as they do on the instrument)
+keeps to **low interval limits**: the lowest note an interval can sit on before it turns
 to mud (a minor second no lower than E3, a minor third no lower than C3, a major third, fourth or
 tritone no lower than Bb2, a fifth no lower than Bb1, and so on), after Hoffmann's chart and Pease and Pullig's *Modern Jazz Voicings* (see
 the sources below).
@@ -286,20 +294,30 @@ next is outlined with **NEXT**. **LOOP** stays in a section; **SONG** plays each
 the next, through to the outro, and ends: the outro's last bar or two are its **ending** (four, then
 the last chord rung out, as MMA's endings; the style's own where it has one: SwingEnd's four then 1
 and 3, the cha-cha cell, the R&B ending's 1, 3 and 4), and then JComp rests until you pick a section or
-start again. **REPEAT** plays the song round and round, the outro's fill leading back into the intro
+start again (picking the outro plays it again; switching to LOOP or REPEAT plays on from the next
+switch point). An outro shorter than its ending plays the ending's last bars, so the last chord still
+rings. **REPEAT** plays the song round and round, the outro's fill leading back into the intro
 (SONG's behaviour before 0.6.0). Following the host, the song starts at the host's bar 1 with the
 Section parameter's section, so starting the host again, or jumping, finds the section that bar is
-in (past the song's end, in SONG, nothing plays).
+in, its ending included (past the song's end, in SONG, nothing plays). In SONG and REPEAT, clicking a
+tile doesn't move where the song starts: it does that only with BY set to the Section parameter
+(by note, the section's note switches as it always does). A style picked while playing, a waltz for a
+four-beat one, finds its bars again on the host's.
 
 A fill into a quieter section (the next section's energy lower than this one's, a chorus into a
 break or the outro) is the **fill down**: a held stab with the next downbeat left clear and nothing
 anticipated (MMA's SwingFill and SonFill, a Yamaha arranger's fill from B down to A). A fill into a
 louder or equal one is the build-up fill. With *Intro sets up the verse* (on by default) the intro's
-last bar going into the verse is a held chord setting up the band, not a fill. **SWITCH AT** the
+last bar going into the verse is a held chord setting up the band, not a fill (it takes the fill's
+place, so it needs *Fill into the new section* on). A fill down plays no louder than the groove it
+leaves, and a fill up no softer than the groove's accents, its last chord always anticipating the
+next section. **SWITCH AT** the
 next beat, bar (the default), 2 bars, 4 bars or the section's end. At the next beat the new section
-comes in mid-bar, its bars still on the host's bar lines. A two-bar take (a clave rhythm, a two-bar
-riff) keeps its phase to the host's bars, so a section starting on an odd bar, a jump or a loop never
-turns the clave round. **BY** a note, the Section parameter, or both.
+comes in mid-bar, its bars still on the host's bar lines. A clave figure (a montuno, a guajeo) keeps
+its phase to the host's bars, so a section starting on an odd bar, a jump or a loop never turns the
+clave round; every other phrase (a four-bar phrase, an answer bar) starts from the section's first
+bar, so its turnaround falls where the progression's does. **BY** a note, the Section parameter, or
+both.
 
 ### NOW PLAYING
 
@@ -312,13 +330,14 @@ playhead. Beside it, two knobs that change the whole part as it plays:
   style's line). Above it, softer repeats of
   the chord sounding fill the gaps, eighths first, then sixteenths (only in a rhythm that already
   plays sixteenths, so a montuno, a bossa or a Charleston stays on eighths), never under a chord still
-  held, and never on a beat in an offbeat style (a skank, an offbeat stab). A figure played as written
+  held, and never on a beat in an offbeat style (a skank, an offbeat stab) or a swung one (a swing
+  comper adds offbeat stabs, not a pulse of chords). A figure played as written
   (the batida, the montunos and guajeos, Freddie Green's four, the cha-cha) gets nothing added. The
   middle plays the take as written, and the same setting always gives the same pattern.
 - **LENGTH**: every chord shorter, down to a staccato chop, or longer, up to legato (held to the next
   chord). The middle plays the lengths as written.
 
-The rolls on GENERATE and PLAY draw the part with DENSITY, LENGTH and RUNS as set, with the engine's
+The rolls on GENERATE and PLAY draw the part with DENSITY, LENGTH, RUNS and the band hits as set, with the engine's
 own dice: the hits, fills and runs the first pass plays (SAME DICE off, later bars differ). EDIT
 shows the take as written, the hits you edit. Thinned hits don't cut a long chord short: at full LENGTH a chord holds
 to the next chord actually played.
@@ -374,8 +393,9 @@ blur.
 
 *Pad layer, on channel* (in NOTES & MORE, off by default, channel 3): the chord sounding held as a pad
 on its own channel under the comp, a four-note close voicing round middle C struck at each change of
-chord and held to the next (MMA's "Sus" grooves). Route that channel to a pad or strings. It follows
-the chords wherever they come from, rests while the comp rests (PLAY ONLY WHILE HELD, the song's end),
+chord and held to the next (MMA's "Sus" grooves), however long that is. Route that channel to a pad
+or strings. It follows the chords wherever they come from, takes a pushed chord with the comp, rests
+while the comp rests (PLAY ONLY WHILE HELD, the song's end), lets go at once when it's switched off,
 and holds through a change of colour only (C7 to C9). Give it its own channel: on JComp's own a key
 both play would be shared.
 
@@ -546,6 +566,25 @@ never comes), fills go down as well as up, the intro sets up the verse with a he
 at fast tempos, chords can carry band hits (accent, hold, shot), a pad layer can hold the chords on a
 second channel, rhythms can be four-bar phrases, and there is 3/4 and 6/8 (Jazz Waltz, Country Waltz,
 6/8 Ballad), with fifteen new styles in all, a Calypso genre among them.
+
+**The sixth review (0.7.0).** Five cold passes (the groove styles; jazz, Latin and the three-beat
+styles; pop, dance, world and ambient; the generator and voicing; the engine and plugin in real time)
+reproduced every finding with `jcomp-dump` or a probe ([docs/sources.md](docs/sources.md), Part J).
+Every song now ends on its home chord (eleven genres' outros had stopped on a IV or a ii-V), and the
+ending's last bar never splits. 6/8 has its own grid on dotted-quarter beats (its own ending, fill down
+and set-up, and no eighth-note swing), and a 3/4 bar's second chord comes on beat 3. Phrases count from
+the section's start, the pad holds to the next change however far and takes a push with the comp, a
+pushed chord ties over the beat it anticipates, and a fixed figure or a waltz's bar line is no longer
+struck again at a change. Auto fills follow a 12-bar section's form, fills keep their anticipation
+at low energy and their level next to the groove, a fill down settles, the boom-chick ending keeps its
+bass, and the bossa carries its batida into the last chord. The new 7#5 chord gives the jazz waltz its
+"Someday My Prince Will Come" changes; Bolero has its own minor progressions, Rock its I-vi-IV-V and
+fifties set, Samba is at 200 BPM, Mambo is a fixed figure, Western Swing accents 2 and 4, and Freddie
+Green's four sustains through the verse. On the plugin side a song that has ended stays silent (the
+bass coming in too) until a section is picked or SONG stops ending it, band hits survive a queued
+section, CHORDS edits carry their band hits, ENERGY and BLEND keep the chords, Cb is spelled in Gb,
+and a damaged song is refused. Projects and presets saved before 0.6.0 open as they played (Song Mode
+LOOP or REPEAT, swing not easing), and songs saved before 0.6.0 gain their fills down and ending.
 
 **Left out for now.** A "+ GUITAR" second player layered over the first, and recording a part played
 in to a take.

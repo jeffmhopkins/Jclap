@@ -253,6 +253,13 @@ public:
          if (i < kParamCount && std::isfinite(x))
             v[i] = x;
       }
+      // A state from before 0.6.0: its Song Mode 1 went round and round (now Song On Repeat; 1 ends
+      // the song), and its swing didn't ease when fast.
+      if (header[1] <= kIntroSetup) {
+         if (std::lround(v[kSongMode]) == 1)
+            v[kSongMode] = 2;
+         v[kSwingEase] = 0;
+      }
       uint32_t size = 0;
       if (!jclap::core::readAll(stream, &size, sizeof(size)) || size > (1u << 20))
          return false;
@@ -262,6 +269,7 @@ public:
       auto loaded = std::make_unique<Song>();
       if (!loaded->load(saved.data(), saved.size()))
          return false;
+      completeSong(recipeFrom([&](clap_id id) { return v[id]; }), *loaded, saved);
       uint32_t nameLength = 0;
       char name[256];
       if (jclap::core::readAll(stream, &nameLength, sizeof(nameLength)) && nameLength < sizeof(name) &&

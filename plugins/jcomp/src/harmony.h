@@ -69,6 +69,9 @@ inline const std::vector<Quality> &qualities() {
       {"maj7#11", {0, 4, 7, 11, 18}, {4, 11, 18, 7, 0}, true},
       {"madd9", {0, 3, 7, 14}, {3, 14, 0, 7}, false},
       {"13sus", {0, 5, 7, 10, 14, 21}, {5, 10, 21, 14, 0, 7}, true},
+      // The augmented dominant (a chart's 7+5: the waltz's III7 and VI7), its #5 the b13 a minor
+      // target's dominant leans on.
+      {"7#5", {0, 4, 8, 10}, {4, 10, 8, 0}, true},
    };
    return q;
 }
@@ -79,7 +82,7 @@ inline const Quality &qualityOf(const Chord &c) {
 // Quality indexes the generator and tests name.
 enum QualityId {
    kMaj, kMin, kDom7, kMaj7, kMin7, kDom9, kMin9, kMaj9, kDom13, kSharp9, kFlat9, kSix, kMin6, kSixNine, kSus,
-   kSus7, kDim, kDim7, kHalfDim, kAug, kAdd9, kMin11, kEleven, kMinMaj7, kSharp11, kMaj7Sharp11, kMinAdd9, kSus13
+   kSus7, kDim, kDim7, kHalfDim, kAug, kAdd9, kMin11, kEleven, kMinMaj7, kSharp11, kMaj7Sharp11, kMinAdd9, kSus13, kSharp5
 };
 
 // ---- keys and scales ----
@@ -97,8 +100,8 @@ inline bool flatKey(int key, int scale = kMajor) {
 // A note's name in a key, spelled by its degree: the key's own notes by their letters (G# in E, Bb
 // in F), and the chromatic ones as the flat third, sixth, seventh and second and the sharp fourth
 // (Eb, Ab, Bb, Db and F# in C), as the borrowed and secondary chords are written. A spelling that
-// would need a double accidental, a Cb or Fb, or an E# or B# (but as a sharp key's leading tone)
-// falls back to the key's sharps or flats.
+// would need a double accidental, a Cb (but in Gb's signature) or Fb, or an E# or B# (but as a sharp
+// key's leading tone) falls back to the key's sharps or flats.
 inline const char *pitchName(int pc, int key = 0, int scale = kMajor) {
    pc = ((pc % 12) + 12) % 12;
    key = ((key % 12) + 12) % 12;
@@ -122,6 +125,12 @@ inline const char *pitchName(int pc, int key = 0, int scale = kMajor) {
    const bool leading = (pc - key + 12) % 12 == 11 && names == kSharpNames;
    if ((!std::strcmp(n, "E#") || !std::strcmp(n, "B#")) && !leading)
       return names[pc];
+   // Cb only where the key signature has it: Gb major's six flats (and its modes: Eb minor, Ab
+   // Dorian, Db Mixolydian), whose IV is Cb.
+   static const int toMajor[kScaleCount] = {0, 3, 10, 5, 0};
+   const int major = (key + toMajor[std::clamp(scale, 0, kScaleCount - 1)]) % 12;
+   if (!std::strcmp(n, "Cb") && major == 6 && pc == 11 && scale != kBlues)
+      return n;
    if (!std::strcmp(n, "Cb") || !std::strcmp(n, "Fb"))
       return names[pc];
    return n;
@@ -321,6 +330,9 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
    Chord best;
    double bestScore = -1e9;
    bool bestRootless = false;
+   // Root, 3rd and 7th over the lowest note (C E Bb) is that note's dominant shell, the most common
+   // way to hold one, never the rootless voicing of the chord a tritone away (Gb7#11).
+   const bool bassShell = (held >> ((bassPc + 4) % 12) & 1) && (held >> ((bassPc + 10) % 12) & 1);
    for (int root = 0; root < 12; ++root) {
       // A rootless voicing needs four notes to be named by its missing root, or a dominant's
       // tritone (its 3rd and 7th) and a colour: the left hand's rootless voicings.
@@ -334,7 +346,7 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
          for (int i : qu.tones)
             want |= 1u << ((root + i) % 12);
          double score = 0;
-         const bool overBass = slash && root != bassPc && bassCount == 1 && !(want & bassBit) &&
+         const bool overBass = slash && !bassShell && root != bassPc && bassCount == 1 && !(want & bassBit) &&
                                (want & ~bassBit) == (held & ~bassBit);
          for (int pc = 0; pc < 12; ++pc) {
             const bool h = held >> pc & 1, w = want >> pc & 1;
@@ -361,7 +373,8 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
          // its own, is that dominant (G13 from F A B E, not an Fmaj7#11 with an avoid note).
          const bool dom = std::find(qu.tones.begin(), qu.tones.end(), 4) != qu.tones.end() &&
                           std::find(qu.tones.begin(), qu.tones.end(), 10) != qu.tones.end();
-         if (rootless && tritone && dom && (held & ~want) == 0)
+         const bool rootlessDom = rootless && tritone && dom && !bassShell;
+         if (rootlessDom && (held & ~want) == 0)
             score += 2.5;
          // Simpler names first: fewer tones break ties.
          score -= 0.05 * static_cast<double>(qu.tones.size());
@@ -369,7 +382,7 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
             bestScore = score;
             best.root = static_cast<int8_t>(root);
             best.quality = static_cast<uint8_t>(q);
-            bestRootless = rootless && tritone && dom;
+            bestRootless = rootlessDom;
          }
       }
    }
@@ -437,8 +450,11 @@ inline Ints pickTones(const Chord &c, int n) {
    // The fifth goes before the root in a seventh chord of four notes when there is a colour tone
    // (3, 7, 9, 5: the classic rootless voicing); pickTones already orders it so.
    const int base = static_cast<int>(t.size());
+   // (Over a major seventh the doubled note is the 9th, not the root a half step over the 7th.)
+   const bool maj7 = std::find(q.tones.begin(), q.tones.end(), 11) != q.tones.end();
+   const bool has9 = std::find(t.begin(), t.end(), 14) != t.end();
    for (int k = 0; static_cast<int>(t.size()) < n; ++k)
-      t.push_back(k % 2 == 0 ? 12 : (q.tones.size() > 2 ? q.tones[2] : 7) + 12 * (1 + k / 2));
+      t.push_back(k % 2 == 0 ? (maj7 && !has9 && k == 0 ? 14 : 12) : (q.tones.size() > 2 ? q.tones[2] : 7) + 12 * (1 + k / 2));
    (void)base;
    return t;
 }
@@ -452,7 +468,8 @@ inline Ints upperTones(const Chord &c, int n) {
    for (int i : q.priority)
       if (i % 12 != 0 && static_cast<int>(t.size()) < n)
          t.push_back(i);
-   for (int extra : {7, 12, 19})
+   const bool maj7 = std::find(q.tones.begin(), q.tones.end(), 11) != q.tones.end();
+   for (int extra : {7, maj7 ? 14 : 12, 19})
       if (static_cast<int>(t.size()) < n && std::find(t.begin(), t.end(), extra) == t.end() &&
           !((extra == 7 || extra == 19) && std::find(q.tones.begin(), q.tones.end(), 18) != q.tones.end()) &&
           !((extra == 7 || extra == 19) && std::find(q.tones.begin(), q.tones.end(), 7) == q.tones.end() && q.tones.size() > 2 &&
@@ -601,7 +618,10 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       // A chord with fewer tones than voices (a triad, a sus, an add9) stacks fewer fourths rather
       // than leaving the shape; one a note or two short is always a choice too (the sparse set of
       // stacks otherwise leaves the top leaping from chord to chord).
-      for (int size = n; size >= 3 && (out.empty() || size >= n - 2); --size)
+      // (A chord with as many tones as voices gets a stack its own size where one exists: a five-note
+      // m9 isn't left at three.)
+      const bool fewer = static_cast<int>(q.tones.size()) < n;
+      for (int size = n; size >= 3 && (out.empty() || (fewer && size >= n - 2)); --size)
       for (int strict = 3, found = static_cast<int>(out.size()); strict >= 0 && static_cast<int>(out.size()) == found; --strict)
          for (int odd = 0; odd < 2 && static_cast<int>(out.size()) == found; ++odd)
             for (int b = vs.lo - 12; b <= vs.hi; ++b) {
@@ -639,6 +659,18 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                      detail::addCandidate(out, v, qs, strict == 1 ? v.front() : -1);
                }
             }
+      // An add9's or a 9th chord's 9th is its colour: the stacks that hold it, where any do.
+      if (hasIv(14)) {
+         Voicings nine;
+         for (const Voicing &v : out)
+            for (int i = 0; i < v.count; ++i)
+               if (((v.notes[static_cast<size_t>(i)] - c.root) % 12 + 12) % 12 == 2) {
+                  nine.push_back(v);
+                  break;
+               }
+         if (!nine.empty())
+            out = nine;
+      }
       // Over a slash bass, the bass is at the bottom: the stacks with it there, else each with the
       // bass added under it.
       if (bassPc != c.root && !out.empty()) {
@@ -1033,6 +1065,10 @@ inline double clashes(const Voicing &v, const Chord &c) {
          const int lo = v.notes[static_cast<size_t>(i)], hi = v.notes[static_cast<size_t>(j)];
          if (hi - lo >= 13 && (hi - lo) % 12 == 1 && !(has(13) && iv(lo) == 0))
             k += 9.0;
+         // A major seventh with the root a half step (or a minor 9th) over it: the rub the
+         // voicing texts rule out (Pease & Pullig; Levine).
+         if (has(11) && iv(lo) == 11 && iv(hi) == 0)
+            k += hi - lo == 1 ? 24.0 : 20.0;
       }
    if (has(15) && has(4)) {
       int third = -1, sharp9 = -1;

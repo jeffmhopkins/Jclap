@@ -96,6 +96,8 @@ struct FixedVec {
 
 constexpr int kSections = 7;
 constexpr int kTakes = 4;
+// How many chord qualities there are (harmony.h's table; a test holds the two together).
+constexpr int kQualityLimit = 29;
 constexpr int kMaxSteps = 64;   // four bars of sixteenths
 constexpr int kMaxProgBars = 12; // a progression loops after up to twelve bars (a 12-bar blues)
 constexpr int kSlots = kMaxProgBars * 2;
@@ -148,9 +150,11 @@ struct Hit {
 
 // Step lengths: sixteenths, eighth triplets (12/8 and the shuffle: three to a beat, twelve a bar), or
 // sixteenths in a bar of three beats (3/4, and 6/8 counted in its eighths: twelve a bar).
-enum Rate : uint8_t { kRate16, kRate8T, kRate34 };
-inline const char *const kRateNames[] = {"1/16", "1/8T", "1/16 in 3"};
-inline const int kRateTicks[] = {12, 16, 12};
+// kRate34 and kRate68: a bar of three quarter beats in sixteenths (12 steps); 3/4 counts them in
+// three quarters, 6/8 in two dotted quarters (six eighths, accents on 1 and 4).
+enum Rate : uint8_t { kRate16, kRate8T, kRate34, kRate68 };
+inline const char *const kRateNames[] = {"1/16", "1/8T", "1/16 in 3", "1/16 in 6/8"};
+inline const int kRateTicks[] = {12, 16, 12, 12};
 constexpr int kTicksPerBeat = 48;
 constexpr int kBeatsPerBar = 4; // a 4/4 bar's (a song in 3/4 has three: Song::beats)
 constexpr int kTicksPerBar = kTicksPerBeat * kBeatsPerBar;
@@ -170,9 +174,11 @@ struct Pattern {
    }
    bool empty() const { return count() == 0; }
    int stepsPerBar() const { return rate == kRate16 ? 16 : 12; }
-   int perBeat() const { return rate == kRate8T ? 3 : 4; }
-   int beats() const { return rate == kRate34 ? 3 : 4; }
-   int stepTicks() const { return kRateTicks[std::min<int>(rate, kRate34)]; }
+   // A beat's steps: a quarter, a triplet's three, or 6/8's dotted quarter.
+   int perBeat() const { return rate == kRate8T ? 3 : rate == kRate68 ? 6 : 4; }
+   bool inThree() const { return rate == kRate34 || rate == kRate68; }
+   int beats() const { return inThree() ? 3 : 4; } // quarter beats a bar
+   int stepTicks() const { return kRateTicks[std::min<int>(rate, kRate68)]; }
    int bars() const { return std::max(1, (steps + stepsPerBar() - 1) / stepsPerBar()); }
    void clear() { hits.fill(Hit{}); }
    bool operator==(const Pattern &o) const { return steps == o.steps && rate == o.rate && hits == o.hits; }
@@ -180,8 +186,10 @@ struct Pattern {
 };
 
 inline int patternTicks(const Pattern &p) { return p.steps * p.stepTicks(); }
-// A bar's strong beats, where a left hand plays and a take's anchors fall: 1 and 3 in four, 1 in three.
-inline int strongSteps(const Pattern &p) { return p.rate == kRate34 ? 12 : p.perBeat() * 2; }
+// A bar's strong beats, where a left hand plays and a take's anchors fall: 1 and 3 in four, 1 in three, 1 and 4 in 6/8.
+inline int strongSteps(const Pattern &p) { return p.rate == kRate34 ? 12 : p.rate == kRate68 ? 6 : p.perBeat() * 2; }
+// Where a bar's second chord comes in (its second slot): half way, but on beat 3 in a waltz.
+inline int halfBar(const Pattern &p) { return p.rate == kRate34 ? 8 : p.stepsPerBar() / 2; }
 
 // A chord: a root (0 = C), a quality (an index into harmony.h's kQualities) and a bass note for a
 // slash chord (-1 the root). A root of -1 is no chord (N.C.): the comp rests.
@@ -322,7 +330,7 @@ struct Song {
       uint32_t version = 0;
       auto pattern = [&](Pattern &p) {
          p.steps = static_cast<uint8_t>(std::clamp<int>(u8(), 1, kMaxSteps));
-         p.rate = static_cast<uint8_t>(std::min<int>(u8(), version >= 3 ? kRate34 : kRate8T));
+         p.rate = static_cast<uint8_t>(std::min<int>(u8(), version >= 3 ? kRate68 : kRate8T));
          for (Hit &h : p.hits) {
             h.vel = static_cast<uint8_t>(std::min<int>(u8(), 127));
             h.len = static_cast<uint8_t>(std::clamp<int>(u8(), 1, kMaxSteps));
@@ -354,7 +362,7 @@ struct Song {
          for (Chord &c : s.chords) {
             const int r = static_cast<int8_t>(u8());
             c.root = static_cast<int8_t>(r < 0 || r > 11 ? -1 : r);
-            c.quality = u8();
+            c.quality = static_cast<uint8_t>(std::min<int>(u8(), kQualityLimit - 1));
             const int b = static_cast<int8_t>(u8());
             c.bass = static_cast<int8_t>(b < 0 || b > 11 ? -1 : b);
          }
@@ -367,6 +375,16 @@ struct Song {
             for (uint8_t &m : s.marks)
                m = static_cast<uint8_t>(std::min<int>(u8(), kMarkShot));
          }
+         // Every pattern written is on the song's meter: a 16-step grid in a waltz's bars is damage.
+         auto meter = [&](const Pattern &p) {
+            if (!p.empty() && p.inThree() != (loaded.beats == 3))
+               ok = false;
+         };
+         for (const Pattern &p : s.takes)
+            meter(p);
+         meter(s.fill);
+         meter(s.fillDown);
+         meter(s.ending);
       }
       if (!ok)
          return false;

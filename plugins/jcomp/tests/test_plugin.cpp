@@ -201,6 +201,36 @@ int main() {
       JCLAP_CHECK(!same(x, z));
    }
    {
+      // E1, E12: a state from before 0.6.0 keeps playing as it did: its Song Mode 1 (round and
+      // round) is Song On Repeat now, and its swing doesn't ease.
+      TestHost a(clap_entry, kId);
+      a.setParam(kSongMode, 1.0);
+      a.process(256);
+      a.plugin()->on_main_thread(a.plugin());
+      Buffer b;
+      const clap_ostream_t out = b.out();
+      JCLAP_CHECK(stateOf(a)->save(a.plugin(), &out));
+      // Cut it down to the params a 0.5 state had (everything before INTRO SETS UP THE VERSE).
+      Buffer old;
+      old.data.assign(b.data.begin(), b.data.begin() + 12);
+      const uint32_t count = kIntroSetup;
+      std::memcpy(old.data.data() + 8, &count, 4);
+      old.data.insert(old.data.end(), b.data.begin() + 12, b.data.begin() + 12 + 8 * count);
+      old.data.insert(old.data.end(), b.data.begin() + 12 + 8 * kParamCount, b.data.end());
+      TestHost c(clap_entry, kId);
+      const clap_istream_t in = old.in();
+      JCLAP_CHECK(stateOf(c)->load(c.plugin(), &in));
+      JCLAP_CHECK_EQ(static_cast<int>(c.object<EditorHost>()->paramValue(kSongMode)), 2);
+      JCLAP_CHECK_EQ(static_cast<int>(c.object<EditorHost>()->paramValue(kSwingEase)), 0);
+      // Today's state keeps its Play Song.
+      TestHost d(clap_entry, kId);
+      b.read = 0;
+      const clap_istream_t in2 = b.in();
+      JCLAP_CHECK(stateOf(d)->load(d.plugin(), &in2));
+      JCLAP_CHECK_EQ(static_cast<int>(d.object<EditorHost>()->paramValue(kSongMode)), 1);
+      JCLAP_CHECK_EQ(static_cast<int>(d.object<EditorHost>()->paramValue(kSwingEase)), 1);
+   }
+   {
       // A recipe param set by the host remakes the song: the genre it names plays.
       TestHost a(clap_entry, kId);
       const Song before = a.object<EditorHost>()->song();

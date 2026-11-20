@@ -219,7 +219,7 @@ struct Preview {
 // into a hit that asks for one on a change of chord.
 // DENSITY and LENGTH as the panel last read them, so every roll draws the part as it will sound.
 struct LiveFeel {
-   double density = 0.5, length = 0.5, runs = 0.25;
+   double density = 0.5, length = 0.5, runs = 0.25, swing = 0.5;
    int same = 4;       // SAME DICE's bars
    int every = 1;      // RUNS AT MOST every so many bars
    bool fixed = false; // the style's figure is played as written
@@ -230,6 +230,7 @@ void readFeel(const EditorHost &host) {
    gFeel.density = host.paramValue(kDensity);
    gFeel.length = host.paramValue(kLength);
    gFeel.runs = host.paramValue(kRuns);
+   gFeel.swing = host.paramValue(kSwing);
    gFeel.same = kSameDiceBars[choiceIndex(host.paramValue(kSameDice), 5)];
    gFeel.every = kRunEveryBars[choiceIndex(host.paramValue(kRunEvery), 3)];
    gFeel.fixed = (styleOf(recipeFrom([&](clap_id id) { return host.paramValue(id); })).mods & kFixed) != 0;
@@ -268,31 +269,54 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
    // Runs on the take's grid, as the engine plays them: sixteenths where it plays them, else eighths.
    const int stride = fine || p.rate == kRate8T ? 1 : 2;
    int lastRunBar = -100;
+   // A bar's second chord: half way, but on beat 3 in a waltz (as the engine's halfTicks()).
+   const int64_t halfBar = p.rate == kRate34 ? 2 * kTicksPerBeat : barTicks / 2;
    const auto chordAtView = [&](int view) {
       const int64_t tick = static_cast<int64_t>(view) * stepTicks;
-      return moved(sec.chordAt(static_cast<int>(tick / barTicks), tick % barTicks >= barTicks / 2), transpose);
+      return moved(sec.chordAt(static_cast<int>(tick / barTicks), tick % barTicks >= halfBar), transpose);
    };
    for (int v = 0; v < out.steps; ++v) {
       Hit h = p.at(v % n);
       const bool onBeat = v % perBeat == 0;
       const bool onEighth = p.rate == kRate8T ? v % 3 != 1 : v % 2 == 0;
-      if (!h.on()) {
+      // A band hit on the chord's slot, as the engine plays it: ACC its first hit louder, HOLD one
+      // chord rung to the next change and SHOT one short, the take resting under both.
+      const int64_t vt = static_cast<int64_t>(v) * stepTicks;
+      const int vbar = static_cast<int>(vt / barTicks);
+      const int pb = std::max<int>(1, sec.progBars);
+      const bool secondSlot = vt % barTicks >= halfBar && (sec.split >> (vbar % pb) & 1);
+      const int mark = sec.marks[static_cast<size_t>((vbar % pb) * 2 + (secondSlot ? 1 : 0))];
+      const int64_t slotStart = static_cast<int64_t>(vbar) * barTicks + (secondSlot ? halfBar : 0);
+      const int64_t slotEnd = !secondSlot && (sec.split >> (vbar % pb) & 1) ? slotStart + halfBar
+                                                                             : static_cast<int64_t>(vbar + 1) * barTicks;
+      bool struck = false;
+      if (mark != kMarkNone && vt == slotStart) {
+         const int written = h.on() && !leftHand(h.part) ? h.vel : 0;
+         if (mark != kMarkAccent || !written)
+            h = hitOf('x');
+         h.push = 0;
+         h.vel = static_cast<uint8_t>(std::min(127, std::max(kAccent + 8, written + 10)));
+         h.art = mark == kMarkHold ? kArtRing : mark == kMarkShot ? kArtChop : kArtAsWritten;
+         struck = true;
+      } else if (mark == kMarkHold || mark == kMarkShot)
+         continue;
+      if (!struck && !h.on()) {
          // DENSITY above the middle fills gaps with softer repeats of the chord sounding.
          const double more = (gFeel.density - 0.5) * 2.0;
          const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
          if (more <= 0.0 || gFeel.fixed || hasLine(p) || prevChord.none() || heldOver(p, v % n) || (!onEighth && !fine) ||
-             (offbeat && onBeat) ||
+             (offbeat && onBeat) || (onBeat && gFeel.swing > 0.55) ||
              rollDice(p, v, 21) >= chance)
             continue;
          h.vel = static_cast<uint8_t>(onBeat ? kSoft : kGhost + (onEighth ? 10 : 0));
          h.len = 1;
          h.art = more > 0.85 ? kArtAsWritten : kArtChop;
-      } else if (thinnedInRoll(sec, p, v % n, v)) {
+      } else if (!struck && thinnedInRoll(sec, p, v % n, v)) {
          continue; // DENSITY below the middle drops the weakest hits; each bar's first stays
       }
       const int64_t tick = static_cast<int64_t>(v) * stepTicks + (h.push ? kTicksPerBeat / 2 : 0);
       const int bar = static_cast<int>(tick / barTicks);
-      const bool half = tick % barTicks >= barTicks / 2;
+      const bool half = tick % barTicks >= halfBar;
       const Chord c = moved(sec.chordAt(bar, half), transpose);
       if (c.none())
          continue;
@@ -373,6 +397,8 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          h.art = kArtRing;
          gap = std::min(gap, 2 * perBeat);
       }
+      if (struck && mark == kMarkHold)
+         gap = std::max(1, static_cast<int>((slotEnd - slotStart) / stepTicks));
       float len = static_cast<float>(h.len) * 0.92f;
       switch (h.art) {
       case kArtChop: len = 0.45f; break;
@@ -1360,7 +1386,17 @@ public:
       }
       return p;
    }
-   const Pattern &pattern() const { return pick(const_cast<Song &>(host_.song())); }
+   // What a draw shows: the pattern on the song's grid, without writing the song (only an edit does).
+   static Pattern shown(const Song &song, int section, int take) {
+      Pattern p = patternOf(song.sections[static_cast<size_t>(section)], take);
+      const Section &sec = song.sections[static_cast<size_t>(section)];
+      if (p.empty() && p.rate != sec.takes[0].rate) {
+         p.rate = sec.takes[0].rate;
+         p.steps = static_cast<uint8_t>(p.stepsPerBar() * (take == 6 ? 2 : 1));
+      }
+      return p;
+   }
+   Pattern pattern() const { return shown(host_.song(), host_.editSection, host_.editTake); }
 
    const PlayFrame *frame = nullptr;
    std::function<void()> onChange, onPick;
@@ -1402,7 +1438,7 @@ public:
       const float w = width() / s;
       const Song &song = host_.song();
       const Section &sec = song.sections[static_cast<size_t>(host_.editSection)];
-      const Pattern &p = TakeRoll::pick(const_cast<Song &>(song), host_.editSection, host_.editTake);
+      const Pattern &p = TakeRoll::shown(song, host_.editSection, host_.editTake);
       const int steps = viewBars(sec, p) * p.stepsPerBar();
       const float gx = kLabelW, cw = (w - gx - 6) / steps;
       const char *names[4] = {"VELOCITY", "LENGTH", "CHANCE", "NUDGE"};
@@ -1480,7 +1516,7 @@ private:
       const float s = ui::designScale(*this);
       const Song &song = host_.song();
       const Section &sec = song.sections[static_cast<size_t>(host_.editSection)];
-      const Pattern &p = TakeRoll::pick(const_cast<Song &>(song), host_.editSection, host_.editTake);
+      const Pattern &p = TakeRoll::shown(song, host_.editSection, host_.editTake);
       const int steps = viewBars(sec, p) * p.stepsPerBar();
       const float cw = (width() / s - kLabelW - 6) / steps;
       const int v = static_cast<int>((e.position.x / s - kLabelW - 3) / cw);
@@ -2263,9 +2299,10 @@ private:
       if (host_.previous.size() > 16)
          host_.previous.erase(host_.previous.begin());
    }
-   void regenerate() {
+   // `keepChords`: ENERGY and BLEND remake the rhythms only, the chords (and their edits) kept.
+   void regenerate(bool keepChords = false) {
       Song s = host_.song();
-      generateSong(recipe(), s);
+      generateSong(recipe(), s, keepChords);
       host_.setSong(s);
       host_.parents.clear();
       breed();
@@ -2344,6 +2381,14 @@ private:
          // A preset is the sound and the song: the routing, the transport and the notes set up for
          // this project stay as they are.
          ui::Preset sound = p;
+         // A preset from before 0.6.0 (no SWING EASES WHEN FAST): its Song Mode 1 went round and
+         // round, and its swing didn't ease.
+         if (std::none_of(sound.values.begin(), sound.values.end(), [](const auto &v) { return v.first == kSwingEase; })) {
+            for (auto &v : sound.values)
+               if (v.first == kSongMode && std::lround(v.second) == 1)
+                  v.second = 2;
+            sound.values.push_back({kSwingEase, 0.0});
+         }
          std::vector<double> d = defaults();
          sound.values.erase(std::remove_if(sound.values.begin(), sound.values.end(),
                                            [](const auto &v) { return isSetupParam(v.first); }),
@@ -2354,7 +2399,7 @@ private:
          ui::applyPreset(sound, host_, d);
          Song song;
          const std::filesystem::path file = ui::userPresetFolder(kPresetFormat) / (p.name + kPresetFormat.extension);
-         if (readSong(songFile(file), song))
+         if (readSong(songFile(file), song, recipe()))
             host_.setSong(song);
          else {
             Song s;
@@ -2391,7 +2436,7 @@ private:
       tiles12_->onBlend = [this](int g) {
          setParam(kBlendGenre, whole(kBlendGenre) - 1 == g || g == whole(kGenre) ? 0 : g + 1);
          remember();
-         regenerate();
+         regenerate(true);
       };
       tips_.add(*tiles12_, "Click a genre to hear it. Shift-click another to blend its rhythms in (BLEND sets how much).");
       style_ = &onPage<ui::Dropdown>(kGeneratePage, {90, 83, 150, 19});
@@ -2405,7 +2450,7 @@ private:
          showOverlays();
       };
       blend_ = &onPage<ParamSlider>(kGeneratePage, {490, 89, 40, 8}, host_, kBlend, "", "", "", kPurple);
-      blend_->onDone = [this] { regenerate(); };
+      blend_->onDone = [this] { regenerate(true); };
       tips_.add(*blend_, "How much of the blended genre's rhythm comes in.");
 
       player_ = &onPage<PlayerButton>(kGeneratePage, {564, 104, 230, 28}, host_);
@@ -2416,7 +2461,7 @@ private:
       tips_.add(*player_, "Who plays: the instrument it voices for and how it touches the chords. Picking one sets the "
                           "voicing and feel to suit.");
       energy_ = &onPage<ParamSlider>(kGeneratePage, {564, 142, 250, 44}, host_, kEnergy, "ENERGY", "laid back", "driving", kOrange);
-      energy_->onDone = [this] { regenerate(); };
+      energy_->onDone = [this] { regenerate(true); };
       tips_.add(*energy_, "How hard the whole song goes. Each section's own energy (in THE SONG) rides on it.");
       weird_ = &onPage<ParamSlider>(kGeneratePage, {564, 194, 250, 44}, host_, kWeird, "WEIRD", "triads, as written",
                                     "extended, reharmonised", kPurple);
@@ -2689,6 +2734,8 @@ private:
             for (int b = was; b < id; ++b) {
                sec.chords[static_cast<size_t>(b * 2)] = sec.chords[static_cast<size_t>((b % was) * 2)];
                sec.chords[static_cast<size_t>(b * 2 + 1)] = sec.chords[static_cast<size_t>((b % was) * 2 + 1)];
+               sec.marks[static_cast<size_t>(b * 2)] = sec.marks[static_cast<size_t>((b % was) * 2)];
+               sec.marks[static_cast<size_t>(b * 2 + 1)] = sec.marks[static_cast<size_t>((b % was) * 2 + 1)];
                if (sec.split >> (b % was) & 1)
                   sec.split = static_cast<uint16_t>(sec.split | (1u << b));
             }
@@ -2700,11 +2747,13 @@ private:
             sec.chords = from.chords;
             sec.split = from.split;
             sec.progBars = from.progBars;
+            sec.marks = from.marks; // the band hits go with the chords they were written on
          } else if (id == 200) {
             Rng rng(sec.seed);
             Recipe r = recipe();
             r.key = s.key;
             makeChords(r, section, sec, rng);
+            sec.marks = {}; // written on chords that are gone
          }
          host_.chordSlot = std::min(host_.chordSlot, sec.progBars * 2 - 1);
          host_.setSong(s);
@@ -2974,7 +3023,7 @@ private:
       editSection_->setSelected(host_.editSection);
       editTake_->setSelected(host_.editTake);
       const Section &sec = host_.song().sections[static_cast<size_t>(host_.editSection)];
-      const Pattern &p = TakeRoll::pick(const_cast<Song &>(host_.song()), host_.editSection, host_.editTake);
+      const Pattern &p = TakeRoll::shown(host_.song(), host_.editSection, host_.editTake);
       const int bars = viewBars(sec, p);
       static const char *const extra[3] = {"FILL", "FILL DOWN", "ENDING"};
       std::string title = std::string(kSectionCaps[host_.editSection]) + " \xC2\xB7 " +
@@ -3046,7 +3095,9 @@ private:
       tiles_ = &onPage<SectionTiles>(kPlayPage, {26, 108, 948, 150}, host_);
       wire(*tiles_);
       tiles_->onAction = [this](int a) {
-         if (a <= kActOutro && whole(kSwitchBy) != 1)
+         // In SONG the Section param is where the song starts: a click goes to the section (as a
+         // section note) without moving the song's start, unless the notes are switched off.
+         if (a <= kActOutro && whole(kSwitchBy) != 1 && (whole(kSongMode) == 0 || whole(kSwitchBy) == 2))
             setParam(kSection, a);
          else if (a >= kActTake1 && a <= kActTake4 && whole(kSwitchBy) != 1)
             setParam(kTake, a - kActTake1);
