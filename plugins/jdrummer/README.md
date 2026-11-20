@@ -15,7 +15,7 @@ variations, a fill and its own energy. Mutate any section until it sits right, e
 switch sections live by click, by note or by automation. It plays with the host's transport, or on
 its own PLAY while the host is stopped.
 
-Version 0.2.0.
+Version 0.2.1.
 
 ![Panel](docs/panel.png)
 
