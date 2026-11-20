@@ -65,6 +65,7 @@ public:
    const Frame &frame() override { return frame_; }
    const Song &song() const override { return song_; }
    void setSong(const Song &s) override { song_ = s; }
+   void previewSong(const Song *) override {}
    void request(int) override {}
    void armLearn(bool) override {}
    int takeLearned() override { return -1; }
@@ -110,6 +111,9 @@ int main(int argc, char **argv) {
       } else if (!a.empty() && a[0] >= '0' && a[0] <= '9')
          (numbers++ == 0 ? width : height) = std::atoi(a.c_str());
    }
+   // GENERATE shows the second child on trial.
+   if (page == 0)
+      host.previewChild = 1;
    // EDIT shows a few of the hits' own values.
    if (page == 1) {
       host.frame_.variation = 0; // so the playhead shows on the pattern being edited

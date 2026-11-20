@@ -123,12 +123,27 @@ public:
 
    const Song &song() const override { return *song_; }
    void setSong(const Song &s) override {
-      if (s == *song_)
+      const bool previewing = previewing_;
+      previewing_ = false;
+      previewChild = -1;
+      if (s == *song_) {
+         if (previewing)
+            send();
          return;
+      }
       *song_ = s;
       send();
       if (auto *state = hostExtension<clap_host_state_t>(CLAP_EXT_STATE))
          state->mark_dirty(host());
+   }
+
+   void previewSong(const Song *s) override {
+      previewing_ = s != nullptr;
+      if (s)
+         preview_ = *s;
+      else
+         previewChild = -1;
+      send();
    }
 
    void request(int action) override {
@@ -249,6 +264,8 @@ public:
       for (size_t i = 0; i < kParamCount; ++i)
          values_[i].store(std::clamp(v[i], kParams[i].min, kParams[i].max));
       *song_ = *loaded;
+      previewing_ = false;
+      previewChild = -1;
       send();
       if (!active_.load()) {
          engine_->setSettings(settings());
@@ -332,11 +349,13 @@ public:
    }
 
 private:
+   // The song to the audio thread: the one on preview while there is one.
    void send() {
-      mail_->back() = *song_;
+      const Song &s = previewing_ ? preview_ : *song_;
+      mail_->back() = s;
       mail_->publish();
       if (!active_.load())
-         engine_->setSong(*song_);
+         engine_->setSong(s);
    }
 
    void handleEvent(const clap_event_header_t *h, const clap_output_events_t *) {
@@ -451,6 +470,8 @@ private:
    std::unique_ptr<jclap::core::TripleBuffer<Song>> mail_;
    jclap::core::TripleBuffer<Frame> frames_;
    static constexpr uint32_t kRequests = 64;
+   Song preview_;
+   bool previewing_ = false;
    std::atomic<int> requests_[kRequests] = {};
    std::atomic<uint32_t> requestWrite_{0};
    uint32_t requestRead_ = 0;

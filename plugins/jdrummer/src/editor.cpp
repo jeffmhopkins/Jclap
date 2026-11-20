@@ -597,7 +597,8 @@ private:
 };
 
 // MUTATE: the section's groove now, and five children, each tagged with how it differs. Click a
-// child to put it in the song; "back" takes the one before.
+// child to hear it in the song, click it again to keep it, or click NOW to go back; "back" takes the
+// one before.
 class MutateRow : public visage::Frame {
 public:
    explicit MutateRow(EditorHost &host) : host_(host) {}
@@ -615,23 +616,26 @@ public:
       drawThumb(c, s, sec.vars[0], kit, 9, 23, kNowW - 18, h - 46);
       if (!host_.parents.empty())
          label(c, s, "< back to gen " + std::to_string(sec.generation), 9, h - 18, 110, 0, visage::Font::kLeft, 9);
-      label(c, s, "click a child to put it in the song", 9, h - 18, kNowW - 18, kFaint, visage::Font::kRight, 8);
+      const bool trying = host_.previewChild >= 0;
+      label(c, s, trying ? "click to go back to it" : "click a child to hear it", 9, h - 18, kNowW - 18,
+            trying ? kOrange : kFaint, visage::Font::kRight, 8);
       c.setColor(kFaint);
       c.triangle((kNowW + 7) * s, (h / 2 - 6) * s, (kNowW + 7) * s, (h / 2 + 6) * s, (kNowW + 15) * s, (h / 2) * s);
       // The children.
       for (int i = 0; i < 5 && i < static_cast<int>(host_.litter.size()); ++i) {
          const float x = kNowW + 22 + i * kChildW;
-         const bool hover = hover_ == i;
-         c.setColor(kCell);
+         const bool hover = hover_ == i, heard = host_.previewChild == i;
+         c.setColor(heard ? kWarm : kCell);
          c.roundedRectangle(x * s, 0, (kChildW - 6) * s, h * s, 5 * s);
-         c.setColor(hover ? kWhite : ui::defaultTheme().panelBorder);
-         c.roundedRectangleBorder(x * s, 0, (kChildW - 6) * s, h * s, 5 * s, hover ? 1.5f * s : 1.0f);
+         c.setColor(heard ? kOrange : hover ? kWhite : ui::defaultTheme().panelBorder);
+         c.roundedRectangleBorder(x * s, 0, (kChildW - 6) * s, h * s, 5 * s, heard || hover ? 1.5f * s : 1.0f);
          std::string tag = host_.tags[static_cast<size_t>(i)];
          if (tag.size() > 26)
             tag = tag.substr(0, 25) + "\xE2\x80\xA6";
          label(c, s, tag, x + 8, 6, kChildW - 20, kWhite, visage::Font::kLeft, 9.5f);
          drawThumb(c, s, host_.litter[static_cast<size_t>(i)], kit, x + 8, 23, kChildW - 22, h - 46);
-         label(c, s, hover ? "click to use" : "", x + 8, h - 18, kChildW - 22, kOrange, visage::Font::kLeft, 8.5f);
+         label(c, s, heard ? "playing \xC2\xB7 click to keep" : hover ? "click to hear" : "", x + 8, h - 18, kChildW - 22,
+               kOrange, visage::Font::kLeft, 8.5f);
       }
    }
    void mouseMove(const visage::MouseEvent &e) override {
@@ -651,11 +655,14 @@ public:
       if (i >= 0) {
          if (onPick)
             onPick(i);
-      } else if (e.position.x / s < 120 && e.position.y / s > height() / s - 22 && onBack)
-         onBack();
+      } else if (e.position.x / s < 120 && e.position.y / s > height() / s - 22 && !host_.parents.empty()) {
+         if (onBack)
+            onBack();
+      } else if (e.position.x / s < kNowW && onNow)
+         onNow();
    }
    std::function<void(int)> onPick;
-   std::function<void()> onBack;
+   std::function<void()> onBack, onNow;
    static constexpr float kNowW = 228, kChildW = 140;
 
 private:
@@ -1638,6 +1645,7 @@ public:
          if (p == host_.page)
             return;
          host_.page = p;
+         endPreview();
          closeOverlays();
          redraw();
       };
@@ -1657,11 +1665,14 @@ public:
       startTimer(33);
    }
    ~Panel() override {
+      endPreview();
       if (host_.learnAction >= 0)
          host_.armLearn(false);
    }
 
    void showPage(int page) {
+      if (page != host_.page)
+         endPreview();
       host_.page = page;
       tabs_->select(page);
       showOverlays();
@@ -1679,6 +1690,9 @@ public:
    }
 
    void timerCallback() override {
+      // Something else changed the song: the child on trial is let go.
+      if (previewing_ && host_.previewChild < 0)
+         endPreview();
       const PlayFrame &f = host_.frame();
       frame_ = f;
       header_->frame = &frame_;
@@ -1796,6 +1810,7 @@ private:
    // Five children of the section's groove. The same section, generation and litter number give the
    // same five (so the panel opens on the litter it closed on); NEW LITTER asks for the next.
    void breed(bool fresh = false) {
+      endPreview();
       if (fresh)
          ++litterRolls_;
       const Section &sec = host_.song().sections[static_cast<size_t>(host_.mutateSection)];
@@ -1812,16 +1827,61 @@ private:
       if (mutate_)
          mutate_->redraw();
    }
-   void adopt(int child) {
-      Song s = host_.song();
-      Section &sec = s.sections[static_cast<size_t>(host_.mutateSection)];
-      host_.parents.push_back(sec.vars[0]);
+   // A click on a child plays the song with it (its variations and fill made from it, as keeping it
+   // would), on the section being mutated, starting PLAY if nothing is running; a second click keeps
+   // exactly what was heard. NOW, a page change or any other change to the song lets it go, back to
+   // the section and transport it found.
+   void pick(int child) {
+      if (child < 0 || child >= static_cast<int>(host_.litter.size()))
+         return;
+      if (previewing_ && host_.previewChild == child) {
+         keep();
+         return;
+      }
+      if (!previewing_) {
+         const PlayFrame &f = host_.frame();
+         previewStarted_ = !f.running && whole(kSync) != 1;
+         previewReturn_ = f.running && f.section != host_.mutateSection ? f.section : -1;
+         if (previewStarted_)
+            setParam(kPlay, 1.0);
+         if (!f.running || f.section != host_.mutateSection)
+            host_.request(host_.mutateSection);
+      }
+      preview_ = host_.song();
+      Section &sec = preview_.sections[static_cast<size_t>(host_.mutateSection)];
       adoptChild(recipe(), sec, host_.litter[static_cast<size_t>(child)], rng_());
+      host_.previewSong(&preview_);
+      host_.previewChild = child;
+      previewing_ = true;
+      if (mutate_)
+         mutate_->redraw();
+   }
+   void keep() {
+      const Song s = preview_;
+      host_.parents.push_back(host_.song().sections[static_cast<size_t>(host_.mutateSection)].vars[0]);
+      endPreview();
       host_.setSong(s);
       breed();
       redraw();
    }
+   void endPreview() {
+      if (!previewing_)
+         return;
+      previewing_ = false;
+      if (host_.previewChild >= 0)
+         host_.previewSong(nullptr);
+      host_.previewChild = -1;
+      if (previewStarted_)
+         setParam(kPlay, 0.0);
+      else if (previewReturn_ >= 0)
+         host_.request(previewReturn_);
+      previewStarted_ = false;
+      previewReturn_ = -1;
+      if (mutate_)
+         mutate_->redraw();
+   }
    void back() {
+      endPreview();
       if (host_.parents.empty())
          return;
       Song s = host_.song();
@@ -1967,8 +2027,11 @@ private:
       litter.dice = true;
       litter.onClick = [this](const visage::MouseEvent &) { breed(true); };
       mutate_ = &onPage<MutateRow>(kGeneratePage, {26, 486, 948, 112}, host_);
-      mutate_->onPick = [this](int i) { adopt(i); };
+      mutate_->onPick = [this](int i) { pick(i); };
       mutate_->onBack = [this] { back(); };
+      mutate_->onNow = [this] { endPreview(); };
+      tips_.add(*mutate_, "Click a child to hear it in place of the section's groove (PLAY starts if nothing is "
+                          "running). Click it again to keep it, or click NOW to go back.");
    }
 
    void drawGenerate(visage::Canvas &c, float s) {
@@ -2352,6 +2415,11 @@ private:
    ui::Tooltips tips_;
    std::mt19937 rng_;
    uint32_t litterRolls_ = 0;
+   // The child on trial: the song as it would be with it, whether its click started PLAY, and the
+   // section to go back to.
+   Song preview_;
+   bool previewing_ = false, previewStarted_ = false;
+   int previewReturn_ = -1;
    PlayFrame frame_;
    ui::TabBar *tabs_ = nullptr;
    ui::PresetBar *presets_ = nullptr;

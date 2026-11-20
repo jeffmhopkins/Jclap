@@ -27,6 +27,8 @@ public:
    // The song, as the panel edits it; a change goes to the audio thread at its next block.
    virtual const Song &song() const = 0;
    virtual void setSong(const Song &s) = 0;
+   // A song to hear in place of the song, without saving it (nullptr goes back). setSong ends it.
+   virtual void previewSong(const Song *s) = 0;
    // A section note's action, as if played (the held ones toggle).
    virtual void request(int action) = 0;
    // Learn: arm it, and read back the note that came in (-1 for none yet).
@@ -47,6 +49,8 @@ public:
    std::vector<Pattern> litter;
    std::vector<std::string> tags;
    std::vector<Pattern> parents;
+   // The child being heard (not yet in the song), or -1.
+   int previewChild = -1;
    // The song before each ROLL SONG, newest last.
    std::vector<Song> previous;
    // EDIT's M and S: pads muted, and pads soloed (when any is, only they play).
