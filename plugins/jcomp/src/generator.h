@@ -709,9 +709,14 @@ inline void shapeEnergy(Pattern &p, double e, Rng &rng, bool fixed = false, unsi
       // Only the anchors: each bar's first hit, rung (one stab on the one, or the first skank), and
       // soft: the quieter the section the softer, down to near silence at 0.
       const auto quiet = static_cast<uint8_t>(std::lround(kNormal * (0.45 + 2.5 * e)));
+      // An offbeat figure over a left hand (the boogie, the shout) keeps the bass on each bar's one:
+      // it's what the offbeats lean against.
+      const bool offbeatBass = offbeatTake(p) && hasLeftHand(p);
       for (int s = 0; s < p.steps; ++s) {
          Hit &h = p.at(s);
          if (!h.on())
+            continue;
+         if (offbeatBass && leftHand(h.part) && s % bar == 0)
             continue;
          if (!isFirst(s)) {
             h = Hit{};
@@ -992,6 +997,21 @@ inline bool mutationFits(const char *tag, unsigned mods, const Pattern &parent) 
 
 // A child of a pattern: one to three mutations, more with more `amount`, of those that suit the
 // style (`mods`). Its tag names them.
+// A take whose rhythm has a chord on a beat keeps one after DENSITY's energy, WEIRD or a mutation
+// thin it (the 60s R&B's beat 3): its first in each bar comes back. Losing them all would make it an
+// offbeat style (a skank's), whose changes and fills wait for an upbeat.
+inline void keepBeatChord(const Pattern &before, Pattern &p) {
+   if (!chordOnBeat(before) || chordOnBeat(p) || before.steps != p.steps || before.rate != p.rate)
+      return;
+   const int bar = p.stepsPerBar(), beat = p.perBeat();
+   for (int from = 0; from < p.steps; from += bar)
+      for (int s = from; s < from + bar && s < p.steps; s += beat)
+         if (before.at(s).on() && !leftHand(before.at(s).part)) {
+            p.at(s) = before.at(s);
+            break;
+         }
+}
+
 inline Pattern mutate(const Pattern &parent, double amount, Rng &rng, std::string &tag, unsigned mods = 0) {
    Pattern p = parent;
    const int n = 1 + static_cast<int>(amount * 2.0 + rng.uniform() * 0.7);
@@ -1016,6 +1036,7 @@ inline Pattern mutate(const Pattern &parent, double amount, Rng &rng, std::strin
    }
    if (p.empty())
       p.at(0) = hitOf('x');
+   keepBeatChord(parent, p);
    return p;
 }
 
@@ -1167,6 +1188,15 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
          if (f.at(s).on() && f.at(s).len <= 1 && !leftHand(f.at(s).part))
             f.at(s).art = kArtChop;
    shapeEnergy(f, std::max(0.35, e), rng, false, st.mods);
+   // An offbeat figure over a left hand whose fill came out as its groove (the shout: its fill's
+   // beat chords give way to the bass) hits every offbeat hard: the praise break's push into the next.
+   bool same = true;
+   for (int s = 0; s < bar && same; ++s)
+      same = f.at(s).on() == base.at(s % std::max<int>(1, base.steps)).on();
+   if (same && offbeatTake(base) && hasLeftHand(base))
+      for (int s = 0; s < bar; ++s)
+         if (f.at(s).on() && !leftHand(f.at(s).part))
+            f.at(s).vel = kAccent;
    return f;
 }
 
@@ -1280,8 +1310,10 @@ inline Section makeSection(const Recipe &r, int section, uint32_t seed) {
    // A genre that takes every anticipation (swing) does in every style, not only those that push.
    const unsigned pushAll = genreAt(r.genre).pushAll && !(st.mods & kFixed) ? kPushes : 0u;
    applyMods(p, st.mods | pushAll, rng, pushAll ? 1.0 : 0.75);
+   const Pattern written = p;
    shapeEnergy(p, e, rng, st.mods & kFixed, st.mods);
    applyWeird(p, r.weird, rng, st.mods);
+   keepBeatChord(written, p);
    applyPlayer(p, playerOf(r), st.mods, rng);
    s.takes[0] = p;
    for (int t = 1; t < kTakes; ++t) {

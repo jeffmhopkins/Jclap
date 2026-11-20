@@ -934,7 +934,10 @@ private:
                barTake_ = other;
          }
          const int every = settings_.autoFillBars;
-         if (every > 0 && (bar + 1) % every == 0) {
+         // Counted round the section's own length as it loops (a 12-bar blues fills its 8th and 12th
+         // bars), and on its last bar too.
+         const int inSection = bar % std::max<int>(1, now.bars);
+         if (every > 0 && ((inSection + 1) % every == 0 || (inSection + 1 == now.bars && now.bars > every))) {
             fill_ = true;
             fillDown_ = false;
          }

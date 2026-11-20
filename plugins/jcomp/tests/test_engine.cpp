@@ -2507,5 +2507,62 @@ int main() {
       JCLAP_CHECK(ringing);
       JCLAP_CHECK(!startingAt(all, 96000 + 36000).empty()); // bar 2's own hit on beat 2.5 plays
    }
+   {
+      // A7: Sixties R&B keeps a chord on a beat through ENERGY, WEIRD and the mutations: it's a
+      // pushed figure, not a skank, so its changes and fills don't wait for an upbeat.
+      for (uint32_t seed = 1; seed <= 30; ++seed)
+         for (double weird : {0.2, 0.9}) {
+            Recipe r = recipeOf(1, 3, seed);
+            r.weird = weird;
+            Song song;
+            generateSong(r, song);
+            for (const Section &sec : song.sections)
+               for (const Pattern &t : sec.takes)
+                  JCLAP_CHECK(chordOnBeat(t));
+         }
+      // A11: at ENERGY 0 the boogie's and the shout's left hand keep each bar's one; A10: the shout's
+      // fill isn't its groove.
+      for (const auto &[g, st] : {std::pair{2, 2}, std::pair{7, 1}}) {
+         Recipe r = recipeOf(g, st, 3);
+         r.energy = 0.0;
+         Song song;
+         generateSong(r, song);
+         const Pattern &t = song.sections[kVerse].takes[0];
+         for (int s = 0; s < t.steps; s += t.stepsPerBar())
+            JCLAP_CHECK(t.at(s).on() && leftHand(t.at(s).part));
+      }
+      Song shout;
+      generateSong(recipeOf(7, 1, 3), shout);
+      for (const Section &sec : shout.sections) {
+         bool differs = false;
+         for (int s = 0; s < sec.fill.steps; ++s)
+            differs = differs || sec.fill.at(s).vel != sec.takes[0].at(s).vel;
+         JCLAP_CHECK(differs);
+      }
+   }
+   {
+      // A12: auto fills follow a looping 12-bar section's form: its 8th and 12th bars, then the
+      // 20th and 24th, not every 8th bar of the host.
+      auto song = songOf("x...x...x...x...", {{"C", nullptr}});
+      for (Section &sec : song->sections) {
+         sec.bars = 12;
+         for (Pattern &t : sec.takes)
+            t = fromRhythm("x...............");
+         sec.fill = fromRhythm("x...x...x...x...");
+      }
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.autoFillBars = 8;
+      e.setSettings(s);
+      e.reset();
+      const auto all = runWith(e, 24000LL * 4 * 24, 0.0, [](int64_t, Block &) {});
+      std::set<int> fills;
+      for (const Timed &t : all)
+         if (t.on() && std::abs(t.time % 96000 - 48000) < 1440)
+            fills.insert(static_cast<int>(t.time / 96000) + 1);
+      JCLAP_CHECK(fills == (std::set<int>{8, 12, 20, 24}));
+   }
    return jclap::core::testResult();
 }
