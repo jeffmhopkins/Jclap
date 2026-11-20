@@ -9,7 +9,7 @@ on their own.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-blue)](../../CMakeLists.txt) [![CLAP: 1.2.10 instrument](https://img.shields.io/badge/CLAP%201.2.10-instrument-blue)](https://github.com/free-audio/clap) [![MPE](https://img.shields.io/badge/MPE-yes-blue)](#playing-it) [![voices: 8](https://img.shields.io/badge/voices-8-blue)](#master) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](https://github.com/VitalAudio/visage) [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)](../../.github/workflows/build.yml)
 
-Version 0.2.0
+Version 0.3.0
 
 </div>
 
@@ -82,9 +82,17 @@ back to the point you set.
     12 kHz) and pushes its drive. Velocity also sets the level.
   - **TALK**: how often a held note speaks again (another syllable or phrase). At 0 it speaks once
     per note.
+  - **SPEAK ABOVE**: over a drone, how hard a note has to be played to speak. Softer notes only
+    hum, harder ones add a droid blurb. The bar rises with the ribbon: none at the droid end, the
+    full setting from the middle on. At its default (50%) and the ribbon in the middle, a soft
+    note is pure drone and a hard one speaks over it.
   - **POP**: how many bleeps a second full pressure pops through a held drone (see below).
   - **REGISTER** and **KEY TRACK**: where the droid's voice sits, and how far the key you play moves
     it.
+  - **DEGRADE**: an old, broken droid. Turning it up drops the sample rate (24 kHz down to about
+    2 kHz) and the bits (14 down to 4), sags the pitch like a tired motor (wow and flutter), cuts
+    the voice out now and then, adds hiss and crackle on the voice, and shrinks and overdrives its
+    speaker. At 0 it does nothing.
 
 ## The DROID ⟷ DRONE ribbon
 
@@ -92,7 +100,8 @@ The ribbon runs from **CHATTER** through **SING** and **HUM** to **CHOIR**. Drag
 an equal-power crossfade between the two halves:
 
 - **All the way left (DROID):** only the droid voice, no drone.
-- **In the middle (50%):** an even mix of droid and drone.
+- **In the middle (50%):** an even mix of droid and drone. With SPEAK ABOVE, soft notes only hum
+  and hard ones speak over their drone.
 - **In between:** each new note speaks over its own drone. Leaning into a held note pops bleeps
   through it, as many a second as POP at full pressure (they rise with the square of the pressure).
 - **All the way right (DRONE):** only the drone. Every held note hums its own line, and the droid is
@@ -132,7 +141,9 @@ beating (VOICING can switch to equal temperament).
 ### AMP, ENVELOPES and SHAPE LFOS
 
 - **AMP** is the drone's envelope: ATTACK, DECAY, SUSTAIN and RELEASE, in seconds. The attack eases
-  in and the release eases out.
+  in and the release eases out, on one curve, so retriggering a note or letting it go never steps
+  its level. A note played on a voice that is still sounding picks up from where it is, without a
+  click, and the SUB crossfades over about 20 ms when it moves to a new lowest note.
 - **ENVELOPES** are two more per-note envelopes, ENV 1 (slow) and ENV 2 (short), each sent **TO** one
   destination by an **AMOUNT** (either way).
 - **SHAPE LFOS** are two free-running LFOs, LFO 1 (breath, 12 s) and LFO 2 (weather, 7.5 s), with
@@ -155,7 +166,14 @@ pure and atonal, LFO 2 does the same to METAL, and ENV 1 swells PARTIALS in over
 
 Both pages share these:
 
-- **SPACE** is a small room: SIZE (closet to hall), MIX and DAMP, plus WIDTH for everything.
+- **SPACE** has JBreath's reverb and delay, a tab each. The delay comes before the reverb.
+  - **REVERB:** SIZE (closet to hall), DECAY (0.2 to 10 s), DAMP, MIX (at 0 the reverb is off),
+    PRE-DELAY (0 to 100 ms), and WIDTH for everything.
+  - **DELAY:** MIX, TIME (10 ms to 2 s), FEEDBACK, TONE (how dark each repeat gets), SPREAD (straight
+    or ping-pong), ON or OFF, and SYNC (free, or a note value from 1/32 to 1/1 that follows the
+    host's tempo).
+
+![SPACE's DELAY tab](docs/panel-delay.png)
 - **MASTER:**
   - POLY or MONO, the number of VOICES (1 to 8), and a dot for each voice in use.
   - The output meters and the master fader. The meters are JSynth's: a soft halo that grows with
@@ -169,7 +187,7 @@ Both pages share these:
 J2D2 takes CLAP notes with per-note expression, MPE over MIDI (it follows the MPE configuration
 message, with ±48 semitone note bends) and plain MIDI with channel or poly aftertouch:
 
-- **Pitch bend** bends the note (and its drone).
+- **Pitch bend** bends the note: its drone and its droid voice, live, even mid-syllable.
 - **Pressure** opens the droid's filter and drive, opens TONE and AIR, pushes the note's energy, and
   pops bleeps through a held drone.
 - **Slide** (CC 74) moves the note's feeling.
@@ -195,9 +213,12 @@ J2D2 builds with the rest of JClap (see the [top-level README](../../README.md))
 - `j2d2-tests`: the engine and the plugin through a test host. It checks that mood shapes the
   phrases (excited is faster and climbs, sad is slower and sinks), that the droid voice starts at
   once and stops within 10 ms of the note-off, that one press speaks one syllable LENGTH long and a
-  phrase never runs past LENGTH, that each drone layer sounds at
+  phrase never runs past LENGTH, that a soft note at the ribbon's middle only hums while a hard one
+  speaks, that pitch bend moves the droid, that the SUB moves between notes without a click, that
+  DEGRADE still speaks and the delay repeats, that each drone layer sounds at
   about the same level, ATONAL's bounds, pure droid and pure drone, pressure popping bleeps through a
   drone, every preset's level, MPE over MIDI, param text and state.
-- `j2d2-screenshot-test`, `j2d2-screenshot-drones-test`: the panel pictures above.
+- `j2d2-screenshot-test`, `j2d2-screenshot-drones-test`, `j2d2-screenshot-delay-test`: the panel
+  pictures above.
 - `j2d2-render out.wav` (with `JCLAP_BUILD_TOOLS`): renders every factory preset to a WAV, each one
   played the same way, for listening and level checks.

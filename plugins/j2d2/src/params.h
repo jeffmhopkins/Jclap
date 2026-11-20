@@ -4,7 +4,9 @@
 // append so saved projects keep working.
 
 #include <jclap/core/helpers.h>
+#include <jclap/dsp/stereo_delay.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -86,6 +88,19 @@ enum ParamId : clap_id {
    // Added in 0.2.0.
    kLength,
    kPerKey,
+   // Added in 0.3.0: the velocity a note needs to speak over a drone, the droid's DEGRADE, and
+   // SPACE's reverb decay and pre-delay and its delay (JBreath's).
+   kSpeakAbove,
+   kDegrade,
+   kSpaceDecay,
+   kSpacePreDelay,
+   kDelayOn,
+   kDelayMix,
+   kDelayTime,
+   kDelaySync,
+   kDelayFeedback,
+   kDelayTone,
+   kDelaySpread,
    kParamCount
 };
 
@@ -186,6 +201,18 @@ inline const jclap::core::ParamDef kParams[kParamCount] = {
    {kVoices, "Voices", "Master", 1.0, kMaxVoices, kMaxVoices, kStepped},
    {kLength, "Length", "Voice", 0.03, 4.0, 0.25, kMod},
    {kPerKey, "Per Key", "Voice", 0.0, 1.0, 0.0, kChoice},
+   {kSpeakAbove, "Speak Above", "Voice", 0.0, 1.0, 0.5, kMod},
+   {kDegrade, "Degrade", "Voice", 0.0, 1.0, 0.0, kMod},
+   {kSpaceDecay, "Space Decay", "Space", 0.2, 10.0, 2.1, kMod},
+   {kSpacePreDelay, "Space Pre-Delay", "Space", 0.0, 100.0, 23.0, kMod},
+   {kDelayOn, "Delay", "Delay", 0.0, 1.0, 0.0, kChoice},
+   {kDelayMix, "Delay Mix", "Delay", 0.0, 1.0, 0.3, kMod},
+   // 0..1 to 10 ms .. 2 s on a log scale (jclap::dsp::delayTimeMs()); 0.684 is 375 ms.
+   {kDelayTime, "Delay Time", "Delay", 0.0, 1.0, 0.684, kMod},
+   {kDelaySync, "Delay Sync", "Delay", 0.0, 13.0, 0.0, kChoice},
+   {kDelayFeedback, "Delay Feedback", "Delay", 0.0, 0.95, 0.4, kMod},
+   {kDelayTone, "Delay Tone", "Delay", 0.0, 1.0, 0.72, kMod},
+   {kDelaySpread, "Delay Spread", "Delay", 0.0, 1.0, 0.5, kMod},
 };
 
 // Choice names, in value order.
@@ -193,6 +220,7 @@ inline const char *const kTuningNames[] = {"Just", "Equal"};
 inline const char *const kPolyNames[] = {"Poly", "Mono"};
 // What one key press speaks: one syllable, or a whole phrase.
 inline const char *const kPerKeyNames[] = {"Syllable", "Phrase"};
+inline const char *const kOnOffNames[] = {"Off", "On"};
 inline const char *const kDestNames[] = {"None",    "Droid/Drone", "Energy", "Feeling",         "Tone",
                                          "Partials", "Air",        "Metal",  "Sub",             "Partials Atonal",
                                          "Metal Atonal", "Cutoff", "Evolve", "Drift",           "Pan"};
@@ -203,7 +231,7 @@ inline const char *const kLayerNames[] = {"Tone", "Partials", "Air", "Metal", "S
 inline bool isDest(clap_id id) { return id == kEnv1Dest || id == kEnv2Dest || id == kLfo1Dest || id == kLfo2Dest; }
 inline bool isShape(clap_id id) { return id == kLfo1Shape || id == kLfo2Shape; }
 inline bool isSeconds(clap_id id) {
-   return id == kLength || (id >= kAttack && id <= kRelease && id != kSustain) ||
+   return id == kLength || id == kSpaceDecay || (id >= kAttack && id <= kRelease && id != kSustain) ||
           (id >= kEnv1Attack && id <= kEnv1Release && id != kEnv1Sustain) ||
           (id >= kEnv2Attack && id <= kEnv2Release && id != kEnv2Sustain);
 }
@@ -220,6 +248,14 @@ inline const char *const *choiceNames(clap_id id, int &count) {
    if (id == kPerKey) {
       count = 2;
       return kPerKeyNames;
+   }
+   if (id == kDelayOn) {
+      count = 2;
+      return kOnOffNames;
+   }
+   if (id == kDelaySync) {
+      count = jclap::dsp::kDelaySyncCount;
+      return jclap::dsp::kDelaySyncNames;
    }
    if (isDest(id)) {
       count = kDestCount;
@@ -258,6 +294,17 @@ inline void formatParam(clap_id id, double value, char *out, size_t size) {
    case kPop:
       std::snprintf(out, size, "%.1f /s", value);
       break;
+   case kSpacePreDelay:
+      std::snprintf(out, size, "%.0f ms", value);
+      break;
+   case kDelayTime: {
+      const double ms = jclap::dsp::delayTimeMs(value);
+      if (ms < 999.5)
+         std::snprintf(out, size, "%.0f ms", ms);
+      else
+         std::snprintf(out, size, "%.2f s", ms / 1000.0);
+      break;
+   }
    case kLfo1Rate:
    case kLfo2Rate:
       // Slow rates read as a period. The switch sits below 1 Hz so the shortest period shown is
@@ -307,8 +354,13 @@ inline bool parseParam(clap_id id, const char *text, double &value) {
       return false;
    while (*end == ' ')
       ++end;
-   if (choiceNames(id, count) || id == kMasterLevel || id == kRegister || id == kPop || id == kVoices)
+   if (choiceNames(id, count) || id == kMasterLevel || id == kRegister || id == kPop || id == kVoices ||
+       id == kSpacePreDelay)
       value = v;
+   else if (id == kDelayTime) {
+      const double ms = (*end == 's') ? v * 1000.0 : v;
+      value = ms > 0.0 ? std::clamp(std::log(ms / 10.0) / std::log(200.0), 0.0, 1.0) : 0.0;
+   }
    else if (isSeconds(id))
       value = (end[0] == 'm' && end[1] == 's') ? v / 1000.0 : v;
    else if (id == kLfo1Rate || id == kLfo2Rate)

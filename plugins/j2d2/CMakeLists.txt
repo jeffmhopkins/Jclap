@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.2.0)
+jclap_plugin_version(0.3.0)
 
 jclap_add_plugin(j2d2
    OUTPUT_NAME "J2D2"
@@ -16,10 +16,12 @@ target_link_libraries(j2d2-tests PRIVATE jclap::ui jclap::dsp)
 if(JCLAP_BUILD_TOOLS)
    add_executable(j2d2-screenshot tools/screenshot.cpp src/editor.cpp)
    target_include_directories(j2d2-screenshot PRIVATE src)
-   target_link_libraries(j2d2-screenshot PRIVATE jclap::ui)
+   target_link_libraries(j2d2-screenshot PRIVATE jclap::ui jclap::dsp)
    jclap_add_screenshot_test(j2d2-screenshot-test TOOL j2d2-screenshot REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel.png)
    jclap_add_screenshot_test(j2d2-screenshot-drones-test TOOL j2d2-screenshot
       REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-drones.png ARGS 1)
+   jclap_add_screenshot_test(j2d2-screenshot-delay-test TOOL j2d2-screenshot
+      REFERENCE ${CMAKE_CURRENT_SOURCE_DIR}/docs/panel-delay.png ARGS 4)
 endif()
 
 # Renders the factory presets offline to a WAV, for listening and level checks.

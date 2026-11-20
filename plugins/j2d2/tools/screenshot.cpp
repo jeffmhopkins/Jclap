@@ -2,8 +2,8 @@
 //
 //    j2d2-screenshot out.png [page [width height [preset]]]
 //
-// page: 0 VOICE, 1 DRONES (AMP), 2 DRONES (ENVELOPES), 3 DRONES (SHAPE LFOS). The preset defaults to
-// Astromech on the VOICE page and Hangar Bay on the others.
+// page: 0 VOICE, 1 DRONES (AMP), 2 DRONES (ENVELOPES), 3 DRONES (SHAPE LFOS), 4 VOICE with SPACE's DELAY
+// tab. The preset defaults to Astromech on the VOICE pages and Hangar Bay on the others.
 
 #include <cstdio>
 #include <cstdlib>
@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
    const int page = argc > 2 ? std::atoi(argv[2]) : 0;
    const int width = argc > 4 ? std::atoi(argv[3]) : 1100;
    const int height = argc > 4 ? std::atoi(argv[4]) : 680;
-   const std::string preset = argc > 5 ? argv[5] : page == 0 ? "Astromech" : "Hangar Bay";
+   const std::string preset = argc > 5 ? argv[5] : page == 0 || page == 4 ? "Astromech" : "Hangar Bay";
    DemoHost host(preset);
    return renderScreenshot(host, page, width, height, argv[1]) ? 0 : 1;
 }

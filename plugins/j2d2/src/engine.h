@@ -28,6 +28,7 @@
 #include <jclap/dsp/filter.h>
 #include <jclap/dsp/math.h>
 #include <jclap/dsp/reverb.h>
+#include <jclap/dsp/stereo_delay.h>
 
 #include <algorithm>
 #include <array>
@@ -301,6 +302,8 @@ public:
       return true;
    }
    bool busy() const { return inPhrase_ || ev_.active(); }
+   // Moves everything it says by `semitones` (the note's pitch bend, and DEGRADE's wow), live.
+   void setPitchOffset(double semitones) { pitchMul_ = std::pow(2.0, semitones / 12.0); }
    int kind() const { return ev_.active() ? ev_.kind : kEvNone; }
    double pitch() const { return ev_.shown; }
 
@@ -566,7 +569,7 @@ private:
          for (int v = 0; v < (e.two ? 2 : 1); ++v) {
             e.slewF[v] = a * e.slewF[v] + (1 - a) * mtof(e.stepPitch[v][j]);
             double &ph = v ? e.ph2 : e.ph;
-            const double f = e.slewF[v] * std::pow(2.0, mod / 12.0);
+            const double f = std::min(0.45 * sr_, e.slewF[v] * std::pow(2.0, mod / 12.0) * pitchMul_);
             ph += f / sr_;
             ph -= std::floor(ph);
             sum += droidOsc(ph, f, kSine, sr_) * (v ? 0.7 : 1.0);
@@ -582,7 +585,7 @@ private:
          break;
       }
       case kEvBuzz: {
-         const double f = e.f0 * std::pow(2.0, 0.4 * e.dir * t + 0.08 * std::sin(kTwoPi * e.wobRate * sec));
+         const double f = e.f0 * std::pow(2.0, 0.4 * e.dir * t + 0.08 * std::sin(kTwoPi * e.wobRate * sec)) * pitchMul_;
          e.ph += f / sr_;
          e.ph -= std::floor(e.ph);
          // A narrow pulse with polyBLEP edges, minus its mean, then a gentle differentiator.
@@ -610,7 +613,8 @@ private:
          break;
       }
       case kEvRing: {
-         const double fa = mtof(e.m), fb = mtof(e.mb) * std::pow(2.0, e.oct * (e.dir > 0 ? t : 1 - t));
+         const double fa = std::min(0.45 * sr_, mtof(e.m) * pitchMul_);
+         const double fb = std::min(0.45 * sr_, mtof(e.mb) * std::pow(2.0, e.oct * (e.dir > 0 ? t : 1 - t)) * pitchMul_);
          e.ph += fa / sr_;
          e.ph2 += fb / sr_;
          e.ph -= std::floor(e.ph);
@@ -639,7 +643,7 @@ private:
          break;
       }
       if (e.kind != kEvSteps && e.kind != kEvBuzz && e.kind != kEvRing) {
-         hz = std::min(hz, 0.45 * sr_);
+         hz = std::min(hz * pitchMul_, 0.45 * sr_);
          e.ph += hz / sr_;
          e.ph -= std::floor(e.ph);
          y = droidOsc(e.ph, hz, e.timbre, sr_);
@@ -664,6 +668,7 @@ private:
    bool inPhrase_ = false, tailDone_ = true;
    double fade_ = 1.0, fadeStep_ = 0.0, stretch_ = 1.0, target_ = 0.0;
    int cap_ = 0, elapsed_ = 0;
+   double pitchMul_ = 1.0;
    int wait_ = 0, left_ = 0, prev_ = -1;
 };
 
@@ -722,17 +727,24 @@ public:
       tone_.setMode(jclap::dsp::Filter::Mode::LowPass);
       air_.setSampleRate(sr);
       air_.setMode(jclap::dsp::Filter::Mode::LowPass);
+      subCoef_ = 1.0 / (0.02 * sr);
    }
 
-   // A new note at `hz`. `seed` makes every note's motion its own.
-   void start(double hz, uint64_t seed) {
+   // A new note at `hz`. `seed` makes every note's motion its own. A voice that is still sounding
+   // (stolen, or retriggered while releasing) keeps its oscillator phases and filter states, so the
+   // new note picks up without a click.
+   void start(double hz, uint64_t seed, bool sounding = false) {
       rng_.seed(seed);
       hz_ = hz;
-      tone_.reset();
-      air_.reset();
-      for (double &p : saw_)
-         p = rng_.uni();
-      body_ = sub_ = 0.0;
+      if (!sounding) {
+         tone_.reset();
+         air_.reset();
+         for (double &p : saw_)
+            p = rng_.uni();
+         body_ = sub_ = 0.0;
+         subMix_ = 0.0;
+         levelsSet_ = false; // the first block's levels apply at once
+      }
       for (Walk *w : {&toneDrift_, &toneHand_, &airBand_, &subWalk_})
          w->init(rng_);
       // PARTIALS: nine pure harmonics and three blue ones, each with its own bloom, drift and pan.
@@ -752,21 +764,23 @@ public:
          p.detune = std::clamp(rng_.normal() * 10.0, -18.0, 18.0);
          p.threshold = rng_.range(0.15, 0.55);
          p.ampRate = rng_.range(0.05, 0.25);
-         p.ph = rng_.uni();
+         if (!sounding)
+            p.ph = rng_.uni();
          p.wob.init(rng_);
          p.amp.init(rng_);
          p.pan.init(rng_);
       }
       for (int i = 0; i < 4; ++i) {
-         Resonator &r = res_[i];
-         r = Resonator{};
+         if (!sounding)
+            res_[i] = Resonator{};
          resQ_[i] = rng_.range(60, 140);
          resAmp_[i].init(rng_);
       }
       for (int i = 0; i < 4; ++i) {
          Mode &m = metal_[i];
          m.scatter = std::clamp(rng_.normal() * 12.0, -20.0, 20.0);
-         m.ph = rng_.uni();
+         if (!sounding)
+            m.ph = rng_.uni();
          m.trem = rng_.range(0.2, 1.2);
          m.tremPh = rng_.uni();
          m.ampRate = rng_.range(0.04, 0.15);
@@ -783,11 +797,26 @@ public:
       if (counter_-- <= 0) {
          counter_ = kBlock - 1;
          control(c);
+         // Layer levels, the sub's swell and METAL's pan glide across the block instead of
+         // stepping, and the SUB crossfades over about 20 ms when it moves to another note.
+         for (int k = 0; k < kLayerCount; ++k) {
+            if (!levelsSet_)
+               levelNow_[k] = c.level[k];
+            levelStep_[k] = (c.level[k] - levelNow_[k]) / kBlock;
+         }
+         levelsSet_ = true;
       }
+      for (int k = 0; k < kLayerCount; ++k)
+         levelNow_[k] += levelStep_[k];
+      subMix_ += ((withSub ? 1.0 : 0.0) - subMix_) * subCoef_;
+      subAmpNow_ += (subAmp_ - subAmpNow_) * 0.002;
+      metalLNow_ += (metalL_ - metalLNow_) * 0.002;
+      metalRNow_ += (metalR_ - metalRNow_) * 0.002;
+      const double *level = levelNow_;
       const double f0 = hz_;
       double L = 0.0, R = 0.0;
       // TONE: three saws a few cents apart and a sine body, under the lowpass the hand moves.
-      if (c.level[kLayerTone] > 0.0) {
+      if (level[kLayerTone] > 0.0) {
          static const double kDetune[3] = {-0.0022, 0.0, 0.0024};
          double saw = 0.0;
          for (int i = 0; i < 3; ++i) {
@@ -808,12 +837,12 @@ public:
          body_ += toneHz_ / sr_;
          body_ -= std::floor(body_);
          const double x = 0.6 * saw / 3.0 + 0.5 * sine01(body_);
-         const double y = tone_.process(static_cast<float>(x)) * kToneGain * c.level[kLayerTone];
+         const double y = tone_.process(static_cast<float>(x)) * kToneGain * level[kLayerTone];
          L += y * 0.9;
          R += y * 0.9;
       }
       // PARTIALS: each harmonic on its own pan path.
-      if (c.level[kLayerPartials] > 0.0) {
+      if (level[kLayerPartials] > 0.0) {
          double pl = 0.0, pr = 0.0;
          for (Partial &p : partials_) {
             if (p.gainNow <= 1e-5 && p.gainStep <= 0.0)
@@ -826,11 +855,11 @@ public:
             pl += s * std::cos(p.panNow * kPi / 2);
             pr += s * std::sin(p.panNow * kPi / 2);
          }
-         L += pl * kPartialsGain * c.level[kLayerPartials];
-         R += pr * kPartialsGain * c.level[kLayerPartials];
+         L += pl * kPartialsGain * level[kLayerPartials];
+         R += pr * kPartialsGain * level[kLayerPartials];
       }
       // AIR: noise through narrow resonators at the note's harmonics, plus a moving band of breath.
-      if (c.level[kLayerAir] > 0.0) {
+      if (level[kLayerAir] > 0.0) {
          const double n = rng_.uni() * 2.0 - 1.0;
          double y = 0.0;
          for (int i = 0; i < 4; ++i) {
@@ -840,13 +869,13 @@ public:
             y += res_[i].process(n) * resNow_[i];
          }
          y += 0.035 * kAirBreath * air_.process(static_cast<float>(n));
-         y *= kAirGain * c.level[kLayerAir];
+         y *= kAirGain * level[kLayerAir];
          // It sits opposite TONE in the field.
          L += y * 0.7;
          R += y * 1.0;
       }
       // METAL: bell modes swelling in and out, each with a little tremolo.
-      if (c.level[kLayerMetal] > 0.0) {
+      if (level[kLayerMetal] > 0.0) {
          double y = 0.0;
          for (Mode &m : metal_) {
             m.ph += m.hz / sr_;
@@ -855,15 +884,15 @@ public:
             m.gainNow += m.gainStep;
             y += sine01(m.ph) * m.gainNow * (1.0 + 0.25 * sine01(m.tremPh));
          }
-         y *= kMetalGain * c.level[kLayerMetal];
-         L += y * metalL_;
-         R += y * metalR_;
+         y *= kMetalGain * level[kLayerMetal];
+         L += y * metalLNow_;
+         R += y * metalRNow_;
       }
       // SUB: an octave under the lowest held note, breathing slowly.
-      if (withSub && c.level[kLayerSub] > 0.0) {
+      if (subMix_ > 1e-4 && level[kLayerSub] > 0.0) {
          sub_ += 0.5 * f0 / sr_;
          sub_ -= std::floor(sub_);
-         const double y = sine01(sub_) * subAmp_ * kSubGain * c.level[kLayerSub];
+         const double y = sine01(sub_) * subAmpNow_ * subMix_ * kSubGain * level[kLayerSub];
          L += y * 0.7;
          R += y * 0.7;
       }
@@ -946,7 +975,11 @@ private:
    double sr_ = 48000.0, hz_ = 110.0, toneHz_ = 110.0;
    Rng rng_;
    int counter_ = 0;
-   double saw_[3] = {0, 0, 0}, body_ = 0, sub_ = 0, subAmp_ = 0.7;
+   double saw_[3] = {0, 0, 0}, body_ = 0, sub_ = 0, subAmp_ = 0.7, subAmpNow_ = 0.7, subMix_ = 0.0;
+   double subCoef_ = 1.0 / (0.02 * 48000.0);
+   double levelNow_[kLayerCount] = {}, levelStep_[kLayerCount] = {};
+   bool levelsSet_ = false;
+   double metalLNow_ = 1, metalRNow_ = 1;
    jclap::dsp::Filter tone_, air_;
    Walk toneDrift_, toneHand_, airBand_, subWalk_;
    Partial partials_[kPartials];
@@ -959,6 +992,70 @@ private:
 
 // ------------------------------------------------------------------------------------------------
 // Envelopes and LFOs.
+
+// DEGRADE: the droid as an old, broken machine. On the droid's bus, before its speaker: the sample
+// rate and bit depth drop, the voice cuts out now and then, and hiss and crackle ride on it. The
+// Engine also takes wow (a slow, warped pitch sag) from here for every voice, and closes and
+// overdrives the speaker. At 0 it does nothing.
+class Degrade {
+public:
+   void prepare(double sr) {
+      sr_ = sr;
+      rng_.seed(0x5eed);
+      reset();
+   }
+   void reset() {
+      held_ = env_ = crack_ = 0.0;
+      phase_ = 1.0;
+      gapLeft_ = 0;
+      gain_ = 1.0;
+      wowPh_ = flutterPh_ = 0.0;
+      drift_.init(rng_);
+   }
+   // Advances `dt` seconds; returns the pitch sag in semitones (never sharp: a tired motor).
+   double wow(double d, double dt) {
+      wowPh_ += 0.45 * dt;
+      flutterPh_ += 6.0 * dt;
+      wowPh_ -= std::floor(wowPh_);
+      flutterPh_ -= std::floor(flutterPh_);
+      const double drift = drift_.tick(dt, 0.3, rng_);
+      return -d * (0.5 + 0.5 * std::sin(kTwoPi * wowPh_) + 0.12 * std::sin(kTwoPi * flutterPh_) + 0.9 * drift);
+   }
+   float tick(float x, double d) {
+      if (d <= 1e-3)
+         return x;
+      // Follows the droid's level, so the hiss and crackle stop when it does.
+      env_ = std::max(static_cast<double>(std::fabs(x)), env_ * 0.9995);
+      // A lower sample rate (24 kHz down to about 2 kHz), held between samples.
+      phase_ += 24000.0 * std::pow(2.0, -3.6 * d) / sr_;
+      if (phase_ >= 1.0) {
+         phase_ -= std::floor(phase_);
+         // Fewer bits: 14 down to 4.
+         const double levels = std::pow(2.0, 14.0 - 10.0 * d);
+         held_ = std::round(x * levels) / levels;
+      }
+      double y = held_;
+      // Dropouts: more often and longer the further it is turned up.
+      if (gapLeft_ > 0)
+         --gapLeft_;
+      else if (rng_.chance(d * d * 3.0 / sr_))
+         gapLeft_ = static_cast<int>(rng_.range(0.015, 0.03 + 0.15 * d) * sr_);
+      gain_ += ((gapLeft_ > 0 ? 0.0 : 1.0) - gain_) * 0.03;
+      y *= gain_;
+      // Hiss and crackle on the voice.
+      if (rng_.chance(d * 60.0 / sr_))
+         crack_ = (rng_.chance(0.5) ? 1.0 : -1.0) * rng_.range(0.2, 0.8);
+      crack_ *= 0.6;
+      y += env_ * d * ((rng_.uni() - 0.5) * 0.25 + crack_);
+      return static_cast<float>(y);
+   }
+
+private:
+   double sr_ = 48000.0, held_ = 0, phase_ = 1, env_ = 0, crack_ = 0, gain_ = 1, wowPh_ = 0, flutterPh_ = 0;
+   int gapLeft_ = 0;
+   Walk drift_;
+   Rng rng_;
+};
 
 // ADSR with times in seconds: a curved attack, linear decay, and a release that eases out.
 struct Adsr {
@@ -1086,6 +1183,8 @@ public:
       speakerLp_.setMode(jclap::dsp::Filter::Mode::LowPass);
       speakerLp_.setCutoff(10000.0);
       room_.prepare(sr);
+      delay_.prepare(sr);
+      degrade_.prepare(sr);
       sineTable();
       reset();
    }
@@ -1103,10 +1202,17 @@ public:
       speakerHp_.reset();
       speakerLp_.reset();
       room_.reset();
+      delay_.reset();
+      degrade_.reset();
       counter_ = 0;
    }
 
    void seed(uint64_t s) { rng_.seed(s); }
+   // The host's tempo, for a synced delay.
+   void setTempo(double bpm) {
+      if (bpm > 1.0)
+         tempo_ = bpm;
+   }
 
    // A note starts. `id` identifies it for expression and note-off (the CLAP note id, or the key).
    // Returns the voice it got.
@@ -1157,7 +1263,9 @@ public:
          v.amp.gate(true);
          v.env1.gate(true);
          v.env2.gate(true);
-         v.drone.start(pitchHz(v, s), rng_.next());
+         const bool sounding = v.droneGainNow > 1e-4;
+         v.drone.start(pitchHz(v, s), rng_.next(), sounding);
+         v.panSet = sounding;
          v.speaker.seed(rng_.next());
       } else {
          v.drone.setPitch(pitchHz(v, s));
@@ -1165,7 +1273,10 @@ public:
       // Every new note speaks (a syllable or a phrase, LENGTH long), unless the ribbon is all the
       // way to drone.
       const double morph = std::clamp(s[kMorph] + modOf(v, kDestMorph, s), 0.0, 1.0);
-      if (morph < 0.98) {
+      // Over a drone a note has to be played hard enough to speak (SPEAK ABOVE): soft notes only
+      // hum. The bar rises with the ribbon, to its full height from the middle on.
+      v.speaks = v.velocity >= s[kSpeakAbove] * std::min(1.0, 2.0 * morph) - 1e-9;
+      if (morph < 0.98 && v.speaks) {
          const Mood mood = moodFor(energyOf(v, s), feelingOf(v, s));
          speak(v, mood, s[kLength] * rng_.range(0.9, 1.1), s);
       }
@@ -1224,10 +1335,24 @@ public:
       jclap::dsp::RoomSettings rs;
       rs.mix = 0.6 * s[kSpaceMix];
       rs.size = s[kSpaceSize];
-      rs.decay = 0.6 + 6.0 * s[kSpaceSize] * s[kSpaceSize];
+      rs.decay = s[kSpaceDecay];
       rs.damp = s[kSpaceDamp];
-      rs.preDelayMs = 8.0 + 30.0 * s[kSpaceSize];
+      rs.preDelayMs = s[kSpacePreDelay];
       room_.set(rs);
+      jclap::dsp::DelaySettings ds;
+      ds.on = s[kDelayOn] >= 0.5;
+      ds.mix = s[kDelayMix];
+      const int sync = static_cast<int>(std::lround(s[kDelaySync]));
+      ds.timeMs = sync > 0 ? jclap::dsp::delaySyncBeats(sync) * 60000.0 / tempo_ : jclap::dsp::delayTimeMs(s[kDelayTime]);
+      ds.feedback = s[kDelayFeedback];
+      ds.tone = s[kDelayTone];
+      ds.spread = s[kDelaySpread];
+      delay_.set(ds);
+      // DEGRADE closes the speaker in from both ends and drives it harder.
+      const double degrade = clamp01(s[kDegrade]);
+      speakerHp_.setCutoff(250.0 * std::pow(2.0, 1.5 * degrade));
+      speakerLp_.setCutoff(10000.0 * std::pow(2.0, -2.8 * degrade));
+      const double speakerDrive = 1.3 + 3.5 * degrade;
       const double master = s[kMasterLevel] <= -59.9 ? 0.0 : std::pow(10.0, s[kMasterLevel] / 20.0);
       const double width = s[kWidth];
       double peak = 0.0;
@@ -1254,18 +1379,22 @@ public:
                v.drone.tick(v.controls, v.sub, l, r);
                v.droneGainNow += v.droneGainStep;
                const double g = v.droneGainNow;
-               L += l * g * v.panL;
-               R += r * g * v.panR;
+               v.panLNow += (v.panL - v.panLNow) * 0.005;
+               v.panRNow += (v.panR - v.panRNow) * 0.005;
+               L += l * g * v.panLNow;
+               R += r * g * v.panRNow;
             }
          }
          // The small speaker the droid talks through: band limited, gently clipped.
+         droid = degrade_.tick(static_cast<float>(droid), degrade);
          droid = speakerLp_.process(speakerHp_.process(static_cast<float>(droid)));
-         droid = std::tanh(1.3 * droid) / std::tanh(1.3);
+         droid = std::tanh(speakerDrive * droid) / std::tanh(speakerDrive);
          L += droid * kDroidGain;
          R += droid * kDroidGain;
-         // Width, then the room, then the master.
+         // Width, then the delay, then the room, then the master.
          const double mid = 0.5 * (L + R), side = 0.5 * (L - R) * width;
          float l = static_cast<float>(mid + side), r = static_cast<float>(mid - side);
+         delay_.tick(l, r);
          room_.tick(l, r);
          l = jclap::dsp::softClip(static_cast<float>(l * master));
          r = jclap::dsp::softClip(static_cast<float>(r * master));
@@ -1311,7 +1440,8 @@ private:
       int32_t noteId = -1;
       double velocity = 0.8, bend = 0, pressure = 0, slide = 0.5, randomE = 0, randomF = 0;
       uint64_t age = 0;
-      double pan = 0, panL = 1, panR = 1;
+      double pan = 0, panL = 1, panR = 1, panLNow = 1, panRNow = 1;
+      bool panSet = false, speaks = true;
       double popClock = 0;
       Adsr amp, env1, env2;
       double envValue[2] = {0, 0};
@@ -1383,6 +1513,7 @@ private:
       const double dt = kBlock / sr_;
       lfoValue_[0] = lfos_[0].tick(dt, s[kLfo1Rate], static_cast<int>(std::lround(s[kLfo1Shape])));
       lfoValue_[1] = lfos_[1].tick(dt, s[kLfo2Rate], static_cast<int>(std::lround(s[kLfo2Shape])));
+      wow_ = degrade_.wow(clamp01(s[kDegrade]), dt);
       // The lowest sounding drone note gets the SUB.
       int lowest = -1;
       for (int i = 0; i < kMaxVoices; ++i)
@@ -1392,7 +1523,9 @@ private:
          Voice &v = voices_[i];
          if (!v.active)
             continue;
-         v.sub = i == lowest || (lowest < 0 && !v.held);
+         // With nothing held, the SUB stays on whichever note had it, fading out with it.
+         if (lowest >= 0)
+            v.sub = i == lowest;
          v.envValue[0] = v.env1.tick(dt, s[kEnv1Attack], s[kEnv1Decay], s[kEnv1Sustain], s[kEnv1Release]);
          v.envValue[1] = v.env2.tick(dt, s[kEnv2Attack], s[kEnv2Decay], s[kEnv2Sustain], s[kEnv2Release]);
          const double amp = v.amp.tick(dt, s[kAttack], s[kDecay], s[kSustain], s[kRelease]);
@@ -1411,8 +1544,10 @@ private:
          // The drone half, by the ribbon, breathing.
          v.breathPh += v.breathRate * dt;
          const double breath = 1.0 + s[kBreath] * 0.35 * std::sin(kTwoPi * v.breathPh);
-         // An eased attack (quadratic) and release (^1.5), as in the sketch.
-         const double shaped = v.amp.stage == Adsr::kAttack ? amp * amp : v.amp.stage == Adsr::kRelease ? std::pow(amp, 1.5) : amp;
+         // An eased attack and release (^1.5), as in the sketch.
+         // One curve for every stage (attack, decay, release, retrigger), so moving between them
+         // never steps the level.
+         const double shaped = std::pow(amp, 1.5);
          v.droneGain = 1.2 * droneMix * shaped * breath * (0.6 + 0.4 * v.velocity);
          v.droneGainStep = (v.droneGain - v.droneGainNow) / kBlock;
          DroneControls &c = v.controls;
@@ -1430,8 +1565,13 @@ private:
          const double pan = std::clamp(v.pan * s[kSpread] * 1.25 + modOf(v, kDestPan, s), -1.0, 1.0);
          v.panL = std::cos((pan + 1) * kPi / 4) * 1.41421356;
          v.panR = std::sin((pan + 1) * kPi / 4) * 1.41421356;
+         if (!v.panSet) {
+            v.panLNow = v.panL;
+            v.panRNow = v.panR;
+            v.panSet = true;
+         }
          // A held note talks again now and then (TALK), less toward the drone end.
-         if (v.held && !v.speaker.busy() && morph < 0.98 && s[kTalk] > 0.0) {
+         if (v.held && v.speaks && !v.speaker.busy() && morph < 0.98 && s[kTalk] > 0.0) {
             const double rate = s[kTalk] * 0.9 * std::pow(1.0 - morph, 1.5) / std::max(0.3, moodFor(e, f).tempo);
             if (rng_.chance(rate * dt))
                speak(v, moodFor(e, f), s[kLength] * rng_.range(0.6, 1.1), s);
@@ -1443,6 +1583,8 @@ private:
                v.speaker.pop(moodFor(e, f), registerOf(v, s), kPopKinds[rng_.integer(0, 6)]);
             }
          }
+         // The note's pitch bend moves what the droid says too, live, with DEGRADE's wow.
+         v.speaker.setPitchOffset(v.bend + wow_);
          v.droidMeter *= 0.97;
          // Done once both halves are quiet.
          if (!v.held)
@@ -1468,6 +1610,9 @@ private:
    double lfoValue_[2] = {0, 0};
    jclap::dsp::Filter speakerHp_, speakerLp_;
    jclap::dsp::Room room_;
+   jclap::dsp::StereoDelay delay_;
+   Degrade degrade_;
+   double tempo_ = 120.0, wow_ = 0.0;
    double peak_ = 0.0;
 };
 
