@@ -3289,6 +3289,7 @@ static void roundFifteenE() {
 }
 
 int main() {
+   std::fprintf(stderr, "> main 1: ---- chord names ----\n"); std::fflush(stderr); // DIAG
    // ---- chord names ----
    {
       Chord c;
@@ -3305,6 +3306,7 @@ int main() {
       JCLAP_CHECK(chordName(nameChord(Ints{52, 56, 59, 62}), 4) == "E7");
    }
 
+   std::fprintf(stderr, "> main 2: ---- voicings ----\n"); std::fflush(stderr); // DIAG
    // ---- voicings ----
    {
       // Every quality, at every root, in every shape: inside the window, never under the floor, and
@@ -3350,6 +3352,7 @@ int main() {
          JCLAP_CHECK(x > 67 && x < 72);
    }
 
+   std::fprintf(stderr, "> main 3: ---- the library ----\n"); std::fflush(stderr); // DIAG
    // ---- the library ----
    {
       JCLAP_CHECK(genreCount() >= 20);
@@ -3389,6 +3392,7 @@ int main() {
       JCLAP_CHECK(styles >= 60);
    }
 
+   std::fprintf(stderr, "> main 4: ---- songs ----\n"); std::fflush(stderr); // DIAG
    // ---- songs ----
    {
       // The same recipe makes the same song, and it saves and loads unchanged.
@@ -3425,6 +3429,7 @@ int main() {
       JCLAP_CHECK(differs);
    }
 
+   std::fprintf(stderr, "> main 5: ---- the engine ----\n"); std::fflush(stderr); // DIAG
    // ---- the engine ----
    {
       // With the host: chords out, each note with its off, in the window, on channel 1.
@@ -3907,6 +3912,7 @@ int main() {
       }
    }
 
+   std::fprintf(stderr, "> main 6: ---- the third review's fixes ----\n"); std::fflush(stderr); // DIAG
    // ---- the third review's fixes ----
    {
       // A chord that changes between hits still sounds, on time, and the chord before doesn't ring
@@ -4297,6 +4303,7 @@ int main() {
       JCLAP_CHECK_EQ(gAllocs, 0);
    }
 
+   std::fprintf(stderr, "> main 7: ---- the fourth review's corrections ---\n"); std::fflush(stderr); // DIAG
    // ---- the fourth review's corrections ----
    {
       auto genreNamed = [](const char *name) {
@@ -4853,6 +4860,7 @@ int main() {
          JCLAP_CHECK(chords > 4);
       }
    }
+   std::fprintf(stderr, "> main 8: ---- round 5 ----\n"); std::fflush(stderr); // DIAG
    // ---- round 5 ----
    {
       // Held notes: a tritone is a dominant's shell, a rootless voicing its dominant, a triad over a
@@ -5018,6 +5026,7 @@ int main() {
          differ += passes[0][i].second != passes[1][i].second || std::abs(passes[0][i].first - passes[1][i].first) > 2;
       JCLAP_CHECK_EQ(differ, 0);
    }
+   std::fprintf(stderr, "> main 9: ---- the comparison with MMA, Impro-Viso\n"); std::fflush(stderr); // DIAG
    // ---- the comparison with MMA, Impro-Visor and JJazzLab (0.6.0) ----
    {
       const auto genreNamed = [](const char *name) {
@@ -5348,6 +5357,7 @@ int main() {
 
       }
    }
+   std::fprintf(stderr, "> main 10: ---- the sixth review's fixes (0.7.0) --\n"); std::fflush(stderr); // DIAG
    // ---- the sixth review's fixes (0.7.0) ----
    {
       // D1: root, 3rd and 7th over the lowest note is that note's dominant, not its tritone sub.
@@ -6045,6 +6055,7 @@ int main() {
       JCLAP_CHECK(chordName(song.sections[kVerse].chords[0], 4) != "F#m7");
    }
 
+   std::fprintf(stderr, "> main 11: ---- the seventh review's fixes (0.8.0) \n"); std::fflush(stderr); // DIAG
    // ---- the seventh review's fixes (0.8.0) ----
    {
       // B01, D01: a rootless 7#5 keeps its #5 (no natural fifth); D06: OCTAVES keeps an altered fifth
@@ -6219,18 +6230,31 @@ int main() {
       JCLAP_CHECK(chordName(chord("Ab13"), 4, kMinor, &to) == "Ab13");
    }
 
+   std::fprintf(stderr, "> roundEight\n"); std::fflush(stderr); // DIAG
    roundEight();
+   std::fprintf(stderr, "> roundNine\n"); std::fflush(stderr); // DIAG
    roundNine();
+   std::fprintf(stderr, "> roundTen\n"); std::fflush(stderr); // DIAG
    roundTen();
+   std::fprintf(stderr, "> roundEleven\n"); std::fflush(stderr); // DIAG
    roundEleven();
+   std::fprintf(stderr, "> roundTwelve\n"); std::fflush(stderr); // DIAG
    roundTwelve();
+   std::fprintf(stderr, "> roundThirteen\n"); std::fflush(stderr); // DIAG
    roundThirteen();
+   std::fprintf(stderr, "> roundFourteen\n"); std::fflush(stderr); // DIAG
    roundFourteen();
+   std::fprintf(stderr, "> roundFourteenB\n"); std::fflush(stderr); // DIAG
    roundFourteenB();
+   std::fprintf(stderr, "> roundFourteenC\n"); std::fflush(stderr); // DIAG
    roundFourteenC();
+   std::fprintf(stderr, "> roundFifteenC\n"); std::fflush(stderr); // DIAG
    roundFifteenC();
+   std::fprintf(stderr, "> roundFifteenD\n"); std::fflush(stderr); // DIAG
    roundFifteenD();
+   std::fprintf(stderr, "> roundFifteenE\n"); std::fflush(stderr); // DIAG
    roundFifteenE();
+   std::fprintf(stderr, "> songStructure\n"); std::fflush(stderr); // DIAG
    songStructure();
    return jclap::core::testResult();
 }
