@@ -348,10 +348,26 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
             h = hitOf('x');
          h.push = 0;
          h.vel = static_cast<uint8_t>(std::min(127, std::max(kAccent + 8, written + 10)));
-         h.art = mark == kMarkHold ? kArtRing : mark == kMarkShot ? kArtChop : kArtAsWritten;
+         if (mark != kMarkAccent || !written)
+            h.art = mark == kMarkHold ? kArtRing : mark == kMarkShot ? kArtChop : kArtAsWritten;
          struck = true;
-      } else if (mark == kMarkHold || mark == kMarkShot)
-         continue;
+      } else if (mark == kMarkHold || mark == kMarkShot) {
+         // The take rests under it, but a hit pushed into the next chord still brings it in.
+         bool leads = false;
+         if (h.on() && chordPart(h.part) && !onBeat)
+            for (int k = 1; k * stepTicks <= kTicksPerBeat / 2; ++k)
+               if (!sameHarmony(chordAtView(v + k), chordAtView(v))) {
+                  bool hit = false;
+                  for (int j = 1; j <= k && !hit && !h.push; ++j) {
+                     const Hit &o = p.at((v + j) % n);
+                     hit = o.on() && !leftHand(o.part);
+                  }
+                  leads = !hit;
+                  break;
+               }
+         if (!leads)
+            continue;
+      }
       if (!struck && !h.on()) {
          // DENSITY above the middle fills gaps with softer repeats of the chord sounding.
          const double more = (gFeel.density - 0.5) * 2.0;
@@ -388,13 +404,15 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       if (!struck && tick > vt && chordPart(h.part)) {
          int64_t ms = 0, me = 0;
          const int m = slotOf(tick, ms, me);
-         if (m != kMarkNone && ms == tick) {
+         // (a push from the "a" crosses into the slot a sixteenth past its start)
+         if (m != kMarkNone && ms > vt && ms <= tick) {
             const int written = !leftHand(h.part) ? h.vel : 0;
             if (m != kMarkAccent)
                h = hitOf('x');
             h.push = 0;
             h.vel = static_cast<uint8_t>(std::min(127, std::max(kAccent + 8, written + 10)));
-            h.art = m == kMarkHold ? kArtRing : m == kMarkShot ? kArtChop : kArtAsWritten;
+            if (m != kMarkAccent)
+               h.art = m == kMarkHold ? kArtRing : m == kMarkShot ? kArtChop : kArtAsWritten;
             struck = true;
             mark = m;
             slotStart = vt;

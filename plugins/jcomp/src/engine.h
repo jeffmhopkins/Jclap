@@ -333,6 +333,7 @@ public:
          flushOffs(out);
          queueLen_ = 0;
          strikes_ = 0;
+         markPushed_ = -1;
          missed_.clear();
          shown_ = {};
          const int64_t t = static_cast<int64_t>(std::floor(b0 * kTicksPerBeat + 1e-6));
@@ -1133,23 +1134,34 @@ private:
          const int mark = markAt(secRel, from);
          if (mark != kMarkNone) {
             if (secRel == from) {
-               // The take pushed into this chord (struck in the half beat before, with the mark): that
-               // push was the band hit, it isn't struck again on the beat.
-               for (size_t i = strikes_; i-- > 0;)
-                  if (strike_[i].t < t) {
-                     if (strike_[i].t >= t - kTicksPerBeat / 2 && chordPart(strike_[i].h.part) &&
-                         strike_[i].c == chordAt(secRel)) {
-                        pushTarget_ = -1;
-                        ++hits_;
-                        return;
-                     }
-                     break;
-                  }
-               strikeMark(mark, p, step, steps, t, secRel);
-               return;
+               // The take pushed into this chord with the band hit on it: that push was the band hit,
+               // it isn't struck again on the beat.
+               if (markPushed_ == anchor_ + from) {
+                  markPushed_ = -1;
+                  pushTarget_ = -1;
+                  ++hits_;
+                  if (mark != kMarkAccent)
+                     return;
+                  // (ACC: the take plays on from the next hit; this one was the push)
+                  const Hit &w = p.at(step);
+                  if (w.on() && !leftHand(w.part))
+                     return;
+               } else {
+                  strikeMark(mark, p, step, steps, t, secRel);
+                  return;
+               }
             }
-            if (mark != kMarkAccent)
-               return;
+            if (mark == kMarkHold || mark == kMarkShot) {
+               // The take rests under a hold or a shot, but a hit pushed into the next chord still
+               // brings it in: a held chord doesn't swallow the push of the one after.
+               const Hit &w = p.at(step);
+               const int64_t next = nextChange(secRel);
+               const bool leads = w.on() && chordPart(w.part) && !onBeat(p, step) && next > secRel &&
+                                  next - secRel <= kTicksPerBeat / 2 &&
+                                  (w.push || !chordHitIn(p, step, 1, static_cast<int>((next - secRel) / p.stepTicks())));
+               if (!leads)
+                  return;
+            }
          }
       }
       // A run coming: look a few steps ahead for a hit with a run into a new chord.
@@ -1264,11 +1276,16 @@ private:
          return;
       }
       // A hit pushed or anticipated into a chord with a band hit on it is that band hit.
-      if (!target && !ending_ && chordRel > secRel && chordPart(h.part)) {
+      // (A push written on the "a" crosses into the slot a sixteenth past its start: still its hit.
+      // Not past the section's end in SONG: the next section's own band hits are its own.)
+      if (!target && !ending_ && chordRel > secRel && chordPart(h.part) &&
+          !(settings_.song && pending_ < 0 &&
+            chordRel >= static_cast<int64_t>(song_.sections[static_cast<size_t>(section_)].bars) * barTicks())) {
          int64_t from = 0;
          const int mark = markAt(chordRel, from);
-         if (mark != kMarkNone && from == chordRel) {
-            strikeMark(mark, p, step, steps, t, secRel, chordRel);
+         if (mark != kMarkNone && from > secRel && from <= chordRel) {
+            markPushed_ = anchor_ + from;
+            strikeMark(mark, p, step, steps, t, secRel, from);
             return;
          }
       }
@@ -1430,9 +1447,17 @@ private:
       h.vel = kAccent;
       h.art = mark == kMarkHold ? kArtRing : mark == kMarkShot ? kArtChop : kArtAsWritten;
       h.len = static_cast<uint8_t>(std::max(1, p.perBeat() / 2 + 1));
+      // ACC louder, not another chord: the written hit keeps its length and articulation.
+      const Hit &w = p.at(step);
+      if (mark == kMarkAccent && w.on() && !leftHand(w.part)) {
+         h = w;
+         h.vel = kAccent;
+         h.push = 0;
+         h.chance = 100;
+      }
       Strike k;
       k.t = t;
-      k.offset = 0.0;
+      k.offset = swingTicks(p, step, stepTicks) / kTicksPerBeat; // a push on a swung eighth, swung
       k.c = c;
       k.v = voicingFor(c, -1, true);
       k.h = h;
@@ -2037,6 +2062,7 @@ private:
    Chord lastChord_, nextChord_, bassChord_;
    // The last pushed chord: the beat it anticipates (-1 none), and its notes.
    int64_t pushTarget_ = -1;
+   int64_t markPushed_ = -1; // the band hit's slot (absolute tick) a push already struck
    // The beat a chord pushed at `t` anticipates: the next quarter, or dotted quarter in 6/8.
    int64_t pushTargetOf(int64_t t) const {
       const int64_t unit = beatUnit();
