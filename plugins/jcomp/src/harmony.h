@@ -462,6 +462,10 @@ inline int lowIntervalLimit(int semitones) {
 inline Ints pickTones(const Chord &c, int n) {
    const Quality &q = qualityOf(c);
    Ints t;
+   // A 13sus in three notes is its 4, b7 and 9: its 4, b7 and 13 are the ii9's own notes a fourth
+   // over (A13sus's D G F# is Em9's G D F#), and the change to it would not be heard.
+   if (c.quality == kSus13 && n == 3)
+      return Ints{5, 10, 14};
    for (int i : q.priority)
       if (static_cast<int>(t.size()) < n)
          t.push_back(i);
@@ -902,6 +906,15 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                Stack w{b};
                w.insert(w.end(), st.begin(), st.end());
                detail::addCandidate(out, w, vs, b);
+               // Short of strings (a 9th's 3, 7 and 9 at five): the fifth on top too, C9's x32333.
+               if (static_cast<int>(w.size()) < n) {
+                  const bool altered5 = std::any_of(q.tones.begin(), q.tones.end(), [](int i) { return i == 6 || i == 8 || i == 18; });
+                  int top = w.back() + 1;
+                  while (((top - (altered5 ? b : b + 7)) % 12 + 12) % 12)
+                     ++top;
+                  w.push_back(top);
+                  detail::addCandidate(out, w, vs, b);
+               }
             }
             continue;
          }

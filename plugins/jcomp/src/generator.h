@@ -471,7 +471,13 @@ inline bool thinnedBy(const Pattern &p, int step, double density, double dice, b
       return false;
    const int perBeat = p.perBeat();
    const int perBar = p.stepsPerBar();
-   if (fixed && (leftHand(p.at(step).part) || p.steps > perBar))
+   // (Every take is two bars long: a one-bar figure written twice, Freddie Green's four, thins as
+   // any take does; a figure whose two bars differ is the clave's.)
+   bool twoBar = false;
+   for (int s = 0; s < perBar && p.steps >= 2 * perBar && !twoBar; ++s)
+      twoBar = p.at(s).on() != p.at(s + perBar).on();
+   twoBar = twoBar || (p.steps > perBar && p.steps < 2 * perBar);
+   if (fixed && (leftHand(p.at(step).part) || twoBar))
       return false;
    // An offbeat take with a left hand (the Shout: bass on the beats, chords between) keeps its bass
    // on the bar's downbeat as another style keeps its first chord.
@@ -685,12 +691,17 @@ inline void blendInto(Pattern &a, const Pattern &b0, double amount, Rng &rng) {
       return;
    // Its rhythm only: the other genre's onsets as this one's chords (not its melody line, nor a left
    // hand this take hasn't got), never a rest over this take's hit, nor a chord over its left hand.
+   // Nor on a beat an offbeat take leaves empty (a one drop's one), inside a chord it holds, or a
+   // quieter hit over one of its own (its accented downbeat stays).
    const bool leftHandA = hasLeftHand(a);
+   const Pattern before = a;
    for (int s = 0; s < a.steps; ++s)
       if (rng.chance(amount)) {
          Hit h = b.at(s % b.steps);
          if (!h.on() || (a.at(s).on() && (leftHand(a.at(s).part) || a.at(s).part == kPartLine)))
             continue; // never over a left hand's note or a riff's
+         if (keepsOff(before, s) || heldOver(before, s) || (before.at(s).on() && h.vel < before.at(s).vel))
+            continue;
          if (h.part == kPartLine || (leftHand(h.part) && !leftHandA)) {
             h.part = kPartChord;
             h.degree = 0;
@@ -1334,7 +1345,9 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
       f.at(s) = Hit{};
    const int bar = f.stepsPerBar();
    // On the take's grid: a hit between the eighths of an eighth-note take moves to the eighth before.
-   if (!fine)
+   // (Not a 12/8 fill of the genre's own: its middle triplets are eighth notes, every triplet, not a
+   // shuffle's.)
+   if (!fine && !(rh && f.rate == kRate8T))
       for (int s = 0; s < bar; ++s)
          if (f.at(s).on() && !onEighth(f, s)) {
             // Onto the eighth before; where that has a hit, the louder of the two stays.
@@ -1462,7 +1475,8 @@ inline bool chordsOnly(const Pattern &p, bool ands) {
          continue;
       ++n;
       const int in = s % bar;
-      if (ands ? in % beat != and_ : (in != beat && in != 3 * beat))
+      // (The ands: every chord off the beat, on its and or its "a": a ska upstroke's chops too.)
+      if (ands ? (in % beat == 0 || (p.rate == kRate8T && in % beat != and_)) : (in != beat && in != 3 * beat))
          return false;
    }
    return n > 0;
@@ -1598,6 +1612,17 @@ inline Pattern makeEnding(const Recipe &r, const Pattern &base, double e) {
          f.at(16) = Hit{};
       }
    }
+   // A house riff ends on its own last bar, then the held chord (four block quarters is a ballad's
+   // cadence); an offbeat stab keeps the ending it has.
+   if (std::string(g.name).find("House") != std::string::npos && !keepsOff(base, 0) && base.rate == kRate16 &&
+       f.steps > f.stepsPerBar()) {
+      const Pattern last = lastBar(base);
+      const int bar = f.stepsPerBar();
+      for (int s = 0; s < bar; ++s) {
+         f.at(s) = last.at(s);
+         f.at(s).push = 0;
+      }
+   }
    // A bossa carries its batida into the held chord, not a bar of block quarters: the figure's own
    // bar: the cycle's first, which falls on the outro's second-last bar (an even bar of an even
    // section), so the cycle isn't broken by two second bars in a row.
@@ -1672,7 +1697,7 @@ inline void completeSong(const Recipe &r, Song &song, const std::vector<uint8_t>
    if (saved.size() < 4)
       return;
    const uint32_t version = saved[0] | saved[1] << 8 | saved[2] << 16 | static_cast<uint32_t>(saved[3]) << 24;
-   // A 6/8 song saved before 0.7.0 (a version below 4) was written on the 3/4 grid: the same ticks, so
+   // A 6/8 song saved by 0.6.x (version 3, with a 3/4 grid) was written on the 3/4 grid: the same ticks, so
    // it moves to the 6/8 rate (two dotted-quarter beats) as it is.
    if (version < 4 && styleOf(r).mods & kSixEight)
       for (Section &s : song.sections) {
@@ -1733,7 +1758,7 @@ inline void generateSong(const Recipe &r, Song &song, bool keepChords = false) {
          continue;
       }
       Section made = makeSection(r, i, mix(r.seed, static_cast<uint32_t>(i)));
-      if (keepChords && !s.chords[0].none()) {
+      if (keepChords && std::any_of(s.chords.begin(), s.chords.end(), [](const Chord &c) { return !c.none(); })) {
          // Moved to the song's key as a locked section's are (KEY may have moved since).
          for (Chord &c : s.chords)
             if (!c.none()) {
