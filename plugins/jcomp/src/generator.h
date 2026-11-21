@@ -826,7 +826,7 @@ inline void applyMods(Pattern &p, unsigned mods, Rng &rng, double pushChance = 0
       if (mods & kShorts && h.on() && h.len <= 1 && !leftHand(h.part) && h.part != kPartLine &&
           !((mods & kBusy) && h.vel >= kAccent * 9 / 10))
          h.art = kArtChop;
-      if (mods & kTopLine && h.on() && h.part == kPartChord && !onBeat(p, s) && rng.chance(0.35))
+      if (mods & kTopLine && h.on() && h.part == kPartChord && !onBeat(p, s) && h.vel < kAccent && rng.chance(0.35))
          h.part = rng.chance(0.5) ? kPartTop : kPartUpper;
    }
    // A rest a two-bar figure writes where its other bar plays is the phrase breathing (Chic's second
@@ -1525,8 +1525,9 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
    if (st.mods & kFixed) {
       Pattern f = base;
       const int half = std::max(1, perBeat(f) / 2);
+      // (Its last chord: a line's note, the tenor's, is never accented or pushed.)
       for (int s = f.steps - 1; s >= 0; --s)
-         if (f.at(s).on() && !leftHand(f.at(s).part)) {
+         if (f.at(s).on() && chordPart(f.at(s).part)) {
             // (Over the take's own peak, at its level: not a raw accent in a quiet section.)
             f.at(s).vel = static_cast<uint8_t>(std::min(127, std::max<int>(f.at(s).vel, chordPeak(base) + 12)));
             const int toEnd = f.stepsPerBar() - s % f.stepsPerBar();
@@ -1648,6 +1649,7 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
    // out as the groove on the take's grid): the last beat rests and its "and" leads in, accented,
    // so the bar before the change is heard as one. (In 6/8 only the last two eighths rest, the 4
    // kept, and the lead is the last eighth: the and of a dotted beat is no anticipation.)
+   uint64_t rested = 0; // (the steps it rests: the energy's fill-ins leave them so)
    {
       const Pattern was = lastBar(base);
       bool same = true;
@@ -1655,12 +1657,16 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
          same = f.at(s).on() == was.at(s).on();
       if (same && !hasLine(base) && !offbeatTake(base) && f.rate != kRate8T && bar - perBeat(f) / 2 > 0) {
          const int from = f.rate == kRate68 ? bar - 4 : bar - perBeat(f);
-         for (int s = from; s < bar; ++s)
+         for (int s = from; s < bar; ++s) {
             if (f.at(s).on() && !leftHand(f.at(s).part))
                f.at(s) = Hit{};
+            if (s < 64)
+               rested |= uint64_t{1} << s;
+         }
          const int lead = f.rate == kRate68 ? bar - 2 : bar - perBeat(f) / 2;
          if (!f.at(lead).on())
             f.at(lead) = hitOf('X');
+         rested &= ~(uint64_t{1} << lead);
       }
    }
    // A style that anticipates its changes does in its fill too (Garland's and of 2 into the bar's
@@ -1707,10 +1713,28 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
              !((st.mods & kBusy) && f.at(s).vel >= kAccent * 9 / 10))
             f.at(s).art = kArtChop;
    const Hit lead = pushed >= 0 ? f.at(pushed) : Hit{};
+   const Pattern unshaped = f;
    shapeEnergy(f, fillEnergy, rng, false, st.mods, swungEighths(g, st));
    // The anticipation into the next section stays, whatever the energy took out.
    if (pushed >= 0 && !f.at(pushed).on())
       f.at(pushed) = lead;
+   // (And the rest before the lead stays a rest: the energy's soft hits don't fill it.)
+   for (int s = 0; s < bar && s < 64; ++s)
+      if (rested >> s & 1 && f.at(s).on() && !unshaped.at(s).on())
+         f.at(s) = Hit{};
+   // A near-silent section's fill still leads into the next: its last chord stays, at its level
+   // (unpushed in funk and an offbeat take, which land on the chord they're on).
+   if (fillEnergy < 0.15) {
+      bool last = false;
+      for (int s = bar - perBeat(f); s < bar && !last; ++s)
+         last = f.at(s).on() && chordPart(f.at(s).part);
+      for (int s = bar - 1; s >= bar - perBeat(f) && !last; --s)
+         if (unshaped.at(s).on() && chordPart(unshaped.at(s).part)) {
+            f.at(s) = unshaped.at(s);
+            f.at(s).vel = static_cast<uint8_t>(std::max(24, std::min<int>(f.at(s).vel, chordPeak(base) > 0 ? chordPeak(base) : kSoft)));
+            last = true;
+         }
+   }
    // The gospel shout's offbeats over its left hand, its fill come out as its groove (its beat
    // chords give way to the bass), hit every offbeat hard: the praise break's push into the next.
    // (Only the shout's: a boom-chick, a waltz or an organ bubble doesn't accent its weak beats.)
@@ -1901,7 +1925,7 @@ inline Pattern makeFillDown(const Recipe &r, int section, const Pattern &base, d
    if (st.mods & kFixed) {
       Pattern f = base;
       for (int s = f.steps - 1; s >= 0; --s)
-         if (f.at(s).on() && !leftHand(f.at(s).part)) {
+         if (f.at(s).on() && chordPart(f.at(s).part)) {
             f.at(s).art = kArtRing;
             break;
          }

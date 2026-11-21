@@ -123,14 +123,17 @@ inline const char *pitchName(int pc, int key = 0, int scale = kMajor) {
    const char *n = spelled[letter][acc + 1];
    // A sharp key's leading tone keeps its letter (E# in F# minor, B# in C# minor): vii°7 is E#dim7.
    // So does its raised fourth (B major's E#, the #iv°7 and V/V's third: C#/E#).
-   const bool leading = ((pc - key + 12) % 12 == 11 || (pc - key + 12) % 12 == 6) && names == kSharpNames;
+   // (And a sharp minor key's major third, the picardy third and V/iv's: C#7/E# in C# minor.)
+   const int deg = (pc - key + 12) % 12;
+   const bool leading = (deg == 11 || deg == 6 || deg == 4) && names == kSharpNames;
    if ((!std::strcmp(n, "E#") || !std::strcmp(n, "B#")) && !leading)
       return names[pc];
    // Cb only where the key signature has it: Gb major's six flats (and its modes: Eb minor, Ab
    // Dorian, Db Mixolydian), whose IV is Cb.
    static const int toMajor[kScaleCount] = {0, 3, 10, 5, 0};
    const int major = (key + toMajor[std::clamp(scale, 0, kScaleCount - 1)]) % 12;
-   if (!std::strcmp(n, "Cb") && major == 6 && pc == 11 && scale != kBlues)
+   // (Gb blues too: its IV is Cb7 beside Gb7 and Db7, not a B7 in another signature.)
+   if (!std::strcmp(n, "Cb") && major == 6 && pc == 11)
       return n;
    if (!std::strcmp(n, "Cb") || !std::strcmp(n, "Fb"))
       return names[pc];
@@ -471,6 +474,10 @@ inline Chord nameChord(const Notes &notes, bool slash = true, int key = -1, int 
          // (Nor a rootless chord other than a dominant: Ab6/9 over C for C Eb F Bb.)
          if (rootless && !dom && bassExplains)
             score -= 1.0;
+         // A bass a fifth or more apart whose own chord holds every note is that chord's root
+         // (Db under D F Ab is Db7b9's, not a D diminished over its b9).
+         if (apartBass && bassExplains && root == bassPc && (held & ~want) == 0)
+            score += 3.0;
          // Simpler names first: fewer tones break ties.
          score -= 0.05 * static_cast<double>(qu.tones.size());
          if (score > bestScore) {
@@ -559,6 +566,20 @@ inline Ints pickTones(const Chord &c, int n) {
       if (root != t.end() && std::find(t.begin(), t.end(), 7) == t.end() &&
           std::find(q.tones.begin(), q.tones.end(), 7) != q.tones.end())
          *root = 7;
+   }
+   // Over a slash bass the root stays: C9/E in three notes is E Bb C, not E Bb D (Em7b5). It takes
+   // the place of the last tone that is neither the bass nor an altered one.
+   if (c.bass >= 0 && c.bass != c.root && !t.empty() && std::find(t.begin(), t.end(), 0) == t.end() &&
+       std::find(t.begin(), t.end(), 12) == t.end()) {
+      for (size_t k = t.size(); k-- > 0;) {
+         const int iv = t[k];
+         const bool bassTone = (c.root + iv) % 12 == c.bass;
+         const bool altered = iv == 13 || iv == 15 || iv == 6 || iv == 8 || iv == 18 || iv == 20;
+         if (!bassTone && !altered) {
+            t[k] = 0;
+            break;
+         }
+      }
    }
    const bool has9 = std::find(t.begin(), t.end(), 14) != t.end();
    for (int k = 0; static_cast<int>(t.size()) < n; ++k)
@@ -1351,7 +1372,7 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
           std::all_of(out.begin(), out.end(), [&](const Voicing &v) { return clashes(v, c) > 0.0; })) {
          VoiceSettings wide = vs;
          wide.lo = std::max(vs.floor, vs.lo - 6);
-         wide.hi = vs.hi + 2;
+         wide.hi = vs.hi; // (lower only: HIGHEST is the window's top)
          wide.maxSpan = vs.maxSpan + 7;
          for (const Voicing &v : candidates(c, wide, shapeOverride, false))
             if (clashes(v, c) <= 0.0)

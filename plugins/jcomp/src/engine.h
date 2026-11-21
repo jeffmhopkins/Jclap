@@ -756,11 +756,18 @@ private:
       const int at = formAt();
       const int from = pendingPos_ >= 0 ? pendingPos_ : at;
       int to = ((from + by) % entries + entries) % entries;
-      // (PREV from a song's first entry starts it again: it doesn't wrap round to the outro and end.)
+      // (PREV from a song's first entry starts it again: it doesn't wrap round to the outro and end;
+      // nor NEXT from its last round to the intro: the song ends as it would.)
       if (by < 0 && from + by < 0 && settings_.songEnds)
          to = 0;
-      // Back to the entry playing, after a NEXT queued another: the queue is cancelled.
-      if (running_ && to == at && pendingPos_ >= 0) {
+      if (by > 0 && from + by >= entries && settings_.songEnds) {
+         to = entries - 1;
+         if (to == at && pendingPos_ < 0)
+            return;
+      }
+      // Back to the entry playing, after a NEXT queued another: the queue is cancelled. (Not a
+      // second PREV at the first entry, which asks for the restart already queued.)
+      if (running_ && to == at && pendingPos_ >= 0 && pendingPos_ != to) {
          pending_ = -1;
          pendingPos_ = -1;
          return;
@@ -810,6 +817,11 @@ private:
             return onBar && ((hostBar % 2) + 2) % 2 == 0;
          }
       }
+      // (In SONG the entry's end is a switch point too: NEXT never makes a short entry play longer
+      // than it would have.)
+      if (settings_.song && onBar && bar > 0 &&
+          bar % std::max<int>(1, song_.sections[static_cast<size_t>(section_)].bars) == 0)
+         return true;
       switch (settings_.switchAt) {
       case 0: return true;
       case 1: return onBar;
@@ -1107,7 +1119,7 @@ private:
          fill_ = true;
          fillDown_ = false;
       }
-      if (settings_.song && settings_.fillInto && pending_ < 0 && bar + 1 == now.bars && songNext() >= 0) {
+      if (settings_.song && settings_.fillInto && !holdChord_ && pending_ < 0 && bar + 1 == now.bars && songNext() >= 0) {
          fill_ = true;
          fillDown_ = downInto(songNext());
       }
@@ -1819,6 +1831,14 @@ private:
       k.offset = 0.0;
       k.c = c;
       k.v = voicingFor(c, -1, true);
+      // (As a take's chord would: a grip over a thumbed bass, or an organ over its own left hand,
+      // leaves the bass to the left hand.)
+      {
+         const bool lh = hasLeftHand(p);
+         k.dropBass = (settings_.voicing.shape == kGrip && lh) ||
+                      (settings_.sustainBass && lh && k.v.count > 2 &&
+                       k.v.notes[0] % 12 == (((c.bass >= 0 ? c.bass : c.root) % 12) + 12) % 12);
+      }
       k.h = h;
       k.vel = lifted(h.vel);
       k.lenBeats = h.len * stepBeats;
