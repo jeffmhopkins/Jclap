@@ -390,8 +390,18 @@ public:
       clock_ += b.frames; // the key clock: this block's events are stamped from the block before's end
 
       if (!run) {
-         if (running_)
+         if (running_) {
             stopAll(out);
+            // A section NEXT, PREV or a tile queued for the pass that stopped: free, it's where play
+            // starts again (as one asked for while stopped is); following the host in SONG, the
+            // host's position places the song, and the cue is dropped.
+            if (pending_ >= 0 && !(settings_.song && following_)) {
+               section_ = pending_;
+               formPos_ = pendingPos_ >= 0 ? pendingPos_ : formAt();
+               cued_ = true;
+            }
+            pending_ = pendingPos_ = -1;
+         }
          running_ = false;
          bassQueue_ = 0;
          if (heldFresh_) {
@@ -457,7 +467,7 @@ public:
             if (settings_.song && !following && !cued_) {
                formPos_ = std::max(0, song_.find(std::clamp(settings_.section, 0, kSections - 1)));
                section_ = song_.entry(formPos_);
-               pending_ = -1;
+               pending_ = pendingPos_ = -1;
             }
             repeat_ = song_.entry(formPos_) == section_ ? repeatOf(formPos_) : 0;
             cued_ = false;
@@ -798,6 +808,7 @@ private:
          section_ = song_.entry(first);
          if (pending_ == section_)
             pending_ = -1;
+         pendingPos_ = pending_ >= 0 ? song_.find(pending_, first + 1) : -1;
          anchor_ = 0;
          repeat_ = repeatOf(first);
          return;
@@ -807,7 +818,7 @@ private:
          ended_ = true;
          formPos_ = entries - 1;
          section_ = song_.entry(formPos_);
-         pending_ = -1;
+         pending_ = pendingPos_ = -1;
          anchor_ = bar * barTicks();
          return;
       }
@@ -827,6 +838,8 @@ private:
       // (A section asked for stays queued: it comes in at its switch point, as it would have.)
       if (pending_ == s)
          pending_ = -1;
+      // (Its entry is the one after this, wherever the jump landed: not the one it meant before.)
+      pendingPos_ = pending_ >= 0 ? song_.find(pending_, (e + 1) % entries) : -1;
       anchor_ = (bar - into) * barTicks();
       // Into the ending's bars: the ending, from here (not the take until the next bar line).
       const Section &now = song_.sections[static_cast<size_t>(s)];

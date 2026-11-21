@@ -281,6 +281,10 @@ template <typename Notes>
 inline Chord nameChord(const Notes &notes, bool slash = true, int key = -1, int scale = kMajor) {
    if (notes.empty())
       return Chord{};
+   // The blues scale is the melody's: its b3 and b5 are blue notes over dominant chords (I7 IV7
+   // V7), so the harmony is read in the key's Mixolydian.
+   if (scale == kBlues)
+      scale = kMixolydian;
    int lowest = 128;
    unsigned held = 0;
    for (int n : notes) {
@@ -303,8 +307,9 @@ inline Chord nameChord(const Notes &notes, bool slash = true, int key = -1, int 
       c.root = static_cast<int8_t>(bassPc);
       // (A bare fifth or octave in a key: the key's own third over it, A5 in A minor is Am.)
       const bool power = held == bassBit || held == (bassBit | 1u << ((bassPc + 7) % 12));
+      // (Not the key's V: a minor key's dominant is major in practice, its leading tone raised.)
       if (power && key >= 0 && inScale(bassPc, key, scale) && !inScale((bassPc + 4) % 12, key, scale) &&
-          inScale((bassPc + 3) % 12, key, scale))
+          inScale((bassPc + 3) % 12, key, scale) && (bassPc - key + 12) % 12 != 7)
          c.quality = kMin;
       for (int pc = 0; pc < 12; ++pc)
          if ((held >> pc & 1) && pc != bassPc) {
@@ -633,22 +638,48 @@ inline Stacks closeStacks(const P &pcs, int lo, int hi) {
 }
 
 // The open chords of a guitar in standard tuning (E2 A2 D3 G3 B3 E4): C, A, G, E, D, Am, Em, Dm, A7,
-// D7, E7, G7, C7, B7, Am7, Em7, Cmaj7, Dmaj7, Fmaj7, A(add), E(add), Am7.
+// D7, E7, G7, C7, B7, Am7, Em7, Cmaj7, Dmaj7, Fmaj7, Amaj7, Emaj7, Cadd9, Dsus4, Dsus2, Asus4, Asus2,
+// Esus4.
 inline constexpr int kOpenGrips[][6] = {
       {48, 52, 55, 60, 64, 0},  {45, 52, 57, 61, 64, 0},  {43, 47, 50, 55, 59, 67}, {40, 47, 52, 56, 59, 64},
       {50, 57, 62, 66, 0, 0},   {45, 52, 57, 60, 64, 0},  {40, 47, 52, 55, 59, 64}, {50, 57, 62, 65, 0, 0},
       {45, 52, 55, 61, 64, 0},  {50, 57, 60, 66, 0, 0},   {40, 47, 50, 56, 59, 64}, {43, 47, 50, 55, 59, 65},
       {48, 52, 58, 60, 64, 0},  {47, 51, 57, 59, 66, 0},  {45, 52, 55, 60, 64, 0},  {40, 47, 50, 55, 59, 64},
       {48, 52, 55, 59, 64, 0},  {50, 57, 61, 66, 0, 0},   {53, 57, 60, 64, 0, 0},   {45, 52, 56, 61, 64, 0},
-      {40, 47, 51, 56, 59, 64}, {45, 52, 55, 60, 64, 0},
+      {40, 47, 51, 56, 59, 64}, {48, 52, 55, 62, 64, 0},  {50, 57, 62, 67, 0, 0},   {50, 57, 62, 64, 0, 0},
+      {45, 52, 57, 62, 64, 0},  {45, 52, 57, 59, 64, 0},  {40, 47, 52, 57, 59, 64},
 };
-// Whether a grip is one of the open chords (all its notes on one of them).
+// An open shape cut to `n` strings from the top: a doubled string first (the top one), so G7's F
+// stays.
+inline Ints gripCut(const int (&shape)[6], int n) {
+   Ints all;
+   for (int x : shape)
+      if (x > 0)
+         all.push_back(x);
+   while (static_cast<int>(all.size()) > n) {
+      int drop = static_cast<int>(all.size()) - 1;
+      for (int i = static_cast<int>(all.size()) - 1; i > 0; --i) {
+         bool doubled = false;
+         for (int j = 0; j < static_cast<int>(all.size()); ++j)
+            doubled = doubled || (j != i && all[static_cast<size_t>(j)] % 12 == all[static_cast<size_t>(i)] % 12);
+         if (doubled) {
+            drop = i;
+            break;
+         }
+      }
+      all.erase(all.begin() + drop);
+   }
+   return all;
+}
+// Whether a grip is one of the open chords as a hand plays it at that many strings (not a thin
+// subset of one: G3 B3 E4 is three strings of an Em7, not an open chord).
 inline bool openGrip(const Voicing &v) {
    for (const auto &shape : kOpenGrips) {
-      bool all = v.count > 0;
-      for (int i = 0; i < v.count && all; ++i)
-         all = std::find(std::begin(shape), std::end(shape), static_cast<int>(v.notes[static_cast<size_t>(i)])) != std::end(shape);
-      if (all)
+      const Ints cut = gripCut(shape, v.count);
+      bool same = static_cast<int>(cut.size()) == v.count;
+      for (int i = 0; i < v.count && same; ++i)
+         same = cut[static_cast<size_t>(i)] == v.notes[static_cast<size_t>(i)];
+      if (same)
          return true;
    }
    return false;
@@ -673,12 +704,24 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
          p.push_back((c.root + i) % 12);
       return p;
    };
+   // Over a slash bass the hands hold the chord's root and its other tones by priority, never the
+   // bass's pitch class again: C/G without its C is an E minor triad over G.
+   const auto overSlash = [&](int k) {
+      Ints t{0};
+      for (int i : q.priority)
+         if (static_cast<int>(t.size()) < k && i % 12 != 0 && (c.root + i) % 12 != bassPc)
+            t.push_back(i);
+      return t;
+   };
+   const bool slashed = bassPc != c.root;
    switch (shape) {
    case kShell: {
       // Root (or the slash bass) under the guide tones: 1-3-7, 1-7-3 (Bud Powell's shells), or
       // 1-3-5 / 1-5-3 for a triad; with more notes, the colour tones on top.
       Ints guide;
-      if (q.seventh) {
+      if (slashed)
+         guide = overSlash(std::max(2, n - 1));
+      else if (q.seventh) {
          // (Not the root again: the bass has it, and over a major seventh B under a C rubs. Over a
          // slash bass the root is a guide tone like the others, but never over a major seventh.)
          const bool maj7 = std::find(q.tones.begin(), q.tones.end(), 11) != q.tones.end();
@@ -730,8 +773,10 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       // its size.)
       // An added tension (one the chord doesn't name) is the key's: a vi chord's 13th in E major
       // isn't A#. (A chord from outside the key takes its own.)
+      // (The blues scale's harmony is the key's Mixolydian: I7 IV7 V7 take their 9ths and 13ths.)
+      const int keyScale = vs.scale == kBlues ? kMixolydian : vs.scale;
       const auto keyHas = [&](int iv) {
-         return vs.key < 0 || !inScale(c.root % 12, vs.key, vs.scale) || inScale((c.root + iv) % 12, vs.key, vs.scale) ||
+         return vs.key < 0 || !inScale(c.root % 12, vs.key, keyScale) || inScale((c.root + iv) % 12, vs.key, keyScale) ||
                 hasIv(iv) || hasIv(iv + 12);
       };
       if ((q.seventh || q.tones.size() > 3 || (q.tones.size() == 3 && !hasIv(6) && !hasIv(8))) && !altered9 && keyHas(2))
@@ -778,8 +823,9 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       const bool fewer = static_cast<int>(q.tones.size()) < n;
       // (Every size with the seventh before any without: a five-note Eb7 stack with no Db is an
       // Eb6/9, and a four-note one that keeps it fits.)
-      for (int pass = 0; pass < 2 && out.empty(); ++pass)
-      for (int size = n; size >= 3 && (out.empty() || (fewer && size >= n - 2)); --size)
+      // (Nor, for a 9th chord, where no stack with the seventh holds the 9th: its colour.)
+      for (int pass = 0; pass < 2 && (out.empty() || (pass == 1 && want9 && !nineFrom(0))); ++pass)
+      for (int size = n; size >= 3 && (out.empty() || (fewer && size >= n - 2) || (pass == 1 && !nineFrom(0))); --size)
       // A level less strict comes in while there are fewer than three stacks to choose from (one
       // stack a chord leaves the top leaping from chord to chord), down to the stacks that still hold
       // the seventh; the last level (no seventh) only where nothing else fits.
@@ -797,7 +843,7 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                   for (int k = 1; k < m; ++k)
                      v.push_back(v.back() + (odd && k - 1 == ex / 2 ? (ex % 2 ? 6 : 4) : 5));
                   bool ok = m >= 2, root = false, third = false, sev = seventh < 0 || (strict < 1 && !needSeventh),
-                       al = alt < 0;
+                       al = alt < 0, nine = false;
                   for (int x : v) {
                      ok = ok && (allowed >> (((x % 12) + 12) % 12) & 1);
                      const int iv = ((x - c.root) % 12 + 12) % 12;
@@ -805,7 +851,12 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                      third = third || (q.tones.size() > 1 && iv == q.tones[1] % 12); // its own (a 7#9's 3rd, not the #9)
                      sev = sev || iv == seventh;
                      al = al || iv == alt;
+                     nine = nine || iv == 2;
                   }
+                  // (A 9th chord no stack with its third holds the 9th of: the "So What" stack, its 9th
+                  // in the third's place, the ambiguity a fourths voicing is for.)
+                  if (pass == 1 && want9 && nine && !third && sev && seventh >= 0)
+                     third = true;
                   if (strict == 1) {
                      if (root)
                         continue; // the plain stacks had this one
@@ -1047,35 +1098,18 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
          for (int i : q.tones)
             chordPcs.push_back((c.root + i) % 12);
          for (const auto &shape : detail::kOpenGrips) {
-            Ints all;
-            for (int x : shape)
-               if (x > 0)
-                  all.push_back(x);
-            // Cut to the voices: a doubled string first (the top one), so G7's F stays.
-            while (static_cast<int>(all.size()) > n) {
-               int drop = static_cast<int>(all.size()) - 1;
-               for (int i = static_cast<int>(all.size()) - 1; i > 0; --i) {
-                  bool doubled = false;
-                  for (int j = 0; j < static_cast<int>(all.size()); ++j)
-                     doubled = doubled || (j != i && all[static_cast<size_t>(j)] % 12 == all[static_cast<size_t>(i)] % 12);
-                  if (doubled) {
-                     drop = i;
-                     break;
-                  }
-               }
-               all.erase(all.begin() + drop);
-            }
+            const Ints all = detail::gripCut(shape, n);
             if (all.size() < 4 || all.front() % 12 != bassPc)
                continue;
-            // Every note the chord's, and its third and (a seventh chord's) seventh there.
-            bool fits = true, third = false, seventh = !q.seventh;
-            for (int x : all) {
-               const int iv = (x - c.root + 120) % 12;
+            // Every note the chord's, and every tone that names it there (its third, seventh and
+            // colour: an open E is no E7#9 or Eadd9); only a perfect fifth may go.
+            bool fits = true, whole = true;
+            for (int x : all)
                fits = fits && std::find(chordPcs.begin(), chordPcs.end(), x % 12) != chordPcs.end();
-               third = third || (q.tones.size() > 1 && iv == q.tones[1] % 12);
-               seventh = seventh || (q.tones.size() > 3 && iv == q.tones[3] % 12);
-            }
-            if (fits && third && seventh) {
+            for (int i : q.tones)
+               if (i % 12 != 7)
+                  whole = whole && std::any_of(all.begin(), all.end(), [&](int x) { return (x - c.root + 120) % 12 == i % 12; });
+            if (fits && whole) {
                Stack v;
                for (int x : all)
                   v.push_back(x);
@@ -1087,7 +1121,7 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
          if (b % 12 != bassPc || (!slash && b < lowIntervalLimit(fifthIv) - 2))
             continue;
          if (slash) {
-            for (const auto &st : detail::closeStacks(pcsOf(pickTones(c, std::max(2, n - 1))), b + 3, b + 20)) {
+            for (const auto &st : detail::closeStacks(pcsOf(overSlash(std::max(2, n - 1))), b + 3, b + 20)) {
                if (st.front() <= b + 2 || st.front() > b + 9)
                   continue;
                Stack v{b};

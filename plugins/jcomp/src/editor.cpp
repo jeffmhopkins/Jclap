@@ -3165,7 +3165,8 @@ private:
       for (int i = 0; i < 5; ++i) {
          std::string tag;
          host_.litter.push_back(mutate(sec.takes[0], param(kMutation), rng, tag, styleOf(recipe()).mods, genreAt(recipe().genre).name,
-                                          playerOf(recipe()).instrument == kOrgan, styleOf(recipe()).bpm));
+                                          playerOf(recipe()).instrument == kOrgan, styleOf(recipe()).bpm,
+                                          playerOf(recipe()).instrument == kPiano || playerOf(recipe()).instrument == kEPiano));
          host_.tags.push_back(tag);
       }
       if (mutate_)
@@ -3752,7 +3753,8 @@ private:
          Rng rng(rng_());
          std::string tag;
          p = mutate(p, param(kMutation), rng, tag, styleOf(recipe()).mods, genreAt(recipe().genre).name,
-                    playerOf(recipe()).instrument == kOrgan, styleOf(recipe()).bpm);
+                    playerOf(recipe()).instrument == kOrgan, styleOf(recipe()).bpm,
+                    playerOf(recipe()).instrument == kPiano || playerOf(recipe()).instrument == kEPiano);
          host_.setSong(s);
          diceTag_ = tag;
          redraw();
