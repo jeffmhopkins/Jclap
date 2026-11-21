@@ -736,6 +736,147 @@ static void roundTen() {
    }
 }
 
+static void roundEleven() {
+   const auto name = [](Ints n, int key = -1, int scale = kMajor) { return chordName(nameChord(n, true, key, scale), 0); };
+   // D06, D07, D14: chord names by the key's scale, a bass a fifth under the rest, a power chord.
+   JCLAP_CHECK(name({59, 65}, 9, kMinor) == "G7");
+   JCLAP_CHECK(name({48, 64, 71, 78}) == "Cmaj7#11");
+   JCLAP_CHECK(name({60, 64, 66, 71}) == "D13");
+   JCLAP_CHECK(name({45, 52}, 9, kMinor) == "Am");
+   // D12: B major's raised fourth is E#.
+   JCLAP_CHECK(chordName(Chord{1, kMaj, 5}, 11) == "C#/E#");
+   // D02: a guitar's open chords: G 320003 (its top string left for the five a grip holds), D xx0232.
+   {
+      VoiceSettings vs;
+      vs.shape = kGrip;
+      vs.voices = 5;
+      vs.lo = 40;
+      vs.hi = 76;
+      vs.center = 58;
+      vs.floor = 40;
+      const auto is = [&](const char *n, Ints want) {
+         const Voicing v = voice(chord(n), nullptr, vs);
+         Ints got;
+         for (int i = 0; i < v.count; ++i)
+            got.push_back(v.notes[static_cast<size_t>(i)]);
+         JCLAP_CHECK(got == want);
+      };
+      is("G", {43, 47, 50, 55, 59});
+      is("D", {50, 57, 62, 66});
+      is("E", {40, 47, 52, 56, 59});
+   }
+   // D08: a minor key's V7 runs the harmonic minor's b9 and b13: E7 into Am never runs a C#.
+   for (int from : {59, 62, 67})
+      for (int to : {64, 69})
+         for (int n : passingRun(from, to, 3, 9, kMinor, false, chord("E7"), chord("Am")))
+            JCLAP_CHECK(n % 12 != 1 && n % 12 != 6);
+   // D09: 4THS at five voices keeps a dominant's seventh, in every key.
+   // D11: SHELL at four voices doesn't double the root on top.
+   // D16: ROOTLESS at three voices keeps an m11's 11th and a 13sus's 13th.
+   for (int root = 0; root < 12; ++root) {
+      VoiceSettings vs;
+      const auto pcs = [&](const Voicing &v) {
+         std::set<int> out;
+         for (int i = 0; i < v.count; ++i)
+            out.insert((v.notes[static_cast<size_t>(i)] - root + 12) % 12);
+         return out;
+      };
+      vs.shape = kQuartal;
+      vs.voices = 5;
+      vs.lo = 50;
+      vs.hi = 76;
+      JCLAP_CHECK(pcs(voice(Chord{static_cast<int8_t>(root), kDom7, -1}, nullptr, vs)).count(10) == 1);
+      vs = VoiceSettings{};
+      vs.shape = kShell;
+      vs.voices = 4;
+      const Voicing shell = voice(Chord{static_cast<int8_t>(root), kMin7, -1}, nullptr, vs);
+      for (int i = 1; i < shell.count; ++i)
+         JCLAP_CHECK(shell.notes[static_cast<size_t>(i)] % 12 != root);
+      vs.shape = kRootless;
+      vs.voices = 3;
+      JCLAP_CHECK(pcs(voice(Chord{static_cast<int8_t>(root), kMin11, -1}, nullptr, vs)).count(5) == 1);
+      JCLAP_CHECK(pcs(voice(Chord{static_cast<int8_t>(root), kSus13, -1}, nullptr, vs)).count(9) == 1);
+      // D10: SPREAD's 7#9 has its #9 over the 3rd.
+      vs.shape = kSpread;
+      vs.voices = 4;
+      const Chord hendrix{static_cast<int8_t>(root), kSharp9, -1};
+      JCLAP_CHECK(clashes(voice(hendrix, nullptr, vs), hendrix) <= 0.0);
+   }
+   // B02, B05 (E14): a section that closes a phrase ends at home. AABA's second A before the bridge,
+   // and the last entry of I V C, end on the outro's last chord, the cadence a bar earlier.
+   {
+      auto song = songOf("x...............", {{"C", nullptr}, {"Am", nullptr}, {"Dm", nullptr}, {"G7", nullptr}});
+      for (Section &sec : song->sections)
+         sec.bars = 4;
+      for (Chord &c : song->sections[kOutro].chords)
+         c = chord("C");
+      song->setForm(4); // AABA: I V V B V O
+      JCLAP_CHECK(chordName(phraseChord(*song, 2, true, kVerse, 3, false), 0) == "C");
+      JCLAP_CHECK(chordName(phraseChord(*song, 2, true, kVerse, 2, false), 0) == "G7");
+      JCLAP_CHECK(chordName(phraseChord(*song, 1, true, kVerse, 3, false), 0) == "G7"); // the first A goes on
+      JCLAP_CHECK(chordName(phraseChord(*song, -1, true, kVerse, 3, false), 0) == "G7");
+      song->setForm(kCustomForm, {kIntro, kVerse, kChorus});
+      JCLAP_CHECK(chordName(phraseChord(*song, 2, true, kChorus, 3, false), 0) == "C");
+      JCLAP_CHECK(chordName(phraseChord(*song, 2, false, kChorus, 3, false), 0) == "G7"); // on repeat
+   }
+   // A03: the Afrobeat figures (Chord Chop, Interlock) are played as written.
+   for (int g = 0; g < genreCount(); ++g)
+      for (const Style &st : genreAt(g).styles)
+         if (std::string(st.name) == "Chord Chop" || std::string(st.name) == "Interlock")
+            JCLAP_CHECK((st.mods & kFixed) != 0);
+   // E01: a chord played a moment late, with a strumming player, never lets the old chord's last
+   // strings sound over the new one.
+   for (int onsets : {1, 2}) {
+      auto song = songOf("x...............", {{"C", nullptr}});
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.chordsFrom = 1;
+      s.onsets = onsets;
+      s.changeAt = 3;
+      s.voicing.voices = 5;
+      e.setSettings(s);
+      e.reset();
+      const int64_t late = 96000 + 20 * 48;
+      bool c = false, f = false;
+      const auto out = runWith(e, 96000 * 3, 0.0, [&](int64_t at, Block &b) {
+         if (!c) {
+            for (int k : {60, 64, 67})
+               e.noteOn(0, k, 100, 0);
+            c = true;
+         }
+         if (!f && at + b.frames > late) {
+            const uint32_t fr = static_cast<uint32_t>(late - at);
+            for (int k : {60, 64, 67})
+               e.noteOff(0, k, fr);
+            for (int k : {65, 69, 72})
+               e.noteOn(0, k, 100, fr);
+            f = true;
+         }
+      });
+      for (const Timed &t : out)
+         if (t.on() && t.time >= late && t.time < 96000 * 2)
+            JCLAP_CHECK(t.m.data1 % 12 == 5 || t.m.data1 % 12 == 9 || t.m.data1 % 12 == 0);
+   }
+   // E17: in LOOP, a host's count-in rests; the bass coming in during it brings no chord in SONG.
+   {
+      auto song = songOf("x...x...x...x...", {{"C", nullptr}});
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      e.setSettings(s);
+      e.reset();
+      const auto out = runWith(e, 96000 * 3, -8.0, [](int64_t, Block &) {});
+      int early = 0, after = 0;
+      for (const Timed &t : out)
+         (t.on() ? (t.time < 96000 * 2 - 480 ? early : after) : after) += 1;
+      JCLAP_CHECK_EQ(early, 0);
+      JCLAP_CHECK(after > 0);
+   }
+}
+
 static void songStructure() {
    // Templates by name, a hand-written order that is one named as it, an empty one once through.
    {
@@ -975,6 +1116,30 @@ static void songStructure() {
       JCLAP_CHECK_EQ(got[3].section, kOutro);
       JCLAP_CHECK_EQ(got[3].formPos, 10);
    }
+   // B01: NEXT twice in Short's first verse goes to the second verse (the section playing, another
+   // entry), not back to nothing queued.
+   {
+      auto song = twoBars();
+      song->setForm(3); // I V C V C O
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.song = true;
+      s.sync = 2;
+      s.play = true;
+      s.freeTempo = 120.0;
+      s.fillInto = false;
+      e.setSettings(s);
+      e.reset();
+      std::vector<Bar> got = bars(e, 3, 0.0, false); // into the verse's first bar
+      JCLAP_CHECK_EQ(got[2].formPos, 1);
+      JCLAP_CHECK(e.noteOn(0, s.noteFor(kActNext), 100));
+      JCLAP_CHECK(e.noteOn(0, s.noteFor(kActNext), 100));
+      got = bars(e, 2, 0.0, false);
+      JCLAP_CHECK_EQ(got[1].section, kVerse);
+      JCLAP_CHECK_EQ(got[1].formPos, 3);
+   }
    // A structure that ends on a section with no ending of its own ends on the outro's.
    {
       auto song = twoBars();
@@ -1054,7 +1219,8 @@ int main() {
                for (int i = 1; i < v.count; ++i) {
                   const int a = v.notes[static_cast<size_t>(i - 1)], b = v.notes[static_cast<size_t>(i)];
                   JCLAP_CHECK(b > a);
-                  if (b - a < 12 && b - a > 0)
+                  // (Not a guitar's grip: the open G's B2 over G2 is the open G.)
+                  if (b - a < 12 && b - a > 0 && shape != kGrip)
                      JCLAP_CHECK(a >= lowIntervalLimit(b - a) - 2);
                }
                ++checked;
@@ -3948,6 +4114,7 @@ int main() {
    roundEight();
    roundNine();
    roundTen();
+   roundEleven();
    songStructure();
    return jclap::core::testResult();
 }

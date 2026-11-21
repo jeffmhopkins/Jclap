@@ -512,6 +512,7 @@ struct Frame {
    int queued = -1;
    int queuedTake = -1;
    int formPos = 0; // the entry of the song's structure playing (SONG mode)
+   int repeat = 0;  // and its repeat (its own dice)
    int step = -1; // the step playing in the pattern playing, and its length
    int steps = 16;
    // The chord sounding (or about to), the next one in the progression, and the notes out now.

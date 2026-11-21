@@ -101,6 +101,8 @@ VoiceSettings voiceSettings(Get value) {
    v.doubleMiddle = whole(kDoubleMiddle) != 0;
    v.noRubs = whole(kNoRubs) != 0;
    v.sameShape = whole(kSameShape) != 0;
+   v.key = ((whole(kKey) % 12) + 12) % 12;
+   v.scale = std::clamp(whole(kScale), 0, kScaleCount - 1);
    return v;
 }
 

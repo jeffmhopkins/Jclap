@@ -52,7 +52,7 @@ inline const Player kPlayerList[kPlayers] = {
    {"Skank Guitar", "off-beat chops, short and high", "reggae, ska", kGuitar, kGuitarKind,
     kClose, 3, 57, 79, 67, 3, 0.4, 0.2, 0.0, 0.05, 0.2, 0},
    // An open-string grip: the bass string, its fifth and octave, the third and colour on top.
-   {"Strummer", "down-up strums across six strings", "rock, country, pop", kGuitar, kGuitarKind,
+   {"Strummer", "down-up strums across the strings", "rock, country, pop", kGuitar, kGuitarKind,
     kGrip, 5, 40, 76, 58, 3, 0.65, 0.2, 0.05, 0.5, 0.3, 0},
    // The montuno's right hand: octaves with chord tones between (C-E-G-C).
    {"Montuno", "Latin piano figures in octaves", "salsa, Latin", kPiano, kKeys,

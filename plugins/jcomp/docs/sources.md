@@ -1934,6 +1934,88 @@ probe program. It found 54 problems (2 critical, 4 high, 22 medium, 26 low); the
   style's fill is its groove (Tenor Line, Palm-Wine, Right-Hand Arpeggio), documented in the README.
   The rolls don't draw the slip note's grace notes (documented).
 
+## Part O. The eleventh review (2026-11-21)
+
+An eleventh cold pass, split as before (styles; song mode; takes and fills; harmony and voicing; the
+engine, plugin and rolls), reproduced every finding with `jcomp-dump` or a probe program, and the roll
+reviewer compared the editor's roll with the engine's first pass for all 87 styles and 7 sections. It
+found 71 problems (9 high, 25 medium, 37 low); these were fixed in 0.13.0, with tests where a test
+could hold them, except those noted at the end.
+
+- **Song mode.** A second NEXT onto another entry of the section playing cancelled the queue (and a
+  later NEXT skipped an entry); it goes there, and a NEXT back onto the entry playing cancels cleanly.
+  A structure ending on a section other than the outro rang out its last chord, often the V7; the last
+  entry of a song that ends closes on the outro's last chord, and so does AABA's second A, each with
+  its own last bar's cadence moved a bar earlier (only the last bar had changed, which lost the
+  cadence in 83 of 87 styles). The repeat lift multiplied the take and clipped at 127, so by the third
+  chorus the accents were gone; it lifts the softer hits more than the loud ones. Stopped, a cue
+  (NEXT, PREV, a note, a tile) was shown but play started from the Section parameter; play starts at
+  the cue. HOLD CHORD let go in SONG moved the song on mid-phrase and off the host's bars; it is placed
+  again where the host is. PREV from the first entry wrapped to the outro and ended the song; it stays.
+  A section played by hand outside the structure took the interrupted entry's lift and dice; its own.
+  Placing the song dropped a queued section; it keeps it. RESET kept a stale push target, which
+  swallowed the next downbeat.
+- **Styles.** Chic's second bar still filled its rests in two of three paths (kBusy, the busy ghost,
+  the "busier" and "ghosts" mutations); all four respect them. Afrobeat's Chord Chop and Interlock
+  were varied like any take; they are fixed figures. Memphis's organ held its 2-and-4 to the next hit,
+  so no backbeat was heard; an offbeat take's organ beats are half held. The batida (and every fixed
+  figure) rang one bar and clipped the next; a fixed figure never rings or chops by the player's rule,
+  nor does an even four (a chord on every beat) except on an organ. Motown's WEIRD took jazz's bII9
+  approaches; it takes the pop branch's V of the next chord.
+- **Takes and fills.** A take came out the same as take 0 one time in twenty (a fifth in offbeat
+  styles): "accents" was undone by the cap that ran after the no-op check; each mutation is now judged
+  after the whole post-pass, retried if it did nothing, and only the ones that did something are
+  named. "accents" works from the take's peak, keeps the One, and leaves lines and ghosts alone; "let
+  it ring" skips lines and ghosts. "sparser" took notes out of an ostinato left hand; it leaves the left
+  hand. "push it" and "ghosts" struck inside held chords, and WEIRD chopped held chords and left its
+  strays unchoked in a choked style; none of these now. "answer" compared bars by onsets alone and
+  overwrote a second bar's left hand; it compares parts. "left hand" and "run in" are offered only
+  where they can do something. DENSITY's fill-ins went under rung chords and had fixed velocities,
+  louder than a quiet section's own chords; they skip rung chords and sit under the take's peak. A quiet
+  section's fill was a full bar louder than its take; it is shaped at the section's own energy below
+  0.15. Riff styles' fills (Clav Riff, Right-Hand Arpeggio) were their groove; they end on a lead. An
+  eighth-note take's folded genre fill came out as the groove; the lead-in rule now applies after the
+  fold. A 6/8 fill rested the whole second dotted beat; only its last four steps rest. The 3/4 and 6/8
+  endings put a block on the oom-pah's bass downbeat; they keep the offbeat. The MUTATE page skipped
+  the organ's post-pass; it uses it.
+- **Harmony and voicing.** The montuno's octave line sat nearly an octave under its window; it starts
+  no more than a third under it and prefers the chord's degree, its 7th and fifth over a low root. A
+  guitar's G, D, E, C7 and B7 were barre or close shapes; the open shapes are offered and preferred.
+  4THS' added 9ths, 11ths and 13ths could be out of the key; they pass the key's scale. A three-note
+  Cmaj7 over E dropped its C; the maj7 swap is only over the root. A tritone pair was named by the
+  major scale of the key (B F in A minor was C#7); it follows the key's scale. Cmaj7#11 over its C
+  was read as D13 without the C; a bass a fifth under the rest that explains the chord is its root. A
+  power chord was major whatever the key; in a key whose scale has the minor third and not the major,
+  minor. A minor key's V7 ran F# and C# against the tonic's third; a dominant takes the key's b9 and
+  b13 where the key has only those (the harmonic minor's V, Levine [2]). 4THS at five voices played a
+  dominant without its 7th (an Eb6/9); every size with the 7th is tried first. SPREAD put a 7#9's #9 a
+  half step under the 3rd; its upper part may start on the 3rd, so the #9 goes on top (the Hendrix
+  chord). SHELL at four voices doubled the root on top; the root is the bass's. ROOTLESS at three voices
+  dropped an m11's 11th and a 13sus's 13th; they take the colour's place. B major's #iv°7 and V/V/3 were
+  spelled with F; E#. The Strummer's blurb said six strings, but a grip holds five notes at most; it
+  says "across the strings".
+- **The engine and the rolls.** A chord played a moment late on the keys with a strumming or rolling
+  player let the old chord's unplayed strings sound over the new one; they are dropped. The engine
+  judged a later bar's hits with this bar's dice; each with its own bar's. A change struck where the
+  take had no chord counted a bass note as its next hit; the chord's own hand. Before the host's bar 1,
+  LOOP played through the count-in and a bass played in SONG's count-in brought chords in; both rest.
+  NOW PLAYING's chord and keyboard lit a lookahead (about 80 ms) early; they show the step heard. Freddie
+  Green's four ignored LENGTH above the middle; it lengthens toward the next stroke. A factory preset
+  read a user song file of the same name (a case-insensitive file system, a new factory style); only a
+  user preset has a song file. The rolls ended a ring at a hit its chance or VARY leaves out, never cut
+  a chord at the next chord of its hand, voiced a fill or an ending from nothing, drew Freddie's four
+  at the generic length, had no 50 ms floor, let a chord a run replaced cut the held low note, struck
+  no chord for a change over a bass note, dropped a chord tied over a page's downbeat, and drew the
+  first chorus's dice and chords for every repeat; all as the engine now. Over the 609 sections at the
+  defaults, 6 still differ (swing, which the roll draws straight, a key the line strikes again, and the slip
+  note's grace notes).
+- **Left as judgement.** Interlock's guitar and tenor share steps (a step holds one part). The organ's
+  shout rule uses the style's tempo, since takes are made without the host's. In E Mixolydian C F# is
+  G#7 (neither reading is in the scale; the reviewer's D7 has a C natural). G C F Bb is Gm11 without its
+  fifth, the reading with a third, as earlier choices (Cm11 over F7sus). The rolls draw a section's
+  first take; VARY's borrowed bars are heard, not drawn (documented). Most generated sections end off
+  the tonic (tracked as data for the closing rule above).
+
 ## Bibliography
 
 1. de Clercq, Trevor, and David Temperley. "A corpus analysis of rock harmony." *Popular Music* 30/1

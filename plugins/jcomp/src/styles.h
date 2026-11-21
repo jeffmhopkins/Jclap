@@ -486,8 +486,8 @@ inline const std::vector<Genre> &genres() {
        // A static minor-seventh (Dorian) vamp; "tonal shifts were rare".
        {{kDorian, {"Cm7|Cm7", "Cm9|Cm9|Cm9|Cm9", "Cm9|F7", "Cm9|F9|Cm9|F9", "Cm11|Cm11", "Cm7|Cm7"}}},
        {{"Tenor Line", "Tenor", 112, 0, 0, 0b010},
-        {"Chord Chop", "Chop", 118, kShorts, 0, 0b100},
-        {"Interlock", "Interlock", 104, kInterlock, 0, 0b110}},
+        {"Chord Chop", "Chop", 118, kShorts | kFixed, 0, 0b100},
+        {"Interlock", "Interlock", 104, kInterlock | kFixed, 0, 0b110}},
        "13, 14"},
       {"Highlife", kFamilies[5], kStrummer, 0.52, 0,
        // Palm-wine two-finger interlock (the thumb on eighths, a finger on sixteenths between: the
