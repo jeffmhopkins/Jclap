@@ -1504,17 +1504,27 @@ int main() {
             before = mean;
          }
       }
-      // A held-chord style's fill holds: from its downbeat, nothing chopped.
+      // A held-chord style's fill holds: from its downbeat, nothing chopped. Ambient's drift holds
+      // on through it: nothing struck within a quarter of the bar line, and no fresh downbeat over a
+      // chord held into the bar.
       for (int g = 0; g < genreCount(); ++g)
          for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st) {
             if (!(genreAt(g).styles[st].mods & kLongs))
                continue;
+            const bool drift = genreAt(g).family == kFamilies[6];
             const Recipe r = recipeOf(g, st, 2);
             auto song = made(r);
             for (const Section &sec : song->sections) {
                if (sec.fill.empty())
                   continue;
-               JCLAP_CHECK(sec.fill.at(0).on());
+               if (drift) {
+                  const Pattern last = lastBar(sec.takes[0]);
+                  const int bar = sec.fill.stepsPerBar();
+                  for (int s = bar - sec.fill.perBeat(); s < bar; ++s)
+                     JCLAP_CHECK(!sec.fill.at(s).on() || last.at(s).on());
+                  JCLAP_CHECK(sec.fill.at(0).on() == last.at(0).on());
+               } else
+                  JCLAP_CHECK(sec.fill.at(0).on());
                for (int s = 0; s < sec.fill.steps; ++s)
                   JCLAP_CHECK(!sec.fill.at(s).on() || sec.fill.at(s).art != kArtChop);
             }

@@ -1262,24 +1262,42 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
       for (int s = f.steps; s < kMaxSteps; ++s)
          f.at(s) = Hit{};
       const int bar = f.stepsPerBar();
+      // Ambient's drift holds on through its fill: the bar as it is, still ringing (a chord held over
+      // two bars sounds whole), with no stutter of the old chord before the change. A bar with
+      // nothing struck in it swells softly in its middle instead.
+      const bool drift = g.family == kFamilies[6];
+      if (drift) {
+         for (int s = 0; s < bar; ++s)
+            if (f.at(s).on() && !leftHand(f.at(s).part))
+               f.at(s).art = kArtRing;
+         if (f.empty()) {
+            f.at(bar / 2) = hitOf('o');
+            f.at(bar / 2).art = kArtRing;
+         }
+         shapeEnergy(f, std::max(0.35, e), rng, true, st.mods);
+         return f;
+      }
       if (!f.at(0).on())
          f.at(0) = hitOf('x'); // the fill bar's chord from its downbeat
       for (int s = 0; s < bar; ++s)
          if (f.at(s).on() && !leftHand(f.at(s).part))
             f.at(s).art = kArtRing;
-      const int last = bar - (f.rate == kRate8T ? 1 : 2);
+      // (Never over the left hand's note: a broken-chord ballad's fifth rocks on into the change.)
+      int last = bar - (f.rate == kRate8T ? 1 : 2);
+      if (f.at(last).on() && leftHand(f.at(last).part) && !f.at(bar - 1).on() && fineGrid(base))
+         last = bar - 1;
       const auto chordOn = [&](int s) { return f.at(s).on() && !leftHand(f.at(s).part); };
-      if (!chordOn(last) && !chordOn(last - 1)) {
+      if (!chordOn(last) && !chordOn(last - 1) && !f.at(last).on()) {
          f.at(last) = hitOf('x');
          f.at(last).art = kArtRing;
       }
-      // (Not ambient's: a drift has no downbeat to push into; the next chord comes on its one.)
-      if (g.family != kFamilies[6])
-         for (int s = bar - 1; s >= 0; --s)
-            if (f.at(s).on() && !leftHand(f.at(s).part)) {
+      // The last chord, off the beat, pushed into the next (a chord on a beat stays where it is).
+      for (int s = bar - 1; s >= 0; --s)
+         if (f.at(s).on() && !leftHand(f.at(s).part)) {
+            if (!onBeat(f, s))
                f.at(s).push = 1;
-               break;
-            }
+            break;
+         }
       shapeEnergy(f, std::max(0.35, e), rng, true, st.mods);
       return f;
    }
@@ -1301,7 +1319,7 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
       const int bar = f.stepsPerBar();
       if (!hasLine(base))
          for (int s = bar - perBeat(f); s < bar; ++s)
-            if (addable(f, s, fine))
+            if (addable(f, s, fine) && !(f.at(s).on() && leftHand(f.at(s).part))) // the left hand plays on
                f.at(s) = hitOf('x');
    }
    // A fill is one bar.
@@ -1545,8 +1563,9 @@ inline Pattern makeFillDown(const Recipe &r, int section, const Pattern &base, d
    f.steps = static_cast<uint8_t>(f.stepsPerBar());
    for (int s = f.steps; s < kMaxSteps; ++s)
       f.at(s) = Hit{};
-   // A left hand keeps its downbeat under a chord that leaves it (boom-chick's bass on the one).
-   if (hasLeftHand(base) && !f.at(0).on()) {
+   // A left hand keeps its downbeat under a chord that leaves it (boom-chick's bass on the one), where
+   // the take's left hand plays one (an organ bubble's never does: the one is dropped).
+   if (hasLeftHand(base) && !f.at(0).on() && base.at(0).on() && leftHand(base.at(0).part)) {
       f.at(0) = base.at(0).on() && leftHand(base.at(0).part) ? base.at(0) : hitOf('b');
       f.at(0).art = kArtRing;
       f.at(0).push = 0;
