@@ -675,6 +675,7 @@ public:
                b = airBlown_[at];
                tg = airTongue_[at];
             }
+            models_[u][settings_.model]->behind = target;
             sum += models_[u][settings_.model]->tick(b, static_cast<float>(emb_), len_[u], tg);
          }
          y = mute_.tick(sum * unisonGain_ * static_cast<float>(gainNow_) * (1.0f - mix));
