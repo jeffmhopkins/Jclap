@@ -2826,6 +2826,7 @@ int main() {
          Settings s = plain();
          s.density = 1.0;
          s.swing = 0.64;
+         s.swingFeel = 1; // swung eighths (C18: the rule is a swing comper's, not a swung-sixteenths groove's)
          e.setSettings(s);
          e.reset();
          const auto all = runWith(e, 24000LL * 16, 0.0, [](int64_t, Block &) {});
@@ -2905,6 +2906,7 @@ int main() {
                      JCLAP_CHECK(last >= 0);
                      if (last >= 0 && std::string(genreAt(g).name) != "Funk")
                         JCLAP_CHECK(onBeat(sec.fill, last) || sec.fill.at(last).push ||
+                                    sec.fill.at(last).part == kPartLine || // a riff's last note is its own
                                     genreAt(g).family == kFamilies[6]); // an ambient drift's fill pushes nothing
                      if (last >= 0 && std::string(genreAt(g).name) == "Funk")
                         JCLAP_CHECK(!sec.fill.at(last).push);

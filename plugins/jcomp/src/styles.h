@@ -288,7 +288,7 @@ inline const std::vector<Genre> &genres() {
        {{kMajor, {"Em7 A7|Dm7 G7|Em7 A7|Dm7 G7", "C6 Am7|Dm7 G7|C6 Am7|Dm7 G7", "Dm7|G7|Cmaj7|Cmaj7", "Dm7 G7|Cmaj7|Dm7 G7|Cmaj7", "E7|E7|A7|A7|D7|D7|G7|G7", "Em7 A7|Dm7 G7|Cmaj7|Cmaj7"}},
         // A waltz's: a chord a bar ("Someday My Prince Will Come"'s I-III7+5-IV-VI7+5-ii-VI7+5-ii-V).
         {kMajor, {"Dm7|G7|Cmaj7|Cmaj7", "Cmaj7|E7#5|Fmaj7|A7#5|Dm7|A7#5|Dm7|G7", "Em7|A7|Dm7|G7", "Cmaj7|Am7|Dm7|G7|Em7|A7|Dm7 G7|Cmaj7", "Fmaj7|Fm7|Em7|A7|D7|D7|Dm7|G7", "Dm7|G7|Cmaj7|Cmaj7"}}},
-       {{"Charleston Comp", "Charleston", 160, kSparse, 0, 0b0011},
+       {{"Charleston Comp", "Charleston", 160, 0, 0, 0b0011},
         {"Garland Pushes", "Garland", 140, kPushes, 0, 0b100000100},
         {"Four To The Bar", "Freddie", 180, kPlain | kShorts | kFixed, 0, 0b001000, kRhythmGuitar, kShell, 3, 40, 64, 52},
         {"Held Comp", "Held", 132, 0, 0, 0b11010000},

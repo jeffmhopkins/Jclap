@@ -1248,7 +1248,7 @@ private:
          if (offbeat && onBeat)
             return;
          // A swing comper fills with offbeat stabs, not a pulse of chords on the beats.
-         if (onBeat && settings_.swing > 0.55)
+         if (onBeat && settings_.swingFeel == 1 && settings_.swing > 0.55)
             return;
          const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
          if (dice(diceBar_, step, 21) >= chance)
@@ -1777,7 +1777,7 @@ private:
       // lengthens it from there).
       // Not in a figure played as written (a guajeo's two-side strikes its one); LENGTH shortens it
       // as it does every chord.
-      const bool tiedOver = h.push && h.part == kPartChord && !settings_.fixed && settings_.length >= 0.5;
+      const bool tiedOver = h.push && h.part == kPartChord && h.art != kArtChop && !settings_.fixed && settings_.length >= 0.5;
       const double tieTo = tiedOver ? static_cast<double>(pushTargetOf(k.t)) / kTicksPerBeat - at + 0.05 : 0.0;
       if (tiedOver)
          len = std::max(len, tieTo);
@@ -1835,7 +1835,7 @@ private:
       k.lastId = nextId_;
       // (Only a push that is tied over: below the middle of LENGTH it's short, and the beat it leads to
       // is struck as written.)
-      if (h.push && h.part == kPartChord && k.lastId >= k.firstId && !settings_.fixed && settings_.length >= 0.5) {
+      if (h.push && h.part == kPartChord && h.art != kArtChop && k.lastId >= k.firstId && !settings_.fixed && settings_.length >= 0.5) {
          pushTarget_ = pushTargetOf(k.t);
          pushChord_ = c;
          pushFirst_ = k.firstId;

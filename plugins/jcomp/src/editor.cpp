@@ -221,6 +221,7 @@ struct Preview {
 // DENSITY and LENGTH as the panel last read them, so every roll draws the part as it will sound.
 struct LiveFeel {
    double density = 0.5, length = 0.5, runs = 0.25, swing = 0.5;
+   int swingFeel = 0;  // 1 swung eighths
    int same = 4;       // SAME DICE's bars
    int every = 1;      // RUNS AT MOST every so many bars
    bool fixed = false; // the style's figure is played as written
@@ -238,6 +239,7 @@ void readFeel(const EditorHost &host) {
    gFeel.length = host.paramValue(kLength);
    gFeel.runs = host.paramValue(kRuns);
    gFeel.swing = host.paramValue(kSwing);
+   gFeel.swingFeel = static_cast<int>(std::lround(host.paramValue(kSwingFeel)));
    gFeel.same = kSameDiceBars[choiceIndex(host.paramValue(kSameDice), 5)];
    gFeel.every = kRunEveryBars[choiceIndex(host.paramValue(kRunEvery), 3)];
    {
@@ -390,7 +392,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          const double more = (gFeel.density - 0.5) * 2.0;
          const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
          if (more <= 0.0 || gFeel.fixed || hasLine(p) || prevChord.none() || heldOver(p, v % n) || (!onEighth && !fine) ||
-             (offbeat && onBeat) || (onBeat && gFeel.swing > 0.55) ||
+             (offbeat && onBeat) || (onBeat && gFeel.swingFeel == 1 && gFeel.swing > 0.55) ||
              rollDice(sec, p, v, 21, firstBar) >= chance)
             continue;
          h.vel = static_cast<uint8_t>(onBeat ? kSoft : kGhost + (onEighth ? 10 : 0));
@@ -548,7 +550,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       else if (gFeel.length > 0.5 && gap * 0.97f > len)
          len += (gap * 0.97f - len) * static_cast<float>((gFeel.length - 0.5) / 0.5);
       // A pushed chord rings at least to the beat it anticipates (LENGTH at the middle or more).
-      if (h.push && h.part == kPartChord && !gFeel.fixed && gFeel.length >= 0.5)
+      if (h.push && h.part == kPartChord && h.art != kArtChop && !gFeel.fixed && gFeel.length >= 0.5)
          len = std::max(len, static_cast<float>(perBeat - v % perBeat) + 0.2f);
       if (pushTo == v && h.part == kPartChord && !h.push && !struck && c == pushChord) {
          pushTo = -1;
@@ -621,7 +623,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          else if (c != bassChord)
             bassChord = Chord{};
       }
-      if (h.push && h.part == kPartChord && !gFeel.fixed && gFeel.length >= 0.5) {
+      if (h.push && h.part == kPartChord && h.art != kArtChop && !gFeel.fixed && gFeel.length >= 0.5) {
          pushTo = v + perBeat - v % perBeat;
          pushChord = c;
          pushFrom = v;
