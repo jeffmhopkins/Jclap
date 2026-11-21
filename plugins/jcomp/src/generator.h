@@ -1185,8 +1185,9 @@ inline bool mutationFits(const char *tag, unsigned mods, const Pattern &parent, 
       for (int i = 0; i < genreCount(); ++i)
          if (std::strcmp(genreAt(i).name, genre) == 0 && genreAt(i).family == kFamilies[6])
             return false;
-   // Nor a take that holds its chords (Held Comp): chopped, it would be another style's stabs.
-   if (is("chop it") && heldTake(parent))
+   // Nor a take that holds its chords (Held Comp): chopped, or ghosted between, it would be another
+   // style's stabs.
+   if ((is("chop it") || is("ghosts") || is("answer")) && heldTake(parent))
       return false;
    // An offbeat take (a skank, a one drop) keeps its strokes where they are, choked: nothing pushed
    // ahead, shifted or rung.
@@ -1334,7 +1335,7 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
             f.at(s).vel = static_cast<uint8_t>(std::min(127, std::max<int>(f.at(s).vel, chordPeak(base) + 12)));
             const int toEnd = f.stepsPerBar() - s % f.stepsPerBar();
             // (Only a style that anticipates: the cha-cha's and the bell's last stroke stays on its chord.)
-            f.at(s).push = ((st.mods & kPushes) || g.pushAll) && toEnd <= half && !onBeat(f, s) ? 1 : 0;
+            f.at(s).push = (st.mods & kPushes) && toEnd <= half && !onBeat(f, s) ? 1 : 0;
             break;
          }
       return f;
@@ -1617,7 +1618,7 @@ inline const char *endingText(const Genre &g, const Pattern &base, unsigned mods
       return "x...x...x...x...|X.......x-------";
    // The bolero broadens into its last chord (MMA's BoleroEnd), on its tresillo: no dance tag.
    if (std::strcmp(style, "Bolero") == 0)
-      return "x-----x-----x...|X---------------";
+      return "x-----x-----x---|X---------------";
    if (n == "Salsa" || n == "Latin Jazz") // the cha-cha cell (4, and, 1), the last chord held from the 1
       return "x...x...x...x.x.|X---------------";
    if (g.family == kFamilies[0]) // MMA's R&B ending: 1, 3 and 4, then the one held two beats

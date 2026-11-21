@@ -289,8 +289,42 @@ bool thinnedInRoll(const Section &sec, const Pattern &p, int step, int view, int
 
 // `firstBar`: the section's bar the pattern starts on (an ending plays over the outro's last bars);
 // `marks`: whether the section's band hits play over it (not in the ending).
+Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const VoiceSettings &vs, int transpose, int key,
+                     int scale, bool runs, int firstBar, bool marks);
+
+// A take's view is played from the section's bar 1 and the view cut out of it (bars 5-8 of an 8-bar
+// progression), so its voicings, its pushes tied in and its runs are the ones
+// the engine plays there, not a fresh start.
 Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSettings &vs, int transpose, int key,
                 int scale, bool runs = true, int firstBar = 0, bool marks = true) {
+   const bool take = std::any_of(sec.takes.begin(), sec.takes.end(), [&](const Pattern &t) { return t == p; });
+   const int perBar = p.stepsPerBar();
+   // (And a bar past the view: the turnaround run into the next pass's or page's downbeat is drawn
+   // where it plays, at the view's end.)
+   if (!take || firstBar < 0 || (firstBar * perBar) % std::max<int>(1, p.steps) != 0 || firstBar > 16)
+      return previewFrom0(sec, p, bars, vs, transpose, key, scale, runs, firstBar, marks);
+   Preview all = previewFrom0(sec, p, firstBar + bars + 1, vs, transpose, key, scale, runs, 0, marks);
+   const int off = firstBar * perBar;
+   Preview out;
+   out.perBar = all.perBar;
+   out.perBeat = all.perBeat;
+   out.bars = std::max(1, bars);
+   out.steps = out.perBar * out.bars;
+   for (RollNote x : all.notes)
+      if (x.start >= static_cast<float>(off) - 1e-3f && x.start < static_cast<float>(off + out.steps) - 1e-3f) {
+         x.start -= static_cast<float>(off);
+         out.notes.push_back(x);
+      }
+   for (PlacedHit x : all.hits)
+      if (x.view >= off && x.view < off + out.steps) {
+         x.view -= off;
+         out.hits.push_back(x);
+      }
+   return out;
+}
+
+Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const VoiceSettings &vs, int transpose, int key,
+                     int scale, bool runs, int firstBar, bool marks) {
    Preview out;
    out.perBar = p.stepsPerBar();
    out.perBeat = p.perBeat();
