@@ -112,6 +112,14 @@ From 0.13.11 the trumpet's slurs and starts and the sax's slurs sound like a pla
   lips, plucked hard, buzzed on their own frequency under the note before the horn took over. For a
   note's first 20 ms they're now tuned up to it, as hard as the air behind them, so it starts on its
   pitch.
+- A trumpet note from A3 to A4 buzzed for a tenth of a second or more before it spoke at mezzo
+  forte (B3 to E4, 100 to 160 ms), where a real trumpet's speaks in 10 to 30. The tongue's release
+  there now lets out more air, by the breath the note will hold (less the harder it's struck, and
+  none at forte, which speaks at once): across G3 to Bb5 a mezzo forte note reaches half its level
+  in 16 ms on average (it was 32) and a forte one in 7 (it was 15).
+- A sax slur across the octave key (E4 onto F4, or back) sounded a wrong note, often an octave
+  down, for 40 to 110 ms before the reed found the new one: the bore's ringing now moves with it
+  from the first resonance to the second, or back, and the wrong note is gone or a brief blip.
 - A sax slur slid through the pitches between its notes for about 60 ms, a glissando: its new
   fingering's resonances moved in over 40 ms. They now move in over 15 ms, and a slur changes in
   about 30 ms, as a real alto's does. An opening vent (the octave key) damps the low resonance at

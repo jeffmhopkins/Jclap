@@ -605,6 +605,7 @@ public:
       // threshold starts it late, and the slower, the later: the dynamic threshold.) A breath
       // attack has no tongue: the breath itself rises through both stages.
       const double target = targetBreath();
+      const double holds = releasing_ || levelNow_ <= 0.0 ? 0.0 : breathAt(settings_.model, speak_, levelNow_);
       const auto stage = [this](double to, double from, double up) {
          return to > from ? up : stop_ ? stopCoef_ : releasing_ ? releaseCoef_ : fallCoef_;
       };
@@ -676,6 +677,7 @@ public:
                tg = airTongue_[at];
             }
             models_[u][settings_.model]->behind = target;
+            models_[u][settings_.model]->holds = holds;
             sum += models_[u][settings_.model]->tick(b, static_cast<float>(emb_), len_[u], tg);
          }
          y = mute_.tick(sum * unisonGain_ * static_cast<float>(gainNow_) * (1.0f - mix));
@@ -924,8 +926,9 @@ private:
    // clarinet's reed speaks at once and its tone is the bore's pressure differentiated, so it needs
    // little surge or support; a flute's jet overblows on a burst, so it takes less kick, and its
    // edge already hisses, so half the noise (a real flute's attack is no noisier up top than its
-   // note); a trumpet's lips blare on a burst, so less kick; the conical reeds build up slowly
-   // from the tongue's start, so they take it all (the oboe a little less: its low notes overshoot
+   // note); a trumpet's lips blare on a burst, so less kick, but a full measure of support (at a
+   // quarter, its soft notes buzzed for a tenth of a second or more before they spoke); the
+   // conical reeds build up slowly from the tongue's start, so they take it all (the oboe a little less: its low notes overshoot
    // on their own), and more support for their soft notes (a slow reed would otherwise start a soft
    // note and lose it), more again on their low notes (support times periodRatio^low); the Alien's
    // twin reeds are the clarinet's valve on a slow helix, between the two. The middle note the

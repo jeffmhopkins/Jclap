@@ -404,6 +404,8 @@ public:
    // The breath the player is aiming for (the voice's target, before the tongue lets it go), set
    // before each tick: how much air a tongued start has behind it before it reaches the reed.
    double behind = 0.0;
+   // The breath the note will hold, without the extra the player starts it with.
+   double holds = 0.0;
 
 protected:
    double fs_ = 96000.0;
@@ -876,6 +878,13 @@ public:
       for (int i = 1; i < b.modes; ++i)
          if (std::fabs(std::log(b.peakHz[i] / want)) < std::fabs(std::log(b.peakHz[best] / want)))
             best = i;
+      // (A slur across the octave key carries the bore's ringing from the resonance the reed was
+      // playing on to the one it plays on now, the first to the second or back: left where it was,
+      // the reed caught the old one as it moved, and a slur from E4 onto F4 sounded a wrong note,
+      // often an octave down, for 40 to 110 ms before it found the new one.)
+      if (ticked_ && best != mode_)
+         bore_.carry(best - mode_);
+      mode_ = best;
       fing_ = f;
       peakHz_ = b.peakHz[best];
       // (With the octave key, the vent's leak and the player's voicing keep the reed off the first
@@ -1210,6 +1219,7 @@ private:
    int fing_ = -1;
    double fingMember_ = 1.0, fingerOff_ = 0.0;
    double bodyAt_ = -1.0, lowAt_ = -1.0, bodyQ_ = 1.0, bodyH_ = 1.0, edgeAt_ = -1e9, knee_ = 0.08;
+   int mode_ = 0;
    double lowNote_ = 0.0, peakHz_ = 277.0, hz_ = 277.0, member_ = 1.0, scale_ = 1.0, body_ = 1.0, vent_ = 0.0, open_ = 7e-4, eqAt_ = -1.0, toneDb_ = 1e9, toneHz_ = 1.0, liftDb_ = 1e9, liftHz_ = 1.0;
    double regDb_ = 1e9, regHz_ = 1.0, famDb_ = 1e9, famHz_ = 1.0, onT_ = 1.0, lift0_ = 0.0, xShut_ = 0.0, liftSec_ = 0.003;
    double x_ = 0, v_ = 0, dpPrev_ = 0, pmS_ = 0, pmB_ = 0, pmCoef_ = 0.01, pmFallCoef_ = 0.001, ventNow_ = 0.0, memberNow_ = 1.0, openNow_ = 7e-4;
@@ -1753,7 +1763,17 @@ public:
          // a moderate breath; and larger over Bb4, where the lips need more to lock on.)
          const double pb = std::clamp<double>(breath, 0.05, 0.3) / 0.5, up = std::max(hz_ / 466.0, 1.0);
          // (No longer four times as much from Eb5 to G#5: shaped as it now is, that only popped.)
-         puff_ += kPuff * std::min(puffTn_, kHardest) * pb * pb * up * up;
+         // (From A3 to A4, up to kPuffMid times as much, and up to twice a hard strike's: the lips
+         // there grow slowest, and a mezzo forte B3 to E4 buzzed for 100 to 160 ms before it spoke,
+         // where a real trumpet's speaks in 10 to 30. By the breath the note will hold, not the
+         // extra it starts with: none at forte, which speaks at once and puffed that hard started
+         // off its pitch, and little on a whisper of pressure. And less the harder it's struck,
+         // whose own puff is near the most already: a hard strike on light pressure, puffed more,
+         // started three or four times as loud as it held.)
+         const double mid = std::clamp((hz_ - 220.0) / 25.0, 0.0, 1.0) * std::clamp((440.0 - hz_) / 40.0, 0.0, 1.0) *
+                            std::clamp((0.7 - holds) / 0.12, 0.0, 1.0) * blow(holds);
+         const double boost = 1.0 + (kPuffMid - 1.0) * mid * std::clamp(1.0 - 0.8 * puffTn_ / kHardest, 0.0, 1.0);
+         puff_ += kPuff * std::min(puffTn_ * boost, std::min(boost, 2.0) * kHardest) * pb * pb * up * up;
          puffTn_ = 0.0;
       }
       tongue_ = tn;
@@ -1835,7 +1855,7 @@ private:
    static constexpr double kP0 = 8000.0, kRho = 1.2, kLipQ = 12.0, kLipMu = 3.0, kLipWidth = 0.012,
                            kSoft = 1e-4, kOut = 1000.0, kBellCut = 1500.0, kKick = 5e-3, kPuff = 2e-3, kHardest = 0.4, kScoop = 100.0,
                            kShock0 = 480.0, kOpenQ = 3.0, kMinPluck = 0.25, kKickLow = 6.0, kBlow0 = 0.15, kBlowSpan = 0.3,
-                           kStartLip = 1.0, kStartLipSec = 0.02;
+                           kStartLip = 1.0, kStartLipSec = 0.02, kPuffMid = 8.0;
    // The puff's length in periods of the note, and its size against the one-sided pulse it was.
    static constexpr double kPuffPeriods = 4.0, kPuffShape = 0.5;
    ModalBore bore_;
