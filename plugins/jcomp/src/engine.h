@@ -2016,7 +2016,9 @@ private:
          for (size_t k = 0; k < run.size(); ++k) {
             const int s = (static_cast<int>(k) + late) * stride;
             const double at2 = start + s * stepBeats + swingTicks(p, (step + s) % steps, stepTicks) / kTicksPerBeat;
-            const int vel = static_cast<int>(lifted(62 + 10 * k));
+            // (At the take's level, climbing to about its loudest: a quiet section's run isn't an
+            // accent over its chords.)
+            const int vel = std::clamp(static_cast<int>(lifted(std::max(24, chordPeak(p)) * (0.62 + 0.09 * static_cast<double>(k)))), 1, 127);
             note(at2, run[k], vel, stride * stepBeats * 0.85);
          }
          runTick_ = t + static_cast<int64_t>(span) * stepTicks;

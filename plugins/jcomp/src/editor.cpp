@@ -399,6 +399,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
    // waits for an upbeat as its take does.)
    const bool take = std::any_of(sec.takes.begin(), sec.takes.end(), [&](const Pattern &t) { return t == p; });
    const bool ending = !take && !(p == sec.fill) && !(p == sec.fillDown) && !sec.takes[0].empty();
+   const bool isFill = !take && (p == sec.fill || p == sec.fillDown);
    const bool offbeat = offbeatTake(ending ? sec.takes[0] : p);
    int octaveStep = 0;
    // Runs on the take's grid, as the engine plays them: sixteenths where it plays them, else eighths.
@@ -433,6 +434,21 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
             return static_cast<float>(k);
       return 1e9f;
    };
+   // The chords struck, by step: a run is decided where it starts, from the chord sounding there
+   // (the engine's lookForRun), not from hits drawn after it that the run takes the place of.
+   struct Struck {
+      int view;
+      Voicing voicing;
+      Chord chord;
+   };
+   std::vector<Struck> struckAt;
+   const Struck initial{-1, prev, prevChord};
+   const auto struckBefore = [&](int view) -> const Struck & {
+      for (size_t k = struckAt.size(); k-- > 0;)
+         if (struckAt[k].view < view)
+            return struckAt[k];
+      return initial;
+   };
    // A change struck over the take's left-hand note: the chord, then that step again for the note.
    int again = -1;
    Hit againHit;
@@ -466,8 +482,10 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
       // A change where the take strikes nothing (nor within an eighth) sounds where it comes, as the
       // engine plays it: with the bar's first chord's feel.
       const bool slotEdge = vt % barTicks == 0 || vt % barTicks == halfBar;
+      // (Only where the progression changes, as the engine's changesAt: a bar of top notes alone
+      // leaves the chord drawn last behind, but beat 3 of the same chord is no change.)
       if (gFeel.live && !replay && mark == kMarkNone && slotEdge && v > 0 && !(h.on() && !leftHand(h.part)) && !prevChord.none() &&
-          !sameHarmony(chordAtView(v), prevChord)) {
+          !sameHarmony(chordAtView(v), prevChord) && !sameHarmony(chordAtView(v), chordAtView(v - 1))) {
          int toNext = out.steps + n;
          for (int k = 1; k < out.steps + n; ++k)
             if (!sameHarmony(chordAtView(v + k), chordAtView(v))) {
@@ -534,8 +552,16 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
       if (!struck && !h.on()) {
          // DENSITY above the middle fills gaps with softer repeats of the chord sounding.
          const double more = (gFeel.density - 0.5) * 2.0;
-         const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
-         if (more <= 0.0 || gFeel.fixed || hasLine(p) || prevChord.none() || heldOver(p, v % n) || ringsOver(p, v % n) ||
+         const double chance = (onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2) * (phraseRest(p, v % n) ? 0.2 : 1.0);
+         int since = 0;
+         for (int k = 1; k < n && !since; ++k) {
+            const Hit &b = p.at((v % n - k + n) % n);
+            if (b.on() && !leftHand(b.part) && b.part != kPartLine)
+               since = k;
+         }
+         const bool swell = gFeel.longs && (v % n) % std::max(1, jcomp::halfBar(p)) == 0 && since >= jcomp::halfBar(p);
+         if (more <= 0.0 || gFeel.fixed || hasLine(p) || prevChord.none() || heldOver(p, v % n) ||
+             (ringsOver(p, v % n) && !swell) || (pushTo >= 0 && v < pushTo) ||
              (!onEighth && !fine) ||
              (offbeat && onBeat) || (gFeel.longs && !onBeat) || (onBeat && gFeel.swingFeel == 1 && gFeel.swing > 0.55) ||
              rollDice(sec, p, v, 21, firstBar) >= chance)
@@ -546,7 +572,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
                                                  : std::min<int>(kGhost, ref / 2));
          h.len = 1;
          h.art = gFeel.longs ? kArtRing : (gFeel.shorts || more <= 0.85) ? kArtChop : kArtAsWritten;
-      } else if (!struck && thinnedInRoll(sec, p, v % n, v, firstBar)) {
+      } else if (!struck && !((isFill || ending) && h.push && !leftHand(h.part)) && thinnedInRoll(sec, p, v % n, v, firstBar)) {
          continue; // DENSITY below the middle drops the weakest hits; each bar's first stays
       } else if (!struck && gFeel.live && h.chance < 100 && rollDice(sec, p, v, 4, firstBar) * 100.0 >= h.chance) {
          continue; // a hit's chance, with the engine's dice for the first pass
@@ -612,10 +638,13 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
       // A run into a change, as the engine finds it: from the step it would start on (four, three
       // or two notes ahead), over the chord before held to the change, where its dice and AT MOST
       // EVERY allow, never over a written chord; the soft hits under it give way.
-      if (runs && gFeel.runs > 0.0 && !gFeel.fixed && h.run && h.part == kPartChord && !prev.empty() && c != prevChord)
+      if (runs && gFeel.runs > 0.0 && !gFeel.fixed && h.run && h.part == kPartChord)
          for (int len : {4, 3, 2}) {
             const int span = len * stride, start = v - span;
             if (start < 1 || (stride == 2 && start % 2))
+               continue;
+            const Struck &was = struckBefore(start);
+            if (was.voicing.empty() || c == was.chord)
                continue;
             // (Nothing under a band hit held or shot: the engine plays only the hit there.)
             bool underMark = false;
@@ -629,15 +658,18 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
             const int sbar = firstBar + start / out.perBar; // (the section's bar, as the engine throws it)
             if (lastRunBar > -100 && sbar - lastRunBar < gFeel.every)
                break;
-            bool held = chordAtView(start - 1) == prevChord;
+            bool held = chordAtView(start - 1) == was.chord;
             for (int k = 0; k < span && held; ++k)
-               held = chordAtView(start + k) == prevChord;
+               held = chordAtView(start + k) == was.chord;
             if (!held)
                continue;
             if (diceFor(sectionSalt(sec), diceBarOf(sbar, gFeel.same) + sbar * 7, start % n, 9) >= std::min(1.0, gFeel.runs * 1.6))
                continue;
-            const int top = prev.top();
-            int land = vc.top();
+            // (The landing voiced from the chord before the run, as the engine's is.)
+            const Voicing runVc = vs.shape == kOctaves && h.voicing < 0 ? vc
+                                  : voice(c, &was.voicing, vs, h.voicing, was.chord.none() ? nullptr : &was.chord);
+            const int top = was.voicing.top();
+            int land = runVc.empty() ? vc.top() : runVc.top();
             if (!gFeel.runLandTop) { // ANY NOTE: the chord note nearest the line's last note (the engine's rule)
                int best = 99;
                for (int i = 0; i < vc.count; ++i)
@@ -690,8 +722,17 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
                   if (x.kind != kRunNote && x.hand == 0 && x.start < from && x.start + x.len > from)
                      x.len = std::max(0.35f, static_cast<float>(from) - x.start - 0.05f);
             for (size_t k = 0; k < r.size(); ++k)
-               out.notes.push_back({static_cast<float>(from + static_cast<int>(k) * stride), 0.85f * stride, r[k], kRunNote, 0.6f});
+               out.notes.push_back({static_cast<float>(from + static_cast<int>(k) * stride), 0.85f * stride, r[k], kRunNote,
+                                    std::min(1.0f, static_cast<float>(std::max(24, chordPeak(p)) * (0.62 + 0.09 * static_cast<double>(k)) / 127.0))});
             lastRunBar = sbar;
+            // (The chords it took the place of were never struck: the landing follows the run, and a
+            // push among them no longer ties over the target.)
+            while (!struckAt.empty() && struckAt.back().view >= from)
+               struckAt.pop_back();
+            if (pushFrom >= from && pushFrom < v)
+               pushTo = -1;
+            if (!runVc.empty())
+               vc = runVc;
             break;
          }
       // The gap to the next hit of the same hand, for RING; a left-hand note as written holds to the
@@ -863,6 +904,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
          pl.voicing = vc;
          prev = vc;
          prevChord = c;
+         struckAt.push_back({v, vc, c});
       } else
          pl.voicing = played;
       out.hits.push_back(pl);
