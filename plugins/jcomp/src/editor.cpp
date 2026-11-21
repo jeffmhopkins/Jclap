@@ -541,7 +541,8 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          played.notes[0] = static_cast<uint8_t>(std::clamp(root + lineInterval(c, h.degree, key, scale), 0, 127));
          played.count = 1;
       } else if (leftHand(h.part)) {
-         played.notes[0] = static_cast<uint8_t>(bassNote(c, vs.floor, h.part == kPartFifth, vs.shape == kGrip));
+         const int under = vc.count > 1 && vs.shape == kSpread ? vc.notes[1] : vc.notes[0];
+         played.notes[0] = static_cast<uint8_t>(bassNote(c, vs.floor, h.part == kPartFifth, vs.shape == kGrip, under));
          played.count = 1;
       }
       if (h.push && h.part == kPartChord && !gFeel.fixed) {

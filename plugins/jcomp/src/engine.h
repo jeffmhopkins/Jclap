@@ -1661,7 +1661,9 @@ private:
          // The alternating bass's fifth only once the chord's root has sounded: a chord arriving on
          // the fifth's step (a change on beat 3) gets its root first.
          const bool fifth = h.part == kPartFifth && sameHarmony(bassChord_, c);
-         v.notes[0] = static_cast<uint8_t>(bassNote(c, settings_.voicing.floor, fifth, settings_.voicing.shape == kGrip));
+         // (the right hand's lowest note: the voicing's, above a SPREAD's own bass)
+         const int under = v.count > 1 && settings_.voicing.shape == kSpread ? v.notes[1] : v.notes[0];
+         v.notes[0] = static_cast<uint8_t>(bassNote(c, settings_.voicing.floor, fifth, settings_.voicing.shape == kGrip, under));
          v.count = 1;
          lastBass_ = v.notes[0];
       }

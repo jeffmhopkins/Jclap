@@ -1295,8 +1295,10 @@ inline Voicing voiceUnder(const Chord &c, int topNote, const Voicing *prev, cons
 // under a slash chord), the nearer of the two above and below that root.
 // The left hand's note: the bass (or root) at or above FLOOR, or its alternate (the fifth, or a
 // slash chord's root). A guitar's thumb takes the alternate below when it would ring more than an
-// octave over the floor (A2 then E2); a pianist's left hand keeps the root lowest (1-5-8).
-inline int bassNote(const Chord &c, int floor, bool fifth = false, bool guitar = true) {
+// octave over the floor (A2 then E2); a pianist's left hand keeps the root lowest (1-5-8), but not
+// up into the chord: where the fifth above would reach the right hand's lowest note (`under`), it's
+// the fifth below (E3 then B2 under B3 E4 G#4, the boom-chick's alternate bass).
+inline int bassNote(const Chord &c, int floor, bool fifth = false, bool guitar = true, int under = 128) {
    const int pc = c.bass >= 0 ? c.bass : c.root;
    int n = std::max(0, floor);
    while (n % 12 != ((pc % 12) + 12) % 12)
@@ -1307,7 +1309,9 @@ inline int bassNote(const Chord &c, int floor, bool fifth = false, bool guitar =
    const int iv = t.size() > 2 && t[2] >= 6 && t[2] <= 8 ? t[2] : 7;
    const int alt = c.bass >= 0 && c.bass != c.root ? (c.root - pc + 12) % 12 : iv;
    const int up = n + alt;
-   return up <= floor + 12 || !guitar ? up : up - 12;
+   if (guitar)
+      return up <= floor + 12 ? up : up - 12;
+   return up > under - 3 && up - 12 >= floor - 7 ? up - 12 : up;
 }
 
 // ---- passing runs ----
