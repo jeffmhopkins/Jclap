@@ -46,7 +46,7 @@ public:
    // The MUTATE card: the children on show, their tags, and the parents to go back to.
    std::vector<Pattern> litter;
    std::vector<std::string> tags;
-   std::vector<Pattern> parents;
+   std::vector<Section> parents; // (the whole section: back gives its takes, fills and ending back too)
    // The song before each ROLL SONG, newest last.
    std::vector<Song> previous;
 };

@@ -1180,6 +1180,212 @@ static void songStructure() {
    }
 }
 
+
+// The twelfth review's fixes.
+static void roundTwelve() {
+   const auto genreNamed = [](const char *name) {
+      for (int i = 0; i < genreCount(); ++i)
+         if (std::string(genreAt(i).name) == name)
+            return i;
+      return -1;
+   };
+   const auto styleNamed = [](int g, const char *name) {
+      const Genre &gen = genreAt(g);
+      for (size_t i = 0; i < gen.styles.size(); ++i)
+         if (std::string(gen.styles[i].name) == name)
+            return static_cast<int>(i);
+      return -1;
+   };
+   const auto made = [](const Recipe &r) {
+      auto s = std::make_unique<Song>();
+      generateSong(r, *s);
+      return s;
+   };
+   const auto pcsOf = [](const Voicing &v) {
+      std::set<int> out;
+      for (int i = 0; i < v.count; ++i)
+         out.insert(v.notes[static_cast<size_t>(i)] % 12);
+      return out;
+   };
+   // D06, D13: over a slash bass, SHELL, GRIP and CLOSE keep the chord's root, the bass lowest.
+   for (int shape : {kShell, kGrip, kClose})
+      for (int n = 3; n <= 5; ++n)
+         for (const char *name : {"C/G", "G/B", "C7/E", "C7/G", "Cmaj7/E", "C9/E"}) {
+            const Chord c = chord(name);
+            VoiceSettings vs;
+            vs.shape = shape;
+            vs.voices = n;
+            vs.lo = 48;
+            vs.hi = 76;
+            vs.center = 62;
+            vs.floor = 40;
+            const Voicing v = voice(c, nullptr, vs);
+            JCLAP_CHECK(v.count > 0 && pcsOf(v).count(c.root) == 1);
+            JCLAP_CHECK(v.count > 0 && v.notes[0] % 12 == c.bass);
+         }
+   // D05: 4THS voices an m9's 9th at four and five voices.
+   for (int n : {4, 5}) {
+      VoiceSettings vs;
+      vs.shape = kQuartal;
+      vs.voices = n;
+      vs.lo = 52;
+      vs.hi = 76;
+      vs.center = 64;
+      vs.key = 9;
+      vs.scale = kMinor;
+      for (const char *name : {"Am9", "Dm9"}) {
+         const Chord c = chord(name);
+         JCLAP_CHECK(pcsOf(voice(c, nullptr, vs)).count((c.root + 2) % 12) == 1);
+      }
+   }
+   // D08: 4THS at five voices never plays fewer notes than at four.
+   for (int q = 0; q < qualityCount(); ++q)
+      for (int r = 0; r < 12; ++r) {
+         VoiceSettings vs;
+         vs.shape = kQuartal;
+         vs.lo = 43;
+         vs.hi = 86;
+         vs.center = 62;
+         vs.floor = 43;
+         const Chord c{static_cast<int8_t>(r), static_cast<uint8_t>(q), -1};
+         vs.voices = 4;
+         const int four = voice(c, nullptr, vs).count;
+         vs.voices = 5;
+         JCLAP_CHECK(voice(c, nullptr, vs).count >= four);
+      }
+   // D11: a 7#9 stays under HIGHEST.
+   for (int r = 0; r < 12; ++r)
+      for (int shape : {kClose, kOctaves, kRootless}) {
+         VoiceSettings vs;
+         vs.shape = shape;
+         vs.voices = 3;
+         vs.lo = 55;
+         vs.hi = 76;
+         vs.center = 65;
+         const Voicing v = voice(Chord{static_cast<int8_t>(r), static_cast<uint8_t>(chord("C7#9").quality), -1}, nullptr, vs);
+         JCLAP_CHECK(v.count == 0 || v.top() <= vs.hi);
+      }
+   // D07: OCTAVES' line moves by steps and thirds, not a sixth's leap, through a montuno's changes.
+   {
+      VoiceSettings vs;
+      vs.shape = kOctaves;
+      vs.voices = 4;
+      vs.lo = 55;
+      vs.hi = 84;
+      vs.center = 68;
+      Voicing prev;
+      int leaps = 0;
+      for (int rep = 0; rep < 2; ++rep)
+         for (const char *name : {"E", "A", "B7", "A"})
+            for (int k = 0; k < 4; ++k) {
+               const Voicing v = octaveLine(chord(name), prev.empty() ? nullptr : &prev, vs, k);
+               if (!prev.empty() && std::abs(v.notes[0] - prev.notes[0]) > 5)
+                  ++leaps;
+               prev = v;
+            }
+      JCLAP_CHECK_EQ(leaps, 0);
+   }
+   // D12: a bass a fifth under the rest whose chord holds them is the root: Db7b9, not Ddim/Db.
+   JCLAP_CHECK(nameChord(Ints{37, 65, 68, 74}).root == 1);
+   // D14: a sharp minor key's major third keeps its letter; Gb blues's IV is Cb7.
+   JCLAP_CHECK(std::string(pitchName(5, 1, kMinor)) == "E#");
+   JCLAP_CHECK(std::string(pitchName(11, 6, kBlues)) == "Cb");
+   // A03, A04: Interlock's chops are choked, and Mambo plays the Montuno player.
+   {
+      const int g = genreNamed("Afrobeat"), st = styleNamed(g, "Interlock");
+      JCLAP_CHECK((genreAt(g).styles[static_cast<size_t>(st)].mods & kShorts) != 0);
+      const int lj = genreNamed("Latin Jazz"), mambo = styleNamed(lj, "Mambo");
+      JCLAP_CHECK_EQ(genreAt(lj).styles[static_cast<size_t>(mambo)].player, static_cast<int>(kMontuno));
+      // A03: the tenor's line notes aren't chopped with the chords.
+      const Recipe r = recipeOf(g, st, 1);
+      auto song = made(r);
+      const Pattern &p = song->sections[kVerse].takes[0];
+      for (int s = 0; s < p.steps; ++s)
+         if (p.at(s).on() && p.at(s).part == kPartLine)
+            JCLAP_CHECK(p.at(s).art != kArtChop);
+   }
+   // C09: "run in" is never offered to a player that plays no runs, nor to a held style.
+   {
+      const Pattern p = fromRhythm("x...x...x...x...");
+      JCLAP_CHECK(!mutationFits("run in", 0, p, nullptr, false));
+      JCLAP_CHECK(!mutationFits("run in", kLongs, p, nullptr, true));
+   }
+   // C13: a tag never names a mutation twice.
+   for (uint32_t seed = 1; seed < 200; ++seed) {
+      Rng rng(seed);
+      std::string tag;
+      mutate(fromRhythm("x.x.x.x.x.x.x.x."), 1.0, rng, tag);
+      std::set<std::string> seen;
+      size_t at = 0;
+      while (at < tag.size()) {
+         const size_t plus = tag.find(" + ", at);
+         const std::string one = tag.substr(at, plus == std::string::npos ? std::string::npos : plus - at);
+         JCLAP_CHECK(seen.insert(one).second);
+         at = plus == std::string::npos ? tag.size() : plus + 3;
+      }
+   }
+   // C08: Tenor Line's takes aren't all the same as take 1.
+   {
+      const int g = genreNamed("Afrobeat"), st = styleNamed(g, "Tenor Line");
+      int differ = 0;
+      for (uint32_t seed = 1; seed <= 6; ++seed) {
+         auto song = made(recipeOf(g, st, seed));
+         const Section &v = song->sections[kVerse];
+         for (int t = 1; t < kTakes; ++t)
+            differ += !(v.takes[static_cast<size_t>(t)] == v.takes[0]);
+      }
+      JCLAP_CHECK(differ > 6);
+   }
+   // B01, B02: a NEXT queued before a stop doesn't fire after the restart, and stopped nothing shows
+   // queued.
+   {
+      auto song = songOf("x...x...x...x...", {{"C", nullptr}});
+      for (Section &sec : song->sections)
+         sec.bars = 2;
+      song->setForm(3); // Short: I V C V C O
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.song = true;
+      s.sync = 1;
+      e.setSettings(s);
+      e.reset();
+      auto out = std::make_unique<OutBuffer>();
+      double beats = 0.0;
+      const auto run = [&](int blocks, bool playing) {
+         for (int i = 0; i < blocks; ++i) {
+            Block b;
+            b.frames = kBlock;
+            b.tempo = 120.0;
+            b.hasTransport = true;
+            b.playing = playing;
+            b.beats = beats;
+            out->clear();
+            e.process(b, *out);
+            if (playing)
+               beats += kBlock / 24000.0;
+         }
+      };
+      run(375 * 3, true); // into the first verse (bar 3: 96000 frames a bar)
+      e.request(kActNext);
+      run(10, true);
+      run(10, false);
+      Frame f;
+      e.fillFrame(f);
+      JCLAP_CHECK_EQ(f.queued, -1);
+      beats = 0.0;
+      std::vector<int> got;
+      for (int bar = 0; bar < 4; ++bar) {
+         run(187, true);
+         e.fillFrame(f);
+         got.push_back(f.section);
+         run(188, true);
+      }
+      JCLAP_CHECK(got == (std::vector<int>{kIntro, kIntro, kVerse, kVerse}));
+   }
+}
+
 int main() {
    // ---- chord names ----
    {
@@ -4115,6 +4321,7 @@ int main() {
    roundNine();
    roundTen();
    roundEleven();
+   roundTwelve();
    songStructure();
    return jclap::core::testResult();
 }

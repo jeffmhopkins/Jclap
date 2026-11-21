@@ -2016,6 +2016,79 @@ could hold them, except those noted at the end.
   first take; VARY's borrowed bars are heard, not drawn (documented). Most generated sections end off
   the tonic (tracked as data for the closing rule above).
 
+## Part P. The twelfth review (2026-11-21)
+
+A twelfth cold pass, split as before (styles; song mode; takes, fills and DENSITY; harmony and
+voicing; the engine, plugin and rolls), reproduced every finding with `jcomp-dump` or a probe
+program; the roll reviewer compared the editor's roll with the engine for every style and section,
+over takes 2-4, fills, band hits and SONG entries as well as the first take. It found 61 problems
+(12 high, 25 medium, 24 low); these were fixed in 0.14.0, with tests where a test could hold them,
+except those noted at the end.
+
+- **Takes and DENSITY.** 0.13.0's "an even four never rings" covered every player; it is a guitar's.
+  "let it ring" still rang fixed figures (the montuno, the batida, the bell) and lines, ghosts and
+  hits already rung, and swapped a held RING for TOP RINGS on organs, pads and guitars; it skips them,
+  and only a piano keeps TOP RINGS. "accents" lightened the One; never. A tag could name a mutation
+  twice; each once. "run in" was offered to players with no runs and to held styles; not. A line-only
+  take (the Afrobeat tenor) bred its parent four times; its line's dynamics vary. DENSITY's threshold
+  was a square root (half the hits gone in its first notch) and then, when made straight, left a third
+  of its travel dead; it is a 0.65 power, and a motor of ghosts thins as its other offbeats do. It also
+  thinned a fill's push; kept. Its fill-ins re-struck a tied push's beat, did nothing in held styles,
+  and filled phrase rests; they leave a tie alone, swell a held chord on 1 or 3, and seldom fill a
+  rest. *back* restored only take 1; the whole section.
+- **Fills.** A fixed figure's fill accented (and its fill down rang) the tenor's line note; its chord.
+  Palm-Wine's fill was the groove less its last note; its genre's own fill, which has the line too, and
+  a riff whose lead step holds the thumb puts its chord on the next free step. A build-up's backbeat
+  dropped to the fill text's level; never under the groove's chord on the same step. The lead-in's
+  rest was refilled by the energy; it stays. A near-silent section's fill had no lead-in; its last
+  chord stays. The song's ending struck a raw accent after a quiet outro; it sits at the outro's level.
+- **Styles.** Interlock's chops weren't choked; they are, the line excepted. Mambo was a jazz comper's
+  rootless block on every stroke; the Montuno player (Moore's guajeo, an octave line moving). Clav
+  Riff's only chord, its resolving stab, could be thinned to a top note; an accent stays a chord.
+- **Song mode.** A NEXT queued before a stop survived it, and the song skipped ahead after the
+  restart; running free it is the start cue, following the host it is dropped. A stale queued entry
+  sent a later NEXT to the wrong entry after a stop or a seek; cleared or re-aimed. Stopped, the tiles
+  showed the last section played; where play starts. Closing a phrase moved any last bar a bar
+  earlier, which made a blues end V-IV-V-I and dropped a pop chorus's V; only a dominant moves. The
+  repeat lift raised ghosts toward the soft level; 5% a repeat, every hit in proportion. A factory
+  preset turned SONG off; it keeps how the song is played. The panel's HOLD CHORD skipped the SONG
+  release; it lets go as the note does. NEXT at a song's end wrapped to the intro, PREV twice at the
+  start cancelled its restart, and NEXT with SWITCH AT longer than the entry made it longer; none now.
+  The structure lit the interrupted entry's letter for a section played by hand, and a fill played
+  under HOLD CHORD; neither now. Bars were counted from beat 0 whatever the host's bar lines; where the
+  host's meter is the song's, its bar start sets them.
+- **Harmony.** 0.13.0's open-grip table dropped every colour tone (add9, 9, sus) and rewarded any
+  subset of an open shape; a grip must hold the chord's tones (a fifth may go) and an open grip must be
+  an exact cut of its shape, and the table gained Cadd9, the sus2 and sus4 grips. The Blues scale named
+  the I7's 7-3 shell as its tritone sub and read a power chord as minor; it reads as the key's
+  Mixolydian, and a power chord on the V stays a power chord. SHELL, GRIP and CLOSE over a slash bass
+  left out the root (C/G was Em/G); the root stays. 4THS lost an m9's 9th at every size; the "So What"
+  stack (its 9th in the third's place) is a choice where no stack holds both. At five voices 4THS often
+  played three notes; a missing voice costs more there, and a secondary dominant in a key takes the
+  key's b9 and b13 and a stack with a tritone and a major third (B E# A D over C#7). OCTAVES' line
+  leapt a sixth after dipping under the window; a degree out of reach gives way to one in reach. The
+  7#9's wider search went above HIGHEST; it widens down only. Db under D F Ab read as Ddim/Db; a bass a
+  fifth apart whose chord holds the rest is the root. C# minor's major third was F; E#. Gb blues's IV
+  was B7; Cb7.
+- **Rolls and the engine.** The roll decided a run at its landing chord, after drawing the hits the
+  run replaces; it decides where the run starts, from the chord sounding there (takes 2-4 at RUNS 0.6:
+  438 differing notes to 4). It struck a change wherever the chord differed from the last full chord
+  drawn; only where the progression changes (107 to 10). Past a section's end it drew the section's
+  own first chord; the next entry's, as the engine plays it, and an entry is led on from the one before
+  it, its push tied over (fills in SONG 132 to 4; voicings across entries 1,824 to 471). Fills were led
+  from take 1; the take playing (223 to 1). OCTAVES' line restarted for each roll; it carries on. A
+  left hand's single note under TOP RINGS was drawn half length, band hits had their own lengths and
+  dropped the bass the engine keeps, two notes on one key overlapped, and SAME DICE Never counted each
+  section's bars; all as the engine now. Runs climbed to 92 whatever the section's level; they climb
+  to the take's own loudest. A change struck between a grip's or an organ's take hits kept the bass the
+  take's own chords leave to the left hand; it leaves it too.
+- **Left as judgement.** OCTAVES and SPREAD start at four notes; VOICES 3 plays them as at four
+  (documented). Following the host in AUTO, a cue made while stopped is for PLAY; the host's start
+  places the song (documented). A vamp can still be offered "run in" (a take doesn't know its chords).
+  Some band-hit HOLD lengths in the roll still differ from the engine's (267 of 49,247 notes). A few
+  secondary dominants in a key still voice three fourths at five voices where no five-note stack holds
+  their tones. The roll draws LOOP's first pass, not the later ones the engine voice-leads into.
+
 ## Bibliography
 
 1. de Clercq, Trevor, and David Temperley. "A corpus analysis of rock harmony." *Popular Music* 30/1

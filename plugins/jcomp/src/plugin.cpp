@@ -354,6 +354,11 @@ public:
             // The count-in isn't the song: JComp starts at the bar the host starts on.
             b.playing = (t->flags & CLAP_TRANSPORT_IS_PLAYING) && !(t->flags & CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL);
             b.beats = static_cast<double>(t->song_pos_beats) / CLAP_BEATTIME_FACTOR;
+            if (t->flags & CLAP_TRANSPORT_HAS_TIME_SIGNATURE && t->tsig_denom > 0) {
+               b.hasBar = true;
+               b.barStart = static_cast<double>(t->bar_start) / CLAP_BEATTIME_FACTOR;
+               b.barBeats = t->tsig_num * 4.0 / t->tsig_denom;
+            }
             if (t->flags & CLAP_TRANSPORT_IS_LOOP_ACTIVE) {
                b.loopActive = true;
                b.loopStart = static_cast<double>(t->loop_start_beats) / CLAP_BEATTIME_FACTOR;
