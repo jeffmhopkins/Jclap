@@ -822,7 +822,9 @@ inline void applyMods(Pattern &p, unsigned mods, Rng &rng, double pushChance = 0
       if (mods & kHalfTime && h.on() && !leftHand(h.part) && h.vel < kAccent && (s / beat) % 2 == 1 && rng.chance(0.7))
          h = Hit{};
       // (A busy scratch's accents ring out: "occasional chords are allowed to ring out", Stewart.)
-      if (mods & kShorts && h.on() && h.len <= 1 && !leftHand(h.part) && !((mods & kBusy) && h.vel >= kAccent * 9 / 10))
+      // (Not a line's note: the interlock's tenor line sings over its choked chords.)
+      if (mods & kShorts && h.on() && h.len <= 1 && !leftHand(h.part) && h.part != kPartLine &&
+          !((mods & kBusy) && h.vel >= kAccent * 9 / 10))
          h.art = kArtChop;
       if (mods & kTopLine && h.on() && h.part == kPartChord && !onBeat(p, s) && rng.chance(0.35))
          h.part = rng.chance(0.5) ? kPartTop : kPartUpper;
@@ -1139,6 +1141,9 @@ inline const std::vector<Mutation> &mutations() {
              // (Nor inside a chord held over it: a held take's half note isn't cut by a push.)
              if (!p.at(s).on() && heldOver(p, s))
                 continue;
+             // (Nor in a rest the figure writes for the phrase to breathe: Chic's second bar.)
+             if (phraseRest(p, s))
+                continue;
              if (rng.chance(0.7)) {
                 if (!p.at(s).on())
                    p.at(s) = hitOf('x');
@@ -1173,7 +1178,8 @@ inline const std::vector<Mutation> &mutations() {
              int to = s + dir;
              while (to > 0 && to < p.steps - 1 && !addable(p, to, fine))
                 to += dir;
-             if (to <= 0 || to >= p.steps || !addable(p, to, fine) || keepsOff(p, to) || heldOver(p, to))
+             if (to <= 0 || to >= p.steps || !addable(p, to, fine) || keepsOff(p, to) || heldOver(p, to) ||
+                 phraseRest(p, to))
                 continue;
              // (Chords only: the bass on its beat and a line's notes stay where they are.)
              if (leftHand(p.at(s).part) || p.at(s).part == kPartLine)
@@ -1206,8 +1212,18 @@ inline const std::vector<Mutation> &mutations() {
           bool four = p.steps > 0; // (a chord on every beat)
           for (int s = 0; s < p.steps && four; s += p.perBeat())
              four = p.at(s).on() && chordPart(p.at(s).part);
+          // A take that is only its line (the Afrobeat tenor's ostinato) keeps its notes, but its
+          // dynamics move a little: a note here and there a touch lighter or harder, never the bar's
+          // first. (Without it the take came out its parent again, and TAKE 2-4 were the same.)
+          bool chords = false;
+          for (int s = 0; s < p.steps && !chords; ++s)
+             chords = p.at(s).on() && p.at(s).part != kPartLine && !leftHand(p.at(s).part);
           for (int s = 0; s < p.steps; ++s) {
              Hit &h = p.at(s);
+             if (!chords && h.on() && h.part == kPartLine && s % p.stepsPerBar() != 0 && rng.chance(0.3)) {
+                h.vel = static_cast<uint8_t>(std::clamp<long>(std::lround(h.vel * (rng.chance(0.5) ? 0.86 : 1.14)), 1, 127));
+                continue;
+             }
              // (A ghost is a ghost at any level: softer than six tenths of the take's loudest.)
              if (!h.on() || h.vel * 10 < peak * 6 || h.part == kPartLine)
                 continue;
@@ -1276,7 +1292,8 @@ inline bool applyMutation(Pattern &p, const char *tag, Rng &rng) {
 }
 
 // Whether a mutation suits a style: a fixed figure only changes its accents; a left hand is added only where the style has one.
-inline bool mutationFits(const char *tag, unsigned mods, const Pattern &parent, const char *genre = nullptr) {
+inline bool mutationFits(const char *tag, unsigned mods, const Pattern &parent, const char *genre = nullptr,
+                         bool runs = true) {
    const auto is = [&](const char *t) { return std::strcmp(tag, t) == 0; };
    // Funk is on the One: nothing pushed over the bar line.
    if (genre && std::strcmp(genre, "Funk") == 0 && is("push it"))
@@ -1304,6 +1321,9 @@ inline bool mutationFits(const char *tag, unsigned mods, const Pattern &parent, 
          lacks = !parent.at(s).on();
       return ((mods & kLeftHand) || hasLeftHand(parent)) && !offbeatTake(parent) && lacks;
    }
+   // (A run only from a player that plays them, and never into a held style's chords.)
+   if (is("run in") && (!runs || (mods & kLongs)))
+      return false;
    if (is("run in")) {
       bool any = false;
       for (int s = 0; s < parent.steps && !any; s += parent.stepsPerBar())
@@ -1359,7 +1379,8 @@ inline void keepBeatChord(const Pattern &before, Pattern &p) {
 }
 
 inline Pattern mutate(const Pattern &parent, double amount, Rng &rng, std::string &tag, unsigned mods = 0,
-                      const char *genre = nullptr, bool organ = false, int bpm = 0, bool pedal = true) {
+                      const char *genre = nullptr, bool organ = false, int bpm = 0, bool pedal = true,
+                      bool runs = true) {
    Pattern p = parent;
    const int n = 1 + static_cast<int>(amount * 2.0 + rng.uniform() * 0.7);
    tag.clear();
@@ -1367,7 +1388,7 @@ inline Pattern mutate(const Pattern &parent, double amount, Rng &rng, std::strin
    std::array<int, 16> fit{};
    int fits = 0;
    for (int i = 0; i < static_cast<int>(list.size()) && fits < 16; ++i)
-      if (mutationFits(list[static_cast<size_t>(i)].tag, mods, parent, genre))
+      if (mutationFits(list[static_cast<size_t>(i)].tag, mods, parent, genre, runs))
          fit[static_cast<size_t>(fits++)] = i;
    // What a take bred from its parent ends as: the style's articulation over what was added or
    // changed (a choked style's chords stay chopped, a busy scratch's accents excepted; a held
@@ -1576,10 +1597,12 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
    // The genre's fill is its own player's (Chic's chucking, the palm-wine thumb): a style played by
    // another (a pad, keys in a guitar genre) fills from its own take.
    // It's also only the take's own instrument part: a fill with a thumb's bass needs a take with a
-   // left hand, and a line (the tenor line, a riff) fills from its own take.
-   const bool genreFill = (st.player < 0 || st.player == g.player) && !hasLine(base);
+   // left hand, and a line (the tenor line, a riff) fills from its own take unless the genre's fill
+   // has the line too (the palm-wine thumb and finger's).
+   const bool genreFill = st.player < 0 || st.player == g.player;
    const Rhythm *rh = genreFill ? pickRhythm(fills, e, rng) : nullptr;
-   if (rh && (rhythmRate(*rh) != base.rate || (hasLeftHand(fromRhythm(*rh)) && !hasLeftHand(base))))
+   if (rh && (rhythmRate(*rh) != base.rate || (hasLeftHand(fromRhythm(*rh)) && !hasLeftHand(base)) ||
+              hasLine(fromRhythm(*rh)) != hasLine(base)))
       rh = nullptr;
    if (rh)
       f = fromRhythm(*rh);
@@ -1597,8 +1620,12 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
          for (int s = lead; s < bar; ++s)
             if (f.at(s).on() && !leftHand(f.at(s).part))
                f.at(s) = Hit{};
-         if (lead > 0 && !f.at(lead).on())
-            f.at(lead) = hitOf('X');
+         // (Where the thumb has the lead's step, the chord comes on the next free one.)
+         for (int s = lead; s > 0 && s < bar; ++s)
+            if (!f.at(s).on()) {
+               f.at(s) = hitOf('X');
+               break;
+            }
       }
    }
    // A fill is one bar.
@@ -1743,6 +1770,14 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
    if (first >= 0 && fPeak < peak)
       for (int s : {first, lastHit})
          f.at(s).vel = static_cast<uint8_t>(std::max<int>(f.at(s).vel, peak));
+   // Nor a chord softer than the groove's on the same step of the bar it replaces: a build-up's
+   // backbeat stays (Memphis's 2 and 4, a house stab).
+   {
+      const Pattern groove = lastBar(base);
+      for (int s = 0; s < bar && s < groove.steps; ++s)
+         if (f.at(s).on() && chordPart(f.at(s).part) && groove.at(s).on() && chordPart(groove.at(s).part))
+            f.at(s).vel = std::max(f.at(s).vel, groove.at(s).vel);
+   }
    // Funk's fill is a pickup: the next section's One is struck, not tied over.
    if (std::strcmp(g.name, "Funk") == 0)
       for (int s = 0; s < bar; ++s)
@@ -2007,7 +2042,8 @@ inline Section makeSection(const Recipe &r, int section, uint32_t seed) {
       std::string tag;
       s.takes[static_cast<size_t>(t)] = mutate(p, 0.15 + 0.15 * t + r.weird * 0.3, rng, tag, st.mods, genreAt(r.genre).name,
                                                playerOf(r).instrument == kOrgan, st.bpm,
-                                               playerOf(r).instrument == kPiano || playerOf(r).instrument == kEPiano);
+                                               playerOf(r).instrument == kPiano || playerOf(r).instrument == kEPiano,
+                                               playerOf(r).runs > 0.0);
    }
    s.fill = makeFill(r, p, e, rng);
    s.fillDown = makeFillDown(r, section, p, e);
@@ -2131,7 +2167,8 @@ inline void adoptChild(const Recipe &r, Section &s, const Pattern &child, uint32
       std::string tag;
       s.takes[static_cast<size_t>(t)] = mutate(child, 0.15 + 0.15 * t + r.weird * 0.3, rng, tag, styleOf(r).mods, genreAt(r.genre).name,
                                                playerOf(r).instrument == kOrgan, styleOf(r).bpm,
-                                               playerOf(r).instrument == kPiano || playerOf(r).instrument == kEPiano);
+                                               playerOf(r).instrument == kPiano || playerOf(r).instrument == kEPiano,
+                                               playerOf(r).runs > 0.0);
    }
    s.fill = makeFill(r, child, s.energy / 100.0, rng);
    // The fill down and the ending made again from the new take (an offbeat take's are its own).

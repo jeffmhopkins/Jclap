@@ -349,7 +349,7 @@ inline const std::vector<Genre> &genres() {
        {{"Cha-Cha", "Cha-Cha", 118, kFixed, 0, 0b1001},
         {"Latin Jazz Guajeo", "Guajeo", 190, kPushes | kRich | kFixed, 0, 0b010, kMontuno},
         {"Bolero", "Bolero", 80, kRich, 1, 0b110000},
-        {"Mambo", "Mambo", 180, kPushes | kFixed, 0, 0b1000010}},
+        {"Mambo", "Mambo", 180, kPushes | kFixed, 0, 0b1000010, kMontuno}},
        "2, 7, 10, 56, 61, 62", true},
 
       // ---- Pop & Rock ----
@@ -487,7 +487,7 @@ inline const std::vector<Genre> &genres() {
        {{kDorian, {"Cm7|Cm7", "Cm9|Cm9|Cm9|Cm9", "Cm9|F7", "Cm9|F9|Cm9|F9", "Cm11|Cm11", "Cm7|Cm7"}}},
        {{"Tenor Line", "Tenor", 112, 0, 0, 0b010},
         {"Chord Chop", "Chop", 118, kShorts | kFixed, 0, 0b100},
-        {"Interlock", "Interlock", 104, kInterlock | kFixed, 0, 0b110}},
+        {"Interlock", "Interlock", 104, kInterlock | kShorts | kFixed, 0, 0b110}},
        "13, 14"},
       {"Highlife", kFamilies[5], kStrummer, 0.52, 0,
        // Palm-wine two-finger interlock (the thumb on eighths, a finger on sixteenths between: the

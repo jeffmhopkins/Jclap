@@ -3166,7 +3166,8 @@ private:
          std::string tag;
          host_.litter.push_back(mutate(sec.takes[0], param(kMutation), rng, tag, styleOf(recipe()).mods, genreAt(recipe().genre).name,
                                           playerOf(recipe()).instrument == kOrgan, styleOf(recipe()).bpm,
-                                          playerOf(recipe()).instrument == kPiano || playerOf(recipe()).instrument == kEPiano));
+                                          playerOf(recipe()).instrument == kPiano || playerOf(recipe()).instrument == kEPiano,
+                    playerOf(recipe()).runs > 0.0));
          host_.tags.push_back(tag);
       }
       if (mutate_)
@@ -3214,21 +3215,27 @@ private:
                   v.second = 2;
             sound.values.push_back({kSwingEase, 0.0});
          }
-         std::vector<double> d = defaults();
-         sound.values.erase(std::remove_if(sound.values.begin(), sound.values.end(),
-                                           [](const auto &v) { return isSetupParam(v.first); }),
-                            sound.values.end());
-         for (clap_id id = 0; id < d.size(); ++id)
-            if (isSetupParam(id))
-               d[id] = host_.paramValue(id);
-         ui::applyPreset(sound, host_, d);
-         Song song;
          // (Only a user preset has a song file: a factory one is never matched to a user's file by
          // its name, whatever the file system's case rules.)
          const auto &bank = factoryPresets();
          const bool factory = std::any_of(bank.begin(), bank.end(), [&](const ui::Preset &q) {
             return q.name == p.name && q.category == p.category && q.values == p.values;
          });
+         // A factory preset is a style: how the song is played through (SONG, SWITCH AT, the intro
+         // and the fills into a section) stays as it is, as its structure does.
+         const auto kept = [factory](clap_id id) {
+            return isSetupParam(id) ||
+                   (factory && (id == kSongMode || id == kSwitchAt || id == kIntroSetup || id == kFillInto));
+         };
+         std::vector<double> d = defaults();
+         sound.values.erase(std::remove_if(sound.values.begin(), sound.values.end(),
+                                           [&](const auto &v) { return kept(v.first); }),
+                            sound.values.end());
+         for (clap_id id = 0; id < d.size(); ++id)
+            if (kept(id))
+               d[id] = host_.paramValue(id);
+         ui::applyPreset(sound, host_, d);
+         Song song;
          const std::filesystem::path file = ui::userPresetFolder(kPresetFormat) / (p.name + kPresetFormat.extension);
          if (!factory && readSong(songFile(file), song, recipe()))
             host_.setSong(song);
@@ -3754,7 +3761,8 @@ private:
          std::string tag;
          p = mutate(p, param(kMutation), rng, tag, styleOf(recipe()).mods, genreAt(recipe().genre).name,
                     playerOf(recipe()).instrument == kOrgan, styleOf(recipe()).bpm,
-                    playerOf(recipe()).instrument == kPiano || playerOf(recipe()).instrument == kEPiano);
+                    playerOf(recipe()).instrument == kPiano || playerOf(recipe()).instrument == kEPiano,
+                    playerOf(recipe()).runs > 0.0);
          host_.setSong(s);
          diceTag_ = tag;
          redraw();

@@ -109,10 +109,19 @@ inline Chord phraseChord(const Song &song, int entry, bool songEnds, int si, int
    if ((second || last) && si != kOutro && bar >= sec.bars - 2) {
       const Section &out = song.sections[kOutro];
       const Chord home = out.chordAt(std::max<int>(1, out.progBars) - 1, true);
-      if (!home.none() && !sameHarmony(sec.chordAt(sec.bars - 1, true), home)) {
+      const Chord lastIn = sec.chordAt(sec.bars - 1, true);
+      if (!home.none() && !sameHarmony(lastIn, home)) {
+         // (Only a dominant moves a bar earlier: a ii-V or a V7, its root a fifth over home's or a
+         // dominant seventh. A blues's turnaround V, after bar 11's I, and a pop chorus's vi just
+         // give the last bar to home: moving them would end the blues V-IV-V-I and drop the pop V.)
+         const Quality &lq = qualityOf(lastIn);
+         const auto has = [&](int iv) { return std::find(lq.tones.begin(), lq.tones.end(), iv) != lq.tones.end(); };
+         const bool dominant = (lastIn.root - home.root + 12) % 12 == 7 || (has(4) && has(10));
+         const bool before = sec.bars >= 2 && (sameHarmony(sec.chordAt(sec.bars - 2, true), home) ||
+                                               sameHarmony(sec.chordAt(sec.bars - 2, true), lastIn));
          if (bar == sec.bars - 1)
             c = home;
-         else if (sec.bars >= 2)
+         else if (sec.bars >= 2 && dominant && !before)
             c = sec.chordAt(sec.bars - 1, half);
       }
    }
@@ -341,7 +350,7 @@ public:
       if (action == kActRunsOff)
          runsOff_ = !runsOff_;
       else if (action == kActHoldChord)
-         holdChord_ = !holdChord_;
+         act(kActHoldChord, 127, !holdChord_); // (let go as the note lets go: in SONG, at the pass's end)
    }
 
    void learn(bool on) {
@@ -399,6 +408,12 @@ public:
                section_ = pending_;
                formPos_ = pendingPos_ >= 0 ? pendingPos_ : formAt();
                cued_ = true;
+            } else if (settings_.song) {
+               // Stopped, the panel shows where play starts again: the song's start (the Section
+               // param's first entry), where PLAY and the host's bar 1 begin it.
+               formPos_ = std::max(0, song_.find(std::clamp(settings_.section, 0, kSections - 1)));
+               section_ = song_.entry(formPos_);
+               repeat_ = repeatOf(formPos_);
             }
             pending_ = pendingPos_ = -1;
          }
@@ -1152,11 +1167,12 @@ private:
    // What velocities are scaled by: VELOCITY SETS ENERGY's, and in SONG a section's repeat lifted a
    // little (the last chorus louder than the first).
    // A velocity at the section's level: ENERGY's velocity scaling, and in SONG a repeated entry
-   // lifted into the headroom above it (the louder hits less, so its accents stay accents).
+   // lifted 5% a repeat (up to the third), every hit in proportion, so a ghost stays a ghost next to
+   // the accents (lifting into the headroom brought a scratch's ghosts near the soft level).
    double lifted(double v) const {
       v *= energy_;
       if (settings_.song && repeat_ > 0)
-         v += std::max(0.0, 127.0 - v) * 0.08 * std::min(repeat_, 3);
+         v = std::min(127.0, v * (1.0 + 0.05 * std::min(repeat_, 3)));
       return v;
    }
    // The ending a section plays as the song's last entry: its own, or (a section with none, a
@@ -1579,8 +1595,18 @@ private:
          // take nothing on the beats.
          const double more = (settings_.density - 0.5) * 2.0;
          // (Nor under a chord rung to the next: an organ's held backbeat isn't cut into eighths.)
+         // (A held style's chord rung since half a bar or more swells again on beat 1 or 3: the
+         // only fill-in a held style has.)
+         int since = 0;
+         for (int k = 1; k < p.steps && !since; ++k) {
+            const Hit &b = p.at((step - k + p.steps) % p.steps);
+            if (b.on() && !leftHand(b.part) && b.part != kPartLine)
+               since = k;
+         }
+         const bool swell = settings_.longs && step % std::max(1, halfBar(p)) == 0 && since >= halfBar(p);
+         // (Nor where a push ties over to its beat.)
          if (more <= 0.0 || settings_.fixed || hasLine(p) || lastChord_.none() || last_.empty() || heldOver(p, step) ||
-             ringsOver(p, step))
+             (ringsOver(p, step) && !swell) || (pushTarget_ >= 0 && t < pushTarget_))
             return;
          if (!onEighth && !fine)
             return;
@@ -1593,7 +1619,9 @@ private:
          // A swing comper fills with offbeat stabs, not a pulse of chords on the beats.
          if (onBeat && settings_.swingFeel == 1 && settings_.swing > 0.55)
             return;
-         const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
+         // (Seldom in a rest the figure writes for the phrase to breathe, Chic's second bar, as
+         // applyMods' busy ghosts.)
+         const double chance = (onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2) * (phraseRest(p, step) ? 0.2 : 1.0);
          if (dice(diceBar_, step, 21) >= chance)
             return;
          // Softer repeats of the take's own level (a quiet section's are quieter still).
@@ -1856,6 +1884,9 @@ private:
    // the progression changes chord half way through it).
    bool thinned(const Pattern &p, int step, int ahead = 0) const {
       if (settings_.density >= 0.5 || !p.at(step).on())
+         return false;
+      // A fill's (or an ending's) pushed lead into the change is the fill's point: it stays.
+      if ((fill_ || ending_) && p.at(step).push && !leftHand(p.at(step).part))
          return false;
       return thinnedBy(p, step, settings_.density, dice(diceAhead(ahead), step, 20),
                        changesAt(barRel_ + std::max(0, ahead) * barTicks() + halfTicks()), settings_.fixed);
