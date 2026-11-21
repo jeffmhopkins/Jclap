@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.14.0.
+Version 0.15.0.
 
 ![Panel](docs/panel.png)
 
@@ -36,7 +36,8 @@ JComp counts in 4/4 from the host's beat 0: its bars are the host's bars when th
 three-beat style (Jazz Waltz, Country Waltz, 6/8 Ballad) counts in bars of three beats instead: set the
 host to 3/4 (or 6/8) from its bar 1. Where the host says where its bars start, a bar of another meter
 (a 2/4 bar in a 4/4 song, a pickup) moves JComp's bar lines with the host's from the next bar in the
-song's meter; a host meter the style doesn't have (a waltz in a 4/4 project) leaves them on beat 0's.
+song's meter. A pickup at the project's start rests, as a count-in does, and the song's bar 1 is the
+bar after it; a short bar later in the song leaves the bar lines where they were; a host meter the style doesn't have (a waltz in a 4/4 project) leaves them on beat 0's.
 While the host counts in (pre-roll), or plays before its bar 1, it waits for the first bar, in LOOP as in SONG (a bass
 played in the count-in brings nothing in). A host loop plays the same notes on
 every pass, the first included when playback starts at the loop's start: the song follows the host's
@@ -73,8 +74,8 @@ every genre, its styles, their tempos and progressions, and the sources each gen
 ![Browser](docs/panel-browser.png)
 
 The **STYLE** box picks the genre's style: a rhythm family, a set of progressions (one per kind of
-section), a tempo, a scale and its own twists (pushes, a busier or sparser hand, runs in, the top note
-alone, a left hand, richer or plainer chords, shuffle, triplets). Shift-click another tile
+section), a tempo, a scale and its own twists (pushes, a busier hand, runs in, a left hand, held or
+choked chords, richer or plainer chords, triplets). Shift-click another tile
 to **blend** its rhythms in; the small purple slider sets how much. A rhythm on the other grid comes
 across beat by beat (a straight eighth onto the shuffle's third triplet). A fixed figure (Freddie
 Green's four, the batida, the montunos and guajeos, the cha-cha) is the style itself and takes no
@@ -92,7 +93,7 @@ and JJazzLab):
 | Piano Ballad | **Ballad Block** (quarters, the 1, and-of-2, 3 ballad figure, a four-bar phrase); **Right-Hand Arpeggio** (the chord broken up and back); **6/8 Ballad** (six eighths leaning on 1 and 4, dotted quarters, the left hand rocking) |
 | Country | **Country Waltz** (oom-pah-pah, the bass on 1 alternating root and fifth); **Western Swing** (four on the guitar, pickups in the fourth bar) |
 | Bossa Nova | **Samba** (MMA's four bars of piano, Impro-Visor's offbeat eighths) |
-| Latin Jazz | **Bolero** (the tresillo ballad); **Mambo** (the broken chord: the chord, then single inner notes, on the Montuno player, its octave line moving) |
+| Latin Jazz | **Bolero** (the tresillo ballad); **Mambo** (the 2-3 guajeo, and in its quieter sections the broken chord: the chord, then single chord notes, on the Montuno player, its octave line moving) |
 | Rock | **Rock'n'Roll Triplets** (pounding triplets, quarters in the fourth bar); **Fifties Pump** (the dotted pickups) |
 | Soul | **Sixties R&B** (the pushed piano offbeats and the organ's answer) |
 | Calypso | **Calypso Strum** and **Calypso Piano** (1, the and of 2, 4) |
@@ -177,8 +178,9 @@ free; following the host, the host's bar places the song and the cue is dropped.
 in AUTO, a cue made while stopped is for PLAY: the host's start places the song where its bar is. In
 a song that ends, NEXT in the last entry stays there (the song ends as it would), and NEXT never makes
 an entry shorter than SWITCH AT play longer. NEXT twice onto another entry of the section playing goes there; PREV from the first entry stays
-on it. A section played by hand that the structure leaves out plays at its own level. Letting go of
-HOLD CHORD in SONG picks the song up where the host is (or, running on its own, at the pass's next
+on it. A section played by hand that the structure leaves out plays at its own level. HOLD CHORD
+keeps its chord through a host loop's wrap or a jump, and in SONG the song stays where it is while
+held. Letting go of HOLD CHORD in SONG picks the song up where the host is (or, running on its own, at the pass's next
 boundary).
 
 ![Song structure](docs/panel-form.png)
@@ -187,7 +189,8 @@ boundary).
 
 The section's take now, and five children, each tagged with how it differs: *busier*, *sparser*,
 *push it*, *chop it*, *let it ring*, *shift*, *ghosts*, *top line*, *accents*, *run in*, *answer* or
-*left hand*. Click a child to put it in the song (the generation counts up); *back* takes the one
+*left hand*, or for a held take *restrike* (the chord struck again, softer, at its half bar).
+Click a child to put it in the song (the generation counts up); *back* takes the one
 before, the section as it was (its other takes, fills and ending too). A tag names each mutation
 once; *run in* is offered only to a player that plays runs, and never to a held style; a take that is
 only its line (the Afrobeat tenor's) varies its line's dynamics, not its notes. **MUTATION** sets how
@@ -292,7 +295,9 @@ How every chord is voiced, for all sections:
   its root above it (C/G is never an E minor over G);
   ROOTLESS and OCTAVES leave it to the bass player. ROOTLESS adds the 9th to every minor seventh, the
   iii chord's included, as most pianists play it, though the 9th is outside the key there. OCTAVES and SPREAD start at four notes: VOICES 3 plays
-  them as at four. On an organ or a pad the low note of SPREAD stays
+  them as at four (an octave pair or a spread chord of three would lose the shape). A major seventh
+  over its own third or fifth (Cmaj7/E) keeps the root a half step over the 7th, as the chord is
+  written. On an organ or a pad the low note of SPREAD stays
   in every chord; on keys it is held from one 1 or 3 to the next. 4THS stacks fewer fourths for a
   chord with fewer tones (a triad, a sus, an add9) rather than leaving the shape, a sus or a triad
   taking its 9th, and it keeps a chord's altered tone (a 7b9's b9, a 7#11's #11): a chord no stack of
@@ -339,7 +344,8 @@ Nothing rings over a change of chord: RING, LENGTH, a left-hand note and a top n
 at the next change. A change the take has no hit for (two chords in a bar, the second between hits)
 is struck where it comes, as the bar's first chord is played.
 - What of the chord it plays: CHORD, TOP (the top note alone), TOP 2, BASS (the left hand's root),
-  5TH (the fifth the bass alternates with: boom-chick's beat 3, the bossa thumb's second note; on keys
+  5TH (the fifth the bass alternates with: boom-chick's beat 3, the bossa thumb's second note, a
+  fifth below the root as a guitarist's thumb plays it; on keys
   the fifth below the root when the one above would crowd the chord, boom-chick's E3 then B2), or LINE
   (one note of a line: the degree of the chord the style wrote, as in the Superstition clav riff, the
   Afrobeat tenor line and the palm-wine finger; the root for a hit set to LINE here). A left hand's
@@ -452,8 +458,9 @@ to the next chord actually played.
 - **SAME DICE EVERY** 1, 2, 4 or 8 bars: the chance hits repeat, so they make a pattern of their own.
   Each section throws its own dice (from its seed), so the pattern differs from section to section
   and song to song, and VARY's take swaps come in with any setting.
-  Following the host, every pass of a host loop plays as the first did (with SAME DICE off the dice
-  count bars from where playback started, so a render from bar 5 is a performance of its own). A start
+  Following the host, every pass of a host loop plays as the first did (with SAME DICE Never the dice
+  count bars from the host's bar 1, so a bar throws the same dice wherever playback started; running
+  free they count from the start). A start
   or a jump into the middle of a bar throws that bar's own dice and plays the take picked, or the
   bar's fill or ending where it has one.
   **AUTO FILLS** every 4, 8 or 16 bars.
@@ -836,6 +843,25 @@ C# minor spells its major third E#. Runs sit at the take's level. The rolls foll
 the next entry (its chord, the push tied over, the voicing led on), decide runs where they start, draw
 fills from the take playing, keep OCTAVES' line in phase, draw one key once, and count SAME DICE
 Never's bars through the song.
+
+**The thirteenth review (0.15.0).** Five more cold passes ([docs/sources.md](docs/sources.md), Part Q).
+Styles: Clav Riff's stab stays a chord in every take, Interlock lays its line and its chop the same way
+in every section, the batida's thumb plays its fifth below the root, the montunos and guajeos play
+eighths and tie their push into the three side, Calypso Piano's chorus is busier than its verse, and a
+quarter pulse rings or doesn't for the whole take. Song: HOLD CHORD holds over a host loop and a jump,
+a pickup bar rests, a queued NEXT keeps the phrase-closing chords, SAME DICE Never counts from the
+host's bar 1, a host stop drops a cue it won't play, NEXT in an entry's last moment no longer skips
+one, and LOOP picks up the host's bars at once. Takes: DENSITY's swell on a held chord plays, it thins
+by a little at every notch, keeps an arpeggio's bass on the One, leaves a fill's lead-in and a skank
+alone, and no longer strikes a change twice; held and fixed styles get takes of their own (the new
+*restrike*), and only a piano gets TOP RINGS. Harmony: 4THS gives a V7 four notes at five voices and
+keeps a 9th chord's third, ROOTLESS keeps the 5th off the b13, a slash bass and a passing diminished
+chord are spelt by their letter (E7/G#, C#dim7), GRIP plays the open G7 and four strings on a seventh,
+a fifth alone in Dorian is the mode's minor v, OCTAVES keeps C11's 11th and doubles a 7#9's chord
+tone, and slash triads and altered slash chords keep their notes. The rolls: SONG's roll is led from
+the song's start in the take playing, its fills drawn over the right bar, runs walk over the chord
+heard and follow the repeat's dice, NOW PLAYING draws the chord held, and a band hit's length is the
+engine's.
 
 **Left out for now.** A "+ GUITAR" second player layered over the first, and recording a part played
 in to a take.
