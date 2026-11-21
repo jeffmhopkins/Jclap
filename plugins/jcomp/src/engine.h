@@ -406,6 +406,23 @@ public:
          // SONG mode on the host's timeline: where the song is at this bar, counted from its start.
          if (settings_.song && following)
             placeInSong(t);
+         // Started or landed mid-bar: the bar line that sets a bar's dice and take was missed, so the
+         // partial bar gets its own here (as a fresh start there would), not the last bar played's.
+         {
+            const int64_t len = barTicks(), rel = nextTick_ - anchor_;
+            if (((rel % len) + len) % len != 0) {
+               if (pendingTake_ >= 0) {
+                  take_ = pendingTake_;
+                  pendingTake_ = -1;
+               }
+               barTake_ = take_;
+               if (start)
+                  absoluteBar_ = 1;
+               const int same = settings_.sameDiceBars;
+               const int bar = static_cast<int>(std::floor(static_cast<double>(rel) / static_cast<double>(len)));
+               diceBar_ = same > 0 ? ((bar % same) + same) % same : static_cast<int>(absoluteBar_);
+            }
+         }
       }
       running_ = true;
       followingBefore_ = following;
@@ -1737,8 +1754,10 @@ private:
       // lengthens it from there).
       // Not in a figure played as written (a guajeo's two-side strikes its one); LENGTH shortens it
       // as it does every chord.
-      if (h.push && h.part == kPartChord && !settings_.fixed && settings_.length >= 0.5)
-         len = std::max(len, static_cast<double>(pushTargetOf(k.t)) / kTicksPerBeat - at + 0.05);
+      const bool tiedOver = h.push && h.part == kPartChord && !settings_.fixed && settings_.length >= 0.5;
+      const double tieTo = tiedOver ? static_cast<double>(pushTargetOf(k.t)) / kTicksPerBeat - at + 0.05 : 0.0;
+      if (tiedOver)
+         len = std::max(len, tieTo);
       // Nothing rings over the next change of chord: the change is played on time, by itself.
       const double cap = k.capBeat < 0.0 ? 1e9 : k.capBeat + settings_.timing * ms - 0.01;
       cutFrom(at - 0.003, hand);
@@ -1777,8 +1796,9 @@ private:
             vv += settings_.topVoice;
          double l = len;
          int noteHand = hand;
+         // (A pushed chord's inner notes still reach the beat it ties over: the beat isn't struck.)
          if (h.art == kArtTopRings && idx != n - 1)
-            l = std::min(len, std::max(lenBeats, gapBeats * 0.5));
+            l = std::max(std::min(len, std::max(lenBeats, gapBeats * 0.5)), tieTo);
          if (holdLow && idx == 0) {
             l = std::max(l, k.holdBeats - 0.02);
             noteHand = 1;

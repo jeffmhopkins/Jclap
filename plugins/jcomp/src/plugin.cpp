@@ -85,8 +85,9 @@ public:
 
    // A recipe param the host changed: the song it names.
    void onMainThread() override {
-      const bool all = remake_.exchange(false);
-      const bool chords = remakeChords_.exchange(false);
+      // (One word, both flags: a callback between two stores can't take one without the other.)
+      const uint32_t remake = remake_.exchange(0);
+      const bool all = remake & kRemake, chords = remake & kRemakeChords;
       const uint32_t sections = remakeSections_.exchange(0);
       if (!all && !sections)
          return;
@@ -281,8 +282,7 @@ public:
       for (size_t i = 0; i < kParamCount; ++i)
          values_[i].store(std::clamp(v[i], kParams[i].min, kParams[i].max));
       // The loaded song is the one: a host's recipe change from before the load doesn't remake it.
-      remake_.store(false);
-      remakeChords_.store(false);
+      remake_.store(0);
       remakeSections_.store(0);
       *song_ = *loaded;
       send();
@@ -475,9 +475,9 @@ private:
                else {
                   // ENERGY and BLEND remake the rhythm only (the chords and their edits stay), as
                   // on the panel; any other recipe param, the whole song.
-                  if (ev->param_id != kEnergy && ev->param_id != kBlend && ev->param_id != kBlendGenre)
-                     remakeChords_.store(true);
-                  remake_.store(true);
+                  remake_.fetch_or(ev->param_id != kEnergy && ev->param_id != kBlend && ev->param_id != kBlendGenre
+                                       ? kRemake | kRemakeChords
+                                       : kRemake);
                }
                host()->request_callback(host());
             }
@@ -582,8 +582,10 @@ private:
    std::atomic<uint32_t> requestWrite_{0};
    uint32_t requestRead_ = 0;
    std::atomic<bool> learnArmed_{false};
-   std::atomic<bool> remake_{false};
-   std::atomic<bool> remakeChords_{false}; // a recipe param other than ENERGY or BLEND changed
+   // A host's recipe change to remake: kRemake, and kRemakeChords for a recipe param other than ENERGY
+   // or BLEND.
+   static constexpr uint32_t kRemake = 1, kRemakeChords = 2;
+   std::atomic<uint32_t> remake_{0};
    std::array<std::bitset<128>, 16> passed_{}; // notes passed on and not yet let go (audio thread)
    std::atomic<uint32_t> remakeSections_{0};
    std::atomic<int> learned_{-1};
