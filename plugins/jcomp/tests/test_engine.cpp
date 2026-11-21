@@ -1998,11 +1998,16 @@ int main() {
             const Section &out = song->sections[kOutro];
             JCLAP_CHECK(!out.ending.empty());
             int last = -1;
+            // (A montuno's or guajeo's last chord comes on the and of 4, pushed; the cha-cha's on the 1.)
+            const std::string gn = genreAt(g).name, sn = genreAt(g).styles[static_cast<size_t>(st)].name;
+            const bool anticipates = gn == "Salsa" || (gn == "Latin Jazz" && sn != "Cha-Cha" && sn != "Bolero");
             for (int k = 0; k < out.ending.steps; ++k)
                if (out.ending.at(k).on()) {
-                  JCLAP_CHECK(!out.ending.at(k).push);
+                  JCLAP_CHECK(!out.ending.at(k).push || (anticipates && k == 14));
                   last = k;
                }
+            if (sn == "Cha-Cha")
+               JCLAP_CHECK(last == 16);
             JCLAP_CHECK(last >= 0 && out.ending.at(last).art == kArtRing);
             JCLAP_CHECK(out.ending.rate == out.takes[0].rate);
             for (const Section &sec : song->sections) {

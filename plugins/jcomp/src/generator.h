@@ -1543,6 +1543,18 @@ inline Pattern makeEnding(const Recipe &r, const Pattern &base, double e) {
    const Genre &g = genreAt(r.genre);
    const Style &st = styleOf(r);
    Pattern f = figure(endingText(g, base, st.mods), base.rate, std::max(0.35, e));
+   // A montuno's or a guajeo's changes come on the and of 4: its last chord with them, held (an
+   // anticipated last hit). The cha-cha's cell ends on the 1 ("chá"), and a bolero on a held downbeat.
+   {
+      const std::string n = g.name, sn = st.name;
+      const bool anticipates = n == "Salsa" || (n == "Latin Jazz" && sn != "Cha-Cha" && sn != "Bolero");
+      if (anticipates && base.rate == kRate16 && f.steps == 32 && f.at(14).on() && f.at(16).on()) {
+         f.at(14) = f.at(16);
+         f.at(14).push = 1;
+         f.at(14).len = 18;
+         f.at(16) = Hit{};
+      }
+   }
    // A bossa carries its batida into the held chord, not a bar of block quarters: the figure's own
    // bar: the cycle's first, which falls on the outro's second-last bar (an even bar of an even
    // section), so the cycle isn't broken by two second bars in a row.
