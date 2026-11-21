@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.8.0.
+Version 0.9.0.
 
 ![Panel](docs/panel.png)
 
@@ -200,7 +200,9 @@ once, short, and rests to the next chord. A band hit plays only over the section
 not over a chord held on the keys, nor in the song's ending; a section queued to come in leaves this
 one's band hits playing up to the switch. A band hit on a chord the take pushes into (a chord struck
 on the and of 4 into it) goes on that push: HOLD rings it on, SHOT cuts it short, and the beat isn't
-struck again. The rolls on GENERATE and PLAY draw the band hits as they play; EDIT draws the take as
+struck again (in SONG, not over the section's last bar line into the next). ACC keeps the stroke's own
+length. Under a HOLD or SHOT the take still plays a chord that leads into the next change (a push, or
+the offbeat half a beat before it). The rolls on GENERATE and PLAY draw the band hits as they play; EDIT draws the take as
 written, its hits under a HOLD or SHOT included.
 
 ## EDIT
@@ -227,7 +229,7 @@ How every chord is voiced, for all sections:
   a change of chord, and the chops and backbeats between are the right hand alone), ROOTLESS
   (Levine's A and B forms, the root left to the bass), OCTAVES (a close chord with its bottom note
   doubled on top, the montuno's right hand: hit by hit its octave line moves through the chord, 5, 3,
-  1, 3, rather than repeating one block) or GRIP (a guitar's: the bass string, its fifth and octave,
+  1, 3, by a step or a third, rather than repeating one block) or GRIP (a guitar's: the bass string, its fifth and octave,
   then the chord's third and colour close above; with three notes, the power chord; in a take with a
   bass of its own, a boom-chick or the palm-wine thumb, the strum leaves the bass strings to the
   thumb's two strings, the root's and the fifth's). A grip is one a hand can make on six strings in
@@ -236,7 +238,9 @@ How every chord is voiced, for all sections:
   ROOTLESS and OCTAVES leave it to the bass player. ROOTLESS adds the 9th to every minor seventh, the
   iii chord's included, as most pianists play it, though the 9th is outside the key there. On an organ or a pad the low note of SPREAD stays
   in every chord; on keys it is held from one 1 or 3 to the next. 4THS stacks fewer fourths for a
-  chord with fewer tones (a triad, a sus, an add9) rather than leaving the shape. ROOTLESS at five
+  chord with fewer tones (a triad, a sus, an add9) rather than leaving the shape, a sus or a triad
+  taking its 9th, and it keeps a chord's altered tone (a 7b9's b9, a 7#11's #11): a chord no stack of
+  fourths holds it in is voiced SPREAD. ROOTLESS at five
   voices adds the 11th of a minor chord or the 13th of a major one, never the root over a major
   seventh. Three voices (a guitar's chop) avoid a half-step cluster when a plainer three will do.
 - **CENTER**: where the voicings sit. **LEAD**: how much each chord is led from the one before (the
@@ -252,8 +256,8 @@ How every chord is voiced, for all sections:
   note goes under the window (SHELL's, SPREAD's and GRIP's root, 4THS' root under the fourths, a slash
   chord's bass), and never under FLOOR. **FLOOR**: nothing goes under this note, the bass part included. The keyboard under the knobs
   shows the window as it sounds (click near either end to move it), the floor in green.
-- *Double a note in the middle, not on top* (a voicing with its top note doubled below costs a
-  little, so smooth voice leading can still win over it), *No half-step rubs below C4*, *Same shape for repeated chords* (while the shape, voices
+- *Double a note in the middle, not on top* (in the middle where the line allows: a voicing with its
+  top note doubled below is still a choice, at a little cost, so smooth voice leading can win over it), *No half-step rubs below C4*, *Same shape for repeated chords* (while the shape, voices
   and window still allow it). A chord that only changes colour (C7 to C9) stays where it is.
 
 Every voicing but a guitar's shells and grips (whose low strings ring as they do on the instrument)
@@ -277,7 +281,8 @@ Nothing rings over a change of chord: RING, LENGTH, a left-hand note and a top n
 at the next change. A change the take has no hit for (two chords in a bar, the second between hits)
 is struck where it comes, as the bar's first chord is played.
 - What of the chord it plays: CHORD, TOP (the top note alone), TOP 2, BASS (the left hand's root),
-  5TH (the fifth the bass alternates with: boom-chick's beat 3, the bossa thumb's second note), or LINE
+  5TH (the fifth the bass alternates with: boom-chick's beat 3, the bossa thumb's second note; on keys
+  the fifth below the root when the one above would crowd the chord, boom-chick's E3 then B2), or LINE
   (one note of a line: the degree of the chord the style wrote, as in the Superstition clav riff, the
   Afrobeat tenor line and the palm-wine finger; the root for a hit set to LINE here). A left hand's
   notes are held to its next note and don't cut the chord above them, nor the chord them; a key both
@@ -296,8 +301,9 @@ and fill. Click a tile to switch to it, a number for that take, FILL for a fill.
 next is outlined with **NEXT**. **LOOP** stays in a section; **SONG** plays each for its bars, then
 the next, through to the outro, and ends: the outro's last bar or two are its **ending** (four, then
 the last chord rung out, as MMA's endings; the style's own where it has one: SwingEnd's four then 1
-and 3, the cha-cha cell with its last chord on the and of 4, the R&B ending's 1, 3 and 4; a skank or an
-offbeat stab ends on its offbeats, then the held chord), and then JComp rests until you pick a section or
+and 3, the cha-cha cell ending on the 1 (a montuno's last chord comes on the and of 4, anticipated), a
+house riff's own last bar, the R&B ending's 1, 3 and 4; a skank, an upstroke or an offbeat stab ends on
+its offbeats, then the held chord; the last chord is the ending's loudest), and then JComp rests until you pick a section or
 start again (picking the outro plays it again; switching to LOOP or REPEAT plays on from the next
 switch point). An outro shorter than its ending plays the ending's last bars, so the last chord still
 rings. **REPEAT** plays the song round and round, the outro's fill leading back into the intro
@@ -337,7 +343,9 @@ playhead. Beside it, two knobs that change the whole part as it plays:
   plays sixteenths, so a montuno, a bossa or a Charleston stays on eighths), never under a chord still
   held, and never on a beat in an offbeat style (a skank, an offbeat stab) or a swung one (a swing
   comper adds offbeat stabs, not a pulse of chords). A figure played as written
-  (the batida, the montunos and guajeos, Freddie Green's four, the cha-cha) gets nothing added. The
+  (the batida, the montunos and guajeos, Freddie Green's four, the cha-cha) gets nothing added; below
+  the middle a two-bar clave figure keeps every stroke, but a one-bar figure (Freddie Green's four, the
+  cha-cha) thins as any take does, its thumb kept. The
   middle plays the take as written, and the same setting always gives the same pattern.
 - **LENGTH**: every chord shorter, down to a staccato chop, or longer, up to legato (held to the next
   chord). The middle plays the lengths as written.
@@ -346,8 +354,13 @@ The rolls on GENERATE and PLAY draw the part with DENSITY, LENGTH, RUNS and the 
 own dice: the hits, fills and runs the first pass plays (SAME DICE off, later bars differ), and the
 chords as the engine plays them: a chord an eighth before a change is the new chord, a push rings on
 through the beat it anticipates, and a change the take has no hit for is struck where it comes. The
-playhead goes through the progression's bars with the take played round under them, and the ENDING's
-roll is drawn over the outro's last bars, where it plays. EDIT
+playhead goes through the progression's bars with the take played round under them (a progression
+longer than four bars shown four at a time, the four the music is in), a fill or fill down is drawn
+over the bar it fills, and the ENDING's roll over the outro's last bars, where it plays. The left
+hand's rules are drawn as played (SPREAD's low note on 1 and 3 only, GRIP's strum without the thumb's
+strings, the root before the fifth on a change, a chopped style's short bass), and a run is drawn only
+where it plays (not under a band hit held or shot), cutting the chord before it with *Shorten the
+chord before*. EDIT
 shows the take as written, the hits you edit. Thinned hits don't cut a long chord short: at full LENGTH a chord holds
 to the next chord actually played.
 
@@ -364,7 +377,9 @@ to the next chord actually played.
   (bottom to top, about 14 ms a note), STRUM DOWN (9 ms apart), or STRUM BOTH (down on the beat, up
   on the off-beats).
 - **SAME DICE EVERY** 1, 2, 4 or 8 bars: the chance hits repeat, so they make a pattern of their own.
-  Following the host, a bar's dice are the host bar's, so every pass of a host loop plays as the first.
+  Following the host, every pass of a host loop plays as the first did (with SAME DICE off the dice
+  count bars from where playback started, so a render from bar 5 is a performance of its own). A start
+  or a jump into the middle of a bar throws that bar's own dice and plays the take picked.
   **AUTO FILLS** every 4, 8 or 16 bars.
 
 ### TRANSPORT
@@ -381,7 +396,8 @@ last chorus's key change) brings its own scale (Ab major's for the Abmaj7, D Mix
 D7), and a sus chord's run passes through the third it suspends. A run walks from the top note
 sounding to the new chord's, never striking the note already sounding; with no room between them it
 starts further off, a sixth at most. It never takes the place of a written chord (only rests and
-soft hits lie under it), never runs over another change, never runs in a figure played as written,
+soft hits lie under it; in a style that walks into its changes, the gospel push and Sunday Ballad, it
+takes an offbeat chord's place), never runs over another change, never runs in a figure played as written,
 and AT MOST counts the host's bars, so a new section doesn't wait on the last one's run.
 **AMOUNT** is how many of the chances are taken; **AT MOST** every bar, every 2 bars or every 4.
 **LANDS ON** the new chord's top note, or any note of it. *Half step from below* ends the run a
@@ -613,6 +629,23 @@ gets no ambient sus chords, a tritone sub of a 7#5 is a 9th and is spelled flat,
 its eighths, funk's fills land on the One, ambient's fills don't push, Western Swing's four gets no
 fill-in chops, and salsa's ending comes on the and of 4. From the host, ENERGY and BLEND keep chord
 edits as on the panel, a loop's dice repeat, and 6/8 songs saved by 0.6.0 load on the 6/8 grid.
+
+**The eighth review (0.9.0).** Five more cold passes ([docs/sources.md](docs/sources.md), Part L).
+Band hits keep a stroke's own length under ACC, let a chord leading into the change through a HOLD or
+SHOT, and stay inside a section in SONG. On keys the alternating bass's fifth goes below the root when
+the one above would crowd the chord; DOUBLE can double the top again at a little cost; a three-note
+13th keeps its 13th; 4THS keeps every altered tone, gives a sus its 9th and leads without thinning;
+minor-ninth rubs give way to clean voicings; a dim triad's or a m7b5's inversions are named as
+themselves; a guitar's 9th grip has five strings; OCTAVES moves by steps and thirds; WEIRD's approach
+aims at a slash chord's bass and leaves a son montuno alone. Chic's chucking strikes its downbeat,
+the Dorian Groove stays on keys, the chicken scratch's accents ring, the Highlife bell is a timeline,
+the Quiet Bossa keeps its thumb, the gospel push walks into its changes, Freddie Green's four is
+even, and a swing comp or a jazz waltz fills in as it should at high energy. Fills compare the take's
+last bar, ambient's hold on, the left hand plays on through fills and fills down, a fixed figure's fill
+down is the figure, the cha-cha and bolero end on the 1, and endings end on their loudest chord. An
+organ's SPREAD bass stays in every chord, a locked section follows a change between 3/4 and 6/8, a
+mid-bar start throws its own dice, and the rolls page through long progressions, draw fills over the
+bar they fill and draw the left hand as it plays.
 
 **Left out for now.** A "+ GUITAR" second player layered over the first, and recording a part played
 in to a take.

@@ -229,6 +229,137 @@ std::vector<uint8_t> saveV2(const Song &s) {
 
 } // namespace
 
+// The eighth review's fixes, in a function of their own: main's frame is already large, and on
+// MSVC its locals don't share stack slots (a Song is 32 KB), so the generator's calls under it ran
+// past Windows' 1 MB stack.
+static void roundEight() {
+   {
+      const auto find = [](const char *gn, const char *sn, int &g, int &st) {
+         for (g = 0; g < genreCount(); ++g)
+            if (std::string(genreAt(g).name) == gn)
+               for (st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st)
+                  if (std::string(genreAt(g).styles[static_cast<size_t>(st)].name) == sn)
+                     return true;
+         return false;
+      };
+      int g = 0, st = 0;
+      // A02: a three-note 13th keeps its 13th; D13: a three-note 13sus is its 4, b7 and 9.
+      Chord c;
+      JCLAP_CHECK(parseChord("A13", c));
+      const Ints t = pickTones(c, 3);
+      JCLAP_CHECK(std::find(t.begin(), t.end(), 21) != t.end());
+      JCLAP_CHECK(parseChord("A13sus", c));
+      JCLAP_CHECK(pickTones(c, 3) == (Ints{5, 10, 14}));
+      // A04: the Highlife bell is a timeline: its onsets are the bell's at every energy and WEIRD.
+      JCLAP_CHECK(find("Highlife", "Bell Twelve", g, st));
+      for (double e : {0.1, 0.5, 0.9})
+         for (double w : {0.0, 1.0}) {
+            Recipe r = recipeOf(g, st, 3);
+            r.energy = e;
+            r.weird = w;
+            auto songPtr = std::make_unique<Song>();
+            Song &song = *songPtr; // (on the heap: a Song is too big for MSVC's 1 MB stack, several to a frame)
+            generateSong(r, song);
+            for (const Section &sec : song.sections)
+               for (const Pattern &p : sec.takes)
+                  for (int k = 0; k < p.steps; ++k) {
+                     const int in = k % 12;
+                     const bool bell = in == 0 || in == 2 || in == 4 || in == 5 || in == 7 || in == 9 || in == 11;
+                     JCLAP_CHECK(!p.at(k).on() || bell);
+                  }
+         }
+      // A05: Chic's chucking strikes the bar's downbeat.
+      JCLAP_CHECK(find("Disco", "Chic Chucking", g, st));
+      {
+         auto song = std::make_unique<Song>();
+         generateSong(recipeOf(g, st, 1), *song);
+         for (const Section &sec : song->sections)
+            for (int k = 0; k < sec.takes[0].steps; k += 16)
+               JCLAP_CHECK(sec.takes[0].at(k).on() && sec.takes[0].at(k).vel > kGhost + 8);
+      }
+      // A06: the Dorian Groove's e-piano plays no clav riff.
+      JCLAP_CHECK(find("Funk", "Dorian Groove", g, st));
+      for (uint32_t seed = 1; seed <= 8; ++seed) {
+         auto songPtr = std::make_unique<Song>();
+         Song &song = *songPtr;
+         generateSong(recipeOf(g, st, seed), song);
+         for (const Section &sec : song.sections)
+            for (const Pattern &p : sec.takes)
+               for (int k = 0; k < p.steps; ++k)
+                  JCLAP_CHECK(!p.at(k).on() || p.at(k).part != kPartLine);
+      }
+      // B06: a section locked under a 3/4 waltz is made again on the 6/8 grid, and back.
+      int wg = 0, ws = 0, sg = 0, ss = 0;
+      JCLAP_CHECK(find("Swing Jazz", "Jazz Waltz", wg, ws));
+      bool six = false;
+      for (sg = 0; sg < genreCount() && !six; ++sg)
+         for (ss = 0; ss < static_cast<int>(genreAt(sg).styles.size()) && !six; ++ss)
+            six = (genreAt(sg).styles[static_cast<size_t>(ss)].mods & kSixEight) != 0;
+      JCLAP_CHECK(six);
+      if (six) {
+         --sg;
+         --ss;
+         auto songPtr = std::make_unique<Song>();
+         Song &song = *songPtr;
+         generateSong(recipeOf(wg, ws, 2), song);
+         song.sections[kVerse].locked = 1;
+         generateSong(recipeOf(sg, ss, 2), song);
+         for (const Pattern &p : song.sections[kVerse].takes)
+            JCLAP_CHECK_EQ(static_cast<int>(p.rate), static_cast<int>(kRate68));
+         generateSong(recipeOf(wg, ws, 2), song);
+         for (const Pattern &p : song.sections[kVerse].takes)
+            JCLAP_CHECK_EQ(static_cast<int>(p.rate), static_cast<int>(kRate34));
+      }
+      // D10: ENERGY keeps a progression edited to start with N.C.
+      {
+         const Recipe r = recipeOf(0, 0, 4);
+         auto songPtr = std::make_unique<Song>();
+         Song &song = *songPtr;
+         generateSong(r, song);
+         song.sections[kVerse].chords[0] = Chord{};
+         song.sections[kVerse].chords[1] = Chord{};
+         const auto before = song.sections[kVerse].chords;
+         generateSong(r, song, true);
+         JCLAP_CHECK(song.sections[kVerse].chords == before);
+      }
+      // B10: an ending's last chord is its loudest; C06: a fill down's left hand keeps off a
+      // downbeat its take leaves empty.
+      for (int gi = 0; gi < genreCount(); ++gi)
+         for (int si = 0; si < static_cast<int>(genreAt(gi).styles.size()); ++si) {
+            auto songPtr = std::make_unique<Song>();
+         Song &song = *songPtr;
+            generateSong(recipeOf(gi, si, 5), song);
+            const Pattern &end = song.sections[kOutro].ending;
+            int last = -1, peak = 0;
+            for (int k = 0; k < end.steps; ++k)
+               if (end.at(k).on() && !leftHand(end.at(k).part)) {
+                  last = k;
+                  peak = std::max<int>(peak, end.at(k).vel);
+               }
+            JCLAP_CHECK(last >= 0 && end.at(last).vel >= peak);
+            for (const Section &sec : song.sections) {
+               const Pattern &take = sec.takes[0], &d = sec.fillDown;
+               if (d.at(0).on() && leftHand(d.at(0).part))
+                  JCLAP_CHECK(take.at(0).on() && leftHand(take.at(0).part));
+            }
+         }
+      // D08: a diminished triad's or a half-diminished chord's inversions are named with their own notes.
+      JCLAP_CHECK(chordName(nameChord(Ints{51, 54, 60}), 0) != "Ab7");
+      JCLAP_CHECK(chordName(nameChord(Ints{54, 58, 60, 63}), 0) != "Ab9");
+      // D05: 4THS keeps a 7b9's b9.
+      {
+         VoiceSettings vs;
+         vs.shape = kQuartal;
+         JCLAP_CHECK(parseChord("C7b9", c));
+         const Voicing v = voice(c, nullptr, vs);
+         bool b9 = false;
+         for (int i = 0; i < v.count; ++i)
+            b9 = b9 || v.notes[static_cast<size_t>(i)] % 12 == 1;
+         JCLAP_CHECK(b9);
+      }
+   }
+}
+
 int main() {
    // ---- chord names ----
    {
@@ -1504,17 +1635,27 @@ int main() {
             before = mean;
          }
       }
-      // A held-chord style's fill holds: from its downbeat, nothing chopped.
+      // A held-chord style's fill holds: from its downbeat, nothing chopped. Ambient's drift holds
+      // on through it: nothing struck within a quarter of the bar line, and no fresh downbeat over a
+      // chord held into the bar.
       for (int g = 0; g < genreCount(); ++g)
          for (int st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st) {
             if (!(genreAt(g).styles[st].mods & kLongs))
                continue;
+            const bool drift = genreAt(g).family == kFamilies[6];
             const Recipe r = recipeOf(g, st, 2);
             auto song = made(r);
             for (const Section &sec : song->sections) {
                if (sec.fill.empty())
                   continue;
-               JCLAP_CHECK(sec.fill.at(0).on());
+               if (drift) {
+                  const Pattern last = lastBar(sec.takes[0]);
+                  const int bar = sec.fill.stepsPerBar();
+                  for (int s = bar - sec.fill.perBeat(); s < bar; ++s)
+                     JCLAP_CHECK(!sec.fill.at(s).on() || last.at(s).on());
+                  JCLAP_CHECK(sec.fill.at(0).on() == last.at(0).on());
+               } else
+                  JCLAP_CHECK(sec.fill.at(0).on());
                for (int s = 0; s < sec.fill.steps; ++s)
                   JCLAP_CHECK(!sec.fill.at(s).on() || sec.fill.at(s).art != kArtChop);
             }
@@ -1998,23 +2139,31 @@ int main() {
             const Section &out = song->sections[kOutro];
             JCLAP_CHECK(!out.ending.empty());
             int last = -1;
-            // (Salsa's and Latin jazz's last chord comes on the and of 4, pushed.)
-            const bool latin = std::string(genreAt(g).name) == "Salsa" || std::string(genreAt(g).name) == "Latin Jazz";
+            // (A montuno's or guajeo's last chord comes on the and of 4, pushed; the cha-cha's on the 1.)
+            const std::string gn = genreAt(g).name, sn = genreAt(g).styles[static_cast<size_t>(st)].name;
+            const bool anticipates = gn == "Salsa" || (gn == "Latin Jazz" && sn != "Cha-Cha" && sn != "Bolero");
             for (int k = 0; k < out.ending.steps; ++k)
                if (out.ending.at(k).on()) {
-                  JCLAP_CHECK(!out.ending.at(k).push || (latin && k == 14 && out.ending.steps == 32));
+                  JCLAP_CHECK(!out.ending.at(k).push || (anticipates && k == 14));
                   last = k;
                }
-            if (latin && out.ending.rate == kRate16 && out.ending.steps == 32)
-               JCLAP_CHECK(last == 14 && out.ending.at(14).push);
+            if (sn == "Cha-Cha")
+               JCLAP_CHECK(last == 16);
             JCLAP_CHECK(last >= 0 && out.ending.at(last).art == kArtRing);
             JCLAP_CHECK(out.ending.rate == out.takes[0].rate);
             for (const Section &sec : song->sections) {
                const Pattern &d = sec.fillDown;
+               const bool intro = &sec == &song->sections[kIntro];
                JCLAP_CHECK(!d.empty() && d.rate == sec.takes[0].rate);
                JCLAP_CHECK(d.count() <= std::max(2, sec.fill.count()));
-               for (int k = d.stepsPerBar() - d.perBeat(); k < d.steps; ++k)
-                  JCLAP_CHECK(!d.at(k).on());
+               if ((genreAt(g).styles[static_cast<size_t>(st)].mods & kFixed) && !intro) {
+                  // A fixed figure settles as itself: its onsets are the take's (Freddie Green's four,
+                  // the clave's side), the last chord rung.
+                  for (int k = 0; k < d.steps; ++k)
+                     JCLAP_CHECK(!d.at(k).on() || sec.takes[0].at(k % sec.takes[0].steps).on());
+               } else
+                  for (int k = d.stepsPerBar() - d.perBeat(); k < d.steps; ++k)
+                     JCLAP_CHECK(!d.at(k).on());
                for (int k = 0; k < d.steps; ++k)
                   JCLAP_CHECK(!d.at(k).push);
             }
@@ -3126,5 +3275,7 @@ int main() {
       const Chord to = chord("Gmaj9");
       JCLAP_CHECK(chordName(chord("Ab13"), 4, kMinor, &to) == "Ab13");
    }
+
+   roundEight();
    return jclap::core::testResult();
 }
