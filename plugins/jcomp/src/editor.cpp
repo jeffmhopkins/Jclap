@@ -255,16 +255,16 @@ void readFeel(const EditorHost &host) {
 
 // The engine's own dice, for the bar of the view a step is in: the roll draws the hits the first
 // pass plays.
-double rollDice(const Pattern &p, int view, int what, int firstBar = 0) {
+double rollDice(const Section &sec, const Pattern &p, int view, int what, int firstBar = 0) {
    const int bar = firstBar + view / std::max(1, p.stepsPerBar());
-   return diceFor(kDiceSalt, diceBarOf(bar, gFeel.same), view % std::max<int>(1, p.steps), what);
+   return diceFor(sectionSalt(sec), diceBarOf(bar, gFeel.same), view % std::max<int>(1, p.steps), what);
 }
 
 // The roll's DENSITY thinning, by the engine's weights: the section's bar (`firstBar` on), and a
 // change of harmony mid-bar as the engine hears one (C7 to C9 is the same chord).
 bool thinnedInRoll(const Section &sec, const Pattern &p, int step, int view, int firstBar = 0) {
    const int bar = firstBar + view / std::max(1, p.stepsPerBar());
-   return thinnedBy(p, step, gFeel.density, rollDice(p, view, 20, firstBar),
+   return thinnedBy(p, step, gFeel.density, rollDice(sec, p, view, 20, firstBar),
                     !sameHarmony(sec.chordAt(bar, true), sec.chordAt(bar, false)), gFeel.fixed);
 }
 
@@ -391,14 +391,14 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
          if (more <= 0.0 || gFeel.fixed || hasLine(p) || prevChord.none() || heldOver(p, v % n) || (!onEighth && !fine) ||
              (offbeat && onBeat) || (onBeat && gFeel.swing > 0.55) ||
-             rollDice(p, v, 21, firstBar) >= chance)
+             rollDice(sec, p, v, 21, firstBar) >= chance)
             continue;
          h.vel = static_cast<uint8_t>(onBeat ? kSoft : kGhost + (onEighth ? 10 : 0));
          h.len = 1;
          h.art = more > 0.85 ? kArtAsWritten : kArtChop;
       } else if (!struck && thinnedInRoll(sec, p, v % n, v, firstBar)) {
          continue; // DENSITY below the middle drops the weakest hits; each bar's first stays
-      } else if (!struck && gFeel.live && h.chance < 100 && rollDice(p, v, 4, firstBar) * 100.0 >= h.chance) {
+      } else if (!struck && gFeel.live && h.chance < 100 && rollDice(sec, p, v, 4, firstBar) * 100.0 >= h.chance) {
          continue; // a hit's chance, with the engine's dice for the first pass
       }
       int64_t tick = static_cast<int64_t>(v) * stepTicks + (h.push ? kTicksPerBeat / 2 : 0);
@@ -479,7 +479,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
                held = chordAtView(start + k) == prevChord;
             if (!held)
                continue;
-            if (diceFor(kDiceSalt, diceBarOf(sbar, gFeel.same) + sbar * 7, start % n, 9) >= std::min(1.0, gFeel.runs * 1.6))
+            if (diceFor(sectionSalt(sec), diceBarOf(sbar, gFeel.same) + sbar * 7, start % n, 9) >= std::min(1.0, gFeel.runs * 1.6))
                continue;
             const int top = prev.top(), land = vc.top();
             Ints r = passingRun(top, land, len, key, scale, true, c, prevChord);
@@ -574,7 +574,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          played.notes[1] = vc.notes[static_cast<size_t>(vc.count - 1)];
          played.count = 2;
       } else if (h.part == kPartLine) {
-         const int low = vs.center - 6;
+         const int low = std::max(vs.lo, std::min(vs.center - 6, vs.hi - 23)); // (a riff's octave under the window's top)
          const int root = low + ((c.root - low) % 12 + 12) % 12;
          played.notes[0] = static_cast<uint8_t>(std::clamp(root + lineInterval(c, h.degree, key, scale), 0, 127));
          played.count = 1;
@@ -595,7 +595,9 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          const bool strong = (v % n) % strongSteps(p) == 0;
          const bool spreadDrop = !strong && vs.shape == kSpread && gFeel.onsets < 2 && !gFeel.sustainBass &&
                                  (c == prevChord || c == bassChord);
-         if (spreadDrop || (vs.shape == kGrip && hasLeftHand(p))) {
+         const bool organDrop = gFeel.sustainBass && hasLeftHand(p) &&
+                                played.notes[0] % 12 == (((c.bass >= 0 ? c.bass : c.root) % 12) + 12) % 12;
+         if (spreadDrop || (vs.shape == kGrip && hasLeftHand(p)) || organDrop) {
             int drop = 1;
             if (vs.shape == kGrip) {
                const int thumb = std::max({lastBass, bassNote(c, vs.floor), bassNote(c, vs.floor, true)});

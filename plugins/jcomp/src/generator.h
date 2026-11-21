@@ -413,6 +413,17 @@ inline bool keepsOff(const Pattern &p, int s) {
 }
 // An offbeat take: its chords keep off beats 1 and 3 (a skank on the ands, the one drop's on 2
 // and 4, the organ bubble), so nothing is added there.
+// A take that holds its chords: at least half its strokes last two steps or more, or ring.
+inline bool heldTake(const Pattern &p) {
+   int held = 0, hits = 0;
+   for (int s = 0; s < p.steps; ++s)
+      if (p.at(s).on() && !leftHand(p.at(s).part)) {
+         ++hits;
+         held += p.at(s).len >= 2 || p.at(s).art == kArtRing || p.at(s).art == kArtTopRings;
+      }
+   return hits > 0 && held * 2 >= hits;
+}
+
 inline bool offbeatTake(const Pattern &p) {
    const int strong = strongSteps(p);
    bool any = false;
@@ -739,7 +750,7 @@ inline void applyMods(Pattern &p, unsigned mods, Rng &rng, double pushChance = 0
       if (mods & kHalfTime && h.on() && (s / beat) % 2 == 1 && rng.chance(0.7))
          h = Hit{};
       // (A busy scratch's accents ring out: "occasional chords are allowed to ring out", Stewart.)
-      if (mods & kShorts && h.on() && h.len <= 1 && !leftHand(h.part) && !((mods & kBusy) && h.vel >= kAccent))
+      if (mods & kShorts && h.on() && h.len <= 1 && !leftHand(h.part) && !((mods & kBusy) && h.vel >= kAccent * 9 / 10))
          h.art = kArtChop;
       if (mods & kTopLine && h.on() && h.part == kPartChord && !onBeat(p, s) && rng.chance(0.35))
          h.part = rng.chance(0.5) ? kPartTop : kPartUpper;
@@ -874,7 +885,7 @@ inline void shapeEnergy(Pattern &p, double e, Rng &rng, bool fixed = false, unsi
    if (mods & kShorts)
       for (int s = 0; s < p.steps; ++s) {
          Hit &h = p.at(s);
-         if (h.on() && h.len <= 1 && !leftHand(h.part) && h.art == kArtAsWritten && !((mods & kBusy) && h.vel >= kAccent))
+         if (h.on() && h.len <= 1 && !leftHand(h.part) && h.art == kArtAsWritten && !((mods & kBusy) && h.vel >= kAccent * 9 / 10))
             h.art = kArtChop;
       }
    const double scale = 0.82 + 0.3 * e;
@@ -1129,14 +1140,20 @@ inline bool mutationFits(const char *tag, unsigned mods, const Pattern &parent, 
    if (genre && std::strcmp(genre, "Funk") == 0 && is("push it"))
       return false;
    if (mods & kFixed)
-      return is("accents") || is("chop it") || (is("let it ring") && !(mods & kShorts));
+      // (Not chopped: a figure that is the style keeps its lengths, Freddie Green's even four and the
+      // bossa's fingers as much as a montuno.)
+      return is("accents") || (is("let it ring") && !(mods & kShorts));
    // A skank is choked short: it never rings.
    if (mods & kShorts && is("let it ring"))
       return false;
+   // (Not into an offbeat take: the organ bubble's left hand stays off the beats.)
    if (is("left hand"))
-      return (mods & kLeftHand) || hasLeftHand(parent);
+      return ((mods & kLeftHand) || hasLeftHand(parent)) && !offbeatTake(parent);
    // Held chords stay held: no chops, no ghosts between them, nothing moved off the beat.
    if (mods & kLongs && (is("chop it") || is("busier") || is("ghosts") || is("shift")))
+      return false;
+   // Nor a take that holds its chords (Held Comp): chopped, it would be another style's stabs.
+   if (is("chop it") && heldTake(parent))
       return false;
    // An offbeat take (a skank, a one drop) keeps its strokes where they are, choked: nothing pushed
    // ahead, shifted or rung.
@@ -1392,9 +1409,11 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
             }
             break;
          }
+   // (Chopped as the take is: a busy scratch's accents still ring.)
    if (st.mods & kShorts)
       for (int s = 0; s < bar; ++s)
-         if (f.at(s).on() && f.at(s).len <= 1 && !leftHand(f.at(s).part))
+         if (f.at(s).on() && f.at(s).len <= 1 && !leftHand(f.at(s).part) &&
+             !((st.mods & kBusy) && f.at(s).vel >= kAccent * 9 / 10))
             f.at(s).art = kArtChop;
    const Hit lead = pushed >= 0 ? f.at(pushed) : Hit{};
    shapeEnergy(f, std::max(0.35, e), rng, false, st.mods, swungEighths(g, st));
@@ -1644,13 +1663,7 @@ inline Pattern makeEnding(const Recipe &r, const Pattern &base, double e) {
    // A style that holds its chords holds them in its ending too: the strokes before the last ring to
    // the next (the generic figures write one-step hits, a chop in a ballad).
    {
-      int held = 0, hits = 0;
-      for (int s = 0; s < base.steps; ++s)
-         if (base.at(s).on() && !leftHand(base.at(s).part)) {
-            ++hits;
-            held += base.at(s).len >= 2 || base.at(s).art == kArtRing || base.at(s).art == kArtTopRings;
-         }
-      if (!(st.mods & kShorts) && ((st.mods & kLongs) || (hits > 0 && held * 2 >= hits)))
+      if (!(st.mods & kShorts) && ((st.mods & kLongs) || heldTake(base)))
          for (int s = 0; s < f.steps; ++s)
             if (f.at(s).on() && !leftHand(f.at(s).part) && f.at(s).len <= 1 && f.at(s).art == kArtAsWritten)
                f.at(s).art = kArtRing;

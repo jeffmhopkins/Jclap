@@ -88,6 +88,9 @@ inline double diceFor(uint32_t salt, int bar, int step, int what) {
    const uint32_t h = mix(mix(salt, static_cast<uint32_t>(bar)), static_cast<uint32_t>(step * 64 + (what << 12)));
    return (h >> 8) * (1.0 / 16777216.0);
 }
+// Each section throws its own dice (from its seed), so VARY's take swaps and the chance hits differ
+// from section to section and song to song, as SAME DICE repeats them within one.
+inline uint32_t sectionSalt(const Section &s) { return mix(kDiceSalt, s.seed * 7u + 1u); }
 // The bar the dice are thrown for: SAME DICE's bars round, or (off) every bar its own, counted from 1.
 inline int diceBarOf(int bar, int same) { return same > 0 ? bar % same : bar + 1; }
 
@@ -865,7 +868,10 @@ private:
 
    // ---- the clock ----
 
-   double dice(int bar, int step, int what) const { return diceFor(salt_, bar, step, what); }
+   double dice(int bar, int step, int what) const {
+      return diceFor(salt_ == kDiceSalt ? sectionSalt(song_.sections[static_cast<size_t>(std::clamp(section_, 0, kSections - 1))]) : salt_,
+                     bar, step, what);
+   }
 
    // Whether the fill going into section `to` is the fill down: into a quieter section, or (INTRO
    // SETS UP) the intro's held chord into the verse.
@@ -1347,7 +1353,11 @@ private:
       k.dropBass = !target && h.part == kPartChord &&
                    ((!strong && settings_.voicing.shape == kSpread && settings_.onsets < 2 && !settings_.sustainBass &&
                      (c == lastChord_ || c == bassChord_)) ||
-                    (settings_.voicing.shape == kGrip && leftHandTake));
+                    (settings_.voicing.shape == kGrip && leftHandTake) ||
+                    // An organ's chord over its own left hand (the gospel shout) leaves the bass key
+                    // to the left hand rather than striking it again.
+                    (settings_.sustainBass && leftHandTake && v.count > 2 &&
+                     v.notes[0] % 12 == (((c.bass >= 0 ? c.bass : c.root) % 12) + 12) % 12));
       const int toStrong = strongSteps(p) - step % strongSteps(p);
       k.holdBeats = toStrong * stepBeats;
       const int64_t after = nextChange(chordRel);
@@ -1684,7 +1694,7 @@ private:
          v.count = 2;
       } else if (h.part == kPartLine) {
          // A line note: its degree of the chord, from the root in the octave round the window's middle.
-         const int low = settings_.voicing.center - 6;
+         const int low = std::max(settings_.voicing.lo, std::min(settings_.voicing.center - 6, settings_.voicing.hi - 23)); // (a riff's octave under the window's top)
          const int root = low + ((c.root - low) % 12 + 12) % 12;
          v.notes[0] = static_cast<uint8_t>(std::clamp(root + lineInterval(c, h.degree, settings_.key, settings_.scale), 0, 127));
          v.count = 1;
@@ -1757,6 +1767,10 @@ private:
       // hole in a held part.
       const double vary = (dice(diceBar_, k.step, 12) * 2.0 - 1.0) * settings_.lengths;
       len *= 1.0 + (h.art == kArtRing || h.art == kArtTopRings ? std::abs(vary) : vary);
+      // Freddie Green's four (an even figure choked short): beats 1 and 3 held a little longer than
+      // 2 and 4 (Pettersen, "Freddie Green fundamentals").
+      if (settings_.fixed && settings_.shorts && h.part == kPartChord && k.t % kTicksPerBeat == 0)
+         len *= (k.t / kTicksPerBeat) % 2 == 0 ? 1.1 : 0.8;
       const double shortest = 0.05 * tempo_ / 60.0;
       len = std::max(len, shortest);
       // A pushed chord is tied over the beat it anticipates (that beat's hit, if the same chord,
@@ -1803,6 +1817,9 @@ private:
                      (dice(diceBar_, k.step, 15) * 2.0 - 1.0) * settings_.velocityVar * 0.5;
          if (idx == n - 1 && n > 1)
             vv += settings_.topVoice;
+         // (And the four's low string only touched: the tenor note on top carries it.)
+         else if (idx == 0 && n > 2 && settings_.fixed && settings_.shorts && h.part == kPartChord)
+            vv -= 18.0;
          double l = len;
          int noteHand = hand;
          // (A pushed chord's inner notes still reach the beat it ties over: the beat isn't struck.)

@@ -151,7 +151,7 @@ inline const std::vector<Genre> &genres() {
        // its line from the minor pentatonic: the root, its octave, the b7, the octave (Hein's first
        // half-bar), then down through the 5th and 4th to the b3 (our reading); the chicken-scratch motor
        // (Stewart: muted, "occasional chords are allowed to ring out").
-       {{"X.....x...x.X...", 0.35}, {"..x..x.x..x..x.x", 0.55}, {"1.8.7.8.5.43...X|1.8.7.8.5.4.3..X", 0.7}, {"X.gxg.x.gXg.x.gx", 0.9}},
+       {{"X.....x...x.X...", 0.35}, {"X.x..x.x..x..x.x", 0.55}, {"1.8.7.8.5.43...X|1.8.7.8.5.4.3..X", 0.7}, {"X.gxg.x.gXg.x.gx", 0.9}},
        {{"X.gxg.x.gXg.xxxx", 0.8}},
        // Brown's static dominant vamp, the bridge a step up ("take it to the bridge"); Fela's Dorian i7.
        {{kMixolydian, {"C7#9|C7#9", "C9|C9|C9|C9", "F9|F9|C9|C9", "C9|F9|C9|F9", "D9|D9|D9|D9", "C9|C9|C7#9|C7#9"}},
@@ -192,7 +192,7 @@ inline const std::vector<Genre> &genres() {
        // Offbeat eighths over four on the floor; the 3-3-2 Rhodes figure; Rodgers' "chucking":
        // sixteenths, muted and ringing, on three-string inversions, the bar struck from its downbeat
        // ("Good Times" and "Le Freak" start on the one) with the motor between.
-       {{"..x...x...x...x.", 0.4}, {"x..x..x...x..x..", 0.6}, {"XxgxgXgxxxgxgXgx", 0.9}},
+       {{"..x...x...x...x.", 0.4}, {"x..x..x...x..x..", 0.6}, {"XxgxgXgxxxgxgXgx|Xxgxg.gxX.gxg.Xx", 0.9}},
        {{"XxgxgXgxgxgxgxxX", 0.9}},
        {{kDorian, {"Cm7|F13", "Cm7|F13|Cm7|F13", "Cm7|F7sus", "Cm7|F7sus|Cm7|F7sus", "Ebmaj7|Dm7|Cm7|Bb", "Cm7|F13|Cm7|Cm7"}}},
        {{"Chic Chucking", "Chucking", 116, kBusy, 0, 0b100},
@@ -303,14 +303,16 @@ inline const std::vector<Genre> &genres() {
        // Samba: MMA's four bars of piano, and Impro-Visor's offbeat eighths (in 2/2: a 2/4 samba at
        // 100 is 200 here, MMA's "double the tempo").
        {{"x...x...f.x.....", 0.6}, {"x.....x.....x...|....x.....x.....", 0.7}, {"x.....x.f...x...|b...x...f.x.....", 0.8},
-        {"x.....x.x...x...|..x.....x...x...|x.....x...x...x.|..x.x.......x...", 0.75}, {"..x...x...x...x.", 0.55}},
+        {"x.....x.x...x...|..x.....x...x...|x.....x...x...x.|..x.x.......x...", 0.75}, {"..x...x...x...x.", 0.55},
+        // Quiet Bossa's: the batida thinned (the thumb on 1 and 3, a chord or two between).
+        {"x.......f.x.....|x...x...f.......", 0.35}},
        {{"x...x...f.x...x.", 0.6}},
        // Imaj7-II7(#11) and the "Ipanema" turn (Imaj7-II7-ii7-bII7); ii-V chains for the bridge.
        {{kMajor, {"Cmaj7|Cmaj7|C6/9|C6/9", "Cmaj7|Cmaj7|D7#11|D7#11|Dm7|Db7#11|Cmaj7|Db7#11", "Dm7|G7|Cmaj7|Cmaj7", "Cmaj7|D7#11|Dm7|Db7#11", "Em7|A7b9|Dm7|G7|Fm7|Bb7|Cmaj7|Cmaj7", "Cmaj7|Cmaj7|C6/9|C6/9"}}},
        // The guitar's voicing whoever plays: the thumb's bass under the fingers' three-note chord.
        {{"Batida", "Batida", 130, kFixed, 0, 0b001, -1, kSpread, 4, 50, 74, 62},
         {"Two-Bar Bossa", "Two Bar", 138, kFixed, 0, 0b100, -1, kSpread, 4, 50, 74, 62},
-        {"Quiet Bossa", "Quiet", 120, kSparse | kRich | kFixed, 0, 0b101, -1, kSpread, 4, 50, 74, 62},
+        {"Quiet Bossa", "Quiet", 120, kRich | kFixed, 0, 0b100000, -1, kSpread, 4, 50, 74, 62},
         {"Samba", "Samba", 200, kPushes, 0, 0b11000}},
        "11, 12, 60, 61, 62"},
       {"Salsa", kFamilies[2], kMontuno, 0.5, 0,
@@ -322,9 +324,10 @@ inline const std::vector<Genre> &genres() {
        {{"x.....x.....x...|....x...x.......", 0.2}, {"x...x.x...x...x.|..x...x...x...x.", 0.6}, {"..x...x...x...x.|x...x.x...x...x.", 0.6},
         {"....x...x.......|x.....x.....x...", 0.2}},
        {{"x...x.x...x.x.x.", 0.8}},
-       // The son montuno I-IV-V-IV; ii-V-I-IV; a minor i-iv-V7. Changes anticipated on the "and" of 4.
-       {{kMajor, {"C|F|G7|F", "C|F|G7|F", "Dm7|G7|C|C", "Dm7|G7|C|F", "Am|Dm|E7|E7", "C|F|G7|C"}},
-        {kMinor, {"Cm|Fm|G7|G7", "Cm|Fm|G7|Fm", "Ab|G7", "Cm|Fm|G7|Cm", "Fm|Bb7|Eb|G7", "Cm|Fm|G7|Cm"}}},
+       // The son montuno I-IV-V-IV in one clave (two chords a bar, as Moore's guajeos change: the and
+       // of 2 anticipates beat 3); ii-V-I-IV; a minor i-iv-V7. The pre and bridge change by the bar.
+       {{kMajor, {"C F|G7 F", "C F|G7 F", "Dm7|G7|C|C", "Dm7 G7|C F", "Am|Dm|E7|E7", "C F|G7 F|C|C"}},
+        {kMinor, {"Cm Fm|G7 G7", "Cm Fm|G7 Fm", "Ab|G7", "Cm Fm|G7 Cm", "Fm|Bb7|Eb|G7", "Cm Fm|G7 Fm|Cm|Cm"}}},
        {{"Montuno 2-3", "2-3", 180, kPushes | kFixed, 0, 0b1010},
         {"Montuno 3-2", "3-2", 180, kPushes | kFixed, 0, 0b101},
         {"Minor Montuno", "Minor", 170, kPushes | kFixed, 1, 0b1010}},
@@ -490,13 +493,13 @@ inline const std::vector<Genre> &genres() {
        // Palm-wine two-finger interlock (the thumb on eighths, a finger on sixteenths between: the
        // Koo Nimo article: the thumb alternating root and fifth, the finger a figure on the top
        // strings); the dance-band 3-3-2; the guitar on the 12/8 bell.
-       {{"b.x.f3b5f.x.b3f5", 0.75}, {"x..x..x.x..x..x.", 0.6}, {"x.x.xx.x.x.x", 0.7}},
+       {{"b.x.f3b5f.x.b3f5", 0.75}, {"x..x..x.x..x..x.", 0.6}, {"X.x.xx.x.x.x", 0.7}},
        {{"b.x.f3b5f.x.xxxx", 0.7}, {"x.x.xx.xxxxx", 0.7}},
        // Dagomba patterns "emphasize two chords, the tonic major and the dominant seventh".
        {{kMajor, {"C|G7", "C|G7|C|G7", "F|G7", "C|F|C|G7", "F|C|G7|C", "C|G7|C|C"}}},
        {{"Palm-Wine", "Palm-Wine", 108, 0, 0, 0b001},
         {"Dance Band", "Dance Band", 120, 0, 0, 0b010},
-        {"Bell Twelve", "12/8", 112, kTriplet | kFixed}},
+        {"Bell Twelve", "12/8", 112, kTriplet | kFixed, 0, 0, -1, kGrip, 3, 52, 76, 64}},
        "7, 26, 27, 28"},
 
       // ---- Ambient ----
