@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace jtunnel::net {
 
@@ -45,8 +46,8 @@ public:
    UdpSocket(const UdpSocket &) = delete;
    UdpSocket &operator=(const UdpSocket &) = delete;
 
-   // Binds to `port` on every interface (0: any free port).
-   bool open(uint16_t port);
+   // Binds to `port` on every interface, or only on loopback (0: any free port).
+   bool open(uint16_t port, bool loopbackOnly = false);
    void close();
    bool isOpen() const { return fd_ != kInvalid; }
    uint16_t localPort() const;
@@ -54,6 +55,54 @@ public:
    bool sendTo(const Address &to, const void *data, size_t size);
    // Waits up to timeoutMs for a packet. Returns its size, 0 on timeout, -1 on error.
    int receive(void *buffer, size_t capacity, Address &from, int timeoutMs);
+
+private:
+#ifdef _WIN32
+   using Handle = uintptr_t;
+   static constexpr Handle kInvalid = ~static_cast<uintptr_t>(0);
+#else
+   using Handle = int;
+   static constexpr Handle kInvalid = -1;
+#endif
+   Handle fd_ = kInvalid;
+};
+
+// A TCP socket on this computer only (127.0.0.1), for the local state server and its clients.
+// Non-blocking once open.
+class TcpSocket {
+public:
+   TcpSocket() = default;
+   ~TcpSocket() { close(); }
+   TcpSocket(TcpSocket &&other) noexcept : fd_(other.fd_) { other.fd_ = kInvalid; }
+   TcpSocket &operator=(TcpSocket &&other) noexcept {
+      if (this != &other) {
+         close();
+         fd_ = other.fd_;
+         other.fd_ = kInvalid;
+      }
+      return *this;
+   }
+   TcpSocket(const TcpSocket &) = delete;
+   TcpSocket &operator=(const TcpSocket &) = delete;
+
+   // Listens on 127.0.0.1:port.
+   bool listenLoopback(uint16_t port);
+   // A waiting connection, if there is one.
+   bool accept(TcpSocket &out);
+   // Connects to 127.0.0.1:port, waiting up to timeoutMs (tests and tools).
+   bool connectLoopback(uint16_t port, int timeoutMs);
+   void close();
+   bool isOpen() const { return fd_ != kInvalid; }
+   uint16_t localPort() const;
+
+   // Bytes read or written, 0 if it would have to wait, -1 once the connection is gone.
+   int read(void *buffer, size_t capacity);
+   int write(const void *data, size_t size);
+
+   // Waits up to timeoutMs for any of the sockets to have something to read (or a connection to
+   // accept), and for those in `writers` to take more.
+   static void wait(const std::vector<const TcpSocket *> &readers, const std::vector<const TcpSocket *> &writers,
+                    int timeoutMs);
 
 private:
 #ifdef _WIN32

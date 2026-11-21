@@ -5,6 +5,7 @@
 #include <deque>
 
 #include "discovery.h"
+#include "state.h"
 
 namespace jtunnel {
 namespace {
@@ -17,6 +18,11 @@ constexpr auto kResolveEvery = std::chrono::seconds(2);
 // A listener that stops asking is dropped after this.
 constexpr auto kSubscriberTimeout = std::chrono::seconds(3);
 constexpr auto kReceivingTimeout = std::chrono::seconds(1);
+// The state thread's tick, how often it reads the host's transport into the "clock" key (30 times a
+// second, smooth enough for a beat light), and how often it renews its own key.
+constexpr int kStateTickMs = 10;
+constexpr auto kClockEvery = std::chrono::milliseconds(33);
+constexpr auto kOwnKeyEvery = std::chrono::seconds(1);
 
 bool sameName(const std::string &a, const char *b) {
    size_t i = 0;
@@ -52,9 +58,16 @@ bool Link::start(LinkState &state, uint64_t owner, const ImpairSettings &impair)
    resolvedFor_.clear();
    target_ = {};
    subscribers_.clear();
+   assembler_.reset();
+   hasStateStream_ = false;
+   state.state.clear();
+   // No local server (every port taken) isn't fatal: the tunnel still works.
+   server_.start(state.state);
+   state.statePort = server_.port();
    running_ = true;
    receiveThread_ = std::thread([this] { receiveLoop(); });
    sendThread_ = std::thread([this] { sendLoop(); });
+   stateThread_ = std::thread([this] { stateLoop(); });
    return true;
 }
 
@@ -68,6 +81,10 @@ void Link::stop() {
       receiveThread_.join();
    if (sendThread_.joinable())
       sendThread_.join();
+   if (stateThread_.joinable())
+      stateThread_.join();
+   server_.stop();
+   script_.close();
    dropTarget();
    if (discoveryHeld_) {
       Discovery::instance().unpublish(owner_);
@@ -80,6 +97,96 @@ void Link::stop() {
       state_->listeners = 0;
       state_->connection = static_cast<int>(Connection::None);
       state_->port = 0;
+      state_->statePort = 0;
+      state_->stateClients = 0;
+      state_->scriptConnected = false;
+   }
+}
+
+void Link::stateLoop() {
+   // A new stream id for each start, so receivers know to forget what an earlier run sent.
+   StateBroadcaster broadcaster(static_cast<uint32_t>(owner_ * 2654435761u) ^
+                                static_cast<uint32_t>(Clock::now().time_since_epoch().count()));
+   std::vector<std::vector<uint8_t>> packets;
+   std::vector<net::Address> to, known;
+   bool wasReceiving = state_->receiving.load();
+   auto lastClock = Clock::now() - kClockEvery, lastOwn = Clock::now() - kOwnKeyEvery, lastTick = Clock::now();
+   const std::string host = net::hostName();
+   while (running_) {
+      const bool receiving = state_->receiving.load();
+      if (receiving != wasReceiving) {
+         // What one mode had means nothing in the other.
+         wasReceiving = receiving;
+         state_->state.clear();
+         known.clear();
+      }
+      std::string name, target;
+      {
+         std::lock_guard<std::mutex> lock(state_->mutex);
+         name = state_->sendName;
+         target = state_->listenTarget;
+      }
+      const auto now = Clock::now();
+
+      if (receiving) {
+         script_.close();
+         state_->scriptConnected = false;
+         if (now - lastOwn >= kOwnKeyEvery) {
+            lastOwn = now;
+            const net::Address source{state_->source.load(), state_->sourcePort.load()};
+            state_->state.put("receiver", "{\"tunnel\":" + jsonQuote(target) + ",\"host\":" + jsonQuote(host) +
+                                             ",\"connected\":" +
+                                             (state_->connection.load() == static_cast<int>(Connection::Receiving)
+                                                 ? "true"
+                                                 : "false") +
+                                             ",\"source\":" + jsonQuote(source.valid() ? source.toString() : "") + "}");
+         }
+         std::this_thread::sleep_for(std::chrono::milliseconds(kStateTickMs));
+      }
+      else {
+         if (!script_.isOpen())
+            script_.open();
+         // Waits for the extension up to a tick.
+         if (script_.isOpen())
+            script_.poll(state_->state, name, kStateTickMs);
+         else
+            std::this_thread::sleep_for(std::chrono::milliseconds(kStateTickMs));
+         state_->scriptConnected = script_.connected();
+         if (now - lastClock >= kClockEvery) {
+            lastClock = now;
+            ClockReading clock;
+            for (int tries = 0; tries < 4 && !state_->clock.read(clock); ++tries) {
+            }
+            state_->state.put("clock", clockJson(clock));
+         }
+         if (now - lastOwn >= kOwnKeyEvery) {
+            lastOwn = now;
+            state_->state.put("sender", "{\"tunnel\":" + jsonQuote(name) + ",\"host\":" + jsonQuote(host) +
+                                           ",\"extension\":" + (script_.connected() ? "true" : "false") + "}");
+         }
+         // Everything to a listener that wasn't there last time, what changed to the rest.
+         to.clear();
+         {
+            std::lock_guard<std::mutex> lock(subscribersMutex_);
+            for (const Subscriber &sub : subscribers_)
+               to.push_back(sub.address);
+         }
+         bool newcomer = false;
+         for (const net::Address &a : to)
+            newcomer = newcomer || std::find(known.begin(), known.end(), a) == known.end();
+         known = to;
+         const auto tick = Clock::now();
+         const int elapsedMs = static_cast<int>(
+            std::clamp<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(tick - lastTick).count(), 1, 1000));
+         lastTick = tick;
+         packets.clear();
+         broadcaster.collect(state_->state, newcomer, elapsedMs, packets);
+         if (!to.empty())
+            for (const std::vector<uint8_t> &p : packets)
+               for (const net::Address &a : to)
+                  socket_.sendTo(a, p.data(), p.size());
+      }
+      state_->stateClients = server_.clients();
    }
 }
 
@@ -160,6 +267,24 @@ void Link::handle(const uint8_t *data, int size, const net::Address &from, Clock
       lastAudio_ = now;
       return;
    }
+   case PacketType::State: {
+      if (!receiving_ || from != target_)
+         return;
+      StatePiece piece;
+      if (!parseState(data, static_cast<size_t>(size), piece))
+         return;
+      if (!hasStateStream_ || piece.streamId != stateStream_) {
+         // The sender started again: what it said before may not hold now.
+         hasStateStream_ = true;
+         stateStream_ = piece.streamId;
+         assembler_.reset();
+         state_->state.clear();
+      }
+      std::string key, value;
+      if (assembler_.add(piece, key, value))
+         state_->state.put(key, value);
+      return;
+   }
    case PacketType::Subscribe: {
       char name[kMaxTunnelName + 1];
       if (receiving_ || sendName_.empty() || !parseSubscribe(data, static_cast<size_t>(size), name, sizeof(name)))
@@ -196,7 +321,11 @@ void Link::dropTarget() {
    }
    target_ = {};
    resolvedFor_.clear();
+   assembler_.reset();
+   hasStateStream_ = false;
    if (state_) {
+      if (state_->receiving.load())
+         state_->state.clear();
       state_->ring.clear();
       state_->source = 0;
       state_->sourcePort = 0;

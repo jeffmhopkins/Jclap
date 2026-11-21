@@ -2,7 +2,8 @@
 
 # JTunnel
 
-Sends a track's audio and MIDI to other JTunnel instances on the network, or plays what they send.
+Sends a track's audio and MIDI to other JTunnel instances on the network, or plays what they send,
+with Bitwig's clip grid, transport and device beside them for a stream overlay.
 
 [![CI](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml/badge.svg)](https://github.com/jeffmhopkins/Jclap/actions/workflows/build.yml) [![CLAP: audio effect](https://img.shields.io/badge/CLAP-audio%20effect-blue)](https://github.com/free-audio/clap) [![GUI: Visage](https://img.shields.io/badge/GUI-Visage-blue)](#panel) [![codec: Opus](https://img.shields.io/badge/codec-Opus-blue)](https://opus-codec.org) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](../../LICENSE)
 
@@ -69,6 +70,7 @@ it under **REACHABLE AT**, such as `192.168.1.20:47000`.
   waits, picks it up again (on whatever port it comes back on) and keeps its buffer.
 - **Threads:** the audio thread never touches the network. The sender codes frames and queues
   packets for a send thread; a receive thread puts frames in a lock-free ring the audio thread reads.
+  A third thread runs the [side channel](#side-channel-the-daws-state) and its local server.
 
 ## Parameters
 
@@ -101,6 +103,89 @@ machine's effects, not sample-tight overdubs across machines.
 > [!NOTE]
 > A stream runs in real time. JTunnel tells the host so (CLAP's render extension); an offline
 > bounce, faster than real time, won't capture what a receiver is receiving.
+
+## Side channel: the DAW's state
+
+Beside the audio and MIDI, a tunnel carries what the DAW is doing, so a streaming app on the far
+machine can draw the clip launcher grid with clips blinking as they play, the transport, the beat,
+meters and the selected device's controls.
+
+![The viewer page, showing a demo state](docs/viewer.png)
+
+<sub>The viewer page every JTunnel serves, here drawing a made-up project.</sub>
+
+**In Bitwig.** A plugin can't see the clip launcher, so a controller extension reads it:
+
+1. Copy [bitwig/JTunnel.control.js](bitwig/JTunnel.control.js) to
+   `Documents/Bitwig Studio/Controller Scripts/`.
+2. In **Settings > Controllers**, add **Jclap > JTunnel**. It needs no MIDI ports.
+3. Every JTunnel sender on this computer picks it up within a second; its panel says **Bitwig
+   extension connected**.
+
+The extension's settings (under the controller in **Settings > Controllers**) set the grid's size
+(**Tracks** and **Scenes**, 1 to 32, 16 by default), **Follow** (**Selection** or **Off**), **Only to
+tunnel** (one sender's name, or empty for all of them) and, under **Send**, a switch for each kind
+of state below. A coloured frame in Bitwig's launcher shows the part of the grid that goes out.
+
+**Following the screen.** Bitwig doesn't tell extensions where its own window is scrolled, so the
+grid follows the selection instead: the tracks keep the selected track in view, and the scenes
+scroll when the selected clip leaves them. Click a clip (or a track) in Bitwig and the grid moves to
+it. With **Follow** off it stays where it is.
+
+**Without the extension**, or in another DAW, a sender still sends the `clock` key from the host's
+transport (tempo, playing, recording, bar and beat), which every CLAP host gives a plugin.
+
+**On the receiving machine**, each JTunnel serves its state on this computer only (127.0.0.1), on
+the first free port from 47300 (up to 47315), shown under **VIEWER AND API** on the panel. A
+sender serves its own state the same way.
+
+| Request | Answer |
+|---|---|
+| `GET /` | The viewer page above, for a browser or a browser source |
+| `GET /state` | Every key and its message, as one JSON object |
+| `GET /state/<key>` | One key's message, such as `/state/transport` (404 if there's none) |
+| `GET /ws` | A WebSocket: `{"type":"snapshot","state":{...}}` when it opens (and again if the state starts over, as when the sender restarts), then `{"type":"update","key":"track/3","value":{...}}` for every change |
+
+```js
+const state = {};
+const ws = new WebSocket("ws://127.0.0.1:47301/ws");
+ws.onmessage = (e) => {
+  const m = JSON.parse(e.data);
+  if (m.type === "snapshot") Object.assign(state, m.state);   // (clear it first)
+  else state[m.key] = m.value;
+};
+```
+
+Each key's message is the whole of that thing, never a change to it, so a client only ever replaces
+a key. HTTP answers allow any origin (`Access-Control-Allow-Origin: *`), and a request whose `Host`
+isn't this computer is refused. The keys:
+
+| Key | From | What's in it |
+|---|---|---|
+| `clock` | the host (any DAW) | `playing`, `recording`, `looping`, `tempo`, `beats` (song position in quarter notes), `seconds`, `bar` and `beat` (from 1), `beatPhase` (0 to 1 through the beat), `timeSignature` `[4,4]`, `loop` `[start,end]`. 30 times a second while playing |
+| `sender` / `receiver` | JTunnel | `tunnel`, `host`; a sender's `extension` (whether Bitwig's is talking), a receiver's `connected` and `source` |
+| `project` | extension | `name`, `layout` (the panel layout), `engine` (audio engine on), `host` (Bitwig's version) |
+| `transport` | extension | `playing`, `recording` (arranger record), `arrangerOverdub`, `launcherOverdub`, `automationWrite` (`mode`, `arranger`, `launcher`, `overridden`), `loop`, `loopStart`, `loopLength`, `punchIn`, `punchOut`, `metronome`, `preRoll`, `fill`, `tempo`, `tempoText`, `timeSignature`, `position` and `positionText` ("3.2.1.00"), `seconds`, `playStart`, `launchQuantization`, `postRecordingAction`, `crossfade` |
+| `grid` | extension | The window sent: `tracks` and `scenes` (its size), `trackOffset` and `sceneOffset` (where it starts in the project), `trackCount` and `sceneCount` (the project's), `follow`, `selectedTrack` and `selectedScene` (-1 for none) |
+| `scenes` | extension | `items`: each scene's `index` (in the project), `exists`, `name`, `color`, `clips` |
+| `track/0` ... `track/N` | extension | One per column of the grid: `index` (in the project), `exists`, `name`, `color` (`#rrggbb`), `type`, `group`, `selected`, `armed`, `monitor`, `mute`, `solo`, `mutedBySolo`, `active`, `volume` and `pan` (0 to 1) with `volumeText` and `panText`, `stopped`, `stopQueued`, `playing` (the scene playing, or -1), and `slots`: each clip's `scene`, `name`, `color`, `hasContent`, `state` (`empty`, `stopped`, `playing` or `recording`), `queued` (`play`, `record`, `stop` or null: blink it) and `selected` |
+| `mixer` | extension | `master` and `fx` (the effect tracks), each with the channel fields above |
+| `meters` | extension | Peak levels, 0 to 1, `[left, right]`: `tracks` (one per grid column), `fx`, `master` |
+| `notes` | extension | Notes sounding now, `[pitch, velocity]`: `tracks` (one list per grid column), `master` |
+| `device` | extension | The selected device: `exists`, `track`, `trackColor`, `name`, `preset`, `category`, `creator`, `enabled`, `plugin`, `windowOpen`, `pinned`, `page` (`index`, `name`, `names`), `params` (its 8 remote controls: `name`, `value` and `modulated` 0 to 1, `text`, `exists`) and `chain` (the track's devices: `name`, `enabled`, `selected`) |
+| `clip` | extension | The selected launcher clip: `exists`, `track`, `scene`, `name`, `color`, `playing`, `playingStep`, `playStart`, `loopStart`, `loopLength`, `loop` |
+| `markers` | extension | `items`: the arranger's cue markers, `name`, `position` (beats), `color` |
+
+A key the extension's settings turn off is dropped from every receiver; so are all its keys when
+Bitwig closes or the extension is removed.
+
+**On the wire**, state goes in its own packets beside the stream's, to everyone listening: what
+changed at once, and everything again about once a second, so a lost packet is put right within a
+second. A message too long for one packet (a track with many clips) goes in pieces. It is small:
+a few kilobytes a second while things change. Receivers older than 0.13 ignore these packets.
+
+The extension talks to the senders on its own computer over OSC on loopback: it listens on UDP port
+47250, and each sender says hello from one of 47251 to 47266.
 
 ## macOS Local Network
 
@@ -156,9 +241,14 @@ parameter, so a project can automate it.
 
 **OUTPUT** has **THRU**, the receiver's **LEVEL**, and input and output meters.
 
+**STATE** along the bottom is the [side channel](#side-channel-the-daws-state). Its light flashes for
+each change; beside it, a sender says whether the Bitwig extension is connected and a receiver how
+much state has come from the sender, and how many viewers are reading it. **VIEWER AND API** is the
+address to open in a browser, or to point a streaming app at.
+
 > [!TIP]
 > To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
-> `build/plugins/jtunnel/jtunnel-screenshot plugins/jtunnel/docs/panel.png`. Add `1440 1112 send` for
+> `build/plugins/jtunnel/jtunnel-screenshot plugins/jtunnel/docs/panel.png`. Add `1440 1264 send` for
 > the sender's view, and `idle` after that to see either before anything connects (or `taken` for a
 > sender whose name is in use, `midi` for a tunnel carrying MIDI only, or `filter` for the MIDI
 > filter open).
@@ -171,8 +261,13 @@ Wi-Fi link with jitter, 60 ms stalls and 2% loss, for 90 simulated seconds: the 
 the clock offset, stop dropping out, keep the tone at its level and deliver a note with its length
 intact, and a MIDI-only link that must deliver a note within 30 ms. It also sends every kind of
 MIDI event through a sender and receiver, a 1000-byte SysEx dump among them, and checks they come
-out in order and whole, and that a dump missing a piece never comes out. `jtunnel-plugin-tests` runs two whole plugins in one process over real UDP on the loopback
+out in order and whole, and that a dump missing a piece never comes out. For the side channel it
+checks the JSON checks, a long state message cut into pieces and put back together through loss,
+repeats and reordering, a store of 25 keys sent over a link losing one packet in five that ends up
+identical on the far side, the bar and beat in 4/4 and 6/8, and the OSC and WebSocket pieces. `jtunnel-plugin-tests` runs two whole plugins in one process over real UDP on the loopback
 interface, one sending a tone, a note, CC, pitch bend, both kinds of aftertouch, a program change,
 an MPE voice, clock, SysEx and a note expression, the other finding the tunnel by name and playing
 them, with the sender's MIDI filter holding transport back and the receiver's holding channel 10
-back.
+back. Then a stand-in for the Bitwig extension answers the sender's hello with a track of 64 clips
+and the scenes, the host's transport plays, and all of it must come out of the receiver's local
+server, over HTTP and a WebSocket, which must also refuse a request for another host.

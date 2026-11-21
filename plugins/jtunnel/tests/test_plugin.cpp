@@ -17,7 +17,10 @@
 
 #include "editor.h"
 #include "params.h"
+#include "net.h"
 #include "protocol.h"
+#include "script_link.h"
+#include "state_server.h"
 
 extern "C" const clap_plugin_entry_t clap_entry;
 
@@ -50,6 +53,30 @@ bool loadState(jclap::core::TestHost &h, const std::vector<uint8_t> &bytes) {
                         return static_cast<int64_t>(k);
                      }};
    return state->load(h.plugin(), &is);
+}
+
+// A GET to the local state server; the body, or "" if it didn't answer.
+std::string httpGet(uint16_t port, const std::string &path, const std::string &extraHeaders = {}) {
+   jtunnel::net::TcpSocket s;
+   if (!s.connectLoopback(port, 1000))
+      return {};
+   const std::string request = "GET " + path + " HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port) + "\r\n" +
+                               extraHeaders + "\r\n";
+   s.write(request.data(), request.size());
+   std::string reply;
+   char buffer[4096];
+   const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+   while (std::chrono::steady_clock::now() < until) {
+      const int n = s.read(buffer, sizeof(buffer));
+      if (n < 0)
+         break;
+      if (n == 0) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(5));
+         continue;
+      }
+      reply.append(buffer, static_cast<size_t>(n));
+   }
+   return reply;
 }
 
 } // namespace
@@ -185,6 +212,118 @@ int main() {
    for (const std::string &n : rx->tunnelNames())
       listed = listed || n == name;
    JCLAP_CHECK(listed);
+
+   // The side channel. A stand-in for the Bitwig extension listens where the real one would, takes
+   // the sender's hello and sends it a track and the scenes; the host's transport plays. All of it
+   // comes out of the receiver's local server, over HTTP and a WebSocket.
+   {
+      jtunnel::net::UdpSocket script;
+      const bool scriptPort = script.open(jtunnel::ScriptLink::kScriptPort, true);
+      if (!scriptPort)
+         std::printf("port %d is taken (Bitwig running?): the extension part is skipped\n",
+                     jtunnel::ScriptLink::kScriptPort);
+      std::string clipNames;
+      for (int i = 0; i < 64; ++i)
+         clipNames += std::string(i ? "," : "") + "{\"name\":\"Clip " + std::to_string(i) + "\",\"state\":\"stopped\"}";
+      const std::string track = "{\"name\":\"Drums\",\"slots\":[" + clipNames + "]}"; // several packets long
+      const std::string scenes = R"({"items":[{"name":"Verse"},{"name":"Chorus"}]})";
+      sender.setTransport(128.0, 0.0, true);
+      bool helloHeard = false, gotTrack = false, gotClock = false, gotScenes = false;
+      uint16_t rxPort = 0;
+      const auto begin = std::chrono::steady_clock::now();
+      while (std::chrono::steady_clock::now() - begin < std::chrono::seconds(8)) {
+         if (scriptPort) {
+            uint8_t packet[2048];
+            jtunnel::net::Address from;
+            const int n = script.receive(packet, sizeof(packet), from, 0);
+            std::string address, tags;
+            std::vector<int32_t> ints;
+            std::vector<std::string> strings;
+            if (n > 0 && jtunnel::ScriptLink::parse(packet, static_cast<size_t>(n), address, tags, ints, strings) &&
+                address == "/jtunnel/hello" && tags == "is" && strings[0] == name) {
+               helloHeard = true;
+               const std::string a[2] = {"track/0", track}, b[2] = {"scenes", scenes};
+               for (const std::string &m : {jtunnel::ScriptLink::message("/jtunnel/state", "ss", nullptr, a),
+                                            jtunnel::ScriptLink::message("/jtunnel/state", "ss", nullptr, b),
+                                            jtunnel::ScriptLink::message("/jtunnel/alive", "", nullptr, nullptr)})
+                  script.sendTo(jtunnel::net::Address::loopback(static_cast<uint16_t>(ints[0])), m.data(), m.size());
+            }
+         }
+         sender.process(block, txIn, txOut);
+         receiver.process(block, rxIn, rxOut);
+         next += std::chrono::microseconds(5333);
+         std::this_thread::sleep_until(next);
+         rxPort = rx->status().statePort;
+         if (rxPort && (frame += block) % (block * 40) == 0) {
+            const std::string state = httpGet(rxPort, "/state");
+            gotTrack = state.find("\"track/0\":" + track) != std::string::npos;
+            gotScenes = state.find("\"scenes\":" + scenes) != std::string::npos;
+            gotClock = state.find("\"clock\":{\"available\":true,\"playing\":true") != std::string::npos &&
+                       state.find("\"tempo\":128.000") != std::string::npos;
+            if (gotClock && (!scriptPort || (gotTrack && gotScenes)))
+               break;
+         }
+      }
+      std::printf("side channel: hello %d, track %d, scenes %d, clock %d, receiver's server on %u\n", helloHeard,
+                  gotTrack, gotScenes, gotClock, rxPort);
+      JCLAP_CHECK(rxPort >= jtunnel::StateServer::kFirstPort);
+      JCLAP_CHECK(gotClock);
+      if (scriptPort) {
+         JCLAP_CHECK(helloHeard && gotTrack && gotScenes);
+         JCLAP_CHECK(tx->status().extension);
+      }
+      // One key; a missing one; a request whose Host isn't this computer.
+      const std::string one = httpGet(rxPort, "/state/clock");
+      JCLAP_CHECK(one.find("200 OK") != std::string::npos && one.find("Access-Control-Allow-Origin: *") != std::string::npos);
+      JCLAP_CHECK(httpGet(rxPort, "/state/nothing").find("404") != std::string::npos);
+      JCLAP_CHECK(httpGet(rxPort, "/").find("text/html") != std::string::npos);
+      {
+         jtunnel::net::TcpSocket s;
+         JCLAP_CHECK(s.connectLoopback(rxPort, 1000));
+         const std::string evil = "GET /state HTTP/1.1\r\nHost: attacker.example\r\n\r\n";
+         s.write(evil.data(), evil.size());
+         std::string reply;
+         char buffer[1024];
+         for (int i = 0; i < 200 && reply.find("\r\n\r\n") == std::string::npos; ++i) {
+            const int n = s.read(buffer, sizeof(buffer));
+            if (n < 0)
+               break;
+            if (n > 0)
+               reply.append(buffer, static_cast<size_t>(n));
+            else
+               std::this_thread::sleep_for(std::chrono::milliseconds(5));
+         }
+         JCLAP_CHECK(reply.find("403") != std::string::npos);
+      }
+      // A WebSocket: the handshake, a snapshot with everything, then updates as the clock moves.
+      {
+         jtunnel::net::TcpSocket ws;
+         JCLAP_CHECK(ws.connectLoopback(rxPort, 1000));
+         const std::string hello = "GET /ws HTTP/1.1\r\nHost: localhost:" + std::to_string(rxPort) +
+                                   "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: "
+                                   "dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n";
+         ws.write(hello.data(), hello.size());
+         std::string got;
+         char buffer[8192];
+         const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+         while (std::chrono::steady_clock::now() < until && got.find("\"type\":\"update\"") == std::string::npos) {
+            sender.process(block, txIn, txOut);
+            receiver.process(block, rxIn, rxOut);
+            next += std::chrono::microseconds(5333);
+            std::this_thread::sleep_until(next);
+            const int n = ws.read(buffer, sizeof(buffer));
+            if (n > 0)
+               got.append(buffer, static_cast<size_t>(n));
+         }
+         JCLAP_CHECK(got.find("Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") != std::string::npos);
+         JCLAP_CHECK(got.find("{\"type\":\"snapshot\",\"state\":{") != std::string::npos);
+         JCLAP_CHECK(got.find("{\"type\":\"update\",\"key\":\"clock\"") != std::string::npos);
+         if (scriptPort)
+            JCLAP_CHECK(got.find(track) != std::string::npos);
+         JCLAP_CHECK(rx->status().stateClients == 1);
+      }
+      sender.clearTransport();
+   }
 
    // A second sender with a name already in use doesn't take it: it waits, and gets it when the
    // first goes. (In one process the two find each other directly, network or not.)

@@ -33,6 +33,12 @@ struct TunnelStatus {
    // MIDI sent (a sender: what came in to be sent) or received, counted since the plugin started,
    // and the last event: status | data1 << 8 | data2 << 16, 0 before any.
    uint32_t midiEvents = 0, lastMidi = 0;
+   // The side channel (state.h): the local server's port (0: none), its WebSocket clients, the keys
+   // held and how many changes have come in; and, sending, whether the Bitwig extension is talking.
+   uint16_t statePort = 0;
+   int stateClients = 0, stateKeys = 0;
+   uint32_t stateUpdates = 0;
+   bool extension = false;
    // Peak levels since the last call, linear.
    float inputPeak = 0, outputPeak = 0;
 };

@@ -13,7 +13,9 @@
 #else
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <fcntl.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <poll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -151,7 +153,7 @@ std::string hostName() {
    return result.empty() ? "JTunnel" : result;
 }
 
-bool UdpSocket::open(uint16_t port) {
+bool UdpSocket::open(uint16_t port, bool loopbackOnly) {
    close();
 #ifdef _WIN32
    SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -177,7 +179,7 @@ bool UdpSocket::open(uint16_t port) {
    sockaddr_in addr{};
    addr.sin_family = AF_INET;
    addr.sin_port = htons(port);
-   addr.sin_addr.s_addr = htonl(INADDR_ANY);
+   addr.sin_addr.s_addr = htonl(loopbackOnly ? INADDR_LOOPBACK : INADDR_ANY);
    if (bind(s, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0) {
       close();
       return false;
@@ -259,6 +261,217 @@ int UdpSocket::receive(void *buffer, size_t capacity, Address &from, int timeout
    from.ip = ntohl(addr.sin_addr.s_addr);
    from.port = ntohs(addr.sin_port);
    return static_cast<int>(n);
+}
+
+// ---- TcpSocket ----
+
+namespace {
+
+#ifdef _WIN32
+using RawSocket = SOCKET;
+bool wouldBlock() {
+   const int e = WSAGetLastError();
+   return e == WSAEWOULDBLOCK || e == WSAEINPROGRESS || e == WSAEINTR;
+}
+void closeRaw(RawSocket s) { closesocket(s); }
+bool setNonBlocking(RawSocket s) {
+   u_long on = 1;
+   return ioctlsocket(s, FIONBIO, &on) == 0;
+}
+using PollFd = WSAPOLLFD;
+int pollRaw(PollFd *fds, size_t n, int timeoutMs) { return WSAPoll(fds, static_cast<ULONG>(n), timeoutMs); }
+#else
+using RawSocket = int;
+bool wouldBlock() { return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR || errno == EINPROGRESS; }
+void closeRaw(RawSocket s) { ::close(s); }
+bool setNonBlocking(RawSocket s) {
+   const int flags = fcntl(s, F_GETFL, 0);
+   return flags >= 0 && fcntl(s, F_SETFL, flags | O_NONBLOCK) == 0;
+}
+using PollFd = pollfd;
+int pollRaw(PollFd *fds, size_t n, int timeoutMs) { return poll(fds, static_cast<nfds_t>(n), timeoutMs); }
+#endif
+
+void noSigPipe(RawSocket s) {
+#ifdef SO_NOSIGPIPE
+   int on = 1;
+   setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+#else
+   (void)s;
+#endif
+}
+
+sockaddr_in loopbackAddress(uint16_t port) {
+   sockaddr_in addr{};
+   addr.sin_family = AF_INET;
+   addr.sin_port = htons(port);
+   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+   return addr;
+}
+
+} // namespace
+
+bool TcpSocket::listenLoopback(uint16_t port) {
+   close();
+   const RawSocket s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+#ifdef _WIN32
+   if (s == INVALID_SOCKET)
+      return false;
+   // Without this, Windows lets a second listener share the port.
+   BOOL exclusive = TRUE;
+   setsockopt(s, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char *>(&exclusive), sizeof(exclusive));
+#else
+   if (s < 0)
+      return false;
+   // A port a closed server just left is free again at once (Unix holds it in TIME_WAIT otherwise).
+   int reuse = 1;
+   setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+#endif
+   fd_ = static_cast<Handle>(s);
+   sockaddr_in addr = loopbackAddress(port);
+   if (bind(s, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0 || listen(s, 16) != 0 || !setNonBlocking(s)) {
+      close();
+      return false;
+   }
+   return true;
+}
+
+bool TcpSocket::accept(TcpSocket &out) {
+   if (fd_ == kInvalid)
+      return false;
+   const RawSocket c = ::accept(static_cast<RawSocket>(fd_), nullptr, nullptr);
+#ifdef _WIN32
+   if (c == INVALID_SOCKET)
+      return false;
+#else
+   if (c < 0)
+      return false;
+#endif
+   out.close();
+   out.fd_ = static_cast<Handle>(c);
+   if (!setNonBlocking(c)) {
+      out.close();
+      return false;
+   }
+   noSigPipe(c);
+   int on = 1;
+   setsockopt(c, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char *>(&on), sizeof(on));
+   return true;
+}
+
+bool TcpSocket::connectLoopback(uint16_t port, int timeoutMs) {
+   close();
+   const RawSocket s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+#ifdef _WIN32
+   if (s == INVALID_SOCKET)
+      return false;
+#else
+   if (s < 0)
+      return false;
+#endif
+   fd_ = static_cast<Handle>(s);
+   noSigPipe(s);
+   if (!setNonBlocking(s)) {
+      close();
+      return false;
+   }
+   sockaddr_in addr = loopbackAddress(port);
+   if (connect(s, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0) {
+      if (!wouldBlock()) {
+         close();
+         return false;
+      }
+      PollFd pfd{};
+      pfd.fd = s;
+      pfd.events = POLLOUT;
+      if (pollRaw(&pfd, 1, timeoutMs) <= 0 || (pfd.revents & (POLLERR | POLLHUP))) {
+         close();
+         return false;
+      }
+      int error = 0;
+      socklen_t len = sizeof(error);
+      getsockopt(s, SOL_SOCKET, SO_ERROR, reinterpret_cast<char *>(&error), &len);
+      if (error) {
+         close();
+         return false;
+      }
+   }
+   return true;
+}
+
+void TcpSocket::close() {
+   if (fd_ == kInvalid)
+      return;
+   closeRaw(static_cast<RawSocket>(fd_));
+   fd_ = kInvalid;
+}
+
+uint16_t TcpSocket::localPort() const {
+   if (fd_ == kInvalid)
+      return 0;
+   sockaddr_in addr{};
+   socklen_t len = sizeof(addr);
+   if (getsockname(static_cast<RawSocket>(fd_), reinterpret_cast<sockaddr *>(&addr), &len) != 0)
+      return 0;
+   return ntohs(addr.sin_port);
+}
+
+int TcpSocket::read(void *buffer, size_t capacity) {
+   if (fd_ == kInvalid)
+      return -1;
+#ifdef _WIN32
+   const int n = recv(static_cast<RawSocket>(fd_), static_cast<char *>(buffer), static_cast<int>(capacity), 0);
+#else
+   const ssize_t n = recv(fd_, buffer, capacity, 0);
+#endif
+   if (n > 0)
+      return static_cast<int>(n);
+   if (n == 0)
+      return -1; // closed by the other end
+   return wouldBlock() ? 0 : -1;
+}
+
+int TcpSocket::write(const void *data, size_t size) {
+   if (fd_ == kInvalid)
+      return -1;
+#ifdef _WIN32
+   const int n = send(static_cast<RawSocket>(fd_), static_cast<const char *>(data), static_cast<int>(size), 0);
+#elif defined(MSG_NOSIGNAL)
+   const ssize_t n = send(fd_, data, size, MSG_NOSIGNAL);
+#else
+   const ssize_t n = send(fd_, data, size, 0);
+#endif
+   if (n >= 0)
+      return static_cast<int>(n);
+   return wouldBlock() ? 0 : -1;
+}
+
+void TcpSocket::wait(const std::vector<const TcpSocket *> &readers, const std::vector<const TcpSocket *> &writers,
+                     int timeoutMs) {
+   std::vector<PollFd> fds;
+   for (const TcpSocket *s : readers)
+      if (s->isOpen()) {
+         PollFd p{};
+         p.fd = static_cast<RawSocket>(s->fd_);
+         p.events = POLLIN;
+         fds.push_back(p);
+      }
+   for (const TcpSocket *s : writers)
+      if (s->isOpen()) {
+         PollFd p{};
+         p.fd = static_cast<RawSocket>(s->fd_);
+         p.events = POLLOUT;
+         fds.push_back(p);
+      }
+   if (fds.empty()) {
+#ifdef _WIN32
+      Sleep(static_cast<DWORD>(timeoutMs));
+#else
+      poll(nullptr, 0, timeoutMs);
+#endif
+      return;
+   }
+   pollRaw(fds.data(), fds.size(), timeoutMs);
 }
 
 // ---- Semaphore ----

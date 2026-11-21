@@ -234,4 +234,45 @@ size_t writeBye(uint8_t *out, size_t capacity) {
    return w.finish();
 }
 
+size_t writeState(uint8_t *out, size_t capacity, const StatePiece &piece) {
+   if (!piece.key || piece.keySize == 0 || piece.keySize > kMaxStateKey || piece.dataSize > kStatePieceBytes ||
+       piece.pieces == 0 || piece.pieces > kMaxStatePieces || piece.piece >= piece.pieces)
+      return 0;
+   Writer w(out, capacity);
+   writeHeader(w, PacketType::State);
+   w.u32(piece.streamId);
+   w.u32(piece.messageId);
+   w.u8(piece.piece);
+   w.u8(piece.pieces);
+   w.u8(piece.keySize);
+   w.bytes(piece.key, piece.keySize);
+   w.u16(piece.dataSize);
+   if (piece.dataSize)
+      w.bytes(piece.data, piece.dataSize);
+   return w.finish();
+}
+
+bool parseState(const uint8_t *data, size_t size, StatePiece &piece) {
+   if (packetType(data, size) != static_cast<uint8_t>(PacketType::State))
+      return false;
+   Reader r(data + kHeaderBytes, size - kHeaderBytes);
+   piece.streamId = r.u32();
+   piece.messageId = r.u32();
+   piece.piece = r.u8();
+   piece.pieces = r.u8();
+   piece.keySize = r.u8();
+   if (!r.ok() || piece.keySize == 0 || piece.keySize > kMaxStateKey || piece.pieces == 0 ||
+       piece.pieces > kMaxStatePieces || piece.piece >= piece.pieces || r.remaining() < piece.keySize + 2u)
+      return false;
+   const size_t keyAt = size - r.remaining();
+   piece.key = reinterpret_cast<const char *>(data + keyAt);
+   uint8_t skip[kMaxStateKey];
+   r.bytes(skip, piece.keySize);
+   piece.dataSize = r.u16();
+   if (!r.ok() || piece.dataSize > kStatePieceBytes || r.remaining() != piece.dataSize)
+      return false;
+   piece.data = data + (size - r.remaining());
+   return true;
+}
+
 } // namespace jtunnel
