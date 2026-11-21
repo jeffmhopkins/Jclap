@@ -926,9 +926,8 @@ private:
    // clarinet's reed speaks at once and its tone is the bore's pressure differentiated, so it needs
    // little surge or support; a flute's jet overblows on a burst, so it takes less kick, and its
    // edge already hisses, so half the noise (a real flute's attack is no noisier up top than its
-   // note); a trumpet's lips blare on a burst, so less kick, but a full measure of support (at a
-   // quarter, its soft notes buzzed for a tenth of a second or more before they spoke); the
-   // conical reeds build up slowly from the tongue's start, so they take it all (the oboe a little less: its low notes overshoot
+   // note); a trumpet's lips blare on a burst, so less kick; the conical reeds build up slowly
+   // from the tongue's start, so they take it all (the oboe a little less: its low notes overshoot
    // on their own), and more support for their soft notes (a slow reed would otherwise start a soft
    // note and lose it), more again on their low notes (support times periodRatio^low); the Alien's
    // twin reeds are the clarinet's valve on a slow helix, between the two. The middle note the
