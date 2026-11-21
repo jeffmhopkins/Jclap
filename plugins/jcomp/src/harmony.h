@@ -962,9 +962,11 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                detail::addCandidate(out, v, ds, -1);
          }
       }
-      if (out.size() == had)
-         for (const Voicing &v : doubledTop)
-            out.push_back(v);
+      // DOUBLE is a cost in the ranking (a doubled top +6), not a filter: where the line needs it
+      // (a triad at four voices, its top held), the doubled top is still a choice.
+      (void)had;
+      for (const Voicing &v : doubledTop)
+         out.push_back(v);
       // A slash chord keeps its bass at the bottom: the voicings that have it there, else each with
       // the bass note added under it.
       if (c.bass >= 0 && c.bass != c.root && !out.empty()) {

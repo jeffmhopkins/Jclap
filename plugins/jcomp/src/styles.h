@@ -437,8 +437,8 @@ inline const std::vector<Genre> &genres() {
        // stabs with a sixteenth push; the stab shifted a sixteenth.
        {{"x---------------", 0.35}, {"..x...x...x..x..", 0.6}, {"...x..x...x..x..", 0.75}},
        {{"..x...x...x.xxx.", 0.6}},
-       // i9-iv9; i(add9)-bVI7-bVII(add9) (the "Can You Feel It" changes); m9 planed a step.
-       {{kMinor, {"Cm9|Fm9", "Cm9|Fm9|Cm9|Fm9", "Ab7|Bbadd9", "Cmadd9|Ab7|Bbadd9|Bbadd9", "Dm9|Dm9|Cm9|Cm9", "Cm9|Fm9|Cm9|Cm9"}}},
+       // i9-iv9; i(add9)-bVImaj7-bVII(add9) (the "Can You Feel It" changes: Hooktheory, Mixed In Key); m9 planed a step.
+       {{kMinor, {"Cm9|Fm9", "Cm9|Fm9|Cm9|Fm9", "Abmaj7|Bbadd9", "Cmadd9|Abmaj7|Bbadd9|Bbadd9", "Dm9|Dm9|Cm9|Cm9", "Cm9|Fm9|Cm9|Cm9"}}},
        {{"Held Like Strings", "Strings", 118, kLongs | kRich, 0, 0b001, kPadPlayer},
         {"Chicago Stabs", "Stabs", 122, kRich | kShorts, 0, 0b010},
         {"Jersey Push", "Push", 124, kRich | kPushes, 0, 0b100}},

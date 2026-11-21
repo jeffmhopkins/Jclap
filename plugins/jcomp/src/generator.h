@@ -326,8 +326,10 @@ inline void makeChords(const Recipe &r, int section, Section &s, Rng &rng) {
       if (d.quality == kSharp5)
          d.quality = kDom9;
    };
+   // (Not the progression's last bar: it leads to its own bar 1 only while the section loops; at the
+   // section's end the next section starts somewhere else, so an approach aimed at bar 1 is wrong.)
    if (reharm > 0.0)
-      for (int b = 0; b < s.progBars; ++b) {
+      for (int b = 0; b + 1 < s.progBars; ++b) {
          Chord &c = s.chords[static_cast<size_t>(b * 2)];
          const Chord next = after(s, b, 0);
          // Not the tonic: a blues's or a vamp's I7 is home, not a dominant to stand in for.
@@ -1478,8 +1480,8 @@ inline const char *endingText(const Genre &g, const Pattern &base, unsigned mods
    const std::string n = g.name;
    if (n == "Swing Jazz") // SwingEnd: four, then 1 and 3
       return "x...x...x...x...|X.......x-------";
-   if (n == "Salsa" || n == "Latin Jazz") // the cha-cha cell, its and of 4 the last chord (pushed), held
-      return "x...x...x...x.X-|----------------";
+   if (n == "Salsa" || n == "Latin Jazz") // the cha-cha cell (4, and, 1), the last chord held from the 1
+      return "x...x...x...x.x.|X---------------";
    if (g.family == kFamilies[0]) // MMA's R&B ending: 1, 3 and 4, then the one held two beats
       return "x.......x...x...|X-------........";
    return "x...x...x...x...|X---------------";
@@ -1541,13 +1543,6 @@ inline Pattern makeEnding(const Recipe &r, const Pattern &base, double e) {
    const Genre &g = genreAt(r.genre);
    const Style &st = styleOf(r);
    Pattern f = figure(endingText(g, base, st.mods), base.rate, std::max(0.35, e));
-   // Salsa's and Latin jazz's changes come on the and of 4: the last chord with them (a cierre's
-   // anticipated last hit).
-   {
-      const std::string n = g.name;
-      if ((n == "Salsa" || n == "Latin Jazz") && base.rate == kRate16 && f.steps == 32 && f.at(14).on())
-         f.at(14).push = 1;
-   }
    // A bossa carries its batida into the held chord, not a bar of block quarters: the figure's own
    // bar: the cycle's first, which falls on the outro's second-last bar (an even bar of an even
    // section), so the cycle isn't broken by two second bars in a row.
