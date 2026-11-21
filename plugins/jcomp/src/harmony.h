@@ -274,9 +274,10 @@ inline Ints chordTones(const Chord &c) {
 // a tone of the quality that is held scores, a held note it doesn't explain costs more, a missing
 // fifth costs little (players leave it out), and the lowest note as the root breaks ties. With
 // `slash`, a lowest note that isn't the root becomes the bass (C/G). One or two notes name a root
-// (a power chord or a bare third reads as major or minor).
+// (a power chord or a bare third reads as major or minor). `key` (0..11, or -1 for none) settles a
+// bare tritone: the dominant whose root is in the key (Bb-E in C is C7, not Gb7).
 template <typename Notes>
-inline Chord nameChord(const Notes &notes, bool slash = true) {
+inline Chord nameChord(const Notes &notes, bool slash = true, int key = -1) {
    if (notes.empty())
       return Chord{};
    int lowest = 128;
@@ -310,6 +311,16 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
                c.root = static_cast<int8_t>(pc);
             else if (iv == 6) { // a tritone: a dominant's 3rd and 7th, the shell a major third over its root
                c.root = static_cast<int8_t>((bassPc + 8) % 12);
+               // (Or the other dominant it belongs to, its 7th in the bass, when that one's root is
+               // in the key and this one's isn't.)
+               if (key >= 0) {
+                  const auto inKey = [&](int pc) {
+                     const int d = ((pc - key) % 12 + 12) % 12;
+                     return d == 0 || d == 2 || d == 4 || d == 5 || d == 7 || d == 9 || d == 11;
+                  };
+                  if (!inKey(c.root) && inKey((bassPc + 2) % 12))
+                     c.root = static_cast<int8_t>((bassPc + 2) % 12);
+               }
                c.quality = kDom7;
                c.bass = -1;
                return c;
@@ -349,6 +360,25 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
                thirdBass = thirdBass || ((iv == 3 || iv == 4) && has);
             }
          }
+   // A dominant whose root is held with its 3rd and 7th (C7's C E Bb, over its E): that chord, not the
+   // rootless one a tritone away (Gb7#11) whose root nobody played.
+   bool rootExplains = false;
+   for (int root = 0; root < 12; ++root)
+      if ((held >> root & 1) && (held >> ((root + 4) % 12) & 1) && (held >> ((root + 10) % 12) & 1))
+         rootExplains = true;
+   // Whether the bass, as the root, has a chord with a third holding every note (C Eb F Bb: Cm11).
+   bool bassExplains = false;
+   for (const Quality &qu : qualities()) {
+      unsigned want = 0;
+      for (int i : qu.tones)
+         want |= 1u << ((bassPc + i) % 12);
+      const bool third = std::find(qu.tones.begin(), qu.tones.end(), 3) != qu.tones.end() ||
+                         std::find(qu.tones.begin(), qu.tones.end(), 4) != qu.tones.end();
+      if (third && (held & ~want) == 0 && ((held >> ((bassPc + 3) % 12) & 1) || (held >> ((bassPc + 4) % 12) & 1))) {
+         bassExplains = true;
+         break;
+      }
+   }
    // (Counted up from the bass, so a tie is read the same way in every key.)
    for (int k = 0; k < 12; ++k) {
       const int root = (bassPc + k) % 12;
@@ -367,8 +397,12 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
          for (int i : qu.tones)
             want |= 1u << ((root + i) % 12);
          double score = 0;
+         // (A chord with a third over the bass: F/G, Bb/C. A sus triad over a bass is that bass's own
+         // chord without its fifth, C6/9's C E A D, not Asus/C.)
+         const bool hasThird = std::find(qu.tones.begin(), qu.tones.end(), 3) != qu.tones.end() ||
+                               std::find(qu.tones.begin(), qu.tones.end(), 4) != qu.tones.end();
          const bool overBass = slash && !bassShell && root != bassPc && bassCount == 1 && !(want & bassBit) &&
-                               (want & ~bassBit) == (held & ~bassBit);
+                               (want & ~bassBit) == (held & ~bassBit) && hasThird;
          for (int pc = 0; pc < 12; ++pc) {
             const bool h = held >> pc & 1, w = want >> pc & 1;
             if (overBass && pc == bassPc)
@@ -396,7 +430,7 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
          // its own, is that dominant (G13 from F A B E, not an Fmaj7#11 with an avoid note).
          const bool dom = std::find(qu.tones.begin(), qu.tones.end(), 4) != qu.tones.end() &&
                           std::find(qu.tones.begin(), qu.tones.end(), 10) != qu.tones.end();
-         const bool rootlessDom = rootless && tritone && dom && !bassShell;
+         const bool rootlessDom = rootless && tritone && dom && !bassShell && !rootExplains;
          // (Not where the notes are a chord held whole, root and all: Cm7b5's Gb Bb C Eb is that
          // chord inverted, whatever the bass, not an Ab9 nobody's root is under.)
          if (rootlessDom && (held & ~want) == 0 && !wholeChord) {
@@ -414,6 +448,13 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
              std::find(qu.tones.begin(), qu.tones.end(), 3) == qu.tones.end() &&
              std::find(qu.tones.begin(), qu.tones.end(), 4) == qu.tones.end())
             score -= 0.3;
+         // A sus chord over another root (F7sus over C) is that root's own chord with a third when one
+         // holds every note: Cm11 without its fifth, not F7sus/C.
+         if (want == held && root != bassPc && !hasThird && bassExplains)
+            score -= 2.5;
+         // (Nor a rootless chord other than a dominant: Ab6/9 over C for C Eb F Bb.)
+         if (rootless && !dom && bassExplains)
+            score -= 1.0;
          // Simpler names first: fewer tones break ties.
          score -= 0.05 * static_cast<double>(qu.tones.size());
          if (score > bestScore) {
@@ -494,6 +535,13 @@ inline Ints pickTones(const Chord &c, int n) {
    const int base = static_cast<int>(t.size());
    // (Over a major seventh the doubled note is the 9th, not the root a half step over the 7th.)
    const bool maj7 = std::find(q.tones.begin(), q.tones.end(), 11) != q.tones.end();
+   // (And a major seventh in three notes is its 3, 5 and 7, not the root a half step over the 7th.)
+   if (maj7 && n == 3) {
+      const auto root = std::find(t.begin(), t.end(), 0);
+      if (root != t.end() && std::find(t.begin(), t.end(), 7) == t.end() &&
+          std::find(q.tones.begin(), q.tones.end(), 7) != q.tones.end())
+         *root = 7;
+   }
    const bool has9 = std::find(t.begin(), t.end(), 14) != t.end();
    for (int k = 0; static_cast<int>(t.size()) < n; ++k)
       t.push_back(k % 2 == 0 ? (maj7 && !has9 && k == 0 ? 14 : 12) : (q.tones.size() > 2 ? q.tones[2] : 7) + 12 * (1 + k / 2));
@@ -819,6 +867,10 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       int fifth = dom ? (has(8) || has(15) || has(13) ? 8 : 9) : (has(6) ? 6 : has(8) ? 8 : 7); // a 7#5 keeps its #5
       if (has(18))
          fifth = 18;                                                // the #11 in its place
+      if (third == 3 && has(17))
+         fifth = 17;                                                // a minor 11th's 11 in place of its fifth (an m11, not an m9)
+      if (third == 5 && has(21))
+         fifth = 21;                                                // a 13sus's 13 in place of its fifth
       if (seventh == 9)
          colour = 14, fifth = 7;                                    // a sixth chord: 3-5-6-9
       iv = {third, fifth, seventh, colour};
@@ -983,6 +1035,16 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                }
             }
             continue;
+         }
+         // A triad's open grip as well: the root, then the third, fifth, octave and third close above
+         // it (C's x32010, G's 32000x): gripFrets keeps it where the fingers can make it.
+         if (n >= 4 && q.tones.size() == 3 && !q.seventh && (q.tones[1] == 3 || q.tones[1] == 4)) {
+            const int third = q.tones[1];
+            const int shape[5] = {0, third, fifthIv, 12, 12 + third};
+            Stack open;
+            for (int i = 0; i < std::min(n, 5); ++i)
+               open.push_back(b + shape[i]);
+            detail::addCandidate(out, open, vs, b);
          }
          Stack v{b, b + fifthIv, b + 12};
          if (!upper.empty())
@@ -1300,12 +1362,22 @@ inline Voicings rankShapes(const Chord &c, const Voicing *prev, const VoiceSetti
             playable.push_back(v);
       if (!playable.empty())
          all = playable;
+      // None a hand can make (a 13th, a 13sus or an m11 at five strings): a string fewer, as a
+      // guitarist leaves one out, rather than a cluster no hand can fret.
+      else if (vs.voices > 3) {
+         VoiceSettings fewer = vs;
+         --fewer.voices;
+         const Voicings less = rankShapes(c, prev, fewer);
+         if (!less.empty() && gripFrets(less[0]) >= 0.0)
+            return less;
+      }
    }
    // By cost, ties kept in order (an insertion sort: no allocation).
    FixedVec<double, 256> costs;
    // DOUBLE IN THE MIDDLE: the top note's pitch sounded again under it costs (the octaves and the
    // fourths are made of their doublings; a left hand's bass may have it).
-   const bool middle = vs.doubleMiddle && vs.shape != kOctaves && vs.shape != kQuartal;
+   // (Nor a guitar's grip: its open chords double the top, C's x32010 and G's 32000x.)
+   const bool middle = vs.doubleMiddle && vs.shape != kOctaves && vs.shape != kQuartal && vs.shape != kGrip;
    const int from = vs.shape == kSpread || vs.shape == kGrip || vs.shape == kShell ? 1 : 0;
    const auto doubledTop = [&](const Voicing &v) {
       for (int i = from; i + 1 < v.count; ++i)
@@ -1368,31 +1440,33 @@ inline Voicing voice(const Chord &c, const Voicing *prev, const VoiceSettings &v
 
 // The OCTAVES shape's line, as a montuno's thumbs move it through a chord: the `step`-th stroke on
 // it has the fifth, third, root, third (the chord's own: a sus fourth, a diminished fifth) at the
-// bottom, doubled on top. A chord's first stroke sits about the window's middle, not walking off
-// from the last voicing (which ratchets it up through a bar of triads); the strokes after it take the
-// octave nearest the last stroke's bottom, so the line moves by a step or a third, never a sixth.
+// bottom, doubled on top. Each stroke takes the octave nearest the last stroke's bottom, so the line
+// moves by a step or a third across a change too; a chord's first stroke goes back to the window's
+// middle only when the line has strayed an octave from it.
 inline Voicing octaveLine(const Chord &c, const Voicing *prev, const VoiceSettings &vs, int step) {
    const auto &q = qualityOf(c).tones;
    const int third = q.size() > 1 ? q[1] % 12 : 4, fifth = q.size() > 2 ? q[2] % 12 : 7;
    const int want[4] = {fifth, third, 0, third};
    const int degree = want[((step % 4) + 4) % 4];
-   // The strokes after the first may dip up to a fourth under the window, rather than leap a sixth
-   // up for a root the window's floor cuts off.
+   // The strokes after the first may dip up to a sixth under the window (not into the bass), rather than leap a sixth
+   // up for a root the window's floor cuts off. A new chord's first stroke follows the line too (the
+   // octaves carry the voice leading across the change: E's G# to A's A, not an octave's leap back
+   // to the middle), unless that strays more than an octave from the window's middle.
+   const bool follow = prev && !prev->empty();
    VoiceSettings wide = vs;
-   if (step > 0 && prev && !prev->empty())
-      wide.lo = vs.lo - 5;
+   if (follow)
+      wide.lo = vs.lo - 9;
    const Voicings r = rankShapes(c, prev, wide);
    const Voicing *best = nullptr;
    double bestD = 1e9;
    for (const Voicing &v : r)
       if (v.count > 1 && ((v.notes[0] - c.root) % 12 + 12) % 12 == degree &&
-          (v.notes[0] >= vs.lo || (prev && std::abs(v.notes[0] - prev->notes[0]) <= 5))) {
+          (v.notes[0] >= vs.lo || (prev && std::abs(v.notes[0] - prev->notes[0]) <= 5 && v.notes[0] >= vs.floor + 3))) {
          double mean = 0.0;
          for (int i = 0; i < v.count; ++i)
             mean += v.notes[static_cast<size_t>(i)];
-         double d = step > 0 && prev && !prev->empty() ? std::abs(v.notes[0] - prev->notes[0]) + 0.01 * std::abs(mean / v.count - vs.center)
-                                                       : std::abs(mean / v.count - vs.center);
-
+         const double off = std::abs(mean / v.count - vs.center);
+         double d = follow ? std::abs(v.notes[0] - prev->notes[0]) + 0.01 * off + (step == 0 && off > 12 ? 100.0 : 0.0) : off;
          if (d < bestD - 1e-9) {
             bestD = d;
             best = &v;
@@ -1440,6 +1514,10 @@ inline int bassNote(const Chord &c, int floor, bool fifth = false, bool guitar =
    const int up = n + alt;
    if (guitar)
       return up <= floor + 12 ? up : up - 12;
+   // (Under a slash chord the slash bass stays the lowest note: the alternate goes above it, or the
+   // bass is struck again, never the root under it: B/D#'s D# is the line, B2 under it undoes it.)
+   if (c.bass >= 0 && c.bass != c.root)
+      return up > under - 3 ? n : up;
    return up > under - 3 && up - 12 >= floor ? up - 12 : up; // (FLOOR holds: nothing under it)
 }
 

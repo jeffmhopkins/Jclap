@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.11.0.
+Version 0.12.0.
 
 ![Panel](docs/panel.png)
 
@@ -71,7 +71,7 @@ every genre, its styles, their tempos and progressions, and the sources each gen
 
 The **STYLE** box picks the genre's style: a rhythm family, a set of progressions (one per kind of
 section), a tempo, a scale and its own twists (pushes, a busier or sparser hand, runs in, the top note
-alone, a left hand, richer or plainer chords, shuffle, half time, triplets). Shift-click another tile
+alone, a left hand, richer or plainer chords, shuffle, triplets). Shift-click another tile
 to **blend** its rhythms in; the small purple slider sets how much. A rhythm on the other grid comes
 across beat by beat (a straight eighth onto the shuffle's third triplet). A fixed figure (Freddie
 Green's four, the batida, the montunos and guajeos, the cha-cha) is the style itself and takes no
@@ -143,8 +143,8 @@ templates:
 
 | Structure | Order |
 | --- | --- |
-| Once through | I V P C B K O (the default, and every song from before 0.11.0) |
-| Verse-Chorus | I V C V C B C O |
+| Once through | I V P C B K O (every song from before 0.11.0) |
+| Verse-Chorus | I V C V C B C O (a new song's) |
 | Pop | I V P C V P C B C C O |
 | Short | I V C V C O |
 | AABA | I V V B V O |
@@ -154,8 +154,16 @@ templates:
 section to add an entry, drag an entry to move it, right-click it or its × to take it out, up to 32.
 A readout under the order gives its entries, bars and length at the tempo. **CLEAR** empties it,
 **START FROM TEMPLATE** puts in a template to edit, **CANCEL** leaves the song as it was, and **OK**
-puts it in the song (named as a template when it is one; an empty one plays every section once). The
-structure is saved with the song and with a preset's song.
+puts it in the song (named as a template when it is one; an empty one plays every section once, and its
+readout says so). The structure is saved with the song and with a preset's song, and a factory preset
+keeps the song's structure. The entry SONG starts from (the Section parameter's section, its first
+entry) is marked on the letters with an orange edge. In SONG, **NEXT** and **PREV** step an entry at a
+time, a section that comes twice running included (Pop's C C). A structure that ends on a section
+with no ending of its own ends on the outro's (the tile and NOW PLAYING show it so). Following
+the host, a count-in before bar 1 waits on the first entry, and a change to the structure or to a
+section's bars while playing puts the song where the host is again. A section that comes back plays a
+little harder each time (up to the fourth), with its own dice, and AABA's last A before the bridge
+ends on the outro's chord.
 
 ![Song structure](docs/panel-form.png)
 
@@ -718,6 +726,29 @@ Pop, Short, AABA, Extended) or one written by hand in SONG STRUCTURE, a section 
 it again. Fills lead into the next entry, the ending is the last entry's, REPEAT goes round the
 structure, and a section switched to by hand carries on from its next entry. Songs save version 5
 (older songs play once through, as before).
+
+**The tenth review (0.12.0).** Five more cold passes ([docs/sources.md](docs/sources.md), Part N).
+In SONG: the count-in, the ending of a structure that ends on a section other than the outro, NEXT
+and PREV through repeated sections, and following the host after a structure change all play as the
+structure says (see THE SONG); new songs are Verse-Chorus. Harmony: the octave line no longer leaps an
+octave between chords, E Bb C is C7/E, C E A D is C6/9, a tritone pair is named by the key, three-note
+maj7s keep the 7th, a guitar's open C and G grips are the open shapes (and every grip is one a hand
+can fret), ROOTLESS keeps a minor or sus chord's extension, and a slash chord's bass on keys sits under
+the chord. Styles: the Bell Twelve plays close triads, Freddie Green's four holds 1 and 3 and leans on
+2 and 4, the shout's organ bounces its upbeats at tempo, Chic's second bar keeps its rests, and WEIRD's
+reharm is the family's (no tritone subs outside jazz, none in the Caribbean and Africa). Fills: a
+boom-chick's, the two-step's and the broken-chord ballad's fill now leads into the change, a fill
+plays at its section's level (no raw accent in a quiet verse), a line is never accented or pushed,
+the 6/8 lead-in is the last eighth, a backbeat's held fill gets no downbeat, and a lead-in is never a
+WEIRD chance hit. An ambient drift has no fill down: the drift plays on into the change. Takes: a
+boom-chick's bass stays on its strong beats, nothing is struck inside a held chord, an organ's added
+chords are held, an even four's takes vary, and a take that came out the same as its parent is tried
+again. BLEND keeps this style's lengths (no held skank, no stabbed whole note). DENSITY above the
+middle adds only rung chords on the beats to a held style or a pad. The rolls cut a ringing chord at
+the next change and a held low note at the next one, count a line as its own hand, and draw an ending
+with its section's offbeat feel. A style whose take is a line (Tenor Line, Palm-Wine, Right-Hand
+Arpeggio) fills with its groove: a riff plays as written. The rolls leave out the slip note's grace
+notes.
 
 **Left out for now.** A "+ GUITAR" second player layered over the first, and recording a part played
 in to a take.
