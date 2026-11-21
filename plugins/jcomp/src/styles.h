@@ -157,7 +157,7 @@ inline const std::vector<Genre> &genres() {
        {{kMixolydian, {"C7#9|C7#9", "C9|C9|C9|C9", "F9|F9|C9|C9", "C9|F9|C9|F9", "D9|D9|D9|D9", "C9|C9|C7#9|C7#9"}},
         {kDorian, {"Cm9|Cm9", "Cm9|F9|Cm9|F9", "F9|F9|F9|F9", "Cm9|Cm9|F9|F9", "Dm9|Dm9|G9|G9", "Cm9|Cm9|Cm9|Cm9"}}},
        {{"Pocket Stabs", "Pocket", 100, 0, 0, 0b0001},
-        {"Clav Riff", "Clav", 100, kTopLine, 1, 0b0100, kClavChopper},
+        {"Clav Riff", "Clav", 100, 0, 1, 0b0100, kClavChopper},
         {"Dorian Groove", "Dorian", 108, kRich, 1, 0b0011},
         {"Chicken Scratch", "Scratch", 112, kBusy | kShorts, 0, 0b1000, kRhythmGuitar}},
        "5, 6, 13"},
@@ -321,7 +321,7 @@ inline const std::vector<Genre> &genres() {
        // the ands of 2, 3 and 4; the three-side all offbeats) and on 3-2 (the bars swapped, the and
        // of 4 the pickup): Moore's examples via Wikipedia's Guajeo, read note by note from its MIDI;
        // chords on the 2-3 clave's strokes.
-       {{"x.....x.....x...|....x...x.......", 0.2}, {"x...x.x...x...x.|..x...x...x...x.", 0.6}, {"..x...x...x...x.|x...x.x...x...x.", 0.6},
+       {{"x.....x.....x...|....x...x.......", 0.2}, {"x-..x-x-..x-..x-|..x-..x-..x-..x-", 0.6}, {"..x-..x-..x-..x-|x-..x-x-..x-..x-", 0.6},
         {"....x...x.......|x.....x.....x...", 0.2}},
        {{"x...x.x...x.x.x.", 0.8}},
        // The son montuno I-IV-V-IV in one clave (two chords a bar, as Moore's guajeos change: the and
@@ -337,7 +337,7 @@ inline const std::vector<Genre> &genres() {
        // that names it (4, its and, and the next 1).
        // The bolero's tresillo (1, the and of 2, 4: Impro-Visor's rhumba) and MMA's four bars; the
        // mambo's broken chord (the chord, then single inner notes).
-       {{"x...x...x...x...", 0.5}, {"x...x.x...x...x.|..x...x...x...x.", 0.8}, {"..x...x...x...x.|x...x.x...x...x.", 0.8},
+       {{"x...x...x...x...", 0.5}, {"x-..x-x-..x-..x-|..x-..x-..x-..x-", 0.8}, {"..x-..x-..x-..x-|x-..x-x-..x-..x-", 0.8},
         {"x...x...x...x.x.", 0.65}, {"x-----x-----x...", 0.4},
         {"x.......x...x...|x...x...x.......|x.........x...x.|....x.....x...x.", 0.55}, {"x.3.5.x.x.3.5.x.", 0.6}},
        {{"x...x...x.x.x.xx", 0.6}},
@@ -532,7 +532,7 @@ inline const std::vector<Genre> &genres() {
        // I-V7, I-IV-V7-I.
        {{kMajor, {"C|G7|C|C", "C|F|G7|C", "F|C|G7|C", "C|F|G7|C|C|F|G7|C", "F|F|C|C|D7|D7|G7|G7", "C|G7|C|C"}}},
        {{"Calypso Strum", "Strum", 110, 0, 0, 0b011},
-        {"Calypso Piano", "Piano", 112, kLeftHand, 0, 0b101, kPopPianist}},
+        {"Calypso Piano", "Piano", 112, kLeftHand, 0, 0b111, kPopPianist}},
        "61"},
    };
    return g;

@@ -2089,6 +2089,69 @@ except those noted at the end.
   secondary dominants in a key still voice three fourths at five voices where no five-note stack holds
   their tones. The roll draws LOOP's first pass, not the later ones the engine voice-leads into.
 
+## Part Q. The thirteenth review (2026-11-21)
+
+A thirteenth cold pass, split as before (styles; song mode; takes, fills and DENSITY; harmony and
+voicing; the engine and rolls), backed every finding with `jcomp-dump`, a probe program or the roll
+comparator, which now plays whole SONG chains as well as single takes. It found 57 problems (4 high,
+23 medium, 30 low); these were fixed in 0.15.0, with tests where a test could hold them, except those
+noted at the end.
+
+- **Styles.** The "top line" mutation thinned Clav Riff's resolving stab to one note in every take
+  2-4; it leaves accents alone and isn't offered to a take with a line, and the dead kTopLine mod is
+  gone. Interlock's line and chop shared three steps and a die decided per section which kept them;
+  the line is laid first, the same way everywhere. The batida's thumb played its fifth above the root
+  (up to C#4); a guitarist's thumb plays it below. The montunos and guajeos played staccato sixteenths
+  and their push into the three side was cut at the bar line; they play eighths, and a fixed figure's
+  push ties over an empty beat (not over a struck one). Calypso Piano's chorus was never busier than
+  its verse; its mask is wider. A quarter pulse on keys rang or not stroke by stroke; once a take. The
+  README listed twists (a sparser hand, shuffle, the top note alone) no style uses; it lists those
+  that are, and Mambo's line names its guajeo.
+- **Song mode and transport.** HOLD CHORD let go at every host loop wrap or jump, and in SONG a jump
+  moved the section under it; the held chord is kept apart from the voice leading, and the song stays
+  put under HOLD. A pickup bar at the project's start played the song's first half bar and then
+  restarted it; the pickup rests as a count-in does (a short bar mid-song still leaves the bar lines
+  as they were). A queued NEXT, PREV or tile turned off the phrase-closing chords; it reads the entry
+  it will reach. SAME DICE Never following the host counted from where playback started; from the
+  host's bar 1. A host stop in AUTO kept a cue on show that the start then dropped, a stopped cue
+  showed a stale repeat, a NEXT in an entry's last 80 ms skipped an entry, and LOOP after SONG kept
+  the entry's anchor; all fixed.
+- **Takes, fills and DENSITY.** The held-style swell under DENSITY never fired (the held-over check
+  came first); it plays. DENSITY's thinning still came in steps (each class of hit at once); each
+  hit's own roll is spread over the travel. It dropped an arpeggio's bass on the One (the line's
+  notes counted as chords); it keeps it. It filled the rest before a fill's lead-in, turned the one
+  drop's skank into a ska chop, and struck a change twice with a fill-in; none now, and an unpushed
+  fill pickup is kept as a pushed one is. Five held or fixed styles had four identical takes; fixed
+  accents may lighten a stroke other than the One, and the new *restrike* strikes a held chord again
+  at its half bar. WEIRD gave guitars, organs and pads TOP RINGS; RING without a piano's pedal. The
+  palm-wine fill's lead-in no longer hangs on one stroke of the groove.
+- **Harmony.** 4THS at five voices gave a V7 three notes (the stack with the b9 clash blocked the
+  clean one); the clean four-note stack is built, and each voice more short costs more than the last.
+  It also dropped a dominant 9th's third at four voices; the "So What" substitute is for chords
+  without a major third. ROOTLESS at five voices put the 5th a half step under the b13. Slash basses
+  and passing diminished chords were spelt flat (E7/Ab, Dbdim7); by the chord tone's letter, and a
+  diminished chord on a raised degree as the raised lower neighbour. GRIP never chose the open G7
+  (320001: its fret span read as unplayable once cut) and played four-voice sevenths as three-note
+  shells; both fixed, and the dead sus2 rows are gone. The "V power chord is major" rule fired in
+  Dorian and Mixolydian; only in minor and blues. OCTAVES doubled a 7#9's #9 and dropped C11's 11th,
+  and its look-ahead ignored HIGHEST. An altered slash dominant lost its 7th at three voices, and
+  CLOSE and DROP 2 slash triads at four voices played five notes.
+- **The engine and rolls.** SONG's roll was led from one entry back in take 1 (21,322 notes over all
+  styles the engine doesn't play); it chains from the song's first entry in the take playing, cached
+  (532). Fill rolls over an entry's last bar were drawn over the wrong bar; under SONG the roll counts
+  the section's own bar, and fills are led from the chain (2,408 to 90 differing cases). The passing
+  run walked over the wrong chord, ANY NOTE searched the wrong voicing, RUNS AT MOST stopped at the
+  first run (and now carries on into the next entry), and the run dice ignored the repeat's salt.
+  NOW PLAYING drew the progression under a held chord; the chord heard. A SHOT or ACC held SPREAD's
+  low note to the next change, ACC lost TOP RINGS, a HOLD band hit ran past its slot, OCTAVES' run
+  landed off the line and GRIP's kept its bass string, and a key could be re-struck 20 ms after
+  itself; all as the engine now (band-hit MARKS 953 differing notes to 40).
+- **Left as judgement.** A major seventh over its third or fifth keeps the root a half step over the
+  7th, as written (documented). VOICES 3 still plays SPREAD and OCTAVES as four (documented). A host
+  bar of another length mid-song leaves the bar lines as they were. The roll's "one key once" rule
+  still misses a few run notes (E15); the SONG roll differs from the engine in 532 of about a million
+  notes.
+
 ## Bibliography
 
 1. de Clercq, Trevor, and David Temperley. "A corpus analysis of rock harmony." *Popular Music* 30/1
