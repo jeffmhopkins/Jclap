@@ -336,7 +336,8 @@ inline const std::vector<Genre> &genres() {
        // The chachachá's quarters; the guajeos (as salsa); the quarters with the "cha-cha-chá" cell
        // that names it (4, its and, and the next 1). The cha-cha's piano takes the 2-3 guajeo at its
        // climax (its montuno, unpushed: the cha-cha doesn't anticipate), the quarters and the cell
-       // below it.
+       // below it, all on the Montuno player's octaves (a charanga pianist's: the guajeo is a line
+       // moving through the chord, not one block struck on its strokes).
        // The bolero's tresillo (1, the and of 2, 4: Impro-Visor's rhumba) and MMA's four bars; the
        // mambo's broken chord (the chord, then single inner notes).
        {{"x...x...x...x...", 0.5}, {"x-..x-x-..x-..x-|..x-..x-..x-..x-", 0.8}, {"..x-..x-..x-..x-|x-..x-x-..x-..x-", 0.8},
@@ -348,7 +349,7 @@ inline const std::vector<Genre> &genres() {
        {{kDorian, {"Cm7|F9", "Cm7|F9", "Ab7|G7", "Cm7|F9|Cm7|F9", "Dm7b5|G7b9|Cm7|Cm7", "Cm7|F9|Cm7|Cm7"}},
         // The bolero's song form: a minor i-iv-V7-i with its secondary dominants ("Besame Mucho").
         {kMinor, {"Fm7|G7|Cm|Cm", "Cm|Fm7|G7|Cm|C7|Fm7|D7|G7", "Gm7b5|C7b9", "Fm7|Bb7|Ebmaj7|Abmaj7|Dm7b5|G7b9|Cm|Cm", "Ebmaj7|Abmaj7|Dm7b5|G7b9", "Fm7|G7b9|Cm|Cm"}}},
-       {{"Cha-Cha", "Cha-Cha", 118, kFixed, 0, 0b1011},
+       {{"Cha-Cha", "Cha-Cha", 118, kFixed, 0, 0b1011, kMontuno},
         {"Latin Jazz Guajeo", "Guajeo", 190, kPushes | kRich | kFixed, 0, 0b010, kMontuno},
         {"Bolero", "Bolero", 80, kRich, 1, 0b110000},
         {"Mambo", "Mambo", 180, kPushes | kFixed, 0, 0b1000010, kMontuno}},
@@ -395,15 +396,16 @@ inline const std::vector<Genre> &genres() {
        // MMA's: the quarter-note block pulse, the ballad figure (1, the and of 2, 3 held), the right
        // hand's arpeggio up the chord and back, the four-bar phrase whose third bar drops its one; in
        // 6/8 (the same twelve sixteenths, in two dotted quarters): the dotted quarters, the six eighths leaning on 1 and 4,
-       // the left hand rocking under them.
+       // the left hand rocking under them. The half notes' lift (a chorus): the second half note
+       // broken into quarters on 3 and 4.
        {{"x-------x-------", 0.35}, {"x.f.b.f.x.f.b.f.", 0.65}, {"xxxXxxxxxXxx", 0.6}, {"x--x--x--x--", 0.35},
         {"x...x...x...x...", 0.5}, {"x.....x.x-------|x...x...x-------", 0.55}, {"b...3.5.8...5.3.|b.....5.8...5.3.", 0.45},
         {"x---x---x---x---|x---x---x---x---|....x---x---x---|x---x---x---x---", 0.5},
-        {"x-----x-----", 0.35, 6}, {"X.x.x.X.x.x.", 0.6, 6}, {"b.x.x.f.x.x.", 0.5, 6}},
+        {"x-----x-----", 0.35, 6}, {"X.x.x.X.x.x.", 0.6, 6}, {"b.x.x.f.x.x.", 0.5, 6}, {"x-------x---x---", 0.75}},
        {{"x-------x.x.x.xx", 0.5}, {"xxxXxxxxxXXX", 0.6}},
        // I-V/7-vi-IV over a falling bass; I-iii-IV-V; IV-V-iii-vi-ii-V-I; the last chorus again, ending home.
        {{kMajor, {"C|G/B|Am|F", "C|G/B|Am|F", "C|Em|F|G", "F|G|Em|Am|Dm|G|C|C", "Ab|Bb|C|C", "F|G|Em|Am|Dm|G|C|C"}}},
-       {{"Half Notes", "Halves", 72, kLongs, 0, 0b001, kPopPianist},
+       {{"Half Notes", "Halves", 72, kLongs, 0, 0b100000000001, kPopPianist},
         {"Broken Chords", "Arpeggio", 68, kLongs, 0, 0b010},
         {"12/8 Ballad", "12/8", 64, kTriplet},
         {"Ballad Block", "Block", 76, 0, 0, 0b10110000},
@@ -411,9 +413,10 @@ inline const std::vector<Genre> &genres() {
         {"6/8 Ballad", "6/8", 84, kWaltz | kSixEight, 0, 0}},
        "1, 61, 62"},
       {"Country", kFamilies[3], kPopPianist, 0.53, 1,
-       // Boom-chick (the bass on 1 and 3, the root then the fifth, the chord on 2 and 4); Cramer's
-       // Nashville sound, its slip notes into the chords; the two-step's two-beat: the bass string on
-       // 1 and 3 (root, then fifth), a down-up strum on 2.
+       // Boom-chick (the bass on 1 and 3, the root then the fifth, the chord on 2 and 4), its chorus
+       // lifted to the two-step's down-up strum on 2 and 4; Cramer's Nashville sound, its slip notes
+       // into the chords; the two-step's two-beat: the bass string on 1 and 3 (root, then fifth), a
+       // down-up strum on 2.
        // Western swing's four on the guitar, the fourth bar with its pickups (MMA); the country waltz's
        // oom-pah-pah, the bass on 1 (root, then fifth) and the chord on 2 and 3, and its busier strum.
        {{"b...x...f...x...", 0.45}, {"x---x-x-x---x-x-", 0.6}, {"b...x-x.f...x-x.", 0.8},
@@ -423,7 +426,7 @@ inline const std::vector<Genre> &genres() {
        // I-IV-I-V; I-II7-V7-I; I-I7-IV-iv-I. A waltz's: a chord a bar.
        {{kMajor, {"C|F|C|G7", "C|F|C|G7", "F|F|C|C", "C|D7|G7|C", "F|C|D7|G7", "C C7|F Fm|C|C"}},
         {kMajor, {"C|G7|C|C", "C|C|F|C|G7|G7|C|C", "F|F|C|C", "F|C|G7|C", "F|F|C|C|D7|D7|G7|G7", "C|G7|C|C"}}},
-       {{"Boom-Chick", "Boom-Chick", 112, kShorts, 0, 0b001},
+       {{"Boom-Chick", "Boom-Chick", 112, kShorts, 0, 0b101},
         {"Nashville Slip", "Slip", 84, kSlip, 0, 0b010},
         {"Two-Step", "Two-Step", 132, 0, 0, 0b100, kStrummer},
         {"Western Swing", "Western", 168, 0, 0, 0b1000, kRhythmGuitar, kShell, 3, 45, 67, 55, 0.6, 1},
@@ -528,12 +531,12 @@ inline const std::vector<Genre> &genres() {
       // ---- added later: kept after the first 24 so a saved genre number keeps its genre ----
       {"Calypso", kFamilies[5], kStrummer, 0.5, 0,
        // MMA's calypso: 1, the and of 2 and 4 (its "C12'3"), the same every bar; a busier strum, and
-       // the bar's one and four alone, quiet.
+       // the bar's one and four alone, quiet (the strum's and the piano's both).
        {{"x.....x.....x...", 0.5}, {"x.....x.x...x.x.", 0.75}, {"x...........x...", 0.3}},
        {{"x.....x...x.x.xx", 0.7}},
        // I-V7, I-IV-V7-I.
        {{kMajor, {"C|G7|C|C", "C|F|G7|C", "F|C|G7|C", "C|F|G7|C|C|F|G7|C", "F|F|C|C|D7|D7|G7|G7", "C|G7|C|C"}}},
-       {{"Calypso Strum", "Strum", 110, 0, 0, 0b011},
+       {{"Calypso Strum", "Strum", 110, 0, 0, 0b111},
         {"Calypso Piano", "Piano", 112, kLeftHand, 0, 0b111, kPopPianist}},
        "61"},
    };

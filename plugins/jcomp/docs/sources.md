@@ -2213,6 +2213,72 @@ fixed in 0.16.0, with tests where a test could hold them, except those noted at 
   README says (E15). C7/G at three voices stays G C E (G Bb E would be an E diminished over G); C F
   Bb stays Fsus/C, the shape of G C F's Csus/G; Db13 at five voices is four notes, 1-b7-3-13.
 
+## Part S. The fifteenth review (2026-11-21)
+
+A fifteenth cold pass, split as before (styles; song mode; takes, fills and DENSITY; harmony and
+voicing; the engine and rolls), backed every finding with `jcomp-dump`, a probe program, two fuzzers
+or the roll comparator. It found 69 problems (7 high, 29 medium, 33 low, some found twice); these
+were fixed in 0.17.0, with tests where a test could hold them, except those noted at the end.
+
+- **Styles.** The 0.16.0 *voicing* mutation was the only variation in the Ambient styles and leapt
+  9 to 19 semitones between bars (it took the 2nd to 5th ranked voicing, often an octave copy or one
+  with fewer notes); a pick is now a neighbour of the best voicing, same count and register, and
+  Ambient takes vary by a soft re-strike late in the bar (*come round*). The Cha-Cha's climax guajeo
+  was one repeated rootless block on the Jazz Comper; it plays on the Montuno player, in octaves, and
+  the README no longer calls its anticipated and-of-4 "unpushed". The one-decision pulse missed beats
+  longer than a step. Calypso Strum's mask couldn't reach its quiet one and four; Boom-Chick and Half
+  Notes played one grid in every section; fixed figures (chop, bell, montuno) ended on generic
+  quarters and now carry their bar into the ending. A chorus picked the sparsest groove up to 15% of
+  the time; never now. A blend with a clave genre keeps one clave. Left-hand styles ended on a
+  six-four (the Shout, Organ Bubble) or with the thumb's fifth ringing under the last chord
+  (Palm-Wine, Two-Step); the left hand's root sounds under the final chord and the hand stops there.
+- **Song mode and transport.** A line take struck block chords on its changes only after some chord
+  had sounded, so the music depended on where playback started; a chord sounded is no longer the
+  test. AUTO FILLS never filled a section shorter than its setting (Every 8, the default, never
+  filled a 4-bar intro); such a section counts the host's bars. A late tile restarted the section
+  after a bar of the next entry, and a late PREV or RESTART played the next entry's first bar first;
+  they act as if pressed at the bar line (a snapshot is kept there). Latch outlived a cued switch;
+  the pad layer's voice leading survived a reset, so a loop's first pass differed; a 3/4 project
+  under a 4/4 style rested a bar on every playback; VARY under SAME DICE 1 swapped every bar or never;
+  HOLD couldn't be pressed again during its let-go and could add a pass running free; NEXT in an
+  odd-length two-bar-clave entry added a bar; AUTO with PLAY on ran free in a pre-roll; a start inside
+  a held chord was silent for seconds. All fixed.
+- **Takes, fills and DENSITY.** In 20 styles takes differed only by a few softer strokes (1,725 such
+  takes over four seeds, 445 now); fixed figures vary by *lean* (their offbeats lighter) and
+  voicing, broken chords by *turn*, and mutate prefers the change heard most. *accents* made Freddie
+  Green's 2 and 4 softer than 1 and 3 and moved backbeat accents onto offbeats; neither now.
+  MUTATE THIS TAKE did nothing on a fill down in 55 styles or an ending in held styles; it finds a
+  change, or says there is none. *restrike* stuttered on chords that weren't held; it needs a beat of
+  chord either side. Fill mutations filled the rest before the lead-in, the MUTATE litter repeated
+  itself and the takes, *sparser* split a quarter pulse, and *shift* could move an accented push; all
+  fixed. Below the middle of LENGTH the push tie stayed full from 0.3 to 0.49, fell to a stab and a
+  silent bar below, and depended on tempo (it edited note-offs already sent); it is decided when the
+  push is struck, scaled smoothly. OCTAVES montuno endings landed on the 3rd or 5th; on the root.
+- **Harmony.** 4THS, keeping root, 3rd and 7th and then colour, left no fourth in nearly every 9th
+  chord at VOICES 4 (C9 as C E Bb D); a rootless level comes before the fourths are given up (Bb E A
+  D, Levine's left-hand voicing), every 4THS voicing has a perfect fourth, triads are D G C E, and a
+  7b9 takes its b13 (C Bb E Ab Db) instead of falling to SPREAD. SHELL at three voices dropped a 7b9's
+  7th and a 7#11's 3rd; every dominant is root, 3rd and 7th. SPREAD doubled a slash bass on top
+  (E7/G#: G# D E G#); GRIP dropped the 13th (C13 x32335 now) and took three strings at VOICES 4; the
+  drops voiced triads as CLOSE; slash chords exceeded VOICES; Bb C E G was C/Bb; a V was misspelt
+  into its target (Gb9 into B7); runs off augmented chords mixed F and F#; ROOTLESS 7#11 clustered.
+  TRY INSTEAD showed only its first four entries, always the unconditional ones, and offered B natural
+  on a Mixolydian I; suggestions are ranked by how they lead to the next chord and filtered to the
+  key and scale, and RICHER's V7 into minor is 7b9, 7#9 or 7#5.
+- **The engine and rolls.** The roll missed a run landing on the next entry's downbeat, a run into a
+  pushed band hit, runs under a HOLD or SHOT, and OCTAVES' step after a run; a Half ACC, a top-note
+  ACC, RUNS SHORTEN off and a run removing a cutting hit were drawn wrong; all fixed (fills 56
+  differing cases to 0, band hits 70 to 0, OCTAVES 42 to 0, LENGTH 0 to 0.3 several hundred to 0).
+  A note struck just before a cut was cut to nothing (zero-length notes under RHYTHM FROM BOTH); a
+  note struck with the cut keeps its length. The pad on the comp's channel lost keys; it takes them
+  back. A push without a voicing pick of its own takes its target's.
+- **Left as judgement or for later.** A run near an entry's end still reads its target from the
+  leaving take (E02; 56 differing SONG-form cases); two comparator cases are untraced (E14); a late
+  held chord leaves sub-millisecond notes, by design (E13). A voicing pick led from a re-voiced
+  chord can still drift; a batida chord over the held thumb has one voicing, so its pick isn't
+  heard; and an organ's tied repeats make a few different takes play alike. A close triad at four
+  voices still doubles its top note. The Afrobeat tenor line varies only its dynamics.
+
 ## Bibliography
 
 1. de Clercq, Trevor, and David Temperley. "A corpus analysis of rock harmony." *Popular Music* 30/1

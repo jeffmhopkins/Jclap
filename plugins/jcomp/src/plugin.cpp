@@ -353,6 +353,7 @@ public:
             b.hasTransport = true;
             // The count-in isn't the song: JComp starts at the bar the host starts on.
             b.playing = (t->flags & CLAP_TRANSPORT_IS_PLAYING) && !(t->flags & CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL);
+            b.preRoll = (t->flags & CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL) != 0;
             b.beats = static_cast<double>(t->song_pos_beats) / CLAP_BEATTIME_FACTOR;
             if (t->flags & CLAP_TRANSPORT_HAS_TIME_SIGNATURE && t->tsig_denom > 0) {
                b.hasBar = true;
