@@ -798,7 +798,20 @@ struct Breaks {
 inline double gripFrets(const Voicing &v); // (below: how a hand frets a grip)
 inline double clashes(const Voicing &v, const Chord &c); // (below: a voicing's rubs)
 inline Breaks breaksOf(const Voicing &v, const Voicing *prev, const VoiceSettings &vs); // (below: the rules it breaks)
-inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOverride = -1, bool widen = true) {
+inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOverride = -1, bool widen = true);
+namespace detail {
+// One shape's voicings, without the fallbacks that call candidates() again: those are in
+// candidates(), below, so that each fallback (a shape for another, a voice fewer, a wider window)
+// stacks only its small frame on this big one. Kept out of line for the same reason: a compiler that
+// gives every block its own stack slots makes this frame large, and an audio thread's stack (or
+// Windows' 1 MB) has no room for three of them. `redirect` is a shape to voice instead.
+#if defined(_MSC_VER)
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+inline Voicings shapeCandidates(const Chord &c, const VoiceSettings &vs, int shapeOverride, bool widen, int &redirect,
+                                bool &redirectWiden) {
    Voicings out;
    if (c.none())
       return out;
@@ -1118,8 +1131,10 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
          if (most == 0 && !q.seventh && hasIv(14) && n > 3)
             out.clear();
       }
-      if (out.empty())
-         return candidates(c, vs, kSpread);
+      if (out.empty()) {
+         redirect = kSpread;
+         return out;
+      }
       break;
    }
    case kSpread: {
@@ -1188,8 +1203,10 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       const auto has = [&](int i) { return std::find(t.begin(), t.end(), i) != t.end(); };
       const int third = has(4) ? 4 : has(3) ? 3 : has(5) ? 5 : -1;
       const int seventh = has(10) ? 10 : has(11) ? 11 : has(9) ? 9 : -1;
-      if (!q.seventh || third < 0 || seventh < 0 || c.quality == kDim7 || c.quality == kHalfDim)
-         return candidates(c, vs, kClose);
+      if (!q.seventh || third < 0 || seventh < 0 || c.quality == kDim7 || c.quality == kHalfDim) {
+         redirect = kClose;
+         return out;
+      }
       const bool dom = third == 4 && seventh == 10;
       int colour = has(15) ? 15 : has(13) ? 13 : 14;              // the altered 9th, or the 9th
       // The 13th on a dominant; the b13 with an altered ninth (Levine's 3-b13-7-b9 for the V of a minor ii-V).
@@ -1532,8 +1549,10 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                out.push_back(v);
       // A chord no grip fits (a slash chord with no room, a diminished chord over a low FLOOR) is
       // still played: close, over its bass.
-      if (out.empty())
-         return candidates(c, vs, kClose);
+      if (out.empty()) {
+         redirect = kClose;
+         return out;
+      }
       break;
    }
    default: {
@@ -1710,11 +1729,24 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       }
       // DROP 2+4 too wide for the window is DROP 2 before it is a voice fewer (a three-note stack
       // has no fourth voice to drop: F4 A4 C5 is a close triad).
-      if (out.empty() && shape == kDrop24)
-         return candidates(c, vs, kDrop2, widen);
+      if (out.empty() && shape == kDrop24) {
+         redirect = kDrop2;
+         redirectWiden = widen;
+         return out;
+      }
       break;
    }
    }
+   return out;
+}
+} // namespace detail
+
+inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOverride, bool widen) {
+   int redirect = -1;
+   bool redirectWiden = true;
+   Voicings out = detail::shapeCandidates(c, vs, shapeOverride, widen, redirect, redirectWiden);
+   if (redirect >= 0)
+      return candidates(c, vs, redirect, redirectWiden);
    // Nothing fits the window (a narrow one, a big shape): a voice fewer, then a wider window.
    if (out.empty() && vs.voices > 3) {
       VoiceSettings fewer = vs;
