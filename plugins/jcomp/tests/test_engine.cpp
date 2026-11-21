@@ -566,6 +566,176 @@ static void roundNine() {
 }
 
 // The song's structure: the order SONG mode plays the sections in.
+// The tenth review's grooves, fills, takes and chord names.
+static void roundTen() {
+   const auto style = [](const char *sn, int &g, int &st) {
+      for (g = 0; g < genreCount(); ++g)
+         for (st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st)
+            if (std::string(genreAt(g).styles[static_cast<size_t>(st)].name) == sn)
+               return true;
+      return false;
+   };
+   const auto name = [](Ints n, int key = -1) { return chordName(nameChord(n, true, key), 0); };
+   int g = 0, st = 0;
+   // D03, D06, D10: chord names.
+   JCLAP_CHECK(name({52, 58, 60}) == "C7/E");
+   JCLAP_CHECK(name({48, 52, 57, 62}) == "C6/9");
+   JCLAP_CHECK(name({48, 51, 55, 58, 62, 65}) == "Cm11");
+   JCLAP_CHECK(name({52, 58, 62}) == "C9");
+   JCLAP_CHECK(name({58, 64}, 0) == "C7");
+   // D04: a guitar's open C, x32010.
+   {
+      VoiceSettings vs;
+      vs.shape = kGrip;
+      vs.voices = 5;
+      const Voicing v = voice(Chord{0, kMaj, -1}, nullptr, vs);
+      const int want[5] = {48, 52, 55, 60, 64};
+      JCLAP_CHECK_EQ(v.count, 5);
+      for (int i = 0; i < 5 && i < v.count; ++i)
+         JCLAP_CHECK_EQ(static_cast<int>(v.notes[static_cast<size_t>(i)]), want[i]);
+   }
+   // A01: Bell Twelve's chords are close triads (their thirds kept).
+   JCLAP_CHECK(style("Bell Twelve", g, st));
+   JCLAP_CHECK(genreAt(g).styles[static_cast<size_t>(st)].shape == kClose && genreAt(g).styles[static_cast<size_t>(st)].voices == 3);
+   // Every style's fills: their anticipation sure (C14), no louder than the take's peak and a bit
+   // (C05), a line as written (C04).
+   for (g = 0; g < genreCount(); ++g)
+      for (st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st)
+         for (uint32_t seed : {1u, 2u}) {
+            Recipe r = recipeOf(g, st, seed);
+            r.weird = 0.8;
+            auto song = std::make_unique<Song>();
+            generateSong(r, *song);
+            for (const Section &sec : song->sections) {
+               const Pattern &f = sec.fill;
+               if (f.empty())
+                  continue;
+               if (!(genreAt(g).styles[static_cast<size_t>(st)].mods & kFixed))
+                  JCLAP_CHECK(chordPeak(f) <= std::max(chordPeak(sec.takes[0]) + 12, kGhost + 12));
+               for (int s = 0; s < f.steps; ++s) {
+                  if (f.at(s).on() && f.at(s).push && chordPart(f.at(s).part))
+                     JCLAP_CHECK_EQ(static_cast<int>(f.at(s).chance), 100);
+                  if (f.at(s).on() && f.at(s).part == kPartLine)
+                     JCLAP_CHECK(!f.at(s).push);
+               }
+            }
+         }
+   // C01: a boom-chick's fill isn't its groove: something leads into the next section.
+   for (const char *sn : {"Boom-Chick", "Two-Step", "Boogie Figure", "Broken Chords"}) {
+      JCLAP_CHECK(style(sn, g, st));
+      for (uint32_t seed = 1; seed <= 6; ++seed) {
+         auto song = std::make_unique<Song>();
+         generateSong(recipeOf(g, st, seed), *song);
+         for (const Section &sec : song->sections) {
+            const Pattern was = lastBar(sec.takes[0]), &f = sec.fill;
+            if (f.empty())
+               continue;
+            bool same = true;
+            for (int s = 0; s < f.stepsPerBar() && same; ++s)
+               same = f.at(s).on() == was.at(s).on() && f.at(s).push == was.at(s).push &&
+                      (!f.at(s).on() || f.at(s).vel == was.at(s).vel);
+            JCLAP_CHECK(!same);
+         }
+      }
+   }
+   // C10: the 6/8 fill's lead-in is its last eighth.
+   JCLAP_CHECK(style("6/8 Ballad", g, st));
+   for (uint32_t seed = 1; seed <= 20; ++seed) {
+      auto song = std::make_unique<Song>();
+      generateSong(recipeOf(g, st, seed), *song);
+      for (const Section &sec : song->sections)
+         for (int s = 0; s < sec.fill.steps; ++s)
+            if (sec.fill.at(s).on() && sec.fill.at(s).push)
+               JCLAP_CHECK(s >= 10);
+   }
+   // Takes: C02 a backbone bass stays on its strong beats; C03 nothing struck inside a held chord;
+   // C06 an organ's chords held.
+   for (g = 0; g < genreCount(); ++g)
+      for (st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st)
+         for (uint32_t seed : {1u, 2u, 3u}) {
+            const Recipe r = recipeOf(g, st, seed);
+            auto song = std::make_unique<Song>();
+            generateSong(r, *song);
+            const unsigned mods = genreAt(g).styles[static_cast<size_t>(st)].mods;
+            const bool organ = playerOf(r).instrument == kOrgan && !(mods & kShorts);
+            for (const Section &sec : song->sections) {
+               const Pattern &t0 = sec.takes[0];
+               for (int k = 1; k < kTakes; ++k) {
+                  const Pattern &t = sec.takes[static_cast<size_t>(k)];
+                  if (t.steps != t0.steps)
+                     continue;
+                  for (int s = 0; s < t.steps; ++s) {
+                     if (t0.at(s).on() && leftHand(t0.at(s).part) && s % strongSteps(t0) == 0)
+                        JCLAP_CHECK(t.at(s).on() && leftHand(t.at(s).part));
+                     // (A chord pushed into the next bar, rung, is the held comp's own anticipation; and a
+                     // held chord the take moved or left out holds nothing.)
+                     if (heldTake(t0) && !t0.at(s).on() && heldOver(t0, s) && t.at(s).on() && !t.at(s).push) {
+                        int holder = s - 1;
+                        while (holder > 0 && !t0.at(holder).on())
+                           --holder;
+                        JCLAP_CHECK(leftHand(t.at(s).part) || !(t.at(holder) == t0.at(holder)));
+                     }
+                     if (organ && t.at(s).on() && chordPart(t.at(s).part) && t.at(s).len <= 1 && !(t0.at(s) == t.at(s)))
+                        JCLAP_CHECK(t.at(s).art != kArtAsWritten);
+                  }
+               }
+            }
+         }
+   // A06: the shout's organ bounces its upbeats, half held, and rings its downbeats.
+   JCLAP_CHECK(style("Shout", g, st));
+   {
+      auto song = std::make_unique<Song>();
+      generateSong(recipeOf(g, st, 1), *song);
+      const Pattern &t = song->sections[kVerse].takes[0];
+      int half = 0;
+      for (int s = 0; s < t.steps; ++s)
+         if (t.at(s).on() && chordPart(t.at(s).part) && t.at(s).len <= 1) {
+            JCLAP_CHECK(t.at(s).art != kArtRing || s % t.perBeat() == 0);
+            half += t.at(s).art == kArtHalf;
+         }
+      JCLAP_CHECK(half > 0);
+   }
+   // A07: Chic's second bar breathes: two of its three rests stay in most takes.
+   JCLAP_CHECK(style("Chic Chucking", g, st));
+   {
+      int kept = 0, all = 0;
+      for (uint32_t seed = 1; seed <= 30; ++seed) {
+         auto song = std::make_unique<Song>();
+         generateSong(recipeOf(g, st, seed), *song);
+         for (const Pattern &t : song->sections[kChorus].takes) {
+            if (t.steps < 32)
+               continue;
+            ++all;
+            kept += (!t.at(21).on()) + (!t.at(25).on()) + (!t.at(29).on()) >= 2;
+         }
+      }
+      JCLAP_CHECK(all > 0 && kept * 10 >= all * 8);
+   }
+   // C07: an ambient drift has no fill down to re-strike its held chord.
+   JCLAP_CHECK(style("Mirror Drift", g, st));
+   {
+      auto song = std::make_unique<Song>();
+      generateSong(recipeOf(g, st, 1), *song);
+      for (const Section &sec : song->sections)
+         JCLAP_CHECK(sec.fillDown.empty());
+   }
+   // A05: WEIRD reharmonises no Caribbean or African progression.
+   for (g = 0; g < genreCount(); ++g) {
+      if (genreAt(g).family != kFamilies[5])
+         continue;
+      Recipe r = recipeOf(g, 0, 4), w = r;
+      r.weird = 0.0;
+      w.weird = 1.0;
+      auto a = std::make_unique<Song>(), b = std::make_unique<Song>();
+      generateSong(r, *a);
+      generateSong(w, *b);
+      for (int i = 0; i < kSections; ++i)
+         for (int bar = 0; bar < a->sections[static_cast<size_t>(i)].progBars; ++bar)
+            JCLAP_CHECK(a->sections[static_cast<size_t>(i)].chordAt(bar, false).root ==
+                        b->sections[static_cast<size_t>(i)].chordAt(bar, false).root);
+   }
+}
+
 static void songStructure() {
    // Templates by name, a hand-written order that is one named as it, an empty one once through.
    {
@@ -778,6 +948,70 @@ static void songStructure() {
       const auto out = runWith(e, 24000 * 12, 0.0, [](int64_t, Block &) {});
       const std::set<int> push = startingAt(out, 24000 * 7 + 12000);
       JCLAP_CHECK(push.count(5) == 1 && push.count(8) == 0);
+   }
+   // NEXT steps through the structure's entries, a section that comes twice running included: in
+   // Pop's C C, NEXT in the first chorus goes to the second, then the outro.
+   {
+      auto song = twoBars();
+      song->setForm(2);
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.song = true;
+      s.sync = 2;
+      s.play = true;
+      s.freeTempo = 120.0;
+      s.fillInto = false;
+      e.setSettings(s);
+      e.reset();
+      std::vector<Bar> got = bars(e, 16, 0.0, false); // to the first bar of the first of the two choruses
+      JCLAP_CHECK_EQ(got[15].formPos, 7);
+      JCLAP_CHECK(e.noteOn(0, s.noteFor(kActNext), 100));
+      got = bars(e, 4, 0.0, false);
+      JCLAP_CHECK_EQ(got[0].formPos, 8);
+      JCLAP_CHECK_EQ(got[1].section, kChorus);
+      JCLAP_CHECK_EQ(got[1].formPos, 9);
+      JCLAP_CHECK_EQ(got[3].section, kOutro);
+      JCLAP_CHECK_EQ(got[3].formPos, 10);
+   }
+   // A structure that ends on a section with no ending of its own ends on the outro's.
+   {
+      auto song = twoBars();
+      song->setForm(kCustomForm, {kIntro, kChorus});
+      song->sections[kChorus].ending = Pattern{};
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.song = true;
+      s.sync = 2;
+      s.play = true;
+      s.freeTempo = 120.0;
+      e.setSettings(s);
+      e.reset();
+      const std::vector<Bar> got = bars(e, 5, 0.0, false);
+      JCLAP_CHECK(!got[2].ending && got[3].ending);
+      JCLAP_CHECK(got[4].ended);
+   }
+   // A host's count-in: the song waits on its first entry, then starts from it at bar 1.
+   {
+      auto song = twoBars();
+      song->setForm(3);
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.song = true;
+      e.setSettings(s);
+      e.reset();
+      const std::vector<Bar> got = bars(e, 5, -8.0, true);
+      for (int i = 0; i < 4; ++i) {
+         JCLAP_CHECK_EQ(got[static_cast<size_t>(i)].section, kIntro);
+         JCLAP_CHECK_EQ(got[static_cast<size_t>(i)].formPos, 0);
+      }
+      JCLAP_CHECK_EQ(got[4].section, kVerse);
+      JCLAP_CHECK_EQ(got[4].formPos, 1);
    }
 }
 
@@ -2076,7 +2310,8 @@ int main() {
                      JCLAP_CHECK(!sec.fill.at(s).on() || last.at(s).on());
                   JCLAP_CHECK(sec.fill.at(0).on() == last.at(0).on());
                } else
-                  JCLAP_CHECK(sec.fill.at(0).on());
+                  // (Not over a backbeat take's rest: a slow blues on 2 and 4 has no downbeat chord.)
+                  JCLAP_CHECK(sec.fill.at(0).on() || keepsOff(sec.takes[0], 0));
                for (int s = 0; s < sec.fill.steps; ++s)
                   JCLAP_CHECK(!sec.fill.at(s).on() || sec.fill.at(s).art != kArtChop);
             }
@@ -2575,11 +2810,18 @@ int main() {
             for (const Section &sec : song->sections) {
                const Pattern &d = sec.fillDown;
                const bool intro = &sec == &song->sections[kIntro];
+               // (An ambient drift has none: its fill, or the take, plays on into the change.)
+               if (genreAt(g).family == kFamilies[6]) {
+                  JCLAP_CHECK(d.empty());
+                  continue;
+               }
                JCLAP_CHECK(!d.empty() && d.rate == sec.takes[0].rate);
                JCLAP_CHECK(d.count() <= std::max(2, sec.fill.count()));
-               if ((genreAt(g).styles[static_cast<size_t>(st)].mods & kFixed) && !intro) {
+               if (genreAt(g).styles[static_cast<size_t>(st)].mods & kFixed) {
                   // A fixed figure settles as itself: its onsets and pushes are the take's (Freddie
-                  // Green's four, the clave's side, a montuno's and of 4 into the next chord).
+                  // Green's four, the clave's side, a montuno's and of 4 into the next chord). The
+                  // intro's set-up too (B05).
+                  (void)intro;
                   for (int k = 0; k < d.steps; ++k) {
                      const Hit &w = sec.takes[0].at(k % sec.takes[0].steps);
                      JCLAP_CHECK(!d.at(k).on() || w.on());
@@ -3705,6 +3947,7 @@ int main() {
 
    roundEight();
    roundNine();
+   roundTen();
    songStructure();
    return jclap::core::testResult();
 }

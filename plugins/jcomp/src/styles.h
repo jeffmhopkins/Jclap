@@ -270,10 +270,10 @@ inline const std::vector<Genre> &genres() {
       // ---- Jazz & Latin ----
       {"Swing Jazz", kFamilies[2], kJazzComper, 0.64, 1,
        // The Charleston (1, the and of 2) and its reverse (the and of 1, 3); Garland's offbeats, an eighth ahead of the next beat;
-       // Freddie Green's four to the bar, one or two notes, even quarters (the chunk at one level: a
-       // backbeat accent on 2 and 4 is the drummer's hi-hat, not his).
+       // Freddie Green's four to the bar, one or two notes, even quarters (the engine shortens 2 and 4
+       // and lifts them a little: Berens, "Basics of Freddie Green Comping").
        // Held comps (MMA's basic swing piano: 1 held, then the and of 3 held over the bar; Impro-Visor's
-       // chord held to the and of 4); Freddie Green's four, each stroke most of a beat long ("chunk"), four
+       // chord held to the and of 4); Freddie Green's four, an eighth or so a stroke ("chunk", "chit"), four
        // to the bar throughout (the two-feel is the bass's, not his); MMA's
        // LongSS2 (1, 2, the and of 3, 4).
        {{"x.....x.........", 0.35}, {"..x.....x.......", 0.45}, {"......x.......x.", 0.6}, {"x--.x--.x--.x--.", 0.8},
@@ -499,7 +499,7 @@ inline const std::vector<Genre> &genres() {
        {{kMajor, {"C|G7", "C|G7|C|G7", "F|G7", "C|F|C|G7", "F|C|G7|C", "C|G7|C|C"}}},
        {{"Palm-Wine", "Palm-Wine", 108, 0, 0, 0b001},
         {"Dance Band", "Dance Band", 120, 0, 0, 0b010},
-        {"Bell Twelve", "12/8", 112, kTriplet | kFixed, 0, 0, -1, kGrip, 3, 52, 76, 64}},
+        {"Bell Twelve", "12/8", 112, kTriplet | kFixed, 0, 0, -1, kClose, 3, 55, 76, 66}},
        "7, 26, 27, 28"},
 
       // ---- Ambient ----

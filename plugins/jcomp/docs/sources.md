@@ -1874,6 +1874,66 @@ naming of the three-note rootless dominants (see below).
   is still the 13th's stack (no four-note stack holds root, 3, 7 and 9). A fill's roll is still voiced
   from the fill's own start, not from the take before it.
 
+## Part N. The tenth review (2026-11-21)
+
+A tenth cold pass, split as before (styles and genres; song mode and structure; fills and takes;
+harmony and voicing; the engine, plugin and rolls), reproduced every finding with `jcomp-dump` or a
+probe program. It found 54 problems (2 critical, 4 high, 22 medium, 26 low); these were fixed in
+0.12.0, each with a test where a test could hold it, except the two noted at the end.
+
+- **Song mode and structure.** A host count-in (negative beats) placed the song at its last entry;
+  the song waits on its first. A structure ending on a section with no ending of its own never ended;
+  the outro's ending plays, and the tile and NOW PLAYING show it. A structure edited while following
+  the host kept the old position; it is placed again, and so is a change to a section's bars or to
+  SONG ENDS. NEXT and PREV stepped sections, so Pop's C C skipped its second chorus; they step
+  entries. The panel's frame kept the last bar's fill and ending lit after the song stopped; only a
+  live bar shows them. A position past the structure's end wrapped to the start; it is clamped, and a
+  section found again after a wrap with SONG ENDS on is its last entry. RESET didn't clear a waiting
+  count-in or a queued entry; it does. A section that comes back played identically each time; it
+  plays a little harder (four percent a time, to the fourth) with its own dice, and AABA's last A
+  before the bridge closes on the outro's chord (a judgement: the A before a contrasting B usually
+  cadences home). New songs were Once through; they are Verse-Chorus. A factory preset dropped the song's
+  structure; it keeps it. The start entry is marked on the letters; an empty structure's readout says
+  it plays every section once.
+- **Harmony and voicing.** The octave line leapt an octave or more between chords in 9 of 12 styles
+  that use it; it follows the line before, within a fourth where the window allows. E Bb C was named
+  Gb7 rootless (a tritone away); a held root with its 3rd and b7 wins (C7/E). C E A D was Am11/C; a
+  bass that has a third above it wins (C6/9). A tritone pair is named by the key (Bb E in C is C7,
+  not Gb7). A three-note maj7 dropped its 7th; it replaces the root. A guitar's open C was the barre;
+  the open triad shapes (x32010) are offered for a major or minor triad, and a grip that can't be
+  fretted at five strings tries four (none unplayable of 348). ROOTLESS at three notes on a minor or sus
+  chord lost its extension; the 11th or 13th takes the fifth's place. A slash chord's bass on keys
+  went above the chord; it stays under.
+- **Styles.** The Bell Twelve played open fourths with no thirds (A01); close triads. Freddie Green's
+  four played every stroke the same length; 1 and 3 ring a little longer (sometimes nearly the full
+  beat) and 2 and 4 are a touch louder (Berens [20]). The gospel shout's organ held every upbeat
+  legato at 160 bpm; at a fast triplet tempo the upbeats are half held and the downbeats ring. Chic's
+  kBusy filled the second bar's rests one take in five; a rest the other bar plays is filled only
+  seldom. WEIRD put jazz's tritone subs into every genre; only jazz families get them, others approach
+  from the V7, and the Caribbean and African families get no reharm.
+- **Fills and takes.** Boom-chick-type takes (Two-Step, Boogie Figure, Organ Bubble) and Broken Chords
+  had fills identical to the groove; their last chords lead in, the broken chord's over its left
+  hand's last note. Fills raised a quiet section's chords to a full accent (up to +75%); they come up
+  to the take's peak and a little, never more. Interlock's fill accented and pushed the tenor line;
+  only chords lead in. The 6/8 fill's lead-in fell on eighth 5; it is the last eighth. A held fill put
+  a downbeat chord into a backbeat take; not over a kept-off beat. A pushed lead-in could be a WEIRD
+  chance hit; it is always played. Ambient's fill down re-struck its held drift chord and went silent
+  for a beat; a drift has no fill down. "sparser" and "shift" took a boom-chick's bass off 1 and 3
+  (thinnedBy's own rule); the bass's strong-beat notes stay. "busier", "shift", "answer" and WEIRD's
+  strays cut held chords; nothing is struck inside one. Mutated organ takes stabbed; the organ's rule
+  holds them. Four To The Bar's takes were always the same as its first; an even four's 1 and 3 may
+  go lighter, and a take that came out the same as its parent is mutated again. BLEND kept the other
+  genre's lengths (a held skank, a stabbed Held Comp); this style's lengths stay. DENSITY above the
+  middle chopped pads into eighths; a held style or a pad gets only rung chords on the beats.
+- **The rolls.** A ringing chord was drawn over the next change, where the engine cuts it; it is cut
+  there. SPREAD's held low note wasn't cut by the next low note; it is. A line counted as the chord
+  hand for RING's gap; it is a hand of its own, as in the engine. An ending's roll used the ending's
+  own offbeat feel, not the section's; the section's.
+- **Left as judgement.** C E F# B is still D13 (the same pitch set as Levine's G13, F A B E, an
+  earlier choice). A three-voice 13sus is the IV triad over V; the bass marks the change. A line
+  style's fill is its groove (Tenor Line, Palm-Wine, Right-Hand Arpeggio), documented in the README.
+  The rolls don't draw the slip note's grace notes (documented).
+
 ## Bibliography
 
 1. de Clercq, Trevor, and David Temperley. "A corpus analysis of rock harmony." *Popular Music* 30/1

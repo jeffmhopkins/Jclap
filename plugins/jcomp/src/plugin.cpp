@@ -50,6 +50,7 @@ public:
       }
       song_ = std::make_unique<Song>();
       generateSong(recipeFrom([this](clap_id id) { return values_[id].load(); }), *song_);
+      song_->setForm(1); // a new song is a song form: verse-chorus (an old one loads as it was saved)
       engine_ = std::make_unique<Engine>();
       mail_ = std::make_unique<jclap::core::TripleBuffer<Song>>();
       engine_->setSettings(settings());
