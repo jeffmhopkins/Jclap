@@ -41,7 +41,7 @@ public:
    int editSection = kChorus;
    int editTake = 0;       // 0..3, 4 the fill, 5 the fill down, 6 the ending
    int editStep = -1;      // the hit picked in EDIT
-   bool playersOpen = false, browserOpen = false, notesOpen = false;
+   bool playersOpen = false, browserOpen = false, notesOpen = false, formOpen = false;
    int learnAction = -1;   // the action waiting for a note in CUSTOM
    // The MUTATE card: the children on show, their tags, and the parents to go back to.
    std::vector<Pattern> litter;

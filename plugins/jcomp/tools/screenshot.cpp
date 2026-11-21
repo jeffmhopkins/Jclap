@@ -1,11 +1,11 @@
 // Renders JComp's panel offscreen to a PNG, for the README and visual checks.
 //
 //    jcomp-screenshot out.png [generate|chords|edit|play] [width height] [players] [browser] [notes] [custom]
-//                     [density=0..1] [length=0..1]
+//                     [form] [density=0..1] [length=0..1]
 //
 // The panel shows the Funk "Pocket Stabs" song, playing the chorus a few steps in, following the
 // host. `players`, `browser` and `notes` open those overlays; `custom` shows the notes card's CUSTOM
-// map with one note learned and one learning.
+// map with one note learned and one learning; `form` opens SONG STRUCTURE on a structure of its own.
 
 #include <cstdio>
 #include <cstdlib>
@@ -32,6 +32,8 @@ public:
       generateSong(recipeFrom([this](clap_id id) { return values_[id]; }), song_);
       song_.sections[kVerse].locked = 1;
       song_.sections[kChorus].generation = 2;
+      song_.setForm(2); // Pop
+      frame_.formPos = 3;
       frame_.running = frame_.following = frame_.hostPlaying = true;
       frame_.tempo = 104.0;
       frame_.bar = 1;
@@ -89,7 +91,7 @@ public:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [generate|chords|edit|play] [width height] [players] [browser] [notes] [custom] [density=0..1] [length=0..1]\n",
+      std::fprintf(stderr, "usage: %s out.png [generate|chords|edit|play] [width height] [players] [browser] [notes] [custom] [form] [density=0..1] [length=0..1]\n",
                    argv[0]);
       return 2;
    }
@@ -116,6 +118,11 @@ int main(int argc, char **argv) {
          host.values_[kNoteMap] = 1;
          host.values_[kLearnNote + kActChorus] = 60;
          host.learnAction = kActFill;
+      } else if (a == "form") {
+         // A structure of its own: the chorus back after the bridge, and twice at the end.
+         host.song_.setForm(kCustomForm, {kIntro, kVerse, kPre, kChorus, kVerse, kPre, kChorus, kBridge, kBreak, kChorus,
+                                          kChorus, kOutro});
+         host.formOpen = true;
       } else if (!a.compare(0, 8, "density="))
          host.values_[kDensity] = std::atof(a.c_str() + 8);
       else if (!a.compare(0, 7, "length="))

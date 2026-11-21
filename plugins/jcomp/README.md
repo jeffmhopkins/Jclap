@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.10.0.
+Version 0.11.0.
 
 ![Panel](docs/panel.png)
 
@@ -135,6 +135,29 @@ voiced, and its energy (drag it up or down; low energy plays the take softly and
 ring, and dragging keeps the section's chords; so do the blend slider and a shift-clicked blend tile,
 which remake only the rhythms, while WEIRD remakes the chords too). The
 die rolls just that section; the lock keeps it from ROLL SONG. Click a section to mutate it below.
+
+The dropdown beside THE SONG's title is the song's **structure**: the order SONG mode plays the
+sections in, a repeat being one more entry. Next to it the structure is spelled out a letter an entry
+(Intro, Verse, Pre, Chorus, Bridge, breaK, Outro), the entry playing lit while SONG plays. The
+templates:
+
+| Structure | Order |
+| --- | --- |
+| Once through | I V P C B K O (the default, and every song from before 0.11.0) |
+| Verse-Chorus | I V C V C B C O |
+| Pop | I V P C V P C B C C O |
+| Short | I V C V C O |
+| AABA | I V V B V O |
+| Extended | I V P C V P C K B C C O |
+
+**Custom…** (or a click on the letters) opens **SONG STRUCTURE** on the structure as it is: click a
+section to add an entry, drag an entry to move it, right-click it or its × to take it out, up to 32.
+A readout under the order gives its entries, bars and length at the tempo. **CLEAR** empties it,
+**START FROM TEMPLATE** puts in a template to edit, **CANCEL** leaves the song as it was, and **OK**
+puts it in the song (named as a template when it is one; an empty one plays every section once). The
+structure is saved with the song and with a preset's song.
+
+![Song structure](docs/panel-form.png)
 
 ### MUTATE
 
@@ -300,18 +323,24 @@ is struck where it comes, as the bar's first chord is played.
 
 A tile per section: its note, its chords, its take with the playhead, its energy, and its four takes
 and fill. Click a tile to switch to it, a number for that take, FILL for a fill. The section coming
-next is outlined with **NEXT**. **LOOP** stays in a section; **SONG** plays each for its bars, then
-the next, through to the outro, and ends: the outro's last bar or two are its **ending** (four, then
+next is outlined with **NEXT**. **LOOP** stays in a section; **SONG** plays the song's structure (see
+THE SONG), each entry for its section's bars, then the next, with the fill into the next entry's section
+(the fill down when that one's quieter), through to the last entry, and ends: the last entry's last bar
+or two are its section's **ending** (only the last entry's: a chorus that comes back plays its fill until
+its last time) (four, then
 the last chord rung out, as MMA's endings; the style's own where it has one: SwingEnd's four then 1
 and 3, the cha-cha cell ending on the 1 (a montuno's last chord comes on the and of 4, anticipated), a
 house riff's own last bar, the R&B ending's 1, 3 and 4; a skank, an upstroke or an offbeat stab ends on
 its offbeats, then the held chord; the last chord is the ending's loudest), and then JComp rests until you pick a section or
 start again (picking the outro plays it again; switching to LOOP or REPEAT plays on from the next
 switch point). An outro shorter than its ending plays the ending's last bars, so the last chord still
-rings. **REPEAT** plays the song round and round, the outro's fill leading back into the intro
-(SONG's behaviour before 0.6.0). Running free, SONG starts from the Section parameter's section.
-Following the host, the song starts at the host's bar 1 with the
-Section parameter's section, so starting the host again, or jumping, finds the section that bar is
+rings. **REPEAT** plays the structure round and round, its last entry's fill leading back into its
+first (SONG's behaviour before 0.6.0). Running free, SONG starts from the Section parameter's
+section's first entry in the structure (or the structure's first entry, if it leaves that section
+out). A section switched to by hand goes on from its next entry in the structure (the chorus asked
+for in the first verse of Pop goes on to the second verse), and a structure changed while playing
+keeps its place (following the host, the song is placed again at the next bar line). Following the
+host, the song starts at the host's bar 1 with the Section parameter's section's first entry, so starting the host again, or jumping, finds the section that bar is
 in, its ending included (past the song's end, in SONG, nothing plays). In SONG and REPEAT, clicking a
 tile doesn't move where the song starts: it does that only with BY set to the Section parameter
 (by note, the section's note switches as it always does). A style picked while playing, a waltz for a
@@ -684,6 +713,12 @@ section and take of the bar heard. The rolls draw a page of a long progression a
 at the view's end as they play, drop VARY's soft hits, keep a run into a band hit, and follow HALF STEP
 FROM BELOW and LANDS ON. Copying chords from another section rounds the section's bars to the progression.
 
+**Song structure (0.11.0).** SONG mode plays a structure of the song's own: a template (Verse-Chorus,
+Pop, Short, AABA, Extended) or one written by hand in SONG STRUCTURE, a section repeated by adding
+it again. Fills lead into the next entry, the ending is the last entry's, REPEAT goes round the
+structure, and a section switched to by hand carries on from its next entry. Songs save version 5
+(older songs play once through, as before).
+
 **Left out for now.** A "+ GUITAR" second player layered over the first, and recording a part played
 in to a take.
 
@@ -697,4 +732,4 @@ it, bar by bar, for review (`jcomp-dump [genre] [style] [seed] [weird] [energy] 
 [sections] [takes] [human]`); `jcomp-screenshot` renders these pictures:
 
     jcomp-screenshot out.png [generate|chords|edit|play] [width height] [players] [browser] [notes] [custom]
-                     [density=0..1] [length=0..1]
+                     [form] [density=0..1] [length=0..1]

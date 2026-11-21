@@ -2140,6 +2140,317 @@ public:
 
 // ---- overlays ----
 
+// Each section's colour where the song's structure is drawn.
+inline const unsigned kSectionColours[kSections] = {kBlue, kGreen, kYellow, kOrange, kPurple, 0xffe58a8au, kTitle};
+
+// The song's structure in THE SONG's header: the order SONG mode plays the sections in, a letter an
+// entry, the one playing lit. A click opens SONG STRUCTURE.
+class FormRow : public visage::Frame {
+public:
+   explicit FormRow(EditorHost &host) : host_(host) {}
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      const float w = width() / s, h = height() / s;
+      const Song &song = host_.song();
+      const int n = song.entries();
+      const float cw = std::min(18.0f, (w - 2) / static_cast<float>(n));
+      const bool songOn = frame && frame->running && host_.paramValue(kSongMode) > 0.5;
+      for (int i = 0; i < n; ++i) {
+         const int sec = song.entry(i);
+         const float x = i * cw;
+         const bool lit = songOn && frame->formPos == i;
+         c.setColor(lit ? kSlate : hover_ ? kCell : kWell);
+         c.roundedRectangle(x * s, 0, (cw - 2) * s, h * s, 3 * s);
+         c.setColor(kSectionColours[sec]);
+         c.roundedRectangle(x * s, (h - 2) * s, (cw - 2) * s, 2 * s, 1 * s);
+         const char letter[2] = {kSectionLetters[sec], 0};
+         label(c, s, letter, x, (h - 13) / 2, cw - 2, lit ? kWhite : kSectionColours[sec], visage::Font::kCenter,
+               cw < 12 ? 7.5f : 8.5f);
+      }
+   }
+   void mouseEnter(const visage::MouseEvent &) override {
+      hover_ = true;
+      redraw();
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = false;
+      redraw();
+   }
+   void mouseDown(const visage::MouseEvent &) override {
+      if (onOpen)
+         onOpen();
+   }
+   std::function<void()> onOpen;
+   const PlayFrame *frame = nullptr;
+
+private:
+   EditorHost &host_;
+   bool hover_ = false;
+};
+
+// SONG STRUCTURE: the order SONG mode plays the sections in, written by hand. The seven sections on
+// top add an entry each; the entries below drag to a new place, and right-click or their x takes
+// them out. OK puts it in the song (as a template's name, if it is one; else Custom).
+class FormOverlay : public visage::Frame {
+public:
+   explicit FormOverlay(EditorHost &host) : host_(host) {}
+
+   void open(const Song &song) {
+      work_.clear();
+      for (int i = 0; i < song.entries(); ++i)
+         work_.push_back(song.entry(i));
+      dragging_ = hover_ = hoverAdd_ = -1;
+      hoverButton_ = Button::None;
+      redraw();
+   }
+   const std::vector<int> &order() const { return work_; }
+   double tempo = 120.0;
+
+   void draw(visage::Canvas &c) override {
+      const float s = ui::designScale(*this);
+      const ui::Theme &t = ui::defaultTheme();
+      c.setColor(0x88000000);
+      c.fill(0, 0, width(), height());
+      c.setColor(t.panel);
+      c.roundedRectangle(kX * s, kY * s, kWBox * s, kHBox * s, 8 * s);
+      c.setColor(t.panelBorder);
+      c.roundedRectangleBorder(kX * s, kY * s, kWBox * s, kHBox * s, 8 * s, 1.0f);
+      label(c, s, "SONG STRUCTURE", kX + 16, kY + 12, 200, kOrange, visage::Font::kLeft, 11.5f);
+      label(c, s, "\xC3\x97", kX + kWBox - 26, kY + 10, 16, 0, visage::Font::kLeft, 13);
+      label(c, s,
+            "The order SONG mode plays the sections in; play one twice by adding it twice. Click a section to add it, drag "
+            "an entry to move it, right-click it or its \xC3\x97 to take it out.",
+            kX + 16, kY + 32, kWBox - 32, 0, visage::Font::kLeft, 8.5f);
+      const Song &song = host_.song();
+      // The sections, to add.
+      for (int i = 0; i < kSections; ++i) {
+         const float x = kX + 16 + i * kAddW, y = kY + kAddY;
+         const bool hot = hoverAdd_ == i && !full();
+         c.setColor(hot ? t.buttonHover : t.button);
+         c.roundedRectangle(x * s, y * s, (kAddW - 8) * s, 38 * s, 5 * s);
+         c.setColor(kSectionColours[i]);
+         c.roundedRectangle(x * s, y * s, 3 * s, 38 * s, 1.5f * s);
+         label(c, s, std::string("+ ") + kSectionCaps[i], x + 10, y + 5, kAddW - 22, full() ? kFaint : kWhite,
+               visage::Font::kLeft, 10);
+         label(c, s, std::to_string(song.sections[static_cast<size_t>(i)].bars) + " bars", x + 10, y + 21, kAddW - 22, 0,
+               visage::Font::kLeft, 8);
+      }
+      // The order.
+      label(c, s, "ORDER", kX + 16, kY + kChipY - 20, 100, kTitle, visage::Font::kLeft, 9.5f);
+      c.setColor(kWell);
+      c.roundedRectangle((kX + 12) * s, (kY + kChipY - 4) * s, (kWBox - 24) * s, (2 * kChipH + 8) * s, 6 * s);
+      if (work_.empty())
+         label(c, s, "Empty: click a section above to start (or OK, to play every section once).", kX + 16,
+               kY + kChipY + kChipH - 8, kWBox - 32, kFaint, visage::Font::kCenter, 9.5f);
+      for (int i = 0; i < static_cast<int>(work_.size()); ++i) {
+         const int sec = work_[static_cast<size_t>(i)];
+         const float x = chipX(i), y = chipY(i);
+         const bool hot = hover_ == i || dragging_ == i;
+         c.setColor(hot ? kSlate : kCell);
+         c.roundedRectangle(x * s, y * s, (kChipW - 4) * s, (kChipH - 6) * s, 4 * s);
+         c.setColor(kSectionColours[sec]);
+         c.roundedRectangle(x * s, y * s, (kChipW - 4) * s, 3 * s, 1.5f * s);
+         if (dragging_ == i)
+            c.roundedRectangleBorder(x * s, y * s, (kChipW - 4) * s, (kChipH - 6) * s, 4 * s, 1.5f * s);
+         label(c, s, std::to_string(i + 1), x + 4, y + 6, 20, kFaint, visage::Font::kLeft, 7);
+         label(c, s, kSectionCaps[sec], x, y + 16, kChipW - 4, kSectionColours[sec], visage::Font::kCenter, 7.5f);
+         label(c, s, std::to_string(song.sections[static_cast<size_t>(sec)].bars), x, y + 29, kChipW - 4, 0,
+               visage::Font::kCenter, 7.5f);
+         if (hover_ == i && dragging_ < 0)
+            label(c, s, "\xC3\x97", x + kChipW - 16, y + 3, 10, kWhite, visage::Font::kLeft, 9);
+      }
+      // The readout.
+      int bars = 0;
+      for (int sec : work_)
+         bars += song.sections[static_cast<size_t>(sec)].bars;
+      const double beats = static_cast<double>(bars) * (song.beats == 3 ? 3 : 4);
+      const int secs = static_cast<int>(std::lround(beats * 60.0 / std::max(1.0, tempo)));
+      char len[96];
+      std::snprintf(len, sizeof(len), "%d of %d entries \xC2\xB7 %d bars \xC2\xB7 %d:%02d at %.0f BPM",
+                    static_cast<int>(work_.size()), kMaxForm, bars, secs / 60, secs % 60, tempo);
+      label(c, s, len, kX + 16, kY + kChipY + 2 * kChipH + 12, kWBox - 32, kTitle, visage::Font::kLeft, 9.5f);
+      // The buttons.
+      const auto button = [&](Button b, const char *text, bool accent) {
+         const Rect r = rect(b);
+         c.setColor(accent ? (hoverButton_ == b ? 0xfff59a3fu : kOrange) : hoverButton_ == b ? t.buttonHover : t.button);
+         c.roundedRectangle(r.x * s, r.y * s, r.w * s, r.h * s, 5 * s);
+         if (!accent) {
+            c.setColor(t.panelBorder);
+            c.roundedRectangleBorder(r.x * s, r.y * s, r.w * s, r.h * s, 5 * s, 1.0f);
+         }
+         c.setColor(accent ? kInk : t.text);
+         c.text(text, ui::font(9.5f * s), visage::Font::kCenter, r.x * s, r.y * s, r.w * s, r.h * s);
+      };
+      button(Button::Clear, "CLEAR", false);
+      button(Button::Template, "START FROM TEMPLATE", false);
+      {
+         const Rect r = rect(Button::Template);
+         c.setColor(t.dimText);
+         const float tx = r.x + r.w - 18, ty = r.y + r.h / 2;
+         c.triangle((tx - 4) * s, (ty - 2) * s, (tx + 4) * s, (ty - 2) * s, tx * s, (ty + 3) * s);
+      }
+      button(Button::Cancel, "CANCEL", false);
+      button(Button::Ok, "OK", true);
+   }
+
+   void mouseMove(const visage::MouseEvent &e) override {
+      const float x = e.position.x / ui::designScale(*this), y = e.position.y / ui::designScale(*this);
+      const int chip = chipAt(x, y), add = addAt(x, y);
+      const Button b = buttonAt(x, y);
+      if (chip != hover_ || add != hoverAdd_ || b != hoverButton_) {
+         hover_ = chip;
+         hoverAdd_ = add;
+         hoverButton_ = b;
+         redraw();
+      }
+   }
+   void mouseExit(const visage::MouseEvent &) override {
+      hover_ = hoverAdd_ = -1;
+      hoverButton_ = Button::None;
+      redraw();
+   }
+   void mouseDown(const visage::MouseEvent &e) override {
+      const float x = e.position.x / ui::designScale(*this), y = e.position.y / ui::designScale(*this);
+      if (x < kX || y < kY || x > kX + kWBox || y > kY + kHBox || (y < kY + 28 && x > kX + kWBox - 34)) {
+         if (onClose)
+            onClose();
+         return;
+      }
+      const int add = addAt(x, y);
+      if (add >= 0) {
+         if (!full())
+            work_.push_back(add);
+         redraw();
+         return;
+      }
+      const int chip = chipAt(x, y);
+      if (chip >= 0) {
+         const float cx = chipX(chip), cy = chipY(chip);
+         if (e.isRightButton() || (x > cx + kChipW - 20 && y < cy + 16)) {
+            work_.erase(work_.begin() + chip);
+            hover_ = -1;
+         } else
+            dragging_ = chip;
+         redraw();
+         return;
+      }
+      switch (buttonAt(x, y)) {
+      case Button::Clear: work_.clear(); break;
+      case Button::Template: templates(); break;
+      case Button::Cancel:
+         if (onClose)
+            onClose();
+         return;
+      case Button::Ok:
+         if (onOk)
+            onOk(work_);
+         return;
+      case Button::None: break;
+      }
+      redraw();
+   }
+   void mouseDrag(const visage::MouseEvent &e) override {
+      if (dragging_ < 0)
+         return;
+      const float x = e.position.x / ui::designScale(*this), y = e.position.y / ui::designScale(*this);
+      const int to = slotAt(x, y);
+      if (to >= 0 && to != dragging_) {
+         const int sec = work_[static_cast<size_t>(dragging_)];
+         work_.erase(work_.begin() + dragging_);
+         work_.insert(work_.begin() + to, sec);
+         dragging_ = to;
+         redraw();
+      }
+   }
+   void mouseUp(const visage::MouseEvent &) override {
+      dragging_ = -1;
+      redraw();
+   }
+
+   std::function<void(const std::vector<int> &)> onOk;
+   std::function<void()> onClose;
+
+private:
+   enum class Button { None, Clear, Template, Cancel, Ok };
+   struct Rect {
+      float x, y, w, h;
+   };
+   static constexpr float kX = 130, kY = 120, kWBox = 740, kHBox = 350;
+   static constexpr float kAddY = 64, kAddW = (kWBox - 32 + 8) / kSections;
+   static constexpr float kChipY = 140, kChipW = (kWBox - 32) / 16, kChipH = 52;
+
+   bool full() const { return static_cast<int>(work_.size()) >= kMaxForm; }
+   static float chipX(int i) { return kX + 16 + (i % 16) * kChipW; }
+   static float chipY(int i) { return kY + kChipY + (i / 16) * kChipH; }
+   int chipAt(float x, float y) const {
+      const int i = slotAt(x, y);
+      return i >= 0 && i < static_cast<int>(work_.size()) && x - chipX(i) < kChipW - 4 ? i : -1;
+   }
+   // The slot under a point, clamped to the entries there are (for a drag).
+   int slotAt(float x, float y) const {
+      const float rx = x - kX - 16, ry = y - kY - kChipY;
+      if (rx < 0 || ry < 0 || rx >= 16 * kChipW || ry >= 2 * kChipH || work_.empty())
+         return -1;
+      const int i = static_cast<int>(ry / kChipH) * 16 + static_cast<int>(rx / kChipW);
+      return std::min(i, static_cast<int>(work_.size()) - 1);
+   }
+   static int addAt(float x, float y) {
+      const float rx = x - kX - 16, ry = y - kY - kAddY;
+      if (rx < 0 || ry < 0 || ry > 38)
+         return -1;
+      const int i = static_cast<int>(rx / kAddW);
+      return i < kSections && std::fmod(rx, kAddW) < kAddW - 8 ? i : -1;
+   }
+   static Rect rect(Button b) {
+      const float y = kY + kHBox - 46;
+      switch (b) {
+      case Button::Clear: return {kX + 16, y, 90, 30};
+      case Button::Template: return {kX + 114, y, 200, 30};
+      case Button::Cancel: return {kX + kWBox - 212, y, 96, 30};
+      case Button::Ok: return {kX + kWBox - 108, y, 92, 30};
+      default: return {0, 0, 0, 0};
+      }
+   }
+   static Button buttonAt(float x, float y) {
+      for (Button b : {Button::Clear, Button::Template, Button::Cancel, Button::Ok}) {
+         const Rect r = rect(b);
+         if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h)
+            return b;
+      }
+      return Button::None;
+   }
+   void templates() {
+      visage::PopupMenu menu;
+      for (int i = 0; i < kFormCount; ++i) {
+         std::string order;
+         for (const char *c = kForms[i].order; *c; ++c) {
+            if (!order.empty())
+               order += " ";
+            order += *c;
+         }
+         menu.addOption(i, std::string(kForms[i].name) + "   " + order);
+      }
+      menu.onSelection() += [this](int id) {
+         if (id < 0 || id >= kFormCount)
+            return;
+         Song s;
+         s.setForm(id);
+         work_.clear();
+         for (int i = 0; i < s.entries(); ++i)
+            work_.push_back(s.entry(i));
+         redraw();
+      };
+      const float sc = ui::designScale(*this);
+      const Rect r = rect(Button::Template);
+      menu.show(this, {r.x * sc, (r.y + r.h) * sc});
+   }
+
+   EditorHost &host_;
+   std::vector<int> work_;
+   int dragging_ = -1, hover_ = -1, hoverAdd_ = -1;
+   Button hoverButton_ = Button::None;
+};
+
 // PLAYERS: every player, with what each plays like.
 class PlayersOverlay : public visage::Frame {
 public:
@@ -2514,6 +2825,7 @@ public:
    }
    void showOverlays() {
       players_->setVisible(host_.playersOpen && host_.page == kGeneratePage);
+      formOverlay_->setVisible(host_.formOpen && host_.page == kGeneratePage);
       if (host_.browserOpen && host_.page == kGeneratePage)
          browser_->open();
       else
@@ -2530,6 +2842,8 @@ public:
       if (host_.page == kGeneratePage) {
          song_->frame = &frame_;
          song_->redraw();
+         formRow_->frame = &frame_;
+         formRow_->redraw();
       } else if (host_.page == kChordsPage) {
          rows_->frame = &frame_;
          rows_->redraw();
@@ -2744,7 +3058,7 @@ private:
    }
 
    void closeOverlays() {
-      host_.playersOpen = host_.browserOpen = host_.notesOpen = false;
+      host_.playersOpen = host_.browserOpen = host_.notesOpen = host_.formOpen = false;
       if (host_.learnAction >= 0) {
          host_.learnAction = -1;
          host_.armLearn(false);
@@ -2798,6 +3112,32 @@ private:
       tips_.add(roll, "A new seed for every section that isn't locked: new rhythms and new colour, the same progressions.");
       auto &prev = onPage<FlatButton>(kGeneratePage, {830, 202, 144, 26}, "\xE2\x86\x90 PREVIOUS ROLL", 9.5f);
       prev.onClick = [this](const visage::MouseEvent &) { previousRoll(); };
+
+      form_ = &onPage<ui::Dropdown>(kGeneratePage, {100, 260, 128, 19});
+      form_->setAccent(kOrange);
+      {
+         std::vector<std::string> forms;
+         for (const FormTemplate &f : kForms)
+            forms.push_back(f.name);
+         forms.push_back("Custom\xE2\x80\xA6");
+         form_->setOptions(forms);
+      }
+      form_->onChange = [this](int i) {
+         if (i < kFormCount) {
+            Song s = host_.song();
+            s.setForm(i);
+            host_.setSong(s);
+            redraw();
+            return;
+         }
+         openForm();
+      };
+      tips_.add(*form_, "The order SONG mode (on PLAY) plays the sections in. Custom\xE2\x80\xA6 writes your own, "
+                        "or changes this one.");
+      formRow_ = &onPage<FormRow>(kGeneratePage, {238, 260, 330, 19}, host_);
+      formRow_->onOpen = [this] { openForm(); };
+      tips_.add(*formRow_, "The song's structure, an entry a letter: Intro, Verse, Pre, Chorus, Bridge, breaK, Outro. "
+                           "Click to change it.");
 
       song_ = &onPage<SongStrip>(kGeneratePage, {26, 278, 948, 158}, host_);
       wire(*song_);
@@ -2877,6 +3217,8 @@ private:
       if (names != style_->options())
          style_->setOptions(names);
       style_->setSelected(std::clamp(whole(kStyle), 0, static_cast<int>(names.size()) - 1));
+      const Song &song = host_.song();
+      form_->setSelected(song.form == kCustomForm ? kFormCount : std::min<int>(song.form, kFormCount - 1));
       blend_->setVisible(host_.page == kGeneratePage && whole(kBlendGenre) > 0);
    }
 
@@ -3440,8 +3782,8 @@ private:
                                                    std::vector<std::string>{"LOOP", "SONG", "REPEAT"});
       songMode.setAccent(kOrange);
       bindings_.bind(songMode, kSongMode);
-      tips_.add(songMode, "LOOP stays in a section; SONG plays each for its bars, then the next, and ends with the "
-                          "outro's ending; REPEAT plays the song round and round.");
+      tips_.add(songMode, "LOOP stays in a section; SONG plays the song's structure (THE SONG, on GENERATE), each "
+                          "section for its bars, and ends with the last one's ending; REPEAT plays it round and round.");
       auto &switchAt = onPage<ui::Dropdown>(kPlayPage, {554, 84, 112, 20}, namesOf(kSwitchAt));
       bindings_.bind(switchAt, kSwitchAt);
       auto &by = onPage<ui::Dropdown>(kPlayPage, {700, 84, 120, 20}, namesOf(kSwitchBy));
@@ -3623,7 +3965,35 @@ private:
 
    // ---- overlays ----
 
+   // SONG STRUCTURE, on the song's structure as it is.
+   void openForm() {
+      closeOverlays();
+      host_.formOpen = true;
+      formOverlay_->open(host_.song());
+      formOverlay_->tempo = host_.frame().tempo;
+      showOverlays();
+      syncGenerate();
+   }
+
    void buildOverlays() {
+      formOverlay_ = &add<FormOverlay>({0, 0, kW, kH}, host_);
+      formOverlay_->onOk = [this](const std::vector<int> &order) {
+         Song s = host_.song();
+         s.setStructure(order);
+         host_.setSong(s);
+         closeOverlays();
+         redraw();
+      };
+      formOverlay_->onClose = [this] {
+         closeOverlays();
+         redraw();
+      };
+      formOverlay_->setOnTop(true);
+      formOverlay_->setVisible(false);
+      if (host_.formOpen) {
+         formOverlay_->open(host_.song());
+         formOverlay_->tempo = host_.frame().tempo;
+      }
       players_ = &add<PlayersOverlay>({0, 0, kW, kH}, host_);
       players_->onPick = [this](int i) {
          for (const auto &[id, v] : playerValues(i))
@@ -3752,6 +4122,9 @@ private:
    FlatButton *notesButton_ = nullptr;
    // Overlays
    PlayersOverlay *players_ = nullptr;
+   FormOverlay *formOverlay_ = nullptr;
+   FormRow *formRow_ = nullptr;
+   ui::Dropdown *form_ = nullptr;
    BrowserOverlay *browser_ = nullptr;
    NotesOverlay *notes_ = nullptr;
    ui::SegmentedSwitch *map_ = nullptr;

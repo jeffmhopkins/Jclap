@@ -115,6 +115,21 @@ inline const char *const kSectionCaps[kSections] = {"INTRO", "VERSE", "PRE", "CH
 inline const double kArcEnergy[kSections] = {0.3, 0.5, 0.65, 0.9, 0.55, 0.3, 0.4};
 inline const int kSectionBars[kSections] = {4, 8, 4, 8, 8, 4, 8};
 
+// A song's structure: the order SONG mode plays the sections in, a repeat being one more entry. The
+// templates, by letter: Intro, Verse, Pre, Chorus, Bridge, breaK, Outro (as JDrummer has them).
+constexpr int kMaxForm = 32;
+constexpr uint8_t kCustomForm = 255;
+struct FormTemplate {
+   const char *name;
+   const char *order;
+};
+inline const FormTemplate kForms[] = {
+    {"Once through", "IVPCBKO"}, {"Verse-Chorus", "IVCVCBCO"}, {"Pop", "IVPCVPCBCCO"},
+    {"Short", "IVCVCO"},         {"AABA", "IVVBVO"},           {"Extended", "IVPCVPCKBCCO"},
+};
+constexpr int kFormCount = 6;
+inline constexpr char kSectionLetters[kSections + 1] = "IVPCBKO";
+
 // How long a hit's notes sound: as the take wrote it (its length), cut short, half, held to the next
 // chord, or with the lower notes let go so only the top keeps singing.
 enum Articulation : uint8_t { kArtAsWritten, kArtChop, kArtHalf, kArtRing, kArtTopRings };
@@ -244,13 +259,78 @@ struct Song {
    std::array<Section, kSections> sections{};
    uint8_t key = 4; // E
    uint8_t beats = 4; // a bar's beats: 4, or 3 (a waltz, a 6/8)
-   bool operator==(const Song &o) const { return sections == o.sections && key == o.key && beats == o.beats; }
+   // The structure: `length` entries of `order`, each a section; none means every section once, in
+   // order. `form` is the template it came from (kForms), or kCustomForm.
+   std::array<uint8_t, kMaxForm> order{};
+   uint8_t length = 0;
+   uint8_t form = 0;
+   bool operator==(const Song &o) const {
+      if (!(sections == o.sections && key == o.key && beats == o.beats && length == o.length && form == o.form))
+         return false;
+      for (int i = 0; i < length; ++i)
+         if (order[static_cast<size_t>(i)] != o.order[static_cast<size_t>(i)])
+            return false;
+      return true;
+   }
    bool operator!=(const Song &o) const { return !(*this == o); }
 
+   int entries() const { return length ? length : kSections; }
+   // The section of entry `i` (wrapping round the structure).
+   int entry(int i) const {
+      i = ((i % entries()) + entries()) % entries();
+      return length ? order[static_cast<size_t>(i)] : i;
+   }
+   // The first entry at or after `from` (wrapping) that plays `section`, or -1.
+   int find(int section, int from = 0) const {
+      for (int k = 0; k < entries(); ++k)
+         if (entry(from + k) == section)
+            return ((from + k) % entries() + entries()) % entries();
+      return -1;
+   }
+   // Sets the structure from a template, or (kCustomForm) from `custom` itself.
+   void setForm(int templ, const std::vector<int> &custom = {}) {
+      length = 0;
+      if (templ >= 0 && templ < kFormCount) {
+         form = static_cast<uint8_t>(templ);
+         if (templ == 0)
+            return; // once through is the plain order
+         for (const char *c = kForms[templ].order; *c && length < kMaxForm; ++c)
+            for (int k = 0; k < kSections; ++k)
+               if (kSectionLetters[k] == *c)
+                  order[length++] = static_cast<uint8_t>(k);
+         return;
+      }
+      form = kCustomForm;
+      for (int s : custom)
+         if (s >= 0 && s < kSections && length < kMaxForm)
+            order[length++] = static_cast<uint8_t>(s);
+   }
+   // A structure as written by hand: a template's name if it is one, an empty one once through, else
+   // Custom.
+   void setStructure(const std::vector<int> &custom) {
+      if (custom.empty()) {
+         setForm(0);
+         return;
+      }
+      for (int f = 0; f < kFormCount; ++f) {
+         Song t;
+         t.setForm(f);
+         bool same = t.entries() == static_cast<int>(custom.size());
+         for (int i = 0; same && i < t.entries(); ++i)
+            same = t.entry(i) == custom[static_cast<size_t>(i)];
+         if (same) {
+            setForm(f);
+            return;
+         }
+      }
+      setForm(kCustomForm, custom);
+   }
+
+   // The song's bars, played through its structure once.
    int totalBars() const {
       int n = 0;
-      for (const Section &s : sections)
-         n += s.bars;
+      for (int i = 0; i < entries(); ++i)
+         n += sections[static_cast<size_t>(entry(i))].bars;
       return n;
    }
 
@@ -258,7 +338,8 @@ struct Song {
    // (four takes and the fill), each pattern as its steps, rate and every hit (10 bytes; 9 before version 2) of its grid.
    // Version 3 adds the bar's beats after the key, and after each section's fill its fill down, its
    // ending and its chords' band hits.
-   static constexpr uint32_t kVersion = 4; // 2: a hit's line degree; 3: 3/4, fills down, endings, band hits; 4: 6/8
+   // Version 5 adds, after the sections, the structure: its template, its length and its entries.
+   static constexpr uint32_t kVersion = 5; // 2: a hit's line degree; 3: 3/4, fills down, endings, band hits; 4: 6/8
 
    std::vector<uint8_t> save() const {
       std::vector<uint8_t> out;
@@ -308,6 +389,10 @@ struct Song {
          for (uint8_t m : s.marks)
             u8(m);
       }
+      u8(form);
+      u8(length);
+      for (int i = 0; i < length; ++i)
+         u8(order[static_cast<size_t>(i)]);
       return out;
    }
 
@@ -386,6 +471,16 @@ struct Song {
          meter(s.fillDown);
          meter(s.ending);
       }
+      if (version >= 5) {
+         const int form = u8(), length = u8();
+         loaded.form = static_cast<uint8_t>(form < kFormCount || form == kCustomForm ? form : 0);
+         loaded.length = static_cast<uint8_t>(std::min(length, kMaxForm));
+         for (int i = 0; i < length; ++i) {
+            const int sec = u8();
+            if (i < kMaxForm)
+               loaded.order[static_cast<size_t>(i)] = static_cast<uint8_t>(std::min(sec, kSections - 1));
+         }
+      }
       if (!ok)
          return false;
       *this = loaded;
@@ -416,6 +511,7 @@ struct Frame {
    int beats = 4;                      // a bar's beats
    int queued = -1;
    int queuedTake = -1;
+   int formPos = 0; // the entry of the song's structure playing (SONG mode)
    int step = -1; // the step playing in the pattern playing, and its length
    int steps = 16;
    // The chord sounding (or about to), the next one in the progression, and the notes out now.

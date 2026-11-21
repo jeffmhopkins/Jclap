@@ -139,7 +139,16 @@ public:
       // A new meter (a waltz picked while playing): the bars are found again from the host's.
       if (s.beats != song_.beats)
          expected_ = -1e9;
+      // A new structure: the song keeps its place where it can (the entry playing, if it still plays
+      // the section playing; else that section's next entry). Following the host in SONG, the song
+      // is placed again where the host is, at the next bar line.
+      const bool form = s.length != song_.length || s.order != song_.order;
       song_ = s;
+      if (form) {
+         formPos_ = formAt();
+         if (settings_.song && following_ && running_ && !holdChord_)
+            songPlace_ = true;
+      }
    }
    const Song &song() const { return song_; }
 
@@ -179,6 +188,8 @@ public:
       flushPending_ = true;
       running_ = false;
       section_ = std::clamp(settings_.section, 0, kSections - 1);
+      formPos_ = 0;
+      formPos_ = formAt();
       take_ = std::clamp(settings_.take, 0, kTakes - 1);
       pending_ = pendingTake_ = -1;
       fill_ = fillPending_ = fillDown_ = ending_ = ended_ = false;
@@ -387,9 +398,12 @@ public:
             absoluteBar_ = 0;
             startBar_ = bar;
             salt_ = kDiceSalt; // the same dice every time it plays: a render comes out the same
-            // Running free, SONG starts the song from its first section, as the host's bar 1 does.
+            // Running free, SONG starts the song from its first section, as the host's bar 1 does:
+            // the Section param's first entry in the structure (or the structure's first, if it
+            // leaves that section out).
             if (settings_.song && !following) {
-               section_ = std::clamp(settings_.section, 0, kSections - 1);
+               formPos_ = std::max(0, song_.find(std::clamp(settings_.section, 0, kSections - 1)));
+               section_ = song_.entry(formPos_);
                pending_ = -1;
             }
          } else {
@@ -517,6 +531,7 @@ public:
       f.beats = beats();
       f.queued = pending_;
       f.queuedTake = pendingTake_;
+      f.formPos = now ? now->formPos : formAt();
       f.step = running_ && now ? now->step : -1;
       f.steps = now ? now->steps : 16;
       f.chord = lastChord_;
@@ -615,6 +630,7 @@ private:
       if (!running_) {
          section_ = s;
          pending_ = -1;
+         formPos_ = formAt();
       }
    }
 
@@ -646,32 +662,37 @@ private:
    }
 
    // SONG mode: the section playing at the host's tick `t`, the song starting at bar 1 with the
-   // Section param's section and going on through the sections in turn.
+   // Section param's first entry in the structure and going on through its entries in turn.
    void placeInSong(int64_t t) {
       const int64_t bar = static_cast<int64_t>(std::floor(static_cast<double>(t) / barTicks()));
-      const int first = std::clamp(settings_.section, 0, kSections - 1);
+      const int entries = song_.entries();
+      const int first = std::max(0, song_.find(std::clamp(settings_.section, 0, kSections - 1)));
+      auto barsOf = [&](int e) { return std::max<int>(1, song_.sections[static_cast<size_t>(song_.entry(e))].bars); };
       int64_t total = 0;
-      // A song that ends runs from its first section to the outro; one on repeat goes round them all.
-      for (int k = settings_.songEnds ? first : 0; k < kSections; ++k)
-         total += std::max<int>(1, song_.sections[static_cast<size_t>(k)].bars);
+      // A song that ends runs from its first entry to the last; one on repeat goes round them all.
+      for (int e = settings_.songEnds ? first : 0; e < entries; ++e)
+         total += barsOf(e);
       ended_ = ending_ = fill_ = fillDown_ = false;
       if (settings_.songEnds && bar >= total) {
          // Past the end: the song is over until the host comes back into it.
          ended_ = true;
-         section_ = kOutro;
+         formPos_ = entries - 1;
+         section_ = song_.entry(formPos_);
          pending_ = -1;
          anchor_ = bar * barTicks();
          return;
       }
       int64_t into = ((bar % total) + total) % total;
-      int s = first;
-      for (int k = 0; k < kSections; ++k) {
-         const int bars = std::max<int>(1, song_.sections[static_cast<size_t>(s)].bars);
+      int e = first;
+      for (int k = 0; k < entries; ++k) {
+         const int bars = barsOf(e);
          if (into < bars)
             break;
          into -= bars;
-         s = (s + 1) % kSections;
+         e = (e + 1) % entries;
       }
+      const int s = song_.entry(e);
+      formPos_ = e;
       section_ = s;
       pending_ = -1;
       anchor_ = (bar - into) * barTicks();
@@ -815,12 +836,14 @@ private:
             rel = rel - sw + (((at % barTicks()) + barTicks()) % barTicks());
          }
       } else if (!holdChord_ && settings_.song) {
-         for (int k = 0; k < kSections; ++k) {
+         int e = formAt();
+         for (int k = 0; k < song_.entries(); ++k) {
             const int64_t end = static_cast<int64_t>(song_.sections[static_cast<size_t>(si)].bars) * barTicks();
             if (rel < end || end <= 0)
                break;
             rel -= end;
-            si = (si + 1) % kSections;
+            e = (e + 1) % song_.entries();
+            si = song_.entry(e);
          }
       }
       const Section &sec = song_.sections[static_cast<size_t>(si)];
@@ -942,11 +965,23 @@ private:
          return true;
       return song_.sections[static_cast<size_t>(to)].energy + 5 < now.energy;
    }
-   // The section SONG mode goes to after this one (-1 at the song's end).
+   // The entry of the song's structure playing: the one SONG mode is on, if it plays the section
+   // playing; else (a section switched to by hand, a structure changed) that section's next entry
+   // from there, or (a section the structure leaves out) still there, so the song goes on from it.
+   int formAt() const {
+      const int entries = song_.entries();
+      const int at = ((formPos_ % entries) + entries) % entries;
+      if (song_.entry(at) == section_)
+         return at;
+      const int f = song_.find(section_, at);
+      return f < 0 ? at : f;
+   }
+   // The section SONG mode goes to after this one (-1 at the song's end: its last entry).
    int songNext() const {
-      if (settings_.songEnds && section_ == kOutro)
+      const int at = formAt();
+      if (settings_.songEnds && at == song_.entries() - 1)
          return -1;
-      return (section_ + 1) % kSections;
+      return song_.entry(at + 1);
    }
    // The pattern playing now: the ending, a fill (up or down), or the bar's take.
    const Pattern &current() const {
@@ -981,6 +1016,7 @@ private:
          if (pending_ >= 0 && switchesAt(t)) {
             section_ = pending_;
             pending_ = -1;
+            formPos_ = formAt();
             // A push struck before the switch was queued anticipated the old section's chord (its
             // band hit, or a tie into its bar 1): the new section's own first beat is struck.
             markPushed_ = -1;
@@ -1039,7 +1075,8 @@ private:
                padAt(t, true);
                return;
             }
-            section_ = songNext();
+            formPos_ = (formAt() + 1) % song_.entries();
+            section_ = song_.entry(formPos_);
             anchor_ = t;
             bar = 0;
             ending_ = false;
@@ -1187,7 +1224,8 @@ private:
          return;
       const int steps = std::max<int>(1, p.steps);
       const int step = static_cast<int>((prel / stepTicks) % steps);
-      shown_[shownAt_++ % shown_.size()] = {t, step, steps, anchor_, section_, barTake_, fill_ || ending_, ending_, fill_ && fillDown_};
+      shown_[shownAt_++ % shown_.size()] = {t, step, steps, anchor_, section_, barTake_, fill_ || ending_, ending_, fill_ && fillDown_,
+                                            formAt()};
       const int bar = static_cast<int>(secRel / barTicks());
       barRel_ = secRel - secRel % barTicks();
       if (settings_.heldOnly && !heldNow_) {
@@ -2143,6 +2181,7 @@ private:
    int64_t startBar_ = 0; // the host bar playing started on
    uint32_t salt_ = kDiceSalt;
    int section_ = 0, take_ = 0, barTake_ = 0, pending_ = -1, pendingTake_ = -1;
+   int formPos_ = 0; // the entry of the song's structure playing (SONG mode walks it)
    bool fill_ = false, fillPending_ = false;
    bool fillDown_ = false; // the fill playing is the fill down (or the intro's setup)
    bool ending_ = false, ended_ = false; // the outro's ending playing; the song over
@@ -2156,6 +2195,7 @@ private:
       // The bar's own state as it was played (the clock's is a lookahead ahead of what's heard).
       int section = 0, take = 0;
       bool fill = false, ending = false, fillDown = false;
+      int formPos = 0;
    };
    std::array<Shown, 8> shown_{};
    size_t shownAt_ = 0;
