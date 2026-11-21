@@ -81,6 +81,49 @@ double partial(const std::vector<float> &x, size_t n, double hz) {
    return 4.0 * std::sqrt(re * re + im * im) / n;
 }
 
+// The peak over [from, to) against the loud end (99.5th percentile) of [h0, h1), in dB: a click
+// at a note's start or change stands out of the level the note then holds.
+double spikeDb(const std::vector<float> &x, size_t from, size_t to, size_t h0, size_t h1) {
+   float peak = 0.0f;
+   for (size_t i = from; i < to; ++i)
+      peak = std::max(peak, std::fabs(x[i]));
+   std::vector<float> held;
+   for (size_t i = h0; i < h1; ++i)
+      held.push_back(std::fabs(x[i]));
+   std::sort(held.begin(), held.end());
+   return 20.0 * std::log10((peak + 1e-9) / (held[held.size() * 995 / 1000] + 1e-9));
+}
+
+// Plays `a`, then at 0.5 s slurs (or tongues, `tongued`) onto `b`, for a second in all.
+Take change(int model, int a, int b, double velocity, bool tongued) {
+   const int os = oversamplingFor(kRate);
+   BreathVoice v;
+   v.prepare(kRate * os);
+   v.setSeed(7);
+   VoiceSettings s;
+   s.model = model;
+   s.source = 2;
+   s.vibDepth = 0.0;
+   v.configure(s);
+   Decimator d;
+   d.prepare(os);
+   v.start(a, velocity, 1.0);
+   Take t;
+   float buf[8];
+   for (int i = 0; i < static_cast<int>(kRate); ++i) {
+      if (i == static_cast<int>(0.5 * kRate)) {
+         if (tongued)
+            v.retongue(b, velocity);
+         else
+            v.slur(b, velocity);
+      }
+      for (int k = 0; k < os; ++k)
+         buf[k] = v.tick();
+      t.out.push_back(d.process(buf));
+   }
+   return t;
+}
+
 } // namespace
 
 int main() {
@@ -193,6 +236,41 @@ int main() {
             std::printf("         corner %d: peak %.1f\n", corner, peak);
          JCLAP_CHECK(peak < 40.0f);
       }
+   }
+
+
+   // Clicks: a note's start, a slur and a tongued repeat stand no more than a few dB out of the
+   // note held after them, and a slur always lands on a sounding note. (The pairs are ones that
+   // clicked or died: a sax's slurs and repeats across its register break, a trumpet's slurs up
+   // into Eb5 to F5, where its valves were once chosen for a pitch the slur passed through.)
+   {
+      struct Pair {
+         int model, a, b;
+      };
+      const Pair pairs[] = {{kSax, 49, 56}, {kSax, 58, 66}, {kSax, 64, 71}, {kSax, 71, 64}, {kOboe, 62, 69},
+                            {kOboe, 70, 74}, {kTrumpet, 62, 75}, {kTrumpet, 73, 75}, {kTrumpet, 70, 76},
+                            {kTrumpet, 72, 77}, {kTrumpet, 67, 72}, {kClarinet, 58, 65}, {kFlute, 72, 79}};
+      const size_t at = static_cast<size_t>(0.5 * kRate), win = static_cast<size_t>(0.06 * kRate);
+      for (const Pair &p : pairs)
+         for (double velocity : {0.5, 0.8}) {
+            const Take own = play(p.model, p.b, 0.6, velocity);
+            const double level = own.rms(static_cast<size_t>(0.4 * kRate), own.out.size());
+            const double onset = spikeDb(own.out, 0, win, static_cast<size_t>(0.3 * kRate), own.out.size());
+            for (bool tongued : {false, true}) {
+               const Take t = change(p.model, p.a, p.b, velocity, tongued);
+               const double after = t.rms(static_cast<size_t>(0.8 * kRate), t.out.size());
+               const double spike = std::min(spikeDb(t.out, at, at + win, at - static_cast<size_t>(0.2 * kRate), at),
+                                             spikeDb(t.out, at, at + win, static_cast<size_t>(0.75 * kRate), t.out.size()));
+               const bool bad = after < 0.3 * level || spike > 9.0 || onset > 9.0;
+               if (bad)
+                  std::printf("         %s %d -> %d %s at %.1f: lands at %.2f of its level, change %+.1f dB, start %+.1f dB\n",
+                              modelInfo(p.model).name, p.a, p.b, tongued ? "tongued" : "slurred", velocity,
+                              after / (level + 1e-12), spike, onset);
+               JCLAP_CHECK(after >= 0.3 * level);
+               JCLAP_CHECK(spike <= 9.0);
+               JCLAP_CHECK(onset <= 9.0);
+            }
+         }
    }
 
    // The lightest MPE touch: a soft strike and a little pressure arriving a moment later. Every

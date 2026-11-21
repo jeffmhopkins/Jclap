@@ -19,8 +19,8 @@ reflections of the real one) driven by a nonlinear exciter, the part the player 
 |---|---|---|---|
 | **Flute** | an air jet crossing the embouchure hole, split in or out of the pipe by the sound in it | open at both ends: every harmonic | the jet takes longer to reach the edge when it's slow, so blowing harder pushes it up a register; edge noise; nearly pure when soft, a strong 2nd and then 3rd harmonic as it's blown harder |
 | **Clarinet** | a single reed: a pressure-controlled valve (Kergomard / Wilson-Beavers), solved each sample with the pressure it makes | a cylinder closed at the reed: odd harmonics | the reed slamming shut at forte; the bell letting the highs out |
-| **Sax** | a cane reed: a mass on a spring under the lip, pushed shut by the mouth pressure (inward striking), beating on the lay at forte | a real alto's air column, computed from its shape (mouthpiece chamber and throat, conical body, nineteen tone holes, the octave key's vents) for each fingering; below the alto's range the tenor, baritone or bass, each on its own fingerings (tuned down to the contrabass, it's the bass sax: the contrabass's reed found no note through most of its range) | nearly a pure tone when it's played softly, filling in to a buzzing forte over about 12 dB as the Iowa alto does; low notes voiced to hold their fundamental under rich harmonics, richer on the bigger horns; growl when it's pushed |
-| **Oboe** | a small, stiff double reed, quasi-static: its slit closes as the drop across it grows, softly as the blades' tips meet, and the lip closes on it to play softly | a cone as two waveguides meeting at the reed (Benade's "cylindrical saxophone"): the bore out to the open holes, and a short pipe for the cone's missing tip, so every resonance is a harmonic of the note; below the oboe's range the cor anglais, bass oboe, two lower still and the contrabassoon, so the Contra Buzz bottom octave speaks at its pitch down to C1 | fitted to the Philharmonia oboe, Bb3 to F6, piano to fortissimo: a fundamental under its 2nd to 5th harmonics and a formant near 1.8 kHz, nasal and reedy; darker played softly; every note pushed at the tongue until it speaks, so the whole range starts alike. About a quarter of the CPU of the 0.11 oboe |
+| **Sax** | a cane reed: a mass on a spring under the lip, pushed shut by the mouth pressure (inward striking), beating on the lay at forte | a real alto's air column, computed from its shape (mouthpiece chamber and throat, conical body, nineteen tone holes, the octave key's vents) for each fingering; below the alto's range the tenor, baritone or bass, each on its own fingerings (tuned down to the contrabass, it's the bass sax: the contrabass's reed found no note through most of its range) | nearly a pure tone when it's played softly, filling in to a buzzing forte over about 12 dB as the Iowa alto does; low notes voiced to hold their fundamental under rich harmonics, richer on the bigger horns; its brightness near 2.3 kHz matched to the Iowa and Philharmonia altos; growl when it's pushed |
+| **Oboe** | a small, stiff double reed, quasi-static: its slit closes as the drop across it grows, softly as the blades' tips meet, and the lip closes on it to play softly | a cone as two waveguides meeting at the reed (Benade's "cylindrical saxophone"): the bore out to the open holes, and a short pipe for the cone's missing tip, so every resonance is a harmonic of the note; below the oboe's range the cor anglais, bass oboe, two lower still and the contrabassoon, so the Contra Buzz bottom octave speaks at its pitch down to C1 | fitted to the Philharmonia and Iowa oboes at mezzo forte: a fundamental under its harmonics and a formant near 1.2 to 1.4 kHz, nasal and reedy; darker played softly; every note pushed at the tongue until it speaks, so the whole range starts alike. About a quarter of the CPU of the 0.11 oboe |
 | **Trumpet** | the lips: a mass on a spring blown open by the mouth pressure (outward striking), with the flow through them in closed form | a real Bb trumpet's air column, computed from its shape (mouthpiece, leadpipe, valves, Bessel bell) for each of its seven valve combinations and played as its resonances; each note is a partial of the valves a player would use | the wave steepening on its way down the horn, more the harder it's blown, towards a shock at forte: the brassy blare; mellow when it's played softly; each tongued note scooping up into its pitch as the lips find the horn's resonance |
 | **Alien** | vocal folds, a pulse opening and snapping shut each period (or a bowed string) | a throat, nose and mouth: a formant synthesizer | every note a syllable of its words (typed, or its own made-up language), each consonant made at its place in the mouth, the vowel held for the note and closed off when it's let go |
 
@@ -62,6 +62,44 @@ start like their neighbours. The sax's top note sits at its neighbours' level (i
 loud), the baritone's middle C to E and the bass sax's middle register (Bass Honk's F3 to B3)
 play in tune and clean instead of rough, flat or silent, and the sax's G#1 goes up an octave like
 the other notes under the bass sax's low A instead of sounding flat and unsteady.
+
+From 0.13.10 the sax, oboe and trumpet no longer click as notes start and change. A slur on the sax
+across the octave key or onto a bigger horn, a bend across its fingerings, and a tongued repeat in
+Mono on the sax or oboe changed the output's colour and gain in steps (its soft shelf swept 20 dB
+through the tongue's stop), each a click: they now glide, and the shelves that follow the note are
+filters that can move while they play. A hard-tongued sax note's accent is a few dB over the note
+instead of more than doubling the breath (its onset overshot by up to 8 dB and its low notes
+squealed for 30 ms). The trumpet's tongue sets its lips going with a short puff at the note's own
+pitch instead of a one-sided pulse, which from Eb5 to A5 started the note with a pop up to 16 dB
+over it, and a slur onto a partial there nudges the lips onto it.
+
+Also from 0.13.10, trumpet slurs and tongued repeats no longer lose the note. A slur took the
+valves of a pitch it passed through on the way and kept them, so a slur up onto Eb5 to F5 often
+went silent: the valves are now chosen for the note being slurred to. In Mono, the tongue's burst
+came as it stopped the air instead of as it let go, so the lips weren't set going on the new note
+(at a soft breath, one tongued trumpet note change in five went silent; now none do) and every
+instrument's repeat started with less of a "ta" than its first note.
+
+Trumpet notes also start much sooner. Measured against the University of Iowa's trumpet (C4 to B4),
+whose notes reach half their level in 15 to 20 ms at every dynamic, Brass Plume's took 50 to 110 ms
+on average (G3 to Bb5), growing out of a faint buzz. Its lips now lose less until they close on
+every cycle, as real lips do before tissue meets tissue, and the tongue plucks them harder the harder
+the player is blowing (fading out from Eb5 to G5, which already spoke quickly), so a breath that
+arrives gently still starts the note gently: the same notes now take 54 ms on average at a soft
+velocity, 30 ms at a middling one and 8 ms at a hard one.
+
+The sax is voiced closer to a real alto. Against the Iowa and Philharmonia altos, its peak near
+2.3 kHz was 8 to 13 dB too strong, which made it nasal and buzzy: it's now no more than 4 dB, and
+the bright band above it rolls off from 5 kHz instead of 6.5 kHz. Across 300 Hz to 3.3 kHz its
+spectrum is now within about 5 dB of the recordings at mezzo forte (it was 7), and 6 dB at piano
+(it was 9.5). Its growl keeps a touch of rasp below forte, so it still growls when played softly.
+
+The oboe is voiced closer to a real one too. Fitted again, against both the Philharmonia and the
+Iowa oboes, C4 to B5: its formant sat at 1.8 kHz, 7 to 13 dB too strong near 2 kHz and 6 dB too
+weak near 1.2 kHz, and its low register was 9 to 12 dB too strong. The formant now sits near 1.2 to
+1.4 kHz and the harmonics stand over the fundamental, as a real oboe's do: across 300 Hz to 3.3 kHz
+it's within about 5 dB of the two recordings (it was 7), and within 3 dB of Iowa's pianissimo (it
+was 6).
 
 ### The alien
 
