@@ -786,6 +786,14 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
          allowed |= 1u << ((c.root + 9) % 12);
       if (q.tones.size() > 1 && q.tones[1] == 3 && !altered5 && keyHas(5))
          allowed |= 1u << ((c.root + 5) % 12); // the 11th over a minor chord
+      // A secondary dominant takes the key's tensions: the b9 and b13 where the key has them and not
+      // the natural ones (V7 of vi in E: G#7's A and E, not A# and E#).
+      if (hasIv(4) && hasIv(10) && !altered9 && !altered5) {
+         if (!keyHas(2) && keyHas(1))
+            allowed |= 1u << ((c.root + 1) % 12);
+         if (!keyHas(9) && keyHas(8))
+            allowed |= 1u << ((c.root + 8) % 12);
+      }
       int seventh = -1;
       for (int i : {10, 11, 9})
          if (q.seventh && seventh < 0 && hasIv(i))
@@ -833,15 +841,29 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
            strict >= (pass == 0 && seventh >= 0 && !needSeventh ? 1 : 0) && (static_cast<int>(out.size()) == found ||
                            (strict >= 1 && (static_cast<int>(out.size()) < found + 3 || (want9 && !nineFrom(found)))));
            --strict)
-         for (int odd = 0; odd < 2 && (static_cast<int>(out.size()) < found + 3 || (want9 && !nineFrom(found))); ++odd)
+         // (Last, a tritone and a major third both: a dominant's 7-3-13-9, B E# A D over C#7, where
+         // the key leaves no stack with one odd interval.)
+         for (int odd = 0; odd < 3 && (static_cast<int>(out.size()) < found + 3 || (want9 && !nineFrom(found))) &&
+                           !(odd == 2 && (!out.empty() || strict > 1));
+              ++odd)
             for (int b = vs.lo - 12; b <= vs.hi; ++b) {
                if (!(allowed >> (((b % 12) + 12) % 12) & 1))
                   continue;
                const int m = strict == 1 ? size - 1 : size;
-               for (int ex = 0; ex < (odd ? 2 * (m - 1) : 1); ++ex) {
+               const int ways = odd == 0 ? 1 : odd == 1 ? 2 * (m - 1) : std::max(0, (m - 1) * (m - 2));
+               for (int ex = 0; ex < ways; ++ex) {
                   Stack v{b};
+                  int tri = -1, maj = -1;
+                  if (odd == 2) {
+                     tri = ex / (m - 2);
+                     maj = ex % (m - 2);
+                     maj += maj >= tri;
+                  }
                   for (int k = 1; k < m; ++k)
-                     v.push_back(v.back() + (odd && k - 1 == ex / 2 ? (ex % 2 ? 6 : 4) : 5));
+                     v.push_back(v.back() + (odd == 1 && k - 1 == ex / 2 ? (ex % 2 ? 6 : 4)
+                                             : k - 1 == tri            ? 6
+                                             : k - 1 == maj            ? 4
+                                                                       : 5));
                   bool ok = m >= 2, root = false, third = false, sev = seventh < 0 || (strict < 1 && !needSeventh),
                        al = alt < 0, nine = false;
                   for (int x : v) {
@@ -1543,7 +1565,10 @@ inline Voicings rankShapes(const Chord &c, const Voicing *prev, const VoiceSetti
       const double frets = grip ? gripFrets(v) : -1.0;
       // (An open chord is the guitarist's first choice: D's xx0232 over a barre on five strings.)
       const bool open = grip && detail::openGrip(v);
-      const double top = (middle && doubledTop(v) ? 6.0 : 0.0) + (open ? 0.5 : 1.5) * std::max(0, fullest - v.count) -
+      // (Fourths more: VOICES 5 of fourths is a five-note stack, not the three-note one that sits
+      // nearer the middle.)
+      const double short1 = open ? 0.5 : vs.shape == kQuartal ? 4.0 : 1.5;
+      const double top = (middle && doubledTop(v) ? 6.0 : 0.0) + short1 * std::max(0, fullest - v.count) -
                          (open ? 2.0 : 0.0);
       costs.push_back(top + (frets >= 0.0 ? 1.5 * frets + cost(v, nullptr, vs) * 0.3 + clashes(v, c) : cost(v, prev, vs) + clashes(v, c)));
    }
@@ -1612,6 +1637,7 @@ inline Voicing octaveLine(const Chord &c, const Voicing *prev, const VoiceSettin
    // The degree wanted, else (a seventh chord's stack with no fifth, a maj7's with no root) another
    // of the chord's tones, so the line still moves: the seventh, then the others.
    int prefs[5] = {degree, q.size() > 3 ? q[3] % 12 : fifth, fifth, 0, third};
+   const Voicing *leap = nullptr;
    for (int pass = 0; pass < 5; ++pass) {
       const int want1 = prefs[pass];
       const Voicing *best = nullptr;
@@ -1630,17 +1656,30 @@ inline Voicing octaveLine(const Chord &c, const Voicing *prev, const VoiceSettin
          const double off = std::abs(mean / v.count - vs.center);
          // Near the stroke before, pulled back up into the window, and a chord's first stroke back
          // toward the middle when the line has strayed an octave from it.
-         double d = follow ? std::abs(v.notes[0] - prev->notes[0]) + 0.05 * off + 0.5 * std::max(0, vs.lo - v.notes[0]) +
-                                 (step == 0 && off > 12 ? 100.0 : 0.0)
+         // And the stroke after in reach: a dip under the window the next degree can't follow by a
+         // step or a third (E3, then A's C#3 under the floor) is a sixth's leap one stroke later.
+         const int v0 = v.notes[0], nextPc = (c.root + want[((step + 1) % 4 + 4) % 4]) % 12;
+         int ahead = 12;
+         for (int x = vs.lo - 4; x <= vs.hi; ++x)
+            if (x % 12 == nextPc && (x >= vs.lo || std::abs(x - v0) <= 5))
+               ahead = std::min(ahead, std::abs(x - v0));
+         double d = follow ? std::abs(v0 - prev->notes[0]) + 0.05 * off + 0.5 * std::max(0, vs.lo - v0) +
+                                 0.6 * std::max(0, ahead - 5) + (step == 0 && off > 12 ? 100.0 : 0.0)
                            : off;
          if (d < bestD - 1e-9) {
             bestD = d;
             best = &v;
          }
       }
-      if (best)
+      // (A degree a sixth's leap away gives way to another of the chord's, in reach by a step or a
+      // third: E's G#3 goes to A's A3, not up to E4.)
+      if (best && (!follow || std::abs(best->notes[0] - prev->notes[0]) <= 5))
          return *best;
+      if (best && !leap)
+         leap = best;
    }
+   if (leap)
+      return *leap;
    return r.empty() ? Voicing{} : r[0];
 }
 
