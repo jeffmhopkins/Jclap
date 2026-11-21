@@ -51,6 +51,14 @@ using namespace jcomp;
 // Each group of tests in a function of its own, kept out of main(): MSVC gives every temporary in a
 // function its own stack slot, so a main() holding every group inlined comes near Windows' 1 MB stack
 // and the first deep voicing call on top of it goes over.
+#if defined(_WIN32) // DIAG
+#include <windows.h> // DIAG
+static LONG WINAPI diagHandler(EXCEPTION_POINTERS *e) { // DIAG
+   std::fprintf(stderr, "DIAG exception 0x%08lx at %p\n", (unsigned long)e->ExceptionRecord->ExceptionCode, e->ExceptionRecord->ExceptionAddress); // DIAG
+   std::fflush(stderr); // DIAG
+   return EXCEPTION_CONTINUE_SEARCH; // DIAG
+} // DIAG
+#endif // DIAG
 #if defined(_MSC_VER)
 #define JCOMP_TEST_NOINLINE __declspec(noinline)
 #else
@@ -3298,6 +3306,11 @@ JCOMP_TEST_NOINLINE static void roundFifteenE() {
 }
 
 int main() {
+#if defined(_WIN32) // DIAG
+   AddVectoredExceptionHandler(1, diagHandler); // DIAG
+   int diagTop = 0; // DIAG
+   std::fprintf(stderr, "DIAG main frame near %p\n", (void *)&diagTop); std::fflush(stderr); // DIAG
+#endif // DIAG
    // ---- chord names ----
    {
       Chord c;
@@ -3327,6 +3340,7 @@ int main() {
                Chord c;
                c.root = static_cast<int8_t>(root);
                c.quality = static_cast<uint8_t>(q);
+               std::fprintf(stderr, "DIAG voice %d %d %d\n", shape, q, root); std::fflush(stderr); // DIAG
                const Voicing v = voice(c, nullptr, vs);
                JCLAP_CHECK(!v.empty());
                if (v.empty())
@@ -3343,6 +3357,7 @@ int main() {
                ++checked;
             }
       JCLAP_CHECK(checked > 500);
+      std::fprintf(stderr, "DIAG sweep done\n"); std::fflush(stderr); // DIAG
       // Led voicings move little: a ii-V-I's top voice moves at most TOP MOVE plus a step.
       vs = VoiceSettings{};
       Voicing prev;
@@ -3353,6 +3368,7 @@ int main() {
          prev = v;
       }
       // A passing run steps through the scale between the notes, never re-striking the one it leaves.
+      std::fprintf(stderr, "DIAG led done\n"); std::fflush(stderr); // DIAG
       const Ints r = passingRun(67, 72, 3, 0, kMajor, false);
       JCLAP_CHECK_EQ(static_cast<int>(r.size()), 2);
       for (int x : r)
@@ -3360,6 +3376,7 @@ int main() {
    }
 
    // ---- the library ----
+   std::fprintf(stderr, "DIAG library\n"); std::fflush(stderr); // DIAG
    {
       JCLAP_CHECK(genreCount() >= 20);
       int styles = 0;
@@ -3399,6 +3416,7 @@ int main() {
    }
 
    // ---- songs ----
+   std::fprintf(stderr, "DIAG songs\n"); std::fflush(stderr); // DIAG
    {
       // The same recipe makes the same song, and it saves and loads unchanged.
       Song a, b;
