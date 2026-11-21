@@ -51,14 +51,8 @@ using namespace jcomp;
 // Each group of tests in a function of its own, kept out of main(): MSVC gives every temporary in a
 // function its own stack slot, so a main() holding every group inlined comes near Windows' 1 MB stack
 // and the first deep voicing call on top of it goes over.
-#if defined(_WIN32) // DIAG
-#include <windows.h> // DIAG
-static LONG WINAPI diagHandler(EXCEPTION_POINTERS *e) { // DIAG
-   std::fprintf(stderr, "DIAG exception 0x%08lx at %p\n", (unsigned long)e->ExceptionRecord->ExceptionCode, e->ExceptionRecord->ExceptionAddress); // DIAG
-   std::fflush(stderr); // DIAG
-   return EXCEPTION_CONTINUE_SEARCH; // DIAG
-} // DIAG
-#endif // DIAG
+#include <csignal> // DIAG
+static void diagSegv(int) { std::fprintf(stderr, "DIAG SIGSEGV (access violation, not stack)\n"); std::fflush(stderr); std::_Exit(3); } // DIAG
 #if defined(_MSC_VER)
 #define JCOMP_TEST_NOINLINE __declspec(noinline)
 #else
@@ -3306,11 +3300,7 @@ JCOMP_TEST_NOINLINE static void roundFifteenE() {
 }
 
 int main() {
-#if defined(_WIN32) // DIAG
-   AddVectoredExceptionHandler(1, diagHandler); // DIAG
-   int diagTop = 0; // DIAG
-   std::fprintf(stderr, "DIAG main frame near %p\n", (void *)&diagTop); std::fflush(stderr); // DIAG
-#endif // DIAG
+   std::signal(SIGSEGV, diagSegv); // DIAG
    // ---- chord names ----
    {
       Chord c;
