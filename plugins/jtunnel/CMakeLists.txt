@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.12.1)
+jclap_plugin_version(0.13.0)
 
 # Opus carries the audio, and mjansson/mdns (one public-domain header) finds tunnels on the network.
 # Both are fetched here because only JTunnel uses them.
@@ -36,8 +36,22 @@ add_library(jtunnel_engine STATIC
    src/net.cpp
    src/discovery.cpp
    src/link.cpp
-   src/impair.cpp)
-target_include_directories(jtunnel_engine PUBLIC src PRIVATE ${mdns_SOURCE_DIR})
+   src/impair.cpp
+   src/state.cpp
+   src/script_link.cpp
+   src/state_server.cpp)
+# The viewer page the local state server hands out, built into the plugin as bytes.
+set(jtunnel_viewer_header ${CMAKE_CURRENT_BINARY_DIR}/generated/viewer_html.h)
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/src/viewer.html jtunnel_viewer_hex HEX)
+string(LENGTH "${jtunnel_viewer_hex}" jtunnel_viewer_hex_length)
+math(EXPR jtunnel_viewer_size "${jtunnel_viewer_hex_length} / 2")
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," jtunnel_viewer_hex "${jtunnel_viewer_hex}")
+# Written beside, then copied only if it changed, so a configure doesn't rebuild the engine for nothing.
+file(WRITE ${jtunnel_viewer_header}.new
+   "// Generated from src/viewer.html by CMake. Don't edit.\n#pragma once\nstatic const unsigned char kViewerHtml[] = {${jtunnel_viewer_hex}};\nstatic const unsigned long kViewerHtmlSize = ${jtunnel_viewer_size};\n")
+configure_file(${jtunnel_viewer_header}.new ${jtunnel_viewer_header} COPYONLY)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/viewer.html)
+target_include_directories(jtunnel_engine PUBLIC src PRIVATE ${mdns_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_compile_features(jtunnel_engine PUBLIC cxx_std_17)
 target_link_libraries(jtunnel_engine PUBLIC jclap::core opus)
 find_package(Threads REQUIRED)

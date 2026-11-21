@@ -227,6 +227,11 @@ public:
       s.codec = r.codec.load();
       s.midiEvents = midiEvents_.load(std::memory_order_relaxed);
       s.lastMidi = lastMidi_.load(std::memory_order_relaxed);
+      s.statePort = link_.statePort.load();
+      s.stateClients = link_.stateClients.load();
+      s.stateKeys = static_cast<int>(link_.state.size());
+      s.stateUpdates = link_.state.updates();
+      s.extension = link_.scriptConnected.load();
       s.inputPeak = inPeak_.exchange(0.0f);
       s.outputPeak = outPeak_.exchange(0.0f);
       return s;
@@ -356,6 +361,8 @@ public:
       const clap_output_events_t *out = proc->out_events;
       edits_.drain(out);
       const uint32_t frames = proc->frames_count;
+      // The side channel's beat comes from here, whatever the mode (state.h).
+      link_.clock.write(clockFrom(proc->transport));
 
       // Params apply for the whole block (nothing here needs them sample-accurate). Notes and MIDI
       // are both sent on and, as a note effect would, passed through.
@@ -471,6 +478,32 @@ private:
    void markDirty() {
       if (auto *state = hostExtension<clap_host_state_t>(CLAP_EXT_STATE))
          state->mark_dirty(host());
+   }
+
+   static ClockReading clockFrom(const clap_event_transport_t *t) {
+      ClockReading c;
+      if (!t)
+         return c;
+      c.available = true;
+      c.playing = (t->flags & CLAP_TRANSPORT_IS_PLAYING) != 0;
+      c.recording = (t->flags & CLAP_TRANSPORT_IS_RECORDING) != 0;
+      c.looping = (t->flags & CLAP_TRANSPORT_IS_LOOP_ACTIVE) != 0;
+      if (t->flags & CLAP_TRANSPORT_HAS_TEMPO)
+         c.tempo = t->tempo;
+      if (t->flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE) {
+         c.beats = static_cast<double>(t->song_pos_beats) / CLAP_BEATTIME_FACTOR;
+         c.barStart = static_cast<double>(t->bar_start) / CLAP_BEATTIME_FACTOR;
+         c.barNumber = t->bar_number;
+         c.loopStart = static_cast<double>(t->loop_start_beats) / CLAP_BEATTIME_FACTOR;
+         c.loopEnd = static_cast<double>(t->loop_end_beats) / CLAP_BEATTIME_FACTOR;
+      }
+      if (t->flags & CLAP_TRANSPORT_HAS_SECONDS_TIMELINE)
+         c.seconds = static_cast<double>(t->song_pos_seconds) / CLAP_SECTIME_FACTOR;
+      if (t->flags & CLAP_TRANSPORT_HAS_TIME_SIGNATURE) {
+         c.tsigNum = t->tsig_num;
+         c.tsigDen = t->tsig_denom;
+      }
+      return c;
    }
 
    static float peak(const float *l, const float *r, uint32_t frames) {

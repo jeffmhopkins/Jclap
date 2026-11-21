@@ -15,6 +15,13 @@
 //             with 255 for a channel or key of -1
 //    subscribe  name length (1), name (no terminator)
 //    bye      nothing
+//    state    stream id (4), message id (4), piece (1), piece count (1), key length (1), key,
+//             data length (2), data
+//
+// State packets are the side channel: what the DAW is doing (its clip grid, transport, selected
+// device...), as JSON messages under keys like "transport" or "track/3", sent beside the audio and
+// MIDI (see state.h). A message too long for one packet goes in pieces; a receiver keeps the
+// newest whole message for each key. Receivers that don't know the type ignore it.
 #pragma once
 
 #include <cstddef>
@@ -22,7 +29,7 @@
 
 namespace jtunnel {
 
-enum class PacketType : uint8_t { Audio = 1, Subscribe = 2, Bye = 3 };
+enum class PacketType : uint8_t { Audio = 1, Subscribe = 2, Bye = 3, State = 4 };
 // None carries no audio: MIDI only, in short frames at the sender's rate, so it arrives sooner.
 enum class Codec : uint8_t { Opus = 0, Pcm24 = 1, None = 2 };
 
@@ -96,6 +103,27 @@ size_t writeSubscribe(uint8_t *out, size_t capacity, const char *tunnelName);
 bool parseSubscribe(const uint8_t *data, size_t size, char *name, size_t nameCapacity);
 
 size_t writeBye(uint8_t *out, size_t capacity);
+
+// The side channel's limits: a key such as "track/12", and a message's data, in up to 64 pieces.
+constexpr size_t kMaxStateKey = 63;
+constexpr size_t kStatePieceBytes = 1200;
+constexpr int kMaxStatePieces = 64;
+constexpr size_t kMaxStateBytes = kStatePieceBytes * kMaxStatePieces;
+
+struct StatePiece {
+   uint32_t streamId = 0;  // the sender's state stream: a new one means start again
+   uint32_t messageId = 0; // the same for every piece of one message, new for every new message
+   uint8_t piece = 0, pieces = 1;
+   const char *key = nullptr; // not terminated
+   uint8_t keySize = 0;
+   const uint8_t *data = nullptr;
+   uint16_t dataSize = 0;
+};
+
+// One piece of a state message. Returns the packet's size, or 0 if it doesn't fit or is malformed.
+size_t writeState(uint8_t *out, size_t capacity, const StatePiece &piece);
+// Points piece's key and data into `data`. False for anything that isn't a well-formed state packet.
+bool parseState(const uint8_t *data, size_t size, StatePiece &piece);
 
 // The type of a packet with a valid header, or 0.
 uint8_t packetType(const uint8_t *data, size_t size);

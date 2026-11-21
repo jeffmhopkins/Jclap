@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JTunnel state</title>
+<!-- Served by a JTunnel instance on this computer: draws its side channel live, from /ws. -->
+<style>
+  :root { --bg:#16191d; --panel:#1f2328; --line:#2e333a; --text:#e6e6e6; --dim:#8a919a; --accent:#f59a23;
+          --play:#3fd27f; --rec:#ff4b4b; --queue:#ffd23f; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:12px 16px; background:var(--panel);
+           border-bottom:1px solid var(--line); }
+  h1 { font-size:16px; margin:0; color:var(--accent); font-weight:600; }
+  .pill { padding:3px 10px; border-radius:12px; background:var(--line); color:var(--dim); font-weight:600; }
+  .pill.on.play { background:var(--play); color:#000; } .pill.on.rec { background:var(--rec); color:#fff; }
+  .pill.on { background:var(--accent); color:#000; }
+  .big { font-size:20px; font-variant-numeric:tabular-nums; font-weight:600; }
+  .beats { display:flex; gap:4px; } .beats i { width:14px; height:14px; border-radius:3px; background:var(--line); }
+  .beats i.on { background:var(--accent); } .beats i.on.first { background:var(--play); }
+  .status { margin-left:auto; color:var(--dim); }
+  main { display:flex; flex-wrap:wrap; gap:16px; padding:16px; align-items:flex-start; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; max-width:100%; }
+  .card h2 { font-size:12px; letter-spacing:.06em; color:var(--accent); margin:0 0 8px; text-transform:uppercase; }
+  .gridwrap { overflow:auto; max-width:100%; }
+  table { border-collapse:separate; border-spacing:3px; }
+  th { font-weight:600; font-size:11px; color:var(--dim); text-align:left; white-space:nowrap; max-width:96px;
+       overflow:hidden; text-overflow:ellipsis; }
+  th.track { border-top:4px solid var(--c, #555); padding:4px 4px 2px; min-width:72px; }
+  th.track.sel { color:var(--text); background:#2a3038; }
+  th.scene { padding-right:6px; }
+  .meter { height:4px; background:var(--line); margin-top:3px; border-radius:2px; overflow:hidden; }
+  .meter b { display:block; height:100%; width:0; background:var(--play); }
+  td { width:80px; height:28px; border-radius:4px; background:#262b31; font-size:11px; padding:0 6px; white-space:nowrap;
+       overflow:hidden; text-overflow:ellipsis; max-width:96px; color:#111; position:relative; }
+  td.empty { background:#22262b; }
+  td.clip { background:var(--c); }
+  td.playing { box-shadow:inset 0 0 0 2px var(--play); }
+  td.playing.beat { filter:brightness(1.35); }
+  td.recording { box-shadow:inset 0 0 0 2px var(--rec); }
+  td.queued { animation:blink .25s steps(2) infinite; }
+  td.sel { outline:2px solid #fff; outline-offset:-1px; }
+  td.playing::before, td.recording::before { content:""; position:absolute; left:3px; top:3px; border-style:solid;
+       border-width:4px 0 4px 6px; border-color:transparent transparent transparent #000; }
+  td.recording::before { border:0; width:7px; height:7px; border-radius:50%; background:var(--rec); }
+  td.playing span, td.recording span { padding-left:8px; }
+  @keyframes blink { to { opacity:.35; } }
+  .params { display:grid; grid-template-columns:repeat(4, 110px); gap:10px; }
+  .param .bar { height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin:4px 0; }
+  .param .bar b { display:block; height:100%; background:var(--accent); }
+  .param .name { color:var(--dim); font-size:11px; } .param .val { font-variant-numeric:tabular-nums; }
+  .chain { display:flex; flex-wrap:wrap; gap:4px; margin-top:10px; }
+  .chain span { padding:2px 8px; border-radius:10px; background:var(--line); font-size:11px; }
+  .chain span.sel { background:var(--accent); color:#000; } .chain span.off { opacity:.45; }
+  details { width:100%; } summary { cursor:pointer; color:var(--dim); }
+  .keys { display:flex; flex-wrap:wrap; gap:6px 14px; margin:8px 0; }
+  pre { white-space:pre-wrap; word-break:break-all; font-size:11px; color:#bfc5cc; max-height:420px; overflow:auto; }
+  .muted { color:var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>JTunnel</h1>
+  <span id="project" class="muted"></span>
+  <span id="play" class="pill play">PLAY</span>
+  <span id="rec" class="pill rec">REC</span>
+  <span id="loop" class="pill">LOOP</span>
+  <span id="tempo" class="big">--- BPM</span>
+  <span id="pos" class="big">-.-</span>
+  <span id="beats" class="beats"></span>
+  <span id="status" class="status">connecting...</span>
+</header>
+<main>
+  <section class="card"><h2>Clips</h2><div class="gridwrap"><table id="grid"></table></div>
+    <div id="gridinfo" class="muted"></div></section>
+  <section class="card" id="devicecard"><h2>Device</h2><div id="device" class="muted">No device</div></section>
+  <section class="card" style="width:100%"><details><summary>Raw state</summary>
+    <div class="keys" id="keys"></div><pre id="raw"></pre></details></section>
+</main>
+<script>
+"use strict";
+const state = {};
+let showKeys = new Set(["clock"]);
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function connect() {
+  const ws = new WebSocket("ws://" + location.host + "/ws");
+  ws.onopen = () => { $("status").textContent = "live"; };
+  ws.onclose = () => { $("status").textContent = "reconnecting..."; setTimeout(connect, 1000); };
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === "snapshot") { for (const k in state) delete state[k]; Object.assign(state, m.state); }
+    else if (m.type === "update") state[m.key] = m.value;
+    dirty = true;
+  };
+}
+
+let dirty = true;
+function frame() {
+  if (dirty) { dirty = false; draw(); }
+  requestAnimationFrame(frame);
+}
+
+function draw() {
+  const clock = state.clock || {}, transport = state.transport || {};
+  const playing = clock.available ? clock.playing : transport.playing;
+  $("play").classList.toggle("on", !!playing);
+  $("rec").classList.toggle("on", !!(clock.recording || transport.recording));
+  $("loop").classList.toggle("on", !!(clock.looping || transport.loop));
+  const tempo = clock.available ? clock.tempo : transport.tempo;
+  $("tempo").textContent = tempo ? tempo.toFixed(2) + " BPM" : "--- BPM";
+  $("pos").textContent = clock.available ? clock.bar + "." + clock.beat : (transport.positionText || "-.-");
+  const sig = (clock.timeSignature || transport.timeSignature || [4, 4])[0];
+  const beats = $("beats");
+  if (beats.children.length !== sig) beats.innerHTML = "<i></i>".repeat(Math.max(1, Math.min(16, sig)));
+  [...beats.children].forEach((b, i) => {
+    b.classList.toggle("on", !!playing && clock.beat === i + 1);
+    b.classList.toggle("first", i === 0);
+  });
+  const sender = state.sender || state.receiver || {};
+  $("project").textContent = [state.project && state.project.name, sender.tunnel && "tunnel " + sender.tunnel]
+    .filter(Boolean).join(" · ");
+  if (state.sender && !state.sender.extension) $("status").textContent = "live, no Bitwig extension";
+  else if (state.receiver && !state.receiver.connected) $("status").textContent = "live, sender not connected";
+  else if ($("status").textContent !== "reconnecting...") $("status").textContent = "live";
+  drawGrid(clock);
+  drawDevice();
+  drawRaw();
+}
+
+function drawGrid(clock) {
+  const grid = state.grid, scenes = (state.scenes && state.scenes.items) || [];
+  const meters = (state.meters && state.meters.tracks) || [];
+  if (!grid) { $("grid").innerHTML = ""; $("gridinfo").textContent = "No clip grid yet (is the Bitwig extension on?)"; return; }
+  const tracks = [];
+  for (let t = 0; t < grid.tracks; t++) { const tr = state["track/" + t]; if (tr && tr.exists) tracks.push([t, tr]); }
+  const onBeat = clock.available && clock.playing && clock.beatPhase < 0.5;
+  let html = "<tr><th></th>";
+  for (const [t, tr] of tracks) {
+    const m = meters[t] || [0, 0];
+    html += `<th class="track${tr.selected ? " sel" : ""}" style="--c:${esc(tr.color)}" title="${esc(tr.name)}">` +
+      `${esc(tr.name)}${tr.armed ? " ●" : ""}${tr.mute ? " M" : ""}${tr.solo ? " S" : ""}` +
+      `<div class="meter"><b style="width:${Math.round(Math.max(m[0], m[1]) * 100)}%"></b></div></th>`;
+  }
+  html += "</tr>";
+  for (let s = 0; s < grid.scenes; s++) {
+    const sc = scenes[s];
+    if (sc && !sc.exists) continue;
+    html += `<tr><th class="scene">${esc(sc ? sc.name || "Scene " + (sc.index + 1) : "")}</th>`;
+    for (const [, tr] of tracks) {
+      const c = (tr.slots || [])[s];
+      if (!c || !c.hasContent) { html += `<td class="empty${c && c.selected ? " sel" : ""}${c && c.queued ? " queued" : ""}"></td>`; continue; }
+      const cls = ["clip", c.state, c.queued ? "queued" : "", c.selected ? "sel" : "", c.state === "playing" && onBeat ? "beat" : ""];
+      html += `<td class="${cls.join(" ")}" style="--c:${esc(c.color)}" title="${esc(c.name)}"><span>${esc(c.name)}</span></td>`;
+    }
+    html += "</tr>";
+  }
+  $("grid").innerHTML = html;
+  $("gridinfo").textContent = `Tracks ${grid.trackOffset + 1}–${grid.trackOffset + tracks.length} of ${grid.trackCount}, ` +
+    `scenes ${grid.sceneOffset + 1}–${Math.min(grid.sceneOffset + grid.scenes, grid.sceneCount)} of ${grid.sceneCount}`;
+}
+
+function drawDevice() {
+  const d = state.device;
+  if (!d || !d.exists) { $("device").innerHTML = "No device selected"; return; }
+  let html = `<div><b>${esc(d.name)}</b> <span class="muted">${esc(d.preset)} · ${esc(d.track)}` +
+    `${d.page && d.page.name ? " · " + esc(d.page.name) : ""}</span></div><div class="params" style="margin-top:8px">`;
+  for (const p of d.params || []) {
+    if (!p.exists) { html += "<div></div>"; continue; }
+    html += `<div class="param"><div class="name">${esc(p.name)}</div><div class="bar"><b style="width:${Math.round(p.modulated * 100)}%"></b></div>` +
+      `<div class="val">${esc(p.text)}</div></div>`;
+  }
+  html += "</div><div class=\"chain\">";
+  for (const c of d.chain || [])
+    html += `<span class="${c.selected ? "sel" : ""}${c.enabled ? "" : " off"}">${esc(c.name)}</span>`;
+  $("device").innerHTML = html + "</div>";
+}
+
+function drawRaw() {
+  if (!$("raw").closest("details").open) return;
+  const keys = Object.keys(state).sort();
+  const box = $("keys");
+  if (box.dataset.keys !== keys.join()) {
+    box.dataset.keys = keys.join();
+    box.innerHTML = keys.map((k) => `<label><input type="checkbox" data-k="${esc(k)}"${showKeys.has(k) ? " checked" : ""}> ${esc(k)}</label>`).join("");
+  }
+  const out = {};
+  for (const k of keys) if (showKeys.has(k)) out[k] = state[k];
+  $("raw").textContent = JSON.stringify(out, null, 2);
+}
+$("keys").addEventListener("change", (e) => {
+  const k = e.target.dataset.k;
+  if (e.target.checked) showKeys.add(k); else showKeys.delete(k);
+  dirty = true;
+});
+document.querySelector("details").addEventListener("toggle", () => { dirty = true; });
+
+connect();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

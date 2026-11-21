@@ -2,7 +2,7 @@
 // receiver share almost nothing. Top left is the tunnel (the name to send as, or what to listen to
 // and the tunnels found), top right the link: who is connected to whom, a few seconds of history
 // and the live readouts. The bottom row is the send format or the receive buffer, and the output.
-// 720 x 556 design grid scaled to the window.
+// 720 x 632 design grid scaled to the window.
 
 #include "editor.h"
 
@@ -38,7 +38,7 @@ namespace {
 namespace ui = jclap::ui;
 
 constexpr float kDesignWidth = 720.0f;
-constexpr float kDesignHeight = 556.0f;
+constexpr float kDesignHeight = 632.0f;
 constexpr float kHeaderHeight = 64.0f;
 
 // The house orange for what is live, a yellow for warnings.
@@ -848,6 +848,18 @@ public:
       inMeter_ = &add<ui::Meter>({648, 450, 14, 82});
       outMeter_ = &add<ui::Meter>({676, 450, 14, 82});
 
+      // The side channel: the DAW's state beside the audio, and where this computer can read it.
+      section({12, 556, 696, 64}, "");
+      stateLed_ = &add<ui::ActivityLed>({28, 564, 80, 22}, "STATE");
+      stateLed_->setColor(kAccent);
+      tips_.add(*stateLed_, "Flashes for each change in the DAW's state: clips, transport, mixer, device");
+      stateLine_ = &add<ui::Label>({120, 566, 380, 18}, "", 0, visage::Font::kLeft, 0.72f);
+      stateInfo_ = &add<ui::Label>({120, 588, 380, 16}, "", 0, visage::Font::kLeft, 0.75f);
+      stateInfo_->setColor(ui::defaultTheme().dimText);
+      add<ui::Label>({512, 566, 180, 14}, "VIEWER AND API", kDim, visage::Font::kRight, 0.8f);
+      stateUrl_ = &add<ui::Label>({492, 584, 200, 20}, "", kAccent, visage::Font::kRight, 0.72f);
+      tips_.add(*stateUrl_, "Open in a browser on this computer to see the clip grid; a streaming app reads /state or /ws");
+
       buildMidiFilter();
 
       sync();
@@ -1010,6 +1022,7 @@ private:
       inMeter_->setLevel(st.inputPeak);
       outMeter_->setLevel(st.outputPeak);
       syncMidi(st, rx);
+      syncState(st, rx);
    }
 
    int carry() const { return static_cast<int>(std::lround(host_.paramValue(kParamCarry))); }
@@ -1100,6 +1113,46 @@ private:
                        rx ? "received" : "sent");
       midiInfo_->setText(buffer);
       midiInfo_->setColor(color);
+   }
+
+   // What the side channel is doing: on a sender, whether the Bitwig extension is talking; on a
+   // receiver, what has come from the sender; and the local address programs read it from.
+   void syncState(const TunnelStatus &st, bool rx) {
+      stateLed_->setCount(st.stateUpdates);
+      char line[96], info[96];
+      unsigned color = 0;
+      if (rx) {
+         if (st.stateKeys > 1)
+            std::snprintf(line, sizeof(line), "%d kinds of DAW state from the sender", st.stateKeys - 1);
+         else {
+            std::snprintf(line, sizeof(line), "No DAW state from the sender yet");
+            color = ui::defaultTheme().dimText;
+         }
+      }
+      else if (st.extension)
+         std::snprintf(line, sizeof(line), "Bitwig extension connected: %d kinds of state", std::max(0, st.stateKeys - 2));
+      else {
+         std::snprintf(line, sizeof(line), "No Bitwig extension: sending the transport only");
+         color = ui::defaultTheme().dimText;
+      }
+      stateLine_->setText(line);
+      stateLine_->setColor(color);
+      if (st.stateClients > 0)
+         std::snprintf(info, sizeof(info), "%d viewer%s connected here", st.stateClients, st.stateClients == 1 ? "" : "s");
+      else if (!rx && st.listeners == 0)
+         std::snprintf(info, sizeof(info), "Sent beside the audio once someone listens");
+      else
+         std::snprintf(info, sizeof(info), "Open the address in a browser to see it");
+      stateInfo_->setText(info);
+      if (st.statePort) {
+         std::snprintf(line, sizeof(line), "http://127.0.0.1:%u", st.statePort);
+         stateUrl_->setText(line);
+         stateUrl_->setColor(kAccent);
+      }
+      else {
+         stateUrl_->setText(st.active ? "No local port free" : "-");
+         stateUrl_->setColor(ui::defaultTheme().dimText);
+      }
    }
 
    // The common states before there is anything to show: switched off, or no socket.
@@ -1311,6 +1364,8 @@ private:
    std::vector<visage::Frame *> filterFrames_;
    bool filterOpen_ = false;
    ui::Label *midiLast_ = nullptr, *midiInfo_ = nullptr;
+   ui::ActivityLed *stateLed_ = nullptr;
+   ui::Label *stateLine_ = nullptr, *stateInfo_ = nullptr, *stateUrl_ = nullptr;
    std::vector<ui::Section *> sections_;
    std::vector<std::string> names_;
    uint32_t lastLost_ = 0, lastConcealed_ = 0;

@@ -1,5 +1,6 @@
-// The engine without a host or a network: packets, codecs, the resampler, and a sender and receiver
-// on clocks 150 ppm apart, joined by a simulated Wi-Fi link with jitter, stalls and loss.
+// The engine without a host or a network: packets, codecs, the resampler, a sender and receiver
+// on clocks 150 ppm apart, joined by a simulated Wi-Fi link with jitter, stalls and loss, and the
+// side channel's state messages going through the same kind of link.
 
 #include <jclap/core/test_host.h>
 
@@ -20,7 +21,10 @@
 #include "receive_ring.h"
 #include "receiver.h"
 #include "resampler.h"
+#include "script_link.h"
 #include "sender.h"
+#include "state.h"
+#include "state_server.h"
 
 using namespace jtunnel;
 
@@ -733,6 +737,140 @@ void testImpairment() {
    JCLAP_CHECK(delaySum / sent > 5.0 && delaySum / sent < 15.0);
 }
 
+// The side channel: JSON checks, the store, messages cut into pieces and put back together through
+// loss, repeats and reordering, the refresh that heals what's lost, the clock, OSC and WebSocket bits.
+void testState() {
+   JCLAP_CHECK(isValidJson(std::string(R"({"a":[1,-2.5e3,true,false,null,"x\"é"],"b":{}})")));
+   for (const char *bad : {"", "{", R"({"a":})", "[1,]", "tru", R"("a)", "{} {}", "01", "{'a':1}", "\"\x01\""})
+      JCLAP_CHECK(!isValidJson(std::string(bad)));
+   JCLAP_CHECK(jsonQuote("a\"b\\c\n\x01") == "\"a\\\"b\\\\c\\n\\u0001\"");
+   JCLAP_CHECK(isValidStateKey(std::string("track/12")) && !isValidStateKey(std::string("a b")) &&
+               !isValidStateKey(std::string()) && !isValidStateKey(std::string(64, 'a')));
+
+   StateStore store;
+   JCLAP_CHECK(store.put("transport", R"({"playing":true})"));
+   JCLAP_CHECK(!store.put("transport", R"({"playing":true})")); // the same again changes nothing
+   JCLAP_CHECK(!store.put("bad key", "{}") && !store.put("x", "{oops"));
+   JCLAP_CHECK(store.put("track/0", R"({"name":"Drums"})"));
+   const uint64_t v = store.version();
+   JCLAP_CHECK(store.put("transport", R"({"playing":false})"));
+   std::vector<StateEntry> changed;
+   store.changes(v, changed);
+   JCLAP_CHECK(changed.size() == 1 && changed[0].key == "transport");
+   JCLAP_CHECK(store.snapshotJson() == R"({"track/0":{"name":"Drums"},"transport":{"playing":false}})");
+   JCLAP_CHECK(isValidJson(store.snapshotJson()));
+   const uint32_t epoch = store.epoch();
+   JCLAP_CHECK(store.remove("track/0") && store.epoch() != epoch && store.size() == 1);
+
+   // Pieces: a message several packets long, through a link that loses, repeats and reorders.
+   std::string big = "{\"names\":[";
+   for (int i = 0; i < 400; ++i)
+      big += (i ? ",\"" : "\"") + std::string("clip number ") + std::to_string(i) + "\"";
+   big += "]}";
+   JCLAP_CHECK(big.size() > 3 * kStatePieceBytes);
+   std::vector<std::vector<uint8_t>> packets;
+   writeStateMessage(7, 42, "track/3", big, packets);
+   JCLAP_CHECK(packets.size() == (big.size() + kStatePieceBytes - 1) / kStatePieceBytes);
+   for (const auto &p : packets)
+      JCLAP_CHECK(p.size() <= kMaxPacketBytes);
+   StateAssembler assembler;
+   std::string key, value;
+   int completed = 0;
+   std::mt19937 rng(3);
+   std::vector<std::vector<uint8_t>> shuffled = packets;
+   shuffled.push_back(packets[1]);
+   std::shuffle(shuffled.begin(), shuffled.end(), rng);
+   for (const auto &p : shuffled) {
+      StatePiece piece;
+      JCLAP_CHECK(parseState(p.data(), p.size(), piece));
+      if (assembler.add(piece, key, value))
+         ++completed;
+   }
+   JCLAP_CHECK(completed == 1 && key == "track/3" && value == big);
+   // A repeat of a finished message (a refresh) gives nothing new.
+   StatePiece again;
+   JCLAP_CHECK(parseState(packets[0].data(), packets[0].size(), again) && !assembler.add(again, key, value));
+   // Truncated or tampered packets are refused.
+   JCLAP_CHECK(!parseState(packets[0].data(), packets[0].size() - 1, again));
+   std::vector<uint8_t> tampered = packets[0];
+   tampered[6 + 4 + 4] = 200; // piece index past the count
+   JCLAP_CHECK(!parseState(tampered.data(), tampered.size(), again));
+   // Audio and state packets aren't mistaken for each other.
+   JCLAP_CHECK(packetType(packets[0].data(), packets[0].size()) == static_cast<uint8_t>(PacketType::State));
+
+   // A sender's store through a lossy link: what's lost comes back with the refresh within a second
+   // or so, and the receiver ends up with exactly what the sender has.
+   {
+      StateStore tx, rx;
+      StateBroadcaster broadcaster(99);
+      StateAssembler rxAssembler;
+      for (int t = 0; t < 24; ++t)
+         tx.put("track/" + std::to_string(t), "{\"name\":\"Track " + std::to_string(t) + "\",\"pad\":\"" +
+                                                    std::string(static_cast<size_t>(300 + t * 100), 'x') + "\"}");
+      tx.put("transport", R"({"tempo":120})");
+      std::bernoulli_distribution lose(0.2);
+      for (int tick = 0; tick < 300; ++tick) { // 3 s at 10 ms
+         if (tick == 50)
+            tx.put("transport", R"({"tempo":128})");
+         std::vector<std::vector<uint8_t>> out;
+         broadcaster.collect(tx, tick == 0, 10, out);
+         for (const auto &p : out) {
+            if (lose(rng))
+               continue;
+            StatePiece piece;
+            std::string k, val;
+            if (parseState(p.data(), p.size(), piece) && rxAssembler.add(piece, k, val))
+               rx.put(k, val);
+         }
+      }
+      JCLAP_CHECK(rx.snapshotJson() == tx.snapshotJson());
+   }
+
+   // The clock: bar and beat from CLAP's transport, in 4/4 and 6/8.
+   {
+      ClockReading c;
+      JCLAP_CHECK(clockJson(c) == R"({"available":false})");
+      c.available = c.playing = true;
+      c.tempo = 120;
+      c.beats = 9.5; // bar 3 (from 8), second beat, half way
+      c.barStart = 8;
+      c.barNumber = 2;
+      const std::string j = clockJson(c);
+      JCLAP_CHECK(isValidJson(j));
+      JCLAP_CHECK(j.find("\"bar\":3,\"beat\":2,\"beatPhase\":0.500") != std::string::npos);
+      c.tsigNum = 6;
+      c.tsigDen = 8;
+      c.beats = 8 + 2.75; // eighth notes: 5.5 of them in, the sixth beat
+      JCLAP_CHECK(clockJson(c).find("\"beat\":6,\"beatPhase\":0.500") != std::string::npos);
+      SharedClock shared;
+      shared.write(c);
+      ClockReading back;
+      JCLAP_CHECK(shared.read(back) && back.beats == c.beats && back.tsigNum == 6 && back.playing);
+   }
+
+   // OSC as the Bitwig extension sends it.
+   {
+      const std::string strings[2] = {"track/1", R"({"name":"Bass"})"};
+      const std::string msg = ScriptLink::message("/jtunnel/state", "ss", nullptr, strings);
+      JCLAP_CHECK(msg.size() % 4 == 0);
+      std::string address, tags;
+      std::vector<int32_t> ints;
+      std::vector<std::string> parsed;
+      JCLAP_CHECK(ScriptLink::parse(reinterpret_cast<const uint8_t *>(msg.data()), msg.size(), address, tags, ints, parsed));
+      JCLAP_CHECK(address == "/jtunnel/state" && tags == "ss" && parsed.size() == 2 && parsed[1] == strings[1]);
+      const int32_t port = 47251;
+      const std::string hello = ScriptLink::message("/jtunnel/hello", "is", &port, strings);
+      JCLAP_CHECK(ScriptLink::parse(reinterpret_cast<const uint8_t *>(hello.data()), hello.size(), address, tags, ints, parsed));
+      JCLAP_CHECK(ints.size() == 1 && ints[0] == 47251 && parsed[0] == "track/1");
+      JCLAP_CHECK(!ScriptLink::parse(reinterpret_cast<const uint8_t *>(hello.data()), hello.size() - 5, address, tags, ints, parsed));
+   }
+
+   // The WebSocket handshake's worked example from RFC 6455.
+   JCLAP_CHECK(StateServer::acceptKey("dGhlIHNhbXBsZSBub25jZQ==") == "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
+   const std::string frame = StateServer::textFrame(std::string(300, 'a'));
+   JCLAP_CHECK(frame.size() == 304 && static_cast<uint8_t>(frame[0]) == 0x81 && static_cast<uint8_t>(frame[1]) == 126);
+}
+
 } // namespace
 
 int main() {
@@ -744,5 +882,6 @@ int main() {
    testRing();
    testImpairment();
    testSimulatedLink();
+   testState();
    return jclap::core::testResult();
 }
