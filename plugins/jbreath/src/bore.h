@@ -52,6 +52,7 @@ public:
       pos_ = 0;
       running_ = false;
       morph_ = fade_ = 0;
+      pending_ = nullptr;
    }
    // The fingering's bore, scaled in frequency by `scale`, at `fs`. Its straight-through wave is
    // only resampled when the scale has moved by more than a couple of percent (a bend or a
@@ -101,8 +102,18 @@ public:
       toN_ = n;
       toR0_ = b.r0;
       blend();
-      if (newBore || std::fabs(std::log(scale / firScale_)) > 0.02)
-         resample(b, scale);
+      if (newBore || std::fabs(std::log(scale / firScale_)) > 0.02) {
+         // (Not while the last one is still fading in: started over, the fade's blend of the two
+         // was dropped for the newest at once, a step in the sound at every one (a slur or a bend
+         // across fingerings asks for one every couple of ms). It waits for the fade to finish.)
+         if (fade_ > 0) {
+            pending_ = &b;
+            pendingScale_ = scale;
+         } else {
+            pending_ = nullptr;
+            resample(b, scale);
+         }
+      }
    }
    // The pressure the past flow leaves at the input this sample (it decays the modes on a step).
    // (Per sample, in real arithmetic on separate real and imaginary arrays, and only the real part
@@ -147,6 +158,11 @@ public:
          const double old = convolve(oldFirRev_, oldPadded_, oldN0_);
          const double w = static_cast<double>(fade_--) / fadeLen_;
          y += w * (old - (y - 2.0 * a));
+         if (fade_ == 0 && pending_) {
+            const BoreFingering &b = *pending_;
+            pending_ = nullptr;
+            resample(b, pendingScale_);
+         }
       }
       pos_ = (pos_ + 1) & (kHistory - 1);
       return y;
@@ -239,7 +255,8 @@ private:
 
    static constexpr double kMorphSec = 0.04, kFadeSec = 0.005;
    static constexpr int kMorphStep = 8; // samples between the morph's steps
-   const BoreFingering *bore_ = nullptr;
+   const BoreFingering *bore_ = nullptr, *pending_ = nullptr;
+   double pendingScale_ = 1.0;
    double fs_ = 0.0, zc_ = 1.0, inst_ = 0.0, firScale_ = 1.0, r0_ = 0.0, fromR0_ = 0.0, toR0_ = 0.0;
    int n_ = 0, n0_ = 1, taps_ = 0, pos_ = 0, fromN_ = 0, toN_ = 0, morph_ = 0, morphLen_ = 1;
    int fade_ = 0, fadeLen_ = 1, oldPadded_ = 0, oldN0_ = 1, padded_ = 0;

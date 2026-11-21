@@ -63,6 +63,16 @@ loud), the baritone's middle C to E and the bass sax's middle register (Bass Hon
 play in tune and clean instead of rough, flat or silent, and the sax's G#1 goes up an octave like
 the other notes under the bass sax's low A instead of sounding flat and unsteady.
 
+From 0.13.10 the sax, oboe and trumpet no longer click as notes start and change. A slur on the sax
+across the octave key or onto a bigger horn, a bend across its fingerings, and a tongued repeat in
+Mono on the sax or oboe changed the output's colour and gain in steps (its soft shelf swept 20 dB
+through the tongue's stop), each a click: they now glide, and the shelves that follow the note are
+filters that can move while they play. A hard-tongued sax note's accent is a few dB over the note
+instead of more than doubling the breath (its onset overshot by up to 8 dB and its low notes
+squealed for 30 ms). The trumpet's tongue sets its lips going with a short puff at the note's own
+pitch instead of a one-sided pulse, which from Eb5 to A5 started the note with a pop up to 16 dB
+over it, and a slur onto a partial there nudges the lips onto it.
+
 ### The alien
 
 An alien that sings words, a syllable a note: yours, typed on the ALIEN tab, or words of its own.
