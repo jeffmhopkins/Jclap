@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.12.0.
+Version 0.13.0.
 
 ![Panel](docs/panel.png)
 
@@ -35,7 +35,8 @@ own channel. Other notes are dropped unless *Pass other notes through* is ticked
 JComp counts in 4/4 from the host's beat 0: its bars are the host's bars when the host is in 4/4. A
 three-beat style (Jazz Waltz, Country Waltz, 6/8 Ballad) counts in bars of three beats instead: set the
 host to 3/4 (or 6/8) from its bar 1.
-While the host counts in (pre-roll) it waits for the first bar. A host loop plays the same notes on
+While the host counts in (pre-roll), or plays before its bar 1, it waits for the first bar, in LOOP as in SONG (a bass
+played in the count-in brings nothing in). A host loop plays the same notes on
 every pass, the first included when playback starts at the loop's start: the song follows the host's
 bars, so a loop or a seek lands where the song is at that bar, and the player starts afresh there (its
 voicing, runs and left hand). A first pass that comes in from bars before the loop arrives with the
@@ -162,8 +163,15 @@ time, a section that comes twice running included (Pop's C C). A structure that 
 with no ending of its own ends on the outro's (the tile and NOW PLAYING show it so). Following
 the host, a count-in before bar 1 waits on the first entry, and a change to the structure or to a
 section's bars while playing puts the song where the host is again. A section that comes back plays a
-little harder each time (up to the fourth), with its own dice, and AABA's last A before the bridge
-ends on the outro's chord.
+little harder each time (up to the fourth), with its own dice: its softer hits come up more than its
+accents, so the accents stay accents. A section that closes a phrase of the song ends at home, on the
+outro's last chord, its own last bar's cadence moved a bar earlier to lead there: AABA's second A
+before the bridge, and the last entry of a song that ends without the outro (I V C ends on I, not on
+the turnaround's V7). Stopped, NEXT, PREV, a section note or a tile click cues the entry play starts
+from. NEXT twice onto another entry of the section playing goes there; PREV from the first entry stays
+on it. A section played by hand that the structure leaves out plays at its own level. Letting go of
+HOLD CHORD in SONG picks the song up where the host is (or, running on its own, at the pass's next
+boundary).
 
 ![Song structure](docs/panel-form.png)
 
@@ -266,7 +274,9 @@ How every chord is voiced, for all sections:
   then the chord's third and colour close above; with three notes, the power chord; in a take with a
   bass of its own, a boom-chick or the palm-wine thumb, the strum leaves the bass strings to the
   thumb's two strings, the root's and the fifth's). A grip is one a hand can make on six strings in
-  standard tuning, low on the neck, so a chord that comes round again is the same grip. A slash chord
+  standard tuning, low on the neck, so a chord that comes round again is the same grip; where a chord
+  has an open-position shape (G 320003, D xx0232, E 022100, C7 x32310, B7 x21202), that's the one
+  (five notes of it at most: the top doubled note goes). A slash chord
   (C/E) keeps its bass at the bottom in CLOSE, DROP 2, DROP 2+4, SHELL, SPREAD, 4THS and GRIP;
   ROOTLESS and OCTAVES leave it to the bass player. ROOTLESS adds the 9th to every minor seventh, the
   iii chord's included, as most pianists play it, though the 9th is outside the key there. On an organ or a pad the low note of SPREAD stays
@@ -380,13 +390,16 @@ playhead. Beside it, two knobs that change the whole part as it plays:
   style's line). Above it, softer repeats of
   the chord sounding fill the gaps, eighths first, then sixteenths (only in a rhythm that already
   plays sixteenths, so a montuno, a bossa or a Charleston stays on eighths), never under a chord still
-  held, and never on a beat in an offbeat style (a skank, an offbeat stab) or a swung one (a swing
+  held or rung to the next, softer than the take's own chords (so a quiet section's fill-ins are
+  quieter still), chopped in a choked style, only rung chords on the beats in a held style or on a pad,
+  and never on a beat in an offbeat style (a skank, an offbeat stab) or a swung one (a swing
   comper adds offbeat stabs, not a pulse of chords). A figure played as written
   (the batida, the montunos and guajeos, Freddie Green's four, the cha-cha) gets nothing added and
   loses nothing below the middle: it is the style. The
   middle plays the take as written, and the same setting always gives the same pattern.
 - **LENGTH**: every chord shorter, down to a staccato chop, or longer, up to legato (held to the next
-  chord). The middle plays the lengths as written.
+  chord). The middle plays the lengths as written (Freddie Green's four its own: 1 and 3 an eighth or
+  so, 2 and 4 a shorter chit).
 
 The rolls on GENERATE and PLAY draw the part with DENSITY, LENGTH, RUNS and the band hits as set, with the engine's
 own dice: the hits, fills and runs the first pass plays (SAME DICE off, later bars differ), and the
@@ -398,7 +411,11 @@ over the bar it fills, and the ENDING's roll over the outro's last bars, where i
 hand's rules are drawn as played (SPREAD's low note on 1 and 3 only, GRIP's strum without the thumb's
 strings, the root before the fifth on a change, a chopped style's short bass), and a run is drawn only
 where it plays (not under a band hit held or shot), cutting the chord before it with *Shorten the
-chord before*. EDIT
+chord before*. A chord rings to the next hit that plays this time (not one its chance or VARY leaves
+out) and lets go at the next chord of its hand; a fill or an ending is voiced on from the bar before
+it, as played; a chord tied over a page's downbeat is drawn from it; and in SONG, NOW PLAYING and the
+tile playing draw the entry's own dice and its closing chord. The rolls draw a section's first take:
+VARY's bars that borrow another take are heard, not drawn. EDIT
 shows the take as written, the hits you edit. Thinned hits don't cut a long chord short: at full LENGTH a chord holds
 to the next chord actually played.
 
@@ -749,6 +766,31 @@ the next change and a held low note at the next one, count a line as its own han
 with its section's offbeat feel. A style whose take is a line (Tenor Line, Palm-Wine, Right-Hand
 Arpeggio) fills with its groove: a riff plays as written. The rolls leave out the slip note's grace
 notes.
+
+**The eleventh review (0.13.0).** Five more cold passes ([docs/sources.md](docs/sources.md), Part O).
+In SONG: NEXT twice onto another entry of the section playing goes there, PREV from the first entry
+stays, a cue made while stopped is where play starts, a section that closes a phrase (AABA's second A,
+the last entry of a song that ends without the outro) ends at home with its cadence before it, a
+repeat's lift keeps the accents, and HOLD CHORD let go picks the song up where the host is; a count-in
+rests in LOOP too. Styles: Chic's rests stay rests, Afrobeat's Chord Chop and Interlock play as
+written, Memphis's organ backbeat is half held, a bossa's fixed figure and a four-to-the-bar guitar no
+longer ring, Motown's WEIRD takes the V of the next chord rather than a jazz approach, and Freddie
+Green's four takes LENGTH above the middle. Takes: a mutation that changes nothing is tried again and
+never named, "accents" keeps the One and leaves lines and ghosts alone, "sparser" keeps a left hand,
+and a held take keeps its holds through WEIRD, "push it" and "ghosts". DENSITY's fill-ins sit under the
+take's level and never under a rung chord. Fills: a quiet section's fill stays quiet, an eighth-note
+take's fill leads in, a riff style ends its fill on a lead, and 6/8 keeps its fourth eighth. Harmony:
+the montuno's octave line stays in its window, a guitar's open chords are the open shapes, quartal
+colours stay in the key, Cmaj7/E keeps its C, a minor key's V7 runs the b9 and b13, 4THS keeps a
+dominant's 7th, SPREAD puts a 7#9's #9 on top, SHELL doesn't double the root, three-note ROOTLESS
+keeps the m11's 11th and the 13sus's 13th, a power chord in a minor key is minor, a bass a fifth under
+the rest is the root (Cmaj7#11, not D13), tritone pairs follow the key's scale, and B major spells
+its raised fourth E#. The engine: a chord played a moment late with a strum no longer lets the old
+chord's last strings sound. The rolls now match the engine's first pass in all but a handful of the 609
+sections at the defaults (chance and VARY in the ring gap, the next chord cutting the one before,
+fills and endings led from the bar before, Freddie's lengths, the 50 ms floor, the run's held low
+note, the change struck over a bass note), and NOW PLAYING's chord changes with what's heard. A
+factory preset never loads a user song file of the same name.
 
 **Left out for now.** A "+ GUITAR" second player layered over the first, and recording a part played
 in to a take.

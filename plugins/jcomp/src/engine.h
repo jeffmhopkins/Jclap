@@ -72,6 +72,7 @@ struct Settings {
    std::array<int, kActionCount> learn{};
    // From the style and the player.
    bool fixed = false;       // a figure played as written: DENSITY adds nothing to it
+   bool freddie = false;     // Freddie Green's four: choked shells, 1 and 3 held a little longer
    bool slip = false;        // Cramer's slip note: a grace note a step under an inner chord tone
    bool shorts = false;      // a style chopped short (a skank, the organ bubble): its left hand too
    bool longs = false;       // a held-chord style (a pad, a ballad's block chords): nothing chopped
@@ -93,12 +94,38 @@ inline double diceFor(uint32_t salt, int bar, int step, int what) {
 // from section to section and song to song, as SAME DICE repeats them within one.
 inline uint32_t sectionSalt(const Section &s) { return mix(kDiceSalt, s.seed * 7u + 1u); }
 // The bar the dice are thrown for: SAME DICE's bars round, or (off) every bar its own, counted from 1.
+// A section's chord at a bar, in the song's structure: a section that closes a phrase of the song
+// ends at home, the chord the outro ends on: played twice running and then left (AABA's second A
+// before the bridge, a second ending), or the last entry of a song that ends without the outro (I V C
+// ends on I, not the turnaround's V7). Its own last bar (the ii-V, the turnaround) moves a bar
+// earlier, so the cadence stays. `entry` -1: not in SONG's structure (the section as written).
+inline Chord phraseChord(const Song &song, int entry, bool songEnds, int si, int bar, bool half) {
+   const Section &sec = song.sections[static_cast<size_t>(std::clamp(si, 0, kSections - 1))];
+   Chord c = sec.chordAt(bar, half);
+   const int e = entry;
+   const bool second = e > 0 && e < song.entries() && song.entry(e - 1) == si && e + 1 < song.entries() &&
+                       song.entry(e + 1) != si;
+   const bool last = e >= 0 && songEnds && e == song.entries() - 1;
+   if ((second || last) && si != kOutro && bar >= sec.bars - 2) {
+      const Section &out = song.sections[kOutro];
+      const Chord home = out.chordAt(std::max<int>(1, out.progBars) - 1, true);
+      if (!home.none() && !sameHarmony(sec.chordAt(sec.bars - 1, true), home)) {
+         if (bar == sec.bars - 1)
+            c = home;
+         else if (sec.bars >= 2)
+            c = sec.chordAt(sec.bars - 1, half);
+      }
+   }
+   return c;
+}
+
 inline int diceBarOf(int bar, int same) { return same > 0 ? bar % same : bar + 1; }
 
 // What the recipe's style and player tell the engine.
 inline void applyRecipe(Settings &s, const Recipe &r) {
    const unsigned mods = styleOf(r).mods;
    s.fixed = (mods & kFixed) != 0;
+   s.freddie = s.fixed && (mods & kShorts) && styleOf(r).shape == kShell;
    s.slip = (mods & kSlip) != 0;
    s.shorts = (mods & kShorts) != 0;
    s.runsIn = (mods & kRunsIn) != 0;
@@ -153,6 +180,7 @@ public:
       song_ = s;
       if (form) {
          formPos_ = formAt();
+         repeat_ = song_.entry(formPos_) == section_ ? repeatOf(formPos_) : 0;
          if (settings_.song && following_ && running_ && !holdChord_)
             songPlace_ = true;
       }
@@ -160,8 +188,10 @@ public:
    const Song &song() const { return song_; }
 
    void setSettings(const Settings &s) {
-      if (s.section != settings_.section && s.switchBy != 1)
+      if (s.section != settings_.section && s.switchBy != 1) {
          queueSection(std::clamp(s.section, 0, kSections - 1), false);
+         cued_ = false; // (the Section param is where a free SONG start begins anyway)
+      }
       if (s.take != settings_.take && s.switchBy != 1)
          pendingTake_ = std::clamp(s.take, 0, kTakes - 1);
       if (s.play && !settings_.play)
@@ -211,6 +241,9 @@ public:
       fill_ = fillPending_ = fillDown_ = ending_ = ended_ = waiting_ = false;
       pendingPos_ = -1;
       repeat_ = 0;
+      cued_ = false;
+      pushTarget_ = -1;
+      markPushed_ = -1;
       shown_ = {};
       padChord_ = Chord{};
       padAhead_ = -1;
@@ -420,11 +453,14 @@ public:
             // Running free, SONG starts the song from its first section, as the host's bar 1 does:
             // the Section param's first entry in the structure (or the structure's first, if it
             // leaves that section out).
-            if (settings_.song && !following) {
+            // (An entry asked for while stopped, by NEXT, PREV, a note or a tile, is where it starts.)
+            if (settings_.song && !following && !cued_) {
                formPos_ = std::max(0, song_.find(std::clamp(settings_.section, 0, kSections - 1)));
                section_ = song_.entry(formPos_);
                pending_ = -1;
             }
+            repeat_ = song_.entry(formPos_) == section_ ? repeatOf(formPos_) : 0;
+            cued_ = false;
          } else {
             // A jump: the section keeps its bars on the bar lines. The fill of the bar it left is
             // left behind with it (the bar landed on finds its own at its bar line).
@@ -451,6 +487,11 @@ public:
                 static_cast<int64_t>(std::max<int>(1, song_.sections[static_cast<size_t>(section_)].bars)) * barTicks();
             const int64_t bar = static_cast<int64_t>(std::floor(static_cast<double>(t) / barTicks())) * barTicks();
             anchor_ = bar - (((bar % secLen) + secLen) % secLen);
+            // Before the host's bar 1 (a count-in, a pre-roll): it rests, and comes in at bar 1.
+            if (t < 0) {
+               waiting_ = true;
+               anchor_ = 0;
+            }
          }
          // SONG mode on the host's timeline: where the song is at this bar, counted from its start.
          if (settings_.song && following)
@@ -556,12 +597,15 @@ public:
       f.formPos = now ? now->formPos : formAt();
       f.step = running_ && now ? now->step : -1;
       f.steps = now ? now->steps : 16;
-      f.chord = lastChord_;
-      f.next = nextChord_;
-      f.voices = last_.count;
-      for (int i = 0; i < last_.count; ++i)
-         f.voicing[static_cast<size_t>(i)] = last_.notes[static_cast<size_t>(i)];
-      f.hits = hits_;
+      f.repeat = now ? now->repeat : repeat_;
+      const bool then = now && now->played;
+      f.chord = then ? now->chord : lastChord_;
+      f.next = then ? now->next : nextChord_;
+      const Voicing &sounding = then ? now->voicing : last_;
+      f.voices = sounding.count;
+      for (int i = 0; i < sounding.count; ++i)
+         f.voicing[static_cast<size_t>(i)] = sounding.notes[static_cast<size_t>(i)];
+      f.hits = then ? now->hits : hits_;
       f.held = heldNow_ ? heldChord_ : latched_;
       f.heldCount = 0;
       for (int k = 0; k < 128 && f.heldCount < 8; ++k)
@@ -618,6 +662,18 @@ private:
          return;
       }
       if (action == kActHoldChord) {
+         // Let go in SONG: the song goes on from where the host is (following), or at the end of the
+         // pass it was holding in (free), not out at the next bar line, mid-phrase.
+         if (!down && holdChord_ && settings_.song && running_ && !ended_) {
+            if (following_)
+               songPlace_ = true;
+            else {
+               const int64_t len = std::max<int64_t>(1, static_cast<int64_t>(song_.sections[static_cast<size_t>(section_)].bars) * barTicks());
+               const int64_t rel = nextTick_ - anchor_;
+               if (rel > 0)
+                  anchor_ += (rel / len) * len;
+            }
+         }
          holdChord_ = down;
          return;
       }
@@ -648,14 +704,30 @@ private:
          queueSection((target() + by + kSections) % kSections, false);
          return;
       }
+      // Following the host, stopped: the host's position says where the song is when it plays, so
+      // nothing is cued (the panel goes on showing where play will start).
+      if (!running_ && following_)
+         return;
       const int entries = song_.entries();
-      const int from = pendingPos_ >= 0 ? pendingPos_ : formAt();
-      const int to = ((from + by) % entries + entries) % entries;
-      queueSection(song_.entry(to), song_.entry(to) == section_ && pending_ < 0);
+      const int at = formAt();
+      const int from = pendingPos_ >= 0 ? pendingPos_ : at;
+      int to = ((from + by) % entries + entries) % entries;
+      // (PREV from a song's first entry starts it again: it doesn't wrap round to the outro and end.)
+      if (by < 0 && from + by < 0 && settings_.songEnds)
+         to = 0;
+      // Back to the entry playing, after a NEXT queued another: the queue is cancelled.
+      if (running_ && to == at && pendingPos_ >= 0) {
+         pending_ = -1;
+         pendingPos_ = -1;
+         return;
+      }
+      // (Another entry of the section playing, or this one again from PREV at the start: a restart.)
+      queueSection(song_.entry(to), song_.entry(to) == section_);
       pendingPos_ = to;
       if (!running_) {
          formPos_ = to;
          pendingPos_ = -1;
+         cued_ = true;
       }
    }
 
@@ -665,13 +737,17 @@ private:
          restart = true; // the song over: the section asked for plays again, even the outro
       if (s == section_ && !restart && running_) {
          pending_ = -1;
+         pendingPos_ = -1;
          return;
       }
+      if (!running_ && settings_.song && following_)
+         return; // (stopped, following the host: the host's position places the song)
       pending_ = s;
       if (!running_) {
          section_ = s;
          pending_ = -1;
          formPos_ = formAt();
+         cued_ = true;
       }
    }
 
@@ -720,7 +796,8 @@ private:
          waiting_ = true;
          formPos_ = first;
          section_ = song_.entry(first);
-         pending_ = -1;
+         if (pending_ == section_)
+            pending_ = -1;
          anchor_ = 0;
          repeat_ = repeatOf(first);
          return;
@@ -747,7 +824,9 @@ private:
       formPos_ = e;
       repeat_ = repeatOf(e);
       section_ = s;
-      pending_ = -1;
+      // (A section asked for stays queued: it comes in at its switch point, as it would have.)
+      if (pending_ == s)
+         pending_ = -1;
       anchor_ = (bar - into) * barTicks();
       // Into the ending's bars: the ending, from here (not the take until the next bar line).
       const Section &now = song_.sections[static_cast<size_t>(s)];
@@ -802,7 +881,7 @@ private:
          if (group.size() >= 2 && group.size() < notes.size())
             notes = group;
       }
-      pendingHeld_ = nameChord(notes, settings_.slashBass, settings_.key);
+      pendingHeld_ = nameChord(notes, settings_.slashBass, settings_.key, settings_.scale);
       heldNotes_ = notes;
       if (!running_) {
          takeHeld();
@@ -907,19 +986,9 @@ private:
             si = song_.entry(e);
          }
       }
-      const Section &sec = song_.sections[static_cast<size_t>(si)];
       const int bar = static_cast<int>(rel / barTicks());
       const bool half = (rel % barTicks()) >= halfTicks();
-      Chord c = sec.chordAt(bar, half);
-      // A section played twice running and then left (AABA's second A before the bridge) takes a
-      // second ending: its last bar is home, the chord the outro ends on.
-      if (e > 0 && song_.entry(e - 1) == si && song_.entry(e + 1) != si && e + 1 < song_.entries() &&
-          bar == sec.bars - 1 && si != kOutro) {
-         const Section &out = song_.sections[kOutro];
-         const Chord home = out.chordAt(std::max<int>(1, out.progBars) - 1, true);
-         if (!home.none())
-            c = home;
-      }
+      Chord c = phraseChord(song_, e, settings_.songEnds, si, bar, half);
       if (!c.none()) {
          c.root = static_cast<int8_t>((c.root + transpose()) % 12);
          if (c.bass >= 0)
@@ -1069,7 +1138,14 @@ private:
    }
    // What velocities are scaled by: VELOCITY SETS ENERGY's, and in SONG a section's repeat lifted a
    // little (the last chorus louder than the first).
-   double gain() const { return energy_ * (settings_.song ? 1.0 + 0.04 * std::min(repeat_, 3) : 1.0); }
+   // A velocity at the section's level: ENERGY's velocity scaling, and in SONG a repeated entry
+   // lifted into the headroom above it (the louder hits less, so its accents stay accents).
+   double lifted(double v) const {
+      v *= energy_;
+      if (settings_.song && repeat_ > 0)
+         v += std::max(0.0, 127.0 - v) * 0.08 * std::min(repeat_, 3);
+      return v;
+   }
    // The ending a section plays as the song's last entry: its own, or (a section with none, a
    // structure ending on the chorus) the outro's, over its own chords.
    const Pattern &endingOf(const Section &s) const {
@@ -1102,6 +1178,12 @@ private:
          waiting_ = false;
          if (settings_.song && following_)
             placeInSong(t);
+         else if (following_) {
+            const int64_t secLen =
+                static_cast<int64_t>(std::max<int>(1, song_.sections[static_cast<size_t>(section_)].bars)) * barTicks();
+            const int64_t bar = t / barTicks() * barTicks();
+            anchor_ = bar - bar % secLen;
+         }
       }
       // Placed again on the host's timeline (a new structure, REPEAT turned on), even past the end.
       if (songPlace_ && t % barTicks() == 0 && ended_) {
@@ -1131,7 +1213,8 @@ private:
             pending_ = -1;
             formPos_ = pendingPos_ >= 0 ? pendingPos_ : formAt();
             pendingPos_ = -1;
-            repeat_ = repeatOf(formPos_);
+            // (A section the structure leaves out, played by hand, is no entry's repeat.)
+            repeat_ = song_.entry(formPos_) == section_ ? repeatOf(formPos_) : 0;
             // A push struck before the switch was queued anticipated the old section's chord (its
             // band hit, or a tie into its bar 1): the new section's own first beat is struck.
             markPushed_ = -1;
@@ -1264,7 +1347,7 @@ private:
       pad_ = voice(c, padLast_.empty() ? nullptr : &padLast_, vs, -1, nullptr);
       padLast_ = pad_;
       const double e = song_.sections[static_cast<size_t>(section_)].energy / 100.0;
-      const int vel = static_cast<int>(std::lround((52.0 + 26.0 * e) * gain()));
+      const int vel = static_cast<int>(std::lround(lifted(52.0 + 26.0 * e)));
       for (int i = 0; i < pad_.count; ++i)
          note(at, pad_.notes[static_cast<size_t>(i)], vel, kHeld, 3, settings_.padChannel); // to the next change
    }
@@ -1317,21 +1400,55 @@ private:
       for (int k = from; k <= to; ++k) {
          const int n = (step + k) % std::max<int>(1, p.steps);
          const Hit &h = p.at(n);
-         if (h.on() && !leftHand(h.part) && !thinned(p, n))
+         if (h.on() && !leftHand(h.part) && !thinned(p, n, barsAhead(p, step, k)))
             return true;
       }
       return false;
+   }
+   // How many bars on from `step`'s a step `gap` later falls; and that bar's dice (a later bar of a
+   // two- or four-bar take throws its own when it plays, so it's judged by them).
+   static int barsAhead(const Pattern &p, int step, int gap) {
+      const int per = std::max(1, p.stepsPerBar());
+      return (step + gap) / per - step / per;
+   }
+   int diceAhead(int bars) const {
+      const int same = settings_.sameDiceBars;
+      return bars <= 0 ? diceBar_ : same > 0 ? (diceBar_ + bars) % same : diceBar_ + bars;
+   }
+   // The step `gap` on from `step` (a hit of `hand`'s) that ends its sound: the next hit of the same
+   // hand that plays this time (its chance, VARY and DENSITY with its own bar's dice; one in the
+   // take's next pass counts only when it always plays); with SPREAD the left hand gives way to a
+   // chord on 1 or 3, which brings its own bass.
+   int gapFrom(const Pattern &p, int step, int steps, int hand) const {
+      int gap = 1;
+      while (gap < steps) {
+         const int n = (step + gap) % steps;
+         const Hit &o = p.at(n);
+         const int ahead = barsAhead(p, step, gap);
+         if (o.on() && !thinned(p, n, ahead)) {
+            const bool within = step + gap < steps;
+            const bool certain = (o.chance >= 100 || (within && plays(o, n, diceAhead(ahead)))) &&
+                                 !(within && varied(p, o, n, diceAhead(ahead)));
+            if (certain && handOf(o.part) == hand)
+               break;
+            if (certain && hand == 1 && o.part == kPartChord && n % strongSteps(p) == 0 &&
+                settings_.voicing.shape == kSpread)
+               break;
+         }
+         ++gap;
+      }
+      return gap;
    }
 
    // One step of a pattern: a run starting, or a hit.
    // VARY drops a soft hit now and then (never one on a beat, nor the bar's first chord): soft as
    // written, before the section's energy scaled it.
-   bool varied(const Pattern &p, const Hit &h, int step) const {
+   bool varied(const Pattern &p, const Hit &h, int step, int diceBar = -1) const {
       if (settings_.vary <= 0.0 || step % perBeat(p) == 0 || firstChord(p, step))
          return false;
       const double e = song_.sections[static_cast<size_t>(section_)].energy / 100.0;
       const double soft = kSoft * (e < 0.15 ? 0.5 + 2.2 * e : 0.82 + 0.3 * e) + 1.0;
-      return h.vel <= soft && dice(diceBar_, step, 5) < settings_.vary * 0.25;
+      return h.vel <= soft && dice(diceBar < 0 ? diceBar_ : diceBar, step, 5) < settings_.vary * 0.25;
    }
 
    void playStep(const Pattern &p, int64_t prel, int64_t t, int64_t secRel) {
@@ -1340,8 +1457,22 @@ private:
          return;
       const int steps = std::max<int>(1, p.steps);
       const int step = static_cast<int>((prel / stepTicks) % steps);
-      shown_[shownAt_++ % shown_.size()] = {t, step, steps, anchor_, section_, barTake_, fill_ || ending_, ending_, fill_ && fillDown_,
-                                            formAt()};
+      const size_t at = shownAt_++ % shown_.size();
+      shown_[at] = {t, step, steps, anchor_, section_, barTake_, fill_ || ending_, ending_, fill_ && fillDown_,
+                    formAt(), repeat_, Chord{}, Chord{}, Voicing{}, 0u, false};
+      // (What the step leaves sounding, however it returns.)
+      struct After {
+         Engine &e;
+         size_t at;
+         ~After() {
+            Shown &x = e.shown_[at];
+            x.chord = e.lastChord_;
+            x.next = e.nextChord_;
+            x.voicing = e.last_;
+            x.hits = e.hits_;
+            x.played = true;
+         }
+      } stepDone{*this, at};
       const int bar = static_cast<int>(secRel / barTicks());
       barRel_ = secRel - secRel % barTicks();
       if (settings_.heldOnly && !heldNow_) {
@@ -1434,7 +1565,9 @@ private:
          // chord still holds isn't a gap; a figure played as written gets nothing, and an offbeat
          // take nothing on the beats.
          const double more = (settings_.density - 0.5) * 2.0;
-         if (more <= 0.0 || settings_.fixed || hasLine(p) || lastChord_.none() || last_.empty() || heldOver(p, step))
+         // (Nor under a chord rung to the next: an organ's held backbeat isn't cut into eighths.)
+         if (more <= 0.0 || settings_.fixed || hasLine(p) || lastChord_.none() || last_.empty() || heldOver(p, step) ||
+             ringsOver(p, step))
             return;
          if (!onEighth && !fine)
             return;
@@ -1450,9 +1583,13 @@ private:
          const double chance = onEighth ? more * 0.85 : std::max(0.0, more - 0.35) * 1.2;
          if (dice(diceBar_, step, 21) >= chance)
             return;
-         h.vel = static_cast<uint8_t>(onBeat ? kSoft : kGhost + (onEighth ? 10 : 0));
+         // Softer repeats of the take's own level (a quiet section's are quieter still).
+         const int ref = std::max(24, chordPeak(p));
+         h.vel = static_cast<uint8_t>(onBeat    ? std::min<int>(kSoft, ref * 3 / 4)
+                                      : onEighth ? std::min<int>(kGhost + 10, ref * 11 / 20)
+                                                 : std::min<int>(kGhost, ref / 2));
          h.len = 1;
-         h.art = settings_.longs ? kArtRing : more > 0.85 ? kArtAsWritten : kArtChop;
+         h.art = settings_.longs ? kArtRing : (settings_.shorts || more <= 0.85) ? kArtChop : kArtAsWritten;
       } else if (!target && thinned(p, step)) {
          return;
       }
@@ -1467,21 +1604,7 @@ private:
       // this time round isn't one; and with a two-handed voicing the left hand gives way to a chord
       // on 1 or 3, which brings its own bass.
       const int hand = handOf(h.part);
-      int gap = 1;
-      while (gap < steps) {
-         const int n = (step + gap) % steps;
-         const Hit &o = p.at(n);
-         if (o.on() && !thinned(p, n)) {
-            const bool certain = (o.chance >= 100 || (step + gap < steps && plays(o, n))) &&
-                                 !(step + gap < steps && varied(p, o, n));
-            if (certain && handOf(o.part) == hand)
-               break;
-            if (certain && hand == 1 && o.part == kPartChord && n % strongSteps(p) == 0 &&
-                settings_.voicing.shape == kSpread)
-               break;
-         }
-         ++gap;
-      }
+      int gap = gapFrom(p, step, steps, hand);
       // A left-hand note as written is held to the next one, two beats at most (not in a style
       // chopped short: the organ bubble's left hand is a detached pulse).
       if (hand == 1 && h.art == kArtAsWritten && h.len <= 1 && !settings_.shorts) {
@@ -1523,7 +1646,7 @@ private:
          v = voicingFor(c, h.voicing, h.part == kPartChord);
       } else
          v = voicingFor(c, h.voicing, h.part == kPartChord);
-      double vel = h.vel * gain();
+      double vel = lifted(h.vel);
       if (settings_.vary > 0.0)
          vel += (dice(diceBar_, step, 6) * 2.0 - 1.0) * settings_.vary * 10.0;
       // A two-handed voicing on keys: the left hand's low note sounds with the chords on beats 1 and 3
@@ -1610,8 +1733,8 @@ private:
    }
 
    // Whether a hit's chance lets it play this time round.
-   bool plays(const Hit &h, int step) const {
-      return h.chance >= 100 || dice(diceBar_, step, 4) * 100.0 < h.chance;
+   bool plays(const Hit &h, int step, int diceBar = -1) const {
+      return h.chance >= 100 || dice(diceBar < 0 ? diceBar_ : diceBar, step, 4) * 100.0 < h.chance;
    }
 
    // The chord a change brings, struck where the take has no hit for it: as the bar's first chord.
@@ -1637,11 +1760,10 @@ private:
       k.c = c;
       k.v = voicingFor(c, -1, true);
       k.h = h;
-      k.vel = h.vel * gain();
+      k.vel = lifted(h.vel);
       k.lenBeats = h.len * stepBeats;
-      int gap = 1;
-      while (gap < steps && !p.at((step + gap) % steps).on())
-         ++gap;
+      // (To the chords' next hit that plays, as a take's own chord's gap: not a bass note's.)
+      const int gap = gapFrom(p, step, steps, 0);
       k.gapBeats = gap * stepBeats;
       k.step = step;
       k.triplet = p.rate == kRate8T;
@@ -1705,7 +1827,7 @@ private:
       for (int k2 = step - step % p.stepsPerBar(), e2 = std::min<int>(p.steps, k2 + p.stepsPerBar()); k2 < e2; ++k2)
          if (p.at(k2).on() && !leftHand(p.at(k2).part))
             loudest = std::max<int>(loudest, p.at(k2).vel);
-      k.vel = std::min(127.0, std::max(kAccent + 8, loudest + 10) * gain());
+      k.vel = std::min(127.0, lifted(std::max(kAccent + 8, loudest + 10)));
       k.lenBeats = h.len * stepBeats;
       k.gapBeats = std::max<double>(1.0, static_cast<double>(end - secRel) / stepTicks) * stepBeats;
       k.step = step;
@@ -1719,11 +1841,11 @@ private:
 
    // Whether DENSITY below the middle drops this hit (thinnedBy, with this bar's dice and whether
    // the progression changes chord half way through it).
-   bool thinned(const Pattern &p, int step) const {
+   bool thinned(const Pattern &p, int step, int ahead = 0) const {
       if (settings_.density >= 0.5 || !p.at(step).on())
          return false;
-      return thinnedBy(p, step, settings_.density, dice(diceBar_, step, 20), changesAt(barRel_ + halfTicks()),
-                       settings_.fixed);
+      return thinnedBy(p, step, settings_.density, dice(diceAhead(ahead), step, 20),
+                       changesAt(barRel_ + std::max(0, ahead) * barTicks() + halfTicks()), settings_.fixed);
    }
 
    // The voicing a hit plays. `chord` for a hit playing the chord itself: with the OCTAVES shape
@@ -1850,7 +1972,7 @@ private:
          for (size_t k = 0; k < run.size(); ++k) {
             const int s = (static_cast<int>(k) + late) * stride;
             const double at2 = start + s * stepBeats + swingTicks(p, (step + s) % steps, stepTicks) / kTicksPerBeat;
-            const int vel = static_cast<int>((62 + 10 * k) * gain());
+            const int vel = static_cast<int>(lifted(62 + 10 * k));
             note(at2, run[k], vel, stride * stepBeats * 0.85);
          }
          runTick_ = t + static_cast<int64_t>(span) * stepTicks;
@@ -1974,12 +2096,14 @@ private:
       // an eighth or so on 1 and 3 (now and then nearly the whole beat), a shorter "chit" on 2 and 4
       // (Pettersen's transcription, "The Short and Long of Freddie Green"; Berens, "Basics of Freddie
       // Green Comping": 1 and 3 longer, 2 and 4 much shorter and slightly accented).
-      const bool freddie = settings_.fixed && settings_.shorts && h.part == kPartChord && k.t % kTicksPerBeat == 0;
+      const bool freddie = settings_.freddie && h.part == kPartChord && k.t % kTicksPerBeat == 0;
       const bool onOneThree = (k.t / kTicksPerBeat) % 2 == 0;
       if (freddie) {
          len = onOneThree ? (dice(diceBar_, k.step, 17) < 0.2 ? 0.9 : 0.55) : 0.38;
          if (settings_.length < 0.5)
             len *= 0.15 + 0.85 * settings_.length / 0.5;
+         else if (settings_.length > 0.5 && gapBeats * 0.97 > len)
+            len += (gapBeats * 0.97 - len) * (settings_.length - 0.5) / 0.5; // toward legato, as every chord
       } else {
          const double vary = (dice(diceBar_, k.step, 12) * 2.0 - 1.0) * settings_.lengths;
          len *= 1.0 + (h.art == kArtRing || h.art == kArtTopRings ? std::abs(vary) : vary);
@@ -2033,7 +2157,7 @@ private:
          if (idx == n - 1 && n > 1)
             vv += settings_.topVoice;
          // (And the four's low string only touched: the tenor note on top carries it.)
-         else if (idx == 0 && n > 2 && settings_.fixed && settings_.shorts && h.part == kPartChord)
+         else if (idx == 0 && n > 2 && settings_.freddie && h.part == kPartChord)
             vv -= 18.0;
          double l = len;
          int noteHand = hand;
@@ -2100,8 +2224,23 @@ private:
                if (queue_[i].id < k.firstId || queue_[i].id > k.lastId)
                   queue_[keep++] = queue_[i];
             queueLen_ = keep;
-         } else
+         } else {
+            // Partly out (a strum or a roll begun): the notes of it still to start are dropped with
+            // their offs, so the old chord's last strings never sound over the new one; the ones
+            // sounding are cut as it's played.
+            bool queued[kQueue] = {};
+            for (size_t i = 0; i < queueLen_; ++i)
+               if (queue_[i].id >= k.firstId && queue_[i].id <= k.lastId && (queue_[i].status & 0xF0) == 0x90)
+                  for (size_t j = 0; j < queueLen_; ++j)
+                     if (queue_[j].id == queue_[i].id)
+                        queued[j] = true;
+            size_t keep = 0;
+            for (size_t i = 0; i < queueLen_; ++i)
+               if (!queued[i])
+                  queue_[keep++] = queue_[i];
+            queueLen_ = keep;
             k.offset = beat - static_cast<double>(k.t) / kTicksPerBeat - settings_.timing * tempo_ / 60000.0;
+         }
          k.c = chordAt(k.t - anchor_);
          k.v = voicingFor(k.c, k.h.voicing, k.h.part == kPartChord);
          playChord(k, true);
@@ -2122,6 +2261,8 @@ private:
       }
       if (ended_ && pending_ < 0)
          return; // the song is over
+      if (waiting_)
+         return; // the count-in: the song comes in at bar 1, whatever the bass plays before it
       ++bassHits_;
       const double inBar = std::fmod(beat - static_cast<double>(anchor_) / kTicksPerBeat, beats());
       const double fromBeat = std::abs(inBar - std::round(inBar));
@@ -2154,7 +2295,7 @@ private:
       const double lenBeats = settings_.follow == 0 ? 4.0 : 2.0;
       k.t = static_cast<int64_t>(std::floor(beat * kTicksPerBeat));
       k.offset = beat - static_cast<double>(k.t) / kTicksPerBeat - settings_.timing * tempo_ / 60000.0;
-      k.vel = k.h.vel * gain();
+      k.vel = lifted(k.h.vel);
       k.lenBeats = k.gapBeats = lenBeats;
       k.step = static_cast<int>(rel / 12);
       playChord(k);
@@ -2315,6 +2456,7 @@ private:
    int pendingPos_ = -1; // the entry NEXT or PREV queued, in SONG
    int repeat_ = 0;      // how often the entry's section has played before it in the structure
    bool waiting_ = false; // SONG following the host before its bar 1: resting until the song starts
+   bool cued_ = false;    // stopped in SONG, an entry asked for (NEXT, PREV, a note): play starts there
    bool fill_ = false, fillPending_ = false;
    bool fillDown_ = false; // the fill playing is the fill down (or the intro's setup)
    bool ending_ = false, ended_ = false; // the outro's ending playing; the song over
@@ -2328,7 +2470,13 @@ private:
       // The bar's own state as it was played (the clock's is a lookahead ahead of what's heard).
       int section = 0, take = 0;
       bool fill = false, ending = false, fillDown = false;
-      int formPos = 0;
+      int formPos = 0, repeat = 0;
+      // The chord sounding after the step, its voicing and the hit count: NOW PLAYING's, in time
+      // with what's heard, not a lookahead early.
+      Chord chord, next;
+      Voicing voicing;
+      uint32_t hits = 0;
+      bool played = false;
    };
    std::array<Shown, 8> shown_{};
    size_t shownAt_ = 0;
