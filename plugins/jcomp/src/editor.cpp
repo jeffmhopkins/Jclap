@@ -428,7 +428,8 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
             const int written = !leftHand(h.part) ? h.vel : 0;
             if (m != kMarkAccent)
                h = hitOf('x');
-            h.push = 0;
+            if (m != kMarkAccent) // (ACC keeps the stroke's tie over the beat)
+               h.push = 0;
             h.vel = static_cast<uint8_t>(std::min(127, std::max(kAccent + 8, written + 10)));
             if (m != kMarkAccent)
                h.art = m == kMarkHold ? kArtRing : m == kMarkShot ? kArtChop : kArtAsWritten;

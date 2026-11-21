@@ -424,6 +424,11 @@ public:
                const int same = settings_.sameDiceBars;
                const int bar = static_cast<int>(std::floor(static_cast<double>(rel) / static_cast<double>(len)));
                diceBar_ = same > 0 ? ((bar % same) + same) % same : static_cast<int>(absoluteBar_);
+               // And its own fill (AUTO FILLS' bar, the fill into SONG's next section) or ending.
+               if (bar >= 0 && !ended_) {
+                  fill_ = fillDown_ = false;
+                  decideBar(bar, anchor_ + static_cast<int64_t>(bar) * len);
+               }
             }
          }
       }
@@ -868,6 +873,45 @@ private:
 
    // ---- the clock ----
 
+   // A bar's fill, fill down or ending, decided at its bar line (or where a start or a jump lands
+   // inside it: the bar plays its own, not the take, so a loop's first pass is as the others).
+   void decideBar(int bar, int64_t t) {
+      const Section &now = song_.sections[static_cast<size_t>(section_)];
+      const int every = settings_.autoFillBars;
+      // Counted round the section's own length as it loops (a 12-bar blues fills its 8th and 12th
+      // bars), and on its last bar too.
+      const int inSection = bar % std::max<int>(1, now.bars);
+      if (every > 0 && ((inSection + 1) % every == 0 || (inSection + 1 == now.bars && now.bars > every))) {
+         fill_ = true;
+         fillDown_ = false;
+      }
+      if (settings_.song && settings_.fillInto && pending_ < 0 && bar + 1 == now.bars) {
+         fill_ = true;
+         fillDown_ = downInto(songNext());
+      }
+      if (settings_.fillInto && pending_ >= 0 && switchesAt(t + barTicks()) && settings_.switchAt != 0) {
+         fill_ = true;
+         fillDown_ = downInto(pending_);
+      }
+      if (fillDown_ && now.fillDown.empty())
+         fillDown_ = false;
+      if (!fillDown_ && now.fill.empty())
+         fill_ = false;
+      // The song's last bars: the outro's ending, in place of its fill.
+      if (settings_.song && settings_.songEnds && !holdChord_ && pending_ < 0 && songNext() < 0 && !now.ending.empty()) {
+         const int endBars = std::min<int>(now.ending.bars(), now.bars);
+         if (bar >= now.bars - endBars) {
+            // An outro shorter than its ending plays the ending's last bars, the last chord
+            // rung out.
+            if (!ending_)
+               endFrom_ = static_cast<int64_t>(now.bars - now.ending.bars()) * barTicks();
+            ending_ = true;
+            fill_ = false;
+         }
+      } else
+         ending_ = false;
+   }
+
    double dice(int bar, int step, int what) const {
       return diceFor(salt_ == kDiceSalt ? sectionSalt(song_.sections[static_cast<size_t>(std::clamp(section_, 0, kSections - 1))]) : salt_,
                      bar, step, what);
@@ -922,6 +966,10 @@ private:
          if (pending_ >= 0 && switchesAt(t)) {
             section_ = pending_;
             pending_ = -1;
+            // A push struck before the switch was queued anticipated the old section's chord (its
+            // band hit, or a tie into its bar 1): the new section's own first beat is struck.
+            markPushed_ = -1;
+            pushTarget_ = -1;
             // The new section starts here, its bars on the host's bar lines (NEXT BEAT included). A
             // two-bar clave figure's progression starts on the figure's first side (an even host
             // bar), so a switch in its second bar comes in mid-figure rather than turning it round.
@@ -987,39 +1035,7 @@ private:
             if (!now.takes[static_cast<size_t>(other)].empty())
                barTake_ = other;
          }
-         const int every = settings_.autoFillBars;
-         // Counted round the section's own length as it loops (a 12-bar blues fills its 8th and 12th
-         // bars), and on its last bar too.
-         const int inSection = bar % std::max<int>(1, now.bars);
-         if (every > 0 && ((inSection + 1) % every == 0 || (inSection + 1 == now.bars && now.bars > every))) {
-            fill_ = true;
-            fillDown_ = false;
-         }
-         if (settings_.song && settings_.fillInto && pending_ < 0 && bar + 1 == now.bars) {
-            fill_ = true;
-            fillDown_ = downInto(songNext());
-         }
-         if (settings_.fillInto && pending_ >= 0 && switchesAt(t + barTicks()) && settings_.switchAt != 0) {
-            fill_ = true;
-            fillDown_ = downInto(pending_);
-         }
-         if (fillDown_ && now.fillDown.empty())
-            fillDown_ = false;
-         if (!fillDown_ && now.fill.empty())
-            fill_ = false;
-         // The song's last bars: the outro's ending, in place of its fill.
-         if (settings_.song && settings_.songEnds && !holdChord_ && pending_ < 0 && songNext() < 0 && !now.ending.empty()) {
-            const int endBars = std::min<int>(now.ending.bars(), now.bars);
-            if (bar >= now.bars - endBars) {
-               // An outro shorter than its ending plays the ending's last bars, the last chord
-               // rung out.
-               if (!ending_)
-                  endFrom_ = static_cast<int64_t>(now.bars - now.ending.bars()) * barTicks();
-               ending_ = true;
-               fill_ = false;
-            }
-         } else
-            ending_ = false;
+         decideBar(bar, t);
       }
       const Section &s = song_.sections[static_cast<size_t>(section_)];
       const int64_t r = t - anchor_;
@@ -1491,12 +1507,15 @@ private:
       if (mark == kMarkAccent && w.on() && !leftHand(w.part)) {
          h = w;
          h.vel = kAccent;
-         h.push = 0;
+         // (A pushed stroke stays tied over the beat it anticipates, as under COMP.)
+         h.push = chordRel > secRel ? w.push : 0;
          h.chance = 100;
       }
       Strike k;
       k.t = t;
       k.offset = swingTicks(p, step, stepTicks) / kTicksPerBeat; // a push on a swung eighth, swung
+      if (mark == kMarkAccent && w.on() && !leftHand(w.part))
+         k.offset += h.nudge * tempo_ / 60000.0; // (and laid back as the stroke is)
       k.c = c;
       k.v = voicingFor(c, -1, true);
       k.h = h;
