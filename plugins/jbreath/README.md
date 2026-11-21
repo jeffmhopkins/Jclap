@@ -80,6 +80,13 @@ came as it stopped the air instead of as it let go, so the lips weren't set goin
 (at a soft breath, one tongued trumpet note change in five went silent; now none do) and every
 instrument's repeat started with less of a "ta" than its first note.
 
+Trumpet notes also start much sooner. Measured against the University of Iowa's trumpet (C4 to B4),
+whose notes reach half their level in 15 to 20 ms at every dynamic, Brass Plume's took 50 to 110 ms
+on average (G3 to Bb5), growing out of a faint buzz. Its lips now lose less until they close on
+every cycle, as real lips do before tissue meets tissue, and the tongue plucks them harder, at least
+a middling pluck however softly a note is tongued (fading out from Eb5 to G5, which already spoke
+quickly): the same notes now take 8 to 35 ms on average.
+
 ### The alien
 
 An alien that sings words, a syllable a note: yours, typed on the ALIEN tab, or words of its own.

@@ -1683,13 +1683,29 @@ public:
          qStiffness_ = character.stiffness;
          lipQ_ = kLipQ * std::exp2(lipStiffness() - 0.5);
       }
-      const double q = lipQ_;
+      // (Until they close on every cycle the lips lose less: much of their damping is tissue meeting
+      // tissue, so lips only starting to buzz, not yet touching, ring up kOpenQ times as freely. With
+      // the closed lips' damping from the first cycle, a note took 80 to 170 ms to reach half its
+      // level at mezzo forte; a real trumpet's take 10 to 30 (Iowa, C4 to B4).)
+      const double q = lipQ_ * (1.0 + (kOpenQ - 1.0) * std::max(0.0, 1.0 - closed_ / 0.2));
       const double acc = -wl * wl * x_ - (wl / q) * v_ + dpPrev_ / lipMu_ + 1e-6 * rng.white();
       v_ += acc / fs_;
       // The tongue's release plucks the lips open, so the note starts at once, as hard as tongued
       // (up to a middling strike: harder is an accent in the breath, not a harder pluck).
+      // (Seven times the pluck it was: with the freer lips above, it starts a mezzo forte note in
+      // about 30 ms and a forte one in under 20, for 1 or 2 dB more over the note at its start.)
       if (tn > tongue_) {
-         const double d = std::min<double>(tn - tongue_, std::max(0.0, kHardest - kickTn_));
+         // (A note started from rest: the lips at rest aren't closing on every cycle.)
+         if (pmS_ < 0.05)
+            closed_ = 0.0;
+         double d = std::min<double>(tn - tongue_, std::max(0.0, kHardest - kickTn_));
+         // (However softly tongued, the first pluck is at least kMinPluck: a real trumpet's notes
+         // reach half their level in 15 to 20 ms at pp as at ff (Iowa, C4 to B4), and a soft
+         // tongue's own pluck left the lips to grow out of almost nothing, over 100 to 700 ms.)
+         // (Fading out from Eb5 to G5, whose notes speak quickly however softly: plucked as hard,
+         // they started up to 8 dB over the note.)
+         if (kickTn_ <= 0.0)
+            d = std::max(d, kMinPluck * std::clamp((800.0 - hz_) / 180.0, 0.0, 1.0));
          kickTn_ += tn - tongue_;
          v_ += kKick * d * hz;
       } else if (tn <= 0.0f)
@@ -1785,8 +1801,8 @@ private:
       }
    };
    static constexpr double kP0 = 8000.0, kRho = 1.2, kLipQ = 12.0, kLipMu = 3.0, kLipWidth = 0.012,
-                           kSoft = 1e-4, kOut = 1000.0, kBellCut = 1500.0, kKick = 5e-3, kPuff = 2e-3, kHardest = 0.4, kScoop = 100.0,
-                           kShock0 = 480.0;
+                           kSoft = 1e-4, kOut = 1000.0, kBellCut = 1500.0, kKick = 3.5e-2, kPuff = 2e-3, kHardest = 0.4, kScoop = 100.0,
+                           kShock0 = 480.0, kOpenQ = 3.0, kMinPluck = 0.25;
    // The puff's length in periods of the note, and its size against the one-sided pulse it was.
    static constexpr double kPuffPeriods = 4.0, kPuffShape = 0.5, kSlurNudge = 1.0;
    ModalBore bore_;
