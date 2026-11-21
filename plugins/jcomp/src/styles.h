@@ -189,7 +189,7 @@ inline const std::vector<Genre> &genres() {
         {"Boogie Figure", "Boogie", 116, 0, 0, 0b1000, -1, -1, 0, 0, 0, 0, 0.62, 1}},
        "23, 52"},
       {"Disco", kFamilies[0], kRhythmGuitar, 0.5, 0,
-       // Offbeat eighths over four on the floor; the 3-3-2 Rhodes figure; Rodgers' "chucking":
+       // Offbeat eighths over four on the floor; the 3-3-4-3-3 Rhodes figure; Rodgers' "chucking":
        // sixteenths, muted and ringing, on three-string inversions, the bar struck from its downbeat
        // ("Good Times" and "Le Freak" start on the one) with the motor between.
        {{"..x...x...x...x.", 0.4}, {"x..x..x...x..x..", 0.6}, {"XxgxgXgxxxgxgXgx|Xxgxg.gxX.gxg.Xx", 0.9}},
@@ -334,7 +334,9 @@ inline const std::vector<Genre> &genres() {
        "2, 7, 8, 9, 10, 56, 58", true},
       {"Latin Jazz", kFamilies[2], kJazzComper, 0.5, 0,
        // The chachachá's quarters; the guajeos (as salsa); the quarters with the "cha-cha-chá" cell
-       // that names it (4, its and, and the next 1).
+       // that names it (4, its and, and the next 1). The cha-cha's piano takes the 2-3 guajeo at its
+       // climax (its montuno, unpushed: the cha-cha doesn't anticipate), the quarters and the cell
+       // below it.
        // The bolero's tresillo (1, the and of 2, 4: Impro-Visor's rhumba) and MMA's four bars; the
        // mambo's broken chord (the chord, then single inner notes).
        {{"x...x...x...x...", 0.5}, {"x-..x-x-..x-..x-|..x-..x-..x-..x-", 0.8}, {"..x-..x-..x-..x-|x-..x-x-..x-..x-", 0.8},
@@ -346,7 +348,7 @@ inline const std::vector<Genre> &genres() {
        {{kDorian, {"Cm7|F9", "Cm7|F9", "Ab7|G7", "Cm7|F9|Cm7|F9", "Dm7b5|G7b9|Cm7|Cm7", "Cm7|F9|Cm7|Cm7"}},
         // The bolero's song form: a minor i-iv-V7-i with its secondary dominants ("Besame Mucho").
         {kMinor, {"Fm7|G7|Cm|Cm", "Cm|Fm7|G7|Cm|C7|Fm7|D7|G7", "Gm7b5|C7b9", "Fm7|Bb7|Ebmaj7|Abmaj7|Dm7b5|G7b9|Cm|Cm", "Ebmaj7|Abmaj7|Dm7b5|G7b9", "Fm7|G7b9|Cm|Cm"}}},
-       {{"Cha-Cha", "Cha-Cha", 118, kFixed, 0, 0b1001},
+       {{"Cha-Cha", "Cha-Cha", 118, kFixed, 0, 0b1011},
         {"Latin Jazz Guajeo", "Guajeo", 190, kPushes | kRich | kFixed, 0, 0b010, kMontuno},
         {"Bolero", "Bolero", 80, kRich, 1, 0b110000},
         {"Mambo", "Mambo", 180, kPushes | kFixed, 0, 0b1000010, kMontuno}},
@@ -430,7 +432,7 @@ inline const std::vector<Genre> &genres() {
 
       // ---- Dance ----
       {"House", kFamilies[4], kHouseStabs, 0.54, 0,
-       // Offbeat stabs; the 3-3-2 M1 piano riff; the two-bar riff anticipating its second bar.
+       // Offbeat stabs; the 3-3-4-3-3 M1 piano riff; the two-bar riff anticipating its second bar.
        {{"X...............", 0.2}, {"..X...X...X...X.", 0.55}, {"x..x..x...x..x..", 0.75}, {"x..x..x.x..x..x.|x..x..x...x..x..", 0.9}},
        {{"x..x..x...x.xxxx", 0.8}},
        // i-bVII-bVI-bVII; the major lift I-iii-IV, IV-V-vi; i-iv in the breakdown.
