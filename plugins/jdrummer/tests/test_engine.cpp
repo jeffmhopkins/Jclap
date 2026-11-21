@@ -895,6 +895,58 @@ void testVaryAndEnergy() {
 
 } // namespace
 
+void testSongStructure() {
+   // SONG mode walks the structure: Pop is I V P C V P C B C C O, then round again.
+   Song s = oneHitSong();
+   for (Section &sec : s.sections)
+      sec.bars = 1;
+   s.setForm(2);
+   JCLAP_CHECK_EQ(s.entries(), 11);
+   JCLAP_CHECK_EQ(s.totalBars(), 11);
+   Settings st = plain();
+   st.song = true;
+   st.section = kIntro;
+   auto e = engineWith(s, st);
+   const int pop[] = {kIntro, kVerse, kPre, kChorus, kVerse, kPre, kChorus, kBridge, kChorus, kChorus, kOutro, kIntro, kVerse};
+   for (int bar = 0; bar < 12; ++bar) {
+      run(*e, 96000, true, bar * 4.0);
+      JCLAP_CHECK_EQ(e->section(), pop[bar + 1]);
+   }
+   // A section picked by hand goes on from its next entry: the chorus, then the second verse.
+   auto e2 = engineWith(s, st);
+   e2->request(kActChorus);
+   run(*e2, 96000, true, 0.0);
+   JCLAP_CHECK_EQ(e2->section(), kVerse);
+   run(*e2, 96000, true, 4.0);
+   JCLAP_CHECK_EQ(e2->section(), kPre);
+   // A section the structure leaves out plays, and the song goes on from where it was.
+   auto e3 = engineWith(s, st);
+   e3->request(kActBreak);
+   run(*e3, 96000, true, 0.0);
+   JCLAP_CHECK_EQ(e3->section(), kVerse);
+   // A custom structure saves and loads; templates are named; no structure is once through.
+   Song c = s;
+   c.setForm(kCustomForm, {kIntro, kChorus, kChorus, kOutro});
+   auto d = std::make_unique<Song>();
+   JCLAP_CHECK(d->load(c.save().data(), c.save().size()));
+   JCLAP_CHECK(*d == c);
+   JCLAP_CHECK_EQ(d->entries(), 4);
+   JCLAP_CHECK_EQ(d->entry(2), kChorus);
+   JCLAP_CHECK_EQ(static_cast<int>(d->form), static_cast<int>(kCustomForm));
+   Song once;
+   JCLAP_CHECK_EQ(once.entries(), kSections);
+   JCLAP_CHECK_EQ(once.entry(6), kOutro);
+   JCLAP_CHECK_EQ(once.find(kChorus, 4), 3);
+   // Changing the structure while it plays keeps the place where the section is still in it.
+   auto e4 = engineWith(s, st);
+   run(*e4, 96000 * 3, true, 0.0); // into the chorus, entry 3
+   Song v = s;
+   v.setForm(1); // I V C V C B C O: the chorus's next entry from 3 is 4, then the bridge
+   e4->setSong(v);
+   run(*e4, 96000, true, 12.0);
+   JCLAP_CHECK_EQ(e4->section(), kBridge);
+}
+
 int main() {
    testLibrary();
    testEveryStyleMakesASong();
@@ -926,5 +978,6 @@ int main() {
    testOddMeter();
    testGeneratorEdges();
    testVaryAndEnergy();
+   testSongStructure();
    return jclap::core::testResult();
 }

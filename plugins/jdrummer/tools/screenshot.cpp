@@ -81,7 +81,7 @@ public:
 
 int main(int argc, char **argv) {
    if (argc < 2) {
-      std::fprintf(stderr, "usage: %s out.png [generate|edit|play] [width height] [players] [browser] [notes] [custom] [addpad]\n",
+      std::fprintf(stderr, "usage: %s out.png [generate|edit|play] [width height] [players] [browser] [notes] [custom] [addpad] [form]\n",
                    argv[0]);
       return 2;
    }
@@ -103,6 +103,12 @@ int main(int argc, char **argv) {
          host.notesOpen = true;
       else if (a == "addpad")
          host.addPadOpen = true;
+      else if (a == "form") {
+         // A structure of its own: the chorus back after the bridge, and twice at the end.
+         host.song_.setForm(kCustomForm, {kIntro, kVerse, kChorus, kVerse, kChorus, kBridge, kBreak, kChorus, kChorus,
+                                          kOutro});
+         host.formOpen = true;
+      }
       else if (a == "custom") {
          host.notesOpen = true;
          host.values_[kNoteMap] = 1;

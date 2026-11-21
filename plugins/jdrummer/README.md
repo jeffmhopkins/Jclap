@@ -15,7 +15,7 @@ variations, a fill and its own energy. Mutate any section until it sits right, e
 switch sections live by click, by note or by automation. It plays with the host's transport, or on
 its own PLAY while the host is stopped.
 
-Version 0.2.3.
+Version 0.3.0.
 
 ![Panel](docs/panel.png)
 
@@ -129,6 +129,30 @@ The seven sections, each as wide as its bars, with its groove. For each:
 - **The die** rolls just that section again.
 - **The lock** keeps it from ROLL SONG.
 
+#### The song's structure
+
+The dropdown beside THE SONG sets the order SONG mode (on PLAY) plays the sections in, so a chorus
+can come back after the bridge. The templates, with I V P C B K O for intro, verse, pre, chorus,
+bridge, break and outro:
+
+| Template | Order |
+|---|---|
+| Once through (default) | I V P C B K O |
+| Verse-Chorus | I V C V C B C O |
+| Pop | I V P C V P C B C C O |
+| Short | I V C V C O |
+| AABA | I V V B V O |
+| Extended | I V P C V P C K B C C O |
+
+**Custom…** opens SONG STRUCTURE to write your own, starting from the order in use. Click a section
+to add it (a repeat is just another entry, up to 32), drag an entry to move it, and right-click it or
+click its × to take it out. The readout gives the entries, the bars and the length at the tempo.
+**START FROM TEMPLATE** loads a template to change, **CLEAR** empties it, and **OK** puts it in the
+song (an order that matches a template takes that template's name). The structure saves with the
+song, and ROLL SONG keeps it. The bar count above the sections counts the structure once through.
+
+![Song structure](docs/panel-form.png)
+
 ### MUTATE
 
 The selected section's groove now, and five children made from it, each tagged with what changed
@@ -197,7 +221,9 @@ What makes each pass a little different:
 - **SAME DICE EVERY** never, 1, 2, 4 (default) or 8 bars: the chance hits and VARY repeat every so
   many bars, so the randomness makes a pattern of its own.
 - **AUTO FILLS** off, or a fill every 4, 8 (default) or 16 bars.
-- **PLAY** LOOP stays in a section; SONG plays each section for its bars, then the next.
+- **PLAY** LOOP stays in a section; SONG plays each section for its bars, then the next in the
+  song's structure (see [The song's structure](#the-songs-structure)), and round again after the
+  last. A section you switch to by hand carries on from its next place in the structure.
 
 ### TRANSPORT
 

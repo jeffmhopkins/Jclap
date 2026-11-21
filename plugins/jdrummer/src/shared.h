@@ -12,6 +12,7 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <string_view>
 #include <vector>
 
 namespace jdrummer {
@@ -34,6 +35,21 @@ inline const char *const kSectionCaps[kSections] = {"INTRO", "VERSE", "PRE", "CH
 // Each section's place in a song's arc: how much energy it is made with, before ENERGY moves them all.
 inline const double kArcEnergy[kSections] = {0.25, 0.5, 0.65, 0.9, 0.55, 0.3, 0.35};
 inline const int kSectionBars[kSections] = {8, 16, 8, 16, 8, 8, 8};
+
+// A song's structure: the order SONG mode plays the sections in, a repeat being one more entry. The
+// templates (as JComp has them), by letter: Intro, Verse, Pre, Chorus, Bridge, breaK, Outro.
+constexpr int kMaxForm = 32;
+constexpr uint8_t kCustomForm = 255;
+struct FormTemplate {
+   const char *name;
+   const char *order;
+};
+inline const FormTemplate kForms[] = {
+    {"Once through", "IVPCBKO"}, {"Verse-Chorus", "IVCVCBCO"}, {"Pop", "IVPCVPCBCCO"},
+    {"Short", "IVCVCO"},         {"AABA", "IVVBVO"},           {"Extended", "IVPCVPCKBCCO"},
+};
+constexpr int kFormCount = 6;
+inline constexpr char kSectionLetters[kSections + 1] = "IVPCBKO";
 
 // One hit on one pad on one step. A velocity of 0 is no hit.
 struct Hit {
@@ -135,13 +151,55 @@ struct Song {
    std::array<Section, kSections> sections{};
    // The kit the percussion parts are written for (the second JKit's): Afro-Latin or Percussion.
    uint8_t percKit = 1; // kPercussionKit
-   bool operator==(const Song &o) const { return sections == o.sections && percKit == o.percKit; }
+   // The structure: `length` entries of `order`, each a section; none means every section once,
+   // in order. `form` is the template it came from (kForms), or kCustomForm.
+   std::array<uint8_t, kMaxForm> order{};
+   uint8_t length = 0;
+   uint8_t form = 0;
+   bool operator==(const Song &o) const {
+      if (!(sections == o.sections && percKit == o.percKit && length == o.length && form == o.form))
+         return false;
+      for (int i = 0; i < length; ++i)
+         if (order[static_cast<size_t>(i)] != o.order[static_cast<size_t>(i)])
+            return false;
+      return true;
+   }
    bool operator!=(const Song &o) const { return !(*this == o); }
 
+   int entries() const { return length ? length : kSections; }
+   int entry(int i) const {
+      i = ((i % entries()) + entries()) % entries();
+      return length ? order[static_cast<size_t>(i)] : i;
+   }
+   // The first entry at or after `from` (wrapping) that plays `section`, or -1.
+   int find(int section, int from = 0) const {
+      for (int k = 0; k < entries(); ++k)
+         if (entry(from + k) == section)
+            return (from + k) % entries();
+      return -1;
+   }
+   // Sets the structure from a template, or (kCustomForm) from `sections` itself.
+   void setForm(int templ, const std::vector<int> &custom = {}) {
+      length = 0;
+      if (templ >= 0 && templ < kFormCount) {
+         form = static_cast<uint8_t>(templ);
+         for (const char *c = kForms[templ].order; *c && length < kMaxForm; ++c)
+            order[length++] = static_cast<uint8_t>(std::string_view(kSectionLetters).find(*c));
+         if (templ == 0)
+            length = 0; // once through is the plain order
+         return;
+      }
+      form = kCustomForm;
+      for (int s : custom)
+         if (s >= 0 && s < kSections && length < kMaxForm)
+            order[length++] = static_cast<uint8_t>(s);
+   }
+
+   // The song's bars, played through its structure once.
    int totalBars() const {
       int n = 0;
-      for (const Section &s : sections)
-         n += s.bars;
+      for (int i = 0; i < entries(); ++i)
+         n += sections[static_cast<size_t>(entry(i))].bars;
       return n;
    }
 
@@ -149,7 +207,8 @@ struct Song {
    // fill, the percussion part; from version 2 the percussion's variations and fill, the section's
    // meter, and after the sections the percussion kit), each
    // pattern as its steps, rate and every hit (4 bytes) of its 16 x 32 grid.
-   static constexpr uint32_t kVersion = 2;
+   // From version 3, after the kit, the structure: its template, its length and its entries.
+   static constexpr uint32_t kVersion = 3;
 
    std::vector<uint8_t> save() const {
       std::vector<uint8_t> out;
@@ -190,6 +249,10 @@ struct Song {
          u8(static_cast<uint8_t>(s.meter >> 8));
       }
       u8(percKit);
+      u8(form);
+      u8(length);
+      for (int i = 0; i < length; ++i)
+         u8(order[static_cast<size_t>(i)]);
       return out;
    }
 
@@ -253,6 +316,16 @@ struct Song {
       }
       // Version 1 wrote every percussion part on the Percussion kit.
       loaded.percKit = version >= 2 ? static_cast<uint8_t>(u8() == 4 ? 4 : 1) : 1;
+      if (version >= 3) {
+         const int form = u8(), length = u8();
+         loaded.form = static_cast<uint8_t>(form < kFormCount || form == kCustomForm ? form : 0);
+         loaded.length = static_cast<uint8_t>(std::min(length, kMaxForm));
+         for (int i = 0; i < length; ++i) {
+            const int s = u8();
+            if (i < kMaxForm)
+               loaded.order[static_cast<size_t>(i)] = static_cast<uint8_t>(std::min(s, kSections - 1));
+         }
+      }
       if (!ok)
          return false;
       *this = loaded;
@@ -270,6 +343,7 @@ struct Frame {
    int bar = 0;
    int beat = 0;
    int section = kChorus;
+   int formPos = 0; // the entry of the song's structure playing
    int variation = 0;
    bool fill = false;
    // The section and variation queued to come in, or -1.

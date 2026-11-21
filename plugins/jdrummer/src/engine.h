@@ -72,7 +72,14 @@ struct OutBuffer {
 
 class Engine {
 public:
-   void setSong(const Song &s) { song_ = s; }
+   // A new song keeps the place in its structure where it can (the entry playing, if it still plays
+   // the section playing; else that section's next entry).
+   void setSong(const Song &s) {
+      song_ = s;
+      formPos_ %= song_.entries();
+      if (song_.entry(formPos_) != section_)
+         formPos_ = place(section_);
+   }
    const Song &song() const { return song_; }
 
    void setSettings(const Settings &s) {
@@ -95,6 +102,8 @@ public:
       queueLen_ = 0;
       running_ = false;
       section_ = std::clamp(settings_.section, 0, kSections - 1);
+      formPos_ = 0;
+      formPos_ = place(section_);
       variation_ = std::clamp(settings_.variation, 0, kVariations - 1);
       pending_ = -1;
       pendingVar_ = -1;
@@ -261,6 +270,7 @@ public:
       f.bar = static_cast<int>(since / barLen());
       f.beat = static_cast<int>((since % barLen()) / beatLen());
       f.section = section_;
+      f.formPos = formPos_;
       f.variation = barVar_;
       f.fill = fill_;
       f.queued = pending_;
@@ -336,6 +346,13 @@ private:
       }
    }
 
+   // The structure's entry for a section switched to by hand: its next one from here, or (a section
+   // the structure leaves out) here, so the song goes on from where it was.
+   int place(int section) const {
+      const int f = song_.find(section, formPos_);
+      return f < 0 ? formPos_ % song_.entries() : f;
+   }
+
    int target() const { return pending_ >= 0 ? pending_ : section_; }
 
    void queueSection(int s, bool restart) {
@@ -348,6 +365,7 @@ private:
       if (!running_) {
          // Not playing: it is simply the section to start on.
          section_ = s;
+         formPos_ = place(s);
          pending_ = -1;
       }
    }
@@ -392,6 +410,7 @@ private:
       if (rel0 % beatLen() == 0 && rel0 > 0) {
          if (pending_ >= 0 && switchesAt(t)) {
             section_ = pending_;
+            formPos_ = place(section_);
             pending_ = -1;
             anchor_ = t;
             sectionStarted_ = true;
@@ -423,7 +442,8 @@ private:
          } else if (bar > 0)
             fill_ = false;
          if (settings_.song && !hold_ && pending_ < 0 && bar >= sec.bars) {
-            section_ = (section_ + 1) % kSections;
+            formPos_ = (formPos_ + 1) % song_.entries();
+            section_ = song_.entry(formPos_);
             anchor_ = t;
             sectionStarted_ = true;
             bar = 0;
@@ -636,6 +656,8 @@ private:
    double tempo_ = 120.0, freeBeat_ = 0.0, expected_ = -1.0;
    int64_t nextTick_ = 0, anchor_ = 0, lastTick_ = 0, absoluteBar_ = 0;
    uint32_t salt_ = 0x1234;
+   // The entry of the song's structure playing (SONG mode walks it).
+   int formPos_ = 0;
    int section_ = 0, variation_ = 0, barVar_ = 0, pending_ = -1, pendingVar_ = -1;
    bool restart_ = false, fill_ = false, fillPending_ = false, sectionStarted_ = false, barStarted_ = false;
    bool fillPlayed_ = false, crashNow_ = false;

@@ -43,7 +43,7 @@ public:
    int editSection = kChorus;
    int editVar = 0;        // 0..3, 4 the fill, 5 the percussion part
    int editPad = -1;       // the lane picked in EDIT
-   bool playersOpen = false, browserOpen = false, notesOpen = false, addPadOpen = false;
+   bool playersOpen = false, browserOpen = false, notesOpen = false, addPadOpen = false, formOpen = false;
    int learnAction = -1;   // the action waiting for a note in CUSTOM
    // The MUTATE card: the children on show, their tags, and the parents to go back to.
    std::vector<Pattern> litter;
