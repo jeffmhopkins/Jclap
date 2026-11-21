@@ -285,9 +285,9 @@ inline const std::vector<Genre> &genres() {
         {"....x...x---", 0.5, 3}, {"........x...|........x...|x...........|x...x.......", 0.4, 3}},
        {{"x.....x...x...x.", 0.6}},
        // Rhythm changes' A; iii-VI7-ii-V; the III7-VI7-II7-V7 bridge.
-       {{kMajor, {"Em7 A7|Dm7 G7|Em7 A7|Dm7 G7", "C6 Am7|Dm7 G7|C6 Am7|Dm7 G7", "Dm7|G7|Cmaj7|Cmaj7", "Dm7 G7|Cmaj7|Dm7 G7|Cmaj7 A7", "E7|E7|A7|A7|D7|D7|G7|G7", "Em7 A7|Dm7 G7|Cmaj7|Cmaj7"}},
+       {{kMajor, {"Em7 A7|Dm7 G7|Em7 A7|Dm7 G7", "C6 Am7|Dm7 G7|C6 Am7|Dm7 G7", "Dm7|G7|Cmaj7|Cmaj7", "Dm7 G7|Cmaj7|Dm7 G7|Cmaj7", "E7|E7|A7|A7|D7|D7|G7|G7", "Em7 A7|Dm7 G7|Cmaj7|Cmaj7"}},
         // A waltz's: a chord a bar ("Someday My Prince Will Come"'s I-III7+5-IV-VI7+5-ii-VI7+5-ii-V).
-        {kMajor, {"Dm7|G7|Cmaj7|Cmaj7", "Cmaj7|E7#5|Fmaj7|A7#5|Dm7|A7#5|Dm7|G7", "Em7|A7|Dm7|G7", "Cmaj7|Am7|Dm7|G7|Em7|A7|Dm7|G7", "Fmaj7|Fm7|Em7|A7|D7|D7|Dm7|G7", "Dm7|G7|Cmaj7|Cmaj7"}}},
+        {kMajor, {"Dm7|G7|Cmaj7|Cmaj7", "Cmaj7|E7#5|Fmaj7|A7#5|Dm7|A7#5|Dm7|G7", "Em7|A7|Dm7|G7", "Cmaj7|Am7|Dm7|G7|Em7|A7|Dm7 G7|Cmaj7", "Fmaj7|Fm7|Em7|A7|D7|D7|Dm7|G7", "Dm7|G7|Cmaj7|Cmaj7"}}},
        {{"Charleston Comp", "Charleston", 160, kSparse, 0, 0b0011},
         {"Garland Pushes", "Garland", 140, kPushes, 0, 0b100000100},
         {"Four To The Bar", "Freddie", 180, kPlain | kShorts | kFixed, 0, 0b001000, kRhythmGuitar, kShell, 3, 40, 64, 52},
@@ -326,7 +326,7 @@ inline const std::vector<Genre> &genres() {
        {{"x...x.x...x.x.x.", 0.8}},
        // The son montuno I-IV-V-IV in one clave (two chords a bar, as Moore's guajeos change: the and
        // of 2 anticipates beat 3); ii-V-I-IV; a minor i-iv-V7. The pre and bridge change by the bar.
-       {{kMajor, {"C F|G7 F", "C F|G7 F", "Dm7|G7|C|C", "Dm7 G7|C F", "Am|Dm|E7|E7", "C F|G7 F|C|C"}},
+       {{kMajor, {"C F|G7 F", "C F|G7 F", "Dm7|G7|C|C", "Dm7 G7|C F", "Am|Dm|E7|Am", "C F|G7 F|C|C"}},
         {kMinor, {"Cm Fm|G7 G7", "Cm Fm|G7 Fm", "Ab|G7", "Cm Fm|G7 Cm", "Fm|Bb7|Eb|G7", "Cm Fm|G7 Fm|Cm|Cm"}}},
        {{"Montuno 2-3", "2-3", 180, kPushes | kFixed, 0, 0b1010},
         {"Montuno 3-2", "3-2", 180, kPushes | kFixed, 0, 0b101},
@@ -345,7 +345,7 @@ inline const std::vector<Genre> &genres() {
        // MMA's mambo plays its broken chord over Clave2 Clave3), the broken chord when quiet.
        {{kDorian, {"Cm7|F9", "Cm7|F9", "Ab7|G7", "Cm7|F9|Cm7|F9", "Dm7b5|G7b9|Cm7|Cm7", "Cm7|F9|Cm7|Cm7"}},
         // The bolero's song form: a minor i-iv-V7-i with its secondary dominants ("Besame Mucho").
-        {kMinor, {"Fm7|G7|Cm|Cm", "Cm|Fm7|G7|Cm|C7|Fm7|D7|G7", "Ab7|G7", "Fm7|Bb7|Ebmaj7|Abmaj7|Dm7b5|G7b9|Cm|Cm", "Ebmaj7|Abmaj7|Dm7b5|G7b9", "Fm7|G7b9|Cm|Cm"}}},
+        {kMinor, {"Fm7|G7|Cm|Cm", "Cm|Fm7|G7|Cm|C7|Fm7|D7|G7", "Gm7b5|C7b9", "Fm7|Bb7|Ebmaj7|Abmaj7|Dm7b5|G7b9|Cm|Cm", "Ebmaj7|Abmaj7|Dm7b5|G7b9", "Fm7|G7b9|Cm|Cm"}}},
        {{"Cha-Cha", "Cha-Cha", 118, kFixed, 0, 0b1001},
         {"Latin Jazz Guajeo", "Guajeo", 190, kPushes | kRich | kFixed, 0, 0b010, kMontuno},
         {"Bolero", "Bolero", 80, kRich, 1, 0b110000},

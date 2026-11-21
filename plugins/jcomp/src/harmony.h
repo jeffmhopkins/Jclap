@@ -1308,16 +1308,23 @@ inline Voicing octaveLine(const Chord &c, const Voicing *prev, const VoiceSettin
    const int third = q.size() > 1 ? q[1] % 12 : 4, fifth = q.size() > 2 ? q[2] % 12 : 7;
    const int want[4] = {fifth, third, 0, third};
    const int degree = want[((step % 4) + 4) % 4];
-   const Voicings r = rankShapes(c, prev, vs);
+   // The strokes after the first may dip up to a fourth under the window, rather than leap a sixth
+   // up for a root the window's floor cuts off.
+   VoiceSettings wide = vs;
+   if (step > 0 && prev && !prev->empty())
+      wide.lo = vs.lo - 5;
+   const Voicings r = rankShapes(c, prev, wide);
    const Voicing *best = nullptr;
    double bestD = 1e9;
    for (const Voicing &v : r)
-      if (v.count > 1 && ((v.notes[0] - c.root) % 12 + 12) % 12 == degree) {
+      if (v.count > 1 && ((v.notes[0] - c.root) % 12 + 12) % 12 == degree &&
+          (v.notes[0] >= vs.lo || (prev && std::abs(v.notes[0] - prev->notes[0]) <= 5))) {
          double mean = 0.0;
          for (int i = 0; i < v.count; ++i)
             mean += v.notes[static_cast<size_t>(i)];
-         const double d = step > 0 && prev && !prev->empty() ? std::abs(v.notes[0] - prev->notes[0]) + 0.01 * std::abs(mean / v.count - vs.center)
-                                                             : std::abs(mean / v.count - vs.center);
+         double d = step > 0 && prev && !prev->empty() ? std::abs(v.notes[0] - prev->notes[0]) + 0.01 * std::abs(mean / v.count - vs.center)
+                                                       : std::abs(mean / v.count - vs.center);
+
          if (d < bestD - 1e-9) {
             bestD = d;
             best = &v;

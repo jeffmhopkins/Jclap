@@ -345,7 +345,16 @@ inline void makeChords(const Recipe &r, int section, Section &s, Rng &rng) {
             const bool home = ((v.root - r.key) % 12 + 12) % 12 == 0;
             if (dominant(v) && !home && !to.none() && to.root == (v.root + 5) % 12 && rng.chance(reharm))
                subOf(v);
-         } else if (!(s.split >> b & 1) && next != c && !next.none() && !(st.mods & kFixed) && rng.chance(reharm * 0.8)) {
+         } else if (!(s.split >> b & 1) && next != c && !next.none() && !(st.mods & kFixed) &&
+                    // (Not where the written bass already moves by step into the next chord, a falling
+                    // line under I-V/3-vi: the approach would break the line or be the chord itself.)
+                    !(next.bass >= 0 && [&] {
+                       const int from = ((c.bass >= 0 ? c.bass : c.root) % 12 + 12) % 12;
+                       const int d = ((from - next.bass) % 12 + 12) % 12;
+                       return d == 1 || d == 2 || d == 11 || d == 10;
+                    }()) &&
+                    ((next.bass >= 0 ? next.bass : next.root) + 1) % 12 != c.root &&
+                    rng.chance(reharm * 0.8)) {
             // (Not in a figure played as written: a son montuno's I-IV-V-IV is the clave's harmony,
             // and a chromatic dominant between its chords isn't its vocabulary; the tritone sub on a
             // resolving V above is.)
@@ -1527,7 +1536,7 @@ inline const char *downText(const Genre &g, const Pattern &base, unsigned mods) 
       return "x.......x.......";
    return "x-------........";
 }
-inline const char *endingText(const Genre &g, const Pattern &base, unsigned mods) {
+inline const char *endingText(const Genre &g, const Pattern &base, unsigned mods, const char *style = "") {
    const bool ands = base.rate != kRate34 && base.rate != kRate68 && chordsOnly(base, true);
    const bool off = !ands && (keepsOff(base, 0) || (base.rate == kRate16 && chordsOnly(base, false)));
    if (ands && !(mods & kLongs)) // the chops on the ands, then the last chord held
@@ -1545,6 +1554,9 @@ inline const char *endingText(const Genre &g, const Pattern &base, unsigned mods
    const std::string n = g.name;
    if (n == "Swing Jazz") // SwingEnd: four, then 1 and 3
       return "x...x...x...x...|X.......x-------";
+   // The bolero broadens into its last chord (MMA's BoleroEnd), on its tresillo: no dance tag.
+   if (std::strcmp(style, "Bolero") == 0)
+      return "x-----x-----x...|X---------------";
    if (n == "Salsa" || n == "Latin Jazz") // the cha-cha cell (4, and, 1), the last chord held from the 1
       return "x...x...x...x.x.|X---------------";
    if (g.family == kFamilies[0]) // MMA's R&B ending: 1, 3 and 4, then the one held two beats
@@ -1620,7 +1632,7 @@ inline Pattern makeFillDown(const Recipe &r, int section, const Pattern &base, d
 inline Pattern makeEnding(const Recipe &r, const Pattern &base, double e) {
    const Genre &g = genreAt(r.genre);
    const Style &st = styleOf(r);
-   Pattern f = figure(endingText(g, base, st.mods), base.rate, std::max(0.35, e));
+   Pattern f = figure(endingText(g, base, st.mods, st.name), base.rate, std::max(0.35, e));
    // A montuno's or a guajeo's changes come on the and of 4: its last chord with them, held (an
    // anticipated last hit). The cha-cha's cell ends on the 1 ("chá"), and a bolero on a held downbeat.
    {
@@ -1763,6 +1775,8 @@ inline void generateSong(const Recipe &r, Song &song, bool keepChords = false) {
    // quarters: a section whose grid is the other one is a new meter too.
    const bool beatsMoved = song.beats != beatsOf(r);
    const bool sixEight = styleRate(styleOf(r).mods) == kRate68;
+   // (And 4/4 in sixteenths and 12/8 both have four beats: the triplet grid is a meter of its own.)
+   const bool twelveEight = styleRate(styleOf(r).mods) == kRate8T;
    song.beats = static_cast<uint8_t>(beatsOf(r));
    for (int i = 0; i < kSections; ++i) {
       Section &s = song.sections[static_cast<size_t>(i)];
@@ -1773,7 +1787,7 @@ inline void generateSong(const Recipe &r, Song &song, bool keepChords = false) {
                if (c.bass >= 0)
                   c.bass = static_cast<int8_t>((c.bass + move) % 12);
             }
-         if (beatsMoved || (s.takes[0].rate == kRate68) != sixEight) {
+         if (beatsMoved || (s.takes[0].rate == kRate68) != sixEight || (s.takes[0].rate == kRate8T) != twelveEight) {
             Section made = makeSection(r, i, s.seed);
             made.chords = s.chords;
             made.split = s.split;
