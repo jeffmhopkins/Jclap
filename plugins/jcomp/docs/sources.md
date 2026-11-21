@@ -1716,6 +1716,77 @@ each with a test where a test could hold it.
   descriptor said 24 genres. Nashville Slip's runs were forced to at least 0.5 though its slip
   replaces them (it now has the player's runs).
 
+## Part L. The eighth review (2026-11-21)
+
+An eighth cold pass, split as the seventh (styles and genres; endings, meters and bossa; fills and
+ambient; harmony and voicing; the engine, plugin and rolls), reproduced every finding with
+`jcomp-dump` or a probe program. It found 59 problems (13 high, 23 medium, 23 low); these were fixed
+in 0.9.0, each with a test where a test could hold it, except two judgement calls noted at the end.
+
+- **Band hits.** ACC replaced the stroke's own length and push with a plain accent; it keeps them.
+  HOLD and SHOT silenced a chord leading into the next change (the and of 4 before it); the lead-in
+  plays. A band hit pushed into a section's first bar in SONG mode struck over the bar line into the
+  next section; it doesn't, and a pushed band hit counts as struck when its beat comes. The rolls draw
+  all of this as played.
+- **Harmony and voicing.** A piano's alternating bass played the fifth above the root into the chord
+  (boom-chick's E3 then B3 under an E3 chord); on keys it goes below when the fifth above would crowd
+  the chord. DOUBLE dropped every doubled-top voicing; they are choices at a cost again. A 13th chord's
+  three-note voicing dropped its 13th; it keeps 3, 7 and 13 (Levine [2] ch. 3). A three-note 13sus
+  was the ii9's notes a fourth over; it is 4, b7 and 9. 4THS lost every 7b9's b9, 7#11's #11 and 7#5's
+  #5 at its looser levels; the altered tone always stays, the 13th goes with a b9 or #9, a #11 keeps
+  its lydian 13th, and a chord no stack holds is voiced SPREAD. A sus or triad in 4THS took no 9th, and
+  voice leading counted only the new voicing's notes, so a thinner voicing always looked cheaper; the
+  sus takes its add9 and movement counts both ways. A minor-ninth interval cost as little as a few
+  semitones of movement; it costs as much as the maj7-under-root rub (the voicing texts keep it out
+  [2]). A diminished triad's first inversion was named a rootless G7 (vii°6, Kostka and Payne), and a
+  m7b5's upper inversions an Ab9; a chord held whole is named as itself. A guitar's 9th grip at five
+  voices was four strings; the fifth goes on top (C9's x32333). OCTAVES' line leapt a sixth inside a
+  chord, its register set by the key; each stroke takes the octave nearest the last. WEIRD's half-step
+  approach aimed at a slash chord's root, not its bass; it approaches the bass, and leaves a son
+  montuno's I-IV-V-IV alone. The reharm put an approach on the progression's last bar, aimed at a bar
+  1 the next section doesn't play. Deep House's progression was rebuilt from "Can You Feel It" [24][25].
+- **Styles.** Chic's chucking muted every beat and rang only the e's and a's; it strikes the downbeat
+  ("Good Times" and "Le Freak" start on the one: Premier Guitar's "The Emperor of Chuck"; Guitar
+  World's Cory Wong lesson). Funk's Dorian Groove played the clav riff and the guitar scratch on an
+  e-piano; it plays the stabs and the counter. The chicken scratch never rang ("occasional chords are
+  allowed to ring out", Stewart); its accents do. Highlife's Bell Twelve was mutated and thinned like a
+  comp; it is a timeline, kFixed. The Quiet Bossa had no thumb for three of its four half bars (the
+  thumb is the surdo); it takes the batida and the thumbed cycle. Gospel Push and the Sunday Ballad
+  could never run (their offbeat chords sat under every run); a style that walks into its changes lets
+  the run take an offbeat chord's place, and Memphis Backbeat no longer marks a run into beat 2, where
+  there is no change. Freddie Green's four leaned 20 to 27 velocity steps on 2 and 4; it is even [19].
+  A swing comp gained soft chords on the beats at high energy, and the jazz waltz no fill-in at all
+  (the "four" test counted its three beats); neither now. BLEND put a chord on an offbeat style's
+  empty one, inside a held chord, or a ghost over an accent; it doesn't. DENSITY couldn't thin a
+  one-bar fixed figure (every take is two bars); a figure whose bars are the same thins as any take,
+  its thumb kept, and a clave figure keeps every stroke.
+- **Fills and endings.** A fill was compared with the take's first bar for the Shout's accents and
+  accented every hit in other genres (Palm-Wine, Boogie); it is compared with the last bar, the Shout
+  only. Mutations raised hits above the take's peak and "push it" pushed funk over its One; they
+  don't. Ambient's fill struck a fresh downbeat into a two-bar hold and stuttered the old chord an
+  eighth before the change (Eno's loops have no cadential pickups); it holds on, or swells softly in
+  the middle. The fill down put a bass on the organ bubble's dropped one [64]; it keeps the take's
+  left hand. A fill's last-beat chords overwrote the left hand (the bubble's and of 4, Broken Chords'
+  fifth); the left hand plays on. A fixed figure's fill down was two half notes (Freddie Green's four
+  in two, the montuno off clave); it is the figure, its last chord rung. The 12/8 Ballad's fill dropped
+  its middle triplets. The cha-cha and the bolero ended on the and of 4, which is the montunos' cierre;
+  they end on the 1. The swing ending's last chord was softer than its accent, and House ended on four
+  block quarters; the last chord is the ending's loudest, and a house riff ends on its own last bar.
+  The ska upstroke's fill down and ending landed on 2 and 4; they keep its offbeats.
+- **The engine, plugin and rolls.** SPREAD's low note on an organ or a pad dropped out between 1 and
+  3, though the README said it stays; it stays. A locked section kept its 3/4 grid under a 6/8 style;
+  it is made again on the new grid. ENERGY from the host threw away chords edited to start with N.C.
+  A start or jump mid-bar played the partial bar with the last bar's dice and take. The main thread
+  could take the "remake the chords" flag without the remake (both are one atomic word now). A
+  pushed TOP RINGS chord's inner notes ended before the beat it tied over. The rolls drew a fill or a
+  fill down over bar 1 rather than the bar it fills, stopped at four bars of an 8- or 12-bar
+  progression, struck SPREAD's low note and GRIP's thumb strings on every chop, played the fifth
+  before the root on a change, rang a chopped style's bass, drew runs under a HOLD, didn't shorten the
+  chord before a run, and threw the view's dice, not the section's. All now follow the engine.
+- **Left as judgement.** The Rhythm Guitar's three-voice 9th grip keeps the voicing voice leading
+  picks rather than always the 3-b7-9 inversion, and the roll doesn't draw the run into the next pass's
+  first bar from the view's last (it draws the runs inside the view).
+
 ## Bibliography
 
 1. de Clercq, Trevor, and David Temperley. "A corpus analysis of rock harmony." *Popular Music* 30/1
