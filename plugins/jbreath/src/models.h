@@ -397,6 +397,10 @@ public:
    // its model and tuning pick: another when the model has kept a horn the row doesn't play there.
    virtual int tuneRow(int row) const { return row; }
    double fingerHz(double hz) const { return hz * std::exp2(-std::clamp(lipBend, -kLipBendMax, kLipBendMax) / 12.0); }
+   // How many semitones the note still has to glide to the one played (set before notePitch): a
+   // slur's few ms, or the Glide time. A player changes valves once, for the note slurred to, not
+   // for each pitch the slide passes through.
+   double glideSemis = 0.0;
 
 protected:
    double fs_ = 96000.0;
@@ -1574,7 +1578,10 @@ public:
       // (Chosen for the note without the player's bend, which the lips make on the valves the note
       // was played with: re-fingered as a bend crossed each semitone, the lips lost the note and
       // fell to another partial, or stopped, for a tenth of a second or more.)
-      const double fh = fingerHz(hz);
+      // (For the note it's gliding to: chosen at each pitch a slur passed through, it took the valves
+      // of one in between and kept them, a fingering that didn't speak on the note, so a slur up
+      // onto Eb5 to F5 died.)
+      const double fh = fingerHz(hz) * std::exp2(glideSemis / 12.0);
       int fv = 0, fp = 1;
       double best = 1e9;
       // (In cents from each resonance, against a table of their pitches made once: a log for each
@@ -1601,9 +1608,10 @@ public:
       }
       if (fv != fing_ || fp != partial_) {
          // A slur onto another partial from Eb5 to G#5, where the lips are eased off and slowest
-         // to catch, nudges them onto the new one with a small puff (kSlurNudge of a middling
-         // strike's): with none, a slur onto E5 lost the note and went silent. (More would catch
-         // every slur there, but pops; the lips' own tuning is what needs to follow the slur.)
+         // to catch, nudges them onto the new one with a puff as big as a middling strike's: with
+         // none, a slur onto E5 lost the note and went silent. (A third of that was enough to pop
+         // no more than the slur itself, but caught only some: with the valves chosen for the note
+         // being slurred to, a whole one catches every slur there from a middling breath up.)
          if (ticked_ && fing_ >= 0) {
             const double pb = std::clamp(pmS_, 0.05, 0.3) / 0.5, up = std::max(fh / 466.0, 1.0);
             const double zone = std::clamp((fh - 560.0) / 60.0, 0.0, 1.0) * std::clamp((820.0 - fh) / 60.0, 0.0, 1.0);
@@ -1780,7 +1788,7 @@ private:
                            kSoft = 1e-4, kOut = 1000.0, kBellCut = 1500.0, kKick = 5e-3, kPuff = 2e-3, kHardest = 0.4, kScoop = 100.0,
                            kShock0 = 480.0;
    // The puff's length in periods of the note, and its size against the one-sided pulse it was.
-   static constexpr double kPuffPeriods = 4.0, kPuffShape = 0.5, kSlurNudge = 0.3;
+   static constexpr double kPuffPeriods = 4.0, kPuffShape = 0.5, kSlurNudge = 1.0;
    ModalBore bore_;
    Delay shock_;
    OnePoleLP acLP_, acLP2_, breathLP_, breathLP2_;

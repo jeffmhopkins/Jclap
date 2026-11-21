@@ -625,13 +625,17 @@ public:
       if (stop_ && breath_ < 1e-4 && tongued)
          valveAt_ = -1;
       gainNow_ += (gainTarget_ - gainNow_) * gainCoef_;
-      tongue_ *= tongueDecay_;
+      // (Struck again in mono, the tongue's burst waits behind it while it stops the air, and comes
+      // as it lets go: spent on the old note's air as the tongue cut it off, it had decayed to a
+      // twentieth by the release, and a trumpet's lips, unplucked, didn't start the new note.)
+      if (kickAge_ >= 0)
+         tongue_ *= tongueDecay_;
       ++age_;
       ++kickAge_;
       // The tongue's noise rides on the air, so there's none without breath: it comes in with the
       // air as it reaches the note's speaking pressure.
       const double airIn = std::clamp(breath_ / std::max(speak_, 0.1), 0.0, 1.0);
-      const float tongue = tongue_ * static_cast<float>(airIn * airIn);
+      const float tongue = kickAge_ < 0 ? 0.0f : tongue_ * static_cast<float>(airIn * airIn);
       // The tongue's release: the pressure built up behind it is let go at once, a short surge of
       // flow that sets the bore ringing, so a tongued note starts on the wave it makes instead of
       // growing out of the reed's noise. It comes as the tongue lets go (or, with no tongue, as the
@@ -1180,6 +1184,7 @@ private:
       // (How far of it the bend takes the note, which the lips bend off the fingering: a sax,
       // trumpet or oboe keeps its fingering through a bend instead of changing it at each semitone.)
       m.lipBend = bendSemis_;
+      m.glideSemis = pitch_ - pitchSm_;
       m.notePitch(hz);
       if (const double off = m.tuningOffset(); off != fingerOff_ || m.tuneRow(row) != row) {
          fingerOff_ = off;
@@ -1232,6 +1237,7 @@ private:
       }
       for (int u = 1; u < unison; ++u) {
          models_[u][settings_.model]->lipBend = bendSemis_;
+         models_[u][settings_.model]->glideSemis = pitch_ - pitchSm_;
          models_[u][settings_.model]->notePitch(hz);
       }
       unison_ = unison;

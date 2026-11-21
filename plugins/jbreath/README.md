@@ -73,6 +73,13 @@ squealed for 30 ms). The trumpet's tongue sets its lips going with a short puff 
 pitch instead of a one-sided pulse, which from Eb5 to A5 started the note with a pop up to 16 dB
 over it, and a slur onto a partial there nudges the lips onto it.
 
+Also from 0.13.10, trumpet slurs and tongued repeats no longer lose the note. A slur took the
+valves of a pitch it passed through on the way and kept them, so a slur up onto Eb5 to F5 often
+went silent: the valves are now chosen for the note being slurred to. In Mono, the tongue's burst
+came as it stopped the air instead of as it let go, so the lips weren't set going on the new note
+(at a soft breath, one tongued trumpet note change in five went silent; now none do) and every
+instrument's repeat started with less of a "ta" than its first note.
+
 ### The alien
 
 An alien that sings words, a syllable a note: yours, typed on the ALIEN tab, or words of its own.
