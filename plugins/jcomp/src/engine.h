@@ -154,6 +154,19 @@ public:
       // from the next switch point.
       if (ended_ && pending_ < 0 && ((settings_.song && !s.song) || (settings_.songEnds && !s.songEnds)))
          pending_ = section_;
+      // SONG turned on mid-play: a section that has looped goes on to its pass's end (not out at the
+      // next bar line, mid-phrase); following the host, the song is placed where the host is at the
+      // next bar line, as a jump there would.
+      if (s.song && !settings_.song && running_ && !ended_) {
+         if (following_)
+            songPlace_ = true;
+         else {
+            const int64_t len = std::max<int64_t>(1, static_cast<int64_t>(song_.sections[static_cast<size_t>(section_)].bars) * barTicks());
+            const int64_t rel = nextTick_ - anchor_;
+            if (rel > 0)
+               anchor_ += (rel / len) * len;
+         }
+      }
       if (!s.velEnergy)
          energy_ = 1.0;
       settings_ = s;
@@ -495,11 +508,11 @@ public:
       const int64_t since = std::max<int64_t>(0, (running_ ? std::min(nowTick_, lastTick_) : lastTick_) - anchor);
       f.bar = static_cast<int>(since / barTicks());
       f.beat = static_cast<int>((since % barTicks()) / kTicksPerBeat);
-      f.section = section_;
-      f.take = barTake_;
-      f.fill = fill_ || ending_;
-      f.ending = ending_;
-      f.fillDown = fill_ && fillDown_;
+      f.section = now ? now->section : section_;
+      f.take = now ? now->take : barTake_;
+      f.fill = now ? now->fill : fill_ || ending_;
+      f.ending = now ? now->ending : ending_;
+      f.fillDown = now ? now->fillDown : fill_ && fillDown_;
       f.ended = ended_;
       f.beats = beats();
       f.queued = pending_;
@@ -953,6 +966,8 @@ private:
       // A run whose target never played (the chord let go, a fill on another grid): it's over.
       if (runTick_ >= 0 && t > runTick_)
          runTick_ = -1;
+      if (runTick_ < 0)
+         runCut_ = -1.0;
       // A held chord waiting for its moment.
       if (heldPending_ && !heldFresh_) {
          const int64_t grid = changeGrid();
@@ -998,6 +1013,14 @@ private:
       }
       if (ended_)
          return;
+      if (songPlace_ && t % barTicks() == 0) {
+         songPlace_ = false;
+         if (settings_.song && following_) {
+            placeInSong(t);
+            if (ended_)
+               return;
+         }
+      }
       const int64_t rel = t - anchor_;
       const Section &sec = song_.sections[static_cast<size_t>(section_)];
       if (rel % barTicks() == 0) {
@@ -1164,7 +1187,7 @@ private:
          return;
       const int steps = std::max<int>(1, p.steps);
       const int step = static_cast<int>((prel / stepTicks) % steps);
-      shown_[shownAt_++ % shown_.size()] = {t, step, steps, anchor_};
+      shown_[shownAt_++ % shown_.size()] = {t, step, steps, anchor_, section_, barTake_, fill_ || ending_, ending_, fill_ && fillDown_};
       const int bar = static_cast<int>(secRel / barTicks());
       barRel_ = secRel - secRel % barTicks();
       if (settings_.heldOnly && !heldNow_) {
@@ -1659,8 +1682,13 @@ private:
          const double stepBeats = static_cast<double>(stepTicks) / kTicksPerBeat;
          const double lay = settings_.timing * tempo_ / 60000.0;
          const double start = static_cast<double>(t) / kTicksPerBeat + lay;
-         if (settings_.runShorten)
-            cutFrom(start - 0.004, 0);
+         // (Cut where the run's first note comes: a shorter run starts late, and the chord struck on
+         // this step, queued after this, is cut there too, in playChord.)
+         const double first = start + late * stride * stepBeats + swingTicks(p, (step + late * stride) % steps, stepTicks) / kTicksPerBeat;
+         if (settings_.runShorten) {
+            cutFrom(first - 0.004, 0);
+            runCut_ = first - 0.004;
+         }
          for (size_t k = 0; k < run.size(); ++k) {
             const int s = (static_cast<int>(k) + late) * stride;
             const double at2 = start + s * stepBeats + swingTicks(p, (step + s) % steps, stepTicks) / kTicksPerBeat;
@@ -1852,6 +1880,10 @@ private:
          note(on, key, static_cast<int>(std::lround(vv)), l, noteHand);
       }
       k.lastId = nextId_;
+      // A chord struck under the start of a run decided on its own step rings no further than the
+      // run's first note.
+      if (runCut_ >= 0.0 && hand == 0 && at < runCut_)
+         cutFrom(runCut_, 0);
       // (Only a push that is tied over: below the middle of LENGTH it's short, and the beat it leads to
       // is struck as written.)
       if (h.push && h.part == kPartChord && h.art != kArtChop && k.lastId >= k.firstId && !settings_.fixed && settings_.length >= 0.5) {
@@ -2121,6 +2153,9 @@ private:
       int64_t t = 0;
       int step = -1, steps = 0;
       int64_t anchor = 0;
+      // The bar's own state as it was played (the clock's is a lookahead ahead of what's heard).
+      int section = 0, take = 0;
+      bool fill = false, ending = false, fillDown = false;
    };
    std::array<Shown, 8> shown_{};
    size_t shownAt_ = 0;
@@ -2137,6 +2172,8 @@ private:
    // The last pushed chord: the beat it anticipates (-1 none), and its notes.
    int64_t pushTarget_ = -1;
    int64_t markPushed_ = -1; // the band hit's slot (absolute tick) a push already struck
+   double runCut_ = -1.0;    // RUNS SHORTEN: where the run playing cuts the right hand (beats)
+   bool songPlace_ = false;  // SONG turned on following the host: placed at the next bar line
    // The beat a chord pushed at `t` anticipates: the next quarter, or dotted quarter in 6/8.
    int64_t pushTargetOf(int64_t t) const {
       const int64_t unit = beatUnit();
