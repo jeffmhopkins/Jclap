@@ -333,12 +333,28 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
    // Root, 3rd and 7th over the lowest note (C E Bb) is that note's dominant shell, the most common
    // way to hold one, never the rootless voicing of the chord a tritone away (Gb7#11).
    const bool bassShell = (held >> ((bassPc + 4) % 12) & 1) && (held >> ((bassPc + 10) % 12) & 1);
+   // Whether the notes are some chord held whole (every tone, its root among them, nothing else).
+   bool wholeChord = false;
+   for (int root = 0; root < 12 && !wholeChord; ++root)
+      if (held >> root & 1)
+         for (const Quality &qu : qualities()) {
+            unsigned want = 0;
+            for (int i : qu.tones)
+               want |= 1u << ((root + i) % 12);
+            if (want == held && qu.tones.size() >= 3) {
+               wholeChord = true;
+               break;
+            }
+         }
    for (int root = 0; root < 12; ++root) {
       // A rootless voicing needs four notes to be named by its missing root, or a dominant's
       // tritone (its 3rd and 7th) and a colour: the left hand's rootless voicings.
       const bool rootless = !(held >> root & 1);
       const bool tritone = (held >> ((root + 4) % 12) & 1) && (held >> ((root + 10) % 12) & 1);
-      if (rootless && pcs < 4 && !tritone)
+      // (Three notes: the tritone and a colour that isn't the fifth. A tritone and a fifth is a
+      // diminished triad, vii°6's D F B, not a G7 with a root nobody played.)
+      const unsigned shell = (1u << ((root + 4) % 12)) | (1u << ((root + 10) % 12)) | (1u << ((root + 7) % 12));
+      if (rootless && pcs < 4 && (!tritone || (held & ~shell) == 0))
          continue;
       for (int q = 0; q < qualityCount(); ++q) {
          const Quality &qu = qualities()[static_cast<size_t>(q)];
@@ -374,7 +390,9 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
          const bool dom = std::find(qu.tones.begin(), qu.tones.end(), 4) != qu.tones.end() &&
                           std::find(qu.tones.begin(), qu.tones.end(), 10) != qu.tones.end();
          const bool rootlessDom = rootless && tritone && dom && !bassShell;
-         if (rootlessDom && (held & ~want) == 0)
+         // (Not where the notes are a chord held whole, root and all: Cm7b5's Gb Bb C Eb is that
+         // chord inverted, whatever the bass, not an Ab9 nobody's root is under.)
+         if (rootlessDom && (held & ~want) == 0 && !wholeChord)
             score += 2.5;
          // Simpler names first: fewer tones break ties.
          score -= 0.05 * static_cast<double>(qu.tones.size());
@@ -585,7 +603,9 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       // when every note is the chord's or one of its tensions, and the stack says what the chord is:
       // its root, its third (or sus fourth), its seventh (or sixth) and an altered tone where it has
       // one. Without them every chord of a diatonic progression finds the same stack and the changes
-      // are never heard. A stack that can't hold them all lets the altered tone go, then the seventh.
+      // are never heard. The altered tone always stays (a 7b9 voiced without its b9 is another
+      // chord): a chord no stack holds it in takes another shape. A stack that can't hold the rest
+      // puts the root under it, then lets the seventh go.
       unsigned own = 0, allowed = 0;
       for (int i : q.tones)
          own |= 1u << ((c.root + i) % 12);
@@ -594,9 +614,12 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       const bool altered9 = hasIv(13) || hasIv(15), altered5 = hasIv(8) || hasIv(6) || hasIv(18);
       // The 9th and 13th sit well in fourths over a chord with a seventh, but not against its b9/#9,
       // nor the 13th against a b13 or a diminished fifth.
-      if ((q.seventh || q.tones.size() > 3) && !altered9)
+      // (A sus or a plain triad takes the 9th too: the sus's add9, Eno's voicing, a stack that keeps
+      // its size.)
+      if ((q.seventh || q.tones.size() > 3 || (q.tones.size() == 3 && !hasIv(6) && !hasIv(8))) && !altered9)
          allowed |= 1u << ((c.root + 2) % 12);
-      if (q.seventh && !altered5 && !hasIv(9))
+      // (A #11 is the lydian dominant's, whose scale has the 13th.)
+      if (q.seventh && !altered9 && !hasIv(8) && !hasIv(6) && !hasIv(9))
          allowed |= 1u << ((c.root + 9) % 12);
       if (q.tones.size() > 1 && q.tones[1] == 3 && !altered5)
          allowed |= 1u << ((c.root + 5) % 12); // the 11th over a minor chord
@@ -638,7 +661,7 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                   for (int k = 1; k < m; ++k)
                      v.push_back(v.back() + (odd && k - 1 == ex / 2 ? (ex % 2 ? 6 : 4) : 5));
                   bool ok = m >= 2, root = false, third = false, sev = seventh < 0 || strict < 1,
-                       al = alt < 0 || strict < 3;
+                       al = alt < 0;
                   for (int x : v) {
                      ok = ok && (allowed >> (((x % 12) + 12) % 12) & 1);
                      const int iv = ((x - c.root) % 12 + 12) % 12;
@@ -1034,12 +1057,19 @@ inline int movement(const Voicing &a, const Voicing &b) {
          m += std::abs(a.notes[static_cast<size_t>(i)] - b.notes[static_cast<size_t>(i)]);
       return m;
    }
-   for (int i = 0; i < b.count; ++i) {
-      int best = 99;
-      for (int j = 0; j < a.count; ++j)
-         best = std::min(best, std::abs(b.notes[static_cast<size_t>(i)] - a.notes[static_cast<size_t>(j)]));
-      m += best;
-   }
+   // Of different sizes: the voices that start and the voices that stop, both, halved (counting only
+   // the new voicing's notes would make a thinner voicing always the cheaper).
+   const auto oneWay = [](const Voicing &x, const Voicing &y) {
+      int sum = 0;
+      for (int i = 0; i < x.count; ++i) {
+         int best = 99;
+         for (int j = 0; j < y.count; ++j)
+            best = std::min(best, std::abs(x.notes[static_cast<size_t>(i)] - y.notes[static_cast<size_t>(j)]));
+         sum += best;
+      }
+      return sum;
+   };
+   m = (oneWay(b, a) + oneWay(a, b) + 1) / 2;
    return m;
 }
 
@@ -1102,7 +1132,7 @@ inline double clashes(const Voicing &v, const Chord &c) {
       for (int j = i + 1; j < v.count; ++j) {
          const int lo = v.notes[static_cast<size_t>(i)], hi = v.notes[static_cast<size_t>(j)];
          if (hi - lo >= 13 && (hi - lo) % 12 == 1 && !(has(13) && iv(lo) == 0))
-            k += 9.0;
+            k += 20.0; // as much as the maj7-under-root rub: a clean voicing nearby wins
          // A major seventh with the root a half step (or a minor 9th) over it: the rub the
          // voicing texts rule out (Pease & Pullig; Levine).
          if (has(11) && iv(lo) == 11 && iv(hi) == 0)
