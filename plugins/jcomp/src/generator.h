@@ -1040,9 +1040,9 @@ inline const std::vector<Mutation> &mutations() {
              if (!h.on() || h.vel == kGhost)
                 continue;
              if (h.vel >= kAccent && rng.chance(0.4))
-                h.vel = kNormal;
+                h.vel = static_cast<uint8_t>(std::lround(h.vel * 0.82));
              else if (!onBeat(p, s) && rng.chance(0.3))
-                h.vel = kAccent;
+                h.vel = kAccent; // (no louder than the take's own peak: mutate() caps it)
           }
        }},
       {"run in", [](Pattern &p, Rng &) {
@@ -1096,8 +1096,11 @@ inline bool applyMutation(Pattern &p, const char *tag, Rng &rng) {
 
 // Whether a mutation suits a style: a fixed figure only changes its accents and lengths (never
 // ringing if it is chopped short); a left hand is added only where the style has one.
-inline bool mutationFits(const char *tag, unsigned mods, const Pattern &parent) {
+inline bool mutationFits(const char *tag, unsigned mods, const Pattern &parent, const char *genre = nullptr) {
    const auto is = [&](const char *t) { return std::strcmp(tag, t) == 0; };
+   // Funk is on the One: nothing pushed over the bar line.
+   if (genre && std::strcmp(genre, "Funk") == 0 && is("push it"))
+      return false;
    if (mods & kFixed)
       return is("accents") || is("chop it") || (is("let it ring") && !(mods & kShorts));
    // A skank is choked short: it never rings.
@@ -1143,7 +1146,8 @@ inline void keepBeatChord(const Pattern &before, Pattern &p) {
          }
 }
 
-inline Pattern mutate(const Pattern &parent, double amount, Rng &rng, std::string &tag, unsigned mods = 0) {
+inline Pattern mutate(const Pattern &parent, double amount, Rng &rng, std::string &tag, unsigned mods = 0,
+                      const char *genre = nullptr) {
    Pattern p = parent;
    const int n = 1 + static_cast<int>(amount * 2.0 + rng.uniform() * 0.7);
    tag.clear();
@@ -1151,7 +1155,7 @@ inline Pattern mutate(const Pattern &parent, double amount, Rng &rng, std::strin
    std::array<int, 16> fit{};
    int fits = 0;
    for (int i = 0; i < static_cast<int>(list.size()) && fits < 16; ++i)
-      if (mutationFits(list[static_cast<size_t>(i)].tag, mods, parent))
+      if (mutationFits(list[static_cast<size_t>(i)].tag, mods, parent, genre))
          fit[static_cast<size_t>(fits++)] = i;
    int lastPick = -1;
    for (int i = 0; i < n && fits > 0; ++i) {
@@ -1168,6 +1172,15 @@ inline Pattern mutate(const Pattern &parent, double amount, Rng &rng, std::strin
    if (p.empty())
       p.at(0) = hitOf('x');
    keepBeatChord(parent, p);
+   // A take bred from another is no louder than it: an added stab or a new accent comes up to the
+   // parent's loudest chord at most (a quiet section's takes stay quiet).
+   const int peak = chordPeak(parent);
+   if (peak > 0)
+      for (int s = 0; s < p.steps; ++s) {
+         const int was = s < parent.steps && parent.at(s).on() ? parent.at(s).vel : 0;
+         if (p.at(s).on() && p.at(s).vel > std::max(peak, was))
+            p.at(s).vel = static_cast<uint8_t>(std::max(peak, was));
+      }
    return p;
 }
 
@@ -1341,16 +1354,21 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
    // The anticipation into the next section stays, whatever the energy took out.
    if (pushed >= 0 && !f.at(pushed).on())
       f.at(pushed) = lead;
-   // An offbeat figure over a left hand whose fill came out as its groove (the shout: its fill's
-   // beat chords give way to the bass) hits every offbeat hard: the praise break's push into the next.
+   // The gospel shout's offbeats over its left hand, its fill come out as its groove (its beat
+   // chords give way to the bass), hit every offbeat hard: the praise break's push into the next.
+   // (Only the shout's: a boom-chick, a waltz or an organ bubble doesn't accent its weak beats.)
+   // The fill is made from the take's last bar, so it's that bar it's compared with.
    bool same = true;
-   for (int s = 0; s < bar && same; ++s)
-      same = f.at(s).on() == base.at(s % std::max<int>(1, base.steps)).on();
-   if (same && offbeatTake(base) && hasLeftHand(base))
+   {
+      const int n = std::max<int>(1, base.steps), from = std::max(0, n - bar);
+      for (int s = 0; s < bar && same; ++s)
+         same = f.at(s).on() == base.at((from + s) % n).on();
+   }
+   if (same && offbeatTake(base) && hasLeftHand(base) && std::strcmp(g.name, "Gospel") == 0) {
       for (int s = 0; s < bar; ++s)
          if (f.at(s).on() && !leftHand(f.at(s).part))
             f.at(s).vel = kAccent;
-   else if (same) {
+   } else if (same && offbeatTake(base) && !hasLeftHand(base)) {
       // Any other fill that came out as the groove (a skank's, an offbeat stab's: moved onto the
       // eighths and kept off the beats) still leads into the next section: its last two chops
       // accented, and a pickup after the last (the triplet before the bar line, or a sixteenth
@@ -1361,9 +1379,13 @@ inline Pattern makeFill(const Recipe &r, const Pattern &base, double e, Rng &rng
             prev = last;
             last = s;
          }
+      // (sure and on time: no WEIRD chance or nudge on the lead-in)
       for (int s : {prev, last})
-         if (s >= 0)
+         if (s >= 0) {
             f.at(s).vel = kAccent;
+            f.at(s).chance = 100;
+            f.at(s).nudge = 0;
+         }
       const int pick = f.rate == kRate8T ? bar - 1 : last + 1;
       if (last >= 0 && (f.rate == kRate8T || fine) && pick > last && pick < bar && !f.at(pick).on()) {
          f.at(pick) = f.at(last);
@@ -1583,7 +1605,7 @@ inline Section makeSection(const Recipe &r, int section, uint32_t seed) {
    s.takes[0] = p;
    for (int t = 1; t < kTakes; ++t) {
       std::string tag;
-      s.takes[static_cast<size_t>(t)] = mutate(p, 0.15 + 0.15 * t + r.weird * 0.3, rng, tag, st.mods);
+      s.takes[static_cast<size_t>(t)] = mutate(p, 0.15 + 0.15 * t + r.weird * 0.3, rng, tag, st.mods, genreAt(r.genre).name);
    }
    s.fill = makeFill(r, p, e, rng);
    s.fillDown = makeFillDown(r, section, p, e);
@@ -1700,7 +1722,7 @@ inline void adoptChild(const Recipe &r, Section &s, const Pattern &child, uint32
    s.takes[0] = child;
    for (int t = 1; t < kTakes; ++t) {
       std::string tag;
-      s.takes[static_cast<size_t>(t)] = mutate(child, 0.15 + 0.15 * t + r.weird * 0.3, rng, tag, styleOf(r).mods);
+      s.takes[static_cast<size_t>(t)] = mutate(child, 0.15 + 0.15 * t + r.weird * 0.3, rng, tag, styleOf(r).mods, genreAt(r.genre).name);
    }
    s.fill = makeFill(r, child, s.energy / 100.0, rng);
    // The fill down and the ending made again from the new take (an offbeat take's are its own).

@@ -2471,7 +2471,7 @@ private:
       host_.tags.clear();
       for (int i = 0; i < 5; ++i) {
          std::string tag;
-         host_.litter.push_back(mutate(sec.takes[0], param(kMutation), rng, tag, styleOf(recipe()).mods));
+         host_.litter.push_back(mutate(sec.takes[0], param(kMutation), rng, tag, styleOf(recipe()).mods, genreAt(recipe().genre).name));
          host_.tags.push_back(tag);
       }
       if (mutate_)
@@ -3014,7 +3014,7 @@ private:
          Pattern &p = TakeRoll::pick(s, host_.editSection, host_.editTake);
          Rng rng(rng_());
          std::string tag;
-         p = mutate(p, param(kMutation), rng, tag, styleOf(recipe()).mods);
+         p = mutate(p, param(kMutation), rng, tag, styleOf(recipe()).mods, genreAt(recipe().genre).name);
          host_.setSong(s);
          diceTag_ = tag;
          redraw();
