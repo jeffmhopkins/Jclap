@@ -48,6 +48,15 @@ void operator delete[](void *p, const std::nothrow_t &) noexcept { std::free(p);
 
 using namespace jcomp;
 
+// Each group of tests in a function of its own, kept out of main(): MSVC gives every temporary in a
+// function its own stack slot, so a main() holding every group inlined comes near Windows' 1 MB stack
+// and the first deep voicing call on top of it goes over.
+#if defined(_MSC_VER)
+#define JCOMP_TEST_NOINLINE __declspec(noinline)
+#else
+#define JCOMP_TEST_NOINLINE __attribute__((noinline))
+#endif
+
 namespace {
 
 constexpr uint32_t kBlock = 256;
@@ -233,7 +242,7 @@ std::vector<uint8_t> saveV2(const Song &s) {
 // The eighth review's fixes, in a function of their own: main's frame is already large, and on
 // MSVC its locals don't share stack slots (a Song is 32 KB), so the generator's calls under it ran
 // past Windows' 1 MB stack.
-static void roundEight() {
+JCOMP_TEST_NOINLINE static void roundEight() {
    {
       const auto find = [](const char *gn, const char *sn, int &g, int &st) {
          for (g = 0; g < genreCount(); ++g)
@@ -362,7 +371,7 @@ static void roundEight() {
 }
 
 // The ninth review's fixes (in a function of their own, for the Windows stack as above).
-static void roundNine() {
+JCOMP_TEST_NOINLINE static void roundNine() {
    const auto find = [](const char *gn, const char *sn, int &g, int &st) {
       for (g = 0; g < genreCount(); ++g)
          if (std::string(genreAt(g).name) == gn)
@@ -568,7 +577,7 @@ static void roundNine() {
 
 // The song's structure: the order SONG mode plays the sections in.
 // The tenth review's grooves, fills, takes and chord names.
-static void roundTen() {
+JCOMP_TEST_NOINLINE static void roundTen() {
    const auto style = [](const char *sn, int &g, int &st) {
       for (g = 0; g < genreCount(); ++g)
          for (st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st)
@@ -737,7 +746,7 @@ static void roundTen() {
    }
 }
 
-static void roundEleven() {
+JCOMP_TEST_NOINLINE static void roundEleven() {
    const auto name = [](Ints n, int key = -1, int scale = kMajor) { return chordName(nameChord(n, true, key, scale), 0); };
    // D06, D07, D14: chord names by the key's scale, a bass a fifth under the rest, a power chord.
    JCLAP_CHECK(name({59, 65}, 9, kMinor) == "G7");
@@ -878,7 +887,7 @@ static void roundEleven() {
    }
 }
 
-static void songStructure() {
+JCOMP_TEST_NOINLINE static void songStructure() {
    // Templates by name, a hand-written order that is one named as it, an empty one once through.
    {
       auto song = std::make_unique<Song>();
@@ -1195,7 +1204,7 @@ static void songStructure() {
 
 
 // The twelfth review's fixes.
-static void roundTwelve() {
+JCOMP_TEST_NOINLINE static void roundTwelve() {
    const auto genreNamed = [](const char *name) {
       for (int i = 0; i < genreCount(); ++i)
          if (std::string(genreAt(i).name) == name)
@@ -1402,7 +1411,7 @@ static void roundTwelve() {
 }
 
 // The thirteenth review's fixes.
-static void roundThirteen() {
+JCOMP_TEST_NOINLINE static void roundThirteen() {
    const auto genreNamed = [](const char *name) {
       for (int i = 0; i < genreCount(); ++i)
          if (std::string(genreAt(i).name) == name)
@@ -1711,7 +1720,7 @@ static void roundThirteen() {
 }
 
 // The fourteenth review's fixes (the engine's; the generator's and the harmony's are in roundFourteenB).
-static void roundFourteen() {
+JCOMP_TEST_NOINLINE static void roundFourteen() {
    const double perBlock = kBlock / 24000.0;
    const auto block = [](Engine &e, OutBuffer &out, double beats, bool playing, double barStart = -1, double barBeats = 0) {
       Block b;
@@ -1892,7 +1901,7 @@ static void roundFourteen() {
 }
 
 // The fourteenth review's harmony fixes (review D).
-static void roundFourteenB() {
+JCOMP_TEST_NOINLINE static void roundFourteenB() {
    const auto pcsOf = [](const Voicing &v) {
       std::set<int> p;
       for (int i = 0; i < v.count; ++i)
@@ -2008,7 +2017,7 @@ static void roundFourteenB() {
 }
 
 // Round fourteen, review C (takes, mutations, the generator) and A06/A07.
-static void roundFourteenC() {
+JCOMP_TEST_NOINLINE static void roundFourteenC() {
    const auto styleOfName = [](const char *sn, int &g, int &st) {
       for (g = 0; g < genreCount(); ++g)
          for (st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st)
@@ -2281,7 +2290,7 @@ static void roundFourteenC() {
 
 // Round fifteen (D): 4THS built of fourths, SHELL guide tones, GRIP five strings, SPREAD over a slash bass,
 // the drops, slash chords within VOICES, held-note names, V spellings, and voicing picks close by.
-static void roundFifteenD() {
+JCOMP_TEST_NOINLINE static void roundFifteenD() {
 
    // D01: 4THS at VOICES 4 and 5 is built of fourths: every dominant has a perfect fourth between
    // neighbouring notes over its lowest (two at five, but a 7#11's, whose #11 takes odd intervals),
@@ -2496,7 +2505,7 @@ static void roundFifteenD() {
 // Round fifteen (C): TRY INSTEAD ranked to the key and the next chord, takes 1-3 heard apart in
 // every style, fixed figures varied by phrasing, backbeats kept, the left hand stopping at an
 // ending's last chord, and bred litters that don't repeat themselves.
-static void roundFifteenC() {
+JCOMP_TEST_NOINLINE static void roundFifteenC() {
    const auto genreNamed = [](const char *name) {
       for (int i = 0; i < genreCount(); ++i)
          if (std::string(genreAt(i).name) == name)
@@ -2673,7 +2682,7 @@ static void roundFifteenC() {
 }
 
 // Round fifteen: the engine and roll findings (reviews B, E, C02, C03, C12, C15).
-static void roundFifteenE() {
+JCOMP_TEST_NOINLINE static void roundFifteenE() {
    const double perBlock = kBlock / 24000.0;
    const auto block = [](Engine &e, OutBuffer &out, double beats, bool playing, double tempo = 120.0) {
       Block b;
@@ -3289,7 +3298,6 @@ static void roundFifteenE() {
 }
 
 int main() {
-   std::fprintf(stderr, "> main 1: ---- chord names ----\n"); std::fflush(stderr); // DIAG
    // ---- chord names ----
    {
       Chord c;
@@ -3306,7 +3314,6 @@ int main() {
       JCLAP_CHECK(chordName(nameChord(Ints{52, 56, 59, 62}), 4) == "E7");
    }
 
-   std::fprintf(stderr, "> main 2: ---- voicings ----\n"); std::fflush(stderr); // DIAG
    // ---- voicings ----
    {
       // Every quality, at every root, in every shape: inside the window, never under the floor, and
@@ -3352,7 +3359,6 @@ int main() {
          JCLAP_CHECK(x > 67 && x < 72);
    }
 
-   std::fprintf(stderr, "> main 3: ---- the library ----\n"); std::fflush(stderr); // DIAG
    // ---- the library ----
    {
       JCLAP_CHECK(genreCount() >= 20);
@@ -3392,7 +3398,6 @@ int main() {
       JCLAP_CHECK(styles >= 60);
    }
 
-   std::fprintf(stderr, "> main 4: ---- songs ----\n"); std::fflush(stderr); // DIAG
    // ---- songs ----
    {
       // The same recipe makes the same song, and it saves and loads unchanged.
@@ -3429,7 +3434,6 @@ int main() {
       JCLAP_CHECK(differs);
    }
 
-   std::fprintf(stderr, "> main 5: ---- the engine ----\n"); std::fflush(stderr); // DIAG
    // ---- the engine ----
    {
       // With the host: chords out, each note with its off, in the window, on channel 1.
@@ -3912,7 +3916,6 @@ int main() {
       }
    }
 
-   std::fprintf(stderr, "> main 6: ---- the third review's fixes ----\n"); std::fflush(stderr); // DIAG
    // ---- the third review's fixes ----
    {
       // A chord that changes between hits still sounds, on time, and the chord before doesn't ring
@@ -4303,7 +4306,6 @@ int main() {
       JCLAP_CHECK_EQ(gAllocs, 0);
    }
 
-   std::fprintf(stderr, "> main 7: ---- the fourth review's corrections ---\n"); std::fflush(stderr); // DIAG
    // ---- the fourth review's corrections ----
    {
       auto genreNamed = [](const char *name) {
@@ -4860,7 +4862,6 @@ int main() {
          JCLAP_CHECK(chords > 4);
       }
    }
-   std::fprintf(stderr, "> main 8: ---- round 5 ----\n"); std::fflush(stderr); // DIAG
    // ---- round 5 ----
    {
       // Held notes: a tritone is a dominant's shell, a rootless voicing its dominant, a triad over a
@@ -5026,7 +5027,6 @@ int main() {
          differ += passes[0][i].second != passes[1][i].second || std::abs(passes[0][i].first - passes[1][i].first) > 2;
       JCLAP_CHECK_EQ(differ, 0);
    }
-   std::fprintf(stderr, "> main 9: ---- the comparison with MMA, Impro-Viso\n"); std::fflush(stderr); // DIAG
    // ---- the comparison with MMA, Impro-Visor and JJazzLab (0.6.0) ----
    {
       const auto genreNamed = [](const char *name) {
@@ -5357,7 +5357,6 @@ int main() {
 
       }
    }
-   std::fprintf(stderr, "> main 10: ---- the sixth review's fixes (0.7.0) --\n"); std::fflush(stderr); // DIAG
    // ---- the sixth review's fixes (0.7.0) ----
    {
       // D1: root, 3rd and 7th over the lowest note is that note's dominant, not its tritone sub.
@@ -6055,7 +6054,6 @@ int main() {
       JCLAP_CHECK(chordName(song.sections[kVerse].chords[0], 4) != "F#m7");
    }
 
-   std::fprintf(stderr, "> main 11: ---- the seventh review's fixes (0.8.0) \n"); std::fflush(stderr); // DIAG
    // ---- the seventh review's fixes (0.8.0) ----
    {
       // B01, D01: a rootless 7#5 keeps its #5 (no natural fifth); D06: OCTAVES keeps an altered fifth
@@ -6230,31 +6228,18 @@ int main() {
       JCLAP_CHECK(chordName(chord("Ab13"), 4, kMinor, &to) == "Ab13");
    }
 
-   std::fprintf(stderr, "> roundEight\n"); std::fflush(stderr); // DIAG
    roundEight();
-   std::fprintf(stderr, "> roundNine\n"); std::fflush(stderr); // DIAG
    roundNine();
-   std::fprintf(stderr, "> roundTen\n"); std::fflush(stderr); // DIAG
    roundTen();
-   std::fprintf(stderr, "> roundEleven\n"); std::fflush(stderr); // DIAG
    roundEleven();
-   std::fprintf(stderr, "> roundTwelve\n"); std::fflush(stderr); // DIAG
    roundTwelve();
-   std::fprintf(stderr, "> roundThirteen\n"); std::fflush(stderr); // DIAG
    roundThirteen();
-   std::fprintf(stderr, "> roundFourteen\n"); std::fflush(stderr); // DIAG
    roundFourteen();
-   std::fprintf(stderr, "> roundFourteenB\n"); std::fflush(stderr); // DIAG
    roundFourteenB();
-   std::fprintf(stderr, "> roundFourteenC\n"); std::fflush(stderr); // DIAG
    roundFourteenC();
-   std::fprintf(stderr, "> roundFifteenC\n"); std::fflush(stderr); // DIAG
    roundFifteenC();
-   std::fprintf(stderr, "> roundFifteenD\n"); std::fflush(stderr); // DIAG
    roundFifteenD();
-   std::fprintf(stderr, "> roundFifteenE\n"); std::fflush(stderr); // DIAG
    roundFifteenE();
-   std::fprintf(stderr, "> songStructure\n"); std::fflush(stderr); // DIAG
    songStructure();
    return jclap::core::testResult();
 }
