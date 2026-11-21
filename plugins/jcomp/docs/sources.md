@@ -338,7 +338,7 @@ with guitar (Van Dyke type [23]).
 |---|---|---|
 | D1 | `..x...x...x...x.` | Offbeat 8th chords (the "and"s), short. Lifts against a four-on-the-floor kick (unverified) |
 | D2 | `gxgxgXgxgxgxgXgx` | Continuous 16ths with muted/ringing alternation, after Chic's "chucking" (accent placement unverified) |
-| D3 | `x..x..x...x..x..` | 3-3-2 syncopated Rhodes/piano figure over 2 beats, repeated (unverified) |
+| D3 | `x..x..x...x..x..` | 3-3-4-3-3 syncopated Rhodes/piano figure over 2 beats, repeated (unverified) |
 
 - **D2** source: Nile Rodgers' "chucking" mixes off-beat strumming with muting; Rodgers says he
   learned it in New York and based his picking on George Van Eps-style three-string inversions [40].
@@ -931,7 +931,7 @@ Section suggestions (unverified, but consistent with [1]):
 
 | ID | Pattern | Description |
 |---|---|---|
-| H1 | `x..x..x...x..x..` | 3-3-2 + 3-3-2 syncopated piano riff ("Ride On Time" style) (unverified grid) |
+| H1 | `x..x..x...x..x..` | 3-3-4-3-3 syncopated piano riff ("Ride On Time" style) (unverified grid) |
 | H2 | `..X...X...X...X.` | Offbeat stabs (unverified) |
 | H3 | `x..x..x.x..x..x.|x..x..x...x..x..` | Two-bar M1-piano riff with the last stab anticipating bar 2 (unverified) |
 
@@ -2151,6 +2151,67 @@ noted at the end.
   bar of another length mid-song leaves the bar lines as they were. The roll's "one key once" rule
   still misses a few run notes (E15); the SONG roll differs from the engine in 532 of about a million
   notes.
+
+## Part R. The fourteenth review (2026-11-21)
+
+A fourteenth cold pass, split as before (styles; song mode; takes, fills and DENSITY; harmony and
+voicing; the engine and rolls), backed every finding with `jcomp-dump`, a probe program, the fuzzer
+or the roll comparator. It found 59 problems (1 critical, 6 high, 26 medium, 26 low); these were
+fixed in 0.16.0, with tests where a test could hold them, except those noted at the end.
+
+- **Styles.** WEIRD's riff art and the backbeat ring were still decided stroke by stroke; a quarter
+  pulse takes one decision, a riff's strokes are chopped or halved, never rung. The README's Calypso
+  Piano row lists its busier chorus and quiet one and four. The House M1 riff and the disco Rhodes
+  figure (`x..x..x...x..x..`, rows D3 and H1) are 3-3-4-3-3, not 3-3-2; relabelled. Mambo could go a
+  whole song without its guajeo; it always plays it at its climax, and the Cha-Cha plays one there
+  sometimes, unpushed.
+- **Song mode and transport.** With CHORDS FROM BOTH and *Latch* (both defaults) a tap's latch end
+  was an absolute tick never cleared, so a tap at beat 30 replaced the first bars of the next
+  playback; a start or a jump clears it, and a tap while stopped plays to the first change. A 2/4
+  project under a 4/4 style was read as a pickup (the 0.15.0 rule); a short first bar is a pickup
+  only when the bar after it is in the song's meter. HOLD CHORD in SONG following the host restarted
+  its section at each wrap and, let go, played the held section's chords out of place until the bar
+  line; the song stays put and comes in at the bar line. PREV, RESTART or a tile in an entry's last
+  80 ms acted on the next entry, and a second NEXT after a cued switch was swallowed; they act on the
+  entry heard. A mid-bar start skipped VARY's swap; HOLD pressed while stopped held the last
+  playback's chord; both fixed.
+- **Takes, fills and DENSITY.** *shift* moved on-beat chords (116 of 304 shift takes) and *sparser*
+  dropped backbeat accents and the one drop's skank; neither touches an accent, a bar's first chord
+  or a 2-and-4 take. *restrike* re-struck ambient drifts in cascades; once per chord, never in
+  Ambient. 649 pairs of identical takes over six seeds; none, with a fallback walk over every fitting
+  mutation and a new *voicing* mutation (a stroke or two in the 2nd to 5th ranked voicing). *accents*
+  and *chop it* touched the left hand, and *let it ring* and *chop it* broke the one-touch pulse;
+  fixed. LENGTH just below the middle turned the push tie off and added strikes; the tie shortens
+  with LENGTH instead. DENSITY filled the fill down's rest and its first notch thinned a quarter of a
+  sixteenth groove; neither now. MUTATE THIS TAKE on a fill or an ending broke them; it mutates them
+  by their role. A line style near silence shrank to a note a bar and lost its bass, and endings
+  ignored the line; both fixed, as are the palm-wine fill and ending, the one drop's ghosts, and the
+  3/4 and 6/8 grids of restrike, the swell and the push ties.
+- **Harmony.** 4THS voiced m9 and m11 without their minor third (the Ambient tonic in every key),
+  claiming the So What stack, which in fact keeps it (E A D G B); every stack now has the third and
+  seventh, colour after them, and a chord no stack holds is SPREAD. 4THS slash chords lost the root or
+  put a note under the bass, and it dropped the 7th of 7b9 and maj9; fixed. GRIP at four strings lost
+  the 7#9's, 7b9's, 13's and maj9's colour to the 0.15.0 reach grips, picked 20 grips needing five
+  fingers, and cut open G7 and B7 with muted inner strings; grips are built from the naming tones,
+  fingers are counted, and cuts take neighbouring strings. Spellings: Dbm7 in G is C#m7, C#7/F is
+  C#7/E#, raised spellings follow the scale (Cdim7 in A minor), and held So What stacks are m11.
+  OCTAVES' 7#9 rubbed against its doubled third, SHELL dropped add9's 9th and three-voice altered
+  tones, ROOTLESS 13 at three voices had no 13th, and the DROP 2+4 slash fallback doubled the bass;
+  all fixed. TRY INSTEAD ignored the key and the next chord; each substitute is offered where it fits.
+- **The engine and rolls.** The SONG roll chain missed runs into the next entry (about 1,400 of the
+  1,660 SONG roll-only notes) and a fill's roll never drew its run into the next section; the take
+  and the fill are previewed a bar longer. The engine treated every entry boundary as a change; only
+  where the harmony changes, or the song ends. The roll left out the change strike on an entry's
+  downbeat, rang SPREAD's low note past a HOLD slot, landed OCTAVES' line an octave off after a run,
+  and couldn't start a run on step 0; all fixed. A note placed in the past had no length, and strums
+  at fast tempos overran their gap; fixed. The engine voiced an ACC band hit and a run landing on a
+  band hit without the stroke's own voicing pick, which the roll used; it follows the roll (MARKS
+  106 differing cases to 73, SONG chains 436 to 0, fills 344 to 68).
+- **Left as judgement or for later.** An ACC pushed by a top note (E08), a late chord's flam of its
+  common tones (E12), a change strike's double trigger of a bass key (E13) and a run into a band hit
+  that is itself a push (E07) are left; the pad layer on the comp's own channel shares keys, as the
+  README says (E15). C7/G at three voices stays G C E (G Bb E would be an E diminished over G); C F
+  Bb stays Fsus/C, the shape of G C F's Csus/G; Db13 at five voices is four notes, 1-b7-3-13.
 
 ## Bibliography
 
