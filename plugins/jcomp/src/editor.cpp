@@ -223,6 +223,10 @@ struct LiveFeel {
    int same = 4;       // SAME DICE's bars
    int every = 1;      // RUNS AT MOST every so many bars
    bool fixed = false; // the style's figure is played as written
+   bool shorts = false; // a style chopped short: its left hand too
+   bool runsIn = false; // a run may take an offbeat chord's place
+   bool sustainBass = false; // an organ or a pad: SPREAD's low note in every chord
+   int onsets = 0;
    bool live = false;  // read from the panel (else EDIT's take as written: every hit, none added)
 };
 LiveFeel gFeel;
@@ -234,7 +238,15 @@ void readFeel(const EditorHost &host) {
    gFeel.swing = host.paramValue(kSwing);
    gFeel.same = kSameDiceBars[choiceIndex(host.paramValue(kSameDice), 5)];
    gFeel.every = kRunEveryBars[choiceIndex(host.paramValue(kRunEvery), 3)];
-   gFeel.fixed = (styleOf(recipeFrom([&](clap_id id) { return host.paramValue(id); })).mods & kFixed) != 0;
+   {
+      const Recipe r = recipeFrom([&](clap_id id) { return host.paramValue(id); });
+      const unsigned mods = styleOf(r).mods;
+      gFeel.fixed = (mods & kFixed) != 0;
+      gFeel.shorts = (mods & kShorts) != 0;
+      gFeel.runsIn = (mods & kRunsIn) != 0;
+      gFeel.sustainBass = playerOf(r).instrument == kOrgan || playerOf(r).instrument == kPad;
+   }
+   gFeel.onsets = static_cast<int>(std::lround(host.paramValue(kOnsets)));
    gFeel.live = true;
 }
 
@@ -264,7 +276,8 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
    const int stepTicks = p.stepTicks();
    const int64_t barTicks = static_cast<int64_t>(p.stepsPerBar()) * stepTicks;
    Voicing prev;
-   Chord prevChord;
+   Chord prevChord, bassChord; // the chord whose bass the left hand has sounded (the engine's)
+   int lastBass = -1;
    const int n = std::max<int>(1, p.steps);
    const int perBeat = p.perBeat();
    const bool fine = fineGrid(p);
@@ -472,7 +485,8 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
             bool clear = true;
             for (int k = late * stride; k < span; ++k) {
                const Hit &o = p.at((start + k) % n);
-               clear = clear && !(o.on() && (((start + k) % n) % strongSteps(p) == 0 || (!leftHand(o.part) && o.vel > kSoft + 8)));
+               clear = clear && !(o.on() && (((start + k) % n) % strongSteps(p) == 0 ||
+                                             (!leftHand(o.part) && o.vel > kSoft + 8 && !gFeel.runsIn)));
             }
             if (!clear)
                continue;
@@ -498,7 +512,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       while (gap < n && (!p.at((v + gap) % n).on() || thinnedInRoll(sec, p, (v + gap) % n, v + gap) ||
                          leftHand(p.at((v + gap) % n).part) != left))
          ++gap;
-      if (left && h.art == kArtAsWritten && h.len <= 1) {
+      if (left && h.art == kArtAsWritten && h.len <= 1 && !gFeel.shorts) {
          h.art = kArtRing;
          gap = std::min(gap, 2 * perBeat);
       }
@@ -541,9 +555,45 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          played.notes[0] = static_cast<uint8_t>(std::clamp(root + lineInterval(c, h.degree, key, scale), 0, 127));
          played.count = 1;
       } else if (leftHand(h.part)) {
+         // The alternating bass's fifth only once the chord's root has sounded (the engine's rule).
+         const bool fifth = h.part == kPartFifth && sameHarmony(bassChord, c);
          const int under = vc.count > 1 && vs.shape == kSpread ? vc.notes[1] : vc.notes[0];
-         played.notes[0] = static_cast<uint8_t>(bassNote(c, vs.floor, h.part == kPartFifth, vs.shape == kGrip, under));
+         played.notes[0] = static_cast<uint8_t>(bassNote(c, vs.floor, fifth, vs.shape == kGrip, under));
          played.count = 1;
+         lastBass = played.notes[0];
+      }
+      // The engine's left-hand rules: SPREAD's low note on keys struck on 1 and 3 (or a change) and
+      // held, the chops between without it; a guitar's grip over a thumbed bass strums without the
+      // thumb's strings.
+      bool holdLow = false;
+      int holdSteps = 0;
+      if (h.part == kPartChord && played.count > 2) {
+         const bool strong = (v % n) % strongSteps(p) == 0;
+         const bool spreadDrop = !strong && vs.shape == kSpread && gFeel.onsets < 2 && !gFeel.sustainBass &&
+                                 (c == prevChord || c == bassChord);
+         if (spreadDrop || (vs.shape == kGrip && hasLeftHand(p))) {
+            int drop = 1;
+            if (vs.shape == kGrip) {
+               const int thumb = std::max({lastBass, bassNote(c, vs.floor), bassNote(c, vs.floor, true)});
+               while (drop < played.count - 2 && played.notes[static_cast<size_t>(drop)] <= thumb)
+                  ++drop;
+            }
+            for (int i = drop; i < played.count; ++i)
+               played.notes[static_cast<size_t>(i - drop)] = played.notes[static_cast<size_t>(i)];
+            played.count -= drop;
+         } else if (vs.shape == kSpread) {
+            holdLow = true;
+            holdSteps = strongSteps(p) - (v % n) % strongSteps(p);
+         }
+      }
+      if (leftHand(h.part))
+         bassChord = c;
+      else if (h.part == kPartChord) {
+         const int bassPc = ((c.bass >= 0 ? c.bass : c.root) % 12 + 12) % 12;
+         if (vc.count > 0 && vc.notes[0] % 12 == bassPc)
+            bassChord = c;
+         else if (c != bassChord)
+            bassChord = Chord{};
       }
       if (h.push && h.part == kPartChord && !gFeel.fixed) {
          pushTo = v + perBeat - v % perBeat;
@@ -556,6 +606,8 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          float l = len;
          if (h.art == kArtTopRings && !top)
             l = std::min(len, std::max<float>(h.len, gap * 0.5f));
+         if (holdLow && i == 0)
+            l = std::max(l, static_cast<float>(holdSteps) - 0.02f);
          out.notes.push_back({static_cast<float>(v), std::max(0.35f, l), played.notes[static_cast<size_t>(i)], kind,
                               h.vel / 127.0f});
       }

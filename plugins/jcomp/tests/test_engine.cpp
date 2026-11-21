@@ -2012,10 +2012,17 @@ int main() {
             JCLAP_CHECK(out.ending.rate == out.takes[0].rate);
             for (const Section &sec : song->sections) {
                const Pattern &d = sec.fillDown;
+               const bool intro = &sec == &song->sections[kIntro];
                JCLAP_CHECK(!d.empty() && d.rate == sec.takes[0].rate);
                JCLAP_CHECK(d.count() <= std::max(2, sec.fill.count()));
-               for (int k = d.stepsPerBar() - d.perBeat(); k < d.steps; ++k)
-                  JCLAP_CHECK(!d.at(k).on());
+               if ((genreAt(g).styles[static_cast<size_t>(st)].mods & kFixed) && !intro) {
+                  // A fixed figure settles as itself: its onsets are the take's (Freddie Green's four,
+                  // the clave's side), the last chord rung.
+                  for (int k = 0; k < d.steps; ++k)
+                     JCLAP_CHECK(!d.at(k).on() || sec.takes[0].at(k % sec.takes[0].steps).on());
+               } else
+                  for (int k = d.stepsPerBar() - d.perBeat(); k < d.steps; ++k)
+                     JCLAP_CHECK(!d.at(k).on());
                for (int k = 0; k < d.steps; ++k)
                   JCLAP_CHECK(!d.at(k).push);
             }

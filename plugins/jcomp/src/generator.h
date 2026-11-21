@@ -351,7 +351,9 @@ inline void makeChords(const Recipe &r, int section, Section &s, Rng &rng) {
             const bool modal = ((st.mods & kLongs) && std::strcmp(g.name, "Blues") != 0) || g.family == kFamilies[6];
             s.chords[static_cast<size_t>(b * 2 + 1)] =
                modal ? Chord{next.root, static_cast<uint8_t>(kSus), -1}
-                     : Chord{static_cast<int8_t>((next.root + 1) % 12), static_cast<uint8_t>(st.mods & kPlain ? kDom7 : kDom9), -1};
+                     // A half step above the bass the next chord is heard on (a slash chord's bass).
+                     : Chord{static_cast<int8_t>(((next.bass >= 0 ? next.bass : next.root) + 1) % 12),
+                             static_cast<uint8_t>(st.mods & kPlain ? kDom7 : kDom9), -1};
             s.split = static_cast<uint16_t>(s.split | (1u << b));
          }
       }
@@ -942,8 +944,10 @@ inline void applyPlayer(Pattern &p, const Player &pl, unsigned mods, Rng &rng) {
          h.art = pl.ring > 0.8 && pedal ? kArtTopRings : kArtRing;
       if (h.art == kArtAsWritten && h.len <= 1 && pl.ring < 0.15 && rng.chance(0.5))
          h.art = kArtChop;
-      // The run goes into the bar's first chord (the Shout's downbeat is its bass; the chord after it).
-      if (h.part == kPartChord && firstChord(p, s) && s % bar < bar / 2) {
+      // The run goes into the bar's first chord (the Shout's downbeat is its bass; the chord after it),
+      // where the change is: on the first beat, or pushed ahead of it. A backbeat's first chord is
+      // beat 2, the chord already sounding: no run goes into that.
+      if (h.part == kPartChord && firstChord(p, s) && (s % bar < bar / 4 || h.push)) {
          const double runs = pl.runs + (mods & kRunsIn ? 0.5 : 0.0);
          h.run = rng.chance(std::min(1.0, runs + 0.15)) ? 1 : 0;
       }
@@ -1511,6 +1515,20 @@ inline Pattern makeFillDown(const Recipe &r, int section, const Pattern &base, d
    // A held style's set-up holds to the bar's last eighth, at its own level (a pad doesn't stab).
    if (section == kIntro && (st.mods & kLongs) && !keepsOff(base, 0))
       text = base.rate == kRate8T ? "x---------.." : base.rate == kRate34 ? "x---------.." : base.rate == kRate68 ? "x---------.." : "x-------------..";
+   // A fixed figure settles as it fills: the figure itself (Freddie Green keeps his four, a montuno its
+   // clave, the side the bar falls on), its last stroke rung on the bar line's side, nothing pushed over.
+   if ((st.mods & kFixed) && section != kIntro) {
+      Pattern f = base;
+      for (int s = 0; s < f.steps; ++s)
+         if (f.at(s).on())
+            f.at(s).push = 0;
+      for (int s = f.steps - 1; s >= 0; --s)
+         if (f.at(s).on() && !leftHand(f.at(s).part)) {
+            f.at(s).art = kArtRing;
+            break;
+         }
+      return f;
+   }
    Pattern f = figure(text, base.rate, std::max(0.35, e));
    // Settling into the quieter section: never above the groove it leaves, not the loudest stab of
    // the song (MMA's fills sit at the groove's volume). The intro's set-up is no louder than the
@@ -1660,7 +1678,10 @@ inline void generateSong(const Recipe &r, Song &song, bool keepChords = false) {
    const int move = (key - song.key + 12) % 12;
    song.key = static_cast<uint8_t>(key);
    // A new meter: even a locked section's rhythm is made again (its chords stay).
-   const bool meter = song.beats != beatsOf(r);
+   // 3/4 and 6/8 both have three beats here, but a waltz's three quarters are not a 6/8's two dotted
+   // quarters: a section whose grid is the other one is a new meter too.
+   const bool beatsMoved = song.beats != beatsOf(r);
+   const bool sixEight = styleRate(styleOf(r).mods) == kRate68;
    song.beats = static_cast<uint8_t>(beatsOf(r));
    for (int i = 0; i < kSections; ++i) {
       Section &s = song.sections[static_cast<size_t>(i)];
@@ -1671,7 +1692,7 @@ inline void generateSong(const Recipe &r, Song &song, bool keepChords = false) {
                if (c.bass >= 0)
                   c.bass = static_cast<int8_t>((c.bass + move) % 12);
             }
-         if (meter) {
+         if (beatsMoved || (s.takes[0].rate == kRate68) != sixEight) {
             Section made = makeSection(r, i, s.seed);
             made.chords = s.chords;
             made.split = s.split;

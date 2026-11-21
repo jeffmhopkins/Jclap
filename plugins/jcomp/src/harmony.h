@@ -49,7 +49,7 @@ inline const std::vector<Quality> &qualities() {
       {"9", {0, 4, 7, 10, 14}, {4, 10, 14, 7, 0}, true},
       {"m9", {0, 3, 7, 10, 14}, {3, 10, 14, 7, 0}, true},
       {"maj9", {0, 4, 7, 11, 14}, {4, 11, 14, 7, 0}, true},
-      {"13", {0, 4, 7, 10, 14, 21}, {4, 10, 14, 21, 0, 7}, true},
+      {"13", {0, 4, 7, 10, 14, 21}, {4, 10, 21, 14, 0, 7}, true},
       {"7#9", {0, 4, 7, 10, 15}, {4, 10, 15, 7, 0}, true},
       {"7b9", {0, 4, 7, 10, 13}, {4, 10, 13, 7, 0}, true},
       {"6", {0, 4, 7, 9}, {4, 9, 0, 7}, true},
@@ -1250,8 +1250,9 @@ inline Voicing voice(const Chord &c, const Voicing *prev, const VoiceSettings &v
 
 // The OCTAVES shape's line, as a montuno's thumbs move it through a chord: the `step`-th stroke on
 // it has the fifth, third, root, third (the chord's own: a sus fourth, a diminished fifth) at the
-// bottom, doubled on top. It arches about the window's middle, not walking off from the last
-// voicing (which ratchets it up through a bar of triads).
+// bottom, doubled on top. A chord's first stroke sits about the window's middle, not walking off
+// from the last voicing (which ratchets it up through a bar of triads); the strokes after it take the
+// octave nearest the last stroke's bottom, so the line moves by a step or a third, never a sixth.
 inline Voicing octaveLine(const Chord &c, const Voicing *prev, const VoiceSettings &vs, int step) {
    const auto &q = qualityOf(c).tones;
    const int third = q.size() > 1 ? q[1] % 12 : 4, fifth = q.size() > 2 ? q[2] % 12 : 7;
@@ -1265,7 +1266,8 @@ inline Voicing octaveLine(const Chord &c, const Voicing *prev, const VoiceSettin
          double mean = 0.0;
          for (int i = 0; i < v.count; ++i)
             mean += v.notes[static_cast<size_t>(i)];
-         const double d = std::abs(mean / v.count - vs.center);
+         const double d = step > 0 && prev && !prev->empty() ? std::abs(v.notes[0] - prev->notes[0]) + 0.01 * std::abs(mean / v.count - vs.center)
+                                                             : std::abs(mean / v.count - vs.center);
          if (d < bestD - 1e-9) {
             bestD = d;
             best = &v;

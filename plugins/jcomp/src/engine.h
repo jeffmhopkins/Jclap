@@ -74,6 +74,7 @@ struct Settings {
    bool fixed = false;       // a figure played as written: DENSITY adds nothing to it
    bool slip = false;        // Cramer's slip note: a grace note a step under an inner chord tone
    bool shorts = false;      // a style chopped short (a skank, the organ bubble): its left hand too
+   bool runsIn = false;      // a style that walks into its changes: a run takes an offbeat chord's place
    bool sustainBass = false; // an organ or a pad: the low note stays in every chord
    int noteFor(int action) const {
       return noteMap == 1 ? learn[static_cast<size_t>(action)] : 12 * (noteOctave + 1) + kActionKey[action];
@@ -96,6 +97,7 @@ inline void applyRecipe(Settings &s, const Recipe &r) {
    s.fixed = (mods & kFixed) != 0;
    s.slip = (mods & kSlip) != 0;
    s.shorts = (mods & kShorts) != 0;
+   s.runsIn = (mods & kRunsIn) != 0;
    const int instrument = playerOf(r).instrument;
    s.sustainBass = instrument == kOrgan || instrument == kPad;
 }
@@ -1054,12 +1056,13 @@ private:
    // turnaround bar, an answer bar) counts from the section's start, as its progression does. A fixed
    // figure (a clave's) keeps its phase to the host's bars instead, so a section starting on an odd
    // bar, a jump or a loop doesn't turn the clave round. A fill plays its last bar into the next,
-   // unless it's the take's own figure (a fixed figure's fill), which keeps the clave's side too.
+   // unless it's the take's own figure (a fixed figure's fill or fill down), which keeps the clave's
+   // side too.
    int64_t patternPos(const Pattern &p, int64_t t, int64_t r) const {
       const int64_t len = std::max(1, patternTicks(p));
       if (ending_)
          return std::clamp<int64_t>(r - endFrom_, 0, len - 1);
-      if (settings_.fixed && (!fill_ || !fillDown_))
+      if (settings_.fixed)
          return ((t % len) + len) % len;
       if (!fill_)
          return ((r % len) + len) % len;
@@ -1317,13 +1320,13 @@ private:
       k.step = step;
       k.triplet = p.rate == kRate8T;
       k.fine = fine;
-      // A two-handed voicing's low note is struck on 1 and 3 and held (an organ's too: it holds it
-      // rather than striking it again with every chord between).
+      // A two-handed voicing's low note is struck on 1 and 3 and held; an organ's or a pad's stays in
+      // every chord (sustainBass), whatever beat the chord is on.
       const bool leftHandTake = hasLeftHand(p);
       // A guitar's grip in a take with a bass of its own (boom-chick, the palm-wine thumb) strums the
       // chord without its bass string: the thumb has it.
       k.dropBass = !target && h.part == kPartChord &&
-                   ((!strong && settings_.voicing.shape == kSpread && settings_.onsets < 2 &&
+                   ((!strong && settings_.voicing.shape == kSpread && settings_.onsets < 2 && !settings_.sustainBass &&
                      (c == lastChord_ || c == bassChord_)) ||
                     (settings_.voicing.shape == kGrip && leftHandTake));
       const int toStrong = strongSteps(p) - step % strongSteps(p);
@@ -1587,11 +1590,13 @@ private:
          }
          const int late = len - static_cast<int>(run.size()); // a shorter run starts later, still into the hit
          // It doesn't take the place of a written chord: only rests and soft hits under it (judged
-         // as written, whatever the energy scaled them to), and never a hit on a strong beat.
+         // as written, whatever the energy scaled them to), and never a hit on a strong beat. A style
+         // that walks into its changes (the gospel push) lets the run take an offbeat chord's place.
          bool clear = true;
          for (int k = late * stride; k < span; ++k) {
             const Hit &o = p.at((step + k) % steps);
-            if (o.on() && (((step + k) % steps) % strongSteps(p) == 0 || (!leftHand(o.part) && o.vel > kSoft + 8)))
+            if (o.on() && (((step + k) % steps) % strongSteps(p) == 0 ||
+                           (!leftHand(o.part) && o.vel > kSoft + 8 && !settings_.runsIn)))
                clear = false;
          }
          if (!clear)

@@ -155,7 +155,7 @@ inline const std::vector<Genre> &genres() {
         {kDorian, {"Cm9|Cm9", "Cm9|F9|Cm9|F9", "F9|F9|F9|F9", "Cm9|Cm9|F9|F9", "Dm9|Dm9|G9|G9", "Cm9|Cm9|Cm9|Cm9"}}},
        {{"Pocket Stabs", "Pocket", 100, 0, 0, 0b0001},
         {"Clav Riff", "Clav", 100, kTopLine, 1, 0b0100, kClavChopper},
-        {"Dorian Groove", "Dorian", 108, kRich, 1},
+        {"Dorian Groove", "Dorian", 108, kRich, 1, 0b0011},
         {"Chicken Scratch", "Scratch", 112, kBusy | kShorts, 0, 0b1000, kRhythmGuitar}},
        "5, 6, 13"},
       {"Soul", kFamilies[0], kChurchOrgan, 0.54, 0,
@@ -187,9 +187,10 @@ inline const std::vector<Genre> &genres() {
        "23, 52"},
       {"Disco", kFamilies[0], kRhythmGuitar, 0.5, 0,
        // Offbeat eighths over four on the floor; the 3-3-2 Rhodes figure; Rodgers' "chucking":
-       // sixteenths, muted and ringing, on three-string inversions.
-       {{"..x...x...x...x.", 0.4}, {"x..x..x...x..x..", 0.6}, {"gxgxgXgxgxgxgXgx", 0.9}},
-       {{"gxgxgXgxgxgxgxxX", 0.9}},
+       // sixteenths, muted and ringing, on three-string inversions, the bar struck from its downbeat
+       // ("Good Times" and "Le Freak" start on the one) with the motor between.
+       {{"..x...x...x...x.", 0.4}, {"x..x..x...x..x..", 0.6}, {"XxgxgXgxxxgxgXgx", 0.9}},
+       {{"XxgxgXgxgxgxgxxX", 0.9}},
        {{kDorian, {"Cm7|F13", "Cm7|F13|Cm7|F13", "Cm7|F7sus", "Cm7|F7sus|Cm7|F7sus", "Ebmaj7|Dm7|Cm7|Bb", "Cm7|F13|Cm7|Cm7"}}},
        {{"Chic Chucking", "Chucking", 116, kBusy, 0, 0b100},
         {"Offbeat Lift", "Lift", 122, kShorts, 0, 0b001},
@@ -305,7 +306,7 @@ inline const std::vector<Genre> &genres() {
        // The guitar's voicing whoever plays: the thumb's bass under the fingers' three-note chord.
        {{"Batida", "Batida", 130, kFixed, 0, 0b001, -1, kSpread, 4, 50, 74, 62},
         {"Two-Bar Bossa", "Two Bar", 138, kFixed, 0, 0b100, -1, kSpread, 4, 50, 74, 62},
-        {"Quiet Bossa", "Quiet", 120, kSparse | kRich | kFixed, 0, 0b011, -1, kSpread, 4, 50, 74, 62},
+        {"Quiet Bossa", "Quiet", 120, kSparse | kRich | kFixed, 0, 0b101, -1, kSpread, 4, 50, 74, 62},
         {"Samba", "Samba", 200, kPushes, 0, 0b11000}},
        "11, 12, 60, 61, 62"},
       {"Salsa", kFamilies[2], kMontuno, 0.5, 0,
@@ -491,7 +492,7 @@ inline const std::vector<Genre> &genres() {
        {{kMajor, {"C|G7", "C|G7|C|G7", "F|G7", "C|F|C|G7", "F|C|G7|C", "C|G7|C|C"}}},
        {{"Palm-Wine", "Palm-Wine", 108, 0, 0, 0b001},
         {"Dance Band", "Dance Band", 120, 0, 0, 0b010},
-        {"Bell Twelve", "12/8", 112, kTriplet}},
+        {"Bell Twelve", "12/8", 112, kTriplet | kFixed}},
        "7, 26, 27, 28"},
 
       // ---- Ambient ----
