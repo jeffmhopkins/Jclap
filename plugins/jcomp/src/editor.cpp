@@ -300,8 +300,27 @@ struct InSong {
    ~InSong() { gSong = RollSong{}; }
 };
 Chord rollChordAt(const Section &sec, int bar, bool half) {
-   const int si = gSong.sectionOf(sec);
-   return si >= 0 ? phraseChord(*gSong.song, gSong.entry, gSong.ends, si, bar, half) : sec.chordAt(bar, half);
+   int si = gSong.sectionOf(sec);
+   if (si < 0)
+      return sec.chordAt(bar, half);
+   // Past the entry's last bar, the next entry's chords, as the engine plays them (the push into
+   // the next section is its chord); past a song that ends, its last chord.
+   const Song &song = *gSong.song;
+   int e = gSong.entry;
+   for (int k = 0; e >= 0 && k < song.entries(); ++k) {
+      const int bars = song.sections[static_cast<size_t>(si)].bars;
+      if (bar < bars || bars <= 0)
+         break;
+      if (gSong.ends && e == song.entries() - 1) {
+         bar = bars - 1;
+         half = true;
+         break;
+      }
+      bar -= bars;
+      e = (e + 1) % song.entries();
+      si = song.entry(e);
+   }
+   return phraseChord(song, e, gSong.ends, si, bar, half);
 }
 
 // The engine's own dice, for the bar of the view a step is in: the roll draws the hits the first
@@ -355,7 +374,27 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
    }
    if (!take || firstBar < 0 || (firstBar * perBar) % std::max<int>(1, p.steps) != 0 || firstBar > 16)
       return previewFrom0(sec, p, bars, vs, transpose, key, scale, runs, firstBar, marks);
-   Preview all = previewFrom0(sec, p, firstBar + bars + 1, vs, transpose, key, scale, runs, 0, marks);
+   // In SONG an entry is led on from the one before it, as the engine voice-leads across them (and
+   // ties a push over the downbeat): that entry's take drawn through, its hands where they end.
+   RollState led;
+   bool chained = false;
+   if (gSong.song && gSong.entry > 0 && gSong.entry < gSong.song->entries() && gSong.sectionOf(sec) >= 0) {
+      const RollSong was = gSong;
+      const Song &song = *gSong.song;
+      const int pe = gSong.entry - 1, psi = song.entry(pe);
+      const Section &ps = song.sections[static_cast<size_t>(psi)];
+      if (!ps.takes[0].empty() && ps.bars > 0 && ps.bars <= 32) {
+         int rep = 0;
+         for (int k = 0; k < pe; ++k)
+            rep += song.entry(k) == psi;
+         gSong.entry = pe;
+         gSong.repeat = rep;
+         led = previewFrom0(ps, ps.takes[0], ps.bars, vs, transpose, key, scale, runs, 0, marks).end;
+         chained = true;
+      }
+      gSong = was;
+   }
+   Preview all = previewFrom0(sec, p, firstBar + bars + 1, vs, transpose, key, scale, runs, 0, marks, chained ? &led : nullptr);
    const int off = firstBar * perBar;
    Preview out;
    out.perBar = all.perBar;

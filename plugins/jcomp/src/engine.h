@@ -153,6 +153,10 @@ struct Block {
    // The host's loop, when it has one: the clock doesn't run past its end (the host jumps back).
    bool loopActive = false;
    double loopStart = 0.0, loopEnd = 0.0;
+   // The host's bar: where its current bar started, and how many quarter-note beats its bars have
+   // (0 when the host doesn't say).
+   bool hasBar = false;
+   double barStart = 0.0, barBeats = 0.0;
 };
 
 struct MidiOut {
@@ -366,7 +370,22 @@ public:
 
    // ---- playing ----
 
-   void process(const Block &b, OutBuffer &out) {
+   void process(const Block &in, OutBuffer &out) {
+      // The song's bars on the host's: where the host's bars are the song's meter, its bar lines are
+      // JComp's, a pickup or a bar of another meter before them included (a 2/4 bar in a 4/4 song
+      // moves the bar lines after it). A host meter the song doesn't have (a waltz in a 4/4
+      // project) leaves them where they were.
+      Block b = in;
+      if (b.hasTransport && b.hasBar && std::abs(b.barBeats - beats()) < 1e-6) {
+         barPhase_ = b.barStart - std::floor(b.barStart / beats()) * beats();
+         if (barPhase_ < 1e-6 || barPhase_ > beats() - 1e-6)
+            barPhase_ = 0.0;
+      }
+      if (b.hasTransport && barPhase_ != 0.0) {
+         b.beats -= barPhase_;
+         b.loopStart -= barPhase_;
+         b.loopEnd -= barPhase_;
+      }
       if (flushPending_) {
          flushOffs(out);
          flushPending_ = false;
@@ -2492,6 +2511,7 @@ private:
    bool flushPending_ = false;
 
    bool running_ = false, following_ = false, followingBefore_ = false, hostPlaying_ = false;
+   double barPhase_ = 0.0; // the host's bar lines past the song's (in beats), where its meter is the song's
    bool hostWasRunning_ = false;
    double tempo_ = 120.0, freeBeat_ = 0.0, expected_ = -1.0;
    int64_t nextTick_ = 0, anchor_ = 0, lastTick_ = 0, absoluteBar_ = 0;
