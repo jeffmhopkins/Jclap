@@ -565,6 +565,222 @@ static void roundNine() {
    }
 }
 
+// The song's structure: the order SONG mode plays the sections in.
+static void songStructure() {
+   // Templates by name, a hand-written order that is one named as it, an empty one once through.
+   {
+      auto song = std::make_unique<Song>();
+      JCLAP_CHECK_EQ(song->entries(), kSections);
+      song->setForm(3); // Short
+      JCLAP_CHECK_EQ(static_cast<int>(song->length), 6);
+      const int shortForm[6] = {kIntro, kVerse, kChorus, kVerse, kChorus, kOutro};
+      for (int i = 0; i < 6; ++i)
+         JCLAP_CHECK_EQ(song->entry(i), shortForm[i]);
+      JCLAP_CHECK_EQ(song->find(kChorus, 3), 4);
+      JCLAP_CHECK_EQ(song->find(kVerse, 4), 1); // wrapping
+      JCLAP_CHECK_EQ(song->find(kPre), -1);
+      song->setStructure({kIntro, kVerse, kVerse, kBridge, kVerse, kOutro});
+      JCLAP_CHECK_EQ(static_cast<int>(song->form), 4); // AABA
+      song->setStructure({kChorus, kChorus});
+      JCLAP_CHECK(song->form == kCustomForm);
+      JCLAP_CHECK_EQ(song->entries(), 2);
+      song->setStructure({});
+      JCLAP_CHECK_EQ(static_cast<int>(song->form), 0);
+      JCLAP_CHECK_EQ(song->entries(), kSections);
+      // Once through is the plain order, stored as none.
+      song->setStructure({kIntro, kVerse, kPre, kChorus, kBridge, kBreak, kOutro});
+      JCLAP_CHECK(song->form == 0 && song->length == 0);
+   }
+   // Saved with the song; a song from before (version 4) plays once through.
+   {
+      auto song = std::make_unique<Song>();
+      generateSong(Recipe{}, *song);
+      song->setForm(kCustomForm, {kChorus, kVerse, kChorus, kChorus, kOutro});
+      const std::vector<uint8_t> saved = song->save();
+      auto back = std::make_unique<Song>();
+      JCLAP_CHECK(back->load(saved.data(), saved.size()));
+      JCLAP_CHECK(*back == *song);
+      JCLAP_CHECK(back->form == kCustomForm && back->length == 5 && back->entry(3) == kChorus);
+      std::vector<uint8_t> old = saved;
+      old.resize(old.size() - 2 - 5); // no structure
+      old[0] = 4;
+      auto four = std::make_unique<Song>();
+      JCLAP_CHECK(four->load(old.data(), old.size()));
+      JCLAP_CHECK(four->length == 0 && four->form == 0);
+   }
+   // What a run plays at each bar: the section and the entry, read half way through the bar.
+   struct Bar {
+      int section, formPos;
+      bool fill, fillDown, ending, ended;
+   };
+   const auto bars = [](Engine &e, int count, double from, bool host) {
+      std::vector<Bar> got;
+      auto out = std::make_unique<OutBuffer>();
+      double beats = from;
+      for (int64_t at = 0; at < count * 96000; at += kBlock) {
+         Block b;
+         b.frames = kBlock;
+         b.tempo = 120.0;
+         b.hasTransport = b.playing = host;
+         b.beats = beats;
+         out->clear();
+         e.process(b, *out);
+         beats += kBlock / 24000.0;
+         if (at % 96000 == 256 * 187) {
+            Frame f;
+            e.fillFrame(f);
+            got.push_back({f.section, f.formPos, f.fill, f.fillDown, f.ending, f.ended});
+         }
+      }
+      return got;
+   };
+   const auto twoBars = [] {
+      auto song = songOf("x...x...x...x...", {{"C", nullptr}});
+      for (Section &sec : song->sections) {
+         sec.bars = 2;
+         sec.fill = fromRhythm("x.x.x.x.x.x.x.x.");
+         sec.fillDown = fromRhythm("X-------........");
+         sec.ending = fromRhythm("X---------------");
+         sec.fill.steps = sec.fillDown.steps = sec.ending.steps = 16; // a bar each
+      }
+      return song;
+   };
+   // SONG walks the structure, the fill going into each entry's next and the ending only on the last
+   // (a chorus that comes back plays its fill, not its ending, until it's the last entry).
+   for (bool host : {false, true}) {
+      auto song = twoBars();
+      song->setForm(kCustomForm, {kIntro, kChorus, kVerse, kChorus});
+      song->sections[kChorus].energy = 90;
+      song->sections[kVerse].energy = 40;
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.song = true;
+      s.sync = host ? 1 : 2;
+      s.play = !host;
+      s.freeTempo = 120.0;
+      e.setSettings(s);
+      e.reset();
+      const std::vector<Bar> got = bars(e, 10, 0.0, host);
+      const int want[8] = {kIntro, kIntro, kChorus, kChorus, kVerse, kVerse, kChorus, kChorus};
+      for (int i = 0; i < 8; ++i) {
+         JCLAP_CHECK_EQ(got[static_cast<size_t>(i)].section, want[i]);
+         JCLAP_CHECK_EQ(got[static_cast<size_t>(i)].formPos, i / 2);
+      }
+      // The first chorus's last bar: the fill down into the quieter verse; the last chorus's: its ending.
+      JCLAP_CHECK(got[3].fill && got[3].fillDown && !got[3].ending);
+      JCLAP_CHECK(!got[2].ending && !got[6].ending);
+      JCLAP_CHECK(got[7].ending);
+      JCLAP_CHECK(got[9].ended);
+   }
+   // REPEAT goes round the structure: after its last entry, its first.
+   {
+      auto song = twoBars();
+      song->setForm(3); // Short: I V C V C O
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.song = true;
+      s.songEnds = false;
+      s.sync = 2;
+      s.play = true;
+      s.freeTempo = 120.0;
+      e.setSettings(s);
+      e.reset();
+      const std::vector<Bar> got = bars(e, 16, 0.0, false);
+      JCLAP_CHECK_EQ(got[10].section, kOutro);
+      JCLAP_CHECK_EQ(got[12].section, kIntro);
+      JCLAP_CHECK_EQ(got[12].formPos, 0);
+      JCLAP_CHECK_EQ(got[14].section, kVerse);
+      JCLAP_CHECK(!got[11].ending);
+   }
+   // Following the host, the song is placed where the host is: bar 5 of Short (two bars a section)
+   // is its first chorus's second bar, bar 6 the second verse.
+   {
+      auto song = twoBars();
+      song->setForm(3);
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.song = true;
+      e.setSettings(s);
+      e.reset();
+      const std::vector<Bar> got = bars(e, 3, 5 * 4.0, true);
+      JCLAP_CHECK_EQ(got[0].section, kChorus);
+      JCLAP_CHECK_EQ(got[0].formPos, 2);
+      JCLAP_CHECK_EQ(got[1].section, kVerse);
+      JCLAP_CHECK_EQ(got[1].formPos, 3);
+      // Starting from the Section param's section: its first entry.
+      auto engine2 = std::make_unique<Engine>();
+      Engine &e2 = *engine2;
+      e2.setSong(*song);
+      s.section = kChorus;
+      e2.setSettings(s);
+      e2.reset();
+      const std::vector<Bar> from = bars(e2, 5, 0.0, true);
+      JCLAP_CHECK_EQ(from[0].section, kChorus);
+      JCLAP_CHECK_EQ(from[2].section, kVerse);
+      JCLAP_CHECK_EQ(from[2].formPos, 3);
+   }
+   // A section switched to by hand carries on from its next entry: in Pop (I V P C V P C B C C O),
+   // the chorus asked for in the first verse goes on to the second verse.
+   {
+      auto song = twoBars();
+      song->setForm(2);
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.song = true;
+      s.sync = 2;
+      s.play = true;
+      s.freeTempo = 120.0;
+      s.fillInto = false;
+      e.setSettings(s);
+      e.reset();
+      std::vector<Bar> got = bars(e, 3, 0.0, false); // into the verse's first bar
+      JCLAP_CHECK_EQ(got[2].section, kVerse);
+      s.section = kChorus;
+      e.setSettings(s);
+      got = bars(e, 6, 0.0, false); // the chorus from the next bar line, for two bars, then on
+      JCLAP_CHECK_EQ(got[0].section, kVerse);
+      JCLAP_CHECK_EQ(got[1].section, kChorus);
+      JCLAP_CHECK_EQ(got[1].formPos, 3);
+      JCLAP_CHECK_EQ(got[3].section, kVerse);
+      JCLAP_CHECK_EQ(got[3].formPos, 4);
+      JCLAP_CHECK_EQ(got[5].section, kPre);
+   }
+   // A push at an entry's end plays the next entry's chord, not the next section's.
+   {
+      auto song = songOf("x.............x.", {{"C", nullptr}});
+      for (int i = 0; i < kSections; ++i) {
+         Section &sec = song->sections[static_cast<size_t>(i)];
+         sec.bars = 2;
+         sec.fill = sec.takes[0];
+         for (Pattern &t : sec.takes)
+            for (int k = 14; k < t.steps; k += 16)
+               t.at(k).push = 1;
+         for (Chord &c : sec.chords)
+            c = chord(i == kChorus ? "F" : i == kVerse ? "Ab" : "C");
+      }
+      song->setForm(kCustomForm, {kIntro, kChorus, kOutro});
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = plain();
+      s.song = true;
+      s.fillInto = false;
+      e.setSettings(s);
+      e.reset();
+      const auto out = runWith(e, 24000 * 12, 0.0, [](int64_t, Block &) {});
+      const std::set<int> push = startingAt(out, 24000 * 7 + 12000);
+      JCLAP_CHECK(push.count(5) == 1 && push.count(8) == 0);
+   }
+}
+
 int main() {
    // ---- chord names ----
    {
@@ -3489,5 +3705,6 @@ int main() {
 
    roundEight();
    roundNine();
+   songStructure();
    return jclap::core::testResult();
 }
