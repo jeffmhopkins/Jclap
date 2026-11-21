@@ -131,6 +131,9 @@ inline double styleSwingOf(const Genre &g, const Style &s) {
    return std::clamp(sw, 0.5, 0.75);
 }
 inline int styleSwingFeelOf(const Genre &g, const Style &s) { return s.swingFeel >= 0 ? s.swingFeel : g.swingFeel; }
+// A swing comper's style (swung eighths, not a sixteenth-note groove's lilt): its fills and its energy
+// add offbeat stabs, not a pulse of chords on the beats.
+inline bool swungEighths(const Genre &g, const Style &s) { return styleSwingFeelOf(g, s) == 1 && styleSwingOf(g, s) > 0.55; }
 
 // The players, by index into players.h's list.
 enum : int {

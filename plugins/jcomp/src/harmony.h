@@ -392,8 +392,15 @@ inline Chord nameChord(const Notes &notes, bool slash = true) {
          const bool rootlessDom = rootless && tritone && dom && !bassShell;
          // (Not where the notes are a chord held whole, root and all: Cm7b5's Gb Bb C Eb is that
          // chord inverted, whatever the bass, not an Ab9 nobody's root is under.)
-         if (rootlessDom && (held & ~want) == 0 && !wholeChord)
+         if (rootlessDom && (held & ~want) == 0 && !wholeChord) {
             score += 2.5;
+            // The stock left-hand forms (3-7-9, 7-3-13: Levine) are the unaltered dominant's: the same
+            // notes as the tritone sub's 7#5 or 7#9, which they are far more often (C9's E Bb D, not
+            // Gb7#5 with a Gb nobody played).
+            const auto hasQ = [&](int i) { return std::find(qu.tones.begin(), qu.tones.end(), i) != qu.tones.end(); };
+            if (!hasQ(8) && !hasQ(13) && !hasQ(15) && !hasQ(6) && !hasQ(18))
+               score += 1.8;
+         }
          // Simpler names first: fewer tones break ties.
          score -= 0.05 * static_cast<double>(qu.tones.size());
          if (score > bestScore) {

@@ -2157,15 +2157,19 @@ int main() {
                JCLAP_CHECK(!d.empty() && d.rate == sec.takes[0].rate);
                JCLAP_CHECK(d.count() <= std::max(2, sec.fill.count()));
                if ((genreAt(g).styles[static_cast<size_t>(st)].mods & kFixed) && !intro) {
-                  // A fixed figure settles as itself: its onsets are the take's (Freddie Green's four,
-                  // the clave's side), the last chord rung.
-                  for (int k = 0; k < d.steps; ++k)
-                     JCLAP_CHECK(!d.at(k).on() || sec.takes[0].at(k % sec.takes[0].steps).on());
-               } else
+                  // A fixed figure settles as itself: its onsets and pushes are the take's (Freddie
+                  // Green's four, the clave's side, a montuno's and of 4 into the next chord).
+                  for (int k = 0; k < d.steps; ++k) {
+                     const Hit &w = sec.takes[0].at(k % sec.takes[0].steps);
+                     JCLAP_CHECK(!d.at(k).on() || w.on());
+                     JCLAP_CHECK(!d.at(k).push || w.push);
+                  }
+               } else {
                   for (int k = d.stepsPerBar() - d.perBeat(); k < d.steps; ++k)
                      JCLAP_CHECK(!d.at(k).on());
-               for (int k = 0; k < d.steps; ++k)
-                  JCLAP_CHECK(!d.at(k).push);
+                  for (int k = 0; k < d.steps; ++k)
+                     JCLAP_CHECK(!d.at(k).push);
+               }
             }
             const bool waltz = genreAt(g).styles[static_cast<size_t>(st)].mods & kWaltz;
             JCLAP_CHECK_EQ(static_cast<int>(song->beats), waltz ? 3 : 4);

@@ -343,9 +343,8 @@ playhead. Beside it, two knobs that change the whole part as it plays:
   plays sixteenths, so a montuno, a bossa or a Charleston stays on eighths), never under a chord still
   held, and never on a beat in an offbeat style (a skank, an offbeat stab) or a swung one (a swing
   comper adds offbeat stabs, not a pulse of chords). A figure played as written
-  (the batida, the montunos and guajeos, Freddie Green's four, the cha-cha) gets nothing added; below
-  the middle a two-bar clave figure keeps every stroke, but a one-bar figure (Freddie Green's four, the
-  cha-cha) thins as any take does, its thumb kept. The
+  (the batida, the montunos and guajeos, Freddie Green's four, the cha-cha) gets nothing added and
+  loses nothing below the middle: it is the style. The
   middle plays the take as written, and the same setting always gives the same pattern.
 - **LENGTH**: every chord shorter, down to a staccato chop, or longer, up to legato (held to the next
   chord). The middle plays the lengths as written.
