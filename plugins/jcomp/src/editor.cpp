@@ -552,7 +552,13 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          len = std::max(len, static_cast<float>(perBeat - v % perBeat) + 0.2f);
       if (pushTo == v && h.part == kPartChord && !h.push && !struck && c == pushChord) {
          pushTo = -1;
-         const float until = static_cast<float>(v) + (h.art == kArtRing || h.art == kArtTopRings ? gap * 0.97f : h.len * 0.92f);
+         float held = h.art == kArtRing || h.art == kArtTopRings ? gap * 0.97f
+                      : h.art == kArtChop                       ? 0.45f
+                      : h.art == kArtHalf                       ? std::max<float>(h.len, static_cast<float>(gap)) * 0.5f
+                                                                : h.len * 0.92f;
+         if (gFeel.length > 0.5 && gap * 0.97f > held)
+            held += (gap * 0.97f - held) * static_cast<float>((gFeel.length - 0.5) / 0.5);
+         const float until = static_cast<float>(v) + held;
          for (RollNote &x : out.notes)
             if (x.start == static_cast<float>(pushFrom) && x.kind != kRunNote)
                x.len = std::max(x.len, until - x.start);
@@ -613,7 +619,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          else if (c != bassChord)
             bassChord = Chord{};
       }
-      if (h.push && h.part == kPartChord && !gFeel.fixed) {
+      if (h.push && h.part == kPartChord && !gFeel.fixed && gFeel.length >= 0.5) {
          pushTo = v + perBeat - v % perBeat;
          pushChord = c;
          pushFrom = v;

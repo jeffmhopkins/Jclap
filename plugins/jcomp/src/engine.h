@@ -840,7 +840,9 @@ private:
       if (!fromProgression())
          return -1;
       const Chord now = progressionChord(rel);
-      const int64_t end = static_cast<int64_t>(song_.sections[static_cast<size_t>(section_)].bars) * barTicks();
+      // The end of the pass playing (a looping section's position keeps counting past its length).
+      const int64_t len = std::max<int64_t>(1, static_cast<int64_t>(song_.sections[static_cast<size_t>(section_)].bars) * barTicks());
+      const int64_t end = (std::max<int64_t>(0, rel) / len + 1) * len;
       for (int64_t at = nextSlot(rel), k = 0; k < 8; ++k, at = nextSlot(at)) {
          if (at >= end && ((settings_.song && pending_ < 0) || pending_ >= 0))
             return at;
@@ -1355,7 +1357,14 @@ private:
       if (!target && h.part == kPartChord && !h.push && t == pushTarget_ && c == pushChord_) {
          pushTarget_ = -1;
          const double from = static_cast<double>(t) / kTicksPerBeat;
-         double until = from + (h.art == kArtRing || h.art == kArtTopRings ? k.gapBeats * 0.97 : k.lenBeats * 0.92);
+         // As long as the beat's own chord would have been (LENGTH toward legato included).
+         double held = h.art == kArtRing || h.art == kArtTopRings ? k.gapBeats * 0.97
+                       : h.art == kArtChop                       ? std::min(k.lenBeats, 0.25) * 0.45
+                       : h.art == kArtHalf                       ? std::max(k.lenBeats, k.gapBeats) * 0.5
+                                                                 : k.lenBeats * 0.92;
+         if (settings_.length > 0.5 && k.gapBeats * 0.97 > held)
+            held += (k.gapBeats * 0.97 - held) * (settings_.length - 0.5) / 0.5;
+         double until = from + held;
          if (k.capBeat >= 0.0)
             until = std::min(until, k.capBeat - 0.01);
          for (size_t i = 0; i < queueLen_; ++i) {
@@ -1807,7 +1816,9 @@ private:
          note(on, key, static_cast<int>(std::lround(vv)), l, noteHand);
       }
       k.lastId = nextId_;
-      if (h.push && h.part == kPartChord && k.lastId >= k.firstId && !settings_.fixed) {
+      // (Only a push that is tied over: below the middle of LENGTH it's short, and the beat it leads to
+      // is struck as written.)
+      if (h.push && h.part == kPartChord && k.lastId >= k.firstId && !settings_.fixed && settings_.length >= 0.5) {
          pushTarget_ = pushTargetOf(k.t);
          pushChord_ = c;
          pushFirst_ = k.firstId;
