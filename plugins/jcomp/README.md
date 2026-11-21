@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.7.0.
+Version 0.8.0.
 
 ![Panel](docs/panel.png)
 
@@ -83,7 +83,7 @@ and JJazzLab):
 
 | Genre | New styles and rhythms |
 |---|---|
-| Swing Jazz | **Jazz Waltz** (3/4: MMA's piano, Impro-Visor's half and quarter, the "2 and 3" comp, MMA's guitar); **Held Comp** (a chord held from 1 and the and of 3, as MMA's basic swing piano); Freddie Green's four plays in two at low energy (the head in two, the solos in four); Garland gains MMA's 1, 2, and of 3, 4 |
+| Swing Jazz | **Jazz Waltz** (3/4: MMA's piano, Impro-Visor's half and quarter, the "2 and 3" comp, MMA's guitar); **Held Comp** (a chord held from 1 and the and of 3, as MMA's basic swing piano); Freddie Green's four is four to the bar at every energy (the guitar keeps the four under the head too); Garland gains MMA's 1, 2, and of 3, 4 |
 | Piano Ballad | **Ballad Block** (quarters, the 1, and-of-2, 3 ballad figure, a four-bar phrase); **Right-Hand Arpeggio** (the chord broken up and back); **6/8 Ballad** (six eighths leaning on 1 and 4, dotted quarters, the left hand rocking) |
 | Country | **Country Waltz** (oom-pah-pah, the bass on 1 alternating root and fifth); **Western Swing** (four on the guitar, pickups in the fourth bar) |
 | Bossa Nova | **Samba** (MMA's four bars of piano, Impro-Visor's offbeat eighths) |
@@ -198,7 +198,10 @@ plays the take as it is; **ACC** strikes the chord's first stroke above the bar'
 **HOLD** strikes it once and holds it to the next chord, the take resting meanwhile; **SHOT** strikes it
 once, short, and rests to the next chord. A band hit plays only over the section's own progression,
 not over a chord held on the keys, nor in the song's ending; a section queued to come in leaves this
-one's band hits playing up to the switch. The rolls draw the band hits as they play.
+one's band hits playing up to the switch. A band hit on a chord the take pushes into (a chord struck
+on the and of 4 into it) goes on that push: HOLD rings it on, SHOT cuts it short, and the beat isn't
+struck again. The rolls on GENERATE and PLAY draw the band hits as they play; EDIT draws the take as
+written, its hits under a HOLD or SHOT included.
 
 ## EDIT
 
@@ -293,11 +296,13 @@ and fill. Click a tile to switch to it, a number for that take, FILL for a fill.
 next is outlined with **NEXT**. **LOOP** stays in a section; **SONG** plays each for its bars, then
 the next, through to the outro, and ends: the outro's last bar or two are its **ending** (four, then
 the last chord rung out, as MMA's endings; the style's own where it has one: SwingEnd's four then 1
-and 3, the cha-cha cell, the R&B ending's 1, 3 and 4), and then JComp rests until you pick a section or
+and 3, the cha-cha cell with its last chord on the and of 4, the R&B ending's 1, 3 and 4; a skank or an
+offbeat stab ends on its offbeats, then the held chord), and then JComp rests until you pick a section or
 start again (picking the outro plays it again; switching to LOOP or REPEAT plays on from the next
 switch point). An outro shorter than its ending plays the ending's last bars, so the last chord still
 rings. **REPEAT** plays the song round and round, the outro's fill leading back into the intro
-(SONG's behaviour before 0.6.0). Following the host, the song starts at the host's bar 1 with the
+(SONG's behaviour before 0.6.0). Running free, SONG starts from the Section parameter's section.
+Following the host, the song starts at the host's bar 1 with the
 Section parameter's section, so starting the host again, or jumping, finds the section that bar is
 in, its ending included (past the song's end, in SONG, nothing plays). In SONG and REPEAT, clicking a
 tile doesn't move where the song starts: it does that only with BY set to the Section parameter
@@ -338,7 +343,11 @@ playhead. Beside it, two knobs that change the whole part as it plays:
   chord). The middle plays the lengths as written.
 
 The rolls on GENERATE and PLAY draw the part with DENSITY, LENGTH, RUNS and the band hits as set, with the engine's
-own dice: the hits, fills and runs the first pass plays (SAME DICE off, later bars differ). EDIT
+own dice: the hits, fills and runs the first pass plays (SAME DICE off, later bars differ), and the
+chords as the engine plays them: a chord an eighth before a change is the new chord, a push rings on
+through the beat it anticipates, and a change the take has no hit for is struck where it comes. The
+playhead goes through the progression's bars with the take played round under them, and the ENDING's
+roll is drawn over the outro's last bars, where it plays. EDIT
 shows the take as written, the hits you edit. Thinned hits don't cut a long chord short: at full LENGTH a chord holds
 to the next chord actually played.
 
@@ -355,6 +364,7 @@ to the next chord actually played.
   (bottom to top, about 14 ms a note), STRUM DOWN (9 ms apart), or STRUM BOTH (down on the beat, up
   on the off-beats).
 - **SAME DICE EVERY** 1, 2, 4 or 8 bars: the chance hits repeat, so they make a pattern of their own.
+  Following the host, a bar's dice are the host bar's, so every pass of a host loop plays as the first.
   **AUTO FILLS** every 4, 8 or 16 bars.
 
 ### TRANSPORT
@@ -585,6 +595,24 @@ bass coming in too) until a section is picked or SONG stops ending it, band hits
 section, CHORDS edits carry their band hits, ENERGY and BLEND keep the chords, Cb is spelled in Gb,
 and a damaged song is refused. Projects and presets saved before 0.6.0 open as they played (Song Mode
 LOOP or REPEAT, swing not easing), and songs saved before 0.6.0 gain their fills down and ending.
+
+**The seventh review (0.8.0).** Five more cold passes, the same split as the sixth
+([docs/sources.md](docs/sources.md), Part K). A rootless 7#5 keeps its #5 (it had a natural fifth
+against it), a jump out of a fill plays the take where it lands, and a new key moves the
+chords that ENERGY or BLEND keep. Thinning keeps a bar's sounding chord rather than its ghost, a fixed
+figure takes no pushes or ties, a run clears no accented or beat hit, the offbeat styles end on their
+offbeats (ska, the one drop, house's offbeat stabs) and their fills lead into the next section. SONG
+running free starts from the Section parameter. SPREAD has more voicings to lead with (the top line
+no longer jumps a fourth in Motown), OCTAVES keeps a m7b5's b5 and a 7b9's b9, 4THS and the triads have
+more stacks to choose from, a band hit on a pushed chord goes on the push, a quiet take's added hits
+stay quiet, and the answer bar leaves a tenor line and a thumb's bass as written. The rolls now play
+what the engine plays: anticipations, ties over pushes, a change struck where the take has none, the
+hits' chances, the playhead's bar, and the ending over its own bars. Freddie Green's four is four at
+every energy, the 60s R&B piano plays both its bars, Rock's bridge leaves the pre's chords, the blues
+gets no ambient sus chords, a tritone sub of a 7#5 is a 9th and is spelled flat, bossa's swing is on
+its eighths, funk's fills land on the One, ambient's fills don't push, Western Swing's four gets no
+fill-in chops, and salsa's ending comes on the and of 4. From the host, ENERGY and BLEND keep chord
+edits as on the panel, a loop's dice repeat, and 6/8 songs saved by 0.6.0 load on the 6/8 grid.
 
 **Left out for now.** A "+ GUITAR" second player layered over the first, and recording a part played
 in to a take.

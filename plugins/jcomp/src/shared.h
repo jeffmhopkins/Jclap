@@ -258,7 +258,7 @@ struct Song {
    // (four takes and the fill), each pattern as its steps, rate and every hit (10 bytes; 9 before version 2) of its grid.
    // Version 3 adds the bar's beats after the key, and after each section's fill its fill down, its
    // ending and its chords' band hits.
-   static constexpr uint32_t kVersion = 3; // 2: a hit's line degree; 3: 3/4, fills down, endings, band hits
+   static constexpr uint32_t kVersion = 4; // 2: a hit's line degree; 3: 3/4, fills down, endings, band hits; 4: 6/8
 
    std::vector<uint8_t> save() const {
       std::vector<uint8_t> out;

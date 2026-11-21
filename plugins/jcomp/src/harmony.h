@@ -622,8 +622,13 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       // m9 isn't left at three.)
       const bool fewer = static_cast<int>(q.tones.size()) < n;
       for (int size = n; size >= 3 && (out.empty() || (fewer && size >= n - 2)); --size)
-      for (int strict = 3, found = static_cast<int>(out.size()); strict >= 0 && static_cast<int>(out.size()) == found; --strict)
-         for (int odd = 0; odd < 2 && static_cast<int>(out.size()) == found; ++odd)
+      // A level less strict comes in while there are fewer than three stacks to choose from (one
+      // stack a chord leaves the top leaping from chord to chord), down to the stacks that still hold
+      // the seventh; the last level (no seventh) only where nothing else fits.
+      for (int strict = 3, found = static_cast<int>(out.size());
+           strict >= 0 && (static_cast<int>(out.size()) == found || (strict >= 1 && static_cast<int>(out.size()) < found + 3));
+           --strict)
+         for (int odd = 0; odd < 2 && static_cast<int>(out.size()) < found + 3; ++odd)
             for (int b = vs.lo - 12; b <= vs.hi; ++b) {
                if (!(allowed >> (((b % 12) + 12) % 12) & 1))
                   continue;
@@ -712,11 +717,14 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
          else if (upper.size() > 2)
             upper.back() = 0;
       }
-      for (int b = vs.floor; b < vs.floor + 12; ++b) {
-         if (b % 12 != bassPc)
+      // The bass in either of its low octaves (never under FLOOR, and low: under the window's
+      // bottom fifth), at least a fifth under the right hand: every root gets a choice of voicings,
+      // so the top voice can lead whatever the key.
+      for (int b = vs.floor; b < vs.floor + 24; ++b) {
+         if (b % 12 != bassPc || (b >= vs.floor + 12 && b >= vs.lo + 7))
             continue;
          for (const auto &st : detail::closeStacks(pcsOf(upper), vs.lo, vs.hi)) {
-            if (st.front() < b + 9)
+            if (st.front() < b + 7)
                continue;
             Stack v{b};
             v.insert(v.end(), st.begin(), st.end());
@@ -738,7 +746,7 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       const bool dom = third == 4 && seventh == 10;
       int colour = has(15) ? 15 : has(13) ? 13 : 14;              // the altered 9th, or the 9th
       // The 13th on a dominant; the b13 with an altered ninth (Levine's 3-b13-7-b9 for the V of a minor ii-V).
-      int fifth = dom ? (has(15) || has(13) ? 8 : 9) : (has(6) ? 6 : has(8) ? 8 : 7);
+      int fifth = dom ? (has(8) || has(15) || has(13) ? 8 : 9) : (has(6) ? 6 : has(8) ? 8 : 7); // a 7#5 keeps its #5
       if (has(18))
          fifth = 18;                                                // the #11 in its place
       if (seventh == 9)
@@ -778,14 +786,28 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       Ints tones;
       for (size_t i = 0; i < q.tones.size() && tones.size() < 3; ++i)
          tones.push_back(q.tones[i]);
-      // A seventh chord at three notes under the octave keeps its seventh in place of the fifth (A9 is
-      // heard as a dominant, not an A triad).
+      // A seventh chord at three notes under the octave keeps its seventh in place of a perfect fifth
+      // (A9 is heard as a dominant, not an A triad). An altered fifth (m7b5's b5, 7#5's #5) is the
+      // chord, so the seventh goes in place of the root instead: the bass has it.
       if (q.seventh && n - 1 <= 3 && tones.size() >= 3)
          for (int i : {10, 11, 9})
             if (std::find(q.tones.begin(), q.tones.end(), i) != q.tones.end() && tones[2] % 12 != i % 12) {
-               tones[2] = i;
+               tones[tones[2] == 7 ? 2 : 0] = i;
                break;
             }
+      // An altered colour (b9, #9, #11) names the chord too: it goes in place of the root at three
+      // notes (the montuno's b9 over the bass's root), else in place of a perfect fifth.
+      for (int alt : {13, 15, 18})
+         if (std::find(q.tones.begin(), q.tones.end(), alt) != q.tones.end()) {
+            for (int want : {n - 1 <= 3 ? 0 : 7, 7, 0}) {
+               auto it = std::find(tones.begin(), tones.end(), want);
+               if (it != tones.end()) {
+                  *it = alt;
+                  break;
+               }
+            }
+            break;
+         }
       for (int i : {10, 11, 9})
          if (static_cast<int>(tones.size()) < n - 1 && q.seventh &&
              std::find(q.tones.begin(), q.tones.end(), i) != q.tones.end() &&
@@ -899,6 +921,10 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
       VoiceSettings ds = vs;
       if (shape == kDrop24)
          ds.maxSpan = vs.maxSpan + 12;
+      // DOUBLE is a rule on the voicing, not on how it was built: (D F# A)+D and (F# A D)+D are the
+      // same notes. A doubled top is kept only where nothing else fits.
+      Voicings doubledTop;
+      const size_t had = out.size();
       for (auto st : detail::closeStacks(distinct, vs.lo, vs.hi)) {
          if (shape == kDrop2 && st.size() >= 3)
             st[st.size() - 2] -= 12;
@@ -916,7 +942,7 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                   if (((x % 12) + 12) % 12 != dpc)
                      continue;
                   for (int d : {x + 12, x - 12}) {
-                     if (std::find(g.begin(), g.end(), d) != g.end() || (vs.doubleMiddle && d > g.back()))
+                     if (std::find(g.begin(), g.end(), d) != g.end())
                         continue;
                      Stack v = g;
                      v.push_back(d);
@@ -926,9 +952,19 @@ inline Voicings candidates(const Chord &c, const VoiceSettings &vs, int shapeOve
                }
             grown = next;
          }
-         for (const auto &v : grown)
-            detail::addCandidate(out, v, ds, -1);
+         for (const auto &v : grown) {
+            bool topTwice = false;
+            for (size_t i = 0; i + 1 < v.size(); ++i)
+               topTwice = topTwice || ((v[i] - v.back()) % 12 + 12) % 12 == 0;
+            if (vs.doubleMiddle && !doubles.empty() && topTwice)
+               detail::addCandidate(doubledTop, v, ds, -1);
+            else
+               detail::addCandidate(out, v, ds, -1);
+         }
       }
+      if (out.size() == had)
+         for (const Voicing &v : doubledTop)
+            out.push_back(v);
       // A slash chord keeps its bass at the bottom: the voicings that have it there, else each with
       // the bass note added under it.
       if (c.bass >= 0 && c.bass != c.root && !out.empty()) {

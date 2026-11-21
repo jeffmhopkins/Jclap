@@ -244,6 +244,27 @@ int main() {
       a.process(256);
       a.plugin()->on_main_thread(a.plugin());
       JCLAP_CHECK(a.object<EditorHost>()->song() == now);
+      // D13: ENERGY or BLEND from the host remakes the rhythm only: an edited chord stays, as it does
+      // when the panel's ENERGY moves. A new seed remakes the chords too.
+      auto *host = a.object<EditorHost>();
+      Song edited = host->song();
+      edited.sections[kVerse].chords[0] = chord("F#m7");
+      host->setSong(edited);
+      a.setParam(kEnergy, 0.9);
+      a.process(256);
+      a.plugin()->on_main_thread(a.plugin());
+      JCLAP_CHECK(host->song().sections[kVerse].chords[0] == chord("F#m7"));
+      JCLAP_CHECK(!(host->song() == edited));
+      a.setParam(kBlendGenre, 3.0);
+      a.process(256);
+      a.plugin()->on_main_thread(a.plugin());
+      JCLAP_CHECK(host->song().sections[kVerse].chords[0] == chord("F#m7"));
+      a.setParam(kSeed, 4242.0);
+      a.process(256);
+      a.plugin()->on_main_thread(a.plugin());
+      JCLAP_CHECK(!(host->song().sections[kVerse].chords[0] == chord("F#m7")));
+      // E13: the descriptor counts the genres there are.
+      JCLAP_CHECK(std::string(a.plugin()->desc->description).find(std::to_string(genreCount()) + " genres") != std::string::npos);
    }
 
    // ---- real time ----

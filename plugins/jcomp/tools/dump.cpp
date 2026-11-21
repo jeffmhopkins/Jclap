@@ -128,9 +128,10 @@ int main(int argc, char **argv) {
             const Section &S = song.sections[static_cast<size_t>(sec)];
             std::printf("-- %s (energy %d, %d bars, prog %d bars):", kSectionNames[sec], S.energy, S.bars, S.progBars);
             for (int b = 0; b < S.progBars; ++b) {
-               std::printf(" |%s", chordName(S.chords[static_cast<size_t>(b * 2)], song.key).c_str());
+               const Chord a = S.chordAt(b, false), z = S.chordAt(b, true), nx = S.chordAt(b + 1, false);
+               std::printf(" |%s", chordName(a, song.key, kMajor, z != a ? &z : &nx).c_str());
                if (S.split >> b & 1)
-                  std::printf(" %s", chordName(S.chords[static_cast<size_t>(b * 2 + 1)], song.key).c_str());
+                  std::printf(" %s", chordName(z, song.key, kMajor, &nx).c_str());
             }
             std::printf(" |\n");
             for (int t = 0; t < std::clamp(takes, 1, kTakes); ++t)

@@ -1,5 +1,5 @@
 // JComp: a CLAP note effect that comps chords for a polyphonic instrument (an e-piano, keys, organ,
-// guitar or synth), the way JDrummer drums: a song made by its generator from 24 genres, played in
+// guitar or synth), the way JDrummer drums: a song made by its generator from 25 genres, played in
 // sections, in time with the host or on its own. The chords come from each section's progression, or
 // from chords held on the keyboard; each is voiced and led from the one before. The engine
 // (engine.h) plays the song; the generator (generator.h) makes it; this file wires them to the
@@ -86,13 +86,14 @@ public:
    // A recipe param the host changed: the song it names.
    void onMainThread() override {
       const bool all = remake_.exchange(false);
+      const bool chords = remakeChords_.exchange(false);
       const uint32_t sections = remakeSections_.exchange(0);
       if (!all && !sections)
          return;
       Song s = *song_;
       const Recipe r = recipeFrom([this](clap_id id) { return values_[id].load(); });
       if (all)
-         generateSong(r, s);
+         generateSong(r, s, !chords);
       else
          // A section's energy: that section's rhythm made again, its chords (and their edits) kept.
          for (int i = 0; i < kSections; ++i)
@@ -281,6 +282,7 @@ public:
          values_[i].store(std::clamp(v[i], kParams[i].min, kParams[i].max));
       // The loaded song is the one: a host's recipe change from before the load doesn't remake it.
       remake_.store(false);
+      remakeChords_.store(false);
       remakeSections_.store(0);
       *song_ = *loaded;
       send();
@@ -470,8 +472,13 @@ private:
             if (isRecipeParam(ev->param_id) && v != values_[ev->param_id].load()) {
                if (ev->param_id >= kSectionEnergy && ev->param_id < kSectionEnergy + kSections)
                   remakeSections_.fetch_or(1u << (ev->param_id - kSectionEnergy));
-               else
+               else {
+                  // ENERGY and BLEND remake the rhythm only (the chords and their edits stay), as
+                  // on the panel; any other recipe param, the whole song.
+                  if (ev->param_id != kEnergy && ev->param_id != kBlend && ev->param_id != kBlendGenre)
+                     remakeChords_.store(true);
                   remake_.store(true);
+               }
                host()->request_callback(host());
             }
             values_[ev->param_id].store(v);
@@ -576,6 +583,7 @@ private:
    uint32_t requestRead_ = 0;
    std::atomic<bool> learnArmed_{false};
    std::atomic<bool> remake_{false};
+   std::atomic<bool> remakeChords_{false}; // a recipe param other than ENERGY or BLEND changed
    std::array<std::bitset<128>, 16> passed_{}; // notes passed on and not yet let go (audio thread)
    std::atomic<uint32_t> remakeSections_{0};
    std::atomic<int> learned_{-1};
@@ -597,7 +605,7 @@ const clap_plugin_descriptor_t JComp::descriptor = {
    "",
    "",
    JCLAP_PLUGIN_VERSION,
-   "A comping generator for keys, organ and guitar: 24 genres, voice leading, passing runs, sections and mutations",
+   "A comping generator for keys, organ and guitar: 25 genres, voice leading, passing runs, sections and mutations",
    kFeatures,
 };
 

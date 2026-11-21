@@ -45,8 +45,8 @@ inline std::vector<std::pair<clap_id, double>> styleValues(int genre, int style)
            {kCenter, own ? s.center : p.center},
            {kOnsets, p.onsets},
            {kTiming, p.laidBack},
-           // A fixed figure has no runs; a slip-note style always slips some.
-           {kRuns, s.mods & kFixed ? 0.0 : s.mods & kSlip ? std::max(0.5, p.runs) : std::min(1.0, p.runs + (s.mods & kRunsIn ? 0.3 : 0.0))}};
+           // A fixed figure has no runs; a slip-note style's slips are its own, its runs the player's.
+           {kRuns, s.mods & kFixed ? 0.0 : std::min(1.0, p.runs + (s.mods & kRunsIn ? 0.3 : 0.0))}};
 }
 
 // What picking a player sets: how it voices and feels.
