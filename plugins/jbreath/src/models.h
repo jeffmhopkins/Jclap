@@ -404,6 +404,8 @@ public:
    // The breath the player is aiming for (the voice's target, before the tongue lets it go), set
    // before each tick: how much air a tongued start has behind it before it reaches the reed.
    double behind = 0.0;
+   // The breath the note will hold, without the extra the player starts it with.
+   double holds = 0.0;
 
 protected:
    double fs_ = 96000.0;
@@ -756,6 +758,10 @@ private:
 class Sax final : public Model {
 public:
    void prepare(double fs) override {
+      // (Another fingering's resonances move in over kMorphSec: over the bore's usual 40 ms, every
+      // slur slid through the pitches between its notes, a glissando, where a real alto's jumps in
+      // 10 to 30.)
+      bore_.morphTime(kMorphSec);
       fs_ = fs;
       player_.prepare(fs);
       reset();
@@ -872,6 +878,13 @@ public:
       for (int i = 1; i < b.modes; ++i)
          if (std::fabs(std::log(b.peakHz[i] / want)) < std::fabs(std::log(b.peakHz[best] / want)))
             best = i;
+      // (A slur across the octave key carries the bore's ringing from the resonance the reed was
+      // playing on to the one it plays on now, the first to the second or back: left where it was,
+      // the reed caught the old one as it moved, and a slur from E4 onto F4 sounded a wrong note,
+      // often an octave down, for 40 to 110 ms before it found the new one.)
+      if (ticked_ && best != mode_)
+         bore_.carry(best - mode_);
+      mode_ = best;
       fing_ = f;
       peakHz_ = b.peakHz[best];
       // (With the octave key, the vent's leak and the player's voicing keep the reed off the first
@@ -1181,7 +1194,7 @@ private:
    static constexpr double kTopHz = 5000.0;  // the output's 4-pole lowpass (6.5 kHz left both recordings' top 4 to 10 dB under ours)
    static constexpr double kAltoPeakDb = 4.0;
    static constexpr float kGrowlRasp = 0.08f;
-   static constexpr double kBodySec = 0.015;
+   static constexpr double kBodySec = 0.015, kMorphSec = 0.015;
    static constexpr double kLowLoss = 0.6;  // the walls' loss on the low notes, of the full
    static constexpr double kVoicing = 10.0;  // and their upper resonances' damping (at 5 the low notes
                                              // blown hard buzzed between two pitches)
@@ -1191,7 +1204,7 @@ private:
    static constexpr double kAccent = 0.4, kAccentSec = 0.03;
    static constexpr double kFamilyDb = 12.0;
    static constexpr int kRegPoints = 11;
-   static constexpr double kRegDb[kRegPoints] = {8.0, 9.0, 10.0, 10.0, 8.3, -11.2, 15.0, 10.3, 4.2, 2.6, -15.0};
+   static constexpr double kRegDb[kRegPoints] = {8.0, 9.0, 10.0, 10.0, 8.3, 3.0, 15.0, 10.3, 4.2, 2.6, -15.0};
    // (and played softly, as much again: the real alto's piano is as even up its range as its forte)
    static constexpr double kRegSoftDb[kRegPoints] = {1.4, 5.7, 5.7, 1.4, 0.0, -2.9, 1.4, -1.4, -7.1, -8.6, -8.6};
    static constexpr double kRegGainDb[kRegPoints] = {4.0, -0.5, -1.5, 1.5, 3.6, 13.2, -1.6, -1.2, 4.0, 4.4, 0.0};
@@ -1206,6 +1219,7 @@ private:
    int fing_ = -1;
    double fingMember_ = 1.0, fingerOff_ = 0.0;
    double bodyAt_ = -1.0, lowAt_ = -1.0, bodyQ_ = 1.0, bodyH_ = 1.0, edgeAt_ = -1e9, knee_ = 0.08;
+   int mode_ = 0;
    double lowNote_ = 0.0, peakHz_ = 277.0, hz_ = 277.0, member_ = 1.0, scale_ = 1.0, body_ = 1.0, vent_ = 0.0, open_ = 7e-4, eqAt_ = -1.0, toneDb_ = 1e9, toneHz_ = 1.0, liftDb_ = 1e9, liftHz_ = 1.0;
    double regDb_ = 1e9, regHz_ = 1.0, famDb_ = 1e9, famHz_ = 1.0, onT_ = 1.0, lift0_ = 0.0, xShut_ = 0.0, liftSec_ = 0.003;
    double x_ = 0, v_ = 0, dpPrev_ = 0, pmS_ = 0, pmB_ = 0, pmCoef_ = 0.01, pmFallCoef_ = 0.001, ventNow_ = 0.0, memberNow_ = 1.0, openNow_ = 7e-4;
@@ -1556,6 +1570,8 @@ public:
       acLP2_ = {};
       acCoef_ = 1.0 - std::exp(-2.0 * kPi * 25.0 / fs_);
       envFall_ = std::exp(-1.0 / (0.03 * fs_));
+      startFall_ = std::exp(-1.0 / (kStartLipSec * fs_));
+      startEnv_ = 0.0;
       closedCoef_ = 1.0 - std::exp(-1.0 / (0.004 * fs_));
       pmCoef_ = 1.0 - std::exp(-1.0 / (0.008 * fs_));
       pmS_ = 0.0;
@@ -1623,19 +1639,13 @@ public:
          fp = partial_;
       }
       if (fv != fing_ || fp != partial_) {
-         // A slur onto another partial from Eb5 to G#5, where the lips are eased off and slowest
-         // to catch, nudges them onto the new one with a puff as big as a middling strike's: with
-         // none, a slur onto E5 lost the note and went silent. (A third of that was enough to pop
-         // no more than the slur itself, but caught only some: with the valves chosen for the note
-         // being slurred to, a whole one catches every slur there from a middling breath up.)
-         if (ticked_ && fing_ >= 0) {
-            const double pb = std::clamp(pmS_, 0.05, 0.3) / 0.5, up = std::max(fh / 466.0, 1.0);
-            const double zone = std::clamp((fh - 560.0) / 60.0, 0.0, 1.0) * std::clamp((820.0 - fh) / 60.0, 0.0, 1.0);
-            if (zone > 0.0) {
-               puff_ = kSlurNudge * zone * kPuff * kHardest * pb * pb * up * up;
-               puffAt_ = 0.0;
-            }
-         }
+         // (A slur onto another partial carries the horn's ringing with the lips: the resonance
+         // they were playing on glides into the one they're slurring to. Left where it was, as the
+         // fingerings' resonances moved by number, the lips found the new one silent and stopped,
+         // a third of all slurs fading nearly to nothing for a tenth of a second, and a slur onto
+         // E5 losing the note. It replaces a puff at each slur from Eb5 to G#5.)
+         if (ticked_ && fing_ >= 0)
+            bore_.carry(fp - partial_);
          fing_ = fv;
          partial_ = fp;
       }
@@ -1697,7 +1707,14 @@ public:
       // close, and lips held tight under the drop would buzz on their own, off the horn.)
       const double loose = 0.10 + 0.08 * std::clamp((hz_ - 550.0) / 60.0, 0.0, 1.0);
       const double lip = std::max(0.72, lipRatio_ - loose * std::clamp((1000.0 - hz_) / 250.0, 0.0, 1.0) * (pmS_ - 0.25));
-      const double wl = 2 * kPi * hz * (lip + 0.1 * (emb - 0.5));
+      // (For a note's first few tens of ms, plucked hard and free to ring, the lips are tuned up
+      // to the note, by lowStart_: left under it they buzzed on their own frequency, slamming shut
+      // before the horn's reflection took over, so a G4 to Eb5 started one to three semitones flat
+      // for 30 ms before snapping up to the note. As much as the pluck, by the air behind it: a
+      // hard strike on a whisper of pressure, tuned up, started twice as loud as it held.)
+      const auto blow = [](double b) { return std::clamp((b - kBlow0) / kBlowSpan, 0.0, 1.0); };
+      startEnv_ *= startFall_;
+      const double wl = 2 * kPi * hz * (lip + (kStartLip - lip) * lowStart_ * startEnv_ * blow(behind) + 0.1 * (emb - 0.5));
       // (The lips' Q only moves with the Stiffness: worked out again only when it does.)
       if (character.stiffness != qStiffness_) {
          qStiffness_ = character.stiffness;
@@ -1717,11 +1734,12 @@ public:
       // mezzo forte note in about 30 ms and a forte one in under 20, as a real trumpet's (Iowa, C4
       // to B4: 15 to 20 ms to half its level at pp, mf and ff). By the air behind it, so a hard
       // strike on a whisper of pressure doesn't start the note twice as loud as it holds.)
-      const auto blow = [](double b) { return std::clamp((b - kBlow0) / kBlowSpan, 0.0, 1.0); };
       if (tn > tongue_) {
          // (A note started from rest: the lips at rest aren't closing on every cycle.)
-         if (pmS_ < 0.05)
+         if (pmS_ < 0.05) {
             closed_ = 0.0;
+            startEnv_ = 1.0;
+         }
          double d = std::min<double>(tn - tongue_, std::max(0.0, kHardest - kickTn_));
          // (However softly tongued, the first pluck is at least kMinPluck of the air behind it: a
          // soft tongue's own pluck left the lips to grow out of almost nothing, over 100 to 700 ms.
@@ -1745,7 +1763,17 @@ public:
          // a moderate breath; and larger over Bb4, where the lips need more to lock on.)
          const double pb = std::clamp<double>(breath, 0.05, 0.3) / 0.5, up = std::max(hz_ / 466.0, 1.0);
          // (No longer four times as much from Eb5 to G#5: shaped as it now is, that only popped.)
-         puff_ += kPuff * std::min(puffTn_, kHardest) * pb * pb * up * up;
+         // (From A3 to A4, up to kPuffMid times as much, and up to twice a hard strike's: the lips
+         // there grow slowest, and a mezzo forte B3 to E4 buzzed for 100 to 160 ms before it spoke,
+         // where a real trumpet's speaks in 10 to 30. By the breath the note will hold, not the
+         // extra it starts with: none at forte, which speaks at once and puffed that hard started
+         // off its pitch, and little on a whisper of pressure. And less the harder it's struck,
+         // whose own puff is near the most already: a hard strike on light pressure, puffed more,
+         // started three or four times as loud as it held.)
+         const double mid = std::clamp((hz_ - 220.0) / 25.0, 0.0, 1.0) * std::clamp((440.0 - hz_) / 40.0, 0.0, 1.0) *
+                            std::clamp((0.7 - holds) / 0.12, 0.0, 1.0) * blow(holds);
+         const double boost = 1.0 + (kPuffMid - 1.0) * mid * std::clamp(1.0 - 0.8 * puffTn_ / kHardest, 0.0, 1.0);
+         puff_ += kPuff * std::min(puffTn_ * boost, std::min(boost, 2.0) * kHardest) * pb * pb * up * up;
          puffTn_ = 0.0;
       }
       tongue_ = tn;
@@ -1826,9 +1854,10 @@ private:
    };
    static constexpr double kP0 = 8000.0, kRho = 1.2, kLipQ = 12.0, kLipMu = 3.0, kLipWidth = 0.012,
                            kSoft = 1e-4, kOut = 1000.0, kBellCut = 1500.0, kKick = 5e-3, kPuff = 2e-3, kHardest = 0.4, kScoop = 100.0,
-                           kShock0 = 480.0, kOpenQ = 3.0, kMinPluck = 0.25, kKickLow = 7.0, kBlow0 = 0.15, kBlowSpan = 0.3;
+                           kShock0 = 480.0, kOpenQ = 3.0, kMinPluck = 0.25, kKickLow = 6.0, kBlow0 = 0.15, kBlowSpan = 0.3,
+                           kStartLip = 1.0, kStartLipSec = 0.02, kPuffMid = 8.0;
    // The puff's length in periods of the note, and its size against the one-sided pulse it was.
-   static constexpr double kPuffPeriods = 4.0, kPuffShape = 0.5, kSlurNudge = 1.0;
+   static constexpr double kPuffPeriods = 4.0, kPuffShape = 0.5;
    ModalBore bore_;
    Delay shock_;
    OnePoleLP acLP_, acLP2_, breathLP_, breathLP2_;
@@ -1841,7 +1870,7 @@ private:
    double peakHz_ = 466.0, hz_ = 466.0, lipRatio_ = 0.84, lipMu_ = 3.0, eqAt_ = 1.0, lipQ_ = kLipQ;
    float qStiffness_ = -1.0f;
    double acMean_ = 0, acEnv_ = 0, acCoef_ = 0.001, envFall_ = 0.9997, closedCoef_ = 0.003;
-   double lowStart_ = 1.0;
+   double lowStart_ = 1.0, startEnv_ = 0.0, startFall_ = 0.999;
    double x_ = 0, v_ = 0, dpPrev_ = 0, closed_ = 0, shockD_ = 120, pmS_ = 0, pmCoef_ = 0.001, puff_ = 0, puffAt_ = 0, puffTn_ = 0, kickTn_ = 0;
    float tongue_ = 0.0f;
 };

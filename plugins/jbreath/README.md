@@ -71,7 +71,7 @@ filters that can move while they play. A hard-tongued sax note's accent is a few
 instead of more than doubling the breath (its onset overshot by up to 8 dB and its low notes
 squealed for 30 ms). The trumpet's tongue sets its lips going with a short puff at the note's own
 pitch instead of a one-sided pulse, which from Eb5 to A5 started the note with a pop up to 16 dB
-over it, and a slur onto a partial there nudges the lips onto it.
+over it.
 
 Also from 0.13.10, trumpet slurs and tongued repeats no longer lose the note. A slur took the
 valves of a pitch it passed through on the way and kept them, so a slur up onto Eb5 to F5 often
@@ -85,8 +85,8 @@ whose notes reach half their level in 15 to 20 ms at every dynamic, Brass Plume'
 on average (G3 to Bb5), growing out of a faint buzz. Its lips now lose less until they close on
 every cycle, as real lips do before tissue meets tissue, and the tongue plucks them harder the harder
 the player is blowing (fading out from Eb5 to G5, which already spoke quickly), so a breath that
-arrives gently still starts the note gently: the same notes now take 54 ms on average at a soft
-velocity, 30 ms at a middling one and 8 ms at a hard one.
+arrives gently still starts the note gently: the same notes now take 56 ms on average at a soft
+velocity, 32 ms at a middling one and 15 ms at a hard one.
 
 The sax is voiced closer to a real alto. Against the Iowa and Philharmonia altos, its peak near
 2.3 kHz was 8 to 13 dB too strong, which made it nasal and buzzy: it's now no more than 4 dB, and
@@ -100,6 +100,32 @@ weak near 1.2 kHz, and its low register was 9 to 12 dB too strong. The formant n
 1.4 kHz and the harmonics stand over the fundamental, as a real oboe's do: across 300 Hz to 3.3 kHz
 it's within about 5 dB of the two recordings (it was 7), and within 3 dB of Iowa's pianissimo (it
 was 6).
+
+From 0.13.11 the trumpet's slurs and starts and the sax's slurs sound like a player's:
+
+- A trumpet slur onto another partial kept the horn ringing on the old resonance, which moved away
+  under the lips, so they stopped: a third of all slurs fell nearly silent for a tenth of a second
+  (Bb3 to D4, for one). The horn's ringing now moves with the lips onto the new resonance, so a slur
+  is continuous, and no slur loses its note (this replaces the nudge that slurs from Eb5 to G#5
+  got).
+- A trumpet note from G4 to Eb5 started one to three semitones flat for 30 ms, then snapped up: its
+  lips, plucked hard, buzzed on their own frequency under the note before the horn took over. For a
+  note's first 20 ms they're now tuned up to it, as hard as the air behind them, so it starts on its
+  pitch.
+- A trumpet note from A3 to A4 buzzed for a tenth of a second or more before it spoke at mezzo
+  forte (B3 to E4, 100 to 160 ms), where a real trumpet's speaks in 10 to 30. The tongue's release
+  there now lets out more air, by the breath the note will hold (less the harder it's struck, and
+  none at forte, which speaks at once): across G3 to Bb5 a mezzo forte note reaches half its level
+  in 16 ms on average (it was 32) and a forte one in 7 (it was 15).
+- A sax slur across the octave key (E4 onto F4, or back) sounded a wrong note, often an octave
+  down, for 40 to 110 ms before the reed found the new one: the bore's ringing now moves with it
+  from the first resonance to the second, or back, and the wrong note is gone or a brief blip.
+- A sax slur slid through the pitches between its notes for about 60 ms, a glissando: its new
+  fingering's resonances moved in over 40 ms. They now move in over 15 ms, and a slur changes in
+  about 30 ms, as a real alto's does. An opening vent (the octave key) damps the low resonance at
+  once, so a slur up onto A4 no longer drops an octave and then lands a fifth too high.
+- The sax's Ab4 and A4 were 7 to 9 dB darker than the notes either side: they're now as bright as
+  their neighbours.
 
 ### The alien
 

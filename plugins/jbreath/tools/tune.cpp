@@ -140,6 +140,7 @@ Played playSteady(Model &m, int id, double len, double hz, double target = -1.0,
       const double airIn = std::min(1.0, breath / std::max(speak, 0.1));
       const float tongue = static_cast<float>(noise * std::exp(-i / (0.017 * kFs)) * airIn * airIn);
       m.behind = b; // (the breath the voice aims for)
+      m.holds = target;
       const float y = m.tick(static_cast<float>(breath + surge), 0.5f, len, tongue);
       if (i >= n - tail)
          out.push_back(y);

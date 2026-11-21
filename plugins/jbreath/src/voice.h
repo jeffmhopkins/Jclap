@@ -605,6 +605,7 @@ public:
       // threshold starts it late, and the slower, the later: the dynamic threshold.) A breath
       // attack has no tongue: the breath itself rises through both stages.
       const double target = targetBreath();
+      const double holds = releasing_ || levelNow_ <= 0.0 ? 0.0 : breathAt(settings_.model, speak_, levelNow_);
       const auto stage = [this](double to, double from, double up) {
          return to > from ? up : stop_ ? stopCoef_ : releasing_ ? releaseCoef_ : fallCoef_;
       };
@@ -676,6 +677,7 @@ public:
                tg = airTongue_[at];
             }
             models_[u][settings_.model]->behind = target;
+            models_[u][settings_.model]->holds = holds;
             sum += models_[u][settings_.model]->tick(b, static_cast<float>(emb_), len_[u], tg);
          }
          y = mute_.tick(sum * unisonGain_ * static_cast<float>(gainNow_) * (1.0f - mix));

@@ -52,6 +52,7 @@ public:
       pos_ = 0;
       running_ = false;
       morph_ = fade_ = 0;
+      carry_ = 0;
       pending_ = nullptr;
    }
    // The fingering's bore, scaled in frequency by `scale`, at `fs`. Its straight-through wave is
@@ -66,18 +67,30 @@ public:
             double highDamp = 1.0) {
       const bool newBore = &b != bore_ || fs != fs_;
       // (Another fingering under a sounding note: its resonances move from where they are to the new
-      // fingering's over kMorphSec, as a finger closing a hole changes the air column, instead of
+      // fingering's over morphSec_, as a finger closing a hole changes the air column, instead of
       // in one sample. Switched at once, the reed lost the note for a few cycles at every fingering
       // a bend or slur crossed, a crackle and a break in the tone.)
-      if (newBore && running_ && fs == fs_) {
+      // (With carry(), the modes are first moved along by that many places, their ringing with
+      // them, so the resonance the lips were playing on glides to the one they're slurring to.)
+      if ((newBore || carry_ != 0) && running_ && fs == fs_) {
+         double xr[kBoreModes], xi[kBoreModes];
          for (int i = 0; i < kBoreModes; ++i) {
-            fromS_[i] = i < n_ ? s_[i] : std::complex<double>(0.0);
-            fromC_[i] = i < n_ ? c_[i] : 0.0;
-            fromD_[i] = i < n_ ? d_[i] : 0.0;
+            const int k = i - carry_, src = k >= 0 && k < n_ ? k : i;
+            const bool moved = src == k || carry_ == 0;
+            fromS_[i] = src < n_ ? s_[src] : std::complex<double>(0.0);
+            fromC_[i] = src < n_ ? c_[src] : 0.0;
+            fromD_[i] = src < n_ ? d_[src] : 0.0;
+            xr[i] = moved && src < n_ ? xr_[src] : 0.0;
+            xi[i] = moved && src < n_ ? xi_[src] : 0.0;
          }
+         for (int i = 0; i < kBoreModes; ++i) {
+            xr_[i] = xr[i];
+            xi_[i] = xi[i];
+         }
+         carry_ = 0;
          fromN_ = n_;
          fromR0_ = r0_;
-         morphLen_ = std::max(1, static_cast<int>(kMorphSec * fs));
+         morphLen_ = std::max(1, static_cast<int>(morphSec_ * fs));
          morph_ = morphLen_;
       }
       bore_ = &b;
@@ -168,6 +181,11 @@ public:
       return y;
    }
    int modes() const { return n_; }
+   // How long another fingering's resonances take to move in (see set()).
+   void morphTime(double sec) { morphSec_ = sec; }
+   // Before the next set(), under a sounding note: move the modes by `places` (a lip slur from
+   // one partial to another, the next set() taking the new one's resonances), see set().
+   void carry(int places) { carry_ = running_ ? places : 0; }
 
 private:
    // The bell's straight-through wave now: `rev`, its taps reversed and padded to whole kLanes,
@@ -203,6 +221,12 @@ private:
          } else {
             const bool from = i < fromN_, to = i < toN_;
             s_[i] = from && to ? (1.0 - w) * fromS_[i] + w * toS_[i] : from ? fromS_[i] : toS_[i];
+            // (A resonance the new fingering damps more, as an opening vent does, is damped that much
+            // at once: eased in with the rest, a slur up onto the octave key's notes left the first
+            // resonance ringing freely part way and the reed fell onto it, an octave down, then
+            // jumped to a fifth over the note.)
+            if (from && to && toS_[i].real() < fromS_[i].real())
+               s_[i] = std::complex<double>(toS_[i].real(), s_[i].imag());
             c_[i] = (from ? (1.0 - w) * fromC_[i] : 0.0) + (to ? w * toC_[i] : 0.0);
             d_[i] = (from ? (1.0 - w) * fromD_[i] : 0.0) + (to ? w * toD_[i] : 0.0);
          }
@@ -253,7 +277,8 @@ private:
          firRev_[padded_ - 1 - t] = fir_[t];
    }
 
-   static constexpr double kMorphSec = 0.04, kFadeSec = 0.005;
+   static constexpr double kFadeSec = 0.005;
+   double morphSec_ = 0.04;
    static constexpr int kMorphStep = 8; // samples between the morph's steps
    const BoreFingering *bore_ = nullptr, *pending_ = nullptr;
    double pendingScale_ = 1.0;
@@ -261,6 +286,7 @@ private:
    int n_ = 0, n0_ = 1, taps_ = 0, pos_ = 0, fromN_ = 0, toN_ = 0, morph_ = 0, morphLen_ = 1;
    int fade_ = 0, fadeLen_ = 1, oldPadded_ = 0, oldN0_ = 1, padded_ = 0;
    bool running_ = false;
+   int carry_ = 0;
    static constexpr int kLanes = 8, kMirror = kMaxTaps + kLanes;
    // Each mode's pole, residues and state, their real and imaginary parts apart (see history()).
    double zr_[kBoreModes] = {}, zi_[kBoreModes] = {}, cr_[kBoreModes] = {}, ci_[kBoreModes] = {};
