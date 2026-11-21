@@ -65,10 +65,11 @@ std::string grid(const Pattern &p) {
    for (int i = 0; i < p.steps; ++i) {
       const Hit &h = p.at(i);
       if (h.on() && (h.push || h.run || h.chance < 100 || h.nudge || h.art != kArtAsWritten || h.voicing >= 0)) {
-         char buf[96];
-         std::snprintf(buf, sizeof buf, " [%d:%s%s%s%s%s]", i, h.push ? "push " : "", h.run ? "run " : "",
+         char buf[128];
+         std::snprintf(buf, sizeof buf, " [%d:%s%s%s%s%s%s]", i, h.push ? "push " : "", h.run ? "run " : "",
                        h.chance < 100 ? ("p" + std::to_string(h.chance) + " ").c_str() : "",
-                       h.art != kArtAsWritten ? kArtNames[h.art] : "", h.nudge ? (" n" + std::to_string(h.nudge)).c_str() : "");
+                       h.art != kArtAsWritten ? kArtNames[h.art] : "", h.nudge ? (" n" + std::to_string(h.nudge)).c_str() : "",
+                       h.voicing >= 0 ? (" v" + std::to_string(h.voicing)).c_str() : "");
          extra += buf;
       }
    }
