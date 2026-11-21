@@ -1787,6 +1787,93 @@ in 0.9.0, each with a test where a test could hold it, except two judgement call
   picks rather than always the 3-b7-9 inversion, and the roll doesn't draw the run into the next pass's
   first bar from the view's last (it draws the runs inside the view).
 
+## Part M. The ninth review (2026-11-21)
+
+A ninth cold pass, split as before (styles and genres; endings, meters and the reharm; fills and
+energy; harmony and voicing; the engine, plugin and rolls), reproduced every finding with `jcomp-dump`
+or a probe program. It found 72 problems (11 high, 31 medium, 30 low); these were fixed in 0.10.0,
+each with a test where a test could hold it, except the few noted at the end. Two fixes of 0.9.0 were
+turned back: DENSITY's thinning of a one-bar fixed figure (a figure that is the style, the bell, the
+batida, Freddie Green's four, loses nothing below the middle now, as a clave figure didn't), and the
+naming of the three-note rootless dominants (see below).
+
+- **Harmony and voicing.** The stock left-hand forms 3-7-9 and 7-3-13 (Levine [2] ch. 3) were named
+  as the tritone sub's 7#5 or 7#9 (E Bb D as Gb7#5), so the bass played a tritone away; the unaltered
+  dominant wins. nameChord broke ties by absolute pitch class, so 40 of 252 inversion classes were
+  named differently by key (Am7/G in one key, C6/G in another); candidates are counted up from the
+  bass, and of two whole readings the one with a third wins (Cm11, not F13sus over Eb). A whole chord
+  over its own third took the slash-bass reading (Cadd9/E as Gsus/E, C7#9/E as Cm7/E); it is itself.
+  The keys' fifth below (0.9.0) went up to five semitones under FLOOR; it never does. A new chord's
+  fresh voicing could carry a minor-ninth rub the best one lacked (Quiet Storm's B13sus); it can't.
+  4THS gave no m9 its 9th at five voices and dropped a m7b5's b5 and a minor-major's 7th; the levels
+  go on down until a stack holds the 9th, and a b5 or a maj7 over a minor third stays. OCTAVES and SHELL
+  put a major seventh a half step under a doubled root (Pease and Pullig rule it out); the seventh
+  takes the root's place, and the shell's upper part skips the root. ROOTLESS at three notes dropped a
+  #11 or #5. SPREAD's triad at five voices gave four notes (the doubled fifth was one pitch class); the
+  stack's lowest note is doubled an octave up. A guitar's grip on a maj7, a 13th or an m11 was often
+  one no hand can fret (70 of 348 at five voices); close grips over the root are offered where the
+  fifth-and-octave one can't be fretted (26 left at five, none at four). A thinner voicing won by
+  moving less; a voice short of what fits costs a little.
+- **Styles and the reharm.** The Dorian Groove's counter-rhythm never touched the One, and its loud
+  sections got it most (Vincent's *Funk*; the code's own "Funk is on the One"); it starts on the One.
+  The son montuno changed chord once a bar, half the guajeo's harmonic rhythm (Moore's I IV V IV in
+  one clave, via Wikipedia's *Guajeo*); two chords a bar, the and of 2 anticipating beat 3. Its octave
+  line leapt a sixth where the window cut the root off; the strokes after the first may dip a fourth
+  under it. Freddie Green's four was three equal notes with random lengths (Pettersen: 1 and 3 a
+  little longer, the low string only touched); 1 and 3 are held longer and the low note is lighter, and
+  mutations no longer chop it, the bossa's fingers or Held Comp. The gospel shout's chords struck the
+  left hand's bass key again; an organ's chord over its own left hand leaves it out. The "left hand"
+  mutation put the organ bubble's bass on 1 and 3 (Berklee's *Bubblin'*: all the upbeats); not into an
+  offbeat take. The Quiet Bossa was the batida at a slower tempo (kSparse did nothing to a three-chord
+  bar); it has a thinner figure of its own, and Charleston Comp loses the no-op too. Chic's chucking
+  was one bar on one shape; the second bar answers, stab-oriented. The Bell Twelve strummed five
+  strings at one level on every stroke (Wikipedia's *Highlife*: arpeggiated, two-finger); three
+  strings and an accent on stroke 1. The clav riff climbed past its window; its octave fits under the
+  top. WEIRD's approach chord was the chord itself under a falling slash bass (I to I9 to V/3); not
+  where the bass already moves by step. A locked section kept its grid between 4/4 sixteenths and
+  12/8; it is made again. The bolero ended on the cha-cha cell (MMA's BoleroEnd broadens); it ends on
+  its tresillo, held. Some section joins left a secondary dominant hanging (the swing chorus's VI7
+  into the bridge's III7, the salsa bridge's V/vi, the bolero's pre-chorus V7 into iv, the waltz
+  chorus's V7 into IV); each now resolves.
+- **Fills, endings and energy.** A montuno's fill down cleared its pushes, so it played the old chord
+  on the and of 4; it keeps them. Held, legato styles' endings chopped their penultimate bar; the
+  strokes before the last ring. A skank at energy under 0.15 rang for a whole bar, chorus energy added
+  un-chopped chords to choked styles, and swing fills added soft chords on the beats; a choked style
+  stays chopped and a swing fill's fill-in is off the beats (keyed on swung eighths, not the swing
+  amount). A fixed figure's fill jumped its last stroke to a raw accent and pushed where its style
+  doesn't (the cha-cha, the bell); it comes up from the take's level and pushes only with the style.
+  The gospel shout's fill accent never fired; it does. Fills skipped the player, so an organ's fill
+  went detached; an organ's fill holds. The fill pushed a riff's last note to the next chord's degree;
+  a line isn't pushed. Held-chord mutations added unrung eighths, re-struck ambient's held chords, and
+  "push it" rang a skank; mutations keep the style's articulation. Mirror Drift's fill re-struck its
+  held chord half way through the bar; a bar that only holds has no fill. A fill made from the take's
+  last bar was scaled for energy twice; once. The fill's left hand was the take's first bar, not the
+  one it replaces. Several fills were the groove itself (Sixties R&B, Two-Step); the last beat rests
+  and its "and" leads in. Blending brought another style's ghost mutes into held styles; onsets only.
+- **The engine, plugin and rolls.** A push below the middle of LENGTH was still treated as tied, so
+  the beat it led to was silent; only a tied push holds the beat. A tied push ignored LENGTH toward
+  legato; it follows it, and a chopped push isn't tied at all. A looping section with a switch queued
+  counted every slot as a change and cut long chords at each half bar; the section's end is the
+  pass's. VARY never swapped a take with SAME DICE at 1, 2 or 4 (a constant salt); each section throws
+  its own dice from its seed. A late switch left the old section's pushed band hit ringing over the new
+  bar 1; the switch clears it. ACC on a pushed chord lost its tie and nudge; it keeps both. A start or a
+  loop inside a fill bar played the take; the bar's fill, fill down or ending is decided there too.
+  RUNS SHORTEN missed the chord struck where a late run was decided; it is cut at the run's first note.
+  The host's recipe change could be lost to the order of a flag and its value; the value is stored
+  first. Turning SONG on mid-play left a looped section at the next bar line; it waits for the pass's
+  end, or (following the host) lands where the song is. The panel's tile showed the fill, section and
+  take a lookahead early; it shows the bar heard. Copying another section's chords didn't round its
+  bars to the progression; it does. The rolls threw the run dice for the view's bar, never drew the
+  turnaround run into the next pass or page, started every page afresh, dropped a run into a band hit,
+  ignored VARY's soft-hit drops, and ignored HALF STEP FROM BELOW and LANDS ON; they now follow the
+  engine (a take's view is played from bar 1 and a bar past it, and cut out). The README's loop
+  promise was overstated (a first pass entered from before the loop can differ a little); it says so.
+- **Left as judgement, or for later.** SONG plays each section once (B08); an editable song structure
+  is planned as its own change. Afrobeat's Interlock still lets the tenor line take the chord chop's
+  place where both strike (both together need a hit that carries two parts). A 4THS C9 at four voices
+  is still the 13th's stack (no four-note stack holds root, 3, 7 and 9). A fill's roll is still voiced
+  from the fill's own start, not from the take before it.
+
 ## Bibliography
 
 1. de Clercq, Trevor, and David Temperley. "A corpus analysis of rock harmony." *Popular Music* 30/1

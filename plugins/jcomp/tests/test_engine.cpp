@@ -360,6 +360,211 @@ static void roundEight() {
    }
 }
 
+// The ninth review's fixes (in a function of their own, for the Windows stack as above).
+static void roundNine() {
+   const auto find = [](const char *gn, const char *sn, int &g, int &st) {
+      for (g = 0; g < genreCount(); ++g)
+         if (std::string(genreAt(g).name) == gn)
+            for (st = 0; st < static_cast<int>(genreAt(g).styles.size()); ++st)
+               if (std::string(genreAt(g).styles[static_cast<size_t>(st)].name) == sn)
+                  return true;
+      return false;
+   };
+   const auto name = [](Ints n, bool slash = true) { return chordName(nameChord(n, slash), 0); };
+   int g = 0, st = 0;
+   // D01: the stock rootless left-hand forms are the unaltered dominant.
+   JCLAP_CHECK(name({52, 58, 62}) == "C9");
+   JCLAP_CHECK(name({64, 69, 70}) == "C13");
+   JCLAP_CHECK(name({41, 47, 52}) == "G13");
+   // D02: a shape is named the same in every key.
+   for (const Ints &shape : {Ints{52, 55, 57, 60}, Ints{55, 58, 60, 63}, Ints{48, 53, 55, 58, 62, 69}, Ints{52, 55, 58, 60}})
+      for (bool slash : {true, false}) {
+         std::string first;
+         for (int t = 0; t < 12; ++t) {
+            Ints n = shape;
+            for (int &x : n)
+               x += t;
+            Chord c = nameChord(n, slash);
+            c.root = static_cast<int8_t>((c.root - t + 12) % 12);
+            if (c.bass >= 0)
+               c.bass = static_cast<int8_t>((c.bass - t + 12) % 12);
+            const std::string got = chordName(c, 0);
+            if (t == 0)
+               first = got;
+            JCLAP_CHECK(got == first);
+         }
+      }
+   // D03: a whole chord over its own third keeps its quality.
+   JCLAP_CHECK(name({52, 55, 60, 62}) == "Cadd9/E");
+   JCLAP_CHECK(name({52, 55, 58, 63, 72}) == "C7#9/E");
+   JCLAP_CHECK(name({51, 55, 58, 62, 65, 72}) == "Cm11/Eb");
+   JCLAP_CHECK(name({55, 60, 65}) == "Csus/G");
+   // D04: the keys' fifth below never goes under FLOOR.
+   for (int floor = 36; floor <= 52; ++floor)
+      for (int root = 0; root < 12; ++root)
+         for (int under = floor + 3; under < floor + 24; ++under)
+            JCLAP_CHECK(bassNote(Chord{static_cast<int8_t>(root), kMaj, -1}, floor, true, false, under) >= floor);
+   // D08 and D13: 4THS keeps a half-diminished's b5; ROOTLESS at three keeps a #11.
+   {
+      VoiceSettings vs;
+      vs.shape = kQuartal;
+      for (int n : {3, 4, 5}) {
+         vs.voices = n;
+         Chord c;
+         JCLAP_CHECK(parseChord("Cm7b5", c));
+         const Voicing v = voice(c, nullptr, vs);
+         bool b5 = false;
+         for (int i = 0; i < v.count; ++i)
+            b5 = b5 || v.notes[static_cast<size_t>(i)] % 12 == 6;
+         JCLAP_CHECK(b5);
+      }
+      vs.shape = kRootless;
+      vs.voices = 3;
+      Chord c;
+      JCLAP_CHECK(parseChord("C7#11", c));
+      const Voicing v = voice(c, nullptr, vs);
+      bool s11 = false;
+      for (int i = 0; i < v.count; ++i)
+         s11 = s11 || v.notes[static_cast<size_t>(i)] % 12 == 6;
+      JCLAP_CHECK(s11);
+   }
+   // D09: OCTAVES never puts a major seventh right under a doubled root.
+   {
+      VoiceSettings vs;
+      vs.shape = kOctaves;
+      for (int n : {3, 4, 5})
+         for (int root = 0; root < 12; ++root) {
+            vs.voices = n;
+            const Voicing v = voice(Chord{static_cast<int8_t>(root), kMaj7, -1}, nullptr, vs);
+            for (int i = 1; i < v.count; ++i)
+               JCLAP_CHECK(!(v.notes[static_cast<size_t>(i)] % 12 == root && v.notes[static_cast<size_t>(i)] - v.notes[static_cast<size_t>(i - 1)] == 1));
+         }
+   }
+   // B06: the bolero broadens into its last chord, no cha-cha tag.
+   JCLAP_CHECK(find("Latin Jazz", "Bolero", g, st));
+   {
+      auto song = std::make_unique<Song>();
+      generateSong(recipeOf(g, st, 1), *song);
+      const Pattern &end = song->sections[kOutro].ending;
+      JCLAP_CHECK(!end.empty());
+      for (int s = 0; s < end.stepsPerBar(); ++s)
+         JCLAP_CHECK(!end.at(s).on() || end.at(s).len >= 4);
+   }
+   for (uint32_t seed = 1; seed <= 12; ++seed) {
+      // A01: Dorian Groove's chorus is on the One.
+      JCLAP_CHECK(find("Funk", "Dorian Groove", g, st));
+      {
+         auto song = std::make_unique<Song>();
+         generateSong(recipeOf(g, st, seed), *song);
+         const Pattern &p = song->sections[kChorus].takes[0];
+         for (int b = 0; b < p.bars(); ++b)
+            JCLAP_CHECK(p.at(b * p.stepsPerBar()).on() && !leftHand(p.at(b * p.stepsPerBar()).part));
+      }
+      // A03: the son montuno changes chord twice a bar in its verse.
+      JCLAP_CHECK(find("Salsa", "Montuno 2-3", g, st));
+      {
+         auto song = std::make_unique<Song>();
+         generateSong(recipeOf(g, st, seed), *song);
+         JCLAP_CHECK((song->sections[kVerse].split & 1) != 0);
+      }
+      // A07: the bubble's left hand stays off the beats in every take.
+      JCLAP_CHECK(find("Reggae", "Organ Bubble", g, st));
+      {
+         auto song = std::make_unique<Song>();
+         generateSong(recipeOf(g, st, seed), *song);
+         for (const Section &sec : song->sections)
+            for (const Pattern &p : sec.takes)
+               for (int s = 0; s < p.steps; s += p.stepsPerBar() / 2)
+                  JCLAP_CHECK(!(p.at(s).on() && leftHand(p.at(s).part)));
+      }
+      // A05, A12: a figure that is the style, and a held take, aren't chopped by a mutation.
+      for (const auto &[gn, sn] : {std::pair{"Swing Jazz", "Held Comp"}, std::pair{"Bossa Nova", "Batida"},
+                                   std::pair{"Bossa Nova", "Two-Bar Bossa"}}) {
+         JCLAP_CHECK(find(gn, sn, g, st));
+         auto song = std::make_unique<Song>();
+         generateSong(recipeOf(g, st, seed), *song);
+         for (const Section &sec : song->sections)
+            for (int t = 1; t < kTakes; ++t) {
+               const Pattern &p = sec.takes[static_cast<size_t>(t)], &p0 = sec.takes[0];
+               for (int s = 0; s < p.steps; ++s)
+                  JCLAP_CHECK(!(p.at(s).on() && p.at(s).art == kArtChop && !(s < p0.steps && p0.at(s).art == kArtChop)));
+            }
+      }
+      // C05: the cha-cha's and the bell's fill gains no push its style lacks.
+      for (const auto &[gn, sn] : {std::pair{"Latin Jazz", "Cha-Cha"}, std::pair{"Highlife", "Bell Twelve"}}) {
+         JCLAP_CHECK(find(gn, sn, g, st));
+         auto song = std::make_unique<Song>();
+         generateSong(recipeOf(g, st, seed), *song);
+         for (const Section &sec : song->sections)
+            for (int s = 0; s < sec.fill.steps; ++s)
+               JCLAP_CHECK(!sec.fill.at(s).push);
+      }
+      // C08: a riff's fill doesn't push its line's last note.
+      JCLAP_CHECK(find("Afrobeat", "Tenor Line", g, st));
+      {
+         auto song = std::make_unique<Song>();
+         generateSong(recipeOf(g, st, seed), *song);
+         for (const Section &sec : song->sections)
+            for (int s = 0; s < sec.fill.steps; ++s)
+               JCLAP_CHECK(!(sec.fill.at(s).push && sec.fill.at(s).part == kPartLine));
+      }
+      // C10: a choked style's takes never ring a chord.
+      JCLAP_CHECK(find("Reggae", "One Drop Skank", g, st));
+      {
+         auto song = std::make_unique<Song>();
+         generateSong(recipeOf(g, st, seed), *song);
+         for (const Section &sec : song->sections)
+            for (const Pattern &p : sec.takes)
+               for (int s = 0; s < p.steps; ++s)
+                  JCLAP_CHECK(!(p.at(s).on() && !leftHand(p.at(s).part) && p.at(s).len <= 1 &&
+                                (p.at(s).art == kArtRing || p.at(s).art == kArtTopRings)));
+      }
+   }
+   // A09: the clav riff stays in its window in every key.
+   JCLAP_CHECK(find("Funk", "Clav Riff", g, st));
+   for (int key = 0; key < 12; ++key) {
+      Recipe r = recipeOf(g, st, 1);
+      r.key = key;
+      auto song = std::make_unique<Song>();
+      generateSong(r, *song);
+      auto engine = std::make_unique<Engine>();
+      Engine &e = *engine;
+      e.setSong(*song);
+      Settings s = settingsFor(r);
+      applyRecipe(s, r);
+      s.section = kVerse;
+      s.key = song->key;
+      e.setSettings(s);
+      e.reset();
+      const auto out = runWith(e, 24000LL * 32, 0.0, [](int64_t, Block &) {});
+      for (const Timed &t : out)
+         if (t.on())
+            JCLAP_CHECK(t.m.data1 <= s.voicing.hi + 2);
+   }
+   // B05: a locked section is remade between 4/4 sixteenths and 12/8.
+   {
+      int g2 = 0, st2 = 0;
+      JCLAP_CHECK(find("Piano Ballad", "Ballad Block", g, st));
+      JCLAP_CHECK(find("Piano Ballad", "12/8 Ballad", g2, st2));
+      auto song = std::make_unique<Song>();
+      generateSong(recipeOf(g, st, 1), *song);
+      song->sections[kVerse].locked = 1;
+      const auto chords = song->sections[kVerse].chords;
+      generateSong(recipeOf(g2, st2, 1), *song, true);
+      JCLAP_CHECK(song->sections[kVerse].takes[0].rate == kRate8T);
+      JCLAP_CHECK(song->sections[kVerse].chords == chords);
+      generateSong(recipeOf(g, st, 1), *song, true);
+      JCLAP_CHECK(song->sections[kVerse].takes[0].rate == kRate16);
+   }
+   // E04: each section throws its own dice.
+   {
+      Section a, b;
+      a.seed = 1;
+      b.seed = 2;
+      JCLAP_CHECK(sectionSalt(a) != sectionSalt(b));
+   }
+}
+
 int main() {
    // ---- chord names ----
    {
@@ -2157,15 +2362,19 @@ int main() {
                JCLAP_CHECK(!d.empty() && d.rate == sec.takes[0].rate);
                JCLAP_CHECK(d.count() <= std::max(2, sec.fill.count()));
                if ((genreAt(g).styles[static_cast<size_t>(st)].mods & kFixed) && !intro) {
-                  // A fixed figure settles as itself: its onsets are the take's (Freddie Green's four,
-                  // the clave's side), the last chord rung.
-                  for (int k = 0; k < d.steps; ++k)
-                     JCLAP_CHECK(!d.at(k).on() || sec.takes[0].at(k % sec.takes[0].steps).on());
-               } else
+                  // A fixed figure settles as itself: its onsets and pushes are the take's (Freddie
+                  // Green's four, the clave's side, a montuno's and of 4 into the next chord).
+                  for (int k = 0; k < d.steps; ++k) {
+                     const Hit &w = sec.takes[0].at(k % sec.takes[0].steps);
+                     JCLAP_CHECK(!d.at(k).on() || w.on());
+                     JCLAP_CHECK(!d.at(k).push || w.push);
+                  }
+               } else {
                   for (int k = d.stepsPerBar() - d.perBeat(); k < d.steps; ++k)
                      JCLAP_CHECK(!d.at(k).on());
-               for (int k = 0; k < d.steps; ++k)
-                  JCLAP_CHECK(!d.at(k).push);
+                  for (int k = 0; k < d.steps; ++k)
+                     JCLAP_CHECK(!d.at(k).push);
+               }
             }
             const bool waltz = genreAt(g).styles[static_cast<size_t>(st)].mods & kWaltz;
             JCLAP_CHECK_EQ(static_cast<int>(song->beats), waltz ? 3 : 4);
@@ -2822,6 +3031,7 @@ int main() {
          Settings s = plain();
          s.density = 1.0;
          s.swing = 0.64;
+         s.swingFeel = 1; // swung eighths (C18: the rule is a swing comper's, not a swung-sixteenths groove's)
          e.setSettings(s);
          e.reset();
          const auto all = runWith(e, 24000LL * 16, 0.0, [](int64_t, Block &) {});
@@ -2901,6 +3111,7 @@ int main() {
                      JCLAP_CHECK(last >= 0);
                      if (last >= 0 && std::string(genreAt(g).name) != "Funk")
                         JCLAP_CHECK(onBeat(sec.fill, last) || sec.fill.at(last).push ||
+                                    sec.fill.at(last).part == kPartLine || // a riff's last note is its own
                                     genreAt(g).family == kFamilies[6]); // an ambient drift's fill pushes nothing
                      if (last >= 0 && std::string(genreAt(g).name) == "Funk")
                         JCLAP_CHECK(!sec.fill.at(last).push);
@@ -3277,5 +3488,6 @@ int main() {
    }
 
    roundEight();
+   roundNine();
    return jclap::core::testResult();
 }

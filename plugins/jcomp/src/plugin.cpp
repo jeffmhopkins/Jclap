@@ -469,7 +469,10 @@ private:
             const double v = std::clamp(ev->value, kParams[ev->param_id].min, kParams[ev->param_id].max);
             // A recipe param set by the host (not the panel, which remakes the song itself): the song
             // is remade from it on the main thread.
-            if (isRecipeParam(ev->param_id) && v != values_[ev->param_id].load()) {
+            // (The value stored before the flag is raised: the main thread reads it once it sees the flag.)
+            const bool changed = v != values_[ev->param_id].load();
+            values_[ev->param_id].store(v);
+            if (isRecipeParam(ev->param_id) && changed) {
                if (ev->param_id >= kSectionEnergy && ev->param_id < kSectionEnergy + kSections)
                   remakeSections_.fetch_or(1u << (ev->param_id - kSectionEnergy));
                else {
@@ -481,7 +484,6 @@ private:
                }
                host()->request_callback(host());
             }
-            values_[ev->param_id].store(v);
          }
          return true;
       }

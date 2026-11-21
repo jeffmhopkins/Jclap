@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.9.0.
+Version 0.10.0.
 
 ![Panel](docs/panel.png)
 
@@ -36,9 +36,11 @@ JComp counts in 4/4 from the host's beat 0: its bars are the host's bars when th
 three-beat style (Jazz Waltz, Country Waltz, 6/8 Ballad) counts in bars of three beats instead: set the
 host to 3/4 (or 6/8) from its bar 1.
 While the host counts in (pre-roll) it waits for the first bar. A host loop plays the same notes on
-every pass, the first included: the song follows the host's bars, so a loop or a seek lands where the
-song is at that bar, and the player starts afresh there (its voicing, runs and left hand), so the
-first pass is the pass you'll hear every time. A start or a loop that lands a little past a bar line
+every pass, the first included when playback starts at the loop's start: the song follows the host's
+bars, so a loop or a seek lands where the song is at that bar, and the player starts afresh there (its
+voicing, runs and left hand). A first pass that comes in from bars before the loop arrives with the
+player's voicing (and a push or a run) from those bars, so it can differ a little from the passes after
+it; a run or a push at the loop's end still leads into the bar after the loop. A start or a loop that lands a little past a bar line
 (up to about 80 ms, a host's block) still plays that bar's first chord, a little late. DENSITY's fills, VARY and the chance hits roll the same way on every playback, so
 a render is the same every time.
 
@@ -343,9 +345,8 @@ playhead. Beside it, two knobs that change the whole part as it plays:
   plays sixteenths, so a montuno, a bossa or a Charleston stays on eighths), never under a chord still
   held, and never on a beat in an offbeat style (a skank, an offbeat stab) or a swung one (a swing
   comper adds offbeat stabs, not a pulse of chords). A figure played as written
-  (the batida, the montunos and guajeos, Freddie Green's four, the cha-cha) gets nothing added; below
-  the middle a two-bar clave figure keeps every stroke, but a one-bar figure (Freddie Green's four, the
-  cha-cha) thins as any take does, its thumb kept. The
+  (the batida, the montunos and guajeos, Freddie Green's four, the cha-cha) gets nothing added and
+  loses nothing below the middle: it is the style. The
   middle plays the take as written, and the same setting always gives the same pattern.
 - **LENGTH**: every chord shorter, down to a staccato chop, or longer, up to legato (held to the next
   chord). The middle plays the lengths as written.
@@ -377,9 +378,12 @@ to the next chord actually played.
   (bottom to top, about 14 ms a note), STRUM DOWN (9 ms apart), or STRUM BOTH (down on the beat, up
   on the off-beats).
 - **SAME DICE EVERY** 1, 2, 4 or 8 bars: the chance hits repeat, so they make a pattern of their own.
+  Each section throws its own dice (from its seed), so the pattern differs from section to section
+  and song to song, and VARY's take swaps come in with any setting.
   Following the host, every pass of a host loop plays as the first did (with SAME DICE off the dice
   count bars from where playback started, so a render from bar 5 is a performance of its own). A start
-  or a jump into the middle of a bar throws that bar's own dice and plays the take picked.
+  or a jump into the middle of a bar throws that bar's own dice and plays the take picked, or the
+  bar's fill or ending where it has one.
   **AUTO FILLS** every 4, 8 or 16 bars.
 
 ### TRANSPORT
@@ -646,6 +650,39 @@ down is the figure, the cha-cha and bolero end on the 1, and endings end on thei
 organ's SPREAD bass stays in every chord, a locked section follows a change between 3/4 and 6/8, a
 mid-bar start throws its own dice, and the rolls page through long progressions, draw fills over the
 bar they fill and draw the left hand as it plays.
+
+**The ninth review (0.10.0).** Five more cold passes ([docs/sources.md](docs/sources.md), Part M).
+The stock rootless left-hand forms (3-7-9, 7-3-13) are named as the dominant they are, a shape is named
+the same in every key, and a whole chord over its own third keeps its quality (C7#9/E, not Cm7/E).
+FLOOR holds for the keys' fifth below. 4THS gives a ninth chord its 9th and keeps a m7b5's b5 and a
+minor-major's 7th; OCTAVES and SHELL put no major seventh under a doubled root; ROOTLESS at three notes
+keeps a #11 or #5; SPREAD fills its fifth voice on a triad; a guitar's grip on a 13th or an m11 is one a
+hand can fret; a voicing a voice short of what fits costs a little; a fresh voicing for a new chord is
+never one with a rub the best lacks. DENSITY below the middle no longer thins a figure that is the
+style (it gets nothing added and loses nothing). A montuno's fill down keeps its pushes, held styles'
+endings ring, and a choked style stays choked at every energy, in its fills and in its takes. The son
+montuno changes chord twice a bar, its octave line no longer leaps a sixth, the Dorian Groove is on the
+One, Freddie Green's four holds 1 and 3 a little longer over a lighter low string, the gospel shout's
+chords leave the bass key to the left hand and its fill drives into the next section, the organ
+bubble's left hand stays off the beats, the Quiet Bossa is a quieter figure, Chic's chucking answers
+in a second bar, the Bell Twelve plays three strings with an accent on its first stroke, the clav riff
+stays in its window, the bolero broadens into its last chord, and some section joins resolve as they
+should (the swing chorus, the salsa bridge, the bolero's pre-chorus, the jazz waltz's chorus).
+Fills: a fixed figure's fill comes up from the take's own level and pushes only where the style
+does, a riff's last note isn't pushed, an organ's fill holds its chords, a fill made from the take's
+last bar is scaled once and leads into the change, a drift that only holds its chord has no fill, and
+the left hand in a fill is the bar's it replaces. Mutations keep a held take held (no chops, ghosts or
+answers), a choked one choked, the bubble's left hand off the beats, and blending brings in onsets,
+not another style's mutes. A locked section follows a change between 4/4 and 12/8. In the engine: a
+push below the middle of LENGTH isn't tied over (the beat it leads to is struck), a tied push follows
+LENGTH toward legato, a chopped push isn't tied, a looping section with a switch queued no longer cuts
+long chords at each half bar, VARY's take swaps happen, a late switch drops a band hit pushed from the
+old section, ACC keeps a pushed stroke's tie and its nudge, a start inside a fill bar plays the fill,
+RUNS SHORTEN cuts a chord struck where a late run starts, SONG turned on mid-play waits for the
+section's end (or, following the host, lands where the song is), and the panel's tile shows the fill,
+section and take of the bar heard. The rolls draw a page of a long progression and the turnaround run
+at the view's end as they play, drop VARY's soft hits, keep a run into a band hit, and follow HALF STEP
+FROM BELOW and LANDS ON. Copying chords from another section rounds the section's bars to the progression.
 
 **Left out for now.** A "+ GUITAR" second player layered over the first, and recording a part played
 in to a take.
