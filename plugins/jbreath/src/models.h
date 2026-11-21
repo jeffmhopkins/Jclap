@@ -1455,10 +1455,14 @@ private:
       lpDelay_ = kLpPitch * 2.0 * a * (std::cos(w) - a) / (1.0 - 2.0 * a * std::cos(w) + a * a) +
                  ta * (std::cos(w) - ta) / (1.0 - 2.0 * ta * std::cos(w) + ta * ta);
       refl_ = character.keep(static_cast<float>(kRefl));
-      // What's heard, as a real oboe's in front of it (fitted to the Philharmonia oboe's harmonics,
-      // Bb3 to F6): the fundamental highpassed under the harmonics, a broad bump near 900 Hz, the
-      // formant near 1.8 kHz, a shelf over 1.4 kHz and the top falling away past 4 kHz (scaled down
-      // with a bigger family member, the formant and shelf by less: they come from the reed).
+      // What's heard, as a real oboe's in front of it (fitted to the Philharmonia and Iowa oboes'
+      // harmonics at mezzo forte, C4 to B5): the formant near 1.2 to 1.4 kHz (two peaks), a shelf
+      // from 1 kHz lifting the harmonics over the fundamental, and the top falling away past
+      // 5.7 kHz (scaled down with a bigger family member, the formant and shelf by less: they come
+      // from the reed). The old fit's formant at 1.8 kHz left it 7 to 13 dB too strong near 2 kHz
+      // and its low register 9 to 12 dB too strong. (Its peaks and shelf are three quarters of the
+      // fit's, which matches as well: at the full fit a soft note pushed to speak started 5 dB over
+      // the note it settled to.)
       const double fam = member_;
       const double up = std::pow(fam, 0.3);
       if (std::fabs(fam - eqAt_) > 1e-3) {
@@ -1489,8 +1493,8 @@ private:
    static constexpr double kCut = 2.0, kCutMin = 400.0, kRefl = 0.985, kLpPitch = 1.3;
    static constexpr double kGamma = 0.8, kSpeakAt = 0.25, kGammaSpeak = 0.49, kZeta = 0.8, kLip0 = 0.6;
    static constexpr double kOut = 1.0, kOutTilt = 1.6, kLevel0 = 0.12;
-   static constexpr double kHpHz = 204, kHpQ = 0.86, kPk1Hz = 924, kPk1Q = 0.30, kPk1Db = 11.0, kPk2Hz = 1827,
-                           kPk2Q = 1.07, kPk2Db = 16.9, kHsHz = 1404, kHsDb = 3.2, kTopHz = 4059;
+   static constexpr double kHpHz = 120, kHpQ = 0.62, kPk1Hz = 1190, kPk1Q = 2.0, kPk1Db = 5.6, kPk2Hz = 1437,
+                           kPk2Q = 2.0, kPk2Db = 13.5, kHsHz = 1020, kHsDb = 6.0, kTopHz = 5700;
    static constexpr double kSoftAt = 0.7, kSoftDb = -7.2, kSoftHz = 3.00, kSoftGain = 4.0;
    Delay bore_, tip_;
    OnePoleLP lp1_, lp2_, tipLp_, breathLP_;
