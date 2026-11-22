@@ -18,7 +18,7 @@ line. Mutate any section until it sits right, edit any hit, then switch sections
 note or by automation. It plays with the host's transport, or on its own PLAY while the host is
 stopped.
 
-Version 0.17.0.
+Version 0.18.0.
 
 ![Panel](docs/panel.png)
 
@@ -39,7 +39,8 @@ host to 3/4 (or 6/8) from its bar 1. Where the host says where its bars start, a
 song's meter. A pickup at the project's start (a short bar followed by one in the song's meter) rests, as a count-in does, and the song's bar 1 is the
 bar after it; a short bar later in the song leaves the bar lines where they were; a host meter the style doesn't have (a waltz in a 4/4 project) leaves them on beat 0's, and a project whose every bar is shorter than the style's (2/4 under a 4/4 style)
 counts from beat 0 as if it had none, wherever playback starts (once JComp has seen the short bar
-followed by another, from the second playback on).
+followed by another, from the second playback on; the first playback rests the first bar as a pickup
+and keeps the song's bar 1 on the host's bar 2 until playback stops, rather than jumping mid-play).
 While the host counts in (pre-roll, in AUTO with PLAY on too), or plays before its bar 1, it waits for the first bar, in LOOP as in SONG (a bass
 played in the count-in brings nothing in). A host loop plays the same notes on
 every pass, the first included when playback starts at the loop's start: the song follows the host's
@@ -101,7 +102,8 @@ and JJazzLab):
 | Latin Jazz | **Bolero** (the tresillo ballad); **Mambo** (the 2-3 guajeo, always at its climax, and in its quieter sections the broken chord: the chord, then single chord notes, on the Montuno player, its octave line moving; its ending the broken chord's last bar, then its last chord anticipated on the and of 4); **Cha-Cha** (the quarters and the cha-cha-chá cell on the Montuno player, and at its climax mostly the 2-3 guajeo in octaves, its and of 4 bringing the next chord in untied) |
 | Rock | **Rock'n'Roll Triplets** (pounding triplets, quarters in the fourth bar); **Fifties Pump** (the dotted pickups) |
 | Soul | **Sixties R&B** (the pushed piano offbeats and the organ's answer) |
-| Calypso | **Calypso Strum** and **Calypso Piano** (1, the and of 2, 4; busier in the chorus, the one and four alone when quiet, as an intro mostly is) |
+| 90s R&B | **New Jack Swing** (stabs on swung sixteenths, in the chorus too) |
+| Calypso | **Calypso Strum** and **Calypso Piano** (1, the and of 2, 4; busier in the chorus, the one and the and of 2 alone when quiet, as an intro mostly is) |
 | Pop, Rock, Gospel, Blues | four-bar phrases in Dotted Pulse, Quarter Pound, Praise Walk-Up and Chicago Shuffle; Slow Blues gains its quarters with a pickup into 4 |
 
 ### HOW IT PLAYS
@@ -184,12 +186,12 @@ in AUTO, a cue made while stopped is for PLAY: the host's start places the song 
 a song that ends, NEXT in the last entry stays there (the song ends as it would), and NEXT never makes
 an entry shorter than SWITCH AT play longer. NEXT twice onto another entry of the section playing goes there; PREV from the first entry stays
 on it. A section played by hand that the structure leaves out plays at its own level. HOLD CHORD
-keeps its chord through a host loop's wrap or a jump, and in SONG the song stays where it is while
+holds the chord you hear when you press it, a line's or a top note's chord included, and keeps it through a host loop's wrap or a jump, and in SONG the song stays where it is while
 held (following the host, the held section doesn't start its bar 1 again at a wrap). Letting go of HOLD CHORD in SONG
 picks the song up where the host is (or, running on its own, at the pass's next boundary); following the host, the
 chord is held to the next bar line, where the song comes in at its place. Pressed while stopped, HOLD CHORD holds the
 first chord the next start plays. While a let-go waits for the bar line the button shows it let go,
-and pressing it again keeps the chord. PREV, RESTART or a tile pressed in an entry's last moment act as
+and pressing it again keeps the chord. PREV, RESTART or a tile pressed in an entry's last moment (the song's last one included) act as
 if pressed at its bar line, on the entry you hear (a tile for the entry playing does nothing), and a
 second NEXT after a cued switch arrives counts. NEXT in the last bar of an entry with a two-bar clave
 figure and an odd number of bars switches at the entry's end.
@@ -201,18 +203,24 @@ figure and an odd number of bars switches at the entry's end.
 The section's take now, and five children, each tagged with how it differs: *busier*, *sparser*,
 *push it*, *chop it*, *let it ring*, *shift*, *ghosts*, *top line*, *accents*, *run in*, *answer* or
 *left hand*, *voicing* (a chord or two in another voicing close by, the same notes' count and
-register, never an octave copy, the strokes unchanged), *lean* (a fixed figure's offbeats a touch
-lighter, its phrasing, never its notes), *turn* (a broken-chord line swapping two neighbouring
-notes), *come round* (an ambient drift's held chord struck again, softly, late in the bar), or for a
+register, never an octave copy, never clashing or rubbing more than JComp's own, a note fewer only
+where no full one is close; offered only where it brings other notes, the strokes unchanged), *lean*
+(one stroke of a fixed figure's bar a touch lighter, its phrasing, never its notes), *turn* (a
+broken-chord line swapping two neighbouring notes, only where that makes no repeated note and never
+a rung top note), *come round* (an ambient drift's held chord struck again, softly, late in the bar,
+once a hold and never louder than four fifths of the chord), or for a
 held take *restrike* (the chord struck again, softer, at its half bar or the next bar's one, once,
 with a beat of the chord held on either side; never in Ambient). *sparser* never takes out an accent, a bar's first chord or a 2-and-4 skank; *shift* moves
 only an offbeat chord; *chop it*, *let it ring* and *accents* leave the left hand as written and treat
 a quarter pulse's beats as one, and *chop it* isn't offered to a choked style; *accents* never moves a
-backbeat's accent, and in a four to the bar lightens 1 and 3, never 2 and 4; a fixed figure varies
-only by *lean* and *voicing*; a one drop gains only the stroke after its skank. The four takes always
-differ, and audibly where the style allows (the Afrobeat tenor line, the style, varies only its
-dynamics); the five children never repeat each other or a take. A chorus never gets a style's
-sparsest groove, and a blend with a clave genre keeps one clave.
+backbeat's accent or lightens a backbeat's 2 or 4, and in a four to the bar lightens 1 and 3; a
+fixed figure varies only by *lean* and *voicing*; a one drop gains only the stroke after its skank;
+Clav Riff varies by ghosts, its stabs and phrased note levels. The four takes always differ, and
+audibly where the style allows (the Afrobeat tenor line, the style, varies only its dynamics,
+phrased); the five children never repeat each other or a take, and a child the engine would play
+the same as another isn't offered. A chorus never gets a style's sparsest groove, nor one sparser
+than its verse's, and a blend with a clave genre keeps one clave and never fills a phrase's
+written rests.
 Click a child to put it in the song (the generation counts up); *back* takes the one
 before, the section as it was (its other takes, fills and ending too). A tag names each mutation
 once; *run in* is offered only to a player that plays runs, and never to a held style; a take that is
@@ -269,12 +277,12 @@ Its **ROOT** and **CHORD** (major, minor, 7, 9, 13, 7#9, 7b9, 7#5, m7, m9, maj7,
 its **BASS** (the root, or any note for a slash chord), and whether it **LASTS** the bar or half of it
 (a split bar has a chord in each half). Under them, the chord on a keyboard as JComp will voice it, led
 from the chord before it, and **TRY INSTEAD**: chords that could stand in (for a dominant its tritone sub,
-a sus, a 7#9 or the ii before it; for a major chord the relative minor or the iii; for a minor one
+a sus, a 7#9 or the ii before it, a m7b5 before a V into minor; for a major chord the relative minor or the iii; for a minor one
 the relative major or the IV7; the V of the next chord, the dominant a half step above it, or a passing
 diminished; or the chord richer or plainer), each offered only where its notes fit the key and the
-scale (in a Mixolydian song no Em7 or Cmaj7#11 on the I) and the chord after it (the backdoor only
+scale (in a Mixolydian song no Em7 or Cmaj7#11 on the I, nor a lydian IV in Mixolydian or a blues) and the chord after it (the backdoor only
 before a major chord, a tritone sub only where it resolves), the ones that lead to the next chord
-first (G7b9 into Cm). Click one to use it. RICHER makes a V7 into a minor chord a 7b9, sometimes a
+first (G7b9 into Cm), and never the next chord itself. Click one to use it. RICHER makes a V7 into a minor chord a 7b9, sometimes a
 7#9 or 7#5.
 
 **BAND HIT** writes a hit over the chord, as a chart does (JJazzLab's chord interpretations): **COMP**
@@ -301,7 +309,8 @@ pick it, drag it sideways to move it (its chord follows the bar), double-click t
 the roll, each hit's **VELOCITY**, **LENGTH** (down to a chop, up to ring), **CHANCE** and **NUDGE**:
 drag a bar, double-click for its default. **MUTATE THIS TAKE** mutates it once, never into a copy of
 the section's other takes. On the fill it keeps the lead-in and adds nothing after it; on the fill
-down and the ending only accents, let it ring, top line or a voicing: the onsets and pushes stay, and
+down and the ending only accents, let it ring, top line, a voicing, lean (fixed figures) or turn
+(broken chords): the onsets and pushes stay, and
 the ending's last chord stays rung and loudest, with nothing after it. Where nothing can vary (the
 Afrobeat tenor line, a one-chord drift's fill) it says *nothing to vary here*.
 
@@ -313,17 +322,20 @@ How every chord is voiced, for all sections:
   7th, the root below), 4THS (quartal: fourths, one of them perhaps a tritone or a third, holding the
   chord's third and seventh so the changes are heard, every voicing with a perfect fourth in it; at
   three and four voices the root is left to the bass before the fourths are given up, as a left hand
-  plays them (C9 is Bb E A D), and a triad is D G C E),
+  plays them (C9 is Bb E A D), and a triad is D G C E; the stacks with the most perfect fourths come
+  first, Dm7 D G C F and Fmaj7 E A D G),
   SPREAD (two hands: on keys the left hand's low note sounds with the chords on beats 1 and 3 and on
   a change of chord, and the chops and backbeats between are the right hand alone), ROOTLESS
   (Levine's A and B forms, the root left to the bass), OCTAVES (a close chord with its bottom note
   doubled on top, the montuno's right hand: hit by hit its octave line moves through the chord, 5, 3,
-  1, 3, by a step or a third, rather than repeating one block) or GRIP (a guitar's: the bass string, its fifth and octave,
+  1, 3, by a step or a third, rather than repeating one block; a seventh chord's line plays its fifth
+  or third as a stroke of its own, never an octave copy of the stroke before) or GRIP (a guitar's: the bass string, its fifth and octave,
   then the chord's third and colour close above; with three notes, the power chord; in a take with a
   bass of its own, a boom-chick or the palm-wine thumb, the strum leaves the bass strings to the
   thumb's two strings, the root's and the fifth's). A grip is one a hand can make on six strings in
   standard tuning, low on the neck, so a chord that comes round again is the same grip; where a chord
-  has an open-position shape (G 320003, D xx0232, E 022100, C7 x32310, B7 x21202), that's the one.
+  has an open-position shape (G 320003, D xx0232, E 022100, C7 x32310, B7 x21202, Dm7 xx0211, C6
+  x32210, G6 320000, Dm6 xx0201, D6 xx0202, E9 020102, Gmaj7 320002, Bm7 x20202), that's the one.
   A grip of fewer strings takes neighbouring ones, the lowest, or the top ones where the low cut
   would lose a naming tone (G7 at four strings is xx0001), and never needs more than four fingers;
   at four strings it keeps the third, the seventh and the colour (a 7#9's #9, a 13's 13th) before the
@@ -331,8 +343,11 @@ How every chord is voiced, for all sections:
   5 plays that many strings wherever a full grip fits in five frets (Fm7 1311xx), open chords aside.
   A slash chord
   (C/E) keeps its bass at the bottom in CLOSE, DROP 2, DROP 2+4, SHELL, SPREAD, 4THS and GRIP, and
-  its root above it (C/G is never an E minor over G), with VOICES notes in all in CLOSE and the drops;
-  SPREAD never doubles a seventh chord's slash bass in the right hand (D7/F# is F# D A C);
+  its root above it (C/G is never an E minor over G), with VOICES notes in all in CLOSE and the drops
+  and on VOICES strings in GRIP, with the open slash shapes C/G 332010, G/B x20003, C/E 032010, D/F#
+  2x0232 and Am/G 302210 (a window too narrow at five gets a voice fewer); SPREAD never doubles a
+  seventh chord's slash bass in the right hand, and at five voices doubles its root or fifth in the
+  middle instead (D7/F# is F# A D A C);
   ROOTLESS and OCTAVES leave it to the bass player. ROOTLESS adds the 9th to every minor seventh, the
   iii chord's included, as most pianists play it, though the 9th is outside the key there. OCTAVES and SPREAD start at four notes: VOICES 3 plays
   them as at four (an octave pair or a spread chord of three would lose the shape). A major seventh
@@ -349,8 +364,12 @@ How every chord is voiced, for all sections:
   seventh, and gives a 7#11 its 13th; at three voices a 13 chord is 7, 3 and 13. SHELL keeps an add9's
   9th, and at three voices every dominant is its root, 3rd and 7th (C7#9 C E Bb, C7/G G C Bb), m7b5
   keeping its b5 (C Gb Bb). DROP 2 and DROP 2+4 drop a triad at four from C E G C (G3 C4 E4 C5, C3 G3
-  E4 C5), and a DROP 2+4 too wide for the window plays DROP 2. OCTAVES doubles a 7#9's #9 in octaves (Eb E Bb Eb)
-  rather than putting it a half step under a doubled third. Three voices (a guitar's chop) avoid a half-step cluster when a plainer three will do.
+  E4 C5), a diminished or augmented triad in four notes too (Cdim Eb Gb C Gb), and a DROP 2+4 too
+  wide for the window plays DROP 2. OCTAVES doubles a 7#9's #9 in octaves (Eb E Bb Eb) rather than
+  putting it a half step under a doubled third. A chord whose every voicing clashes looks a little
+  lower for a clean one (DROP 2+4 first among DROP 2's: Dbmaj7 Ab Db F C). CLOSE at five voices
+  doubles a minor triad's third rather than leap. A minor chord no stack of fourths holds with its 9th
+  takes no 13th in 4THS (Am9 at three is D G C). Three voices (a guitar's chop) avoid a half-step cluster when a plainer three will do.
 - **CENTER**: where the voicings sit. **LEAD**: how much each chord is led from the one before (the
   least total movement) rather than placed at the center. **TOP MOVE**: the most the top voice should
   move, in semitones. **SPREAD**: the widest the upper part may be (a left hand's low note in SHELL,
@@ -389,7 +408,7 @@ Nothing rings over a change of chord: RING, LENGTH, a left-hand note and a top n
 at the next change. A change the take has no hit for (two chords in a bar, the second between hits)
 is struck where it comes, as the bar's first chord is played.
 - What of the chord it plays: CHORD, TOP (the top note alone), TOP 2, BASS (the left hand's root),
-  5TH (the fifth the bass alternates with: boom-chick's beat 3, the bossa thumb's second note, a
+  5TH (never under a slash chord's bass; the fifth the bass alternates with: boom-chick's beat 3, the bossa thumb's second note, a
   fifth below the root as a guitarist's thumb plays it; on keys
   the fifth below the root when the one above would crowd the chord, boom-chick's E3 then B2), or LINE
   (one note of a line: the degree of the chord the style wrote, as in the Superstition clav riff, the
@@ -397,7 +416,7 @@ is struck where it comes, as the bar's first chord is played.
   notes are held to its next note and don't cut the chord above them, nor the chord them; a key both
   hands play is let go only by the note that struck it last.
 - **RE-VOICE**: another voicing for this hit close by (the same notes' count and register, never an
-  octave copy), round to JComp's own again. **+ MUTATE HIT** changes
+  octave copy, never clashing or rubbing more than JComp's own), round to JComp's own again. **+ MUTATE HIT** changes
   one thing about it.
 
 ## PLAY
@@ -442,7 +461,8 @@ louder or equal one is the build-up fill. With *Intro sets up the verse* (on by 
 last bar going into the verse is a held chord setting up the band, not a fill (it takes the fill's
 place, so it needs *Fill into the new section* on). A fill down plays no louder than the groove it
 leaves, and a fill up no softer than the groove's accents, its last chord always anticipating the
-next section. **SWITCH AT** the
+next section (a backbeat fill pushes its last and of 4; a 12/8 fill rests on beat 4's first two
+triplets and pushes the third). **SWITCH AT** the
 next beat, bar (the default), 2 bars, 4 bars or the section's end. At the next beat the new section
 comes in mid-bar, its bars still on the host's bar lines. A clave figure (a montuno, a guajeo) keeps
 its phase to the host's bars, so a section starting on an odd bar, a jump or a loop never turns the
@@ -452,11 +472,12 @@ both.
 
 ### NOW PLAYING
 
-The chord sounding, big, the chord after it, its notes and its shape, and the take on a roll with the
+The chord sounding (in a line take, the chord its line plays), big, the chord after it, its notes and its shape, and the take on a roll with the
 playhead. Beside it, two knobs that change the whole part as it plays:
 
 - **DENSITY**: fewer or more chords. Below the middle the weakest hits drop out first (soft off-beats,
-  then off-beats, then the lesser beats, spread evenly over the knob's whole travel; each bar's first chord
+  then off-beats, then the lesser beats, each take's weakest strokes first, spread evenly over the
+  knob's whole travel so it thins steadily from just below the middle; each bar's first chord
   always stays, and so does the first chord after a change half way through the bar, and a line
   style's line). Above it, softer repeats of
   the chord sounding fill the gaps, eighths first, then sixteenths (only in a rhythm that already
@@ -490,9 +511,12 @@ chord before*. A chord rings to the next hit that plays this time (not one its c
 out) and lets go at the next chord of its hand; a fill or an ending is voiced on from the bar before
 it, as played; a chord tied over a page's downbeat is drawn from it; and in SONG, NOW PLAYING and the
 tile playing draw the entry's own dice and its closing chord. The rolls draw a section's first take:
-VARY's bars that borrow another take are heard, not drawn. EDIT
-shows the take as written, the hits you edit. Thinned hits don't cut a long chord short: at full LENGTH a chord holds
-to the next chord actually played.
+VARY's bars that borrow another take are heard, not drawn, and NOW PLAYING, the tile and the
+transport show the take that is set. A run into an entry's downbeat lands on that entry's own first
+hit and voicing, and is drawn so. EDIT
+shows the take as written, the hits you edit. In a take that holds its chords (and a held style),
+thinned hits don't cut a long chord short: at full LENGTH a chord holds to the next chord actually
+played; in a choked take, a chord rung on to its neighbour still lets go where a thinned neighbour was.
 
 ### FEEL
 
@@ -559,7 +583,8 @@ on its own channel under the comp, a four-note close voicing round middle C stru
 chord and held to the next (MMA's "Sus" grooves), however long that is. Route that channel to a pad
 or strings. It follows the chords wherever they come from, takes a pushed chord with the comp, rests
 while the comp rests (PLAY ONLY WHILE HELD, the song's end), lets go at once when it's switched off,
-and holds through a change of colour only (C7 to C9); each start voices it afresh. Give it its own
+and holds through a change of colour only (C7 to C9); each start voices it afresh, and moving its
+channel moves the chord held at once. Give it its own
 channel: on JComp's own a key both play is shared, and the pad takes it back when the comp's note ends.
 
 The keyboard shows the notes going out (top orange, bottom purple, inner blue) and what you hold
@@ -957,6 +982,26 @@ a slash bass; drops differ on triads; held Bb C E G is C7/Bb; and TRY INSTEAD pu
 next chord first. The rolls: runs into the next entry, under band hits and from fills, OCTAVES after
 runs, and the left-hand ending all match the engine (fills, band hits and OCTAVES: no differing
 cases), and a note struck just before a cut keeps its length.
+
+**The sixteenth review (0.18.0).** Five more cold passes ([docs/sources.md](docs/sources.md), Part T).
+Notes: a short bass note under a rolled chord with RHYTHM FROM BASS no longer leaves keys stuck on,
+and late keys and cuts leave no blips. HOLD CHORD holds the chord heard, a line take's too. Song: HOLD
+pressed while stopped starts the song where the host is, a stop or seek after a push keeps the next
+downbeat, a 2/4 or 3/4 project's first playback keeps its pickup footing, late presses at the song's
+end act at the bar line, a start inside a Half chord sounds it, and a free cue doesn't survive AUTO's
+handover. Takes: *accents* keeps a backbeat's 2 and 4, children and takes are heard apart as the
+engine plays them, *push it*, *busier* and *ghosts* work in every bar, *turn* makes no repeated notes
+and leaves fixed figures alone, *come round* stays soft and single, DENSITY thins steadily from just
+below the middle, and a choked take's rung chord lets go. Styles: a chorus never drops below its
+verse's groove, Calypso's quiet figure keeps the and of 2, New Jack Swing's chorus swings, the
+energies of Sixties R&B, Garland Pushes and Ballad Block run the right way, a blend keeps a phrase's
+rests, and backbeat and 12/8 fills push into the next bar. Harmony: 4THS prefers the stacks with the
+most fourths, the voicing pick never clashes more than JComp's own, OCTAVES' line on a seventh chord
+moves through its fifth instead of jumping octaves, slash chords keep VOICES notes in the drops and in
+GRIP (with open slash grips), more open grips, SPREAD fills a seventh over its third, dim triads drop
+in four notes, a chord whose voicings all clash looks lower, and TRY INSTEAD never offers the next chord.
+The rolls: runs into the next entry read that entry's take, band hits end with their entry, and every
+comparator run, SONG forms with four takes included, has no differing cases.
 
 **Left out for now.** A "+ GUITAR" second player layered over the first, and recording a part played
 in to a take.

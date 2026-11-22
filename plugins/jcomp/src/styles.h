@@ -165,9 +165,10 @@ inline const std::vector<Genre> &genres() {
        // The backbeat on 2 and 4 (Motown's and Memphis's guitar and keys); pumping eighths; the
        // gospel 3-3-2 push.
        // The 60s R&B piano's pushed offbeats and its answer (MMA's R&B groove: the piano's and the organ's
-       // parts, both played on piano here, each bar with its own chords: no bar left to one upbeat).
+       // parts, both played on piano here, each bar with its own chords: no bar left to one upbeat;
+       // the sparser of the two the quieter, so a chorus lifts to the busier).
        {{"....X.......X...", 0.3}, {"x-x-X-x-x-x-X-x-", 0.6}, {"x--x--x-x--x--x-", 0.8},
-        {"..x.x.x.x.x...x.|x.x.x...x...x.x.", 0.5}, {"....x.x.......x.|x.x.x...x...x...", 0.65}},
+        {"..x.x.x.x.x...x.|x.x.x...x...x.x.", 0.65}, {"....x.x.......x.|x.x.x...x...x...", 0.5}},
        {{"x-x-X-x-x-x-xxxx", 0.7}},
        {{kMajor, {"C|C7|F|Fm", "C|Am|F|G", "F|G|F|G", "C|F|C|F", "Dm7|G7|C|C", "C|C7|F Fm|C"}}},
        {{"Memphis Backbeat", "Backbeat", 96, kPlain, 0, 0b001, -1, kDrop2, 4, 55, 76, 64},
@@ -213,7 +214,9 @@ inline const std::vector<Genre> &genres() {
         {"Dilla Push", "Push", 90, kPushes | kRich, 0, 0b100}},
        "15"},
       {"90s R&B", kFamilies[0], kNeoSoulKeys, 0.5, 0,
-       {{"x--------.x-----", 0.35}, {"x..x..x.....x...", 0.6}, {"x.x...x.x...x.x.", 0.8}},
+       // (New Jack Swing's: its stabs on swung sixteenths, the MPC's swing, at every energy: a chorus
+       // on straight eighths would leave the swing nothing to move.)
+       {{"x--------.x-----", 0.35}, {"x..x..x.....x...", 0.6}, {"x..x..x.x..x.x..", 0.8}},
        {{"x..x..x...x.xxxx", 0.7}},
        // IVmaj7-iii7-vi7; bVImaj7-bVII-I; ii7-V7sus-Imaj9.
        {{kMajor, {"Fmaj7|Em7|Am7|Am7", "Fmaj7|Em7|Am7|Am7", "Abmaj7|Bb|C|C", "Dm7|G13sus|Cmaj9|Cmaj9", "Abmaj7|Bb|Fmaj7|G13sus", "Fmaj7|Em7|Dm7 G13sus|Cmaj9"}}},
@@ -275,10 +278,10 @@ inline const std::vector<Genre> &genres() {
        // Held comps (MMA's basic swing piano: 1 held, then the and of 3 held over the bar; Impro-Visor's
        // chord held to the and of 4); Freddie Green's four, an eighth or so a stroke ("chunk", "chit"), four
        // to the bar throughout (the two-feel is the bass's, not his); MMA's
-       // LongSS2 (1, 2, the and of 3, 4).
-       {{"x.....x.........", 0.35}, {"..x.....x.......", 0.45}, {"......x.......x.", 0.6}, {"x--.x--.x--.x--.", 0.8},
+       // LongSS2 (1, 2, the and of 3, 4), which Garland lifts to: his two offbeats alone are the quieter.
+       {{"x.....x.........", 0.35}, {"..x.....x.......", 0.45}, {"......x.......x.", 0.55}, {"x--.x--.x--.x--.", 0.8},
         {"x-------..x-----|x---------------", 0.3}, {"x--.....x--.....", 0.1}, {"x-------------..", 0.25},
-        {"x-------....o---", 0.4}, {"x...x.....x.x...", 0.55},
+        {"x-------....o---", 0.4}, {"x...x.....x.x...", 0.6},
         // The jazz waltz, in three: MMA's piano (1, its and, 2, 3), Impro-Visor's half and quarter,
         // the "2 and 3" comp that leaves the one to the bass, MMA's guitar.
         {"x.x.x...x...|x.x.x...x...|x...x...x...|x.x.x...x...", 0.6, 3}, {"x-------x---", 0.35, 3},
@@ -397,9 +400,10 @@ inline const std::vector<Genre> &genres() {
        // hand's arpeggio up the chord and back, the four-bar phrase whose third bar drops its one; in
        // 6/8 (the same twelve sixteenths, in two dotted quarters): the dotted quarters, the six eighths leaning on 1 and 4,
        // the left hand rocking under them. The half notes' lift (a chorus): the second half note
-       // broken into quarters on 3 and 4.
+       // broken into quarters on 3 and 4. (The ballad figure, sparser than the block pulse, is the
+       // quieter of the two: a chorus lifts to the quarters.)
        {{"x-------x-------", 0.35}, {"x.f.b.f.x.f.b.f.", 0.65}, {"xxxXxxxxxXxx", 0.6}, {"x--x--x--x--", 0.35},
-        {"x...x...x...x...", 0.5}, {"x.....x.x-------|x...x...x-------", 0.55}, {"b...3.5.8...5.3.|b.....5.8...5.3.", 0.45},
+        {"x...x...x...x...", 0.5}, {"x.....x.x-------|x...x...x-------", 0.45}, {"b...3.5.8...5.3.|b.....5.8...5.3.", 0.45},
         {"x---x---x---x---|x---x---x---x---|....x---x---x---|x---x---x---x---", 0.5},
         {"x-----x-----", 0.35, 6}, {"X.x.x.X.x.x.", 0.6, 6}, {"b.x.x.f.x.x.", 0.5, 6}, {"x-------x---x---", 0.75}},
        {{"x-------x.x.x.xx", 0.5}, {"xxxXxxxxxXXX", 0.6}},
@@ -495,9 +499,10 @@ inline const std::vector<Genre> &genres() {
         {"Interlock", "Interlock", 104, kInterlock | kShorts | kFixed, 0, 0b110}},
        "13, 14"},
       {"Highlife", kFamilies[5], kStrummer, 0.52, 0,
-       // Palm-wine two-finger interlock (the thumb on eighths, a finger on sixteenths between: the
-       // Koo Nimo article: the thumb alternating root and fifth, the finger a figure on the top
-       // strings); the dance-band 3-3-2; the guitar on the 12/8 bell.
+       // Palm-wine two-finger interlock (the Koo Nimo article: the thumb alternating root and fifth,
+       // the finger a figure on the top strings): here the thumb on 1, 2, the and of 2, 3, 4 and the
+       // and of 4 (each half bar a 2+1+1 under the chord pinched on the ands of 1 and 3), the finger
+       // on the sixteenths between; the dance-band 3-3-2; the guitar on the 12/8 bell.
        {{"b.x.f3b5f.x.b3f5", 0.75}, {"x..x..x.x..x..x.", 0.6}, {"X.x.xx.x.x.x", 0.7}},
        {{"b.x.f3b5f.x.xxxx", 0.7}, {"x.x.xx.xxxxx", 0.7}},
        // Dagomba patterns "emphasize two chords, the tonic major and the dominant seventh".
@@ -531,8 +536,10 @@ inline const std::vector<Genre> &genres() {
       // ---- added later: kept after the first 24 so a saved genre number keeps its genre ----
       {"Calypso", kFamilies[5], kStrummer, 0.5, 0,
        // MMA's calypso: 1, the and of 2 and 4 (its "C12'3"), the same every bar; a busier strum, and
-       // the bar's one and four alone, quiet (the strum's and the piano's both).
-       {{"x.....x.....x...", 0.5}, {"x.....x.x...x.x.", 0.75}, {"x...........x...", 0.3}},
+       // quiet, the bar's one and the and of 2 alone (the strum's and the piano's both): the and of 2
+       // is the push that makes the 3+3+2 lilt, and kept, a quiet bar is still calypso (MMA never
+       // drops it; 1 and 4 alone is a plain 3+1).
+       {{"x.....x.....x...", 0.5}, {"x.....x.x...x.x.", 0.75}, {"x.....x.........", 0.3}},
        {{"x.....x...x.x.xx", 0.7}},
        // I-V7, I-IV-V7-I.
        {{kMajor, {"C|G7|C|C", "C|F|G7|C", "F|C|G7|C", "C|F|G7|C|C|F|G7|C", "F|F|C|C|D7|D7|G7|G7", "C|G7|C|C"}}},
