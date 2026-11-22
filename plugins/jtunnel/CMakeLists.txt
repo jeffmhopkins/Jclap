@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.13.1)
+jclap_plugin_version(0.14.0)
 
 # Opus carries the audio, and mjansson/mdns (one public-domain header) finds tunnels on the network.
 # Both are fetched here because only JTunnel uses them.

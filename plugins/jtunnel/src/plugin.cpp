@@ -232,6 +232,10 @@ public:
       s.stateKeys = static_cast<int>(link_.state.size());
       s.stateUpdates = link_.state.updates();
       s.extension = link_.scriptConnected.load();
+      // A receiver learns it from the sender's own key, which a sender keeps too.
+      std::string sender;
+      if (!s.extension && link_.state.get("sender", sender))
+         s.extension = sender.find("\"extension\":true") != std::string::npos;
       s.inputPeak = inPeak_.exchange(0.0f);
       s.outputPeak = outPeak_.exchange(0.0f);
       return s;

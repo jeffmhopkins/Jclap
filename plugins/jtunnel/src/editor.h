@@ -34,7 +34,9 @@ struct TunnelStatus {
    // and the last event: status | data1 << 8 | data2 << 16, 0 before any.
    uint32_t midiEvents = 0, lastMidi = 0;
    // The side channel (state.h): the local server's port (0: none), its WebSocket clients, the keys
-   // held and how many changes have come in; and, sending, whether the Bitwig extension is talking.
+   // held and how many changes have come in; and whether there is Bitwig state: on a sender, the
+   // extension is talking; on a receiver, the sender says its extension is. The panel shows its
+   // side-channel row only then.
    uint16_t statePort = 0;
    int stateClients = 0, stateKeys = 0;
    uint32_t stateUpdates = 0;

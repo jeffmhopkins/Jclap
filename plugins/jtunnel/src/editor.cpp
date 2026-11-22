@@ -2,7 +2,8 @@
 // receiver share almost nothing. Top left is the tunnel (the name to send as, or what to listen to
 // and the tunnels found), top right the link: who is connected to whom, a few seconds of history
 // and the live readouts. The bottom row is the send format or the receive buffer, and the output.
-// 720 x 632 design grid scaled to the window.
+// Under them, while there is Bitwig state, a row for the side channel: 720 x 632, and 720 x 556
+// without it. The design grid is scaled to the window.
 
 #include "editor.h"
 
@@ -38,7 +39,9 @@ namespace {
 namespace ui = jclap::ui;
 
 constexpr float kDesignWidth = 720.0f;
+// The full panel, with the side channel's row, and the panel without it.
 constexpr float kDesignHeight = 632.0f;
+constexpr float kCompactHeight = 556.0f;
 constexpr float kHeaderHeight = 64.0f;
 
 // The house orange for what is live, a yellow for warnings.
@@ -849,16 +852,18 @@ public:
       outMeter_ = &add<ui::Meter>({676, 450, 14, 82});
 
       // The side channel: the DAW's state beside the audio, and where this computer can read it.
-      section({12, 556, 696, 64}, "");
+      // Only while there is Bitwig state to show: most tunnels have no extension behind them.
+      stateFrames_.push_back(&section({12, 556, 696, 64}, ""));
       stateLed_ = &add<ui::ActivityLed>({28, 564, 80, 22}, "STATE");
       stateLed_->setColor(kAccent);
       tips_.add(*stateLed_, "Flashes for each change in the DAW's state: clips, transport, mixer, device");
       stateLine_ = &add<ui::Label>({120, 566, 380, 18}, "", 0, visage::Font::kLeft, 0.72f);
       stateInfo_ = &add<ui::Label>({120, 588, 380, 16}, "", 0, visage::Font::kLeft, 0.75f);
       stateInfo_->setColor(ui::defaultTheme().dimText);
-      add<ui::Label>({512, 566, 180, 14}, "VIEWER AND API", kDim, visage::Font::kRight, 0.8f);
+      auto &viewerTitle = add<ui::Label>({512, 566, 180, 14}, "VIEWER AND API", kDim, visage::Font::kRight, 0.8f);
       stateUrl_ = &add<ui::Label>({492, 584, 200, 20}, "", kAccent, visage::Font::kRight, 0.72f);
       tips_.add(*stateUrl_, "Open in a browser on this computer to see the clip grid; a streaming app reads /state or /ws");
+      stateFrames_.insert(stateFrames_.end(), {stateLed_, stateLine_, stateInfo_, stateUrl_, &viewerTitle});
 
       buildMidiFilter();
 
@@ -1039,6 +1044,7 @@ private:
    void buildMidiFilter() {
       const ui::Rect card{236, 70, 472, 252};
       auto &backdrop = add<FilterBackdrop>({0, 0, kDesignWidth, kDesignHeight});
+      backdrop_ = &backdrop;
       backdrop.setCard(card);
       backdrop.onClose = [this] { showMidiFilter(false); };
       filterFrames_.push_back(&backdrop);
@@ -1118,6 +1124,7 @@ private:
    // What the side channel is doing: on a sender, whether the Bitwig extension is talking; on a
    // receiver, what has come from the sender; and the local address programs read it from.
    void syncState(const TunnelStatus &st, bool rx) {
+      showState(st.extension);
       stateLed_->setCount(st.stateUpdates);
       char line[96], info[96];
       unsigned color = 0;
@@ -1153,6 +1160,18 @@ private:
          stateUrl_->setText(st.active ? "No local port free" : "-");
          stateUrl_->setColor(ui::defaultTheme().dimText);
       }
+   }
+
+   // Shows or hides the side channel's row, and grows or shrinks the panel to match.
+   void showState(bool show) {
+      if (show == stateShown_)
+         return;
+      stateShown_ = show;
+      for (visage::Frame *f : stateFrames_)
+         f->setVisible(show);
+      const float height = show ? kDesignHeight : kCompactHeight;
+      move(*backdrop_, {0, 0, kDesignWidth, height});
+      setDesignSize(kDesignWidth, height);
    }
 
    // The common states before there is anything to show: switched off, or no socket.
@@ -1366,6 +1385,9 @@ private:
    ui::Label *midiLast_ = nullptr, *midiInfo_ = nullptr;
    ui::ActivityLed *stateLed_ = nullptr;
    ui::Label *stateLine_ = nullptr, *stateInfo_ = nullptr, *stateUrl_ = nullptr;
+   std::vector<visage::Frame *> stateFrames_;
+   visage::Frame *backdrop_ = nullptr;
+   bool stateShown_ = true;
    std::vector<ui::Section *> sections_;
    std::vector<std::string> names_;
    uint32_t lastLost_ = 0, lastConcealed_ = 0;
@@ -1376,14 +1398,19 @@ private:
 } // namespace
 
 std::unique_ptr<ui::Window> createEditor(EditorHost &host) {
-   return std::make_unique<ui::Window>(std::make_unique<Panel>(host),
-                                       ui::WindowOptions{static_cast<int>(kDesignWidth), static_cast<int>(kDesignHeight)});
+   // The panel has already sized itself for what it shows.
+   auto panel = std::make_unique<Panel>(host);
+   const ui::WindowOptions options{static_cast<int>(panel->designWidth()), static_cast<int>(panel->designHeight())};
+   return std::make_unique<ui::Window>(std::move(panel), options);
 }
 
 bool renderScreenshot(EditorHost &host, int width, int height, const char *pngPath, bool midiFilter) {
    Panel panel(host);
    panel.simulate(kHistory);
    panel.showMidiFilter(midiFilter);
+   // A height of 0: the panel's own shape at this width.
+   if (height <= 0)
+      height = static_cast<int>(std::lround(width * panel.designHeight() / panel.designWidth()));
    return ui::renderToPng(panel, width, height, pngPath);
 }
 

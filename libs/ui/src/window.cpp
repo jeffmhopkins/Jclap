@@ -40,10 +40,13 @@ struct Window::Impl {
    WindowOptions options;
    // Held while shown on screen: checks for a newer release, once per session.
    std::shared_ptr<void> updateCheck;
+   // The panel changed shape and the host may apply the new size later: Visage's own aspect ratio
+   // is taken again from the next resize.
+   bool newShape = false;
 };
 
 Window::Window(std::unique_ptr<visage::Frame> root, const WindowOptions &options)
-   : impl_(new Impl{{}, std::move(root), options, {}}) {
+   : impl_(new Impl{{}, std::move(root), options, {}, false}) {
    auto &app = impl_->app;
    app.addChild(impl_->root.get());
    app.onResize() += [this] {
@@ -53,6 +56,10 @@ Window::Window(std::unique_ptr<visage::Frame> root, const WindowOptions &options
             menu->setVisible(false);
             menu->exit();
          }
+      }
+      if (impl_->newShape) {
+         impl_->newShape = false;
+         impl_->app.setFixedAspectRatio(impl_->options.fixedAspectRatio);
       }
       layoutRoot();
    };
@@ -66,8 +73,25 @@ Window::Window(std::unique_ptr<visage::Frame> root, const WindowOptions &options
    app.setMinimumDimensions(options.width * options.minimumScale, options.height * options.minimumScale);
    // No onWindowContentsResized hook: it fires for every resize, the host's own included, and
    // echoing those back as request_resize makes hosts recurse or fight over the size.
-   if (auto *design = dynamic_cast<DesignFrame *>(impl_->root.get()))
+   if (auto *design = dynamic_cast<DesignFrame *>(impl_->root.get())) {
       design->onZoom = [this](float zoom) { setZoom(zoom); };
+      design->onDesignSize = [this, design](float designWidth, float designHeight) {
+         // The window's shape follows the panel's; its zoom stays as it is.
+         const float zoom = design->currentZoom;
+         WindowOptions &o = impl_->options;
+         o.height = std::max(1, static_cast<int>(std::lround(o.width * designHeight / designWidth)));
+         visage::ApplicationWindow &app = impl_->app;
+         app.setMinimumDimensions(o.width * o.minimumScale, o.height * o.minimumScale);
+         if (app.window())
+            setZoom(zoom);
+         else
+            app.setWindowDimensions(static_cast<int>(std::lround(o.width * zoom)),
+                                    static_cast<int>(std::lround(o.height * zoom)));
+         app.setFixedAspectRatio(o.fixedAspectRatio);
+         impl_->newShape = true;
+         layoutRoot();
+      };
+   }
 }
 
 // A DesignFrame keeps its aspect ratio, centred, when the host gives the window another shape.
