@@ -2504,6 +2504,126 @@ these were fixed in 0.20.0, with tests, except those noted at the end.
   beats. A 12/8 host is followed only by the triplet-grid styles: a straight-grid style in a 12/8
   project still reads the host's bar as six quarters.
 
+## Part W. The nineteenth review (2026-11-22)
+
+A nineteenth cold pass of 0.20.0, split as before (styles and genre idiom; song mode and transport;
+takes, fills, MUTATE and DENSITY; harmony and voicing; note output and the rolls), backed every
+finding with `jcomp-dump`, a probe program, the note fuzzer or the roll comparator. The harmony pass
+built 0.19.0's harmony.h beside 0.20.0's and swept both, about 1.05 million fresh voicings (every
+quality, root, slash bass, shape, VOICES 3 to 5 and the players' windows) and 20 led progressions in
+every key, then tagged every voicing that changed; the takes pass bred 40-generation adopt chains in
+every style; the rolls pass timed the panel's drawing. It found 54 problems (7 high, 23 medium, 24
+low, none critical; 45 the round before). About half were fallout from 0.20.0's own new rules, so
+several of 0.20.0's changes were reworked or taken back. They were fixed in 0.21.0, with tests,
+except those noted at the end.
+
+- **Styles.** 0.20.0's rule that a bar of three chords or fewer keeps every stroke near silence was
+  judged bar by bar, so a four-bar phrase thinned upside down: its sparse bars whole and its busier
+  turnaround cut to one stroke. It is now judged on the whole take, and a phrase's bar of quarters
+  keeps its beats as a pulse's do. The same rule beat the backbeat's, so Slow Blues' quiet backbeat
+  played 1, 2 and 4; a backbeat bar now keeps 2 and 4 alone. Only the boom-chick's left hand survived
+  near silence; the organ bubble, the boogie and the shout lost theirs, though there the left hand is
+  the figure (the bubble's upbeats are the left hand's, the chop only answers: Jenson [51], Splice
+  [70]; boogie-woogie is its left-hand bass [71]). A quiet take now keeps the left hand's notes on the
+  beats, and every note of a left hand all off the strong beats. 0.20.0's dotted rule knew only
+  gaps of three sixteenths, so Calypso's 3+3+2 written in eighths still filled in to beat 2 and the
+  and of 3 (the strum's own D DU U DU strikes them, Ukulele Magazine [69], but Calypso Piano's MMA
+  figure [61] blurs); a gap of three eighths now counts too (Calypso, Dotted Pulse, the bolero), and
+  a quiet dotted figure keeps its head, its first strokes a dotted step apart. Fill-ins landed a
+  sixteenth from Dilla Push's late stab, stuttering it, and a swung chorus (Jazz Waltz) filled to six
+  eighths a bar; a fill-in now keeps off a chord off the eighths, and a swung take gains one a bar at
+  most. backbeatTake accepted a take if one bar leaned on 2 and 4, so Samba's MMA phrase, whose fourth
+  bar does, thinned as a backbeat; every bar that strikes a beat must now. Praise Walk-Up's pre-chorus
+  dropped below its verse because the spiritual's phrase was labelled above the ballad comp it
+  outplays; it is relabelled (0.35), as is the Jazz Waltz's MMA guitar (0.3). A rest inside Neo-Soul's
+  Behind The Beat hold did nothing, as '-' reached back over it; a rest now ends a hold. Held Like
+  Strings' ending had an empty last bar; it strikes its last chord. The README's claims about the
+  quiet thinning and Ballad Block's verse are reworded to what the code does.
+- **Song mode and transport.** FILL pressed in a bar's last beat was lost; it now fills the whole
+  next bar, and like a take is taken back to a bar line it just missed. HOLD CHORD held the chord
+  before a change that only the left hand, the bass or the pad had sounded; it now holds the last
+  chord struck by any part. A 6/8 or 9/8 bar in a 12/8 project, since 0.20.0's 12/8 scaling was
+  decided bar by bar, jumped the song two bars ahead and then back to its entry's bar 1; the scaling
+  now holds from the playback's first 12/8 bar to its stop. RESTART, or NEXT onto AABA's next A,
+  pressed while the song waited to be placed on the host's bars was dropped; it now restarts the
+  entry. HOLD pressed in the lookahead before a change only the pad strikes played the next chord on
+  the pad for a sixteenth; a late tile, NEXT, PREV, RESTART or take, and HOLD at the song's end,
+  struck a pad again that should have rung on; the take-back now restores the pad that was sounding.
+  A start or a loop inside a held style's chord just before a hit its chance or VARY left out gave
+  silence to the next chord; the chase now looks at the hits that play this time. With SAME DICE
+  Never, a project with a pickup threw every bar's dice one bar ahead from the top; bar 1 now throws
+  bar 1's. A sync handover at another tempo cut the last chord to 10 to 19 ms; it now lasts the 20
+  ms floor (see the note output below).
+- **Takes, fills, MUTATE and DENSITY.** The finish step's restore of the parent's chord peak lifted a
+  whole riff (Clav Riff) by about 22% when its stabs went; it lifts chords only. *busier*, *ghosts* and
+  *answer* filled the gaps of an offbeat motor, house stabs and the ska double upstroke gaining stabs
+  on the e and the a (a ska guitar's upstroke and its double stay inside the offbeat, the review's
+  judgement after Ranglin's and Lynn Taitt's playing; the M1 organ stab, as on Robin S's "Show Me
+  Love", 1992, likewise), and the same mutations broke the dotted and syncopated figures that
+  shapeEnergy and the fill-ins already protect; nothing is now laid in such gaps (`fillsGap`), and a
+  syncopated figure's strokes aren't moved. WEIRD's chance hits fell on a motor's chops, dropping ska
+  upstrokes; they no longer do. Over adopt chains *sparser* outpaced *busier*, so pulse styles drifted
+  thinner (Driving Eighths, a family of eighth-note comping patterns in Harrison's *The Pop Piano
+  Book* [72]), *sparser* could take every stab of a riff over stabs, and *accents* drifted an even
+  motor into a mosaic of levels (89 against 60) and the Afrobeat tenor line off its own level, which
+  Fela's bands keep even (Veal [14]). *busier*, *sparser*, *ghosts* and *shift* now work a column at a
+  time, every bar alike; *busier* and *sparser* lean back toward the figure the take was written
+  from (`writtenFigure`) at the section's energy; a riff keeps a stab a bar; *accents* leaves at most
+  two strokes a bar off the figure's level; and a held take's second bows and a drift's returns can be
+  taken back, so they come and go rather than pile up. A ghost before a bar's first stab made
+  *accents* lighten it and *shift* move it; the bar's first sounding chord is now the anchor. The
+  four-on-the-beats branch of *accents* lightened beat 3 again every generation, to 0.56 of the One,
+  where Berens [20] has it a touch lighter; it lightens it once or restores it. DENSITY's fill-ins
+  ignored the dotted rule shapeEnergy obeys and blurred New Jack Swing's 3+3+2; the engine and the
+  rolls now use the generator's own test (`syncopatedTake`). The Ear didn't hear LENGTH, so at LENGTH
+  0 or 1 a child that only changed lengths was a dead button; the editor now passes LENGTH to
+  the litter and to MUTATE THIS TAKE. The step that adds one more mutation to a near copy took a voicing
+  in styles where voicing is the last resort (a house stab's chord memory); it now does so only in a
+  held style, a fixed figure, or where nothing else changes the child.
+- **Harmony and voicing.** All but two of the harmony findings were 0.20.0's own voicing rules. SPREAD's "major
+  triad over its third" rule hollowed Piano Ballad's default verse (B/D# a bare fifth over the bass),
+  applying a chorale rule to a pop pianist, whose slash chord is the named triad in the right hand
+  over the bass note in the left (Skoove [66]; Pianote [67]); it is taken out, the triad held whole.
+  The always-on slash rebuild spread CLOSE at three over 15 to 17 semitones, a six-fret stretch no
+  guitarist frets as a chop, and at four gave hollow octave-hole voicings; CLOSE over a slash bass now
+  prefers voicings close over it, inside an octave at three. ROOTLESS voiced as CLOSE dropped the
+  guide tones at three voices (G7/D as D F G, a sus sound); over a bass that isn't a guide tone it now
+  keeps the 3rd and 7th and leaves the root out, as Levine's three-note forms do [2]. OCTAVES' slash
+  maj7 kept its root by putting the 7 a half step under it in every stroke, scored as a clash by
+  JComp's own table; over a slash bass the 7 is now left out. DROP 2 and DROP 2+4 still doubled a
+  slash 7#5's #5 and a slash m7b5's b5 on top, against their own comment and the doubling rules of
+  Aldwell and Schachter [68]; a slash chord's double is now its root alone. The "a voice short" filter
+  kept a muddy five over a clean four (E7/B); mud is now weighed among the rebuilds first. An
+  augmented triad's or 7#5's voicing at five came out a voice short in narrow windows, and a 7#5 in
+  DROP 2 now doubles its root in the middle (an augmented triad in CLOSE at five has no voicing inside
+  SPREAD's span without its #5 twice, and stays at four). The new open grips' four-string cuts
+  counted as open grips for other chords (G11 at five played Fmaj7/G's 3x321x); an open grip now
+  counts only where every string is the chord's. TRY INSTEAD and the generator's minor-dominant colour
+  could put a 7#5 over its own fifth in the bass, which the voicer then dropped; they take the b9
+  there. Three-string grips of a slash augmented triad, a dim7 and a m7b5 lost the tone that names
+  them (pre-existing); they now keep it.
+- **Engine and rolls.** HOLD let go in SONG past the song's end let the comp's last strokes ring up to
+  1.5 beats into the silence; the let-go now cuts them at the bar line, and inside the song at the
+  next change. The rolls were recomputed every 33 ms frame, a GRIP style's taking 18 to 33 ms of the
+  UI thread; they are now kept and drawn again only when something they're drawn from changes, and
+  songLead's cache, which missed VARY, covers the whole feel. The 20 ms shortest cut was measured at
+  the new tempo at a stop or a jump, so a note struck just before a host stop in Sync AUTO lasted 6.9
+  ms; the time a note has sounded is now counted at the tempo it was placed at. HOLD pressed while
+  stopped held nothing until a chord sounded, and a let-go cancelled by pressing again still placed
+  the song at the bar line; both are fixed. Nashville Slip's slip note struck again a key the chord
+  before still held, an extra attack on Cramer's grace [18]; the slip is left out there. A chord
+  brought by RHYTHM FROM THE BASS just before the song's end rang up to 2 beats past it; it stops at
+  the end. Every comparator run, extended to the new cases, has no differing cases, and the fuzzer
+  finds no stuck, doubled, orphan or zero-length notes.
+- **Left as judgement or for later.** Palm-Wine's pinch (A11) is still struck as the Strummer's 9 ms
+  strum rather than plucked together. DENSITY's thinning of a ghost-laced take (C11) is spread over
+  the knob's first third in the generator's model, but the engine's render still loses more in the
+  first notches than that model says. In about fifteen two-groove styles the pre-chorus plays the
+  verse's groove (A12, as Part U already noted); the README says so. Takes, made without LENGTH, can
+  still sound alike at LENGTH 0 or 1. Three-string F6/G and Fmaj7#11/G keep the plain triad over the
+  bass, since their 6 or #11 over it would name another chord. voice()'s stack use (about 220 KB in an
+  unoptimised clang build, D12) is unchanged.
+
 ## Bibliography
 
 1. de Clercq, Trevor, and David Temperley. "A corpus analysis of rock harmony." *Popular Music* 30/1
@@ -2682,3 +2802,20 @@ these were fixed in 0.20.0, with tests, except those noted at the end.
     MusicRadar, "Guitar basics: getting started with offbeats,"
     https://www.musicradar.com/how-to/guitar-basics-getting-started-with-offbeats (as cited by the
     eighteenth review)
+66. Skoove. "Slash chords" (the triad in the right hand, the slash note in the left),
+    https://www.skoove.com/blog/slash-chords/ (as cited by the nineteenth review)
+67. Pianote. On slash chords (the same two-hand reading), https://pianote.com/blog/?p=1482 (as cited
+    by the nineteenth review)
+68. Aldwell, Edward, and Carl Schachter. *Harmony and Voice Leading* (on doubling: root or fifth, not
+    the tendency or altered tones). Not read; as cited by the nineteenth review.
+69. Ukulele Magazine. "Learn Calypso Strumming on Ukulele" (D DU U DU), https://ukulelemagazine.com/?p=37216
+    (as cited by the nineteenth review)
+70. Splice. "Reggae chord progressions: A beginner's guide" (the organ bubble),
+    https://splice.com/blog/reggae-chord-progressions/ (as cited by the nineteenth review)
+71. Wikipedia. "Boogie-woogie" (its left-hand bass figure), https://en.wikipedia.org/wiki/Boogie-woogie
+    (cited by the nineteenth review from general knowledge; not fetched)
+72. Harrison, Mark. *The Pop Piano Book.* Milwaukee: Hal Leonard (eighth-note comping patterns as a
+    style family; chapter not checked, as cited by the nineteenth review)
+73. Hutchinson, Robert. *Music Theory for the 21st-Century Classroom*, 14.6 "The 3-2 Son Clave,"
+    https://musictheory.pugetsound.edu/mt21c/ThreeTwoClave.html (the clave checks the nineteenth
+    review found correct)
