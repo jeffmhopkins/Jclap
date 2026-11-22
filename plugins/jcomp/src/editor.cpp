@@ -256,6 +256,15 @@ struct LiveFeel {
    double vary = 0.2;       // VARY: soft hits dropped now and then
    double bpm = 120.0;      // the style's tempo: the engine's shortest note (50 ms) in beats
    bool live = false;  // read from the panel (else EDIT's take as written: every hit, none added)
+   // Every field (a roll kept is drawn again only while none has changed: a new one goes here too).
+   bool operator==(const LiveFeel &o) const {
+      return density == o.density && length == o.length && runs == o.runs && swing == o.swing &&
+             swingFeel == o.swingFeel && same == o.same && every == o.every && fixed == o.fixed && shorts == o.shorts &&
+             freddie == o.freddie && fillInto == o.fillInto && introSetup == o.introSetup && autoFill == o.autoFill &&
+             thumb == o.thumb && longs == o.longs && runsIn == o.runsIn && sustainBass == o.sustainBass &&
+             onsets == o.onsets && runShorten == o.runShorten && runHalfStep == o.runHalfStep &&
+             runLandTop == o.runLandTop && vary == o.vary && bpm == o.bpm && live == o.live;
+   }
 };
 LiveFeel gFeel;
 
@@ -602,51 +611,59 @@ Preview takeAsPlayed(const Section &sec, const Pattern &p, int bars, const Voice
    return out;
 }
 
+// What a roll is drawn from beyond its own section: a voicing's settings, and the song a chain of its
+// entries runs through (kept as one copy: a number for each new one seen).
+bool sameVoicing(const VoiceSettings &a, const VoiceSettings &b) {
+   return a.shape == b.shape && a.voices == b.voices && a.lo == b.lo && a.hi == b.hi && a.center == b.center &&
+          a.floor == b.floor && a.topMove == b.topMove && a.maxSpan == b.maxSpan && a.lead == b.lead &&
+          a.noRubs == b.noRubs && a.doubleMiddle == b.doubleMiddle && a.sameShape == b.sameShape && a.key == b.key &&
+          a.scale == b.scale;
+}
+uint32_t songSeen(const Song *song) {
+   static Song seen;
+   static const Song *at = nullptr;
+   static uint32_t number = 0;
+   if (!song)
+      return 0;
+   if (song != at || *song != seen) {
+      seen = *song;
+      at = song;
+      ++number;
+   }
+   return number;
+}
+
 // In SONG, where the hands are at the end of each entry before `entry`, as the engine plays the song
 // from its start: every entry drawn through in the take playing, led on from the one before (an
 // inversion or an octave chosen in the intro carries through the song). Kept while nothing that
-// draws them changes, so the panel doesn't draw the song again every frame. False when the entry
-// before has nothing to lead from.
+// draws them changes (the song, the voicing, every LiveFeel field, the take, a held chord), so the
+// panel doesn't draw the song again every frame. False when the entry before has nothing to lead
+// from.
 bool songLead(const VoiceSettings &vs, int transpose, int key, int scale, bool runs, bool marks, int entry, RollState &out) {
    if (!gSong.song || entry <= 0 || entry >= gSong.song->entries())
       return false;
    const Song &song = *gSong.song;
-   uint32_t h = mix(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&song)), static_cast<uint32_t>(song.entries()));
-   for (int k = 0; k < song.entries(); ++k)
-      h = mix(h, static_cast<uint32_t>(song.entry(k)));
-   // (Everything of a section a roll draws: its takes, fills and ending hit by hit, its band hits.)
-   const auto hashPattern = [&](const Pattern &t) {
-      h = mix(h, static_cast<uint32_t>(t.steps | t.rate << 8));
-      for (int i = 0; i < t.steps; ++i) {
-         const Hit &x = t.at(i);
-         h = mix(h, static_cast<uint32_t>(x.vel | x.len << 8 | x.chance << 16 | static_cast<uint8_t>(x.nudge) << 24));
-         h = mix(h, static_cast<uint32_t>(x.art | x.part << 4 | x.run << 8 | x.push << 9 | static_cast<uint8_t>(x.voicing) << 10 | x.degree << 18));
+   struct Key {
+      uint32_t song = 0;
+      VoiceSettings vs;
+      int transpose = 0, key = 0, scale = 0, leadTake = 0, landAt = -1;
+      bool runs = false, marks = false, ends = false;
+      LiveFeel feel;
+      Chord over;
+      FillAt fillAt;
+      bool operator==(const Key &o) const {
+         return song == o.song && sameVoicing(vs, o.vs) && transpose == o.transpose && key == o.key && scale == o.scale &&
+                leadTake == o.leadTake && landAt == o.landAt && runs == o.runs && marks == o.marks && ends == o.ends &&
+                feel == o.feel && over == o.over && fillAt.p == o.fillAt.p && fillAt.bar == o.fillAt.bar &&
+                fillAt.patBar == o.fillAt.patBar && fillAt.bars == o.fillAt.bars;
       }
    };
-   for (const Section &sec : song.sections) {
-      h = mix(h, sec.seed * 31u + sec.bars);
-      h = mix(h, static_cast<uint32_t>(sec.split | sec.progBars << 16 | sec.energy << 24));
-      for (const Pattern &t : sec.takes)
-         hashPattern(t);
-      for (const Pattern *t : {&sec.fill, &sec.fillDown, &sec.ending})
-         hashPattern(*t);
-      for (uint8_t m : sec.marks)
-         h = mix(h, m);
-      for (const Chord &c : sec.chords)
-         h = mix(h, static_cast<uint32_t>(c.root * 64 + c.quality + (c.bass + 1) * 4096));
-   }
-   for (int v : {vs.shape, vs.voices, vs.lo, vs.hi, vs.center, vs.floor, transpose, key, scale, runs ? 1 : 0, marks ? 1 : 0,
-                 gLeadTake, gFeel.same, gFeel.every, gSong.ends ? 1 : 0, gFeel.fillInto ? 1 : 0, gFeel.introSetup ? 1 : 0,
-                 gFeel.autoFill, gFeel.fixed ? 1 : 0, gFeel.live ? 1 : 0})
-      h = mix(h, static_cast<uint32_t>(v + 1000));
-   h = mix(h, static_cast<uint32_t>(gChordOverride.none() ? 0 : 1 + gChordOverride.root * 64 + gChordOverride.quality));
-   for (double d : {gFeel.density, gFeel.length, gFeel.runs, gFeel.swing})
-      h = mix(h, static_cast<uint32_t>(std::lround(d * 10000.0)));
-   static uint32_t cachedKey = 0;
+   const Key now{songSeen(&song), vs, transpose, key, scale, gLeadTake, gLandAt, runs, marks, gSong.ends, gFeel, gChordOverride, gFillAt};
+   static Key cachedKey;
    static std::vector<RollState> cached;
    static std::vector<char> cachedOk;
-   if (cachedKey != h || cached.empty()) {
-      cachedKey = h;
+   if (!(cachedKey == now) || cached.empty()) {
+      cachedKey = now;
       cached.clear();
       cachedOk.clear();
       const RollSong was = gSong;
@@ -689,8 +706,8 @@ bool songLead(const VoiceSettings &vs, int transpose, int key, int scale, bool r
 // A take's view is played from the section's bar 1 and the view cut out of it (bars 5-8 of an 8-bar
 // progression), so its voicings, its pushes tied in and its runs are the ones
 // the engine plays there, not a fresh start.
-Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSettings &vs, int transpose, int key,
-                int scale, bool runs = true, int firstBar = 0, bool marks = true) {
+Preview previewNow(const Section &sec, const Pattern &p, int bars, const VoiceSettings &vs, int transpose, int key,
+                   int scale, bool runs, int firstBar, bool marks) {
    const bool take = std::any_of(sec.takes.begin(), sec.takes.end(), [&](const Pattern &t) { return t == p; });
    const int perBar = p.stepsPerBar();
    // (And a bar past the view: the turnaround run into the next pass's or page's downbeat is drawn
@@ -766,6 +783,75 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          out.hits.push_back(x);
       }
    return out;
+}
+
+// The same, kept: the panel draws its rolls every frame, and a roll drawn from the song's start (a
+// GRIP style's most of all) took most of a frame. Drawn again only when something it's drawn from
+// changes: its section and pattern (which they are, and every hit of them), the arguments, the
+// song, and every global a roll reads (the feel, the entry, the take led from, a held chord, the
+// fill it's led into).
+Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSettings &vs, int transpose, int key,
+                int scale, bool runs = true, int firstBar = 0, bool marks = true) {
+   struct Key {
+      const Section *secAt = nullptr;
+      const Pattern *pAt = nullptr, *fillP = nullptr;
+      Section sec;
+      Pattern p, fill;
+      VoiceSettings vs;
+      int bars = 0, transpose = 0, key = 0, scale = 0, firstBar = 0, leadTake = 0, landAt = -1;
+      int fillBar = -1, fillPatBar = 0, fillBars = 1;
+      bool runs = false, marks = false;
+      RollSong song;
+      uint32_t songNumber = 0;
+      LiveFeel feel;
+      Chord over;
+      bool operator==(const Key &o) const {
+         return secAt == o.secAt && pAt == o.pAt && fillP == o.fillP && bars == o.bars && transpose == o.transpose &&
+                key == o.key && scale == o.scale && firstBar == o.firstBar && leadTake == o.leadTake &&
+                landAt == o.landAt && fillBar == o.fillBar && fillPatBar == o.fillPatBar && fillBars == o.fillBars &&
+                runs == o.runs && marks == o.marks && song.song == o.song.song && song.entry == o.song.entry &&
+                song.repeat == o.song.repeat && song.barsBefore == o.song.barsBefore && song.ends == o.song.ends &&
+                songNumber == o.songNumber && over == o.over && sameVoicing(vs, o.vs) && feel == o.feel && p == o.p &&
+                fill == o.fill && sec == o.sec;
+      }
+   };
+   Key k;
+   k.secAt = &sec;
+   k.pAt = &p;
+   k.fillP = gFillAt.p;
+   k.sec = sec;
+   k.p = p;
+   if (gFillAt.p)
+      k.fill = *gFillAt.p;
+   k.vs = vs;
+   k.bars = bars;
+   k.transpose = transpose;
+   k.key = key;
+   k.scale = scale;
+   k.firstBar = firstBar;
+   k.leadTake = gLeadTake;
+   k.landAt = gLandAt;
+   k.fillBar = gFillAt.bar;
+   k.fillPatBar = gFillAt.patBar;
+   k.fillBars = gFillAt.bars;
+   k.runs = runs;
+   k.marks = marks;
+   k.song = gSong;
+   k.songNumber = songSeen(gSong.song);
+   k.feel = gFeel;
+   k.over = gChordOverride;
+   // (The last few: a frame draws the seven tiles and NOW PLAYING.)
+   static std::vector<std::pair<Key, Preview>> kept;
+   for (size_t i = 0; i < kept.size(); ++i)
+      if (kept[i].first == k) {
+         std::rotate(kept.begin(), kept.begin() + static_cast<std::ptrdiff_t>(i), kept.begin() + static_cast<std::ptrdiff_t>(i) + 1);
+         return kept.front().second;
+      }
+   Preview pv = previewNow(sec, p, bars, vs, transpose, key, scale, runs, firstBar, marks);
+   if (kept.size() >= 24)
+      kept.pop_back();
+   kept.insert(kept.begin(), {k, pv});
+   return pv;
 }
 
 Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const VoiceSettings &vs, int transpose, int key,
@@ -1048,6 +1134,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
          const bool swell = gFeel.longs && (v % n) % std::max(1, jcomp::halfBar(p)) == 0 && since >= jcomp::halfBar(p);
          if (more <= 0.0 || gFeel.fixed || hasLine(p) || prevChord.none() || isFillDown || (heldOver(p, v % n) && !swell) ||
              (ringsOver(p, v % n) && !swell) || (pushTo >= 0 && v < pushTo) || fillInKeepsOff(p, v % n, isFill || ending) ||
+             (syncopatedFigure(p) && !swell) ||
              (!onEighth && !fine) ||
              (offbeat && onBeat) || (gFeel.longs && !onBeat) || (onBeat && gFeel.swingFeel == 1 && gFeel.swing > 0.55) ||
              rollDice(sec, p, v, 21, firstBar) >= chance)
@@ -3866,7 +3953,8 @@ private:
                                  playerOf(recipe()).instrument == kOrgan, styleOf(recipe()).bpm,
                                  playerOf(recipe()).instrument == kPiano || playerOf(recipe()).instrument == kEPiano,
                                  playerOf(recipe()).runs > 0.0, &voicing, param(kRuns),
-                                 kRunEveryBars[choiceIndex(param(kRunEvery), 3)], param(kLengths));
+                                 kRunEveryBars[choiceIndex(param(kRunEvery), 3)], param(kLengths),
+                                 param(kLength));
       if (mutate_)
          mutate_->redraw();
    }
@@ -4474,7 +4562,7 @@ private:
          const Pattern &lead = sec.takes[static_cast<size_t>(sec.takes[static_cast<size_t>(leadTake)].empty() ? 0 : leadTake)];
          const Ear ear(&sec, p, &voicing, styleOf(recipe()).mods, param(kRuns),
                        kRunEveryBars[choiceIndex(param(kRunEvery), 3)], role != kMutateTake ? &lead : nullptr,
-                       param(kLengths));
+                       param(kLengths), false, param(kLength));
          const Pattern child = mutate(p, param(kMutation), rng, tag, styleOf(recipe()).mods, genreAt(recipe().genre).name,
                                       playerOf(recipe()).instrument == kOrgan, styleOf(recipe()).bpm,
                                       playerOf(recipe()).instrument == kPiano || playerOf(recipe()).instrument == kEPiano,

@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.20.0)
+jclap_plugin_version(0.21.0)
 
 jclap_add_plugin(jcomp
    OUTPUT_NAME "JComp"

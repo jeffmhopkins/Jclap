@@ -17,7 +17,7 @@
 //    1..9 a single line note, by its degree over the chord's root (1 the root, 3 the chord's third,
 //         7 its seventh, 8 the root an octave up, 9 the ninth up there), from the chord's own tones
 //         or the key's scale: a riff, a tenor guitar's line, a finger's figure
-//    -  holds the step before   .  rest
+//    -  holds the hit before (only straight after it, or after another '-')   .  rest
 //
 // A progression is written in C (or C minor) and moved to the song's key: bars split by '|', two
 // chords in a bar split by a space, each a chord name harmony.h's parseChord reads.
@@ -203,7 +203,7 @@ inline const std::vector<Genre> &genres() {
       {"Neo-Soul", kFamilies[0], kNeoSoulKeys, 0.58, 0,
        // Long chords behind the beat with an anticipation; soft re-attacks; a sparse push. The feel
        // is the timing (Danielsen on D'Angelo's "Left and Right"): keys late, never on the hats.
-       {{"x--.--x---.x--..", 0.4}, {"x--o--x-o-x--o--", 0.6}, {"x.....x-.x....x.", 0.7}},
+       {{"x----.x---.x--..", 0.4}, {"x--o--x-o-x--o--", 0.6}, {"x.....x-.x....x.", 0.7}},
        {{"x--o--x-o-x.xoxx", 0.7}},
        // A Dorian m9 vamp; IVmaj7-iii7-vi7 and ii7-V7sus in the relative major; m9s planed. Read as
        // minor: the vamp's Dorian IV13 is then a borrowed colour, and the relative major's iii keeps
@@ -243,7 +243,9 @@ inline const std::vector<Genre> &genres() {
        {{"x---x-x-----x-x-", 0.4}, {"x.xX.xx.x.xX.xx.", 0.85}, {"X.xx.xX.xx.x", 0.6}, {"b.xb.Xb.xb.X", 0.9},
         {"x--x--x--x--", 0.35}, {"X.xX.xx.xX.x", 0.85},
         // The spiritual's four-bar phrase: halves, the fourth bar in quarters turning it round.
-        {"x-------x-------|x-------x-------|x-------x-------|x---x---x---x---", 0.45}},
+        // (Labelled under the ballad comp's 0.40: two halves a bar against its five strokes, so a
+        // pre-chorus building from that comp never drops to it.)
+        {"x-------x-------|x-------x-------|x-------x-------|x---x---x---x---", 0.35}},
        {{"x.xX.xx.x.xXxxxx", 0.85}, {"X.xx.xX.xxxx", 0.7}},
        // I-vi-ii-V; the walk-up IV-#IVo7-I/5-VI7-ii-V; ii-V vamps; I-I7/3-IV-iv-I.
        // The shout's own vamp: I-vi-IV-I, the blues shuffle's harmony sped up (PianoGroove).
@@ -286,7 +288,8 @@ inline const std::vector<Genre> &genres() {
         // The jazz waltz, in three: MMA's piano (1, its and, 2, 3), Impro-Visor's half and quarter,
         // the "2 and 3" comp that leaves the one to the bass, MMA's guitar.
         {"x.x.x...x...|x.x.x...x...|x...x...x...|x.x.x...x...", 0.6, 3}, {"x-------x---", 0.35, 3},
-        {"....x...x---", 0.5, 3}, {"........x...|........x...|x...........|x...x.......", 0.4, 3}},
+        // (MMA's guitar, a stroke a bar or so, is the quietest of them: under the half and quarter.)
+        {"....x...x---", 0.5, 3}, {"........x...|........x...|x...........|x...x.......", 0.3, 3}},
        {{"x.....x...x...x.", 0.6}},
        // Rhythm changes' A; iii-VI7-ii-V; the III7-VI7-II7-V7 bridge.
        {{kMajor, {"Em7 A7|Dm7 G7|Em7 A7|Dm7 G7", "C6 Am7|Dm7 G7|C6 Am7|Dm7 G7", "Dm7|G7|Cmaj7|Cmaj7", "Dm7 G7|Cmaj7|Dm7 G7|Cmaj7", "E7|E7|A7|A7|D7|D7|G7|G7", "Em7 A7|Dm7 G7|Cmaj7|Cmaj7"}},
