@@ -320,7 +320,15 @@ int main() {
          JCLAP_CHECK(got.find("{\"type\":\"update\",\"key\":\"clock\"") != std::string::npos);
          if (scriptPort)
             JCLAP_CHECK(got.find(track) != std::string::npos);
-         JCLAP_CHECK(rx->status().stateClients == 1);
+         // The viewer count reaches the status a moment after the server takes the connection (the
+         // server counts it, then the link's state thread copies it over), so give it a while.
+         int clients = 0;
+         for (int i = 0; i < 200 && (clients = rx->status().stateClients) != 1; ++i) {
+            sender.process(block, txIn, txOut);
+            receiver.process(block, rxIn, rxOut);
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+         }
+         JCLAP_CHECK(clients == 1);
       }
       sender.clearTransport();
    }
