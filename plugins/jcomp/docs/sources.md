@@ -2335,6 +2335,59 @@ the end.
   bars' first chords). C7, C9 and C13 at three voices in 4THS are the same stack, and a 13sus can't
   keep its 13th in fourths. A run into the next entry doesn't model that entry's VARY swap.
 
+## Part U. The seventeenth review (2026-11-22)
+
+A seventeenth cold pass of 0.18.0, split as before, backed every finding with `jcomp-dump`, a probe
+program, the note fuzzer or the roll comparator, extended this time to AUTO FILL, fills over four
+takes and VARY's borrowed bars, and compared harmony against 0.17.0 to catch regressions. It found
+54 problems (5 high, 25 medium, 24 low, none critical; 65 the round before); these were fixed in
+0.19.0, with tests, except those noted at the end.
+
+- **Styles.** shapeEnergy thinned any stroke that wasn't a bar's first or an accent, so quiet one
+  drops, rockers, organ bubbles and boom-chicks lost one of 2 and 4, and sparse figures (Calypso's
+  quiet one and and-of-2, the Charleston) their defining stroke; backbeat pairs and figures of three
+  chords or fewer now thin together or not at all. The 0.18.0 energy relabels had side effects:
+  Charleston Comp's verse counted as a climax and never played the Charleston, Ballad Block lost its
+  ballad figure, and Garland Pushes' chorus drew MMA's LongSS2, which has no push; the climax rule
+  now needs a margin, Ballad Block's phrase is the quieter figure, and Garland's lift pushes the ands
+  of 2 and 4 (Red Garland's own comping, per Piano With Jonny's style study). The engine's change
+  strike filled the one that Ballad Block's four-bar phrase leaves out of its third bar; a written rest
+  on a bar's one now stays a rest. A pre-chorus no longer draws the chorus's busiest groove, rolling
+  the verse alone keeps the chorus floor, and loud fill-ins no longer blur New Jack Swing's figure.
+- **Song mode and transport.** A push into a section switched by hand was struck again on its
+  downbeat in 44 of 55 styles, where the song's own advance tied it; the switch now keeps the tie. A
+  press in the last 80 ms before any switch point came a whole period late; it is taken back to the
+  bar line. HOLD in the song's ending dropped the ending; it holds the last chord as a fermata. A stop
+  after the end left a stale cue and "the song has ended"; a take-back at the end left the pad
+  silent; HOLD over a stop depended on when it was pressed; HOLD during a run let the run walk on; a
+  2/4 bar mid-song struck the next downbeat twice 5 ms apart. The shortest cut is 20 ms at any tempo,
+  not 0.02 beats.
+- **Takes, fills and DENSITY.** Quarter Pound's and Minor Rock's written quarters counted as held,
+  blocking most mutations, so takes differed by a lighter beat 3 and the litter repeated; a quarter
+  pulse's beats are struck. The litter drops any child that sounds like a take or a sibling, so a
+  style with little room shows fewer. The Ear now models multi-chord gospel runs as the engine plays
+  them, judges phrase rests against the parent after *sparser*, ignores nudges under 5 ms (Friberg &
+  Sundberg's 6 ms just-noticeable difference, 1995), and hears a fill's mutation only in its own bars.
+- **Harmony and voicing.** Three of 0.18.0's own fixes regressed: a maj7 over its 9th in DROP 2+4 put
+  its 7th a half step under the root, a six-four lost its doubled bass (C/G doubled the third), and the
+  OCTAVES line sank under LOWEST on seventh chords; all three are undone without losing what 0.18.0
+  fixed. Six-string open grips (G, E, G7, E9) were cut to five strings from the top, muting the colour
+  tone; they ring all six at five voices. Slash chords over an open bass string (A/E, D/A, F/A) have
+  open grips, and E7/G# no longer sits at the 9th fret. Cmaj7/E is E C G B, the m7b5 shell is named so
+  where the key or a doubled root says it is, TRY INSTEAD's sus before a minor chord is a 7sus, and
+  richer() no longer makes G/B a G13sus/B.
+- **Engine and rolls.** Runs, push voicings and push ties into a fill bar read the take's next bar,
+  not the fill's; NOW PLAYING led a LOOP fill from the wrong bar; and a fixed figure's two-bar fill
+  was drawn over both bars where the engine plays one. songLead's cache now covers band hits, picks and
+  fills. Every comparator run has no differing cases, the new AUTO FILL and four-take fill runs
+  included (fills with four takes 767 to 0); VARY's runs differ only inside or after borrowed bars.
+  The fuzzer finds no stuck, doubled, orphan or zero-length notes and no note under 3 ms.
+- **Left as judgement or for later.** A press within the last few milliseconds before a bar line,
+  whose notes are already out, still waits for the next switch point. Two-rhythm styles can't give a
+  pre-chorus a groove of its own. A few small near-duplicates remain where only a per-child run model
+  would tell them apart (Quiet Storm, Sixties R&B). E01's fill lookahead has comparator coverage but
+  no engine test.
+
 ## Bibliography
 
 1. de Clercq, Trevor, and David Temperley. "A corpus analysis of rock harmony." *Popular Music* 30/1

@@ -277,11 +277,12 @@ inline const std::vector<Genre> &genres() {
        // and lifts them a little: Berens, "Basics of Freddie Green Comping").
        // Held comps (MMA's basic swing piano: 1 held, then the and of 3 held over the bar; Impro-Visor's
        // chord held to the and of 4); Freddie Green's four, an eighth or so a stroke ("chunk", "chit"), four
-       // to the bar throughout (the two-feel is the bass's, not his); MMA's
-       // LongSS2 (1, 2, the and of 3, 4), which Garland lifts to: his two offbeats alone are the quieter.
+       // to the bar throughout (the two-feel is the bass's, not his); Garland's lift, every and, the
+       // ands of 2 and 4 still pushing into the next chord: his two offbeats alone are the quieter, and
+       // a chorus that drops the pushes isn't Garland's.
        {{"x.....x.........", 0.35}, {"..x.....x.......", 0.45}, {"......x.......x.", 0.55}, {"x--.x--.x--.x--.", 0.8},
         {"x-------..x-----|x---------------", 0.3}, {"x--.....x--.....", 0.1}, {"x-------------..", 0.25},
-        {"x-------....o---", 0.4}, {"x...x.....x.x...", 0.6},
+        {"x-------....o---", 0.4}, {"..x...x...x...x.", 0.6},
         // The jazz waltz, in three: MMA's piano (1, its and, 2, 3), Impro-Visor's half and quarter,
         // the "2 and 3" comp that leaves the one to the bass, MMA's guitar.
         {"x.x.x...x...|x.x.x...x...|x...x...x...|x.x.x...x...", 0.6, 3}, {"x-------x---", 0.35, 3},
@@ -400,11 +401,11 @@ inline const std::vector<Genre> &genres() {
        // hand's arpeggio up the chord and back, the four-bar phrase whose third bar drops its one; in
        // 6/8 (the same twelve sixteenths, in two dotted quarters): the dotted quarters, the six eighths leaning on 1 and 4,
        // the left hand rocking under them. The half notes' lift (a chorus): the second half note
-       // broken into quarters on 3 and 4. (The ballad figure, sparser than the block pulse, is the
-       // quieter of the two: a chorus lifts to the quarters.)
+       // broken into quarters on 3 and 4. (The ballad figure and the four-bar phrase, sparser than
+       // the block pulse, are the quieter: a chorus lifts to the quarters.)
        {{"x-------x-------", 0.35}, {"x.f.b.f.x.f.b.f.", 0.65}, {"xxxXxxxxxXxx", 0.6}, {"x--x--x--x--", 0.35},
         {"x...x...x...x...", 0.5}, {"x.....x.x-------|x...x...x-------", 0.45}, {"b...3.5.8...5.3.|b.....5.8...5.3.", 0.45},
-        {"x---x---x---x---|x---x---x---x---|....x---x---x---|x---x---x---x---", 0.5},
+        {"x---x---x---x---|x---x---x---x---|....x---x---x---|x---x---x---x---", 0.45},
         {"x-----x-----", 0.35, 6}, {"X.x.x.X.x.x.", 0.6, 6}, {"b.x.x.f.x.x.", 0.5, 6}, {"x-------x---x---", 0.75}},
        {{"x-------x.x.x.xx", 0.5}, {"xxxXxxxxxXXX", 0.6}},
        // I-V/7-vi-IV over a falling bass; I-iii-IV-V; IV-V-iii-vi-ii-V-I; the last chorus again, ending home.

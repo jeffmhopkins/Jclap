@@ -243,6 +243,7 @@ struct LiveFeel {
    bool shorts = false; // a style chopped short: its left hand too
    bool freddie = false; // Freddie Green's four: lengths of its own on the beats
    bool fillInto = true, introSetup = true; // SONG's fills into the next entry (the roll's chain plays them)
+   int autoFill = 0;     // AUTO FILLS every so many bars (0 off): the bars a take's roll leads into a fill
    bool thumb = false;   // a guitar's thumb under its fingers: the fifth under the root
    bool longs = false;  // a held-chord style or a pad: DENSITY adds only rung chords on the beats
    bool runsIn = false; // a run may take an offbeat chord's place
@@ -277,6 +278,7 @@ void readFeel(const EditorHost &host) {
       gFeel.thumb = gFeel.fixed && styleOf(r).shape == kSpread;
       gFeel.fillInto = std::lround(host.paramValue(kFillInto)) != 0;
       gFeel.introSetup = std::lround(host.paramValue(kIntroSetup)) != 0;
+      gFeel.autoFill = kAutoFillBars[choiceIndex(host.paramValue(kAutoFill), 4)];
       gFeel.bpm = std::max(30.0, static_cast<double>(styleOf(r).bpm));
    }
    gFeel.onsets = static_cast<int>(std::lround(host.paramValue(kOnsets)));
@@ -304,6 +306,32 @@ struct RollSong {
 RollSong gSong;
 int gLandAt = -1; // the view step where a run's landing is kept (Preview::land): an entry's or a fill's next downbeat
 int gLeadTake = 0; // the take playing: a fill or an ending is led on from it
+// The fill (or ending) a roll of it is led into: from the section's bar `bar`, its bar `patBar`
+// plays (a fill's last, a fixed figure's side the host's bar falls on, an ending's first), for
+// `bars` bars (a fill one).
+struct FillAt {
+   const Pattern *p = nullptr;
+   int bar = -1, patBar = 0, bars = 1;
+};
+FillAt gFillAt;
+
+// The fill SONG plays in the last bar of section `si`'s entry going into section `next`, as the
+// engine's downInto picks it (-1, or a section the entry has one bar for: none).
+const Pattern *songFillOf(const Song &song, int si, int next) {
+   if (!gFeel.fillInto || next < 0)
+      return nullptr;
+   const Section &ps = song.sections[static_cast<size_t>(si)];
+   const bool down = next != si && !ps.fillDown.empty() &&
+                     ((si == kIntro && next == kVerse && gFeel.introSetup) || song.sections[static_cast<size_t>(next)].energy + 5 < ps.energy);
+   const Pattern *fp = down ? &ps.fillDown : ps.fill.empty() ? nullptr : &ps.fill;
+   return fp && !fp->empty() && ps.bars > 1 ? fp : nullptr;
+}
+// The bar of a fill the engine plays over a section's bar: a fixed figure's the side the host's bar
+// falls on (`hostBar`), else its last.
+int fillBarOf(const Pattern &fp, int hostBar) {
+   const int bars = std::max(1, fp.bars());
+   return gFeel.fixed ? (hostBar % bars + bars) % bars : bars - 1;
+}
 // Set for the drawing of one roll in a song's entry, then cleared.
 struct InSong {
    InSong(const Song &song, const PlayFrame &f, bool on, bool ends) {
@@ -361,6 +389,45 @@ Chord rollChordAt(const Section &sec, int bar, bool half) {
    return phraseChord(song, e, gSong.ends, si, bar, half);
 }
 
+// The pattern the engine plays over the section's bar `bar` (in the entry gSong names, or the
+// section going round) where it isn't the take: AUTO FILLS' fill, SONG's fill into the next entry,
+// the song's ending, or the fill a roll of it is led into (gFillAt); `patBar` is its bar there. Null
+// where the take plays.
+const Pattern *playedOver(const Section &sec, int bar, int &patBar) {
+   if (gFillAt.p && bar >= gFillAt.bar && bar < gFillAt.bar + gFillAt.bars) {
+      patBar = gFillAt.patBar + bar - gFillAt.bar;
+      return gFillAt.p;
+   }
+   if (!gFeel.live)
+      return nullptr; // (EDIT draws the take as written)
+   const int bars = std::max<int>(1, sec.bars);
+   const bool inSong = gSong.song && gSong.entry >= 0 && gSong.sectionOf(sec) >= 0;
+   if (inSong && bar >= bars)
+      return nullptr; // (the next entry's)
+   const int hostBar = bar + (inSong ? gSong.barsBefore : 0);
+   const int inSec = bar % bars, every = gFeel.autoFill;
+   const bool phrase = every > 0 && (bars >= every ? (inSec + 1) % every == 0 || (inSec + 1 == bars && bars > every)
+                                                   : (hostBar + 1) % every == 0);
+   const Pattern *fp = phrase ? &sec.fill : nullptr;
+   if (inSong) {
+      const Song &song = *gSong.song;
+      if (gSong.ends && gSong.entry == song.entries() - 1) {
+         const Pattern &end = sec.ending.empty() ? song.sections[kOutro].ending : sec.ending;
+         if (!end.empty() && bar >= bars - std::min<int>(end.bars(), bars)) {
+            patBar = std::clamp(bar - (bars - end.bars()), 0, end.bars() - 1);
+            return &end;
+         }
+      } else if (bar + 1 == bars) {
+         if (const Pattern *into = songFillOf(song, gSong.sectionOf(sec), song.entry((gSong.entry + 1) % song.entries())))
+            fp = into;
+      }
+   }
+   if (!fp || fp->empty())
+      return nullptr;
+   patBar = fillBarOf(*fp, hostBar);
+   return fp;
+}
+
 // The engine's own dice, for the bar of the view a step is in: the roll draws the hits the first
 // pass plays.
 double rollDice(const Section &sec, const Pattern &p, int view, int what, int firstBar = 0) {
@@ -393,8 +460,10 @@ bool thinnedInRoll(const Section &sec, const Pattern &p, int step, int view, int
 
 // `firstBar`: the section's bar the pattern starts on (an ending plays over the outro's last bars);
 // `marks`: whether the section's band hits play over it (not in the ending).
+// `skip`: the views before it aren't drawn (a fixed figure's fill drawn from its side playing), the
+// hands `from` there.
 Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const VoiceSettings &vs, int transpose, int key,
-                     int scale, bool runs, int firstBar, bool marks, const RollState *from = nullptr);
+                     int scale, bool runs, int firstBar, bool marks, const RollState *from = nullptr, int skip = 0);
 
 // In SONG, where the hands are at the end of each entry before `entry`, as the engine plays the song
 // from its start: every entry drawn through in the take playing, led on from the one before (an
@@ -408,18 +477,30 @@ bool songLead(const VoiceSettings &vs, int transpose, int key, int scale, bool r
    uint32_t h = mix(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&song)), static_cast<uint32_t>(song.entries()));
    for (int k = 0; k < song.entries(); ++k)
       h = mix(h, static_cast<uint32_t>(song.entry(k)));
+   // (Everything of a section a roll draws: its takes, fills and ending hit by hit, its band hits.)
+   const auto hashPattern = [&](const Pattern &t) {
+      h = mix(h, static_cast<uint32_t>(t.steps | t.rate << 8));
+      for (int i = 0; i < t.steps; ++i) {
+         const Hit &x = t.at(i);
+         h = mix(h, static_cast<uint32_t>(x.vel | x.len << 8 | x.chance << 16 | static_cast<uint8_t>(x.nudge) << 24));
+         h = mix(h, static_cast<uint32_t>(x.art | x.part << 4 | x.run << 8 | x.push << 9 | static_cast<uint8_t>(x.voicing) << 10 | x.degree << 18));
+      }
+   };
    for (const Section &sec : song.sections) {
       h = mix(h, sec.seed * 31u + sec.bars);
+      h = mix(h, static_cast<uint32_t>(sec.split | sec.progBars << 16 | sec.energy << 24));
       for (const Pattern &t : sec.takes)
-         for (int i = 0; i < t.steps; ++i) {
-            const Hit &x = t.at(i);
-            h = mix(h, static_cast<uint32_t>(x.vel | x.len << 8 | x.art << 16 | x.part << 20 | x.push << 24 | x.run << 25 | x.chance << 26));
-         }
+         hashPattern(t);
+      for (const Pattern *t : {&sec.fill, &sec.fillDown, &sec.ending})
+         hashPattern(*t);
+      for (uint8_t m : sec.marks)
+         h = mix(h, m);
       for (const Chord &c : sec.chords)
          h = mix(h, static_cast<uint32_t>(c.root * 64 + c.quality + (c.bass + 1) * 4096));
    }
    for (int v : {vs.shape, vs.voices, vs.lo, vs.hi, vs.center, vs.floor, transpose, key, scale, runs ? 1 : 0, marks ? 1 : 0,
-                 gLeadTake, gFeel.same, gFeel.every, gSong.ends ? 1 : 0, gFeel.fillInto ? 1 : 0, gFeel.introSetup ? 1 : 0})
+                 gLeadTake, gFeel.same, gFeel.every, gSong.ends ? 1 : 0, gFeel.fillInto ? 1 : 0, gFeel.introSetup ? 1 : 0,
+                 gFeel.autoFill, gFeel.fixed ? 1 : 0, gFeel.live ? 1 : 0})
       h = mix(h, static_cast<uint32_t>(v + 1000));
    h = mix(h, static_cast<uint32_t>(gChordOverride.none() ? 0 : 1 + gChordOverride.root * 64 + gChordOverride.quality));
    for (double d : {gFeel.density, gFeel.length, gFeel.runs, gFeel.swing})
@@ -448,18 +529,11 @@ bool songLead(const VoiceSettings &vs, int transpose, int key, int scale, bool r
             gSong.barsBefore = before;
             const Pattern &tp = ps.takes[static_cast<size_t>(ps.takes[static_cast<size_t>(gLeadTake)].empty() ? 0 : gLeadTake)];
             // (Its last bar the fill into the next entry, where FILL INTO plays one: the engine's
-            // downInto picks the fill down.)
-            const int next = song.entry(k + 1);
-            const Pattern *fp = nullptr;
-            if (gFeel.fillInto) {
-               const bool down = next != si && !ps.fillDown.empty() &&
-                                 ((si == kIntro && next == kVerse && gFeel.introSetup) ||
-                                  song.sections[static_cast<size_t>(next)].energy + 5 < ps.energy);
-               fp = down ? &ps.fillDown : ps.fill.empty() ? nullptr : &ps.fill;
-               if (fp && (fp->empty() || fp->bars() >= ps.bars))
-                  fp = nullptr;
-            }
-            const int takeBars = ps.bars - (fp ? fp->bars() : 0);
+            // downInto picks the fill down. One bar of it, as the engine plays it: a fixed figure's
+            // two-bar fill only on the side its host bar falls on.)
+            const Pattern *fp = songFillOf(song, si, song.entry(k + 1));
+            const int takeBars = ps.bars - (fp ? 1 : 0);
+            const int side = fp ? fillBarOf(*fp, before + takeBars) : 0;
             const RollState in = st;
             st = previewFrom0(ps, tp, takeBars, vs, transpose, key, scale, runs, 0, marks, have ? &in : nullptr).end;
             // (A run decided in the entry's last bar lands on the next entry's downbeat: drawn a bar
@@ -469,7 +543,10 @@ bool songLead(const VoiceSettings &vs, int transpose, int key, int scale, bool r
                   to.runAgo = ext.runAgo - 1;
             };
             gLandAt = takeBars * tp.stepsPerBar();
+            if (fp)
+               gFillAt = {fp, takeBars, side, 1};
             const Preview ext = previewFrom0(ps, tp, takeBars + 1, vs, transpose, key, scale, runs, 0, marks, have ? &in : nullptr);
+            gFillAt = FillAt{};
             gLandAt = -1;
             runInto(ext.end, st);
             if (ext.landSet && !fp) {
@@ -479,9 +556,10 @@ bool songLead(const VoiceSettings &vs, int transpose, int key, int scale, bool r
             }
             if (fp) {
                const RollState mid = st;
-               st = previewFrom0(ps, *fp, fp->bars(), vs, transpose, key, scale, runs, takeBars, marks, &mid).end;
-               gLandAt = fp->bars() * fp->stepsPerBar();
-               const Preview extf = previewFrom0(ps, *fp, fp->bars() + 1, vs, transpose, key, scale, runs, takeBars, marks, &mid);
+               const int skip = side * fp->stepsPerBar();
+               st = previewFrom0(ps, *fp, side + 1, vs, transpose, key, scale, runs, takeBars - side, marks, &mid, skip).end;
+               gLandAt = (side + 1) * fp->stepsPerBar();
+               const Preview extf = previewFrom0(ps, *fp, side + 2, vs, transpose, key, scale, runs, takeBars - side, marks, &mid, skip);
                gLandAt = -1;
                runInto(extf.end, st);
                if (extf.landSet) {
@@ -526,10 +604,17 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
       const bool chained = gSong.song && gSong.sectionOf(sec) >= 0 &&
                            songLead(vs, transpose, key, scale, runs, leadMarks, gSong.entry, chain);
       Preview lead = previewFrom0(sec, from, firstBar, vs, transpose, key, scale, runs, 0, leadMarks, chained ? &chain : nullptr);
+      // A fill plays one bar, where it's drawn: its last, or a fixed figure's side the host's bar
+      // falls on (the engine plays the take on the bar before, not the figure's other side).
+      const bool fill = p == sec.fill || p == sec.fillDown;
+      const int side = fill ? fillBarOf(p, firstBar + (gSong.song && gSong.sectionOf(sec) >= 0 ? gSong.barsBefore : 0)) : 0;
+      const int drawn = fill ? 1 : bars;
       // (A run in the take's bar before into the fill's downbeat, as the engine plays it: the hands
-      // where it lands, and AT MOST EVERY counted from it.)
+      // where it lands, and AT MOST EVERY counted from it; the fill's own hit there decides it.)
       gLandAt = firstBar * from.stepsPerBar();
+      gFillAt = {&p, firstBar, side, fill ? 1 : std::max(1, p.bars())};
       const Preview ext = previewFrom0(sec, from, firstBar + 1, vs, transpose, key, scale, runs, 0, leadMarks, chained ? &chain : nullptr);
+      gFillAt = FillAt{};
       gLandAt = -1;
       if (ext.end.runAgo < 100 && ext.end.runAgo - 1 >= 1 && ext.end.runAgo - 1 < lead.end.runAgo)
          lead.end.runAgo = ext.end.runAgo - 1;
@@ -539,12 +624,19 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
          lead.end.runAgo = ago;
       }
       // Drawn a bar longer and cut back to its own bars, as the take view is: the fill's run into
-      // the bar after it is drawn.
-      Preview all = previewFrom0(sec, p, bars + 1, vs, transpose, key, scale, runs, firstBar, marks, &lead.end);
-      const float end = static_cast<float>(std::max(1, bars) * all.perBar);
+      // the bar after it (the take's again) is drawn.
+      const int skip = side * p.stepsPerBar();
+      gFillAt = {&p, firstBar, side, fill ? 1 : std::max(1, p.bars())};
+      Preview all = previewFrom0(sec, p, side + drawn + 1, vs, transpose, key, scale, runs, firstBar - side, marks, &lead.end, skip);
+      gFillAt = FillAt{};
+      const float end = static_cast<float>(std::max(1, drawn) * all.perBar);
+      for (RollNote &x : all.notes)
+         x.start -= static_cast<float>(skip);
+      for (PlacedHit &x : all.hits)
+         x.view -= skip;
       all.notes.erase(std::remove_if(all.notes.begin(), all.notes.end(), [&](const RollNote &x) { return x.start >= end - 1e-3f; }), all.notes.end());
       all.hits.erase(std::remove_if(all.hits.begin(), all.hits.end(), [&](const PlacedHit &x) { return x.view >= static_cast<int>(end); }), all.hits.end());
-      all.bars = std::max(1, bars);
+      all.bars = std::max(1, drawn);
       all.steps = all.perBar * all.bars;
       return all;
    }
@@ -581,7 +673,7 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
 }
 
 Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const VoiceSettings &vs, int transpose, int key,
-                     int scale, bool runs, int firstBar, bool marks, const RollState *from) {
+                     int scale, bool runs, int firstBar, bool marks, const RollState *from, int skip) {
    Preview out;
    out.perBar = p.stepsPerBar();
    out.perBeat = p.perBeat();
@@ -616,9 +708,35 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
       if (np.steps > 0 && np.stepTicks() == stepTicks)
          nextTake = &np;
    }
+   // Over a bar the engine plays another pattern on (a fill, the ending: playedOver; after the fill
+   // drawn, the take again), that one's hits, as written, as past an entry's end: a run or a push
+   // into its downbeat is its own hit's.
+   const Pattern &leadTake = sec.takes[static_cast<size_t>(sec.takes[static_cast<size_t>(gLeadTake)].empty() ? 0 : gLeadTake)];
+   const bool drawnFill = gFillAt.p == &p && isFill;
+   std::vector<std::pair<const Pattern *, int>> over;
+   const auto overAt = [&](int view) -> std::pair<const Pattern *, int> {
+      const int b = view / std::max(1, out.perBar);
+      if (view < 0)
+         return {nullptr, 0};
+      while (static_cast<int>(over.size()) <= b) {
+         const int bar = firstBar + static_cast<int>(over.size());
+         int patBar = 0;
+         const Pattern *q = playedOver(sec, bar, patBar);
+         if (!q && drawnFill && !leadTake.empty()) {
+            const int hostBar = bar + (gSong.song && gSong.sectionOf(sec) >= 0 ? gSong.barsBefore : 0);
+            q = &leadTake;
+            patBar = (gFeel.fixed ? hostBar : bar) % std::max(1, leadTake.bars());
+         }
+         over.push_back({q == &p || (q && *q == p) ? nullptr : q, patBar});
+      }
+      return over[static_cast<size_t>(b)];
+   };
    const auto hitAt = [&](int view) -> Hit {
       if (endView >= 0 && view >= endView)
          return nextTake ? nextTake->at((view - endView) % nextTake->steps) : Hit{};
+      const auto [q, patBar] = overAt(view);
+      if (q)
+         return q->stepTicks() == stepTicks ? q->at((patBar * q->stepsPerBar() + view % out.perBar) % std::max<int>(1, q->steps)) : Hit{};
       return p.at(view % n);
    };
    // DENSITY's thinning, as the engine's thinned(): a fill's or an ending's lead into the change stays.
@@ -642,18 +760,18 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
       prev = from->prev;
       octaveStep = from->octaveStep;
       if (from->runAgo < 100)
-         lastRunBar = firstBar - from->runAgo;
+         lastRunBar = firstBar + skip / out.perBar - from->runAgo;
       prevChord = from->prevChord;
       bassChord = from->bassChord;
       lastBass = from->lastBass;
       if (!from->pushed.none()) {
-         pushTo = 0; // (its notes are the bar before's, not drawn here)
+         pushTo = skip; // (its notes are the bar before's, not drawn here)
          pushChord = from->pushed;
       }
    }
    // A band hit the take pushed into: the chord's slot isn't struck again (one pushed into from the
    // bar before, the downbeat's).
-   int64_t markPushed = from && from->markPushed ? 0 : -1;
+   int64_t markPushed = from && from->markPushed ? static_cast<int64_t>(skip) * stepTicks : -1;
    // The next change of harmony after a tick, as a view step: nothing rings over it (the engine's cap).
    const auto changeAfter = [&](int64_t at, const Chord &now) {
       const int64_t first = at / stepTicks + 1;
@@ -685,9 +803,9 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
    // A change struck over the take's left-hand note: the chord, then that step again for the note.
    int again = -1;
    Hit againHit;
-   for (int v = 0; v < out.steps; v += again == v ? 0 : 1) {
+   for (int v = skip; v < out.steps; v += again == v ? 0 : 1) {
       Hit h = hitAt(v);
-      const bool past = endView >= 0 && v >= endView;
+      const bool past = (endView >= 0 && v >= endView) || overAt(v).first;
       const bool replay = again == v;
       if (replay) {
          h = againHit;
@@ -742,8 +860,10 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
          const Hit &o = p.at((v + j) % n);
          lineBrings = o.on() && !leftHand(o.part) && !thinR((v + j) % n, v + j);
       }
+      // (Not on a bar's one a phrase leaves empty, as the engine's: the rest stays a rest.)
+      const bool rest = vt % barTicks == 0 && !past && phraseRest(p, v % n);
       if (gFeel.live && !replay && mark == kMarkNone && slotEdge && (v > 0 || from) && !(h.on() && !leftHand(h.part)) &&
-          (from || !out.notes.empty()) && !lineBrings &&
+          (from || !out.notes.empty()) && !lineBrings && !rest &&
           !sameHarmony(chordAtView(v), prevChord) && (v == 0 || !sameHarmony(chordAtView(v), chordAtView(v - 1)))) {
          int toNext = out.steps + n;
          for (int k = 1; k < out.steps + n; ++k)
@@ -880,6 +1000,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
             slotStart = vt;
             slotEnd = me;
             markPushed = ms;
+            accWritten = m == kMarkAccent && written; // (its room no further than the change, as the engine's)
          }
       }
       const int bar = static_cast<int>(tick / barTicks);
@@ -921,7 +1042,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
          for (int len : {4, 3, 2}) {
             const int span = len * stride, start = v - span;
             // (On an entry's step 0 too, led on from the entry before: the engine looks there.)
-            if (start < (from ? 0 : 1) || (stride == 2 && start % 2))
+            if (start < (from ? skip : 1) || (stride == 2 && start % 2))
                continue;
             const Struck &was = struckBefore(start);
             if (was.voicing.empty() || c == was.chord)
@@ -1108,9 +1229,10 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
       // (A HOLD rings to its slot's end, as the engine holds it: the next slot is the take's again.)
       if (struck && mark == kMarkHold)
          gap = std::max(1, static_cast<int>((slotEnd - slotStart) / stepTicks));
-      // (An ACC on a written stroke: its room to the take's next hit, but no further than the change.)
+      // (An ACC on a written stroke: its room to the take's next hit, but no further than the change
+      // after the chord's start: a push into it is still on the chord before.)
       if (accWritten)
-         gap = std::max(1, std::min(gap, static_cast<int>(changeAfter(vt, c)) - v));
+         gap = std::max(1, std::min(gap, static_cast<int>(changeAfter(tick, c)) - v));
       float len = static_cast<float>(h.len) * 0.92f;
       switch (h.art) {
       case kArtChop: len = 0.45f; break;
@@ -1324,9 +1446,11 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
 }
 
 // How many bars a section's view shows: its progression, at least its take, at most four (a longer
-// progression is shown four bars at a time). A fill or fill down (`show` 4, 5) and the ending (6)
-// show their own bars.
+// progression is shown four bars at a time). A fill or fill down (`show` 4, 5) shows the bar it
+// plays (a fixed figure's two-bar fill, its side), the ending (6) its own bars.
 int viewBars(const Section &sec, const Pattern &p, int show = -1) {
+   if (show == 4 || show == 5)
+      return 1;
    if (show >= 4)
       return std::clamp<int>(p.bars(), 1, 4);
    return std::clamp<int>(std::max<int>(sec.progBars, p.bars()), 1, 4);
@@ -1350,24 +1474,24 @@ int firstBarOf(const Section &sec, int show, const PlayFrame *f = nullptr, const
    const int pb = std::max(1, static_cast<int>(sec.progBars));
    const int bar = std::max(0, f->bar);
    if (show == 4 || show == 5) {
-      const int per = p ? std::max(1, p->stepsPerBar()) : 16;
-      // (In SONG the section's own bar, not wrapped round the progression: a verse of 8 bars over a
-      // 4-bar progression fills its bar 8, where the next entry's chord is pushed into.)
-      if (inSong)
-         return std::max(0, bar - f->step / per);
-      return ((bar - f->step / per) % pb + pb) % pb;
+      // (The section's own bar, not wrapped round the progression: a verse of 8 bars over a 4-bar
+      // progression fills its bar 8, led on from its bars 1-7, where the next entry's chord is pushed
+      // into. In LOOP, round the section's own bars as it goes round.)
+      return inSong ? bar : bar % std::max(1, static_cast<int>(sec.bars));
    }
    return pb > 4 ? bar % pb / 4 * 4 : 0;
 }
 
 // The step of a view the engine is playing: a take plays round under the progression's bars, so the
-// playhead goes on to the bar of the view the music is in (a fill or an ending plays from its own
-// start). `firstBar`: the bar the view starts on (a page of a long progression); -1 when the music is
+// playhead goes on to the bar of the view the music is in (an ending plays from its own start, a
+// fill over its one bar). `firstBar`: the bar the view starts on (a page of a long progression); -1 when the music is
 // on a bar the view doesn't show.
 int viewStep(const PlayFrame &f, const Section &sec, const Pattern &p, int firstBar = 0) {
-   if (f.step < 0 || f.fill || f.fillDown || f.ending)
-      return f.step;
    const int per = std::max(1, p.stepsPerBar());
+   if (f.step < 0 || f.ending)
+      return f.step;
+   if (f.fill || f.fillDown)
+      return f.step % per; // (the one bar drawn: a fixed figure's side)
    const int pb = std::max(1, static_cast<int>(sec.progBars));
    if (pb > 4) {
       const int b = std::max(0, f.bar) % pb - firstBar;
@@ -2049,6 +2173,9 @@ public:
          drawRoll(c, s, pv(host_.litter[static_cast<size_t>(i)]), x + 8, 23, kChildW - 22, h - 46);
          label(c, s, hover ? "click to use" : "", x + 8, h - 18, kChildW - 22, kOrange, visage::Font::kLeft, 8.5f);
       }
+      // (A style with little room breeds fewer children than five, or none that would sound new.)
+      if (host_.litter.empty())
+         label(c, s, "nothing to vary here", kNowW + 22, h / 2 - 6, kChildW * 2, kFaint, visage::Font::kLeft, 9.5f);
    }
    void mouseMove(const visage::MouseEvent &e) override {
       const int i = childAt(e);
@@ -3618,7 +3745,8 @@ private:
       host_.litter = breedLitter(sec, 5, param(kMutation), rng, host_.tags, styleOf(recipe()).mods, genreAt(recipe().genre).name,
                                  playerOf(recipe()).instrument == kOrgan, styleOf(recipe()).bpm,
                                  playerOf(recipe()).instrument == kPiano || playerOf(recipe()).instrument == kEPiano,
-                                 playerOf(recipe()).runs > 0.0, &voicing);
+                                 playerOf(recipe()).runs > 0.0, &voicing, param(kRuns),
+                                 kRunEveryBars[choiceIndex(param(kRunEvery), 3)]);
       if (mutate_)
          mutate_->redraw();
    }
@@ -4220,7 +4348,10 @@ private:
                   others[static_cast<size_t>(nOthers++)] = sec.takes[static_cast<size_t>(t)];
          // (Heard as the engine will play it: the section's chords, the panel's voicing, the style's mods.)
          const VoiceSettings voicing = vs();
-         const Ear ear(&sec, p, &voicing, styleOf(recipe()).mods);
+         // (A fill, a fill down or the ending is heard only in its own bars, after the take it leads from.)
+         const Pattern &lead = sec.takes[0];
+         const Ear ear(&sec, p, &voicing, styleOf(recipe()).mods, param(kRuns),
+                       kRunEveryBars[choiceIndex(param(kRunEvery), 3)], role != kMutateTake ? &lead : nullptr);
          const Pattern child = mutate(p, param(kMutation), rng, tag, styleOf(recipe()).mods, genreAt(recipe().genre).name,
                                       playerOf(recipe()).instrument == kOrgan, styleOf(recipe()).bpm,
                                       playerOf(recipe()).instrument == kPiano || playerOf(recipe()).instrument == kEPiano,
