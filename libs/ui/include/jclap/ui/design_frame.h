@@ -53,6 +53,12 @@ public:
 
    float designWidth() const { return designWidth_; }
    float designHeight() const { return designHeight_; }
+   // Changes the design size, for a panel that grows or shrinks (a row that comes and goes). Children
+   // keep their design bounds; move() the ones that should follow. A Window root asks the host for
+   // the matching window size at the same zoom, and letterboxes the panel if the host says no.
+   void setDesignSize(float designWidth, float designHeight);
+   // Set by Window: called by setDesignSize.
+   std::function<void(float designWidth, float designHeight)> onDesignSize;
    // Pixels per design unit: the largest that fits both ways, so nothing is cut off when the frame
    // has another aspect ratio (Window centres the frame and keeps its shape).
    float scale() const { return std::min(width() / designWidth_, height() / designHeight_); }

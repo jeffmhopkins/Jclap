@@ -271,6 +271,14 @@ int main() {
       if (scriptPort) {
          JCLAP_CHECK(helloHeard && gotTrack && gotScenes);
          JCLAP_CHECK(tx->status().extension);
+         // The receiver learns it from the sender's key, refreshed each second, and shows its row.
+         bool rxKnows = false;
+         for (int i = 0; i < 300 && !(rxKnows = rx->status().extension); ++i) {
+            sender.process(block, txIn, txOut);
+            receiver.process(block, rxIn, rxOut);
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+         }
+         JCLAP_CHECK(rxKnows);
       }
       // One key; a missing one; a request whose Host isn't this computer.
       const std::string one = httpGet(rxPort, "/state/clock");

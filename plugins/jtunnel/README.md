@@ -241,15 +241,21 @@ parameter, so a project can automate it.
 
 **OUTPUT** has **THRU**, the receiver's **LEVEL**, and input and output meters.
 
-**STATE** along the bottom is the [side channel](#side-channel-the-daws-state). Its light flashes for
-each change; beside it, a sender says whether the Bitwig extension is connected and a receiver how
-much state has come from the sender, and how many viewers are reading it. **VIEWER AND API** is the
-address to open in a browser, or to point a streaming app at.
+**STATE** along the bottom is the [side channel](#side-channel-the-daws-state), and it's only there
+while there is Bitwig state: on a sender while the Bitwig extension is connected, on a receiver while
+its sender's is. Without it the row is hidden and the panel is shorter (720 x 556 instead of
+720 x 632, as below); the row comes back by itself when the extension does. The tempo, bar and beat
+still go to the viewer page and the API either way. Its light flashes for each change; beside it, a
+sender says how much the extension is sending and a receiver how much state has come from the
+sender, and how many viewers are reading it. **VIEWER AND API** is the address to open in a
+browser, or to point a streaming app at.
+
+![The panel without the Bitwig extension: no STATE row](docs/panel-compact.png)
 
 > [!TIP]
 > To regenerate `docs/panel.png`, configure with `-DJCLAP_BUILD_TOOLS=ON` and run
-> `build/plugins/jtunnel/jtunnel-screenshot plugins/jtunnel/docs/panel.png`. Add `1440 1264 send` for
-> the sender's view, and `idle` after that to see either before anything connects (or `taken` for a
+> `build/plugins/jtunnel/jtunnel-screenshot plugins/jtunnel/docs/panel.png`. Add `1440 0 send` for
+> the sender's view (a height of 0 keeps the panel's own shape), and `idle` after that to see either before anything connects (or `taken` for a
 > sender whose name is in use, `midi` for a tunnel carrying MIDI only, or `filter` for the MIDI
 > filter open).
 

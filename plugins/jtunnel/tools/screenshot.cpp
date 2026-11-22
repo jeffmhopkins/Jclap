@@ -74,7 +74,7 @@ public:
       if (!idle_) {
          s.stateKeys = send_ ? 29 : 28;
          s.stateUpdates = static_cast<uint32_t>(t * 3);
-         s.extension = send_;
+         s.extension = true;
          s.stateClients = send_ ? 0 : 1;
       }
       else
@@ -143,7 +143,8 @@ int main(int argc, char **argv) {
       return 1;
    }
    const int width = argc > 3 ? std::atoi(argv[2]) : 720;
-   const int height = argc > 3 ? std::atoi(argv[3]) : 632;
+   // 0: the panel's own shape (shorter without the Bitwig row).
+   const int height = argc > 3 ? std::atoi(argv[3]) : 0;
    const std::string variant = argc > 5 ? argv[5] : "";
    DemoHost host(argc > 4 && std::string(argv[4]) == "send", variant == "idle", variant == "taken", variant == "midi",
                  variant == "filter");

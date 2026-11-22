@@ -67,6 +67,17 @@ void DesignFrame::layout(const Placed &p) {
       scalable->setScale(s);
 }
 
+void DesignFrame::setDesignSize(float designWidth, float designHeight) {
+   if (designWidth == designWidth_ && designHeight == designHeight_)
+      return;
+   designWidth_ = designWidth;
+   designHeight_ = designHeight;
+   if (onDesignSize)
+      onDesignSize(designWidth, designHeight);
+   resized();
+   redraw();
+}
+
 void DesignFrame::resized() {
    for (const Placed &p : placed_)
       layout(p);
