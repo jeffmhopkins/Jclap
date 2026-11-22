@@ -503,9 +503,10 @@ inline const std::vector<Genre> &genres() {
        // Palm-wine two-finger interlock (the Koo Nimo article: the thumb alternating root and fifth,
        // the finger a figure on the top strings): here the thumb on 1, 2, the and of 2, 3, 4 and the
        // and of 4 (each half bar a 2+1+1 under the chord pinched on the ands of 1 and 3), the finger
-       // on the sixteenths between; the dance-band 3-3-2; the guitar on the 12/8 bell.
-       {{"b.x.f3b5f.x.b3f5", 0.75}, {"x..x..x.x..x..x.", 0.6}, {"X.x.xx.x.x.x", 0.7}},
-       {{"b.x.f3b5f.x.xxxx", 0.7}, {"x.x.xx.xxxxx", 0.7}},
+       // on the sixteenths between; the dance-band 3-3-2; the guitar on the 12/8 bell. The pinch is
+       // the top two strings plucked with the finger, not the grip strummed ('u').
+       {{"b.u.f3b5f.u.b3f5", 0.75}, {"x..x..x.x..x..x.", 0.6}, {"X.x.xx.x.x.x", 0.7}},
+       {{"b.u.f3b5f.u.xxxx", 0.7}, {"x.x.xx.xxxxx", 0.7}},
        // Dagomba patterns "emphasize two chords, the tonic major and the dominant seventh".
        {{kMajor, {"C|G7", "C|G7|C|G7", "F|G7", "C|F|C|G7", "F|C|G7|C", "C|G7|C|C"}}},
        {{"Palm-Wine", "Palm-Wine", 108, 0, 0, 0b001},

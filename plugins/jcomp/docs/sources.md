@@ -2388,6 +2388,122 @@ takes and VARY's borrowed bars, and compared harmony against 0.17.0 to catch reg
   would tell them apart (Quiet Storm, Sixties R&B). E01's fill lookahead has comparator coverage but
   no engine test.
 
+## Part V. The eighteenth review (2026-11-22)
+
+An eighteenth cold pass of 0.19.0, split as before (styles and genre idiom; song mode and transport;
+takes, fills and MUTATE; harmony and voicing; note output and the rolls), backed every finding with
+`jcomp-dump`, a probe program, the note fuzzer or the roll comparator, and built each probe against
+0.18.0's sources as well to tell 0.19.0's regressions from older faults. The fuzzer was extended to
+host bars of changing meter, count-ins, HOLD through song endings and PAD CHANNEL moves; the
+comparator to the take roll over fill bars, AUTO FILLS over whole sections, and a model of VARY's
+borrowed bars. It found 45 problems (1 critical, 6 high, 18 medium, 20 low; 54 the round before);
+these were fixed in 0.20.0, with tests, except those noted at the end.
+
+- **Styles.** 0.19.0's backbeat anchors counted any even pulse as a backbeat, since its 2 and 4 are
+  as loud as anything in it, so quiet quarters and eighths (Straight Eighths, Eighth Pump, Western
+  Swing, the 12/8 Ballad) played 1, 2 and 4 with beat 3 gone. A backbeat take is now one whose 2 and
+  4 stand over a softer or empty 1 and 3; near silence it keeps 2 and 4 alone, as Memphis's quiet
+  backbeat does, and a pulse thins as a pulse. Near silence the sparse figures were still cut to
+  their first stroke (Calypso's one and and of 2, the Charleston, the country waltz's oom-pah-pah) and
+  a boom-chick kept only its root; every chord of a bar written with three or fewer now stays, and a
+  boom-chick keeps its fifth on 3. The rule against loud fill-ins on syncopated figures counted
+  chords off the eighths, so it missed the 3+3+2 it was written for (90s R&B's x..x..x.....x...,
+  Rainy Chop's), which filled in to straight eighths; the tresillo is defined by its gaps (Toussaint,
+  "The Euclidean Algorithm Generates Traditional Musical Rhythms", 2005; Peñalosa [9]), and two
+  onsets three sixteenths apart now mark a figure as dotted. The fill-ins also ignored a four-bar
+  phrase's written rests, so MMA's bolero and samba [61] and Quarter Pound lost their turnaround bar;
+  they keep out of them, as every other adder already did. A pre-chorus with two grooves took the
+  busiest and with three often dipped below the verse; it now lies between the verse's groove and the
+  busiest, or plays the verse's own, and rolling the verse re-rolls it as it does the chorus. Swing's
+  genre fill, kept off the beats under Garland's every-and chorus, came out sparser than the chorus
+  it led out of; an offbeat take whose genre fill would thin it fills from its own last bar, which
+  keeps Garland's offbeat left hand (Piano With Jonny's "How to play in the style of Red Garland" and
+  a jazzguitar.be forum thread on Garland's comping rhythms, as the review read them). Palm-Wine's
+  pinch was the Strummer's grip strummed over four strings; palm-wine guitar is thumb and finger
+  [27], so the pinch is now the two top strings. And a 12/8 project ran the 12/8 styles at one and a
+  half times the host's pulse (the host's bar is six quarters to JComp); a triplet-grid style under
+  a 12/8 host now counts the host's bar as its four dotted-quarter beats.
+- **Song mode and transport.** The one critical finding was a 0.19.0 regression: the Ballad Block
+  rule that keeps a phrase's empty bar one a rest also caught a held style's ending, whose last bar is
+  written empty under the chord before, so Slow Jam and the other held styles ended on the V, IV or
+  bVII with a silent last bar; an ending's last bar now always strikes the song's last chord. After a
+  pickup bar, bar 1's downbeat came up to a block late; it now comes on time. HOLD
+  pressed in the moment before a run landed struck the next chord, then the held one; the landing is
+  now struck again as the held chord and the run cut. The pad sounded two chords at once, or a blip,
+  when a start, a seek or HOLD's let-go landed on a pushed hit, and stayed on the old chord when one
+  was struck again (HOLD near a change, a chord key a moment late); it now takes its chord after the
+  step and its push are played, drops a pad note that would only blip, and follows the chord struck
+  again. A take pressed just before a bar line where the song placed
+  itself on the host's timeline lost the placement, so the song drifted off the host's bars; the
+  take-back keeps it, and HOLD's let-go. For one block after an entry's downbeat RESTART and the tiles
+  acted on the entry before it; they now go by what is heard. Freddie Green's four choked the song's
+  last chord to 0.55 beats, leaving HOLD's fermata nothing to hold; a last chord its ending writes to ring now
+  rings. Letting go of the
+  chord keys still cut a strum's last strings to 5-15 ms; strings still to come are now not started.
+  After the song's end RHYTHM FROM THE BASS struck the ended section's chord on every bass note while
+  an asked-for section waited for its switch point; it waits too.
+- **Takes, fills and MUTATE.** *lean* only ever lightened, and a fixed child was never louder than its
+  parent, so a montuno adopted ten times was a downbeat over ghosts (mean level 89 to 37 over thirty
+  generations); a montuno is played at an even level, its accents its own pushes (Mauleón [8], on
+  montunos), and Freddie Green's 2 and 4 are no softer than 1 and 3 [20]. *lean* now works from the
+  figure's own level, restores a leaned stroke as one of its moves, and never leans so much that the
+  level is no longer most of the figure; *accents* on a line works from the line's level, and the
+  other styles' children are lifted back to the parent's loudest chord, ending a slower drift (Jersey
+  Push 89 to 67). *voicing* was one way: a re-voiced chord could never move again, nor go back to the
+  voice leading's own, so fixed styles ran out of children after five or six adopts; it can now do
+  both. The Ear compared a fixed figure's two-bar fill over both bars, where the engine plays only the
+  one that falls in the section's last, so MUTATE THIS TAKE reported changes never heard (Two-Bar
+  Bossa 34 in 42); it now hears that bar only. *run in* could never be picked, as no comparison looked
+  at the run flag; a run flag now counts, now and then, on a change a run can walk into while RUNS is
+  up, and RUNS, not the player, gates it, as the engine does. *top line* turned a skank into single
+  notes and *sparser* took out upstrokes nothing put back (Upstroke's eight per two bars to under four
+  after thirty generations); a ska skank is a chord chopped on every and on the treble strings, its
+  top three notes (Wikipedia, "Ska stroke"; Guitar Wiki, "Beginning Ska"; MusicRadar, "Getting started
+  with offbeats" [65]), and an offbeat take is now kept whole by both, and by *answer*. The Ear now
+  cuts a length at the next change of chord, as the engine does, and weighs a written length against
+  LENGTHS' dice rather than treating it as a ring; a child that differs only by a chance value is a
+  change of level, not of rhythm, the answer keeps its bar's own chance and nudge, and a tag names only
+  the mutations still heard in the child. MUTATE THIS TAKE hears a fill led from the take playing,
+  not take 1. The Afrobeat tenor line's takes differ only by a note or two a bar louder or softer;
+  that is the style (Fela's tenor guitar repeats its line, Veal [14]), and the README now says so.
+- **Harmony and voicing.** A mode's own dominant held as its 3-7-9 shell (a blues' or a Mixolydian
+  vamp's I9, Dorian's IV9: E Bb D in C, A Eb G in C Dorian) was named the m7b5 on its third, since
+  0.19.0 tested only the key's V; the I and IV are now excluded too (Levine [2], on 3-7 left-hand
+  voicings). Slash chords in CLOSE and the drops had one or two voicings with the bass at the bottom,
+  so the top leapt into them two to five times as often as into other chords; the bass may now go
+  under any good voicing of the chord over it, as an arranger voices one (Pease and Pullig [4]).
+  OCTAVES' V7 in C or B minor stroked only its seventh and root (F G F G for G7), never the leading
+  tone a minor montuno's V7 bar is about (Mauleón [8], the i-iv-V7 montunos); where the seventh is in
+  reach only under the window it strokes the third. 4THS counted an octave copy as another stack, and
+  its fourths filter dropped a stack in reach for a far one with more fourths before TOP MOVE was
+  weighed (Ab7 to Dbmaj7 leapt); the in-reach stack with the most fourths now stays a choice. Augmented
+  triads and 7#5 chords doubled their #5 at five voices, and diminished triads their b5 in DROP 2+4;
+  they now double the root or the third, in SPREAD and GRIP too. SPREAD doubled G/B's leading tone over its own bass (B2 B3 D4
+  G4); a major triad over its third now doubles only its root and fifth, a minor one its root or
+  fifth in the middle. ROOTLESS ignored a slash bass (Dm7/C sounded Fmaj7/C) and is voiced as CLOSE
+  there; OCTAVES at five voices dropped a slash maj7's root (Cmaj7/E as E minor) and keeps it. GRIP
+  gains the first-position C7/E 032310, Fmaj7/A x03210 and Fmaj7/G 3x3210, and E7/G# is the
+  string-skip 4x0100 (checked against the standard chord dictionaries, the review's judgement).
+  TRY INSTEAD offered a slash chord's own chord without its bass, ranked first, and the ii of a
+  tritone sub as a m7b5 spelled with a sharp (G#m7b5 for Db7 into C); it keeps the slash bass where
+  it is a tone of the stand-in and gives the sub its own ii-V's minor seventh, Abm7 (Levine [2]).
+- **Engine and rolls.** The take roll drew SONG's FILL INTO and AUTO FILLS' bars as the take, where
+  the engine plays the fill; each such bar, and each bar VARY borrows from another take, is now
+  drawn as that pattern plays it, led on from the bars before. A run into a chance hit made it play
+  even where its die dropped it, so RUNS changed which hits sounded; a run now goes only into a hit
+  that plays this time (its chance, VARY and DENSITY with that bar's dice). The FILL page drew the
+  fill over the bar playing, or bar 1 when stopped; it draws it over the bar it plays into. Every
+  comparator run has no differing cases, VARY's included, but four swung lengths the comparator
+  measures to a note's end where the roll draws its length. The fuzzer, extended as above, finds no
+  stuck, doubled, orphan or zero-length notes.
+- **Left as judgement or for later.** Quiet Bossa still breeds an empty litter in some sections (4
+  of 28 in the fix's sweep): its few strokes and its Spread voicing leave little to vary. The
+  review's other GRIP gaps (an unfrettable Am7/B or Gsus/C) are left; only the open shapes above
+  were added. A handful of notes of 17
+  to 19 ms remain at a change of sync mode, where the 20 ms floor is measured in the new tempo's
+  beats. A 12/8 host is followed only by the triplet-grid styles: a straight-grid style in a 12/8
+  project still reads the host's bar as six quarters.
+
 ## Bibliography
 
 1. de Clercq, Trevor, and David Temperley. "A corpus analysis of rock harmony." *Popular Music* 30/1
@@ -2561,3 +2677,8 @@ takes and VARY's borrowed bars, and compared harmony against 0.17.0 to catch reg
 63. JJazzLab user guide (Yamaha styles, chord symbol interpretation, jjSwing),
     https://jjazzlab.gitbook.io/user-guide
 64. "Bubblin'", *Berklee Today*, Spring 2015 (the reggae organ's left hand on the upbeats)
+65. The ska stroke: Wikipedia, "Ska stroke," https://en.wikipedia.org/wiki/Ska_stroke ; Guitar Wiki
+    (Fandom), "Beginning Ska" ("the 3 highest notes of a chord"), https://guitar.fandom.com/wiki/Beginning_Ska ;
+    MusicRadar, "Guitar basics: getting started with offbeats,"
+    https://www.musicradar.com/how-to/guitar-basics-getting-started-with-offbeats (as cited by the
+    eighteenth review)
