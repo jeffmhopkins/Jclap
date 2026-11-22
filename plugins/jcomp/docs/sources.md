@@ -1207,7 +1207,7 @@ section type [13][14]).
 
 | ID | Pattern | Description |
 |---|---|---|
-| HL1 | `x.xxx.x.x.xxx.x.` | Two-finger palm-wine interlock: thumb on 8ths (bass), finger on 16ths between (two layers, see below) |
+| HL1 | `x.xxx.x.x.xxx.x.` | Two-finger palm-wine interlock: thumb on 1, 2, &2, 3, 4, &4 (bass), finger on 16ths between (two layers, see below) |
 | HL2 | (12-grid) | Bell-pattern-aligned guitar figure: highlife borrows the 12/8 bell (Peñalosa 2010 p. 247, via [7]) |
 | HL3 | `x..x..x.x..x..x.` | Dance-band highlife chord comp, 3-3-2 (unverified) |
 
@@ -2278,6 +2278,62 @@ were fixed in 0.17.0, with tests where a test could hold them, except those note
   chord can still drift; a batida chord over the held thumb has one voicing, so its pick isn't
   heard; and an organ's tied repeats make a few different takes play alike. A close triad at four
   voices still doubles its top note. The Afrobeat tenor line varies only its dynamics.
+
+## Part T. The sixteenth review (2026-11-22)
+
+A sixteenth cold pass of 0.17.0, split as before, backed every finding with `jcomp-dump`, a probe
+program, a new note fuzzer (doubled, orphan, zero-length, short, long and stuck notes, and every
+sounding key's queued off checked each block) or the roll comparator, now extended to band hits in
+SONG, band hits with fills, DENSITY, LENGTH and VARY. It found 65 problems (1 critical, 7 high, 24
+medium, 33 low, a few found twice); these were fixed in 0.18.0, with tests, except those noted at
+the end.
+
+- **Styles.** OCTAVES on a 7b9 (the salsa bridge's V7b9, now common since a V7 into minor is
+  usually a 7b9) froze on one three-note stroke or flipped an octave on most strokes; a seventh
+  chord's line now builds a stroke on its fifth or third and never counts an octave copy as a move.
+  The Cha-Cha's octave quarters leapt a minor sixth in every A9 bar; gone. "A chorus never gets the
+  sparsest groove" was false where rhythms sat within 0.15 of the busiest or ENERGY was low; a chorus
+  now never drops below its verse's pick (replayed from the verse's seed). Sixties R&B, Garland
+  Pushes and Ballad Block had their quieter figure labelled the louder. Calypso's quiet figure lost
+  the and of 2 that MMA's calypso always keeps; it is the one and the and of 2. New Jack Swing's
+  chorus had no sixteenths to swing. A blend filled rests a phrase writes on purpose.
+- **Song mode and transport.** HOLD CHORD held the last chord a full-chord hit struck, so a line
+  take held nothing and a line-and-chord take the chord before; it holds the chord heard. HOLD while
+  stopped in SONG started at the first entry; a push before a stop or seek skipped the next
+  downbeat (`pushTarget_` survived); a 2/4 or 3/4 project's first playback under a 4/4 style rested,
+  blipped and jumped mid-bar (it now keeps the pickup footing until playback stops); a late press at
+  the song's very end came in a bar late; a cue queued while free survived AUTO's handover.
+- **Takes, fills and DENSITY.** *accents* lightened one of an even 2 and 4 (Organ Bubble 151 of 159
+  takes; against the reggae keyboard's lean, Berklee Today, "The Woodshed: Bubblin'", 2015); it no
+  longer touches a backbeat. About a quarter of MUTATE children in some styles played the same notes
+  as a take or a sibling, mostly because a voicing pick had no audible neighbour; the generator now
+  hears a take as the engine will voice it (change strikes, pushes, runs, octave lines) and offers
+  only children that sound different. *push it*, *busier* and *ghosts* read the phrase rest from the
+  pattern being changed, so they never changed the same step in two bars. *turn* broke fixed figures
+  and made repeated notes. DENSITY had a dead stretch below the middle for beat-chord takes; it now
+  thins over each take's own range of strengths. Memphis fills now push their last offbeat, a 12/8
+  fill rests on beat 4's first two triplets and pushes the third.
+- **Harmony and voicing.** 4THS never counted fourths (Dm7 at four was D C F B); the stack with the
+  most fourths now wins. The voicing pick brought back clashes the best avoided; it never clashes
+  more now. Slash triads lost a voice in CLOSE and the drops, and GRIP played them on three strings;
+  they keep VOICES notes, with open slash grips. More open grips (Dm7, C6, G6, Dm6, D6, E9, Gmaj7,
+  Bm7), SPREAD at five on a seventh over its third, four-note dim triads in the drops, a clean
+  voicing looked for lower where every one clashes, and TRY INSTEAD no longer offers the next chord
+  or a lydian IV in Mixolydian. voice()'s stack use fell about 15%; a Windows-only crash in 0.17.0's
+  tests came from three nested calls of the voicing fallbacks, now kept off the big frame.
+- **Engine and rolls.** With RHYTHM FROM BASS, a bass note shorter than a rolled chord moved the
+  chord's offs ahead of ons not yet sounded, and the offs were dropped: stuck keys (critical). A run
+  near an entry's end read its target from the leaving take (last round's E02); engine and roll now
+  look into the next entry. The rolls applied a section's band hits past its entry's end, led the
+  ending as if the take had none, and struck a band hit again after a push; a push under HOLD or SHOT
+  lost its tie below the middle of LENGTH; VARY's borrowed take was shown in NOW PLAYING. Every
+  comparator run, the new ones included, has no differing cases (SONG forms with four takes 56 to 0,
+  SONG band hits 239 to 0, band hits with fills and short LENGTH 1151 to 0); VARY's runs differ by
+  design. The fuzzer finds no stuck, doubled or zero-length notes with RHYTHM FROM off, chords or bass.
+- **Left as judgement or for later.** Quarter Pound, Quiet Bossa and the fixed figures have little
+  room to vary, so their takes differ by less. Held Comp barely thins under DENSITY (its hits are
+  bars' first chords). C7, C9 and C13 at three voices in 4THS are the same stack, and a 13sus can't
+  keep its 13th in fourths. A run into the next entry doesn't model that entry's VARY swap.
 
 ## Bibliography
 

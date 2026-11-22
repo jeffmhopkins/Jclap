@@ -217,6 +217,7 @@ struct RollState {
    Chord prevChord, bassChord;
    int lastBass = -1;
    Chord pushed; // a chord pushed into the next downbeat, tied over it
+   bool markPushed = false; // a push into the next downbeat struck its band hit there
    int octaveStep = 0; // where OCTAVES' line is (a montuno's fill goes on in phase)
    int runAgo = 100;   // bars from the last run's bar to the end (RUNS AT MOST, carried on)
 };
@@ -518,14 +519,17 @@ Preview preview(const Section &sec, const Pattern &p, int bars, const VoiceSetti
    if (!take && firstBar > 0 && firstBar <= 32 && !sec.takes[0].empty()) {
       const Pattern &from = sec.takes[static_cast<size_t>(sec.takes[static_cast<size_t>(gLeadTake)].empty() ? 0 : gLeadTake)];
       // (In SONG, its entry's bars led on from the song before them: songLead.)
+      // (The take's bars before an ending played their band hits, as the song before them did: only
+      // the ending itself plays none. EDIT draws them all as written.)
+      const bool leadMarks = marks || gFeel.live;
       RollState chain;
       const bool chained = gSong.song && gSong.sectionOf(sec) >= 0 &&
-                           songLead(vs, transpose, key, scale, runs, marks, gSong.entry, chain);
-      Preview lead = previewFrom0(sec, from, firstBar, vs, transpose, key, scale, runs, 0, marks, chained ? &chain : nullptr);
+                           songLead(vs, transpose, key, scale, runs, leadMarks, gSong.entry, chain);
+      Preview lead = previewFrom0(sec, from, firstBar, vs, transpose, key, scale, runs, 0, leadMarks, chained ? &chain : nullptr);
       // (A run in the take's bar before into the fill's downbeat, as the engine plays it: the hands
       // where it lands, and AT MOST EVERY counted from it.)
       gLandAt = firstBar * from.stepsPerBar();
-      const Preview ext = previewFrom0(sec, from, firstBar + 1, vs, transpose, key, scale, runs, 0, marks, chained ? &chain : nullptr);
+      const Preview ext = previewFrom0(sec, from, firstBar + 1, vs, transpose, key, scale, runs, 0, leadMarks, chained ? &chain : nullptr);
       gLandAt = -1;
       if (ext.end.runAgo < 100 && ext.end.runAgo - 1 >= 1 && ext.end.runAgo - 1 < lead.end.runAgo)
          lead.end.runAgo = ext.end.runAgo - 1;
@@ -598,6 +602,29 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
    const bool isFill = !take && (p == sec.fill || p == sec.fillDown);
    const bool isFillDown = !take && p == sec.fillDown && !(p == sec.fill);
    const bool offbeat = offbeatTake(ending ? sec.takes[0] : p);
+   // Past the entry's end in SONG, the next entry's take, as the engine plays it there (its grid
+   // another: no hits): a run into its downbeat lands on its own hit, its voicing pick and all. Its
+   // dice are its own, so its hits there are drawn as written.
+   int endView = -1;
+   const Pattern *nextTake = nullptr;
+   if (gSong.song && gSong.entry >= 0 && gSong.sectionOf(sec) >= 0 && gChordOverride.none() && gSong.song->entries() > 0 &&
+       !(gSong.ends && gSong.entry == gSong.song->entries() - 1)) {
+      const Song &song = *gSong.song;
+      const Section &ns = song.sections[static_cast<size_t>(song.entry((gSong.entry + 1) % song.entries()))];
+      const Pattern &np = ns.takes[static_cast<size_t>(ns.takes[static_cast<size_t>(gLeadTake)].empty() ? 0 : gLeadTake)];
+      endView = (sec.bars - firstBar) * out.perBar;
+      if (np.steps > 0 && np.stepTicks() == stepTicks)
+         nextTake = &np;
+   }
+   const auto hitAt = [&](int view) -> Hit {
+      if (endView >= 0 && view >= endView)
+         return nextTake ? nextTake->at((view - endView) % nextTake->steps) : Hit{};
+      return p.at(view % n);
+   };
+   // DENSITY's thinning, as the engine's thinned(): a fill's or an ending's lead into the change stays.
+   const auto thinR = [&](int step, int view) {
+      return !((isFill || ending) && fillLead(p, step)) && thinnedInRoll(sec, p, step, view, firstBar);
+   };
    int octaveStep = 0;
    // Runs on the take's grid, as the engine plays them: sixteenths where it plays them, else eighths.
    const int stride = fine || p.rate == kRate8T ? 1 : 2;
@@ -624,8 +651,9 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
          pushChord = from->pushed;
       }
    }
-   // A band hit the take pushed into: the chord's slot isn't struck again.
-   int64_t markPushed = -1;
+   // A band hit the take pushed into: the chord's slot isn't struck again (one pushed into from the
+   // bar before, the downbeat's).
+   int64_t markPushed = from && from->markPushed ? 0 : -1;
    // The next change of harmony after a tick, as a view step: nothing rings over it (the engine's cap).
    const auto changeAfter = [&](int64_t at, const Chord &now) {
       const int64_t first = at / stepTicks + 1;
@@ -658,7 +686,8 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
    int again = -1;
    Hit againHit;
    for (int v = 0; v < out.steps; v += again == v ? 0 : 1) {
-      Hit h = p.at(v % n);
+      Hit h = hitAt(v);
+      const bool past = endView >= 0 && v >= endView;
       const bool replay = again == v;
       if (replay) {
          h = againHit;
@@ -676,6 +705,10 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
          const bool second = at % barTicks >= halfBar && (sec.split >> pbar & 1);
          start = static_cast<int64_t>(b) * barTicks + (second ? halfBar : 0);
          end = !second && (sec.split >> pbar & 1) ? start + halfBar : static_cast<int64_t>(b + 1) * barTicks;
+         // (Past the entry's end in SONG, the next entry's chords: none of this section's band hits,
+         // as the engine plays it.)
+         if (gSong.song && gSong.sectionOf(sec) >= 0 && b + firstBar >= sec.bars)
+            return static_cast<int>(kMarkNone);
          return marks ? static_cast<int>(sec.marks[static_cast<size_t>(pbar * 2 + (second ? 1 : 0))]) : kMarkNone;
       };
       (void)vbar;
@@ -707,7 +740,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
          lineBrings = true;
       for (int j = 1; hasLine(p) && !lineBrings && j <= std::max(1, perBeat - 1); ++j) {
          const Hit &o = p.at((v + j) % n);
-         lineBrings = o.on() && !leftHand(o.part) && !thinnedInRoll(sec, p, (v + j) % n, v + j, firstBar);
+         lineBrings = o.on() && !leftHand(o.part) && !thinR((v + j) % n, v + j);
       }
       if (gFeel.live && !replay && mark == kMarkNone && slotEdge && (v > 0 || from) && !(h.on() && !leftHand(h.part)) &&
           (from || !out.notes.empty()) && !lineBrings &&
@@ -724,7 +757,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
          bool hit = false;
          for (int j = 1; j <= toChange && !hit; ++j) {
             const Hit &o = p.at((v + j) % n);
-            hit = o.on() && !leftHand(o.part) && !thinnedInRoll(sec, p, (v + j) % n, v + j, firstBar);
+            hit = o.on() && !leftHand(o.part) && !thinR((v + j) % n, v + j);
          }
          if (!hit) {
             if (h.on()) {
@@ -770,7 +803,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
                   bool hit = false;
                   for (int j = 1; j <= k && !hit && !h.push; ++j) {
                      const Hit &o = p.at((v + j) % n);
-                     hit = o.on() && !leftHand(o.part);
+                     hit = o.on() && !leftHand(o.part) && !thinR((v + j) % n, v + j);
                   }
                   leads = !hit;
                   break;
@@ -801,12 +834,12 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
                                                  : std::min<int>(kGhost, ref / 2));
          h.len = 1;
          h.art = gFeel.longs ? kArtRing : (gFeel.shorts || more <= 0.85) ? kArtChop : kArtAsWritten;
-      } else if (!struck && !((isFill || ending) && fillLead(p, v % n)) && thinnedInRoll(sec, p, v % n, v, firstBar)) {
+      } else if (!struck && !past && thinR(v % n, v)) {
          continue; // DENSITY below the middle drops the weakest hits; each bar's first stays
-      } else if (!struck && gFeel.live && h.chance < 100 && rollDice(sec, p, v, 4, firstBar) * 100.0 >= h.chance) {
+      } else if (!struck && !past && gFeel.live && h.chance < 100 && rollDice(sec, p, v, 4, firstBar) * 100.0 >= h.chance) {
          continue; // a hit's chance, with the engine's dice for the first pass
       }
-      if (!struck && gFeel.live && rollVaried(sec, p, h, v, firstBar))
+      if (!struck && !past && gFeel.live && rollVaried(sec, p, h, v, firstBar))
          continue; // VARY's soft hit left out this time, as the engine's first pass does
       int64_t tick = static_cast<int64_t>(v) * stepTicks + (h.push ? kTicksPerBeat / 2 : 0);
       // A chord an eighth before a change, with nothing after it until the change, anticipates it,
@@ -817,7 +850,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
                bool hit = false;
                for (int j = 1; j <= k && !hit; ++j) {
                   const Hit &o = p.at((v + j) % n);
-                  hit = o.on() && !leftHand(o.part) && !thinnedInRoll(sec, p, (v + j) % n, v + j, firstBar);
+                  hit = o.on() && !leftHand(o.part) && !thinR((v + j) % n, v + j);
                }
                if (!hit)
                   tick = static_cast<int64_t>(v + k) * stepTicks;
@@ -861,7 +894,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
       // (A push tied over its beat takes the beat's own voicing, as the engine's: the beat is unstruck.)
       int pick = h.voicing;
       if (pick < 0 && !struck && h.push && h.part == kPartChord && h.art != kArtChop && pushTies(p, v % n, gFeel.fixed)) {
-         const Hit &o = p.at((v + perBeat - v % perBeat) % n);
+         const Hit o = hitAt(v + perBeat - v % perBeat);
          if (o.on() && o.part == kPartChord && !o.push)
             pick = o.voicing;
       }
@@ -901,14 +934,14 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
                const int m = slotOf(st, a, b);
                if (m == kMarkHold || m == kMarkShot) {
                   underMark = true;
-                  const Hit &w = p.at(start % n);
+                  const Hit w = hitAt(start);
                   if (st != a && w.on() && chordPart(w.part) && start % perBeat != 0)
                      for (int k = 1; k * stepTicks <= kTicksPerBeat / 2; ++k)
                         if (!sameHarmony(chordAtView(start + k), chordAtView(start))) {
                            bool hit = false;
                            for (int j = 1; j <= k && !hit && !w.push; ++j) {
                               const Hit &o = p.at((start + j) % n);
-                              hit = o.on() && !leftHand(o.part) && !thinnedInRoll(sec, p, (start + j) % n, start + j, firstBar);
+                              hit = o.on() && !leftHand(o.part) && !thinR((start + j) % n, start + j);
                            }
                            underMark = hit;
                            break;
@@ -965,7 +998,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
             const int late = len - static_cast<int>(r.size());
             bool clear = true;
             for (int k = late * stride; k < span; ++k) {
-               const Hit &o = p.at((start + k) % n);
+               const Hit o = hitAt(start + k);
                clear = clear && !(o.on() && (((start + k) % n) % strongSteps(p) == 0 ||
                                              (!leftHand(o.part) && o.vel > kSoft + 8 && !gFeel.runsIn)));
             }
@@ -976,7 +1009,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
             const Chord runPrevChord = was.chord;
             const auto under = [&](float at) {
                const int view = static_cast<int>(at);
-               return view >= from && view < v && !leftHand(p.at(view % n).part);
+               return view >= from && view < v && !leftHand(hitAt(view).part);
             };
             out.notes.erase(std::remove_if(out.notes.begin(), out.notes.end(), [&](const RollNote &x) { return under(x.start); }),
                             out.notes.end());
@@ -1040,11 +1073,24 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
       // The engine's rule: a hit its chance (or VARY) leaves out this time isn't the next one; one in
       // the take's next pass counts only when it always plays; and with SPREAD the left hand gives
       // way to a chord on 1 or 3.
+      // (In a take of choked strokes a thinned hit still ends the one before it, as the engine's gapFrom.)
+      const bool choked = gFeel.density < 0.5 && !gFeel.longs && !heldTake(p);
       int gap = 1;
       for (; gap < n; ++gap) {
          const int w = v + gap;
+         // (Past the entry's end, from a hit there: the next take's next sure chord, as the engine's
+         // tiedHeld counts it.)
+         if (past) {
+            const Hit o = hitAt(w);
+            if (o.on() && o.chance >= 100 && handOf(o.part) == handOf(h.part))
+               break;
+            continue;
+         }
          const Hit &o = p.at(w % n);
-         if (!o.on() || thinnedInRoll(sec, p, w % n, w, firstBar))
+         const bool gone = o.on() && thinR(w % n, w);
+         if (gone && choked && handOf(o.part) == handOf(h.part))
+            break;
+         if (!o.on() || gone)
             continue;
          const bool within = v % n + gap < n;
          const bool certain =
@@ -1217,7 +1263,12 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
          for (RollNote &x : out.notes)
             if (x.key == finalBass && x.start < static_cast<float>(v) - 0.01f && x.start + x.len > static_cast<float>(v))
                x.len = static_cast<float>(v) - x.start;
-         out.notes.push_back({static_cast<float>(v), std::min(capLen, std::max(shortest, len)), finalBass, kBottomNote, h.vel / 127.0f, 1});
+         // (SPREAD's held low note on the same key is one note with it, held to the later end, as the
+         // engine's emit keeps a key struck twice at once.)
+         float bl = std::max(shortest, len);
+         if (holdLow && played.count > 0 && played.notes[0] == finalBass)
+            bl = std::max(bl, static_cast<float>(holdSteps) - 0.02f);
+         out.notes.push_back({static_cast<float>(v), std::min(capLen, bl), finalBass, kBottomNote, h.vel / 127.0f, 1});
       }
       for (int i = 0; i < played.count; ++i) {
          if (played.notes[static_cast<size_t>(i)] == finalBass)
@@ -1268,6 +1319,7 @@ Preview previewFrom0(const Section &sec, const Pattern &p, int bars, const Voice
    out.end.lastBass = lastBass;
    if (pushTo == out.steps)
       out.end.pushed = pushChord;
+   out.end.markPushed = markPushed == static_cast<int64_t>(out.steps) * stepTicks;
    return out;
 }
 
@@ -3560,11 +3612,13 @@ private:
          ++litterRolls_;
       const Section &sec = host_.song().sections[static_cast<size_t>(host_.mutateSection)];
       Rng rng(mix(mix(sec.seed, sec.generation), litterRolls_ * 31u + static_cast<uint32_t>(host_.mutateSection)));
-      // (Each child unlike the section's other takes and the children before it.)
+      // (Each child unlike the section's other takes and the children before it, as the engine will
+      // voice it: a child that would play the same notes isn't one.)
+      const VoiceSettings voicing = vs();
       host_.litter = breedLitter(sec, 5, param(kMutation), rng, host_.tags, styleOf(recipe()).mods, genreAt(recipe().genre).name,
                                  playerOf(recipe()).instrument == kOrgan, styleOf(recipe()).bpm,
                                  playerOf(recipe()).instrument == kPiano || playerOf(recipe()).instrument == kEPiano,
-                                 playerOf(recipe()).runs > 0.0);
+                                 playerOf(recipe()).runs > 0.0, &voicing);
       if (mutate_)
          mutate_->redraw();
    }
@@ -4164,12 +4218,16 @@ private:
             for (int t = 0; t < kTakes; ++t)
                if (t != host_.editTake)
                   others[static_cast<size_t>(nOthers++)] = sec.takes[static_cast<size_t>(t)];
+         // (Heard as the engine will play it: the section's chords, the panel's voicing, the style's mods.)
+         const VoiceSettings voicing = vs();
+         const Ear ear(&sec, p, &voicing, styleOf(recipe()).mods);
          const Pattern child = mutate(p, param(kMutation), rng, tag, styleOf(recipe()).mods, genreAt(recipe().genre).name,
                                       playerOf(recipe()).instrument == kOrgan, styleOf(recipe()).bpm,
                                       playerOf(recipe()).instrument == kPiano || playerOf(recipe()).instrument == kEPiano,
-                                      playerOf(recipe()).runs > 0.0, role, nOthers ? others.data() : nullptr, nOthers);
+                                      playerOf(recipe()).runs > 0.0, role, nOthers ? others.data() : nullptr, nOthers,
+                                      &ear);
          // (Nothing the mutation could change that would be heard: said so, the take kept.)
-         if (tag.empty() || heardChange(p, child) == 0) {
+         if (tag.empty() || heardChange(p, child, &ear) == 0) {
             diceTag_ = "nothing to vary here";
             redraw();
             return;
