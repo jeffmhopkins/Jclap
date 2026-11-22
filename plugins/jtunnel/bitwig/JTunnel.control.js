@@ -35,6 +35,8 @@ var SUBSCRIBER_TIMEOUT_MS = 4000;
 
 var transport, application, arranger, markers, cursorTrack, trackBank, sceneBank, fxBank, master;
 var cursorDevice, remote, deviceBank, cursorClip;
+// Selection flags: Bitwig allows createEqualsValue only in init(), so each is made once there.
+var trackSelected = [], deviceSelected = [];
 var meters = {tracks: [], fx: [], master: [0, 0]};
 var settings = {};
 var osc, clientConns = {}, subscribers = {};
@@ -159,7 +161,9 @@ function observe() {
       var track = trackBank.getItemAt(t);
       observeChannel(track);
       interested([track.position(), track.trackType(), track.isGroup(), track.arm(), track.monitorMode(),
-                  track.isStopped(), track.isQueuedForStop(), track.createEqualsValue(cursorTrack)]);
+                  track.isStopped(), track.isQueuedForStop()]);
+      trackSelected[t] = track.createEqualsValue(cursorTrack);
+      trackSelected[t].markInterested();
       var slots = track.clipLauncherSlotBank();
       for (var s = 0; s < MAX_SCENES; s++) {
          var slot = slots.getItemAt(s);
@@ -196,7 +200,9 @@ function observe() {
    }
    for (var d = 0; d < MAX_DEVICES; d++) {
       var dev = deviceBank.getItemAt(d);
-      interested([dev.exists(), dev.name(), dev.isEnabled(), dev.createEqualsValue(cursorDevice)]);
+      interested([dev.exists(), dev.name(), dev.isEnabled()]);
+      deviceSelected[d] = dev.createEqualsValue(cursorDevice);
+      deviceSelected[d].markInterested();
    }
    interested([cursorClip.exists(), cursorClip.playingStep(), cursorClip.getPlayStart(), cursorClip.getLoopLength(),
                cursorClip.getLoopStart(), cursorClip.isLoopEnabled(), cursorClip.color(),
@@ -283,7 +289,7 @@ function trackState(t) {
    out.index = track.position().get();
    out.type = str(track.trackType());
    out.group = track.isGroup().get();
-   out.selected = track.createEqualsValue(cursorTrack).get();
+   out.selected = trackSelected[t].get();
    out.armed = track.arm().get();
    out.monitor = str(track.monitorMode());
    out.stopped = track.isStopped().get();
@@ -411,7 +417,7 @@ function collect() {
          var dev = deviceBank.getItemAt(d);
          if (dev.exists().get())
             chain.push({name: str(dev.name()), enabled: dev.isEnabled().get(),
-                        selected: dev.createEqualsValue(cursorDevice).get()});
+                        selected: deviceSelected[d].get()});
       }
       var pages = remote.pageNames().get();
       var pageNames = [];
