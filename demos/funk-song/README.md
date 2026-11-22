@@ -1,0 +1,65 @@
+# Funk song data
+
+A short funk song (100 BPM, 4/4, in E) made entirely with JClap's own plugins, rendered offline:
+JDrummer plays the drums into JKit, JArp drives JSynth's bass, JSynth plays the e-piano and JBreath
+plays the lead. This folder holds every version's notes, note data and sources, so other projects
+(visualizers, streaming) can read them straight from the repo.
+
+## Layout
+
+| Path | What it is |
+|---|---|
+| `cue-list.md` | The original (v2) cue list: sections, bars, times, chords. |
+| `vN/notes.md` | What changed in that version (v2 to v42). |
+| `vN/kit.txt` | JKit pad setup: pad number, sample takes, then pad params (`1=` pan, `16=` reverb send). |
+| `vN/source/` | The scripts and C++ tools that render that version (`song.py` runs it all). |
+| `vN/source/{drums,bass,epiano,lead}.txt` | Note event logs, v2 to v15 (see format below). |
+| `vN/source/arrangement.txt` | JDrummer arrangement, v6 to v15 (see format below). |
+| `vN/funk-song-vN.mid` | Standard MIDI File made from that version's event logs, v4 to v15. |
+| `v42/funk-song-v42.mp3` | The latest render. |
+| `v42/funk.jkit` | The latest JKit state (the drum kit). |
+| `tools/txt2mid.py` | Converts event logs to a `.mid` file. No dependencies. |
+
+From v16 on, the note events are no longer stored: `song.py` generates them each time it renders.
+
+## Event log format (`*.txt`)
+
+One MIDI message per line, in seconds from the start of the song:
+
+    seconds status data1 data2
+
+- `status` is the raw MIDI status byte in decimal. 144 to 159 is note-on (channels 1 to 16), 128 to
+  143 is note-off, and a note-on with velocity 0 is also a note-off.
+- Drums are on channel 10: 153 note-on, 137 note-off. Notes are General MIDI drums (36 kick,
+  38 snare, 42 closed hat, 44 pedal hat, 46 open hat, 49 crash, 41/43/45 toms).
+- Bass and e-piano are on channel 1 (144/128).
+- The lead (JBreath) uses channels 1 and 2 (144/128, 145/129) and also carries pitch bend (225, data1 = LSB, data2 = MSB) and
+  channel pressure (209, data1 = pressure).
+- Lines are mostly in time order, but not strictly: sort by `seconds` before playing.
+
+## Arrangement format (`arrangement.txt`)
+
+Lines of `bar section`, bar counted from 0, one bar = 2.4 s at 100 BPM. Sections are JDrummer's
+Section param: 0 intro, 1 verse, 2 pre, 3 chorus, 4 bridge, 5 break, 6 outro, and -1 marks the end.
+
+## v42 sections
+
+From `v42/source/sections.py` (bars from 0, 2.4 s a bar):
+
+| Section | Bars | Time |
+|---|---|---|
+| intro | 0-4 | 0:00.0 |
+| verse 1 | 4-12 | 0:09.6 |
+| chorus 1 | 12-20 | 0:28.8 |
+| verse 2 | 20-24 | 0:48.0 |
+| break | 24-32 | 0:57.6 |
+| chorus 2 | 32-40 | 1:16.8 |
+| pre-tag | 40-46 | 1:36.0 |
+| tag | 46-49 | 1:50.4, ends about 1:57.6 |
+
+## MIDI files (`*.mid`)
+
+Type 1, 480 ticks a beat, a 100 BPM tempo and 4/4 in the first track, then one track per part, named
+`bass`, `drums`, `epiano`, `lead` (whichever that version has). Rebuild one with:
+
+    python3 tools/txt2mid.py v15/funk-song-v15.mid 100 v15/source/{bass,drums,epiano,lead}.txt
