@@ -359,6 +359,7 @@ public:
                b.hasBar = true;
                b.barStart = static_cast<double>(t->bar_start) / CLAP_BEATTIME_FACTOR;
                b.barBeats = t->tsig_num * 4.0 / t->tsig_denom;
+               b.twelveEight = t->tsig_num == 12 && t->tsig_denom == 8;
             }
             if (t->flags & CLAP_TRANSPORT_IS_LOOP_ACTIVE) {
                b.loopActive = true;
