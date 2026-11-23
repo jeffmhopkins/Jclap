@@ -397,8 +397,8 @@ int main() {
          std::this_thread::sleep_until(next);
          if (tick % 40 == 0) {
             const std::string state = httpGet(rx->status().statePort, "/state/params");
-            gotValues = state.find("\"values\":[0.0000,0.0000,0.0000,0.0000,0.7500,") != std::string::npos &&
-                        state.find(",1.0000],") != std::string::npos;
+            gotValues = state.find("\"values\":[0.000000,0.000000,0.000000,0.000000,0.750000,") != std::string::npos &&
+                        state.find(",1.000000],") != std::string::npos;
             gotNameInKey = state.find("\"names\":[\"\",\"\",\"\",\"\",\"Camera 1 Pan\",\"\"") != std::string::npos;
             if (gotValues && gotNameInKey && named == "Camera 1 Pan")
                break;
