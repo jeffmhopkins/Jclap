@@ -52,6 +52,10 @@ var lastAlive = 0;
 // tick, and the `launch` key's state.
 var slotWas = {};
 var launch = {count: 0, scene: -1, name: "", clips: 0, lastScene: -1, lastName: "", at: 0};
+// Track selections, for the `select` key: the track selected at the last tick (undefined before
+// the first), and the last selection.
+var selectWas;
+var select = {count: 0, lastTrack: -1, lastName: "", at: 0};
 
 function init() {
    transport = host.createTransport();
@@ -372,6 +376,32 @@ function launchState(keys, sceneItems) {
    };
 }
 
+// Spots a track being selected: the selected track's place in the project differs from the last
+// tick's. The first tick only notes it, so starting the extension selects nothing. As with a
+// launch, `track` and `name` hold it for LAUNCH_PULSE_MS and then read -1 and "", so selecting the
+// same track again later is a change too. Clicking the track that is already selected changes
+// nothing Bitwig reports, so it isn't seen.
+function selectState(position, name) {
+   var now = Date.now();
+   if (selectWas !== undefined && position !== selectWas && position >= 0) {
+      select.count++;
+      select.lastTrack = position;
+      select.lastName = name;
+      select.at = now;
+   }
+   selectWas = position;
+   if (position === select.lastTrack)
+      select.lastName = name; // a rename after selecting
+   var live = select.count > 0 && now - select.at < LAUNCH_PULSE_MS;
+   return {
+      track: live ? select.lastTrack : -1,
+      name: live ? select.lastName : "",
+      count: select.count,
+      lastTrack: select.lastTrack,
+      lastName: select.lastName
+   };
+}
+
 // Every key and its message, for the kinds of state that are on.
 function collect() {
    var keys = {};
@@ -444,6 +474,8 @@ function collect() {
       for (var t = 0; t < settings.tracks; t++)
          keys["track/" + t] = trackState(t);
       keys.launch = launchState(keys, items);
+      keys.select = selectState(cursorTrack.exists().get() ? cursorTrack.position().get() : -1,
+                                str(cursorTrack.name()));
    }
    if (on.mixer) {
       var fx = [];
@@ -588,11 +620,13 @@ function tick() {
 
 // Takes a kind of state off: tells the senders to drop its keys.
 function forget(topic) {
-   if (topic === "grid")
+   if (topic === "grid") {
       slotWas = {};
+      selectWas = undefined;
+   }
    var dropped = [];
    for (var key in lastSent)
-      if (key === topic || (topic === "grid" && (key === "scenes" || key === "launch" || key.indexOf("track/") === 0)))
+      if (key === topic || (topic === "grid" && (key === "scenes" || key === "launch" || key === "select" || key.indexOf("track/") === 0)))
          dropped.push(key);
    dropped.forEach(function (key) {
       delete lastSent[key];

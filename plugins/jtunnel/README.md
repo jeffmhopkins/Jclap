@@ -188,7 +188,8 @@ isn't this computer is refused. The keys:
 | `transport` | extension | `playing`, `recording` (arranger record), `arrangerOverdub`, `launcherOverdub`, `automationWrite` (`mode`, `arranger`, `launcher`, `overridden`), `loop`, `loopStart`, `loopLength`, `punchIn`, `punchOut`, `metronome`, `preRoll`, `fill`, `tempo`, `tempoText`, `timeSignature`, `position` and `positionText` ("3.2.1.00"), `seconds`, `playStart`, `launchQuantization`, `postRecordingAction`, `crossfade` |
 | `grid` | extension | The window sent: `tracks` and `scenes` (its size), `trackOffset` and `sceneOffset` (where it starts in the project), `trackCount` and `sceneCount` (the project's), `follow`, `selectedTrack` and `selectedScene` (-1 for none) |
 | `scenes` | extension | `items`: each scene's `index` (in the project), `exists`, `name`, `color`, `clips` |
-| `launch` | extension | The last [scene launch](#scene-launches): `scene` (its index in the project) and `name` for 0.3 s after it, then -1 and `""`; `count` (launches since the extension started), `clips` (how many it launched), `lastScene` and `lastName` (kept) |
+| `launch` | extension | The last [scene launch](#scene-launches-and-track-selections): `scene` (its index in the project) and `name` for 0.3 s after it, then -1 and `""`; `count` (launches since the extension started), `clips` (how many it launched), `lastScene` and `lastName` (kept) |
+| `select` | extension | The last [track selection](#scene-launches-and-track-selections): `track` (its index in the project) and `name` for 0.3 s after it, then -1 and `""`; `count`, `lastTrack` and `lastName` (kept) |
 | `track/0` ... `track/N` | extension | One per column of the grid: `index` (in the project), `exists`, `name`, `color` (`#rrggbb`), `type`, `group`, `selected`, `armed`, `monitor`, `mute`, `solo`, `mutedBySolo`, `active`, `volume` and `pan` (0 to 1) with `volumeText` and `panText`, `stopped`, `stopQueued`, `playing` (the scene playing, or -1), and `slots`: each clip's `scene`, `name`, `color`, `hasContent`, `state` (`empty`, `stopped`, `playing` or `recording`), `queued` (`play`, `record`, `stop` or null: blink it) and `selected` |
 | `mixer` | extension | `master` and `fx` (the effect tracks), each with the channel fields above |
 | `meters` | extension | Peak levels, 0 to 1, `[left, right]`: `tracks` (one per grid column), `fx`, `master` |
@@ -201,7 +202,7 @@ isn't this computer is refused. The keys:
 A key the extension's settings turn off is dropped from every receiver; so are all its keys when
 Bitwig closes or the extension is removed.
 
-### Scene launches
+### Scene launches and track selections
 
 The `launch` key lets a receiver act when a scene is launched, such as starting a sequence in a
 streaming app, without mapping a modulation channel. For 0.3 s after each launch, `scene` and
@@ -220,6 +221,12 @@ is one that starts playing without being queued (with launch quantization off). 
   queue again. With quantization off they restart at once, and nothing shows.
 - Scrolling the grid launches nothing, since clips are tracked by their place in the project.
   The **Clip grid and scenes** switch under **Send** turns `launch` off with the grid.
+
+The `select` key does the same for selecting a track: `track` and `name` hold it for 0.3 s, so a
+trigger on `select` `track` equal to 4 (the fifth track, counting from 0) fires every time it is
+selected, even after other tracks were selected in between. Clicking the track that is already
+selected changes nothing Bitwig reports, so it fires nothing, and moving the selected track to
+another place reads as a selection. It goes with the grid, too.
 
 **On the wire**, state goes in its own packets beside the stream's, to everyone listening: what
 changed at once, and everything again about once a second, so a lost packet is put right within a
@@ -331,4 +338,5 @@ name must show in the param's info and the key and survive a save and load, whil
 never subscribed renames nothing. `jtunnel-extension-tests` (run where node is installed) loads the
 Bitwig extension with Bitwig's API stubbed and checks how it reads scene launches: a queued scene, a
 relaunch, a launch without quantization, a launch queued over two ticks, and a scrolled grid that
-launches nothing.
+launches nothing; and how it reads track selections: a change fires, the first one only sets where
+it starts, and selecting a track again after another fires again.

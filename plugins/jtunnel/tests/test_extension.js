@@ -1,5 +1,6 @@
-// The Bitwig extension's scene-launch spotting (bitwig/JTunnel.control.js, launchState), run in
-// node with Bitwig's API stubbed out. Usage: node test_extension.js <path to JTunnel.control.js>
+// The Bitwig extension's scene-launch and track-selection spotting (bitwig/JTunnel.control.js,
+// launchState and selectState), run in node with Bitwig's API stubbed out.
+// Usage: node test_extension.js <path to JTunnel.control.js>
 const vm = require('vm'), fs = require('fs'), assert = require('assert');
 const src = fs.readFileSync(process.argv[2], 'utf8');
 let t = 1000;
@@ -35,4 +36,18 @@ assert.deepStrictEqual([r.scene,r.name,r.count],[0,"Intro",3]);
 t+=500; L([[1,[[0,"playing",null],[1,"stopped","play"]]],[2,[[0,"playing",null],[1,"stopped",null]]]]);
 t+=33; r = L([[1,[[0,"playing",null],[1,"stopped","play"]]],[2,[[0,"playing",null],[1,"stopped","play"]]]]);
 assert.deepStrictEqual([r.scene,r.count,r.clips],[1,4,2]);
+// Track selection: the first tick notes, a change fires and pulses, reselecting later fires again.
+let sel = ctx.selectState(2, "Bass");
+assert.deepStrictEqual([sel.track, sel.count], [-1, 0]);
+t += 33; sel = ctx.selectState(4, "Keys");
+assert.deepStrictEqual([sel.track, sel.name, sel.count], [4, "Keys", 1]);
+t += 500; sel = ctx.selectState(4, "Keys");
+assert.deepStrictEqual([sel.track, sel.name, sel.lastTrack, sel.lastName], [-1, "", 4, "Keys"]);
+t += 33; sel = ctx.selectState(2, "Bass");
+t += 500; ctx.selectState(2, "Bass");
+t += 33; sel = ctx.selectState(4, "Keys");
+assert.deepStrictEqual([sel.track, sel.name, sel.count], [4, "Keys", 3]);
+// Nothing selected fires nothing.
+t += 500; sel = ctx.selectState(-1, "");
+assert.deepStrictEqual([sel.track, sel.count], [-1, 3]);
 console.log("ok");
