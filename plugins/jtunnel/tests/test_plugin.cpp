@@ -341,6 +341,98 @@ int main() {
       sender.clearTransport();
    }
 
+   // Modulation. The sender's Mod 5 is set and modulated, and its value reaches the receiver as the
+   // "params" key. A stand-in for JStream subscribes and names Mod 5; the sender takes the name on
+   // the main thread and the host sees it in the param's info, and in the key. A socket that never
+   // subscribed can't rename anything.
+   {
+      auto *params = static_cast<const clap_plugin_params_t *>(sender.plugin()->get_extension(sender.plugin(), CLAP_EXT_PARAMS));
+      const auto paramName = [&](clap_id id) {
+         clap_param_info_t info{};
+         for (uint32_t i = 0; i < params->count(sender.plugin()); ++i)
+            if (params->get_info(sender.plugin(), i, &info) && info.id == id)
+               return std::string(info.name);
+         return std::string();
+      };
+      const clap_id mod5 = jtunnel::kParamMod1 + 4;
+      clap_param_info_t info{};
+      JCLAP_CHECK(params->get_info(sender.plugin(), mod5, &info) && (info.flags & CLAP_PARAM_IS_MODULATABLE) &&
+                  std::string(info.module) == "Modulation");
+      JCLAP_CHECK(paramName(mod5) == "Mod 5");
+      JCLAP_CHECK(sender.paramText(mod5, 0.25) == "0.250");
+      sender.setParam(mod5, 0.25);
+      sender.modulate(mod5, 0.5);
+      sender.setParam(jtunnel::kParamMod1 + 31, 1.0);
+      sender.modulate(jtunnel::kParamMod1 + 31, 0.5); // kept to 1
+
+      const std::string address = tx->status().localAddress;
+      const uint16_t txPort = static_cast<uint16_t>(std::stoi(address.substr(address.rfind(':') + 1)));
+      jtunnel::net::UdpSocket jstream, stranger;
+      JCLAP_CHECK(jstream.open(0, true) && stranger.open(0, true));
+      uint8_t packet[jtunnel::kMaxPacketBytes];
+      std::string names[jtunnel::kModSlots];
+      names[4] = "Camera 1 Pan";
+      const size_t namesSize = jtunnel::writeNames(packet, sizeof(packet), names);
+      std::vector<uint8_t> namesPacket(packet, packet + namesSize);
+      names[4] = "Hijacked";
+      const size_t strangerSize = jtunnel::writeNames(packet, sizeof(packet), names);
+      std::vector<uint8_t> strangerPacket(packet, packet + strangerSize);
+
+      bool gotValues = false, gotNameInKey = false;
+      std::string named;
+      const auto begin = std::chrono::steady_clock::now();
+      int tick = 0;
+      while (std::chrono::steady_clock::now() - begin < std::chrono::seconds(6)) {
+         if (tick++ % 50 == 0) {
+            const size_t n = jtunnel::writeSubscribe(packet, sizeof(packet), name.c_str());
+            jstream.sendTo(jtunnel::net::Address::loopback(txPort), packet, n);
+            stranger.sendTo(jtunnel::net::Address::loopback(txPort), strangerPacket.data(), strangerPacket.size());
+            jstream.sendTo(jtunnel::net::Address::loopback(txPort), namesPacket.data(), namesPacket.size());
+         }
+         sender.process(block, txIn, txOut);
+         receiver.process(block, rxIn, rxOut);
+         sender.plugin()->on_main_thread(sender.plugin());
+         named = paramName(mod5);
+         next += std::chrono::microseconds(5333);
+         std::this_thread::sleep_until(next);
+         if (tick % 40 == 0) {
+            const std::string state = httpGet(rx->status().statePort, "/state/params");
+            gotValues = state.find("\"values\":[0.0000,0.0000,0.0000,0.0000,0.7500,") != std::string::npos &&
+                        state.find(",1.0000],") != std::string::npos;
+            gotNameInKey = state.find("\"names\":[\"\",\"\",\"\",\"\",\"Camera 1 Pan\",\"\"") != std::string::npos;
+            if (gotValues && gotNameInKey && named == "Camera 1 Pan")
+               break;
+         }
+      }
+      std::printf("modulation: values %d, name in key %d, param named \"%s\"\n", gotValues, gotNameInKey, named.c_str());
+      JCLAP_CHECK(gotValues);
+      JCLAP_CHECK(gotNameInKey);
+      JCLAP_CHECK(named == "Camera 1 Pan");
+      JCLAP_CHECK(paramName(jtunnel::kParamMod1) == "Mod 1");
+      // On its own, the socket that never subscribed still changes nothing.
+      for (int i = 0; i < 20; ++i) {
+         stranger.sendTo(jtunnel::net::Address::loopback(txPort), strangerPacket.data(), strangerPacket.size());
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+      sender.plugin()->on_main_thread(sender.plugin());
+      JCLAP_CHECK(paramName(mod5) == "Camera 1 Pan");
+
+      // The names go with the project, and a project saved before 0.15 (no names) loads unnamed.
+      const std::vector<uint8_t> bytes = saveState(sender);
+      jclap::core::TestHost copy(clap_entry, kId);
+      JCLAP_CHECK(loadState(copy, bytes));
+      auto *copyParams = static_cast<const clap_plugin_params_t *>(copy.plugin()->get_extension(copy.plugin(), CLAP_EXT_PARAMS));
+      JCLAP_CHECK(copyParams->get_info(copy.plugin(), mod5, &info) && std::string(info.name) == "Camera 1 Pan");
+      JCLAP_CHECK_EQ(copy.paramValue(mod5), 0.25);
+      std::vector<uint8_t> old = bytes;
+      old.resize(old.size() - (1 + jtunnel::kModSlots + std::string("Camera 1 Pan").size())); // count, lengths, the name
+      jclap::core::TestHost oldCopy(clap_entry, kId);
+      JCLAP_CHECK(loadState(oldCopy, old));
+      auto *oldParams = static_cast<const clap_plugin_params_t *>(oldCopy.plugin()->get_extension(oldCopy.plugin(), CLAP_EXT_PARAMS));
+      JCLAP_CHECK(oldParams->get_info(oldCopy.plugin(), mod5, &info) && std::string(info.name) == "Mod 5");
+      JCLAP_CHECK_EQ(oldCopy.paramValue(mod5), 0.25);
+   }
+
    // A second sender with a name already in use doesn't take it: it waits, and gets it when the
    // first goes. (In one process the two find each other directly, network or not.)
    {

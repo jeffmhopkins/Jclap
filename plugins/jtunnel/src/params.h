@@ -37,8 +37,15 @@ enum ParamId : clap_id {
    kParamExpressions,
    kParamChannel1,
    kParamChannel16 = kParamChannel1 + 15,
+   // Modulation: 32 plain 0 to 1 channels a sender streams to its receivers as the "params" key, for
+   // a program on the far side (such as JStream) to bind to. A receiver can name them (protocol.h).
+   kParamMod1,
+   kParamMod32 = kParamMod1 + 31,
    kParamCount
 };
+
+constexpr int kModCount = kParamMod32 - kParamMod1 + 1;
+static_assert(kModCount == kModSlots, "a names packet names every modulation param");
 
 enum Mode { kModeSend = 0, kModeReceive = 1 };
 enum CodecChoice { kCodecOpus = 0, kCodecPcm = 1 };
@@ -90,9 +97,42 @@ inline constexpr ParamInfo kParams[kParamCount] = {
    {"Channel 14", 0, 1, 1, true},
    {"Channel 15", 0, 1, 1, true},
    {"Channel 16", 0, 1, 1, true},
+   {"Mod 1", 0, 1, 0, false},
+   {"Mod 2", 0, 1, 0, false},
+   {"Mod 3", 0, 1, 0, false},
+   {"Mod 4", 0, 1, 0, false},
+   {"Mod 5", 0, 1, 0, false},
+   {"Mod 6", 0, 1, 0, false},
+   {"Mod 7", 0, 1, 0, false},
+   {"Mod 8", 0, 1, 0, false},
+   {"Mod 9", 0, 1, 0, false},
+   {"Mod 10", 0, 1, 0, false},
+   {"Mod 11", 0, 1, 0, false},
+   {"Mod 12", 0, 1, 0, false},
+   {"Mod 13", 0, 1, 0, false},
+   {"Mod 14", 0, 1, 0, false},
+   {"Mod 15", 0, 1, 0, false},
+   {"Mod 16", 0, 1, 0, false},
+   {"Mod 17", 0, 1, 0, false},
+   {"Mod 18", 0, 1, 0, false},
+   {"Mod 19", 0, 1, 0, false},
+   {"Mod 20", 0, 1, 0, false},
+   {"Mod 21", 0, 1, 0, false},
+   {"Mod 22", 0, 1, 0, false},
+   {"Mod 23", 0, 1, 0, false},
+   {"Mod 24", 0, 1, 0, false},
+   {"Mod 25", 0, 1, 0, false},
+   {"Mod 26", 0, 1, 0, false},
+   {"Mod 27", 0, 1, 0, false},
+   {"Mod 28", 0, 1, 0, false},
+   {"Mod 29", 0, 1, 0, false},
+   {"Mod 30", 0, 1, 0, false},
+   {"Mod 31", 0, 1, 0, false},
+   {"Mod 32", 0, 1, 0, false},
 };
 
 inline bool isMidiFilterParam(clap_id id) { return id >= kParamSysex && id <= kParamChannel16; }
+inline bool isModParam(clap_id id) { return id >= kParamMod1 && id <= kParamMod32; }
 
 // The MIDI filter, for an event in the wire's form (see protocol.h): the param for its kind, and
 // its channel (-1 for none, or an expression for every channel).
@@ -178,6 +218,8 @@ inline void formatParam(clap_id id, double value, char *out, uint32_t size) {
       else
          std::snprintf(out, size, "%+.1f dB", value);
    }
+   else if (isModParam(id))
+      std::snprintf(out, size, "%.3f", value);
    else
       std::snprintf(out, size, "%g", value);
 }

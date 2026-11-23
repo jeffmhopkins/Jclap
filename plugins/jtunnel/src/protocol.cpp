@@ -1,6 +1,7 @@
 #include "protocol.h"
 
 #include <cstring>
+#include <utility>
 
 namespace jtunnel {
 namespace {
@@ -232,6 +233,92 @@ size_t writeBye(uint8_t *out, size_t capacity) {
    Writer w(out, capacity);
    writeHeader(w, PacketType::Bye);
    return w.finish();
+}
+
+bool isValidModName(const char *name, size_t size) {
+   if (size > kMaxModName)
+      return false;
+   if (size && (name[0] == ' ' || name[size - 1] == ' '))
+      return false;
+   for (size_t i = 0; i < size;) {
+      const uint8_t c = static_cast<uint8_t>(name[i]);
+      if (c < 0x20 || c == 0x7F)
+         return false;
+      int extra = 0;
+      uint32_t point = c;
+      if (c >= 0x80) {
+         if ((c & 0xE0) == 0xC0)
+            extra = 1, point = c & 0x1F;
+         else if ((c & 0xF0) == 0xE0)
+            extra = 2, point = c & 0x0F;
+         else if ((c & 0xF8) == 0xF0)
+            extra = 3, point = c & 0x07;
+         else
+            return false;
+      }
+      if (i + static_cast<size_t>(extra) >= size)
+         return false;
+      for (int k = 1; k <= extra; ++k) {
+         const uint8_t b = static_cast<uint8_t>(name[i + static_cast<size_t>(k)]);
+         if ((b & 0xC0) != 0x80)
+            return false;
+         point = point << 6 | (b & 0x3F);
+      }
+      // Overlong forms, surrogates, past U+10FFFF, and the C1 controls.
+      static const uint32_t kMin[4] = {0, 0x80, 0x800, 0x10000};
+      if (point < kMin[extra] || (point >= 0xD800 && point <= 0xDFFF) || point > 0x10FFFF ||
+          (point >= 0x80 && point < 0xA0))
+         return false;
+      i += 1 + static_cast<size_t>(extra);
+   }
+   return true;
+}
+
+size_t writeNames(uint8_t *out, size_t capacity, const std::string *names) {
+   int count = 0;
+   for (int i = 0; i < kModSlots; ++i) {
+      if (!isValidModName(names[i].data(), names[i].size()))
+         return 0;
+      count += !names[i].empty();
+   }
+   Writer w(out, capacity);
+   writeHeader(w, PacketType::Names);
+   w.u8(static_cast<uint8_t>(count));
+   for (int i = 0; i < kModSlots; ++i)
+      if (!names[i].empty()) {
+         w.u8(static_cast<uint8_t>(i));
+         w.u8(static_cast<uint8_t>(names[i].size()));
+         w.bytes(names[i].data(), names[i].size());
+      }
+   return w.finish();
+}
+
+bool parseNames(const uint8_t *data, size_t size, std::string *names) {
+   if (packetType(data, size) != static_cast<uint8_t>(PacketType::Names))
+      return false;
+   std::string got[kModSlots];
+   bool named[kModSlots] = {};
+   Reader r(data + kHeaderBytes, size - kHeaderBytes);
+   const int count = r.u8();
+   if (!r.ok() || count > kModSlots)
+      return false;
+   for (int i = 0; i < count; ++i) {
+      const int slot = r.u8();
+      const size_t n = r.u8();
+      if (!r.ok() || slot >= kModSlots || named[slot] || n == 0 || n > kMaxModName || r.remaining() < n)
+         return false;
+      char text[kMaxModName];
+      r.bytes(text, n);
+      if (!isValidModName(text, n))
+         return false;
+      got[slot].assign(text, n);
+      named[slot] = true;
+   }
+   if (!r.ok() || r.remaining() != 0)
+      return false;
+   for (int i = 0; i < kModSlots; ++i)
+      names[i] = std::move(got[i]);
+   return true;
 }
 
 size_t writeState(uint8_t *out, size_t capacity, const StatePiece &piece) {

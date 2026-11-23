@@ -36,7 +36,8 @@ using namespace jtunnel;
 const char *const kFeatures[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_UTILITY, nullptr};
 
 // State layout: 4-byte magic, uint32 version, uint32 param count, one double per param, then the
-// send name and the listen target, each a length byte and that many bytes.
+// send name and the listen target, each a length byte and that many bytes, then (since 0.15) the
+// modulation params' names: a count byte and, for each, a length byte and that many bytes.
 constexpr char kStateMagic[4] = {'J', 'T', 'U', 'N'};
 constexpr uint32_t kStateVersion = 1;
 constexpr size_t kMaxTarget = 63;
@@ -100,6 +101,9 @@ public:
          link_.sendName = defaultSendName();
       }
       owner_ = Discovery::newOwnerId();
+      // A receiver's names arrive on the link's receive thread; the host calls back on the main
+      // thread, where they are taken (onMainThread).
+      link_.namesChanged = [this] { host()->request_callback(host()); };
       edits_.init(host());
       hostMenu_.init(host());
       gui_.init(*this);
@@ -135,7 +139,10 @@ public:
    void reset() override {
       sender_.restart();
       receiver_.restart();
+      std::fill(std::begin(modAmount_), std::end(modAmount_), 0.0);
    }
+
+   void onMainThread() override { takeNames(true); }
 
    const void *extension(const char *id) override {
       if (!std::strcmp(id, CLAP_EXT_AUDIO_PORTS))
@@ -249,6 +256,16 @@ public:
       if (index >= kParamCount)
          return false;
       const ParamInfo &p = kParams[index];
+      if (isModParam(index)) {
+         // A modulation param takes the name its receiver gave it, if any, so the host shows what
+         // it drives over there.
+         const std::string &named = names_[index - kParamMod1];
+         jclap::core::fillParamInfo({index, named.empty() ? p.name : named.c_str(), "Modulation", p.min, p.max, p.def,
+                                     static_cast<clap_param_info_flags>(CLAP_PARAM_IS_AUTOMATABLE |
+                                                                        CLAP_PARAM_IS_MODULATABLE)},
+                                    info);
+         return true;
+      }
       jclap::core::fillParamInfo(
          {index, p.name, "", p.min, p.max, p.def,
           static_cast<clap_param_info_flags>(CLAP_PARAM_IS_AUTOMATABLE | (p.stepped ? CLAP_PARAM_IS_STEPPED : 0))},
@@ -280,7 +297,10 @@ public:
          const clap_event_header_t *h = in->get(in, i);
          if (h->space_id == CLAP_CORE_EVENT_SPACE_ID && h->type == CLAP_EVENT_PARAM_VALUE)
             applyParam(reinterpret_cast<const clap_event_param_value_t *>(h));
+         else if (h->space_id == CLAP_CORE_EVENT_SPACE_ID && h->type == CLAP_EVENT_PARAM_MOD)
+            applyMod(reinterpret_cast<const clap_event_param_mod_t *>(h));
       }
+      publishMods();
       edits_.drain(out);
    }
 
@@ -310,6 +330,9 @@ public:
          putText(link_.sendName, kMaxNameLength);
          putText(link_.listenTarget, kMaxTarget);
       }
+      bytes.push_back(static_cast<uint8_t>(kModCount));
+      for (const std::string &name : names_)
+         putText(name, kMaxModName);
       return jclap::core::writeAll(stream, bytes.data(), static_cast<int64_t>(bytes.size()));
    }
 
@@ -342,6 +365,22 @@ public:
          if (n && !jclap::core::readAll(stream, &text[0], n))
             return false;
       }
+      // The modulation params' names, which a project saved before 0.15 doesn't have.
+      std::string names[kModCount];
+      uint8_t named = 0;
+      if (jclap::core::readAll(stream, &named, 1)) {
+         for (int i = 0; i < named; ++i) {
+            uint8_t n = 0;
+            std::string text;
+            if (!jclap::core::readAll(stream, &n, 1))
+               return false;
+            text.resize(n);
+            if (n && !jclap::core::readAll(stream, &text[0], n))
+               return false;
+            if (i < kModCount && isValidModName(text.data(), text.size()))
+               names[i] = std::move(text);
+         }
+      }
 
       for (uint32_t i = 0; i < kParamCount; ++i)
          params_[i].store(std::clamp(values[i], kParams[i].min, kParams[i].max));
@@ -352,9 +391,12 @@ public:
          if (clean[0])
             link_.sendName = clean;
          link_.listenTarget = cleanTarget(texts[1]);
+         std::copy(std::begin(names), std::end(names), link_.modNames);
+         link_.modNamesVersion.fetch_add(1);
       }
-      if (auto *hostParams = hostExtension<clap_host_params_t>(CLAP_EXT_PARAMS))
-         hostParams->rescan(host(), CLAP_PARAM_RESCAN_VALUES);
+      publishMods();
+      // Takes the names it just loaded, and has the host read the values (and names) again.
+      takeNames(false, CLAP_PARAM_RESCAN_VALUES);
       return true;
    }
 
@@ -378,9 +420,12 @@ public:
             continue;
          if (h->type == CLAP_EVENT_PARAM_VALUE)
             applyParam(reinterpret_cast<const clap_event_param_value_t *>(h));
+         else if (h->type == CLAP_EVENT_PARAM_MOD)
+            applyMod(reinterpret_cast<const clap_event_param_mod_t *>(h));
          else
             collectNote(h);
       }
+      publishMods();
 
       // Audio buffers, standing in silence for a missing input and scratch for a missing output.
       const float *inL = silence_.data(), *inR = silence_.data();
@@ -562,6 +607,47 @@ private:
          params_[ev->param_id].store(std::clamp(ev->value, kParams[ev->param_id].min, kParams[ev->param_id].max));
    }
 
+   // A modulator's amount on a modulation param. JTunnel has no voices, so a per-note one counts as
+   // the param's.
+   void applyMod(const clap_event_param_mod_t *ev) {
+      if (isModParam(ev->param_id) && std::isfinite(ev->amount))
+         modAmount_[ev->param_id - kParamMod1] = ev->amount;
+   }
+
+   // The modulation params as they stand (base plus modulation, kept to 0 to 1), for the link.
+   void publishMods() {
+      for (int i = 0; i < kModCount; ++i) {
+         const double v = std::clamp(params_[kParamMod1 + i].load() + modAmount_[i], 0.0, 1.0);
+         link_.mod[i].store(static_cast<float>(v), std::memory_order_relaxed);
+      }
+   }
+
+   // Main thread: takes the names a receiver gave (or a project held) if they changed, and has the
+   // host read the params' info again so it shows them. `dirty` marks the project changed, which a
+   // load isn't. `also` adds rescan flags to the call.
+   void takeNames(bool dirty, uint32_t also = 0) {
+      const uint32_t version = link_.modNamesVersion.load();
+      uint32_t flags = also;
+      if (version != namesTaken_) {
+         namesTaken_ = version;
+         std::string names[kModCount];
+         {
+            std::lock_guard<std::mutex> lock(link_.mutex);
+            std::copy(std::begin(link_.modNames), std::end(link_.modNames), names);
+         }
+         if (!std::equal(std::begin(names), std::end(names), std::begin(names_))) {
+            std::copy(std::begin(names), std::end(names), std::begin(names_));
+            // Info only: a name change takes effect at once, with the plugin active (CLAP's params.h).
+            flags |= CLAP_PARAM_RESCAN_INFO;
+            if (dirty)
+               markDirty();
+         }
+      }
+      if (flags)
+         if (auto *hostParams = hostExtension<clap_host_params_t>(CLAP_EXT_PARAMS))
+            hostParams->rescan(host(), flags);
+   }
+
    // Everything a note port brings goes on the wire: notes (as MIDI), MIDI messages of every kind,
    // SysEx (in pieces) and note expressions. pushMerged passes the originals through.
    void collectNote(const clap_event_header_t *h) {
@@ -688,6 +774,12 @@ private:
    }
 
    std::atomic<double> params_[kParamCount];
+   // Audio thread (or flush): each modulation param's modulator amount.
+   double modAmount_[kModCount] = {};
+   // Main thread: the modulation params' names as the host was last told them, and the version of
+   // the link's names they came from.
+   std::string names_[kModCount];
+   uint32_t namesTaken_ = 0;
    double sampleRate_ = 48000.0;
    uint64_t owner_ = 0;
    std::atomic<bool> active_{false}, linkUp_{false};
