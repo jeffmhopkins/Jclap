@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -69,6 +70,16 @@ struct LinkState {
    std::atomic<uint16_t> statePort{0};      // the local server's port, 0 if it has none
    std::atomic<int> stateClients{0};        // WebSocket clients on it
    std::atomic<bool> scriptConnected{false}; // a sender hears the Bitwig extension
+
+   // The modulation params (params.h), base plus modulation, written by the audio thread. A sender
+   // sends them as the "params" key.
+   std::atomic<float> mod[kModSlots] = {};
+   // What a receiver last named them (protocol.h), under `mutex`: empty for no name. The version
+   // goes up with each change, and `namesChanged` (set before the link starts) is called from the
+   // receive thread after it.
+   std::string modNames[kModSlots];
+   std::atomic<uint32_t> modNamesVersion{0};
+   std::function<void()> namesChanged;
 };
 
 class Link {

@@ -130,6 +130,53 @@ void testProtocol() {
 
 // Every kind of event goes on the wire and comes back: messages of each length, SysEx pieces and
 // note expressions. Anything malformed is refused.
+// A receiver's names for the modulation params: whole lists, UTF-8, and nothing malformed taken.
+void testNames() {
+   uint8_t packet[kMaxPacketBytes];
+   std::string names[kModSlots], got[kModSlots];
+   names[4] = "Camera 1 Pan";
+   names[31] = "Fog d\xC3\xA9nsit\xC3\xA9"; // "Fog densite" with accents
+   size_t n = writeNames(packet, sizeof(packet), names);
+   JCLAP_CHECK(n > 0);
+   JCLAP_CHECK_EQ(packetType(packet, n), static_cast<uint8_t>(PacketType::Names));
+   got[0] = "stale";
+   JCLAP_CHECK(parseNames(packet, n, got));
+   for (int i = 0; i < kModSlots; ++i)
+      JCLAP_CHECK(got[i] == names[i]);
+   // Every slot at the longest name still fits one packet.
+   for (std::string &name : names)
+      name = std::string(kMaxModName, 'x');
+   n = writeNames(packet, sizeof(packet), names);
+   JCLAP_CHECK(n > 0 && n <= kMaxPacketBytes && parseNames(packet, n, got) && got[31] == names[31]);
+   // An empty list clears every name.
+   for (std::string &name : names)
+      name.clear();
+   n = writeNames(packet, sizeof(packet), names);
+   JCLAP_CHECK(parseNames(packet, n, got) && got[31].empty());
+   // Names that may not be one: too long, a control character, a space at an end, broken UTF-8.
+   for (const std::string bad : {std::string(kMaxModName + 1, 'x'), std::string("a\nb"), std::string(" Pan"),
+                                 std::string("Pan "), std::string("\xC3"), std::string("\xC0\xAF"),
+                                 std::string("\xED\xA0\x80"), std::string("\xC2\x85")}) {
+      names[0] = bad;
+      JCLAP_CHECK_EQ(writeNames(packet, sizeof(packet), names), 0u);
+   }
+   // Malformed packets change nothing: a slot out of range, a slot twice, trailing bytes, cut short.
+   names[0] = "Pan";
+   n = writeNames(packet, sizeof(packet), names);
+   got[0] = "kept";
+   uint8_t broken[64];
+   std::memcpy(broken, packet, n);
+   broken[7] = kModSlots;
+   JCLAP_CHECK(!parseNames(broken, n, got));
+   JCLAP_CHECK(!parseNames(packet, n - 1, got));
+   broken[7] = 0;
+   broken[n] = 0;
+   JCLAP_CHECK(!parseNames(broken, n + 1, got));
+   const uint8_t twice[] = {'J', 'T', 'U', 'N', kProtocolVersion, 5, 2, 1, 1, 'a', 1, 1, 'b'};
+   JCLAP_CHECK(!parseNames(twice, sizeof(twice), got));
+   JCLAP_CHECK(got[0] == "kept");
+}
+
 void testMidiEvents() {
    JCLAP_CHECK_EQ(midiMessageSize(0x90), 3);
    JCLAP_CHECK_EQ(midiMessageSize(0xC3), 2);
@@ -875,6 +922,7 @@ void testState() {
 
 int main() {
    testProtocol();
+   testNames();
    testMidiEvents();
    testAllMidi();
    testCodecs();

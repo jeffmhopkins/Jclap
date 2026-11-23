@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <deque>
 
 #include "discovery.h"
@@ -30,6 +31,21 @@ bool sameName(const std::string &a, const char *b) {
       if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i])))
          return false;
    return i == a.size() && !b[i];
+}
+
+// The "params" key's message: the modulation params' values, 0 to 1, and their names ("" for none).
+std::string paramsJson(LinkState &state) {
+   std::string json = "{\"values\":[";
+   char number[16];
+   for (int i = 0; i < kModSlots; ++i) {
+      std::snprintf(number, sizeof(number), "%s%.4f", i ? "," : "", static_cast<double>(state.mod[i].load(std::memory_order_relaxed)));
+      json += number;
+   }
+   json += "],\"names\":[";
+   std::lock_guard<std::mutex> lock(state.mutex);
+   for (int i = 0; i < kModSlots; ++i)
+      json += (i ? "," : "") + jsonQuote(state.modNames[i]);
+   return json + "]}";
 }
 
 } // namespace
@@ -158,6 +174,7 @@ void Link::stateLoop() {
             for (int tries = 0; tries < 4 && !state_->clock.read(clock); ++tries) {
             }
             state_->state.put("clock", clockJson(clock));
+            state_->state.put("params", paramsJson(*state_));
          }
          if (now - lastOwn >= kOwnKeyEvery) {
             lastOwn = now;
@@ -300,6 +317,29 @@ void Link::handle(const uint8_t *data, int size, const net::Address &from, Clock
       else
          subscribers_.push_back({from, now});
       state_->listeners = static_cast<int>(subscribers_.size());
+      return;
+   }
+   case PacketType::Names: {
+      // Only a sender takes names, and only from a receiver subscribed to it.
+      if (receiving_)
+         return;
+      {
+         std::lock_guard<std::mutex> lock(subscribersMutex_);
+         if (std::none_of(subscribers_.begin(), subscribers_.end(), [&](const Subscriber &s) { return s.address == from; }))
+            return;
+      }
+      std::string names[kModSlots];
+      if (!parseNames(data, static_cast<size_t>(size), names))
+         return;
+      {
+         std::lock_guard<std::mutex> lock(state_->mutex);
+         if (std::equal(names, names + kModSlots, state_->modNames))
+            return;
+         std::copy(names, names + kModSlots, state_->modNames);
+         state_->modNamesVersion.fetch_add(1);
+      }
+      if (state_->namesChanged)
+         state_->namesChanged();
       return;
    }
    case PacketType::Bye: {

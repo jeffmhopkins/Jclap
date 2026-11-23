@@ -17,19 +17,26 @@
 //    bye      nothing
 //    state    stream id (4), message id (4), piece (1), piece count (1), key length (1), key,
 //             data length (2), data
+//    names    count (1), count x [slot (1), name length (1), name]
 //
 // State packets are the side channel: what the DAW is doing (its clip grid, transport, selected
 // device...), as JSON messages under keys like "transport" or "track/3", sent beside the audio and
 // MIDI (see state.h). A message too long for one packet goes in pieces; a receiver keeps the
 // newest whole message for each key. Receivers that don't know the type ignore it.
+//
+// Names go the other way, from a receiver to the sender it subscribes to: what the receiver calls
+// each of the sender's modulation params (params.h), such as "Camera 1 Pan" for the one it binds to
+// a camera's pan. The list is whole each time: a slot it leaves out has no name. A receiver sends it
+// beside its subscription; a sender that doesn't know the type ignores it.
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 namespace jtunnel {
 
-enum class PacketType : uint8_t { Audio = 1, Subscribe = 2, Bye = 3, State = 4 };
+enum class PacketType : uint8_t { Audio = 1, Subscribe = 2, Bye = 3, State = 4, Names = 5 };
 // None carries no audio: MIDI only, in short frames at the sender's rate, so it arrives sooner.
 enum class Codec : uint8_t { Opus = 0, Pcm24 = 1, None = 2 };
 
@@ -103,6 +110,19 @@ size_t writeSubscribe(uint8_t *out, size_t capacity, const char *tunnelName);
 bool parseSubscribe(const uint8_t *data, size_t size, char *name, size_t nameCapacity);
 
 size_t writeBye(uint8_t *out, size_t capacity);
+
+// Names for the modulation params: kModSlots of them, each up to kMaxModName bytes of UTF-8 with no
+// control characters, so all of them fit one packet.
+constexpr int kModSlots = 32;
+constexpr size_t kMaxModName = 40;
+// True if `name` may be a slot's name: empty (no name), or valid UTF-8 of at most kMaxModName bytes
+// with no control characters and no space at either end.
+bool isValidModName(const char *name, size_t size);
+// The names in `names[0..kModSlots)`, leaving out the empty ones. 0 if any is invalid.
+size_t writeNames(uint8_t *out, size_t capacity, const std::string *names);
+// Fills names[0..kModSlots), empty for each slot the packet leaves out. False for anything that
+// isn't a well-formed names packet: a slot out of range or named twice, or an invalid name.
+bool parseNames(const uint8_t *data, size_t size, std::string *names);
 
 // The side channel's limits: a key such as "track/12", and a message's data, in up to 64 pieces.
 constexpr size_t kMaxStateKey = 63;

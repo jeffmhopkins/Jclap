@@ -87,8 +87,28 @@ it under **REACHABLE AT**, such as `192.168.1.20:47000`.
 | Carry | Audio + MIDI, Audio, MIDI | What a sender sends, or what a receiver plays of what arrives |
 | Notes, CC, Pitch Bend, Channel Pressure, Poly Pressure, Program Change, Note Expressions, SysEx, Clock, Transport, System Messages | On, Off | The MIDI filter's kinds: whether each goes through (sent, or played), all on by default |
 | Channel 1 to Channel 16 | On, Off | The MIDI filter's channels, all on by default |
+| Mod 1 to Mod 32 | 0 to 1 | [Modulation channels](#modulation-channels) a sender streams to its receivers, for a program on the far side to bind. Automatable and modulatable. Each takes the name its receiver gives it |
 
 The tunnel name and the listen target are saved with the project, not as parameters.
+
+## Modulation channels
+
+A sender has 32 plain parameters, **Mod 1** to **Mod 32** (under **Modulation** in the host's
+list), that do nothing to the sound. Automate them, map a knob to them, or put a modulator on them
+(an LFO, an envelope, a step sequencer), and the sender streams where each one stands, the
+modulation included, to every receiver as the `params` key of the
+[side channel](#side-channel-the-daws-state), about 30 times a second while they move. A program
+on the receiving machine binds whatever it likes to them: JStream, for one, can drive a scene's
+camera, a light or a filter from Mod 5 as it would from a MIDI CC.
+
+**Named from the far side.** A receiver can tell the sender what it uses each one for, and the
+sender renames the parameter to match, so the host's device panel and automation lanes say
+**Camera 1 Pan** instead of **Mod 5**. JTunnel asks the host to read the names again at once
+(CLAP's param info rescan), with no reload; a slot the receiver doesn't name goes back to
+**Mod N**. The names are saved with the project, so it reopens with them before the receiver is
+back. Only a receiver subscribed to this sender can name its parameters, and when two receivers
+name them differently, the one that spoke last wins. A JTunnel receiver never names anything; it is
+for programs like JStream.
 
 ## Latency
 
@@ -175,6 +195,7 @@ isn't this computer is refused. The keys:
 | `device` | extension | The selected device: `exists`, `track`, `trackColor`, `name`, `preset`, `category`, `creator`, `enabled`, `plugin`, `windowOpen`, `pinned`, `page` (`index`, `name`, `names`), `params` (its 8 remote controls: `name`, `value` and `modulated` 0 to 1, `text`, `exists`) and `chain` (the track's devices: `name`, `enabled`, `selected`) |
 | `clip` | extension | The selected launcher clip: `exists`, `track`, `scene`, `name`, `color`, `playing`, `playingStep`, `playStart`, `loopStart`, `loopLength`, `loop` |
 | `markers` | extension | `items`: the arranger's cue markers, `name`, `position` (beats), `color` |
+| `params` | JTunnel | The [modulation channels](#modulation-channels): `values`, 32 numbers from 0 to 1 (Mod 1 first), and `names`, the 32 names a receiver gave them (`""` for none). A binding reads Mod 5 as `values.4` |
 
 A key the extension's settings turn off is dropped from every receiver; so are all its keys when
 Bitwig closes or the extension is removed.
@@ -183,6 +204,11 @@ Bitwig closes or the extension is removed.
 changed at once, and everything again about once a second, so a lost packet is put right within a
 second. A message too long for one packet (a track with many clips) goes in pieces. It is small:
 a few kilobytes a second while things change. Receivers older than 0.13 ignore these packets.
+
+**Names** go the other way: a receiver may send its sender one small packet listing what it calls
+each modulation channel (up to 40 bytes of UTF-8 each), beside its subscription. A sender takes it
+only from an address subscribed to it, and anything malformed changes nothing. Senders older than
+0.15 ignore it.
 
 The extension talks to the senders on its own computer over OSC on loopback: it listens on UDP port
 47250, and each sender says hello from one of 47251 to 47266.
@@ -270,10 +296,15 @@ MIDI event through a sender and receiver, a 1000-byte SysEx dump among them, and
 out in order and whole, and that a dump missing a piece never comes out. For the side channel it
 checks the JSON checks, a long state message cut into pieces and put back together through loss,
 repeats and reordering, a store of 25 keys sent over a link losing one packet in five that ends up
-identical on the far side, the bar and beat in 4/4 and 6/8, and the OSC and WebSocket pieces. `jtunnel-plugin-tests` runs two whole plugins in one process over real UDP on the loopback
+identical on the far side, the bar and beat in 4/4 and 6/8, and the OSC and WebSocket pieces. It also checks the names packet: whole lists, UTF-8, every slot at
+the longest name in one packet, and nothing malformed (a slot out of range or twice, a control
+character, broken UTF-8) taken. `jtunnel-plugin-tests` runs two whole plugins in one process over real UDP on the loopback
 interface, one sending a tone, a note, CC, pitch bend, both kinds of aftertouch, a program change,
 an MPE voice, clock, SysEx and a note expression, the other finding the tunnel by name and playing
 them, with the sender's MIDI filter holding transport back and the receiver's holding channel 10
 back. Then a stand-in for the Bitwig extension answers the sender's hello with a track of 64 clips
 and the scenes, the host's transport plays, and all of it must come out of the receiver's local
-server, over HTTP and a WebSocket, which must also refuse a request for another host.
+server, over HTTP and a WebSocket, which must also refuse a request for another host. Last, the sender's Mod 5 is set and modulated
+and must reach the receiver's `params` key; a stand-in for JStream subscribes and names it, and the
+name must show in the param's info and the key and survive a save and load, while a socket that
+never subscribed renames nothing.
