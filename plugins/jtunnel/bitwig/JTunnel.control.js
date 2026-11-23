@@ -17,7 +17,7 @@
 
 loadAPI(18);
 
-host.defineController("Jclap", "JTunnel", "0.1", "4c235e29-7ea2-41aa-887f-27806841fbfd", "Jclap");
+host.defineController("Jclap", "JTunnel", "0.2", "4c235e29-7ea2-41aa-887f-27806841fbfd", "Jclap");
 host.defineMidiPorts(0, 0);
 
 var SCRIPT_PORT = 47250;
@@ -31,6 +31,12 @@ var MAX_DEVICES = 16;
 var MAX_MARKERS = 32;
 var PARAMS = 8;
 var TICK_MS = 33; // 30 times a second
+// How long a launch's scene stays in the `launch` key before it reads -1 again, so the next launch
+// of the same scene is a change too. Several ticks, so every receiver sees it.
+var LAUNCH_PULSE_MS = 300;
+// Launches of one scene this close together are one launch: a scene's clips can be queued over
+// two ticks.
+var LAUNCH_JOIN_MS = 150;
 var SUBSCRIBER_TIMEOUT_MS = 4000;
 
 var transport, application, arranger, markers, cursorTrack, trackBank, sceneBank, fxBank, master;
@@ -42,6 +48,10 @@ var settings = {};
 var osc, clientConns = {}, subscribers = {};
 var lastSent = {}; // key -> the JSON last sent
 var lastAlive = 0;
+// Scene launches: what each clip slot (by track and scene in the project) was doing at the last
+// tick, and the `launch` key's state.
+var slotWas = {};
+var launch = {count: 0, scene: -1, name: "", clips: 0, lastScene: -1, lastName: "", at: 0};
 
 function init() {
    transport = host.createTransport();
@@ -306,6 +316,62 @@ function trackState(t) {
    return out;
 }
 
+// Spots a scene launch in the grid's clips: a slot newly queued to play, or newly playing without
+// having been queued (no launch quantization). Bitwig tells extensions nothing about scenes
+// launching as such, so a scene launch shows only as its clips launching; a scene with no clip in
+// the grid's tracks launches nothing that can be seen, and so does a clip launched on its own,
+// which reads as its scene. Slots are keyed by their place in the project, so scrolling the grid
+// launches nothing.
+function launchState(keys, sceneItems) {
+   var now = Date.now();
+   var seen = {}, launched = {}, best = -1;
+   for (var t = 0; t < settings.tracks; t++) {
+      var track = keys["track/" + t];
+      if (!track.exists)
+         continue;
+      track.slots.forEach(function (slot) {
+         if (slot.scene < 0)
+            return;
+         var id = track.index + ":" + slot.scene;
+         var now2 = slot.queued === "play" ? "queued"
+            : (slot.state === "playing" || slot.state === "recording") ? "playing" : "idle";
+         var was = slotWas[id];
+         seen[id] = now2;
+         if (was !== undefined && ((now2 === "queued" && was !== "queued") || (now2 === "playing" && was === "idle"))) {
+            launched[slot.scene] = (launched[slot.scene] || 0) + 1;
+            if (best < 0 || launched[slot.scene] > launched[best])
+               best = slot.scene;
+         }
+      });
+   }
+   slotWas = seen;
+   if (best >= 0) {
+      if (best === launch.lastScene && now - launch.at < LAUNCH_JOIN_MS) {
+         launch.clips += launched[best];
+      } else {
+         var name = "";
+         sceneItems.forEach(function (item) {
+            if (item.index === best)
+               name = item.name;
+         });
+         launch.count++;
+         launch.clips = launched[best];
+         launch.lastScene = best;
+         launch.lastName = name;
+      }
+      launch.at = now;
+   }
+   var live = launch.count > 0 && now - launch.at < LAUNCH_PULSE_MS;
+   return {
+      scene: live ? launch.lastScene : -1,
+      name: live ? launch.lastName : "",
+      count: launch.count,
+      clips: launch.clips,
+      lastScene: launch.lastScene,
+      lastName: launch.lastName
+   };
+}
+
 // Every key and its message, for the kinds of state that are on.
 function collect() {
    var keys = {};
@@ -377,6 +443,7 @@ function collect() {
       keys.scenes = {items: items};
       for (var t = 0; t < settings.tracks; t++)
          keys["track/" + t] = trackState(t);
+      keys.launch = launchState(keys, items);
    }
    if (on.mixer) {
       var fx = [];
@@ -521,9 +588,11 @@ function tick() {
 
 // Takes a kind of state off: tells the senders to drop its keys.
 function forget(topic) {
+   if (topic === "grid")
+      slotWas = {};
    var dropped = [];
    for (var key in lastSent)
-      if (key === topic || (topic === "grid" && (key === "scenes" || key.indexOf("track/") === 0)))
+      if (key === topic || (topic === "grid" && (key === "scenes" || key === "launch" || key.indexOf("track/") === 0)))
          dropped.push(key);
    dropped.forEach(function (key) {
       delete lastSent[key];

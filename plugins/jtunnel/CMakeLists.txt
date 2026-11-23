@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.15.0)
+jclap_plugin_version(0.16.0)
 
 # Opus carries the audio, and mjansson/mdns (one public-domain header) finds tunnels on the network.
 # Both are fetched here because only JTunnel uses them.
@@ -80,6 +80,14 @@ target_link_libraries(jtunnel-engine-tests PRIVATE jtunnel_engine)
 jclap_add_test(jtunnel-plugin-tests SOURCES tests/test_plugin.cpp src/plugin.cpp src/editor.cpp)
 target_include_directories(jtunnel-plugin-tests PRIVATE src)
 target_link_libraries(jtunnel-plugin-tests PRIVATE jtunnel_engine jclap::ui)
+
+# The Bitwig extension's scene-launch spotting, in node with Bitwig's API stubbed, where node is.
+find_program(JTUNNEL_NODE node)
+if(JTUNNEL_NODE)
+   add_test(NAME jtunnel-extension-tests
+      COMMAND ${JTUNNEL_NODE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_extension.js
+              ${CMAKE_CURRENT_SOURCE_DIR}/bitwig/JTunnel.control.js)
+endif()
 
 # Offscreen render of the panel, for docs and visual checks. Needs a GPU (or a software Vulkan driver).
 if(JCLAP_BUILD_TOOLS)
