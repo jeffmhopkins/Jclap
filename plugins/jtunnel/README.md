@@ -197,7 +197,7 @@ isn't this computer is refused. The keys:
 | `device` | extension | The selected device: `exists`, `track`, `trackColor`, `name`, `preset`, `category`, `creator`, `enabled`, `plugin`, `windowOpen`, `pinned`, `page` (`index`, `name`, `names`), `params` (its 8 remote controls: `name`, `value` and `modulated` 0 to 1, `text`, `exists`) and `chain` (the track's devices: `name`, `enabled`, `selected`) |
 | `clip` | extension | The selected launcher clip: `exists`, `track`, `scene`, `name`, `color`, `playing`, `playingStep`, `playStart`, `loopStart`, `loopLength`, `loop` |
 | `markers` | extension | `items`: the arranger's cue markers, `name`, `position` (beats), `color` |
-| `params` | JTunnel | The [modulation channels](#modulation-channels): `values`, 32 numbers from 0 to 1 (Mod 1 first), and `names`, the 32 names a receiver gave them (`""` for none). A binding reads Mod 5 as `values.4` |
+| `params` | JTunnel | The [modulation channels](#modulation-channels): `values`, 32 numbers from 0 to 1 to six decimal places (Mod 1 first), and `names`, the 32 names a receiver gave them (`""` for none). A binding reads Mod 5 as `values.4` |
 
 A key the extension's settings turn off is dropped from every receiver; so are all its keys when
 Bitwig closes or the extension is removed.

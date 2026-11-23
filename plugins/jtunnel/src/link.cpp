@@ -38,7 +38,7 @@ std::string paramsJson(LinkState &state) {
    std::string json = "{\"values\":[";
    char number[16];
    for (int i = 0; i < kModSlots; ++i) {
-      std::snprintf(number, sizeof(number), "%s%.4f", i ? "," : "", static_cast<double>(state.mod[i].load(std::memory_order_relaxed)));
+      std::snprintf(number, sizeof(number), "%s%.6f", i ? "," : "", static_cast<double>(state.mod[i].load(std::memory_order_relaxed)));
       json += number;
    }
    json += "],\"names\":[";
