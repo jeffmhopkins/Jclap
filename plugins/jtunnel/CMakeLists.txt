@@ -1,5 +1,5 @@
 # This plugin's version: bump it when the plugin changes (see jclap_plugin_version in cmake/JClap.cmake).
-jclap_plugin_version(0.14.0)
+jclap_plugin_version(0.15.0)
 
 # Opus carries the audio, and mjansson/mdns (one public-domain header) finds tunnels on the network.
 # Both are fetched here because only JTunnel uses them.
@@ -39,6 +39,7 @@ add_library(jtunnel_engine STATIC
    src/impair.cpp
    src/state.cpp
    src/script_link.cpp
+   src/expression.cpp
    src/state_server.cpp)
 # The viewer page the local state server hands out, built into the plugin as bytes.
 set(jtunnel_viewer_header ${CMAKE_CURRENT_BINARY_DIR}/generated/viewer_html.h)

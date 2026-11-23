@@ -8,13 +8,16 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <functional>
 #include <initializer_list>
 #include <queue>
 #include <random>
+#include <thread>
 #include <vector>
 
 #include "codec.h"
+#include "expression.h"
 #include "impair.h"
 #include "params.h"
 #include "protocol.h"
@@ -871,6 +874,134 @@ void testState() {
    JCLAP_CHECK(frame.size() == 304 && static_cast<uint8_t>(frame[0]) == 0x81 && static_cast<uint8_t>(frame[1]) == 126);
 }
 
+TimedMidi midi(std::initializer_list<int> bytes) {
+   TimedMidi m{};
+   for (const int b : bytes)
+      m.data[m.size++] = static_cast<uint8_t>(b);
+   return m;
+}
+
+TimedMidi pressureExpression(int channel, int key, double value) {
+   TimedMidi m{};
+   m.data[0] = kTagExpression;
+   m.data[1] = 6; // CLAP_NOTE_EXPRESSION_PRESSURE
+   m.data[2] = static_cast<uint8_t>(channel);
+   m.data[3] = static_cast<uint8_t>(key);
+   uint64_t bits;
+   std::memcpy(&bits, &value, 8);
+   for (int i = 0; i < 8; ++i)
+      m.data[4 + i] = static_cast<uint8_t>(bits >> (8 * i));
+   m.size = kExpressionBytes;
+   return m;
+}
+
+// The `expression` key's pitch bend, pressure and notes, channel by channel, from a track's MIDI,
+// and how a sender reports them to the Bitwig extension.
+void testExpression() {
+   ExpressionTracker t;
+   const auto json = [&] { return expressionJson(t.snapshot()); };
+   JCLAP_CHECK(json() == R"({"bend":0.000,"pressure":0.000,"channels":[],"notes":[]})");
+   {
+      const TimedMidi e[] = {midi({0xE0, 0x7F, 0x7F})}; // all the way up
+      JCLAP_CHECK(t.add(e, 1));
+      JCLAP_CHECK(json() == R"({"bend":1.000,"pressure":0.000,"channels":[{"channel":1,"bend":1.000,"pressure":0.000}],"notes":[]})");
+      JCLAP_CHECK(!t.add(e, 1)); // the same again changes nothing
+      const TimedMidi down[] = {midi({0xE0, 0x00, 0x00})};
+      t.add(down, 1);
+      JCLAP_CHECK(json().find(R"("bend":-1.000)") == 1);
+      const TimedMidi centre[] = {midi({0xE0, 0x00, 0x40})};
+      t.add(centre, 1);
+      JCLAP_CHECK(json() == R"({"bend":0.000,"pressure":0.000,"channels":[],"notes":[]})");
+   }
+   {
+      // MPE: a note on each of two channels, each bent and pressed its own way. The track's bend is
+      // the furthest, its pressure the hardest; each channel and note keeps its own.
+      const TimedMidi e[] = {midi({0x91, 60, 100}), midi({0x92, 64, 80}), midi({0xE1, 0x00, 0x50}),
+                             midi({0xE2, 0x00, 0x20}), midi({0xD1, 127}), midi({0xD2, 0})};
+      t.add(e, 6);
+      JCLAP_CHECK(json() ==
+                  R"({"bend":-0.500,"pressure":1.000,"channels":[)"
+                  R"({"channel":2,"bend":0.250,"pressure":1.000},{"channel":3,"bend":-0.500,"pressure":0.000}],"notes":[)"
+                  R"({"channel":2,"pitch":60,"velocity":100,"bend":0.250,"pressure":1.000},)"
+                  R"({"channel":3,"pitch":64,"velocity":80,"bend":-0.500,"pressure":0.000}]})");
+      // The notes end; the channels' bends and pressure stay until they're put back.
+      const TimedMidi off[] = {midi({0x81, 60, 0}), midi({0x92, 64, 0}), midi({0xD1, 0}), midi({0xE1, 0x00, 0x40}),
+                               midi({0xE2, 0x00, 0x40})};
+      t.add(off, 5);
+      JCLAP_CHECK(json() == R"({"bend":0.000,"pressure":0.000,"channels":[],"notes":[]})");
+   }
+   {
+      // Poly pressure is a held note's own; it goes with the note, and a key not held has none.
+      const TimedMidi e[] = {midi({0x90, 60, 90}), midi({0xA0, 60, 127}), midi({0xA0, 61, 127})};
+      t.add(e, 3);
+      JCLAP_CHECK(json() == R"({"bend":0.000,"pressure":1.000,"channels":[{"channel":1,"bend":0.000,"pressure":1.000}],)"
+                            R"("notes":[{"channel":1,"pitch":60,"velocity":90,"bend":0.000,"pressure":1.000}]})");
+      // A CLAP pressure expression for one note, then for every held note.
+      const TimedMidi more[] = {midi({0x90, 67, 90}), pressureExpression(0, 60, 0.5)};
+      t.add(more, 2);
+      JCLAP_CHECK(t.snapshot().noteCount == 2 && t.snapshot().notes[0].pressure == 0.5f &&
+                  t.snapshot().notes[1].pressure == 0.0f);
+      const TimedMidi all[] = {pressureExpression(255, 255, 0.75)};
+      t.add(all, 1);
+      JCLAP_CHECK(t.snapshot().notes[0].pressure == 0.75f && t.snapshot().notes[1].pressure == 0.75f);
+      // Another expression (brightness) and a nonsense value change nothing.
+      TimedMidi other = pressureExpression(0, 60, 0.9);
+      other.data[1] = 5;
+      const TimedMidi odd[] = {other, pressureExpression(0, 60, std::nan(""))};
+      JCLAP_CHECK(!t.add(odd, 2));
+      const TimedMidi off[] = {midi({0x80, 60, 0}), midi({0x80, 67, 0})};
+      t.add(off, 2);
+      JCLAP_CHECK(json() == R"({"bend":0.000,"pressure":0.000,"channels":[],"notes":[]})");
+   }
+   {
+      // The shared copy: what the audio thread publishes, the state thread reads.
+      SharedExpression shared;
+      const TimedMidi e[] = {midi({0x95, 48, 70})};
+      t.add(e, 1);
+      ExpressionSnapshot back;
+      const uint32_t before = shared.read(back);
+      JCLAP_CHECK(back.noteCount == 0);
+      JCLAP_CHECK(shared.publish(t.snapshot()));
+      JCLAP_CHECK(shared.read(back) == before + 1 && back.noteCount == 1 && back.notes[0].channel == 5);
+   }
+   t.reset();
+   JCLAP_CHECK(t.snapshot().noteCount == 0);
+
+   // The report to the extension: at once, then no more than 15 times a second while it changes.
+   net::UdpSocket script;
+   if (!script.open(ScriptLink::kScriptPort, true)) {
+      std::printf("  (skipped the expression report: port %d is in use)\n", ScriptLink::kScriptPort);
+      return;
+   }
+   ScriptLink link;
+   JCLAP_CHECK(link.open());
+   uint8_t buffer[2048];
+   std::string address, tags;
+   std::vector<int32_t> ints;
+   std::vector<std::string> strings;
+   auto next = [&](int waitMs) {
+      net::Address from;
+      const int n = script.receive(buffer, sizeof(buffer), from, waitMs);
+      return n > 0 && ScriptLink::parse(buffer, static_cast<size_t>(n), address, tags, ints, strings);
+   };
+   const std::string first = R"({"bend":0.250})", second = R"({"bend":-0.500})";
+   link.reportExpression("", "", first); // no track name: nothing
+   JCLAP_CHECK(!next(30));
+   link.reportExpression("Lead", "#ff8000", first);
+   JCLAP_CHECK(next(500));
+   JCLAP_CHECK(address == "/jtunnel/expression" && tags == "isss");
+   JCLAP_CHECK(ints.size() == 1 && ints[0] == link.port());
+   JCLAP_CHECK(strings.size() == 3 && strings[0] == "Lead" && strings[1] == "#ff8000" && strings[2] == first);
+   link.reportExpression("Lead", "#ff8000", second); // too soon
+   JCLAP_CHECK(!next(20));
+   std::this_thread::sleep_for(std::chrono::milliseconds(80));
+   link.reportExpression("Lead", "#ff8000", second);
+   JCLAP_CHECK(next(500) && strings[2] == second);
+   std::this_thread::sleep_for(std::chrono::milliseconds(80));
+   link.reportExpression("Lead", "#ff8000", second); // unchanged: waits for its second
+   JCLAP_CHECK(!next(20));
+   JCLAP_CHECK(link.expressionReports() == 2);
+}
 } // namespace
 
 int main() {
@@ -883,5 +1014,6 @@ int main() {
    testImpairment();
    testSimulatedLink();
    testState();
+   testExpression();
    return jclap::core::testResult();
 }

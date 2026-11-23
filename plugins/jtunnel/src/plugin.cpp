@@ -104,6 +104,7 @@ public:
       hostMenu_.init(host());
       gui_.init(*this);
       gui_.createWindow = [this] { return createEditor(*this); };
+      readTrackInfo();
       return true;
    }
 
@@ -117,6 +118,10 @@ public:
       scratch_.assign(maxFrames * 2, 0.0f);
       sending_ = false;
       appliedMode_ = -1;
+      expression_.reset();
+      link_.expression.reset();
+      publishExpression_ = false;
+      readTrackInfo();
       link_.receiving = mode() == kModeReceive;
       // No socket isn't fatal: the plugin still passes audio through, and the panel says why.
       link_.ring.clear();
@@ -135,6 +140,7 @@ public:
    void reset() override {
       sender_.restart();
       receiver_.restart();
+      resetExpression_ = true;
    }
 
    const void *extension(const char *id) override {
@@ -148,6 +154,8 @@ public:
          return &stateExtension;
       if (!std::strcmp(id, CLAP_EXT_RENDER))
          return &renderExtension;
+      if (!std::strcmp(id, CLAP_EXT_TRACK_INFO) || !std::strcmp(id, CLAP_EXT_TRACK_INFO_COMPAT))
+         return &trackInfoExtension;
       return jclap::ui::ClapGui::extensionFor<JTunnel, &JTunnel::gui_>(id);
    }
 
@@ -411,9 +419,22 @@ public:
          sender_.restart();
          receiver_.restart();
          sending_ = false;
+         resetExpression_ = true;
       }
       const bool thru = params_[kParamThru].load() >= 0.5;
       const int carry = intParam(kParamCarry);
+      // The side channel's pitch bend, pressure and notes are the track's, whatever the MIDI filter
+      // keeps.
+      if (m == kModeSend) {
+         if (resetExpression_.exchange(false)) {
+            expression_.reset();
+            publishExpression_ = true;
+         }
+         if (expression_.add(midiIn_, midiInCount_))
+            publishExpression_ = true;
+         if (publishExpression_)
+            publishExpression_ = !link_.expression.publish(expression_.snapshot());
+      }
       // A sender sends only what the MIDI filter lets through; a receiver plays only that.
       midiInCount_ = filterMidi(midiIn_, midiInCount_);
 
@@ -475,6 +496,29 @@ public:
 
 private:
    static const clap_plugin_render_t renderExtension;
+   static const clap_plugin_track_info_t trackInfoExtension;
+
+   // Main thread: the track's name and colour, which a sender tells the Bitwig extension so it can
+   // put this track's pitch bend and pressure in the right column of its grid.
+   void readTrackInfo() {
+      clap_track_info_t info{};
+      const auto *trackInfo = hostExtension<clap_host_track_info_t>(CLAP_EXT_TRACK_INFO);
+      if (!trackInfo)
+         trackInfo = hostExtension<clap_host_track_info_t>(CLAP_EXT_TRACK_INFO_COMPAT);
+      std::string name, color;
+      if (trackInfo && trackInfo->get(host(), &info)) {
+         if (info.flags & CLAP_TRACK_INFO_HAS_TRACK_NAME)
+            name.assign(info.name, strnlen(info.name, sizeof(info.name)));
+         if (info.flags & CLAP_TRACK_INFO_HAS_TRACK_COLOR) {
+            char hex[8];
+            std::snprintf(hex, sizeof(hex), "#%02x%02x%02x", info.color.red, info.color.green, info.color.blue);
+            color = hex;
+         }
+      }
+      std::lock_guard<std::mutex> lock(link_.mutex);
+      link_.trackName = name;
+      link_.trackColor = color;
+   }
 
    int mode() const { return intParam(kParamMode); }
    int intParam(ParamId id) const { return static_cast<int>(params_[id].load() + 0.5); }
@@ -698,6 +742,9 @@ private:
    Receiver receiver_;
    int appliedMode_ = -1;
    bool sending_ = false;
+   ExpressionTracker expression_; // audio thread
+   std::atomic<bool> resetExpression_{false};
+   bool publishExpression_ = false; // audio thread: a snapshot is waiting to go
 
    std::vector<float> thruL_, thruR_, silence_, scratch_;
    TimedMidi midiIn_[kMaxMidi];
@@ -720,6 +767,10 @@ const clap_plugin_render_t JTunnel::renderExtension = {
    // A stream runs in real time; an offline bounce would send it faster than anyone can play it.
    [](const clap_plugin_t *) { return true; },
    [](const clap_plugin_t *, clap_plugin_render_mode mode) { return mode == CLAP_RENDER_REALTIME; },
+};
+
+const clap_plugin_track_info_t JTunnel::trackInfoExtension = {
+   [](const clap_plugin_t *plugin) { static_cast<JTunnel *>(jclap::core::Plugin::from(plugin))->readTrackInfo(); },
 };
 
 const clap_plugin_descriptor_t JTunnel::descriptor = {

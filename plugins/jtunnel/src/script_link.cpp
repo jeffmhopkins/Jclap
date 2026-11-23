@@ -10,6 +10,11 @@ constexpr auto kHelloEvery = std::chrono::seconds(1);
 // The script says it's alive every second; after this long without a word it has gone (Bitwig
 // closed, the extension removed) and what it said is dropped.
 constexpr auto kScriptTimeout = std::chrono::seconds(4);
+// Pitch bend, pressure and notes go no more often than this while they move (15 a second: every
+// other frame of the extension's 30 a second, smooth enough for a meter, and a small fraction of a
+// MIDI stream), and this often while they don't, so the script knows the sender is still there.
+constexpr auto kReportAtMost = std::chrono::microseconds(1000000 / 15);
+constexpr auto kReportAtLeast = std::chrono::seconds(1);
 
 void padTo4(std::string &out) {
    while (out.size() % 4)
@@ -96,6 +101,7 @@ void ScriptLink::close() {
    socket_.close();
    heard_ = false;
    lastHello_ = {};
+   lastReport_ = {};
 }
 
 bool ScriptLink::connected() const { return heard_ && Clock::now() - lastHeard_ < kScriptTimeout; }
@@ -104,6 +110,25 @@ void ScriptLink::forgetScriptKeys(StateStore &store) {
    for (const std::string &key : keys_)
       store.remove(key);
    keys_.clear();
+}
+
+void ScriptLink::reportExpression(const std::string &track, const std::string &color, const std::string &json) {
+   if (!socket_.isOpen() || track.empty() || json.empty())
+      return;
+   const bool changed = json != reportedJson_ || track != reportedTrack_ || color != reportedColor_;
+   const auto now = Clock::now();
+   const auto since = now - lastReport_;
+   if (since < kReportAtMost || (!changed && since < kReportAtLeast))
+      return;
+   lastReport_ = now;
+   reportedTrack_ = track;
+   reportedColor_ = color;
+   reportedJson_ = json;
+   const int32_t port = socket_.localPort();
+   const std::string strings[3] = {track, color, json};
+   const std::string msg = message("/jtunnel/expression", "isss", &port, strings);
+   socket_.sendTo(net::Address::loopback(kScriptPort), msg.data(), msg.size());
+   ++reports_;
 }
 
 void ScriptLink::poll(StateStore &store, const std::string &tunnelName, int timeoutMs) {

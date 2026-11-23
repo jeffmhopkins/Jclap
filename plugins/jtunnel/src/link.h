@@ -3,7 +3,8 @@
 // The receive thread takes in audio (into the ring), state, subscriptions and goodbyes, and twice a
 // second keeps the instance's own subscription and its mDNS announcement up to date. The state
 // thread runs the side channel (state.h): on a sender it takes what the Bitwig extension says
-// (script_link.h) and the host's transport, and sends what changed to every listener. It also
+// (script_link.h) and the host's transport, tells the extension its track's pitch bend, pressure and
+// notes (expression.h), and sends what changed to every listener. It also
 // runs the local server (state_server.h) that hands the state to programs on this computer.
 #pragma once
 
@@ -17,6 +18,7 @@
 #include <thread>
 #include <vector>
 
+#include "expression.h"
 #include "impair.h"
 #include "net.h"
 #include "protocol.h"
@@ -54,6 +56,8 @@ struct LinkState {
    std::mutex mutex;
    std::string sendName;
    std::string listenTarget; // a tunnel name, or an address someone typed
+   // The track this instance is on, as the host tells it (CLAP track info); empty if it doesn't.
+   std::string trackName, trackColor; // trackColor "#rrggbb", or empty
 
    // Written by the link.
    std::atomic<int> listeners{0};
@@ -65,6 +69,7 @@ struct LinkState {
    // The side channel: the DAW's state, and the host's transport written by the audio thread.
    StateStore state;
    SharedClock clock;
+   SharedExpression expression; // a sender's input's pitch bend, pressure and notes, by channel
    // Written by the link.
    std::atomic<uint16_t> statePort{0};      // the local server's port, 0 if it has none
    std::atomic<int> stateClients{0};        // WebSocket clients on it

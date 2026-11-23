@@ -1,6 +1,7 @@
 // JTunnel extension for Bitwig Studio: hands what Bitwig is doing (the clip launcher grid with every
-// clip's state, the scenes, the transport, the mixer, meters, playing notes, the selected device
-// and its controls, cue markers) to the JTunnel senders on this computer, which carry it beside
+// clip's state, the scenes, the transport, the mixer, meters, playing notes, each track's pitch
+// bend and pressure by MIDI channel, the selected device and its controls, cue markers) to the
+// JTunnel senders on this computer, which carry it beside
 // their audio and MIDI as the tunnel's side channel. A receiver serves it to programs on its own
 // computer (see the JTunnel README, "Side channel").
 //
@@ -8,6 +9,12 @@
 // over OSC on loopback: it listens on UDP port 47250, each JTunnel sender says hello every second
 // from a port of 47251 to 47266, and the script sends that sender every key it has and then every
 // change (/jtunnel/state key json), and /jtunnel/alive each second.
+//
+// Bitwig's API shows a track's playing notes only as pitch and velocity, so each JTunnel sender
+// reads its own track's MIDI and tells this script the rest (/jtunnel/expression port track color
+// json: the track's pitch bend, pressure and held notes, channel by channel, at most 15 times a
+// second). The script finds the track in its grid by name (and colour, when two share a name) and
+// sends them all on as the `expression` key.
 //
 // Install: copy this file to Documents/Bitwig Studio/Controller Scripts/, then in Settings >
 // Controllers add "Jclap > JTunnel". It needs no MIDI ports. Its settings there pick the grid's size,
@@ -42,6 +49,7 @@ var settings = {};
 var osc, clientConns = {}, subscribers = {};
 var lastSent = {}; // key -> the JSON last sent
 var lastAlive = 0;
+var expressions = {}; // sender port -> {track, color, value, seen}: what each sender's track plays
 
 function init() {
    transport = host.createTransport();
@@ -95,7 +103,8 @@ function readSettings() {
    });
    // Each kind of state can be left out, to keep the tunnel's side channel small.
    var topics = [["grid", "Clip grid and scenes"], ["transport", "Transport"], ["mixer", "Mixer"],
-                 ["meters", "Meters"], ["notes", "Playing notes"], ["device", "Selected device"],
+                 ["meters", "Meters"], ["notes", "Playing notes"],
+                 ["expression", "Pitch bend and pressure"], ["device", "Selected device"],
                  ["markers", "Cue markers"], ["clip", "Selected clip"], ["project", "Project"]];
    settings.topics = {};
    topics.forEach(function (t) {
@@ -239,6 +248,35 @@ function notes(ch) {
    for (var i = 0; playing && i < playing.length; i++)
       out.push([playing[i].pitch(), playing[i].velocity()]);
    return out;
+}
+
+// What the JTunnel sender on this track says it plays (see the top of this file), or null for a
+// track without one. A sender is matched by its track's name, and by colour when more than one
+// track has that name; with two senders on one track, the one heard from last.
+function expressionFor(track) {
+   if (!track.exists().get())
+      return null;
+   var name = str(track.name()), color = hex(track.color());
+   var best = null, bestScore = 0;
+   for (var port in expressions) {
+      var e = expressions[port];
+      if (e.track !== name)
+         continue;
+      var score = 1 + (e.color && sameColor(e.color, color) ? 1 : 0);
+      if (score > bestScore || (score === bestScore && e.seen > best.seen)) {
+         best = e;
+         bestScore = score;
+      }
+   }
+   return best ? best.value : null;
+}
+
+// Two "#rrggbb" colours, allowing for rounding between how CLAP and the API give them.
+function sameColor(a, b) {
+   for (var i = 1; i < 7; i += 2)
+      if (Math.abs(parseInt(a.substr(i, 2), 16) - parseInt(b.substr(i, 2), 16)) > 2)
+         return false;
+   return true;
 }
 
 function channelState(ch) {
@@ -400,6 +438,12 @@ function collect() {
          tn.push(notes(trackBank.getItemAt(n)));
       keys.notes = {tracks: tn, master: notes(master)};
    }
+   if (on.expression) {
+      var te = [];
+      for (var x = 0; x < settings.tracks; x++)
+         te.push(expressionFor(trackBank.getItemAt(x)));
+      keys.expression = {tracks: te};
+   }
    if (on.device) {
       var params = [];
       for (var p = 0; p < PARAMS; p++) {
@@ -501,6 +545,9 @@ function tick() {
       for (var port in subscribers)
          if (now - subscribers[port].seen > SUBSCRIBER_TIMEOUT_MS)
             delete subscribers[port];
+      for (var e in expressions)
+         if (now - expressions[e].seen > SUBSCRIBER_TIMEOUT_MS)
+            delete expressions[e];
       var keys = collect();
       for (var key in keys) {
          var json = encode(keys[key]);
@@ -561,6 +608,22 @@ function startServer() {
          for (var key in lastSent)
             send(sub, "/jtunnel/state", key, lastSent[key]);
          send(sub, "/jtunnel/alive");
+      }));
+      // Every sender's track, whichever tunnel the state goes to: a receiver of one tunnel sees
+      // every track's.
+      space.registerMethod("/jtunnel/expression", ",isss", "A JTunnel sender's track's pitch bend, pressure and notes",
+                           guarded(function (source, msg) {
+         var port = msg.getInt(0);
+         if (!clientConns[port])
+            return;
+         var value;
+         try {
+            value = JSON.parse(String(msg.getString(3)));
+         } catch (e) {
+            return;
+         }
+         expressions[port] = {track: String(msg.getString(1)), color: String(msg.getString(2)), value: value,
+                              seen: Date.now()};
       }));
       space.registerDefaultMethod(function () {});
       osc.createUdpServer(SCRIPT_PORT, space);

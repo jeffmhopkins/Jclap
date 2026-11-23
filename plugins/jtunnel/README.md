@@ -172,9 +172,20 @@ isn't this computer is refused. The keys:
 | `mixer` | extension | `master` and `fx` (the effect tracks), each with the channel fields above |
 | `meters` | extension | Peak levels, 0 to 1, `[left, right]`: `tracks` (one per grid column), `fx`, `master` |
 | `notes` | extension | Notes sounding now, `[pitch, velocity]`: `tracks` (one list per grid column), `master` |
+| `expression` | extension and senders | `tracks`: one per grid column, `null` for a track with no JTunnel sender on it. Each is the track's MIDI, channel by channel (channels 1 to 16, so MPE's channel per note shows): `bend` (-1 to 1, 0 the centre: the channel bent furthest) and `pressure` (0 to 1: the hardest anywhere) for the whole track; `channels`, each channel in use (a held note, a bend off the centre or any pressure) with its `channel`, `bend` and `pressure`; and `notes`, each held note's `channel`, `pitch`, `velocity` (0 to 127), `bend` (its channel's) and `pressure` (the harder of its own and its channel's). Up to 15 times a second while it moves |
 | `device` | extension | The selected device: `exists`, `track`, `trackColor`, `name`, `preset`, `category`, `creator`, `enabled`, `plugin`, `windowOpen`, `pinned`, `page` (`index`, `name`, `names`), `params` (its 8 remote controls: `name`, `value` and `modulated` 0 to 1, `text`, `exists`) and `chain` (the track's devices: `name`, `enabled`, `selected`) |
 | `clip` | extension | The selected launcher clip: `exists`, `track`, `scene`, `name`, `color`, `playing`, `playingStep`, `playStart`, `loopStart`, `loopLength`, `loop` |
 | `markers` | extension | `items`: the arranger's cue markers, `name`, `position` (beats), `color` |
+
+**Pitch bend and pressure.** Bitwig shows an extension a track's playing notes only as pitch and
+velocity, so the `expression` key comes from the tracks themselves: each JTunnel sender reads its
+own track's MIDI (pitch bend, channel and poly pressure, CLAP pressure expressions and which notes
+are held, on every channel, whatever its MIDI filter lets through) and tells the extension, at most
+15 times a second while anything moves and once a second while nothing does. The extension puts
+each in its track's column, found by the track's name (Bitwig gives a plugin its track's name and
+colour), so put a JTunnel sender on every track whose expression you want, and give tracks
+distinct names; two with the same name are told apart by colour. Every sender's track goes into
+the key, whichever tunnel **Only to tunnel** picks.
 
 A key the extension's settings turn off is dropped from every receiver; so are all its keys when
 Bitwig closes or the extension is removed.

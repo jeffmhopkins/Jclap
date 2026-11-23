@@ -112,6 +112,9 @@ void Link::stateLoop() {
    bool wasReceiving = state_->receiving.load();
    auto lastClock = Clock::now() - kClockEvery, lastOwn = Clock::now() - kOwnKeyEvery, lastTick = Clock::now();
    const std::string host = net::hostName();
+   ExpressionSnapshot expression;
+   uint32_t expressionVersion = 0;
+   std::string expressionJsonText;
    while (running_) {
       const bool receiving = state_->receiving.load();
       if (receiving != wasReceiving) {
@@ -120,11 +123,13 @@ void Link::stateLoop() {
          state_->state.clear();
          known.clear();
       }
-      std::string name, target;
+      std::string name, target, track, trackColor;
       {
          std::lock_guard<std::mutex> lock(state_->mutex);
          name = state_->sendName;
          target = state_->listenTarget;
+         track = state_->trackName;
+         trackColor = state_->trackColor;
       }
       const auto now = Clock::now();
 
@@ -147,8 +152,15 @@ void Link::stateLoop() {
          if (!script_.isOpen())
             script_.open();
          // Waits for the extension up to a tick.
-         if (script_.isOpen())
+         if (script_.isOpen()) {
+            const uint32_t version = state_->expression.read(expression);
+            if (version != expressionVersion || expressionJsonText.empty()) {
+               expressionVersion = version;
+               expressionJsonText = expressionJson(expression);
+            }
+            script_.reportExpression(track, trackColor, expressionJsonText);
             script_.poll(state_->state, name, kStateTickMs);
+         }
          else
             std::this_thread::sleep_for(std::chrono::milliseconds(kStateTickMs));
          state_->scriptConnected = script_.connected();
